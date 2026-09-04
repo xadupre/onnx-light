@@ -75,6 +75,18 @@ void RegisterPatterns() {
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<ConvBiasNullPattern>();
                                    });
+    core::builder::RegisterPattern("ConvAddFusion",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<ConvAddFusionPattern>();
+                                   });
+    core::builder::RegisterPattern("ConvMulFusion",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<ConvMulFusionPattern>();
+                                   });
+    core::builder::RegisterPattern("ConvBatchNormalizationFusion",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<ConvBatchNormalizationFusionPattern>();
+                                   });
     core::builder::RegisterPattern("Dropout",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<DropoutPattern>();

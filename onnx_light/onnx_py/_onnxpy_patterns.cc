@@ -115,6 +115,19 @@ NB_MODULE(_onnxpypatterns, m) {
   nb::class_<onnx_patterns::ConvBiasNullPattern, core::builder::PatternOptimization>(
       m, "ConvBiasNullPattern", "Removes a null (all-zero) bias input from a Conv node.")
       .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::ConvAddFusionPattern, core::builder::PatternOptimization>(
+      m, "ConvAddFusionPattern",
+      "Folds a channel-wise constant Add following a Conv into the Conv bias.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::ConvMulFusionPattern, core::builder::PatternOptimization>(
+      m, "ConvMulFusionPattern",
+      "Folds a scalar or channel-wise constant Mul following a Conv into its constants.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::ConvBatchNormalizationFusionPattern,
+             core::builder::PatternOptimization>(
+      m, "ConvBatchNormalizationFusionPattern",
+      "Folds inference BatchNormalization following a Conv into its weights and bias.")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
   nb::class_<onnx_patterns::DropoutPattern, core::builder::PatternOptimization>(
       m, "DropoutPattern",
       "Replaces an inference Dropout by an Identity node when its mask output "

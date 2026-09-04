@@ -829,7 +829,10 @@ TEST(PatternOptimization, RegistersBuiltInPatternsOnce) {
   EXPECT_EQ(std::count(names.begin(), names.end(), "CastOpCast"), 1);
   EXPECT_EQ(std::count(names.begin(), names.end(), "ClipClip"), 1);
   EXPECT_EQ(std::count(names.begin(), names.end(), "ConstantToInitializer"), 1);
+  EXPECT_EQ(std::count(names.begin(), names.end(), "ConvAddFusion"), 1);
+  EXPECT_EQ(std::count(names.begin(), names.end(), "ConvBatchNormalizationFusion"), 1);
   EXPECT_EQ(std::count(names.begin(), names.end(), "ConvBiasNull"), 1);
+  EXPECT_EQ(std::count(names.begin(), names.end(), "ConvMulFusion"), 1);
   EXPECT_EQ(std::count(names.begin(), names.end(), "Dropout"), 1);
   EXPECT_EQ(std::count(names.begin(), names.end(), "Identity"), 1);
   EXPECT_EQ(std::count(names.begin(), names.end(), "NotNot"), 1);
@@ -944,6 +947,19 @@ TEST(PatternOptimization, RegistersBuiltInPatternsOnce) {
       std::any_of(patterns.begin(), patterns.end(), [](const auto &pattern) {
         return dynamic_cast<onnx_patterns::ConvBiasNullPattern *>(pattern.get()) != nullptr;
       });
+  const bool found_conv_add_fusion =
+      std::any_of(patterns.begin(), patterns.end(), [](const auto &pattern) {
+        return dynamic_cast<onnx_patterns::ConvAddFusionPattern *>(pattern.get()) != nullptr;
+      });
+  const bool found_conv_mul_fusion =
+      std::any_of(patterns.begin(), patterns.end(), [](const auto &pattern) {
+        return dynamic_cast<onnx_patterns::ConvMulFusionPattern *>(pattern.get()) != nullptr;
+      });
+  const bool found_conv_bn_fusion =
+      std::any_of(patterns.begin(), patterns.end(), [](const auto &pattern) {
+        return dynamic_cast<onnx_patterns::ConvBatchNormalizationFusionPattern *>(pattern.get()) !=
+               nullptr;
+      });
   const bool found_dropout = std::any_of(patterns.begin(), patterns.end(), [](const auto &pattern) {
     return dynamic_cast<onnx_patterns::DropoutPattern *>(pattern.get()) != nullptr;
   });
@@ -964,7 +980,10 @@ TEST(PatternOptimization, RegistersBuiltInPatternsOnce) {
   EXPECT_TRUE(found_cast_op_cast);
   EXPECT_TRUE(found_clip_clip);
   EXPECT_TRUE(found_constant_to_initializer);
+  EXPECT_TRUE(found_conv_add_fusion);
+  EXPECT_TRUE(found_conv_bn_fusion);
   EXPECT_TRUE(found_conv_bias_null);
+  EXPECT_TRUE(found_conv_mul_fusion);
   EXPECT_TRUE(found_dropout);
   EXPECT_TRUE(found_identity);
   EXPECT_TRUE(found_not_not);

@@ -23,6 +23,9 @@ ClipClipPattern: TypeAlias = _patterns.ClipClipPattern
 ReluClipFusionPattern: TypeAlias = _patterns.ReluClipFusionPattern
 ConstantToInitializerPattern: TypeAlias = _patterns.ConstantToInitializerPattern
 ConvBiasNullPattern: TypeAlias = _patterns.ConvBiasNullPattern
+ConvAddFusionPattern: TypeAlias = _patterns.ConvAddFusionPattern
+ConvMulFusionPattern: TypeAlias = _patterns.ConvMulFusionPattern
+ConvBatchNormalizationFusionPattern: TypeAlias = _patterns.ConvBatchNormalizationFusionPattern
 DropoutPattern: TypeAlias = _patterns.DropoutPattern
 IdentityPattern: TypeAlias = _patterns.IdentityPattern
 NotNotPattern: TypeAlias = _patterns.NotNotPattern
@@ -280,7 +283,10 @@ __all__ = [
     "ConcatSliceEliminationPattern",
     "ConcatTwiceUnaryPattern",
     "ConstantToInitializerPattern",
+    "ConvAddFusionPattern",
+    "ConvBatchNormalizationFusionPattern",
     "ConvBiasNullPattern",
+    "ConvMulFusionPattern",
     "DivMulPattern",
     "DropoutPattern",
     "ExpandBroadcastPattern",

@@ -12,11 +12,23 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
  * Fuses a reciprocal followed by multiplication into one division.
  *
  * @code
- *   one, denominator ───→ Div ───→ Mul ←─── value
+ * Before:
+ *                       ┌─────────────┐
+ *   one ───────────────→│             │
+ *                       │     Div     │───→ reciprocal ───┐
+ *   denominator ───────→│             │                   │
+ *                       └─────────────┘                   ↓
+ *                                                   ┌─────────────┐
+ *   value ─────────────────────────────────────────→│     Mul     │───→ output
+ *                                                   └─────────────┘
  *
- * becomes
+ * After:
  *
- *   value, denominator ───→ Div
+ *                       ┌─────────────┐
+ *   value ─────────────→│             │
+ *                       │     Div     │───→ output
+ *   denominator ───────→│             │
+ *                       └─────────────┘
  * @endcode
  *
  * ``one`` must be a one-element FLOAT, FLOAT16, DOUBLE, INT32, or INT64

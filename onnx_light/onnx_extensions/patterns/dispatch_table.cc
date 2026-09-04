@@ -133,6 +133,10 @@ void RegisterPatterns() {
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<GatherShapePattern>();
                                    });
+    core::builder::RegisterPattern("PreShapeNodeElimination",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<PreShapeNodeEliminationPattern>();
+                                   });
     core::builder::RegisterPattern("GathersSplit",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<GathersSplitPattern>();
@@ -140,6 +144,14 @@ void RegisterPatterns() {
     core::builder::RegisterPattern("GatherSliceToSplit",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<GatherSliceToSplitPattern>();
+                                   });
+    core::builder::RegisterPattern("GatherToSlice",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<GatherToSlicePattern>();
+                                   });
+    core::builder::RegisterPattern("GatherUpstreamPropagation",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<GatherUpstreamPropagationPattern>();
                                    });
     core::builder::RegisterPattern("SliceSlice",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {

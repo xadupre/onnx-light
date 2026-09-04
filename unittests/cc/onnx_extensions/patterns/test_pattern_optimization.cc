@@ -840,6 +840,7 @@ TEST(PatternOptimization, RegistersBuiltInPatternsOnce) {
   const std::vector<std::string> new_pattern_names = {
       "ConcatSliceElimination",
       "GatherSliceToSplit",
+      "GatherToSlice",
       "LabelEncoderFusion",
       "SliceConcatToSpaceToDepth",
       "ConcatReshape",

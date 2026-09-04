@@ -464,8 +464,6 @@ ONNX_OPERATOR_SET_SCHEMA(
           updateOutputShape(ctx, 0, tensor_proto);
         }));
 
-static const char *const Constant_ver9_doc = kDoc_Constant_ver1;
-
 ONNX_OPERATOR_SET_SCHEMA(
     Constant, 9,
     OpSchema()

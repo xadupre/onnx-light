@@ -1887,7 +1887,7 @@ static void einsumShapeInference(ONNX_LIGHT_NAMESPACE::InferenceContext &ctx,
 ONNX_OPERATOR_SET_SCHEMA(
     Einsum, 12,
     OpSchema()
-        .SetDoc(kDoc_CumSum_ver11)
+        .SetDoc(kDoc_Einsum_ver12)
         .Attr("equation", "Einsum expression string.", AttributeProto::STRING)
         .Input(0, "Inputs", "Operands", "T", OpSchema::Variadic, true, 1, OpSchema::Differentiable)
         .Output(0, "Output", "Output tensor", "T", OpSchema::Single, true, 1,

@@ -801,6 +801,9 @@ TEST(onnx_defs, DocStrings_ContainExpectedContent) {
   EXPECT_NE(strstr(kDoc_Sigmoid_ver6, "sigmoid"), nullptr);
   EXPECT_NE(strstr(kDoc_Tanh_ver6, "hyperbolic tangent"), nullptr);
   EXPECT_NE(strstr(kDoc_MatMul_ver9, "matmul"), nullptr);
+  const OpSchema *einsum_schema = OpSchemaRegistry::Schema("Einsum", 12, ONNX_DOMAIN);
+  ASSERT_NE(einsum_schema, nullptr);
+  EXPECT_NE(strstr(einsum_schema->doc(), "einsum"), nullptr);
   EXPECT_NE(strstr(kDoc_GRU_ver14, "GRU"), nullptr);
   EXPECT_NE(strstr(kDoc_LSTM_ver14, "LSTM"), nullptr);
   // The Pad doc string mirrors the upstream ONNX schema and must include the

@@ -3108,7 +3108,7 @@ When training_mode=False:
 Y = (X - input_mean) / sqrt(input_var + epsilon) * scale + B
 ```
 
-For previous (depreciated) non-spatial cases, implementors are suggested
+For previous (depreciated) non-spatial cases, implementers are suggested
 to flatten the input shape to (N x C * D1 * D2 * ... * Dn) before a BatchNormalization Op.
 )DOC";
 const char kDoc_ConvInteger_ver10[] = R"DOC(
@@ -3352,7 +3352,7 @@ When training_mode=False:
 Y = (X - input_mean) / sqrt(input_var + epsilon) * scale + B
 ```
 
-For previous (depreciated) non-spatial cases, implementors are suggested
+For previous (depreciated) non-spatial cases, implementers are suggested
 to flatten the input shape to (N x C * D1 * D2 * ... * Dn) before a BatchNormalization Op.
 )DOC";
 const char kDoc_BatchNormalization_ver9[] = R"DOC(
@@ -3363,7 +3363,7 @@ there are multiple cases for the number of outputs, which we list below:
 Output case #1: Y, mean, var, saved_mean, saved_var (training mode)
 Output case #2: Y (test mode)
 
-For previous (depreciated) non-spatial cases, implementors are suggested
+For previous (depreciated) non-spatial cases, implementers are suggested
 to flatten the input shape to (N x C*D1*D2 ..*Dn) before a BatchNormalization Op.
 )DOC";
 const char kDoc_BatchNormalization_ver1[] = R"DOC(

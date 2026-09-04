@@ -41,6 +41,7 @@ ConcatTwiceUnaryPattern: TypeAlias = _patterns.ConcatTwiceUnaryPattern
 GatherConcatPattern: TypeAlias = _patterns.GatherConcatPattern
 GatherGatherPattern: TypeAlias = _patterns.GatherGatherPattern
 GatherSliceToSplitPattern: TypeAlias = _patterns.GatherSliceToSplitPattern
+GatherToSlicePattern: TypeAlias = _patterns.GatherToSlicePattern
 GatherShapePattern: TypeAlias = _patterns.GatherShapePattern
 PreShapeNodeEliminationPattern: TypeAlias = _patterns.PreShapeNodeEliminationPattern
 SliceSlicePattern: TypeAlias = _patterns.SliceSlicePattern
@@ -304,6 +305,7 @@ __all__ = [
     "GatherGatherPattern",
     "GatherShapePattern",
     "GatherSliceToSplitPattern",
+    "GatherToSlicePattern",
     "GathersSplitPattern",
     "GeluPattern",
     "GemmSumFusionPattern",

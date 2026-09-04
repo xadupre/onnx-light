@@ -145,6 +145,10 @@ void RegisterPatterns() {
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<GatherSliceToSplitPattern>();
                                    });
+    core::builder::RegisterPattern("GatherToSlice",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<GatherToSlicePattern>();
+                                   });
     core::builder::RegisterPattern("SliceSlice",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<SliceSlicePattern>();

@@ -191,6 +191,12 @@ NB_MODULE(_onnxpypatterns, m) {
   BindPattern<onnx_patterns::GatherSliceToSplitPattern>(
       m, "GatherSliceToSplitPattern",
       "Fuses compatible sibling Gather and Slice ranges into one Split.");
+  nb::class_<onnx_patterns::GatherToSlicePattern, core::builder::PatternOptimization>(
+      m, "GatherToSlicePattern",
+      "Rewrites a Gather selecting a constant scalar, singleton, or "
+      "arithmetic-progression index into a Slice (plus Squeeze for a scalar "
+      "index).")
+      .def(nb::init<int>(), nb::arg("priority") = 0);
   nb::class_<onnx_patterns::GatherShapePattern, core::builder::PatternOptimization>(
       m, "GatherShapePattern",
       "Rewrites a Gather of a scalar index over a Shape node into a narrowed "

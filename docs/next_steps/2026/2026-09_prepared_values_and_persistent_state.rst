@@ -55,8 +55,8 @@ The implementation already supplies:
   in ``onnx_core/runtime/memory/simple_tensor.h``.
 
 These are reusable facilities, not yet a unified graph-visible structured
-value system. The proposed ``StructTypeProto``, ``StructProto`` and
-``CompiledTensorProto`` are not existing serialized contracts. Prepared
+value system. The proposed ``StructTypeProto`` and common stored-value
+container are not existing serialized contracts. Prepared
 objects currently expose a raw-buffer view, while ``RuntimeSession`` retains
 ordinary initializers and kernel instances. ``RuntimeContext::Clear`` clears
 invocation values; it must not become the owner of persistent request state.
@@ -97,9 +97,10 @@ No inheritance chain can express these three independent choices cleanly.
 Representation model: a small quantized core plus generic structs
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-Use a small specialized representation for frequent cases, and the generic
-structured representation for the long tail. Names and wire field numbers
-are finalized in PR01; no ONNX-standard status is implied.
+Use one stored-value container with a small set of built-in layouts and a
+generic structured layout for the long tail. Quantized, prepacked and mutable
+are not separate storage categories. Names and wire field numbers are
+finalized in PR01; no ONNX-standard status is implied.
 
 .. list-table::
    :header-rows: 1
@@ -111,25 +112,28 @@ are finalized in PR01; no ONNX-standard status is implied.
      - Describes a portable physical layout: fixed-width fields, nested
        records, arrays and bit packing. Counts are concrete after shape
        binding; references are acyclic and size arithmetic is checked.
-   * - ``StructProto``
-     - Carries a concrete type reference and its owned or external payload.
-       The type determines the exact serialized byte ranges.
-   * - ``QuantizedTensorProto``
-     - Provides one compact built-in affine representation: codes, scales,
-       optional zero points, logical shape, axis and block size. Initial
-       targets are ordinary INT8 quantization and blockwise INT4 weights.
-       These are configurations of the same message, not one message per
-       bit width, algorithm or vendor format.
-   * - ``CompiledTensorProto``
-     - Wraps one prepared representation with all source dependencies,
-       preparation recipe and compatibility requirements. It remains an
-       optional derived cache, not a new graph-level numerical meaning.
+   * - ``StoredValueProto`` (working name)
+     - One value container with optional logical tensor type/shape, a layout
+       choice and owned or external payload. Layout is either a small
+       built-in dense/affine form or a concrete ``StructTypeProto`` reference.
+       INT8 and blockwise INT4 are configurations, not distinct messages.
+   * - Optional preparation metadata
+     - Records source dependencies, preparation recipe and compatibility
+       requirements for a derived value. These are metadata on the same
+       container, not a second container owning another payload.
 
-Do not add a universal ``TensorRepresentationProto`` plus a growing
-``QuantizationDescriptorProto`` hierarchy. A common runtime descriptor can
-adapt ordinary tensors, the small quantized core, and structures without
-requiring another serialized wrapper or duplicating their storage. Reuse
-allocation, shape and external-data machinery across those representations.
+``StoredValueProto`` replaces the separate ``StructProto``,
+``QuantizedTensorProto`` and ``CompiledTensorProto`` value-container proposals;
+it is not an additional wrapper around all three. Existing ordinary
+``TensorProto`` values remain supported without migration. A common runtime
+view adapts both existing tensors and stored values, reusing allocation,
+shape and external-data machinery.
+
+The affine layout parameters are a small nested descriptor, not a growing
+``QuantizationDescriptorProto`` hierarchy. Source INT4 weights, their custom
+prepacked form, and an INT4 KV block use the same container with different
+layouts and lifetime bindings. Only derived prepacked values need preparation
+provenance; authoritative request state is not a reconstructible weight cache.
 
 The initial specialized subset is a proposal to freeze in PR01, not permission
 to add all formats expressible by the catalogue. Additional built-in forms
@@ -138,10 +142,10 @@ require demonstrated common use and an explicit proto-size review.
 The representation supports three cases:
 
 1. **Common quantization:** INT8 per-tensor/per-axis and INT4 blockwise affine
-   values use the small ``QuantizedTensorProto`` contract directly.
+   values select the common container's built-in affine layout.
 2. **Other quantized formats:** codebooks, non-linear quantization, sparse
    outliers, mixed-bit blocks, rotations, and vendor-specific layouts use
-   ``StructProto`` plus a versioned format identity and an explicit decoder
+   its structured layout plus a versioned format identity and an explicit decoder
    or registered consumer. Their schemas and numerical implementations live
    outside the proto library; adding one must not grow its message set.
 3. **Fully custom structures:** arbitrary records use the same generic
@@ -152,7 +156,7 @@ The representation supports three cases:
 
 For example, an INT4 matrix representation can contain an array of records
 ``{codes, scale, zero_point, compensation, padding}``. This custom packed
-layout uses ``StructProto`` rather than adding a tile-specific quantized
+layout selects a ``StructTypeProto`` rather than adding a tile-specific quantized
 message. Its registered format defines the logical block mapping and field
 interpretation. An FP32 packed matrix also uses structures, without inventing
 a quantization descriptor for non-quantized data.
@@ -306,11 +310,86 @@ The state contract requires:
   explicit reset or restore; do not promise rollback without a real journal;
 * request buffers cannot be evicted as if they were reconstructible weights.
 
-The initial implementation uses fixed-capacity contiguous KV storage. Paging,
-quantized pages and explicit checkpoint/restore extend the same state model
-later. Process-lifetime persistence does not imply automatic disk persistence.
+The first runtime increment uses fixed-capacity contiguous KV storage, but
+the representation contract includes heterogeneous quantized blocks from PR01.
+Paged mixed-format execution is a required next increment, not a redesign
+deferred until after acceptance.
+Process-lifetime persistence does not imply automatic disk persistence.
 State snapshots, if added, are opt-in, versioned and bound to model identity;
 they are never written into the reusable weight cache.
+
+Paged KV with independently quantized blocks
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+The request owns a logical block table. Each K or V block is an instance of
+the same stored-value representation used for source weights and prepacking.
+The table does not impose one global physical dtype or format. Different
+layers, heads, token ranges, and K/V blocks can choose different layouts.
+
+.. code-block:: text
+
+    request state
+      layer 0, head group 0:
+        tokens [0, 128):
+          K -> stored value {affine INT4, own scales and zero points}
+          V -> stored value {affine INT8, own scales and zero points}
+        tokens [128, 256):
+          K -> stored value {structured custom format A}
+          V -> stored value {affine INT4, own scales and zero points}
+        tokens [256, 384), valid length 17:
+          K -> stored value {dense FP16}
+          V -> stored value {dense FP16}
+
+This example allocates capacity for the last block but exposes only 17 valid
+tokens. Logical page size, quantization group size and physical allocation
+size are independent: a page may contain several quantization groups.
+Finer-grained mixed layouts can be represented by multiple logical blocks or
+an explicit structured layout, not by adding a proto per combination.
+
+Each block descriptor carries its logical range, tensor geometry, valid
+length, concrete layout/type, payload owner and byte extent. Scales, zero
+points, group axes and sizes belong to that block's representation, not a
+global cache descriptor. K and V formats may differ, but their logical token
+ranges must agree. For a given layer/head mapping, the decoder output types
+and geometry must satisfy the shared Attention contract even when physical
+layouts differ.
+
+The block table is runtime state using existing container machinery or a
+structured descriptor, not a new ``QuantizedKVCacheProto`` or a separate
+paged quantization hierarchy. It retains owners/generations, not serialized
+raw pointers. A block identity includes its request and logical position;
+mutable blocks are never deduplicated by the prepared-weight cache.
+
+Attention obtains a block iterator with logical ranges, valid extents and
+resolved layout-specific readers. It dispatches once per block or tile to
+dequantize/consume bounded data and carries the same online-softmax state
+across blocks. It must not flatten, concatenate or fully dequantize the cache
+before execution. Masks and positions use logical token indices, not physical
+page offsets. Unsupported layouts are rejected before state mutation or
+partial execution unless an explicitly selected bounded decoder is available.
+
+Appending to the current block requires an explicit quantization policy:
+
+* freeze the active group's scale/zero point and apply its documented rounding
+  and saturation rules; or
+* keep an active dense block and quantize it when sealed; or
+* recompute parameters and requantize the affected group/block.
+
+Changing a scale while leaving previous codes untouched is invalid. Published
+sealed blocks are unchanged by later appends unless an explicit conversion is
+requested. Converting INT8 to INT4, or replacing a custom layout, may allocate
+a replacement block and update its table entry after successful conversion;
+it must not rebuild the complete cache. Existing readers retain the old owner
+until completion, and the temporary replacement counts against the request
+memory budget. Failed conversion before publication leaves the old block
+valid; failed in-place mutation follows the request invalidation contract.
+
+Validation must cover mixed INT4/INT8/custom/dense blocks, distinct K and V
+formats, partial final groups, page boundaries, per-block parameter changes,
+reset/isolation, masks and conversion failures. Compare Attention with the
+reference computation over the same decoded quantized values; assess loss
+against unquantized KV separately. Report append, conversion and decode
+latency, allocated bytes and dequantization workspace per format.
 
 Mutation and graph compatibility
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -375,13 +454,15 @@ All new steps are pending; completed foundations above are reused.
    * - PR01
      - Representation and lifetime contracts
      - Freeze the small built-in affine subset, struct-based extension path,
-       identities, native bindings and request state effects. Record the
+       identities, native bindings and request state effects, including
+       heterogeneous K/V block descriptors. Record the
        minimal proto size baseline and agree a size budget before PR02.
      - Existing runtime APIs
    * - PR02
-     - Structured storage and minimal quantized proto
+     - Common storage and minimal built-in layouts
      - Round-trip common INT8/INT4 forms, a struct-based codebook/mixed-bit
-       format and custom records. Check sizes, ownership and references.
+       format and custom records through one container, including a mixed
+       KV-block fixture. Check sizes, ownership and references.
        Report proto binary-size growth within the PR01 budget; no
        format-specific decoder is linked into the proto target.
      - PR01
@@ -410,22 +491,29 @@ All new steps are pending; completed foundations above are reused.
        binding, effect dependencies, reset and failure semantics. Two
        requests share weights and remain isolated across repeated runs.
      - PR01; existing allocation/task infrastructure
-   * - PR07
+   * - PR07a
      - Contiguous KV and CPU consumer integration
      - CPU kernels consume the backend-neutral state API. Append touches
        only new tokens; decode performs no full-cache output allocation or
        copy. Verify dynamic lengths, capacity, cancellation and stateless
        compatibility against tensor past/present execution.
      - PR03, PR06; CPU backend integration
+   * - PR07b
+     - Paged KV with heterogeneous quantization
+     - The shared stored-value representation supports different K/V and
+       per-block formats. Blockwise append/conversion and Attention preserve
+       validity, numerical contracts and bounded workspace without copying
+       or dequantizing the entire cache.
+     - PR02, PR07a; CPU backend integration
    * - PR08
      - End-to-end prepared/stateful acceptance
      - Measure cold/warm preparation, repeated decode and simultaneous
        independent requests. Report source/packed/state/scratch bytes,
        preparation counts and per-token copies; verify stale-cache handling,
        eviction pins, request reset/isolation and the final proto-size budget.
-     - PR04, PR05, PR07
+     - PR04, PR05, PR07b
    * - Later
-     - Paging, quantized state and snapshots
+     - Snapshots and advanced page policies
      - Extend the accepted request contract without a second type system or
        implicit disk persistence; each feature has separate correctness,
        lifetime and memory gates.

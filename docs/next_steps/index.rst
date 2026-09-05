@@ -72,8 +72,9 @@ Planned
     * - :ref:`l-next-steps-prepared-values-and-persistent-state`
       - Combines a small built-in quantized subset with generic structures
         for other formats, under an explicit proto-size budget. Unifies typed
-        prepacking, compiled caches, GraphBuilder and request-owned state
-        using the completed runtime infrastructure.
+        prepacking, compiled caches, GraphBuilder and request-owned state,
+        including paged KV blocks with independent quantization, using the
+        completed runtime infrastructure.
 
 Completed
 ---------

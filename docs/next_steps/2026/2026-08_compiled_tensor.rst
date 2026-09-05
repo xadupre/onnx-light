@@ -14,6 +14,9 @@ CompiledTensorProto
     preparation keys cover all source operands and their semantics, not only
     the single ``source_name`` sketched below. Reuse the implemented prepared
     object store and disk cache; this historical proto is not implemented.
+    The current plan replaces the separate compiled/quantized/structured
+    value containers with one stored-value container and optional preparation
+    metadata.
 
 Motivation
 ++++++++++

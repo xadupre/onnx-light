@@ -14,8 +14,10 @@ Quantization
     :ref:`l-next-steps-prepared-values-and-persistent-state`. This page remains
     a quantization-format catalogue, not a list of implemented kernels or a
     proto implementation checklist. Only a small affine INT8/INT4 subset is
-    proposed for specialized proto support; all other formats use generic
-    structures, with their implementations outside the proto library.
+    proposed as built-in layouts of one stored-value container; all other
+    formats use its structured layout, with their implementations outside
+    the proto library. The same representation serves weights and mixed-format
+    KV blocks.
 
 .. note::
 

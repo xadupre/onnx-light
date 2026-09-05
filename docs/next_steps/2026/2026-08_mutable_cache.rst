@@ -12,8 +12,9 @@ Mutable execution cache
     Persistent state and mutation are now specified by
     :ref:`l-next-steps-prepared-values-and-persistent-state`. The caller-bound
     cache and specialized quantized-page examples below are historical
-    alternatives. The current plan uses explicit request state, one shared
-    representation system, and separate optional checkpoint persistence.
+    alternatives. The current plan uses explicit request state and the same
+    stored-value representation for weights and heterogeneous quantized K/V
+    blocks. Paging is required by PR07b; checkpoint persistence stays optional.
 
 Objective
 +++++++++

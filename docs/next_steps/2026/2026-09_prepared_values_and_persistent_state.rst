@@ -55,8 +55,8 @@ The implementation already supplies:
   in ``onnx_core/runtime/memory/simple_tensor.h``.
 
 These are reusable facilities, not yet a unified graph-visible structured
-value system. The proposed ``StructTypeProto`` and common stored-value
-container are not existing serialized contracts. Prepared
+value system. The proposed ``StructTypeProto`` and ``EncodedValueProto``
+are not existing serialized contracts. Prepared
 objects currently expose a raw-buffer view, while ``RuntimeSession`` retains
 ordinary initializers and kernel instances. ``RuntimeContext::Clear`` clears
 invocation values; it must not become the owner of persistent request state.
@@ -97,7 +97,7 @@ No inheritance chain can express these three independent choices cleanly.
 Representation model: a small quantized core plus generic structs
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-Use one stored-value container with a small set of built-in layouts and a
+Use one ``EncodedValueProto`` container with a small set of built-in layouts and a
 generic structured layout for the long tail. Quantized, prepacked and mutable
 are not separate storage categories. Names and wire field numbers are
 finalized in PR01; no ONNX-standard status is implied.
@@ -112,7 +112,7 @@ finalized in PR01; no ONNX-standard status is implied.
      - Describes a portable physical layout: fixed-width fields, nested
        records, arrays and bit packing. Counts are concrete after shape
        binding; references are acyclic and size arithmetic is checked.
-   * - ``StoredValueProto`` (working name)
+   * - ``EncodedValueProto``
      - One value container with optional logical tensor type/shape, a layout
        choice and owned or external payload. Layout is either a small
        built-in dense/affine form or a concrete ``StructTypeProto`` reference.
@@ -122,12 +122,18 @@ finalized in PR01; no ONNX-standard status is implied.
        requirements for a derived value. These are metadata on the same
        container, not a second container owning another payload.
 
-``StoredValueProto`` replaces the separate ``StructProto``,
+``EncodedValueProto`` replaces the separate ``StructProto``,
 ``QuantizedTensorProto`` and ``CompiledTensorProto`` value-container proposals;
 it is not an additional wrapper around all three. Existing ordinary
 ``TensorProto`` values remain supported without migration. A common runtime
-view adapts both existing tensors and stored values, reusing allocation,
+view adapts both existing tensors and encoded values, reusing allocation,
 shape and external-data machinery.
+
+``Encoded`` identifies a representation that needs a layout-aware
+interpretation, rather than merely indicating that bytes are stored.
+``Value`` permits custom records containing multiple buffers as well as
+logical tensors. The name applies equally to packed weights and KV blocks;
+it does not imply immutability or disk persistence.
 
 The affine layout parameters are a small nested descriptor, not a growing
 ``QuantizationDescriptorProto`` hierarchy. Source INT4 weights, their custom
@@ -322,7 +328,7 @@ Paged KV with independently quantized blocks
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 The request owns a logical block table. Each K or V block is an instance of
-the same stored-value representation used for source weights and prepacking.
+the same ``EncodedValueProto`` representation used for source weights and prepacking.
 The table does not impose one global physical dtype or format. Different
 layers, heads, token ranges, and K/V blocks can choose different layouts.
 
@@ -331,14 +337,14 @@ layers, heads, token ranges, and K/V blocks can choose different layouts.
     request state
       layer 0, head group 0:
         tokens [0, 128):
-          K -> stored value {affine INT4, own scales and zero points}
-          V -> stored value {affine INT8, own scales and zero points}
+          K -> EncodedValueProto {affine INT4, own scales and zero points}
+          V -> EncodedValueProto {affine INT8, own scales and zero points}
         tokens [128, 256):
-          K -> stored value {structured custom format A}
-          V -> stored value {affine INT4, own scales and zero points}
+          K -> EncodedValueProto {structured custom format A}
+          V -> EncodedValueProto {affine INT4, own scales and zero points}
         tokens [256, 384), valid length 17:
-          K -> stored value {dense FP16}
-          V -> stored value {dense FP16}
+          K -> EncodedValueProto {dense FP16}
+          V -> EncodedValueProto {dense FP16}
 
 This example allocates capacity for the last block but exposes only 17 valid
 tokens. Logical page size, quantization group size and physical allocation
@@ -443,6 +449,19 @@ Implementation sequence
 
 All new steps are pending; completed foundations above are reused.
 
+The first concrete implementation is the **structured representation**:
+``StructTypeProto`` and the structured-layout branch of ``EncodedValueProto``.
+PR01 first freezes their minimal contract and the proto-size budget. PR02
+implements checked fields, arrays, bit packing, type references, payload
+ownership and serialization before adding the small built-in affine subset.
+Custom packed weights and heterogeneous KV-block fixtures must work through
+structures without requiring a catalogue of native quantized types.
+
+Use :ref:`l-next-steps-custom-types` as physical-layout design material, not
+as a separate roadmap to implement verbatim: its old ``StructProto`` value
+container is replaced by ``EncodedValueProto``. Typed prepacking, graph
+integration and persistent-state consumers build on this common foundation.
+
 .. list-table::
    :header-rows: 1
    :widths: 8 27 48 17
@@ -459,10 +478,11 @@ All new steps are pending; completed foundations above are reused.
        minimal proto size baseline and agree a size budget before PR02.
      - Existing runtime APIs
    * - PR02
-     - Common storage and minimal built-in layouts
-     - Round-trip common INT8/INT4 forms, a struct-based codebook/mixed-bit
-       format and custom records through one container, including a mixed
-       KV-block fixture. Check sizes, ownership and references.
+     - Structs first, then minimal built-in layouts
+     - Implement StructTypeProto and EncodedValueProto's structured branch
+       first; then add common INT8/INT4 layouts. Round-trip custom records,
+       codebook/mixed-bit formats and a heterogeneous KV-block fixture.
+       Check sizes, ownership and references.
        Report proto binary-size growth within the PR01 budget; no
        format-specific decoder is linked into the proto target.
      - PR01
@@ -500,7 +520,7 @@ All new steps are pending; completed foundations above are reused.
      - PR03, PR06; CPU backend integration
    * - PR07b
      - Paged KV with heterogeneous quantization
-     - The shared stored-value representation supports different K/V and
+     - The shared EncodedValueProto representation supports different K/V and
        per-block formats. Blockwise append/conversion and Attention preserve
        validity, numerical contracts and bounded workspace without copying
        or dequantizing the entire cache.

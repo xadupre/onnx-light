@@ -13,6 +13,9 @@ Structured views over byte buffers
     :ref:`l-next-steps-prepared-values-and-persistent-state`. This page retains
     the original physical-layout proposal; its structures are not implemented
     proto contracts. The unified plan takes precedence where details differ.
+    Its first concrete implementation is ``StructTypeProto`` together with
+    the structured branch of ``EncodedValueProto``, which replaces the
+    historical ``StructProto`` container below.
 
 Motivation
 ++++++++++

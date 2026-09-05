@@ -11,8 +11,10 @@ Objective and consolidation
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 Define one runtime contract for reusable prepared weights and request-owned
-persistent state, with a representation system that supports both declarative
-quantization and fully custom structures. The first end-to-end consumer is
+persistent state, with a deliberately small set of built-in quantized forms
+and generic structures for every other format. The trade-off is proto-library
+size versus convenience for common formats, not a complete quantization
+taxonomy. The first end-to-end consumer is
 Qwen: shared packed projection weights plus independent mutable KV caches
 for successive decode requests.
 
@@ -25,9 +27,10 @@ This roadmap replaces the independent implementation sequences in:
 * :ref:`l-next-steps-mutable-cache`.
 
 Those pages remain design history and format examples. Where their proposals
-conflict, this page is authoritative. In particular, specialized quantization
-protos must not introduce a second payload/type hierarchy, and a compiled
-cache entry is not the same thing as a quantized source value.
+conflict, this page is authoritative. In particular, only a small closed set
+of common quantized forms gets specialized proto support; the format catalogue
+does not become a proto hierarchy. A compiled cache entry is not the same
+thing as a quantized source value.
 
 The completed prepared-execution, native fast-loading, allocator, and session
 executor work remains the foundation. This plan extends their contracts; it
@@ -91,11 +94,12 @@ structure. A compiled representation can be quantized or floating point.
 A mutable state slot can contain a dense tensor or a structured value.
 No inheritance chain can express these three independent choices cleanly.
 
-Representation model: structured storage plus semantic profiles
+Representation model: a small quantized core plus generic structs
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-Use composition, with the following proposed responsibilities. Names and
-wire field numbers are finalized in PR01; no ONNX-standard status is implied.
+Use a small specialized representation for frequent cases, and the generic
+structured representation for the long tail. Names and wire field numbers
+are finalized in PR01; no ONNX-standard status is implied.
 
 .. list-table::
    :header-rows: 1
@@ -110,43 +114,48 @@ wire field numbers are finalized in PR01; no ONNX-standard status is implied.
    * - ``StructProto``
      - Carries a concrete type reference and its owned or external payload.
        The type determines the exact serialized byte ranges.
-   * - ``TensorRepresentationProto``
-     - Associates structured storage with logical tensor type/shape when
-       applicable, a versioned format identity and optional semantic
-       quantization metadata. A custom non-tensor value has no fabricated
-       logical tensor type.
-   * - ``QuantizationDescriptorProto``
-     - Describes affine or codebook semantics using references to fields:
-       codes, scales, zero points, axes, block sizes, rounding and decoding.
-       It does not own another copy of the payload.
+   * - ``QuantizedTensorProto``
+     - Provides one compact built-in affine representation: codes, scales,
+       optional zero points, logical shape, axis and block size. Initial
+       targets are ordinary INT8 quantization and blockwise INT4 weights.
+       These are configurations of the same message, not one message per
+       bit width, algorithm or vendor format.
    * - ``CompiledTensorProto``
      - Wraps one prepared representation with all source dependencies,
        preparation recipe and compatibility requirements. It remains an
        optional derived cache, not a new graph-level numerical meaning.
 
-``QuantizedTensorProto`` may be an authoring convenience for
-``TensorRepresentationProto`` plus a quantization descriptor. It must not
-be a separately maintained wire layout, allocation path or shape registry.
+Do not add a universal ``TensorRepresentationProto`` plus a growing
+``QuantizationDescriptorProto`` hierarchy. A common runtime descriptor can
+adapt ordinary tensors, the small quantized core, and structures without
+requiring another serialized wrapper or duplicating their storage. Reuse
+allocation, shape and external-data machinery across those representations.
 
-The representation supports three progressively specialized cases:
+The initial specialized subset is a proposal to freeze in PR01, not permission
+to add all formats expressible by the catalogue. Additional built-in forms
+require demonstrated common use and an explicit proto-size review.
 
-1. **Declarative quantization:** packed INT4 codes, block scales and zero
-   points have a known affine profile. Generic tooling can inspect them and
-   an explicit decoder can produce the logical tensor.
-2. **Hybrid quantized/custom layout:** a named structure interleaves codes,
-   scales, correction sums and tile padding. The same semantic profile
-   references its fields; a kernel consumes that layout directly without
-   materializing the decoded tensor.
-3. **Fully custom representation:** a versioned domain/type identity describes
-   records or opaque bytes with a registered consumer. A decoder is optional
-   for a derived prepack with a portable source fallback. An authoritative
-   custom graph input without a consumer or decoder fails explicitly.
+The representation supports three cases:
+
+1. **Common quantization:** INT8 per-tensor/per-axis and INT4 blockwise affine
+   values use the small ``QuantizedTensorProto`` contract directly.
+2. **Other quantized formats:** codebooks, non-linear quantization, sparse
+   outliers, mixed-bit blocks, rotations, and vendor-specific layouts use
+   ``StructProto`` plus a versioned format identity and an explicit decoder
+   or registered consumer. Their schemas and numerical implementations live
+   outside the proto library; adding one must not grow its message set.
+3. **Fully custom structures:** arbitrary records use the same generic
+   structure mechanism, with or without tensor semantics. A decoder is
+   optional for a derived prepack with a portable source fallback. An
+   authoritative custom graph input without a consumer or decoder fails
+   explicitly.
 
 For example, an INT4 matrix representation can contain an array of records
-``{codes, scale, zero_point, compensation, padding}``. Quantization identifies
-the first three fields and their logical block mapping; compensation and
-padding remain physical implementation details. An FP32 packed matrix uses
-the same storage system without any quantization descriptor.
+``{codes, scale, zero_point, compensation, padding}``. This custom packed
+layout uses ``StructProto`` rather than adding a tile-specific quantized
+message. Its registered format defines the logical block mapping and field
+interpretation. An FP32 packed matrix also uses structures, without inventing
+a quantization descriptor for non-quantized data.
 
 A registered native C++ type can bind a descriptor to a typed view or create
 an owned runtime object with auxiliary indexes. Serialized bytes are not a
@@ -159,6 +168,25 @@ Keep per-weight scales and zero points in value storage, not in the reusable
 type catalogue. Only true format constants belong to the type. Registered
 validation and decoding are explicit operations; merely loading a descriptor
 must not execute arbitrary decoder code.
+
+Proto-library size gate
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+PR01 records the existing minimal proto-library binary size, dependencies and
+exported symbols with one reproducible Release configuration, and fixes the
+allowed size increase before implementation. PR02 reports the delta under
+identical compiler, linker, stripping and build settings.
+
+The proto target contains only the selected compact messages, serialization
+and structural machinery. Format-specific validators, decoders, prepackers,
+catalogue data and registration tables belong to optional compute/runtime
+components, not transitive dependencies of the proto library.
+
+A codebook or mixed-bit fixture must round-trip through structures without
+adding a specialized proto message, parser branch or enum entry for its
+format. Existing ONNX scalar types are reused rather than duplicated.
+Exceeding the agreed binary-size budget requires reducing the built-in
+subset or an explicit design decision, not silently increasing the budget.
 
 Prepacking: prepare once, share only when compatible
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -346,15 +374,16 @@ All new steps are pending; completed foundations above are reused.
      - Depends on
    * - PR01
      - Representation and lifetime contracts
-     - Freeze identities, physical/semantic separation, native custom-type
-       binding, request state effects and version rules. Fixtures cover
-       dense prepack, affine INT4, custom records and mutable dense KV.
+     - Freeze the small built-in affine subset, struct-based extension path,
+       identities, native bindings and request state effects. Record the
+       minimal proto size baseline and agree a size budget before PR02.
      - Existing runtime APIs
    * - PR02
-     - Structured storage and quantization profiles
-     - Checked layout/type resolution, buffer ownership and explicit decoding
-       support declarative, hybrid and fully custom fixtures. Round-trips
-       preserve metadata and reject malformed sizes and cyclic references.
+     - Structured storage and minimal quantized proto
+     - Round-trip common INT8/INT4 forms, a struct-based codebook/mixed-bit
+       format and custom records. Check sizes, ownership and references.
+       Report proto binary-size growth within the PR01 budget; no
+       format-specific decoder is linked into the proto target.
      - PR01
    * - PR03
      - Typed preparation and kernel binding
@@ -393,7 +422,7 @@ All new steps are pending; completed foundations above are reused.
      - Measure cold/warm preparation, repeated decode and simultaneous
        independent requests. Report source/packed/state/scratch bytes,
        preparation counts and per-token copies; verify stale-cache handling,
-       eviction pins and request reset/isolation.
+       eviction pins, request reset/isolation and the final proto-size budget.
      - PR04, PR05, PR07
    * - Later
      - Paging, quantized state and snapshots

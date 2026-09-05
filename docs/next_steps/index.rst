@@ -70,10 +70,10 @@ Planned
     * - Plan
       - Contribution
     * - :ref:`l-next-steps-prepared-values-and-persistent-state`
-      - Unifies structured and quantized representations, typed prepacking,
-        compiled caches, GraphBuilder integration and request-owned persistent
-        state. Reuses the completed preparation, allocation and execution
-        infrastructure.
+      - Combines a small built-in quantized subset with generic structures
+        for other formats, under an explicit proto-size budget. Unifies typed
+        prepacking, compiled caches, GraphBuilder and request-owned state
+        using the completed runtime infrastructure.
 
 Completed
 ---------

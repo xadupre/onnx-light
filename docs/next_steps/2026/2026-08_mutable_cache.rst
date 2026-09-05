@@ -5,7 +5,15 @@ Mutable execution cache
 
 :Date: 2026-08
 
-**discussion**
+**consolidated design reference**
+
+.. note::
+
+    Persistent state and mutation are now specified by
+    :ref:`l-next-steps-prepared-values-and-persistent-state`. The caller-bound
+    cache and specialized quantized-page examples below are historical
+    alternatives. The current plan uses explicit request state, one shared
+    representation system, and separate optional checkpoint persistence.
 
 Objective
 +++++++++

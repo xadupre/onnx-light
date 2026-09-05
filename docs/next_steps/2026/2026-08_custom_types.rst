@@ -5,7 +5,14 @@ Structured views over byte buffers
 
 :Date: 2026-08
 
-**discussion**
+**consolidated design reference**
+
+.. note::
+
+    The implementation sequence and current decisions are consolidated in
+    :ref:`l-next-steps-prepared-values-and-persistent-state`. This page retains
+    the original physical-layout proposal; its structures are not implemented
+    proto contracts. The unified plan takes precedence where details differ.
 
 Motivation
 ++++++++++

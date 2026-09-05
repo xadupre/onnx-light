@@ -6,7 +6,15 @@ Quantization
 
 :Date: 2026-08
 
-**discussion**
+**consolidated design reference**
+
+.. note::
+
+    The implementation sequence is now
+    :ref:`l-next-steps-prepared-values-and-persistent-state`. This page remains
+    a quantization-format catalogue, not a list of implemented kernels or a
+    separate proto hierarchy. The unified plan defines how semantic profiles
+    combine with custom physical layouts.
 
 .. note::
 

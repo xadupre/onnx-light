@@ -5,7 +5,15 @@ CompiledTensorProto
 
 :Date: 2026-08
 
-**discussion**
+**consolidated design reference**
+
+.. note::
+
+    The current design is
+    :ref:`l-next-steps-prepared-values-and-persistent-state`. In particular,
+    preparation keys cover all source operands and their semantics, not only
+    the single ``source_name`` sketched below. Reuse the implemented prepared
+    object store and disk cache; this historical proto is not implemented.
 
 Motivation
 ++++++++++

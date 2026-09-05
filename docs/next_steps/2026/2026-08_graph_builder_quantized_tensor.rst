@@ -5,7 +5,14 @@ Quantized values in ``GraphBuilder``
 
 :Date: 2026-08
 
-**discussion**
+**consolidated design reference**
+
+.. note::
+
+    GraphBuilder integration is PR05 of
+    :ref:`l-next-steps-prepared-values-and-persistent-state`. The API sketches
+    below are historical proposals, not existing interfaces. Use the unified
+    plan for the representation, ownership and implementation sequence.
 
 Objective
 +++++++++

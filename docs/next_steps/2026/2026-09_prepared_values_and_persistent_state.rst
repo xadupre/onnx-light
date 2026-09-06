@@ -4,6 +4,7 @@ Prepared values, custom representations, and persistent state
 ================================================================================
 
 :Date: 2026-09
+:Updated: 2026-09-06
 
 **planned**
 
@@ -109,14 +110,16 @@ finalized in PR01; no ONNX-standard status is implied.
    * - Descriptor
      - Responsibility
    * - ``StructTypeProto``
-     - Describes a portable physical layout: fixed-width fields, nested
-       records, arrays and bit packing. Counts are concrete after shape
-       binding; references are acyclic and size arithmetic is checked.
+     - Describes one fixed-size physical element: fields, nested records,
+       fixed arrays and bit packing. Internal counts are concrete,
+       references are acyclic and size arithmetic is checked. The number of
+       repeated elements belongs to the value, not this type.
    * - ``EncodedValueProto``
      - One value container with optional logical tensor type/shape, a layout
-       choice and owned or external payload. Layout is either a small
-       built-in dense/affine form or a concrete ``StructTypeProto`` reference.
-       INT8 and blockwise INT4 are configurations, not distinct messages.
+       choice, physical ``storage_shape`` and owned or external payload.
+       Layout is either a small built-in dense/affine form or a concrete
+       ``StructTypeProto`` reference. INT8 and blockwise INT4 are
+       configurations, not distinct messages.
    * - Optional preparation metadata
      - Records source dependencies, preparation recipe and compatibility
        requirements for a derived value. These are metadata on the same
@@ -178,6 +181,106 @@ Keep per-weight scales and zero points in value storage, not in the reusable
 type catalogue. Only true format constants belong to the type. Registered
 validation and decoding are explicit operations; merely loading a descriptor
 must not execute arbitrary decoder code.
+
+One element type, many storage shapes
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+Follow the existing tensor distinction between element type and shape.
+``StructTypeProto`` defines one encoded element, which can itself be a
+fixed-size block. ``EncodedValueProto.storage_shape`` specifies how many
+such elements are stored and their physical array dimensions. Changing that
+shape does not instantiate or create a new type.
+
+For example, the shared catalogue contains one block declaration:
+
+.. code-block:: text
+
+    ModelProto.struct_types[3] = StructTypeProto {
+        name: "Int4Block"
+        structure: {
+            codes: INT4[32]
+            scale: FLOAT
+        }
+    }
+
+    EncodedValueProto {
+        struct_type: { type_index: 3 }
+        storage_shape: [128]
+        logical_type: FLOAT[4096]
+        raw_data: ...                 // 128 * 20 = 2560 bytes
+    }
+
+    EncodedValueProto {
+        struct_type: { type_index: 3 }
+        storage_shape: [256]
+        logical_type: FLOAT[8192]
+        raw_data: ...                 // 256 * 20 = 5120 bytes
+    }
+
+This is descriptive syntax, not the final wire schema. Each physical element
+contains 16 bytes of INT4 codes followed by one 4-byte FLOAT scale, with no
+implicit padding. The registered decoder defines the signed-code scaling and
+mapping from blocks to logical elements. Scale values differ between blocks
+and remain in the payload; the declaration only specifies their placement.
+
+There are three distinct quantities:
+
+* **element type:** the fixed physical layout of one ``Int4Block``;
+* **storage shape:** the physical array of those blocks;
+* **logical shape:** the dimensions exposed by the decoder or consuming
+  kernel, not the number of physical records.
+
+For the structured branch, require:
+
+.. code-block:: text
+
+    element_bytes = checked_size(resolved_struct_type)
+    payload_bytes = checked_product(storage_shape) * element_bytes
+
+The concrete element must be byte-aligned; explicit padding is part of its
+type. Storage dimensions are non-negative concrete integers. An empty
+``storage_shape`` means one scalar record; any zero dimension means zero
+records. There is no ``-1`` dimension, inferred count from payload length or
+automatic padding. Validate all dimensions and arithmetic before allocation
+or access, then require the exact inline/external payload length.
+
+The first version stores records densely in a documented row-major order.
+Layouts requiring internal strides, tile padding or multiple fields express
+them in the fixed element structure or a supported built-in layout, not in
+an implicit reshape. Built-in dense/affine layouts have their own explicit
+size rules, including parameter storage; do not apply the struct formula
+blindly to them.
+
+Logical dimensions are checked by the format/decoder contract and may differ
+from ``storage_shape``. They never make a tensor-only operator accept encoded
+bytes implicitly.
+
+Shared catalogue, not template instantiations
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+Model values reference a declaration in ``ModelProto.struct_types`` via
+``type_index``. The value's reference may select that declaration, while the
+resolved declaration must be concrete. An inline declaration remains useful
+for standalone values; import/export should share equivalent declarations
+without merging different decoding semantics.
+
+Resolve and validate each type once in its catalogue scope. Values with
+different storage shapes share that resolved type; do not create a cache of
+``(type, template_arguments)`` instantiations. They retain their own
+shape/extent checks and payload owners.
+
+Dynamic KV values use a session-owned catalogue with stable resolved type
+handles. The model catalogue is read-only; additional session types are
+interned without mutating it or duplicating a declaration for every page.
+Indices are catalogue-local, not process-global identities. Export of a
+session-created value includes or remaps its referenced declarations;
+an index from another catalogue cannot be consumed without resolution.
+
+Do not add generic template parameters, argument lists or an expression
+language to the initial proto contract. Fixed arrays inside a record remain
+part of its element type. If a later use case requires variable dimensions
+inside the record, evaluate reuse of ONNX symbolic dimensions separately,
+with explicit binding and size rules; it is not implicit support in PR02.
 
 Proto-library size gate
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -360,6 +463,13 @@ ranges must agree. For a given layer/head mapping, the decoder output types
 and geometry must satisfy the shared Attention contract even when physical
 layouts differ.
 
+For a structured block, ``storage_shape`` determines the allocated physical
+records, not the current valid token count. Pages with different capacities
+can share the same element type while carrying different storage shapes.
+Appending a token changes request validity and data, not the type catalogue.
+Mapping quantization groups and padding to valid tokens remains an explicit
+layout/Attention contract.
+
 The block table is runtime state using existing container machinery or a
 structured descriptor, not a new ``QuantizedKVCacheProto`` or a separate
 paged quantization hierarchy. It retains owners/generations, not serialized
@@ -432,10 +542,11 @@ Known logical dimensions do not permit a tensor-only operator to consume
 structured bytes implicitly: use an explicit decoder or a matching schema.
 
 ``GraphBuilder`` preserves structured source initializers, type references,
-external payload ownership and quantization metadata through import/export,
-functions and subgraphs. Deduplication considers semantic profiles as well
-as bytes. Rewrites that change any preparation dependency invalidate the
-corresponding compiled binding.
+physical storage shapes, external payload ownership and quantization metadata
+through import/export, functions and subgraphs. Deduplication considers
+semantic profiles as well as bytes and both physical and logical shapes.
+Rewrites that change any preparation dependency invalidate the corresponding
+compiled binding.
 
 Prefer an optional companion compiled store for the first implementation.
 Do not make the core plan depend on modifying upstream ONNX wire messages or
@@ -453,7 +564,8 @@ The first concrete implementation is the **structured representation**:
 ``StructTypeProto`` and the structured-layout branch of ``EncodedValueProto``.
 PR01 first freezes their minimal contract and the proto-size budget. PR02
 implements checked fields, arrays, bit packing, type references, payload
-ownership and serialization before adding the small built-in affine subset.
+ownership, per-value storage shapes and serialization before adding the
+small built-in affine subset.
 Custom packed weights and heterogeneous KV-block fixtures must work through
 structures without requiring a catalogue of native quantized types.
 
@@ -473,8 +585,9 @@ integration and persistent-state consumers build on this common foundation.
    * - PR01
      - Representation and lifetime contracts
      - Freeze the small built-in affine subset, struct-based extension path,
-       identities, native bindings and request state effects, including
-       heterogeneous K/V block descriptors. Record the
+       element-type/storage-shape separation, catalogue identities, native
+       bindings and request state effects, including heterogeneous K/V block
+       descriptors. Record the
        minimal proto size baseline and agree a size budget before PR02.
      - Existing runtime APIs
    * - PR02
@@ -482,7 +595,8 @@ integration and persistent-state consumers build on this common foundation.
      - Implement StructTypeProto and EncodedValueProto's structured branch
        first; then add common INT8/INT4 layouts. Round-trip custom records,
        codebook/mixed-bit formats and a heterogeneous KV-block fixture.
-       Check sizes, ownership and references.
+       Prove one type is shared by different storage shapes; check scalar,
+       empty, overflow, catalogue resolution and exact payload-size cases.
        Report proto binary-size growth within the PR01 budget; no
        format-specific decoder is linked into the proto target.
      - PR01
@@ -558,6 +672,12 @@ tensor-cache execution with the same numerical contract. Test concurrent
 preparation, active pins during eviction, changed scales with unchanged code
 bytes, incompatible ISA/ABI, missing consumers, reset, invalid capacities,
 failed mutations and independent requests.
+
+Type/value tests also round-trip two encoded values with the same catalogue
+reference but different storage shapes and payloads. Verify a single shared
+resolved descriptor, scalar and zero-size storage, malformed lengths,
+arithmetic overflow, external payload extents and session-to-model catalogue
+remapping without copying type declarations per KV block.
 
 Structural gates are explicit: a reused prepared object has no repeat
 prepacking, a compatible verified disk hit does not read portable payloads,

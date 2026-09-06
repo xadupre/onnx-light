@@ -16,6 +16,11 @@ Structured views over byte buffers
     Its first concrete implementation is ``StructTypeProto`` together with
     the structured branch of ``EncodedValueProto``, which replaces the
     historical ``StructProto`` container below.
+    The current contract separates the fixed-size element type from
+    ``EncodedValueProto.storage_shape``: different repetition counts share
+    one catalogue declaration, without template parameters or type
+    instantiations. The historical size rules below describe one element;
+    its total value size additionally includes the storage-shape product.
 
 Motivation
 ++++++++++

@@ -5,7 +5,17 @@ Quantized values in ``GraphBuilder``
 
 :Date: 2026-08
 
-**discussion**
+**consolidated design reference**
+
+.. note::
+
+    GraphBuilder integration is PR05 of
+    :ref:`l-next-steps-prepared-values-and-persistent-state`. The API sketches
+    below are historical proposals, not existing interfaces. Use the unified
+    plan for the representation, ownership and implementation sequence.
+    In particular, preserve ``EncodedValueProto.storage_shape`` separately
+    from the decoded logical shape and share ``StructTypeProto`` declarations
+    across values. A different physical array size does not create a new type.
 
 Objective
 +++++++++

@@ -6,15 +6,27 @@ Quantization
 
 :Date: 2026-08
 
-**discussion**
+**consolidated design reference**
 
 .. note::
 
-    The structures on this page are descriptive quantization profiles. They
-    should be implemented with :ref:`l-next-steps-custom-types`, not as a
-    parallel protobuf hierarchy. Each specialized structure below is followed
-    by its ``StructTypeProto`` translation. The families remain useful
-    as format names, validation profiles, and decoder specifications.
+    The implementation sequence is now
+    :ref:`l-next-steps-prepared-values-and-persistent-state`. This page remains
+    a quantization-format catalogue, not a list of implemented kernels or a
+    proto implementation checklist. Only a small affine INT8/INT4 subset is
+    proposed as built-in layouts of ``EncodedValueProto``; all other
+    formats use its structured layout, with their implementations outside
+    the proto library. The same representation serves weights and mixed-format
+    KV blocks.
+
+.. note::
+
+    The structures on this page are descriptive quantization profiles.
+    Apart from the small built-in subset selected by the unified plan, they
+    use :ref:`l-next-steps-custom-types`, not specialized protobuf messages.
+    Each structure below is followed by its ``StructTypeProto`` translation.
+    The families remain useful as format names, validation profiles and
+    decoder specifications, without increasing the proto library per format.
 
 Format coverage summary
 +++++++++++++++++++++++

@@ -5,7 +5,22 @@ Structured views over byte buffers
 
 :Date: 2026-08
 
-**discussion**
+**consolidated design reference**
+
+.. note::
+
+    The implementation sequence and current decisions are consolidated in
+    :ref:`l-next-steps-prepared-values-and-persistent-state`. This page retains
+    the original physical-layout proposal; its structures are not implemented
+    proto contracts. The unified plan takes precedence where details differ.
+    Its first concrete implementation is ``StructTypeProto`` together with
+    the structured branch of ``EncodedValueProto``, which replaces the
+    historical ``StructProto`` container below.
+    The current contract separates the fixed-size element type from
+    ``EncodedValueProto.storage_shape``: different repetition counts share
+    one catalogue declaration, without template parameters or type
+    instantiations. The historical size rules below describe one element;
+    its total value size additionally includes the storage-shape product.
 
 Motivation
 ++++++++++

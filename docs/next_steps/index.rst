@@ -4,6 +4,7 @@ Next Steps
 ==========
 
 :Date: 2026-08
+:Updated: 2026-09
 
 .. toctree::
     :maxdepth: 1
@@ -35,6 +36,7 @@ Next Steps
     2026/2026-08_buffer_reuse_arena
     2026/2026-08_graph_builder_optimization
     2026/2026-08_session_execution_pools
+    2026/2026-09_prepared_values_and_persistent_state
 
 Started
 -------
@@ -56,6 +58,24 @@ Started
         owners in ``SessionState``, use direct reads for ineligible tensors,
         run the four-configuration benchmark, and submit the upstream PR. All
         native dependencies through #4623 are complete.
+
+Planned
+-------
+
+.. list-table::
+    :header-rows: 1
+    :widths: 35 65
+    :class: sphinx-datatable
+
+    * - Plan
+      - Contribution
+    * - :ref:`l-next-steps-prepared-values-and-persistent-state`
+      - Combines a small built-in quantized subset with generic structures
+        for other formats, under an explicit proto-size budget. Unifies typed
+        prepacking, compiled caches, GraphBuilder and request-owned state,
+        including paged KV blocks with independent quantization, using the
+        completed runtime infrastructure. Shared element types and per-value
+        storage shapes avoid template instantiations and duplicate types.
 
 Completed
 ---------
@@ -137,24 +157,24 @@ Discussion
 
     * - Plan
       - Contribution
-    * - :ref:`l-next-steps-custom-types`
-      - Describes structured byte buffers used by packed weights and persistent
-        state.
     * - :ref:`l-next-steps-proto-inheritance`
-      - Reuses common schema fields without changing the flat wire format.
-    * - :ref:`l-next-steps-quantization`
-      - Defines quantized layouts consumed by kernels, prepared weights, and
-        persistent cache pages.
-    * - :ref:`l-next-steps-graph-builder-quantized-tensor`
-      - Preserves quantized initializers until preparation or persistent-state
-        allocation.
-    * - :ref:`l-next-steps-mutable-cache`
-      - Defines in-place KV-cache updates, aliasing, capacity, and persistence.
-    * - :ref:`l-next-steps-compiled-tensor`
-      - Persists packed weights so startup and ONNX Runtime integration can
-        avoid repeated prepacking.
+      - Reuses common schema fields without changing the flat wire format;
+        independent of the prepared-value and persistent-state plan.
     * - :ref:`l-next-steps-model-resolution`
       - Determines the final graph and live payloads before parallel reads or
         ONNX Runtime handoff.
     * - :ref:`l-next-steps-split-wheels`
       - Packages runtime capabilities independently from their execution order.
+
+Consolidated design references
+----------------------------------------
+
+The following proposals are retained as historical detail and format examples.
+Their implementation sequences are superseded by
+:ref:`l-next-steps-prepared-values-and-persistent-state`.
+
+* :ref:`l-next-steps-custom-types`
+* :ref:`l-next-steps-quantization`
+* :ref:`l-next-steps-graph-builder-quantized-tensor`
+* :ref:`l-next-steps-compiled-tensor`
+* :ref:`l-next-steps-mutable-cache`

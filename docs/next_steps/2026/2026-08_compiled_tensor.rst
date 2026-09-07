@@ -1,7 +1,7 @@
 .. _l-next-steps-compiled-tensor:
 
-CompiledTensorProto
-===================
+Prepared values in EncodedValueProto
+====================================
 
 :Date: 2026-08
 
@@ -11,12 +11,11 @@ CompiledTensorProto
 
     The current design is
     :ref:`l-next-steps-prepared-values-and-persistent-state`. In particular,
-    preparation keys cover all source operands and their semantics, not only
-    the single ``source_name`` sketched below. Reuse the implemented prepared
-    object store and disk cache; this historical proto is not implemented.
-    The current plan replaces the separate compiled/quantized/structured
-    value containers with ``EncodedValueProto`` and optional preparation
-    metadata.
+    preparation keys cover all source operands and their semantics. Reuse
+    the implemented prepared object store and disk cache. The proposed
+    typed serialization below is not implemented: it uses
+    ``EncodedValueProto`` with optional preparation metadata, not a separate
+    ``CompiledTensorProto`` or a wrapper around a ``StructProto``.
 
 Motivation
 ++++++++++
@@ -30,31 +29,43 @@ to reference the original initializer, which remains the portable fallback.
 The cached bytes use :ref:`l-next-steps-custom-types` and are ignored when the
 current runtime or device is incompatible.
 
-Stable contract
-+++++++++++++++
+Value and preparation metadata
++++++++++++++++++++++++++++++++++++++++++++++++++
+
+The prepared payload is an ``EncodedValueProto``. Preparation metadata
+records its provenance and compatibility without owning another payload.
+The following descriptive sketch does not freeze wire field numbers or
+metadata field names:
 
 .. code-block:: text
 
-    message CompiledTensorProto {
-        string source_name = 1;        // original graph initializer
-        StructProto value = 2;   // prepacked physical representation
-        int32 device = 3;              // index into ModelProto.devices
-        bytes source_digest = 4;       // digest of the canonical source tensor
-        string digest_algorithm = 5;   // for example "blake3"
-        repeated StringStringEntryProto metadata_props = 6;
+    EncodedValueProto {
+        struct_type: { type_ref: 3001 }
+        storage_shape: [tile_count]
+        logical_type: FLOAT[K, N]
+        raw_data: ...
+        preparation: {
+            source_lineage: ...       // ordered operands and their semantics
+            source_lineage_digest: ...
+            digest_algorithm: "blake3"
+            recipe: ...               // operator, packing and tuning choices
+            device: 1                 // index into ModelProto.devices
+        }
     }
 
-``value`` is always an exact structured value: it uses either a non-negative
-model-level ``type`` index or an inline concrete ``struct_type``. An
-unconstrained static type is not valid here.
+The structured branch resolves a stable ``type_ref`` ID or an inline
+concrete ``struct_type``. An unconstrained static type is not valid for a
+payload. A built-in layout may instead use the same value container without
+a structured declaration.
 
-``source_name`` refers to one initializer in ``ModelProto.graph``. The first
-version does not address initializers owned by nested subgraphs.
-``source_digest`` prevents stale compiled data from being used after that
-initializer changes. The digest algorithm is explicit so the cache format
-does not depend on one hard-coded hash implementation. The digest covers the
-element type, dimensions, and canonical tensor content, but not the tensor
-name, external-data location, or storage method.
+Source lineage resolves every operand in its graph scope, including scales,
+zero points, bias and other inputs when they contribute to preparation.
+Its digest prevents stale prepared data from being used after any dependency
+changes. The digest algorithm is explicit. The key covers canonical source
+content, types, dimensions, type constants and interpretation, together with
+the recipe and compatibility metadata; it is not merely a digest of one
+weight buffer. Tensor names and external-data locations are not sufficient
+content identities.
 
 DeviceProto
 +++++++++++
@@ -80,35 +91,39 @@ compatibility keys may be stored in ``metadata_props``.
 ModelProto extension
 ++++++++++++++++++++
 
+An illustrative model extension stores the same value messages directly:
+
 .. code-block:: text
 
     message ModelProto {
         ...
         repeated StructTypeProto struct_types = <N>;
         repeated DeviceProto devices = <N+1>;
-        repeated CompiledTensorProto compiled_tensors = <N+2>;
+        repeated EncodedValueProto prepared_values = <N+2>;
     }
 
-Several compiled entries may reference the same ``source_name`` for different
-architectures, runtimes, or packing strategies. Their
-``StructTypeProto.name`` and metadata distinguish the physical formats.
+Several prepared entries may use the same source lineage for different
+architectures, runtimes, or packing strategies. Stable structured type IDs,
+resolved definitions and compatibility metadata distinguish physical formats;
+display names alone do not. The collection is a cache attachment, not a new
+value category or a replacement for portable graph initializers.
 
 Loading rules
 +++++++++++++
 
 A runtime uses a compiled entry only when all of the following hold:
 
-* ``source_name`` resolves to exactly one initializer;
-* ``source_digest`` matches the canonical initializer content;
+* every source operand resolves unambiguously in its scope;
+* the source-lineage digest and preparation recipe match current dependencies;
 * ``device`` is an in-range model-level index;
 * device type, architecture, runtime, version, and required metadata are
   compatible;
-* ``value`` and its concrete ``StructTypeProto`` pass structural and
+* the encoded value, selected layout and storage shape pass structural and
   payload-size validation;
 * the runtime recognizes that physical type and compiled-format version.
 
 If a compatibility condition or digest comparison fails, the runtime treats
-the entry as a cache miss and rebuilds it from the original initializer.
+the entry as a cache miss and rebuilds it from the portable source operands.
 Invalid compiled data must never change graph results or make an otherwise
 valid portable model unloadable. Malformed indices, payloads, or digest
 declarations are checker errors; ordinary incompatibility or a stale digest
@@ -119,19 +134,22 @@ Quantized and tiled tensors
 
 No dependency on ``QuantizedTensorProto`` is needed. A quantized, tiled, or
 otherwise packed cache entry is represented by the same
-``StructProto`` mechanism:
+``EncodedValueProto`` mechanism:
 
 .. code-block:: text
 
-    CompiledTensorProto {
-        source_name: "decoder.layers.0.attn.weight"
-        value: StructProto {
-            type: 3                    // model-level packed CUDA type
-            raw_data: ...
+    EncodedValueProto {
+        struct_type: { type_ref: 3002 } // stable packed CUDA type ID
+        storage_shape: [tile_count]
+        logical_type: FLOAT[K, N]
+        raw_data: ...
+        preparation: {
+            source_lineage: ...        // includes weight and all other operands
+            source_lineage_digest: ...
+            digest_algorithm: "blake3"
+            recipe: ...
+            device: 1                  // e.g. CUDA sm_80 + runtime ABI
         }
-        device: 1                      // e.g. CUDA sm_80 + runtime ABI
-        source_digest: ...
-        digest_algorithm: "blake3"
     }
 
 The referenced structured type describes the complete byte layout. Its
@@ -145,10 +163,10 @@ Validation
 A checker validates:
 
 * unique device descriptors and valid device indices;
-* unique ``(source_name, device, physical type)`` cache keys;
-* source initializer existence;
+* unique complete preparation keys, including lineage, recipe, layout and device;
+* source operand existence and unambiguous scope;
 * non-empty digest and algorithm fields;
-* exact structured type resolution and payload size;
+* exact layout resolution, stable structured IDs and payload size;
 * absence of unconstrained static structured types;
 * metadata keys are unique.
 
@@ -158,9 +176,8 @@ but structural errors are rejected independently of hardware availability.
 Relationship to other proposals
 +++++++++++++++++++++++++++++++
 
-``CompiledTensorProto`` depends only on the stable physical representation in
-``StructProto``. The specialized hierarchy in
+Preparation reuses the physical representation in ``EncodedValueProto``.
+The specialized hierarchy in
 :ref:`l-next-steps-quantization` may remain a format catalogue, but it is not a
-storage dependency. Proto inheritance is likewise unnecessary because the
-compiled value is composed from a ``StructProto`` rather than derived
-from it.
+storage dependency. Proto inheritance and wrapper containers are unnecessary:
+the preparation recipe is optional metadata on the same encoded value.

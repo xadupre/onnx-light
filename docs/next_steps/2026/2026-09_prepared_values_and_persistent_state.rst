@@ -138,6 +138,13 @@ interpretation, rather than merely indicating that bytes are stored.
 logical tensors. The name applies equally to packed weights and KV blocks;
 it does not imply immutability or disk persistence.
 
+Keep the name ``EncodedValueProto`` for every value example and proposed
+API. ``StructProto`` would suggest that every value must instantiate a
+``StructTypeProto``, whereas built-in layouts need not do so. Reserve
+``StructTypeProto`` for the reusable structured element description,
+including its constants. Do not introduce a ``StructProto`` alias, base
+class, nested value wrapper or parallel value category.
+
 The affine layout parameters are a small nested descriptor, not a growing
 ``QuantizationDescriptorProto`` hierarchy. Source INT4 weights, their custom
 prepacked form, and an INT4 KV block use the same container with different
@@ -271,9 +278,8 @@ Shared catalogue, not template instantiations
 Concrete declarations in ``ModelProto.struct_types`` carry a nonzero
 ``uint64 type_id``. Model values reference that stable number through
 ``struct_type: { type_ref: id }``; they never reference a declaration's
-position in the repeated field. The historical ``StructProto`` example
-uses ``type_id`` for the same value-side reference. The resolved declaration
-must be concrete. An inline declaration remains useful for standalone values.
+position in the repeated field. The resolved declaration must be concrete.
+An inline declaration remains useful for standalone values.
 
 Producers assign IDs through a shared type registry so the same type can
 keep the same number in different models. List order and storage shape do
@@ -588,16 +594,16 @@ All new steps are pending; completed foundations above are reused.
 The first concrete implementation is the **structured representation**:
 ``StructTypeProto`` and the structured-layout branch of ``EncodedValueProto``.
 PR01 first freezes their minimal contract and the proto-size budget. PR02
-implements checked fields, arrays, bit packing, type references, payload
+implements checked typed/constant fields, arrays, bit packing, type references, payload
 ownership, per-value storage shapes and serialization before adding the
 small built-in affine subset.
 Custom packed weights and heterogeneous KV-block fixtures must work through
 structures without requiring a catalogue of native quantized types.
 
 Use :ref:`l-next-steps-custom-types` as physical-layout design material, not
-as a separate roadmap to implement verbatim: its old ``StructProto`` value
-container is replaced by ``EncodedValueProto``. Typed prepacking, graph
-integration and persistent-state consumers build on this common foundation.
+as a separate roadmap to implement verbatim. Its examples use the same
+``EncodedValueProto`` container. Typed prepacking, graph integration and
+persistent-state consumers build on this common foundation.
 
 .. list-table::
    :header-rows: 1
@@ -702,6 +708,9 @@ Type/value tests also round-trip two encoded values with the same stable type
 ID but different storage shapes and payloads. Include two models with reordered
 catalogues and unchanged references, per-value scale/zero-point parameters,
 missing and duplicate IDs, and conflicting definitions under the same ID.
+Round-trip constants inside the shared type declaration without including
+them in value-buffer sizes. Reject fields with both or neither of ``type``
+and ``constant``, invalid tensor constants, and physical fields of unknown size.
 Verify a single shared resolved descriptor, scalar and zero-size storage,
 malformed lengths, arithmetic overflow, external payload extents and
 session-to-model catalogue resolution preserving IDs without copying type

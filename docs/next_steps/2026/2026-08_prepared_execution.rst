@@ -586,7 +586,7 @@ Reusing a persisted prepack
 
 Prepacking is often linear but not free, and it repeats on every load. The
 first implementation does **not** depend on the proposed
-:ref:`l-next-steps-compiled-tensor` format: ``CompiledTensorProto`` is not
+:ref:`l-next-steps-compiled-tensor` format: ``EncodedValueProto`` is not
 implemented and is not required for prepared execution.
 
 A companion ONNX model stores each packed representation as a standard
@@ -650,10 +650,11 @@ Prepacking reuses that cache instead of introducing a second format:
 * an incompatible runtime or device ignores the cached value and falls back to
   the portable initializer.
 
-``CompiledTensorProto`` may later replace this metadata convention if a stable,
-shared structured-physical-value format is adopted. That migration changes the
-cache serialization only; it does not change plan tasks, scheduling, residency,
-or allocator ownership.
+The unified plan proposes ``EncodedValueProto`` with optional preparation
+metadata as the future typed serialization of these same entries. It does
+not introduce a separate compiled-value container. That migration changes
+cache serialization only; it does not change plan tasks, scheduling,
+residency, or allocator ownership.
 
 Cache writes use a temporary file, flush and validate the complete record, then
 publish it with an atomic rename. Cancellation before publication leaves no

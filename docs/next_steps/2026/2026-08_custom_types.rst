@@ -11,19 +11,18 @@ Structured views over byte buffers
 
     The implementation sequence and current decisions are consolidated in
     :ref:`l-next-steps-prepared-values-and-persistent-state`. This page retains
-    the original physical-layout proposal; its structures are not implemented
+    the physical-layout proposal; its structures are not implemented
     proto contracts. The unified plan takes precedence where details differ.
     Its first concrete implementation is ``StructTypeProto`` together with
-    the structured branch of ``EncodedValueProto``, which replaces the
-    historical ``StructProto`` container below.
+    the structured branch of ``EncodedValueProto``. All value examples below
+    use this single container; there is no separate ``StructProto``.
     The current contract separates the fixed-size element type from
     ``EncodedValueProto.storage_shape``: different repetition counts share
     one catalogue declaration, without template parameters or type
-    instantiations. The historical size rules below describe one element;
+    instantiations. The size rules below describe one element;
     its total value size additionally includes the storage-shape product.
     Type references use explicit stable numeric identifiers, not positions
-    in ``ModelProto.struct_types``. The same rule applies to both the
-    illustrative ``StructProto`` below and the unified ``EncodedValueProto``.
+    in ``ModelProto.struct_types``.
 
 Motivation
 ++++++++++
@@ -37,33 +36,43 @@ Conversely, adding one protobuf message for every quantization or custom
 format creates a closed hierarchy that must grow whenever a new layout is
 introduced.
 
-This proposal assumes that a ``StructProto`` already exists. It owns
-or references a byte buffer and references the physical type from which its
-exact byte size is computed:
+``EncodedValueProto`` owns or references a byte buffer and selects its
+physical layout. Its structured branch references a ``StructTypeProto``;
+the other branches cover the small built-in dense/affine subset. The
+following sketch shows only the structured branch, with wire field numbers
+still to be frozen in the unified plan:
 
 .. code-block:: text
 
-    message StructProto {
-        oneof type {
-            uint64 type_id = 1;           // stable identifier, never a list index
-            StructTypeProto struct_type = 2;  // standalone inline declaration
+    message EncodedValueProto {
+        oneof layout {
+            StructTypeProto struct_type = <N>;  // type_ref or concrete inline type
+            // Other built-in layout branches are omitted here.
         }
-        bytes raw_data = 3;
-        repeated StringStringEntryProto external_data = 4;
-        string name = 5;
-        string doc_string = 6;
+        repeated int64 storage_shape = <N>;
+        optional TypeProto logical_type = <N>;
+        bytes raw_data = <N>;
+        repeated StringStringEntryProto external_data = <N>;
+        string name = <N>;
+        string doc_string = <N>;
     }
 
-The container itself is outside the scope of this page. The purpose of the
-specification is to define ``StructTypeProto``: a portable structure
-that can be overlaid on the bytes of a ``StructProto``.
+The complete container contract belongs to the unified plan. This page
+defines ``StructTypeProto``: a reusable description of one physical element,
+including its constant fields, not a second payload container. ``Encoded``
+does not imply compression or quantization; it also covers custom records
+and prepacked values.
 
-The type system adds three serialized structural kinds and constant fields:
+The type system adds three serialized structural kinds:
 
 * an array of a statically sized ``TypeProto``;
 * a bit packing of repeated named components;
-* a structure containing named, statically sized ``TypeProto`` fields;
-* a tensor constant consuming no payload bytes.
+* a structure containing named fields.
+
+Each structure field selects either a statically sized ``TypeProto`` for
+data in the value buffer, or a ``TensorProto constant`` stored in the type.
+A constant is a field value, not a fourth structural kind, and consumes no
+bytes in the encoded value buffer.
 
 Scalars and ordinary tensors continue to use ``TypeProto.Tensor``. Quantized
 values, packed records, custom numeric types, image pixels, and other static
@@ -73,15 +82,15 @@ additions.
 Requirements
 ++++++++++++
 
-* The size implied by the physical type equals the inline or external payload
-  length.
+* The physical element size times the storage-shape product equals the inline
+  or external payload length.
 * Every read performed by the structured view is bounds-checked.
 * Bits and multi-byte values use one canonical ordering convention.
 * A structure may be nested and repeated without introducing a new proto
   for each format.
 * Every array and bit-packing length is a concrete non-negative integer.
-* The number of payload bytes of a value is computable from its type without
-  reading the payload.
+* The number of payload bytes is computable from its type and storage shape
+  without reading the payload.
 * The physical structure is inspectable without loading a vendor plugin.
 * An optional standard ONNX decoder defines logical semantics such as
   dequantization.
@@ -94,12 +103,14 @@ The proposal has three valid uses of ``StructTypeProto``:
 ``concrete declaration``
     Selects ``array``, ``bit_packing``, or ``structure``. It appears in
     ``ModelProto.struct_types`` or in
-    ``StructProto.struct_type``. It completely determines the payload size.
+    ``EncodedValueProto.struct_type``. It completely determines the size of
+    one physical element.
 
 ``exact static reference``
-    Selects ``type_ref`` and appears inside ``TypeProto``. Its numeric value
-    identifies the declaration with that ``type_id``, independent of its
-    position in the model's catalogue.
+    Selects ``type_ref`` and appears inside ``TypeProto`` or the structured
+    layout of ``EncodedValueProto``. Its numeric value identifies the
+    declaration with that ``type_id``, independent of its position in the
+    model's catalogue.
 
 ``unconstrained static category``
     Leaves ``kind`` unset and appears only inside ``TypeProto``. It accepts
@@ -131,6 +142,7 @@ declaration:
 .. code-block:: text
 
     size(scalar(T))             = bit_width(T)
+    size(tensor(T, dims))       = checked_product(dims) * bit_width(T)
     size(Array(T, n))           = n * size(T)
     size(BitPacking(c..., n))   = n * sum(c.bit_width)
     size(Field(constant))       = 0
@@ -139,18 +151,43 @@ declaration:
     size(type_ref=id)           = size(resolve_type_id(id))
 
 All arithmetic is checked in ``uint64``. References must be acyclic. The
-concrete root size must be divisible by eight and equal the inline
-``raw_data`` length or the external-data ``length``, so the physical schema
-and payload remain independently checkable.
+concrete root size must be divisible by eight. For the structured layout:
+
+.. code-block:: text
+
+    element_bytes = size(resolved_struct_type) / 8
+    payload_bytes = checked_product(storage_shape) * element_bytes
+
+Storage dimensions are concrete and non-negative. ``storage_shape: []``
+means one record; a zero dimension means an empty payload. Require
+``payload_bytes`` to equal the inline ``raw_data`` length or external-data
+``length``. The optional logical type/shape describes the decoded value, not
+the physical repetition count.
 
 StructTypeProto
 +++++++++++++++
 
 The complete proposal adds one top-level structured type message.
+``Structure``, ``Array`` and ``BitPacking`` below are its nested message
+declarations, not undefined external types. In particular,
+``StructTypeProto.Structure.Field`` explicitly declares the ``constant``
+alternative:
 
 .. code-block:: text
 
     message StructTypeProto {
+        message Structure {
+            message Field {
+                string name = 1;
+                oneof content {
+                    TypeProto type = 2;
+                    TensorProto constant = 4;
+                }
+                string doc_string = 3;
+            }
+            repeated Field field = 1;
+        }
+
         message BitPacking {
             message Component {
                 string name = 1;
@@ -163,19 +200,6 @@ The complete proposal adds one top-level structured type message.
         message Array {
             TypeProto element_type = 1;
             uint64 dimension = 2;
-        }
-
-        message Field {
-            string name = 1;
-            oneof content {
-                TypeProto type = 2;
-                TensorProto constant = 4;
-            }
-            string doc_string = 3;
-        }
-
-        message Structure {
-            repeated Field field = 1;
         }
 
         oneof kind {
@@ -193,6 +217,48 @@ The complete proposal adds one top-level structured type message.
         optional uint64 type_id = 11;  // identity of a concrete declaration
     }
 
+Where constants are stored
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The exact path is ``StructTypeProto.structure.field[i].constant``.
+``Structure`` groups the fields; it does not own another value buffer.
+For each field, ``oneof content`` selects exactly one of:
+
+* ``type``: describes bytes to read from ``EncodedValueProto.raw_data`` or
+  its external payload;
+* ``constant``: contains the actual ``TensorProto`` value in the type
+  declaration, without advancing the value-buffer offset.
+
+For example, the constant scale is represented by this fragment of a
+``StructTypeProto`` in protobuf text notation:
+
+.. code-block:: text
+
+    structure {
+        field {
+            name: "scale"
+            constant {
+                data_type: 1          # TensorProto.FLOAT
+                float_data: 0.25
+                # No dims entries: this is a scalar.
+            }
+        }
+    }
+
+There is no ``structure: Structure { ... }`` constructor in that notation:
+``structure { ... }`` selects the field whose declared message type is
+``StructTypeProto.Structure``. The compact examples below abbreviate ONNX
+tensor types as ``tensor(FLOAT, [])``, constant tensor values as
+``tensor(FLOAT, [], 0.25)``, and fixed array types as
+``array(INT4, dimension=128)``. Those helpers are explanatory shorthand, not
+additional proto messages or wire syntax.
+
+``Field.type`` accepts only a statically sized tensor type or a concrete
+structured type, directly or by reference. Unknown rank, symbolic dimensions,
+sequences, maps, optional values and opaque types cannot describe fixed
+payload fields. ``Field.constant`` must be a valid tensor value with concrete
+dimensions and matching data; it is not a reference to a graph input.
+
 Integration
 +++++++++++
 
@@ -209,12 +275,13 @@ Integration
         }
     }
 
-A reusable value selects a declaration by ``StructProto.type_id``. Every
+A reusable value selects a declaration through
+``EncodedValueProto.struct_type: { type_ref: id }``. Every
 declaration in ``ModelProto.struct_types`` has its own nonzero ``type_id``;
 the model builds an ID-to-declaration lookup rather than interpreting the ID
-as an array index. An inline value selects ``StructProto.struct_type``
-instead, with no ``-1`` sentinel. Nested references use ``type_ref`` with
-the same identifier.
+as an array index. A standalone value can place a concrete declaration in
+``EncodedValueProto.struct_type`` instead, with no ``-1`` sentinel. Nested
+references use ``type_ref`` with the same identifier.
 
 The identifier belongs to the type contract, not to one model. An exporter
 can reuse, for example, ``type_id=1001`` in several models even if the
@@ -258,7 +325,7 @@ The following type stores 128 ``INT4`` values plus format constants:
     StructTypeProto {
         type_id: 1001
         name: "LINEAR_INT4_128"
-        structure: Structure {
+        structure: {
             field: {
                 name: "values"
                 type: array(INT4, dimension=128)
@@ -274,8 +341,10 @@ The following type stores 128 ``INT4`` values plus format constants:
         }
     }
 
-    StructProto {
-        type_id: 1001
+    EncodedValueProto {
+        struct_type: { type_ref: 1001 }
+        storage_shape: []
+        logical_type: FLOAT[128]
         raw_data: <64 bytes>
         name: "weight"
     }
@@ -297,7 +366,7 @@ payload, just as it describes the array of codes:
     StructTypeProto {
         type_id: 1002
         name: "LINEAR_INT4_128_WITH_PARAMETERS"
-        structure: Structure {
+        structure: {
             field: {
                 name: "values"
                 type: array(INT4, dimension=128)
@@ -313,14 +382,18 @@ payload, just as it describes the array of codes:
         }
     }
 
-    StructProto {
-        type_id: 1002
+    EncodedValueProto {
+        struct_type: { type_ref: 1002 }
+        storage_shape: []
+        logical_type: FLOAT[128]
         raw_data: <64 code bytes, FLOAT scale=0.125, INT64 zero_point=0>
         name: "weight_a"
     }
 
-    StructProto {
-        type_id: 1002
+    EncodedValueProto {
+        struct_type: { type_ref: 1002 }
+        storage_shape: []
+        logical_type: FLOAT[128]
         raw_data: <64 code bytes, FLOAT scale=0.25, INT64 zero_point=-2>
         name: "weight_b"
     }
@@ -351,7 +424,7 @@ example, with the model-level storage and value references shown explicitly:
         struct_types: {
             type_id: 1003
             name: "LINEAR_INT4_128_FIXED_PARAMETERS"
-            structure: Structure {
+            structure: {
                 field: {
                     name: "values"
                     type: array(INT4, dimension=128)
@@ -369,14 +442,18 @@ example, with the model-level storage and value references shown explicitly:
         }
     }
 
-    StructProto {
-        type_id: 1003
+    EncodedValueProto {
+        struct_type: { type_ref: 1003 }
+        storage_shape: []
+        logical_type: FLOAT[128]
         raw_data: <64 code bytes for weight_a>
         name: "weight_a"
     }
 
-    StructProto {
-        type_id: 1003
+    EncodedValueProto {
+        struct_type: { type_ref: 1003 }
+        storage_shape: []
+        logical_type: FLOAT[128]
         raw_data: <64 code bytes for weight_b>
         name: "weight_b"
     }
@@ -401,8 +478,10 @@ A checker rejects:
 * an invalid or cyclic type reference;
 * a zero, missing, duplicate or conflicting catalogue type identifier;
 * a field without exactly one of ``type`` and ``constant``;
+* an invalid tensor constant or a field type without a concrete physical size;
 * duplicate field or component names;
 * zero component widths or unsupported physical leaf types;
 * a physical size that is not byte-aligned;
+* a negative storage dimension or overflowing size/product;
 * a payload whose length differs from the computed size;
 * implicit padding or untyped trailing bytes.

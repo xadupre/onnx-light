@@ -12,11 +12,9 @@ Next Steps
 
     2026/2026-08_kernel_parallelization
     2026/2026-08_onnxruntime_fast_model_loading
-    2026/2026-08_custom_types
     2026/2026-08_proto_inheritance
     2026/2026-08_quantization
     2026/2026-08_graph_builder_quantized_tensor
-    2026/2026-08_mutable_cache
     2026/2026-08_model_resolution
     2026/2026-08_split_wheels
     2026/2026-08_fast_loading_sequence
@@ -35,7 +33,7 @@ Next Steps
     2026/2026-08_buffer_reuse_arena
     2026/2026-08_graph_builder_optimization
     2026/2026-08_session_execution_pools
-    2026/2026-09_prepared_values_and_persistent_state
+    2026/2026-09_custom_quantized_and_persistent_values
 
 Started
 -------
@@ -68,14 +66,13 @@ Planned
 
     * - Plan
       - Contribution
-    * - :ref:`l-next-steps-prepared-values-and-persistent-state`
-      - Combines a small built-in quantized subset with generic structures
-        for other formats, under an explicit proto-size budget. Unifies typed
-        prepacking, compiled caches, GraphBuilder and request-owned state,
-        including paged KV blocks with independent quantization, using the
-        completed runtime infrastructure. Shared element types and record
-        counts derived from payload byte lengths avoid template instantiations
-        and duplicate types.
+    * - :ref:`l-next-steps-custom-quantized-persistent-values`
+      - Custom structs, quantized representations and persistent values in one
+        plan. State is built from model input/output feedback and initial values;
+        a mapping may retain just the cache field of a larger struct.
+        Prepared weights reuse the same representations. Fixed size is needed
+        only for byte encoding; paging and mutation protocols are not required
+        to construct state.
 
 Completed
 ---------
@@ -173,7 +170,5 @@ The following proposals are retained as historical detail and format examples.
 Their implementation sequences are superseded by
 :ref:`l-next-steps-prepared-values-and-persistent-state`.
 
-* :ref:`l-next-steps-custom-types`
 * :ref:`l-next-steps-quantization`
 * :ref:`l-next-steps-graph-builder-quantized-tensor`
-* :ref:`l-next-steps-mutable-cache`

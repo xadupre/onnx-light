@@ -396,15 +396,20 @@ TEST(BackendRunModel, Scan) { RunBackendCasesFor("Scan"); }
 
 // Quantization kernels.
 // The reference QuantizeLinear/DequantizeLinear kernels support per-tensor and
-// per-axis quantization with FLOAT scales, covering integer (UINT8/INT8/UINT16/
-// INT16), float8, and sub-byte (INT4/UINT4/INT2/UINT2/FLOAT4E2M1) output types.
-// Skip blocked / FLOAT16-scale cases which are not yet implemented.
+// per-axis quantization with FLOAT or FLOAT16 inputs and scales, covering
+// integer (UINT8/INT8/UINT16/INT16), float8, and sub-byte
+// (INT4/UINT4/INT2/UINT2/FLOAT4E2M1) output types.
 TEST(BackendRunModel, QuantizeLinear) {
   RunBackendCasesFor("QuantizeLinear", [](const DataSet &ds) {
     if (ds.inputs.size() < 2) {
       return false;
     }
-    if (ds.inputs[1].data_type != static_cast<int32_t>(DataType::FLOAT)) {
+    const int32_t x_dtype = ds.inputs[0].data_type;
+    const int32_t scale_dtype = ds.inputs[1].data_type;
+    if ((x_dtype != static_cast<int32_t>(DataType::FLOAT) &&
+         x_dtype != static_cast<int32_t>(DataType::FLOAT16)) ||
+        (scale_dtype != static_cast<int32_t>(DataType::FLOAT) &&
+         scale_dtype != static_cast<int32_t>(DataType::FLOAT16))) {
       return false;
     }
     if (ds.outputs.empty()) {

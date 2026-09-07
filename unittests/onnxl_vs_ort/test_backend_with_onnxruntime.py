@@ -124,6 +124,9 @@ ORT_EXCLUDE_REGEX = [
     # ORT only supports scalar/1-element zero points for MatMulInteger.
     r"^test_cc_matmulinteger_per_col_b_zp$",
     r"^test_cc_matmulinteger_per_row_a_zp$",
+    # ORT rounds this FLOAT16 QuantizeLinear regression incorrectly; see
+    # microsoft/onnxruntime#32452.
+    r"^test_quantizelinear_float16_rounding$",
     # ORT rejects FLOAT16 scales for QLinearMatMul.
     r"^test_cc_qlinearmatmul_2D_uint8_float16$",
     r"^test_cc_qlinearmatmul_2D_int8_float16$",

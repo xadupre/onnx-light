@@ -2075,8 +2075,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
         for (int64_t d : t.shape)
           tp.ref_dims().push_back(static_cast<uint64_t>(d));
         if (static_cast<TensorProto::DataType>(t.data_type) == TensorProto::DataType::STRING) {
-          tp.ref_string_data().reserve(t.string_data.size());
-          for (const std::string &s : t.string_data)
+          tp.ref_string_data().reserve(t.AsStrings().size());
+          for (const std::string &s : t.AsStrings())
             tp.add_string_data(utils::String(s));
         } else {
           // ``assign_borrowed`` stores a non-owning view over the tensor's

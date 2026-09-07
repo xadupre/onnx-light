@@ -185,6 +185,9 @@ public:
   /// attribute carrying the nested builder name(s). :cpp:func:`BuildGraph` /
   /// :cpp:func:`ToGraph` / :cpp:func:`ToModel` materialize those references
   /// back into GRAPH / GRAPHS attributes.
+  /// Function declarations retain their value information and attribute
+  /// defaults. Their bodies are inferred only after specialization at a call
+  /// site, so an unspecified formal-input rank is never treated as scalar.
   explicit GraphBuilder(const ModelProto &model, SchemaLookupFn schema_lookup = {});
 
   ~GraphBuilder();
@@ -227,6 +230,9 @@ public:
 
   /// Appends ``tensor`` as a graph initializer. The tensor may carry external
   /// data (``data_location == EXTERNAL``). Returns the initializer name.
+  /// A public-input default must match its declared element type, rank and
+  /// static dimensions; unspecified rank and symbolic dimensions are allowed.
+  /// Defaults remain overridable and are not treated as optimization constants.
   const std::string &MakeInitializer(const TensorProto &tensor);
 
   /// Builds and appends an initializer whose data lives in an external file.
@@ -252,6 +258,8 @@ public:
 
   /// Declares a graph input from a ready-made :cpp:class:`ValueInfoProto` and
   /// returns its name.
+  /// A missing tensor shape leaves the rank unknown (no tensor descriptor);
+  /// an explicitly empty shape declares a scalar.
   const std::string &MakeInput(const ValueInfoProto &value_info);
 
   /// Declares a graph input described by ``type`` and returns its name.
@@ -318,6 +326,8 @@ public:
   /// to remove their own unused nodes. Values a subgraph consumes from the
   /// enclosing scope are treated as inputs of the owning control-flow node, so
   /// the producers a subgraph body relies on are kept alive.
+  /// Orphan initializers are also removed, including from empty graphs; graph
+  /// inputs, outputs and initializers captured by live subgraphs are retained.
   ///
   /// @return The total number of nodes removed, including those pruned from
   ///         nested subgraphs and local functions.
@@ -502,6 +512,8 @@ public:
   /// Creates and returns a nested builder for a local function named ``name``.
   /// The nested builder is appended to this builder's local function list;
   /// local functions are emitted into the produced :cpp:class:`ModelProto`.
+  /// Calls through :cpp:func:`MakeNode` infer their outputs natively, including
+  /// nested calls, from owned snapshots of the current function definitions.
   /// Throws when ``name`` is already used.
   GraphBuilder &MakeLocalFunction(const std::string &name, const std::string &domain = "");
 
@@ -580,6 +592,9 @@ public:
   // ── Finalization ─────────────────────────────────────────────────────
 
   /// Returns the finalized :cpp:class:`GraphProto`.
+  /// Stably orders dependencies, including lexical subgraph captures, before
+  /// hoisting Shape/Size nodes and recomputing lifetime and memory metadata.
+  /// Throws on cyclic dependencies or undefined inputs. Mutates node order.
   GraphProto ToGraph();
 
   /// Returns the finalized graph wrapped in a :cpp:class:`ModelProto`.
@@ -689,6 +704,17 @@ private:
   // Imports ``function`` by replaying its body nodes and formal inputs/outputs.
   void ImportFunction(const FunctionProto &function);
 
+  // Rebuilds owned definitions on demand for function calls and graph-valued
+  // inference, including direct optimizer edits to nested builders. Ordinary
+  // operators do not refresh. Copied contexts retain their owned snapshots.
+  void RefreshLocalFunctions();
+
+  // Builds a function without running inference on its unspecialized body.
+  FunctionProto BuildFunction(const std::string &domain, const GraphProto &graph) const;
+
+  // Orders producers before consumers, including lexical subgraph captures.
+  void SortNodesTopologically();
+
   // Converts node attributes from proto form to builder form: GRAPH/GRAPHS
   // attributes become ``*_ref`` STRING/STRINGS attributes that reference nested
   // subgraph builders.
@@ -724,6 +750,9 @@ private:
 
   std::string name_;
   std::string function_domain_;
+  FunctionProto function_declaration_;
+  GraphBuilder *parent_ = nullptr;
+  bool defer_inference_ = false;
   SchemaLookupFn schema_lookup_;
   // Lazily-built lookup table: op_type -> normalised domain -> schema history.
   std::unordered_map<std::string, std::unordered_map<std::string, std::vector<LightOpSchema>>>
@@ -735,6 +764,11 @@ private:
   utils::RepeatedProtoField<TensorProto> initializers_;
   std::vector<std::unique_ptr<GraphBuilder>> local_functions_;
   std::vector<std::unique_ptr<GraphBuilder>> subgraphs_;
+  std::unordered_map<std::string, std::shared_ptr<const FunctionProto>> function_definitions_;
+  // Root-owned membership index, updated on creation and rebuilt on refresh.
+  // Removed functions may leave conservative entries until the next refresh.
+  std::unordered_set<std::string> local_function_keys_;
+  bool local_function_index_dirty_ = false;
   std::unordered_set<std::string> names_;
   std::unordered_set<std::string> inherited_names_;
   std::unordered_map<std::string, int> opsets_;

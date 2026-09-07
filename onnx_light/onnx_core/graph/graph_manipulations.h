@@ -56,8 +56,9 @@ CollectRemainingInputs(const utils::RepeatedProtoField<NodeProto> &nodes,
  * at runtime.
  *
  * Includes names referenced by ``node.input()`` and external inputs captured by
- * subgraph attributes (``GRAPH`` / ``GRAPHS``), preserves first-seen order
- * without duplicates, and skips empty input names.
+ * subgraph attributes (``GRAPH`` / ``GRAPHS``), including values returned
+ * directly by a subgraph without a producer in that scope. Preserves
+ * first-seen order without duplicates and skips empty input names.
  */
 std::vector<std::string> CollectNodeInputs(const NodeProto &node);
 

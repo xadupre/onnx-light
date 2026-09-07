@@ -131,7 +131,7 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
-/// Shared FLOAT kernel for ``ReduceMax`` and ``ReduceMin``.
+/// Preserves numeric/BOOL input types for ``ReduceMax`` and ``ReduceMin``.
 class ReduceMinMax : public KernelBase {
 public:
   enum class Mode { kMax, kMin };
@@ -284,12 +284,12 @@ public:
       : ReduceLogSumOp(ctx, ReduceLogSumOp::Mode::kLogSumExp) {}
 };
 
-/// Arithmetic mean reduction of a FLOAT input ``data`` along the dimensions
+/// Computes the arithmetic mean of a floating-point input along the dimensions
 /// listed in the optional ``axes`` int64 tensor. ``ReduceMean`` computes
 /// ``y = sum(x, axes) / N`` where ``N`` is the product of the reduced
-/// dimension sizes. ONNX does not define a value for the empty-set case
-/// (division by zero); this kernel returns ``0`` in that case for
-/// consistency with the other reduction kernels.
+/// dimension sizes. Supports FLOAT, DOUBLE, FLOAT16 and BFLOAT16; half inputs
+/// accumulate in FLOAT and DOUBLE inputs retain their precision. Empty reductions
+/// produce NaN.
 ///
 /// The interface mirrors :class:`ReduceMinMax` / :class:`ReduceL1L2`: the
 /// ``axes`` may either be omitted (reduce-all unless

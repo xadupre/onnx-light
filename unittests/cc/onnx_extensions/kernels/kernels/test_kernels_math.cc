@@ -95,6 +95,28 @@ using onnx_kernels::kernel::TopK;
 
 namespace Test {
 
+TEST(KernelClass, NativeLogSoftmaxLegacyDoubleAndHalfAccumulation) {
+  const KernelContext modern{DefaultOpset(18)};
+  const KernelContext legacy{DefaultOpset(11)};
+  const Tensor x = Tensor::FromDouble("", {1, 2, 2}, {10000, 10000, 10000, 10000});
+  onnx_kernels::kernel::LogSoftmax current{modern};
+  onnx_kernels::kernel::LogSoftmax old{legacy};
+  Tensor output = Tensor::FromDouble("", {1, 2, 2}, {0, 0, 0, 0});
+  current(x, 1, output);
+  EXPECT_DOUBLE_EQ(output.AsDouble()[0], -std::log(2.0));
+  old(x, 1, output);
+  EXPECT_DOUBLE_EQ(output.AsDouble()[0], -std::log(4.0));
+  Tensor half = core::runtime::DemoteFromFloat32(Tensor::FromFloat("", {1, 2}, {10000, 10000}),
+                                                 DataType::FLOAT16);
+  Tensor result = current(half, -1);
+  EXPECT_EQ(result.data_type, DataType::FLOAT16);
+  Tensor promoted = core::runtime::PromoteToFloat32(result);
+  EXPECT_NEAR(promoted.AsFloat()[0], -std::log(2.0f), 0.0003f);
+  const Tensor empty = Tensor::FromDouble("", {2, 0}, {});
+  EXPECT_EQ(current(empty, 1).shape, empty.shape);
+  EXPECT_THROW(current(empty, 2), std::invalid_argument);
+}
+
 TEST(KernelClass, AbsClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(13)};
   Abs abs_kernel{ctx};

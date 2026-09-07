@@ -6,6 +6,7 @@
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -41,7 +42,23 @@ Tensor Compress::operator()(const Tensor &input, const Tensor &condition,
                             std::optional<int64_t> axis, RuntimeContext *rt) const {
   const uint8_t *cond = ValidateCondition(condition);
   const std::size_t cond_len = static_cast<std::size_t>(condition.element_count());
-  const std::size_t elem_size = ElementSize(input.data_type);
+  const bool is_string = input.data_type == DataType::STRING;
+  const std::size_t elem_size = is_string ? 0 : ElementSize(input.data_type);
+  if (is_string) {
+    EXT_ENFORCE_INVALID(input.AsStrings().size() == static_cast<size_t>(input.element_count()),
+                        "kernel::Compress: string payload does not match input shape.");
+  }
+  const auto copy_elements = [&](Tensor &output, int64_t dst, int64_t src, int64_t count) {
+    if (count == 0) {
+      return;
+    }
+    if (is_string) {
+      std::copy_n(input.AsStrings().begin() + src, count, output.AsStrings().begin() + dst);
+    } else {
+      std::memcpy(output.mutable_bytes() + dst * elem_size, input.bytes() + src * elem_size,
+                  count * elem_size);
+    }
+  };
   if (!axis.has_value()) {
     // Flatten mode: select individual elements from the flattened input. The
     // selected elements are counted first, then copied in a single pass, so no
@@ -56,11 +73,13 @@ Tensor Compress::operator()(const Tensor &input, const Tensor &condition,
     const size_t output_n_bytes = static_cast<std::size_t>(out_count) * elem_size;
     Tensor output = rt ? rt->MakeOutputTensor(0, input.data_type, {out_count}, output_n_bytes)
                        : MakeOutputTensor(input.data_type, {out_count}, output_n_bytes, nullptr);
+    if (is_string) {
+      output.AsStrings().resize(static_cast<size_t>(out_count));
+    }
     int64_t k = 0;
     for (int64_t i = 0; i < total && static_cast<std::size_t>(i) < cond_len; ++i) {
       if (cond[static_cast<std::size_t>(i)]) {
-        std::memcpy(output.mutable_bytes() + static_cast<std::size_t>(k) * elem_size,
-                    input.bytes() + static_cast<std::size_t>(i) * elem_size, elem_size);
+        copy_elements(output, k, i, 1);
         ++k;
       }
     }
@@ -93,6 +112,9 @@ Tensor Compress::operator()(const Tensor &input, const Tensor &condition,
   const size_t output_n_bytes = static_cast<std::size_t>(out_total) * elem_size;
   Tensor output = rt ? rt->MakeOutputTensor(0, input.data_type, out_shape, output_n_bytes)
                      : MakeOutputTensor(input.data_type, out_shape, output_n_bytes, nullptr);
+  if (is_string) {
+    output.AsStrings().resize(static_cast<size_t>(out_total));
+  }
 
   if (out_total == 0) {
     return output;
@@ -118,9 +140,7 @@ Tensor Compress::operator()(const Tensor &input, const Tensor &condition,
         // Source flat offset for this (outer, axis_idx) block.
         const int64_t src_base = (o * axis_dim + i) * inner;
         const int64_t dst_base = (o * selected_count + s) * inner;
-        std::memcpy(output.mutable_bytes() + static_cast<std::size_t>(dst_base) * elem_size,
-                    input.bytes() + static_cast<std::size_t>(src_base) * elem_size,
-                    static_cast<std::size_t>(inner) * elem_size);
+        copy_elements(output, dst_base, src_base, inner);
         ++s;
       }
     }
@@ -137,7 +157,9 @@ void Compress::operator()(const Tensor &input, const Tensor &condition, std::opt
                       "kernel::Compress: preallocated output shape mismatch.");
   EXT_ENFORCE_INVALID(output.size_bytes() == produced.size_bytes(),
                       "kernel::Compress: preallocated output buffer size mismatch.");
-  if (!produced.data.empty()) {
+  if (produced.data_type == DataType::STRING) {
+    output.AsStrings() = std::move(produced.AsStrings());
+  } else if (produced.size_bytes() > 0) {
     std::memcpy(output.mutable_bytes(), produced.bytes(), produced.size_bytes());
   }
 }

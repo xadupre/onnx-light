@@ -28,6 +28,7 @@ The module is exposed as ``onnx_light.onnx_core.graph_builder``.
 
 from __future__ import annotations
 
+import importlib.util
 from collections.abc import Callable
 from typing import TypeAlias
 
@@ -36,6 +37,11 @@ import numpy
 from ..onnx import helper, numpy_helper
 from ..onnx_op import GetAllOnnxOpSchemasWithHistory, LightOpSchema
 from ..onnx_py._onnxpycore import builder as _C  # type: ignore[attr-defined]
+
+# Reduced builds retain graph authoring without kernels; full builds register
+# constant-folding kernels without depending on an evaluator import.
+if importlib.util.find_spec("onnx_light.onnx_py._onnxpykernels") is not None:
+    from ..onnx_py import _onnxpykernels  # noqa: F401
 
 ConstantFoldingOptions: TypeAlias = _C.ConstantFoldingOptions
 PatternOptimization: TypeAlias = _C.PatternOptimization

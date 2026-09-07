@@ -99,6 +99,22 @@ void BindNodeAttributes(NodeProto &node, const AttributeMap &attr_map) {
 // the same local-function map, so nested local-function calls are also
 // supported.
 void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const FunctionProto &func) {
+  EXT_ENFORCE_INVALID(node.input_size() == func.input_size(), "Local function '", func.name(),
+                      "': expected ", func.input_size(), " inputs, got ", node.input_size(), ".");
+  EXT_ENFORCE_INVALID(node.output_size() == func.output_size(), "Local function '", func.name(),
+                      "': expected ", func.output_size(), " outputs, got ", node.output_size(),
+                      ".");
+  // Nested expansion creates fresh contexts, but shares the definition
+  // pointers. Track the active definitions across those contexts and unwind
+  // on inference errors as well as successful calls.
+  static thread_local std::vector<const FunctionProto *> active;
+  EXT_ENFORCE_INVALID(std::find(active.begin(), active.end(), &func) == active.end(),
+                      "Recursive local function call: '", func.domain(), ":", func.name(), "'.");
+  active.push_back(&func);
+  struct PopActive {
+    std::vector<const FunctionProto *> &stack;
+    ~PopActive() { stack.pop_back(); }
+  } pop_active{active};
   ShapesContext sub_ctx;
   // Inherit caller opsets first, then let the function's own opset
   // imports override them.
@@ -110,9 +126,7 @@ void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const Fu
     sub_ctx.SetOpsetVersion(osi.domain(), static_cast<int>(osi.version()));
   }
   // Forward the local-function map so nested calls are dispatched too.
-  for (const auto &kv : ctx.LocalFunctions()) {
-    sub_ctx.SetLocalFunction(kv.second);
-  }
+  sub_ctx.CopyLocalFunctions(ctx);
   // Positional binding: function input names take the descriptors of
   // the caller's input names.
   const int n_inputs = std::min(node.input_size(), func.input_size());
@@ -133,8 +147,16 @@ void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const Fu
   // inference. Attributes referencing a name not supplied by the call
   // site are removed (see ``BindNodeAttributes``).
   AttributeMap attr_map;
+  for (const auto &attr : func.attribute_proto()) {
+    attr_map[attr.name()] = &attr;
+  }
   for (const auto &attr : node.attribute()) {
     attr_map[attr.name()] = &attr;
+  }
+  for (std::size_t i = 0; i < func.attribute().size(); ++i) {
+    const std::string name = func.attribute(i);
+    EXT_ENFORCE_INVALID(attr_map.find(name) != attr_map.end(), "Local function '", func.name(),
+                        "': missing required attribute '", name, "'.");
   }
   // Recursively run shape inference on the function body, binding
   // attribute references on a per-node copy to avoid mutating ``func``.

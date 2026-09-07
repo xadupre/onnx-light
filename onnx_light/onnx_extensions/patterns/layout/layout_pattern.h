@@ -139,15 +139,26 @@ public:
  * Swaps an unshared ``Unsqueeze`` and ``Transpose``, remapping both axes and
  * permutation.
  *
+ * Requires the input-axes form of ``Unsqueeze`` (opset 13 or later), a constant
+ * one-dimensional INT64 axes tensor, and an explicit valid permutation.
+ * Negative axes are normalized against the expanded rank; duplicates and
+ * out-of-range axes are rejected. The permutation supplies the expanded rank
+ * when shape metadata is absent; any known operand rank must agree.
+ *
+ * For normalized inserted axes A and permutation P, the replacement axes are
+ * the output positions i for which P[i] belongs to A (the inverse permutation,
+ * not P[A]). The replacement permutation removes those entries from P and
+ * renumbers the remaining original operand axes in their natural order.
+ *
  * @code
  * Before:
  *                    ┌───────────┐
- *   x, axes=[1] ────→│ Unsqueeze │────→ u
+ *   x, axes=[0] ────→│ Unsqueeze │────→ u
  *                    └───────────┘
  *                          │
  *                          ↓
  *               ┌───────────────────┐
- *               │ Transpose [0,2,1] │────→ y
+ *               │ Transpose [1,2,0] │────→ y
  *               └───────────────────┘
  *
  * After:

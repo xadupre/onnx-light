@@ -38,6 +38,22 @@ using onnx_kernels::kernel::Unsqueeze;
 
 namespace Test {
 
+TEST(KernelClass, NativeCompressStringBorrowedAndPreallocated) {
+  const KernelContext ctx{DefaultOpset(18)};
+  const Tensor owned = Tensor::FromStrings("", {2, 2}, {"été", "", "東京", "D"});
+  const Tensor data = owned.BorrowView();
+  const Tensor condition = Tensor::FromBool("", {2}, {0, 1});
+  onnx_kernels::kernel::Compress compress{ctx};
+  Tensor output = Tensor::FromStrings("", {2, 1}, {"", ""});
+  compress(data, condition, -1, output);
+  EXPECT_EQ(output.AsStrings(), (std::vector<std::string>{"", "D"}));
+  const Tensor flattened = compress(data, Tensor::FromBool("", {4}, {1, 0, 1, 0}), std::nullopt);
+  EXPECT_EQ(flattened.AsStrings(), (std::vector<std::string>{"été", "東京"}));
+  output = Tensor::FromStrings("", {0, 2}, {});
+  compress(data, Tensor::FromBool("", {2}, {0, 0}), 0, output);
+  EXPECT_TRUE(output.AsStrings().empty());
+}
+
 TEST(KernelClass, ConcatClassConcatenatesAxis0) {
   const KernelContext ctx{DefaultOpset(13)};
   Concat concat_kernel{ctx};

@@ -42,6 +42,32 @@ using onnx_kernels::kernel::Xor;
 
 namespace Test {
 
+TEST(KernelClass, NativeLessDoubleAndWhereHalfPreserveBits) {
+  const KernelContext ctx{DefaultOpset(18)};
+  const Tensor x = Tensor::FromDouble("", {2}, {1, 1 + 1e-12});
+  const Tensor y = Tensor::FromDouble("", {}, {1 + 1e-12});
+  Less less{ctx};
+  Tensor compared = Tensor::FromBool("", {2}, {0, 0});
+  less(x, y, compared);
+  EXPECT_EQ(compared.AsBool()[0], 1);
+  EXPECT_EQ(compared.AsBool()[1], 0);
+  EXPECT_EQ(less(x, y).data, compared.data);
+
+  Tensor half_x = Tensor::FromUint16("", {2}, {0x8000, 0x3c00});
+  Tensor half_y = Tensor::FromUint16("", {}, {0x4000});
+  Tensor output = Tensor::FromUint16("", {2, 2}, {0, 0, 0, 0});
+  half_x.data_type = half_y.data_type = output.data_type = core::runtime::DataType::FLOAT16;
+  const Tensor condition = Tensor::FromBool("", {2, 2}, {1, 0, 0, 1});
+  Where where{ctx};
+  where(condition, half_x, half_y, output);
+  const uint16_t *bits = reinterpret_cast<const uint16_t *>(output.bytes());
+  EXPECT_EQ(bits[0], 0x8000);
+  EXPECT_EQ(bits[1], 0x4000);
+  EXPECT_EQ(bits[2], 0x4000);
+  EXPECT_EQ(bits[3], 0x3c00);
+  EXPECT_EQ(where(condition, half_x, half_y).data, output.data);
+}
+
 TEST(KernelClass, AndClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(7)};
   And and_kernel{ctx};

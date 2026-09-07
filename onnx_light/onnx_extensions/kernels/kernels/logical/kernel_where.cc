@@ -25,6 +25,8 @@ constexpr const char *kWhereName = "kernel::Where";
 template <typename T> const T *WhereTypedInput(const Tensor &t) {
   if constexpr (std::is_same_v<T, uint8_t>) {
     return t.data_type == static_cast<int32_t>(DataType::BOOL) ? t.AsBool() : t.As<T>();
+  } else if constexpr (std::is_same_v<T, uint16_t>) {
+    return reinterpret_cast<const uint16_t *>(t.bytes());
   } else {
     return t.As<T>();
   }
@@ -33,6 +35,8 @@ template <typename T> const T *WhereTypedInput(const Tensor &t) {
 template <typename T> T *WhereTypedOutput(Tensor &t) {
   if constexpr (std::is_same_v<T, uint8_t>) {
     return t.data_type == static_cast<int32_t>(DataType::BOOL) ? t.AsBool() : t.As<T>();
+  } else if constexpr (std::is_same_v<T, uint16_t>) {
+    return reinterpret_cast<uint16_t *>(t.mutable_bytes());
   } else {
     return t.As<T>();
   }
@@ -71,7 +75,7 @@ TernaryBroadcastInfo CheckWhereBroadcast(const Tensor &condition, const Tensor &
     const int64_t dc = sc[d];
     const int64_t dx = sx[d];
     const int64_t dy = sy[d];
-    const int64_t max_dim = std::max(dc, std::max(dx, dy));
+    const int64_t max_dim = dc != 1 ? dc : (dx != 1 ? dx : dy);
     EXT_ENFORCE_INVALID((dc == 1 || dc == max_dim) && (dx == 1 || dx == max_dim) &&
                             (dy == 1 || dy == max_dim),
                         "kernel::Where input shapes are not multidirectional-broadcastable.");
@@ -272,6 +276,7 @@ Tensor Where::operator()(const Tensor &condition, const Tensor &x, const Tensor 
     return WhereAllocTyped<int64_t>(condition, x, y, allocator);
   case DataType::UINT8:
     return WhereAllocTyped<uint8_t>(condition, x, y, allocator);
+  case DataType::FLOAT16:
   case DataType::UINT16:
     return WhereAllocTyped<uint16_t>(condition, x, y, allocator);
   case DataType::UINT32:
@@ -282,7 +287,7 @@ Tensor Where::operator()(const Tensor &condition, const Tensor &x, const Tensor 
     return WhereAllocString(condition, x, y);
   default:
     EXT_THROW_INVALID(kWhereName, ": unsupported data type ", x.data_type,
-                      ", only supports BOOL, FLOAT, DOUBLE, INT8, INT16, INT32, "
+                      ", only supports BOOL, FLOAT, FLOAT16, DOUBLE, INT8, INT16, INT32, "
                       "INT64, UINT8, UINT16, UINT32, UINT64 and STRING x/y inputs.");
   }
 }
@@ -306,6 +311,7 @@ void Where::operator()(const Tensor &condition, const Tensor &x, const Tensor &y
     return WhereInPlaceTyped<int64_t>(condition, x, y, output);
   case DataType::UINT8:
     return WhereInPlaceTyped<uint8_t>(condition, x, y, output);
+  case DataType::FLOAT16:
   case DataType::UINT16:
     return WhereInPlaceTyped<uint16_t>(condition, x, y, output);
   case DataType::UINT32:
@@ -316,7 +322,7 @@ void Where::operator()(const Tensor &condition, const Tensor &x, const Tensor &y
     return WhereInPlaceString(condition, x, y, output);
   default:
     EXT_THROW_INVALID(kWhereName, ": unsupported data type ", x.data_type,
-                      ", only supports BOOL, FLOAT, DOUBLE, INT8, INT16, INT32, "
+                      ", only supports BOOL, FLOAT, FLOAT16, DOUBLE, INT8, INT16, INT32, "
                       "INT64, UINT8, UINT16, UINT32, UINT64 and STRING x/y inputs.");
   }
 }

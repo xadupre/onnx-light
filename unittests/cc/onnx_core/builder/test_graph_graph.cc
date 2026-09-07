@@ -30,6 +30,37 @@ core::symbolic::SymShape MakeShape(std::initializer_list<int64_t> dims) {
   return shape;
 }
 
+// Exercises finalization independently of any production pattern's ordering.
+class ReverseReplacementOrder : public core::builder::PatternOptimization {
+public:
+  explicit ReverseReplacementOrder(std::string producer_input = "X")
+      : PatternOptimization(1, "ReverseReplacementOrder"),
+        producer_input(std::move(producer_input)) {}
+
+  core::builder::MatchResult Match(core::builder::GraphGraph &graph,
+                                   const NodeProto &candidate) const override {
+    if (candidate.name() != "rewrite") {
+      return {};
+    }
+    const NodeProto *consumer = graph.NodeBefore("Y");
+    return {this, {&candidate, consumer}, consumer};
+  }
+
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &, const std::vector<const NodeProto *> &) const override {
+    utils::RepeatedProtoField<NodeProto> nodes;
+    NodeProto consumer = MakeNode("Add", {"p", "X"}, {"Y"});
+    consumer.add_metadata(core::compute::kReleaseAfterMetadataKey, "p");
+    consumer.add_metadata(core::compute::kNodePeakMemoryMetadataKey, "999999");
+    consumer.add_metadata("user.annotation", "retained");
+    nodes.push_back(consumer);
+    nodes.push_back(MakeNode("Mul", {producer_input, "X"}, {"p"}));
+    return nodes;
+  }
+
+  std::string producer_input;
+};
+
 } // namespace
 
 TEST(GraphGraph, IndexesPredecessorsAndSuccessors) {
@@ -78,6 +109,51 @@ TEST(GraphGraph, IndexesPredecessorsAndSuccessors) {
   ASSERT_EQ(mul_pred.size(), 1u);
   EXPECT_EQ(mul_pred[0], add);
   EXPECT_TRUE(graph.Successors(*mul).empty());
+}
+
+TEST(GraphGraph, NativeCleanupReplaysOrphanInitializers) {
+  for (bool add_dead_node : {false, true}) {
+    SCOPED_TRACE(add_dead_node);
+    core::builder::GraphBuilder builder("g", SchemaLookup());
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+    builder.MakeInitializer(MakeInitializer<float>("unused", {2}, {1.0f, 2.0f}));
+    if (add_dead_node) {
+      builder.MakeNode("Add", {"x", "unused"}, {"dead"});
+    }
+    builder.MakeOutput("x");
+    const ModelProto original = builder.ToModel();
+    core::builder::GraphGraph graph(builder);
+    const auto rewrites = graph.Optimize();
+    ASSERT_EQ(rewrites.size(), 1u);
+    EXPECT_EQ(rewrites[0].pattern->Name(), "RemoveUnusedNodes");
+    ASSERT_EQ(rewrites[0].removed_initializers.size(), 1u);
+    const GraphProto optimized = builder.ToGraph();
+    EXPECT_EQ(optimized.node_size(), 0);
+    EXPECT_EQ(optimized.initializer_size(), 0);
+    const GraphProto replayed = core::builder::Replay(original, rewrites, SchemaLookup());
+    EXPECT_EQ(replayed.SerializeAsString(), optimized.SerializeAsString());
+  }
+}
+
+TEST(GraphGraph, NativeInputDefaultsAreNotOptimizationConstants) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  for (const std::string name : {"x", "z"}) {
+    builder.MakeInput(name, core::symbolic::TensorType::kFloat, MakeShape({1}));
+    builder.MakeInitializer(MakeInitializer<float>(name.c_str(), {1}, {1.0f}));
+  }
+  builder.MakeInitializer(MakeInitializer<float>("weight", {1}, {1.0f}));
+  builder.MakeNode("Add", {"x", "weight"}, {"sum"});
+  builder.MakeNode("Add", {"sum", "z"}, {"out"});
+  builder.MakeOutput("out");
+  core::builder::GraphGraph graph(builder);
+  EXPECT_FALSE(graph.IsConstant("x"));
+  EXPECT_FALSE(graph.IsConstant("sum"));
+  EXPECT_EQ(graph.GetComputedConstant("x"), nullptr);
+  EXPECT_TRUE(graph.IsConstant("weight"));
+  EXPECT_EQ(builder.RemoveDuplicateInitializers(), 0u);
+  EXPECT_EQ(builder.ConstantFold(), 0u);
+  graph.Optimize();
+  EXPECT_EQ(builder.Initializers().size(), 3u);
 }
 
 TEST(GraphGraph, UsageQueries) {
@@ -223,6 +299,102 @@ TEST(GraphGraph, SetComputedConstantIsCached) {
   const TensorProto *tensor = graph.GetComputedConstant("y");
   ASSERT_NE(tensor, nullptr);
   EXPECT_EQ(tensor->name().value(), "y");
+}
+
+TEST(GraphGraph, NativeExportOrdersDependenciesAndRecomputesCapturedLifetimes) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+  builder.MakeNode("Neg", {"X"}, {"p"}, "", "rewrite");
+  builder.MakeNode("Abs", {"p"}, {"Y"});
+  builder.MakeOutput("Y");
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  for (const std::string name : {"then_branch", "else_branch"}) {
+    auto &branch = builder.MakeSubgraph(name);
+    branch.MakeOutput("p");
+    AttributeProto reference;
+    reference.set_name(name + "_ref");
+    reference.set_type(AttributeProto::AttributeType::STRING);
+    reference.set_s(name);
+    attributes.push_back(reference);
+  }
+
+  builder.MakeNode("If", {"condition"}, {"selected"}, "", "", attributes);
+  builder.MakeOutput("selected");
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<ReverseReplacementOrder>());
+  core::builder::GraphGraph optimizer(builder, std::move(patterns));
+  EXPECT_FALSE(optimizer.Optimize(1).empty());
+  const GraphProto graph = builder.ToGraph();
+  ASSERT_EQ(graph.node().size(), 3u);
+  EXPECT_EQ(graph.node(0).op_type(), "Mul");
+  EXPECT_EQ(graph.node(1).op_type(), "Add");
+  EXPECT_EQ(graph.node(2).op_type(), "If");
+  bool preserved_annotation = false;
+  for (const auto &metadata : graph.node(1).metadata_props()) {
+    EXPECT_NE(metadata.key(), core::compute::kReleaseAfterMetadataKey);
+    if (metadata.key() == core::compute::kNodePeakMemoryMetadataKey) {
+      EXPECT_NE(metadata.value(), "999999");
+    }
+    preserved_annotation |= metadata.key() == "user.annotation" && metadata.value() == "retained";
+  }
+  EXPECT_TRUE(preserved_annotation);
+  bool released_after_capture = false;
+  for (const auto &metadata : graph.node(2).metadata_props()) {
+    released_after_capture |=
+        metadata.key() == core::compute::kReleaseAfterMetadataKey && metadata.value() == "p";
+  }
+  EXPECT_TRUE(released_after_capture);
+  EXPECT_EQ(builder.ToGraph().node(0).op_type(), "Mul");
+}
+
+TEST(GraphGraph, NativeExportOrdersProducerBeforeLexicalCapture) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+  builder.MakeNode("Neg", {"X"}, {"p"}, "", "rewrite");
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  for (const std::string name : {"then_branch", "else_branch"}) {
+    auto &branch = builder.MakeSubgraph(name);
+    branch.MakeOutput("p");
+    AttributeProto reference;
+    reference.set_name(name + "_ref");
+    reference.set_type(AttributeProto::AttributeType::STRING);
+    reference.set_s(name);
+    attributes.push_back(reference);
+  }
+  builder.MakeNode("If", {"condition"}, {"selected"}, "", "", attributes);
+  builder.MakeOutput("selected");
+  builder.MakeNode("Abs", {"p"}, {"Y"});
+  builder.MakeOutput("Y");
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<ReverseReplacementOrder>());
+  core::builder::GraphGraph optimizer(builder, std::move(patterns));
+  optimizer.Optimize(1);
+  const GraphProto graph = builder.ToGraph();
+  ASSERT_EQ(graph.node().size(), 3u);
+  EXPECT_EQ(graph.node(0).op_type(), "Mul");
+  EXPECT_EQ(graph.node(1).op_type(), "If");
+  EXPECT_EQ(graph.node(2).op_type(), "Add");
+}
+
+TEST(GraphGraph, NativeExportRejectsCyclesAndUndefinedDependencies) {
+  for (const std::string input : {"Y", "undefined"}) {
+    core::builder::GraphBuilder builder("g", SchemaLookup());
+    builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+    builder.MakeNode("Neg", {"X"}, {"p"}, "", "rewrite");
+    builder.MakeNode("Abs", {"p"}, {"Y"});
+    builder.MakeOutput("Y");
+    std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+    patterns.push_back(std::make_unique<ReverseReplacementOrder>(input));
+    core::builder::GraphGraph optimizer(builder, std::move(patterns));
+    EXPECT_THROW(
+        {
+          optimizer.Optimize(1);
+          builder.ToGraph();
+        },
+        core::builder::BuilderError);
+  }
 }
 
 } // namespace Test

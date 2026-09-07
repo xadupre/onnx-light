@@ -73,8 +73,9 @@ namespace {
 //
 // Expected outputs for the blocked and FLOAT16 cases are
 // computed offline. The reference ``kernel::DequantizeLinear`` supports
-// per-tensor scalar and per-axis FLOAT scale with FLOAT output for byte-sized
-// integer, float8, and sub-byte (INT4/UINT4/INT2/UINT2/FLOAT4E2M1) inputs.
+// FLOAT and FLOAT16 scales for per-tensor, per-axis, and blocked execution
+// with byte-sized integer, float8, and sub-byte (INT4/UINT4/INT2/UINT2/
+// FLOAT4E2M1) inputs.
 // ---------------------------------------------------------------------------
 void RegisterDequantizeLinearCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(25);
@@ -404,6 +405,47 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry, TestMode mod
                                            12.0f,   48.0f,  96.0f,  86.0f,  60.0f,  -14.0f,
                                            10.0f,   20.0f,  32.0f,  90.0f,  250.0f, 80.0f,
                                            1210.0f, 194.0f, 0.0f,   417.0f, 530.0f, 200.0f});
+             return IoData{{std::move(x), std::move(x_scale), std::move(x_zero_point)},
+                           {std::move(y)}};
+           });
+  }
+
+  // FLOAT16 per-axis UINT8 dequantization with an explicit UINT8 zero point.
+  {
+    NodeProto f16_axis_node;
+    f16_axis_node.set_op_type("DequantizeLinear");
+    f16_axis_node.add_input("x");
+    f16_axis_node.add_input("x_scale");
+    f16_axis_node.add_input("x_zero_point");
+    f16_axis_node.add_output("y");
+    AddAttribute<int64_t>(f16_axis_node, "axis", 1);
+    Expect(registry, std::move(f16_axis_node), "test_cc_dequantizelinear_axis_float16", {opset},
+           []() -> IoData {
+             Tensor x = Tensor::FromUint8("", {2, 3}, {1, 2, 3, 4, 5, 6});
+             Tensor x_scale = MakeFloat16Tensor("", {3}, {0.5f, 2.0f, 4.0f});
+             Tensor x_zero_point = Tensor::FromUint8("", {3}, {1, 1, 1});
+             Tensor y = MakeFloat16Tensor("", {2, 3}, {0.0f, 2.0f, 8.0f, 1.5f, 8.0f, 20.0f});
+             return IoData{{std::move(x), std::move(x_scale), std::move(x_zero_point)},
+                           {std::move(y)}};
+           });
+  }
+
+  // FLOAT16 blocked UINT8 dequantization with a block size of two.
+  {
+    NodeProto f16_blocked_node;
+    f16_blocked_node.set_op_type("DequantizeLinear");
+    f16_blocked_node.add_input("x");
+    f16_blocked_node.add_input("x_scale");
+    f16_blocked_node.add_input("x_zero_point");
+    f16_blocked_node.add_output("y");
+    AddAttribute<int64_t>(f16_blocked_node, "axis", 1);
+    AddAttribute<int64_t>(f16_blocked_node, "block_size", 2);
+    Expect(registry, std::move(f16_blocked_node), "test_cc_dequantizelinear_blocked_float16",
+           {opset_v21}, []() -> IoData {
+             Tensor x = Tensor::FromUint8("", {1, 4}, {1, 2, 3, 4});
+             Tensor x_scale = MakeFloat16Tensor("", {1, 2}, {0.5f, 2.0f});
+             Tensor x_zero_point = Tensor::FromUint8("", {1, 2}, {1, 1});
+             Tensor y = MakeFloat16Tensor("", {1, 4}, {0.0f, 0.5f, 4.0f, 6.0f});
              return IoData{{std::move(x), std::move(x_scale), std::move(x_zero_point)},
                            {std::move(y)}};
            });

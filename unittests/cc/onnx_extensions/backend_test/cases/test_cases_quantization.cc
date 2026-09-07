@@ -300,6 +300,8 @@ TEST(BackendTestCase, DequantizeLinearCaseIsPresent) {
   const TestCase *upstream_e4m3fn_zp_case = nullptr;
   const TestCase *axis_case = nullptr;
   const TestCase *blocked_case = nullptr;
+  const TestCase *axis_float16_case = nullptr;
+  const TestCase *blocked_float16_case = nullptr;
   const TestCase *e4m3fn_float16_case = nullptr;
   const TestCase *uint4_case = nullptr;
   const TestCase *int4_case = nullptr;
@@ -327,6 +329,10 @@ TEST(BackendTestCase, DequantizeLinearCaseIsPresent) {
       axis_case = &c;
     } else if (c.name == "test_dequantizelinear_blocked") {
       blocked_case = &c;
+    } else if (c.name == "test_cc_dequantizelinear_axis_float16") {
+      axis_float16_case = &c;
+    } else if (c.name == "test_cc_dequantizelinear_blocked_float16") {
+      blocked_float16_case = &c;
     } else if (c.name == "test_dequantizelinear_e4m3fn_float16") {
       e4m3fn_float16_case = &c;
     } else if (c.name == "test_dequantizelinear_uint4") {
@@ -351,6 +357,8 @@ TEST(BackendTestCase, DequantizeLinearCaseIsPresent) {
   ASSERT_NE(upstream_e4m3fn_zp_case, nullptr);
   ASSERT_NE(axis_case, nullptr);
   ASSERT_NE(blocked_case, nullptr);
+  ASSERT_NE(axis_float16_case, nullptr);
+  ASSERT_NE(blocked_float16_case, nullptr);
   ASSERT_NE(e4m3fn_float16_case, nullptr);
   ASSERT_NE(uint4_case, nullptr);
   ASSERT_NE(int4_case, nullptr);
@@ -543,6 +551,15 @@ TEST(BackendTestCase, DequantizeLinearCaseIsPresent) {
     EXPECT_FLOAT_EQ(py[1], 178.0f);
     EXPECT_FLOAT_EQ(py[18], 1210.0f);
     EXPECT_FLOAT_EQ(py[23], 200.0f);
+  }
+
+  for (const TestCase *c : {axis_float16_case, blocked_float16_case}) {
+    ASSERT_EQ(c->data_sets().size(), 1u);
+    const auto &ds = c->data_sets()[0];
+    ASSERT_EQ(ds.inputs.size(), 3u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.inputs[1].data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT16));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT16));
   }
 
   // Upstream FLOAT8E4M3FN -> FLOAT16 case (test_dequantizelinear_e4m3fn_float16):

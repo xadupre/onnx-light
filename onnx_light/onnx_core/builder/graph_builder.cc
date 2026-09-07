@@ -174,9 +174,7 @@ GraphBuilder &GraphBuilder::operator=(GraphBuilder &&other) noexcept {
   name_ = std::move(other.name_);
   function_domain_ = std::move(other.function_domain_);
   function_attributes_ = std::move(other.function_attributes_);
-  function_attribute_defaults_ = std::move(other.function_attribute_defaults_);
-  function_value_info_ = std::move(other.function_value_info_);
-  function_metadata_ = std::move(other.function_metadata_);
+  metadata_ = std::move(other.metadata_);
   function_doc_string_ = std::move(other.function_doc_string_);
   function_overload_ = std::move(other.function_overload_);
   schema_lookup_ = std::move(other.schema_lookup_);
@@ -188,7 +186,6 @@ GraphBuilder &GraphBuilder::operator=(GraphBuilder &&other) noexcept {
   initializers_ = std::move(other.initializers_);
   local_functions_ = std::move(other.local_functions_);
   subgraphs_ = std::move(other.subgraphs_);
-  local_function_keys_ = std::move(other.local_function_keys_);
   names_ = std::move(other.names_);
   inherited_names_ = std::move(other.inherited_names_);
   opsets_ = std::move(other.opsets_);
@@ -200,13 +197,6 @@ GraphBuilder &GraphBuilder::operator=(GraphBuilder &&other) noexcept {
   }
   for (const auto &child : subgraphs_) {
     child->parent_ = this;
-  }
-  // Moving a nested builder can change membership in both enclosing trees.
-  for (GraphBuilder *root : {this, &other}) {
-    while (root->parent_ != nullptr) {
-      root = root->parent_;
-    }
-    root->local_function_index_dirty_ = true;
   }
   return *this;
 }
@@ -530,8 +520,7 @@ void GraphBuilder::ImportGraph(const GraphProto &graph) {
 
 void GraphBuilder::ImportFunction(const FunctionProto &function) {
   function_attributes_.assign(function.attribute().begin(), function.attribute().end());
-  function_attribute_defaults_ = function.attribute_proto();
-  function_metadata_ = function.metadata_props();
+  metadata_ = function.metadata_props();
   if (function.has_doc_string()) {
     function_doc_string_ = function.doc_string().value();
   }
@@ -578,15 +567,6 @@ void GraphBuilder::ImportFunction(const FunctionProto &function) {
       }
     }
     MakeOutput(value_info);
-  }
-  for (const auto &value_info : function.value_info()) {
-    const auto matches = [&](const ValueInfoProto &value) {
-      return value.name() == value_info.name();
-    };
-    if (std::none_of(inputs_.begin(), inputs_.end(), matches) &&
-        std::none_of(outputs_.begin(), outputs_.end(), matches)) {
-      function_value_info_.push_back(value_info);
-    }
   }
 }
 
@@ -679,7 +659,6 @@ void GraphBuilder::RefreshLocalFunctions() {
   while (root->parent_ != nullptr) {
     root = root->parent_;
   }
-  root->local_function_index_dirty_ = true;
   std::vector<GraphBuilder *> builders;
   std::function<void(GraphBuilder &)> collect = [&](GraphBuilder &builder) {
     builders.push_back(&builder);
@@ -692,11 +671,11 @@ void GraphBuilder::RefreshLocalFunctions() {
     }
   };
   collect(*root);
-  root->local_function_keys_.clear();
+  std::unordered_set<std::string> function_keys;
   for (GraphBuilder *builder : builders) {
     for (const auto &function : builder->local_functions_) {
       const std::string key = function->function_domain_ + ":" + function->name_;
-      if (!root->local_function_keys_.insert(key).second) {
+      if (!function_keys.insert(key).second) {
         throw BuilderError("GraphBuilder: duplicate local function '" + key + "'.");
       }
       const auto definition =
@@ -706,7 +685,6 @@ void GraphBuilder::RefreshLocalFunctions() {
       }
     }
   }
-  root->local_function_index_dirty_ = false;
 }
 
 std::vector<std::string>
@@ -719,15 +697,30 @@ GraphBuilder::MakeNode(const std::string &op_type, const std::vector<std::string
     while (root->parent_ != nullptr) {
       root = root->parent_;
     }
-    const bool calls_function = root->local_function_keys_.count(domain + ":" + op_type) != 0;
+    const std::string function_key = domain + ":" + op_type;
+    bool calls_function = false;
+    bool has_local_functions = false;
+    std::function<void(const GraphBuilder &)> inspect = [&](const GraphBuilder &builder) {
+      for (const auto &function : builder.local_functions_) {
+        has_local_functions = true;
+        if (function->function_domain_ + ":" + function->name_ == function_key) {
+          calls_function = true;
+        }
+        inspect(*function);
+      }
+      for (const auto &subgraph : builder.subgraphs_) {
+        inspect(*subgraph);
+      }
+    };
+    inspect(*root);
     const bool may_call_function_in_graph =
-        !root->local_function_keys_.empty() &&
+        has_local_functions &&
         std::any_of(attributes.begin(), attributes.end(), [](const AttributeProto &attribute) {
           return attribute.type() == AttributeProto::AttributeType::GRAPH ||
                  attribute.type() == AttributeProto::AttributeType::GRAPHS ||
                  HasGraphReferenceSuffix(attribute.name().value());
         });
-    if (root->local_function_index_dirty_ || calls_function || may_call_function_in_graph) {
+    if (calls_function || may_call_function_in_graph) {
       RefreshLocalFunctions();
     }
   }
@@ -1980,11 +1973,6 @@ GraphBuilder &GraphBuilder::MakeLocalFunction(const std::string &name, const std
   child->parent_ = this;
   GraphBuilder &ref = *child;
   local_functions_.push_back(std::move(child));
-  GraphBuilder *root = this;
-  while (root->parent_ != nullptr) {
-    root = root->parent_;
-  }
-  root->local_function_keys_.insert(domain + ":" + name);
   return ref;
 }
 
@@ -2361,13 +2349,12 @@ FunctionProto GraphBuilder::BuildFunction(const std::string &domain) const {
   for (const auto &attribute : function_attributes_) {
     function.add_attribute(attribute);
   }
-  function.ref_attribute_proto() = function_attribute_defaults_;
-  function.ref_metadata_props() = function_metadata_;
+  function.ref_metadata_props() = metadata_;
   if (function_doc_string_) {
     function.set_doc_string(*function_doc_string_);
   }
-  if (function_overload_) {
-    function.set_overload(*function_overload_);
+  if (!function_overload_.empty()) {
+    function.set_overload(function_overload_);
   }
   for (const ValueInfoProto &input : inputs_) {
     function.add_input(input.name().value());
@@ -2389,14 +2376,6 @@ FunctionProto GraphBuilder::BuildFunction(const std::string &domain) const {
     NodeProto materialized = node;
     MaterializeGraphReferences(materialized);
     function.add_node(materialized);
-  }
-  for (const auto &value_info : function_value_info_) {
-    const bool present = std::any_of(
-        function.value_info().begin(), function.value_info().end(),
-        [&](const ValueInfoProto &existing) { return existing.name() == value_info.name(); });
-    if (!present && HasName(value_info.name().value())) {
-      function.add_value_info(value_info);
-    }
   }
   return function;
 }

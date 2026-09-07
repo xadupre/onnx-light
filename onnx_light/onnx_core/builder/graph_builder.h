@@ -752,11 +752,9 @@ private:
   std::string name_;
   std::string function_domain_;
   std::vector<std::string> function_attributes_;
-  utils::RepeatedProtoField<AttributeProto> function_attribute_defaults_;
-  utils::RepeatedProtoField<ValueInfoProto> function_value_info_;
-  utils::RepeatedProtoField<StringStringEntryProto> function_metadata_;
+  utils::RepeatedProtoField<StringStringEntryProto> metadata_;
   std::optional<std::string> function_doc_string_;
-  std::optional<std::string> function_overload_;
+  std::string function_overload_;
   GraphBuilder *parent_ = nullptr;
   SchemaLookupFn schema_lookup_;
   // Lazily-built lookup table: op_type -> normalised domain -> schema history.
@@ -769,10 +767,6 @@ private:
   utils::RepeatedProtoField<TensorProto> initializers_;
   std::vector<std::unique_ptr<GraphBuilder>> local_functions_;
   std::vector<std::unique_ptr<GraphBuilder>> subgraphs_;
-  // Root-owned membership index, updated on creation and rebuilt on refresh.
-  // Removed functions may leave conservative entries until the next refresh.
-  std::unordered_set<std::string> local_function_keys_;
-  bool local_function_index_dirty_ = false;
   std::unordered_set<std::string> names_;
   std::unordered_set<std::string> inherited_names_;
   std::unordered_map<std::string, int> opsets_;

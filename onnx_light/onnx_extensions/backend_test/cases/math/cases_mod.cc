@@ -50,7 +50,11 @@ Tensor MakeModFloatTensor(int32_t dtype, const std::vector<double> &values) {
   if (dtype == DataType::DOUBLE) {
     return Tensor::FromDouble("", shape, values);
   }
-  const std::vector<float> floats(values.begin(), values.end());
+  std::vector<float> floats;
+  floats.reserve(values.size());
+  for (double value : values) {
+    floats.push_back(static_cast<float>(value));
+  }
   return dtype == DataType::FLOAT16 ? MakeFloat16Tensor("", shape, floats)
                                     : Tensor::FromFloat("", shape, floats);
 }

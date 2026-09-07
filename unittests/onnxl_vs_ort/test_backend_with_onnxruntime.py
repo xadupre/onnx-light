@@ -24,8 +24,7 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
     max_ir_version = ort_max_ir_version()
     if model.ir_version > max_ir_version:
         raise unittest.SkipTest(
-            f"model IR version {model.ir_version} exceeds "
-            f"onnxruntime maximum {max_ir_version}"
+            f"model IR version {model.ir_version} exceeds onnxruntime maximum {max_ir_version}"
         )
     max_opset_version = ort_max_opset_version()
     for opset in model.opset_import:
@@ -168,11 +167,10 @@ ORT_EXCLUDE_REGEX = [
     r"^test_mod_mixed_sign_bfloat16$",
     r"^test_cc_mod_bfloat16_fmod$",
     r"^test_cc_pow_types_bfloat16_float32$",
-    # ORT diverges from the reference on MaxUnpool and on align_corners
-    # Resize downsample cases where scale * input_width is fractional:
+    # ORT diverges from the reference on align_corners Resize downsample
+    # cases where scale * input_width is fractional:
     # ONNX reference / onnx-light use (scale * input_width - 1) in the
     # denominator, while ORT uses (output_width_int - 1).
-    r"^test_cc_maxunpool_export_with_output_shape$",
     r"^test_resize_downsample_scales_linear_align_corners$",
     r"^test_resize_downsample_scales_cubic_align_corners$",
     # ORT IRFFT mishandles the ``inverse=1, onesided=1`` combination.
@@ -238,6 +236,23 @@ if platform.system() == "Darwin":
     ORT_EXCLUDE_REGEX.append(r"^test_cc_cast(like)?_(FLOAT|FLOAT16|BFLOAT16)_to_UINT16$")
 
 TestOrtBackend = make_test_class(onnxruntime_backend, exclude_regex=ORT_EXCLUDE_REGEX)
+
+# Keep these ORT 1.29 limitations executable: an unexpected success must fail
+# so the marker is removed when ORT catches up with the ONNX reference.
+for _case_name in (
+    # ORT omits ceil-tail padding from the dilated AveragePool divisor
+    # (microsoft/onnxruntime#29629).
+    "averagepool_3d_dilated_ceil_padding_divisor",
+    "averagepool_3d_dilations_large_count_include_pad_is_1_ceil_mode_is_True",
+    # ORT rejects four spatial dimensions with "Unsupported pooling size".
+    "maxunpool_export_4d",
+):
+    _method_name = f"test_test_cc_{_case_name}"
+    setattr(
+        TestOrtBackend,
+        _method_name,
+        unittest.expectedFailure(getattr(TestOrtBackend, _method_name)),
+    )
 
 
 if __name__ == "__main__":

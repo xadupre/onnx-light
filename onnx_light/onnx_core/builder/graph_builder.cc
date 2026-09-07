@@ -15,6 +15,7 @@
 
 #include "onnx_core/compute/constant_info.h"
 #include "onnx_core/compute/value_tags.h"
+#include "onnx_core/graph/graph_manipulations.h"
 #include "onnx_core/runtime/kernels/run_nodes.h"
 #include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_proto/onnx_alias.h"
@@ -32,6 +33,31 @@ using ::onnx_light::core::symbolic::SymTensorToValueInfo;
 using ::onnx_light::core::symbolic::TensorTypeToDataType;
 
 namespace {
+
+bool HasUnboundAttributes(const NodeProto &node) {
+  for (const auto &attribute : node.attribute()) {
+    if (!attribute.ref_attr_name().empty() ||
+        (attribute.type() == AttributeProto::AttributeType::GRAPH && !attribute.has_g()) ||
+        (attribute.type() == AttributeProto::AttributeType::GRAPHS && attribute.graphs().empty())) {
+      return true;
+    }
+    if (attribute.has_g()) {
+      for (const auto &child : attribute.g().node()) {
+        if (HasUnboundAttributes(child)) {
+          return true;
+        }
+      }
+    }
+    for (const auto &graph : attribute.graphs()) {
+      for (const auto &child : graph.node()) {
+        if (HasUnboundAttributes(child)) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
 
 // Compares two packed payload fields byte-for-byte without copying.
 template <typename T>
@@ -147,8 +173,12 @@ GraphBuilder &GraphBuilder::operator=(GraphBuilder &&other) noexcept {
   }
   name_ = std::move(other.name_);
   function_domain_ = std::move(other.function_domain_);
-  function_declaration_ = std::move(other.function_declaration_);
-  defer_inference_ = other.defer_inference_;
+  function_attributes_ = std::move(other.function_attributes_);
+  function_attribute_defaults_ = std::move(other.function_attribute_defaults_);
+  function_value_info_ = std::move(other.function_value_info_);
+  function_metadata_ = std::move(other.function_metadata_);
+  function_doc_string_ = std::move(other.function_doc_string_);
+  function_overload_ = std::move(other.function_overload_);
   schema_lookup_ = std::move(other.schema_lookup_);
   schema_table_ = std::move(other.schema_table_);
   compute_ = std::move(other.compute_);
@@ -500,11 +530,15 @@ void GraphBuilder::ImportGraph(const GraphProto &graph) {
 }
 
 void GraphBuilder::ImportFunction(const FunctionProto &function) {
-  function_declaration_ = function;
-  // Formal inputs need not declare a rank, and referenced attributes are
-  // unresolved until a call supplies its arguments. Never infer this body
-  // using invented scalar descriptors.
-  defer_inference_ = true;
+  function_attributes_.assign(function.attribute().begin(), function.attribute().end());
+  function_attribute_defaults_ = function.attribute_proto();
+  function_metadata_ = function.metadata_props();
+  if (function.has_doc_string()) {
+    function_doc_string_ = function.doc_string().value();
+  }
+  if (function.has_overload()) {
+    function_overload_ = function.overload().value();
+  }
   for (const auto &opset : function.opset_import()) {
     SetOpsetVersion(opset.domain().empty() ? std::string() : opset.domain().value(),
                     static_cast<int>(opset.version()));
@@ -545,6 +579,15 @@ void GraphBuilder::ImportFunction(const FunctionProto &function) {
       }
     }
     MakeOutput(value_info);
+  }
+  for (const auto &value_info : function.value_info()) {
+    const auto matches = [&](const ValueInfoProto &value) {
+      return value.name() == value_info.name();
+    };
+    if (std::none_of(inputs_.begin(), inputs_.end(), matches) &&
+        std::none_of(outputs_.begin(), outputs_.end(), matches)) {
+      function_value_info_.push_back(value_info);
+    }
   }
 }
 
@@ -676,7 +719,7 @@ GraphBuilder::MakeNode(const std::string &op_type, const std::vector<std::string
                        const std::vector<std::string> &outputs, const std::string &domain,
                        const std::string &name,
                        const utils::RepeatedProtoField<AttributeProto> &attributes) {
-  if (!defer_inference_) {
+  {
     GraphBuilder *root = this;
     while (root->parent_ != nullptr) {
       root = root->parent_;
@@ -779,27 +822,18 @@ GraphBuilder::MakeNode(const std::string &op_type, const std::vector<std::string
   // Run incremental shape inference for the new node when a shape function is
   // registered for its operator; unregistered operators simply leave their
   // outputs without an inferred descriptor.
-  bool has_unbound_graph_attribute = false;
-  for (const auto &attribute : stored.attribute()) {
-    if (!attribute.ref_attr_name().empty()) {
-      has_unbound_graph_attribute = true;
+  if (ShapeFunctionAvailable(stored)) {
+    NodeProto materialized = stored;
+    MaterializeGraphReferences(materialized);
+    bool known_inputs = true;
+    for (const std::string &input : core::graph::CollectNodeInputs(materialized)) {
+      if (!input.empty() && !compute_.Shapes().Has(input) &&
+          !compute_.Shapes().HasSequence(input)) {
+        known_inputs = false;
+        break;
+      }
     }
-    if ((attribute.type() == AttributeProto::AttributeType::GRAPH && !attribute.has_g()) ||
-        (attribute.type() == AttributeProto::AttributeType::GRAPHS &&
-         attribute.graphs().size() == 0)) {
-      has_unbound_graph_attribute = true;
-    }
-  }
-  bool known_inputs = true;
-  for (const std::string &input : inputs) {
-    if (!input.empty() && !compute_.Shapes().Has(input) && !compute_.Shapes().HasSequence(input)) {
-      known_inputs = false;
-    }
-  }
-  if (!defer_inference_ && known_inputs && !has_unbound_graph_attribute) {
-    if (ShapeFunctionAvailable(stored)) {
-      NodeProto materialized = stored;
-      MaterializeGraphReferences(materialized);
+    if (known_inputs && !HasUnboundAttributes(materialized)) {
       const int64_t index = static_cast<int64_t>(nodes_.size() - 1);
       compute_.Shapes().set_current_node_index(index);
       compute_.Shapes().ComputeShapeNode(materialized);
@@ -1966,7 +2000,6 @@ GraphBuilder &GraphBuilder::MakeSubgraph(const std::string &name) {
   ReserveName(name);
   auto child = std::make_unique<GraphBuilder>(name, schema_lookup_);
   child->parent_ = this;
-  child->defer_inference_ = defer_inference_;
   for (const auto &entry : opsets_) {
     child->SetOpsetVersion(entry.first, entry.second);
   }
@@ -2327,14 +2360,20 @@ FunctionProto GraphBuilder::ToFunction(const std::string &domain) {
 }
 
 FunctionProto GraphBuilder::BuildFunction(const std::string &domain) const {
-  FunctionProto function = function_declaration_;
-  function.ref_input().clear();
-  function.ref_output().clear();
-  function.ref_node().clear();
-  function.ref_opset_import().clear();
-  function.ref_value_info().clear();
+  FunctionProto function;
   function.set_name(name_);
   function.set_domain(domain);
+  for (const auto &attribute : function_attributes_) {
+    function.add_attribute(attribute);
+  }
+  function.ref_attribute_proto() = function_attribute_defaults_;
+  function.ref_metadata_props() = function_metadata_;
+  if (function_doc_string_) {
+    function.set_doc_string(*function_doc_string_);
+  }
+  if (function_overload_) {
+    function.set_overload(*function_overload_);
+  }
   for (const ValueInfoProto &input : inputs_) {
     function.add_input(input.name().value());
     function.add_value_info(input);
@@ -2356,7 +2395,7 @@ FunctionProto GraphBuilder::BuildFunction(const std::string &domain) const {
     MaterializeGraphReferences(materialized);
     function.add_node(materialized);
   }
-  for (const auto &value_info : function_declaration_.value_info()) {
+  for (const auto &value_info : function_value_info_) {
     const bool present = std::any_of(
         function.value_info().begin(), function.value_info().end(),
         [&](const ValueInfoProto &existing) { return existing.name() == value_info.name(); });

@@ -40,6 +40,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <set>
 #include <source_location>
 #include <stdexcept>
@@ -186,8 +187,8 @@ public:
   /// :cpp:func:`ToGraph` / :cpp:func:`ToModel` materialize those references
   /// back into GRAPH / GRAPHS attributes.
   /// Function declarations retain their value information and attribute
-  /// defaults. Their bodies are inferred only after specialization at a call
-  /// site, so an unspecified formal-input rank is never treated as scalar.
+  /// defaults. Inference runs when input descriptors and referenced attributes
+  /// are available; an unspecified formal-input rank is never treated as scalar.
   explicit GraphBuilder(const ModelProto &model, SchemaLookupFn schema_lookup = {});
 
   ~GraphBuilder();
@@ -750,9 +751,13 @@ private:
 
   std::string name_;
   std::string function_domain_;
-  FunctionProto function_declaration_;
+  std::vector<std::string> function_attributes_;
+  utils::RepeatedProtoField<AttributeProto> function_attribute_defaults_;
+  utils::RepeatedProtoField<ValueInfoProto> function_value_info_;
+  utils::RepeatedProtoField<StringStringEntryProto> function_metadata_;
+  std::optional<std::string> function_doc_string_;
+  std::optional<std::string> function_overload_;
   GraphBuilder *parent_ = nullptr;
-  bool defer_inference_ = false;
   SchemaLookupFn schema_lookup_;
   // Lazily-built lookup table: op_type -> normalised domain -> schema history.
   std::unordered_map<std::string, std::unordered_map<std::string, std::vector<LightOpSchema>>>

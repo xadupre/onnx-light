@@ -45,6 +45,23 @@ inline float ReadScalarScale(const Tensor &x_scale) {
   return x_scale.AsFloat()[0];
 }
 
+inline float ReadScale(const Tensor &x_scale, int64_t index) {
+  if (x_scale.data_type == static_cast<int32_t>(DataType::FLOAT16)) {
+    uint16_t bits;
+    std::memcpy(&bits, x_scale.bytes() + index * sizeof(uint16_t), sizeof(uint16_t));
+    return Float16BitsToFloat(bits);
+  }
+  return x_scale.AsFloat()[index];
+}
+
+inline void WriteDequantized(Tensor &output, int64_t index, float value) {
+  if (output.data_type == static_cast<int32_t>(DataType::FLOAT16)) {
+    reinterpret_cast<uint16_t *>(output.mutable_bytes())[index] = FloatToFloat16Bits(value);
+    return;
+  }
+  output.AsFloat()[index] = value;
+}
+
 template <typename XT>
 void DequantizeLoop(const Tensor &x, float x_scale, XT x_zero_point, Tensor &output) {
   const XT *px = reinterpret_cast<const XT *>(x.bytes());
@@ -104,12 +121,11 @@ inline void DequantizeFloat8Loop(const Tensor &x, float x_scale, float x_zero_po
 void DequantizeInt4Loop(const Tensor &x, float x_scale, float zp, bool is_signed, Tensor &output) {
   const std::uint8_t *px = x.bytes();
   const int64_t n = x.element_count();
-  float *py = output.AsFloat();
   for (int64_t i = 0; i < n; ++i) {
     const std::uint8_t nibble = Read4BitElement(px, i);
     const float val = is_signed ? static_cast<float>(Int4NibbleToInt8(nibble))
                                 : static_cast<float>(Uint4NibbleToUint8(nibble));
-    py[i] = (val - zp) * x_scale;
+    WriteDequantized(output, i, (val - zp) * x_scale);
   }
 }
 
@@ -117,12 +133,11 @@ void DequantizeInt4Loop(const Tensor &x, float x_scale, float zp, bool is_signed
 void DequantizeInt2Loop(const Tensor &x, float x_scale, float zp, bool is_signed, Tensor &output) {
   const std::uint8_t *px = x.bytes();
   const int64_t n = x.element_count();
-  float *py = output.AsFloat();
   for (int64_t i = 0; i < n; ++i) {
     const std::uint8_t bits = Read2BitElement(px, i);
     const float val = is_signed ? static_cast<float>(Int2BitsToInt8(bits))
                                 : static_cast<float>(Uint2BitsToUint8(bits));
-    py[i] = (val - zp) * x_scale;
+    WriteDequantized(output, i, (val - zp) * x_scale);
   }
 }
 
@@ -130,19 +145,17 @@ void DequantizeInt2Loop(const Tensor &x, float x_scale, float zp, bool is_signed
 void DequantizeFloat4E2M1Loop(const Tensor &x, float x_scale, float zp, Tensor &output) {
   const std::uint8_t *px = x.bytes();
   const int64_t n = x.element_count();
-  float *py = output.AsFloat();
   for (int64_t i = 0; i < n; ++i) {
     const float val = Float4E2M1NibbleToFloat(Read4BitElement(px, i));
-    py[i] = (val - zp) * x_scale;
+    WriteDequantized(output, i, (val - zp) * x_scale);
   }
 }
 
 void DequantizeFloat6Loop(const Tensor &x, float x_scale, float zp, Tensor &output) {
   const std::uint8_t *px = x.bytes();
-  float *py = output.AsFloat();
   const auto dtype = static_cast<DataType>(x.data_type);
   for (int64_t i = 0; i < x.element_count(); ++i)
-    py[i] = (Float6BitsToFloat(Read6BitElement(px, i), dtype) - zp) * x_scale;
+    WriteDequantized(output, i, (Float6BitsToFloat(Read6BitElement(px, i), dtype) - zp) * x_scale);
 }
 
 // Reads the zero-point nibble from a sub-byte packed tensor (ZP has 1 element).
@@ -235,10 +248,10 @@ void DequantizeBlockLoop(const Tensor &x, const float *scales, const XT *zp_data
                          const int64_t *scale_index, Tensor &output) {
   const XT *px = reinterpret_cast<const XT *>(x.bytes());
   const int64_t n = x.element_count();
-  float *py = output.AsFloat();
   for (int64_t i = 0; i < n; ++i) {
     const int64_t si = scale_index[i];
-    py[i] = (static_cast<float>(px[i]) - static_cast<float>(zp_data[si])) * scales[si];
+    WriteDequantized(output, i,
+                     (static_cast<float>(px[i]) - static_cast<float>(zp_data[si])) * scales[si]);
   }
 }
 
@@ -247,11 +260,10 @@ void DequantizeBlockFloat8Loop(const Tensor &x, const float *scales, const std::
                                Float8Decoder decode, const int64_t *scale_index, Tensor &output) {
   const std::uint8_t *px = x.bytes();
   const int64_t n = x.element_count();
-  float *py = output.AsFloat();
   for (int64_t i = 0; i < n; ++i) {
     const int64_t si = scale_index[i];
     const float zp = decode(zp_bytes[si]);
-    py[i] = (decode(px[i]) - zp) * scales[si];
+    WriteDequantized(output, i, (decode(px[i]) - zp) * scales[si]);
   }
 }
 
@@ -260,7 +272,6 @@ void DequantizeBlockInt4Loop(const Tensor &x, const float *scales, const std::ui
                              bool is_signed, const int64_t *scale_index, Tensor &output) {
   const std::uint8_t *px = x.bytes();
   const int64_t n = x.element_count();
-  float *py = output.AsFloat();
   for (int64_t i = 0; i < n; ++i) {
     const int64_t si = scale_index[i];
     const std::uint8_t zp_nibble = Read4BitElement(zp_bytes, si);
@@ -269,7 +280,7 @@ void DequantizeBlockInt4Loop(const Tensor &x, const float *scales, const std::ui
     const std::uint8_t nibble = Read4BitElement(px, i);
     const float val = is_signed ? static_cast<float>(Int4NibbleToInt8(nibble))
                                 : static_cast<float>(Uint4NibbleToUint8(nibble));
-    py[i] = (val - zp) * scales[si];
+    WriteDequantized(output, i, (val - zp) * scales[si]);
   }
 }
 
@@ -278,7 +289,6 @@ void DequantizeBlockInt2Loop(const Tensor &x, const float *scales, const std::ui
                              bool is_signed, const int64_t *scale_index, Tensor &output) {
   const std::uint8_t *px = x.bytes();
   const int64_t n = x.element_count();
-  float *py = output.AsFloat();
   for (int64_t i = 0; i < n; ++i) {
     const int64_t si = scale_index[i];
     const std::uint8_t zp_bits = Read2BitElement(zp_bytes, si);
@@ -287,7 +297,7 @@ void DequantizeBlockInt2Loop(const Tensor &x, const float *scales, const std::ui
     const std::uint8_t bits = Read2BitElement(px, i);
     const float val = is_signed ? static_cast<float>(Int2BitsToInt8(bits))
                                 : static_cast<float>(Uint2BitsToUint8(bits));
-    py[i] = (val - zp) * scales[si];
+    WriteDequantized(output, i, (val - zp) * scales[si]);
   }
 }
 
@@ -297,24 +307,23 @@ void DequantizeBlockFloat4E2M1Loop(const Tensor &x, const float *scales,
                                    Tensor &output) {
   const std::uint8_t *px = x.bytes();
   const int64_t n = x.element_count();
-  float *py = output.AsFloat();
   for (int64_t i = 0; i < n; ++i) {
     const int64_t si = scale_index[i];
     const float zp = Float4E2M1NibbleToFloat(Read4BitElement(zp_bytes, si));
     const float val = Float4E2M1NibbleToFloat(Read4BitElement(px, i));
-    py[i] = (val - zp) * scales[si];
+    WriteDequantized(output, i, (val - zp) * scales[si]);
   }
 }
 
 void DequantizeBlockFloat6Loop(const Tensor &x, const float *scales, const std::uint8_t *zp_bytes,
                                const int64_t *scale_index, Tensor &output) {
   const std::uint8_t *px = x.bytes();
-  float *py = output.AsFloat();
   const auto dtype = static_cast<DataType>(x.data_type);
   for (int64_t i = 0; i < x.element_count(); ++i) {
     const int64_t si = scale_index[i];
     const float zp = Float6BitsToFloat(Read6BitElement(zp_bytes, si), dtype);
-    py[i] = (Float6BitsToFloat(Read6BitElement(px, i), dtype) - zp) * scales[si];
+    WriteDequantized(output, i,
+                     (Float6BitsToFloat(Read6BitElement(px, i), dtype) - zp) * scales[si]);
   }
 }
 
@@ -516,14 +525,12 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
   if (x_scale.element_count() == 1) {
     return (*this)(x, x_scale, x_zero_point, output);
   }
-  EXT_ENFORCE_INVALID(x_scale.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      "kernel::DequantizeLinear: x_scale must be FLOAT for per-axis "
-                      "dequantization.");
+  EXT_ENFORCE_INVALID(IsSupportedScaleDType(x_scale.data_type),
+                      "kernel::DequantizeLinear: x_scale must be FLOAT or FLOAT16.");
   EXT_ENFORCE_INVALID(x.data_type == x_zero_point.data_type,
                       "kernel::DequantizeLinear: x_zero_point data_type must match x.");
-  EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      "kernel::DequantizeLinear: output dtype must be FLOAT for per-axis "
-                      "dequantization.");
+  EXT_ENFORCE_INVALID(output.data_type == x_scale.data_type,
+                      "kernel::DequantizeLinear: output dtype must match x_scale.");
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       "kernel::DequantizeLinear preallocated output shape must match x shape.");
   EXT_ENFORCE_INVALID(
@@ -564,7 +571,17 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
                                                         "kernel::DequantizeLinear: scale-index");
   ComputeScaleIndex(x, x_scale, axis, scale_index_buf.data());
   const int64_t *idx = scale_index_buf.data();
-  const float *scales = x_scale.AsFloat();
+  std::vector<float> decoded_scales;
+  const float *scales = nullptr;
+  if (x_scale.data_type == static_cast<int32_t>(DataType::FLOAT16)) {
+    decoded_scales.resize(static_cast<std::size_t>(x_scale.element_count()));
+    for (int64_t i = 0; i < x_scale.element_count(); ++i) {
+      decoded_scales[static_cast<std::size_t>(i)] = ReadScale(x_scale, i);
+    }
+    scales = decoded_scales.data();
+  } else {
+    scales = x_scale.AsFloat();
+  }
   const std::uint8_t *zp_bytes = x_zero_point.bytes();
 
   switch (x.data_type) {

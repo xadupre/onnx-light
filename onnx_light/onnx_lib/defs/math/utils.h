@@ -25,6 +25,8 @@ namespace ONNX_LIGHT_NAMESPACE::defs::math::utils {
 
 std::function<void(OpSchema &)> TopKOpGenerator(std::vector<std::string> allowed_types);
 
+std::function<void(OpSchema &)> EinsumOpGenerator(std::vector<std::string> allowed_types);
+
 template <typename T> T GetScalarValueFromTensor(const ONNX_LIGHT_NAMESPACE::TensorProto *t) {
   if (t == nullptr) {
     return T{};

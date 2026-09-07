@@ -686,6 +686,60 @@ TEST(KernelClass, CastLikeWithSaturateUsesAllocatorWhenRuntimeContextHasOne) {
   EXPECT_EQ(py[1], 2);
 }
 
+TEST(KernelClass, UniqueBfloat16NumericOrderingAndSignedZero) {
+  const KernelContext ctx{DefaultOpset(28)};
+  const Unique unique_kernel{ctx};
+  const float inf = std::numeric_limits<float>::infinity();
+  const Tensor x =
+      core::runtime::MakeBfloat16Tensor("", {9}, {2, -0.0f, -2, 0.0f, -1, -2, inf, -inf, 2});
+  const auto out = unique_kernel(x);
+  ASSERT_EQ(out.y.data_type, core::runtime::DataType::BFLOAT16);
+  ASSERT_EQ(out.y.shape, (std::vector<int64_t>{6}));
+  const std::vector<uint16_t> expected{0xff80, 0xc000, 0xbf80, 0x8000, 0x4000, 0x7f80};
+  const auto *y_bits = reinterpret_cast<const uint16_t *>(out.y.bytes());
+  EXPECT_EQ(std::vector<uint16_t>(y_bits, y_bits + 6), expected);
+  EXPECT_EQ(std::vector<int64_t>(out.indices.As<int64_t>(), out.indices.As<int64_t>() + 6),
+            (std::vector<int64_t>{7, 2, 4, 1, 0, 6}));
+  EXPECT_EQ(std::vector<int64_t>(out.inverse_indices.As<int64_t>(),
+                                 out.inverse_indices.As<int64_t>() + 9),
+            (std::vector<int64_t>{4, 3, 1, 3, 2, 1, 5, 0, 4}));
+  EXPECT_EQ(std::vector<int64_t>(out.counts.As<int64_t>(), out.counts.As<int64_t>() + 6),
+            (std::vector<int64_t>{1, 2, 1, 2, 2, 1}));
+}
+
+TEST(KernelClass, UniqueBfloat16AxisSortedAndUnsorted) {
+  const KernelContext ctx{DefaultOpset(28)};
+  const Unique unique_kernel{ctx};
+  const Tensor x = core::runtime::MakeBfloat16Tensor("", {2, 4}, {2, -1, 2, -1, 0, 3, 0, -2});
+  for (bool sorted : {false, true}) {
+    Unique::Attributes attrs;
+    attrs.axis = -1;
+    attrs.sorted = sorted;
+    const auto out = unique_kernel(x, attrs);
+    ASSERT_EQ(out.y.shape, (std::vector<int64_t>{2, 3}));
+    const Tensor expected = core::runtime::MakeBfloat16Tensor(
+        "", {2, 3},
+        sorted ? std::vector<float>{-1, -1, 2, -2, 3, 0} : std::vector<float>{2, -1, -1, 0, 3, -2});
+    EXPECT_EQ(out.y.data, expected.data);
+    EXPECT_EQ(std::vector<int64_t>(out.indices.As<int64_t>(), out.indices.As<int64_t>() + 3),
+              (sorted ? std::vector<int64_t>{3, 1, 0} : std::vector<int64_t>{0, 1, 3}));
+    EXPECT_EQ(std::vector<int64_t>(out.inverse_indices.As<int64_t>(),
+                                   out.inverse_indices.As<int64_t>() + 4),
+              (sorted ? std::vector<int64_t>{2, 1, 2, 0} : std::vector<int64_t>{0, 1, 0, 2}));
+    EXPECT_EQ(std::vector<int64_t>(out.counts.As<int64_t>(), out.counts.As<int64_t>() + 3),
+              (sorted ? std::vector<int64_t>{1, 1, 2} : std::vector<int64_t>{2, 1, 1}));
+  }
+}
+
+TEST(KernelClass, UniqueBfloat16EmptyInput) {
+  const KernelContext ctx{DefaultOpset(28)};
+  const Unique unique_kernel{ctx};
+  const auto out = unique_kernel(core::runtime::MakeBfloat16Tensor("", {0}, {}));
+  EXPECT_EQ(out.y.data_type, core::runtime::DataType::BFLOAT16);
+  for (const Tensor *tensor : {&out.y, &out.indices, &out.inverse_indices, &out.counts})
+    EXPECT_EQ(tensor->shape, (std::vector<int64_t>{0}));
+}
+
 // Ensures the Unique kernel's ``ComputeUniqueGroups`` driver acquires its
 // scratch and result buffers (indices/inverse_indices/counts) from the
 // ``KernelContext`` allocator instead of inline ``std::vector`` storage.

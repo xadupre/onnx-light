@@ -954,6 +954,7 @@ public:
   /// Attributes carried by the ONNX ``SpaceToDepth`` operator.
   struct Attributes {
     int64_t blocksize = 0;
+    std::string mode = "DCR";
   };
 
   using KernelBase::KernelBase;

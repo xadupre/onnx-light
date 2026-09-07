@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/expect.h"
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_extensions/backend_test/cases/tensor/include_tensor_cases.h"
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_proto/onnx_helper.h"
@@ -75,6 +76,18 @@ void RegisterUniqueCases(std::vector<TestCase> &registry, TestMode mode) {
                             std::move(out.inverse_indices), std::move(out.counts)}};
            });
     return;
+  }
+
+  {
+    NodeProto node = MakeUniqueNode(/*sorted_attr=*/1, /*axis_attr=*/std::nullopt);
+    Expect(registry, std::move(node), "test_unique_bfloat16_sorted_without_axis",
+           {DefaultOpset(28)}, []() -> IoData {
+             return IoData{{MakeBfloat16Tensor("X", {6}, {2, 1, 1, 3, 4, 3})},
+                           {MakeBfloat16Tensor("Y", {4}, {1, 2, 3, 4}),
+                            Tensor::FromInt64("indices", {4}, {1, 0, 3, 4}),
+                            Tensor::FromInt64("inverse_indices", {6}, {1, 0, 0, 2, 3, 2}),
+                            Tensor::FromInt64("counts", {4}, {2, 1, 2, 1})}};
+           });
   }
 
   // test_cc_unique_not_sorted_without_axis — 1-D float input, sorted=0.

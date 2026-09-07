@@ -6,6 +6,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <set>
 #include <variant>
 #include <vector>
@@ -122,13 +123,31 @@ TEST(OnnxOpTensorRegistrationTest, PadReflectExamplesAreValid) {
   }
 }
 
+TEST(OnnxOpTensorRegistrationTest, ReturnsOpset28SchemasWithoutShapeInference) {
+  for (const char *name :
+       {"Compress", "DepthToSpace", "OneHot", "ReverseSequence", "SpaceToDepth", "Unique"}) {
+    SCOPED_TRACE(name);
+    const auto schemas = onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory(name);
+    const auto *schema = FindByVersion(schemas, 28);
+    ASSERT_NE(schema, nullptr);
+    ASSERT_FALSE(schema->outputs().empty());
+    const auto &constraints = schema->type_constraints();
+    const auto output_type =
+        std::find_if(constraints.begin(), constraints.end(), [schema](const auto &constraint) {
+          return constraint.type_param_str == schema->outputs()[0].type;
+        });
+    ASSERT_NE(output_type, constraints.end());
+    EXPECT_EQ(output_type->allowed_type_strs, core::schema::ConcatTypesVer13());
+  }
+}
+
 TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory();
   const std::vector<core::schema::LightOpSchema> cast_schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Cast");
 
-  EXPECT_EQ(schemas.size(), 134u);
+  EXPECT_EQ(schemas.size(), 140u);
 
   const core::schema::LightOpSchema *const cast_v1 = FindByVersion(cast_schemas, 1);
   const core::schema::LightOpSchema *const cast_v6 = FindByVersion(cast_schemas, 6);

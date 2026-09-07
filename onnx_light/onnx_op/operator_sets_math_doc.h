@@ -26,6 +26,13 @@ namespace math {
 std::string MakeElementwiseMathDoc(const char *op_type, int since_version);
 
 /**
+ * Returns the documentation string for the Mod operator at opset 28.
+ *
+ * @return Documentation string for the Mod operator.
+ */
+std::string MakeModDoc();
+
+/**
  * Returns the documentation string for a unary element-wise math operator.
  *
  * @param op_type Operator name (e.g. "Sin", "Cos", "Abs").
@@ -115,8 +122,7 @@ std::string MakeCumSumDoc();
 std::string MakeCumProdDoc();
 
 /**
- * Returns the documentation string for the Einsum operator at opset 12
- * (the only opset in which Einsum was introduced).
+ * Returns the documentation string shared by the Einsum operator versions.
  *
  * @return Documentation string for the Einsum operator.
  */

@@ -1287,11 +1287,107 @@ ONNX_OPERATOR_SET_SCHEMA(
           PropagateShapeDataFromInputToOutput(ctx, 0);
         }));
 
+static bool BuildContextDependentFunctionBodySpaceToDepth(const FunctionBodyBuildContext &ctx,
+                                                          const OpSchema &schema,
+                                                          FunctionProto &functionProto) {
+  const auto *blocksize_attr = ctx.getAttribute("blocksize");
+  if (blocksize_attr == nullptr || !blocksize_attr->has_i() || blocksize_attr->i() <= 0) {
+    return false;
+  }
+  const auto blocksize = blocksize_attr->i();
+  const auto block_area = checkedMultiply(blocksize, blocksize);
+  const auto *mode_attr = ctx.getAttribute("mode");
+  const std::string mode =
+      (mode_attr != nullptr && mode_attr->has_s()) ? mode_attr->s().value() : "DCR";
+  if (mode != "DCR" && mode != "CRD") {
+    return false;
+  }
+
+  FunctionBuilder builder(functionProto);
+  builder.Const1D("blocksize", blocksize)
+      .Const1D("block_area", block_area)
+      .Const1D("zero", int64_t{0})
+      .Const1D("one", int64_t{1})
+      .Const1D("two", int64_t{2})
+      .Const1D("three", int64_t{3})
+      .Const1D("four", int64_t{4})
+      .Add("input_shape = Shape (input)")
+      .Add("N = Slice (input_shape, zero, one)")
+      .Add("C = Slice (input_shape, one, two)")
+      .Add("H = Slice (input_shape, two, three)")
+      .Add("W = Slice (input_shape, three, four)")
+      .Add("H_block = Div (H, blocksize)")
+      .Add("W_block = Div (W, blocksize)")
+      .Add("C_block = Mul (C, block_area)")
+      .Add("tmp_shape = Concat <axis = 0> (N, C, H_block, blocksize, W_block, blocksize)")
+      .Add("tmp = Reshape <allowzero = 1> (input, tmp_shape)");
+  if (mode == "DCR") {
+    builder.Add("tmp_transposed = Transpose <perm = [0, 3, 5, 1, 2, 4]> (tmp)");
+  } else {
+    builder.Add("tmp_transposed = Transpose <perm = [0, 1, 3, 5, 2, 4]> (tmp)");
+  }
+  builder.Add("output_shape = Concat <axis = 0> (N, C_block, H_block, W_block)")
+      .Add("output = Reshape <allowzero = 1> (tmp_transposed, output_shape)");
+  schema.BuildFunction(functionProto);
+  return true;
+}
+
+static bool BuildContextDependentFunctionBodyDepthToSpace(const FunctionBodyBuildContext &ctx,
+                                                          const OpSchema &schema,
+                                                          FunctionProto &functionProto) {
+  const auto *blocksize_attr = ctx.getAttribute("blocksize");
+  if (blocksize_attr == nullptr || !blocksize_attr->has_i() || blocksize_attr->i() <= 0) {
+    return false;
+  }
+  const auto blocksize = blocksize_attr->i();
+  const auto block_area = checkedMultiply(blocksize, blocksize);
+  const auto *mode_attr = ctx.getAttribute("mode");
+  const std::string mode =
+      (mode_attr != nullptr && mode_attr->has_s()) ? mode_attr->s().value() : "DCR";
+  if (mode != "DCR" && mode != "CRD") {
+    return false;
+  }
+
+  FunctionBuilder builder(functionProto);
+  builder.Const1D("blocksize", blocksize)
+      .Const1D("block_area", block_area)
+      .Const1D("zero", int64_t{0})
+      .Const1D("one", int64_t{1})
+      .Const1D("two", int64_t{2})
+      .Const1D("three", int64_t{3})
+      .Const1D("four", int64_t{4})
+      .Add("input_shape = Shape (input)")
+      .Add("N = Slice (input_shape, zero, one)")
+      .Add("C = Slice (input_shape, one, two)")
+      .Add("H = Slice (input_shape, two, three)")
+      .Add("W = Slice (input_shape, three, four)")
+      .Add("H_block = Mul (H, blocksize)")
+      .Add("W_block = Mul (W, blocksize)")
+      .Add("C_block = Div (C, block_area)");
+  if (mode == "DCR") {
+    builder.Add("tmp_shape = Concat <axis = 0> (N, blocksize, blocksize, C_block, H, W)")
+        .Add("tmp = Reshape <allowzero = 1> (input, tmp_shape)")
+        .Add("tmp_transposed = Transpose <perm = [0, 3, 4, 1, 5, 2]> (tmp)");
+  } else {
+    builder.Add("tmp_shape = Concat <axis = 0> (N, C_block, blocksize, blocksize, H, W)")
+        .Add("tmp = Reshape <allowzero = 1> (input, tmp_shape)")
+        .Add("tmp_transposed = Transpose <perm = [0, 1, 4, 2, 5, 3]> (tmp)");
+  }
+  builder.Add("output_shape = Concat <axis = 0> (N, C_block, H_block, W_block)")
+      .Add("output = Reshape <allowzero = 1> (tmp_transposed, output_shape)");
+  schema.BuildFunction(functionProto);
+  return true;
+}
+
 ONNX_OPERATOR_SET_SCHEMA(
-    SpaceToDepth, 13,
+    SpaceToDepth, 28,
     OpSchema()
         .Attr("blocksize", "Blocks of [blocksize, blocksize] are moved.", AttributeProto::INT)
-        .SetDoc(kDoc_SpaceToDepth_ver1)
+        .Attr("mode",
+              "DCR (default) for depth-column-row order re-arrangement. Use CRD for "
+              "column-row-depth order.",
+              AttributeProto::STRING, std::string("DCR"))
+        .SetDoc(kDoc_SpaceToDepth_ver28)
         .Input(0, "input",
                "Input tensor of [N,C,H,W], where N is the batch axis, C is the channel or depth"
                ", H is the height and W is the width.",
@@ -1318,17 +1414,18 @@ ONNX_OPERATOR_SET_SCHEMA(
               fail_shape_inference("Input tensor must be 4-dimensional");
             }
           }
-        }));
+        })
+        .SetContextDependentFunctionBodyBuilder(BuildContextDependentFunctionBodySpaceToDepth));
 
 ONNX_OPERATOR_SET_SCHEMA(
-    DepthToSpace, 13,
+    DepthToSpace, 28,
     OpSchema()
         .Attr("blocksize", "Blocks of [blocksize, blocksize] are moved.", AttributeProto::INT)
         .Attr("mode",
               "DCR (default) for depth-column-row order re-arrangement. Use CRD for "
               "column-row-depth order.",
               AttributeProto::STRING, std::string("DCR"))
-        .SetDoc(kDoc_DepthToSpace_ver13)
+        .SetDoc(kDoc_DepthToSpace_ver28)
         .Input(0, "input",
                "Input tensor of [N,C,H,W], where N is the batch axis, C is the channel or depth"
                ", H is the height and W is the width.",
@@ -1355,7 +1452,8 @@ ONNX_OPERATOR_SET_SCHEMA(
               fail_shape_inference("Input tensor must be 4-dimensional");
             }
           }
-        }));
+        })
+        .SetContextDependentFunctionBodyBuilder(BuildContextDependentFunctionBodyDepthToSpace));
 
 ONNX_OPERATOR_SET_SCHEMA(
     Tile, 13,
@@ -1933,7 +2031,7 @@ ONNX_OPERATOR_SET_SCHEMA(
         .TypeAndShapeInferenceFunction(propagateShapeAndTypeFromFirstInput));
 
 ONNX_OPERATOR_SET_SCHEMA(
-    Compress, 11,
+    Compress, 28,
     OpSchema()
         .SetDoc(kDoc_Compress_ver9)
         .Attr("axis",
@@ -1954,7 +2052,7 @@ ONNX_OPERATOR_SET_SCHEMA(
         .Output(0, "output",
                 "Tensor of rank r if axis is specified. Otherwise output is a Tensor of rank 1.",
                 "T", OpSchema::Single, true, 1, OpSchema::Differentiable)
-        .TypeConstraint("T", OpSchema::all_tensor_types(),
+        .TypeConstraint("T", OpSchema::all_tensor_types_ir4(),
                         "Constrain input and output types to all tensor types.")
         .TypeConstraint("T1", {"tensor(bool)"}, "Constrain to boolean tensors.")
         .TypeAndShapeInferenceFunction([](InferenceContext &ctx) {
@@ -1990,7 +2088,7 @@ ONNX_OPERATOR_SET_SCHEMA(
         }));
 
 ONNX_OPERATOR_SET_SCHEMA(
-    OneHot, 11,
+    OneHot, 28,
     OpSchema()
         .SetDoc(kDoc_OneHot_ver11)
         .Attr("axis",
@@ -2037,7 +2135,7 @@ ONNX_OPERATOR_SET_SCHEMA(
                         "Constrain input to only numeric types.")
         .TypeConstraint("T2", OpSchema::all_numeric_types(),
                         "Constrain input to only numeric types.")
-        .TypeConstraint("T3", OpSchema::all_tensor_types(), "Constrain to any tensor type.")
+        .TypeConstraint("T3", OpSchema::all_tensor_types_ir4(), "Constrain to any tensor type.")
         .TypeAndShapeInferenceFunction([](InferenceContext &ctx) {
           // Check that the node has three inputs.
           if (ctx.getNumInputs() != 3) {
@@ -2212,7 +2310,7 @@ ONNX_OPERATOR_SET_SCHEMA(NonZero, 13,
                              }));
 
 ONNX_OPERATOR_SET_SCHEMA(
-    ReverseSequence, 10,
+    ReverseSequence, 28,
     OpSchema()
         .SetDoc(kDoc_ReverseSequence_ver10)
         .Attr("time_axis",
@@ -2227,7 +2325,7 @@ ONNX_OPERATOR_SET_SCHEMA(
             "Tensor specifying lengths of the sequences in a batch. It has shape `[batch_size]`.",
             "tensor(int64)", OpSchema::Single)
         .Output(0, "Y", "Tensor with same shape of input.", "T", OpSchema::Single)
-        .TypeConstraint("T", OpSchema::all_tensor_types(),
+        .TypeConstraint("T", OpSchema::all_tensor_types_ir4(),
                         "Input and output types can be of any tensor type.")
         .TypeAndShapeInferenceFunction([](InferenceContext &ctx) {
           propagateElemTypeFromInputToOutput(ctx, 0, 0);
@@ -2248,7 +2346,7 @@ ONNX_OPERATOR_SET_SCHEMA(
         }));
 
 ONNX_OPERATOR_SET_SCHEMA(
-    Unique, 11,
+    Unique, 28,
     OpSchema()
         .SetDoc(kDoc_Unique_ver11)
         .Attr("sorted",
@@ -2290,7 +2388,7 @@ ONNX_OPERATOR_SET_SCHEMA(
                 "the count of each element "
                 "of 'Y' in input 'X'",
                 "tensor(int64)", OpSchema::Optional, true, 1, OpSchema::NonDifferentiable)
-        .TypeConstraint("T", OpSchema::all_tensor_types(), "Input can be of any tensor type.")
+        .TypeConstraint("T", OpSchema::all_tensor_types_ir4(), "Input can be of any tensor type.")
         .TypeAndShapeInferenceFunction([](InferenceContext &ctx) {
           // Type inference
           propagateElemTypeFromInputToOutput(ctx, 0, 0);

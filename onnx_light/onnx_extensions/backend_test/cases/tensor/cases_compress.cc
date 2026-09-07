@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/expect.h"
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_extensions/backend_test/cases/tensor/include_tensor_cases.h"
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_proto/onnx_helper.h"
@@ -53,6 +54,16 @@ void RegisterCompressCases(std::vector<TestCase> &registry, TestMode mode) {
              return IoData{{std::move(input), std::move(condition)}, {std::move(output)}};
            });
     return;
+  }
+
+  {
+    Expect(registry, MakeCompressNode(0), "test_compress_bfloat16", {DefaultOpset(28)},
+           []() -> IoData {
+             Tensor input = MakeBfloat16Tensor("input", {3, 2}, {1, 2, 3, 4, 5, 6});
+             Tensor condition = Tensor::FromBool("condition", {3}, {0, 1, 1});
+             Tensor output = MakeBfloat16Tensor("output", {2, 2}, {3, 4, 5, 6});
+             return IoData{{std::move(input), std::move(condition)}, {std::move(output)}};
+           });
   }
 
   // test_cc_compress_no_axis — flatten then select elements.

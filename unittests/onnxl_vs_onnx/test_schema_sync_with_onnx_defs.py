@@ -16,6 +16,19 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
         ("", "OptionalHasElement", 28),
     }
     REDUCE_LOG_28_KEYS = {("", "ReduceLogSum", 28), ("", "ReduceLogSumExp", 28)}
+    DATA_LAYOUT_28_KEYS = {
+        ("", name, 28)
+        for name in (
+            "Compress",
+            "DepthToSpace",
+            "Einsum",
+            "Mod",
+            "OneHot",
+            "ReverseSequence",
+            "SpaceToDepth",
+            "Unique",
+        )
+    }
     ATTENTION_25_KEY = ("", "Attention", 25)
     STFT_KEY = ("", "STFT", 17)
     STFT_DOC_MARKER = "frames = floor((signal_length - frame_length) / frame_step) + 1"
@@ -33,7 +46,8 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
 
     @classmethod
     def _remove_recent_28_schemas_if_onnx_is_outdated(cls, light_dict, onnx_dict):
-        for key in (cls.OPTIONAL_28_KEYS | cls.REDUCE_LOG_28_KEYS) - set(onnx_dict):
+        recent_keys = cls.OPTIONAL_28_KEYS | cls.REDUCE_LOG_28_KEYS | cls.DATA_LAYOUT_28_KEYS
+        for key in recent_keys - set(onnx_dict):
             if isinstance(light_dict, set):
                 light_dict.discard(key)
             else:
@@ -84,9 +98,9 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
             light_dict.pop(self.ATTENTION_25_KEY, None)
         self._remove_stft_if_onnx_docs_are_outdated(light_dict, onnx_dict)
         self.assertEqual(set(light_dict), set(onnx_dict))
-        for key, schema in light_dict.items():
+        for key, lights in light_dict.items():
             with self.subTest(key=key):
-                lights = light_dict[key]
+                schema = onnx_dict[key]
                 self.assertGreater(len(schema.outputs), 0)
                 self.assertGreater(len(lights.outputs), 0)
                 self.assertGreater(schema.line, 0)
@@ -94,7 +108,6 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
                 self.assertEqual(len(schema.inputs), len(lights.inputs))
                 self.assertEqual(len(schema.outputs), len(lights.outputs))
                 self.assertEqual(len(schema.type_constraints), len(lights.type_constraints))
-                self.assertEqual(schema.file, lights.file)
                 self.assertEqual(schema.has_function, lights.has_function)
                 self.assertEqual(schema.deprecated, lights.deprecated)
                 self.assertEqual(schema.is_infinite(0), lights.is_infinite(0))
@@ -102,7 +115,7 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
                 self.assertEqual(schema.max_output, lights.max_output)
                 # file and line are build-environment-specific and intentionally not compared
                 self.assertEqual(schema.non_deterministic, lights.non_deterministic)
-                self.assertEqual(schema.support_level, lights.support_level)
+                self.assertEqual(schema.support_level.name, lights.support_level.name)
                 self.assertEqual(schema.doc, lights.doc)
 
     def test_registered_onnx_ops_match_onnx_match_input_output_doc(self):

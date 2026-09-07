@@ -441,48 +441,6 @@ format/decoder contract against the derived record count. A byte length does
 not determine tensor rank or shape. Logical dimensions never make a
 tensor-only operator accept encoded bytes implicitly.
 
-Shared catalogue, not template instantiations
-+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-Concrete declarations in ``ModelProto.struct_types`` carry a nonzero
-``uint64 type_id``. Model values reference that stable number through
-``struct_type: { type_ref: id }``; they never reference a declaration's
-position in the repeated field. The resolved declaration must be concrete.
-An inline declaration remains useful for standalone values.
-
-Producers assign IDs through a shared type registry so the same type can
-keep the same number in different models. List order and payload length do
-not affect the ID. Reusing a number requires identical physical layout,
-format constants, and decoding/encoding semantics; names alone are not
-identities. A different definition requires a different ID. The illustrative
-numbers in these examples do not reserve global IDs.
-
-Each model includes its referenced declarations. Reject missing references,
-zero IDs, duplicate IDs within a model and conflicting definitions under
-one ID when combining catalogues. Import/export must not silently renumber
-a conflict or merge different decoding semantics.
-
-Resolve and validate each type once in its catalogue scope. Values with
-different payload lengths share that resolved type; do not create a cache of
-``(type, template_arguments)`` instantiations. They retain their own
-logical-shape/byte-extent checks and payload owners.
-
-Dynamic KV values use a session-owned catalogue with stable resolved type
-handles. The model catalogue is read-only; additional session types are
-interned without mutating it or duplicating a declaration for every page.
-Serialized type IDs retain their meaning across compatible catalogues;
-runtime handles or dense lookup indices remain catalogue-local. Export of a
-session-created value includes its declarations and preserves their IDs.
-Import resolves those IDs against the destination catalogue, sharing matching
-declarations and rejecting conflicts instead of remapping their identity.
-
-Do not add generic template parameters, argument lists or an expression
-language to the initial proto contract. Fixed arrays inside a byte-encoded
-record remain part of its element type. General structs may already use
-ONNX symbolic dimensions in their tensor fields, but that does not make them
-fixed-size packed records. A runtime dimension binding alone does not select
-a serialized layout or introduce an implicit reshape.
-
 Quantization examples: constants and per-value parameters
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 

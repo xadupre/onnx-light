@@ -11,11 +11,12 @@ Quantized values in ``GraphBuilder``
 
     GraphBuilder integration is PR05 of
     :ref:`l-next-steps-prepared-values-and-persistent-state`. The API sketches
-    below are historical proposals, not existing interfaces. Use the unified
+    below are proposals, not existing interfaces. Use the unified
     plan for the representation, ownership and implementation sequence.
-    In particular, preserve ``EncodedValueProto.storage_shape`` separately
-    from the decoded logical shape and share ``StructTypeProto`` declarations
-    across values. A different physical array size does not create a new type.
+    In particular, preserve payload byte extents separately from the decoded
+    logical shape and share ``StructTypeProto`` declarations across values.
+    A different payload length does not create a new type; the number of
+    structured records is derived by exact division by the element byte size.
 
 Objective
 +++++++++
@@ -23,10 +24,10 @@ Objective
 ``GraphBuilder`` must preserve quantized initializers without converting them
 to ``TensorProto`` or dequantizing them.
 
-The recommended representation is ``StructProto`` plus ``StructTypeProto``,
-as defined in :ref:`l-next-steps-custom-types`. If
-``QuantizedTensorProto`` is retained, the same design applies with specialized
-names.
+The representation is ``EncodedValueProto``. Its structured layout uses
+``StructTypeProto`` as defined in :ref:`l-next-steps-custom-types`; the same
+value container also supports the small built-in layout subset. There is no
+separate structured or quantized value container.
 
 Graph storage
 +++++++++++++
@@ -35,15 +36,15 @@ Graph storage
 
 .. code-block:: text
 
-    repeated StructProto structured_initializer = <N>;
+    repeated EncodedValueProto encoded_initializer = <N>;
 
 ``GraphBuilder`` stores these protos unchanged and exposes:
 
 .. code-block:: cpp
 
-    const std::string &MakeStructuredInitializer(const StructProto &value);
-    const RepeatedProtoField<StructProto> &
-    StructuredInitializers() const noexcept;
+    const std::string &MakeEncodedInitializer(const EncodedValueProto &value);
+    const RepeatedProtoField<EncodedValueProto> &
+    EncodedInitializers() const noexcept;
 
 Names are shared with inputs, ordinary initializers, and node outputs.
 External data remains external.
@@ -60,10 +61,9 @@ Add a symbolic descriptor:
 
 .. code-block:: cpp
 
-    class SymStruct {
+    class SymEncodedValue {
     public:
-      const StructTypeRef &PhysicalType() const;
-      const std::vector<uint64_t> &Dims() const;
+      const EncodedLayoutRef &PhysicalLayout() const;
       uint64_t ByteSize() const;
       const TypeProto *LogicalType() const;
       const SymTensor *LogicalTensor() const;
@@ -73,63 +73,69 @@ Add a symbolic descriptor:
 
 .. code-block:: cpp
 
-    std::unordered_map<std::string, SymStruct> structs_;
+    std::unordered_map<std::string, SymEncodedValue> encoded_values_;
     RepeatedProtoField<StructTypeProto> struct_types_;
+    std::unordered_map<uint64_t, size_t> struct_type_positions_;
 
-with ``SetStruct``, ``HasStruct``, ``GetStruct``, ``AddStructType``, and
-``GetStructType``.
+with ``SetEncodedValue``, ``HasEncodedValue``, ``GetEncodedValue``,
+``AddStructType``, and ``GetStructType``. ``EncodedLayoutRef`` selects a
+built-in layout or a resolved structured type. Type lookup uses stable
+``type_id`` values; catalogue positions are internal lookup details.
 
-``SymStruct`` keeps both views of the value:
+``SymEncodedValue`` keeps both views of the value:
 
-* physical type, dimensions, and checked byte size;
+* physical layout and checked byte size, with structured record counts derived
+  from the payload extent rather than a serialized physical shape;
 * decoded logical type and, when applicable, its ``SymTensor``.
 
 The payload itself remains in ``GraphBuilder``. A value name appears in only
 one context map. Availability checks must cover tensors, sequences, and
-structures.
+encoded values.
 
 Inference
 +++++++++
 
 ``ComputeShapeModel`` registers model-level structured types before the graph
-is processed. ``ComputeShapeGraph`` seeds structured initializers through the
-same helper used by ``GraphBuilder::MakeStructuredInitializer``.
+is processed. ``ComputeShapeGraph`` seeds encoded initializers through the
+same helper used by ``GraphBuilder::MakeEncodedInitializer``.
 
-For ``StructProto``, the helper:
+For ``EncodedValueProto``, the helper:
 
-1. resolves the inline or model-level physical type;
-2. binds ``StructProto.dims``;
-3. validates the payload size;
-4. reads the decoder output type;
-5. creates and stores ``SymStruct``.
+1. resolves the selected built-in layout or inline/ID-referenced structured type;
+2. obtains the inline byte length or validates the explicit external byte extent;
+3. validates the layout's size rules, deriving structured record counts by exact division;
+4. validates the optional logical type against the decoder or registered layout;
+5. creates and stores ``SymEncodedValue``.
 
 A tensor operator must not receive ``LogicalTensor()`` implicitly. It needs an
-explicit decoder, unless its schema accepts the structured value directly.
-``LightOpSchema::SchemaInputValue`` must therefore support ``SymStruct``.
+explicit decoder, unless its schema accepts the encoded value directly.
+``LightOpSchema::SchemaInputValue`` must therefore support ``SymEncodedValue``.
 
 Scopes
 ++++++
 
-Subgraph contexts inherit outer structured values and the structured-type
+Subgraph contexts inherit outer encoded values and the structured-type
 catalogue. Local functions inherit the catalogue but not outer values.
-Function input and output binding copies the complete ``SymStruct``.
+Function input and output binding copies the complete ``SymEncodedValue``.
 
 Serialization and passes
 ++++++++++++++++++++++++
 
 ``ModelProto -> GraphBuilder -> ModelProto`` must preserve payloads, types,
-dimensions, and model-level references. ``ToModel`` compacts the type
-catalogue and remaps indices. ``ToGraph`` rejects model-level references
-because a standalone graph cannot resolve them.
+byte extents, optional logical shapes, and stable type references. ``ToModel`` may
+compact unused catalogue entries but preserves their ``type_id`` values;
+conflicting definitions under the same ID are rejected, not silently
+renumbered. ``ToGraph`` rejects remaining model-level references unless their
+declarations are exported inline; a standalone graph has no model catalogue.
 
-Passes handling initializers must include structured initializers. Duplicate
-removal compares the resolved physical type, dimensions, payload, and
-interpretation metadata; equal bytes alone are insufficient.
+Passes handling initializers must include encoded initializers. Duplicate
+removal compares the resolved physical layout, byte extents and logical shapes,
+payload, and interpretation metadata; equal bytes alone are insufficient.
 
 Implementation order
 ++++++++++++++++++++
 
-1. Add the proto field and ``SymStruct``.
+1. Add the proto field and ``SymEncodedValue``.
 2. Extend ``ShapesContext`` and schema validation.
 3. Add ``GraphBuilder`` storage, import, and serialization.
 4. Extend subgraphs, functions, and initializer passes.

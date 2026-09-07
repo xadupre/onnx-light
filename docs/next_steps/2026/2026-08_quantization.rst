@@ -27,6 +27,11 @@ Quantization
     Each structure below is followed by its ``StructTypeProto`` translation.
     The families remain useful as format names, validation profiles and
     decoder specifications, without increasing the proto library per format.
+    The older ``type_index`` notation in the catalogue examples is historical:
+    the current contract uses explicit declaration ``type_id`` values and
+    ``type_ref`` references, not list positions. See
+    :ref:`l-next-steps-custom-types` for the stable-ID rules and both fixed
+    and per-value linear quantization parameter examples.
 
 Format coverage summary
 +++++++++++++++++++++++
@@ -194,8 +199,9 @@ CPU prepacking coverage
 The formats above describe values and portable physical layouts. They do not
 cover every representation produced by a CPU kernel prepacker. A prepacked
 tensor is tied to an operand role, a microkernel ABI, and an exact processor
-feature set; it must therefore be stored as a :ref:`l-next-steps-compiled-tensor`
-cache entry while the original initializer remains the portable fallback.
+feature set; it must therefore be stored as a
+:ref:`prepared cache entry <l-next-steps-custom-types-prepared-values>`
+while the original initializer remains the portable fallback.
 Prepacking is useful for floating-point and integer tensors, not only INT4.
 
 The first CPU implementation should cover the following persistent matrix
@@ -316,8 +322,8 @@ prepackers for every constant operand whose reuse amortizes preparation:
 Mutable decoder K/V caches are not compiled initializers. Their blocked or
 quantized runtime layout belongs to :ref:`l-next-steps-prepared-execution` and
 must encode the same head, sequence-tile, feature, and kernel-ABI constraints.
-A cache populated during inference must never be published as a
-``CompiledTensorProto`` for a model initializer.
+A cache populated during inference must never be published as an immutable
+prepared cache entry for a model initializer.
 
 Packed-format contract
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -336,7 +342,7 @@ incompatible cache entry without inspecting implementation-specific bytes:
   compensation values, and sparse outliers;
 * supported dynamic-shape bounds, batch/head sharing, and fused epilogue;
 * payload size and alignment, plus the source digest required by
-  :ref:`l-next-steps-compiled-tensor`.
+  :ref:`l-next-steps-custom-types-prepared-values`.
 
 Packed entries must use specific names such as
 ``matmul-b-int4-avx512-vnni-nr64-kr4-v2`` or
@@ -346,12 +352,16 @@ then applies the :ref:`l-next-steps-processor-aware-kernel-tuning` packing
 threshold. On a miss, the runtime prepacks from the portable initializer; it
 may also execute an unpacked kernel when packing would cost more than it saves.
 
-QuantizedTensorProto
-++++++++++++++++++++
+Quantized values in EncodedValueProto
++++++++++++++++++++++++++++++++++++++++++++++++++
 
 A quantized tensor cannot rely on ``shape × sizeof(data_type)`` to compute
 its storage size (sub-byte packing, block metadata, sparse outliers, etc.).
-It carries its own byte size explicitly.
+The payload supplies its byte length; the selected layout validates that
+extent. For a fixed-size structured element, exact division derives the
+record count without a serialized physical shape. The
+specialized message below is retained only as a historical comparison;
+``EncodedValueProto`` is the sole proposed value container.
 
 .. tab-set::
 
@@ -373,21 +383,25 @@ It carries its own byte size explicitly.
 
       .. code-block:: text
 
-         StructProto {
-             type: <quantization-profile type index>
+         EncodedValueProto {
+             struct_type: { type_ref: <quantization-profile type ID> }
+             logical_type: <decoded tensor type and shape>
              raw_data: ...
              name: ...
              doc_string: ...
          }
 
-``QuantizedTensorProto`` becomes ``StructProto``. ``raw_data``,
+The historical ``QuantizedTensorProto`` is replaced by ``EncodedValueProto``.
+``raw_data``,
 ``external_data``, ``name``, and ``doc_string`` are carried by that generic
 value. Its exact model-level or inline ``StructTypeProto`` replaces
-``quantized_type`` and ``quantization``. Counts such as a block or tile
-number are concrete dimensions of that type. The size computed from the
-physical type must equal ``raw_data.size()`` or external-data ``length``.
-Logical dimensions and element type belong to the decoder output
-``ValueInfoProto``.
+``quantized_type`` and ``quantization``. Counts of repeated fixed-size blocks
+or tiles are derived from ``raw_data.size()`` or the explicit external-data
+``length``, divided by the strictly positive element byte size. Reject partial
+records and zero-sized roots; fixed arrays inside an element remain part of
+its type. Optional logical dimensions and element type are carried by the
+value and checked against the decoder/consumer contract, not inferred from
+the byte length alone.
 
 In both forms, ``name`` identifies the concrete value and ``doc_string``
 documents it.
@@ -450,18 +464,18 @@ if ``QuantizedTensorProto`` remained a distinct value category:
          message SequenceProto {
              enum DataType {
                  ...
-                 STRUCT = <N>;
+                 ENCODED_VALUE = <N>;
              }
-             repeated StructProto struct_values = <N>;
+             repeated EncodedValueProto encoded_values = <N>;
              optional TypeProto value_type = <N+1>;
          }
 
          message OptionalProto {
              enum DataType {
                  ...
-                 STRUCT = <N>;
+                 ENCODED_VALUE = <N>;
              }
-             optional StructProto struct_value = <N>;
+             optional EncodedValueProto encoded_value = <N>;
              optional TypeProto value_type = <N+1>;
          }
 
@@ -478,24 +492,31 @@ These specialized branches map to the generic integrations defined by
 
 * ``TypeProto.QuantizedTensor`` becomes
   ``TypeProto.struct_type``;
-* ``QUANTIZED_TENSOR`` becomes the ``STRUCT`` value category;
+* ``QUANTIZED_TENSOR`` becomes the ``ENCODED_VALUE`` value category;
 * ``quantized_tensor_values`` and ``quantized_tensor_value`` become
-  ``struct_values`` and ``struct_value``;
+  ``encoded_values`` and ``encoded_value``;
 * heterogeneous pages use the unconstrained static structured category,
-  while each ``StructProto`` carries its exact physical type.
+  while each ``EncodedValueProto`` selects its exact physical layout and
+  carries its payload byte extent.
+
+The custom-type tab illustrates constraints on the structured branch only;
+the encoded value category is shared with built-in layouts, not a second
+container restricted to structures.
 
 ``MapProto`` inherits support because its values are represented by a
 ``SequenceProto``. Consequently, ``Sequence<QuantizedTensor>`` and
 ``Map<int64, QuantizedTensor>`` can represent a paged KV-cache with a different
 quantization declaration for each page.
 
-``value_type`` is required for these new categories and carries the complete
-``TypeProto.QuantizedTensor`` constraint. It makes standalone sequence and map
-values self-describing and must agree with any enclosing ``ValueInfoProto``.
+``value_type`` is required for these new categories. The historical
+specialized branch uses ``TypeProto.QuantizedTensor``; the structured branch
+of the unified container uses the corresponding ``TypeProto.struct_type``
+constraint. It makes standalone sequence and map values self-describing and
+must agree with any enclosing ``ValueInfoProto``.
 
 The generalized design in :ref:`l-next-steps-custom-types` avoids duplicating
-this machinery: a quantized tensor is an structured value with an explicit
-physical type and a decoder with a typed output signature.
+this machinery: a custom quantized tensor is an encoded value with an explicit
+structured layout and a decoder with a typed output signature.
 
 QuantizationProto
 +++++++++++++++++
@@ -645,6 +666,11 @@ Scalar or additive vector lookup-table quantization. Scalar codebooks
 use ``num_codebooks = vector_size = 1``. For additive vector
 quantization, each vector is reconstructed as the sum of one entry from
 each codebook.
+
+For a complete example using only ``StructTypeProto`` and
+``EncodedValueProto``, see :ref:`l-next-steps-custom-types-codebook`. It
+combines a shared two-bit-index/codebook subtype with a parent type carrying
+per-block scales, including stable-ID references and exact payload sizes.
 
 .. tab-set::
 

@@ -74,8 +74,9 @@ Native PR03 -- consume prepared tensors before portable weights
 
 **Implemented by issue #4620.**
 
-Implement the CPU subset of :ref:`l-next-steps-compiled-tensor`. Resolve source
-digest, CPU/ISA, runtime, kernel layout, and format compatibility from metadata.
+Implement the CPU subset of :ref:`l-next-steps-custom-types-prepared-values`.
+Resolve source digest, CPU/ISA, runtime, kernel layout, and format compatibility
+from metadata.
 On a hit, read or map the packed payload and skip the portable source and
 prepack. On a miss, read the source, prepack, publish immediately, and persist
 an atomic cache entry in the background.

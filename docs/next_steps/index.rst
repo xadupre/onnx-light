@@ -17,7 +17,6 @@ Next Steps
     2026/2026-08_quantization
     2026/2026-08_graph_builder_quantized_tensor
     2026/2026-08_mutable_cache
-    2026/2026-08_compiled_tensor
     2026/2026-08_model_resolution
     2026/2026-08_split_wheels
     2026/2026-08_fast_loading_sequence
@@ -74,8 +73,9 @@ Planned
         for other formats, under an explicit proto-size budget. Unifies typed
         prepacking, compiled caches, GraphBuilder and request-owned state,
         including paged KV blocks with independent quantization, using the
-        completed runtime infrastructure. Shared element types and per-value
-        storage shapes avoid template instantiations and duplicate types.
+        completed runtime infrastructure. Shared element types and record
+        counts derived from payload byte lengths avoid template instantiations
+        and duplicate types.
 
 Completed
 ---------
@@ -176,5 +176,4 @@ Their implementation sequences are superseded by
 * :ref:`l-next-steps-custom-types`
 * :ref:`l-next-steps-quantization`
 * :ref:`l-next-steps-graph-builder-quantized-tensor`
-* :ref:`l-next-steps-compiled-tensor`
 * :ref:`l-next-steps-mutable-cache`

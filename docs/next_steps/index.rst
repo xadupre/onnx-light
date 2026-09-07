@@ -74,6 +74,25 @@ Planned
         protocols are not required to construct state. Prepacking remains in
         the completed prepared-execution plan.
 
+Discussion
+----------
+
+.. list-table::
+    :header-rows: 1
+    :widths: 35 65
+    :class: sphinx-datatable
+
+    * - Plan
+      - Contribution
+    * - :ref:`l-next-steps-proto-inheritance`
+      - Reuses common schema fields without changing the flat wire format;
+        independent of the prepared-value and persistent-state plan.
+    * - :ref:`l-next-steps-model-resolution`
+      - Determines the final graph and live payloads before parallel reads or
+        ONNX Runtime handoff.
+    * - :ref:`l-next-steps-split-wheels`
+      - Packages runtime capabilities independently from their execution order.
+
 Completed
 ---------
 
@@ -143,25 +162,6 @@ Completed
     * - :ref:`l-next-steps-session-execution-pools`
       - Supplies the shared executor used by parallel kernels and startup
         tasks.
-
-Discussion
-----------
-
-.. list-table::
-    :header-rows: 1
-    :widths: 35 65
-    :class: sphinx-datatable
-
-    * - Plan
-      - Contribution
-    * - :ref:`l-next-steps-proto-inheritance`
-      - Reuses common schema fields without changing the flat wire format;
-        independent of the prepared-value and persistent-state plan.
-    * - :ref:`l-next-steps-model-resolution`
-      - Determines the final graph and live payloads before parallel reads or
-        ONNX Runtime handoff.
-    * - :ref:`l-next-steps-split-wheels`
-      - Packages runtime capabilities independently from their execution order.
 
 Consolidated design references
 ----------------------------------------

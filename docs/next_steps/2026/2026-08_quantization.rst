@@ -27,6 +27,11 @@ Quantization
     Each structure below is followed by its ``StructTypeProto`` translation.
     The families remain useful as format names, validation profiles and
     decoder specifications, without increasing the proto library per format.
+    The older ``type_index`` notation in the catalogue examples is historical:
+    the current contract uses explicit declaration ``type_id`` values and
+    ``type_ref`` references, not list positions. See
+    :ref:`l-next-steps-custom-types` for the stable-ID rules and both fixed
+    and per-value linear quantization parameter examples.
 
 Format coverage summary
 +++++++++++++++++++++++

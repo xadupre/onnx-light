@@ -182,6 +182,14 @@ type catalogue. Only true format constants belong to the type. Registered
 validation and decoding are explicit operations; merely loading a descriptor
 must not execute arbitrary decoder code.
 
+The examples in :ref:`l-next-steps-custom-types` retain fixed format constants
+and show both alternatives for variable affine parameters: scalar fields in
+each payload, or separate ordinary tensor inputs outside the structured
+layout entirely. In the latter case, the structured decoder exposes the
+integer codes; graph-level dequantization or a fused consumer binds scale
+and zero point explicitly. The structured value's logical type is then the
+integer tensor, not the final dequantized FLOAT tensor.
+
 One element type, many storage shapes
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
@@ -195,7 +203,8 @@ For example, the shared catalogue contains one block declaration:
 
 .. code-block:: text
 
-    ModelProto.struct_types[3] = StructTypeProto {
+    StructTypeProto {                 // declaration in ModelProto.struct_types
+        type_id: 2001
         name: "Int4Block"
         structure: {
             codes: INT4[32]
@@ -204,14 +213,14 @@ For example, the shared catalogue contains one block declaration:
     }
 
     EncodedValueProto {
-        struct_type: { type_index: 3 }
+        struct_type: { type_ref: 2001 }
         storage_shape: [128]
         logical_type: FLOAT[4096]
         raw_data: ...                 // 128 * 20 = 2560 bytes
     }
 
     EncodedValueProto {
-        struct_type: { type_index: 3 }
+        struct_type: { type_ref: 2001 }
         storage_shape: [256]
         logical_type: FLOAT[8192]
         raw_data: ...                 // 256 * 20 = 5120 bytes
@@ -258,11 +267,24 @@ bytes implicitly.
 Shared catalogue, not template instantiations
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-Model values reference a declaration in ``ModelProto.struct_types`` via
-``type_index``. The value's reference may select that declaration, while the
-resolved declaration must be concrete. An inline declaration remains useful
-for standalone values; import/export should share equivalent declarations
-without merging different decoding semantics.
+Concrete declarations in ``ModelProto.struct_types`` carry a nonzero
+``uint64 type_id``. Model values reference that stable number through
+``struct_type: { type_ref: id }``; they never reference a declaration's
+position in the repeated field. The historical ``StructProto`` example
+uses ``type_id`` for the same value-side reference. The resolved declaration
+must be concrete. An inline declaration remains useful for standalone values.
+
+Producers assign IDs through a shared type registry so the same type can
+keep the same number in different models. List order and storage shape do
+not affect the ID. Reusing a number requires identical physical layout,
+format constants, and decoding/encoding semantics; names alone are not
+identities. A different definition requires a different ID. The illustrative
+numbers in these examples do not reserve global IDs.
+
+Each model includes its referenced declarations. Reject missing references,
+zero IDs, duplicate IDs within a model and conflicting definitions under
+one ID when combining catalogues. Import/export must not silently renumber
+a conflict or merge different decoding semantics.
 
 Resolve and validate each type once in its catalogue scope. Values with
 different storage shapes share that resolved type; do not create a cache of
@@ -272,9 +294,11 @@ shape/extent checks and payload owners.
 Dynamic KV values use a session-owned catalogue with stable resolved type
 handles. The model catalogue is read-only; additional session types are
 interned without mutating it or duplicating a declaration for every page.
-Indices are catalogue-local, not process-global identities. Export of a
-session-created value includes or remaps its referenced declarations;
-an index from another catalogue cannot be consumed without resolution.
+Serialized type IDs retain their meaning across compatible catalogues;
+runtime handles or dense lookup indices remain catalogue-local. Export of a
+session-created value includes its declarations and preserves their IDs.
+Import resolves those IDs against the destination catalogue, sharing matching
+declarations and rejecting conflicts instead of remapping their identity.
 
 Do not add generic template parameters, argument lists or an expression
 language to the initial proto contract. Fixed arrays inside a record remain
@@ -673,11 +697,14 @@ preparation, active pins during eviction, changed scales with unchanged code
 bytes, incompatible ISA/ABI, missing consumers, reset, invalid capacities,
 failed mutations and independent requests.
 
-Type/value tests also round-trip two encoded values with the same catalogue
-reference but different storage shapes and payloads. Verify a single shared
-resolved descriptor, scalar and zero-size storage, malformed lengths,
-arithmetic overflow, external payload extents and session-to-model catalogue
-remapping without copying type declarations per KV block.
+Type/value tests also round-trip two encoded values with the same stable type
+ID but different storage shapes and payloads. Include two models with reordered
+catalogues and unchanged references, per-value scale/zero-point parameters,
+missing and duplicate IDs, and conflicting definitions under the same ID.
+Verify a single shared resolved descriptor, scalar and zero-size storage,
+malformed lengths, arithmetic overflow, external payload extents and
+session-to-model catalogue resolution preserving IDs without copying type
+declarations per KV block.
 
 Structural gates are explicit: a reused prepared object has no repeat
 prepacking, a compatible verified disk hit does not read portable payloads,

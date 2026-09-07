@@ -1,6 +1,7 @@
 .. _l-next-steps-prepared-values-and-persistent-state:
+.. _l-next-steps-custom-quantized-persistent-values:
 
-Structured values, prepared caches, and persistent state
+Custom, quantized, and persistent values
 ================================================================================
 
 :Date: 2026-09
@@ -11,16 +12,15 @@ Structured values, prepared caches, and persistent state
 Objective and consolidation
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-Define one runtime contract for reusable prepared weights and request-owned
-persistent state, with a deliberately small set of built-in quantized forms
-and generic structures for every other format. The trade-off is proto-library
-size versus convenience for common formats, not a complete quantization
-taxonomy. The first end-to-end consumer is
-Qwen: shared packed projection weights plus independent mutable KV caches
-for successive decode requests.
+Cover three uses of values: custom structs, quantized representations, and
+values retained between model calls. Prepared weights reuse the same
+representations. Persistent state is built from an explicit mapping of model
+outputs back to inputs, not a separate state type system. Qwen is the first
+consumer: shared packed weights and per-request KV values carried between
+decode calls.
 
 This page contains the structured-type contract, quantization examples,
-prepared-cache format, and persistent struct-instance contract in one
+prepared-cache format, and output-to-input state binding in one
 implementation sequence. The separate structured-types and mutable-cache
 pages have been removed; their retained contracts and examples are integrated
 here, not maintained as competing proposals.
@@ -63,7 +63,8 @@ ordinary initializers and kernel instances. ``RuntimeContext::Clear`` clears
 invocation values; it must not become the owner of persistent request state.
 
 The new work connects typed representations and kernel preparation to these
-facilities, then adds an explicit request lifetime and mutation contract.
+facilities, then adds a small wrapper for feeding retained outputs into the
+next model call.
 
 Three independent decisions
 +++++++++++++++++++++++++++
@@ -86,13 +87,13 @@ Keep logical meaning, physical representation and lifetime independent:
      - Describes exact fields, buffers, bit layout, padding and format
        identity; it is not inferred from logical dtype alone.
    * - Lifetime and access
-     - Immutable session prepack, mutable request cache, invocation workspace
+     - Immutable session prepack, retained request cache, invocation workspace
      - Determines ownership, sharing, synchronization and release, not the
        numerical type.
 
 A quantized value can use either a conventional block layout or a custom
 structure. A compiled representation can be quantized or floating point.
-A mutable state slot can contain a dense tensor or a structured value.
+A retained input can contain a dense tensor or a structured value.
 No inheritance chain can express these three independent choices cleanly.
 
 Representation model: a small quantized core plus generic structs
@@ -830,436 +831,139 @@ only because its original source remains available.
 
 .. _l-next-steps-mutable-cache:
 
-Persistent state: explicit request ownership
+Persistent state from model inputs and outputs
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-Share representation and allocation descriptors with prepared values, but
-never store mutable KV buffers in the immutable ``PreparedObjectStore``.
-
-.. list-table::
-   :header-rows: 1
-   :widths: 23 39 38
-
-   * - Lifetime
-     - Owner and access
-     - Examples
-   * - Session
-     - Immutable model and prepared store; shareable with consumer pins
-     - Packed weights, read-only tables, kernel configuration
-   * - Request
-     - Explicit state handle; mutable under exclusive invocation access
-     - KV data, valid lengths, positions, page tables
-   * - Invocation
-     - Submission-owned values and scratch; released after completion
-     - Temporary attention buffers and ordinary outputs
-
-The public API needs an explicit state object created from the prepared
-session. Proposed lifecycle, not an existing API:
+State is simply the model outputs retained to supply some inputs of the next
+call. The model already describes their types; the caller supplies only the
+output-to-input mapping and the initial values. Matching names or shapes is
+not enough to infer which output is meant to feed which input.
 
 .. code-block:: text
 
-    session = prepare(model)
-    state_a = session.create_state(capacity)
-    state_b = session.create_state(capacity)
-    run(session, inputs_a, state_a)
-    run(session, next_inputs_a, state_a)
-    run(session, inputs_b, state_b)
-    reset(state_a)
-    close(state_a)
+    model inputs:  tokens, past_key, past_value
+    model outputs: logits, present_key, present_value
 
-The session owns the immutable state specification; each request handle owns
-its mutable allocations and metadata. A borrowed ``RuntimeContext`` binding
-retains the handle for the complete asynchronous invocation, but clearing that
-context does not reset the state. Existing stateless ``Run`` behavior stays
-unchanged.
+    state = make_state(
+        model,
+        feedback={
+            "past_key": "present_key",       // input <- output
+            "past_value": "present_value"
+        },
+        initial={"past_key": empty_key, "past_value": empty_value}
+    )
 
-The state contract requires:
+    out = state.run({"tokens": first_tokens})
+    out = state.run({"tokens": next_tokens})
 
-* independent requests share weights but never mutable cache storage;
-* concurrent use of the same mutable state handle fails before execution;
-  separate handles may execute concurrently;
-* reset, resize and destruction cannot race with an active invocation;
-* capacity, logical length, storage identity and allocated bytes are distinct;
-  fixed-capacity overflow fails before writes;
-* reset clears validity and positions without requiring allocation or a full
-  payload clear; invalid entries must never be read;
-* successful completion publishes new lengths only after all relevant writes
-  and device events complete;
-* cancellation or failure after mutation marks the state unusable until
-  explicit reset or restore; do not promise rollback without a real journal;
-* request buffers cannot be evicted as if they were reconstructible weights.
+This proposed helper is equivalent to the ordinary stateless loop:
 
-The first runtime increment uses fixed-capacity contiguous KV storage, but
-the representation contract includes heterogeneous quantized blocks from PR01.
-Paged mixed-format execution is a required next increment, not a redesign
-deferred until after acceptance.
-Process-lifetime persistence does not imply automatic disk persistence.
-State snapshots, if added, are opt-in, versioned and bound to model identity;
-they are never written into the reusable weight cache.
+.. code-block:: text
+
+    feeds = {"tokens": tokens, **state.values}
+    outputs = run(model, feeds)
+    state.values = {
+        input_name: outputs[output_name]
+        for input_name, output_name in feedback.items()
+    }
+
+The retained values constitute the state. There is no separately authored
+``state_spec``, hidden kernel state or new persistent proto. ``make_state``
+derives field types from the selected model inputs and checks that the
+corresponding outputs can feed them. Initial contents and unresolved dimensions
+must be supplied; types alone cannot determine an initial cache.
 
 .. _l-next-steps-persistent-composite-state:
 .. _l-next-steps-persistent-struct-state:
 
-A cache is a persistent struct instance
+A struct with only one persistent part
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Persistence qualifies the binding of a value instance, not its structural
-type or each individual field. The request state owns a root slot whose value
-can be a tensor, an encoded block, or a struct with named fields and
-containers of separately owned values. ``StructTypeProto`` describes that
-struct; there is no additional composite specification. The same struct
-type could describe an invocation-local instance without becoming a new type.
-
-The following describes proposed runtime specifications and bindings, not
-new protobuf messages or existing public API names:
+The same mapping can select a field instead of an entire input. These are
+ordinary structs described by ``StructTypeProto``:
 
 .. code-block:: text
 
-    KVBlock = struct {                // StructTypeProto, type_id 4001
-        first_token: INT64
-        valid_length: INT64
-        key: encoded value view
-        value: encoded value view
+    Cache = struct {
+        keys: Tensor
+        values: Tensor
+        length: INT64
     }
 
-    KVCache = struct {                // StructTypeProto, type_id 4002
+    model input request: struct {
+        tokens: INT64[batch, sequence]
+        cache: Cache
+    }
+    model output response: struct {
+        logits: FLOAT[batch, sequence, vocabulary]
+        cache: Cache
+    }
+
+    state = make_state(
+        model,
+        feedback={"request.cache": "response.cache"},
+        initial={"request.cache": initial_cache}
+    )
+    out = state.run({"request.tokens": first_tokens})
+    out = state.run({"request.tokens": next_tokens})
+
+Only ``request.cache`` persists. Tokens are supplied anew and logits are not
+retained by the state. To retain a smaller part, select its field path instead.
+The struct declaration contains no ``persistent`` flag: the feedback mapping
+selects the persistent part of this instance.
+
+Dotted paths are shorthand for a graph input/output name followed by struct
+field names, not additional model inputs. The helper assembles the input struct
+from current feeds and retained fields. The actual tensor types and shape
+constraints come from the model; ``Tensor`` above only abbreviates them.
+
+Minimal rules
+~~~~~~~~~~~~~
+
+* Every selected input/output path must exist and have compatible types,
+  representation contracts and shape constraints. Dynamic dimensions are
+  checked on the actual values before they become next-call inputs.
+* Every required input field comes from either the current feeds or retained
+  state. Missing initial values, duplicate assignments and overlapping
+  destination paths are errors.
+* Update all retained fields only after successful execution and validation.
+  Two states are independent; simultaneous calls using the same state are rejected.
+* ``reset(initial)`` restores caller-supplied initial values; ``close`` releases
+  retained values. Neither action may race with an active call.
+
+Persistence does not imply mutation, a packed byte layout or disk persistence.
+The first implementation preserves ordinary model input/output semantics.
+In-place KV reuse is a later optimization when the kernel and ownership permit
+it; it must not modify previously returned ordinary outputs. If such an
+optimization fails after modifying state, reset is required before reuse.
+Snapshots, a new alias-annotation wire format and region-level mutation
+scheduling are outside this initial design.
+
+Quantized and paged caches use the same feedback
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+A cache can contain a sequence of blocks instead of contiguous K/V tensors.
+This changes its fields and representations, not its persistence mechanism:
+
+.. code-block:: text
+
+    Cache = struct {
         blocks: sequence<KVBlock>
-        valid_length: INT64
-        capacity: INT64
+        length: INT64
     }
+    feedback = {"request.cache": "response.cache"}
 
-    session.state_spec["cache"] = {
-        type: {struct_type: {type_ref: 4002}}
-        lifetime: request
-        access: mutable
-    }
+Each K/V block may use a different ``EncodedValueProto`` layout, such as
+INT4, INT8 or a codebook struct, provided its decoded type and geometry satisfy
+the consumer contract. The block's logical token range and valid length are
+value data; payload byte length measures physical records, not valid tokens.
+Changing scales requires a defined conversion of the affected codes.
 
-    request_a = session.create_state(capacity)
-    request_b = session.create_state(capacity)
-    run(session, inputs_a, request_a)
-    run(session, next_inputs_a, request_a)
-    run(session, inputs_b, request_b)
-
-An encoded value view is the runtime view of the existing
-``EncodedValueProto`` representation with its payload owner; it is not another
-serialized value category. ``KVCache`` and ``KVBlock`` are illustrative
-struct declarations, not dedicated ``KVCacheProto`` additions.
-The contiguous variant uses named K and V tensor/encoded-value fields instead
-of a page sequence, under the same root binding.
-
-The page sequence is an ordinary typed field of the cache struct. For example,
-the corresponding part of type 4002 uses the existing ``TypeProto`` sequence
-alternative, rather than a new cache/composite descriptor:
-
-.. code-block:: text
-
-    StructTypeProto {
-        type_id: 4002
-        name: "KVCache"
-        structure: {
-            field: {
-                name: "blocks"
-                type: {
-                    sequence_type: {
-                        elem_type: {struct_type: {type_ref: 4001}}
-                    }
-                }
-            }
-            field: {name: "valid_length", type: tensor(INT64, [])}
-            field: {name: "capacity", type: tensor(INT64, [])}
-        }
-    }
-
-This is a valid struct type even though its page sequence has no fixed inline
-byte size. Its type declaration can be serialized; it cannot be used as the
-element layout of a flat ``EncodedValueProto.raw_data`` payload. Each encoded
-K/V block still has its own eligible concrete layout and byte extent.
-
-The root binding makes the owned table, blocks, lengths and positions survive
-invocation cleanup together. ``reset`` clears validity and positions without
-requiring a full payload clear; ``close`` releases the owned allocations.
-Owned children do not need independent ``persistent`` flags or state slots.
-Replacing a page changes an owned child, not the root's type or lifetime.
-Both validity metadata and payload writes participate in the state mutation
-contract and publish together after successful completion.
-
-Ownership follows explicit owned-field edges, not every reference reachable
-from the object. Shared immutable type declarations, codebooks and prepared
-weights keep their existing catalogue/session owner. Borrowed views retain
-their owner for the invocation and do not become writable because the root
-is mutable. A reference to another independently owned state needs an explicit
-binding, lifetime pin and effect dependency; it is not silently adopted by the
-first request. Separate request roots must not share writable child storage.
-
-There is one struct type system, with different storage cases:
-
-* If all fields are eligible for fixed-size inline encoding, a value may use
-  one packed payload. A nested ``type_ref`` then describes embedded data, not
-  a serialized pointer or an allocation handle.
-* A struct instance with tensor, sequence or other dynamic fields retains
-  ordinary field values and their owners. Its runtime views use the same
-  field/type declarations, plus instance-specific layout, extent and geometry.
-  It need not occupy one contiguous serialized byte buffer.
-
-PR01 specifies the runtime views, field paths and owned/borrowed bindings for
-``StructTypeProto``, not another descriptor hierarchy. Do not infer an inline
-layout for a dynamic page sequence, invent a serialized ``PersistentTypeProto``,
-or put ``persistent`` in ``StructTypeProto``.
-The session owns the immutable struct declaration and each request owns
-an independent instance. The first implementation locks the whole mutable
-root for one invocation; field/region effects still describe what kernels
-may read and write, without promising concurrent mutation of disjoint fields.
-
-Persistence here means retention between invocations. Optional snapshots
-would serialize the owned values and validity metadata with explicit
-references and model identity, never native pointers or a dump of the runtime
-struct object. The byte-payload sketch above does not claim field-by-field
-serialization of general struct instances. Such export must fail explicitly
-until a value encoding is specified; snapshot format and restoration remain
-later work, without reintroducing ``StructProto`` or dumping native pointers.
-
-Paged KV with independently quantized blocks
-+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-The request owns a logical block table. Each K or V block is an instance of
-the same ``EncodedValueProto`` representation used for source weights and prepacking.
-The table does not impose one global physical dtype or format. Different
-layers, heads, token ranges, and K/V blocks can choose different layouts.
-
-.. code-block:: text
-
-    request state
-      layer 0, head group 0:
-        tokens [0, 128):
-          K -> EncodedValueProto {affine INT4, own scales and zero points}
-          V -> EncodedValueProto {affine INT8, own scales and zero points}
-        tokens [128, 256):
-          K -> EncodedValueProto {structured custom format A}
-          V -> EncodedValueProto {affine INT4, own scales and zero points}
-        tokens [256, 384), valid length 17:
-          K -> EncodedValueProto {dense FP16}
-          V -> EncodedValueProto {dense FP16}
-
-This example allocates capacity for the last block but exposes only 17 valid
-tokens. Logical page size, quantization group size and physical allocation
-size are independent: a page may contain several quantization groups.
-Finer-grained mixed layouts can be represented by multiple logical blocks or
-an explicit structured layout, not by adding a proto per combination.
-
-Each block descriptor carries its logical range, tensor geometry, valid
-length, concrete layout/type, payload owner and byte extent. Scales, zero
-points, group axes and sizes belong to that block's representation, not a
-global cache descriptor. K and V formats may differ, but their logical token
-ranges must agree. For a given layer/head mapping, the decoder output types
-and geometry must satisfy the shared Attention contract even when physical
-layouts differ.
-
-For a structured block, the payload byte extent divided by the element byte
-size determines the allocated physical records, not the current valid token
-count. Pages with different capacities can share the same element type while
-carrying different byte extents. Spare allocation beyond the declared payload
-extent is not part of the encoded value.
-Appending a token changes request validity and data, not the type catalogue.
-Mapping quantization groups and padding to valid tokens remains an explicit
-layout/Attention contract.
-
-The block table is a sequence field of the cache's ``StructTypeProto`` above,
-using existing container machinery and checked instance views. Its dynamic
-field value is not encoded inline in the byte-payload layout. There is no new
-``QuantizedKVCacheProto`` or separate paged quantization hierarchy.
-The table retains owners/generations, not
-serialized raw pointers. A block identity includes its request and logical
-position; mutable blocks are never deduplicated by the prepared-weight cache.
-
-Attention obtains a block iterator with logical ranges, valid extents and
-resolved layout-specific readers. It dispatches once per block or tile to
-dequantize/consume bounded data and carries the same online-softmax state
-across blocks. It must not flatten, concatenate or fully dequantize the cache
-before execution. Masks and positions use logical token indices, not physical
-page offsets. Unsupported layouts are rejected before state mutation or
-partial execution unless an explicitly selected bounded decoder is available.
-
-Appending to the current block requires an explicit quantization policy:
-
-* freeze the active group's scale/zero point and apply its documented rounding
-  and saturation rules; or
-* keep an active dense block and quantize it when sealed; or
-* recompute parameters and requantize the affected group/block.
-
-Changing a scale while leaving previous codes untouched is invalid. Published
-sealed blocks are unchanged by later appends unless an explicit conversion is
-requested. Converting INT8 to INT4, or replacing a custom layout, may allocate
-a replacement block and update its table entry after successful conversion;
-it must not rebuild the complete cache. Existing readers retain the old owner
-until completion, and the temporary replacement counts against the request
-memory budget. Failed conversion before publication leaves the old block
-valid; failed in-place mutation follows the request invalidation contract.
-
-Validation must cover mixed INT4/INT8/custom/dense blocks, distinct K and V
-formats, partial final groups, page boundaries, per-block parameter changes,
-reset/isolation, masks and conversion failures. Compare Attention with the
-reference computation over the same decoded quantized values; assess loss
-against unquantized KV separately. Report append, conversion and decode
-latency, allocated bytes and dequantization workspace per format.
-
-Mutation and graph compatibility
-+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-Mandatory mutation/aliasing is different from opportunistic last-use buffer
-reuse. A kernel declares state reads/writes, affected regions and required
-aliases; the execution plan orders conflicting accesses even when SSA names
-alone provide no data dependency.
-
-The first backend-neutral state slots are runtime bindings, not mutable
-``TensorProto`` initializers and not hidden mutable members of shared kernel
-instances. The graph and schema contracts must identify state effects at
-function and subgraph boundaries. Existing ordinary ONNX graphs keep their
-functional input/output semantics.
-
-A state-aware rewrite of tensor ``past``/``present`` is opt-in and legal only
-when external observations and ownership allow mutation. An ordinary fetched
-``present`` tensor retains ordinary output lifetime semantics; returning a
-live alias requires an explicit state-view API and cannot silently change a
-previously returned tensor during the next decode step.
-
-Required aliases preserve storage identity, offsets and strides. Immutable
-initializers, unsafe shared writable bindings or unsupported views fail rather
-than triggering a hidden full-cache copy. Dense KV append writes only new
-tokens and committed metadata; Attention reads the valid prefix directly.
-
-State effects and required-alias annotations
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-A kernel effect identifies the request root, field path and affected region:
-for example, reading ``cache.blocks[*].key`` or writing the active block and
-its valid length. Conflicting effects on the same root are ordered even when
-ordinary SSA names have no dependency. Functions and subgraphs preserve these
-effects; hiding mutable storage in a shared kernel member is not equivalent.
-
-When a state-aware graph exposes input/output aliases, the retained wire
-proposal is:
-
-.. code-block:: text
-
-    message ValueAliasProto {
-        enum Kind {
-            UNDEFINED = 0;
-            MUST_ALIAS = 1;
-        }
-        int32 output_index = 1;
-        int32 input_index = 2;
-        Kind kind = 3;
-    }
-    message NodeProto {
-        repeated ValueAliasProto output_alias = <N>;
-    }
-    message ValueInfoProto {
-        enum Access {
-            READ_ONLY = 0;
-            READ_WRITE = 1;
-        }
-        Access access = <N>;
-        string alias_of = <N+1>;
-    }
-
-PR01 freezes the graph-boundary contract and field/region effect description;
-these sketches do not claim existing or standard ONNX wire fields.
-``output_alias`` relates operator ports, while ``alias_of`` exposes the same
-relation by value name at graph/function boundaries. If both are supplied,
-they must identify the same input. These annotations specify access and
-aliasing, not persistence: the request root binding still owns the storage.
-An empty ``alias_of`` declares no alias to another named value; it does not
-transfer ownership out of a state slot.
-
-For a contiguous cache bound from the request:
-
-.. code-block:: text
-
-    graph input:
-        cache: FLOAT16[2, batch, heads, capacity, head_size]
-            access: READ_WRITE
-        values: FLOAT16[2, batch, heads, new_length, head_size]
-        position: INT64[]
-    node:
-        op_type: "CacheUpdate"
-        input: ["cache", "values", "position"]
-        output: ["updated_cache"]
-        output_alias: {output_index: 0, input_index: 0, kind: MUST_ALIAS}
-    graph output:
-        updated_cache: FLOAT16[2, batch, heads, capacity, head_size]
-            alias_of: "cache"
-
-The request retains the cache after execution. The explicitly requested
-state view of ``updated_cache`` uses the same storage and does not become an
-ordinary detached ``present`` result. The runtime rejects an immutable or
-unsafe shared writable binding rather than allocating another full cache.
-The alias is mandatory even while the old SSA name remains live; it is not
-conditional on last-use reuse.
-
-``ShapesContext`` resolves alias ports to names, merges type and shape
-constraints, checks known ``position + new_length <= capacity`` bounds and
-rejects incompatible constraints or alias chains without a valid root.
-Control-flow branches merge an aliased output only when they agree on its
-alias root. The runtime checks dynamic bounds and concrete owner, offset,
-stride and pointer identity. Struct field descriptions reuse the same
-value/shape information rather than introducing a special ``SymCache`` type.
-
-Memory planning counts persistent allocations once, outside invocation
-release/reuse candidates. Appending within capacity adds no full-cache output
-allocation; its peak includes workspace and any newly created or converted
-pages. An ownership or alias annotation alone is not proof of zero-copy:
-acceptance measures allocation and copy counters.
-
-Existing runtime comparisons
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-These are comparisons against the pinned implementations below, not additional
-implementation roadmaps or claims about every later release.
-
-ONNX Runtime GenAI exposes ``past_key_values.*`` and ``present.*``. Its
-``past_present_share_buffer`` option binds one capacity-sized ``OrtValue``
-to both names, so a compatible Attention kernel appends directly. For
-example:
-
-.. code-block:: json
-
-    {"search": {"past_present_share_buffer": true, "num_beams": 1, "max_length": 4096}}
-
-At the pinned revision, activation requires explicit opt-in and one beam,
-apart from the specialized Whisper case; graph capture requires shared
-buffers. GenAI also has windowed/model-managed caches and paged metadata.
-Its paged cache preallocates K and V tensors with geometry
-``[num_blocks, block_size, num_kv_heads, head_size]``. A block table assigns
-slices, but all blocks in a backing tensor share dtype/layout/size and the
-pool does not grow. This differs from independently allocated mixed-format
-blocks. One active request gains no continuous-batching benefit merely by
-using that pool.
-
-See `GenAI cache implementation
-<https://github.com/microsoft/onnxruntime-genai/blob/ff2009e71bd625d3c5ed7a6cbb410cf2e2dbaf48/src/models/kv_cache.cpp#L531-L564>`_,
-`cache interfaces
-<https://github.com/microsoft/onnxruntime-genai/blob/ff2009e71bd625d3c5ed7a6cbb410cf2e2dbaf48/src/models/kv_cache.h>`_,
-`paged cache
-<https://github.com/microsoft/onnxruntime-genai/blob/ff2009e71bd625d3c5ed7a6cbb410cf2e2dbaf48/src/engine/paged_key_value_cache.h>`_,
-`activation rules
-<https://github.com/microsoft/onnxruntime-genai/blob/ff2009e71bd625d3c5ed7a6cbb410cf2e2dbaf48/src/generators.cpp#L430-L435>`_,
-and the `model builder
-<https://github.com/microsoft/onnxruntime-genai/blob/ff2009e71bd625d3c5ed7a6cbb410cf2e2dbaf48/src/python/py/models/builders/base.py>`_.
-
-llama.cpp owns KV state in the runtime. Per-layer K/V tensors have fixed
-capacity; cells map tokens/sequences to slots, and graph views write ranges
-through ``cpy_k`` and ``cpy_v``. Reuse, shifting, eviction and defragmentation
-recover space, but do not grow the underlying allocation. K and V may use
-different global types, not arbitrary per-cell formats; specialized block
-caches are not a generic heterogeneous page container.
-
-See `llama-kv-cache.h
-<https://github.com/ggml-org/llama.cpp/blob/7ba604f1cb61cd14898138e9abc0b4ff2601f180/src/llama-kv-cache.h>`_
-and `llama-kv-cache.cpp
-<https://github.com/ggml-org/llama.cpp/blob/7ba604f1cb61cd14898138e9abc0b4ff2601f180/src/llama-kv-cache.cpp>`_.
-The unified proposal combines explicit request ownership with graph-visible
-effects and aliases; neither runtime-only hidden mutation nor caller-side
-buffer sharing alone supplies that complete contract.
+Paging, block conversion and zero-copy Attention are optional consumer
+optimizations after basic input/output feedback works. They must not require
+another state description. Their later acceptance measures bounded workspace,
+per-block allocation/conversion and no full-cache copy or dequantization;
+they are not prerequisites for constructing persistent state.
 
 GraphBuilder, shape inference and serialization
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -1276,7 +980,9 @@ byte extents, external payload ownership and quantization metadata
 through import/export, functions and subgraphs. Deduplication considers
 semantic profiles as well as payload bytes, layout and optional logical shapes.
 Rewrites that change any preparation dependency invalidate the corresponding
-compiled binding.
+compiled binding. Feedback bindings are validated against the final model
+inputs/outputs; a rewrite that removes or changes a selected path requires an
+updated mapping, not a silently retained hidden state.
 
 General struct declarations and their tensor/sequence field constraints
 round-trip through the type catalogue as well. This does not make a runtime
@@ -1289,7 +995,7 @@ Do not make the core plan depend on modifying upstream ONNX wire messages or
 on proto inheritance. If model extensions are later serialized, document their
 version and round-trip behavior explicitly; standard ONNX export must lower
 to supported tensors/operators or report an unsupported export, never silently
-drop authoritative structured values or state effects.
+drop authoritative structured values or feedback bindings.
 
 Implementation sequence
 +++++++++++++++++++++++
@@ -1323,12 +1029,11 @@ foundation, without a second cache or struct roadmap.
      - Representation and lifetime contracts
      - Freeze the small built-in affine subset, struct-based extension path,
        fixed element types and payload-derived counts, catalogue identities,
-       native bindings and request state effects, including heterogeneous K/V block
-       descriptors. Use one struct type system and define which structs admit
-       fixed-size byte encoding;
-       define root lifetime/access, owned/borrowed fields and field-path effects.
-       Record the
-       minimal proto size baseline and agree a size budget before PR02.
+       native bindings and typed input/output feedback. Use one struct type
+       system and define which structs admit fixed-size byte encoding.
+       Freeze whole-value/field-path matching and initial-value validation;
+       do not require a separate state specification or alias proto.
+       Record the minimal proto size baseline and agree a size budget before PR02.
      - Existing runtime APIs
    * - PR02
      - Structs first, then minimal built-in layouts
@@ -1366,22 +1071,22 @@ foundation, without a second cache or struct roadmap.
        Rewrites invalidate stale bindings; standard export never loses data.
      - PR02, PR03
    * - PR06
-     - Request state and mutation planning
-     - Introduce explicit state handles, persistent allocations, exclusive
-       binding, effect dependencies, reset and failure semantics. A root slot
-       retains its owned struct fields across calls without per-field
-       persistence flags. Two requests share weights and immutable types,
-       but never writable cache children, across repeated runs.
+     - State from model input/output feedback
+     - Build state from selected input/output pairs and initial values.
+       Infer its types from the model; retain only selected values or struct
+       fields. Repeated calls match a manual stateless feedback loop.
+       Verify initialization, validation, reset, failures and independent states.
      - PR02; existing allocation/task infrastructure
    * - PR07a
      - Contiguous KV and CPU consumer integration
-     - CPU kernels consume the backend-neutral state API. Append touches
-       only new tokens; decode performs no full-cache output allocation or
-       copy. Verify dynamic lengths, capacity, cancellation and stateless
-       compatibility against tensor past/present execution.
+     - Optimize the same past/present inputs and outputs when ownership
+       permits buffer reuse. Append touches only new tokens, preserves
+       ordinary fetched outputs and matches functional execution. Verify
+       capacity/cancellation and measure allocation/copy costs; do not make
+       zero-copy a precondition for the PR06 state helper.
      - PR03, PR06; CPU backend integration
    * - PR07b
-     - Paged KV with heterogeneous quantization
+     - Optional paged KV with heterogeneous quantization
      - The shared EncodedValueProto representation supports different K/V and
        per-block formats. Blockwise append/conversion and Attention preserve
        validity, numerical contracts and bounded workspace without copying
@@ -1390,20 +1095,21 @@ foundation, without a second cache or struct roadmap.
    * - PR08
      - End-to-end prepared/stateful acceptance
      - Measure cold/warm preparation, repeated decode and simultaneous
-       independent requests. Report source/packed/state/scratch bytes,
+       independent feedback states. Report source/packed/state/scratch bytes,
        preparation counts and per-token copies; verify stale-cache handling,
        eviction pins, request reset/isolation and the final proto-size budget.
-     - PR04, PR05, PR07b
+     - PR04, PR05, PR06, PR07a
    * - Later
      - Snapshots and advanced page policies
-     - Extend the accepted request contract without a second type system or
-       implicit disk persistence; each feature has separate correctness,
-       lifetime and memory gates.
+     - Extend the input/output feedback contract without a second state type
+       system. Snapshots, explicit alias annotations and advanced mutation
+       scheduling remain outside the first implementation.
      - PR08
 
 PR06 can proceed in parallel with PR03-PR05 after PR02 provides the shared
-struct types and field views. Initial contiguous
-state does not depend on every quantization format or GraphBuilder extension.
+struct types and field views. Basic feedback state does not depend on every
+quantization format, paging or a new mutation protocol. PR07b is optional and
+does not block PR08.
 The declarative format catalogue is not a prerequisite for FP32 prepacking.
 
 Ownership and acceptance
@@ -1411,25 +1117,24 @@ Ownership and acceptance
 
 ``onnx-light`` owns the type/serialization contracts, prepared identities,
 allocation and lifecycle, graph/schema integration, effect scheduling and
-request state. ``onnx-light-cpu`` supplies its format validators, prepackers,
+input/output feedback state. ``onnx-light-cpu`` supplies its format validators, prepackers,
 typed consumers, KV append and Attention implementation. It does not create
 another persistent-state manager or private executor.
 
 Acceptance uses C++ fixtures and existing runtime/backend test infrastructure.
-Compare packed versus unpacked computation and stateful versus functional
-tensor-cache execution with the same numerical contract. Test concurrent
+Compare packed versus unpacked computation and the state helper versus a
+manual output-to-input loop with the same numerical contract. Test concurrent
 preparation, active pins during eviction, changed scales with unchanged code
 bytes, incompatible ISA/ABI, missing consumers, reset, invalid capacities,
 failed mutations and independent requests.
 
-Persistent-struct fixtures cover contiguous fields and dynamic page containers,
-owned versus borrowed fields, immutable shared constants, root/field aliases,
-retention across invocation cleanup and release on request close. Accept
-dynamic fields in the struct declaration, but reject attempts to encode them
-as fixed-size inline payload fields,
-or to mutate borrowed read-only data through a mutable parent. Check that
-payload writes and validity metadata publish consistently, and that function
-and subgraph boundaries preserve field/region effects.
+State fixtures retain a whole tensor and only the cache field of a larger
+struct. Verify that tokens/logits are not retained, types come from model I/O,
+the next call receives exactly the previous selected outputs, and missing,
+overlapping or incompatible bindings fail explicitly. Test failed calls
+without partial state updates and two independent feedback loops.
+Dynamic fields remain valid struct types but cannot be encoded as fixed-size
+inline payload fields. Optional reuse must not corrupt retained ordinary outputs.
 
 Type/value tests also round-trip two encoded values with the same stable type
 ID but different payload lengths and derived record counts. Include two models
@@ -1454,8 +1159,10 @@ stale value. Session-only generation identities must not validate persisted
 entries in another process.
 
 Structural gates are explicit: a reused prepared object has no repeat
-prepacking, a compatible verified disk hit does not read portable payloads,
-and a fixed-capacity decode step neither allocates nor copies a full KV cache.
+prepacking and a compatible verified disk hit does not read portable payloads.
+The basic state helper promises correct feedback, not zero-copy execution.
+Only a demonstrated fixed-capacity reuse path may claim no full-cache
+allocation or copy.
 Publish latency, dispersion, peak/resident bytes and copy/read counters;
 performance claims must distinguish source validation, preparation, inference
 and state-management cost.

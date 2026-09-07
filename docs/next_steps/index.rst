@@ -33,7 +33,7 @@ Next Steps
     2026/2026-08_buffer_reuse_arena
     2026/2026-08_graph_builder_optimization
     2026/2026-08_session_execution_pools
-    2026/2026-09_prepared_values_and_persistent_state
+    2026/2026-09_custom_quantized_and_persistent_values
 
 Started
 -------
@@ -66,17 +66,13 @@ Planned
 
     * - Plan
       - Contribution
-    * - :ref:`l-next-steps-prepared-values-and-persistent-state`
-      - Combines a small built-in quantized subset with generic structures
-        for other formats, under an explicit proto-size budget. Unifies typed
-        prepacking, compiled caches, GraphBuilder and request-owned state,
-        including paged KV blocks with independent quantization, using the
-        completed runtime infrastructure. Shared element types and record
-        counts derived from payload byte lengths avoid template instantiations
-        and duplicate types. Persistence belongs to the request-owned
-        struct instance, not its type or individual fields. Fixed physical
-        size is required for byte encoding, not for all structs.
-        Includes the former struct and mutable-cache pages.
+    * - :ref:`l-next-steps-custom-quantized-persistent-values`
+      - Custom structs, quantized representations and persistent values in one
+        plan. State is built from model input/output feedback and initial values;
+        a mapping may retain just the cache field of a larger struct.
+        Prepared weights reuse the same representations. Fixed size is needed
+        only for byte encoding; paging and mutation protocols are not required
+        to construct state.
 
 Completed
 ---------

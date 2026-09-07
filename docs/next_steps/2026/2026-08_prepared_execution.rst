@@ -586,8 +586,8 @@ Reusing a persisted prepack
 
 Prepacking is often linear but not free, and it repeats on every load. The
 first implementation does **not** depend on the proposed
-:ref:`l-next-steps-compiled-tensor` format: ``EncodedValueProto`` is not
-implemented and is not required for prepared execution.
+:ref:`l-next-steps-custom-types-prepared-values` format:
+``EncodedValueProto`` is not implemented and is not required for prepared execution.
 
 A companion ONNX model stores each packed representation as a standard
 ``TensorProto``:

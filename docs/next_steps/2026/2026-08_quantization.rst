@@ -199,8 +199,9 @@ CPU prepacking coverage
 The formats above describe values and portable physical layouts. They do not
 cover every representation produced by a CPU kernel prepacker. A prepacked
 tensor is tied to an operand role, a microkernel ABI, and an exact processor
-feature set; it must therefore be stored as a :ref:`l-next-steps-compiled-tensor`
-cache entry while the original initializer remains the portable fallback.
+feature set; it must therefore be stored as a
+:ref:`prepared cache entry <l-next-steps-custom-types-prepared-values>`
+while the original initializer remains the portable fallback.
 Prepacking is useful for floating-point and integer tensors, not only INT4.
 
 The first CPU implementation should cover the following persistent matrix
@@ -341,7 +342,7 @@ incompatible cache entry without inspecting implementation-specific bytes:
   compensation values, and sparse outliers;
 * supported dynamic-shape bounds, batch/head sharing, and fused epilogue;
 * payload size and alignment, plus the source digest required by
-  :ref:`l-next-steps-compiled-tensor`.
+  :ref:`l-next-steps-custom-types-prepared-values`.
 
 Packed entries must use specific names such as
 ``matmul-b-int4-avx512-vnni-nr64-kr4-v2`` or

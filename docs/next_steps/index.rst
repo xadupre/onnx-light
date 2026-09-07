@@ -17,7 +17,6 @@ Next Steps
     2026/2026-08_quantization
     2026/2026-08_graph_builder_quantized_tensor
     2026/2026-08_mutable_cache
-    2026/2026-08_compiled_tensor
     2026/2026-08_model_resolution
     2026/2026-08_split_wheels
     2026/2026-08_fast_loading_sequence
@@ -176,5 +175,4 @@ Their implementation sequences are superseded by
 * :ref:`l-next-steps-custom-types`
 * :ref:`l-next-steps-quantization`
 * :ref:`l-next-steps-graph-builder-quantized-tensor`
-* :ref:`l-next-steps-compiled-tensor`
 * :ref:`l-next-steps-mutable-cache`

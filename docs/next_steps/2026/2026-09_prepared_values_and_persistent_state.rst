@@ -21,10 +21,9 @@ for successive decode requests.
 
 This roadmap replaces the independent implementation sequences in:
 
-* :ref:`l-next-steps-custom-types`;
+* :ref:`l-next-steps-custom-types`, including typed prepared/compiled caches;
 * :ref:`l-next-steps-quantization`;
 * :ref:`l-next-steps-graph-builder-quantized-tensor`;
-* :ref:`l-next-steps-compiled-tensor`;
 * :ref:`l-next-steps-mutable-cache`.
 
 Those pages remain design history and format examples. Where their proposals

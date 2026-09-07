@@ -470,6 +470,111 @@ scale or zero point changes the type definition and therefore requires a
 different ID; use the preceding per-value payload example when parameters
 must vary without changing the type.
 
+.. _l-next-steps-custom-types-codebook:
+
+Example: codebook quantization through a shared subtype
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+The subtype below describes 32 two-bit indices and a constant four-entry
+codebook. A second type embeds that subtype by its stable ID and adds a
+per-block FLOAT scale. This is composition by reference, not type
+inheritance; neither the subtype declaration nor its codebook is copied
+into each parent record. The reference lives in the type declaration:
+each parent payload still contains its own eight code bytes, not a pointer
+to another value.
+
+.. code-block:: text
+
+    ModelProto {
+        struct_types: {
+            type_id: 1101
+            name: "CODEBOOK2_BLOCK_32"
+            structure: {
+                field: {
+                    name: "codes"
+                    type: {
+                        struct_type: {
+                            bit_packing: {
+                                component: { name: "index", bit_width: 2 }
+                                dimension: 32
+                            }
+                        }
+                    }
+                }
+                field: {
+                    name: "codebook"
+                    constant: tensor(FLOAT, [4], [-1.0, -0.25, 0.25, 1.0])
+                }
+            }
+        }
+
+        struct_types: {
+            type_id: 1102
+            name: "SCALED_CODEBOOK2_BLOCK_32"
+            structure: {
+                field: {
+                    name: "quantized"
+                    type: { struct_type: { type_ref: 1101 } }
+                }
+                field: {
+                    name: "scale"
+                    type: tensor(FLOAT, [])
+                }
+            }
+            decoder: DecodeScaledCodebookBlocks
+        }
+    }
+
+    EncodedValueProto {
+        struct_type: { type_ref: 1102 }
+        storage_shape: []
+        logical_type: FLOAT[32]
+        raw_data: <E4 E4 E4 E4 E4 E4 E4 E4 00 00 00 40>
+        name: "one_block"
+    }
+
+    EncodedValueProto {
+        struct_type: { type_ref: 1102 }
+        storage_shape: [128]
+        logical_type: FLOAT[4096]
+        raw_data: <128 records, each containing 8 code bytes and one FLOAT scale>
+        name: "weight"
+    }
+
+The first ``raw_data`` is shown as hexadecimal bytes, not a string to store
+literally. Each byte ``E4`` packs indices ``0, 1, 2, 3`` in least-significant
+bit order; ``00 00 00 40`` is the little-endian FLOAT value 2.0.
+The codebook is serialized once in the ``constant`` member of type 1101's
+field named ``codebook``, not in either value buffer.
+
+Resolution follows ``1102 -> quantized.type -> 1101``. The root decoder
+reads each block's scale and packed indices from its payload, and the
+codebook from the resolved subtype's constant field:
+
+.. code-block:: text
+
+    table = resolved_type(1101).structure.field["codebook"].constant
+    output[block * 32 + i] = record.scale * table[record.quantized.codes[i].index]
+
+Here the field-name lookup and ``record`` view are explanatory notation.
+The registered decoder is bound to the resolved descriptors; it does not
+hard-code a model catalogue position. Only the parent decoder is invoked.
+A decoder attached to the subtype would not be composed automatically.
+The first value decodes to ``[-2.0, -0.5, 0.5, 2.0]`` repeated eight times.
+For the second value, the decoder flattens 128 decoded blocks in storage order.
+
+Type 1101 contributes ``32 * 2 / 8 = 8`` physical bytes. Its codebook occupies
+space in the type declaration but contributes zero bytes to the value
+payload. Type 1102 therefore occupies ``8 + 4 = 12`` bytes per record:
+the two value buffers contain exactly 12 and ``128 * 12 = 1536`` bytes.
+The format validator requires exactly four FLOAT codebook entries, so every
+two-bit index addresses a valid entry.
+
+Different codes, per-block scales and storage shapes reuse both declarations.
+Other structured types may also reference subtype 1101. Changing the constant
+codebook requires a new subtype ID and a new parent ID when its reference
+changes; it must not silently change the meaning of the existing IDs.
+
 Validation
 ++++++++++
 

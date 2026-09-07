@@ -664,6 +664,11 @@ use ``num_codebooks = vector_size = 1``. For additive vector
 quantization, each vector is reconstructed as the sum of one entry from
 each codebook.
 
+For a complete example using only ``StructTypeProto`` and
+``EncodedValueProto``, see :ref:`l-next-steps-custom-types-codebook`. It
+combines a shared two-bit-index/codebook subtype with a parent type carrying
+per-block scales, including stable-ID references and exact payload sizes.
+
 .. tab-set::
 
    .. tab-item:: Specialized proto

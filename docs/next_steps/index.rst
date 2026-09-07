@@ -73,8 +73,9 @@ Planned
         for other formats, under an explicit proto-size budget. Unifies typed
         prepacking, compiled caches, GraphBuilder and request-owned state,
         including paged KV blocks with independent quantization, using the
-        completed runtime infrastructure. Shared element types and per-value
-        storage shapes avoid template instantiations and duplicate types.
+        completed runtime infrastructure. Shared element types and record
+        counts derived from payload byte lengths avoid template instantiations
+        and duplicate types.
 
 Completed
 ---------

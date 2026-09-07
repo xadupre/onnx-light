@@ -13,9 +13,10 @@ Quantized values in ``GraphBuilder``
     :ref:`l-next-steps-prepared-values-and-persistent-state`. The API sketches
     below are proposals, not existing interfaces. Use the unified
     plan for the representation, ownership and implementation sequence.
-    In particular, preserve ``EncodedValueProto.storage_shape`` separately
-    from the decoded logical shape and share ``StructTypeProto`` declarations
-    across values. A different physical array size does not create a new type.
+    In particular, preserve payload byte extents separately from the decoded
+    logical shape and share ``StructTypeProto`` declarations across values.
+    A different payload length does not create a new type; the number of
+    structured records is derived by exact division by the element byte size.
 
 Objective
 +++++++++
@@ -63,7 +64,6 @@ Add a symbolic descriptor:
     class SymEncodedValue {
     public:
       const EncodedLayoutRef &PhysicalLayout() const;
-      const std::vector<int64_t> &StorageShape() const;
       uint64_t ByteSize() const;
       const TypeProto *LogicalType() const;
       const SymTensor *LogicalTensor() const;
@@ -84,7 +84,8 @@ built-in layout or a resolved structured type. Type lookup uses stable
 
 ``SymEncodedValue`` keeps both views of the value:
 
-* physical layout, storage shape, and checked byte size;
+* physical layout and checked byte size, with structured record counts derived
+  from the payload extent rather than a serialized physical shape;
 * decoded logical type and, when applicable, its ``SymTensor``.
 
 The payload itself remains in ``GraphBuilder``. A value name appears in only
@@ -101,8 +102,8 @@ same helper used by ``GraphBuilder::MakeEncodedInitializer``.
 For ``EncodedValueProto``, the helper:
 
 1. resolves the selected built-in layout or inline/ID-referenced structured type;
-2. binds ``EncodedValueProto.storage_shape``;
-3. validates the payload size;
+2. obtains the inline byte length or validates the explicit external byte extent;
+3. validates the layout's size rules, deriving structured record counts by exact division;
 4. validates the optional logical type against the decoder or registered layout;
 5. creates and stores ``SymEncodedValue``.
 
@@ -121,14 +122,14 @@ Serialization and passes
 ++++++++++++++++++++++++
 
 ``ModelProto -> GraphBuilder -> ModelProto`` must preserve payloads, types,
-storage and logical shapes, and stable type references. ``ToModel`` may
+byte extents, optional logical shapes, and stable type references. ``ToModel`` may
 compact unused catalogue entries but preserves their ``type_id`` values;
 conflicting definitions under the same ID are rejected, not silently
 renumbered. ``ToGraph`` rejects remaining model-level references unless their
 declarations are exported inline; a standalone graph has no model catalogue.
 
 Passes handling initializers must include encoded initializers. Duplicate
-removal compares the resolved physical layout, storage and logical shapes,
+removal compares the resolved physical layout, byte extents and logical shapes,
 payload, and interpretation metadata; equal bytes alone are insufficient.
 
 Implementation order

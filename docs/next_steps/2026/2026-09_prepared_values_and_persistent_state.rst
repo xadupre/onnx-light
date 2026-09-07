@@ -112,10 +112,11 @@ finalized in PR01; no ONNX-standard status is implied.
      - Describes one fixed-size physical element: fields, nested records,
        fixed arrays and bit packing. Internal counts are concrete,
        references are acyclic and size arithmetic is checked. The number of
-       repeated elements belongs to the value, not this type.
+       repeated elements is derived from the value's byte extent, not stored
+       in this type.
    * - ``EncodedValueProto``
      - One value container with optional logical tensor type/shape, a layout
-       choice, physical ``storage_shape`` and owned or external payload.
+       choice and owned or external payload with a known byte extent.
        Layout is either a small built-in dense/affine form or a concrete
        ``StructTypeProto`` reference. INT8 and blockwise INT4 are
        configurations, not distinct messages.
@@ -197,14 +198,14 @@ codes with the type's constants to expose a logical FLOAT tensor. All values
 of that type share the same parameters; varying them without changing the
 type requires the per-value payload form.
 
-One element type, many storage shapes
+One element type, many payload lengths
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-Follow the existing tensor distinction between element type and shape.
 ``StructTypeProto`` defines one encoded element, which can itself be a
-fixed-size block. ``EncodedValueProto.storage_shape`` specifies how many
-such elements are stored and their physical array dimensions. Changing that
-shape does not instantiate or create a new type.
+fixed-size block. ``EncodedValueProto`` stores a flat sequence of such
+elements. The payload byte length and the resolved element byte size
+determine the number of records; a different count does not instantiate or
+create a new type. No physical shape or redundant record count is serialized.
 
 For example, the shared catalogue contains one block declaration:
 
@@ -221,14 +222,12 @@ For example, the shared catalogue contains one block declaration:
 
     EncodedValueProto {
         struct_type: { type_ref: 2001 }
-        storage_shape: [128]
         logical_type: FLOAT[4096]
         raw_data: ...                 // 128 * 20 = 2560 bytes
     }
 
     EncodedValueProto {
         struct_type: { type_ref: 2001 }
-        storage_shape: [256]
         logical_type: FLOAT[8192]
         raw_data: ...                 // 256 * 20 = 5120 bytes
     }
@@ -242,7 +241,8 @@ and remain in the payload; the declaration only specifies their placement.
 There are three distinct quantities:
 
 * **element type:** the fixed physical layout of one ``Int4Block``;
-* **storage shape:** the physical array of those blocks;
+* **payload byte length:** the extent of the flat sequence of blocks, from
+  which their count is derived;
 * **logical shape:** the dimensions exposed by the decoder or consuming
   kernel, not the number of physical records.
 
@@ -251,25 +251,39 @@ For the structured branch, require:
 .. code-block:: text
 
     element_bytes = checked_size(resolved_struct_type)
-    payload_bytes = checked_product(storage_shape) * element_bytes
+    payload_bytes = raw_data.size()        // inline payload
+    // Or external_data.length for a validated external payload extent.
+    require(element_bytes > 0)
+    require(payload_bytes % element_bytes == 0)
+    element_count = payload_bytes / element_bytes
 
-The concrete element must be byte-aligned; explicit padding is part of its
-type. Storage dimensions are non-negative concrete integers. An empty
-``storage_shape`` means one scalar record; any zero dimension means zero
-records. There is no ``-1`` dimension, inferred count from payload length or
-automatic padding. Validate all dimensions and arithmetic before allocation
-or access, then require the exact inline/external payload length.
+The concrete root element must have a strictly positive, byte-aligned size;
+explicit padding is part of its type. Validate its fixed dimensions and size
+arithmetic before allocation or access. The two buffers above therefore
+contain ``2560 / 20 = 128`` and ``5120 / 20 = 256`` records of the same type.
+An empty payload means zero records; exactly one element's byte size means
+one record. Reject partial records rather than rounding their count.
 
-The first version stores records densely in a documented row-major order.
+Reject a zero-sized encoded root because its payload length cannot determine
+its number of instances. Zero-sized nested structures, such as constant-only
+field groups, remain allowed within a positive-sized root.
+
+Inline length is already carried by ``raw_data``. External data must provide
+an explicit length and a valid backing-file extent; do not infer the length
+from the remainder of a file or accept conflicting payload sources.
+Do not add a second serialized byte-count field.
+
+The first version stores records densely in buffer order.
 Layouts requiring internal strides, tile padding or multiple fields express
 them in the fixed element structure or a supported built-in layout, not in
 an implicit reshape. Built-in dense/affine layouts have their own explicit
 size rules, including parameter storage; do not apply the struct formula
 blindly to them.
 
-Logical dimensions are checked by the format/decoder contract and may differ
-from ``storage_shape``. They never make a tensor-only operator accept encoded
-bytes implicitly.
+Logical dimensions remain optional value information checked by the
+format/decoder contract against the derived record count. A byte length does
+not determine tensor rank or shape. Logical dimensions never make a
+tensor-only operator accept encoded bytes implicitly.
 
 Shared catalogue, not template instantiations
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -281,7 +295,7 @@ position in the repeated field. The resolved declaration must be concrete.
 An inline declaration remains useful for standalone values.
 
 Producers assign IDs through a shared type registry so the same type can
-keep the same number in different models. List order and storage shape do
+keep the same number in different models. List order and payload length do
 not affect the ID. Reusing a number requires identical physical layout,
 format constants, and decoding/encoding semantics; names alone are not
 identities. A different definition requires a different ID. The illustrative
@@ -293,9 +307,9 @@ one ID when combining catalogues. Import/export must not silently renumber
 a conflict or merge different decoding semantics.
 
 Resolve and validate each type once in its catalogue scope. Values with
-different storage shapes share that resolved type; do not create a cache of
+different payload lengths share that resolved type; do not create a cache of
 ``(type, template_arguments)`` instantiations. They retain their own
-shape/extent checks and payload owners.
+logical-shape/byte-extent checks and payload owners.
 
 Dynamic KV values use a session-owned catalogue with stable resolved type
 handles. The model catalogue is read-only; additional session types are
@@ -493,9 +507,11 @@ ranges must agree. For a given layer/head mapping, the decoder output types
 and geometry must satisfy the shared Attention contract even when physical
 layouts differ.
 
-For a structured block, ``storage_shape`` determines the allocated physical
-records, not the current valid token count. Pages with different capacities
-can share the same element type while carrying different storage shapes.
+For a structured block, the payload byte extent divided by the element byte
+size determines the allocated physical records, not the current valid token
+count. Pages with different capacities can share the same element type while
+carrying different byte extents. Spare allocation beyond the declared payload
+extent is not part of the encoded value.
 Appending a token changes request validity and data, not the type catalogue.
 Mapping quantization groups and padding to valid tokens remains an explicit
 layout/Attention contract.
@@ -572,9 +588,9 @@ Known logical dimensions do not permit a tensor-only operator to consume
 structured bytes implicitly: use an explicit decoder or a matching schema.
 
 ``GraphBuilder`` preserves structured source initializers, type references,
-physical storage shapes, external payload ownership and quantization metadata
+byte extents, external payload ownership and quantization metadata
 through import/export, functions and subgraphs. Deduplication considers
-semantic profiles as well as bytes and both physical and logical shapes.
+semantic profiles as well as payload bytes, layout and optional logical shapes.
 Rewrites that change any preparation dependency invalidate the corresponding
 compiled binding.
 
@@ -593,9 +609,9 @@ All new steps are pending; completed foundations above are reused.
 The first concrete implementation is the **structured representation**:
 ``StructTypeProto`` and the structured-layout branch of ``EncodedValueProto``.
 PR01 first freezes their minimal contract and the proto-size budget. PR02
-implements checked typed/constant fields, arrays, bit packing, type references, payload
-ownership, per-value storage shapes and serialization before adding the
-small built-in affine subset.
+implements checked typed/constant fields, arrays, bit packing, type references,
+payload ownership, byte extents, derived record counts and serialization
+before adding the small built-in affine subset.
 Custom packed weights and heterogeneous KV-block fixtures must work through
 structures without requiring a catalogue of native quantized types.
 
@@ -615,8 +631,8 @@ persistent-state consumers build on this common foundation.
    * - PR01
      - Representation and lifetime contracts
      - Freeze the small built-in affine subset, struct-based extension path,
-       element-type/storage-shape separation, catalogue identities, native
-       bindings and request state effects, including heterogeneous K/V block
+       fixed element types and payload-derived counts, catalogue identities,
+       native bindings and request state effects, including heterogeneous K/V block
        descriptors. Record the
        minimal proto size baseline and agree a size budget before PR02.
      - Existing runtime APIs
@@ -625,8 +641,9 @@ persistent-state consumers build on this common foundation.
      - Implement StructTypeProto and EncodedValueProto's structured branch
        first; then add common INT8/INT4 layouts. Round-trip custom records,
        codebook/mixed-bit formats and a heterogeneous KV-block fixture.
-       Prove one type is shared by different storage shapes; check scalar,
-       empty, overflow, catalogue resolution and exact payload-size cases.
+       Prove one type is shared by different payload lengths; check single-record,
+       empty, zero-sized-root rejection, overflow, catalogue resolution and
+       exact payload-divisibility cases.
        Report proto binary-size growth within the PR01 budget; no
        format-specific decoder is linked into the proto target.
      - PR01
@@ -704,14 +721,16 @@ bytes, incompatible ISA/ABI, missing consumers, reset, invalid capacities,
 failed mutations and independent requests.
 
 Type/value tests also round-trip two encoded values with the same stable type
-ID but different storage shapes and payloads. Include two models with reordered
-catalogues and unchanged references, per-value scale/zero-point parameters,
+ID but different payload lengths and derived record counts. Include two models
+with reordered catalogues and unchanged references, per-value scale/zero-point parameters,
 missing and duplicate IDs, and conflicting definitions under the same ID.
 Round-trip constants inside the shared type declaration without including
 them in value-buffer sizes. Reject fields with both or neither of ``type``
 and ``constant``, invalid tensor constants, and physical fields of unknown size.
-Verify a single shared resolved descriptor, scalar and zero-size storage,
-malformed lengths, arithmetic overflow, external payload extents and
+Verify a single shared resolved descriptor, one-record and empty payloads,
+zero-sized-root rejection, allowed constant-only nested structures, partial
+records, arithmetic overflow, explicit external lengths and validated extents,
+logical shapes inconsistent with derived record counts, and
 session-to-model catalogue resolution preserving IDs without copying type
 declarations per KV block.
 

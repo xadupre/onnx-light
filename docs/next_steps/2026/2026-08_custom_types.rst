@@ -17,11 +17,10 @@ Structured types and prepared values
     Its first concrete implementation is ``StructTypeProto`` together with
     the structured branch of ``EncodedValueProto``. All value examples below
     use this single container; there is no separate ``StructProto``.
-    The current contract separates the fixed-size element type from
-    ``EncodedValueProto.storage_shape``: different repetition counts share
-    one catalogue declaration, without template parameters or type
-    instantiations. The size rules below describe one element;
-    its total value size additionally includes the storage-shape product.
+    The current contract describes one fixed-size element and derives the
+    number of records from the payload byte length. Different repetition
+    counts share one catalogue declaration, without template parameters,
+    type instantiations or a serialized physical shape.
     Type references use explicit stable numeric identifiers, not positions
     in ``ModelProto.struct_types``.
     The former compiled-tensor proposal is incorporated in
@@ -53,7 +52,6 @@ still to be frozen in the unified plan:
             StructTypeProto struct_type = <N>;  // type_ref or concrete inline type
             // Other built-in layout branches are omitted here.
         }
-        repeated int64 storage_shape = <N>;
         optional TypeProto logical_type = <N>;
         bytes raw_data = <N>;
         repeated StringStringEntryProto external_data = <N>;
@@ -86,15 +84,15 @@ additions.
 Requirements
 ++++++++++++
 
-* The physical element size times the storage-shape product equals the inline
-  or external payload length.
+* The inline or external payload length is an exact multiple of the
+  strictly positive physical element byte size.
 * Every read performed by the structured view is bounds-checked.
 * Bits and multi-byte values use one canonical ordering convention.
 * A structure may be nested and repeated without introducing a new proto
   for each format.
 * Every array and bit-packing length is a concrete non-negative integer.
-* The number of payload bytes is computable from its type and storage shape
-  without reading the payload.
+* The number of records is computable from the type and payload byte length
+  without interpreting the payload contents.
 * The physical structure is inspectable without loading a vendor plugin.
 * An optional standard ONNX decoder defines logical semantics such as
   dequantization.
@@ -133,9 +131,10 @@ are invoked. A declaration reached through a nested ``type_ref`` contributes
 only its physical structure and constants; its decoder and encoder are not
 composed implicitly.
 
-No other interpretation of an absent field is permitted. In particular,
-counts are concrete, and there are no inferred lengths, implicit alignment,
-hidden padding, semantic traits, or alternate byte orders.
+Counts inside a type remain explicit and concrete. Only the number of
+complete records in a value is derived from its payload byte length.
+There are no inferred field dimensions, implicit alignment, hidden padding,
+semantic traits, or alternate byte orders.
 
 Physical size function
 ++++++++++++++++++++++
@@ -155,18 +154,34 @@ declaration:
     size(type_ref=id)           = size(resolve_type_id(id))
 
 All arithmetic is checked in ``uint64``. References must be acyclic. The
-concrete root size must be divisible by eight. For the structured layout:
+concrete root of an encoded value must have a strictly positive size
+divisible by eight. For the structured layout:
 
 .. code-block:: text
 
     element_bytes = size(resolved_struct_type) / 8
-    payload_bytes = checked_product(storage_shape) * element_bytes
+    payload_bytes = raw_data.size()        // inline payload
+    // Or external_data.length for a validated external payload extent.
+    require(element_bytes > 0)
+    require(payload_bytes % element_bytes == 0)
+    element_count = payload_bytes / element_bytes
 
-Storage dimensions are concrete and non-negative. ``storage_shape: []``
-means one record; a zero dimension means an empty payload. Require
-``payload_bytes`` to equal the inline ``raw_data`` length or external-data
-``length``. The optional logical type/shape describes the decoded value, not
-the physical repetition count.
+The selected payload source supplies the byte length: ``raw_data.size()``
+for inline bytes, or an explicit ``external_data.length`` for external bytes.
+Validate external offsets, lengths and actual backing-file bounds; an absent
+external length is not an instruction to consume the rest of a file.
+Conflicting inline and external payload sources are rejected.
+Do not serialize a redundant byte count, record count or physical shape.
+
+An empty payload means zero records of a positive-sized type. A payload of
+exactly ``element_bytes`` means one record. A zero-sized root is rejected:
+its byte length cannot distinguish zero, one or many instances. Zero-sized
+substructures, including constant-only field groups, remain valid inside a
+positive-sized root and consume no payload bytes.
+
+The optional logical type/shape describes the decoded value. Its consistency
+with the derived record count is checked by the decoder or format contract;
+byte length alone cannot determine tensor rank or dimensions.
 
 StructTypeProto
 +++++++++++++++
@@ -347,7 +362,6 @@ The following type stores 128 ``INT4`` values plus format constants:
 
     EncodedValueProto {
         struct_type: { type_ref: 1001 }
-        storage_shape: []
         logical_type: FLOAT[128]
         raw_data: <64 bytes>
         name: "weight"
@@ -388,7 +402,6 @@ payload, just as it describes the array of codes:
 
     EncodedValueProto {
         struct_type: { type_ref: 1002 }
-        storage_shape: []
         logical_type: FLOAT[128]
         raw_data: <64 code bytes, FLOAT scale=0.125, INT64 zero_point=0>
         name: "weight_a"
@@ -396,7 +409,6 @@ payload, just as it describes the array of codes:
 
     EncodedValueProto {
         struct_type: { type_ref: 1002 }
-        storage_shape: []
         logical_type: FLOAT[128]
         raw_data: <64 code bytes, FLOAT scale=0.25, INT64 zero_point=-2>
         name: "weight_b"
@@ -448,7 +460,6 @@ example, with the model-level storage and value references shown explicitly:
 
     EncodedValueProto {
         struct_type: { type_ref: 1003 }
-        storage_shape: []
         logical_type: FLOAT[128]
         raw_data: <64 code bytes for weight_a>
         name: "weight_a"
@@ -456,7 +467,6 @@ example, with the model-level storage and value references shown explicitly:
 
     EncodedValueProto {
         struct_type: { type_ref: 1003 }
-        storage_shape: []
         logical_type: FLOAT[128]
         raw_data: <64 code bytes for weight_b>
         name: "weight_b"
@@ -531,7 +541,6 @@ to another value.
 
     EncodedValueProto {
         struct_type: { type_ref: 1102 }
-        storage_shape: []
         logical_type: FLOAT[32]
         raw_data: <E4 E4 E4 E4 E4 E4 E4 E4 00 00 00 40>
         name: "one_block"
@@ -539,7 +548,6 @@ to another value.
 
     EncodedValueProto {
         struct_type: { type_ref: 1102 }
-        storage_shape: [128]
         logical_type: FLOAT[4096]
         raw_data: <128 records, each containing 8 code bytes and one FLOAT scale>
         name: "weight"
@@ -574,7 +582,10 @@ the two value buffers contain exactly 12 and ``128 * 12 = 1536`` bytes.
 The format validator requires exactly four FLOAT codebook entries, so every
 two-bit index addresses a valid entry.
 
-Different codes, per-block scales and storage shapes reuse both declarations.
+The byte lengths therefore imply one and 128 records respectively; no
+record count or physical shape is serialized alongside them.
+
+Different codes, per-block scales and payload lengths reuse both declarations.
 Other structured types may also reference subtype 1101. Changing the constant
 codebook requires a new subtype ID and a new parent ID when its reference
 changes; it must not silently change the meaning of the existing IDs.
@@ -591,8 +602,10 @@ A checker rejects:
 * duplicate field or component names;
 * zero component widths or unsupported physical leaf types;
 * a physical size that is not byte-aligned;
-* a negative storage dimension or overflowing size/product;
-* a payload whose length differs from the computed size;
+* a zero-sized root used by an encoded value;
+* a negative or non-concrete physical field dimension, or overflowing size arithmetic;
+* a payload length that is not an exact multiple of the element byte size;
+* a missing external length, invalid byte extent or conflicting payload sources;
 * implicit padding or untyped trailing bytes.
 
 .. _l-next-steps-custom-types-prepared-values:
@@ -626,9 +639,8 @@ metadata field names:
 
     EncodedValueProto {
         struct_type: { type_ref: 3001 }
-        storage_shape: [tile_count]
         logical_type: FLOAT[K, N]
-        raw_data: ...
+        raw_data: <complete packed records>
         preparation: {
             source_lineage: ...       // ordered operands and their semantics
             source_lineage_digest: ...
@@ -703,8 +715,8 @@ A runtime uses a compiled entry only when all of the following hold:
 * ``device`` is an in-range model-level index;
 * device type, architecture, runtime, version, and required metadata are
   compatible;
-* the encoded value, selected layout and storage shape pass structural and
-  payload-size validation;
+* the encoded value, selected layout and byte extent pass structural and
+  payload-size validation, including exact record divisibility for structures;
 * the runtime recognizes that physical type and compiled-format version.
 
 If a compatibility condition or digest comparison fails, the runtime treats
@@ -725,9 +737,8 @@ otherwise packed cache entry is represented by the same
 
     EncodedValueProto {
         struct_type: { type_ref: 3002 } // stable packed CUDA type ID
-        storage_shape: [tile_count]
         logical_type: FLOAT[K, N]
-        raw_data: ...
+        raw_data: <complete packed records>
         preparation: {
             source_lineage: ...        // includes weight and all other operands
             source_lineage_digest: ...

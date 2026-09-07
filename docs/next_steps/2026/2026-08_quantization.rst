@@ -357,7 +357,9 @@ Quantized values in EncodedValueProto
 
 A quantized tensor cannot rely on ``shape × sizeof(data_type)`` to compute
 its storage size (sub-byte packing, block metadata, sparse outliers, etc.).
-Its selected layout and storage shape determine the exact byte size. The
+The payload supplies its byte length; the selected layout validates that
+extent. For a fixed-size structured element, exact division derives the
+record count without a serialized physical shape. The
 specialized message below is retained only as a historical comparison;
 ``EncodedValueProto`` is the sole proposed value container.
 
@@ -383,7 +385,6 @@ specialized message below is retained only as a historical comparison;
 
          EncodedValueProto {
              struct_type: { type_ref: <quantization-profile type ID> }
-             storage_shape: [block_count]
              logical_type: <decoded tensor type and shape>
              raw_data: ...
              name: ...
@@ -394,12 +395,13 @@ The historical ``QuantizedTensorProto`` is replaced by ``EncodedValueProto``.
 ``raw_data``,
 ``external_data``, ``name``, and ``doc_string`` are carried by that generic
 value. Its exact model-level or inline ``StructTypeProto`` replaces
-``quantized_type`` and ``quantization``. Counts such as a block or tile
-number belong to ``storage_shape`` when repeating the same fixed element;
-fixed arrays inside that element remain part of its type. The element size
-times the storage-shape product must equal ``raw_data.size()`` or
-external-data ``length``. Optional logical dimensions and element type are
-carried by the value and checked against the decoder/consumer contract.
+``quantized_type`` and ``quantization``. Counts of repeated fixed-size blocks
+or tiles are derived from ``raw_data.size()`` or the explicit external-data
+``length``, divided by the strictly positive element byte size. Reject partial
+records and zero-sized roots; fixed arrays inside an element remain part of
+its type. Optional logical dimensions and element type are carried by the
+value and checked against the decoder/consumer contract, not inferred from
+the byte length alone.
 
 In both forms, ``name`` identifies the concrete value and ``doc_string``
 documents it.
@@ -495,7 +497,7 @@ These specialized branches map to the generic integrations defined by
   ``encoded_values`` and ``encoded_value``;
 * heterogeneous pages use the unconstrained static structured category,
   while each ``EncodedValueProto`` selects its exact physical layout and
-  storage shape.
+  carries its payload byte extent.
 
 The custom-type tab illustrates constraints on the structured branch only;
 the encoded value category is shared with built-in layouts, not a second

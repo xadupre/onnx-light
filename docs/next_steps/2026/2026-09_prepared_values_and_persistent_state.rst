@@ -20,7 +20,7 @@ Qwen: shared packed projection weights plus independent mutable KV caches
 for successive decode requests.
 
 This page contains the structured-type contract, quantization examples,
-prepared-cache format, and persistent composite-state contract in one
+prepared-cache format, and persistent struct-instance contract in one
 implementation sequence. The separate structured-types and mutable-cache
 pages have been removed; their retained contracts and examples are integrated
 here, not maintained as competing proposals.
@@ -98,10 +98,13 @@ No inheritance chain can express these three independent choices cleanly.
 Representation model: a small quantized core plus generic structs
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-Use one ``EncodedValueProto`` container with a small set of built-in layouts and a
-generic structured layout for the long tail. Quantized, prepacked and mutable
-are not separate storage categories. Names and wire field numbers are
-finalized in PR01; no ONNX-standard status is implied.
+Use one ``StructTypeProto`` to describe structs, including structs containing
+tensors, nested structs and sequences. Use ``EncodedValueProto`` for their
+byte-encoded representations when a fixed physical layout exists, alongside
+the small set of built-in layouts. A runtime struct does not need a second
+type category called a composite. Quantized, prepacked and mutable are not
+separate storage categories. Names and wire field numbers are finalized in
+PR01; no ONNX-standard status is implied.
 
 .. list-table::
    :header-rows: 1
@@ -110,17 +113,18 @@ finalized in PR01; no ONNX-standard status is implied.
    * - Descriptor
      - Responsibility
    * - ``StructTypeProto``
-     - Describes one fixed-size physical element: fields, nested records,
-       fixed arrays and bit packing. Internal counts are concrete,
-       references are acyclic and size arithmetic is checked. The number of
-       repeated elements is derived from the value's byte extent, not stored
-       in this type.
+     - Describes fields and their types, nested structs, arrays and bit
+       packing. A struct need not have a fixed physical size. The subset with
+       statically sized inline fields also describes one byte-encoded
+       element; only this subset uses checked size arithmetic and record
+       counts derived from payload length.
    * - ``EncodedValueProto``
      - One value container with optional logical tensor type/shape, a layout
        choice and owned or external payload with a known byte extent.
        Layout is either a small built-in dense/affine form or a concrete
-       ``StructTypeProto`` reference. INT8 and blockwise INT4 are
-       configurations, not distinct messages.
+       ``StructTypeProto`` reference whose physical element size is known.
+       A general struct with dynamic fields cannot be dumped into this byte
+       payload. INT8 and blockwise INT4 are configurations, not distinct messages.
    * - Optional preparation metadata
      - Records source dependencies, preparation recipe and compatibility
        requirements for a derived value. These are metadata on the same
@@ -135,17 +139,18 @@ shape and external-data machinery.
 
 ``Encoded`` identifies a representation that needs a layout-aware
 interpretation, rather than merely indicating that bytes are stored.
-``Value`` permits custom records as well as logical tensors. A runtime
-composite groups independently owned buffers through its tensor/encoded-value
-fields; they are not inline pointers in a serialized physical record.
+``Value`` permits custom records as well as logical tensors. A runtime struct
+instance groups independently owned buffers through its fields, using the
+same ``StructTypeProto`` rather than a parallel descriptor system. Those
+buffers are not inline pointers in a serialized physical record.
 The name applies equally to packed weights and KV blocks;
 it does not imply immutability or disk persistence.
 
 Keep the name ``EncodedValueProto`` for every value example and proposed
 API. ``StructProto`` would suggest that every value must instantiate a
 ``StructTypeProto``, whereas built-in layouts need not do so. Reserve
-``StructTypeProto`` for the reusable structured element description,
-including its constants. Do not introduce a ``StructProto`` alias, base
+``StructTypeProto`` for the reusable struct description, including its field
+types and constants. Do not introduce a ``StructProto`` alias, base
 class, nested value wrapper or parallel value category.
 
 The affine layout parameters are a small nested descriptor, not a growing
@@ -203,15 +208,18 @@ type requires the per-value payload form.
 
 .. _l-next-steps-custom-types:
 
-Structured physical types
+Struct types and byte-encodable layouts
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-``StructTypeProto`` describes one fixed-size physical element, not the
-ownership tree of an entire runtime cache. A concrete declaration selects
-``array``, ``bit_packing`` or ``structure``. Its fields select either bytes
-in the value payload or a tensor constant in the declaration.
+``StructTypeProto`` describes a struct's fields and types. A concrete
+declaration selects ``array``, ``bit_packing`` or ``structure``. Each field
+selects either a value type or a tensor constant in the declaration.
+It may describe a cache with tensor and sequence fields, not just a packed
+numeric record.
 
-The following wire sketch is a proposal; PR01 freezes field numbers:
+Fixed physical size is an eligibility condition for byte encoding, not a
+requirement on every struct. The following wire sketch shows the struct type
+and the byte-encoded value container; PR01 freezes field numbers:
 
 .. code-block:: text
 
@@ -278,18 +286,28 @@ The following wire sketch is a proposal; PR01 freezes field numbers:
     }
 
 ``EncodedValueProto.struct_type`` selects an exact ``type_ref`` or a concrete
-inline declaration. An exact static reference may also appear inside
-``TypeProto`` and nested physical fields. A ``StructTypeProto`` with its kind
-unset is an unconstrained static category, permitted only inside ``TypeProto``
+inline declaration eligible for byte encoding. An exact type reference may
+also appear inside ``TypeProto`` and nested fields, including references to
+structs with dynamic fields. A ``StructTypeProto`` with its kind
+unset is an unconstrained struct category, permitted only inside ``TypeProto``
 for heterogeneous sequence/map element constraints, never as a payload layout.
 Reference and category forms carry no declaration ID, decoder, encoder, name,
 or declaration metadata of their own.
 
-``Field.type`` and ``Array.element_type`` must resolve to statically sized
-tensor or structured types. Unknown rank, symbolic dimensions, sequences,
-maps, optional values and opaque types cannot be inline physical fields.
-Runtime containers of separately owned values are described in
-:ref:`l-next-steps-persistent-composite-state`; they do not relax this rule.
+``Field.type`` and ``Array.element_type`` use ``TypeProto``: tensors, nested
+structs, sequences, maps and optional values use their existing type
+alternatives and validation rules. Tensor dimensions may be dynamic when
+the consuming contract permits it. Array lengths and bit-packing counts
+remain explicit concrete integers; a dynamic-length collection uses a sequence.
+Opaque fields require an explicit supported native binding and lifecycle.
+
+For byte encoding, every non-constant field must instead resolve recursively
+to fixed-size inline data. Dynamic dimensions, sequences, maps, optional
+values and opaque objects have no implicit inline size. Such a struct remains
+a valid runtime type but cannot select the raw/external byte-payload layout.
+Its runtime field values retain their ordinary owners and checked views.
+There is no second composite type or descriptor to define; see
+:ref:`l-next-steps-persistent-struct-state`.
 
 ``Field.constant`` is the actual ``TensorProto`` value, not a graph input or
 a second value buffer. It must have concrete dimensions and matching data.
@@ -297,10 +315,11 @@ Only true shared format constants belong here; changing a constant changes
 the type identity. Mutable lengths, positions and per-block quantization
 parameters are instance data, not declaration constants.
 
-Physical rules and validation
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Byte-encoding rules and validation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Compute sizes recursively in bits with checked ``uint64`` arithmetic:
+For a byte-encodable struct, compute sizes recursively in bits with checked
+``uint64`` arithmetic:
 
 .. code-block:: text
 
@@ -320,23 +339,26 @@ physical data. No native alignment or process-local pointer representation is
 implicit in this contract. Every field, array and bit-packing read is
 bounds-checked; a typed view does not bypass alignment or byte-extent checks.
 
-The checker rejects duplicate field/component names, fields with both or
-neither content alternatives, invalid constants, zero component widths,
-unsupported leaves, unresolved or cyclic references, negative or non-concrete
-counts and overflowing size arithmetic. The encoded root must have strictly
-positive size divisible by eight. Nested constant-only groups may have size
-zero. Payload divisibility and external bounds follow the next section.
+Type checking rejects duplicate field/component names, fields with both or
+neither content alternatives, invalid field types/constants, zero component
+widths, unresolved or cyclic references, and invalid array/bit-packing counts.
+Byte-encoding validation additionally rejects fields without a fixed physical
+size, unsupported physical leaves and overflowing size arithmetic. The encoded
+root must have strictly positive size divisible by eight. Constant-only
+structs are valid types but cannot be roots of this byte encoding; nested
+constant-only groups may contribute zero bytes. Payload divisibility and
+external bounds follow the next section.
 
-Only the decoder or encoder attached to the selected concrete root is invoked.
+For encoded values, only the decoder or encoder of the concrete root is invoked.
 A nested ``type_ref`` contributes layout and constants; its decoder or encoder
 is not composed implicitly. Loading a type must not execute decoder code.
 
 One element type, many payload lengths
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-``StructTypeProto`` defines one encoded element, which can itself be a
-fixed-size block. ``EncodedValueProto`` stores a flat sequence of such
-elements. The payload byte length and the resolved element byte size
+In the byte-encodable subset, ``StructTypeProto`` defines one encoded element,
+which can itself be a fixed-size block. ``EncodedValueProto`` stores a flat
+sequence of such elements. The payload byte length and the resolved element byte size
 determine the number of records; a different count does not instantiate or
 create a new type. No physical shape or redundant record count is serialized.
 
@@ -454,10 +476,11 @@ Import resolves those IDs against the destination catalogue, sharing matching
 declarations and rejecting conflicts instead of remapping their identity.
 
 Do not add generic template parameters, argument lists or an expression
-language to the initial proto contract. Fixed arrays inside a record remain
-part of its element type. If a later use case requires variable dimensions
-inside the record, evaluate reuse of ONNX symbolic dimensions separately,
-with explicit binding and size rules; it is not implicit support in PR02.
+language to the initial proto contract. Fixed arrays inside a byte-encoded
+record remain part of its element type. General structs may already use
+ONNX symbolic dimensions in their tensor fields, but that does not make them
+fixed-size packed records. A runtime dimension binding alone does not select
+a serialized layout or introduce an implicit reshape.
 
 Quantization examples: constants and per-value parameters
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -694,9 +717,35 @@ must propagate, not become a success-shaped fallback.
 Typed compiled-cache attachment
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The optional prepared attachment stores the same ``EncodedValueProto``,
-with preparation metadata that does not own a second payload. This sketch
-is not a finalized wire schema:
+A compiled cache stores the result of a preparation operation. For example,
+a quantized matrix prepack may be computed from weights ``W``, scales ``S``
+and zero points ``Z``. Its bytes belong to ``EncodedValueProto``; preparation
+metadata explains how those bytes were produced and when they can be reused.
+
+The metadata answers three separate questions:
+
+* ``sources``: which input values are needed to prepare or rebuild this value?
+  Each entry records the operand's role and a reference resolved in its graph
+  or function scope. Include bias only if preparation actually depends on it.
+* The source's ``content_id``: are these still the same contents? The graph
+  name ``W`` can stay unchanged while its weights change. A durable identity
+  covers the canonical content, type, dimensions and interpretation, including
+  relevant layout definitions and type constants, not just the display name.
+* ``recipe`` and ``device``: which transformation produced the bytes, and
+  which consumer can use them? They identify the preparation operation,
+  version, relevant attributes and runtime/device compatibility.
+
+Use one content identity per source, not a mandatory second
+``sources_digest`` alongside those identities. The runtime derives the
+complete prepared lookup key from the ordered source roles/identities,
+recipe, output layout and compatibility requirements. It may hash that key
+internally; that is not another serialized proof that the sources are current.
+If a source reference is already content-addressed, reuse its identity instead
+of duplicating it in a separate fingerprint field.
+
+The following example uses graph-name references plus per-source hashes.
+It is descriptive syntax, not a finalized wire schema. The digest values
+are placeholders for hashes computed from the actual source values:
 
 .. code-block:: text
 
@@ -720,24 +769,59 @@ is not a finalized wire schema:
         logical_type: FLOAT[K, N]
         raw_data: <complete packed records>
         preparation: {
-            source_lineage: ...       // ordered operands and their semantics
-            source_lineage_digest: ...
-            digest_algorithm: "blake3"
-            recipe: ...               // operator, layout and tuning choices
+            sources: [
+                {
+                    role: "weights"
+                    value: {scope: "main", name: "W"}
+                    content_id: {algorithm: "blake3", digest: <W identity>}
+                },
+                {
+                    role: "scales"
+                    value: {scope: "main", name: "S"}
+                    content_id: {algorithm: "blake3", digest: <S identity>}
+                },
+                {
+                    role: "zero_points"
+                    value: {scope: "main", name: "Z"}
+                    content_id: {algorithm: "blake3", digest: <Z identity>}
+                }
+            ]
+            recipe: {
+                name: "cpu.matmul.pack"
+                version: 1
+                attributes: {transpose_b: false}
+            }
             device: 1                 // index into ModelProto.devices
         }
     }
 
+Changing ``S`` changes its content identity and invalidates this prepared
+value even when ``W`` is unchanged. Changing ``transpose_b`` or the packing
+version changes the recipe and likewise prevents reuse. The source references
+still identify the inputs from which to rebuild.
+
+For a session-only in-memory prepared value, a tracked source identity and
+generation may replace content hashing under an explicit immutability/version
+contract. A pointer address alone is insufficient. Process-local generations
+cannot validate a disk cache in another process; persisted entries require
+durable content identities. A hash copied from an untrusted cache is not proof
+of the current source: validation follows the source-identity rules above.
+
+``source_lineage`` in the existing prepared-execution APIs means this ordered
+source list. It does not require another source concept or registry in the
+new value format, and the new example does not prescribe renaming those APIs.
+
 Device type, architecture, implementation ABI and metadata express
 compatibility, not merely a device ordinal. The device index is an index
 into the model's device list; it is unrelated to stable structured type IDs.
-One source lineage may have several entries for different devices or recipes.
+One set of sources may have several entries for different devices or recipes.
 FP32, tiled and quantized packs all use this attachment without another
 compiled or quantized value-container hierarchy.
 
 The checker validates unique device descriptors, in-range device indices,
 unique complete preparation keys, source existence and unambiguous scope,
-non-empty digest and algorithm fields, unique metadata keys, exact layouts
+valid source content identities (including algorithm and digest for the hash
+form), unique metadata keys, exact layouts
 and valid byte extents. A payload cannot select an unconstrained structured
 category. Device compatibility and digest comparison may be deferred until
 load time, but structural errors are independent of hardware availability.
@@ -814,36 +898,38 @@ State snapshots, if added, are opt-in, versioned and bound to model identity;
 they are never written into the reusable weight cache.
 
 .. _l-next-steps-persistent-composite-state:
+.. _l-next-steps-persistent-struct-state:
 
-A cache is a persistent composite instance
+A cache is a persistent struct instance
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Persistence qualifies the binding of a value instance, not its structural
 type or each individual field. The request state owns a root slot whose value
-can be a tensor, an encoded block, or a composite with named fields and
-containers of separately owned values. The same structural specification
-could describe an invocation-local object without changing its numeric types.
+can be a tensor, an encoded block, or a struct with named fields and
+containers of separately owned values. ``StructTypeProto`` describes that
+struct; there is no additional composite specification. The same struct
+type could describe an invocation-local instance without becoming a new type.
 
 The following describes proposed runtime specifications and bindings, not
 new protobuf messages or existing public API names:
 
 .. code-block:: text
 
-    KVBlock = composite {
+    KVBlock = struct {                // StructTypeProto, type_id 4001
         first_token: INT64
         valid_length: INT64
         key: encoded value view
         value: encoded value view
     }
 
-    KVCache = composite {
+    KVCache = struct {                // StructTypeProto, type_id 4002
         blocks: sequence<KVBlock>
         valid_length: INT64
         capacity: INT64
     }
 
     session.state_spec["cache"] = {
-        value_spec: KVCache
+        type: {struct_type: {type_ref: 4002}}
         lifetime: request
         access: mutable
     }
@@ -857,9 +943,37 @@ new protobuf messages or existing public API names:
 An encoded value view is the runtime view of the existing
 ``EncodedValueProto`` representation with its payload owner; it is not another
 serialized value category. ``KVCache`` and ``KVBlock`` are illustrative
-composite specifications, not dedicated ``KVCacheProto`` additions.
+struct declarations, not dedicated ``KVCacheProto`` additions.
 The contiguous variant uses named K and V tensor/encoded-value fields instead
 of a page sequence, under the same root binding.
+
+The page sequence is an ordinary typed field of the cache struct. For example,
+the corresponding part of type 4002 uses the existing ``TypeProto`` sequence
+alternative, rather than a new cache/composite descriptor:
+
+.. code-block:: text
+
+    StructTypeProto {
+        type_id: 4002
+        name: "KVCache"
+        structure: {
+            field: {
+                name: "blocks"
+                type: {
+                    sequence_type: {
+                        elem_type: {struct_type: {type_ref: 4001}}
+                    }
+                }
+            }
+            field: {name: "valid_length", type: tensor(INT64, [])}
+            field: {name: "capacity", type: tensor(INT64, [])}
+        }
+    }
+
+This is a valid struct type even though its page sequence has no fixed inline
+byte size. Its type declaration can be serialized; it cannot be used as the
+element layout of a flat ``EncodedValueProto.raw_data`` payload. Each encoded
+K/V block still has its own eligible concrete layout and byte extent.
 
 The root binding makes the owned table, blocks, lengths and positions survive
 invocation cleanup together. ``reset`` clears validity and positions without
@@ -877,21 +991,21 @@ is mutable. A reference to another independently owned state needs an explicit
 binding, lifetime pin and effect dependency; it is not silently adopted by the
 first request. Separate request roots must not share writable child storage.
 
-Two different structures must not be confused:
+There is one struct type system, with different storage cases:
 
-* A physical ``StructTypeProto`` record contains fixed-size inline fields in
-  one payload. Nested ``type_ref`` means embedded data with a shared
-  description, not a pointer, owned allocation or state reference.
-* A runtime composite names and owns tensor/encoded-value fields and dynamic
-  containers. Their checked descriptors retain each payload owner, layout,
-  byte extent and logical geometry. They need not occupy one contiguous
-  serialized byte buffer.
+* If all fields are eligible for fixed-size inline encoding, a value may use
+  one packed payload. A nested ``type_ref`` then describes embedded data, not
+  a serialized pointer or an allocation handle.
+* A struct instance with tensor, sequence or other dynamic fields retains
+  ordinary field values and their owners. Its runtime views use the same
+  field/type declarations, plus instance-specific layout, extent and geometry.
+  It need not occupy one contiguous serialized byte buffer.
 
-PR01 must specify this runtime composite descriptor, field paths and
-owned/borrowed bindings alongside the physical type contract. Do not encode a
-dynamic page sequence as a fixed-size physical field, invent a serialized
-``PersistentTypeProto``, or put ``persistent`` in ``StructTypeProto``.
-The session owns the immutable composite specification and each request owns
+PR01 specifies the runtime views, field paths and owned/borrowed bindings for
+``StructTypeProto``, not another descriptor hierarchy. Do not infer an inline
+layout for a dynamic page sequence, invent a serialized ``PersistentTypeProto``,
+or put ``persistent`` in ``StructTypeProto``.
+The session owns the immutable struct declaration and each request owns
 an independent instance. The first implementation locks the whole mutable
 root for one invocation; field/region effects still describe what kernels
 may read and write, without promising concurrent mutation of disjoint fields.
@@ -899,7 +1013,10 @@ may read and write, without promising concurrent mutation of disjoint fields.
 Persistence here means retention between invocations. Optional snapshots
 would serialize the owned values and validity metadata with explicit
 references and model identity, never native pointers or a dump of the runtime
-composite object. Snapshot format and restoration remain later work.
+struct object. The byte-payload sketch above does not claim field-by-field
+serialization of general struct instances. Such export must fail explicitly
+until a value encoding is specified; snapshot format and restoration remain
+later work, without reintroducing ``StructProto`` or dumping native pointers.
 
 Paged KV with independently quantized blocks
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -946,10 +1063,11 @@ Appending a token changes request validity and data, not the type catalogue.
 Mapping quantization groups and padding to valid tokens remains an explicit
 layout/Attention contract.
 
-The block table is a field of the runtime composite above, using existing
-container machinery and checked field descriptors. It is not an inline
-variable-size ``StructTypeProto`` field, a new ``QuantizedKVCacheProto`` or a
-separate paged quantization hierarchy. It retains owners/generations, not
+The block table is a sequence field of the cache's ``StructTypeProto`` above,
+using existing container machinery and checked instance views. Its dynamic
+field value is not encoded inline in the byte-payload layout. There is no new
+``QuantizedKVCacheProto`` or separate paged quantization hierarchy.
+The table retains owners/generations, not
 serialized raw pointers. A block identity includes its request and logical
 position; mutable blocks are never deduplicated by the prepared-weight cache.
 
@@ -1083,7 +1201,7 @@ constraints, checks known ``position + new_length <= capacity`` bounds and
 rejects incompatible constraints or alias chains without a valid root.
 Control-flow branches merge an aliased output only when they agree on its
 alias root. The runtime checks dynamic bounds and concrete owner, offset,
-stride and pointer identity. Composite field descriptions reuse the same
+stride and pointer identity. Struct field descriptions reuse the same
 value/shape information rather than introducing a special ``SymCache`` type.
 
 Memory planning counts persistent allocations once, outside invocation
@@ -1147,7 +1265,8 @@ GraphBuilder, shape inference and serialization
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 ``ShapesContext`` stays the single source of truth for symbolic value types.
-Extend it with the structured physical descriptor and optional logical view;
+Extend it with ``StructTypeProto`` field types and, where applicable, the
+byte-encoded layout and optional logical view;
 do not add an independent quantization registry in ``GraphBuilder``.
 Known logical dimensions do not permit a tensor-only operator to consume
 structured bytes implicitly: use an explicit decoder or a matching schema.
@@ -1158,6 +1277,12 @@ through import/export, functions and subgraphs. Deduplication considers
 semantic profiles as well as payload bytes, layout and optional logical shapes.
 Rewrites that change any preparation dependency invalidate the corresponding
 compiled binding.
+
+General struct declarations and their tensor/sequence field constraints
+round-trip through the type catalogue as well. This does not make a runtime
+cache instance a serializable initializer: the byte-payload encoding remains
+limited to eligible fixed-layout structs. Unsupported field-value export
+fails explicitly rather than dropping dynamic fields or serializing pointers.
 
 Prefer an optional companion compiled store for the first implementation.
 Do not make the core plan depend on modifying upstream ONNX wire messages or
@@ -1175,12 +1300,13 @@ The first concrete implementation is the **structured representation**:
 ``StructTypeProto`` and the structured-layout branch of ``EncodedValueProto``.
 PR01 first freezes their minimal contract and the proto-size budget. PR02
 implements checked typed/constant fields, arrays, bit packing, type references,
-payload ownership, byte extents, derived record counts and serialization
-before adding the small built-in affine subset.
+and runtime field views using the same declarations. It implements payload
+ownership, byte extents, derived record counts and value serialization for the
+byte-encodable subset before adding the small built-in affine subset.
 Custom packed weights and heterogeneous KV-block fixtures must work through
 structures without requiring a catalogue of native quantized types.
 
-The physical layouts, examples, prepared attachments and composite-state
+The struct types, physical layouts, examples, prepared attachments and state
 bindings above belong to this single sequence. Typed prepacking, graph
 integration and persistent-state consumers build on the same representation
 foundation, without a second cache or struct roadmap.
@@ -1198,7 +1324,8 @@ foundation, without a second cache or struct roadmap.
      - Freeze the small built-in affine subset, struct-based extension path,
        fixed element types and payload-derived counts, catalogue identities,
        native bindings and request state effects, including heterogeneous K/V block
-       descriptors. Distinguish fixed physical records from runtime composites;
+       descriptors. Use one struct type system and define which structs admit
+       fixed-size byte encoding;
        define root lifetime/access, owned/borrowed fields and field-path effects.
        Record the
        minimal proto size baseline and agree a size budget before PR02.
@@ -1206,11 +1333,14 @@ foundation, without a second cache or struct roadmap.
    * - PR02
      - Structs first, then minimal built-in layouts
      - Implement StructTypeProto and EncodedValueProto's structured branch
-       first; then add common INT8/INT4 layouts. Round-trip custom records,
+       first; then add common INT8/INT4 layouts. Round-trip type declarations
+       with tensor/sequence fields and expose checked runtime field views.
+       Round-trip byte-encoded custom records,
        codebook/mixed-bit formats and a heterogeneous KV-block fixture.
        Prove one type is shared by different payload lengths; check single-record,
        empty, zero-sized-root rejection, overflow, catalogue resolution and
-       exact payload-divisibility cases.
+       exact payload-divisibility cases. A struct with dynamic fields is a
+       valid type but is rejected as a flat byte-payload layout.
        Report proto binary-size growth within the PR01 budget; no
        format-specific decoder is linked into the proto target.
      - PR01
@@ -1224,8 +1354,10 @@ foundation, without a second cache or struct roadmap.
      - Persisted compiled representations
      - Reuse PreparedTensorCache with multi-source keys, compatibility,
        invalidation, atomic publication and explicit miss diagnostics.
+       Sources carry reusable content identities; an additional aggregate
+       sources digest is not a required serialized field.
        Warm hits skip preparation; no-source-read claims have verified
-       lineage. Round-trip typed/native objects via versioned payloads.
+       source identities. Round-trip typed/native objects via versioned payloads.
      - PR03
    * - PR05
      - GraphBuilder and model-resolution integration
@@ -1237,10 +1369,10 @@ foundation, without a second cache or struct roadmap.
      - Request state and mutation planning
      - Introduce explicit state handles, persistent allocations, exclusive
        binding, effect dependencies, reset and failure semantics. A root slot
-       retains its owned composite fields across calls without per-field
+       retains its owned struct fields across calls without per-field
        persistence flags. Two requests share weights and immutable types,
        but never writable cache children, across repeated runs.
-     - PR01; existing allocation/task infrastructure
+     - PR02; existing allocation/task infrastructure
    * - PR07a
      - Contiguous KV and CPU consumer integration
      - CPU kernels consume the backend-neutral state API. Append touches
@@ -1269,7 +1401,8 @@ foundation, without a second cache or struct roadmap.
        lifetime and memory gates.
      - PR08
 
-PR06 can proceed in parallel with PR02-PR05 after PR01. Initial contiguous
+PR06 can proceed in parallel with PR03-PR05 after PR02 provides the shared
+struct types and field views. Initial contiguous
 state does not depend on every quantization format or GraphBuilder extension.
 The declarative format catalogue is not a prerequisite for FP32 prepacking.
 
@@ -1289,10 +1422,11 @@ preparation, active pins during eviction, changed scales with unchanged code
 bytes, incompatible ISA/ABI, missing consumers, reset, invalid capacities,
 failed mutations and independent requests.
 
-Composite-state fixtures cover contiguous fields and dynamic page containers,
+Persistent-struct fixtures cover contiguous fields and dynamic page containers,
 owned versus borrowed fields, immutable shared constants, root/field aliases,
-retention across invocation cleanup and release on request close. Reject
-attempts to encode a variable-size container as an inline physical struct field
+retention across invocation cleanup and release on request close. Accept
+dynamic fields in the struct declaration, but reject attempts to encode them
+as fixed-size inline payload fields,
 or to mutate borrowed read-only data through a mutable parent. Check that
 payload writes and validity metadata publish consistently, and that function
 and subgraph boundaries preserve field/region effects.
@@ -1303,13 +1437,21 @@ with reordered catalogues and unchanged references, per-value scale/zero-point p
 missing and duplicate IDs, and conflicting definitions under the same ID.
 Round-trip constants inside the shared type declaration without including
 them in value-buffer sizes. Reject fields with both or neither of ``type``
-and ``constant``, invalid tensor constants, and physical fields of unknown size.
+and ``constant`` and invalid tensor constants. Reject unknown-size fields only
+when validating eligibility for the byte-payload layout, not when declaring a
+general struct type.
 Verify a single shared resolved descriptor, one-record and empty payloads,
 zero-sized-root rejection, allowed constant-only nested structures, partial
 records, arithmetic overflow, explicit external lengths and validated extents,
 logical shapes inconsistent with derived record counts, and
 session-to-model catalogue resolution preserving IDs without copying type
 declarations per KV block.
+
+Prepared-cache fixtures change a source's contents without changing its graph
+name, change only a scale or a recipe attribute, and reuse unchanged
+content-addressed sources. No extra aggregate digest is needed to reject a
+stale value. Session-only generation identities must not validate persisted
+entries in another process.
 
 Structural gates are explicit: a reused prepared object has no repeat
 prepacking, a compatible verified disk hit does not read portable payloads,

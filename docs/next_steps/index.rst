@@ -74,7 +74,8 @@ Planned
         completed runtime infrastructure. Shared element types and record
         counts derived from payload byte lengths avoid template instantiations
         and duplicate types. Persistence belongs to the request-owned
-        composite instance, not its physical struct type or individual fields.
+        struct instance, not its type or individual fields. Fixed physical
+        size is required for byte encoding, not for all structs.
         Includes the former struct and mutable-cache pages.
 
 Completed

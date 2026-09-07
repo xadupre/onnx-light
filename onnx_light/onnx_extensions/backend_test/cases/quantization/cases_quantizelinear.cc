@@ -39,6 +39,8 @@ namespace {
 //     input, equivalent to a zero point of 0).
 //   * ``test_cc_quantizelinear_int8`` — explicit INT8 ``y_zero_point``, so
 //     the output element type is INT8.
+//   * ``test_quantizelinear_float16_rounding`` — FLOAT16 input and scale
+//     distinguish nearest-even rounding from truncation (onnxruntime#18576).
 //   * ``test_quantizelinear_uint16`` — upstream UINT16 case with
 //     ``y_zero_point=32767`` (``QuantizeLinear.export_uint16``).
 //   * ``test_quantizelinear_int16`` — upstream INT16 case with
@@ -161,6 +163,27 @@ void RegisterQuantizeLinearCases(std::vector<TestCase> &registry, TestMode mode)
 
       return IoData{{std::move(x), std::move(y_scale), std::move(y_zero_point)}, {std::move(y)}};
     });
+  }
+
+  // Regression for the FLOAT16 CPU rounding bug fixed by onnxruntime#32452.
+  {
+    NodeProto node;
+    node.set_op_type("QuantizeLinear");
+    node.add_input("x");
+    node.add_input("y_scale");
+    node.add_input("y_zero_point");
+    node.add_output("y");
+    Expect(registry, std::move(node), "test_quantizelinear_float16_rounding", {DefaultOpset(19)},
+           []() -> IoData {
+             Tensor x = MakeFloat16Tensor(
+                 "", {4},
+                 {0.050018310546875f, -0.050018310546875f, 0.04998779296875f, -0.04998779296875f});
+             Tensor y_scale = MakeFloat16Scalar("", 0.0999755859375f);
+             Tensor y_zero_point = Tensor::FromInt8("", {}, {0});
+             Tensor y = Tensor::FromInt8("", {4}, {1, -1, 0, 0});
+             return IoData{{std::move(x), std::move(y_scale), std::move(y_zero_point)},
+                           {std::move(y)}};
+           });
   }
 
   // Upstream ONNX backend test cases for the ``QuantizeLinear`` operator

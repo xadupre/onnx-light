@@ -71,8 +71,8 @@ using ::onnx_light::core::runtime::OpsetId;
 // with an input.
 // ---------------------------------------------------------------------------
 
-/// Per-tensor and per-axis linear quantization of a FLOAT input ``x`` to an
-/// integer or sub-byte output. The output element type is taken from
+/// Per-tensor and per-axis linear quantization of a FLOAT or FLOAT16 input
+/// ``x`` using a FLOAT or FLOAT16 scale. The output element type is taken from
 /// ``y_zero_point`` (UINT8, INT8, UINT16, INT16, FLOAT8E4M3FN, FLOAT8E5M2,
 /// INT4, UINT4, INT2, UINT2, FLOAT4E2M1, FLOAT6E2M3, or FLOAT6E3M2); if
 /// ``y_zero_point`` is omitted
@@ -109,8 +109,8 @@ public:
   void operator()(const Tensor &x, const Tensor &y_scale, int64_t axis, int32_t output_dtype,
                   Tensor &output, RuntimeContext *rt = nullptr) const;
 
-  /// Output element type differs from the FLOAT input element type, so storage
-  /// can never be shared with an input.
+  /// Output element type differs from the floating-point input element type,
+  /// so storage can never be shared with an input.
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 

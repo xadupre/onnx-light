@@ -12,11 +12,9 @@ Next Steps
 
     2026/2026-08_kernel_parallelization
     2026/2026-08_onnxruntime_fast_model_loading
-    2026/2026-08_custom_types
     2026/2026-08_proto_inheritance
     2026/2026-08_quantization
     2026/2026-08_graph_builder_quantized_tensor
-    2026/2026-08_mutable_cache
     2026/2026-08_model_resolution
     2026/2026-08_split_wheels
     2026/2026-08_fast_loading_sequence
@@ -75,7 +73,9 @@ Planned
         including paged KV blocks with independent quantization, using the
         completed runtime infrastructure. Shared element types and record
         counts derived from payload byte lengths avoid template instantiations
-        and duplicate types.
+        and duplicate types. Persistence belongs to the request-owned
+        composite instance, not its physical struct type or individual fields.
+        Includes the former struct and mutable-cache pages.
 
 Completed
 ---------
@@ -173,7 +173,5 @@ The following proposals are retained as historical detail and format examples.
 Their implementation sequences are superseded by
 :ref:`l-next-steps-prepared-values-and-persistent-state`.
 
-* :ref:`l-next-steps-custom-types`
 * :ref:`l-next-steps-quantization`
 * :ref:`l-next-steps-graph-builder-quantized-tensor`
-* :ref:`l-next-steps-mutable-cache`

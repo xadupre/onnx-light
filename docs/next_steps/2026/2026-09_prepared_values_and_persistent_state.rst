@@ -1,10 +1,10 @@
 .. _l-next-steps-prepared-values-and-persistent-state:
 
-Prepared values, custom representations, and persistent state
+Structured values, prepared caches, and persistent state
 ================================================================================
 
 :Date: 2026-09
-:Updated: 2026-09-06
+:Updated: 2026-09-07
 
 **planned**
 
@@ -19,15 +19,16 @@ taxonomy. The first end-to-end consumer is
 Qwen: shared packed projection weights plus independent mutable KV caches
 for successive decode requests.
 
-This roadmap replaces the independent implementation sequences in:
+This page contains the structured-type contract, quantization examples,
+prepared-cache format, and persistent composite-state contract in one
+implementation sequence. The separate structured-types and mutable-cache
+pages have been removed; their retained contracts and examples are integrated
+here, not maintained as competing proposals.
 
-* :ref:`l-next-steps-custom-types`, including typed prepared/compiled caches;
-* :ref:`l-next-steps-quantization`;
-* :ref:`l-next-steps-graph-builder-quantized-tensor`;
-* :ref:`l-next-steps-mutable-cache`.
-
-Those pages remain design history and format examples. Where their proposals
-conflict, this page is authoritative. In particular, only a small closed set
+:ref:`l-next-steps-quantization` and
+:ref:`l-next-steps-graph-builder-quantized-tensor` remain format and authoring
+design references, not independent implementation sequences. Where their
+proposals conflict, this page is authoritative. Only a small closed set
 of common quantized forms gets specialized proto support; the format catalogue
 does not become a proto hierarchy. A compiled cache entry is not the same
 thing as a quantized source value.
@@ -134,8 +135,10 @@ shape and external-data machinery.
 
 ``Encoded`` identifies a representation that needs a layout-aware
 interpretation, rather than merely indicating that bytes are stored.
-``Value`` permits custom records containing multiple buffers as well as
-logical tensors. The name applies equally to packed weights and KV blocks;
+``Value`` permits custom records as well as logical tensors. A runtime
+composite groups independently owned buffers through its tensor/encoded-value
+fields; they are not inline pointers in a serialized physical record.
+The name applies equally to packed weights and KV blocks;
 it does not imply immutability or disk persistence.
 
 Keep the name ``EncodedValueProto`` for every value example and proposed
@@ -189,7 +192,7 @@ type catalogue. Only true format constants belong to the type. Registered
 validation and decoding are explicit operations; merely loading a descriptor
 must not execute arbitrary decoder code.
 
-The examples in :ref:`l-next-steps-custom-types` distinguish parameters stored
+The examples below distinguish parameters stored
 as constants in the type from parameters stored as scalar fields in each
 payload. Outside the byte buffer does not mean outside the type: constant
 scale and zero point are serialized once in the shared ``StructTypeProto``
@@ -197,6 +200,136 @@ declaration, while each value stores only codes. The decoder combines those
 codes with the type's constants to expose a logical FLOAT tensor. All values
 of that type share the same parameters; varying them without changing the
 type requires the per-value payload form.
+
+.. _l-next-steps-custom-types:
+
+Structured physical types
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+``StructTypeProto`` describes one fixed-size physical element, not the
+ownership tree of an entire runtime cache. A concrete declaration selects
+``array``, ``bit_packing`` or ``structure``. Its fields select either bytes
+in the value payload or a tensor constant in the declaration.
+
+The following wire sketch is a proposal; PR01 freezes field numbers:
+
+.. code-block:: text
+
+    message EncodedValueProto {
+        oneof layout {
+            StructTypeProto struct_type = <N>;  // exact reference or inline type
+            // The small built-in layout alternatives are omitted here.
+        }
+        optional TypeProto logical_type = <N>;
+        bytes raw_data = <N>;
+        repeated StringStringEntryProto external_data = <N>;
+        string name = <N>;
+        string doc_string = <N>;
+        // Optional preparation metadata is described below.
+    }
+
+    message StructTypeProto {
+        message Structure {
+            message Field {
+                string name = 1;
+                oneof content {
+                    TypeProto type = 2;
+                    TensorProto constant = 4;
+                }
+                string doc_string = 3;
+            }
+            repeated Field field = 1;
+        }
+        message BitPacking {
+            message Component {
+                string name = 1;
+                uint32 bit_width = 2;
+            }
+            repeated Component component = 1;
+            uint64 dimension = 2;
+        }
+        message Array {
+            TypeProto element_type = 1;
+            uint64 dimension = 2;
+        }
+        oneof kind {
+            Array array = 1;
+            Structure structure = 2;
+            BitPacking bit_packing = 3;
+            uint64 type_ref = 5;
+        }
+        optional FunctionProto decoder = 6;
+        optional FunctionProto encoder = 7;
+        string name = 8;
+        string doc_string = 9;
+        repeated StringStringEntryProto metadata_props = 10;
+        optional uint64 type_id = 11;
+    }
+
+    message TypeProto {
+        oneof value {
+            // Existing alternatives remain unchanged.
+            StructTypeProto struct_type = <N>;
+        }
+    }
+
+    message ModelProto {
+        repeated StructTypeProto struct_types = <N>;
+    }
+
+``EncodedValueProto.struct_type`` selects an exact ``type_ref`` or a concrete
+inline declaration. An exact static reference may also appear inside
+``TypeProto`` and nested physical fields. A ``StructTypeProto`` with its kind
+unset is an unconstrained static category, permitted only inside ``TypeProto``
+for heterogeneous sequence/map element constraints, never as a payload layout.
+Reference and category forms carry no declaration ID, decoder, encoder, name,
+or declaration metadata of their own.
+
+``Field.type`` and ``Array.element_type`` must resolve to statically sized
+tensor or structured types. Unknown rank, symbolic dimensions, sequences,
+maps, optional values and opaque types cannot be inline physical fields.
+Runtime containers of separately owned values are described in
+:ref:`l-next-steps-persistent-composite-state`; they do not relax this rule.
+
+``Field.constant`` is the actual ``TensorProto`` value, not a graph input or
+a second value buffer. It must have concrete dimensions and matching data.
+Only true shared format constants belong here; changing a constant changes
+the type identity. Mutable lengths, positions and per-block quantization
+parameters are instance data, not declaration constants.
+
+Physical rules and validation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Compute sizes recursively in bits with checked ``uint64`` arithmetic:
+
+.. code-block:: text
+
+    size(scalar(T))             = bit_width(T)
+    size(tensor(T, dims))       = checked_product(dims) * bit_width(T)
+    size(Array(T, n))           = n * size(T)
+    size(BitPacking(c..., n))   = n * sum(c.bit_width)
+    size(Field(constant))       = 0
+    size(Field(T))              = size(T)
+    size(Structure(f...))       = sum(size(f))
+    size(type_ref=id)           = size(resolve_type_id(id))
+
+Arrays and bit packings are tight, fields follow declaration order, and
+padding is explicit. Bits run from least to most significant within a byte;
+multi-byte values are little-endian. Only fixed-width ONNX scalar leaves are
+physical data. No native alignment or process-local pointer representation is
+implicit in this contract. Every field, array and bit-packing read is
+bounds-checked; a typed view does not bypass alignment or byte-extent checks.
+
+The checker rejects duplicate field/component names, fields with both or
+neither content alternatives, invalid constants, zero component widths,
+unsupported leaves, unresolved or cyclic references, negative or non-concrete
+counts and overflowing size arithmetic. The encoded root must have strictly
+positive size divisible by eight. Nested constant-only groups may have size
+zero. Payload divisibility and external bounds follow the next section.
+
+Only the decoder or encoder attached to the selected concrete root is invoked.
+A nested ``type_ref`` contributes layout and constants; its decoder or encoder
+is not composed implicitly. Loading a type must not execute decoder code.
 
 One element type, many payload lengths
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -326,6 +459,158 @@ part of its element type. If a later use case requires variable dimensions
 inside the record, evaluate reuse of ONNX symbolic dimensions separately,
 with explicit binding and size rules; it is not implicit support in PR02.
 
+Quantization examples: constants and per-value parameters
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+The following descriptive notation abbreviates ordinary ONNX tensor types as
+``tensor(FLOAT, [])`` and tensor constants as ``tensor(FLOAT, [], 0.25)``.
+These are explanatory helpers, not additional messages or protobuf syntax.
+
+.. code-block:: text
+
+    ModelProto {
+        struct_types: {
+            type_id: 1003
+            name: "LINEAR_INT4_128_FIXED_PARAMETERS"
+            structure: {
+                field: {name: "values", type: array(INT4, dimension=128)}
+                field: {name: "scale", constant: tensor(FLOAT, [], 0.25)}
+                field: {name: "zero_point", constant: tensor(INT64, [], -2)}
+            }
+            decoder: DecodeLinearInt4
+        }
+        struct_types: {
+            type_id: 1002
+            name: "LINEAR_INT4_128_WITH_PARAMETERS"
+            structure: {
+                field: {name: "values", type: array(INT4, dimension=128)}
+                field: {name: "scale", type: tensor(FLOAT, [])}
+                field: {name: "zero_point", type: tensor(INT64, [])}
+            }
+            decoder: DecodeLinearInt4
+        }
+    }
+
+    EncodedValueProto {
+        struct_type: {type_ref: 1003}
+        logical_type: FLOAT[128]
+        raw_data: <64 code bytes for weight_a>
+    }
+    EncodedValueProto {
+        struct_type: {type_ref: 1003}
+        logical_type: FLOAT[128]
+        raw_data: <64 code bytes for weight_b>
+    }
+    EncodedValueProto {
+        struct_type: {type_ref: 1002}
+        logical_type: FLOAT[128]
+        raw_data: <64 code bytes, FLOAT scale=0.125, INT64 zero_point=0>
+    }
+    EncodedValueProto {
+        struct_type: {type_ref: 1002}
+        logical_type: FLOAT[128]
+        raw_data: <64 code bytes, FLOAT scale=0.25, INT64 zero_point=-2>
+    }
+
+For type 1003, both constants are serialized once at
+``ModelProto.struct_types[*].structure.field[*].constant``. Neither value
+buffer contains them; there are no separate graph inputs for these parameters.
+Each payload is exactly ``128 * 4 / 8 = 64`` bytes, and decoding applies
+``(code - (-2)) * 0.25``. Changing the constants requires a different type ID.
+
+For type 1002, both payloads occupy ``64 + 4 + 8 = 76`` bytes. The decoder
+reads each value's parameters and applies ``(code - zero_point) * scale``.
+Changing those values does not change the layout or type ID. The INT64 at
+byte offset 68 is not necessarily aligned; typed readers must handle it.
+Outside the byte buffer means inside the shared type declaration only for
+true format constants, not arbitrary per-value state.
+
+.. _l-next-steps-custom-types-codebook:
+
+Codebook quantization through a shared subtype
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+A subtype describes 32 two-bit indices and a constant four-entry codebook.
+A parent embeds that subtype by stable ID and adds a per-block FLOAT scale.
+This is composition by reference in the type catalogue, not inheritance or
+a pointer to another value: each parent payload contains its own code bytes.
+
+.. code-block:: text
+
+    ModelProto {
+        struct_types: {
+            type_id: 1101
+            name: "CODEBOOK2_BLOCK_32"
+            structure: {
+                field: {
+                    name: "codes"
+                    type: {
+                        struct_type: {
+                            bit_packing: {
+                                component: {name: "index", bit_width: 2}
+                                dimension: 32
+                            }
+                        }
+                    }
+                }
+                field: {
+                    name: "codebook"
+                    constant: tensor(FLOAT, [4], [-1.0, -0.25, 0.25, 1.0])
+                }
+            }
+        }
+        struct_types: {
+            type_id: 1102
+            name: "SCALED_CODEBOOK2_BLOCK_32"
+            structure: {
+                field: {
+                    name: "quantized"
+                    type: {struct_type: {type_ref: 1101}}
+                }
+                field: {name: "scale", type: tensor(FLOAT, [])}
+            }
+            decoder: DecodeScaledCodebookBlocks
+        }
+    }
+
+    EncodedValueProto {
+        struct_type: {type_ref: 1102}
+        logical_type: FLOAT[32]
+        raw_data: <E4 E4 E4 E4 E4 E4 E4 E4 00 00 00 40>
+    }
+    EncodedValueProto {
+        struct_type: {type_ref: 1102}
+        logical_type: FLOAT[4096]
+        raw_data: <128 records, each containing 8 code bytes and one FLOAT scale>
+    }
+
+Hexadecimal payload notation is illustrative, not a literal string. ``E4``
+packs indices ``0, 1, 2, 3`` in least-significant-bit order; ``00 00 00 40``
+encodes FLOAT 2.0. The codebook lives once in type 1101's constant field and
+contributes no payload bytes.
+
+Resolution follows ``1102 -> quantized.type -> 1101``. The root decoder reads
+the subtype's codebook and each record's scale and indices:
+
+.. code-block:: text
+
+    table = resolved_type(1101).structure.field["codebook"].constant
+    output[block * 32 + i] = record.scale * table[record.quantized.codes[i].index]
+
+This is descriptive field-view notation. The decoder uses resolved types,
+not model catalogue positions; it does not invoke a subtype decoder.
+The first value decodes to ``[-2.0, -0.5, 0.5, 2.0]`` repeated eight times.
+The second flattens 128 decoded blocks in storage order.
+
+Type 1101 contributes eight bytes; type 1102 contributes ``8 + 4 = 12`` bytes
+per record. Payload lengths 12 and 1536 imply one and 128 records without
+serialized counts or physical shapes. Exactly four FLOAT codebook entries
+make all two-bit indices valid.
+
+Other parent types may reuse subtype 1101. Changing its constant codebook
+requires a new subtype ID and a new parent ID when the reference changes.
+Codes, per-block scales and payload lengths may change without new types.
+
 Proto-library size gate
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
@@ -344,6 +629,8 @@ adding a specialized proto message, parser branch or enum entry for its
 format. Existing ONNX scalar types are reused rather than duplicated.
 Exceeding the agreed binary-size budget requires reducing the built-in
 subset or an explicit design decision, not silently increasing the budget.
+
+.. _l-next-steps-custom-types-prepared-values:
 
 Prepacking: prepare once, share only when compatible
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -403,6 +690,61 @@ content is a diagnosed cache miss. Corrupt optional cache files may be
 discarded with diagnostics and rebuilt, as the existing cache does. Invalid
 authoritative model descriptors are load/checker errors. A rebuild failure
 must propagate, not become a success-shaped fallback.
+
+Typed compiled-cache attachment
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The optional prepared attachment stores the same ``EncodedValueProto``,
+with preparation metadata that does not own a second payload. This sketch
+is not a finalized wire schema:
+
+.. code-block:: text
+
+    message DeviceProto {
+        string type = 1;              // "cpu", "cuda", "rocm", ...
+        optional int32 index = 2;     // exact ordinal only when required
+        string architecture = 3;      // "x86_64-avx2", "sm_80", ...
+        string runtime = 4;
+        string runtime_version = 5;
+        repeated StringStringEntryProto metadata_props = 6;
+    }
+
+    message ModelProto {
+        repeated StructTypeProto struct_types = <N>;
+        repeated DeviceProto devices = <N+1>;
+        repeated EncodedValueProto prepared_values = <N+2>;
+    }
+
+    EncodedValueProto {
+        struct_type: {type_ref: 3001}
+        logical_type: FLOAT[K, N]
+        raw_data: <complete packed records>
+        preparation: {
+            source_lineage: ...       // ordered operands and their semantics
+            source_lineage_digest: ...
+            digest_algorithm: "blake3"
+            recipe: ...               // operator, layout and tuning choices
+            device: 1                 // index into ModelProto.devices
+        }
+    }
+
+Device type, architecture, implementation ABI and metadata express
+compatibility, not merely a device ordinal. The device index is an index
+into the model's device list; it is unrelated to stable structured type IDs.
+One source lineage may have several entries for different devices or recipes.
+FP32, tiled and quantized packs all use this attachment without another
+compiled or quantized value-container hierarchy.
+
+The checker validates unique device descriptors, in-range device indices,
+unique complete preparation keys, source existence and unambiguous scope,
+non-empty digest and algorithm fields, unique metadata keys, exact layouts
+and valid byte extents. A payload cannot select an unconstrained structured
+category. Device compatibility and digest comparison may be deferred until
+load time, but structural errors are independent of hardware availability.
+A missing portable decoder is acceptable for a runtime-specific derived pack
+only because its original source remains available.
+
+.. _l-next-steps-mutable-cache:
 
 Persistent state: explicit request ownership
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -471,6 +813,94 @@ Process-lifetime persistence does not imply automatic disk persistence.
 State snapshots, if added, are opt-in, versioned and bound to model identity;
 they are never written into the reusable weight cache.
 
+.. _l-next-steps-persistent-composite-state:
+
+A cache is a persistent composite instance
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Persistence qualifies the binding of a value instance, not its structural
+type or each individual field. The request state owns a root slot whose value
+can be a tensor, an encoded block, or a composite with named fields and
+containers of separately owned values. The same structural specification
+could describe an invocation-local object without changing its numeric types.
+
+The following describes proposed runtime specifications and bindings, not
+new protobuf messages or existing public API names:
+
+.. code-block:: text
+
+    KVBlock = composite {
+        first_token: INT64
+        valid_length: INT64
+        key: encoded value view
+        value: encoded value view
+    }
+
+    KVCache = composite {
+        blocks: sequence<KVBlock>
+        valid_length: INT64
+        capacity: INT64
+    }
+
+    session.state_spec["cache"] = {
+        value_spec: KVCache
+        lifetime: request
+        access: mutable
+    }
+
+    request_a = session.create_state(capacity)
+    request_b = session.create_state(capacity)
+    run(session, inputs_a, request_a)
+    run(session, next_inputs_a, request_a)
+    run(session, inputs_b, request_b)
+
+An encoded value view is the runtime view of the existing
+``EncodedValueProto`` representation with its payload owner; it is not another
+serialized value category. ``KVCache`` and ``KVBlock`` are illustrative
+composite specifications, not dedicated ``KVCacheProto`` additions.
+The contiguous variant uses named K and V tensor/encoded-value fields instead
+of a page sequence, under the same root binding.
+
+The root binding makes the owned table, blocks, lengths and positions survive
+invocation cleanup together. ``reset`` clears validity and positions without
+requiring a full payload clear; ``close`` releases the owned allocations.
+Owned children do not need independent ``persistent`` flags or state slots.
+Replacing a page changes an owned child, not the root's type or lifetime.
+Both validity metadata and payload writes participate in the state mutation
+contract and publish together after successful completion.
+
+Ownership follows explicit owned-field edges, not every reference reachable
+from the object. Shared immutable type declarations, codebooks and prepared
+weights keep their existing catalogue/session owner. Borrowed views retain
+their owner for the invocation and do not become writable because the root
+is mutable. A reference to another independently owned state needs an explicit
+binding, lifetime pin and effect dependency; it is not silently adopted by the
+first request. Separate request roots must not share writable child storage.
+
+Two different structures must not be confused:
+
+* A physical ``StructTypeProto`` record contains fixed-size inline fields in
+  one payload. Nested ``type_ref`` means embedded data with a shared
+  description, not a pointer, owned allocation or state reference.
+* A runtime composite names and owns tensor/encoded-value fields and dynamic
+  containers. Their checked descriptors retain each payload owner, layout,
+  byte extent and logical geometry. They need not occupy one contiguous
+  serialized byte buffer.
+
+PR01 must specify this runtime composite descriptor, field paths and
+owned/borrowed bindings alongside the physical type contract. Do not encode a
+dynamic page sequence as a fixed-size physical field, invent a serialized
+``PersistentTypeProto``, or put ``persistent`` in ``StructTypeProto``.
+The session owns the immutable composite specification and each request owns
+an independent instance. The first implementation locks the whole mutable
+root for one invocation; field/region effects still describe what kernels
+may read and write, without promising concurrent mutation of disjoint fields.
+
+Persistence here means retention between invocations. Optional snapshots
+would serialize the owned values and validity metadata with explicit
+references and model identity, never native pointers or a dump of the runtime
+composite object. Snapshot format and restoration remain later work.
+
 Paged KV with independently quantized blocks
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
@@ -516,11 +946,12 @@ Appending a token changes request validity and data, not the type catalogue.
 Mapping quantization groups and padding to valid tokens remains an explicit
 layout/Attention contract.
 
-The block table is runtime state using existing container machinery or a
-structured descriptor, not a new ``QuantizedKVCacheProto`` or a separate
-paged quantization hierarchy. It retains owners/generations, not serialized
-raw pointers. A block identity includes its request and logical position;
-mutable blocks are never deduplicated by the prepared-weight cache.
+The block table is a field of the runtime composite above, using existing
+container machinery and checked field descriptors. It is not an inline
+variable-size ``StructTypeProto`` field, a new ``QuantizedKVCacheProto`` or a
+separate paged quantization hierarchy. It retains owners/generations, not
+serialized raw pointers. A block identity includes its request and logical
+position; mutable blocks are never deduplicated by the prepared-weight cache.
 
 Attention obtains a block iterator with logical ranges, valid extents and
 resolved layout-specific readers. It dispatches once per block or tile to
@@ -578,6 +1009,140 @@ initializers, unsafe shared writable bindings or unsupported views fail rather
 than triggering a hidden full-cache copy. Dense KV append writes only new
 tokens and committed metadata; Attention reads the valid prefix directly.
 
+State effects and required-alias annotations
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A kernel effect identifies the request root, field path and affected region:
+for example, reading ``cache.blocks[*].key`` or writing the active block and
+its valid length. Conflicting effects on the same root are ordered even when
+ordinary SSA names have no dependency. Functions and subgraphs preserve these
+effects; hiding mutable storage in a shared kernel member is not equivalent.
+
+When a state-aware graph exposes input/output aliases, the retained wire
+proposal is:
+
+.. code-block:: text
+
+    message ValueAliasProto {
+        enum Kind {
+            UNDEFINED = 0;
+            MUST_ALIAS = 1;
+        }
+        int32 output_index = 1;
+        int32 input_index = 2;
+        Kind kind = 3;
+    }
+    message NodeProto {
+        repeated ValueAliasProto output_alias = <N>;
+    }
+    message ValueInfoProto {
+        enum Access {
+            READ_ONLY = 0;
+            READ_WRITE = 1;
+        }
+        Access access = <N>;
+        string alias_of = <N+1>;
+    }
+
+PR01 freezes the graph-boundary contract and field/region effect description;
+these sketches do not claim existing or standard ONNX wire fields.
+``output_alias`` relates operator ports, while ``alias_of`` exposes the same
+relation by value name at graph/function boundaries. If both are supplied,
+they must identify the same input. These annotations specify access and
+aliasing, not persistence: the request root binding still owns the storage.
+An empty ``alias_of`` declares no alias to another named value; it does not
+transfer ownership out of a state slot.
+
+For a contiguous cache bound from the request:
+
+.. code-block:: text
+
+    graph input:
+        cache: FLOAT16[2, batch, heads, capacity, head_size]
+            access: READ_WRITE
+        values: FLOAT16[2, batch, heads, new_length, head_size]
+        position: INT64[]
+    node:
+        op_type: "CacheUpdate"
+        input: ["cache", "values", "position"]
+        output: ["updated_cache"]
+        output_alias: {output_index: 0, input_index: 0, kind: MUST_ALIAS}
+    graph output:
+        updated_cache: FLOAT16[2, batch, heads, capacity, head_size]
+            alias_of: "cache"
+
+The request retains the cache after execution. The explicitly requested
+state view of ``updated_cache`` uses the same storage and does not become an
+ordinary detached ``present`` result. The runtime rejects an immutable or
+unsafe shared writable binding rather than allocating another full cache.
+The alias is mandatory even while the old SSA name remains live; it is not
+conditional on last-use reuse.
+
+``ShapesContext`` resolves alias ports to names, merges type and shape
+constraints, checks known ``position + new_length <= capacity`` bounds and
+rejects incompatible constraints or alias chains without a valid root.
+Control-flow branches merge an aliased output only when they agree on its
+alias root. The runtime checks dynamic bounds and concrete owner, offset,
+stride and pointer identity. Composite field descriptions reuse the same
+value/shape information rather than introducing a special ``SymCache`` type.
+
+Memory planning counts persistent allocations once, outside invocation
+release/reuse candidates. Appending within capacity adds no full-cache output
+allocation; its peak includes workspace and any newly created or converted
+pages. An ownership or alias annotation alone is not proof of zero-copy:
+acceptance measures allocation and copy counters.
+
+Existing runtime comparisons
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+These are comparisons against the pinned implementations below, not additional
+implementation roadmaps or claims about every later release.
+
+ONNX Runtime GenAI exposes ``past_key_values.*`` and ``present.*``. Its
+``past_present_share_buffer`` option binds one capacity-sized ``OrtValue``
+to both names, so a compatible Attention kernel appends directly. For
+example:
+
+.. code-block:: json
+
+    {"search": {"past_present_share_buffer": true, "num_beams": 1, "max_length": 4096}}
+
+At the pinned revision, activation requires explicit opt-in and one beam,
+apart from the specialized Whisper case; graph capture requires shared
+buffers. GenAI also has windowed/model-managed caches and paged metadata.
+Its paged cache preallocates K and V tensors with geometry
+``[num_blocks, block_size, num_kv_heads, head_size]``. A block table assigns
+slices, but all blocks in a backing tensor share dtype/layout/size and the
+pool does not grow. This differs from independently allocated mixed-format
+blocks. One active request gains no continuous-batching benefit merely by
+using that pool.
+
+See `GenAI cache implementation
+<https://github.com/microsoft/onnxruntime-genai/blob/ff2009e71bd625d3c5ed7a6cbb410cf2e2dbaf48/src/models/kv_cache.cpp#L531-L564>`_,
+`cache interfaces
+<https://github.com/microsoft/onnxruntime-genai/blob/ff2009e71bd625d3c5ed7a6cbb410cf2e2dbaf48/src/models/kv_cache.h>`_,
+`paged cache
+<https://github.com/microsoft/onnxruntime-genai/blob/ff2009e71bd625d3c5ed7a6cbb410cf2e2dbaf48/src/engine/paged_key_value_cache.h>`_,
+`activation rules
+<https://github.com/microsoft/onnxruntime-genai/blob/ff2009e71bd625d3c5ed7a6cbb410cf2e2dbaf48/src/generators.cpp#L430-L435>`_,
+and the `model builder
+<https://github.com/microsoft/onnxruntime-genai/blob/ff2009e71bd625d3c5ed7a6cbb410cf2e2dbaf48/src/python/py/models/builders/base.py>`_.
+
+llama.cpp owns KV state in the runtime. Per-layer K/V tensors have fixed
+capacity; cells map tokens/sequences to slots, and graph views write ranges
+through ``cpy_k`` and ``cpy_v``. Reuse, shifting, eviction and defragmentation
+recover space, but do not grow the underlying allocation. K and V may use
+different global types, not arbitrary per-cell formats; specialized block
+caches are not a generic heterogeneous page container.
+
+See `llama-kv-cache.h
+<https://github.com/ggml-org/llama.cpp/blob/7ba604f1cb61cd14898138e9abc0b4ff2601f180/src/llama-kv-cache.h>`_
+and `llama-kv-cache.cpp
+<https://github.com/ggml-org/llama.cpp/blob/7ba604f1cb61cd14898138e9abc0b4ff2601f180/src/llama-kv-cache.cpp>`_.
+The unified proposal combines explicit request ownership with graph-visible
+effects and aliases; neither runtime-only hidden mutation nor caller-side
+buffer sharing alone supplies that complete contract.
+
 GraphBuilder, shape inference and serialization
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
@@ -615,10 +1180,10 @@ before adding the small built-in affine subset.
 Custom packed weights and heterogeneous KV-block fixtures must work through
 structures without requiring a catalogue of native quantized types.
 
-Use :ref:`l-next-steps-custom-types` as physical-layout design material, not
-as a separate roadmap to implement verbatim. Its examples use the same
-``EncodedValueProto`` container. Typed prepacking, graph integration and
-persistent-state consumers build on this common foundation.
+The physical layouts, examples, prepared attachments and composite-state
+bindings above belong to this single sequence. Typed prepacking, graph
+integration and persistent-state consumers build on the same representation
+foundation, without a second cache or struct roadmap.
 
 .. list-table::
    :header-rows: 1
@@ -633,7 +1198,9 @@ persistent-state consumers build on this common foundation.
      - Freeze the small built-in affine subset, struct-based extension path,
        fixed element types and payload-derived counts, catalogue identities,
        native bindings and request state effects, including heterogeneous K/V block
-       descriptors. Record the
+       descriptors. Distinguish fixed physical records from runtime composites;
+       define root lifetime/access, owned/borrowed fields and field-path effects.
+       Record the
        minimal proto size baseline and agree a size budget before PR02.
      - Existing runtime APIs
    * - PR02
@@ -669,8 +1236,10 @@ persistent-state consumers build on this common foundation.
    * - PR06
      - Request state and mutation planning
      - Introduce explicit state handles, persistent allocations, exclusive
-       binding, effect dependencies, reset and failure semantics. Two
-       requests share weights and remain isolated across repeated runs.
+       binding, effect dependencies, reset and failure semantics. A root slot
+       retains its owned composite fields across calls without per-field
+       persistence flags. Two requests share weights and immutable types,
+       but never writable cache children, across repeated runs.
      - PR01; existing allocation/task infrastructure
    * - PR07a
      - Contiguous KV and CPU consumer integration
@@ -719,6 +1288,14 @@ tensor-cache execution with the same numerical contract. Test concurrent
 preparation, active pins during eviction, changed scales with unchanged code
 bytes, incompatible ISA/ABI, missing consumers, reset, invalid capacities,
 failed mutations and independent requests.
+
+Composite-state fixtures cover contiguous fields and dynamic page containers,
+owned versus borrowed fields, immutable shared constants, root/field aliases,
+retention across invocation cleanup and release on request close. Reject
+attempts to encode a variable-size container as an inline physical struct field
+or to mutate borrowed read-only data through a mutable parent. Check that
+payload writes and validity metadata publish consistently, and that function
+and subgraph boundaries preserve field/region effects.
 
 Type/value tests also round-trip two encoded values with the same stable type
 ID but different payload lengths and derived record counts. Include two models

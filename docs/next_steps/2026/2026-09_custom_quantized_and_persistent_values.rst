@@ -13,58 +13,47 @@ Objective and consolidation
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 Cover three uses of values: custom structs, quantized representations, and
-values retained between model calls. Prepared weights reuse the same
-representations. Persistent state is built from an explicit mapping of model
-outputs back to inputs, not a separate state type system. Qwen is the first
-consumer: shared packed weights and per-request KV values carried between
-decode calls.
+values retained between model calls. Persistent state is built from an explicit
+mapping of model outputs back to inputs, not a separate state type system. Qwen
+is the first consumer: quantized values and per-request KV values carried
+between decode calls.
 
 This page contains the structured-type contract, quantization examples,
-prepared-cache format, and output-to-input state binding in one
-implementation sequence. The separate structured-types and mutable-cache
-pages have been removed; their retained contracts and examples are integrated
-here, not maintained as competing proposals.
+and output-to-input state binding in one implementation sequence. The separate
+structured-types and mutable-cache pages have been removed; their retained
+contracts and examples are integrated here, not maintained as competing
+proposals. Prepacking, prepared-object identity, persistence, and scheduling
+remain owned by :ref:`l-next-steps-prepared-execution`.
 
 :ref:`l-next-steps-quantization` and
 :ref:`l-next-steps-graph-builder-quantized-tensor` remain format and authoring
 design references, not independent implementation sequences. Where their
 proposals conflict, this page is authoritative. Only a small closed set
 of common quantized forms gets specialized proto support; the format catalogue
-does not become a proto hierarchy. A compiled cache entry is not the same
-thing as a quantized source value.
+does not become a proto hierarchy.
 
 The completed prepared-execution, native fast-loading, allocator, and session
-executor work remains the foundation. This plan extends their contracts; it
-does not rebuild their schedulers or reopen their completed implementation
-sequences. :ref:`l-next-steps-proto-inheritance` is independent and is not a
-prerequisite.
+executor work remains the foundation. This plan defines representations that
+those facilities may consume; it does not extend their cache format, rebuild
+their schedulers, or reopen their completed implementation sequences.
+:ref:`l-next-steps-proto-inheritance` is independent and is not a prerequisite.
 
 Existing foundations and missing integration
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-The implementation already supplies:
+The implementation already supplies ordinary ``Tensor`` storage owners,
+borrowed views and allocation handles in
+``onnx_core/runtime/memory/simple_tensor.h``.
 
-* ``PreparedKey``, session/invocation ``TaskScope`` and explicit task
-  dependencies in ``onnx_core/compute/prepared_task.h``;
-* ``PreparedObjectStore``, immutable publication, generation tracking,
-  consumer pins, residency budgets, eviction and materialization recipes in
-  ``onnx_core/compute/prepared_execution.h``;
-* ``PreparedTensorCache`` with digest, ISA, runtime, layout and format checks,
-  diagnosed misses and atomic background persistence in
-  ``onnx_core/compute/prepared_tensor_cache.h``;
-* ordinary ``Tensor`` storage owners, borrowed views and allocation handles
-  in ``onnx_core/runtime/memory/simple_tensor.h``.
+Prepared execution already owns prepared-object identity, publication,
+residency, eviction and persistence. Those are separate reusable facilities,
+not a graph-visible structured value system. The proposed ``StructTypeProto``
+and ``EncodedValueProto`` are not existing serialized contracts.
+``RuntimeContext::Clear`` clears invocation values; it must not become the
+owner of persistent request state.
 
-These are reusable facilities, not yet a unified graph-visible structured
-value system. The proposed ``StructTypeProto`` and ``EncodedValueProto``
-are not existing serialized contracts. Prepared
-objects currently expose a raw-buffer view, while ``RuntimeSession`` retains
-ordinary initializers and kernel instances. ``RuntimeContext::Clear`` clears
-invocation values; it must not become the owner of persistent request state.
-
-The new work connects typed representations and kernel preparation to these
-facilities, then adds a small wrapper for feeding retained outputs into the
-next model call.
+The new work connects typed representations to kernel consumers, then adds a
+small wrapper for feeding retained outputs into the next model call.
 
 Three independent decisions
 +++++++++++++++++++++++++++
@@ -87,7 +76,7 @@ Keep logical meaning, physical representation and lifetime independent:
      - Describes exact fields, buffers, bit layout, padding and format
        identity; it is not inferred from logical dtype alone.
    * - Lifetime and access
-     - Immutable session prepack, retained request cache, invocation workspace
+     - Immutable session value, retained request cache, invocation workspace
      - Determines ownership, sharing, synchronization and release, not the
        numerical type.
 
@@ -103,8 +92,8 @@ Use one ``StructTypeProto`` to describe structs, including structs containing
 tensors, nested structs and sequences. Use ``EncodedValueProto`` for their
 byte-encoded representations when a fixed physical layout exists, alongside
 the small set of built-in layouts. A runtime struct does not need a second
-type category called a composite. Quantized, prepacked and mutable are not
-separate storage categories. Names and wire field numbers are finalized in
+type category called a composite. Quantized, kernel-specific and mutable are
+not separate storage categories. Names and wire field numbers are finalized in
 PR01; no ONNX-standard status is implied.
 
 .. list-table::
@@ -155,10 +144,10 @@ types and constants. Do not introduce a ``StructProto`` alias, base
 class, nested value wrapper or parallel value category.
 
 The affine layout parameters are a small nested descriptor, not a growing
-``QuantizationDescriptorProto`` hierarchy. Source INT4 weights, their custom
-prepacked form, and an INT4 KV block use the same container with different
-layouts and lifetime bindings. Only derived prepacked values need preparation
-provenance; authoritative request state is not a reconstructible weight cache.
+``QuantizationDescriptorProto`` hierarchy. Source INT4 weights, a
+kernel-specific INT4 form, and an INT4 KV block use the same container with
+different layouts and lifetime bindings. Authoritative request state is not a
+reconstructible weight cache.
 
 The initial specialized subset is a proposal to freeze in PR01, not permission
 to add all formats expressible by the catalogue. Additional built-in forms
@@ -174,10 +163,8 @@ The representation supports three cases:
    or registered consumer. Their schemas and numerical implementations live
    outside the proto library; adding one must not grow its message set.
 3. **Fully custom structures:** arbitrary records use the same generic
-   structure mechanism, with or without tensor semantics. A decoder is
-   optional for a derived prepack with a portable source fallback. An
-   authoritative custom graph input without a consumer or decoder fails
-   explicitly.
+   structure mechanism, with or without tensor semantics. An authoritative
+   custom graph input without a consumer or decoder fails explicitly.
 
 For example, an INT4 matrix representation can contain an array of records
 ``{codes, scale, zero_point, compensation, padding}``. This custom packed
@@ -602,9 +589,9 @@ allowed size increase before implementation. PR02 reports the delta under
 identical compiler, linker, stripping and build settings.
 
 The proto target contains only the selected compact messages, serialization
-and structural machinery. Format-specific validators, decoders, prepackers,
-catalogue data and registration tables belong to optional compute/runtime
-components, not transitive dependencies of the proto library.
+and structural machinery. Format-specific validators, decoders, catalogue data
+and registration tables belong to optional compute/runtime components, not
+transitive dependencies of the proto library.
 
 A codebook or mixed-bit fixture must round-trip through structures without
 adding a specialized proto message, parser branch or enum entry for its
@@ -614,178 +601,22 @@ subset or an explicit design decision, not silently increasing the budget.
 
 .. _l-next-steps-custom-types-prepared-values:
 
-Prepacking: prepare once, share only when compatible
-+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Interoperability with prepared execution
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-A preparation request identifies the selected consumer contract and all
-constant inputs it depends on, not just one ``source_name``. For example,
-``MatMulNBits`` preparation may depend on packed weights, scales, zero points
-and a bias. A multi-node fusion may depend on several initializers.
+``EncodedValueProto`` may describe the bytes and logical view of an object
+managed by :ref:`l-next-steps-prepared-execution`. This plan does not define
+prepack requests, prepared keys, source identities, cache persistence,
+compatibility checks, publication, eviction, or scheduling. Those contracts
+remain entirely in :ref:`l-next-steps-prepared-execution`,
+:ref:`l-next-steps-model-resolution`, and
+:ref:`l-next-steps-native-fast-loading-completion`.
 
-The canonical prepared key contains:
-
-* ordered source roles and content identities, including type and shape;
-* quantization descriptors and relevant operator attributes such as transpose,
-  grouping, block size and any fused epilogue;
-* representation format/version and kernel/prepacker ABI;
-* required device capabilities, including exact ISA subsets and OS-enabled
-  features, with alignment/layout requirements;
-* any tuning choice that actually changes packed bytes or their interpretation.
-
-Thread count or a node name is not a mandatory key component if it does not
-change representation compatibility. Different consumers may share one
-object only when their consumer contracts agree. One source may legitimately
-have several prepared variants. Byte equality alone does not prove semantic
-equivalence.
-
-Reuse the existing lifecycle:
-
-.. code-block:: text
-
-    resolve consumer and source identities
-        -> find compatible resident or persisted representation
-        -> load packed bytes OR load source dependencies and prepare
-        -> validate and atomically publish one immutable generation
-        -> bind typed, pinned views to consumer kernels
-        -> optionally persist, evict when unpinned, and reload
-
-Concurrent requests for the same key share the existing in-flight generation.
-Preparation is a session task; dynamic operands remain invocation work unless
-the caller supplies an explicit immutable identity/version contract. Never
-cache mutable inputs by pointer address.
-
-Normal kernel execution uses its prepared binding without repeating layout
-discovery, registry lookup or prepacking. Kernel construction/configuration
-and asynchronous prepared dependencies must agree on the same binding. A
-single scoped execution plan remains authoritative.
-
-Disk-cache compatibility is resolved before selecting the payload manifest.
-Skipping portable payload reads requires a trustworthy source content identity
-already available from an immutable artifact manifest or prior validation.
-Do not trust an unverified digest merely copied from a cache entry. If the
-source identity cannot be established without reading it, perform that
-validation and report its I/O cost instead of claiming a no-source-read hit.
-
-The portable source remains recoverable; a compiled payload never replaces it
-as the sole authoritative model value. Capability/ABI mismatch or stale
-content is a diagnosed cache miss. Corrupt optional cache files may be
-discarded with diagnostics and rebuilt, as the existing cache does. Invalid
-authoritative model descriptors are load/checker errors. A rebuild failure
-must propagate, not become a success-shaped fallback.
-
-Typed compiled-cache attachment
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-A compiled cache stores the result of a preparation operation. For example,
-a quantized matrix prepack may be computed from weights ``W``, scales ``S``
-and zero points ``Z``. Its bytes belong to ``EncodedValueProto``; preparation
-metadata explains how those bytes were produced and when they can be reused.
-
-The metadata answers three separate questions:
-
-* ``sources``: which input values are needed to prepare or rebuild this value?
-  Each entry records the operand's role and a reference resolved in its graph
-  or function scope. Include bias only if preparation actually depends on it.
-* The source's ``content_id``: are these still the same contents? The graph
-  name ``W`` can stay unchanged while its weights change. A durable identity
-  covers the canonical content, type, dimensions and interpretation, including
-  relevant layout definitions and type constants, not just the display name.
-* ``recipe`` and ``device``: which transformation produced the bytes, and
-  which consumer can use them? They identify the preparation operation,
-  version, relevant attributes and runtime/device compatibility.
-
-Use one content identity per source, not a mandatory second
-``sources_digest`` alongside those identities. The runtime derives the
-complete prepared lookup key from the ordered source roles/identities,
-recipe, output layout and compatibility requirements. It may hash that key
-internally; that is not another serialized proof that the sources are current.
-If a source reference is already content-addressed, reuse its identity instead
-of duplicating it in a separate fingerprint field.
-
-The following example uses graph-name references plus per-source hashes.
-It is descriptive syntax, not a finalized wire schema. The digest values
-are placeholders for hashes computed from the actual source values:
-
-.. code-block:: text
-
-    message DeviceProto {
-        string type = 1;              // "cpu", "cuda", "rocm", ...
-        optional int32 index = 2;     // exact ordinal only when required
-        string architecture = 3;      // "x86_64-avx2", "sm_80", ...
-        string runtime = 4;
-        string runtime_version = 5;
-        repeated StringStringEntryProto metadata_props = 6;
-    }
-
-    message ModelProto {
-        repeated StructTypeProto struct_types = <N>;
-        repeated DeviceProto devices = <N+1>;
-        repeated EncodedValueProto prepared_values = <N+2>;
-    }
-
-    EncodedValueProto {
-        struct_type: {type_ref: 3001}
-        logical_type: FLOAT[K, N]
-        raw_data: <complete packed records>
-        preparation: {
-            sources: [
-                {
-                    role: "weights"
-                    value: {scope: "main", name: "W"}
-                    content_id: {algorithm: "blake3", digest: <W identity>}
-                },
-                {
-                    role: "scales"
-                    value: {scope: "main", name: "S"}
-                    content_id: {algorithm: "blake3", digest: <S identity>}
-                },
-                {
-                    role: "zero_points"
-                    value: {scope: "main", name: "Z"}
-                    content_id: {algorithm: "blake3", digest: <Z identity>}
-                }
-            ]
-            recipe: {
-                name: "cpu.matmul.pack"
-                version: 1
-                attributes: {transpose_b: false}
-            }
-            device: 1                 // index into ModelProto.devices
-        }
-    }
-
-Changing ``S`` changes its content identity and invalidates this prepared
-value even when ``W`` is unchanged. Changing ``transpose_b`` or the packing
-version changes the recipe and likewise prevents reuse. The source references
-still identify the inputs from which to rebuild.
-
-For a session-only in-memory prepared value, a tracked source identity and
-generation may replace content hashing under an explicit immutability/version
-contract. A pointer address alone is insufficient. Process-local generations
-cannot validate a disk cache in another process; persisted entries require
-durable content identities. A hash copied from an untrusted cache is not proof
-of the current source: validation follows the source-identity rules above.
-
-``source_lineage`` in the existing prepared-execution APIs means this ordered
-source list. It does not require another source concept or registry in the
-new value format, and the new example does not prescribe renaming those APIs.
-
-Device type, architecture, implementation ABI and metadata express
-compatibility, not merely a device ordinal. The device index is an index
-into the model's device list; it is unrelated to stable structured type IDs.
-One set of sources may have several entries for different devices or recipes.
-FP32, tiled and quantized packs all use this attachment without another
-compiled or quantized value-container hierarchy.
-
-The checker validates unique device descriptors, in-range device indices,
-unique complete preparation keys, source existence and unambiguous scope,
-valid source content identities (including algorithm and digest for the hash
-form), unique metadata keys, exact layouts
-and valid byte extents. A payload cannot select an unconstrained structured
-category. Device compatibility and digest comparison may be deferred until
-load time, but structural errors are independent of hardware availability.
-A missing portable decoder is acceptable for a runtime-specific derived pack
-only because its original source remains available.
+The representation layer exposes only enough validated type, layout, and
+payload information for a prepared consumer to bind a typed view. It does not
+add preparation provenance to ``EncodedValueProto`` or a ``prepared_values``
+field to ``ModelProto``. Portable source retention and persisted compiled
+payloads remain concerns of the prepared-object cache.
 
 .. _l-next-steps-mutable-cache:
 
@@ -937,10 +768,9 @@ structured bytes implicitly: use an explicit decoder or a matching schema.
 byte extents, external payload ownership and quantization metadata
 through import/export, functions and subgraphs. Deduplication considers
 semantic profiles as well as payload bytes, layout and optional logical shapes.
-Rewrites that change any preparation dependency invalidate the corresponding
-compiled binding. Feedback bindings are validated against the final model
-inputs/outputs; a rewrite that removes or changes a selected path requires an
-updated mapping, not a silently retained hidden state.
+Feedback bindings are validated against the final model inputs/outputs; a
+rewrite that removes or changes a selected path requires an updated mapping,
+not a silently retained hidden state.
 
 General struct declarations and their tensor/sequence field constraints
 round-trip through the type catalogue as well. This does not make a runtime
@@ -948,11 +778,10 @@ cache instance a serializable initializer: the byte-payload encoding remains
 limited to eligible fixed-layout structs. Unsupported field-value export
 fails explicitly rather than dropping dynamic fields or serializing pointers.
 
-Prefer an optional companion compiled store for the first implementation.
 Do not make the core plan depend on modifying upstream ONNX wire messages or
 on proto inheritance. If model extensions are later serialized, document their
-version and round-trip behavior explicitly; standard ONNX export must lower
-to supported tensors/operators or report an unsupported export, never silently
+version and round-trip behavior explicitly; standard ONNX export must lower to
+supported tensors/operators or report an unsupported export, never silently
 drop authoritative structured values or feedback bindings.
 
 Implementation sequence
@@ -970,10 +799,10 @@ byte-encodable subset before adding the small built-in affine subset.
 Custom packed weights and heterogeneous KV-block fixtures must work through
 structures without requiring a catalogue of native quantized types.
 
-The struct types, physical layouts, examples, prepared attachments and state
-bindings above belong to this single sequence. Typed prepacking, graph
-integration and persistent-state consumers build on the same representation
-foundation, without a second cache or struct roadmap.
+The struct types, physical layouts, examples and state bindings above belong to
+this single sequence. Graph integration and persistent-state consumers build
+on the same representation foundation, without a second cache or struct
+roadmap.
 
 .. list-table::
    :header-rows: 1
@@ -1008,83 +837,64 @@ foundation, without a second cache or struct roadmap.
        format-specific decoder is linked into the proto target.
      - PR01
    * - PR03
-     - Typed preparation and kernel binding
-     - Extend the existing object store and task bindings without a second
-       scheduler. One FP32 pack and one hybrid INT4 pack share compatible
-       objects, remain pinned during use, and never repack at each invocation.
+     - GraphBuilder and serialization integration
+     - Structured initializers, logical/physical inference, scope-aware
+       references and deduplication agree. Standard export never loses data.
      - PR02
    * - PR04
-     - Persisted compiled representations
-     - Reuse PreparedTensorCache with multi-source keys, compatibility,
-       invalidation, atomic publication and explicit miss diagnostics.
-       Sources carry reusable content identities; an additional aggregate
-       sources digest is not a required serialized field.
-       Warm hits skip preparation; no-source-read claims have verified
-       source identities. Round-trip typed/native objects via versioned payloads.
-     - PR03
-   * - PR05
-     - GraphBuilder and model-resolution integration
-     - Structured initializers, logical/physical inference, scope-aware
-       references, deduplication and prepared payload selection agree.
-       Rewrites invalidate stale bindings; standard export never loses data.
-     - PR02, PR03
-   * - PR06
      - State from model input/output feedback
      - Build state from selected input/output pairs and initial values.
        Infer its types from the model; retain only selected values or struct
        fields. Repeated calls match a manual stateless feedback loop.
        Verify initialization, validation, reset, failures and independent states.
      - PR02; existing allocation/task infrastructure
-   * - PR07a
+   * - PR05
      - Contiguous KV and CPU consumer integration
      - Optimize the same past/present inputs and outputs when ownership
        permits buffer reuse. Append touches only new tokens, preserves
        ordinary fetched outputs and matches functional execution. Verify
        capacity/cancellation and measure allocation/copy costs; do not make
-       zero-copy a precondition for the PR06 state helper.
-     - PR03, PR06; CPU backend integration
-   * - PR07b
+       zero-copy a precondition for the PR04 state helper.
+     - PR04; CPU backend integration
+   * - PR06
      - Optional paged KV with heterogeneous quantization
      - The shared EncodedValueProto representation supports different K/V and
        per-block formats. Blockwise append/conversion and Attention preserve
        validity, numerical contracts and bounded workspace without copying
        or dequantizing the entire cache.
-     - PR02, PR07a; CPU backend integration
-   * - PR08
-     - End-to-end prepared/stateful acceptance
-     - Measure cold/warm preparation, repeated decode and simultaneous
-       independent feedback states. Report source/packed/state/scratch bytes,
-       preparation counts and per-token copies; verify stale-cache handling,
-       eviction pins, request reset/isolation and the final proto-size budget.
-     - PR04, PR05, PR06, PR07a
+     - PR02, PR05; CPU backend integration
+   * - PR07
+     - End-to-end structured/stateful acceptance
+     - Measure repeated decode and simultaneous independent feedback states.
+       Report state/scratch bytes and per-token copies; verify request
+       reset/isolation and the final proto-size budget.
+     - PR03, PR04, PR05
    * - Later
      - Snapshots and advanced page policies
      - Extend the input/output feedback contract without a second state type
        system. Snapshots, explicit alias annotations and advanced mutation
        scheduling remain outside the first implementation.
-     - PR08
+     - PR07
 
-PR06 can proceed in parallel with PR03-PR05 after PR02 provides the shared
-struct types and field views. Basic feedback state does not depend on every
-quantization format, paging or a new mutation protocol. PR07b is optional and
-does not block PR08.
-The declarative format catalogue is not a prerequisite for FP32 prepacking.
+PR04 can proceed in parallel with PR03 after PR02 provides the shared struct
+types and field views. Basic feedback state does not depend on every
+quantization format, paging or a new mutation protocol. PR06 is optional and
+does not block PR07.
 
 Ownership and acceptance
 ++++++++++++++++++++++++
 
-``onnx-light`` owns the type/serialization contracts, prepared identities,
-allocation and lifecycle, graph/schema integration, effect scheduling and
-input/output feedback state. ``onnx-light-cpu`` supplies its format validators, prepackers,
-typed consumers, KV append and Attention implementation. It does not create
-another persistent-state manager or private executor.
+``onnx-light`` owns the type/serialization contracts, allocation and lifecycle,
+graph/schema integration, effect scheduling and input/output feedback state.
+``onnx-light-cpu`` supplies its format validators, typed consumers, KV append
+and Attention implementation. It does not create another persistent-state
+manager or private executor.
 
 Acceptance uses C++ fixtures and existing runtime/backend test infrastructure.
-Compare packed versus unpacked computation and the state helper versus a
-manual output-to-input loop with the same numerical contract. Test concurrent
-preparation, active pins during eviction, changed scales with unchanged code
-bytes, incompatible ISA/ABI, missing consumers, reset, invalid capacities,
-failed mutations and independent requests.
+Compare encoded versus decoded computation and the state helper versus a manual
+output-to-input loop with the same numerical contract. Test changed scales with
+unchanged code bytes, missing consumers, reset, invalid capacities, failed
+mutations and independent requests.
 
 State fixtures retain a whole tensor and only the cache field of a larger
 struct. Verify that tokens/logits are not retained, types come from model I/O,
@@ -1110,17 +920,9 @@ logical shapes inconsistent with derived record counts, and
 session-to-model catalogue resolution preserving IDs without copying type
 declarations per KV block.
 
-Prepared-cache fixtures change a source's contents without changing its graph
-name, change only a scale or a recipe attribute, and reuse unchanged
-content-addressed sources. No extra aggregate digest is needed to reject a
-stale value. Session-only generation identities must not validate persisted
-entries in another process.
-
-Structural gates are explicit: a reused prepared object has no repeat
-prepacking and a compatible verified disk hit does not read portable payloads.
 The basic state helper promises correct feedback, not zero-copy execution.
 Only a demonstrated fixed-capacity reuse path may claim no full-cache
 allocation or copy.
 Publish latency, dispersion, peak/resident bytes and copy/read counters;
-performance claims must distinguish source validation, preparation, inference
-and state-management cost.
+performance claims must distinguish decoding, inference and state-management
+cost.

@@ -543,6 +543,8 @@ budget. This prevents aggressive prefetch from evicting the weight currently
 used by inference or from exhausting the ``ExecutionArena`` and ``IOArena``
 budgets.
 
+.. _l-next-steps-prepacking:
+
 Prepacking
 ++++++++++
 
@@ -584,10 +586,10 @@ and layout key, it also defines the cache identity used for persistence.
 Reusing a persisted prepack
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Prepacking is often linear but not free, and it repeats on every load. The
-first implementation does **not** depend on the proposed
-:ref:`l-next-steps-custom-types-prepared-values` format:
-``EncodedValueProto`` is not implemented and is not required for prepared execution.
+Prepacking is often linear but not free, and it repeats on every load. Prepared
+execution does not depend on the structured representation proposed by
+:ref:`l-next-steps-custom-quantized-persistent-values`:
+``EncodedValueProto`` is not required for prepared execution.
 
 A companion ONNX model stores each packed representation as a standard
 ``TensorProto``:

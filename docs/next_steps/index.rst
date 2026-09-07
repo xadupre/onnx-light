@@ -70,9 +70,9 @@ Planned
       - Custom structs, quantized representations and persistent values in one
         plan. State is built from model input/output feedback and initial values;
         a mapping may retain just the cache field of a larger struct.
-        Prepared weights reuse the same representations. Fixed size is needed
-        only for byte encoding; paging and mutation protocols are not required
-        to construct state.
+        Fixed size is needed only for byte encoding; paging and mutation
+        protocols are not required to construct state. Prepacking remains in
+        the completed prepared-execution plan.
 
 Completed
 ---------

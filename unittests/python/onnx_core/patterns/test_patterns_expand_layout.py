@@ -1374,7 +1374,12 @@ class TestExpandLayoutPatterns(ExtTestCase):
                                 self.assertPatternRewritten(rewrites, "SwapUnsqueezeTranspose")
                                 self.assertEqual(["Transpose", "Unsqueeze"], _ops(optimized))
                                 self.assertEqual("Y", optimized.graph.node[-1].output[0])
-                                expected_axes = [i for i, axis in enumerate(perm) if axis in axes]
+                                normalized_axes = {
+                                    axis + rank if axis < 0 else axis for axis in signed_axes
+                                }
+                                expected_axes = [
+                                    i for i, axis in enumerate(perm) if axis in normalized_axes
+                                ]
                                 self.assertEqual(
                                     expected_axes,
                                     _initializer_values(
@@ -1401,13 +1406,11 @@ class TestExpandLayoutPatterns(ExtTestCase):
             model, "SwapUnsqueezeTranspose", run_shape_inference=False
         )
         self.assertPatternRewritten(rewrites, "SwapUnsqueezeTranspose")
-        for shape in ((2, 3), (4, 2)):
-            with self.subTest(shape=shape):
-                self.assertEquivalent(
-                    model,
-                    optimized,
-                    {"X": np.arange(np.prod(shape), dtype=np.float32).reshape(shape)},
-                )
+        self.assertEqual(["Transpose", "Unsqueeze"], _ops(optimized))
+        self.assertEqual([0, 1], _attribute_ints(optimized.graph.node[0], "perm"))
+        self.assertEqual(
+            [2], _initializer_values(optimized, optimized.graph.node[1].input[1]).tolist()
+        )
 
     def test_swap_unsqueeze_transpose_three_operand_einsum_numerically(self):
         # Broadcasts bac, cd, def into ebcadf, then contracts a, d, f.

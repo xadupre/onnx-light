@@ -4,10 +4,12 @@
 
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/kernels/kernel_run_helpers.h"
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <optional>
@@ -53,6 +55,18 @@ template <typename T> int CompareTyped(const uint8_t *a, const uint8_t *b) {
 
 int CompareElement(DataType dt, const uint8_t *a, const uint8_t *b, std::size_t elem_size) {
   switch (dt) {
+  case DataType::BFLOAT16: {
+    uint16_t a_bits;
+    uint16_t b_bits;
+    std::memcpy(&a_bits, a, sizeof(a_bits));
+    std::memcpy(&b_bits, b, sizeof(b_bits));
+    const float va = Bfloat16BitsToFloat(a_bits);
+    const float vb = Bfloat16BitsToFloat(b_bits);
+    // Keep NaNs separate from numeric values and ordered after them.
+    if (std::isnan(va) || std::isnan(vb))
+      return static_cast<int>(std::isnan(va)) - static_cast<int>(std::isnan(vb));
+    return va < vb ? -1 : (va > vb ? 1 : 0);
+  }
   case DataType::FLOAT:
     return CompareTyped<float>(a, b);
   case DataType::DOUBLE:
@@ -224,10 +238,11 @@ Unique::Outputs Unique::operator()(const Tensor &x, const Attributes &attrs,
   const DataType dt = static_cast<DataType>(x.data_type);
   const bool is_string = (dt == DataType::STRING);
   if (!is_string) {
-    // Validate dtype: support the same numeric and BOOL types as NonZero.
+    // Validate numeric and BOOL dtypes.
     switch (dt) {
     case DataType::FLOAT:
     case DataType::DOUBLE:
+    case DataType::BFLOAT16:
     case DataType::INT8:
     case DataType::INT16:
     case DataType::INT32:

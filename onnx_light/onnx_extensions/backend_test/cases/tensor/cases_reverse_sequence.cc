@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/expect.h"
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_extensions/backend_test/cases/tensor/include_tensor_cases.h"
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_proto/onnx_helper.h"
@@ -60,6 +61,16 @@ void RegisterReverseSequenceCases(std::vector<TestCase> &registry, TestMode mode
              return IoData{{std::move(x), std::move(seq)}, {std::move(y)}};
            });
     return;
+  }
+
+  {
+    Expect(registry, MakeReverseSequenceNode(1, 0, true, true), "test_reversesequence_bfloat16",
+           {DefaultOpset(28)}, []() -> IoData {
+             Tensor input = MakeBfloat16Tensor("X", {2, 4}, {1, 2, 3, 4, 5, 6, 7, 8});
+             Tensor sequence_lens = Tensor::FromInt64("sequence_lens", {2}, {4, 3});
+             Tensor output = MakeBfloat16Tensor("Y", {2, 4}, {4, 3, 2, 1, 7, 6, 5, 8});
+             return IoData{{std::move(input), std::move(sequence_lens)}, {std::move(output)}};
+           });
   }
 
   // test_cc_reversesequence_time: 4x4 input, time_axis=0, batch_axis=1.

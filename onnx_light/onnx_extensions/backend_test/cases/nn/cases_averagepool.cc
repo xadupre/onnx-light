@@ -769,6 +769,35 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry, TestMode mode) {
            });
   }
 
+  {
+    NodeProto node;
+    node.set_op_type("AveragePool");
+    node.add_input("x");
+    node.add_output("y");
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {5, 5, 5});
+    AddAttribute<std::vector<int64_t>>(node, "strides", {3, 3, 3});
+    AddAttribute<std::vector<int64_t>>(node, "dilations", {2, 2, 2});
+    AddAttribute<int64_t>(node, "count_include_pad", 1);
+    AddAttribute<int64_t>(node, "ceil_mode", 1);
+    Expect(registry, std::move(node), "test_cc_averagepool_3d_dilated_ceil_padding_divisor",
+           {opset}, []() -> IoData {
+             Tensor x =
+                 Tensor::FromFloat("", {1, 1, 32, 32, 32}, std::vector<float>(32 * 32 * 32, 1));
+             std::vector<float> expected;
+             expected.reserve(9 * 9 * 9);
+             for (int d = 0; d < 9; ++d) {
+               for (int h = 0; h < 9; ++h) {
+                 for (int w = 0; w < 9; ++w) {
+                   const int samples = (d == 8 ? 4 : 5) * (h == 8 ? 4 : 5) * (w == 8 ? 4 : 5);
+                   expected.push_back(static_cast<float>(samples) / 125);
+                 }
+               }
+             }
+             Tensor y = Tensor::FromFloat("", {1, 1, 9, 9, 9}, expected);
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
+  }
+
   // 3-D AveragePool with a 5x5x5 kernel, strides (3, 3, 3) and dilations
   // (2, 2, 2) on a deterministic random 1x1x32x32x32 input, exercising all
   // four (count_include_pad, ceil_mode) combinations (mirrors the

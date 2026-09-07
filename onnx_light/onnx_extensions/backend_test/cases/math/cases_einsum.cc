@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/expect.h"
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_extensions/backend_test/cases/math/include_math_cases.h"
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
@@ -56,6 +57,41 @@ void RegisterEinsumCases(std::vector<TestCase> &registry, TestMode mode) {
              return IoData{{std::move(a), std::move(b)}, {std::move(z)}};
            });
     return;
+  }
+
+  // ONNX weekly 2026-09-07 fixtures use float32 accumulation rounded once.
+  {
+    NodeProto node = MakeEinsumNode(2, "bij, bjk -> bik");
+    Expect(registry, std::move(node), "test_einsum_batch_matmul_bfloat16", {DefaultOpset(28)},
+           []() -> IoData {
+             std::vector<float> a(30), b(60);
+             for (std::size_t i = 0; i < a.size(); ++i)
+               a[i] = static_cast<float>(i % 2);
+             for (std::size_t i = 0; i < b.size(); ++i)
+               b[i] = static_cast<float>(i % 2);
+             return IoData{
+                 {MakeBfloat16Tensor("", {5, 2, 3}, a), MakeBfloat16Tensor("", {5, 3, 4}, b)},
+                 {MakeBfloat16Tensor("", {5, 2, 4},
+                                     {0, 1, 0, 1, 0, 2, 0, 2, 0, 1, 0, 1, 0, 2, 0, 2, 0, 1, 0, 1, 0,
+                                      2, 0, 2, 0, 1, 0, 1, 0, 2, 0, 2, 0, 1, 0, 1, 0, 2, 0, 2})}};
+           });
+  }
+  {
+    NodeProto node = MakeEinsumNode(1, "ij->i");
+    Expect(registry, std::move(node), "test_einsum_sum_bfloat16", {DefaultOpset(28)},
+           []() -> IoData {
+             return IoData{{MakeBfloat16Tensor("", {3, 4}, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11})},
+                           {MakeBfloat16Tensor("", {3}, {6, 22, 38})}};
+           });
+  }
+  {
+    NodeProto node = MakeEinsumNode(1, "ij->ji");
+    Expect(registry, std::move(node), "test_einsum_transpose_bfloat16", {DefaultOpset(28)},
+           []() -> IoData {
+             return IoData{
+                 {MakeBfloat16Tensor("", {3, 4}, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11})},
+                 {MakeBfloat16Tensor("", {4, 3}, {0, 4, 8, 1, 5, 9, 2, 6, 10, 3, 7, 11})}};
+           });
   }
 
   // Transpose: "ij->ji" (explicit).

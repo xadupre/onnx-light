@@ -2,6 +2,7 @@ import re
 import unittest
 from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
+from tempfile import TemporaryDirectory
 import onnx
 import onnx.defs as onnx_defs
 import onnx_light.onnx.defs
@@ -49,14 +50,29 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
 
     @classmethod
     def _collect_operator_schemas(
-        cls, defs_root: Path, max_opset_version: int
+        cls,
+        defs_root: Path,
+        max_opset_version: int,
+        operator_versions: dict[str, int] | None = None,
     ) -> dict[str, tuple[int, set[str]]]:
         """Collects the latest operator schemas up to a maximum opset version."""
         schemas: dict[str, tuple[int, set[str]]] = {}
-        for source_file in sorted(defs_root.rglob("*.cc")):
-            source = source_file.read_text(encoding="utf-8", errors="ignore")
-            for op_name, opset_version, attributes in cls._extract_schema_blocks(source):
-                if opset_version > max_opset_version:
+        sources = {
+            path: path.read_text(encoding="utf-8", errors="ignore")
+            for path in sorted(defs_root.rglob("*"))
+            if path.suffix in {".cc", ".h"}
+        }
+        helper_sources = tuple(sources.values())
+        for source_file, source in sources.items():
+            if source_file.suffix != ".cc":
+                continue
+            for op_name, opset_version, attributes in cls._extract_schema_blocks(
+                source, helper_sources
+            ):
+                version_limit = min(
+                    max_opset_version, (operator_versions or {}).get(op_name, max_opset_version)
+                )
+                if opset_version > version_limit:
                     continue
                 if op_name not in schemas or opset_version > schemas[op_name][0]:
                     schemas[op_name] = (opset_version, attributes)
@@ -65,7 +81,9 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
         return schemas
 
     @classmethod
-    def _extract_schema_blocks(cls, source: str) -> list[tuple[str, int, set[str]]]:
+    def _extract_schema_blocks(
+        cls, source: str, helper_sources: tuple[str, ...] = ()
+    ) -> list[tuple[str, int, set[str]]]:
         """Extracts schema macro tuples: operator name, opset version, and explicit attributes."""
         token = "ONNX_OPERATOR_SET_SCHEMA("
         blocks: list[tuple[str, int, set[str]]] = []
@@ -90,7 +108,7 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
                     index = close_paren + 1
                     continue
 
-                attributes = cls._extract_attributes(source, schema_body)
+                attributes = cls._extract_attributes(source, schema_body, helper_sources)
                 blocks.append((op_name, opset_version, attributes))
 
             index = close_paren + 1
@@ -150,25 +168,49 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
         return -1
 
     @classmethod
-    def _extract_attributes(cls, source: str, schema_body: str) -> set[str]:
-        """Extracts attributes from an inline schema or a zero-argument schema helper."""
+    def _extract_attributes(
+        cls, source: str, schema_body: str, helper_sources: tuple[str, ...] = ()
+    ) -> set[str]:
+        """Extracts inline attributes and attributes from schema helpers and fillers."""
         attributes = set(re.findall(r'\.Attr\(\s*"([^"]+)"', schema_body))
-        helper_match = re.fullmatch(r"([A-Za-z_]\w*)\s*\(\s*\)\s*;?", schema_body.strip())
-        if attributes or helper_match is None:
-            return attributes
-
-        helper_name = helper_match.group(1)
-        definition = re.search(
-            rf"\b(?:static\s+)?OpSchema\s+{re.escape(helper_name)}\s*\(\s*\)\s*\{{", source
+        body = schema_body.strip()
+        helper_match = re.match(r"((?:[A-Za-z_]\w*::)*[A-Za-z_]\w*)\s*\(", body)
+        helper_names = re.findall(
+            r"\.FillUsing\(\s*((?:[A-Za-z_]\w*::)*[A-Za-z_]\w*)\s*\(", schema_body
         )
-        if definition is None:
-            return attributes
+        if helper_match is not None:
+            close_paren = cls._find_matching_parenthesis(body, body.find("("))
+            if close_paren >= 0 and not body[close_paren + 1 :].strip(";\n\r\t "):
+                helper_names.append(helper_match.group(1))
+        for qualified_name in helper_names:
+            helper_name = qualified_name.rsplit("::", 1)[-1]
+            for helper_source in (source, *helper_sources):
+                helper_body = cls._find_helper_body(helper_source, helper_name)
+                if helper_body is not None:
+                    attributes.update(re.findall(r'\.Attr\(\s*"([^"]+)"', helper_body))
+                    break
+            else:
+                raise ValueError(f"Cannot resolve schema helper {qualified_name!r}.")
+        return attributes
 
-        open_brace = source.find("{", definition.start())
-        close_brace = cls._find_matching_brace(source, open_brace)
-        if close_brace < 0:
-            return attributes
-        return set(re.findall(r'\.Attr\(\s*"([^"]+)"', source[open_brace + 1 : close_brace]))
+    @classmethod
+    def _find_helper_body(cls, source: str, helper_name: str) -> str | None:
+        """Finds a helper definition, excluding declarations and call sites."""
+        for candidate in re.finditer(rf"\b{re.escape(helper_name)}\s*\(", source):
+            open_paren = source.find("(", candidate.start())
+            close_paren = cls._find_matching_parenthesis(source, open_paren)
+            if close_paren < 0:
+                continue
+            open_brace = close_paren + 1
+            while open_brace < len(source) and source[open_brace].isspace():
+                open_brace += 1
+            if open_brace >= len(source) or source[open_brace] != "{":
+                continue
+            close_brace = cls._find_matching_brace(source, open_brace)
+            if close_brace < 0:
+                raise ValueError(f"Unterminated schema helper {helper_name!r}.")
+            return source[open_brace + 1 : close_brace]
+        return None
 
     @classmethod
     def _find_matching_brace(cls, source: str, open_brace: int) -> int:
@@ -291,12 +333,13 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
 
     def test_onnx_light_operator_and_attribute_signatures_match_onnx(self):
         target_version = onnx_defs.onnx_opset_version()
+        onnx_schemas = self._collect_operator_schemas(
+            Path(onnx.__file__).resolve().parent / "defs", target_version
+        )
         onnx_light_schemas = self._collect_operator_schemas(
             Path(__file__).resolve().parents[2] / "onnx_light" / "onnx_lib" / "defs",
             target_version,
-        )
-        onnx_schemas = self._collect_operator_schemas(
-            Path(onnx.__file__).resolve().parent / "defs", target_version
+            {name: version for name, (version, _) in onnx_schemas.items()},
         )
 
         # Recently merged schemas may not yet be present in the installed onnx source package.
@@ -304,14 +347,6 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
             onnx_light_schemas.pop("SwiGLU", None)
         if "BitShift" not in onnx_schemas:
             onnx_light_schemas.pop("BitShift", None)
-        elif onnx_schemas["BitShift"][0] < 28:
-            onnx_light_schemas["BitShift"] = onnx_schemas["BitShift"]
-        for op_name in ("Optional", "OptionalGetElement", "OptionalHasElement"):
-            if onnx_schemas[op_name][0] < 28:
-                onnx_light_schemas[op_name] = onnx_schemas[op_name]
-        for op_name in ("ReduceLogSum", "ReduceLogSumExp"):
-            if onnx_schemas[op_name][0] < 28:
-                onnx_light_schemas[op_name] = onnx_schemas[op_name]
         if "DynamicQuantizeLinear" not in onnx_schemas:
             onnx_light_schemas.pop("DynamicQuantizeLinear", None)
 
@@ -341,6 +376,61 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
         self.assertEqual(
             self._extract_schema_blocks(source), [("Example", 25, {"alpha", "beta"})]
         )
+
+    def test_extract_schema_attributes_from_namespaced_filler(self):
+        source = """
+        ONNX_OPERATOR_SET_SCHEMA(
+            Example, 28,
+            OpSchema().Attr("axis", "axis", AttributeProto::INT)
+                .FillUsing(defs::math::utils::ExampleGenerator(AllTypes())));
+        """
+        helper_source = """
+        std::function<void(OpSchema&)> ExampleGenerator(std::vector<std::string> types);
+        void Other() { ExampleGenerator(AllTypes()); }
+        std::function<void(OpSchema&)> ExampleGenerator(std::vector<std::string> types) {
+            return [](OpSchema& schema) {
+                schema.Attr("equation", "expression with { braces }", AttributeProto::STRING);
+            };
+        }
+        """
+        self.assertEqual(
+            self._extract_schema_blocks(source, (helper_source,)),
+            [("Example", 28, {"axis", "equation"})],
+        )
+
+    def test_extract_schema_attributes_from_parameterized_helper(self):
+        source = """
+        OpSchema MakeExampleSchema(bool recent) {
+            return OpSchema().Attr("axis", "axis", AttributeProto::INT);
+        }
+        ONNX_OPERATOR_SET_SCHEMA(Example, 11, MakeExampleSchema(false));
+        ONNX_OPERATOR_SET_SCHEMA(Example, 28, MakeExampleSchema(true));
+        """
+        self.assertEqual(
+            self._extract_schema_blocks(source),
+            [("Example", 11, {"axis"}), ("Example", 28, {"axis"})],
+        )
+
+    def test_extract_schema_attributes_rejects_missing_filler(self):
+        source = "ONNX_OPERATOR_SET_SCHEMA(Example, 28, OpSchema().FillUsing(Missing()));"
+        with self.assertRaisesRegex(ValueError, "Cannot resolve schema helper 'Missing'"):
+            self._extract_schema_blocks(source)
+
+    def test_collect_schema_uses_actual_historical_attributes(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "defs.cc").write_text(
+                'ONNX_OPERATOR_SET_SCHEMA(Example, 11, OpSchema().Attr("axis", "old"));\n'
+                'ONNX_OPERATOR_SET_SCHEMA(Example, 28, OpSchema().Attr("mode", "new"));\n',
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                self._collect_operator_schemas(root, 28, {"Example": 11}),
+                {"Example": (11, {"axis"})},
+            )
+            self.assertEqual(
+                self._collect_operator_schemas(root, 28), {"Example": (28, {"mode"})}
+            )
 
     def test_preview_operators_separated_from_preview_training(self):
         defs_root = Path(__file__).resolve().parents[2] / "onnx_light" / "onnx_lib" / "defs"

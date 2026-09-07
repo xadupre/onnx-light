@@ -12,6 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Improvements
 
+- Synchronized the opset 28 schemas with ONNX weekly 1.24, including BF16 constraints
+  and `SpaceToDepth`/`DepthToSpace` function bodies.
 - Made `setup.py build_ext --inplace` reject editable installs that redirect imports to
   another source tree while continuing to allow editable installs of the current tree.
 - Required nanobind 3.0.1 or newer.
@@ -27,6 +29,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixes
 
+- Added BF16 `Einsum` and `Unique`, floating-point floor remainder for `Mod`, and CRD
+  mode for `SpaceToDepth`; corrected dilated `AveragePool` padding counts and
+  explicit `MaxUnpool` output shapes.
+- Aligned the ONNX schema determinism API and corrected schema synchronization tests
+  to compare upstream metadata and resolve attributes declared by schema helpers.
 - Prevented crashes and invalid memory access on malformed models during function inlining,
   version conversion, and node-level shape inference.
 - Preserved the input type when propagating `Attention` masks for low-precision inputs.

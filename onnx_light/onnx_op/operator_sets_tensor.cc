@@ -1350,10 +1350,20 @@ LightOpSchema MakeDepthToSpaceSchema(int since_version, const std::vector<Tensor
       {
           {"T", types, MakeDepthToSpaceTypeConstraintDescription(since_version)},
       },
-      std::move(attributes));
+      std::move(attributes), /*has_function_implementation=*/since_version >= 28);
 }
 
 LightOpSchema MakeSpaceToDepthSchema(int since_version, const std::vector<TensorType> &types) {
+  std::vector<AttributeParam> attributes{
+      {"blocksize", "Blocks of [blocksize, blocksize] are moved.", AttributeType::INT,
+       /*required=*/true},
+  };
+  if (since_version >= 28) {
+    attributes.push_back({"mode",
+                          "DCR (default) for depth-column-row order re-arrangement. Use CRD for "
+                          "column-row-depth order.",
+                          AttributeType::STRING, /*required=*/false, std::string("DCR")});
+  }
   return LightOpSchema(
       "SpaceToDepth", kOnnxDomain, since_version, MakeSpaceToDepthDoc(since_version),
       {
@@ -1369,10 +1379,7 @@ LightOpSchema MakeSpaceToDepthSchema(int since_version, const std::vector<Tensor
       {
           {"T", types, MakeSpaceToDepthTypeConstraintDescription(since_version)},
       },
-      {
-          {"blocksize", "Blocks of [blocksize, blocksize] are moved.", AttributeType::INT,
-           /*required=*/true},
-      });
+      std::move(attributes), /*has_function_implementation=*/since_version >= 28);
 }
 
 LightOpSchema MakeGatherSchema(int since_version, const std::vector<TensorType> &types) {
@@ -1835,6 +1842,7 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
       {"Compress",
        [] {
          return std::vector<LightOpSchema>{
+             MakeCompressSchema(28, ConcatTypesVer13()),
              MakeCompressSchema(11, AllTensorTypes()),
              MakeCompressSchema(9, AllTensorTypes()),
          };
@@ -1851,6 +1859,7 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
       {"DepthToSpace",
        [] {
          return std::vector<LightOpSchema>{
+             MakeDepthToSpaceSchema(28, ConcatTypesVer13()),
              MakeDepthToSpaceSchema(13, ConcatTypesVer13()),
              MakeDepthToSpaceSchema(11, AllTensorTypes()),
              MakeDepthToSpaceSchema(1, AllTensorTypes()),
@@ -1859,6 +1868,7 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
       {"SpaceToDepth",
        [] {
          return std::vector<LightOpSchema>{
+             MakeSpaceToDepthSchema(28, ConcatTypesVer13()),
              MakeSpaceToDepthSchema(13, ConcatTypesVer13()),
              MakeSpaceToDepthSchema(1, AllTensorTypes()),
          };
@@ -2042,6 +2052,7 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
       {"OneHot",
        [] {
          return std::vector<LightOpSchema>{
+             MakeOneHotSchema(28, AllNumericTypes(), AllNumericTypes(), ConcatTypesVer13()),
              MakeOneHotSchema(11, AllNumericTypes(), AllNumericTypes(), AllTensorTypes()),
              MakeOneHotSchema(9, AllNumericTypes(), AllNumericTypes(), AllTensorTypes()),
          };
@@ -2072,6 +2083,7 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
       {"ReverseSequence",
        [] {
          return std::vector<LightOpSchema>{
+             MakeReverseSequenceSchema(28, ConcatTypesVer13()),
              MakeReverseSequenceSchema(10, AllTensorTypes()),
          };
        }},
@@ -2090,6 +2102,7 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
       {"Unique",
        [] {
          return std::vector<LightOpSchema>{
+             MakeUniqueSchema(28, ConcatTypesVer13()),
              MakeUniqueSchema(11, AllTensorTypes()),
          };
        }},

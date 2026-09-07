@@ -64,8 +64,7 @@ void RegisterMaxUnpoolCases(std::vector<TestCase> &registry, TestMode mode) {
   }
 
   // Three-input form: ``output_shape = [1, 1, 5, 5]`` overrides the
-  // inferred ``[1, 1, 4, 4]``; the inferred region is placed at the
-  // top-left corner of the larger output.
+  // inferred ``[1, 1, 4, 4]``; indices refer to the final 5x5 layout.
   {
     NodeProto node;
     node.set_op_type("MaxUnpool");
@@ -77,20 +76,50 @@ void RegisterMaxUnpoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2});
     Expect(registry, std::move(node), "test_cc_maxunpool_export_with_output_shape", {opset},
            []() -> IoData {
-             const OpsetId opset = DefaultOpset(22);
-
-             const KernelContext maxunpool_kernel_ctx{opset};
-             const onnx_kernels::kernel::MaxUnpool maxunpool_kernel{maxunpool_kernel_ctx};
-
              Tensor x = Tensor::FromFloat("", {1, 1, 2, 2}, {5.0f, 6.0f, 7.0f, 8.0f});
-             Tensor indices = Tensor::FromInt64("", {1, 1, 2, 2}, {5, 7, 13, 15});
+             Tensor indices = Tensor::FromInt64("", {1, 1, 2, 2}, {6, 8, 16, 18});
              Tensor output_shape = Tensor::FromInt64("", {4}, {1, 1, 5, 5});
-             Tensor y = maxunpool_kernel(x, indices, output_shape, /*kernel_shape=*/{2, 2},
-                                         /*strides=*/{2, 2});
+             Tensor y = Tensor::FromFloat("", {1, 1, 5, 5}, {0, 0, 0, 0, 0, 0, 5, 0, 6, 0, 0, 0, 0,
+                                                             0, 0, 0, 7, 0, 8, 0, 0, 0, 0, 0, 0});
 
              return IoData{{std::move(x), std::move(indices), std::move(output_shape)},
                            {std::move(y)}};
            });
+  }
+
+  {
+    NodeProto node;
+    node.set_op_type("MaxUnpool");
+    node.add_input("xT");
+    node.add_input("xI");
+    node.add_output("y");
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2});
+    AddAttribute<std::vector<int64_t>>(node, "strides", {2});
+    Expect(registry, std::move(node), "test_cc_maxunpool_export_1d", {opset}, []() -> IoData {
+      Tensor x = Tensor::FromFloat("", {1, 1, 2}, {1, 2});
+      Tensor indices = Tensor::FromInt64("", {1, 1, 2}, {1, 3});
+      Tensor y = Tensor::FromFloat("", {1, 1, 4}, {0, 1, 0, 2});
+      return IoData{{std::move(x), std::move(indices)}, {std::move(y)}};
+    });
+  }
+
+  {
+    NodeProto node;
+    node.set_op_type("MaxUnpool");
+    node.add_input("xT");
+    node.add_input("xI");
+    node.add_output("y");
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2, 2, 2});
+    AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2, 2, 2});
+    Expect(registry, std::move(node), "test_cc_maxunpool_export_4d", {opset}, []() -> IoData {
+      Tensor x = Tensor::FromFloat("", {1, 1, 1, 1, 1, 2}, {1, 2});
+      Tensor indices = Tensor::FromInt64("", {1, 1, 1, 1, 1, 2}, {0, 31});
+      std::vector<float> expected(32, 0.0f);
+      expected.front() = 1;
+      expected.back() = 2;
+      Tensor y = Tensor::FromFloat("", {1, 1, 2, 2, 2, 4}, expected);
+      return IoData{{std::move(x), std::move(indices)}, {std::move(y)}};
+    });
   }
 
   // Two-input form: the output shape is fully determined by ``kernel_shape``

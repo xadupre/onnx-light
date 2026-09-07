@@ -5,6 +5,7 @@
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 #include "onnx_light_helpers.h"
 
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/memory/temporary_buffer.h"
 #include "onnx_core/runtime/runtime_context.h"
@@ -13,6 +14,7 @@
 #include <set>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <vector>
 
@@ -345,25 +347,52 @@ void RunEinsum(const Tensors &inputs, const EinsumPlan &plan, T *out_data,
                                                       "kernel::Einsum in_ptrs");
   const T **in_ptrs = in_ptrs_buf.data();
   for (std::size_t i = 0; i < inputs.size(); ++i) {
-    in_ptrs[i] = inputs[i].As<T>();
+    if constexpr (std::is_same_v<T, uint16_t>) {
+      in_ptrs[i] = reinterpret_cast<const uint16_t *>(inputs[i].bytes());
+    } else {
+      in_ptrs[i] = inputs[i].As<T>();
+    }
   }
 
+  // Output labels precede contraction labels, so each output's reduction is
+  // contiguous. BFLOAT16 can accumulate in float32 and round once without a
+  // full-size temporary output or promoted input tensors.
+  using Acc = std::conditional_t<std::is_same_v<T, uint16_t>, float, T>;
+  Acc sum{0};
+  const int64_t reduction_count = total / out_count;
   for (int64_t step = 0; step < total; ++step) {
     // Compute the product of input values at the current label indices.
-    T prod{1};
+    Acc prod{1};
     for (std::size_t i = 0; i < inputs.size(); ++i) {
       int64_t off = 0;
       for (std::size_t k = 0; k < plan.all_labels.size(); ++k) {
         off += ix[k] * plan.input_strides[i][k];
       }
-      prod *= in_ptrs[i][off];
+      if constexpr (std::is_same_v<T, uint16_t>) {
+        prod *= Bfloat16BitsToFloat(in_ptrs[i][off]);
+      } else {
+        prod *= in_ptrs[i][off];
+      }
     }
     // Accumulate into the output position.
     int64_t out_off = 0;
     for (std::size_t k = 0; k < plan.all_labels.size(); ++k) {
       out_off += ix[k] * plan.output_stride_per_label[k];
     }
-    out_data[out_off] += prod;
+    if constexpr (std::is_same_v<T, uint16_t>) {
+      if (inputs.size() == 1 && n_labels == plan.output_labels.size()) {
+        // A transpose/diagonal extraction is not a reduction: preserve -0.
+        out_data[out_off] = FloatToBfloat16Bits(prod);
+      } else {
+        sum += prod;
+        if ((step + 1) % reduction_count == 0) {
+          out_data[out_off] = FloatToBfloat16Bits(sum);
+          sum = Acc{0};
+        }
+      }
+    } else {
+      out_data[out_off] += prod;
+    }
 
     // Advance ``ix`` (row-major).
     for (std::size_t k = plan.all_labels.size(); k-- > 0;) {
@@ -386,7 +415,8 @@ Tensor EinsumAlloc(const Tensors &inputs, const EinsumPlan &plan, int32_t dtype,
   const size_t z_n_bytes = static_cast<std::size_t>(out_count) * sizeof(T);
   Tensor z = rt ? rt->MakeOutputTensor(0, dtype, plan.output_shape, z_n_bytes)
                 : MakeOutputTensor(dtype, plan.output_shape, z_n_bytes, nullptr);
-  RunEinsum<T>(inputs, plan, z.As<T>(), rt ? rt->execution_allocator() : nullptr);
+  RunEinsum<T>(inputs, plan, reinterpret_cast<T *>(z.mutable_bytes()),
+               rt ? rt->execution_allocator() : nullptr);
   return z;
 }
 
@@ -400,7 +430,7 @@ void EinsumInPlace(const Tensors &inputs, const EinsumPlan &plan, int32_t dtype,
   EXT_ENFORCE_INVALID(output.shape == plan.output_shape, kEinsumName, ": output shape mismatch.");
   EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<std::size_t>(out_count) * sizeof(T),
                       kEinsumName, ": output buffer size mismatch.");
-  RunEinsum<T>(inputs, plan, output.As<T>(), nullptr);
+  RunEinsum<T>(inputs, plan, reinterpret_cast<T *>(output.mutable_bytes()), nullptr);
 }
 
 void RequireHomogeneous(const Tensors &inputs) {
@@ -437,9 +467,11 @@ Tensor Einsum::operator()(const Tensors &inputs, const std::string &equation,
     return EinsumAlloc<float>(inputs, plan, DataType::FLOAT, rt);
   case DataType::DOUBLE:
     return EinsumAlloc<double>(inputs, plan, DataType::DOUBLE, rt);
+  case DataType::BFLOAT16:
+    return EinsumAlloc<uint16_t>(inputs, plan, DataType::BFLOAT16, rt);
   default:
     EXT_THROW_INVALID(kEinsumName, ": unsupported data type ", inputs[0].data_type,
-                      ", only supports FLOAT and DOUBLE inputs.");
+                      ", only supports FLOAT, DOUBLE and BFLOAT16 inputs.");
   }
 }
 
@@ -451,9 +483,11 @@ void Einsum::operator()(const Tensors &inputs, const std::string &equation, Tens
     return EinsumInPlace<float>(inputs, plan, DataType::FLOAT, output);
   case DataType::DOUBLE:
     return EinsumInPlace<double>(inputs, plan, DataType::DOUBLE, output);
+  case DataType::BFLOAT16:
+    return EinsumInPlace<uint16_t>(inputs, plan, DataType::BFLOAT16, output);
   default:
     EXT_THROW_INVALID(kEinsumName, ": unsupported data type ", inputs[0].data_type,
-                      ", only supports FLOAT and DOUBLE inputs.");
+                      ", only supports FLOAT, DOUBLE and BFLOAT16 inputs.");
   }
 }
 

@@ -298,6 +298,29 @@ std::string MakeNonZeroTypeConstraintDescription(int since_version) {
 }
 
 std::string MakeOneHotDoc(int since_version) {
+  if (since_version >= 28) {
+    return R"DOC(
+    Produces a one-hot tensor based on inputs.
+    The locations represented by the index values in the 'indices' input tensor will have 'on_value'
+    and the other locations will have 'off_value' in the output tensor, where 'on_value' and 'off_value'
+    are specified as part of required input argument 'values', which is a two-element tensor of format
+    [off_value, on_value]. The rank of the output tensor will be one greater than the rank of the
+    input tensor. The additional dimension is for one-hot representation. The additional dimension will
+    be inserted at the position specified by 'axis'. If 'axis' is not specified then the additional
+    dimension will be inserted as the innermost dimension, i.e. axis=-1. The size of the additional
+    dimension is specified by required scalar input 'depth'. The type of the output tensor is the same
+    as the type of the 'values' input. Any entries in the 'indices' input tensor with values outside
+    the range [-depth, depth-1] will result in one-hot representation with all 'off_value' values in the
+    output tensor.
+
+    when axis = 0:
+    output[input[i, j, k], i, j, k] = 1 for all i, j, k and 0 otherwise.
+
+    when axis = -1:
+    output[i, j, k, input[i, j, k]] = 1 for all i, j, k and 0 otherwise.
+
+)DOC";
+  }
   if (since_version >= 11) {
     return R"DOC(
     Produces a one-hot tensor based on inputs.
@@ -1147,7 +1170,12 @@ std::string MakeDepthToSpaceTypeConstraintDescription(int since_version) {
 }
 
 std::string MakeSpaceToDepthDoc(int since_version) {
-  (void)since_version;
+  if (since_version >= 28) {
+    return R"DOC(SpaceToDepth rearranges blocks of spatial data into depth. More specifically,
+this op outputs a copy of the input tensor where values from the height and width dimensions
+are moved to the depth dimension. `mode` determines whether blocks are ordered depth-column-row
+(`DCR`, the default) or column-row-depth (`CRD`).)DOC";
+  }
   return R"DOC(SpaceToDepth rearranges blocks of spatial data into depth. More specifically,
 this op outputs a copy of the input tensor where values from the height and width dimensions
 are moved to the depth dimension.
@@ -1795,6 +1823,13 @@ std::string MakeReverseSequenceTypeConstraintDescription(int since_version) {
 }
 
 std::string MakeCompressDoc(int since_version) {
+  if (since_version >= 28) {
+    return R"DOC(
+    Selects slices from an input tensor along a given axis where condition evaluates to True for each axis index.
+    In case axis is not provided, input is flattened before elements are selected.
+    Compress behaves like numpy.compress: https://docs.scipy.org/doc/numpy/reference/generated/numpy.compress.html
+    )DOC";
+  }
   if (since_version <= 9) {
     return R"DOC(
 Selects slices from an input tensor along a given axis value passed.

@@ -1525,7 +1525,7 @@ TEST(KernelClass, MaxUnpoolWithOutputShape) {
   const KernelContext ctx{DefaultOpset(22)};
   MaxUnpool unpool{ctx};
   Tensor x = Tensor::FromFloat("", {1, 1, 2, 2}, {5.0f, 6.0f, 7.0f, 8.0f});
-  Tensor indices = Tensor::FromInt64("", {1, 1, 2, 2}, {5, 7, 13, 15});
+  Tensor indices = Tensor::FromInt64("", {1, 1, 2, 2}, {6, 8, 16, 18});
   Tensor output_shape = Tensor::FromInt64("", {4}, {1, 1, 5, 5});
   Tensor y = unpool(x, indices, output_shape, /*kernel_shape=*/{2, 2}, /*strides=*/{2, 2});
   const std::vector<int64_t> expected_shape = {1, 1, 5, 5};

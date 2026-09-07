@@ -225,25 +225,25 @@ TEST(BackendTestCase, AveragePoolCasesArePresent) {
     EXPECT_FLOAT_EQ(py[8], 33.0f);
   }
 
-  // Opset-18 1-D ceil/count_include_pad case: 1x2x4 output with the
-  // reference values mirrored from the ORT regression tests.
+  // Including padding keeps the full kernel divisor in ceil-mode tails,
+  // including for schemas before dilation was introduced.
   {
     const auto &ds = avp_18_1d_ceil_cip->data_sets()[0];
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 2, 4}));
     const float *py = ds.outputs[0].AsFloat();
     EXPECT_FLOAT_EQ(py[0], 0.73807144f);
-    EXPECT_FLOAT_EQ(py[7], -0.40353334f);
+    EXPECT_FLOAT_EQ(py[7], -2.4212f / 7);
   }
 
   // Opset-18 2-D ceil/count_include_pad case: 1x1x3x3 output whose trailing
-  // windows must ignore ceil-mode phantom cells.
+  // windows include the implicit padding in the divisor.
   {
     const auto &ds = avp_18_2d_ceil_cip->data_sets()[0];
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 1, 3, 3}));
     const float *py = ds.outputs[0].AsFloat();
     EXPECT_FLOAT_EQ(py[0], 1.5555556f);
     EXPECT_FLOAT_EQ(py[4], 11.0f);
-    EXPECT_FLOAT_EQ(py[8], 4.0f);
+    EXPECT_FLOAT_EQ(py[8], 16.0f / 9);
   }
 
   // Opset-18 2-D ceil/count_exclude_pad no-regression case.

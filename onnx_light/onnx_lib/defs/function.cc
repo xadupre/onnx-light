@@ -56,22 +56,22 @@ void FunctionExpandHelper(const NodeProto &node, const FunctionProto &func, Grap
   // add default values obtained from the function schema.
   // get the domain version for function schema
   int domain_version = -1;
+  const std::string node_domain = node.domain();
   for (const auto &opset_import : func.ref_opset_import()) {
-    if (opset_import.ref_domain() == node.ref_domain()) {
+    if (opset_import.domain() == node_domain) {
       domain_version = static_cast<int>(opset_import.ref_version());
     }
   }
   if (domain_version == -1) {
-    ONNX_THROW("No opset import registered for domain '", node.ref_domain(), "' in function proto");
+    ONNX_THROW("No opset import registered for domain '", node_domain, "' in function proto");
   }
 
   const OpSchemaRegistry *schema_registry = OpSchemaRegistry::Instance();
   const auto *const schema =
-      schema_registry->GetSchema(node.ref_op_type(), domain_version, node.ref_domain());
+      schema_registry->GetSchema(node.ref_op_type(), domain_version, node_domain);
   if (schema == nullptr) {
-    ONNX_THROW("No schema registered for op '", node.ref_op_type(), "' in domain '",
-               node.ref_domain(), "' at version ", domain_version,
-               " while expanding function node ", node_name);
+    ONNX_THROW("No schema registered for op '", node.ref_op_type(), "' in domain '", node_domain,
+               "' at version ", domain_version, " while expanding function node ", node_name);
   }
   const auto &default_attrs = schema->attributes();
 

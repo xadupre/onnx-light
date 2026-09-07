@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/expect.h"
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_extensions/backend_test/cases/tensor/include_tensor_cases.h"
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_proto/onnx_helper.h"
@@ -62,6 +63,18 @@ void RegisterOneHotCases(std::vector<TestCase> &registry, TestMode mode) {
                            {std::move(y)}};
            });
     return;
+  }
+
+  {
+    Expect(registry, MakeOneHotNode(true, 1), "test_onehot_with_bfloat16_values",
+           {DefaultOpset(28)}, []() -> IoData {
+             Tensor indices = Tensor::FromInt64("indices", {2}, {0, 2});
+             Tensor depth = Tensor::FromFloat("depth", {}, {4});
+             Tensor values = MakeBfloat16Tensor("values", {2}, {1, 3});
+             Tensor output = MakeBfloat16Tensor("y", {2, 4}, {3, 1, 1, 1, 1, 1, 3, 1});
+             return IoData{{std::move(indices), std::move(depth), std::move(values)},
+                           {std::move(output)}};
+           });
   }
 
   // test_onehot_without_axis: indices INT64 vector, depth FLOAT scalar,

@@ -86,7 +86,24 @@ std::vector<LightOpSchema> BuildElementwiseMathSchemaForVersion(const char *op_t
 
 std::vector<LightOpSchema> BuildModSchemas() {
   std::vector<LightOpSchema> schemas;
-  schemas.reserve(2);
+  schemas.reserve(3);
+  schemas.push_back(LightOpSchema(
+      "Mod", kOnnxDomain, 28, MakeModDoc(),
+      {
+          {"A", "Dividend tensor", "T"},
+          {"B", "Divisor tensor", "T"},
+      },
+      {
+          {"C", "Remainder tensor", "T"},
+      },
+      {
+          {"T", AllNumericTypesIr4(), "Constrain input and output types to numeric tensors."},
+      },
+      {
+          {"fmod",
+           "Whether the operator should use floor (0) or truncation (1) to calculate the quotient.",
+           AttributeType::INT, /*required=*/false, static_cast<int64_t>(0)},
+      }));
   schemas.push_back(
       LightOpSchema("Mod", kOnnxDomain, 13, "Performs an element-wise binary modulo operation.",
                     {
@@ -2395,7 +2412,22 @@ std::vector<LightOpSchema> BuildGemmSchemas() {
 
 std::vector<LightOpSchema> BuildEinsumSchemas() {
   std::vector<LightOpSchema> schemas;
-  schemas.reserve(1);
+  schemas.reserve(2);
+
+  schemas.push_back(
+      LightOpSchema("Einsum", kOnnxDomain, 28, MakeEinsumDoc(),
+                    {
+                        {"Inputs", "Operands", "T"},
+                    },
+                    {
+                        {"Output", "Output tensor", "T"},
+                    },
+                    {
+                        {"T", AllNumericTypesIr4(),
+                         "Constrain input and output types to all numerical tensor types."},
+                    },
+                    {AttributeParam{"equation", "Einsum expression string.", AttributeType::STRING,
+                                    /*required=*/true, std::monostate{}}}));
 
   // Einsum v12: introduced. Variadic homogeneous input "Inputs" (min arity 1),
   // single output "Output". The "equation" attribute is required and carries

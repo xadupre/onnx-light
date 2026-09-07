@@ -182,13 +182,14 @@ type catalogue. Only true format constants belong to the type. Registered
 validation and decoding are explicit operations; merely loading a descriptor
 must not execute arbitrary decoder code.
 
-The examples in :ref:`l-next-steps-custom-types` retain fixed format constants
-and show both alternatives for variable affine parameters: scalar fields in
-each payload, or separate ordinary tensor inputs outside the structured
-layout entirely. In the latter case, the structured decoder exposes the
-integer codes; graph-level dequantization or a fused consumer binds scale
-and zero point explicitly. The structured value's logical type is then the
-integer tensor, not the final dequantized FLOAT tensor.
+The examples in :ref:`l-next-steps-custom-types` distinguish parameters stored
+as constants in the type from parameters stored as scalar fields in each
+payload. Outside the byte buffer does not mean outside the type: constant
+scale and zero point are serialized once in the shared ``StructTypeProto``
+declaration, while each value stores only codes. The decoder combines those
+codes with the type's constants to expose a logical FLOAT tensor. All values
+of that type share the same parameters; varying them without changing the
+type requires the per-value payload form.
 
 One element type, many storage shapes
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

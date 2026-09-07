@@ -249,7 +249,7 @@ Physical rules
 * The decoder maps physical fields to one logical ONNX value.
 
 Example: quantization parameters fixed by the type
-+++++++++++++++++++++++++++++++++++++++++++++++++
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 The following type stores 128 ``INT4`` values plus format constants:
 
@@ -286,7 +286,7 @@ every value of type 1001 uses scale 0.125 and zero point 0. Different fixed
 parameters would define a different type.
 
 Example: quantization parameters supplied by each value
-++++++++++++++++++++++++++++++++++++++++++++++++++++++
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 Here the scale and zero-point values are not part of the type definition.
 The reusable layout describes only their scalar types and positions in the
@@ -337,46 +337,61 @@ neither change ``type_id=1002`` nor require a new type declaration.
 The two values may belong to different models, each declaring the same
 type 1002 at any position in its catalogue.
 
-Variant: parameters completely outside the structured layout
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Variant: parameters outside the byte buffer, stored in the type
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-If neither scale nor zero point should even be a field of the physical type,
-keep them as separate graph tensors. The structured type then describes only
-the codes, and its decoder returns an ordinary INT4 tensor, not dequantized
-FLOAT values:
+Outside the byte buffer does not mean outside ``StructTypeProto``. To keep
+only the codes in each payload, store scale and zero point as constant fields
+in the shared type declaration. This uses the same mechanism as the first
+example, with the model-level storage and value references shown explicitly:
 
 .. code-block:: text
 
-    StructTypeProto {
-        type_id: 1003
-        name: "INT4_CODES_128"
-        structure: Structure {
-            field: {
-                name: "values"
-                type: array(INT4, dimension=128)
+    ModelProto {
+        struct_types: {
+            type_id: 1003
+            name: "LINEAR_INT4_128_FIXED_PARAMETERS"
+            structure: Structure {
+                field: {
+                    name: "values"
+                    type: array(INT4, dimension=128)
+                }
+                field: {
+                    name: "scale"
+                    constant: tensor(FLOAT, [], 0.25)
+                }
+                field: {
+                    name: "zero_point"
+                    constant: tensor(INT64, [], -2)
+                }
             }
+            decoder: DecodeLinearInt4  // returns FLOAT[128]
         }
-        decoder: DecodeInt4Codes      // returns INT4[128]
     }
 
     StructProto {
         type_id: 1003
-        raw_data: <64 code bytes>
-        name: "weight_codes"
+        raw_data: <64 code bytes for weight_a>
+        name: "weight_a"
     }
 
-    // Separate ordinary tensor inputs or initializers, not type constants.
-    weight_scale = tensor(FLOAT, [], 0.25)
-    weight_zero_point = tensor(INT4, [], -2)
-    codes = DecodeInt4Codes(weight_codes)
-    decoded = DequantizeLinear(codes, weight_scale, weight_zero_point)
+    StructProto {
+        type_id: 1003
+        raw_data: <64 code bytes for weight_b>
+        name: "weight_b"
+    }
 
-The graph binds the three values explicitly. Other weights reuse type 1003
-with their own code buffers and parameter tensors. There is no implicit
-name-based lookup or hidden capture of a model initializer by the type.
-The structured payload remains 64 bytes; the separate tensor owners retain
-their scale and zero-point storage. A prepared dequantization or fused
-consumer must include both parameter tensors in its preparation key.
+The model serializes the two constants once inside
+``ModelProto.struct_types`` in the declaration whose ``type_id`` is 1003.
+Neither ``raw_data`` buffer contains them, and there are no separate graph
+inputs or initializers for these parameters. The decoder resolves the type,
+reads its constants and computes ``(code - (-2)) * 0.25`` for either value.
+
+Both values share one declaration and each payload remains exactly 64 bytes.
+Another model can include that same declaration with the same ID. Changing
+scale or zero point changes the type definition and therefore requires a
+different ID; use the preceding per-value payload example when parameters
+must vary without changing the type.
 
 Validation
 ++++++++++

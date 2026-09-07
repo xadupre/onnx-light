@@ -41,7 +41,7 @@ from ..onnx_py._onnxpycore import builder as _C  # type: ignore[attr-defined]
 # Reduced builds retain graph authoring without kernels; full builds register
 # constant-folding kernels without depending on an evaluator import.
 if importlib.util.find_spec("onnx_light.onnx_py._onnxpykernels") is not None:
-    from ..onnx_py import _onnxpykernels  # noqa: F401
+    importlib.import_module("onnx_light.onnx_py._onnxpykernels")
 
 ConstantFoldingOptions: TypeAlias = _C.ConstantFoldingOptions
 PatternOptimization: TypeAlias = _C.PatternOptimization

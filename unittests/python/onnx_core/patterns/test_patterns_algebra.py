@@ -101,7 +101,7 @@ class TestPatternsAlgebra(ExtTestCase):
                 optimized, rewrites = _optimize(model, "MulMulMulScalar")
 
                 self.assertEqual(expected_ops, _op_types(optimized))
-                self.assertEqual(3, len(optimized.graph.initializer))
+                self.assertEqual(1, len(optimized.graph.initializer))
                 combined = [
                     initializer
                     for initializer in optimized.graph.initializer
@@ -122,7 +122,16 @@ class TestPatternsAlgebra(ExtTestCase):
 
         self.assertEqual(["Mul", "Div"], _op_types(optimized))
         self.assertEqual(1, _rewrite_count(rewrites, "MulMulMulScalar"))
-        self.assertEqual(1, report.rewrites)
+        self.assertEqual(
+            ["MulMulMulScalar", "RemoveUnusedNodes"],
+            [rewrite.pattern_name for rewrite in rewrites],
+        )
+        self.assertEqual(len(rewrites), report.rewrites)
+        self.assertEqual([0, 1, 2], list(rewrites[1].removed_initializers))
+        self.assertEqual(
+            [initializer.name for initializer in optimized.graph.initializer],
+            [initializer.name for initializer in rewrites[1].added_initializers],
+        )
         self.assertEqual("MulMulMulScalar", pattern_report.pattern_name)
         self.assertEqual(1, pattern_report.matches)
         self.assertGreaterEqual(pattern_report.attempts, 1)
@@ -178,7 +187,7 @@ class TestPatternsAlgebra(ExtTestCase):
                 optimized, rewrites = _optimize(model, "Sub1Mul")
 
                 self.assertEqual(["Mul", "Sub"], _op_types(optimized))
-                self.assertEqual(1, len(optimized.graph.initializer))
+                self.assertEqual(0, len(optimized.graph.initializer))
                 self.assertEqual(1, _rewrite_count(rewrites, "Sub1Mul"))
                 self.assert_equivalent(model, optimized, feeds, atol=1e-5)
 
@@ -203,7 +212,7 @@ class TestPatternsAlgebra(ExtTestCase):
                 optimized, rewrites = _optimize(model, "Sub1Mul")
 
                 self.assertEqual(["Mul", "Sub"], _op_types(optimized))
-                self.assertEqual(1, len(optimized.graph.initializer))
+                self.assertEqual(0, len(optimized.graph.initializer))
                 self.assertEqual(1, _rewrite_count(rewrites, "Sub1Mul"))
                 self.assert_equivalent(model, optimized, feeds, atol=1e-5)
 
@@ -565,7 +574,7 @@ class TestPatternsAlgebra(ExtTestCase):
         optimized, rewrites = _optimize(model, "ShapeBasedIdentity")
 
         self.assertEqual(["Identity"], _op_types(optimized))
-        self.assertEqual(1, len(optimized.graph.initializer))
+        self.assertEqual(0, len(optimized.graph.initializer))
         self.assertEqual(1, _rewrite_count(rewrites, "ShapeBasedIdentity"))
         self.assert_equivalent(model, optimized, feeds)
 
@@ -739,7 +748,7 @@ class TestPatternsAlgebra(ExtTestCase):
                 optimized, rewrites = _optimize(model, "SwapRangeAddScalar")
 
                 self.assertEqual(expected_ops, _op_types(optimized))
-                self.assertEqual(2 if zero_start else 1, len(optimized.graph.initializer))
+                self.assertEqual(1, len(optimized.graph.initializer))
                 self.assertEqual(1, _rewrite_count(rewrites, "SwapRangeAddScalar"))
                 self.assert_equivalent(model, optimized, feeds)
 
@@ -822,7 +831,7 @@ class TestPatternsAlgebra(ExtTestCase):
                 self.assertEqual(
                     ["TopK"] if keepdims else ["TopK", "Squeeze", "Squeeze"], _op_types(optimized)
                 )
-                self.assertEqual(2, len(optimized.graph.initializer))
+                self.assertEqual(1, len(optimized.graph.initializer))
                 self.assertEqual(1, _rewrite_count(rewrites, "ReduceArgTopK"))
                 self.assert_equivalent(model, optimized, feeds)
 
@@ -867,7 +876,7 @@ class TestPatternsAlgebra(ExtTestCase):
 
                 self.assertEqual(["Where"], _op_types(optimized))
                 self.assertEqual([("mask", "X", "inf")], _node_inputs(optimized))
-                self.assertEqual(3, len(optimized.graph.initializer))
+                self.assertEqual(2, len(optimized.graph.initializer))
                 self.assertEqual(1, _rewrite_count(rewrites, "WhereAdd"))
                 self.assert_equivalent(model, optimized, feeds)
 

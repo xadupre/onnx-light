@@ -284,7 +284,7 @@ class TestPatternsMatmulNormalization(ExtTestCase):
                     ["GemmTranspose"],
                     ["Gemm"],
                     required_pattern="GemmTranspose",
-                    initializer_count=2,
+                    initializer_count=1,
                 )
                 attributes = {
                     attribute.name: attribute for attribute in optimized.graph.node[-1].attribute
@@ -880,7 +880,7 @@ class TestPatternsMatmulNormalization(ExtTestCase):
                     ["TransposeReshapeMatMul"],
                     ["Reshape", "Transpose", "MatMul"],
                     required_pattern="TransposeReshapeMatMul",
-                    initializer_count=2,
+                    initializer_count=1,
                 )
 
     def test_transpose_reshape_matmul_no_match(self):
@@ -968,7 +968,7 @@ class TestPatternsMatmulNormalization(ExtTestCase):
             ["BatchNormalization"],
             ["Identity"],
             required_pattern="BatchNormalization",
-            initializer_count=2,
+            initializer_count=0,
             schema_lookup=False,
         )
 
@@ -1191,7 +1191,7 @@ class TestPatternsMatmulNormalization(ExtTestCase):
                     ["LayerNormalization"],
                     ["LayerNormalization"],
                     required_pattern="LayerNormalization",
-                    initializer_count=5 if epsilon is not None else 4,
+                    initializer_count=2,
                     atol=1e-5,
                 )
 
@@ -1223,7 +1223,7 @@ class TestPatternsMatmulNormalization(ExtTestCase):
                             ["LayerNormalization"],
                             expected_ops,
                             required_pattern="LayerNormalization",
-                            initializer_count=4 if expected_ops == ["LayerNormalization"] else 2,
+                            initializer_count=2 if expected_ops == ["LayerNormalization"] else 0,
                             atol=1e-3 if dtype == np.float16 else 1e-5,
                             rtol=1e-3 if dtype == np.float16 else 1e-5,
                         )
@@ -1358,7 +1358,7 @@ class TestPatternsMatmulNormalization(ExtTestCase):
             ["CastLayerNormalizationCast"],
             ["LayerNormalization"],
             required_pattern="CastLayerNormalizationCast",
-            initializer_count=4,
+            initializer_count=2,
             atol=1e-2,
             rtol=1e-2,
             schema_lookup=False,
@@ -1386,7 +1386,7 @@ class TestPatternsMatmulNormalization(ExtTestCase):
             ["CastLayerNormalizationCast"],
             ["RMSNormalization"],
             required_pattern="CastLayerNormalizationCast",
-            initializer_count=2,
+            initializer_count=1,
             atol=1e-2,
             rtol=1e-2,
         )
@@ -1488,7 +1488,7 @@ class TestPatternsMatmulNormalization(ExtTestCase):
                             ["RMSNormalization"],
                             expected_ops,
                             required_pattern="RMSNormalization",
-                            initializer_count=4 if dynamic else 5,
+                            initializer_count=0 if dynamic else 1,
                             atol=1e-3 if cast else 1e-5,
                             rtol=1e-3 if cast else 1e-5,
                         )
@@ -1538,7 +1538,7 @@ class TestPatternsMatmulNormalization(ExtTestCase):
                     ["RMSNormalizationMul"],
                     ["RMSNormalization"],
                     required_pattern="RMSNormalizationMul",
-                    initializer_count=2,
+                    initializer_count=1,
                     atol=tolerance,
                     rtol=tolerance,
                 )
@@ -1631,7 +1631,7 @@ class TestPatternsMatmulNormalization(ExtTestCase):
                     ["Gelu"],
                     ["Gelu"],
                     required_pattern="Gelu",
-                    initializer_count=5,
+                    initializer_count=0,
                     atol=tolerance,
                     rtol=tolerance,
                 )
@@ -1685,7 +1685,7 @@ class TestPatternsMatmulNormalization(ExtTestCase):
                     ["LeakyRelu"],
                     ["LeakyRelu"],
                     required_pattern="LeakyRelu",
-                    initializer_count=2,
+                    initializer_count=0,
                     atol=tolerance,
                     rtol=tolerance,
                 )
@@ -1720,7 +1720,7 @@ class TestPatternsMatmulNormalization(ExtTestCase):
             ["LeakyRelu"],
             ["LeakyRelu", "LeakyRelu"],
             required_pattern="LeakyRelu",
-            initializer_count=3,
+            initializer_count=0,
         )
 
     def test_leaky_relu_no_match_and_opset(self):
@@ -1765,7 +1765,7 @@ class TestPatternsMatmulNormalization(ExtTestCase):
                         ["MaxRelu"],
                         ["Relu"],
                         required_pattern="MaxRelu",
-                        initializer_count=1,
+                        initializer_count=0,
                     )
 
     def test_max_relu_no_match_and_opset(self):
@@ -1876,7 +1876,7 @@ class TestPatternsMatmulNormalization(ExtTestCase):
             ["SoftmaxCrossEntropyLossCast"],
             ["SoftmaxCrossEntropyLoss"],
             required_pattern="SoftmaxCrossEntropyLossCast",
-            initializer_count=4,
+            initializer_count=0,
             atol=2e-3,
             rtol=2e-3,
         )

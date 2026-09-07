@@ -769,7 +769,6 @@ private:
   utils::RepeatedProtoField<TensorProto> initializers_;
   std::vector<std::unique_ptr<GraphBuilder>> local_functions_;
   std::vector<std::unique_ptr<GraphBuilder>> subgraphs_;
-  std::unordered_map<std::string, std::shared_ptr<const FunctionProto>> function_definitions_;
   // Root-owned membership index, updated on creation and rebuilt on refresh.
   // Removed functions may leave conservative entries until the next refresh.
   std::unordered_set<std::string> local_function_keys_;

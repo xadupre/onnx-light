@@ -188,7 +188,6 @@ GraphBuilder &GraphBuilder::operator=(GraphBuilder &&other) noexcept {
   initializers_ = std::move(other.initializers_);
   local_functions_ = std::move(other.local_functions_);
   subgraphs_ = std::move(other.subgraphs_);
-  function_definitions_ = std::move(other.function_definitions_);
   local_function_keys_ = std::move(other.local_function_keys_);
   names_ = std::move(other.names_);
   inherited_names_ = std::move(other.inherited_names_);
@@ -693,22 +692,18 @@ void GraphBuilder::RefreshLocalFunctions() {
     }
   };
   collect(*root);
-  root->function_definitions_.clear();
   root->local_function_keys_.clear();
   for (GraphBuilder *builder : builders) {
     for (const auto &function : builder->local_functions_) {
       const std::string key = function->function_domain_ + ":" + function->name_;
-      if (root->function_definitions_.find(key) != root->function_definitions_.end()) {
+      if (!root->local_function_keys_.insert(key).second) {
         throw BuilderError("GraphBuilder: duplicate local function '" + key + "'.");
       }
-      root->function_definitions_[key] =
+      const auto definition =
           std::make_shared<FunctionProto>(function->BuildFunction(function->function_domain_));
-      root->local_function_keys_.insert(key);
-    }
-  }
-  for (GraphBuilder *builder : builders) {
-    for (const auto &definition : root->function_definitions_) {
-      builder->compute_.Shapes().SetLocalFunction(definition.second);
+      for (GraphBuilder *target : builders) {
+        target->compute_.Shapes().SetLocalFunction(definition);
+      }
     }
   }
   root->local_function_index_dirty_ = false;

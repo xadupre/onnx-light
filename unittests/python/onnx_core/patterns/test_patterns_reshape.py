@@ -190,7 +190,7 @@ class TestPatternsReshape(ExtTestCase):
             ["Reshape"],
             ["Identity"],
             required_patterns={"Reshape"},
-            expected_initializer_names={"shape"},
+            expected_initializer_names=set(),
         )
 
     def test_reshape_reshape_execution(self):

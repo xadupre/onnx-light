@@ -710,7 +710,7 @@ private:
   void RefreshLocalFunctions();
 
   // Builds a function without running inference on its unspecialized body.
-  FunctionProto BuildFunction(const std::string &domain, const GraphProto &graph) const;
+  FunctionProto BuildFunction(const std::string &domain) const;
 
   // Orders producers before consumers, including lexical subgraph captures.
   void SortNodesTopologically();
@@ -736,7 +736,7 @@ private:
   // Runs the whole-graph compute analyses and writes their result into
   // ``graph`` (shapes, in-place / release-after / value-tag metadata and
   // per-node peak memory).
-  void Finalize(GraphProto &graph);
+  template <typename Proto> void Finalize(Proto &graph);
 
   // Returns the nested builder named ``name`` in ``builders`` or nullptr.
   static GraphBuilder *FindNamedBuilder(const std::vector<std::unique_ptr<GraphBuilder>> &builders,

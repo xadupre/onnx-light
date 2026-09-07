@@ -968,6 +968,50 @@ void ShapesContext::ComputeShapeModel(const ModelProto &model,
   }
 }
 
+namespace {
+
+template <typename GraphOrFunction>
+void ApplyInferredShapesToValueInfo(const ShapesContext &ctx, GraphOrFunction &graph,
+                                    const std::unordered_set<std::string> &seeded,
+                                    const std::unordered_set<std::string> &output_names) {
+  // Track existing value_info entries to avoid creating duplicates;
+  // update them in place when the name matches.
+  std::unordered_set<std::string> existing_value_info;
+  for (int i = 0; i < graph.value_info_size(); ++i) {
+    ValueInfoProto &vi = *graph.mutable_value_info(i);
+    const std::string name = vi.name();
+    existing_value_info.insert(name);
+    if (!name.empty() && ctx.Has(name)) {
+      SymTensorToValueInfo(ctx.Get(name), vi);
+    }
+  }
+  // Append a new value_info entry for every other inferred tensor.
+  // Iteration order over the unordered map is not specified, so the
+  // names are gathered and sorted to make the output deterministic.
+  std::vector<std::string> new_names;
+  new_names.reserve(ctx.Tensors().size());
+  for (const auto &kv : ctx.Tensors()) {
+    const std::string &name = kv.first;
+    if (name.empty() || seeded.count(name) != 0 || output_names.count(name) != 0 ||
+        existing_value_info.count(name) != 0) {
+      continue;
+    }
+    new_names.push_back(name);
+  }
+  std::sort(new_names.begin(), new_names.end());
+  for (const std::string &name : new_names) {
+    const SymTensor &tensor = ctx.Get(name);
+    if (TensorTypeToDataType(tensor.Dtype()) == TensorProto::DataType::UNDEFINED) {
+      continue;
+    }
+    ValueInfoProto *vi = graph.add_value_info();
+    vi->set_name(name);
+    SymTensorToValueInfo(tensor, *vi);
+  }
+}
+
+} // namespace
+
 void ShapesContext::ApplyInferredShapesToGraph(GraphProto &graph) const {
   // Names that already have authoritative type/shape information in
   // the proto and must not be overwritten.
@@ -988,40 +1032,11 @@ void ShapesContext::ApplyInferredShapesToGraph(GraphProto &graph) const {
       SymTensorToValueInfo(Get(name), vi);
     }
   }
-  // Track existing value_info entries to avoid creating duplicates;
-  // update them in place when the name matches.
-  std::unordered_set<std::string> existing_value_info;
-  for (int i = 0; i < graph.value_info_size(); ++i) {
-    ValueInfoProto &vi = *graph.mutable_value_info(i);
-    const std::string name = vi.name();
-    existing_value_info.insert(name);
-    if (!name.empty() && Has(name)) {
-      SymTensorToValueInfo(Get(name), vi);
-    }
-  }
-  // Append a new value_info entry for every other inferred tensor.
-  // Iteration order over the unordered map is not specified, so the
-  // names are gathered and sorted to make the output deterministic.
-  std::vector<std::string> new_names;
-  new_names.reserve(Tensors().size());
-  for (const auto &kv : Tensors()) {
-    const std::string &name = kv.first;
-    if (name.empty() || seeded.count(name) != 0 || output_names.count(name) != 0 ||
-        existing_value_info.count(name) != 0) {
-      continue;
-    }
-    new_names.push_back(name);
-  }
-  std::sort(new_names.begin(), new_names.end());
-  for (const std::string &name : new_names) {
-    const SymTensor &tensor = Get(name);
-    if (TensorTypeToDataType(tensor.Dtype()) == TensorProto::DataType::UNDEFINED) {
-      continue;
-    }
-    ValueInfoProto *vi = graph.add_value_info();
-    vi->set_name(name);
-    SymTensorToValueInfo(tensor, *vi);
-  }
+  ApplyInferredShapesToValueInfo(*this, graph, seeded, output_names);
+}
+
+void ShapesContext::ApplyInferredShapesToFunction(FunctionProto &function) const {
+  ApplyInferredShapesToValueInfo(*this, function, {}, {});
 }
 
 void ShapesContext::ApplyInferredShapesToModel(ModelProto &model) const {

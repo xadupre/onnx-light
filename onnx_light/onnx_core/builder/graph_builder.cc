@@ -10,6 +10,7 @@
 #include <queue>
 #include <set>
 #include <sstream>
+#include <type_traits>
 #include <utility>
 
 #include "onnx_core/compute/constant_info.h"
@@ -657,8 +658,8 @@ void GraphBuilder::RefreshLocalFunctions() {
       if (root->function_definitions_.find(key) != root->function_definitions_.end()) {
         throw BuilderError("GraphBuilder: duplicate local function '" + key + "'.");
       }
-      root->function_definitions_[key] = std::make_shared<FunctionProto>(
-          function->BuildFunction(function->function_domain_, function->BuildGraph()));
+      root->function_definitions_[key] =
+          std::make_shared<FunctionProto>(function->BuildFunction(function->function_domain_));
       root->local_function_keys_.insert(key);
     }
   }
@@ -2186,7 +2187,7 @@ void GraphBuilder::SortNodesTopologically() {
   }
 }
 
-void GraphBuilder::Finalize(GraphProto &graph) {
+template <typename Proto> void GraphBuilder::Finalize(Proto &graph) {
   // Rewrites can carry old annotations onto new nodes. In particular, an
   // empty release list must clear, rather than retain, the old schedule.
   const std::unordered_set<std::string> computed_keys = {
@@ -2231,8 +2232,27 @@ void GraphBuilder::Finalize(GraphProto &graph) {
   compute_.ComputePeakMemory(graph, device_);
   // Writes inferred shapes (value_info), in-place / release-after / shape-tag
   // metadata and per-node peak memory.
-  compute_.WriteToGraph(graph);
+  if constexpr (std::is_same_v<Proto, GraphProto>) {
+    compute_.WriteToGraph(graph);
+  } else {
+    compute_.WriteToFunction(graph);
+    for (std::size_t i = 0; i < inputs_.size(); ++i) {
+      if (inputs_[i].has_type()) {
+        graph.ref_value_info()[i].ref_type() = inputs_[i].type();
+      } else {
+        graph.ref_value_info()[i].clear_type();
+      }
+    }
+  }
   std::unordered_set<std::string> live_values;
+  if constexpr (std::is_same_v<Proto, FunctionProto>) {
+    for (const auto &input : graph.input()) {
+      live_values.insert(input);
+    }
+    for (const auto &output : graph.output()) {
+      live_values.insert(output);
+    }
+  }
   for (const auto &node : graph.node()) {
     for (std::size_t i = 0; i < node.output().size(); ++i) {
       live_values.insert(node.output(i));
@@ -2283,11 +2303,30 @@ FunctionProto GraphBuilder::ToFunction(const std::string &domain) {
     throw BuilderError("GraphBuilder: a FunctionProto cannot carry initializers; remove them or "
                        "produce a model / graph instead.");
   }
-  return BuildFunction(domain, ToGraph());
+  SortNodesTopologically();
+  MoveShapeAndSizeNodes();
+  if (parent_ == nullptr) {
+    RefreshLocalFunctions();
+  }
+  FunctionProto function = BuildFunction(domain);
+  for (std::size_t i = 0; i < inputs_.size(); ++i) {
+    ValueInfoProto &input = function.ref_value_info()[i];
+    auto tag = std::find_if(
+        input.ref_metadata_props().begin(), input.ref_metadata_props().end(),
+        [](const auto &entry) { return entry.key() == core::compute::kValueTagMetadataKey; });
+    if (tag == input.ref_metadata_props().end()) {
+      auto *entry = input.add_metadata_props();
+      entry->set_key(core::compute::kValueTagMetadataKey);
+      entry->set_value("weight");
+    } else if (tag->value().empty()) {
+      tag->set_value("weight");
+    }
+  }
+  Finalize(function);
+  return function;
 }
 
-FunctionProto GraphBuilder::BuildFunction(const std::string &domain,
-                                          const GraphProto &graph) const {
+FunctionProto GraphBuilder::BuildFunction(const std::string &domain) const {
   FunctionProto function = function_declaration_;
   function.ref_input().clear();
   function.ref_output().clear();
@@ -2296,15 +2335,14 @@ FunctionProto GraphBuilder::BuildFunction(const std::string &domain,
   function.ref_value_info().clear();
   function.set_name(name_);
   function.set_domain(domain);
-  for (std::size_t i = 0; i < graph.input().size(); ++i) {
-    function.add_input(graph.input(static_cast<std::size_t>(i)).name().value());
-    function.add_value_info(graph.input(static_cast<std::size_t>(i)));
+  for (const ValueInfoProto &input : inputs_) {
+    function.add_input(input.name().value());
+    function.add_value_info(input);
   }
-  for (std::size_t i = 0; i < graph.output().size(); ++i) {
-    function.add_output(graph.output(static_cast<std::size_t>(i)).name().value());
-    const ValueInfoProto &output = graph.output(static_cast<std::size_t>(i));
+  for (const ValueInfoProto &output : outputs_) {
+    function.add_output(output.name().value());
     const bool is_input =
-        std::any_of(graph.input().begin(), graph.input().end(),
+        std::any_of(inputs_.begin(), inputs_.end(),
                     [&](const ValueInfoProto &input) { return input.name() == output.name(); });
     if (!is_input) {
       function.add_value_info(output);
@@ -2313,11 +2351,10 @@ FunctionProto GraphBuilder::BuildFunction(const std::string &domain,
   for (const auto &entry : opsets_) {
     function.add_opset(entry.first, entry.second);
   }
-  for (std::size_t i = 0; i < graph.node().size(); ++i) {
-    function.add_node(graph.node(static_cast<std::size_t>(i)));
-  }
-  for (const auto &value_info : graph.value_info()) {
-    function.add_value_info(value_info);
+  for (const NodeProto &node : nodes_) {
+    NodeProto materialized = node;
+    MaterializeGraphReferences(materialized);
+    function.add_node(materialized);
   }
   for (const auto &value_info : function_declaration_.value_info()) {
     const bool present = std::any_of(

@@ -187,6 +187,13 @@ void CollectGraphSeedTags(const GraphProto &graph,
   }
 }
 
+void CollectFunctionSeedTags(const FunctionProto &function,
+                             std::unordered_map<std::string, std::string> &value_tags) {
+  for (const auto &value : function.value_info()) {
+    SetValueTag(value_tags, value.name(), ReadMetadataValue(value, kValueTagMetadataKey));
+  }
+}
+
 bool ProcessNodeTags(const NodeProto &node, std::size_t n,
                      std::unordered_map<std::string, std::string> &value_tags,
                      std::vector<std::string> &node_tags,

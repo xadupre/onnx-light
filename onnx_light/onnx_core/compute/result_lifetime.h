@@ -129,4 +129,8 @@ private:
  */
 ResultLifetimeInfo ComputeResultLifetimeInfo(const GraphProto &graph, bool allow_input_overwrite);
 
+/// Computes value lifetimes directly from a function's nodes and declarations.
+ResultLifetimeInfo ComputeResultLifetimeInfo(const FunctionProto &function,
+                                             bool allow_input_overwrite);
+
 } // namespace ONNX_LIGHT_NAMESPACE::core::compute

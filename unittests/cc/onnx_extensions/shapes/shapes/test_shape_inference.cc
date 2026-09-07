@@ -919,6 +919,44 @@ TEST(OnnxOptimShapeInference, ApplyInferredShapesToModelRejectsModelWithoutGraph
   EXPECT_THROW(ctx.ApplyInferredShapesToModel(model), std::invalid_argument);
 }
 
+TEST(OnnxOptimShapeInference, ApplyInferredShapesToFunctionPreservesDeclarationsAndSymbolicDims) {
+  FunctionProto function;
+  function.add_input("X");
+  function.add_output("Y");
+  function.add_value_info()->set_name("X");
+  function.add_value_info()->set_name("unrelated");
+
+  core::shapes::ShapesContext ctx;
+  const core::symbolic::SymTensor tensor(
+      nullptr, core::symbolic::TensorType::kFloat,
+      core::symbolic::SymShape{core::symbolic::SymDim("batch"), core::symbolic::SymDim(4)});
+  ctx.Set("Y", core::symbolic::SymTensor(tensor));
+  ctx.Set("X", core::symbolic::SymTensor(tensor));
+  ctx.Set("A", core::symbolic::SymTensor(tensor));
+  ctx.ApplyInferredShapesToFunction(function);
+  ctx.ApplyInferredShapesToFunction(function);
+
+  ASSERT_EQ(function.input_size(), 1u);
+  EXPECT_EQ(function.input(0), "X");
+  ASSERT_EQ(function.output_size(), 1u);
+  EXPECT_EQ(function.output(0), "Y");
+  ASSERT_EQ(function.value_info_size(), 4u);
+  EXPECT_EQ(function.value_info()[0].name(), "X");
+  EXPECT_EQ(function.value_info()[1].name(), "unrelated");
+  EXPECT_FALSE(function.value_info()[1].has_type());
+  EXPECT_EQ(function.value_info()[2].name(), "A");
+  EXPECT_EQ(function.value_info()[3].name(), "Y");
+  for (int index : {0, 2, 3}) {
+    const auto &vi = function.value_info()[index];
+    ASSERT_TRUE(vi.has_type() && vi.type().has_tensor_type());
+    const auto &tensor_type = vi.type().tensor_type();
+    EXPECT_EQ(tensor_type.elem_type(), static_cast<int>(TensorProto::DataType::FLOAT));
+    ASSERT_EQ(tensor_type.shape().dim_size(), 2u);
+    EXPECT_EQ(tensor_type.shape().dim()[0].dim_param(), "batch");
+    EXPECT_EQ(tensor_type.shape().dim()[1].dim_value(), 4);
+  }
+}
+
 TEST(OnnxOptimShapeInference, InferShapesModelEndToEnd) {
   // Convenience wrapper: runs ComputeShapeModel + ApplyInferredShapesToModel.
   ModelProto model = MakeReshapeWithConstantModel(/*input_shape=*/{3, 4}, /*target=*/{-1, 2});

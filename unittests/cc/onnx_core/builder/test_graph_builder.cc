@@ -218,6 +218,66 @@ TEST(GraphBuilder, ToFunctionRejectsInitializers) {
   EXPECT_THROW(builder.ToFunction("custom"), core::builder::BuilderError);
 }
 
+TEST(GraphBuilder, ToFunctionPreservesFinalizedShapesAndMetadata) {
+  core::builder::GraphBuilder builder("F", SchemaLookup());
+  ValueInfoProto input;
+  input.set_name("X");
+  input.set_doc_string("Input declaration");
+  auto *input_type = input.mutable_type()->mutable_tensor_type();
+  input_type->set_elem_type(TensorProto::DataType::FLOAT);
+  input_type->mutable_shape()->add_dim();
+  input_type->mutable_shape()->add_dim()->set_dim_value(3);
+  builder.MakeInput(input);
+  builder.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+  builder.MakeNode("Neg", {"X"}, {"intermediate"});
+  builder.MakeNode("Abs", {"intermediate"}, {"out"});
+  builder.MakeNode("Shape", {"intermediate"}, {"shape"});
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  for (const std::string name : {"then_branch", "else_branch"}) {
+    auto &branch = builder.MakeSubgraph(name);
+    branch.MakeNode("Identity", {"intermediate"}, {name + "_result"});
+    branch.MakeOutput(name + "_result");
+    AttributeProto reference;
+    reference.set_name(name + "_ref");
+    reference.set_type(AttributeProto::AttributeType::STRING);
+    reference.set_s(name);
+    attributes.push_back(reference);
+  }
+  builder.MakeNode("If", {"condition"}, {"selected"}, "", "", attributes);
+  for (const std::string name : {"out", "shape", "selected"}) {
+    builder.MakeOutput(name);
+  }
+
+  const FunctionProto function = builder.ToFunction("custom");
+  const GraphProto graph = builder.ToGraph();
+  EXPECT_EQ(function.name(), "F");
+  EXPECT_EQ(function.domain(), "custom");
+  ASSERT_EQ(function.node().size(), graph.node().size());
+  for (std::size_t i = 0; i < graph.node().size(); ++i) {
+    EXPECT_EQ(function.node(i).SerializeAsString(), graph.node(i).SerializeAsString());
+  }
+  EXPECT_EQ(function.node(1).op_type(), "Shape");
+  ASSERT_EQ(function.value_info().size(),
+            graph.input().size() + graph.output().size() + graph.value_info().size());
+  const auto check_value_info = [&](const auto &values) {
+    for (const ValueInfoProto &expected : values) {
+      bool found = false;
+      for (const ValueInfoProto &actual : function.value_info()) {
+        if (actual.name() == expected.name()) {
+          EXPECT_EQ(actual.SerializeAsString(), expected.SerializeAsString());
+          found = true;
+          break;
+        }
+      }
+      EXPECT_TRUE(found) << expected.name();
+    }
+  };
+  check_value_info(graph.input());
+  check_value_info(graph.output());
+  check_value_info(graph.value_info());
+  EXPECT_EQ(builder.ToFunction("custom").SerializeAsString(), function.SerializeAsString());
+}
+
 TEST(GraphBuilder, ExplicitOpsetIsPreserved) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   builder.SetOpsetVersion("", 17);

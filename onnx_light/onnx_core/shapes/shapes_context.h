@@ -711,6 +711,9 @@ public:
   /// back into ``graph``.
   void ApplyInferredShapesToGraph(GraphProto &graph) const;
 
+  /// Writes inferred descriptors into function value_info, including inputs and outputs.
+  void ApplyInferredShapesToFunction(FunctionProto &function) const;
+
   /// Writes the shape and element-type descriptors stored in ``*this``
   /// back into ``model.graph()``.
   void ApplyInferredShapesToModel(ModelProto &model) const;

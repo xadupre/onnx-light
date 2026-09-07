@@ -9,7 +9,7 @@ Quantized values in ``GraphBuilder``
 
 .. note::
 
-    GraphBuilder integration is PR05 of
+    GraphBuilder integration is PR03 of
     :ref:`l-next-steps-prepared-values-and-persistent-state`. The API sketches
     below are proposals, not existing interfaces. Use the unified
     plan for the representation, ownership and implementation sequence.

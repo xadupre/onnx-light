@@ -807,34 +807,13 @@ FIELD_OPTIONAL_ONEOF(StructTypeProto, struct_type, 1000, type,
                      "onnx-light extensions so upstream ONNX keeps the low-numbered range. A "
                      "StructTypeProto with no kind is an unconstrained category, permitted only "
                      "here (never as a declaration or an encoded payload layout).")
-/**
- * Clears every alternative of the ``value`` oneof whose field number differs from
- * @p keep_order, so at most one alternative is ever set.
- */
-inline void clear_oneof_type(int keep_order = -1) {
-  if (keep_order != order_tensor_type())
-    tensor_type_.reset();
-  if (keep_order != order_sequence_type())
-    sequence_type_.reset();
-  if (keep_order != order_map_type())
-    map_type_.reset();
-  if (keep_order != order_opaque_type())
-    opaque_type_.reset();
-  if (keep_order != order_sparse_tensor_type())
-    sparse_tensor_type_.reset();
-  if (keep_order != order_optional_type())
-    optional_type_.reset();
-  if (keep_order != order_struct_type())
-    struct_type_.reset();
-}
+ONEOF(type, tensor_type, sequence_type, map_type, opaque_type, sparse_tensor_type, optional_type,
+      struct_type)
 inline bool has_type() const {
   return has_tensor_type() || has_sequence_type() || has_map_type() || has_sparse_tensor_type() ||
          has_optional_type() || has_opaque_type() || has_struct_type();
 }
-inline bool is_set() const {
-  return has_tensor_type() || has_sparse_tensor_type() || has_sequence_type() ||
-         has_optional_type() || has_map_type() || has_opaque_type() || has_struct_type();
-}
+inline bool is_set() const { return has_type(); }
 enum ValueCase : int32_t {
   kUndefined = 0,
   kTensorType = 1,
@@ -972,16 +951,7 @@ FIELD_STR(doc_string, 3, "A human-readable documentation for this field. Markdow
 FIELD_OPTIONAL_ONEOF(TensorProto, constant, 4, content,
                      "The actual shared format constant, not a graph input. It must have "
                      "concrete dimensions and matching data, and contributes zero payload bytes.")
-/**
- * Clears every alternative of the ``content`` oneof whose field number differs from
- * @p keep_order, so at most one alternative is ever set.
- */
-inline void clear_oneof_content(int keep_order = -1) {
-  if (keep_order != order_type())
-    type_.reset();
-  if (keep_order != order_constant())
-    constant_.reset();
-}
+ONEOF(content, type, constant)
 inline bool has_content() const { return has_type() || has_constant(); }
 enum ContentCase : int32_t {
   CONTENT_NOT_SET = 0,
@@ -1041,20 +1011,7 @@ FIELD_OPTIONAL_ONEOF(uint64_t, type_ref, 4, kind,
                      "Reference to a declaration in ModelProto.struct_types. A type_ref carries "
                      "only the referenced ID: declaration fields, metadata, codecs and another "
                      "kind must be absent.")
-/**
- * Clears every alternative of the ``kind`` oneof whose field number differs from
- * @p keep_order, so at most one alternative is ever set.
- */
-inline void clear_oneof_kind(int keep_order = -1) {
-  if (keep_order != order_array())
-    array_.reset();
-  if (keep_order != order_structure())
-    structure_.reset();
-  if (keep_order != order_bit_packing())
-    bit_packing_.reset();
-  if (keep_order != order_type_ref())
-    type_ref_.reset();
-}
+ONEOF(kind, array, structure, bit_packing, type_ref)
 FIELD_OPTIONAL(FunctionProto, decoder, 5,
                "Optional decoder. Only the concrete root's codec is invoked; a nested type_ref "
                "contributes layout and constants but not its own decoder or encoder.")
@@ -1117,16 +1074,7 @@ FIELD_OPTIONAL_ONEOF(AffineLayoutProto, affine, 1, layout, "Built-in affine layo
 FIELD_OPTIONAL_ONEOF(StructTypeProto, struct_type, 2, layout,
                      "Structured layout: an exact type_ref or a concrete inline "
                      "declaration eligible for byte encoding.")
-/**
- * Clears every alternative of the ``layout`` oneof whose field number differs from
- * @p keep_order, so at most one alternative is ever set.
- */
-inline void clear_oneof_layout(int keep_order = -1) {
-  if (keep_order != order_affine())
-    affine_.reset();
-  if (keep_order != order_struct_type())
-    struct_type_.reset();
-}
+ONEOF(layout, affine, struct_type)
 FIELD_OPTIONAL(TypeProto, logical_type, 3,
                "Decoded type and shape when the value denotes a tensor. It is required, with "
                "concrete dimensions, for the affine branch.")
@@ -1869,18 +1817,7 @@ FIELD_OPTIONAL_ONEOF(MapProto, map_value, 6, value,
 FIELD_OPTIONAL_ONEOF(OptionalProto, optional_value, 7, value,
                      "For OptionalProto value, allowing optional to be of itself (completeness) "
                      "When this field is present, the elem_type field MUST be OPTIONAL.")
-inline void clear_oneof_value(int keep_order = -1) {
-  if (keep_order != order_tensor_value())
-    tensor_value_.reset();
-  if (keep_order != order_sparse_tensor_value())
-    sparse_tensor_value_.reset();
-  if (keep_order != order_sequence_value())
-    sequence_value_.reset();
-  if (keep_order != order_map_value())
-    map_value_.reset();
-  if (keep_order != order_optional_value())
-    optional_value_.reset();
-}
+ONEOF(value, tensor_value, sparse_tensor_value, sequence_value, map_value, optional_value)
 inline OptionalProto() { elem_type_ = DataType::UNDEFINED; }
 inline bool has_value() const {
   return has_tensor_value() || has_sequence_value() || has_map_value() ||

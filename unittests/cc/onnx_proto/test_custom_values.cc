@@ -1335,13 +1335,15 @@ TEST(custom_values, OneofSettersClearSiblings) {
   type.ref_struct_type().set_type_ref(kInt4Block);
   EXPECT_EQ(type.value_case(), TypeProto::kStructType);
   EXPECT_FALSE(type.has_tensor_type());
+  EXPECT_FALSE(type.tensor_type_optional().has_value());
   // Mutable access to another alternative also switches the oneof.
   type.ref_sequence_type().set_elem_type(MakeTensorType(TensorProto::FLOAT, {}));
   EXPECT_EQ(type.value_case(), TypeProto::kSequenceType);
   EXPECT_FALSE(type.has_struct_type());
-  type.clear_oneof_type();
+  type.clear_type();
   EXPECT_EQ(type.value_case(), TypeProto::kUndefined);
   EXPECT_FALSE(type.has_type());
+  EXPECT_FALSE(type.sequence_type_optional().has_value());
 
   StructTypeProto declaration;
   declaration.ref_structure().add_field()->set_name("codes");
@@ -1380,6 +1382,14 @@ TEST(custom_values, OneofSettersClearSiblings) {
   optional.ref_sequence_value().set_elem_type(SequenceProto::TENSOR);
   EXPECT_TRUE(optional.has_sequence_value());
   EXPECT_FALSE(optional.has_tensor_value());
+  EXPECT_FALSE(optional.tensor_value_optional().has_value());
+
+  TypeProto moved_from;
+  moved_from.ref_tensor_type().set_elem_type(TensorProto::FLOAT);
+  TypeProto moved_to(std::move(moved_from));
+  EXPECT_TRUE(moved_to.has_tensor_type());
+  EXPECT_FALSE(moved_from.has_tensor_type());
+  EXPECT_EQ(moved_from.value_case(), TypeProto::kUndefined);
 }
 
 TEST(custom_values, OneofLastAlternativeOnTheWireWins) {

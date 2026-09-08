@@ -26,6 +26,14 @@ template <typename T> inline const T &default_proto_instance() {
 #define FIELD_FIXED_SIZE 2
 #define FIELD_FIXED32 5 // deprecated value but used in old files
 
+#if defined(_MSC_VER)
+#define ONNX_LIGHT_NOINLINE __declspec(noinline)
+#elif defined(__GNUC__) || defined(__clang__)
+#define ONNX_LIGHT_NOINLINE __attribute__((noinline))
+#else
+#define ONNX_LIGHT_NOINLINE
+#endif
+
 /** Serialization/parsing core declaration macro for generated proto classes. */
 #define SERIALIZATION_METHOD()                                                                     \
   using ProtoAdapterBase::ParseFromStream;                                                         \
@@ -264,12 +272,8 @@ public:                                                                         
   utils::RepeatedField<type> name##_;                                                              \
   using name##_t = type;
 
-#define _FIELD_OPTIONAL_IMPL(type, name, order, doc, ONEOF_CLEAR)                                  \
+#define _FIELD_OPTIONAL(type, name, order, doc)                                                    \
 public:                                                                                            \
-  /** Clears the sibling alternatives of the oneof owning this field; a no-op for a plain          \
-   *  optional field. Called by every entry point that makes this field present, so that both      \
-   *  the setters and the wire parser implement protobuf's "last one wins" oneof rule. */          \
-  inline void enter_oneof_##name() { ONEOF_CLEAR }                                                 \
   inline type &ref_##name() {                                                                      \
     if (!has_##name()) {                                                                           \
       add_##name();                                                                                \
@@ -295,6 +299,95 @@ public:                                                                         
     return name##_;                                                                                \
   }                                                                                                \
   inline type *add_##name() {                                                                      \
+    name##_.set_empty_value();                                                                     \
+    return &(*name##_);                                                                            \
+  }                                                                                                \
+  inline void set_##name(const type &v) { name##_ = v; }                                           \
+  inline void set_##name(type &&v) { name##_ = std::move(v); }                                     \
+  inline void reset_##name() { name##_.reset(); }                                                  \
+  inline void clear_##name() { name##_.reset(); }                                                  \
+  inline bool has_##name() const { return name##_.has_value(); }                                   \
+  inline int order_##name() const { return order; }                                                \
+  static inline constexpr const char *DOC_##name = doc;                                            \
+  static inline constexpr const char *_name_##name = #name;                                        \
+  utils::OptionalField<type> name##_;                                                              \
+  using name##_t = type;
+
+#define FIELD_OPTIONAL(type, name, order, doc)                                                     \
+  _FIELD_OPTIONAL(type, name, order, doc)                                                          \
+  inline bool has_oneof_##name() const { return has_##name(); }
+
+#define _ONEOF_RESET_1(a) a##_.reset();
+#define _ONEOF_RESET_2(a, b)                                                                       \
+  _ONEOF_RESET_1(a)                                                                                \
+  _ONEOF_RESET_1(b)
+#define _ONEOF_RESET_3(a, b, c)                                                                    \
+  _ONEOF_RESET_2(a, b)                                                                             \
+  _ONEOF_RESET_1(c)
+#define _ONEOF_RESET_4(a, b, c, d)                                                                 \
+  _ONEOF_RESET_3(a, b, c)                                                                          \
+  _ONEOF_RESET_1(d)
+#define _ONEOF_RESET_5(a, b, c, d, e)                                                              \
+  _ONEOF_RESET_4(a, b, c, d)                                                                       \
+  _ONEOF_RESET_1(e)
+#define _ONEOF_RESET_6(a, b, c, d, e, f)                                                           \
+  _ONEOF_RESET_5(a, b, c, d, e)                                                                    \
+  _ONEOF_RESET_1(f)
+#define _ONEOF_RESET_7(a, b, c, d, e, f, g)                                                        \
+  _ONEOF_RESET_6(a, b, c, d, e, f)                                                                 \
+  _ONEOF_RESET_1(g)
+#define _ONEOF_RESET_SELECT(_1, _2, _3, _4, _5, _6, _7, NAME, ...) NAME
+#define _ONEOF_RESET_FIELDS(...)                                                                   \
+  _ONEOF_RESET_SELECT(__VA_ARGS__, _ONEOF_RESET_7, _ONEOF_RESET_6, _ONEOF_RESET_5, _ONEOF_RESET_4, \
+                      _ONEOF_RESET_3, _ONEOF_RESET_2, _ONEOF_RESET_1)(__VA_ARGS__)
+
+/** Declares the discriminator and reset operation shared by one protobuf ``oneof``. */
+#define ONEOF(name, ...)                                                                           \
+public:                                                                                            \
+  ONNX_LIGHT_NOINLINE inline void clear_##name() {                                                 \
+    _ONEOF_RESET_FIELDS(__VA_ARGS__)                                                               \
+    oneof_case_##name##_ = -1;                                                                     \
+  }                                                                                                \
+  inline int oneof_case_##name() const { return oneof_case_##name##_; }                            \
+                                                                                                   \
+private:                                                                                           \
+  inline void set_oneof_case_##name(int value) { oneof_case_##name##_ = value; }                   \
+  int oneof_case_##name##_ = -1;                                                                   \
+                                                                                                   \
+public:
+
+/** Declares one alternative governed by the discriminator declared with ``ONEOF``. */
+#define FIELD_OPTIONAL_ONEOF(type, name, order, oneof, doc)                                        \
+public:                                                                                            \
+  inline void enter_oneof_##name() {                                                               \
+    if (oneof_case_##oneof() != order) {                                                           \
+      clear_##oneof();                                                                             \
+      set_oneof_case_##oneof(order);                                                               \
+    }                                                                                              \
+  }                                                                                                \
+  inline type &ref_##name() {                                                                      \
+    if (!has_##name()) {                                                                           \
+      add_##name();                                                                                \
+    }                                                                                              \
+    return *name##_;                                                                               \
+  }                                                                                                \
+  inline const type &ref_##name() const {                                                          \
+    if (!has_##name()) {                                                                           \
+      return ::onnx_light::proto_default_detail::default_proto_instance<type>();                   \
+    }                                                                                              \
+    return *name##_;                                                                               \
+  }                                                                                                \
+  inline const type &name() const { return ref_##name(); }                                         \
+  inline type *mutable_##name() { return &ref_##name(); }                                          \
+  inline const type *ptr_##name() const {                                                          \
+    return has_##name() ? &(*name##_) : static_cast<type *>(nullptr);                              \
+  }                                                                                                \
+  inline utils::OptionalField<type> &name##_optional() { return name##_; }                         \
+  inline const utils::OptionalField<type> &name##_optional() const {                               \
+    EXT_ENFORCE(has_##name(), "Oneof field '", #name, "' is not active.");                         \
+    return name##_;                                                                                \
+  }                                                                                                \
+  inline type *add_##name() {                                                                      \
     enter_oneof_##name();                                                                          \
     name##_.set_empty_value();                                                                     \
     return &(*name##_);                                                                            \
@@ -307,26 +400,20 @@ public:                                                                         
     enter_oneof_##name();                                                                          \
     name##_ = std::move(v);                                                                        \
   }                                                                                                \
-  inline void reset_##name() { name##_.reset(); }                                                  \
-  inline void clear_##name() { name##_.reset(); }                                                  \
+  inline void reset_##name() {                                                                     \
+    if (oneof_case_##oneof() == order) {                                                           \
+      clear_##oneof();                                                                             \
+    } else {                                                                                       \
+      name##_.reset();                                                                             \
+    }                                                                                              \
+  }                                                                                                \
+  inline void clear_##name() { reset_##name(); }                                                   \
   inline bool has_##name() const { return name##_.has_value(); }                                   \
   inline int order_##name() const { return order; }                                                \
   static inline constexpr const char *DOC_##name = doc;                                            \
   static inline constexpr const char *_name_##name = #name;                                        \
   utils::OptionalField<type> name##_;                                                              \
-  using name##_t = type;
-
-#define _FIELD_OPTIONAL(type, name, order, doc) _FIELD_OPTIONAL_IMPL(type, name, order, doc, )
-
-#define FIELD_OPTIONAL(type, name, order, doc)                                                     \
-  _FIELD_OPTIONAL(type, name, order, doc)                                                          \
-  inline bool has_oneof_##name() const { return has_##name(); }
-
-/** Declares a protobuf ``oneof`` alternative: making this field present clears every sibling
- *  alternative, so at most one alternative is set and the last value seen on the wire wins.
- *  The enclosing message must declare ``void clear_oneof_<oneof>(int keep_order = -1)``. */
-#define FIELD_OPTIONAL_ONEOF(type, name, order, oneof, doc)                                        \
-  _FIELD_OPTIONAL_IMPL(type, name, order, doc, clear_oneof_##oneof(order);)                        \
+  using name##_t = type;                                                                           \
   inline bool has_oneof_##name() const { return has_##oneof(); }
 
 #define FIELD_OPTIONAL_ENUM(type, name, order, doc)                                                \

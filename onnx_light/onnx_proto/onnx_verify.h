@@ -1,8 +1,10 @@
 #pragma once
 
 #include "onnx.h"
-#include "onnx_encoded_value.h"
+#include "onnx_helper.h"
 
+#include <cstddef>
+#include <string>
 #include <unordered_set>
 
 /**
@@ -26,6 +28,181 @@
  */
 
 namespace ONNX_LIGHT_NAMESPACE {
+
+/** Returns true when @p data_type is one of the supported affine storage types. */
+inline constexpr bool IsAffineStorageType(TensorProto::DataType data_type) {
+  return data_type == TensorProto::INT8 || data_type == TensorProto::UINT8 ||
+         data_type == TensorProto::INT4 || data_type == TensorProto::UINT4;
+}
+
+/** Describes the validated payload geometry of one ``EncodedValueProto``. */
+struct EncodedValueLayout {
+  /** Resolved structured root, or null for the affine branch. */
+  const StructTypeProto *root = nullptr;
+  /** Affine descriptor, or null for the structured branch. */
+  const AffineLayoutProto *affine = nullptr;
+  /** Size of one record in bits: the element size, or the storage width for the affine branch. */
+  uint64_t element_bits = 0;
+  /** Byte extent of the payload, inline or declared by the external metadata. */
+  uint64_t payload_bytes = 0;
+  /** Number of records derived from the payload extent, or logical elements for affine. */
+  uint64_t record_count = 0;
+  /** True when the payload lives outside the message. */
+  bool external = false;
+  /** True when a ``type_ref`` was left unresolved because no catalogue was available. */
+  bool unresolved_reference = false;
+  /**
+   * True when the payload bytes themselves were inspected, which only an inline
+   * ``raw_data`` payload allows. For an external payload only the metadata is
+   * validated: ``payload_bytes`` is the *declared* extent, the backing file is
+   * neither opened nor measured, and content rules that need the bytes (the
+   * affine 4-bit nibble padding in particular) are not checked. Load the payload
+   * and re-validate before treating an external value as fully checked.
+   */
+  bool content_verified = false;
+};
+
+/**
+ * Maximum nesting depth accepted while walking a declaration. Every nested
+ * ``TypeProto`` and every ``type_ref`` expansion counts as one level, so a
+ * hostile or accidentally recursive catalogue cannot exhaust the stack.
+ */
+inline constexpr uint32_t kMaxStructTypeDepth = 64;
+
+/**
+ * Resolves ``type_id`` references declared by ``ModelProto.struct_types``.
+ *
+ * The catalogue borrows the model it was built from: it must not outlive that
+ * model, and the model must not be mutated while it is in use. A catalogue
+ * holds a handful of declarations, so lookups scan them linearly instead of
+ * paying for a hash map.
+ */
+class ONNX_LIGHT_PROTO_API StructTypeCatalogue {
+public:
+  /** Builds an empty catalogue resolving no identity. */
+  StructTypeCatalogue() = default;
+
+  /**
+   * Indexes and validates every declaration of @p model.
+   *
+   * Each entry must carry a nonzero ``type_id`` unique in the model and a
+   * concrete kind; references must resolve and must not form a cycle.
+   *
+   * @param model Model owning the declarations, borrowed by the catalogue.
+   *
+   * @throws std::invalid_argument Thrown when a declaration is malformed.
+   */
+  void Build(const ModelProto &model);
+
+  /** Returns the declaration for @p type_id, or null when the model declares no such identity. */
+  inline const StructTypeProto *Find(uint64_t type_id) const {
+    if (model_ == nullptr || type_id == 0) {
+      return nullptr;
+    }
+    const utils::RepeatedProtoField<StructTypeProto> &declarations = model_->ref_struct_types();
+    for (size_t i = 0; i < declarations.size(); ++i) {
+      if (declarations[i].has_type_id() && declarations[i].ref_type_id() == type_id) {
+        return &declarations[i];
+      }
+    }
+    return nullptr;
+  }
+
+  /** Returns the number of indexed declarations. */
+  inline size_t size() const { return model_ == nullptr ? 0 : model_->ref_struct_types().size(); }
+
+  /** Returns true when the catalogue indexes no declaration. */
+  inline bool empty() const { return size() == 0; }
+
+  /**
+   * Returns the declaration @p type denotes, or @p type itself when it is not a reference.
+   *
+   * @throws std::invalid_argument Thrown when the reference does not resolve.
+   */
+  inline const StructTypeProto &Resolve(const StructTypeProto &type) const {
+    if (type.kind_case() != StructTypeProto::kTypeRef) {
+      return type;
+    }
+    const StructTypeProto *declaration = Find(type.ref_type_ref());
+    EXT_ENFORCE_INVALID(declaration != nullptr,
+                        "StructTypeProto references a type_id the model does not declare.");
+    return *declaration;
+  }
+
+  /**
+   * Computes the fixed size of @p type in bits with checked ``uint64_t`` arithmetic.
+   *
+   * Constants contribute zero bits, arrays and bit packings are tight and
+   * fields follow declaration order.
+   *
+   * @param type Type whose layout is measured.
+   * @param bits Receives the size in bits on success.
+   * @param reason Optional destination for a human-readable failure cause.
+   *
+   * Returns: True when the type has a fixed inline layout, false otherwise.
+   */
+  bool FixedBitSize(const StructTypeProto &type, uint64_t &bits,
+                    std::string *reason = nullptr) const;
+
+  /**
+   * Returns true when @p type can be the root of a byte-encoded payload, that
+   * is when its size is fixed, strictly positive and a whole number of bytes.
+   *
+   * @param type Type to test.
+   * @param bytes Receives the size of one record in bytes on success.
+   * @param reason Optional destination for a human-readable failure cause.
+   */
+  inline bool IsByteEncodable(const StructTypeProto &type, uint64_t &bytes,
+                              std::string *reason = nullptr) const {
+    uint64_t bits = 0;
+    if (!FixedBitSize(type, bits, reason)) {
+      return false;
+    }
+    if (bits == 0 || bits % 8 != 0) {
+      if (reason != nullptr) {
+        *reason = "the encoded root needs a strictly positive size divisible by eight";
+      }
+      return false;
+    }
+    bytes = bits / 8;
+    return true;
+  }
+
+  /**
+   * Validates a ``TypeProto``, including any nested ``struct_type``.
+   *
+   * Dynamic tensor dimensions, sequences, maps and optional values stay valid
+   * types here; only byte encoding requires a fixed layout.
+   *
+   * @param type Type to validate.
+   *
+   * @throws std::invalid_argument Thrown when validation fails.
+   */
+  void ValidateType(const TypeProto &type) const;
+
+  /**
+   * Validates one ``EncodedValueProto`` and returns its payload geometry.
+   *
+   * Checks the layout choice, raw/external exclusivity, external metadata,
+   * byte-encodability of the structured root and payload divisibility, or the
+   * frozen affine contract (storage type, parameter types, axis and block
+   * size, logical type and shape, code byte length and nibble padding).
+   *
+   * @param value Value to validate.
+   * @param require_resolved_reference When false, a ``type_ref`` that this
+   * catalogue cannot resolve suspends the size checks instead of failing; used
+   * to validate a graph before its model catalogue is known.
+   *
+   * Returns: The validated layout.
+   *
+   * @throws std::invalid_argument Thrown when validation fails.
+   */
+  EncodedValueLayout ValidateEncodedValue(const EncodedValueProto &value,
+                                          bool require_resolved_reference = true) const;
+
+private:
+  const ModelProto *model_ = nullptr;
+};
 
 /**
  * Validates a ValueInfoProto.

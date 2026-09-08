@@ -1,8 +1,8 @@
 // Unit tests for the custom value representation implemented by PR02 of the
 // "custom, quantized and persistent values" plan: the StructTypeProto /
 // EncodedValueProto wire messages, the field-1000 extension branches, and the
-// catalogue / layout / payload helpers declared in onnx_encoded_value.h.
-#include "onnx_encoded_value.h"
+// verification, field-location, and payload-access helpers.
+#include "onnx_encoded_value_view.h"
 #include "onnx_verify.h"
 #include <cstdint>
 #include <cstring>
@@ -782,7 +782,7 @@ TEST(custom_values, ReadsConstantAndPerValueParameters) {
   EXPECT_EQ(fixed_view.record_count(), 1u);
   EXPECT_EQ(fixed_view.record_bits(), 512u);
   EncodedFieldRef values;
-  ASSERT_TRUE(catalogue.FindField(*fixed, "values", values));
+  ASSERT_TRUE(FindEncodedField(catalogue, *fixed, "values", values));
   EXPECT_EQ(values.count, 128u);
   EXPECT_EQ(values.bit_width, 4u);
   EXPECT_EQ(values.bit_offset, 0u);
@@ -800,8 +800,8 @@ TEST(custom_values, ReadsConstantAndPerValueParameters) {
   EXPECT_EQ(parameter_view.record_bits(), 608u);
   EncodedFieldRef scale;
   EncodedFieldRef zero_point;
-  ASSERT_TRUE(catalogue.FindField(*parameters, "scale", scale));
-  ASSERT_TRUE(catalogue.FindField(*parameters, "zero_point", zero_point));
+  ASSERT_TRUE(FindEncodedField(catalogue, *parameters, "scale", scale));
+  ASSERT_TRUE(FindEncodedField(catalogue, *parameters, "zero_point", zero_point));
   EXPECT_EQ(scale.bit_offset, 512u);
   EXPECT_EQ(zero_point.bit_offset, 544u);
   EXPECT_EQ(zero_point.bit_offset % 8, 0u);
@@ -811,8 +811,8 @@ TEST(custom_values, ReadsConstantAndPerValueParameters) {
 
   // A constant field is not physical: it is read from the declaration instead.
   EncodedFieldRef unused;
-  EXPECT_FALSE(catalogue.FindField(*fixed, "scale", unused));
-  EXPECT_FALSE(catalogue.FindField(*parameters, "missing", unused));
+  EXPECT_FALSE(FindEncodedField(catalogue, *fixed, "scale", unused));
+  EXPECT_FALSE(FindEncodedField(catalogue, *parameters, "missing", unused));
 }
 
 TEST(custom_values, DecodesCodebookComposition) {
@@ -842,8 +842,8 @@ TEST(custom_values, DecodesCodebookComposition) {
   ASSERT_NE(root, nullptr);
   EncodedFieldRef indices;
   EncodedFieldRef scale;
-  ASSERT_TRUE(catalogue.FindField(*root, "quantized.codes.index", indices));
-  ASSERT_TRUE(catalogue.FindField(*root, "scale", scale));
+  ASSERT_TRUE(FindEncodedField(catalogue, *root, "quantized.codes.index", indices));
+  ASSERT_TRUE(FindEncodedField(catalogue, *root, "scale", scale));
   EXPECT_EQ(indices.bit_offset, 0u);
   EXPECT_EQ(indices.bit_stride, 2u);
   EXPECT_EQ(indices.bit_width, 2u);
@@ -912,7 +912,7 @@ TEST(custom_values, HeterogeneousKeyValueDeclarations) {
 
   EncodedValueView int8_view(catalogue, verified.ref_encoded_initializer()[1]);
   EncodedFieldRef codes;
-  ASSERT_TRUE(catalogue.FindField(*catalogue.Find(kInt8Block), "codes", codes));
+  ASSERT_TRUE(FindEncodedField(catalogue, *catalogue.Find(kInt8Block), "codes", codes));
   EXPECT_EQ(codes.count, 16u);
   EXPECT_EQ(codes.bit_width, 8u);
   EXPECT_EQ(int8_view.ReadSignedElement(codes, 2, 3), 35);
@@ -1184,7 +1184,7 @@ TEST(custom_values, BorrowedPayloadKeepsItsOwnerAlive) {
   EncodedValueView view(catalogue, *copy);
   EXPECT_EQ(view.record_count(), 2u);
   EncodedFieldRef scale;
-  ASSERT_TRUE(catalogue.FindField(*catalogue.Find(kInt4Block), "scale", scale));
+  ASSERT_TRUE(FindEncodedField(catalogue, *catalogue.Find(kInt4Block), "scale", scale));
   EXPECT_FLOAT_EQ(view.ReadFloatElement(scale, 1, 0), 1.0f);
 
   copy.reset();
@@ -1238,7 +1238,7 @@ TEST(custom_values, RecordAccessIsBoundsChecked) {
   EXPECT_THROW(view.ReadBits(0, 0, 65), std::invalid_argument);
 
   EncodedFieldRef codes;
-  ASSERT_TRUE(catalogue.FindField(*catalogue.Find(kInt4Block), "codes", codes));
+  ASSERT_TRUE(FindEncodedField(catalogue, *catalogue.Find(kInt4Block), "codes", codes));
   EXPECT_NO_THROW(view.ReadElement(codes, 0, 31));
   EXPECT_THROW(view.ReadElement(codes, 0, 32), std::invalid_argument);
   EXPECT_THROW(view.ReadElement(codes, 5, 0), std::invalid_argument);

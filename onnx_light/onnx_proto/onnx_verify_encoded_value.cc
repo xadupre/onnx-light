@@ -1,4 +1,4 @@
-#include "onnx_encoded_value.h"
+#include "onnx_encoded_value_view.h"
 #include "onnx_helper.h"
 #include "onnx_verify.h"
 
@@ -1094,10 +1094,10 @@ StructTypeCatalogue::ValidateEncodedValue(const EncodedValueProto &value,
   return layout;
 }
 
-bool StructTypeCatalogue::FindField(const StructTypeProto &root, std::string_view path,
-                                    EncodedFieldRef &out) const {
+bool FindEncodedField(const StructTypeCatalogue &catalogue, const StructTypeProto &root,
+                      std::string_view path, EncodedFieldRef &out) {
   out = EncodedFieldRef();
-  return LocateInStruct(*this, root, path, 0, out);
+  return LocateInStruct(catalogue, root, path, 0, out);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE

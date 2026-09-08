@@ -64,6 +64,20 @@ void VerifyValueInfo(const ValueInfoProto &value_info, bool is_main_graph) {
   case TypeProto::kOpaqueType:
     // domain/name are both optional per spec; nothing further to check.
     break;
+  case TypeProto::kStructType: {
+    // A structured value may be an unconstrained category, a reference or an
+    // inline declaration; only an identity claim is rejected here because a
+    // value type never owns a catalogue entry.
+    const StructTypeProto &struct_type = type.struct_type();
+    EXT_ENFORCE_INVALID(!struct_type.has_type_id(), "ValueInfoProto '", value_info.name(),
+                        "' struct_type must not carry a 'type_id'; only ModelProto.struct_types "
+                        "entries own an identity.");
+    EXT_ENFORCE_INVALID(struct_type.kind_case() != StructTypeProto::kTypeRef ||
+                            struct_type.ref_type_ref() != 0,
+                        "ValueInfoProto '", value_info.name(),
+                        "' struct_type uses type_ref 0, which is never a valid identity.");
+    break;
+  }
   case TypeProto::kUndefined:
   default:
     EXT_THROW_INVALID("ValueInfoProto '", value_info.name(),
@@ -262,6 +276,11 @@ void VerifySparseTensor(const SparseTensorProto &sparse_tensor) {
 
 void VerifyAttribute(const AttributeProto &attribute, bool in_function_body,
                      const std::unordered_set<std::string> &scope) {
+  VerifyAttribute(/*struct_types=*/nullptr, attribute, in_function_body, scope);
+}
+
+void VerifyAttribute(const StructTypeCatalogue *struct_types, const AttributeProto &attribute,
+                     bool in_function_body, const std::unordered_set<std::string> &scope) {
   EXT_ENFORCE_INVALID(!attribute.name().empty(),
                       "AttributeProto is missing a non-empty 'name' field.");
 
@@ -306,7 +325,7 @@ void VerifyAttribute(const AttributeProto &attribute, bool in_function_body,
   case AttributeProto::GRAPH:
     EXT_ENFORCE_INVALID(attribute.has_g(), "AttributeProto '", attribute.name(),
                         "' has type GRAPH but 'g' is not set.");
-    VerifyGraph(attribute.g(), /*is_main_graph=*/false, in_function_body, &scope);
+    VerifyGraph(struct_types, attribute.g(), /*is_main_graph=*/false, in_function_body, &scope);
     break;
   case AttributeProto::SPARSE_TENSOR:
     EXT_ENFORCE_INVALID(attribute.has_sparse_tensor(), "AttributeProto '", attribute.name(),
@@ -316,12 +335,21 @@ void VerifyAttribute(const AttributeProto &attribute, bool in_function_body,
   case AttributeProto::TYPE_PROTO:
     EXT_ENFORCE_INVALID(attribute.has_tp(), "AttributeProto '", attribute.name(),
                         "' has type TYPE_PROTO but 'tp' is not set.");
+    if (struct_types != nullptr) {
+      struct_types->ValidateType(attribute.tp());
+    }
     break;
   case AttributeProto::FLOATS:
   case AttributeProto::INTS:
   case AttributeProto::STRINGS:
-  case AttributeProto::TYPE_PROTOS:
     // An empty repeated value is a valid (if unusual) attribute value.
+    break;
+  case AttributeProto::TYPE_PROTOS:
+    if (struct_types != nullptr) {
+      for (const auto &type : attribute.type_protos()) {
+        struct_types->ValidateType(type);
+      }
+    }
     break;
   case AttributeProto::TENSORS:
     for (const auto &t : attribute.tensors()) {
@@ -335,7 +363,7 @@ void VerifyAttribute(const AttributeProto &attribute, bool in_function_body,
     break;
   case AttributeProto::GRAPHS:
     for (const auto &g : attribute.graphs()) {
-      VerifyGraph(g, /*is_main_graph=*/false, in_function_body, &scope);
+      VerifyGraph(struct_types, g, /*is_main_graph=*/false, in_function_body, &scope);
     }
     break;
   case AttributeProto::UNDEFINED:
@@ -346,6 +374,11 @@ void VerifyAttribute(const AttributeProto &attribute, bool in_function_body,
 
 void VerifyNode(const NodeProto &node, bool in_function_body,
                 const std::unordered_set<std::string> &scope) {
+  VerifyNode(/*struct_types=*/nullptr, node, in_function_body, scope);
+}
+
+void VerifyNode(const StructTypeCatalogue *struct_types, const NodeProto &node,
+                bool in_function_body, const std::unordered_set<std::string> &scope) {
   EXT_ENFORCE_INVALID(!node.op_type().empty(), "NodeProto '", node.name(),
                       "' is missing a non-empty 'op_type'.");
   EXT_ENFORCE_INVALID(!(node.ref_input().empty() && node.ref_output().empty()),
@@ -358,19 +391,34 @@ void VerifyNode(const NodeProto &node, bool in_function_body,
                         "' has an attribute without a name.");
     EXT_ENFORCE_INVALID(seen_attr_names.insert(ToStdString(attr.name())).second, "NodeProto '",
                         node.name(), "' has attribute '", attr.name(), "' more than once.");
-    VerifyAttribute(attr, in_function_body, scope);
+    VerifyAttribute(struct_types, attr, in_function_body, scope);
   }
 }
 
 void VerifyGraph(const GraphProto &graph, bool is_main_graph, bool in_function_body,
                  const std::unordered_set<std::string> *outer_scope) {
+  VerifyGraph(/*struct_types=*/nullptr, graph, is_main_graph, in_function_body, outer_scope);
+}
+
+void VerifyGraph(const StructTypeCatalogue *struct_types, const GraphProto &graph,
+                 bool is_main_graph, bool in_function_body,
+                 const std::unordered_set<std::string> *outer_scope) {
+  const StructTypeCatalogue empty_catalogue;
+  const StructTypeCatalogue &catalogue = struct_types == nullptr ? empty_catalogue : *struct_types;
   std::unordered_set<std::string> defined;
   if (outer_scope != nullptr) {
     defined = *outer_scope;
   }
 
+  const auto verify_value_type = [struct_types](const ValueInfoProto &value_info) {
+    if (struct_types != nullptr && value_info.has_type()) {
+      struct_types->ValidateType(value_info.type());
+    }
+  };
+
   for (const auto &value_info : graph.input()) {
     VerifyValueInfo(value_info, is_main_graph);
+    verify_value_type(value_info);
     EXT_ENFORCE_INVALID(defined.insert(ToStdString(value_info.name())).second, "Graph '",
                         graph.name(), "' has input '", value_info.name(),
                         "' defined more than once (SSA violation).");
@@ -395,6 +443,16 @@ void VerifyGraph(const GraphProto &graph, bool is_main_graph, bool in_function_b
     VerifySparseTensor(sparse_init);
     defined.insert(ToStdString(name));
   }
+  for (const auto &encoded : graph.encoded_initializer()) {
+    EXT_ENFORCE_INVALID(!encoded.name().empty(), "Graph '", graph.name(),
+                        "' has an encoded initializer without a name.");
+    EXT_ENFORCE_INVALID(initializer_names.insert(ToStdString(encoded.name())).second, "Graph '",
+                        graph.name(), "' encoded initializer '", encoded.name(),
+                        "' is not unique across initializers, sparse_initializers and "
+                        "encoded_initializers.");
+    catalogue.ValidateEncodedValue(encoded, /*require_resolved_reference=*/struct_types != nullptr);
+    defined.insert(ToStdString(encoded.name()));
+  }
 
   for (const auto &node : graph.node()) {
     for (const auto &input : node.input()) {
@@ -406,7 +464,7 @@ void VerifyGraph(const GraphProto &graph, bool is_main_graph, bool in_function_b
                           input, "' before it is produced; nodes must be topologically sorted.");
     }
 
-    VerifyNode(node, in_function_body, defined);
+    VerifyNode(struct_types, node, in_function_body, defined);
 
     for (const auto &output : node.output()) {
       if (output.empty()) {
@@ -417,8 +475,13 @@ void VerifyGraph(const GraphProto &graph, bool is_main_graph, bool in_function_b
     }
   }
 
+  for (const auto &value_info : graph.value_info()) {
+    verify_value_type(value_info);
+  }
+
   for (const auto &value_info : graph.output()) {
     VerifyValueInfo(value_info, is_main_graph);
+    verify_value_type(value_info);
     EXT_ENFORCE_INVALID(defined.count(ToStdString(value_info.name())) > 0, "Graph '", graph.name(),
                         "' output '", value_info.name(),
                         "' is not produced by any node, input, or initializer.");
@@ -426,6 +489,10 @@ void VerifyGraph(const GraphProto &graph, bool is_main_graph, bool in_function_b
 }
 
 void VerifyFunction(const FunctionProto &function) {
+  VerifyFunction(/*struct_types=*/nullptr, function);
+}
+
+void VerifyFunction(const StructTypeCatalogue *struct_types, const FunctionProto &function) {
   EXT_ENFORCE_INVALID(!function.name().empty(),
                       "FunctionProto is missing a non-empty 'name' field.");
 
@@ -447,7 +514,7 @@ void VerifyFunction(const FunctionProto &function) {
                           "' before it is produced; nodes must be topologically sorted.");
     }
 
-    VerifyNode(node, /*in_function_body=*/true, defined);
+    VerifyNode(struct_types, node, /*in_function_body=*/true, defined);
 
     for (const auto &output : node.output()) {
       if (output.empty()) {
@@ -463,6 +530,14 @@ void VerifyFunction(const FunctionProto &function) {
                         "' output '", output,
                         "' is not produced by any node or declared as an input.");
   }
+
+  if (struct_types != nullptr) {
+    for (const auto &value_info : function.value_info()) {
+      if (value_info.has_type()) {
+        struct_types->ValidateType(value_info.type());
+      }
+    }
+  }
 }
 
 void VerifyModel(const ModelProto &model) {
@@ -476,11 +551,15 @@ void VerifyModel(const ModelProto &model) {
                         " imports domain '", opset.domain(), "' more than once.");
   }
 
-  VerifyGraph(model.graph(), /*is_main_graph=*/true);
+  StructTypeCatalogue struct_types;
+  struct_types.Build(model);
+
+  VerifyGraph(&struct_types, model.graph(), /*is_main_graph=*/true,
+              /*in_function_body=*/false, /*outer_scope=*/nullptr);
 
   std::unordered_set<std::string> function_ids;
   for (const auto &function : model.functions()) {
-    VerifyFunction(function);
+    VerifyFunction(&struct_types, function);
     const std::string id = onnx_light_helpers::MakeString(function.domain(), "::", function.name(),
                                                           "::", function.overload());
     EXT_ENFORCE_INVALID(function_ids.insert(id).second, "ModelProto declares function '", id,

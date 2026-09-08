@@ -7,6 +7,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### New Features
 
+- Added the `StructTypeProto` / `EncodedValueProto` custom value representation
+  (`TypeProto.struct_type`, `GraphProto.encoded_initializer` and `ModelProto.struct_types`
+  on the reserved field number 1000), together with catalogue resolution, checked
+  byte-layout arithmetic, payload-derived record counts and bounds-checked record access
+  in `onnx_light/onnx_proto/onnx_struct_value.h`.
 - Added ONNX `FLOAT6E2M3` and `FLOAT6E3M2` support across schemas, serialization,
   validation, runtime tensors, `Cast`, `QuantizeLinear`, and `DequantizeLinear`.
 - Added portable optimizer patterns for linear algebra, convolution, normalization,

@@ -56,9 +56,10 @@ Started
         run the four-configuration benchmark, and submit the upstream PR. All
         native dependencies through #4623 are complete.
     * - :ref:`l-next-steps-custom-quantized-persistent-values`
-      - Implement the frozen custom-value representation, then integrate it
-        with ``GraphBuilder``, model input/output feedback, contiguous KV reuse,
-        and optional paged quantized caches.
+      - The frozen custom-value representation is implemented in
+        ``lib_onnx_proto``; integrate it next with ``GraphBuilder``, then with
+        model input/output feedback, contiguous KV reuse, and optional paged
+        quantized caches.
 
 Discussion
 ----------

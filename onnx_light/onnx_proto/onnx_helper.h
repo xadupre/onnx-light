@@ -2,11 +2,42 @@
 
 #include "onnx.h"
 
+#include <filesystem>
 #include <initializer_list>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
+
+/**
+ * Returns true when an external-data ``location`` entry is a relative path that
+ * cannot escape the directory it is resolved against.
+ *
+ * The lexically-normalised path must be non-empty, must have no root component,
+ * must not start with ``..`` and must end on a file name. This is the single
+ * definition of the rule; ``TensorProto::LoadExternalData`` and the
+ * ``EncodedValueProto`` metadata validator both use it so an untrusted model
+ * cannot reach outside its own directory.
+ *
+ * @param location Raw ``location`` value taken from ``external_data``.
+ *
+ * Returns: True when the location is safe to resolve against a base directory.
+ */
+inline bool IsSafeExternalDataLocation(std::string_view location) {
+  if (location.empty()) {
+    return false;
+  }
+  const std::filesystem::path normalized =
+      std::filesystem::path(std::string(location)).lexically_normal();
+  if (normalized.empty() || normalized.has_root_path()) {
+    return false;
+  }
+  if (*normalized.begin() == std::filesystem::path("..")) {
+    return false;
+  }
+  return !normalized.filename().empty();
+}
 
 // Canonical name of the default ONNX domain. The empty string used by
 // ``NodeProto::domain()`` for the default ONNX domain is normalised to

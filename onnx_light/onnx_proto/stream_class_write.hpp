@@ -14,8 +14,12 @@ using namespace onnx_light_helpers;
 
 namespace ONNX_LIGHT_NAMESPACE {
 
+/** Writes a length-delimited sub-message, reusing the size computed by the preceding size pass.
+ *  ``order`` identifies the enclosing field in the consistency-check message; it replaces the
+ *  former ``typeid(T).name()``, whose type_info emission cost one exported symbol and one RTTI
+ *  name string per message class in ``lib_onnx_proto``. */
 template <typename T>
-void write_with_cache_size(utils::BinaryWriteStream &stream, const T &field,
+void write_with_cache_size(utils::BinaryWriteStream &stream, int order, const T &field,
                            SerializeOptions &options) {
   SerializeSizeResult size;
   bool is_cached = stream.GetCachedSize(reinterpret_cast<const void *>(&field), size);
@@ -28,14 +32,14 @@ void write_with_cache_size(utils::BinaryWriteStream &stream, const T &field,
   field.SerializeToStream(stream, options);
   EXT_ENFORCE(stream.size() - pos == static_cast<uint64_t>(size.proto_size), "Serialized size (",
               stream.size() - pos, ") size does not match the expected size (", size.proto_size,
-              ") for type ", typeid(T).name(), ".");
+              ") for the sub-message of field ", order, ".");
 }
 
 template <typename T>
 void write_field(utils::BinaryWriteStream &stream, int order, const T &field,
                  SerializeOptions &options) {
   stream.write_field_header(order, FIELD_FIXED_SIZE);
-  write_with_cache_size(stream, field, options);
+  write_with_cache_size(stream, order, field, options);
 }
 
 template <typename T>
@@ -43,7 +47,7 @@ void write_optional_proto_field(utils::BinaryWriteStream &stream, int order,
                                 const utils::OptionalField<T> &field, SerializeOptions &options) {
   if (field.has_value()) {
     stream.write_field_header(order, FIELD_FIXED_SIZE);
-    write_with_cache_size(stream, *field, options);
+    write_with_cache_size(stream, order, *field, options);
   }
 }
 
@@ -116,6 +120,13 @@ void write_field(utils::BinaryWriteStream &stream, int order, const int32_t &fie
                  SerializeOptions &) {
   stream.write_field_header(order, FIELD_VARINT);
   stream.write_int32(field);
+}
+
+template <>
+void write_field(utils::BinaryWriteStream &stream, int order, const uint32_t &field,
+                 SerializeOptions &) {
+  stream.write_field_header(order, FIELD_VARINT);
+  stream.write_variant_uint64(static_cast<uint64_t>(field));
 }
 
 template <>
@@ -216,7 +227,7 @@ void write_repeated_field(utils::BinaryWriteStream &stream, int order,
   EXT_ENFORCE(!is_packed, "option is_packed is not implemented for field order ", order);
   for (size_t i = 0; i < field.size(); ++i) {
     stream.write_field_header(order, FIELD_FIXED_SIZE);
-    write_with_cache_size(stream, field[i], options);
+    write_with_cache_size(stream, order, field[i], options);
   }
 }
 
@@ -226,7 +237,7 @@ void write_repeated_field(utils::BinaryWriteStream &stream, int order, const std
   EXT_ENFORCE(!is_packed, "option is_packed is not implemented for field order ", order);
   for (const auto &d : field) {
     stream.write_field_header(order, FIELD_FIXED_SIZE);
-    write_with_cache_size(stream, d, options);
+    write_with_cache_size(stream, order, d, options);
   }
 }
 

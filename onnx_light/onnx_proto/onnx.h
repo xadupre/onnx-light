@@ -684,6 +684,8 @@ END_PROTO()
 
 // TypeProto
 
+class StructTypeProto;
+
 // message TypeProto {
 //   message Tensor {
 //     optional int32 elem_type = 1;
@@ -714,6 +716,7 @@ END_PROTO()
 //     Optional optional_type = 9;
 //     SparseTensor sparse_tensor_type = 8;
 //     Opaque opaque_type = 7;
+//     StructTypeProto struct_type = 1000;  // onnx-light extension
 //   }
 //   optional string denotation = 6;
 // }
@@ -788,24 +791,51 @@ FIELD_STR(name, 2, "The name of the opaque type.")
 END_PROTO()
 
 inline TypeProto() {}
-FIELD_OPTIONAL_ONEOF(Tensor, tensor_type, 1, type, "The type of a tensor.")
-FIELD_OPTIONAL_ONEOF(Sequence, sequence_type, 4, type, "The type of a sequence.")
-FIELD_OPTIONAL_ONEOF(Map, map_type, 5, type, "The type of a map.")
-FIELD_OPTIONAL_ONEOF(Opaque, opaque_type, 7, type, "The type of an opaque object.")
+FIELD_OPTIONAL_ONEOF_EXCLUSIVE(Tensor, tensor_type, 1, type, "The type of a tensor.")
+FIELD_OPTIONAL_ONEOF_EXCLUSIVE(Sequence, sequence_type, 4, type, "The type of a sequence.")
+FIELD_OPTIONAL_ONEOF_EXCLUSIVE(Map, map_type, 5, type, "The type of a map.")
+FIELD_OPTIONAL_ONEOF_EXCLUSIVE(Opaque, opaque_type, 7, type, "The type of an opaque object.")
 FIELD_STR(denotation, 6,
           "An optional denotation can be used to denote the whole type with a standard "
           "semantic description as to what is stored inside. Refer to "
           "https://github.com/onnx/onnx/blob/main/docs/"
           "TypeDenotation.md#type-denotation-definition for pre-defined type denotations.")
-FIELD_OPTIONAL_ONEOF(SparseTensor, sparse_tensor_type, 8, type, "Type of the sparse tensor")
-FIELD_OPTIONAL_ONEOF(Optional, optional_type, 9, type, "The type of an optional.")
+FIELD_OPTIONAL_ONEOF_EXCLUSIVE(SparseTensor, sparse_tensor_type, 8, type,
+                               "Type of the sparse tensor")
+FIELD_OPTIONAL_ONEOF_EXCLUSIVE(Optional, optional_type, 9, type, "The type of an optional.")
+FIELD_OPTIONAL_ONEOF_EXCLUSIVE(
+    StructTypeProto, struct_type, 1000, type,
+    "The type of a structured value. Field numbers 1000-1099 are reserved for "
+    "onnx-light extensions so upstream ONNX keeps the low-numbered range. A "
+    "StructTypeProto with no kind is an unconstrained category, permitted only "
+    "here (never as a declaration or an encoded payload layout).")
+/**
+ * Clears every alternative of the ``value`` oneof whose field number differs from
+ * @p keep_order, so at most one alternative is ever set.
+ */
+inline void clear_oneof_type(int keep_order = -1) {
+  if (keep_order != order_tensor_type())
+    tensor_type_.reset();
+  if (keep_order != order_sequence_type())
+    sequence_type_.reset();
+  if (keep_order != order_map_type())
+    map_type_.reset();
+  if (keep_order != order_opaque_type())
+    opaque_type_.reset();
+  if (keep_order != order_sparse_tensor_type())
+    sparse_tensor_type_.reset();
+  if (keep_order != order_optional_type())
+    optional_type_.reset();
+  if (keep_order != order_struct_type())
+    struct_type_.reset();
+}
 inline bool has_type() const {
   return has_tensor_type() || has_sequence_type() || has_map_type() || has_sparse_tensor_type() ||
-         has_optional_type() || has_opaque_type();
+         has_optional_type() || has_opaque_type() || has_struct_type();
 }
 inline bool is_set() const {
   return has_tensor_type() || has_sparse_tensor_type() || has_sequence_type() ||
-         has_optional_type() || has_map_type() || has_opaque_type();
+         has_optional_type() || has_map_type() || has_opaque_type() || has_struct_type();
 }
 enum ValueCase : int32_t {
   kUndefined = 0,
@@ -815,6 +845,7 @@ enum ValueCase : int32_t {
   kMapType = 4,
   kOptionalType = 5,
   kOpaqueType = 6,
+  kStructType = 7,
 };
 static const ValueCase VALUE_NOT_SET = ValueCase::kUndefined;
 inline ValueCase value_case() const {
@@ -830,7 +861,334 @@ inline ValueCase value_case() const {
     return ValueCase::kOptionalType;
   if (has_opaque_type())
     return ValueCase::kOpaqueType;
+  if (has_struct_type())
+    return ValueCase::kStructType;
   return ValueCase::kUndefined;
+}
+END_PROTO()
+
+// AffineLayoutProto
+
+// message AffineLayoutProto {
+//   TensorProto.DataType storage_type = 1;
+//   TensorProto scale = 2;
+//   optional TensorProto zero_point = 3;
+//   optional int64 axis = 4;
+//   optional uint64 block_size = 5;
+// }
+BEGIN_PROTO(AffineLayoutProto,
+            "Describes the built-in affine (linear) quantization layout of an EncodedValueProto. "
+            "The branch is deliberately closed: other affine forms use a structured layout "
+            "instead of extending this message.")
+FIELD_OPTIONAL_ENUM(TensorProto::DataType, storage_type, 1,
+                    "Element type of the stored codes. It MUST be one of INT8, UINT8, INT4 or "
+                    "UINT4 and the payload holds only row-major codes packed like "
+                    "TensorProto.raw_data.")
+FIELD_OPTIONAL(TensorProto, scale, 2,
+               "Scalar or parameter tensor with a floating element type. This field MUST be "
+               "present for a valid affine layout.")
+FIELD_OPTIONAL(TensorProto, zero_point, 3,
+               "Optional zero point with element type storage_type. It defaults to zero.")
+FIELD_OPTIONAL(int64_t, axis, 4,
+               "Omitting axis selects per-tensor quantization; setting it selects per-axis "
+               "parameters.")
+FIELD_OPTIONAL(uint64_t, block_size, 5,
+               "Blocked quantization along axis. It is valid only together with axis.")
+END_PROTO()
+
+// StructTypeProto
+
+class FunctionProto;
+
+// message StructTypeProto {
+//   message Structure {
+//     message Field {
+//       string name = 1;
+//       oneof content {
+//         TypeProto type = 2;
+//         TensorProto constant = 4;
+//       }
+//       string doc_string = 3;
+//     }
+//     repeated Field field = 1;
+//   }
+//   message BitPacking {
+//     message Component {
+//       string name = 1;
+//       uint32 bit_width = 2;
+//     }
+//     repeated Component component = 1;
+//     uint64 dimension = 2;
+//   }
+//   message Array {
+//     TypeProto element_type = 1;
+//     uint64 dimension = 2;
+//   }
+//   oneof kind {
+//     Array array = 1;
+//     Structure structure = 2;
+//     BitPacking bit_packing = 3;
+//     uint64 type_ref = 4;
+//   }
+//   optional FunctionProto decoder = 5;
+//   optional FunctionProto encoder = 6;
+//   string name = 7;
+//   string doc_string = 8;
+//   repeated StringStringEntryProto metadata_props = 9;
+//   optional uint64 type_id = 10;
+// }
+BEGIN_PROTO_NOINIT(
+    StructTypeProto,
+    "Describes a struct's fields and types: a concrete declaration selects array, bit_packing "
+    "or structure, and each field selects either a value type or a tensor constant. A fixed "
+    "physical size is an eligibility condition for byte encoding, not a requirement on every "
+    "struct.")
+
+// message Structure {
+//   message Field {
+//     string name = 1;
+//     oneof content {
+//       TypeProto type = 2;
+//       TensorProto constant = 4;
+//     }
+//     string doc_string = 3;
+//   }
+//   repeated Field field = 1;
+// }
+BEGIN_PROTO(Structure, "An ordered list of named fields.")
+
+// message Field {
+//   string name = 1;
+//   oneof content {
+//     TypeProto type = 2;
+//     TensorProto constant = 4;
+//   }
+//   string doc_string = 3;
+// }
+BEGIN_PROTO(Field, "One named field holding either a value type or a shared format constant.")
+FIELD_STR(name, 1, "Field name, unique within the enclosing structure.")
+FIELD_OPTIONAL_ONEOF_EXCLUSIVE(
+    TypeProto, type, 2, content,
+    "Type of the field value. It follows the existing TypeProto validation "
+    "rules for tensors, nested structs, sequences, maps and optional values.")
+FIELD_STR(doc_string, 3, "A human-readable documentation for this field. Markdown is allowed.")
+FIELD_OPTIONAL_ONEOF_EXCLUSIVE(
+    TensorProto, constant, 4, content,
+    "The actual shared format constant, not a graph input. It must have "
+    "concrete dimensions and matching data, and contributes zero payload bytes.")
+/**
+ * Clears every alternative of the ``content`` oneof whose field number differs from
+ * @p keep_order, so at most one alternative is ever set.
+ */
+inline void clear_oneof_content(int keep_order = -1) {
+  if (keep_order != order_type())
+    type_.reset();
+  if (keep_order != order_constant())
+    constant_.reset();
+}
+inline bool has_content() const { return has_type() || has_constant(); }
+enum ContentCase : int32_t {
+  CONTENT_NOT_SET = 0,
+  kType = 2,
+  kConstant = 4,
+};
+inline ContentCase content_case() const {
+  if (has_type())
+    return ContentCase::kType;
+  if (has_constant())
+    return ContentCase::kConstant;
+  return ContentCase::CONTENT_NOT_SET;
+}
+END_PROTO()
+
+FIELD_REPEATED_PROTO(Field, field, 1, "Fields in declaration order.")
+END_PROTO()
+
+// message BitPacking {
+//   message Component {
+//     string name = 1;
+//     uint32 bit_width = 2;
+//   }
+//   repeated Component component = 1;
+//   uint64 dimension = 2;
+// }
+BEGIN_PROTO(BitPacking, "A tight repetition of a group of named bit fields.")
+
+// message Component {
+//   string name = 1;
+//   uint32 bit_width = 2;
+// }
+BEGIN_PROTO(Component, "One named bit field inside a bit-packing group.")
+FIELD_STR(name, 1, "Component name, unique within the enclosing bit packing.")
+FIELD_DEFAULT(uint32_t, bit_width, 2, 0, "Width of the component in bits, strictly positive.")
+END_PROTO()
+
+FIELD_REPEATED_PROTO(Component, component, 1,
+                     "Components of one group, laid out from the least significant bit.")
+FIELD_DEFAULT(uint64_t, dimension, 2, 0, "Number of repeated groups, an explicit concrete count.")
+END_PROTO()
+
+// message Array {
+//   TypeProto element_type = 1;
+//   uint64 dimension = 2;
+// }
+BEGIN_PROTO(Array, "A tight repetition of a single element type.")
+FIELD_OPTIONAL(TypeProto, element_type, 1, "Type of one element.")
+FIELD_DEFAULT(uint64_t, dimension, 2, 0, "Number of elements, an explicit concrete count.")
+END_PROTO()
+
+inline StructTypeProto() {}
+FIELD_OPTIONAL_ONEOF_EXCLUSIVE(Array, array, 1, kind, "Array declaration.")
+FIELD_OPTIONAL_ONEOF_EXCLUSIVE(Structure, structure, 2, kind, "Structure declaration.")
+FIELD_OPTIONAL_ONEOF_EXCLUSIVE(BitPacking, bit_packing, 3, kind, "Bit-packing declaration.")
+FIELD_OPTIONAL_ONEOF_EXCLUSIVE(
+    uint64_t, type_ref, 4, kind,
+    "Reference to a declaration in ModelProto.struct_types. A type_ref carries "
+    "only the referenced ID: declaration fields, metadata, codecs and another "
+    "kind must be absent.")
+/**
+ * Clears every alternative of the ``kind`` oneof whose field number differs from
+ * @p keep_order, so at most one alternative is ever set.
+ */
+inline void clear_oneof_kind(int keep_order = -1) {
+  if (keep_order != order_array())
+    array_.reset();
+  if (keep_order != order_structure())
+    structure_.reset();
+  if (keep_order != order_bit_packing())
+    bit_packing_.reset();
+  if (keep_order != order_type_ref())
+    type_ref_.reset();
+}
+FIELD_OPTIONAL(FunctionProto, decoder, 5,
+               "Optional decoder. Only the concrete root's codec is invoked; a nested type_ref "
+               "contributes layout and constants but not its own decoder or encoder.")
+FIELD_OPTIONAL(FunctionProto, encoder, 6, "Optional encoder, mirroring decoder.")
+FIELD_STR(name, 7, "A human-readable name for this declaration.")
+FIELD_STR(doc_string, 8, "A human-readable documentation for this type. Markdown is allowed.")
+FIELD_REPEATED_PROTO(StringStringEntryProto, metadata_props, 9,
+                     "Named metadata values; keys should be distinct.")
+FIELD_OPTIONAL(uint64_t, type_id, 10,
+               "Nonzero, model-scoped stable format identity. Each ID has exactly one "
+               "declaration in ModelProto.struct_types; an inline declaration has no type_id "
+               "and cannot be referenced.")
+inline bool has_kind() const {
+  return has_array() || has_structure() || has_bit_packing() || has_type_ref();
+}
+enum KindCase : int32_t {
+  KIND_NOT_SET = 0,
+  kArray = 1,
+  kStructure = 2,
+  kBitPacking = 3,
+  kTypeRef = 4,
+};
+inline KindCase kind_case() const {
+  if (has_array())
+    return KindCase::kArray;
+  if (has_structure())
+    return KindCase::kStructure;
+  if (has_bit_packing())
+    return KindCase::kBitPacking;
+  if (has_type_ref())
+    return KindCase::kTypeRef;
+  return KindCase::KIND_NOT_SET;
+}
+inline void Clear() {
+  this->~StructTypeProto();
+  new (this) StructTypeProto();
+}
+END_PROTO()
+
+// EncodedValueProto
+
+// message EncodedValueProto {
+//   oneof layout {
+//     AffineLayoutProto affine = 1;
+//     StructTypeProto struct_type = 2;
+//   }
+//   optional TypeProto logical_type = 3;
+//   bytes raw_data = 4;
+//   repeated StringStringEntryProto external_data = 5;
+//   optional TensorProto.DataLocation data_location = 6;
+//   string name = 7;
+//   string doc_string = 8;
+// }
+BEGIN_PROTO(EncodedValueProto,
+            "One value container with an optional logical tensor type and shape, a layout "
+            "choice and an owned or external payload with a known byte extent. Payload byte "
+            "length and the resolved element size determine the record count; no physical "
+            "shape or redundant count is serialized.")
+FIELD_OPTIONAL_ONEOF_EXCLUSIVE(AffineLayoutProto, affine, 1, layout, "Built-in affine layout.")
+FIELD_OPTIONAL_ONEOF_EXCLUSIVE(StructTypeProto, struct_type, 2, layout,
+                               "Structured layout: an exact type_ref or a concrete inline "
+                               "declaration eligible for byte encoding.")
+/**
+ * Clears every alternative of the ``layout`` oneof whose field number differs from
+ * @p keep_order, so at most one alternative is ever set.
+ */
+inline void clear_oneof_layout(int keep_order = -1) {
+  if (keep_order != order_affine())
+    affine_.reset();
+  if (keep_order != order_struct_type())
+    struct_type_.reset();
+}
+FIELD_OPTIONAL(TypeProto, logical_type, 3,
+               "Decoded type and shape when the value denotes a tensor. It is required, with "
+               "concrete dimensions, for the affine branch.")
+FIELD_BYTES(raw_data, 4,
+            "Inline payload holding a flat sequence of encoded records. It is mutually "
+            "exclusive with external_data, and an empty inline payload represents zero records.")
+FIELD_REPEATED_PROTO(StringStringEntryProto, external_data, 5,
+                     "External payload description. data_location == EXTERNAL requires a "
+                     "'location' entry and an explicit 'length'; 'offset' is optional.")
+FIELD_OPTIONAL_ENUM(TensorProto::DataLocation, data_location, 6,
+                    "DEFAULT reads raw_data, EXTERNAL reads the external payload.")
+FIELD_STR(name, 7, "Name of the value; graph-scoped and unique across all initializers.")
+FIELD_STR(doc_string, 8, "A human-readable documentation for this value. Markdown is allowed.")
+inline bool has_layout() const { return has_affine() || has_struct_type(); }
+enum LayoutCase : int32_t {
+  LAYOUT_NOT_SET = 0,
+  kAffine = 1,
+  kStructType = 2,
+};
+inline LayoutCase layout_case() const {
+  if (has_affine())
+    return LayoutCase::kAffine;
+  if (has_struct_type())
+    return LayoutCase::kStructType;
+  return LayoutCase::LAYOUT_NOT_SET;
+}
+/** Sets raw_data from a byte buffer (protobuf bytes-field compat). */
+inline void set_raw_data(const void *data, size_t size) {
+  raw_data_.resize(size);
+  if (size > 0)
+    std::memcpy(raw_data_.data(), data, size);
+}
+/** Sets raw_data from a std::string (protobuf bytes-field compat). */
+inline void set_raw_data(const std::string &data) { set_raw_data(data.data(), data.size()); }
+inline void clear_raw_data() { raw_data_.clear(); }
+/** Returns whether raw_data is present, including an explicitly set empty value. */
+inline bool is_raw_data() const { return has_raw_data(); }
+/**
+ * Sets the payload to a borrowed view of an external buffer and attaches a custom deleter
+ * called when all references to that buffer are dropped. See
+ * ``TensorProto::set_raw_data_with_deleter``.
+ *
+ * @param ptr     Pointer to the first payload byte.
+ * @param sz      Number of payload bytes.
+ * @param deleter Callable invoked once when the backing storage is released.
+ */
+template <typename Deleter>
+inline void set_raw_data_with_deleter(const uint8_t *ptr, size_t sz, Deleter &&deleter) {
+  raw_data_.assign_with_deleter(ptr, sz, std::forward<Deleter>(deleter));
+}
+/**
+ * Attaches a custom deleter to this value's payload without changing the stored bytes.
+ *
+ * @param deleter Callable invoked once when the backing storage is released.
+ */
+template <typename Deleter> inline void attach_raw_data_deleter(Deleter &&deleter) {
+  raw_data_.attach_deleter(std::forward<Deleter>(deleter));
 }
 END_PROTO()
 
@@ -1136,6 +1494,12 @@ FIELD_REPEATED_PROTO(
     "'a_zero_point' are scale and zero point of tensor 'a' in the model.")
 FIELD_REPEATED_PROTO(StringStringEntryProto, metadata_props, 16,
                      "Named metadata values; keys should be distinct.")
+FIELD_REPEATED_PROTO(
+    EncodedValueProto, encoded_initializer, 1000,
+    "A list of named byte-encoded constant inputs of the graph (onnx-light extension, field "
+    "numbers 1000-1099 are reserved for local extensions). Each entry MUST have a name, unique "
+    "across initializer, sparse_initializer and encoded_initializer, and the name MAY also "
+    "appear in the input list.")
 /**
  * Appends a new node built from *op_type*, *inputs*, *outputs* and the
  * optional *domain* / *name* to the graph and returns a reference to it.
@@ -1302,6 +1666,12 @@ FIELD_REPEATED_PROTO(
     DeviceConfigurationProto, configuration, 26,
     "Describes different target configurations for a multi-device use case. A model MAY "
     "describe multiple multi-device configurations for execution.")
+FIELD_REPEATED_PROTO(
+    StructTypeProto, struct_types, 1000,
+    "Model-scoped catalogue of struct declarations (onnx-light extension, field numbers "
+    "1000-1099 are reserved for local extensions). Every entry MUST carry a nonzero, unique "
+    "type_id; duplicate IDs, unresolved references and reference cycles are invalid, and "
+    "reordering the catalogue does not change identity.")
 /**
  * Appends *function* to the model's ``functions`` field and returns a
  * reference to the stored copy.

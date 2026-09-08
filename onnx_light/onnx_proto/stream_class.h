@@ -264,8 +264,12 @@ public:                                                                         
   utils::RepeatedField<type> name##_;                                                              \
   using name##_t = type;
 
-#define _FIELD_OPTIONAL(type, name, order, doc)                                                    \
+#define _FIELD_OPTIONAL_IMPL(type, name, order, doc, ONEOF_CLEAR)                                  \
 public:                                                                                            \
+  /** Clears the sibling alternatives of the oneof owning this field; a no-op for a plain          \
+   *  optional field. Called by every entry point that makes this field present, so that both      \
+   *  the setters and the wire parser implement protobuf's "last one wins" oneof rule. */          \
+  inline void enter_oneof_##name() { ONEOF_CLEAR }                                                 \
   inline type &ref_##name() {                                                                      \
     if (!has_##name()) {                                                                           \
       add_##name();                                                                                \
@@ -291,11 +295,18 @@ public:                                                                         
     return name##_;                                                                                \
   }                                                                                                \
   inline type *add_##name() {                                                                      \
+    enter_oneof_##name();                                                                          \
     name##_.set_empty_value();                                                                     \
     return &(*name##_);                                                                            \
   }                                                                                                \
-  inline void set_##name(const type &v) { name##_ = v; }                                           \
-  inline void set_##name(type &&v) { name##_ = std::move(v); }                                     \
+  inline void set_##name(const type &v) {                                                          \
+    enter_oneof_##name();                                                                          \
+    name##_ = v;                                                                                   \
+  }                                                                                                \
+  inline void set_##name(type &&v) {                                                               \
+    enter_oneof_##name();                                                                          \
+    name##_ = std::move(v);                                                                        \
+  }                                                                                                \
   inline void reset_##name() { name##_.reset(); }                                                  \
   inline void clear_##name() { name##_.reset(); }                                                  \
   inline bool has_##name() const { return name##_.has_value(); }                                   \
@@ -305,12 +316,26 @@ public:                                                                         
   utils::OptionalField<type> name##_;                                                              \
   using name##_t = type;
 
+#define _FIELD_OPTIONAL(type, name, order, doc) _FIELD_OPTIONAL_IMPL(type, name, order, doc, )
+
 #define FIELD_OPTIONAL(type, name, order, doc)                                                     \
   _FIELD_OPTIONAL(type, name, order, doc)                                                          \
   inline bool has_oneof_##name() const { return has_##name(); }
 
+/** Groups a field under a named presence group without enforcing exclusivity: the message
+ *  exposes has_oneof_##name() through has_##oneof(), but the alternatives may coexist (used
+ *  where upstream ONNX declares plain optional fields, e.g. OptionalProto). */
 #define FIELD_OPTIONAL_ONEOF(type, name, order, oneof, doc)                                        \
   _FIELD_OPTIONAL(type, name, order, doc)                                                          \
+  inline bool has_oneof_##name() const { return has_##oneof(); }
+
+/** Declares a genuine protobuf ``oneof`` alternative: making this field present clears every
+ *  sibling alternative, so at most one alternative is ever set and the last value seen on the
+ *  wire wins. The enclosing message must declare
+ *  ``void clear_oneof_<oneof>(int keep_order = -1)`` clearing every alternative whose field
+ *  number differs from keep_order. */
+#define FIELD_OPTIONAL_ONEOF_EXCLUSIVE(type, name, order, oneof, doc)                              \
+  _FIELD_OPTIONAL_IMPL(type, name, order, doc, clear_oneof_##oneof(order);)                        \
   inline bool has_oneof_##name() const { return has_##oneof(); }
 
 #define FIELD_OPTIONAL_ENUM(type, name, order, doc)                                                \

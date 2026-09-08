@@ -72,6 +72,22 @@ void ValidateNumericOrBool(const Tensor &t, const char *name) {
   }
 }
 
+template <typename T> constexpr T LowerBound() {
+  if constexpr (std::numeric_limits<T>::has_infinity) {
+    return -std::numeric_limits<T>::infinity();
+  } else {
+    return std::numeric_limits<T>::lowest();
+  }
+}
+
+template <typename T> constexpr T UpperBound() {
+  if constexpr (std::numeric_limits<T>::has_infinity) {
+    return std::numeric_limits<T>::infinity();
+  } else {
+    return std::numeric_limits<T>::max();
+  }
+}
+
 template <typename T>
 void MinMaxReduceTyped(const Tensor &data, const Shape &is_reduced,
                        const Shape &output_shape_noreduce, ReduceMinMax::Mode mode,
@@ -79,10 +95,8 @@ void MinMaxReduceTyped(const Tensor &data, const Shape &is_reduced,
   const Shape out_strides = RowMajorStrides(output_shape_noreduce);
   T *py = reinterpret_cast<T *>(output.mutable_bytes());
   const int64_t out_count = output.element_count();
-  const T lower = std::numeric_limits<T>::has_infinity ? -std::numeric_limits<T>::infinity()
-                                                       : std::numeric_limits<T>::lowest();
-  const T upper = std::numeric_limits<T>::has_infinity ? std::numeric_limits<T>::infinity()
-                                                       : std::numeric_limits<T>::max();
+  const T lower = LowerBound<T>();
+  const T upper = UpperBound<T>();
   const T init =
       mode == ReduceMinMax::Mode::kMax ? lower : (data.data_type == DataType::BOOL ? T(1) : upper);
   for (int64_t i = 0; i < out_count; ++i) {

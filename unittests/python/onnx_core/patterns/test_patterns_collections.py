@@ -56,10 +56,12 @@ class TestCollectionPatterns(ExtTestCase):
     """Tests collection, slicing, gathering, splitting, and sequence patterns."""
 
     def optimize(self, model, pattern_name):
-        """Optimizes a model with one isolated GraphGraph pattern."""
+        """Optimizes a model and returns only the isolated pattern's rewrites."""
         builder = optimization.GraphBuilder(model)
         graph = optimization.GraphGraph(builder, [pattern_name], use_global_patterns=False)
-        rewrites = graph.optimize()
+        all_rewrites, report = graph.optimize(report=True)
+        self.assertEqual(report.rewrites, len(all_rewrites))
+        rewrites = [rewrite for rewrite in all_rewrites if rewrite.pattern_name == pattern_name]
         return builder.to_onnx("model"), rewrites
 
     def assert_equivalent(self, original, optimized, feeds):
@@ -184,16 +186,7 @@ class TestCollectionPatterns(ExtTestCase):
         numpy.testing.assert_array_equal(values[slice_node.input[3]], numpy.array([0, 1]))
         if first_step or second_step:
             numpy.testing.assert_array_equal(values[slice_node.input[4]], numpy.array([1, 1]))
-        if first_step != second_step:
-            generated_ones = [
-                value
-                for name, value in values.items()
-                if name not in {"zero", "one"}
-                and value.shape == (1,)
-                and numpy.array_equal(value, numpy.array([1]))
-            ]
-            self.assertEqual(len(generated_ones), 1)
-            numpy.testing.assert_array_equal(generated_ones[0], numpy.array([1]))
+        self.assertEqual(set(values), set(list(slice_node.input)[1:]))
         self.assert_equivalent(model, optimized, feeds)
 
     def test_slice_slice_nostep(self):

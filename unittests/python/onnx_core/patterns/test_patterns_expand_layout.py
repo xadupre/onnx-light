@@ -1338,6 +1338,128 @@ class TestExpandLayoutPatterns(ExtTestCase):
         self.assertPatternNotRewritten(rewrites, "SwapUnsqueezeTranspose")
         self.assertEqual(["Unsqueeze", "Transpose", "Identity"], _ops(optimized))
 
+    def test_swap_unsqueeze_transpose_all_small_permutations_numerically(self):
+        for input_rank in range(4):
+            shape = tuple(range(2, 2 + input_rank))
+            values = np.arange(np.prod(shape, dtype=np.int64), dtype=np.float32).reshape(shape)
+            for count in (1, 2):
+                rank = input_rank + count
+                if rank > 4:
+                    continue
+                for axes in itertools.combinations(range(rank), count):
+                    variants = {
+                        axes,
+                        tuple(axis - rank for axis in axes),
+                        tuple(reversed(axes)),
+                        tuple(axis - rank if i % 2 else axis for i, axis in enumerate(axes)),
+                    }
+                    for perm in itertools.permutations(range(rank)):
+                        expected = np.transpose(np.expand_dims(values, axes), perm)
+                        for signed_axes in sorted(variants):
+                            with self.subTest(shape=shape, axes=signed_axes, perm=perm):
+                                model = _make_model(
+                                    [
+                                        oh.make_node("Unsqueeze", ["X", "axes"], ["u"]),
+                                        oh.make_node("Transpose", ["u"], ["Y"], perm=perm),
+                                    ],
+                                    [oh.make_tensor_value_info("X", TensorProto.FLOAT, shape)],
+                                    [
+                                        oh.make_tensor_value_info(
+                                            "Y", TensorProto.FLOAT, expected.shape
+                                        )
+                                    ],
+                                    [_initializer("axes", signed_axes, np.int64)],
+                                )
+                                optimized, rewrites = _optimize(model, "SwapUnsqueezeTranspose")
+                                self.assertPatternRewritten(rewrites, "SwapUnsqueezeTranspose")
+                                self.assertEqual(["Transpose", "Unsqueeze"], _ops(optimized))
+                                self.assertEqual("Y", optimized.graph.node[-1].output[0])
+                                normalized_axes = {
+                                    axis + rank if axis < 0 else axis for axis in signed_axes
+                                }
+                                expected_axes = [
+                                    i for i, axis in enumerate(perm) if axis in normalized_axes
+                                ]
+                                self.assertEqual(
+                                    expected_axes,
+                                    _initializer_values(
+                                        optimized, optimized.graph.node[-1].input[1]
+                                    ).tolist(),
+                                )
+                                for candidate in (model, optimized):
+                                    actual = ReferenceEvaluator(candidate).run(
+                                        None, {"X": values}
+                                    )[0]
+                                    np.testing.assert_array_equal(expected, actual)
+
+    def test_swap_unsqueeze_transpose_rank_inferred_from_explicit_perm(self):
+        model = _make_model(
+            [
+                oh.make_node("Unsqueeze", ["X", "axes"], ["u"]),
+                oh.make_node("Transpose", ["u"], ["Y"], perm=[1, 2, 0]),
+            ],
+            [oh.make_tensor_value_info("X", TensorProto.FLOAT, None)],
+            [oh.make_tensor_value_info("Y", TensorProto.FLOAT, None)],
+            [_initializer("axes", [-3], np.int64)],
+        )
+        optimized, rewrites = _optimize(
+            model, "SwapUnsqueezeTranspose", run_shape_inference=False
+        )
+        self.assertPatternRewritten(rewrites, "SwapUnsqueezeTranspose")
+        self.assertEqual(["Transpose", "Unsqueeze"], _ops(optimized))
+        self.assertEqual([0, 1], _attribute_ints(optimized.graph.node[0], "perm"))
+        self.assertEqual(
+            [2], _initializer_values(optimized, optimized.graph.node[1].input[1]).tolist()
+        )
+
+    def test_swap_unsqueeze_transpose_three_operand_einsum_numerically(self):
+        # Broadcasts bac, cd, def into ebcadf, then contracts a, d, f.
+        nodes = []
+        initializers = []
+        for index, axes, perm in (
+            (0, [3, 4, 5], [4, 0, 2, 1, 3, 5]),
+            (1, [2, 3, 4, 5], [4, 2, 0, 3, 1, 5]),
+            (2, [3, 4, 5], [1, 3, 4, 5, 0, 2]),
+        ):
+            initializers.append(_initializer(f"axes{index}", axes, np.int64))
+            nodes.extend(
+                [
+                    oh.make_node("Unsqueeze", [f"X{index}", f"axes{index}"], [f"u{index}"]),
+                    oh.make_node("Transpose", [f"u{index}"], [f"t{index}"], perm=perm),
+                ]
+            )
+        nodes.extend(
+            [
+                oh.make_node("Mul", ["t0", "t1"], ["product"]),
+                oh.make_node("Mul", ["product", "t2"], ["broadcast"]),
+                oh.make_node("ReduceSum", ["broadcast", "reduce_axes"], ["Y"], keepdims=0),
+            ]
+        )
+        initializers.append(_initializer("reduce_axes", [3, 4, 5], np.int64))
+        shapes = ((2, 2, 2), (2, 2), (2, 2, 2))
+        model = _make_model(
+            nodes,
+            [
+                oh.make_tensor_value_info(f"X{index}", TensorProto.FLOAT, shape)
+                for index, shape in enumerate(shapes)
+            ],
+            [oh.make_tensor_value_info("Y", TensorProto.FLOAT, [2, 2, 2])],
+            initializers,
+        )
+        feeds = {
+            f"X{index}": (np.arange(np.prod(shape), dtype=np.float32).reshape(shape) + index + 1)
+            / 8
+            for index, shape in enumerate(shapes)
+        }
+        expected = np.einsum("bac,cd,def->ebc", feeds["X0"], feeds["X1"], feeds["X2"])
+        optimized, rewrites = _optimize(model, "SwapUnsqueezeTranspose")
+        self.assertEqual(
+            3, sum(rewrite.pattern_name == "SwapUnsqueezeTranspose" for rewrite in rewrites)
+        )
+        for candidate in (model, optimized):
+            actual = ReferenceEvaluator(candidate).run(None, feeds)[0]
+            np.testing.assert_allclose(expected, actual, rtol=1e-6, atol=1e-6)
+
     def test_transpose_equal_reshape_upstream_shapes(self):
         for batch in (3, 0):
             with self.subTest(batch=batch):

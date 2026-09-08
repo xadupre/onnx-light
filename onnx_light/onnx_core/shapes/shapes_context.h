@@ -305,7 +305,7 @@ public:
     tensors_.clear();
     sequences_.clear();
     opsets_.clear();
-    local_functions_.clear();
+    ClearLocalFunctions();
     custom_shape_inference_.clear();
     constraints_.clear();
     subgraph_contexts_.clear();
@@ -487,7 +487,14 @@ public:
     key += ":";
     key += func->name();
     local_functions_[key] = func;
+    owned_local_functions_.erase(key);
   }
+
+  /// Registers an owned definition whose lifetime also covers copied contexts.
+  void SetLocalFunction(std::shared_ptr<const FunctionProto> func);
+
+  /// Copies function registrations, retaining ownership of native definitions.
+  void CopyLocalFunctions(const ShapesContext &context);
 
   /// ``true`` when a model-local function is registered for ``key``.
   /// ``key`` is expected to be the ``"<domain>:<name>"`` identifier of
@@ -495,6 +502,9 @@ public:
   bool HasLocalFunction(const std::string &key) const {
     return local_functions_.find(key) != local_functions_.end();
   }
+
+  /// Clears function definitions without discarding inferred shapes.
+  void ClearLocalFunctions() noexcept;
 
   /// Returns the registered ``FunctionProto`` pointer for ``key``, or
   /// ``nullptr`` when none is registered. ``key`` is expected to be the
@@ -690,6 +700,9 @@ public:
   /// back into ``graph``.
   void ApplyInferredShapesToGraph(GraphProto &graph) const;
 
+  /// Writes inferred descriptors into function value_info, including inputs and outputs.
+  void ApplyInferredShapesToFunction(FunctionProto &function) const;
+
   /// Writes the shape and element-type descriptors stored in ``*this``
   /// back into ``model.graph()``.
   void ApplyInferredShapesToModel(ModelProto &model) const;
@@ -792,6 +805,7 @@ private:
   /// :cpp:func:`HasDimValue` / :cpp:func:`SetDimValue`).
   std::unordered_map<std::string, int64_t> dim_values_;
   std::unordered_map<std::string, const FunctionProto *> local_functions_;
+  std::unordered_map<std::string, std::shared_ptr<const FunctionProto>> owned_local_functions_;
   CustomShapeInferenceMap custom_shape_inference_;
   std::unordered_set<Constraint, PairStringHash> constraints_;
   std::unordered_set<LessEqualConstraint, PairStringHash> le_constraints_;

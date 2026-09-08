@@ -99,6 +99,22 @@ void BindNodeAttributes(NodeProto &node, const AttributeMap &attr_map) {
 // the same local-function map, so nested local-function calls are also
 // supported.
 void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const FunctionProto &func) {
+  EXT_ENFORCE_INVALID(node.input_size() == func.input_size(), "Local function '", func.name(),
+                      "': expected ", func.input_size(), " inputs, got ", node.input_size(), ".");
+  EXT_ENFORCE_INVALID(node.output_size() == func.output_size(), "Local function '", func.name(),
+                      "': expected ", func.output_size(), " outputs, got ", node.output_size(),
+                      ".");
+  // Nested expansion creates fresh contexts, but shares the definition
+  // pointers. Track the active definitions across those contexts and unwind
+  // on inference errors as well as successful calls.
+  static thread_local std::vector<const FunctionProto *> active;
+  EXT_ENFORCE_INVALID(std::find(active.begin(), active.end(), &func) == active.end(),
+                      "Recursive local function call: '", func.domain(), ":", func.name(), "'.");
+  active.push_back(&func);
+  struct PopActive {
+    std::vector<const FunctionProto *> &stack;
+    ~PopActive() { stack.pop_back(); }
+  } pop_active{active};
   ShapesContext sub_ctx;
   // Inherit caller opsets first, then let the function's own opset
   // imports override them.
@@ -110,9 +126,7 @@ void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const Fu
     sub_ctx.SetOpsetVersion(osi.domain(), static_cast<int>(osi.version()));
   }
   // Forward the local-function map so nested calls are dispatched too.
-  for (const auto &kv : ctx.LocalFunctions()) {
-    sub_ctx.SetLocalFunction(kv.second);
-  }
+  sub_ctx.CopyLocalFunctions(ctx);
   // Positional binding: function input names take the descriptors of
   // the caller's input names.
   const int n_inputs = std::min(node.input_size(), func.input_size());
@@ -133,8 +147,16 @@ void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const Fu
   // inference. Attributes referencing a name not supplied by the call
   // site are removed (see ``BindNodeAttributes``).
   AttributeMap attr_map;
+  for (const auto &attr : func.attribute_proto()) {
+    attr_map[attr.name()] = &attr;
+  }
   for (const auto &attr : node.attribute()) {
     attr_map[attr.name()] = &attr;
+  }
+  for (std::size_t i = 0; i < func.attribute().size(); ++i) {
+    const std::string name = func.attribute(i);
+    EXT_ENFORCE_INVALID(attr_map.find(name) != attr_map.end(), "Local function '", func.name(),
+                        "': missing required attribute '", name, "'.");
   }
   // Recursively run shape inference on the function body, binding
   // attribute references on a per-node copy to avoid mutating ``func``.
@@ -946,6 +968,50 @@ void ShapesContext::ComputeShapeModel(const ModelProto &model,
   }
 }
 
+namespace {
+
+template <typename GraphOrFunction>
+void ApplyInferredShapesToValueInfo(const ShapesContext &ctx, GraphOrFunction &graph,
+                                    const std::unordered_set<std::string> &seeded,
+                                    const std::unordered_set<std::string> &output_names) {
+  // Track existing value_info entries to avoid creating duplicates;
+  // update them in place when the name matches.
+  std::unordered_set<std::string> existing_value_info;
+  for (int i = 0; i < graph.value_info_size(); ++i) {
+    ValueInfoProto &vi = *graph.mutable_value_info(i);
+    const std::string name = vi.name();
+    existing_value_info.insert(name);
+    if (!name.empty() && ctx.Has(name)) {
+      SymTensorToValueInfo(ctx.Get(name), vi);
+    }
+  }
+  // Append a new value_info entry for every other inferred tensor.
+  // Iteration order over the unordered map is not specified, so the
+  // names are gathered and sorted to make the output deterministic.
+  std::vector<std::string> new_names;
+  new_names.reserve(ctx.Tensors().size());
+  for (const auto &kv : ctx.Tensors()) {
+    const std::string &name = kv.first;
+    if (name.empty() || seeded.count(name) != 0 || output_names.count(name) != 0 ||
+        existing_value_info.count(name) != 0) {
+      continue;
+    }
+    new_names.push_back(name);
+  }
+  std::sort(new_names.begin(), new_names.end());
+  for (const std::string &name : new_names) {
+    const SymTensor &tensor = ctx.Get(name);
+    if (TensorTypeToDataType(tensor.Dtype()) == TensorProto::DataType::UNDEFINED) {
+      continue;
+    }
+    ValueInfoProto *vi = graph.add_value_info();
+    vi->set_name(name);
+    SymTensorToValueInfo(tensor, *vi);
+  }
+}
+
+} // namespace
+
 void ShapesContext::ApplyInferredShapesToGraph(GraphProto &graph) const {
   // Names that already have authoritative type/shape information in
   // the proto and must not be overwritten.
@@ -966,40 +1032,11 @@ void ShapesContext::ApplyInferredShapesToGraph(GraphProto &graph) const {
       SymTensorToValueInfo(Get(name), vi);
     }
   }
-  // Track existing value_info entries to avoid creating duplicates;
-  // update them in place when the name matches.
-  std::unordered_set<std::string> existing_value_info;
-  for (int i = 0; i < graph.value_info_size(); ++i) {
-    ValueInfoProto &vi = *graph.mutable_value_info(i);
-    const std::string name = vi.name();
-    existing_value_info.insert(name);
-    if (!name.empty() && Has(name)) {
-      SymTensorToValueInfo(Get(name), vi);
-    }
-  }
-  // Append a new value_info entry for every other inferred tensor.
-  // Iteration order over the unordered map is not specified, so the
-  // names are gathered and sorted to make the output deterministic.
-  std::vector<std::string> new_names;
-  new_names.reserve(Tensors().size());
-  for (const auto &kv : Tensors()) {
-    const std::string &name = kv.first;
-    if (name.empty() || seeded.count(name) != 0 || output_names.count(name) != 0 ||
-        existing_value_info.count(name) != 0) {
-      continue;
-    }
-    new_names.push_back(name);
-  }
-  std::sort(new_names.begin(), new_names.end());
-  for (const std::string &name : new_names) {
-    const SymTensor &tensor = Get(name);
-    if (TensorTypeToDataType(tensor.Dtype()) == TensorProto::DataType::UNDEFINED) {
-      continue;
-    }
-    ValueInfoProto *vi = graph.add_value_info();
-    vi->set_name(name);
-    SymTensorToValueInfo(tensor, *vi);
-  }
+  ApplyInferredShapesToValueInfo(*this, graph, seeded, output_names);
+}
+
+void ShapesContext::ApplyInferredShapesToFunction(FunctionProto &function) const {
+  ApplyInferredShapesToValueInfo(*this, function, {}, {});
 }
 
 void ShapesContext::ApplyInferredShapesToModel(ModelProto &model) const {

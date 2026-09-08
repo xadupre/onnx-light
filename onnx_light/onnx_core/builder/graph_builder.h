@@ -40,6 +40,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <set>
 #include <source_location>
 #include <stdexcept>
@@ -185,6 +186,9 @@ public:
   /// attribute carrying the nested builder name(s). :cpp:func:`BuildGraph` /
   /// :cpp:func:`ToGraph` / :cpp:func:`ToModel` materialize those references
   /// back into GRAPH / GRAPHS attributes.
+  /// Function declarations retain their value information and attribute
+  /// defaults. Inference runs when input descriptors and referenced attributes
+  /// are available; an unspecified formal-input rank is never treated as scalar.
   explicit GraphBuilder(const ModelProto &model, SchemaLookupFn schema_lookup = {});
 
   ~GraphBuilder();
@@ -227,6 +231,9 @@ public:
 
   /// Appends ``tensor`` as a graph initializer. The tensor may carry external
   /// data (``data_location == EXTERNAL``). Returns the initializer name.
+  /// A public-input default must match its declared element type, rank and
+  /// static dimensions; unspecified rank and symbolic dimensions are allowed.
+  /// Defaults remain overridable and are not treated as optimization constants.
   const std::string &MakeInitializer(const TensorProto &tensor);
 
   /// Builds and appends an initializer whose data lives in an external file.
@@ -252,6 +259,8 @@ public:
 
   /// Declares a graph input from a ready-made :cpp:class:`ValueInfoProto` and
   /// returns its name.
+  /// A missing tensor shape leaves the rank unknown (no tensor descriptor);
+  /// an explicitly empty shape declares a scalar.
   const std::string &MakeInput(const ValueInfoProto &value_info);
 
   /// Declares a graph input described by ``type`` and returns its name.
@@ -318,6 +327,8 @@ public:
   /// to remove their own unused nodes. Values a subgraph consumes from the
   /// enclosing scope are treated as inputs of the owning control-flow node, so
   /// the producers a subgraph body relies on are kept alive.
+  /// Orphan initializers are also removed, including from empty graphs; graph
+  /// inputs, outputs and initializers captured by live subgraphs are retained.
   ///
   /// @return The total number of nodes removed, including those pruned from
   ///         nested subgraphs and local functions.
@@ -502,6 +513,8 @@ public:
   /// Creates and returns a nested builder for a local function named ``name``.
   /// The nested builder is appended to this builder's local function list;
   /// local functions are emitted into the produced :cpp:class:`ModelProto`.
+  /// Calls through :cpp:func:`MakeNode` infer their outputs natively, including
+  /// nested calls, from owned snapshots of the current function definitions.
   /// Throws when ``name`` is already used.
   GraphBuilder &MakeLocalFunction(const std::string &name, const std::string &domain = "");
 
@@ -580,6 +593,9 @@ public:
   // ── Finalization ─────────────────────────────────────────────────────
 
   /// Returns the finalized :cpp:class:`GraphProto`.
+  /// Stably orders dependencies, including lexical subgraph captures, before
+  /// hoisting Shape/Size nodes and recomputing lifetime and memory metadata.
+  /// Throws on cyclic dependencies or undefined inputs. Mutates node order.
   GraphProto ToGraph();
 
   /// Returns the finalized graph wrapped in a :cpp:class:`ModelProto`.
@@ -594,6 +610,7 @@ public:
 
 private:
   std::size_t RemoveUnusedNodesImpl(bool recursive);
+  void PruneValueInfos();
   std::size_t
   RemoveIdentityNodesImpl(bool recursive,
                           std::unordered_map<std::string, std::string> *applied_renames = nullptr);
@@ -689,6 +706,17 @@ private:
   // Imports ``function`` by replaying its body nodes and formal inputs/outputs.
   void ImportFunction(const FunctionProto &function);
 
+  // Rebuilds owned definitions on demand for function calls and graph-valued
+  // inference, including direct optimizer edits to nested builders. Ordinary
+  // operators do not refresh. Copied contexts retain their owned snapshots.
+  void RefreshLocalFunctions();
+
+  // Builds a function without running inference on its unspecialized body.
+  FunctionProto BuildFunction(const std::string &domain) const;
+
+  // Orders producers before consumers, including lexical subgraph captures.
+  void SortNodesTopologically();
+
   // Converts node attributes from proto form to builder form: GRAPH/GRAPHS
   // attributes become ``*_ref`` STRING/STRINGS attributes that reference nested
   // subgraph builders.
@@ -710,7 +738,7 @@ private:
   // Runs the whole-graph compute analyses and writes their result into
   // ``graph`` (shapes, in-place / release-after / value-tag metadata and
   // per-node peak memory).
-  void Finalize(GraphProto &graph);
+  template <typename Proto> void Finalize(Proto &graph);
 
   // Returns the nested builder named ``name`` in ``builders`` or nullptr.
   static GraphBuilder *FindNamedBuilder(const std::vector<std::unique_ptr<GraphBuilder>> &builders,
@@ -724,6 +752,11 @@ private:
 
   std::string name_;
   std::string function_domain_;
+  std::vector<std::string> function_attributes_;
+  utils::RepeatedProtoField<AttributeProto> function_attribute_protos_;
+  utils::RepeatedProtoField<StringStringEntryProto> metadata_;
+  std::optional<std::string> doc_string_;
+  GraphBuilder *parent_ = nullptr;
   SchemaLookupFn schema_lookup_;
   // Lazily-built lookup table: op_type -> normalised domain -> schema history.
   std::unordered_map<std::string, std::unordered_map<std::string, std::vector<LightOpSchema>>>
@@ -731,13 +764,18 @@ private:
   ComputeContext compute_;
   utils::RepeatedProtoField<ValueInfoProto> inputs_;
   utils::RepeatedProtoField<ValueInfoProto> outputs_;
+  utils::RepeatedProtoField<ValueInfoProto> value_infos_;
   utils::RepeatedProtoField<NodeProto> nodes_;
   utils::RepeatedProtoField<TensorProto> initializers_;
   std::vector<std::unique_ptr<GraphBuilder>> local_functions_;
   std::vector<std::unique_ptr<GraphBuilder>> subgraphs_;
   std::unordered_set<std::string> names_;
   std::unordered_set<std::string> inherited_names_;
+  // Effective domain-to-version map emitted in the resulting proto. Versions
+  // inferred from operator schemas may increase as nodes are added.
   std::unordered_map<std::string, int> opsets_;
+  // Domains explicitly set by the user or imported from an existing proto.
+  // Their versions are fixed and must not be advanced by schema inference.
   std::unordered_set<std::string> user_opsets_;
   Device device_ = Device::kUndefined;
   std::uint64_t auto_counter_ = 0;

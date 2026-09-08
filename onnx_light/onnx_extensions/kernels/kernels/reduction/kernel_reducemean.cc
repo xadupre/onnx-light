@@ -4,11 +4,13 @@
 
 #include "onnx_extensions/kernels/kernels/reduction/include_reduction_kernels.h"
 
+#include "onnx_core/runtime/kernels/float16_promote.h"
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <stdexcept>
 #include <string>
 
@@ -48,20 +50,18 @@ Shape RowMajorStrides(const Shape &shape) {
 }
 
 void ValidateFloat(const Tensor &t, const char *name) {
-  EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      "kernel::ReduceMean: ", name, " must be a FLOAT tensor.");
+  EXT_ENFORCE_INVALID(t.data_type == DataType::FLOAT || t.data_type == DataType::DOUBLE ||
+                          core::runtime::IsHalfPrecision(t.data_type),
+                      "kernel::ReduceMean: ", name, " must be a floating-point tensor.");
 }
 
 // Computes the arithmetic mean of elements of ``data`` along the reduced
-// dimensions and writes the result into the output buffer. The empty-set
-// identity for ``mean`` is undefined (division by zero); ONNX leaves the
-// behaviour unspecified in that case, but no upstream reference test
-// exercises it so we simply produce ``0`` values like the other reductions
-// do when no elements are aggregated.
-void MeanReduce(const Tensor &data, const Shape &is_reduced, const Shape &output_shape_noreduce,
-                Tensor &output) {
+// dimensions. Empty reductions produce NaN rather than a spurious zero mean.
+template <typename T>
+void MeanReduceTyped(const Tensor &data, const Shape &is_reduced,
+                     const Shape &output_shape_noreduce, Tensor &output) {
   const Shape out_strides = RowMajorStrides(output_shape_noreduce);
-  float *py = output.AsFloat();
+  T *py = output.As<T>();
   const int64_t out_count = output.element_count();
   for (int64_t i = 0; i < out_count; ++i) {
     py[i] = 0.0f;
@@ -76,7 +76,7 @@ void MeanReduce(const Tensor &data, const Shape &is_reduced, const Shape &output
     }
   }
 
-  const float *px = data.AsFloat();
+  const T *px = data.As<T>();
   const int64_t rank = static_cast<int64_t>(data.shape.size());
   Shape idx;
   idx.assign(static_cast<size_t>(rank), 0);
@@ -100,11 +100,27 @@ void MeanReduce(const Tensor &data, const Shape &is_reduced, const Shape &output
     }
   }
 
-  if (reduced_count > 0) {
-    const float denom = static_cast<float>(reduced_count);
-    for (int64_t i = 0; i < out_count; ++i) {
-      py[i] /= denom;
+  for (int64_t i = 0; i < out_count; ++i) {
+    py[i] = reduced_count > 0 ? py[i] / static_cast<T>(reduced_count)
+                              : std::numeric_limits<T>::quiet_NaN();
+  }
+}
+
+void MeanReduce(const Tensor &data, const Shape &is_reduced, const Shape &output_shape_noreduce,
+                Tensor &output) {
+  if (core::runtime::IsHalfPrecision(data.data_type)) {
+    Tensor promoted = core::runtime::PromoteToFloat32(data);
+    Tensor reduced = MakeOutputTensor(DataType::FLOAT, output.shape,
+                                      output.element_count() * sizeof(float), nullptr);
+    MeanReduceTyped<float>(promoted, is_reduced, output_shape_noreduce, reduced);
+    Tensor demoted = core::runtime::DemoteFromFloat32(reduced, data.data_type);
+    if (output.size_bytes() > 0) {
+      std::memcpy(output.mutable_bytes(), demoted.bytes(), output.size_bytes());
     }
+  } else if (data.data_type == DataType::DOUBLE) {
+    MeanReduceTyped<double>(data, is_reduced, output_shape_noreduce, output);
+  } else {
+    MeanReduceTyped<float>(data, is_reduced, output_shape_noreduce, output);
   }
 }
 
@@ -124,10 +140,9 @@ Tensor ReduceMean::operator()(const Tensor &data, bool keepdims, bool noop_with_
   for (int64_t d : out_shape) {
     out_count *= d;
   }
-  const size_t out_n_bytes = static_cast<size_t>(out_count) * sizeof(float);
-  Tensor out =
-      rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes)
-         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes, nullptr);
+  const size_t out_n_bytes = static_cast<size_t>(out_count) * ElementSize(data.data_type);
+  Tensor out = rt ? rt->MakeOutputTensor(0, data.data_type, out_shape, out_n_bytes)
+                  : MakeOutputTensor(data.data_type, out_shape, out_n_bytes, nullptr);
   (*this)(data, keepdims, noop_with_empty_axes, out);
   return out;
 }
@@ -148,11 +163,14 @@ void ReduceMean::operator()(const Tensor &data, bool keepdims, bool noop_with_em
       "kernel::ReduceMean preallocated output shape does not match expected shape.");
   const int64_t out_count = output.element_count();
   EXT_ENFORCE_INVALID(
-      output.size_bytes() == static_cast<size_t>(out_count) * sizeof(float),
+      output.data_type == data.data_type &&
+          output.size_bytes() == static_cast<size_t>(out_count) * ElementSize(data.data_type),
       "kernel::ReduceMean preallocated output buffer has unexpected size in bytes.");
 
   if (noop_with_empty_axes) {
-    std::memcpy(output.mutable_bytes(), data.bytes(), data.size_bytes());
+    if (data.size_bytes() > 0) {
+      std::memcpy(output.mutable_bytes(), data.bytes(), data.size_bytes());
+    }
     return;
   }
   const Shape out_shape_noreduce = ComputeOutputShape(data.shape, is_reduced, /*keepdims=*/false);
@@ -184,10 +202,9 @@ Tensor ReduceMean::operator()(const Tensor &data, const Tensor &axes, bool keepd
   for (int64_t d : out_shape) {
     out_count *= d;
   }
-  const size_t out_n_bytes = static_cast<size_t>(out_count) * sizeof(float);
-  Tensor out =
-      rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes)
-         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes, nullptr);
+  const size_t out_n_bytes = static_cast<size_t>(out_count) * ElementSize(data.data_type);
+  Tensor out = rt ? rt->MakeOutputTensor(0, data.data_type, out_shape, out_n_bytes)
+                  : MakeOutputTensor(data.data_type, out_shape, out_n_bytes, nullptr);
   (*this)(data, axes, keepdims, noop_with_empty_axes, out);
   return out;
 }
@@ -220,11 +237,14 @@ void ReduceMean::operator()(const Tensor &data, const Tensor &axes, bool keepdim
       "kernel::ReduceMean preallocated output shape does not match expected shape.");
   const int64_t out_count = output.element_count();
   EXT_ENFORCE_INVALID(
-      output.size_bytes() == static_cast<size_t>(out_count) * sizeof(float),
+      output.data_type == data.data_type &&
+          output.size_bytes() == static_cast<size_t>(out_count) * ElementSize(data.data_type),
       "kernel::ReduceMean preallocated output buffer has unexpected size in bytes.");
 
   if (naxes == 0 && noop_with_empty_axes) {
-    std::memcpy(output.mutable_bytes(), data.bytes(), data.size_bytes());
+    if (data.size_bytes() > 0) {
+      std::memcpy(output.mutable_bytes(), data.bytes(), data.size_bytes());
+    }
     return;
   }
   const Shape out_shape_noreduce = ComputeOutputShape(data.shape, is_reduced, /*keepdims=*/false);

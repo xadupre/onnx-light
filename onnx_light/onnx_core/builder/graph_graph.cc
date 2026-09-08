@@ -148,8 +148,14 @@ void GraphGraph::Rebuild() {
   initializers_.clear();
   computed_constants_.clear();
 
+  std::unordered_set<std::string> input_names;
+  for (const ValueInfoProto &input : builder_.Inputs()) {
+    input_names.insert(input.name().value());
+  }
   for (const TensorProto &initializer : builder_.Initializers()) {
-    initializers_.emplace(initializer.name().value(), &initializer);
+    if (!input_names.count(initializer.name().value())) {
+      initializers_.emplace(initializer.name().value(), &initializer);
+    }
   }
   for (const ValueInfoProto &output : builder_.Outputs()) {
     output_names_.insert(output.name().value());
@@ -565,9 +571,11 @@ std::vector<LocalRewriting> GraphGraph::OptimizeImpl(int max_iter, OptimizationR
 std::size_t GraphGraph::Cleanup(std::vector<LocalRewriting> &rewrites, std::size_t &rewrite_batch) {
   const auto record_nodes = [&](const std::string &name, const auto &cleanup) {
     const std::size_t node_count = builder_.nodes_.size();
+    const std::size_t initializer_count = builder_.initializers_.size();
     std::unordered_map<std::string, std::string> applied_renames;
     const std::size_t removed = cleanup(applied_renames);
-    if (removed == 0) {
+    const std::size_t removed_initializers = initializer_count - builder_.initializers_.size();
+    if (removed == 0 && removed_initializers == 0) {
       return std::size_t{0};
     }
     LocalRewriting rewriting;
@@ -581,11 +589,20 @@ std::size_t GraphGraph::Cleanup(std::vector<LocalRewriting> &rewrites, std::size
     for (std::size_t i = 0; i < builder_.nodes_.size(); ++i) {
       rewriting.added_nodes_positions.push_back(i);
     }
+    if (removed_initializers != 0) {
+      for (std::size_t i = 0; i < initializer_count; ++i) {
+        rewriting.removed_initializers.push_back(i);
+      }
+      rewriting.added_initializers = builder_.initializers_;
+      for (std::size_t i = 0; i < builder_.initializers_.size(); ++i) {
+        rewriting.added_initializer_positions.push_back(i);
+      }
+    }
     rewriting.value_renames.assign(applied_renames.begin(), applied_renames.end());
     std::sort(rewriting.value_renames.begin(), rewriting.value_renames.end());
     rewriting.iteration = rewrite_batch++;
     rewrites.push_back(std::move(rewriting));
-    return removed;
+    return removed + removed_initializers;
   };
 
   std::size_t cleaned = record_nodes("RemoveDuplicateNodes", [&](auto &renames) {
@@ -801,6 +818,7 @@ void GraphGraph::ApplyRewritingBatch(const std::vector<LocalRewriting> &rewrites
         "Replay: added node positions do not leave enough slots for retained nodes.");
   }
   builder_.nodes_ = std::move(rebuilt);
+  builder_.PruneValueInfos();
   Rebuild();
 }
 

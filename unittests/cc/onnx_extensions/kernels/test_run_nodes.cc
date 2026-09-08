@@ -4955,6 +4955,40 @@ TEST(RunNodes, CollectNodeInputsIncludesSubgraphCaptures) {
   EXPECT_EQ(inputs, (std::vector<std::string>{"cond", "a", "b"}));
 }
 
+TEST(RunNodes, CollectNodeInputsIncludesDirectSubgraphOutputCaptures) {
+  for (bool multiple_graphs : {false, true}) {
+    SCOPED_TRACE(multiple_graphs);
+    GraphProto branch;
+    ValueInfoProto input;
+    input.set_name("formal");
+    branch.add_input(input);
+    TensorProto *initializer = branch.add_initializer();
+    initializer->set_name("weight");
+    initializer->set_data_type(TensorProto::DataType::FLOAT);
+    initializer->add_dims(1);
+    initializer->add_float_data(1.0f);
+    branch.add_node(MakeNode("Identity", {"formal"}, {"local"}));
+    for (const std::string name : {"captured", "formal", "weight", "local"}) {
+      ValueInfoProto output;
+      output.set_name(name);
+      branch.add_output(output);
+    }
+    NodeProto node = MakeNode("If", {"condition"}, {"result"});
+    AttributeProto attribute;
+    attribute.set_name("body");
+    if (multiple_graphs) {
+      attribute.set_type(AttributeProto::AttributeType::GRAPHS);
+      attribute.ref_graphs().push_back(branch);
+    } else {
+      attribute.set_type(AttributeProto::AttributeType::GRAPH);
+      attribute.ref_g() = branch;
+    }
+    node.ref_attribute().push_back(attribute);
+    EXPECT_EQ(core::runtime::RuntimeSession::CollectNodeInputs(node),
+              (std::vector<std::string>{"condition", "captured"}));
+  }
+}
+
 TEST(RunNodes, RunGraphReleaseIntermediatesRemovesUnusedAndEmitsEvent) {
   // y = Add(Abs(x), z) — after running, "t" (the intermediate) must be gone
   // from the context, "y" (declared output) must remain, and "x" / "z"

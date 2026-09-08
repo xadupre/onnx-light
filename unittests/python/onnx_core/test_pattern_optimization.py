@@ -104,6 +104,47 @@ class TestPatternOptimization(ExtTestCase):
         rewrites = graph.optimize()
         self.assertEqual(len(rewrites), 1)
 
+    def test_initializer_only_cleanup_reports_and_replays(self):
+        for with_node in (False, True):
+            with self.subTest(with_node=with_node):
+                nodes = [oh.make_node("Neg", ["live"], ["y"])] if with_node else []
+                output_name = "y" if with_node else "live"
+                model = oh.make_model(
+                    oh.make_graph(
+                        nodes,
+                        "initializer_cleanup",
+                        [],
+                        [oh.make_tensor_value_info(output_name, TensorProto.FLOAT, [2])],
+                        [
+                            oh.make_tensor("live", TensorProto.FLOAT, [2], [1, 2]),
+                            oh.make_tensor("unused", TensorProto.FLOAT, [2], [3, 4]),
+                        ],
+                    ),
+                    opset_imports=[oh.make_opsetid("", 18)],
+                    ir_version=10,
+                )
+                builder = optim.GraphBuilder(model)
+                graph = optim.GraphGraph(builder, [], use_global_patterns=False)
+                rewrites, report = graph.optimize(report=True)
+                optimized = builder.build_graph()
+
+                self.assertEqual(
+                    [rewrite.pattern_name for rewrite in rewrites], ["RemoveUnusedNodes"]
+                )
+                self.assertEqual(report.rewrites, 1)
+                self.assertEqual(len(report.patterns), 0)
+                self.assertEqual(len(optimized.node), len(nodes))
+                self.assertEqual([value.name for value in optimized.initializer], ["live"])
+                self.assertEqual(
+                    optimized.initializer[0].SerializeToString(),
+                    model.graph.initializer[0].SerializeToString(),
+                )
+                self.assertEqual(
+                    optim.replay(model, rewrites).SerializeToString(),
+                    optimized.SerializeToString(),
+                )
+                self.assertEqual(len(graph.optimize()), 0)
+
     def test_global_pattern_registration(self):
         optim.register_pattern(NegNegPattern())
         try:

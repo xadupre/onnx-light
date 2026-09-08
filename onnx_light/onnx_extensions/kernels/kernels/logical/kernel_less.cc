@@ -17,13 +17,13 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
 constexpr const char *kLessName = "kernel::Less";
-constexpr std::array<int32_t, 11> kSupportedElementTypes = {
-    static_cast<int32_t>(DataType::FLOAT),    static_cast<int32_t>(DataType::FLOAT16),
-    static_cast<int32_t>(DataType::BFLOAT16), static_cast<int32_t>(DataType::INT8),
-    static_cast<int32_t>(DataType::INT16),    static_cast<int32_t>(DataType::INT32),
-    static_cast<int32_t>(DataType::INT64),    static_cast<int32_t>(DataType::UINT8),
-    static_cast<int32_t>(DataType::UINT16),   static_cast<int32_t>(DataType::UINT32),
-    static_cast<int32_t>(DataType::UINT64),
+constexpr std::array<int32_t, 12> kSupportedElementTypes = {
+    static_cast<int32_t>(DataType::DOUBLE),  static_cast<int32_t>(DataType::FLOAT),
+    static_cast<int32_t>(DataType::FLOAT16), static_cast<int32_t>(DataType::BFLOAT16),
+    static_cast<int32_t>(DataType::INT8),    static_cast<int32_t>(DataType::INT16),
+    static_cast<int32_t>(DataType::INT32),   static_cast<int32_t>(DataType::INT64),
+    static_cast<int32_t>(DataType::UINT8),   static_cast<int32_t>(DataType::UINT16),
+    static_cast<int32_t>(DataType::UINT32),  static_cast<int32_t>(DataType::UINT64),
 };
 constexpr auto kLessOp = [](auto a, auto b) -> uint8_t { return a < b ? 1 : 0; };
 } // namespace
@@ -44,11 +44,22 @@ Tensor Less::operator()(const Tensor &x, const Tensor &y, RuntimeContext *rt) co
     (*this)(x, y, output);
     return output;
   }
+  if (x.data_type == DataType::DOUBLE) {
+    return detail::BinaryElementwiseAllocInOut<double, uint8_t>(
+        kLessName, "DOUBLE", DataType::DOUBLE, "BOOL", DataType::BOOL, x, y, kLessOp, nullptr,
+        tuning().parallel_minimum_elements);
+  }
   return detail::BinaryComparisonAlloc(kLessName, x, y, kLessOp, nullptr,
                                        tuning().parallel_minimum_elements);
 }
 
 void Less::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
+  if (x.data_type == DataType::DOUBLE) {
+    detail::BinaryElementwiseInOut<double, uint8_t>(kLessName, "DOUBLE", DataType::DOUBLE, "BOOL",
+                                                    DataType::BOOL, x, y, output, kLessOp,
+                                                    tuning().parallel_minimum_elements);
+    return;
+  }
   detail::BinaryComparison(kLessName, x, y, output, kLessOp, tuning().parallel_minimum_elements);
 }
 

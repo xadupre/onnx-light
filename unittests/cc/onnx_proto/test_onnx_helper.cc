@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>
+#include <limits>
 #include <random>
 #include <system_error>
 #include <thread>
@@ -2615,6 +2616,22 @@ TEST(onnx_helper, ReadScalarAsDouble_RawData) {
   i64.set_raw_data(&lval, sizeof(lval));
   ASSERT_TRUE(ReadScalarAsDouble(i64, out));
   EXPECT_DOUBLE_EQ(out, static_cast<double>(lval));
+}
+
+TEST(onnx_helper, ReadIntegerValuesNegativeInt64RawData) {
+  const uint8_t raw[] = {
+      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, // -1
+      0xfe, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, // -2
+      0xfd, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, // -3
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, // INT64_MIN
+  };
+  TensorProto tensor;
+  tensor.set_data_type(TensorProto::DataType::INT64);
+  tensor.set_raw_data(raw, sizeof(raw));
+
+  std::vector<int64_t> values;
+  ASSERT_TRUE(ReadIntegerValues(tensor, values));
+  EXPECT_EQ(values, (std::vector<int64_t>{-1, -2, -3, std::numeric_limits<int64_t>::min()}));
 }
 
 TEST(onnx_helper, ReadScalarAsDouble_EmptyOrUnsupported) {

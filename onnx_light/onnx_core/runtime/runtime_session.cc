@@ -167,7 +167,12 @@ void RuntimeSession::SetInitializers(const GraphProto &graph) {
 void RuntimeSession::SeedInitializers(RuntimeContext &rt) const {
   for (const Tensor &initializer : initializers_) {
     if (!rt.Has(initializer.name)) {
-      rt.Set(initializer.name, initializer.BorrowView(), RuntimeEventKind::kInitializer);
+      // Borrowed string views leave string_data empty. Materializes the payload for
+      // kernels and callbacks without exposing the cached strings to mutation.
+      rt.Set(initializer.name,
+             initializer.data_type == DataType::STRING ? initializer.ToOwned()
+                                                       : initializer.BorrowView(),
+             RuntimeEventKind::kInitializer);
     }
   }
 }

@@ -459,7 +459,9 @@ TEST(PatternOptimization, CleanupPassesProduceReplayableRewritingSequence) {
   builder.MakeNode("Neg", {"x"}, {"a"});
   builder.MakeNode("Neg", {"x"}, {"b"});
   builder.MakeNode("Identity", {"b"}, {"forwarded"});
-  builder.MakeNode("Add", {"a", "forwarded"}, {"y"});
+  builder.MakeNode("Add", {"a", "forwarded"}, {"sum"});
+  builder.MakeNode("Add", {"sum", "c1"}, {"biased"});
+  builder.MakeNode("Add", {"biased", "c2"}, {"y"});
   builder.MakeNode("Relu", {"x"}, {"dead"});
   builder.MakeOutput("y");
 

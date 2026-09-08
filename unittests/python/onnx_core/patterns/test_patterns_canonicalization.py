@@ -180,6 +180,10 @@ class TestCanonicalizationPatterns(ExtTestCase):
         graph = optimization.GraphGraph(builder, [pattern], use_global_patterns=False)
         all_rewrites, report = graph.optimize(report=True)
         self.assertEqual(report.rewrites, len(all_rewrites))
+        self.assertEqual(
+            optimization.replay(model, all_rewrites).SerializeToString(),
+            builder.build_graph().SerializeToString(),
+        )
         rewrites = [rewrite for rewrite in all_rewrites if rewrite.pattern_name == pattern]
         return builder.to_onnx("model"), rewrites, report
 
@@ -708,7 +712,8 @@ class TestCanonicalizationPatterns(ExtTestCase):
         self.assertGreaterEqual(len(rewrites), 1)
         self.assertEqual(len(optimized.graph.initializer), 1)
         initializer = optimized.graph.initializer[0]
-        self.assertEqual(initializer.name, "constant_cst2init")
+        self.assertEqual(initializer.name, "constant")
+        self.assertEqual(list(optimized.graph.node[0].input), ["X", initializer.name])
         np.testing.assert_array_equal(
             onh.to_array(initializer), np.array([1, 2], dtype=np.float32)
         )
@@ -760,8 +765,12 @@ class TestCanonicalizationPatterns(ExtTestCase):
         self.assertGreaterEqual(len(rewrites), 2)
         self.assertTrue(report.subgraphs)
         then_optimized, else_optimized = _if_branches(optimized)
-        self.assertEqual(len(then_optimized.initializer), 2)
-        self.assertEqual(len(else_optimized.initializer), 2)
+        self.assertEqual(
+            [initializer.name for initializer in then_optimized.initializer], ["then_output"]
+        )
+        self.assertEqual(
+            [initializer.name for initializer in else_optimized.initializer], ["else_output"]
+        )
         for feeds in (
             {"X": np.ones((3, 2), dtype=np.float32)},
             {"X": -np.ones((3, 2), dtype=np.float32)},
@@ -776,17 +785,14 @@ class TestCanonicalizationPatterns(ExtTestCase):
         self.assertNotIn("Constant", _recursive_op_types(optimized.graph))
         self.assertGreaterEqual(len(rewrites), 2)
         self.assertEqual(
-            {initializer.name for initializer in optimized.graph.initializer},
-            {"threshold", "outer_two"},
+            {initializer.name for initializer in optimized.graph.initializer}, {"threshold"}
         )
         then_graph, else_graph = _if_branches(optimized)
         self.assertEqual(
-            {initializer.name for initializer in then_graph.initializer},
-            {"two_cst2init", "two_cst2init_0"},
+            {initializer.name for initializer in then_graph.initializer}, {"two_cst2init", "two"}
         )
         self.assertEqual(
-            {initializer.name for initializer in else_graph.initializer},
-            {"two_cst2init", "two_cst2init_0"},
+            {initializer.name for initializer in else_graph.initializer}, {"two_cst2init", "two"}
         )
         for feeds in (
             {"X": np.array([1, 2, 3], dtype=np.float32)},
@@ -825,9 +831,7 @@ class TestCanonicalizationPatterns(ExtTestCase):
 
         self.assertNotIn("Constant", _op_types(optimized))
         self.assertGreaterEqual(len(rewrites), 1)
-        self.assertEqual(
-            {initializer.name for initializer in optimized.graph.initializer}, {"Y", "Y_cst2init"}
-        )
+        self.assertEqual({initializer.name for initializer in optimized.graph.initializer}, {"Y"})
         self._assert_equivalent(model, optimized, {})
 
     def test_dropout_minimal_layernorm_artifact_replacement(self):
@@ -846,7 +850,10 @@ class TestCanonicalizationPatterns(ExtTestCase):
 
         self.assertEqual(_op_types(optimized), ["LayerNormalization", "Add"])
         self.assertGreaterEqual(len(rewrites), 1)
-        self.assertEqual(len(optimized.graph.initializer), 4)
+        self.assertEqual(
+            {initializer.name for initializer in optimized.graph.initializer},
+            {"scale", "bias", "residual"},
+        )
         self._assert_equivalent(model, optimized, feeds, atol=1e-6)
 
     def test_dropout_no_match_when_mask_is_used(self):
@@ -910,9 +917,7 @@ class TestCanonicalizationPatterns(ExtTestCase):
         self.assertEqual(_op_types(optimized), ["Conv"])
         self.assertEqual(list(optimized.graph.node[0].input), ["X", "W"])
         self.assertEqual(len(rewrites), 1)
-        self.assertEqual(
-            {initializer.name for initializer in optimized.graph.initializer}, {"bias"}
-        )
+        self.assertEqual(len(optimized.graph.initializer), 0)
         self._assert_equivalent(model, optimized, feeds, atol=1e-6)
 
     def test_conv_bias_null_materialized_constant(self):

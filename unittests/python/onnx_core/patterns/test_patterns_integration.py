@@ -347,7 +347,7 @@ class TestPatternsIntegration(ExtTestCase):
         model = self._make_attention_model_4d()
         optimized, rewrites = _optimize(model, ["FunctionAttention"])
 
-        self.assertEqual(rewrites, ["FunctionAttention"])
+        self.assertEqual(rewrites, ["FunctionAttention", "RemoveUnusedNodes"])
         self.assertEqual(
             _node_types(optimized),
             [
@@ -434,7 +434,7 @@ class TestPatternsIntegration(ExtTestCase):
         model = self._make_attention_model_3d()
         optimized, rewrites = _optimize(model, ["FunctionAttention"])
 
-        self.assertEqual(rewrites, ["FunctionAttention"])
+        self.assertEqual(rewrites, ["FunctionAttention", "RemoveUnusedNodes"])
         local_attention = [
             node
             for node in optimized.graph.node

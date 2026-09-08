@@ -8,9 +8,12 @@
 
 namespace ONNX_LIGHT_NAMESPACE::core::compute {
 
-ResultLifetimeInfo ComputeResultLifetimeInfo(const GraphProto &graph, bool allow_input_overwrite) {
-  const int num_nodes = graph.node().size();
-  ResultLifetimeInfo info;
+namespace {
+
+ResultLifetimeInfo ComputeResultLifetimeInfoImpl(const utils::RepeatedProtoField<NodeProto> &nodes,
+                                                 bool allow_input_overwrite,
+                                                 ResultLifetimeInfo info) {
+  const int num_nodes = nodes.size();
   info.resize(static_cast<std::size_t>(num_nodes));
 
   // Names whose buffers must never be overwritten in place: declared graph
@@ -18,22 +21,13 @@ ResultLifetimeInfo ComputeResultLifetimeInfo(const GraphProto &graph, bool allow
   // or must outlive the run. Declared graph inputs are protected unless
   // ``allow_input_overwrite`` explicitly opts into reusing them, in which case
   // only initializers and outputs stay protected.
-  for (std::size_t i = 0; i < graph.input().size(); ++i) {
-    const std::string name = graph.input()[i].name();
-    info.graph_inputs.insert(name);
+  for (const std::string &name : info.graph_inputs) {
     if (!allow_input_overwrite) {
       info.keep.insert(name);
     }
   }
-  for (std::size_t i = 0; i < graph.initializer().size(); ++i) {
-    const std::string name = graph.initializer()[i].name();
-    info.graph_initializers.insert(name);
-    info.keep.insert(name);
-  }
-  for (std::size_t i = 0; i < graph.output().size(); ++i) {
-    info.keep.insert(graph.output()[i].name());
-    info.graph_outputs.insert(graph.output()[i].name());
-  }
+  info.keep.insert(info.graph_initializers.begin(), info.graph_initializers.end());
+  info.keep.insert(info.graph_outputs.begin(), info.graph_outputs.end());
 
   // Producer node index for every top-level intermediate, and the index of
   // the last node that references each name (directly or via a subgraph).
@@ -49,7 +43,7 @@ ResultLifetimeInfo ComputeResultLifetimeInfo(const GraphProto &graph, bool allow
     }
   }
   for (int i = 0; i < num_nodes; ++i) {
-    const NodeProto &node = graph.node()[i];
+    const NodeProto &node = nodes[i];
     std::vector<std::string> &referenced = referenced_per_node[static_cast<std::size_t>(i)];
     referenced = ::ONNX_LIGHT_NAMESPACE::core::graph::CollectNodeInputs(node);
     for (const std::string &name : referenced) {
@@ -89,6 +83,30 @@ ResultLifetimeInfo ComputeResultLifetimeInfo(const GraphProto &graph, bool allow
   }
 
   return info;
+}
+
+} // namespace
+
+ResultLifetimeInfo ComputeResultLifetimeInfo(const GraphProto &graph, bool allow_input_overwrite) {
+  ResultLifetimeInfo info;
+  for (const auto &input : graph.input()) {
+    info.graph_inputs.insert(input.name());
+  }
+  for (const auto &initializer : graph.initializer()) {
+    info.graph_initializers.insert(initializer.name());
+  }
+  for (const auto &output : graph.output()) {
+    info.graph_outputs.insert(output.name());
+  }
+  return ComputeResultLifetimeInfoImpl(graph.node(), allow_input_overwrite, std::move(info));
+}
+
+ResultLifetimeInfo ComputeResultLifetimeInfo(const FunctionProto &function,
+                                             bool allow_input_overwrite) {
+  ResultLifetimeInfo info;
+  info.graph_inputs.insert(function.input().begin(), function.input().end());
+  info.graph_outputs.insert(function.output().begin(), function.output().end());
+  return ComputeResultLifetimeInfoImpl(function.node(), allow_input_overwrite, std::move(info));
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::compute

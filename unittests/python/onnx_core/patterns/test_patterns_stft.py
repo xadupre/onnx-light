@@ -82,7 +82,8 @@ class TestSTFTFusionPattern(ExtTestCase):
                     )
                     optimized, rewrites = _optimize(model)
                     self.assertEqual(
-                        [rewrite.pattern_name for rewrite in rewrites], ["STFTFusion"]
+                        [rewrite.pattern_name for rewrite in rewrites],
+                        ["STFTFusion", "RemoveUnusedNodes"],
                     )
                     self.assertEqual([node.op_type for node in optimized.graph.node], ["STFT"])
                     self.assertEqual(optimized.graph.node[0].attribute[0].i, int(onesided))

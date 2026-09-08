@@ -218,6 +218,66 @@ TEST(GraphBuilder, ToFunctionRejectsInitializers) {
   EXPECT_THROW(builder.ToFunction("custom"), core::builder::BuilderError);
 }
 
+TEST(GraphBuilder, ToFunctionPreservesFinalizedShapesAndMetadata) {
+  core::builder::GraphBuilder builder("F", SchemaLookup());
+  ValueInfoProto input;
+  input.set_name("X");
+  input.set_doc_string("Input declaration");
+  auto *input_type = input.mutable_type()->mutable_tensor_type();
+  input_type->set_elem_type(TensorProto::DataType::FLOAT);
+  input_type->mutable_shape()->add_dim();
+  input_type->mutable_shape()->add_dim()->set_dim_value(3);
+  builder.MakeInput(input);
+  builder.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+  builder.MakeNode("Neg", {"X"}, {"intermediate"});
+  builder.MakeNode("Abs", {"intermediate"}, {"out"});
+  builder.MakeNode("Shape", {"intermediate"}, {"shape"});
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  for (const std::string name : {"then_branch", "else_branch"}) {
+    auto &branch = builder.MakeSubgraph(name);
+    branch.MakeNode("Identity", {"intermediate"}, {name + "_result"});
+    branch.MakeOutput(name + "_result");
+    AttributeProto reference;
+    reference.set_name(name + "_ref");
+    reference.set_type(AttributeProto::AttributeType::STRING);
+    reference.set_s(name);
+    attributes.push_back(reference);
+  }
+  builder.MakeNode("If", {"condition"}, {"selected"}, "", "", attributes);
+  for (const std::string name : {"out", "shape", "selected"}) {
+    builder.MakeOutput(name);
+  }
+
+  const FunctionProto function = builder.ToFunction("custom");
+  const GraphProto graph = builder.ToGraph();
+  EXPECT_EQ(function.name(), "F");
+  EXPECT_EQ(function.domain(), "custom");
+  ASSERT_EQ(function.node().size(), graph.node().size());
+  for (std::size_t i = 0; i < graph.node().size(); ++i) {
+    EXPECT_EQ(function.node(i).SerializeAsString(), graph.node(i).SerializeAsString());
+  }
+  EXPECT_EQ(function.node(1).op_type(), "Shape");
+  ASSERT_EQ(function.value_info().size(),
+            graph.input().size() + graph.output().size() + graph.value_info().size());
+  const auto check_value_info = [&](const auto &values) {
+    for (const ValueInfoProto &expected : values) {
+      bool found = false;
+      for (const ValueInfoProto &actual : function.value_info()) {
+        if (actual.name() == expected.name()) {
+          EXPECT_EQ(actual.SerializeAsString(), expected.SerializeAsString());
+          found = true;
+          break;
+        }
+      }
+      EXPECT_TRUE(found) << expected.name();
+    }
+  };
+  check_value_info(graph.input());
+  check_value_info(graph.output());
+  check_value_info(graph.value_info());
+  EXPECT_EQ(builder.ToFunction("custom").SerializeAsString(), function.SerializeAsString());
+}
+
 TEST(GraphBuilder, ExplicitOpsetIsPreserved) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   builder.SetOpsetVersion("", 17);
@@ -902,6 +962,560 @@ TEST(GraphBuilder, InlineLocalFunctionsIncludeWildcardsNameByDomain) {
 TEST(GraphBuilder, InlineLocalFunctionsRejectsIncludeAndExclude) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   EXPECT_THROW(builder.InlineLocalFunctions({{"", "A"}}, {{"", "B"}}), core::builder::BuilderError);
+}
+
+TEST(GraphBuilder, NativeLocalFunctionInfersBeforeFollowingNode) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.SetOpsetVersion("", 18);
+  auto &function = builder.MakeLocalFunction("F", "local");
+  function.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  function.MakeNode("Identity", {"a"}, {"r"});
+  function.MakeOutput("r");
+  builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeNode("F", {"X"}, {"result"}, "local");
+  ASSERT_TRUE(builder.HasShape("result"));
+  EXPECT_EQ(builder.GetShape("result").Shape(), MakeShape({2, 3}));
+  builder.MakeNode("Add", {"result", "X"}, {"Y"});
+  builder.MakeOutput("Y");
+  const ModelProto model = builder.ToModel();
+  ASSERT_EQ(model.functions().size(), 1u);
+  ASSERT_GE(model.functions(0).value_info().size(), 2u);
+  EXPECT_EQ(model.functions(0).value_info(0).name(), "a");
+  EXPECT_TRUE(model.functions(0).value_info(0).has_type());
+  EXPECT_EQ(model.graph().output(0).type().tensor_type().shape().dim_size(), 2);
+  core::builder::GraphBuilder imported(model, SchemaLookup());
+  EXPECT_EQ(imported.LocalFunction("F").GetShape("a").Shape(), MakeShape({2, 3}));
+  EXPECT_EQ(imported.GetShape("Y").Shape(), MakeShape({2, 3}));
+}
+
+TEST(GraphBuilder, NativeLocalFunctionDefinitionsSurviveMovesAndEdits) {
+  core::builder::GraphBuilder original("g", SchemaLookup());
+  auto &function = original.MakeLocalFunction("F", "local");
+  function.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  function.MakeNode("Identity", {"a"}, {"r"});
+  function.MakeOutput("r");
+  original.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  original.MakeNode("F", {"X"}, {"first"}, "local");
+  core::shapes::ShapesContext retained = original.Shapes();
+  core::builder::GraphBuilder moved(std::move(original));
+  moved.LocalFunction("F").MakeNode("Shape", {"a"}, {"shape"});
+  moved.LocalFunction("F").MakeOutput("shape");
+  const auto outputs = moved.MakeNode("F", {"X"}, {}, "local");
+  ASSERT_EQ(outputs.size(), 2u);
+  EXPECT_EQ(moved.GetShape(outputs[0]).Shape(), MakeShape({2, 3}));
+  EXPECT_EQ(moved.GetShape(outputs[1]).Shape(), MakeShape({2}));
+  // The copied context still owns the original, one-output definition.
+  retained.ComputeShapeNode(MakeNode("F", {"X"}, {"old"}, "local"));
+  EXPECT_EQ(retained.Get("old").Shape(), MakeShape({2, 3}));
+}
+
+TEST(GraphBuilder, NativeGenericFunctionImportsAndSpecializesNestedMatMul) {
+  core::builder::GraphBuilder seed("g", SchemaLookup());
+  seed.SetOpsetVersion("", 18);
+  seed.SetOpsetVersion("local", 1);
+  seed.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  seed.MakeInput("W", core::symbolic::TensorType::kFloat, MakeShape({3, 4}));
+  ModelProto model = seed.ToModel();
+  FunctionProto outer;
+  outer.set_name("Outer");
+  outer.set_domain("local");
+  outer.add_input("a");
+  outer.add_input("b");
+  outer.add_output("r");
+  outer.add_opset("", 18);
+  outer.add_opset("local", 1);
+  outer.add_node(MakeNode("Inner", {"a", "b"}, {"r"}, "local"));
+  model.add_function(outer);
+  FunctionProto inner = outer;
+  inner.set_name("Inner");
+  inner.ref_node().clear();
+  inner.add_node(MakeNode("MatMul", {"a", "b"}, {"r"}));
+  model.add_function(inner);
+  model.mutable_graph()->add_node(MakeNode("Outer", {"X", "W"}, {"Y"}, "local"));
+  core::builder::GraphBuilder builder(model, SchemaLookup());
+  EXPECT_FALSE(builder.LocalFunction("Inner").HasShape("a"));
+  ASSERT_TRUE(builder.HasShape("Y"));
+  EXPECT_EQ(builder.GetShape("Y").Shape(), MakeShape({2, 4}));
+  builder.MakeNode("Add", {"Y", "Y"}, {"Z"});
+  EXPECT_EQ(builder.GetShape("Z").Shape(), MakeShape({2, 4}));
+  for (auto &function : model.ref_functions()) {
+    for (std::size_t i = 0; i < model.graph().input().size(); ++i) {
+      ValueInfoProto input = model.graph().input(i);
+      input.set_name(function.input(i));
+      function.add_value_info(input);
+    }
+  }
+  core::builder::GraphBuilder typed(model, SchemaLookup());
+  ASSERT_TRUE(typed.LocalFunction("Inner").HasShape("r"));
+  EXPECT_EQ(typed.LocalFunction("Inner").GetShape("r").Shape(), MakeShape({2, 4}));
+  EXPECT_EQ(typed.GetShape("Y").Shape(), MakeShape({2, 4}));
+}
+
+TEST(GraphBuilder, NativeTypedFunctionInfersOnImportAndPreservesDeclarationsAfterMove) {
+  core::builder::GraphBuilder seed("g", SchemaLookup());
+  seed.SetOpsetVersion("", 18);
+  seed.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  ModelProto model = seed.ToModel();
+  FunctionProto function;
+  function.set_name("F");
+  function.set_domain("local");
+  function.set_doc_string("Function documentation");
+  function.add_metadata("purpose", "roundtrip");
+  function.add_input("a");
+  function.add_output("r");
+  function.add_opset("", 18);
+  function.add_attribute("required");
+  AttributeProto default_attribute;
+  default_attribute.set_name("optional");
+  default_attribute.set_type(AttributeProto::AttributeType::INT);
+  default_attribute.set_i(7);
+  function.add_attribute_proto(default_attribute);
+  for (const std::string name : {"a", "middle", "r"}) {
+    ValueInfoProto value_info = model.graph().input(0);
+    value_info.set_name(name);
+    value_info.set_doc_string(name + " documentation");
+    auto *metadata = value_info.add_metadata_props();
+    metadata->set_key("purpose");
+    metadata->set_value(name);
+    function.add_value_info(value_info);
+  }
+  function.add_node(MakeNode("Neg", {"a"}, {"middle"}));
+  function.add_node(MakeNode("Abs", {"middle"}, {"r"}));
+  model.add_function(function);
+  core::builder::GraphBuilder builder(model, SchemaLookup());
+  auto &local = builder.LocalFunction("F");
+  ASSERT_TRUE(local.HasShape("middle"));
+  EXPECT_EQ(local.GetShape("middle").Shape(), MakeShape({2, 3}));
+  ASSERT_TRUE(local.HasShape("r"));
+  local.MakeNode("Identity", {"r"}, {"extra"});
+  local.MakeOutput("extra");
+  core::builder::GraphBuilder moved(std::move(builder));
+  const ModelProto exported = moved.ToModel();
+  ASSERT_EQ(exported.functions().size(), 1u);
+  const FunctionProto &actual = exported.functions(0);
+  EXPECT_EQ(actual.doc_string(), function.doc_string());
+  ASSERT_EQ(actual.attribute().size(), 1u);
+  EXPECT_EQ(actual.attribute(0), "required");
+  ASSERT_EQ(actual.attribute_proto().size(), 1u);
+  EXPECT_EQ(actual.attribute_proto(0).SerializeAsString(), default_attribute.SerializeAsString());
+  bool found_metadata = false;
+  for (const auto &metadata : actual.metadata_props()) {
+    if (metadata.key() == "purpose") {
+      EXPECT_EQ(metadata.value(), "roundtrip");
+      found_metadata = true;
+    }
+  }
+  EXPECT_TRUE(found_metadata);
+  for (const auto &expected : function.value_info()) {
+    std::size_t matches = 0;
+    for (const auto &value_info : actual.value_info()) {
+      if (value_info.name() == expected.name()) {
+        ++matches;
+        EXPECT_EQ(value_info.doc_string(), expected.doc_string());
+        bool found_value_metadata = false;
+        for (const auto &metadata : value_info.metadata_props()) {
+          if (metadata.key() == "purpose") {
+            EXPECT_EQ(metadata.value(), expected.name());
+            found_value_metadata = true;
+          }
+        }
+        EXPECT_TRUE(found_value_metadata);
+      }
+    }
+    EXPECT_EQ(matches, 1u) << expected.name();
+  }
+  ASSERT_EQ(actual.node().size(), 3u);
+  ASSERT_EQ(actual.output().size(), 2u);
+  EXPECT_EQ(actual.output(1), "extra");
+}
+
+TEST(GraphBuilder, NativeFunctionImportsIfWithUnboundAttributesOrUnknownCaptures) {
+  for (const bool referenced_attribute : {false, true}) {
+    SCOPED_TRACE(referenced_attribute);
+    core::builder::GraphBuilder seed("g", SchemaLookup());
+    seed.SetOpsetVersion("", 18);
+    seed.SetOpsetVersion("local", 1);
+    seed.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+    seed.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+    ModelProto model = seed.ToModel();
+    FunctionProto function;
+    function.set_name("Select");
+    function.set_domain("local");
+    function.add_input("a");
+    function.add_input("condition");
+    function.add_output("r");
+    function.add_opset("", 18);
+    function.add_value_info(model.graph().input(1));
+    if (referenced_attribute) {
+      ValueInfoProto input = model.graph().input(0);
+      input.set_name("a");
+      function.add_value_info(input);
+      AttributeProto default_type;
+      default_type.set_name("dtype");
+      default_type.set_type(AttributeProto::AttributeType::INT);
+      default_type.set_i(TensorProto::DataType::DOUBLE);
+      function.add_attribute_proto(default_type);
+    }
+    NodeProto select = MakeNode("If", {"condition"}, {"r"});
+    for (const std::string name : {"then_branch", "else_branch"}) {
+      AttributeProto branch;
+      branch.set_name(name);
+      branch.set_type(AttributeProto::AttributeType::GRAPH);
+      GraphProto *graph = branch.mutable_g();
+      graph->set_name(name);
+      NodeProto node =
+          MakeNode(referenced_attribute ? "Cast" : "Identity", {"a"}, {"branch_result"});
+      if (referenced_attribute) {
+        AttributeProto reference;
+        reference.set_name("to");
+        reference.set_type(AttributeProto::AttributeType::INT);
+        reference.set_ref_attr_name("dtype");
+        node.add_attribute(reference);
+      }
+      graph->add_node(node);
+      graph->add_output()->set_name("branch_result");
+      select.add_attribute(branch);
+    }
+    function.add_node(select);
+    model.add_function(function);
+    core::builder::GraphBuilder builder(model, SchemaLookup());
+    EXPECT_FALSE(builder.LocalFunction("Select").HasShape("r"));
+    builder.MakeNode("Select", {"X", "condition"}, {"Y"}, "local");
+    ASSERT_TRUE(builder.HasShape("Y"));
+    EXPECT_EQ(builder.GetShape("Y").Shape(), MakeShape({2, 3}));
+    EXPECT_EQ(builder.GetShape("Y").Dtype(), referenced_attribute
+                                                 ? core::symbolic::TensorType::kDouble
+                                                 : core::symbolic::TensorType::kFloat);
+  }
+}
+
+TEST(GraphBuilder, NativeFunctionBindsRequiredAndDefaultAttributes) {
+  core::builder::GraphBuilder seed("g", SchemaLookup());
+  seed.SetOpsetVersion("", 18);
+  seed.SetOpsetVersion("local", 1);
+  seed.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  ModelProto model = seed.ToModel();
+  FunctionProto function;
+  function.set_name("Convert");
+  function.set_domain("local");
+  function.add_input("a");
+  ValueInfoProto input = model.graph().input(0);
+  input.set_name("a");
+  function.add_value_info(input);
+  function.add_output("r");
+  function.add_opset("", 18);
+  AttributeProto default_type;
+  default_type.set_name("dtype");
+  default_type.set_type(AttributeProto::AttributeType::INT);
+  default_type.set_i(TensorProto::DataType::DOUBLE);
+  function.add_attribute_proto(default_type);
+  NodeProto cast = MakeNode("Cast", {"a"}, {"r"});
+  AttributeProto reference;
+  reference.set_name("to");
+  reference.set_type(AttributeProto::AttributeType::INT);
+  reference.set_ref_attr_name("dtype");
+  cast.add_attribute(reference);
+  function.add_node(cast);
+  model.add_function(function);
+  FunctionProto required = function;
+  required.set_name("Required");
+  required.ref_attribute_proto().clear();
+  required.add_attribute("dtype");
+  model.add_function(required);
+  core::builder::GraphBuilder builder(model, SchemaLookup());
+  EXPECT_TRUE(builder.LocalFunction("Convert").HasShape("a"));
+  EXPECT_FALSE(builder.LocalFunction("Convert").HasShape("r"));
+  builder.MakeNode("Convert", {"X"}, {"default"}, "local");
+  EXPECT_EQ(builder.GetShape("default").Dtype(), core::symbolic::TensorType::kDouble);
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  default_type.set_i(TensorProto::DataType::INT64);
+  attributes.push_back(default_type);
+  builder.MakeNode("Convert", {"X"}, {"explicit"}, "local", "", attributes);
+  EXPECT_EQ(builder.GetShape("explicit").Dtype(), core::symbolic::TensorType::kInt64);
+  EXPECT_THROW(builder.MakeNode("Required", {"X"}, {"missing"}, "local"), std::invalid_argument);
+  builder.MakeNode("Required", {"X"}, {"provided"}, "local", "", attributes);
+  EXPECT_EQ(builder.GetShape("provided").Dtype(), core::symbolic::TensorType::kInt64);
+  const ModelProto exported = builder.ToModel();
+  ASSERT_EQ(exported.functions(0).attribute_proto().size(), 1u);
+  EXPECT_EQ(exported.functions(0).node(0).attribute(0).ref_attr_name(), "dtype");
+}
+
+TEST(GraphBuilder, NativeFunctionRejectsRecursionAndWrongArity) {
+  core::builder::GraphBuilder seed("g", SchemaLookup());
+  seed.SetOpsetVersion("", 18);
+  seed.SetOpsetVersion("local", 1);
+  seed.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  ModelProto model = seed.ToModel();
+  FunctionProto function;
+  function.set_name("Recursive");
+  function.set_domain("local");
+  function.add_opset("local", 1);
+  function.add_input("a");
+  function.add_output("r");
+  function.add_node(MakeNode("Recursive", {"a"}, {"r"}, "local"));
+  model.add_function(function);
+  core::builder::GraphBuilder builder(model, SchemaLookup());
+  EXPECT_THROW(builder.MakeNode("Recursive", {"X"}, {"recursive"}, "local"), std::invalid_argument);
+  EXPECT_THROW(builder.MakeNode("Recursive", {"X", "X"}, {"arity"}, "local"),
+               std::invalid_argument);
+}
+
+TEST(GraphBuilder, NativeUnknownRankIsNotScalar) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  ValueInfoProto unknown;
+  unknown.set_name("unknown");
+  unknown.mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::DataType::FLOAT);
+  builder.MakeInput(unknown);
+  EXPECT_FALSE(builder.HasShape("unknown"));
+  builder.MakeInput("scalar", core::symbolic::TensorType::kFloat, MakeShape({}));
+  ASSERT_TRUE(builder.HasShape("scalar"));
+  EXPECT_EQ(builder.GetShape("scalar").Shape().Rank(), 0u);
+  builder.MakeNode("MatMul", {"unknown", "unknown"}, {"deferred"});
+  EXPECT_FALSE(builder.HasShape("deferred"));
+  EXPECT_THROW(builder.MakeNode("MatMul", {"scalar", "scalar"}, {"invalid"}),
+               std::invalid_argument);
+}
+
+TEST(GraphBuilder, NativeIfInfersCapturedOutputsBeforeCastLike) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.SetOpsetVersion("", 18);
+  builder.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+  builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  for (const std::string name : {"then_branch", "else_branch"}) {
+    auto &branch = builder.MakeSubgraph(name);
+    branch.MakeNode("Identity", {"X"}, {"branch_result"});
+    branch.MakeOutput("branch_result");
+    AttributeProto reference;
+    reference.set_name(name + "_ref");
+    reference.set_type(AttributeProto::AttributeType::STRING);
+    reference.set_s(name);
+    attributes.push_back(reference);
+  }
+  builder.MakeNode("If", {"condition"}, {"selected"}, "", "", attributes);
+  ASSERT_TRUE(builder.HasShape("selected"));
+  builder.MakeNode("CastLike", {"selected", "X"}, {"Y"});
+  EXPECT_EQ(builder.GetShape("Y").Shape(), MakeShape({2, 3}));
+  builder.MakeOutput("Y");
+  core::builder::GraphBuilder imported(builder.ToModel(), SchemaLookup());
+  EXPECT_EQ(imported.GetShape("selected").Shape(), MakeShape({2, 3}));
+}
+
+TEST(GraphBuilder, NativeSubgraphRejectsAncestorShadowing) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  auto &branch = builder.MakeSubgraph("branch");
+  EXPECT_THROW(branch.MakeNode("Identity", {"X"}, {"X"}), core::builder::BuilderError);
+  EXPECT_THROW(branch.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3})),
+               core::builder::BuilderError);
+  branch.MakeNode("Identity", {"X"}, {"Y"});
+  EXPECT_EQ(branch.GetShape("Y").Shape(), MakeShape({2, 3}));
+}
+
+TEST(GraphBuilder, NativeCleanupPrunesInitializersWithoutNodes) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("public", core::symbolic::TensorType::kFloat, MakeShape({1}));
+  builder.MakeInitializer(MakeInitializer<float>("public", {1}, {1.0f}));
+  builder.MakeInitializer(MakeInitializer<float>("output", {1}, {2.0f}));
+  builder.MakeInitializer(MakeInitializer<float>("orphan", {1}, {3.0f}));
+  builder.MakeOutput("output");
+  EXPECT_EQ(builder.RemoveUnusedNodes(), 0u);
+  ASSERT_EQ(builder.Initializers().size(), 2u);
+  EXPECT_EQ(builder.Initializers()[0].name(), "public");
+  EXPECT_EQ(builder.Initializers()[1].name(), "output");
+  const GraphProto graph = builder.ToGraph();
+  EXPECT_EQ(graph.value_info().size(), 0u);
+  EXPECT_EQ(graph.input().size(), 1u);
+}
+
+TEST(GraphBuilder, NativeCleanupRetainsInitializerCapturedByLiveBranch) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+  builder.MakeInitializer(MakeInitializer<float>("captured", {1}, {1.0f}));
+  builder.MakeInitializer(MakeInitializer<float>("orphan", {1}, {2.0f}));
+  builder.MakeNode("Neg", {"orphan"}, {"dead"});
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  for (const std::string name : {"then_branch", "else_branch"}) {
+    auto &branch = builder.MakeSubgraph(name);
+    branch.MakeOutput("captured");
+    AttributeProto reference;
+    reference.set_name(name + "_ref");
+    reference.set_type(AttributeProto::AttributeType::STRING);
+    reference.set_s(name);
+    attributes.push_back(reference);
+  }
+  builder.MakeNode("If", {"condition"}, {"Y"}, "", "", attributes);
+  builder.MakeOutput("Y");
+  EXPECT_EQ(builder.RemoveUnusedNodes(), 1u);
+  ASSERT_EQ(builder.Initializers().size(), 1u);
+  EXPECT_EQ(builder.Initializers()[0].name(), "captured");
+  EXPECT_EQ(builder.ToGraph().value_info().size(), 0u);
+}
+
+TEST(GraphBuilder, NativeFunctionSnapshotsRefreshOnlyOnDemand) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  auto &function = builder.MakeLocalFunction("F", "local");
+  function.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  function.MakeNode("Identity", {"a"}, {"r"});
+  function.MakeNode("Neg", {"a"}, {"dead"});
+  function.MakeOutput("r");
+  builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeNode("F", {"X"}, {"result"}, "local");
+  const core::shapes::ShapesContext snapshot = builder.Shapes();
+  const FunctionProto *definition = snapshot.GetLocalFunction("local:F");
+  ASSERT_NE(definition, nullptr);
+  ASSERT_EQ(definition->node().size(), 2u);
+
+  auto &growing_function = builder.MakeLocalFunction("Identity", "local");
+  growing_function.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  std::string previous = "a";
+  for (int i = 0; i < 16; ++i) {
+    const std::string output = "inner_" + std::to_string(i);
+    growing_function.MakeNode("Identity", {previous}, {output});
+    previous = output;
+    builder.MakeNode("Identity", {"X"}, {"ordinary_" + std::to_string(i)});
+    EXPECT_EQ(builder.Shapes().GetLocalFunction("local:F"), definition);
+    EXPECT_FALSE(builder.Shapes().HasLocalFunction("local:Identity"));
+  }
+  growing_function.MakeOutput(previous);
+  builder.MakeNode("Identity", {"X"}, {"from_growing"}, "local");
+  EXPECT_EQ(builder.GetShape("from_growing").Shape(), MakeShape({2, 3}));
+  const core::shapes::ShapesContext updated = builder.Shapes();
+  ASSERT_NE(updated.GetLocalFunction("local:Identity"), nullptr);
+  EXPECT_EQ(updated.GetLocalFunction("local:Identity")->node().size(), 16u);
+
+  EXPECT_EQ(function.RemoveUnusedNodes(), 1u);
+  builder.MakeNode("Add", {"result", "X"}, {"ordinary_after_edit"});
+  EXPECT_EQ(builder.Shapes().GetLocalFunction("local:F"), updated.GetLocalFunction("local:F"));
+  builder.MakeNode("F", {"X"}, {"after_edit"}, "local");
+  ASSERT_NE(builder.Shapes().GetLocalFunction("local:F"), nullptr);
+  EXPECT_EQ(builder.Shapes().GetLocalFunction("local:F")->node().size(), 1u);
+  EXPECT_EQ(builder.GetShape("after_edit").Shape(), MakeShape({2, 3}));
+  EXPECT_EQ(definition->node().size(), 2u);
+}
+
+TEST(GraphBuilder, NativeDemandRefreshDiscardsRemovedFunctions) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  auto &function = builder.MakeLocalFunction("F", "local");
+  function.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  function.MakeNode("Identity", {"a"}, {"r"});
+  function.MakeOutput("r");
+  builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeNode("F", {"X"}, {"result"}, "local");
+  builder.MakeOutput("result");
+  const core::shapes::ShapesContext snapshot = builder.Shapes();
+  EXPECT_EQ(builder.InlineLocalFunctions(), 1u);
+  EXPECT_FALSE(builder.HasLocalFunction("F"));
+  builder.MakeNode("F", {"X"}, {"unregistered"}, "local");
+  EXPECT_FALSE(builder.HasShape("unregistered"));
+  EXPECT_FALSE(builder.Shapes().HasLocalFunction("local:F"));
+  EXPECT_TRUE(snapshot.HasLocalFunction("local:F"));
+}
+
+TEST(GraphBuilder, NativeGraphReferencesRefreshLateFunctionDefinitions) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.SetOpsetVersion("local", 1);
+  builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  for (const std::string name : {"then_branch", "else_branch"}) {
+    auto &branch = builder.MakeSubgraph(name);
+    branch.MakeNode("F", {"X"}, {"branch_result"}, "local");
+    branch.MakeOutput("branch_result");
+    EXPECT_FALSE(branch.HasShape("branch_result"));
+    AttributeProto reference;
+    reference.set_name(name + "_ref");
+    reference.set_type(AttributeProto::AttributeType::STRING);
+    reference.set_s(name);
+    attributes.push_back(reference);
+  }
+  auto &function = builder.MakeLocalFunction("F", "local");
+  function.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  function.MakeNode("Identity", {"a"}, {"r"});
+  function.MakeOutput("r");
+  EXPECT_FALSE(builder.Shapes().HasLocalFunction("local:F"));
+  builder.MakeNode("If", {"condition"}, {"selected"}, "", "", attributes);
+  EXPECT_EQ(builder.GetShape("selected").Shape(), MakeShape({2, 3}));
+  EXPECT_EQ(builder.Subgraph("then_branch").GetShape("branch_result").Shape(), MakeShape({2, 3}));
+  const core::shapes::ShapesContext snapshot = builder.Shapes();
+  builder.MakeNode("CastLike", {"selected", "X"}, {"Y"});
+  EXPECT_EQ(builder.GetShape("Y").Shape(), MakeShape({2, 3}));
+  EXPECT_EQ(builder.Shapes().GetLocalFunction("local:F"), snapshot.GetLocalFunction("local:F"));
+}
+
+TEST(GraphBuilder, NativeDefaultInitializerValidatesDeclaredTensor) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  const std::vector<TensorProto> incompatible = {
+      MakeInitializer<int64_t>("x", {2}, {1, 2}), MakeInitializer<float>("x", {1, 2}, {1.0f, 2.0f}),
+      MakeInitializer<float>("x", {3}, {1.0f, 2.0f, 3.0f})};
+  for (const TensorProto &tensor : incompatible) {
+    EXPECT_THROW(builder.MakeInitializer(tensor), core::builder::BuilderError);
+    EXPECT_TRUE(builder.Initializers().empty());
+    EXPECT_EQ(builder.GetShape("x").Dtype(), core::symbolic::TensorType::kFloat);
+    EXPECT_EQ(builder.GetShape("x").Shape(), MakeShape({2}));
+  }
+  const TensorProto compatible = MakeInitializer<float>("x", {2}, {1.0f, 2.0f});
+  EXPECT_EQ(builder.MakeInitializer(compatible), "x");
+  ASSERT_EQ(builder.Initializers().size(), 1u);
+  EXPECT_THROW(builder.MakeInitializer(compatible), core::builder::BuilderError);
+}
+
+TEST(GraphBuilder, NativeDefaultInitializerAllowsSymbolicAndUnknownDimensions) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  ValueInfoProto input;
+  input.set_name("x");
+  auto *type = input.mutable_type()->mutable_tensor_type();
+  type->set_elem_type(TensorProto::DataType::FLOAT);
+  type->mutable_shape()->add_dim()->set_dim_param("batch");
+  type->mutable_shape()->add_dim();
+  type->mutable_shape()->add_dim()->set_dim_value(3);
+  builder.MakeInput(input);
+  const auto expected_shape = builder.GetShape("x").Shape();
+  EXPECT_EQ(
+      builder.MakeInitializer(MakeInitializer<float>("x", {2, 4, 3}, std::vector<float>(24, 1.0f))),
+      "x");
+  EXPECT_EQ(builder.GetShape("x").Shape(), expected_shape);
+  const auto &declared = builder.Inputs()[0].type().tensor_type().shape();
+  EXPECT_EQ(declared.dim(0).dim_param(), "batch");
+  EXPECT_FALSE(declared.dim(1).has_dim_value());
+  EXPECT_FALSE(declared.dim(1).has_dim_param());
+  EXPECT_EQ(declared.dim(2).dim_value(), 3);
+}
+
+TEST(GraphBuilder, NativeDefaultInitializerAllowsUnknownRankAndType) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  ValueInfoProto input;
+  input.set_name("unknown_rank");
+  input.mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::DataType::FLOAT);
+  builder.MakeInput(input);
+  EXPECT_EQ(builder.MakeInitializer(MakeInitializer<float>("unknown_rank", {2}, {1.0f, 2.0f})),
+            "unknown_rank");
+  EXPECT_FALSE(builder.Inputs()[0].type().tensor_type().has_shape());
+  EXPECT_FALSE(builder.Compute().Shapes().Has("unknown_rank"));
+  ValueInfoProto untyped;
+  untyped.set_name("untyped");
+  builder.MakeInput(untyped);
+  EXPECT_EQ(builder.MakeInitializer(MakeInitializer<int64_t>("untyped", {1}, {1})), "untyped");
+  builder.MakeInput("scalar", core::symbolic::TensorType::kFloat, MakeShape({}));
+  EXPECT_THROW(builder.MakeInitializer(MakeInitializer<float>("scalar", {1}, {1.0f})),
+               core::builder::BuilderError);
+  EXPECT_EQ(builder.MakeInitializer(MakeInitializer<float>("scalar", {}, {1.0f})), "scalar");
+}
+
+TEST(GraphBuilder, NativeDefaultInitializerRejectsNonTensorInput) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  ValueInfoProto input;
+  input.set_name("sequence");
+  input.mutable_type()
+      ->mutable_sequence_type()
+      ->mutable_elem_type()
+      ->mutable_tensor_type()
+      ->set_elem_type(TensorProto::DataType::FLOAT);
+  builder.MakeInput(input);
+  EXPECT_THROW(builder.MakeInitializer(MakeInitializer<float>("sequence", {1}, {1.0f})),
+               core::builder::BuilderError);
+  EXPECT_TRUE(builder.Initializers().empty());
 }
 
 } // namespace Test

@@ -8,7 +8,9 @@
 
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <cstdint>
+#include <limits>
 #include <stdexcept>
 #include <vector>
 
@@ -26,6 +28,39 @@ using onnx_kernels::kernel::ReduceSum;
 using onnx_kernels::kernel::ReduceSumSquare;
 
 namespace Test {
+
+TEST(KernelClass, NativeReductionDoublePrecisionAndEmptyIdentities) {
+  const KernelContext ctx{DefaultOpset(18)};
+  const Tensor data = Tensor::FromDouble("", {2, 2}, {1, 1 + 1e-12, 2, 2 + 1e-12});
+  const Tensor axes = Tensor::FromInt64("", {1}, {-1});
+  const Tensor empty_axes = Tensor::FromInt64("", {0}, {});
+  ReduceMin minimum{ctx};
+  ReduceMax maximum{ctx};
+  ReduceMean mean{ctx};
+  Tensor out = Tensor::FromDouble("", {2}, {0, 0});
+  minimum(data, axes, false, false, out);
+  EXPECT_EQ(out.AsDouble()[0], 1);
+  maximum(data, axes, false, false, out);
+  EXPECT_EQ(out.AsDouble()[0], 1 + 1e-12);
+  mean(data, axes, false, false, out);
+  EXPECT_EQ(out.AsDouble()[0], (1 + (1 + 1e-12)) / 2);
+  EXPECT_EQ(mean(data, empty_axes, false, true).data, data.data);
+  const Tensor empty = Tensor::FromDouble("", {0, 3}, {});
+  const Tensor axis0 = Tensor::FromInt64("", {1}, {0});
+  Tensor low = minimum(empty, axis0, false);
+  Tensor high = maximum(empty, axis0, false);
+  Tensor average = mean(empty, axis0, false);
+  for (int i = 0; i < 3; ++i) {
+    EXPECT_EQ(low.AsDouble()[i], std::numeric_limits<double>::infinity());
+    EXPECT_EQ(high.AsDouble()[i], -std::numeric_limits<double>::infinity());
+    EXPECT_TRUE(std::isnan(average.AsDouble()[i]));
+  }
+  const Tensor integers = Tensor::FromInt64("", {2}, {9007199254740993LL, 9007199254740992LL});
+  EXPECT_EQ(maximum(integers).AsInt64()[0], 9007199254740993LL);
+  const Tensor nan_data = Tensor::FromDouble("", {2}, {NAN, 1});
+  EXPECT_TRUE(std::isnan(minimum(nan_data).AsDouble()[0]));
+  EXPECT_TRUE(std::isnan(maximum(nan_data).AsDouble()[0]));
+}
 
 TEST(KernelClass, ReduceSumDefaultAxesReducesAll) {
   const KernelContext ctx{DefaultOpset(13)};
@@ -175,7 +210,7 @@ TEST(KernelClass, ReduceMinMaxRejectsBadInputs) {
   const KernelContext ctx{DefaultOpset(18)};
   ReduceMax reduce_max{ctx};
   Tensor data = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
-  Tensor bad_data = Tensor::FromInt32("", {2}, {1, 2});
+  Tensor bad_data = Tensor::FromStrings("", {2}, {"a", "b"});
   EXPECT_THROW(reduce_max(bad_data), std::invalid_argument);
 
   Tensor bad_axes = Tensor::FromInt32("", {1}, {0});

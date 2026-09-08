@@ -176,7 +176,6 @@ GraphBuilder &GraphBuilder::operator=(GraphBuilder &&other) noexcept {
   function_attributes_ = std::move(other.function_attributes_);
   metadata_ = std::move(other.metadata_);
   doc_string_ = std::move(other.doc_string_);
-  overload_ = std::move(other.overload_);
   schema_lookup_ = std::move(other.schema_lookup_);
   schema_table_ = std::move(other.schema_table_);
   compute_ = std::move(other.compute_);
@@ -523,9 +522,6 @@ void GraphBuilder::ImportFunction(const FunctionProto &function) {
   metadata_ = function.metadata_props();
   if (function.has_doc_string()) {
     doc_string_ = function.doc_string().value();
-  }
-  if (function.has_overload()) {
-    overload_ = function.overload().value();
   }
   for (const auto &opset : function.opset_import()) {
     SetOpsetVersion(opset.domain().empty() ? std::string() : opset.domain().value(),
@@ -2352,9 +2348,6 @@ FunctionProto GraphBuilder::BuildFunction(const std::string &domain) const {
   function.ref_metadata_props() = metadata_;
   if (doc_string_) {
     function.set_doc_string(*doc_string_);
-  }
-  if (!overload_.empty()) {
-    function.set_overload(overload_);
   }
   for (const ValueInfoProto &input : inputs_) {
     function.add_input(input.name().value());

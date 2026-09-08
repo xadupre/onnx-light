@@ -1059,7 +1059,6 @@ TEST(GraphBuilder, NativeTypedFunctionInfersOnImportAndPreservesDeclarationsAfte
   FunctionProto function;
   function.set_name("F");
   function.set_domain("local");
-  function.set_overload("typed");
   function.set_doc_string("Function documentation");
   function.add_metadata("purpose", "roundtrip");
   function.add_input("a");
@@ -1095,7 +1094,6 @@ TEST(GraphBuilder, NativeTypedFunctionInfersOnImportAndPreservesDeclarationsAfte
   ASSERT_EQ(exported.functions().size(), 1u);
   const FunctionProto &actual = exported.functions(0);
   EXPECT_EQ(actual.doc_string(), function.doc_string());
-  EXPECT_EQ(actual.overload(), function.overload());
   ASSERT_EQ(actual.attribute().size(), 1u);
   EXPECT_EQ(actual.attribute(0), "required");
   ASSERT_EQ(actual.attribute_proto().size(), 1u);

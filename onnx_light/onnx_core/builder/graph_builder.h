@@ -754,7 +754,6 @@ private:
   std::vector<std::string> function_attributes_;
   utils::RepeatedProtoField<StringStringEntryProto> metadata_;
   std::optional<std::string> doc_string_;
-  std::string overload_;
   GraphBuilder *parent_ = nullptr;
   SchemaLookupFn schema_lookup_;
   // Lazily-built lookup table: op_type -> normalised domain -> schema history.

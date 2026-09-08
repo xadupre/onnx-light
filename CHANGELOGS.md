@@ -9,11 +9,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - Added ONNX `FLOAT6E2M3` and `FLOAT6E3M2` support across schemas, serialization,
   validation, runtime tensors, `Cast`, `QuantizeLinear`, and `DequantizeLinear`.
+- Added portable optimizer patterns for linear algebra, convolution, normalization,
+  collection, padding, activation, STFT, gather propagation, shape simplification, and
+  linear attention, together with peak-memory estimation for the latter.
 
 ### Improvements
 
 - Synchronized the opset 28 schemas with ONNX weekly 1.24, including BF16 constraints
   and `SpaceToDepth`/`DepthToSpace` function bodies.
+- Aligned default CPU affinity with ONNX Runtime.
+- Extended `QuantizeLinear` and `DequantizeLinear` with `FLOAT16` rounding, per-axis, and
+  blocked-quantization support.
+- Closed native `GraphBuilder` compatibility gaps for local functions, shape and lifetime
+  analyses, optimization replay, and native data-type handling.
 - Made `setup.py build_ext --inplace` reject editable installs that redirect imports to
   another source tree while continuing to allow editable installs of the current tree.
 - Required nanobind 3.0.1 or newer.
@@ -43,6 +51,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Added input validation to `GroupNormalization` shape inference.
 - Restricted opset 28 `ReduceLogSum` to floating-point types and added version conversion
   support.
+- Propagated upstream ONNX fixes for initializer handling, `Resize`, and tensor diagnostics.
+- Fixed signed `INT64` raw-data decoding.
 
 ### Documentation & CI
 
@@ -50,6 +60,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Reduced the release wheel matrix while retaining CPython 3.12–3.14 coverage.
 - Refreshed the project goals, fuzzing, pattern optimization, and no-copy ownership
   documentation.
+- Consolidated the custom, quantized, prepared, and persistent-value roadmaps, separated
+  prepacking concerns, and reordered next-step discussions ahead of completed work.
+- Centralized static ONNX operator schema documentation and documented the pattern-porting
+  workflow.
 - Improved generated pattern diagrams and catalog links, restored ONNX introduction
   navigation, added gallery thumbnails, and graphed ONNX cold-start timings.
 - Corrected `Pad` reflect-mode examples and expanded the `STFT` operator documentation.

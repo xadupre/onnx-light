@@ -753,8 +753,8 @@ private:
   std::string function_domain_;
   std::vector<std::string> function_attributes_;
   utils::RepeatedProtoField<StringStringEntryProto> metadata_;
-  std::optional<std::string> function_doc_string_;
-  std::string function_overload_;
+  std::optional<std::string> doc_string_;
+  std::string overload_;
   GraphBuilder *parent_ = nullptr;
   SchemaLookupFn schema_lookup_;
   // Lazily-built lookup table: op_type -> normalised domain -> schema history.
@@ -769,7 +769,11 @@ private:
   std::vector<std::unique_ptr<GraphBuilder>> subgraphs_;
   std::unordered_set<std::string> names_;
   std::unordered_set<std::string> inherited_names_;
+  // Effective domain-to-version map emitted in the resulting proto. Versions
+  // inferred from operator schemas may increase as nodes are added.
   std::unordered_map<std::string, int> opsets_;
+  // Domains explicitly set by the user or imported from an existing proto.
+  // Their versions are fixed and must not be advanced by schema inference.
   std::unordered_set<std::string> user_opsets_;
   Device device_ = Device::kUndefined;
   std::uint64_t auto_counter_ = 0;

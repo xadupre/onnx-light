@@ -175,8 +175,8 @@ GraphBuilder &GraphBuilder::operator=(GraphBuilder &&other) noexcept {
   function_domain_ = std::move(other.function_domain_);
   function_attributes_ = std::move(other.function_attributes_);
   metadata_ = std::move(other.metadata_);
-  function_doc_string_ = std::move(other.function_doc_string_);
-  function_overload_ = std::move(other.function_overload_);
+  doc_string_ = std::move(other.doc_string_);
+  overload_ = std::move(other.overload_);
   schema_lookup_ = std::move(other.schema_lookup_);
   schema_table_ = std::move(other.schema_table_);
   compute_ = std::move(other.compute_);
@@ -522,10 +522,10 @@ void GraphBuilder::ImportFunction(const FunctionProto &function) {
   function_attributes_.assign(function.attribute().begin(), function.attribute().end());
   metadata_ = function.metadata_props();
   if (function.has_doc_string()) {
-    function_doc_string_ = function.doc_string().value();
+    doc_string_ = function.doc_string().value();
   }
   if (function.has_overload()) {
-    function_overload_ = function.overload().value();
+    overload_ = function.overload().value();
   }
   for (const auto &opset : function.opset_import()) {
     SetOpsetVersion(opset.domain().empty() ? std::string() : opset.domain().value(),
@@ -2350,11 +2350,11 @@ FunctionProto GraphBuilder::BuildFunction(const std::string &domain) const {
     function.add_attribute(attribute);
   }
   function.ref_metadata_props() = metadata_;
-  if (function_doc_string_) {
-    function.set_doc_string(*function_doc_string_);
+  if (doc_string_) {
+    function.set_doc_string(*doc_string_);
   }
-  if (!function_overload_.empty()) {
-    function.set_overload(function_overload_);
+  if (!overload_.empty()) {
+    function.set_overload(overload_);
   }
   for (const ValueInfoProto &input : inputs_) {
     function.add_input(input.name().value());

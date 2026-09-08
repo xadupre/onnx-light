@@ -26,6 +26,25 @@ int ShapesContext::OpsetVersion(const std::string &domain) const {
   return it == opsets_.end() ? kUnknownOpsetVersion : it->second;
 }
 
+// ── Model-local functions ───────────────────────────────────────────
+
+void ShapesContext::SetLocalFunction(std::shared_ptr<const FunctionProto> func) {
+  EXT_ENFORCE_INVALID(func != nullptr, "SetLocalFunction: func must not be nullptr.");
+  const std::string key = std::string(func->domain()) + ":" + std::string(func->name());
+  local_functions_[key] = func.get();
+  owned_local_functions_[key] = std::move(func);
+}
+
+void ShapesContext::CopyLocalFunctions(const ShapesContext &context) {
+  local_functions_ = context.local_functions_;
+  owned_local_functions_ = context.owned_local_functions_;
+}
+
+void ShapesContext::ClearLocalFunctions() noexcept {
+  local_functions_.clear();
+  owned_local_functions_.clear();
+}
+
 // ── Custom shape-inference hooks ────────────────────────────────────
 
 void ShapesContext::SetCustomShapeInferenceFunction(const std::string &domain,

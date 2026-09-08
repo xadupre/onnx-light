@@ -491,18 +491,10 @@ public:
   }
 
   /// Registers an owned definition whose lifetime also covers copied contexts.
-  void SetLocalFunction(std::shared_ptr<const FunctionProto> func) {
-    EXT_ENFORCE_INVALID(func != nullptr, "SetLocalFunction: func must not be nullptr.");
-    const std::string key = std::string(func->domain()) + ":" + std::string(func->name());
-    local_functions_[key] = func.get();
-    owned_local_functions_[key] = std::move(func);
-  }
+  void SetLocalFunction(std::shared_ptr<const FunctionProto> func);
 
   /// Copies function registrations, retaining ownership of native definitions.
-  void CopyLocalFunctions(const ShapesContext &context) {
-    local_functions_ = context.local_functions_;
-    owned_local_functions_ = context.owned_local_functions_;
-  }
+  void CopyLocalFunctions(const ShapesContext &context);
 
   /// ``true`` when a model-local function is registered for ``key``.
   /// ``key`` is expected to be the ``"<domain>:<name>"`` identifier of
@@ -512,10 +504,7 @@ public:
   }
 
   /// Clears function definitions without discarding inferred shapes.
-  void ClearLocalFunctions() noexcept {
-    local_functions_.clear();
-    owned_local_functions_.clear();
-  }
+  void ClearLocalFunctions() noexcept;
 
   /// Returns the registered ``FunctionProto`` pointer for ``key``, or
   /// ``nullptr`` when none is registered. ``key`` is expected to be the

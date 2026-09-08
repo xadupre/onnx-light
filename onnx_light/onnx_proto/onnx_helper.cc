@@ -11,6 +11,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <memory>
 #include <random>
 #include <stdexcept>
@@ -1353,9 +1354,13 @@ bool ReadIntegerValues(const TensorProto &tensor_proto, std::vector<int64_t> &ou
         // Sign-extend ``element_bytes``-wide value.
         const uint64_t sign_bit = uint64_t{1} << (element_bytes * 8 - 1);
         if (u & sign_bit) {
-          // Fill the high bits with 1s.
-          const uint64_t mask = ~((uint64_t{1} << (element_bytes * 8)) - 1);
-          v = static_cast<int64_t>(u | mask);
+          if (element_bytes == sizeof(uint64_t)) {
+            v = std::numeric_limits<int64_t>::min() + static_cast<int64_t>(u - sign_bit);
+          } else {
+            // Fill the high bits with 1s.
+            const uint64_t mask = ~((uint64_t{1} << (element_bytes * 8)) - 1);
+            v = static_cast<int64_t>(u | mask);
+          }
         } else {
           v = static_cast<int64_t>(u);
         }

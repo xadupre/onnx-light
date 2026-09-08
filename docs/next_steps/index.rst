@@ -55,24 +55,10 @@ Started
         owners in ``SessionState``, use direct reads for ineligible tensors,
         run the four-configuration benchmark, and submit the upstream PR. All
         native dependencies through #4623 are complete.
-
-Planned
--------
-
-.. list-table::
-    :header-rows: 1
-    :widths: 35 65
-    :class: sphinx-datatable
-
-    * - Plan
-      - Contribution
     * - :ref:`l-next-steps-custom-quantized-persistent-values`
-      - Custom structs, quantized representations and persistent values in one
-        plan. State is built from model input/output feedback and initial values;
-        a mapping may retain just the cache field of a larger struct.
-        Fixed size is needed only for byte encoding; paging and mutation
-        protocols are not required to construct state. Prepacking remains in
-        the completed prepared-execution plan.
+      - Implement the frozen custom-value representation, then integrate it
+        with ``GraphBuilder``, model input/output feedback, contiguous KV reuse,
+        and optional paged quantized caches.
 
 Discussion
 ----------

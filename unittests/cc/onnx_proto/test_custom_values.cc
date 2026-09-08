@@ -1,8 +1,8 @@
 // Unit tests for the custom value representation implemented by PR02 of the
 // "custom, quantized and persistent values" plan: the StructTypeProto /
 // EncodedValueProto wire messages, the field-1000 extension branches, and the
-// catalogue / layout / payload helpers declared in onnx_struct_value.h.
-#include "onnx_struct_value.h"
+// catalogue / layout / payload helpers declared in onnx_encoded_value.h.
+#include "onnx_encoded_value.h"
 #include "onnx_verify.h"
 #include <cstdint>
 #include <cstring>
@@ -1373,6 +1373,13 @@ TEST(custom_values, OneofSettersClearSiblings) {
   value.ref_affine().set_storage_type(TensorProto::INT8);
   EXPECT_EQ(value.layout_case(), EncodedValueProto::kAffine);
   EXPECT_FALSE(value.has_struct_type());
+
+  OptionalProto optional;
+  optional.ref_tensor_value().set_data_type(TensorProto::FLOAT);
+  ASSERT_TRUE(optional.has_tensor_value());
+  optional.ref_sequence_value().set_elem_type(SequenceProto::TENSOR);
+  EXPECT_TRUE(optional.has_sequence_value());
+  EXPECT_FALSE(optional.has_tensor_value());
 }
 
 TEST(custom_values, OneofLastAlternativeOnTheWireWins) {
@@ -1394,6 +1401,16 @@ TEST(custom_values, OneofLastAlternativeOnTheWireWins) {
                                        LengthDelimited(1, Bytes(tensor))));
   EXPECT_EQ(reversed.value_case(), TypeProto::kTensorType);
   EXPECT_FALSE(reversed.has_struct_type());
+
+  TensorProto tensor_value;
+  tensor_value.set_data_type(TensorProto::FLOAT);
+  SequenceProto sequence_value;
+  sequence_value.set_elem_type(SequenceProto::TENSOR);
+  OptionalProto optional;
+  ASSERT_TRUE(optional.ParseFromString(LengthDelimited(3, Bytes(tensor_value)) +
+                                       LengthDelimited(5, Bytes(sequence_value))));
+  EXPECT_TRUE(optional.has_sequence_value());
+  EXPECT_FALSE(optional.has_tensor_value());
 
   // A tag whose wire type does not match is skipped and leaves the oneof alone.
   TypeProto skipped;

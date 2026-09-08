@@ -362,10 +362,10 @@ add_library(lib_onnx_proto ${_lib_onnx_proto_type} ${ONNX_LIGHT_HEADERS} ${ONNX_
 # throughput-sensitive. Optimize that translation unit for size so the frozen
 # PR02 validation contract stays within the proto-library binary budget.
 if(MSVC)
-  set_source_files_properties("${ONNX_PROTO_PATH}/onnx_struct_value.cc"
+  set_source_files_properties("${ONNX_PROTO_PATH}/onnx_encoded_value.cc"
                               PROPERTIES COMPILE_OPTIONS "/Os")
 else()
-  set_source_files_properties("${ONNX_PROTO_PATH}/onnx_struct_value.cc"
+  set_source_files_properties("${ONNX_PROTO_PATH}/onnx_encoded_value.cc"
                               PROPERTIES COMPILE_OPTIONS "-Os")
 endif()
 if(_lib_onnx_proto_type STREQUAL "SHARED" AND WIN32)

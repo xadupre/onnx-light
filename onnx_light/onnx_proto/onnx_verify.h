@@ -1,7 +1,7 @@
 #pragma once
 
 #include "onnx.h"
-#include "onnx_struct_value.h"
+#include "onnx_encoded_value.h"
 
 #include <unordered_set>
 

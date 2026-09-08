@@ -322,19 +322,10 @@ public:                                                                         
   _FIELD_OPTIONAL(type, name, order, doc)                                                          \
   inline bool has_oneof_##name() const { return has_##name(); }
 
-/** Groups a field under a named presence group without enforcing exclusivity: the message
- *  exposes has_oneof_##name() through has_##oneof(), but the alternatives may coexist (used
- *  where upstream ONNX declares plain optional fields, e.g. OptionalProto). */
+/** Declares a protobuf ``oneof`` alternative: making this field present clears every sibling
+ *  alternative, so at most one alternative is set and the last value seen on the wire wins.
+ *  The enclosing message must declare ``void clear_oneof_<oneof>(int keep_order = -1)``. */
 #define FIELD_OPTIONAL_ONEOF(type, name, order, oneof, doc)                                        \
-  _FIELD_OPTIONAL(type, name, order, doc)                                                          \
-  inline bool has_oneof_##name() const { return has_##oneof(); }
-
-/** Declares a genuine protobuf ``oneof`` alternative: making this field present clears every
- *  sibling alternative, so at most one alternative is ever set and the last value seen on the
- *  wire wins. The enclosing message must declare
- *  ``void clear_oneof_<oneof>(int keep_order = -1)`` clearing every alternative whose field
- *  number differs from keep_order. */
-#define FIELD_OPTIONAL_ONEOF_EXCLUSIVE(type, name, order, oneof, doc)                              \
   _FIELD_OPTIONAL_IMPL(type, name, order, doc, clear_oneof_##oneof(order);)                        \
   inline bool has_oneof_##name() const { return has_##oneof(); }
 

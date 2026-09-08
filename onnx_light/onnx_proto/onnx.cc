@@ -2140,15 +2140,15 @@ void OptionalProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_OPTIONAL_PROTO_FIELD(options, stream, optional_value)
 }
 bool OptionalProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
-  READ_BEGIN(options, stream, OptionalProto)                      //
-  READ_FIELD(options, stream, name)                               //
-  READ_ENUM_FIELD(options, stream, elem_type)                     //
-  READ_OPTIONAL_PROTO_FIELD(options, stream, tensor_value)        //
-  READ_OPTIONAL_PROTO_FIELD(options, stream, sparse_tensor_value) //
-  READ_OPTIONAL_PROTO_FIELD(options, stream, sequence_value)      //
-  READ_OPTIONAL_PROTO_FIELD(options, stream, map_value)           //
-  READ_OPTIONAL_PROTO_FIELD(options, stream, optional_value)      //
-  READ_END(options, stream, OptionalProto)                        // NOLINT
+  READ_BEGIN(options, stream, OptionalProto)                   //
+  READ_FIELD(options, stream, name)                            //
+  READ_ENUM_FIELD(options, stream, elem_type)                  //
+  READ_ONEOF_PROTO_FIELD(options, stream, tensor_value)        //
+  READ_ONEOF_PROTO_FIELD(options, stream, sparse_tensor_value) //
+  READ_ONEOF_PROTO_FIELD(options, stream, sequence_value)      //
+  READ_ONEOF_PROTO_FIELD(options, stream, map_value)           //
+  READ_ONEOF_PROTO_FIELD(options, stream, optional_value)      //
+  READ_END(options, stream, OptionalProto)                     // NOLINT
   return true;
 }
 void OptionalProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const {

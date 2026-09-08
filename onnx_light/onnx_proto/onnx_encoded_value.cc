@@ -1,4 +1,4 @@
-#include "onnx_struct_value.h"
+#include "onnx_encoded_value.h"
 #include "onnx_helper.h"
 #include "onnx_verify.h"
 

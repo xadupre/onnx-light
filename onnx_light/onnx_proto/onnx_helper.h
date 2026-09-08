@@ -11,6 +11,52 @@
 namespace ONNX_LIGHT_NAMESPACE {
 
 /**
+ * Returns the physical width in bits of a fixed-width ONNX element type, or 0
+ * when the type has no fixed inline width.
+ */
+inline constexpr uint32_t FixedBitWidth(TensorProto::DataType data_type) {
+  switch (data_type) {
+  case TensorProto::UINT2:
+  case TensorProto::INT2:
+    return 2;
+  case TensorProto::UINT4:
+  case TensorProto::INT4:
+  case TensorProto::FLOAT4E2M1:
+    return 4;
+  case TensorProto::FLOAT6E2M3:
+  case TensorProto::FLOAT6E3M2:
+    return 6;
+  case TensorProto::UINT8:
+  case TensorProto::INT8:
+  case TensorProto::BOOL:
+  case TensorProto::FLOAT8E4M3FN:
+  case TensorProto::FLOAT8E4M3FNUZ:
+  case TensorProto::FLOAT8E5M2:
+  case TensorProto::FLOAT8E5M2FNUZ:
+  case TensorProto::FLOAT8E8M0:
+    return 8;
+  case TensorProto::UINT16:
+  case TensorProto::INT16:
+  case TensorProto::FLOAT16:
+  case TensorProto::BFLOAT16:
+    return 16;
+  case TensorProto::UINT32:
+  case TensorProto::INT32:
+  case TensorProto::FLOAT:
+    return 32;
+  case TensorProto::UINT64:
+  case TensorProto::INT64:
+  case TensorProto::DOUBLE:
+  case TensorProto::COMPLEX64:
+    return 64;
+  case TensorProto::COMPLEX128:
+    return 128;
+  default:
+    return 0;
+  }
+}
+
+/**
  * Returns true when an external-data ``location`` entry is a relative path that
  * cannot escape the directory it is resolved against.
  *

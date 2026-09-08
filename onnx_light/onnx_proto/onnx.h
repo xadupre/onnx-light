@@ -791,24 +791,22 @@ FIELD_STR(name, 2, "The name of the opaque type.")
 END_PROTO()
 
 inline TypeProto() {}
-FIELD_OPTIONAL_ONEOF_EXCLUSIVE(Tensor, tensor_type, 1, type, "The type of a tensor.")
-FIELD_OPTIONAL_ONEOF_EXCLUSIVE(Sequence, sequence_type, 4, type, "The type of a sequence.")
-FIELD_OPTIONAL_ONEOF_EXCLUSIVE(Map, map_type, 5, type, "The type of a map.")
-FIELD_OPTIONAL_ONEOF_EXCLUSIVE(Opaque, opaque_type, 7, type, "The type of an opaque object.")
+FIELD_OPTIONAL_ONEOF(Tensor, tensor_type, 1, type, "The type of a tensor.")
+FIELD_OPTIONAL_ONEOF(Sequence, sequence_type, 4, type, "The type of a sequence.")
+FIELD_OPTIONAL_ONEOF(Map, map_type, 5, type, "The type of a map.")
+FIELD_OPTIONAL_ONEOF(Opaque, opaque_type, 7, type, "The type of an opaque object.")
 FIELD_STR(denotation, 6,
           "An optional denotation can be used to denote the whole type with a standard "
           "semantic description as to what is stored inside. Refer to "
           "https://github.com/onnx/onnx/blob/main/docs/"
           "TypeDenotation.md#type-denotation-definition for pre-defined type denotations.")
-FIELD_OPTIONAL_ONEOF_EXCLUSIVE(SparseTensor, sparse_tensor_type, 8, type,
-                               "Type of the sparse tensor")
-FIELD_OPTIONAL_ONEOF_EXCLUSIVE(Optional, optional_type, 9, type, "The type of an optional.")
-FIELD_OPTIONAL_ONEOF_EXCLUSIVE(
-    StructTypeProto, struct_type, 1000, type,
-    "The type of a structured value. Field numbers 1000-1099 are reserved for "
-    "onnx-light extensions so upstream ONNX keeps the low-numbered range. A "
-    "StructTypeProto with no kind is an unconstrained category, permitted only "
-    "here (never as a declaration or an encoded payload layout).")
+FIELD_OPTIONAL_ONEOF(SparseTensor, sparse_tensor_type, 8, type, "Type of the sparse tensor")
+FIELD_OPTIONAL_ONEOF(Optional, optional_type, 9, type, "The type of an optional.")
+FIELD_OPTIONAL_ONEOF(StructTypeProto, struct_type, 1000, type,
+                     "The type of a structured value. Field numbers 1000-1099 are reserved for "
+                     "onnx-light extensions so upstream ONNX keeps the low-numbered range. A "
+                     "StructTypeProto with no kind is an unconstrained category, permitted only "
+                     "here (never as a declaration or an encoded payload layout).")
 /**
  * Clears every alternative of the ``value`` oneof whose field number differs from
  * @p keep_order, so at most one alternative is ever set.
@@ -967,15 +965,13 @@ BEGIN_PROTO(Structure, "An ordered list of named fields.")
 // }
 BEGIN_PROTO(Field, "One named field holding either a value type or a shared format constant.")
 FIELD_STR(name, 1, "Field name, unique within the enclosing structure.")
-FIELD_OPTIONAL_ONEOF_EXCLUSIVE(
-    TypeProto, type, 2, content,
-    "Type of the field value. It follows the existing TypeProto validation "
-    "rules for tensors, nested structs, sequences, maps and optional values.")
+FIELD_OPTIONAL_ONEOF(TypeProto, type, 2, content,
+                     "Type of the field value. It follows the existing TypeProto validation "
+                     "rules for tensors, nested structs, sequences, maps and optional values.")
 FIELD_STR(doc_string, 3, "A human-readable documentation for this field. Markdown is allowed.")
-FIELD_OPTIONAL_ONEOF_EXCLUSIVE(
-    TensorProto, constant, 4, content,
-    "The actual shared format constant, not a graph input. It must have "
-    "concrete dimensions and matching data, and contributes zero payload bytes.")
+FIELD_OPTIONAL_ONEOF(TensorProto, constant, 4, content,
+                     "The actual shared format constant, not a graph input. It must have "
+                     "concrete dimensions and matching data, and contributes zero payload bytes.")
 /**
  * Clears every alternative of the ``content`` oneof whose field number differs from
  * @p keep_order, so at most one alternative is ever set.
@@ -1038,14 +1034,13 @@ FIELD_DEFAULT(uint64_t, dimension, 2, 0, "Number of elements, an explicit concre
 END_PROTO()
 
 inline StructTypeProto() {}
-FIELD_OPTIONAL_ONEOF_EXCLUSIVE(Array, array, 1, kind, "Array declaration.")
-FIELD_OPTIONAL_ONEOF_EXCLUSIVE(Structure, structure, 2, kind, "Structure declaration.")
-FIELD_OPTIONAL_ONEOF_EXCLUSIVE(BitPacking, bit_packing, 3, kind, "Bit-packing declaration.")
-FIELD_OPTIONAL_ONEOF_EXCLUSIVE(
-    uint64_t, type_ref, 4, kind,
-    "Reference to a declaration in ModelProto.struct_types. A type_ref carries "
-    "only the referenced ID: declaration fields, metadata, codecs and another "
-    "kind must be absent.")
+FIELD_OPTIONAL_ONEOF(Array, array, 1, kind, "Array declaration.")
+FIELD_OPTIONAL_ONEOF(Structure, structure, 2, kind, "Structure declaration.")
+FIELD_OPTIONAL_ONEOF(BitPacking, bit_packing, 3, kind, "Bit-packing declaration.")
+FIELD_OPTIONAL_ONEOF(uint64_t, type_ref, 4, kind,
+                     "Reference to a declaration in ModelProto.struct_types. A type_ref carries "
+                     "only the referenced ID: declaration fields, metadata, codecs and another "
+                     "kind must be absent.")
 /**
  * Clears every alternative of the ``kind`` oneof whose field number differs from
  * @p keep_order, so at most one alternative is ever set.
@@ -1118,10 +1113,10 @@ BEGIN_PROTO(EncodedValueProto,
             "choice and an owned or external payload with a known byte extent. Payload byte "
             "length and the resolved element size determine the record count; no physical "
             "shape or redundant count is serialized.")
-FIELD_OPTIONAL_ONEOF_EXCLUSIVE(AffineLayoutProto, affine, 1, layout, "Built-in affine layout.")
-FIELD_OPTIONAL_ONEOF_EXCLUSIVE(StructTypeProto, struct_type, 2, layout,
-                               "Structured layout: an exact type_ref or a concrete inline "
-                               "declaration eligible for byte encoding.")
+FIELD_OPTIONAL_ONEOF(AffineLayoutProto, affine, 1, layout, "Built-in affine layout.")
+FIELD_OPTIONAL_ONEOF(StructTypeProto, struct_type, 2, layout,
+                     "Structured layout: an exact type_ref or a concrete inline "
+                     "declaration eligible for byte encoding.")
 /**
  * Clears every alternative of the ``layout`` oneof whose field number differs from
  * @p keep_order, so at most one alternative is ever set.
@@ -1874,6 +1869,18 @@ FIELD_OPTIONAL_ONEOF(MapProto, map_value, 6, value,
 FIELD_OPTIONAL_ONEOF(OptionalProto, optional_value, 7, value,
                      "For OptionalProto value, allowing optional to be of itself (completeness) "
                      "When this field is present, the elem_type field MUST be OPTIONAL.")
+inline void clear_oneof_value(int keep_order = -1) {
+  if (keep_order != order_tensor_value())
+    tensor_value_.reset();
+  if (keep_order != order_sparse_tensor_value())
+    sparse_tensor_value_.reset();
+  if (keep_order != order_sequence_value())
+    sequence_value_.reset();
+  if (keep_order != order_map_value())
+    map_value_.reset();
+  if (keep_order != order_optional_value())
+    optional_value_.reset();
+}
 inline OptionalProto() { elem_type_ = DataType::UNDEFINED; }
 inline bool has_value() const {
   return has_tensor_value() || has_sequence_value() || has_map_value() ||

@@ -197,7 +197,14 @@ jobs:
           python .github/scripts/report_proto_binary_size.py \
             "${proto_dir}" \
             --summary "${GITHUB_STEP_SUMMARY}" \
-            --max-installed-size 1258291
+            --max-installed-size 1193944 \
+            --max-text-size 822634 \
+            --max-dynamic-symbols 760 \
+            --allowed-dependency libcrypto.so.3 \
+            --allowed-dependency libstdc++.so.6 \
+            --allowed-dependency libgcc_s.so.1 \
+            --allowed-dependency libc.so.6 \
+            --allowed-dependency ld-linux-x86-64.so.2
 
       - name: Install ONNX weekly
         run: pip uninstall -y onnx && pip install --upgrade onnx-weekly

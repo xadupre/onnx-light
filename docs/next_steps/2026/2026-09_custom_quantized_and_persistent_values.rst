@@ -7,7 +7,7 @@ Custom, quantized, and persistent values
 :Date: 2026-09
 :Updated: 2026-09-08
 
-**planned**
+**in progress**
 
 Objective and consolidation
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -73,8 +73,7 @@ Representation model: a small quantized core plus generic structs
 
 One ``StructTypeProto`` describes structs; ``EncodedValueProto`` holds
 their byte-encoded representation when a fixed physical layout exists,
-alongside a small set of built-in layouts (names and field numbers
-finalized in PR01):
+alongside the built-in affine layout frozen by PR01:
 
 .. list-table::
    :header-rows: 1
@@ -92,10 +91,6 @@ finalized in PR01):
        layout choice and owned or external payload with a known byte
        extent. Layout is either a built-in dense/affine form or a
        concrete ``StructTypeProto`` reference.
-   * - Optional preparation metadata
-     - Source dependencies, preparation recipe and compatibility
-       requirements for a derived value, as metadata on the same
-       container.
 
 ``EncodedValueProto`` replaces the separate ``StructProto``,
 ``QuantizedTensorProto`` and ``CompiledTensorProto`` proposals; existing
@@ -134,22 +129,35 @@ declaration selects ``array``, ``bit_packing`` or ``structure``, and each
 field selects either a value type or a tensor constant. It may describe a
 cache with tensor and sequence fields; fixed physical size is an
 eligibility condition for byte encoding, not a requirement on every
-struct. The wire sketch below shows the struct type and byte-encoded
-value container:
+struct.
+
+PR01 freezes the following wire contract. Field numbers 1000--1099 are
+reserved for local onnx-light extensions so future upstream ONNX fields
+can continue using the low-numbered range. ``TypeProto.struct_type``,
+``GraphProto.encoded_initializer`` and ``ModelProto.struct_types`` each
+use field 1000 in their respective messages.
 
 .. code-block:: text
 
+    message AffineLayoutProto {
+        TensorProto.DataType storage_type = 1;
+        TensorProto scale = 2;
+        optional TensorProto zero_point = 3;
+        optional int64 axis = 4;
+        optional uint64 block_size = 5;
+    }
+
     message EncodedValueProto {
         oneof layout {
-            StructTypeProto struct_type = <N>;  // exact reference or inline type
-            // The small built-in layout alternatives are omitted here.
+            AffineLayoutProto affine = 1;
+            StructTypeProto struct_type = 2;  // exact reference or inline type
         }
-        optional TypeProto logical_type = <N>;
-        bytes raw_data = <N>;
-        repeated StringStringEntryProto external_data = <N>;
-        string name = <N>;
-        string doc_string = <N>;
-        // Optional preparation metadata is described below.
+        optional TypeProto logical_type = 3;
+        bytes raw_data = 4;
+        repeated StringStringEntryProto external_data = 5;
+        optional TensorProto.DataLocation data_location = 6;
+        string name = 7;
+        string doc_string = 8;
     }
 
     message StructTypeProto {
@@ -180,26 +188,104 @@ value container:
             Array array = 1;
             Structure structure = 2;
             BitPacking bit_packing = 3;
-            uint64 type_ref = 5;
+            uint64 type_ref = 4;
         }
-        optional FunctionProto decoder = 6;
-        optional FunctionProto encoder = 7;
-        string name = 8;
-        string doc_string = 9;
-        repeated StringStringEntryProto metadata_props = 10;
-        optional uint64 type_id = 11;
+        optional FunctionProto decoder = 5;
+        optional FunctionProto encoder = 6;
+        string name = 7;
+        string doc_string = 8;
+        repeated StringStringEntryProto metadata_props = 9;
+        optional uint64 type_id = 10;
     }
 
     message TypeProto {
         oneof value {
             // Existing alternatives remain unchanged.
-            StructTypeProto struct_type = <N>;
+            StructTypeProto struct_type = 1000;
         }
     }
 
-    message ModelProto {
-        repeated StructTypeProto struct_types = <N>;
+    message GraphProto {
+        // Existing fields remain unchanged.
+        repeated EncodedValueProto encoded_initializer = 1000;
     }
+
+    message ModelProto {
+        // Existing fields remain unchanged.
+        repeated StructTypeProto struct_types = 1000;
+    }
+
+The specialized affine branch is deliberately closed:
+
+* ``storage_type`` is one of ``INT8``, ``UINT8``, ``INT4`` or ``UINT4``.
+  ``raw_data`` or the external payload contains only row-major codes using
+  the corresponding ``TensorProto.raw_data`` packing. INT4/UINT4 stores
+  the first element in the low nibble and the second in the high nibble;
+  an unused final high nibble is zero.
+* ``scale`` is a scalar or parameter tensor with floating element type;
+  ``zero_point`` is optional, has ``storage_type``, and defaults to zero.
+* Omitting ``axis`` selects per-tensor quantization. Setting ``axis``
+  selects per-axis parameters. ``block_size`` is valid only with an axis
+  and selects blocked quantization along it.
+* Parameter shapes, axis normalization, code packing and decoded values
+  follow the corresponding ``QuantizeLinear``/``DequantizeLinear``
+  contract. Other affine forms use a structured layout instead of
+  extending this message.
+
+``logical_type`` must be a tensor type with concrete dimensions for the
+affine branch. For ``n`` logical elements, the code payload is exactly
+``ceil(n * bit_width(storage_type) / 8)`` bytes. It may be omitted for a
+custom struct without tensor semantics; when present, the decoder or
+native consumer must produce that exact type and shape.
+
+Catalogue and identity contract
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``type_id`` is a nonzero, model-scoped stable format identity. Each ID
+has exactly one declaration in ``ModelProto.struct_types``; duplicate
+IDs, unresolved references and reference cycles are invalid. Reordering
+the catalogue does not change identity. Changing fields, constants,
+physical layout, decoder or encoder requires a new ID.
+
+A ``type_ref`` contains only the referenced ID: declaration fields,
+metadata, codecs and another kind must be absent. An inline declaration
+has no ``type_id`` and cannot be referenced. A ``StructTypeProto`` with
+no kind remains an unconstrained category only inside ``TypeProto``; it
+is never a declaration or encoded layout.
+
+``GraphProto.encoded_initializer`` names graph constants. Names are
+unique across dense, sparse and encoded initializers and may also appear
+in graph inputs. A structured graph input or output uses
+``TypeProto.struct_type``; tensor-only operators do not accept it without
+an explicit decoder or registered consumer.
+
+Payload and lifetime contract
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``raw_data`` and ``external_data`` are mutually exclusive.
+``data_location == EXTERNAL`` requires ``external_data`` with
+``location`` and explicit ``length``; ``offset`` is optional. Default
+location uses ``raw_data``. An empty inline payload represents zero
+records. Payload bounds and layout are validated before any decoder or
+native callback runs.
+
+Inline bytes are owned or borrowed with an owner token. External mapped
+bytes retain their mapping owner. Runtime structs retain each field's
+owner independently; serialized records never contain pointers, native
+padding, vtables or process-local handles. Invocation-only ownerless
+borrows are copied before being published as model outputs or retained
+feedback state.
+
+Encoded inputs are read-only in the first implementation. A retained
+state update becomes visible atomically only after execution and
+validation succeed. Reset or close cannot race with a call. In-place KV
+mutation and alias annotations remain later work.
+
+Native bindings are keyed by ``type_id`` and verify the resolved
+declaration before creating a typed view. Inline custom layouts require
+generic field access or an explicit codec. Missing consumers fail
+explicitly; loading a model never executes codec code. Format-specific
+bindings and codecs stay outside ``lib_onnx_proto``.
 
 ``EncodedValueProto.struct_type`` selects an exact ``type_ref`` or a
 concrete inline declaration eligible for byte encoding; a reference may
@@ -462,16 +548,57 @@ its codebook requires a new subtype ID.
 Proto-library size gate
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-PR01 records the existing minimal proto-library binary size, dependencies
-and exported symbols under one reproducible Release configuration and
-fixes the allowed size increase before implementation; PR02 reports the
-delta under identical build settings. The proto target contains only the
-selected compact messages and serialization machinery: format-specific
-validators, decoders, catalogue data and registration tables stay optional
-runtime dependencies. A codebook or mixed-bit fixture must round-trip
-through structures without adding a specialized proto message, parser
-branch or enum entry. Exceeding the agreed budget requires reducing the
-built-in subset or an explicit design decision, not silently raising it.
+The canonical PR01 baseline is the installed library from
+`Linux core CI run 34234846380
+<https://github.com/xadupre/onnx-light/actions/runs/34234846380>`_ at
+commit ``f450bbbda903a94cce0bce1eff7fba94097190f5``. The job uses
+Ubuntu 24.04 x86-64, GCC
+13.3.0, CPython 3.13.15, the Python shared-library topology, Release mode,
+CMake installation stripping, OpenSSL, and the existing CI command:
+
+.. code-block:: bash
+
+    pip install -C build-dir=build -C cmake.build-type=Release \
+        -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -e .[dev] -v
+    proto_dir="$(python -c \
+        'import importlib.util, pathlib; print(pathlib.Path(importlib.util.find_spec(
+        "onnx_light.onnx_py._onnxpyprotoop").origin).parent)')"
+    python .github/scripts/report_proto_binary_size.py \
+        "${proto_dir}"
+
+.. list-table::
+   :header-rows: 1
+   :widths: 45 30 25
+
+   * - Metric
+     - PR01 baseline
+     - PR02 maximum
+   * - Stripped installed bytes
+     - 1,062,872
+     - 1,193,944
+   * - Allocated section bytes
+     - 1,054,507
+     - Report only
+   * - ``.text`` bytes
+     - 724,330
+     - 822,634
+   * - Defined dynamic symbols
+     - 696
+     - 760
+   * - ``DT_NEEDED``
+     - ``libcrypto``, ``libstdc++``, ``libgcc_s``, ``libc``, ``ld-linux``
+     - No additions
+
+PR02 may add at most 128 KiB of stripped size, 96 KiB of ``.text`` and
+64 dynamic symbols, while adding no shared-library dependency. Its
+installed-size ceiling of 1,193,944 bytes is stricter than the existing
+1.2 MiB project ceiling. The proto target contains only compact messages
+and serialization machinery; format-specific validators, codecs,
+catalogues and registration tables stay optional runtime dependencies.
+The absolute CI gates enforce the table's maxima. PR02 also reports a
+baseline and candidate built side by side with the same workflow to
+verify the deltas. A runner toolchain update refreshes the reference
+baseline in a separate PR, not as part of a representation change.
 
 .. _l-next-steps-custom-types-prepared-values:
 
@@ -639,13 +766,11 @@ or report an unsupported export.
 Implementation sequence
 +++++++++++++++++++++++
 
-All new steps are pending; completed foundations above are reused. The
-first concrete implementation is the **structured representation**:
-``StructTypeProto`` and the structured-layout branch of
-``EncodedValueProto``. PR01 freezes their minimal contract and the
-proto-size budget; PR02 implements typed/constant fields, arrays, bit
-packing, type references, payload ownership and value serialization,
-before adding the small built-in affine subset.
+PR01 is complete: the representation, identity, payload, lifetime,
+feedback and size contracts above are frozen. PR02 is next and implements
+``StructTypeProto``, ``EncodedValueProto``, typed/constant fields, arrays,
+bit packing, type references, payload ownership and value serialization
+before adding the built-in affine subset.
 
 .. list-table::
    :header-rows: 1
@@ -656,7 +781,7 @@ before adding the small built-in affine subset.
      - Acceptance
      - Depends on
    * - PR01
-     - Representation and lifetime contracts
+     - Representation and lifetime contracts (**done**)
      - Freeze the built-in affine subset, struct extension path, fixed
        element types, payload-derived counts, catalogue identities,
        native bindings and feedback matching; record the proto-size

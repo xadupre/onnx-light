@@ -610,6 +610,7 @@ public:
 
 private:
   std::size_t RemoveUnusedNodesImpl(bool recursive);
+  void PruneValueInfos();
   std::size_t
   RemoveIdentityNodesImpl(bool recursive,
                           std::unordered_map<std::string, std::string> *applied_renames = nullptr);
@@ -752,6 +753,7 @@ private:
   std::string name_;
   std::string function_domain_;
   std::vector<std::string> function_attributes_;
+  utils::RepeatedProtoField<AttributeProto> function_attribute_protos_;
   utils::RepeatedProtoField<StringStringEntryProto> metadata_;
   std::optional<std::string> doc_string_;
   GraphBuilder *parent_ = nullptr;
@@ -762,6 +764,7 @@ private:
   ComputeContext compute_;
   utils::RepeatedProtoField<ValueInfoProto> inputs_;
   utils::RepeatedProtoField<ValueInfoProto> outputs_;
+  utils::RepeatedProtoField<ValueInfoProto> value_infos_;
   utils::RepeatedProtoField<NodeProto> nodes_;
   utils::RepeatedProtoField<TensorProto> initializers_;
   std::vector<std::unique_ptr<GraphBuilder>> local_functions_;

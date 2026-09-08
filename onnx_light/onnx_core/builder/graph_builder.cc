@@ -174,6 +174,7 @@ GraphBuilder &GraphBuilder::operator=(GraphBuilder &&other) noexcept {
   name_ = std::move(other.name_);
   function_domain_ = std::move(other.function_domain_);
   function_attributes_ = std::move(other.function_attributes_);
+  function_attribute_protos_ = std::move(other.function_attribute_protos_);
   metadata_ = std::move(other.metadata_);
   doc_string_ = std::move(other.doc_string_);
   schema_lookup_ = std::move(other.schema_lookup_);
@@ -181,6 +182,7 @@ GraphBuilder &GraphBuilder::operator=(GraphBuilder &&other) noexcept {
   compute_ = std::move(other.compute_);
   inputs_ = std::move(other.inputs_);
   outputs_ = std::move(other.outputs_);
+  value_infos_ = std::move(other.value_infos_);
   nodes_ = std::move(other.nodes_);
   initializers_ = std::move(other.initializers_);
   local_functions_ = std::move(other.local_functions_);
@@ -491,6 +493,7 @@ GraphBuilder::ImportAttributes(const NodeProto &node,
 }
 
 void GraphBuilder::ImportGraph(const GraphProto &graph) {
+  value_infos_ = graph.value_info();
   for (const auto &input : graph.input()) {
     MakeInput(input);
   }
@@ -519,6 +522,7 @@ void GraphBuilder::ImportGraph(const GraphProto &graph) {
 
 void GraphBuilder::ImportFunction(const FunctionProto &function) {
   function_attributes_.assign(function.attribute().begin(), function.attribute().end());
+  function_attribute_protos_ = function.attribute_proto();
   metadata_ = function.metadata_props();
   if (function.has_doc_string()) {
     doc_string_ = function.doc_string().value();
@@ -563,6 +567,15 @@ void GraphBuilder::ImportFunction(const FunctionProto &function) {
       }
     }
     MakeOutput(value_info);
+  }
+  for (const auto &declared : function.value_info()) {
+    const bool is_input = std::find(function.input().begin(), function.input().end(),
+                                    declared.name()) != function.input().end();
+    const bool is_output = std::find(function.output().begin(), function.output().end(),
+                                     declared.name()) != function.output().end();
+    if (!is_input && !is_output) {
+      value_infos_.push_back(declared);
+    }
   }
 }
 
@@ -716,7 +729,8 @@ GraphBuilder::MakeNode(const std::string &op_type, const std::vector<std::string
                  attribute.type() == AttributeProto::AttributeType::GRAPHS ||
                  HasGraphReferenceSuffix(attribute.name().value());
         });
-    if (calls_function || may_call_function_in_graph) {
+    if (calls_function || may_call_function_in_graph ||
+        compute_.Shapes().HasLocalFunction(function_key)) {
       RefreshLocalFunctions();
     }
   }
@@ -1009,7 +1023,36 @@ std::size_t GraphBuilder::RemoveUnusedNodesImpl(bool recursive) {
       ++it;
     }
   }
+  PruneValueInfos();
   return removed + local_removed;
+}
+
+void GraphBuilder::PruneValueInfos() {
+  std::unordered_set<std::string> existing;
+  for (const ValueInfoProto &input : inputs_) {
+    existing.insert(input.name().value());
+  }
+  for (const ValueInfoProto &output : outputs_) {
+    existing.insert(output.name().value());
+  }
+  for (const TensorProto &initializer : initializers_) {
+    existing.insert(initializer.name().value());
+  }
+  for (const NodeProto &node : nodes_) {
+    for (std::size_t i = 0; i < node.input().size(); ++i) {
+      existing.insert(node.input(static_cast<std::size_t>(i)));
+    }
+    for (std::size_t i = 0; i < node.output().size(); ++i) {
+      existing.insert(node.output(static_cast<std::size_t>(i)));
+    }
+  }
+  for (auto it = value_infos_.begin(); it != value_infos_.end();) {
+    if (existing.find(it->name().value()) == existing.end()) {
+      it = value_infos_.erase(it);
+    } else {
+      ++it;
+    }
+  }
 }
 
 namespace {
@@ -2018,6 +2061,9 @@ GraphProto GraphBuilder::BuildGraph() const {
   for (const ValueInfoProto &output : outputs_) {
     graph.add_output(output);
   }
+  for (const ValueInfoProto &value_info : value_infos_) {
+    graph.add_value_info(value_info);
+  }
   return graph;
 }
 
@@ -2345,6 +2391,7 @@ FunctionProto GraphBuilder::BuildFunction(const std::string &domain) const {
   for (const auto &attribute : function_attributes_) {
     function.add_attribute(attribute);
   }
+  function.ref_attribute_proto() = function_attribute_protos_;
   function.ref_metadata_props() = metadata_;
   if (doc_string_) {
     function.set_doc_string(*doc_string_);
@@ -2361,6 +2408,9 @@ FunctionProto GraphBuilder::BuildFunction(const std::string &domain) const {
     if (!is_input) {
       function.add_value_info(output);
     }
+  }
+  for (const ValueInfoProto &value_info : value_infos_) {
+    function.add_value_info(value_info);
   }
   for (const auto &entry : opsets_) {
     function.add_opset(entry.first, entry.second);

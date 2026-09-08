@@ -818,6 +818,7 @@ void GraphGraph::ApplyRewritingBatch(const std::vector<LocalRewriting> &rewrites
         "Replay: added node positions do not leave enough slots for retained nodes.");
   }
   builder_.nodes_ = std::move(rebuilt);
+  builder_.PruneValueInfos();
   Rebuild();
 }
 

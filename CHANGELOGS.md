@@ -9,9 +9,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - Added the `StructTypeProto` / `EncodedValueProto` custom value representation
   (`TypeProto.struct_type`, `GraphProto.encoded_initializer` and `ModelProto.struct_types`
-  on the reserved field number 1000), together with catalogue resolution, checked
-  byte-layout arithmetic, payload-derived record counts and bounds-checked record access
-  in `onnx_light/onnx_proto/onnx_struct_value.h`.
+  on the reserved field number 1000), with serialization for typed and constant fields,
+  arrays, bit-packed records and shared type references.
+- Added built-in affine INT8/UINT8 and INT4/UINT4 encoded layouts, with per-value
+  quantization parameters and inline or external payload metadata. Catalogue resolution,
+  checked layout arithmetic and payload-derived record counts are validated through
+  `onnx_light/onnx_proto/onnx_verify.h` and integrated into `VerifyModel`/`VerifyGraph`.
 - Added ONNX `FLOAT6E2M3` and `FLOAT6E3M2` support across schemas, serialization,
   validation, runtime tensors, `Cast`, `QuantizeLinear`, and `DequantizeLinear`.
 - Added portable optimizer patterns for linear algebra, convolution, normalization,
@@ -20,6 +23,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Improvements
 
+- Unified fixed-width element-size metadata across structured-value validation and
+  `BitCast` schemas, shape inference and runtime kernels.
 - Synchronized the opset 28 schemas with ONNX weekly 1.24, including BF16 constraints
   and `SpaceToDepth`/`DepthToSpace` function bodies.
 - Aligned default CPU affinity with ONNX Runtime.
@@ -42,6 +47,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixes
 
+- Fixed protobuf oneof resets with the legacy MSVC preprocessor, ensuring every backing
+  field is cleared when switching or resetting alternatives.
 - Honored globally registered shape callbacks in custom domains during native shape inference
   and `GraphBuilder` construction.
 - Corrected variadic output bounds for `If`, `Loop`, `Scan`, and `SequenceMap` so native
@@ -65,6 +72,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Documentation & CI
 
+- Increased core CI timeouts to 90 minutes on Windows x64 and 60 minutes on macOS,
+  leaving room for tests after cold builds.
 - Bumped the release version to `0.1.26`.
 - Reduced the release wheel matrix while retaining CPython 3.12–3.14 coverage.
 - Refreshed the project goals, fuzzing, pattern optimization, and no-copy ownership

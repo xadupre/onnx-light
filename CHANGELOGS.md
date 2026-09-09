@@ -37,6 +37,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixes
 
+- Honored globally registered shape callbacks in custom domains during native shape inference
+  and `GraphBuilder` construction.
 - Corrected variadic output bounds for `If`, `Loop`, `Scan`, and `SequenceMap` so native
   `GraphBuilder` accepts multi-output control flow, including `Scan` inside local functions.
 - Added BF16 `Einsum` and `Unique`, floating-point floor remainder for `Mod`, and CRD

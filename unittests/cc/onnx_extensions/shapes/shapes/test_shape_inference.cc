@@ -4,6 +4,7 @@
 
 #include "onnx_core/shapes/shape_inference.h"
 
+#include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx.h"
@@ -1256,6 +1257,28 @@ TEST(OnnxOptimShapeInference, ComputeShapeNodeUsesRegisteredCustomDomainCallback
   EXPECT_EQ(ctx.Get("Y").Dtype(), core::symbolic::TensorType::kFloat);
   EXPECT_EQ(ctx.Get("Y").Shape(),
             (core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)}));
+}
+
+TEST(OnnxOptimShapeInference, ComputeShapeNodeUsesGlobalCustomDomainCallback) {
+  core::shapes::RegisterComputeShapeFn(
+      "com.acme.global", "Identity", [](core::shapes::ShapesContext &ctx, const NodeProto &node) {
+        ctx.Set(node.output(0), core::symbolic::SymTensor(ctx.Get(node.input(0))));
+      });
+  const NodeProto node = MakeNode("Identity", {"X"}, {"Y"}, "com.acme.global");
+  const core::symbolic::SymTensor input(nullptr, core::symbolic::TensorType::kFloat,
+                                        {core::symbolic::SymDim(2), core::symbolic::SymDim(3)});
+  core::shapes::ShapesContext ctx;
+  ctx.Set("X", core::symbolic::SymTensor(input));
+  ctx.ComputeShapeNode(node);
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), input.Dtype());
+  EXPECT_EQ(ctx.Get("Y").Shape(), input.Shape());
+
+  core::shapes::ShapesContext missing_input;
+  EXPECT_THROW(missing_input.ComputeShapeNode(node), std::invalid_argument);
+  EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
+  EXPECT_THROW(ctx.ComputeShapeNode(MakeNode("Unregistered", {"X"}, {"Z"}, "com.acme.global")),
+               std::invalid_argument);
 }
 
 namespace {

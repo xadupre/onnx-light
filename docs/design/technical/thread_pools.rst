@@ -60,9 +60,9 @@ Overview
         participant count targets physical cores and includes the calling
         thread.
     * - Work publication
-      - A short mutex-protected update installs the callable and block count,
-        then increments an atomic generation and calls
-        ``condition_variable::notify_all``.
+      - A short mutex-protected update marks the generation odd, installs the
+        callable and block count, notifies each admitted worker, and publishes
+        an even generation. Spinning workers acquire work without the mutex.
       - The compiler outlines the region. ``__kmpc_fork_call`` in LLVM or
         ``GOMP_parallel`` in GCC publishes that outlined function and releases
         the team through runtime barriers.
@@ -79,7 +79,8 @@ Overview
         dynamic than ``onnx-light``'s fixed worker-to-block mapping.
     * - Idle waiting
       - Workers spin for the resolved iteration or duration budget and then
-        park on a ``std::condition_variable``.
+        park on a ``std::condition_variable``. The spin loop uses the
+        architecture's pause/yield instruction, including MSVC builds.
       - Workers normally spin or yield for a runtime-defined interval and then
         use an implementation- and platform-specific blocking wait.
       - Spinning is enabled by default. ORT supports disabling it or selecting
@@ -139,20 +140,29 @@ the calling thread and :cpp:class:`RuntimeContext`. Each parallel kernel calls
 1. The kernel may stay inline when its work is below ``grain``. Otherwise,
    ``ParallelFor`` divides the range into at most one block per admitted
    participant.
-2. ``ThreadPool::Run`` locks the executor's region mutex, publishes one
-   callable under its state mutex, increments ``generation_``, and notifies all
-   workers.
+2. ``ThreadPool::Run`` locks the executor's region and state mutexes, marks
+   ``generation_`` odd, installs one callable, and notifies admitted workers.
+   It publishes an even generation immediately before unlocking.
 3. The caller computes block 0 while worker ``j - 1`` computes block ``j``.
 4. Workers decrement ``remaining_``. The caller first spins and then waits on
    ``cv_done_`` if needed.
 5. The workers spin for the next generation and eventually park on
-   ``cv_work_``. The nearby ``Softmax`` or second ``Gemm`` can reach them while
-   they are still spinning and avoid an operating-system wake-up.
+   their individual condition variables. The nearby ``Softmax`` or second
+   ``Gemm`` can reach them while they are still spinning and avoid an
+   operating-system wake-up.
 
 The mutexes do not cover matrix multiplication or softmax arithmetic. They
-only serialize publication and concurrent regions. The unconditional
-``notify_all`` can nevertheless wake workers that have no block when a kernel
-admits fewer participants than the pool contains.
+only serialize publication and concurrent regions. Workers without an assigned
+block are not notified. Spinning workers accept an even generation only when
+it remains unchanged across an acquire load of the selected-worker count.
+The count's release store follows the odd-generation marker, so a worker
+cannot combine an old generation with a newer count. Once selected, its
+outstanding contribution to ``remaining_`` prevents replacement of the
+callable until it finishes. This avoids serializing warm workers on the state
+mutex without allowing concurrent reads of a changing payload.
+
+Parked workers still check the generation predicate under the state mutex,
+so notifying before publication does not lose wakeups.
 
 OpenMP
 ++++++

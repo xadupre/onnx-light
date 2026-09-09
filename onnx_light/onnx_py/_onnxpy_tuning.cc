@@ -520,6 +520,7 @@ nb::dict Calibrate(const std::string &kernel, const std::vector<int32_t> &elemen
   result["comparisons"] = std::move(comparisons);
   if (save && !calibration.calibrated.empty()) {
     rt::KernelTuningCacheOptions cache_options;
+    cache_options.execution = options.execution;
     if (path.has_value()) {
       cache_options.path = *path;
     }

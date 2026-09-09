@@ -63,8 +63,6 @@ jobs:
     # schema / shape-inference / manipulation layers that ship in the reduced
     # build. Mirrors .github/workflows/build_reduced_wheel.yml's configure flags.
     name: reduced (ubuntu-latest, py3.13)
-    needs: changes
-    if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 22
     permissions:
@@ -115,8 +113,6 @@ jobs:
     # .github/workflows/ci_no_onnx.yml but lives inside ci-1-core so the gate is
     # observable as a required PR status check.
     name: no-onnx (ubuntu-latest, py3.13)
-    needs: changes
-    if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 19
     permissions:

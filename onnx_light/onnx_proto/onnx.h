@@ -807,8 +807,8 @@ FIELD_OPTIONAL_ONEOF(StructTypeProto, struct_type, 1000, type,
                      "onnx-light extensions so upstream ONNX keeps the low-numbered range. A "
                      "StructTypeProto with no kind is an unconstrained category, permitted only "
                      "here (never as a declaration or an encoded payload layout).")
-ONEOF(type, tensor_type, sequence_type, map_type, opaque_type, sparse_tensor_type, optional_type,
-      struct_type)
+ONEOF(type, tensor_type_, sequence_type_, map_type_, opaque_type_, sparse_tensor_type_,
+      optional_type_, struct_type_)
 inline bool has_type() const {
   return has_tensor_type() || has_sequence_type() || has_map_type() || has_sparse_tensor_type() ||
          has_optional_type() || has_opaque_type() || has_struct_type();
@@ -951,7 +951,7 @@ FIELD_STR(doc_string, 3, "A human-readable documentation for this field. Markdow
 FIELD_OPTIONAL_ONEOF(TensorProto, constant, 4, content,
                      "The actual shared format constant, not a graph input. It must have "
                      "concrete dimensions and matching data, and contributes zero payload bytes.")
-ONEOF(content, type, constant)
+ONEOF(content, type_, constant_)
 inline bool has_content() const { return has_type() || has_constant(); }
 enum ContentCase : int32_t {
   CONTENT_NOT_SET = 0,
@@ -1011,7 +1011,7 @@ FIELD_OPTIONAL_ONEOF(uint64_t, type_ref, 4, kind,
                      "Reference to a declaration in ModelProto.struct_types. A type_ref carries "
                      "only the referenced ID: declaration fields, metadata, codecs and another "
                      "kind must be absent.")
-ONEOF(kind, array, structure, bit_packing, type_ref)
+ONEOF(kind, array_, structure_, bit_packing_, type_ref_)
 FIELD_OPTIONAL(FunctionProto, decoder, 5,
                "Optional decoder. Only the concrete root's codec is invoked; a nested type_ref "
                "contributes layout and constants but not its own decoder or encoder.")
@@ -1074,7 +1074,7 @@ FIELD_OPTIONAL_ONEOF(AffineLayoutProto, affine, 1, layout, "Built-in affine layo
 FIELD_OPTIONAL_ONEOF(StructTypeProto, struct_type, 2, layout,
                      "Structured layout: an exact type_ref or a concrete inline "
                      "declaration eligible for byte encoding.")
-ONEOF(layout, affine, struct_type)
+ONEOF(layout, affine_, struct_type_)
 FIELD_OPTIONAL(TypeProto, logical_type, 3,
                "Decoded type and shape when the value denotes a tensor. It is required, with "
                "concrete dimensions, for the affine branch.")
@@ -1817,7 +1817,7 @@ FIELD_OPTIONAL_ONEOF(MapProto, map_value, 6, value,
 FIELD_OPTIONAL_ONEOF(OptionalProto, optional_value, 7, value,
                      "For OptionalProto value, allowing optional to be of itself (completeness) "
                      "When this field is present, the elem_type field MUST be OPTIONAL.")
-ONEOF(value, tensor_value, sparse_tensor_value, sequence_value, map_value, optional_value)
+ONEOF(value, tensor_value_, sparse_tensor_value_, sequence_value_, map_value_, optional_value_)
 inline OptionalProto() { elem_type_ = DataType::UNDEFINED; }
 inline bool has_value() const {
   return has_tensor_value() || has_sequence_value() || has_map_value() ||

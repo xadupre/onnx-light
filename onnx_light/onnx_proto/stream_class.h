@@ -21,6 +21,13 @@ template <typename T> inline const T &default_proto_instance() {
 
 } // namespace onnx_light::proto_default_detail
 
+namespace onnx_light::proto_oneof_detail {
+
+/// Resets the backing fields without variadic macro dispatch (MSVC's legacy preprocessor).
+template <typename... Fields> inline void reset_fields(Fields &...fields) { (fields.reset(), ...); }
+
+} // namespace onnx_light::proto_oneof_detail
+
 #define FIELD_VARINT 0
 #define FIELD_FIXED64 1
 #define FIELD_FIXED_SIZE 2
@@ -317,35 +324,11 @@ public:                                                                         
   _FIELD_OPTIONAL(type, name, order, doc)                                                          \
   inline bool has_oneof_##name() const { return has_##name(); }
 
-#define _ONEOF_RESET_1(a) a##_.reset();
-#define _ONEOF_RESET_2(a, b)                                                                       \
-  _ONEOF_RESET_1(a)                                                                                \
-  _ONEOF_RESET_1(b)
-#define _ONEOF_RESET_3(a, b, c)                                                                    \
-  _ONEOF_RESET_2(a, b)                                                                             \
-  _ONEOF_RESET_1(c)
-#define _ONEOF_RESET_4(a, b, c, d)                                                                 \
-  _ONEOF_RESET_3(a, b, c)                                                                          \
-  _ONEOF_RESET_1(d)
-#define _ONEOF_RESET_5(a, b, c, d, e)                                                              \
-  _ONEOF_RESET_4(a, b, c, d)                                                                       \
-  _ONEOF_RESET_1(e)
-#define _ONEOF_RESET_6(a, b, c, d, e, f)                                                           \
-  _ONEOF_RESET_5(a, b, c, d, e)                                                                    \
-  _ONEOF_RESET_1(f)
-#define _ONEOF_RESET_7(a, b, c, d, e, f, g)                                                        \
-  _ONEOF_RESET_6(a, b, c, d, e, f)                                                                 \
-  _ONEOF_RESET_1(g)
-#define _ONEOF_RESET_SELECT(_1, _2, _3, _4, _5, _6, _7, NAME, ...) NAME
-#define _ONEOF_RESET_FIELDS(...)                                                                   \
-  _ONEOF_RESET_SELECT(__VA_ARGS__, _ONEOF_RESET_7, _ONEOF_RESET_6, _ONEOF_RESET_5, _ONEOF_RESET_4, \
-                      _ONEOF_RESET_3, _ONEOF_RESET_2, _ONEOF_RESET_1)(__VA_ARGS__)
-
-/** Declares the discriminator and reset operation shared by one protobuf ``oneof``. */
+/** Declares a protobuf ``oneof`` discriminator and reset operation from its backing fields. */
 #define ONEOF(name, ...)                                                                           \
 public:                                                                                            \
   ONNX_LIGHT_NOINLINE inline void clear_##name() {                                                 \
-    _ONEOF_RESET_FIELDS(__VA_ARGS__)                                                               \
+    ::onnx_light::proto_oneof_detail::reset_fields(__VA_ARGS__);                                   \
     oneof_case_##name##_ = -1;                                                                     \
   }                                                                                                \
   inline int oneof_case_##name() const { return oneof_case_##name##_; }                            \

@@ -1525,6 +1525,54 @@ TEST(custom_values, OneofSettersClearSiblings) {
   EXPECT_EQ(moved_from.value_case(), TypeProto::kUndefined);
 }
 
+TEST(custom_values, OneofClearResetsEveryBackingField) {
+  // Populate the backing fields directly so clearing must visit every alternative.
+  TypeProto type;
+  type.ref_struct_type();
+  type.tensor_type_optional().set_empty_value();
+  type.sequence_type_optional().set_empty_value();
+  type.map_type_optional().set_empty_value();
+  type.opaque_type_optional().set_empty_value();
+  type.sparse_tensor_type_optional().set_empty_value();
+  type.optional_type_optional().set_empty_value();
+  type.clear_type();
+  EXPECT_FALSE(type.has_type());
+  EXPECT_EQ(type.oneof_case_type(), -1);
+
+  StructTypeProto declaration;
+  declaration.set_type_ref(kInt4Block);
+  declaration.array_optional().set_empty_value();
+  declaration.structure_optional().set_empty_value();
+  declaration.bit_packing_optional().set_empty_value();
+  declaration.clear_kind();
+  EXPECT_FALSE(declaration.has_kind());
+  EXPECT_EQ(declaration.oneof_case_kind(), -1);
+
+  StructTypeProto::Structure::Field field;
+  field.ref_type();
+  field.constant_optional().set_empty_value();
+  field.clear_content();
+  EXPECT_FALSE(field.has_content());
+  EXPECT_EQ(field.oneof_case_content(), -1);
+
+  EncodedValueProto value;
+  value.ref_affine();
+  value.struct_type_optional().set_empty_value();
+  value.clear_layout();
+  EXPECT_FALSE(value.has_layout());
+  EXPECT_EQ(value.oneof_case_layout(), -1);
+
+  OptionalProto optional;
+  optional.ref_tensor_value();
+  optional.sparse_tensor_value_optional().set_empty_value();
+  optional.sequence_value_optional().set_empty_value();
+  optional.map_value_optional().set_empty_value();
+  optional.optional_value_optional().set_empty_value();
+  optional.clear_value();
+  EXPECT_FALSE(optional.has_value());
+  EXPECT_EQ(optional.oneof_case_value(), -1);
+}
+
 TEST(custom_values, OneofLastAlternativeOnTheWireWins) {
   TypeProto::Tensor tensor;
   tensor.set_elem_type(TensorProto::FLOAT);

@@ -9,12 +9,19 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cerrno>
 #include <chrono>
+#include <csignal>
 #include <cstdint>
 #include <mutex>
 #include <thread>
 #include <utility>
 #include <vector>
+
+#if defined(__linux__)
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
@@ -82,6 +89,63 @@ TEST(ThreadPool, SpinningLimitedWakeupsCompleteVaryingBlockCounts) {
     }
   }
 }
+
+#if defined(__linux__)
+TEST(ThreadPool, GlobalPoolReinitializesAfterFork) {
+  ThreadPool &parent_pool = GlobalThreadPool();
+  if (parent_pool.worker_count() == 0) {
+    GTEST_SKIP() << "The fork regression requires at least one worker.";
+  }
+  parent_pool.Run(2, [](int64_t) {});
+
+  const pid_t child = fork();
+  ASSERT_GE(child, 0);
+  if (child == 0) {
+    std::atomic<int> completed{0};
+    ParallelFor(2, 1, [&completed](int64_t begin, int64_t end) {
+      (void)begin;
+      (void)end;
+      completed.fetch_add(1, std::memory_order_relaxed);
+    });
+    _exit(completed.load(std::memory_order_relaxed) == 2 ? 0 : 1);
+  }
+
+  int status = 0;
+  pid_t waited = 0;
+  int wait_error = 0;
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+  while (waited == 0 && std::chrono::steady_clock::now() < deadline) {
+    do {
+      waited = waitpid(child, &status, WNOHANG);
+    } while (waited < 0 && errno == EINTR);
+    if (waited < 0) {
+      wait_error = errno;
+      break;
+    }
+    if (waited == 0) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+  }
+  if (waited != child) {
+    const bool timed_out = waited == 0;
+    const int kill_result = kill(child, SIGKILL);
+    const int kill_error = errno;
+    do {
+      waited = waitpid(child, &status, 0);
+    } while (waited < 0 && errno == EINTR);
+    EXPECT_TRUE(kill_result == 0 || kill_error == ESRCH);
+    EXPECT_EQ(waited, child);
+    if (timed_out) {
+      ADD_FAILURE() << "Child ParallelFor timed out after fork.";
+    } else {
+      ADD_FAILURE() << "waitpid failed with errno " << wait_error << ".";
+    }
+    return;
+  }
+  ASSERT_TRUE(WIFEXITED(status));
+  EXPECT_EQ(WEXITSTATUS(status), 0);
+}
+#endif
 
 TEST(ThreadPool, PublishesPayloadForSpinningAndParkedWorkers) {
   for (int mode = 0; mode < 3; ++mode) {

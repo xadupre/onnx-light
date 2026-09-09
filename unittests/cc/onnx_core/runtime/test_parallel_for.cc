@@ -7,9 +7,12 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <mutex>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -76,6 +79,31 @@ TEST(ThreadPool, SpinningLimitedWakeupsCompleteVaryingBlockCounts) {
     });
     for (const std::atomic<int> &visit : visits) {
       EXPECT_EQ(visit.load(std::memory_order_relaxed), 1);
+    }
+  }
+}
+
+TEST(ThreadPool, PublishesPayloadForSpinningAndParkedWorkers) {
+  for (int mode = 0; mode < 3; ++mode) {
+    SCOPED_TRACE(mode);
+    ThreadPoolOptions options;
+    options.spin_iterations = mode == 1 ? 10000 : 0;
+    options.spin_duration_ns = mode == 2 ? 100000 : 0;
+    ThreadPool pool(8, options);
+    constexpr std::array<int64_t, 4> block_counts{9, 1, 2, 5};
+    for (int iteration = 0; iteration < 2000; ++iteration) {
+      if (iteration % 128 == 0) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+      }
+      const int64_t blocks = block_counts[iteration % block_counts.size()];
+      const uint64_t payload = static_cast<uint64_t>(iteration + 1) * 16;
+      std::array<uint64_t, 9> results{};
+      pool.Run(blocks, [&](int64_t block) {
+        results[static_cast<std::size_t>(block)] = payload + static_cast<uint64_t>(block);
+      });
+      for (std::size_t block = 0; block < results.size(); ++block) {
+        EXPECT_EQ(results[block], block < static_cast<std::size_t>(blocks) ? payload + block : 0);
+      }
     }
   }
 }

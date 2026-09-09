@@ -15,8 +15,23 @@
 #include <system_error>
 #include <thread>
 
+#if !defined(_WIN32)
+#include <unistd.h>
+#else
+#define NOMINMAX
+#include <windows.h>
+#endif
+
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
+
+uintptr_t CurrentProcessId() noexcept {
+#if defined(_WIN32)
+  return static_cast<uintptr_t>(GetCurrentProcessId());
+#else
+  return static_cast<uintptr_t>(getpid());
+#endif
+}
 
 void CpuRelax() noexcept {
 #if defined(__x86_64__) || defined(__i386__)
@@ -268,9 +283,84 @@ void ThreadPool::WorkerLoop(int64_t worker_index) {
   }
 }
 
+namespace {
+
+class GlobalThreadPoolState {
+public:
+  static_assert(std::atomic<uintptr_t>::is_always_lock_free,
+                "Fork-safe global pool publication requires lock-free process state.");
+
+  GlobalThreadPoolState()
+      : process_state_(StableState(CurrentProcessId())),
+        pool_(new ThreadPool(ParallelForThreadCount() - 1)) {}
+
+  ~GlobalThreadPoolState() {
+    if (process_state_.load(std::memory_order_acquire) == StableState(CurrentProcessId())) {
+      delete pool_;
+    }
+  }
+
+  ThreadPool &Get() {
+    const uintptr_t process_id = CurrentProcessId();
+    const uintptr_t stable_state = StableState(process_id);
+    for (;;) {
+      uintptr_t state = process_state_.load(std::memory_order_acquire);
+      if (state == stable_state) {
+        return *pool_;
+      }
+      if (state == ResettingState(process_id)) {
+        CpuRelax();
+        continue;
+      }
+      if (!process_state_.compare_exchange_weak(state, ResettingState(process_id),
+                                                std::memory_order_acq_rel,
+                                                std::memory_order_acquire)) {
+        continue;
+      }
+      ResetGuard reset_guard(process_state_, state);
+      // The inherited pool owns joinable std::thread objects whose workers
+      // do not survive fork. Leave it untouched and create child-owned state.
+      pool_ = new ThreadPool(ParallelForThreadCount() - 1);
+      process_state_.store(stable_state, std::memory_order_release);
+      reset_guard.Commit();
+      return *pool_;
+    }
+  }
+
+private:
+  class ResetGuard {
+  public:
+    ResetGuard(std::atomic<uintptr_t> &state, uintptr_t previous_state) noexcept
+        : state_(state), previous_state_(previous_state) {}
+
+    ~ResetGuard() {
+      if (!committed_) {
+        state_.store(previous_state_, std::memory_order_release);
+      }
+    }
+
+    void Commit() noexcept { committed_ = true; }
+
+  private:
+    std::atomic<uintptr_t> &state_;
+    uintptr_t previous_state_;
+    bool committed_ = false;
+  };
+
+  static uintptr_t StableState(uintptr_t process_id) noexcept { return process_id << 1; }
+  static uintptr_t ResettingState(uintptr_t process_id) noexcept {
+    return StableState(process_id) | 1;
+  }
+
+  std::atomic<uintptr_t> process_state_;
+  ThreadPool *pool_;
+};
+
+} // namespace
+
 ThreadPool &GlobalThreadPool() {
-  static ThreadPool pool(ParallelForThreadCount() - 1);
-  return pool;
+  static GlobalThreadPoolState state;
+  return state.Get();
 }
 
 namespace {

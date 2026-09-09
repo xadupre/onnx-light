@@ -172,7 +172,10 @@ private:
 /// The pool is constructed on first use with ``ParallelForThreadCount() - 1``
 /// worker threads (the calling thread makes up the last participant) and lives
 /// for the remainder of the process. Threads are therefore created once and
-/// reused across every ``ParallelFor`` call.
+/// reused across every ``ParallelFor`` call. After ``fork()``, the child
+/// abandons the inherited pool without joining its vanished workers and creates
+/// a child-owned pool on first use. References obtained before ``fork()`` must
+/// not be reused in the child; call this function again instead.
 ///
 /// Returns:
 ///   A reference to the shared thread pool.

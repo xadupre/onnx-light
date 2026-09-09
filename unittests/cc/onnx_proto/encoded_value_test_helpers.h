@@ -7,8 +7,8 @@
 #include <string_view>
 
 /**
- * @file onnx_encoded_value_view.h
- * @brief Field location and bounds-checked payload access for ``EncodedValueProto``.
+ * @file encoded_value_test_helpers.h
+ * @brief Test helpers for reading ``EncodedValueProto`` payloads.
  *
  * The helpers declared here locate fixed-width leaves within a validated
  * structured layout and read their bits from an inline encoded payload.
@@ -18,7 +18,9 @@
  * except the ones documented as returning ``false``.
  */
 
-namespace ONNX_LIGHT_NAMESPACE {
+namespace {
+
+using namespace ONNX_LIGHT_NAMESPACE;
 
 /** Locates one physical leaf inside a byte-encoded record. */
 struct EncodedFieldRef {
@@ -51,9 +53,8 @@ struct EncodedFieldRef {
  *
  * @throws std::invalid_argument Thrown when the type itself is malformed.
  */
-ONNX_LIGHT_PROTO_API bool FindEncodedField(const StructTypeCatalogue &catalogue,
-                                           const StructTypeProto &root, std::string_view path,
-                                           EncodedFieldRef &out);
+bool FindEncodedField(const StructTypeCatalogue &catalogue, const StructTypeProto &root,
+                      std::string_view path, EncodedFieldRef &out);
 
 /**
  * Bounds-checked read access to the records of an ``EncodedValueProto``.
@@ -61,7 +62,7 @@ ONNX_LIGHT_PROTO_API bool FindEncodedField(const StructTypeCatalogue &catalogue,
  * The view borrows the payload bytes: the value (and whatever owner token its
  * ``raw_data`` holds) must outlive the view.
  */
-class ONNX_LIGHT_PROTO_API EncodedValueView {
+class EncodedValueView {
 public:
   /**
    * Validates @p value against @p catalogue and binds the view to its payload.
@@ -188,4 +189,4 @@ private:
   size_t payload_size_ = 0;
 };
 
-} // namespace ONNX_LIGHT_NAMESPACE
+} // namespace

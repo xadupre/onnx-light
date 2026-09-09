@@ -1,5 +1,4 @@
 #include "onnx_verify.h"
-#include "onnx_encoded_value_view.h"
 #include "onnx_helper.h"
 
 #include <algorithm>
@@ -888,125 +887,6 @@ void ValidateAffineLayout(const EncodedValueProto &value, EncodedValueLayout &la
   layout.record_count = elements;
 }
 
-/** Splits @p path on the first dot and returns the leading segment. */
-std::string_view SplitPath(std::string_view path, std::string_view &rest) {
-  const size_t dot = path.find('.');
-  if (dot == std::string_view::npos) {
-    rest = std::string_view();
-    return path;
-  }
-  rest = path.substr(dot + 1);
-  return path.substr(0, dot);
-}
-
-bool LocateInStruct(const StructTypeCatalogue &catalogue, const StructTypeProto &type,
-                    std::string_view path, uint64_t base_bits, EncodedFieldRef &out);
-
-/** Describes a fixed-width leaf reachable through a TypeProto. */
-bool LocateInType(const StructTypeCatalogue &catalogue, const TypeProto &type,
-                  std::string_view path, uint64_t base_bits, EncodedFieldRef &out) {
-  if (type.value_case() == TypeProto::kStructType) {
-    return LocateInStruct(catalogue, type.ref_struct_type(), path, base_bits, out);
-  }
-  if (!path.empty() || type.value_case() != TypeProto::kTensorType) {
-    return false;
-  }
-  const TypeProto::Tensor &tensor = type.ref_tensor_type();
-  if (!tensor.has_elem_type()) {
-    return false;
-  }
-  const uint32_t width = FixedBitWidth(tensor.elem_type());
-  uint64_t count = 0;
-  if (width == 0 || !ConcreteElementCount(tensor, count, nullptr)) {
-    return false;
-  }
-  out.bit_offset = base_bits;
-  out.bit_stride = width;
-  out.bit_width = width;
-  out.count = count;
-  out.elem_type = tensor.elem_type();
-  return true;
-}
-
-/** Walks @p path inside @p type, accumulating bit offsets in declaration order. */
-bool LocateInStruct(const StructTypeCatalogue &catalogue, const StructTypeProto &type,
-                    std::string_view path, uint64_t base_bits, EncodedFieldRef &out) {
-  const StructTypeProto &resolved = catalogue.Resolve(type);
-  switch (resolved.kind_case()) {
-  case StructTypeProto::kStructure: {
-    std::string_view rest;
-    const std::string_view head = SplitPath(path, rest);
-    if (head.empty()) {
-      return false;
-    }
-    Walk walk;
-    walk.catalogue = &catalogue;
-    uint64_t offset = base_bits;
-    for (const auto &field : resolved.ref_structure().ref_field()) {
-      if (field.name().sv() == head) {
-        if (field.content_case() != StructTypeProto::Structure::Field::kType) {
-          return false;
-        }
-        return LocateInType(catalogue, field.ref_type(), rest, offset, out);
-      }
-      if (field.content_case() == StructTypeProto::Structure::Field::kConstant) {
-        continue;
-      }
-      uint64_t field_bits = 0;
-      if (!BitSizeOfType(walk, field.ref_type(), field_bits, nullptr) ||
-          !CheckedAdd(offset, field_bits, offset)) {
-        return false;
-      }
-    }
-    return false;
-  }
-  case StructTypeProto::kBitPacking: {
-    std::string_view rest;
-    const std::string_view head = SplitPath(path, rest);
-    if (head.empty() || !rest.empty()) {
-      return false;
-    }
-    const StructTypeProto::BitPacking &packing = resolved.ref_bit_packing();
-    uint64_t group = 0;
-    if (!GroupBits(packing, group, nullptr)) {
-      return false;
-    }
-    uint64_t offset = 0;
-    for (const auto &component : packing.ref_component()) {
-      if (component.name().sv() == head) {
-        out.bit_offset = base_bits + offset;
-        out.bit_stride = group;
-        out.bit_width = component.ref_bit_width();
-        out.count = packing.ref_dimension();
-        out.elem_type = TensorProto::UNDEFINED;
-        return true;
-      }
-      offset += component.ref_bit_width();
-    }
-    return false;
-  }
-  case StructTypeProto::kArray: {
-    if (!path.empty() || !resolved.ref_array().has_element_type()) {
-      return false;
-    }
-    EncodedFieldRef element;
-    if (!LocateInType(catalogue, resolved.ref_array().ref_element_type(), std::string_view(),
-                      base_bits, element)) {
-      return false;
-    }
-    uint64_t total = 0;
-    if (!CheckedMultiply(element.count, resolved.ref_array().ref_dimension(), total)) {
-      return false;
-    }
-    out = element;
-    out.count = total;
-    return true;
-  }
-  default:
-    return false;
-  }
-}
-
 } // namespace
 
 void StructTypeCatalogue::Build(const ModelProto &model) {
@@ -1099,12 +979,6 @@ StructTypeCatalogue::ValidateEncodedValue(const EncodedValueProto &value,
   }
   layout.record_count = layout.payload_bytes / element_bytes;
   return layout;
-}
-
-bool FindEncodedField(const StructTypeCatalogue &catalogue, const StructTypeProto &root,
-                      std::string_view path, EncodedFieldRef &out) {
-  out = EncodedFieldRef();
-  return LocateInStruct(catalogue, root, path, 0, out);
 }
 
 void VerifyValueInfo(const ValueInfoProto &value_info, bool is_main_graph) {

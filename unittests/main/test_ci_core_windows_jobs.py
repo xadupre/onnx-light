@@ -1,11 +1,9 @@
 import re
 import unittest
-
-from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
-class TestCiCoreWindowsJobs(ExtTestCase):
+class TestCiCoreWindowsJobs(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.root = Path(__file__).resolve().parents[2]
@@ -71,10 +69,14 @@ class TestCiCoreWindowsJobs(ExtTestCase):
             return None
         return re.findall(r"\w+", needs_match.group(1))
 
-    def test_reduced_and_no_onnx_preflights_run_in_parallel(self):
-        """Verifies that the reduced and no-onnx preflights have no interdependency."""
-        self.assertIsNone(self._job_needs("reduced_tests_ubuntu"))
-        self.assertIsNone(self._job_needs("no_onnx_tests_ubuntu"))
+    def test_reduced_and_no_onnx_preflights_skip_documentation_changes(self):
+        """Verifies that parallel preflights skip documentation-only changes."""
+        for job_name in ("reduced_tests_ubuntu", "no_onnx_tests_ubuntu"):
+            needs = self._job_needs(job_name)
+            self.assertEqual(needs, ["changes"], job_name)
+            match = re.search(rf"(?ms)^  {job_name}:\s*$(.*?)(?=^  \w+:\s*$|\Z)", self.content)
+            self.assertIsNotNone(match, job_name)
+            self.assertIn("if: ${{ needs.changes.outputs.docs_only != 'true' }}", match.group(1))
 
     def test_downstream_jobs_gate_on_both_preflights(self):
         """Verifies that every downstream build job waits on both preflights."""

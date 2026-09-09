@@ -22,6 +22,10 @@
 #include <windows.h>
 #endif
 
+#if defined(_MSC_VER)
+#include <intrin.h>
+#endif
+
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
 
@@ -34,7 +38,11 @@ uintptr_t CurrentProcessId() noexcept {
 }
 
 void CpuRelax() noexcept {
-#if defined(__x86_64__) || defined(__i386__)
+#if defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
+  _mm_pause();
+#elif defined(_MSC_VER) && (defined(_M_ARM64) || defined(_M_ARM))
+  __yield();
+#elif defined(__x86_64__) || defined(__i386__)
   __builtin_ia32_pause();
 #elif defined(__aarch64__) || defined(__arm__)
   __asm__ volatile("yield");
@@ -118,17 +126,20 @@ bool ThreadPool::InPool() noexcept { return InPoolFlag(); }
 
 bool ThreadPool::SpinForWork(uint64_t last_generation, int64_t worker_index) const noexcept {
   const auto work_available = [this, last_generation, worker_index]() {
-    if (generation_.load(std::memory_order_acquire) == last_generation) {
+    const uint64_t generation = generation_.load(std::memory_order_acquire);
+    if ((generation & 1) != 0 || generation == last_generation) {
       return false;
     }
-    return worker_index < active_workers_.load(std::memory_order_acquire);
+    return worker_index < active_workers_.load(std::memory_order_acquire) &&
+           generation_.load(std::memory_order_acquire) == generation;
   };
   if (options_.spin_iterations != 0) {
     for (uint64_t spin = 0; spin < options_.spin_iterations; ++spin) {
       if (stop_.load(std::memory_order_acquire) || work_available()) {
         return true;
       }
-      if (generation_.load(std::memory_order_acquire) != last_generation) {
+      const uint64_t generation = generation_.load(std::memory_order_acquire);
+      if ((generation & 1) == 0 && generation != last_generation) {
         return false;
       }
       CpuRelax();
@@ -143,7 +154,8 @@ bool ThreadPool::SpinForWork(uint64_t last_generation, int64_t worker_index) con
     if (stop_.load(std::memory_order_acquire) || work_available()) {
       return true;
     }
-    if (generation_.load(std::memory_order_acquire) != last_generation) {
+    const uint64_t generation = generation_.load(std::memory_order_acquire);
+    if ((generation & 1) == 0 && generation != last_generation) {
       return false;
     }
     CpuRelax();
@@ -190,15 +202,19 @@ void ThreadPool::RunErased(int64_t num_blocks, void *task_ctx, TaskFn task_fn) {
   std::lock_guard<std::mutex> region(region_mu_);
   {
     std::lock_guard<std::mutex> lock(mu_);
+    // Odd generations mark publication in progress. The release store to
+    // active_workers_ lets readers detect a count from a newer publication.
+    generation_.fetch_add(1, std::memory_order_release);
     task_ctx_ = task_ctx;
     task_fn_ = task_fn;
     num_blocks_ = num_blocks;
     remaining_.store(num_blocks - 1, std::memory_order_relaxed);
     active_workers_.store(num_blocks - 1, std::memory_order_release);
-    generation_.fetch_add(1, std::memory_order_release);
     for (int64_t worker = 0; worker < num_blocks - 1; ++worker) {
       worker_work_[static_cast<size_t>(worker)]->notify_one();
     }
+    // Publish the stable payload after all wakeups have been issued.
+    generation_.fetch_add(1, std::memory_order_release);
   }
 
   bool &in_pool = InPoolFlag();
@@ -244,15 +260,17 @@ void ThreadPool::WorkerLoop(int64_t worker_index) {
       return;
     }
     if (work_ready) {
-      std::lock_guard<std::mutex> lock(mu_);
-      const uint64_t generation = generation_.load(std::memory_order_relaxed);
-      if (generation == last_generation) {
+      const uint64_t generation = generation_.load(std::memory_order_acquire);
+      if ((generation & 1) != 0 || generation == last_generation) {
         continue;
       }
+      if (worker_index >= active_workers_.load(std::memory_order_acquire) ||
+          generation_.load(std::memory_order_acquire) != generation) {
+        continue;
+      }
+      // This worker belongs to the validated publication and has not completed
+      // it. remaining_ therefore keeps the payload alive until after fn returns.
       last_generation = generation;
-      if (worker_index >= active_workers_.load(std::memory_order_acquire)) {
-        continue;
-      }
       ctx = task_ctx_;
       fn = task_fn_;
       num_blocks = num_blocks_;

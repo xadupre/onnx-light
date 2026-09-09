@@ -766,11 +766,16 @@ or report an unsupported export.
 Implementation sequence
 +++++++++++++++++++++++
 
-PR01 is complete: the representation, identity, payload, lifetime,
-feedback and size contracts above are frozen. PR02 is next and implements
-``StructTypeProto``, ``EncodedValueProto``, typed/constant fields, arrays,
-bit packing, type references, payload ownership and value serialization
-before adding the built-in affine subset.
+PR01 and PR02 are complete: the representation, identity, payload, lifetime,
+feedback and size contracts above are frozen, and ``StructTypeProto``,
+``EncodedValueProto``, typed/constant fields, arrays, bit packing, type
+references, payload ownership, value serialization and the built-in affine
+subset are implemented in ``lib_onnx_proto``
+(``onnx_light/onnx_proto/onnx_struct_value.h``/``.cc`` plus the
+``TypeProto``/``GraphProto``/``ModelProto`` field-1000 branches), with
+structural validation wired into ``VerifyModel``/``VerifyGraph``. PR03 is next
+and integrates the representation with ``GraphBuilder`` authoring,
+deduplication and inference.
 
 .. list-table::
    :header-rows: 1
@@ -788,7 +793,7 @@ before adding the built-in affine subset.
        baseline and budget before PR02.
      - Existing runtime APIs
    * - PR02
-     - Structs first, then minimal built-in layouts
+     - Structs first, then minimal built-in layouts (**done**)
      - Implement ``StructTypeProto`` and the structured branch of
        ``EncodedValueProto`` first, then common INT8/INT4 layouts.
        Round-trip tensor/sequence fields, byte-encoded custom records,
@@ -797,7 +802,7 @@ before adding the built-in affine subset.
        binary-size budget.
      - PR01
    * - PR03
-     - GraphBuilder and serialization integration
+     - GraphBuilder and serialization integration (**next**)
      - Structured initializers, logical/physical inference, scope-aware
        references and deduplication agree. Standard export never loses
        data.

@@ -17,6 +17,7 @@
 #include "onnx_lib/defs/tensor/utils.h"
 #include "onnx_manipulations/tensor_proto_util.h"
 #include "onnx_proto/onnx_alias.h"
+#include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 
@@ -137,45 +138,6 @@ ONNX_OPERATOR_SET_SCHEMA(
         .TypeConstraint("T2", OpSchema::all_non_string_tensor_types_ir13(),
                         "Constrain output types. Bitcasting to string is not supported.")
         .TypeAndShapeInferenceFunction([](InferenceContext &ctx) {
-          auto get_bit_size = [](int element_type) -> int {
-            switch (element_type) {
-            case TensorProto::FLOAT:
-            case TensorProto::INT32:
-            case TensorProto::UINT32:
-              return 32;
-            case TensorProto::DOUBLE:
-            case TensorProto::INT64:
-            case TensorProto::UINT64:
-            case TensorProto::COMPLEX64:
-              return 64;
-            case TensorProto::COMPLEX128:
-              return 128;
-            case TensorProto::FLOAT16:
-            case TensorProto::BFLOAT16:
-            case TensorProto::INT16:
-            case TensorProto::UINT16:
-              return 16;
-            case TensorProto::INT8:
-            case TensorProto::UINT8:
-            case TensorProto::BOOL:
-            case TensorProto::FLOAT8E4M3FN:
-            case TensorProto::FLOAT8E4M3FNUZ:
-            case TensorProto::FLOAT8E5M2:
-            case TensorProto::FLOAT8E5M2FNUZ:
-            case TensorProto::FLOAT8E8M0:
-              return 8;
-            case TensorProto::INT4:
-            case TensorProto::UINT4:
-            case TensorProto::FLOAT4E2M1:
-              return 4;
-            case TensorProto::INT2:
-            case TensorProto::UINT2:
-              return 2;
-            default:
-              return 0;
-            }
-          };
-
           // Validate that input and output types have the same bit-width
           auto input_type = ctx.getInputType(0);
           if (input_type && input_type->has_tensor_type()) {
@@ -183,8 +145,10 @@ ONNX_OPERATOR_SET_SCHEMA(
             auto *to_attr = ctx.getAttribute("to");
             if (to_attr) {
               auto output_element_type = static_cast<int32_t>(to_attr->i());
-              int input_element_bit_size = get_bit_size(input_element_type);
-              int output_element_bit_size = get_bit_size(output_element_type);
+              const uint32_t input_element_bit_size =
+                  FixedBitWidth(static_cast<TensorProto::DataType>(input_element_type));
+              const uint32_t output_element_bit_size =
+                  FixedBitWidth(static_cast<TensorProto::DataType>(output_element_type));
               if (input_element_bit_size != 0 && output_element_bit_size != 0 &&
                   input_element_bit_size != output_element_bit_size) {
                 fail_shape_inference("BitCast requires input and output types to have the same "

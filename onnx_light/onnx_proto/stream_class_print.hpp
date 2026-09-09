@@ -282,6 +282,12 @@ inline void write_into_stream(std::stringstream &ss, utils::PrintOptions &option
 
 template <>
 inline void write_into_stream(std::stringstream &ss, utils::PrintOptions &options,
+                              const char *field_name, const uint32_t &field) {
+  ss << field_name << ": " << write_as_string(options, field) << " ";
+}
+
+template <>
+inline void write_into_stream(std::stringstream &ss, utils::PrintOptions &options,
                               const char *field_name, const TensorProto::DataType &field) {
   ss << field_name << ": " << write_as_string(options, static_cast<int32_t>(field)) << " ";
 }

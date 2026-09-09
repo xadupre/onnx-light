@@ -320,18 +320,18 @@ void SetProtoFieldFromKwarg(nb::handle py, const std::string &key, nb::handle va
 #define PYFIELD_OPTIONAL_PROTO(cls, name)                                                          \
   def_prop_rw(                                                                                     \
       #name, [](cls & self)->cls::name##_t * {                                                     \
-        if (!self.name##_.has_value()) {                                                           \
+        if (!self.has_##name()) {                                                                  \
           if (self.has_oneof_##name())                                                             \
             return nullptr;                                                                        \
-          self.name##_.set_empty_value();                                                          \
+          return self.add_##name();                                                                \
         }                                                                                          \
-        return &(*self.name##_);                                                                   \
+        return self.mutable_##name();                                                              \
       },                                                                                           \
       [](cls &self, nb::object obj) {                                                              \
         if (obj.is_none()) {                                                                       \
-          self.name##_.reset();                                                                    \
+          self.reset_##name();                                                                     \
         } else if (nb::isinstance<cls::name##_t>(obj)) {                                           \
-          self.name##_ = nb::cast<cls::name##_t &>(obj);                                           \
+          self.set_##name(nb::cast<cls::name##_t &>(obj));                                         \
         } else {                                                                                   \
           EXT_THROW("unexpected value type, unable to set '" #name "' for class '" #cls "'.");     \
         }                                                                                          \
@@ -339,10 +339,7 @@ void SetProtoFieldFromKwarg(nb::handle py, const std::string &key, nb::handle va
       nb::rv_policy::reference_internal, cls::DOC_##name, nb::for_setter(nb::arg("value").none())) \
       .def("has_" #name, &cls::has_##name, "Tells if '" #name "' has a value.")                    \
       .def(                                                                                        \
-          "add_" #name, [](cls & self)->cls::name##_t & {                                          \
-            self.name##_.set_empty_value();                                                        \
-            return *self.name##_;                                                                  \
-          },                                                                                       \
+          "add_" #name, [](cls & self)->cls::name##_t & { return *self.add_##name(); },            \
           nb::rv_policy::reference_internal, "Sets an empty value.")
 
 #define SHORTEN_CODE(cls, dtype)                                                                   \

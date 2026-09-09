@@ -41,6 +41,16 @@ using TypeProto_SparseTensor = TypeProto::SparseTensor;
 
 using TypeProto_Tensor = TypeProto::Tensor;
 
+using StructTypeProto_Array = StructTypeProto::Array;
+
+using StructTypeProto_BitPacking = StructTypeProto::BitPacking;
+
+using StructTypeProto_BitPacking_Component = StructTypeProto::BitPacking::Component;
+
+using StructTypeProto_Structure = StructTypeProto::Structure;
+
+using StructTypeProto_Structure_Field = StructTypeProto::Structure::Field;
+
 #define TensorProto_DataType_Name TensorProto::DataType_Name
 
 // Defined as free functions (rather than a macro like TensorProto_DataType_Name

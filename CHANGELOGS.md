@@ -44,6 +44,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Added signed-integer support for `BitShift` in opset 28.
 - Extended the `Optional` operators to all IR version 14 types and propagated ONNX opset 29
   metadata.
+- Unified default CPU thread-count resolution across `ParallelFor`, runtime parameters,
+  and kernel tuning, preferring process-visible physical cores and respecting CPU affinity.
+- Reduced warm thread-pool dispatch contention by publishing work without requiring
+  spinning workers to acquire the state mutex.
 
 ### Fixes
 
@@ -69,6 +73,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   support.
 - Propagated upstream ONNX fixes for initializer handling, `Resize`, and tensor diagnostics.
 - Fixed signed `INT64` raw-data decoding.
+- Made the global thread pool fork-safe by replacing inherited state on first use in the
+  child without joining vanished workers. Pool references obtained before `fork()` must
+  be reacquired in the child.
+- Persisted the calibration execution descriptor, including the effective thread count,
+  in the kernel-tuning cache.
 
 ### Documentation & CI
 
@@ -87,6 +96,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Corrected `Pad` reflect-mode examples and expanded the `STFT` operator documentation.
 - Added C++ backend coverage for 3D `GlobalMaxPool` and stabilized the backend benchmark
   timing test on loaded CI runners.
+- Added high-arity C++ backend cases for five-input `Max`, `Min`, `Mean`, `Sum`, and
+  `Concat`, three-input `Einsum`, and five-output `Split`, with end-to-end model coverage
+  for `Einsum` and `Split`.
 
 ## [0.1.21] – 2026-08-30
 

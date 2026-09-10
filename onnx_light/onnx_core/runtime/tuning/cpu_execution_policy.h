@@ -176,6 +176,18 @@ inline constexpr uint64_t kDefaultAdaptiveSpinIterations = 10000;
 std::vector<CpuLogicalProcessor> ProcessVisibleLogicalProcessors();
 
 /**
+ * Returns the default number of CPU participants available to this process.
+ *
+ * The count prefers process-visible physical cores, then process-visible
+ * logical processors, and falls back to machine topology when process affinity
+ * cannot be queried. The result is always at least ``1``.
+ *
+ * Returns:
+ *   The default number of CPU participants.
+ */
+uint32_t DefaultCpuParticipantCount() noexcept;
+
+/**
  * Returns the detected physical core count for the process-visible topology.
  *
  * Falls back to the platform CPU descriptor when the topology cannot be read,

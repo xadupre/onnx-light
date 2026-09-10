@@ -332,6 +332,11 @@ std::vector<CpuLogicalProcessor> ProcessVisibleLogicalProcessors() {
   return processors;
 }
 
+uint32_t DefaultCpuParticipantCount() noexcept {
+  std::vector<std::string> diagnostics;
+  return ResolveDefaultThreads(ProcessVisibleLogicalProcessors(), diagnostics);
+}
+
 uint32_t DetectedPhysicalCoreCount() noexcept {
   return DetectedPhysicalCores(ProcessVisibleLogicalProcessors());
 }

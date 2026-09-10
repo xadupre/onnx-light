@@ -194,8 +194,9 @@ public:
    * Executes contiguous ranges covering ``[0, total)``.
    *
    * ``maximum_participants == 0`` uses the session limit. A positive value may
-   * lower but never raise that limit. Work below ``minimum_elements`` runs inline.
-   * Executors inherited across ``fork`` are rejected.
+   * lower but never raise that limit. Work below ``minimum_elements``, single-iteration work, and
+   * work with only one available participant run inline. Executors inherited across ``fork`` are
+   * rejected.
    *
    * @param total Number of iterations. Values ``<= 0`` are a no-op.
    * @param minimum_elements Minimum iterations required for parallel execution. Must be positive.

@@ -45,6 +45,11 @@ TEST(ParallelFor, MinimumElementsIsParallelCrossover) {
                 [&](int64_t, int64_t) { blocks.fetch_add(1, std::memory_order_relaxed); });
     EXPECT_EQ(blocks.load(std::memory_order_relaxed) > 1, expect_parallel);
   }
+
+  std::atomic<int64_t> single_blocks{0};
+  ParallelFor(1, 1,
+              [&](int64_t, int64_t) { single_blocks.fetch_add(1, std::memory_order_relaxed); });
+  EXPECT_EQ(single_blocks.load(std::memory_order_relaxed), 1);
 }
 
 TEST(ParallelFor, BlocksCoverRangeExactlyOnce) {

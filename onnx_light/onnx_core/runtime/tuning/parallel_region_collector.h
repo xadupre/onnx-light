@@ -60,6 +60,7 @@ struct ParallelRegionEvent {
   std::string_view label;
   std::source_location location;
   int64_t total_iterations = 0;
+  /// Minimum iterations assigned to a block.
   int64_t grain_size = 0;
   int32_t requested_threads = 0;
   int32_t admitted_threads = 0;
@@ -84,6 +85,7 @@ struct ParallelRegionReportEvent {
   uint_least32_t line = 0;
   uint_least32_t column = 0;
   int64_t total_iterations = 0;
+  /// Minimum iterations assigned to a block.
   int64_t grain_size = 0;
   int32_t requested_threads = 0;
   int32_t admitted_threads = 0;

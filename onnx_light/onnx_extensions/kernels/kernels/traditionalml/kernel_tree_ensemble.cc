@@ -28,6 +28,7 @@ constexpr int64_t kAggMax = 3;
 /// TreeEnsemble v5 post_transform codes.
 constexpr int64_t kPostNone = 0;
 constexpr int64_t kPostSoftmax = 1;
+constexpr int64_t kPostSoftmaxZero = 3;
 
 /// Traverses a single tree (v5 encoding) for a single input sample and
 /// accumulates leaf contributions into ``accum``.
@@ -162,9 +163,11 @@ template <typename T>
 Tensor TreeEnsemble::operator()(const Tensor &x, int64_t n_targets, int64_t aggregate_function,
                                 int64_t post_transform, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(n_targets >= 1, "kernel::TreeEnsemble: n_targets must be >= 1.");
-  EXT_ENFORCE_INVALID(post_transform == kPostNone || post_transform == kPostSoftmax,
-                      "kernel::TreeEnsemble: only post_transform 0 (NONE) or 1 (SOFTMAX) "
-                      "are supported.");
+  EXT_ENFORCE_INVALID(
+      post_transform == kPostNone || post_transform == kPostSoftmax ||
+          post_transform == kPostSoftmaxZero,
+      "kernel::TreeEnsemble: only post_transform 0 (NONE), 1 (SOFTMAX) or 3 (SOFTMAX_ZERO) "
+      "are supported.");
 
   int64_t sample_count = 0;
   int64_t feature_count = 0;
@@ -199,7 +202,7 @@ Tensor TreeEnsemble::operator()(const Tensor &x, int64_t n_targets, int64_t aggr
     }
 
     // Apply post_transform.
-    if (post_transform == kPostSoftmax) {
+    if (post_transform == kPostSoftmax || post_transform == kPostSoftmaxZero) {
       T max_val = accum[0];
       for (int64_t t = 1; t < n_targets; ++t) {
         if (accum[static_cast<size_t>(t)] > max_val) {
@@ -208,12 +211,20 @@ Tensor TreeEnsemble::operator()(const Tensor &x, int64_t n_targets, int64_t aggr
       }
       T sum = T{0};
       for (int64_t t = 0; t < n_targets; ++t) {
-        accum[static_cast<size_t>(t)] = static_cast<T>(std::exp(
-            static_cast<double>(accum[static_cast<size_t>(t)]) - static_cast<double>(max_val)));
+        T &value = accum[static_cast<size_t>(t)];
+        if (post_transform == kPostSoftmaxZero && std::abs(static_cast<double>(value)) <= 1e-7) {
+          value =
+              static_cast<T>(static_cast<double>(value) * std::exp(-static_cast<double>(max_val)));
+        } else {
+          value =
+              static_cast<T>(std::exp(static_cast<double>(value) - static_cast<double>(max_val)));
+        }
         sum += accum[static_cast<size_t>(t)];
       }
       for (int64_t t = 0; t < n_targets; ++t) {
-        accum[static_cast<size_t>(t)] /= sum;
+        // A zero normalization sum uses a uniform fallback, including near-zero cancellation.
+        accum[static_cast<size_t>(t)] =
+            sum == T{0} ? T{1} / static_cast<T>(n_targets) : accum[static_cast<size_t>(t)] / sum;
       }
     }
 

@@ -619,7 +619,9 @@ private:
 /// Uses the new ``TreeEnsemble`` encoding: ``tree_roots``, ``nodes_splits``
 /// (a tensor), ``leaf_targetids``, and ``leaf_weights``.
 ///
-/// Only ``post_transform`` 0 (NONE) and 1 (SOFTMAX) are supported.
+/// Supports ``post_transform`` 0 (NONE), 1 (SOFTMAX), and 3 (SOFTMAX_ZERO).
+/// SOFTMAX_ZERO uses uniform scores of ``1 / n_targets`` when its normalization
+/// sum is zero, including all-zero scores and cancelling near-zero scores.
 class TreeEnsemble : public KernelBase {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx.ml:TreeEnsemble";
@@ -668,7 +670,7 @@ public:
   /// @param x                    Input feature matrix ``[N, F]``.
   /// @param n_targets            Number of regression targets.
   /// @param aggregate_function   0=AVERAGE, 1=SUM (default), 2=MIN, 3=MAX.
-  /// @param post_transform       0=NONE (default), 1=SOFTMAX.
+  /// @param post_transform       0=NONE (default), 1=SOFTMAX, 3=SOFTMAX_ZERO.
   template <typename T>
   Tensor operator()(const Tensor &x, int64_t n_targets, int64_t aggregate_function,
                     int64_t post_transform, RuntimeContext *rt = nullptr) const;

@@ -8,6 +8,7 @@
 
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <cstdint>
 #include <limits>
 #include <stdexcept>
@@ -927,6 +928,34 @@ TEST(KernelClass, TreeEnsembleV5SingleTreeMatchesReference) {
 // ``onnx/backend/test/case/node/ai_onnx_ml/tree_ensemble.py``). Locks the
 // BRANCH_MEMBER (mode 6) handling against the reference implementation's
 // expected outputs, including NaN feature handling.
+TEST(KernelClass, TreeEnsembleV5SoftmaxZeroPreservesNonzeroNormalization) {
+  const auto check = []<typename T>() {
+    const KernelContext ctx{OpsetId("ai.onnx.ml", 5)};
+    const std::vector<std::vector<double>> scores{
+        {0.0, 2.0, 0.0}, {5e-8, -2.5e-8, 0.0}, {-2.0, -2.0, -2.0}, {1000.0, 1000.0, 1000.0}};
+    const std::vector<std::vector<double>> expected{{0.0, 1.0, 0.0},
+                                                    {2.0, -1.0, 0.0},
+                                                    {1.0 / 3, 1.0 / 3, 1.0 / 3},
+                                                    {1.0 / 3, 1.0 / 3, 1.0 / 3}};
+    const Tensor x = Tensor::From<T>("", {1, 1}, {T{0}});
+    for (size_t i = 0; i < scores.size(); ++i) {
+      SCOPED_TRACE(i);
+      const onnx_kernels::kernel::TreeEnsemble tree{
+          ctx,       {0, 1, 2}, {0, 0, 0}, {0.0, 0.0, 0.0}, {0, 0, 0}, {0, 1, 2}, {0, 1, 2},
+          {1, 1, 1}, {1, 1, 1}, {},        {0, 1, 2},       scores[i], {}};
+      const Tensor y = tree.template operator()<T>(x, 3, 1, 3);
+      ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 3}));
+      for (size_t target = 0; target < 3; ++target) {
+        EXPECT_TRUE(std::isfinite(y.As<T>()[target]));
+        EXPECT_NEAR(y.As<T>()[target], expected[i][target], 1e-6);
+      }
+      EXPECT_THROW((void)tree.template operator()<T>(x, 3, 1, 5), std::invalid_argument);
+    }
+  };
+  check.operator()<float>();
+  check.operator()<double>();
+}
+
 TEST(KernelClass, TreeEnsembleV5SetMembershipMatchesReference) {
   const KernelContext ctx{OpsetId("ai.onnx.ml", 5)};
   const float kNaN = std::numeric_limits<float>::quiet_NaN();

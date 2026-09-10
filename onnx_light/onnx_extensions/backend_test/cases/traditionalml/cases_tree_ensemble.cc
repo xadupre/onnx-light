@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <string>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
@@ -74,6 +75,65 @@ void AddUint8TensorInt32Data(NodeProto &node, const char *name, const std::vecto
   }
 }
 
+template <typename T>
+void RegisterSoftmaxZeroCase(std::vector<TestCase> &registry, int64_t n_targets) {
+  const OpsetId opset("ai.onnx.ml", 5);
+  const auto dtype = static_cast<TensorProto::DataType>(core::runtime::TensorElementType<T>::value);
+  const std::string type_name = dtype == TensorProto::FLOAT ? "float" : "double";
+  std::vector<int64_t> roots, true_ids, false_ids, target_ids;
+  std::vector<T> weights;
+  for (int64_t target = 0; target < n_targets; ++target) {
+    roots.push_back(target);
+    true_ids.push_back(2 * target);
+    false_ids.push_back(2 * target + 1);
+    target_ids.insert(target_ids.end(), {target, target});
+    weights.push_back(T{0});
+    weights.push_back(n_targets > 1 && target < 2 ? static_cast<T>(target == 0 ? 5e-8 : -5e-8)
+                                                  : -T{0});
+  }
+  const std::vector<int64_t> features(n_targets, 0), leafs(n_targets, 1);
+  const std::vector<uint8_t> modes(n_targets, 0);
+  const std::vector<T> splits(n_targets, T{0});
+  NodeProto node;
+  node.set_op_type("TreeEnsemble");
+  node.set_domain("ai.onnx.ml");
+  node.add_input("X");
+  node.add_output("Y");
+  AddInts(node, "tree_roots", roots);
+  AddInts(node, "nodes_featureids", features);
+  AddTypedTensor<T>(node, "nodes_splits", dtype, splits);
+  AddUint8Tensor(node, "nodes_modes", modes);
+  AddInts(node, "nodes_truenodeids", true_ids);
+  AddInts(node, "nodes_falsenodeids", false_ids);
+  AddInts(node, "nodes_trueleafs", leafs);
+  AddInts(node, "nodes_falseleafs", leafs);
+  AddInts(node, "leaf_targetids", target_ids);
+  AddTypedTensor<T>(node, "leaf_weights", dtype, weights);
+  AddInt(node, "n_targets", n_targets);
+  AddInt(node, "aggregate_function", 1);
+  AddInt(node, "post_transform", 3);
+
+  // The two rows produce all-zero and cancelling near-zero scores. Unlike the
+  // ONNX reference helper's fixed 0.5, the zero-sum policy is uniform 1/n_targets.
+  Expect(registry, std::move(node),
+         "test_cc_treeensemble_softmax_zero_sum_zero_" + std::to_string(n_targets) + "_" +
+             type_name,
+         {DefaultOpset(13), opset},
+         [opset, n_targets, roots, features, splits, modes, true_ids, false_ids, leafs, target_ids,
+          weights]() -> IoData {
+           const KernelContext ctx{opset};
+           const onnx_kernels::kernel::TreeEnsemble tree{
+               ctx,   roots,    features,   std::vector<double>(splits.begin(), splits.end()),
+               modes, true_ids, false_ids,  leafs,
+               leafs, {},       target_ids, std::vector<double>(weights.begin(), weights.end()),
+               {}};
+           Tensor x = Tensor::From<T>("", {2, 1}, {T{-1}, T{1}});
+           Tensor y = tree.template operator()<T>(x, n_targets, /*aggregate_function=*/1,
+                                                  /*post_transform=*/3);
+           return IoData{{std::move(x)}, {std::move(y)}};
+         });
+}
+
 } // namespace
 
 void RegisterTreeEnsembleCases(std::vector<TestCase> &registry, TestMode mode) {
@@ -125,6 +185,11 @@ void RegisterTreeEnsembleCases(std::vector<TestCase> &registry, TestMode mode) {
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
+  }
+
+  for (int64_t n_targets : {1, 2, 3, 5}) {
+    RegisterSoftmaxZeroCase<float>(registry, n_targets);
+    RegisterSoftmaxZeroCase<double>(registry, n_targets);
   }
 
   // ---------------------------------------------------------------------------

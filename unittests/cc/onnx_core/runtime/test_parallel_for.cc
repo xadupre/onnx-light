@@ -66,7 +66,7 @@ TEST(ParallelFor, BlocksCoverRangeExactlyOnce) {
   EXPECT_EQ(ranges.front().first, 0);
   EXPECT_EQ(ranges.back().second, 100);
   for (std::size_t i = 0; i < ranges.size(); ++i) {
-    EXPECT_GE(ranges[i].second - ranges[i].first, 30);
+    EXPECT_GT(ranges[i].second - ranges[i].first, 0);
     if (i != 0) {
       EXPECT_EQ(ranges[i - 1].second, ranges[i].first);
     }

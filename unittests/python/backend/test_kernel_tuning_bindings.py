@@ -42,6 +42,28 @@ class TestKernelTuningBindings(ExtTestCase):
         self.assertEqual(report["calibrated"], [])
         self.assertEqual(report["candidate_diagnostics"], [])
 
+    def test_calibration_saves_explicit_cpu_executor(self):
+        policy = rt.CpuExecutionPolicy()
+        policy.num_threads = 1
+        policy.affinity_policy = rt.CpuAffinityPolicy.NONE
+
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "kernel_tuning.cache"
+            report = rt.calibrate_kernel_tuning(
+                "Abs",
+                element_types=[int(TensorProto.FLOAT)],
+                maximum_duration_ms=25,
+                save=True,
+                path=str(path),
+                cpu_execution=policy,
+            )
+
+            self.assertEqual(report["cache_update"]["status"], "updated")
+            self.assertIn("\neffective_threads 1\n", path.read_text())
+            inspection = rt.inspect_kernel_tuning_cache(path=str(path), num_threads=1)
+            self.assertEqual(inspection["status"], "loaded")
+            self.assertEqual(inspection["profiles"][0]["effective_threads"], 1)
+
     def test_calibration_filters_device(self):
         with self.assertRaisesRegex(ValueError, "supports only the CPU device"):
             rt.calibrate_kernel_tuning(

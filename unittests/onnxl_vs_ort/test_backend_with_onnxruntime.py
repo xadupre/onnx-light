@@ -119,6 +119,9 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_linearclassifier_int64_binary$",
     # ORT returns wrong labels for the binary TreeEnsembleClassifier test case.
     r"^test_cc_treeensembleclassifier_int64_binary$",
+    # ORT divides by zero for SOFTMAX_ZERO zero-sum scores (NaN/Inf), whereas
+    # onnx-light deliberately uses a uniform 1/n_targets robustness fallback.
+    r"^test_cc_treeensemble_softmax_zero_sum_zero_(1|2|3|5)_(float|double)$",
     # ORT returns ZipMap outputs in a different carrier format.
     r"^test_cc_zipmap_",
     # ORT only supports scalar/1-element zero points for MatMulInteger.

@@ -422,6 +422,7 @@ void ParallelForErased(int64_t total, int64_t minimum_elements, void *task_ctx,
     return;
   }
 
+  // The crossover only decides whether to dispatch; participants determine the block grain.
   const int64_t num_blocks = std::min(max_threads, total);
 
   ParallelRange range{

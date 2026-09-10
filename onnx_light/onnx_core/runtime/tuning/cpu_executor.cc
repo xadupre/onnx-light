@@ -511,6 +511,7 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t minimum_elements, void *con
     record(1, false);
     return;
   }
+  // The crossover only decides whether to dispatch; participants determine the block grain.
   const int64_t num_blocks = std::min<int64_t>(static_cast<int64_t>(participant_limit), total);
   grain_size = total / num_blocks;
 

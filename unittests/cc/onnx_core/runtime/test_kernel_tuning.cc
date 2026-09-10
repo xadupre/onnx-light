@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/runtime/kernels/parallel_for.h"
+#include "onnx_core/runtime/runtime_session.h"
 #include "onnx_core/runtime/tuning/cpu_executor.h"
 #include "onnx_core/runtime/tuning/kernel_tuning.h"
 #include "onnx_core/runtime/tuning/kernel_tuning_cache.h"
@@ -13,6 +14,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -21,6 +23,12 @@
 #include <thread>
 #include <unordered_set>
 #include <utility>
+
+#if defined(__linux__)
+#include <sched.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
@@ -1090,6 +1098,67 @@ TEST(KernelTuningCache, DefaultExecutionDescriptorMatchesDefaultSessionThreadCou
       LoadKernelTuningCache(selection, {cache.path(), std::nullopt});
   EXPECT_EQ(loaded.loaded, std::vector<KernelTuningKey>({defaults.key}));
 }
+
+#if defined(__linux__)
+TEST(KernelTuningCache, RestrictedAffinityMatchesStandaloneAndSessionDefaults) {
+  constexpr const char *child_environment = "ONNX_LIGHT_AFFINITY_TEST_CHILD";
+  if (std::getenv(child_environment) == nullptr) {
+    cpu_set_t original_affinity;
+    CPU_ZERO(&original_affinity);
+    if (sched_getaffinity(0, sizeof(original_affinity), &original_affinity) != 0) {
+      GTEST_SKIP() << "process affinity is unavailable";
+    }
+    if (CPU_COUNT(&original_affinity) < 2) {
+      GTEST_SKIP() << "fewer than two process-visible logical processors";
+    }
+
+    cpu_set_t restricted_affinity;
+    CPU_ZERO(&restricted_affinity);
+    for (int processor = 0; processor < CPU_SETSIZE; ++processor) {
+      if (CPU_ISSET(processor, &original_affinity)) {
+        CPU_SET(processor, &restricted_affinity);
+        break;
+      }
+    }
+    const pid_t child = fork();
+    ASSERT_GE(child, 0);
+    if (child == 0) {
+      if (sched_setaffinity(0, sizeof(restricted_affinity), &restricted_affinity) != 0 ||
+          setenv(child_environment, "1", 1) != 0) {
+        _exit(2);
+      }
+      execl(
+          "/proc/self/exe", "/proc/self/exe",
+          "--gtest_filter=KernelTuningCache.RestrictedAffinityMatchesStandaloneAndSessionDefaults",
+          nullptr);
+      _exit(2);
+    }
+
+    int status = 0;
+    ASSERT_EQ(waitpid(child, &status, 0), child);
+    ASSERT_TRUE(WIFEXITED(status));
+    EXPECT_EQ(WEXITSTATUS(status), 0);
+    return;
+  }
+
+  KernelTuningParameters defaults = MakeDefaults();
+  defaults.key.library = "cache_restricted_affinity_test";
+  RegisterKernelTuningSchema(KernelTuningSchema(defaults));
+  TemporaryCache cache("restricted_affinity");
+  const KernelTuningCacheUpdateReport update = UpdateKernelTuningCache(
+      std::span<const KernelTuningParameters>(&defaults, 1), {cache.path(), std::nullopt});
+  ASSERT_EQ(update.status, KernelTuningCacheUpdateStatus::kUpdated);
+  const KernelTuningCacheInspectionReport inspection =
+      InspectKernelTuningCache({cache.path(), std::nullopt});
+  ASSERT_EQ(inspection.profiles.size(), 1u);
+
+  RuntimeSession session(ExecutionPlan{});
+  const uint32_t cache_threads = inspection.profiles[0].execution.effective_threads;
+  EXPECT_EQ(cache_threads, 1u);
+  EXPECT_EQ(cache_threads, static_cast<uint32_t>(ParallelForThreadCount()));
+  EXPECT_EQ(cache_threads, session.cpu_executor()->effective_threads());
+}
+#endif
 
 TEST(KernelTuningCache, AtomicallyCreatesMergesAndReplacesProfiles) {
   KernelTuningParameters first = MakeDefaults();

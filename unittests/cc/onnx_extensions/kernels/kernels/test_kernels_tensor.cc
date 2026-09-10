@@ -7,12 +7,14 @@
 #include "onnx_core/runtime/kernels/cast_float8.h"
 #include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/kernels/kernel_context.h"
+#include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/tuning/parallel_region_collector.h"
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -911,13 +913,20 @@ TEST(KernelClass, AffineGridUsesTunableParallelRows) {
   Tensor size3d = Tensor::FromInt64("", {5}, {2, 3, 4, 5, 6});
   (void)ag_kernel(theta3d, size3d, AffineGrid::Attributes{});
 
+  // The tuned crossover of one element makes both loops eligible for parallel
+  // execution; the grain is then derived from the admitted participants.
+  const int64_t participants = core::runtime::ParallelForThreadCount();
+  const auto expected_grain = [participants](int64_t total) {
+    return participants <= 1 || total == 1 ? total : total / std::min(participants, total);
+  };
+
   ASSERT_EQ(collector.events().size(), 2u);
   EXPECT_EQ(collector.events()[0].label, "AffineGrid");
   EXPECT_EQ(collector.events()[0].total_iterations, 2 * 5);
-  EXPECT_EQ(collector.events()[0].grain_size, 1);
+  EXPECT_EQ(collector.events()[0].grain_size, expected_grain(2 * 5));
   EXPECT_EQ(collector.events()[1].label, "AffineGrid");
   EXPECT_EQ(collector.events()[1].total_iterations, 2 * 4 * 5);
-  EXPECT_EQ(collector.events()[1].grain_size, 1);
+  EXPECT_EQ(collector.events()[1].grain_size, expected_grain(2 * 4 * 5));
 }
 
 TEST(KernelClass, AffineGridRejectsBadShapes) {

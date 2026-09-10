@@ -110,6 +110,11 @@ The existing calibration cases measure every value side by side. The fastest
 validated value is persisted, while text and JSON output report elapsed times,
 speedups, the baseline, and the selected value.
 
+``parallel.minimum_elements`` is the serial/parallel crossover: a loop with
+exactly that many elements is eligible for parallel execution. Once the loop is
+dispatched, the executor derives the block grain from the number of admitted
+participants, independently from the crossover value.
+
 Optimize over backend cases
 +++++++++++++++++++++++++++
 

@@ -194,16 +194,17 @@ public:
    * Executes contiguous ranges covering ``[0, total)``.
    *
    * ``maximum_participants == 0`` uses the session limit. A positive value may
-   * lower but never raise that limit. Work below ``grain`` runs inline.
-   * Executors inherited across ``fork`` are rejected.
+   * lower but never raise that limit. Work below ``minimum_elements``, single-iteration work, and
+   * work with only one available participant run inline. Executors inherited across ``fork`` are
+   * rejected.
    *
    * @param total Number of iterations. Values ``<= 0`` are a no-op.
-   * @param grain Minimum iterations per parallel range. Must be positive.
+   * @param minimum_elements Minimum iterations required for parallel execution. Must be positive.
    * @param context Opaque context passed to ``function``.
    * @param function Range callback, which must not throw.
    * @param maximum_participants Optional kernel-specific participant limit.
    */
-  void ParallelFor(int64_t total, int64_t grain, void *context, ParallelRangeFn function,
+  void ParallelFor(int64_t total, int64_t minimum_elements, void *context, ParallelRangeFn function,
                    uint32_t maximum_participants = 0, ParallelRegionCollector *collector = nullptr,
                    std::string_view label = {},
                    std::source_location location = std::source_location::current());

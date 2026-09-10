@@ -215,10 +215,10 @@ void ParallelForErasedProfiled(int64_t total, int64_t minimum_elements, void *ta
  * touch data disjoint per block (typically writing ``output[begin, end)`` from
  * ``input[begin, end)``). It must not throw.
  *
- * @param total      Number of iterations. Values ``<= 0`` are a no-op.
+ * @param total            Number of iterations. Values ``<= 0`` are a no-op.
  * @param minimum_elements Minimum iterations required for parallel execution. Must be positive.
- * @param fn         Callable invoked as ``fn(int64_t begin, int64_t end)`` for
- *                   each block, covering ``[begin, end)``.
+ * @param fn               Callable invoked as ``fn(int64_t begin, int64_t end)`` for
+ *                         each block, covering ``[begin, end)``.
  */
 template <typename Fn>
 void ParallelFor(int64_t total, int64_t minimum_elements, Fn fn, std::string_view label = {},

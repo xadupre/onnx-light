@@ -403,6 +403,23 @@ void RegisterSplitCases(std::vector<TestCase> &registry, TestMode mode) {
            });
   }
 
+  // ---- opset 18: five outputs exercise high-arity variadic output binding ----
+  {
+    NodeProto node =
+        MakeSplitNode({"output_1", "output_2", "output_3", "output_4", "output_5"}, /*axis=*/0,
+                      /*has_axis=*/true, /*num_outputs=*/5);
+    Expect(
+        registry, std::move(node), "test_cc_split_five_outputs_opset18", {opset18}, []() -> IoData {
+          const KernelContext ctx{DefaultOpset(18)};
+          const onnx_kernels::kernel::Split kernel{ctx};
+
+          Tensor input = Tensor::FromFloat(
+              "", {10}, {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
+          std::vector<Tensor> outputs = kernel(input, /*axis=*/0, /*split=*/{}, /*num_outputs=*/5);
+          return IoData{{std::move(input)}, std::move(outputs)};
+        });
+  }
+
   // ---- opset 18: 2-D uneven split via num_outputs (axis=1, dim=8, n=3 -> [3,3,2]) ----
   {
     Tensor x = Tensor::FromFloat("", {2, 8},

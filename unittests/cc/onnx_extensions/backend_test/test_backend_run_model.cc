@@ -233,6 +233,7 @@ TEST(BackendRunModel, Sum) { RunBackendCasesFor("Sum"); }
 TEST(BackendRunModel, Max) { RunBackendCasesFor("Max"); }
 TEST(BackendRunModel, Min) { RunBackendCasesFor("Min"); }
 TEST(BackendRunModel, Mean) { RunBackendCasesFor("Mean"); }
+TEST(BackendRunModel, Einsum) { RunBackendCasesFor("Einsum"); }
 
 // Reduction kernels.
 TEST(BackendRunModel, ArgMax) { RunBackendCasesFor("ArgMax"); }
@@ -277,6 +278,7 @@ TEST(BackendRunModel, Compress) { RunBackendCasesFor("Compress"); }
 TEST(BackendRunModel, Unique) { RunBackendCasesFor("Unique"); }
 TEST(BackendRunModel, NonZero) { RunBackendCasesFor("NonZero"); }
 TEST(BackendRunModel, Concat) { RunBackendCasesFor("Concat"); }
+TEST(BackendRunModel, Split) { RunBackendCasesFor("Split"); }
 TEST(BackendRunModel, CumSum) { RunBackendCasesFor("CumSum"); }
 TEST(BackendRunModel, CumProd) { RunBackendCasesFor("CumProd"); }
 TEST(BackendRunModel, DFT) { RunBackendCasesFor("DFT"); }

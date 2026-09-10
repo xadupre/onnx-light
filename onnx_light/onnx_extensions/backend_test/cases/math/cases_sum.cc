@@ -115,6 +115,29 @@ void RegisterSumCases(std::vector<TestCase> &registry, TestMode mode) {
     });
   }
 
+  // Five inputs exercise variadic dispatch beyond the common unary/binary/ternary arities.
+  {
+    NodeProto node;
+    node.set_op_type("Sum");
+    for (int i = 0; i < 5; ++i) {
+      node.add_input("data_" + std::to_string(i));
+    }
+    node.add_output("sum");
+    Expect(registry, std::move(node), "test_cc_sum_five_inputs", {opset}, []() -> IoData {
+      const KernelContext ctx{DefaultOpset(13)};
+      const onnx_kernels::kernel::Sum kernel{ctx};
+
+      std::vector<Tensor> inputs;
+      for (int i = 0; i < 5; ++i) {
+        inputs.push_back(Tensor::FromFloat(
+            "", {3},
+            {static_cast<float>(i + 1), static_cast<float>(2 * i), static_cast<float>(-i)}));
+      }
+      Tensor output = kernel(inputs);
+      return IoData{std::move(inputs), {std::move(output)}};
+    });
+  }
+
   // Broadcasting variant: scalar broadcast against rank-2 input.
   {
     NodeProto node;

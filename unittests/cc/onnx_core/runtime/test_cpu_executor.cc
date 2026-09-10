@@ -7,12 +7,14 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <memory>
 #include <mutex>
 #include <set>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #if defined(__linux__)
@@ -237,6 +239,29 @@ TEST(CpuExecutor, ExternalDispatcherCoversRangeWithoutCreatingAPool) {
   EXPECT_EQ(dispatch.dispatched_blocks, 4);
   EXPECT_TRUE(std::all_of(observation.visits.begin(), observation.visits.end(),
                           [](int visits) { return visits == 1; }));
+}
+
+TEST(CpuExecutor, MinimumElementsIsParallelCrossover) {
+  std::unique_ptr<CpuExecutor> executor = CpuExecutor::CreateExternal(4, &DispatchInline);
+  constexpr int64_t minimum_elements = 8;
+  constexpr std::array<std::pair<int64_t, bool>, 4> cases{{
+      {minimum_elements - 1, false},
+      {minimum_elements, true},
+      {2 * minimum_elements - 1, true},
+      {2 * minimum_elements, true},
+  }};
+
+  for (const auto &[total, expect_parallel] : cases) {
+    SCOPED_TRACE(total);
+    ExternalDispatchObservation dispatch;
+    CpuExecutorDispatchScope dispatch_scope(executor.get(), &dispatch);
+    RangeObservation observation(static_cast<size_t>(total));
+    executor->ParallelFor(total, minimum_elements, &observation, &ObserveRange);
+    EXPECT_EQ(dispatch.dispatches != 0, expect_parallel);
+    EXPECT_EQ(dispatch.dispatched_blocks, expect_parallel ? 4 : 0);
+    EXPECT_TRUE(std::all_of(observation.visits.begin(), observation.visits.end(),
+                            [](int visits) { return visits == 1; }));
+  }
 }
 
 TEST(CpuExecutor, ExternalDispatcherValidatesConfiguration) {

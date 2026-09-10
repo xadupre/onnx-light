@@ -26,7 +26,28 @@
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
 
-TEST(ParallelFor, GrainIsMinimumBlockSize) {
+TEST(ParallelFor, MinimumElementsIsParallelCrossover) {
+  if (ParallelForThreadCount() <= 1) {
+    GTEST_SKIP() << "The crossover test requires at least two threads.";
+  }
+  constexpr int64_t minimum_elements = 8;
+  constexpr std::array<std::pair<int64_t, bool>, 4> cases{{
+      {minimum_elements - 1, false},
+      {minimum_elements, true},
+      {2 * minimum_elements - 1, true},
+      {2 * minimum_elements, true},
+  }};
+
+  for (const auto &[total, expect_parallel] : cases) {
+    SCOPED_TRACE(total);
+    std::atomic<int64_t> blocks{0};
+    ParallelFor(total, minimum_elements,
+                [&](int64_t, int64_t) { blocks.fetch_add(1, std::memory_order_relaxed); });
+    EXPECT_EQ(blocks.load(std::memory_order_relaxed) > 1, expect_parallel);
+  }
+}
+
+TEST(ParallelFor, BlocksCoverRangeExactlyOnce) {
   std::mutex mutex;
   std::vector<std::pair<int64_t, int64_t>> ranges;
 

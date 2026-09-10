@@ -64,7 +64,7 @@ TEST(ParallelRegionCollector, RecordsSerialLimitedAndParallelRegions) {
 
   const auto &parallel = collector.events()[2];
   EXPECT_EQ(parallel.total_iterations, 8);
-  EXPECT_EQ(parallel.grain_size, 1);
+  EXPECT_EQ(parallel.grain_size, 4);
   EXPECT_EQ(parallel.requested_threads, 2);
   EXPECT_EQ(parallel.admitted_threads, 2);
   EXPECT_EQ(parallel.observed_threads, 2);

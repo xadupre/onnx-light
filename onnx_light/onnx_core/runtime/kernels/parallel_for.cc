@@ -401,32 +401,28 @@ void RunParallelBlock(ParallelRange &range, int64_t block_index) {
 
 namespace detail {
 
-void ParallelForErased(int64_t total, int64_t grain_size, void *task_ctx, ParallelRangeFn task_fn) {
+void ParallelForErased(int64_t total, int64_t minimum_elements, void *task_ctx,
+                       ParallelRangeFn task_fn) {
   if (total <= 0) {
     return;
   }
-  EXT_ENFORCE_INVALID(grain_size > 0, "ParallelFor grain_size must be positive, got ", grain_size,
-                      ".");
+  EXT_ENFORCE_INVALID(minimum_elements > 0, "ParallelFor minimum_elements must be positive, got ",
+                      minimum_elements, ".");
   // Inside a session run the leased executor is installed on the calling
   // thread; dispatching through it is what makes the session policy effective.
   // The process-wide pool below only serves standalone callers that run
   // outside any executor scope.
   if (CpuExecutor *executor = CurrentCpuExecutor(); executor != nullptr) {
-    executor->ParallelFor(total, grain_size, task_ctx, task_fn);
+    executor->ParallelFor(total, minimum_elements, task_ctx, task_fn);
     return;
   }
   const int64_t max_threads = ParallelForThreadCount();
-  if (total < grain_size || max_threads <= 1) {
+  if (total < minimum_elements || max_threads <= 1) {
     task_fn(task_ctx, static_cast<int64_t>(0), total);
     return;
   }
 
-  const int64_t max_useful_blocks = total / grain_size;
-  const int64_t num_blocks = std::min(max_threads, max_useful_blocks);
-  if (num_blocks <= 1) {
-    task_fn(task_ctx, static_cast<int64_t>(0), total);
-    return;
-  }
+  const int64_t num_blocks = std::min(max_threads, total);
 
   ParallelRange range{
       task_ctx,
@@ -438,16 +434,17 @@ void ParallelForErased(int64_t total, int64_t grain_size, void *task_ctx, Parall
                          [&range](int64_t block_index) { RunParallelBlock(range, block_index); });
 }
 
-void ParallelForErasedProfiled(int64_t total, int64_t grain_size, void *task_ctx,
+void ParallelForErasedProfiled(int64_t total, int64_t minimum_elements, void *task_ctx,
                                ParallelRangeFn task_fn, ParallelRegionCollector *collector,
                                std::string_view label, std::source_location location) {
   if (total <= 0) {
     return;
   }
-  EXT_ENFORCE_INVALID(grain_size > 0, "ParallelFor grain_size must be positive, got ", grain_size,
-                      ".");
+  EXT_ENFORCE_INVALID(minimum_elements > 0, "ParallelFor minimum_elements must be positive, got ",
+                      minimum_elements, ".");
   if (CpuExecutor *executor = CurrentCpuExecutor(); executor != nullptr) {
-    executor->ParallelFor(total, grain_size, task_ctx, task_fn, 0, collector, label, location);
+    executor->ParallelFor(total, minimum_elements, task_ctx, task_fn, 0, collector, label,
+                          location);
     return;
   }
 
@@ -461,29 +458,24 @@ void ParallelForErasedProfiled(int64_t total, int64_t grain_size, void *task_ctx
   const int64_t max_threads = ParallelForThreadCount();
   uint32_t admitted = 1;
   const bool nested_inline = ThreadPool::InParallelRegion();
-  if (total < grain_size || max_threads <= 1) {
+  int64_t grain_size = total;
+  if (total < minimum_elements || max_threads <= 1) {
     ParallelRegionCollectorScope collector_scope(collector, run_id, region_id);
     task_fn(task_ctx, static_cast<int64_t>(0), total);
   } else {
-    const int64_t max_useful_blocks = total / grain_size;
-    const int64_t num_blocks = std::min(max_threads, max_useful_blocks);
-    if (num_blocks <= 1) {
+    const int64_t num_blocks = std::min(max_threads, total);
+    grain_size = total / num_blocks;
+    admitted = nested_inline ? 1 : static_cast<uint32_t>(num_blocks);
+    ParallelRange range{
+        task_ctx,
+        task_fn,
+        grain_size,
+        total % num_blocks,
+    };
+    GlobalThreadPool().Run(num_blocks, [&range, collector, run_id, region_id](int64_t block_index) {
       ParallelRegionCollectorScope collector_scope(collector, run_id, region_id);
-      task_fn(task_ctx, static_cast<int64_t>(0), total);
-    } else {
-      admitted = nested_inline ? 1 : static_cast<uint32_t>(num_blocks);
-      ParallelRange range{
-          task_ctx,
-          task_fn,
-          total / num_blocks,
-          total % num_blocks,
-      };
-      GlobalThreadPool().Run(
-          num_blocks, [&range, collector, run_id, region_id](int64_t block_index) {
-            ParallelRegionCollectorScope collector_scope(collector, run_id, region_id);
-            RunParallelBlock(range, block_index);
-          });
-    }
+      RunParallelBlock(range, block_index);
+    });
   }
   const auto elapsed = std::chrono::steady_clock::now() - start;
   const int64_t wall_time = std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count();

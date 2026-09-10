@@ -393,9 +393,10 @@ void CpuExecutor::ParallelFor(int64_t total, const CpuLoopCost &cost, void *cont
               location);
 }
 
-void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, ParallelRangeFn function,
-                              uint32_t maximum_participants, ParallelRegionCollector *collector,
-                              std::string_view label, std::source_location location) {
+void CpuExecutor::ParallelFor(int64_t total, int64_t minimum_elements, void *context,
+                              ParallelRangeFn function, uint32_t maximum_participants,
+                              ParallelRegionCollector *collector, std::string_view label,
+                              std::source_location location) {
   if (impl_->process_id != CurrentProcessId()) {
     throw std::runtime_error(
         "CpuExecutor inherited across fork is unusable; acquire a new executor in the child.");
@@ -403,8 +404,8 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, Paral
   if (total <= 0) {
     return;
   }
-  if (grain <= 0) {
-    throw std::invalid_argument("CpuExecutor ParallelFor grain must be positive.");
+  if (minimum_elements <= 0) {
+    throw std::invalid_argument("CpuExecutor ParallelFor minimum_elements must be positive.");
   }
   if (function == nullptr) {
     throw std::invalid_argument("CpuExecutor ParallelFor function must not be null.");
@@ -444,6 +445,7 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, Paral
   const uint32_t participant_limit =
       maximum_participants == 0 ? impl_->policy.effective_threads
                                 : std::min(maximum_participants, impl_->policy.effective_threads);
+  int64_t grain_size = total;
   const auto record = [&](uint32_t admitted, bool nested_inline) {
     if (collector == nullptr) {
       return;
@@ -468,7 +470,7 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, Paral
         .label = label,
         .location = location,
         .total_iterations = total,
-        .grain_size = grain,
+        .grain_size = grain_size,
         .requested_threads = static_cast<int32_t>(participant_limit),
         .admitted_threads = static_cast<int32_t>(admitted),
         .observed_threads = static_cast<int32_t>(admitted),
@@ -495,7 +497,7 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, Paral
     record(1, true);
     return;
   }
-  if (total < grain || participant_limit <= 1) {
+  if (total < minimum_elements || participant_limit <= 1) {
     if (counters != nullptr) {
       counters->limited_inline_dispatches.fetch_add(1, std::memory_order_relaxed);
     }
@@ -509,28 +511,13 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, Paral
     record(1, false);
     return;
   }
-  const int64_t useful_blocks = total / grain;
-  const int64_t num_blocks =
-      std::min<int64_t>(static_cast<int64_t>(participant_limit), useful_blocks);
-  if (num_blocks <= 1) {
-    if (counters != nullptr) {
-      counters->limited_inline_dispatches.fetch_add(1, std::memory_order_relaxed);
-    }
-    CpuExecutorRegionScope region_scope(this);
-    if (collector != nullptr) {
-      ParallelRegionCollectorScope collector_scope(collector, run_id, region_id);
-      function(context, 0, total);
-    } else {
-      function(context, 0, total);
-    }
-    record(1, false);
-    return;
-  }
+  const int64_t num_blocks = std::min<int64_t>(static_cast<int64_t>(participant_limit), total);
+  grain_size = total / num_blocks;
 
   ParallelRange range{
       context,
       function,
-      total / num_blocks,
+      grain_size,
       total % num_blocks,
   };
   struct BlockContext {

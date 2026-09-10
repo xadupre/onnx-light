@@ -31,7 +31,8 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 /// Iteration count below which :cpp:func:`ParallelFor` runs the whole range
 /// inline on the calling thread. Waking worker threads for tiny ranges costs
 /// more than the work they save, so small tensors stay single-threaded.
-inline constexpr int64_t kParallelForGrainSize = 1 << 15; // 32768 elements
+inline constexpr int64_t kParallelForMinimumElements = 1 << 15; // 32768 elements
+inline constexpr int64_t kParallelForGrainSize = kParallelForMinimumElements;
 
 /**
  * Configures worker startup and spin-before-park behavior for a
@@ -185,8 +186,9 @@ namespace detail {
 
 using ParallelRangeFn = void (*)(void *, int64_t, int64_t);
 
-void ParallelForErased(int64_t total, int64_t grain_size, void *task_ctx, ParallelRangeFn task_fn);
-void ParallelForErasedProfiled(int64_t total, int64_t grain_size, void *task_ctx,
+void ParallelForErased(int64_t total, int64_t minimum_elements, void *task_ctx,
+                       ParallelRangeFn task_fn);
+void ParallelForErasedProfiled(int64_t total, int64_t minimum_elements, void *task_ctx,
                                ParallelRangeFn task_fn, ParallelRegionCollector *collector,
                                std::string_view label, std::source_location location);
 
@@ -199,11 +201,11 @@ void ParallelForErasedProfiled(int64_t total, int64_t grain_size, void *task_ctx
  * Blocks are processed on the :cpp:class:`CpuExecutor` installed on the calling
  * thread, or on the shared :cpp:func:`GlobalThreadPool` when the caller runs
  * outside any executor scope (up to :cpp:func:`ParallelForThreadCount`
- * participants, including the calling thread). When ``total`` is below ``grain_size`` or only one
- * thread is available the whole range is processed inline on the calling thread, so
- * ``fn`` must be safe to call once with the full range. The three-argument
- * overload accepts a kernel-specific ``grain_size``; the two-argument overload
- * below uses :cpp:var:`kParallelForGrainSize`. Every
+ * participants, including the calling thread). When ``total`` is below
+ * ``minimum_elements`` or only one thread is available, the whole range is processed inline on the
+ * calling thread, so ``fn`` must be safe to call once with the full range. The three-argument
+ * overload accepts a kernel-specific ``minimum_elements``; the two-argument overload
+ * below uses :cpp:var:`kParallelForMinimumElements`. Every
  * block is disjoint and covers the range exactly once, so the observable result
  * is independent of the number of threads: kernels that only map input
  * elements to output elements (no cross-element accumulation) stay bit-exact.
@@ -213,30 +215,30 @@ void ParallelForErasedProfiled(int64_t total, int64_t grain_size, void *task_ctx
  * ``input[begin, end)``). It must not throw.
  *
  * @param total      Number of iterations. Values ``<= 0`` are a no-op.
- * @param grain_size Minimum iterations per parallel block. Must be positive.
+ * @param minimum_elements Minimum iterations required for parallel execution. Must be positive.
  * @param fn         Callable invoked as ``fn(int64_t begin, int64_t end)`` for
  *                   each block, covering ``[begin, end)``.
  */
 template <typename Fn>
-void ParallelFor(int64_t total, int64_t grain_size, Fn fn, std::string_view label = {},
+void ParallelFor(int64_t total, int64_t minimum_elements, Fn fn, std::string_view label = {},
                  std::source_location location = std::source_location::current()) {
   const auto task_fn = [](void *ctx, int64_t begin, int64_t end) {
     (*static_cast<Fn *>(ctx))(begin, end);
   };
   ParallelRegionCollector *collector = CurrentParallelRegionCollector();
   if (collector == nullptr) {
-    detail::ParallelForErased(total, grain_size, static_cast<void *>(&fn), task_fn);
+    detail::ParallelForErased(total, minimum_elements, static_cast<void *>(&fn), task_fn);
     return;
   }
-  detail::ParallelForErasedProfiled(total, grain_size, static_cast<void *>(&fn), task_fn, collector,
-                                    label, location);
+  detail::ParallelForErasedProfiled(total, minimum_elements, static_cast<void *>(&fn), task_fn,
+                                    collector, label, location);
 }
 
-/// Runs ``fn`` over ``[0, total)`` using the default grain size.
+/// Runs ``fn`` over ``[0, total)`` using the default parallel crossover threshold.
 template <typename Fn>
 void ParallelFor(int64_t total, Fn fn, std::string_view label = {},
                  std::source_location location = std::source_location::current()) {
-  ParallelFor(total, kParallelForGrainSize, std::move(fn), label, location);
+  ParallelFor(total, kParallelForMinimumElements, std::move(fn), label, location);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

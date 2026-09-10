@@ -417,7 +417,7 @@ void ParallelForErased(int64_t total, int64_t minimum_elements, void *task_ctx,
     return;
   }
   const int64_t max_threads = ParallelForThreadCount();
-  if (total < minimum_elements || max_threads <= 1) {
+  if (total < minimum_elements || total == 1 || max_threads <= 1) {
     task_fn(task_ctx, static_cast<int64_t>(0), total);
     return;
   }
@@ -460,7 +460,7 @@ void ParallelForErasedProfiled(int64_t total, int64_t minimum_elements, void *ta
   uint32_t admitted = 1;
   const bool nested_inline = ThreadPool::InParallelRegion();
   int64_t grain_size = total;
-  if (total < minimum_elements || max_threads <= 1) {
+  if (total < minimum_elements || total == 1 || max_threads <= 1) {
     ParallelRegionCollectorScope collector_scope(collector, run_id, region_id);
     task_fn(task_ctx, static_cast<int64_t>(0), total);
   } else {

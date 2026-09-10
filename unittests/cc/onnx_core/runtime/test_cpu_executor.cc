@@ -262,6 +262,13 @@ TEST(CpuExecutor, MinimumElementsIsParallelCrossover) {
     EXPECT_TRUE(std::all_of(observation.visits.begin(), observation.visits.end(),
                             [](int visits) { return visits == 1; }));
   }
+
+  ExternalDispatchObservation single_dispatch;
+  CpuExecutorDispatchScope dispatch_scope(executor.get(), &single_dispatch);
+  RangeObservation single_observation(1);
+  executor->ParallelFor(1, 1, &single_observation, &ObserveRange);
+  EXPECT_EQ(single_dispatch.dispatches, 0);
+  EXPECT_EQ(single_observation.visits, std::vector<int>{1});
 }
 
 TEST(CpuExecutor, ExternalDispatcherValidatesConfiguration) {

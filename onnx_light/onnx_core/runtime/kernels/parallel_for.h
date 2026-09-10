@@ -32,7 +32,7 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 /// inline on the calling thread. Waking worker threads for tiny ranges costs
 /// more than the work they save, so small tensors stay single-threaded.
 inline constexpr int64_t kParallelForMinimumElements = 1 << 15; // 32768 elements
-// Backward-compatible name for the crossover threshold, not a per-block grain.
+/// Backward-compatible name for the crossover threshold, not a per-block grain.
 inline constexpr int64_t kParallelForGrainSize = kParallelForMinimumElements;
 
 /**

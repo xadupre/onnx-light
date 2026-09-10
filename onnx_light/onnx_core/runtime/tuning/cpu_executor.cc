@@ -497,7 +497,7 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t minimum_elements, void *con
     record(1, true);
     return;
   }
-  if (total < minimum_elements || participant_limit <= 1) {
+  if (total < minimum_elements || total == 1 || participant_limit <= 1) {
     if (counters != nullptr) {
       counters->limited_inline_dispatches.fetch_add(1, std::memory_order_relaxed);
     }

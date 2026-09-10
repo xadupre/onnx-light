@@ -109,6 +109,29 @@ void RegisterMeanCases(std::vector<TestCase> &registry, TestMode mode) {
     });
   }
 
+  // Five inputs exercise variadic dispatch beyond the common unary/binary/ternary arities.
+  {
+    NodeProto node;
+    node.set_op_type("Mean");
+    for (int i = 0; i < 5; ++i) {
+      node.add_input("data_" + std::to_string(i));
+    }
+    node.add_output("result");
+    Expect(registry, std::move(node), "test_cc_mean_five_inputs", {opset}, []() -> IoData {
+      const KernelContext ctx{DefaultOpset(13)};
+      const onnx_kernels::kernel::Mean kernel{ctx};
+
+      std::vector<Tensor> inputs;
+      for (int i = 0; i < 5; ++i) {
+        inputs.push_back(Tensor::FromFloat(
+            "", {3},
+            {static_cast<float>(i), static_cast<float>(i + 1), static_cast<float>(2 * i)}));
+      }
+      Tensor output = kernel(inputs);
+      return IoData{std::move(inputs), {std::move(output)}};
+    });
+  }
+
   // Broadcasting variant: scalar broadcast against rank-2 input.
   {
     NodeProto node;

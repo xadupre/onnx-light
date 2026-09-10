@@ -116,6 +116,29 @@ void RegisterConcatCases(std::vector<TestCase> &registry, TestMode mode) {
              });
     }
   }
+
+  // Five inputs exercise variadic input binding beyond the common binary case.
+  {
+    NodeProto node;
+    node.set_op_type("Concat");
+    for (int i = 0; i < 5; ++i) {
+      node.add_input("value" + std::to_string(i));
+    }
+    node.add_output("output");
+    AddAttribute<int64_t>(node, "axis", 0);
+    Expect(registry, std::move(node), "test_cc_concat_five_inputs", {opset}, []() -> IoData {
+      const KernelContext ctx{DefaultOpset(13)};
+      const onnx_kernels::kernel::Concat kernel{ctx};
+
+      std::vector<Tensor> inputs;
+      for (int i = 0; i < 5; ++i) {
+        inputs.push_back(
+            Tensor::FromFloat("", {2}, {static_cast<float>(2 * i), static_cast<float>(2 * i + 1)}));
+      }
+      Tensor output = kernel(inputs, 0);
+      return IoData{std::move(inputs), {std::move(output)}};
+    });
+  }
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

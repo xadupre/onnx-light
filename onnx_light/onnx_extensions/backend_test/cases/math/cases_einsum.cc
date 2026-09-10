@@ -212,6 +212,23 @@ void RegisterEinsumCases(std::vector<TestCase> &registry, TestMode mode) {
     });
   }
 
+  // Three-input contraction exercises variadic binding beyond the binary case.
+  {
+    const std::string eq = "ij,jk,kl->il";
+    NodeProto node = MakeEinsumNode(3, eq);
+    Expect(registry, std::move(node), "test_cc_einsum_three_inputs", {opset}, [eq]() -> IoData {
+      const KernelContext ctx{DefaultOpset(13)};
+      const onnx_kernels::kernel::Einsum kernel{ctx};
+
+      Tensor a = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+      Tensor b = Tensor::FromFloat("", {2, 3}, {1.0f, 0.0f, 2.0f, 0.0f, 1.0f, 3.0f});
+      Tensor c = Tensor::FromFloat("", {3, 2}, {1.0f, 2.0f, 0.0f, 1.0f, 2.0f, 0.0f});
+      std::vector<Tensor> inputs{a, b, c};
+      Tensor output = kernel(inputs, eq);
+      return IoData{std::move(inputs), {std::move(output)}};
+    });
+  }
+
   // Implicit mode: "ij" — output keeps both labels (alphabetical order).
   {
     const std::string eq = "ij";

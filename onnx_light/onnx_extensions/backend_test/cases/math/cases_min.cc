@@ -265,6 +265,29 @@ void RegisterMinCases(std::vector<TestCase> &registry, TestMode mode) {
     });
   }
 
+  // Five inputs exercise variadic dispatch beyond the common unary/binary/ternary arities.
+  {
+    NodeProto node;
+    node.set_op_type("Min");
+    for (int i = 0; i < 5; ++i) {
+      node.add_input("data_" + std::to_string(i));
+    }
+    node.add_output("result");
+    Expect(registry, std::move(node), "test_cc_min_five_inputs", {opset}, []() -> IoData {
+      const KernelContext ctx{DefaultOpset(13)};
+      const onnx_kernels::kernel::Min kernel{ctx};
+
+      std::vector<Tensor> inputs;
+      inputs.push_back(Tensor::FromFloat("", {3}, {1.0f, 9.0f, -5.0f}));
+      inputs.push_back(Tensor::FromFloat("", {3}, {2.0f, 8.0f, -4.0f}));
+      inputs.push_back(Tensor::FromFloat("", {3}, {3.0f, 7.0f, -3.0f}));
+      inputs.push_back(Tensor::FromFloat("", {3}, {4.0f, 6.0f, -2.0f}));
+      inputs.push_back(Tensor::FromFloat("", {3}, {5.0f, 5.0f, -1.0f}));
+      Tensor output = kernel(inputs);
+      return IoData{std::move(inputs), {std::move(output)}};
+    });
+  }
+
   // ``test_min_float16`` — Min on FLOAT16 inputs with hardcoded expected.
   {
     NodeProto node;

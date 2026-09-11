@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <barrier>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -417,6 +418,198 @@ TEST(CpuExecutor, NestedParallelForRunsInline) {
   EXPECT_FALSE(observation.changed_thread.load(std::memory_order_relaxed));
 }
 
+TEST(CpuExecutorRegistry, NestedPolicyControlsSharingAndRetainsCompatiblePool) {
+  CpuExecutorRegistry registry(2);
+  std::array<uint64_t, 2> identities{};
+  for (bool allow_nested : {false, true}) {
+    CpuExecutionPolicy request;
+    request.num_threads = 4;
+    request.allow_nested_parallelism = allow_nested;
+    auto executor = registry.Acquire(request);
+    EXPECT_EQ(executor, registry.Acquire(request));
+    EXPECT_EQ(executor->policy().allow_nested_parallelism, allow_nested);
+    identities[allow_nested] = executor->instance_id();
+    executor.reset();
+    EXPECT_EQ(registry.Acquire(request)->instance_id(), identities[allow_nested]);
+  }
+  EXPECT_NE(identities[0], identities[1]);
+  EXPECT_EQ(registry.live_pool_count(), 2u);
+}
+
+TEST(CpuExecutor, NestedAdmissionUsesOnlyIdleParticipants) {
+  for (bool allow_nested : {false, true}) {
+    for (CpuSpinPolicy spin : {CpuSpinPolicy::kAdaptive, CpuSpinPolicy::kParkImmediately}) {
+      CpuExecutorRegistry registry(1);
+      CpuExecutionPolicy request;
+      request.num_threads = 4;
+      request.spin_policy = spin;
+      request.allow_nested_parallelism = allow_nested;
+      auto executor = registry.Acquire(request);
+      for (int64_t outer_participants : {1, 2, 4}) {
+        for (int64_t nesting_block : {int64_t{0}, outer_participants - 1}) {
+          for (uint32_t inner_limit : {0u, 2u}) {
+            SCOPED_TRACE(::testing::Message()
+                         << allow_nested << ", " << static_cast<int>(spin) << ", "
+                         << outer_participants << ", " << nesting_block << ", " << inner_limit);
+            struct Observation {
+              CpuExecutor *executor;
+              int64_t nesting_block;
+              uint32_t inner_limit;
+              std::barrier<> barrier;
+              RangeObservation inner{17};
+              RangeObservation outer{4};
+            } observation{executor.get(), nesting_block, inner_limit,
+                          std::barrier<>(outer_participants)};
+            executor->ParallelFor(
+                outer_participants, 1, &observation, [](void *context, int64_t begin, int64_t end) {
+                  auto &call = *static_cast<Observation *>(context);
+                  ObserveRange(&call.outer, begin, end);
+                  call.barrier.arrive_and_wait();
+                  if (begin == call.nesting_block) {
+                    call.executor->ParallelFor(17, 1, &call.inner, &ObserveRange, call.inner_limit);
+                  }
+                  // Keeps every outer participant reserved until the nested region finishes.
+                  call.barrier.arrive_and_wait();
+                });
+            const size_t expected =
+                allow_nested
+                    ? std::min<int64_t>(5 - outer_participants, inner_limit == 0 ? 4 : inner_limit)
+                    : 1;
+            EXPECT_EQ(observation.inner.threads.size(), expected);
+            EXPECT_TRUE(std::all_of(observation.inner.visits.begin(),
+                                    observation.inner.visits.end(),
+                                    [](int visits) { return visits == 1; }));
+            observation.outer.threads.insert(observation.inner.threads.begin(),
+                                             observation.inner.threads.end());
+            EXPECT_EQ(observation.outer.threads.size(), outer_participants + expected - 1);
+            EXPECT_LE(observation.outer.threads.size(), 4u);
+          }
+        }
+      }
+    }
+  }
+}
+
+TEST(CpuExecutor, NestedCostBasedDispatchAndProfilingHonorPolicy) {
+  for (bool allow_nested : {false, true}) {
+    for (int32_t participants : {1, 4}) {
+      CpuExecutorRegistry registry(1);
+      CpuExecutionPolicy request;
+      request.num_threads = participants;
+      request.allow_nested_parallelism = allow_nested;
+      auto executor = registry.Acquire(request);
+      executor->EnableCounters();
+      ParallelRegionCollector collector(8);
+      struct Observation {
+        CpuExecutor *executor;
+        ParallelRegionCollector *collector;
+        RangeObservation inner{200000};
+      } observation{executor.get(), &collector};
+      executor->ParallelFor(
+          1, 2, &observation,
+          [](void *context, int64_t, int64_t) {
+            auto &call = *static_cast<Observation *>(context);
+            call.executor->ParallelFor(200000, CpuLoopCost{4.0, 4.0, 15.0}, &call.inner,
+                                       &ObserveRange, 0, call.collector, "inner");
+          },
+          0, &collector, "outer");
+      const size_t expected = allow_nested ? participants : 1;
+      EXPECT_EQ(observation.inner.threads.size(), expected);
+      EXPECT_TRUE(std::all_of(observation.inner.visits.begin(), observation.inner.visits.end(),
+                              [](int visits) { return visits == 1; }));
+      const auto events = collector.events();
+      ASSERT_EQ(events.size(), 2u);
+      EXPECT_EQ(events[0].label, "inner");
+      EXPECT_EQ(events[0].admitted_threads, expected);
+      EXPECT_EQ(events[0].observed_threads, expected);
+      EXPECT_EQ(events[0].nested_inline, expected == 1);
+      EXPECT_EQ(events[0].parent_region_id, events[1].region_id);
+      EXPECT_EQ(events[0].executor_instance_id, executor->instance_id());
+      EXPECT_EQ(executor->counters().nested_inline_dispatches, expected == 1 ? 1u : 0u);
+    }
+  }
+}
+
+TEST(CpuExecutor, ConcurrentRecursiveRegionsRespectParticipantBudget) {
+  CpuExecutorRegistry registry(1);
+  CpuExecutionPolicy request;
+  request.num_threads = 4;
+  request.allow_nested_parallelism = true;
+  auto executor = registry.Acquire(request);
+  struct Observation {
+    CpuExecutor *executor;
+    std::atomic<int> active{0};
+    std::atomic<int> peak{0};
+    std::atomic<int> visits{0};
+
+    void Run(int depth) {
+      struct Context {
+        Observation *observation;
+        int depth;
+      } context{this, depth};
+      executor->ParallelFor(
+          3, 1, &context,
+          [](void *opaque, int64_t begin, int64_t end) {
+            auto &call = *static_cast<Context *>(opaque);
+            auto &observation = *call.observation;
+            for (int64_t i = begin; i < end; ++i) {
+              if (call.depth != 0) {
+                observation.Run(call.depth - 1);
+              } else {
+                const int active = observation.active.fetch_add(1) + 1;
+                int peak = observation.peak.load();
+                while (peak < active && !observation.peak.compare_exchange_weak(peak, active)) {
+                }
+                std::this_thread::yield();
+                observation.visits.fetch_add(1);
+                observation.active.fetch_sub(1);
+              }
+            }
+          },
+          depth == 3 ? 1 : 0);
+    }
+  } observation{executor.get()};
+  std::thread first([&]() { observation.Run(3); });
+  std::thread second([&]() { observation.Run(3); });
+  first.join();
+  second.join();
+  EXPECT_EQ(observation.visits.load(), 162);
+  EXPECT_LE(observation.peak.load(), 4);
+  EXPECT_EQ(observation.active.load(), 0);
+  RangeObservation reuse(17);
+  executor->ParallelFor(17, 1, &reuse, &ObserveRange);
+  EXPECT_EQ(reuse.threads.size(), 4u);
+}
+
+TEST(CpuExecutor, CrossPoolNestingDoesNotDeadlockOrCreateAnotherTeam) {
+  CpuExecutionPolicy request;
+  request.num_threads = 4;
+  request.allow_nested_parallelism = true;
+  CpuExecutorRegistry first_registry(1);
+  CpuExecutorRegistry second_registry(1);
+  auto first = first_registry.Acquire(request);
+  auto second = second_registry.Acquire(request);
+  struct Observation {
+    CpuExecutor *first;
+    CpuExecutor *second;
+    RangeObservation inner{17};
+  } observation{first.get(), second.get()};
+  first->ParallelFor(1, 1, &observation, [](void *context, int64_t, int64_t) {
+    auto &call = *static_cast<Observation *>(context);
+    const std::thread::id caller = std::this_thread::get_id();
+    call.second->ParallelFor(4, 1, context, [](void *context, int64_t begin, int64_t end) {
+      auto &call = *static_cast<Observation *>(context);
+      EXPECT_EQ(begin, 0);
+      EXPECT_EQ(end, 4);
+      call.first->ParallelFor(17, 1, &call.inner, &ObserveRange);
+    });
+    EXPECT_TRUE(call.inner.threads.contains(caller));
+  });
+  EXPECT_EQ(observation.inner.threads.size(), 4u);
+  EXPECT_TRUE(std::all_of(observation.inner.visits.begin(), observation.inner.visits.end(),
+                          [](int visits) { return visits == 1; }));
+}
+
 TEST(CpuExecutor, DisabledCountersRemainEmpty) {
   CpuExecutorRegistry registry(1);
   std::shared_ptr<CpuExecutor> executor = registry.Acquire(NoAffinityPolicy(1));
@@ -487,6 +680,62 @@ TEST(CpuExecutor, RejectsMalformedResolvedPolicy) {
 }
 
 #if defined(__linux__)
+TEST(CpuExecutor, NestedDispatchPreservesWorkerAffinity) {
+  const auto visible = ProcessVisibleLogicalProcessors();
+  if (visible.size() < 2) {
+    GTEST_SKIP() << "fewer than two stable process-visible processors";
+  }
+  for (bool allow_nested : {false, true}) {
+    CpuExecutionPolicy request;
+    request.affinity_policy = CpuAffinityPolicy::kExplicit;
+    request.cpu_set = {visible[0], visible[1]};
+    request.allow_nested_parallelism = allow_nested;
+    CpuExecutorRegistry registry(1);
+    auto executor = registry.Acquire(request);
+    // Keeps explicit caller pinning off the test runner's thread.
+    std::thread caller([&]() {
+      executor->ParallelFor(2, 1, executor.get(), [](void *context, int64_t, int64_t) {
+        auto &executor = *static_cast<CpuExecutor *>(context);
+        auto before = ProcessVisibleLogicalProcessors();
+        executor.ParallelFor(1, 1, &before, [](void *context, int64_t, int64_t) {
+          const auto &expected = *static_cast<std::vector<CpuLogicalProcessor> *>(context);
+          EXPECT_EQ(ProcessVisibleLogicalProcessors(), expected);
+        });
+        EXPECT_EQ(ProcessVisibleLogicalProcessors(), before);
+      });
+    });
+    caller.join();
+  }
+}
+
+TEST(CpuExecutor, CrossExecutorDispatchPreservesWorkerAffinity) {
+  const auto visible = ProcessVisibleLogicalProcessors();
+  if (visible.size() < 2) {
+    GTEST_SKIP() << "fewer than two stable process-visible processors";
+  }
+  CpuExecutionPolicy outer_request;
+  outer_request.num_threads = 2;
+  outer_request.affinity_policy = CpuAffinityPolicy::kExplicit;
+  outer_request.cpu_set = {visible[0], visible[1]};
+  CpuExecutionPolicy inner_request;
+  inner_request.num_threads = 1;
+  inner_request.affinity_policy = CpuAffinityPolicy::kExplicit;
+  inner_request.cpu_set = {visible[0]};
+  CpuExecutorRegistry registry(2);
+  auto outer = registry.Acquire(outer_request);
+  auto inner = registry.Acquire(inner_request);
+
+  std::thread caller([&]() {
+    outer->ParallelFor(2, 1, inner.get(), [](void *context, int64_t, int64_t) {
+      auto &inner = *static_cast<CpuExecutor *>(context);
+      const auto before = ProcessVisibleLogicalProcessors();
+      inner.ParallelFor(1, 1, nullptr, [](void *, int64_t, int64_t) {});
+      EXPECT_EQ(ProcessVisibleLogicalProcessors(), before);
+    });
+  });
+  caller.join();
+}
+
 TEST(CpuExecutor, ExecutorInheritedAcrossForkIsRejected) {
   CpuExecutorRegistry registry(1);
   std::shared_ptr<CpuExecutor> executor = registry.Acquire(NoAffinityPolicy(2));

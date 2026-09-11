@@ -95,8 +95,9 @@ Overview
       - The caller waits for the submitted intra-operator work. Pool barriers
         and task counters complete the operator before graph execution advances.
     * - Nested work
-      - A nested region on the same executor runs inline to prevent deadlock
-        and oversubscription.
+      - Nested regions run inline by default. ``allow_nested_parallelism``
+        admits only idle workers from the same pool, without exceeding its
+        participant limit or waiting for busy workers.
       - Controlled by OpenMP nesting and active-level settings; a nested region
         may serialize or form another team.
       - The thread pool detects parallel sections and limits nested

@@ -53,6 +53,8 @@ struct ThreadPoolOptions {
   WorkerStartFn worker_start = nullptr;
   /// Context passed to :cpp:var:`worker_start`.
   void *worker_start_context = nullptr;
+  /// Enables bounded nested admission on idle workers of this pool.
+  bool allow_nested_parallelism = false;
 };
 
 /// Returns the number of participating threads :cpp:func:`ParallelFor` may use.
@@ -88,7 +90,8 @@ int64_t ParallelForThreadCount() noexcept;
  * scenarios:
  *   - no workers available (single core): every block runs inline on the caller;
  *   - a single block: runs inline without touching the workers;
- *   - nested calls from inside a running block: run inline to avoid deadlock;
+ *   - nested calls from inside a running block: run inline by default, or use
+ *     idle workers when bounded nested admission is enabled;
  *   - concurrent calls from unrelated threads: serialized so one region runs at
  *     a time, each still internally parallel.
  */
@@ -122,12 +125,15 @@ public:
    * Runs ``fn(block)`` for every ``block`` in ``[0, num_blocks)``, then blocks
    * until all blocks finish.
    *
-   * Block ``0`` runs on the calling thread and selected workers receive the
-   * remaining blocks by index. Only as many parked workers as there are worker blocks
-   * are notified. ``fn`` is invoked concurrently and must only touch data
-   * disjoint per block; it must not throw. ``num_blocks`` must not exceed
-   * ``worker_count() + 1`` when workers are used; :cpp:func:`ParallelFor`
-   * enforces this.
+   * Unless ``ThreadPoolOptions::allow_nested_parallelism`` is enabled, block
+   * ``0`` runs on the calling thread and selected workers receive the remaining
+   * blocks by index. Only as many parked workers as there are worker blocks are
+   * notified, and ``num_blocks`` must not exceed ``worker_count() + 1`` when
+   * workers are used; :cpp:func:`ParallelFor` enforces this. With nested
+   * parallelism enabled, blocks are striped across the admitted caller and idle
+   * workers, so ``num_blocks`` may exceed the participant count. ``fn`` is
+   * invoked concurrently and must only touch data disjoint per block; it must
+   * not throw.
    *
    * @param num_blocks Number of blocks to run. Values ``<= 0`` are a no-op.
    * @param fn         Callable invoked as ``fn(int64_t block)``.
@@ -142,17 +148,31 @@ public:
   /// Returns whether the calling thread is executing a pool region.
   static bool InParallelRegion() noexcept { return InPool(); }
 
+  /// Runs up to ``maximum_participants`` blocks on the caller and idle workers.
+  /// The callback receives its block index and the admitted block count, and must not throw.
+  /// Unrelated callers serialize; nested callers never wait for worker admission.
+  /// Calls from another pool execute inline to avoid cross-pool lock inversion.
+  /// Requires ``ThreadPoolOptions::allow_nested_parallelism``.
+  /// Returns the admitted participant count.
+  int64_t RunBounded(int64_t maximum_participants, void *context,
+                     void (*function)(void *, int64_t, int64_t));
+
 private:
+  struct BoundedRegion;
+  struct BoundedWorker;
   void RunErased(int64_t num_blocks, void *task_ctx, TaskFn task_fn);
+  static ThreadPool *&CurrentBoundedPool() noexcept;
   static bool &InPoolFlag() noexcept;
   static bool InPool() noexcept;
   void StopAndJoin() noexcept;
   bool SpinForWork(uint64_t last_generation, int64_t worker_index) const noexcept;
-  bool SpinForCompletion() const noexcept;
+  bool SpinForCompletion(const std::atomic<int64_t> &remaining) const noexcept;
   void WorkerLoop(int64_t worker_index);
+  void BoundedWorkerLoop(int64_t worker_index);
 
   ThreadPoolOptions options_;
   std::vector<std::thread> workers_;
+  std::vector<std::unique_ptr<BoundedWorker>> bounded_workers_;
   std::mutex mu_;
   std::mutex region_mu_;
   std::vector<std::unique_ptr<std::condition_variable>> worker_work_;

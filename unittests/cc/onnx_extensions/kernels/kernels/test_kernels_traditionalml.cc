@@ -923,6 +923,39 @@ TEST(KernelClass, TreeEnsembleV5SingleTreeMatchesReference) {
   EXPECT_FLOAT_EQ(py[1], 2.0f);
 }
 
+TEST(KernelClass, TreeEnsembleV5ValidatesBeforeExecution) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 5)};
+  const auto make_tree =
+      [&](const std::vector<int64_t> &roots, const std::vector<int64_t> &true_ids,
+          const std::vector<int64_t> &false_ids, const std::vector<int64_t> &true_leafs,
+          const std::vector<int64_t> &false_leafs, const std::vector<double> &splits = {0.5, 0.5},
+          const std::vector<uint8_t> &modes = {0, 0}, const std::vector<int64_t> &missing = {},
+          const std::vector<double> &weights = {1.0}) {
+        return onnx_kernels::kernel::TreeEnsemble(ctx, roots, {0, 0}, splits, modes, true_ids,
+                                                  false_ids, true_leafs, false_leafs, missing, {0},
+                                                  weights, {});
+      };
+  EXPECT_THROW(make_tree({0}, {1, 0}, {0, 0}, {0, 0}, {1, 1}), std::invalid_argument);
+  EXPECT_THROW(make_tree({0}, {1, 0}, {1, 0}, {0, 1}, {0, 1}), std::invalid_argument);
+  EXPECT_THROW(make_tree({-1}, {1, 0}, {0, 0}, {0, 1}, {1, 1}), std::invalid_argument);
+  EXPECT_THROW(make_tree({2}, {1, 0}, {0, 0}, {0, 1}, {1, 1}), std::invalid_argument);
+  EXPECT_THROW(make_tree({0}, {2, 0}, {0, 0}, {0, 1}, {1, 1}), std::invalid_argument);
+  EXPECT_THROW(make_tree({0}, {1, 0}, {1, 0}, {0, 1}, {1, 1}), std::invalid_argument);
+  EXPECT_THROW(make_tree({0}, {1}, {0, 0}, {0, 1}, {1, 1}), std::invalid_argument);
+  EXPECT_THROW(make_tree({0}, {1, 0}, {0, 0}, {0}, {1, 1}), std::invalid_argument);
+  EXPECT_THROW(make_tree({0}, {1, 0}, {0, 0}, {0, 1}, {1, 1}, {0.5}), std::invalid_argument);
+  EXPECT_THROW(make_tree({0}, {1, 0}, {0, 0}, {0, 1}, {1, 1}, {0.5, 0.5}, {0}),
+               std::invalid_argument);
+  EXPECT_THROW(make_tree({0}, {1, 0}, {0, 0}, {0, 1}, {1, 1}, {0.5, 0.5}, {0, 0}, {0}),
+               std::invalid_argument);
+  EXPECT_THROW(make_tree({0}, {1, 0}, {0, 0}, {0, 1}, {1, 1}, {0.5, 0.5}, {0, 0}, {}, {}),
+               std::invalid_argument);
+  const auto tree = make_tree({0, 1}, {1, 0}, {0, 0}, {0, 1}, {1, 1});
+  const auto output = tree.operator()<float>(Tensor::FromFloat("", {2, 1}, {0.0f, 1.0f}), 1, 1, 0);
+  EXPECT_FLOAT_EQ(output.AsFloat()[0], 2.0f);
+  EXPECT_FLOAT_EQ(output.AsFloat()[1], 2.0f);
+}
+
 // Mirrors the upstream ONNX node test
 // ``test_ai_onnx_ml_tree_ensemble_set_membership`` (see
 // ``onnx/backend/test/case/node/ai_onnx_ml/tree_ensemble.py``). Locks the

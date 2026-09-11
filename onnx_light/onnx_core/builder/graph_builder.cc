@@ -20,6 +20,7 @@
 #include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_proto/onnx_alias.h"
 #include "onnx_proto/onnx_helper.h"
+#include "onnx_proto/onnx_tree_ensemble.h"
 
 namespace ONNX_LIGHT_NAMESPACE::core::builder {
 
@@ -813,6 +814,13 @@ GraphBuilder::MakeNode(const std::string &op_type, const std::vector<std::string
       ImportAttributes(attribute_source, excluded_inherited_names);
   for (const AttributeProto &attribute : normalized_attributes) {
     node.add_attribute(attribute);
+  }
+  if (domain == "ai.onnx.ml" && op_type == "TreeEnsemble") {
+    const auto error = ValidateTreeEnsembleAttributes(
+        [&node](const char *attribute_name) { return FindAttribute(node, attribute_name); });
+    if (!error.empty()) {
+      throw BuilderError(error);
+    }
   }
   NodeProto &stored = nodes_.add();
   stored = std::move(node);

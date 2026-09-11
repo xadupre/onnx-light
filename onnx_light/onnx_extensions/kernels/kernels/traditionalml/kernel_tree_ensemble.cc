@@ -10,6 +10,7 @@
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/kernels/kernel_run_helpers.h"
+#include "onnx_proto/onnx_tree_ensemble.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -138,6 +139,22 @@ TreeEnsemble::TreeEnsemble(
       nodes_falsenodeids_(nodes_falsenodeids), nodes_trueleafs_(nodes_trueleafs),
       nodes_falseleafs_(nodes_falseleafs), nodes_missing_(nodes_missing),
       leaf_targetids_(leaf_targetids), leaf_weights_(leaf_weights) {
+  for (const auto &[name, size] :
+       {std::pair{"nodes_splits", nodes_splits_.size()}, {"nodes_modes", nodes_modes_.size()}}) {
+    EXT_ENFORCE_INVALID(size == nodes_featureids_.size(), "TreeEnsemble: attribute '", name,
+                        "' must have length ", nodes_featureids_.size(), ", got ", size, ".");
+  }
+  EXT_ENFORCE_INVALID(nodes_missing_.empty() || nodes_missing_.size() == nodes_featureids_.size(),
+                      "TreeEnsemble: attribute 'nodes_missing_value_tracks_true' must have length ",
+                      nodes_featureids_.size(), ", got ", nodes_missing_.size(), ".");
+  EXT_ENFORCE_INVALID(leaf_weights_.size() == leaf_targetids_.size(),
+                      "TreeEnsemble: attribute 'leaf_weights' must have length ",
+                      leaf_targetids_.size(), ", got ", leaf_weights_.size(), ".");
+  const auto error = ValidateTreeEnsembleTopology(
+      tree_roots_, nodes_featureids_.size(), leaf_targetids_.size(), nodes_truenodeids_,
+      nodes_falsenodeids_, nodes_trueleafs_, nodes_falseleafs_);
+  EXT_ENFORCE_INVALID(error.empty(), error);
+
   // Precompute per-node membership sets for BRANCH_MEMBER (mode 6) nodes by
   // walking ``membership_values`` in nodes_modes order, where each set is
   // delimited by a NaN sentinel.

@@ -415,6 +415,11 @@ struct RuntimeContextOptions {
  * callers do not have to reach for ``rt.tensors()[name]`` directly.
  */
 class RuntimeContext {
+private:
+  struct KernelUsageState;
+  RuntimeContext(KernelContext kernel_ctx, RuntimeContextOptions options,
+                 std::shared_ptr<KernelUsageState> kernel_usage);
+
 public:
   RuntimeContext() = default;
   ~RuntimeContext();

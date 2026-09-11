@@ -115,19 +115,13 @@ ThreadPoolOptions MakeThreadPoolOptions(const ResolvedCpuExecutionPolicy &policy
   ThreadPoolOptions options;
   options.spin_iterations = policy.spin.iterations;
   options.spin_duration_ns = policy.spin.duration_ns;
+  options.allow_nested_parallelism = policy.allow_nested_parallelism;
   if (!policy.worker_processors.empty()) {
     options.worker_start = worker_start;
     options.worker_start_context = worker_context;
   }
   return options;
 }
-
-struct ParallelRange {
-  void *context = nullptr;
-  ParallelRangeFn function = nullptr;
-  int64_t base_block_size = 0;
-  int64_t extra_blocks = 0;
-};
 
 CpuExecutor *&CurrentCpuExecutorSlot() noexcept {
   thread_local CpuExecutor *current = nullptr;
@@ -326,7 +320,8 @@ CpuExecutor::PlanParallelFor(int64_t total, const CpuLoopCost &cost,
       constraints.maximum_participants == 0
           ? impl_->policy.effective_threads
           : std::min(constraints.maximum_participants, impl_->policy.effective_threads);
-  if (total <= 0 || participant_limit <= 1 || ActiveCpuExecutorRegionSlot() == this) {
+  if (total <= 0 || participant_limit <= 1 ||
+      (ActiveCpuExecutorRegionSlot() == this && !impl_->policy.allow_nested_parallelism)) {
     return {};
   }
   const double bytes_read =
@@ -431,14 +426,14 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t minimum_elements, void *con
     counters->dispatches.fetch_add(1, std::memory_order_relaxed);
   }
   const bool nested = ActiveCpuExecutorRegionSlot() == this;
-  if (impl_->policy.caller_processor.has_value()) {
+  if (!nested && impl_->policy.caller_processor.has_value()) {
     std::string error;
     if (!PinCurrentThread(*impl_->policy.caller_processor, error)) {
       throw std::runtime_error("CpuExecutor caller affinity failed: " + error);
     }
   }
   // Every participant runs with this executor installed so a nested parallel
-  // region dispatches here (and therefore runs inline) instead of waking an
+  // region stays within this pool's participant budget instead of waking an
   // unrelated process-wide pool.
   CpuExecutorScope caller_scope(this);
 
@@ -483,7 +478,8 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t minimum_elements, void *con
         .nested_inline = nested_inline,
     });
   };
-  if (nested) {
+  const bool bounded = impl_->policy.allow_nested_parallelism;
+  if (nested && !bounded) {
     if (counters != nullptr) {
       counters->nested_inline_dispatches.fetch_add(1, std::memory_order_relaxed);
     }
@@ -497,7 +493,8 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t minimum_elements, void *con
     record(1, true);
     return;
   }
-  if (total < minimum_elements || total == 1 || participant_limit <= 1) {
+  const bool limited = total < minimum_elements || total == 1 || participant_limit <= 1;
+  if (limited && !bounded) {
     if (counters != nullptr) {
       counters->limited_inline_dispatches.fetch_add(1, std::memory_order_relaxed);
     }
@@ -512,37 +509,53 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t minimum_elements, void *con
     return;
   }
   // The crossover only decides whether to dispatch; participants determine the block grain.
-  const int64_t num_blocks = std::min<int64_t>(static_cast<int64_t>(participant_limit), total);
+  const int64_t num_blocks =
+      limited ? 1 : std::min<int64_t>(static_cast<int64_t>(participant_limit), total);
   grain_size = total / num_blocks;
 
-  ParallelRange range{
-      context,
-      function,
-      grain_size,
-      total % num_blocks,
-  };
   struct BlockContext {
-    ParallelRange *range;
+    void *context;
+    ParallelRangeFn function;
     CpuExecutor *executor;
     ParallelRegionCollector *collector;
     uint64_t run_id;
     uint64_t region_id;
+    int64_t total;
+    int64_t num_blocks;
+    static void Run(void *opaque, int64_t block_index, int64_t participants) {
+      auto &block = *static_cast<BlockContext *>(opaque);
+      CpuExecutorScope block_scope(block.executor);
+      CpuExecutorRegionScope region_scope(block.executor);
+      const int64_t base_block_size = block.total / participants;
+      const int64_t extra_blocks = block.total % participants;
+      const int64_t begin = block_index * base_block_size + std::min(block_index, extra_blocks);
+      const int64_t end = begin + base_block_size + (block_index < extra_blocks ? 1 : 0);
+      if (block.collector != nullptr) {
+        ParallelRegionCollectorScope collector_scope(block.collector, block.run_id,
+                                                     block.region_id);
+        block.function(block.context, begin, end);
+      } else {
+        block.function(block.context, begin, end);
+      }
+    }
   };
-  BlockContext block_context{&range, this, collector, run_id, region_id};
+  BlockContext block_context{context, function,  this,  collector,
+                             run_id,  region_id, total, num_blocks};
+  if (bounded) {
+    const int64_t admitted =
+        impl_->pool->RunBounded(num_blocks, &block_context, &BlockContext::Run);
+    grain_size = total / admitted;
+    if (admitted == 1 && counters != nullptr) {
+      auto &inline_dispatches =
+          nested ? counters->nested_inline_dispatches : counters->limited_inline_dispatches;
+      inline_dispatches.fetch_add(1, std::memory_order_relaxed);
+    }
+    record(static_cast<uint32_t>(admitted), nested && admitted == 1);
+    return;
+  }
   const auto run_block = [](void *opaque, int64_t block_index) {
     auto &block = *static_cast<BlockContext *>(opaque);
-    CpuExecutorScope block_scope(block.executor);
-    CpuExecutorRegionScope region_scope(block.executor);
-    const ParallelRange &range = *block.range;
-    const int64_t begin =
-        block_index * range.base_block_size + std::min(block_index, range.extra_blocks);
-    const int64_t end = begin + range.base_block_size + (block_index < range.extra_blocks ? 1 : 0);
-    if (block.collector != nullptr) {
-      ParallelRegionCollectorScope collector_scope(block.collector, block.run_id, block.region_id);
-      range.function(range.context, begin, end);
-    } else {
-      range.function(range.context, begin, end);
-    }
+    BlockContext::Run(opaque, block_index, block.num_blocks);
   };
   if (impl_->dispatch != nullptr) {
     const CpuExecutorDispatchBinding &binding = CurrentCpuExecutorDispatchBinding();

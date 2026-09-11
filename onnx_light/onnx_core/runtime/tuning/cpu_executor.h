@@ -124,8 +124,10 @@ CpuExecutorKey MakeCpuExecutorKey(const ResolvedCpuExecutionPolicy &policy);
  *
  * Instances are obtained from :cpp:class:`CpuExecutorRegistry`. Concurrent
  * regions sharing an executor serialize dispatch metadata while their
- * surrounding inference calls remain independent. Nested regions execute
- * inline to avoid deadlock and oversubscription.
+ * surrounding inference calls remain independent. Nested regions execute inline
+ * by default. With ``allow_nested_parallelism``, they may admit idle workers from
+ * this same pool, never exceeding its effective participant limit. Admission does
+ * not wait for busy workers; a saturated pool therefore executes nesting inline.
  */
 class CpuExecutor {
 public:

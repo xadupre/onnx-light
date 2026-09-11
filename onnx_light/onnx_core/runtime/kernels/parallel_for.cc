@@ -68,6 +68,19 @@ int64_t ParallelForThreadCount() noexcept {
 
 ThreadPool::ThreadPool(int64_t num_workers) : ThreadPool(num_workers, ThreadPoolOptions{}) {}
 
+struct ThreadPool::BoundedRegion {
+  void *context;
+  void (*function)(void *, int64_t, int64_t);
+  int64_t participants = 1;
+  std::atomic<int64_t> remaining{0};
+};
+
+struct ThreadPool::BoundedWorker {
+  BoundedRegion *region = nullptr;
+  int64_t block = 0;
+  std::atomic<bool> pending{false};
+};
+
 ThreadPool::ThreadPool(int64_t num_workers, ThreadPoolOptions options)
     : options_(std::move(options)) {
   if (num_workers < 0) {
@@ -76,6 +89,9 @@ ThreadPool::ThreadPool(int64_t num_workers, ThreadPoolOptions options)
   worker_work_.reserve(static_cast<size_t>(num_workers));
   for (int64_t i = 0; i < num_workers; ++i) {
     worker_work_.push_back(std::make_unique<std::condition_variable>());
+    if (options_.allow_nested_parallelism) {
+      bounded_workers_.push_back(std::make_unique<BoundedWorker>());
+    }
   }
   workers_.reserve(static_cast<size_t>(num_workers));
   try {
@@ -124,8 +140,17 @@ bool &ThreadPool::InPoolFlag() noexcept {
 
 bool ThreadPool::InPool() noexcept { return InPoolFlag(); }
 
+ThreadPool *&ThreadPool::CurrentBoundedPool() noexcept {
+  thread_local ThreadPool *pool = nullptr;
+  return pool;
+}
+
 bool ThreadPool::SpinForWork(uint64_t last_generation, int64_t worker_index) const noexcept {
   const auto work_available = [this, last_generation, worker_index]() {
+    if (options_.allow_nested_parallelism) {
+      return bounded_workers_[static_cast<size_t>(worker_index)]->pending.load(
+          std::memory_order_acquire);
+    }
     const uint64_t generation = generation_.load(std::memory_order_acquire);
     if ((generation & 1) != 0 || generation == last_generation) {
       return false;
@@ -139,7 +164,8 @@ bool ThreadPool::SpinForWork(uint64_t last_generation, int64_t worker_index) con
         return true;
       }
       const uint64_t generation = generation_.load(std::memory_order_acquire);
-      if ((generation & 1) == 0 && generation != last_generation) {
+      if (!options_.allow_nested_parallelism && (generation & 1) == 0 &&
+          generation != last_generation) {
         return false;
       }
       CpuRelax();
@@ -155,7 +181,8 @@ bool ThreadPool::SpinForWork(uint64_t last_generation, int64_t worker_index) con
       return true;
     }
     const uint64_t generation = generation_.load(std::memory_order_acquire);
-    if ((generation & 1) == 0 && generation != last_generation) {
+    if (!options_.allow_nested_parallelism && (generation & 1) == 0 &&
+        generation != last_generation) {
       return false;
     }
     CpuRelax();
@@ -163,10 +190,10 @@ bool ThreadPool::SpinForWork(uint64_t last_generation, int64_t worker_index) con
   return false;
 }
 
-bool ThreadPool::SpinForCompletion() const noexcept {
+bool ThreadPool::SpinForCompletion(const std::atomic<int64_t> &remaining) const noexcept {
   if (options_.spin_iterations != 0) {
     for (uint64_t spin = 0; spin < options_.spin_iterations; ++spin) {
-      if (remaining_.load(std::memory_order_acquire) == 0) {
+      if (remaining.load(std::memory_order_acquire) == 0) {
         return true;
       }
       CpuRelax();
@@ -178,7 +205,7 @@ bool ThreadPool::SpinForCompletion() const noexcept {
   }
   const auto deadline = std::chrono::steady_clock::now() + SpinDuration(options_.spin_duration_ns);
   while (std::chrono::steady_clock::now() < deadline) {
-    if (remaining_.load(std::memory_order_acquire) == 0) {
+    if (remaining.load(std::memory_order_acquire) == 0) {
       return true;
     }
     CpuRelax();
@@ -188,6 +215,20 @@ bool ThreadPool::SpinForCompletion() const noexcept {
 
 void ThreadPool::RunErased(int64_t num_blocks, void *task_ctx, TaskFn task_fn) {
   if (num_blocks <= 0) {
+    return;
+  }
+  if (options_.allow_nested_parallelism) {
+    struct Context {
+      void *context;
+      TaskFn function;
+      int64_t blocks;
+    } context{task_ctx, task_fn, num_blocks};
+    RunBounded(num_blocks, &context, [](void *opaque, int64_t block, int64_t participants) {
+      const auto &call = *static_cast<Context *>(opaque);
+      for (int64_t b = block; b < call.blocks; b += participants) {
+        call.function(call.context, b);
+      }
+    });
     return;
   }
   if (workers_.empty() || num_blocks == 1 || InPool()) {
@@ -223,11 +264,90 @@ void ThreadPool::RunErased(int64_t num_blocks, void *task_ctx, TaskFn task_fn) {
   task_fn(task_ctx, static_cast<int64_t>(0));
   in_pool = was_in_pool;
 
-  if (SpinForCompletion()) {
+  if (SpinForCompletion(remaining_)) {
     return;
   }
   std::unique_lock<std::mutex> lock(mu_);
   cv_done_.wait(lock, [this]() { return remaining_.load(std::memory_order_acquire) == 0; });
+}
+
+int64_t ThreadPool::RunBounded(int64_t maximum_participants, void *context,
+                               void (*function)(void *, int64_t, int64_t)) {
+  if (!options_.allow_nested_parallelism || maximum_participants <= 0 || function == nullptr) {
+    throw std::invalid_argument("ThreadPool bounded dispatch requires enabled nesting, a positive "
+                                "participant limit, and a callback.");
+  }
+  // A foreign pool must not create another team or acquire locks in the opposite order.
+  if (InPool() && CurrentBoundedPool() != this) {
+    function(context, 0, 1);
+    return 1;
+  }
+  std::unique_lock<std::mutex> root(region_mu_, std::defer_lock);
+  if (CurrentBoundedPool() != this) {
+    root.lock();
+  }
+  BoundedRegion region{context, function};
+  {
+    std::lock_guard<std::mutex> lock(mu_);
+    for (size_t i = 0; i < bounded_workers_.size() && region.participants < maximum_participants;
+         ++i) {
+      BoundedWorker &worker = *bounded_workers_[i];
+      if (worker.region == nullptr) {
+        worker.region = &region;
+        worker.block = region.participants++;
+      }
+    }
+    region.remaining.store(region.participants - 1, std::memory_order_relaxed);
+    for (size_t i = 0; i < bounded_workers_.size(); ++i) {
+      BoundedWorker &worker = *bounded_workers_[i];
+      if (worker.region == &region) {
+        worker.pending.store(true, std::memory_order_release);
+        worker_work_[i]->notify_one();
+      }
+    }
+  }
+  ThreadPool *previous = CurrentBoundedPool();
+  const bool was_in_pool = InPoolFlag();
+  CurrentBoundedPool() = this;
+  InPoolFlag() = true;
+  function(context, 0, region.participants);
+  InPoolFlag() = was_in_pool;
+  CurrentBoundedPool() = previous;
+  if (!SpinForCompletion(region.remaining)) {
+    std::unique_lock<std::mutex> lock(mu_);
+    cv_done_.wait(lock,
+                  [&region]() { return region.remaining.load(std::memory_order_acquire) == 0; });
+  }
+  return region.participants;
+}
+
+void ThreadPool::BoundedWorkerLoop(int64_t worker_index) {
+  CurrentBoundedPool() = this;
+  BoundedWorker &worker = *bounded_workers_[static_cast<size_t>(worker_index)];
+  bool participated = false;
+  for (;;) {
+    if (!participated || !SpinForWork(0, worker_index)) {
+      std::unique_lock<std::mutex> lock(mu_);
+      worker_work_[static_cast<size_t>(worker_index)]->wait(lock, [&]() {
+        return stop_.load(std::memory_order_acquire) ||
+               worker.pending.load(std::memory_order_acquire);
+      });
+    }
+    if (stop_.load(std::memory_order_acquire)) {
+      return;
+    }
+    BoundedRegion *region = worker.region;
+    region->function(region->context, worker.block, region->participants);
+    {
+      std::lock_guard<std::mutex> lock(mu_);
+      worker.pending.store(false, std::memory_order_release);
+      worker.region = nullptr;
+      if (region->remaining.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+        cv_done_.notify_all();
+      }
+    }
+    participated = true;
+  }
 }
 
 void ThreadPool::WorkerLoop(int64_t worker_index) {
@@ -246,6 +366,11 @@ void ThreadPool::WorkerLoop(int64_t worker_index) {
     ++started_workers_;
   }
   cv_started_.notify_one();
+
+  if (options_.allow_nested_parallelism) {
+    BoundedWorkerLoop(worker_index);
+    return;
+  }
 
   uint64_t last_generation = 0;
   for (;;) {

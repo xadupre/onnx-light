@@ -281,7 +281,7 @@ Pool PR03 implements this with a thread-scoped view. ``RuntimeSession::Run``
 installs its leased executor through ``CpuExecutorScope`` and on
 ``RuntimeContext::cpu_executor`` for the duration of the run, and every
 participant of a parallel region keeps that view installed, so a nested region
-runs inline on the same executor. The free ``ParallelFor`` dispatches through
+stays on the same executor. The free ``ParallelFor`` dispatches through
 the installed executor and only falls back to the process-wide pool for
 standalone callers running outside any session. A nested session that did not
 receive an explicit policy inherits the executor already installed on the
@@ -304,16 +304,20 @@ Nested parallel regions run inline by default. This includes:
 * application code invoking a session from its own pool;
 * callbacks that enter BLAS, OpenMP, or another runtime pool.
 
-An executor marks its workers and caller-owned active regions. Pool PR02 always
-runs nested calls inline, including when the nesting flag is present in the
-sharing key. A nested call may reuse the current participants only if a later
-explicit composition design proves it deadlock-free and bounded; it must never
-wake an unrelated pool.
+An executor marks its workers and caller-owned active regions. With
+``allow_nested_parallelism=true``, a nested call may admit idle workers from
+that same pool. Admission never waits for busy workers, and a saturated pool
+runs the nested region inline. The caller is already a participant, so only
+the admitted idle workers count as additional participants. No new threads
+or unrelated pools are created, and the total stays within the resolved
+session limit. Kernel-specific limits and minimum-work thresholds still apply
+to each region. The default remains false because nested dispatch is usually
+less efficient. Entry from another thread pool stays inline to avoid cross-pool
+lock inversion and additional teams.
 
-Concurrent calls sharing one executor serialize only the parallel-region
-dispatch metadata, not complete inference runs. The design must measure and
-document whether one active region at a time is acceptable or whether the pool
-needs a bounded multi-region scheduler.
+Concurrent calls sharing one executor serialize outer regions, not complete
+inference runs. When nesting is enabled this includes inline outer regions,
+so their nested work cannot exceed the shared participant budget.
 
 Spinning and parking
 ++++++++++++++++++++
@@ -383,7 +387,7 @@ The integration must prove:
 * no ``onnx-light-cpu`` worker is created by registered-kernel execution;
 * the session's effective threads equal observed participants;
 * kernel-specific maximum participants are respected;
-* nested calls remain inline;
+* nested calls remain inline by default and respect the shared limit when enabled;
 * standalone kernels retain their documented behavior.
 
 Tuning and cache identity

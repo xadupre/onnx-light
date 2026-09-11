@@ -82,6 +82,42 @@ TEST(ThreadPool, WorkerStartupFailureRejectsPool) {
   EXPECT_THROW(ThreadPool(1, options), std::runtime_error);
 }
 
+TEST(ThreadPool, BoundedDispatchValidatesArguments) {
+  const auto callback = [](void *, int64_t, int64_t) {};
+  ThreadPool disabled(0);
+  EXPECT_THROW(disabled.RunBounded(1, nullptr, callback), std::invalid_argument);
+  ThreadPoolOptions options;
+  options.allow_nested_parallelism = true;
+  ThreadPool enabled(1, options);
+  EXPECT_THROW(enabled.RunBounded(0, nullptr, callback), std::invalid_argument);
+  EXPECT_THROW(enabled.RunBounded(1, nullptr, nullptr), std::invalid_argument);
+  EXPECT_EQ(enabled.RunBounded(8, nullptr, callback), 2);
+}
+
+TEST(ThreadPool, BoundedNestedRunCoversAllIndexedBlocks) {
+  for (int64_t workers : {0, 1, 3}) {
+    for (uint64_t duration : {0u, 1000u}) {
+      ThreadPoolOptions options;
+      options.allow_nested_parallelism = true;
+      options.spin_iterations = 0;
+      options.spin_duration_ns = duration;
+      ThreadPool pool(workers, options);
+      for (int iteration = 0; iteration < 100; ++iteration) {
+        std::array<std::atomic<int>, 8> visits{};
+        pool.Run(2, [&](int64_t outer) {
+          pool.Run(4, [&](int64_t inner) {
+            EXPECT_TRUE(ThreadPool::InParallelRegion());
+            visits[static_cast<size_t>(outer * 4 + inner)].fetch_add(1);
+          });
+        });
+        for (const auto &visit : visits) {
+          EXPECT_EQ(visit.load(), 1);
+        }
+      }
+    }
+  }
+}
+
 TEST(ThreadPool, ParkImmediatelyRepeatedDispatchesStillCompleteWork) {
   ThreadPoolOptions options;
   options.spin_iterations = 0;

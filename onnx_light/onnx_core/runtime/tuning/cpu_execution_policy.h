@@ -103,7 +103,9 @@ struct CpuExecutionPolicy {
   /// assigned to the calling participant; the remaining processors are
   /// assigned to workers.
   std::vector<CpuLogicalProcessor> cpu_set;
-  /// Whether nested parallel regions may create additional participants.
+  /// Allows nested regions to use idle workers from the same executor without
+  /// exceeding the resolved participant limit. Defaults to inline nesting,
+  /// which is usually more efficient.
   bool allow_nested_parallelism = false;
 
   bool operator==(const CpuExecutionPolicy &) const = default;
@@ -151,7 +153,7 @@ struct ResolvedCpuExecutionPolicy {
   bool uses_efficiency_cores = false;
   /// Resolved spin and park policy.
   ResolvedSpinPolicy spin;
-  /// Whether nested parallel regions may create additional participants.
+  /// Allows nested regions to use idle workers within effective_threads.
   bool allow_nested_parallelism = false;
   /// Human-readable notes about fallbacks taken during resolution.
   std::vector<std::string> diagnostics;

@@ -3020,13 +3020,13 @@ TEST(KernelClass, GemmCalibrationSkipsInlineCandidate) {
   const auto calibrate = core::runtime::GetKernelTuningRegistry().FindCalibrationFunction(key);
   ASSERT_TRUE(calibrate);
   const auto &defaults = schema->portable_defaults();
-  const int64_t m = defaults.Get<int64_t>("algorithm.tile_m");
-  const int64_t n = defaults.Get<int64_t>("algorithm.tile_n");
+  const int64_t m = gemm.tuning().tile_m;
+  const int64_t n = gemm.tuning().tile_n;
   core::runtime::CalibrationOptions options;
   // Only the one-task case fits. Neither serial runner may be timed as a candidate win.
   options.maximum_memory_bytes = static_cast<uint64_t>((m * 128 + 128 * n + 2 * m * n) * 4);
   core::runtime::CalibrationReporter reporter;
-  const core::runtime::CpuExecutionDescriptor execution{platform::GetCpuDescriptor(), 2};
+  const core::runtime::CpuExecutionDescriptor execution{core::platform::GetCpuDescriptor(), 2};
 
   const auto selected = calibrate(key, execution, options, reporter);
 

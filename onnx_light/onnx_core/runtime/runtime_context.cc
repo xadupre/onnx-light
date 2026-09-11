@@ -276,6 +276,32 @@ void RuntimeContext::RecordRunNodeEvent(const NodeProto &node, const std::string
 
 RuntimeContext::~RuntimeContext() = default;
 
+void RuntimeContext::set_kernel_usage_enabled(bool enabled) {
+  const std::lock_guard<std::mutex> lock(kernel_usage_->mutex);
+  kernel_usage_->enabled.store(enabled, std::memory_order_relaxed);
+}
+
+void RuntimeContext::RecordKernelUsage(std::string_view name) {
+  if (!kernel_usage_enabled()) {
+    return;
+  }
+  const std::lock_guard<std::mutex> lock(kernel_usage_->mutex);
+  // Rechecks under the lock so disabling also waits for in-flight appends.
+  if (kernel_usage_enabled() && kernel_usage_->names.size() < kKernelUsageLimit) {
+    kernel_usage_->names.emplace_back(name);
+  }
+}
+
+std::vector<std::string> RuntimeContext::GetKernelUsage() const {
+  const std::lock_guard<std::mutex> lock(kernel_usage_->mutex);
+  return kernel_usage_->names;
+}
+
+void RuntimeContext::ClearKernelUsage() {
+  const std::lock_guard<std::mutex> lock(kernel_usage_->mutex);
+  kernel_usage_->names.clear();
+}
+
 void RuntimeContext::Set(const std::string &name, Tensor tensor, RuntimeEventKind kind) {
   EXT_ENFORCE(!Has(name), "RuntimeContext::Set: a tensor named '", name, "' already exists.");
   EnsureAllocatorBacked(tensor, allocator_, kind);
@@ -369,6 +395,7 @@ RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name)
   // allocator, tensors produced by the body would be freed when the child
   // context is destroyed, leaving any copies held by the caller with stale
   // allocation pointers.
+  child.kernel_usage_ = kernel_usage_;
   child.functions() = functions_;
   child.tensors() = tensors_;
   child.sequences() = sequences_;
@@ -386,6 +413,7 @@ RuntimeContext RuntimeContext::MakeFunctionContext() const {
                                         .release_intermediates = release_intermediates_,
                                         .device = device_,
                                     });
+  child.kernel_usage_ = kernel_usage_;
   child.functions() = functions_;
   child.set_cpu_executor(cpu_executor_);
   return child;

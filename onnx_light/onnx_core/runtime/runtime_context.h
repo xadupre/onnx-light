@@ -16,9 +16,13 @@
 #include "onnx_proto/onnx.h"
 
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <functional>
+#include <memory>
+#include <mutex>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -444,6 +448,32 @@ public:
   /// from the hot path.
   bool events_enabled() const noexcept { return events_enabled_; }
 
+  /// Maximum number of kernel names retained until :cpp:func:`ClearKernelUsage`.
+  static constexpr size_t kKernelUsageLimit = 1024;
+
+  /// Returns whether kernel usage recording is enabled (disabled by default).
+  bool kernel_usage_enabled() const noexcept {
+    return kernel_usage_->enabled.load(std::memory_order_relaxed);
+  }
+
+  /// Enables or disables kernel usage recording without clearing existing names.
+  /// The flag and log are shared with child contexts and copies of this context,
+  /// but not with independently constructed contexts. These diagnostic operations
+  /// are thread-safe; other RuntimeContext operations still require external
+  /// synchronization.
+  void set_kernel_usage_enabled(bool enabled);
+
+  /// Records a backend-selected kernel name when enabled. Keeps the first
+  /// :cpp:var:`kKernelUsageLimit` names, including duplicates, and drops later
+  /// entries until cleared. The disabled path does not lock or copy the name.
+  void RecordKernelUsage(std::string_view name);
+
+  /// Returns an independent snapshot of the recorded kernel names.
+  std::vector<std::string> GetKernelUsage() const;
+
+  /// Clears recorded kernel names without changing the enabled flag.
+  void ClearKernelUsage();
+
   /// Returns the non-owning view on the CPU executor the running session
   /// leased, or ``nullptr`` when the context is used outside a session run.
   /// Kernels that need an explicit executor dispatch through it instead of a
@@ -708,6 +738,7 @@ public:
   /// :cpp:func:`current_subgraph`
   /// is set to ``(current_node_index(), attr_name)`` on the child.
   /// The subgraph's writes remain local and do not pollute this context.
+  /// Kernel usage recording shares the parent's diagnostic state.
   ///
   /// Returns:
   ///   A new :cpp:class:`RuntimeContext` initialised for subgraph execution.
@@ -718,6 +749,7 @@ public:
   /// registry, verbosity and runtime parameters, but starts with an empty
   /// tensor and sequence map so the function's formal inputs are bound
   /// explicitly by the caller.
+  /// Kernel usage recording shares the parent's diagnostic state.
   ///
   /// Returns:
   ///   A new :cpp:class:`RuntimeContext` initialised for function execution.
@@ -731,6 +763,8 @@ public:
   /// :cpp:func:`events_enabled` / :cpp:func:`release_intermediates`
   /// settings are intentionally preserved, so the execution-plan cache
   /// is amortised across repeated runs of the same model.
+  /// Kernel usage recording is preserved; :cpp:func:`ClearKernelUsage` clears it
+  /// separately.
   void Clear() noexcept {
     tensors_.clear();
     sequences_.clear();
@@ -896,6 +930,12 @@ public:
   }
 
 private:
+  struct KernelUsageState {
+    std::atomic<bool> enabled{false};
+    std::mutex mutex;
+    std::vector<std::string> names;
+  };
+
   /// Fills ``ev.allocated_bytes`` / ``ev.peak_bytes`` from the currently
   /// attached allocator (:cpp:func:`RawBufferAllocator::TotalAllocatedSize`
   /// and :cpp:func:`RawBufferAllocator::PeakAllocatedSize`). Leaves both at
@@ -906,6 +946,7 @@ private:
   KernelContext kernel_ctx_;
   FunctionMap functions_;
   CustomKernelMap custom_kernels_;
+  std::shared_ptr<KernelUsageState> kernel_usage_ = std::make_shared<KernelUsageState>();
   RuntimeEventLog events_;
   SequenceMap sequences_;
   OnnxMapMap maps_;

@@ -64,6 +64,7 @@ struct ParallelRegionEvent {
   int64_t grain_size = 0;
   int32_t requested_threads = 0;
   int32_t admitted_threads = 0;
+  /// Number of distinct threads that executed blocks, not peak concurrency.
   int32_t observed_threads = 0;
   std::optional<uint64_t> wall_time_ns;
   std::optional<uint64_t> process_cpu_time_ns;
@@ -129,7 +130,7 @@ private:
 /// Returns normalized process CPU utilization when all inputs are valid.
 std::optional<double> ComputeCpuUtilization(std::optional<uint64_t> process_cpu_time_ns,
                                             std::optional<uint64_t> wall_time_ns,
-                                            int32_t admitted_threads) noexcept;
+                                            int32_t observed_threads) noexcept;
 
 /// Returns aggregate process CPU time, or no value when the platform cannot provide it.
 std::optional<uint64_t> ReadProcessCpuTimeNs() noexcept;

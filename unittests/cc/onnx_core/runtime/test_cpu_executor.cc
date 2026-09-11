@@ -242,6 +242,28 @@ TEST(CpuExecutor, ExternalDispatcherCoversRangeWithoutCreatingAPool) {
                           [](int visits) { return visits == 1; }));
 }
 
+TEST(CpuExecutor, ExternalDispatcherProfilesDistinctExecutingThreads) {
+  ExternalDispatchObservation dispatch;
+  std::unique_ptr<CpuExecutor> executor = CpuExecutor::CreateExternal(4, &DispatchInline);
+  CpuExecutorDispatchScope dispatch_scope(executor.get(), &dispatch);
+  RangeObservation observation(400);
+  ParallelRegionCollector collector(1);
+
+  executor->ParallelFor(400, 100, &observation, &ObserveRange, 0, &collector);
+
+  EXPECT_EQ(dispatch.dispatched_blocks, 4);
+  EXPECT_EQ(observation.threads.size(), 1u);
+  EXPECT_TRUE(std::all_of(observation.visits.begin(), observation.visits.end(),
+                          [](int visits) { return visits == 1; }));
+  ASSERT_EQ(collector.events().size(), 1u);
+  const auto &event = collector.events()[0];
+  EXPECT_EQ(event.requested_threads, 4);
+  EXPECT_EQ(event.admitted_threads, 4);
+  EXPECT_EQ(event.observed_threads, 1);
+  EXPECT_EQ(event.cpu_utilization,
+            ComputeCpuUtilization(event.process_cpu_time_ns, event.wall_time_ns, 1));
+}
+
 TEST(CpuExecutor, MinimumElementsIsParallelCrossover) {
   std::unique_ptr<CpuExecutor> executor = CpuExecutor::CreateExternal(4, &DispatchInline);
   constexpr int64_t minimum_elements = 8;

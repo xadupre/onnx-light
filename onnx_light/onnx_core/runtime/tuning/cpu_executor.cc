@@ -442,6 +442,7 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t minimum_elements, void *con
       maximum_participants == 0 ? impl_->policy.effective_threads
                                 : std::min(maximum_participants, impl_->policy.effective_threads);
   int64_t grain_size = total;
+  std::vector<std::thread::id> executing_threads;
   const auto record = [&](uint32_t admitted, bool nested_inline) {
     if (collector == nullptr) {
       return;
@@ -458,6 +459,15 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t minimum_elements, void *con
             : std::nullopt;
     const HardwareCounterSample hardware_counters =
         collector->EndHardwareCounters(counter_measurement, admitted == 1);
+    int32_t observed = 1;
+    if (!executing_threads.empty()) {
+      // Bounded dispatch may admit fewer blocks than requested.
+      executing_threads.resize(admitted);
+      std::sort(executing_threads.begin(), executing_threads.end());
+      observed =
+          static_cast<int32_t>(std::unique(executing_threads.begin(), executing_threads.end()) -
+                               executing_threads.begin());
+    }
     collector->Record(ParallelRegionEvent{
         .region_id = region_id,
         .parent_region_id = parent_region_id,
@@ -469,11 +479,10 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t minimum_elements, void *con
         .grain_size = grain_size,
         .requested_threads = static_cast<int32_t>(participant_limit),
         .admitted_threads = static_cast<int32_t>(admitted),
-        .observed_threads = static_cast<int32_t>(admitted),
+        .observed_threads = observed,
         .wall_time_ns = wall_time_ns,
         .process_cpu_time_ns = process_cpu_time_ns,
-        .cpu_utilization = ComputeCpuUtilization(process_cpu_time_ns, wall_time_ns,
-                                                 static_cast<int32_t>(admitted)),
+        .cpu_utilization = ComputeCpuUtilization(process_cpu_time_ns, wall_time_ns, observed),
         .counters = hardware_counters,
         .executor_instance_id = impl_->instance_id,
         .nested_inline = nested_inline,
@@ -513,6 +522,9 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t minimum_elements, void *con
   const int64_t num_blocks =
       limited ? 1 : std::min<int64_t>(static_cast<int64_t>(participant_limit), total);
   grain_size = total / num_blocks;
+  if (collector != nullptr) {
+    executing_threads.resize(static_cast<size_t>(num_blocks));
+  }
 
   struct BlockContext {
     void *context;
@@ -523,6 +535,7 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t minimum_elements, void *con
     uint64_t region_id;
     int64_t total;
     int64_t num_blocks;
+    std::thread::id *executing_threads;
     static void Run(void *opaque, int64_t block_index, int64_t participants) {
       auto &block = *static_cast<BlockContext *>(opaque);
       CpuExecutorScope block_scope(block.executor);
@@ -532,6 +545,8 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t minimum_elements, void *con
       const int64_t begin = block_index * base_block_size + std::min(block_index, extra_blocks);
       const int64_t end = begin + base_block_size + (block_index < extra_blocks ? 1 : 0);
       if (block.collector != nullptr) {
+        // Each block owns one slot; dispatch completes before the IDs are read.
+        block.executing_threads[block_index] = std::this_thread::get_id();
         ParallelRegionCollectorScope collector_scope(block.collector, block.run_id,
                                                      block.region_id);
         block.function(block.context, begin, end);
@@ -540,8 +555,9 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t minimum_elements, void *con
       }
     }
   };
-  BlockContext block_context{context, function,  this,  collector,
-                             run_id,  region_id, total, num_blocks};
+  BlockContext block_context{context,   function,   this,
+                             collector, run_id,     region_id,
+                             total,     num_blocks, executing_threads.data()};
   if (bounded) {
     const int64_t admitted =
         impl_->pool->RunBounded(num_blocks, &block_context, &BlockContext::Run);

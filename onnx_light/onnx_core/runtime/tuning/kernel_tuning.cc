@@ -1158,6 +1158,7 @@ KernelTuningParameters CalibrateKernelBenchmark(const KernelTuningKey &key,
   uint64_t first_winning_size = 0;
   bool measured_any = false;
   bool tuned = false;
+  uint64_t last_losing_size = 0;
   uint64_t previous_problem_size = 0;
   for (size_t case_index = 0; case_index < benchmark.cases.size();) {
     const uint64_t problem_size = benchmark.cases[case_index].problem_size;
@@ -1168,9 +1169,29 @@ KernelTuningParameters CalibrateKernelBenchmark(const KernelTuningKey &key,
     }
     previous_problem_size = problem_size;
     const int64_t candidate_value = static_cast<int64_t>((problem_size + 1) / 2);
+    size_t group_end = case_index;
+    bool equivalent_paths = candidate_value == benchmark.serial_parameter_value;
+    while (group_end < benchmark.cases.size() &&
+           benchmark.cases[group_end].problem_size == problem_size) {
+      if (benchmark.same_execution_path &&
+          benchmark.same_execution_path(benchmark.cases[group_end],
+                                        benchmark.serial_parameter_value, candidate_value)) {
+        equivalent_paths = true;
+      }
+      ++group_end;
+    }
+    if (equivalent_paths) {
+      reporter.AddDiagnostic(key.kernel + " skipped problem_size=" + std::to_string(problem_size) +
+                             " because reference and candidate use the same execution path.");
+      case_index = group_end;
+      consecutive_wins = 0;
+      first_winning_size = 0;
+      continue;
+    }
     benchmark.candidate.configure(candidate_value);
     bool group_won = true;
     bool group_measured = false;
+    bool group_complete = true;
 
     while (case_index < benchmark.cases.size() &&
            benchmark.cases[case_index].problem_size == problem_size) {
@@ -1181,6 +1202,7 @@ KernelTuningParameters CalibrateKernelBenchmark(const KernelTuningKey &key,
       const uint64_t memory_bytes = CaseMemoryBytes(benchmark_case);
       if (memory_bytes > memory_budget) {
         group_won = false;
+        group_complete = false;
         continue;
       }
 
@@ -1244,14 +1266,27 @@ KernelTuningParameters CalibrateKernelBenchmark(const KernelTuningKey &key,
       }
       ++consecutive_wins;
       if (consecutive_wins == benchmark.required_consecutive_wins) {
-        const int64_t minimum_elements = static_cast<int64_t>((first_winning_size + 1) / 2);
+        const int64_t minimum_elements = static_cast<int64_t>(first_winning_size);
         selected.values[benchmark.parameter_name] = minimum_elements;
         reporter.AddDiagnostic(key.kernel + " selected " + benchmark.parameter_name + "=" +
                                std::to_string(minimum_elements) + ".");
+        if (last_losing_size == 0) {
+          reporter.AddDiagnostic(key.kernel +
+                                 " crossover is at or below the smallest measured "
+                                 "size " +
+                                 std::to_string(first_winning_size) + "; not bracketed.");
+        } else {
+          reporter.AddDiagnostic(key.kernel + " crossover is bracketed by measured sizes " +
+                                 std::to_string(last_losing_size) + " and " +
+                                 std::to_string(first_winning_size) + ".");
+        }
         tuned = true;
         break;
       }
     } else {
+      if (group_measured && group_complete) {
+        last_losing_size = problem_size;
+      }
       consecutive_wins = 0;
       first_winning_size = 0;
     }
@@ -1261,8 +1296,8 @@ KernelTuningParameters CalibrateKernelBenchmark(const KernelTuningKey &key,
   }
   if (!measured_any) {
     reporter.AddDiagnostic(key.kernel +
-                           " calibration memory budget is too small; kept the portable "
-                           "threshold.");
+                           " calibration measured no eligible cases within the memory budget; "
+                           "kept the portable threshold.");
   } else if (!tuned) {
     reporter.AddDiagnostic(key.kernel +
                            " calibration found no stable parallel crossover; kept the portable "

@@ -213,6 +213,14 @@ configured speedup for consecutive problem sizes. Resource limits bound the
 search. Inspect ``diagnostics`` to see the selected value. Schema-only keys
 without a callback appear in ``unsupported``.
 
+Groups whose reference and candidate use the same execution path are skipped.
+The selected threshold is the first size in a stable winning sequence, not an
+extrapolation below that size. Diagnostics distinguish a crossover bracketed by
+measured losing and winning sizes from one at or below the smallest measured
+size. Gemm tries geometrically growing task counts up to 4096, stopping after
+stable wins or at the resource limits; its single-task inline case is excluded.
+When no stable win is found within those limits, the portable threshold is kept.
+
 The selected profile is published in the current process immediately.
 With the default ``save=True``, it is also validated, locked, merged, and
 atomically persisted for later processes. Use ``save=False`` for an in-memory
@@ -228,7 +236,8 @@ A registered tuning schema does not imply that a calibration callback exists.
 1. Define a ``KernelCalibrationFunction`` near the kernel implementation.
 2. Construct a ``KernelCalibrationBenchmark`` with its portable parameters,
    deterministic cases, reference runner, candidate runner, and output
-   validation.
+   validation. Set ``same_execution_path`` when different parameter values can
+   resolve to the same path; any such case excludes its entire crossover group.
 3. Call ``CalibrateKernelBenchmark`` from that function.
 4. Register it for every supported exact key with
    ``RegisterKernelCalibrationFunction`` in the kernel's

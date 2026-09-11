@@ -645,6 +645,82 @@ TEST(KernelCalibration, ValidatesCandidateOutput) {
   EXPECT_TRUE(reporter.parallel_region_report()->events().empty());
 }
 
+TEST(KernelCalibration, NeverTimesEquivalentExecutionPathGroups) {
+  CalibrationExecutorScope executor_scope(2);
+  const KernelTuningParameters defaults = MakeDefaults();
+  KernelCalibrationBenchmark benchmark;
+  benchmark.portable_parameters = defaults;
+  benchmark.parameter_name = "algorithm.tile_m";
+  benchmark.cases = MakeElementwiseCalibrationCases(DataType::FLOAT, 1, 16, 16, false);
+  benchmark.cases.push_back(benchmark.cases.front());
+  benchmark.cases.back().name = "equivalent";
+  benchmark.repetitions = 1;
+  benchmark.required_consecutive_wins = 1;
+  benchmark.reference.configure = [](int64_t) {};
+  benchmark.candidate.configure = [](int64_t) {};
+  int runs = 0;
+  benchmark.reference.run = [&runs](std::span<const Tensor>, Tensor &) { ++runs; };
+  benchmark.candidate.run = benchmark.reference.run;
+  benchmark.same_execution_path = [](const KernelCalibrationCase &benchmark_case, int64_t,
+                                     int64_t) { return benchmark_case.name == "equivalent"; };
+  const CpuExecutionDescriptor execution{platform::GetCpuDescriptor(), 2};
+
+  for (bool identical_values : {false, true}) {
+    SCOPED_TRACE(identical_values);
+    if (identical_values) {
+      benchmark.same_execution_path = {};
+      benchmark.serial_parameter_value = 8;
+    }
+    CalibrationReporter reporter;
+    const KernelTuningParameters selected =
+        CalibrateKernelBenchmark(defaults.key, execution, {}, reporter, benchmark);
+
+    EXPECT_EQ(selected.Get<int64_t>("algorithm.tile_m"), 64);
+    EXPECT_EQ(runs, 0);
+    EXPECT_EQ(reporter.benchmark_cases(), 0u);
+    ASSERT_FALSE(reporter.diagnostics().empty());
+    EXPECT_NE(reporter.diagnostics().front().find("same execution path"), std::string::npos);
+  }
+}
+
+TEST(KernelCalibration, ReportsMeasuredAndUnbracketedCrossoverBounds) {
+  CalibrationExecutorScope executor_scope(2);
+  const KernelTuningParameters defaults = MakeDefaults();
+  const CpuExecutionDescriptor execution{platform::GetCpuDescriptor(), 2};
+  for (bool bracketed : {false, true}) {
+    SCOPED_TRACE(bracketed);
+    KernelCalibrationBenchmark benchmark;
+    benchmark.portable_parameters = defaults;
+    benchmark.parameter_name = "algorithm.tile_m";
+    benchmark.cases = MakeElementwiseCalibrationCases(DataType::FLOAT, 1, 16, 64, false);
+    benchmark.repetitions = 3;
+    benchmark.reference.configure = [](int64_t) {};
+    benchmark.candidate.configure = [](int64_t) {};
+    benchmark.reference.run = [bracketed](std::span<const Tensor>, Tensor &output) {
+      if (!bracketed || output.element_count() > 16) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+      }
+      std::fill_n(output.AsFloat(), output.element_count(), 1.0f);
+    };
+    benchmark.candidate.run = [bracketed](std::span<const Tensor>, Tensor &output) {
+      if (bracketed && output.element_count() == 16) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+      }
+      std::fill_n(output.AsFloat(), output.element_count(), 1.0f);
+    };
+    CalibrationReporter reporter;
+    const KernelTuningParameters selected =
+        CalibrateKernelBenchmark(defaults.key, execution, {}, reporter, benchmark);
+
+    EXPECT_EQ(selected.Get<int64_t>("algorithm.tile_m"), bracketed ? 32 : 16);
+    ASSERT_EQ(reporter.diagnostics().size(), 2u);
+    EXPECT_NE(reporter.diagnostics().back().find(
+                  bracketed ? "bracketed by measured sizes 16 and 32"
+                            : "at or below the smallest measured size 16; not bracketed"),
+              std::string::npos);
+  }
+}
+
 TEST(KernelCalibration, ComparesExplicitParameterValuesSideBySide) {
   KernelTuningParameters defaults = MakeDefaults();
   KernelCalibrationBenchmark benchmark;

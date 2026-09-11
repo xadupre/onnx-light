@@ -255,6 +255,8 @@ struct KernelCalibrationBenchmark {
   uint64_t default_maximum_duration_ms = 250;
   uint64_t default_maximum_memory_bytes = uint64_t{64} << 20;
   std::function<bool(const Tensor &, const Tensor &)> validate_output;
+  /** Identifies equivalent reference/candidate paths before timing a crossover group. */
+  std::function<bool(const KernelCalibrationCase &, int64_t, int64_t)> same_execution_path;
 };
 
 /** Reports one explicit tuning value measured across the calibration cases. */

@@ -667,6 +667,7 @@ class TestRunNodesBindings(ExtTestCase):
                 callback_ref = weakref.ref(copy)
                 registry = rt if global_scope else ctx
                 registry.register_custom_kernel("my.domain", "Copy", copy)
+                self.addCleanup(registry.unregister_custom_kernel, "my.domain", "Copy")
                 session.run(ctx)
                 self.assertTrue(registry.unregister_custom_kernel("my.domain", "Copy"))
                 del copy

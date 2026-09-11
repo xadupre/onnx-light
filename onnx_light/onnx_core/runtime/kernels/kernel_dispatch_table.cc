@@ -14,6 +14,19 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 namespace {
 
+// Stores only a callable and a non-owning node pointer, never a node cache.
+class CustomKernelAdapter : public KernelBase {
+public:
+  CustomKernelAdapter(const NodeProto &node, RuntimeContext &rt, CustomKernelFn fn)
+      : KernelBase(rt.kernel_ctx()), fn_(std::move(fn)) {
+    set_node(node);
+  }
+  void Run(RuntimeContext &rt) override { fn_(*node_, rt); }
+
+private:
+  CustomKernelFn fn_;
+};
+
 // Returns the ``"<domain>:<op_type>"`` dispatch key, normalising an empty
 // domain to :cpp:var:`kDefaultOnnxDomain`.
 std::string DispatchKey(const std::string &domain, const std::string &op_type) {
@@ -80,8 +93,19 @@ bool RegisterKernelFn(const std::string &domain, const std::string &op_type,
 
 const CustomKernelMap &GlobalCustomKernels() { return MutableGlobalCustomKernels(); }
 
+NodeKernelFn MakeCustomKernelFactory(CustomKernelFn fn) {
+  return [fn = std::move(fn)](const NodeProto &node, RuntimeContext &rt) {
+    return std::make_unique<CustomKernelAdapter>(node, rt, fn);
+  };
+}
+
 void RegisterGlobalCustomKernel(const std::string &domain, const std::string &op_type,
                                 CustomKernelFn fn) {
+  RegisterGlobalCustomKernelFactory(domain, op_type, MakeCustomKernelFactory(std::move(fn)));
+}
+
+void RegisterGlobalCustomKernelFactory(const std::string &domain, const std::string &op_type,
+                                       NodeKernelFn fn) {
   MutableGlobalCustomKernels()[CustomKernelKey(domain, op_type)] = std::move(fn);
 }
 

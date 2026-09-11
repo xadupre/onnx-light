@@ -4,6 +4,7 @@
 
 #include "onnx_core/runtime/runtime_context.h"
 
+#include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
 #include "onnx_core/runtime/tuning/cpu_executor.h"
 
 #include <algorithm>
@@ -390,6 +391,22 @@ const ExecutionPlan &RuntimeContext::GetExecutionPlan(const FunctionProto &func)
 
 void RuntimeContext::ClearExecutionPlans() noexcept { execution_plans_.clear(); }
 
+bool RuntimeContext::RegisterKernelFn(const std::string &domain, const std::string &op_type,
+                                      symbolic::Device device, NodeKernelFn fn, bool overwrite) {
+  const std::string d = domain.empty() ? std::string("ai.onnx") : domain;
+  const std::string key = d + ":" + op_type + symbolic::DeviceKeySuffix(device);
+  if (!overwrite && custom_kernels_.find(key) != custom_kernels_.end()) {
+    return false;
+  }
+  custom_kernels_[key] = std::move(fn);
+  return true;
+}
+
+void RuntimeContext::RegisterCustomKernel(const std::string &domain, const std::string &op_type,
+                                          CustomKernelFn fn) {
+  RegisterKernelFn(domain, op_type, device_, MakeCustomKernelFactory(std::move(fn)));
+}
+
 RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name) const {
   RuntimeContext child(kernel_ctx_,
                        RuntimeContextOptions{
@@ -408,6 +425,7 @@ RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name)
   // context is destroyed, leaving any copies held by the caller with stale
   // allocation pointers.
   child.functions() = functions_;
+  child.custom_kernels() = custom_kernels_;
   child.tensors() = tensors_;
   child.sequences() = sequences_;
   child.set_cpu_executor(cpu_executor_);
@@ -427,6 +445,7 @@ RuntimeContext RuntimeContext::MakeFunctionContext() const {
                        },
                        kernel_usage_);
   child.functions() = functions_;
+  child.custom_kernels() = custom_kernels_;
   child.set_cpu_executor(cpu_executor_);
   return child;
 }

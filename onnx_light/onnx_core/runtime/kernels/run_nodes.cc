@@ -951,20 +951,6 @@ private:
   std::shared_ptr<SubgraphSession> body_session_;
 };
 
-// Adapts a user-registered :cpp:type:`CustomKernelFn` (which runs the whole
-// node) to the :cpp:class:`KernelBase` interface.
-class CustomKernelAdapter : public KernelBase {
-public:
-  CustomKernelAdapter(const NodeProto &node, CustomKernelFn fn)
-      : KernelBase(KernelContext{}), fn_(std::move(fn)) {
-    set_node(node);
-  }
-  void Run(RuntimeContext &rt) override { fn_(*node_, rt); }
-
-private:
-  CustomKernelFn fn_;
-};
-
 } // namespace
 
 // Resolves how ``node`` must be dispatched, building and returning the
@@ -1030,16 +1016,18 @@ std::unique_ptr<KernelBase> ResolveNodeKernelDefault(const NodeProto &node, Runt
   }
 
   const std::string key = domain + ":" + op_type;
+  const symbolic::Device device = rt.device();
+  const std::string device_suffix = symbolic::DeviceKeySuffix(device);
   // User-registered custom kernels take precedence over built-in
   // kernel dispatch table entries so callers can override (or
   // extend) the runtime with their own implementations. Per-context
   // registrations (:cpp:func:`RuntimeContext::RegisterCustomKernel`) are
   // consulted first, so a context can override a globally registered
   // kernel of the same ``(domain, op_type)``.
-  auto ckit = rt.custom_kernels().find(key);
+  auto ckit = rt.custom_kernels().find(key + device_suffix);
   if (ckit != rt.custom_kernels().end()) {
-    CustomKernelFn fn = ckit->second;
-    return std::make_unique<CustomKernelAdapter>(node, fn);
+    NodeKernelFn fn = ckit->second;
+    return fn(node, rt);
   }
   // Process-wide (global) custom kernels apply to every RuntimeContext, so a
   // caller can install a kernel once (:cpp:func:`RegisterGlobalCustomKernel`)
@@ -1048,8 +1036,8 @@ std::unique_ptr<KernelBase> ResolveNodeKernelDefault(const NodeProto &node, Runt
   const auto &global_custom = GlobalCustomKernels();
   auto gckit = global_custom.find(key);
   if (gckit != global_custom.end()) {
-    CustomKernelFn fn = gckit->second;
-    return std::make_unique<CustomKernelAdapter>(node, fn);
+    NodeKernelFn fn = gckit->second;
+    return fn(node, rt);
   }
   // A kernel's identity in :cpp:func:`KernelDispatchTable` is
   // ``(domain, op_type, device)``. The default host devices
@@ -1060,8 +1048,6 @@ std::unique_ptr<KernelBase> ResolveNodeKernelDefault(const NodeProto &node, Runt
   // C++ reference runtime only ships CPU kernels, running on a non-CPU device
   // finds no entry and fails below with a message naming the device rather
   // than silently dispatching to the CPU kernel.
-  const symbolic::Device device = rt.device();
-  const std::string device_suffix = symbolic::DeviceKeySuffix(device);
   const auto &table = KernelDispatchTable();
   auto it = table.find(key + device_suffix);
   if (device_suffix.empty()) {
@@ -1072,7 +1058,8 @@ std::unique_ptr<KernelBase> ResolveNodeKernelDefault(const NodeProto &node, Runt
                         "' in domain '", domain, "' on device '", symbolic::DeviceName(device),
                         "'.");
   }
-  return it->second(node, rt);
+  NodeKernelFn fn = it->second;
+  return fn(node, rt);
 }
 
 // Emits the ReferenceEvaluator verbose progress line for one dispatch.

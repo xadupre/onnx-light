@@ -1912,8 +1912,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
              nb::callable fn) {
             // Wrap the Python callable in a CustomKernelFn. We capture
             // the callable in a ``nb::callable`` which keeps a Python
-            // reference alive until the registration is replaced or the
-            // RuntimeContext is destroyed. The GIL is reacquired before
+            // reference alive in the factory and in each resolved kernel.
+            // The GIL is reacquired before
             // invoking the callable so that it is safe to call from the
             // RunNode dispatcher (which may be invoked without the GIL
             // held in the future).
@@ -1934,7 +1934,10 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           ":meth:`put_sequence`) under the names declared by ``node.output``. "
           "Custom kernels override any built-in entry with the same key, but "
           "model-local functions and the built-in control-flow operators "
-          "(``If``, ``Loop``, ``Scan``, ``SequenceMap``) still take precedence.")
+          "(``If``, ``Loop``, ``Scan``, ``SequenceMap``) still take precedence. "
+          "Registration creates a factory; each resolved node owns one callback "
+          "adapter for the session lifetime, including across input shape changes. "
+          "Replacement or removal affects future resolutions only.")
       .def("unregister_custom_kernel", &RuntimeContext::UnregisterCustomKernel, nb::arg("domain"),
            nb::arg("op_type"),
            "Removes a custom kernel registration for ``(domain, op_type)``. "
@@ -2174,8 +2177,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       "register_custom_kernel",
       [](const std::string &domain, const std::string &op_type, nb::callable fn) {
         // Same GIL-safe wrapping as the RuntimeContext binding: the callable is
-        // captured in an nb::callable (keeping a Python reference alive until the
-        // registration is replaced or cleared) and the GIL is reacquired before
+        // captured in an nb::callable (keeping a Python reference alive in both
+        // the factory and resolved kernels) and the GIL is reacquired before
         // it is invoked from the RunNode dispatcher.
         core::runtime::RegisterGlobalCustomKernel(domain, op_type,
                                                   [fn](const NodeProto &node, RuntimeContext &ctx) {
@@ -2193,7 +2196,9 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       ":meth:`RuntimeContext.register_custom_kernel`). A per-context registration "
       "for the same key overrides the global one; both override any built-in entry, "
       "but model-local functions and the built-in control-flow operators (``If``, "
-      "``Loop``, ``Scan``, ``SequenceMap``) still take precedence.");
+      "``Loop``, ``Scan``, ``SequenceMap``) still take precedence. Like local "
+      "registrations, callbacks are adapted to session-owned kernels; replacement "
+      "or removal affects future resolutions only.");
   rt_mod.def("unregister_custom_kernel", &core::runtime::UnregisterGlobalCustomKernel,
              nb::arg("domain"), nb::arg("op_type"),
              "Removes a process-wide custom kernel registration for "

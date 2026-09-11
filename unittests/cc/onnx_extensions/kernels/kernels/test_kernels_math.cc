@@ -9,6 +9,7 @@
 #include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/tuning/cpu_executor.h"
 #include "onnx_core/runtime/tuning/kernel_tuning.h"
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
@@ -2998,11 +2999,42 @@ TEST(KernelClass, GemmCalibratesParallelMinimumTasksThreshold) {
   ASSERT_EQ(report.calibrated.size(), 1u);
   EXPECT_EQ(report.calibrated[0].key, float_key);
   EXPECT_TRUE(report.calibrated[0].Contains("parallel.minimum_tasks"));
+  EXPECT_GE(report.calibrated[0].Get<int64_t>("parallel.minimum_tasks"), 2);
   EXPECT_TRUE(report.unsupported.empty());
 
   const auto schema = core::runtime::GetKernelTuningRegistry().FindSchema(float_key);
   ASSERT_NE(schema, nullptr);
   EXPECT_NO_THROW(schema->Validate(report.calibrated[0]));
+}
+
+TEST(KernelClass, GemmCalibrationSkipsInlineCandidate) {
+  core::runtime::CpuExecutionPolicy policy;
+  policy.num_threads = 2;
+  policy.affinity_policy = core::runtime::CpuAffinityPolicy::kNone;
+  const auto executor = core::runtime::GlobalCpuExecutorRegistry().Acquire(policy);
+  const core::runtime::CpuExecutorScope scope(executor.get());
+  const Gemm gemm{KernelContext{DefaultOpset(13)}};
+  const auto key = gemm.TuningKey(static_cast<int32_t>(DataType::FLOAT));
+  const auto schema = core::runtime::GetKernelTuningRegistry().FindSchema(key);
+  ASSERT_NE(schema, nullptr);
+  const auto calibrate = core::runtime::GetKernelTuningRegistry().FindCalibrationFunction(key);
+  ASSERT_TRUE(calibrate);
+  const auto &defaults = schema->portable_defaults();
+  const int64_t m = defaults.Get<int64_t>("algorithm.tile_m");
+  const int64_t n = defaults.Get<int64_t>("algorithm.tile_n");
+  core::runtime::CalibrationOptions options;
+  // Only the one-task case fits. Neither serial runner may be timed as a candidate win.
+  options.maximum_memory_bytes = static_cast<uint64_t>((m * 128 + 128 * n + 2 * m * n) * 4);
+  core::runtime::CalibrationReporter reporter;
+  const core::runtime::CpuExecutionDescriptor execution{platform::GetCpuDescriptor(), 2};
+
+  const auto selected = calibrate(key, execution, options, reporter);
+
+  EXPECT_EQ(selected.Get<int64_t>("parallel.minimum_tasks"),
+            defaults.Get<int64_t>("parallel.minimum_tasks"));
+  EXPECT_EQ(reporter.benchmark_cases(), 0u);
+  ASSERT_FALSE(reporter.diagnostics().empty());
+  EXPECT_NE(reporter.diagnostics().front().find("same execution path"), std::string::npos);
 }
 
 // Verifies that ``kernel::MatMul`` produces FLOAT16 / BFLOAT16 outputs that

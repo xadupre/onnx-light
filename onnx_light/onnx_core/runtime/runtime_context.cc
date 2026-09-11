@@ -276,6 +276,42 @@ void RuntimeContext::RecordRunNodeEvent(const NodeProto &node, const std::string
 
 RuntimeContext::~RuntimeContext() = default;
 
+RuntimeContext::RuntimeContext(KernelContext kernel_ctx, RuntimeContextOptions options,
+                               std::shared_ptr<KernelUsageState> kernel_usage)
+    : kernel_ctx_(std::move(kernel_ctx)), kernel_usage_(std::move(kernel_usage)),
+      events_enabled_(options.events_enabled), verbose_(options.verbose),
+      release_intermediates_(options.release_intermediates), allocator_(options.allocator),
+      io_allocator_(options.io_allocator), active_allocator_(options.allocator),
+      device_(options.device) {
+  kernel_ctx_.allocator = active_allocator_;
+}
+
+void RuntimeContext::set_kernel_usage_enabled(bool enabled) {
+  const std::lock_guard<std::mutex> lock(kernel_usage_->mutex);
+  kernel_usage_->enabled.store(enabled, std::memory_order_relaxed);
+}
+
+void RuntimeContext::RecordKernelUsage(std::string_view name) {
+  if (!kernel_usage_enabled()) {
+    return;
+  }
+  const std::lock_guard<std::mutex> lock(kernel_usage_->mutex);
+  // Rechecks under the lock so disabling also waits for in-flight appends.
+  if (kernel_usage_enabled() && kernel_usage_->names.size() < kKernelUsageLimit) {
+    kernel_usage_->names.emplace_back(name);
+  }
+}
+
+std::vector<std::string> RuntimeContext::GetKernelUsage() const {
+  const std::lock_guard<std::mutex> lock(kernel_usage_->mutex);
+  return kernel_usage_->names;
+}
+
+void RuntimeContext::ClearKernelUsage() {
+  const std::lock_guard<std::mutex> lock(kernel_usage_->mutex);
+  kernel_usage_->names.clear();
+}
+
 void RuntimeContext::Set(const std::string &name, Tensor tensor, RuntimeEventKind kind) {
   EXT_ENFORCE(!Has(name), "RuntimeContext::Set: a tensor named '", name, "' already exists.");
   EnsureAllocatorBacked(tensor, allocator_, kind);
@@ -355,13 +391,15 @@ const ExecutionPlan &RuntimeContext::GetExecutionPlan(const FunctionProto &func)
 void RuntimeContext::ClearExecutionPlans() noexcept { execution_plans_.clear(); }
 
 RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name) const {
-  RuntimeContext child(kernel_ctx_, RuntimeContextOptions{
-                                        .allocator = nullptr,
-                                        .events_enabled = events_enabled_,
-                                        .verbose = verbose_,
-                                        .release_intermediates = release_intermediates_,
-                                        .device = device_,
-                                    });
+  RuntimeContext child(kernel_ctx_,
+                       RuntimeContextOptions{
+                           .allocator = nullptr,
+                           .events_enabled = events_enabled_,
+                           .verbose = verbose_,
+                           .release_intermediates = release_intermediates_,
+                           .device = device_,
+                       },
+                       kernel_usage_);
   // Subgraph contexts do not inherit the parent allocator. Body kernels use
   // inline tensor storage, and the parent's EnsureAllocatorBacked (called in
   // Put/Set) migrates final outputs to the parent allocator when results are
@@ -378,14 +416,16 @@ RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name)
 }
 
 RuntimeContext RuntimeContext::MakeFunctionContext() const {
-  RuntimeContext child(kernel_ctx_, RuntimeContextOptions{
-                                        .allocator = allocator_,
-                                        .io_allocator = io_allocator_,
-                                        .events_enabled = false,
-                                        .verbose = verbose_,
-                                        .release_intermediates = release_intermediates_,
-                                        .device = device_,
-                                    });
+  RuntimeContext child(kernel_ctx_,
+                       RuntimeContextOptions{
+                           .allocator = allocator_,
+                           .io_allocator = io_allocator_,
+                           .events_enabled = false,
+                           .verbose = verbose_,
+                           .release_intermediates = release_intermediates_,
+                           .device = device_,
+                       },
+                       kernel_usage_);
   child.functions() = functions_;
   child.set_cpu_executor(cpu_executor_);
   return child;

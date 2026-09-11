@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -19,6 +20,59 @@ from onnx_light import kernel_tuning  # noqa: E402
 
 
 class TestKernelTuningBindings(ExtTestCase):
+    def test_published_calibration_profiles_match_registered_schemas(self):
+        reports = sorted(
+            (Path(__file__).resolve().parents[3] / "docs" / "next_steps").rglob(
+                "*_calibration.json"
+            )
+        )
+        self.assertTrue(reports, "No published calibration reports found")
+        key_fields = (
+            "library",
+            "kernel",
+            "implementation",
+            "element_type",
+            "device",
+            "tuning_abi",
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            path = str(Path(temporary) / "kernel_tuning.cache")
+            schemas = {
+                tuple(schema[field] for field in key_fields): schema
+                for schema in rt.kernel_tuning_parameters(library=None, device=None, path=path)[
+                    "kernels"
+                ]
+            }
+            for report_path in reports:
+                report = json.loads(report_path.read_text(encoding="utf-8"))
+                profiles = report["calibrated_profiles"]
+                with self.subTest(report=report_path.name):
+                    self.assertTrue(profiles)
+                    self.assertEqual(len(profiles), report["calibratable_keys"])
+                    verification = report["reload_verification"]
+                    self.assertEqual(verification["loaded_keys"], len(profiles))
+                    self.assertEqual(verification["published_profiles_resolved"], len(profiles))
+                    self.assertEqual(verification["load_status"], "loaded")
+                    self.assertEqual(verification["incompatible_keys"], 0)
+                    self.assertEqual(verification["invalid_keys"], 0)
+                for profile in profiles:
+                    key = tuple(profile[field] for field in key_fields)
+                    with self.subTest(report=report_path.name, key=key):
+                        self.assertIn(key, schemas)
+                        self.assertEqual(
+                            set(profile["values"]), set(schemas[key]["parameter_names"])
+                        )
+                        update = rt.set_kernel_tuning_parameters(
+                            **{
+                                field: profile[field] for field in key_fields if field != "device"
+                            },
+                            values=profile["values"],
+                            path=path,
+                            load=False,
+                        )
+                        self.assertEqual(update["status"], "updated")
+                        self.assertEqual(update["values"], profile["values"])
+
     def test_lists_registered_kernels(self):
         identifiers = rt.registered_kernels()
         self.assertEqual(identifiers, sorted(identifiers))
@@ -231,6 +285,40 @@ class TestKernelTuningBindings(ExtTestCase):
             with self.assertRaises(ValueError):
                 rt.set_kernel_tuning_parameters(
                     "Abs", int(TensorProto.FLOAT), {"parallel.minimum_elements": 0}, path=path
+                )
+            self.assertFalse(Path(path).exists())
+
+    def test_rejects_obsolete_gemm_parameters_and_abi(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = str(Path(temporary) / "kernel_tuning.cache")
+            schema = rt.kernel_tuning_parameters(
+                kernel="Gemm", element_type=int(TensorProto.FLOAT), path=path
+            )["kernels"][0]
+            for name in (
+                "algorithm.pack_b_minimum_elements",
+                "algorithm.skinny_m_limit",
+                "algorithm.tile_k",
+                "algorithm.tile_m",
+                "algorithm.tile_n",
+                "conversion.parallel_minimum_elements",
+                "parallel.fmas_per_work_unit",
+            ):
+                with self.subTest(parameter=name), self.assertRaises(ValueError):
+                    rt.set_kernel_tuning_parameters(
+                        "Gemm",
+                        int(TensorProto.FLOAT),
+                        {**schema["defaults"], name: 1},
+                        path=path,
+                        load=False,
+                    )
+            with self.assertRaises(KeyError):
+                rt.set_kernel_tuning_parameters(
+                    "Gemm",
+                    int(TensorProto.FLOAT),
+                    schema["defaults"],
+                    tuning_abi=schema["tuning_abi"] + 1,
+                    path=path,
+                    load=False,
                 )
             self.assertFalse(Path(path).exists())
 

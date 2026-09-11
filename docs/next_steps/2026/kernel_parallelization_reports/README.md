@@ -15,7 +15,7 @@ the kernel tuning cache.
 | File | Architecture | Notes |
 | --- | --- | --- |
 | `x86_64_baseline.json` | x86-64 (AMD EPYC 7763) | Generated in the CI sandbox used to develop this tool. |
-| `x86_64_calibration.json` | x86-64 (AMD EPYC 7763) | Step G calibration report; see below. |
+| `x86_64_calibration.json` | x86-64 (Intel Xeon Platinum 8370C) | Regenerated Step G calibration report; see below. |
 
 An ARM64 report has not been published yet: this repository's automation
 does not currently have access to ARM64 hardware. Add `arm64_baseline.json`
@@ -28,6 +28,14 @@ such access is available.
 calibratable kernel tuning key missing from a tuning cache with:
 
 `onnx_light.kernel_tuning.apply_kernel_tuning_updates(path=...)`.
+
+Use a new, empty cache path when regenerating so that previously cached keys
+are measured again. The report records the source commit under `source_revision`
+and the measured machine under `cpu_descriptor`. The refreshed report replaces
+the earlier AMD EPYC measurement: Gemm now registers only
+`parallel.minimum_tasks`, so the old algorithm, conversion, and work-unit
+parameters are no longer valid. The unchanged `x86_64_baseline.json` is still
+the historical AMD EPYC baseline, not a before/after comparison on this machine.
 
 It then reloads that cache path in a separate process
 (`onnx_light.kernel_tuning.load_kernel_tuning_cache` /
@@ -46,3 +54,11 @@ available, so promoting them without a matching ARM64 measurement would
 risk an undeclared regression on that architecture. The persisted cache
 profile itself already lets this machine use the calibrated values ahead of
 any default change, without affecting other processors.
+
+`TestKernelTuningBindings.test_published_calibration_profiles_match_registered_schemas`
+discovers every `*_calibration.json` below `docs/next_steps` and validates
+every profile against the current registered key (including device and tuning
+ABI), complete parameter names, and C++ schema value constraints. It uses a
+temporary local cache without publishing profiles; it does not benchmark or
+require the report's original hardware. This schema check is distinct from
+the original-machine, fresh-process reload verification recorded in the report.

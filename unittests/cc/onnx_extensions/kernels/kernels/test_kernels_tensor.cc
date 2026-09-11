@@ -952,6 +952,97 @@ TEST(KernelClass, AffineGridRejectsBadShapes) {
   EXPECT_THROW((void)ag_kernel(theta, size3d, AffineGrid::Attributes{}), std::invalid_argument);
 }
 
+namespace {
+
+void ExpectAffineGridRejectsSize(const Tensor &theta, const std::vector<int64_t> &size_values) {
+  const KernelContext ctx{DefaultOpset(20)};
+  AffineGrid ag_kernel{ctx};
+  Tensor size = Tensor::FromInt64("", {static_cast<int64_t>(size_values.size())}, size_values);
+  Tensor output = Tensor::FromFloat("", {0}, {});
+  output.shape = {size_values[0]};
+  output.shape.insert(output.shape.end(), size_values.begin() + 2, size_values.end());
+  output.shape.push_back(static_cast<int64_t>(size_values.size()) - 2);
+  EXPECT_THROW((void)ag_kernel(theta, size, AffineGrid::Attributes{}), std::invalid_argument);
+  EXPECT_THROW(ag_kernel(theta, size, AffineGrid::Attributes{}, output), std::invalid_argument);
+}
+
+} // namespace
+
+TEST(KernelClass, AffineGridRejectsNegativeDimensions) {
+  for (int64_t spatial_rank : {2, 3}) {
+    Tensor theta = Tensor::FromFloat("", {1, spatial_rank, spatial_rank + 1},
+                                     std::vector<float>(spatial_rank * (spatial_rank + 1), 0));
+    for (int64_t axis = 0; axis < spatial_rank + 2; ++axis) {
+      SCOPED_TRACE(axis);
+      std::vector<int64_t> size_values(spatial_rank + 2, 1);
+      size_values[axis] = -1;
+      theta.shape[0] = size_values[0];
+      ExpectAffineGridRejectsSize(theta, size_values);
+    }
+    theta.shape[0] = 1;
+    std::vector<int64_t> size_values(spatial_rank + 2, 1);
+    size_values[2] = 0;
+    size_values[3] = -1;
+    ExpectAffineGridRejectsSize(theta, size_values);
+  }
+}
+
+TEST(KernelClass, AffineGridRejectsElementCountOverflow) {
+  const int64_t max_dim = std::numeric_limits<int64_t>::max();
+  for (int64_t spatial_rank : {2, 3}) {
+    Tensor theta = Tensor::FromFloat("", {1, spatial_rank, spatial_rank + 1},
+                                     std::vector<float>(spatial_rank * (spatial_rank + 1), 0));
+    std::vector<int64_t> size_values(spatial_rank + 2, 1);
+    size_values[2] = max_dim / 2 + 1;
+    size_values[3] = 2;
+    ExpectAffineGridRejectsSize(theta, size_values);
+    // The spatial product fits, but the final coordinate dimension overflows.
+    size_values[2] = max_dim / spatial_rank + 1;
+    size_values[3] = 1;
+    ExpectAffineGridRejectsSize(theta, size_values);
+  }
+}
+
+TEST(KernelClass, AffineGridRejectsByteCountOverflow) {
+  for (int64_t spatial_rank : {2, 3}) {
+    Tensor theta = Tensor::FromFloat("", {1, spatial_rank, spatial_rank + 1},
+                                     std::vector<float>(spatial_rank * (spatial_rank + 1), 0));
+    std::vector<int64_t> size_values(spatial_rank + 2, 1);
+    size_values[2] = static_cast<int64_t>(std::numeric_limits<size_t>::max() / sizeof(float) /
+                                          static_cast<size_t>(spatial_rank)) +
+                     1;
+    ExpectAffineGridRejectsSize(theta, size_values);
+  }
+}
+
+TEST(KernelClass, AffineGridEmptyOutputSkipsCoordinateAllocation) {
+  const KernelContext ctx{DefaultOpset(20)};
+  AffineGrid ag_kernel{ctx};
+  for (int64_t spatial_rank : {2, 3}) {
+    for (int64_t axis = 0; axis < spatial_rank + 2; ++axis) {
+      if (axis == 1) {
+        continue; // C is not an output dimension.
+      }
+      SCOPED_TRACE(axis);
+      std::vector<int64_t> size_values(spatial_rank + 2, std::numeric_limits<int64_t>::max());
+      size_values[0] = 1;
+      size_values[1] = 1;
+      size_values[axis] = 0;
+      Tensor theta =
+          Tensor::FromFloat("", {size_values[0], spatial_rank, spatial_rank + 1},
+                            std::vector<float>(size_values[0] * spatial_rank * (spatial_rank + 1)));
+      Tensor size = Tensor::FromInt64("", {spatial_rank + 2}, size_values);
+      std::vector<int64_t> expected_shape{size_values[0]};
+      expected_shape.insert(expected_shape.end(), size_values.begin() + 2, size_values.end());
+      expected_shape.push_back(spatial_rank);
+      Tensor output = ag_kernel(theta, size, AffineGrid::Attributes{});
+      EXPECT_EQ(output.shape, expected_shape);
+      EXPECT_EQ(output.size_bytes(), 0u);
+      EXPECT_NO_THROW(ag_kernel(theta, size, AffineGrid::Attributes{}, output));
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // GridSample kernel tests.
 // ---------------------------------------------------------------------------

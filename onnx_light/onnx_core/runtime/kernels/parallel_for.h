@@ -125,12 +125,15 @@ public:
    * Runs ``fn(block)`` for every ``block`` in ``[0, num_blocks)``, then blocks
    * until all blocks finish.
    *
-   * Block ``0`` runs on the calling thread and selected workers receive the
-   * remaining blocks by index. Only as many parked workers as there are worker blocks
-   * are notified. ``fn`` is invoked concurrently and must only touch data
-   * disjoint per block; it must not throw. ``num_blocks`` must not exceed
-   * ``worker_count() + 1`` when workers are used; :cpp:func:`ParallelFor`
-   * enforces this.
+   * Unless ``ThreadPoolOptions::allow_nested_parallelism`` is enabled, block
+   * ``0`` runs on the calling thread and selected workers receive the remaining
+   * blocks by index. Only as many parked workers as there are worker blocks are
+   * notified, and ``num_blocks`` must not exceed ``worker_count() + 1`` when
+   * workers are used; :cpp:func:`ParallelFor` enforces this. With nested
+   * parallelism enabled, blocks are striped across the admitted caller and idle
+   * workers, so ``num_blocks`` may exceed the participant count. ``fn`` is
+   * invoked concurrently and must only touch data disjoint per block; it must
+   * not throw.
    *
    * @param num_blocks Number of blocks to run. Values ``<= 0`` are a no-op.
    * @param fn         Callable invoked as ``fn(int64_t block)``.

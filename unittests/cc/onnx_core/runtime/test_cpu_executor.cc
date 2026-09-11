@@ -708,6 +708,34 @@ TEST(CpuExecutor, NestedDispatchPreservesWorkerAffinity) {
   }
 }
 
+TEST(CpuExecutor, CrossExecutorDispatchPreservesWorkerAffinity) {
+  const auto visible = ProcessVisibleLogicalProcessors();
+  if (visible.size() < 2) {
+    GTEST_SKIP() << "fewer than two stable process-visible processors";
+  }
+  CpuExecutionPolicy outer_request;
+  outer_request.num_threads = 2;
+  outer_request.affinity_policy = CpuAffinityPolicy::kExplicit;
+  outer_request.cpu_set = {visible[0], visible[1]};
+  CpuExecutionPolicy inner_request;
+  inner_request.num_threads = 1;
+  inner_request.affinity_policy = CpuAffinityPolicy::kExplicit;
+  inner_request.cpu_set = {visible[0]};
+  CpuExecutorRegistry registry(2);
+  auto outer = registry.Acquire(outer_request);
+  auto inner = registry.Acquire(inner_request);
+
+  std::thread caller([&]() {
+    outer->ParallelFor(2, 1, inner.get(), [](void *context, int64_t, int64_t) {
+      auto &inner = *static_cast<CpuExecutor *>(context);
+      const auto before = ProcessVisibleLogicalProcessors();
+      inner.ParallelFor(1, 1, nullptr, [](void *, int64_t, int64_t) {});
+      EXPECT_EQ(ProcessVisibleLogicalProcessors(), before);
+    });
+  });
+  caller.join();
+}
+
 TEST(CpuExecutor, ExecutorInheritedAcrossForkIsRejected) {
   CpuExecutorRegistry registry(1);
   std::shared_ptr<CpuExecutor> executor = registry.Acquire(NoAffinityPolicy(2));

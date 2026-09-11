@@ -425,8 +425,9 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t minimum_elements, void *con
   if (counters != nullptr) {
     counters->dispatches.fetch_add(1, std::memory_order_relaxed);
   }
-  const bool nested = ActiveCpuExecutorRegionSlot() == this;
-  if (!nested && impl_->policy.caller_processor.has_value()) {
+  CpuExecutor *const active_region = ActiveCpuExecutorRegionSlot();
+  const bool nested = active_region == this;
+  if (active_region == nullptr && impl_->policy.caller_processor.has_value()) {
     std::string error;
     if (!PinCurrentThread(*impl_->policy.caller_processor, error)) {
       throw std::runtime_error("CpuExecutor caller affinity failed: " + error);

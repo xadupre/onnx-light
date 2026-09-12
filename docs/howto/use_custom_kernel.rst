@@ -102,10 +102,97 @@ back through :cpp:func:`onnx_light::core::runtime::RuntimeContext::Put`.
 
 Registrations are stored on the evaluator's persistent
 :class:`RuntimeContext`, so the same evaluator can be reused across runs.
-Registering or unregistering a kernel invalidates the evaluator's cached
-runtime sessions; the next
-:py:meth:`~onnx_light.onnx.reference.ReferenceEvaluator.run` recreates them
-and picks up the updated dispatch.
+Registering, replacing, or unregistering a kernel affects **future resolutions
+only**. Already-resolved kernels retain their callable until their session is
+destroyed. Create a new evaluator to resolve its nodes again.
+
+Prepare a native kernel once
+----------------------------
+
+Native kernels with preparation or mutable workspace should register a
+:cpp:type:`onnx_light::core::runtime::NodeKernelFn`, globally through
+:cpp:func:`onnx_light::core::runtime::RegisterKernelFn` or locally through
+:cpp:func:`onnx_light::core::runtime::RuntimeContext::RegisterKernelFn`.
+Both use exactly the same lifecycle:
+
+.. code-block:: text
+
+    Global or RuntimeContext-local registry
+        -> NodeKernelFn
+        -> one KernelBase per resolved node, owned by RuntimeSession
+        -> repeated Run(RuntimeContext&) calls
+
+For example, prepare an immutable scale factor once and adapt the output to
+the current input shape on each run:
+
+.. code-block:: cpp
+
+    #include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
+    #include "onnx_core/runtime/runtime_session.h"
+
+    using namespace onnx_light;
+    using namespace onnx_light::core::runtime;
+
+    class ScaleKernel : public KernelBase {
+    public:
+      ScaleKernel(const NodeProto &node, RuntimeContext &rt, float factor)
+          : KernelBase(rt.kernel_ctx()), factor_(factor) {
+        set_node(node);
+      }
+
+      void Run(RuntimeContext &rt) override {
+        const Tensor &x = rt.Get(node_->input(0));
+        std::vector<float> values(static_cast<size_t>(x.element_count()));
+        for (size_t i = 0; i < values.size(); ++i)
+          values[i] = x.AsFloat()[i] * factor_;
+        rt.Put(node_->output(0),
+               Tensor::FromFloat(node_->output(0), x.shape, values, rt.allocator()));
+      }
+
+    private:
+      const float factor_;
+    };
+
+    NodeKernelFn factory = [](const NodeProto &node, RuntimeContext &rt) {
+      float factor = 1.0f;
+      for (const auto &attribute : node.attribute())
+        if (attribute.name() == "factor")
+          factor = attribute.f();
+      return std::make_unique<ScaleKernel>(node, rt, factor);
+    };
+
+    // Choose one scope. A local factory overrides the global one.
+    RegisterKernelFn("my.domain", "Scale", core::symbolic::Device::kCPU, factory);
+    RuntimeContext rt;
+    rt.RegisterKernelFn("my.domain", "Scale", core::symbolic::Device::kCPU, factory);
+    RuntimeSession session(model);  // model outlives session
+    // Supply inputs in rt, then call session.Run(rt) repeatedly.
+
+The factory must return a fresh kernel, attach the original node, and defer
+computation to ``Run``. It must not retain the construction-time
+``RuntimeContext`` by reference: nested contexts can be short-lived.
+The original graph/model and its nodes must remain alive and unchanged until
+the session and its kernels are destroyed. Neither the factory adapter nor
+dispatch copies attribute-heavy nodes or serializes them for inference.
+
+Kernel identity is independent of input shape. Inputs ``[1, 20]``,
+``[100, 20]``, and ``[10, 20]`` reuse the same instance and immutable
+parameters. The kernel may resize batch-dependent output/workspace, adapt its
+internal plan, or explicitly reject an unsupported shape change.
+
+Callback convenience APIs, including Python, register factories that create
+session-owned callback adapters; there is no callback-owned kernel cache.
+C++ callable values are copied per resolved node. Shared captures and Python
+callable objects remain the caller's responsibility: use native factories
+for private mutable preparation state, not a callback cache keyed by node
+serialization or input shape. ``RunNode`` is a one-shot resolution; reuse a
+``RuntimeSession`` for repeated inference.
+
+``CustomKernelMap`` now stores ``NodeKernelFn`` values. Code that previously
+inserted callbacks directly into ``custom_kernels()`` should use
+``RegisterCustomKernel`` instead (or explicitly call ``MakeCustomKernelFactory``).
+Global custom overrides can also register factories directly through
+``RegisterGlobalCustomKernelFactory``.
 
 Register globally or per session
 --------------------------------
@@ -114,7 +201,7 @@ The examples above register a kernel on a single
 :class:`~onnx_light.onnx.reference.ReferenceEvaluator` (equivalently, on one
 :class:`RuntimeContext`) — the kernel is only visible to that object. onnx-light
 also supports **global** (process-wide) registration: a global kernel is picked
-up by *every* :class:`RuntimeContext` created afterwards, so you install it once
+up by future resolutions in *every* :class:`RuntimeContext`, so you install it once
 instead of on every evaluator.
 
 Both scopes are supported, and a per-session registration always overrides a
@@ -123,6 +210,20 @@ highest to lowest, is: model-local functions, the built-in control-flow
 operators (``If`` / ``Loop`` / ``Scan`` / ``SequenceMap``), per-session custom
 kernels, global custom kernels, then the built-in
 :cpp:func:`onnx_light::core::runtime::KernelDispatchTable`.
+
+Local factories use the same device-qualified keys as global factories
+(``CPU`` and ``Undefined`` share the host entry). Local callback registration
+uses the context's device; global callback overrides remain device-independent.
+Subgraph and model-local function contexts inherit a copy of the parent's
+local factory registrations at child creation, not its kernel instances.
+Their nested sessions retain already-resolved kernels across invocations;
+an uninitialized branch picks up the registrations visible at its first run.
+
+Register or mutate global registries before concurrent resolution, or
+externally synchronize access; registries are not internally synchronized.
+Independent sessions with independent contexts can run concurrently provided
+user factories/callbacks are thread-safe and do not share mutable kernel state.
+Concurrent runs on the **same** session or context are not supported.
 
 Because an evaluator caches its runtime sessions on first
 :py:meth:`~onnx_light.onnx.reference.ReferenceEvaluator.run`, register a global
@@ -213,7 +314,7 @@ removes a previously registered custom kernel. Because custom kernels are
 consulted before the built-in
 :cpp:func:`onnx_light::core::runtime::KernelDispatchTable`, unregistering one
 that overrode a built-in operator restores the original built-in kernel on the
-next :py:meth:`~onnx_light.onnx.reference.ReferenceEvaluator.run`. It returns
+next resolution, not the next run of an already-prepared session. It returns
 ``True`` when a custom kernel was removed and ``False`` otherwise; the empty
 domain is normalised to ``"ai.onnx"`` just like when registering.
 
@@ -221,7 +322,8 @@ domain is normalised to ``"ai.onnx"`` just like when registering.
 
     sess.register_custom_kernel("", "Abs", lambda node, x: -x)
     # ... use the negated override ...
-    sess.unregister_custom_kernel("", "Abs")  # restores the built-in Abs
+    sess.unregister_custom_kernel("", "Abs")  # leaves prepared kernels intact
+    sess = ReferenceEvaluator(model)  # a new evaluator resolves the built-in Abs
     (y,) = sess.run(None, {"x": np.array([-1.0, -2.0, -3.0], dtype=np.float32)})
     # y == [1., 2., 3.] (built-in Abs again)
 

@@ -534,8 +534,9 @@ class ReferenceEvaluator:
     def register_custom_kernel(self, domain: str, op_type: str, fn: Any) -> None:
         """Registers a Python custom kernel for ``(domain, op_type)``.
 
-        The kernel is invoked on every :meth:`run` call whenever a node
-        matches the registered ``(domain, op_type)`` pair. Custom
+        Future node resolutions use this registration. Already-resolved
+        kernels keep their callable across repeated runs and shape changes;
+        create a new evaluator to resolve its nodes again. Custom
         kernels override any built-in onnx-light kernel with the same
         key (model-local functions and the built-in control-flow
         operators ``If`` / ``Loop`` / ``Scan`` / ``SequenceMap`` still
@@ -573,18 +574,15 @@ class ReferenceEvaluator:
         # later registration for the same (domain, op_type) overwrites the
         # previous one, matching the dict-based bookkeeping above.
         self._ctx.register_custom_kernel(domain, op_type, _wrapper)
-        # Drop any cached RuntimeSession: its kernels were resolved before this
-        # custom kernel existed, so the next run must rebuild them to pick it up.
-        self._runner.reset()
 
     def unregister_custom_kernel(self, domain: str, op_type: str) -> bool:
         """Removes a custom kernel previously registered for ``(domain, op_type)``.
 
         Custom kernels are consulted before the built-in onnx-light
         dispatch table, so unregistering one restores the original
-        built-in kernel for that ``(domain, op_type)`` when there is one
-        (a subsequent :meth:`run` dispatches to it again). If no built-in
-        kernel exists for the pair, running a graph that uses it fails
+        built-in kernel for future resolutions when there is one.
+        Already-resolved kernels are unaffected. If no built-in
+        kernel exists for the pair, resolving a graph that uses it fails
         with an ``unsupported op_type`` error, as it would before any
         custom kernel was registered.
 
@@ -613,14 +611,8 @@ class ReferenceEvaluator:
         if key not in self._custom_kernels:
             return False
         del self._custom_kernels[key]
-        # Remove the wrapper from the persistent RuntimeContext so the next
-        # run falls back to the built-in kernel dispatch table (the original
-        # kernel) for this (domain, op_type).
+        # Existing session-owned adapters retain their callable.
         self._ctx.unregister_custom_kernel(domain, op_type)
-        # Drop any cached RuntimeSession: its kernels were resolved while the
-        # custom kernel existed, so the next run must rebuild them to pick up
-        # the restored built-in kernel.
-        self._runner.reset()
         return True
 
     @staticmethod
@@ -631,8 +623,8 @@ class ReferenceEvaluator:
         evaluator it is called on, a global kernel is picked up by every
         :class:`ReferenceEvaluator` (and any other runtime context). Register
         the kernel *before* running an evaluator, since an evaluator caches its
-        runtime sessions on first run and only rebuilds them when its own
-        (per-session) registrations change.
+        runtime sessions on first run. Replacing either global or local
+        registrations does not invalidate already-resolved kernels.
 
         ``fn`` follows the same ``fn(node, *inputs)`` numpy contract as
         :meth:`register_custom_kernel`. A per-session registration for the same

@@ -5,6 +5,7 @@
 #include "onnx_core/builder/graph_graph.h"
 #include "onnx_core/builder/pattern_registry.h"
 #include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
+#include "onnx_core/runtime/kernels/run_nodes.h"
 #include "onnx_core/runtime/memory/simple_tensor.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/patterns/canonicalization/cast_pattern.h"
@@ -178,17 +179,33 @@ public:
 
   ~ScopedAddKernel() {
     if (previous_) {
-      core::runtime::RegisterGlobalCustomKernel("", "Add", std::move(previous_));
+      core::runtime::RegisterGlobalCustomKernelFactory("", "Add", std::move(previous_));
     } else {
       core::runtime::UnregisterGlobalCustomKernel("", "Add");
     }
   }
 
 private:
-  core::runtime::CustomKernelFn previous_;
+  core::runtime::NodeKernelFn previous_;
 };
 
 } // namespace
+
+TEST(PatternOptimization, ScopedCustomKernelRestoresFactory) {
+  ScopedAddKernel outer;
+  {
+    ScopedAddKernel inner;
+  }
+
+  const NodeProto node = MakeNode("Add", {"a", "b"}, {"y"});
+  core::runtime::RuntimeContext runtime;
+  runtime.Set("a", core::runtime::Tensor::FromFloat("a", {1}, {1.0f}));
+  runtime.Set("b", core::runtime::Tensor::FromFloat("b", {1}, {2.0f}));
+  core::runtime::RunNode(node, runtime);
+
+  ASSERT_TRUE(runtime.Has("y"));
+  EXPECT_FLOAT_EQ(runtime.Get("y").AsFloat()[0], 3.0f);
+}
 
 TEST(PatternOptimization, IgnoresNullPositionalPlaceholders) {
   core::builder::GraphBuilder builder("g", SchemaLookup());

@@ -20,6 +20,8 @@
 #include "onnx_lib/common/scoped_resource.h"
 #include "onnx_lib/shape_inference/implementation.h"
 #include "onnx_manipulations/tensor_proto_util.h"
+#include "onnx_proto/onnx_helper.h"
+#include "onnx_proto/onnx_tree_ensemble.h"
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -702,6 +704,13 @@ void check_node(const NodeProto &node, const CheckerContext &ctx,
                ONNX_LIGHT_NAMESPACE::to_string(domain_version));
   } else {
     schema->Verify(node);
+    if (node.domain().sv() == AI_ONNX_ML_DOMAIN && node.op_type() == "TreeEnsemble") {
+      const auto error = ValidateTreeEnsembleAttributes(
+          [&node](const char *name) { return FindAttribute(node, name); });
+      if (!error.empty()) {
+        fail_check(error);
+      }
+    }
   }
 }
 

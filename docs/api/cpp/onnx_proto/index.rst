@@ -18,6 +18,7 @@ onnx_proto
     worker_pool
     fields
     onnx_verify
+    onnx_tree_ensemble
     serialize_options
     tml
     type_helper

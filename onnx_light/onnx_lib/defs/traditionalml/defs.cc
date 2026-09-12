@@ -9,6 +9,7 @@
 #include "onnx_lib/defs/doc_strings.h"
 #include "onnx_lib/defs/schema.h"
 #include "onnx_lib/defs/traditionalml/utils.h"
+#include "onnx_proto/onnx_tree_ensemble.h"
 
 #ifdef ONNX_ML
 namespace ONNX_LIGHT_NAMESPACE {
@@ -917,6 +918,12 @@ ONNX_ML_OPERATOR_SET_SCHEMA(
             fail_shape_inference(
                 "Attribute 'leaf_weights' must have same type as input. Input type is ", input_type,
                 " and attribute type is ", leaf_weights->t().data_type());
+          }
+
+          const auto error = ValidateTreeEnsembleAttributes(
+              [&ctx](const char *name) { return ctx.getAttribute(name); });
+          if (!error.empty()) {
+            fail_shape_inference(error);
           }
 
           checkInputRank(ctx, 0, 2);

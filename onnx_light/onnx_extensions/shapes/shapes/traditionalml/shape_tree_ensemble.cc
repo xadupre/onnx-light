@@ -9,6 +9,7 @@
 
 #include "onnx_core/shapes/shape_check.h"
 #include "onnx_proto/onnx_helper.h"
+#include "onnx_proto/onnx_tree_ensemble.h"
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::traditionalml {
 
@@ -82,6 +83,9 @@ void ComputeShapeTreeEnsembleClassifier(ShapesContext &ctx, const NodeProto &nod
 
 void ComputeShapeTreeEnsemble(ShapesContext &ctx, const NodeProto &node, const char *x) {
   CheckNodeOpAndOutput(node, "TreeEnsemble", "ComputeShapeTreeEnsemble");
+  const auto error = ValidateTreeEnsembleAttributes(
+      [&node](const char *name) { return FindAttribute(node, name); });
+  EXT_ENFORCE_INVALID(error.empty(), error);
 
   const SymTensor &input = ctx.Get(x);
   SymDim batch_dim = BatchDimFromTreeInput(input, "ComputeShapeTreeEnsemble");

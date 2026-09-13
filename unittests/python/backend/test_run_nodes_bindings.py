@@ -648,6 +648,38 @@ class TestRunNodesBindings(ExtTestCase):
         gc.collect()
         self.assertIsNone(custom_ref())
 
+    def test_resolved_callback_outlives_registration(self):
+        model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["my.domain" : 1]>'
+            "agraph (float[3] x) => (float[3] y) { y = my.domain.Copy(x) }"
+        )
+        for global_scope in (False, True):
+            with self.subTest(global_scope=global_scope):
+                ctx = rt.RuntimeContext(rt.KernelContext(rt.default_opset(18)))
+                session = rt.RuntimeSession(model)
+                ctx.set("x", _make_float_tensor("x", [1.0, 2.0, 3.0]))
+                nodes = []
+
+                def copy(node, context):
+                    nodes.append(node)
+                    context.put(str(node.output[0]), context.get(str(node.input[0])), "output")
+
+                callback_ref = weakref.ref(copy)
+                registry = rt if global_scope else ctx
+                registry.register_custom_kernel("my.domain", "Copy", copy)
+                self.addCleanup(registry.unregister_custom_kernel, "my.domain", "Copy")
+                session.run(ctx)
+                self.assertTrue(registry.unregister_custom_kernel("my.domain", "Copy"))
+                del copy
+                gc.collect()
+                self.assertIsNotNone(callback_ref())
+                session.run(ctx)
+                self.assertEqual(_unpack_floats(ctx.get("y")), (1.0, 2.0, 3.0))
+                self.assertIs(nodes[0], nodes[1])
+                del session
+                gc.collect()
+                self.assertIsNone(callback_ref())
+
     def test_register_global_custom_kernel(self):
         # A globally registered custom kernel is picked up by a fresh
         # RuntimeContext that never called register_custom_kernel itself.

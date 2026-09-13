@@ -38,7 +38,7 @@ public:
   ~RestoreAbsKernelOverrides() {
     core::runtime::RegisterKernelFn("", "Abs", core::symbolic::Device::kCPU, std::move(dispatch_));
     if (global_custom_) {
-      core::runtime::RegisterGlobalCustomKernel("", "Abs", std::move(global_custom_));
+      core::runtime::RegisterGlobalCustomKernelFactory("", "Abs", std::move(global_custom_));
     } else {
       core::runtime::UnregisterGlobalCustomKernel("", "Abs");
     }
@@ -46,7 +46,7 @@ public:
 
 private:
   core::runtime::NodeKernelFn dispatch_;
-  core::runtime::CustomKernelFn global_custom_;
+  core::runtime::NodeKernelFn global_custom_;
 };
 } // namespace
 using core::backend_test::TestCase;

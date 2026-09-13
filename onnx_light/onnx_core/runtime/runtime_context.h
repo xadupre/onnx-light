@@ -110,9 +110,21 @@ using ShapeMap = std::unordered_map<std::string, Shape>;
 using FunctionMap = std::unordered_map<std::string, const FunctionProto *>;
 
 /**
- * Signature of a user-provided custom kernel callback. Unlike the internal
- * :cpp:type:`NodeKernelFn` dispatch-table factories, custom kernels keep the
- * simple "run the whole node now" contract: implementations read their inputs
+ * Factory signature for global and context-local kernel registrations.
+ * Called once per resolved node, it returns a fresh, session-owned kernel.
+ * Preparation belongs in the factory; repeated computation belongs in
+ * :cpp:func:`KernelBase::Run`. The factory attaches the original node with
+ * :cpp:func:`KernelBase::set_node`; the node must outlive the session.
+ * The factory must not retain the supplied RuntimeContext by reference.
+ * Factories must not share mutable kernel state between independent sessions.
+ */
+using NodeKernelFn =
+    std::function<std::unique_ptr<KernelBase>(const NodeProto &node, RuntimeContext &rt)>;
+
+/**
+ * Signature of a user-provided custom kernel callback. Registration adapts
+ * callbacks to :cpp:type:`NodeKernelFn` factories, using the same session-owned
+ * lifecycle. Implementations read their inputs
  * from ``rt.tensors()`` (or ``rt.sequences()``) by name and insert produced
  * outputs under the names declared by ``node.output(i)``.
  *
@@ -123,17 +135,16 @@ using FunctionMap = std::unordered_map<std::string, const FunctionProto *>;
 using CustomKernelFn = std::function<void(const NodeProto &, class RuntimeContext &)>;
 
 /**
- * Name-keyed map of user-provided custom kernels consulted by
+ * Name-keyed map of user-provided kernel factories consulted by
  * :cpp:func:`RunNode` before the built-in
  * :cpp:func:`KernelDispatchTable`. Allows callers to extend the
- * runtime with operators implemented either in C++ (any callable
- * compatible with :cpp:type:`CustomKernelFn`) or in Python (through
+ * runtime with operators implemented either in C++ or in Python (through
  * the ``RuntimeContext.register_custom_kernel`` binding) without
- * touching the static dispatch table. Keys are
- * ``"<domain>:<op_type>"``; a custom registration overrides any
+ * touching the static dispatch table. Keys use the same device suffix as
+ * :cpp:func:`KernelDispatchTable`; a custom registration overrides any
  * built-in entry with the same key.
  */
-using CustomKernelMap = std::unordered_map<std::string, CustomKernelFn>;
+using CustomKernelMap = std::unordered_map<std::string, NodeKernelFn>;
 
 /**
  * Maximum number of element values captured inline by
@@ -655,7 +666,8 @@ public:
 
   /// User-provided custom kernel registry consulted by
   /// :cpp:func:`RunNode` before the built-in :cpp:func:`KernelDispatchTable`.
-  /// Keys are the canonical ``"<domain>:<op_type>"`` pair (the default
+  /// Keys are the canonical ``"<domain>:<op_type>"`` pair with an optional
+  /// device suffix, as in :cpp:func:`KernelDispatchTable` (the default
   /// ONNX domain — the empty ``NodeProto::domain()`` — is normalised
   /// to ``"ai.onnx"``). A custom registration overrides any built-in
   /// entry with the same key, but model-local functions and the
@@ -664,20 +676,28 @@ public:
   CustomKernelMap &custom_kernels() noexcept { return custom_kernels_; }
   const CustomKernelMap &custom_kernels() const noexcept { return custom_kernels_; }
 
+  /// Registers a context-local factory with the same contract and device keys
+  /// as :cpp:func:`core::runtime::RegisterKernelFn`. Local factories override
+  /// global registrations and are inherited by subgraph/function contexts.
+  /// Replacement affects future resolutions, not already-resolved kernels.
+  /// Registry access must not race with registration or context copying.
+  bool RegisterKernelFn(const std::string &domain, const std::string &op_type,
+                        symbolic::Device device, NodeKernelFn fn, bool overwrite = true);
+
   /// Registers or replaces a custom kernel for ``(domain, op_type)``.
-  /// The empty domain is normalized to ``"ai.onnx"``.
+  /// Adapts the callback to a factory for this context's device.
+  /// The empty domain is normalized to ``"ai.onnx"``. Native kernels with
+  /// preparation or mutable state should use :cpp:func:`RegisterKernelFn`.
   void RegisterCustomKernel(const std::string &domain, const std::string &op_type,
-                            CustomKernelFn fn) {
-    const std::string d = domain.empty() ? std::string("ai.onnx") : domain;
-    custom_kernels_[d + ":" + op_type] = std::move(fn);
-  }
+                            CustomKernelFn fn);
 
   /// Removes the custom kernel registered for ``(domain, op_type)``.
-  /// The empty domain is normalised to ``"ai.onnx"``.
+  /// The empty domain is normalised to ``"ai.onnx"``; removes the entry for
+  /// this context's device.
   /// Returns ``true`` when an entry was removed, ``false`` otherwise.
   bool UnregisterCustomKernel(const std::string &domain, const std::string &op_type) {
     const std::string d = domain.empty() ? std::string("ai.onnx") : domain;
-    return custom_kernels_.erase(d + ":" + op_type) > 0;
+    return custom_kernels_.erase(d + ":" + op_type + symbolic::DeviceKeySuffix(device_)) > 0;
   }
 
   /// Removes every registered custom kernel.
@@ -737,9 +757,10 @@ public:
   /// Creates a fresh child context for executing a subgraph (e.g. the
   /// ``then_branch`` or ``else_branch`` of ``If``, or the ``body`` of
   /// ``Loop`` / ``Scan``). The child context inherits the parent's
-  /// kernel context, allocator, function registry, tensor map,
+  /// kernel context, function and local factory registries, tensor map,
   /// sequence map, verbosity, runtime parameters and event-logging flag so
-  /// outer-scope values are visible inside the subgraph.
+  /// outer-scope values are visible inside the subgraph. The child does not
+  /// inherit the allocator; results are migrated when propagated to the parent.
   /// :cpp:func:`current_subgraph`
   /// is set to ``(current_node_index(), attr_name)`` on the child.
   /// The subgraph's writes remain local and do not pollute this context.
@@ -751,7 +772,7 @@ public:
 
   /// Creates a fresh child context for executing a model-local function.
   /// The child inherits the parent's kernel context, allocator, function
-  /// registry, verbosity and runtime parameters, but starts with an empty
+  /// and local factory registries, verbosity and runtime parameters, but starts with an empty
   /// tensor and sequence map so the function's formal inputs are bound
   /// explicitly by the caller.
   /// Kernel usage recording shares the parent's diagnostic state.

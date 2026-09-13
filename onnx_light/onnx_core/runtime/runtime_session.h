@@ -120,6 +120,18 @@ struct KernelTuningResolutionStatistics {
  *     inputs) without redoing the per-node dispatch lookup or re-constructing
  *     the concrete per-node kernel objects.
  *
+ * Global and context-local factories (including adapted callbacks) follow
+ * this same lifecycle. Registration replacement or removal only affects
+ * future resolutions, including child sessions not yet initialized. A new
+ * input shape does not change kernel identity: the existing kernel adapts
+ * its internal plan/workspace or explicitly rejects an unsupported change.
+ * The original graph/model and its nodes must remain alive and unchanged
+ * until the session and its kernels are destroyed; adapters do not copy or
+ * serialize nodes. Factories must return independent mutable kernel state
+ * for each resolution. Independent sessions and contexts may run concurrently
+ * with thread-safe user callbacks and immutable shared parameters, but runs
+ * on the same session/context must be serialized by the caller.
+ *
  * This mirrors how an inference runtime prepares an executable graph once and
  * then runs it repeatedly. Every caller that needs to run a node list builds
  * one of these sessions over the list's :cpp:class:`ExecutionPlan` and calls

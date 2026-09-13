@@ -35,18 +35,9 @@
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
-/**
- * Factory signature registered in :cpp:func:`KernelDispatchTable` for every
- * ``(domain, op_type)``. Called once per node (during kernel resolution /
- * initialization, e.g. by :cpp:func:`RuntimeSession::Run` or by
- * :cpp:func:`RunNode`): validates the node's input/output counts, constructs
- * the concrete kernel object and attaches the node via
- * :cpp:func:`KernelBase::set_node`, returning a :cpp:class:`KernelBase`. Must
- * NOT perform any computation itself — all per-run computation belongs in the
- * returned kernel's :cpp:func:`KernelBase::Run`.
- */
-using NodeKernelFn =
-    std::function<std::unique_ptr<KernelBase>(const NodeProto &node, RuntimeContext &rt)>;
+/// Adapts a callback to a factory without copying or serializing the node.
+/// Each resolution copies the callable into a fresh session-owned KernelBase.
+NodeKernelFn MakeCustomKernelFactory(CustomKernelFn fn);
 
 /**
  * Adapts a backend kernel to the lifetime of a :cpp:class:`RuntimeSession`.
@@ -137,6 +128,11 @@ const std::unordered_map<std::string, NodeKernelFn> &KernelDispatchTable();
  * default ``overwrite = true`` so they always take precedence over the
  * built-ins.
  *
+ * Replacement affects future resolutions only. Existing sessions retain
+ * their kernels. Registry mutation must not overlap resolution on any thread;
+ * separate sessions may run concurrently if their kernels do not share
+ * mutable state. Concurrent runs on the same session are not supported.
+ *
  * @param domain    The operator domain (``""`` or ``"ai.onnx"`` for standard ONNX).
  * @param op_type   The ONNX operator type name (e.g. ``"Abs"``).
  * @param device    The device the kernel runs on (e.g. :cpp:enumerator:`symbolic::Device::kCPU`).
@@ -180,10 +176,18 @@ const CustomKernelMap &GlobalCustomKernels();
  * domain is normalised to :cpp:var:`kDefaultOnnxDomain`. Unlike
  * :cpp:func:`RegisterKernelFn` (which registers a per-device kernel
  * *factory*), @p fn keeps the simple "run the whole node now" contract of
- * :cpp:type:`CustomKernelFn`.
+ * :cpp:type:`CustomKernelFn`. Registration converts it to a
+ * :cpp:type:`NodeKernelFn`; each resolution creates a new session-owned
+ * adapter retaining the callable and a non-owning pointer to the node.
  */
 void RegisterGlobalCustomKernel(const std::string &domain, const std::string &op_type,
                                 CustomKernelFn fn);
+
+/// Registers a factory in the global custom override registry. This registry
+/// retains the precedence of the callback convenience API, but stores only
+/// factories and uses the same session-owned lifecycle as RegisterKernelFn.
+void RegisterGlobalCustomKernelFactory(const std::string &domain, const std::string &op_type,
+                                       NodeKernelFn fn);
 
 /**
  * Removes the process-wide custom kernel registered for (@p domain,

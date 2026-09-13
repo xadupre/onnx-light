@@ -104,7 +104,8 @@ Registrations are stored on the evaluator's persistent
 :class:`RuntimeContext`, so the same evaluator can be reused across runs.
 Registering, replacing, or unregistering a kernel affects **future resolutions
 only**. Already-resolved kernels retain their callable until their session is
-destroyed. Create a new evaluator to resolve its nodes again.
+destroyed. To use a replacement for those nodes, create a new evaluator and
+register the replacement on it before its first run.
 
 Prepare a native kernel once
 ----------------------------
@@ -162,7 +163,7 @@ the current input shape on each run:
     };
 
     // Choose one scope. A local factory overrides the global one.
-    RegisterKernelFn("my.domain", "Scale", core::symbolic::Device::kCPU, factory);
+    // RegisterKernelFn("my.domain", "Scale", core::symbolic::Device::kCPU, factory);
     RuntimeContext rt;
     rt.RegisterKernelFn("my.domain", "Scale", core::symbolic::Device::kCPU, factory);
     RuntimeSession session(model);  // model outlives session

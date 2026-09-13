@@ -536,11 +536,11 @@ class ReferenceEvaluator:
 
         Future node resolutions use this registration. Already-resolved
         kernels keep their callable across repeated runs and shape changes;
-        create a new evaluator to resolve its nodes again. Custom
-        kernels override any built-in onnx-light kernel with the same
-        key (model-local functions and the built-in control-flow
-        operators ``If`` / ``Loop`` / ``Scan`` / ``SequenceMap`` still
-        take precedence).
+        to use a replacement for those nodes, create a new evaluator and
+        register the callback on it before its first run. Custom kernels
+        override any built-in onnx-light kernel with the same key (model-local
+        functions and the built-in control-flow operators ``If`` / ``Loop`` /
+        ``Scan`` / ``SequenceMap`` still take precedence).
 
         Parameters
         ----------

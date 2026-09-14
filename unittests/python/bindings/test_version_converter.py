@@ -165,7 +165,8 @@ class TestVersionConverter(ExtTestCase):
 
     def test_group_normalization_21_20_rejects_missing_inputs(self) -> None:
         model = self._group_normalization_model((2, 4, 3))
-        model.graph.node[0].input.pop()
+        model.graph.node[0].input.clear()
+        model.graph.node[0].input.extend(["X", "scale"])
         with self.assertRaisesRegex(RuntimeError, "must have exactly 3 inputs"):
             version_converter.convert_version(model, 20)
 

@@ -126,20 +126,23 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
-/// Global Lp pooling on a FLOAT tensor laid out as ``(N, C, D1, ..., Dk)``.
+/// Global Lp pooling on a FLOAT, DOUBLE, FLOAT16, or BFLOAT16 tensor laid out
+/// as ``(N, C, D1, ..., Dk)``.
 /// The output shape is ``(N, C, 1, 1, ..., 1)`` — each spatial dimension is
 /// reduced to 1 by computing the Lp norm over all elements in that dimension.
 /// The default value of ``p`` is 2 (L2 norm). When ``p == 1`` this is L1
-/// pooling; ``p == 2`` (default) gives the RMS/L2 pooling defined by ONNX.
+/// pooling; ``p == 2`` (default) gives L2 pooling (without averaging).
 class GlobalLpPool : public KernelBase {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:GlobalLpPool";
   void Run(RuntimeContext &rt) override;
   using KernelBase::KernelBase;
 
-  /// Returns a FLOAT output tensor of shape ``(N, C, 1, 1, ..., 1)``.
-  /// ``p`` is the Lp norm exponent (default 2).
-  Tensor operator()(const Tensor &x, int64_t p = 2, RuntimeContext *rt = nullptr) const;
+  /// Returns an output tensor of shape ``(N, C, 1, 1, ..., 1)`` with the input dtype.
+  /// ``p`` is a finite positive exponent (default 2); opset 1 allows fractional values.
+  /// Computes in the log domain to avoid intermediate overflow and underflow.
+  /// Empty spatial dimensions produce zeros.
+  Tensor operator()(const Tensor &x, double p = 2, RuntimeContext *rt = nullptr) const;
 
   /// Output shape differs from the input shape, so storage cannot be shared.
   static constexpr bool CanRunInPlace() noexcept { return false; }

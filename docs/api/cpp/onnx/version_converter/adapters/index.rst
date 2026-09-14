@@ -23,6 +23,7 @@ adapters
     gemm_7_6
     gridsample_19_20
     group_normalization_20_21
+    group_normalization_21_20
     maxpool_8_7
     no_previous_version
     pad_10_11

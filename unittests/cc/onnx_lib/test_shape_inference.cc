@@ -1,7 +1,7 @@
 #include "onnx.h"
-#include "onnx_lib/defs/parser.h"
 #include "onnx_lib/defs/shape_inference.h"
 #include "onnx_lib/shape_inference/implementation.h"
+#include "onnx_manipulations/parser.h"
 #include <gtest/gtest.h>
 #include <stdexcept>
 #include <tuple>

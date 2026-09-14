@@ -23,6 +23,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 //   * test_l2normalization_axis_0 / _axis_1 — mirror upstream ONNX cases.
 //   * test_l1normalization_axis_0 / _axis_1 / _axis_last — mirror upstream
 //     ONNX cases.
+//   * test_l1normalization_negative_values — L1 norm uses absolute values.
 // ---------------------------------------------------------------------------
 void RegisterLpNormalizationCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
@@ -159,6 +160,22 @@ void RegisterLpNormalizationCases(std::vector<TestCase> &registry, TestMode mode
       Tensor y = kernel(x1, /*axis=*/0, /*p=*/1);
       return IoData{{std::move(x1)}, {std::move(y)}};
     });
+  }
+
+  // Upstream ONNX case: L1 normalization with negative values.
+  {
+    NodeProto node;
+    node.set_op_type("LpNormalization");
+    node.add_input("x");
+    node.add_output("y");
+    AddAttribute<int64_t>(node, "axis", 0);
+    AddAttribute<int64_t>(node, "p", 1);
+    Expect(registry, std::move(node), "test_l1normalization_negative_values", {opset},
+           []() -> IoData {
+             Tensor x = Tensor::FromFloat("", {2}, {1.0f, -1.0f});
+             Tensor y = Tensor::FromFloat("", {2}, {0.5f, -0.5f});
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 
   // Upstream ONNX case: L1 normalization on axis=1 over a (2, 2) input.

@@ -88,7 +88,7 @@ TEST(KernelClass, GlobalLpPoolStableDoubleAndFractionalExponent) {
   x = Tensor::FromDouble("", {1, 1, 2, 2, 2}, {1, 2, 3, 4, 5, 6, 7, 8});
   y = pool(x, 3);
   EXPECT_EQ(y.shape, (std::vector<int64_t>{1, 1, 1, 1, 1}));
-  EXPECT_NEAR(y.AsDouble()[0], 10.90272461, 1e-8);
+  EXPECT_NEAR(y.AsDouble()[0], 10.902723556992836, 1e-8);
 }
 
 TEST(KernelClass, GlobalLpPoolNonFiniteAndEmptyInputs) {

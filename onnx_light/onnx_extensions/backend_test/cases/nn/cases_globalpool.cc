@@ -302,7 +302,7 @@ void RegisterGlobalLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
       Expect(registry, std::move(node), "test_cc_globallppool_1d_p3" + suffix, {case_opset},
              []() -> IoData {
                Tensor x = Tensor::FromFloat("", {1, 2, 2}, {-1.0f, 2.0f, -3.0f, 4.0f});
-               Tensor y = Tensor::FromFloat("", {1, 2, 1}, {2.080084f, 4.4979415f});
+               Tensor y = Tensor::FromFloat("", {1, 2, 1}, {2.0800838f, 4.4979415f});
                return IoData{{std::move(x)}, {std::move(y)}};
              });
     }

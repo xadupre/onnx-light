@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/expect.h"
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_extensions/backend_test/cases/nn/include_nn_cases.h"
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 #include "onnx_proto/onnx_helper.h"
@@ -119,6 +120,42 @@ void RegisterLayerNormalizationCases(std::vector<TestCase> &registry, TestMode m
 
   constexpr float kDefaultEpsilon = 1e-5f;
   constexpr float kAltEpsilon = 0.1f;
+
+  {
+    NodeProto node;
+    node.set_op_type("LayerNormalization");
+    for (const char *name : {"X", "Scale", "B"}) {
+      node.add_input(name);
+    }
+    for (const char *name : {"Y", "Mean", "InvStdDev"}) {
+      node.add_output(name);
+    }
+    AddAttribute<float>(node, "epsilon", 0.0f);
+    AddAttribute<int64_t>(node, "stash_type", 1);
+    Expect(registry, std::move(node), "test_cc_layer_normalization_float16_float32_stash", {opset},
+           []() -> IoData {
+             return IoData{{MakeFloat16Tensor("", {1, 2}, {256.0f, -256.0f}),
+                            MakeFloat16Tensor("", {2}, {1.0f, 1.0f}),
+                            MakeFloat16Tensor("", {2}, {0.0f, 0.0f})},
+                           {MakeFloat16Tensor("", {1, 2}, {1.0f, -1.0f}),
+                            Tensor::FromFloat("", {1, 1}, {0.0f}),
+                            Tensor::FromFloat("", {1, 1}, {1.0f / 256.0f})}};
+           });
+  }
+  {
+    NodeProto node;
+    node.set_op_type("LayerNormalization");
+    node.add_input("X");
+    node.add_input("Scale");
+    node.add_output("Y");
+    AddAttribute<float>(node, "epsilon", 0.0f);
+    Expect(registry, std::move(node), "test_cc_layer_normalization_float16_affine_precision",
+           {opset}, []() -> IoData {
+             return IoData{
+                 {MakeFloat16Tensor("", {1, 3}, {1.0f, 2.0f, 4.0f}), MakeFloat16Scalar("", 1.3f)},
+                 {MakeFloat16Tensor("", {1, 3}, {-1.3896484375f, -0.347412109375f, 1.736328125f})}};
+           });
+  }
 
   // 2D cases (shape [3, 4]).
   RegisterCase(registry, opset, "layer_normalization_2d_axis0", {3, 4},

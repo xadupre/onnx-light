@@ -29,6 +29,7 @@ using onnx_kernels::kernel::BatchNormalization;
 using onnx_kernels::kernel::Dropout;
 using onnx_kernels::kernel::GRU;
 using onnx_kernels::kernel::KernelContext;
+using onnx_kernels::kernel::LayerNormalization;
 using onnx_kernels::kernel::LSTM;
 using onnx_kernels::kernel::MaxPool;
 using onnx_kernels::kernel::MaxUnpool;
@@ -651,6 +652,70 @@ TEST(KernelClass, DropoutRejectsInvalidRatio) {
 }
 
 // ---- RMSNormalization -----------------------------------------------------
+
+TEST(KernelClass, NormalizationHalfPrecisionStashAndPreallocatedOutputs) {
+  const KernelContext ctx{DefaultOpset(23)};
+  for (bool bfloat : {false, true}) {
+    SCOPED_TRACE(bfloat);
+    const auto make = bfloat ? core::runtime::MakeBfloat16Tensor : core::runtime::MakeFloat16Tensor;
+    const auto encode =
+        bfloat ? core::runtime::FloatToBfloat16Bits : core::runtime::FloatToFloat16Bits;
+    const auto decode =
+        bfloat ? core::runtime::Bfloat16BitsToFloat : core::runtime::Float16BitsToFloat;
+    for (int64_t axis : {int64_t{0}, int64_t{-2}}) {
+      SCOPED_TRACE(axis);
+      Tensor x = make("", {3, 1}, {1.0f, 2.0f, 4.0f}, nullptr);
+      Tensor scale = make("", {}, {1.3f}, nullptr);
+      Tensor bias = make("", {}, {0.1f}, nullptr);
+      const float s = decode(encode(1.3f));
+      const float b = decode(encode(0.1f));
+      auto [y, mean, inv] = LayerNormalization{ctx}(x, scale, bias, axis, 0.0f);
+      ASSERT_EQ(y.data_type, x.data_type);
+      ASSERT_EQ(mean.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
+      ASSERT_EQ(inv.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
+      EXPECT_EQ(mean.shape, (std::vector<int64_t>{1, 1}));
+      EXPECT_EQ(inv.shape, mean.shape);
+      EXPECT_FLOAT_EQ(mean.AsFloat()[0], 7.0f / 3.0f);
+      EXPECT_FLOAT_EQ(inv.AsFloat()[0], 1.0f / std::sqrt(14.0f / 9.0f));
+      Tensor actual = core::runtime::PromoteToFloat32(y);
+      for (int i = 0; i < 3; ++i) {
+        const float normalized =
+            (static_cast<float>(1 << i) - 7.0f / 3.0f) / std::sqrt(14.0f / 9.0f);
+        EXPECT_FLOAT_EQ(actual.AsFloat()[i],
+                        decode(encode(decode(encode(decode(encode(normalized)) * s)) + b)));
+      }
+      LayerNormalization{ctx}(x, scale, bias, x, mean, inv, axis, 0.0f);
+      EXPECT_EQ(x.data, y.data);
+
+      x = make("", {3, 1}, {1.0f, 2.0f, 4.0f}, nullptr);
+      y = RMSNormalization{ctx}(x, scale, axis, 0.0f);
+      actual = core::runtime::PromoteToFloat32(y);
+      for (int i = 0; i < 3; ++i) {
+        const float normalized = static_cast<float>(1 << i) / std::sqrt(7.0f);
+        EXPECT_FLOAT_EQ(actual.AsFloat()[i], decode(encode(decode(encode(normalized)) * s)));
+      }
+      RMSNormalization{ctx}(x, scale, x, axis, 0.0f);
+      EXPECT_EQ(x.data, y.data);
+    }
+  }
+}
+
+TEST(KernelClass, NormalizationHalfPrecisionRejectsMismatchedTypes) {
+  const KernelContext ctx{DefaultOpset(23)};
+  Tensor x = core::runtime::MakeFloat16Tensor("", {1, 2}, {256.0f, -256.0f});
+  Tensor scale = core::runtime::MakeFloat16Scalar("", 1.0f);
+  Tensor wrong = Tensor::FromFloat("", {}, {1.0f});
+  EXPECT_THROW(LayerNormalization{ctx}(x, wrong, Tensor{}), std::invalid_argument);
+  EXPECT_THROW(LayerNormalization{ctx}(x, scale, wrong), std::invalid_argument);
+  EXPECT_THROW(RMSNormalization{ctx}(x, wrong), std::invalid_argument);
+  auto [y, mean, inv] = LayerNormalization{ctx}(x, scale, Tensor{});
+  EXPECT_THROW(LayerNormalization{ctx}(x, scale, Tensor{}, wrong, mean, inv),
+               std::invalid_argument);
+  Tensor half_mean = core::runtime::MakeFloat16Tensor("", {1, 1}, {0.0f});
+  EXPECT_THROW(LayerNormalization{ctx}(x, scale, Tensor{}, y, half_mean, inv),
+               std::invalid_argument);
+  EXPECT_THROW(RMSNormalization{ctx}(x, scale, wrong), std::invalid_argument);
+}
 
 TEST(KernelClass, RMSNormalizationMatchesHandComputed) {
   const KernelContext ctx{DefaultOpset(23)};

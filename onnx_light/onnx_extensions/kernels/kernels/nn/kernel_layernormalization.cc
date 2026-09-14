@@ -4,6 +4,8 @@
 
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_core/runtime/kernels/cast_helper.h"
+#include "onnx_core/runtime/kernels/float16_promote.h"
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/kernels/kernel_run_helpers.h"
@@ -88,8 +90,9 @@ Shape ReducedShape(const Shape &x_shape, int64_t axis) {
 std::tuple<Tensor, Tensor, Tensor>
 LayerNormalization::operator()(const Tensor &x, const Tensor &scale, const Tensor &b, int64_t axis,
                                float epsilon, RuntimeContext *rt) const {
-  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      "kernel::LayerNormalization: X must be FLOAT.");
+  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT) ||
+                          IsHalfPrecision(x.data_type),
+                      "kernel::LayerNormalization: X must be FLOAT, FLOAT16 or BFLOAT16.");
   const int64_t rank = static_cast<int64_t>(x.shape.size());
   EXT_ENFORCE_INVALID(rank >= 1, "kernel::LayerNormalization: X must have rank >= 1.");
   const int64_t normalized_axis = NormalizeAxis(axis, rank);
@@ -101,9 +104,8 @@ LayerNormalization::operator()(const Tensor &x, const Tensor &scale, const Tenso
   const size_t reduced_bytes = static_cast<size_t>(reduced_elem) * sizeof(float);
 
   const size_t y_n_bytes = x.size_bytes();
-  Tensor y =
-      rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::FLOAT), x.shape, y_n_bytes)
-         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), x.shape, y_n_bytes, nullptr);
+  Tensor y = rt ? rt->MakeOutputTensor(0, x.data_type, x.shape, y_n_bytes)
+                : MakeOutputTensor(x.data_type, x.shape, y_n_bytes, nullptr);
   const bool has_mean_output =
       rt == nullptr || rt->output_slot_io_roles().empty() || rt->output_slot_io_roles().size() > 1;
   const bool has_inv_std_output =
@@ -131,12 +133,13 @@ LayerNormalization::operator()(const Tensor &x, const Tensor &scale, const Tenso
 void LayerNormalization::operator()(const Tensor &x, const Tensor &scale, const Tensor &b,
                                     Tensor &y, Tensor &mean, Tensor &inv_std_dev, int64_t axis,
                                     float epsilon) const {
-  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      "kernel::LayerNormalization: X must be FLOAT.");
-  EXT_ENFORCE_INVALID(scale.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      "kernel::LayerNormalization: Scale must be FLOAT.");
-  EXT_ENFORCE_INVALID(y.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      "kernel::LayerNormalization: Y must be FLOAT.");
+  const bool half = IsHalfPrecision(x.data_type);
+  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT) || half,
+                      "kernel::LayerNormalization: X must be FLOAT, FLOAT16 or BFLOAT16.");
+  EXT_ENFORCE_INVALID(scale.data_type == x.data_type,
+                      "kernel::LayerNormalization: Scale must have the same dtype as X.");
+  EXT_ENFORCE_INVALID(y.data_type == x.data_type,
+                      "kernel::LayerNormalization: Y must have the same dtype as X.");
   EXT_ENFORCE_INVALID(mean.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::LayerNormalization: Mean must be FLOAT.");
   EXT_ENFORCE_INVALID(inv_std_dev.data_type == static_cast<int32_t>(DataType::FLOAT),
@@ -148,8 +151,8 @@ void LayerNormalization::operator()(const Tensor &x, const Tensor &scale, const 
 
   const bool has_bias = !b.shape.empty() || b.size_bytes() > 0;
   if (has_bias) {
-    EXT_ENFORCE_INVALID(b.data_type == static_cast<int32_t>(DataType::FLOAT),
-                        "kernel::LayerNormalization: B must be FLOAT.");
+    EXT_ENFORCE_INVALID(b.data_type == x.data_type,
+                        "kernel::LayerNormalization: B must have the same dtype as X.");
   }
 
   const int64_t rank = static_cast<int64_t>(x.shape.size());
@@ -186,10 +189,18 @@ void LayerNormalization::operator()(const Tensor &x, const Tensor &scale, const 
   const Shape scale_strides = BuildBroadcastIndex(x.shape, axis, scale.shape);
   const Shape bias_strides = has_bias ? BuildBroadcastIndex(x.shape, axis, b.shape) : Shape();
 
-  const float *px = x.AsFloat();
-  const float *ps = scale.AsFloat();
-  const float *pb = has_bias ? b.AsFloat() : nullptr;
-  float *py = y.AsFloat();
+  const Tensor x_float = half ? PromoteToFloat32(x) : Tensor{};
+  const Tensor scale_float = half ? PromoteToFloat32(scale) : Tensor{};
+  const Tensor b_float = half && has_bias ? PromoteToFloat32(b) : Tensor{};
+  const float *px = half ? x_float.AsFloat() : x.AsFloat();
+  const float *ps = half ? scale_float.AsFloat() : scale.AsFloat();
+  const float *pb = has_bias ? (half ? b_float.AsFloat() : b.AsFloat()) : nullptr;
+  float *py = half ? nullptr : y.AsFloat();
+  uint16_t *py_half = half ? reinterpret_cast<uint16_t *>(y.mutable_bytes()) : nullptr;
+  const auto encode = x.data_type == static_cast<int32_t>(DataType::FLOAT16) ? FloatToFloat16Bits
+                                                                             : FloatToBfloat16Bits;
+  const auto decode = x.data_type == static_cast<int32_t>(DataType::FLOAT16) ? Float16BitsToFloat
+                                                                             : Bfloat16BitsToFloat;
   float *pmean = mean.AsFloat();
   float *pinv = inv_std_dev.AsFloat();
 
@@ -217,12 +228,23 @@ void LayerNormalization::operator()(const Tensor &x, const Tensor &scale, const 
     int64_t si = 0;
     int64_t bi = 0;
     for (int64_t i = 0; i < norm_size; ++i) {
-      const float normalized = (px[base + i] - static_cast<float>(m)) * inv;
+      float normalized = (px[base + i] - static_cast<float>(m)) * inv;
+      // The affine stage runs in the input dtype, not the stash dtype.
+      if (half) {
+        normalized = decode(encode(normalized));
+      }
       float v = normalized * ps[si];
+      if (half) {
+        v = decode(encode(v));
+      }
       if (has_bias) {
         v += pb[bi];
       }
-      py[base + i] = v;
+      if (half) {
+        py_half[base + i] = encode(v);
+      } else {
+        py[base + i] = v;
+      }
 
       for (int64_t d = normalized_rank - 1; d >= 0; --d) {
         ++coord[static_cast<size_t>(d)];

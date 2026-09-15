@@ -14,6 +14,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <stdexcept>
 #include <vector>
 
@@ -37,6 +38,97 @@ using onnx_kernels::kernel::RMSNormalization;
 using onnx_kernels::kernel::RotaryEmbedding;
 
 namespace Test {
+
+TEST(KernelClass, GlobalLpPoolDtypes) {
+  const KernelContext ctx{DefaultOpset(22)};
+  const onnx_kernels::kernel::GlobalLpPool pool{ctx};
+  for (const Tensor &x :
+       {Tensor::FromFloat("", {1, 1, 3}, {1, 2, 2}), Tensor::FromDouble("", {1, 1, 3}, {1, 2, 2}),
+        core::runtime::MakeFloat16Tensor("", {1, 1, 3}, {1, 2, 2}),
+        core::runtime::MakeBfloat16Tensor("", {1, 1, 3}, {1, 2, 2})}) {
+    Tensor y = pool(x);
+    EXPECT_EQ(y.data_type, x.data_type);
+    EXPECT_EQ(y.shape, (std::vector<int64_t>{1, 1, 1}));
+    Tensor promoted = core::runtime::PromoteToFloat32(y);
+    if (y.data_type == static_cast<int32_t>(core::runtime::DataType::DOUBLE)) {
+      EXPECT_DOUBLE_EQ(promoted.AsDouble()[0], 3.0);
+    } else {
+      EXPECT_FLOAT_EQ(promoted.AsFloat()[0], 3.0f);
+    }
+  }
+}
+
+TEST(KernelClass, GlobalLpPoolHalfPrecisionRange) {
+  const KernelContext ctx{DefaultOpset(22)};
+  const onnx_kernels::kernel::GlobalLpPool pool{ctx};
+  Tensor x = core::runtime::MakeFloat16Tensor("", {1, 2, 2}, {300, 300, 1e-4f, 1e-4f});
+  Tensor y = core::runtime::PromoteToFloat32(pool(x));
+  Tensor expected = core::runtime::PromoteToFloat32(
+      core::runtime::MakeFloat16Tensor("", {1, 2, 1}, {424.25f, 1.415e-4f}));
+  EXPECT_FLOAT_EQ(y.AsFloat()[0], expected.AsFloat()[0]);
+  EXPECT_FLOAT_EQ(y.AsFloat()[1], expected.AsFloat()[1]);
+
+  x = core::runtime::MakeBfloat16Tensor("", {1, 1, 2}, {3e19f, 3e19f});
+  y = core::runtime::PromoteToFloat32(pool(x));
+  expected = core::runtime::PromoteToFloat32(
+      core::runtime::MakeBfloat16Tensor("", {1, 1, 1}, {4.237e19f}));
+  EXPECT_FLOAT_EQ(y.AsFloat()[0], expected.AsFloat()[0]);
+}
+
+TEST(KernelClass, GlobalLpPoolStableDoubleAndFractionalExponent) {
+  const KernelContext ctx{DefaultOpset(1)};
+  const onnx_kernels::kernel::GlobalLpPool pool{ctx};
+  Tensor x = Tensor::FromDouble("", {1, 1, 2}, {1e100, 1e-300});
+  Tensor y = pool(x, 0.001f);
+  EXPECT_NEAR(y.AsDouble()[0] / 3.47096941e245, 1.0, 1e-6);
+  x = Tensor::FromDouble("", {1, 2, 2}, {1e200, 1e200, 1e-200, 1e-200});
+  y = pool(x);
+  EXPECT_NEAR(y.AsDouble()[0] / 1e200, std::sqrt(2.0), 1e-12);
+  EXPECT_NEAR(y.AsDouble()[1] / 1e-200, std::sqrt(2.0), 1e-12);
+  x = Tensor::FromDouble("", {1, 1, 2, 2, 2}, {1, 2, 3, 4, 5, 6, 7, 8});
+  y = pool(x, 3);
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{1, 1, 1, 1, 1}));
+  EXPECT_NEAR(y.AsDouble()[0], 10.902723556992836, 1e-8);
+}
+
+TEST(KernelClass, GlobalLpPoolNonFiniteAndEmptyInputs) {
+  const KernelContext ctx{DefaultOpset(22)};
+  const onnx_kernels::kernel::GlobalLpPool pool{ctx};
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+  Tensor x = Tensor::FromFloat("", {1, 5, 3},
+                               {nan, 1, 2, inf, 1, 2, inf, inf, nan, -inf, inf, 0, 0, 0, 0});
+  Tensor y = pool(x);
+  EXPECT_TRUE(std::isnan(y.AsFloat()[0]));
+  EXPECT_EQ(y.AsFloat()[1], inf);
+  EXPECT_TRUE(std::isnan(y.AsFloat()[2]));
+  EXPECT_EQ(y.AsFloat()[3], inf);
+  EXPECT_EQ(y.AsFloat()[4], 0.0f);
+  x = Tensor::FromFloat("", {2, 3, 0, 4}, {});
+  y = pool(x, 3);
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2, 3, 1, 1}));
+  for (int64_t i = 0; i < y.element_count(); ++i) {
+    EXPECT_EQ(y.AsFloat()[i], 0.0f);
+  }
+  for (const std::vector<int64_t> &shape :
+       {std::vector<int64_t>{0, 3, 4}, std::vector<int64_t>{2, 0, 4}}) {
+    y = pool(Tensor::FromFloat("", shape, {}));
+    EXPECT_EQ(y.shape, (std::vector<int64_t>{shape[0], shape[1], 1}));
+    EXPECT_EQ(y.element_count(), 0);
+  }
+}
+
+TEST(KernelClass, GlobalLpPoolRejectsInvalidInputs) {
+  const KernelContext ctx{DefaultOpset(22)};
+  const onnx_kernels::kernel::GlobalLpPool pool{ctx};
+  const Tensor x = Tensor::FromFloat("", {1, 1, 2}, {1, 2});
+  for (double p : {0.0, -1.0, std::numeric_limits<double>::infinity(),
+                   std::numeric_limits<double>::quiet_NaN()}) {
+    EXPECT_THROW(pool(x, p), std::invalid_argument);
+  }
+  EXPECT_THROW(pool(Tensor::FromFloat("", {2}, {1, 2})), std::invalid_argument);
+  EXPECT_THROW(pool(Tensor::FromInt64("", {1, 1, 2}, {1, 2})), std::invalid_argument);
+}
 
 TEST(KernelClass, AveragePool2DDefault) {
   const KernelContext ctx{DefaultOpset(19)};

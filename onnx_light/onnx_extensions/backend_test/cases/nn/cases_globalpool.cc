@@ -194,7 +194,9 @@ void RegisterGlobalMaxPoolCases(std::vector<TestCase> &registry, TestMode mode) 
 // Cases:
 //   * test_cc_globallppool_lp1 — 2-D spatial, p=1 (L1 norm).
 //   * test_cc_globallppool_lp2 — 2-D spatial, p=2 (default L2 norm).
-//   * test_cc_globallppool_default — 1x1x3x3, default p=2.
+//   * test_cc_globallppool_default — 2-D spatial, default p=2.
+//   * test_cc_globallppool_1d_p3 — 1-D spatial, p=3.
+//   * test_cc_globallppool_3d — 3-D spatial, p=1.
 // ---------------------------------------------------------------------------
 void RegisterGlobalLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
@@ -270,24 +272,70 @@ void RegisterGlobalLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     });
   }
 
-  // 1 x 1 x 3 x 3, default p=2.
+  // Independent expected values from ONNX PR #8414, across all schema versions.
+  for (int64_t version : {1, 2, 22}) {
+    const OpsetId case_opset = DefaultOpset(version);
+    const std::string suffix = version == 22 ? "" : "_opset" + std::to_string(version);
+    {
+      NodeProto node;
+      node.set_op_type("GlobalLpPool");
+      node.add_input("x");
+      node.add_output("y");
+      Expect(registry, std::move(node), "test_cc_globallppool_default" + suffix, {case_opset},
+             []() -> IoData {
+               Tensor x = Tensor::FromFloat("", {1, 2, 2, 2},
+                                            {1.0f, -2.0f, 3.0f, -4.0f, 5.0f, -6.0f, 7.0f, -8.0f});
+               Tensor y = Tensor::FromFloat("", {1, 2, 1, 1}, {5.477226f, 13.190906f});
+               return IoData{{std::move(x)}, {std::move(y)}};
+             });
+    }
+    {
+      NodeProto node;
+      node.set_op_type("GlobalLpPool");
+      node.add_input("x");
+      node.add_output("y");
+      if (version == 1) {
+        AddAttribute<float>(node, "p", 3.0f);
+      } else {
+        AddAttribute<int64_t>(node, "p", 3);
+      }
+      Expect(registry, std::move(node), "test_cc_globallppool_1d_p3" + suffix, {case_opset},
+             []() -> IoData {
+               Tensor x = Tensor::FromFloat("", {1, 2, 2}, {-1.0f, 2.0f, -3.0f, 4.0f});
+               Tensor y = Tensor::FromFloat("", {1, 2, 1}, {2.0800838f, 4.4979415f});
+               return IoData{{std::move(x)}, {std::move(y)}};
+             });
+    }
+    {
+      NodeProto node;
+      node.set_op_type("GlobalLpPool");
+      node.add_input("x");
+      node.add_output("y");
+      if (version == 1) {
+        AddAttribute<float>(node, "p", 1.0f);
+      } else {
+        AddAttribute<int64_t>(node, "p", 1);
+      }
+      Expect(registry, std::move(node), "test_cc_globallppool_3d" + suffix, {case_opset},
+             []() -> IoData {
+               Tensor x = Tensor::FromFloat("", {1, 1, 2, 1, 2}, {-1.0f, 2.0f, -3.0f, 4.0f});
+               Tensor y = Tensor::FromFloat("", {1, 1, 1, 1, 1}, {10.0f});
+               return IoData{{std::move(x)}, {std::move(y)}};
+             });
+    }
+  }
   {
     NodeProto node;
     node.set_op_type("GlobalLpPool");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_globallppool_default", {opset}, []() -> IoData {
-      const OpsetId opset = DefaultOpset(22);
-
-      const KernelContext kernel_ctx{opset};
-      const onnx_kernels::kernel::GlobalLpPool kernel{kernel_ctx};
-
-      Tensor x = Tensor::FromFloat("", {1, 1, 3, 3},
-                                   {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
-      Tensor y = kernel(x); // expected: sqrt(1+4+9+16+25+36+49+64+81) = sqrt(285)
-
-      return IoData{{std::move(x)}, {std::move(y)}};
-    });
+    AddAttribute<float>(node, "p", 0.5f);
+    Expect(registry, std::move(node), "test_cc_globallppool_fractional_p", {DefaultOpset(1)},
+           []() -> IoData {
+             Tensor x = Tensor::FromFloat("", {1, 1, 3}, {1.0f, 4.0f, 9.0f});
+             Tensor y = Tensor::FromFloat("", {1, 1, 1}, {36.0f});
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
   }
 }
 

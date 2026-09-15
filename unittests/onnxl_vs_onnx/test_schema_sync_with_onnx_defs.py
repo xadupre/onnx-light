@@ -9,12 +9,49 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
     # SwiGLU (onnx#8202) may not yet be present in the installed onnx; the empty
     # domain string is the default ai.onnx domain used by the registered schemas.
     SWIGLU_KEY = ("", "SwiGLU", 28)
+    BITSHIFT_28_KEY = ("", "BitShift", 28)
+    OPTIONAL_28_KEYS = {
+        ("", "Optional", 28),
+        ("", "OptionalGetElement", 28),
+        ("", "OptionalHasElement", 28),
+    }
+    REDUCE_LOG_28_KEYS = {("", "ReduceLogSum", 28), ("", "ReduceLogSumExp", 28)}
+    DATA_LAYOUT_28_KEYS = {
+        ("", name, 28)
+        for name in (
+            "Compress",
+            "DepthToSpace",
+            "Einsum",
+            "Mod",
+            "OneHot",
+            "ReverseSequence",
+            "SpaceToDepth",
+            "Unique",
+        )
+    }
     ATTENTION_25_KEY = ("", "Attention", 25)
+    STFT_KEY = ("", "STFT", 17)
+    STFT_DOC_MARKER = "frames = floor((signal_length - frame_length) / frame_step) + 1"
 
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
         onnx_light.onnx.defs.register_onnx_operator_set_schema()
+
+    @classmethod
+    def _remove_stft_if_onnx_docs_are_outdated(cls, light_dict, onnx_dict):
+        if cls.STFT_DOC_MARKER not in onnx_dict[cls.STFT_KEY].doc:
+            light_dict.pop(cls.STFT_KEY)
+            onnx_dict.pop(cls.STFT_KEY)
+
+    @classmethod
+    def _remove_recent_28_schemas_if_onnx_is_outdated(cls, light_dict, onnx_dict):
+        recent_keys = cls.OPTIONAL_28_KEYS | cls.REDUCE_LOG_28_KEYS | cls.DATA_LAYOUT_28_KEYS
+        for key in recent_keys - set(onnx_dict):
+            if isinstance(light_dict, set):
+                light_dict.discard(key)
+            else:
+                light_dict.pop(key, None)
 
     def test_onnx_light_ir_and_opset_versions_match_onnx(self):
         self.assertEqual(onnx_light.onnx.defs.onnx_ir_version(), onnx.IR_VERSION)
@@ -37,6 +74,11 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
             onnx_light_schema_keys.discard(flex_attention_key)
         if self.SWIGLU_KEY not in onnx_schema_keys:
             onnx_light_schema_keys.discard(self.SWIGLU_KEY)
+        if self.BITSHIFT_28_KEY not in onnx_schema_keys:
+            onnx_light_schema_keys.discard(self.BITSHIFT_28_KEY)
+        self._remove_recent_28_schemas_if_onnx_is_outdated(
+            onnx_light_schema_keys, onnx_schema_keys
+        )
         if self.ATTENTION_25_KEY not in onnx_schema_keys:
             onnx_light_schema_keys.discard(self.ATTENTION_25_KEY)
 
@@ -49,12 +91,16 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
         onnx_dict = {(s.domain, s.name, s.since_version): s for s in hist}
         if self.SWIGLU_KEY not in onnx_dict:
             light_dict.pop(self.SWIGLU_KEY, None)
+        if self.BITSHIFT_28_KEY not in onnx_dict:
+            light_dict.pop(self.BITSHIFT_28_KEY, None)
+        self._remove_recent_28_schemas_if_onnx_is_outdated(light_dict, onnx_dict)
         if self.ATTENTION_25_KEY not in onnx_dict:
             light_dict.pop(self.ATTENTION_25_KEY, None)
+        self._remove_stft_if_onnx_docs_are_outdated(light_dict, onnx_dict)
         self.assertEqual(set(light_dict), set(onnx_dict))
-        for key, schema in light_dict.items():
+        for key, lights in light_dict.items():
             with self.subTest(key=key):
-                lights = light_dict[key]
+                schema = onnx_dict[key]
                 self.assertGreater(len(schema.outputs), 0)
                 self.assertGreater(len(lights.outputs), 0)
                 self.assertGreater(schema.line, 0)
@@ -62,7 +108,6 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
                 self.assertEqual(len(schema.inputs), len(lights.inputs))
                 self.assertEqual(len(schema.outputs), len(lights.outputs))
                 self.assertEqual(len(schema.type_constraints), len(lights.type_constraints))
-                self.assertEqual(schema.file, lights.file)
                 self.assertEqual(schema.has_function, lights.has_function)
                 self.assertEqual(schema.deprecated, lights.deprecated)
                 self.assertEqual(schema.is_infinite(0), lights.is_infinite(0))
@@ -70,7 +115,7 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
                 self.assertEqual(schema.max_output, lights.max_output)
                 # file and line are build-environment-specific and intentionally not compared
                 self.assertEqual(schema.non_deterministic, lights.non_deterministic)
-                self.assertEqual(schema.support_level, lights.support_level)
+                self.assertEqual(schema.support_level.name, lights.support_level.name)
                 self.assertEqual(schema.doc, lights.doc)
 
     def test_registered_onnx_ops_match_onnx_match_input_output_doc(self):
@@ -80,8 +125,12 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
         onnx_dict = {(s.domain, s.name, s.since_version): s for s in hist}
         if self.SWIGLU_KEY not in onnx_dict:
             light_dict.pop(self.SWIGLU_KEY, None)
+        if self.BITSHIFT_28_KEY not in onnx_dict:
+            light_dict.pop(self.BITSHIFT_28_KEY, None)
+        self._remove_recent_28_schemas_if_onnx_is_outdated(light_dict, onnx_dict)
         if self.ATTENTION_25_KEY not in onnx_dict:
             light_dict.pop(self.ATTENTION_25_KEY, None)
+        self._remove_stft_if_onnx_docs_are_outdated(light_dict, onnx_dict)
         self.assertEqual(set(light_dict), set(onnx_dict))
 
         def _normalize(text):
@@ -113,8 +162,12 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
         onnx_dict = {(s.domain, s.name, s.since_version): s for s in hist}
         if self.SWIGLU_KEY not in onnx_dict:
             light_dict.pop(self.SWIGLU_KEY, None)
+        if self.BITSHIFT_28_KEY not in onnx_dict:
+            light_dict.pop(self.BITSHIFT_28_KEY, None)
+        self._remove_recent_28_schemas_if_onnx_is_outdated(light_dict, onnx_dict)
         if self.ATTENTION_25_KEY not in onnx_dict:
             light_dict.pop(self.ATTENTION_25_KEY, None)
+        self._remove_stft_if_onnx_docs_are_outdated(light_dict, onnx_dict)
         self.assertEqual(set(light_dict), set(onnx_dict))
         for key, lights in light_dict.items():
             schema = onnx_dict[key]

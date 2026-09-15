@@ -53,6 +53,15 @@ kernel that was already registered (it registers each built-in only when the
 slot is still empty). As a result a downstream override wins whether it is
 installed before or after the built-ins are registered.
 
+For context-local registration, pass the same factory to
+``rt.RegisterKernelFn(domain, op_type, device, factory)`` instead. Local
+factories override global ones and propagate into subgraph/function contexts.
+Both scopes create one session-owned kernel per resolved node and reuse it
+across runs, even when the input shape changes. Register replacements before
+resolution: replacing a registration never invalidates an existing kernel.
+The original model must outlive the session. Independent sessions must not
+share mutable kernel state; concurrent runs on one session are not supported.
+
 Step 1 -- Install the onnx_light C++ library
 ---------------------------------------------
 
@@ -112,8 +121,5 @@ On Windows:
 See also
 --------
 
-* :ref:`l-howto-use-custom-kernel` — how to register per-session custom kernels
-  from Python and C++ (the lighter-weight
-  :cpp:func:`onnx_light::core::runtime::RuntimeContext::RegisterCustomKernel`
-  hook), as opposed to installing a kernel class into the global dispatch table
-  as this example does.
+* :ref:`l-howto-use-custom-kernel` — context-local factories and Python/C++
+  callback convenience APIs using the same session-owned kernel lifecycle.

@@ -41,7 +41,7 @@ jobs:
         run: sudo apt-get install -y clang clang-tidy cmake ninja-build libssl-dev
 
       - name: Install Python build dependencies
-        run: pip install "nanobind>=3.0.0" numpy scikit-build-core
+        run: pip install "nanobind>=3.0.1" numpy scikit-build-core
 
       - name: Set up sccache
         uses: mozilla-actions/sccache-action@v0.0.11

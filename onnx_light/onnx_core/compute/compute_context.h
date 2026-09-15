@@ -343,6 +343,12 @@ public:
                            bool allow_input_overwrite = false,
                            const std::unordered_map<std::string, std::string> &value_tags = {});
 
+  /// Analyses a function's reuse, releases and memory without constructing a graph.
+  void
+  ComputeInPlaceReuseGraph(const FunctionProto &function, const ShapesContext &ctx,
+                           bool allow_input_overwrite = false,
+                           const std::unordered_map<std::string, std::string> &value_tags = {});
+
   /// Seeds the incremental in-place-reuse lifetime state for a declared graph
   /// input (``is_graph_input``) or initializer (``is_initializer``). When
   /// ``allow_input_overwrite`` is ``false`` the value is protected (kept) from
@@ -501,6 +507,10 @@ public:
   const std::vector<int64_t> &ComputePeakMemory(const GraphProto &graph,
                                                 Device device = Device::kUndefined);
 
+  /// Computes per-node peak scratch memory directly for a function.
+  const std::vector<int64_t> &ComputePeakMemory(const FunctionProto &function,
+                                                Device device = Device::kUndefined);
+
   /// Read-only access to the per-node peak-memory estimates computed by
   /// :cpp:func:`ComputePeakMemory`. Empty before it has been called.
   const std::vector<int64_t> &PeakMemory() const noexcept { return peak_memory_; }
@@ -543,6 +553,9 @@ public:
   ///        place; must be the same graph passed to :cpp:func:`Compute` /
   ///        :cpp:func:`ComputeInPlaceReuseGraph`.
   void WriteToGraph(GraphProto &graph) const;
+
+  /// Writes inferred value_info and computed node metadata directly into a function.
+  void WriteToFunction(FunctionProto &function) const;
 
   /// Same as :cpp:func:`WriteToGraph(GraphProto&)` applied to ``model.graph()``.
   void WriteToModel(ModelProto &model) const;
@@ -641,6 +654,18 @@ public:
   }
 
 private:
+  template <typename GraphOrFunction>
+  void ComputeInPlaceReuseGraphImpl(const GraphOrFunction &graph, const ShapesContext &ctx,
+                                    bool allow_input_overwrite,
+                                    const std::unordered_map<std::string, std::string> &value_tags);
+
+  template <typename GraphOrFunction> void WriteToMetadataImpl(GraphOrFunction &graph) const;
+
+  const std::vector<int64_t> &
+  ComputePeakMemoryNodes(const utils::RepeatedProtoField<NodeProto> &nodes, Device device);
+
+  void WritePeakMemoryToNodes(utils::RepeatedProtoField<NodeProto> &nodes) const;
+
   static std::string NormalizeDomain(const std::string &domain) {
     return domain.empty() ? std::string(::onnx_light::core::shapes::kOnnxDomain) : domain;
   }

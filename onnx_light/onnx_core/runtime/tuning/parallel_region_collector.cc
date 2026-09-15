@@ -318,13 +318,13 @@ uint64_t NextParallelRegionId() noexcept {
 
 std::optional<double> ComputeCpuUtilization(std::optional<uint64_t> process_cpu_time_ns,
                                             std::optional<uint64_t> wall_time_ns,
-                                            int32_t admitted_threads) noexcept {
+                                            int32_t observed_threads) noexcept {
   if (!process_cpu_time_ns.has_value() || !wall_time_ns.has_value() || *wall_time_ns == 0 ||
-      admitted_threads <= 0) {
+      observed_threads <= 0) {
     return std::nullopt;
   }
   return static_cast<double>(*process_cpu_time_ns) / static_cast<double>(*wall_time_ns) /
-         static_cast<double>(admitted_threads);
+         static_cast<double>(observed_threads);
 }
 
 std::optional<uint64_t> ReadProcessCpuTimeNs() noexcept {

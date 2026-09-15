@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -19,6 +20,59 @@ from onnx_light import kernel_tuning  # noqa: E402
 
 
 class TestKernelTuningBindings(ExtTestCase):
+    def test_published_calibration_profiles_match_registered_schemas(self):
+        reports = sorted(
+            (Path(__file__).resolve().parents[3] / "docs" / "next_steps").rglob(
+                "*_calibration.json"
+            )
+        )
+        self.assertTrue(reports, "No published calibration reports found")
+        key_fields = (
+            "library",
+            "kernel",
+            "implementation",
+            "element_type",
+            "device",
+            "tuning_abi",
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            path = str(Path(temporary) / "kernel_tuning.cache")
+            schemas = {
+                tuple(schema[field] for field in key_fields): schema
+                for schema in rt.kernel_tuning_parameters(library=None, device=None, path=path)[
+                    "kernels"
+                ]
+            }
+            for report_path in reports:
+                report = json.loads(report_path.read_text(encoding="utf-8"))
+                profiles = report["calibrated_profiles"]
+                with self.subTest(report=report_path.name):
+                    self.assertTrue(profiles)
+                    self.assertEqual(len(profiles), report["calibratable_keys"])
+                    verification = report["reload_verification"]
+                    self.assertEqual(verification["loaded_keys"], len(profiles))
+                    self.assertEqual(verification["published_profiles_resolved"], len(profiles))
+                    self.assertEqual(verification["load_status"], "loaded")
+                    self.assertEqual(verification["incompatible_keys"], 0)
+                    self.assertEqual(verification["invalid_keys"], 0)
+                for profile in profiles:
+                    key = tuple(profile[field] for field in key_fields)
+                    with self.subTest(report=report_path.name, key=key):
+                        self.assertIn(key, schemas)
+                        self.assertEqual(
+                            set(profile["values"]), set(schemas[key]["parameter_names"])
+                        )
+                        update = rt.set_kernel_tuning_parameters(
+                            **{
+                                field: profile[field] for field in key_fields if field != "device"
+                            },
+                            values=profile["values"],
+                            path=path,
+                            load=False,
+                        )
+                        self.assertEqual(update["status"], "updated")
+                        self.assertEqual(update["values"], profile["values"])
+
     def test_lists_registered_kernels(self):
         identifiers = rt.registered_kernels()
         self.assertEqual(identifiers, sorted(identifiers))
@@ -42,10 +96,38 @@ class TestKernelTuningBindings(ExtTestCase):
         self.assertEqual(report["calibrated"], [])
         self.assertEqual(report["candidate_diagnostics"], [])
 
+    def test_calibration_saves_explicit_cpu_executor(self):
+        policy = rt.CpuExecutionPolicy()
+        policy.num_threads = 1
+        policy.affinity_policy = rt.CpuAffinityPolicy.NONE
+
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "kernel_tuning.cache"
+            report = rt.calibrate_kernel_tuning(
+                "Abs",
+                element_types=[int(TensorProto.FLOAT)],
+                maximum_duration_ms=25,
+                save=True,
+                path=str(path),
+                cpu_execution=policy,
+            )
+
+            self.assertEqual(report["cache_update"]["status"], "updated")
+            self.assertIn("\neffective_threads 1\n", path.read_text())
+            inspection = rt.inspect_kernel_tuning_cache(path=str(path), num_threads=1)
+            self.assertEqual(inspection["status"], "loaded")
+            self.assertEqual(inspection["profiles"][0]["effective_threads"], 1)
+
     def test_calibration_filters_device(self):
         with self.assertRaisesRegex(ValueError, "supports only the CPU device"):
             rt.calibrate_kernel_tuning(
                 "Abs", element_types=[int(TensorProto.FLOAT)], device=0, save=False
+            )
+
+    def test_calibration_reports_unknown_device_value(self):
+        with self.assertRaisesRegex(ValueError, "Unknown kernel tuning device value 8192"):
+            rt.calibrate_kernel_tuning(
+                "Abs", element_types=[int(TensorProto.FLOAT)], device=8192, save=False
             )
 
     def test_calibration_exposes_bounded_parallel_diagnostics(self):
@@ -109,6 +191,29 @@ class TestKernelTuningBindings(ExtTestCase):
         )
         self.assertEqual(comparison["values"][0]["speedup"], 1.0)
         self.assertGreater(comparison["values"][0]["benchmark_cases"], 0)
+
+    def test_analyzes_latency_metrics_and_selects_criterion(self):
+        report = kernel_tuning.analyze_kernel_tuning_latencies(
+            [[2.0, 8.0, 10.0], [1.0, 4.0, 20.0], [4.0, 4.0, 5.0]], "average-speedup"
+        )
+
+        self.assertEqual(report["criterion"], "average-speedup")
+        self.assertEqual(report["selected_index"], 1)
+        self.assertEqual(
+            set(report["values"][1]),
+            {
+                "average",
+                "sum",
+                "median",
+                "average_speedup",
+                "median_speedup",
+                "max_speedup",
+                "max_latency",
+            },
+        )
+        self.assertEqual(report["values"][1]["sum"], 25.0)
+        self.assertEqual(report["values"][1]["median"], 4.0)
+        self.assertEqual(report["values"][1]["average_speedup"], 1.5)
 
     def test_lists_registered_parameters_and_defaults(self):
         report = kernel_tuning.kernel_tuning_parameters(
@@ -183,12 +288,64 @@ class TestKernelTuningBindings(ExtTestCase):
                 )
             self.assertFalse(Path(path).exists())
 
+    def test_rejects_obsolete_gemm_parameters_and_abi(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = str(Path(temporary) / "kernel_tuning.cache")
+            schema = rt.kernel_tuning_parameters(
+                kernel="Gemm", element_type=int(TensorProto.FLOAT), path=path
+            )["kernels"][0]
+            for name in (
+                "algorithm.pack_b_minimum_elements",
+                "algorithm.skinny_m_limit",
+                "algorithm.tile_k",
+                "algorithm.tile_m",
+                "algorithm.tile_n",
+                "conversion.parallel_minimum_elements",
+                "parallel.fmas_per_work_unit",
+            ):
+                with self.subTest(parameter=name), self.assertRaises(ValueError):
+                    rt.set_kernel_tuning_parameters(
+                        "Gemm",
+                        int(TensorProto.FLOAT),
+                        {**schema["defaults"], name: 1},
+                        path=path,
+                        load=False,
+                    )
+            with self.assertRaises(KeyError):
+                rt.set_kernel_tuning_parameters(
+                    "Gemm",
+                    int(TensorProto.FLOAT),
+                    schema["defaults"],
+                    tuning_abi=schema["tuning_abi"] + 1,
+                    path=path,
+                    load=False,
+                )
+            self.assertFalse(Path(path).exists())
+
     def test_load_reports_missing_cache(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = str(Path(temporary) / "missing.cache")
             report = rt.load_kernel_tuning_cache(path=path)
             self.assertEqual(report["status"], "not_found")
             self.assertEqual(report["path"], path)
+
+    def test_removes_tuning_cache(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = str(Path(temporary) / "kernel_tuning.cache")
+            kernel_tuning.set_kernel_tuning_parameters(
+                "Abs",
+                int(TensorProto.FLOAT),
+                {"parallel.minimum_elements": 12345},
+                path=path,
+                load=False,
+            )
+
+            removed = kernel_tuning.remove_kernel_tuning_cache(path)
+            self.assertTrue(removed["removed"])
+            self.assertEqual(removed["path"], path)
+            self.assertEqual(removed["diagnostics"], [])
+            self.assertFalse(Path(path).exists())
+            self.assertFalse(kernel_tuning.remove_kernel_tuning_cache(path)["removed"])
 
     def test_default_cache_is_loaded_on_import(self):
         with tempfile.TemporaryDirectory() as temporary:

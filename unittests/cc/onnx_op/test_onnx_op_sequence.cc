@@ -7,12 +7,24 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <limits>
 #include <variant>
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace Test {
+
+TEST(OnnxOpSequenceRegistrationTest, PreservesSequenceMapVariadicOutputBounds) {
+  for (const bool init_doc : {false, true}) {
+    SCOPED_TRACE(init_doc);
+    const auto schemas =
+        onnx_op::sequence::GetAllOnnxOpSequenceSchemasWithHistory("SequenceMap", init_doc);
+    ASSERT_EQ(schemas.size(), 1u);
+    EXPECT_EQ(schemas[0].min_output(), 1);
+    EXPECT_EQ(schemas[0].max_output(), std::numeric_limits<int>::max());
+  }
+}
 
 static const core::schema::LightOpSchema *
 FindByVersion(const std::vector<core::schema::LightOpSchema> &schemas, int version) {

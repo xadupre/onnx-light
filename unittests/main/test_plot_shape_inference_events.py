@@ -2,12 +2,14 @@ import ast
 import pathlib
 import unittest
 
+from onnx_light.ext_test_case import ExtTestCase
+
 NONZERO_CHAIN_TEST_CASE_NAME = "test_cc_shape_inference_nonzero_chain_named"
 
 
 def _example_has_nonzero_chain_event_logging() -> bool:
     root = pathlib.Path(__file__).resolve().parents[2]
-    source_path = root / "docs" / "examples" / "core" / "plot_shape_inference.py"
+    source_path = root / "docs" / "examples" / "compute" / "plot_shape_inference.py"
     tree = ast.parse(source_path.read_text(encoding="utf-8"), filename=str(source_path))
 
     has_case_name = False
@@ -32,7 +34,7 @@ def _example_has_nonzero_chain_event_logging() -> bool:
     return has_case_name and has_events_enabled and has_compute_shape_model_call
 
 
-class TestPlotShapeInferenceEvents(unittest.TestCase):
+class TestPlotShapeInferenceEvents(ExtTestCase):
     def test_nonzero_events_section_present(self):
         self.assertTrue(_example_has_nonzero_chain_event_logging())
 

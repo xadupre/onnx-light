@@ -29,8 +29,6 @@ Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 // ---------------------------------------------------------------------------
 void RegisterLessCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Less less_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -42,7 +40,12 @@ void RegisterLessCases(std::vector<TestCase> &registry, TestMode mode) {
     const std::vector<int64_t> shape = {1024, 4096};
     const int64_t count = 1024 * 4096;
     Expect(registry, std::move(node), "test_cc_less_benchmark", {opset}, {count, count}, {count},
-           [less_kernel, shape]() -> IoData {
+           [shape]() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext less_kernel_ctx{opset};
+             const onnx_kernels::kernel::Less less_kernel{less_kernel_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, shape, /*seed=*/9201);
              Tensor y = RandnTensor(DataType::FLOAT, shape, /*seed=*/9202);
              Tensor z = less_kernel(x, y);
@@ -58,7 +61,12 @@ void RegisterLessCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_input("y");
     node.add_output("z");
-    Expect(registry, std::move(node), "test_cc_less", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_less", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext less_kernel_ctx{opset};
+      const onnx_kernels::kernel::Less less_kernel{less_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
       Tensor y = Tensor::FromFloat("", {2, 2}, {2.0f, 2.0f, 2.0f, 2.0f});
       Tensor z = less_kernel(x, y);
@@ -74,7 +82,12 @@ void RegisterLessCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_input("y");
     node.add_output("z");
-    Expect(registry, std::move(node), "test_cc_less_bcast", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_less_bcast", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext less_kernel_ctx{opset};
+      const onnx_kernels::kernel::Less less_kernel{less_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
       Tensor y = Tensor::FromFloat("", {}, {2.5f});
       Tensor z = less_kernel(x, y);
@@ -103,28 +116,48 @@ void RegisterLessCases(std::vector<TestCase> &registry, TestMode mode) {
   const std::vector<std::pair<std::string, std::function<IoData()>>> cases = {
       // From Less.export():
       {"test_less",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(13);
+
+         const KernelContext less_kernel_ctx{opset};
+         const onnx_kernels::kernel::Less less_kernel{less_kernel_ctx};
+
          auto inputs_0 = RandnFloat({3, 4, 5}, /*seed=*/25);
          auto inputs_1 = RandnFloat({3, 4, 5}, /*seed=*/26);
          Tensor z = less_kernel(inputs_0, inputs_1);
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_less_int8",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(13);
+
+         const KernelContext less_kernel_ctx{opset};
+         const onnx_kernels::kernel::Less less_kernel{less_kernel_ctx};
+
          auto inputs_0 = RandnTensor(DataType::INT8, {3, 4, 5}, /*seed=*/51);
          auto inputs_1 = RandnTensor(DataType::INT8, {3, 4, 5}, /*seed=*/52);
          Tensor z = less_kernel(inputs_0, inputs_1);
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_less_int16",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(13);
+
+         const KernelContext less_kernel_ctx{opset};
+         const onnx_kernels::kernel::Less less_kernel{less_kernel_ctx};
+
          auto inputs_0 = RandnTensor(DataType::INT16, {3, 4, 5}, /*seed=*/53);
          auto inputs_1 = RandnTensor(DataType::INT16, {3, 4, 5}, /*seed=*/54);
          Tensor z = less_kernel(inputs_0, inputs_1);
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_less_uint8",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(13);
+
+         const KernelContext less_kernel_ctx{opset};
+         const onnx_kernels::kernel::Less less_kernel{less_kernel_ctx};
+
          auto inputs_0 =
              Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/55));
          auto inputs_1 =
@@ -133,7 +166,12 @@ void RegisterLessCases(std::vector<TestCase> &registry, TestMode mode) {
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_less_uint16",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(13);
+
+         const KernelContext less_kernel_ctx{opset};
+         const onnx_kernels::kernel::Less less_kernel{less_kernel_ctx};
+
          auto inputs_0 =
              Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/57));
          auto inputs_1 =
@@ -142,7 +180,12 @@ void RegisterLessCases(std::vector<TestCase> &registry, TestMode mode) {
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_less_uint32",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(13);
+
+         const KernelContext less_kernel_ctx{opset};
+         const onnx_kernels::kernel::Less less_kernel{less_kernel_ctx};
+
          auto inputs_0 =
              Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/59));
          auto inputs_1 =
@@ -151,7 +194,12 @@ void RegisterLessCases(std::vector<TestCase> &registry, TestMode mode) {
          return IoData{{std::move(inputs_0), std::move(inputs_1)}, {std::move(z)}};
        }},
       {"test_less_uint64",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(13);
+
+         const KernelContext less_kernel_ctx{opset};
+         const onnx_kernels::kernel::Less less_kernel{less_kernel_ctx};
+
          auto inputs_0 =
              Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/61));
          auto inputs_1 =
@@ -161,7 +209,12 @@ void RegisterLessCases(std::vector<TestCase> &registry, TestMode mode) {
        }},
       // From Less.export_less_broadcast():
       {"test_less_bcast",
-       [=]() -> IoData {
+       []() -> IoData {
+         const OpsetId opset = DefaultOpset(13);
+
+         const KernelContext less_kernel_ctx{opset};
+         const onnx_kernels::kernel::Less less_kernel{less_kernel_ctx};
+
          auto inputs_0 = RandnFloat({3, 4, 5}, /*seed=*/27);
          auto inputs_1 = RandnFloat({5}, /*seed=*/28);
          Tensor z = less_kernel(inputs_0, inputs_1);
@@ -180,7 +233,12 @@ void RegisterLessCases(std::vector<TestCase> &registry, TestMode mode) {
     n16.add_input("x");
     n16.add_input("y");
     n16.add_output("z");
-    Expect(registry, std::move(n16), "test_cc_less_float16", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(n16), "test_cc_less_float16", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext less_kernel_ctx{opset};
+      const onnx_kernels::kernel::Less less_kernel{less_kernel_ctx};
+
       Tensor x = MakeFloat16Tensor("", {2, 3}, {1.0f, 4.0f, 3.0f, 6.0f, 5.0f, 2.0f});
       Tensor y = MakeFloat16Tensor("", {2, 3}, {2.0f, 3.0f, 3.0f, 5.0f, 6.0f, 1.0f});
       Tensor z = less_kernel(x, y);
@@ -195,7 +253,12 @@ void RegisterLessCases(std::vector<TestCase> &registry, TestMode mode) {
     nbf.add_input("x");
     nbf.add_input("y");
     nbf.add_output("z");
-    Expect(registry, std::move(nbf), "test_cc_less_bfloat16", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(nbf), "test_cc_less_bfloat16", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(13);
+
+      const KernelContext less_kernel_ctx{opset};
+      const onnx_kernels::kernel::Less less_kernel{less_kernel_ctx};
+
       Tensor x = MakeBfloat16Tensor("", {2, 3}, {1.0f, 4.0f, 3.0f, 6.0f, 5.0f, 2.0f});
       Tensor y = MakeBfloat16Tensor("", {2, 3}, {2.0f, 3.0f, 3.0f, 5.0f, 6.0f, 1.0f});
       Tensor z = less_kernel(x, y);

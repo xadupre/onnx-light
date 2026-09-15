@@ -98,7 +98,8 @@ step and produces the input required by the next one.
         calibrated keys through their exact processor and execution
         descriptor. None of the calibrated values were promoted to portable
         schema defaults, because only one architecture was measured; see
-        ``kernel_parallelization_reports/x86_64_calibration.json``. An ARM64
+        ``kernel_parallelization_reports/x86_64_calibration.json``, regenerated
+        against the current schema on an Intel Xeon Platinum 8370C. An ARM64
         machine profile remains outstanding, blocked on hardware access)
     * - H. Acceptance
       - Step G
@@ -248,7 +249,18 @@ recalibration or extra registry access. See
 ``kernel_parallelization_reports/x86_64_calibration.json`` for the complete
 selected values and per-key diagnostics.
 
-This pass fixed a real cross-process matching defect uncovered while
+The published calibration report has been regenerated against the current
+registry on an Intel Xeon Platinum 8370C, replacing the earlier AMD EPYC
+report whose Gemm profiles contained obsolete algorithm, conversion, and
+work-unit parameters. Gemm now accepts only ``parallel.minimum_tasks``.
+The report records its source revision and hardware; its reload verification
+applies to that run, not arbitrary later schemas. A binding regression test
+validates every profile in every published calibration report against the
+registered schema and tuning ABI at HEAD, including value constraints.
+The separate Step E baseline remains the historical AMD EPYC measurement
+and must not be treated as a same-machine comparison with this calibration.
+
+The original pass fixed a real cross-process matching defect uncovered while
 verifying the reload: ``KernelTuningCacheOptions::execution``, when left
 unset (the common case for an ad hoc calibration run), fell back to the
 processor's raw logical-core count in ``CurrentExecutionDescriptor()``,
@@ -269,10 +281,9 @@ value risks an undeclared regression on ARM64, which the acceptance
 criteria for this step explicitly forbid. Instead, the calibrated values
 stay in the persisted machine cache, where they are selected only for the
 exact processor and execution descriptor recorded during calibration --
-this machine already benefits from them (for example unary
-``parallel.minimum_elements`` dropped from the portable default of 32768 to
-8192, and ``Gemm``'s ``parallel.minimum_tasks`` dropped from 2 to 1) without
-changing behavior anywhere else. Publishing an ARM64 report and comparing it
+the measured machine can use them without changing behavior anywhere else.
+The selected thresholds are recorded in the report rather than assumed to
+transfer between x86-64 processors. Publishing an ARM64 report and comparing it
 against ``x86_64_calibration.json`` is the next measured step before any
 default promotion; it remains blocked on ARM64 hardware access, matching the
 Step E baseline's outstanding ARM64 gap.

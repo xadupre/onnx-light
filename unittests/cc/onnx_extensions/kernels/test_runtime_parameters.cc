@@ -4,17 +4,16 @@
 
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/compute/execution_plan.h"
-#include "onnx_core/platform/cpu_descriptor.h"
 #include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_core/runtime/memory/simple_tensor.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/runtime_session.h"
+#include "onnx_core/runtime/tuning/cpu_execution_policy.h"
 #include "onnx_core/runtime/tuning/runtime_parameters.h"
 #include "onnx_proto/onnx.h"
 
 #include <gtest/gtest.h>
 
-#include <thread>
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -28,38 +27,25 @@ using core::runtime::RuntimeSession;
 using core::runtime::RuntimeSessionOptions;
 using core::runtime::Tensor;
 
-namespace {
-
-// Resolves the number of CPU cores the same way RuntimeParameters does so the
-// tests do not hard-code an expected value that depends on the test host.
-int32_t ExpectedCores() {
-  const core::platform::CpuDescriptor &descriptor = core::platform::GetCpuDescriptor();
-  if (descriptor.physical_cores.has_value() && *descriptor.physical_cores != 0) {
-    return static_cast<int32_t>(*descriptor.physical_cores);
-  }
-  if (descriptor.logical_cores.has_value() && *descriptor.logical_cores != 0) {
-    return static_cast<int32_t>(*descriptor.logical_cores);
-  }
-  const unsigned int threads = std::thread::hardware_concurrency();
-  return threads == 0 ? 1 : static_cast<int32_t>(threads);
-}
-
-} // namespace
+namespace {} // namespace
 
 TEST(runtime_parameters, DefaultIsCores) {
   RuntimeParameters params;
   EXPECT_EQ(params.num_threads, 0);
-  EXPECT_EQ(params.EffectiveNumThreads(), ExpectedCores());
+  EXPECT_EQ(params.EffectiveNumThreads(),
+            static_cast<int32_t>(core::runtime::DefaultCpuParticipantCount()));
 }
 
 TEST(runtime_parameters, ZeroResolvesToCores) {
   RuntimeParameters params(0);
-  EXPECT_EQ(params.EffectiveNumThreads(), ExpectedCores());
+  EXPECT_EQ(params.EffectiveNumThreads(),
+            static_cast<int32_t>(core::runtime::DefaultCpuParticipantCount()));
 }
 
 TEST(runtime_parameters, NegativeResolvesToCores) {
   RuntimeParameters params(-4);
-  EXPECT_EQ(params.EffectiveNumThreads(), ExpectedCores());
+  EXPECT_EQ(params.EffectiveNumThreads(),
+            static_cast<int32_t>(core::runtime::DefaultCpuParticipantCount()));
 }
 
 TEST(runtime_parameters, OneDisablesParallelism) {

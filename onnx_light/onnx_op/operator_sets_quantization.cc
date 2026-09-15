@@ -49,6 +49,25 @@ LightOpSchema MakeQuantizeLinearV25Schema() {
       });
 }
 
+LightOpSchema MakeQuantizeLinearV28Schema() {
+  LightOpSchema schema = MakeQuantizeLinearV25Schema();
+  schema = LightOpSchema(
+      "QuantizeLinear", kOnnxDomain, 28, MakeQuantizeLinearDoc(28), schema.inputs(),
+      schema.outputs(),
+      {
+          schema.type_constraints()[0],
+          schema.type_constraints()[1],
+          {"T3",
+           {TensorType::kInt8, TensorType::kUint8, TensorType::kInt16, TensorType::kUint16,
+            TensorType::kFloat8e4m3fn, TensorType::kFloat8e4m3fnuz, TensorType::kFloat8e5m2,
+            TensorType::kFloat8e5m2fnuz, TensorType::kUint4, TensorType::kInt4,
+            TensorType::kFloat4e2m1, TensorType::kUint2, TensorType::kInt2, TensorType::kFloat6e2m3,
+            TensorType::kFloat6e3m2},
+           "The type of the input `y_zero_point` and the output `y`."},
+      });
+  return schema;
+}
+
 LightOpSchema MakeQuantizeLinearV24Schema() {
   return LightOpSchema(
       "QuantizeLinear", kOnnxDomain, 24, MakeQuantizeLinearDoc(24),
@@ -277,6 +296,25 @@ LightOpSchema MakeDequantizeLinearV25Schema() {
            {TensorType::kFloat, TensorType::kFloat16, TensorType::kBfloat16},
            "The type of the output 'y'."},
       });
+}
+
+LightOpSchema MakeDequantizeLinearV28Schema() {
+  LightOpSchema schema = MakeDequantizeLinearV25Schema();
+  schema = LightOpSchema(
+      "DequantizeLinear", kOnnxDomain, 28, MakeDequantizeLinearDoc(28), schema.inputs(),
+      schema.outputs(),
+      {
+          {"T1",
+           {TensorType::kInt8, TensorType::kUint8, TensorType::kInt16, TensorType::kUint16,
+            TensorType::kInt32, TensorType::kFloat8e4m3fn, TensorType::kFloat8e4m3fnuz,
+            TensorType::kFloat8e5m2, TensorType::kFloat8e5m2fnuz, TensorType::kUint4,
+            TensorType::kInt4, TensorType::kFloat4e2m1, TensorType::kUint2, TensorType::kInt2,
+            TensorType::kFloat6e2m3, TensorType::kFloat6e3m2},
+           "The type of the inputs 'x_zero_point' and 'x'."},
+          schema.type_constraints()[1],
+          schema.type_constraints()[2],
+      });
+  return schema;
 }
 
 LightOpSchema MakeDequantizeLinearV24Schema() {
@@ -653,19 +691,19 @@ std::vector<LightOpSchema> GetAllOnnxOpQuantizationSchemasWithHistory(const std:
       {"QuantizeLinear",
        [] {
          return std::vector<LightOpSchema>{
-             MakeQuantizeLinearV25Schema(), MakeQuantizeLinearV24Schema(),
-             MakeQuantizeLinearV23Schema(), MakeQuantizeLinearV21Schema(),
-             MakeQuantizeLinearV19Schema(), MakeQuantizeLinearV13Schema(),
-             MakeQuantizeLinearV10Schema(),
+             MakeQuantizeLinearV28Schema(), MakeQuantizeLinearV25Schema(),
+             MakeQuantizeLinearV24Schema(), MakeQuantizeLinearV23Schema(),
+             MakeQuantizeLinearV21Schema(), MakeQuantizeLinearV19Schema(),
+             MakeQuantizeLinearV13Schema(), MakeQuantizeLinearV10Schema(),
          };
        }},
       {"DequantizeLinear",
        [] {
          return std::vector<LightOpSchema>{
-             MakeDequantizeLinearV25Schema(), MakeDequantizeLinearV24Schema(),
-             MakeDequantizeLinearV23Schema(), MakeDequantizeLinearV21Schema(),
-             MakeDequantizeLinearV19Schema(), MakeDequantizeLinearV13Schema(),
-             MakeDequantizeLinearV10Schema(),
+             MakeDequantizeLinearV28Schema(), MakeDequantizeLinearV25Schema(),
+             MakeDequantizeLinearV24Schema(), MakeDequantizeLinearV23Schema(),
+             MakeDequantizeLinearV21Schema(), MakeDequantizeLinearV19Schema(),
+             MakeDequantizeLinearV13Schema(), MakeDequantizeLinearV10Schema(),
          };
        }},
       {"QLinearConv",

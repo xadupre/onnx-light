@@ -12,8 +12,6 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 void RegisterDetCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(11);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Det det_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -22,7 +20,12 @@ void RegisterDetCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("Y");
     const std::vector<int64_t> shape = {512, 64, 64};
     Expect(registry, std::move(node), "test_cc_det_benchmark", {opset}, {512 * 64 * 64}, {512},
-           [det_kernel, shape]() -> IoData {
+           [shape]() -> IoData {
+             const OpsetId opset = DefaultOpset(11);
+
+             const KernelContext det_kernel_ctx{opset};
+             const onnx_kernels::kernel::Det det_kernel{det_kernel_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, shape, 439);
              Tensor y = det_kernel(x);
              return IoData{{std::move(x)}, {std::move(y)}};
@@ -36,7 +39,12 @@ void RegisterDetCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Det");
     node.add_input("X");
     node.add_output("Y");
-    Expect(registry, std::move(node), "test_cc_det_2d", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_det_2d", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(11);
+
+      const KernelContext det_kernel_ctx{opset};
+      const onnx_kernels::kernel::Det det_kernel{det_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {2, 2}, {0.0f, 1.0f, 2.0f, 3.0f});
       Tensor y = det_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
@@ -49,7 +57,12 @@ void RegisterDetCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Det");
     node.add_input("X");
     node.add_output("Y");
-    Expect(registry, std::move(node), "test_cc_det_nd", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_det_nd", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(11);
+
+      const KernelContext det_kernel_ctx{opset};
+      const onnx_kernels::kernel::Det det_kernel{det_kernel_ctx};
+
       Tensor x = Tensor::FromFloat(
           "", {3, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 1.0f, 2.0f, 2.0f, 1.0f, 1.0f, 3.0f, 3.0f, 1.0f});
       Tensor y = det_kernel(x);

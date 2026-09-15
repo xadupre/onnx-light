@@ -8,6 +8,54 @@
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
 
+/**
+ * Fuses matching ReduceMin/ReduceMax and ArgMin/ArgMax nodes into TopK with K=1.
+ *
+ * @code
+ * Before:
+ *                    ┌───────────────┐
+ *            ┌──────→│ ReduceMax/Min │────→ values
+ *            │       └───────────────┘
+ *            │
+ *   x ───────┤
+ *            │
+ *            │       ┌────────────┐
+ *            └──────→│ ArgMax/Min │────→ indices
+ *                    └────────────┘
+ *
+ * After:
+ *                 ┌──────┐
+ *   x, K=[1] ────→│ TopK │
+ *                 └──────┘
+ *                    │
+ *              ┌─────┴─────┐
+ *              │           │
+ *              ↓           ↓
+ *           values      indices
+ *
+ * After (keepdims=0):
+ *                 ┌──────┐
+ *   x, K=[1] ────→│ TopK │
+ *                 └──────┘
+ *                    │
+ *              ┌─────┴─────┐
+ *              │           │
+ *              ↓           ↓
+ *      temporary values  temporary indices
+ *              │           │
+ *              ↓           ↓
+ *           ┌─────────┐  ┌─────────┐
+ *   axes ──→│ Squeeze │  │ Squeeze │←── axes
+ *           └─────────┘  └─────────┘
+ *              │           │
+ *              ↓           ↓
+ *           values      indices
+ * @endcode
+ *
+ * The Min variant sets ``largest=0``. When ``keepdims=0``, TopK produces
+ * temporary singleton-axis outputs and two Squeeze nodes restore the original
+ * ``values`` and ``indices`` output names.
+ */
 class ReduceArgTopKPattern final : public core::builder::PatternOptimization {
 public:
   explicit ReduceArgTopKPattern(int priority = 0)
@@ -21,6 +69,60 @@ public:
         const std::vector<const NodeProto *> &nodes) const override;
 };
 
+/**
+ * Moves a Cast-ReduceSum-Mul-Sub-Cast normalization chain to the result type.
+ *
+ * @code
+ * Before:
+ *          ┌──────┐
+ *   x ────→│ Cast │────→ xc
+ *          └──────┘
+ *             │
+ *             ↓
+ *       ┌───────────┐
+ *       │ ReduceSum │←──── axes
+ *       └───────────┘
+ *             │
+ *             ↓
+ *          ┌─────┐
+ *          │ Mul │←──── scale
+ *          └─────┘
+ *             │
+ *             ↓
+ *          ┌─────┐
+ *          │ Sub │←──── xc (or axes)
+ *          └─────┘
+ *             │
+ *             ↓
+ *          ┌──────┐
+ *          │ Cast │────→ y
+ *          └──────┘
+ *
+ * After:
+ *          ┌───────────┐
+ *   x ────→│ ReduceSum │←──── axes
+ *          └───────────┘
+ *               │
+ *               ↓
+ *            ┌─────┐      ┌──────┐
+ *            │ Mul │←──── │ Cast │←──── scale
+ *            └─────┘      └──────┘
+ *               │
+ *               ↓
+ *            ┌─────┐
+ *            │ Sub │←──── x
+ *            └─────┘
+ *               │
+ *               ↓
+ *               y
+ * @endcode
+ *
+ * The reversed Sub operand order is retained. The five matched nodes become
+ * ReduceSum, Cast, Mul, and Sub nodes in ``T`` while preserving ``axes``,
+ * ``scale``, ReduceSum attributes, and the final output ``y``. The matcher also
+ * accepts ``axes`` instead of ``xc`` as the reused Sub input; Apply replaces
+ * that reused input with ``x`` in either case.
+ */
 class ReduceSumNormalizePattern final : public core::builder::PatternOptimization {
 public:
   explicit ReduceSumNormalizePattern(int priority = 0)

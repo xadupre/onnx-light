@@ -128,7 +128,9 @@ def prepare_case(op_name: str) -> dict:
     """
 
     pattern = f"^test_cc_{op_name}_benchmark$"
-    matches = collect_test_cases_by_name(pattern, mode=TestMode.BENCHMARK)
+    matches = collect_test_cases_by_name(
+        pattern, mode=TestMode.BENCHMARK, generate_benchmark_expected_outputs=True
+    )
     if len(matches) != 1:
         raise ValueError(
             f"Expected exactly one benchmark case matching {pattern!r}, got {len(matches)}."

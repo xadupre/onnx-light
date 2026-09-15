@@ -130,11 +130,16 @@ namespace {
 
 } // namespace
 
-std::vector<TestCase> CollectTestCases(const std::string &op_type, bool include_big,
-                                       TestMode mode) {
+std::vector<TestCase> CollectTestCases(const std::string &op_type, bool include_big, TestMode mode,
+                                       bool generate_benchmark_expected_outputs) {
   std::vector<TestCase> registry;
   for (const auto &fn : GetRegisteredCollectors()) {
     fn(registry, op_type, include_big, mode);
+  }
+  if (mode == TestMode::BENCHMARK && !generate_benchmark_expected_outputs) {
+    for (TestCase &tc : registry) {
+      tc.set_expected_outputs_generated(false);
+    }
   }
   if (include_big) {
     return registry;
@@ -150,8 +155,10 @@ std::vector<TestCase> CollectTestCases(const std::string &op_type, bool include_
 }
 
 std::vector<TestCase> CollectTestCasesByName(const std::string &name_regex, bool include_big,
-                                             TestMode mode) {
-  std::vector<TestCase> all_cases = CollectTestCases("", include_big, mode);
+                                             TestMode mode,
+                                             bool generate_benchmark_expected_outputs) {
+  std::vector<TestCase> all_cases =
+      CollectTestCases("", include_big, mode, generate_benchmark_expected_outputs);
   if (name_regex.empty()) {
     return all_cases;
   }
@@ -166,8 +173,10 @@ std::vector<TestCase> CollectTestCasesByName(const std::string &name_regex, bool
   return filtered;
 }
 
-std::vector<TestCase> GetTestCaseByName(const std::string &name, bool include_big, TestMode mode) {
-  std::vector<TestCase> all_cases = CollectTestCases("", include_big, mode);
+std::vector<TestCase> GetTestCaseByName(const std::string &name, bool include_big, TestMode mode,
+                                        bool generate_benchmark_expected_outputs) {
+  std::vector<TestCase> all_cases =
+      CollectTestCases("", include_big, mode, generate_benchmark_expected_outputs);
   std::vector<TestCase> result;
   for (auto &tc : all_cases) {
     if (tc.name == name) {

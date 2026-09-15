@@ -16,12 +16,12 @@ Options class hierarchy
 Buffer-related options (alignment, size threshold) are shared across several
 operations and are factored into a common base class:
 
-* :cpp:struct:`~onnx_light::TensorBufferOptions` – base class with ``raw_data_threshold`` (default: 0)
+* :cpp:struct:`~onnx_light::TensorBufferOptions` – base class with
+  ``raw_data_threshold`` (default: ``kSmallTensorDataThresholdBytes``, or 64 bytes)
   and ``alignment`` (default: 0).
-* :cpp:struct:`~onnx_light::ParseOptions` inherits :cpp:struct:`~onnx_light::TensorBufferOptions`; its ``raw_data_threshold``
-  defaults to 1024 bytes.
-* :cpp:struct:`~onnx_light::SerializeOptions` inherits :cpp:struct:`~onnx_light::TensorBufferOptions`; its ``raw_data_threshold``
-  defaults to ``kSmallTensorDataThresholdBytes`` (64 bytes).
+* :cpp:struct:`~onnx_light::ParseOptions` and
+  :cpp:struct:`~onnx_light::SerializeOptions` inherit
+  :cpp:struct:`~onnx_light::TensorBufferOptions` without changing these defaults.
 
 Any function that accepts a :cpp:struct:`~onnx_light::TensorBufferOptions` reference also accepts
 :cpp:struct:`~onnx_light::ParseOptions` or :cpp:struct:`~onnx_light::SerializeOptions` objects.
@@ -29,9 +29,11 @@ Any function that accepts a :cpp:struct:`~onnx_light::TensorBufferOptions` refer
 Core objects and where ownership lives
 --------------------------------------
 
-Every tensor stores bytes in ``TensorProto::raw_data`` (type :cpp:class:`~onnx_light::utils::ByteSpan`).
+When a tensor payload is represented by ``TensorProto::raw_data``, its bytes are
+stored in a :cpp:class:`~onnx_light::utils::ByteSpan`.
 That :cpp:class:`~onnx_light::utils::ByteSpan` object is a member of the :class:`~onnx_light.onnx_lib.TensorProto` instance, so its
-lifetime is tied to the model object graph (``ModelProto -> GraphProto -> TensorProto``).
+lifetime is tied to the tensor, whether standalone or in the model object graph
+(``ModelProto -> GraphProto -> TensorProto``).
 :cpp:class:`~onnx_light::utils::ByteSpan` has two storage modes:
 
 * **Owned mode**: it owns an internal byte buffer.
@@ -50,8 +52,8 @@ you can attach an arbitrary cleanup function directly to a tensor via
 :cpp:func:`~onnx_light::TensorProto::set_raw_data_with_deleter` or the lower-level
 :cpp:func:`~onnx_light::utils::ByteSpan::assign_with_deleter`.  The deleter is called
 exactly once when the last copy of the owner token inside the ByteSpan is destroyed —
-that is, when the tensor (and all copies of it that share the same buffer) goes out
-of scope or its raw_data is overwritten/cleared.
+that is, after every tensor sharing that token goes out of scope or its ``raw_data``
+is overwritten or cleared.
 
 The deleter is a zero-argument callable (lambda, function pointer, or functor)
 returning ``void``.  Internally it is wrapped in a ``std::shared_ptr<void>`` with a
@@ -79,10 +81,10 @@ C++ example::
     // The tensor now owns buf's lifetime through the deleter.  buf must not be
     // freed elsewhere.
 
-A no-op deleter is valid and costs nothing extra::
+A no-op deleter is valid, but if no cleanup is required, directly borrowing the
+buffer avoids creating a shared owner token::
 
-    tensor.set_raw_data_with_deleter(ptr, sz, []() {});
-    // Equivalent to: tensor.ref_raw_data().assign_borrowed(ptr, sz);
+    tensor.ref_raw_data().assign_borrowed(ptr, sz);
 
 The lower-level :cpp:func:`~onnx_light::utils::ByteSpan::assign_with_deleter` works the same way::
 
@@ -93,38 +95,44 @@ changing the storage mode), use
 :cpp:func:`~onnx_light::TensorProto::attach_raw_data_deleter` or the lower-level
 :cpp:func:`~onnx_light::utils::ByteSpan::attach_deleter`::
 
-    // raw_data already populated (owned or borrowed); just register cleanup.
-    tensor.attach_raw_data_deleter([]() { /* custom cleanup */ });
+    // Preserve any current owner when raw_data is borrowed.
+    auto owner = tensor.ref_raw_data().owner();
+    tensor.attach_raw_data_deleter([owner]() { /* custom cleanup */ });
+
+Attaching a deleter replaces any existing shared owner token.  For borrowed data,
+the new deleter must therefore keep the backing storage valid until it runs.
 
 Taking ownership of tensor data while parsing
 ---------------------------------------------
 
 :cpp:struct:`~onnx_light::ParseOptions` exposes a ``raw_data_callback`` hook that is
-invoked for every :class:`~onnx_light.onnx_lib.TensorProto` once its ``raw_data`` has
-been parsed (inline or external).  The callback receives the freshly parsed tensor and
-returns a deleter (a zero-argument callable); when the returned deleter is non-empty it is
-attached to the tensor's ``raw_data`` via
+invoked for every :class:`~onnx_light.onnx_lib.TensorProto` that has ``raw_data`` once
+that data has been parsed (inline or external).  The callback receives the freshly
+parsed tensor and returns a deleter (a zero-argument callable); when the returned
+deleter is non-empty it is attached to the tensor's ``raw_data`` via
 :cpp:func:`~onnx_light::utils::ByteSpan::attach_deleter`, so it fires once when the buffer
 is released.  Return an empty ``std::function`` to leave ownership unchanged.
 
-The callback works regardless of where the bytes live — on disk (a ``no_copy`` borrowed
-view of an mmap or external weights file) or in CPU memory (an owned buffer) — because the
-deleter is layered on top of the existing storage without moving the bytes::
+The callback works with owned or borrowed bytes without moving them.  A non-empty
+deleter replaces the current owner token, so it must retain or release any backing
+storage needed by borrowed bytes::
 
     ParseOptions options;
     options.raw_data_callback = [](TensorProto &tensor,
                                    GraphProto *graph) -> std::function<void()> {
       // Inspect tensor.ref_raw_data() and the parent graph (``graph`` is nullptr for a
       // standalone tensor); optionally relocate it (e.g. to a device) and return the matching
-      // cleanup. Returning {} keeps the default ownership.
-      return [name = tensor.ref_name()]() { /* release resources */ };
+      // cleanup. Preserve the current owner when the bytes remain borrowed.
+      auto owner = tensor.ref_raw_data().owner();
+      return [owner, name = tensor.ref_name()]() {
+        /* release resources */
+      };
     };
     model.ParseFromString(bytes, options);
 
 By default ``raw_data_callback`` is empty and parsing behaves exactly as before.
 
 The same hook is available from Python as
-:attr:`onnx_light.onnx.ParseOptions.raw_data_callback`.  The callback is called as
 :attr:`onnx_light.onnx.ParseOptions.raw_data_callback`.  The callback is called as
 ``fn(tensor, graph)`` with the freshly parsed :class:`~onnx_light.onnx.TensorProto` and its
 parent :class:`~onnx_light.onnx.GraphProto` (or ``None`` for a standalone tensor) and must return
@@ -133,6 +141,7 @@ either ``None`` (ownership unchanged) or a zero-argument callable used as the de
     import onnx_light.onnx as onnx
 
     options = onnx.ParseOptions()
+    # print() returns None, so the tensor keeps its default ownership.
     options.raw_data_callback = lambda tensor, graph: print(tensor.name, len(tensor.raw_data))
 
     model = onnx.ModelProto()
@@ -150,8 +159,8 @@ forwards every parsed tensor to its ``on_tensor`` callable and always returns
 
 See the :ref:`l-example-plot-raw-data-callback` gallery example for a complete walk-through.
 
-
------------------------------------------
+No-copy ownership while parsing
+-------------------------------
 
 Ownership is assigned while parsing each tensor:
 
@@ -197,7 +206,6 @@ This is useful for:
 
 * Reducing memory fragmentation after loading a model that was parsed without the
   no-copy option.
-* Enabling memory-mapping of all tensor weights after the fact.
 * Preparing a model for inference runtimes that benefit from a single contiguous
   tensor weight region.
 

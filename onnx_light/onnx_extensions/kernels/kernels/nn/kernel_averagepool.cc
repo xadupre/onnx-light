@@ -284,23 +284,11 @@ void AveragePool::operator()(const Tensor &x, const Shape &kernel_shape, const S
         }
         // Accumulate the average over the kernel window.
         //
-        // ONNX semantics: a kernel position contributes to the divisor only
-        // when it falls inside the padded input region
-        // ``[-pad_begin, in_dim + pad_end)``.  Positions in
-        // ``[0, in_dim)`` (``in_input``) contribute their real value;
-        // positions in the padded region but outside the input
-        // (``in_padded_region && !in_input``) contribute 0; positions
-        // outside the padded region entirely (``ceil_mode`` overshoot or
-        // otherwise) contribute nothing and are not counted in either
-        // divisor.
-        //
-        // - ``count_include_pad=true``: divisor = number of positions in
-        //   ``in_padded_region`` (i.e. ``in_window_count``).
-        // - ``count_include_pad=false``: divisor = number of positions in
-        //   ``in_input`` (i.e. ``valid_count``).
+        // Including padding counts every sampled kernel position, including
+        // the implicit right padding needed by a ceil-mode tail window.
+        // Dilation changes the sample spacing, not the number of samples.
         double sum = 0.0;
-        int64_t valid_count = 0;     // positions in [0, in_dim) (real values).
-        int64_t in_window_count = 0; // positions in [-pad_begin, in_dim + pad_end).
+        int64_t valid_count = 0;
         // Recursively (here: iteratively) iterate over the kernel volume.
         const int64_t kernel_volume = [&]() {
           int64_t v = 1;
@@ -319,29 +307,21 @@ void AveragePool::operator()(const Tensor &x, const Shape &kernel_shape, const S
           }
           int64_t in_offset = in_base;
           bool in_input = true;
-          bool in_padded_region = true;
           for (size_t i = 0; i < k; ++i) {
             const int64_t p = out_idx[i] * strides[i] + kidx[i] * eff_dilations[i] - eff_pads[i];
-            if (p < -eff_pads[i] || p >= x.shape[i + 2] + eff_pads[i + k]) {
-              in_padded_region = false;
-              in_input = false;
-              break;
-            }
             if (p < 0 || p >= x.shape[i + 2]) {
               in_input = false;
+              break;
             } else {
               in_offset += p * in_strides[i + 2];
             }
           }
-          if (in_padded_region) {
-            ++in_window_count;
-            if (in_input) {
-              sum += static_cast<double>(px[in_offset]);
-              ++valid_count;
-            }
+          if (in_input) {
+            sum += static_cast<double>(px[in_offset]);
+            ++valid_count;
           }
         }
-        int64_t denom = count_include_pad ? in_window_count : valid_count;
+        int64_t denom = count_include_pad ? kernel_volume : valid_count;
         int64_t out_offset = out_base;
         for (size_t i = 0; i < k; ++i) {
           out_offset += out_idx[i] * out_strides[i + 2];

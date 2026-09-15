@@ -7,6 +7,7 @@
 
 #include <gtest/gtest.h>
 
+#include <limits>
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -16,6 +17,22 @@ namespace Test {
 constexpr size_t kExpectedIfSchemaCount = 3;
 constexpr size_t kExpectedLoopSchemaCount = 3;
 constexpr size_t kExpectedScanSchemaCount = 3;
+
+TEST(OnnxOpControlflowRegistrationTest, PreservesVariadicOutputBoundsWithAndWithoutDocs) {
+  for (const bool init_doc : {false, true}) {
+    SCOPED_TRACE(init_doc);
+    const auto schemas =
+        onnx_op::controlflow::GetAllOnnxOpControlflowSchemasWithHistory("", init_doc);
+    ASSERT_EQ(schemas.size(),
+              kExpectedIfSchemaCount + kExpectedLoopSchemaCount + kExpectedScanSchemaCount);
+    for (const auto &schema : schemas) {
+      SCOPED_TRACE(schema.name());
+      SCOPED_TRACE(schema.since_version());
+      EXPECT_EQ(schema.min_output(), 1);
+      EXPECT_EQ(schema.max_output(), std::numeric_limits<int>::max());
+    }
+  }
+}
 
 static const core::schema::LightOpSchema *
 FindByVersion(const std::vector<core::schema::LightOpSchema> &schemas, int version) {

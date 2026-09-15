@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
 #include "onnx_extensions/backend_test/cases/math/include_math_cases.h"
 
 #include <gtest/gtest.h>
@@ -10,6 +11,7 @@
 #include <algorithm>
 #include <cmath>
 #include <initializer_list>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -22,6 +24,30 @@ std::vector<core::backend_test::TestCase> CollectTestCases(const std::string &op
   CollectMathTestCases(registry, op_type);
   return registry;
 }
+
+class RestoreAbsKernelOverrides {
+public:
+  RestoreAbsKernelOverrides() : dispatch_(core::runtime::KernelDispatchTable().at("ai.onnx:Abs")) {
+    const auto &custom_kernels = core::runtime::GlobalCustomKernels();
+    auto it = custom_kernels.find("ai.onnx:Abs");
+    if (it != custom_kernels.end()) {
+      global_custom_ = it->second;
+    }
+  }
+
+  ~RestoreAbsKernelOverrides() {
+    core::runtime::RegisterKernelFn("", "Abs", core::symbolic::Device::kCPU, std::move(dispatch_));
+    if (global_custom_) {
+      core::runtime::RegisterGlobalCustomKernelFactory("", "Abs", std::move(global_custom_));
+    } else {
+      core::runtime::UnregisterGlobalCustomKernel("", "Abs");
+    }
+  }
+
+private:
+  core::runtime::NodeKernelFn dispatch_;
+  core::runtime::NodeKernelFn global_custom_;
+};
 } // namespace
 using core::backend_test::TestCase;
 
@@ -105,6 +131,39 @@ const TestCase *FindCase(const std::vector<TestCase> &cases, const std::string &
 }
 
 } // namespace
+
+TEST(BackendTestCase, AbsCaseNamesContainTensorType) {
+  const auto cases = CollectTestCases("Abs");
+  const std::vector<std::string> expected_names = {
+      "test_cc_abs_float16", "test_cc_abs_bfloat16", "test_cc_abs_int8",   "test_cc_abs_int16",
+      "test_cc_abs_int32",   "test_cc_abs_int64",    "test_cc_abs_double",
+  };
+  for (const std::string &name : expected_names) {
+    EXPECT_NE(FindCase(cases, name), nullptr) << "missing typed case: " << name;
+  }
+}
+
+TEST(BackendTestCase, AbsExpectedOutputsIgnoreExternalKernelOverrides) {
+  RestoreAbsKernelOverrides restore;
+  core::runtime::RegisterKernelFn(
+      "", "Abs", core::symbolic::Device::kCPU,
+      [](const NodeProto &, core::runtime::RuntimeContext &)
+          -> std::unique_ptr<core::runtime::KernelBase> { return nullptr; });
+  core::runtime::RegisterGlobalCustomKernel(
+      "", "Abs", [](const NodeProto &node, core::runtime::RuntimeContext &ctx) {
+        const auto &x = ctx.Get(node.input(0));
+        ctx.Put(node.output(0),
+                core::runtime::Tensor::FromFloat(
+                    node.output(0), x.shape,
+                    std::vector<float>(static_cast<size_t>(x.element_count()), 42.0f)));
+      });
+
+  const auto cases = CollectTestCases("Abs");
+  const TestCase *tc = FindCase(cases, "test_cc_abs");
+  ASSERT_NE(tc, nullptr);
+  const auto &expected = tc->data_sets().front().outputs.front();
+  EXPECT_FLOAT_EQ(expected.AsFloat()[0], 1.0f);
+}
 
 TEST(BackendTestCase, SubCaseOutputsAreElementwiseDifference) {
   auto cases = CollectTestCases("Sub");
@@ -1269,11 +1328,10 @@ TEST(BackendTestCase, BenchmarkModeProducesLargeInputCases) {
       if (c.name.find("_benchmark_bfloat16") != std::string::npos) {
         ++benchmark_bfloat16_cases;
       }
-      // Lazy cases must not have been materialized during collection. Use the
-      // introspection helpers (which do *not* trigger materialization) rather
-      // than data_sets(), which would build the multi-million-element tensors.
+      // Cases must not have been materialized during collection. Inspect the
+      // state rather than data_sets(), which would build the multi-million-
+      // element tensors.
       EXPECT_FALSE(c.materialized()) << "benchmark case materialized eagerly: " << c.name;
-      EXPECT_TRUE(c.is_lazy()) << "benchmark case missing builder: " << c.name;
       int64_t max_elems = 0;
       for (int64_t n : c.declared_input_element_counts) {
         max_elems = std::max(max_elems, n);

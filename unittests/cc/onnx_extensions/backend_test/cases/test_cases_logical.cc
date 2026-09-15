@@ -8,6 +8,7 @@
 
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -613,6 +614,18 @@ TEST(BackendTestCase, WhereCasesArePresent) {
   auto cases = CollectTestCases("Where");
   EXPECT_NE(FindLogicalCase(cases, "test_where_example"), nullptr);
   EXPECT_NE(FindLogicalCase(cases, "test_where_bcast"), nullptr);
+  for (const char *name : {
+           "test_cc_where_signed_zero_selected_from_x_float",
+           "test_cc_where_signed_zero_selected_from_y_float",
+           "test_cc_where_signed_zero_selected_from_broadcast_y_float",
+           "test_cc_where_signed_zero_selected_from_broadcast_x_float",
+           "test_cc_where_signed_zero_selected_from_x_double",
+           "test_cc_where_signed_zero_selected_from_y_double",
+           "test_cc_where_signed_zero_selected_from_broadcast_y_double",
+           "test_cc_where_signed_zero_selected_from_broadcast_x_double",
+       }) {
+    EXPECT_NE(FindLogicalCase(cases, name), nullptr) << "Missing Where case: " << name;
+  }
 }
 
 TEST(BackendTestCase, WhereTypeCombinationCasesArePresent) {
@@ -657,6 +670,41 @@ TEST(BackendTestCase, WhereCaseOutputsSelectExpectedElements) {
   EXPECT_FLOAT_EQ(z[1], 6.0f);
   EXPECT_FLOAT_EQ(z[2], 3.0f);
   EXPECT_FLOAT_EQ(z[3], 8.0f);
+}
+
+TEST(BackendTestCase, WhereSignedZeroCasesPreserveSign) {
+  auto cases = CollectTestCases("Where");
+  for (const char *name : {
+           "test_cc_where_signed_zero_selected_from_x_float",
+           "test_cc_where_signed_zero_selected_from_y_float",
+           "test_cc_where_signed_zero_selected_from_broadcast_y_float",
+           "test_cc_where_signed_zero_selected_from_broadcast_x_float",
+       }) {
+    const TestCase *tc = FindLogicalCase(cases, name);
+    ASSERT_NE(tc, nullptr) << name;
+    const auto &output = tc->data_sets()[0].outputs[0];
+    ASSERT_EQ(output.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT)) << name;
+    const float *values = reinterpret_cast<const float *>(output.data.data());
+    for (int64_t i = 0; i < output.element_count(); ++i) {
+      EXPECT_TRUE(std::signbit(values[i])) << name << ", element " << i;
+    }
+  }
+
+  for (const char *name : {
+           "test_cc_where_signed_zero_selected_from_x_double",
+           "test_cc_where_signed_zero_selected_from_y_double",
+           "test_cc_where_signed_zero_selected_from_broadcast_y_double",
+           "test_cc_where_signed_zero_selected_from_broadcast_x_double",
+       }) {
+    const TestCase *tc = FindLogicalCase(cases, name);
+    ASSERT_NE(tc, nullptr) << name;
+    const auto &output = tc->data_sets()[0].outputs[0];
+    ASSERT_EQ(output.data_type, static_cast<int32_t>(core::runtime::DataType::DOUBLE)) << name;
+    const double *values = reinterpret_cast<const double *>(output.data.data());
+    for (int64_t i = 0; i < output.element_count(); ++i) {
+      EXPECT_TRUE(std::signbit(values[i])) << name << ", element " << i;
+    }
+  }
 }
 
 TEST(BackendTestCase, BitwiseCasesArePresent) {

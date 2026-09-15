@@ -19,11 +19,11 @@ Currently provided helpers:
 * :func:`onnx_light.tools.pretty_onnx` -- render any ONNX proto
   (model, graph, function, node, attribute, value info, tensor) as a
   compact human-readable string.
-* :func:`onnx_light.tools.translate` -- translate a model or graph into
-  Python code that rebuilds it, either as a compact
+* :func:`onnx_light.tools.translate` -- translate a model or graph into Python
+  or C++ code that rebuilds it, either as a compact
   :mod:`onnx_light.onnx.helper` expression (``api="onnx-compact"``) or as
   a :class:`~onnx_light.onnx_core.graph_builder.GraphBuilder` script
-  (``api="builder"``).
+  (``api="builder"``) or native C++ builder function (``api="cpp"``).
 * :func:`onnx_light.tools.build_kernel_inventory` -- enumerate every
   registered native kernel path and classify it as ``serial``,
   ``parallel_fixed_policy``, ``tunable`` or ``calibratable``.

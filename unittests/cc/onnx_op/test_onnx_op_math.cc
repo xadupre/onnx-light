@@ -22,6 +22,17 @@ FindByVersion(const std::vector<core::schema::LightOpSchema> &schemas, int versi
   return nullptr;
 }
 
+TEST(OnnxOpMathRegistrationTest, ReturnsOpset28SchemasWithoutShapeInference) {
+  for (const char *name : {"Einsum", "Mod"}) {
+    SCOPED_TRACE(name);
+    const auto schemas = onnx_op::math::GetAllOnnxOpMathSchemasWithHistory(name);
+    const auto *schema = FindByVersion(schemas, 28);
+    ASSERT_NE(schema, nullptr);
+    ASSERT_EQ(schema->type_constraints().size(), 1u);
+    EXPECT_EQ(schema->type_constraints()[0].allowed_type_strs, core::schema::AllNumericTypesIr4());
+  }
+}
+
 TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory();
@@ -108,7 +119,7 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<core::schema::LightOpSchema> mean_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Mean");
 
-  EXPECT_EQ(schemas.size(), 183u);
+  EXPECT_EQ(schemas.size(), 185u);
 
   // Neg has three versioned schemas (v1, v6, v13).
   ASSERT_EQ(neg_schemas.size(), 3u);
@@ -143,8 +154,8 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(swish_v24->attributes()[0].type, core::schema::AttributeType::FLOAT);
   EXPECT_FALSE(swish_v24->attributes()[0].required);
 
-  // Einsum was introduced at v12 and has had a single schema since then.
-  ASSERT_EQ(einsum_schemas.size(), 1u);
+  // Einsum was introduced at v12 and adds BFLOAT16 at v28.
+  ASSERT_EQ(einsum_schemas.size(), 2u);
   const core::schema::LightOpSchema *const einsum_v12 = FindByVersion(einsum_schemas, 12);
   ASSERT_NE(nullptr, einsum_v12);
   EXPECT_EQ(einsum_v12->domain(), "ai.onnx");
@@ -916,7 +927,16 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSTFTSchemaWithoutShapeInference) {
   ASSERT_EQ(stft_v17->attributes().size(), 1u);
   EXPECT_EQ(stft_v17->attributes()[0].name, "onesided");
   EXPECT_EQ(stft_v17->attributes()[0].type, core::schema::AttributeType::INT);
-  EXPECT_FALSE(stft_v17->doc().empty());
+  EXPECT_NE(stft_v17->doc().find("frames = floor((signal_length - frame_length) / frame_step) + 1"),
+            std::string::npos);
+  EXPECT_NE(stft_v17->inputs()[0].description.find("rank 3"), std::string::npos);
+  EXPECT_NE(stft_v17->inputs()[1].description.find("scalar"), std::string::npos);
+  EXPECT_NE(stft_v17->inputs()[2].description.find("rectangular (all-ones) window"),
+            std::string::npos);
+  EXPECT_NE(stft_v17->inputs()[3].description.find("defaults to `signal_length`"),
+            std::string::npos);
+  EXPECT_NE(stft_v17->outputs()[0].description.find("real and imaginary parts"), std::string::npos);
+  EXPECT_EQ(stft_v17->attributes()[0].description.find("X[m,w]="), std::string::npos);
 }
 
 TEST(OnnxOpMathRegistrationTest, ReturnsLeakyReluSchemaWithoutShapeInference) {

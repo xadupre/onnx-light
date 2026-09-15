@@ -22,10 +22,16 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cerrno>
 #include <charconv>
+#include <cstdlib>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+
+#if defined(__APPLE__)
+#include <locale.h>
+#endif
 
 namespace ONNX_LIGHT_NAMESPACE::core::symbolic {
 
@@ -53,8 +59,20 @@ bool TryParseDoubleValue(const std::string &text, double &value) {
       return false;
     }
   }
+#if defined(__APPLE__)
+  locale_t c_locale = newlocale(LC_NUMERIC_MASK, "C", nullptr);
+  if (c_locale == nullptr) {
+    return false;
+  }
+  char *parsed_end = nullptr;
+  errno = 0;
+  value = strtod_l(begin, &parsed_end, c_locale);
+  freelocale(c_locale);
+  return errno != ERANGE && parsed_end == end;
+#else
   const auto parsed = std::from_chars(begin, end, value);
   return parsed.ec == std::errc() && parsed.ptr == end;
+#endif
 }
 
 } // namespace

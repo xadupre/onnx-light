@@ -4,6 +4,7 @@
 
 #include "onnx_core/runtime/kernels/cast_helper.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -201,6 +202,64 @@ std::uint8_t FloatRoundToFloat4E2M1Nibble(float v) noexcept {
     }
   }
   return best;
+}
+
+float Float6BitsToFloat(std::uint8_t bits, DataType dtype) {
+  const int mantissa_bits = dtype == DataType::FLOAT6E2M3 ? 3 : 2;
+  const int exponent_bits = 5 - mantissa_bits;
+  const int exponent_bias = (1 << (exponent_bits - 1)) - 1;
+  const int exponent = (bits >> mantissa_bits) & ((1 << exponent_bits) - 1);
+  const int mantissa = bits & ((1 << mantissa_bits) - 1);
+  const float value =
+      exponent == 0 ? std::ldexp(static_cast<float>(mantissa), 1 - exponent_bias - mantissa_bits)
+                    : std::ldexp(1.0f + static_cast<float>(mantissa) / (1 << mantissa_bits),
+                                 exponent - exponent_bias);
+  return (bits & 0x20u) != 0 ? -value : value;
+}
+
+std::uint8_t FloatToFloat6Bits(float value, DataType dtype) {
+  if (std::isnan(value))
+    return 0;
+  const bool negative = std::signbit(value);
+  if (std::isinf(value))
+    return static_cast<std::uint8_t>(0x1Fu | (negative ? 0x20u : 0u));
+  const float magnitude = std::abs(value);
+  static constexpr std::uint8_t kMagnitudeCodes[32] = {0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10,
+                                                       11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+                                                       22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
+  const auto upper = std::lower_bound(
+      std::begin(kMagnitudeCodes), std::end(kMagnitudeCodes), magnitude,
+      [dtype](std::uint8_t bits, float target) { return Float6BitsToFloat(bits, dtype) < target; });
+  std::uint8_t best = upper == std::end(kMagnitudeCodes) ? 0x1Fu : *upper;
+  if (upper != std::begin(kMagnitudeCodes) && upper != std::end(kMagnitudeCodes)) {
+    const std::uint8_t lower = *(upper - 1);
+    const float lower_distance = magnitude - Float6BitsToFloat(lower, dtype);
+    const float upper_distance = Float6BitsToFloat(*upper, dtype) - magnitude;
+    if (lower_distance < upper_distance ||
+        (lower_distance == upper_distance && (lower & 1u) == 0u)) {
+      best = lower;
+    }
+  }
+  return static_cast<std::uint8_t>(best | (negative ? 0x20u : 0u));
+}
+
+std::uint8_t Read6BitElement(const std::uint8_t *src, int64_t index) {
+  const size_t bit_offset = static_cast<size_t>(index) * 6;
+  const size_t byte_offset = bit_offset / 8;
+  const int shift = static_cast<int>(bit_offset % 8);
+  std::uint16_t value = static_cast<std::uint16_t>(src[byte_offset]) >> shift;
+  if (shift > 2)
+    value |= static_cast<std::uint16_t>(src[byte_offset + 1]) << (8 - shift);
+  return static_cast<std::uint8_t>(value & 0x3Fu);
+}
+
+void Write6BitElement(std::uint8_t *dst, int64_t index, std::uint8_t value) {
+  const size_t bit_offset = static_cast<size_t>(index) * 6;
+  const size_t byte_offset = bit_offset / 8;
+  const int shift = static_cast<int>(bit_offset % 8);
+  dst[byte_offset] |= static_cast<std::uint8_t>((value & 0x3Fu) << shift);
+  if (shift > 2)
+    dst[byte_offset + 1] |= static_cast<std::uint8_t>((value & 0x3Fu) >> (8 - shift));
 }
 
 std::vector<std::uint8_t> Pack4Bit(const std::vector<std::int8_t> &values) {

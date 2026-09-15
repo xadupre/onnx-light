@@ -61,6 +61,16 @@ jobs:
           UNITTEST_GOING=1 ./build/load-onnx-light-time-example/load_onnx_light_time \
             ./unittests/cc/onnx_proto/data/test_softmax_example_expanded.onnx
 
+      - name: Build standalone parallel_for_profiling example
+        run: |
+          cmake -S examples/parallel_for_profiling -B build/parallel-for-profiling-example \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="${{ github.workspace }}/build/install-onnx-light"
+          cmake --build build/parallel-for-profiling-example --parallel "${CMAKE_BUILD_PARALLEL_LEVEL}"
+
+      - name: Smoke-run standalone parallel_for_profiling example
+        run: ./build/parallel-for-profiling-example/parallel_for_profiling
+
       - name: Build standalone register_custom_kernel example
         run: |
           cmake -S examples/register_custom_kernel -B build/register-custom-kernel-example \

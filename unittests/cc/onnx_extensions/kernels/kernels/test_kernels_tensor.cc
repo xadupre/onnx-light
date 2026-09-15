@@ -7,12 +7,14 @@
 #include "onnx_core/runtime/kernels/cast_float8.h"
 #include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/kernels/kernel_context.h"
+#include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/tuning/parallel_region_collector.h"
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -29,6 +31,7 @@ using onnx_kernels::kernel::Cast;
 using onnx_kernels::kernel::CastLike;
 using onnx_kernels::kernel::Concat;
 using onnx_kernels::kernel::KernelContext;
+using onnx_kernels::kernel::Pad;
 using onnx_kernels::kernel::Reshape;
 using onnx_kernels::kernel::Slice;
 using onnx_kernels::kernel::Squeeze;
@@ -36,6 +39,22 @@ using onnx_kernels::kernel::Unique;
 using onnx_kernels::kernel::Unsqueeze;
 
 namespace Test {
+
+TEST(KernelClass, NativeCompressStringBorrowedAndPreallocated) {
+  const KernelContext ctx{DefaultOpset(18)};
+  const Tensor owned = Tensor::FromStrings("", {2, 2}, {"été", "", "東京", "D"});
+  const Tensor data = owned.BorrowView();
+  const Tensor condition = Tensor::FromBool("", {2}, {0, 1});
+  onnx_kernels::kernel::Compress compress{ctx};
+  Tensor output = Tensor::FromStrings("", {2, 1}, {"", ""});
+  compress(data, condition, -1, output);
+  EXPECT_EQ(output.AsStrings(), (std::vector<std::string>{"", "D"}));
+  const Tensor flattened = compress(data, Tensor::FromBool("", {4}, {1, 0, 1, 0}), std::nullopt);
+  EXPECT_EQ(flattened.AsStrings(), (std::vector<std::string>{"été", "東京"}));
+  output = Tensor::FromStrings("", {0, 2}, {});
+  compress(data, Tensor::FromBool("", {2}, {0, 0}), 0, output);
+  EXPECT_TRUE(output.AsStrings().empty());
+}
 
 TEST(KernelClass, ConcatClassConcatenatesAxis0) {
   const KernelContext ctx{DefaultOpset(13)};
@@ -79,6 +98,75 @@ TEST(KernelClass, ConcatClassRejectsScalar) {
   Concat concat_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {}, {1.0f});
   EXPECT_THROW((void)concat_kernel({x}, /*axis=*/0), std::invalid_argument);
+}
+
+TEST(KernelClass, PadCropsBeforeApplyingConstantPadding) {
+  const KernelContext ctx{DefaultOpset(21)};
+  const Pad pad{ctx};
+  const Tensor x = Tensor::FromFloat(
+      "", {4, 5}, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19});
+  const Tensor value = Tensor::FromFloat("", {}, {-5});
+
+  const Tensor crop_pads = Tensor::FromInt64("", {4}, {-1, -1, -1, -2});
+  const Tensor cropped = pad(x, crop_pads, &value);
+  EXPECT_EQ(cropped.shape, (std::vector<int64_t>{2, 2}));
+  ASSERT_EQ(cropped.element_count(), 4);
+  EXPECT_FLOAT_EQ(cropped.AsFloat()[0], 6);
+  EXPECT_FLOAT_EQ(cropped.AsFloat()[1], 7);
+  EXPECT_FLOAT_EQ(cropped.AsFloat()[2], 11);
+  EXPECT_FLOAT_EQ(cropped.AsFloat()[3], 12);
+
+  const Tensor pads = Tensor::FromInt64("", {4}, {-2, 1, 1, -1});
+  const Tensor y = pad(x, pads, &value);
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{3, 5}));
+  const std::vector<float> expected{-5, 10, 11, 12, 13, -5, 15, 16, 17, 18, -5, -5, -5, -5, -5};
+  ASSERT_EQ(y.element_count(), static_cast<int64_t>(expected.size()));
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_FLOAT_EQ(y.AsFloat()[i], expected[i]);
+  }
+}
+
+TEST(KernelClass, PadRejectsReflectPaddingBeyondCroppedAxis) {
+  const KernelContext ctx{DefaultOpset(21)};
+  const Pad pad{ctx};
+  const Tensor x = Tensor::FromFloat("", {4}, {0, 1, 2, 3});
+  const Tensor pads = Tensor::FromInt64("", {2}, {-2, 2});
+
+  EXPECT_THROW((void)pad(x, pads, nullptr, nullptr, "reflect"), std::invalid_argument);
+}
+
+TEST(KernelClass, PadRejectsNegativeOutputDimension) {
+  const KernelContext ctx{DefaultOpset(21)};
+  const Pad pad{ctx};
+  const Tensor x = Tensor::FromFloat("", {3}, {0, 1, 2});
+  const Tensor pads = Tensor::FromInt64("", {2}, {-4, 0});
+
+  EXPECT_THROW((void)pad(x, pads), std::invalid_argument);
+}
+
+TEST(KernelClass, PadRejectsNonConstantOvercrop) {
+  const KernelContext ctx{DefaultOpset(21)};
+  const Pad pad{ctx};
+  const Tensor x = Tensor::FromFloat("", {3}, {0, 1, 2});
+  const Tensor pads = Tensor::FromInt64("", {2}, {-4, 2});
+
+  EXPECT_THROW((void)pad(x, pads, nullptr, nullptr, "edge"), std::invalid_argument);
+}
+
+TEST(KernelClass, PadAcceptsCancellingExtremePads) {
+  const KernelContext ctx{DefaultOpset(21)};
+  const Pad pad{ctx};
+  const Tensor x = Tensor::FromFloat("", {3}, {0, 1, 2});
+  const Tensor pads = Tensor::FromInt64(
+      "", {2}, {std::numeric_limits<int64_t>::max(), -std::numeric_limits<int64_t>::max()});
+  const Tensor value = Tensor::FromFloat("", {}, {-5});
+
+  const Tensor y = pad(x, pads, &value);
+
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{3}));
+  EXPECT_FLOAT_EQ(y.AsFloat()[0], -5);
+  EXPECT_FLOAT_EQ(y.AsFloat()[1], -5);
+  EXPECT_FLOAT_EQ(y.AsFloat()[2], -5);
 }
 
 TEST(KernelClass, ConcatInPlaceWritesToPreallocatedOutput) {
@@ -222,6 +310,23 @@ TEST(KernelClass, CastClassFloatToInt32TruncatesTowardZero) {
   EXPECT_EQ(py[1], 0);
   EXPECT_EQ(py[2], 2);
   EXPECT_EQ(py[3], 4);
+}
+
+TEST(KernelClass, CastClassFloat6RoundTripsPackedValues) {
+  const KernelContext ctx{DefaultOpset(28)};
+  Cast cast_kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {5}, {-1.0f, -0.5f, 0.0f, 1.0f, 2.0f});
+
+  for (const auto &[dtype, expected_bytes] :
+       std::vector<std::pair<core::runtime::DataType, std::vector<uint8_t>>>{
+           {core::runtime::DataType::FLOAT6E2M3, {40, 9, 32, 16}},
+           {core::runtime::DataType::FLOAT6E3M2, {44, 10, 48, 16}}}) {
+    Tensor packed = cast_kernel(x, static_cast<int32_t>(dtype));
+    EXPECT_EQ(packed.data, expected_bytes);
+    Tensor unpacked = cast_kernel(packed, static_cast<int32_t>(core::runtime::DataType::FLOAT));
+    for (int64_t i = 0; i < x.element_count(); ++i)
+      EXPECT_FLOAT_EQ(unpacked.AsFloat()[i], x.AsFloat()[i]);
+  }
 }
 
 // FLOAT16 subnormals must decode to their true tiny magnitudes (value =
@@ -599,6 +704,60 @@ TEST(KernelClass, CastLikeWithSaturateUsesAllocatorWhenRuntimeContextHasOne) {
   EXPECT_EQ(py[1], 2);
 }
 
+TEST(KernelClass, UniqueBfloat16NumericOrderingAndSignedZero) {
+  const KernelContext ctx{DefaultOpset(28)};
+  const Unique unique_kernel{ctx};
+  const float inf = std::numeric_limits<float>::infinity();
+  const Tensor x =
+      core::runtime::MakeBfloat16Tensor("", {9}, {2, -0.0f, -2, 0.0f, -1, -2, inf, -inf, 2});
+  const auto out = unique_kernel(x);
+  ASSERT_EQ(out.y.data_type, core::runtime::DataType::BFLOAT16);
+  ASSERT_EQ(out.y.shape, (std::vector<int64_t>{6}));
+  const std::vector<uint16_t> expected{0xff80, 0xc000, 0xbf80, 0x8000, 0x4000, 0x7f80};
+  const auto *y_bits = reinterpret_cast<const uint16_t *>(out.y.bytes());
+  EXPECT_EQ(std::vector<uint16_t>(y_bits, y_bits + 6), expected);
+  EXPECT_EQ(std::vector<int64_t>(out.indices.As<int64_t>(), out.indices.As<int64_t>() + 6),
+            (std::vector<int64_t>{7, 2, 4, 1, 0, 6}));
+  EXPECT_EQ(std::vector<int64_t>(out.inverse_indices.As<int64_t>(),
+                                 out.inverse_indices.As<int64_t>() + 9),
+            (std::vector<int64_t>{4, 3, 1, 3, 2, 1, 5, 0, 4}));
+  EXPECT_EQ(std::vector<int64_t>(out.counts.As<int64_t>(), out.counts.As<int64_t>() + 6),
+            (std::vector<int64_t>{1, 2, 1, 2, 2, 1}));
+}
+
+TEST(KernelClass, UniqueBfloat16AxisSortedAndUnsorted) {
+  const KernelContext ctx{DefaultOpset(28)};
+  const Unique unique_kernel{ctx};
+  const Tensor x = core::runtime::MakeBfloat16Tensor("", {2, 4}, {2, -1, 2, -1, 0, 3, 0, -2});
+  for (bool sorted : {false, true}) {
+    Unique::Attributes attrs;
+    attrs.axis = -1;
+    attrs.sorted = sorted;
+    const auto out = unique_kernel(x, attrs);
+    ASSERT_EQ(out.y.shape, (std::vector<int64_t>{2, 3}));
+    const Tensor expected = core::runtime::MakeBfloat16Tensor(
+        "", {2, 3},
+        sorted ? std::vector<float>{-1, -1, 2, -2, 3, 0} : std::vector<float>{2, -1, -1, 0, 3, -2});
+    EXPECT_EQ(out.y.data, expected.data);
+    EXPECT_EQ(std::vector<int64_t>(out.indices.As<int64_t>(), out.indices.As<int64_t>() + 3),
+              (sorted ? std::vector<int64_t>{3, 1, 0} : std::vector<int64_t>{0, 1, 3}));
+    EXPECT_EQ(std::vector<int64_t>(out.inverse_indices.As<int64_t>(),
+                                   out.inverse_indices.As<int64_t>() + 4),
+              (sorted ? std::vector<int64_t>{2, 1, 2, 0} : std::vector<int64_t>{0, 1, 0, 2}));
+    EXPECT_EQ(std::vector<int64_t>(out.counts.As<int64_t>(), out.counts.As<int64_t>() + 3),
+              (sorted ? std::vector<int64_t>{1, 1, 2} : std::vector<int64_t>{2, 1, 1}));
+  }
+}
+
+TEST(KernelClass, UniqueBfloat16EmptyInput) {
+  const KernelContext ctx{DefaultOpset(28)};
+  const Unique unique_kernel{ctx};
+  const auto out = unique_kernel(core::runtime::MakeBfloat16Tensor("", {0}, {}));
+  EXPECT_EQ(out.y.data_type, core::runtime::DataType::BFLOAT16);
+  for (const Tensor *tensor : {&out.y, &out.indices, &out.inverse_indices, &out.counts})
+    EXPECT_EQ(tensor->shape, (std::vector<int64_t>{0}));
+}
+
 // Ensures the Unique kernel's ``ComputeUniqueGroups`` driver acquires its
 // scratch and result buffers (indices/inverse_indices/counts) from the
 // ``KernelContext`` allocator instead of inline ``std::vector`` storage.
@@ -754,13 +913,20 @@ TEST(KernelClass, AffineGridUsesTunableParallelRows) {
   Tensor size3d = Tensor::FromInt64("", {5}, {2, 3, 4, 5, 6});
   (void)ag_kernel(theta3d, size3d, AffineGrid::Attributes{});
 
+  // The tuned crossover of one element makes both loops eligible for parallel
+  // execution; the grain is then derived from the admitted participants.
+  const int64_t participants = core::runtime::ParallelForThreadCount();
+  const auto expected_grain = [participants](int64_t total) {
+    return participants <= 1 || total == 1 ? total : total / std::min(participants, total);
+  };
+
   ASSERT_EQ(collector.events().size(), 2u);
   EXPECT_EQ(collector.events()[0].label, "AffineGrid");
   EXPECT_EQ(collector.events()[0].total_iterations, 2 * 5);
-  EXPECT_EQ(collector.events()[0].grain_size, 1);
+  EXPECT_EQ(collector.events()[0].grain_size, expected_grain(2 * 5));
   EXPECT_EQ(collector.events()[1].label, "AffineGrid");
   EXPECT_EQ(collector.events()[1].total_iterations, 2 * 4 * 5);
-  EXPECT_EQ(collector.events()[1].grain_size, 1);
+  EXPECT_EQ(collector.events()[1].grain_size, expected_grain(2 * 4 * 5));
 }
 
 TEST(KernelClass, AffineGridRejectsBadShapes) {
@@ -784,6 +950,97 @@ TEST(KernelClass, AffineGridRejectsBadShapes) {
   // theta inner dims (2,3) vs 3-D size of length 5.
   Tensor size3d = Tensor::FromInt64("", {5}, {1, 1, 2, 2, 2});
   EXPECT_THROW((void)ag_kernel(theta, size3d, AffineGrid::Attributes{}), std::invalid_argument);
+}
+
+namespace {
+
+void ExpectAffineGridRejectsSize(const Tensor &theta, const std::vector<int64_t> &size_values) {
+  const KernelContext ctx{DefaultOpset(20)};
+  AffineGrid ag_kernel{ctx};
+  Tensor size = Tensor::FromInt64("", {static_cast<int64_t>(size_values.size())}, size_values);
+  Tensor output = Tensor::FromFloat("", {0}, {});
+  output.shape = {size_values[0]};
+  output.shape.insert(output.shape.end(), size_values.begin() + 2, size_values.end());
+  output.shape.push_back(static_cast<int64_t>(size_values.size()) - 2);
+  EXPECT_THROW((void)ag_kernel(theta, size, AffineGrid::Attributes{}), std::invalid_argument);
+  EXPECT_THROW(ag_kernel(theta, size, AffineGrid::Attributes{}, output), std::invalid_argument);
+}
+
+} // namespace
+
+TEST(KernelClass, AffineGridRejectsNegativeDimensions) {
+  for (int64_t spatial_rank : {2, 3}) {
+    Tensor theta = Tensor::FromFloat("", {1, spatial_rank, spatial_rank + 1},
+                                     std::vector<float>(spatial_rank * (spatial_rank + 1), 0));
+    for (int64_t axis = 0; axis < spatial_rank + 2; ++axis) {
+      SCOPED_TRACE(axis);
+      std::vector<int64_t> size_values(spatial_rank + 2, 1);
+      size_values[axis] = -1;
+      theta.shape[0] = size_values[0];
+      ExpectAffineGridRejectsSize(theta, size_values);
+    }
+    theta.shape[0] = 1;
+    std::vector<int64_t> size_values(spatial_rank + 2, 1);
+    size_values[2] = 0;
+    size_values[3] = -1;
+    ExpectAffineGridRejectsSize(theta, size_values);
+  }
+}
+
+TEST(KernelClass, AffineGridRejectsElementCountOverflow) {
+  const int64_t max_dim = std::numeric_limits<int64_t>::max();
+  for (int64_t spatial_rank : {2, 3}) {
+    Tensor theta = Tensor::FromFloat("", {1, spatial_rank, spatial_rank + 1},
+                                     std::vector<float>(spatial_rank * (spatial_rank + 1), 0));
+    std::vector<int64_t> size_values(spatial_rank + 2, 1);
+    size_values[2] = max_dim / 2 + 1;
+    size_values[3] = 2;
+    ExpectAffineGridRejectsSize(theta, size_values);
+    // The spatial product fits, but the final coordinate dimension overflows.
+    size_values[2] = max_dim / spatial_rank + 1;
+    size_values[3] = 1;
+    ExpectAffineGridRejectsSize(theta, size_values);
+  }
+}
+
+TEST(KernelClass, AffineGridRejectsByteCountOverflow) {
+  for (int64_t spatial_rank : {2, 3}) {
+    Tensor theta = Tensor::FromFloat("", {1, spatial_rank, spatial_rank + 1},
+                                     std::vector<float>(spatial_rank * (spatial_rank + 1), 0));
+    std::vector<int64_t> size_values(spatial_rank + 2, 1);
+    size_values[2] = static_cast<int64_t>(std::numeric_limits<size_t>::max() / sizeof(float) /
+                                          static_cast<size_t>(spatial_rank)) +
+                     1;
+    ExpectAffineGridRejectsSize(theta, size_values);
+  }
+}
+
+TEST(KernelClass, AffineGridEmptyOutputSkipsCoordinateAllocation) {
+  const KernelContext ctx{DefaultOpset(20)};
+  AffineGrid ag_kernel{ctx};
+  for (int64_t spatial_rank : {2, 3}) {
+    for (int64_t axis = 0; axis < spatial_rank + 2; ++axis) {
+      if (axis == 1) {
+        continue; // C is not an output dimension.
+      }
+      SCOPED_TRACE(axis);
+      std::vector<int64_t> size_values(spatial_rank + 2, std::numeric_limits<int64_t>::max());
+      size_values[0] = 1;
+      size_values[1] = 1;
+      size_values[axis] = 0;
+      Tensor theta =
+          Tensor::FromFloat("", {size_values[0], spatial_rank, spatial_rank + 1},
+                            std::vector<float>(size_values[0] * spatial_rank * (spatial_rank + 1)));
+      Tensor size = Tensor::FromInt64("", {spatial_rank + 2}, size_values);
+      std::vector<int64_t> expected_shape{size_values[0]};
+      expected_shape.insert(expected_shape.end(), size_values.begin() + 2, size_values.end());
+      expected_shape.push_back(spatial_rank);
+      Tensor output = ag_kernel(theta, size, AffineGrid::Attributes{});
+      EXPECT_EQ(output.shape, expected_shape);
+      EXPECT_EQ(output.size_bytes(), 0u);
+      EXPECT_NO_THROW(ag_kernel(theta, size, AffineGrid::Attributes{}, output));
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1390,6 +1647,24 @@ TEST(KernelClass, TensorScatterCircularWrapsWriteIndex) {
   const std::vector<float> expected{2, 0, 0, 1};
   for (std::size_t i = 0; i < expected.size(); ++i) {
     EXPECT_FLOAT_EQ(py[i], expected[i]) << "i=" << i;
+  }
+}
+
+TEST(KernelClass, TensorScatterCircularPreservesPrefixCoordinates) {
+  const KernelContext ctx{DefaultOpset(24)};
+  onnx_kernels::kernel::TensorScatter ts{ctx};
+  Tensor past = Tensor::FromFloat("", {5, 4, 1}, std::vector<float>(20, -1.0f));
+  Tensor update = Tensor::FromFloat("", {5, 1, 1}, {1, 2, 3, 4, 5});
+  Tensor write = Tensor::FromInt64("", {5}, {0, 0, 0, 0, 0});
+  onnx_kernels::kernel::TensorScatter::Attributes attrs;
+  attrs.axis = 1;
+  attrs.mode = "circular";
+
+  Tensor y = ts(past, update, &write, attrs);
+
+  const float *py = y.AsFloat();
+  for (int64_t batch = 0; batch < 5; ++batch) {
+    EXPECT_FLOAT_EQ(py[batch * 4], static_cast<float>(batch + 1));
   }
 }
 

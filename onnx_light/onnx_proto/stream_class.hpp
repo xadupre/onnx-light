@@ -160,6 +160,36 @@
     DEBUG_PRINT("  - optional field " #name)                                                       \
   }
 
+/** Reads a sub-message that is a ``oneof`` alternative. A different alternative clears the
+ *  siblings (protobuf's "last one wins" rule), while another occurrence of the same alternative
+ *  merges into the existing sub-message. */
+#define READ_ONEOF_PROTO_FIELD(options, stream, name)                                              \
+  else if (static_cast<int>(field_number.field_number) == order_##name()) {                        \
+    DEBUG_PRINT("  + oneof field " #name)                                                          \
+    if (static_cast<int>(field_number.wire_type) == FIELD_FIXED_SIZE) {                            \
+      if (!has_##name()) {                                                                         \
+        enter_oneof_##name();                                                                      \
+        name##_.set_empty_value();                                                                 \
+      }                                                                                            \
+      read_next_field_in_shortended_stream(stream, #name, options, *name##_);                      \
+    } else {                                                                                       \
+      SkipFieldByWireType(stream, field_number.wire_type, #name);                                  \
+    }                                                                                              \
+    DEBUG_PRINT("  - oneof field " #name)                                                          \
+  }
+
+/** Reads a scalar ``oneof`` alternative, clearing the sibling alternatives first. A tag whose
+ *  wire type does not match @p expected_wire_type is skipped and leaves the oneof untouched. */
+#define READ_ONEOF_FIELD(options, stream, name, expected_wire_type)                                \
+  else if (static_cast<int>(field_number.field_number) == order_##name()) {                        \
+    DEBUG_PRINT("  + oneof scalar " #name)                                                         \
+    if (static_cast<int>(field_number.wire_type) == (expected_wire_type)) {                        \
+      enter_oneof_##name();                                                                        \
+    }                                                                                              \
+    read_field(stream, static_cast<int>(field_number.wire_type), name##_, #name, options);         \
+    DEBUG_PRINT("  - oneof scalar " #name)                                                         \
+  }
+
 #define READ_ENUM_FIELD(options, stream, name)                                                     \
   else if (static_cast<int>(field_number.field_number) == order_##name()) {                        \
     DEBUG_PRINT("  + enum " #name)                                                                 \

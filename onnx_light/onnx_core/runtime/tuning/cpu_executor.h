@@ -26,6 +26,18 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 /// Type-erased range callable: ``function(context, begin, end)``.
 using ParallelRangeFn = void (*)(void *, int64_t, int64_t);
 
+/// Type-erased block callable used by an external CPU dispatcher.
+using CpuParallelBlockFn = void (*)(void *, int64_t);
+
+/**
+ * Dispatches indexed blocks through an externally owned worker pool.
+ *
+ * The callback must synchronously invoke ``block_function(block_context, i)``
+ * exactly once for every ``i`` in ``[0, num_blocks)`` before returning.
+ */
+using CpuParallelDispatchFn = void (*)(void *dispatch_context, int64_t num_blocks,
+                                       void *block_context, CpuParallelBlockFn block_function);
+
 /**
  * Identifies every resolved property that changes executor behavior.
  *
@@ -112,14 +124,31 @@ CpuExecutorKey MakeCpuExecutorKey(const ResolvedCpuExecutionPolicy &policy);
  *
  * Instances are obtained from :cpp:class:`CpuExecutorRegistry`. Concurrent
  * regions sharing an executor serialize dispatch metadata while their
- * surrounding inference calls remain independent. Nested regions execute
- * inline to avoid deadlock and oversubscription.
+ * surrounding inference calls remain independent. Nested regions execute inline
+ * by default. With ``allow_nested_parallelism``, they may admit idle workers from
+ * this same pool, never exceeding its effective participant limit. Admission does
+ * not wait for busy workers; a saturated pool therefore executes nesting inline.
  */
 class CpuExecutor {
 public:
   CpuExecutor(const CpuExecutor &) = delete;
   CpuExecutor &operator=(const CpuExecutor &) = delete;
   ~CpuExecutor();
+
+  /**
+   * Creates an executor that delegates parallel blocks to an external worker pool.
+   *
+   * The executor never creates worker threads. ``maximum_participants`` limits
+   * the number of blocks submitted for one region and must be positive. The
+   * dispatcher must remain valid until the returned executor is destroyed.
+   * Each invocation supplies its transient dispatcher context through
+   * :cpp:class:`CpuExecutorDispatchScope`.
+   *
+   * Returns:
+   *   An executor backed by ``dispatch``.
+   */
+  static std::unique_ptr<CpuExecutor> CreateExternal(uint32_t maximum_participants,
+                                                     CpuParallelDispatchFn dispatch);
 
   /// Returns the effective participant count, including the caller.
   uint32_t effective_threads() const noexcept;
@@ -151,8 +180,9 @@ public:
   /**
    * Plans a loop from its per-iteration memory and compute cost.
    *
-   * The model amortizes executor startup and per-participant overhead, then
-   * chooses a task grain large enough to keep dispatch overhead bounded.
+   * The model compares serial execution with warm-pool dispatch, divided loop
+   * work, and coordination for each additional participant. It also chooses a
+   * task grain large enough to keep dispatch overhead bounded.
    * ``maximum_participants == 0`` uses the session limit.
    */
   CpuParallelPlan PlanParallelFor(int64_t total, const CpuLoopCost &cost,
@@ -166,16 +196,17 @@ public:
    * Executes contiguous ranges covering ``[0, total)``.
    *
    * ``maximum_participants == 0`` uses the session limit. A positive value may
-   * lower but never raise that limit. Work below ``grain`` runs inline.
-   * Executors inherited across ``fork`` are rejected.
+   * lower but never raise that limit. Work below ``minimum_elements``, single-iteration work, and
+   * work with only one available participant run inline. Executors inherited across ``fork`` are
+   * rejected.
    *
    * @param total Number of iterations. Values ``<= 0`` are a no-op.
-   * @param grain Minimum iterations per parallel range. Must be positive.
+   * @param minimum_elements Minimum iterations required for parallel execution. Must be positive.
    * @param context Opaque context passed to ``function``.
    * @param function Range callback, which must not throw.
    * @param maximum_participants Optional kernel-specific participant limit.
    */
-  void ParallelFor(int64_t total, int64_t grain, void *context, ParallelRangeFn function,
+  void ParallelFor(int64_t total, int64_t minimum_elements, void *context, ParallelRangeFn function,
                    uint32_t maximum_participants = 0, ParallelRegionCollector *collector = nullptr,
                    std::string_view label = {},
                    std::source_location location = std::source_location::current());
@@ -197,6 +228,7 @@ private:
   struct Impl;
 
   explicit CpuExecutor(ResolvedCpuExecutionPolicy policy);
+  CpuExecutor(ResolvedCpuExecutionPolicy policy, CpuParallelDispatchFn dispatch);
 
   std::unique_ptr<Impl> impl_;
 };
@@ -232,6 +264,27 @@ public:
 
 private:
   CpuExecutor *previous_;
+};
+
+/**
+ * Installs the transient context used by an external executor dispatch.
+ *
+ * The binding is thread-local, composes across nested scopes, and does not own
+ * either pointer. It separates an invocation-specific runtime context from the
+ * persistent :cpp:class:`CpuExecutor`.
+ */
+class CpuExecutorDispatchScope {
+public:
+  CpuExecutorDispatchScope(CpuExecutor *executor, void *dispatch_context) noexcept;
+
+  CpuExecutorDispatchScope(const CpuExecutorDispatchScope &) = delete;
+  CpuExecutorDispatchScope &operator=(const CpuExecutorDispatchScope &) = delete;
+
+  ~CpuExecutorDispatchScope();
+
+private:
+  CpuExecutor *previous_executor_;
+  void *previous_context_;
 };
 
 /**

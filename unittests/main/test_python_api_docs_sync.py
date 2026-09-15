@@ -1,8 +1,10 @@
 from pathlib import Path
 import unittest
 
+from onnx_light.ext_test_case import ExtTestCase
 
-class TestPythonApiDocsSync(unittest.TestCase):
+
+class TestPythonApiDocsSync(ExtTestCase):
     """Tests that Python API doc toctrees stay aligned with public modules."""
 
     ROOT = Path(__file__).resolve().parents[2]

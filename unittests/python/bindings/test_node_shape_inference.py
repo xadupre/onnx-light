@@ -144,6 +144,34 @@ class TestNodeShapeInference(ExtTestCase):
     def test_scan_num_scan_inputs_out_of_range_latest(self) -> None:
         self._check_scan_num_scan_inputs_out_of_range(defs.get_schema("Scan").since_version)
 
+    def test_if_subgraph_with_unknown_op_does_not_use_temporary_map(self) -> None:
+        branch_output = oh.make_tensor_value_info("branch_result", onnxl.TensorProto.FLOAT, ())
+        branches = [
+            oh.make_graph(
+                [oh.make_node("UnknownOp", [], ["branch_result"], domain="local.unknown")],
+                name,
+                [],
+                [branch_output],
+            )
+            for name in ("then_branch", "else_branch")
+        ]
+        schema = defs.get_schema("If")
+        result = shape_inference.infer_node_outputs(
+            schema,
+            oh.make_node(
+                "If", ["cond"], ["result"], then_branch=branches[0], else_branch=branches[1]
+            ),
+            {"cond": oh.make_tensor_type_proto(onnxl.TensorProto.BOOL, ())},
+            opset_imports=[
+                oh.make_opsetid("", schema.since_version),
+                oh.make_opsetid("local.unknown", 1),
+            ],
+        )
+
+        self.assertEqual(
+            result, {"result": oh.make_tensor_type_proto(onnxl.TensorProto.FLOAT, ())}
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -191,6 +191,67 @@ def _pack_2bitx4(array: np.ndarray) -> npt.NDArray[np.uint8]:
     return array_flat[0::4] | array_flat[1::4] | array_flat[2::4] | array_flat[3::4]
 
 
+def _pack_6bit(values: np.ndarray) -> npt.NDArray[np.uint8]:
+    """Packs 6-bit codes four at a time into three bytes in LSB-first order."""
+    flat = values.astype(np.uint8, copy=False).ravel() & 0x3F
+    packed_size = -(-flat.size * 6 // 8)
+    pad = -flat.size % 4
+    if pad:
+        flat = np.concatenate([flat, np.zeros(pad, dtype=np.uint8)])
+    v0, v1, v2, v3 = flat[0::4], flat[1::4], flat[2::4], flat[3::4]
+    packed = np.empty((v0.size, 3), dtype=np.uint8)
+    packed[:, 0] = v0 | ((v1 & 0x03) << 6)
+    packed[:, 1] = (v1 >> 2) | ((v2 & 0x0F) << 4)
+    packed[:, 2] = (v2 >> 4) | (v3 << 2)
+    return packed.reshape(-1)[:packed_size]
+
+
+def _unpack_6bit(data: np.ndarray, dims: Sequence[int]) -> npt.NDArray[np.uint8]:
+    """Unpacks an LSB-first packed 6-bit buffer into an array with the requested shape."""
+    original_size = math.prod(dims)
+    num_groups = -(-original_size // 4)
+    needed_bytes = num_groups * 3
+    min_bytes = -(-original_size * 6 // 8)
+    data = data.astype(np.uint8, copy=False)
+    if data.size < min_bytes:
+        raise ValueError(
+            f"Packed 6-bit data ({data.size} bytes) is too small for the declared "
+            f"shape {list(dims)} ({min_bytes} bytes required)."
+        )
+    bulk_bytes = min(data.size, needed_bytes) // 3 * 3
+    bulk_groups = bulk_bytes // 3
+    unpacked = np.empty((num_groups, 4), dtype=np.uint8)
+    b0, b1, b2 = data[0:bulk_bytes:3], data[1:bulk_bytes:3], data[2:bulk_bytes:3]
+    unpacked[:bulk_groups, 0] = b0 & 0x3F
+    unpacked[:bulk_groups, 1] = ((b0 >> 6) & 0x03) | ((b1 & 0x0F) << 2)
+    unpacked[:bulk_groups, 2] = ((b1 >> 4) & 0x0F) | ((b2 & 0x03) << 4)
+    unpacked[:bulk_groups, 3] = (b2 >> 2) & 0x3F
+    if bulk_groups < num_groups:
+        tail = np.zeros(3, dtype=np.uint8)
+        rest = data[bulk_bytes:]
+        tail[: rest.size] = rest
+        t0, t1, t2 = tail
+        unpacked[bulk_groups, 0] = t0 & 0x3F
+        unpacked[bulk_groups, 1] = ((t0 >> 6) & 0x03) | ((t1 & 0x0F) << 2)
+        unpacked[bulk_groups, 2] = ((t1 >> 4) & 0x0F) | ((t2 & 0x03) << 4)
+        unpacked[bulk_groups, 3] = (t2 >> 2) & 0x3F
+    return unpacked.reshape(-1)[:original_size].reshape(dims)
+
+
+def _reshape_or_raise(array: np.ndarray, dims: Sequence[int], tensor: TensorProto) -> np.ndarray:
+    """Reshapes an array and explains when the bytes may represent another message type."""
+    try:
+        return array.reshape(dims)
+    except ValueError as exc:
+        raise ValueError(
+            f"{exc} Failed to reshape tensor '{tensor.name}'. This can happen "
+            "when the parsed bytes are not actually a TensorProto; protobuf "
+            "does not encode message-type information, so a different message "
+            "type (e.g. OptionalProto, SequenceProto, MapProto) can be "
+            "silently misparsed as one."
+        ) from exc
+
+
 def _load_external_data_for_tensor(tensor: TensorProto, base_dir: str) -> None:
     """Loads data from an external file into tensor.raw_data.
 
@@ -283,7 +344,7 @@ def to_array(tensor: TensorProto, base_dir: str = "") -> np.ndarray:  # noqa: PL
     if tensor.data_type == TensorProto.STRING:
         utf8_strings = getattr(tensor, storage_field)
         ss = [s.decode("utf-8") if isinstance(s, bytes) else str(s) for s in utf8_strings]
-        return np.asarray(ss).astype(np_dtype).reshape(dims)
+        return _reshape_or_raise(np.asarray(ss).astype(np_dtype), dims, tensor)
 
     # Load raw data from external tensor if it exists
     if int(tensor.data_location) == int(TensorProto.EXTERNAL):
@@ -304,7 +365,11 @@ def to_array(tensor: TensorProto, base_dir: str = "") -> np.ndarray:  # noqa: PL
             data = np.frombuffer(raw_data, dtype=np.uint8)
             return _unpack_2bit(data, dims).view(np_dtype)
 
-        return np.frombuffer(raw_data, dtype=np_dtype).reshape(dims)
+        if tensor_dtype in {TensorProto.FLOAT6E2M3, TensorProto.FLOAT6E3M2}:
+            data = np.frombuffer(raw_data, dtype=np.uint8)
+            return _unpack_6bit(data, dims).view(np_dtype)
+
+        return _reshape_or_raise(np.frombuffer(raw_data, dtype=np_dtype), dims, tensor)
 
     if tensor_dtype in {
         TensorProto.BFLOAT16,
@@ -312,13 +377,11 @@ def to_array(tensor: TensorProto, base_dir: str = "") -> np.ndarray:  # noqa: PL
         TensorProto.INT16,
         TensorProto.UINT16,
     }:
-        return (
-            np.array(tensor.int32_data, dtype=np.int32)
-            .view(np.uint32)
-            .astype(np.uint16)
-            .reshape(dims)
-            .view(np_dtype)
-        )
+        return _reshape_or_raise(
+            np.array(tensor.int32_data, dtype=np.int32).view(np.uint32).astype(np.uint16),
+            dims,
+            tensor,
+        ).view(np_dtype)
 
     if tensor_dtype in {
         TensorProto.FLOAT8E4M3FN,
@@ -328,12 +391,23 @@ def to_array(tensor: TensorProto, base_dir: str = "") -> np.ndarray:  # noqa: PL
         TensorProto.FLOAT8E8M0,
         TensorProto.BOOL,
     }:
-        return (
+        return _reshape_or_raise(
             np.array(tensor.int32_data, dtype=np.int32)
             .view(np.uint32)
             .astype(np.uint8)
-            .view(np_dtype)
-            .reshape(dims)
+            .view(np_dtype),
+            dims,
+            tensor,
+        )
+
+    if tensor_dtype in {TensorProto.FLOAT6E2M3, TensorProto.FLOAT6E3M2}:
+        return _reshape_or_raise(
+            (
+                np.array(tensor.int32_data, dtype=np.int32).view(np.uint32).astype(np.uint8)
+                & 0x3F
+            ).view(np_dtype),
+            dims,
+            tensor,
         )
 
     if tensor_dtype in {TensorProto.UINT4, TensorProto.INT4, TensorProto.FLOAT4E2M1}:
@@ -346,9 +420,13 @@ def to_array(tensor: TensorProto, base_dir: str = "") -> np.ndarray:  # noqa: PL
 
     data = getattr(tensor, storage_field)
     if tensor_dtype in (TensorProto.COMPLEX64, TensorProto.COMPLEX128):
-        return np.array(data, dtype=storage_np_dtype).view(dtype=np_dtype).reshape(dims)
+        return _reshape_or_raise(
+            np.array(data, dtype=storage_np_dtype).view(dtype=np_dtype), dims, tensor
+        )
 
-    return np.asarray(data, dtype=storage_np_dtype).astype(np_dtype).reshape(dims)
+    return _reshape_or_raise(
+        np.asarray(data, dtype=storage_np_dtype).astype(np_dtype), dims, tensor
+    )
 
 
 def tobytes_little_endian(array: np.ndarray) -> bytes:
@@ -407,6 +485,9 @@ def from_array(array: np.ndarray, /, name: str | None = None) -> TensorProto:
     if dtype in {TensorProto.UINT2, TensorProto.INT2}:
         # Pack the array into int2
         array = _pack_2bitx4(array)
+
+    if dtype in {TensorProto.FLOAT6E2M3, TensorProto.FLOAT6E3M2}:
+        array = _pack_6bit(array.view(np.uint8))
 
     tensor.raw_data = tobytes_little_endian(array)
     tensor.data_type = dtype  # type: ignore[assignment]

@@ -97,13 +97,15 @@ struct CpuExecutionPolicy {
   /// ``0`` for the adaptive and park-immediately policies.
   uint64_t spin_budget = 0;
   /// Requested affinity policy.
-  CpuAffinityPolicy affinity_policy = CpuAffinityPolicy::kPhysicalCores;
+  CpuAffinityPolicy affinity_policy = CpuAffinityPolicy::kNone;
   /// Explicit participant CPU set, required and only allowed for
   /// :cpp:enumerator:`CpuAffinityPolicy::kExplicit`. The first processor is
   /// assigned to the calling participant; the remaining processors are
   /// assigned to workers.
   std::vector<CpuLogicalProcessor> cpu_set;
-  /// Whether nested parallel regions may create additional participants.
+  /// Allows nested regions to use idle workers from the same executor without
+  /// exceeding the resolved participant limit. Defaults to inline nesting,
+  /// which is usually more efficient.
   bool allow_nested_parallelism = false;
 
   bool operator==(const CpuExecutionPolicy &) const = default;
@@ -151,7 +153,7 @@ struct ResolvedCpuExecutionPolicy {
   bool uses_efficiency_cores = false;
   /// Resolved spin and park policy.
   ResolvedSpinPolicy spin;
-  /// Whether nested parallel regions may create additional participants.
+  /// Allows nested regions to use idle workers within effective_threads.
   bool allow_nested_parallelism = false;
   /// Human-readable notes about fallbacks taken during resolution.
   std::vector<std::string> diagnostics;
@@ -174,6 +176,30 @@ inline constexpr uint64_t kDefaultAdaptiveSpinIterations = 10000;
  *   The process-visible logical processors in increasing identifier order.
  */
 std::vector<CpuLogicalProcessor> ProcessVisibleLogicalProcessors();
+
+/**
+ * Returns the default number of CPU participants available to this process.
+ *
+ * The count prefers process-visible physical cores, then process-visible
+ * logical processors, and falls back to machine topology when process affinity
+ * cannot be queried. The result is always at least ``1``.
+ *
+ * Returns:
+ *   The default number of CPU participants.
+ */
+uint32_t DefaultCpuParticipantCount() noexcept;
+
+/**
+ * Returns the detected physical core count for the process-visible topology.
+ *
+ * Falls back to the platform CPU descriptor when the topology cannot be read,
+ * matching the detection :cpp:func:`ResolveCpuExecutionPolicy` uses to bound
+ * :cpp:enumerator:`CpuAffinityPolicy::kPhysicalCores` participant counts.
+ *
+ * Returns:
+ *   The detected physical core count, or ``0`` when it cannot be determined.
+ */
+uint32_t DetectedPhysicalCoreCount() noexcept;
 
 /**
  * Resolves a requested CPU execution policy into an immutable resolution.

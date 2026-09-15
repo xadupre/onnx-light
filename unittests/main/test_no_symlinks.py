@@ -1,9 +1,11 @@
 import subprocess
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
-class TestNoSymlinks(unittest.TestCase):
+class TestNoSymlinks(ExtTestCase):
     """Ensures no symlink is allowed anywhere in the repository."""
 
     @classmethod

@@ -30,6 +30,7 @@ def _measure_backend_test_case(
     import time
 
     from onnx_light.onnx.reference import ReferenceEvaluator
+    from onnx_light.onnx_py._onnxpybackend import backend_test  # type: ignore
 
     materialization_start = time.perf_counter()
     model = case.model
@@ -69,8 +70,8 @@ def _measure_backend_test_case(
 
     return {
         "name": case.name,
-        "kind": case.kind,
-        "tag": case.tag,
+        "kind": backend_test.test_case_kind_name(case.kind),
+        "tag": backend_test.test_case_tag_name(case.tag),
         "status": "completed",
         "timed_out": False,
         "error": None,
@@ -115,6 +116,7 @@ def measure_backend_test_case_by_name(
     case_name: str,
     mode: str,
     include_big: bool,
+    generate_benchmark_expected_outputs: bool,
     repeat: int,
     warmup: int,
     max_repeat_time: float,
@@ -127,8 +129,15 @@ def measure_backend_test_case_by_name(
 
     test_mode = backend.TestMode.TEST if mode == "test" else backend.TestMode.BENCHMARK
     cases = backend.collect_test_cases_by_name(
-        f"^{re.escape(case_name)}$", include_big=include_big, mode=test_mode
+        f"^{re.escape(case_name)}$",
+        include_big=include_big,
+        mode=test_mode,
+        generate_benchmark_expected_outputs=generate_benchmark_expected_outputs,
     )
     if len(cases) != 1:
         raise RuntimeError(f"expected one backend case named {case_name!r}, got {len(cases)}")
-    return _measure_backend_test_case(cases[0], repeat, warmup, max_repeat_time, capture_model)
+    case = cases[0]
+    try:
+        return _measure_backend_test_case(case, repeat, warmup, max_repeat_time, capture_model)
+    finally:
+        case.unload()

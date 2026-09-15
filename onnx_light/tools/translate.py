@@ -8,11 +8,13 @@ Two output *flavours* (``api``) are supported:
   `yet-another-onnx-builder <https://github.com/xadupre/yet-another-onnx-builder>`_.
 * ``"builder"`` -- a plain Python script that rebuilds the same model with the
   incremental :class:`onnx_light.onnx_core.graph_builder.GraphBuilder`
-  (``g.make_input(...)``, ``g.make_node(...)``, ``g.make_output(...)``,
-  ``g.to_onnx(...)``).
+  (``g.inp(...)``, ``g.init(...)``, ``g.op.<operator>(...)``,
+  ``g.out(...)``, ``g.to_onnx(...)``).
+* ``"cpp"`` -- a C++ function that rebuilds the model with
+  :cpp:class:`core::builder::GraphBuilder`.
 
-Both flavours are pure Python and only rely on the attributes of the standard
-ONNX message types (``ModelProto``, ``GraphProto``, ``NodeProto``,
+All flavours only rely on the attributes of the standard ONNX message types
+(``ModelProto``, ``GraphProto``, ``NodeProto``,
 ``ValueInfoProto``, ``TensorProto``, ``AttributeProto`` and
 ``TensorShapeProto``); they therefore work both with messages built by
 :mod:`onnx_light` and with messages built by the upstream :mod:`onnx` package.
@@ -27,6 +29,9 @@ Example::
 
 from __future__ import annotations
 
+import json
+import keyword
+import math
 import textwrap
 from typing import Any
 
@@ -160,6 +165,15 @@ def _node_expr(node: Any) -> str:
     return f"oh.make_node({', '.join(args)})"
 
 
+def _builder_value_info_args(value_info: Any) -> list[str]:
+    """Returns compact builder arguments for a value info."""
+    return [
+        repr(_s(getattr(value_info, "name", ""))),
+        f"onnx.TensorProto.{_dtype_enum_name(_elem_type(value_info))}",
+        repr(_shape_tuple(value_info)),
+    ]
+
+
 # ---------------------------------------------------------------------------
 # Graph rendering (nested ``oh.make_graph`` expression, used for subgraphs)
 # ---------------------------------------------------------------------------
@@ -206,7 +220,7 @@ def translate_header(api: str = "onnx-compact") -> str:
     """Returns the import header required by the code produced by :func:`translate`.
 
     Args:
-        api: target flavour, ``"onnx-compact"`` or ``"builder"``.
+        api: target flavour, ``"onnx-compact"``, ``"builder"`` or ``"cpp"``.
 
     Returns:
         The import header as a string ending with a trailing newline.
@@ -227,6 +241,17 @@ def translate_header(api: str = "onnx-compact") -> str:
             import onnx_light.onnx.helper as oh
             import onnx_light.onnx.numpy_helper as onh
             from onnx_light.onnx_core.graph_builder import GraphBuilder
+            """)
+    if api == "cpp":
+        return textwrap.dedent("""\
+            #include "onnx_core/builder/graph_builder.h"
+            #include "onnx_op/operator_sets.h"
+
+            #include <limits>
+            #include <string>
+            #include <vector>
+
+            namespace onnx_light = ONNX_LIGHT_NAMESPACE;
             """)
     raise ValueError(f"Unexpected value {api!r} for api.")
 
@@ -299,30 +324,47 @@ def _translate_builder(model: Any, graph: Any) -> str:
             # An initializer that is also listed as a graph input; the builder
             # declares it once as an initializer below.
             continue
-        expr = _value_info_expr(input_name, _elem_type(inp), _shape_tuple(inp))
-        lines.append(f"g.make_input({expr})")
+        args = _builder_value_info_args(inp)
+        lines.append(f"g.inp({', '.join(args)})")
 
     for init in _iter(getattr(graph, "initializer", None)):
-        expr = _from_array_expr(init, _s(getattr(init, "name", "")))
-        lines.append(f"g.make_initializer({expr})")
+        array = _tensor_to_numpy(init)
+        init_name = _s(getattr(init, "name", ""))
+        lines.append(f"g.init({_array_expr(array)}, name={init_name!r})")
 
     for node in _iter(getattr(graph, "node", None)):
         op_type = _s(getattr(node, "op_type", ""))
         inputs = [_s(i) for i in _iter(getattr(node, "input", None))]
         outputs = [_s(o) for o in _iter(getattr(node, "output", None))]
         domain = _s(getattr(node, "domain", "") or "")
-        args = [f"{op_type!r}", repr(inputs), f"outputs={outputs!r}"]
+        args = [*[repr(value) for value in inputs], f"outputs={outputs!r}"]
         if domain:
             args.append(f"domain={domain!r}")
         attributes = _node_attributes(node)
-        if attributes:
-            attrs = ", ".join(f"{k!r}: {v}" for k, v in attributes)
-            args.append(f"attributes={{{attrs}}}")
-        lines.append(f"g.make_node({', '.join(args)})")
+        direct_attributes = []
+        indirect_attributes = []
+        for name, value in attributes:
+            if (
+                name.isidentifier()
+                and not keyword.iskeyword(name)
+                and name not in {"domain", "name", "outputs"}
+            ):
+                direct_attributes.append((name, value))
+            else:
+                indirect_attributes.append((name, value))
+        args.extend(f"{name}={value}" for name, value in direct_attributes)
+        if indirect_attributes:
+            attrs = ", ".join(f"{name!r}: {value}" for name, value in indirect_attributes)
+            args.append(f"**{{{attrs}}}")
+        operator = f"g.op.{op_type}" if op_type.isidentifier() else f"getattr(g.op, {op_type!r})"
+        lines.append(f"{operator}({', '.join(args)})")
 
     for out in _iter(getattr(graph, "output", None)):
-        expr = _value_info_expr(_s(getattr(out, "name", "")), _elem_type(out), _shape_tuple(out))
-        lines.append(f"g.make_output({expr})")
+        elem_type = _elem_type(out)
+        if elem_type:
+            lines.append(f"g.out({', '.join(_builder_value_info_args(out))})")
+        else:
+            lines.append(f"g.out({_s(getattr(out, 'name', ''))!r})")
 
     if ir_version:
         lines.append(f"model = g.to_onnx('model', ir_version={ir_version})")
@@ -331,15 +373,214 @@ def _translate_builder(model: Any, graph: Any) -> str:
     return "\n".join(lines) + "\n"
 
 
+_CPP_TENSOR_TYPES = {
+    1: "kFloat",
+    2: "kUint8",
+    3: "kInt8",
+    4: "kUint16",
+    5: "kInt16",
+    6: "kInt32",
+    7: "kInt64",
+    9: "kBool",
+    10: "kFloat16",
+    11: "kDouble",
+    12: "kUint32",
+    13: "kUint64",
+    14: "kComplex64",
+    15: "kComplex128",
+    16: "kBfloat16",
+    17: "kFloat8e4m3fn",
+    18: "kFloat8e4m3fnuz",
+    19: "kFloat8e5m2",
+    20: "kFloat8e5m2fnuz",
+    21: "kUint4",
+    22: "kInt4",
+    23: "kFloat4e2m1",
+}
+
+_CPP_ATTRIBUTE_TYPES = {
+    _ATTR_FLOAT: "FLOAT",
+    _ATTR_INT: "INT",
+    _ATTR_STRING: "STRING",
+    _ATTR_FLOATS: "FLOATS",
+    _ATTR_INTS: "INTS",
+    _ATTR_STRINGS: "STRINGS",
+}
+
+
+def _cpp_shape_expr(value_info: Any) -> str:
+    """Returns a C++ ``SymShape`` expression for a value info."""
+    shape = _shape_tuple(value_info)
+    if shape is None:
+        return "onnx_light::core::symbolic::SymShape()"
+    dimensions = ", ".join(
+        (
+            f"onnx_light::core::symbolic::SymDim({dimension!r})"
+            if isinstance(dimension, str)
+            else f"onnx_light::core::symbolic::SymDim({int(dimension or 0)})"
+        )
+        for dimension in shape
+    )
+    return f"onnx_light::core::symbolic::SymShape{{{dimensions}}}"
+
+
+def _cpp_string(value: str) -> str:
+    """Returns a double-quoted C++ string literal."""
+    return json.dumps(value)
+
+
+def _cpp_float(value: float) -> str:
+    """Returns a C++ expression for a float value."""
+    if math.isnan(value):
+        return "std::numeric_limits<float>::quiet_NaN()"
+    if math.isinf(value):
+        return (
+            "std::numeric_limits<float>::infinity()"
+            if value > 0
+            else "-std::numeric_limits<float>::infinity()"
+        )
+    return f"{value:.9g}f"
+
+
+def _cpp_tensor_statements(tensor: Any, variable: str) -> list[str]:
+    """Returns C++ statements that construct a tensor from its raw bytes."""
+    array = _tensor_to_numpy(tensor)
+    raw_data = ", ".join(
+        f"static_cast<char>(static_cast<unsigned char>({value}))" for value in array.tobytes()
+    )
+    lines = [f"  onnx_light::TensorProto {variable};"]
+    lines.append(f"  {variable}.set_name({_cpp_string(_s(getattr(tensor, 'name', '')))});")
+    lines.append(
+        f"  {variable}.set_data_type(onnx_light::TensorProto::DataType::"
+        f"{_dtype_enum_name(int(getattr(tensor, 'data_type', 0)))});"
+    )
+    for dimension in array.shape:
+        lines.append(f"  {variable}.add_dims({dimension});")
+    lines.append(f"  {variable}.set_raw_data(std::string({{{raw_data}}}));")
+    return lines
+
+
+def _cpp_attribute_statements(node: Any, index: int) -> tuple[list[str], str]:
+    """Returns C++ statements and the attribute argument for ``node``."""
+    attributes = list(_iter(getattr(node, "attribute", None)))
+    if not attributes:
+        return [], ""
+    variable = f"attributes_{index}"
+    lines = [f"  onnx_light::utils::RepeatedProtoField<onnx_light::AttributeProto> {variable};"]
+    for attr_index, attr in enumerate(_iter(getattr(node, "attribute", None))):
+        attr_variable = f"attribute_{index}_{attr_index}"
+        attr_type = int(getattr(attr, "type", 0) or 0)
+        if attr_type not in _CPP_ATTRIBUTE_TYPES:
+            attr_name = _s(getattr(attr, "name", ""))
+            raise NotImplementedError(
+                f"C++ translation of attribute {attr_name!r} with type {attr_type} "
+                "is not implemented."
+            )
+        lines.extend(
+            [
+                f"  onnx_light::AttributeProto &{attr_variable} = {variable}.add();",
+                f"  {attr_variable}.set_name({_cpp_string(_s(getattr(attr, 'name', '')))});",
+                (
+                    f"  {attr_variable}.set_type(onnx_light::AttributeProto::AttributeType::"
+                    f"{_CPP_ATTRIBUTE_TYPES[attr_type]});"
+                ),
+            ]
+        )
+        if attr_type == _ATTR_FLOAT:
+            lines.append(
+                f"  {attr_variable}.set_f({_cpp_float(float(getattr(attr, 'f', 0.0) or 0.0))});"
+            )
+        elif attr_type == _ATTR_INT:
+            lines.append(f"  {attr_variable}.set_i({int(getattr(attr, 'i', 0) or 0)});")
+        elif attr_type == _ATTR_STRING:
+            lines.append(f"  {attr_variable}.set_s({_cpp_string(_s(getattr(attr, 's', b'')))});")
+        elif attr_type == _ATTR_FLOATS:
+            for value in _iter(getattr(attr, "floats", None)):
+                lines.append(f"  {attr_variable}.add_floats({_cpp_float(float(value))});")
+        elif attr_type == _ATTR_INTS:
+            for value in _iter(getattr(attr, "ints", None)):
+                lines.append(f"  {attr_variable}.add_ints({int(value)});")
+        elif attr_type == _ATTR_STRINGS:
+            for value in _iter(getattr(attr, "strings", None)):
+                lines.append(f"  {attr_variable}.add_strings({_cpp_string(_s(value))});")
+    return lines, variable
+
+
+def _translate_cpp(model: Any, graph: Any) -> str:
+    """Translates a model/graph into a C++ ``GraphBuilder`` function."""
+    name = _s(getattr(graph, "name", "")) or "graph"
+    initializer_names = {
+        _s(getattr(init, "name", "")) for init in _iter(getattr(graph, "initializer", None))
+    }
+    lines = [
+        "onnx_light::ModelProto BuildModel() {",
+        "  onnx_light::core::builder::GraphBuilder g(",
+        f"      {_cpp_string(name)}, [](const std::string &op_type) {{",
+        "        return onnx_light::onnx_op::GetAllOnnxOpSchemasWithHistory(op_type, false);",
+        "      });",
+    ]
+    for domain, version in _opsets(model):
+        lines.append(f"  g.SetOpsetVersion({_cpp_string(domain)}, {version});")
+    for inp in _iter(getattr(graph, "input", None)):
+        input_name = _s(getattr(inp, "name", ""))
+        if input_name not in initializer_names:
+            cpp_type = _CPP_TENSOR_TYPES.get(_elem_type(inp))
+            if cpp_type is None:
+                raise NotImplementedError(f"Unsupported C++ input type {_elem_type(inp)}.")
+            lines.append(
+                f"  g.MakeInput({_cpp_string(input_name)}, "
+                f"onnx_light::core::symbolic::TensorType::{cpp_type}, "
+                f"{_cpp_shape_expr(inp)});"
+            )
+    for index, init in enumerate(_iter(getattr(graph, "initializer", None))):
+        variable = f"initializer_{index}"
+        lines.extend(_cpp_tensor_statements(init, variable))
+        lines.append(f"  g.MakeInitializer({variable});")
+    for index, node in enumerate(_iter(getattr(graph, "node", None))):
+        attribute_lines, attributes = _cpp_attribute_statements(node, index)
+        lines.extend(attribute_lines)
+        inputs = ", ".join(
+            _cpp_string(_s(value)) for value in _iter(getattr(node, "input", None))
+        )
+        outputs = ", ".join(
+            _cpp_string(_s(value)) for value in _iter(getattr(node, "output", None))
+        )
+        domain = _s(getattr(node, "domain", "") or "")
+        node_name = _s(getattr(node, "name", "") or "")
+        args = [_cpp_string(_s(getattr(node, "op_type", ""))), f"{{{inputs}}}", f"{{{outputs}}}"]
+        if domain or node_name or attributes:
+            args.append(_cpp_string(domain))
+        if node_name or attributes:
+            args.append(_cpp_string(node_name))
+        if attributes:
+            args.append(attributes)
+        lines.append(f"  g.MakeNode({', '.join(args)});")
+    for out in _iter(getattr(graph, "output", None)):
+        cpp_type = _CPP_TENSOR_TYPES.get(_elem_type(out))
+        output_name = _s(getattr(out, "name", ""))
+        if cpp_type is None:
+            lines.append(f"  g.MakeOutput({_cpp_string(output_name)});")
+        else:
+            lines.append(
+                f"  g.MakeOutput({_cpp_string(output_name)}, "
+                f"onnx_light::core::symbolic::TensorType::{cpp_type}, "
+                f"{_cpp_shape_expr(out)});"
+            )
+    ir_version = int(getattr(model, "ir_version", 0) or 0)
+    lines.append(f"  return g.ToModel({ir_version});" if ir_version else "  return g.ToModel();")
+    lines.append("}")
+    return "\n".join(lines) + "\n"
+
+
 def translate(proto: Any, api: str = "onnx-compact") -> str:
     """Translates an ONNX model or graph into Python code that rebuilds it.
 
     Args:
         proto: a ``ModelProto`` or ``GraphProto`` (or a file path to load).
-        api: target flavour, ``"onnx-compact"`` (default) or ``"builder"``.
+        api: target flavour, ``"onnx-compact"`` (default), ``"builder"`` or ``"cpp"``.
 
     Returns:
-        The generated Python code as a string (without the import header, see
+        The generated Python or C++ code as a string (without the matching header, see
         :func:`translate_header`).
     """
     if isinstance(proto, str):
@@ -354,4 +595,6 @@ def translate(proto: Any, api: str = "onnx-compact") -> str:
         return _translate_compact(model, graph)
     if api == "builder":
         return _translate_builder(model, graph)
+    if api == "cpp":
+        return _translate_cpp(model, graph)
     raise ValueError(f"Unexpected value {api!r} for api.")

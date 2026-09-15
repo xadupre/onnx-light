@@ -180,6 +180,10 @@ class TestCanonicalizationPatterns(ExtTestCase):
         graph = optimization.GraphGraph(builder, [pattern], use_global_patterns=False)
         all_rewrites, report = graph.optimize(report=True)
         self.assertEqual(report.rewrites, len(all_rewrites))
+        self.assertEqual(
+            optimization.replay(model, all_rewrites).SerializeToString(),
+            builder.build_graph().SerializeToString(),
+        )
         rewrites = [rewrite for rewrite in all_rewrites if rewrite.pattern_name == pattern]
         return builder.to_onnx("model"), rewrites, report
 
@@ -708,7 +712,8 @@ class TestCanonicalizationPatterns(ExtTestCase):
         self.assertGreaterEqual(len(rewrites), 1)
         self.assertEqual(len(optimized.graph.initializer), 1)
         initializer = optimized.graph.initializer[0]
-        self.assertEqual(initializer.name, "constant_cst2init")
+        self.assertEqual(initializer.name, "constant")
+        self.assertEqual(list(optimized.graph.node[0].input), ["X", initializer.name])
         np.testing.assert_array_equal(
             onh.to_array(initializer), np.array([1, 2], dtype=np.float32)
         )
@@ -760,8 +765,12 @@ class TestCanonicalizationPatterns(ExtTestCase):
         self.assertGreaterEqual(len(rewrites), 2)
         self.assertTrue(report.subgraphs)
         then_optimized, else_optimized = _if_branches(optimized)
-        self.assertEqual(len(then_optimized.initializer), 2)
-        self.assertEqual(len(else_optimized.initializer), 2)
+        self.assertEqual(
+            [initializer.name for initializer in then_optimized.initializer], ["then_output"]
+        )
+        self.assertEqual(
+            [initializer.name for initializer in else_optimized.initializer], ["else_output"]
+        )
         for feeds in (
             {"X": np.ones((3, 2), dtype=np.float32)},
             {"X": -np.ones((3, 2), dtype=np.float32)},
@@ -776,17 +785,14 @@ class TestCanonicalizationPatterns(ExtTestCase):
         self.assertNotIn("Constant", _recursive_op_types(optimized.graph))
         self.assertGreaterEqual(len(rewrites), 2)
         self.assertEqual(
-            {initializer.name for initializer in optimized.graph.initializer},
-            {"threshold", "outer_two"},
+            {initializer.name for initializer in optimized.graph.initializer}, {"threshold"}
         )
         then_graph, else_graph = _if_branches(optimized)
         self.assertEqual(
-            {initializer.name for initializer in then_graph.initializer},
-            {"two_cst2init", "two_cst2init_0"},
+            {initializer.name for initializer in then_graph.initializer}, {"two_cst2init", "two"}
         )
         self.assertEqual(
-            {initializer.name for initializer in else_graph.initializer},
-            {"two_cst2init", "two_cst2init_0"},
+            {initializer.name for initializer in else_graph.initializer}, {"two_cst2init", "two"}
         )
         for feeds in (
             {"X": np.array([1, 2, 3], dtype=np.float32)},
@@ -825,9 +831,7 @@ class TestCanonicalizationPatterns(ExtTestCase):
 
         self.assertNotIn("Constant", _op_types(optimized))
         self.assertGreaterEqual(len(rewrites), 1)
-        self.assertEqual(
-            {initializer.name for initializer in optimized.graph.initializer}, {"Y", "Y_cst2init"}
-        )
+        self.assertEqual({initializer.name for initializer in optimized.graph.initializer}, {"Y"})
         self._assert_equivalent(model, optimized, {})
 
     def test_dropout_minimal_layernorm_artifact_replacement(self):
@@ -846,7 +850,10 @@ class TestCanonicalizationPatterns(ExtTestCase):
 
         self.assertEqual(_op_types(optimized), ["LayerNormalization", "Add"])
         self.assertGreaterEqual(len(rewrites), 1)
-        self.assertEqual(len(optimized.graph.initializer), 4)
+        self.assertEqual(
+            {initializer.name for initializer in optimized.graph.initializer},
+            {"scale", "bias", "residual"},
+        )
         self._assert_equivalent(model, optimized, feeds, atol=1e-6)
 
     def test_dropout_no_match_when_mask_is_used(self):
@@ -910,9 +917,7 @@ class TestCanonicalizationPatterns(ExtTestCase):
         self.assertEqual(_op_types(optimized), ["Conv"])
         self.assertEqual(list(optimized.graph.node[0].input), ["X", "W"])
         self.assertEqual(len(rewrites), 1)
-        self.assertEqual(
-            {initializer.name for initializer in optimized.graph.initializer}, {"bias"}
-        )
+        self.assertEqual(len(optimized.graph.initializer), 0)
         self._assert_equivalent(model, optimized, feeds, atol=1e-6)
 
     def test_conv_bias_null_materialized_constant(self):
@@ -998,6 +1003,140 @@ class TestCanonicalizationPatterns(ExtTestCase):
         self.assertEqual(list(optimized.graph.node[0].input), ["X", "W", "bias"])
         self.assertEqual(len(rewrites), 0)
         self._assert_equivalent(model, optimized, feeds, atol=1e-6)
+
+    def test_conv_add_fusion_keeps_relu(self):
+        model = _model(
+            [
+                oh.make_node("Conv", ["X", "W", "B"], ["conv"]),
+                oh.make_node("Add", ["addend", "conv"], ["added"]),
+                oh.make_node("Relu", ["added"], ["Y"]),
+            ],
+            [_value_info("X", TensorProto.FLOAT, [1, 2, 3, 3])],
+            [_value_info("Y", TensorProto.FLOAT, [1, 3, 3, 3])],
+            [
+                _array(np.arange(6).reshape(3, 2, 1, 1) / 7, np.float32, "W"),
+                _array([0.5, -0.25, 1.0], np.float32, "B"),
+                _array(np.array([1.0, 2.0, -3.0]).reshape(3, 1, 1), np.float32, "addend"),
+            ],
+        )
+        feeds = {"X": np.arange(18, dtype=np.float32).reshape(1, 2, 3, 3) / 5}
+
+        optimized, rewrites, _ = self._optimize(model, "ConvAddFusion")
+
+        self.assertEqual(_op_types(optimized), ["Conv", "Relu"])
+        self.assertEqual(optimized.graph.node[0].output[0], "added")
+        self.assertEqual(len(rewrites), 1)
+        self._assert_equivalent(model, optimized, feeds, atol=1e-6)
+
+    def test_conv_mul_fusion_channel_broadcast(self):
+        model = _model(
+            [
+                oh.make_node("Conv", ["X", "W", "B"], ["conv"]),
+                oh.make_node("Mul", ["conv", "scale"], ["Y"]),
+            ],
+            [_value_info("X", TensorProto.FLOAT, [1, 2, 2, 2])],
+            [_value_info("Y", TensorProto.FLOAT, [1, 3, 2, 2])],
+            [
+                _array(np.arange(6).reshape(3, 2, 1, 1) / 11, np.float32, "W"),
+                _array([0.5, -0.25, 1.0], np.float32, "B"),
+                _array(np.array([2.0, -1.0, 0.25]).reshape(1, 3, 1, 1), np.float32, "scale"),
+            ],
+        )
+        feeds = {"X": np.arange(8, dtype=np.float32).reshape(1, 2, 2, 2) / 3}
+
+        optimized, rewrites, _ = self._optimize(model, "ConvMulFusion")
+
+        self.assertEqual(_op_types(optimized), ["Conv"])
+        self.assertEqual(len(optimized.graph.node[0].input), 3)
+        self.assertEqual(len(rewrites), 1)
+        self._assert_equivalent(model, optimized, feeds, atol=1e-6)
+
+    def test_conv_batch_normalization_fusion_without_conv_bias(self):
+        model = _model(
+            [
+                oh.make_node("Conv", ["X", "W"], ["conv"]),
+                oh.make_node(
+                    "BatchNormalization",
+                    ["conv", "scale", "bn_bias", "mean", "variance"],
+                    ["Y", "", ""],
+                    epsilon=1e-4,
+                ),
+            ],
+            [_value_info("X", TensorProto.FLOAT, [1, 2, 2, 2])],
+            [_value_info("Y", TensorProto.FLOAT, [1, 3, 2, 2])],
+            [
+                _array(np.arange(6).reshape(3, 2, 1, 1) / 13, np.float32, "W"),
+                _array([1.0, 2.0, 0.5], np.float32, "scale"),
+                _array([0.25, -0.5, 1.0], np.float32, "bn_bias"),
+                _array([0.1, 0.2, 0.3], np.float32, "mean"),
+                _array([1.0, 2.0, 3.0], np.float32, "variance"),
+            ],
+            opset=14,
+        )
+        feeds = {"X": np.arange(8, dtype=np.float32).reshape(1, 2, 2, 2) / 3}
+
+        optimized, rewrites, _ = self._optimize(model, "ConvBatchNormalizationFusion")
+
+        self.assertEqual(_op_types(optimized), ["Conv"])
+        self.assertEqual(len(optimized.graph.node[0].input), 3)
+        self.assertEqual(len(rewrites), 1)
+        weights = np.arange(6, dtype=np.float32).reshape(3, 2) / 13
+        conv = np.einsum("oc,nchw->nohw", weights, feeds["X"])
+        expected = (
+            conv - np.array([0.1, 0.2, 0.3], dtype=np.float32).reshape(1, 3, 1, 1)
+        ) * np.array([1.0, 2.0, 0.5], dtype=np.float32).reshape(1, 3, 1, 1) / np.sqrt(
+            np.array([1.0, 2.0, 3.0], dtype=np.float32).reshape(1, 3, 1, 1) + np.float32(1e-4)
+        ) + np.array(
+            [0.25, -0.5, 1.0], dtype=np.float32
+        ).reshape(
+            1, 3, 1, 1
+        )
+        got = ReferenceEvaluator(optimized).run(None, feeds)[0]
+        np.testing.assert_allclose(expected, got, rtol=0, atol=2e-6)
+
+    def test_conv_fusions_reject_bad_broadcast_and_optional_bn_output(self):
+        add_model = _model(
+            [
+                oh.make_node("Conv", ["X", "W"], ["conv"]),
+                oh.make_node("Add", ["conv", "bad"], ["Y"]),
+            ],
+            [_value_info("X", TensorProto.FLOAT, [1, 1, 2, 2])],
+            [_value_info("Y", TensorProto.FLOAT, [1, 2, 2, 2])],
+            [
+                _array(np.ones((2, 1, 1, 1)), np.float32, "W"),
+                _array([1.0, 2.0], np.float32, "bad"),
+            ],
+        )
+        optimized, rewrites, _ = self._optimize(add_model, "ConvAddFusion")
+        self.assertEqual(_op_types(optimized), ["Conv", "Add"])
+        self.assertEqual(len(rewrites), 0)
+
+        bn_model = _model(
+            [
+                oh.make_node("Conv", ["X", "W"], ["conv"]),
+                oh.make_node(
+                    "BatchNormalization",
+                    ["conv", "scale", "bias", "mean", "variance"],
+                    ["Y", "saved_mean", ""],
+                ),
+            ],
+            [_value_info("X", TensorProto.FLOAT, [1, 1, 2, 2])],
+            [
+                _value_info("Y", TensorProto.FLOAT, [1, 1, 2, 2]),
+                _value_info("saved_mean", TensorProto.FLOAT, [1]),
+            ],
+            [
+                _array(np.ones((1, 1, 1, 1)), np.float32, "W"),
+                _array([1.0], np.float32, "scale"),
+                _array([0.0], np.float32, "bias"),
+                _array([0.0], np.float32, "mean"),
+                _array([1.0], np.float32, "variance"),
+            ],
+            opset=14,
+        )
+        optimized, rewrites, _ = self._optimize(bn_model, "ConvBatchNormalizationFusion")
+        self.assertEqual(_op_types(optimized), ["Conv", "BatchNormalization"])
+        self.assertEqual(len(rewrites), 0)
 
     def test_pad_conv_fusion(self):
         model = _model(

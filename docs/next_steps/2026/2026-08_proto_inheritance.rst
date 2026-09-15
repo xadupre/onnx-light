@@ -7,6 +7,17 @@ Proto schema inheritance
 
 **discussion**
 
+.. note::
+
+    This is an independent schema-language discussion, not part of the
+    implementation sequence in
+    :ref:`l-next-steps-prepared-values-and-persistent-state`. Its historical
+    ``StructProto`` / ``QuantizedTensorProto`` hierarchy is not retained:
+    the selected representation uses one ``EncodedValueProto`` container and
+    a separate ``StructTypeProto`` descriptor, without value inheritance.
+    The examples below illustrate the rejected hierarchy only; they do not
+    define additional containers to implement.
+
 Motivation
 ++++++++++
 

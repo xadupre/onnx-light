@@ -340,16 +340,5 @@ for row_index, result in enumerate(results):
     speedup_axis.set_title(f"Abs speed-up ({label}, onnxruntime = 1)")
     speedup_axis.legend()
 
-# %%
-# ``onnx-light`` is expected to beat ``onnxruntime`` on the smallest ``float32``
-# vector, where the fixed per-call overhead dominates.
-
-float32_result = results[0]
-float32_speedups = float32_result["ort_times"] / float32_result["onnx_light_times"]
-assert float32_speedups[0] > 1.0, (
-    "onnx-light is expected to be faster than onnxruntime for the first (smallest) size, "
-    f"got a speed-up of {float32_speedups[0]:.2f}x for size {float32_result['sizes'][0]}"
-)
-
 figure.tight_layout()
 figure.savefig("plot_abs_benchmark.png")

@@ -92,7 +92,7 @@ class TestDocumentationExamples(ExtTestCase):
         root_fold = os.path.normpath(os.path.join(this, "..", "..", "docs", "examples"))
         # Collect (fold, name) pairs from all subdirectories
         found = []
-        for subdir in ("runtime", "core", "proto"):
+        for subdir in ("runtime", "core", "proto", "patterns"):
             fold = os.path.join(root_fold, subdir)
             if os.path.isdir(fold):
                 for name in os.listdir(fold):
@@ -105,7 +105,12 @@ class TestDocumentationExamples(ExtTestCase):
             if (
                 not reason
                 and not has_onnx()
-                and name in {"plot_save_external_data_time.py", "plot_onnx_time.py"}
+                and name
+                in {
+                    "plot_onnx_cold_start.py",
+                    "plot_save_external_data_time.py",
+                    "plot_onnx_time.py",
+                }
             ):
                 reason = "onnx is missing"
 

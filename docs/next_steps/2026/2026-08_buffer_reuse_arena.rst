@@ -315,17 +315,17 @@ Conceptually, the allocation path is:
 
 .. code-block:: text
 
-    GraphProto::output names
-             |
-             v
+      GraphProto::output names
+                  |
+                  v
     ExecutionPlan: (node, output slot) -> allocation role
-             |
-             v
+                  |
+                  v
     kernel asks for output slot N
-             |
-             +-- execution role --> ExecutionArena
-             |
-             `-- I/O role -------> IOArena
+                  |
+                  +-- execution role --> ExecutionArena
+                  |
+                  `-- I/O role -------> IOArena
 
 The important API distinction is between asking for anonymous bytes and asking
 for a node output. ``MakeOutputTensor(dtype, shape, bytes, allocator)`` alone

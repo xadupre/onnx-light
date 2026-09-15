@@ -1,8 +1,10 @@
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
-class TestPixiLock(unittest.TestCase):
+class TestPixiLock(ExtTestCase):
     """Sanity checks on the committed pixi.lock manifest."""
 
     @classmethod

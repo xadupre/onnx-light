@@ -20,6 +20,8 @@
 #include "onnx_lib/common/scoped_resource.h"
 #include "onnx_lib/shape_inference/implementation.h"
 #include "onnx_manipulations/tensor_proto_util.h"
+#include "onnx_proto/onnx_helper.h"
+#include "onnx_proto/onnx_tree_ensemble.h"
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -201,6 +203,21 @@ void check_tensor(const TensorProto &tensor, const CheckerContext &ctx) {
     case TensorProto::INT2:
       expected_bytes = (nelem + 3) / 4; // 4 elements per byte, ceiling division
       break;
+    case TensorProto::FLOAT6E2M3:
+    case TensorProto::FLOAT6E3M2:
+      expected_bytes = nelem / 4 * 3 + (nelem % 4 * 6 + 7) / 8;
+      if (expected_bytes > 0 && static_cast<int64_t>(tensor.raw_data().size()) >= expected_bytes) {
+        const auto used_bits = static_cast<uint8_t>((nelem % 4 * 6) % 8);
+        if (used_bits != 0) {
+          const auto last_byte = static_cast<uint8_t>(tensor.raw_data()[expected_bytes - 1]);
+          const auto unused_bits_mask = static_cast<uint8_t>(0xFFU << used_bits);
+          if ((last_byte & unused_bits_mask) != 0) {
+            fail_check("TensorProto (tensor name: ", tensor.name(),
+                       ") has non-zero padding bits in its packed FLOAT6 raw_data.");
+          }
+        }
+      }
+      break;
     default:
       break;
     }
@@ -245,6 +262,8 @@ void check_tensor(const TensorProto &tensor, const CheckerContext &ctx) {
     case TensorProto::FLOAT8E5M2:
     case TensorProto::FLOAT8E5M2FNUZ:
     case TensorProto::FLOAT8E8M0:
+    case TensorProto::FLOAT6E2M3:
+    case TensorProto::FLOAT6E3M2:
       check_field(int32_data);
       if (nelem > 0) {
         // These types are not packed: each element occupies one int32_data entry.
@@ -253,6 +272,15 @@ void check_tensor(const TensorProto &tensor, const CheckerContext &ctx) {
           fail_check("TensorProto (tensor name: ", tensor.name(), ") int32_data size (",
                      tensor.int32_data().size(), ") is too small for the declared shape (",
                      expected_int32s, " int32 values required).");
+        }
+        if (tensor.data_type() == TensorProto::FLOAT6E2M3 ||
+            tensor.data_type() == TensorProto::FLOAT6E3M2) {
+          for (const auto value : tensor.int32_data()) {
+            if (value < 0 || value > 0x3F) {
+              fail_check("TensorProto (tensor name: ", tensor.name(),
+                         ") FLOAT6 int32_data values must use only bits 0-5.");
+            }
+          }
         }
       }
       break;
@@ -676,6 +704,13 @@ void check_node(const NodeProto &node, const CheckerContext &ctx,
                ONNX_LIGHT_NAMESPACE::to_string(domain_version));
   } else {
     schema->Verify(node);
+    if (node.domain().sv() == AI_ONNX_ML_DOMAIN && node.op_type() == "TreeEnsemble") {
+      const auto error = ValidateTreeEnsembleAttributes(
+          [&node](const char *name) { return FindAttribute(node, name); });
+      if (!error.empty()) {
+        fail_check(error);
+      }
+    }
   }
 }
 

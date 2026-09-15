@@ -86,7 +86,24 @@ std::vector<LightOpSchema> BuildElementwiseMathSchemaForVersion(const char *op_t
 
 std::vector<LightOpSchema> BuildModSchemas() {
   std::vector<LightOpSchema> schemas;
-  schemas.reserve(2);
+  schemas.reserve(3);
+  schemas.push_back(LightOpSchema(
+      "Mod", kOnnxDomain, 28, MakeModDoc(),
+      {
+          {"A", "Dividend tensor", "T"},
+          {"B", "Divisor tensor", "T"},
+      },
+      {
+          {"C", "Remainder tensor", "T"},
+      },
+      {
+          {"T", AllNumericTypesIr4(), "Constrain input and output types to numeric tensors."},
+      },
+      {
+          {"fmod",
+           "Whether the operator should use floor (0) or truncation (1) to calculate the quotient.",
+           AttributeType::INT, /*required=*/false, static_cast<int64_t>(0)},
+      }));
   schemas.push_back(
       LightOpSchema("Mod", kOnnxDomain, 13, "Performs an element-wise binary modulo operation.",
                     {
@@ -2395,7 +2412,22 @@ std::vector<LightOpSchema> BuildGemmSchemas() {
 
 std::vector<LightOpSchema> BuildEinsumSchemas() {
   std::vector<LightOpSchema> schemas;
-  schemas.reserve(1);
+  schemas.reserve(2);
+
+  schemas.push_back(
+      LightOpSchema("Einsum", kOnnxDomain, 28, MakeEinsumDoc(),
+                    {
+                        {"Inputs", "Operands", "T"},
+                    },
+                    {
+                        {"Output", "Output tensor", "T"},
+                    },
+                    {
+                        {"T", AllNumericTypesIr4(),
+                         "Constrain input and output types to all numerical tensor types."},
+                    },
+                    {AttributeParam{"equation", "Einsum expression string.", AttributeType::STRING,
+                                    /*required=*/true, std::monostate{}}}));
 
   // Einsum v12: introduced. Variadic homogeneous input "Inputs" (min arity 1),
   // single output "Output". The "equation" attribute is required and carries
@@ -3006,29 +3038,44 @@ std::vector<LightOpSchema> BuildSTFTSchemas() {
       "For complex input, the following shape is expected: "
       "[batch_size][signal_length][2], where "
       "[batch_size][signal_length][0] represents the real component and "
-      "[batch_size][signal_length][1] represents the imaginary component of the signal.";
-  const std::string frame_step_desc = "The number of samples to step between successive DFTs.";
+      "[batch_size][signal_length][1] represents the imaginary component of the signal. "
+      "The tensor is expected to have rank 3.";
+  const std::string frame_step_desc =
+      "A scalar representing the number of samples to step between successive DFTs.";
   const std::string window_desc =
-      "A tensor representing the window that will be slid over the signal."
-      "The window must have rank 1 with shape: [window_shape]. "
-      "It's an optional value. ";
-  const std::string frame_length_desc = "A scalar representing the size of the DFT. "
-                                        "It's an optional value.";
+      "An optional 1-D tensor representing the window function to be applied to each frame of "
+      "the signal before computing the DFT. "
+      "The length of the window (window.shape[0]) determines the frame length when `frame_length` "
+      "is not specified. "
+      "If both `window` and `frame_length` are provided, the length of the `window` must equal "
+      "`frame_length`. "
+      "When omitted, a rectangular (all-ones) window of length `frame_length` is used.";
+  const std::string frame_length_desc =
+      "An optional scalar representing the length of each frame (i.e., the DFT size). "
+      "When omitted and `window` is provided, `frame_length` is inferred from `window.shape[0]`. "
+      "When both `window` and `frame_length` are omitted, `frame_length` defaults to "
+      "`signal_length`. "
+      "If both `frame_length` and `window` are provided, the length of the `window` must equal "
+      "`frame_length`.";
   const std::string output_desc =
-      "The Short-time Fourier Transform of the signals."
+      "The Short-time Fourier Transform of the signal. "
+      "The number of frames in the output is `frames = floor((signal_length - frame_length) / "
+      "frame_step) + 1`. "
       "If onesided is 1, the output has the shape: [batch_size][frames][dft_unique_bins][2], "
-      "where dft_unique_bins is frame_length // 2 + 1 (the unique components of the DFT) "
+      "where dft_unique_bins is frame_length // 2 + 1 (the unique components of the DFT). "
       "If onesided is 0, the output has the shape: [batch_size][frames][frame_length][2], "
-      "where frame_length is the length of the DFT.";
+      "where frame_length is the length of the DFT. "
+      "The last dimension of size 2 represents the real and imaginary parts of each complex "
+      "value.";
   const std::string onesided_desc =
       "If onesided is 1, only values for w in [0, 1, 2, ..., floor(n_fft/2) + 1] are "
       "returned because "
       "the real-to-complex Fourier transform satisfies the conjugate symmetry, i.e., X[m, "
-      "w] = X[m,w]=X[m,n_fft-w]*. "
+      "w] = X[m, n_fft-w]*. "
       "Note if the input or window tensors are complex, then onesided output is not "
       "possible. "
       "Enabling onesided with real inputs performs a Real-valued fast Fourier transform "
-      "(RFFT)."
+      "(RFFT). "
       "When invoked with real or complex valued input, the default value is 1. "
       "Values can be 0 or 1.";
 

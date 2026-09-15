@@ -48,7 +48,10 @@ TEST(BackendTestCase, AveragePoolCasesArePresent) {
   const TestCase *avp_2d_pre_same_upper = nullptr;
   const TestCase *avp_2d_same_upper = nullptr;
   const TestCase *avp_2d_same_lower = nullptr;
+  const TestCase *avp_1d_dilations_same_upper = nullptr;
+  const TestCase *avp_1d_dilations_same_lower = nullptr;
   const TestCase *avp_2d_dilations = nullptr;
+  const TestCase *avp_2d_dilations_cip = nullptr;
   const TestCase *avp_2d_dilations_valid = nullptr;
   const TestCase *avp_3d_dilations_small = nullptr;
   const TestCase *avp_3d_dil_large_0_T = nullptr;
@@ -92,8 +95,14 @@ TEST(BackendTestCase, AveragePoolCasesArePresent) {
       avp_2d_same_upper = &c;
     } else if (c.name == "test_cc_averagepool_2d_same_lower") {
       avp_2d_same_lower = &c;
+    } else if (c.name == "test_cc_averagepool_1d_dilations_same_upper") {
+      avp_1d_dilations_same_upper = &c;
+    } else if (c.name == "test_cc_averagepool_1d_dilations_same_lower") {
+      avp_1d_dilations_same_lower = &c;
     } else if (c.name == "test_cc_averagepool_2d_dilations") {
       avp_2d_dilations = &c;
+    } else if (c.name == "test_cc_averagepool_2d_dilations_count_include_pad") {
+      avp_2d_dilations_cip = &c;
     } else if (c.name == "test_cc_averagepool_2d_dilations_valid") {
       avp_2d_dilations_valid = &c;
     } else if (c.name == "test_cc_averagepool_3d_dilations_small") {
@@ -130,7 +139,10 @@ TEST(BackendTestCase, AveragePoolCasesArePresent) {
   ASSERT_NE(avp_2d_pre_same_upper, nullptr);
   ASSERT_NE(avp_2d_same_upper, nullptr);
   ASSERT_NE(avp_2d_same_lower, nullptr);
+  ASSERT_NE(avp_1d_dilations_same_upper, nullptr);
+  ASSERT_NE(avp_1d_dilations_same_lower, nullptr);
   ASSERT_NE(avp_2d_dilations, nullptr);
+  ASSERT_NE(avp_2d_dilations_cip, nullptr);
   ASSERT_NE(avp_2d_dilations_valid, nullptr);
   ASSERT_NE(avp_3d_dilations_small, nullptr);
   ASSERT_NE(avp_3d_dil_large_0_T, nullptr);
@@ -173,6 +185,35 @@ TEST(BackendTestCase, AveragePoolCasesArePresent) {
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 1, 5, 5}));
   }
 
+  // Dilated SAME padding uses the effective kernel extent and splits odd
+  // padding on the side selected by SAME_UPPER/SAME_LOWER.
+  {
+    const auto &upper = avp_1d_dilations_same_upper->data_sets()[0].outputs[0];
+    const auto &lower = avp_1d_dilations_same_lower->data_sets()[0].outputs[0];
+    EXPECT_EQ(upper.shape, (std::vector<int64_t>{1, 1, 3}));
+    EXPECT_EQ(lower.shape, (std::vector<int64_t>{1, 1, 3}));
+    const float *upper_values = upper.AsFloat();
+    const float *lower_values = lower.AsFloat();
+    EXPECT_FLOAT_EQ(upper_values[0], 3.0f);
+    EXPECT_FLOAT_EQ(upper_values[1], 4.0f);
+    EXPECT_FLOAT_EQ(upper_values[2], 5.0f);
+    EXPECT_FLOAT_EQ(lower_values[0], 2.0f);
+    EXPECT_FLOAT_EQ(lower_values[1], 3.0f);
+    EXPECT_FLOAT_EQ(lower_values[2], 4.0f);
+  }
+
+  // Dilated pooling with count_include_pad divides each border window by the
+  // full 2x2 kernel size.
+  {
+    const auto &output = avp_2d_dilations_cip->data_sets()[0].outputs[0];
+    EXPECT_EQ(output.shape, (std::vector<int64_t>{1, 1, 3, 3}));
+    const float *values = output.AsFloat();
+    const std::vector<float> expected = {1.25f, 2.5f, 1.25f, 2.5f, 5.0f, 2.5f, 1.25f, 2.5f, 1.25f};
+    for (size_t i = 0; i < expected.size(); ++i) {
+      EXPECT_FLOAT_EQ(values[i], expected[i]);
+    }
+  }
+
   // Dilated VALID case: effective kernel is 5x5, so a 7x7 input yields a 3x3
   // output whose center value is the mean of the sampled 3x3 grid.
   {
@@ -184,25 +225,25 @@ TEST(BackendTestCase, AveragePoolCasesArePresent) {
     EXPECT_FLOAT_EQ(py[8], 33.0f);
   }
 
-  // Opset-18 1-D ceil/count_include_pad case: 1x2x4 output with the
-  // reference values mirrored from the ORT regression tests.
+  // Including padding keeps the full kernel divisor in ceil-mode tails,
+  // including for schemas before dilation was introduced.
   {
     const auto &ds = avp_18_1d_ceil_cip->data_sets()[0];
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 2, 4}));
     const float *py = ds.outputs[0].AsFloat();
     EXPECT_FLOAT_EQ(py[0], 0.73807144f);
-    EXPECT_FLOAT_EQ(py[7], -0.40353334f);
+    EXPECT_FLOAT_EQ(py[7], -2.4212f / 7);
   }
 
   // Opset-18 2-D ceil/count_include_pad case: 1x1x3x3 output whose trailing
-  // windows must ignore ceil-mode phantom cells.
+  // windows include the implicit padding in the divisor.
   {
     const auto &ds = avp_18_2d_ceil_cip->data_sets()[0];
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 1, 3, 3}));
     const float *py = ds.outputs[0].AsFloat();
     EXPECT_FLOAT_EQ(py[0], 1.5555556f);
     EXPECT_FLOAT_EQ(py[4], 11.0f);
-    EXPECT_FLOAT_EQ(py[8], 4.0f);
+    EXPECT_FLOAT_EQ(py[8], 16.0f / 9);
   }
 
   // Opset-18 2-D ceil/count_exclude_pad no-regression case.
@@ -539,7 +580,6 @@ TEST(BackendTestCase, AttentionBenchmarkCorpusIsLazyAndCoversPrefillAndDecode) {
   bool has_gqa = false;
   bool has_mqa = false;
   for (const TestCase &test_case : cases) {
-    EXPECT_TRUE(test_case.is_lazy());
     EXPECT_FALSE(test_case.materialized());
     EXPECT_TRUE(test_case.name.ends_with("_benchmark"));
     has_prefill |= test_case.name.find("prefill") != std::string::npos;
@@ -709,17 +749,19 @@ TEST(BackendTestCase, LSTMCasesArePresent) {
 
   // ``lstm_batchwise``: layout=1 with batch_size=3, seq_length=1,
   // hidden_size=7. Y has shape [batch, seq, num_directions, hidden] =
-  // [3, 1, 1, 7] and Y_h has shape [batch, num_directions, hidden] = [3, 1, 7].
+  // [3, 1, 1, 7], and Y_h and Y_c have shape [batch, num_directions, hidden] =
+  // [3, 1, 7].
   {
     const GraphProto &graph = batchwise->model().ref_graph();
     ASSERT_EQ(graph.ref_input().size(), 3u);
-    ASSERT_EQ(graph.ref_output().size(), 2u);
+    ASSERT_EQ(graph.ref_output().size(), 3u);
     const auto &ds = batchwise->data_sets()[0];
     ASSERT_EQ(ds.inputs.size(), 3u);
-    ASSERT_EQ(ds.outputs.size(), 2u);
+    ASSERT_EQ(ds.outputs.size(), 3u);
     EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3, 1, 2}));
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 1, 1, 7}));
     EXPECT_EQ(ds.outputs[1].shape, (std::vector<int64_t>{3, 1, 7}));
+    EXPECT_EQ(ds.outputs[2].shape, (std::vector<int64_t>{3, 1, 7}));
   }
 }
 

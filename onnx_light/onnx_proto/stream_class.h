@@ -21,10 +21,25 @@ template <typename T> inline const T &default_proto_instance() {
 
 } // namespace onnx_light::proto_default_detail
 
+namespace onnx_light::proto_oneof_detail {
+
+/// Resets the backing fields without variadic macro dispatch (MSVC's legacy preprocessor).
+template <typename... Fields> inline void reset_fields(Fields &...fields) { (fields.reset(), ...); }
+
+} // namespace onnx_light::proto_oneof_detail
+
 #define FIELD_VARINT 0
 #define FIELD_FIXED64 1
 #define FIELD_FIXED_SIZE 2
 #define FIELD_FIXED32 5 // deprecated value but used in old files
+
+#if defined(_MSC_VER)
+#define ONNX_LIGHT_NOINLINE __declspec(noinline)
+#elif defined(__GNUC__) || defined(__clang__)
+#define ONNX_LIGHT_NOINLINE __attribute__((noinline))
+#else
+#define ONNX_LIGHT_NOINLINE
+#endif
 
 /** Serialization/parsing core declaration macro for generated proto classes. */
 #define SERIALIZATION_METHOD()                                                                     \
@@ -309,8 +324,79 @@ public:                                                                         
   _FIELD_OPTIONAL(type, name, order, doc)                                                          \
   inline bool has_oneof_##name() const { return has_##name(); }
 
+/** Declares a protobuf ``oneof`` discriminator and reset operation from its backing fields. */
+#define ONEOF(name, ...)                                                                           \
+public:                                                                                            \
+  ONNX_LIGHT_NOINLINE inline void clear_##name() {                                                 \
+    ::onnx_light::proto_oneof_detail::reset_fields(__VA_ARGS__);                                   \
+    oneof_case_##name##_ = -1;                                                                     \
+  }                                                                                                \
+  inline int oneof_case_##name() const { return oneof_case_##name##_; }                            \
+                                                                                                   \
+private:                                                                                           \
+  inline void set_oneof_case_##name(int value) { oneof_case_##name##_ = value; }                   \
+  int oneof_case_##name##_ = -1;                                                                   \
+                                                                                                   \
+public:
+
+/** Declares one alternative governed by the discriminator declared with ``ONEOF``. */
 #define FIELD_OPTIONAL_ONEOF(type, name, order, oneof, doc)                                        \
-  _FIELD_OPTIONAL(type, name, order, doc)                                                          \
+public:                                                                                            \
+  inline void enter_oneof_##name() {                                                               \
+    if (oneof_case_##oneof() != order) {                                                           \
+      clear_##oneof();                                                                             \
+      set_oneof_case_##oneof(order);                                                               \
+    }                                                                                              \
+  }                                                                                                \
+  inline type &ref_##name() {                                                                      \
+    if (!has_##name()) {                                                                           \
+      add_##name();                                                                                \
+    }                                                                                              \
+    return *name##_;                                                                               \
+  }                                                                                                \
+  inline const type &ref_##name() const {                                                          \
+    if (!has_##name()) {                                                                           \
+      return ::onnx_light::proto_default_detail::default_proto_instance<type>();                   \
+    }                                                                                              \
+    return *name##_;                                                                               \
+  }                                                                                                \
+  inline const type &name() const { return ref_##name(); }                                         \
+  inline type *mutable_##name() { return &ref_##name(); }                                          \
+  inline const type *ptr_##name() const {                                                          \
+    return has_##name() ? &(*name##_) : static_cast<type *>(nullptr);                              \
+  }                                                                                                \
+  inline utils::OptionalField<type> &name##_optional() { return name##_; }                         \
+  inline const utils::OptionalField<type> &name##_optional() const {                               \
+    EXT_ENFORCE(has_##name(), "Oneof field '", #name, "' is not active.");                         \
+    return name##_;                                                                                \
+  }                                                                                                \
+  inline type *add_##name() {                                                                      \
+    enter_oneof_##name();                                                                          \
+    name##_.set_empty_value();                                                                     \
+    return &(*name##_);                                                                            \
+  }                                                                                                \
+  inline void set_##name(const type &v) {                                                          \
+    enter_oneof_##name();                                                                          \
+    name##_ = v;                                                                                   \
+  }                                                                                                \
+  inline void set_##name(type &&v) {                                                               \
+    enter_oneof_##name();                                                                          \
+    name##_ = std::move(v);                                                                        \
+  }                                                                                                \
+  inline void reset_##name() {                                                                     \
+    if (oneof_case_##oneof() == order) {                                                           \
+      clear_##oneof();                                                                             \
+    } else {                                                                                       \
+      name##_.reset();                                                                             \
+    }                                                                                              \
+  }                                                                                                \
+  inline void clear_##name() { reset_##name(); }                                                   \
+  inline bool has_##name() const { return name##_.has_value(); }                                   \
+  inline int order_##name() const { return order; }                                                \
+  static inline constexpr const char *DOC_##name = doc;                                            \
+  static inline constexpr const char *_name_##name = #name;                                        \
+  utils::OptionalField<type> name##_;                                                              \
+  using name##_t = type;                                                                           \
   inline bool has_oneof_##name() const { return has_##oneof(); }
 
 #define FIELD_OPTIONAL_ENUM(type, name, order, doc)                                                \

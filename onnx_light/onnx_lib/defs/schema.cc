@@ -597,7 +597,7 @@ OpSchema &OpSchema::Input(int n, FormalParameter formal_parameter) {
   return *this;
 }
 
-OpSchema &OpSchema::Input(int n, std::string name, const std::string &description,
+OpSchema &OpSchema::Input(int n, std::string name, [[maybe_unused]] const std::string &description,
                           std::string type_str, OpSchema::FormalParameterOption param_option,
                           bool is_homogeneous, int min_arity,
                           DifferentiationCategory differentiation_category) {
@@ -611,8 +611,9 @@ OpSchema &OpSchema::Input(int n, std::string name, const std::string &descriptio
                                   differentiation_category));
 }
 
-OpSchema &OpSchema::Input(int n, const char *name, const char *description, const char *type_str,
-                          FormalParameterOption param_option, bool is_homogeneous, int min_arity,
+OpSchema &OpSchema::Input(int n, const char *name, [[maybe_unused]] const char *description,
+                          const char *type_str, FormalParameterOption param_option,
+                          bool is_homogeneous, int min_arity,
                           DifferentiationCategory differentiation_category) {
   return Input(n, std::string(name),
 #ifndef __ONNX_NO_DOC_STRINGS
@@ -632,7 +633,7 @@ OpSchema &OpSchema::Output(int n, FormalParameter formal_parameter) {
   return *this;
 }
 
-OpSchema &OpSchema::Output(int n, std::string name, const std::string &description,
+OpSchema &OpSchema::Output(int n, std::string name, [[maybe_unused]] const std::string &description,
                            std::string type_str, OpSchema::FormalParameterOption param_option,
                            bool is_homogeneous, int min_arity,
                            DifferentiationCategory differentiation_category) {
@@ -646,8 +647,9 @@ OpSchema &OpSchema::Output(int n, std::string name, const std::string &descripti
                                    differentiation_category));
 }
 
-OpSchema &OpSchema::Output(int n, const char *name, const char *description, const char *type_str,
-                           FormalParameterOption param_option, bool is_homogeneous, int min_arity,
+OpSchema &OpSchema::Output(int n, const char *name, [[maybe_unused]] const char *description,
+                           const char *type_str, FormalParameterOption param_option,
+                           bool is_homogeneous, int min_arity,
                            DifferentiationCategory differentiation_category) {
   return Output(n, std::string(name),
 #ifndef __ONNX_NO_DOC_STRINGS
@@ -1224,6 +1226,36 @@ const std::vector<std::string> &OpSchema::all_non_string_tensor_types_ir13() {
   return all_non_string_tensor_types_ir13;
 }
 
+const std::vector<std::string> &OpSchema::all_tensor_types_ir14() {
+  static const auto types = [] {
+    auto result = all_tensor_types_ir13();
+    result.emplace_back("tensor(float6e2m3)");
+    result.emplace_back("tensor(float6e3m2)");
+    return result;
+  }();
+  return types;
+}
+
+const std::vector<std::string> &OpSchema::all_non_complex_tensor_types_ir14() {
+  static const auto types = [] {
+    auto result = all_non_complex_tensor_types_ir13();
+    result.emplace_back("tensor(float6e2m3)");
+    result.emplace_back("tensor(float6e3m2)");
+    return result;
+  }();
+  return types;
+}
+
+const std::vector<std::string> &OpSchema::all_non_string_tensor_types_ir14() {
+  static const auto types = [] {
+    auto result = all_non_string_tensor_types_ir13();
+    result.emplace_back("tensor(float6e2m3)");
+    result.emplace_back("tensor(float6e3m2)");
+    return result;
+  }();
+  return types;
+}
+
 const std::vector<std::string> &OpSchema::all_tensor_sequence_types() {
   static const std::vector<std::string> all_tensor_sequence_types = {
       "seq(tensor(uint8))",  "seq(tensor(uint16))",    "seq(tensor(uint32))",
@@ -1312,6 +1344,17 @@ const std::vector<std::string> &OpSchema::all_tensor_sequence_types_ir13() {
       "seq(tensor(float4e2m1))",   "seq(tensor(float8e8m0))",
       "seq(tensor(uint2))",        "seq(tensor(int2))"};
   return all_tensor_sequence_types_ir13;
+}
+
+const std::vector<std::string> &OpSchema::all_tensor_sequence_types_ir14() {
+  static const auto types = [] {
+    std::vector<std::string> result;
+    for (const auto &type : all_tensor_types_ir14()) {
+      result.emplace_back("seq(" + type + ")");
+    }
+    return result;
+  }();
+  return types;
 }
 
 const std::vector<std::string> &OpSchema::all_optional_types() {
@@ -1659,7 +1702,7 @@ OpSchemaRegistry::DomainToVersionRange::DomainToVersionRange() {
   // Increase the highest version when you make BC-breaking changes to the
   // operator schema on specific domain. Update the lowest version when it's
   // determined to remove too old version history.
-  map_[ONNX_DOMAIN] = std::make_pair(1, 28);
+  map_[ONNX_DOMAIN] = std::make_pair(1, 29);
   map_[AI_ONNX_ML_DOMAIN] = std::make_pair(1, 5);
   map_[AI_ONNX_TRAINING_DOMAIN] = std::make_pair(1, 1);
   map_[AI_ONNX_PREVIEW_DOMAIN] = std::make_pair(1, 1);
@@ -1670,7 +1713,7 @@ OpSchemaRegistry::DomainToVersionRange::DomainToVersionRange() {
   // Version corresponding last release of ONNX. Update this to match with
   // the max version above in a *release* version of ONNX. But in other
   // versions, the max version may be ahead of the last-release-version.
-  last_release_version_map_[ONNX_DOMAIN] = 27;
+  last_release_version_map_[ONNX_DOMAIN] = 28;
   last_release_version_map_[AI_ONNX_ML_DOMAIN] = 5;
   last_release_version_map_[AI_ONNX_TRAINING_DOMAIN] = 1;
   last_release_version_map_[AI_ONNX_PREVIEW_DOMAIN] = 1;

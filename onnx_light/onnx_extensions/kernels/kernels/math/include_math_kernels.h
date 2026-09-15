@@ -916,11 +916,10 @@ public:
 
 /// Element-wise modulo with NumPy-style broadcasting. The ``fmod`` flag
 /// controls the semantics:
-///   * ``fmod == 0`` (default): integer modulo whose sign follows the divisor
-///     (Python ``%`` / ``numpy.mod``). Only valid for integer dtypes.
+///   * ``fmod == 0`` (default): floor remainder whose sign follows the divisor
+///     (Python ``%`` / ``numpy.mod``), including floating-point inputs.
 ///   * ``fmod == 1``: C ``fmod`` semantics whose sign follows the dividend.
-///     Required when either input is floating point and also accepted for
-///     integer inputs (where it coincides with C ``%`` truncated modulo).
+///     For integer inputs it coincides with C ``%`` truncated modulo.
 class Mod : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Mod";
@@ -1255,7 +1254,7 @@ struct EinsumPlan;
 /// of input tensors. The equation may contain ellipsis (``...``) to broadcast
 /// leading dimensions, and may be given either in explicit form (``->``
 /// followed by the output term) or implicit form. All inputs must share the
-/// same dtype (FLOAT or DOUBLE); the output has the same dtype.
+/// same dtype (FLOAT, DOUBLE, or BFLOAT16); the output has the same dtype.
 class Einsum : public KernelBase {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Einsum";

@@ -110,12 +110,89 @@ The existing calibration cases measure every value side by side. The fastest
 validated value is persisted, while text and JSON output report elapsed times,
 speedups, the baseline, and the selected value.
 
+``parallel.minimum_elements`` is the serial/parallel crossover: a loop with
+exactly that many elements is eligible for parallel execution. Once the loop is
+dispatched, the executor derives the block grain from the number of admitted
+participants, independently from the crossover value.
+
+Optimize over backend cases
++++++++++++++++++++++++++++
+
+Use ``onnx-light backend`` when the objective is latency over a list of
+backend cases rather than a kernel's synthetic calibration workload. A regular
+expression is required so the corpus is explicit:
+
+.. code-block:: bash
+
+    python -m onnx_light backend \
+        --regex "^test_cc_not.*benchmark" --mode benchmark \
+        --kernel Not --dtype BOOL --impl portable \
+        --parameter parallel.minimum_elements=default,16384,32768,65536 \
+        --criterion median-speedup --json
+
+Repeat ``--parameter`` when a schema exposes interacting parameters. The command
+evaluates their Cartesian product, with a limit of 256 sets. Each specification
+starts with ``default``; the resulting all-default set is the baseline.
+Parameter names must be unique, integer values must be positive, and
+``--kernel``, ``--dtype``, and ``--impl`` must identify exactly one schema.
+
+``--criterion`` is required and accepts:
+
+* ``average``, ``sum``, ``median``, or ``max-latency``, which minimize the
+  corresponding latency across selected cases;
+* ``average-speedup``, ``median-speedup``, or ``max-speedup``, which maximize
+  per-case speedup relative to the all-default baseline.
+
+Every parameter set reports all seven metrics, its timeout count, and whether
+it was selected. A timed-out set has unavailable metrics. When the baseline
+times out, latency criteria can still select a complete candidate, but speedup
+metrics and speedup-based selection are unavailable. Progress is written to
+standard error, so ``--json`` on standard output remains machine-readable:
+
+.. code-block:: text
+
+    [backend tune] [##########----------] 2/4
+    [backend tune] [####################] 4/4
+
+The comparison uses temporary cache files and does not modify the machine
+tuning cache. Its result is printed to standard output, returned as JSON with
+``--json``, or written as CSV/XLSX with ``--output``. The selected set is
+advisory: kernels do not use it after the command ends. Use
+``set_kernel_tuning_parameters`` separately to persist and publish a selected
+set.
+
+Analyze measurements from Python
+++++++++++++++++++++++++++++++++
+
+The same native C++ metric analyzer is exposed in Python for measurements
+collected by another harness. Rows represent parameter sets, columns represent
+the same ordered cases, and the first row is the speedup baseline:
+
+.. code-block:: python
+
+    report = kernel_tuning.analyze_kernel_tuning_latencies(
+        [
+            [0.002, 0.008, 0.010],
+            [0.001, 0.004, 0.020],
+            [0.004, 0.004, 0.005],
+        ],
+        "average-speedup",
+    )
+    print(report["selected_index"])
+    for metrics in report["values"]:
+        print(metrics)
+
+Use ``None`` for a missing case measurement. The corresponding row is
+incomplete. The return value contains ``criterion``, ``selected_index``, and
+``values``. Every complete value contains ``average``, ``sum``, ``median``,
+``average_speedup``, ``median_speedup``, ``max_speedup``, and ``max_latency``.
+
 Calibrate one kernel from Python
 ++++++++++++++++++++++++++++++++
 
-The built-in calibration callbacks currently cover ``Abs``, ``Add``, and
-``Not``. The Python extension registers them when imported. Select a kernel and
-optionally one or more ONNX element types:
+The built-in calibration callbacks cover ``Abs``, ``Add``, ``Gemm``, ``Log``,
+``Not``, ``Sigmoid``, and ``Tanh``. The Python extension registers them when
+imported. Select a kernel and optionally one or more ONNX element types:
 
 .. code-block:: python
 
@@ -136,6 +213,14 @@ configured speedup for consecutive problem sizes. Resource limits bound the
 search. Inspect ``diagnostics`` to see the selected value. Schema-only keys
 without a callback appear in ``unsupported``.
 
+Groups whose reference and candidate use the same execution path are skipped.
+The selected threshold is the first size in a stable winning sequence, not an
+extrapolation below that size. Diagnostics distinguish a crossover bracketed by
+measured losing and winning sizes from one at or below the smallest measured
+size. Gemm tries geometrically growing task counts up to 4096, stopping after
+stable wins or at the resource limits; its single-task inline case is excluded.
+When no stable win is found within those limits, the portable threshold is kept.
+
 The selected profile is published in the current process immediately.
 With the default ``save=True``, it is also validated, locked, merged, and
 atomically persisted for later processes. Use ``save=False`` for an in-memory
@@ -151,7 +236,8 @@ A registered tuning schema does not imply that a calibration callback exists.
 1. Define a ``KernelCalibrationFunction`` near the kernel implementation.
 2. Construct a ``KernelCalibrationBenchmark`` with its portable parameters,
    deterministic cases, reference runner, candidate runner, and output
-   validation.
+   validation. Set ``same_execution_path`` when different parameter values can
+   resolve to the same path; any such case excludes its entire crossover group.
 3. Call ``CalibrateKernelBenchmark`` from that function.
 4. Register it for every supported exact key with
    ``RegisterKernelCalibrationFunction`` in the kernel's
@@ -209,6 +295,32 @@ The cache is a versioned text file beginning with
 be modified through ``UpdateKernelTuningCache`` so validation, locking, merging,
 and atomic replacement remain effective. Set ``KernelTuningCacheOptions::path``
 to use an explicit location.
+
+Remove cached results
++++++++++++++++++++++
+
+Remove the default cache, or the explicit cache passed to tuning operations,
+through the Python API:
+
+.. code-block:: python
+
+    removal = kernel_tuning.remove_kernel_tuning_cache()
+    print(removal["path"], removal["removed"], removal["diagnostics"])
+
+    # Removes an explicitly selected cache instead.
+    removal = kernel_tuning.remove_kernel_tuning_cache("/path/to/kernel_tuning.cache")
+
+The function takes the cache's inter-process lock before deleting the file.
+``removed`` is ``False`` without diagnostics when the file was already absent.
+After removal, a new process falls back to registered processor profiles or
+portable defaults.
+
+Removing a cache does not reconfigure kernels already initialized in the
+current process. It also does not retract profiles already published into that
+process's immutable tuning-registry generations. Restart the process after
+removal when subsequent sessions must stop using a profile that was previously
+loaded. The equivalent native operation is
+:cpp:func:`RemoveKernelTuningCache`.
 
 Load and use cached values
 ++++++++++++++++++++++++++

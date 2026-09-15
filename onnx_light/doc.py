@@ -9,7 +9,10 @@ import subprocess
 import textwrap
 from dataclasses import dataclass, field
 from types import SimpleNamespace
-from typing import Any, Callable, Iterable
+from typing import TYPE_CHECKING, Any, Callable, Iterable
+
+if TYPE_CHECKING:
+    from .onnx_lib.backend.test.case.base import TestCase
 
 
 def find_standalone_executable(
@@ -242,6 +245,179 @@ def measure_cpp_with_example(
         "max": values["max"],
         "std": values.get("std", float("nan")),
     }
+
+
+# ---------------------------------------------------------------------------
+# Pattern documentation generation
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class _PatternDocumentation:
+    """Stores the summary extracted from one C++ pattern class."""
+
+    class_name: str
+    family: str
+    summary: str
+
+
+def _clean_doxygen_comment(comment: str) -> str:
+    """Removes Doxygen line markers."""
+    lines = []
+    for line in comment.splitlines():
+        cleaned = re.sub(r"^\s*\* ?", "", line)
+        lines.append(cleaned.rstrip())
+    return "\n".join(lines).strip()
+
+
+def _load_pattern_documentation(patterns_root: pathlib.Path) -> dict[str, _PatternDocumentation]:
+    """Loads pattern summaries and rewrite graphs from C++ headers."""
+    documentation: dict[str, _PatternDocumentation] = {}
+    declaration = re.compile(r"/\*\*(.*?)\*/\s*class\s+(\w+Pattern)\b", re.DOTALL)
+    for header in sorted(patterns_root.rglob("*.h")):
+        relative = header.relative_to(patterns_root)
+        family = relative.parent.as_posix()
+        if family == ".":
+            family = "core"
+        source = header.read_text(encoding="utf-8")
+        for match in declaration.finditer(source):
+            class_name = match.group(2)
+            if class_name in documentation:
+                raise RuntimeError(f"Duplicate C++ documentation for pattern {class_name!r}.")
+            comment = _clean_doxygen_comment(match.group(1))
+            before_code, marker, code_and_after = comment.partition("@code")
+            code, end_marker, _ = code_and_after.partition("@endcode")
+            if not marker or not end_marker or "Before" not in code or "After" not in code:
+                raise RuntimeError(
+                    f"Pattern {class_name!r} must document a Before/After @code graph."
+                )
+            paragraphs = [part.strip() for part in before_code.split("\n\n") if part.strip()]
+            if not paragraphs:
+                raise RuntimeError(f"Pattern {class_name!r} has no summary.")
+            summary = " ".join(paragraphs[0].split())
+            documentation[class_name] = _PatternDocumentation(
+                class_name=class_name, family=family, summary=summary
+            )
+    return documentation
+
+
+def render_rst_pattern_catalog(patterns_root: str | pathlib.Path | None = None) -> str:
+    """Renders the registered C++ patterns as a reST catalogue.
+
+    The live Python registry determines which patterns appear. Summaries are
+    extracted from the corresponding C++ Doxygen comments, so the catalogue
+    has no separately maintained pattern list. Rewrite graphs remain in the
+    linked C++ class documentation.
+
+    Args:
+        patterns_root: Optional path to the C++ pattern headers. It defaults to
+            the headers located beside the installed ``onnx_light`` package.
+
+    Returns:
+        A reST ``list-table`` linking each pattern to its C++ and Python classes
+        and displaying its summary.
+    """
+    from .onnx_core import optimization
+
+    root = (
+        pathlib.Path(patterns_root)
+        if patterns_root is not None
+        else pathlib.Path(__file__).resolve().parent / "onnx_extensions" / "patterns"
+    )
+    if not root.is_dir():
+        raise FileNotFoundError(f"C++ pattern headers were not found in {root}.")
+    documentation = _load_pattern_documentation(root)
+    rows = []
+    for pattern in optimization.standard_patterns():
+        class_name = type(pattern).__name__
+        if class_name not in documentation:
+            raise RuntimeError(
+                f"Registered pattern {pattern.name!r} has no C++ documentation for {class_name}."
+            )
+        if not hasattr(optimization, class_name):
+            raise RuntimeError(
+                f"Registered pattern {pattern.name!r} is not exposed by the public Python API."
+            )
+        rows.append((str(pattern.name), documentation[class_name].family, class_name))
+
+    lines = [
+        ".. list-table::",
+        "    :header-rows: 1",
+        "    :widths: 5 30 65",
+        "    :class: sphinx-datatable pattern-catalog",
+        "",
+        "    * - #",
+        "      - Pattern",
+        "      - Summary",
+    ]
+    for index, (name, family, class_name) in enumerate(sorted(rows), 1):
+        item = documentation[class_name]
+        lines.extend(
+            [
+                f"    * - {index}",
+                (
+                    f"      - :cpp:class:`{name} "
+                    f"<onnx_light::onnx_patterns::{class_name}>` (``{family}``)"
+                ),
+                (
+                    "      - "
+                    f":class:`Python <onnx_light.onnx_core.optimization.{class_name}>`"
+                    f" — {item.summary}"
+                ),
+            ]
+        )
+    return "\n".join(lines) + "\n"
+
+
+def render_rst_peak_memory_catalog(keys: Iterable[str] | None = None) -> str:
+    """Renders the registered peak-memory functions as a reST catalogue.
+
+    Args:
+        keys: Optional dispatch-table keys to render. It defaults to the keys
+            registered by the installed ``onnx_light`` package.
+
+    Returns:
+        A reST ``list-table`` containing one row per registered function.
+    """
+    if keys is None:
+        from .onnx_core.shape_inference import peak_memory_dispatch_table_keys
+
+        keys = peak_memory_dispatch_table_keys()
+
+    rows: list[tuple[str, str, str]] = []
+    for key in keys:
+        parts = key.split(":")
+        if len(parts) not in (2, 3):
+            raise ValueError(f"Unexpected peak-memory dispatch key {key!r}.")
+        domain, op_type = parts[:2]
+        device = "CPU / default" if len(parts) == 2 else f"GPU{int(parts[2])}"
+        rows.append((domain, op_type, device))
+
+    lines = [
+        ".. list-table::",
+        "    :header-rows: 1",
+        "    :widths: 25 30 20 25",
+        "    :class: sphinx-datatable memory-peak-catalog",
+        "",
+        "    * - Operator",
+        "      - Domain",
+        "      - Device",
+        "      - APIs",
+    ]
+    for domain, op_type, device in sorted(rows):
+        lines.extend(
+            [
+                f"    * - **{op_type}**",
+                f"      - ``{domain}``",
+                f"      - {device}",
+                (
+                    "      - :cpp:func:`C++ <onnx_light::core::shapes::ComputePeakMemory>`"
+                    " / "
+                    ":func:`Python <onnx_light.onnx_core.shape_inference.compute_peak_memory>`"
+                ),
+            ]
+        )
+    return "\n".join(lines) + "\n"
 
 
 # ---------------------------------------------------------------------------
@@ -927,13 +1103,15 @@ def _examples_section_lines(schema: Any, domain: str) -> list[str]:
     lines: list[str] = ["Examples", "--------", ""]
     for name in sorted(matches):
         tc = matches[name]
+        model = tc.model
+        data_sets = tc.data_sets or []
         lines.append(f"**{name}**")
         lines.append("")
 
         # Find the (first) node in the model that matches this operator.
         target_node = None
-        if tc.model is not None:
-            for node in tc.model.graph.node:
+        if model is not None:
+            for node in model.graph.node:
                 if node.op_type == schema.name and node.domain == lookup_domain:
                     target_node = node
                     break
@@ -959,8 +1137,8 @@ def _examples_section_lines(schema: Any, domain: str) -> list[str]:
                     lines.append(f"        {_format_example_attribute(attr)}")
             lines.append("")
 
-        for ds_index, (inputs, outputs) in enumerate(tc.data_sets or []):
-            if len(tc.data_sets or []) > 1:
+        for ds_index, (inputs, outputs) in enumerate(data_sets):
+            if len(data_sets) > 1:
                 lines.append(".. code-block:: text")
                 lines.append("")
                 lines.append(f"    Data set {ds_index}:")
@@ -992,6 +1170,7 @@ def _examples_section_lines(schema: Any, domain: str) -> list[str]:
                 for ln in formatted.splitlines():
                     lines.append(f"        {ln}")
             lines.append("")
+        tc.unload()
 
     return lines
 
@@ -1237,8 +1416,11 @@ def _index_page_rst(domains: list[str]) -> str:
     lines: list[str] = []
     lines.append(".. _l-onnx-operators:")
     lines.append("")
+    lines.append("ByOp")
+    lines.append("====")
+    lines.append("")
     lines.append("Ops")
-    lines.append("===")
+    lines.append("---")
     lines.append("")
     lines.append(
         "This section lists all ONNX operators grouped by domain.  "
@@ -1252,6 +1434,31 @@ def _index_page_rst(domains: list[str]) -> str:
     for domain in sorted(domains):
         stem = _domain_file_stem(domain)
         lines.append(f"   {stem}")
+    lines.append("")
+    lines.append(".. _l-api-pattern-catalog:")
+    lines.append("")
+    lines.append("Patterns")
+    lines.append("--------")
+    lines.append("")
+    lines.append(
+        "This table is generated from the patterns registered by the installed "
+        "``onnx_light`` package. Summaries come from the C++ Doxygen comments; "
+        "follow the C++ class links to see the rewrite graphs."
+    )
+    lines.append("")
+    lines.append(render_rst_pattern_catalog().rstrip())
+    lines.append("")
+    lines.append(".. _l-api-memory-peak-catalog:")
+    lines.append("")
+    lines.append("MemoryPeak")
+    lines.append("----------")
+    lines.append("")
+    lines.append(
+        "This table lists the peak-memory functions registered by the installed "
+        "``onnx_light`` package."
+    )
+    lines.append("")
+    lines.append(render_rst_peak_memory_catalog().rstrip())
     lines.append("")
 
     return "\n".join(lines)
@@ -1440,11 +1647,15 @@ def generate_operators_doc(
     # Write the top-level index
     _report("Writing operators index page.")
     index_path = os.path.join(output_dir, "index.rst")
-
-    def _make_index_page() -> str:
-        return _index_page_rst(list(by_domain.keys()))
-
-    _write_if_missing(index_path, _make_index_page)
+    index_content = _index_page_rst(list(by_domain.keys()))
+    if (
+        os.path.exists(index_path)
+        and pathlib.Path(index_path).read_text(encoding="utf-8") == index_content
+    ):
+        skipped += 1
+    else:
+        pathlib.Path(index_path).write_text(index_content, encoding="utf-8")
+        written += 1
     _report(
         f"Finished generating operator pages "
         f"({written} written, {skipped} skipped because already present)."
@@ -1461,8 +1672,6 @@ def generate_operators_doc(
 from . import onnx as onnxl  # noqa: E402
 from .onnx_core.shape_inference import infer_shapes_model  # noqa: E402
 from .tools import pretty_onnx  # noqa: E402
-from .onnx_lib.backend.test.case import collect_test_case  # noqa: E402
-from .onnx_lib.backend.test.case.base import TestCase  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Data model
@@ -1632,26 +1841,33 @@ def _strip_value_info(model: onnxl.ModelProto) -> None:
 
 
 def _iter_inference_cases() -> Iterable[TestCase]:
+    from .onnx_lib.backend.test.case import collect_test_case
+
     cases = collect_test_case()
     for name in sorted(cases):
         tc = cases[name]
-        if tc.tag == "inference":
+        if tc.tag.name == "INFERENCE":
             yield tc
 
 
-def compute_inference_coverage() -> InferenceCoverageReport:
+def compute_inference_coverage(unload: bool = True) -> InferenceCoverageReport:
     """Computes the shape-inference report for every ``"inference"`` case.
 
     For every case, the model is deep-cloned, its ``graph.value_info`` is
     cleared, and :func:`infer_shapes_model` (from ``onnx_shapes``) is run on
     the clone. The report contrasts the *expected* shapes from the original
     model with the *computed* shapes from the inferred clone.
+
+    :param unload: Releases each native-backed case after processing it.
+        Defaults to ``True``.
     """
     report = InferenceCoverageReport()
 
     for tc in _iter_inference_cases():
         original = tc.model
         if original is None:  # pragma: no cover - defensive
+            if unload:
+                tc.unload()
             continue
         try:
             model_str = pretty_onnx(original)
@@ -1716,6 +1932,8 @@ def compute_inference_coverage() -> InferenceCoverageReport:
                 name=tc.name, model_str=model_str, error=error, comparisons=comparisons
             )
         )
+        if unload:
+            tc.unload()
 
     return report
 

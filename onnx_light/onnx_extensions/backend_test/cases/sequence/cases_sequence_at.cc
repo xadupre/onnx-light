@@ -29,63 +29,72 @@ constexpr int64_t kDefaultIrVersion = 13;
 void RegisterSequenceAtCase(const std::string &name, const std::vector<Tensor> &inputs,
                             int64_t position, const OpsetId &opset,
                             std::vector<TestCase> &registry) {
-  const KernelContext ctx{opset};
+  TestCase lazy_case(name, name);
+  lazy_case.rtol = 1e-3;
+  lazy_case.atol = 1e-7;
+  lazy_case.build = [opset, inputs, position, name](bool) -> BuiltCase {
+    const KernelContext ctx_1{opset};
+    const onnx_kernels::kernel::SequenceConstruct kernel_1{ctx_1};
+    const KernelContext ctx_2{opset};
+    const onnx_kernels::kernel::SequenceAt kernel_2{ctx_2};
 
-  // Compute expected output with the reference kernel.
-  const Sequence seq = onnx_kernels::kernel::SequenceConstruct(ctx).AsSequence(inputs);
-  Tensor position_tensor = Tensor::FromInt64("position", {}, {position});
-  Tensor expected = onnx_kernels::kernel::SequenceAt(ctx)(seq, position_tensor);
-  expected.name = "output_tensor";
+    // Compute expected output with the reference kernel.
+    const Sequence seq = kernel_1.AsSequence(inputs);
+    Tensor position_tensor = Tensor::FromInt64("position", {}, {position});
+    Tensor expected = kernel_2(seq, position_tensor);
+    expected.name = "output_tensor";
 
-  TestCase tc(name, name);
-  tc.rtol = 1e-3;
-  tc.atol = 1e-7;
+    TestCase tc(name, name);
+    tc.rtol = 1e-3;
+    tc.atol = 1e-7;
 
-  ModelProto &model = tc.emplace_model();
-  model.set_ir_version(kDefaultIrVersion);
-  model.set_producer_name("backend-test");
-  OperatorSetIdProto proto;
-  proto.set_domain(opset.domain);
-  proto.set_version(opset.version);
-  model.add_opset_import(proto);
+    ModelProto &model = tc.emplace_model();
+    model.set_ir_version(kDefaultIrVersion);
+    model.set_producer_name("backend-test");
+    OperatorSetIdProto proto;
+    proto.set_domain(opset.domain);
+    proto.set_version(opset.version);
+    model.add_opset_import(proto);
 
-  GraphProto *graph = model.add_graph();
-  graph->set_name(name);
+    GraphProto *graph = model.add_graph();
+    graph->set_name(name);
 
-  // Node 1: SequenceConstruct <inputs…> → input_seq.
-  NodeProto *seq_node = graph->add_node();
-  seq_node->set_op_type("SequenceConstruct");
-  for (std::size_t i = 0; i < inputs.size(); ++i) {
-    seq_node->add_input(inputs[i].name);
-  }
-  seq_node->add_output("input_seq");
+    // Node 1: SequenceConstruct <inputs…> → input_seq.
+    NodeProto *seq_node = graph->add_node();
+    seq_node->set_op_type("SequenceConstruct");
+    for (std::size_t i = 0; i < inputs.size(); ++i) {
+      seq_node->add_input(inputs[i].name);
+    }
+    seq_node->add_output("input_seq");
 
-  // Node 2: SequenceAt input_seq, position → output_tensor.
-  NodeProto *at_node = graph->add_node();
-  at_node->set_op_type("SequenceAt");
-  at_node->add_input("input_seq");
-  at_node->add_input("position");
-  at_node->add_output("output_tensor");
+    // Node 2: SequenceAt input_seq, position → output_tensor.
+    NodeProto *at_node = graph->add_node();
+    at_node->set_op_type("SequenceAt");
+    at_node->add_input("input_seq");
+    at_node->add_input("position");
+    at_node->add_output("output_tensor");
 
-  // Graph inputs: the individual tensors and the position scalar.
-  for (const Tensor &t : inputs) {
-    FillValueInfo(t, *graph->add_input());
-  }
-  FillValueInfo(position_tensor, *graph->add_input());
+    // Graph inputs: the individual tensors and the position scalar.
+    for (const Tensor &t : inputs) {
+      FillValueInfo(t, *graph->add_input());
+    }
+    FillValueInfo(position_tensor, *graph->add_input());
 
-  // Graph output: the selected tensor.
-  FillValueInfo(expected, *graph->add_output());
+    // Graph output: the selected tensor.
+    FillValueInfo(expected, *graph->add_output());
 
-  // DataSet: feed the original tensors and the position.
-  DataSet ds;
-  for (const Tensor &t : inputs) {
-    ds.inputs.push_back(t);
-  }
-  ds.inputs.push_back(position_tensor);
-  ds.outputs.push_back(expected);
-  tc.data_sets().emplace_back(std::move(ds));
+    // DataSet: feed the original tensors and the position.
+    DataSet ds;
+    for (const Tensor &t : inputs) {
+      ds.inputs.push_back(t);
+    }
+    ds.inputs.push_back(position_tensor);
+    ds.outputs.push_back(expected);
+    tc.data_sets().emplace_back(std::move(ds));
 
-  registry.emplace_back(std::move(tc));
+    return tc.take_materialized();
+  };
+  registry.emplace_back(std::move(lazy_case));
 }
 
 } // namespace

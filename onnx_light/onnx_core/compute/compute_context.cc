@@ -122,6 +122,7 @@ std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>
 ComputeContext::ComputeValueAndNodeTags(const FunctionProto &function) {
   value_tags_.clear();
   node_tags_.clear();
+  CollectFunctionSeedTags(function, value_tags_);
   std::vector<const NodeProto *> nodes;
   nodes.reserve(function.node().size());
   for (std::size_t i = 0; i < function.node().size(); ++i) {
@@ -400,6 +401,19 @@ void ComputeContext::AppendNodeReuse(const NodeProto &node, std::size_t node_ind
 void ComputeContext::ComputeInPlaceReuseGraph(
     const GraphProto &graph, const ShapesContext &ctx, bool allow_input_overwrite,
     const std::unordered_map<std::string, std::string> &value_tags) {
+  ComputeInPlaceReuseGraphImpl(graph, ctx, allow_input_overwrite, value_tags);
+}
+
+void ComputeContext::ComputeInPlaceReuseGraph(
+    const FunctionProto &function, const ShapesContext &ctx, bool allow_input_overwrite,
+    const std::unordered_map<std::string, std::string> &value_tags) {
+  ComputeInPlaceReuseGraphImpl(function, ctx, allow_input_overwrite, value_tags);
+}
+
+template <typename GraphOrFunction>
+void ComputeContext::ComputeInPlaceReuseGraphImpl(
+    const GraphOrFunction &graph, const ShapesContext &ctx, bool allow_input_overwrite,
+    const std::unordered_map<std::string, std::string> &value_tags) {
   const int num_nodes = graph.node().size();
   std::vector<NodeMemoryProfile> memory(static_cast<std::size_t>(num_nodes),
                                         MakeEmptyNodeMemoryProfile());
@@ -438,8 +452,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
   }
 
   std::unordered_map<std::string, LiveAllocation> alive;
-  for (std::size_t i = 0; i < graph.initializer().size(); ++i) {
-    const std::string name = graph.initializer()[i].name();
+  for (const std::string &name : lifetime.graph_initializers) {
     if (name.empty() || !ctx.Has(name)) {
       continue;
     }
@@ -451,8 +464,7 @@ void ComputeContext::ComputeInPlaceReuseGraph(
     alive[name] = LiveAllocation{expressions::simplify_dim_type(*bytes, &simplified_dim_cache),
                                  MemoryValueSource::kInitializer, ValueTag(value_tags, name)};
   }
-  for (std::size_t i = 0; i < graph.input().size(); ++i) {
-    const std::string name = graph.input()[i].name();
+  for (const std::string &name : graph_inputs) {
     if (name.empty() || alive.find(name) != alive.end() || !ctx.Has(name)) {
       continue;
     }
@@ -621,7 +633,10 @@ void ComputeContext::ComputeInPlaceReuseGraph(
   }
 }
 
-void ComputeContext::WriteToMetadata(GraphProto &graph) const {
+void ComputeContext::WriteToMetadata(GraphProto &graph) const { WriteToMetadataImpl(graph); }
+
+template <typename GraphOrFunction>
+void ComputeContext::WriteToMetadataImpl(GraphOrFunction &graph) const {
   EXT_ENFORCE_INVALID(static_cast<std::size_t>(graph.node().size()) == reuse_.size(),
                       "ComputeContext::WriteToMetadata: graph has ", graph.node().size(),
                       " node(s) but the computed reuse result has ", reuse_.size(),
@@ -720,9 +735,20 @@ ComputeContext::ComputeShapes(const utils::RepeatedProtoField<NodeProto> &nodes,
 
 const std::vector<int64_t> &ComputeContext::ComputePeakMemory(const GraphProto &graph,
                                                               Device device) {
-  peak_memory_.assign(static_cast<std::size_t>(graph.node().size()), 0);
-  for (std::size_t i = 0; i < graph.node().size(); ++i) {
-    const NodeProto &node = graph.node()[i];
+  return ComputePeakMemoryNodes(graph.node(), device);
+}
+
+const std::vector<int64_t> &ComputeContext::ComputePeakMemory(const FunctionProto &function,
+                                                              Device device) {
+  return ComputePeakMemoryNodes(function.node(), device);
+}
+
+const std::vector<int64_t> &
+ComputeContext::ComputePeakMemoryNodes(const utils::RepeatedProtoField<NodeProto> &nodes,
+                                       Device device) {
+  peak_memory_.assign(static_cast<std::size_t>(nodes.size()), 0);
+  for (std::size_t i = 0; i < nodes.size(); ++i) {
+    const NodeProto &node = nodes[i];
     std::vector<SymShape> input_shapes;
     input_shapes.reserve(node.input().size());
     for (const auto &input_name : node.input()) {
@@ -757,11 +783,21 @@ void ComputeContext::Compute(const ModelProto &model, Device device, bool allow_
 void ComputeContext::WriteToGraph(GraphProto &graph) const {
   shapes_.ApplyInferredShapesToGraph(graph);
   WriteToMetadata(graph);
-  if (peak_memory_.size() == static_cast<std::size_t>(graph.node().size())) {
-    for (std::size_t i = 0; i < graph.node().size(); ++i) {
+  WritePeakMemoryToNodes(*graph.mutable_node());
+}
+
+void ComputeContext::WriteToFunction(FunctionProto &function) const {
+  shapes_.ApplyInferredShapesToFunction(function);
+  WriteToMetadataImpl(function);
+  WritePeakMemoryToNodes(*function.mutable_node());
+}
+
+void ComputeContext::WritePeakMemoryToNodes(utils::RepeatedProtoField<NodeProto> &nodes) const {
+  if (peak_memory_.size() == static_cast<std::size_t>(nodes.size())) {
+    for (std::size_t i = 0; i < nodes.size(); ++i) {
       const int64_t peak = peak_memory_[static_cast<std::size_t>(i)];
       if (peak > 0) {
-        (*graph.mutable_node())[i].add_metadata(kNodePeakMemoryMetadataKey, std::to_string(peak));
+        nodes[i].add_metadata(kNodePeakMemoryMetadataKey, std::to_string(peak));
       }
     }
   }

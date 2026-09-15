@@ -21,8 +21,6 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterGroupNormalizationCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(21);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::GroupNormalization groupnorm_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -39,7 +37,12 @@ void RegisterGroupNormalizationCases(std::vector<TestCase> &registry, TestMode m
     constexpr int64_t W = 128;
     constexpr int64_t x_count = N * C * H * W;
     Expect(registry, std::move(node), "test_cc_group_normalization_example_benchmark", {opset},
-           {x_count, C, C}, {x_count}, [groupnorm_kernel]() -> IoData {
+           {x_count, C, C}, {x_count}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(21);
+
+             const KernelContext groupnorm_kernel_ctx{opset};
+             const onnx_kernels::kernel::GroupNormalization groupnorm_kernel{groupnorm_kernel_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, {N, C, H, W}, 1901);
              Tensor scale = RandnTensor(DataType::FLOAT, {C}, 1902);
              Tensor bias = RandnTensor(DataType::FLOAT, {C}, 1903);
@@ -61,7 +64,12 @@ void RegisterGroupNormalizationCases(std::vector<TestCase> &registry, TestMode m
     node.add_output("y");
     AddAttribute<int64_t>(node, "num_groups", 2);
     Expect(registry, std::move(node), "test_cc_group_normalization_example", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(21);
+
+             const KernelContext groupnorm_kernel_ctx{opset};
+             const onnx_kernels::kernel::GroupNormalization groupnorm_kernel{groupnorm_kernel_ctx};
+
              const int64_t N = 3;
              const int64_t C = 4;
              const int64_t H = 2;
@@ -92,7 +100,12 @@ void RegisterGroupNormalizationCases(std::vector<TestCase> &registry, TestMode m
     AddAttribute<int64_t>(node, "num_groups", 2);
     AddAttribute<float>(node, "epsilon", 1e-2f);
     Expect(registry, std::move(node), "test_cc_group_normalization_epsilon", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(21);
+
+             const KernelContext groupnorm_kernel_ctx{opset};
+             const onnx_kernels::kernel::GroupNormalization groupnorm_kernel{groupnorm_kernel_ctx};
+
              const int64_t N = 3;
              const int64_t C = 4;
              const int64_t H = 2;

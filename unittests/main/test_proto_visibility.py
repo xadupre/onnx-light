@@ -1,8 +1,10 @@
 import pathlib
 import unittest
 
+from onnx_light.ext_test_case import ExtTestCase
 
-class TestProtoVisibility(unittest.TestCase):
+
+class TestProtoVisibility(ExtTestCase):
     def test_shared_proto_uses_explicit_visibility(self):
         root = pathlib.Path(__file__).resolve().parents[2]
         cmake = (root / "CMakeLists.txt").read_text(encoding="utf-8")

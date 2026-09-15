@@ -3,7 +3,104 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [0.1.21] – Unreleased
+## [0.1.27] – Unreleased
+
+### New Features
+
+- Added the `StructTypeProto` / `EncodedValueProto` custom value representation
+  (`TypeProto.struct_type`, `GraphProto.encoded_initializer` and `ModelProto.struct_types`
+  on the reserved field number 1000), with serialization for typed and constant fields,
+  arrays, bit-packed records and shared type references.
+- Added built-in affine INT8/UINT8 and INT4/UINT4 encoded layouts, with per-value
+  quantization parameters and inline or external payload metadata. Catalogue resolution,
+  checked layout arithmetic and payload-derived record counts are validated through
+  `onnx_light/onnx_proto/onnx_verify.h` and integrated into `VerifyModel`/`VerifyGraph`.
+- Added ONNX `FLOAT6E2M3` and `FLOAT6E3M2` support across schemas, serialization,
+  validation, runtime tensors, `Cast`, `QuantizeLinear`, and `DequantizeLinear`.
+- Added portable optimizer patterns for linear algebra, convolution, normalization,
+  collection, padding, activation, STFT, gather propagation, shape simplification, and
+  linear attention, together with peak-memory estimation for the latter.
+
+### Improvements
+
+- Unified fixed-width element-size metadata across structured-value validation and
+  `BitCast` schemas, shape inference and runtime kernels.
+- Synchronized the opset 28 schemas with ONNX weekly 1.24, including BF16 constraints
+  and `SpaceToDepth`/`DepthToSpace` function bodies.
+- Aligned default CPU affinity with ONNX Runtime.
+- Extended `QuantizeLinear` and `DequantizeLinear` with `FLOAT16` rounding, per-axis, and
+  blocked-quantization support.
+- Closed native `GraphBuilder` compatibility gaps for local functions, shape and lifetime
+  analyses, optimization replay, and native data-type handling.
+- Made `setup.py build_ext --inplace` reject editable installs that redirect imports to
+  another source tree while continuing to allow editable installs of the current tree.
+- Required nanobind 3.0.1 or newer.
+- Improved `STFT` shape inference for dynamic inputs, added validation for optional inputs,
+  and aligned the runtime default for omitted frame lengths with the schema.
+- Aligned reduction shape inference with the opset transitions for input-based axes and
+  empty-axis semantics.
+- Used the public `TestCase.unload()` API directly when processing backend test cases.
+- Added negative-padding support to the `Pad` kernel.
+- Added signed-integer support for `BitShift` in opset 28.
+- Extended the `Optional` operators to all IR version 14 types and propagated ONNX opset 29
+  metadata.
+- Unified default CPU thread-count resolution across `ParallelFor`, runtime parameters,
+  and kernel tuning, preferring process-visible physical cores and respecting CPU affinity.
+- Reduced warm thread-pool dispatch contention by publishing work without requiring
+  spinning workers to acquire the state mutex.
+
+### Fixes
+
+- Fixed protobuf oneof resets with the legacy MSVC preprocessor, ensuring every backing
+  field is cleared when switching or resetting alternatives.
+- Honored globally registered shape callbacks in custom domains during native shape inference
+  and `GraphBuilder` construction.
+- Corrected variadic output bounds for `If`, `Loop`, `Scan`, and `SequenceMap` so native
+  `GraphBuilder` accepts multi-output control flow, including `Scan` inside local functions.
+- Added BF16 `Einsum` and `Unique`, floating-point floor remainder for `Mod`, and CRD
+  mode for `SpaceToDepth`; corrected dilated `AveragePool` padding counts and
+  explicit `MaxUnpool` output shapes.
+- Aligned the ONNX schema determinism API and corrected schema synchronization tests
+  to compare upstream metadata and resolve attributes declared by schema helpers.
+- Prevented crashes and invalid memory access on malformed models during function inlining,
+  version conversion, and node-level shape inference.
+- Preserved the input type when propagating `Attention` masks for low-precision inputs.
+- Avoided redefining toolchain-provided `_FORTIFY_SOURCE` settings in release wheel builds.
+- Fixed subprocess cleanup in the ONNX cold-start gallery example.
+- Prevented `Einsum` shape inference crashes for inputs with mismatched ellipsis ranks.
+- Added input validation to `GroupNormalization` shape inference.
+- Restricted opset 28 `ReduceLogSum` to floating-point types and added version conversion
+  support.
+- Propagated upstream ONNX fixes for initializer handling, `Resize`, and tensor diagnostics.
+- Fixed signed `INT64` raw-data decoding.
+- Made the global thread pool fork-safe by replacing inherited state on first use in the
+  child without joining vanished workers. Pool references obtained before `fork()` must
+  be reacquired in the child.
+- Persisted the calibration execution descriptor, including the effective thread count,
+  in the kernel-tuning cache.
+
+### Documentation & CI
+
+- Increased core CI timeouts to 90 minutes on Windows x64 and 60 minutes on macOS,
+  leaving room for tests after cold builds.
+- Bumped the release version to `0.1.27`.
+- Reduced the release wheel matrix while retaining CPython 3.12–3.14 coverage.
+- Refreshed the project goals, fuzzing, pattern optimization, and no-copy ownership
+  documentation.
+- Consolidated the custom, quantized, prepared, and persistent-value roadmaps, separated
+  prepacking concerns, and reordered next-step discussions ahead of completed work.
+- Centralized static ONNX operator schema documentation and documented the pattern-porting
+  workflow.
+- Improved generated pattern diagrams and catalog links, restored ONNX introduction
+  navigation, added gallery thumbnails, and graphed ONNX cold-start timings.
+- Corrected `Pad` reflect-mode examples and expanded the `STFT` operator documentation.
+- Added C++ backend coverage for 3D `GlobalMaxPool` and stabilized the backend benchmark
+  timing test on loaded CI runners.
+- Added high-arity C++ backend cases for five-input `Max`, `Min`, `Mean`, `Sum`, and
+  `Concat`, three-input `Einsum`, and five-output `Split`, with end-to-end model coverage
+  for `Einsum` and `Split`.
+
+## [0.1.21] – 2026-08-30
 
 ### New Features
 
@@ -22,6 +119,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Improvements
 
+- Made every collected C++ backend test case lazily materialized and unloadable,
+  including manually assembled control-flow, sequence, and shape-analysis cases;
+  Python collection and exhaustive processing APIs now unload native-backed
+  payloads by default.
 - Removed compatibility-parser input staging and the external-data pre-scan, resolving
   descriptors in a single pass while freezing live payload manifests before materialization.
 - Cached runtime initializer tensors per session and reused compatible CPU executor pools.
@@ -33,6 +134,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixes
 
+- Based cost-aware CPU loop planning on recurring warm-pool dispatch and
+  participant coordination instead of one-time executor startup.
 - Prevented a lost thread-pool completion notification from blocking parallel regions,
   especially during repeated small GEMM executions on Windows.
 - Fixed the Linux release build when the CPU helper is conditionally unused.
@@ -49,6 +152,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   execution, kernel tuning, compute analyses, and ONNX Runtime benchmark comparisons.
 - Documented CPU thread-pool dispatch, split the fast-loading work into ordered roadmaps,
   and clarified the next-step objectives and dependencies.
+- Reorganized the generated API catalogues under a `ByOp` page, including pattern rewrites
+  and registered peak-memory functions.
 - Isolated and bounded benchmark gallery measurements.
 - Fixed macOS GoogleTest discovery by deferring it to `PRE_TEST` mode.
 

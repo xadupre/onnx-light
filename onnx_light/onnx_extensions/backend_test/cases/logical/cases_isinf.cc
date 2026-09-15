@@ -27,14 +27,17 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterIsInfCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(20);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::IsInf isinf_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeNode("IsInf", {"x"}, {"y"});
     const int64_t count = kBenchmarkElementwiseSize;
     Expect(registry, std::move(node), "test_cc_isinf_benchmark", {opset}, {count}, {count},
-           [isinf_kernel, count]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(20);
+
+             const KernelContext isinf_kernel_ctx{opset};
+             const onnx_kernels::kernel::IsInf isinf_kernel{isinf_kernel_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, {count}, /*seed=*/9301);
              Tensor y = isinf_kernel(x);
              return IoData{{std::move(x)}, {std::move(y)}};
@@ -46,7 +49,12 @@ void RegisterIsInfCases(std::vector<TestCase> &registry, TestMode mode) {
 
   {
     NodeProto node = MakeNode("IsInf", {"x"}, {"y"});
-    Expect(registry, std::move(node), "test_cc_isinf", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_isinf", {opset}, [inf_v]() -> IoData {
+      const OpsetId opset = DefaultOpset(20);
+
+      const KernelContext isinf_kernel_ctx{opset};
+      const onnx_kernels::kernel::IsInf isinf_kernel{isinf_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {3}, {1.0f, inf_v, -inf_v});
       Tensor y = isinf_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
@@ -58,7 +66,12 @@ void RegisterIsInfCases(std::vector<TestCase> &registry, TestMode mode) {
   //   y = np.isinf(x)
   {
     NodeProto node = MakeNode("IsInf", {"x"}, {"y"});
-    Expect(registry, std::move(node), "test_isinf", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_isinf", {opset}, [nan_v, inf_v]() -> IoData {
+      const OpsetId opset = DefaultOpset(20);
+
+      const KernelContext isinf_kernel_ctx{opset};
+      const onnx_kernels::kernel::IsInf isinf_kernel{isinf_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {6}, {-1.2f, nan_v, inf_v, 2.8f, -inf_v, inf_v});
       Tensor y = isinf_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
@@ -71,7 +84,12 @@ void RegisterIsInfCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     NodeProto node = MakeNode("IsInf", {"x"}, {"y"});
     AddAttribute<int64_t>(node, "detect_negative", 0);
-    Expect(registry, std::move(node), "test_isinf_positive", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_isinf_positive", {opset}, [nan_v, inf_v]() -> IoData {
+      const OpsetId opset = DefaultOpset(20);
+
+      const KernelContext isinf_kernel_ctx{opset};
+      const onnx_kernels::kernel::IsInf isinf_kernel{isinf_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {6}, {-1.7f, nan_v, inf_v, 3.6f, -inf_v, inf_v});
       Tensor y = isinf_kernel(x, /*detect_positive=*/1, /*detect_negative=*/0);
       return IoData{{std::move(x)}, {std::move(y)}};
@@ -84,7 +102,12 @@ void RegisterIsInfCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     NodeProto node = MakeNode("IsInf", {"x"}, {"y"});
     AddAttribute<int64_t>(node, "detect_positive", 0);
-    Expect(registry, std::move(node), "test_isinf_negative", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_isinf_negative", {opset}, [nan_v, inf_v]() -> IoData {
+      const OpsetId opset = DefaultOpset(20);
+
+      const KernelContext isinf_kernel_ctx{opset};
+      const onnx_kernels::kernel::IsInf isinf_kernel{isinf_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {6}, {-1.7f, nan_v, inf_v, -3.6f, -inf_v, inf_v});
       Tensor y = isinf_kernel(x, /*detect_positive=*/0, /*detect_negative=*/1);
       return IoData{{std::move(x)}, {std::move(y)}};
@@ -94,7 +117,7 @@ void RegisterIsInfCases(std::vector<TestCase> &registry, TestMode mode) {
   // ``test_isinf_float16`` — IsInf on FLOAT16 input with hardcoded expected.
   {
     NodeProto node = MakeNode("IsInf", {"x"}, {"y"});
-    Expect(registry, std::move(node), "test_isinf_float16", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_isinf_float16", {opset}, [inf_v, nan_v]() -> IoData {
       Tensor x = MakeFloat16Tensor("", {6}, {-inf_v, -1.0f, 0.0f, 1.0f, inf_v, nan_v});
       // Expected: [True, False, False, False, True, False]
       Tensor y = Tensor::FromBool("", {6}, {1, 0, 0, 0, 1, 0});

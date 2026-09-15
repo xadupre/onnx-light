@@ -12,7 +12,7 @@ using namespace ONNX_LIGHT_NAMESPACE::core::schema;
 namespace optional {
 
 std::string MakeOptionalDoc(int since_version) {
-  if (since_version == 15) {
+  if (since_version == 15 || since_version == 28) {
     return R"DOC(
 Constructs an optional-type value containing either an empty optional of a certain type specified by the attribute,
 or a non-empty value containing the input element.
@@ -22,7 +22,7 @@ or a non-empty value containing the input element.
 }
 
 std::string MakeOptionalHasElementDoc(int since_version) {
-  if (since_version == 18) {
+  if (since_version == 18 || since_version == 28) {
     return R"DOC(
 Returns true if (1) the input is an optional-type and contains an element,
 or, (2) the input is a tensor or sequence type.
@@ -39,7 +39,7 @@ Returns true if the optional-type input contains an element. If it is an empty o
 }
 
 std::string MakeOptionalGetElementDoc(int since_version) {
-  if (since_version == 18) {
+  if (since_version == 18 || since_version == 28) {
     return R"DOC(
 If the input is a tensor or sequence type, it returns the input.
 If the input is an optional type, it outputs the element in the input.

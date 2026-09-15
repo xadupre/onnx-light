@@ -277,6 +277,13 @@ std::vector<TensorType> CastTypesVer25() {
   };
 }
 
+std::vector<TensorType> CastTypesVer28() {
+  std::vector<TensorType> types = CastTypesVer25();
+  types.push_back(TensorType::kFloat6e2m3);
+  types.push_back(TensorType::kFloat6e3m2);
+  return types;
+}
+
 std::vector<TensorType> EqualTypesV1V7() {
   return {
       TensorType::kBool,

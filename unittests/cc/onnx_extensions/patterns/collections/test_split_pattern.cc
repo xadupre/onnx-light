@@ -167,6 +167,75 @@ TEST(GathersSplitPattern, RejectsWhenIndicesDoNotCoverAxis) {
   EXPECT_EQ(match.pattern, nullptr);
 }
 
+TEST(GatherSliceToSplitPattern, FusesMixedCompletePartition) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.SetOpsetVersion("", 18);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2D(2, 6));
+  builder.MakeInitializer(MakeInitializer<int64_t>("i0", {}, {0}));
+  builder.MakeInitializer(MakeInitializerShape("one", {1}));
+  builder.MakeInitializer(MakeInitializerShape("three", {3}));
+  builder.MakeInitializer(MakeInitializerShape("six", {6}));
+  builder.MakeInitializer(MakeInitializerShape("axis", {1}));
+  builder.MakeNode("Gather", {"x", "i0"}, {"a"}, "", "", AxisAttrs(1));
+  builder.MakeNode("Slice", {"x", "one", "three", "axis"}, {"b"});
+  builder.MakeNode("Slice", {"x", "three", "six", "axis"}, {"c"});
+  builder.MakeOutput("a");
+  builder.MakeOutput("b");
+  builder.MakeOutput("c");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::GatherSliceToSplitPattern pattern;
+  const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[1]);
+  ASSERT_EQ(match.pattern, &pattern);
+  ASSERT_EQ(match.nodes.size(), 3u);
+  const utils::RepeatedProtoField<NodeProto> replacements = pattern.Apply(graph, match.nodes);
+  ASSERT_EQ(replacements.size(), 2u);
+  EXPECT_EQ(replacements[0].op_type().value(), "Split");
+  EXPECT_EQ(replacements[0].output_size(), 3);
+  EXPECT_EQ(replacements[1].op_type().value(), "Squeeze");
+  EXPECT_EQ(replacements[1].output()[0].value(), "a");
+}
+
+TEST(GatherSliceToSplitPattern, RejectsOverlap) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.SetOpsetVersion("", 18);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2D(2, 4));
+  builder.MakeInitializer(MakeInitializer<int64_t>("i1", {}, {1}));
+  builder.MakeInitializer(MakeInitializerShape("zero", {0}));
+  builder.MakeInitializer(MakeInitializerShape("two", {2}));
+  builder.MakeInitializer(MakeInitializerShape("four", {4}));
+  builder.MakeInitializer(MakeInitializerShape("axis", {1}));
+  builder.MakeNode("Gather", {"x", "i1"}, {"a"}, "", "", AxisAttrs(1));
+  builder.MakeNode("Slice", {"x", "zero", "two", "axis"}, {"b"});
+  builder.MakeNode("Slice", {"x", "two", "four", "axis"}, {"c"});
+  builder.MakeOutput("a");
+  builder.MakeOutput("b");
+  builder.MakeOutput("c");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::GatherSliceToSplitPattern pattern;
+  EXPECT_EQ(pattern.Match(graph, builder.Nodes()[0]).pattern, nullptr);
+}
+
+TEST(GatherSliceToSplitPattern, RejectsNonUnitSliceStep) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.SetOpsetVersion("", 18);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2D(2, 4));
+  builder.MakeInitializer(MakeInitializer<int64_t>("i0", {}, {0}));
+  builder.MakeInitializer(MakeInitializerShape("one", {1}));
+  builder.MakeInitializer(MakeInitializerShape("four", {4}));
+  builder.MakeInitializer(MakeInitializerShape("axis", {1}));
+  builder.MakeInitializer(MakeInitializerShape("step", {2}));
+  builder.MakeNode("Gather", {"x", "i0"}, {"a"}, "", "", AxisAttrs(1));
+  builder.MakeNode("Slice", {"x", "one", "four", "axis", "step"}, {"b"});
+  builder.MakeOutput("a");
+  builder.MakeOutput("b");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::GatherSliceToSplitPattern pattern;
+  EXPECT_EQ(pattern.Match(graph, builder.Nodes()[0]).pattern, nullptr);
+}
+
 TEST(SlicesSplitPattern, MergesContiguousSlicesIntoSplit) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2D(2, 8));

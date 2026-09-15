@@ -15,7 +15,7 @@ import unittest
 import xml.dom.minidom
 from types import SimpleNamespace
 
-from onnx_light.ext_test_case import HAS_OPTIM_EXT
+from onnx_light.ext_test_case import ExtTestCase, HAS_OPTIM_EXT
 from onnx_light.tools import to_svg, to_svg_graph
 from onnx_light.tools.svg import _escape_xml
 
@@ -113,7 +113,7 @@ def _count_crossings(boxes: list, edges: list, by_order: bool) -> int:
     return crossings
 
 
-class TestSvg(unittest.TestCase):
+class TestSvg(ExtTestCase):
     def _assert_valid_svg(self, text: str) -> None:
         self.assertTrue(text.startswith("<svg "))
         self.assertTrue(text.rstrip().endswith("</svg>"))

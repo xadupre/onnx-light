@@ -5,7 +5,7 @@ Compact GraphBuilder authoring and runtime walkthroughs
 
 :Date: 2026-08
 
-**discussion**
+**implemented**
 
 Objective
 +++++++++

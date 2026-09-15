@@ -7,6 +7,7 @@ OUTPUT_DIRECTORY       = $(DOXYGEN_OUTPUT_DIR)
 INPUT                  = ../onnx_light/onnx_helpers/include \
                          ../onnx_light/onnx_core \
                          ../onnx_light/onnx_op \
+                         ../onnx_light/onnx_extensions/patterns \
                          ../onnx_light/onnx_extensions/shapes \
                          ../onnx_light/onnx_extensions/backend_test \
                          ../onnx_light/onnx_extensions/kernels \

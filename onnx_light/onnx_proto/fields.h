@@ -618,6 +618,18 @@ public:
   }
 };
 
+/** Optional field specialization for uint64_t. */
+template <> class OptionalField<uint64_t> : public _OptionalField<uint64_t> {
+public:
+  /** Constructs an empty optional uint64_t field. */
+  explicit inline OptionalField() : _OptionalField<uint64_t>() {}
+  /** Assigns a uint64_t value to the field. */
+  inline OptionalField<uint64_t> &operator=(const uint64_t &other) {
+    value_ = other;
+    return *this;
+  }
+};
+
 /** Optional field specialization for int32_t. */
 template <> class OptionalField<int32_t> : public _OptionalField<int32_t> {
 public:

@@ -12,16 +12,65 @@
 #include <atomic>
 #include <cctype>
 #include <chrono>
+#include <cmath>
 #include <cstring>
 #include <limits>
 #include <mutex>
+#include <numeric>
 #include <stdexcept>
+#include <string>
 #include <tuple>
 #include <unordered_set>
 #include <utility>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
+
+double Median(std::vector<double> values) {
+  std::sort(values.begin(), values.end());
+  const size_t middle = values.size() / 2;
+  return values.size() % 2 == 0 ? (values[middle - 1] + values[middle]) / 2 : values[middle];
+}
+
+double CriterionValue(const KernelTuningLatencyMetrics &metrics, KernelTuningCriterion criterion) {
+  switch (criterion) {
+  case KernelTuningCriterion::kAverage:
+    return metrics.average;
+  case KernelTuningCriterion::kSum:
+    return metrics.sum;
+  case KernelTuningCriterion::kMedian:
+    return metrics.median;
+  case KernelTuningCriterion::kAverageSpeedup:
+    return metrics.average_speedup.value();
+  case KernelTuningCriterion::kMedianSpeedup:
+    return metrics.median_speedup.value();
+  case KernelTuningCriterion::kMaxSpeedup:
+    return metrics.max_speedup.value();
+  case KernelTuningCriterion::kMaxLatency:
+    return metrics.max_latency;
+  }
+  throw std::invalid_argument("Unknown kernel tuning criterion " +
+                              std::to_string(static_cast<int>(criterion)) + ".");
+}
+
+bool Maximizes(KernelTuningCriterion criterion) {
+  return criterion == KernelTuningCriterion::kAverageSpeedup ||
+         criterion == KernelTuningCriterion::kMedianSpeedup ||
+         criterion == KernelTuningCriterion::kMaxSpeedup;
+}
+
+bool HasCriterion(const KernelTuningLatencyMetrics &metrics, KernelTuningCriterion criterion) {
+  switch (criterion) {
+  case KernelTuningCriterion::kAverageSpeedup:
+    return metrics.average_speedup.has_value();
+  case KernelTuningCriterion::kMedianSpeedup:
+    return metrics.median_speedup.has_value();
+  case KernelTuningCriterion::kMaxSpeedup:
+    return metrics.max_speedup.has_value();
+  default:
+    return true;
+  }
+}
 
 template <typename T> bool Contains(const std::vector<T> &values, const T &value) {
   return values.empty() || std::find(values.begin(), values.end(), value) != values.end();
@@ -225,6 +274,119 @@ size_t KernelTuningKeyHash::operator()(const KernelTuningKey &key) const noexcep
   HashCombine(hash, std::hash<int32_t>{}(static_cast<int32_t>(key.device)));
   HashCombine(hash, std::hash<uint32_t>{}(key.tuning_abi));
   return hash;
+}
+
+KernelTuningCriterion ParseKernelTuningCriterion(std::string_view criterion) {
+  if (criterion == "average")
+    return KernelTuningCriterion::kAverage;
+  if (criterion == "sum")
+    return KernelTuningCriterion::kSum;
+  if (criterion == "median")
+    return KernelTuningCriterion::kMedian;
+  if (criterion == "average-speedup")
+    return KernelTuningCriterion::kAverageSpeedup;
+  if (criterion == "median-speedup")
+    return KernelTuningCriterion::kMedianSpeedup;
+  if (criterion == "max-speedup")
+    return KernelTuningCriterion::kMaxSpeedup;
+  if (criterion == "max-latency")
+    return KernelTuningCriterion::kMaxLatency;
+  throw std::invalid_argument("Unknown kernel tuning criterion '" + std::string(criterion) + "'.");
+}
+
+std::string_view KernelTuningCriterionName(KernelTuningCriterion criterion) {
+  switch (criterion) {
+  case KernelTuningCriterion::kAverage:
+    return "average";
+  case KernelTuningCriterion::kSum:
+    return "sum";
+  case KernelTuningCriterion::kMedian:
+    return "median";
+  case KernelTuningCriterion::kAverageSpeedup:
+    return "average-speedup";
+  case KernelTuningCriterion::kMedianSpeedup:
+    return "median-speedup";
+  case KernelTuningCriterion::kMaxSpeedup:
+    return "max-speedup";
+  case KernelTuningCriterion::kMaxLatency:
+    return "max-latency";
+  }
+  throw std::invalid_argument("Unknown kernel tuning criterion " +
+                              std::to_string(static_cast<int>(criterion)) + ".");
+}
+
+KernelTuningLatencyReport
+AnalyzeKernelTuningLatencies(const std::vector<std::vector<std::optional<double>>> &latencies,
+                             KernelTuningCriterion criterion) {
+  if (latencies.empty() || latencies.front().empty()) {
+    throw std::invalid_argument("Kernel tuning latency measurements must not be empty.");
+  }
+  const size_t case_count = latencies.front().size();
+  for (const auto &row : latencies) {
+    if (row.size() != case_count) {
+      throw std::invalid_argument("Kernel tuning latency rows must have the same number of cases.");
+    }
+    for (const std::optional<double> &latency : row) {
+      if (latency.has_value() && (!std::isfinite(*latency) || *latency <= 0)) {
+        throw std::invalid_argument("Kernel tuning latencies must be positive and finite.");
+      }
+    }
+  }
+
+  KernelTuningLatencyReport report;
+  report.criterion = criterion;
+  report.values.reserve(latencies.size());
+  const bool has_baseline =
+      std::all_of(latencies.front().begin(), latencies.front().end(),
+                  [](const std::optional<double> &value) { return value.has_value(); });
+  for (const auto &row : latencies) {
+    if (std::any_of(row.begin(), row.end(),
+                    [](const std::optional<double> &value) { return !value.has_value(); })) {
+      report.values.emplace_back(std::nullopt);
+      continue;
+    }
+    std::vector<double> values;
+    std::vector<double> speedups;
+    values.reserve(case_count);
+    speedups.reserve(case_count);
+    double sum = 0;
+    for (size_t index = 0; index < case_count; ++index) {
+      const double value = *row[index];
+      values.push_back(value);
+      if (has_baseline) {
+        speedups.push_back(*latencies.front()[index] / value);
+      }
+      sum += value;
+    }
+    KernelTuningLatencyMetrics metrics;
+    metrics.average = sum / static_cast<double>(case_count);
+    metrics.sum = sum;
+    metrics.median = Median(values);
+    metrics.max_latency = *std::max_element(values.begin(), values.end());
+    if (has_baseline) {
+      metrics.average_speedup =
+          std::accumulate(speedups.begin(), speedups.end(), 0.0) / static_cast<double>(case_count);
+      metrics.median_speedup = Median(speedups);
+      metrics.max_speedup = *std::max_element(speedups.begin(), speedups.end());
+    }
+    report.values.push_back(std::move(metrics));
+  }
+
+  std::optional<size_t> selected;
+  for (size_t index = 0; index < report.values.size(); ++index) {
+    if (!report.values[index].has_value() || !HasCriterion(*report.values[index], criterion)) {
+      continue;
+    }
+    if (!selected.has_value() ||
+        (Maximizes(criterion) ? CriterionValue(*report.values[index], criterion) >
+                                    CriterionValue(*report.values[*selected], criterion)
+                              : CriterionValue(*report.values[index], criterion) <
+                                    CriterionValue(*report.values[*selected], criterion))) {
+      selected = index;
+    }
+  }
+  report.selected_index = selected;
+  return report;
 }
 
 std::string_view TuningValueTypeName(const TuningValue &value) noexcept {
@@ -996,6 +1158,7 @@ KernelTuningParameters CalibrateKernelBenchmark(const KernelTuningKey &key,
   uint64_t first_winning_size = 0;
   bool measured_any = false;
   bool tuned = false;
+  uint64_t last_losing_size = 0;
   uint64_t previous_problem_size = 0;
   for (size_t case_index = 0; case_index < benchmark.cases.size();) {
     const uint64_t problem_size = benchmark.cases[case_index].problem_size;
@@ -1006,9 +1169,29 @@ KernelTuningParameters CalibrateKernelBenchmark(const KernelTuningKey &key,
     }
     previous_problem_size = problem_size;
     const int64_t candidate_value = static_cast<int64_t>((problem_size + 1) / 2);
+    size_t group_end = case_index;
+    bool equivalent_paths = candidate_value == benchmark.serial_parameter_value;
+    while (group_end < benchmark.cases.size() &&
+           benchmark.cases[group_end].problem_size == problem_size) {
+      if (benchmark.same_execution_path &&
+          benchmark.same_execution_path(benchmark.cases[group_end],
+                                        benchmark.serial_parameter_value, candidate_value)) {
+        equivalent_paths = true;
+      }
+      ++group_end;
+    }
+    if (equivalent_paths) {
+      reporter.AddDiagnostic(key.kernel + " skipped problem_size=" + std::to_string(problem_size) +
+                             " because reference and candidate use the same execution path.");
+      case_index = group_end;
+      consecutive_wins = 0;
+      first_winning_size = 0;
+      continue;
+    }
     benchmark.candidate.configure(candidate_value);
     bool group_won = true;
     bool group_measured = false;
+    bool group_complete = true;
 
     while (case_index < benchmark.cases.size() &&
            benchmark.cases[case_index].problem_size == problem_size) {
@@ -1019,6 +1202,7 @@ KernelTuningParameters CalibrateKernelBenchmark(const KernelTuningKey &key,
       const uint64_t memory_bytes = CaseMemoryBytes(benchmark_case);
       if (memory_bytes > memory_budget) {
         group_won = false;
+        group_complete = false;
         continue;
       }
 
@@ -1082,14 +1266,27 @@ KernelTuningParameters CalibrateKernelBenchmark(const KernelTuningKey &key,
       }
       ++consecutive_wins;
       if (consecutive_wins == benchmark.required_consecutive_wins) {
-        const int64_t minimum_elements = static_cast<int64_t>((first_winning_size + 1) / 2);
+        const int64_t minimum_elements = static_cast<int64_t>(first_winning_size);
         selected.values[benchmark.parameter_name] = minimum_elements;
         reporter.AddDiagnostic(key.kernel + " selected " + benchmark.parameter_name + "=" +
                                std::to_string(minimum_elements) + ".");
+        if (last_losing_size == 0) {
+          reporter.AddDiagnostic(key.kernel +
+                                 " crossover is at or below the smallest measured "
+                                 "size " +
+                                 std::to_string(first_winning_size) + "; not bracketed.");
+        } else {
+          reporter.AddDiagnostic(key.kernel + " crossover is bracketed by measured sizes " +
+                                 std::to_string(last_losing_size) + " and " +
+                                 std::to_string(first_winning_size) + ".");
+        }
         tuned = true;
         break;
       }
     } else {
+      if (group_measured && group_complete) {
+        last_losing_size = problem_size;
+      }
       consecutive_wins = 0;
       first_winning_size = 0;
     }
@@ -1099,8 +1296,8 @@ KernelTuningParameters CalibrateKernelBenchmark(const KernelTuningKey &key,
   }
   if (!measured_any) {
     reporter.AddDiagnostic(key.kernel +
-                           " calibration memory budget is too small; kept the portable "
-                           "threshold.");
+                           " calibration measured no eligible cases within the memory budget; "
+                           "kept the portable threshold.");
   } else if (!tuned) {
     reporter.AddDiagnostic(key.kernel +
                            " calibration found no stable parallel crossover; kept the portable "

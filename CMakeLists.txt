@@ -15,7 +15,7 @@ if(NOT _is_multi_config AND NOT CMAKE_BUILD_TYPE)
       "Debug" "Release" "RelWithDebInfo" "MinSizeRel")
 endif()
 
-project(onnx_light VERSION 0.1.21 LANGUAGES CXX)
+project(onnx_light VERSION 0.1.27 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -358,6 +358,16 @@ else()
 endif()
 
 add_library(lib_onnx_proto ${_lib_onnx_proto_type} ${ONNX_LIGHT_HEADERS} ${ONNX_LIGHT_PROTO_ALL_SOURCES})
+# Structural validation is control-flow and diagnostics heavy rather than
+# throughput-sensitive. Optimize that translation unit for size so the frozen
+# PR02 validation contract stays within the proto-library binary budget.
+if(MSVC)
+  set_source_files_properties("${ONNX_PROTO_PATH}/onnx_verify.cc"
+                              PROPERTIES COMPILE_OPTIONS "/Os")
+else()
+  set_source_files_properties("${ONNX_PROTO_PATH}/onnx_verify.cc"
+                              PROPERTIES COMPILE_OPTIONS "-Os")
+endif()
 if(_lib_onnx_proto_type STREQUAL "SHARED" AND WIN32)
   # Export every symbol so downstream extensions can use the proto classes
   # without sprinkling __declspec(dllexport) annotations in headers.
@@ -860,7 +870,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
     list(APPEND _onnxpy_rpath_targets lib_onnx_proto)
   endif()
   if(_onnx_light_lib_type STREQUAL "SHARED")
-    list(APPEND _onnxpy_rpath_targets lib_onnx_lib lib_onnx_manipulations lib_onnx_op
+    list(APPEND _onnxpy_rpath_targets lib_onnx_core lib_onnx_lib lib_onnx_manipulations lib_onnx_op
         lib_onnx_shape lib_onnx_patterns)
     if(ONNX_LIGHT_BUILD_KERNELS)
       list(APPEND _onnxpy_rpath_targets lib_onnx_kernels lib_onnx_backend_test lib_onnx_gradient)

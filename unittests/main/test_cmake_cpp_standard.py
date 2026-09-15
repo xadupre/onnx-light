@@ -1,8 +1,10 @@
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
-class TestCMakeCppStandard(unittest.TestCase):
+class TestCMakeCppStandard(ExtTestCase):
     def test_project_cmake_uses_cpp20(self):
         root = Path(__file__).resolve().parents[2]
         content = (root / "CMakeLists.txt").read_text(encoding="utf-8")

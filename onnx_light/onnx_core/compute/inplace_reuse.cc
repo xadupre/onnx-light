@@ -281,20 +281,36 @@ std::vector<InPlaceReuse> ComputeSingleNodeReuse(
   return node_result;
 }
 
+namespace {
+
 std::vector<std::vector<InPlaceReuse>>
-ComputeInPlaceReuseMatches(const GraphProto &graph, const ShapesContext &ctx,
-                           const ResultLifetimeInfo &lifetime) {
-  const int num_nodes = graph.node().size();
+ComputeInPlaceReuseMatchesImpl(const utils::RepeatedProtoField<NodeProto> &nodes,
+                               const ShapesContext &ctx, const ResultLifetimeInfo &lifetime) {
+  const int num_nodes = nodes.size();
   std::vector<std::vector<InPlaceReuse>> result(static_cast<std::size_t>(num_nodes));
   expressions::SimplifiedExpressionCache simplified_dim_cache;
   std::unordered_map<std::string, std::optional<expressions::DimType>> byte_size_expr_cache;
 
   for (int i = 0; i < num_nodes; ++i) {
     result[static_cast<std::size_t>(i)] =
-        ComputeSingleNodeReuse(graph.node()[i], i, ctx, lifetime.keep, lifetime.producer,
+        ComputeSingleNodeReuse(nodes[i], i, ctx, lifetime.keep, lifetime.producer,
                                lifetime.last_use, byte_size_expr_cache, simplified_dim_cache);
   }
   return result;
+}
+
+} // namespace
+
+std::vector<std::vector<InPlaceReuse>>
+ComputeInPlaceReuseMatches(const GraphProto &graph, const ShapesContext &ctx,
+                           const ResultLifetimeInfo &lifetime) {
+  return ComputeInPlaceReuseMatchesImpl(graph.node(), ctx, lifetime);
+}
+
+std::vector<std::vector<InPlaceReuse>>
+ComputeInPlaceReuseMatches(const FunctionProto &function, const ShapesContext &ctx,
+                           const ResultLifetimeInfo &lifetime) {
+  return ComputeInPlaceReuseMatchesImpl(function.node(), ctx, lifetime);
 }
 
 std::vector<std::vector<InPlaceReuse>>

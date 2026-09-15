@@ -32,9 +32,9 @@ TEST(OnnxOpReductionRegistrationTest, ReturnsSchemasWithoutShapeInference) {
 
   // Counts per op: ReduceSum=3 (v1,v11,v13); ReduceMax/ReduceMin=6 each
   // (v1,v11,v12,v13,v18,v20); ArgMax/ArgMin=4 each (v1,v11,v12,v13); all other
-  // reduce ops (Mean, Prod, SumSquare, LogSum, LogSumExp, L1, L2)=4 each
-  // (v1,v11,v13,v18).
-  EXPECT_EQ(schemas.size(), 51u);
+  // reduce ops Mean, Prod, SumSquare, L1, L2 have 4 versions (v1,v11,v13,v18);
+  // LogSum and LogSumExp additionally have a float-only v28 schema.
+  EXPECT_EQ(schemas.size(), 53u);
 
   const core::schema::LightOpSchema *const reduce_sum_v13 = FindByVersion(reduce_sum_schemas, 13);
   const core::schema::LightOpSchema *const reduce_sum_v11 = FindByVersion(reduce_sum_schemas, 11);
@@ -136,6 +136,24 @@ TEST(OnnxOpReductionRegistrationTest, SimpleReduceOpsShareVersionStructure) {
     EXPECT_NE(v18->doc(), v13->doc()) << op;
     EXPECT_NE(v13->doc(), v11->doc()) << op;
     EXPECT_NE(v11->doc(), v1->doc()) << op;
+  }
+}
+
+TEST(OnnxOpReductionRegistrationTest, ReduceLogOpsAreFloatOnlySinceOpset28) {
+  const std::vector<core::schema::TensorType> expected_types = {
+      core::schema::TensorType::kFloat16, core::schema::TensorType::kFloat,
+      core::schema::TensorType::kDouble, core::schema::TensorType::kBfloat16};
+  for (const std::string &op : {std::string("ReduceLogSum"), std::string("ReduceLogSumExp")}) {
+    const std::vector<core::schema::LightOpSchema> schemas =
+        onnx_op::reduction::GetAllOnnxOpReductionSchemasWithHistory(op);
+    const core::schema::LightOpSchema *const v28 = FindByVersion(schemas, 28);
+    const core::schema::LightOpSchema *const v18 = FindByVersion(schemas, 18);
+    ASSERT_NE(nullptr, v28) << op;
+    ASSERT_NE(nullptr, v18) << op;
+    EXPECT_EQ(v28->type_constraints()[0].allowed_type_strs, expected_types) << op;
+    EXPECT_EQ(v18->type_constraints()[0].allowed_type_strs,
+              core::schema::NumericTypesForMathReductionIr4())
+        << op;
   }
 }
 

@@ -177,6 +177,7 @@ there's no zero point (zero point is supposed to be 0).
 
 std::string MakeQuantizeLinearDoc(int since_version) {
   switch (since_version) {
+  case 28:
   case 25:
     return kQuantizeLinearVer25Doc;
   case 24:
@@ -197,6 +198,7 @@ std::string MakeQuantizeLinearDoc(int since_version) {
 
 std::string MakeDequantizeLinearDoc(int since_version) {
   switch (since_version) {
+  case 28:
   case 25:
   case 24:
   case 23:

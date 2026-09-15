@@ -11,6 +11,8 @@ tests build small protos out of :class:`types.SimpleNamespace` objects
 from __future__ import annotations
 
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from types import SimpleNamespace
 
 from onnx_light.tools import pretty_onnx
@@ -115,7 +117,7 @@ def _function(
     )
 
 
-class TestPrettyOnnx(unittest.TestCase):
+class TestPrettyOnnx(ExtTestCase):
     def test_value_info(self) -> None:
         self.assertEqual(pretty_onnx(_vi("X", dims=(1, 3))), "float[1,3] X")
         self.assertEqual(pretty_onnx(_vi("Y", dims=("N", 4))), "float[N,4] Y")

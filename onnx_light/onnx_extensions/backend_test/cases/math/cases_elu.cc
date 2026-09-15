@@ -13,11 +13,10 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 void RegisterEluCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(6);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Elu elu_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Elu", elu_kernel, "test_cc_elu_benchmark", opset, registry);
+    ExpectBenchmarkUnaryFloat<onnx_kernels::kernel::Elu>("Elu", "test_cc_elu_benchmark", opset,
+                                                         registry);
     return;
   }
 
@@ -30,8 +29,13 @@ void RegisterEluCases(std::vector<TestCase> &registry, TestMode mode) {
     AttributeProto *alpha = node.add_attribute();
     alpha->set_name("alpha");
     alpha->set_type(AttributeProto::FLOAT);
-    Expect(registry, std::move(node), "test_cc_elu_example", {opset}, [=]() -> IoData {
-      alpha->set_f(2.0f);
+    alpha->set_f(2.0f);
+
+    Expect(registry, std::move(node), "test_cc_elu_example", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(6);
+
+      const KernelContext elu_kernel_ctx{opset};
+      const onnx_kernels::kernel::Elu elu_kernel{elu_kernel_ctx};
 
       Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
       Tensor y = elu_kernel(x, 2.0f);
@@ -48,8 +52,13 @@ void RegisterEluCases(std::vector<TestCase> &registry, TestMode mode) {
     AttributeProto *alpha = node.add_attribute();
     alpha->set_name("alpha");
     alpha->set_type(AttributeProto::FLOAT);
-    Expect(registry, std::move(node), "test_cc_elu", {opset}, [=]() -> IoData {
-      alpha->set_f(2.0f);
+    alpha->set_f(2.0f);
+
+    Expect(registry, std::move(node), "test_cc_elu", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(6);
+
+      const KernelContext elu_kernel_ctx{opset};
+      const onnx_kernels::kernel::Elu elu_kernel{elu_kernel_ctx};
 
       Tensor x = Tensor::FromFloat("", {2, 3}, {-2.0f, -1.0f, -0.5f, 0.5f, 1.0f, 2.0f});
       Tensor y = elu_kernel(x, 2.0f);
@@ -62,7 +71,12 @@ void RegisterEluCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Elu");
     node.add_input("X");
     node.add_output("Y");
-    Expect(registry, std::move(node), "test_cc_elu_default", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_elu_default", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(6);
+
+      const KernelContext elu_kernel_ctx{opset};
+      const onnx_kernels::kernel::Elu elu_kernel{elu_kernel_ctx};
+
       // No alpha attribute: defaults to 1.0.
       Tensor x = Tensor::FromFloat("", {2, 3}, {-2.0f, -1.0f, -0.5f, 0.5f, 1.0f, 2.0f});
       Tensor y = elu_kernel(x);
@@ -80,8 +94,13 @@ void RegisterEluCases(std::vector<TestCase> &registry, TestMode mode) {
     AttributeProto *alpha = node.add_attribute();
     alpha->set_name("alpha");
     alpha->set_type(AttributeProto::FLOAT);
-    Expect(registry, std::move(node), "test_cc_elu_float16", {opset}, [=]() -> IoData {
-      alpha->set_f(2.0f);
+    alpha->set_f(2.0f);
+
+    Expect(registry, std::move(node), "test_cc_elu_float16", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(6);
+
+      const KernelContext elu_kernel_ctx{opset};
+      const onnx_kernels::kernel::Elu elu_kernel{elu_kernel_ctx};
 
       Tensor x = MakeFloat16Tensor("", {2, 3}, {-2.0f, -1.0f, -0.5f, 0.5f, 1.0f, 2.0f});
       Tensor y = elu_kernel(x, 2.0f);
@@ -99,8 +118,13 @@ void RegisterEluCases(std::vector<TestCase> &registry, TestMode mode) {
     AttributeProto *alpha = node.add_attribute();
     alpha->set_name("alpha");
     alpha->set_type(AttributeProto::FLOAT);
-    Expect(registry, std::move(node), "test_cc_elu_bfloat16", {opset}, [=]() -> IoData {
-      alpha->set_f(1.0f);
+    alpha->set_f(1.0f);
+
+    Expect(registry, std::move(node), "test_cc_elu_bfloat16", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(6);
+
+      const KernelContext elu_kernel_ctx{opset};
+      const onnx_kernels::kernel::Elu elu_kernel{elu_kernel_ctx};
 
       std::vector<float> vals = {-2.0f, -1.0f, -0.5f, 0.5f, 1.0f, 2.0f};
       std::vector<uint8_t> raw(vals.size() * sizeof(uint16_t));

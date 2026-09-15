@@ -69,6 +69,8 @@ TEST(SimpleTensorPackedByteSize, SubByteTypes) {
   EXPECT_EQ(PackedByteSize(static_cast<int32_t>(DataType::FLOAT4E2M1), 4), 2u);
   EXPECT_EQ(PackedByteSize(static_cast<int32_t>(DataType::INT2), 4), 1u);
   EXPECT_EQ(PackedByteSize(static_cast<int32_t>(DataType::UINT2), 5), 2u);
+  EXPECT_EQ(PackedByteSize(static_cast<int32_t>(DataType::FLOAT6E2M3), 4), 3u);
+  EXPECT_EQ(PackedByteSize(static_cast<int32_t>(DataType::FLOAT6E3M2), 5), 4u);
 }
 
 TEST(SimpleTensorPackedByteSize, RegularTypes) {
@@ -534,6 +536,22 @@ TEST(SimpleTensorFromProto, SubByteInt4FromInt32Field) {
   Tensor t = TensorFromProto(tp);
   EXPECT_EQ(t.size_bytes(), 1u);
   EXPECT_EQ(t.bytes()[0], 0x21);
+}
+
+TEST(SimpleTensorFromProto, Float6FromInt32Field) {
+  TensorProto tp;
+  tp.set_name("fp6");
+  tp.ref_dims().push_back(4);
+  tp.set_data_type(TensorProto::DataType::FLOAT6E2M3);
+  tp.add_int32_data(1);
+  tp.add_int32_data(2);
+  tp.add_int32_data(3);
+  tp.add_int32_data(4);
+  Tensor t = TensorFromProto(tp);
+  ASSERT_EQ(t.size_bytes(), 3u);
+  EXPECT_EQ(t.bytes()[0], 0x81);
+  EXPECT_EQ(t.bytes()[1], 0x30);
+  EXPECT_EQ(t.bytes()[2], 0x10);
 }
 
 TEST(SimpleTensorFromProto, StringField) {

@@ -103,13 +103,16 @@ void RegisterResizeCasesFromUpstream(std::vector<TestCase> &registry);
 void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset13 = DefaultOpset(13);
   const OpsetId opset18 = DefaultOpset(18);
-  const KernelContext ctx{opset13};
-  const onnx_kernels::kernel::Resize resize_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeResizeNodeScales("nearest", "asymmetric");
     Expect(registry, std::move(node), "test_cc_resize_upsample_scales_nearest_asymmetric_benchmark",
-           {opset13}, {1048576, 4}, {6291456}, [resize_kernel]() -> IoData {
+           {opset13}, {1048576, 4}, {6291456}, []() -> IoData {
+             const OpsetId opset13 = DefaultOpset(13);
+
+             const KernelContext resize_kernel_ctx{opset13};
+             const onnx_kernels::kernel::Resize resize_kernel{resize_kernel_ctx};
+
              Tensor X = RandnTensor(DataType::FLOAT, {1, 1, 1024, 1024}, 2001);
              Tensor scales = MakeScalesTensor({1.0f, 1.0f, 2.0f, 3.0f});
              onnx_kernels::kernel::Resize::Attributes attrs;
@@ -128,7 +131,12 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
   // coordinate_transformation_mode == "asymmetric".
   {
     Expect(registry, MakeResizeNodeScales("nearest", "asymmetric"),
-           "test_cc_resize_upsample_scales_nearest_asymmetric", {opset13}, [=]() -> IoData {
+           "test_cc_resize_upsample_scales_nearest_asymmetric", {opset13}, []() -> IoData {
+             const OpsetId opset13 = DefaultOpset(13);
+
+             const KernelContext resize_kernel_ctx{opset13};
+             const onnx_kernels::kernel::Resize resize_kernel{resize_kernel_ctx};
+
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              const Tensor scales = MakeScalesTensor({1.0f, 1.0f, 2.0f, 3.0f});
              onnx_kernels::kernel::Resize::Attributes attrs;
@@ -144,7 +152,12 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
   // of the NCHW layout.
   {
     Expect(registry, MakeResizeNodeScales("nearest", "asymmetric"),
-           "test_cc_resize_upsample_scales_nearest_1d", {opset13}, [=]() -> IoData {
+           "test_cc_resize_upsample_scales_nearest_1d", {opset13}, []() -> IoData {
+             const OpsetId opset13 = DefaultOpset(13);
+
+             const KernelContext resize_kernel_ctx{opset13};
+             const onnx_kernels::kernel::Resize resize_kernel{resize_kernel_ctx};
+
              const Tensor X = Tensor::FromFloat("", {3}, {10.0f, 20.0f, 30.0f});
              const Tensor scales = MakeScalesTensor({2.0f});
              onnx_kernels::kernel::Resize::Attributes attrs;
@@ -160,7 +173,12 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
   // ``scales``. Output is [1, 1, 4, 6] matching the scales [1, 1, 2, 3].
   {
     Expect(registry, MakeResizeNodeSizes("nearest", "asymmetric"),
-           "test_cc_resize_upsample_sizes_nearest_asymmetric", {opset13}, [=]() -> IoData {
+           "test_cc_resize_upsample_sizes_nearest_asymmetric", {opset13}, []() -> IoData {
+             const OpsetId opset13 = DefaultOpset(13);
+
+             const KernelContext resize_kernel_ctx{opset13};
+             const onnx_kernels::kernel::Resize resize_kernel{resize_kernel_ctx};
+
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              const Tensor sizes = MakeSizesTensor({1, 1, 4, 6});
              onnx_kernels::kernel::Resize::Attributes attrs;
@@ -184,7 +202,12 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
   // nearest_mode=round_prefer_floor).
   {
     Expect(registry, MakeResizeNodeScales("nearest", /*coord_mode=*/""),
-           "test_resize_upsample_scales_nearest", {opset13}, [=]() -> IoData {
+           "test_resize_upsample_scales_nearest", {opset13}, []() -> IoData {
+             const OpsetId opset13 = DefaultOpset(13);
+
+             const KernelContext resize_kernel_ctx{opset13};
+             const onnx_kernels::kernel::Resize resize_kernel{resize_kernel_ctx};
+
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              const Tensor scales = MakeScalesTensor({1.0f, 1.0f, 2.0f, 3.0f});
              onnx_kernels::kernel::Resize::Attributes
@@ -197,7 +220,12 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_resize_downsample_scales_nearest — half_pixel + round_prefer_floor.
   {
     Expect(registry, MakeResizeNodeScales("nearest", /*coord_mode=*/""),
-           "test_resize_downsample_scales_nearest", {opset13}, [=]() -> IoData {
+           "test_resize_downsample_scales_nearest", {opset13}, []() -> IoData {
+             const OpsetId opset13 = DefaultOpset(13);
+
+             const KernelContext resize_kernel_ctx{opset13};
+             const onnx_kernels::kernel::Resize resize_kernel{resize_kernel_ctx};
+
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 4},
                                                 {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
              const Tensor scales = MakeScalesTensor({1.0f, 1.0f, 0.6f, 0.6f});
@@ -210,7 +238,12 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_resize_upsample_sizes_nearest — sizes path, half_pixel default.
   {
     Expect(registry, MakeResizeNodeSizes("nearest", /*coord_mode=*/""),
-           "test_resize_upsample_sizes_nearest", {opset13}, [=]() -> IoData {
+           "test_resize_upsample_sizes_nearest", {opset13}, []() -> IoData {
+             const OpsetId opset13 = DefaultOpset(13);
+
+             const KernelContext resize_kernel_ctx{opset13};
+             const onnx_kernels::kernel::Resize resize_kernel{resize_kernel_ctx};
+
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              const Tensor sizes = MakeSizesTensor({1, 1, 7, 8});
              onnx_kernels::kernel::Resize::Attributes attrs;
@@ -222,7 +255,12 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_resize_downsample_sizes_nearest — sizes path, half_pixel default.
   {
     Expect(registry, MakeResizeNodeSizes("nearest", /*coord_mode=*/""),
-           "test_resize_downsample_sizes_nearest", {opset13}, [=]() -> IoData {
+           "test_resize_downsample_sizes_nearest", {opset13}, []() -> IoData {
+             const OpsetId opset13 = DefaultOpset(13);
+
+             const KernelContext resize_kernel_ctx{opset13};
+             const onnx_kernels::kernel::Resize resize_kernel{resize_kernel_ctx};
+
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 4},
                                                 {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
              const Tensor sizes = MakeSizesTensor({1, 1, 1, 3});
@@ -236,7 +274,12 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
   // floor.
   {
     Expect(registry, MakeResizeNodeSizes("nearest", "align_corners", "floor"),
-           "test_resize_upsample_sizes_nearest_floor_align_corners", {opset13}, [=]() -> IoData {
+           "test_resize_upsample_sizes_nearest_floor_align_corners", {opset13}, []() -> IoData {
+             const OpsetId opset13 = DefaultOpset(13);
+
+             const KernelContext resize_kernel_ctx{opset13};
+             const onnx_kernels::kernel::Resize resize_kernel{resize_kernel_ctx};
+
              const Tensor X =
                  Tensor::FromFloat("", {1, 1, 4, 4},
                                    {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
@@ -255,7 +298,12 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
   {
     Expect(registry, MakeResizeNodeSizes("nearest", "asymmetric", "round_prefer_ceil"),
            "test_resize_upsample_sizes_nearest_round_prefer_ceil_asymmetric", {opset13},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset13 = DefaultOpset(13);
+
+             const KernelContext resize_kernel_ctx{opset13};
+             const onnx_kernels::kernel::Resize resize_kernel{resize_kernel_ctx};
+
              const Tensor X =
                  Tensor::FromFloat("", {1, 1, 4, 4},
                                    {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
@@ -272,7 +320,12 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_resize_upsample_sizes_nearest_ceil_half_pixel — half_pixel + ceil.
   {
     Expect(registry, MakeResizeNodeSizes("nearest", "half_pixel", "ceil"),
-           "test_resize_upsample_sizes_nearest_ceil_half_pixel", {opset13}, [=]() -> IoData {
+           "test_resize_upsample_sizes_nearest_ceil_half_pixel", {opset13}, []() -> IoData {
+             const OpsetId opset13 = DefaultOpset(13);
+
+             const KernelContext resize_kernel_ctx{opset13};
+             const onnx_kernels::kernel::Resize resize_kernel{resize_kernel_ctx};
+
              const Tensor X =
                  Tensor::FromFloat("", {1, 1, 4, 4},
                                    {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
@@ -292,7 +345,12 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.axes = {2, 3};
     Expect(registry,
            MakeResizeNodeScales("nearest", /*coord_mode=*/"", /*nearest_mode=*/"", attrs.axes),
-           "test_resize_upsample_scales_nearest_axes_2_3", {opset18}, [=]() -> IoData {
+           "test_resize_upsample_scales_nearest_axes_2_3", {opset18}, [attrs]() -> IoData {
+             const OpsetId opset13 = DefaultOpset(13);
+
+             const KernelContext resize_kernel_ctx{opset13};
+             const onnx_kernels::kernel::Resize resize_kernel{resize_kernel_ctx};
+
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              const Tensor scales = MakeScalesTensor({2.0f, 3.0f});
              const Tensor Y = resize_kernel(X, scales, attrs);
@@ -307,7 +365,12 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.axes = {3, 2};
     Expect(registry,
            MakeResizeNodeScales("nearest", /*coord_mode=*/"", /*nearest_mode=*/"", attrs.axes),
-           "test_resize_upsample_scales_nearest_axes_3_2", {opset18}, [=]() -> IoData {
+           "test_resize_upsample_scales_nearest_axes_3_2", {opset18}, [attrs]() -> IoData {
+             const OpsetId opset13 = DefaultOpset(13);
+
+             const KernelContext resize_kernel_ctx{opset13};
+             const onnx_kernels::kernel::Resize resize_kernel{resize_kernel_ctx};
+
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              const Tensor scales = MakeScalesTensor({3.0f, 2.0f});
              const Tensor Y = resize_kernel(X, scales, attrs);
@@ -321,7 +384,12 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.axes = {2, 3};
     Expect(registry,
            MakeResizeNodeSizes("nearest", /*coord_mode=*/"", /*nearest_mode=*/"", attrs.axes),
-           "test_resize_upsample_sizes_nearest_axes_2_3", {opset18}, [=]() -> IoData {
+           "test_resize_upsample_sizes_nearest_axes_2_3", {opset18}, [attrs]() -> IoData {
+             const OpsetId opset13 = DefaultOpset(13);
+
+             const KernelContext resize_kernel_ctx{opset13};
+             const onnx_kernels::kernel::Resize resize_kernel{resize_kernel_ctx};
+
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              const Tensor sizes = MakeSizesTensor({7, 8});
              const Tensor Y = resize_kernel.ResizeSizes(X, sizes, attrs);
@@ -336,7 +404,12 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.axes = {3, 2};
     Expect(registry,
            MakeResizeNodeSizes("nearest", /*coord_mode=*/"", /*nearest_mode=*/"", attrs.axes),
-           "test_resize_upsample_sizes_nearest_axes_3_2", {opset18}, [=]() -> IoData {
+           "test_resize_upsample_sizes_nearest_axes_3_2", {opset18}, [attrs]() -> IoData {
+             const OpsetId opset13 = DefaultOpset(13);
+
+             const KernelContext resize_kernel_ctx{opset13};
+             const onnx_kernels::kernel::Resize resize_kernel{resize_kernel_ctx};
+
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              const Tensor sizes = MakeSizesTensor({8, 7});
              const Tensor Y = resize_kernel.ResizeSizes(X, sizes, attrs);
@@ -354,7 +427,12 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry,
            MakeResizeNodeSizes("nearest", /*coord_mode=*/"", /*nearest_mode=*/"", attrs.axes,
                                attrs.keep_aspect_ratio_policy),
-           "test_resize_upsample_sizes_nearest_not_larger", {opset18}, [=]() -> IoData {
+           "test_resize_upsample_sizes_nearest_not_larger", {opset18}, [attrs]() -> IoData {
+             const OpsetId opset13 = DefaultOpset(13);
+
+             const KernelContext resize_kernel_ctx{opset13};
+             const onnx_kernels::kernel::Resize resize_kernel{resize_kernel_ctx};
+
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              const Tensor sizes = MakeSizesTensor({7, 8});
              const Tensor Y = resize_kernel.ResizeSizes(X, sizes, attrs);
@@ -372,7 +450,12 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry,
            MakeResizeNodeSizes("nearest", /*coord_mode=*/"", /*nearest_mode=*/"", attrs.axes,
                                attrs.keep_aspect_ratio_policy),
-           "test_resize_upsample_sizes_nearest_not_smaller", {opset18}, [=]() -> IoData {
+           "test_resize_upsample_sizes_nearest_not_smaller", {opset18}, [attrs]() -> IoData {
+             const OpsetId opset13 = DefaultOpset(13);
+
+             const KernelContext resize_kernel_ctx{opset13};
+             const onnx_kernels::kernel::Resize resize_kernel{resize_kernel_ctx};
+
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              const Tensor sizes = MakeSizesTensor({7, 8});
              const Tensor Y = resize_kernel.ResizeSizes(X, sizes, attrs);
@@ -389,7 +472,12 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry,
            MakeResizeNodeSizes("nearest", /*coord_mode=*/"", /*nearest_mode=*/"", attrs.axes,
                                attrs.keep_aspect_ratio_policy),
-           "test_resize_downsample_sizes_nearest_not_larger", {opset18}, [=]() -> IoData {
+           "test_resize_downsample_sizes_nearest_not_larger", {opset18}, [attrs]() -> IoData {
+             const OpsetId opset13 = DefaultOpset(13);
+
+             const KernelContext resize_kernel_ctx{opset13};
+             const onnx_kernels::kernel::Resize resize_kernel{resize_kernel_ctx};
+
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 4},
                                                 {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
              const Tensor sizes = MakeSizesTensor({1, 3});
@@ -407,7 +495,12 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
     Expect(registry,
            MakeResizeNodeSizes("nearest", /*coord_mode=*/"", /*nearest_mode=*/"", attrs.axes,
                                attrs.keep_aspect_ratio_policy),
-           "test_resize_downsample_sizes_nearest_not_smaller", {opset18}, [=]() -> IoData {
+           "test_resize_downsample_sizes_nearest_not_smaller", {opset18}, [attrs]() -> IoData {
+             const OpsetId opset13 = DefaultOpset(13);
+
+             const KernelContext resize_kernel_ctx{opset13};
+             const onnx_kernels::kernel::Resize resize_kernel{resize_kernel_ctx};
+
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 4},
                                                 {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
              const Tensor sizes = MakeSizesTensor({1, 3});
@@ -446,7 +539,7 @@ void RegisterResizeCasesFromUpstream(std::vector<TestCase> &registry) {
     node.add_output("Y");
     AddAttribute<std::string>(node, "mode", "linear");
     Expect(registry, std::move(node), "test_resize_upsample_scales_linear", {DefaultOpset(19)},
-           [=]() -> IoData {
+           []() -> IoData {
              const Tensor input_0 = Tensor::FromFloat("X", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              const Tensor input_2 = Tensor::FromFloat("scales", {4}, {1.0f, 1.0f, 2.0f, 2.0f});
              const Tensor output_0 =
@@ -468,7 +561,7 @@ void RegisterResizeCasesFromUpstream(std::vector<TestCase> &registry) {
     AddAttribute<std::string>(node, "coordinate_transformation_mode", "align_corners");
     AddAttribute<std::string>(node, "mode", "linear");
     Expect(registry, std::move(node), "test_resize_upsample_scales_linear_align_corners",
-           {DefaultOpset(19)}, [=]() -> IoData {
+           {DefaultOpset(19)}, []() -> IoData {
              const Tensor input_0 = Tensor::FromFloat("X", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              const Tensor input_2 = Tensor::FromFloat("scales", {4}, {1.0f, 1.0f, 2.0f, 2.0f});
              const Tensor output_0 =
@@ -491,7 +584,7 @@ void RegisterResizeCasesFromUpstream(std::vector<TestCase> &registry) {
     AddAttribute<std::string>(node, "coordinate_transformation_mode", "half_pixel_symmetric");
     AddAttribute<std::string>(node, "mode", "linear");
     Expect(registry, std::move(node), "test_resize_upsample_scales_linear_half_pixel_symmetric",
-           {DefaultOpset(19)}, [=]() -> IoData {
+           {DefaultOpset(19)}, []() -> IoData {
              const Tensor input_0 = Tensor::FromFloat("X", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              const Tensor input_2 =
                  Tensor::FromFloat("scales", {4}, {1.0f, 1.0f, 2.29999995f, 2.94000006f});
@@ -515,7 +608,7 @@ void RegisterResizeCasesFromUpstream(std::vector<TestCase> &registry) {
     node.add_output("Y");
     AddAttribute<std::string>(node, "mode", "linear");
     Expect(registry, std::move(node), "test_resize_downsample_scales_linear", {DefaultOpset(19)},
-           [=]() -> IoData {
+           []() -> IoData {
              const Tensor input_0 = Tensor::FromFloat(
                  "X", {1, 1, 2, 4}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
              const Tensor input_2 =
@@ -537,7 +630,7 @@ void RegisterResizeCasesFromUpstream(std::vector<TestCase> &registry) {
     AddAttribute<std::string>(node, "coordinate_transformation_mode", "align_corners");
     AddAttribute<std::string>(node, "mode", "linear");
     Expect(registry, std::move(node), "test_resize_downsample_scales_linear_align_corners",
-           {DefaultOpset(19)}, [=]() -> IoData {
+           {DefaultOpset(19)}, []() -> IoData {
              const Tensor input_0 = Tensor::FromFloat(
                  "X", {1, 1, 2, 4}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
              const Tensor input_2 =
@@ -558,7 +651,7 @@ void RegisterResizeCasesFromUpstream(std::vector<TestCase> &registry) {
     AddAttribute<int64_t>(node, "antialias", 1);
     AddAttribute<std::string>(node, "mode", "linear");
     Expect(registry, std::move(node), "test_resize_downsample_scales_linear_antialias",
-           {DefaultOpset(19)}, [=]() -> IoData {
+           {DefaultOpset(19)}, []() -> IoData {
              const Tensor input_0 =
                  Tensor::FromFloat("X", {1, 1, 4, 4},
                                    {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
@@ -582,7 +675,7 @@ void RegisterResizeCasesFromUpstream(std::vector<TestCase> &registry) {
     AddAttribute<std::string>(node, "coordinate_transformation_mode", "half_pixel_symmetric");
     AddAttribute<std::string>(node, "mode", "linear");
     Expect(registry, std::move(node), "test_resize_downsample_scales_linear_half_pixel_symmetric",
-           {DefaultOpset(19)}, [=]() -> IoData {
+           {DefaultOpset(19)}, []() -> IoData {
              const Tensor input_0 = Tensor::FromFloat("X", {1, 1, 1, 4}, {1.0f, 2.0f, 3.0f, 4.0f});
              const Tensor input_2 =
                  Tensor::FromFloat("scales", {4}, {1.0f, 1.0f, 1.0f, 0.600000024f});
@@ -604,7 +697,7 @@ void RegisterResizeCasesFromUpstream(std::vector<TestCase> &registry) {
     AddAttribute<int64_t>(node, "antialias", 1);
     AddAttribute<std::string>(node, "mode", "linear");
     Expect(registry, std::move(node), "test_resize_downsample_sizes_linear_antialias",
-           {DefaultOpset(19)}, [=]() -> IoData {
+           {DefaultOpset(19)}, []() -> IoData {
              const Tensor input_0 =
                  Tensor::FromFloat("X", {1, 1, 4, 4},
                                    {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
@@ -630,7 +723,7 @@ void RegisterResizeCasesFromUpstream(std::vector<TestCase> &registry) {
     AddAttribute<std::string>(node, "coordinate_transformation_mode", "pytorch_half_pixel");
     AddAttribute<std::string>(node, "mode", "linear");
     Expect(registry, std::move(node), "test_resize_downsample_sizes_linear_pytorch_half_pixel",
-           {DefaultOpset(19)}, [=]() -> IoData {
+           {DefaultOpset(19)}, []() -> IoData {
              const Tensor input_0 =
                  Tensor::FromFloat("X", {1, 1, 4, 4},
                                    {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
@@ -652,7 +745,7 @@ void RegisterResizeCasesFromUpstream(std::vector<TestCase> &registry) {
     node.add_output("Y");
     AddAttribute<std::string>(node, "mode", "cubic");
     Expect(registry, std::move(node), "test_resize_upsample_scales_cubic", {DefaultOpset(19)},
-           [=]() -> IoData {
+           []() -> IoData {
              const Tensor input_0 =
                  Tensor::FromFloat("X", {1, 1, 4, 4},
                                    {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
@@ -686,7 +779,7 @@ void RegisterResizeCasesFromUpstream(std::vector<TestCase> &registry) {
     AddAttribute<std::string>(node, "coordinate_transformation_mode", "align_corners");
     AddAttribute<std::string>(node, "mode", "cubic");
     Expect(registry, std::move(node), "test_resize_upsample_scales_cubic_align_corners",
-           {DefaultOpset(19)}, [=]() -> IoData {
+           {DefaultOpset(19)}, []() -> IoData {
              const Tensor input_0 =
                  Tensor::FromFloat("X", {1, 1, 4, 4},
                                    {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
@@ -720,7 +813,7 @@ void RegisterResizeCasesFromUpstream(std::vector<TestCase> &registry) {
     AddAttribute<std::string>(node, "coordinate_transformation_mode", "asymmetric");
     AddAttribute<std::string>(node, "mode", "cubic");
     Expect(registry, std::move(node), "test_resize_upsample_scales_cubic_asymmetric",
-           {DefaultOpset(19)}, [=]() -> IoData {
+           {DefaultOpset(19)}, []() -> IoData {
              const Tensor input_0 =
                  Tensor::FromFloat("X", {1, 1, 4, 4},
                                    {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
@@ -752,7 +845,7 @@ void RegisterResizeCasesFromUpstream(std::vector<TestCase> &registry) {
     AddAttribute<int64_t>(node, "exclude_outside", 1);
     AddAttribute<std::string>(node, "mode", "cubic");
     Expect(registry, std::move(node), "test_resize_upsample_scales_cubic_A_n0p5_exclude_outside",
-           {DefaultOpset(19)}, [=]() -> IoData {
+           {DefaultOpset(19)}, []() -> IoData {
              const Tensor input_0 =
                  Tensor::FromFloat("X", {1, 1, 4, 4},
                                    {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
@@ -786,7 +879,7 @@ void RegisterResizeCasesFromUpstream(std::vector<TestCase> &registry) {
     node.add_output("Y");
     AddAttribute<std::string>(node, "mode", "cubic");
     Expect(registry, std::move(node), "test_resize_upsample_sizes_cubic", {DefaultOpset(19)},
-           [=]() -> IoData {
+           []() -> IoData {
              const Tensor input_0 =
                  Tensor::FromFloat("X", {1, 1, 4, 4},
                                    {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
@@ -823,7 +916,7 @@ void RegisterResizeCasesFromUpstream(std::vector<TestCase> &registry) {
     node.add_output("Y");
     AddAttribute<std::string>(node, "mode", "cubic");
     Expect(registry, std::move(node), "test_resize_downsample_scales_cubic", {DefaultOpset(19)},
-           [=]() -> IoData {
+           []() -> IoData {
              const Tensor input_0 =
                  Tensor::FromFloat("X", {1, 1, 4, 4},
                                    {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
@@ -849,7 +942,7 @@ void RegisterResizeCasesFromUpstream(std::vector<TestCase> &registry) {
     AddAttribute<std::string>(node, "coordinate_transformation_mode", "align_corners");
     AddAttribute<std::string>(node, "mode", "cubic");
     Expect(registry, std::move(node), "test_resize_downsample_scales_cubic_align_corners",
-           {DefaultOpset(19)}, [=]() -> IoData {
+           {DefaultOpset(19)}, []() -> IoData {
              const Tensor input_0 =
                  Tensor::FromFloat("X", {1, 1, 4, 4},
                                    {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
@@ -875,7 +968,7 @@ void RegisterResizeCasesFromUpstream(std::vector<TestCase> &registry) {
     AddAttribute<int64_t>(node, "antialias", 1);
     AddAttribute<std::string>(node, "mode", "cubic");
     Expect(registry, std::move(node), "test_resize_downsample_scales_cubic_antialias",
-           {DefaultOpset(19)}, [=]() -> IoData {
+           {DefaultOpset(19)}, []() -> IoData {
              const Tensor input_0 =
                  Tensor::FromFloat("X", {1, 1, 4, 4},
                                    {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
@@ -900,7 +993,7 @@ void RegisterResizeCasesFromUpstream(std::vector<TestCase> &registry) {
     AddAttribute<int64_t>(node, "exclude_outside", 1);
     AddAttribute<std::string>(node, "mode", "cubic");
     Expect(registry, std::move(node), "test_resize_downsample_scales_cubic_A_n0p5_exclude_outside",
-           {DefaultOpset(19)}, [=]() -> IoData {
+           {DefaultOpset(19)}, []() -> IoData {
              const Tensor input_0 =
                  Tensor::FromFloat("X", {1, 1, 4, 4},
                                    {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
@@ -926,7 +1019,7 @@ void RegisterResizeCasesFromUpstream(std::vector<TestCase> &registry) {
     node.add_output("Y");
     AddAttribute<std::string>(node, "mode", "cubic");
     Expect(registry, std::move(node), "test_resize_downsample_sizes_cubic", {DefaultOpset(19)},
-           [=]() -> IoData {
+           []() -> IoData {
              const Tensor input_0 =
                  Tensor::FromFloat("X", {1, 1, 4, 4},
                                    {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
@@ -952,7 +1045,7 @@ void RegisterResizeCasesFromUpstream(std::vector<TestCase> &registry) {
     AddAttribute<int64_t>(node, "antialias", 1);
     AddAttribute<std::string>(node, "mode", "cubic");
     Expect(registry, std::move(node), "test_resize_downsample_sizes_cubic_antialias",
-           {DefaultOpset(19)}, [=]() -> IoData {
+           {DefaultOpset(19)}, []() -> IoData {
              const Tensor input_0 =
                  Tensor::FromFloat("X", {1, 1, 4, 4},
                                    {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
@@ -978,7 +1071,7 @@ void RegisterResizeCasesFromUpstream(std::vector<TestCase> &registry) {
     AddAttribute<std::string>(node, "coordinate_transformation_mode", "tf_crop_and_resize");
     AddAttribute<std::string>(node, "mode", "linear");
     Expect(registry, std::move(node), "test_resize_tf_crop_and_resize", {DefaultOpset(19)},
-           [=]() -> IoData {
+           []() -> IoData {
              const Tensor input_0 =
                  Tensor::FromFloat("X", {1, 1, 4, 4},
                                    {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
@@ -1009,7 +1102,7 @@ void RegisterResizeCasesFromUpstream(std::vector<TestCase> &registry) {
     AddAttribute<float>(node, "extrapolation_value", 10.0f);
     AddAttribute<std::string>(node, "mode", "linear");
     Expect(registry, std::move(node), "test_resize_tf_crop_and_resize_extrapolation_value",
-           {DefaultOpset(19)}, [=]() -> IoData {
+           {DefaultOpset(19)}, []() -> IoData {
              const Tensor input_0 =
                  Tensor::FromFloat("X", {1, 1, 4, 4},
                                    {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
@@ -1039,7 +1132,7 @@ void RegisterResizeCasesFromUpstream(std::vector<TestCase> &registry) {
     AddAttribute<std::string>(node, "coordinate_transformation_mode", "tf_crop_and_resize");
     AddAttribute<std::string>(node, "mode", "linear");
     Expect(registry, std::move(node), "test_resize_tf_crop_and_resize_axes_2_3", {DefaultOpset(19)},
-           [=]() -> IoData {
+           []() -> IoData {
              const Tensor input_0 =
                  Tensor::FromFloat("X", {1, 1, 4, 4},
                                    {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
@@ -1069,7 +1162,7 @@ void RegisterResizeCasesFromUpstream(std::vector<TestCase> &registry) {
     AddAttribute<std::string>(node, "coordinate_transformation_mode", "tf_crop_and_resize");
     AddAttribute<std::string>(node, "mode", "linear");
     Expect(registry, std::move(node), "test_resize_tf_crop_and_resize_axes_3_2", {DefaultOpset(19)},
-           [=]() -> IoData {
+           []() -> IoData {
              const Tensor input_0 =
                  Tensor::FromFloat("X", {1, 1, 4, 4},
                                    {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,

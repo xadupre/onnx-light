@@ -24,8 +24,7 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
     max_ir_version = ort_max_ir_version()
     if model.ir_version > max_ir_version:
         raise unittest.SkipTest(
-            f"model IR version {model.ir_version} exceeds "
-            f"onnxruntime maximum {max_ir_version}"
+            f"model IR version {model.ir_version} exceeds onnxruntime maximum {max_ir_version}"
         )
     max_opset_version = ort_max_opset_version()
     for opset in model.opset_import:
@@ -49,6 +48,7 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 ORT_EXCLUDE_REGEX = [
     # ORT/reference parity mismatches in focused C++ cases.
     r"^test_cc_stft_complex_batched$",
+    r"^test_cc_stft_default_frame_length$",
     r"^test_cc_image_decoder_",
     # Preview ops/functions are not registered in ORT.
     r"^test_cc_flexattention_",
@@ -119,11 +119,17 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_linearclassifier_int64_binary$",
     # ORT returns wrong labels for the binary TreeEnsembleClassifier test case.
     r"^test_cc_treeensembleclassifier_int64_binary$",
+    # ORT divides by zero for SOFTMAX_ZERO zero-sum scores (NaN/Inf), whereas
+    # onnx-light deliberately uses a uniform 1/n_targets robustness fallback.
+    r"^test_cc_treeensemble_softmax_zero_sum_zero_(1|2|3|5)_(float|double)$",
     # ORT returns ZipMap outputs in a different carrier format.
     r"^test_cc_zipmap_",
     # ORT only supports scalar/1-element zero points for MatMulInteger.
     r"^test_cc_matmulinteger_per_col_b_zp$",
     r"^test_cc_matmulinteger_per_row_a_zp$",
+    # ORT rounds this FLOAT16 QuantizeLinear regression incorrectly; see
+    # microsoft/onnxruntime#32452.
+    r"^test_quantizelinear_float16_rounding$",
     # ORT rejects FLOAT16 scales for QLinearMatMul.
     r"^test_cc_qlinearmatmul_2D_uint8_float16$",
     r"^test_cc_qlinearmatmul_2D_int8_float16$",
@@ -133,6 +139,8 @@ ORT_EXCLUDE_REGEX = [
     # AveragePool tail windows tracked by microsoft/onnxruntime#29629.
     r"^test_cc_averagepool_18_ceil_count_include_pad_1d$",
     r"^test_cc_averagepool_18_ceil_count_include_pad_2d$",
+    # ORT 1.27 ignores dilations when computing SAME_* output dimensions.
+    r"^test_cc_averagepool_1d_dilations_same_(?:lower|upper)$",
     # ORT is missing kernels for these ops or dtypes.
     r"^test_cc_globallppool_",
     r"^test_cc_maxroipool_",
@@ -165,11 +173,10 @@ ORT_EXCLUDE_REGEX = [
     r"^test_mod_mixed_sign_bfloat16$",
     r"^test_cc_mod_bfloat16_fmod$",
     r"^test_cc_pow_types_bfloat16_float32$",
-    # ORT diverges from the reference on MaxUnpool and on align_corners
-    # Resize downsample cases where scale * input_width is fractional:
+    # ORT diverges from the reference on align_corners Resize downsample
+    # cases where scale * input_width is fractional:
     # ONNX reference / onnx-light use (scale * input_width - 1) in the
     # denominator, while ORT uses (output_width_int - 1).
-    r"^test_cc_maxunpool_export_with_output_shape$",
     r"^test_resize_downsample_scales_linear_align_corners$",
     r"^test_resize_downsample_scales_cubic_align_corners$",
     # ORT IRFFT mishandles the ``inverse=1, onesided=1`` combination.
@@ -235,6 +242,23 @@ if platform.system() == "Darwin":
     ORT_EXCLUDE_REGEX.append(r"^test_cc_cast(like)?_(FLOAT|FLOAT16|BFLOAT16)_to_UINT16$")
 
 TestOrtBackend = make_test_class(onnxruntime_backend, exclude_regex=ORT_EXCLUDE_REGEX)
+
+# Keep these ORT 1.29 limitations executable: an unexpected success must fail
+# so the marker is removed when ORT catches up with the ONNX reference.
+for _case_name in (
+    # ORT omits ceil-tail padding from the dilated AveragePool divisor
+    # (microsoft/onnxruntime#29629).
+    "averagepool_3d_dilated_ceil_padding_divisor",
+    "averagepool_3d_dilations_large_count_include_pad_is_1_ceil_mode_is_True",
+    # ORT rejects four spatial dimensions with "Unsupported pooling size".
+    "maxunpool_export_4d",
+):
+    _method_name = f"test_test_cc_{_case_name}"
+    setattr(
+        TestOrtBackend,
+        _method_name,
+        unittest.expectedFailure(getattr(TestOrtBackend, _method_name)),
+    )
 
 
 if __name__ == "__main__":

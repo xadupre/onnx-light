@@ -31,6 +31,37 @@ div.pst-scrollable-table-container:has(> table.howto-side-by-side) {
     overflow-x: visible;
 }
 
+/* Generated catalogues wrap long API names instead of forcing page-level scrolling. */
+.pattern-catalog,
+.memory-peak-catalog {
+    width: 100%;
+    table-layout: fixed;
+}
+
+.pattern-catalog {
+    font-size: 0.8rem;
+}
+
+.pattern-catalog td,
+.pattern-catalog th,
+.memory-peak-catalog td,
+.memory-peak-catalog th {
+    overflow-wrap: anywhere;
+    white-space: normal;
+}
+
+div.pst-scrollable-table-container:has(> table.pattern-catalog),
+div.pst-scrollable-table-container:has(> table.memory-peak-catalog) {
+    overflow-x: visible;
+}
+
+/* Quick-tour diagrams should keep their natural size and never dominate the page. */
+img.quick-tour-graph {
+    width: auto;
+    max-width: min(100%, 420px);
+    max-height: 520px;
+}
+
 /* Runtime test-coverage page: pass / fail colored cells. */
 .green {
     color: #1a7f37;

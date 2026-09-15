@@ -6,6 +6,7 @@
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_proto/onnx_helper.h"
 #include <algorithm>
 #include <cstdint>
 #include <stdexcept>
@@ -15,51 +16,9 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
 
-// Returns the per-element bit-width supported by ``BitCast`` (opset 26).
-// Returns 0 for unsupported dtypes (including STRING and UNDEFINED).
-// Mirrors the table in ``onnx_lib/defs/tensor/defs.cc``.
-int BitCastBitSize(int32_t dtype) {
-  switch (static_cast<DataType>(dtype)) {
-  case DataType::FLOAT:
-  case DataType::INT32:
-  case DataType::UINT32:
-    return 32;
-  case DataType::DOUBLE:
-  case DataType::INT64:
-  case DataType::UINT64:
-  case DataType::COMPLEX64:
-    return 64;
-  case DataType::COMPLEX128:
-    return 128;
-  case DataType::FLOAT16:
-  case DataType::BFLOAT16:
-  case DataType::INT16:
-  case DataType::UINT16:
-    return 16;
-  case DataType::INT8:
-  case DataType::UINT8:
-  case DataType::BOOL:
-  case DataType::FLOAT8E4M3FN:
-  case DataType::FLOAT8E4M3FNUZ:
-  case DataType::FLOAT8E5M2:
-  case DataType::FLOAT8E5M2FNUZ:
-  case DataType::FLOAT8E8M0:
-    return 8;
-  case DataType::INT4:
-  case DataType::UINT4:
-  case DataType::FLOAT4E2M1:
-    return 4;
-  case DataType::INT2:
-  case DataType::UINT2:
-    return 2;
-  default:
-    return 0;
-  }
-}
-
 void ValidateBitCast(int32_t from, int32_t to) {
-  const int from_bits = BitCastBitSize(from);
-  const int to_bits = BitCastBitSize(to);
+  const uint32_t from_bits = FixedBitWidth(static_cast<TensorProto::DataType>(from));
+  const uint32_t to_bits = FixedBitWidth(static_cast<TensorProto::DataType>(to));
   EXT_ENFORCE_INVALID(from_bits != 0 && to_bits != 0,
                       "kernel::BitCast: unsupported data type (from=", from, ", to=", to,
                       "); string or undefined types are not allowed.");

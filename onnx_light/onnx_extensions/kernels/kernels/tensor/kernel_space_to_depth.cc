@@ -46,9 +46,12 @@ void SpaceToDepth::operator()(const Tensor &input, const Attributes &attrs, Tens
                       "kernel::SpaceToDepth: preallocated output dtype must match input dtype.");
   EXT_ENFORCE_INVALID(output.shape == out_shape,
                       "kernel::SpaceToDepth: preallocated output shape mismatch.");
+  EXT_ENFORCE_INVALID(attrs.mode == "DCR" || attrs.mode == "CRD",
+                      "kernel::SpaceToDepth: mode must be 'DCR' or 'CRD'.");
 
   const std::size_t elem_size = ElementSize(input.data_type);
   const int64_t blocksize = attrs.blocksize;
+  const bool is_dcr = attrs.mode == "DCR";
   const int64_t N = input.shape[0];
   const int64_t C = input.shape[1];
   const int64_t H = input.shape[2];
@@ -70,7 +73,7 @@ void SpaceToDepth::operator()(const Tensor &input, const Attributes &attrs, Tens
   const uint8_t *const in_ptr = input.bytes();
   uint8_t *const out_ptr = output.mutable_bytes();
 
-  // ONNX spec (SpaceToDepth):
+  // ONNX spec (SpaceToDepth, DCR):
   //   tmp = reshape(x, [N, C, H/bs, bs, W/bs, bs])
   //   tmp = transpose(tmp, [0, 3, 5, 1, 2, 4])
   //   y   = reshape(tmp, [N, C*bs*bs, H/bs, W/bs])
@@ -80,11 +83,12 @@ void SpaceToDepth::operator()(const Tensor &input, const Attributes &attrs, Tens
   //   c    = c_out % C
   //   h_in = h_out * bs + bh
   //   w_in = w_out * bs + bw
+  // CRD groups channels first: c_out = c * bs * bs + bh * bs + bw.
   for (int64_t n = 0; n < N; ++n) {
     for (int64_t c_out = 0; c_out < C_out; ++c_out) {
-      const int64_t bh = c_out / (blocksize * C);
-      const int64_t bw = (c_out / C) % blocksize;
-      const int64_t c = c_out % C;
+      const int64_t bh = is_dcr ? c_out / (blocksize * C) : (c_out / blocksize) % blocksize;
+      const int64_t bw = is_dcr ? (c_out / C) % blocksize : c_out % blocksize;
+      const int64_t c = is_dcr ? c_out % C : c_out / (blocksize * blocksize);
       for (int64_t h_out = 0; h_out < H_out; ++h_out) {
         const int64_t h_in = h_out * blocksize + bh;
         for (int64_t w_out = 0; w_out < W_out; ++w_out) {
@@ -112,6 +116,7 @@ void SpaceToDepth::Run(RuntimeContext &rt) {
   EXT_ENFORCE_INVALID(!(blocksize_attr->type() != AttributeProto::AttributeType::INT),
                       "RunNode: SpaceToDepth attribute 'blocksize' must be INT.");
   attrs.blocksize = blocksize_attr->i();
+  attrs.mode = GetAttributeStringOrDefault(node, "mode", "DCR");
   onnx_kernels::kernel::SpaceToDepth kernel(rt.kernel_ctx());
   SetOutput(node, 0, kernel(input, attrs, &rt), rt);
 }

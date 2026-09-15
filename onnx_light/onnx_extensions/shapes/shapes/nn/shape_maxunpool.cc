@@ -55,19 +55,37 @@ void ComputeShapeMaxUnpool(ShapesContext &ctx, const NodeProto &node, const char
   const SymShape *explicit_out_shape = nullptr;
   if (output_shape != nullptr) {
     const SymTensor &out_shape_tensor = ctx.Get(output_shape);
+    EXT_ENFORCE_INVALID(out_shape_tensor.Dtype() == TensorType::kInt64,
+                        "ComputeShapeMaxUnpool: output_shape must be INT64.");
+    EXT_ENFORCE_INVALID(out_shape_tensor.Shape().Rank() == 1,
+                        "ComputeShapeMaxUnpool: output_shape must be rank 1.");
+    const SymDim &length = out_shape_tensor.Shape()[0];
+    EXT_ENFORCE_INVALID(!length.IsInt() || length.AsInt() == static_cast<int64_t>(in_shape.Rank()),
+                        "ComputeShapeMaxUnpool: output_shape length must match input rank.");
     if (out_shape_tensor.HasValueAsShape()) {
       explicit_out_shape = &out_shape_tensor.ValueAsShape();
+      EXT_ENFORCE_INVALID(explicit_out_shape->Rank() == in_shape.Rank(),
+                          "ComputeShapeMaxUnpool: output_shape length must match input rank.");
+      for (size_t i = 0; i < explicit_out_shape->Rank(); ++i) {
+        const SymDim &dim = (*explicit_out_shape)[i];
+        EXT_ENFORCE_INVALID(!dim.IsInt() || dim.AsInt() >= 0,
+                            "ComputeShapeMaxUnpool: output_shape dimensions must be non-negative.");
+      }
     }
+    SymShape out_shape;
+    for (size_t i = 0; i < in_shape.Rank(); ++i) {
+      out_shape.PushBack(explicit_out_shape
+                             ? (*explicit_out_shape)[i]
+                             : SymDim(std::string(output_shape) + "[" + std::to_string(i) + "]"));
+    }
+    ctx.Set(node.output(0), SymTensor(nullptr, input.Dtype(), std::move(out_shape)));
+    return;
   }
 
   SymShape out_shape;
   out_shape.PushBack(in_shape[0]);
   out_shape.PushBack(in_shape[1]);
   for (size_t i = 0; i < n_input_dims; ++i) {
-    if (explicit_out_shape != nullptr && static_cast<size_t>(i + 2) < explicit_out_shape->Rank()) {
-      out_shape.PushBack((*explicit_out_shape)[i + 2]);
-      continue;
-    }
     const SymDim &d = in_shape[i + 2];
     if (d.IsInt()) {
       const int64_t out_d =

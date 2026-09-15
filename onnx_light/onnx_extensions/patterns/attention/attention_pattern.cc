@@ -853,6 +853,312 @@ FunctionAttentionGQAPattern::Apply(core::builder::GraphGraph &graph,
 
 namespace {
 
+bool HasAxes(core::builder::GraphGraph &graph, const NodeProto *node,
+             const std::vector<int64_t> &expected) {
+  std::vector<int64_t> axes;
+  return node != nullptr && node->input_size() == 2 &&
+         ReadConstantInts(graph, node->input()[1].value(), axes) && axes == expected;
+}
+
+struct LinearAttentionUnpack {
+  const NodeProto *reshape = nullptr;
+  const NodeProto *transpose = nullptr;
+  const NodeProto *squeeze = nullptr;
+};
+
+LinearAttentionUnpack MatchLinearAttentionUnpack(core::builder::GraphGraph &graph,
+                                                 const std::string &name) {
+  LinearAttentionUnpack branch;
+  branch.squeeze = graph.NodeBefore(name);
+  if (!IsNode(branch.squeeze, "Squeeze", 2, 1) ||
+      !(HasAxes(graph, branch.squeeze, {2}) || HasAxes(graph, branch.squeeze, {-2}))) {
+    return {};
+  }
+  branch.transpose = graph.NodeBefore(branch.squeeze->input()[0].value());
+  if (!IsNode(branch.transpose, "Transpose", 1, 1) || !HasPerm(*branch.transpose, {0, 2, 1, 3})) {
+    return {};
+  }
+  branch.reshape = graph.NodeBefore(branch.transpose->input()[0].value());
+  if (!IsNode(branch.reshape, "Reshape", 2, 1) ||
+      !graph.IsConstant(branch.reshape->input()[1].value())) {
+    return {};
+  }
+  return branch;
+}
+
+struct LinearAttentionOuterProduct {
+  const NodeProto *key = nullptr;
+  const NodeProto *value = nullptr;
+};
+
+LinearAttentionOuterProduct MatchLinearAttentionOuterProduct(core::builder::GraphGraph &graph,
+                                                             const NodeProto *node) {
+  if (!IsNode(node, "Mul", 2, 1) && !IsNode(node, "MatMul", 2, 1)) {
+    return {};
+  }
+  for (const auto &indices : {std::pair<int, int>{0, 1}, std::pair<int, int>{1, 0}}) {
+    const NodeProto *key = graph.NodeBefore(node->input()[indices.first].value());
+    const NodeProto *value = graph.NodeBefore(node->input()[indices.second].value());
+    if (IsNode(key, "Unsqueeze", 2, 1) && IsNode(value, "Unsqueeze", 2, 1) &&
+        (HasAxes(graph, key, {-1}) || HasAxes(graph, key, {3})) &&
+        (HasAxes(graph, value, {-2}) || HasAxes(graph, value, {2}))) {
+      return {key, value};
+    }
+  }
+  return {};
+}
+
+bool ReadLinearAttentionHeads(core::builder::GraphGraph &graph, const NodeProto &reshape,
+                              int64_t &heads) {
+  std::vector<int64_t> shape;
+  if (!ReadConstantInts(graph, reshape.input()[1].value(), shape) || shape.size() != 4 ||
+      shape[2] <= 0) {
+    return false;
+  }
+  heads = shape[2];
+  return true;
+}
+
+const NodeProto *OnlyNextNode(core::builder::GraphGraph &graph, const std::string &name) {
+  const auto &next = graph.NextNodes(name);
+  return next.size() == 1 ? next[0] : nullptr;
+}
+
+} // namespace
+
+std::set<std::string> LinearAttentionPattern::FastOpType() const { return {"Mul"}; }
+
+core::builder::MatchResult LinearAttentionPattern::Match(core::builder::GraphGraph &graph,
+                                                         const NodeProto &candidate) const {
+  if (!IsNode(&candidate, "Mul", 2, 1) || !MainOpsetAtLeast(graph, 27)) {
+    return NoMatch(candidate, "LinearAttentionPattern expects a Mul at opset 27.");
+  }
+
+  int scale_index = -1;
+  for (int index = 0; index < 2; ++index) {
+    if (graph.IsConstantScalar(candidate.input()[index].value(), false)) {
+      if (scale_index != -1) {
+        return NoMatch(candidate, "LinearAttentionPattern expects one scalar scale.");
+      }
+      scale_index = index;
+    }
+  }
+  if (scale_index == -1) {
+    return NoMatch(candidate, "LinearAttentionPattern expects one scalar scale.");
+  }
+
+  const NodeProto *output_squeeze = graph.NodeBefore(candidate.input()[1 - scale_index].value());
+  if (!IsNode(output_squeeze, "Squeeze", 2, 1) ||
+      !(HasAxes(graph, output_squeeze, {-2}) || HasAxes(graph, output_squeeze, {2}))) {
+    return NoMatch(candidate, "LinearAttentionPattern expects a squeezed MatMul output.");
+  }
+  const NodeProto *output_matmul = graph.NodeBefore(output_squeeze->input()[0].value());
+  if (!IsNode(output_matmul, "MatMul", 2, 1)) {
+    return NoMatch(candidate, "LinearAttentionPattern expects a query/state MatMul.");
+  }
+  const NodeProto *query_unsqueeze = graph.NodeBefore(output_matmul->input()[0].value());
+  if (!IsNode(query_unsqueeze, "Unsqueeze", 2, 1) ||
+      !(HasAxes(graph, query_unsqueeze, {-2}) || HasAxes(graph, query_unsqueeze, {2}))) {
+    return NoMatch(candidate, "LinearAttentionPattern expects an unsqueezed query.");
+  }
+
+  const NodeProto *state_add = graph.NodeBefore(output_matmul->input()[1].value());
+  if (!IsNode(state_add, "Add", 2, 1)) {
+    return NoMatch(candidate, "LinearAttentionPattern expects an Add state update.");
+  }
+
+  const NodeProto *outer_product = nullptr;
+  const NodeProto *state_decay = nullptr;
+  const NodeProto *decay_exp = nullptr;
+  const NodeProto *decay_unsqueeze = nullptr;
+  LinearAttentionOuterProduct outer;
+  for (int state_index = 0; state_index < 2 && state_decay == nullptr; ++state_index) {
+    const NodeProto *mul = graph.NodeBefore(state_add->input()[state_index].value());
+    if (!IsNode(mul, "Mul", 2, 1)) {
+      continue;
+    }
+    for (int decay_index = 0; decay_index < 2; ++decay_index) {
+      const NodeProto *decay = graph.NodeBefore(mul->input()[decay_index].value());
+      const NodeProto *unsqueeze = nullptr;
+      const NodeProto *exp = decay;
+      if (IsNode(decay, "Unsqueeze", 2, 1) &&
+          (HasAxes(graph, decay, {-1}) || HasAxes(graph, decay, {3}))) {
+        unsqueeze = decay;
+        exp = graph.NodeBefore(decay->input()[0].value());
+      }
+      if (!IsNode(exp, "Exp", 1, 1)) {
+        continue;
+      }
+      const NodeProto *outer_candidate =
+          graph.NodeBefore(state_add->input()[1 - state_index].value());
+      LinearAttentionOuterProduct matched =
+          MatchLinearAttentionOuterProduct(graph, outer_candidate);
+      if (matched.key != nullptr) {
+        state_decay = mul;
+        decay_exp = exp;
+        decay_unsqueeze = unsqueeze;
+        outer_product = outer_candidate;
+        outer = matched;
+        break;
+      }
+    }
+  }
+
+  if (outer_product == nullptr) {
+    for (int index = 0; index < 2; ++index) {
+      const NodeProto *candidate_outer = graph.NodeBefore(state_add->input()[index].value());
+      LinearAttentionOuterProduct matched =
+          MatchLinearAttentionOuterProduct(graph, candidate_outer);
+      if (matched.key != nullptr) {
+        outer_product = candidate_outer;
+        outer = matched;
+        break;
+      }
+    }
+  }
+  if (outer_product == nullptr) {
+    return NoMatch(candidate, "LinearAttentionPattern expects a key/value outer product.");
+  }
+
+  const LinearAttentionUnpack query =
+      MatchLinearAttentionUnpack(graph, query_unsqueeze->input()[0].value());
+  const LinearAttentionUnpack key =
+      MatchLinearAttentionUnpack(graph, outer.key->input()[0].value());
+  const LinearAttentionUnpack value =
+      MatchLinearAttentionUnpack(graph, outer.value->input()[0].value());
+  if (query.reshape == nullptr || key.reshape == nullptr || value.reshape == nullptr) {
+    return NoMatch(candidate, "LinearAttentionPattern expects packed query, key, and value.");
+  }
+
+  LinearAttentionUnpack decay;
+  if (decay_exp != nullptr) {
+    decay = MatchLinearAttentionUnpack(graph, decay_exp->input()[0].value());
+    if (decay.reshape == nullptr) {
+      return NoMatch(candidate, "LinearAttentionPattern expects packed gated decay.");
+    }
+  }
+
+  int64_t q_num_heads = 0;
+  int64_t kv_num_heads = 0;
+  int64_t value_num_heads = 0;
+  if (!ReadLinearAttentionHeads(graph, *query.reshape, q_num_heads) ||
+      !ReadLinearAttentionHeads(graph, *key.reshape, kv_num_heads) ||
+      !ReadLinearAttentionHeads(graph, *value.reshape, value_num_heads) ||
+      value_num_heads != kv_num_heads || q_num_heads % kv_num_heads != 0) {
+    return NoMatch(candidate, "LinearAttentionPattern expects valid constant head counts.");
+  }
+  if (decay.reshape != nullptr) {
+    int64_t decay_num_heads = 0;
+    if (!ReadLinearAttentionHeads(graph, *decay.reshape, decay_num_heads) ||
+        decay_num_heads != kv_num_heads) {
+      return NoMatch(candidate, "LinearAttentionPattern expects matching decay heads.");
+    }
+  }
+
+  const NodeProto *output_unsqueeze = OnlyNextNode(graph, candidate.output()[0].value());
+  if (!IsNode(output_unsqueeze, "Unsqueeze", 2, 1) ||
+      !(HasAxes(graph, output_unsqueeze, {2}) || HasAxes(graph, output_unsqueeze, {-2}))) {
+    return NoMatch(candidate, "LinearAttentionPattern expects output repacking.");
+  }
+  const NodeProto *output_transpose = OnlyNextNode(graph, output_unsqueeze->output()[0].value());
+  if (!IsNode(output_transpose, "Transpose", 1, 1) || !HasPerm(*output_transpose, {0, 2, 1, 3})) {
+    return NoMatch(candidate, "LinearAttentionPattern expects output repacking.");
+  }
+  const NodeProto *output_reshape = OnlyNextNode(graph, output_transpose->output()[0].value());
+  if (!IsNode(output_reshape, "Reshape", 2, 1) ||
+      !graph.IsConstant(output_reshape->input()[1].value())) {
+    return NoMatch(candidate, "LinearAttentionPattern expects output repacking.");
+  }
+
+  std::vector<const NodeProto *> matched = {
+      query.reshape,   query.transpose, query.squeeze,   key.reshape,      key.transpose,
+      key.squeeze,     value.reshape,   value.transpose, value.squeeze,    decay.reshape,
+      decay.transpose, decay.squeeze,   outer.key,       outer.value,      outer_product,
+      decay_exp,       decay_unsqueeze, state_decay,     state_add,        query_unsqueeze,
+      output_matmul,   output_squeeze,  &candidate,      output_unsqueeze, output_transpose,
+      output_reshape};
+  for (const NodeProto *node : matched) {
+    if (node != nullptr && node != state_add && node != output_reshape &&
+        graph.IsUsedMoreThanOnce(node->output()[0].value())) {
+      return NoMatch(candidate, "LinearAttentionPattern cannot remove shared intermediates.");
+    }
+  }
+  return core::builder::MatchResult{this, std::move(matched), output_reshape};
+}
+
+utils::RepeatedProtoField<NodeProto>
+LinearAttentionPattern::Apply(core::builder::GraphGraph &graph,
+                              const std::vector<const NodeProto *> &nodes) const {
+  if (nodes.size() != 26 || nodes[0] == nullptr || nodes[3] == nullptr || nodes[6] == nullptr ||
+      nodes[12] == nullptr || nodes[13] == nullptr || nodes[14] == nullptr ||
+      nodes[18] == nullptr || nodes[22] == nullptr || nodes[25] == nullptr) {
+    throw BuilderError("LinearAttentionPattern::Apply expects the recurrence decomposition.");
+  }
+
+  const NodeProto &query_reshape = *nodes[0];
+  const NodeProto &key_reshape = *nodes[3];
+  const NodeProto &value_reshape = *nodes[6];
+  const NodeProto &outer_product = *nodes[14];
+  const NodeProto *decay_exp = nodes[15];
+  const NodeProto *decay_reshape = nodes[9];
+  const NodeProto *state_decay = nodes[17];
+  const NodeProto &state_add = *nodes[18];
+  const NodeProto &scale_mul = *nodes[22];
+  const NodeProto &output_reshape = *nodes[25];
+
+  int64_t q_num_heads = 0;
+  int64_t kv_num_heads = 0;
+  if (!ReadLinearAttentionHeads(graph, query_reshape, q_num_heads) ||
+      !ReadLinearAttentionHeads(graph, key_reshape, kv_num_heads)) {
+    throw BuilderError("LinearAttentionPattern::Apply could not read head counts.");
+  }
+
+  const int scale_index = graph.IsConstantScalar(scale_mul.input()[0].value(), false) ? 0 : 1;
+  double scale = 0.0;
+  if (!ReadConstantScalar(graph, scale_mul.input()[scale_index].value(), scale)) {
+    throw BuilderError("LinearAttentionPattern::Apply could not read the scale.");
+  }
+
+  const std::string outer_output = outer_product.output()[0].value();
+  const int outer_index = state_add.input()[0].value() == outer_output ? 0 : 1;
+  std::string past_state = state_add.input()[1 - outer_index].value();
+  std::string update_rule = "linear";
+  std::string decay;
+  if (state_decay != nullptr) {
+    update_rule = "gated";
+    const std::string decay_value =
+        nodes[16] == nullptr ? decay_exp->output()[0].value() : nodes[16]->output()[0].value();
+    const int decay_index = state_decay->input()[0].value() == decay_value ? 0 : 1;
+    past_state = state_decay->input()[1 - decay_index].value();
+    decay = decay_reshape == nullptr ? decay_exp->input()[0].value()
+                                     : decay_reshape->input()[0].value();
+  }
+
+  std::vector<std::string> inputs = {query_reshape.input()[0].value(),
+                                     key_reshape.input()[0].value(),
+                                     value_reshape.input()[0].value(), past_state};
+  if (!decay.empty()) {
+    inputs.push_back(decay);
+  }
+  NodeProto replacement =
+      MakePatternNode("LinearAttention", inputs,
+                      {output_reshape.output()[0].value(), state_add.output()[0].value()}, "",
+                      "LinearAttentionPattern--" + state_add.name().value());
+  AddIntAttribute(replacement, "q_num_heads", q_num_heads);
+  AddIntAttribute(replacement, "kv_num_heads", kv_num_heads);
+  AddFloatAttribute(replacement, "scale", static_cast<float>(scale));
+  AttributeProto *rule = replacement.add_attribute();
+  rule->set_name("update_rule");
+  rule->set_type(AttributeProto::AttributeType::STRING);
+  rule->set_s(update_rule);
+
+  utils::RepeatedProtoField<NodeProto> result;
+  result.push_back(std::move(replacement));
+  return result;
+}
+
+namespace {
+
 bool IsLocalAttentionGqaCall(const NodeProto &node) {
   if (NormaliseDomain(node.domain().value()) != kIntermediateDomain || node.input_size() != 7) {
     return false;

@@ -111,3 +111,30 @@ TEST(onnx_ir_pb_converter, PreserveValueDocString) {
   }
   EXPECT_TRUE(checked_value_info);
 }
+
+TEST(onnx_ir_pb_converter, PreserveFloat8E8M0InitializerData) {
+  ModelProto model;
+  model.set_ir_version(13);
+  GraphProto *graph = model.add_graph();
+  graph->set_name("float8e8m0");
+  TensorProto *initializer = graph->add_initializer();
+  initializer->set_name("scale");
+  initializer->set_data_type(TensorProto::FLOAT8E8M0);
+  initializer->add_dims(2);
+  initializer->add_int32_data(127);
+  initializer->add_int32_data(128);
+
+  std::shared_ptr<Graph> imported = ImportModelProto(model);
+  ASSERT_TRUE(imported != nullptr);
+
+  ModelProto exported;
+  exported.set_ir_version(model.ir_version());
+  ExportModelProto(&exported, imported);
+
+  ASSERT_EQ(exported.ref_graph().ref_initializer().size(), 1u);
+  const TensorProto &exported_initializer = exported.ref_graph().ref_initializer()[0];
+  EXPECT_EQ(exported_initializer.data_type(), TensorProto::FLOAT8E8M0);
+  ASSERT_EQ(exported_initializer.ref_int32_data().size(), 2u);
+  EXPECT_EQ(exported_initializer.ref_int32_data()[0], 127);
+  EXPECT_EQ(exported_initializer.ref_int32_data()[1], 128);
+}

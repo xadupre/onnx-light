@@ -256,6 +256,13 @@ void read_field(utils::BinaryStream &stream, int wire_type, utils::OptionalField
 }
 
 template <>
+void read_field(utils::BinaryStream &stream, int wire_type, utils::OptionalField<uint64_t> &field,
+                const char *name, ParseOptions &) {
+  SKIP_IF_WRONG_WIRE_TYPE(wire_type == FIELD_VARINT, stream, wire_type, name);
+  field = stream.next_uint64();
+}
+
+template <>
 void read_field(utils::BinaryStream &stream, int wire_type, utils::OptionalField<int32_t> &field,
                 const char *name, ParseOptions &) {
   SKIP_IF_WRONG_WIRE_TYPE(wire_type == FIELD_VARINT, stream, wire_type, name);
@@ -289,6 +296,13 @@ void read_field(utils::BinaryStream &stream, int wire_type, int32_t &field, cons
                 ParseOptions &) {
   SKIP_IF_WRONG_WIRE_TYPE(wire_type == FIELD_VARINT, stream, wire_type, name);
   field = stream.next_int32();
+}
+
+template <>
+void read_field(utils::BinaryStream &stream, int wire_type, uint32_t &field, const char *name,
+                ParseOptions &) {
+  SKIP_IF_WRONG_WIRE_TYPE(wire_type == FIELD_VARINT, stream, wire_type, name);
+  field = static_cast<uint32_t>(stream.next_uint64());
 }
 
 template <>

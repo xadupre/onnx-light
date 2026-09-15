@@ -37,6 +37,9 @@ bool TrySetValueTag(std::unordered_map<std::string, std::string> &value_tags,
 void CollectGraphSeedTags(const GraphProto &graph,
                           std::unordered_map<std::string, std::string> &value_tags);
 
+void CollectFunctionSeedTags(const FunctionProto &function,
+                             std::unordered_map<std::string, std::string> &value_tags);
+
 // Applies the tag-inference rules for a single node ``node`` at index ``n``,
 // updating ``value_tags`` and ``node_tags`` in place. ``has_custom_node_tag_override``
 // (sized to the node count) persists whether a custom callback already set a

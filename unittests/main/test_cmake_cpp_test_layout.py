@@ -1,8 +1,10 @@
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
-class TestCMakeCppTestLayout(unittest.TestCase):
+class TestCMakeCppTestLayout(ExtTestCase):
     def test_helper_test_uses_cc_common_directory(self):
         root = Path(__file__).resolve().parents[2]
         content = (root / "CMakeLists.txt").read_text(encoding="utf-8")

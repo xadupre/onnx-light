@@ -19,6 +19,15 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace Test {
 
+static GraphProto ParseGraph(const char *input) {
+  GraphProto graph;
+  OnnxParser parser(input);
+  auto status = parser.Parse(graph);
+  EXPECT_TRUE(status.IsOK()) << status.ErrorMessage();
+  EXPECT_TRUE(parser.EndOfInput()) << "Extra unparsed input unexpected.";
+  return graph;
+}
+
 // Helper: parse an ONNX text model, optionally inline functions, and return
 // the result via the model out-parameter.
 //
@@ -323,37 +332,23 @@ bar (x) => (y) {
 }
 
 TEST(FunctionBuilder, AddInlinedCallBasic) {
-  // Test the AddInlinedCall functionality.
-  GraphProto graph;
+  auto graph = ParseGraph(R"ONNX(
+ test_graph (float x) => (float y) <float const_val = {2.0}> {
+   y = Add(x, const_val)
+ }
+ )ONNX");
 
-  // Create a simple graph using parser for better readability.
-  const char *graph_text = R"ONNX(
-test_graph (float x) => (float y)
-<float const_val = {2.0}>
-{
-    y = Add(x, const_val)
-}
-)ONNX";
-
-  auto status = OnnxParser::Parse(graph, graph_text);
-  EXPECT_TRUE(status.IsOK()) << status.ErrorMessage();
-
-  // Create a function and use AddInlinedCall.
   FunctionProto function;
   FunctionBuilder builder(function);
 
   builder.AddInlinedCall({"result"}, graph, {"input_x"}, "test");
 
-  // Verify the function has the expected structure:
-  // One Constant node (for const_val initializer) + one Add node.
   ASSERT_EQ(function.ref_node().size(), 2U);
 
-  // Check the first node is a Constant.
   ASSERT_EQ(function.ref_node()[0].ref_op_type(), "Constant");
   ASSERT_EQ(function.ref_node()[0].ref_output().size(), 1U);
   ASSERT_NE(std::string(function.ref_node()[0].ref_output()[0]).find("test"), std::string::npos);
 
-  // Check the second node is an Add.
   ASSERT_EQ(function.ref_node()[1].ref_op_type(), "Add");
   ASSERT_EQ(function.ref_node()[1].ref_input().size(), 2U);
   ASSERT_EQ(function.ref_node()[1].ref_output().size(), 1U);
@@ -362,32 +357,22 @@ test_graph (float x) => (float y)
 }
 
 TEST(Renamer, BasicFunctionality) {
-  // Test the Renamer class functionality.
-  GraphProto graph;
+  auto graph = ParseGraph(R"ONNX(
+  test_graph (float input, float formal_input) => (float temp_output) {
+    temp_output = Identity(formal_input)
+  }
+  )ONNX");
 
-  // Add input to graph.
-  auto *input = graph.add_input();
-  input->set_name("input");
-
-  // Create a Renamer instance.
   inliner::Renamer renamer("test", graph);
 
-  // Test binding names.
   renamer.BindName("formal_input", "actual_input");
 
-  // Test creating unique names and binding.
   std::string unique_name = renamer.BindToUniqueName("temp");
   ASSERT_NE(unique_name.find("test"), std::string::npos);
 
-  // Test renaming a node.
-  NodeProto node;
-  node.set_op_type("Add");
-  *node.add_input() = "formal_input";
-  *node.add_output() = "temp_output";
-
+  NodeProto node = graph.ref_node()[0];
   renamer.RenameNode(node);
 
-  // Verify renaming worked correctly.
   ASSERT_EQ(node.ref_input()[0], "actual_input");
   ASSERT_NE(node.ref_output()[0].find("test"), std::string::npos);
 }

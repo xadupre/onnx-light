@@ -7,16 +7,52 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
+#include <cerrno>
+#include <chrono>
+#include <csignal>
 #include <cstdint>
 #include <mutex>
+#include <thread>
 #include <utility>
 #include <vector>
+
+#if defined(__linux__)
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
 
-TEST(ParallelFor, GrainIsMinimumBlockSize) {
+TEST(ParallelFor, MinimumElementsIsParallelCrossover) {
+  if (ParallelForThreadCount() <= 1) {
+    GTEST_SKIP() << "The crossover test requires at least two threads.";
+  }
+  constexpr int64_t minimum_elements = 8;
+  constexpr std::array<std::pair<int64_t, bool>, 4> cases{{
+      {minimum_elements - 1, false},
+      {minimum_elements, true},
+      {2 * minimum_elements - 1, true},
+      {2 * minimum_elements, true},
+  }};
+
+  for (const auto &[total, expect_parallel] : cases) {
+    SCOPED_TRACE(total);
+    std::atomic<int64_t> blocks{0};
+    ParallelFor(total, minimum_elements,
+                [&](int64_t, int64_t) { blocks.fetch_add(1, std::memory_order_relaxed); });
+    EXPECT_EQ(blocks.load(std::memory_order_relaxed) > 1, expect_parallel);
+  }
+
+  std::atomic<int64_t> single_blocks{0};
+  ParallelFor(1, 1,
+              [&](int64_t, int64_t) { single_blocks.fetch_add(1, std::memory_order_relaxed); });
+  EXPECT_EQ(single_blocks.load(std::memory_order_relaxed), 1);
+}
+
+TEST(ParallelFor, BlocksCoverRangeExactlyOnce) {
   std::mutex mutex;
   std::vector<std::pair<int64_t, int64_t>> ranges;
 
@@ -30,7 +66,7 @@ TEST(ParallelFor, GrainIsMinimumBlockSize) {
   EXPECT_EQ(ranges.front().first, 0);
   EXPECT_EQ(ranges.back().second, 100);
   for (std::size_t i = 0; i < ranges.size(); ++i) {
-    EXPECT_GE(ranges[i].second - ranges[i].first, 30);
+    EXPECT_GT(ranges[i].second - ranges[i].first, 0);
     if (i != 0) {
       EXPECT_EQ(ranges[i - 1].second, ranges[i].first);
     }
@@ -44,6 +80,42 @@ TEST(ThreadPool, WorkerStartupFailureRejectsPool) {
     return false;
   };
   EXPECT_THROW(ThreadPool(1, options), std::runtime_error);
+}
+
+TEST(ThreadPool, BoundedDispatchValidatesArguments) {
+  const auto callback = [](void *, int64_t, int64_t) {};
+  ThreadPool disabled(0);
+  EXPECT_THROW(disabled.RunBounded(1, nullptr, callback), std::invalid_argument);
+  ThreadPoolOptions options;
+  options.allow_nested_parallelism = true;
+  ThreadPool enabled(1, options);
+  EXPECT_THROW(enabled.RunBounded(0, nullptr, callback), std::invalid_argument);
+  EXPECT_THROW(enabled.RunBounded(1, nullptr, nullptr), std::invalid_argument);
+  EXPECT_EQ(enabled.RunBounded(8, nullptr, callback), 2);
+}
+
+TEST(ThreadPool, BoundedNestedRunCoversAllIndexedBlocks) {
+  for (int64_t workers : {0, 1, 3}) {
+    for (uint64_t duration : {0u, 1000u}) {
+      ThreadPoolOptions options;
+      options.allow_nested_parallelism = true;
+      options.spin_iterations = 0;
+      options.spin_duration_ns = duration;
+      ThreadPool pool(workers, options);
+      for (int iteration = 0; iteration < 100; ++iteration) {
+        std::array<std::atomic<int>, 8> visits{};
+        pool.Run(2, [&](int64_t outer) {
+          pool.Run(4, [&](int64_t inner) {
+            EXPECT_TRUE(ThreadPool::InParallelRegion());
+            visits[static_cast<size_t>(outer * 4 + inner)].fetch_add(1);
+          });
+        });
+        for (const auto &visit : visits) {
+          EXPECT_EQ(visit.load(), 1);
+        }
+      }
+    }
+  }
 }
 
 TEST(ThreadPool, ParkImmediatelyRepeatedDispatchesStillCompleteWork) {
@@ -76,6 +148,88 @@ TEST(ThreadPool, SpinningLimitedWakeupsCompleteVaryingBlockCounts) {
     });
     for (const std::atomic<int> &visit : visits) {
       EXPECT_EQ(visit.load(std::memory_order_relaxed), 1);
+    }
+  }
+}
+
+#if defined(__linux__)
+TEST(ThreadPool, GlobalPoolReinitializesAfterFork) {
+  ThreadPool &parent_pool = GlobalThreadPool();
+  if (parent_pool.worker_count() == 0) {
+    GTEST_SKIP() << "The fork regression requires at least one worker.";
+  }
+  parent_pool.Run(2, [](int64_t) {});
+
+  const pid_t child = fork();
+  ASSERT_GE(child, 0);
+  if (child == 0) {
+    std::atomic<int> completed{0};
+    ParallelFor(2, 1, [&completed](int64_t begin, int64_t end) {
+      (void)begin;
+      (void)end;
+      completed.fetch_add(1, std::memory_order_relaxed);
+    });
+    _exit(completed.load(std::memory_order_relaxed) == 2 ? 0 : 1);
+  }
+
+  int status = 0;
+  pid_t waited = 0;
+  int wait_error = 0;
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+  while (waited == 0 && std::chrono::steady_clock::now() < deadline) {
+    do {
+      waited = waitpid(child, &status, WNOHANG);
+    } while (waited < 0 && errno == EINTR);
+    if (waited < 0) {
+      wait_error = errno;
+      break;
+    }
+    if (waited == 0) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+  }
+  if (waited != child) {
+    const bool timed_out = waited == 0;
+    const int kill_result = kill(child, SIGKILL);
+    const int kill_error = errno;
+    do {
+      waited = waitpid(child, &status, 0);
+    } while (waited < 0 && errno == EINTR);
+    EXPECT_TRUE(kill_result == 0 || kill_error == ESRCH);
+    EXPECT_EQ(waited, child);
+    if (timed_out) {
+      ADD_FAILURE() << "Child ParallelFor timed out after fork.";
+    } else {
+      ADD_FAILURE() << "waitpid failed with errno " << wait_error << ".";
+    }
+    return;
+  }
+  ASSERT_TRUE(WIFEXITED(status));
+  EXPECT_EQ(WEXITSTATUS(status), 0);
+}
+#endif
+
+TEST(ThreadPool, PublishesPayloadForSpinningAndParkedWorkers) {
+  for (int mode = 0; mode < 3; ++mode) {
+    SCOPED_TRACE(mode);
+    ThreadPoolOptions options;
+    options.spin_iterations = mode == 1 ? 10000 : 0;
+    options.spin_duration_ns = mode == 2 ? 100000 : 0;
+    ThreadPool pool(8, options);
+    constexpr std::array<int64_t, 4> block_counts{9, 1, 2, 5};
+    for (int iteration = 0; iteration < 2000; ++iteration) {
+      if (iteration % 128 == 0) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+      }
+      const int64_t blocks = block_counts[iteration % block_counts.size()];
+      const uint64_t payload = static_cast<uint64_t>(iteration + 1) * 16;
+      std::array<uint64_t, 9> results{};
+      pool.Run(blocks, [&](int64_t block) {
+        results[static_cast<std::size_t>(block)] = payload + static_cast<uint64_t>(block);
+      });
+      for (std::size_t block = 0; block < results.size(); ++block) {
+        EXPECT_EQ(results[block], block < static_cast<std::size_t>(blocks) ? payload + block : 0);
+      }
     }
   }
 }

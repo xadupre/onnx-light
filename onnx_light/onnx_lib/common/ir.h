@@ -1449,6 +1449,16 @@ public:
     useName(initializer.name());
   }
 
+  /** @brief Move-taking overload of @ref addInitializer(Tensor &). */
+  void addInitializer(Tensor &&initializer) {
+    if (initializer.name().empty()) {
+      initializer.setName(getNextUniqueName());
+    }
+    initializer_names_.push_back(initializer.name());
+    useName(initializer.name());
+    initializers_.push_back(std::move(initializer));
+  }
+
   /**
    * @brief Adds @p initializer to the initializer list and returns a corresponding Value.
    *
@@ -1466,6 +1476,22 @@ public:
     init_value->setUniqueName(initializer.name());
     init_value->setSizes(dim_sizes);
     init_value->setElemType(initializer.elem_type());
+    return init_value;
+  }
+
+  /** @brief Move-taking overload of @ref addInitializerAndCreateValue(Tensor &). */
+  Value *addInitializerAndCreateValue(Tensor &&initializer) {
+    if (initializer.name().empty()) {
+      initializer.setName(getNextUniqueName());
+    }
+    auto *init_value = initializer_node_->addOutput();
+    std::vector<Dimension> dim_sizes{initializer.sizes().cbegin(), initializer.sizes().cend()};
+    init_value->setUniqueName(initializer.name());
+    init_value->setSizes(dim_sizes);
+    init_value->setElemType(initializer.elem_type());
+    initializer_names_.push_back(initializer.name());
+    useName(initializer.name());
+    initializers_.push_back(std::move(initializer));
     return init_value;
   }
 

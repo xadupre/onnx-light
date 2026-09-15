@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -43,14 +44,46 @@ using namespace ::onnx_light::core::runtime;
  *   this mode existed.
  * - ``BENCHMARK`` produces cases whose inputs are enlarged so a single kernel
  *   evaluation processes enough elements to run long enough (~0.1 s) to be
- *   timed reliably. The exact sizes are hand-tuned per operator.
+ *   timed reliably. By default these are input-only performance cases; callers
+ *   may explicitly request reference outputs when validating correctness. The
+ *   exact sizes are hand-tuned per operator.
  */
 enum class TestMode { TEST, BENCHMARK };
+
+/// Identifies whether a backend test exercises one node or a complete model.
+enum class TestCaseKind { NODE, MODEL };
+
+/// Identifies the family or operator domain associated with a backend test.
+enum class TestCaseTag {
+  NONE,
+  AI_ONNX_ML,
+  AI_ONNX_PREVIEW,
+  AI_ONNX_PREVIEW_TRAINING,
+  AI_RT,
+  CONSTANT,
+  EMPTY_SHAPE,
+  INFERENCE,
+  INPLACE,
+  LOCAL_FUNCTION,
+  NAN_INF,
+  PEAK_MEMORY,
+  RELEASE,
+  SHAPE_TAG,
+};
+
+/// Returns the stable string representation of a test-case kind.
+std::string_view TestCaseKindName(TestCaseKind kind);
+
+/// Returns the stable string representation of a test-case tag.
+std::string_view TestCaseTagName(TestCaseTag tag);
 
 /// A single (inputs, expected outputs) data set associated with a TestCase.
 struct DataSet {
   Tensors inputs;
   Tensors outputs;
+  /// Whether ``outputs`` contains generated reference values. False explicitly
+  /// marks an input-only performance data set.
+  bool expected_outputs_generated = true;
   /// Map-typed inputs keyed by the graph input name.
   std::vector<Map> maps;
 };
@@ -61,14 +94,24 @@ struct TestCase;
  * Product of a lazily-built :ref:`TestCase`: the single-node ``ModelProto``
  * together with its input/output data sets. A ``TestCase`` stores a builder
  * returning this so that constructing the (potentially large) model and
- * running the kernel that computes the expected outputs is deferred until a
- * consumer actually needs them. Collecting a large family of cases (in
+ * running the short-lived reference kernel that computes expected outputs is
+ * deferred until a consumer actually needs them. Neither the builder nor an
+ * unmaterialized case owns a kernel or ``KernelContext``. Collecting a large
+ * family of cases (in
  * particular the ``BENCHMARK`` cases whose inputs contain millions of
  * elements) therefore stays cheap.
  */
 struct BuiltCase {
   ModelProto model;
   std::vector<DataSet> data_sets;
+  /// Optional owner of the resources the payload borrows from. Kernels such as
+  /// ``Constant`` return tensors that are non-owning views over the builder's
+  /// captured tensors, so the data sets stay valid only while the producing
+  /// builder lives. A builder that outlives its own scope (for example the
+  /// collector-backed rebuild fallback, which discards the temporary
+  /// ``TestCase`` it rebuilt) stores it here so the borrowed bytes remain
+  /// alive for as long as the payload does.
+  std::shared_ptr<void> retained;
 };
 
 /**
@@ -80,17 +123,16 @@ struct BuiltCase {
  * (both the correctness ``TEST`` cases and the ``BENCHMARK`` cases) is *lazy*:
  * it carries a ``build`` closure that produces the :ref:`BuiltCase` — the
  * ``ModelProto`` and its ``data_sets`` — on first access via :func:`model` /
- * :func:`data_sets` / :func:`Materialize`. A handful of manually-assembled
- * cases (control-flow, sequence, ...) are instead *eager*: they populate the
- * model cache with :func:`emplace_model` / :func:`set_model` and append their
- * data sets directly, so ``build`` is left unset and :func:`Materialize` is a
- * no-op. Every case records ``declared_input_element_counts`` /
+ * :func:`data_sets` / :func:`Materialize`. Manually-assembled cases
+ * (control-flow, sequence, ...) use the same lazy builder model so collection
+ * never computes expected outputs. Every case records
+ * ``declared_input_element_counts`` /
  * ``declared_output_element_counts`` so its sizing can be checked without
  * running the (potentially expensive) builder.
  *
- * The string-typed fields (``name``, ``model_name``, ``kind``, ``tag``) are
+ * The metadata fields (``name``, ``model_name``, ``kind``, ``tag``) are
  * declared ``const`` and must therefore be supplied at construction time.
- * ``tag`` is an optional, free-form label used to group families of cases
+ * ``tag`` is an optional label used to group families of cases
  * (e.g. ``"empty_shape"``, ``"nan_inf"``, ``"inference"``); it defaults to
  * the empty string for the ordinary node cases in the default ``ai.onnx``
  * domain. For test cases whose underlying node belongs to a non-default
@@ -101,16 +143,19 @@ struct BuiltCase {
 struct TestCase {
   const std::string name;
   const std::string model_name;
-  const std::string kind;
-  const std::string tag;
+  const TestCaseKind kind;
+  const TestCaseTag tag;
   double rtol = 1e-3;
   double atol = 1e-7;
-
   /// Optional builder producing the model + data sets on demand. When set the
   /// case is *lazy*: ``data_sets`` starts empty and the model is unbuilt until
   /// :func:`Materialize` / :func:`model` / :func:`data_sets` runs the builder
   /// once.
-  std::function<BuiltCase()> build;
+  std::function<BuiltCase(bool)> build;
+
+  /// Whether this case retains generated reference outputs. Benchmark
+  /// collection may disable these to build input-only performance cases.
+  bool expected_outputs_generated = true;
 
   /// Declared element count of each input/output, recorded without
   /// materializing tensor data. Used to validate the sizing of a case (in
@@ -118,14 +163,14 @@ struct TestCase {
   std::vector<int64_t> declared_input_element_counts;
   std::vector<int64_t> declared_output_element_counts;
 
-  TestCase() : kind("node"), tag() {}
-  explicit TestCase(std::string name_, std::string model_name_ = "", std::string kind_ = "node",
-                    std::string tag_ = "", double atol_ = 1e-7, double rtol_ = 1e-3)
-      : name(std::move(name_)), model_name(std::move(model_name_)), kind(std::move(kind_)),
-        tag(std::move(tag_)), rtol(rtol_), atol(atol_) {}
-
+  TestCase() : kind(TestCaseKind::NODE), tag(TestCaseTag::NONE) {}
+  explicit TestCase(std::string name_, std::string model_name_ = "",
+                    TestCaseKind kind_ = TestCaseKind::NODE, TestCaseTag tag_ = TestCaseTag::NONE,
+                    double atol_ = 1e-7, double rtol_ = 1e-3)
+      : name(std::move(name_)), model_name(std::move(model_name_)), kind(kind_), tag(tag_),
+        rtol(rtol_), atol(atol_) {}
   // Explicit move constructor. Required because the ``const std::string``
-  // members would otherwise cause the implicit move constructor to fall
+  // name members would otherwise cause the implicit move constructor to fall
   // back to ``std::string`` copy construction (and therefore not be
   // ``noexcept``), which in turn forces ``std::vector<TestCase>`` to
   // copy-construct existing elements on reallocation — impossible because the
@@ -134,15 +179,7 @@ struct TestCase {
   // non-const object, so casting away the member-level ``const`` to invoke
   // ``std::string``'s move constructor on the moved-from source does not
   // modify an actually-const object.
-  TestCase(TestCase &&other) noexcept
-      : name(std::move(const_cast<std::string &>(other.name))),
-        model_name(std::move(const_cast<std::string &>(other.model_name))),
-        kind(std::move(const_cast<std::string &>(other.kind))),
-        tag(std::move(const_cast<std::string &>(other.tag))), rtol(other.rtol), atol(other.atol),
-        build(std::move(other.build)),
-        declared_input_element_counts(std::move(other.declared_input_element_counts)),
-        declared_output_element_counts(std::move(other.declared_output_element_counts)),
-        data_sets_(std::move(other.data_sets_)), model_(std::move(other.model_)) {}
+  TestCase(TestCase &&other) noexcept;
 
   TestCase(const TestCase &) = delete;
   TestCase &operator=(const TestCase &) = delete;
@@ -151,80 +188,78 @@ struct TestCase {
   /// Creates (if needed) and returns the mutable model cache. Used by eager
   /// case builders that populate the ``ModelProto`` in place. Clears any
   /// previously-built cache.
-  ModelProto &emplace_model() {
-    model_ = std::make_unique<ModelProto>();
-    return *model_;
-  }
+  ModelProto &emplace_model();
 
   /// Stores an already-built model into the cache.
-  void set_model(ModelProto model) { model_ = std::make_unique<ModelProto>(std::move(model)); }
+  void set_model(ModelProto model);
 
   /// Returns whether the case has already been materialized (its model cache
   /// exists). Introspection helper that does *not* trigger materialization.
   bool materialized() const { return model_ != nullptr; }
 
-  /// Returns whether the case is lazy (carries a ``build`` closure). Does not
-  /// trigger materialization.
-  bool is_lazy() const { return static_cast<bool>(build); }
+  /// Returns whether the case has generated expected outputs.
+  bool has_expected_outputs() const { return expected_outputs_generated; }
+
+  /// Installs a lightweight fallback that recreates the case after unloading.
+  void set_rebuild(std::function<BuiltCase(bool)> rebuild);
+
+  /// Configures whether the case retains expected outputs.
+  void set_expected_outputs_generated(bool value);
 
   /// Runs the ``build`` closure once (if the case is lazy and not yet built),
   /// materializing the model cache and ``data_sets``. No-op for eager cases and
   /// for already-materialized cases.
-  void Materialize() {
-    if (model_ || !build) {
-      return;
-    }
-    BuiltCase built = build();
-    model_ = std::make_unique<ModelProto>(std::move(built.model));
-    if (data_sets_.empty()) {
-      data_sets_ = std::move(built.data_sets);
-    }
-  }
+  void Materialize();
+
+  /// Releases the cached payload and, for collected cases, the primary build
+  /// closure together with any captured input-generation state.
+  /// Existing Python references retain shared ownership of released models or
+  /// data sets. Eager cases without a rebuild fallback reject unloading.
+  void unload();
+
+  /// Moves the cached model and data sets out of a materialized case.
+  /// Used by collector-backed rebuild closures after recreating a formerly
+  /// eager case. The case is left unmaterialized.
+  BuiltCase take_materialized();
+
+  /// Returns a shared model handle for bindings that must preserve its lifetime.
+  std::shared_ptr<ModelProto> model_handle();
+
+  /// Returns shared data set handles for bindings that must preserve their lifetimes.
+  std::vector<std::shared_ptr<DataSet>> data_set_handles();
 
   /// Lazily builds (once) and returns the model.
-  ModelProto &model() {
-    EnsureMaterialized();
-    if (!model_) {
-      model_ = std::make_unique<ModelProto>();
-    }
-    return *model_;
-  }
+  ModelProto &model();
 
   /// Const overload. Materializes the case (model *and* data sets) on first
   /// access via the same builder, so ``data_sets`` is consistent in const
   /// contexts as well.
-  const ModelProto &model() const {
-    EnsureMaterialized();
-    if (!model_) {
-      model_ = std::make_unique<ModelProto>();
-    }
-    return *model_;
-  }
+  const ModelProto &model() const;
 
   /// Lazily builds (once) and returns the mutable data sets. Eager producers
   /// also use this to append their data sets (``build`` is unset, so
   /// materialization is a no-op).
-  std::vector<DataSet> &data_sets() {
-    EnsureMaterialized();
-    return data_sets_;
-  }
+  std::vector<DataSet> &data_sets();
 
   /// Const overload. Materializes the case on first access.
-  const std::vector<DataSet> &data_sets() const {
-    EnsureMaterialized();
-    return data_sets_;
-  }
+  const std::vector<DataSet> &data_sets() const;
 
 private:
+  std::shared_ptr<std::vector<DataSet>> data_sets_handle();
+
   /// Data sets. Empty until the ``build`` closure has run (for lazy cases) or
   /// until an eager producer appends them directly via :func:`data_sets`.
-  mutable std::vector<DataSet> data_sets_;
-  mutable std::unique_ptr<ModelProto> model_;
+  mutable std::shared_ptr<std::vector<DataSet>> data_sets_;
+  mutable std::shared_ptr<ModelProto> model_;
+  /// Keeps alive whatever the materialized payload borrows from (see
+  /// ``BuiltCase::retained``). Released together with the payload.
+  mutable std::shared_ptr<void> retained_;
+  std::function<BuiltCase(bool)> rebuild_;
 
   // Materializes through a const accessor. The object is never truly const
   // (every ``TestCase`` is allocated non-const), so casting away ``const`` to
   // run the builder and populate the caches is well-defined.
-  void EnsureMaterialized() const { const_cast<TestCase *>(this)->Materialize(); }
+  void EnsureMaterialized() const;
 };
 
 /**
@@ -288,15 +323,15 @@ void AppendValueInfo(ValueInfoProto &vi, const std::string &name, TensorProto::D
 /**
  * Describes an ONNX value type for a graph value-info, supporting the
  * container kinds the backend test cases need: a plain ``Tensor``, a
- * ``Sequence`` of an element type, or a ``Map`` from a key type to a value
- * type. Built via the factory helpers :func:`TensorTypeSpec`,
- * :func:`SequenceTypeSpec` and :func:`MapTypeSpec` and consumed by
+ * ``Sequence`` or ``Optional`` of an element type, or a ``Map`` from a key
+ * type to a value type. Built via the factory helpers :func:`TensorTypeSpec`,
+ * :func:`SequenceTypeSpec`, :func:`OptionalTypeSpec` and :func:`MapTypeSpec` and consumed by
  * :func:`AppendValueInfo` / :func:`Expect` to emit value-infos whose declared
  * schema type differs from the materialized ``Tensor`` representation (e.g.
  * sequence- or map-valued outputs).
  */
 struct TypeSpec {
-  enum class Kind { kTensor, kSequence, kMap };
+  enum class Kind { kTensor, kSequence, kOptional, kMap };
 
   Kind kind = Kind::kTensor;
   /// For ``kTensor``: the tensor element type. For ``kMap``: the key type.
@@ -322,6 +357,10 @@ TypeSpec TensorTypeSpec(int32_t elem_type, std::vector<int64_t> shape);
 /// Returns a ``TypeSpec`` describing a ``Sequence`` whose elements have type
 /// ``elem``.
 TypeSpec SequenceTypeSpec(TypeSpec elem);
+
+/// Returns a ``TypeSpec`` describing an ``Optional`` whose element has type
+/// ``elem``.
+TypeSpec OptionalTypeSpec(TypeSpec elem);
 
 /// Returns a ``TypeSpec`` describing a ``Map`` from ``key_type`` keys to
 /// ``value`` values.
@@ -392,14 +431,19 @@ void DispatchRegisterByOpType(std::vector<TestCase> &registry, const std::string
  *                   tensors that make exhaustive test loops slow.
  * @param mode       When :cpp:enumerator:`TestMode::BENCHMARK`, categories that
  *                   support it emit benchmark-sized cases (large inputs) instead
- *                   of the standard correctness cases. Defaults to
- *                   :cpp:enumerator:`TestMode::TEST`.
+ *                   of the standard correctness cases. Benchmark cases are
+ *                   input-only unless ``generate_benchmark_expected_outputs``
+ *                   is true. Defaults to :cpp:enumerator:`TestMode::TEST`.
+ * @param generate_benchmark_expected_outputs Generate reference outputs for
+ *                   benchmark cases. Ignored for ``TEST``, whose outputs are
+ *                   always generated.
  *
  * @return A fresh registry of test cases (Abs, Add equal-shape, Add scalar
  *         broadcast).
  */
 std::vector<TestCase> CollectTestCases(const std::string &op_type = "", bool include_big = false,
-                                       TestMode mode = TestMode::TEST);
+                                       TestMode mode = TestMode::TEST,
+                                       bool generate_benchmark_expected_outputs = false);
 
 /**
  * Collects C++-implemented backend test node cases whose
@@ -424,7 +468,8 @@ std::vector<TestCase> CollectTestCases(const std::string &op_type = "", bool inc
  */
 std::vector<TestCase> CollectTestCasesByName(const std::string &name_regex,
                                              bool include_big = false,
-                                             TestMode mode = TestMode::TEST);
+                                             TestMode mode = TestMode::TEST,
+                                             bool generate_benchmark_expected_outputs = false);
 
 /**
  * Returns the single C++-implemented backend test case whose
@@ -447,6 +492,7 @@ std::vector<TestCase> CollectTestCasesByName(const std::string &name_regex,
  *         signals that no case with the requested name was found.
  */
 std::vector<TestCase> GetTestCaseByName(const std::string &name, bool include_big = false,
-                                        TestMode mode = TestMode::TEST);
+                                        TestMode mode = TestMode::TEST,
+                                        bool generate_benchmark_expected_outputs = false);
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::backend_test

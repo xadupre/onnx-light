@@ -4,7 +4,9 @@
 
 #include "onnx_extensions/patterns/collections/concat_pattern.h"
 
+#include <array>
 #include <cstdint>
+#include <limits>
 #include <set>
 #include <string>
 #include <vector>
@@ -161,6 +163,101 @@ bool ValidUnaryConsumer(core::builder::GraphGraph &graph, const NodeProto &conca
   return false;
 }
 
+bool ReadConstantInts(core::builder::GraphGraph &graph, const std::string &name,
+                      std::vector<int64_t> &values) {
+  if (!graph.IsConstant(name)) {
+    return false;
+  }
+  const TensorProto *tensor = graph.GetComputedConstant(name);
+  return tensor != nullptr && ReadIntegerValues(*tensor, values);
+}
+
+bool ReadSimpleSlice(core::builder::GraphGraph &graph, const NodeProto &slice, int64_t &start,
+                     int64_t &end, int64_t &axis, int64_t &step) {
+  if (!IsDefaultOp(slice, "Slice") || slice.input_size() < 3) {
+    return false;
+  }
+  std::vector<int64_t> starts;
+  std::vector<int64_t> ends;
+  if (!ReadConstantInts(graph, slice.input()[1].value(), starts) ||
+      !ReadConstantInts(graph, slice.input()[2].value(), ends) || starts.size() != 1 ||
+      ends.size() != 1) {
+    return false;
+  }
+  start = starts[0];
+  end = ends[0];
+  axis = 0;
+  step = 1;
+  if (slice.input_size() >= 4 && !slice.input()[3].value().empty()) {
+    std::vector<int64_t> axes;
+    if (!ReadConstantInts(graph, slice.input()[3].value(), axes) || axes.size() != 1) {
+      return false;
+    }
+    axis = axes[0];
+  }
+  if (slice.input_size() >= 5 && !slice.input()[4].value().empty()) {
+    std::vector<int64_t> steps;
+    if (!ReadConstantInts(graph, slice.input()[4].value(), steps) || steps.size() != 1) {
+      return false;
+    }
+    step = steps[0];
+  }
+  return true;
+}
+
+struct SpatialSlice {
+  std::array<int64_t, 4> starts{0, 0, 0, 0};
+  std::array<int64_t, 4> ends{
+      std::numeric_limits<int64_t>::max(), std::numeric_limits<int64_t>::max(),
+      std::numeric_limits<int64_t>::max(), std::numeric_limits<int64_t>::max()};
+  std::array<int64_t, 4> steps{1, 1, 1, 1};
+};
+
+bool ReadSpatialSlice(core::builder::GraphGraph &graph, const NodeProto &slice,
+                      SpatialSlice &params) {
+  if (!IsDefaultOp(slice, "Slice") || slice.input_size() < 3) {
+    return false;
+  }
+  std::vector<int64_t> starts;
+  std::vector<int64_t> ends;
+  if (!ReadConstantInts(graph, slice.input()[1].value(), starts) ||
+      !ReadConstantInts(graph, slice.input()[2].value(), ends) || starts.empty() ||
+      starts.size() != ends.size()) {
+    return false;
+  }
+  std::vector<int64_t> axes(starts.size());
+  for (std::size_t i = 0; i < axes.size(); ++i) {
+    axes[i] = static_cast<int64_t>(i);
+  }
+  if (slice.input_size() >= 4 && !slice.input()[3].value().empty() &&
+      (!ReadConstantInts(graph, slice.input()[3].value(), axes) || axes.size() != starts.size())) {
+    return false;
+  }
+  std::vector<int64_t> steps(starts.size(), 1);
+  if (slice.input_size() >= 5 && !slice.input()[4].value().empty() &&
+      (!ReadConstantInts(graph, slice.input()[4].value(), steps) ||
+       steps.size() != starts.size())) {
+    return false;
+  }
+  std::array<bool, 4> seen{false, false, false, false};
+  for (std::size_t i = 0; i < starts.size(); ++i) {
+    const int64_t axis = axes[i] < 0 ? axes[i] + 4 : axes[i];
+    if (axis < 0 || axis >= 4 || seen[static_cast<std::size_t>(axis)]) {
+      return false;
+    }
+    seen[static_cast<std::size_t>(axis)] = true;
+    params.starts[static_cast<std::size_t>(axis)] = starts[i];
+    params.ends[static_cast<std::size_t>(axis)] = ends[i];
+    params.steps[static_cast<std::size_t>(axis)] = steps[i];
+  }
+  return true;
+}
+
+bool IsFullSliceEnd(const core::symbolic::SymShape &shape, std::size_t axis, int64_t end) {
+  return end == std::numeric_limits<int64_t>::max() ||
+         (shape[axis].IsInt() && end >= shape[axis].AsInt());
+}
+
 } // namespace
 
 std::set<std::string> ConcatEmptyPattern::FastOpType() const { return {"Concat"}; }
@@ -215,6 +312,171 @@ ConcatEmptyPattern::Apply(core::builder::GraphGraph &graph,
     *concat.add_attribute() = attribute;
   }
   replacements.push_back(concat);
+  return replacements;
+}
+
+std::set<std::string> ConcatSliceEliminationPattern::FastOpType() const { return {"Concat"}; }
+
+core::builder::MatchResult ConcatSliceEliminationPattern::Match(core::builder::GraphGraph &graph,
+                                                                const NodeProto &candidate) const {
+  if (!IsDefaultOp(candidate, "Concat") || candidate.input_size() < 2) {
+    return NoMatch(candidate, "candidate is not a multi-input default-domain Concat");
+  }
+  const std::string &output = candidate.output()[0].value();
+  if (graph.IsOutput(output) || graph.IsUsedBySubgraph(output)) {
+    return NoMatch(candidate, "the Concat output escapes the matched slices");
+  }
+  const std::vector<const NodeProto *> &consumers = graph.NextNodes(output);
+  if (consumers.size() != static_cast<std::size_t>(candidate.input_size())) {
+    return NoMatch(candidate, "the number of Slice consumers differs from the Concat inputs");
+  }
+
+  int64_t rank = -1;
+  int64_t axis = GetAxis(candidate, 0);
+  std::vector<int64_t> boundaries{0};
+  for (const auto &input : candidate.input()) {
+    if (!graph.HasShape(input.value())) {
+      return NoMatch(candidate, "a Concat input has no known shape");
+    }
+    const core::symbolic::SymShape &shape = graph.GetShape(input.value()).Shape();
+    if (rank < 0) {
+      rank = static_cast<int64_t>(shape.Rank());
+      axis = axis < 0 ? axis + rank : axis;
+    }
+    if (static_cast<int64_t>(shape.Rank()) != rank || axis < 0 || axis >= rank ||
+        !shape[static_cast<std::size_t>(axis)].IsInt()) {
+      return NoMatch(candidate, "the Concat axis dimensions are not statically known");
+    }
+    boundaries.push_back(boundaries.back() + shape[static_cast<std::size_t>(axis)].AsInt());
+  }
+
+  std::vector<const NodeProto *> ordered(static_cast<std::size_t>(candidate.input_size()), nullptr);
+  for (const NodeProto *slice : consumers) {
+    if (slice->input_size() == 0 || slice->input()[0].value() != output) {
+      return NoMatch(candidate, "the Concat output is not the Slice data input");
+    }
+    int64_t start = 0;
+    int64_t end = 0;
+    int64_t slice_axis = 0;
+    int64_t step = 1;
+    if (!ReadSimpleSlice(graph, *slice, start, end, slice_axis, step)) {
+      return NoMatch(candidate, "a consumer is not a constant one-axis Slice");
+    }
+    slice_axis = slice_axis < 0 ? slice_axis + rank : slice_axis;
+    if (slice_axis != axis || step != 1) {
+      return NoMatch(candidate, "a Slice uses a different axis or non-unit step");
+    }
+    std::size_t slot = ordered.size();
+    for (std::size_t i = 0; i < ordered.size(); ++i) {
+      if (start == boundaries[i] &&
+          (end == boundaries[i + 1] ||
+           (i + 1 == ordered.size() && end == std::numeric_limits<int64_t>::max()))) {
+        slot = i;
+        break;
+      }
+    }
+    if (slot == ordered.size() || ordered[slot] != nullptr) {
+      return NoMatch(candidate, "the Slice ranges do not recover distinct Concat inputs");
+    }
+    ordered[slot] = slice;
+  }
+  std::vector<const NodeProto *> nodes{&candidate};
+  nodes.insert(nodes.end(), ordered.begin(), ordered.end());
+  return core::builder::MatchResult{this, nodes, &candidate};
+}
+
+utils::RepeatedProtoField<NodeProto>
+ConcatSliceEliminationPattern::Apply(core::builder::GraphGraph &graph,
+                                     const std::vector<const NodeProto *> &nodes) const {
+  if (nodes.size() < 3 || nodes[0] == nullptr) {
+    throw BuilderError("ConcatSliceEliminationPattern::Apply expects a Concat and its slices.");
+  }
+  const core::builder::MatchResult verified = Match(graph, *nodes[0]);
+  if (verified.pattern == nullptr || verified.nodes != nodes) {
+    throw BuilderError(
+        "ConcatSliceEliminationPattern::Apply received an unsafe or inconsistent match.");
+  }
+  const NodeProto &concat = *nodes[0];
+  utils::RepeatedProtoField<NodeProto> replacements;
+  for (std::size_t i = 1; i < nodes.size(); ++i) {
+    const std::string name = "ConcatSliceEliminationPattern--" + nodes[i]->name().value();
+    replacements.push_back(MakeNode("Identity", {concat.input()[static_cast<int>(i - 1)].value()},
+                                    {nodes[i]->output()[0].value()}, "", name.c_str()));
+  }
+  return replacements;
+}
+
+std::set<std::string> SliceConcatToSpaceToDepthPattern::FastOpType() const { return {"Concat"}; }
+
+core::builder::MatchResult
+SliceConcatToSpaceToDepthPattern::Match(core::builder::GraphGraph &graph,
+                                        const NodeProto &candidate) const {
+  int64_t concat_axis = GetAxis(candidate, 0);
+  concat_axis = concat_axis < 0 ? concat_axis + 4 : concat_axis;
+  if (!IsDefaultOp(candidate, "Concat") || candidate.input_size() != 4 || concat_axis != 1) {
+    return NoMatch(candidate, "candidate is not a four-input channel-axis Concat");
+  }
+  static constexpr std::array<std::array<int64_t, 2>, 4> phases{
+      {{{0, 0}}, {{0, 1}}, {{1, 0}}, {{1, 1}}}};
+  std::string data;
+  std::vector<const NodeProto *> nodes;
+  nodes.reserve(5);
+  for (int i = 0; i < 4; ++i) {
+    const NodeProto *slice = graph.NodeBefore(candidate.input()[i].value());
+    if (slice == nullptr || graph.IsUsedMoreThanOnce(slice->output()[0].value()) ||
+        graph.IsOutput(slice->output()[0].value()) ||
+        graph.IsUsedBySubgraph(slice->output()[0].value())) {
+      return NoMatch(candidate, "a Concat input is not produced by an exclusive Slice");
+    }
+    if (i == 0) {
+      data = slice->input()[0].value();
+      if (!graph.HasShape(data) || graph.GetShape(data).Shape().Rank() != 4) {
+        return NoMatch(candidate, "the common Slice input is not known to be rank 4");
+      }
+    } else if (slice->input()[0].value() != data) {
+      return NoMatch(candidate, "the Slice nodes do not share one input");
+    }
+    const core::symbolic::SymShape &shape = graph.GetShape(data).Shape();
+    if (!shape[2].IsInt() || !shape[3].IsInt() || shape[2].AsInt() % 2 != 0 ||
+        shape[3].AsInt() % 2 != 0) {
+      return NoMatch(candidate, "the spatial dimensions are not static even multiples of two");
+    }
+    SpatialSlice params;
+    if (!ReadSpatialSlice(graph, *slice, params) || params.starts[0] != 0 ||
+        params.starts[1] != 0 || params.steps[0] != 1 || params.steps[1] != 1 ||
+        params.steps[2] != 2 || params.steps[3] != 2 ||
+        params.starts[2] != phases[static_cast<std::size_t>(i)][0] ||
+        params.starts[3] != phases[static_cast<std::size_t>(i)][1]) {
+      return NoMatch(candidate, "a Slice does not select the expected canonical phase");
+    }
+    for (std::size_t axis = 0; axis < 4; ++axis) {
+      if (!IsFullSliceEnd(shape, axis, params.ends[axis])) {
+        return NoMatch(candidate, "a Slice crops rather than spanning the full input");
+      }
+    }
+    nodes.push_back(slice);
+  }
+  nodes.push_back(&candidate);
+  return core::builder::MatchResult{this, nodes, &candidate};
+}
+
+utils::RepeatedProtoField<NodeProto>
+SliceConcatToSpaceToDepthPattern::Apply(core::builder::GraphGraph &graph,
+                                        const std::vector<const NodeProto *> &nodes) const {
+  if (nodes.size() != 5 || nodes[0] == nullptr || nodes[4] == nullptr) {
+    throw BuilderError("SliceConcatToSpaceToDepthPattern::Apply expects four slices and a Concat.");
+  }
+  const core::builder::MatchResult verified = Match(graph, *nodes[4]);
+  if (verified.pattern == nullptr || verified.nodes != nodes) {
+    throw BuilderError(
+        "SliceConcatToSpaceToDepthPattern::Apply received an unsafe or inconsistent match.");
+  }
+  const std::string name = "SliceConcatToSpaceToDepthPattern--" + nodes[4]->name().value();
+  NodeProto replacement = MakeNode("SpaceToDepth", {nodes[0]->input()[0].value()},
+                                   {nodes[4]->output()[0].value()}, "", name.c_str());
+  AddAttribute<int64_t>(replacement, "blocksize", 2);
+  utils::RepeatedProtoField<NodeProto> replacements;
+  replacements.push_back(replacement);
   return replacements;
 }
 

@@ -183,7 +183,7 @@ KernelTuningParameters MakeGemmParameters(const KernelTuningKey &key,
 std::vector<KernelCalibrationCase> MakeGemmCalibrationCases(int32_t element_type, int64_t tile_m,
                                                             int64_t tile_n, int64_t k) {
   std::vector<KernelCalibrationCase> cases;
-  for (int64_t task_count : {int64_t{1}, int64_t{2}, int64_t{4}, int64_t{8}}) {
+  for (int64_t task_count = 1; task_count <= 4096; task_count *= 2) {
     const int64_t m = tile_m * task_count;
     KernelCalibrationCase gemm_case;
     gemm_case.name = "gemm_tiles";
@@ -210,6 +210,13 @@ KernelTuningParameters CalibrateGemm(const KernelTuningKey &key,
   benchmark.serial_parameter_value = std::numeric_limits<int64_t>::max();
   benchmark.cases =
       MakeGemmCalibrationCases(key.element_type, defaults.tile_m, defaults.tile_n, int64_t{128});
+  benchmark.same_execution_path = [](const KernelCalibrationCase &gemm_case, int64_t reference,
+                                     int64_t candidate) {
+    // These cases use the portable tile defaults and a task grain of one.
+    const int64_t tasks = static_cast<int64_t>(gemm_case.problem_size);
+    const auto is_parallel = [tasks](int64_t threshold) { return tasks > 1 && tasks >= threshold; };
+    return is_parallel(reference) == is_parallel(candidate);
+  };
   benchmark.default_maximum_duration_ms = 1000;
   benchmark.reference.configure = [&](int64_t value) {
     reference.Configure(MakeGemmParameters(key, value));

@@ -144,6 +144,13 @@ SerializeSizeResult size_field(utils::BinaryWriteStream &stream, int order, cons
 }
 
 template <>
+SerializeSizeResult size_field(utils::BinaryWriteStream &stream, int order, const uint32_t &field,
+                               SerializeOptions &) {
+  return make_proto_size(stream.size_field_header(order, FIELD_VARINT) +
+                         stream.size_variant_uint64(static_cast<uint64_t>(field)));
+}
+
+template <>
 SerializeSizeResult size_field(utils::BinaryWriteStream &stream, int order, const double &field,
                                SerializeOptions &) {
   return make_proto_size(stream.size_field_header(order, FIELD_FIXED_SIZE) +

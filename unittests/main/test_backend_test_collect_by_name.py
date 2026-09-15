@@ -80,6 +80,83 @@ class TestCollectTestCasesByName(ExtTestCase):
         # generator and changes its output.
         self.assertTrue(any(name.endswith("_benchmark") for name in benchmark_names))
 
+    def test_benchmark_expected_outputs_are_opt_in(self):
+        pattern = r"^test_cc_abs_benchmark$"
+        input_only = bt.collect_test_cases_by_name(pattern, mode=bt.TestMode.BENCHMARK)
+        self.assertEqual(len(input_only), 1)
+        self.assertFalse(input_only[0].has_expected_outputs)
+        self.assertEqual(len(input_only[0].data_sets), 1)
+        self.assertFalse(input_only[0].data_sets[0].expected_outputs_generated)
+        self.assertEqual(input_only[0].data_sets[0].outputs, [])
+
+        checked = bt.collect_test_cases_by_name(
+            pattern, mode=bt.TestMode.BENCHMARK, generate_benchmark_expected_outputs=True
+        )
+        self.assertEqual(len(checked), 1)
+        self.assertTrue(checked[0].has_expected_outputs)
+        self.assertTrue(checked[0].data_sets[0].expected_outputs_generated)
+        self.assertEqual(len(checked[0].data_sets[0].outputs), 1)
+
+    def test_lazy_case_unloads_and_rematerializes_with_references(self):
+        cases = bt.collect_test_cases_by_name(r"^test_cc_abs$")
+        self.assertEqual(len(cases), 1)
+        case = cases[0]
+        self.assertFalse(case.materialized)
+
+        model = case.model
+        data_set = case.data_sets[0]
+        tensor = data_set.inputs[0]
+        self.assertTrue(case.materialized)
+
+        case.unload()
+        self.assertFalse(case.materialized)
+        self.assertEqual(model.graph.node[0].op_type, "Abs")
+        self.assertEqual(tensor.shape, [2, 3])
+        self.assertEqual(len(data_set.inputs), 1)
+
+        self.assertEqual(case.model.graph.node[0].op_type, "Abs")
+        self.assertEqual(case.data_sets[0].inputs[0].shape, [2, 3])
+        self.assertTrue(case.materialized)
+        case.unload()
+        self.assertFalse(case.materialized)
+
+    def test_manually_built_case_unloads_and_rematerializes(self):
+        cases = bt.collect_test_cases_by_name(r"^test_cc_if_seq$")
+        self.assertEqual(len(cases), 1)
+        case = cases[0]
+        self.assertFalse(case.materialized)
+
+        self.assertEqual(case.model.graph.node[0].op_type, "If")
+        self.assertGreater(len(case.data_sets), 0)
+        case.unload()
+        self.assertFalse(case.materialized)
+
+        self.assertEqual(case.model.graph.node[0].op_type, "If")
+        self.assertGreater(len(case.data_sets), 0)
+        case.unload()
+        self.assertFalse(case.materialized)
+
+    def test_post_build_model_mutation_survives_unload(self):
+        cases = bt.collect_test_cases_by_name(r"^test_cc_optional$")
+        self.assertEqual(len(cases), 1)
+        case = cases[0]
+        for _ in range(2):
+            output_type = case.model.graph.output[0].type
+            self.assertTrue(output_type.has_optional_type())
+            self.assertFalse(output_type.has_tensor_type())
+            case.unload()
+            self.assertFalse(case.materialized)
+
+    def test_every_collected_case_is_unloadable(self):
+        for mode in (bt.TestMode.TEST, bt.TestMode.BENCHMARK):
+            with self.subTest(mode=mode):
+                cases = bt.collect_test_cases(include_big=True, mode=mode)
+                self.assertGreater(len(cases), 0)
+                for case in cases:
+                    self.assertFalse(case.materialized, case.name)
+                    case.unload()
+                    self.assertFalse(case.materialized, case.name)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

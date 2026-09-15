@@ -27,8 +27,6 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterBatchNormalizationCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(15);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::BatchNormalization batchnorm_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -46,7 +44,12 @@ void RegisterBatchNormalizationCases(std::vector<TestCase> &registry, TestMode m
     constexpr int64_t W = 128;
     constexpr int64_t x_count = N * C * H * W;
     Expect(registry, std::move(node), "test_cc_batchnorm_example_benchmark", {opset},
-           {x_count, C, C, C, C}, {x_count}, [batchnorm_kernel]() -> IoData {
+           {x_count, C, C, C, C}, {x_count}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(15);
+
+             const KernelContext batchnorm_kernel_ctx{opset};
+             const onnx_kernels::kernel::BatchNormalization batchnorm_kernel{batchnorm_kernel_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, {N, C, H, W}, 1201);
              Tensor scale = RandnTensor(DataType::FLOAT, {C}, 1202);
              Tensor bias = RandnTensor(DataType::FLOAT, {C}, 1203);
@@ -72,7 +75,12 @@ void RegisterBatchNormalizationCases(std::vector<TestCase> &registry, TestMode m
     node.add_input("input_mean");
     node.add_input("input_var");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_batchnorm_example", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_batchnorm_example", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(15);
+
+      const KernelContext batchnorm_kernel_ctx{opset};
+      const onnx_kernels::kernel::BatchNormalization batchnorm_kernel{batchnorm_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {1, 2, 1, 3}, {-1.0f, 0.0f, 1.0f, 2.0f, 3.0f, 4.0f});
       Tensor scale = Tensor::FromFloat("", {2}, {1.0f, 1.5f});
       Tensor bias = Tensor::FromFloat("", {2}, {0.0f, 1.0f});
@@ -100,7 +108,12 @@ void RegisterBatchNormalizationCases(std::vector<TestCase> &registry, TestMode m
     node.add_input("input_var");
     node.add_output("y");
     AddAttribute<float>(node, "epsilon", 1e-2f);
-    Expect(registry, std::move(node), "test_cc_batchnorm_epsilon", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_batchnorm_epsilon", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(15);
+
+      const KernelContext batchnorm_kernel_ctx{opset};
+      const onnx_kernels::kernel::BatchNormalization batchnorm_kernel{batchnorm_kernel_ctx};
+
       const int64_t N = 2;
       const int64_t C = 3;
       const int64_t H = 4;
@@ -143,7 +156,12 @@ void RegisterBatchNormalizationCases(std::vector<TestCase> &registry, TestMode m
     node.add_output("output_var");
     AddAttribute<int64_t>(node, "training_mode", 1);
     Expect(registry, std::move(node), "test_cc_batchnorm_example_training_mode", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(15);
+
+             const KernelContext batchnorm_kernel_ctx{opset};
+             const onnx_kernels::kernel::BatchNormalization batchnorm_kernel{batchnorm_kernel_ctx};
+
              Tensor x = Tensor::FromFloat("", {1, 2, 1, 3}, {-1.0f, 0.0f, 1.0f, 2.0f, 3.0f, 4.0f});
              Tensor scale = Tensor::FromFloat("", {2}, {1.0f, 1.5f});
              Tensor bias = Tensor::FromFloat("", {2}, {0.0f, 1.0f});
@@ -176,7 +194,12 @@ void RegisterBatchNormalizationCases(std::vector<TestCase> &registry, TestMode m
     AddAttribute<float>(node, "epsilon", 1e-2f);
     AddAttribute<int64_t>(node, "training_mode", 1);
     Expect(registry, std::move(node), "test_cc_batchnorm_epsilon_training_mode", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(15);
+
+             const KernelContext batchnorm_kernel_ctx{opset};
+             const onnx_kernels::kernel::BatchNormalization batchnorm_kernel{batchnorm_kernel_ctx};
+
              const int64_t N = 2;
              const int64_t C = 3;
              const int64_t H = 4;

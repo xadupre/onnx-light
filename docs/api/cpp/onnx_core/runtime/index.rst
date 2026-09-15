@@ -42,6 +42,7 @@ a dependency from ``onnx_core`` back onto ``onnx_kernels``.
     parallel_region_collector
     kernel_tuning
     kernel_tuning_cache
+    calibration_profile_store
     parallel_for
     tensor_compare
     node_helpers

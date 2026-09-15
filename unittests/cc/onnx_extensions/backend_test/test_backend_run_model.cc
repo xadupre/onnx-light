@@ -9,6 +9,7 @@
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/runtime_session.h"
 #include "onnx_extensions/kernels/kernels/sequence/include_sequence_kernels.h"
+#include "test_case_utils.h"
 
 #include <gtest/gtest.h>
 
@@ -22,6 +23,7 @@ using core::backend_test::CollectTestCases;
 using core::backend_test::DataSet;
 using core::backend_test::DefaultOpset;
 using core::backend_test::TestCase;
+using core::backend_test::TestCaseUnloadGuard;
 using core::runtime::DataType;
 using core::runtime::ExecutionPlan;
 using core::runtime::Map;
@@ -89,15 +91,18 @@ void RunModelViaSession(const ModelProto &model, RuntimeContext &rt) {
 // Evaluates the optional ``accept_test_case`` predicate once per
 // ``TestCase`` (before any ``DataSet`` is examined); returning ``false``
 // skips the entire case. Evaluates the optional ``accept_data_set``
-// predicate per ``DataSet`` within an accepted case.
+// predicate per ``DataSet`` within an accepted case. Unloads each materialized
+// case after processing by default.
 void RunBackendCasesFor(const std::string &op_type,
                         const std::function<bool(const TestCase &)> &accept_test_case,
-                        const std::function<bool(const DataSet &)> &accept_data_set) {
-  const std::vector<TestCase> cases = CollectTestCases(op_type);
+                        const std::function<bool(const DataSet &)> &accept_data_set,
+                        bool unload = true) {
+  std::vector<TestCase> cases = CollectTestCases(op_type);
   ASSERT_FALSE(cases.empty()) << "No backend test cases found for op_type=" << op_type;
 
   size_t executed = 0;
-  for (const TestCase &tc : cases) {
+  for (TestCase &tc : cases) {
+    TestCaseUnloadGuard unload_guard(tc, unload);
     const auto &graph = tc.model().ref_graph();
     if (graph.ref_node().size() != 1u) {
       continue;
@@ -143,9 +148,11 @@ void RunBackendCasesFor(const std::string &op_type,
 }
 
 void RunBackendCasesFor(
-    const std::string &op_type, const std::function<bool(const DataSet &)> &accept_data_set =
-                                    [](const DataSet &) { return true; }) {
-  RunBackendCasesFor(op_type, [](const TestCase &) { return true; }, accept_data_set);
+    const std::string &op_type,
+    const std::function<bool(const DataSet &)> &accept_data_set =
+        [](const DataSet &) { return true; },
+    bool unload = true) {
+  RunBackendCasesFor(op_type, [](const TestCase &) { return true; }, accept_data_set, unload);
 }
 
 } // namespace
@@ -226,6 +233,7 @@ TEST(BackendRunModel, Sum) { RunBackendCasesFor("Sum"); }
 TEST(BackendRunModel, Max) { RunBackendCasesFor("Max"); }
 TEST(BackendRunModel, Min) { RunBackendCasesFor("Min"); }
 TEST(BackendRunModel, Mean) { RunBackendCasesFor("Mean"); }
+TEST(BackendRunModel, Einsum) { RunBackendCasesFor("Einsum"); }
 
 // Reduction kernels.
 TEST(BackendRunModel, ArgMax) { RunBackendCasesFor("ArgMax"); }
@@ -270,6 +278,7 @@ TEST(BackendRunModel, Compress) { RunBackendCasesFor("Compress"); }
 TEST(BackendRunModel, Unique) { RunBackendCasesFor("Unique"); }
 TEST(BackendRunModel, NonZero) { RunBackendCasesFor("NonZero"); }
 TEST(BackendRunModel, Concat) { RunBackendCasesFor("Concat"); }
+TEST(BackendRunModel, Split) { RunBackendCasesFor("Split"); }
 TEST(BackendRunModel, CumSum) { RunBackendCasesFor("CumSum"); }
 TEST(BackendRunModel, CumProd) { RunBackendCasesFor("CumProd"); }
 TEST(BackendRunModel, DFT) { RunBackendCasesFor("DFT"); }
@@ -389,15 +398,20 @@ TEST(BackendRunModel, Scan) { RunBackendCasesFor("Scan"); }
 
 // Quantization kernels.
 // The reference QuantizeLinear/DequantizeLinear kernels support per-tensor and
-// per-axis quantization with FLOAT scales, covering integer (UINT8/INT8/UINT16/
-// INT16), float8, and sub-byte (INT4/UINT4/INT2/UINT2/FLOAT4E2M1) output types.
-// Skip blocked / FLOAT16-scale cases which are not yet implemented.
+// per-axis quantization with FLOAT or FLOAT16 inputs and scales, covering
+// integer (UINT8/INT8/UINT16/INT16), float8, and sub-byte
+// (INT4/UINT4/INT2/UINT2/FLOAT4E2M1) output types.
 TEST(BackendRunModel, QuantizeLinear) {
   RunBackendCasesFor("QuantizeLinear", [](const DataSet &ds) {
     if (ds.inputs.size() < 2) {
       return false;
     }
-    if (ds.inputs[1].data_type != static_cast<int32_t>(DataType::FLOAT)) {
+    const int32_t x_dtype = ds.inputs[0].data_type;
+    const int32_t scale_dtype = ds.inputs[1].data_type;
+    if ((x_dtype != static_cast<int32_t>(DataType::FLOAT) &&
+         x_dtype != static_cast<int32_t>(DataType::FLOAT16)) ||
+        (scale_dtype != static_cast<int32_t>(DataType::FLOAT) &&
+         scale_dtype != static_cast<int32_t>(DataType::FLOAT16))) {
       return false;
     }
     if (ds.outputs.empty()) {
@@ -425,18 +439,6 @@ TEST(BackendRunModel, DequantizeLinear) {
       return false;
     }
     const int32_t scale_dtype = ds.inputs[1].data_type;
-    const int64_t scale_count = ds.inputs[1].element_count();
-    const bool is_scalar_scale = scale_count == 1;
-    // Per-axis: 1-D x_scale with multiple elements; FLOAT only (no FLOAT16
-    // per-axis). Blocked: N-D FLOAT x_scale that divides x along the
-    // quantization axis. Both are handled by the reference kernel.
-    const bool is_per_axis_scale = scale_count > 1 && ds.inputs[1].shape.size() == 1 &&
-                                   scale_dtype == static_cast<int32_t>(DataType::FLOAT);
-    const bool is_blocked_scale = scale_count > 1 && ds.inputs[1].shape.size() > 1 &&
-                                  scale_dtype == static_cast<int32_t>(DataType::FLOAT);
-    if (!is_scalar_scale && !is_per_axis_scale && !is_blocked_scale) {
-      return false;
-    }
     if (scale_dtype != static_cast<int32_t>(DataType::FLOAT) &&
         scale_dtype != static_cast<int32_t>(DataType::FLOAT16)) {
       return false;
@@ -560,11 +562,12 @@ TEST(BackendRunModel, FlexAttention) {
 // sequence by re-stacking the latter through
 // :cpp:class:`kernel::SequenceConstruct`.
 TEST(BackendRunModel, SequenceMap) {
-  const std::vector<TestCase> cases = CollectTestCases("SequenceMap");
+  std::vector<TestCase> cases = CollectTestCases("SequenceMap");
   ASSERT_FALSE(cases.empty()) << "No backend test cases found for SequenceMap";
 
   std::size_t executed = 0;
-  for (const TestCase &tc : cases) {
+  for (TestCase &tc : cases) {
+    TestCaseUnloadGuard unload_guard(tc);
     SCOPED_TRACE(tc.name);
     const onnx_kernels::kernel::KernelContext kctx(
         DefaultOpset(GetDefaultOpsetVersion(tc.model())));
@@ -609,11 +612,12 @@ TEST(BackendRunModel, SequenceMap) {
 // :cpp:class:`RuntimeContext`, exercising the runtime-allocator path for the
 // kernel's split-size buffer.
 TEST(BackendRunModel, SplitToSequence) {
-  const std::vector<TestCase> cases = CollectTestCases("SplitToSequence");
+  std::vector<TestCase> cases = CollectTestCases("SplitToSequence");
   ASSERT_FALSE(cases.empty()) << "No backend test cases found for SplitToSequence";
 
   std::size_t executed = 0;
-  for (const TestCase &tc : cases) {
+  for (TestCase &tc : cases) {
+    TestCaseUnloadGuard unload_guard(tc);
     const auto &graph = tc.model().ref_graph();
     if (graph.ref_node().size() != 1u || graph.ref_node()[0].ref_op_type() != "SplitToSequence") {
       continue;

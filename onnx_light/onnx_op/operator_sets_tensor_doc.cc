@@ -298,6 +298,29 @@ std::string MakeNonZeroTypeConstraintDescription(int since_version) {
 }
 
 std::string MakeOneHotDoc(int since_version) {
+  if (since_version >= 28) {
+    return R"DOC(
+    Produces a one-hot tensor based on inputs.
+    The locations represented by the index values in the 'indices' input tensor will have 'on_value'
+    and the other locations will have 'off_value' in the output tensor, where 'on_value' and 'off_value'
+    are specified as part of required input argument 'values', which is a two-element tensor of format
+    [off_value, on_value]. The rank of the output tensor will be one greater than the rank of the
+    input tensor. The additional dimension is for one-hot representation. The additional dimension will
+    be inserted at the position specified by 'axis'. If 'axis' is not specified then the additional
+    dimension will be inserted as the innermost dimension, i.e. axis=-1. The size of the additional
+    dimension is specified by required scalar input 'depth'. The type of the output tensor is the same
+    as the type of the 'values' input. Any entries in the 'indices' input tensor with values outside
+    the range [-depth, depth-1] will result in one-hot representation with all 'off_value' values in the
+    output tensor.
+
+    when axis = 0:
+    output[input[i, j, k], i, j, k] = 1 for all i, j, k and 0 otherwise.
+
+    when axis = -1:
+    output[i, j, k, input[i, j, k]] = 1 for all i, j, k and 0 otherwise.
+
+)DOC";
+  }
   if (since_version >= 11) {
     return R"DOC(
     Produces a one-hot tensor based on inputs.
@@ -612,15 +635,15 @@ Example 2 (`reflect` mode):
       [4.5, 5.7],
   ]
 
-  pads = [0, 2, 0, 0]
+  pads = [0, 1, 0, 1]
 
   mode = 'reflect'
 
   output =
   [
-      [1.0, 1.2, 1.0, 1.2],
-      [2.3, 3.4, 2.3, 3.4],
-      [4.5, 5.7, 4.5, 5.7],
+      [1.2, 1.0, 1.2, 1.0],
+      [3.4, 2.3, 3.4, 2.3],
+      [5.7, 4.5, 5.7, 4.5],
   ]
 
 
@@ -692,15 +715,15 @@ Example 2 (`reflect` mode):
       [4.5, 5.7],
   ]
 
-  pads = [0, 2, 0, 0]
+  pads = [0, 1, 0, 1]
 
   mode = 'reflect'
 
   output =
   [
-      [1.0, 1.2, 1.0, 1.2],
-      [2.3, 3.4, 2.3, 3.4],
-      [4.5, 5.7, 4.5, 5.7],
+      [1.2, 1.0, 1.2, 1.0],
+      [3.4, 2.3, 3.4, 2.3],
+      [5.7, 4.5, 5.7, 4.5],
   ]
 
 
@@ -773,14 +796,14 @@ data = [
     [4.5, 5.7],
 ]
 
-pads = [0, 2, 0, 0]
+pads = [0, 1, 0, 1]
 
 mode = 'reflect'
 
 output = [
-    [1.0, 1.2, 1.0, 1.2],
-    [2.3, 3.4, 2.3, 3.4],
-    [4.5, 5.7, 4.5, 5.7],
+    [1.2, 1.0, 1.2, 1.0],
+    [3.4, 2.3, 3.4, 2.3],
+    [5.7, 4.5, 5.7, 4.5],
 ]
 ```
 
@@ -854,14 +877,14 @@ data = [
     [4.5, 5.7],
 ]
 
-pads = [0, 2, 0, 0]
+pads = [0, 1, 0, 1]
 
 mode = 'reflect'
 
 output = [
-    [1.0, 1.2, 1.0, 1.2],
-    [2.3, 3.4, 2.3, 3.4],
-    [4.5, 5.7, 4.5, 5.7],
+    [1.2, 1.0, 1.2, 1.0],
+    [3.4, 2.3, 3.4, 2.3],
+    [5.7, 4.5, 5.7, 4.5],
 ]
 ```
 
@@ -1147,7 +1170,12 @@ std::string MakeDepthToSpaceTypeConstraintDescription(int since_version) {
 }
 
 std::string MakeSpaceToDepthDoc(int since_version) {
-  (void)since_version;
+  if (since_version >= 28) {
+    return R"DOC(SpaceToDepth rearranges blocks of spatial data into depth. More specifically,
+this op outputs a copy of the input tensor where values from the height and width dimensions
+are moved to the depth dimension. `mode` determines whether blocks are ordered depth-column-row
+(`DCR`, the default) or column-row-depth (`CRD`).)DOC";
+  }
   return R"DOC(SpaceToDepth rearranges blocks of spatial data into depth. More specifically,
 this op outputs a copy of the input tensor where values from the height and width dimensions
 are moved to the depth dimension.
@@ -1795,6 +1823,13 @@ std::string MakeReverseSequenceTypeConstraintDescription(int since_version) {
 }
 
 std::string MakeCompressDoc(int since_version) {
+  if (since_version >= 28) {
+    return R"DOC(
+    Selects slices from an input tensor along a given axis where condition evaluates to True for each axis index.
+    In case axis is not provided, input is flattened before elements are selected.
+    Compress behaves like numpy.compress: https://docs.scipy.org/doc/numpy/reference/generated/numpy.compress.html
+    )DOC";
+  }
   if (since_version <= 9) {
     return R"DOC(
 Selects slices from an input tensor along a given axis value passed.
@@ -1872,9 +1907,10 @@ The operation can be described using the following pseudocode:
 for prefix_idx in np.ndindex(past_cache.shape[:axis]):
     batch_idx = prefix_idx[0]
     for sequence_idx in range(sequence_length):
-        cache_idx = (*prefix_idx, write_indices[batch_idx] + sequence_idx)
+        cache_sequence_idx = write_indices[batch_idx] + sequence_idx
         if mode == "circular":
-            cache_idx = tuple(np.mod(np.asarray(cache_idx), max_sequence_length))
+            cache_sequence_idx = cache_sequence_idx % max_sequence_length
+        cache_idx = (*prefix_idx, cache_sequence_idx)
         update_idx = (*prefix_idx, sequence_idx)
         present_cache[cache_idx] = update[update_idx]
 ```

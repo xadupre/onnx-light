@@ -21,6 +21,8 @@
 #include "onnx_extensions/patterns/canonicalization/dropout_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/identity_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/not_pattern.h"
+#include "onnx_extensions/patterns/canonicalization/pad_pattern.h"
+#include "onnx_extensions/patterns/canonicalization/stft_pattern.h"
 #include "onnx_extensions/patterns/collections/concat_pattern.h"
 #include "onnx_extensions/patterns/collections/gather_pattern.h"
 #include "onnx_extensions/patterns/collections/sequence_pattern.h"
@@ -34,6 +36,8 @@
 #include "onnx_extensions/patterns/normalization/activation_pattern.h"
 #include "onnx_extensions/patterns/normalization/normalization_pattern.h"
 #include "onnx_extensions/patterns/reshape/reshape_pattern.h"
+#include "onnx_extensions/patterns/traditionalml/label_encoder_pattern.h"
+#include "onnx_extensions/patterns/traditionalml/tree_ensemble_pattern.h"
 #include "onnx_extensions/patterns/transpose/transpose_pattern.h"
 #include "onnx_extensions/patterns/unsqueeze/unsqueeze_pattern.h"
 
@@ -61,6 +65,8 @@ void RegisterPatterns() {
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<ClipClipPattern>();
                                    });
+    core::builder::RegisterPattern("ReluClipFusion",
+                                   [] { return std::make_unique<ReluClipFusionPattern>(); });
     core::builder::RegisterPattern("ConstantToInitializer",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<ConstantToInitializerPattern>();
@@ -68,6 +74,18 @@ void RegisterPatterns() {
     core::builder::RegisterPattern("ConvBiasNull",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<ConvBiasNullPattern>();
+                                   });
+    core::builder::RegisterPattern("ConvAddFusion",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<ConvAddFusionPattern>();
+                                   });
+    core::builder::RegisterPattern("ConvMulFusion",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<ConvMulFusionPattern>();
+                                   });
+    core::builder::RegisterPattern("ConvBatchNormalizationFusion",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<ConvBatchNormalizationFusionPattern>();
                                    });
     core::builder::RegisterPattern("Dropout",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
@@ -85,9 +103,15 @@ void RegisterPatterns() {
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<PadConvPattern>();
                                    });
+    core::builder::RegisterPattern("PadPadFusion",
+                                   [] { return std::make_unique<PadPadFusionPattern>(); });
     core::builder::RegisterPattern("ConcatEmpty",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<ConcatEmptyPattern>();
+                                   });
+    core::builder::RegisterPattern("ConcatSliceElimination",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<ConcatSliceEliminationPattern>();
                                    });
     core::builder::RegisterPattern("ConcatGather",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
@@ -109,14 +133,32 @@ void RegisterPatterns() {
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<GatherShapePattern>();
                                    });
+    core::builder::RegisterPattern("PreShapeNodeElimination",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<PreShapeNodeEliminationPattern>();
+                                   });
     core::builder::RegisterPattern("GathersSplit",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<GathersSplitPattern>();
+                                   });
+    core::builder::RegisterPattern("GatherSliceToSplit",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<GatherSliceToSplitPattern>();
+                                   });
+    core::builder::RegisterPattern("GatherToSlice",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<GatherToSlicePattern>();
+                                   });
+    core::builder::RegisterPattern("GatherUpstreamPropagation",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<GatherUpstreamPropagationPattern>();
                                    });
     core::builder::RegisterPattern("SliceSlice",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<SliceSlicePattern>();
                                    });
+    core::builder::RegisterPattern("SliceElimination",
+                                   [] { return std::make_unique<SliceEliminationPattern>(); });
     core::builder::RegisterPattern("SlicesSplit",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<SlicesSplitPattern>();
@@ -124,6 +166,10 @@ void RegisterPatterns() {
     core::builder::RegisterPattern("SplitConcat",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<SplitConcatPattern>();
+                                   });
+    core::builder::RegisterPattern("SliceConcatToSpaceToDepth",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<SliceConcatToSpaceToDepthPattern>();
                                    });
     core::builder::RegisterPattern("SequenceConstructAt",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
@@ -232,6 +278,9 @@ void RegisterPatterns() {
     core::builder::RegisterPattern("TransposeReshapeTranspose", [] {
       return std::make_unique<TransposeReshapeTransposePattern>();
     });
+    core::builder::RegisterPattern("DivMul", [] { return std::make_unique<DivMulPattern>(); });
+    core::builder::RegisterPattern("STFTFusion",
+                                   [] { return std::make_unique<STFTFusionPattern>(); });
     core::builder::RegisterPattern("MulMulMulScalar",
                                    [] { return std::make_unique<MulMulMulScalarPattern>(); });
     core::builder::RegisterPattern("SwitchOrderBinary",
@@ -258,10 +307,17 @@ void RegisterPatterns() {
     });
     core::builder::RegisterPattern("GemmTranspose",
                                    [] { return std::make_unique<GemmTransposePattern>(); });
+    core::builder::RegisterPattern("GemmSumFusion",
+                                   [] { return std::make_unique<GemmSumFusionPattern>(); });
     core::builder::RegisterPattern("MatMulAdd",
                                    [] { return std::make_unique<MatMulAddPattern>(); });
+    core::builder::RegisterPattern("MatMulBatchNormalizationFusion", [] {
+      return std::make_unique<MatMulBatchNormalizationFusionPattern>();
+    });
     core::builder::RegisterPattern("MatMulReshape2Of3",
                                    [] { return std::make_unique<MatMulReshape2Of3Pattern>(); });
+    core::builder::RegisterPattern("MatMulScaleFusion",
+                                   [] { return std::make_unique<MatMulScaleFusionPattern>(); });
     core::builder::RegisterPattern("MulMulMatMul",
                                    [] { return std::make_unique<MulMulMatMulPattern>(); });
     core::builder::RegisterPattern("ReshapeMatMulReshape",
@@ -315,6 +371,8 @@ void RegisterPatterns() {
     });
     core::builder::RegisterPattern("FunctionAttention",
                                    [] { return std::make_unique<FunctionAttentionPattern>(); });
+    core::builder::RegisterPattern("LinearAttention",
+                                   [] { return std::make_unique<LinearAttentionPattern>(); });
     core::builder::RegisterPattern("FunctionAttentionGQA",
                                    [] { return std::make_unique<FunctionAttentionGQAPattern>(); });
     core::builder::RegisterPattern("AttentionGQA",
@@ -342,6 +400,14 @@ void RegisterPatterns() {
     core::builder::RegisterPattern("ShapeTranspose",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<ShapeTransposePattern>();
+                                   });
+    core::builder::RegisterPattern("TreeEnsemble",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<TreeEnsemblePattern>();
+                                   });
+    core::builder::RegisterPattern("LabelEncoderFusion",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<LabelEncoderFusionPattern>();
                                    });
     core::builder::RegisterPattern("UnsqueezeShape",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {

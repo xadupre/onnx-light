@@ -4,6 +4,7 @@
 
 #include "onnx_core/shapes/shape_inference.h"
 
+#include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx.h"
@@ -62,6 +63,63 @@ TEST(OnnxOptimShapeInference, SupportsUtilsStringLookupForNodeOutput) {
   ASSERT_TRUE(ctx.Has(output_name));
   EXPECT_EQ(ctx.Get(output_name),
             core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
+}
+
+TEST(OnnxOptimShapeInference, InfersPartialSTFTShapeWithDynamicSignalLength) {
+  NodeProto node = MakeNode("STFT", {"signal", "frame_step", "window"}, {"output"});
+  core::shapes::ShapesContext ctx;
+  int64_t frame_step = 2;
+  ctx.Set("signal", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                              {core::symbolic::SymDim("batch"),
+                                               core::symbolic::SymDim("signal_length"),
+                                               core::symbolic::SymDim(1)}));
+  ctx.Set("frame_step",
+          core::symbolic::SymTensor(&frame_step, core::symbolic::TensorType::kInt64, {}));
+  ctx.Set("window", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                              {core::symbolic::SymDim(5)}));
+
+  ctx.ComputeShapeNode(node);
+
+  ASSERT_TRUE(ctx.Has("output"));
+  const core::symbolic::SymShape &shape = ctx.Get("output").Shape();
+  ASSERT_EQ(shape.Rank(), 4);
+  EXPECT_EQ(shape[0], core::symbolic::SymDim("batch"));
+  EXPECT_FALSE(shape[1].IsInt());
+  EXPECT_EQ(shape[2], core::symbolic::SymDim(3));
+  EXPECT_EQ(shape[3], core::symbolic::SymDim(2));
+}
+
+TEST(OnnxOptimShapeInference, STFTDefaultsFrameLengthToDynamicSignalLength) {
+  NodeProto node = MakeNode("STFT", {"signal", "frame_step"}, {"output"});
+  core::shapes::ShapesContext ctx;
+  int64_t frame_step = 2;
+  ctx.Set("signal", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                              {core::symbolic::SymDim("batch"),
+                                               core::symbolic::SymDim("signal_length"),
+                                               core::symbolic::SymDim(1)}));
+  ctx.Set("frame_step",
+          core::symbolic::SymTensor(&frame_step, core::symbolic::TensorType::kInt64, {}));
+
+  ctx.ComputeShapeNode(node);
+
+  const core::symbolic::SymShape &shape = ctx.Get("output").Shape();
+  ASSERT_EQ(shape.Rank(), 4);
+  EXPECT_EQ(shape[0], core::symbolic::SymDim("batch"));
+  EXPECT_EQ(shape[1], core::symbolic::SymDim(1));
+  EXPECT_FALSE(shape[2].IsInt());
+  EXPECT_EQ(shape[3], core::symbolic::SymDim(2));
+}
+
+TEST(OnnxOptimShapeInference, STFTRejectsOneSidedComplexSignal) {
+  NodeProto node = MakeNode("STFT", {"signal", "frame_step"}, {"output"});
+  core::shapes::ShapesContext ctx;
+  ctx.Set("signal",
+          core::symbolic::SymTensor(
+              nullptr, core::symbolic::TensorType::kFloat,
+              {core::symbolic::SymDim(1), core::symbolic::SymDim(10), core::symbolic::SymDim(2)}));
+  ctx.Set("frame_step", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt64, {}));
+
+  EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
 }
 
 TEST(OnnxOptimShapeInference, DispatchesAddWithBroadcast) {
@@ -717,6 +775,74 @@ TEST(OnnxOptimShapeInference, ComputeShapeModelSeedsInitializerAsShape) {
             (core::symbolic::SymShape{core::symbolic::SymDim(6), core::symbolic::SymDim(2)}));
 }
 
+TEST(OnnxOptimShapeInference, ComputeShapeModelReductionOpset18AxesInitializer) {
+  const std::vector<std::string> op_types = {
+      "ReduceL1",  "ReduceL2",  "ReduceLogSum", "ReduceLogSumExp",
+      "ReduceMax", "ReduceMin", "ReduceProd",   "ReduceSumSquare",
+  };
+  for (const std::string &op_type : op_types) {
+    SCOPED_TRACE(op_type);
+    ModelProto model;
+    model.set_ir_version(8);
+    model.add_opset_import()->set_version(18);
+    GraphProto *graph = model.add_graph();
+    graph->set_name("g");
+    ValueInfoProto *input = graph->add_input();
+    input->set_name("X");
+    SetValueInfoTensorType(*input, TensorProto::DataType::FLOAT, {2, 3, 4});
+    graph->add_output()->set_name("Y");
+    TensorProto *axes = graph->add_initializer();
+    axes->set_name("axes");
+    axes->set_data_type(TensorProto::DataType::INT64);
+    axes->add_dims(1);
+    axes->add_int64_data(1);
+    NodeProto reduce = MakeNode(op_type, {"X", "axes"}, {"temp"});
+    AddAttribute<int64_t>(reduce, "keepdims", 0);
+    *graph->add_node() = std::move(reduce);
+    *graph->add_node() = MakeNode("Identity", {"temp"}, {"Y"});
+
+    core::shapes::ShapesContext ctx;
+    ctx.ComputeShapeModel(model);
+
+    const core::symbolic::SymShape expected{core::symbolic::SymDim(2), core::symbolic::SymDim(4)};
+    EXPECT_EQ(ctx.Get("temp").Shape(), expected);
+    EXPECT_EQ(ctx.Get("Y").Shape(), expected);
+  }
+}
+
+TEST(OnnxOptimShapeInference, ComputeShapeModelReduceSumEmptyAxesInitializer) {
+  for (const int64_t noop_with_empty_axes : {int64_t{0}, int64_t{1}}) {
+    SCOPED_TRACE(noop_with_empty_axes);
+    ModelProto model;
+    model.set_ir_version(8);
+    model.add_opset_import()->set_version(18);
+    GraphProto *graph = model.add_graph();
+    graph->set_name("g");
+    ValueInfoProto *input = graph->add_input();
+    input->set_name("X");
+    SetValueInfoTensorType(*input, TensorProto::DataType::FLOAT, {2, 3, 4});
+    graph->add_output()->set_name("Y");
+    TensorProto *axes = graph->add_initializer();
+    axes->set_name("axes");
+    axes->set_data_type(TensorProto::DataType::INT64);
+    axes->add_dims(0);
+    NodeProto reduce = MakeNode("ReduceSum", {"X", "axes"}, {"Y"});
+    AddAttribute<int64_t>(reduce, "keepdims", 0);
+    AddAttribute<int64_t>(reduce, "noop_with_empty_axes", noop_with_empty_axes);
+    *graph->add_node() = std::move(reduce);
+
+    core::shapes::ShapesContext ctx;
+    ctx.ComputeShapeModel(model);
+
+    const core::symbolic::SymShape expected =
+        noop_with_empty_axes == 0
+            ? core::symbolic::SymShape{}
+            : core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3),
+                                       core::symbolic::SymDim(4)};
+    EXPECT_EQ(ctx.Get("Y").Shape(), expected);
+  }
+}
+
 TEST(OnnxOptimShapeInference, ComputeShapeModelRejectsModelWithoutGraph) {
   ModelProto model;
   core::shapes::ShapesContext ctx;
@@ -792,6 +918,44 @@ TEST(OnnxOptimShapeInference, ApplyInferredShapesToModelRejectsModelWithoutGraph
   ModelProto model;
   core::shapes::ShapesContext ctx;
   EXPECT_THROW(ctx.ApplyInferredShapesToModel(model), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeInference, ApplyInferredShapesToFunctionPreservesDeclarationsAndSymbolicDims) {
+  FunctionProto function;
+  function.add_input("X");
+  function.add_output("Y");
+  function.add_value_info()->set_name("X");
+  function.add_value_info()->set_name("unrelated");
+
+  core::shapes::ShapesContext ctx;
+  const core::symbolic::SymTensor tensor(
+      nullptr, core::symbolic::TensorType::kFloat,
+      core::symbolic::SymShape{core::symbolic::SymDim("batch"), core::symbolic::SymDim(4)});
+  ctx.Set("Y", core::symbolic::SymTensor(tensor));
+  ctx.Set("X", core::symbolic::SymTensor(tensor));
+  ctx.Set("A", core::symbolic::SymTensor(tensor));
+  ctx.ApplyInferredShapesToFunction(function);
+  ctx.ApplyInferredShapesToFunction(function);
+
+  ASSERT_EQ(function.input_size(), 1u);
+  EXPECT_EQ(function.input(0), "X");
+  ASSERT_EQ(function.output_size(), 1u);
+  EXPECT_EQ(function.output(0), "Y");
+  ASSERT_EQ(function.value_info_size(), 4u);
+  EXPECT_EQ(function.value_info()[0].name(), "X");
+  EXPECT_EQ(function.value_info()[1].name(), "unrelated");
+  EXPECT_FALSE(function.value_info()[1].has_type());
+  EXPECT_EQ(function.value_info()[2].name(), "A");
+  EXPECT_EQ(function.value_info()[3].name(), "Y");
+  for (int index : {0, 2, 3}) {
+    const auto &vi = function.value_info()[index];
+    ASSERT_TRUE(vi.has_type() && vi.type().has_tensor_type());
+    const auto &tensor_type = vi.type().tensor_type();
+    EXPECT_EQ(tensor_type.elem_type(), static_cast<int>(TensorProto::DataType::FLOAT));
+    ASSERT_EQ(tensor_type.shape().dim_size(), 2u);
+    EXPECT_EQ(tensor_type.shape().dim()[0].dim_param(), "batch");
+    EXPECT_EQ(tensor_type.shape().dim()[1].dim_value(), 4);
+  }
 }
 
 TEST(OnnxOptimShapeInference, InferShapesModelEndToEnd) {
@@ -1093,6 +1257,28 @@ TEST(OnnxOptimShapeInference, ComputeShapeNodeUsesRegisteredCustomDomainCallback
   EXPECT_EQ(ctx.Get("Y").Dtype(), core::symbolic::TensorType::kFloat);
   EXPECT_EQ(ctx.Get("Y").Shape(),
             (core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)}));
+}
+
+TEST(OnnxOptimShapeInference, ComputeShapeNodeUsesGlobalCustomDomainCallback) {
+  core::shapes::RegisterComputeShapeFn(
+      "com.acme.global", "Identity", [](core::shapes::ShapesContext &ctx, const NodeProto &node) {
+        ctx.Set(node.output(0), core::symbolic::SymTensor(ctx.Get(node.input(0))));
+      });
+  const NodeProto node = MakeNode("Identity", {"X"}, {"Y"}, "com.acme.global");
+  const core::symbolic::SymTensor input(nullptr, core::symbolic::TensorType::kFloat,
+                                        {core::symbolic::SymDim(2), core::symbolic::SymDim(3)});
+  core::shapes::ShapesContext ctx;
+  ctx.Set("X", core::symbolic::SymTensor(input));
+  ctx.ComputeShapeNode(node);
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), input.Dtype());
+  EXPECT_EQ(ctx.Get("Y").Shape(), input.Shape());
+
+  core::shapes::ShapesContext missing_input;
+  EXPECT_THROW(missing_input.ComputeShapeNode(node), std::invalid_argument);
+  EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
+  EXPECT_THROW(ctx.ComputeShapeNode(MakeNode("Unregistered", {"X"}, {"Z"}, "com.acme.global")),
+               std::invalid_argument);
 }
 
 namespace {

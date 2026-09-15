@@ -48,14 +48,10 @@ NodeProto BuildSCENode(bool has_weights, bool with_log_prob, const std::string &
 // covered. The expected outputs are produced by the kernel itself; since the
 // backend invokes the same kernel, this acts as a self-consistency check
 // across every supported reduction / ignore_index / weights / rank combination.
-void RegisterSCEVariants(const onnx_kernels::kernel::SoftmaxCrossEntropyLoss &sce_kernel,
-                         const OpsetId &opset, const std::string &base, const Tensor &scores,
+void RegisterSCEVariants(const OpsetId &opset, const std::string &base, const Tensor &scores,
                          const Tensor &labels, const Tensor *weights, const std::string &reduction,
                          bool has_ignore_index, int64_t ignore_index,
                          std::vector<TestCase> &registry) {
-  auto [loss, log_prob] =
-      sce_kernel(scores, labels, weights, reduction, has_ignore_index, ignore_index);
-
   std::vector<Tensor> inputs;
   inputs.push_back(scores);
   inputs.push_back(labels);
@@ -65,24 +61,40 @@ void RegisterSCEVariants(const onnx_kernels::kernel::SoftmaxCrossEntropyLoss &sc
 
   const std::string name_prefix = "test_cc_" + base;
   const bool has_weights = weights != nullptr;
+  const Tensor weights_value = has_weights ? *weights : Tensor{};
 
   // Loss-only variant.
   {
     NodeProto node = BuildSCENode(has_weights, /*with_log_prob=*/false, reduction, has_ignore_index,
                                   ignore_index);
     Expect(registry, std::move(node), name_prefix, {opset},
-           [=]() -> IoData { return IoData{std::move(inputs), {std::move(loss)}}; });
+           [opset, scores, labels, has_weights, weights_value, reduction, has_ignore_index,
+            ignore_index, inputs]() -> IoData {
+             const KernelContext ctx{opset};
+             const onnx_kernels::kernel::SoftmaxCrossEntropyLoss sce_kernel{ctx};
+
+             auto [loss, log_prob] =
+                 sce_kernel(scores, labels, has_weights ? &weights_value : nullptr, reduction,
+                            has_ignore_index, ignore_index);
+             return IoData{std::move(inputs), {std::move(loss)}};
+           });
   }
 
   // Two-output variant (loss + log_prob).
   {
     NodeProto node = BuildSCENode(has_weights, /*with_log_prob=*/true, reduction, has_ignore_index,
                                   ignore_index);
-    Expect(registry, std::move(node), name_prefix + "_log_prob", {opset}, [=]() -> IoData {
-      Tensor loss_copy = loss;
-      Tensor log_prob_copy = log_prob;
-      return IoData{std::move(inputs), {std::move(loss_copy), std::move(log_prob_copy)}};
-    });
+    Expect(registry, std::move(node), name_prefix + "_log_prob", {opset},
+           [opset, scores, labels, has_weights, weights_value, reduction, has_ignore_index,
+            ignore_index, inputs]() -> IoData {
+             const KernelContext ctx{opset};
+             const onnx_kernels::kernel::SoftmaxCrossEntropyLoss sce_kernel{ctx};
+
+             auto [loss, log_prob] =
+                 sce_kernel(scores, labels, has_weights ? &weights_value : nullptr, reduction,
+                            has_ignore_index, ignore_index);
+             return IoData{std::move(inputs), {std::move(loss), std::move(log_prob)}};
+           });
   }
 }
 
@@ -114,8 +126,6 @@ std::vector<int64_t> MakeLabelRange(int64_t count, int64_t n_classes) {
 
 void RegisterSoftmaxCrossEntropyLossCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::SoftmaxCrossEntropyLoss sce_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -129,7 +139,12 @@ void RegisterSoftmaxCrossEntropyLossCases(std::vector<TestCase> &registry, TestM
     constexpr int64_t labels_count = kN;
     constexpr int64_t loss_count = 1;
     Expect(registry, std::move(node), "test_cc_softmax_cross_entropy_loss_benchmark", {opset},
-           {scores_count, labels_count}, {loss_count}, [sce_kernel, kN, kC]() -> IoData {
+           {scores_count, labels_count}, {loss_count}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext sce_kernel_ctx{opset};
+             const onnx_kernels::kernel::SoftmaxCrossEntropyLoss sce_kernel{sce_kernel_ctx};
+
              Tensor scores = RandnTensor(DataType::FLOAT, {kN, kC}, 443);
              std::vector<int64_t> label_values(kN);
              for (int64_t i = 0; i < kN; ++i) {
@@ -153,7 +168,12 @@ void RegisterSoftmaxCrossEntropyLossCases(std::vector<TestCase> &registry, TestM
     node.add_input("labels");
     node.add_output("output");
     Expect(registry, std::move(node), "test_cc_softmax_cross_entropy_loss_mean", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext sce_kernel_ctx{opset};
+             const onnx_kernels::kernel::SoftmaxCrossEntropyLoss sce_kernel{sce_kernel_ctx};
+
              Tensor scores = Tensor::FromFloat("", {3, 5},
                                                {0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 1.0f, 0.5f, 0.2f,
                                                 0.1f, 0.05f, -0.2f, 0.3f, 0.7f, 0.9f, 0.8f});
@@ -174,7 +194,12 @@ void RegisterSoftmaxCrossEntropyLossCases(std::vector<TestCase> &registry, TestM
     node.add_output("output");
     AddAttribute(node, "reduction", std::string("none"));
     Expect(registry, std::move(node), "test_cc_softmax_cross_entropy_loss_none", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext sce_kernel_ctx{opset};
+             const onnx_kernels::kernel::SoftmaxCrossEntropyLoss sce_kernel{sce_kernel_ctx};
+
              Tensor scores = Tensor::FromFloat("", {3, 5},
                                                {0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 1.0f, 0.5f, 0.2f,
                                                 0.1f, 0.05f, -0.2f, 0.3f, 0.7f, 0.9f, 0.8f});
@@ -197,7 +222,12 @@ void RegisterSoftmaxCrossEntropyLossCases(std::vector<TestCase> &registry, TestM
     node.add_output("output");
     AddAttribute(node, "reduction", std::string("sum"));
     Expect(registry, std::move(node), "test_cc_softmax_cross_entropy_loss_weighted_sum", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext sce_kernel_ctx{opset};
+             const onnx_kernels::kernel::SoftmaxCrossEntropyLoss sce_kernel{sce_kernel_ctx};
+
              Tensor scores = Tensor::FromFloat("", {3, 5},
                                                {0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 1.0f, 0.5f, 0.2f,
                                                 0.1f, 0.05f, -0.2f, 0.3f, 0.7f, 0.9f, 0.8f});
@@ -219,7 +249,12 @@ void RegisterSoftmaxCrossEntropyLossCases(std::vector<TestCase> &registry, TestM
     node.add_output("output");
     node.add_output("log_prob");
     Expect(registry, std::move(node), "test_cc_softmax_cross_entropy_loss_log_prob", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext sce_kernel_ctx{opset};
+             const onnx_kernels::kernel::SoftmaxCrossEntropyLoss sce_kernel{sce_kernel_ctx};
+
              Tensor scores = Tensor::FromFloat("", {3, 5},
                                                {0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 1.0f, 0.5f, 0.2f,
                                                 0.1f, 0.05f, -0.2f, 0.3f, 0.7f, 0.9f, 0.8f});
@@ -252,27 +287,25 @@ void RegisterSoftmaxCrossEntropyLossCases(std::vector<TestCase> &registry, TestM
   const Tensor labels_2d_with_ii = Tensor::FromInt64("", {3}, {2, 0, 4});
 
   // sce_mean
-  RegisterSCEVariants(sce_kernel, opset, "sce_mean", scores_2d, labels_2d,
+  RegisterSCEVariants(opset, "sce_mean", scores_2d, labels_2d,
                       /*weights=*/nullptr, "mean", /*has_ignore_index=*/false,
                       /*ignore_index=*/0, registry);
   // sce_mean_weight
-  RegisterSCEVariants(sce_kernel, opset, "sce_mean_weight", scores_2d, labels_2d, &weights_c5,
-                      "mean", false, 0, registry);
-  // sce_mean_no_weight_ii (ignore_index = 0; label 0 in labels_2d gets ignored)
-  RegisterSCEVariants(sce_kernel, opset, "sce_mean_no_weight_ii", scores_2d, labels_2d_with_ii,
-                      nullptr, "mean", true, 0, registry);
-  // sce_mean_weight_ii
-  RegisterSCEVariants(sce_kernel, opset, "sce_mean_weight_ii", scores_2d, labels_2d_with_ii,
-                      &weights_c5, "mean", true, 0, registry);
-  // sce_sum
-  RegisterSCEVariants(sce_kernel, opset, "sce_sum", scores_2d, labels_2d, nullptr, "sum", false, 0,
+  RegisterSCEVariants(opset, "sce_mean_weight", scores_2d, labels_2d, &weights_c5, "mean", false, 0,
                       registry);
+  // sce_mean_no_weight_ii (ignore_index = 0; label 0 in labels_2d gets ignored)
+  RegisterSCEVariants(opset, "sce_mean_no_weight_ii", scores_2d, labels_2d_with_ii, nullptr, "mean",
+                      true, 0, registry);
+  // sce_mean_weight_ii
+  RegisterSCEVariants(opset, "sce_mean_weight_ii", scores_2d, labels_2d_with_ii, &weights_c5,
+                      "mean", true, 0, registry);
+  // sce_sum
+  RegisterSCEVariants(opset, "sce_sum", scores_2d, labels_2d, nullptr, "sum", false, 0, registry);
   // sce_none (reduction = none, no weights)
-  RegisterSCEVariants(sce_kernel, opset, "sce_none", scores_2d, labels_2d, nullptr, "none", false,
-                      0, registry);
+  RegisterSCEVariants(opset, "sce_none", scores_2d, labels_2d, nullptr, "none", false, 0, registry);
   // sce_none_weights (reduction = none with weights)
-  RegisterSCEVariants(sce_kernel, opset, "sce_none_weights", scores_2d, labels_2d, &weights_c5,
-                      "none", false, 0, registry);
+  RegisterSCEVariants(opset, "sce_none_weights", scores_2d, labels_2d, &weights_c5, "none", false,
+                      0, registry);
 
   // -- 3D scores (N=3, C=5, D=2) --
   {
@@ -280,12 +313,12 @@ void RegisterSoftmaxCrossEntropyLossCases(std::vector<TestCase> &registry, TestM
     Tensor scores_3d = Tensor::FromFloat("", {n, c, d1}, MakeFloatRange(n * c * d1));
     Tensor labels_3d = Tensor::FromInt64("", {n, d1}, MakeLabelRange(n * d1, c));
 
-    RegisterSCEVariants(sce_kernel, opset, "sce_mean_3d", scores_3d, labels_3d, nullptr, "mean",
-                        false, 0, registry);
-    RegisterSCEVariants(sce_kernel, opset, "sce_mean_no_weight_ii_3d", scores_3d, labels_3d,
-                        nullptr, "mean", true, 0, registry);
-    RegisterSCEVariants(sce_kernel, opset, "sce_mean_weight_ii_3d", scores_3d, labels_3d,
-                        &weights_c5, "mean", true, 0, registry);
+    RegisterSCEVariants(opset, "sce_mean_3d", scores_3d, labels_3d, nullptr, "mean", false, 0,
+                        registry);
+    RegisterSCEVariants(opset, "sce_mean_no_weight_ii_3d", scores_3d, labels_3d, nullptr, "mean",
+                        true, 0, registry);
+    RegisterSCEVariants(opset, "sce_mean_weight_ii_3d", scores_3d, labels_3d, &weights_c5, "mean",
+                        true, 0, registry);
   }
 
   // -- 4D scores (N=2, C=4, D1=2, D2=2) --
@@ -295,10 +328,10 @@ void RegisterSoftmaxCrossEntropyLossCases(std::vector<TestCase> &registry, TestM
     Tensor labels_4d = Tensor::FromInt64("", {n, d1, d2}, MakeLabelRange(n * d1 * d2, c));
     Tensor weights_c4 = Tensor::FromFloat("", {c}, {0.2f, 0.3f, 0.6f, 0.1f});
 
-    RegisterSCEVariants(sce_kernel, opset, "sce_mean_no_weight_ii_4d", scores_4d, labels_4d,
-                        nullptr, "mean", true, 0, registry);
-    RegisterSCEVariants(sce_kernel, opset, "sce_mean_weight_ii_4d", scores_4d, labels_4d,
-                        &weights_c4, "mean", true, 0, registry);
+    RegisterSCEVariants(opset, "sce_mean_no_weight_ii_4d", scores_4d, labels_4d, nullptr, "mean",
+                        true, 0, registry);
+    RegisterSCEVariants(opset, "sce_mean_weight_ii_4d", scores_4d, labels_4d, &weights_c4, "mean",
+                        true, 0, registry);
   }
 
   // -- (N, C, d1) with weights and a "negative" ignore_index (= -1) that does
@@ -307,8 +340,8 @@ void RegisterSoftmaxCrossEntropyLossCases(std::vector<TestCase> &registry, TestM
     const int64_t n = 3, c = 5, d1 = 2;
     Tensor scores_nc1 = Tensor::FromFloat("", {n, c, d1}, MakeFloatRange(n * c * d1, -0.4f, 0.1f));
     Tensor labels_nc1 = Tensor::FromInt64("", {n, d1}, MakeLabelRange(n * d1, c));
-    RegisterSCEVariants(sce_kernel, opset, "sce_NCd1_mean_weight_negative_ii", scores_nc1,
-                        labels_nc1, &weights_c5, "mean", true, -1, registry);
+    RegisterSCEVariants(opset, "sce_NCd1_mean_weight_negative_ii", scores_nc1, labels_nc1,
+                        &weights_c5, "mean", true, -1, registry);
   }
 
   // -- (N, C, d1, d2, d3) with reduction="none" and a negative ignore_index.
@@ -318,14 +351,14 @@ void RegisterSoftmaxCrossEntropyLossCases(std::vector<TestCase> &registry, TestM
     const int64_t labels_total = n * d1 * d2 * d3;
     Tensor scores_d3 = Tensor::FromFloat("", {n, c, d1, d2, d3}, MakeFloatRange(total));
     Tensor labels_d3 = Tensor::FromInt64("", {n, d1, d2, d3}, MakeLabelRange(labels_total, c));
-    RegisterSCEVariants(sce_kernel, opset, "sce_NCd1d2d3_none_no_weight_negative_ii", scores_d3,
-                        labels_d3, nullptr, "none", true, -5, registry);
+    RegisterSCEVariants(opset, "sce_NCd1d2d3_none_no_weight_negative_ii", scores_d3, labels_d3,
+                        nullptr, "none", true, -5, registry);
 
     // -- Same rank with weights, reduction="sum" and a "high" ignore_index
     //    (= n_classes), i.e. one that does not match any valid label.
     Tensor weights_c4 = Tensor::FromFloat("", {c}, {0.2f, 0.3f, 0.6f, 0.1f});
-    RegisterSCEVariants(sce_kernel, opset, "sce_NCd1d2d3_sum_weight_high_ii", scores_d3, labels_d3,
-                        &weights_c4, "sum", true, c, registry);
+    RegisterSCEVariants(opset, "sce_NCd1d2d3_sum_weight_high_ii", scores_d3, labels_d3, &weights_c4,
+                        "sum", true, c, registry);
   }
 
   // -- (N, C, d1, d2, d3, d4, d5) -- highest rank exercised by ONNX.
@@ -339,10 +372,10 @@ void RegisterSoftmaxCrossEntropyLossCases(std::vector<TestCase> &registry, TestM
         Tensor::FromInt64("", {n, d1, d2, d3, d4, d5}, MakeLabelRange(labels_total, c));
     Tensor weights_c3 = Tensor::FromFloat("", {c}, {0.5f, 0.3f, 0.2f});
 
-    RegisterSCEVariants(sce_kernel, opset, "sce_NCd1d2d3d4d5_mean_weight", scores_7d, labels_7d,
-                        &weights_c3, "mean", false, 0, registry);
-    RegisterSCEVariants(sce_kernel, opset, "sce_NCd1d2d3d4d5_none_no_weight", scores_7d, labels_7d,
-                        nullptr, "none", false, 0, registry);
+    RegisterSCEVariants(opset, "sce_NCd1d2d3d4d5_mean_weight", scores_7d, labels_7d, &weights_c3,
+                        "mean", false, 0, registry);
+    RegisterSCEVariants(opset, "sce_NCd1d2d3d4d5_none_no_weight", scores_7d, labels_7d, nullptr,
+                        "none", false, 0, registry);
   }
 }
 

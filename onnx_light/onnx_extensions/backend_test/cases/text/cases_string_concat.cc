@@ -19,8 +19,6 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(20);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::StringConcat string_concat{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -31,7 +29,12 @@ void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode) {
 
     constexpr int64_t count = 262144;
     Expect(registry, std::move(node), "test_cc_string_concat_benchmark", {opset}, {count, count},
-           {count}, [string_concat]() -> IoData {
+           {count}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(20);
+
+             const KernelContext string_concat_ctx{opset};
+             const onnx_kernels::kernel::StringConcat string_concat{string_concat_ctx};
+
              std::vector<std::string> x_values(static_cast<size_t>(count));
              std::vector<std::string> y_values(static_cast<size_t>(count));
              for (size_t i = 0; i < x_values.size(); ++i) {
@@ -54,7 +57,12 @@ void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_input("y");
     node.add_output("z");
-    Expect(registry, std::move(node), "test_cc_string_concat", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_string_concat", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(20);
+
+      const KernelContext string_concat_ctx{opset};
+      const onnx_kernels::kernel::StringConcat string_concat{string_concat_ctx};
+
       Tensor x = Tensor::FromStrings("", {3}, {"abc", "", "hello "});
       Tensor y = Tensor::FromStrings("", {3}, {"def", "xyz", "world"});
       Tensor z = string_concat(x, y);
@@ -70,7 +78,12 @@ void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_input("y");
     node.add_output("z");
-    Expect(registry, std::move(node), "test_cc_string_concat_bcast", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_string_concat_bcast", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(20);
+
+      const KernelContext string_concat_ctx{opset};
+      const onnx_kernels::kernel::StringConcat string_concat{string_concat_ctx};
+
       Tensor x = Tensor::FromStrings("", {2, 2}, {"a", "b", "c", "d"});
       Tensor y = Tensor::FromStrings("", {}, {"!"});
       Tensor z = string_concat(x, y);
@@ -88,7 +101,12 @@ void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("y");
     node.add_output("z");
     Expect(registry, std::move(node), "test_cc_string_concat_zero_dimensional", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(20);
+
+             const KernelContext string_concat_ctx{opset};
+             const onnx_kernels::kernel::StringConcat string_concat{string_concat_ctx};
+
              Tensor x = Tensor::FromStrings("", {}, {"cat"});
              Tensor y = Tensor::FromStrings("", {}, {"s"});
              Tensor z = string_concat(x, y);
@@ -105,7 +123,12 @@ void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("x");
     node.add_input("y");
     node.add_output("z");
-    Expect(registry, std::move(node), "test_cc_string_concat_utf8", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_string_concat_utf8", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(20);
+
+      const KernelContext string_concat_ctx{opset};
+      const onnx_kernels::kernel::StringConcat string_concat{string_concat_ctx};
+
       Tensor x = Tensor::FromStrings("", {2}, {"\xe7\x9a\x84", "\xe4\xb8\xad"});
       Tensor y = Tensor::FromStrings("", {2}, {"\xe7\x9a\x84", "\xe4\xb8\xad"});
       Tensor z = string_concat(x, y);
@@ -124,7 +147,12 @@ void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("y");
     node.add_output("z");
     Expect(registry, std::move(node), "test_cc_string_concat_broadcasting", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(20);
+
+             const KernelContext string_concat_ctx{opset};
+             const onnx_kernels::kernel::StringConcat string_concat{string_concat_ctx};
+
              Tensor x = Tensor::FromStrings("", {3}, {"cat", "dog", "snake"});
              Tensor y = Tensor::FromStrings("", {1}, {"s"});
              Tensor z = string_concat(x, y);
@@ -143,7 +171,12 @@ void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("y");
     node.add_output("z");
     Expect(registry, std::move(node), "test_cc_string_concat_empty_string", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(20);
+
+             const KernelContext string_concat_ctx{opset};
+             const onnx_kernels::kernel::StringConcat string_concat{string_concat_ctx};
+
              Tensor x = Tensor::FromStrings("", {2}, {"abc", ""});
              Tensor y = Tensor::FromStrings("", {2}, {"", "abc"});
              Tensor z = string_concat(x, y);
@@ -156,53 +189,65 @@ void RegisterStringConcatCases(std::vector<TestCase> &registry, TestMode mode) {
   // two StringConcat nodes in a single graph. Exercises shape inference and
   // execution across multiple StringConcat invocations.
   {
-    TestCase tc("test_cc_string_concat_chained_3in_1out", "test_cc_string_concat_chained_3in_1out");
+    const std::string name = "test_cc_string_concat_chained_3in_1out";
+    TestCase tc(name, name);
     tc.rtol = 1e-3;
     tc.atol = 1e-7;
+    tc.build = [name](bool) -> BuiltCase {
+      const OpsetId opset = DefaultOpset(20);
 
-    ModelProto &model = tc.emplace_model();
-    model.set_ir_version(13);
-    model.set_producer_name("backend-test");
-    OperatorSetIdProto *osid = model.add_opset_import();
-    osid->set_domain(opset.domain);
-    osid->set_version(opset.version);
+      const KernelContext string_concat_ctx{opset};
+      const onnx_kernels::kernel::StringConcat string_concat{string_concat_ctx};
 
-    GraphProto *graph = model.add_graph();
-    graph->set_name(tc.name);
+      TestCase tc(name, name);
+      tc.rtol = 1e-3;
+      tc.atol = 1e-7;
 
-    // First node: tmp = StringConcat(x, y)
-    NodeProto *node1 = graph->add_node();
-    node1->set_op_type("StringConcat");
-    node1->add_input("x");
-    node1->add_input("y");
-    node1->add_output("tmp");
+      ModelProto &model = tc.emplace_model();
+      model.set_ir_version(13);
+      model.set_producer_name("backend-test");
+      OperatorSetIdProto *osid = model.add_opset_import();
+      osid->set_domain(opset.domain);
+      osid->set_version(opset.version);
 
-    // Second node: w = StringConcat(tmp, z)
-    NodeProto *node2 = graph->add_node();
-    node2->set_op_type("StringConcat");
-    node2->add_input("tmp");
-    node2->add_input("z");
-    node2->add_output("w");
+      GraphProto *graph = model.add_graph();
+      graph->set_name(tc.name);
 
-    Tensor x = Tensor::FromStrings("x", {3}, {"abc", "def", "ghi"});
-    Tensor y = Tensor::FromStrings("y", {3}, {"-", "/", "."});
-    Tensor z = Tensor::FromStrings("z", {3}, {"123", "456", "789"});
-    Tensor tmp = string_concat(x, y);
-    tmp.name = "tmp";
-    Tensor w = string_concat(tmp, z);
-    w.name = "w";
+      // First node: tmp = StringConcat(x, y)
+      NodeProto *node1 = graph->add_node();
+      node1->set_op_type("StringConcat");
+      node1->add_input("x");
+      node1->add_input("y");
+      node1->add_output("tmp");
 
-    FillValueInfo(x, *graph->add_input());
-    FillValueInfo(y, *graph->add_input());
-    FillValueInfo(z, *graph->add_input());
-    FillValueInfo(w, *graph->add_output());
-    FillValueInfo(tmp, *graph->add_value_info());
+      // Second node: w = StringConcat(tmp, z)
+      NodeProto *node2 = graph->add_node();
+      node2->set_op_type("StringConcat");
+      node2->add_input("tmp");
+      node2->add_input("z");
+      node2->add_output("w");
 
-    DataSet ds;
-    ds.inputs = {x, y, z};
-    ds.outputs = {w};
-    tc.data_sets().emplace_back(std::move(ds));
+      Tensor x = Tensor::FromStrings("x", {3}, {"abc", "def", "ghi"});
+      Tensor y = Tensor::FromStrings("y", {3}, {"-", "/", "."});
+      Tensor z = Tensor::FromStrings("z", {3}, {"123", "456", "789"});
+      Tensor tmp = string_concat(x, y);
+      tmp.name = "tmp";
+      Tensor w = string_concat(tmp, z);
+      w.name = "w";
 
+      FillValueInfo(x, *graph->add_input());
+      FillValueInfo(y, *graph->add_input());
+      FillValueInfo(z, *graph->add_input());
+      FillValueInfo(w, *graph->add_output());
+      FillValueInfo(tmp, *graph->add_value_info());
+
+      DataSet ds;
+      ds.inputs = {x, y, z};
+      ds.outputs = {w};
+      tc.data_sets().emplace_back(std::move(ds));
+
+      return tc.take_materialized();
+    };
     registry.emplace_back(std::move(tc));
   }
 }

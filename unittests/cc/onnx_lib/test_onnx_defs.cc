@@ -218,6 +218,51 @@ TEST(onnx_defs, MathOpDataPropagator_InvalidBroadcastRank) {
   EXPECT_TRUE(ctx.output_data_.empty());
 }
 
+TEST(onnx_defs, STFTDocumentation) {
+  const OpSchema *stft_schema = OpSchemaRegistry::Schema("STFT", 17, ONNX_DOMAIN);
+  ASSERT_NE(stft_schema, nullptr);
+
+  EXPECT_NE(std::string(stft_schema->doc())
+                .find("frames = floor((signal_length - frame_length) / frame_step) + 1"),
+            std::string::npos);
+  EXPECT_NE(stft_schema->inputs()[0].GetDescription().find("rank 3"), std::string::npos);
+  EXPECT_NE(stft_schema->inputs()[2].GetDescription().find("rectangular (all-ones) window"),
+            std::string::npos);
+  EXPECT_NE(stft_schema->outputs()[0].GetDescription().find("real and imaginary parts"),
+            std::string::npos);
+}
+
+TEST(onnx_defs, OptionalOpsSupportAllIr14TypesAtOpset28) {
+  const OpSchema *optional = OpSchemaRegistry::Schema("Optional", 28, ONNX_DOMAIN);
+  const OpSchema *has_element = OpSchemaRegistry::Schema("OptionalHasElement", 28, ONNX_DOMAIN);
+  const OpSchema *get_element = OpSchemaRegistry::Schema("OptionalGetElement", 28, ONNX_DOMAIN);
+  ASSERT_NE(optional, nullptr);
+  ASSERT_NE(has_element, nullptr);
+  ASSERT_NE(get_element, nullptr);
+
+  const auto &optional_constraints = optional->typeConstraintMap();
+  const auto &has_constraints = has_element->typeConstraintMap();
+  const auto &get_constraints = get_element->typeConstraintMap();
+  EXPECT_EQ(optional_constraints.at("V").first.size(), 56u);
+  EXPECT_EQ(optional_constraints.at("O").first.size(), 56u);
+  EXPECT_EQ(has_constraints.at("O").first.size(), 112u);
+  EXPECT_EQ(get_constraints.at("O").first.size(), 112u);
+  EXPECT_EQ(get_constraints.at("V").first.size(), 56u);
+
+  const auto contains = [](const auto &types, const std::string &type) {
+    for (const auto *candidate : types.first) {
+      if (*candidate == type) {
+        return true;
+      }
+    }
+    return false;
+  };
+  EXPECT_TRUE(contains(optional_constraints.at("V"), "seq(tensor(float6e2m3))"));
+  EXPECT_TRUE(contains(optional_constraints.at("O"), "optional(seq(tensor(float6e2m3)))"));
+  EXPECT_TRUE(contains(has_constraints.at("O"), "optional(tensor(bfloat16))"));
+  EXPECT_TRUE(contains(get_constraints.at("V"), "tensor(float6e3m2)"));
+}
+
 TEST(onnx_defs, DataTypeAndParserMaps) {
   EXPECT_TRUE((std::is_same<DataType, const std::string *>::value));
   EXPECT_EQ(PrimitiveTypeNameMap::Lookup("float"),
@@ -346,14 +391,15 @@ TEST(onnx_defs, TensorProto_DataType_IsValid_AcceptsInRangeValues) {
   EXPECT_TRUE(TensorProto::DataType_IsValid(TensorProto::DataType::UNDEFINED));
   EXPECT_TRUE(TensorProto::DataType_IsValid(TensorProto::DataType::FLOAT));
   EXPECT_TRUE(TensorProto::DataType_IsValid(TensorProto::DataType::BOOL));
-  EXPECT_TRUE(TensorProto::DataType_IsValid(TensorProto::DataType::INT2)); // last valid value (26)
+  EXPECT_TRUE(
+      TensorProto::DataType_IsValid(TensorProto::DataType::FLOAT6E3M2)); // last valid value (28)
 }
 
 TEST(onnx_defs, TensorProto_DataType_IsValid_RejectsOutOfRangeValues) {
   EXPECT_FALSE(TensorProto::DataType_IsValid(-100));
   EXPECT_FALSE(TensorProto::DataType_IsValid(-1));
-  EXPECT_FALSE(TensorProto::DataType_IsValid(static_cast<int32_t>(TensorProto::DataType::INT2) +
-                                             1)); // 27, just past the last value
+  EXPECT_FALSE(TensorProto::DataType_IsValid(
+      static_cast<int32_t>(TensorProto::DataType::FLOAT6E3M2) + 1)); // just past the last value
   EXPECT_FALSE(TensorProto::DataType_IsValid(9999));
 }
 
@@ -461,6 +507,15 @@ TEST(onnx_defs, Schema_DomainToVersionRange_CustomDomain) {
   EXPECT_EQ(ranges.Map().at(domain).second, 5);
   ASSERT_EQ(ranges.LastReleaseVersionMap().count(domain), 1u);
   EXPECT_EQ(ranges.LastReleaseVersionMap().at(domain), 4);
+}
+
+TEST(onnx_defs, Schema_DomainToVersionRange_OnnxDomain) {
+  const auto &ranges = OpSchemaRegistry::DomainToVersionRange::Instance();
+
+  ASSERT_EQ(ranges.Map().count(ONNX_DOMAIN), 1u);
+  EXPECT_EQ(ranges.Map().at(ONNX_DOMAIN), std::make_pair(1, 29));
+  ASSERT_EQ(ranges.LastReleaseVersionMap().count(ONNX_DOMAIN), 1u);
+  EXPECT_EQ(ranges.LastReleaseVersionMap().at(ONNX_DOMAIN), 28);
 }
 
 TEST(onnx_defs, Schema_PreviewFlexAttentionDefinition) {
@@ -736,6 +791,9 @@ TEST(onnx_defs, DocStrings_NonEmpty) {
   EXPECT_GT(strlen(kDoc_Loop_ver23), 0u);
   EXPECT_GT(strlen(kDoc_scan_24), 0u);
   EXPECT_GT(strlen(kDoc_BitCast_ver26), 0u);
+  EXPECT_GT(strlen(kDoc_If_ver25), 0u);
+  EXPECT_GT(strlen(kDoc_SequenceMap_ver17), 0u);
+  EXPECT_GT(strlen(kDoc_ArrayFeatureExtractor_ver1), 0u);
 }
 
 TEST(onnx_defs, DocStrings_ContainExpectedContent) {
@@ -743,12 +801,19 @@ TEST(onnx_defs, DocStrings_ContainExpectedContent) {
   EXPECT_NE(strstr(kDoc_Sigmoid_ver6, "sigmoid"), nullptr);
   EXPECT_NE(strstr(kDoc_Tanh_ver6, "hyperbolic tangent"), nullptr);
   EXPECT_NE(strstr(kDoc_MatMul_ver9, "matmul"), nullptr);
+  const OpSchema *einsum_schema = OpSchemaRegistry::Schema("Einsum", 12, ONNX_DOMAIN);
+  ASSERT_NE(einsum_schema, nullptr);
+  EXPECT_NE(strstr(einsum_schema->doc(), "einsum"), nullptr);
   EXPECT_NE(strstr(kDoc_GRU_ver14, "GRU"), nullptr);
   EXPECT_NE(strstr(kDoc_LSTM_ver14, "LSTM"), nullptr);
   // The Pad doc string mirrors the upstream ONNX schema and must include the
   // four worked examples (one per supported mode).
   EXPECT_NE(strstr(kDoc_Pad_ver24, "Example 1 (`constant` mode)"), nullptr);
   EXPECT_NE(strstr(kDoc_Pad_ver24, "Example 2 (`reflect` mode)"), nullptr);
+  EXPECT_NE(strstr(kDoc_Pad_ver24, "pads = [0, 1, 0, 1]"), nullptr);
+  EXPECT_NE(strstr(kDoc_Pad_ver24, "[1.2, 1.0, 1.2, 1.0]"), nullptr);
   EXPECT_NE(strstr(kDoc_Pad_ver24, "Example 3 (`edge` mode)"), nullptr);
   EXPECT_NE(strstr(kDoc_Pad_ver24, "Example 4 (`wrap` mode)"), nullptr);
+  EXPECT_NE(strstr(kDoc_Pad_ver13, "pads = [0, 2, 0, 0]"), nullptr);
+  EXPECT_NE(strstr(kDoc_Pad_ver13, "[1.0, 1.2, 1.0, 1.2]"), nullptr);
 }

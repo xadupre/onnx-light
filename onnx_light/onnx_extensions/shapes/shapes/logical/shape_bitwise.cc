@@ -38,7 +38,7 @@ void ComputeShapeBitwiseNot(ShapesContext &ctx, const NodeProto &node, const cha
 
 void ComputeShapeBitShift(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b) {
   // BitShift (opset 11) is element-wise with numpy-style broadcasting;
-  // the output dtype matches the shared unsigned integer input dtype.
+  // the output dtype matches the shared integer input dtype.
   const TensorType out_dtype = ctx.Get(a).Dtype();
   ComputeShapeBinaryBroadcast(ctx, node, a, b, "BitShift", out_dtype);
 }

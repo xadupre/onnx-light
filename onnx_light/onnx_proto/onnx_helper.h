@@ -2,11 +2,88 @@
 
 #include "onnx.h"
 
+#include <filesystem>
 #include <initializer_list>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
+
+/**
+ * Returns the physical width in bits of a fixed-width ONNX element type, or 0
+ * when the type has no fixed inline width.
+ */
+inline constexpr uint32_t FixedBitWidth(TensorProto::DataType data_type) {
+  switch (data_type) {
+  case TensorProto::UINT2:
+  case TensorProto::INT2:
+    return 2;
+  case TensorProto::UINT4:
+  case TensorProto::INT4:
+  case TensorProto::FLOAT4E2M1:
+    return 4;
+  case TensorProto::FLOAT6E2M3:
+  case TensorProto::FLOAT6E3M2:
+    return 6;
+  case TensorProto::UINT8:
+  case TensorProto::INT8:
+  case TensorProto::BOOL:
+  case TensorProto::FLOAT8E4M3FN:
+  case TensorProto::FLOAT8E4M3FNUZ:
+  case TensorProto::FLOAT8E5M2:
+  case TensorProto::FLOAT8E5M2FNUZ:
+  case TensorProto::FLOAT8E8M0:
+    return 8;
+  case TensorProto::UINT16:
+  case TensorProto::INT16:
+  case TensorProto::FLOAT16:
+  case TensorProto::BFLOAT16:
+    return 16;
+  case TensorProto::UINT32:
+  case TensorProto::INT32:
+  case TensorProto::FLOAT:
+    return 32;
+  case TensorProto::UINT64:
+  case TensorProto::INT64:
+  case TensorProto::DOUBLE:
+  case TensorProto::COMPLEX64:
+    return 64;
+  case TensorProto::COMPLEX128:
+    return 128;
+  default:
+    return 0;
+  }
+}
+
+/**
+ * Returns true when an external-data ``location`` entry is a relative path that
+ * cannot escape the directory it is resolved against.
+ *
+ * The lexically-normalised path must be non-empty, must have no root component,
+ * must not start with ``..`` and must end on a file name. This is the single
+ * definition of the rule; ``TensorProto::LoadExternalData`` and the
+ * ``EncodedValueProto`` metadata validator both use it so an untrusted model
+ * cannot reach outside its own directory.
+ *
+ * @param location Raw ``location`` value taken from ``external_data``.
+ *
+ * Returns: True when the location is safe to resolve against a base directory.
+ */
+inline bool IsSafeExternalDataLocation(std::string_view location) {
+  if (location.empty()) {
+    return false;
+  }
+  const std::filesystem::path normalized =
+      std::filesystem::path(std::string(location)).lexically_normal();
+  if (normalized.empty() || normalized.has_root_path()) {
+    return false;
+  }
+  if (*normalized.begin() == std::filesystem::path("..")) {
+    return false;
+  }
+  return !normalized.filename().empty();
+}
 
 // Canonical name of the default ONNX domain. The empty string used by
 // ``NodeProto::domain()`` for the default ONNX domain is normalised to

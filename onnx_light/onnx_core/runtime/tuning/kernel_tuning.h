@@ -62,6 +62,52 @@ struct CpuExecutionDescriptor {
 /** Stores one portable scalar tuning value. */
 using TuningValue = std::variant<int64_t, double, bool, std::string>;
 
+/** Selects the aggregate used to rank tuning parameter sets. */
+enum class KernelTuningCriterion {
+  kAverage,
+  kSum,
+  kMedian,
+  kAverageSpeedup,
+  kMedianSpeedup,
+  kMaxSpeedup,
+  kMaxLatency,
+};
+
+/** Reports latency and speedup aggregates for one tuning parameter set. */
+struct KernelTuningLatencyMetrics {
+  double average = 0;
+  double sum = 0;
+  double median = 0;
+  std::optional<double> average_speedup;
+  std::optional<double> median_speedup;
+  std::optional<double> max_speedup;
+  double max_latency = 0;
+};
+
+/** Reports metrics for every parameter set and the set selected by a criterion. */
+struct KernelTuningLatencyReport {
+  KernelTuningCriterion criterion = KernelTuningCriterion::kAverage;
+  std::optional<size_t> selected_index;
+  std::vector<std::optional<KernelTuningLatencyMetrics>> values;
+};
+
+/** Parses a user-facing kernel tuning criterion name. */
+KernelTuningCriterion ParseKernelTuningCriterion(std::string_view criterion);
+
+/** Returns the user-facing name of a kernel tuning criterion. */
+std::string_view KernelTuningCriterionName(KernelTuningCriterion criterion);
+
+/**
+ * Computes every latency metric and selects one parameter set.
+ *
+ * Rows must correspond to parameter sets and columns to the same ordered backend
+ * cases. Missing measurements invalidate that row. The first row is the speedup
+ * baseline.
+ */
+KernelTuningLatencyReport
+AnalyzeKernelTuningLatencies(const std::vector<std::vector<std::optional<double>>> &latencies,
+                             KernelTuningCriterion criterion);
+
 /**
  * Returns the stable type name of a tuning value.
  *
@@ -209,6 +255,8 @@ struct KernelCalibrationBenchmark {
   uint64_t default_maximum_duration_ms = 250;
   uint64_t default_maximum_memory_bytes = uint64_t{64} << 20;
   std::function<bool(const Tensor &, const Tensor &)> validate_output;
+  /** Identifies equivalent reference/candidate paths before timing a crossover group. */
+  std::function<bool(const KernelCalibrationCase &, int64_t, int64_t)> same_execution_path;
 };
 
 /** Reports one explicit tuning value measured across the calibration cases. */

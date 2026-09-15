@@ -55,6 +55,13 @@ void CollectGraphExternalInputs(const GraphProto &graph, std::vector<std::string
       }
     }
   }
+  for (const ValueInfoProto &output : graph.output()) {
+    const std::string name = output.name();
+    if (!name.empty() && !local.count(name) && !outer_produced.count(name) &&
+        seen.insert(name).second) {
+      out.push_back(name);
+    }
+  }
 }
 
 template <class NodeRange>

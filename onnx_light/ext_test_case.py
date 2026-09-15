@@ -238,27 +238,63 @@ class ExtTestCase(unittest.TestCase):
         else:
             np.testing.assert_allclose(expected, value, atol=atol, rtol=rtol)
 
-    def assertAlmostEqual(  # type: ignore
-        self, expected: np.ndarray, value: np.ndarray, atol: float = 0, rtol: float = 0
-    ):
+    def assertAlmostEqual(  # pyrefly: ignore[bad-override]
+        self,
+        expected: Any,
+        value: Any,
+        places: Optional[int] = 7,
+        msg: Any = None,
+        delta: Any = None,
+        *,
+        atol: Optional[float] = None,
+        rtol: float = 0,
+    ) -> None:
+        """Compares scalars with unittest semantics and arrays with NumPy tolerances."""
+        if not isinstance(expected, np.ndarray) and not isinstance(value, np.ndarray):
+            if atol is None and rtol == 0:
+                return super().assertAlmostEqual(expected, value, places, msg, delta)
         if not isinstance(expected, np.ndarray):
             expected = np.array(expected)
         if not isinstance(value, np.ndarray):
             value = np.array(value).astype(expected.dtype)
-        self.assertEqualArray(expected, value, atol=atol, rtol=rtol)
+        if delta is not None:
+            if atol is not None:
+                raise TypeError("specify delta or atol, not both")
+            atol = delta
+        if atol is None:
+            atol = 0 if rtol else 0.5 * 10 ** (-(7 if places is None else places))
+        self.assertEqualArray(expected, value, atol=atol, rtol=rtol, msg=msg)
 
-    def assertNotAlmostEqual(  # type: ignore
-        self, expected: np.ndarray, value: np.ndarray, atol: float = 0, rtol: float = 0
-    ):
+    def assertNotAlmostEqual(  # pyrefly: ignore[bad-override]
+        self,
+        expected: Any,
+        value: Any,
+        places: Optional[int] = 7,
+        msg: Any = None,
+        delta: Any = None,
+        *,
+        atol: Optional[float] = None,
+        rtol: float = 0,
+    ) -> None:
+        """Verifies scalars or arrays differ according to the requested tolerances."""
+        if not isinstance(expected, np.ndarray) and not isinstance(value, np.ndarray):
+            if atol is None and rtol == 0:
+                return super().assertNotAlmostEqual(expected, value, places, msg, delta)
         if not isinstance(expected, np.ndarray):
             expected = np.array(expected)
         if not isinstance(value, np.ndarray):
             value = np.array(value).astype(expected.dtype)
-        try:
-            self.assertEqualArray(expected, value, atol=atol, rtol=rtol)
-            raise AssertionError("Arrays are equal.")
-        except AssertionError:
-            pass
+        if expected.dtype != value.dtype or expected.shape != value.shape:
+            return
+        if delta is not None:
+            if atol is not None:
+                raise TypeError("specify delta or atol, not both")
+            atol = delta
+        if atol is None:
+            atol = 0 if rtol else 0.5 * 10 ** (-(7 if places is None else places))
+        if not np.allclose(expected, value, atol=atol, rtol=rtol, equal_nan=True):
+            return
+        self.fail(msg or f"{expected!r} and {value!r} are unexpectedly almost equal.")
 
     def assertRaise(self, fct: Callable, exc_type: type[Exception]):
         try:

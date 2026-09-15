@@ -9,20 +9,67 @@
 #include "onnx_core/runtime/runtime_context.h"
 #include <array>
 #include <cstdint>
+#include <cstring>
+#include <limits>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
 
 constexpr const char *kBitShiftName = "kernel::BitShift";
-constexpr std::array<int32_t, 4> kSupportedElementTypes = {
-    static_cast<int32_t>(DataType::UINT8), static_cast<int32_t>(DataType::UINT16),
-    static_cast<int32_t>(DataType::UINT32), static_cast<int32_t>(DataType::UINT64)};
+constexpr std::array<int32_t, 8> kSupportedElementTypes = {
+    static_cast<int32_t>(DataType::UINT8),  static_cast<int32_t>(DataType::UINT16),
+    static_cast<int32_t>(DataType::UINT32), static_cast<int32_t>(DataType::UINT64),
+    static_cast<int32_t>(DataType::INT8),   static_cast<int32_t>(DataType::INT16),
+    static_cast<int32_t>(DataType::INT32),  static_cast<int32_t>(DataType::INT64)};
 
 [[noreturn]] void ThrowUnsupportedBitShift() {
-  EXT_THROW_INVALID(kBitShiftName, " only supports UINT8, UINT16, UINT32 and UINT64 inputs.");
+  EXT_THROW_INVALID(kBitShiftName, " only supports integer inputs.");
+}
+
+template <typename T> bool IsShiftOutOfRange(T amount) {
+  if constexpr (std::is_signed_v<T>) {
+    if (amount < 0) {
+      return true;
+    }
+  }
+  using U = std::make_unsigned_t<T>;
+  return static_cast<U>(amount) >= std::numeric_limits<U>::digits;
+}
+
+template <typename T> T FromUnsignedBits(std::make_unsigned_t<T> value) {
+  if constexpr (std::is_unsigned_v<T>) {
+    return value;
+  }
+  T result;
+  std::memcpy(&result, &value, sizeof(T));
+  return result;
+}
+
+template <typename T> T LeftShift(T value, T amount) {
+  if (IsShiftOutOfRange(amount)) {
+    return 0;
+  }
+  using U = std::make_unsigned_t<T>;
+  return FromUnsignedBits<T>(static_cast<U>(value) << static_cast<U>(amount));
+}
+
+template <typename T> T RightShift(T value, T amount) {
+  if (IsShiftOutOfRange(amount)) {
+    return std::is_signed_v<T> && value < 0 ? static_cast<T>(-1) : static_cast<T>(0);
+  }
+  using U = std::make_unsigned_t<T>;
+  const U shift = static_cast<U>(amount);
+  U result = static_cast<U>(value) >> shift;
+  if constexpr (std::is_signed_v<T>) {
+    if (value < 0 && shift != 0) {
+      result |= static_cast<U>(~U{0} << (std::numeric_limits<U>::digits - shift));
+    }
+  }
+  return FromUnsignedBits<T>(result);
 }
 
 template <typename Op>
@@ -39,6 +86,10 @@ Tensor BitShiftAllocDispatch(const Tensor &x, const Tensor &y, Op op, int64_t gr
     ONNX_LIGHT_BITSHIFT_DISPATCH_CASE(UINT16, "UINT16", uint16_t);
     ONNX_LIGHT_BITSHIFT_DISPATCH_CASE(UINT32, "UINT32", uint32_t);
     ONNX_LIGHT_BITSHIFT_DISPATCH_CASE(UINT64, "UINT64", uint64_t);
+    ONNX_LIGHT_BITSHIFT_DISPATCH_CASE(INT8, "INT8", int8_t);
+    ONNX_LIGHT_BITSHIFT_DISPATCH_CASE(INT16, "INT16", int16_t);
+    ONNX_LIGHT_BITSHIFT_DISPATCH_CASE(INT32, "INT32", int32_t);
+    ONNX_LIGHT_BITSHIFT_DISPATCH_CASE(INT64, "INT64", int64_t);
   default:
     ThrowUnsupportedBitShift();
   }
@@ -59,20 +110,18 @@ void BitShiftInPlaceDispatch(const Tensor &x, const Tensor &y, Tensor &output, O
     ONNX_LIGHT_BITSHIFT_DISPATCH_CASE(UINT16, "UINT16", uint16_t);
     ONNX_LIGHT_BITSHIFT_DISPATCH_CASE(UINT32, "UINT32", uint32_t);
     ONNX_LIGHT_BITSHIFT_DISPATCH_CASE(UINT64, "UINT64", uint64_t);
+    ONNX_LIGHT_BITSHIFT_DISPATCH_CASE(INT8, "INT8", int8_t);
+    ONNX_LIGHT_BITSHIFT_DISPATCH_CASE(INT16, "INT16", int16_t);
+    ONNX_LIGHT_BITSHIFT_DISPATCH_CASE(INT32, "INT32", int32_t);
+    ONNX_LIGHT_BITSHIFT_DISPATCH_CASE(INT64, "INT64", int64_t);
   default:
     ThrowUnsupportedBitShift();
   }
 #undef ONNX_LIGHT_BITSHIFT_DISPATCH_CASE
 }
 
-// Shift functors: cast ``b`` (the shift amount) to ``int`` so the operator
-// expression compiles for every unsigned integral type ``a``. Behavior
-// when ``b`` is greater than or equal to the bit-width of ``a`` is
-// undefined in C++, which matches NumPy's "implementation-defined" wording
-// for ``np.left_shift``/``np.right_shift`` in that situation. The
-// reference cases registered below restrict shift amounts to safe values.
-constexpr auto kLeftShiftFn = [](auto a, auto b) { return a << static_cast<int>(b); };
-constexpr auto kRightShiftFn = [](auto a, auto b) { return a >> static_cast<int>(b); };
+const auto kLeftShiftFn = [](auto a, auto b) { return LeftShift(a, b); };
+const auto kRightShiftFn = [](auto a, auto b) { return RightShift(a, b); };
 
 } // namespace
 

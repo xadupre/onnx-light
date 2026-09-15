@@ -1,8 +1,10 @@
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
-class TestUpstreamOnnxSecurityDefaults(unittest.TestCase):
+class TestUpstreamOnnxSecurityDefaults(ExtTestCase):
     """Checks secure upstream ONNX defaults after the Gemm advisory."""
 
     @classmethod

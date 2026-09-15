@@ -99,6 +99,11 @@ std::vector<std::vector<InPlaceReuse>>
 ComputeInPlaceReuseMatches(const GraphProto &graph, const ShapesContext &ctx,
                            const ResultLifetimeInfo &lifetime);
 
+/// Computes shape-driven in-place reuse matches directly for a function.
+std::vector<std::vector<InPlaceReuse>>
+ComputeInPlaceReuseMatches(const FunctionProto &function, const ShapesContext &ctx,
+                           const ResultLifetimeInfo &lifetime);
+
 /**
  * Computes the in-place reuse opportunities for a single node ``node`` at index
  * ``i`` in a graph, given the shapes inferred into ``ctx`` and the lifetime maps

@@ -47,8 +47,6 @@ Tensor MakeFeatureMap() {
 // ---------------------------------------------------------------------------
 void RegisterMaxRoiPoolCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::MaxRoiPool maxroipool_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -62,7 +60,12 @@ void RegisterMaxRoiPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     constexpr int64_t rois_count = 64 * 5;
     constexpr int64_t y_count = 64 * 32 * 2 * 2;
     Expect(registry, std::move(node), "test_cc_maxroipool_default_benchmark", {opset},
-           {x_count, rois_count}, {y_count}, [maxroipool_kernel]() -> IoData {
+           {x_count, rois_count}, {y_count}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext maxroipool_kernel_ctx{opset};
+             const onnx_kernels::kernel::MaxRoiPool maxroipool_kernel{maxroipool_kernel_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, {1, 32, 128, 128}, 2801);
              const std::vector<int64_t> rois_shape = {64, 5};
              std::vector<float> rois_values;
@@ -90,7 +93,12 @@ void RegisterMaxRoiPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("rois");
     node.add_output("Y");
     AddAttribute<std::vector<int64_t>>(node, "pooled_shape", {2, 2});
-    Expect(registry, std::move(node), "test_cc_maxroipool_default", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_maxroipool_default", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext maxroipool_kernel_ctx{opset};
+      const onnx_kernels::kernel::MaxRoiPool maxroipool_kernel{maxroipool_kernel_ctx};
+
       Tensor x = MakeFeatureMap();
       const std::vector<int64_t> rois_shape = {2, 5};
       const std::vector<float> rois_values = {
@@ -117,7 +125,12 @@ void RegisterMaxRoiPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_output("Y");
     AddAttribute<std::vector<int64_t>>(node, "pooled_shape", {3, 3});
     AddAttribute<float>(node, "spatial_scale", 0.5f);
-    Expect(registry, std::move(node), "test_cc_maxroipool_spatial_scale", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_maxroipool_spatial_scale", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext maxroipool_kernel_ctx{opset};
+      const onnx_kernels::kernel::MaxRoiPool maxroipool_kernel{maxroipool_kernel_ctx};
+
       Tensor x = MakeFeatureMap();
       const std::vector<int64_t> rois_shape = {1, 5};
       // Scaled by 0.5 the corners (0, 0)..(10, 10) cover the whole 6x6 map.

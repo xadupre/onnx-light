@@ -59,7 +59,7 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
     const std::string name = fused ? "test_cc_shape_inference_big_qwen3_4_layers_like_fused"
                                    : "test_cc_shape_inference_big_qwen3_4_layers_like";
 
-    TestCase tc(name, name, "model", "inference");
+    TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
     tc.rtol = 1e-3f;
     tc.atol = 1e-5f;
 
@@ -1852,7 +1852,8 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
           auto it = non_weight_tags.find(name);
           return it == non_weight_tags.end() ? "weight" : it->second;
         };
-        const auto set_value_tag = [&](StringStringEntryProto *entry, const std::string &name) {
+        const auto set_value_tag = [&tag_for](StringStringEntryProto *entry,
+                                              const std::string &name) {
           entry->set_key(core::compute::kValueTagMetadataKey);
           entry->set_value(tag_for(name));
         };

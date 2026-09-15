@@ -36,13 +36,16 @@ NodeProto MakeTriluNode(bool with_k, bool upper, bool set_upper_attr) {
 
 void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(14);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Trilu trilu_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeTriluNode(/*with_k=*/false, /*upper=*/true, /*set_upper_attr=*/false);
     Expect(registry, std::move(node), "test_cc_trilu_upper_default_benchmark", {opset}, {4194304},
-           {4194304}, [trilu_kernel]() -> IoData {
+           {4194304}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(14);
+
+             const KernelContext trilu_kernel_ctx{opset};
+             const onnx_kernels::kernel::Trilu trilu_kernel{trilu_kernel_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, {2048, 2048}, 2001);
              onnx_kernels::kernel::Trilu::Attributes attrs;
              Tensor y = trilu_kernel(x, /*k=*/nullptr, attrs);
@@ -54,7 +57,12 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_trilu_upper_default: 3x3 upper triangle (k=0, default attrs).
   {
     Expect(registry, MakeTriluNode(/*with_k=*/false, /*upper=*/true, /*set_upper_attr=*/false),
-           "test_cc_trilu_upper_default", {opset}, [=]() -> IoData {
+           "test_cc_trilu_upper_default", {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(14);
+
+             const KernelContext trilu_kernel_ctx{opset};
+             const onnx_kernels::kernel::Trilu trilu_kernel{trilu_kernel_ctx};
+
              const Tensor x = Tensor::FromFloat(
                  "X", {3, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
              onnx_kernels::kernel::Trilu::Attributes attrs;
@@ -66,7 +74,12 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_trilu_lower: 3x3 lower triangle (k=0).
   {
     Expect(registry, MakeTriluNode(/*with_k=*/false, /*upper=*/false, /*set_upper_attr=*/true),
-           "test_cc_trilu_lower", {opset}, [=]() -> IoData {
+           "test_cc_trilu_lower", {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(14);
+
+             const KernelContext trilu_kernel_ctx{opset};
+             const onnx_kernels::kernel::Trilu trilu_kernel{trilu_kernel_ctx};
+
              const Tensor x = Tensor::FromFloat(
                  "X", {3, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
              onnx_kernels::kernel::Trilu::Attributes attrs;
@@ -79,7 +92,12 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_trilu_upper_k_positive: shifts diagonal up by 1.
   {
     Expect(registry, MakeTriluNode(/*with_k=*/true, /*upper=*/true, /*set_upper_attr=*/false),
-           "test_cc_trilu_upper_k_positive", {opset}, [=]() -> IoData {
+           "test_cc_trilu_upper_k_positive", {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(14);
+
+             const KernelContext trilu_kernel_ctx{opset};
+             const onnx_kernels::kernel::Trilu trilu_kernel{trilu_kernel_ctx};
+
              const Tensor x =
                  Tensor::FromInt64("X", {3, 4}, {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
              const Tensor k = Tensor::FromInt64("K", {}, {1});
@@ -92,7 +110,12 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_trilu_lower_k_negative: lower triangle excluding the main diagonal.
   {
     Expect(registry, MakeTriluNode(/*with_k=*/true, /*upper=*/false, /*set_upper_attr=*/true),
-           "test_cc_trilu_lower_k_negative", {opset}, [=]() -> IoData {
+           "test_cc_trilu_lower_k_negative", {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(14);
+
+             const KernelContext trilu_kernel_ctx{opset};
+             const onnx_kernels::kernel::Trilu trilu_kernel{trilu_kernel_ctx};
+
              const Tensor x = Tensor::FromFloat(
                  "X", {3, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
              const Tensor k = Tensor::FromInt64("K", {}, {-1});
@@ -106,7 +129,12 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_trilu_batched_upper: batch of 2 matrices, upper, default k.
   {
     Expect(registry, MakeTriluNode(/*with_k=*/false, /*upper=*/true, /*set_upper_attr=*/false),
-           "test_cc_trilu_batched_upper", {opset}, [=]() -> IoData {
+           "test_cc_trilu_batched_upper", {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(14);
+
+             const KernelContext trilu_kernel_ctx{opset};
+             const onnx_kernels::kernel::Trilu trilu_kernel{trilu_kernel_ctx};
+
              const Tensor x = Tensor::FromFloat("X", {2, 2, 2},
                                                 {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
              onnx_kernels::kernel::Trilu::Attributes attrs;
@@ -137,7 +165,12 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_triu
   {
     Expect(registry, MakeTriluNode(/*with_k=*/false, /*upper=*/true, /*set_upper_attr=*/false),
-           "test_cc_triu", {opset}, [=]() -> IoData {
+           "test_cc_triu", {opset}, [x45_data]() -> IoData {
+             const OpsetId opset = DefaultOpset(14);
+
+             const KernelContext trilu_kernel_ctx{opset};
+             const onnx_kernels::kernel::Trilu trilu_kernel{trilu_kernel_ctx};
+
              const Tensor x = Tensor::FromInt64("X", {4, 5}, x45_data);
              onnx_kernels::kernel::Trilu::Attributes attrs;
              const Tensor y = trilu_kernel(x, /*k=*/nullptr, attrs);
@@ -148,7 +181,12 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_triu_neg: k = -1
   {
     Expect(registry, MakeTriluNode(/*with_k=*/true, /*upper=*/true, /*set_upper_attr=*/false),
-           "test_cc_triu_neg", {opset}, [=]() -> IoData {
+           "test_cc_triu_neg", {opset}, [x45_data]() -> IoData {
+             const OpsetId opset = DefaultOpset(14);
+
+             const KernelContext trilu_kernel_ctx{opset};
+             const onnx_kernels::kernel::Trilu trilu_kernel{trilu_kernel_ctx};
+
              const Tensor x = Tensor::FromInt64("X", {4, 5}, x45_data);
              const Tensor k = Tensor::FromInt64("K", {}, {-1});
              onnx_kernels::kernel::Trilu::Attributes attrs;
@@ -160,7 +198,12 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_triu_out_neg_out: k = -7 (whole tensor kept)
   {
     Expect(registry, MakeTriluNode(/*with_k=*/true, /*upper=*/true, /*set_upper_attr=*/false),
-           "test_cc_triu_out_neg_out", {opset}, [=]() -> IoData {
+           "test_cc_triu_out_neg_out", {opset}, [x45_data]() -> IoData {
+             const OpsetId opset = DefaultOpset(14);
+
+             const KernelContext trilu_kernel_ctx{opset};
+             const onnx_kernels::kernel::Trilu trilu_kernel{trilu_kernel_ctx};
+
              const Tensor x = Tensor::FromInt64("X", {4, 5}, x45_data);
              const Tensor k = Tensor::FromInt64("K", {}, {-7});
              onnx_kernels::kernel::Trilu::Attributes attrs;
@@ -172,7 +215,12 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_triu_pos: k = 2
   {
     Expect(registry, MakeTriluNode(/*with_k=*/true, /*upper=*/true, /*set_upper_attr=*/false),
-           "test_cc_triu_pos", {opset}, [=]() -> IoData {
+           "test_cc_triu_pos", {opset}, [x45_data]() -> IoData {
+             const OpsetId opset = DefaultOpset(14);
+
+             const KernelContext trilu_kernel_ctx{opset};
+             const onnx_kernels::kernel::Trilu trilu_kernel{trilu_kernel_ctx};
+
              const Tensor x = Tensor::FromInt64("X", {4, 5}, x45_data);
              const Tensor k = Tensor::FromInt64("K", {}, {2});
              onnx_kernels::kernel::Trilu::Attributes attrs;
@@ -184,7 +232,12 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_triu_out_pos: k = 6 (whole tensor zeroed)
   {
     Expect(registry, MakeTriluNode(/*with_k=*/true, /*upper=*/true, /*set_upper_attr=*/false),
-           "test_cc_triu_out_pos", {opset}, [=]() -> IoData {
+           "test_cc_triu_out_pos", {opset}, [x45_data]() -> IoData {
+             const OpsetId opset = DefaultOpset(14);
+
+             const KernelContext trilu_kernel_ctx{opset};
+             const onnx_kernels::kernel::Trilu trilu_kernel{trilu_kernel_ctx};
+
              const Tensor x = Tensor::FromInt64("X", {4, 5}, x45_data);
              const Tensor k = Tensor::FromInt64("K", {}, {6});
              onnx_kernels::kernel::Trilu::Attributes attrs;
@@ -196,7 +249,12 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_triu_square: 2x3x3 batched upper, default k.
   {
     Expect(registry, MakeTriluNode(/*with_k=*/false, /*upper=*/true, /*set_upper_attr=*/false),
-           "test_cc_triu_square", {opset}, [=]() -> IoData {
+           "test_cc_triu_square", {opset}, [x233_triu]() -> IoData {
+             const OpsetId opset = DefaultOpset(14);
+
+             const KernelContext trilu_kernel_ctx{opset};
+             const onnx_kernels::kernel::Trilu trilu_kernel{trilu_kernel_ctx};
+
              const Tensor x = Tensor::FromInt64("X", {2, 3, 3}, x233_triu);
              onnx_kernels::kernel::Trilu::Attributes attrs;
              const Tensor y = trilu_kernel(x, /*k=*/nullptr, attrs);
@@ -207,7 +265,12 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_triu_square_neg: 2x3x3 batched upper, k = -1.
   {
     Expect(registry, MakeTriluNode(/*with_k=*/true, /*upper=*/true, /*set_upper_attr=*/false),
-           "test_cc_triu_square_neg", {opset}, [=]() -> IoData {
+           "test_cc_triu_square_neg", {opset}, [x233_triu]() -> IoData {
+             const OpsetId opset = DefaultOpset(14);
+
+             const KernelContext trilu_kernel_ctx{opset};
+             const onnx_kernels::kernel::Trilu trilu_kernel{trilu_kernel_ctx};
+
              const Tensor x = Tensor::FromInt64("X", {2, 3, 3}, x233_triu);
              const Tensor k = Tensor::FromInt64("K", {}, {-1});
              onnx_kernels::kernel::Trilu::Attributes attrs;
@@ -219,7 +282,12 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_triu_one_row: shape [3, 1, 5], k = 1.
   {
     Expect(registry, MakeTriluNode(/*with_k=*/true, /*upper=*/true, /*set_upper_attr=*/false),
-           "test_cc_triu_one_row", {opset}, [=]() -> IoData {
+           "test_cc_triu_one_row", {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(14);
+
+             const KernelContext trilu_kernel_ctx{opset};
+             const onnx_kernels::kernel::Trilu trilu_kernel{trilu_kernel_ctx};
+
              const Tensor x =
                  Tensor::FromInt64("X", {3, 1, 5}, {1, 4, 9, 7, 1, 9, 2, 8, 8, 4, 3, 9, 7, 4, 2});
              const Tensor k = Tensor::FromInt64("K", {}, {1});
@@ -232,7 +300,12 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_triu_zero: shape [0, 5], k = 6 (zero-sized input).
   {
     Expect(registry, MakeTriluNode(/*with_k=*/true, /*upper=*/true, /*set_upper_attr=*/false),
-           "test_cc_triu_zero", {opset}, [=]() -> IoData {
+           "test_cc_triu_zero", {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(14);
+
+             const KernelContext trilu_kernel_ctx{opset};
+             const onnx_kernels::kernel::Trilu trilu_kernel{trilu_kernel_ctx};
+
              const Tensor x = Tensor::FromInt64("X", {0, 5}, {});
              const Tensor k = Tensor::FromInt64("K", {}, {6});
              onnx_kernels::kernel::Trilu::Attributes attrs;
@@ -246,7 +319,12 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_tril_neg: k = -1.
   {
     Expect(registry, MakeTriluNode(/*with_k=*/true, /*upper=*/false, /*set_upper_attr=*/true),
-           "test_cc_tril_neg", {opset}, [=]() -> IoData {
+           "test_cc_tril_neg", {opset}, [x45_data]() -> IoData {
+             const OpsetId opset = DefaultOpset(14);
+
+             const KernelContext trilu_kernel_ctx{opset};
+             const onnx_kernels::kernel::Trilu trilu_kernel{trilu_kernel_ctx};
+
              const Tensor x = Tensor::FromInt64("X", {4, 5}, x45_data);
              const Tensor k = Tensor::FromInt64("K", {}, {-1});
              onnx_kernels::kernel::Trilu::Attributes attrs;
@@ -259,7 +337,12 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_tril_out_neg: k = -7 (whole tensor zeroed).
   {
     Expect(registry, MakeTriluNode(/*with_k=*/true, /*upper=*/false, /*set_upper_attr=*/true),
-           "test_cc_tril_out_neg", {opset}, [=]() -> IoData {
+           "test_cc_tril_out_neg", {opset}, [x45_data]() -> IoData {
+             const OpsetId opset = DefaultOpset(14);
+
+             const KernelContext trilu_kernel_ctx{opset};
+             const onnx_kernels::kernel::Trilu trilu_kernel{trilu_kernel_ctx};
+
              const Tensor x = Tensor::FromInt64("X", {4, 5}, x45_data);
              const Tensor k = Tensor::FromInt64("K", {}, {-7});
              onnx_kernels::kernel::Trilu::Attributes attrs;
@@ -272,7 +355,12 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_tril_pos: k = 2.
   {
     Expect(registry, MakeTriluNode(/*with_k=*/true, /*upper=*/false, /*set_upper_attr=*/true),
-           "test_cc_tril_pos", {opset}, [=]() -> IoData {
+           "test_cc_tril_pos", {opset}, [x45_data]() -> IoData {
+             const OpsetId opset = DefaultOpset(14);
+
+             const KernelContext trilu_kernel_ctx{opset};
+             const onnx_kernels::kernel::Trilu trilu_kernel{trilu_kernel_ctx};
+
              const Tensor x = Tensor::FromInt64("X", {4, 5}, x45_data);
              const Tensor k = Tensor::FromInt64("K", {}, {2});
              onnx_kernels::kernel::Trilu::Attributes attrs;
@@ -285,7 +373,12 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_tril_out_pos: k = 6 (whole tensor kept).
   {
     Expect(registry, MakeTriluNode(/*with_k=*/true, /*upper=*/false, /*set_upper_attr=*/true),
-           "test_cc_tril_out_pos", {opset}, [=]() -> IoData {
+           "test_cc_tril_out_pos", {opset}, [x45_data]() -> IoData {
+             const OpsetId opset = DefaultOpset(14);
+
+             const KernelContext trilu_kernel_ctx{opset};
+             const onnx_kernels::kernel::Trilu trilu_kernel{trilu_kernel_ctx};
+
              const Tensor x = Tensor::FromInt64("X", {4, 5}, x45_data);
              const Tensor k = Tensor::FromInt64("K", {}, {6});
              onnx_kernels::kernel::Trilu::Attributes attrs;
@@ -298,7 +391,12 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_tril_square: 2x3x3 batched lower, default k.
   {
     Expect(registry, MakeTriluNode(/*with_k=*/false, /*upper=*/false, /*set_upper_attr=*/true),
-           "test_cc_tril_square", {opset}, [=]() -> IoData {
+           "test_cc_tril_square", {opset}, [x233_tril]() -> IoData {
+             const OpsetId opset = DefaultOpset(14);
+
+             const KernelContext trilu_kernel_ctx{opset};
+             const onnx_kernels::kernel::Trilu trilu_kernel{trilu_kernel_ctx};
+
              const Tensor x = Tensor::FromInt64("X", {2, 3, 3}, x233_tril);
              onnx_kernels::kernel::Trilu::Attributes attrs;
              attrs.upper = 0;
@@ -310,7 +408,12 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_tril_square_neg: 2x3x3 batched lower, k = -1.
   {
     Expect(registry, MakeTriluNode(/*with_k=*/true, /*upper=*/false, /*set_upper_attr=*/true),
-           "test_cc_tril_square_neg", {opset}, [=]() -> IoData {
+           "test_cc_tril_square_neg", {opset}, [x233_tril]() -> IoData {
+             const OpsetId opset = DefaultOpset(14);
+
+             const KernelContext trilu_kernel_ctx{opset};
+             const onnx_kernels::kernel::Trilu trilu_kernel{trilu_kernel_ctx};
+
              const Tensor x = Tensor::FromInt64("X", {2, 3, 3}, x233_tril);
              const Tensor k = Tensor::FromInt64("K", {}, {-1});
              onnx_kernels::kernel::Trilu::Attributes attrs;
@@ -323,7 +426,12 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_tril_one_row_neg: shape [3, 1, 5], default k, lower.
   {
     Expect(registry, MakeTriluNode(/*with_k=*/false, /*upper=*/false, /*set_upper_attr=*/true),
-           "test_cc_tril_one_row_neg", {opset}, [=]() -> IoData {
+           "test_cc_tril_one_row_neg", {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(14);
+
+             const KernelContext trilu_kernel_ctx{opset};
+             const onnx_kernels::kernel::Trilu trilu_kernel{trilu_kernel_ctx};
+
              const Tensor x =
                  Tensor::FromInt64("X", {3, 1, 5}, {6, 2, 4, 1, 6, 8, 3, 8, 7, 0, 2, 2, 9, 5, 9});
              onnx_kernels::kernel::Trilu::Attributes attrs;
@@ -336,7 +444,12 @@ void RegisterTriluCases(std::vector<TestCase> &registry, TestMode mode) {
   // test_cc_tril_zero: shape [3, 0, 5], k = 6 (zero-sized input), lower.
   {
     Expect(registry, MakeTriluNode(/*with_k=*/true, /*upper=*/false, /*set_upper_attr=*/true),
-           "test_cc_tril_zero", {opset}, [=]() -> IoData {
+           "test_cc_tril_zero", {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(14);
+
+             const KernelContext trilu_kernel_ctx{opset};
+             const onnx_kernels::kernel::Trilu trilu_kernel{trilu_kernel_ctx};
+
              const Tensor x = Tensor::FromInt64("X", {3, 0, 5}, {});
              const Tensor k = Tensor::FromInt64("K", {}, {6});
              onnx_kernels::kernel::Trilu::Attributes attrs;

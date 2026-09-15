@@ -4,13 +4,15 @@
 """Tests for the top-level command parser."""
 
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from contextlib import redirect_stderr
 from io import StringIO
 
 from onnx_light.__main__ import _build_parser
 
 
-class TestMainParser(unittest.TestCase):
+class TestMainParser(ExtTestCase):
     def test_kernel_help_contains_examples(self):
         help_text = _build_parser()._subparsers._group_actions[0].choices["kernel"].format_help()
         self.assertIn("examples:", help_text)

@@ -455,7 +455,7 @@ def _attribute_test_name(
 
 
 def _count_onnx_light_backend_tests_by_kind(
-    op_keys: Iterable[tuple[str, str]] | None = None,
+    op_keys: Iterable[tuple[str, str]] | None = None, unload: bool = True
 ) -> tuple[Counter[tuple[str, str]], Counter[tuple[str, str]]]:
     """Counts ordinary and expanded ``onnx_light`` node backend tests.
 
@@ -467,7 +467,7 @@ def _count_onnx_light_backend_tests_by_kind(
     ``op_type`` of the first node of the model so unusual cases still
     contribute somewhere.
     """
-    from ..onnx_lib.backend.test.case.base import collect_test_case
+    from ..onnx_lib.backend.test.case.base import _unload_test_case, collect_test_case
 
     if op_keys is None:
         op_keys = set(_light_schemas_latest())
@@ -476,26 +476,29 @@ def _count_onnx_light_backend_tests_by_kind(
     counts: Counter[tuple[str, str]] = Counter()
     expanded_counts: Counter[tuple[str, str]] = Counter()
     for name, tc in collect_test_case().items():
-        key = _attribute_test_name(name, sorted_forms)
-        if key is None:
-            model = tc.model
-            if model is None:
-                continue
-            nodes = list(model.graph.node)
-            if not nodes:
-                continue
-            n = nodes[0]
-            key = (n.domain or "ai.onnx", n.op_type)
-        target = expanded_counts if _is_expanded_backend_test_name(name) else counts
-        target[key] += 1
+        try:
+            key = _attribute_test_name(name, sorted_forms)
+            if key is None:
+                model = tc.model
+                if model is None:
+                    continue
+                nodes = list(model.graph.node)
+                if not nodes:
+                    continue
+                n = nodes[0]
+                key = (n.domain or "ai.onnx", n.op_type)
+            target = expanded_counts if _is_expanded_backend_test_name(name) else counts
+            target[key] += 1
+        finally:
+            _unload_test_case(tc, unload)
     return counts, expanded_counts
 
 
 def _count_onnx_light_backend_tests(
-    op_keys: Iterable[tuple[str, str]] | None = None,
+    op_keys: Iterable[tuple[str, str]] | None = None, unload: bool = True
 ) -> Counter[tuple[str, str]]:
     """Counts all ``onnx_light`` node backend tests for backward compatibility."""
-    counts, expanded_counts = _count_onnx_light_backend_tests_by_kind(op_keys)
+    counts, expanded_counts = _count_onnx_light_backend_tests_by_kind(op_keys, unload=unload)
     counts.update(expanded_counts)
     return counts
 

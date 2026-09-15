@@ -11,6 +11,7 @@
 #include <array>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <stdexcept>
 #include <string>
 
@@ -92,13 +93,17 @@ void ValidateInputs(const Tensor &theta, const Tensor &size) {
                         "kernel::AffineGrid: theta must be (N, 3, 4) for 3D.");
   }
   const int64_t *size_data = reinterpret_cast<const int64_t *>(size.bytes());
+  for (int64_t i = 0; i < size.shape[0]; ++i) {
+    EXT_ENFORCE_INVALID(size_data[i] >= 0,
+                        "kernel::AffineGrid: size entries must be non-negative.");
+  }
   EXT_ENFORCE_INVALID(size_data[0] == theta.shape[0],
                       "kernel::AffineGrid: size[0] must equal theta's batch dim N.");
 }
 
 // Computes the output shape for an AffineGrid call given a fully validated
 // ``size`` input (1-D INT64 of length 4 or 5).
-onnx_kernels::Shape ComputeOutputShape(const Tensor &size) {
+onnx_kernels::Shape ComputeValidatedOutputShape(const Tensor &size) {
   const int64_t *size_data = reinterpret_cast<const int64_t *>(size.bytes());
   onnx_kernels::Shape out_shape;
   out_shape.push_back(size_data[0]); // N
@@ -113,6 +118,22 @@ onnx_kernels::Shape ComputeOutputShape(const Tensor &size) {
     out_shape.push_back(3);
   }
   return out_shape;
+}
+
+size_t CheckedOutputByteSize(const onnx_kernels::Shape &shape) {
+  if (std::find(shape.begin(), shape.end(), 0) != shape.end()) {
+    return 0;
+  }
+  int64_t total = 1;
+  for (int64_t d : shape) {
+    EXT_ENFORCE_INVALID(d <= std::numeric_limits<int64_t>::max() / total,
+                        "kernel::AffineGrid: output element count overflows int64_t.");
+    total *= d;
+  }
+  EXT_ENFORCE_INVALID(static_cast<uint64_t>(total) <=
+                          std::numeric_limits<size_t>::max() / sizeof(float),
+                      "kernel::AffineGrid: output byte count overflows size_t.");
+  return static_cast<size_t>(total) * sizeof(float);
 }
 
 // Applies an (out_dim x in_dim) affine matrix ``theta`` (read row-major) to
@@ -139,35 +160,29 @@ ONNX_LIGHT_REGISTER_PARALLEL_TUNING_SCHEMA(AffineGrid)
 
 Tensor AffineGrid::operator()(const Tensor &theta, const Tensor &size, const Attributes &attrs,
                               RuntimeContext *rt) const {
-  ValidateInputs(theta, size);
-  const onnx_kernels::Shape out_shape = ComputeOutputShape(size);
-  int64_t total = 1;
-  for (int64_t d : out_shape) {
-    total *= d;
-  }
+  const onnx_kernels::Shape out_shape = ComputeOutputShape(theta, size);
+  const size_t n_bytes = CheckedOutputByteSize(out_shape);
   RawBufferAllocator *allocator = rt != nullptr ? rt->execution_allocator() : nullptr;
-  Tensor out = rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::FLOAT), out_shape,
-                                         static_cast<size_t>(total) * sizeof(float))
-                  : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape,
-                                     static_cast<size_t>(total) * sizeof(float), nullptr);
+  Tensor out =
+      rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::FLOAT), out_shape, n_bytes)
+         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, n_bytes, nullptr);
   (*this)(theta, size, attrs, out, allocator);
   return out;
 }
 
 void AffineGrid::operator()(const Tensor &theta, const Tensor &size, const Attributes &attrs,
                             Tensor &output, RawBufferAllocator *allocator) const {
-  ValidateInputs(theta, size);
-  const onnx_kernels::Shape expected_shape = ComputeOutputShape(size);
+  const onnx_kernels::Shape expected_shape = ComputeOutputShape(theta, size);
+  const size_t n_bytes = CheckedOutputByteSize(expected_shape);
   EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::AffineGrid: preallocated output must be FLOAT.");
   EXT_ENFORCE_INVALID(output.shape == expected_shape,
                       "kernel::AffineGrid: preallocated output has unexpected shape.");
-  int64_t total = 1;
-  for (int64_t d : expected_shape) {
-    total *= d;
-  }
-  EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<size_t>(total) * sizeof(float),
+  EXT_ENFORCE_INVALID(output.size_bytes() == n_bytes,
                       "kernel::AffineGrid: preallocated output buffer has unexpected size.");
+  if (n_bytes == 0) {
+    return;
+  }
 
   const bool align_corners = attrs.align_corners != 0;
   const float *theta_data = reinterpret_cast<const float *>(theta.bytes());
@@ -234,6 +249,11 @@ void AffineGrid::operator()(const Tensor &theta, const Tensor &size, const Attri
         },
         "AffineGrid");
   }
+}
+
+onnx_kernels::Shape AffineGrid::ComputeOutputShape(const Tensor &theta, const Tensor &size) {
+  ValidateInputs(theta, size);
+  return ComputeValidatedOutputShape(size);
 }
 
 void AffineGrid::Run(RuntimeContext &rt) {

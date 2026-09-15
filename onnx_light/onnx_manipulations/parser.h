@@ -136,6 +136,8 @@ public:
     map_["float4e2m1"] = static_cast<int32_t>(TensorProto::DataType::FLOAT4E2M1);
     map_["uint2"] = static_cast<int32_t>(TensorProto::DataType::UINT2);
     map_["int2"] = static_cast<int32_t>(TensorProto::DataType::INT2);
+    map_["float6e2m3"] = static_cast<int32_t>(TensorProto::DataType::FLOAT6E2M3);
+    map_["float6e3m2"] = static_cast<int32_t>(TensorProto::DataType::FLOAT6E3M2);
   }
 
   /// Returns true if the given string is a recognized ONNX primitive type name.

@@ -13,6 +13,7 @@
 #include "../common/ir.h"
 #include <gtest/gtest.h>
 #include <string>
+#include <utility>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
@@ -144,6 +145,36 @@ TEST(onnx_ir_name_bookkeeping, ClearInitializersKeepsSurvivingValueNamesReserved
     }
   }
   EXPECT_FALSE(saw_reserved_name_again);
+}
+
+TEST(onnx_ir_name_bookkeeping, MoveInitializerPreservesTensorAndValueMetadata) {
+  Graph g;
+  g.setName("test");
+
+  Tensor first;
+  first.setName("first");
+  first.elem_type() = TensorProto_DataType_FLOAT;
+  first.sizes() = {2};
+  first.floats() = {1.0f, 2.0f};
+  g.addInitializer(std::move(first));
+
+  Tensor second;
+  second.setName("second");
+  second.elem_type() = TensorProto_DataType_INT64;
+  second.sizes() = {3};
+  second.int64s() = {4, 5, 6};
+  Value *value = g.addInitializerAndCreateValue(std::move(second));
+
+  ASSERT_EQ(g.initializers().size(), 2U);
+  EXPECT_EQ(g.initializers()[0].name(), "first");
+  EXPECT_EQ(g.initializers()[0].floats(), std::vector<float>({1.0f, 2.0f}));
+  EXPECT_EQ(g.initializers()[1].name(), "second");
+  EXPECT_EQ(g.initializers()[1].int64s(), std::vector<int64_t>({4, 5, 6}));
+  EXPECT_EQ(value->uniqueName(), "second");
+  ASSERT_EQ(value->sizes().size(), 1U);
+  EXPECT_TRUE(value->sizes()[0].is_int);
+  EXPECT_EQ(value->sizes()[0].dim, 3);
+  EXPECT_EQ(value->elemType(), TensorProto_DataType_INT64);
 }
 
 // forEachNode()'s subgraph walk must tolerate a callback that reaches back and

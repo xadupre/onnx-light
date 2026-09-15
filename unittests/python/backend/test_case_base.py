@@ -1,4 +1,5 @@
 import unittest
+from types import SimpleNamespace
 
 
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
@@ -11,6 +12,7 @@ import onnx_light.onnx.defs as defs
 _case_base = import_or_skip("onnx_light.onnx_lib.backend.test.case.base")
 ALL_TESTS = _case_base.ALL_TESTS
 TestCase = _case_base.TestCase
+_TestCaseKind = _case_base.TestCaseKind
 collect_test_case = _case_base.collect_test_case
 expect = _case_base.expect
 get_test_cases_for_op = _case_base.get_test_cases_for_op
@@ -52,7 +54,7 @@ class TestBackendFunction(ExtTestCase):
         tc = ALL_TESTS["test_abs_basic"]
         self.assertIsInstance(tc, TestCase)
         self.assertEqual(tc.name, "test_abs_basic")
-        self.assertEqual(tc.kind, "node")
+        self.assertEqual(tc.kind, _TestCaseKind.NODE)
 
     def test_expect_model_has_correct_opset(self):
         """Tests that the model has the correct opset version from schema."""
@@ -157,12 +159,12 @@ class TestBackendFunction(ExtTestCase):
         x = np.array([1.0], dtype=np.float32)
         expect(node, inputs=[x], outputs=[np.abs(x)], name="test_abs_repr")
         tc = ALL_TESTS["test_abs_repr"]
-        self.assertEqual(repr(tc), "TestCase(name='test_abs_repr', kind='node')")
+        self.assertEqual(repr(tc), "TestCase(name='test_abs_repr', kind=TestCaseKind.NODE)")
 
         # C++-bound instance returned by collect_test_case.
         result = collect_test_case()
         cc = result["test_cc_abs"]
-        self.assertEqual(repr(cc), "TestCase(name='test_cc_abs', kind='node')")
+        self.assertEqual(repr(cc), "TestCase(name='test_cc_abs', kind=TestCaseKind.NODE)")
 
     def test_collect_test_case_returns_dict(self):
         """Tests that collect_test_case returns a dictionary."""
@@ -177,7 +179,73 @@ class TestBackendFunction(ExtTestCase):
         tc = result["test_cc_abs"]
         self.assertIsInstance(tc, TestCase)
         self.assertEqual(tc.name, "test_cc_abs")
-        self.assertEqual(tc.kind, "node")
+        self.assertEqual(tc.kind, _TestCaseKind.NODE)
+
+    def test_collect_test_case_is_unloaded_by_default(self):
+        """Native-backed Python cases materialize on demand and can be reused."""
+        tc = collect_test_case()["test_cc_abs"]
+        self.assertFalse(tc.materialized)
+        self.assertEqual(tc.model.graph.node[0].op_type, "Abs")
+        self.assertTrue(tc.materialized)
+        tc.unload()
+        self.assertFalse(tc.materialized)
+        self.assertEqual(tc.model.graph.node[0].op_type, "Abs")
+
+    def test_collect_test_case_can_keep_payloads(self):
+        """unload=False preserves eager conversion for callers that need it."""
+        tc = collect_test_case(unload=False)["test_cc_abs"]
+        self.assertTrue(tc.materialized)
+        self.assertIsNotNone(tc.data_sets)
+
+    def test_partial_native_overlay_is_completed_without_overwrite(self):
+        """A custom model or data-set overlay preserves the other native payload."""
+        tc = collect_test_case()["test_cc_abs"]
+        model = tc.model
+        data_sets = tc.data_sets
+
+        tc.unload()
+        tc.model = model
+        self.assertIs(tc.model, model)
+        self.assertIsNotNone(tc.data_sets)
+
+        tc.unload()
+        tc.data_sets = data_sets
+        self.assertIs(tc.data_sets, data_sets)
+        self.assertIsNotNone(tc.model)
+
+    def test_python_defined_case_unload_is_safe(self):
+        """Python-defined eager cases ignore unload because they cannot rebuild."""
+        node = onnxl.helper.make_node("Abs", inputs=["x"], outputs=["y"])
+        x = np.array([1.0], dtype=np.float32)
+        expect(node, inputs=[x], outputs=[np.abs(x)], name="test_python_unload")
+        tc = ALL_TESTS["test_python_unload"]
+        tc.unload()
+        self.assertTrue(tc.materialized)
+
+    def test_unload_test_case_ignores_objects_without_unload(self):
+        """Lightweight stand-ins holding no native payload are left untouched."""
+        stand_in = SimpleNamespace(model=None)
+        _case_base._unload_test_case(stand_in, True)
+        self.assertFalse(hasattr(stand_in, "unload"))
+
+    def test_assert_allclose_unloads_after_failure(self):
+        """Runtime failures still release native-backed Python payloads."""
+        tc = collect_test_case()["test_cc_abs"]
+
+        def fail_runtime(model, *inputs):
+            raise RuntimeError("expected failure")
+
+        with self.assertRaisesRegex(RuntimeError, "expected failure"):
+            tc.assert_allclose(fail_runtime)
+        self.assertFalse(tc.materialized)
+
+    def test_assert_allclose_can_keep_payload(self):
+        """Retains payloads after runtime comparisons when unloading is disabled."""
+        tc = collect_test_case()["test_cc_abs"]
+
+        tc.assert_allclose(lambda model, *inputs: None, unload=False)
+
+        self.assertTrue(tc.materialized)
 
     def test_collect_test_case_finds_blackmanwindow_tests(self):
         """Tests that collect_test_case finds BlackmanWindow test cases (from C++)."""
@@ -222,7 +290,7 @@ class TestBackendFunction(ExtTestCase):
             self.assertEqual(tc.name, name)
             self.assertIsNotNone(tc.model)
             self.assertIsNotNone(tc.data_sets)
-            self.assertIn(tc.kind, ("node", "model"))
+            self.assertIn(tc.kind, (_TestCaseKind.NODE, _TestCaseKind.MODEL))
             self.assertIsInstance(tc.rtol, float)
             self.assertIsInstance(tc.atol, float)
 

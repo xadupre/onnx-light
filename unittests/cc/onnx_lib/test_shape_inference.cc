@@ -3,6 +3,7 @@
 #include "onnx_lib/shape_inference/implementation.h"
 #include <gtest/gtest.h>
 #include <stdexcept>
+#include <tuple>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
@@ -397,6 +398,191 @@ TEST(onnx_shape_inference, InferShapesImpl_ModelGraph) {
   EXPECT_EQ(dims[1].ref_dim_value(), kExpectedDim1);
 }
 
+TEST(onnx_shape_inference, OptionalOpsInferIr14SequenceTypesAtOpset28) {
+  ModelProto model;
+  model.set_ir_version(14);
+  auto *opset = model.add_opset_import();
+  opset->set_domain("");
+  opset->set_version(28);
+
+  GraphProto *graph = model.mutable_graph();
+  graph->set_name("optional_ir14_sequence");
+  ValueInfoProto *input = graph->add_input();
+  input->set_name("sequence_input");
+  auto *element_tensor =
+      input->mutable_type()->mutable_sequence_type()->mutable_elem_type()->mutable_tensor_type();
+  element_tensor->set_elem_type(TensorProto::FLOAT6E2M3);
+  element_tensor->mutable_shape()->add_dim()->set_dim_value(2);
+  element_tensor->mutable_shape()->add_dim()->set_dim_value(3);
+
+  graph->add_output()->set_name("has_element");
+  graph->add_output()->set_name("sequence_output");
+
+  NodeProto *optional = graph->add_node();
+  optional->set_op_type("Optional");
+  *optional->add_input() = "sequence_input";
+  *optional->add_output() = "optional_value";
+  NodeProto *has_element = graph->add_node();
+  has_element->set_op_type("OptionalHasElement");
+  *has_element->add_input() = "optional_value";
+  *has_element->add_output() = "has_element";
+  NodeProto *get_element = graph->add_node();
+  get_element->set_op_type("OptionalGetElement");
+  *get_element->add_input() = "optional_value";
+  *get_element->add_output() = "sequence_output";
+
+  shape_inference::InferShapes(model);
+
+  const auto &outputs = model.ref_graph().ref_output();
+  ASSERT_EQ(outputs.size(), 2u);
+  ASSERT_TRUE(outputs[0].ref_type().has_tensor_type());
+  EXPECT_EQ(outputs[0].ref_type().ref_tensor_type().ref_elem_type(), TensorProto::BOOL);
+  ASSERT_TRUE(outputs[1].ref_type().has_sequence_type());
+  const auto &inferred_element = outputs[1].ref_type().ref_sequence_type().ref_elem_type();
+  ASSERT_TRUE(inferred_element.has_tensor_type());
+  EXPECT_EQ(inferred_element.ref_tensor_type().ref_elem_type(), TensorProto::FLOAT6E2M3);
+  ASSERT_EQ(inferred_element.ref_tensor_type().ref_shape().ref_dim().size(), 2u);
+}
+
+TEST(onnx_shape_inference, InferShapesImpl_STFTPartialShapeWithDynamicSignalLength) {
+  ModelProto model;
+  model.set_ir_version(IR_VERSION);
+  auto *opset = model.add_opset_import();
+  opset->set_domain("");
+  opset->set_version(17);
+
+  GraphProto *graph = model.mutable_graph();
+  graph->set_name("stft_graph");
+  ValueInfoProto *signal = graph->add_input();
+  signal->set_name("signal");
+  TypeProto::Tensor *signal_type = signal->mutable_type()->mutable_tensor_type();
+  signal_type->set_elem_type(TensorProto::FLOAT);
+  TensorShapeProto *signal_shape = signal_type->mutable_shape();
+  signal_shape->add_dim()->set_dim_param("batch");
+  signal_shape->add_dim()->set_dim_param("signal_length");
+  signal_shape->add_dim()->set_dim_value(1);
+
+  TensorProto *frame_step = graph->add_initializer();
+  frame_step->set_name("frame_step");
+  frame_step->set_data_type(TensorProto::INT64);
+  frame_step->add_int64_data(2);
+  TensorProto *window = graph->add_initializer();
+  window->set_name("window");
+  window->set_data_type(TensorProto::FLOAT);
+  window->add_dims(5);
+
+  ValueInfoProto *output = graph->add_output();
+  output->set_name("output");
+  output->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+  NodeProto *node = graph->add_node();
+  node->set_op_type("STFT");
+  *node->add_input() = "signal";
+  *node->add_input() = "frame_step";
+  *node->add_input() = "window";
+  *node->add_output() = "output";
+
+  shape_inference::InferShapes(model);
+
+  const auto &dims =
+      model.ref_graph().ref_output()[0].ref_type().ref_tensor_type().ref_shape().ref_dim();
+  ASSERT_EQ(dims.size(), 4);
+  EXPECT_EQ(dims[0].ref_dim_param(), "batch");
+  EXPECT_FALSE(dims[1].has_dim_value());
+  EXPECT_EQ(dims[2].ref_dim_value(), 3);
+  EXPECT_EQ(dims[3].ref_dim_value(), 2);
+}
+
+namespace {
+
+ModelProto MakeGroupNormalizationModel(const std::vector<int64_t> &x_shape,
+                                       const std::vector<int64_t> &scale_shape,
+                                       const std::vector<int64_t> &bias_shape, int64_t num_groups) {
+  ModelProto model;
+  model.set_ir_version(IR_VERSION);
+  auto *opset = model.add_opset_import();
+  opset->set_domain("");
+  opset->set_version(21);
+
+  GraphProto *graph = model.mutable_graph();
+  graph->set_name("group_normalization_graph");
+  auto add_input = [&](const char *name, const std::vector<int64_t> &shape) {
+    ValueInfoProto *input = graph->add_input();
+    input->set_name(name);
+    TypeProto::Tensor *tensor = input->mutable_type()->mutable_tensor_type();
+    tensor->set_elem_type(TensorProto::FLOAT);
+    TensorShapeProto *tensor_shape = tensor->mutable_shape();
+    for (const int64_t dim : shape) {
+      if (dim < 0) {
+        tensor_shape->add_dim();
+      } else {
+        tensor_shape->add_dim()->set_dim_value(dim);
+      }
+    }
+  };
+  add_input("X", x_shape);
+  add_input("scale", scale_shape);
+  add_input("bias", bias_shape);
+
+  ValueInfoProto *output = graph->add_output();
+  output->set_name("Y");
+  output->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+
+  NodeProto *node = graph->add_node();
+  node->set_op_type("GroupNormalization");
+  *node->add_input() = "X";
+  *node->add_input() = "scale";
+  *node->add_input() = "bias";
+  *node->add_output() = "Y";
+  auto *attribute = node->add_attribute();
+  attribute->set_name("num_groups");
+  attribute->set_type(AttributeProto::INT);
+  attribute->set_i(num_groups);
+  return model;
+}
+
+} // namespace
+
+TEST(onnx_shape_inference, InferShapesImpl_GroupNormalization) {
+  ModelProto model = MakeGroupNormalizationModel({2, 4, 0, -1}, {4}, {4}, 2);
+
+  shape_inference::InferShapes(model);
+
+  const auto &output = model.ref_graph().ref_output()[0].ref_type().ref_tensor_type();
+  EXPECT_EQ(output.elem_type(), TensorProto::FLOAT);
+  const auto &dims = output.ref_shape().ref_dim();
+  ASSERT_EQ(dims.size(), 4u);
+  EXPECT_EQ(dims[0].ref_dim_value(), 2);
+  EXPECT_EQ(dims[1].ref_dim_value(), 4);
+  EXPECT_EQ(dims[2].ref_dim_value(), 0);
+  EXPECT_FALSE(dims[3].has_dim_value());
+}
+
+TEST(onnx_shape_inference, InferShapesImpl_GroupNormalizationUnknownChannel) {
+  ModelProto model = MakeGroupNormalizationModel({2, -1, 3}, {-1}, {-1}, 2);
+
+  shape_inference::InferShapes(model);
+
+  const auto &dims =
+      model.ref_graph().ref_output()[0].ref_type().ref_tensor_type().ref_shape().ref_dim();
+  ASSERT_EQ(dims.size(), 3u);
+  EXPECT_FALSE(dims[1].has_dim_value());
+}
+
+TEST(onnx_shape_inference, InferShapesImpl_GroupNormalizationRejectsInvalidInputs) {
+  const std::vector<
+      std::tuple<std::vector<int64_t>, std::vector<int64_t>, std::vector<int64_t>, int64_t>>
+      invalid_inputs = {
+          {{2}, {2}, {2}, 1},    {{2, 4}, {4, 1}, {4}, 2}, {{2, 4}, {3}, {4}, 2},
+          {{2, 4}, {4}, {3}, 2}, {{2, 5}, {5}, {5}, 2},    {{2, 4}, {4}, {4}, 0},
+      };
+  for (const auto &[x_shape, scale_shape, bias_shape, num_groups] : invalid_inputs) {
+    ModelProto model = MakeGroupNormalizationModel(x_shape, scale_shape, bias_shape, num_groups);
+    EXPECT_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                              ShapeInferenceOptions(false, 1, false)),
+                 ONNX_LIGHT_NAMESPACE::InferenceError);
+  }
+}
+
 TEST(onnx_shape_inference, InferShapesImpl_SplitToSequenceRejectsZeroScalarSplit) {
   for (const int64_t version : {int64_t{11}, int64_t{24}}) {
     ModelProto model;
@@ -519,6 +705,43 @@ TEST(onnx_shape_inference, InferShapesImpl_RNNBidirectionalLayout0) {
   EXPECT_EQ(y_h_dims[0].ref_dim_value(), 2);
   EXPECT_EQ(y_h_dims[1].ref_dim_value(), 2);
   EXPECT_EQ(y_h_dims[2].ref_dim_value(), 5);
+}
+
+TEST(GraphInferencerImplTest, OuterScopeMapLifetimeTest) {
+  TypeProto outer_type;
+  outer_type.mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+  outer_type.mutable_tensor_type()->mutable_shape();
+
+  auto make_subgraph = []() {
+    GraphProto graph;
+    auto *node = graph.add_node();
+    node->set_op_type("Identity");
+    node->add_input("outer");
+    node->add_output("result");
+    graph.add_output()->set_name("result");
+    return graph;
+  };
+  auto infer_and_check = [](GraphProto &graph,
+                            shape_inference::GraphInferenceContext &graph_context) {
+    shape_inference::GraphInferencerImpl graph_inferencer(graph, graph_context);
+    const auto output_types = graph_inferencer.doInferencing({}, {});
+    ASSERT_EQ(output_types.size(), 1);
+    ASSERT_NE(output_types[0], nullptr);
+    EXPECT_EQ(output_types[0]->ref_tensor_type().ref_elem_type(), TensorProto::FLOAT);
+  };
+
+  std::unordered_map<std::string, int> opset_imports{{ONNX_DOMAIN, 25}};
+  shape_inference::GraphInferenceContext::OuterScopeValueTypesMap live_outer_scope;
+  shape_inference::GraphInferenceContext borrowed_context(live_outer_scope, opset_imports);
+  live_outer_scope.emplace("outer", &outer_type);
+  auto borrowed_graph = make_subgraph();
+  infer_and_check(borrowed_graph, borrowed_context);
+
+  auto owned_graph = make_subgraph();
+  shape_inference::GraphInferenceContext owned_context(
+      shape_inference::GraphInferenceContext::OuterScopeValueTypesMap{{"outer", &outer_type}},
+      opset_imports);
+  infer_and_check(owned_graph, owned_context);
 }
 
 TEST(onnx_shape_inference, InferShapesImpl_LSTMLayout1WithYc) {

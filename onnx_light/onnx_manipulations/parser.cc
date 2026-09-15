@@ -112,7 +112,7 @@ static bool IsNegativeZeroIntegerLiteral(const std::string &s) {
   return std::all_of(s.begin() + 1, s.end(), [](char c) { return c == '0'; });
 }
 
-#if defined(__cpp_lib_to_chars) && __cpp_lib_to_chars >= 201611L
+#if defined(__cpp_lib_to_chars) && __cpp_lib_to_chars >= 201611L && !defined(__APPLE__)
 
 float LocaleIndependentStof(const std::string &s) {
   float val = 0.0f;
@@ -655,6 +655,8 @@ Common::Status OnnxParser::Parse(TensorProto &tensorProto, const TypeProto &tens
         case TensorProto::DataType::FLOAT8E4M3FNUZ:
         case TensorProto::DataType::FLOAT8E5M2:
         case TensorProto::DataType::FLOAT8E5M2FNUZ:
+        case TensorProto::DataType::FLOAT6E2M3:
+        case TensorProto::DataType::FLOAT6E3M2:
         case TensorProto::DataType::FLOAT8E8M0:
         case TensorProto::DataType::BOOL:
         case TensorProto::DataType::FLOAT4E2M1:

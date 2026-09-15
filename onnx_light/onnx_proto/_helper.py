@@ -124,6 +124,12 @@ _ML_DTYPES_TENSOR_TYPE_MAP: dict[int, TensorDtypeMap] = {
     int(TensorProto.INT2): TensorDtypeMap(
         np.dtype(_ml_dtypes.int2), int(TensorProto.INT32), "TensorProto.INT2"
     ),
+    int(TensorProto.FLOAT6E2M3): TensorDtypeMap(
+        np.dtype(_ml_dtypes.float6_e2m3fn), int(TensorProto.INT32), "TensorProto.FLOAT6E2M3"
+    ),
+    int(TensorProto.FLOAT6E3M2): TensorDtypeMap(
+        np.dtype(_ml_dtypes.float6_e3m2fn), int(TensorProto.INT32), "TensorProto.FLOAT6E3M2"
+    ),
 }
 TENSOR_TYPE_MAP.update(_ML_DTYPES_TENSOR_TYPE_MAP)
 _NP_DTYPE_TO_TENSOR_DTYPE.update({v.np_dtype: k for k, v in _ML_DTYPES_TENSOR_TYPE_MAP.items()})
@@ -626,22 +632,25 @@ def make_tensor(
     np_dtype = tensor_dtype_to_np_dtype(data_type)
 
     if raw:
-        # NumPy doesn't have INT4/FP4. It is packed in couples to UINT8 buffers.
-        if data_type in {TensorProto.UINT4, TensorProto.INT4, TensorProto.FLOAT4E2M1}:
-            expected_size_bytes = 0.5
+        # NumPy doesn't have INT2/INT4/FP4/FP6. It uses packed UINT8 buffers.
+        if data_type in {TensorProto.FLOAT6E2M3, TensorProto.FLOAT6E3M2}:
+            bits_per_element = 6
+        elif data_type in {TensorProto.UINT4, TensorProto.INT4, TensorProto.FLOAT4E2M1}:
+            bits_per_element = 4
         elif data_type in {TensorProto.UINT2, TensorProto.INT2}:
-            expected_size_bytes = 0.25
+            bits_per_element = 2
         else:
-            expected_size_bytes = np_dtype.itemsize
-        expected_size_bytes *= math.prod(dims)
-        expected_size_bytes = math.ceil(expected_size_bytes)
+            bits_per_element = np_dtype.itemsize * 8
+        expected_size_bytes = -(-math.prod(dims) * bits_per_element // 8)
         if isinstance(vals, np.ndarray):
-            from ._numpy_helper import _pack_2bitx4, _pack_4bitx2
+            from ._numpy_helper import _pack_2bitx4, _pack_4bitx2, _pack_6bit
 
             if data_type in {TensorProto.UINT4, TensorProto.INT4, TensorProto.FLOAT4E2M1}:
                 vals = _pack_4bitx2(vals)
             elif data_type in {TensorProto.UINT2, TensorProto.INT2}:
                 vals = _pack_2bitx4(vals)
+            elif data_type in {TensorProto.FLOAT6E2M3, TensorProto.FLOAT6E3M2}:
+                vals = _pack_6bit(vals.view(np.uint8))
             raw_data = vals.tobytes()
         elif isinstance(vals, bytes):
             raw_data = vals
@@ -678,6 +687,8 @@ def make_tensor(
         TensorProto.FLOAT8E5M2FNUZ,
         TensorProto.FLOAT8E8M0,
     }:
+        vals = vals.view(np.uint8)  # type: ignore
+    elif data_type in {TensorProto.FLOAT6E2M3, TensorProto.FLOAT6E3M2}:
         vals = vals.view(np.uint8)  # type: ignore
     elif data_type in {TensorProto.UINT4, TensorProto.INT4, TensorProto.FLOAT4E2M1}:
         from ._numpy_helper import _pack_4bitx2

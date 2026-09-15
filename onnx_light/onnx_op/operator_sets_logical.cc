@@ -395,34 +395,38 @@ std::vector<LightOpSchema> BuildIsInfSchemas() {
 }
 
 std::vector<LightOpSchema> BuildBitShiftSchemas() {
-  // BitShift (opset 11): two integer inputs (unsigned dtypes) with
-  // multidirectional broadcasting and a required ``direction`` string
-  // attribute selecting LEFT or RIGHT shift.
-  static const std::vector<TensorType> kBitShiftIntTypes = {
+  static const std::vector<TensorType> kBitShiftIntTypesV11 = {
       TensorType::kUint8,
       TensorType::kUint16,
       TensorType::kUint32,
       TensorType::kUint64,
   };
-  std::vector<AttributeParam> attributes;
-  attributes.push_back({"direction",
-                        "Direction of moving bits. It can be either \"RIGHT\" (for right shift) "
-                        "or \"LEFT\" (for left shift).",
-                        AttributeType::STRING, /*required=*/true});
+  static const std::vector<TensorType> kBitShiftIntTypesV28 = {
+      TensorType::kUint8, TensorType::kUint16, TensorType::kUint32, TensorType::kUint64,
+      TensorType::kInt8,  TensorType::kInt16,  TensorType::kInt32,  TensorType::kInt64,
+  };
+  const auto make_schema = [](int version, const std::vector<TensorType> &types) {
+    std::vector<AttributeParam> attributes;
+    attributes.push_back({"direction",
+                          "Direction of moving bits. It can be either \"RIGHT\" (for right shift) "
+                          "or \"LEFT\" (for left shift).",
+                          AttributeType::STRING, /*required=*/true});
+    return LightOpSchema("BitShift", kOnnxDomain, version, MakeBitShiftOperatorDoc(version),
+                         {
+                             {"X", "First operand, input to be shifted.", "T"},
+                             {"Y", "Second operand, amounts of shift.", "T"},
+                         },
+                         {
+                             {"Z", "Output tensor", "T"},
+                         },
+                         {
+                             {"T", types, "Constrain input and output types to integer tensors."},
+                         },
+                         std::move(attributes));
+  };
   std::vector<LightOpSchema> schemas;
-  schemas.push_back(LightOpSchema(
-      "BitShift", kOnnxDomain, 11, MakeBitShiftOperatorDoc(),
-      {
-          {"X", "First operand, input to be shifted.", "T"},
-          {"Y", "Second operand, amounts of shift.", "T"},
-      },
-      {
-          {"Z", "Output tensor", "T"},
-      },
-      {
-          {"T", kBitShiftIntTypes, "Constrain input and output types to integer tensors."},
-      },
-      std::move(attributes)));
+  schemas.push_back(make_schema(28, kBitShiftIntTypesV28));
+  schemas.push_back(make_schema(11, kBitShiftIntTypesV11));
   return schemas;
 }
 

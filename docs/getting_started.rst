@@ -13,6 +13,14 @@ or
 
     python setup.py build_ext --inplace
 
+The ``setup.py build_ext --inplace`` command refuses to run when an editable
+``onnx-light`` installation points to another source tree, or when an import
+hook left behind by a removed installation is still present, because such a hook
+hides the extensions built in the current source tree. An editable installation
+of the current source tree is fine. Uninstall the conflicting one with
+``python -m pip uninstall onnx-light``; the error reports every location that
+must be removed.
+
 To speed up compilation with multiple threads, pass ``--parallel`` (or ``-j``)
 with the number of jobs:
 
@@ -35,6 +43,17 @@ Run a quick check:
 .. code-block:: bash
 
     python -c "import onnx_light; print(onnx_light.__version__)"
+
+The installation also exposes commands for inspecting, annotating, running,
+benchmarking, and tuning models:
+
+.. code-block:: bash
+
+    onnx-light --help
+    onnx-light show model.onnx
+
+See :ref:`l-howto-command-line` for the five subcommands and their output
+formats.
 
 Build and run the C++ unit tests from the editable build:
 
@@ -170,9 +189,10 @@ them:
           -DONNX_LIGHT_BUILD_KERNELS=OFF
     cmake --build build-install
 
-``ONNX_LIGHT_BUILD_KERNELS=OFF`` is incompatible with
-``ONNX_LIGHT_BUILD_PYTHON=ON`` and ``ONNX_LIGHT_BUILD_TESTS=ON``, so it is meant
-for pure C++ builds.  See :ref:`l-design-cpp-linking-no-kernels` for the
-matching CMake workflow and the list of targets that remain available.
+``ONNX_LIGHT_BUILD_KERNELS=OFF`` also supports Python and C++ test builds: the
+kernel, backend-test, and gradient modules/tests are omitted while the reduced
+proto, schema, shape, and optimization subset remains available. See
+:ref:`l-design-cpp-linking-no-kernels` for the matching CMake workflow and
+exported targets.
 
 Source code: `https://github.com/xadupre/onnx-light <https://github.com/xadupre/onnx-light>`_

@@ -115,19 +115,13 @@ ThreadPoolOptions MakeThreadPoolOptions(const ResolvedCpuExecutionPolicy &policy
   ThreadPoolOptions options;
   options.spin_iterations = policy.spin.iterations;
   options.spin_duration_ns = policy.spin.duration_ns;
+  options.allow_nested_parallelism = policy.allow_nested_parallelism;
   if (!policy.worker_processors.empty()) {
     options.worker_start = worker_start;
     options.worker_start_context = worker_context;
   }
   return options;
 }
-
-struct ParallelRange {
-  void *context = nullptr;
-  ParallelRangeFn function = nullptr;
-  int64_t base_block_size = 0;
-  int64_t extra_blocks = 0;
-};
 
 CpuExecutor *&CurrentCpuExecutorSlot() noexcept {
   thread_local CpuExecutor *current = nullptr;
@@ -137,6 +131,16 @@ CpuExecutor *&CurrentCpuExecutorSlot() noexcept {
 CpuExecutor *&ActiveCpuExecutorRegionSlot() noexcept {
   thread_local CpuExecutor *active = nullptr;
   return active;
+}
+
+struct CpuExecutorDispatchBinding {
+  CpuExecutor *executor = nullptr;
+  void *context = nullptr;
+};
+
+CpuExecutorDispatchBinding &CurrentCpuExecutorDispatchBinding() noexcept {
+  thread_local CpuExecutorDispatchBinding binding;
+  return binding;
 }
 
 class CpuExecutorRegionScope {
@@ -162,6 +166,19 @@ CpuExecutorScope::CpuExecutorScope(CpuExecutor *executor) noexcept
 }
 
 CpuExecutorScope::~CpuExecutorScope() { CurrentCpuExecutorSlot() = previous_; }
+
+CpuExecutorDispatchScope::CpuExecutorDispatchScope(CpuExecutor *executor,
+                                                   void *dispatch_context) noexcept {
+  CpuExecutorDispatchBinding &binding = CurrentCpuExecutorDispatchBinding();
+  previous_executor_ = binding.executor;
+  previous_context_ = binding.context;
+  binding = CpuExecutorDispatchBinding{executor, dispatch_context};
+}
+
+CpuExecutorDispatchScope::~CpuExecutorDispatchScope() {
+  CurrentCpuExecutorDispatchBinding() =
+      CpuExecutorDispatchBinding{previous_executor_, previous_context_};
+}
 
 CpuExecutorKey MakeCpuExecutorKey(const ResolvedCpuExecutionPolicy &policy) {
   return CpuExecutorKey{
@@ -190,8 +207,18 @@ struct CpuExecutor::Impl {
                                         std::move(options));
   }
 
+  Impl(ResolvedCpuExecutionPolicy resolved, CpuParallelDispatchFn external_dispatch)
+      : policy(std::move(resolved)), executor_key(MakeCpuExecutorKey(policy)),
+        process_id(CurrentProcessId()), instance_id(NextCpuExecutorInstanceId()),
+        dispatch(external_dispatch) {
+    ValidateResolvedPolicy(policy);
+    if (dispatch == nullptr) {
+      throw std::invalid_argument("CpuExecutor external dispatch must not be null.");
+    }
+  }
+
   ~Impl() {
-    if (process_id != CurrentProcessId()) {
+    if (pool != nullptr && process_id != CurrentProcessId()) {
       (void)pool.release();
     }
   }
@@ -207,6 +234,7 @@ struct CpuExecutor::Impl {
   uint64_t process_id;
   uint64_t instance_id;
   std::unique_ptr<ThreadPool> pool;
+  CpuParallelDispatchFn dispatch = nullptr;
   std::mutex counters_mutex;
   std::unique_ptr<CounterState> counters_storage;
   std::atomic<CounterState *> counters{nullptr};
@@ -215,7 +243,27 @@ struct CpuExecutor::Impl {
 CpuExecutor::CpuExecutor(ResolvedCpuExecutionPolicy policy)
     : impl_(std::make_unique<Impl>(std::move(policy))) {}
 
+CpuExecutor::CpuExecutor(ResolvedCpuExecutionPolicy policy, CpuParallelDispatchFn dispatch)
+    : impl_(std::make_unique<Impl>(std::move(policy), dispatch)) {}
+
 CpuExecutor::~CpuExecutor() = default;
+
+std::unique_ptr<CpuExecutor> CpuExecutor::CreateExternal(uint32_t maximum_participants,
+                                                         CpuParallelDispatchFn dispatch) {
+  if (maximum_participants == 0) {
+    throw std::invalid_argument("CpuExecutor external maximum_participants must be positive.");
+  }
+  if (maximum_participants > static_cast<uint32_t>(std::numeric_limits<int32_t>::max())) {
+    throw std::invalid_argument(
+        "CpuExecutor external maximum_participants exceeds the supported limit.");
+  }
+  CpuExecutionPolicy request;
+  request.num_threads = static_cast<int32_t>(maximum_participants);
+  request.affinity_policy = CpuAffinityPolicy::kNone;
+  request.spin_policy = CpuSpinPolicy::kParkImmediately;
+  return std::unique_ptr<CpuExecutor>(
+      new CpuExecutor(ResolveCpuExecutionPolicy(request), dispatch));
+}
 
 uint32_t CpuExecutor::effective_threads() const noexcept { return impl_->policy.effective_threads; }
 
@@ -261,15 +309,19 @@ CpuParallelPlan
 CpuExecutor::PlanParallelFor(int64_t total, const CpuLoopCost &cost,
                              const CpuParallelConstraints &constraints) const noexcept {
   constexpr double kMemoryCyclesPerByte = 11.0 / 64.0;
-  constexpr double kStartupCycles = 1500000.0;
-  constexpr double kPerParticipantCycles = 50000.0;
+  // Workers are persistent, so each operation pays warm dispatch and
+  // completion costs rather than thread creation.
+  constexpr double kDispatchCycles = 50000.0;
+  // Additional participants add serialized wake and coordination work.
+  constexpr double kPerAdditionalParticipantCycles = 20000.0;
   constexpr double kTaskCycles = 40000.0;
 
   const uint32_t participant_limit =
       constraints.maximum_participants == 0
           ? impl_->policy.effective_threads
           : std::min(constraints.maximum_participants, impl_->policy.effective_threads);
-  if (total <= 0 || participant_limit <= 1 || ActiveCpuExecutorRegionSlot() == this) {
+  if (total <= 0 || participant_limit <= 1 ||
+      (ActiveCpuExecutorRegionSlot() == this && !impl_->policy.allow_nested_parallelism)) {
     return {};
   }
   const double bytes_read =
@@ -283,22 +335,39 @@ CpuExecutor::PlanParallelFor(int64_t total, const CpuLoopCost &cost,
     return {};
   }
 
-  const double total_cycles = static_cast<double>(total) * iteration_cycles;
-  const double estimated =
-      std::floor((total_cycles - kStartupCycles) / kPerParticipantCycles + 0.9);
-  uint32_t participants =
-      estimated > 1.0
-          ? std::min<uint32_t>(
-                participant_limit,
-                static_cast<uint32_t>(std::min(estimated, static_cast<double>(participant_limit))))
-          : 1;
-  if (participants > 1 && constraints.preferred_participants != 0) {
-    participants = std::min(constraints.preferred_participants, participant_limit);
-  }
+  const double total_cycles =
+      static_cast<double>(total) > std::numeric_limits<double>::max() / iteration_cycles
+          ? std::numeric_limits<double>::max()
+          : static_cast<double>(total) * iteration_cycles;
   const double grain = std::ceil(kTaskCycles / iteration_cycles);
   const int64_t grain_size = grain >= static_cast<double>(std::numeric_limits<int64_t>::max())
                                  ? std::numeric_limits<int64_t>::max()
                                  : std::max<int64_t>(static_cast<int64_t>(grain), 1);
+  const int64_t useful_blocks = total / grain_size;
+  if (useful_blocks <= 1) {
+    return CpuParallelPlan{grain_size, 1};
+  }
+  const uint32_t candidate_limit = useful_blocks >= static_cast<int64_t>(participant_limit)
+                                       ? participant_limit
+                                       : static_cast<uint32_t>(useful_blocks);
+  const double ideal = std::sqrt(total_cycles / kPerAdditionalParticipantCycles);
+  const uint32_t lower =
+      std::isfinite(ideal)
+          ? std::clamp(static_cast<uint32_t>(
+                           std::min(std::floor(ideal), static_cast<double>(candidate_limit))),
+                       2u, candidate_limit)
+          : candidate_limit;
+  const uint32_t upper = std::min(lower + 1, candidate_limit);
+  const auto elapsed_cycles = [total_cycles](uint32_t candidate) {
+    return kDispatchCycles + total_cycles / static_cast<double>(candidate) +
+           kPerAdditionalParticipantCycles * static_cast<double>(candidate - 1);
+  };
+  uint32_t participants = elapsed_cycles(upper) < elapsed_cycles(lower) ? upper : lower;
+  if (!(elapsed_cycles(participants) < total_cycles)) {
+    participants = 1;
+  } else if (constraints.preferred_participants != 0) {
+    participants = std::min(constraints.preferred_participants, participant_limit);
+  }
   return CpuParallelPlan{grain_size, participants};
 }
 
@@ -319,9 +388,10 @@ void CpuExecutor::ParallelFor(int64_t total, const CpuLoopCost &cost, void *cont
               location);
 }
 
-void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, ParallelRangeFn function,
-                              uint32_t maximum_participants, ParallelRegionCollector *collector,
-                              std::string_view label, std::source_location location) {
+void CpuExecutor::ParallelFor(int64_t total, int64_t minimum_elements, void *context,
+                              ParallelRangeFn function, uint32_t maximum_participants,
+                              ParallelRegionCollector *collector, std::string_view label,
+                              std::source_location location) {
   if (impl_->process_id != CurrentProcessId()) {
     throw std::runtime_error(
         "CpuExecutor inherited across fork is unusable; acquire a new executor in the child.");
@@ -329,8 +399,8 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, Paral
   if (total <= 0) {
     return;
   }
-  if (grain <= 0) {
-    throw std::invalid_argument("CpuExecutor ParallelFor grain must be positive.");
+  if (minimum_elements <= 0) {
+    throw std::invalid_argument("CpuExecutor ParallelFor minimum_elements must be positive.");
   }
   if (function == nullptr) {
     throw std::invalid_argument("CpuExecutor ParallelFor function must not be null.");
@@ -355,21 +425,24 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, Paral
   if (counters != nullptr) {
     counters->dispatches.fetch_add(1, std::memory_order_relaxed);
   }
-  const bool nested = ActiveCpuExecutorRegionSlot() == this;
-  if (impl_->policy.caller_processor.has_value()) {
+  CpuExecutor *const active_region = ActiveCpuExecutorRegionSlot();
+  const bool nested = active_region == this;
+  if (active_region == nullptr && impl_->policy.caller_processor.has_value()) {
     std::string error;
     if (!PinCurrentThread(*impl_->policy.caller_processor, error)) {
       throw std::runtime_error("CpuExecutor caller affinity failed: " + error);
     }
   }
   // Every participant runs with this executor installed so a nested parallel
-  // region dispatches here (and therefore runs inline) instead of waking an
+  // region stays within this pool's participant budget instead of waking an
   // unrelated process-wide pool.
   CpuExecutorScope caller_scope(this);
 
   const uint32_t participant_limit =
       maximum_participants == 0 ? impl_->policy.effective_threads
                                 : std::min(maximum_participants, impl_->policy.effective_threads);
+  int64_t grain_size = total;
+  std::vector<std::thread::id> executing_threads;
   const auto record = [&](uint32_t admitted, bool nested_inline) {
     if (collector == nullptr) {
       return;
@@ -386,6 +459,15 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, Paral
             : std::nullopt;
     const HardwareCounterSample hardware_counters =
         collector->EndHardwareCounters(counter_measurement, admitted == 1);
+    int32_t observed = 1;
+    if (!executing_threads.empty()) {
+      // Bounded dispatch may admit fewer blocks than requested.
+      executing_threads.resize(admitted);
+      std::sort(executing_threads.begin(), executing_threads.end());
+      observed =
+          static_cast<int32_t>(std::unique(executing_threads.begin(), executing_threads.end()) -
+                               executing_threads.begin());
+    }
     collector->Record(ParallelRegionEvent{
         .region_id = region_id,
         .parent_region_id = parent_region_id,
@@ -394,20 +476,20 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, Paral
         .label = label,
         .location = location,
         .total_iterations = total,
-        .grain_size = grain,
+        .grain_size = grain_size,
         .requested_threads = static_cast<int32_t>(participant_limit),
         .admitted_threads = static_cast<int32_t>(admitted),
-        .observed_threads = static_cast<int32_t>(admitted),
+        .observed_threads = observed,
         .wall_time_ns = wall_time_ns,
         .process_cpu_time_ns = process_cpu_time_ns,
-        .cpu_utilization = ComputeCpuUtilization(process_cpu_time_ns, wall_time_ns,
-                                                 static_cast<int32_t>(admitted)),
+        .cpu_utilization = ComputeCpuUtilization(process_cpu_time_ns, wall_time_ns, observed),
         .counters = hardware_counters,
         .executor_instance_id = impl_->instance_id,
         .nested_inline = nested_inline,
     });
   };
-  if (nested) {
+  const bool bounded = impl_->policy.allow_nested_parallelism;
+  if (nested && !bounded) {
     if (counters != nullptr) {
       counters->nested_inline_dispatches.fetch_add(1, std::memory_order_relaxed);
     }
@@ -421,7 +503,8 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, Paral
     record(1, true);
     return;
   }
-  if (total < grain || participant_limit <= 1) {
+  const bool limited = total < minimum_elements || total == 1 || participant_limit <= 1;
+  if (limited && !bounded) {
     if (counters != nullptr) {
       counters->limited_inline_dispatches.fetch_add(1, std::memory_order_relaxed);
     }
@@ -435,43 +518,74 @@ void CpuExecutor::ParallelFor(int64_t total, int64_t grain, void *context, Paral
     record(1, false);
     return;
   }
-  const int64_t useful_blocks = total / grain;
+  // The crossover only decides whether to dispatch; participants determine the block grain.
   const int64_t num_blocks =
-      std::min<int64_t>(static_cast<int64_t>(participant_limit), useful_blocks);
-  if (num_blocks <= 1) {
-    if (counters != nullptr) {
-      counters->limited_inline_dispatches.fetch_add(1, std::memory_order_relaxed);
-    }
-    CpuExecutorRegionScope region_scope(this);
-    if (collector != nullptr) {
-      ParallelRegionCollectorScope collector_scope(collector, run_id, region_id);
-      function(context, 0, total);
-    } else {
-      function(context, 0, total);
-    }
-    record(1, false);
-    return;
+      limited ? 1 : std::min<int64_t>(static_cast<int64_t>(participant_limit), total);
+  grain_size = total / num_blocks;
+  if (collector != nullptr) {
+    executing_threads.resize(static_cast<size_t>(num_blocks));
   }
 
-  ParallelRange range{
-      context,
-      function,
-      total / num_blocks,
-      total % num_blocks,
-  };
-  impl_->pool->Run(num_blocks, [&range, this, collector, run_id, region_id](int64_t block_index) {
-    CpuExecutorScope block_scope(this);
-    CpuExecutorRegionScope region_scope(this);
-    const int64_t begin =
-        block_index * range.base_block_size + std::min(block_index, range.extra_blocks);
-    const int64_t end = begin + range.base_block_size + (block_index < range.extra_blocks ? 1 : 0);
-    if (collector != nullptr) {
-      ParallelRegionCollectorScope collector_scope(collector, run_id, region_id);
-      range.function(range.context, begin, end);
-    } else {
-      range.function(range.context, begin, end);
+  struct BlockContext {
+    void *context;
+    ParallelRangeFn function;
+    CpuExecutor *executor;
+    ParallelRegionCollector *collector;
+    uint64_t run_id;
+    uint64_t region_id;
+    int64_t total;
+    int64_t num_blocks;
+    std::thread::id *executing_threads;
+    static void Run(void *opaque, int64_t block_index, int64_t participants) {
+      auto &block = *static_cast<BlockContext *>(opaque);
+      CpuExecutorScope block_scope(block.executor);
+      CpuExecutorRegionScope region_scope(block.executor);
+      const int64_t base_block_size = block.total / participants;
+      const int64_t extra_blocks = block.total % participants;
+      const int64_t begin = block_index * base_block_size + std::min(block_index, extra_blocks);
+      const int64_t end = begin + base_block_size + (block_index < extra_blocks ? 1 : 0);
+      if (block.collector != nullptr) {
+        // Each block owns one slot; dispatch completes before the IDs are read.
+        block.executing_threads[block_index] = std::this_thread::get_id();
+        ParallelRegionCollectorScope collector_scope(block.collector, block.run_id,
+                                                     block.region_id);
+        block.function(block.context, begin, end);
+      } else {
+        block.function(block.context, begin, end);
+      }
     }
-  });
+  };
+  BlockContext block_context{context,   function,   this,
+                             collector, run_id,     region_id,
+                             total,     num_blocks, executing_threads.data()};
+  if (bounded) {
+    const int64_t admitted =
+        impl_->pool->RunBounded(num_blocks, &block_context, &BlockContext::Run);
+    grain_size = total / admitted;
+    if (admitted == 1 && counters != nullptr) {
+      auto &inline_dispatches =
+          nested ? counters->nested_inline_dispatches : counters->limited_inline_dispatches;
+      inline_dispatches.fetch_add(1, std::memory_order_relaxed);
+    }
+    record(static_cast<uint32_t>(admitted), nested && admitted == 1);
+    return;
+  }
+  const auto run_block = [](void *opaque, int64_t block_index) {
+    auto &block = *static_cast<BlockContext *>(opaque);
+    BlockContext::Run(opaque, block_index, block.num_blocks);
+  };
+  if (impl_->dispatch != nullptr) {
+    const CpuExecutorDispatchBinding &binding = CurrentCpuExecutorDispatchBinding();
+    if (binding.executor != this) {
+      throw std::runtime_error(
+          "CpuExecutor external dispatch requires a matching CpuExecutorDispatchScope.");
+    }
+    impl_->dispatch(binding.context, num_blocks, &block_context, run_block);
+  } else {
+    impl_->pool->Run(num_blocks, [&block_context, run_block](int64_t block_index) {
+      run_block(&block_context, block_index);
+    });
+  }
   record(static_cast<uint32_t>(num_blocks), false);
 }
 

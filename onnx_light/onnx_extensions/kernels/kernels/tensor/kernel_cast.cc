@@ -88,8 +88,14 @@ bool IsFloat4CastDtype(int32_t dtype) {
   return static_cast<DataType>(dtype) == DataType::FLOAT4E2M1;
 }
 
+bool IsFloat6CastDtype(int32_t dtype) {
+  return static_cast<DataType>(dtype) == DataType::FLOAT6E2M3 ||
+         static_cast<DataType>(dtype) == DataType::FLOAT6E3M2;
+}
+
 bool IsSubByteCastDtype(int32_t dtype) {
-  return IsInt4CastDtype(dtype) || IsInt2CastDtype(dtype) || IsFloat4CastDtype(dtype);
+  return IsInt4CastDtype(dtype) || IsInt2CastDtype(dtype) || IsFloat4CastDtype(dtype) ||
+         IsFloat6CastDtype(dtype);
 }
 
 bool IsSupportedCastDtype(int32_t dtype) {
@@ -383,7 +389,8 @@ Tensor Cast::operator()(const Tensor &x, int32_t to, bool saturate, RuntimeConte
       IsSupportedCastDtype(to), "kernel::Cast: unsupported 'to' dtype ", std::to_string(to),
       " (supported: FLOAT, DOUBLE, INT32, INT64, INT8, UINT8, "
       "INT16, UINT16, BOOL, STRING, FLOAT16, BFLOAT16, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
-      "FLOAT8E5M2, FLOAT8E5M2FNUZ, FLOAT8E8M0, FLOAT4E2M1, INT4, UINT4, INT2, UINT2).");
+      "FLOAT8E5M2, FLOAT8E5M2FNUZ, FLOAT8E8M0, FLOAT4E2M1, FLOAT6E2M3, FLOAT6E3M2, "
+      "INT4, UINT4, INT2, UINT2).");
   if (static_cast<DataType>(to) == DataType::STRING) {
     // ``STRING`` elements live in ``string_data`` rather than the raw byte
     // buffer, so the allocator-backed buffer carries zero bytes; routing it
@@ -413,12 +420,14 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
       std::to_string(x.data_type),
       " (supported: FLOAT, DOUBLE, INT32, INT64, INT8, UINT8, "
       "INT16, UINT16, BOOL, STRING, FLOAT16, BFLOAT16, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
-      "FLOAT8E5M2, FLOAT8E5M2FNUZ, FLOAT8E8M0, FLOAT4E2M1, INT4, UINT4, INT2, UINT2).");
+      "FLOAT8E5M2, FLOAT8E5M2FNUZ, FLOAT8E8M0, FLOAT4E2M1, FLOAT6E2M3, FLOAT6E3M2, "
+      "INT4, UINT4, INT2, UINT2).");
   EXT_ENFORCE_INVALID(
       IsSupportedCastDtype(to), "kernel::Cast: unsupported 'to' dtype ", std::to_string(to),
       " (supported: FLOAT, DOUBLE, INT32, INT64, INT8, UINT8, "
       "INT16, UINT16, BOOL, STRING, FLOAT16, BFLOAT16, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
-      "FLOAT8E5M2, FLOAT8E5M2FNUZ, FLOAT8E8M0, FLOAT4E2M1, INT4, UINT4, INT2, UINT2).");
+      "FLOAT8E5M2, FLOAT8E5M2FNUZ, FLOAT8E8M0, FLOAT4E2M1, FLOAT6E2M3, FLOAT6E3M2, "
+      "INT4, UINT4, INT2, UINT2).");
   EXT_ENFORCE_INVALID(output.data_type == to,
                       "kernel::Cast preallocated output dtype must match 'to'.");
   EXT_ENFORCE_INVALID(output.shape == x.shape,
@@ -480,6 +489,11 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
             v = FloatRoundToFloat4E2M1Nibble(src_v);
             Write4BitElement(dst, i, v);
             break;
+          case DataType::FLOAT6E2M3:
+          case DataType::FLOAT6E3M2:
+            v = FloatToFloat6Bits(src_v, to_dt);
+            Write6BitElement(dst, i, v);
+            break;
           default:
             EXT_THROW_INVALID("kernel::Cast: unsupported sub-byte 'to' dtype.");
           }
@@ -519,9 +533,11 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
       const auto to_dt = static_cast<DataType>(to);
       // FLOAT4E2M1 decodes to a non-integer real value; route through a
       // separate float path so 0.5/1.5/etc. survive the conversion.
-      if (from_dt == DataType::FLOAT4E2M1) {
+      if (from_dt == DataType::FLOAT4E2M1 || IsFloat6CastDtype(x.data_type)) {
         for (int64_t i = 0; i < n; ++i) {
-          const float fv = Float4E2M1NibbleToFloat(Read4BitElement(src, i));
+          const float fv = from_dt == DataType::FLOAT4E2M1
+                               ? Float4E2M1NibbleToFloat(Read4BitElement(src, i))
+                               : Float6BitsToFloat(Read6BitElement(src, i), from_dt);
           switch (to_dt) {
           case DataType::FLOAT:
             output.AsFloat()[i] = fv;

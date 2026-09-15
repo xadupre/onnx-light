@@ -81,12 +81,13 @@ For one profiled parallel region:
 
 .. code-block:: text
 
-    cpu_utilization = process_cpu_time / (wall_time * effective_threads)
+    cpu_utilization = process_cpu_time / (wall_time * observed_threads)
     ipc             = retired_instructions / cpu_cycles
     llc_miss_rate   = llc_misses / llc_references
 
-``effective_threads`` is the number of participants admitted to that region,
-not ``std::thread::hardware_concurrency()``. The event also records requested,
+``observed_threads`` is the number of distinct threads that executed blocks in
+that region, not peak concurrency or ``std::thread::hardware_concurrency()``.
+Thread IDs are collected only when profiling is enabled. The event records requested,
 admitted, and observed participant counts so a consumer can distinguish a
 small task from scheduler under-utilization.
 

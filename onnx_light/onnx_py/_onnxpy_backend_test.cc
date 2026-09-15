@@ -12,6 +12,7 @@
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/pair.h>
+#include <nanobind/stl/shared_ptr.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 #include <regex>
@@ -22,6 +23,10 @@ namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
 using core::backend_test::DataSet;
 using core::backend_test::TestCase;
+using core::backend_test::TestCaseKind;
+using core::backend_test::TestCaseKindName;
+using core::backend_test::TestCaseTag;
+using core::backend_test::TestCaseTagName;
 using core::backend_test::TestMode;
 using core::runtime::Map;
 using core::runtime::Tensor;
@@ -218,6 +223,8 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
           "outputs", [](DataSet &ds) -> std::vector<Tensor> & { return ds.outputs; },
           [](DataSet &ds, std::vector<Tensor> v) { ds.outputs = std::move(v); },
           nb::rv_policy::reference_internal)
+      .def_ro("expected_outputs_generated", &DataSet::expected_outputs_generated,
+              "Whether expected outputs were generated for this data set.")
       .def_rw("maps", &DataSet::maps)
       .def("__repr__", [](const DataSet &ds) {
         return "DataSet(inputs=" + std::to_string(ds.inputs.size()) +
@@ -232,12 +239,38 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
   // automatically. Callers must therefore have imported ``_onnxpyprotoop``
   // before accessing ``TestCase.model``; the package ``_onnxpy.py`` shim
   // guarantees that ordering.
+  nb::enum_<TestCaseKind>(bt_mod, "TestCaseKind", "Identifies the scope of a backend test case.")
+      .value("NODE", TestCaseKind::NODE)
+      .value("MODEL", TestCaseKind::MODEL);
+
+  nb::enum_<TestCaseTag>(bt_mod, "TestCaseTag",
+                         "Identifies a backend test family or operator domain.")
+      .value("NONE", TestCaseTag::NONE)
+      .value("AI_ONNX_ML", TestCaseTag::AI_ONNX_ML)
+      .value("AI_ONNX_PREVIEW", TestCaseTag::AI_ONNX_PREVIEW)
+      .value("AI_ONNX_PREVIEW_TRAINING", TestCaseTag::AI_ONNX_PREVIEW_TRAINING)
+      .value("AI_RT", TestCaseTag::AI_RT)
+      .value("CONSTANT", TestCaseTag::CONSTANT)
+      .value("EMPTY_SHAPE", TestCaseTag::EMPTY_SHAPE)
+      .value("INFERENCE", TestCaseTag::INFERENCE)
+      .value("INPLACE", TestCaseTag::INPLACE)
+      .value("LOCAL_FUNCTION", TestCaseTag::LOCAL_FUNCTION)
+      .value("NAN_INF", TestCaseTag::NAN_INF)
+      .value("PEAK_MEMORY", TestCaseTag::PEAK_MEMORY)
+      .value("RELEASE", TestCaseTag::RELEASE)
+      .value("SHAPE_TAG", TestCaseTag::SHAPE_TAG);
+
+  bt_mod.def("test_case_kind_name",
+             [](TestCaseKind kind) { return std::string(TestCaseKindName(kind)); });
+  bt_mod.def("test_case_tag_name",
+             [](TestCaseTag tag) { return std::string(TestCaseTagName(tag)); });
+
   nb::class_<TestCase>(bt_mod, "TestCase",
                        "A single C++-generated backend test case (mirrors "
                        "onnx_light.backend.test.case.base.TestCase).")
-      .def(nb::init<std::string, std::string, std::string, std::string, double, double>(),
+      .def(nb::init<std::string, std::string, TestCaseKind, TestCaseTag, double, double>(),
            nb::arg("name"), nb::arg("model_name") = std::string(),
-           nb::arg("kind") = std::string("node"), nb::arg("tag") = std::string(),
+           nb::arg("kind") = TestCaseKind::NODE, nb::arg("tag") = TestCaseTag::NONE,
            nb::arg("atol") = 1e-7, nb::arg("rtol") = 1e-3)
       .def_ro("name", &TestCase::name)
       .def_ro("model_name", &TestCase::model_name)
@@ -245,19 +278,24 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
       .def_ro("tag", &TestCase::tag)
       .def_rw("rtol", &TestCase::rtol)
       .def_rw("atol", &TestCase::atol)
-      .def_prop_ro(
-          "data_sets", [](TestCase &tc) -> std::vector<DataSet> & { return tc.data_sets(); },
-          nb::rv_policy::reference_internal,
-          "Returns the input/output data sets of this test case, materializing "
-          "them first for lazily-built cases.")
-      .def_prop_ro(
-          "model", [](TestCase &tc) -> ModelProto & { return tc.model(); },
-          nb::rv_policy::reference_internal,
-          "Returns the ``ModelProto`` of this test case, resolved against the "
-          "binding registered by ``_onnxpyprotoop``. Built on demand for "
-          "lazily-built (benchmark) cases.")
+      .def_prop_ro("has_expected_outputs", &TestCase::has_expected_outputs,
+                   "Returns whether this case has generated expected outputs.")
+      .def_prop_ro("data_sets", &TestCase::data_set_handles,
+                   "Returns the input/output data sets of this test case, materializing "
+                   "them first for lazily-built cases.")
+      .def_prop_ro("model", &TestCase::model_handle,
+                   "Returns the ``ModelProto`` of this test case, resolved against the "
+                   "binding registered by ``_onnxpyprotoop``. Built on demand for "
+                   "lazily-built (benchmark) cases.")
+      .def_prop_ro("materialized", &TestCase::materialized,
+                   "Returns whether this case currently retains a materialized payload.")
+      .def("unload", &TestCase::unload,
+           "Releases this collected case's cached model, data sets, and build-time "
+           "resources such as captured kernel instances. The case is rebuilt on the next "
+           "``model`` or ``data_sets`` access, while existing Python references remain valid.")
       .def("__repr__", [](const TestCase &tc) {
-        return "TestCase(name='" + tc.name + "', kind='" + tc.kind + "')";
+        return "TestCase(name='" + tc.name + "', kind=TestCaseKind." +
+               std::string(tc.kind == TestCaseKind::NODE ? "NODE" : "MODEL") + ")";
       });
 
   nb::enum_<TestMode>(bt_mod, "TestMode",
@@ -271,11 +309,13 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
 
   bt_mod.def(
       "collect_test_cases",
-      [](const std::string &op_type_or_cat, bool include_big, TestMode mode) {
-        return core::backend_test::CollectTestCases(op_type_or_cat, include_big, mode);
+      [](const std::string &op_type_or_cat, bool include_big, TestMode mode,
+         bool generate_benchmark_expected_outputs) {
+        return core::backend_test::CollectTestCases(op_type_or_cat, include_big, mode,
+                                                    generate_benchmark_expected_outputs);
       },
       nb::arg("op_type_or_cat") = std::string(), nb::arg("include_big") = false,
-      nb::arg("mode") = TestMode::TEST,
+      nb::arg("mode") = TestMode::TEST, nb::arg("generate_benchmark_expected_outputs") = false,
       "Returns the list of C++-implemented backend test node cases. When "
       "``op_type_or_cat`` is non-empty, only cases whose top-level graph "
       "contains a node with that operator type are returned. It can also "
@@ -288,15 +328,17 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
 
   bt_mod.def(
       "collect_test_cases_by_name",
-      [](const std::string &name_regex, bool include_big, TestMode mode) {
+      [](const std::string &name_regex, bool include_big, TestMode mode,
+         bool generate_benchmark_expected_outputs) {
         try {
-          return core::backend_test::CollectTestCasesByName(name_regex, include_big, mode);
+          return core::backend_test::CollectTestCasesByName(name_regex, include_big, mode,
+                                                            generate_benchmark_expected_outputs);
         } catch (const std::regex_error &e) {
           throw nb::value_error(e.what());
         }
       },
       nb::arg("name_regex") = std::string(), nb::arg("include_big") = false,
-      nb::arg("mode") = TestMode::TEST,
+      nb::arg("mode") = TestMode::TEST, nb::arg("generate_benchmark_expected_outputs") = false,
       "Returns the C++-implemented backend test node cases whose ``name`` matches "
       "the ECMAScript regular expression ``name_regex`` (``std::regex_search`` "
       "semantics: substring match by default; anchor with ``^...$`` to require a "
@@ -309,10 +351,13 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
 
   bt_mod.def(
       "get_test_case_by_name",
-      [](const std::string &name, bool include_big, TestMode mode) {
-        return core::backend_test::GetTestCaseByName(name, include_big, mode);
+      [](const std::string &name, bool include_big, TestMode mode,
+         bool generate_benchmark_expected_outputs) {
+        return core::backend_test::GetTestCaseByName(name, include_big, mode,
+                                                     generate_benchmark_expected_outputs);
       },
       nb::arg("name"), nb::arg("include_big") = false, nb::arg("mode") = TestMode::TEST,
+      nb::arg("generate_benchmark_expected_outputs") = false,
       "Returns the single C++-implemented backend test case whose ``name`` "
       "matches exactly, as a list of at most one element. An empty list signals "
       "that no case with the requested name was found. More efficient than "

@@ -21,9 +21,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterOneHotEncoderCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
-  const KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
-  const onnx_kernels::kernel::OneHotEncoder one_hot{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -46,9 +44,12 @@ void RegisterOneHotEncoderCases(std::vector<TestCase> &registry, TestMode mode) 
     zeros_attr->set_i(static_cast<int64_t>(1));
 
     Expect(registry, std::move(node), "test_cc_one_hot_encoder_int64_benchmark",
-           {default_opset, opset}, {8192}, {32768}, [one_hot, cats]() -> IoData {
+           {default_opset, opset}, {8192}, {32768}, [opset, cats]() -> IoData {
+             const KernelContext one_hot_ctx{opset};
+             const onnx_kernels::kernel::OneHotEncoder one_hot{one_hot_ctx};
+
              Tensor x = RandnTensor(DataType::INT64, {8192}, 2691);
-             Tensor y = one_hot.operator()<int64_t>(x, cats, /*zeros=*/true);
+             Tensor y = one_hot.template operator()<int64_t>(x, cats, /*zeros=*/true);
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -69,16 +70,18 @@ void RegisterOneHotEncoderCases(std::vector<TestCase> &registry, TestMode mode) 
     for (int64_t v : cats) {
       cats_attr->ints().push_back(v);
     }
-
     AttributeProto *zeros_attr = node.add_attribute();
+    zeros_attr->set_name("zeros");
+    zeros_attr->set_type(AttributeProto::AttributeType::INT);
+    zeros_attr->set_i(static_cast<int64_t>(1));
+
     Expect(registry, std::move(node), "test_cc_one_hot_encoder_int64", {default_opset, opset},
-           [=]() -> IoData {
-             zeros_attr->set_name("zeros");
-             zeros_attr->set_type(AttributeProto::AttributeType::INT);
-             zeros_attr->set_i(static_cast<int64_t>(1));
+           [opset, cats]() -> IoData {
+             const KernelContext one_hot_ctx{opset};
+             const onnx_kernels::kernel::OneHotEncoder one_hot{one_hot_ctx};
 
              Tensor x = Tensor::FromInt64("", {3}, {0, 2, 7});
-             Tensor y = one_hot.operator()<int64_t>(x, cats, /*zeros=*/true);
+             Tensor y = one_hot.template operator()<int64_t>(x, cats, /*zeros=*/true);
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -100,13 +103,15 @@ void RegisterOneHotEncoderCases(std::vector<TestCase> &registry, TestMode mode) 
     for (const std::string &v : cats) {
       *cats_attr->add_strings() = utils::String(v);
     }
-
     AttributeProto *zeros_attr = node.add_attribute();
+    zeros_attr->set_name("zeros");
+    zeros_attr->set_type(AttributeProto::AttributeType::INT);
+    zeros_attr->set_i(static_cast<int64_t>(1));
+
     Expect(registry, std::move(node), "test_cc_one_hot_encoder_string", {default_opset, opset},
-           [=]() -> IoData {
-             zeros_attr->set_name("zeros");
-             zeros_attr->set_type(AttributeProto::AttributeType::INT);
-             zeros_attr->set_i(static_cast<int64_t>(1));
+           [opset, cats]() -> IoData {
+             const KernelContext one_hot_ctx{opset};
+             const onnx_kernels::kernel::OneHotEncoder one_hot{one_hot_ctx};
 
              Tensor x = Tensor::FromStrings("", {4}, {"a", "b", "d", "c"});
              Tensor y = one_hot(x, cats, /*zeros=*/true);

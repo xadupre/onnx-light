@@ -7,6 +7,7 @@
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/kernels/kernel_run_helpers.h"
+#include <cmath>
 #include <cstdint>
 #include <span>
 #include <stdexcept>
@@ -20,6 +21,13 @@ namespace {
 
 template <typename KeyT> int32_t KeyDataType() noexcept { return TensorElementType<KeyT>::value; }
 
+template <typename KeyT> bool KeysEqual(const KeyT &lhs, const KeyT &rhs) {
+  if constexpr (std::is_floating_point_v<KeyT>) {
+    return lhs == rhs || (std::isnan(lhs) && std::isnan(rhs));
+  }
+  return lhs == rhs;
+}
+
 template <typename KeyT, typename ValueT>
 void LookupAndFill(const Tensor &x, std::span<const KeyT> keys, std::span<const ValueT> values,
                    ValueT default_value, ValueT *out) {
@@ -29,9 +37,9 @@ void LookupAndFill(const Tensor &x, std::span<const KeyT> keys, std::span<const 
     const std::vector<std::string> &px = x.AsStrings();
     for (int64_t i = 0; i < n; ++i) {
       ValueT mapped = default_value;
-      for (size_t j = 0; j < k; ++j) {
-        if (px[static_cast<size_t>(i)] == keys[j]) {
-          mapped = values[j];
+      for (size_t j = k; j > 0; --j) {
+        if (KeysEqual(px[static_cast<size_t>(i)], keys[j - 1])) {
+          mapped = values[j - 1];
           break;
         }
       }
@@ -41,9 +49,9 @@ void LookupAndFill(const Tensor &x, std::span<const KeyT> keys, std::span<const 
     const KeyT *px = x.As<KeyT>();
     for (int64_t i = 0; i < n; ++i) {
       ValueT mapped = default_value;
-      for (size_t j = 0; j < k; ++j) {
-        if (px[i] == keys[j]) {
-          mapped = values[j];
+      for (size_t j = k; j > 0; --j) {
+        if (KeysEqual(px[i], keys[j - 1])) {
+          mapped = values[j - 1];
           break;
         }
       }
@@ -76,12 +84,21 @@ Tensor LabelEncoder::operator()(const Tensor &x, std::span<const KeyT> keys,
                                 RuntimeContext *rt) const {
   ValidateInputs<KeyT, ValueT>(x, keys, values);
   const int64_t n = x.element_count();
-  const size_t n_bytes = static_cast<size_t>(n) * sizeof(ValueT);
-  Tensor out =
-      rt ? rt->MakeOutputTensor(0, TensorElementType<ValueT>::value, x.shape, n_bytes)
-         : MakeOutputTensor(TensorElementType<ValueT>::value, x.shape, n_bytes, ctx_.allocator);
-  LookupAndFill<KeyT, ValueT>(x, keys, values, default_value,
-                              reinterpret_cast<ValueT *>(out.mutable_bytes()));
+  Tensor out;
+  if constexpr (std::is_same_v<ValueT, std::string>) {
+    out = rt ? rt->MakeOutputTensor(0, DataType::STRING, x.shape, 0)
+             : Tensor::MakeString("", x.shape, std::vector<std::string>(static_cast<size_t>(n)));
+    if (rt != nullptr) {
+      out.string_data.resize(static_cast<size_t>(n));
+    }
+    LookupAndFill<KeyT, ValueT>(x, keys, values, default_value, out.string_data.data());
+  } else {
+    const size_t n_bytes = static_cast<size_t>(n) * sizeof(ValueT);
+    out = rt ? rt->MakeOutputTensor(0, TensorElementType<ValueT>::value, x.shape, n_bytes)
+             : MakeOutputTensor(TensorElementType<ValueT>::value, x.shape, n_bytes, ctx_.allocator);
+    LookupAndFill<KeyT, ValueT>(x, keys, values, default_value,
+                                reinterpret_cast<ValueT *>(out.mutable_bytes()));
+  }
   return out;
 }
 
@@ -90,15 +107,25 @@ void LabelEncoder::operator()(const Tensor &x, std::span<const KeyT> keys,
                               std::span<const ValueT> values, ValueT default_value,
                               Tensor &output) const {
   ValidateInputs<KeyT, ValueT>(x, keys, values);
-  EXT_ENFORCE_INVALID(
-      output.data_type == TensorElementType<ValueT>::value,
-      "kernel::LabelEncoder preallocated output dtype must match the requested ValueT.");
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       "kernel::LabelEncoder preallocated output shape must match the input shape.");
-  EXT_ENFORCE_INVALID(output.size_bytes() ==
-                          static_cast<size_t>(x.element_count()) * sizeof(ValueT),
-                      "kernel::LabelEncoder preallocated output buffer is incorrectly sized.");
-  LookupAndFill<KeyT, ValueT>(x, keys, values, default_value, output.As<ValueT>());
+  if constexpr (std::is_same_v<ValueT, std::string>) {
+    EXT_ENFORCE_INVALID(
+        output.data_type == static_cast<int32_t>(DataType::STRING),
+        "kernel::LabelEncoder preallocated output dtype must match the requested ValueT.");
+    EXT_ENFORCE_INVALID(
+        static_cast<int64_t>(output.string_data.size()) == x.element_count(),
+        "kernel::LabelEncoder preallocated output string_data is incorrectly sized.");
+    LookupAndFill<KeyT, ValueT>(x, keys, values, default_value, output.string_data.data());
+  } else {
+    EXT_ENFORCE_INVALID(
+        output.data_type == TensorElementType<ValueT>::value,
+        "kernel::LabelEncoder preallocated output dtype must match the requested ValueT.");
+    EXT_ENFORCE_INVALID(output.size_bytes() ==
+                            static_cast<size_t>(x.element_count()) * sizeof(ValueT),
+                        "kernel::LabelEncoder preallocated output buffer is incorrectly sized.");
+    LookupAndFill<KeyT, ValueT>(x, keys, values, default_value, output.As<ValueT>());
+  }
 }
 
 // Explicit instantiations for the supported (KeyT, ValueT) combinations.
@@ -115,6 +142,9 @@ ONNX_LIGHT_INSTANTIATE_LABEL_ENCODER(float, int64_t);
 ONNX_LIGHT_INSTANTIATE_LABEL_ENCODER(float, float);
 ONNX_LIGHT_INSTANTIATE_LABEL_ENCODER(std::string, int64_t);
 ONNX_LIGHT_INSTANTIATE_LABEL_ENCODER(std::string, int16_t);
+ONNX_LIGHT_INSTANTIATE_LABEL_ENCODER(int64_t, std::string);
+ONNX_LIGHT_INSTANTIATE_LABEL_ENCODER(float, std::string);
+ONNX_LIGHT_INSTANTIATE_LABEL_ENCODER(std::string, std::string);
 
 #undef ONNX_LIGHT_INSTANTIATE_LABEL_ENCODER
 
@@ -197,12 +227,13 @@ void LabelEncoder::Run(RuntimeContext &rt) {
 
   // Resolve ValueT and look up the (optional) default attribute.
   // Same pattern: tensor holder keeps value data alive for the span.
-  enum class ValueKind { Int64, Float, Int16 };
+  enum class ValueKind { Int64, Float, Int16, String };
   ValueKind value_kind;
   Tensor values_tensor_holder; // alive until after label_encoder call
   std::vector<int64_t> values_i64_vec;
   std::vector<float> values_f32_vec;
   std::vector<int16_t> values_i16_vec;
+  std::vector<std::string> values_str;
   std::span<const int64_t> values_i64;
   std::span<const float> values_f32;
   std::span<const int16_t> values_i16;
@@ -219,8 +250,10 @@ void LabelEncoder::Run(RuntimeContext &rt) {
     }
     values_f32 = values_f32_vec;
   } else if (values_strings != nullptr) {
-    EXT_THROW_INVALID("RunNode: LabelEncoder with 'values_strings' is not supported "
-                      "by this kernel registration.");
+    value_kind = ValueKind::String;
+    for (const auto &v : values_strings->strings()) {
+      values_str.push_back(v);
+    }
   } else {
     values_tensor_holder = TensorFromProto(values_tensor->t());
     switch (values_tensor_holder.data_type) {
@@ -236,15 +269,21 @@ void LabelEncoder::Run(RuntimeContext &rt) {
       value_kind = ValueKind::Int16;
       values_i16 = TensorSpan<int16_t>(values_tensor_holder);
       break;
+    case static_cast<int32_t>(DataType::STRING):
+      value_kind = ValueKind::String;
+      values_str = values_tensor_holder.AsStrings();
+      break;
     default:
       EXT_THROW_INVALID("RunNode: LabelEncoder 'values_tensor' must have element "
-                        "type INT64, FLOAT or INT16.");
+                        "type INT64, FLOAT, INT16 or STRING.");
     }
   }
 
   int64_t default_i64 = -1;
   float default_f32 = 0.0f;
   int16_t default_i16 = -1;
+  std::string default_str =
+      GetAttributeStringOrDefault(node, "default_string", std::string("_Unused"));
   const AttributeProto *default_int64 = FindAttribute(node, "default_int64");
   const AttributeProto *default_float = FindAttribute(node, "default_float");
   const AttributeProto *default_tensor_attr = FindAttribute(node, "default_tensor");
@@ -268,9 +307,12 @@ void LabelEncoder::Run(RuntimeContext &rt) {
     case static_cast<int32_t>(DataType::INT16):
       default_i16 = dt.AsInt16()[0];
       break;
+    case static_cast<int32_t>(DataType::STRING):
+      default_str = dt.AsStrings()[0];
+      break;
     default:
       EXT_THROW_INVALID("RunNode: LabelEncoder 'default_tensor' must have element "
-                        "type INT64, FLOAT or INT16.");
+                        "type INT64, FLOAT, INT16 or STRING.");
     }
   }
 
@@ -288,6 +330,13 @@ void LabelEncoder::Run(RuntimeContext &rt) {
     out = label_encoder.operator()<std::string, int64_t>(x, keys_str, values_i64, default_i64, &rt);
   } else if (key_kind == KeyKind::String && value_kind == ValueKind::Int16) {
     out = label_encoder.operator()<std::string, int16_t>(x, keys_str, values_i16, default_i16, &rt);
+  } else if (key_kind == KeyKind::Int64 && value_kind == ValueKind::String) {
+    out = label_encoder.operator()<int64_t, std::string>(x, keys_i64, values_str, default_str, &rt);
+  } else if (key_kind == KeyKind::Float && value_kind == ValueKind::String) {
+    out = label_encoder.operator()<float, std::string>(x, keys_f32, values_str, default_str, &rt);
+  } else if (key_kind == KeyKind::String && value_kind == ValueKind::String) {
+    out = label_encoder.operator()<std::string, std::string>(x, keys_str, values_str, default_str,
+                                                             &rt);
   } else {
     EXT_THROW_INVALID("RunNode: LabelEncoder key/value type combination is not supported.");
   }

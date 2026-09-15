@@ -57,9 +57,7 @@ void AddIntAttr(NodeProto &node, const char *name, int64_t value) {
 // ---------------------------------------------------------------------------
 void RegisterImputerCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset("ai.onnx.ml", 1);
-  const KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
-  const onnx_kernels::kernel::Imputer imputer{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -74,9 +72,12 @@ void RegisterImputerCases(std::vector<TestCase> &registry, TestMode mode) {
     AddFloatsAttr(node, "imputed_value_floats", imputed_values);
 
     Expect(registry, std::move(node), "test_cc_imputer_float_benchmark", {default_opset, opset},
-           {24576}, {24576}, [imputer, imputed_values, replaced_value]() -> IoData {
+           {24576}, {24576}, [opset, imputed_values, replaced_value]() -> IoData {
+             const KernelContext imputer_ctx{opset};
+             const onnx_kernels::kernel::Imputer imputer{imputer_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, {8192, 3}, 2631);
-             Tensor y = imputer.operator()<float>(x, imputed_values, replaced_value);
+             Tensor y = imputer.template operator()<float>(x, imputed_values, replaced_value);
              return IoData{{std::move(x)}, {std::move(y)}};
            });
     return;
@@ -94,9 +95,12 @@ void RegisterImputerCases(std::vector<TestCase> &registry, TestMode mode) {
     AddFloatAttr(node, "replaced_value_float", replaced_value);
     AddFloatsAttr(node, "imputed_value_floats", imputed_values);
     Expect(registry, std::move(node), "test_cc_imputer_float", {default_opset, opset},
-           [=]() -> IoData {
+           [opset, imputed_values, replaced_value]() -> IoData {
+             const KernelContext imputer_ctx{opset};
+             const onnx_kernels::kernel::Imputer imputer{imputer_ctx};
+
              Tensor x = Tensor::FromFloat("", {2, 3}, {0.0f, 1.0f, 0.0f, 5.0f, 0.0f, 6.0f});
-             Tensor y = imputer.operator()<float>(x, imputed_values, replaced_value);
+             Tensor y = imputer.template operator()<float>(x, imputed_values, replaced_value);
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -114,9 +118,12 @@ void RegisterImputerCases(std::vector<TestCase> &registry, TestMode mode) {
     AddFloatAttr(node, "replaced_value_float", replaced_value);
     AddFloatsAttr(node, "imputed_value_floats", imputed_values);
     Expect(registry, std::move(node), "test_cc_imputer_float_broadcast", {default_opset, opset},
-           [=]() -> IoData {
+           [opset, imputed_values, replaced_value]() -> IoData {
+             const KernelContext imputer_ctx{opset};
+             const onnx_kernels::kernel::Imputer imputer{imputer_ctx};
+
              Tensor x = Tensor::FromFloat("", {4}, {-1.0f, 2.0f, -1.0f, 4.0f});
-             Tensor y = imputer.operator()<float>(x, imputed_values, replaced_value);
+             Tensor y = imputer.template operator()<float>(x, imputed_values, replaced_value);
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -134,9 +141,12 @@ void RegisterImputerCases(std::vector<TestCase> &registry, TestMode mode) {
     AddFloatAttr(node, "replaced_value_float", replaced_value);
     AddFloatsAttr(node, "imputed_value_floats", imputed_values);
     Expect(registry, std::move(node), "test_cc_imputer_float_nan", {default_opset, opset},
-           [=]() -> IoData {
+           [opset, replaced_value, imputed_values]() -> IoData {
+             const KernelContext imputer_ctx{opset};
+             const onnx_kernels::kernel::Imputer imputer{imputer_ctx};
+
              Tensor x = Tensor::FromFloat("", {3}, {replaced_value, 2.0f, replaced_value});
-             Tensor y = imputer.operator()<float>(x, imputed_values, replaced_value);
+             Tensor y = imputer.template operator()<float>(x, imputed_values, replaced_value);
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });
@@ -154,9 +164,12 @@ void RegisterImputerCases(std::vector<TestCase> &registry, TestMode mode) {
     AddIntAttr(node, "replaced_value_int64", replaced_value);
     AddIntsAttr(node, "imputed_value_int64s", imputed_values);
     Expect(registry, std::move(node), "test_cc_imputer_int64", {default_opset, opset},
-           [=]() -> IoData {
+           [opset, imputed_values]() -> IoData {
+             const KernelContext imputer_ctx{opset};
+             const onnx_kernels::kernel::Imputer imputer{imputer_ctx};
+
              Tensor x = Tensor::FromInt64("", {3, 2}, {0, 0, 1, 2, 0, 3});
-             Tensor y = imputer.operator()<int64_t>(x, imputed_values, replaced_value);
+             Tensor y = imputer.template operator()<int64_t>(x, imputed_values, replaced_value);
 
              return IoData{{std::move(x)}, {std::move(y)}};
            });

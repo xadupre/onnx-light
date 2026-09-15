@@ -5,6 +5,7 @@
 #include "onnx_op/operator_sets_controlflow.h"
 #include "onnx_op/operator_sets_controlflow_doc.h"
 
+#include <limits>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_op::controlflow {
@@ -49,6 +50,8 @@ LightOpSchema MakeIfSchema(int since_version) {
                                 AttributeType::GRAPH,
                                 /*required=*/true, std::monostate{}},
              })
+      .set_min_output(1)
+      .set_max_output(std::numeric_limits<int>::max())
       .set_node_determinism(LightOpSchema::NodeDeterminism::NonDeterministic);
 }
 
@@ -96,6 +99,8 @@ LightOpSchema MakeLoopSchema(int since_version) {
                  AttributeParam{"body", MakeLoopBodyAttributeDescription(), AttributeType::GRAPH,
                                 /*required=*/true, std::monostate{}},
              })
+      .set_min_output(1)
+      .set_max_output(std::numeric_limits<int>::max())
       .set_node_determinism(LightOpSchema::NodeDeterminism::NonDeterministic);
 }
 
@@ -153,6 +158,8 @@ LightOpSchema MakeScanSchema(int since_version) {
                   "Final values of the loop's N state variables followed by K scan_outputs", "V"},
              },
              std::move(type_constraints), std::move(attributes))
+      .set_min_output(1)
+      .set_max_output(std::numeric_limits<int>::max())
       .set_node_determinism(LightOpSchema::NodeDeterminism::NonDeterministic);
 }
 

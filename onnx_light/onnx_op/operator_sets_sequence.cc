@@ -5,6 +5,7 @@
 #include "onnx_op/operator_sets_sequence.h"
 #include "onnx_op/operator_sets_sequence_doc.h"
 
+#include <limits>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_op::sequence {
@@ -195,6 +196,8 @@ std::vector<LightOpSchema> GetAllOnnxOpSequenceSchemasWithHistory(const std::str
                      {"V", AllTensorOrSequenceTypes(), "Constrain to any tensor or sequence type."},
                  },
                  /*has_function_implementation=*/true)
+                 .set_min_output(1)
+                 .set_max_output(std::numeric_limits<int>::max())
                  .set_node_determinism(LightOpSchema::NodeDeterminism::NonDeterministic)};
        }},
       {"SplitToSequence",

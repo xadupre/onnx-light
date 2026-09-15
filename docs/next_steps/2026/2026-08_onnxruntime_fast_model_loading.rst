@@ -5,7 +5,7 @@ Using ``onnx-light`` fast loading in ``onnxruntime``
 
 :Date: 2026-08
 
-**blocked; final step after native completion**
+**ready; native completion is implemented and issue #4612 remains open**
 
 Objective
 +++++++++
@@ -111,9 +111,9 @@ Acceptance:
 ``PayloadIdentity``, ``MappedPayload``, ``FinalDestinationReadDescriptor``, and
 ``MappedPayloadSource`` are exposed independently of ORT, built on the existing
 ``mmap_file_as_shared_ptr`` / ``validate_external_weights_read_path``
-confinement helpers in ``stream.h``. This early onnx-light prerequisite does
-not start the onnxruntime implementation; that work remains blocked until the
-native completion roadmap is finished.
+confinement helpers in ``stream.h``. This early onnx-light prerequisite did not start the onnxruntime
+implementation. The native completion roadmap is now finished, so issue #4612
+can consume the stable contract.
 
 Final ORT PR -- consume owned payloads in session state
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++

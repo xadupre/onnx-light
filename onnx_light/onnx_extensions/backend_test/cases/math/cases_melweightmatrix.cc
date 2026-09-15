@@ -23,8 +23,6 @@ void RegisterMelWeightMatrixCases(std::vector<TestCase> &registry, TestMode mode
   constexpr float kUpperEdgeHertz = 8192.0f / 2.0f;
 
   const OpsetId opset = DefaultOpset(17);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::MelWeightMatrix mel_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto bench_node;
@@ -37,7 +35,12 @@ void RegisterMelWeightMatrixCases(std::vector<TestCase> &registry, TestMode mode
     bench_node.add_output("output");
     const int64_t output_count = (8192 / 2 + 1) * 2048;
     Expect(registry, std::move(bench_node), "test_cc_melweightmatrix_benchmark", {opset},
-           {1, 1, 1, 1, 1}, {output_count}, [mel_kernel]() -> IoData {
+           {1, 1, 1, 1, 1}, {output_count}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(17);
+
+             const KernelContext mel_kernel_ctx{opset};
+             const onnx_kernels::kernel::MelWeightMatrix mel_kernel{mel_kernel_ctx};
+
              Tensor b_num_mel_bins = Tensor::FromInt32("", {}, {2048});
              Tensor b_dft_length = Tensor::FromInt32("", {}, {8192});
              Tensor b_sample_rate = Tensor::FromInt32("", {}, {16000});
@@ -62,7 +65,12 @@ void RegisterMelWeightMatrixCases(std::vector<TestCase> &registry, TestMode mode
   node.add_input("upper_edge_hertz");
   node.add_output("output");
 
-  Expect(registry, std::move(node), "test_cc_melweightmatrix", {opset}, [=]() -> IoData {
+  Expect(registry, std::move(node), "test_cc_melweightmatrix", {opset}, []() -> IoData {
+    const OpsetId opset = DefaultOpset(17);
+
+    const KernelContext mel_kernel_ctx{opset};
+    const onnx_kernels::kernel::MelWeightMatrix mel_kernel{mel_kernel_ctx};
+
     Tensor num_mel_bins = Tensor::FromInt32("", {}, {kNumMelBins});
     Tensor dft_length = Tensor::FromInt32("", {}, {kDftLength});
     Tensor sample_rate = Tensor::FromInt32("", {}, {kSampleRate});

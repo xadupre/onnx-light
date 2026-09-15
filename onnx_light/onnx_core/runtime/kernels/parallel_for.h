@@ -31,7 +31,9 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 /// Iteration count below which :cpp:func:`ParallelFor` runs the whole range
 /// inline on the calling thread. Waking worker threads for tiny ranges costs
 /// more than the work they save, so small tensors stay single-threaded.
-inline constexpr int64_t kParallelForGrainSize = 1 << 15; // 32768 elements
+inline constexpr int64_t kParallelForMinimumElements = 1 << 15; // 32768 elements
+/// Backward-compatible name for the crossover threshold, not a per-block grain.
+inline constexpr int64_t kParallelForGrainSize = kParallelForMinimumElements;
 
 /**
  * Configures worker startup and spin-before-park behavior for a
@@ -51,6 +53,8 @@ struct ThreadPoolOptions {
   WorkerStartFn worker_start = nullptr;
   /// Context passed to :cpp:var:`worker_start`.
   void *worker_start_context = nullptr;
+  /// Enables bounded nested admission on idle workers of this pool.
+  bool allow_nested_parallelism = false;
 };
 
 /// Returns the number of participating threads :cpp:func:`ParallelFor` may use.
@@ -86,7 +90,8 @@ int64_t ParallelForThreadCount() noexcept;
  * scenarios:
  *   - no workers available (single core): every block runs inline on the caller;
  *   - a single block: runs inline without touching the workers;
- *   - nested calls from inside a running block: run inline to avoid deadlock;
+ *   - nested calls from inside a running block: run inline by default, or use
+ *     idle workers when bounded nested admission is enabled;
  *   - concurrent calls from unrelated threads: serialized so one region runs at
  *     a time, each still internally parallel.
  */
@@ -120,12 +125,15 @@ public:
    * Runs ``fn(block)`` for every ``block`` in ``[0, num_blocks)``, then blocks
    * until all blocks finish.
    *
-   * Block ``0`` runs on the calling thread and selected workers receive the
-   * remaining blocks by index. Only as many parked workers as there are worker blocks
-   * are notified. ``fn`` is invoked concurrently and must only touch data
-   * disjoint per block; it must not throw. ``num_blocks`` must not exceed
-   * ``worker_count() + 1`` when workers are used; :cpp:func:`ParallelFor`
-   * enforces this.
+   * Unless ``ThreadPoolOptions::allow_nested_parallelism`` is enabled, block
+   * ``0`` runs on the calling thread and selected workers receive the remaining
+   * blocks by index. Only as many parked workers as there are worker blocks are
+   * notified, and ``num_blocks`` must not exceed ``worker_count() + 1`` when
+   * workers are used; :cpp:func:`ParallelFor` enforces this. With nested
+   * parallelism enabled, blocks are striped across the admitted caller and idle
+   * workers, so ``num_blocks`` may exceed the participant count. ``fn`` is
+   * invoked concurrently and must only touch data disjoint per block; it must
+   * not throw.
    *
    * @param num_blocks Number of blocks to run. Values ``<= 0`` are a no-op.
    * @param fn         Callable invoked as ``fn(int64_t block)``.
@@ -140,17 +148,31 @@ public:
   /// Returns whether the calling thread is executing a pool region.
   static bool InParallelRegion() noexcept { return InPool(); }
 
+  /// Runs up to ``maximum_participants`` blocks on the caller and idle workers.
+  /// The callback receives its block index and the admitted block count, and must not throw.
+  /// Unrelated callers serialize; nested callers never wait for worker admission.
+  /// Calls from another pool execute inline to avoid cross-pool lock inversion.
+  /// Requires ``ThreadPoolOptions::allow_nested_parallelism``.
+  /// Returns the admitted participant count.
+  int64_t RunBounded(int64_t maximum_participants, void *context,
+                     void (*function)(void *, int64_t, int64_t));
+
 private:
+  struct BoundedRegion;
+  struct BoundedWorker;
   void RunErased(int64_t num_blocks, void *task_ctx, TaskFn task_fn);
+  static ThreadPool *&CurrentBoundedPool() noexcept;
   static bool &InPoolFlag() noexcept;
   static bool InPool() noexcept;
   void StopAndJoin() noexcept;
   bool SpinForWork(uint64_t last_generation, int64_t worker_index) const noexcept;
-  bool SpinForCompletion() const noexcept;
+  bool SpinForCompletion(const std::atomic<int64_t> &remaining) const noexcept;
   void WorkerLoop(int64_t worker_index);
+  void BoundedWorkerLoop(int64_t worker_index);
 
   ThreadPoolOptions options_;
   std::vector<std::thread> workers_;
+  std::vector<std::unique_ptr<BoundedWorker>> bounded_workers_;
   std::mutex mu_;
   std::mutex region_mu_;
   std::vector<std::unique_ptr<std::condition_variable>> worker_work_;
@@ -172,7 +194,10 @@ private:
 /// The pool is constructed on first use with ``ParallelForThreadCount() - 1``
 /// worker threads (the calling thread makes up the last participant) and lives
 /// for the remainder of the process. Threads are therefore created once and
-/// reused across every ``ParallelFor`` call.
+/// reused across every ``ParallelFor`` call. After ``fork()``, the child
+/// abandons the inherited pool without joining its vanished workers and creates
+/// a child-owned pool on first use. References obtained before ``fork()`` must
+/// not be reused in the child; call this function again instead.
 ///
 /// Returns:
 ///   A reference to the shared thread pool.
@@ -182,8 +207,9 @@ namespace detail {
 
 using ParallelRangeFn = void (*)(void *, int64_t, int64_t);
 
-void ParallelForErased(int64_t total, int64_t grain_size, void *task_ctx, ParallelRangeFn task_fn);
-void ParallelForErasedProfiled(int64_t total, int64_t grain_size, void *task_ctx,
+void ParallelForErased(int64_t total, int64_t minimum_elements, void *task_ctx,
+                       ParallelRangeFn task_fn);
+void ParallelForErasedProfiled(int64_t total, int64_t minimum_elements, void *task_ctx,
                                ParallelRangeFn task_fn, ParallelRegionCollector *collector,
                                std::string_view label, std::source_location location);
 
@@ -196,11 +222,11 @@ void ParallelForErasedProfiled(int64_t total, int64_t grain_size, void *task_ctx
  * Blocks are processed on the :cpp:class:`CpuExecutor` installed on the calling
  * thread, or on the shared :cpp:func:`GlobalThreadPool` when the caller runs
  * outside any executor scope (up to :cpp:func:`ParallelForThreadCount`
- * participants, including the calling thread). When ``total`` is below ``grain_size`` or only one
- * thread is available the whole range is processed inline on the calling thread, so
- * ``fn`` must be safe to call once with the full range. The three-argument
- * overload accepts a kernel-specific ``grain_size``; the two-argument overload
- * below uses :cpp:var:`kParallelForGrainSize`. Every
+ * participants, including the calling thread). When ``total`` is below
+ * ``minimum_elements`` or only one thread is available, the whole range is processed inline on the
+ * calling thread, so ``fn`` must be safe to call once with the full range. The three-argument
+ * overload accepts a kernel-specific ``minimum_elements``; the two-argument overload
+ * below uses :cpp:var:`kParallelForMinimumElements`. Every
  * block is disjoint and covers the range exactly once, so the observable result
  * is independent of the number of threads: kernels that only map input
  * elements to output elements (no cross-element accumulation) stay bit-exact.
@@ -209,31 +235,31 @@ void ParallelForErasedProfiled(int64_t total, int64_t grain_size, void *task_ctx
  * touch data disjoint per block (typically writing ``output[begin, end)`` from
  * ``input[begin, end)``). It must not throw.
  *
- * @param total      Number of iterations. Values ``<= 0`` are a no-op.
- * @param grain_size Minimum iterations per parallel block. Must be positive.
- * @param fn         Callable invoked as ``fn(int64_t begin, int64_t end)`` for
- *                   each block, covering ``[begin, end)``.
+ * @param total            Number of iterations. Values ``<= 0`` are a no-op.
+ * @param minimum_elements Minimum iterations required for parallel execution. Must be positive.
+ * @param fn               Callable invoked as ``fn(int64_t begin, int64_t end)`` for
+ *                         each block, covering ``[begin, end)``.
  */
 template <typename Fn>
-void ParallelFor(int64_t total, int64_t grain_size, Fn fn, std::string_view label = {},
+void ParallelFor(int64_t total, int64_t minimum_elements, Fn fn, std::string_view label = {},
                  std::source_location location = std::source_location::current()) {
   const auto task_fn = [](void *ctx, int64_t begin, int64_t end) {
     (*static_cast<Fn *>(ctx))(begin, end);
   };
   ParallelRegionCollector *collector = CurrentParallelRegionCollector();
   if (collector == nullptr) {
-    detail::ParallelForErased(total, grain_size, static_cast<void *>(&fn), task_fn);
+    detail::ParallelForErased(total, minimum_elements, static_cast<void *>(&fn), task_fn);
     return;
   }
-  detail::ParallelForErasedProfiled(total, grain_size, static_cast<void *>(&fn), task_fn, collector,
-                                    label, location);
+  detail::ParallelForErasedProfiled(total, minimum_elements, static_cast<void *>(&fn), task_fn,
+                                    collector, label, location);
 }
 
-/// Runs ``fn`` over ``[0, total)`` using the default grain size.
+/// Runs ``fn`` over ``[0, total)`` using the default parallel crossover threshold.
 template <typename Fn>
 void ParallelFor(int64_t total, Fn fn, std::string_view label = {},
                  std::source_location location = std::source_location::current()) {
-  ParallelFor(total, kParallelForGrainSize, std::move(fn), label, location);
+  ParallelFor(total, kParallelForMinimumElements, std::move(fn), label, location);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

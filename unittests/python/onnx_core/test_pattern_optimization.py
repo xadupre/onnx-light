@@ -64,7 +64,8 @@ class TestPatternOptimization(ExtTestCase):
             "LocalRewriting("
             "pattern=NegNeg, graph_path=<root>, matched_nodes=2, added_nodes=1)",
         )
-        details = str(rewrites[0])
+        self.assertEqual(str(rewrites[0]), repr(rewrites[0]))
+        details = rewrites[0].to_detailed_string()
         self.assertIn("  graph_path: <root>\n", details)
         self.assertIn("  matched_nodes:\n    positions: [0, 1]\n", details)
         self.assertIn(
@@ -102,6 +103,47 @@ class TestPatternOptimization(ExtTestCase):
 
         rewrites = graph.optimize()
         self.assertEqual(len(rewrites), 1)
+
+    def test_initializer_only_cleanup_reports_and_replays(self):
+        for with_node in (False, True):
+            with self.subTest(with_node=with_node):
+                nodes = [oh.make_node("Neg", ["live"], ["y"])] if with_node else []
+                output_name = "y" if with_node else "live"
+                model = oh.make_model(
+                    oh.make_graph(
+                        nodes,
+                        "initializer_cleanup",
+                        [],
+                        [oh.make_tensor_value_info(output_name, TensorProto.FLOAT, [2])],
+                        [
+                            oh.make_tensor("live", TensorProto.FLOAT, [2], [1, 2]),
+                            oh.make_tensor("unused", TensorProto.FLOAT, [2], [3, 4]),
+                        ],
+                    ),
+                    opset_imports=[oh.make_opsetid("", 18)],
+                    ir_version=10,
+                )
+                builder = optim.GraphBuilder(model)
+                graph = optim.GraphGraph(builder, [], use_global_patterns=False)
+                rewrites, report = graph.optimize(report=True)
+                optimized = builder.build_graph()
+
+                self.assertEqual(
+                    [rewrite.pattern_name for rewrite in rewrites], ["RemoveUnusedNodes"]
+                )
+                self.assertEqual(report.rewrites, 1)
+                self.assertEqual(len(report.patterns), 0)
+                self.assertEqual(len(optimized.node), len(nodes))
+                self.assertEqual([value.name for value in optimized.initializer], ["live"])
+                self.assertEqual(
+                    optimized.initializer[0].SerializeToString(),
+                    model.graph.initializer[0].SerializeToString(),
+                )
+                self.assertEqual(
+                    optim.replay(model, rewrites).SerializeToString(),
+                    optimized.SerializeToString(),
+                )
+                self.assertEqual(len(graph.optimize()), 0)
 
     def test_global_pattern_registration(self):
         optim.register_pattern(NegNegPattern())
@@ -186,6 +228,57 @@ class TestPatternOptimization(ExtTestCase):
         self.assertEqual(list(optimized.graph.node[0].input), ["x", "mn", "mx"])
         self.assertEqual(rewrites[0].pattern_name, "ClipClip")
 
+    def test_standard_gather_to_slice_pattern_rewrites_vector_singleton(self):
+        graph = oh.make_graph(
+            [oh.make_node("Gather", ["x", "idx"], ["y"])],
+            "agraph",
+            [oh.make_tensor_value_info("x", TensorProto.FLOAT, [5])],
+            [oh.make_tensor_value_info("y", TensorProto.FLOAT, [1])],
+            initializer=[oh.make_tensor("idx", TensorProto.INT64, [1], [3])],
+        )
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+
+        builder = optim.GraphBuilder(model)
+        graph = optim.GraphGraph(builder, optim.standard_patterns(["GatherToSlice"]))
+        rewrites = graph.optimize()
+        optimized = builder.to_onnx("model")
+
+        self.assertIn("GatherToSlice", optim.registered_pattern_names())
+        self.assertIsInstance(optim.GatherToSlicePattern(), optim.PatternOptimization)
+        self.assertEqual([node.op_type for node in optimized.graph.node], ["Slice"])
+        self.assertEqual(optimized.graph.node[0].input[0], "x")
+        self.assertEqual(optimized.graph.node[0].output[0], "y")
+        self.assertEqual(rewrites[0].pattern_name, "GatherToSlice")
+
+    def test_standard_gather_to_slice_pattern_rewrites_scalar_index_with_squeeze(self):
+        graph = oh.make_graph(
+            [oh.make_node("Gather", ["x", "idx"], ["y"])],
+            "agraph",
+            [oh.make_tensor_value_info("x", TensorProto.FLOAT, [5])],
+            [oh.make_tensor_value_info("y", TensorProto.FLOAT, [])],
+            initializer=[oh.make_tensor("idx", TensorProto.INT64, [], [2])],
+        )
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+
+        builder = optim.GraphBuilder(model)
+        graph = optim.GraphGraph(builder, optim.standard_patterns(["GatherToSlice"]))
+        graph.optimize()
+        optimized = builder.to_onnx("model")
+
+        op_types = [node.op_type for node in optimized.graph.node]
+        self.assertEqual(op_types, ["Slice", "Squeeze"])
+        self.assertEqual(optimized.graph.node[0].input[0], "x")
+        self.assertEqual(optimized.graph.node[-1].output[0], "y")
+
+    def test_structural_patterns_are_selectable(self):
+        names = set(optim.registered_pattern_names())
+        self.assertIn("SliceElimination", names)
+        self.assertIn("PadPadFusion", names)
+        self.assertIn("ReluClipFusion", names)
+        self.assertIsInstance(optim.SliceEliminationPattern(), optim.PatternOptimization)
+        self.assertIsInstance(optim.PadPadFusionPattern(), optim.PatternOptimization)
+        self.assertIsInstance(optim.ReluClipFusionPattern(), optim.PatternOptimization)
+
     def test_tensor_layout_algebra_patterns_are_selectable(self):
         names = (
             "ConcatReshape",
@@ -219,9 +312,12 @@ class TestPatternOptimization(ExtTestCase):
             "ShapeBasedIdentity",
             "ShapeBasedSameChildren",
             "ShapeBasedShapeShapeAdd",
+            "GemmSumFusion",
             "GemmTranspose",
             "MatMulAdd",
+            "MatMulBatchNormalizationFusion",
             "MatMulReshape2Of3",
+            "MatMulScaleFusion",
             "MulMulMatMul",
             "ReshapeMatMulReshape",
             "ShapeBasedMatMulToMul",
@@ -298,7 +394,7 @@ class TestPatternOptimization(ExtTestCase):
         self.assertEqual(len(rewrites), 1)
         self.assertEqual(rewrites[0].graph_path, ["then_branch"])
         self.assertIn("graph_path=then_branch", repr(rewrites[0]))
-        self.assertIn("  graph_path: then_branch\n", str(rewrites[0]))
+        self.assertIn("  graph_path: then_branch\n", rewrites[0].to_detailed_string())
         self.assertTrue(any(item.graph_path == ["then_branch"] for item in report.subgraphs))
 
     def test_render_rst_standard_patterns_table_lists_every_pattern(self):

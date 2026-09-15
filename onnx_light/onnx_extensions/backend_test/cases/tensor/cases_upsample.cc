@@ -44,13 +44,16 @@ Tensor MakeScalesTensor(const std::vector<float> &scales) {
 
 void RegisterUpsampleCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(9);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Upsample upsample_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeUpsampleNode("nearest");
     Expect(registry, std::move(node), "test_cc_upsample_nearest_benchmark", {opset}, {1048576, 4},
-           {6291456}, [upsample_kernel]() -> IoData {
+           {6291456}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(9);
+
+             const KernelContext upsample_kernel_ctx{opset};
+             const onnx_kernels::kernel::Upsample upsample_kernel{upsample_kernel_ctx};
+
              Tensor X = RandnTensor(DataType::FLOAT, {1, 1, 1024, 1024}, 2001);
              Tensor scales = MakeScalesTensor({1.0f, 1.0f, 2.0f, 3.0f});
              onnx_kernels::kernel::Upsample::Attributes attrs;
@@ -66,7 +69,12 @@ void RegisterUpsampleCases(std::vector<TestCase> &registry, TestMode mode) {
   // [1, 1, 2, 3], nearest mode -> output shape [1, 1, 4, 6].
   {
     Expect(registry, MakeUpsampleNode("nearest"), "test_cc_upsample_nearest", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(9);
+
+             const KernelContext upsample_kernel_ctx{opset};
+             const onnx_kernels::kernel::Upsample upsample_kernel{upsample_kernel_ctx};
+
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              const Tensor scales = MakeScalesTensor({1.0f, 1.0f, 2.0f, 3.0f});
              onnx_kernels::kernel::Upsample::Attributes attrs;
@@ -80,7 +88,12 @@ void RegisterUpsampleCases(std::vector<TestCase> &registry, TestMode mode) {
   // to "nearest" per the upstream spec).
   {
     Expect(registry, MakeUpsampleNode(""), "test_cc_upsample_nearest_default_mode", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(9);
+
+             const KernelContext upsample_kernel_ctx{opset};
+             const onnx_kernels::kernel::Upsample upsample_kernel{upsample_kernel_ctx};
+
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              const Tensor scales = MakeScalesTensor({1.0f, 1.0f, 2.0f, 2.0f});
              onnx_kernels::kernel::Upsample::Attributes attrs;
@@ -94,7 +107,12 @@ void RegisterUpsampleCases(std::vector<TestCase> &registry, TestMode mode) {
   // as an independent sanity check for the strided index mapping.
   {
     Expect(registry, MakeUpsampleNode("nearest"), "test_cc_upsample_nearest_1d", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(9);
+
+             const KernelContext upsample_kernel_ctx{opset};
+             const onnx_kernels::kernel::Upsample upsample_kernel{upsample_kernel_ctx};
+
              const Tensor X = Tensor::FromFloat("", {3}, {10.0f, 20.0f, 30.0f});
              const Tensor scales = MakeScalesTensor({2.0f});
              onnx_kernels::kernel::Upsample::Attributes attrs;
@@ -110,7 +128,12 @@ void RegisterUpsampleCases(std::vector<TestCase> &registry, TestMode mode) {
   // with another implementation.
   {
     Expect(registry, MakeUpsampleNode("linear"), "test_cc_upsample_linear", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(9);
+
+             const KernelContext upsample_kernel_ctx{opset};
+             const onnx_kernels::kernel::Upsample upsample_kernel{upsample_kernel_ctx};
+
              const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
              const Tensor scales = MakeScalesTensor({1.0f, 1.0f, 2.0f, 2.0f});
              onnx_kernels::kernel::Upsample::Attributes attrs;

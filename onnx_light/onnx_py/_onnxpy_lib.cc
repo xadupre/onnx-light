@@ -324,9 +324,10 @@ void AddOnnxPyLib(nb::module_ &m) {
       .def_prop_ro("has_data_propagation_function", &OpSchema::has_data_propagation_function)
       .def_prop_ro("type_constraints", &OpSchema::typeConstraintParams)
       .def_static("is_infinite", [](int v) { return v == std::numeric_limits<int>::max(); })
+      .def_prop_ro("node_determinism", &OpSchema::GetNodeDeterminism)
       .def_prop_ro("non_deterministic",
                    [](const OpSchema *op) {
-                     return op->GetNodeDeterminism() == OpSchema::NodeDeterminism::NonDeterministic;
+                     return op->GetNodeDeterminism() != OpSchema::NodeDeterminism::Deterministic;
                    })
       .def_prop_ro("has_function", &OpSchema::HasFunction)
       .def_prop_ro("_function_body",

@@ -35,8 +35,6 @@ NodeProto MakeConvNode(const std::vector<std::string> &inputs,
 
 void RegisterConvCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Conv conv{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeConvNode({"X", "W"}, {"Y"});
@@ -45,7 +43,12 @@ void RegisterConvCases(std::vector<TestCase> &registry, TestMode mode) {
     constexpr int64_t w_count = 32 * 32 * 3 * 3;
     constexpr int64_t y_count = 1 * 32 * 126 * 126;
     Expect(registry, std::move(node), "test_cc_basic_conv_without_padding_benchmark", {opset},
-           {x_count, w_count}, {y_count}, [conv]() -> IoData {
+           {x_count, w_count}, {y_count}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext conv_ctx{opset};
+             const onnx_kernels::kernel::Conv conv{conv_ctx};
+
              Tensor X = RandnTensor(DataType::FLOAT, {1, 32, 128, 128}, 1001);
              Tensor W = RandnTensor(DataType::FLOAT, {32, 32, 3, 3}, 1002);
              Tensor B;
@@ -71,12 +74,23 @@ void RegisterConvCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor B;
     onnx_kernels::kernel::Conv::Attributes attrs;
     attrs.kernel_shape = {3, 3};
-    Tensor Y = conv(X, W, B, attrs);
-    Y.name = "Y";
     NodeProto node = MakeConvNode({"X", "W"}, {"Y"});
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
     Expect(registry, std::move(node), "test_cc_basic_conv_without_padding", {opset},
-           [=]() -> IoData { return IoData{{std::move(X), std::move(W)}, {std::move(Y)}}; });
+           [attrs, Xv]() -> IoData {
+             Tensor X = Tensor::FromFloat("X", {1, 1, 5, 5}, Xv);
+             Tensor W = Tensor::FromFloat("W", {1, 1, 3, 3}, std::vector<float>(9, 1.0f));
+             Tensor B;
+
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext conv_ctx{opset};
+             const onnx_kernels::kernel::Conv conv{conv_ctx};
+
+             Tensor Y = conv(X, W, B, attrs);
+             Y.name = "Y";
+             return IoData{{std::move(X), std::move(W)}, {std::move(Y)}};
+           });
   }
 
   // -------------------------------------------------------------------
@@ -92,13 +106,24 @@ void RegisterConvCases(std::vector<TestCase> &registry, TestMode mode) {
     onnx_kernels::kernel::Conv::Attributes attrs;
     attrs.kernel_shape = {3, 3};
     attrs.pads = {1, 1, 1, 1};
-    Tensor Y = conv(X, W, B, attrs);
-    Y.name = "Y";
     NodeProto node = MakeConvNode({"X", "W"}, {"Y"});
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
     AddAttribute<std::vector<int64_t>>(node, "pads", {1, 1, 1, 1});
     Expect(registry, std::move(node), "test_cc_basic_conv_with_padding", {opset},
-           [=]() -> IoData { return IoData{{std::move(X), std::move(W)}, {std::move(Y)}}; });
+           [attrs, Xv]() -> IoData {
+             Tensor X = Tensor::FromFloat("X", {1, 1, 5, 5}, Xv);
+             Tensor W = Tensor::FromFloat("W", {1, 1, 3, 3}, std::vector<float>(9, 1.0f));
+             Tensor B;
+
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext conv_ctx{opset};
+             const onnx_kernels::kernel::Conv conv{conv_ctx};
+
+             Tensor Y = conv(X, W, B, attrs);
+             Y.name = "Y";
+             return IoData{{std::move(X), std::move(W)}, {std::move(Y)}};
+           });
   }
 
   // -------------------------------------------------------------------
@@ -116,14 +141,25 @@ void RegisterConvCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.kernel_shape = {3, 3};
     attrs.pads = {1, 1, 1, 1};
     attrs.strides = {2, 2};
-    Tensor Y = conv(X, W, B, attrs);
-    Y.name = "Y";
     NodeProto node = MakeConvNode({"X", "W"}, {"Y"});
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
     AddAttribute<std::vector<int64_t>>(node, "pads", {1, 1, 1, 1});
     AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2});
     Expect(registry, std::move(node), "test_cc_conv_with_strides_padding", {opset},
-           [=]() -> IoData { return IoData{{std::move(X), std::move(W)}, {std::move(Y)}}; });
+           [attrs, Xv]() -> IoData {
+             Tensor X = Tensor::FromFloat("X", {1, 1, 7, 5}, Xv);
+             Tensor W = Tensor::FromFloat("W", {1, 1, 3, 3}, std::vector<float>(9, 1.0f));
+             Tensor B;
+
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext conv_ctx{opset};
+             const onnx_kernels::kernel::Conv conv{conv_ctx};
+
+             Tensor Y = conv(X, W, B, attrs);
+             Y.name = "Y";
+             return IoData{{std::move(X), std::move(W)}, {std::move(Y)}};
+           });
   }
 
   // -------------------------------------------------------------------
@@ -139,14 +175,24 @@ void RegisterConvCases(std::vector<TestCase> &registry, TestMode mode) {
     onnx_kernels::kernel::Conv::Attributes attrs;
     attrs.kernel_shape = {3, 3};
     attrs.auto_pad = AutoPad::kSameUpper;
-    Tensor Y = conv(X, W, B, attrs);
-    Y.name = "Y";
     NodeProto node = MakeConvNode({"X", "W", "B"}, {"Y"});
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
     AddAttribute<std::string>(node, "auto_pad", "SAME_UPPER");
-    Expect(registry, std::move(node), "test_cc_conv_with_autopad_same", {opset}, [=]() -> IoData {
-      return IoData{{std::move(X), std::move(W), std::move(B)}, {std::move(Y)}};
-    });
+    Expect(registry, std::move(node), "test_cc_conv_with_autopad_same", {opset},
+           [attrs, Xv]() -> IoData {
+             Tensor X = Tensor::FromFloat("X", {1, 1, 4, 4}, Xv);
+             Tensor W = Tensor::FromFloat("W", {1, 1, 3, 3}, std::vector<float>(9, 1.0f));
+             Tensor B = Tensor::FromFloat("B", {1}, {0.5f});
+
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext conv_ctx{opset};
+             const onnx_kernels::kernel::Conv conv{conv_ctx};
+
+             Tensor Y = conv(X, W, B, attrs);
+             Y.name = "Y";
+             return IoData{{std::move(X), std::move(W), std::move(B)}, {std::move(Y)}};
+           });
   }
 
   // -------------------------------------------------------------------
@@ -163,13 +209,24 @@ void RegisterConvCases(std::vector<TestCase> &registry, TestMode mode) {
     onnx_kernels::kernel::Conv::Attributes attrs;
     attrs.kernel_shape = {3, 3};
     attrs.strides = {2, 2};
-    Tensor Y = conv(X, W, B, attrs);
-    Y.name = "Y";
     NodeProto node = MakeConvNode({"X", "W"}, {"Y"});
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
     AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2});
     Expect(registry, std::move(node), "test_cc_conv_with_strides_no_padding", {opset},
-           [=]() -> IoData { return IoData{{std::move(X), std::move(W)}, {std::move(Y)}}; });
+           [attrs, Xv]() -> IoData {
+             Tensor X = Tensor::FromFloat("X", {1, 1, 7, 5}, Xv);
+             Tensor W = Tensor::FromFloat("W", {1, 1, 3, 3}, std::vector<float>(9, 1.0f));
+             Tensor B;
+
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext conv_ctx{opset};
+             const onnx_kernels::kernel::Conv conv{conv_ctx};
+
+             Tensor Y = conv(X, W, B, attrs);
+             Y.name = "Y";
+             return IoData{{std::move(X), std::move(W)}, {std::move(Y)}};
+           });
   }
 
   // -------------------------------------------------------------------
@@ -187,14 +244,25 @@ void RegisterConvCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.kernel_shape = {3, 3};
     attrs.pads = {1, 0, 1, 0};
     attrs.strides = {2, 2};
-    Tensor Y = conv(X, W, B, attrs);
-    Y.name = "Y";
     NodeProto node = MakeConvNode({"X", "W"}, {"Y"});
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
     AddAttribute<std::vector<int64_t>>(node, "pads", {1, 0, 1, 0});
     AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2});
     Expect(registry, std::move(node), "test_cc_conv_with_strides_and_asymmetric_padding", {opset},
-           [=]() -> IoData { return IoData{{std::move(X), std::move(W)}, {std::move(Y)}}; });
+           [attrs, Xv]() -> IoData {
+             Tensor X = Tensor::FromFloat("X", {1, 1, 7, 5}, Xv);
+             Tensor W = Tensor::FromFloat("W", {1, 1, 3, 3}, std::vector<float>(9, 1.0f));
+             Tensor B;
+
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext conv_ctx{opset};
+             const onnx_kernels::kernel::Conv conv{conv_ctx};
+
+             Tensor Y = conv(X, W, B, attrs);
+             Y.name = "Y";
+             return IoData{{std::move(X), std::move(W)}, {std::move(Y)}};
+           });
   }
 
   // -------------------------------------------------------------------
@@ -215,14 +283,25 @@ void RegisterConvCases(std::vector<TestCase> &registry, TestMode mode) {
     attrs.kernel_shape = {3, 3};
     attrs.auto_pad = AutoPad::kSameUpper;
     attrs.strides = {2, 2};
-    Tensor Y = conv(X, W, B, attrs);
-    Y.name = "Y";
     NodeProto node = MakeConvNode({"X", "W"}, {"Y"});
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
     AddAttribute<std::string>(node, "auto_pad", "SAME_UPPER");
     AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2});
     Expect(registry, std::move(node), "test_cc_conv_with_autopad_same_stride2", {opset},
-           [=]() -> IoData { return IoData{{std::move(X), std::move(W)}, {std::move(Y)}}; });
+           [attrs, Xv]() -> IoData {
+             Tensor X = Tensor::FromFloat("X", {1, 1, 4, 4}, Xv);
+             Tensor W = Tensor::FromFloat("W", {1, 1, 3, 3}, std::vector<float>(9, 1.0f));
+             Tensor B;
+
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext conv_ctx{opset};
+             const onnx_kernels::kernel::Conv conv{conv_ctx};
+
+             Tensor Y = conv(X, W, B, attrs);
+             Y.name = "Y";
+             return IoData{{std::move(X), std::move(W)}, {std::move(Y)}};
+           });
   }
 
   // -------------------------------------------------------------------
@@ -240,12 +319,21 @@ void RegisterConvCases(std::vector<TestCase> &registry, TestMode mode) {
     onnx_kernels::kernel::Conv::Attributes attrs;
     attrs.kernel_shape = {3, 3};
     attrs.pads = {1, 1, 1, 1};
-    Tensor Y = conv(X, W, B, attrs);
-    Y.name = "Y";
     NodeProto node = MakeConvNode({"X", "W", "B"}, {"Y"});
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
     AddAttribute<std::vector<int64_t>>(node, "pads", {1, 1, 1, 1});
-    Expect(registry, std::move(node), "test_cc_conv_fp16", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_conv_fp16", {opset}, [attrs, Xv]() -> IoData {
+      Tensor X = MakeFloat16Tensor("X", {1, 1, 4, 4}, Xv);
+      Tensor W = MakeFloat16Tensor("W", {1, 1, 3, 3}, std::vector<float>(9, 0.25f));
+      Tensor B = MakeFloat16Tensor("B", {1}, {0.5f});
+
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext conv_ctx{opset};
+      const onnx_kernels::kernel::Conv conv{conv_ctx};
+
+      Tensor Y = conv(X, W, B, attrs);
+      Y.name = "Y";
       return IoData{{std::move(X), std::move(W), std::move(B)}, {std::move(Y)}};
     });
   }

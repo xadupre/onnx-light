@@ -2,17 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_lib/defs/doc_strings.h"
 #include "onnx_lib/defs/schema.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
-static constexpr const char *OptionalHasElement_ver1_doc = R"DOC(
-Returns true if the optional-type input contains an element. If it is an empty optional-type, this op returns false.
-)DOC";
-
 ONNX_OPERATOR_SET_SCHEMA(
     OptionalHasElement, 15,
     OpSchema()
-        .SetDoc(OptionalHasElement_ver1_doc)
+        .SetDoc(kDoc_OptionalHasElement_ver1)
         .Input(0, "input", "The optional input.", "O")
         .Output(0, "output",
                 "A scalar boolean tensor. If true, it indicates that optional-type input contains "
@@ -34,16 +31,10 @@ ONNX_OPERATOR_SET_SCHEMA(
           output_tensor_type->set_elem_type(TensorProto::BOOL);
           output_tensor_type->mutable_shape()->Clear();
         }));
-
-static constexpr const char *OptionalGetElement_ver1_doc = R"DOC(
-Outputs the element in the optional-type input. It is an error if the input value does not have an element
-and the behavior is undefined in this case.
-)DOC";
-
 ONNX_OPERATOR_SET_SCHEMA(
     OptionalGetElement, 15,
     OpSchema()
-        .SetDoc(OptionalGetElement_ver1_doc)
+        .SetDoc(kDoc_OptionalGetElement_ver1)
         .Input(0, "input", "The optional input.", "O")
         .Output(0, "output", "Output element in the optional input.", "V")
         .TypeConstraint("O", OpSchema::all_optional_types(),

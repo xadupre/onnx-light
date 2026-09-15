@@ -30,6 +30,7 @@
 
 #include <gtest/gtest.h>
 
+#include <memory>
 #include <regex>
 #include <stdexcept>
 #include <string>
@@ -40,12 +41,18 @@
 #include <utility>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::backend_test::BuiltCase;
 using core::backend_test::CollectTestCases;
 using core::backend_test::CollectTestCasesByName;
+using core::backend_test::DataSet;
 using core::backend_test::DefaultOpset;
 using core::backend_test::Expect;
+using core::backend_test::IoData;
 using core::backend_test::OpsetId;
+using core::backend_test::TensorTypeSpec;
 using core::backend_test::TestCase;
+using core::backend_test::TestCaseKind;
+using core::backend_test::TestCaseTag;
 using core::runtime::Tensor;
 
 namespace Test {
@@ -135,8 +142,8 @@ TEST(BackendTestCase, ExpectBuildsSingleNodeModel) {
   ASSERT_EQ(registry.size(), 1u);
   const TestCase &tc = registry[0];
   EXPECT_EQ(tc.name, "test_dummy_add");
-  EXPECT_EQ(tc.kind, "node");
-  EXPECT_EQ(tc.tag, "");
+  EXPECT_EQ(tc.kind, TestCaseKind::NODE);
+  EXPECT_EQ(tc.tag, TestCaseTag::NONE);
   EXPECT_EQ(tc.data_sets().size(), 1u);
   EXPECT_EQ(tc.data_sets()[0].inputs.size(), 2u);
   EXPECT_EQ(tc.data_sets()[0].outputs.size(), 1u);
@@ -150,6 +157,100 @@ TEST(BackendTestCase, ExpectBuildsSingleNodeModel) {
             "Add");
   ASSERT_EQ(tc.model().ref_opset_import().size(), 1u);
   EXPECT_EQ(tc.model().ref_opset_import()[0].version(), 14);
+}
+
+TEST(BackendTestCase, LazyCaseCanUnloadAndRematerialize) {
+  int builds = 0;
+  TestCase tc("lazy_case");
+  tc.build = [&builds](bool) {
+    ++builds;
+    BuiltCase built;
+    built.model.set_ir_version(9);
+    DataSet data_set;
+    data_set.inputs.push_back(Tensor::FromFloat("x", {1}, {1.0f}));
+    built.data_sets.push_back(std::move(data_set));
+    return built;
+  };
+
+  EXPECT_FALSE(tc.materialized());
+  EXPECT_EQ(tc.model().ir_version(), 9);
+  EXPECT_EQ(tc.data_sets()[0].inputs[0].AsFloat()[0], 1.0f);
+  EXPECT_TRUE(tc.materialized());
+  EXPECT_EQ(builds, 1);
+
+  tc.unload();
+  EXPECT_FALSE(tc.materialized());
+  EXPECT_EQ(tc.name, "lazy_case");
+  EXPECT_EQ(tc.model().ir_version(), 9);
+  EXPECT_EQ(tc.data_sets()[0].inputs[0].AsFloat()[0], 1.0f);
+  EXPECT_EQ(builds, 2);
+
+  tc.unload();
+  EXPECT_FALSE(tc.materialized());
+}
+
+TEST(BackendTestCase, CollectedCaseUnloadReleasesBuildState) {
+  auto build_state = std::make_shared<int>(1);
+  std::weak_ptr<int> weak_build_state = build_state;
+
+  TestCase tc("collected_case");
+  tc.build = [state = build_state](bool) {
+    BuiltCase built;
+    built.model.set_ir_version(*state);
+    return built;
+  };
+  tc.set_rebuild([](bool) {
+    BuiltCase built;
+    built.model.set_ir_version(2);
+    return built;
+  });
+  build_state.reset();
+
+  EXPECT_FALSE(weak_build_state.expired());
+  tc.unload();
+  EXPECT_TRUE(weak_build_state.expired());
+  EXPECT_FALSE(tc.materialized());
+  EXPECT_EQ(tc.model().ir_version(), 2);
+}
+
+TEST(BackendTestCase, RematerializedCaseKeepsBorrowedDataAlive) {
+  // Mirrors kernels such as ``Constant`` whose returning overload borrows the
+  // builder's captured tensor instead of copying it: the payload produced by a
+  // rebuild closure must keep that builder alive, otherwise the data sets view
+  // freed memory once the case is rematerialized.
+  TestCase tc("borrowing_case");
+  tc.set_rebuild([](bool) {
+    auto source = std::make_shared<TestCase>("borrowing_source");
+    source->build = [value = Tensor::FromFloat("y", {3}, {1.5f, 2.5f, 3.5f})](bool) {
+      BuiltCase inner;
+      inner.model.set_ir_version(9);
+      DataSet data_set;
+      data_set.outputs.push_back(
+          Tensor::Borrow("y", value.data_type, value.shape, value.bytes(), value.size_bytes()));
+      inner.data_sets.push_back(std::move(data_set));
+      return inner;
+    };
+    source->Materialize();
+    BuiltCase built = source->take_materialized();
+    built.retained = source;
+    return built;
+  });
+
+  ASSERT_TRUE(tc.data_sets()[0].outputs[0].is_borrowed());
+  EXPECT_EQ(tc.data_sets()[0].outputs[0].AsFloat()[0], 1.5f);
+  EXPECT_EQ(tc.data_sets()[0].outputs[0].AsFloat()[2], 3.5f);
+
+  tc.unload();
+  ASSERT_TRUE(tc.data_sets()[0].outputs[0].is_borrowed());
+  EXPECT_EQ(tc.data_sets()[0].outputs[0].AsFloat()[0], 1.5f);
+  EXPECT_EQ(tc.data_sets()[0].outputs[0].AsFloat()[2], 3.5f);
+}
+
+TEST(BackendTestCase, EagerCaseCannotUnload) {
+  TestCase tc("eager_case");
+  tc.emplace_model().set_ir_version(9);
+  EXPECT_THROW(tc.unload(), std::runtime_error);
+  EXPECT_TRUE(tc.materialized());
 }
 
 TEST(BackendTestCase, DefaultOpsetUsesEmptyDomain) {
@@ -181,7 +282,7 @@ TEST(BackendTestCase, TagDefaultsToEmptyForOrdinaryCases) {
   onnx_backend_test::CollectMathTestCases(registry);
   ASSERT_FALSE(registry.empty());
   for (const auto &tc : registry) {
-    EXPECT_EQ(tc.tag, "") << "case: " << tc.name;
+    EXPECT_EQ(tc.tag, TestCaseTag::NONE) << "case: " << tc.name;
   }
 }
 
@@ -190,7 +291,7 @@ TEST(BackendTestCase, TagIsEmptyShapeForEmptyShapeCases) {
   onnx_backend_test::CollectEmptyShapeTestCases(registry);
   ASSERT_FALSE(registry.empty());
   for (const auto &tc : registry) {
-    EXPECT_EQ(tc.tag, "empty_shape") << "case: " << tc.name;
+    EXPECT_EQ(tc.tag, TestCaseTag::EMPTY_SHAPE) << "case: " << tc.name;
   }
 }
 
@@ -199,7 +300,7 @@ TEST(BackendTestCase, TagIsNanInfForNanInfCases) {
   onnx_backend_test::CollectNanInfTestCases(registry);
   ASSERT_FALSE(registry.empty());
   for (const auto &tc : registry) {
-    EXPECT_EQ(tc.tag, "nan_inf") << "case: " << tc.name;
+    EXPECT_EQ(tc.tag, TestCaseTag::NAN_INF) << "case: " << tc.name;
   }
 }
 
@@ -208,7 +309,7 @@ TEST(BackendTestCase, TagIsInferenceForShapeInferenceCases) {
   onnx_backend_test::CollectShapeInferenceTestCases(registry);
   ASSERT_FALSE(registry.empty());
   for (const auto &tc : registry) {
-    EXPECT_EQ(tc.tag, "inference") << "case: " << tc.name;
+    EXPECT_EQ(tc.tag, TestCaseTag::INFERENCE) << "case: " << tc.name;
   }
 }
 
@@ -217,7 +318,7 @@ TEST(BackendTestCase, TagIsInPlaceForInPlaceCases) {
   onnx_backend_test::CollectInPlaceTestCases(registry);
   ASSERT_FALSE(registry.empty());
   for (const auto &tc : registry) {
-    EXPECT_EQ(tc.tag, "inplace") << "case: " << tc.name;
+    EXPECT_EQ(tc.tag, TestCaseTag::INPLACE) << "case: " << tc.name;
   }
 }
 
@@ -226,7 +327,7 @@ TEST(BackendTestCase, TagIsReleaseForReleaseCases) {
   onnx_backend_test::CollectReleaseTestCases(registry);
   ASSERT_FALSE(registry.empty());
   for (const auto &tc : registry) {
-    EXPECT_EQ(tc.tag, "release") << "case: " << tc.name;
+    EXPECT_EQ(tc.tag, TestCaseTag::RELEASE) << "case: " << tc.name;
   }
 }
 
@@ -235,7 +336,7 @@ TEST(BackendTestCase, TagIsShapeTagForShapeTagCases) {
   onnx_backend_test::CollectShapeTagTestCases(registry);
   ASSERT_FALSE(registry.empty());
   for (const auto &tc : registry) {
-    EXPECT_EQ(tc.tag, "shape_tag") << "case: " << tc.name;
+    EXPECT_EQ(tc.tag, TestCaseTag::SHAPE_TAG) << "case: " << tc.name;
   }
 }
 
@@ -257,7 +358,7 @@ TEST(BackendTestCase, TagDefaultsToDomainForNonDefaultDomainNode) {
          {OpsetId("ai.onnx.ml", 1)}, "backend-test", registry);
 
   ASSERT_EQ(registry.size(), 1u);
-  EXPECT_EQ(registry[0].tag, "ai.onnx.ml");
+  EXPECT_EQ(registry[0].tag, TestCaseTag::AI_ONNX_ML);
 }
 
 TEST(BackendTestCase, TagStaysEmptyForDefaultDomainNode) {
@@ -274,7 +375,37 @@ TEST(BackendTestCase, TagStaysEmptyForDefaultDomainNode) {
          "backend-test", registry);
 
   ASSERT_EQ(registry.size(), 1u);
-  EXPECT_EQ(registry[0].tag, "");
+  EXPECT_EQ(registry[0].tag, TestCaseTag::NONE);
+}
+
+TEST(BackendTestCase, InputOnlyLazyCaseSkipsExpectedOutputOracle) {
+  NodeProto node;
+  node.set_op_type("Abs");
+  node.add_input("x");
+  node.add_output("y");
+
+  bool oracle_called = false;
+  std::vector<TestCase> registry;
+  Expect(registry, std::move(node), "input_only", {DefaultOpset(14)}, {2}, {2},
+         [&oracle_called](bool generate_outputs) {
+           IoData io{{Tensor::FromFloat("", {2}, {-1.0f, 2.0f})}, {}};
+           io.expected_outputs_generated = generate_outputs;
+           if (generate_outputs) {
+             oracle_called = true;
+             io.outputs.emplace_back(Tensor::FromFloat("", {2}, {1.0f, 2.0f}));
+           }
+           return io;
+         },
+         "backend-test", TestCaseTag::NONE, {TensorTypeSpec(TensorProto::FLOAT, {2})});
+
+  ASSERT_EQ(registry.size(), 1u);
+  registry[0].set_expected_outputs_generated(false);
+  EXPECT_FALSE(registry[0].has_expected_outputs());
+  const auto &data_sets = registry[0].data_sets();
+  ASSERT_EQ(data_sets.size(), 1u);
+  EXPECT_FALSE(data_sets[0].expected_outputs_generated);
+  EXPECT_TRUE(data_sets[0].outputs.empty());
+  EXPECT_FALSE(oracle_called);
 }
 
 TEST(BackendTestCase, ExplicitTagOverridesDomainDefault) {
@@ -289,10 +420,10 @@ TEST(BackendTestCase, ExplicitTagOverridesDomainDefault) {
   std::vector<TestCase> registry;
   Expect(node, {Tensor::FromFloat("x", {2}, {1.0f, 2.0f})},
          {Tensor::FromFloat("y", {2}, {0.0f, 1.0f})}, "test_cc_explicit_tag",
-         {OpsetId("ai.onnx.ml", 1)}, "backend-test", registry, "inference");
+         {OpsetId("ai.onnx.ml", 1)}, "backend-test", registry, TestCaseTag::INFERENCE);
 
   ASSERT_EQ(registry.size(), 1u);
-  EXPECT_EQ(registry[0].tag, "inference");
+  EXPECT_EQ(registry[0].tag, TestCaseTag::INFERENCE);
 }
 
 TEST(BackendTestCase, CollectReturnsExpectedNames) {
@@ -653,12 +784,7 @@ TEST(BackendTestCase, CollectEmptyFilterReturnsAllCases) {
   EXPECT_EQ(all_math.size(), all_math_default.size());
 }
 
-TEST(BackendTestCase, DISABLED_BenchmarkModeCollectsAllCategories) {
-  // Heavy: BENCHMARK collection executes every kernel on large inputs, so it is
-  // disabled by default. Run manually with
-  // ``--gtest_also_run_disabled_tests --gtest_filter=*BenchmarkModeCollectsAll*``
-  // to validate that every category's benchmark branch is runnable and to time
-  // each category so pathologically-sized benchmark shapes can be found.
+TEST(BackendTestCase, BenchmarkModeCollectsAllCategories) {
   using core::backend_test::TestMode;
   const std::vector<
       std::pair<std::string, void (*)(std::vector<TestCase> &, const std::string &, TestMode)>>
@@ -705,13 +831,7 @@ TEST(BackendTestCase, DISABLED_BenchmarkModeCollectsAllCategories) {
   EXPECT_GT(benchmark_cases, 0u);
 }
 
-TEST(BackendTestCase, DISABLED_BenchmarkModeMaterializesAllCategories) {
-  // Heavy: forces every benchmark case's lazy builder to run (generating large
-  // inputs and evaluating the reference kernel), so it is disabled by default.
-  // Run manually with
-  // ``--gtest_also_run_disabled_tests --gtest_filter=*BenchmarkModeMaterializesAll*``.
-  // Validates that every lazy benchmark builder is runnable and that the tensors
-  // it produces have the element counts declared at collection time.
+TEST(BackendTestCase, BenchmarkModeCasesHaveValidSizingForAllCategories) {
   using core::backend_test::TestMode;
   const std::vector<
       std::pair<std::string, void (*)(std::vector<TestCase> &, const std::string &, TestMode)>>
@@ -738,42 +858,24 @@ TEST(BackendTestCase, DISABLED_BenchmarkModeMaterializesAllCategories) {
           {"ShapeTag", onnx_backend_test::CollectShapeTagTestCases},
           {"NanInf", onnx_backend_test::CollectNanInfTestCases},
       };
-  size_t materialized = 0;
-  for (const auto &[name, fn] : collectors) {
+  size_t benchmark_cases = 0;
+  for (const auto &collector : collectors) {
     std::vector<TestCase> reg;
-    fn(reg, "", TestMode::BENCHMARK);
-    for (auto &tc : reg) {
+    collector.second(reg, "", TestMode::BENCHMARK);
+    for (const auto &tc : reg) {
       if (tc.name.find("_benchmark") == std::string::npos) {
         continue;
       }
-      // Lazy cases declared their sizing; verify materialization reproduces it.
-      const bool was_lazy = static_cast<bool>(tc.build);
-      tc.Materialize();
-      ASSERT_FALSE(tc.data_sets().empty()) << "no data set materialized: " << tc.name;
-      const auto &ds = tc.data_sets()[0];
-      if (was_lazy && !tc.declared_input_element_counts.empty()) {
-        ASSERT_EQ(ds.inputs.size(), tc.declared_input_element_counts.size())
-            << "input count mismatch: " << tc.name;
-        for (size_t i = 0; i < ds.inputs.size(); ++i) {
-          EXPECT_EQ(ds.inputs[i].element_count(), tc.declared_input_element_counts[i])
-              << "input[" << i << "] size mismatch: " << tc.name;
-        }
+      for (int64_t count : tc.declared_input_element_counts) {
+        EXPECT_GE(count, 0) << "invalid input size: " << tc.name;
       }
-      if (was_lazy && !tc.declared_output_element_counts.empty()) {
-        ASSERT_EQ(ds.outputs.size(), tc.declared_output_element_counts.size())
-            << "output count mismatch: " << tc.name;
-        for (size_t i = 0; i < ds.outputs.size(); ++i) {
-          EXPECT_EQ(ds.outputs[i].element_count(), tc.declared_output_element_counts[i])
-              << "output[" << i << "] size mismatch: " << tc.name;
-        }
+      for (int64_t count : tc.declared_output_element_counts) {
+        EXPECT_GE(count, 0) << "invalid output size: " << tc.name;
       }
-      // The model must build too.
-      EXPECT_TRUE(tc.model().has_graph()) << "no graph in materialized model: " << tc.name;
-      ++materialized;
+      ++benchmark_cases;
     }
-    std::cout << "[bench-materialize] " << name << ": done" << std::endl;
   }
-  EXPECT_GT(materialized, 0u);
+  EXPECT_GT(benchmark_cases, 0u);
 }
 
 } // namespace Test

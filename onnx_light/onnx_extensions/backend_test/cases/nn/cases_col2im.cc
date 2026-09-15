@@ -38,8 +38,6 @@ NodeProto MakeCol2ImNode(const std::vector<std::string> &inputs,
 // expectations stay self-consistent with this library.
 void RegisterCol2ImCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Col2Im op{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     // Large 2-D Col2Im: image 64x64, block 4x4, 16 channels.
@@ -52,7 +50,12 @@ void RegisterCol2ImCases(std::vector<TestCase> &registry, TestMode mode) {
     const std::vector<int64_t> in_shape = {1, col, blocks};
     NodeProto node = MakeCol2ImNode({"input", "image_shape", "block_shape"}, {"output"});
     Expect(registry, std::move(node), "test_cc_col2im_benchmark", {opset}, {col * blocks, 2, 2},
-           {channels * image * image}, [op, in_shape, block, image]() -> IoData {
+           {channels * image * image}, [in_shape]() -> IoData {
+             const OpsetId opset = DefaultOpset(18);
+
+             const KernelContext op_ctx{opset};
+             const onnx_kernels::kernel::Col2Im op{op_ctx};
+
              Tensor input = RandnTensor(DataType::FLOAT, in_shape, 2001);
              Tensor image_shape = Tensor::FromInt64("image_shape", {2}, {image, image});
              Tensor block_shape = Tensor::FromInt64("block_shape", {2}, {block, block});
@@ -77,10 +80,19 @@ void RegisterCol2ImCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor image_shape = Tensor::FromInt64("image_shape", {2}, {5, 5});
     Tensor block_shape = Tensor::FromInt64("block_shape", {2}, {1, 5});
     onnx_kernels::kernel::Col2Im::Attributes attrs;
-    Tensor output = op(input, image_shape, block_shape, attrs);
-    output.name = "output";
     NodeProto node = MakeCol2ImNode({"input", "image_shape", "block_shape"}, {"output"});
-    Expect(registry, std::move(node), "test_cc_col2im", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_col2im", {opset}, [attrs, in_v]() -> IoData {
+      Tensor input = Tensor::FromFloat("input", {1, 5, 5}, in_v);
+      Tensor image_shape = Tensor::FromInt64("image_shape", {2}, {5, 5});
+      Tensor block_shape = Tensor::FromInt64("block_shape", {2}, {1, 5});
+
+      const OpsetId opset = DefaultOpset(18);
+
+      const KernelContext op_ctx{opset};
+      const onnx_kernels::kernel::Col2Im op{op_ctx};
+
+      Tensor output = op(input, image_shape, block_shape, attrs);
+      output.name = "output";
       return IoData{{std::move(input), std::move(image_shape), std::move(block_shape)},
                     {std::move(output)}};
     });
@@ -98,11 +110,20 @@ void RegisterCol2ImCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor block_shape = Tensor::FromInt64("block_shape", {2}, {1, 5});
     onnx_kernels::kernel::Col2Im::Attributes attrs;
     attrs.pads = {0, 1, 0, 1};
-    Tensor output = op(input, image_shape, block_shape, attrs);
-    output.name = "output";
     NodeProto node = MakeCol2ImNode({"input", "image_shape", "block_shape"}, {"output"});
     AddAttribute<std::vector<int64_t>>(node, "pads", {0, 1, 0, 1});
-    Expect(registry, std::move(node), "test_cc_col2im_pads", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_col2im_pads", {opset}, [attrs, in_v]() -> IoData {
+      Tensor input = Tensor::FromFloat("input", {1, 5, 15}, in_v);
+      Tensor image_shape = Tensor::FromInt64("image_shape", {2}, {5, 5});
+      Tensor block_shape = Tensor::FromInt64("block_shape", {2}, {1, 5});
+
+      const OpsetId opset = DefaultOpset(18);
+
+      const KernelContext op_ctx{opset};
+      const onnx_kernels::kernel::Col2Im op{op_ctx};
+
+      Tensor output = op(input, image_shape, block_shape, attrs);
+      output.name = "output";
       return IoData{{std::move(input), std::move(image_shape), std::move(block_shape)},
                     {std::move(output)}};
     });
@@ -120,11 +141,20 @@ void RegisterCol2ImCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor block_shape = Tensor::FromInt64("block_shape", {2}, {3, 3});
     onnx_kernels::kernel::Col2Im::Attributes attrs;
     attrs.strides = {2, 2};
-    Tensor output = op(input, image_shape, block_shape, attrs);
-    output.name = "output";
     NodeProto node = MakeCol2ImNode({"input", "image_shape", "block_shape"}, {"output"});
     AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2});
-    Expect(registry, std::move(node), "test_cc_col2im_strides", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_col2im_strides", {opset}, [attrs, in_v]() -> IoData {
+      Tensor input = Tensor::FromFloat("input", {1, 9, 4}, in_v);
+      Tensor image_shape = Tensor::FromInt64("image_shape", {2}, {5, 5});
+      Tensor block_shape = Tensor::FromInt64("block_shape", {2}, {3, 3});
+
+      const OpsetId opset = DefaultOpset(18);
+
+      const KernelContext op_ctx{opset};
+      const onnx_kernels::kernel::Col2Im op{op_ctx};
+
+      Tensor output = op(input, image_shape, block_shape, attrs);
+      output.name = "output";
       return IoData{{std::move(input), std::move(image_shape), std::move(block_shape)},
                     {std::move(output)}};
     });
@@ -142,14 +172,24 @@ void RegisterCol2ImCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor block_shape = Tensor::FromInt64("block_shape", {2}, {2, 2});
     onnx_kernels::kernel::Col2Im::Attributes attrs;
     attrs.dilations = {1, 5};
-    Tensor output = op(input, image_shape, block_shape, attrs);
-    output.name = "output";
     NodeProto node = MakeCol2ImNode({"input", "image_shape", "block_shape"}, {"output"});
     AddAttribute<std::vector<int64_t>>(node, "dilations", {1, 5});
-    Expect(registry, std::move(node), "test_cc_col2im_dilations", {opset}, [=]() -> IoData {
-      return IoData{{std::move(input), std::move(image_shape), std::move(block_shape)},
-                    {std::move(output)}};
-    });
+    Expect(registry, std::move(node), "test_cc_col2im_dilations", {opset},
+           [attrs, in_v]() -> IoData {
+             Tensor input = Tensor::FromFloat("input", {1, 4, 5}, in_v);
+             Tensor image_shape = Tensor::FromInt64("image_shape", {2}, {6, 6});
+             Tensor block_shape = Tensor::FromInt64("block_shape", {2}, {2, 2});
+
+             const OpsetId opset = DefaultOpset(18);
+
+             const KernelContext op_ctx{opset};
+             const onnx_kernels::kernel::Col2Im op{op_ctx};
+
+             Tensor output = op(input, image_shape, block_shape, attrs);
+             output.name = "output";
+             return IoData{{std::move(input), std::move(image_shape), std::move(block_shape)},
+                           {std::move(output)}};
+           });
   }
 
   // ---------------------------------------------------------------------
@@ -164,10 +204,19 @@ void RegisterCol2ImCases(std::vector<TestCase> &registry, TestMode mode) {
     Tensor image_shape = Tensor::FromInt64("image_shape", {3}, {3, 4, 5});
     Tensor block_shape = Tensor::FromInt64("block_shape", {3}, {1, 1, 5});
     onnx_kernels::kernel::Col2Im::Attributes attrs;
-    Tensor output = op(input, image_shape, block_shape, attrs);
-    output.name = "output";
     NodeProto node = MakeCol2ImNode({"input", "image_shape", "block_shape"}, {"output"});
-    Expect(registry, std::move(node), "test_cc_col2im_5d", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_col2im_5d", {opset}, [attrs, in_v]() -> IoData {
+      Tensor input = Tensor::FromFloat("input", {1, 10, 12}, in_v);
+      Tensor image_shape = Tensor::FromInt64("image_shape", {3}, {3, 4, 5});
+      Tensor block_shape = Tensor::FromInt64("block_shape", {3}, {1, 1, 5});
+
+      const OpsetId opset = DefaultOpset(18);
+
+      const KernelContext op_ctx{opset};
+      const onnx_kernels::kernel::Col2Im op{op_ctx};
+
+      Tensor output = op(input, image_shape, block_shape, attrs);
+      output.name = "output";
       return IoData{{std::move(input), std::move(image_shape), std::move(block_shape)},
                     {std::move(output)}};
     });

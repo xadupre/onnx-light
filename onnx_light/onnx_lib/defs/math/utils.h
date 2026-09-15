@@ -25,6 +25,8 @@ namespace ONNX_LIGHT_NAMESPACE::defs::math::utils {
 
 std::function<void(OpSchema &)> TopKOpGenerator(std::vector<std::string> allowed_types);
 
+std::function<void(OpSchema &)> EinsumOpGenerator(std::vector<std::string> allowed_types);
+
 template <typename T> T GetScalarValueFromTensor(const ONNX_LIGHT_NAMESPACE::TensorProto *t) {
   if (t == nullptr) {
     return T{};
@@ -49,8 +51,6 @@ void MatMulShapeInference(ONNX_LIGHT_NAMESPACE::InferenceContext &ctx, int input
                           int input2Idx);
 
 void QLinearMatMulShapeInference(ONNX_LIGHT_NAMESPACE::InferenceContext &ctx);
-
-const char *QLinearMatMulDoc();
 
 int64_t MathOpTwoIntegers(const std::string &op_type, int64_t a, int64_t b);
 

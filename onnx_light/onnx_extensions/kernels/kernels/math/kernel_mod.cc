@@ -61,9 +61,20 @@ template <typename T> T TruncMod(T a, T b) {
 // for zero divisors, matching the convention established by
 // :ref:`kernel::Div` (the upstream ONNX backend tests guarantee non-zero
 // divisors).
-template <typename T> T FloatFmod(T a, T b) {
+template <typename T> T FloatFmod(T a, T b, int64_t fmod) {
   static_assert(std::is_floating_point<T>::value, "FloatFmod requires a floating-point type.");
-  return std::fmod(a, b);
+  T r = std::fmod(a, b);
+  if (fmod == 0) {
+    // NumPy remainder adjusts a truncated remainder, avoiding overflow and
+    // cancellation in a - floor(a / b) * b. Zero takes the divisor's sign.
+    if (r == T{0}) {
+      return std::copysign(T{0}, b);
+    }
+    if ((r < T{0}) != (b < T{0})) {
+      r += b;
+    }
+  }
+  return r;
 }
 
 template <typename T>
@@ -95,18 +106,18 @@ void ModInPlaceInt(const char *dtype_name, int32_t dtype, const Tensor &x, const
 
 template <typename T>
 Tensor ModAllocFloat(const char *dtype_name, int32_t dtype, const Tensor &x, const Tensor &y,
-                     int64_t grain, RawBufferAllocator *allocator = nullptr) {
+                     int64_t fmod, int64_t grain, RawBufferAllocator *allocator = nullptr) {
   return detail::BinaryElementwiseAlloc<T, T>(
-      kModName, dtype_name, dtype, x, y, [](T a, T b) -> T { return FloatFmod<T>(a, b); },
+      kModName, dtype_name, dtype, x, y, [fmod](T a, T b) -> T { return FloatFmod<T>(a, b, fmod); },
       allocator, grain);
 }
 
 template <typename T>
 void ModInPlaceFloat(const char *dtype_name, int32_t dtype, const Tensor &x, const Tensor &y,
-                     Tensor &output, int64_t grain) {
+                     int64_t fmod, Tensor &output, int64_t grain) {
   detail::BinaryElementwise<T, T>(
-      kModName, dtype_name, dtype, x, y, output, [](T a, T b) -> T { return FloatFmod<T>(a, b); },
-      grain);
+      kModName, dtype_name, dtype, x, y, output,
+      [fmod](T a, T b) -> T { return FloatFmod<T>(a, b, fmod); }, grain);
 }
 
 // IEEE-754 binary16 helpers for the FLOAT16 dispatch path are provided by
@@ -115,40 +126,42 @@ void ModInPlaceFloat(const char *dtype_name, int32_t dtype, const Tensor &x, con
 // bit pattern as round-tripping through float32 fmod, so this conversion
 // path matches the upstream ``test_mod_mixed_sign_float16`` reference.
 
-Tensor ModAllocFloat16(const Tensor &x, const Tensor &y, int64_t grain,
+Tensor ModAllocFloat16(const Tensor &x, const Tensor &y, int64_t fmod, int64_t grain,
                        RawBufferAllocator *allocator = nullptr) {
   return detail::BinaryElementwiseAlloc<uint16_t, uint16_t>(
       kModName, "FLOAT16", DataType::FLOAT16, x, y,
-      [](uint16_t a, uint16_t b) -> uint16_t {
-        return FloatToFloat16Bits(std::fmod(Float16BitsToFloat(a), Float16BitsToFloat(b)));
+      [fmod](uint16_t a, uint16_t b) -> uint16_t {
+        return FloatToFloat16Bits(FloatFmod(Float16BitsToFloat(a), Float16BitsToFloat(b), fmod));
       },
       allocator, grain);
 }
 
-void ModInPlaceFloat16(const Tensor &x, const Tensor &y, Tensor &output, int64_t grain) {
+void ModInPlaceFloat16(const Tensor &x, const Tensor &y, int64_t fmod, Tensor &output,
+                       int64_t grain) {
   detail::BinaryElementwise<uint16_t, uint16_t>(
       kModName, "FLOAT16", DataType::FLOAT16, x, y, output,
-      [](uint16_t a, uint16_t b) -> uint16_t {
-        return FloatToFloat16Bits(std::fmod(Float16BitsToFloat(a), Float16BitsToFloat(b)));
+      [fmod](uint16_t a, uint16_t b) -> uint16_t {
+        return FloatToFloat16Bits(FloatFmod(Float16BitsToFloat(a), Float16BitsToFloat(b), fmod));
       },
       grain);
 }
 
-Tensor ModAllocBfloat16(const Tensor &x, const Tensor &y, int64_t grain,
+Tensor ModAllocBfloat16(const Tensor &x, const Tensor &y, int64_t fmod, int64_t grain,
                         RawBufferAllocator *allocator = nullptr) {
   return detail::BinaryElementwiseAlloc<uint16_t, uint16_t>(
       kModName, "BFLOAT16", DataType::BFLOAT16, x, y,
-      [](uint16_t a, uint16_t b) -> uint16_t {
-        return FloatToBfloat16Bits(std::fmod(Bfloat16BitsToFloat(a), Bfloat16BitsToFloat(b)));
+      [fmod](uint16_t a, uint16_t b) -> uint16_t {
+        return FloatToBfloat16Bits(FloatFmod(Bfloat16BitsToFloat(a), Bfloat16BitsToFloat(b), fmod));
       },
       allocator, grain);
 }
 
-void ModInPlaceBfloat16(const Tensor &x, const Tensor &y, Tensor &output, int64_t grain) {
+void ModInPlaceBfloat16(const Tensor &x, const Tensor &y, int64_t fmod, Tensor &output,
+                        int64_t grain) {
   detail::BinaryElementwise<uint16_t, uint16_t>(
       kModName, "BFLOAT16", DataType::BFLOAT16, x, y, output,
-      [](uint16_t a, uint16_t b) -> uint16_t {
-        return FloatToBfloat16Bits(std::fmod(Bfloat16BitsToFloat(a), Bfloat16BitsToFloat(b)));
+      [fmod](uint16_t a, uint16_t b) -> uint16_t {
+        return FloatToBfloat16Bits(FloatFmod(Bfloat16BitsToFloat(a), Bfloat16BitsToFloat(b), fmod));
       },
       grain);
 }
@@ -157,8 +170,6 @@ constexpr const char *kSupportedModTypesMsg =
     " only supports FLOAT16, BFLOAT16, FLOAT, DOUBLE, INT8, INT16, INT32, INT64, UINT8, UINT16, "
     "UINT32 and UINT64 inputs.";
 
-constexpr const char *kFmodRequiredForFloatMsg =
-    " requires attribute ``fmod`` set to 1 for floating-point inputs.";
 } // namespace
 
 Mod::Mod(const KernelContext &ctx)
@@ -169,6 +180,7 @@ void Mod::RegisterTuningSchemas() {
 }
 
 Tensor Mod::operator()(const Tensor &x, const Tensor &y, int64_t fmod, RuntimeContext *rt) const {
+  EXT_ENFORCE_INVALID(fmod == 0 || fmod == 1, kModName, ": fmod must be 0 or 1.");
   if (rt != nullptr) {
     const Shape out_shape = detail::BroadcastShape("kernel::Mod", x.shape, y.shape);
     const int64_t out_count = out_shape.product();
@@ -180,21 +192,13 @@ Tensor Mod::operator()(const Tensor &x, const Tensor &y, int64_t fmod, RuntimeCo
   const int64_t grain = tuning().parallel_minimum_elements;
   switch (x.data_type) {
   case DataType::FLOAT16:
-    EXT_ENFORCE_INVALID(fmod == 1, kModName, ": unsupported data type ", x.data_type,
-                        kFmodRequiredForFloatMsg);
-    return ModAllocFloat16(x, y, grain, nullptr);
+    return ModAllocFloat16(x, y, fmod, grain, nullptr);
   case DataType::BFLOAT16:
-    EXT_ENFORCE_INVALID(fmod == 1, kModName, ": unsupported data type ", x.data_type,
-                        kFmodRequiredForFloatMsg);
-    return ModAllocBfloat16(x, y, grain, nullptr);
+    return ModAllocBfloat16(x, y, fmod, grain, nullptr);
   case DataType::FLOAT:
-    EXT_ENFORCE_INVALID(fmod == 1, kModName, ": unsupported data type ", x.data_type,
-                        kFmodRequiredForFloatMsg);
-    return ModAllocFloat<float>("FLOAT", DataType::FLOAT, x, y, grain, nullptr);
+    return ModAllocFloat<float>("FLOAT", DataType::FLOAT, x, y, fmod, grain, nullptr);
   case DataType::DOUBLE:
-    EXT_ENFORCE_INVALID(fmod == 1, kModName, ": unsupported data type ", x.data_type,
-                        kFmodRequiredForFloatMsg);
-    return ModAllocFloat<double>("DOUBLE", DataType::DOUBLE, x, y, grain, nullptr);
+    return ModAllocFloat<double>("DOUBLE", DataType::DOUBLE, x, y, fmod, grain, nullptr);
   case DataType::INT8:
     return ModAllocInt<int8_t>("INT8", DataType::INT8, x, y, fmod, grain, nullptr);
   case DataType::INT16:
@@ -217,24 +221,17 @@ Tensor Mod::operator()(const Tensor &x, const Tensor &y, int64_t fmod, RuntimeCo
 }
 
 void Mod::operator()(const Tensor &x, const Tensor &y, int64_t fmod, Tensor &output) const {
+  EXT_ENFORCE_INVALID(fmod == 0 || fmod == 1, kModName, ": fmod must be 0 or 1.");
   const int64_t grain = tuning().parallel_minimum_elements;
   switch (x.data_type) {
   case DataType::FLOAT16:
-    EXT_ENFORCE_INVALID(fmod == 1, kModName, ": unsupported data type ", x.data_type,
-                        kFmodRequiredForFloatMsg);
-    return ModInPlaceFloat16(x, y, output, grain);
+    return ModInPlaceFloat16(x, y, fmod, output, grain);
   case DataType::BFLOAT16:
-    EXT_ENFORCE_INVALID(fmod == 1, kModName, ": unsupported data type ", x.data_type,
-                        kFmodRequiredForFloatMsg);
-    return ModInPlaceBfloat16(x, y, output, grain);
+    return ModInPlaceBfloat16(x, y, fmod, output, grain);
   case DataType::FLOAT:
-    EXT_ENFORCE_INVALID(fmod == 1, kModName, ": unsupported data type ", x.data_type,
-                        kFmodRequiredForFloatMsg);
-    return ModInPlaceFloat<float>("FLOAT", DataType::FLOAT, x, y, output, grain);
+    return ModInPlaceFloat<float>("FLOAT", DataType::FLOAT, x, y, fmod, output, grain);
   case DataType::DOUBLE:
-    EXT_ENFORCE_INVALID(fmod == 1, kModName, ": unsupported data type ", x.data_type,
-                        kFmodRequiredForFloatMsg);
-    return ModInPlaceFloat<double>("DOUBLE", DataType::DOUBLE, x, y, output, grain);
+    return ModInPlaceFloat<double>("DOUBLE", DataType::DOUBLE, x, y, fmod, output, grain);
   case DataType::INT8:
     return ModInPlaceInt<int8_t>("INT8", DataType::INT8, x, y, fmod, output, grain);
   case DataType::INT16:

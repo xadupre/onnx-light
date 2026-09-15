@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 #include "onnx_lib/defs/sequence/utils.h"
+#include "onnx_lib/defs/doc_strings.h"
 
 #include <algorithm>
 #include <numeric>
@@ -10,23 +11,6 @@
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::defs::sequence::utils {
-
-// Common documentation for SplitToSequence operator, versions 11 and 24
-static constexpr const char *SplitToSequence_ver11_doc =
-    R"DOC(
-Split a tensor into a sequence of tensors, along the specified 'axis'.
-Lengths of the parts can be specified using the optional argument 'split'.
-If 'split' is not specified, 'input' is split into chunks of size 1 along the
-specified 'axis'.
-'split' must contain only positive numbers.
-'split' is either a scalar (tensor of empty shape), or a 1-D tensor.
-If 'split' is a scalar, then 'input' will be split into chunks all of size 'split'
-if possible. The last chunk alone may be smaller than 'split' if the 'input' size
-along the given axis 'axis' is not divisible by 'split'.
-If 'split' is a 1-dimensional tensor, the input tensor is split into 'size(split)' chunks,
-with lengths of the parts on 'axis' specified in 'split'. In this scenario, the sum of entries
-in 'split' must be equal to the dimension size of input tensor on 'axis'.
-)DOC";
 
 std::function<void(OpSchema &)> SplitToSequenceOpGenerator(std::vector<std::string> input_types,
                                                            std::vector<std::string> output_types) {
@@ -53,7 +37,7 @@ std::function<void(OpSchema &)> SplitToSequenceOpGenerator(std::vector<std::stri
               "Keep the split dimension or not. Default 1, which means we keep split dimension. "
               "If input 'split' is specified, this attribute is ignored.",
               AttributeProto::INT, static_cast<int64_t>(1))
-        .SetDoc(SplitToSequence_ver11_doc)
+        .SetDoc(kDoc_SplitToSequence_ver11)
         .TypeAndShapeInferenceFunction([](InferenceContext &ctx) {
           const auto *const input0_type = ctx.getInputType(0);
           if (nullptr == input0_type) {

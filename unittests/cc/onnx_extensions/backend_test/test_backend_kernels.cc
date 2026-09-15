@@ -3,12 +3,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/backend_test/test_case_registry.h"
 #include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_proto/onnx_helper.h"
+#include "test_case_utils.h"
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -17,7 +20,11 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using core::backend_test::CollectTestCases;
 using core::backend_test::DataSet;
 using core::backend_test::DefaultOpset;
+using core::backend_test::GetRegisteredCollectors;
 using core::backend_test::TestCase;
+using core::backend_test::TestCaseUnloadGuard;
+using core::backend_test::TestMode;
+using core::runtime::KernelBase;
 using core::runtime::Tensor;
 using onnx_kernels::kernel::KernelContext;
 using onnx_kernels::kernel::Split;
@@ -59,11 +66,53 @@ void ExpectTensorEqual(const Tensor &actual, const Tensor &expected) {
 
 } // namespace
 
+TEST(BackendKernels, CollectionDoesNotRetainReferenceKernels) {
+  const int64_t initial_live = KernelBase::LiveInstanceCountForTesting();
+  uint64_t construction_count = KernelBase::ConstructionCountForTesting();
+
+  const auto &collectors = GetRegisteredCollectors();
+  for (size_t collector_index = 0; collector_index < collectors.size(); ++collector_index) {
+    SCOPED_TRACE("collector index: " + std::to_string(collector_index));
+    const auto &collector = collectors[collector_index];
+    std::vector<TestCase> test_cases;
+    collector(test_cases, "", false, TestMode::TEST);
+    EXPECT_EQ(KernelBase::ConstructionCountForTesting(), construction_count);
+    EXPECT_EQ(KernelBase::LiveInstanceCountForTesting(), initial_live);
+    construction_count = KernelBase::ConstructionCountForTesting();
+
+    std::vector<TestCase> benchmark_cases;
+    collector(benchmark_cases, "", false, TestMode::BENCHMARK);
+    EXPECT_EQ(KernelBase::ConstructionCountForTesting(), construction_count);
+    EXPECT_EQ(KernelBase::LiveInstanceCountForTesting(), initial_live);
+    construction_count = KernelBase::ConstructionCountForTesting();
+  }
+
+  const uint64_t before_lazy_collection = KernelBase::ConstructionCountForTesting();
+  std::vector<TestCase> abs_cases = CollectTestCases("Abs", false, TestMode::TEST);
+  EXPECT_EQ(KernelBase::ConstructionCountForTesting(), before_lazy_collection);
+  EXPECT_EQ(KernelBase::LiveInstanceCountForTesting(), initial_live);
+  auto abs_case = std::find_if(abs_cases.begin(), abs_cases.end(), [](const TestCase &test_case) {
+    return test_case.name == "test_cc_abs";
+  });
+  ASSERT_NE(abs_case, abs_cases.end());
+
+  const uint64_t before_materialization = KernelBase::ConstructionCountForTesting();
+  abs_case->Materialize();
+  EXPECT_GT(KernelBase::ConstructionCountForTesting(), before_materialization);
+  EXPECT_EQ(KernelBase::LiveInstanceCountForTesting(), initial_live);
+
+  const uint64_t before_benchmark_collection = KernelBase::ConstructionCountForTesting();
+  std::vector<TestCase> abs_benchmarks = CollectTestCases("Abs", false, TestMode::BENCHMARK, false);
+  EXPECT_EQ(KernelBase::ConstructionCountForTesting(), before_benchmark_collection);
+  EXPECT_EQ(KernelBase::LiveInstanceCountForTesting(), initial_live);
+}
+
 TEST(BackendKernels, SplitKernelRunsOnBackendTestCases) {
-  const std::vector<TestCase> cases = CollectTestCases("Split");
+  std::vector<TestCase> cases = CollectTestCases("Split");
   ASSERT_FALSE(cases.empty());
 
-  for (const TestCase &tc : cases) {
+  for (TestCase &tc : cases) {
+    TestCaseUnloadGuard unload_guard(tc);
     SCOPED_TRACE(tc.name);
     ASSERT_EQ(tc.model().ref_graph().ref_node().size(), 1u);
     const NodeProto &node = tc.model().ref_graph().ref_node()[0];

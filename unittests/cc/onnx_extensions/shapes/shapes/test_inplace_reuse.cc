@@ -13,6 +13,7 @@
 #include "onnx_core/compute/compute_context.h"
 #include "onnx_core/compute/execution_plan.h"
 #include "onnx_core/compute/result_lifetime.h"
+#include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_core/shapes/shape_inference.h"
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"
@@ -24,6 +25,8 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
+#include <variant>
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -846,6 +849,126 @@ TEST(OnnxOptimInPlaceReuse, ComputeContextWriteToGraph) {
     }
   }
   EXPECT_TRUE(found_release);
+}
+
+TEST(OnnxOptimInPlaceReuse, FunctionLifetimeProtectsDeclarations) {
+  FunctionProto function;
+  function.add_input("X");
+  function.add_output("Y");
+  function.add_output("Z");
+  *function.add_node() = MakeNode("Abs", {"X"}, {"A"});
+  *function.add_node() = MakeNode("Abs", {"A"}, {"Y"});
+  *function.add_node() = MakeNode("Abs", {"Y"}, {"Z"});
+
+  ComputeContext ctx;
+  ctx.ComputeShapes(function, {{"X", SymTensor(nullptr, TensorType::kFloat, SymShape{3, 4})}});
+  const auto lifetime = ComputeResultLifetimeInfo(function, false);
+  EXPECT_EQ(lifetime.graph_inputs, (std::unordered_set<std::string>{"X"}));
+  EXPECT_EQ(lifetime.graph_outputs, (std::unordered_set<std::string>{"Y", "Z"}));
+  EXPECT_TRUE(lifetime.graph_initializers.empty());
+  ASSERT_EQ(lifetime.size(), 3u);
+  EXPECT_EQ(lifetime[0].not_used_after, (std::vector<std::string>{"X"}));
+  EXPECT_EQ(lifetime[1].release_after, (std::vector<std::string>{"A"}));
+  EXPECT_TRUE(lifetime[2].release_after.empty());
+
+  ctx.ComputeInPlaceReuseGraph(function, ctx.Shapes());
+  EXPECT_EQ(ctx.Reuse(),
+            core::compute::ComputeInPlaceReuseMatches(function, ctx.Shapes(), lifetime));
+  EXPECT_TRUE(ctx.NodeReuse(0).empty());
+  EXPECT_EQ(ctx.NodeReuse(1), (std::vector<InPlaceReuse>{{0, 0, InPlaceReuseKind::kEqual}}));
+  EXPECT_TRUE(ctx.NodeReuse(2).empty());
+
+  const auto overwrite_lifetime = ComputeResultLifetimeInfo(function, true);
+  EXPECT_EQ(overwrite_lifetime.producer.at("X"), -1);
+  EXPECT_EQ(overwrite_lifetime.keep.count("X"), 0u);
+  ctx.ComputeInPlaceReuseGraph(function, ctx.Shapes(), true);
+  EXPECT_EQ(ctx.NodeReuse(0), (std::vector<InPlaceReuse>{{0, 0, InPlaceReuseKind::kEqual}}));
+  EXPECT_TRUE(ctx.NodeReuse(2).empty());
+}
+
+TEST(OnnxOptimInPlaceReuse, ComputeContextWriteToFunction) {
+  FunctionProto function;
+  function.add_input("X");
+  function.add_output("Y");
+  for (const std::string name : {"X", "Y"}) {
+    auto *vi = function.add_value_info();
+    vi->set_name(name);
+    SetFloatTensorType(*vi, {1});
+  }
+  *function.add_node() = MakeNode("Abs", {"X"}, {"A"});
+  *function.add_node() = MakeNode("Abs", {"A"}, {"Y"});
+
+  ComputeContext ctx;
+  ctx.ComputeShapes(function, {{"X", SymTensor(nullptr, TensorType::kFloat, SymShape{3, 4})}});
+  ctx.ComputeInPlaceReuseGraph(function, ctx.Shapes(), false, {{"A", "shape"}});
+  EXPECT_EQ(ctx.ComputePeakMemory(function), (std::vector<int64_t>{0, 0}));
+  ctx.WriteToFunction(function);
+  ctx.WriteToFunction(function);
+
+  ASSERT_EQ(function.value_info_size(), 3u);
+  std::set<std::string> names;
+  for (const auto &vi : function.value_info()) {
+    names.insert(vi.name());
+    ASSERT_TRUE(vi.has_type() && vi.type().has_tensor_type());
+    const auto &tensor_type = vi.type().tensor_type();
+    EXPECT_EQ(tensor_type.elem_type(), static_cast<int>(TensorProto::DataType::FLOAT));
+    ASSERT_EQ(tensor_type.shape().dim_size(), 2u);
+    EXPECT_EQ(tensor_type.shape().dim()[0].dim_value(), 3);
+    EXPECT_EQ(tensor_type.shape().dim()[1].dim_value(), 4);
+  }
+  EXPECT_EQ(names, (std::set<std::string>{"A", "X", "Y"}));
+  std::unordered_map<std::string, std::string> metadata;
+  for (const auto &entry : function.node()[1].metadata_props()) {
+    metadata[entry.key()] = entry.value();
+  }
+  EXPECT_EQ(metadata.at(core::compute::kInPlaceReuseMetadataKey), "0:0:equal");
+  EXPECT_EQ(metadata.at(core::compute::kReleaseAfterMetadataKey), "A");
+  EXPECT_EQ(metadata.at(core::compute::kReleaseAfterShapeTagMetadataKey), "A");
+  EXPECT_EQ(function.node()[0].metadata_props()[0].key(), core::compute::kNotUsedAfterMetadataKey);
+  EXPECT_EQ(function.node()[0].metadata_props()[0].value(), "X");
+  ASSERT_EQ(ctx.Memory().size(), 2u);
+  EXPECT_EQ(std::get<int64_t>(std::get<core::expressions::DimType>(
+                ctx.NodeMemory(0).at(core::compute::kNodeMemoryTotalBytesKey))),
+            96);
+  EXPECT_EQ(std::get<int64_t>(std::get<core::expressions::DimType>(
+                ctx.NodeMemory(1).at(core::compute::kNodeMemoryOutputAllocationBytesKey))),
+            0);
+
+  function.add_node();
+  EXPECT_THROW(ctx.WriteToFunction(function), std::invalid_argument);
+}
+
+TEST(OnnxOptimInPlaceReuse, FunctionPeakMemoryWritesMetadata) {
+  core::shapes::RegisterComputePeakMemoryFn(
+      "test.function", "Scratch", core::symbolic::Device::kCPU,
+      [](core::symbolic::Device device, const std::vector<SymShape> &input_shapes) -> int64_t {
+        EXPECT_EQ(device, core::symbolic::Device::kCPU);
+        EXPECT_EQ(input_shapes.size(), 2u);
+        EXPECT_EQ(input_shapes[0], (SymShape{3, 4}));
+        EXPECT_EQ(input_shapes[1], SymShape{});
+        return 128;
+      });
+  FunctionProto function;
+  function.add_input("X");
+  function.add_output("Y");
+  auto *node = function.add_node();
+  *node = MakeNode("Scratch", {"X", ""}, {"Y"});
+  node->set_domain("test.function");
+  ComputeContext ctx;
+  ctx.Shapes().Set("X", SymTensor(nullptr, TensorType::kFloat, SymShape{3, 4}));
+  ctx.Shapes().Set("Y", SymTensor(nullptr, TensorType::kFloat, SymShape{3, 4}));
+  ctx.ComputeInPlaceReuseGraph(function, ctx.Shapes());
+  EXPECT_EQ(ctx.ComputePeakMemory(function, core::symbolic::Device::kCPU),
+            (std::vector<int64_t>{128}));
+  ctx.WriteToFunction(function);
+  bool found_peak = false;
+  for (const auto &entry : function.node()[0].metadata_props()) {
+    if (entry.key() == core::compute::kNodePeakMemoryMetadataKey) {
+      EXPECT_EQ(entry.value(), "128");
+      found_peak = true;
+    }
+  }
+  EXPECT_TRUE(found_peak);
 }
 
 // ComputeContext::BuildExecutionPlan derives the execution plan from the

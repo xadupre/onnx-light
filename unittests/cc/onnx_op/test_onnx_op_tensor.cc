@@ -6,6 +6,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <set>
 #include <variant>
 #include <vector>
@@ -110,13 +111,43 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsGridSampleSchemasForAllVersions) {
   EXPECT_EQ(std::get<std::string>(s20->attributes()[0].default_value), "linear");
 }
 
+TEST(OnnxOpTensorRegistrationTest, PadReflectExamplesAreValid) {
+  const std::vector<core::schema::LightOpSchema> schemas =
+      onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Pad");
+
+  for (int version : {11, 13, 18, 19, 21, 23, 24, 25}) {
+    const core::schema::LightOpSchema *const schema = FindByVersion(schemas, version);
+    ASSERT_NE(schema, nullptr) << "missing Pad schema for version " << version;
+    EXPECT_NE(schema->doc().find("pads = [0, 1, 0, 1]"), std::string::npos) << version;
+    EXPECT_NE(schema->doc().find("[1.2, 1.0, 1.2, 1.0]"), std::string::npos) << version;
+  }
+}
+
+TEST(OnnxOpTensorRegistrationTest, ReturnsOpset28SchemasWithoutShapeInference) {
+  for (const char *name :
+       {"Compress", "DepthToSpace", "OneHot", "ReverseSequence", "SpaceToDepth", "Unique"}) {
+    SCOPED_TRACE(name);
+    const auto schemas = onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory(name);
+    const auto *schema = FindByVersion(schemas, 28);
+    ASSERT_NE(schema, nullptr);
+    ASSERT_FALSE(schema->outputs().empty());
+    const auto &constraints = schema->type_constraints();
+    const auto output_type =
+        std::find_if(constraints.begin(), constraints.end(), [schema](const auto &constraint) {
+          return constraint.type_param_str == schema->outputs()[0].type;
+        });
+    ASSERT_NE(output_type, constraints.end());
+    EXPECT_EQ(output_type->allowed_type_strs, core::schema::ConcatTypesVer13());
+  }
+}
+
 TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   const std::vector<core::schema::LightOpSchema> schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory();
   const std::vector<core::schema::LightOpSchema> cast_schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Cast");
 
-  EXPECT_EQ(schemas.size(), 133u);
+  EXPECT_EQ(schemas.size(), 140u);
 
   const core::schema::LightOpSchema *const cast_v1 = FindByVersion(cast_schemas, 1);
   const core::schema::LightOpSchema *const cast_v6 = FindByVersion(cast_schemas, 6);
@@ -127,6 +158,7 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   const core::schema::LightOpSchema *const cast_v23 = FindByVersion(cast_schemas, 23);
   const core::schema::LightOpSchema *const cast_v24 = FindByVersion(cast_schemas, 24);
   const core::schema::LightOpSchema *const cast_v25 = FindByVersion(cast_schemas, 25);
+  const core::schema::LightOpSchema *const cast_v28 = FindByVersion(cast_schemas, 28);
   ASSERT_NE(nullptr, cast_v1);
   ASSERT_NE(nullptr, cast_v6);
   ASSERT_NE(nullptr, cast_v9);
@@ -136,6 +168,7 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   ASSERT_NE(nullptr, cast_v23);
   ASSERT_NE(nullptr, cast_v24);
   ASSERT_NE(nullptr, cast_v25);
+  ASSERT_NE(nullptr, cast_v28);
   EXPECT_EQ(cast_v25->domain(), "ai.onnx");
   EXPECT_EQ(cast_v25->inputs().size(), 1u);
   EXPECT_EQ(cast_v25->outputs().size(), 1u);
@@ -149,6 +182,7 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   EXPECT_EQ(cast_v23->type_constraints()[0].allowed_type_strs, core::schema::CastTypesVer23());
   EXPECT_EQ(cast_v24->type_constraints()[0].allowed_type_strs, core::schema::CastTypesVer24());
   EXPECT_EQ(cast_v25->type_constraints()[0].allowed_type_strs, core::schema::CastTypesVer25());
+  EXPECT_EQ(cast_v28->type_constraints()[0].allowed_type_strs, core::schema::CastTypesVer28());
   EXPECT_NE(cast_v1->type_constraints()[0].allowed_type_strs,
             cast_v9->type_constraints()[0].allowed_type_strs);
   EXPECT_NE(cast_v19->type_constraints()[0].allowed_type_strs,

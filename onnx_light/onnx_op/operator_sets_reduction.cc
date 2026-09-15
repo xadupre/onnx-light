@@ -204,6 +204,18 @@ std::vector<LightOpSchema> BuildSimpleReduceSchemas(const std::string &op_type,
   };
 }
 
+std::vector<LightOpSchema> BuildReduceLogSchemas(const std::string &op_type,
+                                                 const std::string &name) {
+  std::vector<TensorType> float_types = FloatTypes();
+  float_types.push_back(TensorType::kBfloat16);
+  std::vector<LightOpSchema> schemas = BuildSimpleReduceSchemas(op_type, name, kEmptyMinusInf);
+  schemas.insert(schemas.begin(),
+                 MakeReduceAxesInputSchema(op_type, 28, MakeReduceOpDoc(name, kEmptyMinusInf, 28),
+                                           float_types,
+                                           "Constrain input and output types to float tensors."));
+  return schemas;
+}
+
 // Builds the version history for ReduceMax / ReduceMin, which additionally
 // support 8-bit numeric tensors from opset 12 and boolean tensors from opset 20.
 std::vector<LightOpSchema> BuildReduceMaxMinSchemas(const std::string &op_type,
@@ -256,12 +268,9 @@ std::vector<LightOpSchema> GetAllOnnxOpReductionSchemasWithHistory(const std::st
       {"ArgMin", [] { return BuildArgReduceSchemas("ArgMin", "min"); }},
       {"ReduceL1", [] { return BuildSimpleReduceSchemas("ReduceL1", "L1 norm", kEmptyZero); }},
       {"ReduceL2", [] { return BuildSimpleReduceSchemas("ReduceL2", "L2 norm", kEmptyZero); }},
-      {"ReduceLogSum",
-       [] { return BuildSimpleReduceSchemas("ReduceLogSum", "log sum", kEmptyMinusInf); }},
+      {"ReduceLogSum", [] { return BuildReduceLogSchemas("ReduceLogSum", "log sum"); }},
       {"ReduceLogSumExp",
-       [] {
-         return BuildSimpleReduceSchemas("ReduceLogSumExp", "log sum exponent", kEmptyMinusInf);
-       }},
+       [] { return BuildReduceLogSchemas("ReduceLogSumExp", "log sum exponent"); }},
       {"ReduceMax", [] { return BuildReduceMaxMinSchemas("ReduceMax", "max", kEmptyMin); }},
       {"ReduceMean",
        [] { return BuildSimpleReduceSchemas("ReduceMean", "mean", kEmptyUndefined); }},

@@ -1542,9 +1542,7 @@ class TestReferenceEvaluatorCustomKernels(ExtTestCase):
         np.testing.assert_array_equal(y, np.array([99.0, 102.0, 96.5], dtype=np.float32))
 
     def test_custom_kernel_registered_after_run(self):
-        # Registering a custom kernel after a first run() must take effect on
-        # the next run: register_custom_kernel invalidates the cached
-        # RuntimeSession so its per-node kernels are re-resolved.
+        # Replacement affects future resolutions, never a prepared session.
         model = parser.parse_model(self._CUSTOM_MODEL_SRC)
         sess = ReferenceEvaluator(model)
         x = np.array([-1.0, 2.0, -3.5], dtype=np.float32)
@@ -1553,11 +1551,46 @@ class TestReferenceEvaluatorCustomKernels(ExtTestCase):
         (first,) = sess.run(None, {"x": x})
         np.testing.assert_array_equal(first, x * x)
 
-        # Re-register a different kernel for the same op; the next run must use
-        # it rather than the kernel cached in the previous run's session.
         sess.register_custom_kernel("my.domain", "Square", lambda node, v: v + 1.0)
         (second,) = sess.run(None, {"x": x})
-        np.testing.assert_array_equal(second, x + 1.0)
+        np.testing.assert_array_equal(second, x * x)
+
+        fresh = ReferenceEvaluator(model)
+        fresh.register_custom_kernel("my.domain", "Square", lambda node, v: v + 1.0)
+        (updated,) = fresh.run(None, {"x": x})
+        np.testing.assert_array_equal(updated, x + 1.0)
+
+    def test_custom_kernel_shape_changes_keep_resolved_callback(self):
+        model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 18, "my.domain" : 1]>'
+            "agraph (float[N,20] x) => (float[N,20] y) { y = my.domain.Square(x) }"
+        )
+        for global_scope in (False, True):
+            with self.subTest(global_scope=global_scope):
+                sess = ReferenceEvaluator(model)
+                seen_nodes = []
+
+                def square(node, x):
+                    seen_nodes.append(node)
+                    return x * x
+
+                register = (
+                    ReferenceEvaluator.register_custom_kernel_global
+                    if global_scope
+                    else sess.register_custom_kernel
+                )
+                register("my.domain", "Square", square)
+                try:
+                    for batch in (1, 100, 10):
+                        x = np.full((batch, 20), 2, dtype=np.float32)
+                        (y,) = sess.run(None, {"x": x})
+                        np.testing.assert_array_equal(y, x * x)
+                        register("my.domain", "Square", lambda node, x: x + 10)
+                    self.assertEqual(len(seen_nodes), 3)
+                    self.assertTrue(all(node is seen_nodes[0] for node in seen_nodes))
+                finally:
+                    if global_scope:
+                        ReferenceEvaluator.unregister_custom_kernel_global("my.domain", "Square")
 
     def test_custom_kernel_multi_output(self):
         src = (
@@ -1618,7 +1651,7 @@ class TestReferenceEvaluatorUnregisterCustomKernels(ExtTestCase):
     """Tests for :meth:`ReferenceEvaluator.unregister_custom_kernel`."""
 
     def test_unregister_restores_builtin(self):
-        # Overriding a built-in op and then unregistering restores the original.
+        # Unregistering restores the original only for future resolutions.
         src = (
             '<ir_version: 10, opset_import: ["" : 18]>\n'
             "agraph (float[3] x) => (float[3] y) { y = Abs(x) }\n"
@@ -1631,7 +1664,10 @@ class TestReferenceEvaluatorUnregisterCustomKernels(ExtTestCase):
         np.testing.assert_array_equal(overridden, x + 100.0)
 
         self.assertTrue(sess.unregister_custom_kernel("", "Abs"))
-        (restored,) = sess.run(None, {"x": x})
+        (retained,) = sess.run(None, {"x": x})
+        np.testing.assert_array_equal(retained, x + 100.0)
+        fresh = ReferenceEvaluator(parser.parse_model(src))
+        (restored,) = fresh.run(None, {"x": x})
         np.testing.assert_array_equal(restored, np.abs(x))
 
     def test_unregister_returns_false_when_absent(self):
@@ -1657,8 +1693,7 @@ class TestReferenceEvaluatorUnregisterCustomKernels(ExtTestCase):
         np.testing.assert_array_equal(restored, np.array([1.0, 2.0, 3.5], dtype=np.float32))
 
     def test_unregister_removes_user_domain_kernel(self):
-        # Unregistering a custom-only op (no built-in) makes the graph fail
-        # again with an unsupported op error.
+        # New resolutions fail after removal; the prepared adapter stays alive.
         model = parser.parse_model(
             '<ir_version: 10, opset_import: ["" : 18, "my.domain" : 1]>\n'
             "agraph (float[3] x) => (float[3] y) {\n"
@@ -1672,8 +1707,10 @@ class TestReferenceEvaluatorUnregisterCustomKernels(ExtTestCase):
         np.testing.assert_array_equal(y, x * x)
 
         self.assertTrue(sess.unregister_custom_kernel("my.domain", "Square"))
+        (retained,) = sess.run(None, {"x": x})
+        np.testing.assert_array_equal(retained, x * x)
         with self.assertRaises(ValueError) as ctx:
-            sess.run(None, {"x": x})
+            ReferenceEvaluator(model).run(None, {"x": x})
         self.assertIn("unsupported op_type", str(ctx.exception))
 
 

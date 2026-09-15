@@ -5,12 +5,11 @@
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
-#include "onnx_core/runtime/memory/temporary_buffer.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/kernels/kernel_run_helpers.h"
 #include <algorithm>
 #include <cstdint>
-#include <cstring>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -19,15 +18,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
 
-// Mirrors the upstream ONNX reference (``onnx.reference.ops.op_max_unpool``)
-// behaviour:
-//   1. Compute the *inferred* output shape from ``kernel_shape``, ``strides``
-//      and ``pads`` regardless of whether ``output_shape`` is provided.
-//   2. Allocate a buffer of ``prod(inferred_shape)`` zeros and scatter
-//      ``X.flat[i]`` to ``Y.flat[indices.flat[i]]`` (indices are global flat
-//      offsets into that inferred-shape buffer, not per-channel offsets).
-//   3. If ``output_shape`` is provided, copy the inferred region into the
-//      top-left corner of a zero buffer of shape ``output_shape``.
+// Indices are global flattened offsets into the final output, including when
+// output_shape overrides the dimensions inferred from the pooling attributes.
 Tensor RunMaxUnpool(const Tensor &x, const Tensor &indices, const Shape &kernel_shape,
                     const Shape &strides_in, const Shape &pads_in,
                     const Shape *explicit_output_shape, RuntimeContext *rt) {
@@ -67,102 +59,56 @@ Tensor RunMaxUnpool(const Tensor &x, const Tensor &indices, const Shape &kernel_
                         "kernel::MaxUnpool: pads entries must be non-negative.");
   }
 
-  Shape inferred_shape;
-  inferred_shape.assign(x.shape.size(), 0);
-  inferred_shape[0] = x.shape[0];
-  inferred_shape[1] = x.shape[1];
-  for (size_t i = 0; i < k; ++i) {
-    inferred_shape[i + 2] =
-        strides[i] * (x.shape[i + 2] - 1) + kernel_shape[i] - pads[i] - pads[i + k];
-    EXT_ENFORCE_INVALID(inferred_shape[i + 2] > 0,
-                        "kernel::MaxUnpool: inferred output spatial dimension is non-positive.");
-  }
-  int64_t inferred_total = 1;
-  for (int64_t d : inferred_shape) {
-    inferred_total *= d;
-  }
-
-  int64_t x_total = 1;
-  for (int64_t d : x.shape) {
-    x_total *= d;
-  }
-
-  // Draw the scatter buffer from the runtime allocator (falling back to a
-  // std::vector when no allocator is attached). The allocator-backed path is
-  // not guaranteed zeroed, so the buffer is explicitly zero-filled before the
-  // scatter below.
-  detail::TemporaryTypedBuffer<float> y_inferred_buf(static_cast<size_t>(inferred_total),
-                                                     rt ? rt->execution_allocator() : nullptr,
-                                                     "kernel::MaxUnpool y_inferred");
-  float *y_inferred = y_inferred_buf.data();
-  std::fill(y_inferred, y_inferred + static_cast<size_t>(inferred_total), 0.0f);
-  const float *px = x.AsFloat();
-  const int64_t *pi = indices.AsInt64();
-  for (int64_t i = 0; i < x_total; ++i) {
-    const int64_t idx = pi[i];
-    EXT_ENFORCE_INVALID(idx >= 0 && idx < inferred_total, "kernel::MaxUnpool: indices entry ",
-                        std::to_string(idx), " out of range for inferred output of ",
-                        std::to_string(inferred_total), " elements.");
-    y_inferred[static_cast<size_t>(idx)] = px[i];
-  }
-
-  if (explicit_output_shape == nullptr) {
-    const size_t out_n_bytes = static_cast<size_t>(inferred_total) * sizeof(float);
-    Tensor out = rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::FLOAT), inferred_shape,
-                                           out_n_bytes)
-                    : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), inferred_shape,
-                                       out_n_bytes, nullptr);
-    std::memcpy(out.mutable_bytes(), y_inferred,
-                static_cast<size_t>(inferred_total) * sizeof(float));
-    return out;
-  }
-
-  EXT_ENFORCE_INVALID(explicit_output_shape->size() == x.shape.size(),
+  Shape out_shape = explicit_output_shape ? *explicit_output_shape : x.shape;
+  EXT_ENFORCE_INVALID(out_shape.size() == x.shape.size(),
                       "kernel::MaxUnpool: output_shape rank must match x rank.");
-  for (int64_t d : *explicit_output_shape) {
-    EXT_ENFORCE_INVALID(d > 0, "kernel::MaxUnpool: output_shape entries must be positive.");
+  if (explicit_output_shape == nullptr) {
+    for (size_t i = 0; i < k; ++i) {
+      const int64_t in_dim = x.shape[i + 2];
+      EXT_ENFORCE_INVALID(
+          in_dim <= 1 ||
+              in_dim - 1 <= (std::numeric_limits<int64_t>::max() - kernel_shape[i]) / strides[i],
+          "kernel::MaxUnpool: inferred output dimension overflows.");
+      out_shape[i + 2] = strides[i] * (in_dim - 1) + kernel_shape[i];
+      EXT_ENFORCE_INVALID(out_shape[i + 2] >= pads[i],
+                          "kernel::MaxUnpool: inferred output dimension is negative.");
+      out_shape[i + 2] -= pads[i];
+      EXT_ENFORCE_INVALID(out_shape[i + 2] >= pads[i + k],
+                          "kernel::MaxUnpool: inferred output dimension is negative.");
+      out_shape[i + 2] -= pads[i + k];
+    }
   }
-  // The output dimensions must be at least as large as the inferred ones; the
-  // inferred region is copied into the top-left corner.
-  for (size_t i = 0; i < x.shape.size(); ++i) {
-    EXT_ENFORCE_INVALID((*explicit_output_shape)[i] >= inferred_shape[i],
-                        "kernel::MaxUnpool: output_shape must be >= inferred shape on every axis.");
+  for (int64_t d : out_shape) {
+    EXT_ENFORCE_INVALID(d >= 0, "kernel::MaxUnpool: output_shape entries must be non-negative.");
   }
-  int64_t out_total = 1;
-  for (int64_t d : *explicit_output_shape) {
+  int64_t out_total = std::find(out_shape.begin(), out_shape.end(), 0) != out_shape.end() ? 0 : 1;
+  for (int64_t d : out_shape) {
+    EXT_ENFORCE_INVALID(out_total == 0 || d <= std::numeric_limits<int64_t>::max() / out_total,
+                        "kernel::MaxUnpool: output size overflows.");
     out_total *= d;
   }
+  EXT_ENFORCE_INVALID(static_cast<uint64_t>(out_total) <=
+                          std::numeric_limits<size_t>::max() / sizeof(float),
+                      "kernel::MaxUnpool: output byte size overflows.");
+  const size_t x_total = x.element_count();
+  const int64_t *pi = indices.AsInt64();
+  for (size_t i = 0; i < x_total; ++i) {
+    EXT_ENFORCE_INVALID(pi[i] >= 0 && pi[i] < out_total, "kernel::MaxUnpool: indices entry ",
+                        std::to_string(pi[i]), " out of range for output of ",
+                        std::to_string(out_total), " elements.");
+  }
   const size_t out_n_bytes = static_cast<size_t>(out_total) * sizeof(float);
-  Tensor out = rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::FLOAT),
-                                         *explicit_output_shape, out_n_bytes)
-                  : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), *explicit_output_shape,
-                                     out_n_bytes, nullptr);
+  Tensor out =
+      rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes)
+         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), out_shape, out_n_bytes, nullptr);
+  if (out_total == 0) {
+    return out;
+  }
   float *po = reinterpret_cast<float *>(out.mutable_bytes());
   std::fill(po, po + static_cast<size_t>(out_total), 0.0f);
-
-  // Compute strides for both layouts and copy the inferred region into the
-  // top-left corner of the output.
-  Shape in_strides;
-  in_strides.assign(x.shape.size(), 1);
-  Shape out_strides;
-  out_strides.assign(x.shape.size(), 1);
-  for (size_t i = x.shape.size(); i-- > 1;) {
-    in_strides[i - 1] = in_strides[i] * inferred_shape[i];
-    out_strides[i - 1] = out_strides[i] * (*explicit_output_shape)[i];
-  }
-  Shape idx;
-  idx.assign(x.shape.size(), 0);
-  for (int64_t flat = 0; flat < inferred_total; ++flat) {
-    int64_t rem = flat;
-    for (size_t i = inferred_shape.size(); i-- > 0;) {
-      idx[i] = rem % inferred_shape[i];
-      rem /= inferred_shape[i];
-    }
-    int64_t out_offset = 0;
-    for (size_t i = 0; i < idx.size(); ++i) {
-      out_offset += idx[i] * out_strides[i];
-    }
-    po[out_offset] = y_inferred[static_cast<size_t>(flat)];
+  const float *px = x.AsFloat();
+  for (size_t i = 0; i < x_total; ++i) {
+    po[static_cast<size_t>(pi[i])] = px[i];
   }
 
   return out;

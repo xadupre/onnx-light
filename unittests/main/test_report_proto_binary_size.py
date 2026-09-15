@@ -1,5 +1,7 @@
 import importlib.util
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
@@ -18,7 +20,7 @@ def _load_reporter():
     return module
 
 
-class TestReportProtoBinarySize(unittest.TestCase):
+class TestReportProtoBinarySize(ExtTestCase):
     @classmethod
     def setUpClass(cls):
         cls.reporter = _load_reporter()
@@ -33,6 +35,37 @@ class TestReportProtoBinarySize(unittest.TestCase):
             RuntimeError, r"maximum 1,048,576 bytes.*lib\.so: 1,048,577 bytes"
         ):
             self.reporter._enforce_installed_size_budget(measurements, 1_048_576)
+
+    def test_optional_size_budget_accepts_limit(self):
+        measurements = [{"source": "lib.so", "text_size": 1024}]
+        self.reporter._enforce_optional_size_budget(measurements, "text_size", ".text size", 1024)
+
+    def test_optional_size_budget_rejects_unavailable_measurement(self):
+        measurements = [{"source": "lib.so", "dynamic_symbols": None}]
+        with self.assertRaisesRegex(
+            RuntimeError, r"defined dynamic-symbol count unavailable for: lib\.so"
+        ):
+            self.reporter._enforce_optional_size_budget(
+                measurements, "dynamic_symbols", "defined dynamic-symbol count", 760
+            )
+
+    def test_optional_size_budget_rejects_oversized_measurement(self):
+        measurements = [{"source": "lib.so", "dynamic_symbols": 761}]
+        with self.assertRaisesRegex(RuntimeError, r"maximum 760.*lib\.so: 761"):
+            self.reporter._enforce_optional_size_budget(
+                measurements, "dynamic_symbols", "defined dynamic-symbol count", 760
+            )
+
+    def test_allowed_dependencies_accepts_subset(self):
+        measurements = [{"source": "lib.so", "dependencies": ["libc.so.6"]}]
+        self.reporter._enforce_allowed_dependencies(measurements, {"libc.so.6", "libstdc++.so.6"})
+
+    def test_allowed_dependencies_rejects_addition(self):
+        measurements = [{"source": "lib.so", "dependencies": ["libc.so.6", "libdecoder.so.1"]}]
+        with self.assertRaisesRegex(
+            RuntimeError, r"added shared dependencies: lib\.so: libdecoder\.so\.1"
+        ):
+            self.reporter._enforce_allowed_dependencies(measurements, {"libc.so.6"})
 
 
 if __name__ == "__main__":

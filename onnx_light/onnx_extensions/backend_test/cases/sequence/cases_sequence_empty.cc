@@ -30,53 +30,62 @@ constexpr int64_t kDefaultIrVersion = 13;
 // the empty sequence's element dtype.
 void RegisterSequenceEmptyCase(const std::string &name, bool has_dtype, int64_t dtype,
                                const OpsetId &opset, std::vector<TestCase> &registry) {
-  const KernelContext ctx{opset};
+  TestCase lazy_case(name, name);
+  lazy_case.rtol = 1e-3;
+  lazy_case.atol = 1e-7;
+  lazy_case.build = [opset, has_dtype, dtype, name](bool) -> BuiltCase {
+    const KernelContext ctx_1{opset};
+    const onnx_kernels::kernel::SequenceEmpty kernel_1{ctx_1};
+    const KernelContext ctx_2{opset};
+    const onnx_kernels::kernel::SequenceEmpty kernel_2{ctx_2};
+    const KernelContext ctx_3{opset};
+    const onnx_kernels::kernel::SequenceLength kernel_3{ctx_3};
 
-  // Compute the expected output: SequenceLength of an empty sequence
-  // is always 0.
-  const Sequence empty_seq =
-      has_dtype ? onnx_kernels::kernel::SequenceEmpty(ctx)(static_cast<int32_t>(dtype))
-                : onnx_kernels::kernel::SequenceEmpty(ctx)();
-  Tensor expected = onnx_kernels::kernel::SequenceLength(ctx)(empty_seq);
-  expected.name = "length";
+    // Compute the expected output: SequenceLength of an empty sequence
+    // is always 0.
+    const Sequence empty_seq = has_dtype ? kernel_1(static_cast<int32_t>(dtype)) : kernel_2();
+    Tensor expected = kernel_3(empty_seq);
+    expected.name = "length";
 
-  TestCase tc(name, name);
-  tc.rtol = 1e-3;
-  tc.atol = 1e-7;
+    TestCase tc(name, name);
+    tc.rtol = 1e-3;
+    tc.atol = 1e-7;
 
-  ModelProto &model = tc.emplace_model();
-  model.set_ir_version(kDefaultIrVersion);
-  model.set_producer_name("backend-test");
-  OperatorSetIdProto proto;
-  proto.set_domain(opset.domain);
-  proto.set_version(opset.version);
-  model.add_opset_import(proto);
+    ModelProto &model = tc.emplace_model();
+    model.set_ir_version(kDefaultIrVersion);
+    model.set_producer_name("backend-test");
+    OperatorSetIdProto proto;
+    proto.set_domain(opset.domain);
+    proto.set_version(opset.version);
+    model.add_opset_import(proto);
 
-  GraphProto *graph = model.add_graph();
-  graph->set_name(name);
+    GraphProto *graph = model.add_graph();
+    graph->set_name(name);
 
-  // Node 1: SequenceEmpty [dtype] → empty_seq.
-  NodeProto *empty_node = graph->add_node();
-  empty_node->set_op_type("SequenceEmpty");
-  empty_node->add_output("empty_seq");
-  if (has_dtype) {
-    AddAttribute<int64_t>(*empty_node, "dtype", dtype);
-  }
+    // Node 1: SequenceEmpty [dtype] → empty_seq.
+    NodeProto *empty_node = graph->add_node();
+    empty_node->set_op_type("SequenceEmpty");
+    empty_node->add_output("empty_seq");
+    if (has_dtype) {
+      AddAttribute<int64_t>(*empty_node, "dtype", dtype);
+    }
 
-  // Node 2: SequenceLength empty_seq → length.
-  NodeProto *len_node = graph->add_node();
-  len_node->set_op_type("SequenceLength");
-  len_node->add_input("empty_seq");
-  len_node->add_output("length");
+    // Node 2: SequenceLength empty_seq → length.
+    NodeProto *len_node = graph->add_node();
+    len_node->set_op_type("SequenceLength");
+    len_node->add_input("empty_seq");
+    len_node->add_output("length");
 
-  // No graph inputs. Graph output is the scalar INT64 length.
-  FillValueInfo(expected, *graph->add_output());
+    // No graph inputs. Graph output is the scalar INT64 length.
+    FillValueInfo(expected, *graph->add_output());
 
-  DataSet ds;
-  ds.outputs.push_back(expected);
-  tc.data_sets().emplace_back(std::move(ds));
+    DataSet ds;
+    ds.outputs.push_back(expected);
+    tc.data_sets().emplace_back(std::move(ds));
 
-  registry.emplace_back(std::move(tc));
+    return tc.take_materialized();
+  };
+  registry.emplace_back(std::move(lazy_case));
 }
 
 } // namespace

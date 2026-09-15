@@ -35,13 +35,13 @@ def _section_sizes(path: pathlib.Path) -> dict[str, int]:
     return sections
 
 
-def _elf_metadata(path: pathlib.Path) -> tuple[int | None, str]:
+def _elf_metadata(path: pathlib.Path) -> tuple[int | None, list[str] | None]:
     """Returns the defined dynamic-symbol count and ELF dependencies."""
     if path.read_bytes()[:4] != b"\x7fELF":
-        return None, "n/a"
+        return None, None
     readelf = shutil.which("readelf")
     if readelf is None:
-        return None, "readelf unavailable"
+        return None, None
 
     symbols = subprocess.run(
         [readelf, "--dyn-syms", "-W", str(path)], check=True, capture_output=True, text=True
@@ -56,7 +56,7 @@ def _elf_metadata(path: pathlib.Path) -> tuple[int | None, str]:
         [readelf, "-d", "-W", str(path)], check=True, capture_output=True, text=True
     )
     dependencies = re.findall(r"\(NEEDED\).*?\[(.*?)\]", dynamic.stdout)
-    return defined_symbols, ", ".join(dependencies) or "none"
+    return defined_symbols, dependencies
 
 
 def _measure(path: pathlib.Path, source: str, compressed_size: int | None) -> dict[str, object]:
@@ -131,7 +131,9 @@ def _render(measurements: list[dict[str, object]]) -> str:
         )
     lines.extend(["", "**Required shared libraries**"])
     for measurement in measurements:
-        lines.append(f"- `{measurement['source']}`: {measurement['dependencies']}")
+        dependencies = measurement["dependencies"]
+        rendered_dependencies = ", ".join(dependencies) if dependencies is not None else "n/a"
+        lines.append(f"- `{measurement['source']}`: {rendered_dependencies or 'none'}")
     return "\n".join(lines) + "\n"
 
 
@@ -157,6 +159,48 @@ def _enforce_installed_size_budget(
     )
 
 
+def _enforce_optional_size_budget(
+    measurements: list[dict[str, object]], key: str, label: str, maximum_size: int
+) -> None:
+    """Raises an error when a measured optional size exceeds its budget."""
+    unavailable = [
+        str(measurement["source"]) for measurement in measurements if measurement[key] is None
+    ]
+    if unavailable:
+        raise RuntimeError(f"{label} unavailable for: {', '.join(unavailable)}")
+    oversized = [measurement for measurement in measurements if measurement[key] > maximum_size]
+    if oversized:
+        details = ", ".join(
+            f"{measurement['source']}: {measurement[key]:,}" for measurement in oversized
+        )
+        raise RuntimeError(
+            f"lib_onnx_proto {label} budget exceeded (maximum {maximum_size:,}): {details}"
+        )
+
+
+def _enforce_allowed_dependencies(
+    measurements: list[dict[str, object]], allowed_dependencies: set[str]
+) -> None:
+    """Raises an error when a measured library adds a shared dependency."""
+    unavailable = [
+        str(measurement["source"])
+        for measurement in measurements
+        if measurement["dependencies"] is None
+    ]
+    if unavailable:
+        raise RuntimeError(f"shared dependencies unavailable for: {', '.join(unavailable)}")
+    unexpected = [
+        (measurement["source"], sorted(set(measurement["dependencies"]) - allowed_dependencies))
+        for measurement in measurements
+    ]
+    unexpected = [(source, dependencies) for source, dependencies in unexpected if dependencies]
+    if unexpected:
+        details = ", ".join(
+            f"{source}: {', '.join(dependencies)}" for source, dependencies in unexpected
+        )
+        raise RuntimeError(f"lib_onnx_proto added shared dependencies: {details}")
+
+
 def main() -> None:
     """Runs the binary-size reporter."""
     parser = argparse.ArgumentParser()
@@ -167,9 +211,27 @@ def main() -> None:
         type=int,
         help="fails when any installed proto library exceeds this number of bytes",
     )
+    parser.add_argument(
+        "--max-text-size",
+        type=int,
+        help="fails when any proto library .text section exceeds this number of bytes",
+    )
+    parser.add_argument(
+        "--max-dynamic-symbols",
+        type=int,
+        help="fails when any proto library exceeds this number of defined dynamic symbols",
+    )
+    parser.add_argument(
+        "--allowed-dependency",
+        action="append",
+        default=[],
+        help="shared library permitted in DT_NEEDED; repeat for every allowed dependency",
+    )
     arguments = parser.parse_args()
-    if arguments.max_installed_size is not None and arguments.max_installed_size < 0:
-        parser.error("--max-installed-size must be non-negative")
+    for option in ("max_installed_size", "max_text_size", "max_dynamic_symbols"):
+        value = getattr(arguments, option)
+        if value is not None and value < 0:
+            parser.error(f"--{option.replace('_', '-')} must be non-negative")
 
     measurements = [
         measurement for target in arguments.targets for measurement in _measure_target(target)
@@ -184,6 +246,19 @@ def main() -> None:
             summary.write(report)
     if arguments.max_installed_size is not None:
         _enforce_installed_size_budget(measurements, arguments.max_installed_size)
+    if arguments.max_text_size is not None:
+        _enforce_optional_size_budget(
+            measurements, "text_size", ".text size", arguments.max_text_size
+        )
+    if arguments.max_dynamic_symbols is not None:
+        _enforce_optional_size_budget(
+            measurements,
+            "dynamic_symbols",
+            "defined dynamic-symbol count",
+            arguments.max_dynamic_symbols,
+        )
+    if arguments.allowed_dependency:
+        _enforce_allowed_dependencies(measurements, set(arguments.allowed_dependency))
 
 
 if __name__ == "__main__":

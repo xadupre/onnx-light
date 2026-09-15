@@ -26,6 +26,11 @@ set(ONNX_LIGHT_HARDENING_LINK_OPTIONS "" CACHE INTERNAL "")
 
 function(_onnx_light_try_cxx_flag flag out_var)
   string(MAKE_C_IDENTIFIER "ONNX_LIGHT_HARDENING_CXX_${flag}" cache_var)
+  if(MSVC)
+    set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} /WX")
+  else()
+    set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} -Werror")
+  endif()
   check_cxx_compiler_flag("${flag}" ${cache_var})
   if(${cache_var})
     set(${out_var} TRUE PARENT_SCOPE)
@@ -180,14 +185,33 @@ else()
   endforeach()
 
   # _FORTIFY_SOURCE requires an optimization level (>= -O1); GCC otherwise
-  # warns. Use level 3 when available, fall back to 2.
-  _onnx_light_try_cxx_flag("-D_FORTIFY_SOURCE=3" _have_fortify3)
-  if(_have_fortify3)
-    list(APPEND _onnx_light_hardening_compile_definitions "_FORTIFY_SOURCE=3")
-  else()
-    _onnx_light_try_cxx_flag("-D_FORTIFY_SOURCE=2" _have_fortify2)
-    if(_have_fortify2)
-      list(APPEND _onnx_light_hardening_compile_definitions "_FORTIFY_SOURCE=2")
+  # warns. Some toolchains provide it through compiler specs, where redefining
+  # it fails under -Werror. Retain the toolchain's configured level in that
+  # case; otherwise use level 3 when available, falling back to 2.
+  set(_onnx_light_empty_source "${CMAKE_CURRENT_BINARY_DIR}/onnx_light_hardening_empty.cc")
+  file(WRITE "${_onnx_light_empty_source}" "")
+  execute_process(
+      COMMAND "${CMAKE_CXX_COMPILER}" -dM -E -x c++ "${_onnx_light_empty_source}"
+      OUTPUT_VARIABLE _onnx_light_cxx_predefines
+      ERROR_VARIABLE _onnx_light_cxx_predefines_error
+      RESULT_VARIABLE _onnx_light_cxx_predefines_result
+      TIMEOUT 30)
+  file(REMOVE "${_onnx_light_empty_source}")
+  if(NOT _onnx_light_cxx_predefines_result STREQUAL "0")
+    message(FATAL_ERROR
+            "ONNX_HARDENING: compiler predefined-macro probe failed "
+            "(${_onnx_light_cxx_predefines_result}): "
+            "${_onnx_light_cxx_predefines_error}")
+  endif()
+  if(NOT _onnx_light_cxx_predefines MATCHES "#define _FORTIFY_SOURCE [0-9]+")
+    _onnx_light_try_cxx_flag("-D_FORTIFY_SOURCE=3" _have_fortify3)
+    if(_have_fortify3)
+      list(APPEND _onnx_light_hardening_compile_definitions "_FORTIFY_SOURCE=3")
+    else()
+      _onnx_light_try_cxx_flag("-D_FORTIFY_SOURCE=2" _have_fortify2)
+      if(_have_fortify2)
+        list(APPEND _onnx_light_hardening_compile_definitions "_FORTIFY_SOURCE=2")
+      endif()
     endif()
   endif()
   # libstdc++ runtime assertions (bounds checks on containers).

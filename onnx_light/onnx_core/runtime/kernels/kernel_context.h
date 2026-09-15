@@ -92,9 +92,10 @@ struct KernelContext {
  * ``KernelBase``'s constructor via ``using KernelBase::KernelBase;``, which
  * preserves the ``explicit`` qualifier on the single-argument constructor.
  *
- * ``ctx_`` is stored by value so that kernels are safely copy-constructible:
- * lazy test-case lambdas capture kernels by value and may outlive the
- * ``KernelContext`` local variable used at registration time.
+ * ``ctx_`` is stored by value so a kernel remains independent of the
+ * caller-owned ``KernelContext`` after construction. Backend-test builders
+ * construct short-lived contexts and kernels only while materializing
+ * reference outputs.
  *
  * ``KernelBase`` is also the runtime dispatch interface: it exposes a virtual
  * :cpp:func:`Run` that the runtime (:cpp:func:`RunNode` /
@@ -114,10 +115,18 @@ struct KernelContext {
  */
 class KernelBase {
 public:
-  explicit KernelBase(const KernelContext &ctx) : ctx_(ctx) {}
-  KernelBase(const KernelBase &) = default;
+  explicit KernelBase(const KernelContext &ctx);
+  KernelBase(const KernelBase &other);
+  KernelBase(KernelBase &&other) noexcept;
   KernelBase &operator=(const KernelBase &) = default;
-  virtual ~KernelBase() = default;
+  KernelBase &operator=(KernelBase &&) noexcept = default;
+  virtual ~KernelBase();
+
+  /// Returns the number of kernel instances constructed in this process.
+  static uint64_t ConstructionCountForTesting();
+
+  /// Returns the number of kernel instances currently alive in this process.
+  static int64_t LiveInstanceCountForTesting();
 
   /// Attaches the node this kernel runs for. Called once at kernel-resolution
   /// time; the node outlives the kernel.

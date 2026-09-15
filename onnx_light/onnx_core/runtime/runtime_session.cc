@@ -22,12 +22,10 @@ namespace {
 /// The requested participant count comes from
 /// :cpp:var:`RuntimeParameters::num_threads` (negative values mean "topology
 /// default", as documented there) and worker placement is left to the
-/// operating system so wiring the executor does not change where the workers
-/// of an existing session run.
+/// operating system, matching ONNX Runtime's default affinity.
 CpuExecutionPolicy DefaultCpuExecutionPolicy(const RuntimeParameters &parameters) {
   CpuExecutionPolicy policy;
   policy.num_threads = parameters.num_threads < 0 ? 0 : parameters.num_threads;
-  policy.affinity_policy = CpuAffinityPolicy::kNone;
   return policy;
 }
 
@@ -169,7 +167,12 @@ void RuntimeSession::SetInitializers(const GraphProto &graph) {
 void RuntimeSession::SeedInitializers(RuntimeContext &rt) const {
   for (const Tensor &initializer : initializers_) {
     if (!rt.Has(initializer.name)) {
-      rt.Set(initializer.name, initializer.BorrowView(), RuntimeEventKind::kInitializer);
+      // Borrowed string views leave string_data empty. Materializes the payload for
+      // kernels and callbacks without exposing the cached strings to mutation.
+      rt.Set(initializer.name,
+             initializer.data_type == DataType::STRING ? initializer.ToOwned()
+                                                       : initializer.BorrowView(),
+             RuntimeEventKind::kInitializer);
     }
   }
 }

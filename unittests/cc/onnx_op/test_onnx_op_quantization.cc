@@ -12,8 +12,8 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace Test {
 
-constexpr size_t kExpectedQuantizeLinearSchemaCount = 7;
-constexpr size_t kExpectedDequantizeLinearSchemaCount = 7;
+constexpr size_t kExpectedQuantizeLinearSchemaCount = 8;
+constexpr size_t kExpectedDequantizeLinearSchemaCount = 8;
 constexpr size_t kExpectedQLinearConvSchemaCount = 1;
 constexpr size_t kExpectedQLinearMatMulSchemaCount = 2;
 constexpr size_t kExpectedDynamicQuantizeLinearSchemaCount = 1;
@@ -41,6 +41,7 @@ TEST(OnnxOpQuantizationRegistrationTest, ReturnsQuantizeLinearSchemasWithoutShap
   EXPECT_EQ(schemas.size(), kExpectedQuantizationSchemaCount);
 
   const core::schema::LightOpSchema *const v25 = FindByVersion(quantize_linear_schemas, 25);
+  const core::schema::LightOpSchema *const v28 = FindByVersion(quantize_linear_schemas, 28);
   const core::schema::LightOpSchema *const v24 = FindByVersion(quantize_linear_schemas, 24);
   const core::schema::LightOpSchema *const v23 = FindByVersion(quantize_linear_schemas, 23);
   const core::schema::LightOpSchema *const v21 = FindByVersion(quantize_linear_schemas, 21);
@@ -49,6 +50,7 @@ TEST(OnnxOpQuantizationRegistrationTest, ReturnsQuantizeLinearSchemasWithoutShap
   const core::schema::LightOpSchema *const v10 = FindByVersion(quantize_linear_schemas, 10);
 
   ASSERT_NE(nullptr, v25);
+  ASSERT_NE(nullptr, v28);
   ASSERT_NE(nullptr, v24);
   ASSERT_NE(nullptr, v23);
   ASSERT_NE(nullptr, v21);
@@ -81,6 +83,9 @@ TEST(OnnxOpQuantizationRegistrationTest, ReturnsQuantizeLinearSchemasWithoutShap
   EXPECT_EQ(v25->type_constraints()[2].type_param_str, "T3");
   EXPECT_EQ(v25->type_constraints()[2].allowed_type_strs.size(), 13u);
   EXPECT_EQ(v25->type_constraints()[2].allowed_type_strs.back(), core::schema::TensorType::kInt2);
+  EXPECT_EQ(v28->type_constraints()[2].allowed_type_strs.size(), 15u);
+  EXPECT_EQ(v28->type_constraints()[2].allowed_type_strs.back(),
+            core::schema::TensorType::kFloat6e3m2);
 
   // v24 added float8e8m0 to T2 and the float4e2m1 entry to T3.
   ASSERT_EQ(v24->type_constraints().size(), 3u);
@@ -132,6 +137,7 @@ TEST(OnnxOpQuantizationRegistrationTest, ReturnsDequantizeLinearSchemasWithoutSh
   EXPECT_EQ(dequantize_linear_schemas.size(), kExpectedDequantizeLinearSchemaCount);
 
   const core::schema::LightOpSchema *const v25 = FindByVersion(dequantize_linear_schemas, 25);
+  const core::schema::LightOpSchema *const v28 = FindByVersion(dequantize_linear_schemas, 28);
   const core::schema::LightOpSchema *const v24 = FindByVersion(dequantize_linear_schemas, 24);
   const core::schema::LightOpSchema *const v23 = FindByVersion(dequantize_linear_schemas, 23);
   const core::schema::LightOpSchema *const v21 = FindByVersion(dequantize_linear_schemas, 21);
@@ -140,6 +146,7 @@ TEST(OnnxOpQuantizationRegistrationTest, ReturnsDequantizeLinearSchemasWithoutSh
   const core::schema::LightOpSchema *const v10 = FindByVersion(dequantize_linear_schemas, 10);
 
   ASSERT_NE(nullptr, v25);
+  ASSERT_NE(nullptr, v28);
   ASSERT_NE(nullptr, v24);
   ASSERT_NE(nullptr, v23);
   ASSERT_NE(nullptr, v21);
@@ -171,6 +178,7 @@ TEST(OnnxOpQuantizationRegistrationTest, ReturnsDequantizeLinearSchemasWithoutSh
   EXPECT_EQ(v25->type_constraints()[1].type_param_str, "T2");
   EXPECT_EQ(v25->type_constraints()[2].type_param_str, "T3");
   EXPECT_EQ(v25->type_constraints()[0].allowed_type_strs.size(), 14u);
+  EXPECT_EQ(v28->type_constraints()[0].allowed_type_strs.size(), 16u);
   EXPECT_EQ(v25->type_constraints()[0].allowed_type_strs.back(), core::schema::TensorType::kInt2);
 
   // v24 introduced T3 + the float8e8m0 entry on T2 vs. v23.

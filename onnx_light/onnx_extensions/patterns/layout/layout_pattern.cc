@@ -400,7 +400,8 @@ std::set<std::string> SwapUnsqueezeTransposePattern::FastOpType() const { return
 core::builder::MatchResult SwapUnsqueezeTransposePattern::Match(core::builder::GraphGraph &graph,
                                                                 const NodeProto &candidate) const {
   if (!IsDefaultOp(candidate, "Transpose") || candidate.input_size() != 1 ||
-      candidate.output_size() != 1 || graph.IsUsedMoreThanOnce(candidate.input()[0].value())) {
+      candidate.output_size() != 1 || !MainOpsetAtLeast(graph, 13) ||
+      graph.IsUsedMoreThanOnce(candidate.input()[0].value())) {
     return NoMatch(candidate, "candidate is not an unshared default-domain Transpose");
   }
   const NodeProto *unsqueeze = graph.NodeBefore(candidate.input()[0].value());
@@ -414,20 +415,24 @@ core::builder::MatchResult SwapUnsqueezeTransposePattern::Match(core::builder::G
   std::vector<int64_t> perm;
   std::vector<int64_t> axes;
   if (!GetAttributeInts(candidate, "perm", perm) || !IsValidPermutation(perm) ||
-      !ReadConstantIntegers(graph, unsqueeze->input()[1].value(), axes) || axes.empty()) {
+      !ReadConstantShape(graph, unsqueeze->input()[1].value(), axes) || axes.empty() ||
+      axes.size() > perm.size()) {
     return NoMatch(candidate, "the Transpose perm or Unsqueeze axes are invalid");
   }
-  const bool has_negative =
-      std::any_of(axes.begin(), axes.end(), [](int64_t axis) { return axis < 0; });
+  const int64_t rank = static_cast<int64_t>(perm.size());
+  if ((graph.HasShape(unsqueeze->input()[0].value()) &&
+       graph.GetShape(unsqueeze->input()[0].value()).Shape().Rank() != perm.size() - axes.size()) ||
+      (graph.HasShape(candidate.input()[0].value()) &&
+       graph.GetShape(candidate.input()[0].value()).Shape().Rank() != perm.size())) {
+    return NoMatch(candidate, "the Transpose perm does not match the Unsqueeze rank");
+  }
+  std::set<int64_t> normalized_axes;
   for (int64_t axis : axes) {
-    const int64_t normalized =
-        has_negative
-            ? ((axis + static_cast<int64_t>(perm.size())) % static_cast<int64_t>(perm.size()) +
-               static_cast<int64_t>(perm.size())) %
-                  static_cast<int64_t>(perm.size())
-            : axis;
-    if (normalized < 0 || normalized >= static_cast<int64_t>(perm.size())) {
+    if (axis < -rank || axis >= rank) {
       return NoMatch(candidate, "an Unsqueeze axis is out of range for the Transpose");
+    }
+    if (!normalized_axes.insert(axis < 0 ? axis + rank : axis).second) {
+      return NoMatch(candidate, "the Unsqueeze axes contain duplicate dimensions");
     }
   }
   return core::builder::MatchResult{this, {unsqueeze, &candidate}, &candidate};
@@ -450,40 +455,32 @@ SwapUnsqueezeTransposePattern::Apply(core::builder::GraphGraph &graph,
   ReadConstantIntegers(graph, unsqueeze.input()[1].value(), axes);
   GetAttributeInts(transpose, "perm", perm);
 
-  if (std::any_of(axes.begin(), axes.end(), [](int64_t axis) { return axis < 0; })) {
-    const int64_t rank = static_cast<int64_t>(perm.size());
-    for (int64_t &axis : axes) {
-      axis = ((axis + rank) % rank + rank) % rank;
+  for (int64_t &axis : axes) {
+    if (axis < 0) {
+      axis += static_cast<int64_t>(perm.size());
     }
   }
   const std::set<int64_t> axes_set(axes.begin(), axes.end());
-  std::vector<int64_t> filtered_perm;
-  for (int64_t p : perm) {
-    if (axes_set.find(p) == axes_set.end()) {
-      filtered_perm.push_back(p);
+  std::vector<int64_t> original_axes(perm.size(), -1);
+  int64_t original_axis = 0;
+  for (std::size_t axis = 0; axis < perm.size(); ++axis) {
+    if (axes_set.find(static_cast<int64_t>(axis)) == axes_set.end()) {
+      original_axes[axis] = original_axis++;
     }
   }
-  std::vector<std::pair<int64_t, int64_t>> inverse_perm;
-  for (std::size_t i = 0; i < filtered_perm.size(); ++i) {
-    inverse_perm.push_back({filtered_perm[i], static_cast<int64_t>(i)});
-  }
-  std::sort(inverse_perm.begin(), inverse_perm.end());
-  std::vector<std::pair<int64_t, int64_t>> new_perm_pairs;
-  for (std::size_t i = 0; i < inverse_perm.size(); ++i) {
-    new_perm_pairs.push_back({inverse_perm[i].second, static_cast<int64_t>(i)});
-  }
-  std::sort(new_perm_pairs.begin(), new_perm_pairs.end());
-  std::vector<int64_t> new_perm;
-  for (const auto &[_, value] : new_perm_pairs) {
-    new_perm.push_back(value);
-  }
 
+  std::vector<int64_t> new_perm;
   std::vector<int64_t> new_axes;
   new_axes.reserve(axes.size());
-  for (int64_t axis : axes) {
-    new_axes.push_back(perm[static_cast<std::size_t>(axis)]);
+  for (std::size_t output_axis = 0; output_axis < perm.size(); ++output_axis) {
+    const int64_t input_axis = original_axes[static_cast<std::size_t>(perm[output_axis])];
+    if (input_axis < 0) {
+      // Transpose maps output positions to input axes, not the other way around.
+      new_axes.push_back(static_cast<int64_t>(output_axis));
+    } else {
+      new_perm.push_back(input_axis);
+    }
   }
-  std::sort(new_axes.begin(), new_axes.end());
 
   core::builder::GraphBuilder &builder = graph.Builder();
   const std::string intermediate =

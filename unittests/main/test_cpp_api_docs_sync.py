@@ -3,8 +3,10 @@ import re
 from pathlib import Path
 import unittest
 
+from onnx_light.ext_test_case import ExtTestCase
 
-class TestCppApiDocsSync(unittest.TestCase):
+
+class TestCppApiDocsSync(ExtTestCase):
     """Tests that the C++ API docs stay aligned with the Doxygen-indexed headers.
 
     The C++ API reference under ``docs/api/cpp`` is generated from the project

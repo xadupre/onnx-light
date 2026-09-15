@@ -32,14 +32,17 @@ NodeProto MakeGatherNDNode(int64_t batch_dims, bool include_batch_dims) {
 
 void RegisterGatherNDCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(13);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::GatherND gnd_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeGatherNDNode(0, true);
     Expect(registry, std::move(node), "test_cc_gathernd_example_int32_benchmark", {opset},
            {kBenchmarkElementwiseSize, kBenchmarkElementwiseSize * 2}, {kBenchmarkElementwiseSize},
-           [gnd_kernel]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext gnd_kernel_ctx{opset};
+             const onnx_kernels::kernel::GatherND gnd_kernel{gnd_kernel_ctx};
+
              std::vector<int32_t> data_values(kBenchmarkElementwiseSize);
              for (int64_t i = 0; i < kBenchmarkElementwiseSize; ++i) {
                data_values[static_cast<std::size_t>(i)] = static_cast<int32_t>(i % 65536);
@@ -61,7 +64,12 @@ void RegisterGatherNDCases(std::vector<TestCase> &registry, TestMode mode) {
   // ``test_gathernd_example_int32`` (2x2 data with k_last == rank).
   {
     Expect(registry, MakeGatherNDNode(0, true), "test_cc_gathernd_example_int32", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext gnd_kernel_ctx{opset};
+             const onnx_kernels::kernel::GatherND gnd_kernel{gnd_kernel_ctx};
+
              Tensor data = Tensor::FromInt32("", {2, 2}, {0, 1, 2, 3});
              Tensor indices = Tensor::FromInt64("", {2, 2}, {0, 0, 1, 1});
              Tensor output = gnd_kernel(data, indices, 0);
@@ -73,7 +81,12 @@ void RegisterGatherNDCases(std::vector<TestCase> &registry, TestMode mode) {
   // index selects a 1-D slice of length 2.
   {
     Expect(registry, MakeGatherNDNode(0, true), "test_cc_gathernd_example_float32", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext gnd_kernel_ctx{opset};
+             const onnx_kernels::kernel::GatherND gnd_kernel{gnd_kernel_ctx};
+
              Tensor data = Tensor::FromFloat("", {2, 2}, {0.0f, 1.0f, 2.0f, 3.0f});
              Tensor indices = Tensor::FromInt64("", {2, 1}, {1, 0});
              Tensor output = gnd_kernel(data, indices, 0);
@@ -85,7 +98,12 @@ void RegisterGatherNDCases(std::vector<TestCase> &registry, TestMode mode) {
   // For each batch i, indices[i] picks rows of data[i] independently.
   {
     Expect(registry, MakeGatherNDNode(1, true), "test_cc_gathernd_example_int32_batch_dim1",
-           {opset}, [=]() -> IoData {
+           {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(13);
+
+             const KernelContext gnd_kernel_ctx{opset};
+             const onnx_kernels::kernel::GatherND gnd_kernel{gnd_kernel_ctx};
+
              Tensor data = Tensor::FromInt32("", {2, 2, 2}, {0, 1, 2, 3, 4, 5, 6, 7});
              Tensor indices = Tensor::FromInt64("", {2, 1}, {1, 0});
              Tensor output = gnd_kernel(data, indices, 1);

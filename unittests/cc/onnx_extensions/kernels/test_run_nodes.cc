@@ -1169,6 +1169,54 @@ TEST(RunNodes, RunNodeResizeSizesFromDispatchTable) {
   EXPECT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
 }
 
+TEST(RunNodes, RunNodeResizeRejectsDuplicateNormalizedAxes) {
+  RuntimeContext rt(KernelContext(DefaultOpset(19)));
+  rt.tensors()["X"] = Tensor::FromFloat("X", {2, 3, 4}, std::vector<float>(24, 1.0f));
+  rt.tensors()["sizes"] = Tensor::FromInt64("sizes", {2}, {5, 5});
+  NodeProto node = MakeNode("Resize", {"X", "", "", "sizes"}, {"Y"});
+  AttributeProto *axes = node.add_attribute();
+  axes->set_name("axes");
+  axes->set_type(AttributeProto::AttributeType::INTS);
+  axes->add_ints(1);
+  axes->add_ints(-2);
+
+  EXPECT_THROW(RunNode(node, rt), std::invalid_argument);
+}
+
+TEST(RunNodes, RunNodeResizePreservesZeroSizedDimensions) {
+  RuntimeContext rt(KernelContext(DefaultOpset(19)));
+  rt.tensors()["X"] = Tensor::FromFloat("X", {0, 3, 4}, {});
+  rt.tensors()["sizes"] = Tensor::FromInt64("sizes", {1}, {5});
+  NodeProto node = MakeNode("Resize", {"X", "", "", "sizes"}, {"Y"});
+  AttributeProto *axes = node.add_attribute();
+  axes->set_name("axes");
+  axes->set_type(AttributeProto::AttributeType::INTS);
+  axes->add_ints(2);
+
+  RunNode(node, rt);
+
+  const Tensor &y = rt.tensors().at("Y");
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{0, 3, 5}));
+  EXPECT_EQ(y.element_count(), 0);
+}
+
+TEST(RunNodes, RunNodeResizeAllowsZeroOutputSize) {
+  RuntimeContext rt(KernelContext(DefaultOpset(19)));
+  rt.tensors()["X"] = Tensor::FromFloat("X", {2, 3, 4}, std::vector<float>(24, 1.0f));
+  rt.tensors()["sizes"] = Tensor::FromInt64("sizes", {1}, {0});
+  NodeProto node = MakeNode("Resize", {"X", "", "", "sizes"}, {"Y"});
+  AttributeProto *axes = node.add_attribute();
+  axes->set_name("axes");
+  axes->set_type(AttributeProto::AttributeType::INTS);
+  axes->add_ints(1);
+
+  RunNode(node, rt);
+
+  const Tensor &y = rt.tensors().at("Y");
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2, 0, 4}));
+  EXPECT_EQ(y.element_count(), 0);
+}
+
 TEST(RunNodes, RunNodeRegexFullMatchFromDispatchTable) {
   RuntimeContext rt(KernelContext(DefaultOpset(20)));
   rt.tensors()["x"] = Tensor::FromStrings("x", {3}, {"abc", "abcdef", "xyz"});
@@ -4905,6 +4953,40 @@ TEST(RunNodes, CollectNodeInputsIncludesSubgraphCaptures) {
 
   auto inputs = core::runtime::RuntimeSession::CollectNodeInputs(node);
   EXPECT_EQ(inputs, (std::vector<std::string>{"cond", "a", "b"}));
+}
+
+TEST(RunNodes, CollectNodeInputsIncludesDirectSubgraphOutputCaptures) {
+  for (bool multiple_graphs : {false, true}) {
+    SCOPED_TRACE(multiple_graphs);
+    GraphProto branch;
+    ValueInfoProto input;
+    input.set_name("formal");
+    branch.add_input(input);
+    TensorProto *initializer = branch.add_initializer();
+    initializer->set_name("weight");
+    initializer->set_data_type(TensorProto::DataType::FLOAT);
+    initializer->add_dims(1);
+    initializer->add_float_data(1.0f);
+    branch.add_node(MakeNode("Identity", {"formal"}, {"local"}));
+    for (const std::string name : {"captured", "formal", "weight", "local"}) {
+      ValueInfoProto output;
+      output.set_name(name);
+      branch.add_output(output);
+    }
+    NodeProto node = MakeNode("If", {"condition"}, {"result"});
+    AttributeProto attribute;
+    attribute.set_name("body");
+    if (multiple_graphs) {
+      attribute.set_type(AttributeProto::AttributeType::GRAPHS);
+      attribute.ref_graphs().push_back(branch);
+    } else {
+      attribute.set_type(AttributeProto::AttributeType::GRAPH);
+      attribute.ref_g() = branch;
+    }
+    node.ref_attribute().push_back(attribute);
+    EXPECT_EQ(core::runtime::RuntimeSession::CollectNodeInputs(node),
+              (std::vector<std::string>{"condition", "captured"}));
+  }
 }
 
 TEST(RunNodes, RunGraphReleaseIntermediatesRemovesUnusedAndEmitsEvent) {

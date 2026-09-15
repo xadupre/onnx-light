@@ -31,6 +31,8 @@ This example:
 * runs the model and prints the result.
 """
 
+# sphinx_gallery_thumbnail_path = "_static/gallery_thumbnails/custom_kernel.png"
+
 from __future__ import annotations
 
 import numpy as np

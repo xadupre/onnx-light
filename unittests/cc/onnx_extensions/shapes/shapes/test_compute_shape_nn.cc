@@ -9,6 +9,7 @@
 #include <gtest/gtest.h>
 
 #include <stdexcept>
+#include <tuple>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
@@ -886,6 +887,120 @@ TEST(OnnxOptimShapesNnBatchNormalization, RejectsWrongOpType) {
   EXPECT_THROW(
       onnx_shapes::shapes::nn::ComputeShapeBatchNormalization(ctx, node, "X", "input_mean"),
       std::invalid_argument);
+}
+
+namespace {
+
+NodeProto MakeGroupNormalizationNode(int64_t num_groups) {
+  NodeProto node;
+  node.set_op_type("GroupNormalization");
+  node.add_input("X");
+  node.add_input("scale");
+  node.add_input("bias");
+  node.add_output("Y");
+  AddAttribute<int64_t>(node, "num_groups", num_groups);
+  return node;
+}
+
+void SetGroupNormalizationInputs(core::shapes::ShapesContext &ctx,
+                                 const core::symbolic::SymShape &x_shape,
+                                 const core::symbolic::SymShape &scale_shape,
+                                 const core::symbolic::SymShape &bias_shape) {
+  ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, x_shape));
+  ctx.Set("scale",
+          core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, scale_shape));
+  ctx.Set("bias",
+          core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, bias_shape));
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesNnGroupNormalization, ValidatesInputsAndPropagatesX) {
+  NodeProto node = MakeGroupNormalizationNode(2);
+  core::shapes::ShapesContext ctx;
+  ctx.SetOpsetVersion("ai.onnx", 21);
+  SetGroupNormalizationInputs(
+      ctx,
+      core::symbolic::SymShape{core::symbolic::SymDim("N"), core::symbolic::SymDim(4),
+                               core::symbolic::SymDim(int64_t{0}), core::symbolic::SymDim("W")},
+      core::symbolic::SymShape{core::symbolic::SymDim(4)},
+      core::symbolic::SymShape{core::symbolic::SymDim(4)});
+
+  onnx_shapes::shapes::nn::ComputeShapeGroupNormalization(ctx, node, "X");
+
+  const core::symbolic::SymShape &output = ctx.Get("Y").Shape();
+  ASSERT_EQ(output.Rank(), 4u);
+  EXPECT_EQ(output[0].AsExpr(), "N");
+  EXPECT_EQ(output[1].AsInt(), 4);
+  EXPECT_EQ(output[2].AsInt(), 0);
+  EXPECT_EQ(output[3].AsExpr(), "W");
+}
+
+TEST(OnnxOptimShapesNnGroupNormalization, AcceptsUnknownChannel) {
+  NodeProto node = MakeGroupNormalizationNode(2);
+  core::shapes::ShapesContext ctx;
+  ctx.SetOpsetVersion("ai.onnx", 21);
+  SetGroupNormalizationInputs(ctx,
+                              core::symbolic::SymShape{core::symbolic::SymDim("N"),
+                                                       core::symbolic::SymDim("?"),
+                                                       core::symbolic::SymDim("W")},
+                              core::symbolic::SymShape{core::symbolic::SymDim("?")},
+                              core::symbolic::SymShape{core::symbolic::SymDim("?")});
+
+  EXPECT_NO_THROW(onnx_shapes::shapes::nn::ComputeShapeGroupNormalization(ctx, node, "X"));
+}
+
+TEST(OnnxOptimShapesNnGroupNormalization, RejectsInvalidInputs) {
+  const std::vector<std::tuple<core::symbolic::SymShape, core::symbolic::SymShape,
+                               core::symbolic::SymShape, int64_t>>
+      invalid_inputs = {
+          {{core::symbolic::SymDim(2)},
+           {core::symbolic::SymDim(2)},
+           {core::symbolic::SymDim(2)},
+           1},
+          {{core::symbolic::SymDim(2), core::symbolic::SymDim(4)},
+           {core::symbolic::SymDim(4), core::symbolic::SymDim(1)},
+           {core::symbolic::SymDim(4)},
+           2},
+          {{core::symbolic::SymDim(2), core::symbolic::SymDim(4)},
+           {core::symbolic::SymDim(3)},
+           {core::symbolic::SymDim(4)},
+           2},
+          {{core::symbolic::SymDim(2), core::symbolic::SymDim(4)},
+           {core::symbolic::SymDim(4)},
+           {core::symbolic::SymDim(3)},
+           2},
+          {{core::symbolic::SymDim(2), core::symbolic::SymDim(5)},
+           {core::symbolic::SymDim(5)},
+           {core::symbolic::SymDim(5)},
+           2},
+          {{core::symbolic::SymDim(2), core::symbolic::SymDim(4)},
+           {core::symbolic::SymDim(4)},
+           {core::symbolic::SymDim(4)},
+           0},
+      };
+  for (const auto &[x_shape, scale_shape, bias_shape, num_groups] : invalid_inputs) {
+    NodeProto node = MakeGroupNormalizationNode(num_groups);
+    core::shapes::ShapesContext ctx;
+    ctx.SetOpsetVersion("ai.onnx", 21);
+    SetGroupNormalizationInputs(ctx, x_shape, scale_shape, bias_shape);
+    EXPECT_THROW(onnx_shapes::shapes::nn::ComputeShapeGroupNormalization(ctx, node, "X"),
+                 std::invalid_argument);
+  }
+}
+
+TEST(OnnxOptimShapesNnGroupNormalization, PreservesDeprecatedOpset18ScaleShape) {
+  NodeProto node = MakeGroupNormalizationNode(2);
+  core::shapes::ShapesContext ctx;
+  ctx.SetOpsetVersion("ai.onnx", 18);
+  SetGroupNormalizationInputs(ctx,
+                              core::symbolic::SymShape{core::symbolic::SymDim(2),
+                                                       core::symbolic::SymDim(4),
+                                                       core::symbolic::SymDim(3)},
+                              core::symbolic::SymShape{core::symbolic::SymDim(2)},
+                              core::symbolic::SymShape{core::symbolic::SymDim(2)});
+
+  EXPECT_NO_THROW(onnx_shapes::shapes::nn::ComputeShapeGroupNormalization(ctx, node, "X"));
 }
 
 TEST(OnnxOptimShapesNnMeanVarianceNormalization, PropagatesInputShapeAndType) {

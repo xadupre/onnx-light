@@ -362,12 +362,12 @@ TEST(OnnxOptimShapesReductionReduceMax, AxesInputValueAsShapeKeepdims) {
   EXPECT_EQ(ctx.Get("Y").Dtype(), core::symbolic::TensorType::kFloat);
 }
 
-TEST(OnnxOptimShapesReductionReduceMin, AttributeAxesNoKeepdims) {
+TEST(OnnxOptimShapesReductionReduceMin, AttributeAxesNoKeepdimsOpset17) {
   NodeProto node = MakeReduceNode("ReduceMin", {"X"}, /*keepdims=*/0,
                                   /*noop_with_empty_axes=*/std::nullopt,
                                   /*axes_attr=*/{0, 2});
   core::shapes::ShapesContext ctx;
-  ctx.SetOpsetVersion("", 11);
+  ctx.SetOpsetVersion("", 17);
   SetData(ctx,
           core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3),
                                    core::symbolic::SymDim(4)},

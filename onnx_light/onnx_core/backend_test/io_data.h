@@ -23,6 +23,10 @@ struct IoData {
   /// ``map(key_type, value_type)`` TypeProto and stores the Map in the
   /// ``DataSet::maps`` collection so the runtime can retrieve it by name.
   std::vector<Map> maps = {};
+  /// Whether ``outputs`` contains generated reference values. False explicitly
+  /// marks an input-only performance data set; it is distinct from a model
+  /// which legitimately produces no outputs.
+  bool expected_outputs_generated = true;
 };
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::backend_test

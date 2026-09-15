@@ -41,8 +41,6 @@ using onnx_kernels::kernel::AutoPad;
 // ---------------------------------------------------------------------------
 void RegisterLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::LpPool lp_pool_kernel{ctx};
 
   uint64_t seed = 137;
 
@@ -59,7 +57,12 @@ void RegisterLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     constexpr int64_t out_count = 1 * 32 * 16383;
     const uint64_t benchmark_seed = seed;
     Expect(registry, std::move(node), "test_cc_lppool_1d_default_benchmark", {opset}, {in_count},
-           {out_count}, [lp_pool_kernel, benchmark_seed]() -> IoData {
+           {out_count}, [benchmark_seed]() -> IoData {
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext lp_pool_kernel_ctx{opset};
+             const onnx_kernels::kernel::LpPool lp_pool_kernel{lp_pool_kernel_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, {1, 32, 16384}, benchmark_seed);
              Tensor y = lp_pool_kernel(x, /*kernel_shape=*/{2}, /*strides=*/{1},
                                        /*pads=*/{}, /*p=*/3);
@@ -79,7 +82,12 @@ void RegisterLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "strides", {1});
     AddAttribute<int64_t>(node, "p", 3);
     Expect(registry, std::move(node), "test_cc_lppool_1d_default", {opset},
-           [=, case_seed = seed++]() -> IoData {
+           [case_seed = seed++]() -> IoData {
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext lp_pool_kernel_ctx{opset};
+             const onnx_kernels::kernel::LpPool lp_pool_kernel{lp_pool_kernel_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, {1, 3, 32}, /*seed=*/case_seed);
              Tensor y = lp_pool_kernel(x, /*kernel_shape=*/{2}, /*strides=*/{1}, /*pads=*/{},
                                        /*p=*/3);
@@ -98,7 +106,12 @@ void RegisterLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
     AddAttribute<int64_t>(node, "p", 4);
     Expect(registry, std::move(node), "test_cc_lppool_2d_default", {opset},
-           [=, case_seed = seed++]() -> IoData {
+           [case_seed = seed++]() -> IoData {
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext lp_pool_kernel_ctx{opset};
+             const onnx_kernels::kernel::LpPool lp_pool_kernel{lp_pool_kernel_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, {1, 3, 32, 32}, /*seed=*/case_seed);
              Tensor y =
                  lp_pool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{}, /*pads=*/{}, /*p=*/4);
@@ -117,7 +130,12 @@ void RegisterLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2, 2});
     AddAttribute<int64_t>(node, "p", 3);
     Expect(registry, std::move(node), "test_cc_lppool_3d_default", {opset},
-           [=, case_seed = seed++]() -> IoData {
+           [case_seed = seed++]() -> IoData {
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext lp_pool_kernel_ctx{opset};
+             const onnx_kernels::kernel::LpPool lp_pool_kernel{lp_pool_kernel_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, {1, 3, 32, 32, 32}, /*seed=*/case_seed);
              Tensor y = lp_pool_kernel(x, /*kernel_shape=*/{2, 2, 2}, /*strides=*/{}, /*pads=*/{},
                                        /*p=*/3);
@@ -137,7 +155,12 @@ void RegisterLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::string>(node, "auto_pad", "SAME_UPPER");
     AddAttribute<int64_t>(node, "p", 2);
     Expect(registry, std::move(node), "test_cc_lppool_2d_same_upper", {opset},
-           [=, case_seed = seed++]() -> IoData {
+           [case_seed = seed++]() -> IoData {
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext lp_pool_kernel_ctx{opset};
+             const onnx_kernels::kernel::LpPool lp_pool_kernel{lp_pool_kernel_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, {1, 3, 32, 32}, /*seed=*/case_seed);
              Tensor y = lp_pool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{}, /*pads=*/{},
                                        /*p=*/2, /*ceil_mode=*/false, /*dilations=*/{},
@@ -158,7 +181,12 @@ void RegisterLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::string>(node, "auto_pad", "SAME_LOWER");
     AddAttribute<int64_t>(node, "p", 4);
     Expect(registry, std::move(node), "test_cc_lppool_2d_same_lower", {opset},
-           [=, case_seed = seed++]() -> IoData {
+           [case_seed = seed++]() -> IoData {
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext lp_pool_kernel_ctx{opset};
+             const onnx_kernels::kernel::LpPool lp_pool_kernel{lp_pool_kernel_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, {1, 3, 32, 32}, /*seed=*/case_seed);
              Tensor y = lp_pool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{}, /*pads=*/{},
                                        /*p=*/4, /*ceil_mode=*/false, /*dilations=*/{},
@@ -179,7 +207,12 @@ void RegisterLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "pads", {2, 2, 2, 2});
     AddAttribute<int64_t>(node, "p", 3);
     Expect(registry, std::move(node), "test_cc_lppool_2d_pads", {opset},
-           [=, case_seed = seed++]() -> IoData {
+           [case_seed = seed++]() -> IoData {
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext lp_pool_kernel_ctx{opset};
+             const onnx_kernels::kernel::LpPool lp_pool_kernel{lp_pool_kernel_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, {1, 3, 28, 28}, /*seed=*/case_seed);
              Tensor y = lp_pool_kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{},
                                        /*pads=*/{2, 2, 2, 2}, /*p=*/3);
@@ -199,7 +232,12 @@ void RegisterLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "strides", {3, 3});
     AddAttribute<int64_t>(node, "p", 2);
     Expect(registry, std::move(node), "test_cc_lppool_2d_strides", {opset},
-           [=, case_seed = seed++]() -> IoData {
+           [case_seed = seed++]() -> IoData {
+             const OpsetId opset = DefaultOpset(22);
+
+             const KernelContext lp_pool_kernel_ctx{opset};
+             const onnx_kernels::kernel::LpPool lp_pool_kernel{lp_pool_kernel_ctx};
+
              Tensor x = RandnTensor(DataType::FLOAT, {1, 3, 32, 32}, /*seed=*/case_seed);
              Tensor y = lp_pool_kernel(x, /*kernel_shape=*/{5, 5}, /*strides=*/{3, 3}, /*pads=*/{},
                                        /*p=*/2);
@@ -220,7 +258,7 @@ void RegisterLpPoolCases(std::vector<TestCase> &registry, TestMode mode) {
     AddAttribute<std::vector<int64_t>>(node, "strides", {1, 1});
     AddAttribute<std::vector<int64_t>>(node, "dilations", {2, 2});
     AddAttribute<int64_t>(node, "p", 2);
-    Expect(registry, std::move(node), "test_cc_lppool_2d_dilations", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_lppool_2d_dilations", {opset}, []() -> IoData {
       Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
                                    {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
                                     11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});

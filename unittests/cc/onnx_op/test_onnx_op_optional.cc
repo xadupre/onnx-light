@@ -12,7 +12,7 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace Test {
 
-constexpr size_t kExpectedOptionalSchemaCount = 5;
+constexpr size_t kExpectedOptionalSchemaCount = 8;
 
 static const core::schema::LightOpSchema *
 FindByVersion(const std::vector<core::schema::LightOpSchema> &schemas, int version) {
@@ -37,19 +37,27 @@ TEST(OnnxOpOptionalRegistrationTest, ReturnsOptionalSchemasWithoutShapeInference
   EXPECT_EQ(schemas.size(), kExpectedOptionalSchemaCount);
 
   const core::schema::LightOpSchema *const optional_v15 = FindByVersion(optional_schemas, 15);
+  const core::schema::LightOpSchema *const optional_v28 = FindByVersion(optional_schemas, 28);
   const core::schema::LightOpSchema *const has_v18 =
       FindByVersion(optional_has_element_schemas, 18);
+  const core::schema::LightOpSchema *const has_v28 =
+      FindByVersion(optional_has_element_schemas, 28);
   const core::schema::LightOpSchema *const has_v15 =
       FindByVersion(optional_has_element_schemas, 15);
   const core::schema::LightOpSchema *const get_v18 =
       FindByVersion(optional_get_element_schemas, 18);
+  const core::schema::LightOpSchema *const get_v28 =
+      FindByVersion(optional_get_element_schemas, 28);
   const core::schema::LightOpSchema *const get_v15 =
       FindByVersion(optional_get_element_schemas, 15);
 
   ASSERT_NE(nullptr, optional_v15);
+  ASSERT_NE(nullptr, optional_v28);
   ASSERT_NE(nullptr, has_v18);
+  ASSERT_NE(nullptr, has_v28);
   ASSERT_NE(nullptr, has_v15);
   ASSERT_NE(nullptr, get_v18);
+  ASSERT_NE(nullptr, get_v28);
   ASSERT_NE(nullptr, get_v15);
 
   // Optional v15
@@ -91,6 +99,24 @@ TEST(OnnxOpOptionalRegistrationTest, ReturnsOptionalSchemasWithoutShapeInference
 
   // OptionalGetElement v15 input domain is only optional types
   EXPECT_EQ(get_v15->type_constraints()[0].allowed_type_strs.size(), 30u);
+
+  // Opset 28 extends all three operators to every IR14 tensor and sequence type.
+  ASSERT_EQ(optional_v28->type_constraints().size(), 2u);
+  EXPECT_EQ(optional_v28->type_constraints()[0].allowed_type_strs.size(), 56u);
+  EXPECT_EQ(optional_v28->type_constraints()[1].allowed_type_strs.size(), 56u);
+  EXPECT_STREQ(
+      core::schema::ToTypeString(optional_v28->type_constraints()[0].allowed_type_strs.back()),
+      "seq(tensor(float6e3m2))");
+  EXPECT_STREQ(
+      core::schema::ToTypeString(optional_v28->type_constraints()[1].allowed_type_strs.back()),
+      "optional(seq(tensor(float6e3m2)))");
+
+  EXPECT_EQ(has_v28->type_constraints()[0].allowed_type_strs.size(), 112u);
+  EXPECT_EQ(get_v28->type_constraints()[0].allowed_type_strs.size(), 112u);
+  EXPECT_EQ(get_v28->type_constraints()[1].allowed_type_strs.size(), 56u);
+  EXPECT_EQ(optional_v28->doc(), optional_v15->doc());
+  EXPECT_EQ(has_v28->doc(), has_v18->doc());
+  EXPECT_EQ(get_v28->doc(), get_v18->doc());
 }
 
 } // namespace Test

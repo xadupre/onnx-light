@@ -2,6 +2,8 @@ import ast
 import pathlib
 import unittest
 
+from onnx_light.ext_test_case import ExtTestCase
+
 
 def _plot_threads_example_has_xlim_left_zero() -> bool:
     root = pathlib.Path(__file__).resolve().parents[2]
@@ -19,7 +21,7 @@ def _plot_threads_example_has_xlim_left_zero() -> bool:
     return False
 
 
-class TestPlotThreadsLoadSave(unittest.TestCase):
+class TestPlotThreadsLoadSave(ExtTestCase):
     def test_example_sets_xlim_left_to_zero(self):
         """Verifies that the thread plot example pins the x-axis lower bound to zero."""
         self.assertTrue(_plot_threads_example_has_xlim_left_zero())

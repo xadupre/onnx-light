@@ -31,6 +31,36 @@ const std::map<std::string, std::string> kUnaryMathOutputDescriptionMapping{
 };
 }
 
+std::string MakeModDoc() {
+  return R"DOC(
+Performs an element-wise binary modulo operation.
+The `fmod` attribute determines how the quotient is rounded. Its value must be
+`0` (default) or `1`.
+
+If `fmod` is `0`, the output is calculated as `A - floor(A / B) * B`.
+The result has the same sign as `B`.
+For floating-point inputs, the following special cases apply:
+- If `x` is `±0` and `y` is nonzero, `±0` with the sign of `y` is returned.
+- If `x` is `±∞` and `y` is not `NaN`, `NaN` is returned.
+- If `y` is `±0` and `x` is not `NaN`, `NaN` is returned.
+- If `y` is `±∞` and `x` is finite and nonzero, `x` is returned when `x` and
+  `y` have the same sign; otherwise, `y` is returned.
+- If either argument is `NaN`, `NaN` is returned.
+
+If `fmod` is `1`, the output is calculated as `A - trunc(A / B) * B`.
+The result has the same sign as `A`, except that either signed zero may be
+returned when `A` is `-0` and `B` is positive. For floating-point inputs,
+the following special cases apply:
+- If `x` is `-0` and `y` is greater than zero, either `+0` or `-0` may be returned.
+- If `x` is `±∞` and `y` is not `NaN`, `NaN` is returned.
+- If `y` is `±0` and `x` is not `NaN`, `NaN` should be returned.
+- If `y` is `±∞` and `x` is finite, `x` is returned.
+- If either argument is `NaN`, `NaN` is returned.
+
+This operator supports **multidirectional (i.e., NumPy-style) broadcasting**; for more details please check [the doc](Broadcasting.md).
+)DOC";
+}
+
 std::string MakeElementwiseMathDoc(const char *op_type, int since_version) {
   std::map<std::string, std::string> mapping{
       {"Add", "addition"},
@@ -369,7 +399,24 @@ Reference: https://docs.scipy.org/doc/scipy/tutorial/fft.html
 }
 
 std::string MakeSTFTDoc(int /*since_version*/) {
-  return R"DOC(Computes the Short-time Fourier Transform of the signal.)DOC";
+  return R"DOC(Computes the Short-time Fourier Transform of the signal.
+
+The STFT is computed by sliding a window of length `frame_length` over the signal with a
+step size of `frame_step`, computing a DFT of each windowed frame.
+
+The number of frames in the output is computed as:
+
+  `frames = floor((signal_length - frame_length) / frame_step) + 1`
+
+Constraints on inputs:
+- `frame_step` must be a scalar.
+- `frame_length` must be a scalar. When omitted and `window` is provided, `frame_length`
+  is inferred from `window.shape[0]`. When both `window` and `frame_length` are omitted,
+  `frame_length` defaults to `signal_length`.
+- `window` must be a 1-D tensor. When omitted, a rectangular (all-ones) window of length
+  `frame_length` is used. When both `window` and `frame_length` are provided, the length
+  of the `window` tensor must equal `frame_length`.
+)DOC";
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_op::math

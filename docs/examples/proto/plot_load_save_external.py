@@ -14,6 +14,8 @@ All operations are performed through :mod:`onnx_light.onnx`, which routes all
 I/O through C++ without any Python-level tensor iteration.
 """
 
+# sphinx_gallery_thumbnail_path = "_static/gallery_thumbnails/load_save_external.png"
+
 import os
 import shutil
 

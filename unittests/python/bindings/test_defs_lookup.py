@@ -100,6 +100,13 @@ class TestDefsLookup(ExtTestCase):
                 schema = defs.get_schema("Range", version)
                 self.assertFalse(schema.non_deterministic)
 
+    def test_unknown_determinism_is_non_deterministic(self):
+        for name in ("DepthToSpace", "SpaceToDepth"):
+            with self.subTest(name=name):
+                schema = defs.get_schema(name, 28)
+                self.assertEqual(schema.node_determinism, defs.OpSchema.NodeDeterminism.Unknown)
+                self.assertTrue(schema.non_deterministic)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

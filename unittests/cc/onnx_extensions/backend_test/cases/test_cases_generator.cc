@@ -7,6 +7,7 @@
 
 #include <gtest/gtest.h>
 
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -424,6 +425,26 @@ TEST(BackendTestCase, DelayedInitializerCasesArePresent) {
     }
     EXPECT_EQ(dtype->i(), static_cast<int64_t>(core::runtime::DataType::FLOAT));
   }
+}
+
+TEST(BackendTestCase, DelayedInitializerCollectionsUseDistinctFiles) {
+  const auto first_cases = CollectTestCases("DelayedInitializer");
+  const auto second_cases = CollectTestCases("DelayedInitializer");
+  const TestCase *first = FindCase(first_cases, "test_cc_delayedinitializer_file");
+  const TestCase *second = FindCase(second_cases, "test_cc_delayedinitializer_file");
+  ASSERT_NE(first, nullptr);
+  ASSERT_NE(second, nullptr);
+
+  const AttributeProto *first_filename =
+      FindAttribute(first->model().ref_graph().ref_node()[0], "filename");
+  const AttributeProto *second_filename =
+      FindAttribute(second->model().ref_graph().ref_node()[0], "filename");
+  ASSERT_NE(first_filename, nullptr);
+  ASSERT_NE(second_filename, nullptr);
+  EXPECT_NE(ConvertUtilsString(first_filename->ref_s()),
+            ConvertUtilsString(second_filename->ref_s()));
+  EXPECT_TRUE(std::filesystem::is_regular_file(ConvertUtilsString(first_filename->ref_s())));
+  EXPECT_TRUE(std::filesystem::is_regular_file(ConvertUtilsString(second_filename->ref_s())));
 }
 
 namespace {

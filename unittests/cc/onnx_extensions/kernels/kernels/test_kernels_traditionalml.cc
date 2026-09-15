@@ -8,6 +8,7 @@
 
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <cstdint>
 #include <limits>
 #include <stdexcept>
@@ -144,6 +145,51 @@ TEST(KernelClass, LabelEncoderStringRejectsNonStringInput) {
   Tensor x = Tensor::FromInt64("", {1}, {0});
   EXPECT_THROW(((void)label_encoder.operator()<std::string, int64_t>(x, keys, values, -1)),
                std::invalid_argument);
+}
+
+TEST(KernelClass, LabelEncoderInt64ToStringWithDefault) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 4)};
+  LabelEncoder label_encoder{ctx};
+  const std::vector<int64_t> keys{1, 2, 3};
+  const std::vector<std::string> values{"one", "two", "three"};
+  Tensor x = Tensor::FromInt64("", {4}, {3, 1, 7, 2});
+  Tensor y =
+      label_encoder.operator()<int64_t, std::string>(x, keys, values, std::string("unknown"));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::STRING));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{4}));
+  EXPECT_EQ(y.AsStrings(), (std::vector<std::string>{"three", "one", "unknown", "two"}));
+}
+
+TEST(KernelClass, LabelEncoderStringToStringWritesToPreallocatedOutput) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 4)};
+  LabelEncoder label_encoder{ctx};
+  const std::vector<std::string> keys{"a", "b"};
+  const std::vector<std::string> values{"alpha", "beta"};
+  Tensor x = Tensor::FromStrings("", {3}, {"b", "x", "a"});
+  Tensor y = Tensor::MakeString("", {3}, std::vector<std::string>(3));
+  label_encoder.operator()<std::string, std::string>(x, keys, values, std::string("missing"), y);
+  EXPECT_EQ(y.AsStrings(), (std::vector<std::string>{"beta", "missing", "alpha"}));
+}
+
+TEST(KernelClass, LabelEncoderStringOutputUsesLastDuplicateKey) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 4)};
+  LabelEncoder label_encoder{ctx};
+  const std::vector<int64_t> keys{1, 1};
+  const std::vector<std::string> values{"first", "last"};
+  Tensor x = Tensor::FromInt64("", {1}, {1});
+  Tensor y = label_encoder.operator()<int64_t, std::string>(x, keys, values, std::string{});
+  EXPECT_EQ(y.AsStrings(), (std::vector<std::string>{"last"}));
+}
+
+TEST(KernelClass, LabelEncoderFloatToStringMatchesNanKey) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 4)};
+  LabelEncoder label_encoder{ctx};
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const std::vector<float> keys{nan};
+  const std::vector<std::string> values{"nan"};
+  Tensor x = Tensor::FromFloat("", {2}, {nan, 1.0f});
+  Tensor y = label_encoder.operator()<float, std::string>(x, keys, values, std::string("missing"));
+  EXPECT_EQ(y.AsStrings(), (std::vector<std::string>{"nan", "missing"}));
 }
 
 TEST(KernelClass, BinarizerFloatThresholdElementwise) {
@@ -877,11 +923,72 @@ TEST(KernelClass, TreeEnsembleV5SingleTreeMatchesReference) {
   EXPECT_FLOAT_EQ(py[1], 2.0f);
 }
 
+TEST(KernelClass, TreeEnsembleV5ValidatesBeforeExecution) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 5)};
+  const auto make_tree =
+      [&](const std::vector<int64_t> &roots, const std::vector<int64_t> &true_ids,
+          const std::vector<int64_t> &false_ids, const std::vector<int64_t> &true_leafs,
+          const std::vector<int64_t> &false_leafs, const std::vector<double> &splits = {0.5, 0.5},
+          const std::vector<uint8_t> &modes = {0, 0}, const std::vector<int64_t> &missing = {},
+          const std::vector<double> &weights = {1.0}) {
+        return onnx_kernels::kernel::TreeEnsemble(ctx, roots, {0, 0}, splits, modes, true_ids,
+                                                  false_ids, true_leafs, false_leafs, missing, {0},
+                                                  weights, {});
+      };
+  EXPECT_THROW(make_tree({0}, {1, 0}, {0, 0}, {0, 0}, {1, 1}), std::invalid_argument);
+  EXPECT_THROW(make_tree({0}, {1, 0}, {1, 0}, {0, 1}, {0, 1}), std::invalid_argument);
+  EXPECT_THROW(make_tree({-1}, {1, 0}, {0, 0}, {0, 1}, {1, 1}), std::invalid_argument);
+  EXPECT_THROW(make_tree({2}, {1, 0}, {0, 0}, {0, 1}, {1, 1}), std::invalid_argument);
+  EXPECT_THROW(make_tree({0}, {2, 0}, {0, 0}, {0, 1}, {1, 1}), std::invalid_argument);
+  EXPECT_THROW(make_tree({0}, {1, 0}, {1, 0}, {0, 1}, {1, 1}), std::invalid_argument);
+  EXPECT_THROW(make_tree({0}, {1}, {0, 0}, {0, 1}, {1, 1}), std::invalid_argument);
+  EXPECT_THROW(make_tree({0}, {1, 0}, {0, 0}, {0}, {1, 1}), std::invalid_argument);
+  EXPECT_THROW(make_tree({0}, {1, 0}, {0, 0}, {0, 1}, {1, 1}, {0.5}), std::invalid_argument);
+  EXPECT_THROW(make_tree({0}, {1, 0}, {0, 0}, {0, 1}, {1, 1}, {0.5, 0.5}, {0}),
+               std::invalid_argument);
+  EXPECT_THROW(make_tree({0}, {1, 0}, {0, 0}, {0, 1}, {1, 1}, {0.5, 0.5}, {0, 0}, {0}),
+               std::invalid_argument);
+  EXPECT_THROW(make_tree({0}, {1, 0}, {0, 0}, {0, 1}, {1, 1}, {0.5, 0.5}, {0, 0}, {}, {}),
+               std::invalid_argument);
+  const auto tree = make_tree({0, 1}, {1, 0}, {0, 0}, {0, 1}, {1, 1});
+  const auto output = tree.operator()<float>(Tensor::FromFloat("", {2, 1}, {0.0f, 1.0f}), 1, 1, 0);
+  EXPECT_FLOAT_EQ(output.AsFloat()[0], 2.0f);
+  EXPECT_FLOAT_EQ(output.AsFloat()[1], 2.0f);
+}
+
 // Mirrors the upstream ONNX node test
 // ``test_ai_onnx_ml_tree_ensemble_set_membership`` (see
 // ``onnx/backend/test/case/node/ai_onnx_ml/tree_ensemble.py``). Locks the
 // BRANCH_MEMBER (mode 6) handling against the reference implementation's
 // expected outputs, including NaN feature handling.
+TEST(KernelClass, TreeEnsembleV5SoftmaxZeroPreservesNonzeroNormalization) {
+  const auto check = []<typename T>() {
+    const KernelContext ctx{OpsetId("ai.onnx.ml", 5)};
+    const std::vector<std::vector<double>> scores{
+        {0.0, 2.0, 0.0}, {5e-8, -2.5e-8, 0.0}, {-2.0, -2.0, -2.0}, {1000.0, 1000.0, 1000.0}};
+    const std::vector<std::vector<double>> expected{{0.0, 1.0, 0.0},
+                                                    {2.0, -1.0, 0.0},
+                                                    {1.0 / 3, 1.0 / 3, 1.0 / 3},
+                                                    {1.0 / 3, 1.0 / 3, 1.0 / 3}};
+    const Tensor x = Tensor::From<T>("", {1, 1}, {T{0}});
+    for (size_t i = 0; i < scores.size(); ++i) {
+      SCOPED_TRACE(i);
+      const onnx_kernels::kernel::TreeEnsemble tree{
+          ctx,       {0, 1, 2}, {0, 0, 0}, {0.0, 0.0, 0.0}, {0, 0, 0}, {0, 1, 2}, {0, 1, 2},
+          {1, 1, 1}, {1, 1, 1}, {},        {0, 1, 2},       scores[i], {}};
+      const Tensor y = tree.template operator()<T>(x, 3, 1, 3);
+      ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 3}));
+      for (size_t target = 0; target < 3; ++target) {
+        EXPECT_TRUE(std::isfinite(y.As<T>()[target]));
+        EXPECT_NEAR(y.As<T>()[target], expected[i][target], 1e-6);
+      }
+      EXPECT_THROW((void)tree.template operator()<T>(x, 3, 1, 5), std::invalid_argument);
+    }
+  };
+  check.operator()<float>();
+  check.operator()<double>();
+}
+
 TEST(KernelClass, TreeEnsembleV5SetMembershipMatchesReference) {
   const KernelContext ctx{OpsetId("ai.onnx.ml", 5)};
   const float kNaN = std::numeric_limits<float>::quiet_NaN();

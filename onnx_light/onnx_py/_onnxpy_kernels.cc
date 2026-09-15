@@ -8,6 +8,7 @@
 #include "onnx_core/compute/execute_action.h"
 #include "onnx_core/compute/execution_plan.h"
 #include "onnx_core/compute/raw_buffer_allocator.h"
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/kernels/cast_sub_byte.h"
 #include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
 #include "onnx_core/runtime/kernels/random.h"
@@ -157,6 +158,10 @@ int32_t OnnxTypeFromNumpyDtype(OnnxLightNumpyDtype *dtype) {
     return static_cast<int32_t>(TensorProto::INT2);
   if (dtype_name == "uint2")
     return static_cast<int32_t>(TensorProto::UINT2);
+  if (dtype_name == "float6_e2m3fn")
+    return static_cast<int32_t>(TensorProto::FLOAT6E2M3);
+  if (dtype_name == "float6_e3m2fn")
+    return static_cast<int32_t>(TensorProto::FLOAT6E3M2);
   return static_cast<int32_t>(TensorProto::UNDEFINED);
 }
 
@@ -167,6 +172,8 @@ bool IsSubByteType(int32_t data_type) {
   case TensorProto::FLOAT4E2M1:
   case TensorProto::INT2:
   case TensorProto::UINT2:
+  case TensorProto::FLOAT6E2M3:
+  case TensorProto::FLOAT6E3M2:
     return true;
   default:
     return false;
@@ -225,13 +232,18 @@ Tensor TensorFromNumpy(const std::string &name, nb::handle value, std::vector<nb
   if (IsSubByteType(data_type)) {
     core::runtime::RawByteBuffer packed(core::runtime::PackedByteSize(data_type, element_count),
                                         uint8_t{0});
-    const int bits = static_cast<TensorProto::DataType>(data_type) == TensorProto::INT2 ||
-                             static_cast<TensorProto::DataType>(data_type) == TensorProto::UINT2
-                         ? 2
-                         : 4;
+    const auto tensor_type = static_cast<TensorProto::DataType>(data_type);
+    const int bits =
+        tensor_type == TensorProto::INT2 || tensor_type == TensorProto::UINT2
+            ? 2
+            : (tensor_type == TensorProto::FLOAT6E2M3 || tensor_type == TensorProto::FLOAT6E3M2
+                   ? 6
+                   : 4);
     for (int64_t index = 0; index < element_count; ++index) {
       if (bits == 2)
         core::runtime::Write2BitElement(packed.data(), index, data[index]);
+      else if (bits == 6)
+        core::runtime::Write6BitElement(packed.data(), index, data[index]);
       else
         core::runtime::Write4BitElement(packed.data(), index, data[index]);
     }
@@ -352,6 +364,10 @@ const char *NumpyDtypeName(int32_t data_type) {
     return "int2";
   case TensorProto::UINT2:
     return "uint2";
+  case TensorProto::FLOAT6E2M3:
+    return "float6_e2m3fn";
+  case TensorProto::FLOAT6E3M2:
+    return "float6_e3m2fn";
   default:
     return nullptr;
   }
@@ -466,12 +482,15 @@ nb::object TensorToNumpy(Tensor &tensor, RuntimeContext &rt) {
         static_cast<uint8_t *>(OnnxLightNumpyArrayData(OnnxLightNumpyArrayCast(array.ptr())));
     const uint8_t *packed = tensor.bytes();
     const int64_t element_count = tensor.element_count();
-    const bool two_bit =
-        static_cast<TensorProto::DataType>(tensor.data_type) == TensorProto::INT2 ||
-        static_cast<TensorProto::DataType>(tensor.data_type) == TensorProto::UINT2;
-    for (int64_t index = 0; index < element_count; ++index)
-      data[index] = two_bit ? core::runtime::Read2BitElement(packed, index)
-                            : core::runtime::Read4BitElement(packed, index);
+    const auto tensor_type = static_cast<TensorProto::DataType>(tensor.data_type);
+    for (int64_t index = 0; index < element_count; ++index) {
+      if (tensor_type == TensorProto::INT2 || tensor_type == TensorProto::UINT2)
+        data[index] = core::runtime::Read2BitElement(packed, index);
+      else if (tensor_type == TensorProto::FLOAT6E2M3 || tensor_type == TensorProto::FLOAT6E3M2)
+        data[index] = core::runtime::Read6BitElement(packed, index);
+      else
+        data[index] = core::runtime::Read4BitElement(packed, index);
+    }
     return array;
   }
 
@@ -1893,8 +1912,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
              nb::callable fn) {
             // Wrap the Python callable in a CustomKernelFn. We capture
             // the callable in a ``nb::callable`` which keeps a Python
-            // reference alive until the registration is replaced or the
-            // RuntimeContext is destroyed. The GIL is reacquired before
+            // reference alive in the factory and in each resolved kernel.
+            // The GIL is reacquired before
             // invoking the callable so that it is safe to call from the
             // RunNode dispatcher (which may be invoked without the GIL
             // held in the future).
@@ -1915,7 +1934,10 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           ":meth:`put_sequence`) under the names declared by ``node.output``. "
           "Custom kernels override any built-in entry with the same key, but "
           "model-local functions and the built-in control-flow operators "
-          "(``If``, ``Loop``, ``Scan``, ``SequenceMap``) still take precedence.")
+          "(``If``, ``Loop``, ``Scan``, ``SequenceMap``) still take precedence. "
+          "Registration creates a factory; each resolved node owns one callback "
+          "adapter for the session lifetime, including across input shape changes. "
+          "Replacement or removal affects future resolutions only.")
       .def("unregister_custom_kernel", &RuntimeContext::UnregisterCustomKernel, nb::arg("domain"),
            nb::arg("op_type"),
            "Removes a custom kernel registration for ``(domain, op_type)``. "
@@ -2056,8 +2078,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
         for (int64_t d : t.shape)
           tp.ref_dims().push_back(static_cast<uint64_t>(d));
         if (static_cast<TensorProto::DataType>(t.data_type) == TensorProto::DataType::STRING) {
-          tp.ref_string_data().reserve(t.string_data.size());
-          for (const std::string &s : t.string_data)
+          tp.ref_string_data().reserve(t.AsStrings().size());
+          for (const std::string &s : t.AsStrings())
             tp.add_string_data(utils::String(s));
         } else {
           // ``assign_borrowed`` stores a non-owning view over the tensor's
@@ -2155,8 +2177,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       "register_custom_kernel",
       [](const std::string &domain, const std::string &op_type, nb::callable fn) {
         // Same GIL-safe wrapping as the RuntimeContext binding: the callable is
-        // captured in an nb::callable (keeping a Python reference alive until the
-        // registration is replaced or cleared) and the GIL is reacquired before
+        // captured in an nb::callable (keeping a Python reference alive in both
+        // the factory and resolved kernels) and the GIL is reacquired before
         // it is invoked from the RunNode dispatcher.
         core::runtime::RegisterGlobalCustomKernel(domain, op_type,
                                                   [fn](const NodeProto &node, RuntimeContext &ctx) {
@@ -2174,7 +2196,9 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       ":meth:`RuntimeContext.register_custom_kernel`). A per-context registration "
       "for the same key overrides the global one; both override any built-in entry, "
       "but model-local functions and the built-in control-flow operators (``If``, "
-      "``Loop``, ``Scan``, ``SequenceMap``) still take precedence.");
+      "``Loop``, ``Scan``, ``SequenceMap``) still take precedence. Like local "
+      "registrations, callbacks are adapted to session-owned kernels; replacement "
+      "or removal affects future resolutions only.");
   rt_mod.def("unregister_custom_kernel", &core::runtime::UnregisterGlobalCustomKernel,
              nb::arg("domain"), nb::arg("op_type"),
              "Removes a process-wide custom kernel registration for "

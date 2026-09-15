@@ -34,80 +34,91 @@ void RegisterSequenceEraseCase(const std::string &name, const std::vector<Tensor
                                const std::vector<int64_t> &elem_shape, bool has_position,
                                int64_t position, const OpsetId &opset,
                                std::vector<TestCase> &registry) {
-  const KernelContext ctx{opset};
+  TestCase lazy_case(name, name);
+  lazy_case.rtol = 1e-3;
+  lazy_case.atol = 1e-7;
+  lazy_case.build = [opset, inputs, has_position, position, name, elem_shape](bool) -> BuiltCase {
+    const KernelContext ctx_1{opset};
+    const onnx_kernels::kernel::SequenceConstruct kernel_1{ctx_1};
+    const KernelContext ctx_2{opset};
+    const onnx_kernels::kernel::SequenceErase kernel_2{ctx_2};
+    const KernelContext ctx_3{opset};
+    const onnx_kernels::kernel::SequenceConstruct kernel_3{ctx_3};
 
-  // Compute the expected output sequence with the reference kernel.
-  const Sequence seq = onnx_kernels::kernel::SequenceConstruct(ctx).AsSequence(inputs);
-  Tensor position_tensor;
-  const Tensor *pos_ptr = nullptr;
-  if (has_position) {
-    position_tensor = Tensor::FromInt64("position", {}, {position});
-    pos_ptr = &position_tensor;
-  }
-  const Sequence out_seq = onnx_kernels::kernel::SequenceErase(ctx)(seq, pos_ptr);
+    // Compute the expected output sequence with the reference kernel.
+    const Sequence seq = kernel_1.AsSequence(inputs);
+    Tensor position_tensor;
+    const Tensor *pos_ptr = nullptr;
+    if (has_position) {
+      position_tensor = Tensor::FromInt64("position", {}, {position});
+      pos_ptr = &position_tensor;
+    }
+    const Sequence out_seq = kernel_2(seq, pos_ptr);
 
-  // Materialise the output sequence as a stacked tensor.
-  std::vector<Tensor> remaining(out_seq.values.begin(), out_seq.values.end());
-  Tensor stacked = onnx_kernels::kernel::SequenceConstruct(ctx)(remaining);
-  stacked.name = "output_sequence";
+    // Materialise the output sequence as a stacked tensor.
+    std::vector<Tensor> remaining(out_seq.values.begin(), out_seq.values.end());
+    Tensor stacked = kernel_3(remaining);
+    stacked.name = "output_sequence";
 
-  TestCase tc(name, name);
-  tc.rtol = 1e-3;
-  tc.atol = 1e-7;
+    TestCase tc(name, name);
+    tc.rtol = 1e-3;
+    tc.atol = 1e-7;
 
-  ModelProto &model = tc.emplace_model();
-  model.set_ir_version(kDefaultIrVersion);
-  model.set_producer_name("backend-test");
-  OperatorSetIdProto proto;
-  proto.set_domain(opset.domain);
-  proto.set_version(opset.version);
-  model.add_opset_import(proto);
+    ModelProto &model = tc.emplace_model();
+    model.set_ir_version(kDefaultIrVersion);
+    model.set_producer_name("backend-test");
+    OperatorSetIdProto proto;
+    proto.set_domain(opset.domain);
+    proto.set_version(opset.version);
+    model.add_opset_import(proto);
 
-  GraphProto *graph = model.add_graph();
-  graph->set_name(name);
+    GraphProto *graph = model.add_graph();
+    graph->set_name(name);
 
-  // Node 1: SequenceConstruct <inputs…> → input_seq.
-  NodeProto *seq_node = graph->add_node();
-  seq_node->set_op_type("SequenceConstruct");
-  for (std::size_t i = 0; i < inputs.size(); ++i) {
-    seq_node->add_input(inputs[i].name);
-  }
-  seq_node->add_output("input_seq");
+    // Node 1: SequenceConstruct <inputs…> → input_seq.
+    NodeProto *seq_node = graph->add_node();
+    seq_node->set_op_type("SequenceConstruct");
+    for (std::size_t i = 0; i < inputs.size(); ++i) {
+      seq_node->add_input(inputs[i].name);
+    }
+    seq_node->add_output("input_seq");
 
-  // Node 2: SequenceErase input_seq [, position] → output_sequence.
-  NodeProto *erase_node = graph->add_node();
-  erase_node->set_op_type("SequenceErase");
-  erase_node->add_input("input_seq");
-  if (has_position) {
-    erase_node->add_input("position");
-  }
-  erase_node->add_output("output_sequence");
+    // Node 2: SequenceErase input_seq [, position] → output_sequence.
+    NodeProto *erase_node = graph->add_node();
+    erase_node->set_op_type("SequenceErase");
+    erase_node->add_input("input_seq");
+    if (has_position) {
+      erase_node->add_input("position");
+    }
+    erase_node->add_output("output_sequence");
 
-  // Graph inputs: the individual tensors (and optionally the position scalar).
-  for (const Tensor &t : inputs) {
-    FillValueInfo(t, *graph->add_input());
-  }
-  if (has_position) {
-    FillValueInfo(position_tensor, *graph->add_input());
-  }
+    // Graph inputs: the individual tensors (and optionally the position scalar).
+    for (const Tensor &t : inputs) {
+      FillValueInfo(t, *graph->add_input());
+    }
+    if (has_position) {
+      FillValueInfo(position_tensor, *graph->add_input());
+    }
 
-  // Graph output: ``output_sequence`` declared as a SequenceType.
-  AppendValueInfo(
-      *graph->add_output(), stacked.name,
-      SequenceTypeSpec(TensorTypeSpec(static_cast<int32_t>(out_seq.elem_type), elem_shape)));
+    // Graph output: ``output_sequence`` declared as a SequenceType.
+    AppendValueInfo(
+        *graph->add_output(), stacked.name,
+        SequenceTypeSpec(TensorTypeSpec(static_cast<int32_t>(out_seq.elem_type), elem_shape)));
 
-  // DataSet: feed the original tensors (and position if provided).
-  DataSet ds;
-  for (const Tensor &t : inputs) {
-    ds.inputs.push_back(t);
-  }
-  if (has_position) {
-    ds.inputs.push_back(position_tensor);
-  }
-  ds.outputs.push_back(stacked);
-  tc.data_sets().emplace_back(std::move(ds));
+    // DataSet: feed the original tensors (and position if provided).
+    DataSet ds;
+    for (const Tensor &t : inputs) {
+      ds.inputs.push_back(t);
+    }
+    if (has_position) {
+      ds.inputs.push_back(position_tensor);
+    }
+    ds.outputs.push_back(stacked);
+    tc.data_sets().emplace_back(std::move(ds));
 
-  registry.emplace_back(std::move(tc));
+    return tc.take_materialized();
+  };
+  registry.emplace_back(std::move(lazy_case));
 }
 
 } // namespace

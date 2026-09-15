@@ -36,6 +36,8 @@ The model computes::
     Z          = Reshape(relu_out, x_shape)        # uses the "shape" tensor
 """
 
+# sphinx_gallery_thumbnail_path = "_static/gallery_thumbnails/compute_information.png"
+
 from __future__ import annotations
 
 import onnx_light.onnx as onnxl

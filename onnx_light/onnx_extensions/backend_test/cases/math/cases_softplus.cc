@@ -14,12 +14,10 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 
 void RegisterSoftplusCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(22);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::Softplus softplus_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
-    ExpectBenchmarkUnaryFloat("Softplus", softplus_kernel, "test_cc_softplus_benchmark", opset,
-                              registry);
+    ExpectBenchmarkUnaryFloat<onnx_kernels::kernel::Softplus>(
+        "Softplus", "test_cc_softplus_benchmark", opset, registry);
     return;
   }
 
@@ -28,7 +26,12 @@ void RegisterSoftplusCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Softplus");
     node.add_input("X");
     node.add_output("Y");
-    Expect(registry, std::move(node), "test_cc_softplus", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_softplus", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext softplus_kernel_ctx{opset};
+      const onnx_kernels::kernel::Softplus softplus_kernel{softplus_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {2, 3}, {-4.0f, -1.0f, 0.0f, 1.0f, 2.0f, 4.0f});
       Tensor y = softplus_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
@@ -41,7 +44,12 @@ void RegisterSoftplusCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Softplus");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_softplus_example", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_softplus_example", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext softplus_kernel_ctx{opset};
+      const onnx_kernels::kernel::Softplus softplus_kernel{softplus_kernel_ctx};
+
       Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
       Tensor y = softplus_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
@@ -53,7 +61,12 @@ void RegisterSoftplusCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Softplus");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_softplus_float16", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_softplus_float16", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext softplus_kernel_ctx{opset};
+      const onnx_kernels::kernel::Softplus softplus_kernel{softplus_kernel_ctx};
+
       Tensor x = MakeFloat16Tensor("", {2, 3}, {-2.0f, -1.0f, 0.0f, 0.5f, 1.0f, 2.0f});
       Tensor y = softplus_kernel(x);
       return IoData{{std::move(x)}, {std::move(y)}};
@@ -66,7 +79,12 @@ void RegisterSoftplusCases(std::vector<TestCase> &registry, TestMode mode) {
     node.set_op_type("Softplus");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_softplus_bfloat16", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_softplus_bfloat16", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(22);
+
+      const KernelContext softplus_kernel_ctx{opset};
+      const onnx_kernels::kernel::Softplus softplus_kernel{softplus_kernel_ctx};
+
       std::vector<float> vals = {-2.0f, -1.0f, 0.0f, 0.5f, 1.0f, 2.0f};
       std::vector<uint8_t> raw(vals.size() * sizeof(uint16_t));
       auto *dst = reinterpret_cast<uint16_t *>(raw.data());

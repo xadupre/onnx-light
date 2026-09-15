@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/runtime/kernels/parallel_for.h"
+#include "onnx_core/runtime/runtime_session.h"
 #include "onnx_core/runtime/tuning/cpu_executor.h"
 #include "onnx_core/runtime/tuning/kernel_tuning.h"
 #include "onnx_core/runtime/tuning/kernel_tuning_cache.h"
@@ -13,6 +14,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -21,6 +23,12 @@
 #include <thread>
 #include <unordered_set>
 #include <utility>
+
+#if defined(__linux__)
+#include <sched.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
@@ -197,6 +205,65 @@ TEST(KernelTuningParameters, ProvidesStrictTypedAccess) {
   EXPECT_EQ(parameters.Get<std::string>("algorithm.mode"), "blocked");
   EXPECT_THROW(parameters.Get<double>("algorithm.tile_m"), std::invalid_argument);
   EXPECT_THROW(parameters.Get<int64_t>("missing"), std::invalid_argument);
+}
+
+TEST(KernelTuningLatency, ReportsEveryMetricAndSelectsCriterion) {
+  const std::vector<std::vector<std::optional<double>>> latencies = {
+      {2.0, 8.0, 10.0}, {1.0, 4.0, 20.0}, {4.0, 4.0, 5.0}};
+
+  const KernelTuningLatencyReport average =
+      AnalyzeKernelTuningLatencies(latencies, KernelTuningCriterion::kAverage);
+  ASSERT_EQ(average.values.size(), 3u);
+  ASSERT_TRUE(average.values[1].has_value());
+  EXPECT_DOUBLE_EQ(average.values[1]->sum, 25.0);
+  EXPECT_DOUBLE_EQ(average.values[1]->average, 25.0 / 3.0);
+  EXPECT_DOUBLE_EQ(average.values[1]->median, 4.0);
+  EXPECT_DOUBLE_EQ(*average.values[1]->average_speedup, 1.5);
+  EXPECT_DOUBLE_EQ(*average.values[1]->median_speedup, 2.0);
+  EXPECT_DOUBLE_EQ(*average.values[1]->max_speedup, 2.0);
+  EXPECT_DOUBLE_EQ(average.values[1]->max_latency, 20.0);
+  EXPECT_EQ(average.selected_index, 2u);
+
+  const KernelTuningLatencyReport speedup =
+      AnalyzeKernelTuningLatencies(latencies, KernelTuningCriterion::kAverageSpeedup);
+  EXPECT_EQ(speedup.selected_index, 1u);
+}
+
+TEST(KernelTuningLatency, RejectsInvalidRowsAndReportsMissingRows) {
+  EXPECT_THROW(AnalyzeKernelTuningLatencies({}, KernelTuningCriterion::kAverage),
+               std::invalid_argument);
+  EXPECT_THROW(AnalyzeKernelTuningLatencies({{1.0}, {1.0, 2.0}}, KernelTuningCriterion::kAverage),
+               std::invalid_argument);
+  EXPECT_THROW(AnalyzeKernelTuningLatencies({{1.0}, {0.0}}, KernelTuningCriterion::kAverage),
+               std::invalid_argument);
+
+  const KernelTuningLatencyReport report = AnalyzeKernelTuningLatencies(
+      {{1.0, 2.0}, {std::nullopt, 1.0}}, KernelTuningCriterion::kMedian);
+  ASSERT_EQ(report.values.size(), 2u);
+  EXPECT_TRUE(report.values[0].has_value());
+  EXPECT_FALSE(report.values[1].has_value());
+  EXPECT_EQ(report.selected_index, 0u);
+
+  const KernelTuningLatencyReport unavailable =
+      AnalyzeKernelTuningLatencies({{std::nullopt}, {1.0}}, KernelTuningCriterion::kAverage);
+  ASSERT_TRUE(unavailable.values[1].has_value());
+  EXPECT_DOUBLE_EQ(unavailable.values[1]->average, 1.0);
+  EXPECT_FALSE(unavailable.values[1]->average_speedup.has_value());
+  EXPECT_EQ(unavailable.selected_index, 1u);
+
+  const KernelTuningLatencyReport unavailable_speedup =
+      AnalyzeKernelTuningLatencies({{std::nullopt}, {1.0}}, KernelTuningCriterion::kAverageSpeedup);
+  EXPECT_FALSE(unavailable_speedup.selected_index.has_value());
+}
+
+TEST(KernelTuningCriterion, ReportsUnknownCriterionValue) {
+  constexpr auto unknown = static_cast<KernelTuningCriterion>(-1);
+  try {
+    KernelTuningCriterionName(unknown);
+    FAIL() << "Expected an invalid criterion to throw.";
+  } catch (const std::invalid_argument &error) {
+    ASSERT_STREQ(error.what(), "Unknown kernel tuning criterion -1.");
+  }
 }
 
 TEST(KernelTuningSchema, AcceptsCompleteParametersAndRunsValidationHook) {
@@ -578,6 +645,82 @@ TEST(KernelCalibration, ValidatesCandidateOutput) {
   EXPECT_TRUE(reporter.parallel_region_report()->events().empty());
 }
 
+TEST(KernelCalibration, NeverTimesEquivalentExecutionPathGroups) {
+  CalibrationExecutorScope executor_scope(2);
+  const KernelTuningParameters defaults = MakeDefaults();
+  KernelCalibrationBenchmark benchmark;
+  benchmark.portable_parameters = defaults;
+  benchmark.parameter_name = "algorithm.tile_m";
+  benchmark.cases = MakeElementwiseCalibrationCases(DataType::FLOAT, 1, 16, 16, false);
+  benchmark.cases.push_back(benchmark.cases.front());
+  benchmark.cases.back().name = "equivalent";
+  benchmark.repetitions = 1;
+  benchmark.required_consecutive_wins = 1;
+  benchmark.reference.configure = [](int64_t) {};
+  benchmark.candidate.configure = [](int64_t) {};
+  int runs = 0;
+  benchmark.reference.run = [&runs](std::span<const Tensor>, Tensor &) { ++runs; };
+  benchmark.candidate.run = benchmark.reference.run;
+  benchmark.same_execution_path = [](const KernelCalibrationCase &benchmark_case, int64_t,
+                                     int64_t) { return benchmark_case.name == "equivalent"; };
+  const CpuExecutionDescriptor execution{platform::GetCpuDescriptor(), 2};
+
+  for (bool identical_values : {false, true}) {
+    SCOPED_TRACE(identical_values);
+    if (identical_values) {
+      benchmark.same_execution_path = {};
+      benchmark.serial_parameter_value = 8;
+    }
+    CalibrationReporter reporter;
+    const KernelTuningParameters selected =
+        CalibrateKernelBenchmark(defaults.key, execution, {}, reporter, benchmark);
+
+    EXPECT_EQ(selected.Get<int64_t>("algorithm.tile_m"), 64);
+    EXPECT_EQ(runs, 0);
+    EXPECT_EQ(reporter.benchmark_cases(), 0u);
+    ASSERT_FALSE(reporter.diagnostics().empty());
+    EXPECT_NE(reporter.diagnostics().front().find("same execution path"), std::string::npos);
+  }
+}
+
+TEST(KernelCalibration, ReportsMeasuredAndUnbracketedCrossoverBounds) {
+  CalibrationExecutorScope executor_scope(2);
+  const KernelTuningParameters defaults = MakeDefaults();
+  const CpuExecutionDescriptor execution{platform::GetCpuDescriptor(), 2};
+  for (bool bracketed : {false, true}) {
+    SCOPED_TRACE(bracketed);
+    KernelCalibrationBenchmark benchmark;
+    benchmark.portable_parameters = defaults;
+    benchmark.parameter_name = "algorithm.tile_m";
+    benchmark.cases = MakeElementwiseCalibrationCases(DataType::FLOAT, 1, 16, 64, false);
+    benchmark.repetitions = 3;
+    benchmark.reference.configure = [](int64_t) {};
+    benchmark.candidate.configure = [](int64_t) {};
+    benchmark.reference.run = [bracketed](std::span<const Tensor>, Tensor &output) {
+      if (!bracketed || output.element_count() > 16) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+      }
+      std::fill_n(output.AsFloat(), output.element_count(), 1.0f);
+    };
+    benchmark.candidate.run = [bracketed](std::span<const Tensor>, Tensor &output) {
+      if (bracketed && output.element_count() == 16) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+      }
+      std::fill_n(output.AsFloat(), output.element_count(), 1.0f);
+    };
+    CalibrationReporter reporter;
+    const KernelTuningParameters selected =
+        CalibrateKernelBenchmark(defaults.key, execution, {}, reporter, benchmark);
+
+    EXPECT_EQ(selected.Get<int64_t>("algorithm.tile_m"), bracketed ? 32 : 16);
+    ASSERT_EQ(reporter.diagnostics().size(), 2u);
+    EXPECT_NE(reporter.diagnostics().back().find(
+                  bracketed ? "bracketed by measured sizes 16 and 32"
+                            : "at or below the smallest measured size 16; not bracketed"),
+              std::string::npos);
+  }
+}
+
 TEST(KernelCalibration, ComparesExplicitParameterValuesSideBySide) {
   KernelTuningParameters defaults = MakeDefaults();
   KernelCalibrationBenchmark benchmark;
@@ -921,6 +1064,26 @@ TEST(KernelTuningCache, InspectsProfilesWithoutPublishing) {
   EXPECT_EQ(GetKernelTuningRegistry().Snapshot().generation(), before.generation());
 }
 
+TEST(KernelTuningCache, RemovesExistingCacheAndAcceptsMissingCache) {
+  TemporaryCache cache("removal");
+  {
+    std::ofstream stream(cache.path());
+    stream << "onnx_light_kernel_tuning_cache 1\n";
+  }
+
+  const KernelTuningCacheRemovalReport removed =
+      RemoveKernelTuningCache({cache.path(), std::nullopt});
+  EXPECT_TRUE(removed.removed);
+  EXPECT_EQ(removed.path, cache.path());
+  EXPECT_TRUE(removed.diagnostics.empty());
+  EXPECT_FALSE(std::filesystem::exists(cache.path()));
+
+  const KernelTuningCacheRemovalReport missing =
+      RemoveKernelTuningCache({cache.path(), std::nullopt});
+  EXPECT_FALSE(missing.removed);
+  EXPECT_TRUE(missing.diagnostics.empty());
+}
+
 TEST(KernelTuningCache, RejectsMalformedFileWithoutPublishing) {
   KernelTuningParameters defaults = MakeDefaults();
   defaults.key.library = "cache_malformed_test";
@@ -1011,6 +1174,67 @@ TEST(KernelTuningCache, DefaultExecutionDescriptorMatchesDefaultSessionThreadCou
       LoadKernelTuningCache(selection, {cache.path(), std::nullopt});
   EXPECT_EQ(loaded.loaded, std::vector<KernelTuningKey>({defaults.key}));
 }
+
+#if defined(__linux__)
+TEST(KernelTuningCache, RestrictedAffinityMatchesStandaloneAndSessionDefaults) {
+  constexpr const char *child_environment = "ONNX_LIGHT_AFFINITY_TEST_CHILD";
+  if (std::getenv(child_environment) == nullptr) {
+    cpu_set_t original_affinity;
+    CPU_ZERO(&original_affinity);
+    if (sched_getaffinity(0, sizeof(original_affinity), &original_affinity) != 0) {
+      GTEST_SKIP() << "process affinity is unavailable";
+    }
+    if (CPU_COUNT(&original_affinity) < 2) {
+      GTEST_SKIP() << "fewer than two process-visible logical processors";
+    }
+
+    cpu_set_t restricted_affinity;
+    CPU_ZERO(&restricted_affinity);
+    for (int processor = 0; processor < CPU_SETSIZE; ++processor) {
+      if (CPU_ISSET(processor, &original_affinity)) {
+        CPU_SET(processor, &restricted_affinity);
+        break;
+      }
+    }
+    const pid_t child = fork();
+    ASSERT_GE(child, 0);
+    if (child == 0) {
+      if (sched_setaffinity(0, sizeof(restricted_affinity), &restricted_affinity) != 0 ||
+          setenv(child_environment, "1", 1) != 0) {
+        _exit(2);
+      }
+      execl(
+          "/proc/self/exe", "/proc/self/exe",
+          "--gtest_filter=KernelTuningCache.RestrictedAffinityMatchesStandaloneAndSessionDefaults",
+          nullptr);
+      _exit(2);
+    }
+
+    int status = 0;
+    ASSERT_EQ(waitpid(child, &status, 0), child);
+    ASSERT_TRUE(WIFEXITED(status));
+    EXPECT_EQ(WEXITSTATUS(status), 0);
+    return;
+  }
+
+  KernelTuningParameters defaults = MakeDefaults();
+  defaults.key.library = "cache_restricted_affinity_test";
+  RegisterKernelTuningSchema(KernelTuningSchema(defaults));
+  TemporaryCache cache("restricted_affinity");
+  const KernelTuningCacheUpdateReport update = UpdateKernelTuningCache(
+      std::span<const KernelTuningParameters>(&defaults, 1), {cache.path(), std::nullopt});
+  ASSERT_EQ(update.status, KernelTuningCacheUpdateStatus::kUpdated);
+  const KernelTuningCacheInspectionReport inspection =
+      InspectKernelTuningCache({cache.path(), std::nullopt});
+  ASSERT_EQ(inspection.profiles.size(), 1u);
+
+  RuntimeSession session(ExecutionPlan{});
+  const uint32_t cache_threads = inspection.profiles[0].execution.effective_threads;
+  EXPECT_EQ(cache_threads, 1u);
+  EXPECT_EQ(cache_threads, static_cast<uint32_t>(ParallelForThreadCount()));
+  EXPECT_EQ(cache_threads, session.cpu_executor()->effective_threads());
+}
+#endif
 
 TEST(KernelTuningCache, AtomicallyCreatesMergesAndReplacesProfiles) {
   KernelTuningParameters first = MakeDefaults();

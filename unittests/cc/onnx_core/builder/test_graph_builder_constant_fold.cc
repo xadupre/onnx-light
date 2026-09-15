@@ -101,17 +101,6 @@ const TensorProto *FindInitializer(const core::builder::GraphBuilder &builder,
   return nullptr;
 }
 
-// Returns whether the default-domain operator ``op_type`` already has a runtime
-// kernel registered process-wide. A kernels-ON build links the real kernels, so
-// the "missing kernel" scenario exercised below cannot be reproduced there; the
-// affected tests skip themselves in that case and only run in a kernels-OFF
-// build (or before any real kernel is registered).
-bool HasRuntimeKernel(const std::string &op_type) {
-  const std::string key = kDefaultOnnxDomain + ":" + op_type;
-  return core::runtime::KernelDispatchTable().count(key) != 0 ||
-         core::runtime::GlobalCustomKernels().count(key) != 0;
-}
-
 } // namespace
 
 TEST(GraphBuilderConstantFold, FoldsConstantWeightNodeIntoInitializer) {
@@ -262,11 +251,8 @@ TEST(GraphBuilderConstantFold, ShapeResultIsFoldedWhenFoldWeightsDisabled) {
 }
 
 TEST(GraphBuilderConstantFold, MissingWeightKernelIsSkippedByDefault) {
-  // No custom kernels installed: the weight-tagged Add has no runtime kernel.
-  if (HasRuntimeKernel("Add")) {
-    GTEST_SKIP() << "Add kernel is registered in this build variant.";
-  }
   core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.set_device(core::symbolic::Device::kGPU8191);
   builder.MakeInitializer(MakeInitializer<float>("a", {2}, {1.0f, 2.0f}));
   builder.MakeInitializer(MakeInitializer<float>("b", {2}, {3.0f, 4.0f}));
   const std::vector<std::string> sum = builder.MakeNode("Add", {"a", "b"}, {"s"});
@@ -277,10 +263,8 @@ TEST(GraphBuilderConstantFold, MissingWeightKernelIsSkippedByDefault) {
 }
 
 TEST(GraphBuilderConstantFold, MissingWeightKernelRaisesWhenRequested) {
-  if (HasRuntimeKernel("Add")) {
-    GTEST_SKIP() << "Add kernel is registered in this build variant.";
-  }
   core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.set_device(core::symbolic::Device::kGPU8191);
   builder.MakeInitializer(MakeInitializer<float>("a", {2}, {1.0f, 2.0f}));
   builder.MakeInitializer(MakeInitializer<float>("b", {2}, {3.0f, 4.0f}));
   const std::vector<std::string> sum = builder.MakeNode("Add", {"a", "b"}, {"s"});
@@ -292,12 +276,8 @@ TEST(GraphBuilderConstantFold, MissingWeightKernelRaisesWhenRequested) {
 }
 
 TEST(GraphBuilderConstantFold, MissingShapeKernelAlwaysRaises) {
-  // No custom kernels installed: the shape-tagged Shape node has no kernel and
-  // must raise regardless of the weight-kernel flag.
-  if (HasRuntimeKernel("Shape")) {
-    GTEST_SKIP() << "Shape kernel is registered in this build variant.";
-  }
   core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.set_device(core::symbolic::Device::kGPU8191);
   builder.MakeInitializer(
       MakeInitializer<float>("a", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f}));
   const std::vector<std::string> shape = builder.MakeNode("Shape", {"a"}, {"sh"});

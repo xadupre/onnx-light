@@ -11,6 +11,67 @@
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
 
+/**
+ * Fuses the tanh approximation of Gelu.
+ *
+ * @code
+ * Before:
+ *    x, three
+ *       │
+ *       ↓
+ *    ┌─────┐
+ *    │ Pow │
+ *    └─────┘
+ *       │ powered
+ *       ↓
+ *    ┌─────┐
+ *    │ Mul │←──── cubic coefficient
+ *    └─────┘
+ *       │ cubic
+ *    x  │
+ *    │  │
+ *    ↓  ↓
+ *    ┌─────┐
+ *    │ Add │
+ *    └─────┘
+ *       │ polynomial
+ *       ↓
+ *    ┌─────┐
+ *    │ Mul │←──── tanh scale
+ *    └─────┘
+ *       │ scaled polynomial
+ *       ↓
+ *    ┌──────┐
+ *    │ Tanh │
+ *    └──────┘
+ *       │ tanh value
+ *       ↓
+ *    ┌─────┐
+ *    │ Add │←──── one
+ *    └─────┘
+ *       │ tanh term          ┌─────┐
+ *       │  x, one half ─────→│ Mul │────→ half input
+ *       │                    └─────┘
+ *       │                      │
+ *       └──────────┬───────────┘
+ *                  ↓
+ *               ┌─────┐
+ *               │ Mul │────→ y
+ *               └─────┘
+ *
+ * After:
+ *          ┌──────┐
+ *   x ────→│ Gelu │────→ y
+ *          └──────┘
+ * @endcode
+ *
+ * The replacement uses ``approximate="tanh"``. The cubic coefficient may also
+ * be the float16 value ``0.044708251953125``; its usual value is ``0.044715``.
+ * The exponent, tanh scale, final offset, and input scale are respectively
+ * ``3``, ``0.7978515625``, ``1``, and ``0.5``. All decomposition
+ * intermediates must be unshared, and the configured default-domain opset
+ * minimum must be met.
+ */
 class GeluPattern final : public core::builder::PatternOptimization {
 public:
   explicit GeluPattern(int priority = 0, int min_opset = 20, std::string domain = "")
@@ -28,6 +89,31 @@ private:
   std::string domain_;
 };
 
+/**
+ * Fuses a Where-based LeakyRelu decomposition.
+ *
+ * @code
+ * Before:
+ *                                    x
+ *                                    │
+ *                                    │
+ *               ┌─────────┐          │
+ *    x, zero ──→│ Greater │──┐       │
+ *               └─────────┘  │       │
+ *                            │       ↓
+ *               ┌─────┐      │    ┌───────┐
+ *    x, alpha ─→│ Mul │──────┴───→│ Where │────→ y
+ *               └─────┘           └───────┘
+ *
+ * After:
+ *          ┌───────────┐
+ *   x ────→│ LeakyRelu │────→ y
+ *          └───────────┘
+ * @endcode
+ *
+ * The comparison threshold must be exactly zero, the slope must be scalar,
+ * and the Greater and Mul outputs must have no other consumers.
+ */
 class LeakyReluPattern final : public core::builder::PatternOptimization {
 public:
   explicit LeakyReluPattern(int priority = 0, int min_opset = 6)
@@ -44,6 +130,97 @@ private:
   int min_opset_;
 };
 
+/**
+ * Fuses a float16 mean cross-entropy loss decomposition.
+ *
+ * @code
+ * Before:
+ *                  ┌───────┐  ┌─────┐
+ *    labels, -100 →│ Equal │─→│ Not │
+ *                  └───────┘  └─────┘
+ *                               │ valid
+ *                               │
+ *                               │
+ *                               ├── valid, labels, zero_i64 ──→┌───────┐  ┌───────────┐
+ *                               │                              │ Where │─→│ Unsqueeze │
+ *                               │                              └───────┘  └───────────┘
+ *                               │                                               │
+ *                               │                                               │ gather indices
+ *                               │                                               │
+ *                               │               ┌────────────┐                  │
+ *                               │     scores ──→│ LogSoftmax │                  │
+ *                               │               └────────────┘                  │
+ *                               │                      │                        │
+ *                               │                      ↓                        ↓
+ *                               │                   ┌───────────────────────────┐
+ *                               │                   │      GatherElements       │
+ *                               │                   └───────────────────────────┘
+ *                               │                                 │
+ *                               │                                 ↓
+ *                               │                            ┌─────────┐
+ *                               │                            │ Squeeze │
+ *                               │                            └─────────┘
+ *                               │                                 │
+ *                               │                                 ↓
+ *                               │                              ┌─────┐
+ *                               │                              │ Neg │
+ *                               │                              └─────┘
+ *                               │                                 │ losses
+ *                               │                                 │
+ *                               │                                 ↓
+ *                               ├── valid, zero_f16 ──→┌────────────┐
+ *                               │                      │   Where    │────→ masked losses
+ *                               │                      └────────────┘
+ *                               │                                             │
+ *                               │                                             ↓
+ *                               │                                          ┌──────┐
+ *                               │                                          │ Cast │
+ *                               │                                          └──────┘
+ *                               │                                             │
+ *                               │                                             ↓
+ *                               │                                       ┌───────────┐
+ *                               │                                       │ ReduceSum │
+ *                               │                                       └───────────┘
+ *                               │                                             │
+ *                               │                                             ↓
+ *                               │                                         ┌──────┐
+ *                               │                                         │ Cast │
+ *                               │                                         └──────┘
+ *                               │                                            │ numerator
+ *                               │                                            ↓
+ *                               └── valid ──→┌──────┐                        │
+ *                                            │ Cast │                        │
+ *                                            └──────┘                        │
+ *                                               │                            │
+ *                                               ↓                            │
+ *                                         ┌───────────┐                      │
+ *                                         │ ReduceSum │                      │
+ *                                         └───────────┘                      │
+ *                                               │                            │
+ *                                               ↓                            │
+ *                                           ┌──────┐                         │
+ *                                           │ Cast │                         │
+ *                                           └──────┘                         │
+ *                                              │ denominator                 │
+ *                                              ↓                             │
+ *                                              └──────────────┬──────────────┘
+ *                                                             ↓
+ *                                                          ┌─────┐
+ *                                                          │ Div │─────→ loss
+ *                                                          └─────┘
+ *
+ * After:
+ *                     ┌─────────────────────────┐
+ *   scores, labels ──→│ SoftmaxCrossEntropyLoss │────→ loss
+ *                     └─────────────────────────┘
+ * @endcode
+ *
+ * LogSoftmax, GatherElements, Unsqueeze, and Squeeze use axis one. Scores,
+ * masked losses, and the result must be float16; labels and the index zero
+ * must be int64. The reduction inputs are cast to float, both reductions use
+ * ``keepdims=0``, and their results are cast back to float16. The fused loss
+ * uses ``ignore_index=-100`` and ``reduction="mean"``.
+ */
 class SoftmaxCrossEntropyLossCastPattern final : public core::builder::PatternOptimization {
 public:
   explicit SoftmaxCrossEntropyLossCastPattern(int priority = 0, int min_opset = 14,
@@ -63,6 +240,24 @@ private:
   std::string domain_;
 };
 
+/**
+ * Replaces a maximum with scalar zero by Relu.
+ *
+ * @code
+ * Before:
+ *              ┌─────┐
+ *   x, zero ──→│ Max │────→ y
+ *              └─────┘
+ *
+ * After:
+ *          ┌──────┐
+ *   x ────→│ Relu │────→ y
+ *          └──────┘
+ * @endcode
+ *
+ * Exactly one Max input must be scalar zero. Supported element types are
+ * float, float16, int16, and int32; integer inputs require opset 14 or newer.
+ */
 class MaxReluPattern final : public core::builder::PatternOptimization {
 public:
   explicit MaxReluPattern(int priority = 1) : PatternOptimization(priority, "MaxRelu") {}

@@ -70,8 +70,16 @@ def infer_node_outputs(
         from ..onnx.defs import IR_VERSION
 
         ir_version = IR_VERSION  # type: ignore
+    opset_imports_by_domain = (
+        {opset.domain: opset.version for opset in opset_imports} if opset_imports else {}
+    )
     return schema._infer_node_outputs(
-        node, input_types, dict(input_data), dict(input_sparse_data)
+        node,
+        input_types,
+        dict(input_data),
+        dict(input_sparse_data),
+        opset_imports_by_domain,
+        ir_version,
     )
 
 

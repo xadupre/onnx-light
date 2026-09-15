@@ -207,6 +207,7 @@ TEST(SqueezeBinaryUnsqueezePattern, RejectsNonScalarBinaryRightInput) {
 TEST(SwapUnsqueezeTransposePattern, SwapsUnsqueezeAndTranspose) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   SetModernOpset(builder);
+  ASSERT_EQ(builder.OpsetVersion(""), 18);
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3, 4}));
   AddAxesInitializer(builder, "axes", {1});
   builder.MakeNode("Unsqueeze", {"x", "axes"}, {"xu"});
@@ -216,7 +217,8 @@ TEST(SwapUnsqueezeTransposePattern, SwapsUnsqueezeAndTranspose) {
   core::builder::GraphGraph graph(builder);
   onnx_patterns::SwapUnsqueezeTransposePattern pattern;
   const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[1]);
-  ASSERT_EQ(match.pattern, &pattern);
+  ASSERT_EQ(match.pattern, &pattern)
+      << (match.no_match ? match.no_match->ToString() : "no rejection diagnostic");
 
   const utils::RepeatedProtoField<NodeProto> replacements = pattern.Apply(graph, match.nodes);
   ASSERT_EQ(replacements.size(), 2u);
@@ -241,6 +243,128 @@ TEST(SwapUnsqueezeTransposePattern, RejectsSharedUnsqueezeOutput) {
   core::builder::GraphGraph graph(builder);
   onnx_patterns::SwapUnsqueezeTransposePattern pattern;
   EXPECT_EQ(pattern.Match(graph, builder.Nodes()[1]).pattern, nullptr);
+}
+
+TEST(SwapUnsqueezeTransposePattern, RemapsNonInvolutivePermutations) {
+  struct Case {
+    std::vector<int64_t> axes;
+    std::vector<int64_t> perm;
+    std::vector<int64_t> expected_perm;
+    std::vector<int64_t> expected_axes;
+  };
+  for (const Case &test : std::vector<Case>{{{0}, {1, 2, 3, 0}, {0, 1, 2}, {3}},
+                                            {{-4}, {2, 3, 1, 0}, {1, 2, 0}, {3}},
+                                            {{3, 0}, {1, 3, 4, 0, 2}, {0, 2, 1}, {1, 3}},
+                                            {{-2, 0}, {1, 3, 4, 0, 2}, {0, 2, 1}, {1, 3}}}) {
+    SCOPED_TRACE(::testing::PrintToString(test.axes));
+    core::builder::GraphBuilder builder("g", SchemaLookup());
+    SetModernOpset(builder);
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3, 4}));
+    AddAxesInitializer(builder, "axes", test.axes);
+    builder.MakeNode("Unsqueeze", {"x", "axes"}, {"xu"});
+    builder.MakeNode("Transpose", {"xu"}, {"out"}, "", "", PermAttr(test.perm));
+    builder.MakeOutput("out");
+    core::builder::GraphGraph graph(builder);
+    onnx_patterns::SwapUnsqueezeTransposePattern pattern;
+    const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[1]);
+    ASSERT_EQ(match.pattern, &pattern)
+        << (match.no_match ? match.no_match->ToString() : "no rejection diagnostic");
+    const auto replacements = pattern.Apply(graph, match.nodes);
+    ASSERT_EQ(replacements.size(), 2u);
+    EXPECT_EQ(replacements[0].input()[0].value(), "x");
+    EXPECT_EQ(AttributeInts(replacements[0], "perm"), test.expected_perm);
+    EXPECT_EQ(replacements[1].input()[0].value(), replacements[0].output()[0].value());
+    EXPECT_EQ(replacements[1].output()[0].value(), "out");
+    EXPECT_EQ(InitializerInts(builder, replacements[1].input()[1].value()), test.expected_axes);
+  }
+}
+
+TEST(SwapUnsqueezeTransposePattern, RejectsInvalidAxesAndUnsafeDirectApply) {
+  for (const std::vector<int64_t> &axes : std::vector<std::vector<int64_t>>{
+           {}, {0, 0}, {0, -4}, {-5}, {4}, {-1, 4}, {0, 1, 2, 3, 4}}) {
+    SCOPED_TRACE(::testing::PrintToString(axes));
+    core::builder::GraphBuilder builder("g");
+    SetModernOpset(builder);
+    ValueInfoProto input;
+    input.set_name("x");
+    input.mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::DataType::FLOAT);
+    builder.MakeInput(input);
+    AddAxesInitializer(builder, "axes", axes);
+    builder.MakeNode("Unsqueeze", {"x", "axes"}, {"xu"});
+    builder.MakeNode("Transpose", {"xu"}, {"out"}, "", "", PermAttr({1, 2, 3, 0}));
+    builder.MakeOutput("out");
+    core::builder::GraphGraph graph(builder);
+    onnx_patterns::SwapUnsqueezeTransposePattern pattern;
+    EXPECT_EQ(pattern.Match(graph, builder.Nodes()[1]).pattern, nullptr);
+    EXPECT_THROW(pattern.Apply(graph, {&builder.Nodes()[0], &builder.Nodes()[1]}),
+                 core::builder::BuilderError);
+  }
+}
+
+TEST(SwapUnsqueezeTransposePattern, RejectsUnknownAxesMissingPermAndWrongRank) {
+  for (const std::string reason :
+       {"unknown_axes", "missing_perm", "wrong_rank", "output", "domain", "transpose_domain",
+        "old_opset", "scalar_axes", "matrix_axes", "int32_axes", "invalid_perm"}) {
+    SCOPED_TRACE(reason);
+    core::builder::GraphBuilder builder("g");
+    builder.SetOpsetVersion("", reason == "old_opset" ? 12 : 18);
+    if (reason == "domain" || reason == "transpose_domain") {
+      builder.SetOpsetVersion("custom", 1);
+    }
+    if (reason == "wrong_rank") {
+      builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
+    } else {
+      ValueInfoProto input;
+      input.set_name("x");
+      input.mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::DataType::FLOAT);
+      builder.MakeInput(input);
+    }
+    if (reason == "unknown_axes") {
+      builder.MakeInput("axes", core::symbolic::TensorType::kInt64, Shape({1}));
+    } else if (reason == "scalar_axes") {
+      AddScalarInitializer(builder, "axes", 0);
+    } else if (reason == "int32_axes" || reason == "matrix_axes") {
+      TensorProto tensor;
+      tensor.set_name("axes");
+      tensor.dims().push_back(1);
+      if (reason == "int32_axes") {
+        tensor.set_data_type(static_cast<int>(TensorProto::DataType::INT32));
+        tensor.int32_data().push_back(0);
+      } else {
+        tensor.set_data_type(static_cast<int>(TensorProto::DataType::INT64));
+        tensor.dims().push_back(1);
+        tensor.int64_data().push_back(0);
+      }
+      builder.MakeInitializer(tensor);
+    } else {
+      AddAxesInitializer(builder, "axes", {0});
+    }
+    builder.MakeNode("Unsqueeze", {"x", "axes"}, {"xu"}, reason == "domain" ? "custom" : "");
+    if (reason == "missing_perm") {
+      builder.MakeNode("Transpose", {"xu"}, {"out"});
+    } else if (reason == "wrong_rank") {
+      builder.MakeNode("Transpose", {"xu"}, {"out"}, "", "", PermAttr({1, 2, 0}));
+    } else {
+      builder.MakeNode("Transpose", {"xu"}, {"out"}, reason == "transpose_domain" ? "custom" : "",
+                       "",
+                       PermAttr(reason == "invalid_perm" ? std::vector<int64_t>{1, 2, 2, 0}
+                                                         : std::vector<int64_t>{1, 2, 3, 0}));
+    }
+    builder.MakeOutput("out");
+    if (reason == "output") {
+      builder.MakeOutput("xu");
+    }
+    core::builder::GraphGraph graph(builder);
+    onnx_patterns::SwapUnsqueezeTransposePattern pattern;
+    if (reason == "wrong_rank") {
+      // Tests the matcher on an inconsistent candidate without importing an invalid graph.
+      NodeProto candidate = MakeNode("Transpose", {"xu"}, {"out"});
+      AddAttribute(candidate, "perm", std::vector<int64_t>{1, 2, 3, 0});
+      EXPECT_EQ(pattern.Match(graph, candidate).pattern, nullptr);
+    } else {
+      EXPECT_EQ(pattern.Match(graph, builder.Nodes()[1]).pattern, nullptr);
+    }
+  }
 }
 
 TEST(TransposeEqualReshapePattern, ReplacesSingletonTransposeWithReshape) {

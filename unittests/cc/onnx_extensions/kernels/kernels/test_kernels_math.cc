@@ -9,6 +9,7 @@
 #include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/tuning/cpu_executor.h"
 #include "onnx_core/runtime/tuning/kernel_tuning.h"
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
@@ -94,6 +95,28 @@ using onnx_kernels::kernel::Tanh;
 using onnx_kernels::kernel::TopK;
 
 namespace Test {
+
+TEST(KernelClass, NativeLogSoftmaxLegacyDoubleAndHalfAccumulation) {
+  const KernelContext modern{DefaultOpset(18)};
+  const KernelContext legacy{DefaultOpset(11)};
+  const Tensor x = Tensor::FromDouble("", {1, 2, 2}, {10000, 10000, 10000, 10000});
+  onnx_kernels::kernel::LogSoftmax current{modern};
+  onnx_kernels::kernel::LogSoftmax old{legacy};
+  Tensor output = Tensor::FromDouble("", {1, 2, 2}, {0, 0, 0, 0});
+  current(x, 1, output);
+  EXPECT_DOUBLE_EQ(output.AsDouble()[0], -std::log(2.0));
+  old(x, 1, output);
+  EXPECT_DOUBLE_EQ(output.AsDouble()[0], -std::log(4.0));
+  Tensor half = core::runtime::DemoteFromFloat32(Tensor::FromFloat("", {1, 2}, {10000, 10000}),
+                                                 DataType::FLOAT16);
+  Tensor result = current(half, -1);
+  EXPECT_EQ(result.data_type, DataType::FLOAT16);
+  Tensor promoted = core::runtime::PromoteToFloat32(result);
+  EXPECT_NEAR(promoted.AsFloat()[0], -std::log(2.0f), 0.0003f);
+  const Tensor empty = Tensor::FromDouble("", {2, 0}, {});
+  EXPECT_EQ(current(empty, 1).shape, empty.shape);
+  EXPECT_THROW(current(empty, 2), std::invalid_argument);
+}
 
 TEST(KernelClass, AbsClassMatchesReference) {
   const KernelContext ctx{DefaultOpset(13)};
@@ -1521,7 +1544,7 @@ TEST(KernelClass, ModClassMatchesPythonAndCSemantics) {
     EXPECT_EQ(pz[2], 5);
   }
 
-  // Floating-point inputs require fmod=1.
+  // Floating-point fmod=1 preserves the dividend's sign.
   {
     Tensor x = Tensor::FromFloat("", {3}, {-4.3f, 7.2f, 5.0f});
     Tensor y = Tensor::FromFloat("", {3}, {2.1f, -3.4f, 8.0f});
@@ -1532,7 +1555,7 @@ TEST(KernelClass, ModClassMatchesPythonAndCSemantics) {
     EXPECT_FLOAT_EQ(pz[2], 5.0f);
   }
 
-  // FLOAT16 inputs require fmod=1; the output bit pattern must match
+  // FLOAT16 with fmod=1: the output bit pattern must match
   // ``numpy.fmod`` on the IEEE-754 binary16 inputs (upstream
   // ``test_mod_mixed_sign_float16`` reference).
   {
@@ -1557,20 +1580,23 @@ TEST(KernelClass, ModClassMatchesPythonAndCSemantics) {
     EXPECT_EQ(pz[5], 0x4200U); //  3.0
   }
 
-  // FLOAT16 with fmod=0 must throw (matches FLOAT/DOUBLE behaviour).
+  // FLOAT16 with fmod=0 returns NaN for a zero divisor.
   {
     Tensor x("", static_cast<int32_t>(core::runtime::DataType::FLOAT16), {1},
              std::vector<uint8_t>(sizeof(uint16_t), 0));
     Tensor y("", static_cast<int32_t>(core::runtime::DataType::FLOAT16), {1},
              std::vector<uint8_t>(sizeof(uint16_t), 0));
-    EXPECT_THROW(mod_kernel(x, y), std::invalid_argument);
+    Tensor z = mod_kernel(x, y);
+    const uint16_t bits = reinterpret_cast<const uint16_t *>(z.bytes())[0];
+    EXPECT_EQ(bits & 0x7c00U, 0x7c00U);
+    EXPECT_NE(bits & 0x03ffU, 0U);
   }
 
-  // Floating-point with fmod=0 must throw.
+  // Floating-point inputs also support the default floor modulo.
   {
     Tensor x = Tensor::FromFloat("", {1}, {1.0f});
     Tensor y = Tensor::FromFloat("", {1}, {2.0f});
-    EXPECT_THROW(mod_kernel(x, y), std::invalid_argument);
+    EXPECT_FLOAT_EQ(mod_kernel(x, y).AsFloat()[0], 1.0f);
   }
 
   // Broadcasting (int32, scalar-ish divisor).
@@ -1915,6 +1941,72 @@ TEST(KernelClass, EinsumTransposeMatchesNumpy) {
   EXPECT_FLOAT_EQ(py[3], 5.0f);
   EXPECT_FLOAT_EQ(py[4], 3.0f);
   EXPECT_FLOAT_EQ(py[5], 6.0f);
+}
+
+TEST(KernelClass, EinsumBfloat16AccumulatesInFloat32AndRoundsOnce) {
+  const KernelContext ctx{DefaultOpset(28)};
+  Einsum einsum_kernel{ctx};
+  const Tensor x = core::runtime::MakeBfloat16Tensor(
+      "", {3, 3}, {256, 1, -256, 1, 0.00390625f, 0, 1, 0.01171875f, 0});
+  Tensor y = einsum_kernel({x}, "ij->i");
+  ASSERT_EQ(y.data_type, DataType::BFLOAT16);
+  ASSERT_EQ(y.shape, (Shape{3}));
+  const std::vector<uint16_t> expected{0x3f80, 0x3f80, 0x3f82};
+  const auto *y_bits = reinterpret_cast<const uint16_t *>(y.bytes());
+  EXPECT_EQ(std::vector<uint16_t>(y_bits, y_bits + 3), expected);
+
+  Tensor output = core::runtime::MakeBfloat16Tensor("", {3}, {99, 99, 99});
+  einsum_kernel({x}, "ij->i", output);
+  const auto *output_bits = reinterpret_cast<const uint16_t *>(output.bytes());
+  EXPECT_EQ(std::vector<uint16_t>(output_bits, output_bits + 3), expected);
+}
+
+TEST(KernelClass, EinsumBfloat16ProductsAreNotRoundedBeforeReduction) {
+  const KernelContext ctx{DefaultOpset(28)};
+  Einsum einsum_kernel{ctx};
+  const Tensor a = core::runtime::MakeBfloat16Tensor("", {2}, {1.0078125f, -1.015625f});
+  const Tensor b = core::runtime::MakeBfloat16Tensor("", {2}, {1.0078125f, 1});
+  SimpleRawBufferAllocator alloc(3);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
+  const Tensor y = einsum_kernel({a, b}, "i,i", &rt);
+  ASSERT_TRUE(y.shape.empty());
+  ASSERT_EQ(y.data_type, DataType::BFLOAT16);
+  // (1 + 2^-7)^2 - (1 + 2^-6) = 2^-14.
+  EXPECT_EQ(reinterpret_cast<const uint16_t *>(y.bytes())[0], 0x3880);
+  EXPECT_TRUE(y.has_allocation());
+  EXPECT_EQ(alloc.allocated_count(), 1u);
+}
+
+TEST(KernelClass, EinsumBfloat16TransposePreservesSpecialValues) {
+  const KernelContext ctx{DefaultOpset(28)};
+  Einsum einsum_kernel{ctx};
+  const float inf = std::numeric_limits<float>::infinity();
+  const Tensor x = core::runtime::MakeBfloat16Tensor(
+      "", {2, 3}, {-0.0f, inf, -inf, -2.5f, std::ldexp(1.0f, -133), 1.0078125f});
+  const Tensor y = einsum_kernel({x}, "ij->ji");
+  ASSERT_EQ(y.shape, (Shape{3, 2}));
+  const std::vector<uint16_t> expected{0x8000, 0xc020, 0x7f80, 0x0001, 0xff80, 0x3f81};
+  const auto *y_bits = reinterpret_cast<const uint16_t *>(y.bytes());
+  EXPECT_EQ(std::vector<uint16_t>(y_bits, y_bits + 6), expected);
+
+  const Tensor scalar = core::runtime::MakeBfloat16Scalar("", -0.0f);
+  const Tensor identity = einsum_kernel({scalar}, "->");
+  ASSERT_TRUE(identity.shape.empty());
+  EXPECT_EQ(reinterpret_cast<const uint16_t *>(identity.bytes())[0], 0x8000);
+}
+
+TEST(KernelClass, EinsumBfloat16EmptyReductionAndOutput) {
+  const KernelContext ctx{DefaultOpset(28)};
+  Einsum einsum_kernel{ctx};
+  const Tensor x = core::runtime::MakeBfloat16Tensor("", {2, 0}, {});
+  Tensor y = core::runtime::MakeBfloat16Tensor("", {2}, {1, 1});
+  einsum_kernel({x}, "ij->i", y);
+  const auto *y_bits = reinterpret_cast<const uint16_t *>(y.bytes());
+  EXPECT_EQ(y_bits[0], 0);
+  EXPECT_EQ(y_bits[1], 0);
+  const Tensor empty = einsum_kernel({x}, "ij->ji");
+  EXPECT_EQ(empty.shape, (Shape{0, 2}));
+  EXPECT_EQ(empty.element_count(), 0);
 }
 
 TEST(KernelClass, EinsumTraceMatchesSumOfDiagonal) {
@@ -2907,11 +2999,42 @@ TEST(KernelClass, GemmCalibratesParallelMinimumTasksThreshold) {
   ASSERT_EQ(report.calibrated.size(), 1u);
   EXPECT_EQ(report.calibrated[0].key, float_key);
   EXPECT_TRUE(report.calibrated[0].Contains("parallel.minimum_tasks"));
+  EXPECT_GE(report.calibrated[0].Get<int64_t>("parallel.minimum_tasks"), 2);
   EXPECT_TRUE(report.unsupported.empty());
 
   const auto schema = core::runtime::GetKernelTuningRegistry().FindSchema(float_key);
   ASSERT_NE(schema, nullptr);
   EXPECT_NO_THROW(schema->Validate(report.calibrated[0]));
+}
+
+TEST(KernelClass, GemmCalibrationSkipsInlineCandidate) {
+  core::runtime::CpuExecutionPolicy policy;
+  policy.num_threads = 2;
+  policy.affinity_policy = core::runtime::CpuAffinityPolicy::kNone;
+  const auto executor = core::runtime::GlobalCpuExecutorRegistry().Acquire(policy);
+  const core::runtime::CpuExecutorScope scope(executor.get());
+  const Gemm gemm{KernelContext{DefaultOpset(13)}};
+  const auto key = gemm.TuningKey(static_cast<int32_t>(DataType::FLOAT));
+  const auto schema = core::runtime::GetKernelTuningRegistry().FindSchema(key);
+  ASSERT_NE(schema, nullptr);
+  const auto calibrate = core::runtime::GetKernelTuningRegistry().FindCalibrationFunction(key);
+  ASSERT_TRUE(calibrate);
+  const auto &defaults = schema->portable_defaults();
+  const int64_t m = gemm.tuning().tile_m;
+  const int64_t n = gemm.tuning().tile_n;
+  core::runtime::CalibrationOptions options;
+  // Only the one-task case fits. Neither serial runner may be timed as a candidate win.
+  options.maximum_memory_bytes = static_cast<uint64_t>((m * 128 + 128 * n + 2 * m * n) * 4);
+  core::runtime::CalibrationReporter reporter;
+  const core::runtime::CpuExecutionDescriptor execution{core::platform::GetCpuDescriptor(), 2};
+
+  const auto selected = calibrate(key, execution, options, reporter);
+
+  EXPECT_EQ(selected.Get<int64_t>("parallel.minimum_tasks"),
+            defaults.Get<int64_t>("parallel.minimum_tasks"));
+  EXPECT_EQ(reporter.benchmark_cases(), 0u);
+  ASSERT_FALSE(reporter.diagnostics().empty());
+  EXPECT_NE(reporter.diagnostics().front().find("same execution path"), std::string::npos);
 }
 
 // Verifies that ``kernel::MatMul`` produces FLOAT16 / BFLOAT16 outputs that

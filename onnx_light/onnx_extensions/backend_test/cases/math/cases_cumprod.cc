@@ -42,15 +42,18 @@ NodeProto MakeCumProdNode(bool exclusive, bool reverse) {
 // ---------------------------------------------------------------------------
 void RegisterCumProdCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(26);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::CumProd cumprod_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeCumProdNode(/*exclusive=*/false, /*reverse=*/false);
     const std::vector<int64_t> shape = {kBenchmarkElementwiseSize};
     const int64_t count = kBenchmarkElementwiseSize;
     Expect(registry, std::move(node), "test_cc_cumprod_benchmark", {opset}, {count, 1}, {count},
-           [cumprod_kernel, shape, count]() -> IoData {
+           [shape]() -> IoData {
+             const OpsetId opset = DefaultOpset(26);
+
+             const KernelContext cumprod_kernel_ctx{opset};
+             const onnx_kernels::kernel::CumProd cumprod_kernel{cumprod_kernel_ctx};
+
              Tensor x = Tensor::FromDouble("", shape, std::vector<double>(count, 1.0));
              Tensor axis = Tensor::FromInt32("", {}, {0});
              Tensor y = cumprod_kernel(x, axis);
@@ -62,7 +65,12 @@ void RegisterCumProdCases(std::vector<TestCase> &registry, TestMode mode) {
   // 1-D inclusive cumulative product (axis = 0).
   {
     NodeProto node = MakeCumProdNode(/*exclusive=*/false, /*reverse=*/false);
-    Expect(registry, std::move(node), "test_cumprod_1d", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cumprod_1d", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(26);
+
+      const KernelContext cumprod_kernel_ctx{opset};
+      const onnx_kernels::kernel::CumProd cumprod_kernel{cumprod_kernel_ctx};
+
       Tensor x = Tensor::FromDouble("", {3}, {1.0, 2.0, 3.0});
       Tensor axis = Tensor::FromInt32("", {}, {0});
       Tensor y = cumprod_kernel(x, axis);
@@ -73,7 +81,12 @@ void RegisterCumProdCases(std::vector<TestCase> &registry, TestMode mode) {
   // 1-D exclusive cumulative product (axis = 0).
   {
     NodeProto node = MakeCumProdNode(/*exclusive=*/true, /*reverse=*/false);
-    Expect(registry, std::move(node), "test_cumprod_1d_exclusive", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cumprod_1d_exclusive", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(26);
+
+      const KernelContext cumprod_kernel_ctx{opset};
+      const onnx_kernels::kernel::CumProd cumprod_kernel{cumprod_kernel_ctx};
+
       Tensor x = Tensor::FromDouble("", {3}, {1.0, 2.0, 3.0});
       Tensor axis = Tensor::FromInt32("", {}, {0});
       Tensor y = cumprod_kernel(x, axis, /*exclusive=*/true);
@@ -84,7 +97,12 @@ void RegisterCumProdCases(std::vector<TestCase> &registry, TestMode mode) {
   // 1-D reverse cumulative product (axis = 0).
   {
     NodeProto node = MakeCumProdNode(/*exclusive=*/false, /*reverse=*/true);
-    Expect(registry, std::move(node), "test_cumprod_1d_reverse", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cumprod_1d_reverse", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(26);
+
+      const KernelContext cumprod_kernel_ctx{opset};
+      const onnx_kernels::kernel::CumProd cumprod_kernel{cumprod_kernel_ctx};
+
       Tensor x = Tensor::FromDouble("", {3}, {1.0, 2.0, 3.0});
       Tensor axis = Tensor::FromInt32("", {}, {0});
       Tensor y = cumprod_kernel(x, axis, /*exclusive=*/false, /*reverse=*/true);
@@ -95,19 +113,28 @@ void RegisterCumProdCases(std::vector<TestCase> &registry, TestMode mode) {
   // 1-D reverse + exclusive cumulative product (axis = 0).
   {
     NodeProto node = MakeCumProdNode(/*exclusive=*/true, /*reverse=*/true);
-    Expect(registry, std::move(node), "test_cumprod_1d_reverse_exclusive", {opset},
-           [=]() -> IoData {
-             Tensor x = Tensor::FromDouble("", {3}, {1.0, 2.0, 3.0});
-             Tensor axis = Tensor::FromInt32("", {}, {0});
-             Tensor y = cumprod_kernel(x, axis, /*exclusive=*/true, /*reverse=*/true);
-             return IoData{{std::move(x), std::move(axis)}, {std::move(y)}};
-           });
+    Expect(registry, std::move(node), "test_cumprod_1d_reverse_exclusive", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(26);
+
+      const KernelContext cumprod_kernel_ctx{opset};
+      const onnx_kernels::kernel::CumProd cumprod_kernel{cumprod_kernel_ctx};
+
+      Tensor x = Tensor::FromDouble("", {3}, {1.0, 2.0, 3.0});
+      Tensor axis = Tensor::FromInt32("", {}, {0});
+      Tensor y = cumprod_kernel(x, axis, /*exclusive=*/true, /*reverse=*/true);
+      return IoData{{std::move(x), std::move(axis)}, {std::move(y)}};
+    });
   }
 
   // 2-D cumulative product along axis 0.
   {
     NodeProto node = MakeCumProdNode(/*exclusive=*/false, /*reverse=*/false);
-    Expect(registry, std::move(node), "test_cumprod_2d_axis_0", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cumprod_2d_axis_0", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(26);
+
+      const KernelContext cumprod_kernel_ctx{opset};
+      const onnx_kernels::kernel::CumProd cumprod_kernel{cumprod_kernel_ctx};
+
       Tensor x = Tensor::FromDouble("", {2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
       Tensor axis = Tensor::FromInt32("", {}, {0});
       Tensor y = cumprod_kernel(x, axis);
@@ -118,7 +145,12 @@ void RegisterCumProdCases(std::vector<TestCase> &registry, TestMode mode) {
   // 2-D cumulative product along axis 1.
   {
     NodeProto node = MakeCumProdNode(/*exclusive=*/false, /*reverse=*/false);
-    Expect(registry, std::move(node), "test_cumprod_2d_axis_1", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cumprod_2d_axis_1", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(26);
+
+      const KernelContext cumprod_kernel_ctx{opset};
+      const onnx_kernels::kernel::CumProd cumprod_kernel{cumprod_kernel_ctx};
+
       Tensor x = Tensor::FromDouble("", {2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
       Tensor axis = Tensor::FromInt32("", {}, {1});
       Tensor y = cumprod_kernel(x, axis);
@@ -129,7 +161,12 @@ void RegisterCumProdCases(std::vector<TestCase> &registry, TestMode mode) {
   // 2-D cumulative product along negative axis (-1) — axis input is INT64.
   {
     NodeProto node = MakeCumProdNode(/*exclusive=*/false, /*reverse=*/false);
-    Expect(registry, std::move(node), "test_cumprod_2d_negative_axis", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cumprod_2d_negative_axis", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(26);
+
+      const KernelContext cumprod_kernel_ctx{opset};
+      const onnx_kernels::kernel::CumProd cumprod_kernel{cumprod_kernel_ctx};
+
       Tensor x = Tensor::FromDouble("", {2, 3}, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0});
       Tensor axis = Tensor::FromInt64("", {}, {static_cast<int64_t>(-1)});
       Tensor y = cumprod_kernel(x, axis);
@@ -140,7 +177,12 @@ void RegisterCumProdCases(std::vector<TestCase> &registry, TestMode mode) {
   // 2-D cumulative product on INT32 input along axis 0.
   {
     NodeProto node = MakeCumProdNode(/*exclusive=*/false, /*reverse=*/false);
-    Expect(registry, std::move(node), "test_cumprod_2d_int32", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cumprod_2d_int32", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(26);
+
+      const KernelContext cumprod_kernel_ctx{opset};
+      const onnx_kernels::kernel::CumProd cumprod_kernel{cumprod_kernel_ctx};
+
       Tensor x = Tensor::FromInt32("", {2, 3}, {1, 2, 3, 4, 5, 6});
       Tensor axis = Tensor::FromInt32("", {}, {0});
       Tensor y = cumprod_kernel(x, axis);
@@ -151,7 +193,12 @@ void RegisterCumProdCases(std::vector<TestCase> &registry, TestMode mode) {
   // 1-D exclusive cumulative product on INT32 input (axis = 0).
   {
     NodeProto node = MakeCumProdNode(/*exclusive=*/true, /*reverse=*/false);
-    Expect(registry, std::move(node), "test_cumprod_1d_int32_exclusive", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cumprod_1d_int32_exclusive", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(26);
+
+      const KernelContext cumprod_kernel_ctx{opset};
+      const onnx_kernels::kernel::CumProd cumprod_kernel{cumprod_kernel_ctx};
+
       Tensor x = Tensor::FromInt32("", {5}, {1, 2, 3, 4, 5});
       Tensor axis = Tensor::FromInt32("", {}, {0});
       Tensor y = cumprod_kernel(x, axis, /*exclusive=*/true);

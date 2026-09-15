@@ -16,8 +16,6 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 void RegisterHammingWindowCases(std::vector<TestCase> &registry, TestMode mode) {
   constexpr int32_t kSize = 10;
   const OpsetId opset = DefaultOpset(17);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::HammingWindow hamming_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node;
@@ -26,7 +24,12 @@ void RegisterHammingWindowCases(std::vector<TestCase> &registry, TestMode mode) 
     node.add_output("y");
     constexpr int32_t size = 1 << 22;
     Expect(registry, std::move(node), "test_cc_hammingwindow_benchmark", {opset}, {1}, {size},
-           [hamming_kernel, size]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(17);
+
+             const KernelContext hamming_kernel_ctx{opset};
+             const onnx_kernels::kernel::HammingWindow hamming_kernel{hamming_kernel_ctx};
+
              Tensor x = Tensor::FromInt32("", {}, {size});
              Tensor y = hamming_kernel(x, /*periodic=*/true);
              return IoData{{std::move(x)}, {std::move(y)}};
@@ -40,7 +43,12 @@ void RegisterHammingWindowCases(std::vector<TestCase> &registry, TestMode mode) 
     node.set_op_type("HammingWindow");
     node.add_input("x");
     node.add_output("y");
-    Expect(registry, std::move(node), "test_cc_hammingwindow", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_hammingwindow", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(17);
+
+      const KernelContext hamming_kernel_ctx{opset};
+      const onnx_kernels::kernel::HammingWindow hamming_kernel{hamming_kernel_ctx};
+
       Tensor x = Tensor::FromInt32("", {}, {kSize});
       Tensor y = hamming_kernel(x, /*periodic=*/true);
 
@@ -59,7 +67,12 @@ void RegisterHammingWindowCases(std::vector<TestCase> &registry, TestMode mode) 
     attr->set_name("periodic");
     attr->set_type(AttributeProto::AttributeType::INT);
     attr->set_i(0);
-    Expect(registry, std::move(node), "test_cc_hammingwindow_symmetric", {opset}, [=]() -> IoData {
+    Expect(registry, std::move(node), "test_cc_hammingwindow_symmetric", {opset}, []() -> IoData {
+      const OpsetId opset = DefaultOpset(17);
+
+      const KernelContext hamming_kernel_ctx{opset};
+      const onnx_kernels::kernel::HammingWindow hamming_kernel{hamming_kernel_ctx};
+
       Tensor x = Tensor::FromInt32("", {}, {kSize});
       Tensor y = hamming_kernel(x, /*periodic=*/false);
 

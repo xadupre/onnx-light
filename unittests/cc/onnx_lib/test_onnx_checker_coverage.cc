@@ -361,6 +361,37 @@ TEST(CHECKER_COVERAGE, TensorPackedSubByteRawDataTooSmall) {
   }
 }
 
+TEST(CHECKER_COVERAGE, TensorFloat6RejectsNonCanonicalEncodings) {
+  for (TensorProto::DataType dtype : {TensorProto::FLOAT6E2M3, TensorProto::FLOAT6E3M2}) {
+    for (const auto &[num_elements, invalid_last_byte] :
+         {std::pair<int64_t, uint8_t>{1, 0x40}, {2, 0x10}, {3, 0x04}}) {
+      TensorProto tensor;
+      tensor.set_name("t");
+      tensor.set_data_type(dtype);
+      tensor.add_dims(num_elements);
+      const size_t byte_count = static_cast<size_t>((num_elements * 6 + 7) / 8);
+      tensor.ref_raw_data().resize(byte_count);
+      tensor.ref_raw_data()[byte_count - 1] = invalid_last_byte;
+      EXPECT_THROW(checker::check_tensor(tensor, MakeCtx()), ValidationError);
+
+      tensor.ref_raw_data()[byte_count - 1] = 0;
+      EXPECT_NO_THROW(checker::check_tensor(tensor, MakeCtx()));
+    }
+
+    for (const int32_t invalid_value : {-1, 64}) {
+      TensorProto tensor;
+      tensor.set_name("t");
+      tensor.set_data_type(dtype);
+      tensor.add_dims(1);
+      tensor.add_int32_data(invalid_value);
+      EXPECT_THROW(checker::check_tensor(tensor, MakeCtx()), ValidationError);
+
+      tensor.ref_int32_data()[0] = 63;
+      EXPECT_NO_THROW(checker::check_tensor(tensor, MakeCtx()));
+    }
+  }
+}
+
 // Reject non-packed int32_data-stored tensors whose payload is too small.
 TEST(CHECKER_COVERAGE, TensorUnpackedInt32DataTooSmall) {
   // BOOL, INT8, UINT8, INT16, UINT16, FLOAT16, BFLOAT16, and FLOAT8* types are

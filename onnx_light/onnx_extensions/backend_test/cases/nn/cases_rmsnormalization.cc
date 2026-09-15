@@ -43,11 +43,9 @@ Tensor MakeFloatTensor(const std::string &name, const std::vector<int64_t> &shap
 }
 
 // Registers a single RMSNormalization case named ``test_cc_<base>``.
-void RegisterCase(std::vector<TestCase> &registry,
-                  const onnx_kernels::kernel::RMSNormalization &kernel, const OpsetId &opset,
-                  const std::string &base, const std::vector<int64_t> &x_shape,
-                  const std::vector<int64_t> &scale_shape, int64_t axis, bool include_axis_attr,
-                  float epsilon, bool include_epsilon_attr) {
+void RegisterCase(std::vector<TestCase> &registry, const OpsetId &opset, const std::string &base,
+                  const std::vector<int64_t> &x_shape, const std::vector<int64_t> &scale_shape,
+                  int64_t axis, bool include_axis_attr, float epsilon, bool include_epsilon_attr) {
   NodeProto node;
   node.set_op_type("RMSNormalization");
   node.add_input("x");
@@ -59,20 +57,22 @@ void RegisterCase(std::vector<TestCase> &registry,
   if (include_epsilon_attr) {
     AddAttribute<float>(node, "epsilon", epsilon);
   }
-  Expect(registry, std::move(node), "test_cc_" + base, {opset}, [=]() -> IoData {
-    Tensor x = MakeFloatTensor("", x_shape, 0.05f, -0.5f);
-    Tensor scale = MakeFloatTensor("", scale_shape, 0.02f, 0.5f);
-    Tensor y = kernel(x, scale, axis, epsilon);
-    return IoData{{std::move(x), std::move(scale)}, {std::move(y)}};
-  });
+  Expect(registry, std::move(node), "test_cc_" + base, {opset},
+         [opset, x_shape, scale_shape, axis, epsilon]() -> IoData {
+           const KernelContext ctx{opset};
+           const onnx_kernels::kernel::RMSNormalization kernel{ctx};
+
+           Tensor x = MakeFloatTensor("", x_shape, 0.05f, -0.5f);
+           Tensor scale = MakeFloatTensor("", scale_shape, 0.02f, 0.5f);
+           Tensor y = kernel(x, scale, axis, epsilon);
+           return IoData{{std::move(x), std::move(scale)}, {std::move(y)}};
+         });
 }
 
 } // namespace
 
 void RegisterRMSNormalizationCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(23);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::RMSNormalization rmsnorm_kernel{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     constexpr float kDefaultEpsilon = 1e-5f;
@@ -87,8 +87,12 @@ void RegisterRMSNormalizationCases(std::vector<TestCase> &registry, TestMode mod
 
     constexpr int64_t count = 2048 * 2048;
     Expect(registry, std::move(node), "test_cc_rms_normalization_2d_axis0_benchmark", {opset},
-           {count, count}, {count},
-           [rmsnorm_kernel, x_shape, scale_shape, kDefaultEpsilon]() -> IoData {
+           {count, count}, {count}, [x_shape, scale_shape]() -> IoData {
+             const OpsetId opset = DefaultOpset(23);
+
+             const KernelContext rmsnorm_kernel_ctx{opset};
+             const onnx_kernels::kernel::RMSNormalization rmsnorm_kernel{rmsnorm_kernel_ctx};
+
              Tensor x = MakeFloatTensor("", x_shape, 0.05f, -0.5f);
              Tensor scale = MakeFloatTensor("", scale_shape, 0.02f, 0.5f);
              Tensor y = rmsnorm_kernel(x, scale, /*axis=*/0, kDefaultEpsilon);
@@ -101,67 +105,67 @@ void RegisterRMSNormalizationCases(std::vector<TestCase> &registry, TestMode mod
   constexpr float kAltEpsilon = 0.1f;
 
   // 2D cases (shape [3, 4]).
-  RegisterCase(registry, rmsnorm_kernel, opset, "rms_normalization_2d_axis0", {3, 4}, {3, 4},
+  RegisterCase(registry, opset, "rms_normalization_2d_axis0", {3, 4}, {3, 4},
                /*axis=*/0, /*include_axis_attr=*/true, kDefaultEpsilon,
                /*include_epsilon_attr=*/false);
-  RegisterCase(registry, rmsnorm_kernel, opset, "rms_normalization_2d_axis1", {3, 4}, {4},
+  RegisterCase(registry, opset, "rms_normalization_2d_axis1", {3, 4}, {4},
                /*axis=*/1, /*include_axis_attr=*/true, kDefaultEpsilon,
                /*include_epsilon_attr=*/false);
-  RegisterCase(registry, rmsnorm_kernel, opset, "rms_normalization_2d_axis_negative_1", {3, 4}, {4},
+  RegisterCase(registry, opset, "rms_normalization_2d_axis_negative_1", {3, 4}, {4},
                /*axis=*/-1, /*include_axis_attr=*/true, kDefaultEpsilon,
                /*include_epsilon_attr=*/false);
-  RegisterCase(registry, rmsnorm_kernel, opset, "rms_normalization_2d_axis_negative_2", {3, 4},
-               {3, 4}, /*axis=*/-2, /*include_axis_attr=*/true, kDefaultEpsilon,
+  RegisterCase(registry, opset, "rms_normalization_2d_axis_negative_2", {3, 4}, {3, 4}, /*axis=*/-2,
+               /*include_axis_attr=*/true, kDefaultEpsilon,
                /*include_epsilon_attr=*/false);
 
   // 3D cases (shape [2, 3, 5]) with explicit epsilon.
-  RegisterCase(registry, rmsnorm_kernel, opset, "rms_normalization_3d_axis0_epsilon", {2, 3, 5},
-               {2, 3, 5}, /*axis=*/0, /*include_axis_attr=*/true, kAltEpsilon,
+  RegisterCase(registry, opset, "rms_normalization_3d_axis0_epsilon", {2, 3, 5}, {2, 3, 5},
+               /*axis=*/0, /*include_axis_attr=*/true, kAltEpsilon,
                /*include_epsilon_attr=*/true);
-  RegisterCase(registry, rmsnorm_kernel, opset, "rms_normalization_3d_axis1_epsilon", {2, 3, 5},
-               {3, 5}, /*axis=*/1, /*include_axis_attr=*/true, kAltEpsilon,
+  RegisterCase(registry, opset, "rms_normalization_3d_axis1_epsilon", {2, 3, 5}, {3, 5}, /*axis=*/1,
+               /*include_axis_attr=*/true, kAltEpsilon,
                /*include_epsilon_attr=*/true);
-  RegisterCase(registry, rmsnorm_kernel, opset, "rms_normalization_3d_axis2_epsilon", {2, 3, 5},
-               {5}, /*axis=*/2, /*include_axis_attr=*/true, kAltEpsilon,
+  RegisterCase(registry, opset, "rms_normalization_3d_axis2_epsilon", {2, 3, 5}, {5}, /*axis=*/2,
+               /*include_axis_attr=*/true, kAltEpsilon,
                /*include_epsilon_attr=*/true);
-  RegisterCase(registry, rmsnorm_kernel, opset, "rms_normalization_3d_axis_negative_1_epsilon",
-               {2, 3, 5}, {5}, /*axis=*/-1, /*include_axis_attr=*/true, kAltEpsilon,
+  RegisterCase(registry, opset, "rms_normalization_3d_axis_negative_1_epsilon", {2, 3, 5}, {5},
+               /*axis=*/-1, /*include_axis_attr=*/true, kAltEpsilon,
                /*include_epsilon_attr=*/true);
-  RegisterCase(registry, rmsnorm_kernel, opset, "rms_normalization_3d_axis_negative_2_epsilon",
-               {2, 3, 5}, {3, 5}, /*axis=*/-2, /*include_axis_attr=*/true, kAltEpsilon,
+  RegisterCase(registry, opset, "rms_normalization_3d_axis_negative_2_epsilon", {2, 3, 5}, {3, 5},
+               /*axis=*/-2, /*include_axis_attr=*/true, kAltEpsilon,
                /*include_epsilon_attr=*/true);
-  RegisterCase(registry, rmsnorm_kernel, opset, "rms_normalization_3d_axis_negative_3_epsilon",
-               {2, 3, 5}, {2, 3, 5}, /*axis=*/-3, /*include_axis_attr=*/true, kAltEpsilon,
+  RegisterCase(registry, opset, "rms_normalization_3d_axis_negative_3_epsilon", {2, 3, 5},
+               {2, 3, 5}, /*axis=*/-3, /*include_axis_attr=*/true, kAltEpsilon,
                /*include_epsilon_attr=*/true);
 
   // 4D cases (shape [2, 3, 4, 5]).
-  RegisterCase(registry, rmsnorm_kernel, opset, "rms_normalization_4d_axis0", {2, 3, 4, 5},
-               {2, 3, 4, 5}, /*axis=*/0, /*include_axis_attr=*/true, kDefaultEpsilon,
+  RegisterCase(registry, opset, "rms_normalization_4d_axis0", {2, 3, 4, 5}, {2, 3, 4, 5},
+               /*axis=*/0, /*include_axis_attr=*/true, kDefaultEpsilon,
                /*include_epsilon_attr=*/false);
-  RegisterCase(registry, rmsnorm_kernel, opset, "rms_normalization_4d_axis1", {2, 3, 4, 5},
-               {3, 4, 5}, /*axis=*/1, /*include_axis_attr=*/true, kDefaultEpsilon,
+  RegisterCase(registry, opset, "rms_normalization_4d_axis1", {2, 3, 4, 5}, {3, 4, 5}, /*axis=*/1,
+               /*include_axis_attr=*/true, kDefaultEpsilon,
                /*include_epsilon_attr=*/false);
-  RegisterCase(registry, rmsnorm_kernel, opset, "rms_normalization_4d_axis2", {2, 3, 4, 5}, {4, 5},
+  RegisterCase(registry, opset, "rms_normalization_4d_axis2", {2, 3, 4, 5}, {4, 5},
                /*axis=*/2, /*include_axis_attr=*/true, kDefaultEpsilon,
                /*include_epsilon_attr=*/false);
-  RegisterCase(registry, rmsnorm_kernel, opset, "rms_normalization_4d_axis3", {2, 3, 4, 5}, {5},
+  RegisterCase(registry, opset, "rms_normalization_4d_axis3", {2, 3, 4, 5}, {5},
                /*axis=*/3, /*include_axis_attr=*/true, kDefaultEpsilon,
                /*include_epsilon_attr=*/false);
-  RegisterCase(registry, rmsnorm_kernel, opset, "rms_normalization_4d_axis_negative_1",
-               {2, 3, 4, 5}, {5}, /*axis=*/-1, /*include_axis_attr=*/true, kDefaultEpsilon,
+  RegisterCase(registry, opset, "rms_normalization_4d_axis_negative_1", {2, 3, 4, 5}, {5},
+               /*axis=*/-1, /*include_axis_attr=*/true, kDefaultEpsilon,
                /*include_epsilon_attr=*/false);
-  RegisterCase(registry, rmsnorm_kernel, opset, "rms_normalization_4d_axis_negative_2",
-               {2, 3, 4, 5}, {4, 5}, /*axis=*/-2, /*include_axis_attr=*/true, kDefaultEpsilon,
+  RegisterCase(registry, opset, "rms_normalization_4d_axis_negative_2", {2, 3, 4, 5}, {4, 5},
+               /*axis=*/-2, /*include_axis_attr=*/true, kDefaultEpsilon,
                /*include_epsilon_attr=*/false);
-  RegisterCase(registry, rmsnorm_kernel, opset, "rms_normalization_4d_axis_negative_3",
-               {2, 3, 4, 5}, {3, 4, 5}, /*axis=*/-3, /*include_axis_attr=*/true, kDefaultEpsilon,
+  RegisterCase(registry, opset, "rms_normalization_4d_axis_negative_3", {2, 3, 4, 5}, {3, 4, 5},
+               /*axis=*/-3, /*include_axis_attr=*/true, kDefaultEpsilon,
                /*include_epsilon_attr=*/false);
-  RegisterCase(registry, rmsnorm_kernel, opset, "rms_normalization_4d_axis_negative_4",
-               {2, 3, 4, 5}, {2, 3, 4, 5}, /*axis=*/-4, /*include_axis_attr=*/true, kDefaultEpsilon,
+  RegisterCase(registry, opset, "rms_normalization_4d_axis_negative_4", {2, 3, 4, 5}, {2, 3, 4, 5},
+               /*axis=*/-4, /*include_axis_attr=*/true, kDefaultEpsilon,
                /*include_epsilon_attr=*/false);
 
   // Default axis (-1) with default epsilon; no attributes set.
-  RegisterCase(registry, rmsnorm_kernel, opset, "rms_normalization_default_axis", {2, 3, 4, 5}, {5},
+  RegisterCase(registry, opset, "rms_normalization_default_axis", {2, 3, 4, 5}, {5},
                /*axis=*/-1, /*include_axis_attr=*/false, kDefaultEpsilon,
                /*include_epsilon_attr=*/false);
 }

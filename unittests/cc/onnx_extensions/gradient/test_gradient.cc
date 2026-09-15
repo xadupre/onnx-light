@@ -7,6 +7,7 @@
 
 #include "onnx_extensions/gradient/gradient.h"
 
+#include "../backend_test/test_case_utils.h"
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_extensions/gradient/gradient/grad_dispatcher.h"
 #include "onnx_proto/onnx.h"
@@ -19,6 +20,7 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
+using core::backend_test::TestCaseUnloadGuard;
 using onnx_gradient::GradientOfFunction;
 using onnx_gradient::GradientOfNodes;
 
@@ -434,12 +436,13 @@ TEST(BackendTestCasesWithGradient, AllRegisteredOpsHaveWorkingGradients) {
 
   for (const std::string &op_type : grad_op_types) {
     // Collect all standard backend test cases for this operator.
-    const auto cases = core::backend_test::CollectTestCases(op_type);
+    auto cases = core::backend_test::CollectTestCases(op_type);
 
     // Every operator with a gradient should have at least one backend test case.
     EXPECT_FALSE(cases.empty()) << "No backend test cases found for op_type=" << op_type;
 
-    for (const auto &tc : cases) {
+    for (auto &tc : cases) {
+      TestCaseUnloadGuard unload_guard(tc);
       const auto &graph = tc.model().ref_graph();
       if (graph.ref_node().empty()) {
         continue;

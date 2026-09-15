@@ -74,6 +74,13 @@ struct KernelTuningCacheInspectionReport {
   std::vector<std::string> diagnostics;
 };
 
+/** Reports removal of a persisted tuning cache. */
+struct KernelTuningCacheRemovalReport {
+  std::filesystem::path path;
+  bool removed = false;
+  std::vector<std::string> diagnostics;
+};
+
 /** Controls import of a cache file as read-only deployment profiles. */
 struct KernelTuningDeploymentImportOptions {
   std::filesystem::path path;
@@ -109,6 +116,14 @@ std::filesystem::path DefaultKernelTuningCachePath();
  */
 KernelTuningCacheInspectionReport
 InspectKernelTuningCache(const KernelTuningCacheOptions &options = {});
+
+/**
+ * Removes a persisted tuning cache while holding its inter-process lock.
+ *
+ * Already published profiles and initialized kernel instances are unchanged.
+ */
+KernelTuningCacheRemovalReport
+RemoveKernelTuningCache(const KernelTuningCacheOptions &options = {});
 
 /**
  * Validates, merges, and atomically persists calibrated profiles.

@@ -48,37 +48,22 @@ void RegisterOptionalCases(std::vector<TestCase> &registry, TestMode mode) {
   }
 
   const OpsetId opset = DefaultOpset(15);
-  const KernelContext ctx{opset};
 
-  Expect(registry, std::move(node), case_name, {opset}, [=]() -> IoData {
-    Tensor input = benchmark
-                       ? RandnTensor(DataType::FLOAT, shape, 4001)
-                       : Tensor::FromFloat("", shape, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});
-    Tensor output = onnx_kernels::kernel::Optional(ctx)(input);
-    return IoData{{std::move(input)}, {std::move(output)}};
-  });
+  Expect(registry, std::move(node), case_name, {opset},
+         [benchmark, shape]() -> IoData {
+           const OpsetId opset = DefaultOpset(15);
 
-  // ``Expect()`` populates the output value-info as a TensorTypeProto via the
-  // generic ``FillValueInfo`` helper. The ONNX ``Optional`` operator however
-  // requires its output type to match the ``type`` attribute (here an
-  // ``Optional<Tensor<FLOAT, [2, 3]>>``) — runtimes such as ONNX Runtime
-  // perform this type check and would reject the model otherwise. Promote
-  // the just-emitted output to an ``OptionalTypeProto`` wrapping the
-  // existing tensor type.
-  GraphProto &graph = registry.back().model().ref_graph();
-  ValueInfoProto &out_vi = *graph.mutable_output(0);
-  TypeProto &out_tp = out_vi.ref_type();
-  TypeProto::Optional *out_opt = out_tp.add_optional_type();
-  TypeProto *out_elem = out_opt->add_elem_type();
-  TypeProto::Tensor *out_tensor = out_elem->add_tensor_type();
-  out_tensor->set_elem_type(static_cast<int>(DataType::FLOAT));
-  TensorShapeProto *out_shape = out_tensor->add_shape();
-  for (int64_t d : shape) {
-    out_shape->add_dim()->set_dim_value(d);
-  }
-  // Drop the now-redundant tensor_type oneof field so only optional_type is
-  // serialized for this value-info.
-  out_tp.reset_tensor_type();
+           const KernelContext ctx_1{opset};
+           const onnx_kernels::kernel::Optional kernel_1{ctx_1};
+
+           Tensor input =
+               benchmark ? RandnTensor(DataType::FLOAT, shape, 4001)
+                         : Tensor::FromFloat("", shape, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});
+           Tensor output = kernel_1(input);
+           return IoData{{std::move(input)}, {std::move(output)}};
+         },
+         "backend-test", TestCaseTag::NONE,
+         {OptionalTypeSpec(TensorTypeSpec(static_cast<int32_t>(DataType::FLOAT), shape))});
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

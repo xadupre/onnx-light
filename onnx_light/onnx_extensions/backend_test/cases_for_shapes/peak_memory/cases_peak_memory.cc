@@ -26,7 +26,7 @@ void RegisterPeakMemoryCases(std::vector<TestCase> &registry, TestMode mode) {
 
   {
     const std::string name = "test_cc_peak_memory_attention_static";
-    TestCase tc(name, name, "model", "peak_memory");
+    TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::PEAK_MEMORY);
     tc.rtol = 1e-3;
     tc.atol = 1e-7;
 
@@ -54,7 +54,7 @@ void RegisterPeakMemoryCases(std::vector<TestCase> &registry, TestMode mode) {
 
   {
     const std::string name = "test_cc_peak_memory_attention_symbolic";
-    TestCase tc(name, name, "model", "peak_memory");
+    TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::PEAK_MEMORY);
     tc.rtol = 1e-3;
     tc.atol = 1e-7;
 

@@ -36,13 +36,16 @@ NodeProto MakeCenterCropPadNode(const std::vector<int64_t> &axes) {
 // ---------------------------------------------------------------------------
 void RegisterCenterCropPadCases(std::vector<TestCase> &registry, TestMode mode) {
   const OpsetId opset = DefaultOpset(18);
-  const KernelContext ctx{opset};
-  const onnx_kernels::kernel::CenterCropPad op{ctx};
 
   if (mode == TestMode::BENCHMARK) {
     NodeProto node = MakeCenterCropPadNode({});
     Expect(registry, std::move(node), "test_cc_center_crop_pad_crop_benchmark", {opset},
-           {4096 * 2048, 3}, {2048 * 2048}, [op]() -> IoData {
+           {4096 * 2048, 3}, {2048 * 2048}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(18);
+
+             const KernelContext op_ctx{opset};
+             const onnx_kernels::kernel::CenterCropPad op{op_ctx};
+
              Tensor input = RandnTensor(DataType::FLOAT, {4096, 2048, 1}, 2001);
              Tensor shape = Tensor::FromInt64("", {3}, std::vector<int64_t>{2048, 2048, 1});
              onnx_kernels::kernel::CenterCropPad::Attributes attrs;
@@ -56,7 +59,12 @@ void RegisterCenterCropPadCases(std::vector<TestCase> &registry, TestMode mode) 
   // matching upstream test_center_crop_pad_crop (without random values).
   {
     Expect(registry, MakeCenterCropPadNode({}), "test_cc_center_crop_pad_crop", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(18);
+
+             const KernelContext op_ctx{opset};
+             const onnx_kernels::kernel::CenterCropPad op{op_ctx};
+
              std::vector<float> values(20 * 10 * 3);
              for (std::size_t i = 0; i < values.size(); ++i) {
                values[i] = static_cast<float>(i);
@@ -72,7 +80,12 @@ void RegisterCenterCropPadCases(std::vector<TestCase> &registry, TestMode mode) 
   // test_cc_center_crop_pad_pad — strictly padding on every axis.
   {
     Expect(registry, MakeCenterCropPadNode({}), "test_cc_center_crop_pad_pad", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(18);
+
+             const KernelContext op_ctx{opset};
+             const onnx_kernels::kernel::CenterCropPad op{op_ctx};
+
              std::vector<float> values(10 * 7 * 3);
              for (std::size_t i = 0; i < values.size(); ++i) {
                values[i] = static_cast<float>(i + 1);
@@ -88,7 +101,12 @@ void RegisterCenterCropPadCases(std::vector<TestCase> &registry, TestMode mode) 
   // test_cc_center_crop_pad_crop_and_pad — crop on axis 0, pad on axis 1.
   {
     Expect(registry, MakeCenterCropPadNode({}), "test_cc_center_crop_pad_crop_and_pad", {opset},
-           [=]() -> IoData {
+           []() -> IoData {
+             const OpsetId opset = DefaultOpset(18);
+
+             const KernelContext op_ctx{opset};
+             const onnx_kernels::kernel::CenterCropPad op{op_ctx};
+
              std::vector<float> values(20 * 8 * 3);
              for (std::size_t i = 0; i < values.size(); ++i) {
                values[i] = static_cast<float>(i);
@@ -105,7 +123,12 @@ void RegisterCenterCropPadCases(std::vector<TestCase> &registry, TestMode mode) 
   // to a subset of dimensions.
   {
     Expect(registry, MakeCenterCropPadNode({0, 1}), "test_cc_center_crop_pad_crop_axes_hwc",
-           {opset}, [=]() -> IoData {
+           {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(18);
+
+             const KernelContext op_ctx{opset};
+             const onnx_kernels::kernel::CenterCropPad op{op_ctx};
+
              std::vector<float> values(20 * 8 * 3);
              for (std::size_t i = 0; i < values.size(); ++i) {
                values[i] = static_cast<float>(i);
@@ -123,7 +146,12 @@ void RegisterCenterCropPadCases(std::vector<TestCase> &registry, TestMode mode) 
   // test_cc_center_crop_pad_crop_negative_axes_hwc — negative axes.
   {
     Expect(registry, MakeCenterCropPadNode({-3, -2}),
-           "test_cc_center_crop_pad_crop_negative_axes_hwc", {opset}, [=]() -> IoData {
+           "test_cc_center_crop_pad_crop_negative_axes_hwc", {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(18);
+
+             const KernelContext op_ctx{opset};
+             const onnx_kernels::kernel::CenterCropPad op{op_ctx};
+
              std::vector<float> values(20 * 8 * 3);
              for (std::size_t i = 0; i < values.size(); ++i) {
                values[i] = static_cast<float>(i);
@@ -142,7 +170,12 @@ void RegisterCenterCropPadCases(std::vector<TestCase> &registry, TestMode mode) 
   // dimensions (channels-first layout).
   {
     Expect(registry, MakeCenterCropPadNode({1, 2}), "test_cc_center_crop_pad_crop_axes_chw",
-           {opset}, [=]() -> IoData {
+           {opset}, []() -> IoData {
+             const OpsetId opset = DefaultOpset(18);
+
+             const KernelContext op_ctx{opset};
+             const onnx_kernels::kernel::CenterCropPad op{op_ctx};
+
              std::vector<float> values(3 * 20 * 8);
              for (std::size_t i = 0; i < values.size(); ++i) {
                values[i] = static_cast<float>(i);

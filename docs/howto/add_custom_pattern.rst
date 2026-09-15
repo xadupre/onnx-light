@@ -10,7 +10,7 @@ the building block of graph optimization
 (:cpp:class:`onnx_light::core::builder::PatternOptimization` /
 :class:`onnx_light.onnx_core.optimization.PatternOptimization`) — and how
 ``priority`` orders it relative to the standard patterns. For a runnable,
-end-to-end walk-through (statistics, replay of the recorded rewrites, ...) see
+end-to-end walk-through of optimization statistics see
 :ref:`l-example-plot-pattern-optimization`.
 
 A pattern implements three things:
@@ -229,8 +229,10 @@ is set before the pattern is passed to ``GraphGraph``.
 See also
 --------
 
-* :ref:`l-example-plot-pattern-optimization` - runnable example: statistics,
-  the list of applied rewrites, and replaying them from the original model.
+* :ref:`l-example-plot-pattern-optimization` - runnable optimization and
+  statistics example.
+* :ref:`l-example-plot-pattern-replay` - dedicated example that captures
+  rewrites and replays them from the original model.
 * :doc:`/api/python/onnx_core/optimization`
   - Python API reference, including the standard pattern table with their
   priorities.

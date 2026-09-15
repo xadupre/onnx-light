@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/expect.h"
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_extensions/backend_test/cases/nn/include_nn_cases.h"
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 #include "onnx_proto/onnx_helper.h"
@@ -103,6 +104,29 @@ void RegisterRMSNormalizationCases(std::vector<TestCase> &registry, TestMode mod
 
   constexpr float kDefaultEpsilon = 1e-5f;
   constexpr float kAltEpsilon = 0.1f;
+
+  for (bool affine : {false, true}) {
+    NodeProto node;
+    node.set_op_type("RMSNormalization");
+    node.add_input("X");
+    node.add_input("Scale");
+    node.add_output("Y");
+    AddAttribute<float>(node, "epsilon", 0.0f);
+    AddAttribute<int64_t>(node, "stash_type", 1);
+    Expect(registry, std::move(node),
+           affine ? "test_cc_rms_normalization_float16_affine_precision"
+                  : "test_cc_rms_normalization_float16_float32_stash",
+           {opset}, [affine]() -> IoData {
+             return IoData{
+                 {MakeFloat16Tensor("", {1, 2},
+                                    affine ? std::vector<float>{1.0f, 2.0f}
+                                           : std::vector<float>{256.0f, 256.0f}),
+                  MakeFloat16Scalar("", affine ? 1.3f : 1.0f)},
+                 {MakeFloat16Tensor("", {1, 2},
+                                    affine ? std::vector<float>{0.82177734375f, 1.6435546875f}
+                                           : std::vector<float>{1.0f, 1.0f})}};
+           });
+  }
 
   // 2D cases (shape [3, 4]).
   RegisterCase(registry, opset, "rms_normalization_2d_axis0", {3, 4}, {3, 4},

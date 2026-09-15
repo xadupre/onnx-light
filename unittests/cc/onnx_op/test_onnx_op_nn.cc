@@ -1035,6 +1035,8 @@ TEST(OnnxOpNnRegistrationTest, ReturnsLayerNormalizationSchemasForAllVersions) {
   EXPECT_EQ(v17->outputs()[1].type, "U");
   EXPECT_EQ(v17->outputs()[2].name, "InvStdDev");
   EXPECT_EQ(v17->outputs()[2].type, "U");
+  EXPECT_EQ(v17->min_output(), 1);
+  EXPECT_EQ(v17->max_output(), 3);
   ASSERT_EQ(v17->type_constraints().size(), 2u);
   EXPECT_EQ(v17->type_constraints()[0].type_param_str, "T");
   EXPECT_EQ(v17->type_constraints()[0].allowed_type_strs.size(), 4u);

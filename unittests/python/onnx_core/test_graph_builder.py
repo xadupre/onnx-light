@@ -65,6 +65,34 @@ class TestGraphBuilder(ExtTestCase):
         generated = builder.op.TopK(x, k, outputs=2)
         self.assertEqual(len(generated), 2)
 
+    def test_layer_normalization_optional_outputs(self):
+        for output_count in (1, 2, 3):
+            with self.subTest(output_count=output_count):
+                outputs = ["Y", "Mean", "InvStdDev"][:output_count]
+                model = oh.make_model(
+                    oh.make_graph(
+                        [oh.make_node("LayerNormalization", ["X", "Scale"], outputs)],
+                        "layer_normalization",
+                        [
+                            oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT16, [1, 3]),
+                            oh.make_tensor_value_info("Scale", onnxl.TensorProto.FLOAT16, [3]),
+                        ],
+                        [
+                            oh.make_tensor_value_info(
+                                name,
+                                onnxl.TensorProto.FLOAT16 if name == "Y" else FLOAT,
+                                [1, 3] if name == "Y" else [1, 1],
+                            )
+                            for name in outputs
+                        ],
+                    ),
+                    opset_imports=[oh.make_opsetid("", 17)],
+                )
+                rebuilt = GraphBuilder(model).to_onnx("model")
+                checker.check_model(rebuilt)
+                self.assertEqual(list(rebuilt.graph.node[0].output), outputs)
+                self.assertEqual([value.name for value in rebuilt.graph.output], outputs)
+
     def test_compact_custom_operator_without_schema(self):
         builder = GraphBuilder("g")
         builder.set_opset_version("com.example", 7)

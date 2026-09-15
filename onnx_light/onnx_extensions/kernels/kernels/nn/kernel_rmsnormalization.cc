@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/kernels/float16_promote.h"
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
@@ -51,55 +52,25 @@ void CheckScaleBroadcast(const onnx_kernels::Shape &x_shape, int64_t axis,
 
 Tensor RMSNormalization::operator()(const Tensor &x, const Tensor &scale, int64_t axis,
                                     float epsilon, RuntimeContext *rt) const {
-  // FLOAT16/BFLOAT16 are computed in float32 and demoted back, mirroring the
-  // half-precision dispatch used by kernel::Conv and kernel::MatMul. This lets
-  // half-precision language models (e.g. the tiny Llama-style decoder) run
-  // their RMSNorm layers through this kernel.
-  if (IsHalfPrecision(x.data_type)) {
-    RuntimeContext scratch_rt(
-        rt ? rt->kernel_ctx() : ctx_,
-        RuntimeContextOptions{.allocator = rt ? rt->execution_allocator() : nullptr});
-    RuntimeContext *compute_rt = rt ? &scratch_rt : nullptr;
-    const Tensor x_f = PromoteToFloat32(x, compute_rt);
-    const Tensor scale_f = PromoteToFloat32(scale, compute_rt);
-    Tensor y = (*this)(x_f, scale_f, axis, epsilon, compute_rt);
-    Tensor demoted = DemoteFromFloat32(y, x.data_type, compute_rt);
-    Tensor out = rt ? rt->MakeOutputTensor(0, x.data_type, x.shape, demoted.size_bytes())
-                    : MakeOutputTensor(x.data_type, x.shape, demoted.size_bytes(), nullptr);
-    if (demoted.size_bytes() != 0) {
-      std::memcpy(out.mutable_bytes(), demoted.bytes(), demoted.size_bytes());
-    }
-    return out;
-  }
-  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      "kernel::RMSNormalization: X must be FLOAT.");
+  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT) ||
+                          IsHalfPrecision(x.data_type),
+                      "kernel::RMSNormalization: X must be FLOAT, FLOAT16 or BFLOAT16.");
   const size_t out_n_bytes = x.size_bytes();
-  Tensor out =
-      rt ? rt->MakeOutputTensor(0, static_cast<int32_t>(DataType::FLOAT), x.shape, out_n_bytes)
-         : MakeOutputTensor(static_cast<int32_t>(DataType::FLOAT), x.shape, out_n_bytes, nullptr);
+  Tensor out = rt ? rt->MakeOutputTensor(0, x.data_type, x.shape, out_n_bytes)
+                  : MakeOutputTensor(x.data_type, x.shape, out_n_bytes, nullptr);
   (*this)(x, scale, out, axis, epsilon, rt);
   return out;
 }
 
 void RMSNormalization::operator()(const Tensor &x, const Tensor &scale, Tensor &output,
                                   int64_t axis, float epsilon, RuntimeContext *rt) const {
-  if (IsHalfPrecision(x.data_type)) {
-    EXT_ENFORCE_INVALID(output.data_type == x.data_type,
-                        "kernel::RMSNormalization preallocated output must match the input dtype.");
-    Tensor y = (*this)(x, scale, axis, epsilon);
-    EXT_ENFORCE_INVALID(output.shape == y.shape,
-                        "kernel::RMSNormalization: output must have the same shape as X.");
-    EXT_ENFORCE_INVALID(output.size_bytes() == y.size_bytes(),
-                        "kernel::RMSNormalization: output buffer has unexpected size.");
-    std::memcpy(output.mutable_bytes(), y.bytes(), y.size_bytes());
-    return;
-  }
-  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      "kernel::RMSNormalization: X must be FLOAT.");
-  EXT_ENFORCE_INVALID(scale.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      "kernel::RMSNormalization: scale must be FLOAT.");
-  EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::FLOAT),
-                      "kernel::RMSNormalization: output must be FLOAT.");
+  const bool half = IsHalfPrecision(x.data_type);
+  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT) || half,
+                      "kernel::RMSNormalization: X must be FLOAT, FLOAT16 or BFLOAT16.");
+  EXT_ENFORCE_INVALID(scale.data_type == x.data_type,
+                      "kernel::RMSNormalization: scale must have the same dtype as X.");
+  EXT_ENFORCE_INVALID(output.data_type == x.data_type,
+                      "kernel::RMSNormalization: output must have the same dtype as X.");
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       "kernel::RMSNormalization: output must have the same shape as X.");
   EXT_ENFORCE_INVALID(output.size_bytes() == x.size_bytes(),
@@ -182,9 +153,16 @@ void RMSNormalization::operator()(const Tensor &x, const Tensor &scale, Tensor &
     }
   }
 
-  const float *px = x.AsFloat();
-  const float *ps = scale.AsFloat();
-  float *py = output.AsFloat();
+  const Tensor x_float = half ? PromoteToFloat32(x, rt) : Tensor{};
+  const Tensor scale_float = half ? PromoteToFloat32(scale, rt) : Tensor{};
+  const float *px = half ? x_float.AsFloat() : x.AsFloat();
+  const float *ps = half ? scale_float.AsFloat() : scale.AsFloat();
+  float *py = half ? nullptr : output.AsFloat();
+  uint16_t *py_half = half ? reinterpret_cast<uint16_t *>(output.mutable_bytes()) : nullptr;
+  const auto encode = x.data_type == static_cast<int32_t>(DataType::FLOAT16) ? FloatToFloat16Bits
+                                                                             : FloatToBfloat16Bits;
+  const auto decode = x.data_type == static_cast<int32_t>(DataType::FLOAT16) ? Float16BitsToFloat
+                                                                             : Bfloat16BitsToFloat;
 
   // For each outer position, compute the mean of squares over the normalized
   // axes, take the square root and divide ``X`` by it. Then multiply by the
@@ -197,9 +175,16 @@ void RMSNormalization::operator()(const Tensor &x, const Tensor &scale, Tensor &
       sqsum += v * v;
     }
     const double mean = norm_size > 0 ? sqsum / static_cast<double>(norm_size) : 0.0;
-    const float inv_rms = 1.0f / std::sqrt(static_cast<float>(mean) + epsilon);
+    const float rms = std::sqrt(static_cast<float>(mean) + epsilon);
     for (int64_t i = 0; i < norm_size; ++i) {
-      py[base + i] = px[base + i] * inv_rms * ps[scale_index[static_cast<size_t>(i)]];
+      const float normalized = px[base + i] / rms;
+      const float s = ps[scale_index[static_cast<size_t>(i)]];
+      if (half) {
+        // Cast to the input dtype before applying scale.
+        py_half[base + i] = encode(decode(encode(normalized)) * s);
+      } else {
+        py[base + i] = normalized * s;
+      }
     }
   }
 }

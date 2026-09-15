@@ -49,36 +49,25 @@ static void InlineFunctions(ModelProto &model, const char *input,
 
 TEST(FunctionInliner, BasicTest) {
   const char *code = R"ONNX(
-<
-  ir_version: 8,
-  opset_import: [ "" : 10, "local" : 1 ]
->
-agraph (float[N, 128] X, float[128,10] W, float[10] B) => (float[N, 10] C)
-{
-  T = local.foo (X, W, B)
-  C = local.square(T)
-}
+  <ir_version: 8, opset_import: [ "" : 10, "local" : 1 ]>
+  agraph (float[N, 128] X, float[128,10] W, float[10] B) => (float[N, 10] C)
+  {
+    T = local.foo (X, W, B)
+    C = local.square(T)
+  }
 
-<
-  opset_import: [ "" : 10 ],
-  domain: "local",
-  doc_string: "Function foo."
->
-foo (x, w, b) => (c) {
-  T = MatMul(x, w)
-  S = Add(T, b)
-  c = Softmax(S)
-}
+  <opset_import: [ "" : 10 ], domain: "local", doc_string: "Function foo.">
+  foo (x, w, b) => (c) {
+    T = MatMul(x, w)
+    S = Add(T, b)
+    c = Softmax(S)
+  }
 
-<
-  opset_import: [ "" : 10 ],
-  domain: "local",
-  doc_string: "Function square."
->
-square (x) => (y) {
-  y = Mul (x, x)
-}
-)ONNX";
+  <opset_import: [ "" : 10 ], domain: "local", doc_string: "Function square.">
+  square (x) => (y) {
+    y = Mul (x, x)
+  }
+  )ONNX";
 
   ModelProto model;
   InlineFunctions(model, code);
@@ -91,31 +80,24 @@ square (x) => (y) {
 // Test that inlining processes subgraphs.
 TEST(FunctionInliner, SubgraphTest) {
   const char *code = R"ONNX(
-<
-  ir_version: 8,
-  opset_import: [ "" : 10, "local" : 1 ]
->
-agraph (bool cond, float[N] X) => (float[N] Y)
-{
-  Y = If (cond) <
-    then_branch = then_graph () => (y) {
-        y = local.square (X)
-    },
-    else_branch = else_graph () => (y) {
-        y = local.square (X)
-    }
-  >
-}
+  <ir_version: 8, opset_import: [ "" : 10, "local" : 1 ]>
+  agraph (bool cond, float[N] X) => (float[N] Y)
+  {
+    Y = If (cond) <
+      then_branch = then_graph () => (y) {
+          y = local.square (X)
+      },
+      else_branch = else_graph () => (y) {
+          y = local.square (X)
+      }
+    >
+  }
 
-<
-  opset_import: [ "" : 10 ],
-  domain: "local",
-  doc_string: "Function square."
->
-square (x) => (y) {
-  y = Mul (x, x)
-}
-)ONNX";
+  <opset_import: [ "" : 10 ], domain: "local", doc_string: "Function square.">
+  square (x) => (y) {
+    y = Mul (x, x)
+  }
+  )ONNX";
 
   ModelProto model;
   InlineFunctions(model, code);
@@ -130,23 +112,23 @@ square (x) => (y) {
 
 TEST(FunctionInliner, Nested) {
   const char *code = R"ONNX(
-<ir_version: 8, opset_import: [ "" : 17, "local" : 1 ]>
-agraph (float[N] X) => (float[N] Y)
-{
-  Y = local.foo (X)
-}
+  <ir_version: 8, opset_import: [ "" : 17, "local" : 1 ]>
+  agraph (float[N] X) => (float[N] Y)
+  {
+    Y = local.foo (X)
+  }
 
-<opset_import: [ "" : 17, "local" : 1 ], domain: "local">
-foo (x) => (y) {
-  temp = Add(x, x)
-  y = local.bar(temp)
-}
+  <opset_import: [ "" : 17, "local" : 1 ], domain: "local">
+  foo (x) => (y) {
+    temp = Add(x, x)
+    y = local.bar(temp)
+  }
 
-<opset_import: [ "" : 17 ], domain: "local">
-bar (x) => (y) {
-  y = Mul (x, x)
-}
-)ONNX";
+  <opset_import: [ "" : 17 ], domain: "local">
+  bar (x) => (y) {
+    y = Mul (x, x)
+  }
+  )ONNX";
 
   ModelProto model;
   InlineFunctions(model, code);
@@ -158,20 +140,20 @@ bar (x) => (y) {
 
 TEST(FunctionInliner, Renaming) {
   const char *code = R"ONNX(
-<ir_version: 8, opset_import: [ "" : 17, "local" : 1 ]>
-agraph (float[N] X) => (float[N] Y)
-{
-  temp = local.foo (X)
-  temp__1 = Mul (temp, temp)
-  Y = Abs (temp__1)
-}
+  <ir_version: 8, opset_import: [ "" : 17, "local" : 1 ]>
+  agraph (float[N] X) => (float[N] Y)
+  {
+    temp = local.foo (X)
+    temp__1 = Mul (temp, temp)
+    Y = Abs (temp__1)
+  }
 
-<opset_import: [ "" : 17, "local" : 1 ], domain: "local">
-foo (x) => (y) {
-  temp = Add(x, x)
-  y = Neg (temp)
-}
-)ONNX";
+  <opset_import: [ "" : 17, "local" : 1 ], domain: "local">
+  foo (x) => (y) {
+    temp = Add(x, x)
+    y = Neg (temp)
+  }
+  )ONNX";
 
   ModelProto model;
   // Check that renaming handles accidental collision of names: when "temp" in "foo"
@@ -191,20 +173,20 @@ foo (x) => (y) {
 
 TEST(FunctionInliner, ValueInfoPropagation) {
   const char *code = R"ONNX(
-<ir_version: 10, opset_import: [ "" : 17, "local" : 1 ]>
-agraph (float[N] X) => (float[N] Y)
-{
-  result = local.foo (X)
-  Y = Abs (result)
-}
+  <ir_version: 10, opset_import: [ "" : 17, "local" : 1 ]>
+  agraph (float[N] X) => (float[N] Y)
+  {
+    result = local.foo (X)
+    Y = Abs (result)
+  }
 
-<opset_import: [ "" : 17, "local" : 1 ], domain: "local">
-foo (x) => (y)
-<float[N] temp> {
-  temp = Add(x, x)
-  y = Neg (temp)
-}
-)ONNX";
+  <opset_import: [ "" : 17, "local" : 1 ], domain: "local">
+  foo (x) => (y)
+  <float[N] temp> {
+    temp = Add(x, x)
+    y = Neg (temp)
+  }
+  )ONNX";
 
   ModelProto model;
   InlineFunctions(model, code);
@@ -226,19 +208,19 @@ foo (x) => (y)
 
 TEST(FunctionInliner, TwoCallsToSameFunction) {
   const char *code = R"ONNX(
-<ir_version: 8, opset_import: [ "" : 17, "local" : 1 ]>
-agraph (float[N] X) => (float[N] Y)
-{
-  temp = local.foo (X)
-  Y = local.foo (temp)
-}
+  <ir_version: 8, opset_import: [ "" : 17, "local" : 1 ]>
+  agraph (float[N] X) => (float[N] Y)
+  {
+    temp = local.foo (X)
+    Y = local.foo (temp)
+  }
 
-<opset_import: [ "" : 17, "local" : 1 ], domain: "local">
-foo (x) => (y) {
-  temp = Add(x, x)
-  y = Neg (temp)
-}
-)ONNX";
+  <opset_import: [ "" : 17, "local" : 1 ], domain: "local">
+  foo (x) => (y) {
+    temp = Add(x, x)
+    y = Neg (temp)
+  }
+  )ONNX";
 
   ModelProto model;
   // The call below will check that multiple assignments to same name does not happen
@@ -257,23 +239,23 @@ foo (x) => (y) {
 
 TEST(FunctionInliner, OpsetMismatch) {
   const char *code = R"ONNX(
-<ir_version: 8, opset_import: [ "" : 17, "local" : 1 ]>
-agraph (float[N] X) => (float[N] Y)
-{
-  temp = local.foo (X)
-  Y = local.bar (temp)
-}
+  <ir_version: 8, opset_import: [ "" : 17, "local" : 1 ]>
+  agraph (float[N] X) => (float[N] Y)
+  {
+    temp = local.foo (X)
+    Y = local.bar (temp)
+  }
 
-<opset_import: [ "" : 18], domain: "local">
-foo (x) => (y) {
-  y = Add(x, x)
-}
+  <opset_import: [ "" : 18], domain: "local">
+  foo (x) => (y) {
+    y = Add(x, x)
+  }
 
-<opset_import: [ "" : 17], domain: "local">
-bar (x) => (y) {
-  y = Add(x, x)
-}
-)ONNX";
+  <opset_import: [ "" : 17], domain: "local">
+  bar (x) => (y) {
+    y = Add(x, x)
+  }
+  )ONNX";
 
   ModelProto model;
   InlineFunctions(model, code);
@@ -292,23 +274,23 @@ bar (x) => (y) {
 
 TEST(FunctionInliner, SelectiveInlining) {
   const char *code = R"ONNX(
-<ir_version: 8, opset_import: [ "" : 17, "local" : 1 ]>
-agraph (float[N] X) => (float[N] Y)
-{
-  temp = local.foo (X)
-  Y = local.bar (temp)
-}
+  <ir_version: 8, opset_import: [ "" : 17, "local" : 1 ]>
+  agraph (float[N] X) => (float[N] Y)
+  {
+    temp = local.foo (X)
+    Y = local.bar (temp)
+  }
 
-<opset_import: [ "" : 17], domain: "local">
-foo (x) => (y) {
-  y = Add(x, x)
-}
+  <opset_import: [ "" : 17], domain: "local">
+  foo (x) => (y) {
+    y = Add(x, x)
+  }
 
-<opset_import: [ "" : 17, "local" : 1], domain: "local">
-bar (x) => (y) {
-  y = local.foo(x)
-}
-)ONNX";
+  <opset_import: [ "" : 17, "local" : 1], domain: "local">
+  bar (x) => (y) {
+    y = local.foo(x)
+  }
+  )ONNX";
 
   ModelProto model;
   inliner::FunctionIdVector to_inline = {{"local", "foo"}};
@@ -333,10 +315,10 @@ bar (x) => (y) {
 
 TEST(FunctionBuilder, AddInlinedCallBasic) {
   auto graph = ParseGraph(R"ONNX(
- test_graph (float x) => (float y) <float const_val = {2.0}> {
-   y = Add(x, const_val)
- }
- )ONNX");
+  test_graph (float x) => (float y) <float const_val = {2.0}> {
+    y = Add(x, const_val)
+  }
+  )ONNX");
 
   FunctionProto function;
   FunctionBuilder builder(function);

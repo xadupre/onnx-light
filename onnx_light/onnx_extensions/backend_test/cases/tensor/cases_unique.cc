@@ -110,6 +110,56 @@ void RegisterUniqueCases(std::vector<TestCase> &registry, TestMode mode) {
            });
   }
 
+  // Regression cases from onnx/onnx#8424 use explicit first-occurrence outputs.
+  {
+    NodeProto node;
+    node.set_op_type("Unique");
+    node.add_input("X");
+    node.add_output("Y");
+    AddAttribute<int64_t>(node, "sorted", 0);
+    Expect(registry, std::move(node), "test_cc_unique_not_sorted_single_output", {opset},
+           []() -> IoData {
+             return IoData{{Tensor::FromFloat("X", {6}, {2.f, 1.f, 1.f, 3.f, 4.f, 3.f})},
+                           {Tensor::FromFloat("Y", {4}, {2.f, 1.f, 3.f, 4.f})}};
+           });
+  }
+
+  {
+    NodeProto node = MakeUniqueNode(/*sorted_attr=*/0, /*axis_attr=*/std::nullopt);
+    Expect(registry, std::move(node), "test_cc_unique_not_sorted_without_axis_2d", {opset},
+           []() -> IoData {
+             return IoData{{Tensor::FromFloat("X", {2, 2}, {2.f, 1.f, 1.f, 3.f})},
+                           {Tensor::FromFloat("Y", {3}, {2.f, 1.f, 3.f}),
+                            Tensor::FromInt64("indices", {3}, {0, 1, 3}),
+                            Tensor::FromInt64("inverse_indices", {4}, {0, 1, 1, 2}),
+                            Tensor::FromInt64("counts", {3}, {1, 2, 1})}};
+           });
+  }
+
+  {
+    NodeProto node = MakeUniqueNode(/*sorted_attr=*/0, /*axis_attr=*/1);
+    Expect(registry, std::move(node), "test_cc_unique_not_sorted_with_axis", {opset},
+           []() -> IoData {
+             return IoData{{Tensor::FromFloat("X", {2, 3}, {3.f, 1.f, 3.f, 4.f, 2.f, 4.f})},
+                           {Tensor::FromFloat("Y", {2, 2}, {3.f, 1.f, 4.f, 2.f}),
+                            Tensor::FromInt64("indices", {2}, {0, 1}),
+                            Tensor::FromInt64("inverse_indices", {3}, {0, 1, 0}),
+                            Tensor::FromInt64("counts", {2}, {2, 1})}};
+           });
+  }
+
+  {
+    NodeProto node = MakeUniqueNode(/*sorted_attr=*/1, /*axis_attr=*/-1);
+    Expect(registry, std::move(node), "test_cc_unique_sorted_with_negative_axis_reordering",
+           {opset}, []() -> IoData {
+             return IoData{{Tensor::FromFloat("X", {2, 3}, {3.f, 1.f, 3.f, 4.f, 2.f, 4.f})},
+                           {Tensor::FromFloat("Y", {2, 2}, {1.f, 3.f, 2.f, 4.f}),
+                            Tensor::FromInt64("indices", {2}, {1, 0}),
+                            Tensor::FromInt64("inverse_indices", {3}, {1, 0, 1}),
+                            Tensor::FromInt64("counts", {2}, {1, 2})}};
+           });
+  }
+
   // test_cc_unique_sorted_without_axis — 1-D float input, default sorted=1.
   {
     NodeProto node = MakeUniqueNode(/*sorted_attr=*/std::nullopt, /*axis_attr=*/std::nullopt);

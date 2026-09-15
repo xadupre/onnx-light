@@ -268,8 +268,9 @@ NodeProto MakeIf(const std::string &condition, const GraphProto &then_branch,
   node.set_op_type("If");
   node.add_input(condition);
   node.add_output("y");
-  for (const auto &branch :
-       {std::make_pair("then_branch", &then_branch), std::make_pair("else_branch", &else_branch)}) {
+  const std::pair<const char *, const GraphProto *> branches[] = {{"then_branch", &then_branch},
+                                                                  {"else_branch", &else_branch}};
+  for (const auto &branch : branches) {
     auto *attr = node.add_attribute();
     attr->set_name(branch.first);
     attr->set_type(AttributeProto::AttributeType::GRAPH);

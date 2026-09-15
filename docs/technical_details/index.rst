@@ -1,11 +1,10 @@
 .. _l-technical-details:
-.. _l-design-technical:
 
 Technical
 =========
 
-These pages describe implementation details and compare the execution
-strategies used by ``onnx-light`` and other runtimes.
+These pages goes through technical details,
+implementations...
 
 .. toctree::
     :maxdepth: 1

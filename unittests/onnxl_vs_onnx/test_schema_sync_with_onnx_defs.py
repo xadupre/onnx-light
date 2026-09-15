@@ -116,7 +116,21 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
                 # file and line are build-environment-specific and intentionally not compared
                 self.assertEqual(schema.non_deterministic, lights.non_deterministic)
                 self.assertEqual(schema.support_level.name, lights.support_level.name)
-                self.assertEqual(schema.doc, lights.doc)
+                onnx_doc = schema.doc
+                if key == ("", "GroupNormalization", 21):
+                    # Installed ONNX may predate the documentation fix in onnx#8428.
+                    onnx_doc = onnx_doc.replace(
+                        "`scale` and `bias` should be specified for each channel. The number of\n"
+                        "groups `num_groups` should be divisible by the number of channels "
+                        "so that there are\n"
+                        "an equal number of channels per group.",
+                        "`scale` and `bias` should be specified for each channel. "
+                        "The number of channels\n"
+                        "should be divisible by `num_groups` so that there are "
+                        "an equal number of channels\n"
+                        "per group.",
+                    )
+                self.assertEqual(onnx_doc, lights.doc)
 
     def test_registered_onnx_ops_match_onnx_match_input_output_doc(self):
         light_hist = onnx_light.onnx.defs.get_all_schemas_with_history()

@@ -68,6 +68,15 @@ class TestDefsLookup(ExtTestCase):
                     self.assertEqual(schema.name, "Abs")
                     self.assertEqual(schema.domain, defs.ONNX_DOMAIN)
 
+    def test_group_normalization_divisibility_doc(self):
+        schema = defs.get_schema("GroupNormalization", 21)
+        self.assertEqual(schema.since_version, 21)
+        self.assertIn(
+            "The number of channels should be divisible by `num_groups` "
+            "so that there are an equal number of channels per group.",
+            " ".join(schema.doc.split()),
+        )
+
     def test_schema_lookup_error(self):
         with self.assertRaises(defs.SchemaError):
             defs.get_schema("DefinitelyUnknownOperator123")

@@ -20,6 +20,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Added portable optimizer patterns for linear algebra, convolution, normalization,
   collection, padding, activation, STFT, gather propagation, shape simplification, and
   linear attention, together with peak-memory estimation for the latter.
+- Added context-local kernel factory registration through `RuntimeContext::RegisterKernelFn`,
+  with local factories overriding global registrations and inheriting into child contexts.
+- Added kernel-usage recording to `RuntimeContext`, shared across subgraph and function
+  contexts, to track backend kernel selections independently of custom registrations.
+- Added opt-in bounded nested parallelism in `CpuExecutor`, allowing nested regions to
+  borrow idle workers from the same pool without oversubscribing its participant limit.
 
 ### Improvements
 
@@ -48,6 +54,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   and kernel tuning, preferring process-visible physical cores and respecting CPU affinity.
 - Reduced warm thread-pool dispatch contention by publishing work without requiring
   spinning workers to acquire the state mutex.
+- Unified global and context-local kernel lifetimes: each resolved node retains its
+  session-owned kernel across runs and input-shape changes. Replacing or removing a
+  registration affects only future resolutions.
+- Separated the `parallel.minimum_elements` serial/parallel crossover threshold from
+  block grain size, which is derived from the admitted participant count.
 
 ### Fixes
 
@@ -78,6 +89,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   be reacquired in the child.
 - Persisted the calibration execution descriptor, including the effective thread count,
   in the kernel-tuning cache.
+- Excluded calibration groups whose reference and candidate use the same execution path,
+  including single-task `Gemm` cases, and selected crossover thresholds from measured
+  stable wins rather than extrapolating below measured sizes.
+- Corrected parallel-region profiling to count threads that actually execute work rather
+  than reporting the planned participant count.
+- Validated `AffineGrid` runtime dimensions and checked allocation sizes before constructing
+  output tensors.
+- Rejected invalid `TreeEnsemble` topology before execution, with validation also integrated
+  into shape inference, model verification, and native `GraphBuilder`.
 
 ### Documentation & CI
 
@@ -99,6 +119,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Added high-arity C++ backend cases for five-input `Max`, `Min`, `Mean`, `Sum`, and
   `Concat`, three-input `Einsum`, and five-output `Split`, with end-to-end model coverage
   for `Einsum` and `Split`.
+- Regenerated the published x86-64 calibration profile and added regression checks for
+  compatibility with the current tuning schemas.
+- Added `TreeEnsemble` `SOFTMAX_ZERO` backend regression coverage.
+- Documented custom-kernel registration and lifetime guarantees, bounded nested
+  parallelism, and measured calibration crossover bounds.
 
 ## [0.1.21] – 2026-08-30
 

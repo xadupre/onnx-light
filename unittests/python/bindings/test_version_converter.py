@@ -10,7 +10,7 @@ import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.checker as checker
 import onnx_light.onnx.version_converter as version_converter
-from onnx_light.ext_test_case import ExtTestCase
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 
 
 class TestVersionConverter(ExtTestCase):
@@ -55,6 +55,120 @@ class TestVersionConverter(ExtTestCase):
             self._converted(graph, oh.make_operatorsetid("", 8), 2)
 
         self.assertRaises(RuntimeError, test)
+
+    @staticmethod
+    def _group_normalization_model(
+        shape: tuple[int | str | None, ...],
+        dtype: int = onnxl.TensorProto.FLOAT,
+        stash_type: int | None = None,
+        num_groups: int = 2,
+    ) -> onnxl.ModelProto:
+        """Builds an opset-21 GroupNormalization model."""
+        attributes = {"epsilon": 1e-4, "num_groups": num_groups}
+        if stash_type is not None:
+            attributes["stash_type"] = stash_type
+        graph = oh.make_graph(
+            [oh.make_node("GroupNormalization", ["X", "scale", "bias"], ["Y"], **attributes)],
+            "group_normalization",
+            [
+                oh.make_tensor_value_info("X", dtype, shape),
+                oh.make_tensor_value_info("scale", dtype, [4]),
+                oh.make_tensor_value_info("bias", dtype, [4]),
+            ],
+            [oh.make_tensor_value_info("Y", dtype, shape)],
+        )
+        return oh.make_model(graph, opset_imports=[oh.make_operatorsetid("", 21)])
+
+    def test_group_normalization_21_20_matches_reference(self) -> None:
+        onnx = import_or_skip("onnx")
+        ReferenceEvaluator = import_or_skip("onnx.reference", "ReferenceEvaluator")
+        cases = [
+            ((2, 4), onnxl.TensorProto.FLOAT, None, 1e-5),
+            ((2, 4, 3, 2, 2), onnxl.TensorProto.FLOAT, onnxl.TensorProto.FLOAT, 1e-5),
+            ((2, 4, 3), onnxl.TensorProto.DOUBLE, onnxl.TensorProto.DOUBLE, 1e-12),
+            ((2, 4, 3), onnxl.TensorProto.FLOAT16, onnxl.TensorProto.FLOAT16, 2e-3),
+            ((2, 4, 3), onnxl.TensorProto.BFLOAT16, None, 1e-2),
+            ((2, 4, 3), onnxl.TensorProto.FLOAT16, None, 2e-3),
+            ((2, 4, 3), onnxl.TensorProto.DOUBLE, None, 1e-5),
+            (("N", 4, "H", "W"), onnxl.TensorProto.FLOAT, None, 1e-5),
+            ((None, 4, None), onnxl.TensorProto.FLOAT, None, 1e-5),
+        ]
+        for shape, dtype, stash_type, tolerance in cases:
+            with self.subTest(shape=shape, dtype=dtype, stash_type=stash_type):
+                model = self._group_normalization_model(shape, dtype, stash_type)
+                converted = version_converter.convert_version(model, 20)
+                checker.check_model(converted, full_check=True)
+                self.assertEqual(converted.opset_import[0].version, 20)
+                op_types = {node.op_type for node in converted.graph.node}
+                self.assertNotIn("GroupNormalization", op_types)
+                self.assertIn("InstanceNormalization", op_types)
+
+                np_dtype = oh.tensor_dtype_to_np_dtype(dtype)
+                runtime_shape = tuple(d if isinstance(d, int) else 2 for d in shape)
+                rng = np.random.default_rng(0)
+                feeds = {
+                    "X": rng.normal(size=runtime_shape).astype(np_dtype),
+                    "scale": rng.normal(size=(4,)).astype(np_dtype),
+                    "bias": rng.normal(size=(4,)).astype(np_dtype),
+                }
+                expected = ReferenceEvaluator(
+                    onnx.load_model_from_string(model.SerializeToString())
+                ).run(None, feeds)[0]
+                actual = ReferenceEvaluator(
+                    onnx.load_model_from_string(converted.SerializeToString())
+                ).run(None, feeds)[0]
+                self.assertEqual(actual.dtype, feeds["X"].dtype)
+                self.assertEqual(actual.shape, runtime_shape)
+                np.testing.assert_allclose(
+                    actual.astype(np.float64),
+                    expected.astype(np.float64),
+                    rtol=tolerance,
+                    atol=tolerance,
+                )
+
+    def test_group_normalization_21_20_supports_symbolic_dimensions(self) -> None:
+        model = self._group_normalization_model(("N", 4, "H", "W"))
+        converted = version_converter.convert_version(model, 20)
+        checker.check_model(converted, full_check=True)
+        self.assertNotIn("GroupNormalization", {node.op_type for node in converted.graph.node})
+        self.assertEqual(converted.graph.output[0].name, "Y")
+        self.assertEqual(
+            [d.dim_param for d in converted.graph.output[0].type.tensor_type.shape.dim],
+            ["N", "", "H", "W"],
+        )
+
+    def test_group_normalization_21_20_rejects_unsupported_types(self) -> None:
+        for dtype, stash_type, message in [
+            (
+                onnxl.TensorProto.FLOAT,
+                onnxl.TensorProto.BFLOAT16,
+                r"stash_type .* cannot be represented with InstanceNormalization",
+            ),
+            (
+                onnxl.TensorProto.FLOAT,
+                onnxl.TensorProto.INT32,
+                r"stash_type .* cannot be represented with InstanceNormalization",
+            ),
+            (onnxl.TensorProto.INT32, None, r"input type .* is not supported"),
+        ]:
+            with self.subTest(dtype=dtype, stash_type=stash_type):
+                model = self._group_normalization_model((2, 4, 3), dtype, stash_type)
+                with self.assertRaisesRegex(RuntimeError, message):
+                    version_converter.convert_version(model, 20)
+
+    def test_group_normalization_21_20_rejects_nonpositive_groups(self) -> None:
+        for num_groups in (0, -1):
+            with self.subTest(num_groups=num_groups):
+                model = self._group_normalization_model((2, 4, 3), num_groups=num_groups)
+                with self.assertRaisesRegex(RuntimeError, "num_groups must be greater than zero"):
+                    version_converter.convert_version(model, 20)
+
+    def test_group_normalization_21_20_rejects_missing_inputs(self) -> None:
+        model = self._group_normalization_model((2, 4, 3))
+        model.graph.node[0].input.clear()
+        model.graph.node[0].input.extend(["X", "scale"])
+        with self.assertRaisesRegex(RuntimeError, "must have exactly 3 inputs"):
+            version_converter.convert_version(model, 20)
 
     # Test 2: Backwards Compatible Conversion (No Adaptations): Add: 3 -> 2
     def test_backwards_compatible(self) -> None:

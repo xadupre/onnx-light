@@ -286,7 +286,7 @@ public:
 
 /// Reference implementation of ``LayerNormalization`` (opset 17).
 ///
-/// Normalizes a FLOAT input ``X`` of arbitrary rank ``r`` along the last
+/// Normalizes a FLOAT, FLOAT16 or BFLOAT16 input ``X`` of arbitrary rank ``r`` along the last
 /// ``r - axis`` dimensions, then applies a per-element affine transform
 /// using ``Scale`` and the optional ``B`` (both broadcastable to the
 /// normalized shape ``X.shape[axis:]``):
@@ -298,7 +298,9 @@ public:
 ///
 /// In addition to the normalized output ``Y``, the kernel also returns the
 /// per-row ``Mean`` and ``InvStdDev`` tensors. Their shape mirrors ``X``
-/// with the trailing ``r - axis`` dimensions collapsed to 1.
+/// with the trailing ``r - axis`` dimensions collapsed to 1. Both statistics
+/// use FLOAT stash precision. Half inputs are promoted before normalization,
+/// then rounded back to the input dtype before the affine stage.
 class LayerNormalization : public KernelBase {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:LayerNormalization";
@@ -327,7 +329,7 @@ public:
 
 /// Reference implementation of ``RMSNormalization`` (opset 23).
 ///
-/// Normalizes a FLOAT input ``X`` of arbitrary rank ``r`` by dividing it by
+/// Normalizes a FLOAT, FLOAT16 or BFLOAT16 input ``X`` of arbitrary rank ``r`` by dividing it by
 /// the root-mean-square computed over the last ``r - axis`` dimensions, then
 /// multiplies the normalized result by ``scale`` (with unidirectional
 /// broadcasting):
@@ -336,6 +338,8 @@ public:
 ///
 /// where ``normalized_axes = [axis, ..., r - 1]``. ``scale`` must be
 /// broadcastable to the normalized shape (i.e. ``X.shape[axis:]``).
+/// Half inputs are promoted to FLOAT before normalization, then rounded back
+/// to the input dtype before multiplying by ``scale``.
 class RMSNormalization : public KernelBase {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:RMSNormalization";

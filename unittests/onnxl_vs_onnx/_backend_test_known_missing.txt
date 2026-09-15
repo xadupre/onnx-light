@@ -22,6 +22,3 @@ attention_4d_causal_bf16
 attention_4d_causal_fp16
 attention_4d_causal_padded_kv_bf16
 attention_4d_padded_kv_bf16
-
-# --- LpNormalization: new upstream negative-value L1 case not yet ported ---
-l1normalization_negative_values

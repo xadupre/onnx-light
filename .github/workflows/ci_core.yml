@@ -229,8 +229,10 @@ jobs:
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ${{ matrix.os }}
     # Cold builds can take 60 minutes on Windows and 30 minutes on macOS.
-    # Reserve another 30 minutes for tests and build-time variance.
-    timeout-minutes: ${{ matrix.os == 'windows-latest' && 90 || 60 }}
+    # Reserve extra headroom for tests and build-time variance, since a
+    # partial sccache miss on Windows can push the cold-build time close to
+    # the previous 90-minute limit.
+    timeout-minutes: ${{ matrix.os == 'windows-latest' && 120 || 60 }}
     permissions:
       contents: read
       id-token: write
@@ -337,10 +339,11 @@ jobs:
     # Ninja honors the compiler launcher for MSVC, unlike the Visual Studio
     # platform generator previously used here. This lets the x86 build share
     # the same persistent sccache strategy as the x64 Windows build. The
-    # sccache speedup only shows up once the cache is warm; the first (cold)
-    # build after this change still pays the full compile cost, so keep the
-    # same generous 60-minute timeout as the x64 Windows job to absorb that.
-    timeout-minutes: 60
+    # sccache speedup only shows up once the cache is warm; when the cache
+    # does not trigger enough (e.g. a cold or partially invalidated cache),
+    # the build can approach the previous 60-minute limit, so keep a
+    # generous timeout to absorb that variance.
+    timeout-minutes: 90
     permissions:
       contents: read
       id-token: write

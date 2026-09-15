@@ -1563,7 +1563,7 @@ LightOpSchema MakeLayerNormalizationSchema(int since_version) {
        "Type of Mean and InvStdDev. This also specifies stage one's computation precision.",
        AttributeType::INT, /*required=*/false, static_cast<int64_t>(1)},
   };
-  return LightOpSchema(
+  LightOpSchema schema(
       "LayerNormalization", kOnnxDomain, since_version, MakeLayerNormalizationDoc(since_version),
       std::move(inputs), std::move(outputs),
       {
@@ -1573,6 +1573,8 @@ LightOpSchema MakeLayerNormalizationSchema(int since_version) {
           {"U", {TensorType::kFloat, TensorType::kBfloat16}, kLayerNormalizationUConstraintDesc},
       },
       std::move(attrs), /*has_function_implementation=*/true);
+  schema.set_min_output(1);
+  return schema;
 }
 
 // --- RMSNormalization --------------------------------------------------------

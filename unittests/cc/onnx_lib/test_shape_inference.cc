@@ -1,6 +1,7 @@
 #include "onnx.h"
 #include "onnx_lib/defs/shape_inference.h"
 #include "onnx_lib/shape_inference/implementation.h"
+#include "onnx_manipulations/parser.h"
 #include <gtest/gtest.h>
 #include <stdexcept>
 #include <tuple>
@@ -74,7 +75,100 @@ template <class Type> void MergeInShapeInfo(const Type &source, Type &target) {
   }
 }
 
+void DoInferencingTest(bool use_scan_opset8) {
+  RegisterAllOnnxOperatorSchemas();
+  GraphProto subgraph;
+  OnnxParser parser(R"ONNX(
+  scan_body (float[2] loop_state_in, float[2] scan_in) => (float[] loop_state_out, float[] scan_out) {
+    [loop_state_identity] loop_state_out = Identity(loop_state_in)
+    [scan_in_out_identity] scan_out = Identity(scan_in)
+  }
+  )ONNX");
+  auto status = parser.Parse(subgraph);
+  ASSERT_TRUE(status.IsOK()) << status.ErrorMessage();
+  ASSERT_TRUE(parser.EndOfInput()) << "Extra unparsed input unexpected.";
+
+  TypeProto simple_tensor = subgraph.input(0).type();
+  TypeProto simple_tensor_no_shape = subgraph.output(0).type();
+  EXPECT_FALSE(simple_tensor_no_shape.tensor_type().has_shape());
+
+  const std::unordered_map<std::string, int> opset_imports{{ONNX_DOMAIN, 8}};
+  const std::unordered_map<std::string, TypeProto *> outer_scope_value_types;
+  shape_inference::SymbolTableImpl symbol_table;
+  symbol_table.addFromGraph(subgraph);
+  shape_inference::GraphInferenceContext graph_context(outer_scope_value_types, opset_imports,
+                                                       &symbol_table);
+  shape_inference::GraphInferencerImpl graph_inferencer(subgraph, graph_context);
+  auto output = graph_inferencer.doInferencing({&simple_tensor, &simple_tensor}, {});
+  ASSERT_EQ(output.size(), 2U);
+
+  auto check_type = [](const TypeProto &type, const TypeProto &expected) {
+    ASSERT_TRUE(type.has_tensor_type());
+    const auto &tensor = type.tensor_type();
+    const auto &expected_tensor = expected.tensor_type();
+    EXPECT_EQ(tensor.elem_type(), expected_tensor.elem_type());
+    ASSERT_TRUE(tensor.has_shape());
+    ASSERT_EQ(tensor.shape().dim_size(), expected_tensor.shape().dim_size());
+    for (int i = 0; i < tensor.shape().dim_size(); ++i) {
+      EXPECT_EQ(tensor.shape().dim(i).dim_value(), expected_tensor.shape().dim(i).dim_value());
+    }
+  };
+  ASSERT_NE(output[0], nullptr);
+  ASSERT_NE(output[1], nullptr);
+  check_type(*output[0], simple_tensor);
+  check_type(*output[1], simple_tensor);
+
+  NodeProto scan;
+  scan.set_op_type("Scan");
+  auto *num_scan_inputs = scan.add_attribute();
+  num_scan_inputs->set_name("num_scan_inputs");
+  num_scan_inputs->set_type(AttributeProto::INT);
+  num_scan_inputs->set_i(1);
+  auto *body = scan.add_attribute();
+  body->set_name("body");
+  body->set_type(AttributeProto::GRAPH);
+  *body->mutable_g() = subgraph;
+  if (use_scan_opset8) {
+    *scan.add_input() = "";
+  }
+  *scan.add_input() = "loop_state_start";
+  *scan.add_input() = "scan_op_in";
+  *scan.add_output() = "loop_state_final";
+  *scan.add_output() = "scan_op_out";
+
+  TypeProto loop_state_tensor = simple_tensor_no_shape;
+  auto *shape = loop_state_tensor.mutable_tensor_type()->mutable_shape();
+  if (use_scan_opset8) {
+    shape->add_dim()->set_dim_value(1); // batch size
+  }
+  shape->add_dim()->set_dim_value(2); // input size
+
+  TypeProto scan_tensor = simple_tensor_no_shape;
+  shape = scan_tensor.mutable_tensor_type()->mutable_shape();
+  if (use_scan_opset8) {
+    shape->add_dim()->set_dim_value(1); // batch size
+  }
+  shape->add_dim()->set_dim_value(1); // sequence length
+  shape->add_dim()->set_dim_value(2); // input size
+
+  const std::unordered_map<std::string, TypeProto *> value_types{
+      {"loop_state_start", &loop_state_tensor}, {"scan_op_in", &scan_tensor}};
+  ShapeInferenceOptions options{false, 0, false};
+  shape_inference::InferenceContextImpl context(scan, value_types, {}, {}, options, nullptr,
+                                                &graph_context);
+  const auto *schema = OpSchemaRegistry::Schema("Scan", use_scan_opset8 ? 8 : 9, ONNX_DOMAIN);
+  ASSERT_NE(schema, nullptr);
+  schema->GetTypeAndShapeInferenceFunction()(context);
+  ASSERT_EQ(context.getNumOutputs(), 2U);
+  check_type(*context.getOutputType(0), loop_state_tensor);
+  check_type(*context.getOutputType(1), scan_tensor);
+}
+
 } // namespace
+
+TEST(GraphInferencerImplTest, Scan8BasicTest) { DoInferencingTest(true); }
+
+TEST(GraphInferencerImplTest, Scan9BasicTest) { DoInferencingTest(false); }
 
 TEST(onnx_shape_inference, mergeShapeInfo_HasShape) {
   TypeProto::Tensor source_tensor;

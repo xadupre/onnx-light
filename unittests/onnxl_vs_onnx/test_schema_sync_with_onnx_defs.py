@@ -130,6 +130,22 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
                         "an equal number of channels\n"
                         "per group.",
                     )
+                if key == ("ai.onnx.ml", "Normalizer", 1):
+                    # Installed ONNX may predate the documentation fix in onnx#8451.
+                    onnx_doc = onnx_doc.replace(
+                        "Normalize the input.  There are three normalization modes, "
+                        "which have the corresponding formulas,\n"
+                        "    defined using element-wise infix operators '/' and '^' "
+                        "and tensor-wide functions 'max' and 'sum':<br>",
+                        "Normalize the input. There are three normalization modes, "
+                        "which have the corresponding formulas.\n"
+                        "    The function 'abs' and operator '^' are element-wise, "
+                        "while 'max' and 'sum' reduce along the normalization axis:<br>",
+                    )
+                    onnx_doc = onnx_doc.replace("Y = X / sum(X)", "Y = X / sum(abs(X))")
+                    onnx_doc = onnx_doc.replace(
+                        "Y = sqrt(X^2 / sum(X^2)}", "Y = X / sqrt(sum(X^2))"
+                    )
                 self.assertEqual(onnx_doc, lights.doc)
 
     def test_registered_onnx_ops_match_onnx_match_input_output_doc(self):

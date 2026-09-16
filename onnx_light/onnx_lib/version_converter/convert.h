@@ -40,6 +40,8 @@
 #include "onnx_lib/version_converter/adapters/no_previous_version.h"
 #include "onnx_lib/version_converter/adapters/optional_ops.h"
 #include "onnx_lib/version_converter/adapters/pad_10_11.h"
+#include "onnx_lib/version_converter/adapters/pad_18_17.h"
+#include "onnx_lib/version_converter/adapters/pad_19_18.h"
 #include "onnx_lib/version_converter/adapters/q_dq_21_20.h"
 #include "onnx_lib/version_converter/adapters/reduce_log_sum_27_28.h"
 #include "onnx_lib/version_converter/adapters/reshape_4_5.h"
@@ -515,7 +517,12 @@ public:
     registerAdapter(std::make_unique<Softmax_12_13>("LogSoftmax"));
 
     /******** 13 -> 12 ********/
+    const std::vector<TensorProto_DataType> pad_11_unallowed_types = {
+        TensorProto_DataType_BFLOAT16, TensorProto_DataType_BOOL, TensorProto_DataType_COMPLEX64,
+        TensorProto_DataType_COMPLEX128, TensorProto_DataType_STRING};
     registerAdapter(std::make_unique<CompatibleAdapter>("Constant", OpSetID(13), OpSetID(12)));
+    registerAdapter(
+        std::make_unique<TypeRestriction>("Pad", OpSetID(13), OpSetID(12), pad_11_unallowed_types));
     registerAdapter(std::make_unique<AxesInputToAttribute>("ReduceSum", OpSetID(13), OpSetID(12)));
     registerAdapter(std::make_unique<AxesInputToAttribute>("Squeeze", OpSetID(13), OpSetID(12)));
     registerAdapter(std::make_unique<AxesInputToAttribute>("Unsqueeze", OpSetID(13), OpSetID(12)));
@@ -628,6 +635,7 @@ public:
     registerAdapter(std::make_unique<AxesInputToAttribute>("ReduceProd", OpSetID(18), OpSetID(17)));
     registerAdapter(
         std::make_unique<AxesInputToAttribute>("ReduceSumSquare", OpSetID(18), OpSetID(17)));
+    registerAdapter(std::make_unique<Pad_18_17>());
     registerAdapter(std::make_unique<Resize_18_17>());
     registerAdapter(std::make_unique<Scatter_18_17>("ScatterElements"));
     registerAdapter(std::make_unique<Scatter_18_17>("ScatterND"));
@@ -678,7 +686,7 @@ public:
         std::make_unique<TypeRestriction>("If", OpSetID(19), OpSetID(18), float8_unallowed_types));
     registerAdapter(std::make_unique<TypeRestriction>("Loop", OpSetID(19), OpSetID(18),
                                                       float8_unallowed_types));
-    registerAdapter(std::make_unique<CompatibleAdapter>("Pad", OpSetID(19), OpSetID(18)));
+    registerAdapter(std::make_unique<Pad_19_18>());
     registerAdapter(std::make_unique<TypeRestriction>("Reshape", OpSetID(19), OpSetID(18),
                                                       float8_unallowed_types));
     registerAdapter(std::make_unique<CompatibleAdapter>("Resize", OpSetID(19), OpSetID(18)));

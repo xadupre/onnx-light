@@ -136,16 +136,17 @@ void RegisterUniqueCases(std::vector<TestCase> &registry, TestMode mode) {
            });
   }
 
-  {
-    NodeProto node = MakeUniqueNode(/*sorted_attr=*/0, /*axis_attr=*/1);
-    Expect(registry, std::move(node), "test_cc_unique_not_sorted_with_axis", {opset},
-           []() -> IoData {
-             return IoData{{Tensor::FromFloat("X", {2, 3}, {3.f, 1.f, 3.f, 4.f, 2.f, 4.f})},
-                           {Tensor::FromFloat("Y", {2, 2}, {3.f, 1.f, 4.f, 2.f}),
-                            Tensor::FromInt64("indices", {2}, {0, 1}),
-                            Tensor::FromInt64("inverse_indices", {3}, {0, 1, 0}),
-                            Tensor::FromInt64("counts", {2}, {2, 1})}};
-           });
+  for (int64_t axis : {1, -1}) {
+    NodeProto node = MakeUniqueNode(/*sorted_attr=*/0, /*axis_attr=*/axis);
+    const std::string name = axis == 1 ? "test_cc_unique_not_sorted_with_axis"
+                                       : "test_cc_unique_not_sorted_with_negative_axis";
+    Expect(registry, std::move(node), name, {opset}, []() -> IoData {
+      return IoData{{Tensor::FromFloat("X", {2, 3}, {3.f, 1.f, 3.f, 4.f, 2.f, 4.f})},
+                    {Tensor::FromFloat("Y", {2, 2}, {3.f, 1.f, 4.f, 2.f}),
+                     Tensor::FromInt64("indices", {2}, {0, 1}),
+                     Tensor::FromInt64("inverse_indices", {3}, {0, 1, 0}),
+                     Tensor::FromInt64("counts", {2}, {2, 1})}};
+    });
   }
 
   {

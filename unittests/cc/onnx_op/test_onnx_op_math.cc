@@ -2,10 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_lib/defs/schema.h"
 #include "onnx_op/operator_sets_math.h"
 
 #include <gtest/gtest.h>
 
+#include <string>
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -20,6 +22,30 @@ FindByVersion(const std::vector<core::schema::LightOpSchema> &schemas, int versi
     }
   }
   return nullptr;
+}
+
+TEST(OnnxOpMathRegistrationTest, DivIntegerTruncationDocumentation) {
+  const std::string clarification =
+      "For integer inputs, the result is computed using truncating division "
+      "(rounding toward zero). For example, `-11 / 3` yields `-3`.";
+  for (const char *name : {"Div", "Add", "Sub", "Mul"}) {
+    SCOPED_TRACE(name);
+    const auto schemas = onnx_op::math::GetAllOnnxOpMathSchemasWithHistory(name);
+    for (int version : {1, 6, 7, 13, 14}) {
+      SCOPED_TRACE(version);
+      const auto *light = FindByVersion(schemas, version);
+      const auto *full = OpSchemaRegistry::Schema(name, version, ONNX_DOMAIN);
+      ASSERT_NE(light, nullptr);
+      ASSERT_NE(full, nullptr);
+      if (std::string(name) == "Div" && version >= 6) {
+        EXPECT_NE(light->doc().find(clarification), std::string::npos);
+        EXPECT_NE(std::string(full->doc()).find(clarification), std::string::npos);
+      } else {
+        EXPECT_EQ(light->doc().find(clarification), std::string::npos);
+        EXPECT_EQ(std::string(full->doc()).find(clarification), std::string::npos);
+      }
+    }
+  }
 }
 
 TEST(OnnxOpMathRegistrationTest, ReturnsOpset28SchemasWithoutShapeInference) {

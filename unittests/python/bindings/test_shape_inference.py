@@ -1,4 +1,5 @@
 # source: https://github.com/onnx/onnx/blob/main/onnx/test/shape_inference_test.py
+import gc
 import unittest
 from typing import Any
 from onnx_light.ext_test_case import ExtTestCase
@@ -14,6 +15,93 @@ class TestShapeInference(ExtTestCase):
     @classmethod
     def setUpClass(cls):
         defs.register_onnx_operator_set_schema()
+
+    def test_custom_schema_shape_inference_callback_lifetime(self) -> None:
+        """Retains a callback registered from a short-lived Python scope."""
+        op_type = "CallbackLifetime"
+        domain = "com.example"
+
+        def register_schema() -> None:
+            schema = defs.OpSchema(
+                op_type,
+                domain,
+                1,
+                inputs=[defs.OpSchema.FormalParameter("input", "tensor(float)")],
+                outputs=[defs.OpSchema.FormalParameter("output", "tensor(float)")],
+            )
+
+            def infer(ctx: shape_inference.InferenceContext) -> None:
+                ctx.set_output_type(0, ctx.get_input_type(0))
+
+            self.assertIs(schema.set_type_and_shape_inference_function(infer), schema)
+            defs.register_schema(schema)
+
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node(op_type, ["input"], ["output"], domain=domain)],
+                "g",
+                [oh.make_tensor_value_info("input", onnxl.TensorProto.FLOAT, [1, 3])],
+                [oh.make_tensor_value_info("output", onnxl.TensorProto.FLOAT, None)],
+            ),
+            opset_imports=[oh.make_opsetid("", 17), oh.make_opsetid(domain, 1)],
+        )
+        register_schema()
+        self.addCleanup(defs.deregister_schema, op_type, 1, domain)
+        gc.collect()
+        inferred = shape_inference.infer_shapes(model, strict_mode=True)
+        output_type = inferred.graph.output[0].type.tensor_type
+        self.assertEqual(output_type.elem_type, onnxl.TensorProto.FLOAT)
+        self.assertEqual([dim.dim_value for dim in output_type.shape.dim], [1, 3])
+
+    def test_custom_schema_inference_context(self) -> None:
+        """Copies input types and rejects out-of-range context indices."""
+        schema = defs.OpSchema(
+            "CallbackContext",
+            "com.example",
+            1,
+            inputs=[defs.OpSchema.FormalParameter("input", "tensor(float)")],
+            outputs=[defs.OpSchema.FormalParameter("output", "tensor(float)")],
+        )
+
+        def infer(ctx: shape_inference.InferenceContext) -> None:
+            self.assertIsInstance(ctx, shape_inference.InferenceContext)
+            with self.assertRaisesRegex(RuntimeError, "Input 1 is out of bounds"):
+                ctx.get_input_type(1)
+            input_type = ctx.get_input_type(0)
+            with self.assertRaisesRegex(RuntimeError, "Output 1 is out of bounds"):
+                ctx.set_output_type(1, input_type)
+            input_type.tensor_type.shape.dim[0].dim_value = 5
+            self.assertEqual(ctx.get_input_type(0).tensor_type.shape.dim[0].dim_value, 1)
+            self.assertTrue(ctx.set_output_type(0, input_type))
+
+        schema.set_type_and_shape_inference_function(infer)
+        result = shape_inference.infer_node_outputs(
+            schema,
+            oh.make_node(schema.name, ["input"], ["output"], domain=schema.domain),
+            {"input": oh.make_tensor_type_proto(onnxl.TensorProto.FLOAT, [1, 3])},
+        )
+        self.assertEqual(
+            [dim.dim_value for dim in result["output"].tensor_type.shape.dim], [5, 3]
+        )
+
+    def test_custom_schema_inference_callback_error(self) -> None:
+        """Propagates Python callback errors through native inference."""
+        schema = defs.OpSchema(
+            "CallbackError",
+            "com.example",
+            1,
+            inputs=[defs.OpSchema.FormalParameter("input", "tensor(float)")],
+        )
+
+        def infer(ctx: shape_inference.InferenceContext) -> None:
+            self.assertIsNone(ctx.get_input_type(0))
+            raise ValueError("custom inference failed")
+
+        schema.set_type_and_shape_inference_function(infer)
+        with self.assertRaisesRegex(ValueError, "custom inference failed"):
+            shape_inference.infer_node_outputs(
+                schema, oh.make_node(schema.name, ["input"], [], domain=schema.domain), {}
+            )
 
     def _infer_output(
         self,

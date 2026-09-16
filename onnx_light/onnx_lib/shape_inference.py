@@ -6,6 +6,7 @@ from ..onnx_py import _onnxpyprotolib as _C  # type: ignore
 _shape_inference = _C.shape_inference  # type: ignore
 
 InferenceError = _shape_inference.InferenceError
+InferenceContext = _shape_inference.InferenceContext
 
 
 def infer_function_output_types(function, input_types: list, attributes: list) -> list:

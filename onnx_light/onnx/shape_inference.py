@@ -3,5 +3,6 @@ from ..onnx_lib.shape_inference import (  # noqa: F401
     infer_node_outputs,
     infer_shapes,
     infer_shapes_path,
+    InferenceContext,
     InferenceError,
 )

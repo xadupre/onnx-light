@@ -104,6 +104,36 @@ void RegisterGatherElementsCases(std::vector<TestCase> &registry, TestMode mode)
              return IoData{{std::move(data), std::move(indices)}, {std::move(output)}};
            });
   }
+
+  {
+    Expect(registry, MakeGatherElementsNode(1), "test_cc_gather_elements_subshape_axis_1", {opset},
+           []() -> IoData {
+             Tensor data = Tensor::FromInt64("", {2, 3}, {10, 11, 12, 20, 21, 22});
+             Tensor indices = Tensor::FromInt64("", {1, 2}, {2, 0});
+             Tensor output = Tensor::FromInt64("", {1, 2}, {12, 10});
+             return IoData{{std::move(data), std::move(indices)}, {std::move(output)}};
+           });
+  }
+
+  {
+    Expect(registry, MakeGatherElementsNode(0), "test_cc_gather_elements_subshape_axis_0", {opset},
+           []() -> IoData {
+             Tensor data = Tensor::FromInt64("", {3, 2}, {10, 11, 20, 21, 30, 31});
+             Tensor indices = Tensor::FromInt64("", {2, 1}, {2, 0});
+             Tensor output = Tensor::FromInt64("", {2, 1}, {30, 10});
+             return IoData{{std::move(data), std::move(indices)}, {std::move(output)}};
+           });
+  }
+
+  {
+    Expect(registry, MakeGatherElementsNode(-1), "test_cc_gather_elements_subshape_axis_negative_1",
+           {opset}, []() -> IoData {
+             Tensor data = Tensor::FromInt64("", {2, 2, 3}, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11});
+             Tensor indices = Tensor::FromInt64("", {1, 2, 2}, {2, 0, 1, 2});
+             Tensor output = Tensor::FromInt64("", {1, 2, 2}, {2, 0, 4, 5});
+             return IoData{{std::move(data), std::move(indices)}, {std::move(output)}};
+           });
+  }
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

@@ -13,6 +13,7 @@
 #include "onnx_manipulations/printer.h"
 #include <algorithm>
 #include <limits>
+#include <nanobind/stl/function.h>
 #include <nanobind/stl/map.h>
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/set.h>
@@ -120,6 +121,32 @@ void AddOnnxPyLib(nb::module_ &m) {
   nb::exception<InferenceError>(
       shape_inference_mod,
       "InferenceError"); // NOLINT(bugprone-unused-raii,bugprone-throw-keyword-missing)
+
+  nb::class_<InferenceContext>(shape_inference_mod, "InferenceContext",
+                               "Provides type information during an inference callback. "
+                               "The context must not be retained after the callback returns.")
+      .def(
+          "get_input_type",
+          [](const InferenceContext &ctx, size_t index) -> nb::object {
+            const auto *type = ctx.getInputType(index);
+            if (type == nullptr)
+              return nb::none();
+            TypeProto copy;
+            copy.CopyFrom(*type);
+            return nb::cast(std::move(copy));
+          },
+          nb::arg("index"), "Returns a copy of the input type, or None when unavailable.")
+      .def(
+          "set_output_type",
+          [](InferenceContext &ctx, size_t index, const TypeProto &type) {
+            auto *output = ctx.getOutputType(index);
+            if (output == nullptr)
+              return false;
+            output->CopyFrom(type);
+            return true;
+          },
+          nb::arg("index"), nb::arg("type"),
+          "Copies the type to the output and returns whether the output is available.");
 
   shape_inference_mod.def(
       "infer_function_output_types",
@@ -349,6 +376,16 @@ void AddOnnxPyLib(nb::module_ &m) {
              return nb::cast(std::move(copy));
            })
       .def_prop_ro("has_context_dependent_function", &OpSchema::HasContextDependentFunction)
+      .def(
+          "set_type_and_shape_inference_function",
+          [](OpSchema &op, std::function<void(InferenceContext *)> func) -> OpSchema & {
+            // Move nanobind's guarded Python-callable wrapper into the registered
+            // inference function so it remains valid after this binding returns.
+            auto wrapper = [func = std::move(func)](InferenceContext &ctx) { func(&ctx); };
+            return op.TypeAndShapeInferenceFunction(wrapper);
+          },
+          nb::rv_policy::reference_internal,
+          "Sets the inference callback and retains it for the lifetime of the schema.")
       .def("get_context_dependent_function",
            [](const OpSchema *op, const NodeProto &node,
               const std::vector<TypeProto> &input_types) -> nb::object {

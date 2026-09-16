@@ -1,11 +1,10 @@
 import re
 import unittest
 
-from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
-class TestPackageVersionConsistency(ExtTestCase):
+class TestPackageVersionConsistency(unittest.TestCase):
     """Checks package version consistency across release metadata files."""
 
     @classmethod
@@ -26,6 +25,7 @@ class TestPackageVersionConsistency(ExtTestCase):
         setup_py = (self.root / "setup.py").read_text(encoding="utf-8")
         cpp_version = (self.root / "onnx_light" / "_version.cc").read_text(encoding="utf-8")
         cmake = (self.root / "CMakeLists.txt").read_text(encoding="utf-8")
+        changelog = (self.root / "CHANGELOGS.md").read_text(encoding="utf-8")
 
         pyproject_version = self._extract(
             r'^version\s*=\s*"([^"]+)"', pyproject, "pyproject.toml"
@@ -40,11 +40,13 @@ class TestPackageVersionConsistency(ExtTestCase):
         cmake_version = self._extract(
             r"project\(onnx_light VERSION ([0-9]+\.[0-9]+\.[0-9]+)", cmake, "CMakeLists.txt"
         )
+        changelog_version = self._extract(r"^## \[([^\]]+)\]", changelog, "CHANGELOGS.md")
 
         self.assertEqual(pyproject_version, package_init_version)
         self.assertEqual(pyproject_version, setup_py_version)
         self.assertEqual(pyproject_version, cpp_version_value)
         self.assertEqual(pyproject_version, cmake_version)
+        self.assertEqual(pyproject_version, changelog_version)
 
 
 if __name__ == "__main__":

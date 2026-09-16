@@ -186,6 +186,34 @@ class TestVersionConverter(ExtTestCase):
         assert converted_model.graph.node[0].op_type == "Add"
         assert converted_model.opset_import[0].version == 2
 
+    def test_constant_of_shape_20_19(self) -> None:
+        graph = oh.make_graph(
+            [oh.make_node("ConstantOfShape", ["shape"], ["output"])],
+            "constant_of_shape",
+            [oh.make_tensor_value_info("shape", onnxl.TensorProto.INT64, [2])],
+            [oh.make_tensor_value_info("output", onnxl.TensorProto.FLOAT, [2, 3])],
+        )
+        converted = self._converted(graph, oh.make_operatorsetid("", 20), 19)
+        self.assertEqual(converted.opset_import[0].version, 19)
+
+    def test_constant_of_shape_20_19_rejects_bfloat16(self) -> None:
+        graph = oh.make_graph(
+            [
+                oh.make_node(
+                    "ConstantOfShape",
+                    ["shape"],
+                    ["output"],
+                    value=oh.make_tensor("value", onnxl.TensorProto.BFLOAT16, [1], [0]),
+                )
+            ],
+            "constant_of_shape",
+            [oh.make_tensor_value_info("shape", onnxl.TensorProto.INT64, [2])],
+            [oh.make_tensor_value_info("output", onnxl.TensorProto.BFLOAT16, [2, 3])],
+        )
+        model = oh.make_model(graph, opset_imports=[oh.make_operatorsetid("", 20)])
+        with self.assertRaises(RuntimeError):
+            version_converter.convert_version(model, 19)
+
     def test_attention_24_to_25(self) -> None:
         node = oh.make_node("Attention", ["Q", "K", "V"], ["Y"])
         graph = oh.make_graph(

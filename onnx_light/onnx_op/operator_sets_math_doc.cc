@@ -95,7 +95,7 @@ For example, the following tensor shapes are supported (with broadcast=1):
 Attribute `broadcast=1` needs to be passed to enable broadcasting.)DOC";
     if (since_version == 6 && math_name_view == "division") {
       doc += "\n\nFor integer inputs, the result is computed using truncating division "
-             "(rounding toward zero).";
+             "(rounding toward zero). For example, `-11 / 3` yields `-3`.";
     }
     return doc;
   }
@@ -108,7 +108,7 @@ This operator supports multidirectional (i.e., Numpy-style) broadcasting;
 for more details please check the broadcasting behavior in ONNX.)DOC";
   if (math_name_view == "division") {
     doc += "\n\nFor integer inputs, the result is computed using truncating division "
-           "(rounding toward zero).";
+           "(rounding toward zero). For example, `-11 / 3` yields `-3`.";
   }
   return doc;
 }

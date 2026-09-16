@@ -53,6 +53,35 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
             else:
                 light_dict.pop(key, None)
 
+    @staticmethod
+    def _normalize_div_doc(key, doc):
+        if key in {("", "Div", version) for version in (6, 7, 13, 14)}:
+            # Installed ONNX may predate the clarification in onnx#8461.
+            doc = doc.replace(
+                "For integer inputs, the result is computed using truncating division "
+                "(rounding toward zero).\n",
+                "For integer inputs, the result is computed using truncating division "
+                "(rounding toward zero). For example, `-11 / 3` yields `-3`.\n",
+            )
+        return doc
+
+    def test_normalize_div_doc(self):
+        example = " For example, `-11 / 3` yields `-3`."
+        for version in (6, 7, 13, 14):
+            with self.subTest(version=version):
+                key = ("", "Div", version)
+                current_doc = onnx_light.onnx.defs.get_schema("Div", version).doc
+                self.assertIn(example, current_doc)
+                old_doc = current_doc.replace(example, "")
+                self.assertEqual(self._normalize_div_doc(key, old_doc), current_doc)
+                self.assertEqual(self._normalize_div_doc(key, current_doc), current_doc)
+                for other_key in (
+                    ("", "Div", 1),
+                    ("", "Add", version),
+                    ("custom", "Div", version),
+                ):
+                    self.assertEqual(self._normalize_div_doc(other_key, old_doc), old_doc)
+
     def test_onnx_light_ir_and_opset_versions_match_onnx(self):
         self.assertEqual(onnx_light.onnx.defs.onnx_ir_version(), onnx.IR_VERSION)
         self.assertGreaterEqual(
@@ -116,7 +145,7 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
                 # file and line are build-environment-specific and intentionally not compared
                 self.assertEqual(schema.non_deterministic, lights.non_deterministic)
                 self.assertEqual(schema.support_level.name, lights.support_level.name)
-                onnx_doc = schema.doc
+                onnx_doc = self._normalize_div_doc(key, schema.doc)
                 if key == ("", "GroupNormalization", 21):
                     # Installed ONNX may predate the documentation fix in onnx#8428.
                     onnx_doc = onnx_doc.replace(

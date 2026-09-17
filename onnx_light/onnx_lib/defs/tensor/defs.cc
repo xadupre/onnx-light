@@ -581,6 +581,12 @@ ONNX_OPERATOR_SET_SCHEMA(
               if (num_outputs < 1) {
                 fail_shape_inference("Attribute `num_outputs` value cannot be lower than 1");
               }
+              if (num_outputs < static_cast<int64_t>(ctx.getNumOutputs())) {
+                fail_shape_inference(
+                    "The 'num_outputs' attribute (", num_outputs,
+                    ") must be greater or equal to the number outputs of the 'Split' node (",
+                    ctx.getNumOutputs(), ")");
+              }
               if (split_dim_value % num_outputs == 0) { // tensor is evenly splittable
                 int chunk_size = split_dim_value / num_outputs;
                 split.resize(num_outputs, chunk_size);
@@ -2454,6 +2460,9 @@ ONNX_OPERATOR_SET_SCHEMA(
             fail_shape_inference("Both `data` and `indices` input tensors in GatherND op "
                                  "need to have rank larger than 0.");
           }
+          if (batch_dims_data < 0) {
+            fail_shape_inference("attribute 'batch_dims' of 'GatherND' must not be negative");
+          }
 
           // cannot ascertain if the input shapes are valid if shape of
           // `indices` is missing last dimension value so return at this point
@@ -2474,7 +2483,7 @@ ONNX_OPERATOR_SET_SCHEMA(
                 indices_shape.dim(i);
           }
 
-          for (int i = static_cast<int>(last_index_dimension); i < data_rank; ++i) {
+          for (auto i = last_index_dimension; i < data_rank; ++i) {
             *ctx.getOutputType(0)->mutable_tensor_type()->mutable_shape()->add_dim() =
                 data_shape.dim(i);
           }

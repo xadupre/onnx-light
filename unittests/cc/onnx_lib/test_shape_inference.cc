@@ -721,6 +721,181 @@ TEST(onnx_shape_inference, InferShapesImpl_SplitToSequenceRejectsZeroScalarSplit
   }
 }
 
+TEST(onnx_shape_inference, InferShapesImpl_SplitRejectsTooManyOutputs) {
+  ModelProto model;
+  OnnxParser parser(R"ONNX(
+    <ir_version: 10, opset_import: ["" : 18]>
+    graph (float[10] X) => (float[] Y, float[] Z, float[] A, float[] B, float[] C) {
+      Y, Z, A, B, C = Split <num_outputs = 2> (X)
+    }
+  )ONNX");
+  const auto status = parser.Parse(model);
+  ASSERT_TRUE(status.IsOK()) << status.ErrorMessage();
+  EXPECT_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                            ShapeInferenceOptions(false, 1, false)),
+               ONNX_LIGHT_NAMESPACE::InferenceError);
+}
+
+TEST(onnx_shape_inference, InferShapesImpl_SplitAllowsOmittedTrailingOutputs) {
+  for (const int64_t num_outputs : {2, 3}) {
+    SCOPED_TRACE(num_outputs);
+    ModelProto model;
+    OnnxParser parser(R"ONNX(
+      <ir_version: 10, opset_import: ["" : 18]>
+      graph (float[10] X) => (float[] Y, float[] Z) {
+        Y, Z = Split <num_outputs = 3> (X)
+      }
+    )ONNX");
+    const auto status = parser.Parse(model);
+    ASSERT_TRUE(status.IsOK()) << status.ErrorMessage();
+    model.mutable_graph()->mutable_node(0)->mutable_attribute(0)->set_i(num_outputs);
+    shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                 ShapeInferenceOptions(false, 1, false));
+    for (const auto &output : model.graph().output()) {
+      const auto &tensor = output.type().tensor_type();
+      EXPECT_EQ(tensor.elem_type(), TensorProto::FLOAT);
+      ASSERT_EQ(tensor.shape().dim_size(), 1);
+      EXPECT_EQ(tensor.shape().dim(0).dim_value(), num_outputs == 2 ? 5 : 4);
+    }
+  }
+}
+
+TEST(onnx_shape_inference, InferShapesImpl_SplitToSequenceOmittedSplit) {
+  for (const int64_t version : {11, 24}) {
+    for (const int64_t keepdims : {0, 1}) {
+      for (const bool empty_input : {false, true}) {
+        SCOPED_TRACE(version);
+        SCOPED_TRACE(keepdims);
+        SCOPED_TRACE(empty_input);
+        ModelProto model;
+        OnnxParser parser(R"ONNX(
+          <ir_version: 10, opset_import: ["" : 11]>
+          graph (float[6,4] X) => (seq(float[]) Y) {
+            Y = SplitToSequence <keepdims = 1> (X)
+          }
+        )ONNX");
+        const auto status = parser.Parse(model);
+        ASSERT_TRUE(status.IsOK()) << status.ErrorMessage();
+        model.mutable_opset_import(0)->set_version(version);
+        auto *node = model.mutable_graph()->mutable_node(0);
+        node->mutable_attribute(0)->set_i(keepdims);
+        if (empty_input) {
+          *node->add_input() = "";
+        }
+        shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                     ShapeInferenceOptions(false, 1, false));
+        const auto &type = model.graph().output(0).type();
+        ASSERT_TRUE(type.has_sequence_type());
+        const auto &tensor = type.sequence_type().elem_type().tensor_type();
+        EXPECT_EQ(tensor.elem_type(), TensorProto::FLOAT);
+        ASSERT_EQ(tensor.shape().dim_size(), keepdims ? 2 : 1);
+        EXPECT_EQ(tensor.shape().dim(keepdims).dim_value(), 4);
+        if (keepdims) {
+          EXPECT_EQ(tensor.shape().dim(0).dim_value(), 1);
+        }
+      }
+    }
+  }
+}
+
+TEST(onnx_shape_inference, InferShapesImpl_LayerNormalizationRejectsOutOfRangeAxis) {
+  for (const int64_t axis : {int64_t{-4}, int64_t{3}, int64_t{1} << 31, int64_t{1} << 40}) {
+    SCOPED_TRACE(axis);
+    ModelProto model;
+    OnnxParser parser(R"ONNX(
+      <ir_version: 10, opset_import: ["" : 17]>
+      graph (float[2,3,4] X, float[4] Scale) => (float[] Y, float[] Mean, float[] InvStdDev) {
+        Y, Mean, InvStdDev = LayerNormalization <axis = -1> (X, Scale)
+      }
+    )ONNX");
+    const auto status = parser.Parse(model);
+    ASSERT_TRUE(status.IsOK()) << status.ErrorMessage();
+    model.mutable_graph()->mutable_node(0)->mutable_attribute(0)->set_i(axis);
+    EXPECT_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                              ShapeInferenceOptions(false, 1, false)),
+                 ONNX_LIGHT_NAMESPACE::InferenceError);
+  }
+}
+
+TEST(onnx_shape_inference, InferShapesImpl_LayerNormalizationValidAxis) {
+  for (const int64_t axis : {-3, -1, 0, 2}) {
+    SCOPED_TRACE(axis);
+    ModelProto model;
+    OnnxParser parser(R"ONNX(
+      <ir_version: 10, opset_import: ["" : 17]>
+      graph (float[2,3,4] X, float[4] Scale) => (float[] Y, float[] Mean, float[] InvStdDev) {
+        Y, Mean, InvStdDev = LayerNormalization <axis = -1> (X, Scale)
+      }
+    )ONNX");
+    const auto status = parser.Parse(model);
+    ASSERT_TRUE(status.IsOK()) << status.ErrorMessage();
+    model.mutable_graph()->mutable_node(0)->mutable_attribute(0)->set_i(axis);
+    shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                 ShapeInferenceOptions(false, 1, false));
+    const int64_t normalized_axis = axis < 0 ? axis + 3 : axis;
+    for (int output = 0; output < 3; ++output) {
+      const auto &tensor = model.graph().output(output).type().tensor_type();
+      EXPECT_EQ(tensor.elem_type(), TensorProto::FLOAT);
+      ASSERT_EQ(tensor.shape().dim_size(), 3);
+      for (int dim = 0; dim < 3; ++dim) {
+        EXPECT_EQ(tensor.shape().dim(dim).dim_value(),
+                  output > 0 && dim >= normalized_axis ? 1 : dim + 2);
+      }
+    }
+  }
+}
+
+TEST(onnx_shape_inference, InferShapesImpl_GatherNDRejectsNegativeBatchDims) {
+  for (const int64_t version : {12, 13}) {
+    for (const int64_t batch_dims : {-1, -5}) {
+      SCOPED_TRACE(version);
+      SCOPED_TRACE(batch_dims);
+      ModelProto model;
+      OnnxParser parser(R"ONNX(
+        <ir_version: 10, opset_import: ["" : 13]>
+        graph (float[2,2,2] X, int64[2,1] indices) => (float[] Y) {
+          Y = GatherND <batch_dims = -5> (X, indices)
+        }
+      )ONNX");
+      const auto status = parser.Parse(model);
+      ASSERT_TRUE(status.IsOK()) << status.ErrorMessage();
+      model.mutable_opset_import(0)->set_version(version);
+      model.mutable_graph()->mutable_node(0)->mutable_attribute(0)->set_i(batch_dims);
+      EXPECT_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                                ShapeInferenceOptions(false, 1, false)),
+                   ONNX_LIGHT_NAMESPACE::InferenceError);
+    }
+  }
+}
+
+TEST(onnx_shape_inference, InferShapesImpl_GatherNDValidBatchDims) {
+  for (const int64_t version : {12, 13}) {
+    for (const int64_t batch_dims : {0, 1}) {
+      SCOPED_TRACE(version);
+      SCOPED_TRACE(batch_dims);
+      ModelProto model;
+      OnnxParser parser(R"ONNX(
+        <ir_version: 10, opset_import: ["" : 13]>
+        graph (float[2,2,2] X, int64[2,1] indices) => (float[] Y) {
+          Y = GatherND <batch_dims = 0> (X, indices)
+        }
+      )ONNX");
+      const auto status = parser.Parse(model);
+      ASSERT_TRUE(status.IsOK()) << status.ErrorMessage();
+      model.mutable_opset_import(0)->set_version(version);
+      model.mutable_graph()->mutable_node(0)->mutable_attribute(0)->set_i(batch_dims);
+      shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                   ShapeInferenceOptions(false, 1, false));
+      const auto &tensor = model.graph().output(0).type().tensor_type();
+      EXPECT_EQ(tensor.elem_type(), TensorProto::FLOAT);
+      ASSERT_EQ(tensor.shape().dim_size(), 3 - batch_dims);
+      for (const auto &dim : tensor.shape().dim()) {
+        EXPECT_EQ(dim.dim_value(), 2);
+      }
+    }
+  }
+}
+
 TEST(onnx_shape_inference, InferShapesImpl_RNNBidirectionalLayout0) {
   ModelProto model;
   model.set_ir_version(IR_VERSION);

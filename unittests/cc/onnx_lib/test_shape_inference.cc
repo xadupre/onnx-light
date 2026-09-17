@@ -725,7 +725,7 @@ TEST(onnx_shape_inference, InferShapesImpl_SplitRejectsTooManyOutputs) {
   ModelProto model;
   OnnxParser parser(R"ONNX(
     <ir_version: 10, opset_import: ["" : 18]>
-    graph (float[10] X) => (float Y, float Z, float A, float B, float C) {
+    graph (float[10] X) => (float[] Y, float[] Z, float[] A, float[] B, float[] C) {
       Y, Z, A, B, C = Split <num_outputs = 2> (X)
     }
   )ONNX");
@@ -742,7 +742,7 @@ TEST(onnx_shape_inference, InferShapesImpl_SplitAllowsOmittedTrailingOutputs) {
     ModelProto model;
     OnnxParser parser(R"ONNX(
       <ir_version: 10, opset_import: ["" : 18]>
-      graph (float[10] X) => (float Y, float Z) {
+      graph (float[10] X) => (float[] Y, float[] Z) {
         Y, Z = Split <num_outputs = 3> (X)
       }
     )ONNX");
@@ -770,7 +770,7 @@ TEST(onnx_shape_inference, InferShapesImpl_SplitToSequenceOmittedSplit) {
         ModelProto model;
         OnnxParser parser(R"ONNX(
           <ir_version: 10, opset_import: ["" : 11]>
-          graph (float[6,4] X) => (seq(float) Y) {
+          graph (float[6,4] X) => (seq(float[]) Y) {
             Y = SplitToSequence <keepdims = 1> (X)
           }
         )ONNX");
@@ -804,7 +804,7 @@ TEST(onnx_shape_inference, InferShapesImpl_LayerNormalizationRejectsOutOfRangeAx
     ModelProto model;
     OnnxParser parser(R"ONNX(
       <ir_version: 10, opset_import: ["" : 17]>
-      graph (float[2,3,4] X, float[4] Scale) => (float Y, float Mean, float InvStdDev) {
+      graph (float[2,3,4] X, float[4] Scale) => (float[] Y, float[] Mean, float[] InvStdDev) {
         Y, Mean, InvStdDev = LayerNormalization <axis = -1> (X, Scale)
       }
     )ONNX");
@@ -823,7 +823,7 @@ TEST(onnx_shape_inference, InferShapesImpl_LayerNormalizationValidAxis) {
     ModelProto model;
     OnnxParser parser(R"ONNX(
       <ir_version: 10, opset_import: ["" : 17]>
-      graph (float[2,3,4] X, float[4] Scale) => (float Y, float Mean, float InvStdDev) {
+      graph (float[2,3,4] X, float[4] Scale) => (float[] Y, float[] Mean, float[] InvStdDev) {
         Y, Mean, InvStdDev = LayerNormalization <axis = -1> (X, Scale)
       }
     )ONNX");
@@ -853,7 +853,7 @@ TEST(onnx_shape_inference, InferShapesImpl_GatherNDRejectsNegativeBatchDims) {
       ModelProto model;
       OnnxParser parser(R"ONNX(
         <ir_version: 10, opset_import: ["" : 13]>
-        graph (float[2,2,2] X, int64[2,1] indices) => (float Y) {
+        graph (float[2,2,2] X, int64[2,1] indices) => (float[] Y) {
           Y = GatherND <batch_dims = -5> (X, indices)
         }
       )ONNX");
@@ -876,7 +876,7 @@ TEST(onnx_shape_inference, InferShapesImpl_GatherNDValidBatchDims) {
       ModelProto model;
       OnnxParser parser(R"ONNX(
         <ir_version: 10, opset_import: ["" : 13]>
-        graph (float[2,2,2] X, int64[2,1] indices) => (float Y) {
+        graph (float[2,2,2] X, int64[2,1] indices) => (float[] Y) {
           Y = GatherND <batch_dims = 0> (X, indices)
         }
       )ONNX");

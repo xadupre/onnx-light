@@ -319,7 +319,7 @@ void SetProtoFieldFromKwarg(nb::handle py, const std::string &key, nb::handle va
 
 #define PYFIELD_OPTIONAL_PROTO(cls, name)                                                          \
   def_prop_rw(                                                                                     \
-      #name, [](cls & self)->cls::name##_t * {                                                     \
+      #name, [](cls & self) -> cls::name##_t * {                                                   \
         if (!self.has_##name()) {                                                                  \
           if (self.has_oneof_##name())                                                             \
             return nullptr;                                                                        \
@@ -339,7 +339,7 @@ void SetProtoFieldFromKwarg(nb::handle py, const std::string &key, nb::handle va
       nb::rv_policy::reference_internal, cls::DOC_##name, nb::for_setter(nb::arg("value").none())) \
       .def("has_" #name, &cls::has_##name, "Tells if '" #name "' has a value.")                    \
       .def(                                                                                        \
-          "add_" #name, [](cls & self)->cls::name##_t & { return *self.add_##name(); },            \
+          "add_" #name, [](cls & self) -> cls::name##_t & { return *self.add_##name(); },          \
           nb::rv_policy::reference_internal, "Sets an empty value.")
 
 #define SHORTEN_CODE(cls, dtype)                                                                   \
@@ -839,7 +839,7 @@ void define_repeated_field_type_proto(nb::class_<utils::RepeatedField<T>> &nbcls
             if (kwargs.size() > 0) {
               nb::object py_element = nb::cast(element, nb::rv_policy::reference);
               for (auto item : kwargs) {
-                nb::setattr(py_element, nb::cast<nb::str>(item.first), item.second);
+                SetProtoFieldFromKwarg(py_element, nb::cast<std::string>(item.first), item.second);
               }
             }
             return element;
@@ -855,7 +855,7 @@ void define_repeated_field_type_proto(nb::class_<utils::RepeatedField<T>> &nbcls
             if (kwargs.size() > 0) {
               nb::object py_element = nb::cast(element);
               for (auto item : kwargs) {
-                nb::setattr(py_element, nb::cast<nb::str>(item.first), item.second);
+                SetProtoFieldFromKwarg(py_element, nb::cast<std::string>(item.first), item.second);
               }
             }
             return element;

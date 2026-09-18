@@ -7,6 +7,7 @@ onnx_light.tools
     dot
     kernel_baseline
     kernel_inventory
+    kernel_reports
     mermaid
     pretty_print
     schema_comparison

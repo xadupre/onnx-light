@@ -32,7 +32,6 @@ jobs:
       OMP_NUM_THREADS: "2"
       OPENBLAS_NUM_THREADS: "1"
       MKL_NUM_THREADS: "1"
-      XDG_CACHE_HOME: ${{ runner.temp }}/kernel-reports-cache
       EXPECTED_ARCHITECTURE: ${{ matrix.architecture }}
     steps:
       - uses: actions/checkout@v7
@@ -45,6 +44,7 @@ jobs:
       - name: Check native architecture and install build dependencies
         run: |
           test "$(uname -m)" = "$EXPECTED_ARCHITECTURE"
+          echo "XDG_CACHE_HOME=$RUNNER_TEMP/kernel-reports-cache" >> "$GITHUB_ENV"
           sudo apt-get update
           sudo apt-get install -y libssl-dev
           python -m pip install nanobind==3.1.0 numpy==2.5.3 ml-dtypes==0.6.0 pytest==9.1.1

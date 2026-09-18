@@ -12,7 +12,7 @@ import platform
 import subprocess
 from pathlib import Path
 
-from onnx_light.onnx_py._onnxpykernels import runtime
+from onnx_light.onnx_py._onnxpykernels import runtime  # type: ignore[import]
 from onnx_light.tools.kernel_baseline import run_kernel_baseline_report
 
 KEY_FIELDS = ("library", "kernel", "implementation", "element_type", "device", "tuning_abi")

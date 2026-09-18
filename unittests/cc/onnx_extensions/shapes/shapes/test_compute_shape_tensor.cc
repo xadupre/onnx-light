@@ -546,20 +546,29 @@ TEST(OnnxOptimShapesTensorSlice, KeepsAnchorDimsAndBuildsSliceExpression) {
 }
 
 TEST(OnnxOptimShapesTensorSlice, FallsBackToSymbolicWhenBoundsUnknown) {
-  NodeProto node = MakeSliceNode();
-  core::shapes::ShapesContext ctx;
-  ctx.Set("X", core::symbolic::SymTensor(
-                   nullptr, core::symbolic::TensorType::kFloat,
-                   core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(4)}));
-  ctx.Set("Starts", core::symbolic::SymTensor(
-                        nullptr, core::symbolic::TensorType::kInt64,
-                        core::symbolic::SymShape{core::symbolic::SymDim(static_cast<int64_t>(2))}));
-  ctx.Set("Ends", MakeShapeInput({2, 3}));
+  for (const char *unknown : {"Starts", "Ends", "Axes", "Steps"}) {
+    SCOPED_TRACE(unknown);
+    NodeProto node = MakeSliceNode("X", "Starts", "Ends", "Axes", "Steps");
+    core::shapes::ShapesContext ctx;
+    ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                           core::symbolic::SymShape{core::symbolic::SymDim(2),
+                                                                    core::symbolic::SymDim(4)}));
+    ctx.Set("Starts", MakeShapeInput({0, 0}));
+    ctx.Set("Ends", MakeShapeInput({2, 4}));
+    ctx.Set("Axes", MakeShapeInput({0, 1}));
+    ctx.Set("Steps", MakeShapeInput({1, 1}));
+    ctx.Set(unknown,
+            core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt64,
+                                      core::symbolic::SymShape{core::symbolic::SymDim(2)}));
 
-  onnx_shapes::shapes::tensor::ComputeShapeSlice(ctx, node);
+    onnx_shapes::shapes::tensor::ComputeShapeSlice(ctx, node);
 
-  EXPECT_EQ(ctx.Get("Y").Shape(),
-            (core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(4)}));
+    EXPECT_EQ(ctx.Get("Y").Dtype(), core::symbolic::TensorType::kFloat);
+    ASSERT_EQ(ctx.Get("Y").Shape().Rank(), 2u);
+    EXPECT_FALSE(ctx.Get("Y").Shape()[0].IsInt());
+    EXPECT_FALSE(ctx.Get("Y").Shape()[1].IsInt());
+    EXPECT_NE(ctx.Get("Y").Shape(), ctx.Get("X").Shape());
+  }
 }
 
 TEST(OnnxOptimShapesTensorSlice, RejectsWrongOpType) {

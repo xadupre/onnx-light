@@ -3,18 +3,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/expect.h"
+#include "onnx_core/builder/graph_graph.h"
 #include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_core/runtime/kernels/run_nodes.h"
 #include "onnx_core/runtime/memory/simple_tensor.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/runtime_session.h"
 #include "onnx_extensions/kernels/kernels/sequence/include_sequence_kernels.h"
+#include "onnx_extensions/patterns/algebra/common_pattern.h"
+#include "onnx_op/operator_sets.h"
+#include "onnx_proto/onnx_helper.h"
 #include "test_case_utils.h"
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -77,6 +83,68 @@ void RunModelViaSession(const ModelProto &model, RuntimeContext &rt) {
   const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
   RuntimeSession session(plan);
   session.Run(rt);
+}
+
+TEST(BackendRunModel, ShapeBasedIdentityPreservesDynamicSlice) {
+  for (bool computed_end : {false, true}) {
+    SCOPED_TRACE(computed_end);
+    core::builder::GraphBuilder source("dynamic_slice", [](const std::string &op_type) {
+      return onnx_op::GetAllOnnxOpSchemasWithHistory(op_type, false);
+    });
+    source.SetOpsetVersion("", 21);
+    source.MakeInput("X", core::symbolic::TensorType::kFloat, {core::symbolic::SymDim(10)});
+    source.MakeInitializer(MakeInitializer<int64_t>("zero", {1}, {0}));
+    if (computed_end) {
+      source.MakeInput("mask", core::symbolic::TensorType::kInt64, {core::symbolic::SymDim(20)});
+      source.MakeNode("NonZero", {"mask"}, {"indices"});
+      source.MakeNode("Size", {"indices"}, {"count"});
+      source.MakeNode("Unsqueeze", {"count", "zero"}, {"end"});
+    } else {
+      source.MakeInput("end", core::symbolic::TensorType::kInt64, {core::symbolic::SymDim(1)});
+    }
+    source.MakeNode("Slice", {"X", "zero", "end", "zero"}, {"Y"});
+    source.MakeOutput("Y");
+    const ModelProto original = source.ToModel();
+    core::builder::GraphBuilder builder(original, [](const std::string &op_type) {
+      return onnx_op::GetAllOnnxOpSchemasWithHistory(op_type, false);
+    });
+    std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+    patterns.push_back(std::make_unique<onnx_patterns::ShapeBasedIdentityPattern>());
+    core::builder::GraphGraph graph(builder, std::move(patterns));
+    graph.Optimize();
+    const ModelProto optimized = builder.ToModel();
+    ASSERT_EQ(optimized.graph().node().size(), original.graph().node().size());
+    const NodeProto &slice = optimized.graph().node(optimized.graph().node_size() - 1);
+    EXPECT_EQ(slice.op_type().value(), "Slice");
+    EXPECT_EQ(slice.output(0), "Y");
+    ASSERT_EQ(optimized.graph().output(0).type().tensor_type().shape().dim_size(), 1);
+    EXPECT_FALSE(optimized.graph().output(0).type().tensor_type().shape().dim(0).has_dim_value());
+
+    for (int64_t end : {0, 3, 10, 20}) {
+      SCOPED_TRACE(end);
+      for (const ModelProto *model : {&original, &optimized}) {
+        RuntimeContext rt(KernelContext(DefaultOpset(21)));
+        rt.tensors()["X"] = Tensor::FromFloat("X", {10}, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
+        if (computed_end) {
+          std::vector<int64_t> mask(20, 0);
+          for (int64_t i = 0; i < end; ++i) {
+            mask[static_cast<size_t>(i)] = 1;
+          }
+          rt.tensors()["mask"] = Tensor::FromInt64("mask", {20}, mask);
+        } else {
+          rt.tensors()["end"] = Tensor::FromInt64("end", {1}, {end});
+        }
+        RunModelViaSession(*model, rt);
+        const Tensor &output = rt.tensors().at("Y");
+        const int64_t expected_size = std::min(end, int64_t{10});
+        ASSERT_EQ(output.shape, std::vector<int64_t>{expected_size});
+        ASSERT_EQ(output.element_count(), expected_size);
+        for (int64_t i = 0; i < expected_size; ++i) {
+          EXPECT_FLOAT_EQ(output.AsFloat()[i], static_cast<float>(i));
+        }
+      }
+    }
+  }
 }
 
 // Runs the model (via `RunModelViaSession`) on every backend test case whose top-level graph

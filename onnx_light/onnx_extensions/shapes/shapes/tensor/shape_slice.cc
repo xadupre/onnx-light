@@ -120,7 +120,10 @@ void ComputeShapeSlice(ShapesContext &ctx, const NodeProto &node) {
   const SymShape &data_shape = data.Shape();
   const int64_t rank = static_cast<int64_t>(data_shape.Rank());
 
-  SymShape out_shape = data_shape;
+  SymShape out_shape;
+  for (int64_t axis = 0; axis < rank; ++axis) {
+    out_shape.PushBack(SymDim("Slice_" + node.output(0) + "_dim" + std::to_string(axis)));
+  }
 
   const std::optional<std::vector<int64_t>> starts_opt = TryReadIntVector(starts_t);
   const std::optional<std::vector<int64_t>> ends_opt = TryReadIntVector(ends_t);
@@ -167,6 +170,7 @@ void ComputeShapeSlice(ShapesContext &ctx, const NodeProto &node) {
     EXT_ENFORCE_INVALID(steps[i] != 0, "ComputeShapeSlice: 'steps' entries cannot be 0.");
   }
 
+  out_shape = data_shape;
   for (size_t i = 0; i < starts.size(); ++i) {
     int64_t axis = axes[i];
     const int64_t step = steps[i];

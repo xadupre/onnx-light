@@ -240,7 +240,7 @@ void ComputeShapeReshape(ShapesContext &ctx, const NodeProto &node);
  * ``Slice`` preserves input rank and dtype. When ``starts``/``ends`` (and
  * optional ``axes``/``steps``) values are known through
  * :cpp:func:`SymTensor::ValueAsShape`, concrete output lengths are inferred
- * per sliced axis; otherwise sliced axes are left symbolic.
+ * per sliced axis; otherwise output dimensions are left symbolic.
  */
 void ComputeShapeSlice(ShapesContext &ctx, const NodeProto &node);
 

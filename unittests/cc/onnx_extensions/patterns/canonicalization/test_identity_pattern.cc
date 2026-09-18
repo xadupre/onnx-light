@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <type_traits>
 
 #include <gtest/gtest.h>
 
@@ -173,8 +174,22 @@ template <typename T> void CheckConstantOperands(T value) {
             EXPECT_EQ(node.output()[0].value(), "y");
           }
           ASSERT_EQ(optimized.graph().initializer_size(), 1);
-          EXPECT_EQ(optimized.graph().initializer()[0].SerializeAsString(),
-                    data.SerializeAsString());
+          const TensorProto &result = optimized.graph().initializer()[0];
+          EXPECT_EQ(result.name().value(), data.name().value());
+          EXPECT_EQ(result.data_type(), data.data_type());
+          ASSERT_EQ(result.dims_size(), data.dims_size());
+          for (int i = 0; i < result.dims_size(); ++i) {
+            EXPECT_EQ(result.dims()[i], data.dims()[i]);
+          }
+          if constexpr (std::is_floating_point_v<T>) {
+            std::vector<double> values;
+            ASSERT_TRUE(ReadFloatingValues(result, values));
+            EXPECT_EQ(values, std::vector<double>{static_cast<double>(value)});
+          } else {
+            std::vector<int64_t> values;
+            ASSERT_TRUE(ReadIntegerValues(result, values));
+            EXPECT_EQ(values, std::vector<int64_t>{static_cast<int64_t>(value)});
+          }
         }
       }
     }

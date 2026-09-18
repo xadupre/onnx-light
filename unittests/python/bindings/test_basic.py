@@ -158,25 +158,29 @@ class TestIOTensor(ExtTestCase):
         loaded_proto.ParseFromString(proto_bytes)
         self.assertEqual(proto.SerializeToString(), loaded_proto.SerializeToString())
 
-    @unittest.skip("TensorProto.SerializeToFile is not yet implemented in onnx_light")
-    def test_save_and_load_tensor_when_input_is_file_name(self) -> None:
+    def test_save_and_load_tensor_when_input_is_file_descriptor(self) -> None:
         proto = _simple_tensor()
         with tempfile.TemporaryDirectory() as temp_dir:
             tensor_path = os.path.join(temp_dir, "tensor.data")
-            proto.SerializeToFile(tensor_path)
+            flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+            if hasattr(os, "O_BINARY"):
+                flags |= os.O_BINARY
+            fd = os.open(tensor_path, flags, 0o666)
+            try:
+                proto.SerializeToFileDescriptor(fd)
+            finally:
+                os.close(fd)
             loaded_proto = onnxl.TensorProto()
-            loaded_proto.ParseFromFile(tensor_path)
+            loaded_proto.ParseFromString(pathlib.Path(tensor_path).read_bytes())
             self.assertEqual(proto.SerializeToString(), loaded_proto.SerializeToString())
 
-    @unittest.skip("TensorProto.SerializeToFile is not yet implemented in onnx_light")
-    def test_save_and_load_tensor_when_input_is_pathlike(self) -> None:
+    def test_serialize_tensor_to_ostream_and_parse(self) -> None:
         proto = _simple_tensor()
-        with tempfile.TemporaryDirectory() as temp_dir:
-            tensor_path = pathlib.Path(temp_dir, "tensor.data")
-            proto.SerializeToFile(str(tensor_path))
-            loaded_proto = onnxl.TensorProto()
-            loaded_proto.ParseFromFile(str(tensor_path))
-            self.assertEqual(proto.SerializeToString(), loaded_proto.SerializeToString())
+        buffer = io.BytesIO()
+        proto.SerializeToOstream(buffer)
+        loaded_proto = onnxl.TensorProto()
+        loaded_proto.ParseFromString(buffer.getvalue())
+        self.assertEqual(proto.SerializeToString(), loaded_proto.SerializeToString())
 
 
 class TestBasicFunctions(ExtTestCase):

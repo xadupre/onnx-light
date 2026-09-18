@@ -1,0 +1,2 @@
+# Preserves the generator's byte-for-byte snapshot on Windows checkouts.
+onnx_light/onnx_proto/onnx_ort_input_schemas.inc text eol=lf

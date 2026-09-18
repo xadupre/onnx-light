@@ -6,25 +6,22 @@ ORT flatbuffer format: parallelization and alignment
 :epkg:`onnxruntime` defines a compact :epkg:`FlatBuffers` serialization
 (``.ort``) of an ONNX model.  Unlike the protobuf wire format used by
 ``.onnx`` files (see :ref:`l-design-protobuf-format`), a flatbuffer is a
-single, flat, contiguous byte buffer in which every table and vector is
-addressed through relative offsets, so it can be memory-mapped and read
-without an up-front parsing pass.
+single, flat, contiguous byte buffer in which tables and vectors are
+addressed through relative offsets. A consumer can access the serialized
+data without first decoding a protobuf message.
 
-The C++ reader and writer for ``SerializeFormat::kOrtFlatbuffers`` are not
-implemented yet (calls raise ``RuntimeError`` — see
-:ref:`l-howto-save-ort-flatbuffers`).  Before implementing them, two
-properties that ``onnx_light`` already provides for the ``.onnx`` path had
-to be checked against the format itself:
+The native C++ writer supports ``SerializeFormat::kOrtFlatbuffers`` and
+produces an ``ORTM`` buffer with ORT format version ``4``. It is exposed
+through the file, memory, and file-descriptor serialization APIs (see
+:ref:`l-howto-save-ort-flatbuffers`). A full ONNX Runtime build can load the
+result, resolving the graph and upgrading kernel metadata during loading.
+Minimal runtime builds cannot execute these version-4 files directly.
+The native onnx-light reader accepts both native version-4 files and
+current ORT version-6 files, reconstructing an ONNX model for execution
+or reserialization.
 
-* **parallelization** — can the large tensor payloads be read or written by
-  a thread pool, the way the protobuf ``StringStream`` parser
-  parallelizes large ``raw_data`` blocks (``ParseOptions::is_parallel``,
-  ``StartThreadPool`` / ``WaitForDelayedBlock``)?
-* **alignment** — can a tensor's bytes be placed on a power-of-two boundary
-  (element-size, SIMD, or page) so that a downstream consumer can mmap or
-  zero-copy them, the way :attr:`SerializeOptions.alignment` aligns external
-  weights for ``.onnx`` (see :ref:`l-design-no-copy-ownership` and
-  :ref:`l-howto-align-external-data-streaming`)?
+Two layout properties matter for large tensor payloads: parallel assembly
+and alignment of the serialized tensor bytes.
 
 The relevant subset of the onnxruntime schema (``ort.fbs``) is::
 
@@ -40,92 +37,145 @@ The relevant subset of the onnxruntime schema (``ort.fbs``) is::
       external_data_offset:int64 = -1;
     }
 
-The bulk of a model's bytes live in ``Tensor.raw_data`` (or, for tensors
-routed to a companion file, at ``Tensor.external_data_offset``).
+The native writer embeds tensor data inline. Although the format includes
+``external_data_offset``, the writer does not support external sidecar
+output. Unresolved external tensor payloads are rejected: their bytes must
+be loaded into ``raw_data`` before serialization.
+
+Formal node inputs
+------------------
+
+ORT's ``input_arg_counts`` has one entry per formal schema input, not per
+actual node-input slot. For example, a three-input ``Concat`` stores ``[3]``;
+``Clip`` at opset 11 with only its required input stores ``[1, 0, 0]``.
+An explicitly empty optional slot still counts as one actual slot.
+
+The writer resolves input signatures by domain, operator name, and imported
+opset from ``onnx_ort_input_schemas.inc``. This compact snapshot is generated
+from the registered schemas by
+``.github/scripts/generate_ort_input_schemas.py`` and checked by
+``test_ort_input_schemas_sync.py``. It avoids a dependency from the proto
+library back to the full schema library. Unknown operator schemas are
+rejected rather than guessed. Regenerate the snapshot when schema input
+signatures or their input-count bounds change.
+
+Reading and reconstruction
+--------------------------
+
+``ModelProto.ParseFromString(data, popts)`` and
+``ModelProto.ParseFromFile(path, popts)`` select the native reader when
+``popts.format`` is ``SerializeFormat.ORT_FLATBUFFERS``.
+The reader reconstructs graph structure and tensor data rather than the
+original protobuf wire representation. ORT graph normalization and missing
+original names or documentation mean that protobuf byte-for-byte roundtrips
+are not guaranteed. Execution results, not serialized protobuf equality,
+are the appropriate roundtrip check.
+
+The reader honors the configured tensor-byte and recursion limits and
+invokes raw-data and node callbacks. It owns copies of decoded tensor bytes
+even if ``ParseOptions.no_copy`` is set. The offset-addressed format does
+not imply that this reader offers zero-copy or memory-mapped tensor views.
+
+External tensor offsets are explicitly rejected. The reader does not
+automatically open a companion file or guess an external-data filename.
+
+Binary-size budget
+------------------
+
+The native reader and writer add serialization code to ``lib_onnx_proto``.
+The previous Linux CI limits predated the implemented ORT codec: 1,193,944
+installed bytes, 822,634 ``.text`` bytes, and 760 defined dynamic symbols.
+The codec receives a bounded allowance of 192 KiB installed, 128 KiB of
+``.text``, and 32 symbols above those limits. The checks remain enforced;
+the shared-library dependency allowlist is unchanged.
+
+The Linux Release CI measurement for commit ``bbeaeb6b`` is:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 45 30 25
+
+   * - Metric
+     - Measured with native ORT
+     - CI maximum
+   * - Stripped installed bytes
+     - 1,363,432
+     - 1,390,552
+   * - ``.text`` bytes
+     - 940,986
+     - 953,706
+   * - Defined dynamic symbols
+     - 782
+     - 792
+
+These limits account for the added functionality rather than a toolchain
+baseline change. The codec adds no FlatBuffers or ONNX Runtime shared-library
+dependency.
 
 Parallelization
 ---------------
 
-**Reading is parallelizable.**  A flatbuffer never has to be parsed: the
-table/vtable graph is walked through offsets, which is cheap and copies no
-payload.  Each ``raw_data`` vector is an independent, length-prefixed,
-contiguous region at a known offset in the buffer.  Once the offsets of the
-initializers have been collected — a lightweight walk — the large blocks are
-mutually disjoint and can be dispatched to a thread pool to be copied (or, in
-a no-copy load, page-touched) in parallel.  This mirrors exactly how the
-protobuf parser submits large ``raw_data`` ``LEN`` fields to its worker pool,
-so the future ORT reader can reuse the same
-``ParseOptions::is_parallel`` / ``StartThreadPool`` /
-``WaitForDelayedBlock`` machinery.  A pure zero-copy / mmap load needs no
-threads at all, because the bytes are already in memory at their final
-addresses.
+**Native flatbuffer assembly is single-threaded.** The writer constructs a
+single buffer and its relative offsets. Setting
+``SerializeOptions.num_threads`` does not parallelize this assembly.
 
-**Writing is fundamentally single-threaded.**  ``flatbuffers::FlatBufferBuilder``
-builds the buffer bottom-up through a single growing cursor: every child
-(vector or table) must be finished before the parent table that references it
-is started.  There is no API to append two independent ``raw_data`` vectors to
-the same buffer from two threads.  The parallelism available to the writer is
-therefore limited to:
-
-* preparing each tensor's bytes (consolidation, dtype conversion, copying)
-  on worker threads and then feeding the already-materialized spans to the
-  single-threaded builder; and
-* routing large tensors to the companion external file through
-  ``external_data_offset``, where the external writer can stream bytes in
-  parallel exactly like the ``.onnx`` external-data path.
+The format itself does not prevent parallel preparation of independent
+tensor payloads or parallel copying of known payload regions when reading.
+These possibilities are distinct from implemented behavior: the native
+writer does not provide parallel flatbuffer assembly, and the native reader
+decodes sequentially even when ``ParseOptions.num_threads`` is set.
 
 Alignment
 ---------
 
-**Inline ``raw_data`` is not aligned beyond 4 bytes.**  FlatBuffers aligns a
-vector to the size of its element type; ``raw_data`` is declared ``[uint8]``,
-so its elements are 1-byte aligned and the vector's data start is only
-guaranteed to follow its 32-bit length prefix (4-byte alignment).  The schema
-does **not** apply the ``force_align`` attribute to ``raw_data``, so float or
-double weights stored inline are not aligned to their natural element size,
-let alone to a SIMD (e.g. 64-byte) or page (e.g. 4096-byte) boundary.  A
-consumer that needs aligned access to inline ``raw_data`` must therefore
-tolerate unaligned reads or copy the bytes out; the inline path cannot offer
-the mmap-friendly zero-copy guarantee that ``.onnx`` external data provides.
+**Inline tensor byte offsets can be explicitly aligned.** The schema
+declares ``raw_data`` as ``[uint8]`` without a ``force_align`` attribute.
+That does not prohibit the writer from requesting stronger alignment while
+building the vector. The native writer honors
+``SerializeOptions.alignment`` for inline tensor payload offsets; an
+external sidecar is not required.
 
-**The external-data path can be aligned.**  ``Tensor.external_data_offset``
-lets a tensor's bytes live in a companion file at a writer-chosen offset.
-That offset is controlled entirely by the external writer, which can zero-pad
-to any power-of-two boundary — the same technique
-:attr:`SerializeOptions.alignment` and
-:func:`onnx_light.onnx.align_external_data_streaming` already use for ``.onnx``
-external weights.  Alignment for ``.ort`` is therefore achievable, but only
-through ``external_data_offset``, not for bytes embedded inside the flatbuffer.
+The alignment is relative to the start of the serialized buffer. When the
+buffer is written at file offset zero, the tensor's file offset has the
+requested alignment. When writing through a descriptor positioned elsewhere,
+the starting file offset must also be suitably aligned to preserve it.
+
+**Offset alignment does not guarantee pointer alignment.** If a payload
+starts at an aligned offset but the buffer's base address is unaligned, the
+payload's address is still unaligned. In particular, a Python ``bytes``
+allocation returned by ``SerializeToString`` is not guaranteed to have the
+requested base alignment. Memory mapping or another allocation strategy must
+provide an appropriately aligned base before a consumer can rely on aligned
+in-memory access. Alignment alone does not promise that ONNX Runtime will
+use every tensor without copying.
 
 Summary
 -------
 
 .. list-table::
    :header-rows: 1
-   :widths: 22 39 39
+   :widths: 35 65
 
    * - Property
-     - Inline ``raw_data``
-     - External (``external_data_offset``)
-   * - Parallel read
-     - Yes — disjoint offset-addressed blocks, reuse the thread pool
-     - Yes — independent file regions
-   * - Parallel write
-     - No — ``FlatBufferBuilder`` has a single cursor
-     - Yes — external writer can stream in parallel
-   * - Alignment
-     - No — ``[uint8]`` is 1-byte aligned, no ``force_align``
-     - Yes — writer pads each offset to the requested boundary
-
-Consequences for the (future) onnx-light implementation:
-
-* the reader can reuse the existing parallel-block machinery for ``raw_data``
-  and offers true zero-copy / mmap loads;
-* the writer is single-threaded at the flatbuffer-assembly step, so any
-  parallelism and any alignment guarantee (to honour
-  :attr:`SerializeOptions.alignment`) must come from routing large or
-  alignment-sensitive tensors through ``external_data_offset``, mirroring the
-  ``.onnx`` external-data path.
+     - Native onnx-light support
+   * - Serialization targets
+     - File, memory, and file descriptor
+   * - Tensor storage
+     - Inline; unresolved external data and sidecar output rejected
+   * - Parallel assembly
+     - No; ``num_threads`` does not parallelize assembly
+   * - Inline payload offset alignment
+     - Yes, through ``SerializeOptions.alignment``
+   * - Buffer base pointer alignment
+     - Not guaranteed by serialization
+   * - ORT reading
+     - Version 4 and version 6; reconstructs an ONNX model
+   * - Parallel decoding
+     - No; ``num_threads`` does not parallelize decoding
+   * - Zero-copy decoding
+     - No; tensor bytes are copied even with ``no_copy``
+   * - External tensor reading
+     - Unsupported offsets are explicitly rejected
 
 See also
 --------

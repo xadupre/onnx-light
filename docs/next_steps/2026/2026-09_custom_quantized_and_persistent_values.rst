@@ -595,10 +595,13 @@ installed-size ceiling of 1,193,944 bytes is stricter than the existing
 1.2 MiB project ceiling. The proto target contains only compact messages
 and serialization machinery; format-specific validators, codecs,
 catalogues and registration tables stay optional runtime dependencies.
-The absolute CI gates enforce the table's maxima. PR02 also reports a
-baseline and candidate built side by side with the same workflow to
-verify the deltas. A runner toolchain update refreshes the reference
-baseline in a separate PR, not as part of a representation change.
+The table's maxima were the absolute CI gates for PR02. The subsequent
+native ORT reader/writer adds a separate, bounded allowance documented in
+:ref:`l-design-ort-flatbuffer-format`; it does not expand the PR02
+representation allowance. PR02 also reports a baseline and candidate built
+side by side with the same workflow to verify the deltas. A runner
+toolchain update refreshes the reference baseline in a separate PR, not as
+part of a representation change.
 
 .. _l-next-steps-custom-types-prepared-values:
 

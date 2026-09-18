@@ -1,5 +1,6 @@
 #pragma once
 
+#include "onnx_ort_flatbuffers.h"
 #include <cstring>
 #include <istream>
 #include <iterator>
@@ -57,8 +58,14 @@ bool ProtoMessageAdapter<Derived>::ParseFromString(const std::string &raw, Parse
     EXT_ENFORCE(opts.max_tensor_size_bytes >= 0,
                 "ParseFromString: ParseOptions::max_tensor_size_bytes must be >= 0 (got ",
                 opts.max_tensor_size_bytes, ").");
-    EXT_THROW("ParseFromString: SerializeFormat::kOrtFlatbuffers is not implemented yet. "
-              "Use SerializeFormat::kOnnx for now.");
+    if constexpr (std::is_same_v<Derived, ModelProto>) {
+      utils::StringStream stream(reinterpret_cast<const uint8_t *>(raw.data()),
+                                 static_cast<int64_t>(raw.size()));
+      ParseModelFromOrtFlatbuffers(derived(), stream, opts);
+      return true;
+    } else {
+      EXT_THROW("ParseFromString: ORT FlatBuffers parsing requires ModelProto.");
+    }
   }
   EXT_ENFORCE(opts.format == SerializeFormat::kOnnx,
               "ParseFromString: unrecognised SerializeFormat value ", static_cast<int>(opts.format),
@@ -102,8 +109,12 @@ bool ProtoMessageAdapter<Derived>::ParseFromZeroCopyStream(utils::BinaryStream *
     EXT_ENFORCE(opts.max_tensor_size_bytes >= 0,
                 "ParseFromZeroCopyStream: ParseOptions::max_tensor_size_bytes must be >= 0 (got ",
                 opts.max_tensor_size_bytes, ").");
-    EXT_THROW("ParseFromZeroCopyStream: SerializeFormat::kOrtFlatbuffers is not implemented yet. "
-              "Use SerializeFormat::kOnnx for now.");
+    if constexpr (std::is_same_v<Derived, ModelProto>) {
+      ParseModelFromOrtFlatbuffers(derived(), *stream, opts);
+      return true;
+    } else {
+      EXT_THROW("ParseFromZeroCopyStream: ORT FlatBuffers parsing requires ModelProto.");
+    }
   }
   EXT_ENFORCE(opts.format == SerializeFormat::kOnnx,
               "ParseFromZeroCopyStream: unrecognised SerializeFormat value ",
@@ -179,10 +190,12 @@ bool ProtoMessageAdapter<Derived>::SerializeToString(std::string &out,
       local_opts.node_callback = {};
       return SerializeToString(out, local_opts);
     }
+    if (opts.format == SerializeFormat::kOrtFlatbuffers)
+      return SerializeModelToOrtFlatbuffers(derived(), out, opts);
   }
   EXT_ENFORCE(opts.format == SerializeFormat::kOnnx,
-              "SerializeToString: SerializeFormat::kOrtFlatbuffers is not implemented yet. "
-              "Use SerializeFormat::kOnnx for now.");
+              "SerializeToString: ORT FlatBuffers serialization requires ModelProto; "
+              "other messages require SerializeFormat::kOnnx.");
   utils::StringWriteStream size_stream;
   SerializeSizeResult total_size = derived().SerializeSize(size_stream, opts);
   if (!EnforceMaxSerializedSize(total_size, opts, "SerializeToString")) {
@@ -218,10 +231,19 @@ bool ProtoMessageAdapter<Derived>::SerializeToFileDescriptor(int fd, SerializeOp
       local_opts.node_callback = {};
       return SerializeToFileDescriptor(fd, local_opts);
     }
+    if (opts.format == SerializeFormat::kOrtFlatbuffers) {
+      std::string buffer;
+      if (!SerializeModelToOrtFlatbuffers(derived(), buffer, opts))
+        return false;
+      utils::FdWriteStream stream(fd);
+      stream.write_raw_bytes(reinterpret_cast<const uint8_t *>(buffer.data()),
+                             static_cast<utils::offset_t>(buffer.size()));
+      return stream.Flush();
+    }
   }
   EXT_ENFORCE(opts.format == SerializeFormat::kOnnx,
-              "SerializeToFileDescriptor: SerializeFormat::kOrtFlatbuffers is not implemented "
-              "yet. Use SerializeFormat::kOnnx for now.");
+              "SerializeToFileDescriptor: ORT FlatBuffers serialization requires ModelProto; "
+              "other messages require SerializeFormat::kOnnx.");
   SerializeOptions local_opts = opts;
   local_opts.num_threads = 1;
   utils::StringWriteStream size_stream;

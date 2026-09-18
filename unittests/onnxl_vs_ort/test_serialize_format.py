@@ -1,29 +1,17 @@
 """Tests for the ``SerializeFormat`` option on ``ParseOptions`` / ``SerializeOptions``.
 
-The flatbuffer format used by ``onnxruntime`` (``.ort`` files) is exposed through
-``SerializeFormat.ORT_FLATBUFFERS`` but is not implemented yet.  The current API
-contract is:
-
-* the enum members ``ONNX`` and ``ORT_FLATBUFFERS`` exist;
-* the default value of ``ParseOptions.format`` and ``SerializeOptions.format``
-  is ``SerializeFormat.ONNX``;
-* using ``SerializeFormat.ONNX`` keeps the existing protobuf round-trip working
-  unchanged;
-* using ``SerializeFormat.ORT_FLATBUFFERS`` raises a clear error from every
-  parse/serialize entry point until the flatbuffer path is implemented.
-
-Once the flatbuffer path lands, the ``test_ort_flatbuffers_round_trip_with_onnxruntime``
-test verifies that a model serialized with ``SerializeFormat.ORT_FLATBUFFERS``
-loads and runs in ``onnxruntime`` for several opset versions.  Until then it is
-skipped so the suite stays green.
+Model serialization produces ORT FlatBuffers that ONNX Runtime can load and
+execute. Parsing accepts ORT FlatBuffers and rejects invalid buffers and options.
 """
 
 from __future__ import annotations
 
 import os
+import tempfile
 import unittest
 
 import numpy as np
+import onnxruntime
 
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
@@ -84,20 +72,429 @@ class TestSerializeFormat(ExtTestCase):
         parsed.ParseFromString(data, popts)
         self.assertEqual(parsed.graph.name, "g")
 
-    def test_ort_flatbuffers_serialize_to_string_raises(self) -> None:
-        model, _, _ = _make_simple_model()
+    def assert_ort_model(self, data, x, expected) -> None:
+        session = onnxruntime.InferenceSession(data, providers=["CPUExecutionProvider"])
+        (got,) = session.run(None, {"X": x})
+        np.testing.assert_allclose(got, expected, rtol=1e-5, atol=1e-5)
+        if isinstance(data, str) or data[4:8] == b"ORTM":
+            options = onnxl.ParseOptions()
+            options.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+            parsed = onnxl.ModelProto()
+            if isinstance(data, str):
+                parsed.ParseFromFile(data, options)
+            else:
+                parsed.ParseFromString(data, options)
+            session = onnxruntime.InferenceSession(
+                parsed.SerializeToString(), providers=["CPUExecutionProvider"]
+            )
+            (got,) = session.run(None, {"X": x})
+            np.testing.assert_allclose(got, expected, rtol=1e-5, atol=1e-5)
+
+    def test_ort_flatbuffers_serialize_to_string(self) -> None:
+        model, x, expected = _make_simple_model()
         sopts = onnxl.SerializeOptions()
         sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
-        with self.assertRaises(RuntimeError):
+        data = model.SerializeToString(sopts)
+        self.assertEqual(data[4:8], b"ORTM")
+        self.assertEqual(model.SerializeSize(sopts).size(), len(data))
+        self.assert_ort_model(data, x, expected)
+
+    def test_ort_flatbuffers_variadic_inputs(self) -> None:
+        x = np.array([1, 2], dtype=np.float32)
+        for op in ("Concat", "Sum", "Mean", "Min", "Max"):
+            with self.subTest(op=op):
+                model = oh.make_model(
+                    oh.make_graph(
+                        [
+                            oh.make_node(
+                                op,
+                                ["X", "W", "Z"],
+                                ["Y"],
+                                **({"axis": 0} if op == "Concat" else {}),
+                            )
+                        ],
+                        "variadic",
+                        [oh.make_tensor_value_info("X", TensorProto.FLOAT, [2])],
+                        [
+                            oh.make_tensor_value_info(
+                                "Y", TensorProto.FLOAT, [6 if op == "Concat" else 2]
+                            )
+                        ],
+                        [
+                            onh.from_array(np.array([3, 4], dtype=np.float32), name="W"),
+                            onh.from_array(np.array([5, 6], dtype=np.float32), name="Z"),
+                        ],
+                    ),
+                    opset_imports=[oh.make_opsetid("", 18)],
+                    ir_version=9,
+                )
+                options = onnxruntime.SessionOptions()
+                options.intra_op_num_threads = 1
+                reference = onnxruntime.InferenceSession(
+                    model.SerializeToString(), options, providers=["CPUExecutionProvider"]
+                ).run(None, {"X": x})[0]
+                sopts = onnxl.SerializeOptions()
+                sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+                self.assert_ort_model(model.SerializeToString(sopts), x, reference)
+
+    def test_ort_flatbuffers_serialize_to_file_descriptor(self) -> None:
+        model, x, expected = _make_simple_model()
+        sopts = onnxl.SerializeOptions()
+        sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+        with tempfile.TemporaryFile() as stream:
+            model.SerializeToFileDescriptor(stream.fileno(), sopts)
+            stream.seek(0)
+            data = stream.read()
+        self.assertEqual(data, model.SerializeToString(sopts))
+        self.assert_ort_model(data, x, expected)
+
+    def test_ort_flatbuffers_size_limit(self) -> None:
+        model, x, expected = _make_simple_model()
+        sopts = onnxl.SerializeOptions()
+        sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+        data = model.SerializeToString(sopts)
+        sopts.max_serialized_size_bytes = len(data)
+        self.assertEqual(model.SerializeToString(sopts), data)
+        self.assert_ort_model(data, x, expected)
+        for limit in (-1, 1, len(data) - 1):
+            with self.subTest(limit=limit):
+                sopts.max_serialized_size_bytes = limit
+                with self.assertRaisesRegex(RuntimeError, "max_serialized_size_bytes"):
+                    model.SerializeToString(sopts)
+                with tempfile.TemporaryFile() as stream:
+                    with self.assertRaisesRegex(RuntimeError, "max_serialized_size_bytes"):
+                        model.SerializeToFileDescriptor(stream.fileno(), sopts)
+                    self.assertEqual(os.fstat(stream.fileno()).st_size, 0)
+
+    def test_ort_flatbuffers_rejects_standalone_tensor(self) -> None:
+        tensor = onh.from_array(np.ones(3, dtype=np.float32))
+        sopts = onnxl.SerializeOptions()
+        sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+        with self.assertRaisesRegex(RuntimeError, "ModelProto"):
+            tensor.SerializeToString(sopts)
+        with self.assertRaisesRegex(RuntimeError, "ModelProto"):
+            tensor.SerializeSize(sopts)
+
+    def test_ort_flatbuffers_callbacks_preserve_model(self) -> None:
+        model, x, expected = _make_simple_model()
+        before = model.SerializeToString()
+        calls = []
+
+        def rewrite_weights(tensor, graph, buffer, size_only):
+            values = onh.to_array(tensor) * 2
+            calls.append((graph.name, size_only))
+            if not size_only:
+                buffer[:] = values.view(np.uint8).reshape(-1)
+            return values.nbytes
+
+        sopts = onnxl.SerializeOptions()
+        sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+        sopts.raw_data_callback = rewrite_weights
+        self.assert_ort_model(model.SerializeToString(sopts), x, expected * 2)
+        self.assertEqual(calls, [("g", True), ("g", False)])
+        self.assertEqual(model.SerializeToString(), before)
+
+    def test_ort_flatbuffers_inline_alignment(self) -> None:
+        model, _, _ = _make_simple_model()
+        raw = bytes(model.graph.initializer[0].raw_data)
+        sopts = onnxl.SerializeOptions()
+        sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+        for alignment in (16, 64, 4096):
+            with self.subTest(alignment=alignment):
+                sopts.alignment = alignment
+                data = model.SerializeToString(sopts)
+                offset = data.find(raw)
+                self.assertGreaterEqual(offset, 8)
+                self.assertEqual(offset % alignment, 0)
+
+    def test_ort_flatbuffers_rejects_unloaded_external_data(self) -> None:
+        model, _, _ = _make_simple_model()
+        tensor = model.graph.initializer[0]
+        tensor.external_data.add(key="location", value="missing.bin")
+        tensor.data_location = TensorProto.EXTERNAL
+        tensor.ClearField("raw_data")
+        sopts = onnxl.SerializeOptions()
+        sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+        with self.assertRaisesRegex(RuntimeError, "(?i)external"):
             model.SerializeToString(sopts)
 
-    def test_ort_flatbuffers_serialize_to_file_raises(self) -> None:
-        model, _, _ = _make_simple_model()
-        path = self.get_dump_file("test_ort_serialize_to_file_unimpl.ort")
+    def test_ort_flatbuffers_inlines_loaded_external_data(self) -> None:
+        model, x, expected = _make_simple_model()
+        tensor = model.graph.initializer[0]
+        tensor.external_data.add(key="location", value="missing.bin")
+        tensor.data_location = TensorProto.EXTERNAL
+        before = model.SerializeToString()
         sopts = onnxl.SerializeOptions()
         sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
-        with self.assertRaises(RuntimeError):
-            model.SerializeToFile(path, sopts)
+        self.assert_ort_model(model.SerializeToString(sopts), x, expected)
+        self.assertEqual(model.SerializeToString(), before)
+
+    def test_ort_flatbuffers_preserves_overridable_initializer_shape(self) -> None:
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Identity", ["W"], ["Y"])],
+                "overridable",
+                [oh.make_tensor_value_info("W", TensorProto.FLOAT, [None])],
+                [oh.make_tensor_value_info("Y", TensorProto.FLOAT, [None])],
+                [onh.from_array(np.array([1, 2], dtype=np.float32), name="W")],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=9,
+        )
+        sopts = onnxl.SerializeOptions()
+        sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+        session = onnxruntime.InferenceSession(
+            model.SerializeToString(sopts), providers=["CPUExecutionProvider"]
+        )
+        np.testing.assert_array_equal(
+            session.run(None, {})[0], np.array([1, 2], dtype=np.float32)
+        )
+        override = np.array([4, 5, 6], dtype=np.float32)
+        np.testing.assert_array_equal(session.run(None, {"W": override})[0], override)
+
+    def test_ort_flatbuffers_rejects_external_output(self) -> None:
+        model, _, _ = _make_simple_model()
+        sopts = onnxl.SerializeOptions()
+        sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+        with (
+            tempfile.TemporaryDirectory() as folder,
+            self.assertRaisesRegex(RuntimeError, "external"),
+        ):
+            model.SerializeToFile(
+                os.path.join(folder, "model.ort"), sopts, os.path.join(folder, "weights.bin")
+            )
+
+    def test_ort_flatbuffers_typed_initializers(self) -> None:
+        for dtype in (
+            np.float32,
+            np.float64,
+            np.float16,
+            np.int8,
+            np.uint8,
+            np.int16,
+            np.uint16,
+            np.int32,
+            np.uint32,
+            np.int64,
+            np.uint64,
+            np.bool_,
+            np.str_,
+        ):
+            for raw in (False, True):
+                if dtype == np.str_ and raw:
+                    continue
+                with self.subTest(dtype=dtype, raw=raw):
+                    if dtype == np.str_:
+                        values = np.array(["abc", "abc\u00e9"], dtype=dtype)
+                    elif np.issubdtype(dtype, np.integer):
+                        info = np.iinfo(dtype)
+                        values = np.array([info.min, info.max], dtype=dtype)
+                    elif np.issubdtype(dtype, np.floating):
+                        values = np.array([-2.5, 3.75], dtype=dtype)
+                    else:
+                        values = np.array([False, True], dtype=dtype)
+                    elem_type = onh.from_array(values).data_type
+                    tensor = oh.make_tensor("W", elem_type, [2], values, raw=raw)
+                    model = oh.make_model(
+                        oh.make_graph(
+                            [oh.make_node("Identity", ["W"], ["Y"])],
+                            "typed",
+                            [],
+                            [oh.make_tensor_value_info("Y", elem_type, [2])],
+                            [tensor],
+                        ),
+                        opset_imports=[oh.make_opsetid("", 18)],
+                        ir_version=9,
+                    )
+                    sopts = onnxl.SerializeOptions()
+                    sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+                    session = onnxruntime.InferenceSession(
+                        model.SerializeToString(sopts), providers=["CPUExecutionProvider"]
+                    )
+                    np.testing.assert_array_equal(session.run(None, {})[0], values)
+                    popts = onnxl.ParseOptions()
+                    popts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+                    parsed = onnxl.ModelProto()
+                    parsed.ParseFromString(model.SerializeToString(sopts), popts)
+                    np.testing.assert_array_equal(
+                        onh.to_array(parsed.graph.initializer[0]), values
+                    )
+
+    def test_ort_flatbuffers_multi_node_and_variadic_inputs(self) -> None:
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node("Relu", ["X"], ["R"]),
+                    oh.make_node("Concat", ["R", "R", "X"], ["C"], axis=0),
+                    oh.make_node("Add", ["C", "C"], ["Y"]),
+                ],
+                "chain",
+                [oh.make_tensor_value_info("X", TensorProto.FLOAT, [2])],
+                [oh.make_tensor_value_info("Y", TensorProto.FLOAT, [6])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=9,
+        )
+        x = np.array([-1, 2], dtype=np.float32)
+        expected = np.concatenate([np.maximum(x, 0), np.maximum(x, 0), x]) * 2
+        sopts = onnxl.SerializeOptions()
+        sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+        self.assert_ort_model(model.SerializeToString(sopts), x, expected)
+
+    def test_ort_flatbuffers_attributes_and_optional_inputs(self) -> None:
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node("LeakyRelu", ["X"], ["R"], alpha=0.25),
+                    oh.make_node("Pad", ["R", "pads", ""], ["P"], mode="edge"),
+                    oh.make_node("Transpose", ["P"], ["Y"], perm=[1, 0]),
+                ],
+                "attributes",
+                [oh.make_tensor_value_info("X", TensorProto.FLOAT, [2, 2])],
+                [oh.make_tensor_value_info("Y", TensorProto.FLOAT, [4, 2])],
+                [onh.from_array(np.array([0, 1, 0, 1], dtype=np.int64), name="pads")],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=9,
+        )
+        x = np.array([[-1, 2], [-3, 4]], dtype=np.float32)
+        expected = np.pad(np.where(x >= 0, x, x * 0.25), ((0, 0), (1, 1)), mode="edge").T
+        sopts = onnxl.SerializeOptions()
+        sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+        self.assert_ort_model(model.SerializeToString(sopts), x, expected)
+
+    def test_ort_flatbuffers_constant_tensor_attribute(self) -> None:
+        values = np.array([-1, 2], dtype=np.float32)
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node("Constant", [], ["C"], value=onh.from_array(values)),
+                    oh.make_node("Add", ["X", "C"], ["Y"]),
+                ],
+                "constant",
+                [oh.make_tensor_value_info("X", TensorProto.FLOAT, [2])],
+                [oh.make_tensor_value_info("Y", TensorProto.FLOAT, [2])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=9,
+        )
+        x = np.array([3, 5], dtype=np.float32)
+        sopts = onnxl.SerializeOptions()
+        sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+        self.assert_ort_model(model.SerializeToString(sopts), x, x + values)
+
+    def test_ort_flatbuffers_subgraph_capture(self) -> None:
+        then_branch = oh.make_graph(
+            [oh.make_node("Relu", ["X"], ["positive"])],
+            "then",
+            [],
+            [oh.make_tensor_value_info("positive", TensorProto.FLOAT, [2])],
+        )
+        else_branch = oh.make_graph(
+            [oh.make_node("Neg", ["X"], ["negative"])],
+            "else",
+            [],
+            [oh.make_tensor_value_info("negative", TensorProto.FLOAT, [2])],
+        )
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node(
+                        "If", ["cond"], ["Y"], then_branch=then_branch, else_branch=else_branch
+                    )
+                ],
+                "conditional",
+                [
+                    oh.make_tensor_value_info("cond", TensorProto.BOOL, []),
+                    oh.make_tensor_value_info("X", TensorProto.FLOAT, [2]),
+                ],
+                [oh.make_tensor_value_info("Y", TensorProto.FLOAT, [2])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=9,
+        )
+        before = model.SerializeToString()
+        sopts = onnxl.SerializeOptions()
+        sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+        session = onnxruntime.InferenceSession(
+            model.SerializeToString(sopts), providers=["CPUExecutionProvider"]
+        )
+        x = np.array([-1, 2], dtype=np.float32)
+        for condition in (False, True):
+            expected = np.maximum(x, 0) if condition else -x
+            np.testing.assert_array_equal(
+                session.run(None, {"X": x, "cond": np.array(condition)})[0], expected
+            )
+        self.assertEqual(model.SerializeToString(), before)
+        popts = onnxl.ParseOptions()
+        popts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+        parsed = onnxl.ModelProto()
+        parsed.ParseFromString(model.SerializeToString(sopts), popts)
+        session = onnxruntime.InferenceSession(
+            parsed.SerializeToString(), providers=["CPUExecutionProvider"]
+        )
+        for condition in (False, True):
+            expected = np.maximum(x, 0) if condition else -x
+            np.testing.assert_array_equal(
+                session.run(None, {"X": x, "cond": np.array(condition)})[0], expected
+            )
+
+    def test_ort_flatbuffers_loop_carried_and_scan_outputs(self) -> None:
+        body = oh.make_graph(
+            [
+                oh.make_node("Identity", ["keep"], ["next_keep"]),
+                oh.make_node("Add", ["state", "step"], ["next_state"]),
+                oh.make_node("Identity", ["next_state"], ["scan"]),
+            ],
+            "body",
+            [
+                oh.make_tensor_value_info("iteration", TensorProto.INT64, []),
+                oh.make_tensor_value_info("keep", TensorProto.BOOL, []),
+                oh.make_tensor_value_info("state", TensorProto.FLOAT, [2]),
+            ],
+            [
+                oh.make_tensor_value_info("next_keep", TensorProto.BOOL, []),
+                oh.make_tensor_value_info("next_state", TensorProto.FLOAT, [2]),
+                oh.make_tensor_value_info("scan", TensorProto.FLOAT, [2]),
+            ],
+        )
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Loop", ["count", "condition", "X"], ["Y", "S"], body=body)],
+                "loop",
+                [oh.make_tensor_value_info("X", TensorProto.FLOAT, [2])],
+                [
+                    oh.make_tensor_value_info("Y", TensorProto.FLOAT, [2]),
+                    oh.make_tensor_value_info("S", TensorProto.FLOAT, [3, 2]),
+                ],
+                [
+                    onh.from_array(np.array(3, dtype=np.int64), name="count"),
+                    onh.from_array(np.array(True), name="condition"),
+                    onh.from_array(np.ones(2, dtype=np.float32), name="step"),
+                ],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=9,
+        )
+        sopts = onnxl.SerializeOptions()
+        sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+        session = onnxruntime.InferenceSession(
+            model.SerializeToString(sopts), providers=["CPUExecutionProvider"]
+        )
+        x = np.array([1, 2], dtype=np.float32)
+        final, scan = session.run(None, {"X": x})
+        np.testing.assert_array_equal(final, x + 3)
+        np.testing.assert_array_equal(scan, np.stack([x + 1, x + 2, x + 3]))
+        popts = onnxl.ParseOptions()
+        popts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+        parsed = onnxl.ModelProto()
+        parsed.ParseFromString(model.SerializeToString(sopts), popts)
+        session = onnxruntime.InferenceSession(
+            parsed.SerializeToString(), providers=["CPUExecutionProvider"]
+        )
+        final, scan = session.run(None, {"X": x})
+        np.testing.assert_array_equal(final, x + 3)
+        np.testing.assert_array_equal(scan, np.stack([x + 1, x + 2, x + 3]))
 
     def test_ort_flatbuffers_parse_from_string_raises(self) -> None:
         model, _, _ = _make_simple_model()
@@ -121,110 +518,94 @@ class TestSerializeFormat(ExtTestCase):
         with self.assertRaises(RuntimeError):
             parsed.ParseFromFile(path, popts)
 
-    def test_ort_flatbuffers_serialize_to_string_raises_with_parallelization(self) -> None:
-        # Combining the unimplemented ORT flatbuffer writer with parallel writing
-        # must still produce a clean RuntimeError: the format guard is expected
-        # to fire before any thread pool is spun up. This prevents silently
-        # falling back to a parallel ONNX-protobuf write while the user asked
-        # for the flatbuffer format.
-        model, _, _ = _make_simple_model()
+    def test_ort_flatbuffers_serialize_to_string_with_parallelization(self) -> None:
+        model, x, expected = _make_simple_model()
         for num_threads in (2, 4, -1):
             with self.subTest(num_threads=num_threads):
                 sopts = onnxl.SerializeOptions()
                 sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
                 sopts.num_threads = num_threads
-                with self.assertRaises(RuntimeError):
-                    model.SerializeToString(sopts)
+                self.assert_ort_model(model.SerializeToString(sopts), x, expected)
 
-    def test_ort_flatbuffers_serialize_to_string_raises_with_alignment(self) -> None:
-        # Same contract for the alignment knob: the format guard takes
-        # precedence so the user gets a clear "format not implemented" error
-        # instead of an aligned ONNX-protobuf payload.
-        model, _, _ = _make_simple_model()
+    def test_ort_flatbuffers_serialize_to_string_with_alignment(self) -> None:
+        model, x, expected = _make_simple_model()
         for alignment in (16, 64, 4096):
             with self.subTest(alignment=alignment):
                 sopts = onnxl.SerializeOptions()
                 sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
                 sopts.alignment = alignment
-                with self.assertRaises(RuntimeError):
-                    model.SerializeToString(sopts)
+                self.assert_ort_model(model.SerializeToString(sopts), x, expected)
 
-    def test_ort_flatbuffers_serialize_to_string_raises_with_parallel_and_alignment(self) -> None:
-        # Both knobs together must still surface the format guard.
-        model, _, _ = _make_simple_model()
+    def test_ort_flatbuffers_serialize_to_string_with_parallel_and_alignment(self) -> None:
+        model, x, expected = _make_simple_model()
         sopts = onnxl.SerializeOptions()
         sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
         sopts.num_threads = 4
         sopts.alignment = 4096
-        with self.assertRaises(RuntimeError):
-            model.SerializeToString(sopts)
+        self.assert_ort_model(model.SerializeToString(sopts), x, expected)
 
-    def test_ort_flatbuffers_serialize_to_file_raises_with_parallelization(self) -> None:
-        model, _, _ = _make_simple_model()
+    def test_ort_flatbuffers_serialize_to_file_with_parallelization(self) -> None:
+        model, x, expected = _make_simple_model()
         for num_threads in (2, 4, -1):
             with self.subTest(num_threads=num_threads):
-                path = self.get_dump_file(
-                    f"test_ort_serialize_to_file_unimpl_threads_{num_threads}.ort"
-                )
+                path = self.get_dump_file(f"test_ort_serialize_to_file_threads_{num_threads}.ort")
                 sopts = onnxl.SerializeOptions()
                 sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
                 sopts.num_threads = num_threads
-                with self.assertRaises(RuntimeError):
-                    model.SerializeToFile(path, sopts)
+                model.SerializeToFile(path, sopts)
+                self.assert_ort_model(path, x, expected)
 
-    def test_ort_flatbuffers_serialize_to_file_raises_with_alignment(self) -> None:
-        model, _, _ = _make_simple_model()
+    def test_ort_flatbuffers_serialize_to_file_with_alignment(self) -> None:
+        model, x, expected = _make_simple_model()
         for alignment in (16, 64, 4096):
             with self.subTest(alignment=alignment):
-                path = self.get_dump_file(
-                    f"test_ort_serialize_to_file_unimpl_align_{alignment}.ort"
-                )
+                path = self.get_dump_file(f"test_ort_serialize_to_file_align_{alignment}.ort")
                 sopts = onnxl.SerializeOptions()
                 sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
                 sopts.alignment = alignment
-                with self.assertRaises(RuntimeError):
-                    model.SerializeToFile(path, sopts)
+                model.SerializeToFile(path, sopts)
+                self.assert_ort_model(path, x, expected)
 
-    def test_ort_flatbuffers_serialize_to_file_raises_with_parallel_and_alignment(self) -> None:
-        model, _, _ = _make_simple_model()
-        path = self.get_dump_file("test_ort_serialize_to_file_unimpl_parallel_align.ort")
+    def test_ort_flatbuffers_serialize_to_file_with_parallel_and_alignment(self) -> None:
+        model, x, expected = _make_simple_model()
+        path = self.get_dump_file("test_ort_serialize_to_file_parallel_align.ort")
         sopts = onnxl.SerializeOptions()
         sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
         sopts.num_threads = 4
         sopts.alignment = 4096
-        with self.assertRaises(RuntimeError):
-            model.SerializeToFile(path, sopts)
+        model.SerializeToFile(path, sopts)
+        self.assert_ort_model(path, x, expected)
 
-    def test_ort_flatbuffers_parse_from_string_raises_with_parallelization(self) -> None:
-        # Symmetric coverage for the parser: combining the unimplemented
-        # ORT flatbuffer reader with parallel reading must raise cleanly too.
-        model, _, _ = _make_simple_model()
-        data = model.SerializeToString()
+    def test_ort_flatbuffers_parse_from_string_with_parallelization(self) -> None:
+        model, x, expected = _make_simple_model()
+        sopts = onnxl.SerializeOptions()
+        sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+        data = model.SerializeToString(sopts)
         for num_threads in (2, 4, -1):
             with self.subTest(num_threads=num_threads):
                 popts = onnxl.ParseOptions()
                 popts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
                 popts.num_threads = num_threads
                 parsed = onnxl.ModelProto()
-                with self.assertRaises(RuntimeError):
-                    parsed.ParseFromString(data, popts)
+                parsed.ParseFromString(data, popts)
+                self.assert_ort_model(parsed.SerializeToString(), x, expected)
 
-    def test_ort_flatbuffers_parse_from_string_raises_with_alignment(self) -> None:
-        model, _, _ = _make_simple_model()
-        data = model.SerializeToString()
+    def test_ort_flatbuffers_parse_from_string_with_alignment(self) -> None:
+        model, x, expected = _make_simple_model()
+        sopts = onnxl.SerializeOptions()
+        sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+        data = model.SerializeToString(sopts)
         for alignment in (16, 64, 4096):
             with self.subTest(alignment=alignment):
                 popts = onnxl.ParseOptions()
                 popts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
                 popts.alignment = alignment
                 parsed = onnxl.ModelProto()
-                with self.assertRaises(RuntimeError):
-                    parsed.ParseFromString(data, popts)
+                parsed.ParseFromString(data, popts)
+                self.assert_ort_model(parsed.SerializeToString(), x, expected)
 
     def test_ort_flatbuffers_parse_from_string_zero_recursion_depth_raises(self) -> None:
-        # max_recursion_depth must be > 0 for the ORT flatbuffer path.  The
-        # guard fires before the "not implemented" stub so that when the real
-        # parser lands the protection is already wired up.
+        # Invalid options are rejected before decoding starts.
         model, _, _ = _make_simple_model()
         data = model.SerializeToString()
         popts = onnxl.ParseOptions()
@@ -367,19 +748,7 @@ class TestSerializeFormat(ExtTestCase):
         with self.assertRaisesRegex(RuntimeError, "max_tensor_size_bytes"):
             parsed.ParseFromString(data, popts)
 
-    @unittest.skip(
-        "Saving to onnxruntime flatbuffer format is not implemented yet; "
-        "this test will be enabled once SerializeFormat.ORT_FLATBUFFERS produces "
-        "files that load and run in onnxruntime."
-    )
     def test_ort_flatbuffers_round_trip_with_onnxruntime(self) -> None:
-        # When the ORT flatbuffer writer is implemented, this test verifies
-        # that the produced file works with onnxruntime for multiple opsets.
-        try:
-            import onnxruntime as ort  # noqa: F401
-        except ImportError:
-            self.skipTest("onnxruntime is not available")
-
         for opset in (15, 18, 21):
             with self.subTest(opset=opset):
                 model, x, expected = _make_simple_model(opset=opset)
@@ -389,9 +758,7 @@ class TestSerializeFormat(ExtTestCase):
                 model.SerializeToFile(path, sopts)
                 self.assertTrue(os.path.exists(path))
 
-                sess = ort.InferenceSession(path, providers=["CPUExecutionProvider"])
-                (got,) = sess.run(None, {"X": x})
-                np.testing.assert_allclose(got, expected, rtol=1e-5, atol=1e-5)
+                self.assert_ort_model(path, x, expected)
 
 
 if __name__ == "__main__":

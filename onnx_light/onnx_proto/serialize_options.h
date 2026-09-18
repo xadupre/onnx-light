@@ -92,8 +92,7 @@ struct ParseOptions : TensorBufferOptions {
   /** Selects the on-disk serialization format expected when parsing.
    *  ``SerializeFormat::kOnnx`` (default) parses the ONNX protobuf wire format;
    *  ``SerializeFormat::kOrtFlatbuffers`` parses the onnxruntime flatbuffer
-   *  format (``.ort`` files). The flatbuffer path is not yet implemented and
-   *  raises an error when used. */
+   *  format (``.ort`` files) into ModelProto. */
   SerializeFormat format = SerializeFormat::kOnnx;
   /** if true, raw data will not be read but skipped, tensors are not valid in that case  but the
    * model structure is still available */
@@ -104,7 +103,8 @@ struct ParseOptions : TensorBufferOptions {
    *  - ``< 0``: choose a sensible value based on the number of available CPU cores
    *    (``std::thread::hardware_concurrency()``).
    *  - ``0``: treated the same as ``1`` (no parallelization) for the purposes of
-   *    :cpp:func:`is_parallel`. */
+   *    :cpp:func:`is_parallel`.
+   *  ORT FlatBuffers decoding remains sequential regardless of this value. */
   int32_t num_threads = 1;
   /** minimum raw-data block size in bytes to submit to the thread pool when parallel reading is
    * enabled (``num_threads != 1``); blocks smaller than this value are read on the main thread
@@ -133,7 +133,9 @@ struct ParseOptions : TensorBufferOptions {
    * borrows directly from the source bytes buffer (for example the bytes passed to
    * ParseFromString), so the caller MUST keep that buffer alive for as long as any
    * TensorProto references it.  For external-data files, onnx-light loads each weights file
-   * once into a shared model-owned buffer and each tensor borrows a view into that buffer. */
+   * once into a shared model-owned buffer and each tensor borrows a view into that buffer.
+   * ORT FlatBuffers parsing currently materializes model-owned tensor data even when this
+   * flag is true. */
   bool no_copy = false;
   /** If true, parses all tensors normally and then touches one byte per memory page in
    * each non-empty raw_data buffer (plus the last byte). This forces lazy page faults
@@ -217,8 +219,8 @@ struct SerializeOptions : TensorBufferOptions {
   /** Selects the on-disk serialization format produced when serializing.
    *  ``SerializeFormat::kOnnx`` (default) writes the ONNX protobuf wire format;
    *  ``SerializeFormat::kOrtFlatbuffers`` writes the onnxruntime flatbuffer
-   *  format (``.ort`` files). The flatbuffer path is not yet implemented and
-   *  raises an error when used. */
+   *  format (``.ort`` files) for ModelProto. Standalone proto messages cannot
+   *  be serialized as ORT models. */
   SerializeFormat format = SerializeFormat::kOnnx;
   /** if true, raw data will not be written but skipped, tensors are not valid in that case but the
    * model structure is still available */
@@ -229,7 +231,8 @@ struct SerializeOptions : TensorBufferOptions {
    *  - ``< 0``: choose a sensible value based on the number of available CPU cores
    *    (``std::thread::hardware_concurrency()``).
    *  - ``0``: treated the same as ``1`` (no parallelization) for the purposes of
-   *    :cpp:func:`is_parallel`. */
+   *    :cpp:func:`is_parallel`.
+   *  ORT FlatBuffers assembly remains single-threaded regardless of this value. */
   int32_t num_threads = 1;
   /** minimum raw-data block size in bytes to submit to the thread pool when parallel writing is
    * enabled (``num_threads != 1``); blocks smaller than this value are written on the main thread
@@ -249,7 +252,8 @@ struct SerializeOptions : TensorBufferOptions {
    * external_data metadata location (can target multiple weights files). */
   bool use_external_data_location = true;
   /** Maximum serialized size in bytes allowed for one serialization operation.
-   *  The limit applies to the total output size (protobuf payload + external data).
+   *  The limit applies to the total output size (protobuf payload + external data,
+   *  or the complete ORT FlatBuffer).
    *  - ``0`` (default): no limit.
    *  - ``> 0``: serialization returns ``false`` when the computed size exceeds this limit.
    */

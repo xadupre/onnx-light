@@ -41,6 +41,12 @@ namespace ONNX_LIGHT_NAMESPACE::core::shapes {
 /// Returns whether a type contains a structured branch, including nested containers.
 bool HasStructuredType(const TypeProto &type);
 
+/// Compares declared types without their outer denotation annotations.
+bool SameDeclaredType(const TypeProto &left, const TypeProto &right);
+
+/// Checks whether an encoded default is compatible with a public input declaration.
+bool CompatibleEncodedDefault(const TypeProto &declared, const TypeProto &actual);
+
 // The symbolic value descriptors (SymDim, SymShape, SymTensor, SymSequence,
 // TensorType, ...) live in ``onnx_core::symbolic`` so both ``onnx_op`` and
 // ``onnx_shapes`` can share them. Bring them into ``onnx_shapes::shapes`` so

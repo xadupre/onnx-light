@@ -27,7 +27,9 @@ namespace ONNX_LIGHT_NAMESPACE::core::builder {
 
 BuilderError::~BuilderError() = default;
 
+using ::onnx_light::core::shapes::CompatibleEncodedDefault;
 using ::onnx_light::core::shapes::kUnknownOpsetVersion;
+using ::onnx_light::core::shapes::SameDeclaredType;
 using ::onnx_light::core::shapes::ShapesContext;
 using ::onnx_light::core::symbolic::SymTensorFromTensorProto;
 using ::onnx_light::core::symbolic::SymTensorFromValueInfo;
@@ -141,14 +143,6 @@ bool HasStructuredType(const TypeProto &type) {
   return type.has_map_type() && HasStructuredType(type.map_type().value_type());
 }
 
-bool SameDeclaredType(const TypeProto &left, const TypeProto &right) {
-  TypeProto lhs = left;
-  TypeProto rhs = right;
-  lhs.clear_denotation();
-  rhs.clear_denotation();
-  return lhs.SerializeAsString() == rhs.SerializeAsString();
-}
-
 using DeclaredTypes = std::unordered_map<std::string, const TypeProto *>;
 
 DeclaredTypes StructuredDeclarations(const utils::RepeatedProtoField<ValueInfoProto> &values) {
@@ -177,31 +171,6 @@ void SeedDeclaredOutputs(ShapesContext &shapes, const NodeProto &node,
       shapes.SetType(name, *declared->second);
     }
   }
-}
-
-bool CompatibleEncodedDefault(const TypeProto &declared, const TypeProto &actual) {
-  if (!declared.has_tensor_type() || !actual.has_tensor_type()) {
-    return SameDeclaredType(declared, actual);
-  }
-  const auto &left = declared.tensor_type();
-  const auto &right = actual.tensor_type();
-  if (left.elem_type() != TensorProto::UNDEFINED && left.elem_type() != right.elem_type()) {
-    return false;
-  }
-  if (!left.has_shape()) {
-    return true;
-  }
-  if (!right.has_shape() || left.shape().dim().size() != right.shape().dim().size()) {
-    return false;
-  }
-  for (std::size_t i = 0; i < left.shape().dim().size(); ++i) {
-    const auto &dimension = left.shape().dim(i);
-    if (dimension.has_dim_value() && (!right.shape().dim(i).has_dim_value() ||
-                                      dimension.dim_value() != right.shape().dim(i).dim_value())) {
-      return false;
-    }
-  }
-  return true;
 }
 
 void RequireStandardGraph(const GraphProto &graph);

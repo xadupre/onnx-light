@@ -27,6 +27,39 @@ bool HasStructuredType(const TypeProto &type) {
   return false;
 }
 
+bool SameDeclaredType(const TypeProto &left, const TypeProto &right) {
+  TypeProto lhs = left;
+  TypeProto rhs = right;
+  lhs.clear_denotation();
+  rhs.clear_denotation();
+  return lhs.SerializeAsString() == rhs.SerializeAsString();
+}
+
+bool CompatibleEncodedDefault(const TypeProto &declared, const TypeProto &actual) {
+  if (!declared.has_tensor_type() || !actual.has_tensor_type()) {
+    return SameDeclaredType(declared, actual);
+  }
+  const auto &left = declared.tensor_type();
+  const auto &right = actual.tensor_type();
+  if (left.elem_type() != TensorProto::UNDEFINED && left.elem_type() != right.elem_type()) {
+    return false;
+  }
+  if (!left.has_shape()) {
+    return true;
+  }
+  if (!right.has_shape() || left.shape().dim().size() != right.shape().dim().size()) {
+    return false;
+  }
+  for (std::size_t i = 0; i < left.shape().dim().size(); ++i) {
+    const auto &dimension = left.shape().dim(i);
+    if (dimension.has_dim_value() && (!right.shape().dim(i).has_dim_value() ||
+                                      dimension.dim_value() != right.shape().dim(i).dim_value())) {
+      return false;
+    }
+  }
+  return true;
+}
+
 namespace {
 
 void CheckCatalogueCompatibility(const ShapesContext &left, const ShapesContext &right,
@@ -205,8 +238,7 @@ void ShapesContext::CheckStructuredCompatibility(const std::string &name,
                       "Control-flow outputs have incompatible structured types.");
   if (structured) {
     CheckCatalogueCompatibility(*this, other, GetType(name));
-    EXT_ENFORCE_INVALID(GetType(name).SerializeAsString() ==
-                            other.GetType(other_name).SerializeAsString(),
+    EXT_ENFORCE_INVALID(SameDeclaredType(GetType(name), other.GetType(other_name)),
                         "Control-flow outputs have incompatible structured types.");
   }
   EXT_ENFORCE_INVALID(HasEncodedValue(name) == other.HasEncodedValue(other_name),

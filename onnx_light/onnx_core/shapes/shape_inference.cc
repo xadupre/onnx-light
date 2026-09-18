@@ -22,6 +22,14 @@ namespace ONNX_LIGHT_NAMESPACE::core::shapes {
 
 namespace {
 
+void ApplyInferredType(const TypeProto &type, ValueInfoProto &value) {
+  TypeProto inferred = type;
+  if (value.has_type() && value.type().has_denotation()) {
+    inferred.set_denotation(value.type().denotation());
+  }
+  value.ref_type() = std::move(inferred);
+}
+
 // Checks the node belongs to a supported domain: the default ONNX
 // domain (empty string or "ai.onnx") or the traditional ML domain
 // ("ai.onnx.ml"). Throws std::invalid_argument otherwise.
@@ -964,7 +972,25 @@ void ShapesContext::ComputeShapeGraph(const GraphProto &graph) {
   // and ``graph.input()``; the initializer wins).
   current_node_index_ = -2;
   for (const auto &init : graph.ref_encoded_initializer()) {
-    SetEncodedValue(init.name(), init);
+    const auto input = std::find_if(graph.input().begin(), graph.input().end(),
+                                    [&](const auto &vi) { return vi.name() == init.name(); });
+    if (input == graph.input().end()) {
+      SetEncodedValue(init.name(), init);
+      continue;
+    }
+    // An overridable default is validated but cannot specialize its public input.
+    catalogue.ValidateEncodedValue(init);
+    if (input->has_type()) {
+      TypeProto actual;
+      if (init.has_struct_type() && !(input->type().has_tensor_type() && init.has_logical_type())) {
+        actual.ref_struct_type() = init.ref_struct_type();
+      } else {
+        actual = init.ref_logical_type();
+      }
+      EXT_ENFORCE_INVALID(CompatibleEncodedDefault(input->type(), actual),
+                          "ComputeShapeGraph: encoded default is incompatible with input '",
+                          init.name(), "'.");
+    }
   }
   for (std::size_t i = 0; i < graph.initializer().size(); ++i) {
     const TensorProto &init = graph.initializer()[i];
@@ -986,9 +1012,8 @@ void ShapesContext::ComputeShapeGraph(const GraphProto &graph) {
   }
   ComputeShapes(graph.node());
   for (const auto &vi : graph.output()) {
-    if (vi.has_type() && vi.type().has_struct_type()) {
-      EXT_ENFORCE_INVALID(HasType(vi.name()) && GetType(vi.name()).SerializeAsString() ==
-                                                    vi.type().SerializeAsString(),
+    if (vi.has_type() && HasStructuredType(vi.type())) {
+      EXT_ENFORCE_INVALID(HasType(vi.name()) && SameDeclaredType(GetType(vi.name()), vi.type()),
                           "ComputeShapeGraph: incompatible structured output type for '", vi.name(),
                           "'.");
     }
@@ -1060,7 +1085,7 @@ void ApplyInferredShapesToValueInfo(const ShapesContext &ctx, GraphOrFunction &g
     const std::string name = vi.name();
     existing_value_info.insert(name);
     if (!name.empty() && ctx.HasType(name)) {
-      vi.ref_type() = ctx.GetType(name);
+      ApplyInferredType(ctx.GetType(name), vi);
     } else if (!name.empty() && ctx.Has(name)) {
       SymTensorToValueInfo(ctx.Get(name), vi);
     }
@@ -1125,7 +1150,7 @@ void ShapesContext::ApplyInferredShapesToGraph(GraphProto &graph) const {
     const std::string name = vi.name();
     output_names.insert(name);
     if (!name.empty() && HasType(name)) {
-      vi.ref_type() = GetType(name);
+      ApplyInferredType(GetType(name), vi);
     } else if (!name.empty() && Has(name)) {
       SymTensorToValueInfo(Get(name), vi);
     }

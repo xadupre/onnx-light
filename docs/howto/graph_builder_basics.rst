@@ -156,7 +156,13 @@ types from payload geometry. A logical tensor descriptor does not decode the
 stored bytes or make an encoded initializer an ordinary tensor constant.
 The affine branch retains its storage type, scales, zero point, axis and
 block size; its logical tensor type must have concrete dimensions.
-``Identity`` preserves the structured descriptor. Standard tensor operators
+An encoded initializer sharing a graph input's name is an overridable
+default: inference validates its layout but retains the public input type
+and symbolic shape rather than treating the default bytes as a constant.
+``Identity`` preserves the structured descriptor, including structured types
+nested in sequence, optional and map containers. ``If`` branches and
+``Loop``-carried values preserve matching structured types; encoded values
+must also have identical layouts and payloads. Standard tensor operators
 do not implicitly decode encoded inputs. Custom consumers need registered
 shape inference; unsupported structured operations and control-flow merges
 fail explicitly rather than guessing a layout.

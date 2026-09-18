@@ -414,6 +414,107 @@ TEST(StructuredInference, NestedStructuredContainersStillRequireCustomInference)
                std::invalid_argument);
 }
 
+TEST(StructuredInference, IfAndLoopPreserveNestedStructuredContainers) {
+  auto model = StructuredModel();
+  TypeProto type;
+  type.ref_optional_type()
+      .ref_elem_type()
+      .ref_sequence_type()
+      .ref_elem_type()
+      .ref_map_type()
+      .set_key_type(TensorProto::INT64);
+  type.ref_optional_type()
+      .ref_elem_type()
+      .ref_sequence_type()
+      .ref_elem_type()
+      .ref_map_type()
+      .ref_value_type()
+      .ref_struct_type()
+      .set_type_ref(uint64_t(1));
+  core::shapes::ShapesContext context;
+  context.SetStructTypes(model.ref_struct_types());
+  context.SetType("encoded", type);
+  context.Set("condition",
+              core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, {}));
+  context.ComputeShapeNode(IfNode(Branch("left"), Branch("right")));
+  EXPECT_EQ(context.GetType("result").SerializeAsString(), type.SerializeAsString());
+  EXPECT_FALSE(context.Has("result"));
+  EXPECT_FALSE(context.HasEncodedValue("result"));
+
+  GraphProto body;
+  body.add_input()->set_name("iteration");
+  body.add_input()->set_name("cond_in");
+  body.add_input()->set_name("carried");
+  *body.add_node() = UnaryNode("Identity", "cond_in", "cond_out");
+  *body.add_node() = UnaryNode("Identity", "carried", "carried_out");
+  body.add_output()->set_name("cond_out");
+  body.add_output()->set_name("carried_out");
+  NodeProto loop;
+  loop.set_op_type("Loop");
+  loop.add_input("");
+  loop.add_input("condition");
+  loop.add_input("result");
+  loop.add_output("loop_result");
+  auto *attribute = loop.add_attribute();
+  attribute->set_name("body");
+  attribute->set_type(AttributeProto::GRAPH);
+  attribute->set_g(body);
+  context.ComputeShapeNode(loop);
+  EXPECT_EQ(context.GetType("loop_result").SerializeAsString(), type.SerializeAsString());
+  EXPECT_FALSE(context.Has("loop_result"));
+  EXPECT_FALSE(context.HasEncodedValue("loop_result"));
+
+  auto different = Branch("different");
+  auto *input = different.add_input();
+  input->set_name("encoded");
+  input->ref_type().ref_sequence_type().ref_elem_type().ref_struct_type().set_type_ref(uint64_t(1));
+  EXPECT_THROW(context.ComputeShapeNode(IfNode(Branch("left"), different)), std::invalid_argument);
+}
+
+TEST(StructuredInference, RejectsIncompatibleNestedStructuredOutputDeclaration) {
+  auto model = StructuredModel();
+  auto &graph = model.ref_graph();
+  graph.ref_encoded_initializer().Clear();
+  auto *input = graph.add_input();
+  input->set_name("encoded");
+  input->ref_type().ref_sequence_type().ref_elem_type().ref_struct_type().set_type_ref(uint64_t(1));
+  graph.ref_output()[0]
+      .ref_type()
+      .ref_sequence_type()
+      .ref_elem_type()
+      .ref_struct_type()
+      .set_type_ref(uint64_t(2));
+  core::shapes::ShapesContext context;
+  EXPECT_THROW(context.ComputeShapeModel(model), std::invalid_argument);
+}
+
+TEST(StructuredInference, EncodedDefaultsPreservePublicTensorShapeAndValidatePayload) {
+  auto model = StructuredModel();
+  auto *input = model.ref_graph().add_input();
+  input->set_name("encoded");
+  input->ref_type() = LogicalTensor();
+  input->ref_type().ref_tensor_type().ref_shape().ref_dim()[0].set_dim_param("batch");
+  model.ref_graph().ref_node()[0].set_op_type("Abs");
+  core::shapes::ShapesContext context;
+  context.ComputeShapeModel(model);
+  EXPECT_FALSE(context.HasEncodedValue("encoded"));
+  EXPECT_FALSE(context.HasEncodedValue("output"));
+  EXPECT_EQ(context.Get("output").Shape()[0].AsExpr(), "batch");
+
+  core::shapes::ShapesContext preseeded;
+  preseeded.Set("encoded",
+                core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                          core::symbolic::SymShape{core::symbolic::SymDim(12)}));
+  preseeded.ComputeShapeModel(model);
+  EXPECT_EQ(preseeded.Get("output").Shape()[0].AsInt(), 12);
+
+  model.ref_graph().ref_encoded_initializer()[0].set_raw_data("x");
+  EXPECT_THROW(context.ComputeShapeModel(model), std::invalid_argument);
+  model.ref_graph().ref_encoded_initializer()[0].set_raw_data(std::string(4, '\1'));
+  input->ref_type().ref_tensor_type().set_elem_type(TensorProto::INT64);
+  EXPECT_THROW(context.ComputeShapeModel(model), std::invalid_argument);
+}
+
 TEST(StructuredInference, ReorderedCataloguesRemainCompatibleForCopyAndControlFlow) {
   auto model = StructuredModel();
   core::shapes::ShapesContext original;

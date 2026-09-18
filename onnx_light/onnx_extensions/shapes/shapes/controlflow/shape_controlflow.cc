@@ -37,9 +37,6 @@ ShapesContext InferSubgraph(ShapesContext &parent_ctx, const std::string &branch
                             const GraphProto &subgraph) {
   ShapesContext local = parent_ctx;
   local.set_current_subgraph(local.current_node_index(), branch_name);
-  for (const auto &init : subgraph.ref_encoded_initializer()) {
-    local.SetEncodedValue(init.name(), init);
-  }
   for (const auto &input : subgraph.input()) {
     if (input.has_type() && input.type().value_case() != TypeProto::VALUE_NOT_SET) {
       local.SetType(input.name(), input.type());
@@ -162,7 +159,8 @@ void ComputeShapeIf(ShapesContext &ctx, const NodeProto &node) {
     const std::string else_name = else_branch.output()[i].name();
     then_ctx.CheckStructuredCompatibility(then_name, else_ctx, else_name);
     if (then_ctx.HasEncodedValue(then_name) ||
-        (then_ctx.HasType(then_name) && then_ctx.GetType(then_name).has_struct_type())) {
+        (then_ctx.HasType(then_name) &&
+         core::shapes::HasStructuredType(then_ctx.GetType(then_name)))) {
       ctx.CopyValueFrom(out_name, then_ctx, then_name);
       continue;
     }
@@ -225,9 +223,6 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
   // descriptor.
   ShapesContext local = ctx;
   local.set_current_subgraph(local.current_node_index(), "body");
-  for (const auto &init : body.ref_encoded_initializer()) {
-    local.SetEncodedValue(init.name(), init);
-  }
   for (int i = 0; i < static_cast<int>(body.initializer().size()); ++i) {
     const TensorProto &init = body.initializer()[i];
     const std::string name = init.name();
@@ -282,7 +277,7 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
     const std::string body_name = body.output()[1 + i].name();
     ctx.CheckStructuredCompatibility(initial_name, local, body_name);
     if (ctx.HasEncodedValue(initial_name) ||
-        (ctx.HasType(initial_name) && ctx.GetType(initial_name).has_struct_type())) {
+        (ctx.HasType(initial_name) && core::shapes::HasStructuredType(ctx.GetType(initial_name)))) {
       ctx.CopyValueFrom(node_out, local, body_name);
       continue;
     }

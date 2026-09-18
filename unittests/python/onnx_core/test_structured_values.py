@@ -314,6 +314,66 @@ class TestStructuredValues(unittest.TestCase):
 
         check_model(model)
 
+    def test_nested_structured_if_roundtrip(self):
+        value_type = onnx.TypeProto(
+            sequence_type=onnx.TypeProto.Sequence(
+                elem_type=onnx.TypeProto(struct_type=StructTypeProto(type_ref=1))
+            )
+        )
+        branch = helper.make_graph(
+            [helper.make_node("Identity", ["records"], ["forwarded"])],
+            "branch",
+            [],
+            [onnx.ValueInfoProto(name="forwarded", type=value_type)],
+        )
+        model = helper.make_model(
+            helper.make_graph(
+                [
+                    helper.make_node(
+                        "If", ["condition"], ["output"], then_branch=branch, else_branch=branch
+                    )
+                ],
+                "nested",
+                [
+                    helper.make_tensor_value_info("condition", onnx.TensorProto.BOOL, []),
+                    onnx.ValueInfoProto(name="records", type=value_type),
+                ],
+                [onnx.ValueInfoProto(name="output", type=value_type)],
+            )
+        )
+        model.struct_types = [declaration()]
+        context = ShapesContext()
+        context.compute_shape_model(model)
+        self.assertEqual(
+            context.get_type("output").SerializeToString(), value_type.SerializeToString()
+        )
+        exported = GraphBuilder(model).to_model()
+        self.assertEqual(
+            exported.graph.output[0].type.SerializeToString(), value_type.SerializeToString()
+        )
+        restored = onnx.ModelProto()
+        restored.ParseFromString(exported.SerializeToString())
+        context.compute_shape_model(restored)
+        self.assertEqual(
+            context.get_type("output").SerializeToString(), value_type.SerializeToString()
+        )
+
+    def test_encoded_default_preserves_public_input(self):
+        builder = GraphBuilder("default")
+        builder.make_struct_type(declaration())
+        builder.inp("weights", onnx.TensorProto.FLOAT, ["batch"])
+        builder.make_encoded_initializer(encoded())
+        builder.out(builder.op.Abs("weights"))
+        model = builder.to_model()
+        context = ShapesContext()
+        context.compute_shape_model(model)
+        self.assertFalse(context.has_encoded_value("weights"))
+        self.assertFalse(context.has_encoded_value(model.graph.output[0].name))
+        context.apply_inferred_shapes_to_model(model)
+        self.assertEqual(model.graph.input[0].type.tensor_type.shape.dim[0].dim_param, "batch")
+        self.assertEqual(model.graph.output[0].type.tensor_type.shape.dim[0].dim_param, "batch")
+        self.assertEqual(model.graph.encoded_initializer[0].raw_data, b"\x00\xff")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1714,6 +1714,10 @@ TEST(GraphBuilderStructured, NativeRoundtripPreservesDeclarationsAndMetadata) {
             graph->encoded_initializer()[0].SerializeAsString());
   EXPECT_EQ(exported.graph().output()[0].type().SerializeAsString(),
             graph->output()[0].type().SerializeAsString());
+  core::shapes::ShapesContext context;
+  context.ComputeShapeModel(exported);
+  context.ApplyInferredShapesToModel(exported);
+  EXPECT_EQ(exported.graph().output()[0].type().denotation(), "DECLARED_RECORD");
   EXPECT_NO_THROW(VerifyModel(exported));
   EXPECT_THROW(SerializeModelToOrtFlatbuffers(exported, {}), std::invalid_argument);
   EXPECT_THROW(builder.ToStandardModel(), core::builder::BuilderError);
@@ -1990,6 +1994,11 @@ TEST(GraphBuilderStructured, DefaultsRemainOverridableAndProtectedFromDeduplicat
   const auto model = builder.ToModel();
   EXPECT_FALSE(builder.Shapes().HasEncodedValue("input"));
   EXPECT_EQ(model.graph().encoded_initializer().size(), 2u);
+  core::shapes::ShapesContext context;
+  context.ComputeShapeModel(model);
+  EXPECT_FALSE(context.HasEncodedValue("input"));
+  EXPECT_FALSE(context.HasEncodedValue("output"));
+  EXPECT_TRUE(context.HasEncodedValue("constant"));
 }
 
 TEST(GraphBuilderStructured, LocalFunctionUsesModelCatalogueButCannotExportItAlone) {

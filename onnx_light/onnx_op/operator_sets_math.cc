@@ -1604,7 +1604,7 @@ LightOpSchema MakeSoftmaxCrossEntropyLossSchema(int since_version) {
   if (since_version >= 13) {
     t_types.push_back(TensorType::kBfloat16);
   }
-  return LightOpSchema(
+  LightOpSchema schema(
       "SoftmaxCrossEntropyLoss", kOnnxDomain, since_version, doc,
       {
           {"scores",
@@ -1658,6 +1658,7 @@ LightOpSchema MakeSoftmaxCrossEntropyLossSchema(int since_version) {
            AttributeType::INT, /*required=*/false},
       },
       /*has_function_implementation=*/true);
+  return schema.set_min_output(1);
 }
 
 std::vector<LightOpSchema> BuildSoftmaxCrossEntropyLossSchemas() {

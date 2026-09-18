@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/light_op_schema/light_op_schema.h"
+#include "onnx_lib/defs/schema.h"
+#include "onnx_op/operator_sets.h"
 
 #include <gtest/gtest.h>
 
@@ -14,11 +16,12 @@ using core::schema::AttributeParam;
 using core::schema::AttributeType;
 using core::schema::FormalParameter;
 using core::schema::LightOpSchema;
-using core::schema::SchemaError;
 using core::schema::SchemaInputValue;
 using core::schema::TypeConstraintParam;
 
 namespace Test {
+
+using core::schema::SchemaError;
 
 namespace {
 
@@ -79,6 +82,28 @@ TEST(LightOpSchemaVerify, TooManyOutputsRejected) {
   NodeProto node = MakeValidScaleNode();
   node.add_output("y2");
   EXPECT_THROW(schema.Verify(node), SchemaError);
+}
+
+TEST(LightOpSchemaVerify, OptionalOutputBoundsMatchNativeSchemas) {
+  for (bool init_doc : {false, true}) {
+    for (const auto &schema : onnx_op::GetAllOnnxOpSchemasWithHistory("", init_doc)) {
+      if (schema.domain() != core::schema::kOnnxDomain) {
+        continue;
+      }
+      const auto *native = OpSchemaRegistry::Schema(schema.name(), schema.since_version());
+      ASSERT_NE(native, nullptr) << schema.name();
+      bool has_optional_output = false;
+      for (const auto &output : native->outputs()) {
+        has_optional_output |= output.GetOption() == OpSchema::Optional;
+      }
+      if (!has_optional_output) {
+        continue;
+      }
+      SCOPED_TRACE(schema.name() + ":" + std::to_string(schema.since_version()));
+      EXPECT_EQ(schema.min_output(), native->min_output());
+      EXPECT_EQ(schema.max_output(), native->max_output());
+    }
+  }
 }
 
 TEST(LightOpSchemaVerify, MissingRequiredAttributeRejected) {

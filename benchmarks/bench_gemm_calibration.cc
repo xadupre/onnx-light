@@ -75,8 +75,10 @@ void PrintDescriptor(const CpuExecutionDescriptor &execution,
             << " spin_duration_ns=" << policy.spin.duration_ns << " uses_smt=" << policy.uses_smt
             << " uses_efficiency_cores=" << policy.uses_efficiency_cores
             << " nested=" << policy.allow_nested_parallelism << "\n# visible_processors=";
+  const char *separator = "";
   for (const auto &processor : ProcessVisibleLogicalProcessors()) {
-    std::cout << processor.group << ':' << processor.id << ' ';
+    std::cout << separator << processor.group << ':' << processor.id;
+    separator = " ";
   }
   std::cout << '\n';
 }

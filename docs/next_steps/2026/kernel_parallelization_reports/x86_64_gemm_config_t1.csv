@@ -2,7 +2,7 @@
 # architecture=x86_64 vendor=amd family=25 model=17 stepping=1 microarchitecture="" features=511
 # cache_line_bytes=64 l1_data_bytes=32768 l2_bytes=1048576 l3_bytes=33554432 physical_cores=2 logical_cores=4
 # requested_threads=1 effective_threads=1 affinity=none spin=adaptive spin_iterations=10000 spin_duration_ns=0 uses_smt=0 uses_efficiency_cores=0 nested=0
-# visible_processors=0:0 0:1 0:2 0:3 
+# visible_processors=0:0 0:1 0:2 0:3
 dtype,workload,m,n,k,trans_a,trans_b,configuration,tile_m,tile_n,tile_k,pack_b_minimum_elements,repetition,duration_ns
 1,small,16,32,32,0,0,0,64,256,256,16384,0,21852
 1,small,16,32,32,0,0,1,32,256,256,16384,0,21592

@@ -11,6 +11,7 @@
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/tuning/cpu_executor.h"
 #include "onnx_core/runtime/tuning/kernel_tuning.h"
+#include "onnx_core/runtime/tuning/kernel_tuning_cache.h"
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
 #include <gtest/gtest.h>
@@ -21,6 +22,9 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <limits>
 #include <stdexcept>
 #include <thread>
@@ -2988,6 +2992,103 @@ TEST(KernelClass, GemmAlgorithmConfigurationsValidateAndResetDefaults) {
   EXPECT_THROW(gemm.Configure(parameters), std::invalid_argument);
 }
 
+TEST(KernelTuningCache, GemmRejectsLegacyAbiAndRequiresExactExecutorDescriptor) {
+  using namespace core::runtime;
+  struct CacheFile {
+    std::filesystem::path path =
+        std::filesystem::temp_directory_path() /
+        ("onnx_light_gemm_abi_" +
+         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".cache");
+    ~CacheFile() {
+      std::error_code error;
+      std::filesystem::remove(path, error);
+      std::filesystem::remove(path.string() + ".lock", error);
+      std::filesystem::remove(path.string() + ".tmp", error);
+    }
+  } cache;
+  const Gemm gemm{KernelContext{DefaultOpset(13)}};
+  const auto key = gemm.TuningKey(static_cast<int32_t>(DataType::FLOAT));
+  ASSERT_EQ(key.tuning_abi, 2u);
+  const auto schema = GetKernelTuningRegistry().FindSchema(key);
+  ASSERT_NE(schema, nullptr);
+  auto current = schema->portable_defaults();
+  current.values["algorithm.configuration"] = int64_t{6};
+  auto legacy_key = key;
+  legacy_key.tuning_abi = 1;
+  const CpuExecutionDescriptor execution{core::platform::GetCpuDescriptor(), 2};
+  auto mismatch = execution;
+  mismatch.effective_threads = 1;
+  ASSERT_EQ(UpdateKernelTuningCache(std::span<const KernelTuningParameters>(&current, 1),
+                                    {cache.path, execution})
+                .status,
+            KernelTuningCacheUpdateStatus::kUpdated);
+  {
+    std::ifstream input(cache.path);
+    const std::string serialized{std::istreambuf_iterator<char>{input},
+                                 std::istreambuf_iterator<char>{}};
+    const auto profile_start = serialized.find("\nprofile\n");
+    ASSERT_NE(profile_start, std::string::npos);
+    std::string legacy = serialized.substr(profile_start + 1);
+    const std::string abi = "\ntuning_abi 2\n";
+    const auto abi_position = legacy.find(abi);
+    ASSERT_NE(abi_position, std::string::npos);
+    legacy.replace(abi_position, abi.size(), "\ntuning_abi 1\n");
+    const std::string configuration = "value \"algorithm.configuration\" int64 6\n";
+    const auto configuration_position = legacy.find(configuration);
+    ASSERT_NE(configuration_position, std::string::npos);
+    legacy.erase(configuration_position, configuration.size());
+    std::ofstream output(cache.path, std::ios::app);
+    output << legacy;
+    ASSERT_TRUE(output.good());
+  }
+  KernelCalibrationSelection selection;
+  selection.library = key.library;
+  selection.kernels = {key.kernel};
+  selection.element_types = {key.element_type};
+  const auto before = GetKernelTuningRegistry().Snapshot();
+  const auto *before_mismatch = before.Resolve(key, mismatch);
+  ASSERT_NE(before_mismatch, nullptr);
+  const auto rejected = LoadKernelTuningCache(selection, {cache.path, mismatch});
+  EXPECT_TRUE(rejected.loaded.empty());
+  ASSERT_EQ(rejected.stale.size(), 1u);
+  EXPECT_EQ(rejected.stale.front(), legacy_key);
+  ASSERT_EQ(rejected.incompatible.size(), 1u);
+  EXPECT_EQ(rejected.incompatible.front(), key);
+  EXPECT_TRUE(rejected.invalid.empty());
+  EXPECT_EQ(GetKernelTuningRegistry().Snapshot().Resolve(key, mismatch)->values,
+            before_mismatch->values);
+  EXPECT_TRUE(std::any_of(rejected.diagnostics.begin(), rejected.diagnostics.end(),
+                          [](const auto &message) {
+                            return message.find("Gemm") != std::string::npos &&
+                                   message.find("incompatible tuning ABI 1") != std::string::npos;
+                          }));
+  EXPECT_EQ(GetKernelTuningRegistry().Snapshot().HasPublishedProfile(key, mismatch),
+            before.HasPublishedProfile(key, mismatch));
+  EXPECT_TRUE(std::any_of(
+      rejected.diagnostics.begin(), rejected.diagnostics.end(), [](const auto &message) {
+        return message.find("incompatible processor or execution descriptor") != std::string::npos;
+      }));
+
+  const auto loaded = LoadKernelTuningCache(selection, {cache.path, execution});
+  EXPECT_EQ(loaded.status, KernelTuningCacheLoadStatus::kLoaded);
+  ASSERT_EQ(loaded.loaded.size(), 1u);
+  EXPECT_EQ(loaded.loaded.front(), key);
+  ASSERT_EQ(loaded.stale.size(), 1u);
+  EXPECT_EQ(loaded.stale.front(), legacy_key);
+  EXPECT_TRUE(loaded.incompatible.empty());
+  EXPECT_TRUE(loaded.invalid.empty());
+  EXPECT_TRUE(
+      std::any_of(loaded.diagnostics.begin(), loaded.diagnostics.end(), [](const auto &message) {
+        return message.find("Gemm") != std::string::npos &&
+               message.find("incompatible tuning ABI 1") != std::string::npos;
+      }));
+  const auto after = GetKernelTuningRegistry().Snapshot();
+  const auto *resolved = after.Resolve(key, execution);
+  ASSERT_NE(resolved, nullptr);
+  EXPECT_EQ(resolved->Get<int64_t>("algorithm.configuration"), 6);
+  EXPECT_EQ(after.Resolve(key, mismatch)->values, before_mismatch->values);
+}
+
 TEST(KernelClass, GemmAlgorithmConfigurationsPreserveBitsAcrossDtypesAndExecutors) {
   core::runtime::CpuExecutionPolicy policy;
   policy.num_threads = 2;
@@ -3309,8 +3410,20 @@ TEST(KernelClass, GemmAlgorithmCalibrationRejectsInvalidCandidatesAndPartialTime
   EXPECT_EQ(selected.Get<int64_t>("algorithm.configuration"), 0);
   ASSERT_TRUE(reporter.comparison().has_value());
   EXPECT_EQ(reporter.comparison()->selected_value, 0);
+  uint64_t completed_cases = 0;
   for (const auto &value : reporter.comparison()->values) {
     EXPECT_LT(value.benchmark_cases, 9u);
+    completed_cases += value.benchmark_cases;
+  }
+  const bool partial_case =
+      std::any_of(reporter.diagnostics().begin(), reporter.diagnostics().end(),
+                  [](const auto &message) {
+                    return message.find("resources include the incomplete case") !=
+                           std::string::npos;
+                  });
+  EXPECT_EQ(reporter.benchmark_cases(), completed_cases + static_cast<uint64_t>(partial_case));
+  if (partial_case || reporter.measured_duration_ns() != 0) {
+    EXPECT_GT(reporter.peak_memory_bytes(), 0u);
   }
   EXPECT_TRUE(std::any_of(
       reporter.diagnostics().begin(), reporter.diagnostics().end(),

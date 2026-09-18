@@ -303,6 +303,64 @@ Every candidate is checked bit-for-bit against the portable output before
 measurement. The broader benchmark corpus is not the nine-case calibration
 corpus, so it also provides workload checks outside the selection search.
 
+The 2026-09-18 x86-64 run used an AMD EPYC 9V74 (family 25, model 17),
+four visible logical processors/two physical cores, GCC 13.3.0 and a Release
+build without ``-march=native``. Remote ``main`` was refreshed and verified at
+``2cb52b32beee1869994264e3e9849f96513f5947`` before building; the measurement
+source revision was ``b417ed538d0c7c9c2e49bf9914340c81663c360f``.
+The portable baseline and candidates run in the same binary, with identical
+inputs and executor policy; the baseline computation/defaults are unchanged
+from the refreshed branch.
+
+Raw evidence (5880 individual timing samples, not just selected medians):
+
+* :download:`Serial measurements <kernel_parallelization_reports/x86_64_gemm_config_t1.csv>`
+* :download:`Two-participant measurements <kernel_parallelization_reports/x86_64_gemm_config_t2.csv>`
+* :download:`Four-participant measurements <kernel_parallelization_reports/x86_64_gemm_config_t4.csv>`
+* :download:`Hardware, summaries, calibration output, persisted profiles and fresh-process verification <kernel_parallelization_reports/x86_64_gemm_configuration_evidence.json>`
+
+The explicit calibrator selected the following configurations on its nine-case
+corpus; these are observations, not new defaults:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Participants
+     - FLOAT
+     - DOUBLE
+     - FLOAT16
+     - BFLOAT16
+   * - 1
+     - 0
+     - 0
+     - 0
+     - 4
+   * - 2
+     - 6
+     - 6
+     - 2
+     - 1
+   * - 4
+     - 0
+     - 1
+     - 6
+     - 1
+
+All 12 dtype/policy searches completed all 63 candidate/case combinations.
+Peak admitted tensor/scratch storage was 851968 bytes, below the declared
+8 MiB limit; each four-dtype calibration process took 1.23--1.77 seconds.
+Fresh processes loaded and selected all four saved dtype profiles for each
+matching policy; deliberately incompatible processor descriptors selected zero.
+
+The broader benchmark supports keeping the search explicit: the selected
+four-participant DOUBLE/FLOAT16/BFLOAT16 configurations achieved approximately
+1.068x/1.116x/1.093x baseline/candidate speedups in the sum of case medians,
+while the two-participant selections were essentially tied on that corpus.
+The serial BFLOAT16 selection reached only about 1.028x there. Calibration
+corpus wins therefore do not establish a general speedup, even on this machine.
+The raw per-case regressions and all losing candidates remain published; none
+of these results justify portable default promotion.
+
 Reproduce the native measurements and cross-process cache checks with:
 
 .. code-block:: bash

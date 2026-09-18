@@ -1,0 +1,98 @@
+name: Native kernel reports
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  measure:
+    name: kernels (${{ matrix.architecture }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - architecture: aarch64
+            runner: ubuntu-24.04-arm
+          - architecture: x86_64
+            runner: ubuntu-24.04
+    defaults:
+      run:
+        shell: bash
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      CMAKE_ARGS: -DCMAKE_BUILD_TYPE=Release -DONNX_LIGHT_BUILD_TESTS=ON
+      OMP_NUM_THREADS: "2"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      EXPECTED_ARCHITECTURE: ${{ matrix.architecture }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - name: Check native architecture and install build dependencies
+        run: |
+          test "$(uname -m)" = "$EXPECTED_ARCHITECTURE"
+          echo "XDG_CACHE_HOME=$RUNNER_TEMP/kernel-reports-cache" >> "$GITHUB_ENV"
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev
+          python -m pip install nanobind==3.1.0 numpy==2.5.3 ml-dtypes==0.6.0 pytest==9.1.1
+      - name: Build native extension and correctness tests
+        run: python setup.py build_ext --inplace --parallel 4
+      - name: Record provenance and reproduction recipe
+        run: |
+          mkdir -p "$RUNNER_TEMP/kernel-reports"
+          git rev-parse HEAD > "$RUNNER_TEMP/kernel-reports/source-revision.txt"
+          cp .github/workflows/kernel_reports.yml "$RUNNER_TEMP/kernel-reports/"
+          cp build/temp/CMakeCache.txt "$RUNNER_TEMP/kernel-reports/"
+          lscpu --json > "$RUNNER_TEMP/kernel-reports/lscpu.json"
+          cat /proc/meminfo > "$RUNNER_TEMP/kernel-reports/meminfo.txt"
+          cat /proc/self/status > "$RUNNER_TEMP/kernel-reports/process-status.txt"
+          for name in cpu.max memory.max cpuset.cpus.effective; do
+            if [ -f "/sys/fs/cgroup/$name" ]; then
+              cp "/sys/fs/cgroup/$name" "$RUNNER_TEMP/kernel-reports/"
+            fi
+          done
+          { c++ --version; cmake --version; python --version; python -m pip freeze; } \
+            > "$RUNNER_TEMP/kernel-reports/toolchain.txt"
+          printf '%s\n' "OMP_NUM_THREADS=$OMP_NUM_THREADS" \
+            "OPENBLAS_NUM_THREADS=$OPENBLAS_NUM_THREADS" "MKL_NUM_THREADS=$MKL_NUM_THREADS" \
+            > "$RUNNER_TEMP/kernel-reports/thread-environment.txt"
+      - name: Validate native kernels, schemas, cache compatibility and resource policies
+        run: |
+          ctest --test-dir build/temp --output-on-failure \
+            2>&1 | tee "$RUNNER_TEMP/kernel-reports/ctest.log"
+          python -m pytest -q unittests/python/backend/test_kernel_tuning_bindings.py \
+            unittests/python/backend/test_kernel_baseline.py \
+            unittests/python/backend/test_kernel_reports.py \
+            2>&1 | tee "$RUNNER_TEMP/kernel-reports/pytest.log"
+      - name: Measure three independent runs and verify each in fresh processes
+        run: |
+          for run in 1 2 3; do
+            export XDG_CACHE_HOME="$RUNNER_TEMP/kernel-reports-cache/run-$run"
+            output="$RUNNER_TEMP/kernel-reports/run-$run"
+            python -m onnx_light.tools.kernel_reports collect --output "$output" \
+              --threads 2 --repeat 10 --maximum-duration-ms 10000 \
+              --maximum-memory-bytes 268435456
+            python -m onnx_light.tools.kernel_reports verify --output "$output"
+            python -m onnx_light.tools.kernel_reports verify-incompatible --output "$output"
+          done
+      - name: Upload reports, profiles, diagnostics and provenance
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: kernel-reports-${{ matrix.architecture }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/kernel-reports/
+          if-no-files-found: error
+          retention-days: 30

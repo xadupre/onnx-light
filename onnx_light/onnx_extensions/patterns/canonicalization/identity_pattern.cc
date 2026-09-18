@@ -320,7 +320,8 @@ IdentityPattern::Apply(core::builder::GraphGraph &graph,
 
   std::size_t index = 0;
   if (node.input_size() == 2 && BinaryOps().count(op_type) != 0 &&
-      graph.IsConstant(node.input()[0].value()) && IsScalarShape(graph, node.input()[0].value())) {
+      !graph.IsConstant(node.input()[1].value()) && graph.IsConstant(node.input()[0].value()) &&
+      IsScalarShape(graph, node.input()[0].value())) {
     index = 1;
   }
 

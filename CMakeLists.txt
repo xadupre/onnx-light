@@ -1086,6 +1086,9 @@ if(ONNX_LIGHT_BUILD_TESTS OR ONNX_LIGHT_BUILD_BENCHMARKS)
 
   foreach(benchmark_source IN LISTS ONNX_LIGHT_BENCHMARK_SOURCES)
     get_filename_component(benchmark_target "${benchmark_source}" NAME_WE)
+    if(benchmark_target STREQUAL "bench_gemm_calibration" AND NOT ONNX_LIGHT_BUILD_KERNELS)
+      continue()
+    endif()
 
     add_executable(${benchmark_target} "${benchmark_source}")
     target_include_directories(${benchmark_target} PRIVATE
@@ -1093,6 +1096,9 @@ if(ONNX_LIGHT_BUILD_TESTS OR ONNX_LIGHT_BUILD_BENCHMARKS)
         "${ONNX_PROTO_PATH}"
     )
     target_link_libraries(${benchmark_target} PRIVATE lib_onnx_lib)
+    if(benchmark_target STREQUAL "bench_gemm_calibration")
+      target_link_libraries(${benchmark_target} PRIVATE lib_onnx_kernels)
+    endif()
     set_property(TARGET ${benchmark_target} PROPERTY FOLDER "Benchmarks")
 
     if(OpenMP_CXX_FOUND)

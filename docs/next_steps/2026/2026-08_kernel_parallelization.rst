@@ -131,12 +131,11 @@ step and produces the input required by the next one.
         for each selected kernel, all controlled by named tuning parameters.
       - Calibration needs valid candidates with identical numerical and error
         behavior.
-      - Started (``Gemm`` already ran through ``ParallelFor`` with tunable
-        tile and grain parameters; it now also registers a calibration
-        candidate for ``parallel.minimum_tasks`` mirroring the unary
-        ``CalibrateAbs`` pattern. Calibrating the remaining ``Gemm``
-        parameters (tile/pack sizes) and promoting any candidate to a
-        portable default remain outstanding and belong to the next issue)
+      - Started (``Gemm`` calibrates ``parallel.minimum_tasks`` and now
+        explicitly compares finite tile/packing configurations through
+        ``algorithm.configuration``. Work-unit and conversion settings remain
+        internal implementation settings. Portable default promotion and ARM64
+        comparison remain separate acceptance tasks)
     * - G. Calibration
       - Step F
       - Validated processor-specific profiles published through
@@ -153,7 +152,7 @@ step and produces the input required by the next one.
         descriptor. None of the calibrated values were promoted to portable
         schema defaults, because only one architecture was measured; see
         ``kernel_parallelization_reports/x86_64_calibration.json``, regenerated
-        against the current schema on an Intel Xeon Platinum 8370C. An ARM64
+        against the then-current schema on an Intel Xeon Platinum 8370C. An ARM64
         machine profile remains outstanding, blocked on hardware access)
     * - H. Acceptance
       - Step G
@@ -275,9 +274,11 @@ defaults), mirroring the unary ``CalibrateAbs`` crossover search: reference
 and candidate share the same deterministic tiled accumulation order, so their
 outputs are bit-identical regardless of the selected threshold, and the
 candidate never exceeds a bounded duration or memory budget. The remaining
-``Gemm`` algorithm settings (``tile_m/tile_n/tile_k``,
-``pack_b_minimum_elements``, ``parallel_fmas_per_work_unit``) stay internal
-constants until dedicated calibrators make them genuine tuning parameters.
+``Gemm`` tile/packing choices are now measured by a separate, explicitly
+requested ``algorithm.configuration`` search (Gemm tuning ABI 2).
+The configuration is a finite preset, not unrestricted public tile-size keys.
+``parallel_fmas_per_work_unit``, the skinny-M rule and the conversion threshold
+remain internal settings. Configuration 0 preserves all portable defaults.
 Calibrating the newly registered
 ``parallel.minimum_elements`` schemas above where the baseline shows a
 measurable gap remain outstanding; promoting any winning candidate to a
@@ -306,11 +307,13 @@ selected values and per-key diagnostics.
 The published calibration report has been regenerated against the current
 registry on an Intel Xeon Platinum 8370C, replacing the earlier AMD EPYC
 report whose Gemm profiles contained obsolete algorithm, conversion, and
-work-unit parameters. Gemm now accepts only ``parallel.minimum_tasks``.
+work-unit parameters. That report's Gemm ABI 1 accepted only
+``parallel.minimum_tasks``; the ABI 2 configuration search below deliberately
+rejects those old Gemm profiles with an incompatibility diagnostic.
 The report records its source revision and hardware; its reload verification
 applies to that run, not arbitrary later schemas. A binding regression test
-validates every profile in every published calibration report against the
-registered schema and tuning ABI at HEAD, including value constraints.
+validates current profiles against the registered schema and value constraints,
+and verifies explicit incompatibility diagnostics for historical Gemm ABI 1.
 The separate Step E baseline remains the historical AMD EPYC measurement
 and must not be treated as a same-machine comparison with this calibration.
 

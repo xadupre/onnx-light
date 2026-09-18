@@ -6,6 +6,7 @@
 
 #include "onnx_extensions/kernels/tuning/portable_parallel_tuning.h"
 
+#include <limits>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -19,13 +20,20 @@ ValidateGemmTuning(const core::runtime::KernelTuningParameters &parameters) {
   if (value == nullptr || *value <= 0) {
     return std::string("Gemm ") + kGemmParallelMinimumTasks + " must be positive.";
   }
+  const int64_t *configuration = parameters.TryGet<int64_t>(kGemmAlgorithmConfiguration);
+  if (configuration == nullptr || *configuration < 0 ||
+      *configuration >= kGemmAlgorithmConfigurationCount) {
+    return std::string("Gemm ") + kGemmAlgorithmConfiguration + " must be an int64 in [0, " +
+           std::to_string(kGemmAlgorithmConfigurationCount) + ").";
+  }
   return std::nullopt;
 }
 
 core::runtime::KernelTuningParameters MakeGemmDefaults(int32_t element_type, uint32_t tuning_abi) {
   const GemmTuning defaults;
   return {MakePortableTuningKey("Gemm", element_type, tuning_abi),
-          {{kGemmParallelMinimumTasks, defaults.parallel_minimum_tasks}}};
+          {{kGemmParallelMinimumTasks, defaults.parallel_minimum_tasks},
+           {kGemmAlgorithmConfiguration, int64_t{0}}}};
 }
 
 } // namespace
@@ -46,6 +54,31 @@ void ConfigureGemmTuning(const core::runtime::KernelTuningParameters &parameters
   }
   if (std::optional<std::string> error = ValidateGemmTuning(parameters)) {
     throw std::invalid_argument(*error);
+  }
+  tuning = GemmTuning{};
+  switch (*parameters.TryGet<int64_t>(kGemmAlgorithmConfiguration)) {
+  case 1:
+    tuning.tile_m = 32;
+    break;
+  case 2:
+    tuning.tile_n = 64;
+    break;
+  case 3:
+    tuning.tile_k = 64;
+    break;
+  case 4:
+    tuning.pack_b_minimum_elements = 0;
+    break;
+  case 5:
+    tuning.pack_b_minimum_elements = std::numeric_limits<int64_t>::max();
+    break;
+  case 6:
+    tuning.tile_m = 32;
+    tuning.tile_n = 64;
+    tuning.tile_k = 128;
+    break;
+  default:
+    break;
   }
   tuning.parallel_minimum_tasks = *parameters.TryGet<int64_t>(kGemmParallelMinimumTasks);
 }

@@ -12,6 +12,10 @@
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::tuning {
 
 inline constexpr const char *kGemmParallelMinimumTasks = "parallel.minimum_tasks";
+inline constexpr const char *kGemmAlgorithmConfiguration = "algorithm.configuration";
+inline constexpr uint32_t kGemmTuningAbi = 2;
+/** Counts stable configuration IDs: defaults, M32, N64, K64, always/never pack, M32/N64/K128. */
+inline constexpr int64_t kGemmAlgorithmConfigurationCount = 7;
 
 /** Stores the portable Gemm configuration copied into one kernel instance. */
 struct GemmTuning {
@@ -27,10 +31,10 @@ struct GemmTuning {
 
 /** Registers one portable Gemm tuning schema for every supported element type. */
 void RegisterGemmTuningSchemas(std::span<const int32_t> supported_element_types,
-                               uint32_t tuning_abi = 1);
+                               uint32_t tuning_abi = kGemmTuningAbi);
 
-/** Validates and copies resolved Gemm parameters into a typed configuration. */
+/** Validates resolved Gemm parameters and resets the typed configuration before applying them. */
 void ConfigureGemmTuning(const core::runtime::KernelTuningParameters &parameters,
-                         GemmTuning &tuning, uint32_t tuning_abi = 1);
+                         GemmTuning &tuning, uint32_t tuning_abi = kGemmTuningAbi);
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::tuning

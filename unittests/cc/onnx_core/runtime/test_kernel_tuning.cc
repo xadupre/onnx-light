@@ -2,12 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_session.h"
 #include "onnx_core/runtime/tuning/cpu_executor.h"
 #include "onnx_core/runtime/tuning/kernel_tuning.h"
 #include "onnx_core/runtime/tuning/kernel_tuning_cache.h"
 #include "onnx_core/runtime/tuning/runtime_parameters.h"
+#include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
 #include <gtest/gtest.h>
 
@@ -1035,6 +1037,61 @@ TEST(KernelTuningCache, AllowsSameKeyForDifferentExecutionDescriptors) {
                 .Resolve(defaults.key, execution)
                 ->Get<int64_t>("algorithm.tile_m"),
             224);
+}
+
+TEST(KernelTuningCache, GemmRejectsLegacyAbiAndRequiresExactExecutorDescriptor) {
+  const onnx_kernels::kernel::Gemm gemm{KernelContext{backend_test::DefaultOpset(13)}};
+  const auto key = gemm.TuningKey(static_cast<int32_t>(DataType::FLOAT));
+  ASSERT_EQ(key.tuning_abi, 2u);
+  const auto schema = GetKernelTuningRegistry().FindSchema(key);
+  ASSERT_NE(schema, nullptr);
+  auto current = schema->portable_defaults();
+  current.values["algorithm.configuration"] = int64_t{6};
+  auto legacy = current;
+  legacy.key.tuning_abi = 1;
+  legacy.values.erase("algorithm.configuration");
+  const CpuExecutionDescriptor execution{platform::GetCpuDescriptor(), 2};
+  auto mismatch = execution;
+  mismatch.effective_threads = 1;
+  TemporaryCache cache("gemm_abi");
+  {
+    std::ofstream stream(cache.path());
+    stream << "onnx_light_kernel_tuning_cache 1\n";
+    WriteProfile(stream, legacy, execution);
+    WriteProfile(stream, current, execution);
+  }
+  KernelCalibrationSelection selection;
+  selection.library = key.library;
+  selection.kernels = {key.kernel};
+  selection.element_types = {key.element_type};
+  const auto rejected = LoadKernelTuningCache(selection, {cache.path(), mismatch});
+  EXPECT_TRUE(rejected.loaded.empty());
+  ASSERT_EQ(rejected.stale.size(), 1u);
+  EXPECT_EQ(rejected.stale.front(), legacy.key);
+  ASSERT_EQ(rejected.incompatible.size(), 1u);
+  EXPECT_EQ(rejected.incompatible.front(), key);
+  EXPECT_TRUE(rejected.invalid.empty());
+  EXPECT_TRUE(std::any_of(
+      rejected.diagnostics.begin(), rejected.diagnostics.end(), [](const auto &message) {
+        return message.find("incompatible processor or execution descriptor") != std::string::npos;
+      }));
+
+  const auto loaded = LoadKernelTuningCache(selection, {cache.path(), execution});
+  EXPECT_EQ(loaded.status, KernelTuningCacheLoadStatus::kLoaded);
+  ASSERT_EQ(loaded.loaded.size(), 1u);
+  EXPECT_EQ(loaded.loaded.front(), key);
+  ASSERT_EQ(loaded.stale.size(), 1u);
+  EXPECT_EQ(loaded.stale.front(), legacy.key);
+  EXPECT_TRUE(loaded.incompatible.empty());
+  EXPECT_TRUE(loaded.invalid.empty());
+  EXPECT_TRUE(
+      std::any_of(loaded.diagnostics.begin(), loaded.diagnostics.end(), [](const auto &message) {
+        return message.find("Gemm") != std::string::npos &&
+               message.find("incompatible tuning ABI 1") != std::string::npos;
+      }));
+  const auto resolved = GetKernelTuningRegistry().Snapshot().Resolve(key, execution);
+  ASSERT_NE(resolved, nullptr);
+  EXPECT_EQ(resolved->Get<int64_t>("algorithm.configuration"), 6);
 }
 
 TEST(KernelTuningCache, InspectsProfilesWithoutPublishing) {

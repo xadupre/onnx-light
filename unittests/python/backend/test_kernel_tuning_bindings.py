@@ -58,6 +58,28 @@ class TestKernelTuningBindings(ExtTestCase):
                 for profile in profiles:
                     key = tuple(profile[field] for field in key_fields)
                     with self.subTest(report=report_path.name, key=key):
+                        if profile["kernel"] == "Gemm" and profile["tuning_abi"] == 1:
+                            self.assertNotIn(key, schemas)
+                            current_key = (*key[:-1], 2)
+                            self.assertIn(current_key, schemas)
+                            self.assertEqual(
+                                set(schemas[current_key]["parameter_names"]),
+                                {"algorithm.configuration", "parallel.minimum_tasks"},
+                            )
+                            with self.assertRaisesRegex(
+                                KeyError, "No registered kernel tuning schema"
+                            ):
+                                rt.set_kernel_tuning_parameters(
+                                    **{
+                                        field: profile[field]
+                                        for field in key_fields
+                                        if field != "device"
+                                    },
+                                    values=profile["values"],
+                                    path=path,
+                                    load=False,
+                                )
+                            continue
                         self.assertIn(key, schemas)
                         self.assertEqual(
                             set(profile["values"]), set(schemas[key]["parameter_names"])
@@ -165,6 +187,28 @@ class TestKernelTuningBindings(ExtTestCase):
         self.assertEqual(len(report["candidate_diagnostics"]), 1)
         diagnostic = report["candidate_diagnostics"][0]
         self.assertEqual(diagnostic["kernel"], "Gemm")
+
+    def test_gemm_algorithm_configuration_budget_keeps_portable_default(self):
+        policy = rt.CpuExecutionPolicy()
+        policy.num_threads = 1
+        policy.affinity_policy = rt.CpuAffinityPolicy.NONE
+        report = rt.calibrate_kernel_tuning(
+            "Gemm",
+            element_types=[int(TensorProto.FLOAT16)],
+            parameter_name="algorithm.configuration",
+            parameter_values=[6, 4, 6],
+            maximum_memory_bytes=1,
+            maximum_duration_ms=1000,
+            cpu_execution=policy,
+            save=False,
+        )
+        self.assertEqual(len(report["comparisons"]), 1)
+        comparison = report["comparisons"][0]
+        self.assertEqual(comparison["parameter_name"], "algorithm.configuration")
+        self.assertEqual(comparison["baseline_value"], 0)
+        self.assertEqual(comparison["selected_value"], 0)
+        self.assertEqual([value["value"] for value in comparison["values"]], [0, 4, 6])
+        self.assertTrue(all(value["benchmark_cases"] == 0 for value in comparison["values"]))
 
     def test_compares_explicit_tuning_values(self):
         parameters = kernel_tuning.kernel_tuning_parameters(
@@ -294,6 +338,11 @@ class TestKernelTuningBindings(ExtTestCase):
             schema = rt.kernel_tuning_parameters(
                 kernel="Gemm", element_type=int(TensorProto.FLOAT), path=path
             )["kernels"][0]
+            self.assertEqual(schema["tuning_abi"], 2)
+            self.assertEqual(
+                schema["parameter_names"], ["algorithm.configuration", "parallel.minimum_tasks"]
+            )
+            self.assertEqual(schema["defaults"]["algorithm.configuration"], 0)
             for name in (
                 "algorithm.pack_b_minimum_elements",
                 "algorithm.skinny_m_limit",
@@ -320,6 +369,24 @@ class TestKernelTuningBindings(ExtTestCase):
                     path=path,
                     load=False,
                 )
+            with self.assertRaisesRegex(KeyError, "No registered kernel tuning schema"):
+                rt.set_kernel_tuning_parameters(
+                    "Gemm",
+                    int(TensorProto.FLOAT),
+                    {"parallel.minimum_tasks": 2},
+                    tuning_abi=1,
+                    path=path,
+                    load=False,
+                )
+            for value in (-1, 7, 1.5, True, "1"):
+                with self.subTest(configuration=value), self.assertRaises(ValueError):
+                    rt.set_kernel_tuning_parameters(
+                        "Gemm",
+                        int(TensorProto.FLOAT),
+                        {**schema["defaults"], "algorithm.configuration": value},
+                        path=path,
+                        load=False,
+                    )
             self.assertFalse(Path(path).exists())
 
     def test_load_reports_missing_cache(self):

@@ -62,6 +62,39 @@ not imply that this reader offers zero-copy or memory-mapped tensor views.
 External tensor offsets are explicitly rejected. The reader does not
 automatically open a companion file or guess an external-data filename.
 
+Binary-size budget
+------------------
+
+The native reader and writer add serialization code to ``lib_onnx_proto``.
+The previous Linux CI limits predated the implemented ORT codec: 1,193,944
+installed bytes, 822,634 ``.text`` bytes, and 760 defined dynamic symbols.
+The codec receives a bounded allowance of 192 KiB installed, 128 KiB of
+``.text``, and 32 symbols above those limits. The checks remain enforced;
+the shared-library dependency allowlist is unchanged.
+
+The Linux Release CI measurement for commit ``bbeaeb6b`` is:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 45 30 25
+
+   * - Metric
+     - Measured with native ORT
+     - CI maximum
+   * - Stripped installed bytes
+     - 1,363,432
+     - 1,390,552
+   * - ``.text`` bytes
+     - 940,986
+     - 953,706
+   * - Defined dynamic symbols
+     - 782
+     - 792
+
+These limits account for the added functionality rather than a toolchain
+baseline change. The codec adds no FlatBuffers or ONNX Runtime shared-library
+dependency.
+
 Parallelization
 ---------------
 

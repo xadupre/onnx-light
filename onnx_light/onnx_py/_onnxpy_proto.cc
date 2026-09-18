@@ -389,26 +389,21 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
             if (nb::isinstance<ParseOptions &>(options)) {
               ParseOptions &parse_options = nb::cast<ParseOptions &>(options);
               if (parse_options.format == SerializeFormat::kOrtFlatbuffers) {
-                // Recursion-OOM guard: validate the depth limit before any
-                // parsing begins so that a maliciously crafted .ort file cannot
-                // exhaust the call stack once the flatbuffer reader is
-                // implemented.
                 EXT_ENFORCE(parse_options.max_recursion_depth > 0,
                             "ParseFromString: ParseOptions::max_recursion_depth must be > 0 "
                             "(got ",
-                            parse_options.max_recursion_depth,
-                            "). "
-                            "The ORT flatbuffer parser uses this limit to reject models "
-                            "nested more deeply than the configured value, preventing stack "
-                            "overflow on adversarially deep inputs.");
+                            parse_options.max_recursion_depth, ").");
                 EXT_ENFORCE(parse_options.max_tensor_size_bytes >= 0,
                             "ParseFromString: ParseOptions::max_tensor_size_bytes must be "
                             ">= 0 (got ",
                             parse_options.max_tensor_size_bytes,
                             "). Use 0 to disable the limit or a positive value to cap "
                             "tensor allocations.");
-                EXT_THROW("ParseFromString: SerializeFormat::kOrtFlatbuffers is not "
-                          "implemented yet. Use SerializeFormat::kOnnx for now.");
+                if constexpr (std::is_same_v<cls, ModelProto>) {
+                  ParseModelFromOrtFlatbuffers(self, stream, parse_options);
+                } else {
+                  EXT_THROW("ParseFromString: ORT FlatBuffers parsing requires ModelProto.");
+                }
               } else {
                 EXT_ENFORCE(parse_options.format == SerializeFormat::kOnnx,
                             "ParseFromString: unrecognised SerializeFormat value ",
@@ -476,11 +471,13 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
             }
             if (nb::isinstance<ParseOptions &>(options)) {
               ParseOptions &coptions = nb::cast<ParseOptions &>(options);
-              if (coptions.is_parallel()) {
+              const bool parallel_protobuf =
+                  coptions.format == SerializeFormat::kOnnx && coptions.is_parallel();
+              if (parallel_protobuf) {
                 stream->StartThreadPool(coptions.num_threads);
               }
               ParseProtoFromStream(self, *stream, coptions);
-              if (coptions.is_parallel()) {
+              if (parallel_protobuf) {
                 stream->WaitForDelayedBlock();
               }
             } else {
@@ -494,8 +491,13 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
           "SerializeSize",
           [](cls &self, nb::object options) -> SerializeSizeResult {
             if (nb::isinstance<SerializeOptions &>(options)) {
+              auto &opts = nb::cast<SerializeOptions &>(options);
+              if constexpr (!std::is_same_v<cls, ModelProto>) {
+                EXT_ENFORCE(opts.format == SerializeFormat::kOnnx,
+                            "SerializeSize: ORT FlatBuffers serialization requires ModelProto.");
+              }
               utils::StringWriteStream out;
-              return self.SerializeSize(out, nb::cast<SerializeOptions &>(options));
+              return self.SerializeSize(out, opts);
             } else {
               return self.SerializeSize();
             }
@@ -526,6 +528,14 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
           "SerializeToFile",
           [](cls &self, const std::string &file_path, nb::object options,
              std::string &external_data_file) {
+            if (nb::isinstance<SerializeOptions &>(options) &&
+                nb::cast<SerializeOptions &>(options).format == SerializeFormat::kOrtFlatbuffers) {
+              EXT_ENFORCE((std::is_same_v<cls, ModelProto>),
+                          "SerializeToFile: ORT FlatBuffers serialization requires ModelProto.");
+              EXT_ENFORCE(
+                  external_data_file.empty(),
+                  "ORT FlatBuffers serialization does not support external weights output.");
+            }
             cls *to_write = &self;
             std::optional<ModelProto> owned_copy;
             if constexpr (std::is_same_v<cls, ModelProto>) {
@@ -1084,8 +1094,7 @@ void AddOnnxPyProto(nb::module_ &m) {
       .value("ONNX", SerializeFormat::kOnnx, "Default ONNX protobuf wire format.")
       .value("ORT_FLATBUFFERS", SerializeFormat::kOrtFlatbuffers,
              "Flatbuffer-based format used by onnxruntime (``.ort`` files). "
-             "Not implemented yet; setting this format raises an error when "
-             "parsing or serializing.");
+             "Supports ModelProto serialization and parsing.");
 
   nb::class_<TensorBufferOptions>(m, "TensorBufferOptions",
                                   "Common options for tensor buffer operations: in-place "
@@ -1178,8 +1187,7 @@ void AddOnnxPyProto(nb::module_ &m) {
               "Selects the on-disk serialization format expected when parsing. "
               "SerializeFormat.ONNX (default) parses the ONNX protobuf wire format; "
               "SerializeFormat.ORT_FLATBUFFERS parses the onnxruntime flatbuffer format "
-              "(``.ort`` files). The flatbuffer path is not implemented yet and raises "
-              "an error when used.")
+              "(``.ort`` files) into ModelProto.")
       .def_rw("max_recursion_depth", &ParseOptions::max_recursion_depth,
               "Maximum nesting depth of protobuf sub-messages accepted while parsing "
               "(default 100). Protects against stack overflow / out-of-memory from deeply "
@@ -1281,8 +1289,7 @@ void AddOnnxPyProto(nb::module_ &m) {
               "Selects the on-disk serialization format produced when serializing. "
               "SerializeFormat.ONNX (default) writes the ONNX protobuf wire format; "
               "SerializeFormat.ORT_FLATBUFFERS writes the onnxruntime flatbuffer format "
-              "(``.ort`` files). The flatbuffer path is not implemented yet and raises "
-              "an error when used.")
+              "(``.ort`` files) for ModelProto.")
       .def_prop_rw(
           "raw_data_callback",
           [](SerializeOptions &options) -> nb::object {

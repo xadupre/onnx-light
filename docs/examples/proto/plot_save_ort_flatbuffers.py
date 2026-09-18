@@ -5,16 +5,18 @@ Save an ONNX model in the ORT flatbuffer format and compare sizes
 =================================================================
 
 `onnxruntime <https://onnxruntime.ai/>`_ defines a flatbuffer
-serialization (``.ort``) of an ONNX model. It is typically used in
-size-constrained deployments because it can be memory-mapped directly into
-the runtime and avoids a protobuf parsing step.
+serialization (``.ort``) of an ONNX model that avoids a protobuf parsing
+step when loading in the runtime.
 
 *onnx-light* exposes the format through
-:py:class:`onnx_light.onnx.SerializeFormat`, but the C++ writer for
-``ORT_FLATBUFFERS`` is not implemented yet (calls raise ``RuntimeError``).
-Until it lands, this example uses :epkg:`onnxruntime` itself to produce
-the ``.ort`` file and then compares the on-disk sizes of the two formats
-as the number of nodes in the graph grows.
+:py:class:`onnx_light.onnx.SerializeFormat`. This example uses the native
+C++ writer to produce ``.ort`` files and compares the on-disk sizes of the
+two formats as the number of nodes grows. ONNX Runtime is used only to
+verify inference, not to convert or serialize the model. The native reader
+then reconstructs an ONNX model from the ORT file for another inference
+comparison. It accepts both native version-4 and current ORT version-6
+files. A full ONNX Runtime build is required to execute the generated
+version-4 files directly; minimal runtime builds are not supported.
 
 See :ref:`l-howto-save-ort-flatbuffers` for the short recipe.
 """
@@ -69,27 +71,25 @@ def build_model(num_nodes: int, dim: int = DIM) -> onnxl.ModelProto:
 # ------------
 #
 # The ``.onnx`` file is written by :func:`onnx_light.onnx.save`. The
-# ``.ort`` file is produced by :epkg:`onnxruntime`: disable graph
-# optimizations so that the serialized graph stays structurally
-# equivalent to the input, and set ``session.save_model_format=ORT`` so
-# the optimized-model dump uses the flatbuffer format.
+# ``.ort`` file is written directly by the native C++ writer. All weights
+# are already loaded in memory and are embedded inline. Assembly is
+# single-threaded even if ``num_threads`` is set. The same options can
+# also be passed to ``model.SerializeToString`` or
+# ``model.SerializeToFileDescriptor``.
 
 
-def save_as_ort(onnx_path: str, ort_path: str) -> None:
-    """Saves the model at *onnx_path* as an ORT flatbuffer at *ort_path*."""
-    session_options = onnxruntime.SessionOptions()
-    session_options.graph_optimization_level = onnxruntime.GraphOptimizationLevel.ORT_DISABLE_ALL
-    session_options.optimized_model_filepath = ort_path
-    session_options.add_session_config_entry("session.save_model_format", "ORT")
-    # Creating the session triggers the optimized-model dump.
-    onnxruntime.InferenceSession(onnx_path, session_options, providers=["CPUExecutionProvider"])
+def save_as_ort(model: onnxl.ModelProto, ort_path: str) -> None:
+    """Saves *model* as an ORT flatbuffer at *ort_path*."""
+    sopts = onnxl.SerializeOptions()
+    sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+    model.SerializeToFile(ort_path, sopts)
 
 
 # %%
 # Measure sizes for a range of node counts
 # ----------------------------------------
 
-out_dir = "temp_plot_save_ort_flatbuffers"
+out_dir = "plot_save_ort_flatbuffers_output"
 os.makedirs(out_dir, exist_ok=True)
 
 node_counts = [1, 2, 4, 8, 16, 32]
@@ -101,7 +101,7 @@ for n in node_counts:
     onnx_path = os.path.join(out_dir, f"model_{n}.onnx")
     ort_path = os.path.join(out_dir, f"model_{n}.ort")
     onnxl.save(model, onnx_path)
-    save_as_ort(onnx_path, ort_path)
+    save_as_ort(model, ort_path)
     onnx_sizes.append(os.path.getsize(onnx_path))
     ort_sizes.append(os.path.getsize(ort_path))
 
@@ -111,15 +111,66 @@ for n, s_onnx, s_ort in zip(node_counts, onnx_sizes, ort_sizes):
     print(f"{n:>6} {s_onnx / 1024:>12.1f} {s_ort / 1024:>12.1f} {s_ort / s_onnx:>8.3f}")
 
 # %%
+# Verify inference with ONNX Runtime
+# ---------------------------------
+#
+# Load the first model in both formats and compare its outputs. The
+# native writer emits the ``ORTM`` identifier and ORT format version 4.
+
+sessions = [
+    onnxruntime.InferenceSession(
+        os.path.join(out_dir, f"model_{node_counts[0]}.{extension}"),
+        providers=["CPUExecutionProvider"],
+    )
+    for extension in ("onnx", "ort")
+]
+feeds = {"X": np.ones((2, DIM), dtype=np.float32)}
+onnx_result, ort_result = [session.run(None, feeds)[0] for session in sessions]
+np.testing.assert_allclose(ort_result, onnx_result, rtol=1e-5, atol=1e-6)
+print("ONNX Runtime inference agrees for the ONNX and native ORT files.")
+
+# %%
+# Read the ORT file with onnx-light
+# --------------------------------
+#
+# The native reader reconstructs a model that can be serialized as ONNX
+# protobuf and executed. It does not preserve the original protobuf bytes:
+# ORT can normalize graphs and omit original name or documentation details.
+# Compare inference results rather than serialized byte strings.
+#
+# Decoding honors tensor-byte and recursion limits and raw-data/node
+# callbacks. It is sequential even with ``num_threads`` set and owns
+# copies of tensor bytes even with ``no_copy`` set. External tensor
+# offsets are rejected instead of guessing an external-data filename.
+
+popts = onnxl.ParseOptions()
+popts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+first_ort_path = os.path.join(out_dir, f"model_{node_counts[0]}.ort")
+
+restored = onnxl.ModelProto()
+restored.ParseFromFile(first_ort_path, popts)
+
+with open(first_ort_path, "rb") as source:
+    ort_payload = source.read()
+restored_from_bytes = onnxl.ModelProto()
+restored_from_bytes.ParseFromString(ort_payload, popts)
+
+for reconstructed in (restored, restored_from_bytes):
+    reconstructed_session = onnxruntime.InferenceSession(
+        reconstructed.SerializeToString(), providers=["CPUExecutionProvider"]
+    )
+    reconstructed_result = reconstructed_session.run(None, feeds)[0]
+    np.testing.assert_allclose(reconstructed_result, onnx_result, rtol=1e-5, atol=1e-6)
+print("Native ORT file and memory reads preserve the inference results.")
+
+# %%
 # Plot the size ratio vs. number of nodes
 # ---------------------------------------
 #
 # The flatbuffer payload is comparable to the protobuf one and both grow
-# linearly with the number of weight matrices. On much larger models the
-# ``.ort`` file is typically a bit bigger because it embeds runtime
-# metadata; the trade-off is mmap-friendly loading without protobuf
-# parsing. Plotting the ``.ort`` / ``.onnx`` size ratio makes the relative
-# overhead easier to read than the raw sizes.
+# linearly with the number of weight matrices. The relative overhead
+# depends on the graph and tensor sizes. Plotting the ``.ort`` / ``.onnx``
+# size ratio makes that overhead easier to read than the raw sizes.
 
 size_ratios = np.array(ort_sizes) / np.array(onnx_sizes)
 

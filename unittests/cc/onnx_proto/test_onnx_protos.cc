@@ -6155,14 +6155,23 @@ TEST(onnx_proto, SerializeFormat_DefaultIsOnnx) {
   EXPECT_EQ(sopts.format, SerializeFormat::kOnnx);
 }
 
-TEST(onnx_proto, SerializeFormat_OrtFlatbuffersSerializeToStringThrows) {
+TEST(onnx_proto, SerializeFormat_OrtFlatbuffersSerializeToString) {
   ModelProto model;
+  model.set_ir_version(9);
+  model.add_opset_import()->set_version(18);
   GraphProto *graph = model.add_graph();
   graph->set_name("g_ort_serialize");
   SerializeOptions sopts;
   sopts.format = SerializeFormat::kOrtFlatbuffers;
   std::string out;
-  EXPECT_THROW(model.SerializeToString(out, sopts), std::exception);
+  ASSERT_TRUE(model.SerializeToString(out, sopts));
+  ASSERT_GE(out.size(), 8u);
+  EXPECT_EQ(out.substr(4, 4), "ORTM");
+  utils::StringWriteStream size_stream;
+  EXPECT_EQ(model.SerializeSize(size_stream, sopts).size(), static_cast<int64_t>(out.size()));
+  sopts.max_serialized_size_bytes = static_cast<int64_t>(out.size()) - 1;
+  EXPECT_FALSE(model.SerializeToString(out, sopts));
+  EXPECT_TRUE(out.empty());
 }
 
 TEST(onnx_proto, SerializeFormat_OrtFlatbuffersParseFromStringThrows) {
@@ -6178,14 +6187,73 @@ TEST(onnx_proto, SerializeFormat_OrtFlatbuffersParseFromStringThrows) {
   EXPECT_THROW(parsed.ParseFromString(serialized, popts), std::exception);
 }
 
-TEST(onnx_proto, SerializeFormat_OrtFlatbuffersSerializeModelProtoToStreamThrows) {
+TEST(onnx_proto, SerializeFormat_OrtFlatbuffersSerializeModelProtoToStream) {
   ModelProto model;
+  model.set_ir_version(9);
+  model.add_opset_import()->set_version(18);
   GraphProto *graph = model.add_graph();
   graph->set_name("g_ort_stream");
   SerializeOptions sopts;
   sopts.format = SerializeFormat::kOrtFlatbuffers;
   utils::StringWriteStream stream;
-  EXPECT_THROW(SerializeModelProtoToStream(model, stream, sopts), std::exception);
+  ASSERT_TRUE(SerializeModelProtoToStream(model, stream, sopts));
+  std::string out;
+  ASSERT_TRUE(model.SerializeToString(out, sopts));
+  EXPECT_EQ(std::string(reinterpret_cast<const char *>(stream.data()),
+                        static_cast<size_t>(stream.size())),
+            out);
+  utils::StringWriteStream direct;
+  model.SerializeToStream(direct, sopts);
+  EXPECT_EQ(std::string(reinterpret_cast<const char *>(direct.data()),
+                        static_cast<size_t>(direct.size())),
+            out);
+}
+
+TEST(onnx_proto, SerializeFormat_OrtFlatbuffersRoundTripAllEntryPoints) {
+  ModelProto model;
+  model.set_ir_version(9);
+  model.add_opset_import()->set_version(18);
+  GraphProto *graph = model.add_graph();
+  graph->set_name("round_trip");
+  ValueInfoProto *input = graph->add_input();
+  input->set_name("X");
+  auto *tensor_type = input->add_type()->add_tensor_type();
+  tensor_type->set_elem_type(TensorProto::FLOAT);
+  tensor_type->add_shape()->add_dim()->set_dim_value(2);
+  ValueInfoProto *output = graph->add_output();
+  output->CopyFrom(*input);
+  output->set_name("Y");
+  NodeProto *node = graph->add_node();
+  node->set_op_type("Identity");
+  node->add_input("X");
+  node->add_output("Y");
+  SerializeOptions sopts;
+  sopts.format = SerializeFormat::kOrtFlatbuffers;
+  std::string data;
+  ASSERT_TRUE(model.SerializeToString(data, sopts));
+  ParseOptions popts;
+  popts.format = SerializeFormat::kOrtFlatbuffers;
+  ModelProto from_string;
+  ASSERT_TRUE(from_string.ParseFromString(data, popts));
+  ASSERT_EQ(from_string.graph().node().size(), 1u);
+  EXPECT_EQ(from_string.graph().node()[0].op_type(), "Identity");
+  std::string expected;
+  ASSERT_TRUE(from_string.SerializeToString(expected));
+  utils::StringStream zero_copy_stream(reinterpret_cast<const uint8_t *>(data.data()),
+                                       static_cast<int64_t>(data.size()));
+  ModelProto from_zero_copy;
+  ASSERT_TRUE(from_zero_copy.ParseFromZeroCopyStream(&zero_copy_stream, popts));
+  EXPECT_EQ(from_zero_copy.SerializeAsString(), expected);
+  utils::StringStream direct_stream(reinterpret_cast<const uint8_t *>(data.data()),
+                                    static_cast<int64_t>(data.size()));
+  ModelProto from_stream;
+  ASSERT_TRUE(from_stream.ParseFromStream(direct_stream, popts));
+  EXPECT_EQ(from_stream.SerializeAsString(), expected);
+  utils::StringStream helper_stream(reinterpret_cast<const uint8_t *>(data.data()),
+                                    static_cast<int64_t>(data.size()));
+  ModelProto from_helper;
+  ParseModelProtoFromStream(from_helper, helper_stream, popts);
+  EXPECT_EQ(from_helper.SerializeAsString(), expected);
 }
 
 TEST(onnx_proto, SerializeFormat_OrtFlatbuffersParseModelProtoFromStreamThrows) {

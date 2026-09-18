@@ -1931,6 +1931,15 @@ SerializeSizeResult ModelProto::SerializeSize(utils::BinaryWriteStream &stream,
     local_opts.node_callback = {};
     return SerializeSize(stream, local_opts);
   }
+  if (options.format == SerializeFormat::kOrtFlatbuffers) {
+    EXT_ENFORCE(!stream.ExternalWeights(),
+                "ORT FlatBuffers serialization does not support external weights output.");
+    SerializeOptions size_options = options;
+    size_options.max_serialized_size_bytes = 0;
+    std::string buffer;
+    SerializeModelToOrtFlatbuffers(*this, buffer, size_options);
+    return SerializeSizeResult(0, 0, static_cast<int64_t>(buffer.size()));
+  }
   SerializeSizeResult size;
   SIZE_FIELD(size, options, stream, ir_version)
   SIZE_REPEATED_FIELD(size, options, stream, opset_import)
@@ -1948,6 +1957,16 @@ SerializeSizeResult ModelProto::SerializeSize(utils::BinaryWriteStream &stream,
 }
 void ModelProto::SerializeToStream(utils::BinaryWriteStream &stream,
                                    SerializeOptions &options) const {
+  if (options.format == SerializeFormat::kOrtFlatbuffers) {
+    EXT_ENFORCE(!stream.ExternalWeights(),
+                "ORT FlatBuffers serialization does not support external weights output.");
+    std::string buffer;
+    EXT_ENFORCE(SerializeModelToOrtFlatbuffers(*this, buffer, options),
+                "SerializeToStream: output exceeded SerializeOptions.max_serialized_size_bytes.");
+    stream.write_raw_bytes(reinterpret_cast<const uint8_t *>(buffer.data()),
+                           static_cast<utils::offset_t>(buffer.size()));
+    return;
+  }
   WRITE_FIELD(options, stream, ir_version)
   WRITE_REPEATED_FIELD(options, stream, opset_import)
   WRITE_FIELD(options, stream, producer_name)
@@ -1962,6 +1981,10 @@ void ModelProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, struct_types)
 }
 bool ModelProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  if (options.format == SerializeFormat::kOrtFlatbuffers) {
+    ParseModelFromOrtFlatbuffers(*this, stream, options);
+    return true;
+  }
   READ_BEGIN(options, stream, ModelProto)              //
   READ_FIELD(options, stream, ir_version)              //
   READ_REPEATED_FIELD(options, stream, opset_import)   //
@@ -2001,8 +2024,8 @@ bool ModelProto::SerializeToString(std::string &out,
                                    const std::string &external_file_prefix,
                                    const SerializeOptions &opts) const {
   EXT_ENFORCE(opts.format == SerializeFormat::kOnnx,
-              "ModelProto::SerializeToString: SerializeFormat::kOrtFlatbuffers is not "
-              "implemented yet. Use SerializeFormat::kOnnx for now.");
+              "ModelProto::SerializeToString: external files output requires "
+              "SerializeFormat::kOnnx.");
   ModelProto copy;
   copy.CopyFrom(*this);
   SerializeOptions local_opts = opts;

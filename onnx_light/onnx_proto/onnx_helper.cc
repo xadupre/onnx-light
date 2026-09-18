@@ -1097,9 +1097,19 @@ bool SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &st
     local_options.node_callback = {};
     return SerializeModelProtoToStream(model, stream, local_options, clear_external_data);
   }
+  if (options.format == SerializeFormat::kOrtFlatbuffers) {
+    EXT_ENFORCE(!stream.ExternalWeights(),
+                "ORT FlatBuffers serialization does not support external weights output.");
+    std::string buffer;
+    if (!SerializeModelToOrtFlatbuffers(model, buffer, options))
+      return false;
+    stream.write_raw_bytes(reinterpret_cast<const uint8_t *>(buffer.data()),
+                           static_cast<offset_t>(buffer.size()));
+    return true;
+  }
   EXT_ENFORCE(options.format == SerializeFormat::kOnnx,
-              "SerializeModelProtoToStream: SerializeFormat::kOrtFlatbuffers is not "
-              "implemented yet. Use SerializeFormat::kOnnx for now.");
+              "SerializeModelProtoToStream: unrecognised SerializeFormat value ",
+              static_cast<int>(options.format), ".");
   if (options.is_parallel())
     stream.StartThreadPool(options.num_threads);
   if (stream.ExternalWeights()) {
@@ -1195,25 +1205,14 @@ bool SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &st
 void ParseModelProtoFromStream(ModelProto &model, utils::BinaryStream &stream,
                                ParseOptions &options, bool clear_external_data) {
   if (options.format == SerializeFormat::kOrtFlatbuffers) {
-    // Recursion-OOM guard: validate the depth limit before any parsing begins
-    // so that a maliciously crafted .ort file cannot exhaust the call stack
-    // once the flatbuffer reader is implemented.
-    EXT_ENFORCE(options.max_recursion_depth > 0,
-                "ParseModelProtoFromStream: ParseOptions::max_recursion_depth must be > 0 "
-                "(got ",
-                options.max_recursion_depth,
-                "). "
-                "The ORT flatbuffer parser uses this limit to reject models "
-                "nested more deeply than the configured value, preventing stack "
-                "overflow on adversarially deep inputs.");
-    // Tensor-size OOM guard: max_tensor_size_bytes must be >= 0.
-    EXT_ENFORCE(options.max_tensor_size_bytes >= 0,
-                "ParseModelProtoFromStream: ParseOptions::max_tensor_size_bytes must be >= 0 "
-                "(got ",
-                options.max_tensor_size_bytes,
-                "). Use 0 to disable the limit or a positive value to cap tensor allocations.");
-    EXT_THROW("ParseModelProtoFromStream: SerializeFormat::kOrtFlatbuffers is not "
-              "implemented yet. Use SerializeFormat::kOnnx for now.");
+    ParseModelFromOrtFlatbuffers(model, stream, options);
+    if (options._touch_raw_data_pages) {
+      uint64_t pages_touched = 0;
+      (void)TouchesAllModelRawDataPages(model,
+                                        options.io_trace != nullptr ? &pages_touched : nullptr);
+      if (options.io_trace != nullptr)
+        options.io_trace->page_faults = pages_touched;
+    }
   } else {
     EXT_ENFORCE(options.format == SerializeFormat::kOnnx,
                 "ParseModelProtoFromStream: unrecognised SerializeFormat value ",

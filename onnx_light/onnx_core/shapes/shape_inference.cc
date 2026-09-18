@@ -116,6 +116,7 @@ void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const Fu
     ~PopActive() { stack.pop_back(); }
   } pop_active{active};
   ShapesContext sub_ctx;
+  sub_ctx.SetStructTypes(ctx.StructTypes());
   // Inherit caller opsets first, then let the function's own opset
   // imports override them.
   for (const auto &kv : ctx.Opsets()) {
@@ -136,10 +137,8 @@ void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const Fu
     if (caller_name.empty() || callee_name.empty()) {
       continue;
     }
-    if (ctx.Has(caller_name)) {
-      sub_ctx.Set(callee_name, SymTensor(ctx.Get(caller_name)));
-    } else if (ctx.HasSequence(caller_name)) {
-      sub_ctx.SetSequence(callee_name, SymSequence(ctx.GetSequence(caller_name)));
+    if (ctx.Has(caller_name) || ctx.HasType(caller_name) || ctx.HasSequence(caller_name)) {
+      sub_ctx.CopyValueFrom(callee_name, ctx, caller_name);
     }
   }
   // Resolve linked attributes (``ref_attr_name``) in the function body
@@ -174,10 +173,9 @@ void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const Fu
     if (caller_name.empty() || callee_name.empty()) {
       continue;
     }
-    if (sub_ctx.Has(callee_name)) {
-      ctx.Set(caller_name, SymTensor(sub_ctx.Get(callee_name)));
-    } else if (sub_ctx.HasSequence(callee_name)) {
-      ctx.SetSequence(caller_name, SymSequence(sub_ctx.GetSequence(callee_name)));
+    if (sub_ctx.Has(callee_name) || sub_ctx.HasType(callee_name) ||
+        sub_ctx.HasSequence(callee_name)) {
+      ctx.CopyValueFrom(caller_name, sub_ctx, callee_name);
     }
   }
 }
@@ -236,8 +234,13 @@ bool ValueInfoHasTensorShape(const ValueInfoProto &vi) {
 
 bool SeedInputValueInfo(const ValueInfoProto &vi, ShapesContext &ctx) {
   const std::string name = vi.name();
-  if (name.empty() || ctx.Has(name) || ctx.HasSequence(name)) {
+  if (name.empty() || ctx.Has(name) || ctx.HasType(name) || ctx.HasSequence(name)) {
     return false;
+  }
+  if (vi.has_type() && vi.type().value_case() != TypeProto::VALUE_NOT_SET &&
+      !vi.type().has_tensor_type() && !vi.type().has_map_type()) {
+    ctx.SetType(name, vi.type());
+    return true;
   }
   SymTensor tensor;
   if (SymTensorFromValueInfo(vi, tensor)) {
@@ -488,6 +491,12 @@ void MergeAnchorsIntoContext(ShapesContext &ctx, const AnchorMap &anchors, bool 
   for (const auto &kv : anchors) {
     const std::string &name = kv.first;
     const SymTensor &anchor = kv.second;
+    if (ctx.HasEncodedValue(name) || (ctx.HasType(name) && ctx.GetType(name).has_struct_type())) {
+      EXT_ENFORCE_INVALID(ctx.Has(name) && ctx.Get(name).Dtype() == anchor.Dtype() &&
+                              ctx.Get(name).Shape() == anchor.Shape(),
+                          "Structured output has an incompatible logical tensor annotation.");
+      continue;
+    }
     if (!ctx.Has(name)) {
       ctx.Set(name, SymTensor(anchor));
       continue;
@@ -707,6 +716,9 @@ void PropagateAnchorConstraintsIntoContext(ShapesContext &ctx, const AnchorMap &
   }
 
   for (const std::string &name : names) {
+    if (ctx.HasEncodedValue(name)) {
+      continue;
+    }
     const SymTensor &tensor = ctx.Get(name);
     SymTensor updated(tensor);
     bool changed = false;
@@ -867,8 +879,9 @@ void ShapesContext::CheckInputsAvailable(const NodeProto &node) const {
     if (name.empty()) {
       continue;
     }
-    EXT_ENFORCE_INVALID(Has(name) || HasSequence(name), "CheckInputsAvailable: input '", name,
-                        "' of op '", node.op_type(), "' is missing from ShapesContext.");
+    EXT_ENFORCE_INVALID(Has(name) || HasType(name) || HasSequence(name),
+                        "CheckInputsAvailable: input '", name, "' of op '", node.op_type(),
+                        "' is missing from ShapesContext.");
   }
 }
 
@@ -878,13 +891,28 @@ void ShapesContext::CheckOutputsNotAvailable(const NodeProto &node) const {
     if (name.empty()) {
       continue;
     }
-    EXT_ENFORCE_INVALID(!Has(name) && !HasSequence(name), "CheckOutputsNotAvailable: output '",
-                        name, "' of op '", node.op_type(),
+    EXT_ENFORCE_INVALID(!Has(name) && !HasType(name) && !HasSequence(name),
+                        "CheckOutputsNotAvailable: output '", name, "' of op '", node.op_type(),
                         "' is already present in ShapesContext.");
   }
 }
 
 void ShapesContext::ComputeShapeNode(const NodeProto &node) {
+  const bool preserving =
+      (node.domain().empty() || node.domain() == kOnnxDomain) &&
+      (node.op_type() == "Identity" || node.op_type() == "If" || node.op_type() == "Loop");
+  const bool local_function =
+      GetLocalFunction(LocalFunctionKey(node.domain(), node.op_type())) != nullptr;
+  const bool custom_inference =
+      GetCustomShapeInferenceFunction(node.domain(), node.op_type()) != nullptr;
+  for (const auto &input : node.input()) {
+    const std::string name = input;
+    EXT_ENFORCE_INVALID(
+        preserving || local_function || custom_inference ||
+            (!HasEncodedValue(name) && (!HasType(name) || !HasStructuredType(GetType(name)))),
+        "ComputeShapeNode: structured/encoded inference is unsupported for op '", node.op_type(),
+        "'.");
+  }
   // Only capture input names when event logging is active so that the
   // default path stays free of bookkeeping overhead, mirroring
   // ``onnx_kernels::RunNode``.
@@ -912,10 +940,32 @@ void ShapesContext::ComputeShapes(const utils::RepeatedProtoField<NodeProto> &no
 }
 
 void ShapesContext::ComputeShapeGraph(const GraphProto &graph) {
+  ModelProto declarations;
+  declarations.ref_struct_types() = StructTypes();
+  StructTypeCatalogue catalogue;
+  catalogue.Build(declarations);
+  for (const auto &vi : graph.input()) {
+    if (vi.has_type() && vi.type().value_case() != TypeProto::VALUE_NOT_SET) {
+      catalogue.ValidateType(vi.type());
+    }
+  }
+  for (const auto &vi : graph.output()) {
+    if (vi.has_type() && vi.type().value_case() != TypeProto::VALUE_NOT_SET) {
+      catalogue.ValidateType(vi.type());
+    }
+  }
+  for (const auto &vi : graph.value_info()) {
+    if (vi.has_type() && vi.type().value_case() != TypeProto::VALUE_NOT_SET) {
+      catalogue.ValidateType(vi.type());
+    }
+  }
   // Seed initializers first so that they shadow any duplicate input
   // (an ONNX initializer may appear both in ``graph.initializer()``
   // and ``graph.input()``; the initializer wins).
   current_node_index_ = -2;
+  for (const auto &init : graph.ref_encoded_initializer()) {
+    SetEncodedValue(init.name(), init);
+  }
   for (std::size_t i = 0; i < graph.initializer().size(); ++i) {
     const TensorProto &init = graph.initializer()[i];
     const std::string name = init.name();
@@ -935,10 +985,36 @@ void ShapesContext::ComputeShapeGraph(const GraphProto &graph) {
     SeedInputValueInfo(vi, *this);
   }
   ComputeShapes(graph.node());
+  for (const auto &vi : graph.output()) {
+    if (vi.has_type() && vi.type().has_struct_type()) {
+      EXT_ENFORCE_INVALID(HasType(vi.name()) && GetType(vi.name()).SerializeAsString() ==
+                                                    vi.type().SerializeAsString(),
+                          "ComputeShapeGraph: incompatible structured output type for '", vi.name(),
+                          "'.");
+    }
+  }
 }
 
 void ShapesContext::ComputeShapeModel(const ModelProto &model,
                                       bool prefill_with_value_info_output) {
+  // A new model introduces a new declaration scope, including when it has no declarations.
+  for (const auto &entry : encoded_values_) {
+    tensors_.erase(entry.first);
+    sequences_.erase(entry.first);
+    types_.erase(entry.first);
+  }
+  encoded_values_.clear();
+  for (auto it = types_.begin(); it != types_.end();) {
+    if (HasStructuredType(it->second)) {
+      tensors_.erase(it->first);
+      sequences_.erase(it->first);
+      it = types_.erase(it);
+    } else {
+      ++it;
+    }
+  }
+  ClearSubgraphContexts();
+  SetStructTypes(model.ref_struct_types());
   for (std::size_t i = 0; i < model.opset_import().size(); ++i) {
     const OperatorSetIdProto &osi = model.opset_import()[i];
     SetOpsetVersion(osi.domain(), static_cast<int>(osi.version()));
@@ -983,7 +1059,9 @@ void ApplyInferredShapesToValueInfo(const ShapesContext &ctx, GraphOrFunction &g
     ValueInfoProto &vi = *graph.mutable_value_info(i);
     const std::string name = vi.name();
     existing_value_info.insert(name);
-    if (!name.empty() && ctx.Has(name)) {
+    if (!name.empty() && ctx.HasType(name)) {
+      vi.ref_type() = ctx.GetType(name);
+    } else if (!name.empty() && ctx.Has(name)) {
       SymTensorToValueInfo(ctx.Get(name), vi);
     }
   }
@@ -1000,8 +1078,21 @@ void ApplyInferredShapesToValueInfo(const ShapesContext &ctx, GraphOrFunction &g
     }
     new_names.push_back(name);
   }
+  for (const auto &kv : ctx.Types()) {
+    const std::string &name = kv.first;
+    if (!ctx.Has(name) && !name.empty() && seeded.count(name) == 0 &&
+        output_names.count(name) == 0 && existing_value_info.count(name) == 0) {
+      new_names.push_back(name);
+    }
+  }
   std::sort(new_names.begin(), new_names.end());
   for (const std::string &name : new_names) {
+    if (ctx.HasType(name)) {
+      ValueInfoProto *vi = graph.add_value_info();
+      vi->set_name(name);
+      vi->ref_type() = ctx.GetType(name);
+      continue;
+    }
     const SymTensor &tensor = ctx.Get(name);
     if (TensorTypeToDataType(tensor.Dtype()) == TensorProto::DataType::UNDEFINED) {
       continue;
@@ -1024,13 +1115,18 @@ void ShapesContext::ApplyInferredShapesToGraph(GraphProto &graph) const {
   for (std::size_t i = 0; i < graph.initializer().size(); ++i) {
     seeded.insert(graph.initializer()[i].name());
   }
+  for (const auto &init : graph.ref_encoded_initializer()) {
+    seeded.insert(init.name());
+  }
   // Update graph outputs in place.
   std::unordered_set<std::string> output_names;
   for (int i = 0; i < graph.output_size(); ++i) {
     ValueInfoProto &vi = *graph.mutable_output(i);
     const std::string name = vi.name();
     output_names.insert(name);
-    if (!name.empty() && Has(name)) {
+    if (!name.empty() && HasType(name)) {
+      vi.ref_type() = GetType(name);
+    } else if (!name.empty() && Has(name)) {
       SymTensorToValueInfo(Get(name), vi);
     }
   }

@@ -44,7 +44,7 @@ SymTensor OptimTensorFromTensorTypeProto(const TypeProto &tp) {
 
 // Returns a pointer to the first attribute named ``name`` on ``node``,
 // or ``nullptr`` if no such attribute exists.
-const AttributeProto *FindAttribute(const NodeProto &node, const char *name) {
+const AttributeProto *FindOptionalAttribute(const NodeProto &node, const char *name) {
   for (int i = 0; i < node.attribute_size(); ++i) {
     const AttributeProto &attr = node.attribute(i);
     if (attr.ref_name() == name) {
@@ -77,7 +77,7 @@ void ComputeShapeOptional(ShapesContext &ctx, const NodeProto &node) {
   }
 
   // No input: the output element type must come from the ``type`` attribute.
-  const AttributeProto *type_attr = FindAttribute(node, "type");
+  const AttributeProto *type_attr = FindOptionalAttribute(node, "type");
   EXT_ENFORCE_INVALID(type_attr != nullptr && type_attr->has_tp(),
                       "ComputeShapeOptional: op 'Optional' with no input must carry a 'type' "
                       "TypeProto attribute describing the wrapped element type.");

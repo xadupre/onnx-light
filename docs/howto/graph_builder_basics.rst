@@ -89,6 +89,92 @@ The compact helpers delegate to the explicit
 Those ``make_*`` methods are the complete low-level contract for generated code
 and advanced authoring.
 
+Structured values and encoded initializers
+-----------------------------------------
+
+Native models can declare reusable ``StructTypeProto`` types and store
+``EncodedValueProto`` initializers. These are onnx-light protobuf extensions,
+not ordinary ONNX tensors. A declaration describes one record; each payload's
+byte extent determines its record count. Different payload lengths can
+therefore share one type.
+
+.. code-block:: python
+
+    from onnx_light.onnx import (
+        EncodedValueProto,
+        StructTypeProto,
+        TensorProto,
+        TypeProto,
+        ValueInfoProto,
+    )
+    from onnx_light.onnx import helper
+    from onnx_light.onnx_core.graph_builder import GraphBuilder
+
+    # Each record contains two UINT8 elements.
+    pair = StructTypeProto()
+    pair.name = "BytePair"
+    pair.type_id = 1
+    pair.array.dimension = 2
+    pair.array.element_type.CopyFrom(
+        helper.make_tensor_type_proto(TensorProto.UINT8, [])
+    )
+
+    builder = GraphBuilder("encoded_records")
+    builder.set_opset_version("", 18)
+    builder.make_struct_type(pair)
+
+    value = EncodedValueProto()
+    value.name = "records"
+    value.struct_type.type_ref = 1
+    value.raw_data = b"\x01\x02\x03\x04"
+    builder.make_encoded_initializer(value)
+
+    output_type = TypeProto()
+    output_type.struct_type.type_ref = 1
+    output = ValueInfoProto()
+    output.name = "records"
+    output.type.CopyFrom(output_type)
+    builder.make_output(output)
+
+    native_model = builder.to_onnx("model")
+    restored = GraphBuilder(native_model)
+    layout = restored.shapes.get_encoded_layout("records")
+    assert layout.payload_bytes == 4
+    assert layout.record_count == 2
+
+Declarations also support named typed fields, tensor-valued constant fields,
+nested arrays and bit packing. Constant fields occupy no payload bits.
+``make_struct_type`` registers a model-scoped nonzero ``type_id``; references
+must resolve in that model, including its nested subgraphs. Declare referenced
+types before their users when constructing a model incrementally. Importing a
+model loads its complete catalogue before its graph.
+
+``ShapesContext`` keeps the structured type, optional decoded
+``logical_type``, and physical layout together. Its ``get_type``,
+``resolve_struct_type`` and ``get_encoded_layout`` queries distinguish field
+types from payload geometry. A logical tensor descriptor does not decode the
+stored bytes or make an encoded initializer an ordinary tensor constant.
+The affine branch retains its storage type, scales, zero point, axis and
+block size; its logical tensor type must have concrete dimensions.
+``Identity`` preserves the structured descriptor. Standard tensor operators
+do not implicitly decode encoded inputs. Custom consumers need registered
+shape inference; unsupported structured operations and control-flow merges
+fail explicitly rather than guessing a layout.
+
+For external payloads, set ``data_location`` to ``TensorProto.EXTERNAL``
+and provide ``external_data`` entries for ``location`` and ``length``
+(and optionally ``offset``). Validation checks the declared extent, not
+the file's contents. Native C++ callers can also use
+``EncodedValueProto::set_raw_data_with_deleter`` to retain shared buffer
+ownership across builder and context copies.
+
+``build_graph`` and ``to_onnx("model")`` preserve the native extensions.
+Use a model, rather than a standalone graph, to retain shared declarations.
+``to_standard_model`` explicitly rejects structured constructs: lowering
+to standard tensors and operators is not implemented. ORT serialization
+also rejects them. Do not pass native structured models to an upstream
+consumer expecting standard ONNX support.
+
 Optimize and replay a rewrite
 -----------------------------
 

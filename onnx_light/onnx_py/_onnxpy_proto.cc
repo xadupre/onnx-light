@@ -306,7 +306,7 @@ void SetProtoFieldFromKwarg(nb::handle py, const std::string &key, nb::handle va
         if (obj.is_none()) {                                                                       \
           self.reset_##name();                                                                     \
         } else if (nb::isinstance<nb::ctype##_>(obj)) {                                            \
-          self.set_##name(nb::cast<ctype>(obj));                                                   \
+          self.set_##name(nb::cast<cls::name##_t>(obj));                                           \
         } else {                                                                                   \
           EXT_THROW("unexpected value type, unable to set '" #name "' for class '" #cls "'.");     \
         }                                                                                          \
@@ -2261,6 +2261,7 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .PYFIELD_STR(TypeProto, denotation)
       .PYFIELD_OPTIONAL_PROTO(TypeProto, sparse_tensor_type)
       .PYFIELD_OPTIONAL_PROTO(TypeProto, optional_type)
+      .PYFIELD_OPTIONAL_PROTO(TypeProto, struct_type)
       .def(
           "WhichOneof",
           [](const TypeProto &self, const std::string &oneof_name) -> nb::object {
@@ -2278,6 +2279,8 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
               return nb::str("sparse_tensor_type");
             if (self.has_optional_type())
               return nb::str("optional_type");
+            if (self.has_struct_type())
+              return nb::str("struct_type");
             return nb::none();
           },
           nb::arg("oneof_name"),
@@ -2298,6 +2301,8 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
               return self.has_sparse_tensor_type();
             if (field_name == "optional_type")
               return self.has_optional_type();
+            if (field_name == "struct_type")
+              return self.has_struct_type();
             if (field_name == "denotation")
               return self.has_denotation();
             throw nb::attribute_error(
@@ -2307,6 +2312,162 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .def("__repr__", [](TypeProto &self) { return proto_repr_with_short_line(self); });
   DECLARE_REPEATED_FIELD_PROTO(TypeProto, rep_typeproto);
   define_repeated_field_type_proto(rep_typeproto, rep_typeproto_proto);
+
+  PYDEFINE_PROTO_WITH_SUBTYPES(m, StructTypeProto);
+  PYDEFINE_SUBPROTO(nb_StructTypeProto, StructTypeProto, Structure);
+  using StructStructure = StructTypeProto::Structure;
+  PYDEFINE_SUBPROTO(nb_sub_StructTypeProtoStructure, StructStructure, Field)
+      .PYFIELD_STR(StructStructure::Field, name)
+      .PYFIELD_STR(StructStructure::Field, doc_string)
+      .PYFIELD_OPTIONAL_PROTO(StructStructure::Field, type)
+      .PYFIELD_OPTIONAL_PROTO(StructStructure::Field, constant)
+      .def("has_content", &StructStructure::Field::has_content)
+      .def(
+          "WhichOneof",
+          [](const StructStructure::Field &self, const std::string &name) -> nb::object {
+            if (name != "content")
+              throw nb::value_error("Field has no such oneof.");
+            if (self.has_type())
+              return nb::str("type");
+            if (self.has_constant())
+              return nb::str("constant");
+            return nb::none();
+          },
+          nb::arg("oneof_name"));
+  PYADD_SUBPROTO_SERIALIZATION(StructStructure, Field);
+  DECLARE_REPEATED_FIELD_SUBPROTO(StructStructure, Field, rep_struct_field);
+  define_repeated_field_type_proto(rep_struct_field, rep_struct_field_proto);
+  nb_sub_StructTypeProtoStructure.PYFIELD(StructTypeProto::Structure, field);
+  PYADD_SUBPROTO_SERIALIZATION(StructTypeProto, Structure);
+
+  PYDEFINE_SUBPROTO(nb_StructTypeProto, StructTypeProto, BitPacking);
+  using StructBitPacking = StructTypeProto::BitPacking;
+  PYDEFINE_SUBPROTO(nb_sub_StructTypeProtoBitPacking, StructBitPacking, Component)
+      .PYFIELD_STR(StructBitPacking::Component, name)
+      .PYFIELD(StructBitPacking::Component, bit_width);
+  PYADD_SUBPROTO_SERIALIZATION(StructBitPacking, Component);
+  DECLARE_REPEATED_FIELD_SUBPROTO(StructBitPacking, Component, rep_struct_component);
+  define_repeated_field_type_proto(rep_struct_component, rep_struct_component_proto);
+  nb_sub_StructTypeProtoBitPacking.PYFIELD(StructTypeProto::BitPacking, component)
+      .PYFIELD(StructTypeProto::BitPacking, dimension);
+  PYADD_SUBPROTO_SERIALIZATION(StructTypeProto, BitPacking);
+
+  PYDEFINE_SUBPROTO(nb_StructTypeProto, StructTypeProto, Array)
+      .PYFIELD_OPTIONAL_PROTO(StructTypeProto::Array, element_type)
+      .PYFIELD(StructTypeProto::Array, dimension);
+  PYADD_SUBPROTO_SERIALIZATION(StructTypeProto, Array);
+  nb_StructTypeProto.PYFIELD_OPTIONAL_PROTO(StructTypeProto, array)
+      .PYFIELD_OPTIONAL_PROTO(StructTypeProto, structure)
+      .PYFIELD_OPTIONAL_PROTO(StructTypeProto, bit_packing)
+      .PYFIELD_OPTIONAL_INT(StructTypeProto, type_ref)
+      .PYFIELD_OPTIONAL_PROTO(StructTypeProto, decoder)
+      .PYFIELD_OPTIONAL_PROTO(StructTypeProto, encoder)
+      .PYFIELD_STR(StructTypeProto, name)
+      .PYFIELD_STR(StructTypeProto, doc_string)
+      .PYFIELD(StructTypeProto, metadata_props)
+      .PYFIELD_OPTIONAL_INT(StructTypeProto, type_id)
+      .def("has_kind", &StructTypeProto::has_kind)
+      .def(
+          "WhichOneof",
+          [](const StructTypeProto &self, const std::string &name) -> nb::object {
+            if (name != "kind")
+              throw nb::value_error("StructTypeProto has no such oneof.");
+            if (self.has_array())
+              return nb::str("array");
+            if (self.has_structure())
+              return nb::str("structure");
+            if (self.has_bit_packing())
+              return nb::str("bit_packing");
+            if (self.has_type_ref())
+              return nb::str("type_ref");
+            return nb::none();
+          },
+          nb::arg("oneof_name"));
+  PYADD_PROTO_SERIALIZATION(StructTypeProto);
+  DECLARE_REPEATED_FIELD_PROTO(StructTypeProto, rep_struct_type);
+  define_repeated_field_type_proto(rep_struct_type, rep_struct_type_proto);
+
+  PYDEFINE_PROTO(m, AffineLayoutProto)
+      .def_prop_rw(
+          "storage_type", [](const AffineLayoutProto &self) { return self.storage_type(); },
+          [](AffineLayoutProto &self, nb::object value) {
+            self.set_storage_type(nb::isinstance<nb::int_>(value)
+                                      ? static_cast<TensorProto::DataType>(nb::cast<int>(value))
+                                      : nb::cast<TensorProto::DataType>(value));
+          },
+          AffineLayoutProto::DOC_storage_type)
+      .def("has_storage_type", &AffineLayoutProto::has_storage_type)
+      .PYFIELD_OPTIONAL_PROTO(AffineLayoutProto, scale)
+      .PYFIELD_OPTIONAL_PROTO(AffineLayoutProto, zero_point)
+      .PYFIELD_OPTIONAL_INT(AffineLayoutProto, axis)
+      .PYFIELD_OPTIONAL_INT(AffineLayoutProto, block_size);
+  PYADD_PROTO_SERIALIZATION(AffineLayoutProto);
+
+  PYDEFINE_PROTO(m, EncodedValueProto)
+      .PYFIELD_OPTIONAL_PROTO(EncodedValueProto, affine)
+      .PYFIELD_OPTIONAL_PROTO(EncodedValueProto, struct_type)
+      .PYFIELD_OPTIONAL_PROTO(EncodedValueProto, logical_type)
+      .def_prop_rw(
+          "raw_data",
+          [](const EncodedValueProto &self) {
+            return nb::bytes(reinterpret_cast<const char *>(self.raw_data_.data()),
+                             self.raw_data_.size());
+          },
+          [](EncodedValueProto &self, nb::bytes data) {
+            self.set_raw_data(data.data(), data.size());
+          },
+          EncodedValueProto::DOC_raw_data)
+      .def("has_raw_data", &EncodedValueProto::has_raw_data)
+      .PYFIELD(EncodedValueProto, external_data)
+      .def_prop_rw(
+          "data_location", [](const EncodedValueProto &self) { return self.data_location(); },
+          [](EncodedValueProto &self, nb::object value) {
+            self.set_data_location(
+                nb::isinstance<nb::int_>(value)
+                    ? static_cast<TensorProto::DataLocation>(nb::cast<int>(value))
+                    : nb::cast<TensorProto::DataLocation>(value));
+          },
+          EncodedValueProto::DOC_data_location)
+      .def("has_data_location", &EncodedValueProto::has_data_location)
+      .PYFIELD_STR(EncodedValueProto, name)
+      .PYFIELD_STR(EncodedValueProto, doc_string)
+      .def("has_layout", &EncodedValueProto::has_layout)
+      .def(
+          "WhichOneof",
+          [](const EncodedValueProto &self, const std::string &name) -> nb::object {
+            if (name != "layout")
+              throw nb::value_error("EncodedValueProto has no such oneof.");
+            if (self.has_affine())
+              return nb::str("affine");
+            if (self.has_struct_type())
+              return nb::str("struct_type");
+            return nb::none();
+          },
+          nb::arg("oneof_name"));
+  PYADD_PROTO_SERIALIZATION(EncodedValueProto);
+  DECLARE_REPEATED_FIELD_PROTO(EncodedValueProto, rep_encoded_value);
+  define_repeated_field_type_proto(rep_encoded_value, rep_encoded_value_proto);
+
+  auto bind_structured_presence = [](auto &cls) {
+    cls.def(
+        "HasField",
+        [](nb::object self, const std::string &name) {
+          std::string method = "has_" + name;
+          if (!nb::hasattr(self, method.c_str()))
+            throw nb::attribute_error(
+                ("Protocol message has no field named '" + name + "'").c_str());
+          return nb::cast<bool>(self.attr(method.c_str())());
+        },
+        nb::arg("field_name"), "Checks if a field is set, following the protobuf HasField API.");
+  };
+  bind_structured_presence(nb_StructTypeProto);
+  bind_structured_presence(nb_sub_StructTypeProtoStructure);
+  bind_structured_presence(nb_sub_StructStructureField);
+  bind_structured_presence(nb_sub_StructTypeProtoBitPacking);
+  bind_structured_presence(nb_sub_StructBitPackingComponent);
+  bind_structured_presence(nb_sub_StructTypeProtoArray);
+  bind_structured_presence(nb_AffineLayoutProto);
+  bind_structured_presence(nb_EncodedValueProto);
 
   PYDEFINE_PROTO(m, ValueInfoProto)
       .PYFIELD_STR(ValueInfoProto, name)
@@ -2560,6 +2721,7 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .PYFIELD_STR(GraphProto, name)
       .PYFIELD(GraphProto, initializer)
       .PYFIELD(GraphProto, sparse_initializer)
+      .PYFIELD(GraphProto, encoded_initializer)
       .PYFIELD_STR(GraphProto, doc_string)
       .PYFIELD(GraphProto, input)
       .PYFIELD(GraphProto, output)
@@ -2581,6 +2743,8 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
               return self.has_initializer();
             if (field_name == "sparse_initializer")
               return self.has_sparse_initializer();
+            if (field_name == "encoded_initializer")
+              return self.has_encoded_initializer();
             if (field_name == "input")
               return self.has_input();
             if (field_name == "output")
@@ -2754,6 +2918,7 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
       .PYFIELD_OPTIONAL_INT(ModelProto, ir_version)
       .PYFIELD(ModelProto, metadata_props)
       .PYFIELD(ModelProto, functions)
+      .PYFIELD(ModelProto, struct_types)
       .PYFIELD(ModelProto, configuration);
   PYADD_PROTO_SERIALIZATION(ModelProto);
   nb_ModelProto
@@ -2780,6 +2945,8 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
               return self.has_opset_import();
             if (field_name == "functions")
               return self.has_functions();
+            if (field_name == "struct_types")
+              return self.has_struct_types();
             if (field_name == "configuration")
               return self.has_configuration();
             throw nb::attribute_error(

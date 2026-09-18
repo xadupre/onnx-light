@@ -12,8 +12,10 @@ from __future__ import annotations
 __version__ = "1.24.0"
 
 from ..onnx_py._onnxpyprotoop import (  # type: ignore # noqa: F401
+    AffineLayoutProto,
     AttributeProto,
     DeviceConfigurationProto,
+    EncodedValueProto,
     FileLoadMode,
     FunctionProto,
     GraphProto,
@@ -37,6 +39,7 @@ from ..onnx_py._onnxpyprotoop import (  # type: ignore # noqa: F401
     SimpleShardedDimProto,
     SparseTensorProto,
     StringStringEntryProto,
+    StructTypeProto,
     TensorAnnotation,
     TensorBufferOptions,
     TensorProto,

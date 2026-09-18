@@ -236,6 +236,17 @@ public:
   /// Defaults remain overridable and are not treated as optimization constants.
   const std::string &MakeInitializer(const TensorProto &tensor);
 
+  /// Registers a model-scoped structured declaration in the owned shape context.
+  void MakeStructType(const StructTypeProto &type);
+
+  /// Validates and appends an encoded initializer, retaining its payload owner.
+  const std::string &MakeEncodedInitializer(const EncodedValueProto &value);
+
+  /// Returns encoded initializers in declaration order.
+  const utils::RepeatedProtoField<EncodedValueProto> &EncodedInitializers() const noexcept {
+    return encoded_initializers_;
+  }
+
   /// Builds and appends an initializer whose data lives in an external file.
   ///
   /// @param name     Initializer name.
@@ -603,6 +614,9 @@ public:
   /// @param ir_version IR version to write; ``0`` selects the library default.
   ModelProto ToModel(int64_t ir_version = 0);
 
+  /// Returns a standard ONNX model, rejecting native structured extensions.
+  ModelProto ToStandardModel(int64_t ir_version = 0);
+
   /// Returns the finalized nodes wrapped in a :cpp:class:`FunctionProto`.
   ///
   /// @param domain Function domain.
@@ -691,7 +705,8 @@ private:
   // isolated index). Returns the number of initializers removed.
   std::size_t
   DeduplicateInitializers(const InitializerContentIndex &inherited, bool recursive,
-                          std::unordered_map<std::string, std::string> *applied_renames = nullptr);
+                          std::unordered_map<std::string, std::string> *applied_renames = nullptr,
+                          const std::vector<const EncodedValueProto *> &encoded_inherited = {});
 
   // Seeds the incremental annotation state (value tag + in-place-reuse
   // lifetime) for a declared graph input named ``name``.
@@ -699,6 +714,11 @@ private:
 
   // Seeds the owned ShapesContext with the descriptor of ``name``.
   void SeedShape(const std::string &name, SymTensor tensor);
+
+  void SetStructTypes(const utils::RepeatedProtoField<StructTypeProto> &types);
+  void RebuildStructuredState();
+  std::size_t DeduplicateEncodedInitializers(std::vector<const EncodedValueProto *> &index,
+                                             std::unordered_map<std::string, std::string> &rename);
 
   // Imports ``graph`` by replaying its inputs, initializers, nodes and outputs.
   void ImportGraph(const GraphProto &graph);
@@ -713,6 +733,7 @@ private:
 
   // Builds a function without running inference on its unspecialized body.
   FunctionProto BuildFunction(const std::string &domain) const;
+  FunctionProto ExportFunction(const std::string &domain, bool model_scoped);
 
   // Orders producers before consumers, including lexical subgraph captures.
   void SortNodesTopologically();
@@ -767,6 +788,10 @@ private:
   utils::RepeatedProtoField<ValueInfoProto> value_infos_;
   utils::RepeatedProtoField<NodeProto> nodes_;
   utils::RepeatedProtoField<TensorProto> initializers_;
+  utils::RepeatedProtoField<EncodedValueProto> encoded_initializers_;
+  ModelProto model_template_;
+  GraphProto graph_template_;
+  FunctionProto function_template_;
   std::vector<std::unique_ptr<GraphBuilder>> local_functions_;
   std::vector<std::unique_ptr<GraphBuilder>> subgraphs_;
   std::unordered_set<std::string> names_;

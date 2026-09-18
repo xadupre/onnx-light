@@ -8,7 +8,10 @@
 #include "onnx_lib/checker.h"
 #include "onnx_manipulations/parser.h"
 #include "onnx_op/operator_sets.h"
+#include "onnx_proto/onnx_ort_flatbuffers.h"
+#include "onnx_proto/onnx_verify.h"
 
+#include <algorithm>
 #include <gtest/gtest.h>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -1603,6 +1606,481 @@ TEST(GraphBuilder, NativeDefaultInitializerRejectsNonTensorInput) {
   EXPECT_THROW(builder.MakeInitializer(MakeInitializer<float>("sequence", {1}, {1.0f})),
                core::builder::BuilderError);
   EXPECT_TRUE(builder.Initializers().empty());
+}
+
+namespace {
+
+StructTypeProto BuilderRecord(uint64_t id = 1) {
+  StructTypeProto type;
+  type.set_type_id(id);
+  type.set_name("record");
+  auto *field = type.mutable_structure()->add_field();
+  field->set_name("scale");
+  auto *tensor = field->mutable_type()->mutable_tensor_type();
+  tensor->set_elem_type(TensorProto::FLOAT);
+  tensor->mutable_shape();
+  field = type.mutable_structure()->add_field();
+  field->set_name("codes");
+  auto *packing = field->mutable_type()->mutable_struct_type()->mutable_bit_packing();
+  packing->set_dimension(uint64_t{2});
+  auto *component = packing->add_component();
+  component->set_name("nibble");
+  component->set_bit_width(uint32_t{4});
+  field = type.mutable_structure()->add_field();
+  field->set_name("offsets");
+  auto *array = field->mutable_type()->mutable_struct_type()->mutable_array();
+  array->set_dimension(uint64_t{3});
+  tensor = array->mutable_element_type()->mutable_tensor_type();
+  tensor->set_elem_type(TensorProto::UINT8);
+  tensor->mutable_shape();
+  field = type.mutable_structure()->add_field();
+  field->set_name("constant");
+  *field->mutable_constant() = MakeInitializer<float>("", {}, {2.f});
+  return type;
+}
+
+EncodedValueProto BuilderEncoded(const std::string &name, uint64_t id = 1, std::size_t bytes = 16) {
+  EncodedValueProto value;
+  value.set_name(name);
+  value.mutable_struct_type()->set_type_ref(id);
+  value.set_raw_data(std::string(bytes, '\x2a'));
+  return value;
+}
+
+ValueInfoProto BuilderStructuredInfo(const std::string &name, uint64_t id = 1) {
+  ValueInfoProto info;
+  info.set_name(name);
+  info.mutable_type()->mutable_struct_type()->set_type_ref(id);
+  return info;
+}
+
+} // namespace
+
+TEST(GraphBuilderStructured, NativeRoundtripPreservesDeclarationsAndMetadata) {
+  ModelProto model;
+  model.set_ir_version(10);
+  model.set_producer_name("original");
+  model.set_doc_string("model documentation");
+  model.add_opset("", 23);
+  model.ref_struct_types().push_back(BuilderRecord());
+  auto *graph = model.mutable_graph();
+  graph->set_name("native");
+  graph->set_doc_string("graph documentation");
+  graph->ref_encoded_initializer().push_back(BuilderEncoded("weight"));
+  graph->add_value_info(BuilderStructuredInfo("weight"))->set_doc_string("encoded descriptor");
+  graph->add_value_info(BuilderStructuredInfo("result"));
+  graph->add_initializer(MakeInitializer<float>("scale", {}, {2.f}));
+  auto *annotation = graph->add_quantization_annotation();
+  annotation->set_tensor_name("weight");
+  auto *parameter = annotation->add_quant_parameter_tensor_names();
+  parameter->set_key("SCALE_TENSOR");
+  parameter->set_value("scale");
+  auto *node = graph->add_node();
+  node->set_op_type("Identity");
+  node->add_input("weight");
+  node->add_output("result");
+  node->set_doc_string("node documentation");
+  auto *metadata = node->add_metadata_props();
+  metadata->set_key("application");
+  metadata->set_value("retained");
+  graph->add_output(BuilderStructuredInfo("result"));
+  graph->ref_output()[0].mutable_type()->set_denotation("DECLARED_RECORD");
+  core::builder::GraphBuilder builder(model, SchemaLookup());
+  EXPECT_EQ(builder.Shapes().GetEncodedLayout("weight").element_bits, 64u);
+  EXPECT_EQ(builder.Shapes().GetEncodedLayout("weight").record_count, 2u);
+  auto exported = builder.ToModel();
+  EXPECT_EQ(exported.ir_version(), 10);
+  EXPECT_EQ(exported.producer_name(), "original");
+  EXPECT_EQ(exported.doc_string(), model.doc_string());
+  EXPECT_EQ(exported.graph().doc_string(), graph->doc_string());
+  ASSERT_EQ(exported.graph().quantization_annotation().size(), 1u);
+  EXPECT_EQ(exported.graph().quantization_annotation()[0].SerializeAsString(),
+            annotation->SerializeAsString());
+  EXPECT_TRUE(std::any_of(exported.graph().value_info().begin(),
+                          exported.graph().value_info().end(), [](const auto &value) {
+                            return value.name() == "weight" &&
+                                   value.doc_string() == "encoded descriptor";
+                          }));
+  EXPECT_EQ(exported.graph().node()[0].doc_string(), node->doc_string());
+  EXPECT_TRUE(std::any_of(exported.graph().node()[0].metadata_props().begin(),
+                          exported.graph().node()[0].metadata_props().end(), [](const auto &entry) {
+                            return entry.key() == "application" && entry.value() == "retained";
+                          }));
+  ASSERT_EQ(exported.struct_types().size(), 1u);
+  EXPECT_EQ(exported.struct_types()[0].SerializeAsString(),
+            model.struct_types()[0].SerializeAsString());
+  ASSERT_EQ(exported.graph().encoded_initializer().size(), 1u);
+  EXPECT_EQ(exported.graph().encoded_initializer()[0].SerializeAsString(),
+            graph->encoded_initializer()[0].SerializeAsString());
+  EXPECT_EQ(exported.graph().output()[0].type().SerializeAsString(),
+            graph->output()[0].type().SerializeAsString());
+  EXPECT_NO_THROW(VerifyModel(exported));
+  EXPECT_THROW(SerializeModelToOrtFlatbuffers(exported, {}), std::invalid_argument);
+  EXPECT_THROW(builder.ToStandardModel(), core::builder::BuilderError);
+  EXPECT_THROW(builder.ToFunction(), core::builder::BuilderError);
+}
+
+TEST(GraphBuilderStructured, RetainsStructuredInputAndIdentityOutput) {
+  core::builder::GraphBuilder builder("typed", SchemaLookup());
+  builder.MakeStructType(BuilderRecord());
+  builder.MakeInput(BuilderStructuredInfo("x"));
+  builder.MakeNode("Identity", {"x"}, {"y"});
+  builder.MakeOutput("y");
+  EXPECT_TRUE(builder.Shapes().HasType("y"));
+  const auto model = builder.ToModel();
+  EXPECT_TRUE(model.graph().input()[0].type().has_struct_type());
+  ASSERT_TRUE(model.graph().output()[0].type().has_struct_type());
+  EXPECT_EQ(model.graph().output()[0].type().struct_type().type_ref(), 1u);
+}
+
+TEST(GraphBuilderStructured, RejectsBadPayloadAndNamesWithoutMutation) {
+  core::builder::GraphBuilder builder("invalid", SchemaLookup());
+  builder.MakeStructType(BuilderRecord());
+  EXPECT_THROW(builder.MakeEncodedInitializer(BuilderEncoded("bad", 1, 7)), std::invalid_argument);
+  EXPECT_FALSE(builder.HasName("bad"));
+  EXPECT_TRUE(builder.EncodedInitializers().empty());
+  EXPECT_THROW(builder.MakeEncodedInitializer(BuilderEncoded("missing", 999)),
+               std::invalid_argument);
+  EXPECT_FALSE(builder.HasName("missing"));
+  builder.MakeEncodedInitializer(BuilderEncoded("weight"));
+  EXPECT_THROW(builder.MakeEncodedInitializer(BuilderEncoded("weight")),
+               core::builder::BuilderError);
+  EXPECT_THROW(builder.MakeInitializer(MakeInitializer<float>("weight", {}, {1.f})),
+               core::builder::BuilderError);
+  EXPECT_THROW(builder.MakeNode("Identity", {"weight"}, {"weight"}), core::builder::BuilderError);
+  EXPECT_THROW(builder.MakeStructType(BuilderRecord()), std::invalid_argument);
+  EXPECT_EQ(builder.Shapes().StructTypes().size(), 1u);
+  builder.MakeStructType(BuilderRecord(2));
+  EXPECT_THROW(builder.MakeOutput(BuilderStructuredInfo("weight", 2)), core::builder::BuilderError);
+  EXPECT_THROW(builder.MakeOutput(BuilderStructuredInfo("weight", 999)), std::invalid_argument);
+  EXPECT_THROW(builder.MakeOutput("weight", core::symbolic::TensorType::kFloat, MakeShape({4})),
+               core::builder::BuilderError);
+  EXPECT_TRUE(builder.Outputs().empty());
+  EXPECT_EQ(builder.Shapes().GetEncodedLayout("weight").record_count, 2u);
+}
+
+TEST(GraphBuilderStructured, DeduplicatesOnlyCompleteSemanticIdentity) {
+  core::builder::GraphBuilder builder("dedup", SchemaLookup());
+  builder.SetOpsetVersion("custom", 1);
+  builder.MakeStructType(BuilderRecord(1));
+  auto distinct = BuilderRecord(2);
+  *distinct.mutable_structure()->ref_field()[3].mutable_constant() =
+      MakeInitializer<float>("", {}, {3.f});
+  builder.MakeStructType(distinct);
+  builder.MakeEncodedInitializer(BuilderEncoded("first"));
+  builder.MakeEncodedInitializer(BuilderEncoded("duplicate"));
+  builder.MakeEncodedInitializer(BuilderEncoded("different_type", 2));
+  builder.MakeEncodedInitializer(BuilderEncoded("short", 1, 8));
+  builder.MakeEncodedInitializer(BuilderEncoded("public_output"));
+  builder.MakeNode("Consume", {"duplicate", "different_type"}, {"result"}, "custom");
+  builder.MakeOutput("result");
+  builder.MakeOutput(BuilderStructuredInfo("public_output"));
+  EXPECT_EQ(builder.RemoveDuplicateInitializers(), 1u);
+  ASSERT_EQ(builder.EncodedInitializers().size(), 4u);
+  EXPECT_EQ(builder.Shapes().GetEncodedLayout("first").record_count, 2u);
+  EXPECT_EQ(builder.Shapes().GetEncodedLayout("short").record_count, 1u);
+  EXPECT_EQ(builder.Nodes()[0].input(0), "first");
+  EXPECT_EQ(builder.Nodes()[0].input(1), "different_type");
+  EXPECT_FALSE(builder.Shapes().HasEncodedValue("duplicate"));
+  EXPECT_EQ(builder.ToModel().graph().encoded_initializer().size(), 4u);
+}
+
+TEST(GraphBuilderStructured, PrunesEncodedInitializersAndKeepsCapturedValues) {
+  core::builder::GraphBuilder builder("captures", SchemaLookup());
+  builder.SetOpsetVersion("custom", 1);
+  builder.MakeStructType(BuilderRecord());
+  builder.MakeEncodedInitializer(BuilderEncoded("live"));
+  builder.MakeEncodedInitializer(BuilderEncoded("dead"));
+  auto &child = builder.MakeSubgraph("body");
+  child.MakeOutput(BuilderStructuredInfo("live"));
+  AttributeProto attr;
+  attr.set_name("body_ref");
+  attr.set_type(AttributeProto::STRING);
+  attr.set_s("body");
+  utils::RepeatedProtoField<AttributeProto> attrs;
+  attrs.push_back(attr);
+  builder.MakeNode("Capture", {}, {"result"}, "custom", "", attrs);
+  builder.MakeOutput("result");
+  EXPECT_EQ(builder.RemoveUnusedNodes(), 0u);
+  ASSERT_EQ(builder.EncodedInitializers().size(), 1u);
+  EXPECT_EQ(builder.EncodedInitializers()[0].name(), "live");
+  EXPECT_FALSE(builder.Shapes().HasEncodedValue("dead"));
+  const auto model = builder.ToModel();
+  EXPECT_EQ(model.graph().node()[0].attribute()[0].g().output()[0].name(), "live");
+}
+
+TEST(GraphBuilderStructured, NestedDedupRewritesCapturesAndOwnsCatalogue) {
+  core::builder::GraphBuilder builder("nested", SchemaLookup());
+  builder.MakeStructType(BuilderRecord());
+  builder.MakeEncodedInitializer(BuilderEncoded("outer"));
+  auto &child = builder.MakeSubgraph("body");
+  child.MakeEncodedInitializer(BuilderEncoded("inner"));
+  child.MakeNode("Identity", {"inner"}, {"result"});
+  child.MakeOutput("result");
+  EXPECT_EQ(builder.RemoveDuplicateInitializers(), 1u);
+  EXPECT_TRUE(child.EncodedInitializers().empty());
+  EXPECT_EQ(child.Nodes()[0].input(0), "outer");
+  EXPECT_FALSE(child.Shapes().HasEncodedValue("inner"));
+  EXPECT_EQ(child.Shapes().GetEncodedLayout("outer").element_bits, 64u);
+  const auto snapshot = child.Shapes();
+  builder.MakeStructType(BuilderRecord(2));
+  EXPECT_EQ(snapshot.StructTypes().size(), 1u);
+  EXPECT_EQ(child.Shapes().StructTypes().size(), 2u);
+  EXPECT_EQ(snapshot.GetEncodedLayout("outer").root->type_id(), 1u);
+  EXPECT_NO_THROW(child.ToGraph());
+}
+
+TEST(GraphBuilderStructured, RetainsPayloadOwnerAcrossImportMoveAndExport) {
+  bool released = false;
+  ModelProto exported;
+  {
+    ModelProto model;
+    model.add_opset("", 23);
+    model.ref_struct_types().push_back(BuilderRecord());
+    auto value = BuilderEncoded("weight");
+    auto bytes = std::make_shared<std::vector<uint8_t>>(16, 42);
+    value.set_raw_data_with_deleter(bytes->data(), bytes->size(),
+                                    [bytes, &released]() { released = true; });
+    model.mutable_graph()->set_name("owner");
+    model.mutable_graph()->ref_encoded_initializer().push_back(EncodedValueProto(value));
+    model.mutable_graph()->add_output(BuilderStructuredInfo("weight"));
+    core::builder::GraphBuilder imported(model, SchemaLookup());
+    model.Clear();
+    value.Clear();
+    bytes.reset();
+    core::builder::GraphBuilder moved(std::move(imported));
+    EXPECT_FALSE(released);
+    exported = moved.ToModel();
+    EXPECT_EQ(exported.graph().encoded_initializer()[0].raw_data().size(), 16u);
+    EXPECT_FALSE(released);
+  }
+  EXPECT_FALSE(released);
+  exported.Clear();
+  EXPECT_TRUE(released);
+}
+
+TEST(GraphBuilderStructured, ExternalPayloadLengthIsValidatedAndRetained) {
+  core::builder::GraphBuilder builder("external", SchemaLookup());
+  builder.MakeStructType(BuilderRecord());
+  auto value = BuilderEncoded("external");
+  value.clear_raw_data();
+  value.set_data_location(TensorProto::EXTERNAL);
+  auto *entry = value.add_external_data();
+  entry->set_key("location");
+  entry->set_value("records.bin");
+  entry = value.add_external_data();
+  entry->set_key("length");
+  entry->set_value("15");
+  EXPECT_THROW(builder.MakeEncodedInitializer(value), std::invalid_argument);
+  entry->set_value("16");
+  builder.MakeEncodedInitializer(value);
+  builder.MakeOutput(BuilderStructuredInfo("external"));
+  EXPECT_EQ(builder.Shapes().GetEncodedLayout("external").record_count, 2u);
+  EXPECT_FALSE(builder.Shapes().GetEncodedLayout("external").content_verified);
+  const auto graph = builder.ToGraph();
+  EXPECT_EQ(graph.encoded_initializer()[0].SerializeAsString(), value.SerializeAsString());
+}
+
+TEST(GraphBuilderStructured, NestedGraphExportRetainsPayloadOwner) {
+  bool released = false;
+  GraphProto exported;
+  {
+    core::builder::GraphBuilder builder("nested_owner", SchemaLookup());
+    builder.SetOpsetVersion("custom", 1);
+    builder.MakeStructType(BuilderRecord());
+    auto &child = builder.MakeSubgraph("body");
+    auto value = BuilderEncoded("weight");
+    auto bytes = std::make_shared<std::vector<uint8_t>>(16, 42);
+    value.set_raw_data_with_deleter(bytes->data(), bytes->size(),
+                                    [bytes, &released]() { released = true; });
+    child.MakeEncodedInitializer(value);
+    child.MakeOutput(BuilderStructuredInfo("weight"));
+    utils::RepeatedProtoField<AttributeProto> attributes;
+    auto &attribute = attributes.add();
+    attribute.set_name("body_ref");
+    attribute.set_type(AttributeProto::STRING);
+    attribute.set_s("body");
+    builder.MakeNode("Capture", {}, {"result"}, "custom", "", attributes);
+    builder.MakeOutput(BuilderStructuredInfo("result"));
+    exported = builder.ToGraph();
+  }
+  EXPECT_FALSE(released);
+  ASSERT_EQ(exported.node()[0].attribute()[0].g().encoded_initializer().size(), 1u);
+  exported.Clear();
+  EXPECT_TRUE(released);
+}
+
+TEST(GraphBuilderStructured, StandardExportRejectsInlineAndNestedTypes) {
+  core::builder::GraphBuilder standard("standard", SchemaLookup());
+  standard.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  standard.MakeOutput("x");
+  EXPECT_NO_THROW(standard.ToStandardModel());
+  core::builder::GraphBuilder structured("inline", SchemaLookup());
+  auto info = BuilderStructuredInfo("x");
+  auto inline_type = BuilderRecord();
+  inline_type.clear_type_id();
+  *info.mutable_type()->mutable_sequence_type()->mutable_elem_type()->mutable_struct_type() =
+      inline_type;
+  structured.MakeInput(info);
+  structured.MakeOutput(info);
+  EXPECT_THROW(structured.ToStandardModel(), core::builder::BuilderError);
+}
+
+TEST(GraphBuilderStructured, ReordersNodesAndRebuildsAfterIdentityRemoval) {
+  core::builder::GraphBuilder builder("sort", SchemaLookup());
+  builder.MakeStructType(BuilderRecord());
+  builder.MakeEncodedInitializer(BuilderEncoded("weight"));
+  builder.MakeNode("Identity", {"weight"}, {"middle"});
+  builder.MakeNode("Identity", {"middle"}, {"last"});
+  builder.MakeOutput("last");
+  auto &nodes = const_cast<utils::RepeatedProtoField<NodeProto> &>(builder.Nodes());
+  std::swap(nodes[0], nodes[1]);
+  auto graph = builder.ToGraph();
+  ASSERT_EQ(graph.node().size(), 2u);
+  EXPECT_EQ(graph.node()[0].input(0), "weight");
+  ASSERT_TRUE(graph.output()[0].type().has_struct_type());
+  EXPECT_EQ(builder.RemoveIdentityNodes(), 1u);
+  EXPECT_FALSE(builder.Shapes().HasType("middle"));
+  ASSERT_TRUE(builder.Shapes().HasEncodedValue("last"));
+  EXPECT_EQ(builder.Shapes().GetEncodedLayout("last").record_count, 2u);
+  graph = builder.ToGraph();
+  ASSERT_EQ(graph.node().size(), 1u);
+  EXPECT_EQ(graph.node()[0].input(0), "weight");
+}
+
+TEST(GraphBuilderStructured, DoesNotDeduplicateDifferentInlineConstantsOrLogicalTypes) {
+  core::builder::GraphBuilder builder("semantics", SchemaLookup());
+  auto first = BuilderEncoded("first");
+  auto declaration = BuilderRecord();
+  declaration.clear_type_id();
+  *first.mutable_struct_type() = declaration;
+  auto different_constant = first;
+  different_constant.set_name("constant");
+  *different_constant.mutable_struct_type()
+       ->mutable_structure()
+       ->ref_field()[3]
+       .mutable_constant() = MakeInitializer<float>("", {}, {3.f});
+  auto logical = first;
+  logical.set_name("logical");
+  auto *tensor = logical.mutable_logical_type()->mutable_tensor_type();
+  tensor->set_elem_type(TensorProto::FLOAT);
+  tensor->mutable_shape()->add_dim()->set_dim_value(int64_t{4});
+  builder.MakeEncodedInitializer(first);
+  builder.MakeEncodedInitializer(different_constant);
+  builder.MakeEncodedInitializer(logical);
+  EXPECT_EQ(builder.RemoveDuplicateInitializers(), 0u);
+  EXPECT_EQ(builder.EncodedInitializers().size(), 3u);
+}
+
+TEST(GraphBuilderStructured, DefaultsRemainOverridableAndProtectedFromDeduplication) {
+  core::builder::GraphBuilder builder("defaults", SchemaLookup());
+  builder.MakeStructType(BuilderRecord());
+  builder.MakeStructType(BuilderRecord(2));
+  builder.MakeInput(BuilderStructuredInfo("input"));
+  EXPECT_THROW(builder.MakeEncodedInitializer(BuilderEncoded("input", 2)),
+               core::builder::BuilderError);
+  EXPECT_TRUE(builder.EncodedInitializers().empty());
+  builder.MakeEncodedInitializer(BuilderEncoded("input"));
+  builder.MakeEncodedInitializer(BuilderEncoded("constant"));
+  builder.MakeNode("Identity", {"input"}, {"output"});
+  builder.MakeOutput("output");
+  EXPECT_FALSE(builder.Shapes().HasEncodedValue("input"));
+  EXPECT_FALSE(builder.Shapes().HasEncodedValue("output"));
+  EXPECT_EQ(builder.RemoveDuplicateInitializers(), 0u);
+  const auto model = builder.ToModel();
+  EXPECT_FALSE(builder.Shapes().HasEncodedValue("input"));
+  EXPECT_EQ(model.graph().encoded_initializer().size(), 2u);
+}
+
+TEST(GraphBuilderStructured, LocalFunctionUsesModelCatalogueButCannotExportItAlone) {
+  core::builder::GraphBuilder builder("functions", SchemaLookup());
+  builder.MakeStructType(BuilderRecord());
+  auto &function = builder.MakeLocalFunction("Forward", "custom");
+  function.SetOpsetVersion("", 23);
+  function.MakeInput(BuilderStructuredInfo("arg"));
+  function.MakeNode("Identity", {"arg"}, {"result"});
+  function.MakeOutput("result");
+  builder.MakeInput(BuilderStructuredInfo("input"));
+  builder.MakeNode("Forward", {"input"}, {"output"}, "custom");
+  builder.MakeOutput("output");
+  EXPECT_THROW(function.ToFunction("custom"), core::builder::BuilderError);
+  const auto model = builder.ToModel();
+  ASSERT_EQ(model.functions().size(), 1u);
+  EXPECT_EQ(model.struct_types().size(), 1u);
+  EXPECT_TRUE(model.graph().output()[0].type().has_struct_type());
+  EXPECT_NO_THROW(VerifyModel(model));
+}
+
+TEST(GraphBuilderStructured, RejectsNonByteAlignedRootAndUnresolvedInput) {
+  core::builder::GraphBuilder builder("invalid_inline", SchemaLookup());
+  auto value = BuilderEncoded("nibble");
+  value.mutable_struct_type()->clear_type_ref();
+  auto *packing = value.mutable_struct_type()->mutable_bit_packing();
+  packing->set_dimension(uint64_t{1});
+  auto *component = packing->add_component();
+  component->set_name("bits");
+  component->set_bit_width(uint32_t{4});
+  EXPECT_THROW(builder.MakeEncodedInitializer(value), std::invalid_argument);
+  EXPECT_FALSE(builder.HasName("nibble"));
+  EXPECT_THROW(builder.MakeInput(BuilderStructuredInfo("unknown", 999)), std::invalid_argument);
+  EXPECT_FALSE(builder.HasName("unknown"));
+}
+
+TEST(GraphBuilderStructured, DoesNotConstantFoldEncodedBytesAsLogicalTensor) {
+  core::builder::GraphBuilder builder("no_dense_fold", SchemaLookup());
+  builder.MakeStructType(BuilderRecord());
+  auto value = BuilderEncoded("weight");
+  auto *logical = value.mutable_logical_type()->mutable_tensor_type();
+  logical->set_elem_type(TensorProto::FLOAT);
+  logical->mutable_shape()->add_dim()->set_dim_value(int64_t{4});
+  builder.MakeEncodedInitializer(value);
+  builder.MakeNode("Identity", {"weight"}, {"output"});
+  builder.MakeOutput("output");
+  EXPECT_EQ(builder.ConstantFold(), 0u);
+  EXPECT_EQ(builder.Nodes().size(), 1u);
+  EXPECT_EQ(builder.EncodedInitializers().size(), 1u);
+  EXPECT_TRUE(builder.Initializers().empty());
+  EXPECT_TRUE(builder.Shapes().HasEncodedValue("output"));
+}
+
+TEST(GraphBuilderStructured, AffineDeduplicationIncludesScaleNotOnlyCodes) {
+  core::builder::GraphBuilder builder("affine", SchemaLookup());
+  builder.SetOpsetVersion("", 23);
+  EncodedValueProto first;
+  first.set_name("half_scale");
+  first.mutable_affine()->set_storage_type(TensorProto::INT8);
+  *first.mutable_affine()->mutable_scale() = MakeInitializer<float>("", {}, {0.5f});
+  auto *logical = first.mutable_logical_type()->mutable_tensor_type();
+  logical->set_elem_type(TensorProto::FLOAT);
+  logical->mutable_shape()->add_dim()->set_dim_value(int64_t{4});
+  first.set_raw_data(std::string(4, '\x2a'));
+  auto second = first;
+  second.set_name("unit_scale");
+  *second.mutable_affine()->mutable_scale() = MakeInitializer<float>("", {}, {1.f});
+  auto duplicate = first;
+  duplicate.set_name("duplicate");
+  builder.MakeEncodedInitializer(first);
+  builder.MakeEncodedInitializer(second);
+  builder.MakeEncodedInitializer(duplicate);
+  EXPECT_EQ(builder.RemoveDuplicateInitializers(), 1u);
+  ASSERT_EQ(builder.EncodedInitializers().size(), 2u);
+  EXPECT_FALSE(builder.Shapes().HasEncodedValue("duplicate"));
+  EXPECT_EQ(builder.GetShape("half_scale").Dtype(), core::symbolic::TensorType::kFloat);
+  EXPECT_EQ(builder.Shapes().GetEncodedLayout("half_scale").element_bits, 8u);
+  EXPECT_EQ(builder.Shapes().GetEncodedLayout("half_scale").record_count, 4u);
+  builder.MakeOutput("half_scale");
+  builder.MakeOutput("unit_scale");
+  const auto exported = builder.ToModel();
+  ASSERT_EQ(exported.graph().encoded_initializer().size(), 2u);
+  EXPECT_EQ(exported.graph().encoded_initializer()[0].SerializeAsString(),
+            first.SerializeAsString());
+  EXPECT_EQ(exported.graph().encoded_initializer()[1].SerializeAsString(),
+            second.SerializeAsString());
+  EXPECT_THROW(builder.ToStandardModel(), core::builder::BuilderError);
+  SerializeOptions options;
+  options.format = SerializeFormat::kOrtFlatbuffers;
+  std::string bytes;
+  EXPECT_THROW(exported.SerializeToString(bytes, options), std::invalid_argument);
 }
 
 } // namespace Test

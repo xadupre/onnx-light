@@ -774,11 +774,13 @@ feedback and size contracts above are frozen, and ``StructTypeProto``,
 ``EncodedValueProto``, typed/constant fields, arrays, bit packing, type
 references, payload ownership, value serialization and the built-in affine
 subset are implemented in ``lib_onnx_proto``
-(``onnx_light/onnx_proto/onnx_struct_value.h``/``.cc`` plus the
+(``onnx_light/onnx_proto/onnx.h`` and ``onnx_verify.h``/``.cc`` plus the
 ``TypeProto``/``GraphProto``/``ModelProto`` field-1000 branches), with
-structural validation wired into ``VerifyModel``/``VerifyGraph``. PR03 is next
-and integrates the representation with ``GraphBuilder`` authoring,
-deduplication and inference.
+structural validation wired into ``VerifyModel``/``VerifyGraph``. PR03
+integrates the representation with ``GraphBuilder`` authoring,
+deduplication and inference; see
+:ref:`l-howto-graph-builder-basics` for the supported native workflow and
+export boundaries.
 
 .. list-table::
    :header-rows: 1
@@ -805,10 +807,10 @@ deduplication and inference.
        binary-size budget.
      - PR01
    * - PR03
-     - GraphBuilder and serialization integration (**next**)
+     - GraphBuilder and serialization integration (**done**)
      - Structured initializers, logical/physical inference, scope-aware
        references and deduplication agree. Standard export never loses
-       data.
+       data: unsupported structured constructs are rejected explicitly.
      - PR02
    * - PR04
      - State from model input/output feedback

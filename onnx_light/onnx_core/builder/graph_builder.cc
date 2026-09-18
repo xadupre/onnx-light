@@ -21,6 +21,7 @@
 #include "onnx_proto/onnx_alias.h"
 #include "onnx_proto/onnx_helper.h"
 #include "onnx_proto/onnx_tree_ensemble.h"
+#include "onnx_proto/onnx_verify.h"
 
 namespace ONNX_LIGHT_NAMESPACE::core::builder {
 
@@ -117,6 +118,142 @@ bool SameInitializerContent(const TensorProto &lhs, const TensorProto &rhs) {
   return SameExternalData(lhs, rhs);
 }
 
+bool SameEncodedContent(const EncodedValueProto &lhs, const EncodedValueProto &rhs) {
+  // The complete layout (including constants, codecs and nominal type IDs)
+  // participates in identity, not merely its byte extent or payload.
+  EncodedValueProto left = lhs;
+  EncodedValueProto right = rhs;
+  left.clear_name();
+  right.clear_name();
+  return left.SerializeAsString() == right.SerializeAsString();
+}
+
+bool HasStructuredType(const TypeProto &type) {
+  if (type.has_struct_type()) {
+    return true;
+  }
+  if (type.has_sequence_type()) {
+    return HasStructuredType(type.sequence_type().elem_type());
+  }
+  if (type.has_optional_type()) {
+    return HasStructuredType(type.optional_type().elem_type());
+  }
+  return type.has_map_type() && HasStructuredType(type.map_type().value_type());
+}
+
+bool SameDeclaredType(const TypeProto &left, const TypeProto &right) {
+  TypeProto lhs = left;
+  TypeProto rhs = right;
+  lhs.clear_denotation();
+  rhs.clear_denotation();
+  return lhs.SerializeAsString() == rhs.SerializeAsString();
+}
+
+using DeclaredTypes = std::unordered_map<std::string, const TypeProto *>;
+
+DeclaredTypes StructuredDeclarations(const utils::RepeatedProtoField<ValueInfoProto> &values) {
+  DeclaredTypes declarations;
+  for (const auto &value : values) {
+    if (value.has_type() && !value.type().has_tensor_type()) {
+      declarations.emplace(value.name().value(), &value.type());
+    }
+  }
+  return declarations;
+}
+
+void SeedDeclaredOutputs(ShapesContext &shapes, const NodeProto &node,
+                         const DeclaredTypes &declarations) {
+  for (const auto &name : node.output()) {
+    const auto declared = declarations.find(name);
+    if (declared == declarations.end()) {
+      continue;
+    }
+    if (shapes.HasType(name)) {
+      if (!SameDeclaredType(shapes.GetType(name), *declared->second)) {
+        throw BuilderError("GraphBuilder: incompatible declared structured type for '" +
+                           std::string(name) + "'.");
+      }
+    } else if (!shapes.Has(name) && !shapes.HasSequence(name)) {
+      shapes.SetType(name, *declared->second);
+    }
+  }
+}
+
+bool CompatibleEncodedDefault(const TypeProto &declared, const TypeProto &actual) {
+  if (!declared.has_tensor_type() || !actual.has_tensor_type()) {
+    return SameDeclaredType(declared, actual);
+  }
+  const auto &left = declared.tensor_type();
+  const auto &right = actual.tensor_type();
+  if (left.elem_type() != TensorProto::UNDEFINED && left.elem_type() != right.elem_type()) {
+    return false;
+  }
+  if (!left.has_shape()) {
+    return true;
+  }
+  if (!right.has_shape() || left.shape().dim().size() != right.shape().dim().size()) {
+    return false;
+  }
+  for (std::size_t i = 0; i < left.shape().dim().size(); ++i) {
+    const auto &dimension = left.shape().dim(i);
+    if (dimension.has_dim_value() && (!right.shape().dim(i).has_dim_value() ||
+                                      dimension.dim_value() != right.shape().dim(i).dim_value())) {
+      return false;
+    }
+  }
+  return true;
+}
+
+void RequireStandardGraph(const GraphProto &graph);
+
+void RequireStandardAttribute(const AttributeProto &attribute) {
+  if (attribute.has_tp() && HasStructuredType(attribute.tp())) {
+    throw BuilderError("GraphBuilder: standard ONNX cannot represent structured type attributes.");
+  }
+  for (const auto &type : attribute.type_protos()) {
+    if (HasStructuredType(type)) {
+      throw BuilderError(
+          "GraphBuilder: standard ONNX cannot represent structured type attributes.");
+    }
+  }
+  if (attribute.has_g()) {
+    RequireStandardGraph(attribute.g());
+  }
+  for (const auto &graph : attribute.graphs()) {
+    RequireStandardGraph(graph);
+  }
+}
+
+template <typename Proto> void RequireStandardBody(const Proto &body) {
+  for (const auto &value : body.value_info()) {
+    if (value.has_type() && HasStructuredType(value.type())) {
+      throw BuilderError("GraphBuilder: standard ONNX cannot represent structured value types.");
+    }
+  }
+  for (const auto &node : body.node()) {
+    for (const auto &attribute : node.attribute()) {
+      RequireStandardAttribute(attribute);
+    }
+  }
+}
+
+void RequireStandardGraph(const GraphProto &graph) {
+  if (!graph.encoded_initializer().empty()) {
+    throw BuilderError("GraphBuilder: standard ONNX cannot represent encoded initializers.");
+  }
+  for (const auto &value : graph.input()) {
+    if (value.has_type() && HasStructuredType(value.type())) {
+      throw BuilderError("GraphBuilder: standard ONNX cannot represent structured inputs.");
+    }
+  }
+  for (const auto &value : graph.output()) {
+    if (value.has_type() && HasStructuredType(value.type())) {
+      throw BuilderError("GraphBuilder: standard ONNX cannot represent structured outputs.");
+    }
+  }
+  RequireStandardBody(graph);
+}
+
 // Materializes an initializer ``TensorProto`` (owning its payload) from a
 // runtime tensor produced by constant folding. Non-STRING tensors copy their
 // little-endian byte buffer into ``raw_data``; STRING tensors copy their
@@ -146,6 +283,12 @@ GraphBuilder::GraphBuilder(std::string name, SchemaLookupFn schema_lookup)
 GraphBuilder::GraphBuilder(const ModelProto &model, SchemaLookupFn schema_lookup)
     : name_(model.graph().name().empty() ? std::string("graph") : model.graph().name().value()),
       schema_lookup_(std::move(schema_lookup)) {
+  model_template_ = model;
+  model_template_.clear_graph();
+  model_template_.ref_functions().clear();
+  model_template_.ref_struct_types().clear();
+  model_template_.ref_opset_import().clear();
+  compute_.Shapes().SetStructTypes(model.struct_types());
   for (const auto &opset : model.opset_import()) {
     SetOpsetVersion(opset.domain().empty() ? std::string() : opset.domain().value(),
                     static_cast<int>(opset.version()));
@@ -186,6 +329,10 @@ GraphBuilder &GraphBuilder::operator=(GraphBuilder &&other) noexcept {
   value_infos_ = std::move(other.value_infos_);
   nodes_ = std::move(other.nodes_);
   initializers_ = std::move(other.initializers_);
+  encoded_initializers_ = std::move(other.encoded_initializers_);
+  model_template_ = std::move(other.model_template_);
+  graph_template_ = std::move(other.graph_template_);
+  function_template_ = std::move(other.function_template_);
   local_functions_ = std::move(other.local_functions_);
   subgraphs_ = std::move(other.subgraphs_);
   names_ = std::move(other.names_);
@@ -255,6 +402,152 @@ void GraphBuilder::SeedShape(const std::string &name, SymTensor tensor) {
   compute_.Shapes().Set(name, std::move(tensor));
 }
 
+void GraphBuilder::SetStructTypes(const utils::RepeatedProtoField<StructTypeProto> &types) {
+  compute_.Shapes().SetStructTypes(types);
+  for (const auto &child : subgraphs_) {
+    child->SetStructTypes(types);
+  }
+  for (const auto &child : local_functions_) {
+    child->SetStructTypes(types);
+  }
+}
+
+void GraphBuilder::MakeStructType(const StructTypeProto &type) {
+  if (parent_ != nullptr) {
+    parent_->MakeStructType(type);
+    return;
+  }
+  auto declarations = Shapes().StructTypes();
+  declarations.push_back(type);
+  SetStructTypes(declarations);
+}
+
+void GraphBuilder::RebuildStructuredState() {
+  const bool structured =
+      !Shapes().StructTypes().empty() || !encoded_initializers_.empty() ||
+      std::any_of(Shapes().Types().begin(), Shapes().Types().end(),
+                  [](const auto &entry) { return HasStructuredType(entry.second); });
+  if (!structured) {
+    return;
+  }
+  const auto previous = Shapes();
+  compute_.Shapes().Clear();
+  auto &shapes = compute_.Shapes();
+  shapes.CopyLocalFunctions(previous);
+  for (const auto &[domain, version] : opsets_) {
+    shapes.SetOpsetVersion(domain, version);
+  }
+  for (const auto &[key, function] : previous.CustomShapeInferenceFunctions()) {
+    const auto separator = key.rfind(':');
+    shapes.SetCustomShapeInferenceFunction(key.substr(0, separator), key.substr(separator + 1),
+                                           function);
+  }
+  if (parent_ != nullptr) {
+    for (const auto &name : inherited_names_) {
+      const auto &outer = parent_->Shapes();
+      if (outer.Has(name) || outer.HasType(name) || outer.HasSequence(name)) {
+        shapes.CopyValueFrom(name, outer, name);
+      }
+    }
+  }
+  std::unordered_set<std::string> input_names;
+  for (const auto &input : inputs_) {
+    input_names.insert(input.name().value());
+    if (input.has_type() &&
+        (!input.type().has_tensor_type() || input.type().tensor_type().has_shape())) {
+      shapes.SetType(input.name().value(), input.type());
+    }
+  }
+  for (const auto &initializer : initializers_) {
+    if (input_names.count(initializer.name().value()) == 0) {
+      SymTensor tensor;
+      if (SymTensorFromTensorProto(initializer, tensor)) {
+        shapes.Set(initializer.name().value(), std::move(tensor));
+      }
+    }
+  }
+  for (const auto &initializer : encoded_initializers_) {
+    if (input_names.count(initializer.name().value()) == 0) {
+      shapes.SetEncodedValue(initializer.name().value(), initializer);
+    }
+  }
+  const auto declarations = StructuredDeclarations(value_infos_);
+  RefreshLocalFunctions();
+  for (std::size_t i = 0; i < nodes_.size(); ++i) {
+    NodeProto node = nodes_[i];
+    MaterializeGraphReferences(node);
+    bool ready = ShapeFunctionAvailable(node) && !HasUnboundAttributes(node);
+    for (const auto &input : core::graph::CollectNodeInputs(node)) {
+      if (!input.empty() && !shapes.Has(input) && !shapes.HasSequence(input) &&
+          !(shapes.HasType(input) && !shapes.GetType(input).has_tensor_type())) {
+        ready = false;
+        break;
+      }
+    }
+    if (ready) {
+      shapes.set_current_node_index(static_cast<int64_t>(i));
+      shapes.ComputeShapeNode(node);
+    }
+    SeedDeclaredOutputs(shapes, node, declarations);
+  }
+  for (const auto &output : outputs_) {
+    if (output.has_type() && !shapes.HasType(output.name().value()) &&
+        !shapes.Has(output.name().value())) {
+      shapes.SetType(output.name().value(), output.type());
+    }
+  }
+  for (const auto &child : subgraphs_) {
+    child->RebuildStructuredState();
+  }
+}
+
+const std::string &GraphBuilder::MakeEncodedInitializer(const EncodedValueProto &value) {
+  const std::string name = value.name().value();
+  const auto input = std::find_if(inputs_.begin(), inputs_.end(), [&](const ValueInfoProto &v) {
+    return v.name().value() == name;
+  });
+  const bool is_input = input != inputs_.end();
+  const bool has_initializer =
+      std::any_of(initializers_.begin(), initializers_.end(),
+                  [&](const TensorProto &v) { return v.name().value() == name; }) ||
+      std::any_of(encoded_initializers_.begin(), encoded_initializers_.end(),
+                  [&](const EncodedValueProto &v) { return v.name().value() == name; });
+  if (name.empty() || (HasName(name) && (!is_input || has_initializer))) {
+    throw BuilderError("GraphBuilder: encoded initializer name is empty or already defined: '" +
+                       name + "'.");
+  }
+  // Validation happens on a snapshot so failure cannot reserve a name or
+  // partially replace an input's descriptor.
+  ShapesContext validated = Shapes();
+  validated.SetEncodedValue(name, value);
+  if (is_input && input->has_type()) {
+    const TypeProto &actual = value.has_logical_type() && input->type().has_tensor_type()
+                                  ? value.logical_type()
+                                  : validated.GetType(name);
+    if (!CompatibleEncodedDefault(input->type(), actual)) {
+      throw BuilderError("GraphBuilder: encoded initializer '" + name +
+                         "' has a different type from its declared input.");
+    }
+  }
+  if (is_input) {
+    // An overridable default must not supply constant bytes or specialize its
+    // public declaration during inference.
+    validated = Shapes();
+  }
+  const std::string &reserved = is_input ? *names_.find(name) : ReserveName(name);
+  // The rvalue overload avoids CopyFrom's wire round-trip and retains borrowed
+  // payload owners as well as the bytes.
+  encoded_initializers_.push_back(EncodedValueProto(value));
+  compute_.Shapes() = std::move(validated);
+  compute_.SeedValueTag(reserved, "weight");
+  compute_.SeedReuseInput(reserved, is_input, /*is_initializer=*/true,
+                          /*allow_input_overwrite=*/false);
+  if (!is_input) {
+    compute_.SeedConstant(reserved);
+  }
+  return reserved;
+}
+
 const std::string &GraphBuilder::MakeInitializer(const TensorProto &tensor) {
   const std::string tensor_name = tensor.name().value();
   const auto input = std::find_if(inputs_.begin(), inputs_.end(), [&](const ValueInfoProto &value) {
@@ -262,9 +555,14 @@ const std::string &GraphBuilder::MakeInitializer(const TensorProto &tensor) {
   });
   const bool is_input = input != inputs_.end();
   const bool has_initializer =
-      std::any_of(initializers_.begin(), initializers_.end(), [&](const TensorProto &initializer) {
-        return initializer.name().value() == tensor_name;
-      });
+      std::any_of(initializers_.begin(), initializers_.end(),
+                  [&](const TensorProto &initializer) {
+                    return initializer.name().value() == tensor_name;
+                  }) ||
+      std::any_of(encoded_initializers_.begin(), encoded_initializers_.end(),
+                  [&](const EncodedValueProto &initializer) {
+                    return initializer.name().value() == tensor_name;
+                  });
   if (is_input && !has_initializer && input->has_type()) {
     if (!input->type().has_tensor_type()) {
       throw BuilderError("GraphBuilder: initializer '" + tensor_name +
@@ -342,10 +640,17 @@ const std::string &GraphBuilder::MakeExternalInitializer(const std::string &name
 // ── Inputs / outputs ───────────────────────────────────────────────────
 
 const std::string &GraphBuilder::MakeInput(const ValueInfoProto &value_info) {
+  if (value_info.has_type() && HasStructuredType(value_info.type())) {
+    auto validated = Shapes();
+    validated.SetType(value_info.name().value(), value_info.type());
+  }
   // Reserve the name first so a duplicate is rejected before ``inputs_`` is
   // mutated, leaving the builder unchanged on error.
   const std::string &reserved = ReserveName(value_info.name().value());
   inputs_.push_back(value_info);
+  if (value_info.has_type() && !value_info.type().has_tensor_type()) {
+    compute_.Shapes().SetType(reserved, value_info.type());
+  }
   SymTensor descriptor;
   if (value_info.has_type() && value_info.type().has_tensor_type() &&
       value_info.type().tensor_type().has_shape() &&
@@ -373,6 +678,21 @@ const std::string &GraphBuilder::MakeInput(const std::string &name, TensorType d
 }
 
 void GraphBuilder::MakeOutput(const ValueInfoProto &value_info) {
+  const std::string name = value_info.name().value();
+  if (value_info.has_type() &&
+      (HasStructuredType(value_info.type()) || Shapes().HasEncodedValue(name))) {
+    auto validated = Shapes();
+    validated.SetType(name, value_info.type());
+    if (Shapes().HasType(name) &&
+        !CompatibleEncodedDefault(value_info.type(), Shapes().GetType(name))) {
+      throw BuilderError("GraphBuilder: output '" + name +
+                         "' has an incompatible structured type.");
+    }
+  }
+  if (value_info.has_type() && !value_info.type().has_tensor_type() &&
+      !Shapes().HasEncodedValue(value_info.name().value())) {
+    compute_.Shapes().SetType(value_info.name().value(), value_info.type());
+  }
   outputs_.push_back(value_info);
   compute_.SeedReuseOutput(value_info.name().value());
 }
@@ -381,8 +701,7 @@ void GraphBuilder::MakeOutput(const std::string &name, const SymTensor &type) {
   ValueInfoProto vi;
   vi.set_name(name);
   SymTensorToValueInfo(type, vi);
-  outputs_.add() = std::move(vi);
-  compute_.SeedReuseOutput(name);
+  MakeOutput(vi);
 }
 
 void GraphBuilder::MakeOutput(const std::string &name, TensorType dtype, const SymShape &shape) {
@@ -428,7 +747,7 @@ GraphBuilder::ImportAttributes(const NodeProto &node,
   const auto has_graph_content = [](const GraphProto &graph) {
     return !graph.name().empty() || graph.input().size() > 0 || graph.output().size() > 0 ||
            graph.node().size() > 0 || graph.initializer().size() > 0 ||
-           graph.value_info().size() > 0;
+           graph.value_info().size() > 0 || !graph.encoded_initializer().empty();
   };
   utils::RepeatedProtoField<AttributeProto> imported;
   imported.reserve(node.attribute().size());
@@ -494,6 +813,13 @@ GraphBuilder::ImportAttributes(const NodeProto &node,
 }
 
 void GraphBuilder::ImportGraph(const GraphProto &graph) {
+  graph_template_ = graph;
+  graph_template_.ref_input().clear();
+  graph_template_.ref_output().clear();
+  graph_template_.ref_initializer().clear();
+  graph_template_.ref_encoded_initializer().clear();
+  graph_template_.ref_node().clear();
+  graph_template_.ref_value_info().clear();
   value_infos_ = graph.value_info();
   for (const auto &input : graph.input()) {
     MakeInput(input);
@@ -501,6 +827,10 @@ void GraphBuilder::ImportGraph(const GraphProto &graph) {
   for (const auto &initializer : graph.initializer()) {
     MakeInitializer(initializer);
   }
+  for (const auto &initializer : graph.encoded_initializer()) {
+    MakeEncodedInitializer(initializer);
+  }
+  const auto declarations = StructuredDeclarations(value_infos_);
   for (const auto &node : graph.node()) {
     std::vector<std::string> inputs;
     inputs.reserve(node.input().size());
@@ -515,6 +845,10 @@ void GraphBuilder::ImportGraph(const GraphProto &graph) {
     MakeNode(node.op_type().value(), inputs, outputs,
              node.domain().empty() ? std::string() : node.domain().value(),
              node.name().empty() ? std::string() : node.name().value(), ImportAttributes(node));
+    auto attributes = std::move(nodes_.back().ref_attribute());
+    nodes_.back() = node;
+    nodes_.back().ref_attribute() = std::move(attributes);
+    SeedDeclaredOutputs(compute_.Shapes(), node, declarations);
   }
   for (const auto &output : graph.output()) {
     MakeOutput(output);
@@ -522,6 +856,14 @@ void GraphBuilder::ImportGraph(const GraphProto &graph) {
 }
 
 void GraphBuilder::ImportFunction(const FunctionProto &function) {
+  function_template_ = function;
+  function_template_.ref_attribute().clear();
+  function_template_.ref_attribute_proto().clear();
+  function_template_.ref_input().clear();
+  function_template_.ref_output().clear();
+  function_template_.ref_value_info().clear();
+  function_template_.ref_opset_import().clear();
+  function_template_.ref_node().clear();
   function_attributes_.assign(function.attribute().begin(), function.attribute().end());
   function_attribute_protos_ = function.attribute_proto();
   metadata_ = function.metadata_props();
@@ -557,6 +899,9 @@ void GraphBuilder::ImportFunction(const FunctionProto &function) {
     MakeNode(node.op_type().value(), inputs, outputs,
              node.domain().empty() ? std::string() : node.domain().value(),
              node.name().empty() ? std::string() : node.name().value(), ImportAttributes(node));
+    auto attributes = std::move(nodes_.back().ref_attribute());
+    nodes_.back() = node;
+    nodes_.back().ref_attribute() = std::move(attributes);
   }
   for (std::size_t i = 0; i < function.output().size(); ++i) {
     ValueInfoProto value_info;
@@ -834,7 +1179,8 @@ GraphBuilder::MakeNode(const std::string &op_type, const std::vector<std::string
     bool known_inputs = true;
     for (const std::string &input : core::graph::CollectNodeInputs(materialized)) {
       if (!input.empty() && !compute_.Shapes().Has(input) &&
-          !compute_.Shapes().HasSequence(input)) {
+          !compute_.Shapes().HasSequence(input) &&
+          !(Shapes().HasType(input) && !Shapes().GetType(input).has_tensor_type())) {
         known_inputs = false;
         break;
       }
@@ -907,6 +1253,9 @@ void GraphBuilder::CollectImplicitInputs(std::unordered_set<std::string> &out) c
   for (const TensorProto &initializer : initializers_) {
     defined.insert(initializer.name().value());
   }
+  for (const auto &initializer : encoded_initializers_) {
+    defined.insert(initializer.name().value());
+  }
   for (const NodeProto &node : nodes_) {
     for (std::size_t i = 0; i < node.output().size(); ++i) {
       std::string name(node.output(static_cast<std::size_t>(i)));
@@ -949,7 +1298,11 @@ void GraphBuilder::CollectNodeReferences(const NodeProto &node,
   }
 }
 
-std::size_t GraphBuilder::RemoveUnusedNodes() { return RemoveUnusedNodesImpl(true); }
+std::size_t GraphBuilder::RemoveUnusedNodes() {
+  const auto removed = RemoveUnusedNodesImpl(true);
+  RebuildStructuredState();
+  return removed;
+}
 
 std::size_t GraphBuilder::RemoveUnusedNodesImpl(bool recursive) {
   // Prune nested builders first: a leaner subgraph or local function may stop
@@ -1031,6 +1384,13 @@ std::size_t GraphBuilder::RemoveUnusedNodesImpl(bool recursive) {
       ++it;
     }
   }
+  for (auto it = encoded_initializers_.begin(); it != encoded_initializers_.end();) {
+    if (used.count(it->name().value()) == 0) {
+      it = encoded_initializers_.erase(it);
+    } else {
+      ++it;
+    }
+  }
   PruneValueInfos();
   return removed + local_removed;
 }
@@ -1044,6 +1404,9 @@ void GraphBuilder::PruneValueInfos() {
     existing.insert(output.name().value());
   }
   for (const TensorProto &initializer : initializers_) {
+    existing.insert(initializer.name().value());
+  }
+  for (const auto &initializer : encoded_initializers_) {
     existing.insert(initializer.name().value());
   }
   for (const NodeProto &node : nodes_) {
@@ -1097,7 +1460,11 @@ bool CanReuseOutputs(const NodeProto &node, const std::vector<std::string> &surv
 
 } // namespace
 
-std::size_t GraphBuilder::RemoveIdentityNodes() { return RemoveIdentityNodesImpl(true, nullptr); }
+std::size_t GraphBuilder::RemoveIdentityNodes() {
+  const auto removed = RemoveIdentityNodesImpl(true, nullptr);
+  RebuildStructuredState();
+  return removed;
+}
 
 std::size_t GraphBuilder::RemoveIdentityNodesImpl(
     bool recursive, std::unordered_map<std::string, std::string> *applied_renames) {
@@ -1165,7 +1532,11 @@ std::size_t GraphBuilder::RemoveIdentityNodesImpl(
   return removed + local_removed;
 }
 
-std::size_t GraphBuilder::RemoveDuplicateNodes() { return RemoveDuplicateNodesImpl(true, nullptr); }
+std::size_t GraphBuilder::RemoveDuplicateNodes() {
+  const auto removed = RemoveDuplicateNodesImpl(true, nullptr);
+  RebuildStructuredState();
+  return removed;
+}
 
 std::size_t GraphBuilder::RemoveDuplicateNodesImpl(
     bool recursive, std::unordered_map<std::string, std::string> *applied_renames) {
@@ -1444,6 +1815,22 @@ void GraphBuilder::AppendInlinedBody(GraphBuilder &function, const NodeProto &ca
     TensorProto clone = initializer;
     clone.set_name(new_name);
     MakeInitializer(clone);
+    rename.emplace(old_name, new_name);
+  }
+  for (const auto &initializer : function.encoded_initializers_) {
+    const std::string &old_name = initializer.name().value();
+    if (rename.count(old_name) != 0) {
+      throw BuilderError("GraphBuilder: cannot inline an encoded function initializer that is "
+                         "also a formal input or output.");
+    }
+    std::string new_name = function.name() + "_" + old_name;
+    int suffix = 0;
+    while (HasName(new_name)) {
+      new_name = function.name() + "_" + old_name + "_" + std::to_string(suffix++);
+    }
+    EncodedValueProto clone = initializer;
+    clone.set_name(new_name);
+    MakeEncodedInitializer(clone);
     rename.emplace(old_name, new_name);
   }
 
@@ -1842,12 +2229,15 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
 }
 
 std::size_t GraphBuilder::RemoveDuplicateInitializers() {
-  return DeduplicateInitializers(InitializerContentIndex{}, true, nullptr);
+  const auto removed = DeduplicateInitializers(InitializerContentIndex{}, true, nullptr);
+  RebuildStructuredState();
+  return removed;
 }
 
 std::size_t GraphBuilder::DeduplicateInitializers(
     const InitializerContentIndex &inherited, bool recursive,
-    std::unordered_map<std::string, std::string> *applied_renames) {
+    std::unordered_map<std::string, std::string> *applied_renames,
+    const std::vector<const EncodedValueProto *> &encoded_inherited) {
   // Declared graph outputs must keep their own name; they are never dropped as
   // duplicates (but can still act as the survivor for a later duplicate).
   std::unordered_set<std::string> output_names;
@@ -1898,6 +2288,8 @@ std::size_t GraphBuilder::DeduplicateInitializers(
     index[hash].push_back(&kept[kept.size() - 1]);
   }
   initializers_ = std::move(kept);
+  auto encoded_index = encoded_inherited;
+  removed += DeduplicateEncodedInitializers(encoded_index, rename);
 
   RewriteInitializerReferences(rename);
   if (applied_renames != nullptr) {
@@ -1908,12 +2300,45 @@ std::size_t GraphBuilder::DeduplicateInitializers(
   // Local functions have an isolated scope and start from a fresh index.
   if (recursive) {
     for (const auto &subgraph : subgraphs_) {
-      removed += subgraph->DeduplicateInitializers(index, true, nullptr);
+      removed += subgraph->DeduplicateInitializers(index, true, nullptr, encoded_index);
     }
     for (const auto &function : local_functions_) {
       removed += function->DeduplicateInitializers(InitializerContentIndex{}, true, nullptr);
     }
   }
+  return removed;
+}
+
+std::size_t
+GraphBuilder::DeduplicateEncodedInitializers(std::vector<const EncodedValueProto *> &index,
+                                             std::unordered_map<std::string, std::string> &rename) {
+  std::unordered_set<std::string> input_names;
+  std::unordered_set<std::string> output_names;
+  for (const auto &input : inputs_) {
+    input_names.insert(input.name().value());
+  }
+  for (const auto &output : outputs_) {
+    output_names.insert(output.name().value());
+  }
+  std::size_t removed = 0;
+  utils::RepeatedProtoField<EncodedValueProto> kept;
+  for (auto &value : encoded_initializers_) {
+    if (input_names.count(value.name().value())) {
+      kept.push_back(std::move(value));
+      continue;
+    }
+    const auto survivor = std::find_if(index.begin(), index.end(), [&](const auto *candidate) {
+      return SameEncodedContent(*candidate, value);
+    });
+    if (!output_names.count(value.name().value()) && survivor != index.end()) {
+      rename.emplace(value.name().value(), (*survivor)->name().value());
+      ++removed;
+    } else {
+      kept.push_back(std::move(value));
+      index.push_back(&kept.back());
+    }
+  }
+  encoded_initializers_ = std::move(kept);
   return removed;
 }
 
@@ -2017,6 +2442,7 @@ GraphBuilder &GraphBuilder::MakeLocalFunction(const std::string &name, const std
     child->SetOpsetVersion(domain, 1);
   }
   child->function_domain_ = domain;
+  child->compute_.Shapes().SetStructTypes(Shapes().StructTypes());
   child->parent_ = this;
   GraphBuilder &ref = *child;
   local_functions_.push_back(std::move(child));
@@ -2030,6 +2456,7 @@ GraphBuilder &GraphBuilder::MakeSubgraph(const std::string &name) {
   ReserveName(name);
   auto child = std::make_unique<GraphBuilder>(name, schema_lookup_);
   child->parent_ = this;
+  child->compute_.Shapes() = Shapes();
   for (const auto &entry : opsets_) {
     child->SetOpsetVersion(entry.first, entry.second);
   }
@@ -2053,7 +2480,7 @@ const SymTensor &GraphBuilder::GetShape(const std::string &name) const {
 }
 
 GraphProto GraphBuilder::BuildGraph() const {
-  GraphProto graph;
+  GraphProto graph = graph_template_;
   graph.set_name(name_);
   for (const ValueInfoProto &input : inputs_) {
     graph.add_input(input);
@@ -2061,10 +2488,13 @@ GraphProto GraphBuilder::BuildGraph() const {
   for (const TensorProto &initializer : initializers_) {
     graph.add_initializer(initializer);
   }
+  for (const auto &initializer : encoded_initializers_) {
+    graph.ref_encoded_initializer().push_back(EncodedValueProto(initializer));
+  }
   for (const NodeProto &node : nodes_) {
     NodeProto materialized = node;
     MaterializeGraphReferences(materialized);
-    graph.add_node(materialized);
+    graph.ref_node().push_back(std::move(materialized));
   }
   for (const ValueInfoProto &output : outputs_) {
     graph.add_output(output);
@@ -2188,6 +2618,9 @@ void GraphBuilder::SortNodesTopologically() {
   for (const auto &initializer : initializers_) {
     available.insert(initializer.name().value());
   }
+  for (const auto &initializer : encoded_initializers_) {
+    available.insert(initializer.name().value());
+  }
   for (std::size_t i = 0; i < count; ++i) {
     for (std::size_t j = 0; j < nodes_[i].output().size(); ++j) {
       const std::string output = nodes_[i].output(j);
@@ -2300,6 +2733,16 @@ template <typename Proto> void GraphBuilder::Finalize(Proto &graph) {
   // metadata and per-node peak memory.
   if constexpr (std::is_same_v<Proto, GraphProto>) {
     compute_.WriteToGraph(graph);
+    for (std::size_t i = 0; i < inputs_.size(); ++i) {
+      if (inputs_[i].has_type() && HasStructuredType(inputs_[i].type())) {
+        graph.ref_input()[i].ref_type() = inputs_[i].type();
+      }
+    }
+    for (std::size_t i = 0; i < outputs_.size(); ++i) {
+      if (outputs_[i].has_type() && HasStructuredType(outputs_[i].type())) {
+        graph.ref_output()[i].ref_type() = outputs_[i].type();
+      }
+    }
   } else {
     compute_.WriteToFunction(graph);
     for (std::size_t i = 0; i < inputs_.size(); ++i) {
@@ -2307,6 +2750,16 @@ template <typename Proto> void GraphBuilder::Finalize(Proto &graph) {
         graph.ref_value_info()[i].ref_type() = inputs_[i].type();
       } else {
         graph.ref_value_info()[i].clear_type();
+      }
+    }
+    for (const auto &output : outputs_) {
+      if (!output.has_type() || !HasStructuredType(output.type())) {
+        continue;
+      }
+      for (auto &value : graph.ref_value_info()) {
+        if (value.name() == output.name()) {
+          value.ref_type() = output.type();
+        }
       }
     }
   }
@@ -2317,6 +2770,10 @@ template <typename Proto> void GraphBuilder::Finalize(Proto &graph) {
     }
     for (const auto &output : graph.output()) {
       live_values.insert(output);
+    }
+  } else {
+    for (const auto &initializer : graph.encoded_initializer()) {
+      live_values.insert(initializer.name().value());
     }
   }
   for (const auto &node : graph.node()) {
@@ -2345,27 +2802,56 @@ GraphProto GraphBuilder::ToGraph() {
   if (parent_ == nullptr) {
     RefreshLocalFunctions();
   }
+  RebuildStructuredState();
   GraphProto graph = BuildGraph();
   Finalize(graph);
   return graph;
 }
 
 ModelProto GraphBuilder::ToModel(int64_t ir_version) {
-  ModelProto model;
-  model.set_ir_version(ir_version > 0 ? ir_version : static_cast<int64_t>(IR_VERSION));
-  model.set_producer_name("onnx-light");
+  ModelProto model = model_template_;
+  model.set_ir_version(
+      ir_version > 0
+          ? ir_version
+          : (model.has_ir_version() ? model.ir_version() : static_cast<int64_t>(IR_VERSION)));
+  if (!model.has_producer_name()) {
+    model.set_producer_name("onnx-light");
+  }
+  model.ref_struct_types() = Shapes().StructTypes();
   for (const auto &entry : opsets_) {
     model.add_opset(entry.first, entry.second);
   }
   *model.mutable_graph() = ToGraph();
   for (const auto &function : local_functions_) {
-    model.add_function(function->ToFunction(function->function_domain_));
+    model.ref_functions().push_back(function->ExportFunction(function->function_domain_, true));
   }
   return model;
 }
 
+ModelProto GraphBuilder::ToStandardModel(int64_t ir_version) {
+  if (!Shapes().StructTypes().empty()) {
+    throw BuilderError("GraphBuilder: standard ONNX cannot represent a structured type catalogue.");
+  }
+  RequireStandardGraph(BuildGraph());
+  for (const auto &function : local_functions_) {
+    const auto body = function->BuildFunction(function->function_domain_);
+    RequireStandardBody(body);
+    for (const auto &attribute : body.attribute_proto()) {
+      RequireStandardAttribute(attribute);
+    }
+  }
+  return ToModel(ir_version);
+}
+
 FunctionProto GraphBuilder::ToFunction(const std::string &domain) {
-  if (!initializers_.empty()) {
+  return ExportFunction(domain, false);
+}
+
+FunctionProto GraphBuilder::ExportFunction(const std::string &domain, bool model_scoped) {
+  if (!model_scoped && !Shapes().StructTypes().empty()) {
+    throw BuilderError("GraphBuilder: a FunctionProto cannot carry a structured type catalogue.");
+  }
+  if (!initializers_.empty() || !encoded_initializers_.empty()) {
     throw BuilderError("GraphBuilder: a FunctionProto cannot carry initializers; remove them or "
                        "produce a model / graph instead.");
   }
@@ -2374,6 +2860,7 @@ FunctionProto GraphBuilder::ToFunction(const std::string &domain) {
   if (parent_ == nullptr) {
     RefreshLocalFunctions();
   }
+  RebuildStructuredState();
   FunctionProto function = BuildFunction(domain);
   for (std::size_t i = 0; i < inputs_.size(); ++i) {
     ValueInfoProto &input = function.ref_value_info()[i];
@@ -2393,7 +2880,7 @@ FunctionProto GraphBuilder::ToFunction(const std::string &domain) {
 }
 
 FunctionProto GraphBuilder::BuildFunction(const std::string &domain) const {
-  FunctionProto function;
+  FunctionProto function = function_template_;
   function.set_name(name_);
   function.set_domain(domain);
   for (const auto &attribute : function_attributes_) {
@@ -2426,7 +2913,7 @@ FunctionProto GraphBuilder::BuildFunction(const std::string &domain) const {
   for (const NodeProto &node : nodes_) {
     NodeProto materialized = node;
     MaterializeGraphReferences(materialized);
-    function.add_node(materialized);
+    function.ref_node().push_back(std::move(materialized));
   }
   return function;
 }

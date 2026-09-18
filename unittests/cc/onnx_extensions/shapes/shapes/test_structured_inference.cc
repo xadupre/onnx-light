@@ -493,6 +493,7 @@ TEST(StructuredInference, EncodedDefaultsPreservePublicTensorShapeAndValidatePay
   auto *input = model.ref_graph().add_input();
   input->set_name("encoded");
   input->ref_type() = LogicalTensor();
+  input->ref_type().ref_tensor_type().ref_shape().ref_dim()[0].clear_dim_value();
   input->ref_type().ref_tensor_type().ref_shape().ref_dim()[0].set_dim_param("batch");
   model.ref_graph().ref_node()[0].set_op_type("Abs");
   core::shapes::ShapesContext context;

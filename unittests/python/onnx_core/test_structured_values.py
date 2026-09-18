@@ -341,7 +341,7 @@ class TestStructuredValues(unittest.TestCase):
                 [onnx.ValueInfoProto(name="output", type=value_type)],
             )
         )
-        model.struct_types = [declaration()]
+        model.struct_types.extend([declaration()])
         context = ShapesContext()
         context.compute_shape_model(model)
         self.assertEqual(

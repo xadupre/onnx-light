@@ -3415,12 +3415,10 @@ TEST(KernelClass, GemmAlgorithmCalibrationRejectsInvalidCandidatesAndPartialTime
     EXPECT_LT(value.benchmark_cases, 9u);
     completed_cases += value.benchmark_cases;
   }
-  const bool partial_case =
-      std::any_of(reporter.diagnostics().begin(), reporter.diagnostics().end(),
-                  [](const auto &message) {
-                    return message.find("resources include the incomplete case") !=
-                           std::string::npos;
-                  });
+  const bool partial_case = std::any_of(
+      reporter.diagnostics().begin(), reporter.diagnostics().end(), [](const auto &message) {
+        return message.find("resources include the incomplete case") != std::string::npos;
+      });
   EXPECT_EQ(reporter.benchmark_cases(), completed_cases + static_cast<uint64_t>(partial_case));
   if (partial_case || reporter.measured_duration_ns() != 0) {
     EXPECT_GT(reporter.peak_memory_bytes(), 0u);

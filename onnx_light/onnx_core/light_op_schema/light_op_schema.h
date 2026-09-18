@@ -331,7 +331,7 @@ public:
 
   /// Returns the minimum number of outputs supported by this operator.
   /// Defaults to ``outputs().size()``; can be overridden via
-  /// ``set_min_output`` for operators with variadic outputs.
+  /// ``set_min_output`` for operators with optional or variadic outputs.
   int min_output() const { return min_output_; }
   /// Returns the maximum number of outputs supported by this operator.
   /// Defaults to ``outputs().size()``; can be overridden via

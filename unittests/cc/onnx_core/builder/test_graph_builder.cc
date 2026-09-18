@@ -5,6 +5,8 @@
 #include "onnx_core/builder/graph_builder.h"
 
 #include "onnx_helper.h"
+#include "onnx_lib/checker.h"
+#include "onnx_manipulations/parser.h"
 #include "onnx_op/operator_sets.h"
 
 #include <gtest/gtest.h>
@@ -126,6 +128,91 @@ TEST(GraphBuilder, MakeNodeUsesProvidedOutputName) {
   const std::vector<std::string> outputs = builder.MakeNode("Add", {"x", "y"}, {"z"});
   ASSERT_EQ(outputs.size(), 1u);
   EXPECT_EQ(outputs[0], "z");
+}
+
+TEST(GraphBuilder, OmittedOptionalOutputs) {
+  const std::vector<std::string> models = {
+      R"(
+<ir_version: 10, opset_import: ["": 21]>
+pool (float[1,1,4,4] X) => (float[1,1,3,3] Y) {
+  Y = MaxPool <kernel_shape: ints = [2,2]> (X)
+})",
+      R"(
+<ir_version: 10, opset_import: ["": 21]>
+batchnorm (float[1,2,4,4] X, float[2] scale, float[2] B,
+           float[2] mean, float[2] var) => (float[1,2,4,4] Y) {
+  Y = BatchNormalization (X, scale, B, mean, var)
+})",
+      R"(
+<ir_version: 10, opset_import: ["": 24]>
+attention (float[1,2,3,4] Q, float[1,2,3,4] K,
+           float[1,2,3,4] V) => (float[1,2,3,4] Y) {
+  Y = Attention (Q, K, V)
+})",
+      R"(
+<ir_version: 10, opset_import: ["": 21]>
+loss (float[2,3] scores, int64[2] labels) => (float Y) {
+  Y = SoftmaxCrossEntropyLoss (scores, labels)
+})",
+  };
+  for (const auto &text : models) {
+    ModelProto model;
+    ASSERT_TRUE(OnnxParser::Parse(model, text.c_str()).IsOK());
+    const auto &node = model.graph().node(0);
+    SCOPED_TRACE(node.op_type().value());
+    ASSERT_NO_THROW(checker::check_model(model));
+
+    core::builder::GraphBuilder imported(model, SchemaLookup());
+    EXPECT_EQ(imported.Nodes()[0].output().size(), 1u);
+    EXPECT_NO_THROW(checker::check_model(imported.ToModel()));
+
+    const auto schemas = SchemaLookup()(node.op_type().value());
+    const core::schema::LightOpSchema *schema = nullptr;
+    for (const auto &candidate : schemas) {
+      if (candidate.since_version() <= model.opset_import(0).version() &&
+          (schema == nullptr || candidate.since_version() > schema->since_version())) {
+        schema = &candidate;
+      }
+    }
+    ASSERT_NE(schema, nullptr);
+    EXPECT_EQ(schema->min_output(), 1);
+    NodeProto missing_output = node;
+    missing_output.clear_output();
+    EXPECT_THROW(schema->Verify(missing_output), core::schema::SchemaError);
+
+    ModelProto too_many_outputs = model;
+    auto *invalid_node = too_many_outputs.mutable_graph()->mutable_node(0);
+    std::vector<std::string> invalid_outputs = {"Y"};
+    for (int i = 0; i < schema->max_output(); ++i) {
+      invalid_outputs.push_back("extra" + std::to_string(i));
+      invalid_node->add_output(invalid_outputs.back());
+    }
+    EXPECT_THROW(schema->Verify(*invalid_node), core::schema::SchemaError);
+    EXPECT_THROW(core::builder::GraphBuilder(too_many_outputs, SchemaLookup()),
+                 core::builder::BuilderError);
+
+    for (bool automatic_outputs : {false, true}) {
+      core::builder::GraphBuilder builder("optional_outputs", SchemaLookup());
+      builder.SetOpsetVersion("", model.opset_import(0).version());
+      for (const auto &input : model.graph().input()) {
+        builder.MakeInput(input);
+      }
+      std::vector<std::string> inputs;
+      for (const auto &input : node.input()) {
+        inputs.push_back(input.value());
+      }
+      EXPECT_THROW(builder.MakeNode(node.op_type().value(), inputs, invalid_outputs, "", "",
+                                    node.attribute()),
+                   core::builder::BuilderError);
+      const auto outputs = builder.MakeNode(node.op_type().value(), inputs,
+                                            automatic_outputs ? std::vector<std::string>{}
+                                                              : std::vector<std::string>{"Y"},
+                                            "", "", node.attribute());
+      ASSERT_EQ(outputs.size(), 1u);
+      builder.MakeOutput(outputs[0]);
+      EXPECT_NO_THROW(checker::check_model(builder.ToModel()));
+    }
+  }
 }
 
 TEST(GraphBuilder, MakeNodeRejectsUnknownInput) {

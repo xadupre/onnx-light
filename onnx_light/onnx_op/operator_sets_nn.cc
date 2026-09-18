@@ -145,7 +145,8 @@ LightOpSchema MakeMaxPoolSchema(int since_version) {
                        {
                            {"X", kPoolingInputDescription, "T"},
                        },
-                       std::move(outputs), std::move(tcs));
+                       std::move(outputs), std::move(tcs))
+      .set_min_output(1);
 }
 
 const char *const kMaxUnpoolXDescription =
@@ -304,6 +305,7 @@ LightOpSchema MakeDropoutSchema(int since_version) {
                {
                    {"T", FloatTypes(), "Constrain input and output types to float tensors."},
                })
+        .set_min_output(1)
         .set_node_determinism(LightOpSchema::NodeDeterminism::NonDeterministic);
   }
   if (since_version == 10) {
@@ -320,6 +322,7 @@ LightOpSchema MakeDropoutSchema(int since_version) {
                    {"T", FloatTypes(), "Constrain input and output types to float tensors."},
                    {"T1", {TensorType::kBool}, "Constrain output mask types to boolean tensors."},
                })
+        .set_min_output(1)
         .set_node_determinism(LightOpSchema::NodeDeterminism::NonDeterministic);
   }
   return LightOpSchema(
@@ -345,6 +348,7 @@ LightOpSchema MakeDropoutSchema(int since_version) {
                   "Constrain input 'ratio' types to float tensors."},
                  {"T2", {TensorType::kBool}, "Constrain output 'mask' types to boolean tensors."},
              })
+      .set_min_output(1)
       .set_node_determinism(LightOpSchema::NodeDeterminism::NonDeterministic);
 }
 
@@ -783,7 +787,8 @@ LightOpSchema MakeRNNSchema(int since_version) {
                            {"Y", RecurrentYDescription(since_version), "T"},
                            {"Y_h", kRecurrentYhDescription, "T"},
                        },
-                       RecurrentTypeConstraints(since_version));
+                       RecurrentTypeConstraints(since_version))
+      .set_min_output(0);
 }
 
 LightOpSchema MakeGRUSchema(int since_version) {
@@ -800,7 +805,8 @@ LightOpSchema MakeGRUSchema(int since_version) {
                            {"Y", RecurrentYDescription(since_version), "T"},
                            {"Y_h", kRecurrentYhDescription, "T"},
                        },
-                       RecurrentTypeConstraints(since_version));
+                       RecurrentTypeConstraints(since_version))
+      .set_min_output(since_version == 1 ? 2 : 0);
 }
 
 LightOpSchema MakeLSTMSchema(int since_version) {
@@ -820,7 +826,8 @@ LightOpSchema MakeLSTMSchema(int since_version) {
                            {"Y_h", kRecurrentYhDescription, "T"},
                            {"Y_c", kLSTMYcDescription, "T"},
                        },
-                       RecurrentTypeConstraints(since_version));
+                       RecurrentTypeConstraints(since_version))
+      .set_min_output(0);
 }
 
 // --- BatchNormalization -----------------------------------------------------
@@ -945,7 +952,7 @@ std::vector<TensorType> BatchNormalizationFloatTypes(int since_version) {
 
 LightOpSchema MakeBatchNormalizationSchema(int since_version) {
   if (since_version == 1) {
-    return LightOpSchema(
+    LightOpSchema schema(
         "BatchNormalization", kOnnxDomain, since_version, MakeBatchNormalizationDoc(since_version),
         {
             {"X", kBNXDescriptionVer1, "T"},
@@ -964,9 +971,10 @@ LightOpSchema MakeBatchNormalizationSchema(int since_version) {
         {
             {"T", BatchNormalizationFloatTypes(since_version), kBNTConstraintDescription},
         });
+    return schema.set_min_output(1);
   }
   if (since_version == 6) {
-    return LightOpSchema(
+    LightOpSchema schema(
         "BatchNormalization", kOnnxDomain, since_version, MakeBatchNormalizationDoc(since_version),
         {
             {"X", kBNXDescriptionVer6, "T"},
@@ -985,9 +993,10 @@ LightOpSchema MakeBatchNormalizationSchema(int since_version) {
         {
             {"T", BatchNormalizationFloatTypes(since_version), kBNTConstraintDescription},
         });
+    return schema.set_min_output(1);
   }
   if (since_version == 7) {
-    return LightOpSchema(
+    LightOpSchema schema(
         "BatchNormalization", kOnnxDomain, since_version, MakeBatchNormalizationDoc(since_version),
         {
             {"X", kBNXDescriptionVer6, "T"},
@@ -1006,9 +1015,10 @@ LightOpSchema MakeBatchNormalizationSchema(int since_version) {
         {
             {"T", BatchNormalizationFloatTypes(since_version), kBNTConstraintDescription},
         });
+    return schema.set_min_output(1);
   }
   if (since_version == 9) {
-    return LightOpSchema(
+    LightOpSchema schema(
         "BatchNormalization", kOnnxDomain, since_version, MakeBatchNormalizationDoc(since_version),
         {
             {"X", kBNXDescriptionVer9, "T"},
@@ -1027,9 +1037,10 @@ LightOpSchema MakeBatchNormalizationSchema(int since_version) {
         {
             {"T", BatchNormalizationFloatTypes(since_version), kBNTConstraintDescription},
         });
+    return schema.set_min_output(1);
   }
   if (since_version == 14) {
-    return LightOpSchema(
+    LightOpSchema schema(
         "BatchNormalization", kOnnxDomain, since_version, MakeBatchNormalizationDoc(since_version),
         {
             {"X", kBNXDescriptionVer9, "T"},
@@ -1047,9 +1058,10 @@ LightOpSchema MakeBatchNormalizationSchema(int since_version) {
             {"T", BatchNormalizationFloatTypes(since_version), kBNTConstraintDescription},
             {"U", BatchNormalizationFloatTypes(since_version), kBNUConstraintDescription},
         });
+    return schema.set_min_output(1);
   }
   // since_version == 15
-  return LightOpSchema(
+  LightOpSchema schema(
       "BatchNormalization", kOnnxDomain, since_version, MakeBatchNormalizationDoc(since_version),
       {
           {"X", kBNXDescriptionVer9, "T"},
@@ -1068,6 +1080,7 @@ LightOpSchema MakeBatchNormalizationSchema(int since_version) {
           {"T1", BatchNormalizationFloatTypes(since_version), kBNT1ConstraintDescription},
           {"T2", BatchNormalizationFloatTypes(since_version), kBNT2ConstraintDescription},
       });
+  return schema.set_min_output(1);
 }
 
 // --- Attention --------------------------------------------------------------
@@ -1290,7 +1303,7 @@ LightOpSchema MakeAttentionSchema(int since_version) {
          AttributeType::INT, /*required=*/false, static_cast<int64_t>(-1)},
     };
   }
-  return LightOpSchema(
+  LightOpSchema schema(
       "Attention", kOnnxDomain, since_version, MakeAttentionDoc(since_version), std::move(inputs),
       std::move(outputs),
       {
@@ -1301,6 +1314,7 @@ LightOpSchema MakeAttentionSchema(int since_version) {
       },
       std::move(attributes),
       /*has_function_implementation=*/true);
+  return schema.set_min_output(1);
 }
 
 // --- RotaryEmbedding ---------------------------------------------------------

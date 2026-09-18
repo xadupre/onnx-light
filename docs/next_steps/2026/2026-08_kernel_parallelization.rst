@@ -5,7 +5,61 @@ Kernel parallelization and tuning sequence
 
 :Date: 2026-08
 
-**Step G in progress (x86-64 calibrated; ARM64 pending hardware access)**
+**Step G in progress (x86-64 calibrated; ARM64 measurements pending)**
+
+Native measurement workflow
+===========================
+
+The opt-in ``Native kernel reports`` workflow
+(``.github/workflows/kernel_reports.yml``) runs on native
+``ubuntu-24.04-arm`` and ``ubuntu-24.04`` runners. Dispatch it from an
+up-to-date branch; both jobs check out the same event commit SHA, not a
+moving branch tip. For example, after the workflow is on the default branch::
+
+    gh workflow run kernel_reports.yml --ref main
+    gh run list --workflow kernel_reports.yml
+    gh run download <run-id> --dir kernel-reports
+
+Each architecture artifact contains three independent runs, the workflow
+recipe, source revision, compiler/dependency versions, CMake configuration,
+processor and memory information, affinity/cgroup limits, and native test logs.
+Each run records its registry (including tuning ABIs), baseline, per-key raw
+calibration diagnostics, persisted cache, fresh-process reload checks, tuned
+baseline, and same-machine comparisons. Failed jobs also upload partial
+evidence for diagnosis; these artifacts are **not** validated reports.
+Artifacts expire after 30 days: archive successful evidence before expiry.
+
+To reproduce the measurement phases from the recorded source revision, build
+the native extension with the workflow's dependencies and Release configuration,
+set ``PYTHONPATH`` to the checkout, and use a new output/cache directory per run::
+
+    export XDG_CACHE_HOME="$(mktemp -d)"
+    export OMP_NUM_THREADS=2 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+    python -m onnx_light.tools.kernel_reports collect --output /tmp/kernel-run-1 \
+        --threads 2 --repeat 10 --maximum-duration-ms 10000 \
+        --maximum-memory-bytes 268435456
+    python -m onnx_light.tools.kernel_reports verify --output /tmp/kernel-run-1
+    python -m onnx_light.tools.kernel_reports verify-incompatible --output /tmp/kernel-run-1
+
+Calibration discovers the currently registered CPU keys; it neither assumes a
+fixed key count nor supplies historical Gemm parameters. Duration and memory
+budgets apply to the native calibrators, not to the whole process or baseline.
+The workflow runs native correctness, processor-compatibility and execution-policy
+tests, checks sampled thread diagnostics, validates schema/ABI on reload, and
+rejects profiles under a different thread descriptor. Diagnostic buffers are
+bounded; their ``dropped_events`` counts must not be interpreted as full traces.
+
+Compare matching corpus rows, thread policies and source revisions across the
+two artifacts. ``comparison.json`` reports **same-machine** baseline/tuned
+speedups (below one means regression); ARM64/x86-64 absolute latencies compare
+different machines, not the effect of tuning. Inspect all three runs and report
+their spread and unstable profile choices, including regressions. Hosted-VM
+noise and unavailable performance counters limit conclusions; the serial rows
+can also vary from measurement noise even when no serial profile was calibrated.
+The fixed baseline corpus does not cover every calibrated dtype or workload.
+Successful artifacts still require review and publication under
+``kernel_parallelization_reports/`` before the ARM64 evidence gap is closed.
+Profiles remain machine-specific; this workflow does not promote portable defaults.
 
 Objective
 +++++++++

@@ -466,6 +466,7 @@ private:
   }
 
   size_t Tensor(const TensorProto &tensor) {
+    Require(tensor.metadata_props().empty(), "tensor metadata_props are unsupported");
     Require(!tensor.has_segment(), "segmented tensors are unsupported");
     EXT_ENFORCE(!tensor.has_data_location() || tensor.data_location() != TensorProto::EXTERNAL ||
                     tensor.has_raw_data(),
@@ -641,6 +642,9 @@ private:
 
   size_t Graph(const GraphProto &graph, const Types &outer, size_t depth) {
     Require(depth < 100, "graph nesting exceeds 100");
+    Require(graph.metadata_props().empty(), "graph metadata_props are unsupported");
+    for (const auto &node : graph.node())
+      Require(node.metadata_props().empty(), "node metadata_props are unsupported");
     const auto is_constant = [](const NodeProto &node) {
       return NormalizeDomain(Text(node.domain())).empty() && node.op_type() == "Constant";
     };
@@ -705,6 +709,7 @@ private:
     std::set<std::string> available;
     auto add_info = [&](const auto &values) {
       for (const auto &value : values) {
+        Require(value.metadata_props().empty(), "value_info metadata_props are unsupported");
         const auto name = Text(value.name());
         Require(!name.empty(), "graph value has an empty name");
         infos[name] = &value;

@@ -30,6 +30,10 @@ class BinaryStream;
  * FlatBuffers signed 32-bit size limit. Model-local functions, optional/sparse/
  * opaque types, complex tensors, sparse initializers/attributes, GRAPHS
  * attributes, and encoded initializers are unsupported.
+ * Tensor element types newer than FLOAT8E5M2FNUZ (20), including UINT4, INT4,
+ * FLOAT4E2M1, FLOAT8E8M0, UINT2, and INT2, are unsupported.
+ * Preserves model-level metadata_props but rejects graph, node, tensor, and
+ * value-info metadata_props, including in nested graphs and tensor attributes.
  *
  * Returns:
  *     The complete FlatBuffer, including its ORTM file identifier.

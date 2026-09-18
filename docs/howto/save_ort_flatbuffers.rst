@@ -3,7 +3,7 @@
 :html_theme.sidebar_secondary.remove:
 
 How to save and load a model in the ORT flatbuffer format
-=======================================================
+=========================================================
 
 `onnxruntime <https://onnxruntime.ai/>`_ defines a compact flatbuffer
 serialization (``.ort``) that avoids the protobuf parsing step when loading
@@ -118,10 +118,15 @@ Current writer limitations
   files directly; minimal runtime builds are not supported.
 * Local model functions, node overloads, device configurations, and
   quantization annotations are not supported.
+* Only model-level ``metadata_props`` are supported. Metadata properties on
+  graphs, nodes (including ``Constant`` nodes), tensors, and value infos are
+  rejected, including inside nested graphs and tensor attributes.
 * Optional, sparse, opaque, and structured value types, complex tensors,
   sparse initializers, onnx-light's ``GraphProto.encoded_initializer``
   extension, and ``GRAPHS``, sparse-tensor, or type-proto attributes are not
   supported.
+* Tensor element types newer than ``FLOAT8E5M2FNUZ`` (20) are not supported:
+  ``UINT4``, ``INT4``, ``FLOAT4E2M1``, ``FLOAT8E8M0``, ``UINT2``, and ``INT2``.
 * Intermediate tensor types are inferred for common standard operators.
   Other operators require explicit type information in ``graph.value_info``;
   missing information causes serialization to fail. Custom operators also

@@ -135,6 +135,118 @@ TEST(onnx_ort_serialization, CallbackDoesNotMutateModel) {
   EXPECT_TRUE(model.graph().node(0).name().empty());
 }
 
+TEST(onnx_ort_serialization, PreservesModelMetadata) {
+  auto model = OrtModel();
+  auto *entry = model.add_metadata_props();
+  entry->set_key("source");
+  entry->set_value("native_ort");
+  const auto bytes = SerializeModelToOrtFlatbuffers(model, {});
+  utils::StringStream stream(bytes.data(), static_cast<int64_t>(bytes.size()));
+  ModelProto parsed;
+  ParseOptions options;
+  ParseModelFromOrtFlatbuffers(parsed, stream, options);
+  ASSERT_EQ(parsed.metadata_props().size(), 1u);
+  EXPECT_EQ(parsed.metadata_props()[0].key(), "source");
+  EXPECT_EQ(parsed.metadata_props()[0].value(), "native_ort");
+}
+
+TEST(onnx_ort_serialization, RejectsMetadataThroughoutNestedGraphs) {
+  for (bool nested : {false, true}) {
+    SCOPED_TRACE(nested);
+    auto model = OrtModel();
+    auto *graph = model.mutable_graph();
+    if (nested) {
+      auto *condition = graph->add_input();
+      condition->set_name("condition");
+      auto *type = condition->mutable_type()->mutable_tensor_type();
+      type->set_elem_type(TensorProto::BOOL);
+      type->mutable_shape();
+      auto *node = graph->mutable_node(0);
+      node->set_op_type("If");
+      node->clr_input();
+      node->add_input("condition");
+      for (const char *name : {"then_branch", "else_branch"}) {
+        auto *attr = node->add_attribute();
+        attr->set_name(name);
+        attr->set_type(AttributeProto::GRAPH);
+        attr->mutable_g()->CopyFrom(OrtModel().graph());
+        attr->mutable_g()->clr_input();
+      }
+      graph = node->mutable_attribute(0)->mutable_g();
+    }
+    auto rejects_metadata = [&](auto *value, const char *kind) {
+      SCOPED_TRACE(kind);
+      EXPECT_NO_THROW(SerializeModelToOrtFlatbuffers(model, {}));
+      auto *entry = value->add_metadata_props();
+      entry->set_key("source");
+      entry->set_value("must_not_disappear");
+      EXPECT_THROW(SerializeModelToOrtFlatbuffers(model, {}), std::invalid_argument);
+      value->clr_metadata_props();
+      EXPECT_NO_THROW(SerializeModelToOrtFlatbuffers(model, {}));
+    };
+    rejects_metadata(graph, "graph");
+    rejects_metadata(graph->mutable_node(0), "node");
+    if (!nested)
+      rejects_metadata(graph->mutable_input(0), "input");
+    rejects_metadata(graph->mutable_output(0), "output");
+    auto *info = graph->add_value_info();
+    info->CopyFrom(graph->output(0));
+    rejects_metadata(info, "value_info");
+    auto *tensor = graph->add_initializer();
+    tensor->set_name("weight");
+    tensor->set_data_type(TensorProto::FLOAT);
+    tensor->add_float_data(1.0f);
+    rejects_metadata(tensor, "initializer");
+
+    auto *opset = model.add_opset_import();
+    opset->set_domain("metadata.test");
+    opset->set_version(1);
+    auto *node = graph->mutable_node(0);
+    node->set_domain("metadata.test");
+    node->set_op_type("Attributes");
+    auto *attr = node->add_attribute();
+    attr->set_name("tensor");
+    attr->set_type(AttributeProto::TENSOR);
+    attr->mutable_t()->CopyFrom(*tensor);
+    rejects_metadata(attr->mutable_t(), "tensor attribute");
+    attr = node->add_attribute();
+    attr->set_name("tensors");
+    attr->set_type(AttributeProto::TENSORS);
+    attr->add_tensors()->CopyFrom(*tensor);
+    rejects_metadata(attr->mutable_tensors(0), "repeated tensor attribute");
+
+    node->set_domain("");
+    node->set_op_type("Constant");
+    node->clr_input();
+    node->clr_attribute();
+    attr = node->add_attribute();
+    attr->set_name("value");
+    attr->set_type(AttributeProto::TENSOR);
+    attr->mutable_t()->CopyFrom(*tensor);
+    attr->mutable_t()->add_dims(2);
+    attr->mutable_t()->add_float_data(2.0f);
+    rejects_metadata(node, "Constant node");
+    rejects_metadata(attr->mutable_t(), "Constant tensor");
+  }
+}
+
+TEST(onnx_ort_serialization, RejectsNewerTensorElementTypes) {
+  for (auto type : {TensorProto::UINT4, TensorProto::INT4, TensorProto::FLOAT4E2M1,
+                    TensorProto::FLOAT8E8M0, TensorProto::UINT2, TensorProto::INT2}) {
+    SCOPED_TRACE(type);
+    auto model = OrtModel();
+    model.mutable_graph()->mutable_input(0)->mutable_type()->mutable_tensor_type()->set_elem_type(
+        type);
+    EXPECT_THROW(SerializeModelToOrtFlatbuffers(model, {}), std::invalid_argument);
+    model = OrtModel();
+    auto *tensor = model.mutable_graph()->add_initializer();
+    tensor->set_name("weight");
+    tensor->set_data_type(type);
+    tensor->add_int32_data(0);
+    EXPECT_THROW(SerializeModelToOrtFlatbuffers(model, {}), std::invalid_argument);
+  }
+}
+
 TEST(onnx_ort_serialization, RawCallbackInlinesLoadedExternalTensor) {
   auto model = OrtModel();
   auto *tensor = model.mutable_graph()->add_initializer();

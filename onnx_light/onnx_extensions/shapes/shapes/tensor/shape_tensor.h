@@ -241,6 +241,8 @@ void ComputeShapeReshape(ShapesContext &ctx, const NodeProto &node);
  * optional ``axes``/``steps``) values are known through
  * :cpp:func:`SymTensor::ValueAsShape`, concrete output lengths are inferred
  * per sliced axis; otherwise output dimensions are left symbolic.
+ * A symbolic end equal to the input dimension preserves that dimension
+ * when the start is zero and the step is one.
  */
 void ComputeShapeSlice(ShapesContext &ctx, const NodeProto &node);
 

@@ -127,13 +127,13 @@ void ComputeShapeSlice(ShapesContext &ctx, const NodeProto &node) {
 
   const std::optional<std::vector<int64_t>> starts_opt = TryReadIntVector(starts_t);
   const std::optional<std::vector<int64_t>> ends_opt = TryReadIntVector(ends_t);
-  if (!starts_opt.has_value() || !ends_opt.has_value()) {
+  if (!starts_opt.has_value() || !ends_t.HasValueAsShape()) {
     ctx.Set(node.output(0), SymTensor(nullptr, data.Dtype(), std::move(out_shape)));
     return;
   }
   const std::vector<int64_t> &starts = *starts_opt;
-  const std::vector<int64_t> &ends = *ends_opt;
-  EXT_ENFORCE_INVALID(starts.size() == ends.size(),
+  const SymShape &ends = ends_t.ValueAsShape();
+  EXT_ENFORCE_INVALID(starts.size() == ends.Rank(),
                       "ComputeShapeSlice: starts and ends lengths must match.");
 
   std::vector<int64_t> axes;
@@ -178,13 +178,21 @@ void ComputeShapeSlice(ShapesContext &ctx, const NodeProto &node) {
       axis += rank;
     }
     EXT_ENFORCE_INVALID(!(axis < 0 || axis >= rank), "ComputeShapeSlice: axis out of range.");
+    if (!ends_opt.has_value()) {
+      // When ends include symbols, only infer dimensions for proven full slices.
+      if (starts[i] != 0 || step != 1 || ends[i] != data_shape[static_cast<size_t>(axis)]) {
+        out_shape[static_cast<size_t>(axis)] =
+            SymDim("Slice_" + node.output(0) + "_dim" + std::to_string(axis));
+      }
+      continue;
+    }
     if (!data_shape[static_cast<size_t>(axis)].IsInt()) {
-      out_shape[static_cast<size_t>(axis)] =
-          SymbolicSliceLength(data_shape[static_cast<size_t>(axis)], starts[i], ends[i], step);
+      out_shape[static_cast<size_t>(axis)] = SymbolicSliceLength(
+          data_shape[static_cast<size_t>(axis)], starts[i], ends[i].AsInt(), step);
       continue;
     }
     int64_t start = starts[i];
-    int64_t end = ends[i];
+    int64_t end = ends[i].AsInt();
     ProcessSliceInputs(data_shape[static_cast<size_t>(axis)].AsInt(), start, end, step);
     out_shape[static_cast<size_t>(axis)] = SymDim(SliceLength(start, end, step));
   }

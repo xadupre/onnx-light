@@ -5,11 +5,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.1.28] – Unreleased
 
+### New Features
+
+- Added native ORT FlatBuffers serialization and parsing through the C++ and Python
+  memory, stream, and file APIs, without a FlatBuffers library or ONNX Runtime
+  conversion dependency ([#4990](https://github.com/xadupre/onnx-light/pull/4990)).
+  The writer emits ORT version 4 for full ONNX Runtime builds; the reader accepts
+  supported version 4, 5, and 6 models and reconstructs executable ONNX models.
+- Added ORT support for inline tensor payloads, nested control-flow graphs, serialization
+  and parsing callbacks, payload alignment, and checked decoding limits. Formal node
+  input counts are resolved from versioned schemas, including variadic and optional
+  inputs. ORT decoding is sequential and copies tensor data into owned storage.
+  Unsupported constructs and external tensor offsets are rejected explicitly; the
+  writer does not support minimal ONNX Runtime builds or low-bit tensor types.
+
+### Fixes
+
+- Fixed repeated-message `add(**kwargs)` to populate repeated fields using the same
+  logic as proto constructors, including repeated string values
+  ([#4989](https://github.com/xadupre/onnx-light/pull/4989)).
+- Fixed attribute checking to recognize scalar and repeated `GraphProto` values
+  ([#4988](https://github.com/xadupre/onnx-light/pull/4988)).
+- Propagated upstream shape-inference fixes for `Split`, `SplitToSequence`,
+  `LayerNormalization`, and `GatherND`, covering invalid attributes, axis bounds,
+  omitted optional inputs, and omitted trailing outputs
+  ([#4986](https://github.com/xadupre/onnx-light/pull/4986)).
+
 ### Documentation & CI
 
+- Replaced permanently skipped `TensorProto.SerializeToFile` tests with round-trip
+  coverage for the supported `SerializeToFileDescriptor` and `SerializeToOstream` APIs
+  ([#4987](https://github.com/xadupre/onnx-light/pull/4987)).
+- Added native ORT read/write documentation, an interoperability example, malformed-input
+  regressions, and synchronization checks for the compact operator-input schema snapshot.
+- Updated proto-library binary-size budgets to account for the native ORT codec while
+  retaining installed-size, code-size, dynamic-symbol, and shared-dependency checks.
 - Bumped the release version to `0.1.28`.
 
-## [0.1.27] – Unreleased
+## [0.1.27] – 2026-09-16
 
 ### New Features
 

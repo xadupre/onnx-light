@@ -320,7 +320,6 @@ class TestOnnxLightHelper(ExtTestCase):
         for s in oh.get_attribute_value(attr):
             checker.check_sparse_tensor(s)
 
-    @unittest.skipIf(True, "not yet implemented")
     def test_attr_repeated_graph_proto(self) -> None:
         graphs = [onnxl.GraphProto(), onnxl.GraphProto()]
         graphs[0].name = "a"

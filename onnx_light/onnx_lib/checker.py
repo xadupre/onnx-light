@@ -53,11 +53,13 @@ def check_attribute(attribute: _C.AttributeProto) -> None:  # type: ignore
         attribute.has_s(),
         attribute.has_t(),
         attribute.has_sparse_tensor(),
+        attribute.has_g(),
         attribute.has_floats(),
         attribute.has_ints(),
         attribute.has_strings(),
         attribute.has_tensors(),
         attribute.has_sparse_tensors(),
+        attribute.has_graphs(),
     ]
     if not any(oneof):
         raise ValidationError(f"The attribute {attribute.name!r} has no value: {attribute}")

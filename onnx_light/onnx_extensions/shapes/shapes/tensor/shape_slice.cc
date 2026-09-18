@@ -120,17 +120,20 @@ void ComputeShapeSlice(ShapesContext &ctx, const NodeProto &node) {
   const SymShape &data_shape = data.Shape();
   const int64_t rank = static_cast<int64_t>(data_shape.Rank());
 
-  SymShape out_shape = data_shape;
+  SymShape out_shape;
+  for (int64_t axis = 0; axis < rank; ++axis) {
+    out_shape.PushBack(SymDim("Slice_" + node.output(0) + "_dim" + std::to_string(axis)));
+  }
 
   const std::optional<std::vector<int64_t>> starts_opt = TryReadIntVector(starts_t);
   const std::optional<std::vector<int64_t>> ends_opt = TryReadIntVector(ends_t);
-  if (!starts_opt.has_value() || !ends_opt.has_value()) {
+  if (!starts_opt.has_value() || !ends_t.HasValueAsShape()) {
     ctx.Set(node.output(0), SymTensor(nullptr, data.Dtype(), std::move(out_shape)));
     return;
   }
   const std::vector<int64_t> &starts = *starts_opt;
-  const std::vector<int64_t> &ends = *ends_opt;
-  EXT_ENFORCE_INVALID(starts.size() == ends.size(),
+  const SymShape &ends = ends_t.ValueAsShape();
+  EXT_ENFORCE_INVALID(starts.size() == ends.Rank(),
                       "ComputeShapeSlice: starts and ends lengths must match.");
 
   std::vector<int64_t> axes;
@@ -167,6 +170,7 @@ void ComputeShapeSlice(ShapesContext &ctx, const NodeProto &node) {
     EXT_ENFORCE_INVALID(steps[i] != 0, "ComputeShapeSlice: 'steps' entries cannot be 0.");
   }
 
+  out_shape = data_shape;
   for (size_t i = 0; i < starts.size(); ++i) {
     int64_t axis = axes[i];
     const int64_t step = steps[i];
@@ -174,13 +178,21 @@ void ComputeShapeSlice(ShapesContext &ctx, const NodeProto &node) {
       axis += rank;
     }
     EXT_ENFORCE_INVALID(!(axis < 0 || axis >= rank), "ComputeShapeSlice: axis out of range.");
+    if (!ends_opt.has_value()) {
+      // When ends include symbols, only infer dimensions for proven full slices.
+      if (starts[i] != 0 || step != 1 || ends[i] != data_shape[static_cast<size_t>(axis)]) {
+        out_shape[static_cast<size_t>(axis)] =
+            SymDim("Slice_" + node.output(0) + "_dim" + std::to_string(axis));
+      }
+      continue;
+    }
     if (!data_shape[static_cast<size_t>(axis)].IsInt()) {
-      out_shape[static_cast<size_t>(axis)] =
-          SymbolicSliceLength(data_shape[static_cast<size_t>(axis)], starts[i], ends[i], step);
+      out_shape[static_cast<size_t>(axis)] = SymbolicSliceLength(
+          data_shape[static_cast<size_t>(axis)], starts[i], ends[i].AsInt(), step);
       continue;
     }
     int64_t start = starts[i];
-    int64_t end = ends[i];
+    int64_t end = ends[i].AsInt();
     ProcessSliceInputs(data_shape[static_cast<size_t>(axis)].AsInt(), start, end, step);
     out_shape[static_cast<size_t>(axis)] = SymDim(SliceLength(start, end, step));
   }

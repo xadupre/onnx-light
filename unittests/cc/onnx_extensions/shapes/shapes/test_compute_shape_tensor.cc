@@ -545,21 +545,85 @@ TEST(OnnxOptimShapesTensorSlice, KeepsAnchorDimsAndBuildsSliceExpression) {
                                       core::symbolic::SymDim("c-1")}));
 }
 
-TEST(OnnxOptimShapesTensorSlice, FallsBackToSymbolicWhenBoundsUnknown) {
+TEST(OnnxOptimShapesTensorSlice, ProvesOnlyFullSlicesWithSymbolicEnds) {
+  for (int64_t start : {0, 1}) {
+    for (int64_t step : {1, 2, -1}) {
+      for (const char *end : {"a", "other"}) {
+        for (int64_t axis : {0, -2}) {
+          SCOPED_TRACE(start);
+          SCOPED_TRACE(step);
+          SCOPED_TRACE(end);
+          SCOPED_TRACE(axis);
+          NodeProto node = MakeSliceNode("X", "Starts", "Ends", "Axes", "Steps");
+          core::shapes::ShapesContext ctx;
+          ctx.Set("X", core::symbolic::SymTensor(
+                           nullptr, core::symbolic::TensorType::kFloat,
+                           {core::symbolic::SymDim("a"), core::symbolic::SymDim(4)}));
+          ctx.Set("Starts", MakeShapeInput({start}));
+          auto ends = MakeShapeInput({0});
+          ends.SetValueAsShape({core::symbolic::SymDim(end)});
+          ctx.Set("Ends", std::move(ends));
+          ctx.Set("Axes", MakeShapeInput({axis}));
+          ctx.Set("Steps", MakeShapeInput({step}));
+
+          onnx_shapes::shapes::tensor::ComputeShapeSlice(ctx, node);
+
+          const auto &shape = ctx.Get("Y").Shape();
+          ASSERT_EQ(shape.Rank(), 2u);
+          EXPECT_EQ(shape[1], core::symbolic::SymDim(4));
+          EXPECT_EQ(shape == ctx.Get("X").Shape(),
+                    start == 0 && step == 1 && std::string(end) == "a");
+          EXPECT_FALSE(shape[0].IsInt());
+        }
+      }
+    }
+  }
+}
+
+TEST(OnnxOptimShapesTensorSlice, KeepsUnprovenMixedEndLengthsSymbolic) {
   NodeProto node = MakeSliceNode();
   core::shapes::ShapesContext ctx;
-  ctx.Set("X", core::symbolic::SymTensor(
-                   nullptr, core::symbolic::TensorType::kFloat,
-                   core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(4)}));
-  ctx.Set("Starts", core::symbolic::SymTensor(
-                        nullptr, core::symbolic::TensorType::kInt64,
-                        core::symbolic::SymShape{core::symbolic::SymDim(static_cast<int64_t>(2))}));
-  ctx.Set("Ends", MakeShapeInput({2, 3}));
+  ctx.Set("X",
+          core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                    {core::symbolic::SymDim("a"), core::symbolic::SymDim("b")}));
+  ctx.Set("Starts", MakeShapeInput({0, 0}));
+  auto ends = MakeShapeInput({0, 10});
+  ends.SetValueAsShape({core::symbolic::SymDim("a"), core::symbolic::SymDim(10)});
+  ctx.Set("Ends", std::move(ends));
 
   onnx_shapes::shapes::tensor::ComputeShapeSlice(ctx, node);
 
-  EXPECT_EQ(ctx.Get("Y").Shape(),
-            (core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(4)}));
+  const auto &shape = ctx.Get("Y").Shape();
+  ASSERT_EQ(shape.Rank(), 2u);
+  EXPECT_EQ(shape[0], core::symbolic::SymDim("a"));
+  EXPECT_FALSE(shape[1].IsInt());
+  EXPECT_NE(shape[1], core::symbolic::SymDim("b"));
+}
+
+TEST(OnnxOptimShapesTensorSlice, FallsBackToSymbolicWhenBoundsUnknown) {
+  for (const char *unknown : {"Starts", "Ends", "Axes", "Steps"}) {
+    SCOPED_TRACE(unknown);
+    NodeProto node = MakeSliceNode("X", "Starts", "Ends", "Axes", "Steps");
+    core::shapes::ShapesContext ctx;
+    ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                           core::symbolic::SymShape{core::symbolic::SymDim(2),
+                                                                    core::symbolic::SymDim(4)}));
+    ctx.Set("Starts", MakeShapeInput({0, 0}));
+    ctx.Set("Ends", MakeShapeInput({2, 4}));
+    ctx.Set("Axes", MakeShapeInput({0, 1}));
+    ctx.Set("Steps", MakeShapeInput({1, 1}));
+    ctx.Set(unknown,
+            core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt64,
+                                      core::symbolic::SymShape{core::symbolic::SymDim(2)}));
+
+    onnx_shapes::shapes::tensor::ComputeShapeSlice(ctx, node);
+
+    EXPECT_EQ(ctx.Get("Y").Dtype(), core::symbolic::TensorType::kFloat);
+    ASSERT_EQ(ctx.Get("Y").Shape().Rank(), 2u);
+    EXPECT_FALSE(ctx.Get("Y").Shape()[0].IsInt());
+    EXPECT_FALSE(ctx.Get("Y").Shape()[1].IsInt());
+    EXPECT_NE(ctx.Get("Y").Shape(), ctx.Get("X").Shape());
+  }
 }
 
 TEST(OnnxOptimShapesTensorSlice, RejectsWrongOpType) {

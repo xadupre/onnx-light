@@ -13,6 +13,8 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace {
 
+#include "onnx_ort_input_schemas.inc"
+
 void Require(bool condition, const std::string &message) {
   if (!condition)
     throw std::invalid_argument("ORT serialization: " + message);
@@ -173,11 +175,11 @@ public:
     Require(model.configuration().empty(), "device configurations are unsupported");
     Require(model.struct_types().empty(), "structured types are unsupported");
     Require(!model.opset_import().empty(), "model has no opset imports");
-    std::set<std::string> domains;
+    std::map<std::string, int64_t> domains;
     for (const auto &opset : model.opset_import()) {
       Require(opset.version() > 0 && opset.version() <= INT32_MAX, "invalid opset version");
       const auto domain = NormalizeDomain(Text(opset.domain()));
-      Require(domains.insert(domain).second, "duplicate opset domain");
+      Require(domains.emplace(domain, opset.version()).second, "duplicate opset domain");
       if (domain.empty())
         onnx_opset_ = opset.version();
     }
@@ -216,6 +218,43 @@ private:
 
   static std::string NormalizeDomain(const std::string &domain) {
     return domain == "ai.onnx" ? "" : domain;
+  }
+
+  std::vector<int32_t> InputArgCounts(const NodeProto &node) const {
+    const auto domain = NormalizeDomain(Text(node.domain()));
+    const auto name = Text(node.op_type());
+    const auto version = domains_.at(domain);
+    const auto key = std::pair{std::string_view(domain), std::string_view(name)};
+    auto it = std::lower_bound(std::begin(kOrtInputSchemas), std::end(kOrtInputSchemas), key,
+                               [](const OrtInputSchema &schema, const auto &value) {
+                                 return std::pair{std::string_view(schema.Domain()),
+                                                  std::string_view(schema.Name())} < value;
+                               });
+    const OrtInputSchema *schema = nullptr;
+    for (; it != std::end(kOrtInputSchemas) && it->Domain() == key.first &&
+           it->Name() == key.second && it->since_version <= version;
+         ++it)
+      schema = it;
+    Require(schema != nullptr, "operator input schema is unavailable for '" + domain + "::" + name +
+                                   "' at opset " + std::to_string(version));
+    Require(node.input().size() <= INT32_MAX, "node input count exceeds FlatBuffers limit");
+    Require(node.input().size() >= static_cast<size_t>(schema->min_input) &&
+                node.input().size() <= static_cast<size_t>(schema->max_input),
+            "input count does not match the schema for '" + name + "'");
+    std::vector<int32_t> counts;
+    size_t index = 0;
+    for (const char kind : std::string_view(schema->Inputs())) {
+      const auto count = kind == 'V' ? node.input().size() - index
+                                     : static_cast<size_t>(index < node.input().size());
+      Require(kind != 'S' || (count == 1 && !node.input()[index].empty()),
+              "missing required input for '" + name + "'");
+      Require(kind != 'V' || count >= static_cast<size_t>(schema->min_variadic_arity),
+              "missing variadic inputs for '" + name + "'");
+      counts.push_back(static_cast<int32_t>(count));
+      index += count;
+    }
+    Require(index == node.input().size(), "too many inputs for '" + name + "'");
+    return counts;
   }
 
   size_t Shape(const TensorShapeProto &shape) {
@@ -855,8 +894,7 @@ private:
       buffer_.Reference(value, 10, buffer_.Objects(node.attribute(), [&](const auto &attr) {
         return Attribute(attr, scope, depth);
       }));
-      buffer_.Reference(value, 11,
-                        buffer_.Scalars<int32_t>(std::vector<int32_t>(node.input().size(), 1)));
+      buffer_.Reference(value, 11, buffer_.Scalars<int32_t>(InputArgCounts(node)));
       buffer_.Reference(value, 12, buffer_.Strings(implicit[index++]));
       return value.position;
     }));
@@ -893,7 +931,7 @@ private:
   }
 
   FlatBuffer buffer_;
-  std::set<std::string> domains_;
+  std::map<std::string, int64_t> domains_;
   int64_t onnx_opset_ = 0;
 };
 

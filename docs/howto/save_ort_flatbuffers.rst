@@ -129,9 +129,12 @@ Current writer limitations
   ``UINT4``, ``INT4``, ``FLOAT4E2M1``, ``FLOAT8E8M0``, ``UINT2``, and ``INT2``.
 * Intermediate tensor types are inferred for common standard operators.
   Other operators require explicit type information in ``graph.value_info``;
-  missing information causes serialization to fail. Custom operators also
-  require their kernels to be registered with the consuming ONNX Runtime
-  session.
+  missing information causes serialization to fail.
+* Formal input counts are resolved from a compact snapshot of registered
+  operator schemas using the imported domain and opset. Variadic inputs are
+  grouped and omitted trailing optional inputs have zero counts. Operators
+  without an input schema in that snapshot, including unknown custom-domain
+  operators, are rejected rather than assigned guessed input counts.
 * Tensor data is embedded inline. Unresolved external tensor payloads and
   external sidecar output are rejected. Load external tensor bytes into
   ``raw_data`` before serialization.

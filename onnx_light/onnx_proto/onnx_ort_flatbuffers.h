@@ -34,6 +34,9 @@ class BinaryStream;
  * FLOAT4E2M1, FLOAT8E8M0, UINT2, and INT2, are unsupported.
  * Preserves model-level metadata_props but rejects graph, node, tensor, and
  * value-info metadata_props, including in nested graphs and tensor attributes.
+ * Resolves formal input counts from an opset-versioned schema snapshot and
+ * rejects operators without a matching input schema, including unknown custom
+ * operators.
  *
  * Returns:
  *     The complete FlatBuffer, including its ORTM file identifier.

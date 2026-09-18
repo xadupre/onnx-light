@@ -42,6 +42,23 @@ The native writer embeds tensor data inline. Although the format includes
 output. Unresolved external tensor payloads are rejected: their bytes must
 be loaded into ``raw_data`` before serialization.
 
+Formal node inputs
+------------------
+
+ORT's ``input_arg_counts`` has one entry per formal schema input, not per
+actual node-input slot. For example, a three-input ``Concat`` stores ``[3]``;
+``Clip`` at opset 11 with only its required input stores ``[1, 0, 0]``.
+An explicitly empty optional slot still counts as one actual slot.
+
+The writer resolves input signatures by domain, operator name, and imported
+opset from ``onnx_ort_input_schemas.inc``. This compact snapshot is generated
+from the registered schemas by
+``.github/scripts/generate_ort_input_schemas.py`` and checked by
+``test_ort_input_schemas_sync.py``. It avoids a dependency from the proto
+library back to the full schema library. Unknown operator schemas are
+rejected rather than guessed. Regenerate the snapshot when schema input
+signatures or their input-count bounds change.
+
 Reading and reconstruction
 --------------------------
 

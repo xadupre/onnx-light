@@ -47,7 +47,88 @@ size_t Follow(const std::string &bytes, size_t position) {
   return position + Read32(bytes, position);
 }
 
+std::vector<int32_t> InputCounts(const ModelProto &model) {
+  const auto bytes = SerializeModelToOrtFlatbuffers(model, {});
+  size_t session = Read32(bytes, 0);
+  size_t ort_model = Follow(bytes, Field(bytes, session, 1));
+  size_t graph = Follow(bytes, Field(bytes, ort_model, 7));
+  size_t nodes = Follow(bytes, Field(bytes, graph, 2));
+  size_t node = Follow(bytes, nodes + 4);
+  size_t counts = Follow(bytes, Field(bytes, node, 11));
+  std::vector<int32_t> result;
+  for (size_t i = 0; i < Read32(bytes, counts); ++i)
+    result.push_back(static_cast<int32_t>(Read32(bytes, counts + 4 + i * 4)));
+  return result;
+}
+
 } // namespace
+
+TEST(onnx_ort_serialization, WritesSchemaBasedVariadicInputCounts) {
+  auto model = OrtModel();
+  auto *node = model.mutable_graph()->mutable_node(0);
+  node->set_op_type("Concat");
+  node->add_input("X");
+  node->add_input("X");
+  auto *axis = node->add_attribute();
+  axis->set_name("axis");
+  axis->set_type(AttributeProto::INT);
+  axis->set_i(0);
+  EXPECT_EQ(InputCounts(model), (std::vector<int32_t>{3}));
+  node->set_domain("ai.onnx");
+  EXPECT_EQ(InputCounts(model), (std::vector<int32_t>{3}));
+  for (const char *op : {"Sum", "Mean", "Min", "Max"}) {
+    node->set_op_type(op);
+    node->clr_attribute();
+    EXPECT_EQ(InputCounts(model), (std::vector<int32_t>{3}));
+  }
+}
+
+TEST(onnx_ort_serialization, ResolvesOptionalInputCountsByImportedOpset) {
+  auto model = OrtModel();
+  auto *node = model.mutable_graph()->mutable_node(0);
+  node->set_op_type("Clip");
+  model.mutable_opset_import(0)->set_version(10);
+  EXPECT_EQ(InputCounts(model), (std::vector<int32_t>{1}));
+  model.mutable_opset_import(0)->set_version(11);
+  EXPECT_EQ(InputCounts(model), (std::vector<int32_t>{1, 0, 0}));
+  node->add_input("");
+  node->add_input("X");
+  EXPECT_EQ(InputCounts(model), (std::vector<int32_t>{1, 1, 1}));
+  node->add_input("X");
+  EXPECT_THROW(InputCounts(model), std::invalid_argument);
+  node->clr_input();
+  EXPECT_THROW(InputCounts(model), std::invalid_argument);
+}
+
+TEST(onnx_ort_serialization, RejectsUnavailableOperatorInputSchemas) {
+  auto model = OrtModel();
+  auto *opset = model.add_opset_import();
+  opset->set_domain("custom.test");
+  opset->set_version(1);
+  model.mutable_graph()->mutable_node(0)->set_domain("custom.test");
+  EXPECT_THROW(InputCounts(model), std::invalid_argument);
+  model.mutable_graph()->mutable_node(0)->set_domain("");
+  model.mutable_graph()->mutable_node(0)->set_op_type("Resize");
+  model.mutable_opset_import(0)->set_version(9);
+  EXPECT_THROW(InputCounts(model), std::invalid_argument);
+}
+
+TEST(onnx_ort_serialization, WritesFixedAndVariadicInputCounts) {
+  auto model = OrtModel();
+  auto *node = model.mutable_graph()->mutable_node(0);
+  node->set_op_type("Loop");
+  node->add_input("X");
+  EXPECT_EQ(InputCounts(model), (std::vector<int32_t>{1, 1, 0}));
+  node->add_input("X");
+  node->add_input("X");
+  EXPECT_EQ(InputCounts(model), (std::vector<int32_t>{1, 1, 2}));
+  node->clr_input();
+  node->add_input("");
+  node->add_input("");
+  EXPECT_EQ(InputCounts(model), (std::vector<int32_t>{1, 1, 0}));
+  model.mutable_opset_import(0)->set_version(1);
+  EXPECT_THROW(InputCounts(model), std::invalid_argument);
+}
 
 TEST(onnx_ort_serialization, NativeFlatbufferLayoutAndShape) {
   auto model = OrtModel();
@@ -198,12 +279,7 @@ TEST(onnx_ort_serialization, RejectsMetadataThroughoutNestedGraphs) {
     tensor->add_float_data(1.0f);
     rejects_metadata(tensor, "initializer");
 
-    auto *opset = model.add_opset_import();
-    opset->set_domain("metadata.test");
-    opset->set_version(1);
     auto *node = graph->mutable_node(0);
-    node->set_domain("metadata.test");
-    node->set_op_type("Attributes");
     auto *attr = node->add_attribute();
     attr->set_name("tensor");
     attr->set_type(AttributeProto::TENSOR);

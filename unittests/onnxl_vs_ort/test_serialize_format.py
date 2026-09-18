@@ -99,6 +99,44 @@ class TestSerializeFormat(ExtTestCase):
         self.assertEqual(model.SerializeSize(sopts).size(), len(data))
         self.assert_ort_model(data, x, expected)
 
+    def test_ort_flatbuffers_variadic_inputs(self) -> None:
+        x = np.array([1, 2], dtype=np.float32)
+        for op in ("Concat", "Sum", "Mean", "Min", "Max"):
+            with self.subTest(op=op):
+                model = oh.make_model(
+                    oh.make_graph(
+                        [
+                            oh.make_node(
+                                op,
+                                ["X", "W", "Z"],
+                                ["Y"],
+                                **({"axis": 0} if op == "Concat" else {}),
+                            )
+                        ],
+                        "variadic",
+                        [oh.make_tensor_value_info("X", TensorProto.FLOAT, [2])],
+                        [
+                            oh.make_tensor_value_info(
+                                "Y", TensorProto.FLOAT, [6 if op == "Concat" else 2]
+                            )
+                        ],
+                        [
+                            onh.from_array(np.array([3, 4], dtype=np.float32), name="W"),
+                            onh.from_array(np.array([5, 6], dtype=np.float32), name="Z"),
+                        ],
+                    ),
+                    opset_imports=[oh.make_opsetid("", 18)],
+                    ir_version=9,
+                )
+                options = onnxruntime.SessionOptions()
+                options.intra_op_num_threads = 1
+                reference = onnxruntime.InferenceSession(
+                    model.SerializeToString(), options, providers=["CPUExecutionProvider"]
+                ).run(None, {"X": x})[0]
+                sopts = onnxl.SerializeOptions()
+                sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
+                self.assert_ort_model(model.SerializeToString(sopts), x, reference)
+
     def test_ort_flatbuffers_serialize_to_file_descriptor(self) -> None:
         model, x, expected = _make_simple_model()
         sopts = onnxl.SerializeOptions()

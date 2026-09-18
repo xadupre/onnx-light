@@ -331,14 +331,14 @@ TEST(onnx_ort_parsing, EnforcesUtf8StringPayloadBoundaryWithoutChargingContainer
   tensor->set_data_type(TensorProto::STRING);
   tensor->add_dims(2);
   tensor->add_string_data("abc");
-  tensor->add_string_data("caf\xc3\xa9");
+  tensor->add_string_data("abc\xc3\xa9");
   const auto bytes = SerializeModelToOrtFlatbuffers(model, {});
   ParseOptions options;
   options.max_tensor_size_bytes = 8;
   const auto parsed = ReadOrt(bytes, options);
   ASSERT_EQ(parsed.graph().initializer()[0].string_data().size(), 2u);
   EXPECT_EQ(parsed.graph().initializer()[0].string_data()[0], "abc");
-  EXPECT_EQ(parsed.graph().initializer()[0].string_data()[1], "caf\xc3\xa9");
+  EXPECT_EQ(parsed.graph().initializer()[0].string_data()[1], "abc\xc3\xa9");
   options.max_tensor_size_bytes = 7;
   EXPECT_THROW(ReadOrt(bytes, options), onnx_light_helpers::ParseLimitExceeded);
 }

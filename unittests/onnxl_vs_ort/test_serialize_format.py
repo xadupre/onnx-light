@@ -247,7 +247,7 @@ class TestSerializeFormat(ExtTestCase):
                     continue
                 with self.subTest(dtype=dtype, raw=raw):
                     if dtype == np.str_:
-                        values = np.array(["abc", "caf\u00e9"], dtype=dtype)
+                        values = np.array(["abc", "abc\u00e9"], dtype=dtype)
                     elif np.issubdtype(dtype, np.integer):
                         info = np.iinfo(dtype)
                         values = np.array([info.min, info.max], dtype=dtype)

@@ -248,7 +248,7 @@ class TestParseOrtFormat(ExtTestCase):
         self.assertEqual(before, parsed.SerializeToString())
 
     def test_string_tensor_limit(self):
-        values = np.array(["abc", "caf\u00e9"])
+        values = np.array(["abc", "abc\u00e9"])
         model = helper.make_model(
             helper.make_graph(
                 [helper.make_node("Identity", ["W"], ["Y"])],

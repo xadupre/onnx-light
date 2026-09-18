@@ -215,10 +215,10 @@ void FillGemmCalibrationInput(Tensor &input, uint64_t seed) {
       input.As<double>()[index] = value;
       break;
     case DataType::FLOAT16:
-      input.As<uint16_t>()[index] = FloatToFloat16Bits(value);
+      reinterpret_cast<uint16_t *>(input.mutable_bytes())[index] = FloatToFloat16Bits(value);
       break;
     case DataType::BFLOAT16:
-      input.As<uint16_t>()[index] = FloatToBfloat16Bits(value);
+      reinterpret_cast<uint16_t *>(input.mutable_bytes())[index] = FloatToBfloat16Bits(value);
       break;
     default:
       throw std::invalid_argument("Unsupported Gemm calibration element type.");
@@ -276,7 +276,14 @@ KernelTuningParameters CalibrateGemmAlgorithm(const KernelTuningKey &key,
   for (int64_t configuration : configurations) {
     comparison.values.push_back({configuration, 0, 0});
   }
+  uint64_t pending_memory_bytes = 0;
+  uint64_t pending_duration_ns = 0;
   const auto incomplete = [&](const char *reason) {
+    if (pending_memory_bytes != 0) {
+      reporter.RecordBenchmark(pending_memory_bytes, pending_duration_ns);
+      reporter.AddDiagnostic("Gemm resources include the incomplete case; comparison case counts "
+                             "include only fully measured cases.");
+    }
     reporter.AddDiagnostic(std::string("Gemm algorithm calibration ") + reason +
                            "; incomplete corpus kept portable configuration 0.");
     reporter.SetComparison(comparison);
@@ -317,6 +324,7 @@ KernelTuningParameters CalibrateGemmAlgorithm(const KernelTuningKey &key,
         gemm_case.trans_a ? Shape{gemm_case.k, gemm_case.m} : Shape{gemm_case.m, gemm_case.k};
     Tensor a = MakeOutputTensor(key.element_type, a_shape,
                                 static_cast<size_t>(a_elements * element_bytes), nullptr);
+    pending_memory_bytes = a_elements * element_bytes;
     FillGemmCalibrationInput(a, 5);
     if (expired()) {
       return incomplete("exhausted its time budget");
@@ -325,17 +333,20 @@ KernelTuningParameters CalibrateGemmAlgorithm(const KernelTuningKey &key,
         gemm_case.trans_b ? Shape{gemm_case.n, gemm_case.k} : Shape{gemm_case.k, gemm_case.n};
     Tensor b = MakeOutputTensor(key.element_type, b_shape,
                                 static_cast<size_t>(b_elements * element_bytes), nullptr);
+    pending_memory_bytes += b_elements * element_bytes;
     FillGemmCalibrationInput(b, 6);
     if (expired()) {
       return incomplete("exhausted its time budget");
     }
     Tensor baseline = MakeOutputTensor(key.element_type, {gemm_case.m, gemm_case.n},
                                        static_cast<size_t>(y_elements * element_bytes), nullptr);
+    pending_memory_bytes += y_elements * element_bytes;
     if (expired()) {
       return incomplete("exhausted its time budget");
     }
     Tensor candidate = MakeOutputTensor(key.element_type, {gemm_case.m, gemm_case.n},
                                         static_cast<size_t>(y_elements * element_bytes), nullptr);
+    pending_memory_bytes += y_elements * element_bytes;
     const auto run = [&](size_t index) {
       kernel(a, b, nullptr, 1.0f, 0.0f, gemm_case.trans_a, gemm_case.trans_b,
              index == 0 ? baseline : candidate);
@@ -354,6 +365,7 @@ KernelTuningParameters CalibrateGemmAlgorithm(const KernelTuningKey &key,
       if (expired()) {
         return incomplete("exhausted its time budget");
       }
+      pending_memory_bytes = memory_bytes;
       run(index);
       check(index);
       if (options.profiling_capacity != 0) {
@@ -383,6 +395,7 @@ KernelTuningParameters CalibrateGemmAlgorithm(const KernelTuningKey &key,
                                       .count());
         samples[index][repetition] = elapsed;
         measured[index] += elapsed;
+        pending_duration_ns += elapsed;
         check(index);
       }
     }
@@ -401,6 +414,8 @@ KernelTuningParameters CalibrateGemmAlgorithm(const KernelTuningKey &key,
                           static_cast<double>(median) > static_cast<double>(baseline_ns) * 1.10;
       reporter.RecordBenchmark(memory_bytes, measured[index]);
     }
+    pending_memory_bytes = 0;
+    pending_duration_ns = 0;
   }
   size_t best = 0;
   for (size_t index = 1; index < configurations.size(); ++index) {

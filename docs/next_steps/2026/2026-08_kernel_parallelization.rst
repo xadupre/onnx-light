@@ -288,6 +288,43 @@ ranking against an ARM64 report once one is available. A C++ test
 ``CalibrateGemm`` through ``CalibrateRegisteredKernels`` and asserts the
 published candidate validates against the registered schema.
 
+Portable Gemm configuration experiment
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``bench_gemm_calibration`` measures configurations 0--6 separately for FLOAT,
+DOUBLE, FLOAT16 and BFLOAT16. Configuration 0 is the unchanged portable baseline;
+the remaining configurations vary the M, N or K tile, dynamic B packing, or a
+combined smaller tile. The schema definitions and explicit calibration command
+are documented in :doc:`../../howto/tune_kernel_thresholds`.
+The comparison uses ten deterministic workloads (including a 256-cube and a
+513-element reduction), both transpose orientations, seven individual timing
+samples, and serial, two-participant and four-participant session executors.
+Every candidate is checked bit-for-bit against the portable output before
+measurement. The broader benchmark corpus is not the nine-case calibration
+corpus, so it also provides workload checks outside the selection search.
+
+Reproduce the native measurements and cross-process cache checks with:
+
+.. code-block:: bash
+
+    cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+        -DONNX_LIGHT_BUILD_PYTHON=OFF -DONNX_LIGHT_BUILD_BENCHMARKS=ON
+    cmake --build build --target bench_gemm_calibration -j4
+    revision=$(git rev-parse HEAD)
+    build/bench_gemm_calibration measure 2 "$revision" > gemm-t2.csv
+    build/bench_gemm_calibration calibrate 2 "$revision" /tmp/gemm-t2.cache
+    build/bench_gemm_calibration reload 2 "$revision" /tmp/gemm-t2.cache
+    build/bench_gemm_calibration incompatible 2 "$revision" /tmp/gemm-t2.cache
+
+Each invocation is a fresh process. The calibration invocation uses a 2000 ms
+cooperative time budget and an 8 MiB tensor/scratch budget per dtype. The
+``incompatible`` invocation deliberately changes the processor descriptor and
+must neither load nor select any saved Gemm profile. Native regressions also
+exercise mismatched executor participant counts, ABI 1 rejection diagnostics,
+all configuration/dtype combinations, transpose/bias/tile-tail correctness and
+budget/failure paths. No measurements change portable defaults; ARM64 comparison
+and default promotion remain separate acceptance tasks.
+
 Cross-machine calibration and default promotion
 +++++++++++++++++++++++++++++++++++++++++++++++
 

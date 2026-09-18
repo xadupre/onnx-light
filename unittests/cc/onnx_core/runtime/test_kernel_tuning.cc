@@ -9,7 +9,6 @@
 #include "onnx_core/runtime/tuning/kernel_tuning.h"
 #include "onnx_core/runtime/tuning/kernel_tuning_cache.h"
 #include "onnx_core/runtime/tuning/runtime_parameters.h"
-#include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
 #include <gtest/gtest.h>
 
@@ -1040,12 +1039,11 @@ TEST(KernelTuningCache, AllowsSameKeyForDifferentExecutionDescriptors) {
 }
 
 TEST(KernelTuningCache, GemmRejectsLegacyAbiAndRequiresExactExecutorDescriptor) {
-  const onnx_kernels::kernel::Gemm gemm{KernelContext{backend_test::DefaultOpset(13)}};
-  const auto key = gemm.TuningKey(static_cast<int32_t>(DataType::FLOAT));
-  ASSERT_EQ(key.tuning_abi, 2u);
-  const auto schema = GetKernelTuningRegistry().FindSchema(key);
-  ASSERT_NE(schema, nullptr);
-  auto current = schema->portable_defaults();
+  const KernelTuningKey key{"gemm_abi_cache_test", "Gemm",       "portable",
+                            DataType::FLOAT,       Device::kCPU, 2};
+  KernelTuningParameters current{
+      key, {{"parallel.minimum_tasks", int64_t{2}}, {"algorithm.configuration", int64_t{0}}}};
+  RegisterKernelTuningSchema(KernelTuningSchema(current));
   current.values["algorithm.configuration"] = int64_t{6};
   auto legacy = current;
   legacy.key.tuning_abi = 1;
@@ -1071,6 +1069,7 @@ TEST(KernelTuningCache, GemmRejectsLegacyAbiAndRequiresExactExecutorDescriptor) 
   ASSERT_EQ(rejected.incompatible.size(), 1u);
   EXPECT_EQ(rejected.incompatible.front(), key);
   EXPECT_TRUE(rejected.invalid.empty());
+  EXPECT_FALSE(GetKernelTuningRegistry().Snapshot().HasPublishedProfile(key, mismatch));
   EXPECT_TRUE(std::any_of(
       rejected.diagnostics.begin(), rejected.diagnostics.end(), [](const auto &message) {
         return message.find("incompatible processor or execution descriptor") != std::string::npos;

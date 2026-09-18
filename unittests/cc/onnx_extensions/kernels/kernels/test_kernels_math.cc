@@ -3068,6 +3068,35 @@ TEST(KernelClass, GemmAlgorithmConfigurationsPreserveBitsAcrossDtypesAndExecutor
   }
 }
 
+TEST(KernelClass, GemmAlgorithmConfigurationsRejectInvalidOutputs) {
+  const KernelContext context{DefaultOpset(13)};
+  for (const auto dtype :
+       {DataType::FLOAT, DataType::DOUBLE, DataType::FLOAT16, DataType::BFLOAT16}) {
+    SCOPED_TRACE(static_cast<int32_t>(dtype));
+    const Tensor input = dtype == DataType::DOUBLE  ? Tensor::FromDouble("", {1, 1}, {1})
+                         : dtype == DataType::FLOAT ? Tensor::FromFloat("", {1, 1}, {1})
+                                                    : MakeHalfTensor(dtype, {1, 1}, {1});
+    Gemm candidate{context};
+    const auto schema =
+        core::runtime::GetKernelTuningRegistry().FindSchema(candidate.TuningKey(dtype));
+    ASSERT_NE(schema, nullptr);
+    auto parameters = schema->portable_defaults();
+    for (int64_t configuration = 0; configuration < 7; ++configuration) {
+      SCOPED_TRACE(configuration);
+      parameters.values["algorithm.configuration"] = configuration;
+      candidate.Configure(parameters);
+      Tensor wrong_shape("", dtype, {2, 1}, std::vector<uint8_t>(2 * input.size_bytes(), 0x5a));
+      Tensor wrong_dtype = Tensor::FromInt64("", {1, 1}, {123});
+      EXPECT_THROW(candidate(input, input, nullptr, 1, 0, 0, 0, wrong_shape),
+                   std::invalid_argument);
+      EXPECT_THROW(candidate(input, input, nullptr, 1, 0, 0, 0, wrong_dtype),
+                   std::invalid_argument);
+      EXPECT_EQ(wrong_shape.bytes()[0], 0x5a);
+      EXPECT_EQ(wrong_dtype.AsInt64()[0], 123);
+    }
+  }
+}
+
 TEST(KernelClass, GemmParallelTilesPreserveSerialReductionBits) {
   const KernelContext ctx{DefaultOpset(13)};
   Gemm serial_kernel{ctx};

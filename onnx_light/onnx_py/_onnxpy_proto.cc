@@ -1,14 +1,17 @@
+#include "_onnxpy_dlpack.h"
 #include "_onnxpy_node_list.h"
 #include "_onnxpyprotoop.h"
 #include "onnx.h"
 #include "onnx_core/graph/graph_manipulations.h"
 #include "onnx_crypt.h"
 #include "onnx_helper.h"
+#include "onnx_lib/common/platform_helpers.h"
 #include "onnx_lib/onnx-data.pb.h"
 #include "onnx_verify.h"
 #include <algorithm>
 #include <cctype>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <nanobind/make_iterator.h>
 #include <nanobind/nanobind.h>
@@ -28,6 +31,69 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace {
 constexpr size_t MAX_SHORT_REPR_LENGTH = 60;
+
+struct TensorProtoDLPackOwner {
+  nb::object proto;
+  std::shared_ptr<void> buffer;
+};
+
+nb::object MakeTensorProtoDLPack(nb::handle self) {
+  const auto &tensor = nb::cast<const TensorProto &>(self);
+  const auto dtype = DLPackDtypeFromOnnx(tensor.data_type(), "TensorProto");
+  EXT_ENFORCE_INVALID(!tensor.has_segment(),
+                      "TensorProto.__dlpack__: segmented tensors are not supported.");
+  EXT_ENFORCE_INVALID(tensor.has_raw_data(),
+                      "TensorProto.__dlpack__: requires raw_data; typed-field-only payloads and "
+                      "unloaded external data are not supported.");
+  const auto &raw = tensor.ref_raw_data();
+  const size_t itemsize = dtype.bits / 8;
+  if (itemsize > 1 && !is_processor_little_endian()) {
+    throw nb::buffer_error("TensorProto.__dlpack__: multi-byte raw_data requires a little-endian "
+                           "host; byte swapping would require a copy.");
+  }
+  // nanobind caps ndarray rank at 128 and forms signed 64-bit contiguous strides.
+  EXT_ENFORCE_INVALID(tensor.dims_size() <= 128,
+                      "TensorProto.__dlpack__: rank must not exceed 128.");
+  std::vector<size_t> shape;
+  shape.reserve(tensor.dims_size());
+  const uint64_t limit =
+      std::min<uint64_t>(std::numeric_limits<size_t>::max(), std::numeric_limits<int64_t>::max());
+  uint64_t elements = 1;
+  bool empty = false;
+  for (int64_t dim : tensor.ref_dims()) {
+    EXT_ENFORCE_INVALID(dim >= 0, "TensorProto.__dlpack__: dimensions must be non-negative.");
+    const uint64_t extent = std::max<uint64_t>(static_cast<uint64_t>(dim), 1);
+    EXT_ENFORCE_INVALID(extent <= limit / elements,
+                        "TensorProto.__dlpack__: shape or strides overflow.");
+    elements *= extent;
+    empty |= dim == 0;
+    shape.push_back(static_cast<size_t>(dim));
+  }
+  EXT_ENFORCE_INVALID(elements <= limit / itemsize,
+                      "TensorProto.__dlpack__: payload byte count overflows.");
+  const size_t expected = empty ? 0 : static_cast<size_t>(elements * itemsize);
+  EXT_ENFORCE_INVALID(raw.size() == expected,
+                      "TensorProto.__dlpack__: raw_data size does not match shape and data type.");
+  const size_t alignment =
+      dtype.code == static_cast<uint8_t>(nb::dlpack::dtype_code::Complex) ? itemsize / 2 : itemsize;
+  if (expected && reinterpret_cast<uintptr_t>(raw.data()) % alignment != 0) {
+    throw nb::buffer_error("TensorProto.__dlpack__: raw_data is not aligned to its element "
+                           "(or complex component) width; alignment would require a copy.");
+  }
+
+  // Retain the token independently: a borrowed span may be cleared or replaced
+  // while a consumer still holds the old buffer. Never copy the ByteSpan itself.
+  auto state = std::make_unique<TensorProtoDLPackOwner>(
+      TensorProtoDLPackOwner{nb::borrow<nb::object>(self), raw.owner()});
+  nb::capsule owner(state.get(), [](void *ptr) noexcept {
+    nb::gil_scoped_acquire gil;
+    delete static_cast<TensorProtoDLPackOwner *>(ptr);
+  });
+  state.release();
+  nb::ndarray<nb::ro> array(raw.data(), shape.size(), shape.data(), owner, nullptr, dtype,
+                            nb::device::cpu::value, 0);
+  return nb::cast(std::move(array));
+}
 
 // Adapts a Python callable to ParseOptions::raw_data_callback. The callable is invoked as
 // ``fn(tensor, graph)`` for every parsed TensorProto that has raw_data and must return either
@@ -2075,6 +2141,36 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
             memcpy(self.raw_data_.data(), ptr, raw.size());
           },
           TensorProto::DOC_raw_data)
+      .def(
+          "__dlpack__",
+          [](nb::handle self, nb::object stream, std::optional<std::pair<int, int>> /*max_version*/,
+             std::optional<std::pair<int, int>> dl_device, std::optional<bool> copy) {
+            if (!stream.is_none()) {
+              throw nb::value_error("TensorProto.__dlpack__: CPU stream must be None.");
+            }
+            if (dl_device && *dl_device != std::make_pair(1, 0)) {
+              throw nb::buffer_error(
+                  "TensorProto.__dlpack__: only CPU device (1, 0) is supported.");
+            }
+            if (copy.value_or(false)) {
+              throw nb::buffer_error("TensorProto.__dlpack__: copy=True is not supported.");
+            }
+            return MakeTensorProtoDLPack(self);
+          },
+          nb::arg("stream") = nb::none(), nb::kw_only(), nb::arg("max_version") = nb::none(),
+          nb::arg("dl_device") = nb::none(), nb::arg("copy") = nb::none(),
+          "Returns a zero-copy CPU DLPack capsule over dense raw_data, retaining the proto and "
+          "its borrowed owner. Requires native little-endian, element-aligned whole-byte data. "
+          "Does not load, convert, or copy payloads. Consumers must not write to the buffer. "
+          "Do not clear, resize, replace, or reparse owned source storage while a view exists. "
+          "Always returns a legacy capsule, including when max_version is supplied.")
+      .def(
+          "__dlpack_device__",
+          [](const TensorProto &self) {
+            DLPackDtypeFromOnnx(self.data_type(), "TensorProto");
+            return std::make_pair(1, 0);
+          },
+          "Returns the DLPack CPU device (1, 0), rejecting unsupported element types.")
       .def_prop_ro(
           "size",
           [](const TensorProto &self) -> int64_t {

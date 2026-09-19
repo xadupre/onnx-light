@@ -37,6 +37,11 @@ ShapesContext InferSubgraph(ShapesContext &parent_ctx, const std::string &branch
                             const GraphProto &subgraph) {
   ShapesContext local = parent_ctx;
   local.set_current_subgraph(local.current_node_index(), branch_name);
+  for (const auto &input : subgraph.input()) {
+    if (input.has_type() && input.type().value_case() != TypeProto::VALUE_NOT_SET) {
+      local.SetType(input.name(), input.type());
+    }
+  }
   for (int i = 0; i < static_cast<int>(subgraph.initializer().size()); ++i) {
     const TensorProto &init = subgraph.initializer()[i];
     const std::string name = init.name();
@@ -49,7 +54,7 @@ ShapesContext InferSubgraph(ShapesContext &parent_ctx, const std::string &branch
     }
   }
   const size_t events_before = local.Events().size();
-  local.ComputeShapes(subgraph.node());
+  local.ComputeShapeGraph(subgraph);
   if (parent_ctx.events_enabled()) {
     const auto &local_events = local.Events();
     for (size_t i = events_before; i < local_events.size(); ++i) {
@@ -150,6 +155,15 @@ void ComputeShapeIf(ShapesContext &ctx, const NodeProto &node) {
     if (out_name.empty()) {
       continue; // Optional output not produced.
     }
+    const std::string then_name = then_branch.output()[i].name();
+    const std::string else_name = else_branch.output()[i].name();
+    then_ctx.CheckStructuredCompatibility(then_name, else_ctx, else_name);
+    if (then_ctx.HasEncodedValue(then_name) ||
+        (then_ctx.HasType(then_name) &&
+         core::shapes::HasStructuredType(then_ctx.GetType(then_name)))) {
+      ctx.CopyValueFrom(out_name, then_ctx, then_name);
+      continue;
+    }
     const SymTensor &then_t = GetSubgraphOutput(then_ctx, then_branch, "then_branch", i, n_outputs);
     const SymTensor &else_t = GetSubgraphOutput(else_ctx, else_branch, "else_branch", i, n_outputs);
     ctx.Set(out_name, MergeBranchOutputs(ctx, then_t, else_t, out_name));
@@ -226,13 +240,14 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
     const std::string v_initial_name = node.input(2 + i);
     EXT_ENFORCE_INVALID(!v_initial_name.empty(), "ComputeShapeLoop: 'v_initial' input #",
                         std::to_string(i), " has an empty name.");
-    EXT_ENFORCE_INVALID(local.Has(v_initial_name), "ComputeShapeLoop: 'v_initial' input '",
-                        v_initial_name, "' is missing from the inferred context.");
-    local.Set(body.input()[2 + i].name(), SymTensor(local.Get(v_initial_name)));
+    EXT_ENFORCE_INVALID(local.Has(v_initial_name) || local.HasType(v_initial_name),
+                        "ComputeShapeLoop: 'v_initial' input '", v_initial_name,
+                        "' is missing from the inferred context.");
+    local.CopyValueFrom(body.input()[2 + i].name(), ctx, v_initial_name);
   }
 
   const size_t events_before = local.Events().size();
-  local.ComputeShapes(body.node());
+  local.ComputeShapeGraph(body);
   if (ctx.events_enabled()) {
     const auto &local_events = local.Events();
     for (size_t i = events_before; i < local_events.size(); ++i) {
@@ -243,7 +258,8 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
   // Validate that every body output is known in the local context.
   for (int i = 0; i < static_cast<int>(body.output().size()); ++i) {
     const std::string body_out = body.output()[i].name();
-    EXT_ENFORCE_INVALID(local.Has(body_out), "ComputeShapeLoop: body output '", body_out,
+    EXT_ENFORCE_INVALID(local.Has(body_out) || local.HasType(body_out),
+                        "ComputeShapeLoop: body output '", body_out,
                         "' is missing from the inferred context.");
   }
 
@@ -255,6 +271,14 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
   for (int i = 0; i < n_carried; ++i) {
     const std::string node_out = node.output(i);
     if (node_out.empty()) {
+      continue;
+    }
+    const std::string initial_name = node.input(2 + i);
+    const std::string body_name = body.output()[1 + i].name();
+    ctx.CheckStructuredCompatibility(initial_name, local, body_name);
+    if (ctx.HasEncodedValue(initial_name) ||
+        (ctx.HasType(initial_name) && core::shapes::HasStructuredType(ctx.GetType(initial_name)))) {
+      ctx.CopyValueFrom(node_out, local, body_name);
       continue;
     }
     const SymTensor &v_initial = ctx.Get(node.input(2 + i));
@@ -293,7 +317,13 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
     if (node_out.empty()) {
       continue;
     }
-    const SymTensor &scan_out = local.Get(body.output()[1 + n_carried + k].name());
+    const std::string scan_name = body.output()[1 + n_carried + k].name();
+    EXT_ENFORCE_INVALID(
+        !local.HasEncodedValue(scan_name) &&
+            (!local.HasType(scan_name) ||
+             !core::shapes::HasStructuredType(local.GetType(scan_name))),
+        "ComputeShapeLoop: stacking structured/encoded scan outputs is unsupported.");
+    const SymTensor &scan_out = local.Get(scan_name);
     SymShape stacked;
     stacked.PushBack(trip_dim);
     for (std::size_t d = 0; d < scan_out.Shape().Rank(); ++d) {
@@ -334,8 +364,16 @@ int64_t NormalizeAxis(int64_t axis, std::size_t rank, const char *attr_name) {
 
 void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Scan", "ComputeShapeScan");
+  for (const auto &name : node.input()) {
+    EXT_ENFORCE_INVALID(
+        !ctx.HasEncodedValue(name) &&
+            (!ctx.HasType(name) || !core::shapes::HasStructuredType(ctx.GetType(name))),
+        "ComputeShapeScan: structured/encoded inputs are unsupported.");
+  }
 
   const GraphProto &body = FindGraphAttribute(node, "body", "ComputeShapeScan");
+  EXT_ENFORCE_INVALID(body.ref_encoded_initializer().empty(),
+                      "ComputeShapeScan: encoded body initializers are unsupported.");
   const int64_t num_scan_inputs64 = RequireIntAttribute(node, "num_scan_inputs");
   EXT_ENFORCE_INVALID(num_scan_inputs64 > 0,
                       "ComputeShapeScan: 'num_scan_inputs' must be strictly positive, got ",
@@ -498,7 +536,7 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
   }
 
   const size_t events_before_scan = local.Events().size();
-  local.ComputeShapes(body.node());
+  local.ComputeShapeGraph(body);
   if (ctx.events_enabled()) {
     const auto &local_events = local.Events();
     for (size_t i = events_before_scan; i < local_events.size(); ++i) {

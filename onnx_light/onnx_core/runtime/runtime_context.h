@@ -10,6 +10,7 @@
 #include "onnx_core/runtime/memory/simple_map.h"
 #include "onnx_core/runtime/memory/simple_sequence.h"
 #include "onnx_core/runtime/memory/simple_tensor.h"
+#include "onnx_core/runtime/runtime_value.h"
 #include "onnx_core/runtime/tuning/runtime_parameters.h"
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_light_helpers.h"
@@ -532,6 +533,10 @@ public:
   TensorMap &tensors() noexcept { return tensors_; }
   const TensorMap &tensors() const noexcept { return tensors_; }
 
+  /** Returns the structured and encoded graph edges used by custom kernels. */
+  RuntimeValueMap &values() noexcept { return values_; }
+  const RuntimeValueMap &values() const noexcept { return values_; }
+
   /// Kernel construction context (opset + allocator).
   KernelContext &kernel_ctx() noexcept { return kernel_ctx_; }
   const KernelContext &kernel_ctx() const noexcept { return kernel_ctx_; }
@@ -969,6 +974,7 @@ private:
   void StampAllocatorMemory(RuntimeEvent &ev) const noexcept;
 
   TensorMap tensors_;
+  RuntimeValueMap values_;
   KernelContext kernel_ctx_;
   FunctionMap functions_;
   CustomKernelMap custom_kernels_;

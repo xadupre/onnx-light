@@ -353,7 +353,7 @@ bool RuntimeSession::ProducesDeclaredOutput(const NodeProto &node) const {
 void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContext &rt) const {
   for (int i = 0; i < node.output_size(); ++i) {
     const std::string &name = node.output(i);
-    if (name.empty() || !rt.Has(name)) {
+    if (name.empty()) {
       continue;
     }
     // Resolve the allocation role of this individual output slot rather than of
@@ -369,6 +369,31 @@ void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContex
     const bool declared_output = output_names_set_.find(name) != output_names_set_.end();
     const bool slot_to_io = session_io_allocator_ != nullptr && declared_output;
     RawBufferAllocator *expected = slot_to_io ? session_io_allocator_ : session_allocator_;
+    auto value = rt.values().find(name);
+    if (value != rt.values().end()) {
+      const auto migrate = [&](auto &&self, RuntimeValue &item, size_t depth) -> void {
+        EXT_ENFORCE_INVALID(depth <= RuntimeValue::kMaxDepth,
+                            "RuntimeSession: maximum structured output depth exceeded.");
+        if (item.kind == RuntimeValue::Kind::kTensor && expected != nullptr) {
+          Tensor &tensor = item.tensor;
+          if (tensor.size_bytes() > 0 && tensor.data_type != DataType::STRING &&
+              (!tensor.has_allocation() || tensor.allocation_owner() != expected)) {
+            EXT_ENFORCE_INVALID(tensor.bytes() != nullptr,
+                                "RuntimeSession: structured output has a null data pointer.");
+            Tensor owned =
+                MakeOutputTensor(tensor.data_type, tensor.shape, tensor.size_bytes(), expected);
+            std::memcpy(owned.mutable_bytes(), tensor.bytes(), tensor.size_bytes());
+            tensor = std::move(owned);
+          }
+        } else if (item.kind == RuntimeValue::Kind::kStruct) {
+          for (auto &[field, child] : item.fields)
+            self(self, child, depth + 1);
+        }
+      };
+      migrate(migrate, value->second, 0);
+    }
+    if (!rt.Has(name))
+      continue;
     if (expected == nullptr) {
       continue;
     }
@@ -472,7 +497,8 @@ void RuntimeSession::Run(RuntimeContext &rt) {
   // one as a clear error before executing any kernel rather than failing
   // partway through the plan.
   for (const std::string &name : required_inputs_) {
-    EXT_ENFORCE_INVALID(rt.Has(name) || rt.HasSequence(name) || rt.HasMap(name),
+    EXT_ENFORCE_INVALID(rt.Has(name) || rt.HasSequence(name) || rt.HasMap(name) ||
+                            rt.values().count(name) != 0,
                         "RuntimeSession: required input '", name,
                         "' is not defined in the RuntimeContext before Run().");
   }
@@ -632,6 +658,21 @@ void RuntimeSession::Run(RuntimeContext &rt) {
 
 void RuntimeSession::MaterializeBorrowedOutputs(RuntimeContext &rt) const {
   for (const std::string &name : output_names_) {
+    auto value = rt.values().find(name);
+    if (value != rt.values().end()) {
+      const auto detach = [&](auto &&self, RuntimeValue &item, size_t depth) -> void {
+        EXT_ENFORCE_INVALID(depth <= RuntimeValue::kMaxDepth,
+                            "RuntimeSession: maximum structured output depth exceeded.");
+        if (item.kind == RuntimeValue::Kind::kTensor && item.tensor.is_borrowed())
+          item.tensor = item.tensor.ToOwned();
+        else if (item.kind == RuntimeValue::Kind::kEncoded)
+          item = item.DeepCopy();
+        else if (item.kind == RuntimeValue::Kind::kStruct)
+          for (auto &[field, child] : item.fields)
+            self(self, child, depth + 1);
+      };
+      detach(detach, value->second, 0);
+    }
     if (!rt.Has(name)) {
       continue;
     }

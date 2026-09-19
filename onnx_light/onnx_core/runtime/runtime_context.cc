@@ -341,9 +341,10 @@ void RuntimeContext::Put(const std::string &name, Tensor tensor, RuntimeEventKin
 }
 
 bool RuntimeContext::Remove(const std::string &name) {
+  const bool removed_value = values_.erase(name) != 0;
   auto it = tensors_.find(name);
   if (it == tensors_.end()) {
-    return false;
+    return removed_value;
   }
   tensors_.erase(it);
   if (events_enabled_) {
@@ -428,6 +429,7 @@ RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name)
   child.custom_kernels() = custom_kernels_;
   child.tensors() = tensors_;
   child.sequences() = sequences_;
+  child.values() = values_;
   child.set_cpu_executor(cpu_executor_);
   child.set_current_subgraph(current_node_index_, attr_name);
   return child;

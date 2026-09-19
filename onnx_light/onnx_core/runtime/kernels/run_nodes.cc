@@ -279,6 +279,8 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt, SubgraphSession &then_
     }
     if (child.HasSequence(out_name)) {
       rt.PutSequence(caller_name, child.GetSequence(out_name));
+    } else if (child.values().count(out_name) != 0) {
+      rt.values().insert_or_assign(caller_name, child.values().at(out_name).DeepCopy());
     } else {
       auto it = child.tensors().find(out_name);
       EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: If: subgraph output '", out_name,
@@ -849,11 +851,16 @@ public:
 
     RuntimeContext child = rt.MakeFunctionContext();
 
-    // Bind formal function inputs (borrow, no deep-copy).
+    // Bind formal tensor inputs by borrowing; structured inputs own recursive copies.
     for (size_t i = 0; i < static_cast<std::size_t>(func_.input_size()); ++i) {
       const std::string caller_name = node_->input(i);
       const std::string param_name = func_.input(i);
       if (caller_name.empty() || param_name.empty()) {
+        continue;
+      }
+      auto value = rt.values().find(caller_name);
+      if (value != rt.values().end()) {
+        child.values().emplace(param_name, value->second.DeepCopy());
         continue;
       }
       auto it = rt.tensors().find(caller_name);
@@ -874,11 +881,16 @@ public:
     }
     session_->Run(child);
 
-    // Propagate formal outputs back to the caller's tensor map.
+    // Propagate formal outputs back to the caller's value maps.
     for (size_t i = 0; i < static_cast<std::size_t>(func_.output_size()); ++i) {
       const std::string caller_name = node_->output(i);
       const std::string param_name = func_.output(i);
       if (caller_name.empty()) {
+        continue;
+      }
+      auto value = child.values().find(param_name);
+      if (value != child.values().end()) {
+        rt.values().insert_or_assign(caller_name, value->second.DeepCopy());
         continue;
       }
       auto it = child.tensors().find(param_name);

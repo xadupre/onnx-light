@@ -813,7 +813,7 @@ export boundaries.
        data: unsupported structured constructs are rejected explicitly.
      - PR02
    * - PR04
-     - State from model input/output feedback
+     - State from model input/output feedback (**done**)
      - Build state from selected input/output pairs and initial values,
        inferring types from the model. Repeated calls match a manual
        stateless feedback loop; verify initialization, reset and
@@ -845,6 +845,10 @@ types; basic feedback state does not depend on quantization format or
 paging. PR06 is optional and does not block PR07. Later work extends the
 feedback contract without a second state system: snapshots, alias
 annotations and mutation scheduling stay outside this plan.
+
+The implemented PR04 API is :cpp:class:`onnx_light::core::runtime::FeedbackState`.
+See :ref:`l-howto-persistent-feedback` for native and Python examples,
+ownership rules, cancellation and the supported runtime value kinds.
 
 Ownership and acceptance
 ++++++++++++++++++++++++

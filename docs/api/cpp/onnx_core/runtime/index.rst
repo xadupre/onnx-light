@@ -36,6 +36,8 @@ a dependency from ``onnx_core`` back onto ``onnx_kernels``.
     runtime_parameters
     run_nodes
     runtime_session
+    feedback_state
+    runtime_value
     kernel_dispatch_table
     cpu_executor
     cpu_execution_policy

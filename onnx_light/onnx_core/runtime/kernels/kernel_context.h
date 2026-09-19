@@ -15,6 +15,7 @@
 
 #include <cstdint>
 #include <string>
+#include <unordered_set>
 #include <utility>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -32,6 +33,7 @@ using ::onnx_light::core::runtime::RawBufferAllocator;
 // reference, so a forward declaration is sufficient and avoids a circular
 // include (``runtime_context.h`` includes this header).
 class RuntimeContext;
+class PreparedExecutionState;
 struct KernelTuningKey;
 struct KernelTuningParameters;
 
@@ -155,6 +157,18 @@ public:
    * kernel and before its first :cpp:func:`Run`.
    */
   virtual void Configure(const KernelTuningParameters &parameters);
+
+  /// Returns whether this node consumes an immutable input it can prepare.
+  virtual bool HasPreparations(const std::unordered_set<std::string> &immutable_inputs) const;
+
+  /**
+   * Prepares immutable model inputs owned by the enclosing session.
+   *
+   * The default does nothing. Kernels override this hook when they can transform
+   * constant initializers into a session-owned execution format.
+   */
+  virtual void Prepare(RuntimeContext &rt, const std::unordered_set<std::string> &immutable_inputs,
+                       PreparedExecutionState &state);
 
 protected:
   KernelContext ctx_;

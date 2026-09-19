@@ -241,14 +241,16 @@ struct PreparedGemmB::State {
 
   PreparedExecutionState *execution = nullptr;
   PreparedObjectRequest request;
-  int32_t data_type = DataType::UNDEFINED;
+  int32_t source_data_type = DataType::UNDEFINED;
+  int32_t packed_data_type = DataType::UNDEFINED;
   Shape shape;
   int64_t trans_b = 0;
 };
 
 bool PreparedGemmB::IsReady() const {
   return state_ != nullptr && state_->request.completion.IsReady() &&
-         state_->request.completion.status() == TaskStatus::kSucceeded;
+         state_->request.completion.status() == TaskStatus::kSucceeded &&
+         state_->execution->objects().Find(state_->request.key).has_value();
 }
 
 Gemm::Gemm(const KernelContext &ctx) : KernelBase(ctx) {}
@@ -275,35 +277,34 @@ PreparedGemmB Gemm::PrepareConstantB(const Tensor &b, int64_t transB,
                                      PreparedExecutionState &state) const {
   EXT_ENFORCE_INVALID(b.shape.size() == 2, kGemmName, " constant B must have rank 2.");
   EXT_ENFORCE_INVALID(transB == 0 || transB == 1, kGemmName, " transB must be 0 or 1.");
-  EXT_ENFORCE_INVALID(b.data_type == DataType::FLOAT || b.data_type == DataType::DOUBLE, kGemmName,
-                      " prepared constant B only supports FLOAT and DOUBLE.");
+  EXT_ENFORCE_INVALID(tuning::IsSupportedElementType(b.data_type, kSupportedElementTypes),
+                      kGemmName,
+                      " prepared constant B only supports FLOAT, DOUBLE, FLOAT16 and BFLOAT16.");
 
   uint64_t digest = 14695981039346656037ULL;
   for (const uint8_t byte : std::span<const uint8_t>(b.bytes(), b.size_bytes())) {
     digest = (digest ^ byte) * 1099511628211ULL;
   }
   std::ostringstream key;
-  key << "Gemm:B:" << b.name << ':' << b.data_type << ':' << b.shape[0] << 'x' << b.shape[1]
-      << ":transB=" << transB << ":digest=" << digest;
+  key << "Gemm:B:column-major-k-v1:" << b.name << ':' << b.data_type << ':' << b.shape[0] << 'x'
+      << b.shape[1] << ":transB=" << transB << ":digest=" << digest;
   PreparedObjectRequirement requirement{PreparedKey{key.str()},
                                         b.name.empty() ? std::string{"constant B"} : b.name};
   std::optional<PreparedObjectRequest> request;
 
   if (!state.objects().Find(requirement.key).has_value()) {
-    AllocationHandle source(&state.preparation_arena(),
-                            state.preparation_arena().Allocate(b.size_bytes()));
-    std::memcpy(source.buffer()->data(), b.bytes(), b.size_bytes());
-
-    AllocationHandle packed = state.AllocatePrepared(b.size_bytes());
+    const Tensor promoted = IsHalfPrecision(b.data_type) ? PromoteToFloat32(b) : Tensor{};
+    const Tensor &source = IsHalfPrecision(b.data_type) ? promoted : b;
+    AllocationHandle packed = state.AllocatePrepared(source.size_bytes());
     const int64_t k = transB ? b.shape[1] : b.shape[0];
     const int64_t n = transB ? b.shape[0] : b.shape[1];
-    const size_t element_size = b.element_size();
+    const size_t element_size = source.element_size();
     for (int64_t j = 0; j < n; ++j) {
       for (int64_t l = 0; l < k; ++l) {
         const int64_t source_index = transB ? j * k + l : l * n + j;
         const int64_t target_index = j * k + l;
         std::memcpy(packed.buffer()->data() + target_index * element_size,
-                    source.buffer()->data() + source_index * element_size, element_size);
+                    source.bytes() + source_index * element_size, element_size);
       }
     }
 
@@ -318,10 +319,25 @@ PreparedGemmB Gemm::PrepareConstantB(const Tensor &b, int64_t transB,
   }
 
   auto prepared = std::make_shared<PreparedGemmB::State>(state, std::move(*request));
-  prepared->data_type = b.data_type;
+  prepared->source_data_type = b.data_type;
+  prepared->packed_data_type = IsHalfPrecision(b.data_type) ? DataType::FLOAT : b.data_type;
   prepared->shape = b.shape;
   prepared->trans_b = transB;
   return PreparedGemmB(std::move(prepared));
+}
+
+bool Gemm::HasPreparations(const std::unordered_set<std::string> &immutable_inputs) const {
+  return node_->input_size() >= 2 &&
+         immutable_inputs.find(node_->input(1)) != immutable_inputs.end();
+}
+
+void Gemm::Prepare(RuntimeContext &rt, const std::unordered_set<std::string> &immutable_inputs,
+                   PreparedExecutionState &state) {
+  if (!HasPreparations(immutable_inputs)) {
+    return;
+  }
+  prepared_b_ = PrepareConstantB(rt.Get(node_->input(1)),
+                                 GetAttributeIntOrDefault(*node_, "transB", 0), state);
 }
 
 Tensor Gemm::operator()(const Tensor &a, const Tensor &b, const Tensor *c, float alpha, float beta,
@@ -379,13 +395,13 @@ Tensor Gemm::operator()(const Tensor &a, const Tensor &b, const Tensor *c, float
 Tensor Gemm::operator()(const Tensor &a, const PreparedGemmB &b, const Tensor *c, float alpha,
                         float beta, int64_t transA, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(b.state_ != nullptr, kGemmName, " prepared B is empty.");
-  EXT_ENFORCE_INVALID(a.data_type == b.state_->data_type, kGemmName,
+  EXT_ENFORCE_INVALID(a.data_type == b.state_->source_data_type, kGemmName,
                       " inputs A and prepared B must share the same dtype.");
   b.state_->request.completion.Wait();
   const std::optional<PreparedObjectView> view =
       b.state_->execution->objects().Find(b.state_->request.key);
   EXT_ENFORCE(view.has_value(), kGemmName, " prepared B is no longer resident.");
-  const Tensor packed = Tensor::Borrow("", b.state_->data_type, b.state_->shape,
+  const Tensor packed = Tensor::Borrow("", b.state_->packed_data_type, b.state_->shape,
                                        view->buffer->data(), view->buffer->size());
   const int64_t m = transA ? a.shape[1] : a.shape[0];
   const int64_t a_k = transA ? a.shape[0] : a.shape[1];
@@ -415,8 +431,28 @@ Tensor Gemm::operator()(const Tensor &a, const PreparedGemmB &b, const Tensor *c
                         reinterpret_cast<const double *>(view->buffer->data()));
     return output;
   }
+  case DataType::FLOAT16:
+  case DataType::BFLOAT16: {
+    const Tensor a_f = PromoteToFloat32(a, rt, tuning_.conversion_parallel_minimum_elements);
+    Tensor c_f;
+    const Tensor *c_ptr = nullptr;
+    if (c != nullptr) {
+      EXT_ENFORCE_INVALID(c->data_type == a.data_type, kGemmName,
+                          " input C must share dtype with A and prepared B.");
+      c_f = PromoteToFloat32(*c, rt, tuning_.conversion_parallel_minimum_elements);
+      c_ptr = &c_f;
+    }
+    Tensor y = rt ? rt->MakeTemporaryTensor(DataType::FLOAT, shape,
+                                            static_cast<size_t>(m * n) * sizeof(float))
+                  : MakeOutputTensor(DataType::FLOAT, shape,
+                                     static_cast<size_t>(m * n) * sizeof(float), nullptr);
+    GemmCompute<float>(a_f, packed, c_ptr, alpha, beta, transA, b.state_->trans_b, tuning_,
+                       y.As<float>(), reinterpret_cast<const float *>(view->buffer->data()));
+    return DemoteFromFloat32(y, a.data_type, rt, tuning_.conversion_parallel_minimum_elements);
+  }
   default:
-    EXT_THROW_INVALID(kGemmName, ": prepared B requires FLOAT or DOUBLE input A.");
+    EXT_THROW_INVALID(kGemmName,
+                      ": prepared B requires FLOAT, DOUBLE, FLOAT16 or BFLOAT16 input A.");
   }
 }
 
@@ -457,7 +493,11 @@ void Gemm::Run(RuntimeContext &rt) {
   const float beta = GetAttributeFloatOrDefault(node, "beta", 1.0f);
   const int64_t transA = GetAttributeIntOrDefault(node, "transA", 0);
   const int64_t transB = GetAttributeIntOrDefault(node, "transB", 0);
-  SetOutput(node, 0, (*this)(a, b, c, alpha, beta, transA, transB, &rt), rt);
+  if (prepared_b_.has_value() && prepared_b_->IsReady()) {
+    SetOutput(node, 0, (*this)(a, *prepared_b_, c, alpha, beta, transA, &rt), rt);
+  } else {
+    SetOutput(node, 0, (*this)(a, b, c, alpha, beta, transA, transB, &rt), rt);
+  }
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

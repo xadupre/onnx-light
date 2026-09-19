@@ -2758,6 +2758,22 @@ TEST(KernelClass, GemmPreparedConstantBMatchesReferenceForBothTransposeModes) {
   }
 }
 
+TEST(KernelClass, GemmPreparedHalfConstantBStoresPromotedPackedValues) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Gemm gemm_kernel{ctx};
+  core::runtime::PreparedExecutionState state(1, 1);
+  const Tensor a = MakeHalfTensor(DataType::FLOAT16, {1, 3}, {1, 2, 3});
+  const Tensor b = MakeHalfTensor(DataType::FLOAT16, {3, 2}, {1, 2, 3, 4, 5, 6});
+
+  const auto prepared = gemm_kernel.PrepareConstantB(b, /*transB=*/0, state);
+
+  ASSERT_TRUE(prepared.IsReady());
+  EXPECT_EQ(state.prepared_arena().TotalAllocatedSize(), 6 * sizeof(float));
+  const Tensor expected = gemm_kernel(a, b, nullptr, 1.0f, 0.0f, 0, 0);
+  const Tensor got = gemm_kernel(a, prepared, nullptr, 1.0f, 0.0f, 0);
+  EXPECT_EQ(DecodeHalfTensor(got), DecodeHalfTensor(expected));
+}
+
 TEST(KernelClass, GemmPreparedConstantBAllocationFailureCanRetry) {
   const KernelContext ctx{DefaultOpset(13)};
   Gemm gemm_kernel{ctx};

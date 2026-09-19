@@ -9,6 +9,7 @@
 
 #include <gtest/gtest.h>
 
+#include <cstring>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -120,6 +121,52 @@ GraphProto MakeGraph(const std::string &domain, bool two_nodes = false) {
 Tensor MakeInput(int64_t rows, float value = 4, int64_t columns = 20) {
   return Tensor::FromFloat("x", {rows, columns},
                            std::vector<float>(static_cast<size_t>(rows * columns), value));
+}
+
+ModelProto MakeGemmModel(bool overridable_weight) {
+  ModelProto model;
+  GraphProto *graph = model.mutable_graph();
+  graph->add_input()->set_name("A");
+  if (overridable_weight) {
+    graph->add_input()->set_name("B");
+  }
+  graph->add_output()->set_name("Y");
+  TensorProto *weight = graph->add_initializer();
+  weight->set_name("B");
+  weight->set_data_type(TensorProto::DataType::FLOAT);
+  weight->add_dims(3);
+  weight->add_dims(2);
+  const std::vector<float> values{1, 2, 3, 4, 5, 6};
+  weight->set_raw_data(values.data(), values.size() * sizeof(float));
+  NodeProto *gemm = graph->add_node();
+  gemm->set_op_type("Gemm");
+  gemm->add_input("A");
+  gemm->add_input("B");
+  gemm->add_output("Y");
+  return model;
+}
+
+ModelProto MakeManyGemmModel(size_t count) {
+  ModelProto model;
+  GraphProto *graph = model.mutable_graph();
+  graph->add_input()->set_name("A");
+  for (size_t i = 0; i < count; ++i) {
+    const std::string suffix = std::to_string(i);
+    graph->add_output()->set_name("Y" + suffix);
+    TensorProto *weight = graph->add_initializer();
+    weight->set_name("B" + suffix);
+    weight->set_data_type(TensorProto::DataType::FLOAT);
+    weight->add_dims(3);
+    weight->add_dims(2);
+    const std::vector<float> values(6, static_cast<float>(i + 1));
+    weight->set_raw_data(values.data(), values.size() * sizeof(float));
+    NodeProto *gemm = graph->add_node();
+    gemm->set_op_type("Gemm");
+    gemm->add_input("A");
+    gemm->add_input(weight->name());
+    gemm->add_output("Y" + suffix);
+  }
+  return model;
 }
 
 void Feed(RuntimeContext &rt, int64_t rows, float value = 4, int64_t columns = 20) {
@@ -260,6 +307,76 @@ TEST_P(KernelLifecycle, UnsupportedShapeDoesNotReconstructKernel) {
   EXPECT_EQ(state->kernels[0].runs, 3);
   EXPECT_EQ(state->kernels[0].workspace_sizes, (std::vector<size_t>{20, 200}));
   EXPECT_EQ(state->attribute_reads, 1);
+}
+
+TEST(KernelLifecycle, RuntimeSessionPreparesImmutableGemmWeightOnce) {
+  const ModelProto model = MakeGemmModel(false);
+  RuntimeSession session(model);
+  RuntimeContext rt(core::runtime::KernelContext(core::backend_test::DefaultOpset(13)));
+  rt.Put("A", Tensor::FromFloat("A", {1, 3}, {1, 2, 3}));
+
+  session.Run(rt);
+  EXPECT_EQ(session.prepared_bytes(), 6 * sizeof(float));
+  EXPECT_EQ(std::vector<float>(rt.Get("Y").AsFloat(), rt.Get("Y").AsFloat() + 2),
+            (std::vector<float>{22, 28}));
+
+  rt.Remove("Y");
+  rt.Put("A", Tensor::FromFloat("A", {1, 3}, {2, 1, 0}));
+  session.Run(rt);
+  EXPECT_EQ(session.prepared_bytes(), 6 * sizeof(float));
+  EXPECT_EQ(std::vector<float>(rt.Get("Y").AsFloat(), rt.Get("Y").AsFloat() + 2),
+            (std::vector<float>{5, 8}));
+}
+
+TEST(KernelLifecycle, RuntimeSessionDoesNotPrepareOverridableGemmWeight) {
+  const ModelProto model = MakeGemmModel(true);
+  RuntimeSession session(model);
+  RuntimeContext rt(core::runtime::KernelContext(core::backend_test::DefaultOpset(13)));
+  rt.Put("A", Tensor::FromFloat("A", {1, 3}, {1, 2, 3}));
+  rt.Put("B", Tensor::FromFloat("B", {3, 2}, {1, 0, 0, 1, 1, 1}));
+
+  session.Run(rt);
+  EXPECT_EQ(session.prepared_bytes(), 0u);
+  EXPECT_EQ(std::vector<float>(rt.Get("Y").AsFloat(), rt.Get("Y").AsFloat() + 2),
+            (std::vector<float>{4, 5}));
+
+  rt.Remove("Y");
+  rt.Put("B", Tensor::FromFloat("B", {3, 2}, {2, 0, 0, 2, 0, 0}));
+  session.Run(rt);
+  EXPECT_EQ(session.prepared_bytes(), 0u);
+  EXPECT_EQ(std::vector<float>(rt.Get("Y").AsFloat(), rt.Get("Y").AsFloat() + 2),
+            (std::vector<float>{2, 4}));
+}
+
+TEST(KernelLifecycle, RuntimeSessionSizesPreparedStorageForAllGemmWeights) {
+  constexpr size_t weight_count = 5;
+  const ModelProto model = MakeManyGemmModel(weight_count);
+  RuntimeSession session(model);
+  RuntimeContext rt(core::runtime::KernelContext(core::backend_test::DefaultOpset(13)));
+  rt.Put("A", Tensor::FromFloat("A", {1, 3}, {1, 2, 3}));
+
+  session.Run(rt);
+
+  EXPECT_EQ(session.prepared_bytes(), weight_count * 6 * sizeof(float));
+  for (size_t i = 0; i < weight_count; ++i) {
+    const Tensor &output = rt.Get("Y" + std::to_string(i));
+    EXPECT_FLOAT_EQ(output.AsFloat()[0], 6 * static_cast<float>(i + 1));
+    EXPECT_FLOAT_EQ(output.AsFloat()[1], 6 * static_cast<float>(i + 1));
+  }
+}
+
+TEST(KernelLifecycle, RuntimeSessionDoesNotFreezePreexistingInitializerValue) {
+  const ModelProto model = MakeGemmModel(false);
+  RuntimeSession session(model);
+  RuntimeContext rt(core::runtime::KernelContext(core::backend_test::DefaultOpset(13)));
+  rt.Put("A", Tensor::FromFloat("A", {1, 3}, {1, 2, 3}));
+  rt.Put("B", Tensor::FromFloat("B", {3, 2}, {1, 0, 0, 1, 1, 1}));
+
+  session.Run(rt);
+
+  EXPECT_EQ(session.prepared_bytes(), 0u);
+  EXPECT_EQ(std::vector<float>(rt.Get("Y").AsFloat(), rt.Get("Y").AsFloat() + 2),
+            (std::vector<float>{4, 5}));
 }
 
 NodeProto MakeIf(const std::string &condition, const GraphProto &then_branch,

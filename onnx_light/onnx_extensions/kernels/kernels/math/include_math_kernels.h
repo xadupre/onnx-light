@@ -11,6 +11,7 @@
 #include "onnx_extensions/kernels/tuning/portable_parallel_tuning.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -1041,6 +1042,9 @@ public:
   static void RegisterTuningSchemas();
   KernelTuningKey TuningKey(int32_t element_type) const override;
   void Configure(const KernelTuningParameters &parameters) override;
+  bool HasPreparations(const std::unordered_set<std::string> &immutable_inputs) const override;
+  void Prepare(RuntimeContext &rt, const std::unordered_set<std::string> &immutable_inputs,
+               PreparedExecutionState &state) override;
   void Run(RuntimeContext &rt) override;
   /**
    * Prepares one immutable constant B in the session's prepared-object store.
@@ -1062,6 +1066,7 @@ public:
 
 private:
   tuning::GemmTuning tuning_;
+  std::optional<PreparedGemmB> prepared_b_;
 };
 
 /// Matrix product that behaves like NumPy/ONNX ``matmul``.

@@ -158,13 +158,23 @@ void RuntimeSession::SetDeclaredShapes(const GraphProto &graph) {
 
 void RuntimeSession::SetInitializers(const GraphProto &graph) {
   initializers_.clear();
+  immutable_initializer_names_.clear();
   initializers_.reserve(graph.initializer().size());
+  std::unordered_set<std::string> overridable;
+  overridable.reserve(graph.input().size());
+  for (const ValueInfoProto &input : graph.input()) {
+    overridable.insert(input.name());
+  }
   for (const TensorProto &initializer : graph.initializer()) {
     initializers_.push_back(TensorFromProto(initializer));
+    if (overridable.find(initializer.name()) == overridable.end()) {
+      immutable_initializer_names_.insert(initializer.name());
+    }
   }
 }
 
-void RuntimeSession::SeedInitializers(RuntimeContext &rt) const {
+std::unordered_set<std::string> RuntimeSession::SeedInitializers(RuntimeContext &rt) const {
+  std::unordered_set<std::string> seeded;
   for (const Tensor &initializer : initializers_) {
     if (!rt.Has(initializer.name)) {
       // Borrowed string views leave string_data empty. Materializes the payload for
@@ -173,8 +183,10 @@ void RuntimeSession::SeedInitializers(RuntimeContext &rt) const {
              initializer.data_type == DataType::STRING ? initializer.ToOwned()
                                                        : initializer.BorrowView(),
              RuntimeEventKind::kInitializer);
+      seeded.insert(initializer.name);
     }
   }
+  return seeded;
 }
 
 std::vector<std::string>
@@ -193,7 +205,8 @@ std::unique_ptr<KernelBase> RuntimeSession::ResolveNodeKernel(const NodeProto &n
   return detail::ResolveNodeKernelDefault(node, rt, domain, op_type);
 }
 
-void RuntimeSession::InitializeKernels(RuntimeContext &rt) {
+void RuntimeSession::InitializeKernels(RuntimeContext &rt,
+                                       const std::unordered_set<std::string> &preparable_inputs) {
   // Resolve and build the kernel instance for every node the plan will
   // execute, once and up front. Node indices come from the plan's
   // kExecuteNode actions so nodes the plan never runs (if any) are not
@@ -281,6 +294,24 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt) {
     if (parameters != nullptr) {
       ++tuning_resolution_statistics_.resolved_profiles;
       pending_tuning[i].kernel->instance->Configure(*parameters);
+    }
+  }
+  size_t preparation_count = 0;
+  for (const ExecuteAction &action : plan_.actions()) {
+    if (action.kind() == ExecuteActionKind::kExecuteNode) {
+      KernelBase &kernel = *kernels_[action.node_index()].instance;
+      preparation_count += kernel.HasPreparations(preparable_inputs) ? 1 : 0;
+    }
+  }
+  if (preparation_count != 0) {
+    prepared_execution_state_ = std::make_unique<PreparedExecutionState>(1, preparation_count);
+    for (const ExecuteAction &action : plan_.actions()) {
+      if (action.kind() == ExecuteActionKind::kExecuteNode) {
+        KernelBase &kernel = *kernels_[action.node_index()].instance;
+        if (kernel.HasPreparations(preparable_inputs)) {
+          kernel.Prepare(rt, preparable_inputs, *prepared_execution_state_);
+        }
+      }
     }
   }
 
@@ -408,12 +439,18 @@ void RuntimeSession::Run(RuntimeContext &rt) {
   const ParallelRegionCollectorScope collector_scope(parallel_region_collector_ != nullptr
                                                          ? parallel_region_collector_.get()
                                                          : CurrentParallelRegionCollector());
-  SeedInitializers(rt);
+  const std::unordered_set<std::string> seeded_initializers = SeedInitializers(rt);
   // Kernels are resolved against ``rt`` on the first run and cached; later
   // runs reuse the same built instances without redoing the per-node
   // dispatch lookup or re-constructing concrete kernels.
   if (!kernels_initialized_) {
-    InitializeKernels(rt);
+    std::unordered_set<std::string> preparable_inputs;
+    for (const std::string &name : seeded_initializers) {
+      if (immutable_initializer_names_.find(name) != immutable_initializer_names_.end()) {
+        preparable_inputs.insert(name);
+      }
+    }
+    InitializeKernels(rt, preparable_inputs);
   }
   // Use the session's construction-time verbosity when it is non-zero;
   // otherwise fall back to the RuntimeContext's own verbosity. The context

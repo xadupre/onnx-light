@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "onnx_core/compute/prepared_execution.h"
 #include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/tuning/cpu_executor.h"
@@ -272,6 +273,13 @@ public:
     return tuning_resolution_statistics_;
   }
 
+  /// Returns bytes occupied by session-owned prepared kernel objects.
+  size_t prepared_bytes() const noexcept {
+    return prepared_execution_state_ == nullptr
+               ? 0
+               : prepared_execution_state_->objects().resident_bytes();
+  }
+
   /// Enables or disables concrete-shape validation. When enabled, :cpp:func:`Run`
   /// checks that the concrete shape of every tensor carrying a declared
   /// (possibly symbolic) shape — the graph inputs, outputs and ``value_info``
@@ -371,10 +379,11 @@ private:
   /// Resolves and builds the kernel instance for every node the plan executes,
   /// resolving against ``rt``, and records the external inputs those nodes
   /// read in :cpp:member:`required_inputs_`.
-  void InitializeKernels(RuntimeContext &rt);
+  void InitializeKernels(RuntimeContext &rt,
+                         const std::unordered_set<std::string> &preparable_inputs);
 
-  /// Seeds missing initializer names with payload views into the session store.
-  void SeedInitializers(RuntimeContext &rt) const;
+  /// Seeds missing initializer names and returns the names installed by this session.
+  std::unordered_set<std::string> SeedInitializers(RuntimeContext &rt) const;
 
   /// Normalizes every raw tensor output of ``node`` into the arena implied by
   /// that output slot's role: a declared graph output (a name present in
@@ -423,8 +432,10 @@ private:
   /// plan is passed in through the plan-taking constructor.
   ExecutionPlan default_plan_;
   const ExecutionPlan &plan_;
+  std::unique_ptr<PreparedExecutionState> prepared_execution_state_;
   std::vector<PreparedKernel> kernels_;
   std::vector<Tensor> initializers_;
+  std::unordered_set<std::string> immutable_initializer_names_;
   /// One immutable registry generation shared by every kernel in this session.
   /// Kernels copy resolved values during initialization; retaining the snapshot
   /// also makes the generation available for diagnostics.

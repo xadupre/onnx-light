@@ -155,6 +155,21 @@ portable-weight miss. Dependencies are represented by ``TaskId`` values, not by
 waiting inside a worker. A task enters the ready set only when every producer
 has succeeded.
 
+RuntimeSession integration
++++++++++++++++++++++++++++
+
+``RuntimeSession`` invokes each resolved kernel's preparation hook once, after
+applying its tuning profile and before the first node executes. The CPU
+``Gemm`` implementation uses this hook to pack a constant ``B`` initializer
+into the session's ``PreparedExecutionState``. Later runs consume that packed
+object directly instead of repacking ``B``. FLOAT16 and BFLOAT16 weights are
+promoted and packed once as FLOAT because those kernels compute in FLOAT.
+
+An initializer that is also a graph input remains overridable and is therefore
+not prepared: every run continues to consume the caller's current value.
+``RuntimeSession::prepared_bytes`` reports the resident prepared allocation for
+diagnostics and tests.
+
 Pool ownership and dispatch
 +++++++++++++++++++++++++++
 

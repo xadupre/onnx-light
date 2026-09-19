@@ -15,6 +15,10 @@ void ComputeShapeIdentity(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(node.input_size() >= 1, "ComputeShapeIdentity: Identity requires one input.");
 
   const std::string input_name = node.input(0);
+  if (ctx.HasType(input_name) || ctx.HasEncodedValue(input_name)) {
+    ctx.CopyValueFrom(node.output(0), ctx, input_name);
+    return;
+  }
 
   if (ctx.HasSequence(input_name)) {
     // Sequence input: propagate the sequence descriptor to the output.

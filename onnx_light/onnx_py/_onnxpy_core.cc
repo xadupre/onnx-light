@@ -748,12 +748,44 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
   // -----------------------------------------------------------------------
   // ShapesContext
   // -----------------------------------------------------------------------
+  nb::class_<EncodedValueLayout>(shape_mod, "EncodedValueLayout")
+      .def_ro("element_bits", &EncodedValueLayout::element_bits)
+      .def_ro("payload_bytes", &EncodedValueLayout::payload_bytes)
+      .def_ro("record_count", &EncodedValueLayout::record_count)
+      .def_ro("external", &EncodedValueLayout::external)
+      .def_ro("unresolved_reference", &EncodedValueLayout::unresolved_reference)
+      .def_ro("content_verified", &EncodedValueLayout::content_verified);
   nb::class_<onnx_shapes::ShapesContext>(
       shape_mod, "ShapesContext",
       "In/out container shared by the per-operator ``ComputeShape*`` shape-inference "
       "functions. Holds a ``name -> SymTensor`` map, a ``name -> SymSequence`` map "
       "and a ``domain -> opset_version`` map mirroring ``opset_import``.")
       .def(nb::init<>())
+      .def(
+          "set_struct_types",
+          [](onnx_shapes::ShapesContext &self, nb::iterable types) {
+            utils::RepeatedProtoField<StructTypeProto> declarations;
+            for (nb::handle type : types)
+              declarations.push_back(nb::cast<const StructTypeProto &>(type));
+            self.SetStructTypes(declarations);
+          },
+          nb::arg("types"), "Sets the model-scoped structured type declarations.")
+      .def("struct_types", &onnx_shapes::ShapesContext::StructTypes, nb::rv_policy::copy,
+           "Returns the structured type declarations.")
+      .def("resolve_struct_type", &onnx_shapes::ShapesContext::ResolveStructType, nb::arg("type"),
+           nb::rv_policy::copy, "Resolves an inline declaration or model-scoped reference.")
+      .def("set_type", &onnx_shapes::ShapesContext::SetType, nb::arg("name"), nb::arg("type"),
+           "Records the full value type.")
+      .def("has_type", &onnx_shapes::ShapesContext::HasType, nb::arg("name"))
+      .def("get_type", &onnx_shapes::ShapesContext::GetType, nb::arg("name"), nb::rv_policy::copy,
+           "Returns a copy of the full value type.")
+      .def("set_encoded_value", &onnx_shapes::ShapesContext::SetEncodedValue, nb::arg("name"),
+           nb::arg("value"), "Records an encoded value and its logical type.")
+      .def("has_encoded_value", &onnx_shapes::ShapesContext::HasEncodedValue, nb::arg("name"))
+      .def("get_encoded_value", &onnx_shapes::ShapesContext::GetEncodedValue, nb::arg("name"),
+           nb::rv_policy::copy, "Returns a copy of an encoded value.")
+      .def("get_encoded_layout", &onnx_shapes::ShapesContext::GetEncodedLayout, nb::arg("name"),
+           "Returns a snapshot of the validated encoded payload geometry.")
       // Tensor descriptors
       .def(
           "set",
@@ -1975,6 +2007,14 @@ void AddOnnxPyBuilder(nb::module_ &m) {
       .def("make_initializer", &GraphBuilder::MakeInitializer, nb::arg("tensor"),
            "Appends ``tensor`` (which may carry external data) as an initializer and "
            "returns its name.")
+      .def("make_struct_type", &GraphBuilder::MakeStructType, nb::arg("type"),
+           "Registers a model-scoped structured type declaration.")
+      .def("make_encoded_initializer", &GraphBuilder::MakeEncodedInitializer, nb::arg("value"),
+           "Appends an encoded initializer and returns its name.")
+      .def("encoded_initializers", &GraphBuilder::EncodedInitializers, nb::rv_policy::copy,
+           "Returns a copy of the encoded initializers.")
+      .def_prop_ro("shapes", &GraphBuilder::Shapes, nb::rv_policy::reference_internal,
+                   "Returns the builder's shape, type and encoded-layout context.")
       .def(
           "make_external_initializer",
           [](GraphBuilder &self, const std::string &name, int dtype,
@@ -2146,6 +2186,8 @@ void AddOnnxPyBuilder(nb::module_ &m) {
       .def("to_graph", &GraphBuilder::ToGraph, "Returns the finalised GraphProto.")
       .def("to_model", &GraphBuilder::ToModel, nb::arg("ir_version") = 0,
            "Returns the finalised graph wrapped in a ModelProto.")
+      .def("to_standard_model", &GraphBuilder::ToStandardModel, nb::arg("ir_version") = 0,
+           "Returns a standard model, rejecting unsupported structured constructs.")
       .def("to_function", &GraphBuilder::ToFunction, nb::arg("domain") = "",
            "Returns the finalised nodes wrapped in a FunctionProto.")
       .def(

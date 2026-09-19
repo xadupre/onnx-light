@@ -61,6 +61,7 @@ SymTensor = _C.SymTensor
 ShapeEvent = _C.ShapeEvent
 ShapeEventAction = _C.ShapeEventAction
 ShapesContext = _C.ShapesContext
+EncodedValueLayout = _C.EncodedValueLayout
 write_inplace_reuse_to_metadata = _C.write_inplace_reuse_to_metadata
 write_peak_memory_to_metadata = _C.write_peak_memory_to_metadata
 write_value_and_node_tags_to_metadata = _C.write_value_and_node_tags_to_metadata

@@ -5,8 +5,10 @@ package so that ``from onnx_light.onnx.onnx_pb import ModelProto`` works.
 """
 
 from . import (  # noqa: F401
+    AffineLayoutProto,
     AttributeProto,
     DeviceConfigurationProto,
+    EncodedValueProto,
     FunctionProto,
     GraphProto,
     MapProto,
@@ -16,6 +18,7 @@ from . import (  # noqa: F401
     OptionalProto,
     SequenceProto,
     SparseTensorProto,
+    StructTypeProto,
     TensorAnnotation,
     TensorProto,
     TensorShapeProto,

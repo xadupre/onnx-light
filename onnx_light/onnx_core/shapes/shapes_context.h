@@ -18,6 +18,7 @@
 #include "onnx_core/symbolic/sym_sequence.h"
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx.h"
+#include "onnx_proto/onnx_verify.h"
 #include "onnx_proto/simple_string.h"
 
 /**
@@ -36,6 +37,15 @@
  */
 
 namespace ONNX_LIGHT_NAMESPACE::core::shapes {
+
+/// Returns whether a type contains a structured branch, including nested containers.
+bool HasStructuredType(const TypeProto &type);
+
+/// Compares declared types without their outer denotation annotations.
+bool SameDeclaredType(const TypeProto &left, const TypeProto &right);
+
+/// Checks whether an encoded default is compatible with a public input declaration.
+bool CompatibleEncodedDefault(const TypeProto &declared, const TypeProto &actual);
 
 // The symbolic value descriptors (SymDim, SymShape, SymTensor, SymSequence,
 // TensorType, ...) live in ``onnx_core::symbolic`` so both ``onnx_op`` and
@@ -268,6 +278,46 @@ public:
 
   ShapesContext() = default;
 
+  /// Copies and validates model-local structured declarations.
+  void SetStructTypes(const utils::RepeatedProtoField<StructTypeProto> &types);
+  /// Returns the owned model-local declarations.
+  const utils::RepeatedProtoField<StructTypeProto> &StructTypes() const;
+  /// Resolves a structured reference against the owned model catalogue.
+  const StructTypeProto &ResolveStructType(const StructTypeProto &type) const;
+  /// Stores a validated value type and its logical tensor descriptor when available.
+  void SetType(const std::string &name, const TypeProto &type);
+  bool HasType(const std::string &name) const { return types_.count(name) != 0; }
+  const TypeProto &GetType(const std::string &name) const { return types_.at(name); }
+  const std::unordered_map<std::string, TypeProto> &Types() const { return types_; }
+  /// Removes all descriptors for one value without changing the catalogue or inference hooks.
+  void Erase(const std::string &name) {
+    tensors_.erase(name);
+    sequences_.erase(name);
+    types_.erase(name);
+    encoded_values_.erase(name);
+  }
+  /// Clears value descriptors while retaining the catalogue, opsets, and inference hooks.
+  void ClearValues() noexcept {
+    tensors_.clear();
+    sequences_.clear();
+    types_.clear();
+    encoded_values_.clear();
+  }
+  /// Stores an owned encoded value without interpreting its codes as decoded data.
+  void SetEncodedValue(const std::string &name, const EncodedValueProto &value);
+  bool HasEncodedValue(const std::string &name) const { return encoded_values_.count(name) != 0; }
+  const EncodedValueProto &GetEncodedValue(const std::string &name) const {
+    return encoded_values_.at(name);
+  }
+  /// Returns the validated physical layout, borrowing only this context's owned values.
+  EncodedValueLayout GetEncodedLayout(const std::string &name) const;
+  /// Copies a value, including its structured type and physical encoding.
+  void CopyValueFrom(const std::string &name, const ShapesContext &source,
+                     const std::string &source_name);
+  /// Checks exact structured types and encodings before merging control-flow values.
+  void CheckStructuredCompatibility(const std::string &name, const ShapesContext &other,
+                                    const std::string &other_name) const;
+
   // ── Tensor descriptors ──────────────────────────────────────────────
 
   /// Inserts or replaces the descriptor for ``name``. ``tensor`` is
@@ -282,6 +332,9 @@ public:
       LogSetEvent(name, tensor);
     }
     tensors_[name] = std::move(tensor);
+    types_.erase(name);
+    encoded_values_.erase(name);
+    sequences_.erase(name);
   }
 
   /// Overload: ``name`` given as a null-terminated C string.
@@ -298,12 +351,11 @@ public:
   std::size_t Size() const noexcept { return tensors_.size(); }
 
   /// ``true`` when no entries are stored.
-  bool Empty() const noexcept { return tensors_.empty(); }
+  bool Empty() const noexcept { return tensors_.empty() && types_.empty() && sequences_.empty(); }
 
-  /// Removes every entry (both tensor descriptors and opset versions).
+  /// Removes inferred values and opsets while preserving the owned structured catalogue.
   void Clear() noexcept {
-    tensors_.clear();
-    sequences_.clear();
+    ClearValues();
     opsets_.clear();
     ClearLocalFunctions();
     custom_shape_inference_.clear();
@@ -370,11 +422,14 @@ public:
   /// rvalue (use ``std::move``).
   void SetSequence(const std::string &name, SymSequence &&sequence) {
     sequences_[name] = std::move(sequence);
+    tensors_.erase(name);
+    types_.erase(name);
+    encoded_values_.erase(name);
   }
 
   /// Overload: ``name`` given as a null-terminated C string.
   void SetSequence(const char *name, SymSequence &&sequence) {
-    sequences_[std::string(name)] = std::move(sequence);
+    SetSequence(std::string(name), std::move(sequence));
   }
 
   /// Returns ``true`` when a sequence-typed entry exists for ``name``.
@@ -798,6 +853,9 @@ private:
   }
 
   std::unordered_map<std::string, SymTensor> tensors_;
+  std::shared_ptr<const ModelProto> struct_types_model_;
+  std::unordered_map<std::string, TypeProto> types_;
+  std::unordered_map<std::string, EncodedValueProto> encoded_values_;
   std::unordered_map<std::string, SymSequence> sequences_;
   std::unordered_map<std::string, int> opsets_;
   /// Concrete values bound to symbolic dimension expressions while

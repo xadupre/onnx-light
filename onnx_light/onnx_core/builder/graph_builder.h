@@ -229,12 +229,18 @@ public:
 
   // ── Initializers ─────────────────────────────────────────────────────
 
-  /// Appends ``tensor`` as a graph initializer. The tensor may carry external
+  /// Copies ``tensor`` as a graph initializer. The tensor may carry external
   /// data (``data_location == EXTERNAL``). Returns the initializer name.
   /// A public-input default must match its declared element type, rank and
   /// static dimensions; unspecified rank and symbolic dimensions are allowed.
   /// Defaults remain overridable and are not treated as optimization constants.
   const std::string &MakeInitializer(const TensorProto &tensor);
+
+  /// Moves ``tensor`` into the graph, retaining owned raw_data allocations and
+  /// borrowed payload owners. Uses the same validation and annotations as
+  /// MakeInitializer. On success, clears the source to an empty TensorProto
+  /// that can be reused; validation failures leave the source unchanged.
+  const std::string &MakeInitializerMove(TensorProto &&tensor);
 
   /// Registers a model-scoped structured declaration in the owned shape context.
   void MakeStructType(const StructTypeProto &type);
@@ -714,6 +720,8 @@ private:
 
   // Seeds the owned ShapesContext with the descriptor of ``name``.
   void SeedShape(const std::string &name, SymTensor tensor);
+
+  template <typename Tensor> const std::string &MakeInitializerImpl(Tensor &&tensor);
 
   void SetStructTypes(const utils::RepeatedProtoField<StructTypeProto> &types);
   void RebuildStructuredState();

@@ -11,6 +11,7 @@ finalisation). They mirror the C++ counterpart in
 
 from __future__ import annotations
 
+import gc
 import unittest
 
 import numpy
@@ -212,6 +213,111 @@ class TestGraphBuilder(ExtTestCase):
         name = builder.make_external_initializer("w", FLOAT, [4, 4], "weights.bin", 0, 64)
         self.assertEqual(name, "w")
         self.assertTrue(builder.has_name("w"))
+
+    def test_make_initializer_move(self):
+        for raw in (False, True):
+            with self.subTest(raw=raw):
+                values = numpy.arange(1024, dtype=numpy.float32)
+                tensor = oh.make_tensor(
+                    "weight", FLOAT, [1024], values.tobytes() if raw else values, raw=raw
+                )
+                serialized = tensor.SerializeToString()
+                copying = GraphBuilder("copy")
+                self.assertEqual(copying.make_initializer(tensor), "weight")
+                self.assertEqual(tensor.SerializeToString(), serialized)
+
+                builder = GraphBuilder("move")
+                same_source = tensor
+                self.assertEqual(builder.make_initializer_move(tensor), "weight")
+                self.assertEqual(same_source.SerializeToString(), b"")
+                self.assertEqual(
+                    builder.to_graph().initializer[0].SerializeToString(), serialized
+                )
+                self.assertEqual(builder.get_shape("weight").shape.rank(), 1)
+                tensor.CopyFrom(oh.make_tensor("reused", FLOAT, [1], [1.0]))
+                self.assertEqual(builder.make_initializer_move(tensor), "reused")
+                self.assertEqual(tensor.SerializeToString(), b"")
+
+    def test_make_initializer_move_external_data(self):
+        tensor = onnxl.TensorProto()
+        tensor.name = "external"
+        tensor.data_type = FLOAT
+        tensor.dims.extend([4])
+        tensor.data_location = onnxl.TensorProto.EXTERNAL
+        for key, value in (
+            ("location", "missing-weights.bin"),
+            ("offset", "16"),
+            ("length", "16"),
+        ):
+            entry = tensor.external_data.add()
+            entry.key, entry.value = key, value
+        serialized = tensor.SerializeToString()
+        builder = GraphBuilder("g")
+        self.assertEqual(builder.make_initializer_move(tensor), "external")
+        self.assertEqual(builder.to_graph().initializer[0].SerializeToString(), serialized)
+        self.assertEqual(tensor.SerializeToString(), b"")
+
+    def test_make_initializer_move_overridable_default(self):
+        builder = GraphBuilder("g")
+        builder.make_input("x", FLOAT, ["batch", 2])
+        tensor = oh.make_tensor("x", FLOAT, [3, 2], [1.0] * 6)
+        self.assertEqual(builder.make_initializer_move(tensor), "x")
+        self.assertEqual(tensor.SerializeToString(), b"")
+        graph = builder.to_graph()
+        self.assertEqual(graph.input[0].type.tensor_type.shape.dim[0].dim_param, "batch")
+        self.assertEqual(list(graph.initializer[0].dims), [3, 2])
+
+    def test_make_initializer_move_borrowed_owner(self):
+        serialized = oh.make_tensor(
+            "weight", FLOAT, [32], numpy.zeros(32, dtype=numpy.float32).tobytes(), raw=True
+        ).SerializeToString()
+        released = []
+
+        def callback(tensor, graph, owner=serialized):
+            def release():
+                released.append(len(owner))
+
+            return release
+
+        options = onnxl.ParseOptions()
+        options.no_copy = True
+        options.raw_data_callback = callback
+        tensor = onnxl.TensorProto()
+        tensor.ParseFromString(serialized, options)
+        builder = GraphBuilder("g")
+        self.assertEqual(builder.make_initializer_move(tensor), "weight")
+        self.assertEqual(tensor.SerializeToString(), b"")
+        del tensor, serialized, options, callback
+        gc.collect()
+        self.assertEqual(released, [])
+        self.assertEqual(builder.to_graph().initializer[0].raw_data, bytes(128))
+        del builder
+        gc.collect()
+        self.assertEqual(len(released), 1)
+
+    def test_make_initializer_move_validation_preserves_source(self):
+        builder = GraphBuilder("g")
+        builder.make_input("x", FLOAT, [2])
+        tensors = [
+            oh.make_tensor("x", onnxl.TensorProto.INT64, [2], [1, 2]),
+            oh.make_tensor("x", FLOAT, [1, 2], [1.0, 2.0]),
+            oh.make_tensor("x", FLOAT, [3], [1.0, 2.0, 3.0]),
+            oh.make_tensor("", FLOAT, [2], [1.0, 2.0]),
+        ]
+        for tensor in tensors:
+            with self.subTest(tensor=str(tensor)):
+                serialized = tensor.SerializeToString()
+                with self.assertRaises(ValueError):
+                    builder.make_initializer_move(tensor)
+                self.assertEqual(tensor.SerializeToString(), serialized)
+                self.assertEqual(len(builder.to_graph().initializer), 0)
+        for name in ("x", "weight"):
+            tensor = oh.make_tensor(name, FLOAT, [2], [1.0, 2.0])
+            builder.make_initializer(tensor)
+            serialized = tensor.SerializeToString()
+            with self.assertRaises(ValueError):
+                builder.make_initializer_move(tensor)
+            self.assertEqual(tensor.SerializeToString(), serialized)
 
     def test_to_model_produces_graph_with_opset(self):
         builder = GraphBuilder("g")

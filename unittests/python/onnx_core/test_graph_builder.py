@@ -229,14 +229,19 @@ class TestGraphBuilder(ExtTestCase):
                 builder = GraphBuilder("move")
                 same_source = tensor
                 self.assertEqual(builder.make_initializer_move(tensor), "weight")
-                self.assertEqual(same_source.SerializeToString(), b"")
                 self.assertEqual(
-                    builder.to_graph().initializer[0].SerializeToString(), serialized
+                    same_source.SerializeToString(), onnxl.TensorProto().SerializeToString()
+                )
+                self.assertEqual(
+                    builder.to_graph().initializer[0].SerializeToString(),
+                    copying.to_graph().initializer[0].SerializeToString(),
                 )
                 self.assertEqual(builder.get_shape("weight").shape.rank(), 1)
                 tensor.CopyFrom(oh.make_tensor("reused", FLOAT, [1], [1.0]))
                 self.assertEqual(builder.make_initializer_move(tensor), "reused")
-                self.assertEqual(tensor.SerializeToString(), b"")
+                self.assertEqual(
+                    tensor.SerializeToString(), onnxl.TensorProto().SerializeToString()
+                )
 
     def test_make_initializer_move_external_data(self):
         tensor = onnxl.TensorProto()
@@ -254,15 +259,17 @@ class TestGraphBuilder(ExtTestCase):
         serialized = tensor.SerializeToString()
         builder = GraphBuilder("g")
         self.assertEqual(builder.make_initializer_move(tensor), "external")
-        self.assertEqual(builder.to_graph().initializer[0].SerializeToString(), serialized)
-        self.assertEqual(tensor.SerializeToString(), b"")
+        exported = builder.to_graph().initializer[0]
+        exported.ClearField("metadata_props")
+        self.assertEqual(exported.SerializeToString(), serialized)
+        self.assertEqual(tensor.SerializeToString(), onnxl.TensorProto().SerializeToString())
 
     def test_make_initializer_move_overridable_default(self):
         builder = GraphBuilder("g")
         builder.make_input("x", FLOAT, ["batch", 2])
         tensor = oh.make_tensor("x", FLOAT, [3, 2], [1.0] * 6)
         self.assertEqual(builder.make_initializer_move(tensor), "x")
-        self.assertEqual(tensor.SerializeToString(), b"")
+        self.assertEqual(tensor.SerializeToString(), onnxl.TensorProto().SerializeToString())
         graph = builder.to_graph()
         self.assertEqual(graph.input[0].type.tensor_type.shape.dim[0].dim_param, "batch")
         self.assertEqual(list(graph.initializer[0].dims), [3, 2])
@@ -286,7 +293,7 @@ class TestGraphBuilder(ExtTestCase):
         tensor.ParseFromString(serialized, options)
         builder = GraphBuilder("g")
         self.assertEqual(builder.make_initializer_move(tensor), "weight")
-        self.assertEqual(tensor.SerializeToString(), b"")
+        self.assertEqual(tensor.SerializeToString(), onnxl.TensorProto().SerializeToString())
         del tensor, serialized, options, callback
         gc.collect()
         self.assertEqual(released, [])

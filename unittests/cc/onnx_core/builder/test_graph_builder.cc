@@ -201,8 +201,9 @@ TEST(GraphBuilder, MakeInitializerMoveRetainsBorrowedOwner) {
       const auto serialized = tensor.SerializeAsString();
       EXPECT_THROW(builder.MakeInitializerMove(std::move(tensor)), core::builder::BuilderError);
       EXPECT_EQ(tensor.SerializeAsString(), serialized);
-      EXPECT_EQ(tensor.raw_data().data(), data);
-      EXPECT_TRUE(tensor.raw_data().is_borrowed());
+      const auto &unchanged = tensor.raw_data();
+      EXPECT_EQ(unchanged.data(), data);
+      EXPECT_TRUE(unchanged.is_borrowed());
       EXPECT_EQ(released, 0);
       EXPECT_TRUE(builder.Initializers().empty());
 

@@ -97,14 +97,14 @@ unchanged. When the caller no longer needs the tensor, the explicit
 ``builder.make_initializer_move(tensor)`` method transfers it instead::
 
     import numpy
-    from onnx_light.onnx import numpy_helper
+    from onnx_light.onnx import TensorProto, numpy_helper
     from onnx_light.onnx_core.graph_builder import GraphBuilder
 
     builder = GraphBuilder("transfer")
     tensor = numpy_helper.from_array(numpy.ones(1024, dtype=numpy.float32), name="weight")
     name = builder.make_initializer_move(tensor)
     assert name == "weight"
-    assert tensor.SerializeToString() == b""
+    assert tensor.SerializeToString() == TensorProto().SerializeToString()
 
 On success the source is cleared to an empty, reusable ``TensorProto``. All
 Python references to that same source object observe the cleared state.

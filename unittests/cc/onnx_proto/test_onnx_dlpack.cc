@@ -124,10 +124,18 @@ TEST(TensorProtoDLPack, RejectsActiveOwnedExportLease) {
   auto tensor = MakeTensor();
   const auto *pointer = Data(tensor);
   auto lease = tensor.ref_raw_data().acquire_export_guard();
+  auto second_lease = tensor.ref_raw_data().acquire_export_guard();
+  EXPECT_EQ(lease, second_lease);
   EXPECT_THROW(ReleaseDLPack(tensor), std::invalid_argument);
   EXPECT_EQ(Data(tensor), pointer);
   EXPECT_TRUE(tensor.has_raw_data());
   tensor.set_name("metadata remains mutable");
+  lease.reset();
+  EXPECT_THROW(ReleaseDLPack(tensor), std::invalid_argument);
+  second_lease.reset();
+  EXPECT_FALSE(tensor.ref_raw_data().has_active_exports());
+  lease = tensor.ref_raw_data().acquire_export_guard();
+  EXPECT_TRUE(tensor.ref_raw_data().has_active_exports());
   lease.reset();
   auto exported = Release(tensor);
   EXPECT_EQ(exported->dl_tensor.data, pointer);

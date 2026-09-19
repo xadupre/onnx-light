@@ -307,14 +307,7 @@ public:
   inline const std::shared_ptr<void> &owner() const { return owner_; }
 
   /** Retains a lease used to detect outstanding exports of this storage. */
-  inline std::shared_ptr<void> acquire_export_guard() const {
-    auto guard = export_guard_.lock();
-    if (!guard) {
-      guard = std::make_shared<uint8_t>(0);
-      export_guard_ = guard;
-    }
-    return guard;
-  }
+  std::shared_ptr<void> acquire_export_guard() const;
 
   /** Returns whether consumers still hold an export lease on this storage. */
   inline bool has_active_exports() const { return !export_guard_.expired(); }

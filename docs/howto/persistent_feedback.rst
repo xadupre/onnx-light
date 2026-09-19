@@ -15,6 +15,13 @@ retained state from caller-owned inputs, returned outputs and execution
 scratch storage. This initial implementation promises correct feedback,
 not zero-copy KV-cache reuse.
 
+Already-owned graph output storage transfers to the caller without a deep
+copy. Borrowed outputs are detached by the runtime, and allocator-backed
+outputs are copied out of execution storage. Each selected output is copied
+only once into retained state, after validation against its destination
+input. This copy keeps returned outputs independently mutable; initialization,
+invocation inputs and explicit state snapshots likewise preserve isolation.
+
 A basic feedback loop
 ---------------------
 

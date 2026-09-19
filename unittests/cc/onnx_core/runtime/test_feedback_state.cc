@@ -164,6 +164,75 @@ TEST(FeedbackState, RetainsOnlySelectedNestedCacheAndRequiresFreshTokens) {
   EXPECT_EQ(allocator.TotalAllocatedSize(), 0u);
 }
 
+TEST(FeedbackState, TransfersOwnedTensorOutputsWithoutCopying) {
+  ModelProto model = Model();
+  RuntimeContext context(KernelContext(DefaultOpset(18)));
+  const uint8_t *produced = nullptr;
+  context.RegisterCustomKernel("test.feedback", "Step", [&](const NodeProto &, RuntimeContext &rt) {
+    Tensor output = Tensor::FromFloat("present", {1}, {rt.Get("past").AsFloat()[0] + 1});
+    produced = output.bytes();
+    rt.Put("present", std::move(output));
+  });
+  FeedbackState state(model, {{"past", "present"}}, {{"past", Number(1)}});
+  auto first = state.Run(context, {{"tokens", Number(0)}});
+  EXPECT_EQ(first.at("present").tensor.bytes(), produced);
+  first.at("present").tensor.AsFloat()[0] = 100;
+  auto second = state.Run(context, {{"tokens", Number(0)}});
+  EXPECT_EQ(second.at("present").tensor.bytes(), produced);
+  EXPECT_EQ(Number(second.at("present")), 3);
+  state.Close();
+  EXPECT_EQ(Number(first.at("present")), 100);
+  EXPECT_EQ(Number(second.at("present")), 3);
+}
+
+TEST(FeedbackState, TransfersOwnedStructuredOutputsWithoutCopying) {
+  ModelProto model = Model(true);
+  RuntimeContext context(KernelContext(DefaultOpset(18)));
+  const uint8_t *keys = nullptr;
+  const uint8_t *values = nullptr;
+  const uint8_t *logits = nullptr;
+  context.RegisterCustomKernel("test.feedback", "Step", [&](const NodeProto &, RuntimeContext &rt) {
+    const auto &past = rt.values().at("request").fields.at("cache");
+    RuntimeValue response(RuntimeValueMap{
+        {"cache", Cache(Number(past.fields.at("keys")) + 1, Number(past.fields.at("values")) + 2)},
+        {"logits", Number(10)}});
+    keys = response.fields.at("cache").fields.at("keys").tensor.bytes();
+    values = response.fields.at("cache").fields.at("values").tensor.bytes();
+    logits = response.fields.at("logits").tensor.bytes();
+    rt.values()["response"] = std::move(response);
+  });
+  FeedbackState state(model, {{"request.cache", "response.cache"}},
+                      {{"request.cache", Cache(0, 0)}});
+  auto first = state.Run(context, {{"request.tokens", Number(0)}});
+  auto &response = first.at("response");
+  EXPECT_EQ(response.fields.at("cache").fields.at("keys").tensor.bytes(), keys);
+  EXPECT_EQ(response.fields.at("cache").fields.at("values").tensor.bytes(), values);
+  EXPECT_EQ(response.fields.at("logits").tensor.bytes(), logits);
+  response.fields.at("cache").fields.at("keys").tensor.AsFloat()[0] = 100;
+  auto second = state.Run(context, {{"request.tokens", Number(0)}});
+  EXPECT_EQ(Number(second.at("response").fields.at("cache").fields.at("keys")), 2);
+  state.Close();
+  EXPECT_EQ(Number(response.fields.at("logits")), 10);
+}
+
+TEST(FeedbackState, ValidatesDestinationBeforeRetainingOutput) {
+  ModelProto model = Model();
+  model.mutable_graph()->mutable_output(0)->mutable_type()->mutable_tensor_type()->clear_shape();
+  RuntimeContext context(KernelContext(DefaultOpset(18)));
+  bool invalid = true;
+  context.RegisterCustomKernel("test.feedback", "Step", [&](const NodeProto &, RuntimeContext &rt) {
+    if (invalid)
+      rt.Put("present", Tensor::FromFloat("", {2}, {3, 4}));
+    else
+      rt.Put("present", Tensor::FromFloat("", {1}, {rt.Get("past").AsFloat()[0] + 1}));
+  });
+  FeedbackState state(model, {{"past", "present"}}, {{"past", Number(1)}});
+  EXPECT_THROW(state.Run(context, {{"tokens", Number(0)}}), std::invalid_argument);
+  EXPECT_EQ(Number(state.Values().at("past")), 1);
+  invalid = false;
+  EXPECT_EQ(Number(state.Run(context, {{"tokens", Number(0)}}).at("present")), 2);
+}
+
 TEST(FeedbackState, RejectsInvalidMappingsInitialValuesAndModelRewrites) {
   ModelProto model = Model();
   EXPECT_THROW((FeedbackState(model, {}, {})), std::invalid_argument);

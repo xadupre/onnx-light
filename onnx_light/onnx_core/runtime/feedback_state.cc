@@ -197,6 +197,18 @@ void Insert(RuntimeValueMap &values, const std::vector<std::string> &path,
   *target = value.DeepCopy();
 }
 
+void DetachOutputAllocations(RuntimeValue &value, size_t depth = 0) {
+  EXT_ENFORCE_INVALID(depth <= RuntimeValue::kMaxDepth,
+                      "FeedbackState: maximum output depth exceeded.");
+  if (value.kind == RuntimeValue::Kind::kTensor) {
+    if (value.tensor.has_allocation())
+      value.tensor = value.tensor.ToOwned();
+  } else if (value.kind == RuntimeValue::Kind::kStruct) {
+    for (auto &[name, field] : value.fields)
+      DetachOutputAllocations(field, depth + 1);
+  }
+}
+
 class Operation {
 public:
   explicit Operation(std::atomic_flag &busy) : busy_(busy) {
@@ -308,20 +320,27 @@ RuntimeValueMap FeedbackState::Run(RuntimeContext &context, const RuntimeValueMa
   for (const auto &output : model_.graph().output()) {
     RuntimeValue value;
     if (invocation.Has(output.name()))
-      value = RuntimeValue(invocation.Get(output.name()).ToOwned());
+      value = RuntimeValue(std::move(invocation.Get(output.name())));
     else {
       auto it = invocation.values().find(output.name());
       EXT_ENFORCE_INVALID(it != invocation.values().end(), "FeedbackState: missing output '",
                           output.name(), "'.");
-      value = it->second.DeepCopy();
+      value = std::move(it->second);
     }
+    // Run already detached borrowed tensors and encoded payloads. Only arena
+    // allocations still need copying; inline output storage transfers as-is.
+    DetachOutputAllocations(value);
     Validate(value, output.type(), catalogue_, symbols);
     outputs.emplace(output.name(), std::move(value));
   }
   RuntimeValueMap next;
-  for (const auto &[input, output] : bindings_)
-    next.emplace(input, Select(outputs, Path(output, model_.graph().output())).DeepCopy());
-  next = ValidateInitial(next);
+  Symbols next_symbols;
+  for (const auto &[input, output] : bindings_) {
+    const auto path = Path(output, model_.graph().output());
+    const RuntimeValue &value = Select(outputs, path);
+    Validate(value, Resolve(input, model_.graph().input(), catalogue_), catalogue_, next_symbols);
+    next.emplace(input, value.DeepCopy());
+  }
   if (completion != nullptr) {
     EXT_ENFORCE_INVALID(completion->status() == TaskStatus::kPending,
                         "FeedbackState: invocation was cancelled.");

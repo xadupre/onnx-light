@@ -18,7 +18,8 @@ using FeedbackBindings = std::unordered_map<std::string, std::string>;
  *
  * The final model must outlive this state and must not be changed. Each operation
  * checks its serialized snapshot before accessing the session's node pointers.
- * Values and outputs are deep copies; no execution-arena storage escapes a run.
+ * Retained values are isolated from caller-visible outputs. Owned output storage
+ * transfers without copying; no execution-arena storage escapes a run.
  * Only tensors, named structures and inline encoded values are supported.
  * The first context's allocators must outlive the state. Later calls must use
  * those same allocators, as required by the retained RuntimeSession kernels.

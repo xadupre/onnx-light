@@ -43,3 +43,39 @@ protos share the original owner. Do not clear, resize, replace, or reparse
 **owned** source storage while a view exists, including through a containing
 model. Borrowed storage with no owner token remains the caller's lifetime
 responsibility. Shape metadata is snapshotted at export.
+
+Binary-size measurement
+~~~~~~~~~~~~~~~~~~~~~~~
+
+The export implementation stays in the Python extensions; it introduces no
+DLPack runtime library or ``lib_onnx_proto`` dependency. A Linux x86-64
+Release build with GCC 13.3.0, Python 3.13.15 and nanobind 3.1.0, using
+``python setup.py build_ext --inplace --no-kernels``, measured as follows
+(bytes, after ``strip --strip-unneeded``; ``.text`` from ``size -A``):
+
+.. list-table::
+   :header-rows: 1
+
+   * - Artifact / section
+     - Before
+     - After
+     - Delta
+   * - ``_onnxpyprotoop.abi3.so`` stripped file
+     - 2,404,304
+     - 2,412,528
+     - +8,224 (+0.34%)
+   * - ``_onnxpyprotoop.abi3.so`` ``.text``
+     - 1,517,797
+     - 1,523,861
+     - +6,064 (+0.40%)
+   * - ``liblib_onnx_proto.so`` stripped file
+     - 1,371,656
+     - 1,371,656
+     - 0
+   * - ``liblib_onnx_proto.so`` ``.text``
+     - 948,058
+     - 948,058
+     - 0
+
+The stripped proto library is byte-identical before and after, and the
+extension's ``DT_NEEDED`` entries are unchanged.

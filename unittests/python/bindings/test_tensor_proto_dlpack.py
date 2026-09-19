@@ -7,7 +7,7 @@ import unittest
 
 import numpy
 
-from onnx_light.onnx import FileLoadMode, ParseOptions, TensorProto
+from onnx_light.onnx import FileLoadMode, GraphProto, ModelProto, ParseOptions, TensorProto
 from onnx_light.onnx.numpy_helper import from_array
 
 
@@ -157,8 +157,13 @@ class TestTensorProtoDLPack(unittest.TestCase):
 
     def test_borrowed_pointer_copies_and_release(self):
         tensor, address, released = self.make_borrowed()
-        copied = TensorProto()
-        copied.CopyFrom(tensor)
+        # Indexed assignment uses the C++ copy constructor, preserving the token.
+        # CopyFrom/append round-trip through serialization and own new bytes.
+        graph = GraphProto()
+        graph.initializer.add()
+        graph.initializer[0] = tensor
+        copied = graph.initializer[0]
+        self.assertIsNot(copied, tensor)
         capsule = copied.__dlpack__()
         self.assertEqual(capsule_tensor(capsule).data, address)
         view = numpy.from_dlpack(tensor)
@@ -166,7 +171,7 @@ class TestTensorProtoDLPack(unittest.TestCase):
         # The exported token must survive replacement of both borrowed spans.
         tensor.Clear()
         copied.Clear()
-        del tensor, copied
+        del tensor, copied, graph
         gc.collect()
         self.assertEqual(released, [])
         numpy.testing.assert_array_equal(view, numpy.arange(64, dtype=numpy.uint8))
@@ -200,6 +205,28 @@ class TestTensorProtoDLPack(unittest.TestCase):
         del capsule
         gc.collect()
         self.assertEqual(len(released), 1)
+
+    def test_owned_source_retained_until_final_release(self):
+        released = []
+        options = ParseOptions()
+        options.raw_data_callback = lambda tensor, graph: lambda: released.append(True)
+        tensor = TensorProto()
+        tensor.ParseFromString(
+            TensorProto(
+                data_type=TensorProto.UINT8, dims=[1], raw_data=b"\x07"
+            ).SerializeToString(),
+            options,
+        )
+        references = sys.getrefcount(tensor)
+        view = numpy.from_dlpack(tensor)
+        self.assertGreater(sys.getrefcount(tensor), references)
+        del tensor
+        gc.collect()
+        self.assertEqual(released, [])
+        self.assertEqual(view.tolist(), [7])
+        del view
+        gc.collect()
+        self.assertEqual(released, [True])
 
     def test_scalar_and_empty(self):
         for shape in ((), (0,), (2, 0, 3)):
@@ -305,18 +332,27 @@ class TestTensorProtoDLPack(unittest.TestCase):
     def test_loaded_mmap_payload(self):
         expected = numpy.arange(64, dtype=numpy.uint8)
         with tempfile.TemporaryDirectory() as directory:
-            path = os.path.join(directory, "tensor.pb")
+            path = os.path.join(directory, "model.onnx")
             with open(path, "wb") as stream:
-                stream.write(from_array(expected).SerializeToString())
+                stream.write(
+                    ModelProto(
+                        graph=GraphProto(initializer=[from_array(expected)])
+                    ).SerializeToString()
+                )
             options = ParseOptions()
             options.no_copy = True
             options.file_load_mode = FileLoadMode.MMAP
-            tensor = TensorProto()
-            tensor.ParseFromFile(path, options)
-            copied = TensorProto()
-            copied.CopyFrom(tensor)
+            model = ModelProto()
+            model.ParseFromFile(path, options)
+            graph = GraphProto()
+            graph.initializer.add()
+            graph.initializer[0] = model.graph.initializer[0]
+            copied = graph.initializer[0]
             view = numpy.from_dlpack(copied)
-            del tensor, copied
+            source_view = numpy.from_dlpack(model.graph.initializer[0])
+            self.assertEqual(view.ctypes.data, source_view.ctypes.data)
+            del source_view
+            del model, graph, copied
             gc.collect()
             numpy.testing.assert_array_equal(view, expected)
             del view

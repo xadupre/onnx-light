@@ -44,11 +44,52 @@ protos share the original owner. Do not clear, resize, replace, or reparse
 model. Borrowed storage with no owner token remains the caller's lifetime
 responsibility. Shape metadata is snapshotted at export.
 
+Explicit destructive transfer
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``tensor.release_dlpack()`` transfers the existing allocation or shared
+borrowed-storage owner to an independent, single-consumption legacy
+``dltensor`` capsule. Unlike ``__dlpack__``, it does not retain the source.
+The native equivalent is ``ReleaseDLPack(TensorProto&)`` in ``onnx_dlpack.h``.
+
+.. warning::
+
+   **DESTRUCTIVE:** ``release_dlpack()`` immediately removes the source
+   ``raw_data``: its pointer becomes null, size becomes zero, and
+   ``HasField("raw_data")`` becomes false. The tensor and any initializer/model
+   containing it cannot use that payload until it is reassigned.
+   All other proto fields (including name, dimensions, dtype, and external
+   metadata) remain unchanged.
+
+The descriptor snapshots dimensions and dtype, and its storage survives
+source destruction or reuse. The deleter never accesses the source.
+User-provided storage callbacks must likewise be independent of the source.
+Owned and aligned-owned allocations transfer without copying; borrowed data
+requires a lifetime owner and shares exactly-once cleanup with other owners.
+Validation and allocation failures leave the source unchanged, including
+failure to create the Python capsule.
+
+This method applies the same dtype, shape, endian, alignment, and explicit
+empty-payload restrictions as ``__dlpack__``. Consumers must not write to the
+buffer. The return value is a capsule, not an array or protocol object;
+consumers accepting capsules directly can consume it once.
+
+.. warning::
+
+   Transferring owned storage while earlier ``__dlpack__`` views or capsules
+   are still alive raises an exception without modifying the source. Release
+   those consumers first. Borrowed storage with a shared lifetime owner can
+   be transferred while views remain alive; each view retains that owner.
+
 Binary-size measurement
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-The export implementation stays in the Python extensions; it introduces no
-DLPack runtime library or ``lib_onnx_proto`` dependency. A Linux x86-64
+The following historical measurement covers the original non-destructive
+Python-only export, **before** native destructive transfer was added.
+The current implementation shares validation and dtype mapping through
+``lib_onnx_proto`` and vendors the header-only DLPack C ABI; it adds no DLPack
+runtime library. These size deltas do not measure the native transfer API.
+A Linux x86-64
 Release build with GCC 13.3.0, Python 3.13.15 and nanobind 3.1.0, using
 ``python setup.py build_ext --inplace --no-kernels``, measured as follows
 (bytes, after ``strip --strip-unneeded``; ``.text`` from ``size -A``):
@@ -77,5 +118,5 @@ Release build with GCC 13.3.0, Python 3.13.15 and nanobind 3.1.0, using
      - 948,058
      - 0
 
-The stripped proto library is byte-identical before and after, and the
-extension's ``DT_NEEDED`` entries are unchanged.
+In that historical measurement the stripped proto library was byte-identical
+before and after, and the extension's ``DT_NEEDED`` entries were unchanged.

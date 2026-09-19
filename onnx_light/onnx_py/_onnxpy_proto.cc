@@ -35,56 +35,24 @@ constexpr size_t MAX_SHORT_REPR_LENGTH = 60;
 struct TensorProtoDLPackOwner {
   nb::object proto;
   std::shared_ptr<void> buffer;
+  std::shared_ptr<void> export_guard;
 };
 
 nb::object MakeTensorProtoDLPack(nb::handle self) {
   const auto &tensor = nb::cast<const TensorProto &>(self);
-  const auto dtype = DLPackDtypeFromOnnx(tensor.data_type(), "TensorProto");
-  EXT_ENFORCE_INVALID(!tensor.has_segment(),
-                      "TensorProto.__dlpack__: segmented tensors are not supported.");
-  EXT_ENFORCE_INVALID(tensor.has_raw_data(),
-                      "TensorProto.__dlpack__: requires raw_data; typed-field-only payloads and "
-                      "unloaded external data are not supported.");
+  DLPackMetadata metadata;
+  try {
+    metadata = ValidateDLPack(tensor);
+  } catch (const DLPackBufferError &error) {
+    throw nb::buffer_error(error.what());
+  }
+  const nb::dlpack::dtype dtype{metadata.dtype.code, metadata.dtype.bits, metadata.dtype.lanes};
+  const std::vector<size_t> shape(metadata.shape.begin(), metadata.shape.end());
   const auto &raw = tensor.ref_raw_data();
-  const size_t itemsize = dtype.bits / 8;
-  if (itemsize > 1 && !is_processor_little_endian()) {
-    throw nb::buffer_error("TensorProto.__dlpack__: multi-byte raw_data requires a little-endian "
-                           "host; byte swapping would require a copy.");
-  }
-  // nanobind caps ndarray rank at 128 and forms signed 64-bit contiguous strides.
-  EXT_ENFORCE_INVALID(tensor.dims_size() <= 128,
-                      "TensorProto.__dlpack__: rank must not exceed 128.");
-  std::vector<size_t> shape;
-  shape.reserve(tensor.dims_size());
-  const uint64_t limit =
-      std::min<uint64_t>(std::numeric_limits<size_t>::max(), std::numeric_limits<int64_t>::max());
-  uint64_t elements = 1;
-  bool empty = false;
-  for (int64_t dim : tensor.ref_dims()) {
-    EXT_ENFORCE_INVALID(dim >= 0, "TensorProto.__dlpack__: dimensions must be non-negative.");
-    const uint64_t extent = std::max<uint64_t>(static_cast<uint64_t>(dim), 1);
-    EXT_ENFORCE_INVALID(extent <= limit / elements,
-                        "TensorProto.__dlpack__: shape or strides overflow.");
-    elements *= extent;
-    empty |= dim == 0;
-    shape.push_back(static_cast<size_t>(dim));
-  }
-  EXT_ENFORCE_INVALID(elements <= limit / itemsize,
-                      "TensorProto.__dlpack__: payload byte count overflows.");
-  const size_t expected = empty ? 0 : static_cast<size_t>(elements * itemsize);
-  EXT_ENFORCE_INVALID(raw.size() == expected,
-                      "TensorProto.__dlpack__: raw_data size does not match shape and data type.");
-  const size_t alignment =
-      dtype.code == static_cast<uint8_t>(nb::dlpack::dtype_code::Complex) ? itemsize / 2 : itemsize;
-  if (expected && reinterpret_cast<uintptr_t>(raw.data()) % alignment != 0) {
-    throw nb::buffer_error("TensorProto.__dlpack__: raw_data is not aligned to its element "
-                           "(or complex component) width; alignment would require a copy.");
-  }
-
   // Retain the token independently: a borrowed span may be cleared or replaced
   // while a consumer still holds the old buffer. Never copy the ByteSpan itself.
-  auto state = std::make_unique<TensorProtoDLPackOwner>(
-      TensorProtoDLPackOwner{nb::borrow<nb::object>(self), raw.owner()});
+  auto state = std::make_unique<TensorProtoDLPackOwner>(TensorProtoDLPackOwner{
+      nb::borrow<nb::object>(self), raw.owner(), raw.acquire_export_guard()});
   nb::capsule owner(state.get(), [](void *ptr) noexcept {
     nb::gil_scoped_acquire gil;
     delete static_cast<TensorProtoDLPackOwner *>(ptr);
@@ -93,6 +61,44 @@ nb::object MakeTensorProtoDLPack(nb::handle self) {
   nb::ndarray<nb::ro> array(raw.data(), shape.size(), shape.data(), owner, nullptr, dtype,
                             nb::device::cpu::value, 0);
   return nb::cast(std::move(array));
+}
+
+struct ReleasedDLPackOwner {
+  DLManagedTensor managed{};
+  DLManagedTensor *native = nullptr;
+
+  static void Delete(DLManagedTensor *managed) {
+    // A consumer may release from a native worker thread. Storage callbacks can own Python objects.
+    nb::gil_scoped_acquire gil;
+    auto *owner = static_cast<ReleasedDLPackOwner *>(managed->manager_ctx);
+    if (owner->native)
+      owner->native->deleter(owner->native);
+    delete owner;
+  }
+};
+
+nb::object ReleaseTensorProtoDLPack(TensorProto &tensor) {
+  auto owner = std::make_unique<ReleasedDLPackOwner>();
+  owner->managed.manager_ctx = owner.get();
+  owner->managed.deleter = ReleasedDLPackOwner::Delete;
+  // Allocate the Python capsule before the destructive native call, too.
+  PyObject *object = PyCapsule_New(&owner->managed, "dltensor", [](PyObject *capsule) {
+    if (PyCapsule_IsValid(capsule, "dltensor")) {
+      auto *managed = static_cast<DLManagedTensor *>(PyCapsule_GetPointer(capsule, "dltensor"));
+      managed->deleter(managed);
+    }
+  });
+  if (!object)
+    throw nb::python_error();
+  nb::object capsule = nb::steal<nb::object>(object);
+  auto *state = owner.release();
+  try {
+    state->native = ReleaseDLPack(tensor);
+  } catch (const DLPackBufferError &error) {
+    throw nb::buffer_error(error.what());
+  }
+  state->managed.dl_tensor = state->native->dl_tensor;
+  return capsule;
 }
 
 // Adapts a Python callable to ParseOptions::raw_data_callback. The callable is invoked as
@@ -2164,6 +2170,23 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
           "Does not load, convert, or copy payloads. Consumers must not write to the buffer. "
           "Do not clear, resize, replace, or reparse owned source storage while a view exists. "
           "Always returns a legacy capsule, including when max_version is supplied.")
+      .def("release_dlpack", &ReleaseTensorProtoDLPack,
+           R"pbdoc(Transfers raw_data without copying to a single-consumption CPU DLPack capsule.
+
+.. warning::
+
+   DESTRUCTIVE: unlike ``__dlpack__``, this immediately removes the source payload.
+   The tensor and any initializer/model containing it cannot use that payload until
+   ``raw_data`` is reassigned. All other proto fields remain unchanged.
+
+The descriptor snapshots shape/type and owns storage independently of the source, so it
+survives source destruction or reuse. Its deleter never accesses the source. User-supplied
+storage callbacks must likewise not reference a destroyed source. Borrowed data requires
+a lifetime owner. Validation/allocation failure leaves the source unchanged. The same
+dtype, shape, alignment and endian restrictions as ``__dlpack__`` apply. Consumers must
+not write to the buffer. Owned storage with active ``__dlpack__`` consumers cannot
+be transferred: release those consumers first. Borrowed exports retain their shared owner.
+The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
       .def(
           "__dlpack_device__",
           [](const TensorProto &self) {

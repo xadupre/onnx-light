@@ -89,6 +89,36 @@ The compact helpers delegate to the explicit
 Those ``make_*`` methods are the complete low-level contract for generated code
 and advanced authoring.
 
+Transfer an existing initializer
+-------------------------------
+
+``builder.make_initializer(tensor)`` copies a ``TensorProto`` and leaves it
+unchanged. When the caller no longer needs the tensor, the explicit
+``builder.make_initializer_move(tensor)`` method transfers it instead::
+
+    import numpy
+    from onnx_light.onnx import TensorProto, numpy_helper
+    from onnx_light.onnx_core.graph_builder import GraphBuilder
+
+    builder = GraphBuilder("transfer")
+    tensor = numpy_helper.from_array(numpy.ones(1024, dtype=numpy.float32), name="weight")
+    name = builder.make_initializer_move(tensor)
+    assert name == "weight"
+    assert tensor.SerializeToString() == TensorProto().SerializeToString()
+
+On success the source is cleared to an empty, reusable ``TensorProto``. All
+Python references to that same source object observe the cleared state.
+Validation failures leave the source unchanged. Both methods use the same name
+and public-input default checks, shape inference, and value annotations.
+External-data metadata is transferred without reading the external file.
+
+The C++ equivalent is ``builder.MakeInitializerMove(std::move(tensor))``;
+``MakeInitializer(const TensorProto&)`` retains its copying behavior. Moving
+preserves the backing allocation of owned ``raw_data`` and retains the owner
+token of borrowed ``raw_data`` without materializing it. This avoids the
+insertion copy; subsequent graph export operations retain their existing
+copying behavior.
+
 Structured values and encoded initializers
 -----------------------------------------
 

@@ -518,6 +518,16 @@ const std::string &GraphBuilder::MakeEncodedInitializer(const EncodedValueProto 
 }
 
 const std::string &GraphBuilder::MakeInitializer(const TensorProto &tensor) {
+  return MakeInitializerImpl(tensor);
+}
+
+const std::string &GraphBuilder::MakeInitializerMove(TensorProto &&tensor) {
+  const std::string &name = MakeInitializerImpl(std::move(tensor));
+  tensor.Clear();
+  return name;
+}
+
+template <typename Tensor> const std::string &GraphBuilder::MakeInitializerImpl(Tensor &&tensor) {
   const std::string tensor_name = tensor.name().value();
   const auto input = std::find_if(inputs_.begin(), inputs_.end(), [&](const ValueInfoProto &value) {
     return value.name().value() == tensor_name;
@@ -557,11 +567,12 @@ const std::string &GraphBuilder::MakeInitializer(const TensorProto &tensor) {
       }
     }
   }
+  SymTensor descriptor;
+  const bool has_descriptor = !is_input && SymTensorFromTensorProto(tensor, descriptor);
   // ONNX permits an initializer to supply the default for a public input.
   const std::string &reserved =
       is_input && !has_initializer ? *names_.find(tensor_name) : ReserveName(tensor_name);
-  initializers_.push_back(tensor);
-  TensorProto &added = initializers_.back();
+  initializers_.push_back(std::forward<Tensor>(tensor));
   if (is_input) {
     // Defaults remain overridable; neither their values nor their dimensions
     // specialize the public input declaration.
@@ -569,8 +580,7 @@ const std::string &GraphBuilder::MakeInitializer(const TensorProto &tensor) {
                             /*allow_input_overwrite=*/false);
     return reserved;
   }
-  SymTensor descriptor;
-  if (SymTensorFromTensorProto(added, descriptor)) {
+  if (has_descriptor) {
     SeedShape(reserved, std::move(descriptor));
   }
   // Seed the incremental annotations: an initializer is a "weight", is kept

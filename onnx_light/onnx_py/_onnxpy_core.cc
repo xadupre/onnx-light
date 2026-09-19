@@ -2005,8 +2005,18 @@ void AddOnnxPyBuilder(nb::module_ &m) {
       .def("unique_name", &GraphBuilder::UniqueName, nb::arg("prefix") = "n",
            "Returns and records a fresh, unused name starting with ``prefix``.")
       .def("make_initializer", &GraphBuilder::MakeInitializer, nb::arg("tensor"),
-           "Appends ``tensor`` (which may carry external data) as an initializer and "
+           "Copies ``tensor`` (which may carry external data) as an initializer and "
            "returns its name.")
+      .def(
+          "make_initializer_move",
+          [](GraphBuilder &builder, TensorProto &tensor) {
+            return builder.MakeInitializerMove(std::move(tensor));
+          },
+          nb::arg("tensor"),
+          "Moves ``tensor`` into the builder and returns its name, preserving owned raw_data "
+          "allocations and borrowed payload owners. On success, clears the source to an empty, "
+          "reusable TensorProto. Validation failures leave the source unchanged. Uses the same "
+          "validation and annotations as make_initializer, which retains copy semantics.")
       .def("make_struct_type", &GraphBuilder::MakeStructType, nb::arg("type"),
            "Registers a model-scoped structured type declaration.")
       .def("make_encoded_initializer", &GraphBuilder::MakeEncodedInitializer, nb::arg("value"),

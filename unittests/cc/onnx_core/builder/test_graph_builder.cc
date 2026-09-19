@@ -124,6 +124,159 @@ TEST(GraphBuilder, MaintainsConstantInfoIncrementally) {
   EXPECT_EQ(builder.Compute().NodeConstant().at(0), core::compute::ConstantInfo::kConstant);
 }
 
+TEST(GraphBuilder, MakeInitializerMovePreservesOwnedAllocation) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  TensorProto tensor;
+  tensor.set_name("weight");
+  tensor.set_data_type(TensorProto::DataType::FLOAT);
+  tensor.add_dims(1024);
+  tensor.set_raw_data(std::string(1024 * sizeof(float), '\0'));
+  const auto *data = tensor.raw_data().data();
+  const auto serialized = tensor.SerializeAsString();
+
+  core::builder::GraphBuilder copying("copy", SchemaLookup());
+  EXPECT_EQ(copying.MakeInitializer(tensor), "weight");
+  EXPECT_NE(copying.Initializers()[0].raw_data().data(), data);
+  EXPECT_EQ(tensor.SerializeAsString(), serialized);
+
+  EXPECT_EQ(builder.MakeInitializerMove(std::move(tensor)), "weight");
+  ASSERT_EQ(builder.Initializers().size(), 1u);
+  EXPECT_EQ(builder.Initializers()[0].raw_data().data(), data);
+  EXPECT_EQ(builder.Initializers()[0].SerializeAsString(), serialized);
+  EXPECT_EQ(tensor.SerializeAsString(), TensorProto().SerializeAsString());
+  EXPECT_EQ(builder.GetShape("weight").Shape(), MakeShape({1024}));
+  EXPECT_EQ(builder.Compute().ValueTags().at("weight"), "weight");
+  EXPECT_TRUE(builder.Compute().IsConstantValue("weight"));
+
+  tensor.set_name("reused");
+  tensor.set_data_type(TensorProto::DataType::INT64);
+  tensor.add_dims(2);
+  tensor.add_int64_data(2);
+  tensor.add_int64_data(3);
+  EXPECT_EQ(builder.MakeInitializerMove(std::move(tensor)), "reused");
+  EXPECT_TRUE(builder.GetShape("reused").HasValueAsShape());
+  EXPECT_EQ(builder.Initializers()[0].raw_data().data(), data);
+}
+
+TEST(GraphBuilder, MakeInitializerMovePreservesExternalData) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  TensorProto tensor;
+  tensor.set_name("external");
+  tensor.set_data_type(TensorProto::DataType::FLOAT);
+  tensor.add_dims(4);
+  tensor.set_data_location(TensorProto::DataLocation::EXTERNAL);
+  auto *entry = tensor.add_external_data();
+  entry->set_key("location");
+  entry->set_value("missing-weights.bin");
+  entry = tensor.add_external_data();
+  entry->set_key("offset");
+  entry->set_value("16");
+  entry = tensor.add_external_data();
+  entry->set_key("length");
+  entry->set_value("16");
+  tensor.set_doc_string("External initializer");
+  const auto serialized = tensor.SerializeAsString();
+  EXPECT_EQ(builder.MakeInitializerMove(std::move(tensor)), "external");
+  EXPECT_EQ(builder.Initializers()[0].SerializeAsString(), serialized);
+  EXPECT_FALSE(builder.Initializers()[0].has_raw_data());
+  EXPECT_EQ(builder.GetShape("external").Shape(), MakeShape({4}));
+  EXPECT_EQ(tensor.SerializeAsString(), TensorProto().SerializeAsString());
+}
+
+TEST(GraphBuilder, MakeInitializerMoveRetainsBorrowedOwner) {
+  for (bool is_default : {false, true}) {
+    int released = 0;
+    std::weak_ptr<void> owner;
+    {
+      core::builder::GraphBuilder builder("g", SchemaLookup());
+      TensorProto tensor;
+      tensor.set_name(builder.UniqueName("reserved"));
+      tensor.set_data_type(TensorProto::DataType::FLOAT);
+      tensor.add_dims(32);
+      auto bytes = std::make_shared<std::vector<uint8_t>>(32 * sizeof(float), 0);
+      const auto *data = bytes->data();
+      tensor.set_raw_data_with_deleter(data, bytes->size(), [bytes, &released]() { ++released; });
+      owner = tensor.raw_data().owner();
+      bytes.reset();
+      const auto serialized = tensor.SerializeAsString();
+      EXPECT_THROW(builder.MakeInitializerMove(std::move(tensor)), core::builder::BuilderError);
+      EXPECT_EQ(tensor.SerializeAsString(), serialized);
+      const auto &unchanged = tensor.raw_data();
+      EXPECT_EQ(unchanged.data(), data);
+      EXPECT_TRUE(unchanged.is_borrowed());
+      EXPECT_EQ(released, 0);
+      EXPECT_TRUE(builder.Initializers().empty());
+
+      tensor.set_name("weight");
+      if (is_default) {
+        builder.MakeInput("weight", core::symbolic::TensorType::kFloat, MakeShape({32}));
+      }
+      builder.MakeInitializerMove(std::move(tensor));
+      const auto &payload = builder.Initializers()[0].raw_data();
+      EXPECT_EQ(payload.data(), data);
+      EXPECT_TRUE(payload.is_borrowed());
+      EXPECT_FALSE(owner.owner_before(payload.owner()));
+      EXPECT_FALSE(payload.owner().owner_before(owner));
+      EXPECT_FALSE(owner.expired());
+      EXPECT_EQ(released, 0);
+      EXPECT_EQ(tensor.SerializeAsString(), TensorProto().SerializeAsString());
+      EXPECT_FALSE(tensor.raw_data().owner());
+      EXPECT_EQ(builder.Compute().IsConstantValue("weight"), !is_default);
+    }
+    EXPECT_EQ(released, 1);
+    EXPECT_TRUE(owner.expired());
+  }
+}
+
+TEST(GraphBuilder, MakeInitializerMovePreservesOverridableDefault) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  ValueInfoProto input;
+  input.set_name("x");
+  auto *type = input.mutable_type()->mutable_tensor_type();
+  type->set_elem_type(TensorProto::DataType::FLOAT);
+  type->mutable_shape()->add_dim()->set_dim_param("batch");
+  builder.MakeInput(input);
+  const auto shape = builder.GetShape("x").Shape();
+  const auto tags = builder.Compute().ValueTags();
+  TensorProto tensor = MakeInitializer<float>("x", {2}, {1.f, 2.f});
+  EXPECT_EQ(builder.MakeInitializerMove(std::move(tensor)), "x");
+  EXPECT_EQ(builder.GetShape("x").Shape(), shape);
+  EXPECT_EQ(builder.Compute().ValueTags(), tags);
+  EXPECT_FALSE(builder.Compute().IsConstantValue("x"));
+  EXPECT_EQ(builder.Inputs()[0].SerializeAsString(), input.SerializeAsString());
+  EXPECT_EQ(tensor.SerializeAsString(), TensorProto().SerializeAsString());
+}
+
+TEST(GraphBuilder, MakeInitializerMoveValidationDoesNotConsumeSource) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  std::vector<TensorProto> invalid = {MakeInitializer<int64_t>("x", {2}, {1, 2}),
+                                      MakeInitializer<float>("x", {1, 2}, {1.f, 2.f}),
+                                      MakeInitializer<float>("x", {3}, {1.f, 2.f, 3.f}),
+                                      MakeInitializer<float>("", {2}, {1.f, 2.f})};
+  for (auto &tensor : invalid) {
+    const auto serialized = tensor.SerializeAsString();
+    EXPECT_THROW(builder.MakeInitializerMove(std::move(tensor)), core::builder::BuilderError);
+    EXPECT_EQ(tensor.SerializeAsString(), serialized);
+    EXPECT_TRUE(builder.Initializers().empty());
+  }
+
+  for (const auto &name : {"x", "weight"}) {
+    TensorProto tensor;
+    tensor.set_name(name);
+    tensor.set_data_type(TensorProto::DataType::FLOAT);
+    tensor.add_dims(2);
+    tensor.set_raw_data(std::string(2 * sizeof(float), '\0'));
+    builder.MakeInitializer(tensor);
+    const auto serialized = tensor.SerializeAsString();
+    const auto *data = tensor.raw_data().data();
+    EXPECT_THROW(builder.MakeInitializerMove(std::move(tensor)), core::builder::BuilderError);
+    EXPECT_EQ(tensor.SerializeAsString(), serialized);
+    EXPECT_EQ(tensor.raw_data().data(), data);
+  }
+  EXPECT_EQ(builder.Initializers().size(), 2u);
+}
+
 TEST(GraphBuilder, MakeNodeUsesProvidedOutputName) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));

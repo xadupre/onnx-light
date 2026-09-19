@@ -11,7 +11,6 @@
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/tuning/cpu_executor.h"
 #include "onnx_core/runtime/tuning/kernel_tuning.h"
-#include "onnx_core/runtime/tuning/kernel_tuning_cache.h"
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
 #include <gtest/gtest.h>
@@ -22,9 +21,6 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
-#include <filesystem>
-#include <fstream>
-#include <iterator>
 #include <limits>
 #include <stdexcept>
 #include <thread>
@@ -2762,6 +2758,22 @@ TEST(KernelClass, GemmPreparedConstantBMatchesReferenceForBothTransposeModes) {
   }
 }
 
+TEST(KernelClass, GemmPreparedHalfConstantBStoresPromotedPackedValues) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Gemm gemm_kernel{ctx};
+  core::runtime::PreparedExecutionState state(1, 1);
+  const Tensor a = MakeHalfTensor(DataType::FLOAT16, {1, 3}, {1, 2, 3});
+  const Tensor b = MakeHalfTensor(DataType::FLOAT16, {3, 2}, {1, 2, 3, 4, 5, 6});
+
+  const auto prepared = gemm_kernel.PrepareConstantB(b, /*transB=*/0, state);
+
+  ASSERT_TRUE(prepared.IsReady());
+  EXPECT_EQ(state.prepared_arena().TotalAllocatedSize(), 6 * sizeof(float));
+  const Tensor expected = gemm_kernel(a, b, nullptr, 1.0f, 0.0f, 0, 0);
+  const Tensor got = gemm_kernel(a, prepared, nullptr, 1.0f, 0.0f, 0);
+  EXPECT_EQ(DecodeHalfTensor(got), DecodeHalfTensor(expected));
+}
+
 TEST(KernelClass, GemmPreparedConstantBAllocationFailureCanRetry) {
   const KernelContext ctx{DefaultOpset(13)};
   Gemm gemm_kernel{ctx};
@@ -2910,7 +2922,6 @@ TEST(KernelClass, GemmUsesTypedParallelTaskTuning) {
   EXPECT_EQ(float_key.library, "onnx_light");
   EXPECT_EQ(float_key.kernel, "Gemm");
   EXPECT_EQ(float_key.implementation, "portable");
-  EXPECT_EQ(float_key.tuning_abi, 2u);
   EXPECT_NE(float_key, half_key);
   EXPECT_EQ(gemm_kernel.TuningKey(static_cast<int32_t>(DataType::STRING)).device,
             core::symbolic::Device::kUndefined);
@@ -2918,9 +2929,8 @@ TEST(KernelClass, GemmUsesTypedParallelTaskTuning) {
   const auto schema = core::runtime::GetKernelTuningRegistry().FindSchema(float_key);
   ASSERT_NE(schema, nullptr);
   const auto &defaults = schema->portable_defaults();
-  EXPECT_EQ(defaults.values.size(), 2u);
+  EXPECT_EQ(defaults.values.size(), 1u);
   EXPECT_EQ(defaults.Get<int64_t>("parallel.minimum_tasks"), 2);
-  EXPECT_EQ(defaults.Get<int64_t>("algorithm.configuration"), 0);
 
   core::runtime::KernelTuningParameters tuned = defaults;
   tuned.values["parallel.minimum_tasks"] = int64_t{1};
@@ -2948,254 +2958,6 @@ TEST(KernelClass, GemmUsesTypedParallelTaskTuning) {
   tuned.values["parallel.minimum_tasks"] = int64_t{1};
   tuned.key.library = "other_library";
   EXPECT_THROW(gemm_kernel.Configure(tuned), std::invalid_argument);
-}
-
-TEST(KernelClass, GemmAlgorithmConfigurationsValidateAndResetDefaults) {
-  Gemm gemm{KernelContext{DefaultOpset(13)}};
-  const auto key = gemm.TuningKey(static_cast<int32_t>(DataType::FLOAT));
-  const auto schema = core::runtime::GetKernelTuningRegistry().FindSchema(key);
-  ASSERT_NE(schema, nullptr);
-  auto parameters = schema->portable_defaults();
-  const std::vector<int64_t> tile_m{64, 32, 64, 64, 64, 64, 32};
-  const std::vector<int64_t> tile_n{256, 256, 64, 256, 256, 256, 64};
-  const std::vector<int64_t> tile_k{256, 256, 256, 64, 256, 256, 128};
-  for (int64_t configuration = 0; configuration < 7; ++configuration) {
-    SCOPED_TRACE(configuration);
-    parameters.values["algorithm.configuration"] = configuration;
-    ASSERT_NO_THROW(gemm.Configure(parameters));
-    EXPECT_EQ(gemm.tuning().tile_m, tile_m[configuration]);
-    EXPECT_EQ(gemm.tuning().tile_n, tile_n[configuration]);
-    EXPECT_EQ(gemm.tuning().tile_k, tile_k[configuration]);
-    EXPECT_EQ(gemm.tuning().pack_b_minimum_elements, configuration == 4 ? 0
-                                                     : configuration == 5
-                                                         ? std::numeric_limits<int64_t>::max()
-                                                         : 16384);
-    EXPECT_EQ(gemm.tuning().parallel_minimum_tasks, 2);
-  }
-  parameters.values["algorithm.configuration"] = int64_t{0};
-  gemm.Configure(parameters);
-  EXPECT_EQ(gemm.tuning().tile_m, 64);
-  EXPECT_EQ(gemm.tuning().tile_n, 256);
-  EXPECT_EQ(gemm.tuning().tile_k, 256);
-  EXPECT_EQ(gemm.tuning().pack_b_minimum_elements, 16384);
-  for (const core::runtime::TuningValue &invalid :
-       {core::runtime::TuningValue{int64_t{-1}}, core::runtime::TuningValue{int64_t{7}},
-        core::runtime::TuningValue{1.0}, core::runtime::TuningValue{true},
-        core::runtime::TuningValue{std::string{"1"}}}) {
-    parameters.values["algorithm.configuration"] = invalid;
-    EXPECT_THROW(schema->Validate(parameters), std::invalid_argument);
-    EXPECT_THROW(gemm.Configure(parameters), std::invalid_argument);
-  }
-  parameters = schema->portable_defaults();
-  parameters.key.tuning_abi = 1;
-  EXPECT_EQ(core::runtime::GetKernelTuningRegistry().FindSchema(parameters.key), nullptr);
-  EXPECT_THROW(gemm.Configure(parameters), std::invalid_argument);
-}
-
-TEST(KernelTuningCache, GemmRejectsLegacyAbiAndRequiresExactExecutorDescriptor) {
-  using namespace core::runtime;
-  struct CacheFile {
-    std::filesystem::path path =
-        std::filesystem::temp_directory_path() /
-        ("onnx_light_gemm_abi_" +
-         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".cache");
-    ~CacheFile() {
-      std::error_code error;
-      std::filesystem::remove(path, error);
-      std::filesystem::remove(path.string() + ".lock", error);
-      std::filesystem::remove(path.string() + ".tmp", error);
-    }
-  } cache;
-  const Gemm gemm{KernelContext{DefaultOpset(13)}};
-  const auto key = gemm.TuningKey(static_cast<int32_t>(DataType::FLOAT));
-  ASSERT_EQ(key.tuning_abi, 2u);
-  const auto schema = GetKernelTuningRegistry().FindSchema(key);
-  ASSERT_NE(schema, nullptr);
-  auto current = schema->portable_defaults();
-  current.values["algorithm.configuration"] = int64_t{6};
-  auto legacy_key = key;
-  legacy_key.tuning_abi = 1;
-  const CpuExecutionDescriptor execution{core::platform::GetCpuDescriptor(), 2};
-  auto mismatch = execution;
-  mismatch.effective_threads = 1;
-  ASSERT_EQ(UpdateKernelTuningCache(std::span<const KernelTuningParameters>(&current, 1),
-                                    {cache.path, execution})
-                .status,
-            KernelTuningCacheUpdateStatus::kUpdated);
-  {
-    std::ifstream input(cache.path);
-    const std::string serialized{std::istreambuf_iterator<char>{input},
-                                 std::istreambuf_iterator<char>{}};
-    const auto profile_start = serialized.find("\nprofile\n");
-    ASSERT_NE(profile_start, std::string::npos);
-    std::string legacy = serialized.substr(profile_start + 1);
-    const std::string abi = "\ntuning_abi 2\n";
-    const auto abi_position = legacy.find(abi);
-    ASSERT_NE(abi_position, std::string::npos);
-    legacy.replace(abi_position, abi.size(), "\ntuning_abi 1\n");
-    const std::string configuration = "value \"algorithm.configuration\" int64 6\n";
-    const auto configuration_position = legacy.find(configuration);
-    ASSERT_NE(configuration_position, std::string::npos);
-    legacy.erase(configuration_position, configuration.size());
-    std::ofstream output(cache.path, std::ios::app);
-    output << legacy;
-    ASSERT_TRUE(output.good());
-  }
-  KernelCalibrationSelection selection;
-  selection.library = key.library;
-  selection.kernels = {key.kernel};
-  selection.element_types = {key.element_type};
-  const auto before = GetKernelTuningRegistry().Snapshot();
-  const auto *before_mismatch = before.Resolve(key, mismatch);
-  ASSERT_NE(before_mismatch, nullptr);
-  const auto rejected = LoadKernelTuningCache(selection, {cache.path, mismatch});
-  EXPECT_TRUE(rejected.loaded.empty());
-  ASSERT_EQ(rejected.stale.size(), 1u);
-  EXPECT_EQ(rejected.stale.front(), legacy_key);
-  ASSERT_EQ(rejected.incompatible.size(), 1u);
-  EXPECT_EQ(rejected.incompatible.front(), key);
-  EXPECT_TRUE(rejected.invalid.empty());
-  EXPECT_EQ(GetKernelTuningRegistry().Snapshot().Resolve(key, mismatch)->values,
-            before_mismatch->values);
-  EXPECT_TRUE(std::any_of(rejected.diagnostics.begin(), rejected.diagnostics.end(),
-                          [](const auto &message) {
-                            return message.find("Gemm") != std::string::npos &&
-                                   message.find("incompatible tuning ABI 1") != std::string::npos;
-                          }));
-  EXPECT_EQ(GetKernelTuningRegistry().Snapshot().HasPublishedProfile(key, mismatch),
-            before.HasPublishedProfile(key, mismatch));
-  EXPECT_TRUE(std::any_of(
-      rejected.diagnostics.begin(), rejected.diagnostics.end(), [](const auto &message) {
-        return message.find("incompatible processor or execution descriptor") != std::string::npos;
-      }));
-
-  const auto loaded = LoadKernelTuningCache(selection, {cache.path, execution});
-  EXPECT_EQ(loaded.status, KernelTuningCacheLoadStatus::kLoaded);
-  ASSERT_EQ(loaded.loaded.size(), 1u);
-  EXPECT_EQ(loaded.loaded.front(), key);
-  ASSERT_EQ(loaded.stale.size(), 1u);
-  EXPECT_EQ(loaded.stale.front(), legacy_key);
-  EXPECT_TRUE(loaded.incompatible.empty());
-  EXPECT_TRUE(loaded.invalid.empty());
-  EXPECT_TRUE(
-      std::any_of(loaded.diagnostics.begin(), loaded.diagnostics.end(), [](const auto &message) {
-        return message.find("Gemm") != std::string::npos &&
-               message.find("incompatible tuning ABI 1") != std::string::npos;
-      }));
-  const auto after = GetKernelTuningRegistry().Snapshot();
-  const auto *resolved = after.Resolve(key, execution);
-  ASSERT_NE(resolved, nullptr);
-  EXPECT_EQ(resolved->Get<int64_t>("algorithm.configuration"), 6);
-  EXPECT_EQ(after.Resolve(key, mismatch)->values, before_mismatch->values);
-}
-
-TEST(KernelClass, GemmAlgorithmConfigurationsPreserveBitsAcrossDtypesAndExecutors) {
-  core::runtime::CpuExecutionPolicy policy;
-  policy.num_threads = 2;
-  policy.affinity_policy = core::runtime::CpuAffinityPolicy::kNone;
-  const auto executor = core::runtime::GlobalCpuExecutorRegistry().Acquire(policy);
-  const core::runtime::CpuExecutorScope scope(executor.get());
-  const KernelContext context{DefaultOpset(13)};
-  for (const auto dtype :
-       {DataType::FLOAT, DataType::DOUBLE, DataType::FLOAT16, DataType::BFLOAT16}) {
-    SCOPED_TRACE(static_cast<int32_t>(dtype));
-    auto make_tensor = [dtype](const Shape &shape, int seed) {
-      int64_t count = 1;
-      for (const auto dimension : shape) {
-        count *= dimension;
-      }
-      std::vector<float> values(count);
-      for (int64_t i = 0; i < count; ++i) {
-        values[i] = static_cast<float>((i * 17 + seed) % 47 - 23) / static_cast<float>(3 + (i % 7));
-      }
-      if (dtype == DataType::DOUBLE) {
-        const std::vector<double> doubles(values.begin(), values.end());
-        std::vector<uint8_t> bytes(doubles.size() * sizeof(double));
-        std::memcpy(bytes.data(), doubles.data(), bytes.size());
-        return Tensor("", dtype, shape, bytes);
-      }
-      Tensor tensor = Tensor::FromFloat("", shape, values);
-      return dtype == DataType::FLOAT
-                 ? tensor
-                 : onnx_kernels::DemoteFromFloat32(tensor, static_cast<int32_t>(dtype));
-    };
-    for (const Shape &dimensions : {Shape{65, 67, 259}, Shape{3, 5, 7}}) {
-      SCOPED_TRACE(::testing::PrintToString(dimensions));
-      const auto m = dimensions[0], n = dimensions[1], k = dimensions[2];
-      for (const int64_t trans_a : {0, 1}) {
-        for (const int64_t trans_b : {0, 1}) {
-          SCOPED_TRACE(trans_a);
-          SCOPED_TRACE(trans_b);
-          const Tensor a = make_tensor(trans_a ? Shape{k, m} : Shape{m, k}, 3);
-          const Tensor b = make_tensor(trans_b ? Shape{n, k} : Shape{k, n}, 11);
-          const std::vector<Tensor> biases{make_tensor({}, 7), make_tensor({n}, 9),
-                                           make_tensor({m, n}, 13)};
-          for (int bias = -1; bias < static_cast<int>(biases.size()); ++bias) {
-            SCOPED_TRACE(bias);
-            const Tensor *c = bias < 0 ? nullptr : &biases[bias];
-            Gemm baseline{context};
-            const auto key = baseline.TuningKey(static_cast<int32_t>(dtype));
-            const auto schema = core::runtime::GetKernelTuningRegistry().FindSchema(key);
-            ASSERT_NE(schema, nullptr);
-            auto parameters = schema->portable_defaults();
-            parameters.values["parallel.minimum_tasks"] = std::numeric_limits<int64_t>::max();
-            baseline.Configure(parameters);
-            const Tensor expected = baseline(a, b, c, 0.75f, -0.25f, trans_a, trans_b);
-            for (int64_t configuration = 0; configuration < 7; ++configuration) {
-              SCOPED_TRACE(configuration);
-              for (const int64_t minimum_tasks :
-                   {std::numeric_limits<int64_t>::max(), int64_t{1}}) {
-                SCOPED_TRACE(minimum_tasks);
-                Gemm candidate{context};
-                parameters.values["algorithm.configuration"] = configuration;
-                parameters.values["parallel.minimum_tasks"] = minimum_tasks;
-                candidate.Configure(parameters);
-                const Tensor actual = candidate(a, b, c, 0.75f, -0.25f, trans_a, trans_b);
-                ASSERT_EQ(actual.shape, expected.shape);
-                ASSERT_EQ(actual.data_type, expected.data_type);
-                ASSERT_EQ(actual.size_bytes(), expected.size_bytes());
-                EXPECT_EQ(std::memcmp(actual.bytes(), expected.bytes(), expected.size_bytes()), 0);
-                Tensor preallocated("", dtype, expected.shape,
-                                    std::vector<uint8_t>(expected.size_bytes(), 0x5a));
-                candidate(a, b, c, 0.75f, -0.25f, trans_a, trans_b, preallocated);
-                EXPECT_EQ(
-                    std::memcmp(preallocated.bytes(), expected.bytes(), expected.size_bytes()), 0);
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-TEST(KernelClass, GemmAlgorithmConfigurationsRejectInvalidOutputs) {
-  const KernelContext context{DefaultOpset(13)};
-  for (const auto dtype :
-       {DataType::FLOAT, DataType::DOUBLE, DataType::FLOAT16, DataType::BFLOAT16}) {
-    SCOPED_TRACE(static_cast<int32_t>(dtype));
-    const Tensor input = dtype == DataType::DOUBLE  ? Tensor::FromDouble("", {1, 1}, {1})
-                         : dtype == DataType::FLOAT ? Tensor::FromFloat("", {1, 1}, {1})
-                                                    : MakeHalfTensor(dtype, {1, 1}, {1});
-    Gemm candidate{context};
-    const auto schema =
-        core::runtime::GetKernelTuningRegistry().FindSchema(candidate.TuningKey(dtype));
-    ASSERT_NE(schema, nullptr);
-    auto parameters = schema->portable_defaults();
-    for (int64_t configuration = 0; configuration < 7; ++configuration) {
-      SCOPED_TRACE(configuration);
-      parameters.values["algorithm.configuration"] = configuration;
-      candidate.Configure(parameters);
-      Tensor wrong_shape("", dtype, {2, 1}, std::vector<uint8_t>(2 * input.size_bytes(), 0x5a));
-      Tensor wrong_dtype = Tensor::FromInt64("", {1, 1}, {123});
-      EXPECT_THROW(candidate(input, input, nullptr, 1, 0, 0, 0, wrong_shape),
-                   std::invalid_argument);
-      EXPECT_THROW(candidate(input, input, nullptr, 1, 0, 0, 0, wrong_dtype),
-                   std::invalid_argument);
-      EXPECT_EQ(wrong_shape.bytes()[0], 0x5a);
-      EXPECT_EQ(wrong_dtype.AsInt64()[0], 123);
-    }
-  }
 }
 
 TEST(KernelClass, GemmParallelTilesPreserveSerialReductionBits) {
@@ -3289,143 +3051,6 @@ TEST(KernelClass, GemmCalibrationSkipsInlineCandidate) {
   EXPECT_EQ(reporter.benchmark_cases(), 0u);
   ASSERT_FALSE(reporter.diagnostics().empty());
   EXPECT_NE(reporter.diagnostics().front().find("same execution path"), std::string::npos);
-}
-
-TEST(KernelClass, GemmAlgorithmCalibrationMeasuresCompleteCorpusInDeterministicOrder) {
-  core::runtime::CpuExecutionPolicy policy;
-  policy.num_threads = 2;
-  policy.affinity_policy = core::runtime::CpuAffinityPolicy::kNone;
-  const auto executor = core::runtime::GlobalCpuExecutorRegistry().Acquire(policy);
-  const core::runtime::CpuExecutorScope scope(executor.get());
-  const Gemm gemm{KernelContext{DefaultOpset(13)}};
-  const auto key = gemm.TuningKey(static_cast<int32_t>(DataType::FLOAT));
-  const auto calibrate = core::runtime::GetKernelTuningRegistry().FindCalibrationFunction(key);
-  ASSERT_TRUE(calibrate);
-  const core::runtime::CpuExecutionDescriptor execution{core::platform::GetCpuDescriptor(), 2};
-  for (const std::vector<int64_t> &candidates :
-       {std::vector<int64_t>{}, std::vector<int64_t>{6, 4, 6}}) {
-    core::runtime::CalibrationOptions options;
-    options.parameter_name = "algorithm.configuration";
-    options.parameter_values = candidates;
-    options.maximum_duration_ms = 30000;
-    core::runtime::CalibrationReporter reporter(options);
-    const auto selected = calibrate(key, execution, options, reporter);
-    ASSERT_TRUE(reporter.comparison().has_value());
-    const auto &comparison = *reporter.comparison();
-    EXPECT_EQ(comparison.parameter_name, "algorithm.configuration");
-    EXPECT_EQ(comparison.baseline_value, 0);
-    const std::vector<int64_t> expected = candidates.empty()
-                                              ? std::vector<int64_t>{0, 1, 2, 3, 4, 5, 6}
-                                              : std::vector<int64_t>{0, 4, 6};
-    ASSERT_EQ(comparison.values.size(), expected.size());
-    for (size_t index = 0; index < expected.size(); ++index) {
-      EXPECT_EQ(comparison.values[index].value, expected[index]);
-      EXPECT_EQ(comparison.values[index].benchmark_cases, 9u);
-      EXPECT_GT(comparison.values[index].duration_ns, 0u);
-    }
-    EXPECT_EQ(reporter.benchmark_cases(), 9u * expected.size());
-    EXPECT_LE(reporter.peak_memory_bytes(), uint64_t{64} << 20);
-    EXPECT_NE(std::find(expected.begin(), expected.end(), comparison.selected_value),
-              expected.end());
-    EXPECT_EQ(selected.Get<int64_t>("algorithm.configuration"), comparison.selected_value);
-    EXPECT_EQ(selected.Get<int64_t>("parallel.minimum_tasks"), 2);
-    EXPECT_NO_THROW(core::runtime::GetKernelTuningRegistry().FindSchema(key)->Validate(selected));
-  }
-}
-
-TEST(KernelClass, GemmAlgorithmCalibrationBudgetsIncludePackingAndPromotedScratch) {
-  core::runtime::CpuExecutionPolicy policy;
-  policy.num_threads = 1;
-  policy.affinity_policy = core::runtime::CpuAffinityPolicy::kNone;
-  const auto executor = core::runtime::GlobalCpuExecutorRegistry().Acquire(policy);
-  const core::runtime::CpuExecutorScope scope(executor.get());
-  const core::runtime::CpuExecutionDescriptor execution{core::platform::GetCpuDescriptor(), 1};
-  const Gemm gemm{KernelContext{DefaultOpset(13)}};
-  for (const auto dtype :
-       {DataType::FLOAT, DataType::DOUBLE, DataType::FLOAT16, DataType::BFLOAT16}) {
-    SCOPED_TRACE(static_cast<int32_t>(dtype));
-    const auto key = gemm.TuningKey(static_cast<int32_t>(dtype));
-    const auto calibrate = core::runtime::GetKernelTuningRegistry().FindCalibrationFunction(key);
-    ASSERT_TRUE(calibrate);
-    const bool half = dtype == DataType::FLOAT16 || dtype == DataType::BFLOAT16;
-    const uint64_t element_bytes = half ? 2 : dtype == DataType::DOUBLE ? 8 : 4;
-    // The first corpus case is M=8, N=16, K=32, with two resident outputs.
-    const uint64_t tensor_bytes = element_bytes * (256 + 512 + 2 * 128);
-    const uint64_t scratch_bytes = half ? 4 * (256 + 512 + 128) + 2 * 128 : 0;
-    const uint64_t packed_bytes = 512 * (half ? 4 : element_bytes);
-    for (const auto budget :
-         {uint64_t{1}, tensor_bytes, tensor_bytes + scratch_bytes + packed_bytes - 1,
-          tensor_bytes + scratch_bytes + packed_bytes}) {
-      SCOPED_TRACE(budget);
-      core::runtime::CalibrationOptions options;
-      options.parameter_name = "algorithm.configuration";
-      options.parameter_values = {0, 4, 5};
-      options.maximum_memory_bytes = budget;
-      options.maximum_duration_ms = 30000;
-      core::runtime::CalibrationReporter reporter(options);
-      const auto selected = calibrate(key, execution, options, reporter);
-      EXPECT_EQ(selected.Get<int64_t>("algorithm.configuration"), 0);
-      ASSERT_TRUE(reporter.comparison().has_value());
-      EXPECT_EQ(reporter.comparison()->selected_value, 0);
-      ASSERT_EQ(reporter.comparison()->values.size(), 3u);
-      const bool first_case_fits = budget == tensor_bytes + scratch_bytes + packed_bytes;
-      for (const auto &value : reporter.comparison()->values) {
-        EXPECT_EQ(value.benchmark_cases, first_case_fits ? 1u : 0u);
-      }
-      EXPECT_EQ(reporter.peak_memory_bytes(), first_case_fits ? budget : 0u);
-      EXPECT_TRUE(std::any_of(
-          reporter.diagnostics().begin(), reporter.diagnostics().end(),
-          [](const auto &message) { return message.find("memory budget") != std::string::npos; }));
-    }
-  }
-}
-
-TEST(KernelClass, GemmAlgorithmCalibrationRejectsInvalidCandidatesAndPartialTimeWinner) {
-  core::runtime::CpuExecutionPolicy policy;
-  policy.num_threads = 1;
-  policy.affinity_policy = core::runtime::CpuAffinityPolicy::kNone;
-  const auto executor = core::runtime::GlobalCpuExecutorRegistry().Acquire(policy);
-  const core::runtime::CpuExecutorScope scope(executor.get());
-  const core::runtime::CpuExecutionDescriptor execution{core::platform::GetCpuDescriptor(), 1};
-  const Gemm gemm{KernelContext{DefaultOpset(13)}};
-  const auto key = gemm.TuningKey(static_cast<int32_t>(DataType::FLOAT));
-  const auto calibrate = core::runtime::GetKernelTuningRegistry().FindCalibrationFunction(key);
-  ASSERT_TRUE(calibrate);
-  for (const std::vector<int64_t> &candidates :
-       {std::vector<int64_t>{-1}, std::vector<int64_t>{7}, std::vector<int64_t>{0, 3, 7},
-        std::vector<int64_t>(65, 0)}) {
-    core::runtime::CalibrationOptions options;
-    options.parameter_name = "algorithm.configuration";
-    options.parameter_values = candidates;
-    core::runtime::CalibrationReporter reporter(options);
-    EXPECT_THROW(calibrate(key, execution, options, reporter), std::invalid_argument);
-    EXPECT_EQ(reporter.benchmark_cases(), 0u);
-    EXPECT_FALSE(reporter.comparison().has_value());
-  }
-  core::runtime::CalibrationOptions options;
-  options.parameter_name = "algorithm.configuration";
-  options.maximum_duration_ms = 1;
-  core::runtime::CalibrationReporter reporter(options);
-  const auto selected = calibrate(key, execution, options, reporter);
-  EXPECT_EQ(selected.Get<int64_t>("algorithm.configuration"), 0);
-  ASSERT_TRUE(reporter.comparison().has_value());
-  EXPECT_EQ(reporter.comparison()->selected_value, 0);
-  uint64_t completed_cases = 0;
-  for (const auto &value : reporter.comparison()->values) {
-    EXPECT_LT(value.benchmark_cases, 9u);
-    completed_cases += value.benchmark_cases;
-  }
-  const bool partial_case = std::any_of(
-      reporter.diagnostics().begin(), reporter.diagnostics().end(), [](const auto &message) {
-        return message.find("resources include the incomplete case") != std::string::npos;
-      });
-  EXPECT_EQ(reporter.benchmark_cases(), completed_cases + static_cast<uint64_t>(partial_case));
-  if (partial_case || reporter.measured_duration_ns() != 0) {
-    EXPECT_GT(reporter.peak_memory_bytes(), 0u);
-  }
-  EXPECT_TRUE(std::any_of(
-      reporter.diagnostics().begin(), reporter.diagnostics().end(),
-      [](const auto &message) { return message.find("time budget") != std::string::npos; }));
 }
 
 // Verifies that ``kernel::MatMul`` produces FLOAT16 / BFLOAT16 outputs that

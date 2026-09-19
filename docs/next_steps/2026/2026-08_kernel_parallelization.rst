@@ -131,11 +131,12 @@ step and produces the input required by the next one.
         for each selected kernel, all controlled by named tuning parameters.
       - Calibration needs valid candidates with identical numerical and error
         behavior.
-      - Started (``Gemm`` calibrates ``parallel.minimum_tasks`` and now
-        explicitly compares finite tile/packing configurations through
-        ``algorithm.configuration``. Work-unit and conversion settings remain
-        internal implementation settings. Portable default promotion and ARM64
-        comparison remain separate acceptance tasks)
+      - Started (``Gemm`` already ran through ``ParallelFor`` with tunable
+        tile and grain parameters; it now also registers a calibration
+        candidate for ``parallel.minimum_tasks`` mirroring the unary
+        ``CalibrateAbs`` pattern. Calibrating the remaining ``Gemm``
+        parameters (tile/pack sizes) and promoting any candidate to a
+        portable default remain outstanding and belong to the next issue)
     * - G. Calibration
       - Step F
       - Validated processor-specific profiles published through
@@ -152,7 +153,7 @@ step and produces the input required by the next one.
         descriptor. None of the calibrated values were promoted to portable
         schema defaults, because only one architecture was measured; see
         ``kernel_parallelization_reports/x86_64_calibration.json``, regenerated
-        against the then-current schema on an Intel Xeon Platinum 8370C. An ARM64
+        against the current schema on an Intel Xeon Platinum 8370C. An ARM64
         machine profile remains outstanding, blocked on hardware access)
     * - H. Acceptance
       - Step G
@@ -274,11 +275,9 @@ defaults), mirroring the unary ``CalibrateAbs`` crossover search: reference
 and candidate share the same deterministic tiled accumulation order, so their
 outputs are bit-identical regardless of the selected threshold, and the
 candidate never exceeds a bounded duration or memory budget. The remaining
-``Gemm`` tile/packing choices are now measured by a separate, explicitly
-requested ``algorithm.configuration`` search (Gemm tuning ABI 2).
-The configuration is a finite preset, not unrestricted public tile-size keys.
-``parallel_fmas_per_work_unit``, the skinny-M rule and the conversion threshold
-remain internal settings. Configuration 0 preserves all portable defaults.
+``Gemm`` algorithm settings (``tile_m/tile_n/tile_k``,
+``pack_b_minimum_elements``, ``parallel_fmas_per_work_unit``) stay internal
+constants until dedicated calibrators make them genuine tuning parameters.
 Calibrating the newly registered
 ``parallel.minimum_elements`` schemas above where the baseline shows a
 measurable gap remain outstanding; promoting any winning candidate to a
@@ -287,101 +286,6 @@ ranking against an ARM64 report once one is available. A C++ test
 (``KernelClass.GemmCalibratesParallelMinimumTasksThreshold``) exercises
 ``CalibrateGemm`` through ``CalibrateRegisteredKernels`` and asserts the
 published candidate validates against the registered schema.
-
-Portable Gemm configuration experiment
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-``bench_gemm_calibration`` measures configurations 0--6 separately for FLOAT,
-DOUBLE, FLOAT16 and BFLOAT16. Configuration 0 is the unchanged portable baseline;
-the remaining configurations vary the M, N or K tile, dynamic B packing, or a
-combined smaller tile. The schema definitions and explicit calibration command
-are documented in :doc:`../../howto/tune_kernel_thresholds`.
-The comparison uses ten deterministic workloads (including a 256-cube and a
-513-element reduction), both transpose orientations, seven individual timing
-samples, and serial, two-participant and four-participant session executors.
-Every candidate is checked bit-for-bit against the portable output before
-measurement. The broader benchmark corpus is not the nine-case calibration
-corpus, so it also provides workload checks outside the selection search.
-
-The 2026-09-18 x86-64 run used an AMD EPYC 9V74 (family 25, model 17),
-four visible logical processors/two physical cores, GCC 13.3.0 and a Release
-build without ``-march=native``. Remote ``main`` was refreshed and verified at
-``2cb52b32beee1869994264e3e9849f96513f5947`` before building; the measurement
-source revision was ``b417ed538d0c7c9c2e49bf9914340c81663c360f``.
-The portable baseline and candidates run in the same binary, with identical
-inputs and executor policy; the baseline computation/defaults are unchanged
-from the refreshed branch.
-
-Raw evidence (5880 individual timing samples, not just selected medians):
-
-* :download:`Serial measurements <kernel_parallelization_reports/x86_64_gemm_config_t1.csv>`
-* :download:`Two-participant measurements <kernel_parallelization_reports/x86_64_gemm_config_t2.csv>`
-* :download:`Four-participant measurements <kernel_parallelization_reports/x86_64_gemm_config_t4.csv>`
-* :download:`Hardware, summaries, calibration output, persisted profiles and fresh-process verification <kernel_parallelization_reports/x86_64_gemm_configuration_evidence.json>`
-
-The explicit calibrator selected the following configurations on its nine-case
-corpus; these are observations, not new defaults:
-
-.. list-table::
-   :header-rows: 1
-
-   * - Participants
-     - FLOAT
-     - DOUBLE
-     - FLOAT16
-     - BFLOAT16
-   * - 1
-     - 0
-     - 0
-     - 0
-     - 4
-   * - 2
-     - 6
-     - 6
-     - 2
-     - 1
-   * - 4
-     - 0
-     - 1
-     - 6
-     - 1
-
-All 12 dtype/policy searches completed all 63 candidate/case combinations.
-Peak admitted tensor/scratch storage was 851968 bytes, below the declared
-8 MiB limit; each four-dtype calibration process took 1.23--1.77 seconds.
-Fresh processes loaded and selected all four saved dtype profiles for each
-matching policy; deliberately incompatible processor descriptors selected zero.
-
-The broader benchmark supports keeping the search explicit: the selected
-four-participant DOUBLE/FLOAT16/BFLOAT16 configurations achieved approximately
-1.068x/1.116x/1.093x baseline/candidate speedups in the sum of case medians,
-while the two-participant selections were essentially tied on that corpus.
-The serial BFLOAT16 selection reached only about 1.028x there. Calibration
-corpus wins therefore do not establish a general speedup, even on this machine.
-The raw per-case regressions and all losing candidates remain published; none
-of these results justify portable default promotion.
-
-Reproduce the native measurements and cross-process cache checks with:
-
-.. code-block:: bash
-
-    cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
-        -DONNX_LIGHT_BUILD_PYTHON=OFF -DONNX_LIGHT_BUILD_BENCHMARKS=ON
-    cmake --build build --target bench_gemm_calibration -j4
-    revision=$(git rev-parse HEAD)
-    build/bench_gemm_calibration measure 2 "$revision" > gemm-t2.csv
-    build/bench_gemm_calibration calibrate 2 "$revision" /tmp/gemm-t2.cache
-    build/bench_gemm_calibration reload 2 "$revision" /tmp/gemm-t2.cache
-    build/bench_gemm_calibration incompatible 2 "$revision" /tmp/gemm-t2.cache
-
-Each invocation is a fresh process. The calibration invocation uses a 2000 ms
-cooperative time budget and an 8 MiB tensor/scratch budget per dtype. The
-``incompatible`` invocation deliberately changes the processor descriptor and
-must neither load nor select any saved Gemm profile. Native regressions also
-exercise mismatched executor participant counts, ABI 1 rejection diagnostics,
-all configuration/dtype combinations, transpose/bias/tile-tail correctness and
-budget/failure paths. No measurements change portable defaults; ARM64 comparison
-and default promotion remain separate acceptance tasks.
 
 Cross-machine calibration and default promotion
 +++++++++++++++++++++++++++++++++++++++++++++++
@@ -402,13 +306,11 @@ selected values and per-key diagnostics.
 The published calibration report has been regenerated against the current
 registry on an Intel Xeon Platinum 8370C, replacing the earlier AMD EPYC
 report whose Gemm profiles contained obsolete algorithm, conversion, and
-work-unit parameters. That report's Gemm ABI 1 accepted only
-``parallel.minimum_tasks``; the ABI 2 configuration search below deliberately
-rejects those old Gemm profiles with an incompatibility diagnostic.
+work-unit parameters. Gemm now accepts only ``parallel.minimum_tasks``.
 The report records its source revision and hardware; its reload verification
 applies to that run, not arbitrary later schemas. A binding regression test
-validates current profiles against the registered schema and value constraints,
-and verifies explicit incompatibility diagnostics for historical Gemm ABI 1.
+validates every profile in every published calibration report against the
+registered schema and tuning ABI at HEAD, including value constraints.
 The separate Step E baseline remains the historical AMD EPYC measurement
 and must not be treated as a same-machine comparison with this calibration.
 

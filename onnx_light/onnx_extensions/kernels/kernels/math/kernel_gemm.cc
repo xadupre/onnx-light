@@ -5,7 +5,6 @@
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
 #include "onnx_core/compute/prepared_execution.h"
-#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/kernels/float16_promote.h"
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
@@ -13,7 +12,6 @@
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <array>
-#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -29,7 +27,7 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 namespace {
 
 constexpr const char *kGemmName = "kernel::Gemm";
-constexpr uint32_t kTuningAbi = tuning::kGemmTuningAbi;
+constexpr uint32_t kTuningAbi = 1;
 
 constexpr std::array<int32_t, 4> kSupportedElementTypes = {
     static_cast<int32_t>(DataType::FLOAT), static_cast<int32_t>(DataType::DOUBLE),
@@ -174,266 +172,8 @@ constexpr const char *kSupportedGemmTypesMsg =
 
 /// Builds the portable Gemm parameter set with the selected parallel task threshold.
 KernelTuningParameters MakeGemmParameters(const KernelTuningKey &key,
-                                          int64_t parallel_minimum_tasks,
-                                          int64_t configuration = 0) {
-  return {key,
-          {{tuning::kGemmParallelMinimumTasks, parallel_minimum_tasks},
-           {tuning::kGemmAlgorithmConfiguration, configuration}}};
-}
-
-struct GemmAlgorithmCase {
-  const char *name;
-  int64_t m;
-  int64_t n;
-  int64_t k;
-  int64_t trans_a;
-  int64_t trans_b;
-};
-
-constexpr std::array<GemmAlgorithmCase, 9> kGemmAlgorithmCases{{
-    {"small", 8, 16, 32, 0, 0},
-    {"skinny", 1, 256, 128, 0, 0},
-    {"skinny_rows", 8, 128, 256, 0, 0},
-    {"square", 128, 128, 128, 0, 0},
-    {"wide", 64, 256, 128, 0, 0},
-    {"tall", 256, 64, 128, 0, 0},
-    {"transpose_a", 96, 160, 128, 1, 0},
-    {"transpose_b", 96, 160, 128, 0, 1},
-    {"transpose_ab", 65, 129, 97, 1, 1},
-}};
-
-/// Fills an already allocated input without a temporary random-number buffer.
-void FillGemmCalibrationInput(Tensor &input, uint64_t seed) {
-  for (int64_t index = 0; index < input.element_count(); ++index) {
-    seed = seed * 6364136223846793005ULL + 1442695040888963407ULL;
-    const float value = static_cast<float>(static_cast<int>((seed >> 32) % 257) - 128) / 128.0f;
-    switch (input.data_type) {
-    case DataType::FLOAT:
-      input.As<float>()[index] = value;
-      break;
-    case DataType::DOUBLE:
-      input.As<double>()[index] = value;
-      break;
-    case DataType::FLOAT16:
-      reinterpret_cast<uint16_t *>(input.mutable_bytes())[index] = FloatToFloat16Bits(value);
-      break;
-    case DataType::BFLOAT16:
-      reinterpret_cast<uint16_t *>(input.mutable_bytes())[index] = FloatToBfloat16Bits(value);
-      break;
-    default:
-      throw std::invalid_argument("Unsupported Gemm calibration element type.");
-    }
-  }
-}
-
-/// Compares a finite configuration set on the complete, bounded shape corpus.
-KernelTuningParameters CalibrateGemmAlgorithm(const KernelTuningKey &key,
-                                              const CpuExecutionDescriptor &execution,
-                                              const CalibrationOptions &options,
-                                              CalibrationReporter &reporter) {
-  if (execution.effective_threads != static_cast<uint32_t>(ParallelForThreadCount())) {
-    throw std::invalid_argument("Gemm calibration must use the active executor thread count.");
-  }
-  if (options.parameter_values.size() > 64) {
-    throw std::invalid_argument("Gemm calibration supports at most 64 explicit values.");
-  }
-  const tuning::GemmTuning defaults;
-  const KernelTuningParameters portable = MakeGemmParameters(key, defaults.parallel_minimum_tasks);
-  std::vector<int64_t> configurations = options.parameter_values;
-  if (configurations.empty()) {
-    for (int64_t value = 0; value < tuning::kGemmAlgorithmConfigurationCount; ++value) {
-      configurations.push_back(value);
-    }
-  }
-  for (int64_t value : configurations) {
-    if (value < 0 || value >= tuning::kGemmAlgorithmConfigurationCount) {
-      throw std::invalid_argument(
-          "Gemm algorithm.configuration is outside the finite candidate set.");
-    }
-  }
-  configurations.push_back(0);
-  std::sort(configurations.begin(), configurations.end());
-  configurations.erase(std::unique(configurations.begin(), configurations.end()),
-                       configurations.end());
-
-  const uint64_t memory_budget =
-      options.maximum_memory_bytes == 0 ? uint64_t{64} << 20 : options.maximum_memory_bytes;
-  const uint64_t duration_ms =
-      options.maximum_duration_ms == 0 ? 1000 : options.maximum_duration_ms;
-  const auto start = std::chrono::steady_clock::now();
-  const auto expired = [&]() {
-    return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
-                                     std::chrono::steady_clock::now() - start)
-                                     .count()) >= duration_ms;
-  };
-  reporter.AddDiagnostic(
-      "Gemm algorithm calibration uses cooperative wall-clock checks before "
-      "allocations, warmups and samples; a running kernel cannot be interrupted.");
-  KernelTuningComparison comparison;
-  comparison.parameter_name = tuning::kGemmAlgorithmConfiguration;
-  comparison.baseline_value = 0;
-  comparison.selected_value = 0;
-  for (int64_t configuration : configurations) {
-    comparison.values.push_back({configuration, 0, 0});
-  }
-  uint64_t pending_memory_bytes = 0;
-  uint64_t pending_duration_ns = 0;
-  const auto incomplete = [&](const char *reason) {
-    if (pending_memory_bytes != 0) {
-      reporter.RecordBenchmark(pending_memory_bytes, pending_duration_ns);
-      reporter.AddDiagnostic("Gemm resources include the incomplete case; comparison case counts "
-                             "include only fully measured cases.");
-    }
-    reporter.AddDiagnostic(std::string("Gemm algorithm calibration ") + reason +
-                           "; incomplete corpus kept portable configuration 0.");
-    reporter.SetComparison(comparison);
-    reporter.FinalizeCandidateDiagnostics();
-    return portable;
-  };
-
-  const KernelContext context{DefaultOpset(13)};
-  Gemm kernel{context};
-  std::vector<bool> regression(configurations.size(), false);
-  const bool half = IsHalfPrecision(key.element_type);
-  const uint64_t element_bytes = key.element_type == DataType::DOUBLE ? 8 : (half ? 2 : 4);
-  constexpr size_t repetitions = 5;
-  for (const GemmAlgorithmCase &gemm_case : kGemmAlgorithmCases) {
-    const uint64_t a_elements = static_cast<uint64_t>(gemm_case.m * gemm_case.k);
-    const uint64_t b_elements = static_cast<uint64_t>(gemm_case.k * gemm_case.n);
-    const uint64_t y_elements = static_cast<uint64_t>(gemm_case.m * gemm_case.n);
-    bool packs_b = false;
-    for (int64_t configuration : configurations) {
-      tuning::GemmTuning configured;
-      tuning::ConfigureGemmTuning(
-          MakeGemmParameters(key, defaults.parallel_minimum_tasks, configuration), configured);
-      packs_b |= b_elements >= static_cast<uint64_t>(configured.pack_b_minimum_elements);
-    }
-    // Only two output buffers are resident: the baseline and one reused candidate.
-    // Half kernels also retain promoted A/B/Y and allocate a demoted temporary Y.
-    const uint64_t memory_bytes =
-        element_bytes * (a_elements + b_elements + 2 * y_elements) +
-        (packs_b ? b_elements * (half ? 4 : element_bytes) : 0) +
-        (half ? 4 * (a_elements + b_elements + y_elements) + element_bytes * y_elements : 0);
-    if (memory_bytes > memory_budget) {
-      return incomplete("exhausted its memory budget");
-    }
-    if (expired()) {
-      return incomplete("exhausted its time budget");
-    }
-    const Shape a_shape =
-        gemm_case.trans_a ? Shape{gemm_case.k, gemm_case.m} : Shape{gemm_case.m, gemm_case.k};
-    Tensor a = MakeOutputTensor(key.element_type, a_shape,
-                                static_cast<size_t>(a_elements * element_bytes), nullptr);
-    pending_memory_bytes = a_elements * element_bytes;
-    FillGemmCalibrationInput(a, 5);
-    if (expired()) {
-      return incomplete("exhausted its time budget");
-    }
-    const Shape b_shape =
-        gemm_case.trans_b ? Shape{gemm_case.n, gemm_case.k} : Shape{gemm_case.k, gemm_case.n};
-    Tensor b = MakeOutputTensor(key.element_type, b_shape,
-                                static_cast<size_t>(b_elements * element_bytes), nullptr);
-    pending_memory_bytes += b_elements * element_bytes;
-    FillGemmCalibrationInput(b, 6);
-    if (expired()) {
-      return incomplete("exhausted its time budget");
-    }
-    Tensor baseline = MakeOutputTensor(key.element_type, {gemm_case.m, gemm_case.n},
-                                       static_cast<size_t>(y_elements * element_bytes), nullptr);
-    pending_memory_bytes += y_elements * element_bytes;
-    if (expired()) {
-      return incomplete("exhausted its time budget");
-    }
-    Tensor candidate = MakeOutputTensor(key.element_type, {gemm_case.m, gemm_case.n},
-                                        static_cast<size_t>(y_elements * element_bytes), nullptr);
-    pending_memory_bytes += y_elements * element_bytes;
-    const auto run = [&](size_t index) {
-      kernel(a, b, nullptr, 1.0f, 0.0f, gemm_case.trans_a, gemm_case.trans_b,
-             index == 0 ? baseline : candidate);
-    };
-    const auto check = [&](size_t index) {
-      if (index != 0 &&
-          std::memcmp(baseline.bytes(), candidate.bytes(), baseline.size_bytes()) != 0) {
-        throw std::runtime_error(std::string("Gemm algorithm calibration output differs in ") +
-                                 gemm_case.name + " for configuration " +
-                                 std::to_string(configurations[index]) + ".");
-      }
-    };
-    for (size_t index = 0; index < configurations.size(); ++index) {
-      kernel.Configure(
-          MakeGemmParameters(key, defaults.parallel_minimum_tasks, configurations[index]));
-      if (expired()) {
-        return incomplete("exhausted its time budget");
-      }
-      pending_memory_bytes = memory_bytes;
-      run(index);
-      check(index);
-      if (options.profiling_capacity != 0) {
-        if (expired()) {
-          return incomplete("exhausted its time budget");
-        }
-        reporter.ProfileCandidate([&]() { run(index); });
-        check(index);
-      }
-    }
-    std::vector<std::array<uint64_t, repetitions>> samples(configurations.size());
-    std::vector<uint64_t> measured(configurations.size(), 0);
-    for (size_t repetition = 0; repetition < repetitions; ++repetition) {
-      for (size_t offset = 0; offset < configurations.size(); ++offset) {
-        // Rotates the measurement order deterministically to reduce first-run bias.
-        const size_t index = (offset + repetition) % configurations.size();
-        kernel.Configure(
-            MakeGemmParameters(key, defaults.parallel_minimum_tasks, configurations[index]));
-        if (expired()) {
-          return incomplete("exhausted its time budget");
-        }
-        const auto begin = std::chrono::steady_clock::now();
-        run(index);
-        const uint64_t elapsed =
-            static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
-                                      std::chrono::steady_clock::now() - begin)
-                                      .count());
-        samples[index][repetition] = elapsed;
-        measured[index] += elapsed;
-        pending_duration_ns += elapsed;
-        check(index);
-      }
-    }
-    if (expired()) {
-      return incomplete("exhausted its time budget");
-    }
-    for (auto &sample : samples) {
-      std::sort(sample.begin(), sample.end());
-    }
-    const uint64_t baseline_ns = samples.front()[repetitions / 2];
-    for (size_t index = 0; index < configurations.size(); ++index) {
-      const uint64_t median = samples[index][repetitions / 2];
-      comparison.values[index].duration_ns += median;
-      ++comparison.values[index].benchmark_cases;
-      regression[index] = regression[index] ||
-                          static_cast<double>(median) > static_cast<double>(baseline_ns) * 1.10;
-      reporter.RecordBenchmark(memory_bytes, measured[index]);
-    }
-    pending_memory_bytes = 0;
-    pending_duration_ns = 0;
-  }
-  size_t best = 0;
-  for (size_t index = 1; index < configurations.size(); ++index) {
-    if (!regression[index] &&
-        static_cast<double>(comparison.values[index].duration_ns) <=
-            static_cast<double>(comparison.values.front().duration_ns) * 0.95 &&
-        comparison.values[index].duration_ns < comparison.values[best].duration_ns) {
-      best = index;
-    }
-  }
-  comparison.selected_value = configurations[best];
-  reporter.AddDiagnostic("Gemm algorithm calibration selected configuration " +
-                         std::to_string(configurations[best]) +
-                         " using the complete corpus, a 5% aggregate improvement requirement "
-                         "and a 10% per-case regression guard.");
-  reporter.SetComparison(std::move(comparison));
-  reporter.FinalizeCandidateDiagnostics();
-  return MakeGemmParameters(key, defaults.parallel_minimum_tasks, configurations[best]);
+                                          int64_t parallel_minimum_tasks) {
+  return {key, {{tuning::kGemmParallelMinimumTasks, parallel_minimum_tasks}}};
 }
 
 /// Builds calibration cases with a fixed N == tile_n and growing M == tile_m *
@@ -460,9 +200,6 @@ KernelTuningParameters CalibrateGemm(const KernelTuningKey &key,
                                      const CpuExecutionDescriptor &execution,
                                      const CalibrationOptions &options,
                                      CalibrationReporter &reporter) {
-  if (options.parameter_name == tuning::kGemmAlgorithmConfiguration) {
-    return CalibrateGemmAlgorithm(key, execution, options, reporter);
-  }
   const tuning::GemmTuning defaults;
   const KernelContext context{DefaultOpset(13)};
   Gemm reference{context};
@@ -504,14 +241,16 @@ struct PreparedGemmB::State {
 
   PreparedExecutionState *execution = nullptr;
   PreparedObjectRequest request;
-  int32_t data_type = DataType::UNDEFINED;
+  int32_t source_data_type = DataType::UNDEFINED;
+  int32_t packed_data_type = DataType::UNDEFINED;
   Shape shape;
   int64_t trans_b = 0;
 };
 
 bool PreparedGemmB::IsReady() const {
   return state_ != nullptr && state_->request.completion.IsReady() &&
-         state_->request.completion.status() == TaskStatus::kSucceeded;
+         state_->request.completion.status() == TaskStatus::kSucceeded &&
+         state_->execution->objects().Find(state_->request.key).has_value();
 }
 
 Gemm::Gemm(const KernelContext &ctx) : KernelBase(ctx) {}
@@ -538,35 +277,34 @@ PreparedGemmB Gemm::PrepareConstantB(const Tensor &b, int64_t transB,
                                      PreparedExecutionState &state) const {
   EXT_ENFORCE_INVALID(b.shape.size() == 2, kGemmName, " constant B must have rank 2.");
   EXT_ENFORCE_INVALID(transB == 0 || transB == 1, kGemmName, " transB must be 0 or 1.");
-  EXT_ENFORCE_INVALID(b.data_type == DataType::FLOAT || b.data_type == DataType::DOUBLE, kGemmName,
-                      " prepared constant B only supports FLOAT and DOUBLE.");
+  EXT_ENFORCE_INVALID(tuning::IsSupportedElementType(b.data_type, kSupportedElementTypes),
+                      kGemmName,
+                      " prepared constant B only supports FLOAT, DOUBLE, FLOAT16 and BFLOAT16.");
 
   uint64_t digest = 14695981039346656037ULL;
   for (const uint8_t byte : std::span<const uint8_t>(b.bytes(), b.size_bytes())) {
     digest = (digest ^ byte) * 1099511628211ULL;
   }
   std::ostringstream key;
-  key << "Gemm:B:" << b.name << ':' << b.data_type << ':' << b.shape[0] << 'x' << b.shape[1]
-      << ":transB=" << transB << ":digest=" << digest;
+  key << "Gemm:B:column-major-k-v1:" << b.name << ':' << b.data_type << ':' << b.shape[0] << 'x'
+      << b.shape[1] << ":transB=" << transB << ":digest=" << digest;
   PreparedObjectRequirement requirement{PreparedKey{key.str()},
                                         b.name.empty() ? std::string{"constant B"} : b.name};
   std::optional<PreparedObjectRequest> request;
 
   if (!state.objects().Find(requirement.key).has_value()) {
-    AllocationHandle source(&state.preparation_arena(),
-                            state.preparation_arena().Allocate(b.size_bytes()));
-    std::memcpy(source.buffer()->data(), b.bytes(), b.size_bytes());
-
-    AllocationHandle packed = state.AllocatePrepared(b.size_bytes());
+    const Tensor promoted = IsHalfPrecision(b.data_type) ? PromoteToFloat32(b) : Tensor{};
+    const Tensor &source = IsHalfPrecision(b.data_type) ? promoted : b;
+    AllocationHandle packed = state.AllocatePrepared(source.size_bytes());
     const int64_t k = transB ? b.shape[1] : b.shape[0];
     const int64_t n = transB ? b.shape[0] : b.shape[1];
-    const size_t element_size = b.element_size();
+    const size_t element_size = source.element_size();
     for (int64_t j = 0; j < n; ++j) {
       for (int64_t l = 0; l < k; ++l) {
         const int64_t source_index = transB ? j * k + l : l * n + j;
         const int64_t target_index = j * k + l;
         std::memcpy(packed.buffer()->data() + target_index * element_size,
-                    source.buffer()->data() + source_index * element_size, element_size);
+                    source.bytes() + source_index * element_size, element_size);
       }
     }
 
@@ -581,10 +319,25 @@ PreparedGemmB Gemm::PrepareConstantB(const Tensor &b, int64_t transB,
   }
 
   auto prepared = std::make_shared<PreparedGemmB::State>(state, std::move(*request));
-  prepared->data_type = b.data_type;
+  prepared->source_data_type = b.data_type;
+  prepared->packed_data_type = IsHalfPrecision(b.data_type) ? DataType::FLOAT : b.data_type;
   prepared->shape = b.shape;
   prepared->trans_b = transB;
   return PreparedGemmB(std::move(prepared));
+}
+
+bool Gemm::HasPreparations(const std::unordered_set<std::string> &immutable_inputs) const {
+  return node_->input_size() >= 2 &&
+         immutable_inputs.find(node_->input(1)) != immutable_inputs.end();
+}
+
+void Gemm::Prepare(RuntimeContext &rt, const std::unordered_set<std::string> &immutable_inputs,
+                   PreparedExecutionState &state) {
+  if (!HasPreparations(immutable_inputs)) {
+    return;
+  }
+  prepared_b_ = PrepareConstantB(rt.Get(node_->input(1)),
+                                 GetAttributeIntOrDefault(*node_, "transB", 0), state);
 }
 
 Tensor Gemm::operator()(const Tensor &a, const Tensor &b, const Tensor *c, float alpha, float beta,
@@ -642,13 +395,13 @@ Tensor Gemm::operator()(const Tensor &a, const Tensor &b, const Tensor *c, float
 Tensor Gemm::operator()(const Tensor &a, const PreparedGemmB &b, const Tensor *c, float alpha,
                         float beta, int64_t transA, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(b.state_ != nullptr, kGemmName, " prepared B is empty.");
-  EXT_ENFORCE_INVALID(a.data_type == b.state_->data_type, kGemmName,
+  EXT_ENFORCE_INVALID(a.data_type == b.state_->source_data_type, kGemmName,
                       " inputs A and prepared B must share the same dtype.");
   b.state_->request.completion.Wait();
   const std::optional<PreparedObjectView> view =
       b.state_->execution->objects().Find(b.state_->request.key);
   EXT_ENFORCE(view.has_value(), kGemmName, " prepared B is no longer resident.");
-  const Tensor packed = Tensor::Borrow("", b.state_->data_type, b.state_->shape,
+  const Tensor packed = Tensor::Borrow("", b.state_->packed_data_type, b.state_->shape,
                                        view->buffer->data(), view->buffer->size());
   const int64_t m = transA ? a.shape[1] : a.shape[0];
   const int64_t a_k = transA ? a.shape[0] : a.shape[1];
@@ -678,8 +431,28 @@ Tensor Gemm::operator()(const Tensor &a, const PreparedGemmB &b, const Tensor *c
                         reinterpret_cast<const double *>(view->buffer->data()));
     return output;
   }
+  case DataType::FLOAT16:
+  case DataType::BFLOAT16: {
+    const Tensor a_f = PromoteToFloat32(a, rt, tuning_.conversion_parallel_minimum_elements);
+    Tensor c_f;
+    const Tensor *c_ptr = nullptr;
+    if (c != nullptr) {
+      EXT_ENFORCE_INVALID(c->data_type == a.data_type, kGemmName,
+                          " input C must share dtype with A and prepared B.");
+      c_f = PromoteToFloat32(*c, rt, tuning_.conversion_parallel_minimum_elements);
+      c_ptr = &c_f;
+    }
+    Tensor y = rt ? rt->MakeTemporaryTensor(DataType::FLOAT, shape,
+                                            static_cast<size_t>(m * n) * sizeof(float))
+                  : MakeOutputTensor(DataType::FLOAT, shape,
+                                     static_cast<size_t>(m * n) * sizeof(float), nullptr);
+    GemmCompute<float>(a_f, packed, c_ptr, alpha, beta, transA, b.state_->trans_b, tuning_,
+                       y.As<float>(), reinterpret_cast<const float *>(view->buffer->data()));
+    return DemoteFromFloat32(y, a.data_type, rt, tuning_.conversion_parallel_minimum_elements);
+  }
   default:
-    EXT_THROW_INVALID(kGemmName, ": prepared B requires FLOAT or DOUBLE input A.");
+    EXT_THROW_INVALID(kGemmName,
+                      ": prepared B requires FLOAT, DOUBLE, FLOAT16 or BFLOAT16 input A.");
   }
 }
 
@@ -720,7 +493,11 @@ void Gemm::Run(RuntimeContext &rt) {
   const float beta = GetAttributeFloatOrDefault(node, "beta", 1.0f);
   const int64_t transA = GetAttributeIntOrDefault(node, "transA", 0);
   const int64_t transB = GetAttributeIntOrDefault(node, "transB", 0);
-  SetOutput(node, 0, (*this)(a, b, c, alpha, beta, transA, transB, &rt), rt);
+  if (prepared_b_.has_value() && prepared_b_->IsReady()) {
+    SetOutput(node, 0, (*this)(a, *prepared_b_, c, alpha, beta, transA, &rt), rt);
+  } else {
+    SetOutput(node, 0, (*this)(a, b, c, alpha, beta, transA, transB, &rt), rt);
+  }
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

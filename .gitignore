@@ -177,7 +177,6 @@ cmake_install.cmake
 *.o
 
 # Test-generated ONNX model artifacts
-.gemm-test-work/
 *.onnx
 *.data
 *.pb

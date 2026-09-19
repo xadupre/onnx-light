@@ -86,10 +86,8 @@ class TestMainKernel(ExtTestCase):
         self.assertEqual({item["element_type"] for item in tunables}, {1})
         self.assertEqual({item["implementation"] for item in tunables}, {"portable"})
         self.assertEqual(
-            {tuple(item["parameter_names"]) for item in tunables},
-            {("algorithm.configuration", "parallel.minimum_tasks")},
+            {tuple(item["parameter_names"]) for item in tunables}, {("parallel.minimum_tasks",)}
         )
-        self.assertEqual({item["tuning_abi"] for item in tunables}, {2})
 
     def test_rejects_kernel_not_registered_for_device(self):
         with self.assertRaisesRegex(SystemExit, "device GPU0.*Abs"):

@@ -57,4 +57,9 @@ void KernelBase::Configure(const KernelTuningParameters &) {
   EXT_THROW_INVALID("KernelBase::Configure is not implemented for this tunable kernel.");
 }
 
+bool KernelBase::HasPreparations(const std::unordered_set<std::string> &) const { return false; }
+
+void KernelBase::Prepare(RuntimeContext &, const std::unordered_set<std::string> &,
+                         PreparedExecutionState &) {}
+
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

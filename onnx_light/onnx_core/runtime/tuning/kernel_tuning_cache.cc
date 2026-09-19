@@ -770,17 +770,10 @@ KernelTuningCacheLoadReport LoadKernelTuningCache(const KernelCalibrationSelecti
         return SameIdentityIgnoringAbi(key, profile.parameters.key);
       });
       (stale ? report.stale : report.incompatible).push_back(profile.parameters.key);
-      report.diagnostics.push_back(KeyDescription(profile.parameters.key) +
-                                   (stale ? ": incompatible tuning ABI " +
-                                                std::to_string(profile.parameters.key.tuning_abi) +
-                                                "; recalibrate for the registered schema."
-                                          : ": no compatible registered tuning schema."));
       continue;
     }
     if (profile.execution != execution) {
       report.incompatible.push_back(profile.parameters.key);
-      report.diagnostics.push_back(KeyDescription(profile.parameters.key) +
-                                   ": incompatible processor or execution descriptor.");
       continue;
     }
     std::string validation_error;
@@ -852,11 +845,6 @@ ImportKernelTuningDeploymentProfiles(const KernelCalibrationSelection &selection
             return SameIdentityIgnoringAbi(candidate, key);
           });
       (stale ? report.stale : report.incompatible).push_back(key);
-      report.diagnostics.push_back(KeyDescription(key) +
-                                   (stale ? ": incompatible tuning ABI " +
-                                                std::to_string(key.tuning_abi) +
-                                                "; recalibrate for the registered schema."
-                                          : ": no compatible registered tuning schema."));
       continue;
     }
     if (!seen.emplace(key).second) {

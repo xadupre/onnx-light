@@ -148,7 +148,7 @@ class TestFeedbackState(unittest.TestCase):
                     entered.set()
                     if not resume.wait(10):
                         raise RuntimeError("test timed out waiting for cancellation")
-                    context.put_value(node.output[0], numpy.ones(2, dtype=numpy.float32))
+                    context.put_value(str(node.output[0]), numpy.ones(2, dtype=numpy.float32))
 
                 registry = runtime if global_registration else context
                 registry.register_custom_kernel("feedback.test", "Block", block)
@@ -209,9 +209,9 @@ class TestFeedbackState(unittest.TestCase):
 
         def step(node, context):
             """Produces structured outputs through the ordinary custom-kernel API."""
-            request = context.get_value(node.input[0])
+            request = context.get_value(str(node.input[0]))
             cache = array(request["cache"]) + array(request["tokens"])
-            context.put_value(node.output[0], {"cache": cache, "logits": cache * 2})
+            context.put_value(str(node.output[0]), {"cache": cache, "logits": cache * 2})
             if fail:
                 raise RuntimeError("failed after producing outputs")
 

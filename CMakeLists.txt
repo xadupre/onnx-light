@@ -358,14 +358,16 @@ else()
 endif()
 
 add_library(lib_onnx_proto ${_lib_onnx_proto_type} ${ONNX_LIGHT_HEADERS} ${ONNX_LIGHT_PROTO_ALL_SOURCES})
-# Structural validation is control-flow and diagnostics heavy rather than
-# throughput-sensitive. Optimize that translation unit for size so the frozen
-# PR02 validation contract stays within the proto-library binary budget.
+# Structural and DLPack validation are control-flow and diagnostics heavy rather
+# than throughput-sensitive. Optimize these translation units for size to stay
+# within the proto-library binary budget.
 if(MSVC)
   set_source_files_properties("${ONNX_PROTO_PATH}/onnx_verify.cc"
+                              "${ONNX_PROTO_PATH}/onnx_dlpack.cc"
                               PROPERTIES COMPILE_OPTIONS "/Os")
 else()
   set_source_files_properties("${ONNX_PROTO_PATH}/onnx_verify.cc"
+                              "${ONNX_PROTO_PATH}/onnx_dlpack.cc"
                               PROPERTIES COMPILE_OPTIONS "-Os")
 endif()
 if(_lib_onnx_proto_type STREQUAL "SHARED" AND WIN32)

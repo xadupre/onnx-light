@@ -120,3 +120,44 @@ Release build with GCC 13.3.0, Python 3.13.15 and nanobind 3.1.0, using
 
 In that historical measurement the stripped proto library was byte-identical
 before and after, and the extension's ``DT_NEEDED`` entries were unchanged.
+
+Native transfer build budget
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+With native transfer and the out-of-line export guard, the same Linux x86-64
+GCC 13.3.0 Release build initially exceeded the CI ``.text`` limit. Compiling
+``onnx_dlpack.cc`` for size and sharing validation-error construction reduces
+the footprint without changing validation conditions or exception types:
+
+.. list-table::
+   :header-rows: 1
+
+   * - ``liblib_onnx_proto.so`` metric
+     - Before size fix
+     - After size fix
+     - CI maximum
+   * - Stripped file bytes
+     - 1,383,976
+     - 1,379,880
+     - 1,390,552 (unchanged)
+   * - ``.text`` bytes
+     - 956,186
+     - 952,826
+     - 953,706 (unchanged)
+   * - Defined dynamic symbols
+     - 793
+     - 793
+     - 793 (previously 792)
+
+The one-symbol allowance accounts for ``ByteSpan::acquire_export_guard()``
+moving out of line. No public API is hidden to satisfy the count. The shared
+diagnostic helper keeps the ``[onnx-light]`` prefix and descriptive message,
+but omits the redundant stringified C++ condition.
+
+Measurements use ``strip --strip-unneeded`` and
+``.github/scripts/report_proto_binary_size.py`` on the shared proto library,
+configured with ``CMAKE_BUILD_TYPE=Release``, ``ONNX_LIGHT_BUILD_PYTHON=ON``
+and ``ONNX_LIGHT_BUILD_KERNELS=OFF``. The baseline reproduces the failing
+full-build CI measurements exactly. The dependency allowlist is unchanged:
+``libcrypto.so.3``, ``libstdc++.so.6``, ``libgcc_s.so.1``, ``libc.so.6``,
+and ``ld-linux-x86-64.so.2``.

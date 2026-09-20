@@ -10,6 +10,15 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 
+namespace {
+// Share diagnostic construction instead of instantiating it at every validation site.
+void CheckDLPack(bool condition, const char *message) {
+  if (!condition) {
+    EXT_THROW_INVALID(message);
+  }
+}
+} // namespace
+
 DLDataType DLPackDataTypeFromOnnx(int32_t data_type, const char *producer) {
   auto make = [](uint8_t code, uint8_t bits) -> DLDataType { return {code, bits, 1}; };
   switch (static_cast<TensorProto::DataType>(data_type)) {
@@ -63,37 +72,34 @@ DLDataType DLPackDataTypeFromOnnx(int32_t data_type, const char *producer) {
 
 DLPackMetadata ValidateDLPack(const TensorProto &tensor) {
   DLPackMetadata metadata{DLPackDataTypeFromOnnx(tensor.data_type(), "TensorProto"), {}};
-  EXT_ENFORCE_INVALID(!tensor.has_segment(),
-                      "TensorProto DLPack: segmented tensors are not supported.");
-  EXT_ENFORCE_INVALID(tensor.has_raw_data(),
-                      "TensorProto DLPack: requires raw_data; typed-field-only payloads and "
-                      "unloaded external data are not supported.");
+  CheckDLPack(!tensor.has_segment(), "TensorProto DLPack: segmented tensors are not supported.");
+  CheckDLPack(tensor.has_raw_data(),
+              "TensorProto DLPack: requires raw_data; typed-field-only payloads and "
+              "unloaded external data are not supported.");
   const auto &raw = tensor.ref_raw_data();
   const size_t itemsize = metadata.dtype.bits / 8;
   if (itemsize > 1 && std::endian::native != std::endian::little) {
     throw DLPackBufferError("TensorProto DLPack: multi-byte raw_data requires a little-endian "
                             "host; byte swapping would require a copy.");
   }
-  EXT_ENFORCE_INVALID(tensor.dims_size() <= 128, "TensorProto DLPack: rank must not exceed 128.");
+  CheckDLPack(tensor.dims_size() <= 128, "TensorProto DLPack: rank must not exceed 128.");
   metadata.shape.reserve(tensor.dims_size());
   const uint64_t limit =
       std::min<uint64_t>(std::numeric_limits<size_t>::max(), std::numeric_limits<int64_t>::max());
   uint64_t elements = 1;
   bool empty = false;
   for (int64_t dim : tensor.ref_dims()) {
-    EXT_ENFORCE_INVALID(dim >= 0, "TensorProto DLPack: dimensions must be non-negative.");
+    CheckDLPack(dim >= 0, "TensorProto DLPack: dimensions must be non-negative.");
     const uint64_t extent = std::max<uint64_t>(static_cast<uint64_t>(dim), 1);
-    EXT_ENFORCE_INVALID(extent <= limit / elements,
-                        "TensorProto DLPack: shape or strides overflow.");
+    CheckDLPack(extent <= limit / elements, "TensorProto DLPack: shape or strides overflow.");
     elements *= extent;
     empty |= dim == 0;
     metadata.shape.push_back(dim);
   }
-  EXT_ENFORCE_INVALID(elements <= limit / itemsize,
-                      "TensorProto DLPack: payload byte count overflows.");
+  CheckDLPack(elements <= limit / itemsize, "TensorProto DLPack: payload byte count overflows.");
   const size_t expected = empty ? 0 : static_cast<size_t>(elements * itemsize);
-  EXT_ENFORCE_INVALID(raw.size() == expected,
-                      "TensorProto DLPack: raw_data size does not match shape and data type.");
+  CheckDLPack(raw.size() == expected,
+              "TensorProto DLPack: raw_data size does not match shape and data type.");
   const size_t alignment = metadata.dtype.code == kDLComplex ? itemsize / 2 : itemsize;
   if (expected && reinterpret_cast<uintptr_t>(raw.data()) % alignment != 0) {
     throw DLPackBufferError("TensorProto DLPack: raw_data is not aligned to its element "
@@ -113,11 +119,11 @@ struct DLPackOwner {
 DLManagedTensor *ReleaseDLPack(TensorProto &tensor) {
   auto metadata = ValidateDLPack(tensor);
   const auto &raw = static_cast<const TensorProto &>(tensor).ref_raw_data();
-  EXT_ENFORCE_INVALID(raw.is_borrowed() || !raw.has_active_exports(),
-                      "TensorProto ReleaseDLPack: owned raw_data has active DLPack exports; "
-                      "release those consumers before transferring its storage.");
-  EXT_ENFORCE_INVALID(!raw.is_borrowed() || raw.owner().use_count() != 0,
-                      "TensorProto ReleaseDLPack: borrowed raw_data requires a lifetime owner.");
+  CheckDLPack(raw.is_borrowed() || !raw.has_active_exports(),
+              "TensorProto ReleaseDLPack: owned raw_data has active DLPack exports; "
+              "release those consumers before transferring its storage.");
+  CheckDLPack(!raw.is_borrowed() || raw.owner().use_count() != 0,
+              "TensorProto ReleaseDLPack: borrowed raw_data requires a lifetime owner.");
   auto owner = std::make_unique<DLPackOwner>();
   owner->metadata = std::move(metadata);
   owner->managed.dl_tensor = {raw.empty() ? nullptr : const_cast<uint8_t *>(raw.data()),

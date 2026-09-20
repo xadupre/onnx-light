@@ -176,6 +176,20 @@ TEST(TensorProtoDLPack, RejectsInvalidPayloadAtomically) {
   }
 }
 
+TEST(TensorProtoDLPack, ValidationDiagnosticPreservesContext) {
+  auto tensor = MakeTensor();
+  tensor.clear_dims();
+  tensor.add_dims(-1);
+  try {
+    auto exported = Release(tensor);
+    FAIL() << "Expected invalid dimensions to be rejected";
+  } catch (const std::invalid_argument &error) {
+    EXPECT_STREQ(error.what(), "[onnx-light] TensorProto DLPack: dimensions must be non-negative.");
+  }
+  EXPECT_TRUE(tensor.has_raw_data());
+  EXPECT_EQ(tensor.ref_raw_data().size(), 6U);
+}
+
 TEST(TensorProtoDLPack, ExplicitEmptyAndScalar) {
   TensorProto tensor;
   tensor.set_data_type(TensorProto::UINT8);

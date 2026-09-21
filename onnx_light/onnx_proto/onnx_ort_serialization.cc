@@ -680,6 +680,7 @@ private:
   }
 
   size_t Graph(const GraphProto &graph, const Types &outer, size_t depth) {
+    Require(graph.persistent_bindings().empty(), "persistent bindings are unsupported");
     Require(depth < 100, "graph nesting exceeds 100");
     Require(graph.metadata_props().empty(), "graph metadata_props are unsupported");
     for (const auto &node : graph.node())

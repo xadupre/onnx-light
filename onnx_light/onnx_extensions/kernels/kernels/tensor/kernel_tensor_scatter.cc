@@ -116,9 +116,9 @@ void TensorScatter::operator()(const Tensor &past_cache, const Tensor &update,
   const bool is_string = past_cache.data_type == static_cast<int32_t>(DataType::STRING);
   const std::size_t total = static_cast<std::size_t>(past_cache.element_count());
   if (is_string) {
-    EXT_ENFORCE_INVALID(past_cache.string_data.size() == total,
+    EXT_ENFORCE_INVALID(past_cache.AsStrings().size() == total,
                         "kernel::TensorScatter: 'past_cache' string_data size mismatch.");
-    output.string_data.assign(past_cache.string_data.begin(), past_cache.string_data.end());
+    output.string_data.assign(past_cache.AsStrings().begin(), past_cache.AsStrings().end());
   } else {
     const std::size_t bytes = PackedByteSize(past_cache.data_type, past_cache.element_count());
     EXT_ENFORCE_INVALID(past_cache.size_bytes() == bytes,
@@ -187,7 +187,7 @@ void TensorScatter::operator()(const Tensor &past_cache, const Tensor &update,
       if (is_string) {
         for (int64_t e = 0; e < slice_elems; ++e) {
           output.string_data[static_cast<std::size_t>(cache_offset + e)] =
-              update.string_data[static_cast<std::size_t>(update_offset + e)];
+              update.AsStrings()[static_cast<std::size_t>(update_offset + e)];
         }
       } else {
         std::memcpy(output.mutable_bytes() + static_cast<std::size_t>(cache_offset) * elem_size,

@@ -5,7 +5,7 @@ Custom, quantized, and persistent values
 ================================================================================
 
 :Date: 2026-09
-:Updated: 2026-09-08
+:Updated: 2026-09-20
 
 **in progress**
 
@@ -13,17 +13,20 @@ Objective and consolidation
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 Covers three uses of values: custom structs, quantized representations, and
-values retained between calls. Persistent state is an explicit mapping of
-model outputs back to inputs, not a separate state system. Qwen is the
-first consumer: quantized weights and per-request KV values carried
+values retained between calls. Persistent state is declared by
+``GraphProto.persistent_bindings``, an explicit mapping of model outputs
+back to inputs, not a separate state system. The model is immutable once
+bound to a session. Retaining and forwarding state buffers requires no
+payload copy or model serialization. Qwen is the first consumer:
+quantized weights and per-request KV values carried
 between decode calls.
 
 This page merges the former structured-types and mutable-cache proposals
 into one contract, authoritative over :ref:`l-next-steps-quantization` and
 :ref:`l-next-steps-graph-builder-quantized-tensor` where they conflict.
 Only a small closed set of common quantized forms gets specialized proto
-support. Prepacking, prepared-object identity, persistence and scheduling
-stay owned by :ref:`l-next-steps-prepared-execution`, whose completed work
+support. Prepacking, prepared-object identity, prepared-object persistence
+and scheduling stay owned by :ref:`l-next-steps-prepared-execution`, whose completed work
 (native fast-loading, allocator, session executor) is the foundation this
 plan builds on. :ref:`l-next-steps-proto-inheritance` is independent and
 not a prerequisite.
@@ -35,9 +38,11 @@ Existing foundations and missing integration
 ``Tensor`` storage owners, borrowed views and allocation handles. Prepared
 execution already owns prepared-object identity, publication, residency,
 eviction and persistence. ``StructTypeProto`` and ``EncodedValueProto``
-are new. This plan connects typed representations to kernel consumers,
-then adds a small wrapper feeding retained outputs into the next model
-call.
+and their initial GraphBuilder integration are implemented. The remaining
+work connects the graph's persistence declarations to these ownership
+facilities and feeds retained outputs into the next call without copying
+their payloads. The graph attribute described below is planned, not yet
+implemented by the completed representation PRs.
 
 Three independent decisions
 +++++++++++++++++++++++++++
@@ -272,9 +277,12 @@ native callback runs.
 Inline bytes are owned or borrowed with an owner token. External mapped
 bytes retain their mapping owner. Runtime structs retain each field's
 owner independently; serialized records never contain pointers, native
-padding, vtables or process-local handles. Invocation-only ownerless
-borrows are copied before being published as model outputs or retained
-feedback state.
+padding, vtables or process-local handles. On the persistent execution
+path, an invocation-only ownerless borrow cannot become a returned output
+or retained state: the producer must supply a lifetime owner or transfer
+its allocation. Unsupported ownership is rejected explicitly, never
+repaired by a hidden payload copy. Arena storage must remain valid through
+a retained allocation/owner and cannot be recycled while referenced.
 
 Encoded inputs are read-only in the first implementation. A retained
 state update becomes visible atomically only after execution and
@@ -610,8 +618,8 @@ Interoperability with prepared execution
 
 ``EncodedValueProto`` may describe the bytes and logical view of an object
 managed by :ref:`l-next-steps-prepared-execution`, but this plan does not
-define prepack requests, prepared keys, persistence, compatibility
-checks, publication, eviction or scheduling; those stay entirely in
+define prepack requests, prepared keys, prepared-object persistence,
+compatibility checks, publication, eviction or scheduling; those stay entirely in
 :ref:`l-next-steps-prepared-execution`, :ref:`l-next-steps-model-resolution`,
 and :ref:`l-next-steps-native-fast-loading-completion`. The representation
 layer exposes only enough validated type, layout and payload information
@@ -625,20 +633,60 @@ Persistent state from model inputs and outputs
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 State is simply model outputs retained to supply some inputs of the next
-call. The model already describes their types; the caller supplies only
-the output-to-input mapping and initial values.
+call. The model describes both their types and their output-to-input
+bindings. The caller supplies initial values and per-call feeds, not a
+second independently configured mapping.
+
+Graph-level persistence declaration
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Add ``persistent_bindings`` to ``GraphProto``, not a ``persistent`` flag
+to ``StructTypeProto`` or ``EncodedValueProto``. A type can describe both
+persistent and temporary values; an input can be an ordinary tensor or a
+struct field without an encoded payload. A boolean also cannot identify
+the output that supplies the next value.
+
+The proposed local wire extension is:
+
+.. code-block:: text
+
+    message PersistentBindingProto {
+        string input_name = 1;
+        string output_name = 2;
+        repeated string input_field_path = 3;
+        repeated string output_field_path = 4;
+    }
+
+    message GraphProto {
+        // Existing fields, including encoded_initializer = 1000, remain.
+        repeated PersistentBindingProto persistent_bindings = 1001;
+    }
+
+Names identify exact inputs and outputs of the declaring graph. Empty
+field paths select the whole value; nonempty paths select named struct
+fields. Separate field-path components avoid ambiguity when graph names
+or field names contain dots. Dotted notation in examples is shorthand,
+not the wire representation. Field 1001 belongs to the reserved local
+extension range; existing representation field numbers remain unchanged.
+
+No bindings means ordinary stateless execution. The initial runtime scope
+is the model's root graph; persistent bindings in control-flow subgraphs
+are rejected explicitly until scoped state is supported. Passing state
+values through stateless functions and subgraphs remains supported.
+The declaration contains neither current cache contents nor native
+ownership handles. It is serialized only during explicit model save/load,
+not during state construction or execution.
 
 .. code-block:: text
 
     model inputs:  tokens, past_key, past_value
     model outputs: logits, present_key, present_value
+    model.graph.persistent_bindings:
+        past_key <- present_key
+        past_value <- present_value
 
     state = make_state(
         model,
-        feedback={
-            "past_key": "present_key",       // input <- output
-            "past_value": "present_value"
-        },
         initial={"past_key": empty_key, "past_value": empty_value}
     )
 
@@ -653,13 +701,23 @@ This helper is equivalent to the ordinary stateless loop:
     outputs = run(model, feeds)
     state.values = {
         input_name: outputs[output_name]
-        for input_name, output_name in feedback.items()
+        for input_name, output_name in model.graph.persistent_bindings
     }
 
-The retained values constitute the state: there is no separately authored
-``state_spec``, hidden kernel state or new persistent proto. ``make_state``
-derives field types from the selected model inputs and checks that the
-matching outputs can feed them; initial contents must still be supplied.
+These examples are conceptual API sketches. Assignment retains or moves
+buffer owners rather than copying payloads. The retained values
+constitute the request-local state; ``PersistentBindingProto`` declares
+only the graph relationship, not a second value/type system or hidden
+kernel state. ``make_state`` resolves the model's bindings and types once,
+after graph rewrites. Initial contents must still be supplied.
+
+.. important::
+
+   The model must remain immutable for the lifetime of the bound session.
+   Native callers keep it alive; Python bindings retain its owner.
+   State construction and subsequent calls must not serialize, clone,
+   hash or repeatedly compare the model to detect mutation. To change
+   the graph, close the state and create a new session after rewriting.
 
 .. _l-next-steps-persistent-composite-state:
 .. _l-next-steps-persistent-struct-state:
@@ -686,42 +744,79 @@ ordinary structs described by ``StructTypeProto``:
         logits: FLOAT[batch, sequence, vocabulary]
         cache: Cache
     }
+    model.graph.persistent_bindings:
+        request.cache <- response.cache
 
     state = make_state(
         model,
-        feedback={"request.cache": "response.cache"},
-        initial={"request.cache": initial_cache}
+        initial={"request": {"cache": initial_cache}}
     )
-    out = state.run({"request.tokens": first_tokens})
-    out = state.run({"request.tokens": next_tokens})
+    out = state.run({"request": {"tokens": first_tokens}})
+    out = state.run({"request": {"tokens": next_tokens}})
 
 Only ``request.cache`` persists: tokens are supplied anew and logits are
-not retained; the feedback mapping alone selects the persistent part of
-an instance, with no ``persistent`` flag on the struct declaration.
-Dotted paths are shorthand for a graph input/output name followed by
-struct field names; ``Tensor`` above only abbreviates the model's actual
-tensor types and shape constraints.
+not retained. The graph binding selects the persistent part of an instance,
+with no ``persistent`` flag on the shared struct type or encoded value.
+Here the wire input name is ``request`` and its field path is
+``["cache"]``; the output name is ``response`` with the same field path.
+``Tensor`` above only abbreviates the model's actual tensor types and
+shape constraints.
 
 Minimal rules
 ~~~~~~~~~~~~~
 
 * Every selected path must exist with compatible types, representation
-  contracts and shape constraints, checked on actual values before
-  becoming next-call inputs.
+  contracts and shape constraints. Resolve the declarations once;
+  validate actual value metadata before publication without copying or
+  serializing payloads.
 * Every required input field comes from current feeds or retained state;
-  missing initial values or overlapping destination paths are errors.
+  missing initial values, duplicate/overlapping destinations, and current
+  feeds overlapping retained destinations are errors.
 * Retained fields update only after successful execution and validation;
-  states are independent, and simultaneous calls on the same state are
-  rejected. ``reset(initial)`` restores caller-supplied initial values;
+  each request owns its state bindings, and simultaneous calls on the
+  same state are rejected. ``reset(initial)`` restores caller-supplied initial values;
   ``close`` releases retained values, and neither may race with an
   active call.
 
-Persistence implies neither mutation nor disk storage; the first
-implementation preserves ordinary model input/output semantics. In-place
-KV reuse is a later optimization when kernel and ownership permit it and
-must not modify previously returned outputs. Snapshots, an
-alias-annotation wire format and region-level mutation scheduling stay
-outside this initial design.
+Zero-copy ownership from the first state implementation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+PR04 must retain/share/move existing backing storage for initialization,
+reset, per-call feeds, selected outputs and next-call inputs. State-value
+access returns lifetime-safe shared views, not implicit deep-copy
+snapshots. Copying small metadata, shape descriptors or owner handles is
+allowed; copying tensor or encoded payload bytes for state management is
+not. NumPy and PyTorch entry points must likewise retain supported source
+buffers without materializing payload copies, or report unsupported
+layouts/ownership explicitly.
+
+Returned outputs and retained state may share storage. Releasing caller
+references, resetting/closing a state or advancing another invocation must
+not invalidate an outstanding view. Functions, ``If`` and structured
+field transport must preserve these owners rather than call deep-copy
+or serialization-based detachment helpers. Per-request state containers
+are separate; shared buffers do not imply permission to mutate another
+request's data.
+
+.. warning::
+
+   Inputs, retained state and returned views can alias the same payload.
+   Callers and kernels must treat these buffers as read-only while shared
+   or retained. PR04 does not promise independent mutable snapshots or
+   rollback of external writes. It must not silently enable in-place
+   reuse of an allocation still referenced by the previous state or a
+   returned output.
+
+Build and validate the next state's owner handles before publishing them
+atomically. Failure or cancellation leaves the previous state and its
+buffers valid; it must not require a backup copy. Persistence implies
+neither mutation nor disk storage.
+
+This ownership requirement is distinct from PR05's in-place KV append
+and capacity management. Kernels may compute new outputs normally; PR04
+must not duplicate those outputs merely to retain or return them.
+Avoiding algorithmic full-cache reconstruction, paging, explicit
+snapshots and region-level mutation scheduling remain separate work.
 
 Quantized and paged caches use the same feedback
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -735,7 +830,8 @@ This changes its fields and representations, not its persistence mechanism:
         blocks: sequence<KVBlock>
         length: INT64
     }
-    feedback = {"request.cache": "response.cache"}
+    model.graph.persistent_bindings:
+        request.cache <- response.cache
 
 Each K/V block may use a different ``EncodedValueProto`` layout, such as
 INT4, INT8 or a codebook struct, provided its decoded type and geometry
@@ -744,8 +840,8 @@ length are value data; payload byte length measures physical records,
 not valid tokens.
 
 Paging, block conversion and zero-copy Attention are optional consumer
-optimizations built after basic feedback works; acceptance measures
-bounded workspace and no full-cache copy or dequantization.
+optimizations built on already zero-copy state forwarding; acceptance
+measures bounded workspace and no full-cache copy or dequantization.
 
 GraphBuilder, shape inference and serialization
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -757,20 +853,25 @@ layout.
 ``GraphBuilder`` preserves structured source initializers, type
 references, byte extents, external payload ownership and quantization
 metadata through import/export. Deduplication considers semantic
-profiles, not just payload bytes. Feedback bindings are validated
-against the final model inputs/outputs; a rewrite that removes or
-changes a selected path requires an updated mapping. General struct
+profiles, not just payload bytes. It must also author and preserve
+``GraphProto.persistent_bindings`` through import/export, graph copying,
+renaming and optimization. Renaming an input/output updates its binding;
+a rewrite removing or changing a selected path must update the declaration
+consistently or fail, never silently drop it. Validate bindings against the
+final graph before constructing a session. General struct
 declarations round-trip through the type catalogue too; unsupported
 field-value export fails explicitly rather than dropping dynamic fields.
-The core plan needs no changes to upstream ONNX wire messages or proto
-inheritance; standard export must lower to supported tensors/operators
-or report an unsupported export.
+The new binding field is a local ONNX extension, not a change required of
+upstream ONNX or a dependency on proto inheritance. Standard ONNX export
+must reject persistence declarations unless an explicit lowering to a
+stateless graph and caller-managed feedback preserves the contract.
+Silently stripping the attribute is not a valid stateful export.
 
 Implementation sequence
 +++++++++++++++++++++++
 
-PR01 and PR02 are complete: the representation, identity, payload, lifetime,
-feedback and size contracts above are frozen, and ``StructTypeProto``,
+PR01 and PR02 are complete: the representation, identity and size contracts
+are implemented, and ``StructTypeProto``,
 ``EncodedValueProto``, typed/constant fields, arrays, bit packing, type
 references, payload ownership, value serialization and the built-in affine
 subset are implemented in ``lib_onnx_proto``
@@ -780,7 +881,13 @@ structural validation wired into ``VerifyModel``/``VerifyGraph``. PR03
 integrates the representation with ``GraphBuilder`` authoring,
 deduplication and inference; see
 :ref:`l-howto-graph-builder-basics` for the supported native workflow and
-export boundaries.
+export boundaries. The 2026-09-20 revision adds a graph-level persistence
+declaration and makes zero-copy state forwarding mandatory. These are new
+requirements, not claims that the completed PRs already implement them.
+`PR #5016 <https://github.com/xadupre/onnx-light/pull/5016>`_
+implements the PR04a declaration and PR04b runtime together: the
+caller-supplied mapping, model-serialization guard and defensive
+state-payload copies are replaced by graph bindings and retained owners.
 
 .. list-table::
    :header-rows: 1
@@ -812,20 +919,30 @@ export boundaries.
        references and deduplication agree. Standard export never loses
        data: unsupported structured constructs are rejected explicitly.
      - PR02
-   * - PR04
-     - State from model input/output feedback (**done**)
-     - Build state from selected input/output pairs and initial values,
-       inferring types from the model. Repeated calls match a manual
-       stateless feedback loop; verify initialization, reset and
-       failures.
-     - PR02; existing allocation/task infrastructure
+   * - PR04a
+     - Graph-declared persistence
+     - Add ``PersistentBindingProto`` and
+       ``GraphProto.persistent_bindings``; native/Python bindings,
+       parsing/serialization, validation and GraphBuilder preservation
+       agree. Reject unsupported nested-graph declarations and standard
+       export that would drop persistence semantics.
+     - PR02, PR03
+   * - PR04b
+     - Zero-copy request-local feedback execution
+     - Resolve graph bindings once against an immutable model. Retain
+       buffers across initialization, reset, calls and state views without
+       payload copies or model serialization. Verify aliases, lifetimes,
+       atomic failure/cancellation and pointer identity, including
+       structured/function/If paths.
+     - PR04a; existing allocation/task infrastructure
    * - PR05
      - Contiguous KV and CPU consumer integration
      - Optimize past/present inputs when ownership permits buffer reuse:
        append touches only new tokens and matches functional execution.
-       Verify capacity/cancellation and allocation/copy costs;
-       zero-copy is not a PR04 precondition.
-     - PR04; CPU backend integration
+       Verify capacity/cancellation and allocation/copy costs without
+       invalidating prior returned views. Zero-copy state forwarding
+       is already required by PR04b; this step optimizes kernel writes.
+     - PR04b; CPU backend integration
    * - PR06
      - Optional paged KV with heterogeneous quantization
      - The shared ``EncodedValueProto`` representation supports
@@ -838,17 +955,14 @@ export boundaries.
      - Measure repeated decode and simultaneous independent feedback
        states; report state/scratch bytes and per-token copies, and
        verify request reset/isolation and the final proto-size budget.
-     - PR03, PR04, PR05
+     - PR03, PR04a, PR04b, PR05
 
-PR04 can proceed in parallel with PR03 once PR02 provides shared struct
-types; basic feedback state does not depend on quantization format or
-paging. PR06 is optional and does not block PR07. Later work extends the
-feedback contract without a second state system: snapshots, alias
-annotations and mutation scheduling stay outside this plan.
-
-The implemented PR04 API is :cpp:class:`onnx_light::core::runtime::FeedbackState`.
-See :ref:`l-howto-persistent-feedback` for native and Python examples,
-ownership rules, cancellation and the supported runtime value kinds.
+PR04 is now split into the wire/GraphBuilder declaration (PR04a) and its
+zero-copy runtime consumer (PR04b), in that order. Basic feedback does not
+depend on quantization format or paging. PR06 is optional and does not
+block PR07. Later work extends the same graph-declared feedback contract
+without a second state system; explicit snapshots, alias annotations and
+mutation scheduling stay outside these initial steps.
 
 Ownership and acceptance
 ++++++++++++++++++++++++
@@ -866,10 +980,21 @@ unchanged code bytes, missing consumers, reset, invalid capacities and
 failed mutations.
 
 State fixtures retain a whole tensor and only the cache field of a larger
-struct, verifying that unselected values are not retained, the next call
-receives exactly the previous selected outputs, invalid bindings fail
-explicitly, and failed calls leave no partial update nor interfere with
-independent feedback loops.
+struct, verifying that unselected values are not retained and the next
+call receives the same backing buffers as the previous selected outputs.
+Measure pointer identity and payload-copy/allocation counters across
+initialization, repeated calls, reset and state-view access, including
+NumPy/PyTorch entry points, encoded values and function/If transport.
+Exercise caller destruction, outstanding outputs after close, arena
+reuse, invalid ownerless borrows and failed/cancelled runs.
+
+Wire/GraphBuilder fixtures round-trip bindings, preserve them through
+renames and rewrites, distinguish dotted names from nested fields, and
+reject duplicate/overlapping destinations, missing paths, incompatible
+types/shapes and unsupported subgraph declarations. Two values sharing
+one struct type can have different persistence bindings. Large-model
+fixtures verify that constructing and running state performs no model
+serialization, cloning or mutation-detection scan.
 
 Type/value tests round-trip two encoded values sharing a type ID but
 different payload lengths and record counts, covering catalogue
@@ -877,8 +1002,11 @@ reordering and per-value scale/zero-point parameters, with
 malformed-declaration and byte-encoding validation exercised through
 representative cases.
 
-The basic state helper promises correct feedback, not zero-copy execution;
-only a demonstrated fixed-capacity reuse path may claim no full-cache
-allocation or copy. Performance claims publish latency, peak/resident
+PR04b acceptance requires zero payload-copy bytes attributable to state
+management and no model serialization, both during setup and repeated
+calls. Kernel computation and explicit model save/load are measured
+separately, not hidden inside state-management overhead. PR05 must further
+demonstrate fixed-capacity reuse before claiming no algorithmic full-cache
+allocation or copy. Performance reports include latency, peak/resident
 bytes and copy/read counters, distinguishing decoding, inference and
 state-management cost.

@@ -2716,12 +2716,22 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
   DECLARE_REPEATED_FIELD_PROTO(NodeProto, rep_node);
   define_repeated_field_type_proto(rep_node, rep_node_proto);
 
+  PYDEFINE_PROTO(m, PersistentBindingProto)
+      .PYFIELD_STR(PersistentBindingProto, input_name)
+      .PYFIELD_STR(PersistentBindingProto, output_name)
+      .PYFIELD(PersistentBindingProto, input_field_path)
+      .PYFIELD(PersistentBindingProto, output_field_path);
+  PYADD_PROTO_SERIALIZATION(PersistentBindingProto);
+  DECLARE_REPEATED_FIELD_PROTO(PersistentBindingProto, rep_persistent_binding);
+  define_repeated_field_type_proto(rep_persistent_binding, rep_persistent_binding_proto);
+
   PYDEFINE_PROTO(m, GraphProto)
       .PYFIELD(GraphProto, node)
       .PYFIELD_STR(GraphProto, name)
       .PYFIELD(GraphProto, initializer)
       .PYFIELD(GraphProto, sparse_initializer)
       .PYFIELD(GraphProto, encoded_initializer)
+      .PYFIELD(GraphProto, persistent_bindings)
       .PYFIELD_STR(GraphProto, doc_string)
       .PYFIELD(GraphProto, input)
       .PYFIELD(GraphProto, output)

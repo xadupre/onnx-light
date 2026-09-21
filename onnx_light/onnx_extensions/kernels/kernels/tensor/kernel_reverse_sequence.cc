@@ -65,7 +65,7 @@ void ReverseSequence::operator()(const Tensor &input, const Tensor &sequence_len
 
   const bool is_string = input.data_type == static_cast<int32_t>(DataType::STRING);
   if (is_string) {
-    EXT_ENFORCE_INVALID(static_cast<int64_t>(input.string_data.size()) == total,
+    EXT_ENFORCE_INVALID(static_cast<int64_t>(input.AsStrings().size()) == total,
                         "kernel::ReverseSequence: input string_data size does not match shape.");
     EXT_ENFORCE_INVALID(static_cast<int64_t>(output.string_data.size()) == total,
                         "kernel::ReverseSequence: output string_data size does not match shape.");
@@ -118,7 +118,7 @@ void ReverseSequence::operator()(const Tensor &input, const Tensor &sequence_len
       if (is_string) {
         for (int64_t i = 0; i < inner; ++i) {
           output.string_data[static_cast<std::size_t>(dst_off + i)] =
-              input.string_data[static_cast<std::size_t>(src_off + i)];
+              input.AsStrings()[static_cast<std::size_t>(src_off + i)];
         }
       } else {
         std::memcpy(output.mutable_bytes() + static_cast<std::size_t>(dst_off) * elem_size,

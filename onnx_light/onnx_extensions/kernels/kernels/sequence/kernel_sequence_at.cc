@@ -39,7 +39,7 @@ Tensor SequenceAt::operator()(const Sequence &input_sequence, const Tensor &posi
   Tensor output = rt ? rt->MakeOutputTensor(0, input.data_type, input.shape, n_bytes)
                      : MakeOutputTensor(input.data_type, input.shape, n_bytes, nullptr);
   if (input.data_type == static_cast<int32_t>(DataType::STRING)) {
-    output.string_data = input.string_data;
+    output.string_data = input.AsStrings();
   } else if (n_bytes > 0) {
     std::memcpy(output.mutable_bytes(), input.bytes(), n_bytes);
   }

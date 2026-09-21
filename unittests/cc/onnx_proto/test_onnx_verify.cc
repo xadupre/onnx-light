@@ -36,6 +36,103 @@ TEST(onnx_verify, VerifyModel_Valid) {
   EXPECT_NO_THROW(VerifyModel(model));
 }
 
+TEST(onnx_verify, PersistentBindings_RoundtripAndRootOnly) {
+  ModelProto model = MakeValidModel();
+  auto *binding = model.mutable_graph()->add_persistent_bindings();
+  binding->set_input_name("x");
+  binding->set_output_name("y");
+  EXPECT_NO_THROW(VerifyModel(model));
+  ModelProto restored;
+  ASSERT_TRUE(restored.ParseFromString(model.SerializeAsString()));
+  ASSERT_EQ(restored.graph().persistent_bindings_size(), 1);
+  EXPECT_EQ(restored.graph().persistent_bindings(0).input_name(), "x");
+  EXPECT_NO_THROW(VerifyModel(restored));
+  EXPECT_THROW(VerifyPersistentBindings(nullptr, restored.graph(), false), std::invalid_argument);
+  restored.mutable_graph()->add_persistent_bindings(*binding);
+  EXPECT_THROW(VerifyModel(restored), std::invalid_argument);
+}
+
+TEST(onnx_verify, PersistentBindings_FixedShapesAndNames) {
+  ModelProto model = MakeValidModel();
+  auto *binding = model.mutable_graph()->add_persistent_bindings();
+  binding->set_input_name("missing");
+  binding->set_output_name("y");
+  EXPECT_THROW(VerifyModel(model), std::invalid_argument);
+  binding->set_input_name("x");
+  model.mutable_graph()->mutable_output(0)->mutable_type()->mutable_tensor_type()->set_elem_type(
+      TensorProto::INT32);
+  EXPECT_THROW(VerifyModel(model), std::invalid_argument);
+  model.mutable_graph()->mutable_output(0)->mutable_type()->mutable_tensor_type()->set_elem_type(
+      TensorProto::FLOAT);
+  model.mutable_graph()
+      ->mutable_input(0)
+      ->mutable_type()
+      ->mutable_tensor_type()
+      ->mutable_shape()
+      ->add_dim()
+      ->set_dim_param("N");
+  EXPECT_THROW(VerifyModel(model), std::invalid_argument);
+}
+
+TEST(onnx_verify, PersistentBindings_LiteralFieldPaths) {
+  TypeProto type;
+  auto *structure = type.mutable_struct_type()->mutable_structure();
+  auto *field = structure->add_field();
+  field->set_name("a.b");
+  auto *tensor = field->mutable_type()->mutable_tensor_type();
+  tensor->set_elem_type(TensorProto::FLOAT);
+  tensor->mutable_shape()->add_dim()->set_dim_value(2);
+  StructTypeCatalogue catalogue;
+  utils::RepeatedStringField path;
+  path.push_back(utils::String("a.b"));
+  EXPECT_EQ(&ResolvePersistentBindingType(catalogue, type, path), &field->type());
+  path.clear();
+  path.push_back(utils::String("a"));
+  path.push_back(utils::String("b"));
+  EXPECT_THROW(ResolvePersistentBindingType(catalogue, type, path), std::invalid_argument);
+  EXPECT_TRUE(CompatiblePersistentTypes(catalogue, type, type));
+  EXPECT_TRUE(CompatiblePersistentStructTypes(catalogue, type.struct_type(), type.struct_type()));
+  TypeProto different = type;
+  different.mutable_struct_type()
+      ->mutable_structure()
+      ->mutable_field(0)
+      ->mutable_type()
+      ->mutable_tensor_type()
+      ->set_elem_type(TensorProto::INT32);
+  EXPECT_FALSE(CompatiblePersistentTypes(catalogue, type, different));
+  EXPECT_FALSE(
+      CompatiblePersistentStructTypes(catalogue, type.struct_type(), different.struct_type()));
+}
+
+TEST(onnx_verify, PersistentBindings_PartialTensorDeclarations) {
+  StructTypeCatalogue catalogue;
+  TypeProto unknown, symbolic, concrete;
+  unknown.mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+  symbolic.mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+  symbolic.mutable_tensor_type()->mutable_shape()->add_dim()->set_dim_param("N");
+  concrete.mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+  concrete.mutable_tensor_type()->mutable_shape()->add_dim()->set_dim_value(3);
+  EXPECT_TRUE(CompatiblePersistentTypes(catalogue, unknown, concrete));
+  EXPECT_TRUE(CompatiblePersistentTypes(catalogue, concrete, unknown));
+  EXPECT_TRUE(CompatiblePersistentTypes(catalogue, symbolic, concrete));
+  EXPECT_TRUE(CompatiblePersistentTypes(catalogue, concrete, symbolic));
+  symbolic.mutable_tensor_type()->mutable_shape()->mutable_dim(0)->clear_dim_param();
+  EXPECT_TRUE(CompatiblePersistentTypes(catalogue, symbolic, concrete));
+  symbolic.mutable_tensor_type()->mutable_shape()->mutable_dim(0)->set_dim_value(4);
+  EXPECT_FALSE(CompatiblePersistentTypes(catalogue, symbolic, concrete));
+  symbolic.mutable_tensor_type()->clear_shape();
+  symbolic.mutable_tensor_type()->set_elem_type(TensorProto::INT32);
+  EXPECT_FALSE(CompatiblePersistentTypes(catalogue, symbolic, concrete));
+
+  ModelProto model = MakeValidModel();
+  *model.mutable_graph()->mutable_input(0)->mutable_type() = unknown;
+  *model.mutable_graph()->mutable_output(0)->mutable_type() = concrete;
+  auto *binding = model.mutable_graph()->add_persistent_bindings();
+  binding->set_input_name("x");
+  binding->set_output_name("y");
+  EXPECT_NO_THROW(VerifyPersistentBindings(&catalogue, model.graph()));
+}
+
 TEST(onnx_verify, VerifyModel_MissingGraph) {
   ModelProto model;
   EXPECT_THROW(VerifyModel(model), std::invalid_argument);

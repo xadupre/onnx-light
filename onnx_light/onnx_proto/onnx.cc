@@ -1787,6 +1787,41 @@ void NodeProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions &
       NAME_EXIST_VALUE(device_configurations));
 }
 
+// PersistentBindingProto
+
+IMPLEMENT_PROTO(PersistentBindingProto)
+SerializeSizeResult PersistentBindingProto::SerializeSize(utils::BinaryWriteStream &stream,
+                                                          SerializeOptions &options) const {
+  SerializeSizeResult size;
+  SIZE_FIELD(size, options, stream, input_name)
+  SIZE_FIELD(size, options, stream, output_name)
+  SIZE_REPEATED_FIELD(size, options, stream, input_field_path)
+  SIZE_REPEATED_FIELD(size, options, stream, output_field_path)
+  return size;
+}
+void PersistentBindingProto::SerializeToStream(utils::BinaryWriteStream &stream,
+                                               SerializeOptions &options) const {
+  WRITE_FIELD(options, stream, input_name)
+  WRITE_FIELD(options, stream, output_name)
+  WRITE_REPEATED_FIELD(options, stream, input_field_path)
+  WRITE_REPEATED_FIELD(options, stream, output_field_path)
+}
+bool PersistentBindingProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, PersistentBindingProto)
+  READ_FIELD(options, stream, input_name)
+  READ_FIELD(options, stream, output_name)
+  READ_REPEATED_FIELD(options, stream, input_field_path)
+  READ_REPEATED_FIELD(options, stream, output_field_path)
+  READ_END(options, stream, PersistentBindingProto)
+  return true;
+}
+void PersistentBindingProto::PrintToStringStream(std::stringstream &ss,
+                                                 utils::PrintOptions &options) const {
+  write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(input_name),
+                                 NAME_EXIST_VALUE(output_name), NAME_EXIST_VALUE(input_field_path),
+                                 NAME_EXIST_VALUE(output_field_path));
+}
+
 // GraphProto
 
 IMPLEMENT_PROTO(GraphProto)
@@ -1804,6 +1839,7 @@ SerializeSizeResult GraphProto::SerializeSize(utils::BinaryWriteStream &stream,
   SIZE_REPEATED_FIELD(size, options, stream, quantization_annotation)
   SIZE_REPEATED_FIELD(size, options, stream, metadata_props)
   SIZE_REPEATED_FIELD(size, options, stream, encoded_initializer)
+  SIZE_REPEATED_FIELD(size, options, stream, persistent_bindings)
   return size;
 }
 void GraphProto::SerializeToStream(utils::BinaryWriteStream &stream,
@@ -1819,6 +1855,7 @@ void GraphProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, quantization_annotation)
   WRITE_REPEATED_FIELD(options, stream, metadata_props)
   WRITE_REPEATED_FIELD(options, stream, encoded_initializer)
+  WRITE_REPEATED_FIELD(options, stream, persistent_bindings)
 }
 bool GraphProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   // Expose this graph to raw_data_callback while its tensors are being parsed. The guard restores
@@ -1837,6 +1874,7 @@ bool GraphProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opti
   READ_REPEATED_FIELD(options, stream, quantization_annotation) //
   READ_REPEATED_FIELD(options, stream, metadata_props)          //
   READ_REPEATED_FIELD(options, stream, encoded_initializer)     //
+  READ_REPEATED_FIELD(options, stream, persistent_bindings)     //
   READ_END(options, stream, GraphProto)                         //  // NOLINT
   if (options.node_callback) {
     for (int i = 0; i < static_cast<int>(ref_node().size()); ++i) {
@@ -1851,7 +1889,7 @@ void GraphProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions 
       NAME_EXIST_VALUE(output), NAME_EXIST_VALUE(metadata_props), NAME_EXIST_VALUE(node),
       NAME_EXIST_VALUE(initializer), NAME_EXIST_VALUE(sparse_initializer),
       NAME_EXIST_VALUE(value_info), NAME_EXIST_VALUE(quantization_annotation),
-      NAME_EXIST_VALUE(encoded_initializer));
+      NAME_EXIST_VALUE(encoded_initializer), NAME_EXIST_VALUE(persistent_bindings));
 }
 
 // FunctionProto

@@ -379,9 +379,37 @@ Tensor Tensor::BorrowStrings(std::string name, Shape shape,
   return t;
 }
 
+Tensor Tensor::ShareStorage() const {
+  if (borrow_owner_.use_count() == 0) {
+    EXT_ENFORCE_INVALID(!is_borrowed(),
+                        "Tensor::ShareStorage: cannot retain an ownerless borrowed tensor.");
+    if (allocation_ && !allocation_.holds_lease()) {
+      auto *arena = dynamic_cast<IOArena *>(allocation_.owner());
+      EXT_ENFORCE_INVALID(arena != nullptr,
+                          "Tensor::ShareStorage: allocation requires a self-owning I/O lease.");
+      allocation_ = arena->ExportHandle(std::move(allocation_));
+    }
+    auto owner = std::make_shared<Tensor>();
+    owner->data_type = data_type;
+    owner->data = std::move(data);
+    owner->string_data = std::move(string_data);
+    owner->allocation_ = std::move(allocation_);
+    borrow_ptr_ = owner->bytes();
+    borrow_size_ = owner->size_bytes();
+    if (data_type == DataType::STRING)
+      borrow_string_data_ = &owner->string_data;
+    borrow_owner_ = std::move(owner);
+  }
+  Tensor result = Borrow(name, data_type, shape, bytes(), size_bytes(), borrow_owner_);
+  result.borrow_string_data_ = borrow_string_data_;
+  return result;
+}
+
 Tensor Tensor::BorrowView() const {
   if (static_cast<DataType>(data_type) == DataType::STRING) {
-    return Tensor::BorrowStrings(name, shape, AsStrings());
+    Tensor view = Tensor::BorrowStrings(name, shape, AsStrings());
+    view.borrow_owner_ = borrow_owner_;
+    return view;
   }
   return Tensor::Borrow(name, data_type, shape, bytes(), size_bytes(), borrow_owner_);
 }

@@ -29,6 +29,90 @@ using core::runtime::TensorFromProto;
 
 namespace Test {
 
+TEST(SimpleTensorSharing, InlineStorageSurvivesSourceWithoutPayloadCopy) {
+  Tensor value = Tensor::FromFloat("value", {2}, {3, 4});
+  const uint8_t *payload = value.bytes();
+  Tensor shared = value.ShareStorage();
+  EXPECT_EQ(value.bytes(), payload);
+  EXPECT_EQ(shared.bytes(), payload);
+  Tensor next = shared.ShareStorage();
+  value = Tensor();
+  shared = Tensor();
+  EXPECT_EQ(next.bytes(), payload);
+  EXPECT_EQ(next.AsFloat()[1], 4);
+}
+
+TEST(SimpleTensorSharing, StringAndEmptyStorageRetainsPointers) {
+  Tensor value = Tensor::MakeString("strings", {1}, {"value"});
+  const auto *strings = std::as_const(value).AsStrings().data();
+  const auto *characters = std::as_const(value).AsStrings()[0].data();
+  Tensor shared = value.ShareStorage();
+  EXPECT_EQ(std::as_const(shared).AsStrings().data(), strings);
+  EXPECT_EQ(std::as_const(shared).AsStrings()[0].data(), characters);
+  value = Tensor();
+  EXPECT_EQ(std::as_const(shared).AsStrings()[0], "value");
+  Tensor empty = Tensor::FromFloat("empty", {0}, {});
+  Tensor empty_shared = empty.ShareStorage();
+  EXPECT_EQ(empty_shared.size_bytes(), 0u);
+  EXPECT_EQ(empty_shared.bytes(), empty.bytes());
+  EXPECT_GT(empty_shared.borrowed_owner().use_count(), 0);
+}
+
+TEST(SimpleTensorSharing, BorrowedOwnersRemainAliveAndOwnerlessBorrowsReject) {
+  auto data = std::make_shared<std::vector<float>>(1, 3);
+  std::weak_ptr<std::vector<float>> weak = data;
+  const auto *bytes = reinterpret_cast<const uint8_t *>(data->data());
+  Tensor borrowed = Tensor::Borrow("value", DataType::FLOAT, {1}, bytes, sizeof(float), data);
+  Tensor retained = borrowed.ShareStorage();
+  borrowed = Tensor();
+  data.reset();
+  EXPECT_FALSE(weak.expired());
+  EXPECT_EQ(retained.bytes(), bytes);
+  retained = Tensor();
+  EXPECT_TRUE(weak.expired());
+  float ownerless = 0;
+  Tensor unsafe = Tensor::Borrow("", DataType::FLOAT, {1},
+                                 reinterpret_cast<const uint8_t *>(&ownerless), sizeof(float));
+  EXPECT_THROW(unsafe.ShareStorage(), std::invalid_argument);
+}
+
+TEST(SimpleTensorSharing, IOLeaseSurvivesArenaAndRejectsUnleasedExecutionStorage) {
+  auto arena = core::runtime::IOArena::Create(2);
+  std::weak_ptr<core::runtime::IOArena> weak = arena;
+  Tensor value = Tensor::FromFloat("", {1}, {3}, arena.get());
+  const uint8_t *bytes = value.bytes();
+  Tensor retained = value.ShareStorage();
+  EXPECT_EQ(retained.bytes(), bytes);
+  EXPECT_EQ(arena->TotalAllocatedSize(), sizeof(float));
+  value = Tensor();
+  arena.reset();
+  EXPECT_FALSE(weak.expired());
+  EXPECT_EQ(retained.AsFloat()[0], 3);
+  retained = Tensor();
+  EXPECT_TRUE(weak.expired());
+  SimpleRawBufferAllocator execution(2);
+  Tensor unsafe = Tensor::FromFloat("", {1}, {4}, &execution);
+  EXPECT_THROW(unsafe.ShareStorage(), std::invalid_argument);
+  EXPECT_TRUE(unsafe.has_allocation());
+}
+
+TEST(SimpleTensorSharing, ReplacingBorrowWithAllocationReplacesItsLifetimeOwner) {
+  auto data = std::make_shared<std::vector<float>>(1, 3);
+  std::weak_ptr<std::vector<float>> old_owner = data;
+  Tensor value =
+      Tensor::Borrow("", DataType::FLOAT, {1}, reinterpret_cast<const uint8_t *>(data->data()),
+                     sizeof(float), data);
+  data.reset();
+  auto arena = core::runtime::IOArena::Create(2);
+  value.SetAllocation(arena.get(), arena->Allocate(sizeof(float)));
+  value.AsFloat()[0] = 4;
+  EXPECT_TRUE(old_owner.expired());
+  Tensor retained = value.ShareStorage();
+  value = Tensor();
+  arena.reset();
+  EXPECT_EQ(retained.AsFloat()[0], 4);
+}
+
 // ---------------------------------------------------------------------------
 // ElementSize
 // ---------------------------------------------------------------------------

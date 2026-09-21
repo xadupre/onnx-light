@@ -315,7 +315,8 @@ void RuntimeContext::ClearKernelUsage() {
 
 void RuntimeContext::Set(const std::string &name, Tensor tensor, RuntimeEventKind kind) {
   EXT_ENFORCE(!Has(name), "RuntimeContext::Set: a tensor named '", name, "' already exists.");
-  EnsureAllocatorBacked(tensor, allocator_, kind);
+  if (!preserve_value_ownership_)
+    EnsureAllocatorBacked(tensor, allocator_, kind);
   if (events_enabled_) {
     RuntimeEvent ev =
         MakeAddOrReplaceEvent(RuntimeEventAction::kAdd, kind, name, tensor, current_node_index_,
@@ -327,7 +328,8 @@ void RuntimeContext::Set(const std::string &name, Tensor tensor, RuntimeEventKin
 }
 
 void RuntimeContext::Put(const std::string &name, Tensor tensor, RuntimeEventKind kind) {
-  EnsureAllocatorBacked(tensor, allocator_, kind);
+  if (!preserve_value_ownership_)
+    EnsureAllocatorBacked(tensor, allocator_, kind);
   if (events_enabled_) {
     const RuntimeEventAction action =
         Has(name) ? RuntimeEventAction::kReplace : RuntimeEventAction::kAdd;
@@ -427,9 +429,20 @@ RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name)
   // allocation pointers.
   child.functions() = functions_;
   child.custom_kernels() = custom_kernels_;
-  child.tensors() = tensors_;
+  child.set_preserve_value_ownership(preserve_value_ownership_);
+  child.set_model_owner(model_owner_);
+  if (preserve_value_ownership_) {
+    EXT_ENFORCE_INVALID(sequences_.empty(),
+                        "Persistent execution does not transport sequence values.");
+    for (const auto &[name, tensor] : tensors_)
+      child.tensors().emplace(name, tensor.ShareStorage());
+    for (const auto &[name, value] : values_)
+      child.values().emplace(name, value.Share());
+  } else {
+    child.tensors() = tensors_;
+    child.values() = values_;
+  }
   child.sequences() = sequences_;
-  child.values() = values_;
   child.set_cpu_executor(cpu_executor_);
   child.set_current_subgraph(current_node_index_, attr_name);
   return child;
@@ -448,6 +461,8 @@ RuntimeContext RuntimeContext::MakeFunctionContext() const {
                        kernel_usage_);
   child.functions() = functions_;
   child.custom_kernels() = custom_kernels_;
+  child.set_preserve_value_ownership(preserve_value_ownership_);
+  child.set_model_owner(model_owner_);
   child.set_cpu_executor(cpu_executor_);
   return child;
 }

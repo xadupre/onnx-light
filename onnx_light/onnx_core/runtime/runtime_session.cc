@@ -18,6 +18,39 @@
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
 
+Tensor InitializerView(const TensorProto &proto, const std::shared_ptr<void> &model_owner) {
+  Shape shape;
+  for (const auto dimension : proto.dims())
+    shape.push_back(static_cast<int64_t>(dimension));
+  if (proto.is_raw_data()) {
+    const auto &raw = proto.raw_data();
+    EXT_ENFORCE_INVALID(
+        !raw.is_borrowed() || raw.owner().use_count() != 0,
+        "Persistent initializer: borrowed raw_data requires its own backing owner.");
+    return Tensor::Borrow(proto.name(), proto.data_type(), shape, raw.data(), raw.size(),
+                          raw.owner().use_count() != 0 ? raw.owner() : model_owner);
+  }
+  const auto borrow = [&](const auto &values) {
+    return Tensor::Borrow(
+        proto.name(), proto.data_type(), shape, reinterpret_cast<const uint8_t *>(values.data()),
+        values.size() * sizeof(typename std::decay_t<decltype(values)>::value_type), model_owner);
+  };
+  switch (proto.data_type()) {
+  case DataType::FLOAT:
+    return borrow(proto.float_data().values());
+  case DataType::DOUBLE:
+    return borrow(proto.double_data().values());
+  case DataType::INT64:
+    return borrow(proto.int64_data().values());
+  case DataType::UINT64:
+    return borrow(proto.uint64_data().values());
+  case DataType::INT32:
+    return borrow(proto.int32_data().values());
+  default:
+    EXT_THROW_INVALID("Persistent execution requires raw storage for this initializer dtype.");
+  }
+}
+
 /// Derives the CPU policy a session requests when the caller supplied none.
 /// The requested participant count comes from
 /// :cpp:var:`RuntimeParameters::num_threads` (negative values mean "topology
@@ -59,6 +92,10 @@ RuntimeSession::RuntimeSession(const ModelProto &model, int verbose)
                             }) {}
 
 RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions options)
+    : RuntimeSession(model, std::move(options), InitializerMode::kOwned) {}
+
+RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions options,
+                               InitializerMode initializer_mode)
     : default_plan_(model.graph()), plan_(default_plan_), check_shapes_(options.check_shapes),
       allow_external_output_allocators_(options.allow_external_output_allocators),
       parameters_(std::move(options.parameters)),
@@ -69,14 +106,15 @@ RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions op
       parallel_region_collector_(std::move(options.parallel_region_collector)),
       verbose_(options.verbose) {
   SetDeclaredShapes(model.graph());
-  SetInitializers(model.graph());
+  RecordInitializers(model.graph(), initializer_mode);
 }
 
-RuntimeSession::RuntimeSession(const GraphProto &graph, int verbose)
+RuntimeSession::RuntimeSession(const GraphProto &graph, int verbose,
+                               InitializerMode initializer_mode)
     : default_plan_(graph), plan_(default_plan_),
       cpu_execution_(DefaultCpuExecutionPolicy(parameters_)), verbose_(verbose) {
   SetDeclaredShapes(graph);
-  SetInitializers(graph);
+  RecordInitializers(graph, initializer_mode);
 }
 
 RuntimeSession::RuntimeSession(const ExecutionPlan &plan, int verbose)
@@ -157,16 +195,27 @@ void RuntimeSession::SetDeclaredShapes(const GraphProto &graph) {
 }
 
 void RuntimeSession::SetInitializers(const GraphProto &graph) {
+  RecordInitializers(graph, InitializerMode::kOwned);
+}
+
+void RuntimeSession::RecordInitializers(const GraphProto &graph, InitializerMode initializer_mode) {
   initializers_.clear();
+  initializer_graph_ = initializer_mode == InitializerMode::kBorrowed ? &graph : nullptr;
   immutable_initializer_names_.clear();
-  initializers_.reserve(graph.initializer().size());
+  if (initializer_mode == InitializerMode::kOwned)
+    initializers_.reserve(graph.initializer().size());
   std::unordered_set<std::string> overridable;
   overridable.reserve(graph.input().size());
   for (const ValueInfoProto &input : graph.input()) {
     overridable.insert(input.name());
   }
   for (const TensorProto &initializer : graph.initializer()) {
-    initializers_.push_back(TensorFromProto(initializer));
+    if (initializer_mode == InitializerMode::kOwned) {
+      Tensor value = TensorFromProto(initializer);
+      if (value.is_borrowed())
+        value = value.ToOwned();
+      initializers_.push_back(std::move(value));
+    }
     if (overridable.find(initializer.name()) == overridable.end()) {
       immutable_initializer_names_.insert(initializer.name());
     }
@@ -175,13 +224,25 @@ void RuntimeSession::SetInitializers(const GraphProto &graph) {
 
 std::unordered_set<std::string> RuntimeSession::SeedInitializers(RuntimeContext &rt) const {
   std::unordered_set<std::string> seeded;
+  if (initializer_graph_ != nullptr) {
+    EXT_ENFORCE_INVALID(rt.preserve_value_ownership(),
+                        "Borrowed initializers require ownership-preserving execution.");
+    for (const TensorProto &initializer : initializer_graph_->initializer())
+      if (!rt.Has(initializer.name())) {
+        rt.Set(initializer.name(), InitializerView(initializer, rt.model_owner()),
+               RuntimeEventKind::kInitializer);
+        seeded.insert(initializer.name());
+      }
+    return seeded;
+  }
   for (const Tensor &initializer : initializers_) {
     if (!rt.Has(initializer.name)) {
       // Borrowed string views leave string_data empty. Materializes the payload for
       // kernels and callbacks without exposing the cached strings to mutation.
       rt.Set(initializer.name,
-             initializer.data_type == DataType::STRING ? initializer.ToOwned()
-                                                       : initializer.BorrowView(),
+             rt.preserve_value_ownership()               ? initializer.ShareStorage()
+             : initializer.data_type == DataType::STRING ? initializer.ToOwned()
+                                                         : initializer.BorrowView(),
              RuntimeEventKind::kInitializer);
       seeded.insert(initializer.name);
     }
@@ -592,7 +653,7 @@ void RuntimeSession::Run(RuntimeContext &rt) {
                                         .count();
         rt.RecordRunNodeEvent(node, domain, op_type, start_time_ns, duration_ns);
       }
-      if (!allow_external_output_allocators_) {
+      if (!allow_external_output_allocators_ && !rt.preserve_value_ownership()) {
         VerifyOutputAllocators(*nodes[index], rt);
       }
       if (check_shapes) {
@@ -660,6 +721,10 @@ void RuntimeSession::MaterializeBorrowedOutputs(RuntimeContext &rt) const {
   for (const std::string &name : output_names_) {
     auto value = rt.values().find(name);
     if (value != rt.values().end()) {
+      if (rt.preserve_value_ownership()) {
+        value->second = value->second.Share();
+        continue;
+      }
       const auto detach = [&](auto &&self, RuntimeValue &item, size_t depth) -> void {
         EXT_ENFORCE_INVALID(depth <= RuntimeValue::kMaxDepth,
                             "RuntimeSession: maximum structured output depth exceeded.");
@@ -677,7 +742,9 @@ void RuntimeSession::MaterializeBorrowedOutputs(RuntimeContext &rt) const {
       continue;
     }
     Tensor &output = rt.Get(name);
-    if (output.is_borrowed()) {
+    if (rt.preserve_value_ownership()) {
+      output = output.ShareStorage();
+    } else if (output.is_borrowed()) {
       output = output.ToOwned();
     }
   }

@@ -1383,6 +1383,20 @@ StringStringEntryProto &add_metadata(const std::string &key, const std::string &
 std::string Signature(const std::vector<std::string> &resolved_inputs) const;
 END_PROTO()
 
+/**
+ * Declares output-to-input feedback between successful executions of a root graph.
+ * Stores graph wiring only, never state payloads or ownership. Each path component
+ * names one structure field verbatim; an empty path selects the whole value.
+ */
+BEGIN_PROTO(PersistentBindingProto, "Declares a persistent output-to-input binding.")
+FIELD_STR(input_name, 1, "Names the destination graph input.")
+FIELD_STR(output_name, 2, "Names the source graph output.")
+FIELD_REPEATED_STR(utils::String, input_field_path, 3,
+                   "Selects destination structure fields; an empty path selects the whole input.")
+FIELD_REPEATED_STR(utils::String, output_field_path, 4,
+                   "Selects source structure fields; an empty path selects the whole output.")
+END_PROTO()
+
 // GraphProto
 
 // message GraphProto {
@@ -1443,6 +1457,10 @@ FIELD_REPEATED_PROTO(
     "numbers 1000-1099 are reserved for local extensions). Each entry MUST have a name, unique "
     "across initializer, sparse_initializer and encoded_initializer, and the name MAY also "
     "appear in the input list.")
+FIELD_REPEATED_PROTO(
+    PersistentBindingProto, persistent_bindings, 1001,
+    "Declares persistent output-to-input wiring on the model root graph only. "
+    "Destinations must not overlap. Standard ONNX cannot represent this extension.")
 /**
  * Appends a new node built from *op_type*, *inputs*, *outputs* and the
  * optional *domain* / *name* to the graph and returns a reference to it.

@@ -176,9 +176,9 @@ void WhereInPlaceTyped(const Tensor &condition, const Tensor &x, const Tensor &y
 
 Tensor WhereAllocString(const Tensor &condition, const Tensor &x, const Tensor &y) {
   const TernaryBroadcastInfo bi = CheckWhereBroadcast(condition, x, y);
-  EXT_ENFORCE_INVALID(static_cast<int64_t>(x.string_data.size()) == x.element_count(),
+  EXT_ENFORCE_INVALID(static_cast<int64_t>(x.AsStrings().size()) == x.element_count(),
                       "kernel::Where input ``x`` string_data size does not match its shape.");
-  EXT_ENFORCE_INVALID(static_cast<int64_t>(y.string_data.size()) == y.element_count(),
+  EXT_ENFORCE_INVALID(static_cast<int64_t>(y.AsStrings().size()) == y.element_count(),
                       "kernel::Where input ``y`` string_data size does not match its shape.");
 
   Tensor out = Tensor::MakeString("", bi.shape,
@@ -196,8 +196,8 @@ Tensor WhereAllocString(const Tensor &condition, const Tensor &x, const Tensor &
       oy += idx[d] * bi.strides_y[d];
     }
     out.string_data[static_cast<size_t>(flat)] = pc[oc] != 0
-                                                     ? x.string_data[static_cast<size_t>(ox)]
-                                                     : y.string_data[static_cast<size_t>(oy)];
+                                                     ? x.AsStrings()[static_cast<size_t>(ox)]
+                                                     : y.AsStrings()[static_cast<size_t>(oy)];
     for (size_t d = rank; d-- > 0;) {
       if (++idx[d] < bi.shape[d]) {
         break;
@@ -232,8 +232,8 @@ void WhereInPlaceString(const Tensor &condition, const Tensor &x, const Tensor &
       oy += idx[d] * bi.strides_y[d];
     }
     output.string_data[static_cast<size_t>(flat)] = pc[oc] != 0
-                                                        ? x.string_data[static_cast<size_t>(ox)]
-                                                        : y.string_data[static_cast<size_t>(oy)];
+                                                        ? x.AsStrings()[static_cast<size_t>(ox)]
+                                                        : y.AsStrings()[static_cast<size_t>(oy)];
     for (size_t d = rank; d-- > 0;) {
       if (++idx[d] < bi.shape[d]) {
         break;

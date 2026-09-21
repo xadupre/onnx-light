@@ -79,7 +79,7 @@ void Squeeze::operator()(const Tensor &data, const onnx_kernels::Shape &axes,
   EXT_ENFORCE_INVALID(output.shape == out_shape,
                       "kernel::Squeeze: preallocated output shape mismatch.");
   if (data.data_type == static_cast<int32_t>(DataType::STRING)) {
-    output.string_data = data.string_data;
+    output.string_data = data.AsStrings();
     return;
   }
   EXT_ENFORCE_INVALID(output.size_bytes() == data.size_bytes(),

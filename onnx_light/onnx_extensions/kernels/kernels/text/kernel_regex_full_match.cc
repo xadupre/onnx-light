@@ -32,7 +32,7 @@ std::regex CompileRegexPattern(const std::string &pattern) {
 void CheckRegexFullMatchInput(const Tensor &x) {
   EXT_ENFORCE_INVALID(x.data_type == DataType::STRING,
                       "kernel::RegexFullMatch only supports STRING tensors.");
-  EXT_ENFORCE_INVALID(static_cast<int64_t>(x.string_data.size()) == x.element_count(),
+  EXT_ENFORCE_INVALID(static_cast<int64_t>(x.AsStrings().size()) == x.element_count(),
                       "kernel::RegexFullMatch input ``x`` string_data size does not match its "
                       "shape.");
 }
@@ -64,7 +64,7 @@ void RegexFullMatch::operator()(const Tensor &x, const std::string &pattern, Ten
   const std::regex re = CompileRegexPattern(pattern);
   uint8_t *const dst = output.AsBool();
   for (int64_t i = 0; i < n; ++i) {
-    dst[i] = std::regex_match(x.string_data[static_cast<size_t>(i)], re) ? uint8_t{1} : uint8_t{0};
+    dst[i] = std::regex_match(x.AsStrings()[static_cast<size_t>(i)], re) ? uint8_t{1} : uint8_t{0};
   }
 }
 

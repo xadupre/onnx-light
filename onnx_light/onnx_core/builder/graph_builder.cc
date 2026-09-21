@@ -207,6 +207,9 @@ template <typename Proto> void RequireStandardBody(const Proto &body) {
 }
 
 void RequireStandardGraph(const GraphProto &graph) {
+  if (!graph.persistent_bindings().empty()) {
+    throw BuilderError("GraphBuilder: standard ONNX cannot represent persistent bindings.");
+  }
   if (!graph.encoded_initializer().empty()) {
     throw BuilderError("GraphBuilder: standard ONNX cannot represent encoded initializers.");
   }
@@ -792,6 +795,9 @@ GraphBuilder::ImportAttributes(const NodeProto &node,
 }
 
 void GraphBuilder::ImportGraph(const GraphProto &graph) {
+  if (parent_ != nullptr && !graph.persistent_bindings().empty()) {
+    throw BuilderError("GraphBuilder: persistent bindings are supported only on the root graph.");
+  }
   graph_template_ = graph;
   graph_template_.ref_input().clear();
   graph_template_.ref_output().clear();
@@ -2458,6 +2464,13 @@ const SymTensor &GraphBuilder::GetShape(const std::string &name) const {
   return compute_.Shapes().Get(name);
 }
 
+void GraphBuilder::MakePersistentBinding(const PersistentBindingProto &binding) {
+  if (parent_ != nullptr) {
+    throw BuilderError("GraphBuilder: persistent bindings are supported only on the root graph.");
+  }
+  graph_template_.add_persistent_bindings(binding);
+}
+
 GraphProto GraphBuilder::BuildGraph() const {
   GraphProto graph = graph_template_;
   graph.set_name(name_);
@@ -2480,6 +2493,19 @@ GraphProto GraphBuilder::BuildGraph() const {
   }
   for (const ValueInfoProto &value_info : value_infos_) {
     graph.add_value_info(value_info);
+  }
+  if (!graph.persistent_bindings().empty()) {
+    // Supplies inferred IO types before validating the unfinalized graph view.
+    for (auto &output : graph.ref_output()) {
+      if (!output.has_type() && Shapes().HasType(output.name().value())) {
+        *output.mutable_type() = Shapes().GetType(output.name().value());
+      } else if (!output.has_type() && HasShape(output.name().value())) {
+        SymTensorToValueInfo(GetShape(output.name().value()), output);
+      }
+    }
+    StructTypeCatalogue catalogue;
+    catalogue.Build(Shapes().StructTypes());
+    VerifyPersistentBindings(&catalogue, graph, parent_ == nullptr);
   }
   return graph;
 }
@@ -2784,6 +2810,11 @@ GraphProto GraphBuilder::ToGraph() {
   RebuildStructuredState();
   GraphProto graph = BuildGraph();
   Finalize(graph);
+  if (!graph.persistent_bindings().empty()) {
+    StructTypeCatalogue catalogue;
+    catalogue.Build(Shapes().StructTypes());
+    VerifyPersistentBindings(&catalogue, graph, parent_ == nullptr);
+  }
   return graph;
 }
 
@@ -2859,6 +2890,9 @@ FunctionProto GraphBuilder::ExportFunction(const std::string &domain, bool model
 }
 
 FunctionProto GraphBuilder::BuildFunction(const std::string &domain) const {
+  if (!graph_template_.persistent_bindings().empty()) {
+    throw BuilderError("GraphBuilder: a FunctionProto cannot carry persistent bindings.");
+  }
   FunctionProto function = function_template_;
   function.set_name(name_);
   function.set_domain(domain);

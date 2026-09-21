@@ -4,23 +4,30 @@ Persistent input/output feedback
 ===============================
 
 Feedback state retains selected model outputs as inputs for the next call.
-The model remains stateless: types come from its final input/output
-declarations, and the caller supplies the mapping and initial values.
-There is no persistent-state proto or separate executor.
+The graph declares the relationship in ``GraphProto.persistent_bindings``;
+types come from its final input/output declarations. The caller supplies
+initial values, not a separate feedback mapping. Execution uses the existing
+session and allocator infrastructure, not a separate executor.
 
 The native :cpp:class:`onnx_light::core::runtime::FeedbackState` uses the
 existing runtime execution and value ownership contracts. Create one state
-per independent request. Values are copied where necessary to separate
-retained state from caller-owned inputs, returned outputs and execution
-scratch storage. This initial implementation promises correct feedback,
-not zero-copy KV-cache reuse.
+per independent request. Initialization, reset, state forwarding and
+state-value access retain buffer owners without copying payloads.
+Shapes, metadata and owner handles may be copied. Kernels can allocate new
+computed results; the state layer does not duplicate those results merely
+to retain or return them. In-place KV append and capacity management are
+separate optimizations.
 
-Already-owned graph output storage transfers to the caller without a deep
-copy. Borrowed outputs are detached by the runtime, and allocator-backed
-outputs are copied out of execution storage. Each selected output is copied
-only once into retained state, after validation against its destination
-input. This copy keeps returned outputs independently mutable; initialization,
-invocation inputs and explicit state snapshots likewise preserve isolation.
+.. warning::
+
+   Inputs, retained state and returned views can share the same payload.
+   Callers and kernels must not modify that payload while shared or retained.
+   ``state.values`` is a shared view, not an independently mutable snapshot.
+   Metadata such as a returned tensor's name and shape is independent.
+
+The model is immutable for the entire bound session lifetime. State creation
+and execution do not serialize, clone or hash the model to check for changes.
+To rewrite the graph, create a new state/session after rewriting instead.
 
 A basic feedback loop
 ---------------------
@@ -38,31 +45,57 @@ The Python binding is available from the native runtime module:
         "accumulate (float[2] delta, float[2] past) => (float[2] present)"
         "{ present = Add(delta, past) }"
     )
+    binding = model.graph.persistent_bindings.add()
+    binding.input_name = "past"
+    binding.output_name = "present"
     context = runtime.RuntimeContext(
         runtime.KernelContext(runtime.default_opset(18))
     )
     initial = numpy.zeros(2, dtype=numpy.float32)
-    state = runtime.FeedbackState(
-        model, feedback={"past": "present"}, initial={"past": initial}
-    )
+    state = runtime.FeedbackState(model, initial={"past": initial})
     delta = numpy.ones(2, dtype=numpy.float32)
     first = state.run(context, {"delta": delta})
     second = state.run(context, {"delta": delta})
     numpy.testing.assert_array_equal(
-        numpy.frombuffer(second["present"].raw_data(), dtype=numpy.float32),
+        numpy.from_dlpack(second["present"]),
         [2, 2],
     )
     state.reset({"past": initial})
     state.close()
 
-The mapping is **input destination to output source**. Inputs accept runtime
-``Tensor`` objects or NumPy arrays. Outputs and ``state.values`` contain
-owning runtime tensors; snapshots can be changed without changing the state.
+The mapping is **input destination to output source**. Empty
+``input_field_path`` and ``output_field_path`` select whole values. Names
+are exact graph names; separate path components avoid ambiguity with dots
+inside names.
+
+Initial/current-feed and ``state.values`` dictionary keys join path components
+with dots, escaping literal dots and backslashes in **each** component with a
+backslash. Thus ``"request.cache"`` selects the ``cache`` field of ``request``,
+whereas ``r"request\.cache"`` selects the graph input named ``request.cache``.
+``r"request.cache\.key"`` selects the field literally named ``cache.key``.
+Nested dictionaries also select struct fields: ``{"request": {"cache": value}}``.
+Their field names, like protobuf field-path elements, are literal and unescaped.
+
+Inputs accept runtime ``Tensor`` objects, contiguous CPU NumPy arrays and
+compatible DLPack producers such as CPU PyTorch tensors. Noncontiguous,
+byte-swapped or unsupported representations raise an error rather than
+being copied. PyTorch tensors requiring gradients must be detached by the
+caller before DLPack export; ``detach()`` shares storage.
+
+Outputs and ``state.values`` contain tensors with retained storage owners.
+They remain valid after callers drop their input references, after another
+run, or after reset/close. Unsupported ownerless output storage is rejected
+rather than silently copied; an allocator cannot recycle a live retained
+allocation.
 The binding keeps the model alive. The supplied context configures allocators
 and custom kernels; each call executes in a fresh child context, rather than
 leaving old feeds or intermediate values in the caller's context.
 The binding also retains supplied contexts so cached kernel allocator
 references remain valid. Reuse the same context for a state's calls.
+Initializer storage must already be raw bytes or native float, double, int32,
+int64 or uint64 typed fields. Other numeric initializer types require raw
+storage; string initializers are unsupported in this mode. String inputs and
+retained string outputs are supported.
 
 The corresponding C++ entry points are:
 
@@ -70,8 +103,11 @@ The corresponding C++ entry points are:
 
     using namespace onnx_light::core::runtime;
 
+    auto *binding = model.mutable_graph()->add_persistent_bindings();
+    binding->set_input_name("past");
+    binding->set_output_name("present");
     FeedbackState state(
-        model, {{"past", "present"}},
+        model,
         {{"past", RuntimeValue(Tensor::FromFloat("past", {2}, {0.f, 0.f}))}});
     RuntimeContext context(KernelContext(18));
     auto outputs = state.Run(
@@ -83,14 +119,18 @@ The corresponding C++ entry points are:
 
 C++ callers register the operator kernels as usual before executing the model
 (see :doc:`register_builtin_operators`). The model and configured allocators
-must outlive the state/session using them.
+must outlive the state/session using them. With the reference-based C++
+constructor, the model must also outlive any returned views of its initializer
+storage. Use the ``shared_ptr<const ModelProto>`` constructor to retain the
+model automatically in such views; the Python binding retains its model
+automatically.
 
 Lifecycle and validation
 ------------------------
 
-* Construct the state **after** graph rewrites. Every mapped input and output
+* Construct the state **after** graph rewrites. Every graph-declared input and output
   must exist in the final model, with compatible types and shape constraints.
-  A removed or changed path needs an updated mapping and a new state.
+  A removed or changed path needs an updated graph binding and a new state.
 * Supply initial contents for every feedback destination. Each subsequent
   call supplies the remaining inputs; current feeds must not overlap
   retained destinations.
@@ -98,7 +138,14 @@ Lifecycle and validation
   values. A failed or cancelled call must not publish a partial update.
 * Reset explicitly supplies new initial contents. Closing releases retained
   values. Calls, resets and closes on the same state must not overlap.
-* Independent states do not share mutable retained values.
+* Independent states have separate state containers. They can explicitly share
+  read-only input storage; neither may mutate a shared buffer.
+
+Publication replaces owner handles atomically after validation. Failure or
+cancellation leaves the old state available; it does not require backup
+copies. This guarantee does not roll back external writes that violate the
+read-only contract. Persistent declarations currently belong to the root
+graph; declarations inside control-flow subgraphs are rejected.
 
 Cancellation uses the existing task-completion primitive:
 
@@ -123,7 +170,7 @@ A binding may retain a whole input or a selected struct field. For example,
 ``request.cache <- response.cache`` retains only the cache, while
 ``request.tokens`` must be supplied anew. The struct declaration comes from
 ``StructTypeProto`` in the model; persistence is a property of the feedback
-mapping, not a flag on the type.
+declaration in ``GraphProto``, not a flag on the type or encoded payload.
 
 This is equivalent to manually taking the selected outputs from each
 stateless invocation and passing them to the next invocation. Unselected
@@ -134,12 +181,13 @@ the ``request`` and ``response`` structures described above:
 
 .. code-block:: python
 
-    state = runtime.FeedbackState(
-        model,
-        {"request.cache": "response.cache"},
-        {"request.cache": initial_cache},
-    )
-    output = state.run(context, {"request.tokens": tokens})
+    binding = model.graph.persistent_bindings.add()
+    binding.input_name = "request"
+    binding.output_name = "response"
+    binding.input_field_path.append("cache")
+    binding.output_field_path.append("cache")
+    state = runtime.FeedbackState(model, {"request": {"cache": initial_cache}})
+    output = state.run(context, {"request": {"tokens": tokens}})
 
 Custom kernels use ``context.get_value(name)`` and
 ``context.put_value(name, value)`` to exchange structured values; ordinary
@@ -150,3 +198,15 @@ Selecting a struct field does not decode or slice a byte-encoded payload.
 Inline structured encoded payloads can be retained as whole values; external
 payloads must first be loaded. This API currently supports tensors, named
 structs and inline structured encodings, not sequence/map/optional state.
+The zero-copy feedback path supports ``If`` and local functions without
+attribute references. ``Loop``, ``Scan`` and functions requiring attribute
+substitution are rejected until their execution can preserve buffer owners
+without serialization-based cloning.
+
+``GraphBuilder`` preserves and validates persistence declarations during
+import/export and supported rewrites. Direct edits to graph input/output
+names require corresponding binding edits; dangling names are rejected.
+An export to standard ONNX
+that cannot preserve this contract must be rejected, not silently strip
+the bindings. Explicit model saving serializes the declarations, not the
+current request's retained state; execution itself does not serialize them.

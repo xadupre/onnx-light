@@ -29,7 +29,7 @@ void ValidateInputs(const Tensor &x, const ParamStrings &cats_strings,
                         "kernel::CategoryMapper input data_type does not match the requested "
                         "InT (expected STRING).");
     EXT_ENFORCE_INVALID(
-        static_cast<int64_t>(x.string_data.size()) == x.element_count(),
+        static_cast<int64_t>(x.AsStrings().size()) == x.element_count(),
         "kernel::CategoryMapper STRING input string_data size does not match its shape.");
   } else {
     static_assert(std::is_same_v<InT, int64_t>,

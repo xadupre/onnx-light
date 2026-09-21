@@ -252,11 +252,16 @@ GraphBuilder::GraphBuilder(std::string name, SchemaLookupFn schema_lookup)
 GraphBuilder::GraphBuilder(const ModelProto &model, SchemaLookupFn schema_lookup)
     : name_(model.graph().name().empty() ? std::string("graph") : model.graph().name().value()),
       schema_lookup_(std::move(schema_lookup)) {
-  model_template_ = model;
-  model_template_.clear_graph();
-  model_template_.ref_functions().clear();
-  model_template_.ref_struct_types().clear();
-  model_template_.ref_opset_import().clear();
+  // Copy only metadata: copying the optional graph would serialize its payload
+  // before discarding it. Graphs, functions, types and opsets are imported below.
+  model_template_.ir_version_ = model.ir_version_;
+  model_template_.producer_name_ = model.producer_name_;
+  model_template_.producer_version_ = model.producer_version_;
+  model_template_.domain_ = model.domain_;
+  model_template_.model_version_ = model.model_version_;
+  model_template_.doc_string_ = model.doc_string_;
+  model_template_.metadata_props_ = model.metadata_props_;
+  model_template_.configuration_ = model.configuration_;
   compute_.Shapes().SetStructTypes(model.struct_types());
   for (const auto &opset : model.opset_import()) {
     SetOpsetVersion(opset.domain().empty() ? std::string() : opset.domain().value(),

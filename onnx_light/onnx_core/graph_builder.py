@@ -205,9 +205,10 @@ class GraphBuilder(_C.GraphBuilder):
         including models exported from this builder.
 
         Writable arrays remain writable and mutations are visible to all owners.
-        The caller must not mutate weights during optimization or execution, or
-        resize/reallocate their storage while borrowed. Use ``copy=True`` for an
-        independent snapshot; setting an array read-only does not freeze its aliases.
+        The caller must finish mutations before optimization or creating an
+        execution session, which may cache derived values, and must not resize or
+        reallocate storage while borrowed. Use ``copy=True`` for an independent
+        snapshot; setting an array read-only does not freeze its aliases.
         """
         if not isinstance(value, numpy.ndarray):
             raise TypeError(f"An initializer must be a NumPy array, not {type(value).__name__}.")

@@ -12,6 +12,7 @@ import tracemalloc
 import unittest
 import weakref
 
+import ml_dtypes
 import numpy
 
 from onnx_light.onnx import ModelProto, TensorProto, checker, numpy_helper
@@ -58,10 +59,9 @@ class TestGraphBuilderNumpy(unittest.TestCase):
                         self.assertEqual(list(tensor.dims), list(shape))
                         if array.size:
                             self.assertPointer(tensor, array)
-                        self.assertEqual(
-                            tensor.SerializeToString(),
-                            numpy_helper.from_array(array, name="init").SerializeToString(),
-                        )
+                        expected = numpy_helper.from_array(array, name="init")
+                        expected.metadata_props.extend(tensor.metadata_props)
+                        self.assertEqual(tensor.SerializeToString(), expected.SerializeToString())
                         del tensor, model, builder
                         gc.collect()
                         self.assertEqual(sys.getrefcount(array), references)
@@ -145,12 +145,45 @@ class TestGraphBuilderNumpy(unittest.TestCase):
                 elif replacement == "CopyFrom":
                     tensor.CopyFrom(TensorProto())
                 else:
-                    tensor.ParseFromString(TensorProto().SerializeToString())
+                    tensor.ParseFromString(
+                        numpy_helper.from_array(
+                            numpy.zeros(4, dtype=numpy.float32)
+                        ).SerializeToString()
+                    )
                 gc.collect()
                 self.assertEqual(sys.getrefcount(array), references)
                 del tensor, model
                 gc.collect()
                 self.assertEqual(sys.getrefcount(array), references)
+
+    def test_model_import_preserves_metadata(self):
+        builder = GraphBuilder()
+        array = numpy.ones(2, dtype=numpy.float32)
+        builder.init(array, copy=False)
+        model = builder.to_onnx()
+        metadata = {
+            "ir_version": 10,
+            "producer_name": "numpy",
+            "producer_version": "1",
+            "domain": "example",
+            "model_version": 42,
+            "doc_string": "Borrowed weights.",
+        }
+        for name, value in metadata.items():
+            setattr(model, name, value)
+        model.metadata_props.add(key="custom", value="retained")
+        configuration = model.configuration.add()
+        configuration.name = "cpu"
+        configuration.num_devices = 1
+        configuration.device.append("cpu")
+        rebuilt = GraphBuilder(model).to_onnx()
+        for name, value in metadata.items():
+            self.assertEqual(getattr(rebuilt, name), value)
+        self.assertIn(("custom", "retained"), [(p.key, p.value) for p in rebuilt.metadata_props])
+        self.assertEqual(
+            rebuilt.configuration[0].SerializeToString(), configuration.SerializeToString()
+        )
+        self.assertPointer(rebuilt.graph.initializer[0], array)
 
     def test_contiguous_view_and_visible_mutations(self):
         base = numpy.arange(12, dtype=numpy.float32)
@@ -222,7 +255,10 @@ class TestGraphBuilderNumpy(unittest.TestCase):
             numpy.zeros(2, dtype=[("value", "f4")]),
             numpy.zeros(2, dtype="datetime64[ns]"),
             numpy.zeros(2, dtype="V4"),
+            numpy.zeros(2, dtype=ml_dtypes.bfloat16),
         )
+        if numpy.dtype(numpy.longdouble).itemsize > 8:
+            invalid_arrays += (numpy.zeros(2, dtype=numpy.longdouble),)
         for array in invalid_arrays:
             with self.subTest(dtype=array.dtype, strides=array.strides):
                 references = sys.getrefcount(array)
@@ -236,12 +272,23 @@ class TestGraphBuilderNumpy(unittest.TestCase):
         with self.assertRaises(TypeError):
             GraphBuilder().init([1, 2], copy=False)
 
+    def test_buffer_acquisition_failure_preserves_tensor(self):
+        tensor = numpy_helper.from_array(numpy.ones(2, dtype=numpy.float32))
+        expected = tensor.SerializeToString()
+        array = numpy.arange(6, dtype=numpy.float32)[::2]
+        references = sys.getrefcount(array)
+        with self.assertRaises((ValueError, BufferError)):
+            tensor._set_raw_data_from_buffer(array)
+        gc.collect()
+        self.assertEqual(sys.getrefcount(array), references)
+        self.assertEqual(tensor.SerializeToString(), expected)
+
     def test_name_collision_releases_buffer(self):
         builder = GraphBuilder()
         builder.init(numpy.ones(2, dtype=numpy.float32), name="weight")
         array = numpy.zeros(3, dtype=numpy.float32)
         references = sys.getrefcount(array)
-        with self.assertRaises(RuntimeError):
+        with self.assertRaisesRegex(ValueError, "already"):
             builder.init(array, name="weight", copy=False)
         gc.collect()
         self.assertEqual(sys.getrefcount(array), references)

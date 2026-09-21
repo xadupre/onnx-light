@@ -124,8 +124,9 @@ arrays are supported.
 
 **Mutation contract:** writable arrays are allowed and remain writable.
 Mutations through the array or its aliases remain visible in borrowed tensors
-and models. Do not mutate weights during optimization or execution, or
-resize/reallocate their storage while borrowed. Marking an array read-only
+and models. Finish mutations before optimization or creating an execution
+session, which may cache derived values. Do not resize/reallocate storage while
+borrowed. Marking an array read-only
 does not freeze existing writable aliases. Use the default ``copy=True`` when
 an immutable snapshot independent of the source is required.
 Shape analysis retains the tensor's type and dimensions but does not decode

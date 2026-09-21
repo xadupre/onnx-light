@@ -573,7 +573,7 @@ void TensorProto::Segment::PrintToStringStream(std::stringstream &ss,
 
 // TensorProto
 
-IMPLEMENT_PROTO(TensorProto)
+void TensorProto::CopyFrom(const TensorProto &proto) { *this = proto; }
 SerializeSizeResult TensorProto::SerializeSize(utils::BinaryWriteStream &stream,
                                                SerializeOptions &options) const {
   SerializeSizeResult size;

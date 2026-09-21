@@ -295,6 +295,34 @@ class TestTensorProtoDLPack(unittest.TestCase):
         gc.collect()
         self.assertEqual(len(released), 1)
 
+    def test_numpy_initializer_native_release_without_gil(self):
+        from onnx_light.onnx_core.graph_builder import GraphBuilder
+
+        array = numpy.ones(4, dtype=numpy.float32)
+        references = sys.getrefcount(array)
+        builder = GraphBuilder()
+        builder.init(array, copy=False)
+        model = builder.to_onnx()
+        tensor = copy.copy(model.graph.initializer[0])
+        capsule = tensor.release_dlpack()
+        del builder, model, tensor
+        gc.collect()
+        self.assertEqual(sys.getrefcount(array), references + 1)
+        get_pointer = ctypes.pythonapi.PyCapsule_GetPointer
+        get_pointer.restype = ctypes.c_void_p
+        get_pointer.argtypes = [ctypes.py_object, ctypes.c_char_p]
+        pointer = get_pointer(capsule, b"dltensor")
+        descriptor = ctypes.cast(pointer, ctypes.POINTER(DLManagedTensor)).contents
+        set_name = ctypes.pythonapi.PyCapsule_SetName
+        set_name.restype = ctypes.c_int
+        set_name.argtypes = [ctypes.py_object, ctypes.c_char_p]
+        self.assertEqual(set_name(capsule, b"used_dltensor"), 0)
+        ctypes.CFUNCTYPE(None, ctypes.c_void_p)(descriptor.deleter)(pointer)
+        self.assertEqual(sys.getrefcount(array), references)
+        del capsule
+        gc.collect()
+        self.assertEqual(sys.getrefcount(array), references)
+
     def test_import_protocol_errors(self):
         class DeviceProducer:
             def __dlpack_device__(self):

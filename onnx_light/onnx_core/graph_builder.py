@@ -29,12 +29,13 @@ The module is exposed as ``onnx_light.onnx_core.graph_builder``.
 from __future__ import annotations
 
 import importlib.util
+import sys
 from collections.abc import Callable
 from typing import TypeAlias
 
 import numpy
 
-from ..onnx import helper, numpy_helper
+from ..onnx import TensorProto, helper, numpy_helper
 from ..onnx_op import GetAllOnnxOpSchemasWithHistory, LightOpSchema
 from ..onnx_py._onnxpycore import builder as _C  # type: ignore[attr-defined]
 
@@ -194,10 +195,49 @@ class GraphBuilder(_C.GraphBuilder):
             self.make_output(helper.make_tensor_value_info(name, elem_type, shape))
         return name
 
-    def init(self, value: numpy.ndarray, name: str | None = None) -> str:
-        """Adds a NumPy initializer and returns its final name."""
+    def init(self, value: numpy.ndarray, name: str | None = None, *, copy: bool = True) -> str:
+        """Adds a NumPy initializer and returns its final name.
+
+        By default, copies the payload. With ``copy=False``, borrows C-contiguous,
+        dtype-aligned, little-endian storage without conversion. Supports bool, 8/16/32/64-bit
+        integers, float16/32/64 and complex64/128; rejects other dtypes and layouts.
+        Retains the array until the last borrowed payload owner releases it,
+        including models exported from this builder.
+
+        Writable arrays remain writable and mutations are visible to all owners.
+        The caller must finish mutations before optimization or creating an
+        execution session, which may cache derived values, and must not resize or
+        reallocate storage while borrowed. Use ``copy=True`` for an independent
+        snapshot; setting an array read-only does not freeze its aliases.
+        """
         if not isinstance(value, numpy.ndarray):
             raise TypeError(f"An initializer must be a NumPy array, not {type(value).__name__}.")
+        if not copy:
+            if not value.flags.c_contiguous:
+                raise ValueError("copy=False requires a C-contiguous NumPy array.")
+            if not value.flags.aligned:
+                raise ValueError("copy=False requires a dtype-aligned NumPy array.")
+            if value.dtype.byteorder == ">" or (
+                value.dtype.byteorder == "=" and sys.byteorder != "little"
+            ):
+                raise ValueError("copy=False requires little-endian NumPy storage.")
+            if value.dtype.kind not in "biufc" or value.dtype.name not in {
+                "bool",
+                "int8",
+                "int16",
+                "int32",
+                "int64",
+                "uint8",
+                "uint16",
+                "uint32",
+                "uint64",
+                "float16",
+                "float32",
+                "float64",
+                "complex64",
+                "complex128",
+            }:
+                raise TypeError(f"copy=False does not support NumPy dtype {value.dtype}.")
         if name is None:
             while True:
                 candidate = (
@@ -209,7 +249,13 @@ class GraphBuilder(_C.GraphBuilder):
                 if not self.has_name(candidate):
                     name = candidate
                     break
-        return self.make_initializer(numpy_helper.from_array(value, name=name))
+        if copy:
+            return self.make_initializer(numpy_helper.from_array(value, name=name))
+        tensor = TensorProto(
+            name=name, dims=value.shape, data_type=helper.np_dtype_to_tensor_dtype(value.dtype)
+        )
+        tensor._set_raw_data_from_buffer(value)
+        return self.make_initializer_move(tensor)
 
     def register_pattern(self, pattern: PatternOptimization) -> None:
         """Registers or replaces a pattern for this builder."""

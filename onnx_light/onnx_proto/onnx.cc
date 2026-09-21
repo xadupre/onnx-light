@@ -578,7 +578,9 @@ void TensorProto::CopyFrom(const TensorProto &proto) {
   if (raw.is_borrowed() && raw.owner().use_count() != 0) {
     *this = proto;
   } else {
-    CopyProtoFrom(*this, proto);
+    TensorProto copied;
+    CopyProtoFrom(copied, proto);
+    *this = std::move(copied);
   }
 }
 SerializeSizeResult TensorProto::SerializeSize(utils::BinaryWriteStream &stream,

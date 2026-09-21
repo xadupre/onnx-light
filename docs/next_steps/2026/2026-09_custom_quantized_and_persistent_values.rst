@@ -888,6 +888,12 @@ requirements, not claims that the completed PRs already implement them.
 implements the PR04a declaration and PR04b runtime together: the
 caller-supplied mapping, model-serialization guard and defensive
 state-payload copies are replaced by graph bindings and retained owners.
+The Linux Release measurement for this implementation is 1,388,072 installed
+bytes, 959,130 ``.text`` bytes and 795 defined dynamic symbols. Relative to
+the post-ORT limits, PR04 receives a bounded allowance of 32 KiB installed,
+16 KiB of ``.text`` and eight symbols, setting the corresponding CI limits
+to 1,423,320 bytes, 970,090 bytes and 800 symbols. The shared-library
+dependency allowlist remains unchanged.
 
 .. list-table::
    :header-rows: 1

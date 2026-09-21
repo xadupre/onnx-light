@@ -199,7 +199,7 @@ class GraphBuilder(_C.GraphBuilder):
         """Adds a NumPy initializer and returns its final name.
 
         By default, copies the payload. With ``copy=False``, borrows C-contiguous,
-        little-endian storage without conversion. Supports bool, 8/16/32/64-bit
+        dtype-aligned, little-endian storage without conversion. Supports bool, 8/16/32/64-bit
         integers, float16/32/64 and complex64/128; rejects other dtypes and layouts.
         Retains the array until the last borrowed payload owner releases it,
         including models exported from this builder.
@@ -215,6 +215,8 @@ class GraphBuilder(_C.GraphBuilder):
         if not copy:
             if not value.flags.c_contiguous:
                 raise ValueError("copy=False requires a C-contiguous NumPy array.")
+            if not value.flags.aligned:
+                raise ValueError("copy=False requires a dtype-aligned NumPy array.")
             if value.dtype.byteorder == ">" or (
                 value.dtype.byteorder == "=" and sys.byteorder != "little"
             ):

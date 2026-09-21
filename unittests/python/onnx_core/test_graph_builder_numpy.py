@@ -284,6 +284,29 @@ class TestGraphBuilderNumpy(unittest.TestCase):
         self.assertEqual(sys.getrefcount(array), references)
         self.assertEqual(tensor.SerializeToString(), expected)
 
+    def test_misaligned_contiguous_arrays_require_copy(self):
+        for dtype in (numpy.int16, numpy.int32, numpy.int64, numpy.float32, numpy.float64):
+            with self.subTest(dtype=dtype):
+                array = numpy.ndarray(
+                    (3,),
+                    dtype=dtype,
+                    buffer=bytearray(3 * numpy.dtype(dtype).itemsize + 1),
+                    offset=1,
+                )
+                array[:] = [1, 2, 3]
+                self.assertTrue(array.flags.c_contiguous)
+                self.assertFalse(array.flags.aligned)
+                references = sys.getrefcount(array)
+                builder = GraphBuilder()
+                with self.assertRaisesRegex(ValueError, "dtype-aligned"):
+                    builder.init(array, copy=False)
+                gc.collect()
+                self.assertEqual(sys.getrefcount(array), references)
+                self.assertEqual(len(builder.to_onnx().graph.initializer), 0)
+                self.assertEqual(builder.init(array, copy=True), "init")
+                tensor = builder.to_onnx().graph.initializer[0]
+                numpy.testing.assert_array_equal(numpy_helper.to_array(tensor), array)
+
     def test_name_collision_releases_buffer(self):
         builder = GraphBuilder()
         builder.init(numpy.ones(2, dtype=numpy.float32), name="weight")

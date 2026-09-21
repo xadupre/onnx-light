@@ -115,9 +115,11 @@ is destroyed or replaced. Serialization produces independent bytes;
 ``ModelProto.CopyFrom`` retains its existing serialization-based deep-copy
 behavior.
 
-Only C-contiguous, little-endian arrays are accepted. Supported dtypes are
+Only C-contiguous, dtype-aligned (``array.flags.aligned``), little-endian arrays
+are accepted. Supported dtypes are
 ``bool``, signed/unsigned 8/16/32/64-bit integers, ``float16/32/64``, and
-``complex64/128``. Non-contiguous/Fortran-only layouts, incompatible byte order,
+``complex64/128``. Misaligned buffers (even when C-contiguous),
+non-contiguous/Fortran-only layouts, incompatible byte order,
 object/string, structured, and other dtypes raise an exception; there is no
 fallback to a copy. Scalars, empty arrays, contiguous views, and read-only
 arrays are supported.

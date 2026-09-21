@@ -61,7 +61,9 @@ def capsule_tensor(capsule):
     get_pointer = ctypes.pythonapi.PyCapsule_GetPointer
     get_pointer.restype = ctypes.c_void_p
     get_pointer.argtypes = [ctypes.py_object, ctypes.c_char_p]
-    return ctypes.cast(get_pointer(capsule, b"dltensor"), ctypes.POINTER(DLTensor)).contents
+    tensor = ctypes.cast(get_pointer(capsule, b"dltensor"), ctypes.POINTER(DLTensor)).contents
+    tensor._capsule = capsule
+    return tensor
 
 
 class CapsuleProducer:
@@ -182,6 +184,34 @@ class TestTensorProtoDLPack(unittest.TestCase):
         self.assertEqual(tensor.SerializeToString(), copied.SerializeToString())
         tensor.Clear()
         self.assertEqual(copied.raw_data, bytes(range(8)))
+
+    def test_copy_empty_and_ownerless(self):
+        for payload in (b"", bytes(range(8))):
+            for borrowed in (False, True):
+                with self.subTest(payload=payload, borrowed=borrowed):
+                    tensor = TensorProto(
+                        data_type=TensorProto.UINT8, dims=[len(payload)], raw_data=payload
+                    )
+                    serialized = tensor.SerializeToString()
+                    if borrowed:
+                        options = ParseOptions()
+                        options.no_copy = True
+                        tensor = TensorProto()
+                        tensor.ParseFromString(serialized, options)
+                    copied = copy.copy(tensor)
+                    assigned = TensorProto()
+                    assigned.CopyFrom(tensor)
+                    for item in (copied, assigned):
+                        if payload:
+                            self.assertNotEqual(
+                                capsule_tensor(item.__dlpack__()).data,
+                                capsule_tensor(tensor.__dlpack__()).data,
+                            )
+                        self.assertTrue(item.HasField("raw_data"))
+                    del tensor, serialized
+                    gc.collect()
+                    self.assertEqual(copied.raw_data, payload)
+                    self.assertEqual(assigned.raw_data, payload)
 
     def test_import_builder_model_lifetime(self):
         from onnx_light.onnx_core.graph_builder import GraphBuilder

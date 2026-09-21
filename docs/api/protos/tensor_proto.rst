@@ -53,8 +53,9 @@ array may be deleted immediately; the producer's managed tensor retains storage.
 
 ``copy.copy(tensor)``, ``TensorProto.CopyFrom``, repeated tensor insertion, and
 GraphBuilder's ``make_initializer`` / ``make_initializer_move`` preserve the
-borrowed owner, as do the builder's returned graph and model. ``CopyFrom`` still
-copies owned payloads. Serialization creates independent bytes; reparsing those
+borrowed owner, as do the builder's returned graph and model. ``CopyFrom`` and
+``copy.copy`` still copy owned payloads and ownerless borrowed buffers.
+Serialization creates independent bytes; reparsing those
 bytes does not retain the DLPack owner. Treat shared storage as read-only while
 the tensor, builder, or model is in use, including through the original array.
 

@@ -2282,8 +2282,13 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
                   "Borrows read-only raw_data and retains the producer's managed allocation. "
                   "Uses stream=None; asynchronous synchronization and copying are unsupported.")
       .def(
-          "__copy__", [](const TensorProto &self) { return TensorProto(self); },
-          "Copies tensor metadata and shares the owner of borrowed raw_data.")
+          "__copy__",
+          [](const TensorProto &self) {
+            TensorProto result;
+            result.CopyFrom(self);
+            return result;
+          },
+          "Copies tensor metadata and shares managed borrowed raw_data; copies other payloads.")
       .def(
           "__dlpack__",
           [](nb::handle self, nb::object stream, std::optional<std::pair<int, int>> /*max_version*/,

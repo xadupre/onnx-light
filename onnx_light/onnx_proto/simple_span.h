@@ -253,8 +253,8 @@ public:
   /** Move constructor: for aligned-owned mode the pointer remains valid after the move. */
   inline ByteSpan(ByteSpan &&other) noexcept
       : Span(other.ptr_, other.size_), owned_(std::move(other.owned_)), borrowed_(other.borrowed_),
-        aligned_owned_(other.aligned_owned_), align_(other.align_),
-        owner_(std::move(other.owner_)) {
+        aligned_owned_(other.aligned_owned_), align_(other.align_), owner_(std::move(other.owner_)),
+        export_guard_(std::move(other.export_guard_)) {
     other.ptr_ = nullptr;
     other.size_ = 0;
     other.borrowed_ = false;
@@ -271,6 +271,7 @@ public:
       aligned_owned_ = other.aligned_owned_;
       align_ = other.align_;
       owner_ = std::move(other.owner_);
+      export_guard_ = std::move(other.export_guard_);
       ptr_ = other.ptr_;
       size_ = other.size_;
       other.ptr_ = nullptr;
@@ -304,6 +305,12 @@ public:
 
   /** Returns the token retaining borrowed storage, or an empty token when caller-owned. */
   inline const std::shared_ptr<void> &owner() const { return owner_; }
+
+  /** Retains a lease used to detect outstanding exports of this storage. */
+  std::shared_ptr<void> acquire_export_guard() const;
+
+  /** Returns whether consumers still hold an export lease on this storage. */
+  inline bool has_active_exports() const { return !export_guard_.expired(); }
 
   /** Implicit conversion to a standard string so the type is a drop-in for
    *  protobuf ``bytes`` fields (which are std::string) in consuming code. */
@@ -560,6 +567,7 @@ private:
   size_t align_ = 0;
   /** Keeps borrowed backing storage alive when the model owns the shared buffer. */
   std::shared_ptr<void> owner_;
+  mutable std::weak_ptr<void> export_guard_;
 };
 
 } // namespace ONNX_LIGHT_NAMESPACE::utils

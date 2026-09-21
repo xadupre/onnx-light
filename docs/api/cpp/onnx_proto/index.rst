@@ -8,6 +8,7 @@ onnx_proto
     onnx_helper
     onnx_alias
     onnx_crypt
+    onnx_dlpack
     onnx_ort_flatbuffers
     onnx_mapped_payload
     onnx_io_policy

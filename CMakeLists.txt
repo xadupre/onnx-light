@@ -358,14 +358,16 @@ else()
 endif()
 
 add_library(lib_onnx_proto ${_lib_onnx_proto_type} ${ONNX_LIGHT_HEADERS} ${ONNX_LIGHT_PROTO_ALL_SOURCES})
-# Structural validation is control-flow and diagnostics heavy rather than
-# throughput-sensitive. Optimize that translation unit for size so the frozen
-# PR02 validation contract stays within the proto-library binary budget.
+# Structural and DLPack validation are control-flow and diagnostics heavy rather
+# than throughput-sensitive. Optimize these translation units for size to stay
+# within the proto-library binary budget.
 if(MSVC)
   set_source_files_properties("${ONNX_PROTO_PATH}/onnx_verify.cc"
+                              "${ONNX_PROTO_PATH}/onnx_dlpack.cc"
                               PROPERTIES COMPILE_OPTIONS "/Os")
 else()
   set_source_files_properties("${ONNX_PROTO_PATH}/onnx_verify.cc"
+                              "${ONNX_PROTO_PATH}/onnx_dlpack.cc"
                               PROPERTIES COMPILE_OPTIONS "-Os")
 endif()
 if(_lib_onnx_proto_type STREQUAL "SHARED" AND WIN32)
@@ -917,6 +919,9 @@ if(ONNX_LIGHT_BUILD_TESTS)
   set(ONNX_CPP_PROTO_STREAM_CLASS_PRINT_TEST
       "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_proto/test_stream_class_print.cc")
   list(REMOVE_ITEM ONNX_CPP_PROTO_TEST_SOURCES "${ONNX_CPP_PROTO_STREAM_CLASS_PRINT_TEST}")
+  set(ONNX_CPP_PROTO_DLPACK_TEST
+      "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_proto/test_onnx_dlpack.cc")
+  list(REMOVE_ITEM ONNX_CPP_PROTO_TEST_SOURCES "${ONNX_CPP_PROTO_DLPACK_TEST}")
   set(ONNX_CPP_TEST_SOURCES
       ${ONNX_CPP_PROTO_TEST_SOURCES}
       ${ONNX_CPP_CORE_TEST_SOURCES}
@@ -933,7 +938,8 @@ if(ONNX_LIGHT_BUILD_TESTS)
     )
   endif()
   set(ONNX_CPP_ALL_TEST_SOURCES ${ONNX_CPP_TEST_SOURCES}
-      ${ONNX_CPP_PATTERN_REGISTRY_CORE_TEST} ${ONNX_CPP_PROTO_STREAM_CLASS_PRINT_TEST})
+      ${ONNX_CPP_PATTERN_REGISTRY_CORE_TEST} ${ONNX_CPP_PROTO_STREAM_CLASS_PRINT_TEST}
+      ${ONNX_CPP_PROTO_DLPACK_TEST})
 
   enable_testing()
 
@@ -1027,6 +1033,11 @@ if(ONNX_LIGHT_BUILD_TESTS)
   )
   target_link_libraries(test_stream_class_print PRIVATE lib_onnx_proto GTest::gtest_main)
   gtest_discover_tests(test_stream_class_print DISCOVERY_TIMEOUT 120 DISCOVERY_MODE PRE_TEST)
+
+  # The native DLPack export requires only the proto library, not Python or nanobind.
+  add_executable(test_onnx_dlpack "${ONNX_CPP_PROTO_DLPACK_TEST}")
+  target_link_libraries(test_onnx_dlpack PRIVATE lib_onnx_proto GTest::gtest_main)
+  gtest_discover_tests(test_onnx_dlpack DISCOVERY_TIMEOUT 120 DISCOVERY_MODE PRE_TEST)
 
   add_custom_target(onnx_cpp_tests SOURCES ${ONNX_CPP_ALL_TEST_SOURCES})
   source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_proto" PREFIX "Source Files/cc/onnx_proto"
@@ -1285,6 +1296,8 @@ if(ONNX_LIGHT_INSTALL)
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
     PATTERN "_onnxpy.cc" EXCLUDE
   )
+  install(FILES "${ONNX_PROTO_PATH}/dlpack/LICENSE"
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/licenses/onnx_light/dlpack")
 
   # Install public headers from onnx_light/onnx_lib/common
   install(DIRECTORY "${ONNX_COMMON_PATH}/"

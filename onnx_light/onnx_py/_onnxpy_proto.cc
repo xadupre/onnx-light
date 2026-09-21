@@ -1,14 +1,17 @@
+#include "_onnxpy_dlpack.h"
 #include "_onnxpy_node_list.h"
 #include "_onnxpyprotoop.h"
 #include "onnx.h"
 #include "onnx_core/graph/graph_manipulations.h"
 #include "onnx_crypt.h"
 #include "onnx_helper.h"
+#include "onnx_lib/common/platform_helpers.h"
 #include "onnx_lib/onnx-data.pb.h"
 #include "onnx_verify.h"
 #include <algorithm>
 #include <cctype>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <nanobind/make_iterator.h>
 #include <nanobind/nanobind.h>
@@ -28,6 +31,75 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace {
 constexpr size_t MAX_SHORT_REPR_LENGTH = 60;
+
+struct TensorProtoDLPackOwner {
+  nb::object proto;
+  std::shared_ptr<void> buffer;
+  std::shared_ptr<void> export_guard;
+};
+
+nb::object MakeTensorProtoDLPack(nb::handle self) {
+  const auto &tensor = nb::cast<const TensorProto &>(self);
+  DLPackMetadata metadata;
+  try {
+    metadata = ValidateDLPack(tensor);
+  } catch (const DLPackBufferError &error) {
+    throw nb::buffer_error(error.what());
+  }
+  const nb::dlpack::dtype dtype{metadata.dtype.code, metadata.dtype.bits, metadata.dtype.lanes};
+  const std::vector<size_t> shape(metadata.shape.begin(), metadata.shape.end());
+  const auto &raw = tensor.ref_raw_data();
+  // Retain the token independently: a borrowed span may be cleared or replaced
+  // while a consumer still holds the old buffer. Never copy the ByteSpan itself.
+  auto state = std::make_unique<TensorProtoDLPackOwner>(TensorProtoDLPackOwner{
+      nb::borrow<nb::object>(self), raw.owner(), raw.acquire_export_guard()});
+  nb::capsule owner(state.get(), [](void *ptr) noexcept {
+    nb::gil_scoped_acquire gil;
+    delete static_cast<TensorProtoDLPackOwner *>(ptr);
+  });
+  state.release();
+  nb::ndarray<nb::ro> array(raw.data(), shape.size(), shape.data(), owner, nullptr, dtype,
+                            nb::device::cpu::value, 0);
+  return nb::cast(std::move(array));
+}
+
+struct ReleasedDLPackOwner {
+  DLManagedTensor managed{};
+  DLManagedTensor *native = nullptr;
+
+  static void Delete(DLManagedTensor *managed) {
+    // A consumer may release from a native worker thread. Storage callbacks can own Python objects.
+    nb::gil_scoped_acquire gil;
+    auto *owner = static_cast<ReleasedDLPackOwner *>(managed->manager_ctx);
+    if (owner->native)
+      owner->native->deleter(owner->native);
+    delete owner;
+  }
+};
+
+nb::object ReleaseTensorProtoDLPack(TensorProto &tensor) {
+  auto owner = std::make_unique<ReleasedDLPackOwner>();
+  owner->managed.manager_ctx = owner.get();
+  owner->managed.deleter = ReleasedDLPackOwner::Delete;
+  // Allocate the Python capsule before the destructive native call, too.
+  PyObject *object = PyCapsule_New(&owner->managed, "dltensor", [](PyObject *capsule) {
+    if (PyCapsule_IsValid(capsule, "dltensor")) {
+      auto *managed = static_cast<DLManagedTensor *>(PyCapsule_GetPointer(capsule, "dltensor"));
+      managed->deleter(managed);
+    }
+  });
+  if (!object)
+    throw nb::python_error();
+  nb::object capsule = nb::steal<nb::object>(object);
+  auto *state = owner.release();
+  try {
+    state->native = ReleaseDLPack(tensor);
+  } catch (const DLPackBufferError &error) {
+    throw nb::buffer_error(error.what());
+  }
+  state->managed.dl_tensor = state->native->dl_tensor;
+  return capsule;
+}
 
 // Adapts a Python callable to ParseOptions::raw_data_callback. The callable is invoked as
 // ``fn(tensor, graph)`` for every parsed TensorProto that has raw_data and must return either
@@ -2075,6 +2147,53 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
             memcpy(self.raw_data_.data(), ptr, raw.size());
           },
           TensorProto::DOC_raw_data)
+      .def(
+          "__dlpack__",
+          [](nb::handle self, nb::object stream, std::optional<std::pair<int, int>> /*max_version*/,
+             std::optional<std::pair<int, int>> dl_device, std::optional<bool> copy) {
+            if (!stream.is_none()) {
+              throw nb::value_error("TensorProto.__dlpack__: CPU stream must be None.");
+            }
+            if (dl_device && *dl_device != std::make_pair(1, 0)) {
+              throw nb::buffer_error(
+                  "TensorProto.__dlpack__: only CPU device (1, 0) is supported.");
+            }
+            if (copy.value_or(false)) {
+              throw nb::buffer_error("TensorProto.__dlpack__: copy=True is not supported.");
+            }
+            return MakeTensorProtoDLPack(self);
+          },
+          nb::arg("stream") = nb::none(), nb::kw_only(), nb::arg("max_version") = nb::none(),
+          nb::arg("dl_device") = nb::none(), nb::arg("copy") = nb::none(),
+          "Returns a zero-copy CPU DLPack capsule over dense raw_data, retaining the proto and "
+          "its borrowed owner. Requires native little-endian, element-aligned whole-byte data. "
+          "Does not load, convert, or copy payloads. Consumers must not write to the buffer. "
+          "Do not clear, resize, replace, or reparse owned source storage while a view exists. "
+          "Always returns a legacy capsule, including when max_version is supplied.")
+      .def("release_dlpack", &ReleaseTensorProtoDLPack,
+           R"pbdoc(Transfers raw_data without copying to a single-consumption CPU DLPack capsule.
+
+.. warning::
+
+   DESTRUCTIVE: unlike ``__dlpack__``, this immediately removes the source payload.
+   The tensor and any initializer/model containing it cannot use that payload until
+   ``raw_data`` is reassigned. All other proto fields remain unchanged.
+
+The descriptor snapshots shape/type and owns storage independently of the source, so it
+survives source destruction or reuse. Its deleter never accesses the source. User-supplied
+storage callbacks must likewise not reference a destroyed source. Borrowed data requires
+a lifetime owner. Validation/allocation failure leaves the source unchanged. The same
+dtype, shape, alignment and endian restrictions as ``__dlpack__`` apply. Consumers must
+not write to the buffer. Owned storage with active ``__dlpack__`` consumers cannot
+be transferred: release those consumers first. Borrowed exports retain their shared owner.
+The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
+      .def(
+          "__dlpack_device__",
+          [](const TensorProto &self) {
+            DLPackDtypeFromOnnx(self.data_type(), "TensorProto");
+            return std::make_pair(1, 0);
+          },
+          "Returns the DLPack CPU device (1, 0), rejecting unsupported element types.")
       .def_prop_ro(
           "size",
           [](const TensorProto &self) -> int64_t {

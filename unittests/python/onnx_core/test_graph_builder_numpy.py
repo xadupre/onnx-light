@@ -15,8 +15,8 @@ import weakref
 import ml_dtypes
 import numpy
 
+from onnx_light.ext_test_case import import_or_skip
 from onnx_light.onnx import ModelProto, TensorProto, checker, numpy_helper
-from onnx_light.onnx.reference import ReferenceEvaluator
 from onnx_light.onnx_core.graph_builder import GraphBuilder
 
 
@@ -67,6 +67,7 @@ class TestGraphBuilderNumpy(unittest.TestCase):
                         self.assertEqual(sys.getrefcount(array), references)
 
     def test_lifetime_copies_and_execution(self):
+        ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
         array = numpy.arange(6, dtype=numpy.float32)
         expected = array + 1
         source = weakref.ref(array)

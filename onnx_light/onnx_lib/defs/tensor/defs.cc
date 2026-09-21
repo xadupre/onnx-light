@@ -1377,6 +1377,13 @@ ONNX_OPERATOR_SET_SCHEMA(
           if (hasInputShape(ctx, 0)) {
             auto &input_shape = getInputShape(ctx, 0);
             if (input_shape.dim_size() == 4) {
+              for (const int spatial_axis : {2, 3}) {
+                const auto &dim = input_shape.dim(spatial_axis);
+                if (dim.has_dim_value() && dim.dim_value() % blocksize != 0) {
+                  fail_shape_inference("Input dimension ", spatial_axis, " (", dim.dim_value(),
+                                       ") must be a multiple of 'blocksize' (", blocksize, ").");
+                }
+              }
               updateOutputShape(ctx, 0,
                                 {input_shape.dim(0), input_shape.dim(1) * block_area,
                                  input_shape.dim(2) / blocksize, input_shape.dim(3) / blocksize});
@@ -1415,6 +1422,12 @@ ONNX_OPERATOR_SET_SCHEMA(
           if (hasInputShape(ctx, 0)) {
             auto &input_shape = getInputShape(ctx, 0);
             if (input_shape.dim_size() == 4) {
+              const auto &channel_dim = input_shape.dim(1);
+              if (channel_dim.has_dim_value() && channel_dim.dim_value() % block_area != 0) {
+                fail_shape_inference("Input channel dimension (", channel_dim.dim_value(),
+                                     ") must be a multiple of 'blocksize' * 'blocksize' (",
+                                     block_area, ").");
+              }
               updateOutputShape(ctx, 0,
                                 {input_shape.dim(0), input_shape.dim(1) / block_area,
                                  input_shape.dim(2) * blocksize, input_shape.dim(3) * blocksize});

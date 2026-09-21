@@ -798,6 +798,75 @@ TEST(onnx_shape_inference, InferShapesImpl_SplitToSequenceOmittedSplit) {
   }
 }
 
+TEST(onnx_shape_inference, InferShapesImpl_SpaceDepthDivisibility) {
+  const std::vector<std::tuple<std::string, std::string, int64_t>> cases = {
+      {"SpaceToDepth", "1,1,7,8", 2}, {"SpaceToDepth", "1,1,8,7", 2},
+      {"SpaceToDepth", "1,1,7,7", 3}, {"SpaceToDepth", "1,1,H,7", 2},
+      {"SpaceToDepth", "1,1,7,W", 2}, {"DepthToSpace", "1,5,2,2", 2},
+      {"DepthToSpace", "1,6,2,2", 2}, {"DepthToSpace", "1,7,2,2", 2}};
+  for (const auto &[op_type, shape, blocksize] : cases) {
+    for (const int64_t version : {13, 21, 28}) {
+      for (const std::string mode : {"DCR", "CRD"}) {
+        SCOPED_TRACE(op_type + " " + shape + " " + mode);
+        SCOPED_TRACE(version);
+        ModelProto model;
+        const std::string text =
+            "<ir_version: 12, opset_import: [\"\" : " + std::to_string(version) +
+            "]> graph (float[" + shape + "] X) => (float[] Y) { Y = " + op_type +
+            " <blocksize = " + std::to_string(blocksize) + ", mode = \"" + mode + "\"> (X) }";
+        OnnxParser parser(text);
+        const auto status = parser.Parse(model);
+        ASSERT_TRUE(status.IsOK()) << status.ErrorMessage();
+        if (version == 28) {
+          EXPECT_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                                    ShapeInferenceOptions(false, 1, false)),
+                       ONNX_LIGHT_NAMESPACE::InferenceError);
+        } else {
+          EXPECT_NO_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                                       ShapeInferenceOptions(false, 1, false)));
+        }
+      }
+    }
+  }
+}
+
+TEST(onnx_shape_inference, InferShapesImpl_SpaceDepthValidDimensions) {
+  const std::vector<std::tuple<std::string, std::string, int64_t, std::vector<int64_t>>> cases = {
+      {"SpaceToDepth", "2,3,100,100", 10, {2, 300, 10, 10}},
+      {"DepthToSpace", "2,300,10,10", 10, {2, 3, 100, 100}},
+      {"SpaceToDepth", "2,3,H,W", 10, {2, 300, -1, -1}},
+      {"DepthToSpace", "2,C,10,10", 10, {2, -1, 100, 100}},
+      {"SpaceToDepth", "2,3,0,10", 10, {2, 300, 0, 1}},
+      {"DepthToSpace", "2,0,10,10", 10, {2, 0, 100, 100}},
+      {"SpaceToDepth", "2,3,7,9", 1, {2, 3, 7, 9}},
+      {"DepthToSpace", "2,3,7,9", 1, {2, 3, 7, 9}}};
+  for (const auto &[op_type, shape, blocksize, expected] : cases) {
+    for (const std::string mode : {"DCR", "CRD"}) {
+      SCOPED_TRACE(op_type + " " + shape + " " + mode);
+      ModelProto model;
+      const std::string text = "<ir_version: 12, opset_import: [\"\" : 28]> graph (float[" + shape +
+                               "] X) => (float[] Y) { Y = " + op_type +
+                               " <blocksize = " + std::to_string(blocksize) + ", mode = \"" + mode +
+                               "\"> (X) }";
+      OnnxParser parser(text);
+      const auto status = parser.Parse(model);
+      ASSERT_TRUE(status.IsOK()) << status.ErrorMessage();
+      ASSERT_NO_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                                   ShapeInferenceOptions(false, 1, false)));
+      const auto &tensor = model.graph().output(0).type().tensor_type();
+      EXPECT_EQ(tensor.elem_type(), TensorProto::FLOAT);
+      ASSERT_EQ(tensor.shape().dim_size(), 4);
+      for (int dim = 0; dim < 4; ++dim) {
+        if (expected[dim] == -1) {
+          EXPECT_FALSE(tensor.shape().dim(dim).has_dim_value());
+        } else {
+          EXPECT_EQ(tensor.shape().dim(dim).dim_value(), expected[dim]);
+        }
+      }
+    }
+  }
+}
+
 TEST(onnx_shape_inference, InferShapesImpl_LayerNormalizationRejectsOutOfRangeAxis) {
   for (const int64_t axis : {int64_t{-4}, int64_t{3}, int64_t{1} << 31, int64_t{1} << 40}) {
     SCOPED_TRACE(axis);

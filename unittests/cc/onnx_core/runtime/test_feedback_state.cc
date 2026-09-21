@@ -2002,8 +2002,10 @@ TEST(FeedbackState, AttentionCacheDuplicateConsumersConsumePermitOnlyOnce) {
 }
 
 TEST(FeedbackState, UnselectedAttentionUsesExecutionArenaWithUnrelatedRetainedState) {
-  for (bool intermediate : {false, true}) {
+  for (const auto &[intermediate, with_io] : {std::pair{false, false}, std::pair{true, false},
+                                              std::pair{false, true}, std::pair{true, true}}) {
     SCOPED_TRACE(intermediate);
+    SCOPED_TRACE(with_io);
     ModelProto model = AttentionModel();
     auto *graph = model.mutable_graph();
     graph->clear_persistent_bindings();
@@ -2026,8 +2028,10 @@ TEST(FeedbackState, UnselectedAttentionUsesExecutionArenaWithUnrelatedRetainedSt
     step->add_output("next");
     Bind(model, "state", "next");
     SimpleRawBufferAllocator execution(20);
+    auto io = IOArena::Create(20);
     RuntimeContext context(KernelContext(DefaultOpset(23)),
-                           RuntimeContextOptions{.allocator = &execution});
+                           RuntimeContextOptions{.allocator = &execution,
+                                                 .io_allocator = with_io ? io.get() : nullptr});
     context.RegisterCustomKernel(
         "test.feedback", "Unrelated", [](const NodeProto &, RuntimeContext &rt) {
           rt.Put("next", Tensor::FromFloat("", {1}, {rt.Get("state").AsFloat()[0] + 1}));
@@ -2045,4 +2049,92 @@ TEST(FeedbackState, UnselectedAttentionUsesExecutionArenaWithUnrelatedRetainedSt
     EXPECT_EQ(stats.append_copied_bytes, 4 * sizeof(float));
     EXPECT_EQ(stats.reuse_count, 0u);
   }
+}
+
+TEST(FeedbackState, AttentionCacheVariableAndEmptyChunksPreserveNonemptyInitialPrefix) {
+  ModelProto model = AttentionModel();
+  for (int input : {1, 2})
+    *model.mutable_graph()->mutable_input(input)->mutable_type() = AttentionType(1, 1, -1);
+  Tensor key = Tensor::FromFloat("", {1, 1, 2, 2}, {1, 2, 3, 4});
+  Tensor value = Tensor::FromFloat("", {1, 1, 2, 2}, {-1, -2, -3, -4});
+  RuntimeValueMap initial{{"past_key", RuntimeValue(key)}, {"past_value", RuntimeValue(value)}};
+  RuntimeSessionOptions options;
+  options.attention_cache_initial_capacity = 8;
+  FeedbackState state(model, std::move(initial), options);
+  RuntimeContext context(KernelContext(DefaultOpset(23)));
+  onnx_kernels::kernel::Attention reference(context.kernel_ctx());
+  onnx_kernels::kernel::Attention::Attributes attributes;
+  attributes.is_causal = true;
+  const uint8_t *pointer = nullptr;
+  int64_t length = 2;
+  for (int64_t chunk : {2, 0, 3, 2}) {
+    SCOPED_TRACE(chunk);
+    auto feeds = AttentionFeeds(1);
+    std::vector<float> keys(static_cast<size_t>(chunk * 2));
+    std::vector<float> values(keys.size());
+    for (size_t i = 0; i < keys.size(); ++i) {
+      keys[i] = length + static_cast<float>(i) * 0.25f;
+      values[i] = -keys[i];
+    }
+    feeds.at("K") = RuntimeValue(Tensor::FromFloat("", {1, 1, chunk, 2}, keys));
+    feeds.at("V") = RuntimeValue(Tensor::FromFloat("", {1, 1, chunk, 2}, values));
+    auto expected = reference(feeds.at("Q").tensor, feeds.at("K").tensor, feeds.at("V").tensor,
+                              attributes, nullptr, &key, &value);
+    const auto output = state.Run(context, feeds);
+    EqualAttentionTensor(output.at("Y").tensor, expected.Y);
+    EqualAttentionTensor(output.at("present_key").tensor, expected.present_key);
+    EqualAttentionTensor(output.at("present_value").tensor, expected.present_value);
+    if (pointer != nullptr && length + chunk <= 8) {
+      EXPECT_EQ(output.at("present_key").tensor.bytes(), pointer);
+    }
+    pointer = output.at("present_key").tensor.bytes();
+    length += chunk;
+    key = std::move(expected.present_key);
+    value = std::move(expected.present_value);
+  }
+  const auto stats = state.AttentionCacheStats();
+  EXPECT_EQ(stats.allocations, 4u);
+  EXPECT_EQ(stats.allocated_bytes, 2u * (8 + 16) * 2 * sizeof(float));
+  EXPECT_EQ(stats.prefix_copied_bytes, 2u * (2 + 7) * 2 * sizeof(float));
+  EXPECT_EQ(stats.append_copied_bytes, 2u * (2 + 0 + 3 + 2) * 2 * sizeof(float));
+  EXPECT_EQ(stats.reuse_count, 4u);
+}
+
+TEST(FeedbackState, AttentionCacheZeroWidthValueUsesMeasuredDenseFallback) {
+  ModelProto model = AttentionModel();
+  for (int input : {2, 4})
+    model.mutable_graph()
+        ->mutable_input(input)
+        ->mutable_type()
+        ->mutable_tensor_type()
+        ->mutable_shape()
+        ->mutable_dim(3)
+        ->set_dim_value(0);
+  for (int output : {0, 2})
+    model.mutable_graph()
+        ->mutable_output(output)
+        ->mutable_type()
+        ->mutable_tensor_type()
+        ->mutable_shape()
+        ->mutable_dim(3)
+        ->set_dim_value(0);
+  auto initial = EmptyAttentionCache();
+  initial.at("past_value") = RuntimeValue(Tensor::FromFloat("", {1, 1, 0, 0}, {}));
+  FeedbackState state(model, std::move(initial));
+  RuntimeContext context(KernelContext(DefaultOpset(23)));
+  for (int64_t length = 1; length <= 3; ++length) {
+    auto feeds = AttentionFeeds(static_cast<float>(length));
+    feeds.at("V") = RuntimeValue(Tensor::FromFloat("", {1, 1, 1, 0}, {}));
+    const auto output = state.Run(context, feeds);
+    EXPECT_EQ(output.at("present_value").tensor.shape, (Shape{1, 1, length, 0}));
+    EXPECT_EQ(output.at("present_value").tensor.size_bytes(), 0u);
+    EXPECT_EQ(output.at("Y").tensor.shape, (Shape{1, 1, 1, 0}));
+    EXPECT_EQ(output.at("Y").tensor.size_bytes(), 0u);
+  }
+  const auto stats = state.AttentionCacheStats();
+  EXPECT_EQ(stats.allocations, 4u);
+  EXPECT_EQ(stats.allocated_bytes, 16u * 2 * sizeof(float));
+  EXPECT_EQ(stats.prefix_copied_bytes, 0u);
+  EXPECT_EQ(stats.append_copied_bytes, 3u * 2 * sizeof(float));
+  EXPECT_EQ(stats.reuse_count, 2u);
 }

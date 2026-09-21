@@ -268,7 +268,16 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt, SubgraphSession &then_
   // per-call child context (seeded with the caller's current tensors /
   // sequences) is rebuilt here.
   SubgraphSession &session = taken ? then_session : else_session;
-  RuntimeContext child = session.RunChild({}, rt, branch_attr);
+  RuntimeContext child = rt.MakeSubgraphContext(branch_attr);
+  std::unordered_set<std::string> retained;
+  for (int i = 0; i < branch.output_size(); ++i)
+    if (rt.retains_output(node.output(i)))
+      retained.insert(branch.output(i).name());
+  child.set_retained_outputs(std::move(retained));
+  session.RuntimeSession::Run(child);
+  if (rt.events_enabled())
+    for (auto &event : child.events())
+      rt.events().push_back(std::move(event));
 
   for (int i = 0; i < branch.output_size(); ++i) {
     const std::string out_name = branch.output()[i].name();
@@ -279,11 +288,16 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt, SubgraphSession &then_
     }
     if (child.HasSequence(out_name)) {
       rt.PutSequence(caller_name, child.GetSequence(out_name));
+    } else if (child.values().count(out_name) != 0) {
+      RuntimeValue &value = child.values().at(out_name);
+      rt.values().insert_or_assign(caller_name, rt.retains_output(caller_name) ? std::move(value)
+                                                                               : value.DeepCopy());
     } else {
       auto it = child.tensors().find(out_name);
       EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: If: subgraph output '", out_name,
                           "' was not produced by the selected branch.");
-      Tensor t = CloneTensor(it->second, rt.allocator());
+      Tensor t = rt.retains_output(caller_name) ? std::move(it->second)
+                                                : CloneTensor(it->second, rt.allocator());
       t.name = caller_name;
       rt.Put(caller_name, std::move(t), RuntimeEventKind::kOutput);
     }
@@ -848,12 +862,22 @@ public:
         " output(s), got ", node_->output_size(), ".");
 
     RuntimeContext child = rt.MakeFunctionContext();
+    std::unordered_set<std::string> retained;
+    for (int i = 0; i < func_.output_size(); ++i)
+      if (rt.retains_output(node_->output(i)))
+        retained.insert(func_.output(i));
+    child.set_retained_outputs(std::move(retained));
 
-    // Bind formal function inputs (borrow, no deep-copy).
+    // The parent context remains alive throughout the function invocation.
     for (size_t i = 0; i < static_cast<std::size_t>(func_.input_size()); ++i) {
       const std::string caller_name = node_->input(i);
       const std::string param_name = func_.input(i);
       if (caller_name.empty() || param_name.empty()) {
+        continue;
+      }
+      auto value = rt.values().find(caller_name);
+      if (value != rt.values().end()) {
+        child.values().emplace(param_name, value->second.BorrowView());
         continue;
       }
       auto it = rt.tensors().find(caller_name);
@@ -861,10 +885,8 @@ public:
                           "' of call to model-local function '", op_type,
                           "' is missing from the tensor map.");
       const Tensor &src = it->second;
-      Tensor bound =
-          (static_cast<DataType>(src.data_type) == DataType::STRING)
-              ? Tensor::BorrowStrings(param_name, src.shape, src.AsStrings())
-              : Tensor::Borrow(param_name, src.data_type, src.shape, src.bytes(), src.size_bytes());
+      Tensor bound = src.BorrowView();
+      bound.name = param_name;
       child.Put(param_name, std::move(bound), RuntimeEventKind::kInput);
     }
 
@@ -874,18 +896,26 @@ public:
     }
     session_->Run(child);
 
-    // Propagate formal outputs back to the caller's tensor map.
+    // Propagate formal outputs back to the caller's value maps.
     for (size_t i = 0; i < static_cast<std::size_t>(func_.output_size()); ++i) {
       const std::string caller_name = node_->output(i);
       const std::string param_name = func_.output(i);
       if (caller_name.empty()) {
         continue;
       }
+      auto value = child.values().find(param_name);
+      if (value != child.values().end()) {
+        rt.values().insert_or_assign(caller_name, rt.retains_output(caller_name)
+                                                      ? std::move(value->second)
+                                                      : value->second.DeepCopy());
+        continue;
+      }
       auto it = child.tensors().find(param_name);
       EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: output '", param_name,
                           "' of model-local function '", op_type,
                           "' was not produced by the function body.");
-      Tensor result = CloneTensor(it->second, rt.allocator());
+      Tensor result = rt.retains_output(caller_name) ? std::move(it->second)
+                                                     : CloneTensor(it->second, rt.allocator());
       result.name = caller_name;
       rt.Put(caller_name, std::move(result), RuntimeEventKind::kOutput);
     }

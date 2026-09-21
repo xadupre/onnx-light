@@ -149,8 +149,9 @@ public:
    * resolution is still deferred to the first :cpp:func:`Run`.
    *
    * @param model Model whose graph drives execution. The model (and the graph
-   *              it owns) must outlive the session, since the built plan holds
-   *              non-owning pointers into the graph's nodes.
+   *              it owns) must remain immutable and outlive the session and
+   *              its initializer views. The plan and directly usable initializer
+   *              payloads borrow the model's storage.
    * @param verbose Verbosity level used by :cpp:func:`Run` for its progress
    *                lines. ``0`` (the default) leaves verbosity to the
    *                :cpp:class:`RuntimeContext`.
@@ -322,10 +323,11 @@ public:
   /// read but not retained, so it need not outlive the session.
   void SetDeclaredShapes(const GraphProto &graph);
 
-  /// Materializes ``graph`` initializers into the session-owned cache. A
+  /// Records ``graph`` as the source of read-only initializer views. A
   /// session built from a model or graph calls this automatically; callers
   /// constructing a session from an :cpp:class:`ExecutionPlan` may call it once
-  /// before the first :cpp:func:`Run`.
+  /// before the first :cpp:func:`Run`. The graph and its backing storage must
+  /// remain immutable and outlive the session and its initializer views.
   void SetInitializers(const GraphProto &graph);
 
   /**
@@ -434,7 +436,7 @@ private:
   const ExecutionPlan &plan_;
   std::unique_ptr<PreparedExecutionState> prepared_execution_state_;
   std::vector<PreparedKernel> kernels_;
-  std::vector<Tensor> initializers_;
+  const GraphProto *initializer_graph_ = nullptr;
   std::unordered_set<std::string> immutable_initializer_names_;
   /// One immutable registry generation shared by every kernel in this session.
   /// Kernels copy resolved values during initialization; retaining the snapshot

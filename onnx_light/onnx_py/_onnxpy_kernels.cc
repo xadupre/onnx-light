@@ -8,6 +8,7 @@
 #include "onnx_core/compute/execute_action.h"
 #include "onnx_core/compute/execution_plan.h"
 #include "onnx_core/compute/raw_buffer_allocator.h"
+#include "onnx_core/runtime/feedback_state.h"
 #include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/kernels/cast_sub_byte.h"
 #include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
@@ -50,6 +51,7 @@ using core::runtime::ExecuteAction;
 using core::runtime::ExecuteActionKind;
 using core::runtime::ExecutionArena;
 using core::runtime::ExecutionPlan;
+using core::runtime::FeedbackState;
 using core::runtime::HardwareCounterStatusName;
 using core::runtime::IOArena;
 using core::runtime::KernelContext;
@@ -65,6 +67,8 @@ using core::runtime::RuntimeContext;
 using core::runtime::RuntimeParameters;
 using core::runtime::RuntimeSession;
 using core::runtime::RuntimeSessionOptions;
+using core::runtime::RuntimeValue;
+using core::runtime::RuntimeValueMap;
 using core::runtime::Sequence;
 using core::runtime::Shape;
 using core::runtime::SimpleRawBufferAllocator;
@@ -76,6 +80,25 @@ void AddOnnxPyRuntime(nb::module_ &m);
 void AddOnnxPyTuning(nb::module_ &m);
 
 namespace {
+
+core::runtime::CustomKernelFn PythonCustomKernel(nb::callable fn) {
+  // Native sessions copy and release callbacks while the GIL is released.
+  auto callable =
+      std::shared_ptr<nb::callable>(new nb::callable(std::move(fn)), [](nb::callable *value) {
+        if (!nb::is_alive()) {
+          value->release();
+          delete value;
+          return;
+        }
+        nb::gil_scoped_acquire gil;
+        delete value;
+      });
+  return [callable](const NodeProto &node, RuntimeContext &context) {
+    nb::gil_scoped_acquire gil;
+    (*callable)(nb::cast(&node, nb::rv_policy::reference),
+                nb::cast(&context, nb::rv_policy::reference));
+  };
+}
 
 core::runtime::RuntimeEventKind ParseRuntimeEventKind(const std::string &kind) {
   if (kind == "unknown")
@@ -278,6 +301,189 @@ Tensor TensorFromPythonInput(const std::string &name, nb::handle value,
   }
   owners.emplace_back(nb::borrow<nb::object>(value));
   return input;
+}
+
+std::shared_ptr<void> RetainFeedbackOwner(nb::handle value) {
+  return std::shared_ptr<nb::object>(new nb::object(nb::borrow<nb::object>(value)),
+                                     [](nb::object *owner) {
+                                       if (!nb::is_alive()) {
+                                         owner->release();
+                                         delete owner;
+                                         return;
+                                       }
+                                       nb::gil_scoped_acquire gil;
+                                       delete owner;
+                                     });
+}
+
+int32_t FeedbackDtype(nb::dlpack::dtype dtype) {
+  using Code = nb::dlpack::dtype_code;
+  EXT_ENFORCE_INVALID(dtype.lanes == 1, "Feedback arrays require scalar element types.");
+  switch (static_cast<Code>(dtype.code)) {
+  case Code::Int:
+    switch (dtype.bits) {
+    case 8:
+      return TensorProto::INT8;
+    case 16:
+      return TensorProto::INT16;
+    case 32:
+      return TensorProto::INT32;
+    case 64:
+      return TensorProto::INT64;
+    }
+    break;
+  case Code::UInt:
+    switch (dtype.bits) {
+    case 8:
+      return TensorProto::UINT8;
+    case 16:
+      return TensorProto::UINT16;
+    case 32:
+      return TensorProto::UINT32;
+    case 64:
+      return TensorProto::UINT64;
+    }
+    break;
+  case Code::Float:
+    switch (dtype.bits) {
+    case 16:
+      return TensorProto::FLOAT16;
+    case 32:
+      return TensorProto::FLOAT;
+    case 64:
+      return TensorProto::DOUBLE;
+    }
+    break;
+  case Code::Bfloat:
+    if (dtype.bits == 16)
+      return TensorProto::BFLOAT16;
+    break;
+  case Code::Complex:
+    if (dtype.bits == 64)
+      return TensorProto::COMPLEX64;
+    if (dtype.bits == 128)
+      return TensorProto::COMPLEX128;
+    break;
+  case Code::Bool:
+    if (dtype.bits == 8)
+      return TensorProto::BOOL;
+    break;
+  case Code::Float8_E4M3FN:
+    if (dtype.bits == 8)
+      return TensorProto::FLOAT8E4M3FN;
+    break;
+  case Code::Float8_E4M3FNUZ:
+    if (dtype.bits == 8)
+      return TensorProto::FLOAT8E4M3FNUZ;
+    break;
+  case Code::Float8_E5M2:
+    if (dtype.bits == 8)
+      return TensorProto::FLOAT8E5M2;
+    break;
+  case Code::Float8_E5M2FNUZ:
+    if (dtype.bits == 8)
+      return TensorProto::FLOAT8E5M2FNUZ;
+    break;
+  case Code::Float8_E8M0FNU:
+    if (dtype.bits == 8)
+      return TensorProto::FLOAT8E8M0;
+    break;
+  default:
+    break;
+  }
+  EXT_THROW_INVALID(
+      "Feedback arrays have an unsupported DLPack dtype; no conversion is performed.");
+}
+
+Tensor FeedbackTensorFromArray(const std::string &name, nb::handle value) {
+  if (nb::isinstance(value, nb::module_::import_("numpy").attr("ndarray")) &&
+      !nb::cast<bool>(value.attr("dtype").attr("isnative")))
+    throw nb::value_error("Feedback arrays require native byte order; byte swapping would copy.");
+  nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu> array;
+  if (!nb::try_cast(value, array, false))
+    throw nb::type_error("Feedback inputs require a contiguous CPU array with a supported "
+                         "buffer or DLPack representation; implicit copying is disabled.");
+  EXT_ENFORCE_INVALID(array.ndim() <= Shape::kMaxRank, "Feedback array rank is too large.");
+  Shape shape;
+  for (size_t i = 0; i < array.ndim(); ++i) {
+    EXT_ENFORCE_INVALID(array.shape(i) <= static_cast<size_t>(INT64_MAX),
+                        "Feedback array dimension overflows.");
+    shape.push_back(static_cast<int64_t>(array.shape(i)));
+  }
+  const int32_t dtype = FeedbackDtype(array.dtype());
+  const auto count = shape.product(0, shape.size(), "FeedbackTensorFromArray");
+  const size_t bytes =
+      core::runtime::PackedByteSize(static_cast<TensorProto::DataType>(dtype), count);
+  const size_t alignment =
+      array.dtype().code == static_cast<uint8_t>(nb::dlpack::dtype_code::Complex)
+          ? array.itemsize() / 2
+          : array.itemsize();
+  EXT_ENFORCE_INVALID(bytes == 0 || (array.data() != nullptr &&
+                                     reinterpret_cast<uintptr_t>(array.data()) % alignment == 0),
+                      "Feedback array storage is null or unaligned.");
+  nb::object owner = nb::cast(array);
+  return Tensor::Borrow(name, dtype, std::move(shape), static_cast<const uint8_t *>(array.data()),
+                        bytes, RetainFeedbackOwner(owner));
+}
+
+RuntimeValue FeedbackValueFromPython(const std::string &name, nb::handle value, size_t depth = 0) {
+  EXT_ENFORCE_INVALID(depth <= RuntimeValue::kMaxDepth,
+                      "Feedback value exceeds the maximum nesting depth.");
+  if (nb::isinstance<nb::dict>(value)) {
+    RuntimeValueMap fields;
+    for (auto [key, field] : nb::borrow<nb::dict>(value)) {
+      std::string field_name = nb::cast<std::string>(key);
+      fields.emplace(field_name, FeedbackValueFromPython(field_name, field, depth + 1));
+    }
+    return RuntimeValue(std::move(fields));
+  }
+  if (nb::isinstance<EncodedValueProto>(value)) {
+    return RuntimeValue::FromEncodedView(nb::cast<const EncodedValueProto &>(value),
+                                         RetainFeedbackOwner(value));
+  }
+  if (nb::isinstance<Tensor>(value)) {
+    const Tensor &source = nb::cast<const Tensor &>(value);
+    if (source.data_type == TensorProto::STRING) {
+      Tensor tensor = source.ToOwned();
+      tensor.name = name;
+      return RuntimeValue(std::move(tensor));
+    }
+    auto owner = source.has_allocation() ? std::shared_ptr<void>{}
+                 : source.is_borrowed()  ? source.borrowed_owner()
+                                         : RetainFeedbackOwner(value);
+    Tensor tensor = Tensor::Borrow(name, source.data_type, source.shape, source.bytes(),
+                                   source.size_bytes(), std::move(owner));
+    return RuntimeValue(std::move(tensor));
+  }
+  return RuntimeValue(FeedbackTensorFromArray(name, value));
+}
+
+RuntimeValueMap FeedbackValuesFromPython(nb::dict values) {
+  RuntimeValueMap result;
+  for (auto [key, value] : values) {
+    std::string name = nb::cast<std::string>(key);
+    result.emplace(name, FeedbackValueFromPython(name, value));
+  }
+  return result;
+}
+
+nb::object FeedbackValueToPython(RuntimeValue value) {
+  if (value.kind == RuntimeValue::Kind::kTensor)
+    return nb::cast(std::move(value.tensor));
+  if (value.kind == RuntimeValue::Kind::kEncoded) {
+    return nb::cast(std::move(value.encoded));
+  }
+  nb::dict fields;
+  for (auto &[name, field] : value.fields)
+    fields[nb::str(name.c_str())] = FeedbackValueToPython(std::move(field));
+  return fields;
+}
+
+nb::dict FeedbackValuesToPython(RuntimeValueMap values) {
+  nb::dict result;
+  for (auto &[name, value] : values)
+    result[nb::str(name.c_str())] = FeedbackValueToPython(std::move(value));
+  return result;
 }
 
 void PutMapFromDict(RuntimeContext &rt, const std::string &name, nb::dict dictionary) {
@@ -1484,6 +1690,71 @@ void AddOnnxPyRuntime(nb::module_ &m) {
            "kernels in execution order. Repeated operators are preserved. Returns an "
            "empty list until the first :func:`run`.");
 
+  nb::class_<core::runtime::TaskCompletion>(
+      rt_mod, "TaskCompletion", "Shares a single-use task completion and cancellation gate.")
+      .def(
+          "__init__",
+          [](core::runtime::TaskCompletion *self, uint64_t task_id) {
+            new (self) core::runtime::TaskCompletion(core::runtime::TaskId{task_id});
+          },
+          nb::arg("task_id") = 0)
+      .def("cancel", &core::runtime::TaskCompletion::Cancel, nb::arg("message") = "",
+           "Cancels a pending task before feedback publication.")
+      .def("is_ready", &core::runtime::TaskCompletion::IsReady,
+           "Returns whether the task reached a terminal state.");
+
+  nb::class_<FeedbackState>(
+      rt_mod, "FeedbackState",
+      "Retains whole outputs as whole next-call inputs by exact names from the final model.")
+      .def(
+          "__init__",
+          [](FeedbackState *self, const ModelProto &model, nb::dict initial,
+             RuntimeSessionOptions options) {
+            new (self)
+                FeedbackState(model, FeedbackValuesFromPython(initial), options,
+                              RetainFeedbackOwner(nb::cast(&model, nb::rv_policy::reference)));
+          },
+          nb::arg("model"), nb::arg("initial"), nb::arg("options") = RuntimeSessionOptions{},
+          nb::keep_alive<1, 2>(),
+          "Initializes state from model.graph.persistent_bindings without copying payloads. "
+          "Dictionary keys are literal graph input names, never field paths. "
+          "The model must remain immutable. Inputs and retained/returned buffers can alias; "
+          "callers must not mutate them while shared or retained.")
+      .def(
+          "_retain_context", [](FeedbackState &, RuntimeContext &) {}, nb::keep_alive<1, 2>(),
+          "Retains a context before native kernel initialization, including failing calls.")
+      .def(
+          "run",
+          [](FeedbackState &self, RuntimeContext &context, nb::dict feeds,
+             const core::runtime::TaskCompletion *completion) {
+            RuntimeValueMap inputs = FeedbackValuesFromPython(feeds);
+            // Kernel initialization can retain allocator pointers even when execution fails.
+            nb::cast(&self, nb::rv_policy::reference)
+                .attr("_retain_context")(nb::cast(&context, nb::rv_policy::reference));
+            RuntimeValueMap outputs;
+            {
+              nb::gil_scoped_release release;
+              outputs = self.Run(context, inputs, completion);
+            }
+            return FeedbackValuesToPython(std::move(outputs));
+          },
+          nb::arg("context"), nb::arg("feeds"), nb::arg("completion").none() = nb::none(),
+          "Runs the model and commits feedback only after successful validation. "
+          "Feeds name whole non-retained graph inputs; retained inputs cannot be overridden. "
+          "Returns lifetime-safe shared tensors, nested dictionaries or encoded values. "
+          "Uses an optional single-use TaskCompletion to cancel before publication.")
+      .def(
+          "reset",
+          [](FeedbackState &self, nb::dict initial) {
+            self.Reset(FeedbackValuesFromPython(initial));
+          },
+          nb::arg("initial"), "Replaces retained state with explicitly supplied initial values.")
+      .def("close", &FeedbackState::Close,
+           "Releases retained values and permanently closes the state.")
+      .def_prop_ro(
+          "values", [](const FeedbackState &self) { return FeedbackValuesToPython(self.Values()); },
+          "Returns shared read-only payload views keyed by exact retained graph input names.");
+
   nb::class_<ReferenceEvaluatorRunner>(
       rt_mod, "ReferenceEvaluatorRunner",
       "Native hot path used by ReferenceEvaluator.run to adapt Python values, execute a "
@@ -1783,6 +2054,32 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def("has_map", &RuntimeContext::HasMap, nb::arg("name"),
            "Returns ``True`` if a map named ``name`` is currently held by the context.")
       .def(
+          "get_value",
+          [](RuntimeContext &rt, const std::string &name) {
+            if (rt.Has(name))
+              return FeedbackValueToPython(RuntimeValue(
+                  rt.Get(name).borrowed_owner().use_count() != 0 ? rt.Get(name).BorrowView()
+                                                                 : rt.Get(name).ToOwned()));
+            return FeedbackValueToPython(rt.values().at(name));
+          },
+          nb::arg("name"),
+          "Returns a read-only value, sharing existing owners or copying "
+          "unretained tensor storage without modifying its source.")
+      .def(
+          "put_value",
+          [](RuntimeContext &rt, const std::string &name, nb::handle value) {
+            RuntimeValue converted = FeedbackValueFromPython(name, value);
+            if (converted.kind == RuntimeValue::Kind::kTensor) {
+              rt.values().erase(name);
+              rt.Put(name, std::move(converted.tensor));
+            } else {
+              rt.Remove(name);
+              rt.values().insert_or_assign(name, std::move(converted));
+            }
+          },
+          nb::arg("name"), nb::arg("value"),
+          "Stores an owning tensor, struct or encoded value produced by a custom kernel.")
+      .def(
           "map_names",
           [](const RuntimeContext &rt) {
             std::vector<std::string> out;
@@ -1910,19 +2207,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "register_custom_kernel",
           [](RuntimeContext &rt, const std::string &domain, const std::string &op_type,
              nb::callable fn) {
-            // Wrap the Python callable in a CustomKernelFn. We capture
-            // the callable in a ``nb::callable`` which keeps a Python
-            // reference alive in the factory and in each resolved kernel.
-            // The GIL is reacquired before
-            // invoking the callable so that it is safe to call from the
-            // RunNode dispatcher (which may be invoked without the GIL
-            // held in the future).
-            rt.RegisterCustomKernel(domain, op_type,
-                                    [fn](const NodeProto &node, RuntimeContext &ctx) {
-                                      nb::gil_scoped_acquire gil;
-                                      fn(nb::cast(&node, nb::rv_policy::reference),
-                                         nb::cast(&ctx, nb::rv_policy::reference));
-                                    });
+            rt.RegisterCustomKernel(domain, op_type, PythonCustomKernel(std::move(fn)));
           },
           nb::arg("domain"), nb::arg("op_type"), nb::arg("fn"),
           "Registers a custom kernel for ``(domain, op_type)``. The empty domain "
@@ -2176,16 +2461,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
   rt_mod.def(
       "register_custom_kernel",
       [](const std::string &domain, const std::string &op_type, nb::callable fn) {
-        // Same GIL-safe wrapping as the RuntimeContext binding: the callable is
-        // captured in an nb::callable (keeping a Python reference alive in both
-        // the factory and resolved kernels) and the GIL is reacquired before
-        // it is invoked from the RunNode dispatcher.
         core::runtime::RegisterGlobalCustomKernel(domain, op_type,
-                                                  [fn](const NodeProto &node, RuntimeContext &ctx) {
-                                                    nb::gil_scoped_acquire gil;
-                                                    fn(nb::cast(&node, nb::rv_policy::reference),
-                                                       nb::cast(&ctx, nb::rv_policy::reference));
-                                                  });
+                                                  PythonCustomKernel(std::move(fn)));
       },
       nb::arg("domain"), nb::arg("op_type"), nb::arg("fn"),
       "Registers a process-wide (global) custom kernel for ``(domain, op_type)``. "
@@ -2206,4 +2483,5 @@ void AddOnnxPyRuntime(nb::module_ &m) {
              "Returns ``True`` when an entry was removed.");
   rt_mod.def("clear_custom_kernels", &core::runtime::ClearGlobalCustomKernels,
              "Removes every process-wide custom kernel registration.");
+  nb::module_::import_("atexit").attr("register")(rt_mod.attr("clear_custom_kernels"));
 }

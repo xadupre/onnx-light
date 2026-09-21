@@ -1,6 +1,20 @@
 runtime_context.h
 ==================
 
+Selected result ownership
+-------------------------
+
+``set_retained_outputs`` lists exact whole result names whose storage will be
+transferred to an external owner. ``FeedbackState`` supplies this list from
+the graph declarations. Only those names bypass allocator migration and final
+output materialization; other values use the ordinary runtime policies.
+New function/subgraph contexts do not inherit the list. ``If`` and function
+transport explicitly translate selected caller output names into child names.
+Kernel resolution is unchanged.
+
+Ordinary tensors remain in ``tensors()``. ``values()`` carries the structured
+and encoded representations documented in :doc:`runtime_value`.
+
 Kernel usage recording
 ----------------------
 

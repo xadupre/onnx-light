@@ -379,6 +379,25 @@ Tensor Tensor::BorrowStrings(std::string name, Shape shape,
   return t;
 }
 
+Tensor Tensor::RetainStorage() && {
+  EXT_ENFORCE_INVALID(data_type != DataType::STRING,
+                      "Tensor::RetainStorage: string tensors cannot be persistent.");
+  if (borrow_owner_.use_count() != 0)
+    return std::move(*this);
+  EXT_ENFORCE_INVALID(!is_borrowed(),
+                      "Tensor::RetainStorage: cannot retain an ownerless borrowed tensor.");
+  if (allocation_ && !allocation_.holds_lease()) {
+    auto *arena = dynamic_cast<IOArena *>(allocation_.owner());
+    EXT_ENFORCE_INVALID(arena != nullptr && !arena->weak_from_this().expired(),
+                        "Tensor::RetainStorage: allocation requires a self-owning I/O lease.");
+    allocation_ = arena->ExportHandle(std::move(allocation_));
+  }
+  auto owner = std::make_shared<Tensor>(std::move(*this));
+  Tensor result = owner->BorrowView();
+  result.borrow_owner_ = std::move(owner);
+  return result;
+}
+
 Tensor Tensor::BorrowView() const {
   if (static_cast<DataType>(data_type) == DataType::STRING) {
     return Tensor::BorrowStrings(name, shape, AsStrings());

@@ -648,6 +648,8 @@ struct Tensor {
     data = RawBuffer{};
     borrow_ptr_ = nullptr;
     borrow_size_ = 0;
+    borrow_string_data_ = nullptr;
+    borrow_owner_.reset();
   }
 
   bool has_allocation() const noexcept { return static_cast<bool>(allocation_); }
@@ -667,6 +669,16 @@ struct Tensor {
   /// Creates an immutable-storage view whose metadata is independent while its
   /// payload aliases this tensor. This tensor must outlive the returned view.
   Tensor BorrowView() const;
+
+  /**
+   * Transfers storage into a read-only owner-retaining view without copying it.
+   *
+   * Consumes this tensor explicitly. Inline buffers move into an owner; existing
+   * borrowed owners are reused. Ownerless borrows and allocator storage
+   * without a self-owning lease are rejected rather than silently copied.
+   * String tensors cannot be persistent and are always rejected.
+   */
+  Tensor RetainStorage() &&;
 
   /// Returns an owned deep copy of this tensor that references no external
   /// memory: the bytes (or, for ``STRING`` tensors, the strings) are copied

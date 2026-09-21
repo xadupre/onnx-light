@@ -36,6 +36,7 @@ How-to Python / C++
     :maxdepth: 1
 
     use_custom_kernel
+    persistent_feedback
     tune_kernel_thresholds
     use_custom_shape_inference
     register_builtin_operators

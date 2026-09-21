@@ -18,6 +18,36 @@
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
 
+Tensor InitializerView(const TensorProto &proto, const std::shared_ptr<void> &model_owner) {
+  Shape shape;
+  for (const auto dimension : proto.dims())
+    shape.push_back(static_cast<int64_t>(dimension));
+  if (proto.is_raw_data()) {
+    const auto &raw = proto.raw_data();
+    return Tensor::Borrow(proto.name(), proto.data_type(), shape, raw.data(), raw.size(),
+                          raw.is_borrowed() ? raw.owner() : model_owner);
+  }
+  const auto borrow = [&](const auto &values) {
+    return Tensor::Borrow(
+        proto.name(), proto.data_type(), shape, reinterpret_cast<const uint8_t *>(values.data()),
+        values.size() * sizeof(typename std::decay_t<decltype(values)>::value_type), model_owner);
+  };
+  switch (proto.data_type()) {
+  case DataType::FLOAT:
+    return borrow(proto.float_data().values());
+  case DataType::DOUBLE:
+    return borrow(proto.double_data().values());
+  case DataType::INT64:
+    return borrow(proto.int64_data().values());
+  case DataType::UINT64:
+    return borrow(proto.uint64_data().values());
+  case DataType::INT32:
+    return borrow(proto.int32_data().values());
+  default:
+    return TensorFromProto(proto);
+  }
+}
+
 /// Derives the CPU policy a session requests when the caller supplied none.
 /// The requested participant count comes from
 /// :cpp:var:`RuntimeParameters::num_threads` (negative values mean "topology
@@ -157,16 +187,14 @@ void RuntimeSession::SetDeclaredShapes(const GraphProto &graph) {
 }
 
 void RuntimeSession::SetInitializers(const GraphProto &graph) {
-  initializers_.clear();
+  initializer_graph_ = &graph;
   immutable_initializer_names_.clear();
-  initializers_.reserve(graph.initializer().size());
   std::unordered_set<std::string> overridable;
   overridable.reserve(graph.input().size());
   for (const ValueInfoProto &input : graph.input()) {
     overridable.insert(input.name());
   }
   for (const TensorProto &initializer : graph.initializer()) {
-    initializers_.push_back(TensorFromProto(initializer));
     if (overridable.find(initializer.name()) == overridable.end()) {
       immutable_initializer_names_.insert(initializer.name());
     }
@@ -175,16 +203,13 @@ void RuntimeSession::SetInitializers(const GraphProto &graph) {
 
 std::unordered_set<std::string> RuntimeSession::SeedInitializers(RuntimeContext &rt) const {
   std::unordered_set<std::string> seeded;
-  for (const Tensor &initializer : initializers_) {
-    if (!rt.Has(initializer.name)) {
-      // Borrowed string views leave string_data empty. Materializes the payload for
-      // kernels and callbacks without exposing the cached strings to mutation.
-      rt.Set(initializer.name,
-             initializer.data_type == DataType::STRING ? initializer.ToOwned()
-                                                       : initializer.BorrowView(),
-             RuntimeEventKind::kInitializer);
-      seeded.insert(initializer.name);
-    }
+  if (initializer_graph_ != nullptr) {
+    for (const TensorProto &initializer : initializer_graph_->initializer())
+      if (!rt.Has(initializer.name())) {
+        rt.Set(initializer.name(), InitializerView(initializer, rt.model_owner()),
+               RuntimeEventKind::kInitializer);
+        seeded.insert(initializer.name());
+      }
   }
   return seeded;
 }
@@ -353,7 +378,7 @@ bool RuntimeSession::ProducesDeclaredOutput(const NodeProto &node) const {
 void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContext &rt) const {
   for (int i = 0; i < node.output_size(); ++i) {
     const std::string &name = node.output(i);
-    if (name.empty() || !rt.Has(name)) {
+    if (name.empty() || rt.retains_output(name)) {
       continue;
     }
     // Resolve the allocation role of this individual output slot rather than of
@@ -369,6 +394,31 @@ void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContex
     const bool declared_output = output_names_set_.find(name) != output_names_set_.end();
     const bool slot_to_io = session_io_allocator_ != nullptr && declared_output;
     RawBufferAllocator *expected = slot_to_io ? session_io_allocator_ : session_allocator_;
+    auto value = rt.values().find(name);
+    if (value != rt.values().end()) {
+      const auto migrate = [&](auto &&self, RuntimeValue &item, size_t depth) -> void {
+        EXT_ENFORCE_INVALID(depth <= RuntimeValue::kMaxDepth,
+                            "RuntimeSession: maximum structured output depth exceeded.");
+        if (item.kind == RuntimeValue::Kind::kTensor && expected != nullptr) {
+          Tensor &tensor = item.tensor;
+          if (tensor.size_bytes() > 0 && tensor.data_type != DataType::STRING &&
+              (!tensor.has_allocation() || tensor.allocation_owner() != expected)) {
+            EXT_ENFORCE_INVALID(tensor.bytes() != nullptr,
+                                "RuntimeSession: structured output has a null data pointer.");
+            Tensor owned =
+                MakeOutputTensor(tensor.data_type, tensor.shape, tensor.size_bytes(), expected);
+            std::memcpy(owned.mutable_bytes(), tensor.bytes(), tensor.size_bytes());
+            tensor = std::move(owned);
+          }
+        } else if (item.kind == RuntimeValue::Kind::kStruct) {
+          for (auto &[field, child] : item.fields)
+            self(self, child, depth + 1);
+        }
+      };
+      migrate(migrate, value->second, 0);
+    }
+    if (!rt.Has(name))
+      continue;
     if (expected == nullptr) {
       continue;
     }
@@ -472,7 +522,8 @@ void RuntimeSession::Run(RuntimeContext &rt) {
   // one as a clear error before executing any kernel rather than failing
   // partway through the plan.
   for (const std::string &name : required_inputs_) {
-    EXT_ENFORCE_INVALID(rt.Has(name) || rt.HasSequence(name) || rt.HasMap(name),
+    EXT_ENFORCE_INVALID(rt.Has(name) || rt.HasSequence(name) || rt.HasMap(name) ||
+                            rt.values().count(name) != 0,
                         "RuntimeSession: required input '", name,
                         "' is not defined in the RuntimeContext before Run().");
   }
@@ -632,6 +683,23 @@ void RuntimeSession::Run(RuntimeContext &rt) {
 
 void RuntimeSession::MaterializeBorrowedOutputs(RuntimeContext &rt) const {
   for (const std::string &name : output_names_) {
+    if (rt.retains_output(name))
+      continue;
+    auto value = rt.values().find(name);
+    if (value != rt.values().end()) {
+      const auto detach = [&](auto &&self, RuntimeValue &item, size_t depth) -> void {
+        EXT_ENFORCE_INVALID(depth <= RuntimeValue::kMaxDepth,
+                            "RuntimeSession: maximum structured output depth exceeded.");
+        if (item.kind == RuntimeValue::Kind::kTensor && item.tensor.is_borrowed())
+          item.tensor = item.tensor.ToOwned();
+        else if (item.kind == RuntimeValue::Kind::kEncoded)
+          item = item.DeepCopy();
+        else if (item.kind == RuntimeValue::Kind::kStruct)
+          for (auto &[field, child] : item.fields)
+            self(self, child, depth + 1);
+      };
+      detach(detach, value->second, 0);
+    }
     if (!rt.Has(name)) {
       continue;
     }

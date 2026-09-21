@@ -16,6 +16,7 @@ from . import (  # noqa: F401
     NodeProto,
     OperatorSetIdProto,
     OptionalProto,
+    PersistentBindingProto,
     SequenceProto,
     SparseTensorProto,
     StructTypeProto,

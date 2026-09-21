@@ -18,7 +18,8 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 namespace {
 
-void EnsureAllocatorBacked(Tensor &tensor, RawBufferAllocator *allocator, RuntimeEventKind kind) {
+void EnsureAllocatorBacked(Tensor &tensor, RawBufferAllocator *allocator, RuntimeEventKind kind,
+                           symbolic::Device device) {
   // STRING tensors store their payload in string_data instead of raw bytes.
   if (allocator == nullptr || static_cast<DataType>(tensor.data_type) == DataType::STRING) {
     return;
@@ -27,6 +28,11 @@ void EnsureAllocatorBacked(Tensor &tensor, RawBufferAllocator *allocator, Runtim
   // Copying them into the execution arena adds a full memory-bandwidth pass
   // before inference and defeats the Python runner's zero-copy NumPy adapter.
   if (kind == RuntimeEventKind::kInput && tensor.is_borrowed()) {
+    return;
+  }
+  // Initializer storage is host-resident and read-only, not run-local workspace.
+  if (kind == RuntimeEventKind::kInitializer &&
+      (device == symbolic::Device::kUndefined || device == symbolic::Device::kCPU)) {
     return;
   }
   // Tensor was already allocated by a kernel that received the allocator
@@ -315,7 +321,8 @@ void RuntimeContext::ClearKernelUsage() {
 
 void RuntimeContext::Set(const std::string &name, Tensor tensor, RuntimeEventKind kind) {
   EXT_ENFORCE(!Has(name), "RuntimeContext::Set: a tensor named '", name, "' already exists.");
-  EnsureAllocatorBacked(tensor, allocator_, kind);
+  if (!retains_output(name))
+    EnsureAllocatorBacked(tensor, allocator_, kind, device_);
   if (events_enabled_) {
     RuntimeEvent ev =
         MakeAddOrReplaceEvent(RuntimeEventAction::kAdd, kind, name, tensor, current_node_index_,
@@ -327,7 +334,8 @@ void RuntimeContext::Set(const std::string &name, Tensor tensor, RuntimeEventKin
 }
 
 void RuntimeContext::Put(const std::string &name, Tensor tensor, RuntimeEventKind kind) {
-  EnsureAllocatorBacked(tensor, allocator_, kind);
+  if (!retains_output(name))
+    EnsureAllocatorBacked(tensor, allocator_, kind, device_);
   if (events_enabled_) {
     const RuntimeEventAction action =
         Has(name) ? RuntimeEventAction::kReplace : RuntimeEventAction::kAdd;
@@ -341,9 +349,10 @@ void RuntimeContext::Put(const std::string &name, Tensor tensor, RuntimeEventKin
 }
 
 bool RuntimeContext::Remove(const std::string &name) {
+  const bool removed_value = values_.erase(name) != 0;
   auto it = tensors_.find(name);
   if (it == tensors_.end()) {
-    return false;
+    return removed_value;
   }
   tensors_.erase(it);
   if (events_enabled_) {
@@ -426,7 +435,9 @@ RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name)
   // allocation pointers.
   child.functions() = functions_;
   child.custom_kernels() = custom_kernels_;
+  child.set_model_owner(model_owner_);
   child.tensors() = tensors_;
+  child.values() = values_;
   child.sequences() = sequences_;
   child.set_cpu_executor(cpu_executor_);
   child.set_current_subgraph(current_node_index_, attr_name);
@@ -446,6 +457,7 @@ RuntimeContext RuntimeContext::MakeFunctionContext() const {
                        kernel_usage_);
   child.functions() = functions_;
   child.custom_kernels() = custom_kernels_;
+  child.set_model_owner(model_owner_);
   child.set_cpu_executor(cpu_executor_);
   return child;
 }

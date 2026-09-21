@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <charconv>
+#include <cstring>
 #include <limits>
 #include <string>
 #include <unordered_set>
@@ -158,6 +159,8 @@ struct TypeMemo {
  */
 struct Walk {
   const StructTypeCatalogue *catalogue = nullptr;
+  /** Rejects string tensor leaves and constants in persistent values. */
+  bool persistent = false;
   /** Identities currently being expanded, used to reject reference cycles. */
   std::vector<uint64_t> active;
   /** Per-identity memo; catalogues are small, so a linear scan beats a hash map. */
@@ -342,12 +345,18 @@ void ValidateTypeProto(Walk &walk, const TypeProto &type) {
   }
   switch (type.value_case()) {
   case TypeProto::kTensorType:
+    if (walk.persistent && type.ref_tensor_type().elem_type() == TensorProto::STRING) {
+      Invalid("String tensors cannot be persistent, including fields of structured values.");
+    }
     if (!type.ref_tensor_type().has_elem_type() ||
         type.ref_tensor_type().elem_type() == TensorProto::UNDEFINED) {
       Invalid("A tensor type is missing a defined 'elem_type'.");
     }
     break;
   case TypeProto::kSparseTensorType:
+    if (walk.persistent && type.ref_sparse_tensor_type().elem_type() == TensorProto::STRING) {
+      Invalid("String tensors cannot be persistent, including fields of structured values.");
+    }
     if (!type.ref_sparse_tensor_type().has_elem_type() ||
         type.ref_sparse_tensor_type().elem_type() == TensorProto::UNDEFINED) {
       Invalid("A sparse tensor type is missing a defined 'elem_type'.");
@@ -504,6 +513,9 @@ void ValidateStructure(Walk &walk, const StructTypeProto::Structure &structure) 
       ValidateTypeProto(walk, field.ref_type());
       break;
     case StructTypeProto::Structure::Field::kConstant:
+      if (walk.persistent && field.constant().data_type() == TensorProto::STRING) {
+        Invalid("String tensors cannot be persistent, including structured constant fields.");
+      }
       ValidateConstant(field);
       break;
     default:
@@ -889,13 +901,14 @@ void ValidateAffineLayout(const EncodedValueProto &value, EncodedValueLayout &la
 
 } // namespace
 
-void StructTypeCatalogue::Build(const ModelProto &model) {
+void StructTypeCatalogue::Build(const ModelProto &model) { Build(model.ref_struct_types()); }
+
+void StructTypeCatalogue::Build(const utils::RepeatedProtoField<StructTypeProto> &declarations) {
   // Validate through a probe catalogue so a rejected model never leaves this
   // catalogue bound to declarations that failed validation.
-  model_ = nullptr;
+  declarations_ = nullptr;
   StructTypeCatalogue probe;
-  probe.model_ = &model;
-  const utils::RepeatedProtoField<StructTypeProto> &declarations = model.ref_struct_types();
+  probe.declarations_ = &declarations;
   for (size_t i = 0; i < declarations.size(); ++i) {
     const StructTypeProto &declaration = declarations[i];
     if (!declaration.has_type_id() || declaration.ref_type_id() == 0) {
@@ -917,7 +930,7 @@ void StructTypeCatalogue::Build(const ModelProto &model) {
     ValidateStructType(walk, declarations[i], StructRole::kDeclaration);
     walk.entry(declarations[i].ref_type_id()).validated = true;
   }
-  model_ = &model;
+  declarations_ = &declarations;
 }
 
 bool StructTypeCatalogue::FixedBitSize(const StructTypeProto &type, uint64_t &bits,
@@ -1362,6 +1375,213 @@ void VerifyNode(const StructTypeCatalogue *struct_types, const NodeProto &node,
   }
 }
 
+namespace {
+
+template <typename T>
+bool SamePersistentData(const utils::RepeatedField<T> &left, const utils::RepeatedField<T> &right) {
+  return left.size() == right.size() &&
+         (left.empty() || std::memcmp(left.data(), right.data(), left.size() * sizeof(T)) == 0);
+}
+
+bool SamePersistentConstant(const TensorProto &left, const TensorProto &right) {
+  if (left.string_data().size() != right.string_data().size()) {
+    return false;
+  }
+  for (size_t i = 0; i < left.string_data().size(); ++i) {
+    if (left.string_data(i) != right.string_data(i)) {
+      return false;
+    }
+  }
+  return left.data_type() == right.data_type() && SamePersistentData(left.dims(), right.dims()) &&
+         left.raw_data() == right.raw_data() &&
+         SamePersistentData(left.float_data(), right.float_data()) &&
+         SamePersistentData(left.double_data(), right.double_data()) &&
+         SamePersistentData(left.int32_data(), right.int32_data()) &&
+         SamePersistentData(left.int64_data(), right.int64_data()) &&
+         SamePersistentData(left.uint64_data(), right.uint64_data());
+}
+
+bool CompatiblePersistentStruct(const StructTypeCatalogue &catalogue, const StructTypeProto &left,
+                                const StructTypeProto &right, uint32_t depth);
+
+bool CompatiblePersistentType(const StructTypeCatalogue &catalogue, const TypeProto &left,
+                              const TypeProto &right, uint32_t depth) {
+  if (depth > kMaxStructTypeDepth || left.value_case() != right.value_case()) {
+    return false;
+  }
+  if (left.has_tensor_type()) {
+    const auto &a = left.tensor_type();
+    const auto &b = right.tensor_type();
+    if (a.elem_type() != b.elem_type()) {
+      return false;
+    }
+    for (const auto *tensor : {&a, &b}) {
+      for (const auto &dim : tensor->shape().dim()) {
+        if (dim.has_dim_value() && dim.dim_value() < 0) {
+          return false;
+        }
+      }
+    }
+    if (!a.has_shape() || !b.has_shape()) {
+      return true;
+    }
+    if (a.shape().dim_size() != b.shape().dim_size()) {
+      return false;
+    }
+    for (size_t i = 0; i < a.shape().dim().size(); ++i) {
+      if (a.shape().dim(i).has_dim_value() && b.shape().dim(i).has_dim_value() &&
+          a.shape().dim(i).dim_value() != b.shape().dim(i).dim_value()) {
+        return false;
+      }
+    }
+    return true;
+  }
+  if (!left.has_struct_type()) {
+    return false;
+  }
+  return CompatiblePersistentStruct(catalogue, left.struct_type(), right.struct_type(), depth + 1);
+}
+
+bool CompatiblePersistentStruct(const StructTypeCatalogue &catalogue, const StructTypeProto &left,
+                                const StructTypeProto &right, uint32_t depth) {
+  if (depth > kMaxStructTypeDepth) {
+    return false;
+  }
+  const auto &a = catalogue.Resolve(left);
+  const auto &b = catalogue.Resolve(right);
+  // Catalogue identities describe formats, not just coincidentally equal byte sizes.
+  if (a.has_type_id() || b.has_type_id()) {
+    if (!a.has_type_id() || !b.has_type_id() || a.type_id() != b.type_id()) {
+      return false;
+    }
+    if (&a == &b) {
+      return true;
+    }
+  }
+  if (a.has_decoder() || a.has_encoder() || b.has_decoder() || b.has_encoder()) {
+    // Codec-bearing formats require a stable catalogue identity.
+    return false;
+  }
+  if (a.kind_case() != b.kind_case()) {
+    return false;
+  }
+  if (a.has_array()) {
+    return a.array().dimension() == b.array().dimension() &&
+           CompatiblePersistentType(catalogue, a.array().element_type(), b.array().element_type(),
+                                    depth + 1);
+  }
+  if (a.has_bit_packing()) {
+    const auto &ap = a.bit_packing();
+    const auto &bp = b.bit_packing();
+    if (ap.dimension() != bp.dimension() || ap.component_size() != bp.component_size()) {
+      return false;
+    }
+    for (size_t i = 0; i < ap.component().size(); ++i) {
+      if (ap.component(i).name() != bp.component(i).name() ||
+          ap.component(i).bit_width() != bp.component(i).bit_width()) {
+        return false;
+      }
+    }
+    return true;
+  }
+  if (!a.has_structure() || a.structure().field_size() != b.structure().field_size()) {
+    return false;
+  }
+  for (size_t i = 0; i < a.structure().field().size(); ++i) {
+    const auto &af = a.structure().field(i);
+    const auto &bf = b.structure().field(i);
+    if (af.name() != bf.name() || af.content_case() != bf.content_case()) {
+      return false;
+    }
+    if (af.has_type() && !CompatiblePersistentType(catalogue, af.type(), bf.type(), depth + 1)) {
+      return false;
+    }
+    if (af.has_constant() && !SamePersistentConstant(af.constant(), bf.constant())) {
+      return false;
+    }
+  }
+  return true;
+}
+
+const TypeProto &PersistentIOType(const utils::RepeatedProtoField<ValueInfoProto> &values,
+                                  const utils::OptionalString &name) {
+  if (!name.empty()) {
+    for (const auto &value : values) {
+      if (value.name() == name && value.has_type()) {
+        return value.type();
+      }
+    }
+  }
+  Invalid("Persistent binding requires an exact existing typed graph input/output name; "
+          "partial field paths are unsupported.");
+}
+
+} // namespace
+
+void ValidatePersistentType(const StructTypeCatalogue &catalogue, const TypeProto &type) {
+  Walk walk;
+  walk.catalogue = &catalogue;
+  walk.persistent = true;
+  ValidateTypeProto(walk, type);
+}
+
+void ValidatePersistentStructType(const StructTypeCatalogue &catalogue,
+                                  const StructTypeProto &type) {
+  Walk walk;
+  walk.catalogue = &catalogue;
+  walk.persistent = true;
+  ValidateStructType(walk, type,
+                     type.has_type_id() ? StructRole::kDeclaration : StructRole::kNested);
+}
+
+bool CompatiblePersistentTypes(const StructTypeCatalogue &catalogue, const TypeProto &left,
+                               const TypeProto &right) {
+  catalogue.ValidateType(left);
+  catalogue.ValidateType(right);
+  return CompatiblePersistentType(catalogue, left, right, 0);
+}
+
+bool CompatiblePersistentStructTypes(const StructTypeCatalogue &catalogue,
+                                     const StructTypeProto &left, const StructTypeProto &right) {
+  Walk walk;
+  walk.catalogue = &catalogue;
+  ValidateStructType(walk, left,
+                     left.has_type_id() ? StructRole::kDeclaration : StructRole::kNested);
+  ValidateStructType(walk, right,
+                     right.has_type_id() ? StructRole::kDeclaration : StructRole::kNested);
+  return CompatiblePersistentStruct(catalogue, left, right, 0);
+}
+
+void VerifyPersistentBindings(const StructTypeCatalogue *struct_types, const GraphProto &graph,
+                              bool is_main_graph) {
+  if (graph.persistent_bindings().empty()) {
+    return;
+  }
+  if (!is_main_graph) {
+    Invalid("Persistent bindings are supported only on the model root graph, not subgraphs.");
+  }
+  const StructTypeCatalogue empty_catalogue;
+  const auto &catalogue = struct_types == nullptr ? empty_catalogue : *struct_types;
+  const auto &bindings = graph.persistent_bindings();
+  for (size_t i = 0; i < bindings.size(); ++i) {
+    const auto &binding = bindings[i];
+    const auto &input = PersistentIOType(graph.input(), binding.input_name());
+    const auto &output = PersistentIOType(graph.output(), binding.output_name());
+    ValidatePersistentType(catalogue, input);
+    ValidatePersistentType(catalogue, output);
+    if (!CompatiblePersistentTypes(catalogue, input, output)) {
+      Invalid(
+          "Persistent binding requires compatible tensor/struct types and declared dimensions.");
+    }
+    for (size_t j = 0; j < i; ++j) {
+      if (bindings[j].input_name() == binding.input_name())
+        Invalid("Persistent bindings have duplicate input names.");
+      if (bindings[j].output_name() == binding.output_name())
+        Invalid("Persistent bindings have duplicate output names.");
+    }
+  }
+}
+
 void VerifyGraph(const GraphProto &graph, bool is_main_graph, bool in_function_body,
                  const std::unordered_set<std::string> *outer_scope) {
   VerifyGraph(/*struct_types=*/nullptr, graph, is_main_graph, in_function_body, outer_scope);
@@ -1370,6 +1590,7 @@ void VerifyGraph(const GraphProto &graph, bool is_main_graph, bool in_function_b
 void VerifyGraph(const StructTypeCatalogue *struct_types, const GraphProto &graph,
                  bool is_main_graph, bool in_function_body,
                  const std::unordered_set<std::string> *outer_scope) {
+  VerifyPersistentBindings(struct_types, graph, is_main_graph && !in_function_body);
   const StructTypeCatalogue empty_catalogue;
   const StructTypeCatalogue &catalogue = struct_types == nullptr ? empty_catalogue : *struct_types;
   std::unordered_set<std::string> defined;

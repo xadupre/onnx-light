@@ -9,6 +9,7 @@
 #include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/runtime_session.h"
 #include "onnx_core/runtime/tuning/parallel_region_collector.h"
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
@@ -39,6 +40,137 @@ using onnx_kernels::kernel::Unique;
 using onnx_kernels::kernel::Unsqueeze;
 
 namespace Test {
+
+namespace {
+
+void CheckStructuredIdentityLifetime(bool retained) {
+  using namespace core::runtime;
+  std::vector<RuntimeValueMap> results;
+  {
+    ModelProto model;
+    model.set_ir_version(10);
+    model.add_opset_import()->set_version(18);
+    auto *custom_opset = model.add_opset_import();
+    custom_opset->set_domain("test.feedback");
+    custom_opset->set_version(1);
+    auto *graph = model.mutable_graph();
+    for (const char *name : {"first", "second"}) {
+      auto *output = graph->add_output();
+      output->set_name(name);
+      auto *structure = output->mutable_type()->mutable_struct_type()->mutable_structure();
+      for (const char *field_name : {"inline", "shared"}) {
+        auto *field = structure->add_field();
+        field->set_name(field_name);
+        auto *tensor_type = field->mutable_type()->mutable_tensor_type();
+        tensor_type->set_elem_type(TensorProto::FLOAT);
+        tensor_type->mutable_shape()->add_dim()->set_dim_value(1);
+      }
+    }
+    auto *producer = graph->add_node();
+    producer->set_domain("test.feedback");
+    producer->set_op_type("Produce");
+    producer->add_output("mid");
+    auto *identity = graph->add_node();
+    identity->set_op_type("Identity");
+    identity->add_input("mid");
+    identity->add_output("first");
+    auto *consumer = graph->add_node();
+    consumer->set_domain("test.feedback");
+    consumer->set_op_type("Consume");
+    consumer->add_input("mid");
+    consumer->add_input("first");
+    consumer->add_output("checked");
+    identity = graph->add_node();
+    identity->set_op_type("Identity");
+    identity->add_input("checked");
+    identity->add_output("second");
+
+    RuntimeSession session(model);
+    RuntimeContext context(KernelContext(DefaultOpset(18)),
+                           RuntimeContextOptions{.release_intermediates = true});
+    if (retained)
+      context.set_retained_outputs({"first", "second"});
+    float iteration = 0;
+    context.RegisterCustomKernel(
+        "test.feedback", "Produce", [&](const NodeProto &node, RuntimeContext &rt) {
+          ++iteration;
+          rt.values()[node.output(0)] = RuntimeValue(RuntimeValueMap{
+              {"inline", RuntimeValue(Tensor::FromFloat("", {1}, {iteration}))},
+              {"shared", RuntimeValue(Tensor::FromFloat("", {1}, {iteration + 10})).Retain()}});
+        });
+    context.RegisterCustomKernel(
+        "test.feedback", "Consume", [](const NodeProto &node, RuntimeContext &rt) {
+          const auto &source = rt.values().at(node.input(0));
+          const auto &forwarded = rt.values().at(node.input(1));
+          const Tensor &inline_source = source.fields.at("inline").tensor;
+          const Tensor &inline_result = forwarded.fields.at("inline").tensor;
+          EXPECT_FALSE(inline_source.is_borrowed());
+          EXPECT_FALSE(inline_result.is_borrowed());
+          EXPECT_NE(inline_source.bytes(), inline_result.bytes());
+          EXPECT_EQ(inline_source.AsFloat()[0], inline_result.AsFloat()[0]);
+          EXPECT_EQ(source.fields.at("shared").tensor.bytes(),
+                    forwarded.fields.at("shared").tensor.bytes());
+          rt.values()[node.output(0)] = source;
+        });
+    for (int run = 0; run < 3; ++run) {
+      session.Run(context);
+      EXPECT_EQ(context.values().count("mid"), 0u);
+      EXPECT_EQ(context.values().count("checked"), 0u);
+      RuntimeValueMap outputs;
+      for (const char *name : {"first", "second"}) {
+        auto &value = context.values().at(name);
+        outputs.emplace(name, retained ? std::move(value).Retain() : std::move(value));
+      }
+      results.push_back(std::move(outputs));
+      context.values().clear();
+    }
+  }
+  for (size_t run = 0; run < results.size(); ++run) {
+    for (const char *name : {"first", "second"}) {
+      const auto &value = results[run].at(name);
+      EXPECT_EQ(value.fields.at("inline").tensor.AsFloat()[0], static_cast<float>(run + 1));
+      EXPECT_EQ(value.fields.at("shared").tensor.AsFloat()[0], static_cast<float>(run + 11));
+    }
+  }
+}
+
+} // namespace
+
+TEST(FeedbackState, OrdinaryStructuredIdentitySurvivesReleasedInlineIntermediates) {
+  CheckStructuredIdentityLifetime(false);
+}
+
+TEST(FeedbackState, SelectedStructuredIdentitySurvivesReleasedInlineIntermediates) {
+  CheckStructuredIdentityLifetime(true);
+}
+
+TEST(KernelClass, IdentityPreallocatedReadsOrdinaryStrings) {
+  const KernelContext ctx{DefaultOpset(18)};
+  const onnx_kernels::kernel::Identity identity{ctx};
+  const Tensor owned = Tensor::FromStrings("", {3}, {"été", "", "東京"});
+  Tensor output = Tensor::FromStrings("", {3}, {"", "", ""});
+  identity(owned, output);
+  EXPECT_EQ(output.AsStrings(), owned.AsStrings());
+  output.string_data.clear();
+  EXPECT_THROW(identity(owned, output), std::invalid_argument);
+  const Tensor empty = Tensor::FromStrings("", {0}, {});
+  output = Tensor::FromStrings("", {0}, {});
+  identity(empty, output);
+  EXPECT_TRUE(output.AsStrings().empty());
+}
+
+TEST(KernelClass, UnsqueezePreallocatedReadsOrdinaryStrings) {
+  const KernelContext ctx{DefaultOpset(18)};
+  const Unsqueeze unsqueeze{ctx};
+  const Tensor owned = Tensor::FromStrings("", {3}, {"été", "", "東京"});
+  Tensor output = Tensor::FromStrings("", {1, 3, 1}, {"", "", ""});
+  unsqueeze(owned, {0, -1}, output);
+  EXPECT_EQ(output.AsStrings(), owned.AsStrings());
+  const Tensor empty = Tensor::FromStrings("", {0}, {});
+  output = Tensor::FromStrings("", {1, 0}, {});
+  unsqueeze(empty, {0}, output);
+  EXPECT_TRUE(output.AsStrings().empty());
+}
 
 TEST(KernelClass, NativeCompressStringBorrowedAndPreallocated) {
   const KernelContext ctx{DefaultOpset(18)};

@@ -94,12 +94,15 @@ public:
    */
   void Build(const ModelProto &model);
 
+  /** Indexes and validates borrowed declarations without copying their constants or codecs. */
+  void Build(const utils::RepeatedProtoField<StructTypeProto> &declarations);
+
   /** Returns the declaration for @p type_id, or null when the model declares no such identity. */
   inline const StructTypeProto *Find(uint64_t type_id) const {
-    if (model_ == nullptr || type_id == 0) {
+    if (declarations_ == nullptr || type_id == 0) {
       return nullptr;
     }
-    const utils::RepeatedProtoField<StructTypeProto> &declarations = model_->ref_struct_types();
+    const auto &declarations = *declarations_;
     for (size_t i = 0; i < declarations.size(); ++i) {
       if (declarations[i].has_type_id() && declarations[i].ref_type_id() == type_id) {
         return &declarations[i];
@@ -109,7 +112,7 @@ public:
   }
 
   /** Returns the number of indexed declarations. */
-  inline size_t size() const { return model_ == nullptr ? 0 : model_->ref_struct_types().size(); }
+  inline size_t size() const { return declarations_ == nullptr ? 0 : declarations_->size(); }
 
   /** Returns true when the catalogue indexes no declaration. */
   inline bool empty() const { return size() == 0; }
@@ -201,8 +204,43 @@ public:
                                           bool require_resolved_reference = true) const;
 
 private:
-  const ModelProto *model_ = nullptr;
+  const utils::RepeatedProtoField<StructTypeProto> *declarations_ = nullptr;
 };
+
+/** Validates a persistent type, rejecting string tensors at every nesting level. */
+ONNX_LIGHT_PROTO_API void ValidatePersistentType(const StructTypeCatalogue &catalogue,
+                                                 const TypeProto &type);
+
+/** Validates a persistent encoded layout, including referenced types and constant fields. */
+ONNX_LIGHT_PROTO_API void ValidatePersistentStructType(const StructTypeCatalogue &catalogue,
+                                                       const StructTypeProto &type);
+
+/**
+ * Returns whether validated tensor/struct declarations are compatible.
+ * Compares ranks when both are known and dimensions when both are concrete.
+ * Allows symbolic dimensions and unknown ranks in ordinary runtime values.
+ * Compares declarations directly, without serialization, hashing or payload copies.
+ * Throws std::invalid_argument for malformed types or unresolved references.
+ */
+ONNX_LIGHT_PROTO_API bool CompatiblePersistentTypes(const StructTypeCatalogue &catalogue,
+                                                    const TypeProto &left, const TypeProto &right);
+
+/** Returns declaration compatibility of structured types or catalogue references. */
+ONNX_LIGHT_PROTO_API bool CompatiblePersistentStructTypes(const StructTypeCatalogue &catalogue,
+                                                          const StructTypeProto &left,
+                                                          const StructTypeProto &right);
+
+/**
+ * Validates root-graph persistent declarations without reading or copying state payloads.
+ *
+ * Resolves exact whole-input/output names, rejects duplicate inputs or outputs, and
+ * rejects conflicting tensor dtypes, known ranks, concrete dimensions and struct layouts.
+ * String tensors are forbidden, including nested fields and structured constants.
+ * A null catalogue resolves inline types only. Nested graphs must not declare bindings.
+ */
+ONNX_LIGHT_PROTO_API void VerifyPersistentBindings(const StructTypeCatalogue *struct_types,
+                                                   const GraphProto &graph,
+                                                   bool is_main_graph = true);
 
 /**
  * Validates a ValueInfoProto.

@@ -192,11 +192,12 @@ jobs:
         run: pip install -C build-dir=build -C cmake.build-type=Release -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -C cmake.define.CMAKE_C_COMPILER_LAUNCHER=sccache -C cmake.define.CMAKE_CXX_COMPILER_LAUNCHER=sccache -e .[dev] -v
 
       - name: Report installed lib_onnx_proto size
-        # Includes the native ORT codec allowance documented in
-        # docs/design/proto/ort_flatbuffer_format.rst.
-        # DLPack export adds one public symbol, while owner-preserving DLPack
-        # import increases the CopyFrom implementation's text allowance
+        # Includes the native ORT codec and persistent-binding allowances documented in
+        # docs/design/proto/ort_flatbuffer_format.rst and the persistent-values plan.
+        # DLPack export adds one public symbol, while owner-preserving import
+        # increases the CopyFrom implementation's text allowance
         # (see docs/api/protos/tensor_proto.rst).
+        # Persistent type validation exposes two additional shared validation helpers.
         # Replacing CopyFrom payload ownership adds 2016 text bytes; installed-size
         # and symbol limits are unchanged.
         run: |
@@ -204,9 +205,9 @@ jobs:
           python .github/scripts/report_proto_binary_size.py \
             "${proto_dir}" \
             --summary "${GITHUB_STEP_SUMMARY}" \
-            --max-installed-size 1390552 \
-            --max-text-size 958650 \
-            --max-dynamic-symbols 793 \
+            --max-installed-size 1423320 \
+            --max-text-size 972106 \
+            --max-dynamic-symbols 807 \
             --allowed-dependency libcrypto.so.3 \
             --allowed-dependency libstdc++.so.6 \
             --allowed-dependency libgcc_s.so.1 \

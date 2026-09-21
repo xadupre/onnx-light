@@ -10,6 +10,7 @@
 #include "onnx_core/runtime/memory/simple_map.h"
 #include "onnx_core/runtime/memory/simple_sequence.h"
 #include "onnx_core/runtime/memory/simple_tensor.h"
+#include "onnx_core/runtime/runtime_value.h"
 #include "onnx_core/runtime/tuning/runtime_parameters.h"
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_light_helpers.h"
@@ -532,6 +533,22 @@ public:
   TensorMap &tensors() noexcept { return tensors_; }
   const TensorMap &tensors() const noexcept { return tensors_; }
 
+  /** Returns the structured and encoded graph edges used by custom kernels. */
+  RuntimeValueMap &values() noexcept { return values_; }
+  const RuntimeValueMap &values() const noexcept { return values_; }
+
+  /** Selects whole graph outputs whose storage will be moved to an external owner. */
+  void set_retained_outputs(std::unordered_set<std::string> names) {
+    retained_outputs_ = std::move(names);
+  }
+  bool retains_output(const std::string &name) const noexcept {
+    return retained_outputs_.count(name) != 0;
+  }
+
+  /** Retains the immutable source model backing ownership-preserving initializer views. */
+  void set_model_owner(std::shared_ptr<void> owner) { model_owner_ = std::move(owner); }
+  const std::shared_ptr<void> &model_owner() const noexcept { return model_owner_; }
+
   /// Kernel construction context (opset + allocator).
   KernelContext &kernel_ctx() noexcept { return kernel_ctx_; }
   const KernelContext &kernel_ctx() const noexcept { return kernel_ctx_; }
@@ -969,6 +986,7 @@ private:
   void StampAllocatorMemory(RuntimeEvent &ev) const noexcept;
 
   TensorMap tensors_;
+  RuntimeValueMap values_;
   KernelContext kernel_ctx_;
   FunctionMap functions_;
   CustomKernelMap custom_kernels_;
@@ -982,6 +1000,8 @@ private:
   /// Non-owning view on the CPU executor leased by the running session.
   CpuExecutor *cpu_executor_ = nullptr;
   bool release_intermediates_ = false;
+  std::unordered_set<std::string> retained_outputs_;
+  std::shared_ptr<void> model_owner_;
   int64_t current_node_index_ = -1;
   /// Index of the control-flow node in the parent graph currently being
   /// executed (see :cpp:func:`set_current_subgraph`). ``-1`` for the

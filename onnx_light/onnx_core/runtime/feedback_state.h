@@ -60,6 +60,8 @@ public:
   void Close();
   /** Returns read-only aliases keyed by exact retained graph input names. */
   RuntimeValueMap Values() const;
+  /** Returns cumulative cache work, including failed attempts; Reset preserves counters. */
+  AttentionCacheStatistics AttentionCacheStats() const;
 
 private:
   struct Binding {
@@ -68,6 +70,7 @@ private:
     const TypeProto *input_type;
   };
   std::vector<RuntimeValue> ValidateInitial(RuntimeValueMap initial) const;
+  RuntimeValue BorrowForInvocation(const RuntimeValue &value) const;
 
   const ModelProto &model_;
   std::shared_ptr<void> model_owner_;
@@ -76,6 +79,9 @@ private:
   std::vector<Binding> bindings_;
   std::unique_ptr<RuntimeSession> session_;
   std::vector<RuntimeValue> values_;
+  std::shared_ptr<RuntimeContext::AttentionCacheCounterState> attention_cache_stats_ =
+      std::make_shared<RuntimeContext::AttentionCacheCounterState>();
+  size_t attention_cache_initial_capacity_ = 0;
   bool allocators_captured_ = false;
   RawBufferAllocator *execution_allocator_ = nullptr;
   RawBufferAllocator *io_allocator_ = nullptr;

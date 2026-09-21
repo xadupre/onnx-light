@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstring>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <unordered_set>
@@ -441,7 +442,110 @@ RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name)
   child.sequences() = sequences_;
   child.set_cpu_executor(cpu_executor_);
   child.set_current_subgraph(current_node_index_, attr_name);
+  child.attention_cache_stats_ = attention_cache_stats_;
   return child;
+}
+
+void RuntimeContext::AccumulateAttentionCacheStatistics(
+    const AttentionCacheStatistics &statistics) {
+  const std::lock_guard<std::mutex> lock(attention_cache_stats_->mutex);
+  auto &values = attention_cache_stats_->values;
+  values.allocations += statistics.allocations;
+  values.allocated_bytes += statistics.allocated_bytes;
+  values.prefix_copied_bytes += statistics.prefix_copied_bytes;
+  values.append_copied_bytes += statistics.append_copied_bytes;
+  values.reuse_count += statistics.reuse_count;
+}
+
+void RuntimeContext::RecordAttentionCacheCopy(size_t allocated, size_t prefix, size_t appended,
+                                              bool reused) {
+  AccumulateAttentionCacheStatistics(
+      {reused ? 0u : 1u, allocated, prefix, appended, reused ? 1u : 0u});
+}
+
+std::optional<Tensor> RuntimeContext::TryAppendAttentionCache(const Tensor &past,
+                                                              const Tensor &current,
+                                                              int output_slot) {
+  if (attention_cache_initial_capacity_ == 0 || past.data_type != DataType::FLOAT ||
+      current.data_type != DataType::FLOAT || past.shape.size() != 4 || current.shape.size() != 4 ||
+      past.shape[0] != 1 || past.shape[1] != 1 || current.shape[0] != 1 || current.shape[1] != 1 ||
+      past.shape[3] <= 0 || past.shape[3] != current.shape[3] ||
+      (!output_slot_io_roles_.empty() &&
+       static_cast<size_t>(output_slot) >= output_slot_io_roles_.size()))
+    return std::nullopt;
+  if (attention_cache_graph_ == nullptr || current_node_index_ < 0 ||
+      current_node_index_ >= attention_cache_graph_->node_size() ||
+      (output_slot != 1 && output_slot != 2))
+    return std::nullopt;
+  const NodeProto &node = attention_cache_graph_->node(current_node_index_);
+  const int input_slot = output_slot + 3;
+  if (node.op_type() != "Attention" || (!node.domain().empty() && node.domain() != "ai.onnx") ||
+      node.input_size() <= input_slot || node.output_size() <= output_slot)
+    return std::nullopt;
+  const auto input = tensors_.find(node.input(input_slot));
+  if (input == tensors_.end() || &input->second != &past)
+    return std::nullopt;
+  bool declared = false;
+  for (const auto &binding : attention_cache_graph_->persistent_bindings())
+    declared = declared || (binding.input_name().value() == node.input(input_slot) &&
+                            binding.output_name().value() == node.output(output_slot));
+  if (!declared)
+    return std::nullopt;
+  const int64_t previous = past.shape[2], added = current.shape[2];
+  EXT_ENFORCE_INVALID(previous >= 0 && added >= 0 &&
+                          previous <= std::numeric_limits<int64_t>::max() - added,
+                      "Attention cache: sequence length overflow.");
+  Shape shape = past.shape;
+  shape[2] = previous + added;
+  const auto float_bytes = [](const Shape &dimensions) {
+    const int64_t count = dimensions.product(0, dimensions.size(), "Attention cache");
+    EXT_ENFORCE_INVALID(static_cast<uint64_t>(count) <=
+                            std::numeric_limits<size_t>::max() / sizeof(float),
+                        "Attention cache: byte size overflow.");
+    return static_cast<size_t>(count) * sizeof(float);
+  };
+  const size_t logical = float_bytes(shape);
+  const size_t prefix = float_bytes(past.shape);
+  const size_t appended = float_bytes(current.shape);
+  EXT_ENFORCE_INVALID(past.size_bytes() == prefix && current.size_bytes() == appended,
+                      "Attention cache: tensor byte extent mismatch.");
+  if (past.ClaimAppend(logical)) {
+    Tensor result = past.BorrowView();
+    result.shape = std::move(shape);
+    result.borrow_size_ = logical;
+    if (appended != 0)
+      std::memmove(result.mutable_bytes() + prefix, current.bytes(), appended);
+    RecordAttentionCacheCopy(0, 0, appended, true);
+    return result;
+  }
+  const size_t row_bytes = float_bytes({past.shape[3]});
+  const size_t max_capacity = std::numeric_limits<size_t>::max() / row_bytes;
+  size_t capacity = attention_cache_initial_capacity_;
+  if (past.append_storage_)
+    capacity = std::max(capacity, past.append_storage_->capacity / row_bytes);
+  EXT_ENFORCE_INVALID(capacity <= max_capacity,
+                      "Attention cache: initial capacity byte size overflow.");
+  const size_t required = static_cast<size_t>(shape[2]);
+  while (capacity < required) {
+    capacity = capacity > max_capacity / 2 ? max_capacity : capacity * 2;
+    EXT_ENFORCE_INVALID(capacity >= required || capacity < max_capacity,
+                        "Attention cache: capacity overflow.");
+  }
+  const size_t allocated = capacity * row_bytes;
+  Tensor storage = MakeOutputTensor(output_slot, DataType::FLOAT, shape, allocated);
+  RecordAttentionCacheCopy(allocated, 0, 0);
+  // RetainStorage rejects execution-arena memory without a self-owning lease.
+  Tensor result = std::move(storage).RetainStorage();
+  result.borrow_size_ = logical;
+  result.append_storage_ = std::make_shared<Tensor::AppendStorage>(
+      Tensor::AppendStorage{result.borrow_owner_, result.bytes(), allocated});
+  if (prefix != 0)
+    std::memcpy(result.mutable_bytes(), past.bytes(), prefix);
+  if (appended != 0)
+    std::memcpy(result.mutable_bytes() + prefix, current.bytes(), appended);
+  AccumulateAttentionCacheStatistics(
+      {.prefix_copied_bytes = prefix, .append_copied_bytes = appended});
+  return result;
 }
 
 RuntimeContext RuntimeContext::MakeFunctionContext() const {
@@ -459,6 +563,7 @@ RuntimeContext RuntimeContext::MakeFunctionContext() const {
   child.custom_kernels() = custom_kernels_;
   child.set_model_owner(model_owner_);
   child.set_cpu_executor(cpu_executor_);
+  child.attention_cache_stats_ = attention_cache_stats_;
   return child;
 }
 

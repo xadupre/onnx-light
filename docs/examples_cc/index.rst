@@ -11,6 +11,7 @@ headers via `Doxygen <https://www.doxygen.nl/>`_ and rendered by
     aidge_onnx_light_example
     check_onnx_light_model_example
     build_save_load_onnx_proto_example
+    contiguous_kv_decode_example
     export_nnef_example
     load_onnx_light_time_example
     load_onnx_time_example

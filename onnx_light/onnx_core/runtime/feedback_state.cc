@@ -137,6 +137,7 @@ FeedbackState::FeedbackState(const ModelProto &model, RuntimeValueMap initial,
     bindings_.push_back({declared.input_name(), declared.output_name(),
                          &InputType(declared.input_name(), model.graph().input())});
   }
+  attention_cache_initial_capacity_ = options.attention_cache_initial_capacity;
   session_ = std::make_unique<RuntimeSession>(model, std::move(options));
   values_ = ValidateInitial(std::move(initial));
 }
@@ -162,6 +163,18 @@ std::vector<RuntimeValue> FeedbackState::ValidateInitial(RuntimeValueMap initial
   return result;
 }
 
+RuntimeValue FeedbackState::BorrowForInvocation(const RuntimeValue &value) const {
+  if (value.kind == RuntimeValue::Kind::kTensor)
+    return RuntimeValue(value.tensor.BorrowForAppend());
+  if (value.kind != RuntimeValue::Kind::kStruct)
+    return value.BorrowView();
+  RuntimeValue result;
+  result.kind = RuntimeValue::Kind::kStruct;
+  for (const auto &[name, field] : value.fields)
+    result.fields.emplace(name, BorrowForInvocation(field));
+  return result;
+}
+
 RuntimeValueMap FeedbackState::Run(RuntimeContext &context, const RuntimeValueMap &feeds,
                                    const TaskCompletion *completion) {
   const Operation operation(busy_);
@@ -170,7 +183,7 @@ RuntimeValueMap FeedbackState::Run(RuntimeContext &context, const RuntimeValueMa
                       "FeedbackState: invocation was cancelled or completion is not pending.");
   RuntimeValueMap inputs;
   for (size_t i = 0; i < bindings_.size(); ++i)
-    inputs.emplace(bindings_[i].input, values_[i].BorrowView());
+    inputs.emplace(bindings_[i].input, BorrowForInvocation(values_[i]));
   for (const auto &[name, value] : feeds) {
     InputType(name, model_.graph().input());
     EXT_ENFORCE_INVALID(inputs.find(name) == inputs.end(),
@@ -179,6 +192,9 @@ RuntimeValueMap FeedbackState::Run(RuntimeContext &context, const RuntimeValueMa
   }
   Symbols symbols;
   RuntimeContext invocation = context.MakeFunctionContext();
+  invocation.attention_cache_stats_ = attention_cache_stats_;
+  invocation.attention_cache_initial_capacity_ = attention_cache_initial_capacity_;
+  invocation.attention_cache_graph_ = &model_.graph();
   std::unordered_set<std::string> retained_outputs;
   for (const auto &binding : bindings_)
     retained_outputs.insert(binding.output);
@@ -277,6 +293,12 @@ RuntimeValueMap FeedbackState::Values() const {
   for (size_t i = 0; i < bindings_.size(); ++i)
     snapshot.emplace(bindings_[i].input, values_[i].BorrowView());
   return snapshot;
+}
+
+AttentionCacheStatistics FeedbackState::AttentionCacheStats() const {
+  const Operation operation(busy_);
+  const std::lock_guard<std::mutex> lock(attention_cache_stats_->mutex);
+  return attention_cache_stats_->values;
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

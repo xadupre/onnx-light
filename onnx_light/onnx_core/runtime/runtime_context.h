@@ -22,6 +22,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -40,6 +41,15 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 // Forward declaration: a RuntimeContext only carries a non-owning view on the
 // CPU executor leased by the session (see onnx_core/runtime/tuning/cpu_executor.h).
 class CpuExecutor;
+
+/** Measures Attention cache construction, including dense fallback and failed invocations. */
+struct AttentionCacheStatistics {
+  uint64_t allocations = 0;
+  uint64_t allocated_bytes = 0;
+  uint64_t prefix_copied_bytes = 0;
+  uint64_t append_copied_bytes = 0;
+  uint64_t reuse_count = 0;
+};
 
 /**
  * Name-keyed map of tensors carrying both the graph inputs/initializers
@@ -647,6 +657,20 @@ public:
                                                                  AllocatorForOutput(slot));
   }
 
+  /** Returns cumulative cache counters; allocation bytes count requested capacity. */
+  AttentionCacheStatistics attention_cache_statistics() const {
+    const std::lock_guard<std::mutex> lock(attention_cache_stats_->mutex);
+    return attention_cache_stats_->values;
+  }
+  /** Accumulates cache work performed in a separate temporary computation context. */
+  void AccumulateAttentionCacheStatistics(const AttentionCacheStatistics &statistics);
+  /** Records work for every Attention cache path, including non-reusable dense layouts. */
+  void RecordAttentionCacheCopy(size_t allocated, size_t prefix, size_t appended,
+                                bool reused = false);
+  /** Appends to a certified contiguous cache, or declines unsupported/disabled layouts. */
+  std::optional<Tensor> TryAppendAttentionCache(const Tensor &past, const Tensor &current,
+                                                int output_slot);
+
   /// Allocates a temporary/workspace tensor that never crosses the runtime
   /// boundary, always routing it through :cpp:func:`execution_allocator`
   /// regardless of which allocator is currently active. This is the
@@ -973,6 +997,16 @@ public:
   }
 
 private:
+  friend class FeedbackState;
+  struct AttentionCacheCounterState {
+    std::mutex mutex;
+    AttentionCacheStatistics values;
+  };
+  std::shared_ptr<AttentionCacheCounterState> attention_cache_stats_ =
+      std::make_shared<AttentionCacheCounterState>();
+  size_t attention_cache_initial_capacity_ = 0;
+  const GraphProto *attention_cache_graph_ = nullptr;
+
   struct KernelUsageState {
     std::atomic<bool> enabled{false};
     std::mutex mutex;

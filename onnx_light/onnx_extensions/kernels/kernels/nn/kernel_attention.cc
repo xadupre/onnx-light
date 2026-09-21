@@ -21,6 +21,15 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
 
+struct CacheStatisticsForwarder {
+  RuntimeContext *destination;
+  const RuntimeContext &source;
+  ~CacheStatisticsForwarder() {
+    if (destination)
+      destination->AccumulateAttentionCacheStatistics(source.attention_cache_statistics());
+  }
+};
+
 // Validates that ``t`` is a rank-4 tensor whose element type is supported
 // by the Attention kernel (FLOAT, FLOAT16, or BFLOAT16). The caller is
 // identified by ``label`` for clearer error messages.
@@ -126,8 +135,16 @@ bool HasRecordedOutputSlot(const RuntimeContext *rt, int output_slot) {
          static_cast<size_t>(output_slot) < rt->output_slot_io_roles().size();
 }
 
-Tensor ConcatAxis2(const Tensor &a, const Tensor &b, int output_slot,
-                   RuntimeContext *rt = nullptr) {
+size_t FloatCacheBytes(const Shape &shape) {
+  const int64_t count = shape.product(0, shape.size(), "Attention cache");
+  EXT_ENFORCE_INVALID(static_cast<uint64_t>(count) <=
+                          std::numeric_limits<size_t>::max() / sizeof(float),
+                      "kernel::Attention: cache byte size overflow.");
+  return static_cast<size_t>(count) * sizeof(float);
+}
+
+Tensor ConcatAxis2(const Tensor &a, const Tensor &b, int output_slot, RuntimeContext *rt = nullptr,
+                   bool allow_capacity = true) {
   EXT_ENFORCE_INVALID(a.shape.size() == 4 && b.shape.size() == 4,
                       "kernel::Attention: concat inputs must be rank-4.");
   EXT_ENFORCE_INVALID(a.shape[0] == b.shape[0] && a.shape[1] == b.shape[1] &&
@@ -138,9 +155,25 @@ Tensor ConcatAxis2(const Tensor &a, const Tensor &b, int output_slot,
   const int64_t la = a.shape[2];
   const int64_t lb = b.shape[2];
   const int64_t d = a.shape[3];
+  EXT_ENFORCE_INVALID(la >= 0 && lb >= 0 && la <= std::numeric_limits<int64_t>::max() - lb,
+                      "kernel::Attention: cache sequence length overflow.");
   const int64_t lc = la + lb;
-  const size_t out_n_bytes = static_cast<size_t>(batch * heads * lc * d) * sizeof(float);
+  const Shape shape{batch, heads, lc, d};
+  const size_t out_n_bytes = FloatCacheBytes(shape);
+  const size_t prefix = FloatCacheBytes(a.shape);
+  const size_t appended = FloatCacheBytes(b.shape);
+  EXT_ENFORCE_INVALID(a.size_bytes() == prefix && b.size_bytes() == appended,
+                      "kernel::Attention: cache tensor byte extent mismatch.");
+  if (rt != nullptr && allow_capacity) {
+    auto result = rt->TryAppendAttentionCache(a, b, output_slot);
+    if (result)
+      return std::move(*result);
+  }
+  // Multiple dense batch/head slices change stride when the sequence grows.
+  // They must be repacked rather than treated as a contiguous append buffer.
   Tensor out = AllocateResult(rt, output_slot, DataType::FLOAT, {batch, heads, lc, d}, out_n_bytes);
+  if (rt != nullptr)
+    rt->RecordAttentionCacheCopy(out_n_bytes, prefix, appended);
   const float *pa = a.AsFloat();
   const float *pb = b.AsFloat();
   float *po = out.AsFloat();
@@ -159,6 +192,8 @@ Tensor ConcatAxis2(const Tensor &a, const Tensor &b, int output_slot,
 
 Tensor CopyOutput(const Tensor &src, int output_slot, RuntimeContext *rt) {
   Tensor out = AllocateResult(rt, output_slot, src.data_type, src.shape, src.size_bytes());
+  if (rt != nullptr)
+    rt->RecordAttentionCacheCopy(src.size_bytes(), 0, src.size_bytes());
   if (src.size_bytes() != 0) {
     std::memcpy(out.mutable_bytes(), src.bytes(), src.size_bytes());
   }
@@ -233,7 +268,7 @@ Attention::Result ComputeAttentionRank4(const Tensor &Q4, const Tensor &K4, cons
                                         const Attention::Attributes &attrs, const Tensor *attn_mask,
                                         const Tensor *past_key, const Tensor *past_value,
                                         const Tensor *nonpad_kv_seqlen, RuntimeContext *rt,
-                                        bool temporary_y = false) {
+                                        bool temporary_y = false, bool allow_capacity = true) {
   CheckRank4Float(Q4, "Q");
   CheckRank4Float(K4, "K");
   CheckRank4Float(V4, "V");
@@ -268,10 +303,10 @@ Attention::Result ComputeAttentionRank4(const Tensor &Q4, const Tensor &K4, cons
   // The upstream operator concatenates past_key/past_value with K/V along
   // the sequence axis. When neither is supplied, present == K/V.
   Tensor present_key = past_key != nullptr
-                           ? ConcatAxis2(*past_key, K4, 1, rt)
+                           ? ConcatAxis2(*past_key, K4, 1, rt, allow_capacity)
                            : (HasRecordedOutputSlot(rt, 1) ? CopyOutput(K4, 1, rt) : K4);
   Tensor present_value = past_value != nullptr
-                             ? ConcatAxis2(*past_value, V4, 2, rt)
+                             ? ConcatAxis2(*past_value, V4, 2, rt, allow_capacity)
                              : (HasRecordedOutputSlot(rt, 2) ? CopyOutput(V4, 2, rt) : V4);
   const int64_t total_kv_seq_len = present_key.shape[2];
   const int64_t past_kv_seq_len = past_key != nullptr ? past_key->shape[2] : 0;
@@ -511,7 +546,8 @@ Attention::Result ComputeAttentionRank3(const Tensor &Q, const Tensor &K, const 
   Tensor K4 = PromoteRank3(K, attrs.kv_num_heads, "K", rt);
   Tensor V4 = PromoteRank3(V, attrs.kv_num_heads, "V", rt);
   Attention::Result r = ComputeAttentionRank4(Q4, K4, V4, attrs, attn_mask, past_key, past_value,
-                                              nonpad_kv_seqlen, rt, /*temporary_y=*/true);
+                                              nonpad_kv_seqlen, rt, /*temporary_y=*/true,
+                                              /*allow_capacity=*/false);
   r.Y = CollapseToRank3(r.Y, rt);
   return r;
 }
@@ -577,6 +613,7 @@ Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const 
     RuntimeContext scratch_rt(
         rt ? rt->kernel_ctx() : ctx_,
         RuntimeContextOptions{.allocator = rt ? rt->execution_allocator() : nullptr});
+    const CacheStatisticsForwarder forwarder{rt, scratch_rt};
     RuntimeContext *compute_rt = rt ? &scratch_rt : nullptr;
     const Tensor Q_f = PromoteToFloat32(Q, compute_rt);
     const Tensor K_f = PromoteToFloat32(K, compute_rt);

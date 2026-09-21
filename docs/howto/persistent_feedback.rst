@@ -15,8 +15,9 @@ per independent request. Python initialization/reset, C++ ownership transfer,
 state forwarding and state-value access retain buffer owners without copying payloads.
 Shapes, metadata and owner handles may be copied. Kernels can allocate new
 computed results; the state layer does not duplicate those results merely
-to retain or return them. In-place KV append and capacity management are
-separate optimizations.
+to retain or return them. The CPU Attention append optimization described
+below reduces kernel allocations and prefix copies independently of this
+zero-copy state forwarding.
 
 .. warning::
 
@@ -220,3 +221,86 @@ An export to standard ONNX
 that cannot preserve this contract must be rejected, not silently strip
 the bindings. Explicit model saving serializes the declarations, not the
 current request's retained state; execution itself does not serialize them.
+
+Contiguous CPU Attention feedback
+--------------------------------
+
+Declare ``past_key <- present_key`` and ``past_value <- present_value`` using
+the ordinary graph bindings. The native CPU ``Attention`` consumer can then
+retain extra allocation capacity for subsequent appends. There is no separate
+cache identifier, state mapping or executor.
+
+The reusable layout is dense rank-four ``FLOAT`` with shape
+``[1, 1, valid_length, head_size]`` for each K/V tensor. Query tensors can
+have multiple heads (multi-query attention). The tensor's sequence dimension
+and logical byte extent describe only valid tokens, never spare capacity.
+K and V may have different head sizes.
+The Attention node must directly consume and produce the bound root-graph
+K/V inputs and outputs. Intermediate tensors, function/control-flow transport
+and unmatched input/output pairs keep ordinary kernel concatenation; they do
+not acquire append permissions merely because another graph output is retained.
+
+``RuntimeSessionOptions::attention_cache_initial_capacity`` selects the initial
+token capacity (16 by default); zero disables this optimization. Capacity
+grows geometrically when necessary. This option affects ``FeedbackState``
+execution, not ordinary stateless ``RuntimeSession`` calls. It is a native
+C++ option; the Python feedback API uses the default.
+
+Reuse is deliberately conservative:
+
+* Only internally created append buffers are eligible. An arbitrary borrowed
+  NumPy/DLPack buffer, even one with an owner token, does not grant write access.
+* Ownership is checked before creating invocation-local aliases. Keeping a
+  previous output or ``Values()`` view alive prevents reuse of that allocation.
+  The next result instead receives a fresh allocation; the old view's bytes,
+  shape and lifetime do not change.
+* An eligible append writes only the new token range. It does not move or
+  rewrite the valid prefix. The previous state's logical extent remains
+  unchanged until successful publication.
+* Capacity exhaustion allocates a larger buffer and copies the valid prefix
+  once inside the Attention kernel. State publication still only transfers
+  owner handles.
+* Multiple batches or KV heads use ordinary dense concatenation: increasing
+  the sequence dimension changes the stride between heads, so prefix-preserving
+  tail append is not possible in that layout. Half-precision promotion and
+  other unsupported reuse paths keep their ordinary computation semantics.
+
+Cancellation is a publication gate, not kernel preemption. A failed or
+cancelled invocation can have written unused tail bytes, but cannot change the
+previous state's valid prefix or length. A retry must fully write its new
+token range. Reset replaces the retained owners; close releases them. Existing
+returned views remain readable after either operation. Use independent states
+and contexts for concurrent requests; sharing retained owners disables unsafe
+reuse rather than making either request mutate the other's state.
+
+Allocation and copy accounting
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+State forwarding and Attention append have different costs. Pointer identity
+at retention, invocation and publication boundaries verifies that the state
+layer does not copy tensor payloads. Kernel append counters describe work done
+by the kernel, including work preceding a failed or cancelled publication.
+They do not include Attention score/output allocations, arithmetic workspace,
+feed construction, or half-precision conversion.
+
+``FeedbackState::AttentionCacheStats()`` returns cumulative ``allocations``,
+``allocated_bytes``, ``prefix_copied_bytes``, ``append_copied_bytes`` and
+``reuse_count``. Subtract consecutive snapshots to obtain per-token costs.
+Reset preserves these counters. ``allocated_bytes`` counts requested KV
+capacity, not physical heap allocations: an I/O arena may satisfy a request
+from its free lists. The ordinary arena metrics separately describe live and
+peak memory, including other outputs.
+
+For one new token with ``FLOAT`` K/V head sizes ``Dk`` and ``Dv``, appending
+copies ``4 * (Dk + Dv)`` bytes. Reuse within capacity allocates no new KV
+buffers and copies zero prefix bytes. Growth or an outstanding external alias
+requires a new buffer for each affected K/V tensor and copies its valid prefix.
+For ``B`` batches, ``H`` KV heads and a prefix of ``L`` tokens, the dense
+fallback allocates two result buffers and copies
+``4 * B * H * L * (Dk + Dv)`` prefix bytes, plus
+``4 * B * H * (Dk + Dv)`` append bytes per token. None of these kernel-level
+copies is a state-management copy.
+
+A runnable native example, including per-token allocation/copy measurements
+and a multi-head fallback, is provided in
+:doc:`../examples_cc/contiguous_kv_decode_example`.

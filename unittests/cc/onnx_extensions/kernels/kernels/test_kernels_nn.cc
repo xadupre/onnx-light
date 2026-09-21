@@ -14,6 +14,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <future>
 #include <limits>
 #include <stdexcept>
 #include <vector>
@@ -1339,6 +1340,63 @@ TEST(KernelClass, AttentionPastKVConcatenatesIntoPresent) {
   EXPECT_EQ(r.Y.shape, (std::vector<int64_t>{1, 1, 1, 2}));
 }
 
+TEST(KernelClass, AttentionCacheFunctionalConcatenationReportsEveryCopiedByte) {
+  RuntimeContext rt(AttentionKernelContext());
+  const Attention attention{rt.kernel_ctx()};
+  const Tensor current = Tensor::FromFloat("", {1, 1, 1, 2}, {1, 2});
+  const Tensor past = Tensor::FromFloat("", {1, 1, 2, 2}, {3, 4, 5, 6});
+  const auto result = attention(current, current, current, Attention::Attributes{}, nullptr, &past,
+                                &past, nullptr, &rt);
+  const auto stats = rt.attention_cache_statistics();
+  EXPECT_EQ(stats.allocations, 2u);
+  EXPECT_EQ(stats.allocated_bytes, 12 * sizeof(float));
+  EXPECT_EQ(stats.prefix_copied_bytes, 8 * sizeof(float));
+  EXPECT_EQ(stats.append_copied_bytes, 4 * sizeof(float));
+  EXPECT_EQ(stats.reuse_count, 0u);
+  EXPECT_NE(result.present_key.bytes(), past.bytes());
+}
+
+TEST(KernelClass, AttentionCacheRejectsLengthByteOverflowAndInvalidExtent) {
+  const Attention attention{AttentionKernelContext()};
+  const Tensor current = Tensor::FromFloat("", {1, 1, 1, 2}, {1, 2});
+  Tensor invalid = Tensor::FromFloat("", {1, 1, 0, 2}, {});
+  invalid.shape[2] = std::numeric_limits<int64_t>::max();
+  EXPECT_THROW(
+      attention(current, current, current, Attention::Attributes{}, nullptr, &invalid, &invalid),
+      std::invalid_argument);
+  invalid.shape[2] = std::numeric_limits<int64_t>::max() / 2 - 1;
+  EXPECT_THROW(
+      attention(current, current, current, Attention::Attributes{}, nullptr, &invalid, &invalid),
+      std::invalid_argument);
+  invalid.shape[2] = 1;
+  EXPECT_THROW(
+      attention(current, current, current, Attention::Attributes{}, nullptr, &invalid, &invalid),
+      std::invalid_argument);
+}
+
+TEST(KernelClass, AttentionCacheStatisticsAggregateConcurrentIndependentChildren) {
+  RuntimeContext parent(AttentionKernelContext());
+  const auto run = [&parent] {
+    RuntimeContext child = parent.MakeFunctionContext();
+    const Attention attention{child.kernel_ctx()};
+    const Tensor current = Tensor::FromFloat("", {1, 1, 1, 2}, {1, 2});
+    const Tensor past = Tensor::FromFloat("", {1, 1, 2, 2}, {3, 4, 5, 6});
+    for (int i = 0; i < 100; ++i)
+      attention(current, current, current, Attention::Attributes{}, nullptr, &past, &past, nullptr,
+                &child);
+  };
+  auto first = std::async(std::launch::async, run);
+  auto second = std::async(std::launch::async, run);
+  first.get();
+  second.get();
+  const auto stats = parent.attention_cache_statistics();
+  EXPECT_EQ(stats.allocations, 400u);
+  EXPECT_EQ(stats.allocated_bytes, 200u * 12 * sizeof(float));
+  EXPECT_EQ(stats.prefix_copied_bytes, 200u * 8 * sizeof(float));
+  EXPECT_EQ(stats.append_copied_bytes, 200u * 4 * sizeof(float));
+  EXPECT_EQ(stats.reuse_count, 0u);
+}
+
 TEST(KernelClass, AttentionQkMatmulOutputModes) {
   // (B=1, H=1, Lq=1, Lk=2, D=Dv=2). scale=2.0 makes the raw scores
   // easy to verify by hand.
@@ -1739,6 +1797,26 @@ TEST(KernelClass, AttentionHalfPrecisionMatchesFloatReference) {
     for (int64_t i = 0; i < ref.element_count(); ++i) {
       EXPECT_NEAR(got[static_cast<size_t>(i)], ref.AsFloat()[i], tol) << "i=" << i;
     }
+  }
+}
+
+TEST(KernelClass, AttentionHalfPrecisionCacheConcatenationIsMeasured) {
+  const Tensor current = Tensor::FromFloat("", {1, 1, 1, 2}, {1, 2});
+  const Tensor past = Tensor::FromFloat("", {1, 1, 2, 2}, {3, 4, 5, 6});
+  for (int32_t dtype : {core::runtime::DataType::FLOAT16, core::runtime::DataType::BFLOAT16}) {
+    RuntimeContext rt(AttentionKernelContext());
+    const Attention attention{rt.kernel_ctx()};
+    const Tensor half_current = DemoteToHalf(current, dtype);
+    const Tensor half_past = DemoteToHalf(past, dtype);
+    const auto result = attention(half_current, half_current, half_current, Attention::Attributes{},
+                                  nullptr, &half_past, &half_past, nullptr, &rt);
+    EXPECT_EQ(result.present_key.data_type, dtype);
+    const auto stats = rt.attention_cache_statistics();
+    EXPECT_EQ(stats.allocations, 2u);
+    EXPECT_EQ(stats.allocated_bytes, 12 * sizeof(float));
+    EXPECT_EQ(stats.prefix_copied_bytes, 8 * sizeof(float));
+    EXPECT_EQ(stats.append_copied_bytes, 4 * sizeof(float));
+    EXPECT_EQ(stats.reuse_count, 0u);
   }
 }
 

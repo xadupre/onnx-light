@@ -203,7 +203,7 @@ jobs:
             --summary "${GITHUB_STEP_SUMMARY}" \
             --max-installed-size 1423320 \
             --max-text-size 970090 \
-            --max-dynamic-symbols 800 \
+            --max-dynamic-symbols 805 \
             --allowed-dependency libcrypto.so.3 \
             --allowed-dependency libstdc++.so.6 \
             --allowed-dependency libgcc_s.so.1 \

@@ -6,6 +6,9 @@ runtime_value
 edges remain exclusively in ``RuntimeContext::tensors()``; ``values()`` is for
 structured/encoded edges, not a parallel tensor store.
 
+The header declares the representation and API; ``runtime_value.cc`` implements
+copying, retention and validation.
+
 The representation is independent of persistence. Encoded messages have one
 immutable shared owner from construction, not mutable inline storage plus a
 second promoted representation. ``BorrowView()`` copies numeric metadata and

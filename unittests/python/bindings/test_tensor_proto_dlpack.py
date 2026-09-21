@@ -1,9 +1,12 @@
+import copy
 import ctypes
 import gc
+import importlib.util
 import os
 import sys
 import tempfile
 import unittest
+import weakref
 
 import numpy
 
@@ -39,12 +42,28 @@ class DLManagedTensor(ctypes.Structure):
     ]
 
 
+class DLPackVersion(ctypes.Structure):
+    _fields_ = [("major", ctypes.c_uint32), ("minor", ctypes.c_uint32)]
+
+
+class DLManagedTensorVersioned(ctypes.Structure):
+    _fields_ = [
+        ("version", DLPackVersion),
+        ("manager_ctx", ctypes.c_void_p),
+        ("deleter", ctypes.c_void_p),
+        ("flags", ctypes.c_uint64),
+        ("dl_tensor", DLTensor),
+    ]
+
+
 def capsule_tensor(capsule):
     """Returns the tensor at the start of a legacy DLManagedTensor capsule."""
     get_pointer = ctypes.pythonapi.PyCapsule_GetPointer
     get_pointer.restype = ctypes.c_void_p
     get_pointer.argtypes = [ctypes.py_object, ctypes.c_char_p]
-    return ctypes.cast(get_pointer(capsule, b"dltensor"), ctypes.POINTER(DLTensor)).contents
+    tensor = ctypes.cast(get_pointer(capsule, b"dltensor"), ctypes.POINTER(DLTensor)).contents
+    tensor._capsule = capsule
+    return tensor
 
 
 class CapsuleProducer:
@@ -59,6 +78,347 @@ class CapsuleProducer:
 
 
 class TestTensorProtoDLPack(unittest.TestCase):
+    @unittest.skipUnless(sys.byteorder == "little", "Requires native little-endian storage.")
+    def test_import_numpy(self):
+        for dtype in (
+            numpy.float16,
+            numpy.float32,
+            numpy.float64,
+            numpy.int8,
+            numpy.uint8,
+            numpy.int16,
+            numpy.uint16,
+            numpy.int32,
+            numpy.uint32,
+            numpy.int64,
+            numpy.uint64,
+            numpy.complex64,
+            numpy.complex128,
+            numpy.bool_,
+        ):
+            for shape in ((), (2, 3), (0,), (2, 0, 3)):
+                with self.subTest(dtype=dtype, shape=shape):
+                    array = numpy.ones(shape, dtype=dtype)
+                    expected = from_array(array, name="weights").SerializeToString()
+                    address = array.ctypes.data
+                    source = weakref.ref(array)
+                    tensor = TensorProto.from_dlpack(array, name="weights")
+                    self.assertTrue(tensor.HasField("raw_data"))
+                    if array.size:
+                        self.assertEqual(capsule_tensor(tensor.__dlpack__()).data, address)
+                        array[...] = 0
+                        self.assertEqual(tensor.raw_data, array.tobytes())
+                        array[...] = 1
+                    del array
+                    gc.collect()
+                    self.assertIsNotNone(source())
+                    self.assertEqual(tensor.SerializeToString(), expected)
+                    del tensor
+                    gc.collect()
+                    self.assertIsNone(source())
+
+    def test_import_legacy_producer_and_copies(self):
+        original, address, released = self.make_borrowed()
+
+        class LegacyProducer:
+            def __init__(self, tensor):
+                self.tensor = tensor
+
+            def __dlpack_device__(self):
+                return (1, 0)
+
+            def __dlpack__(self, stream=None):
+                if stream is not None:
+                    raise AssertionError("CPU stream must be None.")
+                return self.tensor.release_dlpack()
+
+        tensor = TensorProto.from_dlpack(LegacyProducer(original))
+        copied = copy.copy(tensor)
+        assigned = TensorProto()
+        assigned.CopyFrom(tensor)
+        assigned.CopyFrom(assigned)
+        graph = GraphProto()
+        graph.initializer.append(tensor)
+        for item in (tensor, copied, assigned, graph.initializer[0]):
+            self.assertEqual(capsule_tensor(item.__dlpack__()).data, address)
+        del item, original, tensor, assigned, copied
+        gc.collect()
+        self.assertEqual(released, [])
+        self.assertEqual(graph.initializer[0].raw_data, bytes(range(64)))
+        del graph
+        gc.collect()
+        self.assertEqual(len(released), 1)
+
+    def test_import_readonly_singleton_and_metadata_snapshot(self):
+        array = numpy.arange(6, dtype=numpy.float32).reshape(2, 1, 3)
+        array.setflags(write=False)
+        tensor = TensorProto.from_dlpack(array)
+        self.assertEqual(capsule_tensor(tensor.__dlpack__()).data, array.ctypes.data)
+        numpy.testing.assert_array_equal(numpy.from_dlpack(tensor), array)
+
+        original, address, released = self.make_borrowed()
+        capsule = original.release_dlpack()
+        descriptor = capsule_tensor(capsule)
+        shape = (ctypes.c_int64 * 3)(2, 1, 32)
+        strides = (ctypes.c_int64 * 3)(32, 0, 1)
+        descriptor.ndim = 3
+        descriptor.shape = shape
+        descriptor.strides = strides
+        tensor = TensorProto.from_dlpack(CapsuleProducer(capsule))
+        shape[0] = 99
+        descriptor.dtype.bits = 32
+        self.assertEqual(list(tensor.dims), [2, 1, 32])
+        self.assertEqual(tensor.data_type, TensorProto.UINT8)
+        self.assertEqual(capsule_tensor(tensor.__dlpack__()).data, address)
+        del original, capsule, tensor
+        gc.collect()
+        self.assertEqual(len(released), 1)
+
+    def test_copy_from_owned_still_copies(self):
+        tensor = from_array(numpy.arange(8, dtype=numpy.uint8))
+        copied = TensorProto()
+        copied.CopyFrom(tensor)
+        self.assertNotEqual(
+            capsule_tensor(tensor.__dlpack__()).data, capsule_tensor(copied.__dlpack__()).data
+        )
+        self.assertEqual(tensor.SerializeToString(), copied.SerializeToString())
+        tensor.Clear()
+        self.assertEqual(copied.raw_data, bytes(range(8)))
+
+    def test_copy_empty_and_ownerless(self):
+        for payload in (b"", bytes(range(8))):
+            for borrowed in (False, True):
+                with self.subTest(payload=payload, borrowed=borrowed):
+                    tensor = TensorProto(
+                        data_type=TensorProto.UINT8, dims=[len(payload)], raw_data=payload
+                    )
+                    serialized = tensor.SerializeToString()
+                    if borrowed:
+                        options = ParseOptions()
+                        options.no_copy = True
+                        tensor = TensorProto()
+                        tensor.ParseFromString(serialized, options)
+                    copied = copy.copy(tensor)
+                    assigned = TensorProto()
+                    assigned.CopyFrom(tensor)
+                    for item in (copied, assigned):
+                        if payload:
+                            self.assertNotEqual(
+                                capsule_tensor(item.__dlpack__()).data,
+                                capsule_tensor(tensor.__dlpack__()).data,
+                            )
+                        self.assertTrue(item.HasField("raw_data"))
+                    del tensor, serialized
+                    gc.collect()
+                    self.assertEqual(copied.raw_data, payload)
+                    self.assertEqual(assigned.raw_data, payload)
+
+    def test_import_builder_model_lifetime(self):
+        from onnx_light.onnx_core.graph_builder import GraphBuilder
+
+        for move in (False, True):
+            with self.subTest(move=move):
+                original, address, released = self.make_borrowed()
+                tensor = TensorProto.from_dlpack(original, name="weight")
+                builder = GraphBuilder("dlpack")
+                if move:
+                    builder.make_initializer_move(tensor)
+                    self.assertFalse(tensor.HasField("raw_data"))
+                else:
+                    builder.make_initializer(tensor)
+                model = builder.to_onnx()
+                self.assertEqual(
+                    capsule_tensor(model.graph.initializer[0].__dlpack__()).data, address
+                )
+                del original, tensor, builder
+                gc.collect()
+                self.assertEqual(released, [])
+                serialized = model.SerializeToString()
+                restored = ModelProto()
+                restored.ParseFromString(serialized)
+                self.assertEqual(restored.graph.initializer[0].raw_data, bytes(range(64)))
+                del model
+                gc.collect()
+                self.assertEqual(len(released), 1)
+
+    def test_import_numpy_rejections(self):
+        array = numpy.arange(12, dtype=numpy.float32).reshape(3, 4)
+        for invalid in (
+            array.T,
+            array[:, ::2],
+            array[::-1],
+            numpy.broadcast_to(array, (2, 3, 4)),
+        ):
+            with (
+                self.subTest(strides=invalid.strides),
+                self.assertRaisesRegex(BufferError, "compact"),
+            ):
+                TensorProto.from_dlpack(invalid)
+        for invalid in (array.astype(">f4"), numpy.array(["abc"]), numpy.array([object()])):
+            with self.subTest(dtype=invalid.dtype), self.assertRaises((BufferError, TypeError)):
+                TensorProto.from_dlpack(invalid)
+        with self.assertRaises(TypeError):
+            TensorProto.from_dlpack(object())
+
+    @unittest.skipUnless(importlib.util.find_spec("torch"), "Requires PyTorch.")
+    def test_import_torch(self):
+        import torch
+
+        array = torch.arange(12, dtype=torch.float32).reshape(3, 4)
+        address = array.data_ptr()
+        tensor = TensorProto.from_dlpack(array)
+        del array
+        gc.collect()
+        self.assertEqual(capsule_tensor(tensor.__dlpack__()).data, address)
+        numpy.testing.assert_array_equal(
+            numpy.from_dlpack(tensor), numpy.arange(12, dtype=numpy.float32).reshape(3, 4)
+        )
+
+    def test_import_native_release_without_gil(self):
+        original, _, released = self.make_borrowed()
+        tensor = TensorProto.from_dlpack(CapsuleProducer(original.release_dlpack()))
+        capsule = tensor.release_dlpack()
+        del original, tensor
+        self.assertEqual(released, [])
+        get_pointer = ctypes.pythonapi.PyCapsule_GetPointer
+        get_pointer.restype = ctypes.c_void_p
+        get_pointer.argtypes = [ctypes.py_object, ctypes.c_char_p]
+        pointer = get_pointer(capsule, b"dltensor")
+        descriptor = ctypes.cast(pointer, ctypes.POINTER(DLManagedTensor)).contents
+        set_name = ctypes.pythonapi.PyCapsule_SetName
+        set_name.restype = ctypes.c_int
+        set_name.argtypes = [ctypes.py_object, ctypes.c_char_p]
+        self.assertEqual(set_name(capsule, b"used_dltensor"), 0)
+        ctypes.CFUNCTYPE(None, ctypes.c_void_p)(descriptor.deleter)(pointer)
+        self.assertEqual(len(released), 1)
+        del capsule
+        gc.collect()
+        self.assertEqual(len(released), 1)
+
+    def test_import_protocol_errors(self):
+        class DeviceProducer:
+            def __dlpack_device__(self):
+                return (2, 0)
+
+            def __dlpack__(self, **kwargs):
+                raise AssertionError("Must reject device before exporting.")
+
+        with self.assertRaisesRegex(BufferError, "CPU"):
+            TensorProto.from_dlpack(DeviceProducer())
+
+        class AsyncProducer(DeviceProducer):
+            def __dlpack_device__(self):
+                return (1, 0)
+
+            def __dlpack__(self, *, stream, max_version, copy):
+                if stream is None:
+                    raise BufferError("requires asynchronous synchronization")
+                raise AssertionError("Only stream=None is supported.")
+
+        with self.assertRaisesRegex(BufferError, "asynchronous"):
+            TensorProto.from_dlpack(AsyncProducer())
+
+        class BrokenProducer(AsyncProducer):
+            def __dlpack__(self, **kwargs):
+                raise TypeError("producer failure")
+
+        with self.assertRaisesRegex(TypeError, "producer failure"):
+            TensorProto.from_dlpack(BrokenProducer())
+        with self.assertRaisesRegex(ValueError, "unconsumed"):
+            TensorProto.from_dlpack(CapsuleProducer(None))
+
+    def test_import_capsule_validation_and_cleanup(self):
+        cases = [
+            ("device", lambda t: setattr(t.device, "device_type", 2), BufferError),
+            ("device_id", lambda t: setattr(t.device, "device_id", 1), BufferError),
+            ("dtype", lambda t: setattr(t.dtype, "code", 3), ValueError),
+            ("lanes", lambda t: setattr(t.dtype, "lanes", 2), ValueError),
+            ("subbyte", lambda t: setattr(t.dtype, "bits", 4), ValueError),
+            ("rank", lambda t: setattr(t, "ndim", -1), ValueError),
+            ("rank_limit", lambda t: setattr(t, "ndim", 129), ValueError),
+            ("shape", lambda t: setattr(t, "shape", None), ValueError),
+            ("negative_dim", lambda t: t.shape.__setitem__(0, -1), ValueError),
+            ("overflow", lambda t: t.shape.__setitem__(0, 2**63 - 1), ValueError),
+            ("null_data", lambda t: setattr(t, "data", None), BufferError),
+            ("offset", lambda t: setattr(t, "byte_offset", 1), BufferError),
+            ("offset_overflow", lambda t: setattr(t, "byte_offset", 2**64 - 1), BufferError),
+            ("alignment", lambda t: setattr(t, "data", t.data + 1), BufferError),
+        ]
+        for label, mutate, exception in cases:
+            with self.subTest(label=label):
+                original, _, released = self.make_borrowed(TensorProto.FLOAT, alignment=4)
+                capsule = original.release_dlpack()
+                mutate(capsule_tensor(capsule))
+                with self.assertRaises(exception):
+                    TensorProto.from_dlpack(CapsuleProducer(capsule))
+                self.assertEqual(len(released), 1)
+                with self.assertRaisesRegex(ValueError, "unconsumed"):
+                    TensorProto.from_dlpack(CapsuleProducer(capsule))
+                del capsule, original
+                gc.collect()
+                self.assertEqual(len(released), 1)
+
+    def test_import_byte_offset_and_empty_null(self):
+        for empty in (False, True):
+            with self.subTest(empty=empty):
+                original, address, released = self.make_borrowed()
+                capsule = original.release_dlpack()
+                descriptor = capsule_tensor(capsule)
+                descriptor.shape[0] = 0 if empty else 60
+                descriptor.byte_offset = 0 if empty else 4
+                if empty:
+                    descriptor.data = None
+                tensor = TensorProto.from_dlpack(CapsuleProducer(capsule))
+                self.assertTrue(tensor.HasField("raw_data"))
+                self.assertEqual(tensor.raw_data, b"" if empty else bytes(range(4, 64)))
+                if not empty:
+                    self.assertEqual(capsule_tensor(tensor.__dlpack__()).data, address + 4)
+                del capsule, original
+                self.assertEqual(released, [])
+                del tensor
+                gc.collect()
+                self.assertEqual(len(released), 1)
+
+    def test_import_versioned_capsules(self):
+        for major, flags in ((1, 0), (1, 1), (2, 0), (1, 2), (1, 4), (1, 8)):
+            with self.subTest(major=major, flags=flags):
+                original, address, released = self.make_borrowed()
+                legacy = original.release_dlpack()
+                descriptor = DLManagedTensorVersioned()
+                descriptor.version = DLPackVersion(major, 0)
+                descriptor.flags = flags
+                descriptor.dl_tensor = capsule_tensor(legacy)
+                calls = []
+
+                @ctypes.CFUNCTYPE(None, ctypes.c_void_p)
+                def release(pointer):
+                    calls.append(pointer)
+                    # The fixture keeps the descriptor alive; the native owner holds the payload.
+                    legacy_owner.clear()
+
+                legacy_owner = [legacy]
+                descriptor.deleter = ctypes.cast(release, ctypes.c_void_p)
+                new_capsule = ctypes.pythonapi.PyCapsule_New
+                new_capsule.restype = ctypes.py_object
+                new_capsule.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
+                capsule = new_capsule(ctypes.addressof(descriptor), b"dltensor_versioned", None)
+                del legacy, original
+                if major == 1 and flags in (0, 1):
+                    tensor = TensorProto.from_dlpack(CapsuleProducer(capsule))
+                    self.assertEqual(capsule_tensor(tensor.__dlpack__()).data, address)
+                    self.assertEqual(calls, [])
+                    del tensor
+                else:
+                    with self.assertRaises(BufferError):
+                        TensorProto.from_dlpack(CapsuleProducer(capsule))
+                self.assertEqual(calls, [ctypes.addressof(descriptor)])
+                self.assertEqual(len(released), 1)
+                with self.assertRaisesRegex(ValueError, "unconsumed"):
+                    TensorProto.from_dlpack(CapsuleProducer(capsule))
+                del capsule
+                gc.collect()
+                self.assertEqual(len(calls), 1)
+
     def test_release_owned_and_aligned(self):
         expected = numpy.arange(6, dtype=numpy.uint8).reshape(2, 3)
         for alignment in (0, 64):
@@ -366,7 +726,7 @@ class TestTensorProtoDLPack(unittest.TestCase):
     def test_borrowed_pointer_copies_and_release(self):
         tensor, address, released = self.make_borrowed()
         # Indexed assignment uses the C++ copy constructor, preserving the token.
-        # CopyFrom/append round-trip through serialization and own new bytes.
+        # TensorProto.CopyFrom and append also preserve borrowed owner tokens.
         graph = GraphProto()
         graph.initializer.add()
         graph.initializer[0] = tensor

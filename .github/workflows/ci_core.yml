@@ -194,15 +194,16 @@ jobs:
       - name: Report installed lib_onnx_proto size
         # Includes the native ORT codec allowance documented in
         # docs/design/proto/ort_flatbuffer_format.rst.
-        # The out-of-line DLPack export guard adds one public symbol; byte
-        # budgets are unchanged (see docs/api/protos/tensor_proto.rst).
+        # DLPack export adds one public symbol, while owner-preserving DLPack
+        # import increases the CopyFrom implementation's text allowance
+        # (see docs/api/protos/tensor_proto.rst).
         run: |
           proto_dir="$(python -c 'import importlib.util, pathlib; print(pathlib.Path(importlib.util.find_spec("onnx_light.onnx_py._onnxpyprotoop").origin).parent)')"
           python .github/scripts/report_proto_binary_size.py \
             "${proto_dir}" \
             --summary "${GITHUB_STEP_SUMMARY}" \
             --max-installed-size 1390552 \
-            --max-text-size 953706 \
+            --max-text-size 956634 \
             --max-dynamic-symbols 793 \
             --allowed-dependency libcrypto.so.3 \
             --allowed-dependency libstdc++.so.6 \

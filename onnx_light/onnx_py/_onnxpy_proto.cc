@@ -32,6 +32,136 @@ using namespace ONNX_LIGHT_NAMESPACE;
 namespace {
 constexpr size_t MAX_SHORT_REPR_LENGTH = 60;
 
+struct ImportedDLPackOwner {
+  void *managed = nullptr;
+  bool versioned = false;
+
+  ~ImportedDLPackOwner() {
+    if (!managed)
+      return;
+    nb::gil_scoped_acquire gil;
+    if (versioned) {
+      auto *tensor = static_cast<DLManagedTensorVersioned *>(managed);
+      if (tensor->deleter)
+        tensor->deleter(tensor);
+    } else {
+      auto *tensor = static_cast<DLManagedTensor *>(managed);
+      if (tensor->deleter)
+        tensor->deleter(tensor);
+    }
+  }
+};
+
+TensorProto TensorProtoFromDLPack(nb::object array, const std::string &name) {
+  if (!nb::hasattr(array, "__dlpack__") || !nb::hasattr(array, "__dlpack_device__"))
+    throw nb::type_error("TensorProto.from_dlpack requires the DLPack array protocol.");
+  const auto device = nb::cast<std::pair<int, int>>(array.attr("__dlpack_device__")());
+  if (device != std::make_pair(1, 0))
+    throw nb::buffer_error("TensorProto.from_dlpack supports only CPU device (1, 0).");
+  nb::object capsule;
+  try {
+    capsule = array.attr("__dlpack__")(nb::arg("stream") = nb::none(),
+                                       nb::arg("max_version") = nb::make_tuple(1, 0),
+                                       nb::arg("copy") = false);
+  } catch (const nb::python_error &error) {
+    // Older producers do not accept the version/copy negotiation keywords.
+    if (!error.matches(PyExc_TypeError) ||
+        !std::strstr(error.what(), "unexpected keyword argument") ||
+        (!std::strstr(error.what(), "'max_version'") && !std::strstr(error.what(), "'copy'")))
+      throw;
+    capsule = array.attr("__dlpack__")(nb::arg("stream") = nb::none());
+  }
+  const bool versioned = PyCapsule_IsValid(capsule.ptr(), "dltensor_versioned");
+  if (!versioned && !PyCapsule_IsValid(capsule.ptr(), "dltensor"))
+    throw nb::value_error("TensorProto.from_dlpack requires an unconsumed DLPack capsule.");
+  auto owner = std::make_shared<ImportedDLPackOwner>();
+  void *managed =
+      PyCapsule_GetPointer(capsule.ptr(), versioned ? "dltensor_versioned" : "dltensor");
+  if (PyCapsule_SetName(capsule.ptr(), versioned ? "used_dltensor_versioned" : "used_dltensor") < 0)
+    throw nb::python_error();
+  owner->managed = managed;
+  owner->versioned = versioned;
+  const DLTensor *source;
+  if (versioned) {
+    const auto *tensor = static_cast<DLManagedTensorVersioned *>(managed);
+    if (tensor->version.major != 1)
+      throw nb::buffer_error("TensorProto.from_dlpack: unsupported DLPack major version.");
+    if (tensor->flags & ~uint64_t(DLPACK_FLAG_BITMASK_READ_ONLY))
+      throw nb::buffer_error("TensorProto.from_dlpack: copied storage or unsupported flags.");
+    source = &tensor->dl_tensor;
+  } else {
+    source = &static_cast<DLManagedTensor *>(managed)->dl_tensor;
+  }
+  if (source->device.device_type != kDLCPU || source->device.device_id != 0)
+    throw nb::buffer_error("TensorProto.from_dlpack: exported device must be CPU (1, 0).");
+  if (source->ndim < 0 || source->ndim > 128 || (source->ndim && !source->shape))
+    throw nb::value_error("TensorProto.from_dlpack: invalid rank or missing shape.");
+
+  TensorProto result;
+  result.set_name(name);
+  for (const auto type :
+       {TensorProto::FLOAT,          TensorProto::DOUBLE,         TensorProto::FLOAT16,
+        TensorProto::BFLOAT16,       TensorProto::UINT8,          TensorProto::INT8,
+        TensorProto::UINT16,         TensorProto::INT16,          TensorProto::UINT32,
+        TensorProto::INT32,          TensorProto::UINT64,         TensorProto::INT64,
+        TensorProto::BOOL,           TensorProto::COMPLEX64,      TensorProto::COMPLEX128,
+        TensorProto::FLOAT8E4M3FN,   TensorProto::FLOAT8E4M3FNUZ, TensorProto::FLOAT8E5M2,
+        TensorProto::FLOAT8E5M2FNUZ, TensorProto::FLOAT8E8M0}) {
+    const auto dtype = DLPackDataTypeFromOnnx(type);
+    if (source->dtype.code == dtype.code && source->dtype.bits == dtype.bits &&
+        source->dtype.lanes == dtype.lanes) {
+      result.set_data_type(type);
+      break;
+    }
+  }
+  if (result.data_type() == TensorProto::UNDEFINED)
+    throw nb::value_error("TensorProto.from_dlpack: unsupported dtype or lanes.");
+  const uint64_t limit =
+      std::min<uint64_t>(std::numeric_limits<size_t>::max(), std::numeric_limits<int64_t>::max());
+  uint64_t elements = 1;
+  bool empty = false;
+  for (int32_t i = 0; i < source->ndim; ++i) {
+    const int64_t dim = source->shape[i];
+    if (dim < 0)
+      throw nb::value_error("TensorProto.from_dlpack: dimensions must be non-negative.");
+    const uint64_t extent = std::max<int64_t>(dim, 1);
+    if (extent > limit / elements)
+      throw nb::value_error("TensorProto.from_dlpack: shape or strides overflow.");
+    elements *= extent;
+    empty |= dim == 0;
+    result.add_dims(dim);
+  }
+  if (source->strides && !empty) {
+    int64_t stride = 1;
+    for (int32_t i = source->ndim; i-- > 0;) {
+      if (source->shape[i] > 1 && source->strides[i] != stride)
+        throw nb::buffer_error("TensorProto.from_dlpack requires compact row-major strides.");
+      stride *= source->shape[i];
+    }
+  }
+  const size_t itemsize = source->dtype.bits / 8;
+  if (elements > limit / itemsize)
+    throw nb::value_error("TensorProto.from_dlpack: payload byte count overflows.");
+  const size_t size = empty ? 0 : static_cast<size_t>(elements * itemsize);
+  const uintptr_t base = reinterpret_cast<uintptr_t>(source->data);
+  if ((!base && (size || source->byte_offset)) ||
+      source->byte_offset > std::numeric_limits<uintptr_t>::max() - base ||
+      size > std::numeric_limits<uintptr_t>::max() - (base + source->byte_offset) ||
+      source->byte_offset % itemsize)
+    throw nb::buffer_error("TensorProto.from_dlpack: invalid data pointer or byte offset.");
+  // ByteSpan uses a null pointer to mark absence; an empty tensor still retains its owner.
+  static const uint8_t empty_data = 0;
+  const auto *data =
+      size ? reinterpret_cast<const uint8_t *>(base + source->byte_offset) : &empty_data;
+  result.ref_raw_data().assign_borrowed(data, size, std::move(owner));
+  try {
+    ValidateDLPack(result);
+  } catch (const DLPackBufferError &error) {
+    throw nb::buffer_error(error.what());
+  }
+  return result;
+}
+
 struct TensorProtoDLPackOwner {
   nb::object proto;
   std::shared_ptr<void> buffer;
@@ -2147,6 +2277,18 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
             memcpy(self.raw_data_.data(), ptr, raw.size());
           },
           TensorProto::DOC_raw_data)
+      .def_static("from_dlpack", &TensorProtoFromDLPack, nb::arg("array"), nb::arg("name") = "",
+                  "Constructs a zero-copy tensor from a compact, native-endian CPU DLPack array. "
+                  "Borrows read-only raw_data and retains the producer's managed allocation. "
+                  "Uses stream=None; asynchronous synchronization and copying are unsupported.")
+      .def(
+          "__copy__",
+          [](const TensorProto &self) {
+            TensorProto result;
+            result.CopyFrom(self);
+            return result;
+          },
+          "Copies tensor metadata and shares managed borrowed raw_data; copies other payloads.")
       .def(
           "__dlpack__",
           [](nb::handle self, nb::object stream, std::optional<std::pair<int, int>> /*max_version*/,

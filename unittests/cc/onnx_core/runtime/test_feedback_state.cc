@@ -878,7 +878,7 @@ TEST(FeedbackState, OrdinarySessionInitializersOutliveTheirSourceGraph) {
 
 TEST(FeedbackState, ModelOwnerDoesNotReplaceBorrowedInitializerBackingOwner) {
   for (bool retained_backing : {false, true}) {
-    auto data = std::make_shared<std::vector<float>>(1, 4);
+    auto data = std::make_shared<std::vector<float>>(1, 4.0f);
     std::weak_ptr<std::vector<float>> backing_lifetime = data;
     const auto *payload = reinterpret_cast<const uint8_t *>(data->data());
     auto model = std::make_shared<ModelProto>(Model());

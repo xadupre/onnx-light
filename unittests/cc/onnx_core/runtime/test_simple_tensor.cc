@@ -97,7 +97,7 @@ TEST(SimpleTensorSharing, IOLeaseSurvivesArenaAndRejectsUnleasedExecutionStorage
 }
 
 TEST(SimpleTensorSharing, ReplacingBorrowWithAllocationReplacesItsLifetimeOwner) {
-  auto data = std::make_shared<std::vector<float>>(1, 3);
+  auto data = std::make_shared<std::vector<float>>(1, 3.0f);
   std::weak_ptr<std::vector<float>> old_owner = data;
   Tensor value =
       Tensor::Borrow("", DataType::FLOAT, {1}, reinterpret_cast<const uint8_t *>(data->data()),

@@ -2277,6 +2277,25 @@ Mirrors :func:`onnx.external_data_helper.load_external_data_for_model`.
             memcpy(self.raw_data_.data(), ptr, raw.size());
           },
           TensorProto::DOC_raw_data)
+      .def(
+          "_set_raw_data_from_buffer",
+          [](TensorProto &self, nb::handle array) {
+            auto buffer = std::shared_ptr<Py_buffer>(new Py_buffer{}, [](Py_buffer *buffer) {
+              nb::gil_scoped_acquire gil;
+              PyBuffer_Release(buffer);
+              delete buffer;
+            });
+            if (PyObject_GetBuffer(array.ptr(), buffer.get(), PyBUF_CONTIG_RO) < 0)
+              throw nb::python_error();
+            // ByteSpan uses nullptr for absence, including for zero-length payloads.
+            static const uint8_t empty_data = 0;
+            const auto *data =
+                buffer->buf ? static_cast<const uint8_t *>(buffer->buf) : &empty_data;
+            const size_t size = static_cast<size_t>(buffer->len);
+            self.set_raw_data_with_deleter(data, size, [buffer = std::move(buffer)]() {});
+          },
+          nb::arg("array"),
+          "Borrows a contiguous buffer as raw_data and retains its exporter until final release.")
       .def_static("from_dlpack", &TensorProtoFromDLPack, nb::arg("array"), nb::arg("name") = "",
                   "Constructs a zero-copy tensor from a compact, native-endian CPU DLPack array. "
                   "Borrows read-only raw_data and retains the producer's managed allocation. "

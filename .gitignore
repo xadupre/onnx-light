@@ -32,6 +32,7 @@ sdist/
 var/
 wheels/
 share/python-wheels/
+/share/licenses/
 *.egg-info/
 .installed.cfg
 *.egg

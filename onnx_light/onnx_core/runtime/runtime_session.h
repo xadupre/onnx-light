@@ -441,7 +441,7 @@ private:
   const ExecutionPlan &plan_;
   std::unique_ptr<PreparedExecutionState> prepared_execution_state_;
   std::vector<PreparedKernel> kernels_;
-  std::vector<Tensor> initializers_;
+  std::vector<std::shared_ptr<Tensor>> initializers_;
   const GraphProto *initializer_graph_ = nullptr;
   std::unordered_set<std::string> immutable_initializer_names_;
   /// One immutable registry generation shared by every kernel in this session.

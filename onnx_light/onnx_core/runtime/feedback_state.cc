@@ -116,7 +116,7 @@ private:
 
 } // namespace
 
-FeedbackState::FeedbackState(const ModelProto &model, const RuntimeValueMap &initial,
+FeedbackState::FeedbackState(const ModelProto &model, RuntimeValueMap initial,
                              RuntimeSessionOptions options, std::shared_ptr<void> model_owner)
     : model_(model),
       model_owner_(model_owner.use_count() != 0
@@ -139,15 +139,15 @@ FeedbackState::FeedbackState(const ModelProto &model, const RuntimeValueMap &ini
   }
   session_ = std::make_unique<RuntimeSession>(model, std::move(options),
                                               RuntimeSession::InitializerMode::kBorrowed);
-  values_ = ValidateInitial(initial);
+  values_ = ValidateInitial(std::move(initial));
 }
 
-FeedbackState::FeedbackState(std::shared_ptr<const ModelProto> model,
-                             const RuntimeValueMap &initial, RuntimeSessionOptions options)
-    : FeedbackState(RequireModel(model), initial, std::move(options),
+FeedbackState::FeedbackState(std::shared_ptr<const ModelProto> model, RuntimeValueMap initial,
+                             RuntimeSessionOptions options)
+    : FeedbackState(RequireModel(model), std::move(initial), std::move(options),
                     std::shared_ptr<void>(model, const_cast<ModelProto *>(model.get()))) {}
 
-std::vector<RuntimeValue> FeedbackState::ValidateInitial(const RuntimeValueMap &initial) const {
+std::vector<RuntimeValue> FeedbackState::ValidateInitial(RuntimeValueMap initial) const {
   std::vector<RuntimeValue> result;
   result.reserve(bindings_.size());
   Symbols symbols;
@@ -156,7 +156,7 @@ std::vector<RuntimeValue> FeedbackState::ValidateInitial(const RuntimeValueMap &
     EXT_ENFORCE_INVALID(it != initial.end(), "FeedbackState: missing initial whole input '",
                         binding.input, "'.");
     Validate(it->second, *binding.input_type, catalogue_, symbols);
-    result.push_back(it->second.Share());
+    result.push_back(std::move(it->second).Retain());
   }
   EXT_ENFORCE_INVALID(initial.size() == bindings_.size(),
                       "FeedbackState: initial values must name exactly the retained whole inputs.");
@@ -171,16 +171,19 @@ RuntimeValueMap FeedbackState::Run(RuntimeContext &context, const RuntimeValueMa
                       "FeedbackState: invocation was cancelled or completion is not pending.");
   RuntimeValueMap inputs;
   for (size_t i = 0; i < bindings_.size(); ++i)
-    inputs.emplace(bindings_[i].input, values_[i].Share());
+    inputs.emplace(bindings_[i].input, values_[i].BorrowView());
   for (const auto &[name, value] : feeds) {
     InputType(name, model_.graph().input());
     EXT_ENFORCE_INVALID(inputs.find(name) == inputs.end(),
                         "FeedbackState: current feed cannot override retained input '", name, "'.");
-    inputs.emplace(name, value.Share());
+    inputs.emplace(name, value.BorrowView());
   }
   Symbols symbols;
   RuntimeContext invocation = context.MakeFunctionContext();
-  invocation.set_preserve_value_ownership(true);
+  std::unordered_set<std::string> retained_outputs;
+  for (const auto &binding : bindings_)
+    retained_outputs.insert(binding.output);
+  invocation.set_retained_outputs(std::move(retained_outputs));
   invocation.set_model_owner(model_owner_);
   RegisterModelFunctions(model_, invocation);
   for (const auto &input : model_.graph().input()) {
@@ -195,7 +198,7 @@ RuntimeValueMap FeedbackState::Run(RuntimeContext &context, const RuntimeValueMa
     }
     Validate(it->second, input.type(), catalogue_, symbols);
     if (it->second.kind == RuntimeValue::Kind::kTensor)
-      invocation.Put(input.name(), std::move(it->second.tensor));
+      invocation.Put(input.name(), std::move(it->second.tensor), RuntimeEventKind::kInput);
     else
       invocation.values().emplace(input.name(), std::move(it->second));
   }
@@ -227,9 +230,10 @@ RuntimeValueMap FeedbackState::Run(RuntimeContext &context, const RuntimeValueMa
   next.reserve(bindings_.size());
   Symbols next_symbols;
   for (const auto &binding : bindings_) {
-    const RuntimeValue &value = outputs.at(binding.output);
+    RuntimeValue &value = outputs.at(binding.output);
     Validate(value, *binding.input_type, catalogue_, next_symbols);
-    next.push_back(value.Share());
+    value = std::move(value).Retain();
+    next.push_back(value.BorrowView());
   }
   if (completion != nullptr) {
     EXT_ENFORCE_INVALID(completion->status() == TaskStatus::kPending,
@@ -242,10 +246,10 @@ RuntimeValueMap FeedbackState::Run(RuntimeContext &context, const RuntimeValueMa
   return outputs;
 }
 
-void FeedbackState::Reset(const RuntimeValueMap &initial) {
+void FeedbackState::Reset(RuntimeValueMap initial) {
   const Operation operation(busy_);
   EXT_ENFORCE_INVALID(session_ != nullptr, "FeedbackState: state is closed.");
-  auto next = ValidateInitial(initial);
+  auto next = ValidateInitial(std::move(initial));
   values_.swap(next);
 }
 
@@ -272,7 +276,7 @@ RuntimeValueMap FeedbackState::Values() const {
   EXT_ENFORCE_INVALID(session_ != nullptr, "FeedbackState: state is closed.");
   RuntimeValueMap snapshot;
   for (size_t i = 0; i < bindings_.size(); ++i)
-    snapshot.emplace(bindings_[i].input, values_[i].Share());
+    snapshot.emplace(bindings_[i].input, values_[i].BorrowView());
   return snapshot;
 }
 

@@ -438,15 +438,19 @@ RuntimeValue FeedbackValueFromPython(const std::string &name, nb::handle value, 
     return RuntimeValue(std::move(fields));
   }
   if (nb::isinstance<EncodedValueProto>(value)) {
-    RuntimeValue result;
-    result.kind = RuntimeValue::Kind::kEncoded;
-    result.encoded_owner = std::shared_ptr<EncodedValueProto>(
-        RetainFeedbackOwner(value), &nb::cast<EncodedValueProto &>(value));
-    return result;
+    return RuntimeValue::FromEncodedView(nb::cast<const EncodedValueProto &>(value),
+                                         RetainFeedbackOwner(value));
   }
   if (nb::isinstance<Tensor>(value)) {
-    auto tensor = nb::cast<Tensor &>(value).ShareStorage();
-    tensor.name = name;
+    const Tensor &source = nb::cast<const Tensor &>(value);
+    auto owner = source.has_allocation() ? std::shared_ptr<void>{}
+                 : source.is_borrowed()  ? source.borrowed_owner()
+                                         : RetainFeedbackOwner(value);
+    Tensor tensor =
+        source.data_type == TensorProto::STRING
+            ? Tensor::BorrowStrings(name, source.shape, source.AsStrings(), std::move(owner))
+            : Tensor::Borrow(name, source.data_type, source.shape, source.bytes(),
+                             source.size_bytes(), std::move(owner));
     return RuntimeValue(std::move(tensor));
   }
   return RuntimeValue(FeedbackTensorFromArray(name, value));
@@ -465,8 +469,6 @@ nb::object FeedbackValueToPython(RuntimeValue value) {
   if (value.kind == RuntimeValue::Kind::kTensor)
     return nb::cast(std::move(value.tensor));
   if (value.kind == RuntimeValue::Kind::kEncoded) {
-    if (value.encoded_owner)
-      return nb::cast(std::move(value.encoded_owner));
     return nb::cast(std::move(value.encoded));
   }
   nb::dict fields;
@@ -2053,10 +2055,14 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "get_value",
           [](RuntimeContext &rt, const std::string &name) {
             if (rt.Has(name))
-              return FeedbackValueToPython(RuntimeValue(rt.Get(name).ShareStorage()));
-            return FeedbackValueToPython(rt.values().at(name).Share());
+              return FeedbackValueToPython(RuntimeValue(
+                  rt.Get(name).borrowed_owner().use_count() != 0 ? rt.Get(name).BorrowView()
+                                                                 : rt.Get(name).ToOwned()));
+            return FeedbackValueToPython(rt.values().at(name));
           },
-          nb::arg("name"), "Returns a shared read-only tensor, struct or encoded value.")
+          nb::arg("name"),
+          "Returns a read-only value, sharing existing owners or copying "
+          "unretained tensor storage without modifying its source.")
       .def(
           "put_value",
           [](RuntimeContext &rt, const std::string &name, nb::handle value) {

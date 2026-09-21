@@ -11,8 +11,8 @@ session and allocator infrastructure, not a separate executor.
 
 The native :cpp:class:`onnx_light::core::runtime::FeedbackState` uses the
 existing runtime execution and value ownership contracts. Create one state
-per independent request. Initialization, reset, state forwarding and
-state-value access retain buffer owners without copying payloads.
+per independent request. Python initialization/reset, C++ ownership transfer,
+state forwarding and state-value access retain buffer owners without copying payloads.
 Shapes, metadata and owner handles may be copied. Kernels can allocate new
 computed results; the state layer does not duplicate those results merely
 to retain or return them. In-place KV append and capacity management are
@@ -80,17 +80,22 @@ caller before DLPack export; ``detach()`` shares storage.
 Outputs and ``state.values`` contain tensors with retained storage owners.
 They remain valid after callers drop their input references, after another
 run, or after reset/close. Unsupported ownerless output storage is rejected
-rather than silently copied; an allocator cannot recycle a live retained
+rather than silently copied for a selected output; an allocator cannot recycle a live retained
 allocation.
 The binding keeps the model alive. The supplied context configures allocators
 and custom kernels; each call executes in a fresh child context, rather than
 leaving old feeds or intermediate values in the caller's context.
 The binding also retains supplied contexts so cached kernel allocator
 references remain valid. Reuse the same context for a state's calls.
-Initializer storage must already be raw bytes or native float, double, int32,
-int64 or uint64 typed fields. Other numeric initializer types require raw
-storage; string initializers are unsupported in this mode. String inputs and
-retained string outputs are supported.
+Initializers use model-backed views when their representation is directly
+readable; other numeric representations and strings use normal conversion.
+String inputs and retained string outputs use the existing borrowed-string
+view API, so kernels must read them through ``AsStrings()``.
+
+Persistence applies only to the declared whole outputs, not the entire context.
+Nonpersistent outputs keep normal allocator and materialization behavior.
+There is no alternate kernel dispatcher: for example, tensor ``Identity`` still
+computes an ordinary output rather than promising to alias its input.
 
 The corresponding C++ entry points are:
 
@@ -111,6 +116,13 @@ The corresponding C++ entry points are:
     state.Reset(
         {{"past", RuntimeValue(Tensor::FromFloat("past", {2}, {0.f, 0.f}))}});
     state.Close();
+
+The C++ constructor and ``Reset`` accept initial maps by value. Build an owned
+``RuntimeValueMap`` and pass ``std::move(initial)`` for zero-copy transfer.
+Passing an lvalue uses ordinary C++ copy semantics. To share an existing owned
+tensor explicitly, use ``std::move(tensor).RetainStorage()`` once, then
+``BorrowView()`` on the returned owner-backed view. Const reads never move or
+promote storage.
 
 C++ callers register the operator kernels as usual before executing the model
 (see :doc:`register_builtin_operators`). The model and configured allocators
@@ -192,10 +204,10 @@ objects containing existing tensors or ``EncodedValueProto`` payloads.
 Inline structured encoded payloads can be retained as whole values; external
 payloads must first be loaded. This API currently supports tensors, named
 structs and inline structured encodings, not sequence/map/optional state.
-The zero-copy feedback path supports ``If`` and local functions without
-attribute references. ``Loop``, ``Scan`` and functions requiring attribute
-substitution are rejected until their execution can preserve buffer owners
-without serialization-based cloning.
+``If`` and model-local functions forward selected whole output names and move
+those results without persistence-related copies. Function attributes,
+``Loop`` and ``Scan`` use their ordinary runtime implementations: their normal
+computation/transport costs remain, but unrelated operators are not prohibited.
 
 ``GraphBuilder`` preserves and validates persistence declarations during
 import/export and supported rewrites. Direct edits to graph input/output

@@ -537,9 +537,13 @@ public:
   RuntimeValueMap &values() noexcept { return values_; }
   const RuntimeValueMap &values() const noexcept { return values_; }
 
-  /** Enables read-only, owner-retaining value transport for persistent execution. */
-  void set_preserve_value_ownership(bool enabled) noexcept { preserve_value_ownership_ = enabled; }
-  bool preserve_value_ownership() const noexcept { return preserve_value_ownership_; }
+  /** Selects whole graph outputs whose storage will be moved to an external owner. */
+  void set_retained_outputs(std::unordered_set<std::string> names) {
+    retained_outputs_ = std::move(names);
+  }
+  bool retains_output(const std::string &name) const noexcept {
+    return retained_outputs_.count(name) != 0;
+  }
 
   /** Retains the immutable source model backing ownership-preserving initializer views. */
   void set_model_owner(std::shared_ptr<void> owner) { model_owner_ = std::move(owner); }
@@ -996,7 +1000,7 @@ private:
   /// Non-owning view on the CPU executor leased by the running session.
   CpuExecutor *cpu_executor_ = nullptr;
   bool release_intermediates_ = false;
-  bool preserve_value_ownership_ = false;
+  std::unordered_set<std::string> retained_outputs_;
   std::shared_ptr<void> model_owner_;
   int64_t current_node_index_ = -1;
   /// Index of the control-flow node in the parent graph currently being

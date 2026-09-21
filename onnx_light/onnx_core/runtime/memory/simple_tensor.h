@@ -522,13 +522,13 @@ struct Tensor {
   /// regardless of storage mode.  Also empty when ``data_type`` is
   /// ``DataType::STRING``; in that case the element values are stored in
   /// ``string_data`` instead.
-  mutable RawBuffer data;
+  RawBuffer data;
 
   /// String element values in row-major layout. Populated only when
   /// ``data_type`` is ``DataType::STRING`` and the tensor owns its string
   /// storage; empty for all other element types and for borrowed string
   /// views.
-  mutable std::vector<std::string> string_data;
+  std::vector<std::string> string_data;
 
   Tensor() = default;
   Tensor(std::string n, int32_t dt, Shape s, std::vector<uint8_t> d)
@@ -602,7 +602,8 @@ struct Tensor {
   ///
   /// The referenced string vector **MUST** outlive this ``Tensor``.
   static Tensor BorrowStrings(std::string name, Shape shape,
-                              const std::vector<std::string> &strings);
+                              const std::vector<std::string> &strings,
+                              std::shared_ptr<void> owner = {});
 
   /// Returns a pointer to the raw element bytes.
   /// Works for both owned (``data``) and borrowed (non-owning view) tensors.
@@ -671,18 +672,13 @@ struct Tensor {
   Tensor BorrowView() const;
 
   /**
-   * Returns a read-only alias retaining the payload without copying it.
+   * Transfers storage into a read-only owner-retaining view without copying it.
    *
-   * Promotes inline storage into a shared owner by moving its buffers. All
-   * aliases, including this tensor, must subsequently be treated as read-only.
-   * Promotion changes storage bookkeeping, not payload addresses. Callers must
-   * serialize the first promotion. Ownerless borrows and allocator storage
+   * Consumes this tensor explicitly. Inline buffers move into an owner; existing
+   * borrowed owners are reused. Ownerless borrows and allocator storage
    * without a self-owning lease are rejected rather than silently copied.
    */
-  Tensor ShareStorage() const;
-
-  /** Returns a read-only, owner-retaining alias without copying its payload. */
-  Tensor Share() const { return ShareStorage(); }
+  Tensor RetainStorage() &&;
 
   /// Returns an owned deep copy of this tensor that references no external
   /// memory: the bytes (or, for ``STRING`` tensors, the strings) are copied
@@ -822,14 +818,14 @@ struct Tensor {
 
 private:
   /// Move-only ownership of allocator-backed bytes.
-  mutable AllocationHandle allocation_;
+  AllocationHandle allocation_;
   /// Non-null only for borrowed (non-owning) tensors created via
   /// :cpp:func:`Borrow`.  When set, element bytes are read from
   /// ``borrow_ptr_[0 .. borrow_size_-1]`` rather than from ``data``.
-  mutable const uint8_t *borrow_ptr_ = nullptr;
-  mutable size_t borrow_size_ = 0;
-  mutable const std::vector<std::string> *borrow_string_data_ = nullptr;
-  mutable std::shared_ptr<void> borrow_owner_;
+  const uint8_t *borrow_ptr_ = nullptr;
+  size_t borrow_size_ = 0;
+  const std::vector<std::string> *borrow_string_data_ = nullptr;
+  std::shared_ptr<void> borrow_owner_;
 };
 
 /// ``Tensors`` — the runtime value produced by kernels that emit more than one

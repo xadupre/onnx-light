@@ -806,6 +806,11 @@ neither mutation nor disk storage.
 This ownership requirement is distinct from PR05's in-place KV append
 and capacity management. Kernels may compute new outputs normally; PR04
 must not duplicate those outputs merely to retain or return them.
+The runtime selects exact whole output names at ownership boundaries; it does
+not enable a context-wide persistence mode or replace kernel dispatch.
+C++ owned initial maps are transferred explicitly with ``std::move``; const
+views never promote or move their source storage. ``RuntimeValue`` only supplies
+the recursive struct/encoded representation absent from ``Tensor``.
 Avoiding algorithmic full-cache reconstruction, paging, explicit
 snapshots and region-level mutation scheduling remain separate work.
 

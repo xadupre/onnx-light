@@ -18,7 +18,9 @@ TypeProto FloatType(int64_t size = 1) {
   return type;
 }
 
-RuntimeValue Number(float value) { return RuntimeValue(Tensor::FromFloat("", {1}, {value})); }
+RuntimeValue Number(float value) {
+  return RuntimeValue(Tensor::FromFloat("", {1}, {value})).Retain();
+}
 
 float Number(const RuntimeValue &value) { return value.tensor.AsFloat()[0]; }
 
@@ -106,7 +108,98 @@ void RegisterStructuredStep(RuntimeContext &context, const uint8_t **expected = 
       });
 }
 
+void CheckStructuredIdentityLifetime(bool retained) {
+  std::vector<RuntimeValueMap> results;
+  {
+    ModelProto model;
+    model.set_ir_version(10);
+    model.add_opset_import()->set_version(18);
+    auto *custom_opset = model.add_opset_import();
+    custom_opset->set_domain("test.feedback");
+    custom_opset->set_version(1);
+    auto *graph = model.mutable_graph();
+    for (const char *name : {"first", "second"}) {
+      auto *output = graph->add_output();
+      output->set_name(name);
+      *output->mutable_type() = Structure({{"inline", FloatType()}, {"shared", FloatType()}});
+    }
+    auto *producer = graph->add_node();
+    producer->set_domain("test.feedback");
+    producer->set_op_type("Produce");
+    producer->add_output("mid");
+    auto *identity = graph->add_node();
+    identity->set_op_type("Identity");
+    identity->add_input("mid");
+    identity->add_output("first");
+    auto *consumer = graph->add_node();
+    consumer->set_domain("test.feedback");
+    consumer->set_op_type("Consume");
+    consumer->add_input("mid");
+    consumer->add_input("first");
+    consumer->add_output("checked");
+    identity = graph->add_node();
+    identity->set_op_type("Identity");
+    identity->add_input("checked");
+    identity->add_output("second");
+
+    RuntimeSession session(model);
+    RuntimeContext context(KernelContext(DefaultOpset(18)),
+                           RuntimeContextOptions{.release_intermediates = true});
+    if (retained)
+      context.set_retained_outputs({"first", "second"});
+    float iteration = 0;
+    context.RegisterCustomKernel(
+        "test.feedback", "Produce", [&](const NodeProto &node, RuntimeContext &rt) {
+          ++iteration;
+          rt.values()[node.output(0)] = RuntimeValue(
+              RuntimeValueMap{{"inline", RuntimeValue(Tensor::FromFloat("", {1}, {iteration}))},
+                              {"shared", Number(iteration + 10)}});
+        });
+    context.RegisterCustomKernel(
+        "test.feedback", "Consume", [](const NodeProto &node, RuntimeContext &rt) {
+          const auto &source = rt.values().at(node.input(0));
+          const auto &forwarded = rt.values().at(node.input(1));
+          const Tensor &inline_source = source.fields.at("inline").tensor;
+          const Tensor &inline_result = forwarded.fields.at("inline").tensor;
+          EXPECT_FALSE(inline_source.is_borrowed());
+          EXPECT_FALSE(inline_result.is_borrowed());
+          EXPECT_NE(inline_source.bytes(), inline_result.bytes());
+          EXPECT_EQ(inline_source.AsFloat()[0], inline_result.AsFloat()[0]);
+          EXPECT_EQ(source.fields.at("shared").tensor.bytes(),
+                    forwarded.fields.at("shared").tensor.bytes());
+          rt.values()[node.output(0)] = source;
+        });
+    for (int run = 0; run < 3; ++run) {
+      session.Run(context);
+      EXPECT_EQ(context.values().count("mid"), 0u);
+      EXPECT_EQ(context.values().count("checked"), 0u);
+      RuntimeValueMap outputs;
+      for (const char *name : {"first", "second"}) {
+        auto &value = context.values().at(name);
+        outputs.emplace(name, retained ? std::move(value).Retain() : std::move(value));
+      }
+      results.push_back(std::move(outputs));
+      context.values().clear();
+    }
+  }
+  for (size_t run = 0; run < results.size(); ++run) {
+    for (const char *name : {"first", "second"}) {
+      const auto &value = results[run].at(name);
+      EXPECT_EQ(Number(value.fields.at("inline")), static_cast<float>(run + 1));
+      EXPECT_EQ(Number(value.fields.at("shared")), static_cast<float>(run + 11));
+    }
+  }
+}
+
 } // namespace
+
+TEST(FeedbackState, OrdinaryStructuredIdentitySurvivesReleasedInlineIntermediates) {
+  CheckStructuredIdentityLifetime(false);
+}
+
+TEST(FeedbackState, SelectedStructuredIdentitySurvivesReleasedInlineIntermediates) {
+  CheckStructuredIdentityLifetime(true);
+}
 
 TEST(FeedbackState, WholeTensorMatchesManualLoopAndSharesReadOnlyViews) {
   ModelProto model = Model();
@@ -214,6 +307,136 @@ TEST(FeedbackState, TransfersOwnedTensorOutputsWithoutCopying) {
   state.Close();
   EXPECT_EQ(Number(first.at("present")), 2);
   EXPECT_EQ(Number(second.at("present")), 3);
+}
+
+TEST(FeedbackState, MovesOwnedInitialMapsWithoutMutatingConstViews) {
+  ModelProto model = Model();
+  RuntimeValueMap initial;
+  initial.emplace("past", RuntimeValue(Tensor::FromFloat("", {1}, {2})));
+  const Tensor &source = initial.at("past").tensor;
+  const uint8_t *payload = source.bytes();
+  auto view = source.BorrowView();
+  EXPECT_FALSE(source.is_borrowed());
+  EXPECT_EQ(source.data.data(), payload);
+  EXPECT_FALSE(view.borrowed_owner());
+  FeedbackState state(model, std::move(initial));
+  EXPECT_EQ(state.Values().at("past").tensor.bytes(), payload);
+  EXPECT_TRUE(state.Values().at("past").tensor.borrowed_owner());
+  RuntimeValueMap reset;
+  reset.emplace("past", RuntimeValue(Tensor::FromFloat("", {1}, {4})));
+  const uint8_t *next = reset.at("past").tensor.bytes();
+  state.Reset(std::move(reset));
+  EXPECT_EQ(state.Values().at("past").tensor.bytes(), next);
+}
+
+TEST(FeedbackState, OnlySelectedOutputsBypassOrdinaryAllocationAndMaterialization) {
+  ModelProto model = Model();
+  auto *ordinary = model.mutable_graph()->add_output();
+  ordinary->set_name("ordinary");
+  *ordinary->mutable_type() = FloatType();
+  model.mutable_graph()->mutable_node(0)->add_output("ordinary");
+  SimpleRawBufferAllocator execution(8);
+  RuntimeContext context(KernelContext(DefaultOpset(18)),
+                         RuntimeContextOptions{.allocator = &execution});
+  const uint8_t *selected = nullptr;
+  const uint8_t *ordinary_source = nullptr;
+  context.RegisterCustomKernel("test.feedback", "Step", [&](const NodeProto &, RuntimeContext &rt) {
+    EXPECT_TRUE(rt.retains_output("present"));
+    EXPECT_FALSE(rt.retains_output("ordinary"));
+    EXPECT_FALSE(rt.MakeFunctionContext().retains_output("present"));
+    Tensor result = Tensor::FromFloat("", {1}, {rt.Get("past").AsFloat()[0] + 1});
+    selected = result.bytes();
+    rt.Put("present", std::move(result), RuntimeEventKind::kOutput);
+    ordinary_source = rt.Get("tokens").bytes();
+    rt.Put("ordinary", rt.Get("tokens").BorrowView(), RuntimeEventKind::kOutput);
+    EXPECT_EQ(rt.Get("ordinary").allocation_owner(), &execution);
+    EXPECT_NE(rt.Get("ordinary").bytes(), ordinary_source);
+  });
+  FeedbackState state(model, {{"past", Number(1)}});
+  float token = 7;
+  RuntimeValueMap feeds;
+  feeds.emplace("tokens", RuntimeValue(Tensor::Borrow("", DataType::FLOAT, {1},
+                                                      reinterpret_cast<const uint8_t *>(&token),
+                                                      sizeof(float))));
+  auto output = state.Run(context, feeds);
+  EXPECT_EQ(output.at("present").tensor.bytes(), selected);
+  EXPECT_EQ(state.Values().at("past").tensor.bytes(), selected);
+  EXPECT_EQ(output.at("ordinary").tensor.allocation_owner(), &execution);
+  EXPECT_EQ(Number(output.at("ordinary")), 7);
+  EXPECT_EQ(execution.TotalAllocatedSize(), sizeof(float));
+  output.clear();
+  EXPECT_EQ(execution.TotalAllocatedSize(), 0u);
+}
+
+TEST(FeedbackState, OrdinaryOwnerlessOutputIsMaterializedButSelectedBorrowIsRejected) {
+  ModelProto model = Model();
+  auto *ordinary = model.mutable_graph()->add_output();
+  ordinary->set_name("ordinary");
+  *ordinary->mutable_type() = FloatType();
+  model.mutable_graph()->mutable_node(0)->add_output("ordinary");
+  RuntimeContext context(KernelContext(DefaultOpset(18)));
+  float external = 7;
+  bool invalid_selected = false;
+  context.RegisterCustomKernel("test.feedback", "Step", [&](const NodeProto &, RuntimeContext &rt) {
+    auto borrow = [&] {
+      return Tensor::Borrow("", DataType::FLOAT, {1}, reinterpret_cast<const uint8_t *>(&external),
+                            sizeof(float));
+    };
+    rt.Put("ordinary", borrow());
+    rt.Put("present", invalid_selected ? borrow() : Tensor::FromFloat("", {1}, {2}));
+  });
+  FeedbackState state(model, {{"past", Number(1)}});
+  auto output = state.Run(context, {{"tokens", Number(0)}});
+  EXPECT_FALSE(output.at("ordinary").tensor.is_borrowed());
+  EXPECT_NE(output.at("ordinary").tensor.bytes(), reinterpret_cast<const uint8_t *>(&external));
+  invalid_selected = true;
+  const auto previous = state.Values();
+  EXPECT_THROW(state.Run(context, {{"tokens", Number(0)}}), std::invalid_argument);
+  EXPECT_EQ(state.Values().at("past").tensor.bytes(), previous.at("past").tensor.bytes());
+}
+
+TEST(FeedbackState, FunctionAttributesUseOrdinaryBinding) {
+  ModelProto model = Model();
+  model.add_opset_import()->set_version(18);
+  auto *function = model.add_functions();
+  function->set_domain("test.feedback");
+  function->set_name("Activate");
+  function->add_input("x");
+  function->add_output("y");
+  function->add_attribute("slope");
+  auto *opset = function->add_opset_import();
+  opset->set_domain("test.feedback");
+  opset->set_version(1);
+  auto *body = function->add_node();
+  body->set_domain("test.feedback");
+  body->set_op_type("Scale");
+  body->add_input("x");
+  body->add_output("y");
+  auto *reference = body->add_attribute();
+  reference->set_name("alpha");
+  reference->set_type(AttributeProto::FLOAT);
+  reference->set_ref_attr_name("slope");
+  auto *call = model.mutable_graph()->mutable_node(0);
+  call->set_op_type("Activate");
+  call->clear_input();
+  call->add_input("past");
+  auto *attribute = call->add_attribute();
+  attribute->set_name("slope");
+  attribute->set_type(AttributeProto::FLOAT);
+  attribute->set_f(0.25f);
+  RuntimeContext context(KernelContext(DefaultOpset(18)));
+  context.RegisterCustomKernel(
+      "test.feedback", "Scale", [](const NodeProto &node, RuntimeContext &rt) {
+        EXPECT_EQ(node.attribute(0).name(), "alpha");
+        EXPECT_EQ(node.attribute(0).f(), 0.25f);
+        const float result = rt.Get(node.input(0)).AsFloat()[0] * node.attribute(0).f();
+        rt.Put(node.output(0), Tensor::FromFloat("", {1}, {result}));
+      });
+  FeedbackState state(model, {{"past", Number(-4)}});
+  auto output = state.Run(context, {{"tokens", Number(0)}});
+  EXPECT_EQ(Number(output.at("present")), -1);
+  EXPECT_EQ(state.Values().at("past").tensor.bytes(), output.at("present").tensor.bytes());
+  EXPECT_EQ(Number(state.Run(context, {{"tokens", Number(0)}}).at("present")), -0.25f);
 }
 
 TEST(FeedbackState, TransfersOwnedStructuredOutputsWithoutCopying) {
@@ -590,6 +813,45 @@ TEST(FeedbackState, StructuredValuesCrossIfBranches) {
             expected);
 }
 
+TEST(FeedbackState, SelectedIfInitializerRetainsItsSessionSnapshot) {
+  ModelProto model = Model();
+  model.add_opset_import()->set_version(18);
+  auto *condition = model.mutable_graph()->add_input();
+  condition->set_name("condition");
+  condition->mutable_type()->mutable_tensor_type()->set_elem_type(DataType::BOOL);
+  condition->mutable_type()->mutable_tensor_type()->mutable_shape();
+  GraphProto branch;
+  auto *constant = branch.add_initializer();
+  constant->set_name("constant");
+  constant->set_data_type(DataType::FLOAT);
+  constant->add_dims(1);
+  constant->add_float_data(7);
+  auto *result = branch.add_output();
+  result->set_name("constant");
+  *result->mutable_type() = FloatType();
+  model.mutable_graph()->clear_node();
+  auto *node = model.mutable_graph()->add_node();
+  node->set_op_type("If");
+  node->add_input("condition");
+  node->add_output("present");
+  for (const auto *name : {"then_branch", "else_branch"}) {
+    auto *attribute = node->add_attribute();
+    attribute->set_name(name);
+    attribute->set_type(AttributeProto::GRAPH);
+    *attribute->mutable_g() = branch;
+  }
+  RuntimeContext context(KernelContext(DefaultOpset(18)));
+  FeedbackState state(model, {{"past", Number(0)}});
+  RuntimeValueMap feeds{{"tokens", Number(0)},
+                        {"condition", RuntimeValue(Tensor::FromBool("", {}, {1}))}};
+  auto first = state.Run(context, feeds);
+  auto second = state.Run(context, feeds);
+  EXPECT_EQ(first.at("present").tensor.bytes(), second.at("present").tensor.bytes());
+  state.Close();
+  EXPECT_EQ(Number(first.at("present")), 7);
+  EXPECT_EQ(Number(second.at("present")), 7);
+}
+
 TEST(FeedbackState, RejectsExcessiveRuntimeValueNesting) {
   RuntimeValue value = Number(1);
   for (size_t i = 0; i <= RuntimeValue::kMaxDepth; ++i) {
@@ -598,7 +860,7 @@ TEST(FeedbackState, RejectsExcessiveRuntimeValueNesting) {
     value = std::move(parent);
   }
   EXPECT_THROW(value.DeepCopy(), std::invalid_argument);
-  EXPECT_THROW(value.Share(), std::invalid_argument);
+  EXPECT_THROW(value.BorrowView(), std::invalid_argument);
 }
 
 TEST(FeedbackState, OrdinarySessionReleasesStructuredIntermediates) {
@@ -706,7 +968,7 @@ TEST(FeedbackState, EncodedTransportRetainsTheSamePayloadAcrossResetAndClose) {
   RuntimeContext context(KernelContext(DefaultOpset(18)));
   context.RegisterCustomKernel("test.feedback", "Step", [&](const NodeProto &, RuntimeContext &rt) {
     EXPECT_EQ(rt.values().at("past").Encoded().raw_data().data(), payload);
-    rt.values()["present"] = rt.values().at("past").Share();
+    rt.values()["present"] = rt.values().at("past").BorrowView();
   });
   auto output = state.Run(context, {{"tokens", Number(1)}});
   EXPECT_EQ(output.at("present").Encoded().raw_data().data(), payload);
@@ -726,7 +988,7 @@ TEST(FeedbackState, EncodedExternalViewsRetainTheMessageWithoutMutatingIt) {
   const EncodedValueProto *original = message.get();
   const uint8_t *payload = message->raw_data().data();
   RuntimeValue view = RuntimeValue::FromEncodedView(*message, message);
-  RuntimeValue retained = view.Share();
+  RuntimeValue retained = view.BorrowView();
   EXPECT_EQ(&view.Encoded(), original);
   EXPECT_EQ(&retained.Encoded(), original);
   EXPECT_EQ(message->raw_data().data(), payload);
@@ -748,7 +1010,7 @@ TEST(FeedbackState, EncodedMessageOwnerDoesNotReplaceBorrowedBackingOwner) {
   message->mutable_struct_type()->set_type_ref(7);
   message->mutable_raw_data()->assign_borrowed(&payload, 1);
   RuntimeValue view = RuntimeValue::FromEncodedView(*message, message);
-  EXPECT_THROW(view.Share(), std::invalid_argument);
+  EXPECT_THROW(std::move(view).Retain(), std::invalid_argument);
   const EncodedValueProto &retained = *message;
   EXPECT_EQ(retained.raw_data().data(), &payload);
 }
@@ -774,8 +1036,11 @@ TEST(FeedbackState, StringsAndEmptyTensorsShareRatherThanCopy) {
     const Tensor &source = initial.at("past").tensor;
     const void *payload = strings ? static_cast<const void *>(source.AsStrings().data())
                                   : static_cast<const void *>(source.bytes());
-    FeedbackState state(model, initial);
+    FeedbackState state(model, std::move(initial));
     RuntimeContext context(KernelContext(DefaultOpset(18)));
+    context.RegisterCustomKernel("", "Identity", [](const NodeProto &node, RuntimeContext &rt) {
+      rt.Put(node.output(0), rt.Get(node.input(0)).BorrowView());
+    });
     const auto output = state.Run(context, {{"tokens", Number(0)}});
     const Tensor &result = output.at("present").tensor;
     EXPECT_EQ(strings ? static_cast<const void *>(result.AsStrings().data())
@@ -853,11 +1118,9 @@ TEST(FeedbackState, InitializerViewsRetainImmutableModelAndPayload) {
         initializer->add_float_data(4);
         payload = reinterpret_cast<const uint8_t *>(initializer->float_data().values().data());
       }
-      auto *identity = model->mutable_graph()->mutable_node(0);
-      identity->set_domain("");
-      identity->set_op_type("Identity");
-      identity->clear_input();
-      identity->add_input("constant");
+      model->mutable_graph()->clear_node();
+      model->mutable_graph()->mutable_output(0)->set_name("constant");
+      model->mutable_graph()->mutable_persistent_bindings(0)->set_output_name("constant");
       RuntimeContext context(KernelContext(DefaultOpset(18)));
       context.set_model_owner(std::make_shared<int>(0));
       std::unique_ptr<FeedbackState> state;
@@ -867,14 +1130,14 @@ TEST(FeedbackState, InitializerViewsRetainImmutableModelAndPayload) {
       else
         state = std::make_unique<FeedbackState>(std::shared_ptr<const ModelProto>(model), initial);
       output = state->Run(context, {{"tokens", Number(0)}});
-      EXPECT_EQ(output.at("present").tensor.bytes(), payload);
+      EXPECT_EQ(output.at("constant").tensor.bytes(), payload);
       EXPECT_EQ(state->Values().at("past").tensor.bytes(), payload);
       state->Close();
       model.reset();
     }
     ASSERT_FALSE(weak.expired());
-    EXPECT_EQ(output.at("present").tensor.bytes(), payload);
-    EXPECT_EQ(Number(output.at("present")), 4);
+    EXPECT_EQ(output.at("constant").tensor.bytes(), payload);
+    EXPECT_EQ(Number(output.at("constant")), 4);
     output.clear();
     EXPECT_TRUE(weak.expired());
   }
@@ -931,17 +1194,15 @@ TEST(FeedbackState, ModelOwnerDoesNotReplaceBorrowedInitializerBackingOwner) {
     initializer->add_dims(1);
     initializer->mutable_raw_data()->assign_borrowed(
         payload, sizeof(float), retained_backing ? data : std::shared_ptr<void>{});
-    auto *identity = model->mutable_graph()->mutable_node(0);
-    identity->set_domain("");
-    identity->set_op_type("Identity");
-    identity->clear_input();
-    identity->add_input("constant");
+    model->mutable_graph()->clear_node();
+    model->mutable_graph()->mutable_output(0)->set_name("constant");
+    model->mutable_graph()->mutable_persistent_bindings(0)->set_output_name("constant");
     FeedbackState state(std::shared_ptr<const ModelProto>(model), {{"past", Number(1)}});
     RuntimeContext context(KernelContext(DefaultOpset(18)));
     RuntimeValueMap output;
     if (retained_backing) {
       output = state.Run(context, {{"tokens", Number(0)}});
-      EXPECT_EQ(output.at("present").tensor.bytes(), payload);
+      EXPECT_EQ(output.at("constant").tensor.bytes(), payload);
     } else {
       const auto before = state.Values();
       EXPECT_THROW(state.Run(context, {{"tokens", Number(0)}}), std::invalid_argument);
@@ -953,8 +1214,8 @@ TEST(FeedbackState, ModelOwnerDoesNotReplaceBorrowedInitializerBackingOwner) {
     EXPECT_TRUE(model_lifetime.expired());
     if (retained_backing) {
       ASSERT_FALSE(backing_lifetime.expired());
-      EXPECT_EQ(output.at("present").tensor.bytes(), payload);
-      EXPECT_EQ(Number(output.at("present")), 4);
+      EXPECT_EQ(output.at("constant").tensor.bytes(), payload);
+      EXPECT_EQ(Number(output.at("constant")), 4);
       output.clear();
     }
     EXPECT_TRUE(backing_lifetime.expired());
@@ -971,9 +1232,9 @@ TEST(FeedbackState, WholeStructureFieldsTreatDotsLiterally) {
   Bind(model, "request", "response");
   RuntimeContext context(KernelContext(DefaultOpset(18)));
   context.RegisterCustomKernel("test.feedback", "Step", [](const NodeProto &, RuntimeContext &rt) {
-    rt.values()["response"] = RuntimeValue(
-        RuntimeValueMap{{"cache.part", rt.values().at("request").fields.at("cache.part").Share()},
-                        {"logits", Number(0)}});
+    rt.values()["response"] = RuntimeValue(RuntimeValueMap{
+        {"cache.part", rt.values().at("request").fields.at("cache.part").BorrowView()},
+        {"logits", Number(0)}});
   });
   FeedbackState state(model, {{"request", RuntimeValue(RuntimeValueMap{{"cache.part", Number(1)},
                                                                        {"logits", Number(0)}})}});
@@ -1033,9 +1294,9 @@ TEST(FeedbackState, LiteralDottedRootAndWholeStructureHaveDistinctStateSlots) {
   context.RegisterCustomKernel("test.feedback", "Step", [](const NodeProto &, RuntimeContext &rt) {
     const auto &request = rt.values().at("request");
     rt.values()["response"] =
-        RuntimeValue(RuntimeValueMap{{"cache", request.fields.at("cache").Share()},
-                                     {"logits", RuntimeValue(rt.Get("tokens").Share())}});
-    rt.values()["response.cache"] = rt.values().at("request.cache").Share();
+        RuntimeValue(RuntimeValueMap{{"cache", request.fields.at("cache").BorrowView()},
+                                     {"logits", RuntimeValue(rt.Get("tokens").BorrowView())}});
+    rt.values()["response.cache"] = rt.values().at("request.cache").BorrowView();
   });
   const auto output = state.Run(context, {{"tokens", Number(3)}});
   EXPECT_EQ(output.at("response").fields.at("cache").fields.at("keys").tensor.bytes(), nested);
@@ -1063,7 +1324,7 @@ TEST(FeedbackState, WholeStructureKeepsDottedFieldsAndNestedFieldsDistinct) {
   EXPECT_EQ(Number(before.at("request").fields.at("cache").fields.at("part")), 2);
   RuntimeContext context(KernelContext(DefaultOpset(18)));
   context.RegisterCustomKernel("test.feedback", "Step", [](const NodeProto &, RuntimeContext &rt) {
-    rt.values()["response"] = rt.values().at("request").Share();
+    rt.values()["response"] = rt.values().at("request").BorrowView();
   });
   const auto output = state.Run(context, {{"tokens", Number(3)}});
   EXPECT_EQ(output.at("response").fields.at("cache.part").tensor.bytes(),
@@ -1082,8 +1343,8 @@ TEST(FeedbackState, CurrentFeedsRequireWholeStructuredInputs) {
   context.RegisterCustomKernel("test.feedback", "Step", [](const NodeProto &, RuntimeContext &rt) {
     const auto &request = rt.values().at("request");
     rt.values()["response"] = RuntimeValue(
-        RuntimeValueMap{{"cache", request.fields.at("cache").Share()},
-                        {"logits", rt.values().at("tokens").fields.at("token.part").Share()}});
+        RuntimeValueMap{{"cache", request.fields.at("cache").BorrowView()},
+                        {"logits", rt.values().at("tokens").fields.at("token.part").BorrowView()}});
   });
   FeedbackState state(model, {{"request", Request(1, 2)}});
   RuntimeValueMap feeds{{"tokens", RuntimeValue(RuntimeValueMap{{"token.part", Number(3)}})}};
@@ -1121,7 +1382,7 @@ TEST(FeedbackState, GraphAndFieldNamesTreatBackslashesAndDotsLiterally) {
   RuntimeContext context(KernelContext(DefaultOpset(18)));
   context.RegisterCustomKernel(
       "test.feedback", "Step", [](const NodeProto &node, RuntimeContext &rt) {
-        rt.values()[node.output(0)] = rt.values().at(node.input(0)).Share();
+        rt.values()[node.output(0)] = rt.values().at(node.input(0)).BorrowView();
       });
   const auto flat_output = state.Run(context, {{"tokens", Number(0)}});
   EXPECT_EQ(flat_output.at(output_name).fields.at(state_field).tensor.bytes(), payload);

@@ -13,7 +13,8 @@ immutable model and any externally borrowed model storage. Only owner handles,
 not model or tensor payloads, are copied.
 Borrowed initializer ``raw_data`` must additionally carry its own backing-owner
 control block. Retaining the model cannot make an ownerless external buffer safe;
-such initializers are rejected instead of copied.
+an ownerless initializer view is rejected if selected for retention. Ordinary
+kernel reads and nonpersistent outputs keep their normal behavior.
 
 Initial values, current feeds and ``Values()`` use exact graph input names.
 Dots and backslashes are literal, with no escaping or path resolution.
@@ -27,13 +28,17 @@ Supplying any value for a retained input is an error, even an empty field map.
 ``Values()`` returns complete values keyed by retained graph input names.
 Returned graph-output dictionaries use their literal model output names.
 
-Initial values, reset values, invocation inputs, selected outputs, and
-``Values()`` share payload owners. Their field maps and tensor metadata are
-independent, but their payload addresses are identical. Callers and kernels
+The C++ constructor and ``Reset`` take initial maps by value. Move an owned
+map (``std::move(initial)``) to transfer its payload without copying. Passing an
+lvalue uses its normal C++ copy semantics; explicitly owner-backed borrowed
+tensors and encoded messages share their owners. Neither operation changes a
+const source. ``std::move(tensor).RetainStorage()`` explicitly consumes a tensor
+and returns an owner-retaining view; ``BorrowView()`` never promotes storage.
+Invocation inputs, selected outputs and ``Values()`` share payload owners.
+Their field maps and tensor metadata are independent. Callers and kernels
 must treat shared numeric buffers, strings, and encoded messages as read-only.
 Publication is transactional for owner handles, not a rollback mechanism for
-mutating aliases. First-time storage promotion must not race another operation
-on the same source value.
+mutating aliases.
 
 Old output views remain valid after subsequent invocations, reset, or close.
 Inline buffers move into shared owners; borrowed buffers must supply a lifetime
@@ -47,16 +52,22 @@ and are released only after retained values and kernels are destroyed.
 Reusing the same shared token avoids accumulating duplicate owners. Tokens must
 not own the state itself.
 
-The ownership-preserving execution path also transports values through ``If``
-and stateless model-local functions. It rejects ``Loop``, ``Scan``, and function
-attribute-reference binding rather than using their legacy copying transports.
-Feedback initializers are read-only model views: native float, double, int32, int64 and
-uint64 typed fields and raw storage are supported. Other numeric typed initializer
-representations require conversion to raw storage before constructing the
-immutable model. String initializers are not supported in this mode; string
-inputs and retained string outputs are supported. Ordinary ``RuntimeSession`` construction and public
-``SetInitializers`` retain their independent, eager initializer snapshots; the
-borrowed mode is selected explicitly for feedback and its subgraphs.
+There is no context-wide persistence mode or alternative kernel dispatcher.
+Only the exact declared output names bypass ordinary allocator migration and
+output materialization. Their whole values are moved into retained ownership
+after validation. Other outputs keep normal allocation/materialization rules;
+ordinary feeds may borrow storage for the invocation without an owner.
+``If`` and local functions translate the selected names to their formal
+outputs, then move those results back. Other outputs retain normal transport.
+``Loop``, ``Scan`` and function attribute references use the ordinary runtime;
+persistence adds no blanket prohibition. Tensor ``Identity`` remains an ordinary
+computing kernel, not a persistence-specific aliasing kernel.
+
+Feedback initializers use read-only model views for raw storage and native
+float, double, int32, int64 and uint64 typed fields. Other representations,
+including strings, use normal tensor conversion. Ordinary ``RuntimeSession``
+construction, subgraphs and public ``SetInitializers`` retain their independent,
+eager initializer snapshots.
 ``RuntimeContext::set_model_owner`` can supply a lifetime token for the immutable
 model in an explicitly borrowed runtime session. Feedback always supplies its
 own constructor's model token, not an unrelated calling context's token.
@@ -68,4 +79,4 @@ A reference-only caller supplies a lifetime promise rather than an owning token:
 it must keep the model alive until all of these views are released.
 
 .. doxygenfile:: onnx_core/runtime/feedback_state.h
-    :project: onnx_light
+    :project: onnx-light

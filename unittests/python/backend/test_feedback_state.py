@@ -51,6 +51,135 @@ def array(tensor):
 
 
 class TestFeedbackState(unittest.TestCase):
+    def test_loop_uses_normal_runtime_with_selected_result(self):
+        body = helper.make_graph(
+            [helper.make_node("Add", ["state", "one"], ["next"])],
+            "body",
+            [
+                helper.make_tensor_value_info("iteration", onnx.TensorProto.INT64, []),
+                helper.make_tensor_value_info("keep", onnx.TensorProto.BOOL, []),
+                helper.make_tensor_value_info("state", onnx.TensorProto.FLOAT, [2]),
+            ],
+            [
+                helper.make_tensor_value_info("keep", onnx.TensorProto.BOOL, []),
+                helper.make_tensor_value_info("next", onnx.TensorProto.FLOAT, [2]),
+            ],
+            [helper.make_tensor("one", onnx.TensorProto.FLOAT, [2], [1.0, 1.0])],
+        )
+        model = helper.make_model(
+            helper.make_graph(
+                [
+                    helper.make_node(
+                        "Loop", ["count", "condition", "past"], ["present"], body=body
+                    )
+                ],
+                "loop",
+                [helper.make_tensor_value_info("past", onnx.TensorProto.FLOAT, [2])],
+                [helper.make_tensor_value_info("present", onnx.TensorProto.FLOAT, [2])],
+                [
+                    helper.make_tensor("count", onnx.TensorProto.INT64, [], [2]),
+                    helper.make_tensor("condition", onnx.TensorProto.BOOL, [], [True]),
+                ],
+            ),
+            opset_imports=[helper.make_opsetid("", 18)],
+        )
+        add_binding(model, "past", "present")
+        state = runtime.FeedbackState(model, {"past": numpy.zeros(2, dtype=numpy.float32)})
+        context = make_context()
+        for expected in (2, 4):
+            output = state.run(context, {})
+            numpy.testing.assert_array_equal(array(output["present"]), [expected, expected])
+            self.assertEqual(
+                array(output["present"]).ctypes.data, array(state.values["past"]).ctypes.data
+            )
+
+    def test_scan_keeps_nonpersistent_output_ordinary(self):
+        body = helper.make_graph(
+            [
+                helper.make_node("Add", ["state", "item"], ["next"]),
+                helper.make_node("Identity", ["next"], ["trace"]),
+            ],
+            "body",
+            [
+                helper.make_tensor_value_info("state", onnx.TensorProto.FLOAT, [2]),
+                helper.make_tensor_value_info("item", onnx.TensorProto.FLOAT, [2]),
+            ],
+            [
+                helper.make_tensor_value_info("next", onnx.TensorProto.FLOAT, [2]),
+                helper.make_tensor_value_info("trace", onnx.TensorProto.FLOAT, [2]),
+            ],
+        )
+        model = helper.make_model(
+            helper.make_graph(
+                [
+                    helper.make_node(
+                        "Scan",
+                        ["past", "items"],
+                        ["present", "traces"],
+                        body=body,
+                        num_scan_inputs=1,
+                    )
+                ],
+                "scan",
+                [
+                    helper.make_tensor_value_info("past", onnx.TensorProto.FLOAT, [2]),
+                    helper.make_tensor_value_info("items", onnx.TensorProto.FLOAT, [3, 2]),
+                ],
+                [
+                    helper.make_tensor_value_info("present", onnx.TensorProto.FLOAT, [2]),
+                    helper.make_tensor_value_info("traces", onnx.TensorProto.FLOAT, [3, 2]),
+                ],
+            ),
+            opset_imports=[helper.make_opsetid("", 18)],
+        )
+        add_binding(model, "past", "present")
+        state = runtime.FeedbackState(model, {"past": numpy.zeros(2, dtype=numpy.float32)})
+        context = make_context()
+        outputs = []
+        for expected in (3, 6):
+            output = state.run(context, {"items": numpy.ones((3, 2), dtype=numpy.float32)})
+            numpy.testing.assert_array_equal(array(output["present"]), [expected, expected])
+            outputs.append(output)
+        state.close()
+        numpy.testing.assert_array_equal(array(outputs[0]["traces"]), [[1, 1], [2, 2], [3, 3]])
+
+    def test_retained_strings_cross_sequence_and_if(self):
+        branch = helper.make_graph(
+            [helper.make_node("SequenceAt", ["sequence", "index"], ["result"])],
+            "branch",
+            [],
+            [helper.make_tensor_value_info("result", onnx.TensorProto.STRING, [2])],
+            [helper.make_tensor("index", onnx.TensorProto.INT64, [], [0])],
+        )
+        model = helper.make_model(
+            helper.make_graph(
+                [
+                    helper.make_node("SequenceConstruct", ["past"], ["sequence"]),
+                    helper.make_node(
+                        "If", ["condition"], ["present"], then_branch=branch, else_branch=branch
+                    ),
+                ],
+                "string_sequence",
+                [
+                    helper.make_tensor_value_info("past", onnx.TensorProto.STRING, [2]),
+                    helper.make_tensor_value_info("condition", onnx.TensorProto.BOOL, []),
+                ],
+                [helper.make_tensor_value_info("present", onnx.TensorProto.STRING, [2])],
+            ),
+            opset_imports=[helper.make_opsetid("", 18)],
+        )
+        add_binding(model, "past", "present")
+        initial = runtime.tensor_from_proto(
+            numpy_helper.from_array(numpy.array(["a", "b"], dtype=object))
+        )
+        state = runtime.FeedbackState(model, {"past": initial})
+        context = make_context()
+        for condition in (True, False):
+            output = state.run(context, {"condition": numpy.array(condition)})
+            numpy.testing.assert_array_equal(
+                numpy_helper.to_array(runtime.tensor_to_proto(output["present"])), ["a", "b"]
+            )
+
     def test_context_retention_is_bounded(self):
         state = runtime.FeedbackState(make_model(), {"past": numpy.zeros(2, dtype=numpy.float32)})
         context = make_context()
@@ -389,7 +518,9 @@ class TestFeedbackState(unittest.TestCase):
         state = runtime.FeedbackState(model, {"past": initial})
         self.assertEqual(array(state.values["past"]).ctypes.data, initial.ctypes.data)
         output = state.run(make_context(), {})
-        self.assertEqual(array(output["present"]).ctypes.data, initial.ctypes.data)
+        self.assertEqual(
+            array(output["present"]).ctypes.data, array(state.values["past"]).ctypes.data
+        )
         del initial, state
         gc.collect()
         numpy.testing.assert_array_equal(array(output["present"]), numpy.float32(3))
@@ -487,7 +618,10 @@ class TestFeedbackState(unittest.TestCase):
         state = runtime.FeedbackState(model, {"past.part": initial})
         output = state.run(make_context(), {})
         self.assertEqual(set(state.values), {"past.part"})
-        self.assertEqual(array(output["present.part"]).ctypes.data, initial.ctypes.data)
+        self.assertEqual(
+            array(output["present.part"]).ctypes.data,
+            array(state.values["past.part"]).ctypes.data,
+        )
         with self.assertRaisesRegex(ValueError, "override retained input"):
             state.run(make_context(), {"past.part": initial})
         with self.assertRaisesRegex(ValueError, "missing initial whole input"):
@@ -518,7 +652,8 @@ class TestFeedbackState(unittest.TestCase):
         second = numpy.full(2, 2, dtype=numpy.float32)
         state = runtime.FeedbackState(model, {"past": first})
         output = state.run(make_context(), {"past.part": second})
-        self.assertEqual(array(output["present.part"]).ctypes.data, second.ctypes.data)
+        self.assertNotEqual(array(output["present.part"]).ctypes.data, second.ctypes.data)
+        numpy.testing.assert_array_equal(array(output["present.part"]), second)
         self.assertEqual(set(state.values), {"past"})
         with self.assertRaisesRegex(ValueError, "unknown graph input"):
             state.run(make_context(), {r"past\.part": second})
@@ -528,8 +663,13 @@ class TestFeedbackState(unittest.TestCase):
         state = runtime.FeedbackState(model, {"past": first, "past.part": second})
         output = state.run(make_context(), {})
         self.assertEqual(set(state.values), {"past", "past.part"})
-        self.assertEqual(array(output["present"]).ctypes.data, first.ctypes.data)
-        self.assertEqual(array(output["present.part"]).ctypes.data, second.ctypes.data)
+        self.assertEqual(
+            array(output["present"]).ctypes.data, array(state.values["past"]).ctypes.data
+        )
+        self.assertEqual(
+            array(output["present.part"]).ctypes.data,
+            array(state.values["past.part"]).ctypes.data,
+        )
 
     def test_initializer_output_retains_model(self):
         weights = numpy.ones(2, dtype=numpy.float32)

@@ -21,7 +21,9 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
  * overload or an explicit model_owner token retains that lifetime automatically.
  * Each operation
  * uses cached declaration pointers without cloning or checking the model.
- * Initial values, feeds, returned outputs and Values() share read-only payloads.
+ * Initial/reset maps transfer ownership by value: move owned maps to avoid copies.
+ * Selected outputs and Values() share read-only payloads. Current feeds borrow
+ * for the invocation; only a selected result requires independently valid ownership.
  * Callers and kernels must not mutate shared storage. Ownerless borrows and
  * execution-arena allocations lacking self-owning leases are rejected.
  * Only tensors, named structures and inline encoded values are supported.
@@ -30,9 +32,9 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
  */
 class ONNX_LIGHT_CORE_API FeedbackState {
 public:
-  FeedbackState(const ModelProto &model, const RuntimeValueMap &initial,
+  FeedbackState(const ModelProto &model, RuntimeValueMap initial,
                 RuntimeSessionOptions options = {}, std::shared_ptr<void> model_owner = {});
-  FeedbackState(std::shared_ptr<const ModelProto> model, const RuntimeValueMap &initial,
+  FeedbackState(std::shared_ptr<const ModelProto> model, RuntimeValueMap initial,
                 RuntimeSessionOptions options = {});
 
   /**
@@ -52,8 +54,8 @@ public:
    * not own this FeedbackState, which would create a lifetime cycle.
    */
   void RetainOwner(std::shared_ptr<void> owner);
-  /** Replaces retained values with explicitly supplied initial contents. */
-  void Reset(const RuntimeValueMap &initial);
+  /** Replaces retained values with explicitly transferred initial contents. */
+  void Reset(RuntimeValueMap initial);
   /** Releases retained values and kernels and permanently closes this state. */
   void Close();
   /** Returns read-only aliases keyed by exact retained graph input names. */
@@ -65,7 +67,7 @@ private:
     std::string output;
     const TypeProto *input_type;
   };
-  std::vector<RuntimeValue> ValidateInitial(const RuntimeValueMap &initial) const;
+  std::vector<RuntimeValue> ValidateInitial(RuntimeValueMap initial) const;
 
   const ModelProto &model_;
   std::shared_ptr<void> model_owner_;

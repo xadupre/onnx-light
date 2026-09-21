@@ -169,9 +169,13 @@ Tensor SliceTensorAlongAxis(const Tensor &t, int64_t axis, int64_t index,
 }
 
 SubgraphSession::SubgraphSession(RuntimeContext &rt, const GraphProto &graph)
-    : RuntimeSession(graph, 0,
-                     rt.preserve_value_ownership() ? InitializerMode::kBorrowed
-                                                   : InitializerMode::kOwned) {
+    : RuntimeSession(graph) {
+  // ``rt`` is intentionally unused: the plan is now built directly from
+  // ``graph`` rather than through ``rt.GetExecutionPlan``, so construction no
+  // longer depends on it (see the class-level doc comment). Kept as a
+  // parameter for API symmetry with ``Run``/``RunChild`` and because most
+  // call sites naturally have an ``rt`` in scope at the construction site.
+  (void)rt;
   const auto &outs = graph.output();
   output_names_.reserve(outs.size());
   for (size_t i = 0; i < outs.size(); ++i) {
@@ -217,8 +221,7 @@ Tensors SubgraphSession::Run(std::vector<std::pair<std::string, Tensor>> binding
     auto it = child.tensors().find(out_name);
     EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: subgraph output '", out_name,
                         "' was not produced.");
-    outputs.push_back(rt.preserve_value_ownership() ? it->second.ShareStorage()
-                                                    : CloneTensor(it->second));
+    outputs.push_back(CloneTensor(it->second));
   }
   return outputs;
 }
@@ -265,7 +268,16 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt, SubgraphSession &then_
   // per-call child context (seeded with the caller's current tensors /
   // sequences) is rebuilt here.
   SubgraphSession &session = taken ? then_session : else_session;
-  RuntimeContext child = session.RunChild({}, rt, branch_attr);
+  RuntimeContext child = rt.MakeSubgraphContext(branch_attr);
+  std::unordered_set<std::string> retained;
+  for (int i = 0; i < branch.output_size(); ++i)
+    if (rt.retains_output(node.output(i)))
+      retained.insert(branch.output(i).name());
+  child.set_retained_outputs(std::move(retained));
+  session.RuntimeSession::Run(child);
+  if (rt.events_enabled())
+    for (auto &event : child.events())
+      rt.events().push_back(std::move(event));
 
   for (int i = 0; i < branch.output_size(); ++i) {
     const std::string out_name = branch.output()[i].name();
@@ -277,15 +289,15 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt, SubgraphSession &then_
     if (child.HasSequence(out_name)) {
       rt.PutSequence(caller_name, child.GetSequence(out_name));
     } else if (child.values().count(out_name) != 0) {
-      const RuntimeValue &value = child.values().at(out_name);
-      rt.values().insert_or_assign(caller_name, rt.preserve_value_ownership() ? value.Share()
-                                                                              : value.DeepCopy());
+      RuntimeValue &value = child.values().at(out_name);
+      rt.values().insert_or_assign(caller_name, rt.retains_output(caller_name) ? std::move(value)
+                                                                               : value.DeepCopy());
     } else {
       auto it = child.tensors().find(out_name);
       EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: If: subgraph output '", out_name,
                           "' was not produced by the selected branch.");
-      Tensor t = rt.preserve_value_ownership() ? it->second.ShareStorage()
-                                               : CloneTensor(it->second, rt.allocator());
+      Tensor t = rt.retains_output(caller_name) ? std::move(it->second)
+                                                : CloneTensor(it->second, rt.allocator());
       t.name = caller_name;
       rt.Put(caller_name, std::move(t), RuntimeEventKind::kOutput);
     }
@@ -811,56 +823,15 @@ namespace detail {
 
 namespace {
 
-class SharedIdentityKernel : public KernelBase {
-public:
-  explicit SharedIdentityKernel(const NodeProto &node) : KernelBase(KernelContext{}) {
-    set_node(node);
-    EXT_ENFORCE_INVALID(node.input_size() == 1 && node.output_size() == 1,
-                        "Persistent Identity requires one input and one output.");
-  }
-
-  void Run(RuntimeContext &rt) override {
-    const std::string &input = node_->input(0);
-    const std::string &output = node_->output(0);
-    const auto value = rt.values().find(input);
-    if (value != rt.values().end())
-      rt.values().insert_or_assign(output, value->second.Share());
-    else {
-      Tensor result = rt.Get(input).ShareStorage();
-      result.name = output;
-      rt.Put(output, std::move(result), RuntimeEventKind::kOutput);
-    }
-  }
-};
-
 // Kernel that dispatches a node to a model-local ``FunctionProto`` body.
 // The bound function (with resolved attribute references) is computed once at
 // construction time, and the execution plan + per-node kernel instances are
 // resolved on the first ``Run`` and reused across all subsequent calls.
 class ModelLocalFunctionKernel : public KernelBase {
 public:
-  ModelLocalFunctionKernel(const NodeProto &node, const FunctionProto &func,
-                           bool preserve_value_ownership)
+  ModelLocalFunctionKernel(const NodeProto &node, const FunctionProto &func)
       : KernelBase(KernelContext{}), func_(func) {
     set_node(node);
-    if (preserve_value_ownership) {
-      const auto check = [&](auto &&self, const NodeProto &body_node) -> void {
-        for (const auto &attribute : body_node.attribute()) {
-          EXT_ENFORCE_INVALID(attribute.ref_attr_name().empty(),
-                              "Persistent execution does not support function attribute binding.");
-          if (attribute.has_g())
-            for (const auto &nested : attribute.g().node())
-              self(self, nested);
-          for (const auto &graph : attribute.graphs())
-            for (const auto &nested : graph.node())
-              self(self, nested);
-        }
-      };
-      for (const auto &body_node : func.node())
-        check(check, body_node);
-      plan_ = std::make_unique<ExecutionPlan>(func_);
-      return;
-    }
     // Pre-bind attribute references at construction time (the call-site
     // node and function body are both fixed for this kernel's lifetime).
     std::unordered_map<std::string, const AttributeProto *> attr_map;
@@ -891,8 +862,13 @@ public:
         " output(s), got ", node_->output_size(), ".");
 
     RuntimeContext child = rt.MakeFunctionContext();
+    std::unordered_set<std::string> retained;
+    for (int i = 0; i < func_.output_size(); ++i)
+      if (rt.retains_output(node_->output(i)))
+        retained.insert(func_.output(i));
+    child.set_retained_outputs(std::move(retained));
 
-    // Bind formal tensor inputs by borrowing; structured inputs own recursive copies.
+    // The parent context remains alive throughout the function invocation.
     for (size_t i = 0; i < static_cast<std::size_t>(func_.input_size()); ++i) {
       const std::string caller_name = node_->input(i);
       const std::string param_name = func_.input(i);
@@ -901,9 +877,7 @@ public:
       }
       auto value = rt.values().find(caller_name);
       if (value != rt.values().end()) {
-        child.values().emplace(param_name, rt.preserve_value_ownership()
-                                               ? value->second.Share()
-                                               : value->second.DeepCopy());
+        child.values().emplace(param_name, value->second.BorrowView());
         continue;
       }
       auto it = rt.tensors().find(caller_name);
@@ -911,11 +885,8 @@ public:
                           "' of call to model-local function '", op_type,
                           "' is missing from the tensor map.");
       const Tensor &src = it->second;
-      Tensor bound =
-          rt.preserve_value_ownership() ? src.ShareStorage()
-          : (static_cast<DataType>(src.data_type) == DataType::STRING)
-              ? Tensor::BorrowStrings(param_name, src.shape, src.AsStrings())
-              : Tensor::Borrow(param_name, src.data_type, src.shape, src.bytes(), src.size_bytes());
+      Tensor bound = src.BorrowView();
+      bound.name = param_name;
       child.Put(param_name, std::move(bound), RuntimeEventKind::kInput);
     }
 
@@ -934,8 +905,8 @@ public:
       }
       auto value = child.values().find(param_name);
       if (value != child.values().end()) {
-        rt.values().insert_or_assign(caller_name, rt.preserve_value_ownership()
-                                                      ? value->second.Share()
+        rt.values().insert_or_assign(caller_name, rt.retains_output(caller_name)
+                                                      ? std::move(value->second)
                                                       : value->second.DeepCopy());
         continue;
       }
@@ -943,8 +914,8 @@ public:
       EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: output '", param_name,
                           "' of model-local function '", op_type,
                           "' was not produced by the function body.");
-      Tensor result = rt.preserve_value_ownership() ? it->second.ShareStorage()
-                                                    : CloneTensor(it->second, rt.allocator());
+      Tensor result = rt.retains_output(caller_name) ? std::move(it->second)
+                                                     : CloneTensor(it->second, rt.allocator());
       result.name = caller_name;
       rt.Put(caller_name, std::move(result), RuntimeEventKind::kOutput);
     }
@@ -1030,9 +1001,6 @@ private:
 std::unique_ptr<KernelBase> ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt,
                                                      const std::string &domain,
                                                      const std::string &op_type) {
-  EXT_ENFORCE_INVALID(!rt.preserve_value_ownership() || domain != kDefaultOnnxDomain ||
-                          (op_type != "Loop" && op_type != "Scan"),
-                      "Persistent execution supports If and stateless functions, not Loop/Scan.");
   // A node referring to a model-local FunctionProto (registered by
   // ``RegisterModelFunctions`` from ``ModelProto::functions()``) takes priority over
   // the built-in kernel dispatch table so that user-defined functions
@@ -1043,12 +1011,9 @@ std::unique_ptr<KernelBase> ResolveNodeKernelDefault(const NodeProto &node, Runt
     auto fit = rt.functions().find(fkey);
     if (fit != rt.functions().end()) {
       const FunctionProto *func = fit->second;
-      return std::make_unique<ModelLocalFunctionKernel>(node, *func, rt.preserve_value_ownership());
+      return std::make_unique<ModelLocalFunctionKernel>(node, *func);
     }
   }
-
-  if (rt.preserve_value_ownership() && domain == kDefaultOnnxDomain && op_type == "Identity")
-    return std::make_unique<SharedIdentityKernel>(node);
 
   if (domain == kDefaultOnnxDomain && op_type == "If") {
     const GraphProto &then_branch = GetRequiredGraphAttribute(node, "then_branch");

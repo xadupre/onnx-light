@@ -3,7 +3,8 @@ runtime
 
 The ``runtime`` sub-namespace of ``onnx_core`` (``core::runtime``) hosts the
 generic execution engine: the runtime value types
-(:cpp:struct:`Tensor`, :cpp:struct:`Sequence`, :cpp:struct:`Map`),
+(:cpp:struct:`Tensor`, :cpp:struct:`Sequence`, :cpp:struct:`Map`,
+:cpp:struct:`RuntimeValue` for structured/encoded edges),
 :cpp:class:`RuntimeContext`, the node/graph/function/model traversal
 (:cpp:func:`RunNode`, :cpp:func:`RunNodes`, :cpp:func:`RunGraph`,
 :cpp:func:`RunFunction`, :cpp:func:`RunModel`),

@@ -40,6 +40,38 @@ using onnx_kernels::kernel::Unsqueeze;
 
 namespace Test {
 
+TEST(KernelClass, IdentityPreallocatedReadsBorrowedStrings) {
+  const KernelContext ctx{DefaultOpset(18)};
+  const onnx_kernels::kernel::Identity identity{ctx};
+  const Tensor owned = Tensor::FromStrings("", {3}, {"été", "", "東京"});
+  const Tensor borrowed = owned.BorrowView();
+  ASSERT_TRUE(borrowed.string_data.empty());
+  Tensor output = Tensor::FromStrings("", {3}, {"", "", ""});
+  identity(borrowed, output);
+  EXPECT_EQ(output.AsStrings(), owned.AsStrings());
+  output.string_data.clear();
+  EXPECT_THROW(identity(borrowed, output), std::invalid_argument);
+  const Tensor empty = Tensor::FromStrings("", {0}, {});
+  output = Tensor::FromStrings("", {0}, {});
+  identity(empty.BorrowView(), output);
+  EXPECT_TRUE(output.AsStrings().empty());
+}
+
+TEST(KernelClass, UnsqueezePreallocatedReadsBorrowedStrings) {
+  const KernelContext ctx{DefaultOpset(18)};
+  const Unsqueeze unsqueeze{ctx};
+  const Tensor owned = Tensor::FromStrings("", {3}, {"été", "", "東京"});
+  const Tensor borrowed = owned.BorrowView();
+  ASSERT_TRUE(borrowed.string_data.empty());
+  Tensor output = Tensor::FromStrings("", {1, 3, 1}, {"", "", ""});
+  unsqueeze(borrowed, {0, -1}, output);
+  EXPECT_EQ(output.AsStrings(), owned.AsStrings());
+  const Tensor empty = Tensor::FromStrings("", {0}, {});
+  output = Tensor::FromStrings("", {1, 0}, {});
+  unsqueeze(empty.BorrowView(), {0}, output);
+  EXPECT_TRUE(output.AsStrings().empty());
+}
+
 TEST(KernelClass, NativeCompressStringBorrowedAndPreallocated) {
   const KernelContext ctx{DefaultOpset(18)};
   const Tensor owned = Tensor::FromStrings("", {2, 2}, {"été", "", "東京", "D"});

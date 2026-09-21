@@ -24,11 +24,8 @@ Tensor InitializerView(const TensorProto &proto, const std::shared_ptr<void> &mo
     shape.push_back(static_cast<int64_t>(dimension));
   if (proto.is_raw_data()) {
     const auto &raw = proto.raw_data();
-    EXT_ENFORCE_INVALID(
-        !raw.is_borrowed() || raw.owner().use_count() != 0,
-        "Persistent initializer: borrowed raw_data requires its own backing owner.");
     return Tensor::Borrow(proto.name(), proto.data_type(), shape, raw.data(), raw.size(),
-                          raw.owner().use_count() != 0 ? raw.owner() : model_owner);
+                          raw.is_borrowed() ? raw.owner() : model_owner);
   }
   const auto borrow = [&](const auto &values) {
     return Tensor::Borrow(
@@ -47,7 +44,7 @@ Tensor InitializerView(const TensorProto &proto, const std::shared_ptr<void> &mo
   case DataType::INT32:
     return borrow(proto.int32_data().values());
   default:
-    EXT_THROW_INVALID("Persistent execution requires raw storage for this initializer dtype.");
+    return TensorFromProto(proto);
   }
 }
 
@@ -214,7 +211,7 @@ void RuntimeSession::RecordInitializers(const GraphProto &graph, InitializerMode
       Tensor value = TensorFromProto(initializer);
       if (value.is_borrowed())
         value = value.ToOwned();
-      initializers_.push_back(std::move(value));
+      initializers_.push_back(std::make_shared<Tensor>(std::move(value)));
     }
     if (overridable.find(initializer.name()) == overridable.end()) {
       immutable_initializer_names_.insert(initializer.name());
@@ -225,8 +222,6 @@ void RuntimeSession::RecordInitializers(const GraphProto &graph, InitializerMode
 std::unordered_set<std::string> RuntimeSession::SeedInitializers(RuntimeContext &rt) const {
   std::unordered_set<std::string> seeded;
   if (initializer_graph_ != nullptr) {
-    EXT_ENFORCE_INVALID(rt.preserve_value_ownership(),
-                        "Borrowed initializers require ownership-preserving execution.");
     for (const TensorProto &initializer : initializer_graph_->initializer())
       if (!rt.Has(initializer.name())) {
         rt.Set(initializer.name(), InitializerView(initializer, rt.model_owner()),
@@ -235,15 +230,21 @@ std::unordered_set<std::string> RuntimeSession::SeedInitializers(RuntimeContext 
       }
     return seeded;
   }
-  for (const Tensor &initializer : initializers_) {
+  for (const auto &owner : initializers_) {
+    const Tensor &initializer = *owner;
     if (!rt.Has(initializer.name)) {
       // Borrowed string views leave string_data empty. Materializes the payload for
       // kernels and callbacks without exposing the cached strings to mutation.
-      rt.Set(initializer.name,
-             rt.preserve_value_ownership()               ? initializer.ShareStorage()
-             : initializer.data_type == DataType::STRING ? initializer.ToOwned()
-                                                         : initializer.BorrowView(),
-             RuntimeEventKind::kInitializer);
+      Tensor view;
+      if (initializer.data_type == DataType::STRING)
+        view = rt.retains_output(initializer.name)
+                   ? Tensor::BorrowStrings(initializer.name, initializer.shape,
+                                           initializer.AsStrings(), owner)
+                   : initializer.ToOwned();
+      else
+        view = Tensor::Borrow(initializer.name, initializer.data_type, initializer.shape,
+                              initializer.bytes(), initializer.size_bytes(), owner);
+      rt.Set(initializer.name, std::move(view), RuntimeEventKind::kInitializer);
       seeded.insert(initializer.name);
     }
   }
@@ -414,7 +415,7 @@ bool RuntimeSession::ProducesDeclaredOutput(const NodeProto &node) const {
 void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContext &rt) const {
   for (int i = 0; i < node.output_size(); ++i) {
     const std::string &name = node.output(i);
-    if (name.empty()) {
+    if (name.empty() || rt.retains_output(name)) {
       continue;
     }
     // Resolve the allocation role of this individual output slot rather than of
@@ -653,7 +654,7 @@ void RuntimeSession::Run(RuntimeContext &rt) {
                                         .count();
         rt.RecordRunNodeEvent(node, domain, op_type, start_time_ns, duration_ns);
       }
-      if (!allow_external_output_allocators_ && !rt.preserve_value_ownership()) {
+      if (!allow_external_output_allocators_) {
         VerifyOutputAllocators(*nodes[index], rt);
       }
       if (check_shapes) {
@@ -719,12 +720,10 @@ void RuntimeSession::Run(RuntimeContext &rt) {
 
 void RuntimeSession::MaterializeBorrowedOutputs(RuntimeContext &rt) const {
   for (const std::string &name : output_names_) {
+    if (rt.retains_output(name))
+      continue;
     auto value = rt.values().find(name);
     if (value != rt.values().end()) {
-      if (rt.preserve_value_ownership()) {
-        value->second = value->second.Share();
-        continue;
-      }
       const auto detach = [&](auto &&self, RuntimeValue &item, size_t depth) -> void {
         EXT_ENFORCE_INVALID(depth <= RuntimeValue::kMaxDepth,
                             "RuntimeSession: maximum structured output depth exceeded.");
@@ -742,9 +741,7 @@ void RuntimeSession::MaterializeBorrowedOutputs(RuntimeContext &rt) const {
       continue;
     }
     Tensor &output = rt.Get(name);
-    if (rt.preserve_value_ownership()) {
-      output = output.ShareStorage();
-    } else if (output.is_borrowed()) {
+    if (output.is_borrowed()) {
       output = output.ToOwned();
     }
   }

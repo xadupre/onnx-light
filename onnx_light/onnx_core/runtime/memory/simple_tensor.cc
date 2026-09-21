@@ -369,39 +369,31 @@ Tensor Tensor::Borrow(std::string name, int32_t dtype, Shape shape, const uint8_
   return t;
 }
 
-Tensor Tensor::BorrowStrings(std::string name, Shape shape,
-                             const std::vector<std::string> &strings) {
+Tensor Tensor::BorrowStrings(std::string name, Shape shape, const std::vector<std::string> &strings,
+                             std::shared_ptr<void> owner) {
   Tensor t;
   t.name = std::move(name);
   t.data_type = static_cast<int32_t>(DataType::STRING);
   t.shape = std::move(shape);
   t.borrow_string_data_ = &strings;
+  t.borrow_owner_ = std::move(owner);
   return t;
 }
 
-Tensor Tensor::ShareStorage() const {
-  if (borrow_owner_.use_count() == 0) {
-    EXT_ENFORCE_INVALID(!is_borrowed(),
-                        "Tensor::ShareStorage: cannot retain an ownerless borrowed tensor.");
-    if (allocation_ && !allocation_.holds_lease()) {
-      auto *arena = dynamic_cast<IOArena *>(allocation_.owner());
-      EXT_ENFORCE_INVALID(arena != nullptr,
-                          "Tensor::ShareStorage: allocation requires a self-owning I/O lease.");
-      allocation_ = arena->ExportHandle(std::move(allocation_));
-    }
-    auto owner = std::make_shared<Tensor>();
-    owner->data_type = data_type;
-    owner->data = std::move(data);
-    owner->string_data = std::move(string_data);
-    owner->allocation_ = std::move(allocation_);
-    borrow_ptr_ = owner->bytes();
-    borrow_size_ = owner->size_bytes();
-    if (data_type == DataType::STRING)
-      borrow_string_data_ = &owner->string_data;
-    borrow_owner_ = std::move(owner);
+Tensor Tensor::RetainStorage() && {
+  if (borrow_owner_.use_count() != 0)
+    return std::move(*this);
+  EXT_ENFORCE_INVALID(!is_borrowed(),
+                      "Tensor::RetainStorage: cannot retain an ownerless borrowed tensor.");
+  if (allocation_ && !allocation_.holds_lease()) {
+    auto *arena = dynamic_cast<IOArena *>(allocation_.owner());
+    EXT_ENFORCE_INVALID(arena != nullptr && !arena->weak_from_this().expired(),
+                        "Tensor::RetainStorage: allocation requires a self-owning I/O lease.");
+    allocation_ = arena->ExportHandle(std::move(allocation_));
   }
-  Tensor result = Borrow(name, data_type, shape, bytes(), size_bytes(), borrow_owner_);
-  result.borrow_string_data_ = borrow_string_data_;
+  auto owner = std::make_shared<Tensor>(std::move(*this));
+  Tensor result = owner->BorrowView();
+  result.borrow_owner_ = std::move(owner);
   return result;
 }
 

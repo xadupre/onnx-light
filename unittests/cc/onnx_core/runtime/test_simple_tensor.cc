@@ -59,7 +59,7 @@ TEST(SimpleTensorSharing, StringAndEmptyStorageRetainsPointers) {
 }
 
 TEST(SimpleTensorSharing, BorrowedOwnersRemainAliveAndOwnerlessBorrowsReject) {
-  auto data = std::make_shared<std::vector<float>>(1, 3);
+  auto data = std::make_shared<std::vector<float>>(1, 3.0f);
   std::weak_ptr<std::vector<float>> weak = data;
   const auto *bytes = reinterpret_cast<const uint8_t *>(data->data());
   Tensor borrowed = Tensor::Borrow("value", DataType::FLOAT, {1}, bytes, sizeof(float), data);

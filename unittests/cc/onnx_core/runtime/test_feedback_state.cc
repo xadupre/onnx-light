@@ -404,7 +404,7 @@ TEST(FeedbackState, RetainsInitialOwnerAndRejectsUnleasedExecutionArena) {
   RuntimeContext context(KernelContext(DefaultOpset(18)),
                          RuntimeContextOptions{.allocator = &allocator});
   RegisterStep(context);
-  auto data = std::make_shared<std::vector<float>>(1, 5);
+  auto data = std::make_shared<std::vector<float>>(1, 5.0f);
   std::weak_ptr<std::vector<float>> owner = data;
   RuntimeValueMap initial{
       {"past", RuntimeValue(Tensor::Borrow("", DataType::FLOAT, {1},

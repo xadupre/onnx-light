@@ -5,6 +5,60 @@ TensorProto
 .. autoclass:: onnx_light.onnx.TensorProto
     :members:
 
+DLPack import
+-------------
+
+``TensorProto.from_dlpack(array, name="")`` constructs a tensor without allocating
+or copying its payload. ``array`` must implement both ``__dlpack__`` and
+``__dlpack_device__``. For example::
+
+    import numpy
+    from onnx_light.onnx import TensorProto
+
+    array = numpy.arange(12, dtype=numpy.float32).reshape(3, 4)
+    tensor = TensorProto.from_dlpack(array, name="weights")
+    del array
+    serialized = tensor.SerializeToString()
+
+The explicit import API does not change ``numpy_helper.from_array``: that
+compatibility path still copies. Reading the Python ``tensor.raw_data`` property
+also returns a bytes copy; use ``numpy.from_dlpack(tensor)`` to inspect shared
+storage without copying.
+
+Import accepts only CPU device ``(1, 0)``, compact row-major storage, and the
+whole-byte dtypes listed under export below. Dimensions and byte counts are
+validated, including overflow. Singleton strides are ignored, as are strides of
+empty tensors. Nonzero byte offsets are supported when element-aligned, with
+pointer overflow checks. The producer must supply a valid allocation covering
+the described storage; DLPack does not convey its allocation size.
+
+DLPack describes native-endian storage. Producers must reject non-native-endian
+arrays (as NumPy does); multi-byte imports on big-endian hosts are rejected
+because ONNX requires little-endian bytes. Unsupported layouts, devices, dtypes,
+misalignment, copied versioned exports, and unknown flags fail rather than being
+converted. Read-only versioned exports are accepted.
+
+The consumer requests ``stream=None``, ``max_version=(1, 0)``, and ``copy=False``.
+For legacy producers that reject negotiation keywords, it retries with only
+``stream=None``. It never retries a synchronization failure. CPU data must be
+ready for synchronous access when export returns: no accelerator streams,
+events, or asynchronous synchronization are supported.
+
+Both legacy ``dltensor`` and versioned ``dltensor_versioned`` capsules are consumed
+exactly once. Metadata is copied, while ``raw_data`` borrows the allocation.
+The managed DLPack deleter runs under the Python GIL after the last shared owner
+is released, including on validation failure after capsule consumption. This
+also applies to zero-sized tensors with null data pointers. The original Python
+array may be deleted immediately; the producer's managed tensor retains storage.
+
+``copy.copy(tensor)``, ``TensorProto.CopyFrom``, repeated tensor insertion, and
+GraphBuilder's ``make_initializer`` / ``make_initializer_move`` preserve the
+borrowed owner, as do the builder's returned graph and model. ``CopyFrom`` and
+``copy.copy`` still copy owned payloads and ownerless borrowed buffers.
+Serialization creates independent bytes; reparsing those
+bytes does not retain the DLPack owner. Treat shared storage as read-only while
+the tensor, builder, or model is in use, including through the original array.
+
 DLPack export
 -------------
 

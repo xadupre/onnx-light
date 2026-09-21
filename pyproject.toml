@@ -8,7 +8,7 @@ version = "0.1.28"
 description = "onnx without protobuf"
 readme = "README.md"
 license = "Apache-2.0"
-license-files = ["LICENSE"]
+license-files = ["LICENSE", "onnx_light/onnx_proto/dlpack/LICENSE"]
 requires-python = ">=3.12"
 dependencies = [
     "numpy>=2.2",

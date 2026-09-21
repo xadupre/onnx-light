@@ -86,7 +86,7 @@ Tensor StringNormalizer::operator()(const Tensor &x, CaseChangeAction case_chang
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::STRING),
                       "kernel::StringNormalizer only supports STRING tensors.");
   const int64_t c = ExtractC(x.shape);
-  EXT_ENFORCE_INVALID(static_cast<int64_t>(x.AsStrings().size()) == c,
+  EXT_ENFORCE_INVALID(static_cast<int64_t>(x.string_data.size()) == c,
                       "kernel::StringNormalizer input string_data size does not match its shape.");
 
   // Build the stopword lookup set, lowercasing every entry when
@@ -102,7 +102,7 @@ Tensor StringNormalizer::operator()(const Tensor &x, CaseChangeAction case_chang
   std::vector<std::string> kept;
   kept.reserve(static_cast<size_t>(c));
   for (int64_t i = 0; i < c; ++i) {
-    const std::string &s = x.AsStrings()[static_cast<size_t>(i)];
+    const std::string &s = x.string_data[static_cast<size_t>(i)];
     const std::string &lookup = is_case_sensitive ? s : AsciiToLower(s);
     if (stopword_set.find(lookup) == stopword_set.end()) {
       kept.push_back(s);

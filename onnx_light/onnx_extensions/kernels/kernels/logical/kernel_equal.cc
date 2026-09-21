@@ -63,9 +63,9 @@ StringEqualBroadcast CheckStringEqualInputs(const Tensor &x, const Tensor &y) {
   EXT_ENFORCE_INVALID(
       nx == ny || nx == 1 || ny == 1,
       "kernel::Equal STRING inputs only support equal-shape tensors or scalar broadcasting.");
-  EXT_ENFORCE_INVALID(static_cast<int64_t>(x.AsStrings().size()) == nx,
+  EXT_ENFORCE_INVALID(static_cast<int64_t>(x.string_data.size()) == nx,
                       "kernel::Equal input ``x`` string_data size does not match its shape.");
-  EXT_ENFORCE_INVALID(static_cast<int64_t>(y.AsStrings().size()) == ny,
+  EXT_ENFORCE_INVALID(static_cast<int64_t>(y.string_data.size()) == ny,
                       "kernel::Equal input ``y`` string_data size does not match its shape.");
   StringEqualBroadcast bi;
   bi.nx = nx;
@@ -82,8 +82,8 @@ Tensor EqualStringAlloc(const Tensor &x, const Tensor &y, int64_t grain,
   Tensor out = MakeOutputTensor(DataType::BOOL, bi.shape, out_n_bytes, allocator);
   ParallelFor(bi.element_count, grain, [&x, &y, &out, &bi](int64_t begin, int64_t end) {
     for (int64_t i = begin; i < end; ++i) {
-      const std::string &a = x.AsStrings()[bi.nx == 1 ? 0 : static_cast<size_t>(i)];
-      const std::string &b = y.AsStrings()[bi.ny == 1 ? 0 : static_cast<size_t>(i)];
+      const std::string &a = x.string_data[bi.nx == 1 ? 0 : static_cast<size_t>(i)];
+      const std::string &b = y.string_data[bi.ny == 1 ? 0 : static_cast<size_t>(i)];
       out.mutable_bytes()[static_cast<size_t>(i)] = a == b ? 1 : 0;
     }
   });
@@ -101,8 +101,8 @@ void EqualStringInPlace(const Tensor &x, const Tensor &y, Tensor &output, int64_
                       "kernel::Equal preallocated output ``data`` has unexpected size.");
   ParallelFor(bi.element_count, grain, [&x, &y, &output, &bi](int64_t begin, int64_t end) {
     for (int64_t i = begin; i < end; ++i) {
-      const std::string &a = x.AsStrings()[bi.nx == 1 ? 0 : static_cast<size_t>(i)];
-      const std::string &b = y.AsStrings()[bi.ny == 1 ? 0 : static_cast<size_t>(i)];
+      const std::string &a = x.string_data[bi.nx == 1 ? 0 : static_cast<size_t>(i)];
+      const std::string &b = y.string_data[bi.ny == 1 ? 0 : static_cast<size_t>(i)];
       output.mutable_bytes()[static_cast<size_t>(i)] = a == b ? 1 : 0;
     }
   });

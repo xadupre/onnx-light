@@ -916,52 +916,153 @@ TEST(FeedbackState, EncodedExternalViewsRetainTheMessageWithoutMutatingIt) {
 TEST(FeedbackState, EncodedMessageOwnerDoesNotReplaceBorrowedBackingOwner) {
   uint8_t payload = 5;
   auto message = std::make_shared<EncodedValueProto>();
-  message->mutable_struct_type()->set_type_ref(7);
+  auto *array = message->mutable_struct_type()->mutable_array();
+  array->set_dimension(1);
+  *array->mutable_element_type() = FloatType();
+  array->mutable_element_type()->mutable_tensor_type()->set_elem_type(TensorProto::UINT8);
   message->mutable_raw_data()->assign_borrowed(&payload, 1);
   RuntimeValue view = RuntimeValue::FromEncodedView(*message, message);
-  EXPECT_THROW(std::move(view).Retain(), std::invalid_argument);
+  try {
+    std::move(view).Retain();
+    FAIL() << "Ownerless encoded backing was retained.";
+  } catch (const std::invalid_argument &error) {
+    EXPECT_NE(std::string(error.what()).find("ownerless encoded payload"), std::string::npos);
+  }
   const EncodedValueProto &retained = *message;
   EXPECT_EQ(retained.raw_data().data(), &payload);
 }
 
-TEST(FeedbackState, StringsAndEmptyTensorsShareRatherThanCopy) {
-  for (bool strings : {false, true}) {
+TEST(FeedbackState, EmptyNumericTensorsShareRatherThanCopy) {
+  ModelProto model = Model();
+  auto *identity = model.mutable_graph()->mutable_node(0);
+  identity->clear_input();
+  identity->add_input("past");
+  TypeProto type;
+  type.mutable_tensor_type()->set_elem_type(DataType::FLOAT);
+  type.mutable_tensor_type()->mutable_shape()->add_dim()->set_dim_value(0);
+  *model.mutable_graph()->mutable_input(0)->mutable_type() = type;
+  *model.mutable_graph()->mutable_output(0)->mutable_type() = type;
+  RuntimeValueMap initial;
+  initial.emplace("past", RuntimeValue(Tensor::FromFloat("", {0}, {})));
+  const Tensor &source = initial.at("past").tensor;
+  const void *payload = source.bytes();
+  FeedbackState state(model, std::move(initial));
+  RuntimeContext context;
+  context.RegisterCustomKernel("test.feedback", "Step",
+                               [](const NodeProto &node, RuntimeContext &rt) {
+                                 rt.Put(node.output(0), rt.Get(node.input(0)).BorrowView());
+                               });
+  const auto output = state.Run(context, {{"tokens", Number(0)}});
+  const Tensor &result = output.at("present").tensor;
+  EXPECT_EQ(result.bytes(), payload);
+  state.Close();
+  initial.clear();
+  EXPECT_EQ(result.size_bytes(), 0u);
+}
+
+TEST(FeedbackState, RejectsStringDeclarationsBeforeReadingInitialState) {
+  TypeProto strings = FloatType();
+  strings.mutable_tensor_type()->set_elem_type(DataType::STRING);
+  for (const TypeProto &type : {strings, Structure({{"cache", Structure({{"text", strings}})}})}) {
     ModelProto model = Model();
-    auto *opset = model.add_opset_import();
-    opset->set_version(18);
-    auto *identity = model.mutable_graph()->mutable_node(0);
-    identity->set_domain("");
-    identity->set_op_type("Identity");
-    identity->clear_input();
-    identity->add_input("past");
-    TypeProto type;
-    type.mutable_tensor_type()->set_elem_type(strings ? DataType::STRING : DataType::FLOAT);
-    type.mutable_tensor_type()->mutable_shape()->add_dim()->set_dim_value(strings ? 1 : 0);
     *model.mutable_graph()->mutable_input(0)->mutable_type() = type;
     *model.mutable_graph()->mutable_output(0)->mutable_type() = type;
-    RuntimeValueMap initial;
-    initial.emplace("past", RuntimeValue(strings ? Tensor::MakeString("", {1}, {"hello"})
-                                                 : Tensor::FromFloat("", {0}, {})));
-    const Tensor &source = initial.at("past").tensor;
-    const void *payload = strings ? static_cast<const void *>(source.AsStrings().data())
-                                  : static_cast<const void *>(source.bytes());
-    FeedbackState state(model, std::move(initial));
-    RuntimeContext context(KernelContext(DefaultOpset(18)));
-    context.RegisterCustomKernel("", "Identity", [](const NodeProto &node, RuntimeContext &rt) {
-      rt.Put(node.output(0), rt.Get(node.input(0)).BorrowView());
-    });
-    const auto output = state.Run(context, {{"tokens", Number(0)}});
-    const Tensor &result = output.at("present").tensor;
-    EXPECT_EQ(strings ? static_cast<const void *>(result.AsStrings().data())
-                      : static_cast<const void *>(result.bytes()),
-              payload);
-    state.Close();
-    initial.clear();
-    if (strings)
-      EXPECT_EQ(result.AsStrings()[0], "hello");
-    else
-      EXPECT_EQ(result.size_bytes(), 0u);
+    try {
+      FeedbackState state(model, {});
+      FAIL() << "String declaration was accepted.";
+    } catch (const std::invalid_argument &error) {
+      EXPECT_NE(std::string(error.what()).find("String tensors cannot be persistent"),
+                std::string::npos);
+    }
   }
+}
+
+TEST(FeedbackState, RuntimeRetentionRejectsNestedStringsAndEncodedStringConstants) {
+  RuntimeValue nested(RuntimeValueMap{
+      {"cache", RuntimeValue(RuntimeValueMap{
+                    {"text", RuntimeValue(Tensor::MakeString("", {1}, {"hello"}))}})}});
+  EXPECT_THROW(std::move(nested).Retain(), std::invalid_argument);
+  EncodedValueProto encoded;
+  auto *structure = encoded.mutable_struct_type()->mutable_structure();
+  auto *payload = structure->add_field();
+  payload->set_name("payload");
+  *payload->mutable_type() = FloatType();
+  auto *constant = structure->add_field();
+  constant->set_name("label");
+  constant->mutable_constant()->set_data_type(TensorProto::STRING);
+  constant->mutable_constant()->add_dims(1);
+  constant->mutable_constant()->add_string_data("hello");
+  encoded.set_raw_data(std::string(sizeof(float), '\0'));
+  StructTypeCatalogue catalogue;
+  EXPECT_NO_THROW(catalogue.ValidateEncodedValue(encoded));
+  RuntimeValue inline_value(encoded);
+  EXPECT_THROW(std::move(inline_value).Retain(), std::invalid_argument);
+  ModelProto model;
+  *model.add_struct_types() = encoded.struct_type();
+  model.mutable_struct_types(0)->set_type_id(7);
+  catalogue.Build(model);
+  encoded.mutable_struct_type()->set_type_ref(7);
+  RuntimeValue referenced(encoded);
+  EXPECT_THROW(std::move(referenced).Retain(catalogue), std::invalid_argument);
+  model.mutable_struct_types(0)
+      ->mutable_structure()
+      ->mutable_field(1)
+      ->mutable_constant()
+      ->set_data_type(TensorProto::FLOAT);
+  auto *numeric_constant =
+      model.mutable_struct_types(0)->mutable_structure()->mutable_field(1)->mutable_constant();
+  numeric_constant->clear_string_data();
+  numeric_constant->add_float_data(1.0f);
+  catalogue.Build(model);
+  RuntimeValue numeric(encoded);
+  EXPECT_NO_THROW(std::move(numeric).Retain(catalogue));
+  encoded.mutable_logical_type()->mutable_tensor_type()->set_elem_type(TensorProto::STRING);
+  RuntimeValue logical_strings(encoded);
+  EXPECT_THROW(std::move(logical_strings).Retain(catalogue), std::invalid_argument);
+}
+
+TEST(FeedbackState, OrdinaryStringFeedsAndOutputsAreNotRetained) {
+  ModelProto model = Model();
+  auto *input = model.mutable_graph()->add_input();
+  input->set_name("text");
+  *input->mutable_type() = FloatType();
+  input->mutable_type()->mutable_tensor_type()->set_elem_type(DataType::STRING);
+  auto *output = model.mutable_graph()->add_output();
+  output->set_name("text_out");
+  *output->mutable_type() = input->type();
+  model.mutable_graph()->mutable_node(0)->add_input("text");
+  model.mutable_graph()->mutable_node(0)->add_output("text_out");
+  FeedbackState state(model, {{"past", Number(0)}});
+  RuntimeContext context;
+  context.RegisterCustomKernel("test.feedback", "Step", [](const NodeProto &, RuntimeContext &rt) {
+    EXPECT_TRUE(rt.retains_output("present"));
+    EXPECT_FALSE(rt.retains_output("text_out"));
+    rt.Put("present", Tensor::FromFloat("", {1}, {rt.Get("past").AsFloat()[0] + 1.0f}));
+    rt.Put("text_out", rt.Get("text").ToOwned());
+  });
+  for (float expected : {1.0f, 2.0f}) {
+    RuntimeValueMap feeds{{"tokens", Number(0)},
+                          {"text", RuntimeValue(Tensor::MakeString("", {1}, {"hello"}))}};
+    auto outputs = state.Run(context, feeds);
+    feeds.clear();
+    EXPECT_EQ(outputs.at("text_out").tensor.AsStrings()[0], "hello");
+    EXPECT_EQ(outputs.at("text_out").tensor.borrowed_owner().use_count(), 0);
+    const auto retained = state.Values();
+    EXPECT_EQ(retained.size(), 1u);
+    EXPECT_EQ(Number(retained.at("past")), expected);
+  }
+}
+
+TEST(FeedbackState, CustomStringOutputCannotReplaceNumericState) {
+  ModelProto model = Model();
+  FeedbackState state(model, {{"past", Number(3)}});
+  RuntimeContext context;
+  context.RegisterCustomKernel("test.feedback", "Step",
+                               [](const NodeProto &node, RuntimeContext &rt) {
+                                 rt.Put(node.output(0), Tensor::MakeString("", {1}, {"invalid"}));
+                               });
+  EXPECT_THROW(state.Run(context, {{"tokens", Number(1)}}), std::invalid_argument);
+  EXPECT_EQ(Number(state.Values().at("past")), 3.0f);
 }
 
 TEST(FeedbackState, RejectsOwnerlessInitialAndOutputBorrowsTransactionally) {

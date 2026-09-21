@@ -156,7 +156,7 @@ std::vector<RuntimeValue> FeedbackState::ValidateInitial(RuntimeValueMap initial
     EXT_ENFORCE_INVALID(it != initial.end(), "FeedbackState: missing initial whole input '",
                         binding.input, "'.");
     Validate(it->second, *binding.input_type, catalogue_, symbols);
-    result.push_back(std::move(it->second).Retain());
+    result.push_back(std::move(it->second).Retain(catalogue_));
   }
   EXT_ENFORCE_INVALID(initial.size() == bindings_.size(),
                       "FeedbackState: initial values must name exactly the retained whole inputs.");
@@ -232,7 +232,7 @@ RuntimeValueMap FeedbackState::Run(RuntimeContext &context, const RuntimeValueMa
   for (const auto &binding : bindings_) {
     RuntimeValue &value = outputs.at(binding.output);
     Validate(value, *binding.input_type, catalogue_, next_symbols);
-    value = std::move(value).Retain();
+    value = std::move(value).Retain(catalogue_);
     next.push_back(value.BorrowView());
   }
   if (completion != nullptr) {

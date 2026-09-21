@@ -359,7 +359,7 @@ Tensor TfIdfVectorizer::operator()(const Tensor &x, Mode mode, int64_t min_gram_
           // ``string_data`` is contiguous row-major, so the row can be
           // read in place without copying it into a scratch buffer.
           const std::string *row_data =
-              x.AsStrings().data() + static_cast<size_t>(r) * static_cast<size_t>(c_dim);
+              x.string_data.data() + static_cast<size_t>(r) * static_cast<size_t>(c_dim);
           AccumulateRow<std::string>(row_data, c_dim, r, output_size, min_gram_length,
                                      max_gram_length, max_skip_count, ngram_indexes, root,
                                      frequencies);

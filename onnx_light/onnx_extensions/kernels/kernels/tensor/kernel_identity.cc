@@ -18,7 +18,7 @@ Tensor Identity::operator()(const Tensor &input, RuntimeContext *rt) const {
           : MakeOutputTensor(input.data_type, input.shape, input.size_bytes(), nullptr));
   output.name = input.name;
   if (input.data_type == static_cast<int32_t>(DataType::STRING)) {
-    output.string_data = input.AsStrings();
+    output.string_data = input.string_data;
   } else if (input.size_bytes() != 0) {
     std::memcpy(output.mutable_bytes(), input.bytes(), input.size_bytes());
   }
@@ -31,9 +31,9 @@ void Identity::operator()(const Tensor &input, Tensor &output) const {
   EXT_ENFORCE_INVALID(output.shape == input.shape,
                       "kernel::Identity: preallocated output shape mismatch.");
   if (input.data_type == static_cast<int32_t>(DataType::STRING)) {
-    EXT_ENFORCE_INVALID(output.string_data.size() == input.AsStrings().size(),
+    EXT_ENFORCE_INVALID(output.string_data.size() == input.string_data.size(),
                         "kernel::Identity: preallocated string output size mismatch.");
-    output.string_data = input.AsStrings();
+    output.string_data = input.string_data;
   } else {
     EXT_ENFORCE_INVALID(output.size_bytes() == input.size_bytes(),
                         "kernel::Identity: preallocated output byte-size mismatch.");

@@ -36,9 +36,15 @@ const source. ``std::move(tensor).RetainStorage()`` explicitly consumes a tensor
 and returns an owner-retaining view; ``BorrowView()`` never promotes storage.
 Invocation inputs, selected outputs and ``Values()`` share payload owners.
 Their field maps and tensor metadata are independent. Callers and kernels
-must treat shared numeric buffers, strings, and encoded messages as read-only.
+must treat shared numeric buffers and encoded messages as read-only.
 Publication is transactional for owner handles, not a rollback mechanism for
 mutating aliases.
+
+String tensors cannot be persistent, directly or inside a selected whole
+structure or encoded layout (including constant fields and catalogue references).
+The shared graph validator rejects these declarations before initialization.
+Runtime retention also rejects strings; it never copies them as a fallback.
+Nonpersistent string feeds and outputs keep ordinary materialized storage.
 
 Old output views remain valid after subsequent invocations, reset, or close.
 Inline buffers move into shared owners; borrowed buffers must supply a lifetime

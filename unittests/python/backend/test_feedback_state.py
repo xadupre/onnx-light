@@ -143,7 +143,7 @@ class TestFeedbackState(unittest.TestCase):
         state.close()
         numpy.testing.assert_array_equal(array(outputs[0]["traces"]), [[1, 1], [2, 2], [3, 3]])
 
-    def test_retained_strings_cross_sequence_and_if(self):
+    def test_ordinary_strings_cross_sequence_and_if(self):
         branch = helper.make_graph(
             [helper.make_node("SequenceAt", ["sequence", "index"], ["result"])],
             "branch",
@@ -154,31 +154,46 @@ class TestFeedbackState(unittest.TestCase):
         model = helper.make_model(
             helper.make_graph(
                 [
-                    helper.make_node("SequenceConstruct", ["past"], ["sequence"]),
+                    helper.make_node("Add", ["past", "delta"], ["present"]),
+                    helper.make_node("SequenceConstruct", ["text"], ["sequence"]),
                     helper.make_node(
-                        "If", ["condition"], ["present"], then_branch=branch, else_branch=branch
+                        "If", ["condition"], ["text_out"], then_branch=branch, else_branch=branch
                     ),
                 ],
                 "string_sequence",
                 [
-                    helper.make_tensor_value_info("past", onnx.TensorProto.STRING, [2]),
+                    helper.make_tensor_value_info("past", onnx.TensorProto.FLOAT, [2]),
+                    helper.make_tensor_value_info("delta", onnx.TensorProto.FLOAT, [2]),
+                    helper.make_tensor_value_info("text", onnx.TensorProto.STRING, [2]),
                     helper.make_tensor_value_info("condition", onnx.TensorProto.BOOL, []),
                 ],
-                [helper.make_tensor_value_info("present", onnx.TensorProto.STRING, [2])],
+                [
+                    helper.make_tensor_value_info("present", onnx.TensorProto.FLOAT, [2]),
+                    helper.make_tensor_value_info("text_out", onnx.TensorProto.STRING, [2]),
+                ],
             ),
             opset_imports=[helper.make_opsetid("", 18)],
         )
         add_binding(model, "past", "present")
-        initial = runtime.tensor_from_proto(
+        text = runtime.tensor_from_proto(
             numpy_helper.from_array(numpy.array(["a", "b"], dtype=object))
         )
-        state = runtime.FeedbackState(model, {"past": initial})
+        state = runtime.FeedbackState(model, {"past": numpy.zeros(2, dtype=numpy.float32)})
         context = make_context()
-        for condition in (True, False):
-            output = state.run(context, {"condition": numpy.array(condition)})
-            numpy.testing.assert_array_equal(
-                numpy_helper.to_array(runtime.tensor_to_proto(output["present"])), ["a", "b"]
+        for expected, condition in enumerate((True, False), 1):
+            output = state.run(
+                context,
+                {
+                    "condition": numpy.array(condition),
+                    "delta": numpy.ones(2, dtype=numpy.float32),
+                    "text": text,
+                },
             )
+            numpy.testing.assert_array_equal(
+                numpy_helper.to_array(runtime.tensor_to_proto(output["text_out"])), ["a", "b"]
+            )
+            numpy.testing.assert_array_equal(array(state.values["past"]), [expected, expected])
+            self.assertEqual(set(state.values), {"past"})
 
     def test_context_retention_is_bounded(self):
         state = runtime.FeedbackState(make_model(), {"past": numpy.zeros(2, dtype=numpy.float32)})
@@ -190,7 +205,7 @@ class TestFeedbackState(unittest.TestCase):
             state.run(context, feeds)
         self.assertEqual(sys.getrefcount(context), references)
 
-    def test_shared_string_computation(self):
+    def test_persistent_strings_rejected(self):
         model = parser.parse_model(
             '<ir_version: 10, opset_import: ["" : 20]>'
             "strings (string[2] past, string[2] suffix) => (string[2] present)"
@@ -200,16 +215,36 @@ class TestFeedbackState(unittest.TestCase):
         initial = runtime.tensor_from_proto(
             numpy_helper.from_array(numpy.array(["a", "b"], dtype=object))
         )
-        suffix = runtime.tensor_from_proto(
-            numpy_helper.from_array(numpy.array(["!", "?"], dtype=object))
+        with self.assertRaisesRegex(ValueError, "String tensors cannot be persistent"):
+            runtime.FeedbackState(model, {"past": initial})
+
+    def test_ordinary_string_computation_with_numeric_state(self):
+        model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 20]>'
+            "mixed (float[2] past, float[2] delta, string[2] text, string[2] suffix)"
+            " => (float[2] present, string[2] text_out)"
+            "{ present = Add(past, delta) text_out = StringConcat(text, suffix) }"
         )
-        state = runtime.FeedbackState(model, {"past": initial})
+        add_binding(model, "past", "present")
+        state = runtime.FeedbackState(model, {"past": numpy.zeros(2, dtype=numpy.float32)})
         context = runtime.RuntimeContext(runtime.KernelContext(runtime.default_opset(20)))
-        for expected in (["a!", "b?"], ["a!!", "b??"]):
-            result = state.run(context, {"suffix": suffix})["present"]
+        for expected in (1, 2):
+            feeds = {
+                "text": runtime.tensor_from_proto(
+                    numpy_helper.from_array(numpy.array(["a", "b"], dtype=object))
+                ),
+                "suffix": runtime.tensor_from_proto(
+                    numpy_helper.from_array(numpy.array(["!", "?"], dtype=object))
+                ),
+                "delta": numpy.ones(2, dtype=numpy.float32),
+            }
+            result = state.run(context, feeds)
+            del feeds
             numpy.testing.assert_array_equal(
-                numpy_helper.to_array(runtime.tensor_to_proto(result)), expected
+                numpy_helper.to_array(runtime.tensor_to_proto(result["text_out"])), ["a!", "b?"]
             )
+            numpy.testing.assert_array_equal(array(result["present"]), [expected, expected])
+            self.assertEqual(set(state.values), {"past"})
 
     def test_global_callback_interpreter_shutdown(self):
         result = subprocess.run(

@@ -760,6 +760,10 @@ Minimal rules
   contracts and shape constraints. Resolve the declarations once;
   validate actual value metadata before publication without copying or
   serializing payloads.
+* String tensors cannot be persistent, including nested tensor fields and
+  constants in selected whole structures or encoded layouts. The shared
+  declaration validator follows catalogue references recursively, and runtime
+  retention rejects incompatible actual values rather than copying them.
 * Every required whole input comes from current feeds or retained state;
   missing initial values, duplicate input/output selections, and current
   feeds overriding retained inputs are errors.
@@ -780,6 +784,8 @@ allowed; copying tensor or encoded payload bytes for state management is
 not. NumPy and PyTorch entry points must likewise retain supported source
 buffers without materializing payload copies, or report unsupported
 layouts/ownership explicitly.
+Ordinary nonpersistent string feeds and outputs remain supported with their
+normal materialized representation; they are not part of retained state.
 
 Returned outputs and retained state may share storage. Releasing caller
 references, resetting/closing a state or advancing another invocation must

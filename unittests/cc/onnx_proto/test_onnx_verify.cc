@@ -97,6 +97,75 @@ TEST(onnx_verify, PersistentBindings_WholeStructureCompatibility) {
       CompatiblePersistentStructTypes(catalogue, type.struct_type(), different.struct_type()));
 }
 
+TEST(onnx_verify, PersistentBindings_RejectsStringsInEitherEndpoint) {
+  for (bool input : {false, true}) {
+    ModelProto model = MakeValidModel();
+    auto *value =
+        input ? model.mutable_graph()->mutable_input(0) : model.mutable_graph()->mutable_output(0);
+    value->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::STRING);
+    auto *binding = model.mutable_graph()->add_persistent_bindings();
+    binding->set_input_name("x");
+    binding->set_output_name("y");
+    try {
+      VerifyPersistentBindings(nullptr, model.graph());
+      FAIL() << "String endpoint was accepted.";
+    } catch (const std::invalid_argument &error) {
+      EXPECT_NE(std::string(error.what()).find("String tensors cannot be persistent"),
+                std::string::npos);
+    }
+    model.mutable_graph()->clear_persistent_bindings();
+    EXPECT_NO_THROW(VerifyModel(model));
+  }
+}
+
+TEST(onnx_verify, PersistentTypes_TraversesContainerFieldsAndCatalogueDiamonds) {
+  StructTypeCatalogue catalogue;
+  TypeProto strings;
+  strings.mutable_tensor_type()->set_elem_type(TensorProto::STRING);
+  TypeProto sequence, optional, map, array, sparse;
+  *sequence.mutable_sequence_type()->mutable_elem_type() = strings;
+  *optional.mutable_optional_type()->mutable_elem_type() = strings;
+  map.mutable_map_type()->set_key_type(TensorProto::INT64);
+  *map.mutable_map_type()->mutable_value_type() = strings;
+  array.mutable_struct_type()->mutable_array()->set_dimension(2);
+  *array.mutable_struct_type()->mutable_array()->mutable_element_type() = strings;
+  sparse.mutable_sparse_tensor_type()->set_elem_type(TensorProto::STRING);
+  for (const auto &type : {strings, sequence, optional, map, array, sparse}) {
+    EXPECT_NO_THROW(catalogue.ValidateType(type));
+    EXPECT_THROW(ValidatePersistentType(catalogue, type), std::invalid_argument);
+  }
+
+  ModelProto model;
+  auto *leaf = model.add_struct_types();
+  leaf->set_type_id(1);
+  auto *field = leaf->mutable_structure()->add_field();
+  field->set_name("value");
+  field->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+  for (uint64_t id = 2; id < 20; ++id) {
+    auto *parent = model.add_struct_types();
+    parent->set_type_id(id);
+    for (const char *name : {"left", "right"}) {
+      auto *child = parent->mutable_structure()->add_field();
+      child->set_name(name);
+      child->mutable_type()->mutable_struct_type()->set_type_ref(id - 1);
+    }
+  }
+  catalogue.Build(model);
+  TypeProto root;
+  root.mutable_struct_type()->set_type_ref(19);
+  EXPECT_NO_THROW(ValidatePersistentType(catalogue, root));
+  model.mutable_struct_types(0)
+      ->mutable_structure()
+      ->mutable_field(0)
+      ->mutable_type()
+      ->mutable_tensor_type()
+      ->set_elem_type(TensorProto::STRING);
+  catalogue.Build(model);
+  EXPECT_THROW(ValidatePersistentType(catalogue, root), std::invalid_argument);
+  StructTypeCatalogue empty;
+  EXPECT_THROW(ValidatePersistentType(empty, root), std::invalid_argument);
+}
+
 TEST(onnx_verify, PersistentBindings_RejectsLegacyFieldPathWire) {
   for (const auto &wire : {std::string("\x1a\x05"
                                        "cache"),

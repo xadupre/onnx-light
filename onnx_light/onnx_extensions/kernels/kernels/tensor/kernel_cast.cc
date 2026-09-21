@@ -626,7 +626,7 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
     EXT_ENFORCE_INVALID(static_cast<int64_t>(output.string_data.size()) == n,
                         "kernel::Cast preallocated STRING output must have one entry per element.");
     if (from_string) {
-      output.string_data = x.AsStrings();
+      output.string_data = x.string_data;
       return;
     }
     for (int64_t i = 0; i < n; ++i) {
@@ -641,10 +641,10 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
                       "kernel::Cast preallocated output buffer has unexpected size in bytes.");
 
   if (from_string) {
-    EXT_ENFORCE_INVALID(static_cast<int64_t>(x.AsStrings().size()) == n,
+    EXT_ENFORCE_INVALID(static_cast<int64_t>(x.string_data.size()) == n,
                         "kernel::Cast STRING input must have one entry per element.");
     for (int64_t i = 0; i < n; ++i) {
-      StoreFromDouble(output, i, ParseAsDouble(x.AsStrings()[static_cast<size_t>(i)]));
+      StoreFromDouble(output, i, ParseAsDouble(x.string_data[static_cast<size_t>(i)]));
     }
     return;
   }

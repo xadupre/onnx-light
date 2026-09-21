@@ -5,6 +5,7 @@
 #pragma once
 
 #include "onnx_core/runtime/memory/simple_tensor.h"
+#include "onnx_proto/onnx_verify.h"
 #include <unordered_map>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
@@ -47,36 +48,42 @@ struct RuntimeValue {
     return *encoded;
   }
 
-  /** Returns independent metadata borrowing tensor storage, without changing this value. */
+  /** Borrows numeric storage and materializes ordinary string fields without changing this value.
+   */
   RuntimeValue BorrowView() const { return CopyAtDepth(0, false); }
 
   /** Returns independent owned payloads. */
   RuntimeValue DeepCopy() const { return CopyAtDepth(0, true); }
 
   /** Consumes a selected whole value and explicitly retains its backing storage. */
-  RuntimeValue Retain() && {
-    RetainAtDepth(0);
+  RuntimeValue Retain(const StructTypeCatalogue &catalogue = {}) && {
+    RetainAtDepth(0, catalogue);
     return std::move(*this);
   }
 
 private:
-  void RetainAtDepth(size_t depth) {
+  void RetainAtDepth(size_t depth, const StructTypeCatalogue &catalogue) {
     EXT_ENFORCE_INVALID(depth <= kMaxDepth, "RuntimeValue: maximum nesting depth exceeded.");
     if (kind == Kind::kTensor)
       tensor = std::move(tensor).RetainStorage();
     else if (kind == Kind::kEncoded) {
+      if (Encoded().has_struct_type())
+        ValidatePersistentStructType(catalogue, Encoded().struct_type());
+      if (Encoded().has_logical_type())
+        ValidatePersistentType(catalogue, Encoded().logical_type());
       const auto &raw = Encoded().raw_data();
       EXT_ENFORCE_INVALID(!raw.is_borrowed() || raw.owner().use_count() != 0 || raw.empty(),
                           "RuntimeValue::Retain: cannot retain an ownerless encoded payload.");
     } else
       for (auto &[name, value] : fields)
-        value.RetainAtDepth(depth + 1);
+        value.RetainAtDepth(depth + 1, catalogue);
   }
 
   RuntimeValue CopyAtDepth(size_t depth, bool owned) const {
     EXT_ENFORCE_INVALID(depth <= kMaxDepth, "RuntimeValue: maximum nesting depth exceeded.");
     if (kind == Kind::kTensor)
-      return RuntimeValue(owned ? tensor.ToOwned() : tensor.BorrowView());
+      return RuntimeValue(owned || tensor.data_type == DataType::STRING ? tensor.ToOwned()
+                                                                        : tensor.BorrowView());
     if (kind == Kind::kEncoded) {
       if (!owned) {
         RuntimeValue result;

@@ -602,8 +602,7 @@ struct Tensor {
   ///
   /// The referenced string vector **MUST** outlive this ``Tensor``.
   static Tensor BorrowStrings(std::string name, Shape shape,
-                              const std::vector<std::string> &strings,
-                              std::shared_ptr<void> owner = {});
+                              const std::vector<std::string> &strings);
 
   /// Returns a pointer to the raw element bytes.
   /// Works for both owned (``data``) and borrowed (non-owning view) tensors.
@@ -677,6 +676,7 @@ struct Tensor {
    * Consumes this tensor explicitly. Inline buffers move into an owner; existing
    * borrowed owners are reused. Ownerless borrows and allocator storage
    * without a self-owning lease are rejected rather than silently copied.
+   * String tensors cannot be persistent and are always rejected.
    */
   Tensor RetainStorage() &&;
 

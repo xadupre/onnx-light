@@ -30,7 +30,7 @@ template <typename T> void ValidateNumericInput(const Tensor &x, const std::vect
 void ValidateStringInput(const Tensor &x, const ParamStrings &cats) {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::STRING),
                       "kernel::OneHotEncoder expects a STRING input for string categories.");
-  EXT_ENFORCE_INVALID(static_cast<int64_t>(x.AsStrings().size()) == x.element_count(),
+  EXT_ENFORCE_INVALID(static_cast<int64_t>(x.string_data.size()) == x.element_count(),
                       "kernel::OneHotEncoder STRING input string_data size does not match shape.");
   EXT_ENFORCE_INVALID(!cats.empty(),
                       "kernel::OneHotEncoder requires at least one category in cats_strings.");

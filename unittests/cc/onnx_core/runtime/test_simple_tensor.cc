@@ -42,15 +42,18 @@ TEST(SimpleTensorSharing, InlineStorageSurvivesSourceWithoutPayloadCopy) {
   EXPECT_EQ(next.AsFloat()[1], 4);
 }
 
-TEST(SimpleTensorSharing, StringAndEmptyStorageRetainsPointers) {
-  Tensor value = Tensor::MakeString("strings", {1}, {"value"});
-  const auto *strings = std::as_const(value).AsStrings().data();
-  const auto *characters = std::as_const(value).AsStrings()[0].data();
-  Tensor shared = std::move(value).RetainStorage();
-  EXPECT_EQ(std::as_const(shared).AsStrings().data(), strings);
-  EXPECT_EQ(std::as_const(shared).AsStrings()[0].data(), characters);
-  value = Tensor();
-  EXPECT_EQ(std::as_const(shared).AsStrings()[0], "value");
+TEST(SimpleTensorSharing, RejectsOwnedBorrowedAndEmptyStrings) {
+  for (const auto &strings : {std::vector<std::string>{"value"}, std::vector<std::string>{}}) {
+    Tensor value = Tensor::MakeString("strings", {static_cast<int64_t>(strings.size())}, strings);
+    Tensor borrowed = value.BorrowView();
+    EXPECT_THROW(std::move(value).RetainStorage(), std::invalid_argument);
+    EXPECT_THROW(std::move(borrowed).RetainStorage(), std::invalid_argument);
+    EXPECT_EQ(value.AsStrings(), strings);
+    EXPECT_EQ(std::as_const(borrowed).AsStrings(), strings);
+  }
+}
+
+TEST(SimpleTensorSharing, EmptyNumericStorageRetainsPointers) {
   Tensor empty = Tensor::FromFloat("empty", {0}, {});
   Tensor empty_shared = std::move(empty).RetainStorage();
   EXPECT_EQ(empty_shared.size_bytes(), 0u);

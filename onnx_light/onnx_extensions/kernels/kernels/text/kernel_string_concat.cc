@@ -40,10 +40,10 @@ StringBroadcast CheckStringConcatInputs(const Tensor &x, const Tensor &y) {
       nx == ny || nx == 1 || ny == 1,
       "kernel::StringConcat only supports equal-shape tensors or scalar broadcasting.");
   EXT_ENFORCE_INVALID(
-      static_cast<int64_t>(x.AsStrings().size()) == nx,
+      static_cast<int64_t>(x.string_data.size()) == nx,
       "kernel::StringConcat input ``x`` string_data size does not match its shape.");
   EXT_ENFORCE_INVALID(
-      static_cast<int64_t>(y.AsStrings().size()) == ny,
+      static_cast<int64_t>(y.string_data.size()) == ny,
       "kernel::StringConcat input ``y`` string_data size does not match its shape.");
   StringBroadcast bi;
   bi.nx = nx;
@@ -88,8 +88,8 @@ void StringConcat::operator()(const Tensor &x, const Tensor &y, Tensor &output) 
   ParallelFor(bi.element_count, tuning().parallel_minimum_elements,
               [&x, &y, &output, &bi](int64_t begin, int64_t end) {
                 for (int64_t i = begin; i < end; ++i) {
-                  const std::string &a = x.AsStrings()[bi.nx == 1 ? 0 : static_cast<size_t>(i)];
-                  const std::string &b = y.AsStrings()[bi.ny == 1 ? 0 : static_cast<size_t>(i)];
+                  const std::string &a = x.string_data[bi.nx == 1 ? 0 : static_cast<size_t>(i)];
+                  const std::string &b = y.string_data[bi.ny == 1 ? 0 : static_cast<size_t>(i)];
                   output.string_data[static_cast<size_t>(i)] = a + b;
                 }
               });

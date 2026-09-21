@@ -443,14 +443,16 @@ RuntimeValue FeedbackValueFromPython(const std::string &name, nb::handle value, 
   }
   if (nb::isinstance<Tensor>(value)) {
     const Tensor &source = nb::cast<const Tensor &>(value);
+    if (source.data_type == TensorProto::STRING) {
+      Tensor tensor = source.ToOwned();
+      tensor.name = name;
+      return RuntimeValue(std::move(tensor));
+    }
     auto owner = source.has_allocation() ? std::shared_ptr<void>{}
                  : source.is_borrowed()  ? source.borrowed_owner()
                                          : RetainFeedbackOwner(value);
-    Tensor tensor =
-        source.data_type == TensorProto::STRING
-            ? Tensor::BorrowStrings(name, source.shape, source.AsStrings(), std::move(owner))
-            : Tensor::Borrow(name, source.data_type, source.shape, source.bytes(),
-                             source.size_bytes(), std::move(owner));
+    Tensor tensor = Tensor::Borrow(name, source.data_type, source.shape, source.bytes(),
+                                   source.size_bytes(), std::move(owner));
     return RuntimeValue(std::move(tensor));
   }
   return RuntimeValue(FeedbackTensorFromArray(name, value));

@@ -369,18 +369,19 @@ Tensor Tensor::Borrow(std::string name, int32_t dtype, Shape shape, const uint8_
   return t;
 }
 
-Tensor Tensor::BorrowStrings(std::string name, Shape shape, const std::vector<std::string> &strings,
-                             std::shared_ptr<void> owner) {
+Tensor Tensor::BorrowStrings(std::string name, Shape shape,
+                             const std::vector<std::string> &strings) {
   Tensor t;
   t.name = std::move(name);
   t.data_type = static_cast<int32_t>(DataType::STRING);
   t.shape = std::move(shape);
   t.borrow_string_data_ = &strings;
-  t.borrow_owner_ = std::move(owner);
   return t;
 }
 
 Tensor Tensor::RetainStorage() && {
+  EXT_ENFORCE_INVALID(data_type != DataType::STRING,
+                      "Tensor::RetainStorage: string tensors cannot be persistent.");
   if (borrow_owner_.use_count() != 0)
     return std::move(*this);
   EXT_ENFORCE_INVALID(!is_borrowed(),
@@ -399,9 +400,7 @@ Tensor Tensor::RetainStorage() && {
 
 Tensor Tensor::BorrowView() const {
   if (static_cast<DataType>(data_type) == DataType::STRING) {
-    Tensor view = Tensor::BorrowStrings(name, shape, AsStrings());
-    view.borrow_owner_ = borrow_owner_;
-    return view;
+    return Tensor::BorrowStrings(name, shape, AsStrings());
   }
   return Tensor::Borrow(name, data_type, shape, bytes(), size_bytes(), borrow_owner_);
 }

@@ -159,6 +159,8 @@ struct TypeMemo {
  */
 struct Walk {
   const StructTypeCatalogue *catalogue = nullptr;
+  /** Rejects string tensor leaves and constants in persistent values. */
+  bool persistent = false;
   /** Identities currently being expanded, used to reject reference cycles. */
   std::vector<uint64_t> active;
   /** Per-identity memo; catalogues are small, so a linear scan beats a hash map. */
@@ -343,12 +345,18 @@ void ValidateTypeProto(Walk &walk, const TypeProto &type) {
   }
   switch (type.value_case()) {
   case TypeProto::kTensorType:
+    if (walk.persistent && type.ref_tensor_type().elem_type() == TensorProto::STRING) {
+      Invalid("String tensors cannot be persistent, including fields of structured values.");
+    }
     if (!type.ref_tensor_type().has_elem_type() ||
         type.ref_tensor_type().elem_type() == TensorProto::UNDEFINED) {
       Invalid("A tensor type is missing a defined 'elem_type'.");
     }
     break;
   case TypeProto::kSparseTensorType:
+    if (walk.persistent && type.ref_sparse_tensor_type().elem_type() == TensorProto::STRING) {
+      Invalid("String tensors cannot be persistent, including fields of structured values.");
+    }
     if (!type.ref_sparse_tensor_type().has_elem_type() ||
         type.ref_sparse_tensor_type().elem_type() == TensorProto::UNDEFINED) {
       Invalid("A sparse tensor type is missing a defined 'elem_type'.");
@@ -505,6 +513,9 @@ void ValidateStructure(Walk &walk, const StructTypeProto::Structure &structure) 
       ValidateTypeProto(walk, field.ref_type());
       break;
     case StructTypeProto::Structure::Field::kConstant:
+      if (walk.persistent && field.constant().data_type() == TensorProto::STRING) {
+        Invalid("String tensors cannot be persistent, including structured constant fields.");
+      }
       ValidateConstant(field);
       break;
     default:
@@ -1507,6 +1518,22 @@ const TypeProto &PersistentIOType(const utils::RepeatedProtoField<ValueInfoProto
 
 } // namespace
 
+void ValidatePersistentType(const StructTypeCatalogue &catalogue, const TypeProto &type) {
+  Walk walk;
+  walk.catalogue = &catalogue;
+  walk.persistent = true;
+  ValidateTypeProto(walk, type);
+}
+
+void ValidatePersistentStructType(const StructTypeCatalogue &catalogue,
+                                  const StructTypeProto &type) {
+  Walk walk;
+  walk.catalogue = &catalogue;
+  walk.persistent = true;
+  ValidateStructType(walk, type,
+                     type.has_type_id() ? StructRole::kDeclaration : StructRole::kNested);
+}
+
 bool CompatiblePersistentTypes(const StructTypeCatalogue &catalogue, const TypeProto &left,
                                const TypeProto &right) {
   catalogue.ValidateType(left);
@@ -1540,6 +1567,8 @@ void VerifyPersistentBindings(const StructTypeCatalogue *struct_types, const Gra
     const auto &binding = bindings[i];
     const auto &input = PersistentIOType(graph.input(), binding.input_name());
     const auto &output = PersistentIOType(graph.output(), binding.output_name());
+    ValidatePersistentType(catalogue, input);
+    ValidatePersistentType(catalogue, output);
     if (!CompatiblePersistentTypes(catalogue, input, output)) {
       Invalid(
           "Persistent binding requires compatible tensor/struct types and declared dimensions.");

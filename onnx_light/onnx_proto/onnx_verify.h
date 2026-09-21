@@ -207,6 +207,14 @@ private:
   const utils::RepeatedProtoField<StructTypeProto> *declarations_ = nullptr;
 };
 
+/** Validates a persistent type, rejecting string tensors at every nesting level. */
+ONNX_LIGHT_PROTO_API void ValidatePersistentType(const StructTypeCatalogue &catalogue,
+                                                 const TypeProto &type);
+
+/** Validates a persistent encoded layout, including referenced types and constant fields. */
+ONNX_LIGHT_PROTO_API void ValidatePersistentStructType(const StructTypeCatalogue &catalogue,
+                                                       const StructTypeProto &type);
+
 /**
  * Returns whether validated tensor/struct declarations are compatible.
  * Compares ranks when both are known and dimensions when both are concrete.
@@ -227,6 +235,7 @@ ONNX_LIGHT_PROTO_API bool CompatiblePersistentStructTypes(const StructTypeCatalo
  *
  * Resolves exact whole-input/output names, rejects duplicate inputs or outputs, and
  * rejects conflicting tensor dtypes, known ranks, concrete dimensions and struct layouts.
+ * String tensors are forbidden, including nested fields and structured constants.
  * A null catalogue resolves inline types only. Nested graphs must not declare bindings.
  */
 ONNX_LIGHT_PROTO_API void VerifyPersistentBindings(const StructTypeCatalogue *struct_types,

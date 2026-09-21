@@ -78,7 +78,7 @@ std::pair<Tensor, Tensor> StringSplit::operator()(const Tensor &x, const std::st
                                                   int64_t maxsplit, RuntimeContext *rt) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::STRING),
                       "kernel::StringSplit only supports STRING tensors.");
-  EXT_ENFORCE_INVALID(static_cast<int64_t>(x.AsStrings().size()) == x.element_count(),
+  EXT_ENFORCE_INVALID(static_cast<int64_t>(x.string_data.size()) == x.element_count(),
                       "kernel::StringSplit input string_data size does not match its shape.");
 
   const std::vector<std::string> &input = x.AsStrings();

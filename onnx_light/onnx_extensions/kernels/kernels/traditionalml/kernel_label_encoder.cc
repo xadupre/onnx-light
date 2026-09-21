@@ -66,7 +66,7 @@ void ValidateInputs(const Tensor &x, std::span<const KeyT> keys, std::span<const
     EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::STRING),
                         "kernel::LabelEncoder input data_type does not match the requested KeyT.");
     EXT_ENFORCE_INVALID(
-        static_cast<int64_t>(x.AsStrings().size()) == x.element_count(),
+        static_cast<int64_t>(x.string_data.size()) == x.element_count(),
         "kernel::LabelEncoder STRING input string_data size does not match its shape.");
   } else {
     EXT_ENFORCE_INVALID(x.data_type == KeyDataType<KeyT>(),

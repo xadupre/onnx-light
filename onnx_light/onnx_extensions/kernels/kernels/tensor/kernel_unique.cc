@@ -295,7 +295,7 @@ Unique::Outputs Unique::operator()(const Tensor &x, const Attributes &attrs,
   UniqueGroups groups;
   if (!axis.has_value()) {
     if (is_string) {
-      const auto &strs = x.AsStrings();
+      const auto &strs = x.string_data;
       groups = ComputeUniqueGroups(
           count,
           [&](int64_t a, int64_t b) {
@@ -319,7 +319,7 @@ Unique::Outputs Unique::operator()(const Tensor &x, const Attributes &attrs,
     // element is equal at the corresponding positions. For comparison we
     // walk the (outer, inner) plane.
     if (is_string) {
-      const auto &strs = x.AsStrings();
+      const auto &strs = x.string_data;
       // Flat index helper: at (o, k, i) where k is the axis index, the linear
       // string-data offset is o * axis_dim * inner_elems + k * inner_elems + i.
       auto cmp = [&](int64_t ka, int64_t kb) -> int {
@@ -371,7 +371,7 @@ Unique::Outputs Unique::operator()(const Tensor &x, const Attributes &attrs,
       std::vector<std::string> y_strs;
       y_strs.reserve(static_cast<std::size_t>(n_unique));
       for (int64_t g = 0; g < n_unique; ++g) {
-        y_strs.push_back(x.AsStrings()[static_cast<std::size_t>(first_occ[g])]);
+        y_strs.push_back(x.string_data[static_cast<std::size_t>(first_occ[g])]);
       }
       if (rt != nullptr) {
         out.y = rt->MakeOutputTensor(0, DataType::STRING, {n_unique}, 0);
@@ -408,7 +408,7 @@ Unique::Outputs Unique::operator()(const Tensor &x, const Attributes &attrs,
                 static_cast<std::size_t>(o * axis_dim * inner_elems + k * inner_elems + i);
             const std::size_t dst =
                 static_cast<std::size_t>(o * n_unique * inner_elems + g * inner_elems + i);
-            y_strs[dst] = x.AsStrings()[src];
+            y_strs[dst] = x.string_data[src];
           }
         }
       }

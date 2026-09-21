@@ -77,7 +77,7 @@ byte-swapped or unsupported representations raise an error rather than
 being copied. PyTorch tensors requiring gradients must be detached by the
 caller before DLPack export; ``detach()`` shares storage.
 
-Outputs and ``state.values`` contain tensors with retained storage owners.
+Selected outputs and ``state.values`` contain tensors with retained storage owners.
 They remain valid after callers drop their input references, after another
 run, or after reset/close. Unsupported ownerless output storage is rejected
 rather than silently copied for a selected output; an allocator cannot recycle a live retained
@@ -89,8 +89,12 @@ The binding also retains supplied contexts so cached kernel allocator
 references remain valid. Reuse the same context for a state's calls.
 Initializers use model-backed views when their representation is directly
 readable; other numeric representations and strings use normal conversion.
-String inputs and retained string outputs use the existing borrowed-string
-view API, so kernels must read them through ``AsStrings()``.
+String tensors cannot be persistent, including nested tensor fields and string
+constants in a selected whole structure or encoded layout. Catalogue references
+are checked recursively. Declarations fail before state initialization, and
+runtime retention rejects string payloads rather than copying them.
+Ordinary nonpersistent string feeds and outputs remain supported and use normal
+materialized string storage.
 
 Persistence applies only to the declared whole outputs, not the entire context.
 Nonpersistent outputs keep normal allocator and materialization behavior.

@@ -237,10 +237,7 @@ std::unordered_set<std::string> RuntimeSession::SeedInitializers(RuntimeContext 
       // kernels and callbacks without exposing the cached strings to mutation.
       Tensor view;
       if (initializer.data_type == DataType::STRING)
-        view = rt.retains_output(initializer.name)
-                   ? Tensor::BorrowStrings(initializer.name, initializer.shape,
-                                           initializer.AsStrings(), owner)
-                   : initializer.ToOwned();
+        view = initializer.ToOwned();
       else
         view = Tensor::Borrow(initializer.name, initializer.data_type, initializer.shape,
                               initializer.bytes(), initializer.size_bytes(), owner);

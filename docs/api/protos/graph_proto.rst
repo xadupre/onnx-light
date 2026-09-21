@@ -23,6 +23,9 @@ dimensions when both are concrete; symbolic dimensions and unknown ranks are
 accepted. Byte-encoded values still require fixed geometry under the encoded
 layout validators. Catalogue identities must agree for whole referenced
 formats. Whole structures include all dynamic fields and their declared constants.
+String tensors cannot be persistent, either directly or as nested fields or
+constants of a selected structure or encoded layout. This restriction follows
+catalogue references and does not affect ordinary nonpersistent string values.
 Duplicate input selections and duplicate output selections are rejected; names
 such as ``state`` and ``state.cache`` are distinct graph values.
 Declarations in control-flow subgraphs are not supported.

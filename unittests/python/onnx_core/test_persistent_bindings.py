@@ -46,6 +46,69 @@ def model_with_binding(input_type=None, output_type=None):
 
 
 class TestPersistentBindings(unittest.TestCase):
+    def test_rejects_direct_and_nested_string_tensors(self):
+        strings = tensor_type(onnx.TensorProto.STRING)
+        for value_type in (
+            strings,
+            structure_type([("cache", structure_type([("text", strings)]))]),
+            onnx.TypeProto(
+                struct_type=onnx.StructTypeProto(
+                    array=onnx.StructTypeProto.Array(element_type=strings, dimension=2)
+                )
+            ),
+        ):
+            model = model_with_binding(value_type)
+            with self.subTest(type=value_type):
+                with self.assertRaisesRegex(ValueError, "String tensors cannot be persistent"):
+                    verify.verify_model(model)
+                with self.assertRaisesRegex(ValueError, "String tensors cannot be persistent"):
+                    GraphBuilder(model).to_onnx()
+
+    def test_rejects_strings_through_catalogue_references(self):
+        strings = tensor_type(onnx.TensorProto.STRING)
+        leaf = structure_type([("text", strings)]).struct_type
+        leaf.type_id = 7
+        reference = onnx.TypeProto(struct_type=onnx.StructTypeProto(type_ref=7))
+        root = structure_type([("first", reference), ("second", reference)]).struct_type
+        root.type_id = 8
+        model = model_with_binding(onnx.TypeProto(struct_type=onnx.StructTypeProto(type_ref=8)))
+        model.struct_types.extend([leaf, root])
+        with self.assertRaisesRegex(ValueError, "String tensors cannot be persistent"):
+            verify.verify_model(model)
+        with self.assertRaisesRegex(ValueError, "String tensors cannot be persistent"):
+            GraphBuilder(model).to_onnx()
+
+    def test_persistent_recursive_catalogue_rejected(self):
+        reference = onnx.TypeProto(struct_type=onnx.StructTypeProto(type_ref=7))
+        root = structure_type([("self", reference)]).struct_type
+        root.type_id = 7
+        model = model_with_binding(reference)
+        model.struct_types.append(root)
+        with self.assertRaisesRegex(ValueError, "reference cycle"):
+            verify.verify_model(model)
+        with self.assertRaisesRegex(ValueError, "reference cycle"):
+            GraphBuilder(model).to_onnx()
+
+    def test_rejects_structured_string_constants(self):
+        value_type = structure_type([("cache", tensor_type())])
+        value_type.struct_type.structure.field.append(
+            onnx.StructTypeProto.Structure.Field(
+                name="label",
+                constant=helper.make_tensor("label", onnx.TensorProto.STRING, [1], ["text"]),
+            )
+        )
+        model = model_with_binding(value_type)
+        with self.assertRaisesRegex(ValueError, "String tensors cannot be persistent"):
+            verify.verify_model(model)
+        with self.assertRaisesRegex(ValueError, "String tensors cannot be persistent"):
+            GraphBuilder(model).to_onnx()
+
+    def test_nonpersistent_string_types_remain_valid(self):
+        model = model_with_binding(tensor_type(onnx.TensorProto.STRING))
+        model.graph.persistent_bindings.clear()
+        verify.verify_model(model)
+        GraphBuilder(model).to_onnx()
+
     def test_repeated_binding_container_api(self):
         graph = onnx.GraphProto()
         self.assertEqual(len(graph.persistent_bindings), 0)

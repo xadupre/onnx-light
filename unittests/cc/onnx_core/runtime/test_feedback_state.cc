@@ -33,16 +33,10 @@ TypeProto Structure(std::initializer_list<std::pair<std::string, TypeProto>> fie
   return type;
 }
 
-void Bind(ModelProto &model, const std::string &input, const std::string &output,
-          std::initializer_list<std::string> input_fields = {},
-          std::initializer_list<std::string> output_fields = {}) {
+void Bind(ModelProto &model, const std::string &input, const std::string &output) {
   auto *binding = model.mutable_graph()->add_persistent_bindings();
   binding->set_input_name(input);
   binding->set_output_name(output);
-  for (const auto &field : input_fields)
-    binding->add_input_field_path(field);
-  for (const auto &field : output_fields)
-    binding->add_output_field_path(field);
 }
 
 ModelProto Model(bool structured = false) {
@@ -56,12 +50,10 @@ ModelProto Model(bool structured = false) {
   input->set_name(structured ? "request" : "past");
   const TypeProto cache = Structure({{"keys", FloatType()}, {"values", FloatType()}});
   *input->mutable_type() =
-      structured ? Structure({{"tokens", FloatType()}, {"cache", cache}}) : FloatType();
-  if (!structured) {
-    auto *tokens = graph->add_input();
-    tokens->set_name("tokens");
-    *tokens->mutable_type() = FloatType();
-  }
+      structured ? Structure({{"logits", FloatType()}, {"cache", cache}}) : FloatType();
+  auto *tokens = graph->add_input();
+  tokens->set_name("tokens");
+  *tokens->mutable_type() = FloatType();
   auto *output = graph->add_output();
   output->set_name(structured ? "response" : "present");
   *output->mutable_type() =
@@ -70,11 +62,10 @@ ModelProto Model(bool structured = false) {
   node->set_domain("test.feedback");
   node->set_op_type("Step");
   node->add_input(structured ? "request" : "past");
-  if (!structured)
-    node->add_input("tokens");
+  node->add_input("tokens");
   node->add_output(structured ? "response" : "present");
   if (structured)
-    Bind(model, "request", "response", {"cache"}, {"cache"});
+    Bind(model, "request", "response");
   else
     Bind(model, "past", "present");
   return model;
@@ -92,6 +83,10 @@ RuntimeValue Cache(float key, float value) {
   return RuntimeValue(RuntimeValueMap{{"keys", Number(key)}, {"values", Number(value)}});
 }
 
+RuntimeValue Request(float key, float value) {
+  return RuntimeValue(RuntimeValueMap{{"logits", Number(0)}, {"cache", Cache(key, value)}});
+}
+
 void RegisterStructuredStep(RuntimeContext &context, const uint8_t **expected = nullptr) {
   context.RegisterCustomKernel(
       "test.feedback", "Step", [expected](const NodeProto &node, RuntimeContext &rt) {
@@ -100,7 +95,7 @@ void RegisterStructuredStep(RuntimeContext &context, const uint8_t **expected = 
         if (expected != nullptr) {
           EXPECT_EQ(cache.fields.at("keys").tensor.bytes(), *expected);
         }
-        const float token = Number(request.fields.at("tokens"));
+        const float token = rt.Get(node.input(1)).AsFloat()[0];
         rt.values()[node.output(0)] = RuntimeValue(
             RuntimeValueMap{{"logits", Number(token)},
                             {"cache", Cache(Number(cache.fields.at("keys")) + token,
@@ -149,18 +144,18 @@ TEST(FeedbackState, WholeTensorMatchesManualLoopAndSharesReadOnlyViews) {
   EXPECT_NO_THROW(state.Close());
 }
 
-TEST(FeedbackState, RetainsOnlySelectedNestedCacheAndRequiresFreshTokens) {
+TEST(FeedbackState, RetainsWholeStructureAndRequiresSeparateFreshTokens) {
   ModelProto model = Model(true);
   SimpleRawBufferAllocator allocator(20);
   RuntimeContext context(KernelContext(DefaultOpset(18)),
                          RuntimeContextOptions{.allocator = &allocator});
-  std::weak_ptr<std::vector<float>> unselected;
+  std::weak_ptr<std::vector<float>> retained_logits;
   context.RegisterCustomKernel("test.feedback", "Step", [&](const NodeProto &, RuntimeContext &rt) {
     const auto &request = rt.values().at("request");
     const auto &cache = request.fields.at("cache");
-    float token = Number(request.fields.at("tokens"));
+    float token = rt.Get("tokens").AsFloat()[0];
     auto logits = std::make_shared<std::vector<float>>(1, token);
-    unselected = logits;
+    retained_logits = logits;
     RuntimeValue response(RuntimeValueMap{
         {"cache", Cache(Number(cache.fields.at("keys")) + token,
                         Number(cache.fields.at("values")) + 2 * token)},
@@ -169,22 +164,31 @@ TEST(FeedbackState, RetainsOnlySelectedNestedCacheAndRequiresFreshTokens) {
                                                sizeof(float), logits))}});
     rt.values()["response"] = std::move(response);
   });
-  FeedbackState state(model, {{"request.cache", Cache(0, 10)}});
-  auto first = state.Run(context, {{"request.tokens", Number(2)}});
-  EXPECT_FALSE(unselected.expired());
+  FeedbackState state(model, {{"request", Request(0, 10)}});
+  auto first = state.Run(context, {{"tokens", Number(2)}});
+  EXPECT_FALSE(retained_logits.expired());
+  auto first_logits = retained_logits;
   EXPECT_EQ(allocator.TotalAllocatedSize(), 0u);
   auto snapshot = state.Values();
   ASSERT_EQ(snapshot.size(), 1u);
-  EXPECT_EQ(Number(snapshot.at("request.cache").fields.at("keys")), 2);
+  EXPECT_EQ(Number(snapshot.at("request").fields.at("cache").fields.at("keys")), 2);
+  EXPECT_EQ(snapshot.at("request").fields.at("logits").tensor.bytes(),
+            first.at("response").fields.at("logits").tensor.bytes());
   EXPECT_THROW(state.Run(context, {}), std::invalid_argument);
-  EXPECT_THROW(
-      state.Run(context, {{"request.cache.keys", Number(1)}, {"request.tokens", Number(3)}}),
-      std::invalid_argument);
-  auto second = state.Run(context, {{"request.tokens", Number(3)}});
+  EXPECT_THROW(state.Run(context, {{"request.cache.keys", Number(1)}, {"tokens", Number(3)}}),
+               std::invalid_argument);
+  auto second = state.Run(context, {{"tokens", Number(3)}});
   EXPECT_EQ(Number(second.at("response").fields.at("cache").fields.at("keys")), 5);
   EXPECT_EQ(Number(first.at("response").fields.at("cache").fields.at("keys")), 2);
   EXPECT_EQ(Number(first.at("response").fields.at("logits")), 2);
   EXPECT_EQ(allocator.TotalAllocatedSize(), 0u);
+  first.clear();
+  snapshot.clear();
+  EXPECT_TRUE(first_logits.expired());
+  second.clear();
+  EXPECT_FALSE(retained_logits.expired());
+  state.Close();
+  EXPECT_TRUE(retained_logits.expired());
 }
 
 TEST(FeedbackState, TransfersOwnedTensorOutputsWithoutCopying) {
@@ -228,14 +232,15 @@ TEST(FeedbackState, TransfersOwnedStructuredOutputsWithoutCopying) {
     logits = response.fields.at("logits").tensor.bytes();
     rt.values()["response"] = std::move(response);
   });
-  FeedbackState state(model, {{"request.cache", Cache(0, 0)}});
-  auto first = state.Run(context, {{"request.tokens", Number(0)}});
+  FeedbackState state(model, {{"request", Request(0, 0)}});
+  auto first = state.Run(context, {{"tokens", Number(0)}});
   auto &response = first.at("response");
   EXPECT_EQ(response.fields.at("cache").fields.at("keys").tensor.bytes(), keys);
   EXPECT_EQ(response.fields.at("cache").fields.at("values").tensor.bytes(), values);
   EXPECT_EQ(response.fields.at("logits").tensor.bytes(), logits);
-  EXPECT_EQ(state.Values().at("request.cache").fields.at("keys").tensor.bytes(), keys);
-  auto second = state.Run(context, {{"request.tokens", Number(0)}});
+  EXPECT_EQ(state.Values().at("request").fields.at("cache").fields.at("keys").tensor.bytes(), keys);
+  EXPECT_EQ(state.Values().at("request").fields.at("logits").tensor.bytes(), logits);
+  auto second = state.Run(context, {{"tokens", Number(0)}});
   EXPECT_EQ(Number(second.at("response").fields.at("cache").fields.at("keys")), 2);
   state.Close();
   EXPECT_EQ(Number(response.fields.at("logits")), 10);
@@ -282,8 +287,31 @@ TEST(FeedbackState, RejectsInvalidDeclarationsAndInitialValues) {
   *wrong.mutable_graph()->mutable_output(0)->mutable_type() = FloatType(2);
   EXPECT_THROW((FeedbackState(wrong, {{"past", Number(1)}})), std::invalid_argument);
   ModelProto structured = Model(true);
-  Bind(structured, "request", "response", {"cache", "keys"}, {"cache", "keys"});
+  Bind(structured, "request.cache.keys", "response.cache.keys");
   EXPECT_THROW((FeedbackState(structured, {})), std::invalid_argument);
+}
+
+TEST(FeedbackState, DeclarationValidationAgreesWithGraphVerification) {
+  for (bool input : {false, true}) {
+    ModelProto model = Model(true);
+    auto *binding = model.mutable_graph()->mutable_persistent_bindings(0);
+    if (input)
+      binding->set_input_name("request.cache");
+    else
+      binding->set_output_name("response.cache");
+    EXPECT_THROW(VerifyPersistentBindings(nullptr, model.graph()), std::invalid_argument);
+    EXPECT_THROW((FeedbackState(model, {{"request", Request(1, 2)}})), std::invalid_argument);
+  }
+  for (bool duplicate_input : {false, true}) {
+    ModelProto model = Model();
+    auto *output = model.mutable_graph()->add_output();
+    output->set_name("other");
+    *output->mutable_type() = FloatType();
+    Bind(model, duplicate_input ? "past" : "tokens", duplicate_input ? "other" : "present");
+    EXPECT_THROW(VerifyPersistentBindings(nullptr, model.graph()), std::invalid_argument);
+    EXPECT_THROW((FeedbackState(model, {{"past", Number(1)}, {"tokens", Number(2)}})),
+                 std::invalid_argument);
+  }
 }
 
 TEST(FeedbackState, FailsTransactionallyAndKeepsRequestsIndependent) {
@@ -373,29 +401,30 @@ TEST(FeedbackState, RejectsReentrantOperationsFromTheActiveKernel) {
   EXPECT_EQ(Number(state.Values().at("past")), 2);
 }
 
-TEST(FeedbackState, MultipleSelectedFieldsCommitTogether) {
-  ModelProto model = Model(true);
-  model.mutable_graph()->clear_persistent_bindings();
-  Bind(model, "request", "response", {"cache", "keys"}, {"cache", "keys"});
-  Bind(model, "request", "response", {"cache", "values"}, {"cache", "values"});
+TEST(FeedbackState, MultipleWholeInputsCommitTogether) {
+  ModelProto model = Model();
+  auto *output = model.mutable_graph()->add_output();
+  output->set_name("next_tokens");
+  *output->mutable_type() = FloatType();
+  model.mutable_graph()->mutable_node(0)->add_output("next_tokens");
+  Bind(model, "tokens", "next_tokens");
   RuntimeContext context(KernelContext(DefaultOpset(18)));
   bool invalid = true;
   context.RegisterCustomKernel("test.feedback", "Step", [&](const NodeProto &, RuntimeContext &rt) {
-    RuntimeValue cache = Cache(30, 40);
+    rt.Put("present", Number(30).tensor);
     if (invalid)
-      cache.fields["values"] = RuntimeValue(Tensor::FromInt64("", {1}, {40}));
-    rt.values()["response"] =
-        RuntimeValue(RuntimeValueMap{{"cache", std::move(cache)}, {"logits", Number(1)}});
+      rt.Put("next_tokens", Tensor::FromInt64("", {1}, {40}));
+    else
+      rt.Put("next_tokens", Number(40).tensor);
   });
-  FeedbackState state(model,
-                      {{"request.cache.keys", Number(3)}, {"request.cache.values", Number(4)}});
-  EXPECT_THROW(state.Run(context, {{"request.tokens", Number(1)}}), std::invalid_argument);
-  EXPECT_EQ(Number(state.Values().at("request.cache.keys")), 3);
-  EXPECT_EQ(Number(state.Values().at("request.cache.values")), 4);
+  FeedbackState state(model, {{"past", Number(3)}, {"tokens", Number(4)}});
+  EXPECT_THROW(state.Run(context, {}), std::invalid_argument);
+  EXPECT_EQ(Number(state.Values().at("past")), 3);
+  EXPECT_EQ(Number(state.Values().at("tokens")), 4);
   invalid = false;
-  state.Run(context, {{"request.tokens", Number(1)}});
-  EXPECT_EQ(Number(state.Values().at("request.cache.keys")), 30);
-  EXPECT_EQ(Number(state.Values().at("request.cache.values")), 40);
+  state.Run(context, {});
+  EXPECT_EQ(Number(state.Values().at("past")), 30);
+  EXPECT_EQ(Number(state.Values().at("tokens")), 40);
 }
 
 TEST(FeedbackState, RetainsInitialOwnerAndRejectsUnleasedExecutionArena) {
@@ -475,15 +504,15 @@ TEST(FeedbackState, ExactDottedGraphNamesAreNotOverlappingFields) {
     rt.Put("present.tokens", Number(token + 1).tensor);
   });
   FeedbackState one(model, {{"past", Number(1)}});
-  EXPECT_THROW(one.Run(context, {{"past.tokens", Number(2)}}), std::invalid_argument);
-  EXPECT_EQ(Number(one.Run(context, {{R"(past\.tokens)", Number(2)}}).at("present")), 3);
+  EXPECT_THROW(one.Run(context, {{R"(past\.tokens)", Number(2)}}), std::invalid_argument);
+  EXPECT_EQ(Number(one.Run(context, {{"past.tokens", Number(2)}}).at("present")), 3);
   one.Close();
   ModelProto both_model = model;
   Bind(both_model, "past.tokens", "present.tokens");
-  FeedbackState both(both_model, {{"past", Number(1)}, {R"(past\.tokens)", Number(2)}});
+  FeedbackState both(both_model, {{"past", Number(1)}, {"past.tokens", Number(2)}});
   both.Run(context, {});
   EXPECT_EQ(Number(both.Values().at("past")), 3);
-  EXPECT_EQ(Number(both.Values().at(R"(past\.tokens)")), 3);
+  EXPECT_EQ(Number(both.Values().at("past.tokens")), 3);
 }
 
 TEST(FeedbackState, StructuredValuesCrossModelLocalFunctions) {
@@ -492,6 +521,7 @@ TEST(FeedbackState, StructuredValuesCrossModelLocalFunctions) {
   function->set_domain("test.feedback");
   function->set_name("WrappedStep");
   function->add_input("inner_request");
+  function->add_input("inner_tokens");
   function->add_output("inner_response");
   auto *opset = function->add_opset_import();
   opset->set_domain("test.feedback");
@@ -500,18 +530,21 @@ TEST(FeedbackState, StructuredValuesCrossModelLocalFunctions) {
   node->set_domain("test.feedback");
   node->set_op_type("Step");
   node->add_input("inner_request");
+  node->add_input("inner_tokens");
   node->add_output("inner_response");
   model.mutable_graph()->mutable_node(0)->set_op_type("WrappedStep");
   RuntimeContext context(KernelContext(DefaultOpset(18)));
-  RuntimeValueMap initial{{"request.cache", Cache(1, 2)}};
-  const uint8_t *expected = initial.at("request.cache").fields.at("keys").tensor.bytes();
+  RuntimeValueMap initial{{"request", Request(1, 2)}};
+  const uint8_t *expected =
+      initial.at("request").fields.at("cache").fields.at("keys").tensor.bytes();
   RegisterStructuredStep(context, &expected);
   FeedbackState state(model, initial);
-  state.Run(context, {{"request.tokens", Number(3)}});
-  state.Run(context, {{"request.tokens", Number(4)}});
-  EXPECT_EQ(Number(state.Values().at("request.cache").fields.at("keys")), 8);
-  EXPECT_EQ(Number(state.Values().at("request.cache").fields.at("values")), 9);
-  EXPECT_EQ(state.Values().at("request.cache").fields.at("keys").tensor.bytes(), expected);
+  state.Run(context, {{"tokens", Number(3)}});
+  state.Run(context, {{"tokens", Number(4)}});
+  EXPECT_EQ(Number(state.Values().at("request").fields.at("cache").fields.at("keys")), 8);
+  EXPECT_EQ(Number(state.Values().at("request").fields.at("cache").fields.at("values")), 9);
+  EXPECT_EQ(state.Values().at("request").fields.at("cache").fields.at("keys").tensor.bytes(),
+            expected);
 }
 
 TEST(FeedbackState, StructuredValuesCrossIfBranches) {
@@ -543,16 +576,18 @@ TEST(FeedbackState, StructuredValuesCrossIfBranches) {
     *attribute->mutable_g() = branch;
   }
   RuntimeContext context(KernelContext(DefaultOpset(18)));
-  RuntimeValueMap initial{{"request.cache", Cache(1, 2)}};
-  const uint8_t *expected = initial.at("request.cache").fields.at("keys").tensor.bytes();
+  RuntimeValueMap initial{{"request", Request(1, 2)}};
+  const uint8_t *expected =
+      initial.at("request").fields.at("cache").fields.at("keys").tensor.bytes();
   RegisterStructuredStep(context, &expected);
   FeedbackState state(model, initial);
   for (uint8_t condition : {1, 0})
-    state.Run(context, {{"request.tokens", Number(3)},
+    state.Run(context, {{"tokens", Number(3)},
                         {"cond", RuntimeValue(Tensor::FromBool("", {}, {condition}))}});
-  EXPECT_EQ(Number(state.Values().at("request.cache").fields.at("keys")), 7);
-  EXPECT_EQ(Number(state.Values().at("request.cache").fields.at("values")), 8);
-  EXPECT_EQ(state.Values().at("request.cache").fields.at("keys").tensor.bytes(), expected);
+  EXPECT_EQ(Number(state.Values().at("request").fields.at("cache").fields.at("keys")), 7);
+  EXPECT_EQ(Number(state.Values().at("request").fields.at("cache").fields.at("values")), 8);
+  EXPECT_EQ(state.Values().at("request").fields.at("cache").fields.at("keys").tensor.bytes(),
+            expected);
 }
 
 TEST(FeedbackState, RejectsExcessiveRuntimeValueNesting) {
@@ -586,8 +621,8 @@ TEST(FeedbackState, OrdinarySessionReleasesStructuredIntermediates) {
       "test.feedback", "Step", [](const NodeProto &node, RuntimeContext &rt) {
         rt.values()[node.output(0)] = rt.values().at(node.input(0)).DeepCopy();
       });
-  context.values()["request"] =
-      RuntimeValue(RuntimeValueMap{{"tokens", Number(1)}, {"cache", Cache(2, 3)}});
+  context.values()["request"] = Request(2, 3);
+  context.Put("tokens", Number(1).tensor);
   RuntimeSession session(model);
   session.Run(context);
   EXPECT_EQ(context.values().count("mid"), 0u);
@@ -597,6 +632,7 @@ TEST(FeedbackState, OrdinarySessionReleasesStructuredIntermediates) {
   EXPECT_TRUE(result.has_allocation());
   EXPECT_EQ(result.allocation_owner(), &io);
   EXPECT_EQ(result.AsFloat()[0], 2);
+  EXPECT_TRUE(context.Remove("tokens"));
   EXPECT_EQ(execution.TotalAllocatedSize(), 0u);
   EXPECT_TRUE(context.Remove("response"));
   EXPECT_EQ(io.TotalAllocatedSize(), 0u);
@@ -614,7 +650,7 @@ TEST(FeedbackState, EncodedFieldsUseNativeCatalogueAndOwnedPayloads) {
   TypeProto encoded;
   encoded.mutable_struct_type()->set_type_ref(7);
   *model.mutable_graph()->mutable_input(0)->mutable_type() =
-      Structure({{"tokens", FloatType()}, {"cache", encoded}});
+      Structure({{"logits", FloatType()}, {"cache", encoded}});
   *model.mutable_graph()->mutable_output(0)->mutable_type() =
       Structure({{"logits", FloatType()}, {"cache", encoded}});
   EncodedValueProto initial;
@@ -629,15 +665,20 @@ TEST(FeedbackState, EncodedFieldsUseNativeCatalogueAndOwnedPayloads) {
     rt.values()["response"] = RuntimeValue(
         RuntimeValueMap{{"logits", Number(0)}, {"cache", RuntimeValue(std::move(value))}});
   });
-  FeedbackState state(model, {{"request.cache", RuntimeValue(initial)}});
+  FeedbackState state(
+      model, {{"request", RuntimeValue(RuntimeValueMap{{"logits", Number(0)},
+                                                       {"cache", RuntimeValue(initial)}})}});
   initial.set_raw_data(std::string(1, '\x40'));
-  auto first = state.Run(context, {{"request.tokens", Number(1)}});
-  state.Run(context, {{"request.tokens", Number(2)}});
-  EXPECT_EQ(state.Values().at("request.cache").Encoded().raw_data()[0], 5);
+  auto first = state.Run(context, {{"tokens", Number(1)}});
+  state.Run(context, {{"tokens", Number(2)}});
+  EXPECT_EQ(state.Values().at("request").fields.at("cache").Encoded().raw_data()[0], 5);
   EXPECT_EQ(first.at("response").fields.at("cache").Encoded().raw_data()[0], 4);
   EncodedValueProto wrong = initial;
   wrong.mutable_struct_type()->set_type_ref(8);
-  EXPECT_THROW(state.Reset({{"request.cache", RuntimeValue(wrong)}}), std::invalid_argument);
+  EXPECT_THROW(
+      state.Reset({{"request", RuntimeValue(RuntimeValueMap{{"logits", Number(0)},
+                                                            {"cache", RuntimeValue(wrong)}})}}),
+      std::invalid_argument);
 }
 
 TEST(FeedbackState, EncodedTransportRetainsTheSamePayloadAcrossResetAndClose) {
@@ -920,52 +961,54 @@ TEST(FeedbackState, ModelOwnerDoesNotReplaceBorrowedInitializerBackingOwner) {
   }
 }
 
-TEST(FeedbackState, DeclaredFieldComponentsTreatDotsLiterally) {
+TEST(FeedbackState, WholeStructureFieldsTreatDotsLiterally) {
   ModelProto model = Model(true);
   *model.mutable_graph()->mutable_input(0)->mutable_type() =
-      Structure({{"cache.part", FloatType()}, {"tokens", FloatType()}});
+      Structure({{"cache.part", FloatType()}, {"logits", FloatType()}});
   *model.mutable_graph()->mutable_output(0)->mutable_type() =
       Structure({{"cache.part", FloatType()}, {"logits", FloatType()}});
   model.mutable_graph()->clear_persistent_bindings();
-  Bind(model, "request", "response", {"cache.part"}, {"cache.part"});
+  Bind(model, "request", "response");
   RuntimeContext context(KernelContext(DefaultOpset(18)));
   context.RegisterCustomKernel("test.feedback", "Step", [](const NodeProto &, RuntimeContext &rt) {
     rt.values()["response"] = RuntimeValue(
         RuntimeValueMap{{"cache.part", rt.values().at("request").fields.at("cache.part").Share()},
                         {"logits", Number(0)}});
   });
-  FeedbackState state(model, {{R"(request.cache\.part)", Number(1)}});
+  FeedbackState state(model, {{"request", RuntimeValue(RuntimeValueMap{{"cache.part", Number(1)},
+                                                                       {"logits", Number(0)}})}});
   const auto before = state.Values();
-  const auto output = state.Run(context, {{"request.tokens", Number(0)}});
+  const auto output = state.Run(context, {{"tokens", Number(0)}});
   EXPECT_EQ(output.at("response").fields.at("cache.part").tensor.bytes(),
-            before.at(R"(request.cache\.part)").tensor.bytes());
+            before.at("request").fields.at("cache.part").tensor.bytes());
 }
 
-TEST(FeedbackState, RootStructuredInitialValuesAndPartialFeedsRemainZeroCopy) {
+TEST(FeedbackState, WholeStructuredInitialValuesRejectPartialFeedsAndOverrides) {
   ModelProto model = Model(true);
   RuntimeContext context(KernelContext(DefaultOpset(18)));
   RegisterStructuredStep(context);
-  RuntimeValueMap initial{{"request", RuntimeValue(RuntimeValueMap{{"cache", Cache(1, 2)}})}};
+  RuntimeValueMap initial{{"request", Request(1, 2)}};
   FeedbackState state(model, initial);
-  EXPECT_EQ(state.Values().at("request.cache").fields.at("keys").tensor.bytes(),
+  EXPECT_EQ(state.Values().at("request").fields.at("cache").fields.at("keys").tensor.bytes(),
             initial.at("request").fields.at("cache").fields.at("keys").tensor.bytes());
-  const auto output =
-      state.Run(context, {{"request", RuntimeValue(RuntimeValueMap{{"tokens", Number(3)}})}});
+  const auto output = state.Run(context, {{"tokens", Number(3)}});
   EXPECT_EQ(Number(output.at("response").fields.at("cache").fields.at("keys")), 4);
   EXPECT_THROW(
       state.Run(context, {{"request", RuntimeValue(RuntimeValueMap{{"tokens", Number(3)}})},
-                          {"request.tokens", Number(3)}}),
+                          {"tokens", Number(3)}}),
       std::invalid_argument);
-  EXPECT_THROW(
-      state.Run(context, {{"request", RuntimeValue(RuntimeValueMap{{"cache", Cache(9, 9)},
-                                                                   {"tokens", Number(3)}})}}),
-      std::invalid_argument);
-  EXPECT_THROW(state.Reset({{"request", RuntimeValue(RuntimeValueMap{{"cache", Cache(1, 2)}})},
-                            {"request.cache", Cache(1, 2)}}),
+  EXPECT_THROW(state.Run(context, {{"request", Request(9, 9)}, {"tokens", Number(3)}}),
                std::invalid_argument);
+  EXPECT_THROW(state.Reset({{"request", Request(1, 2)}, {"request.cache", Cache(1, 2)}}),
+               std::invalid_argument);
+  EXPECT_THROW(state.Reset({{"request", RuntimeValue(RuntimeValueMap{{"cache", Cache(1, 2)}})}}),
+               std::invalid_argument);
+  EXPECT_THROW(state.Run(context, {{"request.cache", Cache(1, 2)}, {"tokens", Number(3)}}),
+               std::invalid_argument);
+  EXPECT_EQ(Number(state.Values().at("request").fields.at("cache").fields.at("keys")), 4);
 }
 
-TEST(FeedbackState, LiteralDottedRootAndStructuredFieldHaveDistinctStateSlots) {
+TEST(FeedbackState, LiteralDottedRootAndWholeStructureHaveDistinctStateSlots) {
   ModelProto model = Model(true);
   const TypeProto cache = Structure({{"keys", FloatType()}, {"values", FloatType()}});
   auto *literal_input = model.mutable_graph()->add_input();
@@ -978,96 +1021,86 @@ TEST(FeedbackState, LiteralDottedRootAndStructuredFieldHaveDistinctStateSlots) {
   auto *node = model.mutable_graph()->mutable_node(0);
   node->add_input("request.cache");
   node->add_output("response.cache");
-  RuntimeValueMap initial{{"request", RuntimeValue(RuntimeValueMap{{"cache", Cache(1, 2)}})},
-                          {R"(request\.cache)", Cache(10, 20)}};
+  RuntimeValueMap initial{{"request", Request(1, 2)}, {"request.cache", Cache(10, 20)}};
   const uint8_t *nested = initial.at("request").fields.at("cache").fields.at("keys").tensor.bytes();
-  const uint8_t *literal = initial.at(R"(request\.cache)").fields.at("keys").tensor.bytes();
+  const uint8_t *literal = initial.at("request.cache").fields.at("keys").tensor.bytes();
   FeedbackState state(model, initial);
   const auto before = state.Values();
   ASSERT_EQ(before.size(), 2u);
-  EXPECT_EQ(before.at("request.cache").fields.at("keys").tensor.bytes(), nested);
-  EXPECT_EQ(before.at(R"(request\.cache)").fields.at("keys").tensor.bytes(), literal);
+  EXPECT_EQ(before.at("request").fields.at("cache").fields.at("keys").tensor.bytes(), nested);
+  EXPECT_EQ(before.at("request.cache").fields.at("keys").tensor.bytes(), literal);
   RuntimeContext context(KernelContext(DefaultOpset(18)));
   context.RegisterCustomKernel("test.feedback", "Step", [](const NodeProto &, RuntimeContext &rt) {
     const auto &request = rt.values().at("request");
     rt.values()["response"] =
         RuntimeValue(RuntimeValueMap{{"cache", request.fields.at("cache").Share()},
-                                     {"logits", request.fields.at("tokens").Share()}});
+                                     {"logits", RuntimeValue(rt.Get("tokens").Share())}});
     rt.values()["response.cache"] = rt.values().at("request.cache").Share();
   });
-  const auto output =
-      state.Run(context, {{"request", RuntimeValue(RuntimeValueMap{{"tokens", Number(3)}})}});
+  const auto output = state.Run(context, {{"tokens", Number(3)}});
   EXPECT_EQ(output.at("response").fields.at("cache").fields.at("keys").tensor.bytes(), nested);
   EXPECT_EQ(output.at("response.cache").fields.at("keys").tensor.bytes(), literal);
   state.Reset(before);
   EXPECT_THROW(state.Reset({{"request.cache", Cache(3, 4)}}), std::invalid_argument);
-  EXPECT_EQ(state.Values().at(R"(request\.cache)").fields.at("keys").tensor.bytes(), literal);
+  EXPECT_EQ(state.Values().at("request.cache").fields.at("keys").tensor.bytes(), literal);
 }
 
-TEST(FeedbackState, CanonicalEscapesDistinguishLiteralDottedFieldsAndNestedPaths) {
+TEST(FeedbackState, WholeStructureKeepsDottedFieldsAndNestedFieldsDistinct) {
   ModelProto model = Model(true);
-  const TypeProto type = Structure({{"cache.part", FloatType()},
-                                    {"cache", Structure({{"part", FloatType()}})},
-                                    {"tokens", FloatType()}});
+  const TypeProto type =
+      Structure({{"cache.part", FloatType()}, {"cache", Structure({{"part", FloatType()}})}});
   *model.mutable_graph()->mutable_input(0)->mutable_type() = type;
   *model.mutable_graph()->mutable_output(0)->mutable_type() = type;
   model.mutable_graph()->clear_persistent_bindings();
-  Bind(model, "request", "response", {"cache.part"}, {"cache.part"});
-  Bind(model, "request", "response", {"cache", "part"}, {"cache", "part"});
+  Bind(model, "request", "response");
   RuntimeValueMap initial{
       {"request", RuntimeValue(RuntimeValueMap{
                       {"cache.part", Number(1)},
                       {"cache", RuntimeValue(RuntimeValueMap{{"part", Number(2)}})}})}};
   FeedbackState state(model, initial);
   const auto before = state.Values();
-  EXPECT_EQ(Number(before.at(R"(request.cache\.part)")), 1);
-  EXPECT_EQ(Number(before.at("request.cache.part")), 2);
+  EXPECT_EQ(Number(before.at("request").fields.at("cache.part")), 1);
+  EXPECT_EQ(Number(before.at("request").fields.at("cache").fields.at("part")), 2);
   RuntimeContext context(KernelContext(DefaultOpset(18)));
   context.RegisterCustomKernel("test.feedback", "Step", [](const NodeProto &, RuntimeContext &rt) {
     rt.values()["response"] = rt.values().at("request").Share();
   });
-  const auto output =
-      state.Run(context, {{"request", RuntimeValue(RuntimeValueMap{{"tokens", Number(3)}})}});
+  const auto output = state.Run(context, {{"tokens", Number(3)}});
   EXPECT_EQ(output.at("response").fields.at("cache.part").tensor.bytes(),
-            before.at(R"(request.cache\.part)").tensor.bytes());
+            before.at("request").fields.at("cache.part").tensor.bytes());
   EXPECT_EQ(output.at("response").fields.at("cache").fields.at("part").tensor.bytes(),
-            before.at("request.cache.part").tensor.bytes());
+            before.at("request").fields.at("cache").fields.at("part").tensor.bytes());
   state.Reset(before);
   EXPECT_THROW(state.Reset({{"request.cache.part", Number(3)}}), std::invalid_argument);
 }
 
-TEST(FeedbackState, CurrentFeedsAddressLiteralDottedFieldsThroughEscapesAndRootMaps) {
+TEST(FeedbackState, CurrentFeedsRequireWholeStructuredInputs) {
   ModelProto model = Model(true);
-  const TypeProto cache = Structure({{"keys", FloatType()}, {"values", FloatType()}});
-  *model.mutable_graph()->mutable_input(0)->mutable_type() =
-      Structure({{"token.part", FloatType()}, {"cache", cache}});
+  *model.mutable_graph()->mutable_input(1)->mutable_type() =
+      Structure({{"token.part", FloatType()}});
   RuntimeContext context(KernelContext(DefaultOpset(18)));
   context.RegisterCustomKernel("test.feedback", "Step", [](const NodeProto &, RuntimeContext &rt) {
     const auto &request = rt.values().at("request");
-    rt.values()["response"] =
-        RuntimeValue(RuntimeValueMap{{"cache", request.fields.at("cache").Share()},
-                                     {"logits", request.fields.at("token.part").Share()}});
+    rt.values()["response"] = RuntimeValue(
+        RuntimeValueMap{{"cache", request.fields.at("cache").Share()},
+                        {"logits", rt.values().at("tokens").fields.at("token.part").Share()}});
   });
-  FeedbackState state(model, {{"request.cache", Cache(1, 2)}});
-  RuntimeValueMap feeds{{"request", RuntimeValue(RuntimeValueMap{{"token.part", Number(3)}})}};
-  const uint8_t *token = feeds.at("request").fields.at("token.part").tensor.bytes();
+  FeedbackState state(model, {{"request", Request(1, 2)}});
+  RuntimeValueMap feeds{{"tokens", RuntimeValue(RuntimeValueMap{{"token.part", Number(3)}})}};
+  const uint8_t *token = feeds.at("tokens").fields.at("token.part").tensor.bytes();
   const auto output = state.Run(context, feeds);
   EXPECT_EQ(output.at("response").fields.at("logits").tensor.bytes(), token);
   EXPECT_EQ(Number(output.at("response").fields.at("logits")), 3);
-  const auto escaped = state.Run(context, {{R"(request.token\.part)", Number(4)}});
-  EXPECT_EQ(Number(escaped.at("response").fields.at("logits")), 4);
-  EXPECT_THROW(state.Run(context, {{"request.token.part", Number(4)}}), std::invalid_argument);
+  EXPECT_THROW(state.Run(context, {{R"(tokens.token\.part)", Number(4)}}), std::invalid_argument);
+  EXPECT_THROW(state.Run(context, {{"tokens.token.part", Number(4)}}), std::invalid_argument);
 }
 
-TEST(FeedbackState, CanonicalSelectorsEscapeBackslashesAndDotsInEveryComponent) {
+TEST(FeedbackState, GraphAndFieldNamesTreatBackslashesAndDotsLiterally) {
   ModelProto model = Model(true);
   const std::string input_name = R"(request\part.cache)";
   const std::string output_name = R"(response\part.cache)";
   const std::string state_field = R"(cache\part.state)";
   const std::string token_field = R"(token.part\suffix)";
-  const std::string root_key = R"(request\\part\.cache)";
-  const std::string state_key = R"(request\\part\.cache.cache\\part\.state)";
-  const std::string token_key = R"(request\\part\.cache.token\.part\\suffix)";
   const TypeProto type = Structure({{state_field, FloatType()}, {token_field, FloatType()}});
   model.mutable_graph()->mutable_input(0)->set_name(input_name);
   *model.mutable_graph()->mutable_input(0)->mutable_type() = type;
@@ -1079,26 +1112,24 @@ TEST(FeedbackState, CanonicalSelectorsEscapeBackslashesAndDotsInEveryComponent) 
   node->clear_output();
   node->add_output(output_name);
   model.mutable_graph()->clear_persistent_bindings();
-  Bind(model, input_name, output_name, {state_field}, {state_field});
-  RuntimeValueMap initial{{state_key, Number(1)}};
-  const uint8_t *payload = initial.at(state_key).tensor.bytes();
+  Bind(model, input_name, output_name);
+  RuntimeValueMap initial{{input_name, RuntimeValue(RuntimeValueMap{{state_field, Number(1)},
+                                                                    {token_field, Number(2)}})}};
+  const uint8_t *payload = initial.at(input_name).fields.at(state_field).tensor.bytes();
   FeedbackState state(model, initial);
-  EXPECT_EQ(state.Values().at(state_key).tensor.bytes(), payload);
+  EXPECT_EQ(state.Values().at(input_name).fields.at(state_field).tensor.bytes(), payload);
   RuntimeContext context(KernelContext(DefaultOpset(18)));
   context.RegisterCustomKernel(
       "test.feedback", "Step", [](const NodeProto &node, RuntimeContext &rt) {
         rt.values()[node.output(0)] = rt.values().at(node.input(0)).Share();
       });
-  const auto flat_output = state.Run(context, {{token_key, Number(2)}});
+  const auto flat_output = state.Run(context, {{"tokens", Number(0)}});
   EXPECT_EQ(flat_output.at(output_name).fields.at(state_field).tensor.bytes(), payload);
   EXPECT_EQ(Number(flat_output.at(output_name).fields.at(token_field)), 2);
-  const auto root_output =
-      state.Run(context, {{root_key, RuntimeValue(RuntimeValueMap{{token_field, Number(3)}})}});
-  EXPECT_EQ(Number(root_output.at(output_name).fields.at(token_field)), 3);
   state.Reset(state.Values());
-  EXPECT_EQ(state.Values().at(state_key).tensor.bytes(), payload);
+  EXPECT_EQ(state.Values().at(input_name).fields.at(state_field).tensor.bytes(), payload);
   for (const std::string &invalid :
-       {std::string(R"(request\q)"), root_key + ".", root_key + "\\", root_key + "..field"}) {
+       {std::string(R"(request\\part\.cache)"), input_name + "." + state_field}) {
     EXPECT_THROW(state.Run(context, {{invalid, Number(4)}}), std::invalid_argument);
   }
 }

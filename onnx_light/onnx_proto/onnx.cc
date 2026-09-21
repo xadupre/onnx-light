@@ -1802,31 +1802,29 @@ SerializeSizeResult PersistentBindingProto::SerializeSize(utils::BinaryWriteStre
   SerializeSizeResult size;
   SIZE_FIELD(size, options, stream, input_name)
   SIZE_FIELD(size, options, stream, output_name)
-  SIZE_REPEATED_FIELD(size, options, stream, input_field_path)
-  SIZE_REPEATED_FIELD(size, options, stream, output_field_path)
   return size;
 }
 void PersistentBindingProto::SerializeToStream(utils::BinaryWriteStream &stream,
                                                SerializeOptions &options) const {
   WRITE_FIELD(options, stream, input_name)
   WRITE_FIELD(options, stream, output_name)
-  WRITE_REPEATED_FIELD(options, stream, input_field_path)
-  WRITE_REPEATED_FIELD(options, stream, output_field_path)
 }
 bool PersistentBindingProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, PersistentBindingProto)
   READ_FIELD(options, stream, input_name)
   READ_FIELD(options, stream, output_name)
-  READ_REPEATED_FIELD(options, stream, input_field_path)
-  READ_REPEATED_FIELD(options, stream, output_field_path)
+  else if (field_number.field_number == 3 || field_number.field_number == 4) {
+    // Do not silently reinterpret an old partial binding as whole-input persistence.
+    EXT_THROW_INVALID("Persistent bindings select whole graph inputs/outputs; field paths are "
+                      "unsupported.");
+  }
   READ_END(options, stream, PersistentBindingProto)
   return true;
 }
 void PersistentBindingProto::PrintToStringStream(std::stringstream &ss,
                                                  utils::PrintOptions &options) const {
   write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(input_name),
-                                 NAME_EXIST_VALUE(output_name), NAME_EXIST_VALUE(input_field_path),
-                                 NAME_EXIST_VALUE(output_field_path));
+                                 NAME_EXIST_VALUE(output_name));
 }
 
 // GraphProto

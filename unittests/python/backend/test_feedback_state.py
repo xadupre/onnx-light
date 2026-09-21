@@ -17,6 +17,7 @@ from onnx_light import onnx
 from onnx_light.ext_test_case import import_or_skip
 from onnx_light.onnx import helper, numpy_helper
 from onnx_light.onnx_lib import parser
+from onnx_light.onnx_proto import verify
 
 runtime = import_or_skip("onnx_light.onnx_py._onnxpykernels", "runtime")
 
@@ -32,13 +33,11 @@ def make_model():
     return model
 
 
-def add_binding(model, input_name, output_name, input_fields=(), output_fields=()):
+def add_binding(model, input_name, output_name):
     """Declares a persistent input/output binding."""
     binding = model.graph.persistent_bindings.add()
     binding.input_name = input_name
     binding.output_name = output_name
-    binding.input_field_path.extend(input_fields)
-    binding.output_field_path.extend(output_fields)
 
 
 def make_context():
@@ -221,7 +220,7 @@ class TestFeedbackState(unittest.TestCase):
                 finally:
                     registry.unregister_custom_kernel("feedback.test", "Block")
 
-    def test_structured_field_feedback_and_kernel_failure(self):
+    def test_whole_structured_feedback_and_kernel_failure(self):
         tensor_type = helper.make_tensor_type_proto(onnx.TensorProto.FLOAT, [2])
 
         def struct_type(*names):
@@ -239,42 +238,88 @@ class TestFeedbackState(unittest.TestCase):
 
         model = helper.make_model(
             helper.make_graph(
-                [helper.make_node("Step", ["request"], ["response"], domain="feedback.test")],
+                [
+                    helper.make_node(
+                        "Step", ["request", "tokens"], ["response"], domain="feedback.test"
+                    )
+                ],
                 "structured_feedback",
-                [onnx.ValueInfoProto(name="request", type=struct_type("tokens", "cache"))],
+                [
+                    onnx.ValueInfoProto(name="request", type=struct_type("logits", "cache")),
+                    onnx.ValueInfoProto(name="tokens", type=tensor_type),
+                ],
                 [onnx.ValueInfoProto(name="response", type=struct_type("logits", "cache"))],
             ),
             opset_imports=[helper.make_opsetid("", 18), helper.make_opsetid("feedback.test", 1)],
         )
-        add_binding(model, "request", "response", ["cache"], ["cache"])
+        add_binding(model, "request", "response")
+        verify.verify_model(model)
+        initial_cache = numpy.zeros(2, dtype=numpy.float32)
+        initial_logits = numpy.zeros(2, dtype=numpy.float32)
+        cache_ref, logits_ref = weakref.ref(initial_cache), weakref.ref(initial_logits)
         state = runtime.FeedbackState(
-            model, {"request": {"cache": numpy.zeros(2, dtype=numpy.float32)}}
+            model, {"request": {"cache": initial_cache, "logits": initial_logits}}
         )
+        snapshot = state.values
+        self.assertEqual(
+            array(snapshot["request"]["cache"]).ctypes.data, initial_cache.ctypes.data
+        )
+        self.assertEqual(
+            array(snapshot["request"]["logits"]).ctypes.data, initial_logits.ctypes.data
+        )
+        del initial_cache, initial_logits
+        gc.collect()
+        self.assertIsNotNone(cache_ref())
+        self.assertIsNotNone(logits_ref())
         context = make_context()
         fail = False
 
         def step(node, context):
             """Produces structured outputs through the ordinary custom-kernel API."""
             request = context.get_value(str(node.input[0]))
-            cache = array(request["cache"]) + array(request["tokens"])
+            cache = array(request["cache"]) + array(context.get_value(str(node.input[1])))
             context.put_value(str(node.output[0]), {"cache": cache, "logits": cache * 2})
             if fail:
                 raise RuntimeError("failed after producing outputs")
 
         context.register_custom_kernel("feedback.test", "Step", step)
         for expected in (1, 2):
-            output = state.run(
-                context, {"request": {"tokens": numpy.ones(2, dtype=numpy.float32)}}
-            )
+            output = state.run(context, {"tokens": numpy.ones(2, dtype=numpy.float32)})
             numpy.testing.assert_array_equal(array(output["response"]["cache"]), [expected] * 2)
-        self.assertEqual(set(state.values), {"request.cache"})
+            for field in ("cache", "logits"):
+                self.assertEqual(
+                    array(state.values["request"][field]).ctypes.data,
+                    array(output["response"][field]).ctypes.data,
+                )
+        self.assertEqual(set(state.values), {"request"})
+        for replacement in (
+            {},
+            {"cache": numpy.ones(2, dtype=numpy.float32)},
+            state.values["request"],
+        ):
+            with self.assertRaisesRegex(ValueError, "override retained input"):
+                state.run(
+                    context,
+                    {"request": replacement, "tokens": numpy.ones(2, dtype=numpy.float32)},
+                )
+        with self.assertRaisesRegex(ValueError, "unknown graph input"):
+            state.run(context, {"request.cache": numpy.ones(2, dtype=numpy.float32)})
+        with self.assertRaisesRegex(ValueError, "missing field"):
+            state.reset({"request": {"cache": numpy.zeros(2, dtype=numpy.float32)}})
         fail = True
         with self.assertRaisesRegex(RuntimeError, "failed after producing outputs"):
-            state.run(context, {"request": {"tokens": numpy.ones(2, dtype=numpy.float32)}})
-        numpy.testing.assert_array_equal(array(state.values["request.cache"]), [2, 2])
+            state.run(context, {"tokens": numpy.ones(2, dtype=numpy.float32)})
+        numpy.testing.assert_array_equal(array(state.values["request"]["cache"]), [2, 2])
+        numpy.testing.assert_array_equal(array(state.values["request"]["logits"]), [4, 4])
         fail = False
-        output = state.run(context, {"request": {"tokens": numpy.ones(2, dtype=numpy.float32)}})
+        output = state.run(context, {"tokens": numpy.ones(2, dtype=numpy.float32)})
         numpy.testing.assert_array_equal(array(output["response"]["cache"]), [3, 3])
+        state.close()
+        numpy.testing.assert_array_equal(array(snapshot["request"]["cache"]), [0, 0])
+        del snapshot
+        gc.collect()
+        self.assertIsNone(cache_ref())
+        self.assertIsNone(logits_ref())
 
     def test_source_and_output_lifetimes(self):
         initial = numpy.zeros(2, dtype=numpy.float32)
@@ -373,7 +418,7 @@ class TestFeedbackState(unittest.TestCase):
             with self.subTest(initial=initial), self.assertRaises((TypeError, ValueError)):
                 runtime.FeedbackState(make_model(), {"past": initial})
 
-    def test_literal_dots_in_state_and_current_fields(self):
+    def test_literal_dots_in_whole_structured_state(self):
         tensor_type = helper.make_tensor_type_proto(onnx.TensorProto.FLOAT, [2])
 
         def structure(fields):
@@ -389,13 +434,7 @@ class TestFeedbackState(unittest.TestCase):
                 )
             )
 
-        value_type = structure(
-            [
-                ("a.b", tensor_type),
-                ("a", structure([("b", tensor_type)])),
-                ("token.part", tensor_type),
-            ]
-        )
+        value_type = structure([("a.b", tensor_type), ("a", structure([("b", tensor_type)]))])
         model = helper.make_model(
             helper.make_graph(
                 [helper.make_node("Echo", ["x"], ["y"], domain="feedback.test")],
@@ -405,8 +444,8 @@ class TestFeedbackState(unittest.TestCase):
             ),
             opset_imports=[helper.make_opsetid("", 18), helper.make_opsetid("feedback.test", 1)],
         )
-        add_binding(model, "x", "y", ["a.b"], ["a.b"])
-        add_binding(model, "x", "y", ["a", "b"], ["a", "b"])
+        add_binding(model, "x", "y")
+        verify.verify_model(model)
         first = numpy.ones(2, dtype=numpy.float32)
         second = numpy.full(2, 2, dtype=numpy.float32)
         state = runtime.FeedbackState(model, {"x": {"a.b": first, "a": {"b": second}}})
@@ -417,10 +456,20 @@ class TestFeedbackState(unittest.TestCase):
             context.put_value(str(node.output[0]), context.get_value(str(node.input[0])))
 
         context.register_custom_kernel("feedback.test", "Echo", echo)
-        output = state.run(context, {"x": {"token.part": numpy.zeros(2, dtype=numpy.float32)}})
-        self.assertEqual(set(state.values), {r"x.a\.b", "x.a.b"})
+        output = state.run(context, {})
+        self.assertEqual(set(state.values), {"x"})
         self.assertEqual(array(output["y"]["a.b"]).ctypes.data, first.ctypes.data)
         self.assertEqual(array(output["y"]["a"]["b"]).ctypes.data, second.ctypes.data)
+        state.close()
+        for field, name in (("input_name", "x.a.b"), ("output_name", "y.a.b")):
+            setattr(model.graph.persistent_bindings[0], field, name)
+            with self.assertRaisesRegex(ValueError, "exact.*input/output"):
+                verify.verify_model(model)
+            with self.assertRaisesRegex(ValueError, "exact.*input/output"):
+                runtime.FeedbackState(model, {"x": {"a.b": first, "a": {"b": second}}})
+            setattr(
+                model.graph.persistent_bindings[0], field, "x" if field == "input_name" else "y"
+            )
 
     def test_literal_dotted_graph_name(self):
         model = helper.make_model(
@@ -433,11 +482,54 @@ class TestFeedbackState(unittest.TestCase):
             opset_imports=[helper.make_opsetid("", 18)],
         )
         add_binding(model, "past.part", "present.part")
+        verify.verify_model(model)
         initial = numpy.ones(2, dtype=numpy.float32)
-        state = runtime.FeedbackState(model, {r"past\.part": initial})
+        state = runtime.FeedbackState(model, {"past.part": initial})
         output = state.run(make_context(), {})
-        self.assertEqual(set(state.values), {r"past\.part"})
+        self.assertEqual(set(state.values), {"past.part"})
         self.assertEqual(array(output["present.part"]).ctypes.data, initial.ctypes.data)
+        with self.assertRaisesRegex(ValueError, "override retained input"):
+            state.run(make_context(), {"past.part": initial})
+        with self.assertRaisesRegex(ValueError, "missing initial whole input"):
+            state.reset({r"past\.part": initial})
+
+    def test_graph_name_prefixes_are_independent_inputs(self):
+        model = helper.make_model(
+            helper.make_graph(
+                [
+                    helper.make_node("Identity", ["past"], ["present"]),
+                    helper.make_node("Identity", ["past.part"], ["present.part"]),
+                ],
+                "literal_prefixes",
+                [
+                    helper.make_tensor_value_info(name, onnx.TensorProto.FLOAT, [2])
+                    for name in ("past", "past.part")
+                ],
+                [
+                    helper.make_tensor_value_info(name, onnx.TensorProto.FLOAT, [2])
+                    for name in ("present", "present.part")
+                ],
+            ),
+            opset_imports=[helper.make_opsetid("", 18)],
+        )
+        add_binding(model, "past", "present")
+        verify.verify_model(model)
+        first = numpy.ones(2, dtype=numpy.float32)
+        second = numpy.full(2, 2, dtype=numpy.float32)
+        state = runtime.FeedbackState(model, {"past": first})
+        output = state.run(make_context(), {"past.part": second})
+        self.assertEqual(array(output["present.part"]).ctypes.data, second.ctypes.data)
+        self.assertEqual(set(state.values), {"past"})
+        with self.assertRaisesRegex(ValueError, "unknown graph input"):
+            state.run(make_context(), {r"past\.part": second})
+        state.close()
+        add_binding(model, "past.part", "present.part")
+        verify.verify_model(model)
+        state = runtime.FeedbackState(model, {"past": first, "past.part": second})
+        output = state.run(make_context(), {})
+        self.assertEqual(set(state.values), {"past", "past.part"})
+        self.assertEqual(array(output["present"]).ctypes.data, first.ctypes.data)
+        self.assertEqual(array(output["present.part"]).ctypes.data, second.ctypes.data)
 
     def test_initializer_output_retains_model(self):
         weights = numpy.ones(2, dtype=numpy.float32)

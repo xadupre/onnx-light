@@ -1364,34 +1364,6 @@ void VerifyNode(const StructTypeCatalogue *struct_types, const NodeProto &node,
   }
 }
 
-const TypeProto &ResolvePersistentBindingType(const StructTypeCatalogue &catalogue,
-                                              const TypeProto &type,
-                                              const utils::RepeatedStringField &path) {
-  catalogue.ValidateType(type);
-  const TypeProto *selected = &type;
-  for (const auto &component : path) {
-    if (component.empty() || !selected->has_struct_type()) {
-      Invalid("Persistent binding path requires a non-empty structure field name.");
-    }
-    const auto &structure = catalogue.Resolve(selected->struct_type());
-    if (!structure.has_structure()) {
-      Invalid("Persistent binding path must traverse structure fields.");
-    }
-    const TypeProto *next = nullptr;
-    for (const auto &field : structure.structure().field()) {
-      if (field.name().sv() == component.sv() && field.has_type()) {
-        next = &field.type();
-        break;
-      }
-    }
-    if (next == nullptr) {
-      Invalid("Persistent binding path selects a missing field or a constant.");
-    }
-    selected = next;
-  }
-  return *selected;
-}
-
 namespace {
 
 template <typename T>
@@ -1529,7 +1501,8 @@ const TypeProto &PersistentIOType(const utils::RepeatedProtoField<ValueInfoProto
       }
     }
   }
-  Invalid("Persistent binding requires an existing typed graph input/output name.");
+  Invalid("Persistent binding requires an exact existing typed graph input/output name; "
+          "partial field paths are unsupported.");
 }
 
 } // namespace
@@ -1565,32 +1538,17 @@ void VerifyPersistentBindings(const StructTypeCatalogue *struct_types, const Gra
   const auto &bindings = graph.persistent_bindings();
   for (size_t i = 0; i < bindings.size(); ++i) {
     const auto &binding = bindings[i];
-    const auto &input = ResolvePersistentBindingType(
-        catalogue, PersistentIOType(graph.input(), binding.input_name()),
-        binding.input_field_path());
-    const auto &output = ResolvePersistentBindingType(
-        catalogue, PersistentIOType(graph.output(), binding.output_name()),
-        binding.output_field_path());
+    const auto &input = PersistentIOType(graph.input(), binding.input_name());
+    const auto &output = PersistentIOType(graph.output(), binding.output_name());
     if (!CompatiblePersistentTypes(catalogue, input, output)) {
       Invalid(
           "Persistent binding requires compatible tensor/struct types and declared dimensions.");
     }
     for (size_t j = 0; j < i; ++j) {
-      if (bindings[j].input_name() != binding.input_name()) {
-        continue;
-      }
-      const auto &a = bindings[j].input_field_path();
-      const auto &b = binding.input_field_path();
-      bool prefix = true;
-      for (size_t k = 0; k < std::min(a.size(), b.size()); ++k) {
-        if (a[k] != b[k]) {
-          prefix = false;
-          break;
-        }
-      }
-      if (prefix) {
-        Invalid("Persistent bindings have duplicate or overlapping destination paths.");
-      }
+      if (bindings[j].input_name() == binding.input_name())
+        Invalid("Persistent bindings have duplicate input names.");
+      if (bindings[j].output_name() == binding.output_name())
+        Invalid("Persistent bindings have duplicate output names.");
     }
   }
 }

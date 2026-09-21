@@ -2979,9 +2979,7 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
 
   PYDEFINE_PROTO(m, PersistentBindingProto)
       .PYFIELD_STR(PersistentBindingProto, input_name)
-      .PYFIELD_STR(PersistentBindingProto, output_name)
-      .PYFIELD(PersistentBindingProto, input_field_path)
-      .PYFIELD(PersistentBindingProto, output_field_path);
+      .PYFIELD_STR(PersistentBindingProto, output_name);
   PYADD_PROTO_SERIALIZATION(PersistentBindingProto);
   DECLARE_REPEATED_FIELD_PROTO(PersistentBindingProto, rep_persistent_binding);
   define_repeated_field_type_proto(rep_persistent_binding, rep_persistent_binding_proto);

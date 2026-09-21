@@ -1388,13 +1388,9 @@ END_PROTO()
  * Stores graph wiring only, never state payloads or ownership. Each path component
  * names one structure field verbatim; an empty path selects the whole value.
  */
-BEGIN_PROTO(PersistentBindingProto, "Declares a persistent output-to-input binding.")
-FIELD_STR(input_name, 1, "Names the destination graph input.")
-FIELD_STR(output_name, 2, "Names the source graph output.")
-FIELD_REPEATED_STR(utils::String, input_field_path, 3,
-                   "Selects destination structure fields; an empty path selects the whole input.")
-FIELD_REPEATED_STR(utils::String, output_field_path, 4,
-                   "Selects source structure fields; an empty path selects the whole output.")
+BEGIN_PROTO(PersistentBindingProto, "Declares a whole-output to whole-input persistent binding.")
+FIELD_STR(input_name, 1, "Names the whole destination graph input, literally.")
+FIELD_STR(output_name, 2, "Names the whole source graph output, literally.")
 END_PROTO()
 
 // GraphProto

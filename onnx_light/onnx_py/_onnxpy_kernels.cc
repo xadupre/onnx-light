@@ -1701,7 +1701,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
 
   nb::class_<FeedbackState>(
       rt_mod, "FeedbackState",
-      "Retains selected outputs as next-call inputs using types from the final model.")
+      "Retains whole outputs as whole next-call inputs by exact names from the final model.")
       .def(
           "__init__",
           [](FeedbackState *self, const ModelProto &model, nb::dict initial,
@@ -1713,6 +1713,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           nb::arg("model"), nb::arg("initial"), nb::arg("options") = RuntimeSessionOptions{},
           nb::keep_alive<1, 2>(),
           "Initializes state from model.graph.persistent_bindings without copying payloads. "
+          "Dictionary keys are literal graph input names, never field paths. "
           "The model must remain immutable. Inputs and retained/returned buffers can alias; "
           "callers must not mutate them while shared or retained.")
       .def(
@@ -1735,6 +1736,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           },
           nb::arg("context"), nb::arg("feeds"), nb::arg("completion").none() = nb::none(),
           "Runs the model and commits feedback only after successful validation. "
+          "Feeds name whole non-retained graph inputs; retained inputs cannot be overridden. "
           "Returns lifetime-safe shared tensors, nested dictionaries or encoded values. "
           "Uses an optional single-use TaskCompletion to cancel before publication.")
       .def(
@@ -1747,7 +1749,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
            "Releases retained values and permanently closes the state.")
       .def_prop_ro(
           "values", [](const FeedbackState &self) { return FeedbackValuesToPython(self.Values()); },
-          "Returns shared read-only payload views keyed by feedback destination, not deep copies.");
+          "Returns shared read-only payload views keyed by exact retained graph input names.");
 
   nb::class_<ReferenceEvaluatorRunner>(
       rt_mod, "ReferenceEvaluatorRunner",

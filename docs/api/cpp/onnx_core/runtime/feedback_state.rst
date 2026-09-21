@@ -15,21 +15,17 @@ Borrowed initializer ``raw_data`` must additionally carry its own backing-owner
 control block. Retaining the model cannot make an ownerless external buffer safe;
 such initializers are rejected instead of copied.
 
-Initial values, current feeds and ``Values()`` use canonical selector keys:
-unescaped dots separate components, ``\.`` denotes a literal dot, and ``\\``
-denotes a literal backslash. Every component is escaped, including the graph
-root. The decoded first component must match a graph input name exactly;
-there is no longest-prefix fallback. Thus ``request.cache`` selects field
-``cache`` of root ``request``, whereas ``request\.cache`` selects the literal
-root ``request.cache``. Field ``a.b`` uses ``request.a\.b``, distinct from
-nested fields ``a`` / ``b`` selected by ``request.a.b``. Other escape sequences,
-empty components and trailing backslashes are rejected.
+Initial values, current feeds and ``Values()`` use exact graph input names.
+Dots and backslashes are literal, with no escaping or path resolution.
+``request.cache`` selects only the graph input literally named ``request.cache``,
+never a field of ``request``. Each binding retains a whole input from a whole
+output; duplicate input or output selections are rejected.
 
-Nested field maps are also accepted beneath an escaped root selector. Their
-field keys are literal names, not selectors. Partial root maps can supply
-current fields alongside retained fields, but supplying a retained field again
-is an error. ``Values()`` always returns flat canonical selector keys.
-Returned graph-output dictionaries retain their literal model output names.
+Nested field maps represent complete structured values beneath a graph name.
+Partial root maps cannot combine current fields with retained fields.
+Supplying any value for a retained input is an error, even an empty field map.
+``Values()`` returns complete values keyed by retained graph input names.
+Returned graph-output dictionaries use their literal model output names.
 
 Initial values, reset values, invocation inputs, selected outputs, and
 ``Values()`` share payload owners. Their field maps and tensor metadata are

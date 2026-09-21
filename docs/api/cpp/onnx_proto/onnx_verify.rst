@@ -9,8 +9,9 @@ Persistent declarations
 
 ``VerifyPersistentBindings`` validates root-graph declarations using an optional
 ``StructTypeCatalogue``. ``VerifyGraph`` and ``VerifyModel`` call it automatically.
-``ResolvePersistentBindingType`` returns a borrowed type selected by a literal
-field-name array; it neither serializes types nor copies state buffers.
+Bindings select whole inputs and outputs by exact graph names; dots and
+backslashes are literal. Unknown names and duplicate input or output selections
+are rejected. ``FeedbackState`` uses this same declaration validator.
 ``CompatiblePersistentTypes`` and ``CompatiblePersistentStructTypes`` expose
 the same direct declaration compatibility checks to native runtime callers.
 Unknown ranks and symbolic dimensions remain valid; conflicting known ranks,

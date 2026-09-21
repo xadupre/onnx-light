@@ -643,7 +643,7 @@ Graph-level persistence declaration
 Add ``persistent_bindings`` to ``GraphProto``, not a ``persistent`` flag
 to ``StructTypeProto`` or ``EncodedValueProto``. A type can describe both
 persistent and temporary values; an input can be an ordinary tensor or a
-struct field without an encoded payload. A boolean also cannot identify
+whole structure without an encoded payload. A boolean also cannot identify
 the output that supplies the next value.
 
 The proposed local wire extension is:
@@ -653,8 +653,6 @@ The proposed local wire extension is:
     message PersistentBindingProto {
         string input_name = 1;
         string output_name = 2;
-        repeated string input_field_path = 3;
-        repeated string output_field_path = 4;
     }
 
     message GraphProto {
@@ -662,11 +660,10 @@ The proposed local wire extension is:
         repeated PersistentBindingProto persistent_bindings = 1001;
     }
 
-Names identify exact inputs and outputs of the declaring graph. Empty
-field paths select the whole value; nonempty paths select named struct
-fields. Separate field-path components avoid ambiguity when graph names
-or field names contain dots. Dotted notation in examples is shorthand,
-not the wire representation. Field 1001 belongs to the reserved local
+Names identify exact whole inputs and outputs of the declaring graph.
+An input is entirely persistent or not persistent; partial field selection
+is unsupported. Dots and backslashes in names are literal characters.
+Field 1001 belongs to the reserved local
 extension range; existing representation field numbers remain unchanged.
 
 No bindings means ordinary stateless execution. The initial runtime scope
@@ -722,11 +719,11 @@ after graph rewrites. Initial contents must still be supplied.
 .. _l-next-steps-persistent-composite-state:
 .. _l-next-steps-persistent-struct-state:
 
-A struct with only one persistent part
+Whole structured inputs
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The same mapping can select a field instead of an entire input. These are
-ordinary structs described by ``StructTypeProto``:
+The same mapping can retain an entire structured input. Fresh values belong
+to separate graph inputs. These are ordinary structs described by ``StructTypeProto``:
 
 .. code-block:: text
 
@@ -736,43 +733,37 @@ ordinary structs described by ``StructTypeProto``:
         length: INT64
     }
 
-    model input request: struct {
-        tokens: INT64[batch, sequence]
-        cache: Cache
-    }
-    model output response: struct {
-        logits: FLOAT[batch, sequence, vocabulary]
-        cache: Cache
-    }
+    model input tokens: INT64[batch, sequence]
+    model input cache: Cache
+    model output logits: FLOAT[batch, sequence, vocabulary]
+    model output next_cache: Cache
     model.graph.persistent_bindings:
-        request.cache <- response.cache
+        cache <- next_cache
 
     state = make_state(
         model,
-        initial={"request": {"cache": initial_cache}}
+        initial={"cache": initial_cache}
     )
-    out = state.run({"request": {"tokens": first_tokens}})
-    out = state.run({"request": {"tokens": next_tokens}})
+    out = state.run({"tokens": first_tokens})
+    out = state.run({"tokens": next_tokens})
 
-Only ``request.cache`` persists: tokens are supplied anew and logits are
-not retained. The graph binding selects the persistent part of an instance,
+The whole ``cache`` input persists: tokens are supplied anew and logits are
+separate outputs, not retained. The graph binding selects a whole value,
 with no ``persistent`` flag on the shared struct type or encoded value.
-Here the wire input name is ``request`` and its field path is
-``["cache"]``; the output name is ``response`` with the same field path.
 ``Tensor`` above only abbreviates the model's actual tensor types and
 shape constraints.
 
 Minimal rules
 ~~~~~~~~~~~~~
 
-* Every selected path must exist with compatible types, representation
+* Every selected graph input/output must exist with compatible types, representation
   contracts and shape constraints. Resolve the declarations once;
   validate actual value metadata before publication without copying or
   serializing payloads.
-* Every required input field comes from current feeds or retained state;
-  missing initial values, duplicate/overlapping destinations, and current
-  feeds overlapping retained destinations are errors.
-* Retained fields update only after successful execution and validation;
+* Every required whole input comes from current feeds or retained state;
+  missing initial values, duplicate input/output selections, and current
+  feeds overriding retained inputs are errors.
+* Retained values update only after successful execution and validation;
   each request owns its state bindings, and simultaneous calls on the
   same state are rejected. ``reset(initial)`` restores caller-supplied initial values;
   ``close`` releases retained values, and neither may race with an
@@ -831,7 +822,7 @@ This changes its fields and representations, not its persistence mechanism:
         length: INT64
     }
     model.graph.persistent_bindings:
-        request.cache <- response.cache
+        cache <- next_cache
 
 Each K/V block may use a different ``EncodedValueProto`` layout, such as
 INT4, INT8 or a codebook struct, provided its decoded type and geometry
@@ -856,7 +847,7 @@ metadata through import/export. Deduplication considers semantic
 profiles, not just payload bytes. It must also author and preserve
 ``GraphProto.persistent_bindings`` through import/export, graph copying,
 renaming and optimization. Renaming an input/output updates its binding;
-a rewrite removing or changing a selected path must update the declaration
+a rewrite removing or changing a selected input/output must update the declaration
 consistently or fail, never silently drop it. Validate bindings against the
 final graph before constructing a session. General struct
 declarations round-trip through the type catalogue too; unsupported
@@ -985,8 +976,8 @@ helper versus a manual output-to-input loop, covering changed scales with
 unchanged code bytes, missing consumers, reset, invalid capacities and
 failed mutations.
 
-State fixtures retain a whole tensor and only the cache field of a larger
-struct, verifying that unselected values are not retained and the next
+State fixtures retain whole tensors and whole structured cache inputs,
+verifying that separate unselected outputs are not retained and the next
 call receives the same backing buffers as the previous selected outputs.
 Measure pointer identity and payload-copy/allocation counters across
 initialization, repeated calls, reset and state-view access, including
@@ -996,7 +987,7 @@ reuse, invalid ownerless borrows and failed/cancelled runs.
 
 Wire/GraphBuilder fixtures round-trip bindings, preserve them through
 renames and rewrites, distinguish dotted names from nested fields, and
-reject duplicate/overlapping destinations, missing paths, incompatible
+reject duplicate input/output selections, unknown exact names, incompatible
 types/shapes and unsupported subgraph declarations. Two values sharing
 one struct type can have different persistence bindings. Large-model
 fixtures verify that constructing and running state performs no model

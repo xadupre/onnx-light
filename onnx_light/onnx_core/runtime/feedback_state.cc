@@ -4,7 +4,6 @@
 
 #include "feedback_state.h"
 #include "onnx_core/runtime/kernels/run_nodes.h"
-#include <algorithm>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
@@ -34,80 +33,12 @@ void CheckNestedBindings(const utils::RepeatedProtoField<NodeProto> &nodes, size
     }
 }
 
-std::string PathKey(const std::vector<std::string> &parts) {
-  std::string result;
-  for (const auto &part : parts) {
-    if (!result.empty())
-      result.push_back('.');
-    for (char character : part) {
-      if (character == '.' || character == '\\')
-        result.push_back('\\');
-      result.push_back(character);
-    }
-  }
-  return result;
-}
-
-std::vector<std::string> Path(const std::string &path, const Declarations &declarations) {
-  std::vector<std::string> result;
-  std::string part;
-  bool escaped = false;
-  for (char character : path) {
-    if (escaped) {
-      EXT_ENFORCE_INVALID(character == '.' || character == '\\',
-                          "FeedbackState: only dots and backslashes may be escaped in selectors.");
-      part.push_back(character);
-      escaped = false;
-    } else if (character == '\\') {
-      escaped = true;
-    } else if (character == '.') {
-      EXT_ENFORCE_INVALID(!part.empty(), "FeedbackState: empty path component.");
-      result.push_back(std::move(part));
-      EXT_ENFORCE_INVALID(result.size() <= RuntimeValue::kMaxDepth,
-                          "FeedbackState: maximum selector depth exceeded.");
-      part.clear();
-    } else {
-      part.push_back(character);
-    }
-  }
-  EXT_ENFORCE_INVALID(!escaped && !part.empty(), "FeedbackState: incomplete or empty selector.");
-  result.push_back(std::move(part));
-  bool known_root = false;
+const TypeProto &InputType(const std::string &name, const Declarations &declarations) {
   for (const auto &item : declarations)
-    known_root = known_root || item.name() == result.front();
-  EXT_ENFORCE_INVALID(known_root, "FeedbackState: unknown graph root '", result.front(),
-                      "'; escape literal dots and backslashes in graph names.");
-  return result;
-}
-
-bool OverlappingPaths(const std::vector<std::string> &left, const std::vector<std::string> &right) {
-  return left.size() <= right.size() && std::equal(left.begin(), left.end(), right.begin());
-}
-
-const TypeProto &Resolve(const std::vector<std::string> &parts, const Declarations &declarations,
-                         const StructTypeCatalogue &catalogue) {
-  const TypeProto *type = nullptr;
-  for (const auto &item : declarations)
-    if (item.name() == parts.front())
-      type = &item.type();
-  EXT_ENFORCE_INVALID(type != nullptr, "FeedbackState: unknown graph name '", parts.front(), "'.");
-  for (size_t i = 1; i < parts.size(); ++i) {
-    EXT_ENFORCE_INVALID(type->has_struct_type(), "FeedbackState: non-struct path.");
-    const auto &structure = catalogue.Resolve(type->struct_type());
-    EXT_ENFORCE_INVALID(structure.has_structure(), "FeedbackState: path is not a named structure.");
-    type = nullptr;
-    for (const auto &field : structure.structure().field())
-      if (field.name() == parts[i] && field.has_type())
-        type = &field.type();
-    EXT_ENFORCE_INVALID(type != nullptr, "FeedbackState: unknown field '", parts[i], "'.");
-  }
-  return *type;
-}
-
-void Compatible(const TypeProto &input, const TypeProto &output,
-                const StructTypeCatalogue &catalogue) {
-  EXT_ENFORCE_INVALID(CompatiblePersistentTypes(catalogue, input, output),
-                      "FeedbackState: incompatible binding types.");
+    if (item.name() == name)
+      return item.type();
+  EXT_THROW_INVALID("FeedbackState: unknown graph input name '", name,
+                    "'; names are literal and partial field paths are unsupported.");
 }
 
 void Validate(const RuntimeValue &value, const TypeProto &type,
@@ -169,31 +100,6 @@ void Validate(const RuntimeValue &value, const TypeProto &type,
                       "FeedbackState: unexpected structured field.");
 }
 
-const RuntimeValue &Select(const RuntimeValueMap &values, const std::vector<std::string> &path) {
-  auto it = values.find(path.front());
-  EXT_ENFORCE_INVALID(it != values.end(), "FeedbackState: missing output '", path.front(), "'.");
-  const RuntimeValue *value = &it->second;
-  for (size_t i = 1; i < path.size(); ++i) {
-    EXT_ENFORCE_INVALID(value->kind == RuntimeValue::Kind::kStruct,
-                        "FeedbackState: cannot select fields from an encoded payload.");
-    auto field = value->fields.find(path[i]);
-    EXT_ENFORCE_INVALID(field != value->fields.end(), "FeedbackState: missing output field.");
-    value = &field->second;
-  }
-  return *value;
-}
-
-void Insert(RuntimeValueMap &values, const std::vector<std::string> &path,
-            const RuntimeValue &value) {
-  RuntimeValue *target = &values[path.front()];
-  for (size_t i = 1; i < path.size(); ++i) {
-    EXT_ENFORCE_INVALID(target->kind == RuntimeValue::Kind::kStruct,
-                        "FeedbackState: overlapping current feeds.");
-    target = &target->fields[path[i]];
-  }
-  *target = value.Share();
-}
-
 class Operation {
 public:
   explicit Operation(std::atomic_flag &busy) : busy_(busy) {
@@ -226,29 +132,10 @@ FeedbackState::FeedbackState(const ModelProto &model, const RuntimeValueMap &ini
     catalogue_.ValidateType(input.type());
   for (const auto &output : model.graph().output())
     catalogue_.ValidateType(output.type());
+  VerifyPersistentBindings(&catalogue_, model.graph());
   for (const auto &declared : model.graph().persistent_bindings()) {
-    EXT_ENFORCE_INVALID(!declared.input_name().empty() && !declared.output_name().empty(),
-                        "FeedbackState: binding graph names must not be empty.");
-    Binding binding{
-        declared.input_name(), {declared.input_name()}, {declared.output_name()}, nullptr};
-    for (const auto &field : declared.input_field_path()) {
-      EXT_ENFORCE_INVALID(!field.empty(), "FeedbackState: empty input field name.");
-      binding.input.push_back(field);
-    }
-    for (const auto &field : declared.output_field_path()) {
-      EXT_ENFORCE_INVALID(!field.empty(), "FeedbackState: empty output field name.");
-      binding.output.push_back(field);
-    }
-    binding.key = PathKey(binding.input);
-    binding.input_type = &Resolve(binding.input, model.graph().input(), catalogue_);
-    Compatible(*binding.input_type, Resolve(binding.output, model.graph().output(), catalogue_),
-               catalogue_);
-    for (const auto &other : bindings_) {
-      EXT_ENFORCE_INVALID(!OverlappingPaths(binding.input, other.input) &&
-                              !OverlappingPaths(other.input, binding.input),
-                          "FeedbackState: overlapping destination paths.");
-    }
-    bindings_.push_back(std::move(binding));
+    bindings_.push_back({declared.input_name(), declared.output_name(),
+                         &InputType(declared.input_name(), model.graph().input())});
   }
   session_ = std::make_unique<RuntimeSession>(model, std::move(options),
                                               RuntimeSession::InitializerMode::kBorrowed);
@@ -261,41 +148,18 @@ FeedbackState::FeedbackState(std::shared_ptr<const ModelProto> model,
                     std::shared_ptr<void>(model, const_cast<ModelProto *>(model.get()))) {}
 
 std::vector<RuntimeValue> FeedbackState::ValidateInitial(const RuntimeValueMap &initial) const {
-  std::vector<RuntimeValue> result(bindings_.size());
-  std::vector<bool> supplied(bindings_.size(), false);
+  std::vector<RuntimeValue> result;
+  result.reserve(bindings_.size());
   Symbols symbols;
-  const auto insert = [&](auto &&self, const RuntimeValue &value,
-                          const std::vector<std::string> &path) -> void {
-    EXT_ENFORCE_INVALID(path.size() <= RuntimeValue::kMaxDepth + 1,
-                        "FeedbackState: maximum initial path depth exceeded.");
-    bool ancestor = false;
-    for (size_t i = 0; i < bindings_.size(); ++i) {
-      const auto &binding = bindings_[i];
-      if (path == binding.input) {
-        EXT_ENFORCE_INVALID(!supplied[i], "FeedbackState: duplicate initial destination.");
-        Validate(value, *binding.input_type, catalogue_, symbols);
-        result[i] = value.Share();
-        supplied[i] = true;
-        return;
-      }
-      ancestor = ancestor || OverlappingPaths(path, binding.input);
-    }
-    EXT_ENFORCE_INVALID(ancestor && value.kind == RuntimeValue::Kind::kStruct &&
-                            !value.fields.empty(),
-                        "FeedbackState: initial value does not select a persistent destination; "
-                        "escape literal dots and backslashes in selector components.");
-    for (const auto &[field, child] : value.fields) {
-      auto nested = path;
-      nested.push_back(field);
-      self(self, child, nested);
-    }
-  };
-  for (const auto &[name, value] : initial) {
-    insert(insert, value, Path(name, model_.graph().input()));
+  for (const auto &binding : bindings_) {
+    const auto it = initial.find(binding.input);
+    EXT_ENFORCE_INVALID(it != initial.end(), "FeedbackState: missing initial whole input '",
+                        binding.input, "'.");
+    Validate(it->second, *binding.input_type, catalogue_, symbols);
+    result.push_back(it->second.Share());
   }
-  EXT_ENFORCE_INVALID(
-      std::all_of(supplied.begin(), supplied.end(), [](bool value) { return value; }),
-      "FeedbackState: missing initial values.");
+  EXT_ENFORCE_INVALID(initial.size() == bindings_.size(),
+                      "FeedbackState: initial values must name exactly the retained whole inputs.");
   return result;
 }
 
@@ -306,39 +170,14 @@ RuntimeValueMap FeedbackState::Run(RuntimeContext &context, const RuntimeValueMa
   EXT_ENFORCE_INVALID(completion == nullptr || completion->status() == TaskStatus::kPending,
                       "FeedbackState: invocation was cancelled or completion is not pending.");
   RuntimeValueMap inputs;
-  std::vector<std::vector<std::string>> feed_paths;
-  Symbols feed_symbols;
-  const auto insert_feed = [&](auto &&self, const RuntimeValue &value,
-                               const std::vector<std::string> &path) -> void {
-    EXT_ENFORCE_INVALID(path.size() <= RuntimeValue::kMaxDepth + 1,
-                        "FeedbackState: maximum feed path depth exceeded.");
-    bool ancestor = false;
-    for (const auto &binding : bindings_) {
-      EXT_ENFORCE_INVALID(!OverlappingPaths(binding.input, path),
-                          "FeedbackState: current feed overlaps retained state.");
-      ancestor = ancestor || OverlappingPaths(path, binding.input);
-    }
-    if (ancestor) {
-      EXT_ENFORCE_INVALID(value.kind == RuntimeValue::Kind::kStruct,
-                          "FeedbackState: partial root feeds require a structured map.");
-      for (const auto &[field, child] : value.fields) {
-        auto nested = path;
-        nested.push_back(field);
-        self(self, child, nested);
-      }
-      return;
-    }
-    Validate(value, Resolve(path, model_.graph().input(), catalogue_), catalogue_, feed_symbols);
-    for (const auto &other : feed_paths)
-      EXT_ENFORCE_INVALID(!OverlappingPaths(path, other) && !OverlappingPaths(other, path),
-                          "FeedbackState: overlapping current feeds.");
-    feed_paths.push_back(path);
-    Insert(inputs, path, value);
-  };
-  for (const auto &[name, value] : feeds)
-    insert_feed(insert_feed, value, Path(name, model_.graph().input()));
   for (size_t i = 0; i < bindings_.size(); ++i)
-    Insert(inputs, bindings_[i].input, values_[i]);
+    inputs.emplace(bindings_[i].input, values_[i].Share());
+  for (const auto &[name, value] : feeds) {
+    InputType(name, model_.graph().input());
+    EXT_ENFORCE_INVALID(inputs.find(name) == inputs.end(),
+                        "FeedbackState: current feed cannot override retained input '", name, "'.");
+    inputs.emplace(name, value.Share());
+  }
   Symbols symbols;
   RuntimeContext invocation = context.MakeFunctionContext();
   invocation.set_preserve_value_ownership(true);
@@ -388,7 +227,7 @@ RuntimeValueMap FeedbackState::Run(RuntimeContext &context, const RuntimeValueMa
   next.reserve(bindings_.size());
   Symbols next_symbols;
   for (const auto &binding : bindings_) {
-    const RuntimeValue &value = Select(outputs, binding.output);
+    const RuntimeValue &value = outputs.at(binding.output);
     Validate(value, *binding.input_type, catalogue_, next_symbols);
     next.push_back(value.Share());
   }
@@ -433,7 +272,7 @@ RuntimeValueMap FeedbackState::Values() const {
   EXT_ENFORCE_INVALID(session_ != nullptr, "FeedbackState: state is closed.");
   RuntimeValueMap snapshot;
   for (size_t i = 0; i < bindings_.size(); ++i)
-    snapshot.emplace(bindings_[i].key, values_[i].Share());
+    snapshot.emplace(bindings_[i].input, values_[i].Share());
   return snapshot;
 }
 

@@ -29,7 +29,7 @@ def structure_type(fields):
     )
 
 
-def model_with_binding(input_type=None, output_type=None, **kwargs):
+def model_with_binding(input_type=None, output_type=None):
     """Returns a typed root graph with one persistent declaration."""
     input_type = tensor_type() if input_type is None else input_type
     output_type = input_type if output_type is None else output_type
@@ -39,7 +39,7 @@ def model_with_binding(input_type=None, output_type=None, **kwargs):
         output=[onnx.ValueInfoProto(name="state.out", type=output_type)],
         node=[helper.make_node("Identity", ["state.in"], ["state.out"])],
         persistent_bindings=[
-            PersistentBindingProto(input_name="state.in", output_name="state.out", **kwargs)
+            PersistentBindingProto(input_name="state.in", output_name="state.out")
         ],
     )
     return helper.make_model(graph, opset_imports=[helper.make_opsetid("", 18)])
@@ -50,11 +50,8 @@ class TestPersistentBindings(unittest.TestCase):
         graph = onnx.GraphProto()
         self.assertEqual(len(graph.persistent_bindings), 0)
         binding = graph.persistent_bindings.add(input_name="x", output_name="y")
-        binding.input_field_path.extend(["a.b", "cache"])
-        binding.output_field_path.extend(["a", "b.cache"])
         self.assertEqual(len(graph.persistent_bindings), 1)
         self.assertEqual(graph.persistent_bindings[0].input_name, "x")
-        self.assertEqual(list(graph.persistent_bindings[0].input_field_path), ["a.b", "cache"])
         graph.persistent_bindings.append(PersistentBindingProto(input_name="u", output_name="v"))
         graph.persistent_bindings.extend(
             [PersistentBindingProto(input_name="m", output_name="n")]
@@ -71,24 +68,18 @@ class TestPersistentBindings(unittest.TestCase):
         graph.persistent_bindings.clear()
         self.assertEqual(len(graph.persistent_bindings), 0)
         self.assertEqual(binding.input_name, "x")
-        self.assertEqual(list(binding.output_field_path), ["a", "b.cache"])
+        self.assertEqual(binding.output_name, "y")
 
     def test_exports_and_wire_roundtrip(self):
         self.assertIs(PersistentBindingProto, onnx.PersistentBindingProto)
         self.assertIs(PersistentBindingProto, LibraryPersistentBindingProto)
-        binding = PersistentBindingProto(
-            input_name="in",
-            output_name="out",
-            input_field_path=["a.b", "c"],
-            output_field_path=["a", "b.c"],
-        )
-        # Exact field numbers and repeated strings, not dotted-path encoding.
-        wire = b"\x0a\x02in\x12\x03out\x1a\x03a.b\x1a\x01c\x22\x01a\x22\x03b.c"
+        binding = PersistentBindingProto(input_name="in", output_name="out")
+        wire = b"\x0a\x02in\x12\x03out"
         self.assertEqual(binding.SerializeToString(), wire)
         parsed = PersistentBindingProto()
         parsed.ParseFromString(wire)
-        self.assertEqual(list(parsed.input_field_path), ["a.b", "c"])
-        self.assertEqual(list(parsed.output_field_path), ["a", "b.c"])
+        self.assertEqual(parsed.input_name, "in")
+        self.assertEqual(parsed.output_name, "out")
         graph = onnx.GraphProto(persistent_bindings=[binding])
         self.assertEqual(graph.SerializeToString(), b"\xca\x3e" + bytes([len(wire)]) + wire)
         restored = onnx.GraphProto()
@@ -102,7 +93,14 @@ class TestPersistentBindings(unittest.TestCase):
         restored.ParseFromString(model.SerializeToString())
         verify.verify_model(restored)
         self.assertEqual(restored.graph.persistent_bindings[0].output_name, "state.out")
-        self.assertEqual(len(restored.graph.persistent_bindings[0].input_field_path), 0)
+
+    def test_removed_field_paths_are_rejected(self):
+        for field in ("input_field_path", "output_field_path"):
+            with self.subTest(field=field), self.assertRaises((TypeError, AttributeError)):
+                PersistentBindingProto(input_name="in", output_name="out", **{field: ["cache"]})
+        for legacy_field in (b"\x1a\x05cache", b"\x22\x05cache"):
+            with self.subTest(wire=legacy_field), self.assertRaisesRegex(ValueError, "whole"):
+                PersistentBindingProto().ParseFromString(b"\x0a\x02in\x12\x03out" + legacy_field)
 
     def test_whole_structure_and_catalogue(self):
         value_type = structure_type([("cache", tensor_type())])
@@ -113,43 +111,29 @@ class TestPersistentBindings(unittest.TestCase):
         model = model_with_binding(reference)
         model.struct_types.append(declaration)
         verify.verify_model(model)
-        model.graph.persistent_bindings[0].input_field_path.append("cache")
-        model.graph.persistent_bindings[0].output_field_path.append("cache")
-        verify.verify_model(model)
 
-    def test_dotted_fields_are_unambiguous(self):
+    def test_whole_structure_keeps_literal_dotted_fields(self):
         value_type = structure_type(
             [("a.b", tensor_type()), ("a", structure_type([("b", tensor_type())]))]
         )
-        model = model_with_binding(
-            value_type, input_field_path=["a.b"], output_field_path=["a", "b"]
-        )
-        model.graph.persistent_bindings.append(
-            PersistentBindingProto(
-                input_name="state.in",
-                output_name="state.out",
-                input_field_path=["a", "b"],
-                output_field_path=["a.b"],
-            )
-        )
-        verify.verify_model(model)
+        verify.verify_model(model_with_binding(value_type))
 
-    def test_duplicate_and_overlapping_destinations(self):
-        value_type = structure_type([("cache", tensor_type())])
-        for first_path, second_path in [([], []), ([], ["cache"]), (["cache"], [])]:
-            with self.subTest(first=first_path, second=second_path):
-                model = model_with_binding(
-                    value_type, input_field_path=first_path, output_field_path=first_path
+    def test_duplicate_inputs_and_outputs(self):
+        for duplicate in ("input", "output"):
+            with self.subTest(duplicate=duplicate):
+                model = model_with_binding()
+                model.graph.input.append(onnx.ValueInfoProto(name="other.in", type=tensor_type()))
+                model.graph.output.append(
+                    onnx.ValueInfoProto(name="other.out", type=tensor_type())
                 )
+                model.graph.node.append(helper.make_node("Identity", ["other.in"], ["other.out"]))
                 model.graph.persistent_bindings.append(
                     PersistentBindingProto(
-                        input_name="state.in",
-                        output_name="state.out",
-                        input_field_path=second_path,
-                        output_field_path=second_path,
+                        input_name="state.in" if duplicate == "input" else "other.in",
+                        output_name="state.out" if duplicate == "output" else "other.out",
                     )
                 )
-                with self.assertRaisesRegex(ValueError, "overlapping"):
+                with self.assertRaisesRegex(ValueError, f"duplicate {duplicate}"):
                     verify.verify_model(model)
 
     def test_invalid_names_and_paths(self):
@@ -164,14 +148,18 @@ class TestPersistentBindings(unittest.TestCase):
                 setattr(model.graph.persistent_bindings[0], field, value)
                 with self.assertRaisesRegex(ValueError, "input/output"):
                     verify.verify_model(model)
-        value_type = structure_type([("cache", tensor_type())])
-        for path in [[""], ["missing"], ["cache", "extra"]]:
-            with self.subTest(path=path):
-                model = model_with_binding(value_type, input_field_path=path)
-                with self.assertRaisesRegex(ValueError, "path"):
+        for field, path in [
+            ("input_name", "state.in.cache"),
+            ("output_name", "state.out.cache"),
+            ("input_name", r"state\.in"),
+        ]:
+            with self.subTest(field=field, path=path):
+                model = model_with_binding(structure_type([("cache", tensor_type())]))
+                setattr(model.graph.persistent_bindings[0], field, path)
+                with self.assertRaisesRegex(ValueError, "exact.*input/output"):
                     verify.verify_model(model)
 
-    def test_constants_cannot_be_selected(self):
+    def test_whole_structure_with_constants(self):
         value_type = structure_type([("cache", tensor_type())])
         value_type.struct_type.structure.field.append(
             onnx.StructTypeProto.Structure.Field(
@@ -179,11 +167,7 @@ class TestPersistentBindings(unittest.TestCase):
                 constant=helper.make_tensor("constant", onnx.TensorProto.FLOAT, [], [1.0]),
             )
         )
-        model = model_with_binding(
-            value_type, input_field_path=["constant"], output_field_path=["constant"]
-        )
-        with self.assertRaisesRegex(ValueError, "constant"):
-            verify.verify_model(model)
+        verify.verify_model(model_with_binding(value_type))
 
     def test_invalid_types_and_shapes(self):
         for output_type in [
@@ -269,8 +253,14 @@ class TestPersistentBindings(unittest.TestCase):
         with self.assertRaisesRegex(Exception, "FunctionProto"):
             builder.to_onnx("function")
         builder.make_persistent_binding(PersistentBindingProto(input_name="x", output_name="y"))
-        with self.assertRaisesRegex(ValueError, "overlapping"):
+        with self.assertRaisesRegex(ValueError, "duplicate input"):
             builder.to_onnx()
+
+    def test_builder_rejects_partial_names(self):
+        model = model_with_binding(structure_type([("cache", tensor_type())]))
+        model.graph.persistent_bindings[0].input_name = "state.in.cache"
+        with self.assertRaisesRegex(ValueError, "exact.*input/output"):
+            GraphBuilder(model).to_onnx()
 
     def test_renamed_or_removed_io_cannot_silently_break_bindings(self):
         model = model_with_binding()

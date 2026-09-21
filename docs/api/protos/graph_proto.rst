@@ -10,18 +10,21 @@ Persistent bindings
 
 ``GraphProto.persistent_bindings`` (extension field 1001) declares root-graph
 output-to-input feedback. It stores wiring only, never state contents or owners.
-``PersistentBindingProto`` uses ``input_name`` (field 1), ``output_name``
-(field 2), ``input_field_path`` (field 3), and ``output_field_path`` (field 4).
-Paths are arrays of literal structure-field names: ``["a.b"]`` differs from
-``["a", "b"]``. An empty path selects the entire value.
+``PersistentBindingProto`` uses only ``input_name`` (field 1) and ``output_name``
+(field 2). They select whole graph values by exact name. Dots and backslashes
+are literal characters, not field-path syntax. An input is entirely persistent
+or entirely supplied by current feeds. Former field-path wire fields 3 and 4
+are rejected on load rather than silently changing partial persistence to whole
+persistence.
 
 Validation resolves catalogue references and requires compatible tensor or
 structure declarations. Tensor ranks are compared when both are known, and
 dimensions when both are concrete; symbolic dimensions and unknown ranks are
 accepted. Byte-encoded values still require fixed geometry under the encoded
 layout validators. Catalogue identities must agree for whole referenced
-formats. Constant fields cannot be destinations or sources selected by a path.
-Duplicate destinations and ancestor/descendant destination paths are rejected.
+formats. Whole structures include all dynamic fields and their declared constants.
+Duplicate input selections and duplicate output selections are rejected; names
+such as ``state`` and ``state.cache`` are distinct graph values.
 Declarations in control-flow subgraphs are not supported.
 
 ``GraphBuilder.make_persistent_binding(binding)`` appends a declaration;

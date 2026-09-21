@@ -14,6 +14,8 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 /**
  * Retains graph-declared outputs for the next ordinary session invocation.
  *
+ * Each binding selects one whole input and one whole output by exact graph name.
+ * Structured values retain all fields; current feeds cannot override retained inputs.
  * The final model must not be changed. A reference-only caller must keep it alive
  * until this state and all model-backed output views are released. The shared-model
  * overload or an explicit model_owner token retains that lifetime automatically.
@@ -54,18 +56,13 @@ public:
   void Reset(const RuntimeValueMap &initial);
   /** Releases retained values and kernels and permanently closes this state. */
   void Close();
-  /**
-   * Returns read-only aliases of the selected destination paths.
-   *
-   * Escapes literal dots and backslashes in every component, including graph roots.
-   */
+  /** Returns read-only aliases keyed by exact retained graph input names. */
   RuntimeValueMap Values() const;
 
 private:
   struct Binding {
-    std::string key;
-    std::vector<std::string> input;
-    std::vector<std::string> output;
+    std::string input;
+    std::string output;
     const TypeProto *input_type;
   };
   std::vector<RuntimeValue> ValidateInitial(const RuntimeValueMap &initial) const;

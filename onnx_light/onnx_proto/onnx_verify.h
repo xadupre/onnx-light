@@ -208,17 +208,6 @@ private:
 };
 
 /**
- * Resolves a persistent binding path, treating each component as a literal field name.
- *
- * An empty path selects the entire value. Constants, array indices and bit-packing
- * components are not mutable structure fields. The returned type borrows @p type or
- * the catalogue's model.
- */
-ONNX_LIGHT_PROTO_API const TypeProto &
-ResolvePersistentBindingType(const StructTypeCatalogue &catalogue, const TypeProto &type,
-                             const utils::RepeatedStringField &path);
-
-/**
  * Returns whether validated tensor/struct declarations are compatible.
  * Compares ranks when both are known and dimensions when both are concrete.
  * Allows symbolic dimensions and unknown ranks in ordinary runtime values.
@@ -236,7 +225,7 @@ ONNX_LIGHT_PROTO_API bool CompatiblePersistentStructTypes(const StructTypeCatalo
 /**
  * Validates root-graph persistent declarations without reading or copying state payloads.
  *
- * Resolves input/output names and field paths, rejects overlapping destinations, and
+ * Resolves exact whole-input/output names, rejects duplicate inputs or outputs, and
  * rejects conflicting tensor dtypes, known ranks, concrete dimensions and struct layouts.
  * A null catalogue resolves inline types only. Nested graphs must not declare bindings.
  */

@@ -74,7 +74,7 @@ TEST(onnx_verify, PersistentBindings_FixedShapesAndNames) {
   EXPECT_THROW(VerifyModel(model), std::invalid_argument);
 }
 
-TEST(onnx_verify, PersistentBindings_LiteralFieldPaths) {
+TEST(onnx_verify, PersistentBindings_WholeStructureCompatibility) {
   TypeProto type;
   auto *structure = type.mutable_struct_type()->mutable_structure();
   auto *field = structure->add_field();
@@ -83,13 +83,6 @@ TEST(onnx_verify, PersistentBindings_LiteralFieldPaths) {
   tensor->set_elem_type(TensorProto::FLOAT);
   tensor->mutable_shape()->add_dim()->set_dim_value(2);
   StructTypeCatalogue catalogue;
-  utils::RepeatedStringField path;
-  path.push_back(utils::String("a.b"));
-  EXPECT_EQ(&ResolvePersistentBindingType(catalogue, type, path), &field->type());
-  path.clear();
-  path.push_back(utils::String("a"));
-  path.push_back(utils::String("b"));
-  EXPECT_THROW(ResolvePersistentBindingType(catalogue, type, path), std::invalid_argument);
   EXPECT_TRUE(CompatiblePersistentTypes(catalogue, type, type));
   EXPECT_TRUE(CompatiblePersistentStructTypes(catalogue, type.struct_type(), type.struct_type()));
   TypeProto different = type;
@@ -102,6 +95,39 @@ TEST(onnx_verify, PersistentBindings_LiteralFieldPaths) {
   EXPECT_FALSE(CompatiblePersistentTypes(catalogue, type, different));
   EXPECT_FALSE(
       CompatiblePersistentStructTypes(catalogue, type.struct_type(), different.struct_type()));
+}
+
+TEST(onnx_verify, PersistentBindings_RejectsLegacyFieldPathWire) {
+  for (const auto &wire : {std::string("\x1a\x05"
+                                       "cache"),
+                           std::string("\x22\x05"
+                                       "cache")}) {
+    PersistentBindingProto binding;
+    EXPECT_FALSE(binding.ParseFromString(wire));
+  }
+}
+
+TEST(onnx_verify, PersistentBindings_ExactNamesAndDuplicateSources) {
+  ModelProto model = MakeValidModel();
+  model.mutable_graph()->mutable_input(0)->set_name("state.in");
+  model.mutable_graph()->mutable_output(0)->set_name("state.out");
+  auto *binding = model.mutable_graph()->add_persistent_bindings();
+  binding->set_input_name("state.in");
+  binding->set_output_name("state.out");
+  EXPECT_NO_THROW(VerifyPersistentBindings(nullptr, model.graph()));
+  binding->set_input_name("state.in.cache");
+  EXPECT_THROW(VerifyPersistentBindings(nullptr, model.graph()), std::invalid_argument);
+  binding->set_input_name("state.in");
+  binding->set_output_name("state.out.cache");
+  EXPECT_THROW(VerifyPersistentBindings(nullptr, model.graph()), std::invalid_argument);
+  binding->set_output_name("state.out");
+  auto *input = model.mutable_graph()->add_input();
+  input->set_name("other");
+  *input->mutable_type() = model.graph().input(0).type();
+  auto *second = model.mutable_graph()->add_persistent_bindings();
+  second->set_input_name("other");
+  second->set_output_name("state.out");
+  EXPECT_THROW(VerifyPersistentBindings(nullptr, model.graph()), std::invalid_argument);
 }
 
 TEST(onnx_verify, PersistentBindings_PartialTensorDeclarations) {

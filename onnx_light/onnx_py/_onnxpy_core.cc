@@ -2020,7 +2020,7 @@ void AddOnnxPyBuilder(nb::module_ &m) {
       .def("make_struct_type", &GraphBuilder::MakeStructType, nb::arg("type"),
            "Registers a model-scoped structured type declaration.")
       .def("make_persistent_binding", &GraphBuilder::MakePersistentBinding, nb::arg("binding"),
-           "Appends root-graph feedback wiring, validated during export.")
+           "Appends whole-input/output feedback wiring by exact graph names, validated on export.")
       .def("persistent_bindings", &GraphBuilder::PersistentBindings, nb::rv_policy::copy,
            "Returns a copy of the root-graph persistent declarations.")
       .def("make_encoded_initializer", &GraphBuilder::MakeEncodedInitializer, nb::arg("value"),

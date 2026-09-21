@@ -63,18 +63,13 @@ The Python binding is available from the native runtime module:
     state.reset({"past": initial})
     state.close()
 
-The mapping is **input destination to output source**. Empty
-``input_field_path`` and ``output_field_path`` select whole values. Names
-are exact graph names; separate path components avoid ambiguity with dots
-inside names.
-
-Initial/current-feed and ``state.values`` dictionary keys join path components
-with dots, escaping literal dots and backslashes in **each** component with a
-backslash. Thus ``"request.cache"`` selects the ``cache`` field of ``request``,
-whereas ``r"request\.cache"`` selects the graph input named ``request.cache``.
-``r"request.cache\.key"`` selects the field literally named ``cache.key``.
-Nested dictionaries also select struct fields: ``{"request": {"cache": value}}``.
-Their field names, like protobuf field-path elements, are literal and unescaped.
+The mapping is **whole input destination to whole output source**. An input
+is entirely persistent or entirely supplied by current feeds, never partly
+both. Binding names and initial/current-feed/``state.values`` dictionary keys
+are exact, literal graph names, with no path syntax or escaping.
+``"request.cache"`` names the graph input literally named ``request.cache``;
+it cannot select a field of ``request``. Unknown names are rejected.
+Nested dictionaries represent complete structured values, not partial feeds.
 
 Inputs accept runtime ``Tensor`` objects, contiguous CPU NumPy arrays and
 compatible DLPack producers such as CPU PyTorch tensors. Noncontiguous,
@@ -130,10 +125,10 @@ Lifecycle and validation
 
 * Construct the state **after** graph rewrites. Every graph-declared input and output
   must exist in the final model, with compatible types and shape constraints.
-  A removed or changed path needs an updated graph binding and a new state.
+  A removed or changed input/output needs an updated graph binding and a new state.
 * Supply initial contents for every feedback destination. Each subsequent
-  call supplies the remaining inputs; current feeds must not overlap
-  retained destinations.
+  call supplies the remaining whole inputs; current feeds must not override
+  retained inputs. Duplicate binding input names or output names are rejected.
 * State advances only after successful execution and validation of the next
   values. A failed or cancelled call must not publish a partial update.
 * Reset explicitly supplies new initial contents. Closing releases retained
@@ -166,35 +161,34 @@ requests, and do not mutate model/context configuration during a call.
 Structured feedback
 -------------------
 
-A binding may retain a whole input or a selected struct field. For example,
-``request.cache <- response.cache`` retains only the cache, while
-``request.tokens`` must be supplied anew. The struct declaration comes from
+A binding retains a whole input, including every dynamic field of a structured
+value. To retain a cache while supplying fresh tokens, declare ``cache`` and
+``tokens`` as separate graph inputs and bind ``cache`` to a whole ``next_cache``
+output. The struct declaration comes from
 ``StructTypeProto`` in the model; persistence is a property of the feedback
 declaration in ``GraphProto``, not a flag on the type or encoded payload.
 
 This is equivalent to manually taking the selected outputs from each
-stateless invocation and passing them to the next invocation. Unselected
-outputs, such as logits, are not part of retained state.
+stateless invocation and passing them to the next invocation. Separate unselected
+outputs, such as logits, are not part of retained state. Fields inside a selected
+output are all retained.
 
 Python represents named structs as nested dictionaries. For a model declaring
-the ``request`` and ``response`` structures described above:
+structured ``cache`` and ``next_cache`` values and a separate ``tokens`` input:
 
 .. code-block:: python
 
     binding = model.graph.persistent_bindings.add()
-    binding.input_name = "request"
-    binding.output_name = "response"
-    binding.input_field_path.append("cache")
-    binding.output_field_path.append("cache")
-    state = runtime.FeedbackState(model, {"request": {"cache": initial_cache}})
-    output = state.run(context, {"request": {"tokens": tokens}})
+    binding.input_name = "cache"
+    binding.output_name = "next_cache"
+    state = runtime.FeedbackState(model, {"cache": initial_cache})
+    output = state.run(context, {"tokens": tokens})
 
 Custom kernels use ``context.get_value(name)`` and
 ``context.put_value(name, value)`` to exchange structured values; ordinary
 tensor kernels continue to use the existing tensor API. In C++, structured
 and encoded edges live in ``RuntimeContext::values()`` as ``RuntimeValue``
 objects containing existing tensors or ``EncodedValueProto`` payloads.
-Selecting a struct field does not decode or slice a byte-encoded payload.
 Inline structured encoded payloads can be retained as whole values; external
 payloads must first be loaded. This API currently supports tensors, named
 structs and inline structured encodings, not sequence/map/optional state.

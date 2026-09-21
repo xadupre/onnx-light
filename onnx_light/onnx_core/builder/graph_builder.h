@@ -307,8 +307,8 @@ public:
   /// Read-only access to the declared graph outputs (in declaration order).
   const utils::RepeatedProtoField<ValueInfoProto> &Outputs() const noexcept { return outputs_; }
 
-  /// Appends root-graph feedback wiring; validates names, paths and types during export.
-  /// An empty field path selects the whole value. No state payload is stored.
+  /// Appends whole-input/output feedback wiring; validates exact names and types during export.
+  /// Names are literal, including dots and backslashes. No state payload is stored.
   void MakePersistentBinding(const PersistentBindingProto &binding);
 
   /// Returns the declared feedback bindings in declaration order.

@@ -1,14 +1,20 @@
 runtime_session.h
 =================
 
-Ordinary construction eagerly snapshots initializers, independently of the
-source graph. These cached tensors have explicit shared owners, so a selected
-subgraph initializer output can outlive its session without a payload copy.
-Nonpersistent outputs still materialize borrowed storage normally.
+Sessions, including subgraphs, read directly usable initializer storage from
+the immutable source graph. No ownership mode is required. The graph and its
+backing buffers must outlive the session and its initializer views, including
+when supplied through ``SetInitializers``.
 
-``InitializerMode::kBorrowed`` instead reads initializer storage from the
-immutable graph. The context supplies its model lifetime token; ownerless
-externally borrowed buffers cannot be retained as selected results.
+Host initializers are not copied into the execution allocator for CPU execution
+(``kCPU`` or the default ``kUndefined`` device). Raw storage and native float,
+double, int32, int64 and uint64 fields can be borrowed; representations requiring
+decoding, including strings, still use normal tensor conversion. This host
+borrowing rule does not implement transfers to another device.
+
+The context can supply a model lifetime token for selected retained results;
+ownerless externally borrowed buffers cannot be retained. Nonpersistent graph
+outputs still materialize borrowed storage normally so they can outlive the model.
 
 .. doxygenfile:: onnx_core/runtime/runtime_session.h
    :project: onnx-light

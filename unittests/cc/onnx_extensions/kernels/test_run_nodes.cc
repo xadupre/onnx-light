@@ -5157,7 +5157,7 @@ TEST(RuntimeSession, IsReusableAcrossMultipleRuns) {
   EXPECT_FLOAT_EQ(rt.Get("y").AsFloat()[1], -4.0f);
 }
 
-TEST(RuntimeSession, CachesRawAndTypedInitializersAcrossContextClear) {
+TEST(RuntimeSession, BorrowsRawAndTypedInitializersAcrossContextClear) {
   ModelProto model;
   GraphProto *graph = model.add_graph();
   TensorProto *raw = graph->add_initializer();
@@ -5203,6 +5203,9 @@ TEST(RuntimeSession, CachesRawAndTypedInitializersAcrossContextClear) {
   ASSERT_EQ(typed_addresses.size(), 2u);
   EXPECT_EQ(raw_addresses[0], raw_addresses[1]);
   EXPECT_EQ(typed_addresses[0], typed_addresses[1]);
+  EXPECT_EQ(raw_addresses[0], graph->initializer(0).raw_data().data());
+  EXPECT_EQ(typed_addresses[0],
+            reinterpret_cast<const uint8_t *>(graph->initializer(1).float_data().values().data()));
 }
 
 TEST(RuntimeSession, InputOverridesCachedInitializerForOneRun) {

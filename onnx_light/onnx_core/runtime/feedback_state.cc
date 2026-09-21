@@ -137,8 +137,7 @@ FeedbackState::FeedbackState(const ModelProto &model, RuntimeValueMap initial,
     bindings_.push_back({declared.input_name(), declared.output_name(),
                          &InputType(declared.input_name(), model.graph().input())});
   }
-  session_ = std::make_unique<RuntimeSession>(model, std::move(options),
-                                              RuntimeSession::InitializerMode::kBorrowed);
+  session_ = std::make_unique<RuntimeSession>(model, std::move(options));
   values_ = ValidateInitial(std::move(initial));
 }
 

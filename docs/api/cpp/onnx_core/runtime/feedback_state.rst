@@ -69,13 +69,13 @@ outputs, then move those results back. Other outputs retain normal transport.
 persistence adds no blanket prohibition. Tensor ``Identity`` remains an ordinary
 computing kernel, not a persistence-specific aliasing kernel.
 
-Feedback initializers use read-only model views for raw storage and native
+All runtime sessions use read-only model views for initializer raw storage and native
 float, double, int32, int64 and uint64 typed fields. Other representations,
-including strings, use normal tensor conversion. Ordinary ``RuntimeSession``
-construction, subgraphs and public ``SetInitializers`` retain their independent,
-eager initializer snapshots.
+including strings, use normal tensor conversion. CPU execution does not migrate
+initializers into the execution allocator. The source graph and its storage must
+remain immutable and alive, also for subgraphs and public ``SetInitializers``.
 ``RuntimeContext::set_model_owner`` can supply a lifetime token for the immutable
-model in an explicitly borrowed runtime session. Feedback always supplies its
+model in a runtime session. Feedback always supplies its
 own constructor's model token, not an unrelated calling context's token.
 Known initializer views retain this token
 (including through functions and ``If``), so their output aliases remain valid after the context and state are

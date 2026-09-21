@@ -722,7 +722,7 @@ TEST(FeedbackState, StructuredValuesCrossIfBranches) {
             expected);
 }
 
-TEST(FeedbackState, SelectedIfInitializerRetainsItsSessionSnapshot) {
+TEST(FeedbackState, SelectedIfInitializerRetainsItsModelStorage) {
   ModelProto model = Model();
   model.add_opset_import()->set_version(18);
   auto *condition = model.mutable_graph()->add_input();
@@ -1153,40 +1153,80 @@ TEST(FeedbackState, InitializerViewsRetainImmutableModelAndPayload) {
   }
 }
 
-TEST(FeedbackState, OrdinarySessionInitializersOutliveTheirSourceGraph) {
+TEST(FeedbackState, OrdinarySessionsBorrowInitializersWithoutArenaCopies) {
   for (bool raw : {false, true}) {
-    ModelProto model = Model();
-    auto *node = model.mutable_graph()->mutable_node(0);
-    node->clear_input();
-    node->add_input("constant");
-    RuntimeSession session(model);
-    const uint8_t *original = nullptr;
-    {
-      GraphProto source;
-      auto *initializer = source.add_initializer();
-      initializer->set_name("constant");
-      initializer->set_data_type(DataType::FLOAT);
-      initializer->add_dims(1);
-      if (raw) {
-        const float value = 4;
-        initializer->set_raw_data(
-            std::string(reinterpret_cast<const char *>(&value), sizeof(value)));
-        original = initializer->raw_data().data();
-      } else {
-        initializer->add_float_data(4);
-        original = reinterpret_cast<const uint8_t *>(initializer->float_data().values().data());
+    for (bool separate_graph : {false, true}) {
+      for (const auto device : {core::symbolic::Device::kUndefined, core::symbolic::Device::kCPU}) {
+        SCOPED_TRACE(raw);
+        SCOPED_TRACE(separate_graph);
+        SCOPED_TRACE(static_cast<int32_t>(device));
+        ModelProto model;
+        GraphProto source;
+        auto *graph = model.mutable_graph();
+        auto *initializer = separate_graph ? source.add_initializer() : graph->add_initializer();
+        initializer->set_name("constant");
+        initializer->set_data_type(DataType::FLOAT);
+        initializer->add_dims(1);
+        const uint8_t *original = nullptr;
+        if (raw) {
+          const float value = 4;
+          initializer->set_raw_data(
+              std::string(reinterpret_cast<const char *>(&value), sizeof(value)));
+          original = initializer->raw_data().data();
+        } else {
+          initializer->add_float_data(4);
+          original = reinterpret_cast<const uint8_t *>(initializer->float_data().values().data());
+        }
+        auto *node = graph->add_node();
+        node->set_domain("test.feedback");
+        node->set_op_type("ObserveInitializer");
+        node->add_input("constant");
+        RuntimeSession session(model);
+        if (separate_graph)
+          session.SetInitializers(source);
+        ExecutionArena arena(16);
+        RuntimeContext context(KernelContext(DefaultOpset(18)),
+                               RuntimeContextOptions{.allocator = &arena, .device = device});
+        int calls = 0;
+        context.RegisterCustomKernel("test.feedback", "ObserveInitializer",
+                                     [&](const NodeProto &, RuntimeContext &rt) {
+                                       ++calls;
+                                       EXPECT_EQ(rt.Get("constant").bytes(), original);
+                                       EXPECT_EQ(rt.Get("constant").AsFloat()[0], 4);
+                                       EXPECT_EQ(arena.TotalAllocatedSize(), 0u);
+                                     });
+        for (int run = 0; run < 2; ++run) {
+          session.Run(context);
+          EXPECT_TRUE(context.Get("constant").is_borrowed());
+          context.Clear();
+        }
+        EXPECT_EQ(calls, 2);
       }
-      session.SetInitializers(source);
-      source.clear_initializer();
     }
-    RuntimeContext context(KernelContext(DefaultOpset(18)));
-    context.RegisterCustomKernel(
-        "test.feedback", "Step", [](const NodeProto &, RuntimeContext &rt) {
-          rt.Put("present", Tensor::FromFloat("", {1}, {rt.Get("constant").AsFloat()[0]}));
-        });
-    session.Run(context);
-    EXPECT_NE(context.Get("constant").bytes(), original);
-    EXPECT_EQ(context.Get("present").AsFloat()[0], 4);
+  }
+}
+
+TEST(FeedbackState, InitializerArenaExemptionIsLimitedToHostExecution) {
+  for (const auto device : {core::symbolic::Device::kUndefined, core::symbolic::Device::kCPU,
+                            static_cast<core::symbolic::Device>(0)}) {
+    SCOPED_TRACE(static_cast<int32_t>(device));
+    ExecutionArena arena(16);
+    RuntimeContext context(KernelContext(DefaultOpset(18)),
+                           RuntimeContextOptions{.allocator = &arena, .device = device});
+    const float value = 4;
+    const auto *original = reinterpret_cast<const uint8_t *>(&value);
+    const auto borrow = [&] {
+      return Tensor::Borrow("constant", DataType::FLOAT, {1}, original, sizeof(value));
+    };
+    context.Set("constant", borrow(), RuntimeEventKind::kInitializer);
+    const bool host = device != static_cast<core::symbolic::Device>(0);
+    EXPECT_EQ(context.Get("constant").bytes() == original, host);
+    context.Put("constant", borrow(), RuntimeEventKind::kInitializer);
+    EXPECT_EQ(context.Get("constant").bytes() == original, host);
+    EXPECT_EQ(context.Get("constant").AsFloat()[0], value);
+    context.Set("intermediate", borrow(), RuntimeEventKind::kOutput);
+    EXPECT_NE(context.Get("intermediate").bytes(), original);
+    EXPECT_TRUE(context.Get("intermediate").has_allocation());
   }
 }
 

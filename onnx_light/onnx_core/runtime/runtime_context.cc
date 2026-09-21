@@ -18,7 +18,8 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 namespace {
 
-void EnsureAllocatorBacked(Tensor &tensor, RawBufferAllocator *allocator, RuntimeEventKind kind) {
+void EnsureAllocatorBacked(Tensor &tensor, RawBufferAllocator *allocator, RuntimeEventKind kind,
+                           symbolic::Device device) {
   // STRING tensors store their payload in string_data instead of raw bytes.
   if (allocator == nullptr || static_cast<DataType>(tensor.data_type) == DataType::STRING) {
     return;
@@ -27,6 +28,11 @@ void EnsureAllocatorBacked(Tensor &tensor, RawBufferAllocator *allocator, Runtim
   // Copying them into the execution arena adds a full memory-bandwidth pass
   // before inference and defeats the Python runner's zero-copy NumPy adapter.
   if (kind == RuntimeEventKind::kInput && tensor.is_borrowed()) {
+    return;
+  }
+  // Initializer storage is host-resident and read-only, not run-local workspace.
+  if (kind == RuntimeEventKind::kInitializer &&
+      (device == symbolic::Device::kUndefined || device == symbolic::Device::kCPU)) {
     return;
   }
   // Tensor was already allocated by a kernel that received the allocator
@@ -316,7 +322,7 @@ void RuntimeContext::ClearKernelUsage() {
 void RuntimeContext::Set(const std::string &name, Tensor tensor, RuntimeEventKind kind) {
   EXT_ENFORCE(!Has(name), "RuntimeContext::Set: a tensor named '", name, "' already exists.");
   if (!retains_output(name))
-    EnsureAllocatorBacked(tensor, allocator_, kind);
+    EnsureAllocatorBacked(tensor, allocator_, kind, device_);
   if (events_enabled_) {
     RuntimeEvent ev =
         MakeAddOrReplaceEvent(RuntimeEventAction::kAdd, kind, name, tensor, current_node_index_,
@@ -329,7 +335,7 @@ void RuntimeContext::Set(const std::string &name, Tensor tensor, RuntimeEventKin
 
 void RuntimeContext::Put(const std::string &name, Tensor tensor, RuntimeEventKind kind) {
   if (!retains_output(name))
-    EnsureAllocatorBacked(tensor, allocator_, kind);
+    EnsureAllocatorBacked(tensor, allocator_, kind, device_);
   if (events_enabled_) {
     const RuntimeEventAction action =
         Has(name) ? RuntimeEventAction::kReplace : RuntimeEventAction::kAdd;

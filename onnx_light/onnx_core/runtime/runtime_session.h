@@ -140,8 +140,6 @@ struct KernelTuningResolutionStatistics {
  */
 class RuntimeSession {
 public:
-  enum class InitializerMode { kOwned, kBorrowed };
-
   /**
    * Builds a session over an :cpp:class:`ExecutionPlan` the session owns,
    * constructed from ``model``'s graph (:cpp:func:`ModelProto::graph`). Use
@@ -151,17 +149,15 @@ public:
    * resolution is still deferred to the first :cpp:func:`Run`.
    *
    * @param model Model whose graph drives execution. The model (and the graph
-   *              it owns) must outlive the session, since the built plan holds
-   *              non-owning pointers into the graph's nodes.
+   *              it owns) must remain immutable and outlive the session and
+   *              its initializer views. The plan and directly usable initializer
+   *              payloads borrow the model's storage.
    * @param verbose Verbosity level used by :cpp:func:`Run` for its progress
    *                lines. ``0`` (the default) leaves verbosity to the
    *                :cpp:class:`RuntimeContext`.
    */
   explicit RuntimeSession(const ModelProto &model, int verbose = 0);
   RuntimeSession(const ModelProto &model, RuntimeSessionOptions options);
-  /** Builds an explicitly borrowed initializer session for persistent execution. */
-  RuntimeSession(const ModelProto &model, RuntimeSessionOptions options,
-                 InitializerMode initializer_mode);
 
   /**
    * Builds a session over ``plan``. Kernel resolution is deferred to the first
@@ -327,10 +323,11 @@ public:
   /// read but not retained, so it need not outlive the session.
   void SetDeclaredShapes(const GraphProto &graph);
 
-  /// Eagerly snapshots ``graph`` initializers into independent session-owned storage. A
+  /// Records ``graph`` as the source of read-only initializer views. A
   /// session built from a model or graph calls this automatically; callers
   /// constructing a session from an :cpp:class:`ExecutionPlan` may call it once
-  /// before the first :cpp:func:`Run`. This method does not retain ``graph``.
+  /// before the first :cpp:func:`Run`. The graph and its backing storage must
+  /// remain immutable and outlive the session and its initializer views.
   void SetInitializers(const GraphProto &graph);
 
   /**
@@ -358,8 +355,7 @@ protected:
   /// by :cpp:class:`SubgraphSession` so a control-flow subgraph can be a
   /// :cpp:class:`RuntimeSession` with the same default resolution behavior as a
   /// top-level graph session.
-  explicit RuntimeSession(const GraphProto &graph, int verbose = 0,
-                          InitializerMode initializer_mode = InitializerMode::kOwned);
+  explicit RuntimeSession(const GraphProto &graph, int verbose = 0);
 
   /// Default node-kernel resolution used during
   /// :cpp:func:`InitializeKernels`, so :cpp:class:`RuntimeSession` and
@@ -371,7 +367,6 @@ protected:
                                                 const std::string &op_type) const;
 
 private:
-  void RecordInitializers(const GraphProto &graph, InitializerMode initializer_mode);
   /// A node's kernel instance built once during
   /// :cpp:func:`InitializeKernels`, together with the normalised ``domain``
   /// and ``op_type`` fused into a single ``"<domain>:<op_type>"`` key (the
@@ -441,7 +436,6 @@ private:
   const ExecutionPlan &plan_;
   std::unique_ptr<PreparedExecutionState> prepared_execution_state_;
   std::vector<PreparedKernel> kernels_;
-  std::vector<std::shared_ptr<Tensor>> initializers_;
   const GraphProto *initializer_graph_ = nullptr;
   std::unordered_set<std::string> immutable_initializer_names_;
   /// One immutable registry generation shared by every kernel in this session.

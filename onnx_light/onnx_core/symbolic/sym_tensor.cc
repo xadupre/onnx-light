@@ -667,6 +667,14 @@ bool SymTensorFromTensorProto(const TensorProto &tp, SymTensor &out) {
   }
   SymTensor tensor(nullptr, dtype, ShapeFromTensorProtoDims(tp));
 
+  // Managed borrowed payloads may change through their external owner. Do not
+  // cache value-dependent annotations or allocate decoded copies of their data.
+  const auto &raw = tp.ref_raw_data();
+  if (raw.is_borrowed() && raw.owner().use_count() != 0) {
+    out = std::move(tensor);
+    return true;
+  }
+
   // Determine the element count from the dims; used both to gate the
   // value-as-shape heuristic and to validate decoded payload sizes.
   int64_t count = 1;

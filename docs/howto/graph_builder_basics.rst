@@ -89,6 +89,48 @@ The compact helpers delegate to the explicit
 Those ``make_*`` methods are the complete low-level contract for generated code
 and advanced authoring.
 
+Borrow a NumPy initializer without copying
+-----------------------------------------
+
+``builder.init(array, copy=False)`` borrows the array's payload instead of
+allocating or copying a weight buffer. The default ``copy=True`` keeps the
+existing independent-copy behavior::
+
+    import numpy
+    from onnx_light.onnx_core.graph_builder import GraphBuilder
+
+    weights = numpy.ones((1024, 1024), dtype=numpy.float32)
+    builder = GraphBuilder("borrowed")
+    name = builder.init(weights, name="weights", copy=False)
+    builder.out(name)
+    model = builder.to_onnx()
+    del weights, builder
+    serialized = model.SerializeToString()
+
+The array is retained by a reference-counted payload owner, not just by the
+builder. Exported graphs/models, builders constructed from those models, and
+``TensorProto.CopyFrom`` / ``copy.copy(tensor)`` retain that owner. The array
+reference is released with the Python GIL held when the last borrowed payload
+is destroyed or replaced. Serialization produces independent bytes;
+``ModelProto.CopyFrom`` retains its existing serialization-based deep-copy
+behavior.
+
+Only C-contiguous, little-endian arrays are accepted. Supported dtypes are
+``bool``, signed/unsigned 8/16/32/64-bit integers, ``float16/32/64``, and
+``complex64/128``. Non-contiguous/Fortran-only layouts, incompatible byte order,
+object/string, structured, and other dtypes raise an exception; there is no
+fallback to a copy. Scalars, empty arrays, contiguous views, and read-only
+arrays are supported.
+
+**Mutation contract:** writable arrays are allowed and remain writable.
+Mutations through the array or its aliases remain visible in borrowed tensors
+and models. Do not mutate weights during optimization or execution, or
+resize/reallocate their storage while borrowed. Marking an array read-only
+does not freeze existing writable aliases. Use the default ``copy=True`` when
+an immutable snapshot independent of the source is required.
+Shape analysis retains the tensor's type and dimensions but does not decode
+managed borrowed payloads to cache numeric bounds or shape values.
+
 Transfer an existing initializer
 -------------------------------
 

@@ -123,14 +123,12 @@ void EqualAttentionTensor(const Tensor &actual, const Tensor &expected) {
 
 } // namespace
 
-TEST(FeedbackState, AttentionCacheFixedCapacityMatchesFunctionalGQAWithoutPrefixCopies) {
+TEST(FeedbackState, AttentionCacheDefaultCapacityMatchesFunctionalGQAWithoutPrefixCopies) {
   for (int64_t query_heads : {1, 3}) {
     SCOPED_TRACE(query_heads);
     ModelProto model = AttentionModel(1, 1, query_heads);
     const auto serialized = model.SerializeAsString();
-    RuntimeSessionOptions options;
-    options.persistent_tensor_initial_capacity = 32;
-    FeedbackState state(model, EmptyAttentionCache(), options);
+    FeedbackState state(model, EmptyAttentionCache());
     RuntimeContext context(KernelContext(DefaultOpset(23)));
     onnx_kernels::kernel::Attention reference(context.kernel_ctx());
     onnx_kernels::kernel::Attention::Attributes attrs;
@@ -139,7 +137,7 @@ TEST(FeedbackState, AttentionCacheFixedCapacityMatchesFunctionalGQAWithoutPrefix
     Tensor value = Tensor::FromFloat("", {1, 1, 0, 2}, {});
     const uint8_t *key_pointer = nullptr;
     const uint8_t *value_pointer = nullptr;
-    for (int step = 1; step <= 24; ++step) {
+    for (int step = 1; step <= 32; ++step) {
       const auto feeds = AttentionFeeds(step * 0.125f, 1, 1, query_heads);
       auto expected = reference(feeds.at("Q").tensor, feeds.at("K").tensor, feeds.at("V").tensor,
                                 attrs, nullptr, &key, &value);
@@ -162,8 +160,8 @@ TEST(FeedbackState, AttentionCacheFixedCapacityMatchesFunctionalGQAWithoutPrefix
     EXPECT_EQ(stats.allocations, 2u);
     EXPECT_EQ(stats.allocated_bytes, 2u * 32 * 2 * sizeof(float));
     EXPECT_EQ(stats.prefix_copied_bytes, 0u);
-    EXPECT_EQ(stats.append_copied_bytes, 24u * 2 * 2 * sizeof(float));
-    EXPECT_EQ(stats.reuse_count, 46u);
+    EXPECT_EQ(stats.append_copied_bytes, 32u * 2 * 2 * sizeof(float));
+    EXPECT_EQ(stats.reuse_count, 62u);
     EXPECT_EQ(model.SerializeAsString(), serialized);
   }
 }
@@ -381,14 +379,14 @@ TEST(FeedbackState, AttentionCacheIOLeasesSurviveStateAndAllocatorOwner) {
       EXPECT_EQ(output.at("present_key").tensor.bytes(), pointer);
       EXPECT_EQ(arena->leased_count(), 2u);
       EXPECT_EQ(arena->allocated_count(), 1u); // Only Y; cache views share the two leases.
-      EXPECT_EQ(arena->TotalAllocatedSize(), (2u * 16 * 2 + 2) * sizeof(float));
+      EXPECT_EQ(arena->TotalAllocatedSize(), (2u * 32 * 2 + 2) * sizeof(float));
       const auto snapshot = state.Values();
       EXPECT_EQ(snapshot.at("past_key").tensor.bytes(), pointer);
       EXPECT_EQ(arena->leased_count(), 2u);
       EXPECT_EQ(arena->allocated_count(), 1u);
     }
     EXPECT_EQ(arena->allocated_count(), 0u);
-    EXPECT_EQ(arena->TotalAllocatedSize(), 2u * 16 * 2 * sizeof(float));
+    EXPECT_EQ(arena->TotalAllocatedSize(), 2u * 32 * 2 * sizeof(float));
     retained = state.Values();
     state.Reset(EmptyAttentionCache());
     EXPECT_EQ(arena->leased_count(), 2u);
@@ -754,7 +752,7 @@ TEST(FeedbackState, AttentionCacheZeroWidthValueUsesMeasuredDenseFallback) {
   }
   const auto stats = state.PersistentStorageStats();
   EXPECT_EQ(stats.allocations, 4u);
-  EXPECT_EQ(stats.allocated_bytes, 16u * 2 * sizeof(float));
+  EXPECT_EQ(stats.allocated_bytes, 32u * 2 * sizeof(float));
   EXPECT_EQ(stats.prefix_copied_bytes, 0u);
   EXPECT_EQ(stats.append_copied_bytes, 3u * 2 * sizeof(float));
   EXPECT_EQ(stats.reuse_count, 2u);

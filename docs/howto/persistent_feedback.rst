@@ -275,7 +275,7 @@ and unmatched input/output pairs keep ordinary kernel concatenation; they do
 not acquire append permissions merely because another graph output is retained.
 
 ``RuntimeSessionOptions::persistent_tensor_initial_capacity`` selects the initial
-capacity along the kernel's append axis (16 by default; tokens for Attention);
+capacity along the kernel's append axis (32 by default; tokens for Attention);
 zero disables reservations. ``PersistentTensor`` grows capacity geometrically
 when necessary, using the selected allocator without an alternate allocator or
 automatic retry after allocation failure. This option affects ``FeedbackState``

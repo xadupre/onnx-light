@@ -78,7 +78,7 @@ struct RuntimeSessionOptions {
   bool allow_external_output_allocators = false;
   /// Initial capacity along a kernel's append axis for contiguous persistent tensors.
   /// Zero disables append reservations; kernels use their ordinary allocation path.
-  size_t persistent_tensor_initial_capacity = 16;
+  size_t persistent_tensor_initial_capacity = 32;
 };
 
 /** Reports the one-time kernel tuning work performed by a runtime session. */

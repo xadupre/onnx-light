@@ -30,6 +30,20 @@ size_t AppendSize(const Tensor &prefix, const Tensor &tail, const Shape &shape) 
 
 } // namespace
 
+PersistentStorageStatistics PersistentStorageCounters::Snapshot() const {
+  const std::lock_guard<std::mutex> lock(mutex_);
+  return values_;
+}
+
+void PersistentStorageCounters::Accumulate(const PersistentStorageStatistics &statistics) {
+  const std::lock_guard<std::mutex> lock(mutex_);
+  values_.allocations += statistics.allocations;
+  values_.allocated_bytes += statistics.allocated_bytes;
+  values_.prefix_copied_bytes += statistics.prefix_copied_bytes;
+  values_.append_copied_bytes += statistics.append_copied_bytes;
+  values_.reuse_count += statistics.reuse_count;
+}
+
 PersistentTensor::PersistentTensor(Tensor value) : value_(std::move(value).RetainStorage()) {}
 
 bool PersistentTensor::Matches(const Tensor &view) const noexcept {

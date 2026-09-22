@@ -60,8 +60,8 @@ public:
   void Close();
   /** Returns read-only aliases keyed by exact retained graph input names. */
   RuntimeValueMap Values() const;
-  /** Returns cumulative cache work, including failed attempts; Reset preserves counters. */
-  AttentionCacheStatistics AttentionCacheStats() const;
+  /** Returns reported storage work, including failed attempts; Reset preserves counters. */
+  PersistentStorageStatistics PersistentStorageStats() const;
 
 private:
   struct Binding {
@@ -78,8 +78,8 @@ private:
   std::vector<Binding> bindings_;
   std::unique_ptr<RuntimeSession> session_;
   std::vector<PersistentValue> values_;
-  std::shared_ptr<RuntimeContext::AttentionCacheCounterState> attention_cache_stats_ =
-      std::make_shared<RuntimeContext::AttentionCacheCounterState>();
+  std::shared_ptr<PersistentStorageCounters> persistent_storage_counters_ =
+      std::make_shared<PersistentStorageCounters>();
   size_t attention_cache_initial_capacity_ = 0;
   bool allocators_captured_ = false;
   RawBufferAllocator *execution_allocator_ = nullptr;

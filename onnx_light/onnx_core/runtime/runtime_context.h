@@ -43,15 +43,6 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 // CPU executor leased by the session (see onnx_core/runtime/tuning/cpu_executor.h).
 class CpuExecutor;
 
-/** Measures Attention cache construction, including dense fallback and failed invocations. */
-struct AttentionCacheStatistics {
-  uint64_t allocations = 0;
-  uint64_t allocated_bytes = 0;
-  uint64_t prefix_copied_bytes = 0;
-  uint64_t append_copied_bytes = 0;
-  uint64_t reuse_count = 0;
-};
-
 /**
  * Name-keyed map of tensors carrying both the graph inputs/initializers
  * and the intermediate values produced by previously executed nodes.
@@ -658,16 +649,15 @@ public:
                                                                  AllocatorForOutput(slot));
   }
 
-  /** Returns cumulative cache counters; allocation bytes count requested capacity. */
-  AttentionCacheStatistics attention_cache_statistics() const {
-    const std::lock_guard<std::mutex> lock(attention_cache_stats_->mutex);
-    return attention_cache_stats_->values;
+  /** Returns reported storage work; allocation bytes count requested capacity. */
+  PersistentStorageStatistics persistent_storage_statistics() const {
+    return persistent_storage_counters_->Snapshot();
   }
-  /** Accumulates cache work performed in a separate temporary computation context. */
-  void AccumulateAttentionCacheStatistics(const AttentionCacheStatistics &statistics);
-  /** Records work for every Attention cache path, including non-reusable dense layouts. */
-  void RecordAttentionCacheCopy(size_t allocated, size_t prefix, size_t appended,
-                                bool reused = false);
+  /** Accumulates storage work performed in a separate temporary computation context. */
+  void AccumulatePersistentStorageStatistics(const PersistentStorageStatistics &statistics);
+  /** Records one storage construction, including allocation/copy fallback or reuse. */
+  void RecordPersistentStorageCopy(size_t allocated, size_t prefix, size_t appended,
+                                   bool reused = false);
   /** Appends to a certified contiguous cache, or declines unsupported/disabled layouts. */
   std::optional<Tensor> TryAppendAttentionCache(const Tensor &past, const Tensor &current,
                                                 int output_slot);
@@ -999,12 +989,8 @@ public:
 
 private:
   friend class FeedbackState;
-  struct AttentionCacheCounterState {
-    std::mutex mutex;
-    AttentionCacheStatistics values;
-  };
-  std::shared_ptr<AttentionCacheCounterState> attention_cache_stats_ =
-      std::make_shared<AttentionCacheCounterState>();
+  std::shared_ptr<PersistentStorageCounters> persistent_storage_counters_ =
+      std::make_shared<PersistentStorageCounters>();
   size_t attention_cache_initial_capacity_ = 0;
   const GraphProto *attention_cache_graph_ = nullptr;
   struct PersistentTensorBinding {

@@ -1347,7 +1347,7 @@ TEST(KernelClass, AttentionCacheFunctionalConcatenationReportsEveryCopiedByte) {
   const Tensor past = Tensor::FromFloat("", {1, 1, 2, 2}, {3, 4, 5, 6});
   const auto result = attention(current, current, current, Attention::Attributes{}, nullptr, &past,
                                 &past, nullptr, &rt);
-  const auto stats = rt.attention_cache_statistics();
+  const auto stats = rt.persistent_storage_statistics();
   EXPECT_EQ(stats.allocations, 2u);
   EXPECT_EQ(stats.allocated_bytes, 12 * sizeof(float));
   EXPECT_EQ(stats.prefix_copied_bytes, 8 * sizeof(float));
@@ -1389,7 +1389,7 @@ TEST(KernelClass, AttentionCacheStatisticsAggregateConcurrentIndependentChildren
   auto second = std::async(std::launch::async, run);
   first.get();
   second.get();
-  const auto stats = parent.attention_cache_statistics();
+  const auto stats = parent.persistent_storage_statistics();
   EXPECT_EQ(stats.allocations, 400u);
   EXPECT_EQ(stats.allocated_bytes, 200u * 12 * sizeof(float));
   EXPECT_EQ(stats.prefix_copied_bytes, 200u * 8 * sizeof(float));
@@ -1811,7 +1811,7 @@ TEST(KernelClass, AttentionHalfPrecisionCacheConcatenationIsMeasured) {
     const auto result = attention(half_current, half_current, half_current, Attention::Attributes{},
                                   nullptr, &half_past, &half_past, nullptr, &rt);
     EXPECT_EQ(result.present_key.data_type, dtype);
-    const auto stats = rt.attention_cache_statistics();
+    const auto stats = rt.persistent_storage_statistics();
     EXPECT_EQ(stats.allocations, 2u);
     EXPECT_EQ(stats.allocated_bytes, 12 * sizeof(float));
     EXPECT_EQ(stats.prefix_copied_bytes, 8 * sizeof(float));

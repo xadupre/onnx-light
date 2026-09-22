@@ -6,9 +6,37 @@
 
 #include "onnx_core/runtime/runtime_value.h"
 #include <atomic>
+#include <mutex>
 #include <optional>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
+
+/**
+ * Measures reported kernel work on persistent-capable storage.
+ *
+ * Includes allocation/copy fallback and failed attempts, independently of the
+ * consuming operator. These counters do not automatically track all runtime work.
+ */
+struct PersistentStorageStatistics {
+  uint64_t allocations = 0;
+  uint64_t allocated_bytes = 0;
+  uint64_t prefix_copied_bytes = 0;
+  uint64_t append_copied_bytes = 0;
+  uint64_t reuse_count = 0;
+};
+
+/** Aggregates operator-independent storage work across an invocation's contexts. */
+class ONNX_LIGHT_CORE_API PersistentStorageCounters {
+public:
+  /** Returns a consistent snapshot of all cumulative counters. */
+  PersistentStorageStatistics Snapshot() const;
+  /** Adds reported work atomically with respect to other updates and snapshots. */
+  void Accumulate(const PersistentStorageStatistics &statistics);
+
+private:
+  mutable std::mutex mutex_;
+  PersistentStorageStatistics values_;
+};
 
 /**
  * Retains a tensor value and, for internally allocated append buffers, spare capacity.

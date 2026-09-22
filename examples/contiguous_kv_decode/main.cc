@@ -80,7 +80,7 @@ int main() {
     FeedbackState state(model,
                         {{"past_key", Filled(heads, 0, 0)}, {"past_value", Filled(heads, 0, 0)}},
                         RuntimeSessionOptions{.attention_cache_initial_capacity = 4});
-    AttentionCacheStatistics previous;
+    PersistentStorageStatistics previous;
     for (int step = 0; step < 20; ++step) {
       RuntimeValueMap feeds{{"q", Filled(heads, 1, 0)},
                             {"k", Filled(heads, 1, 0)},
@@ -102,7 +102,7 @@ int main() {
         std::cerr << "State forwarding unexpectedly copied a KV payload.\n";
         return 1;
       }
-      const auto counters = state.AttentionCacheStats();
+      const auto counters = state.PersistentStorageStats();
       std::cout << heads << "," << step + 1 << "," << elapsed.count() << ","
                 << counters.allocations - previous.allocations << ","
                 << counters.allocated_bytes - previous.allocated_bytes << ","

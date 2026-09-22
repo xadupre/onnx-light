@@ -21,6 +21,46 @@ PersistentTensor Cache() {
 
 } // namespace
 
+TEST(PersistentStorageCounters, AccumulatesIndependentOfRuntimeAndOperator) {
+  PersistentStorageCounters counters;
+  const auto empty = counters.Snapshot();
+  EXPECT_EQ(empty.allocations, 0u);
+  EXPECT_EQ(empty.allocated_bytes, 0u);
+  EXPECT_EQ(empty.prefix_copied_bytes, 0u);
+  EXPECT_EQ(empty.append_copied_bytes, 0u);
+  EXPECT_EQ(empty.reuse_count, 0u);
+  counters.Accumulate({1, 64, 8, 4, 0});
+  const auto first = counters.Snapshot();
+  counters.Accumulate({0, 0, 0, 4, 1});
+  const auto total = counters.Snapshot();
+  EXPECT_EQ(total.allocations, 1u);
+  EXPECT_EQ(total.allocated_bytes, 64u);
+  EXPECT_EQ(total.prefix_copied_bytes, 8u);
+  EXPECT_EQ(total.append_copied_bytes, 8u);
+  EXPECT_EQ(total.reuse_count, 1u);
+  EXPECT_EQ(first.append_copied_bytes, 4u);
+  EXPECT_EQ(first.reuse_count, 0u);
+}
+
+TEST(PersistentStorageCounters, ConcurrentUpdatesAndSnapshotsStayConsistent) {
+  PersistentStorageCounters counters;
+  const auto update = [&] {
+    for (int i = 0; i < 100; ++i) {
+      counters.Accumulate({1, 64, 8, 4, 2});
+      const auto snapshot = counters.Snapshot();
+      EXPECT_EQ(snapshot.allocated_bytes, snapshot.allocations * 64);
+      EXPECT_EQ(snapshot.prefix_copied_bytes, snapshot.allocations * 8);
+      EXPECT_EQ(snapshot.append_copied_bytes, snapshot.allocations * 4);
+      EXPECT_EQ(snapshot.reuse_count, snapshot.allocations * 2);
+    }
+  };
+  auto first = std::async(std::launch::async, update);
+  auto second = std::async(std::launch::async, update);
+  first.get();
+  second.get();
+  EXPECT_EQ(counters.Snapshot().allocations, 200u);
+}
+
 TEST(PersistentTensor, RetainsWithoutCopyAndDoesNotCertifyImportedStorage) {
   Tensor tensor = Tensor::FromFloat("", {2}, {1, 2});
   const uint8_t *bytes = tensor.bytes();

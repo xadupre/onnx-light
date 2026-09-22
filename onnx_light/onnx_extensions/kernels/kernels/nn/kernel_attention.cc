@@ -21,12 +21,12 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
 
-struct CacheStatisticsForwarder {
+struct StorageStatisticsForwarder {
   RuntimeContext *destination;
   const RuntimeContext &source;
-  ~CacheStatisticsForwarder() {
+  ~StorageStatisticsForwarder() {
     if (destination)
-      destination->AccumulateAttentionCacheStatistics(source.attention_cache_statistics());
+      destination->AccumulatePersistentStorageStatistics(source.persistent_storage_statistics());
   }
 };
 
@@ -173,7 +173,7 @@ Tensor ConcatAxis2(const Tensor &a, const Tensor &b, int output_slot, RuntimeCon
   // They must be repacked rather than treated as a contiguous append buffer.
   Tensor out = AllocateResult(rt, output_slot, DataType::FLOAT, {batch, heads, lc, d}, out_n_bytes);
   if (rt != nullptr)
-    rt->RecordAttentionCacheCopy(out_n_bytes, prefix, appended);
+    rt->RecordPersistentStorageCopy(out_n_bytes, prefix, appended);
   const float *pa = a.AsFloat();
   const float *pb = b.AsFloat();
   float *po = out.AsFloat();
@@ -193,7 +193,7 @@ Tensor ConcatAxis2(const Tensor &a, const Tensor &b, int output_slot, RuntimeCon
 Tensor CopyOutput(const Tensor &src, int output_slot, RuntimeContext *rt) {
   Tensor out = AllocateResult(rt, output_slot, src.data_type, src.shape, src.size_bytes());
   if (rt != nullptr)
-    rt->RecordAttentionCacheCopy(src.size_bytes(), 0, src.size_bytes());
+    rt->RecordPersistentStorageCopy(src.size_bytes(), 0, src.size_bytes());
   if (src.size_bytes() != 0) {
     std::memcpy(out.mutable_bytes(), src.bytes(), src.size_bytes());
   }
@@ -613,7 +613,7 @@ Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const 
     RuntimeContext scratch_rt(
         rt ? rt->kernel_ctx() : ctx_,
         RuntimeContextOptions{.allocator = rt ? rt->execution_allocator() : nullptr});
-    const CacheStatisticsForwarder forwarder{rt, scratch_rt};
+    const StorageStatisticsForwarder forwarder{rt, scratch_rt};
     RuntimeContext *compute_rt = rt ? &scratch_rt : nullptr;
     const Tensor Q_f = PromoteToFloat32(Q, compute_rt);
     const Tensor K_f = PromoteToFloat32(K, compute_rt);

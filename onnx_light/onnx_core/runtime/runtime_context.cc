@@ -442,24 +442,18 @@ RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name)
   child.sequences() = sequences_;
   child.set_cpu_executor(cpu_executor_);
   child.set_current_subgraph(current_node_index_, attr_name);
-  child.attention_cache_stats_ = attention_cache_stats_;
+  child.persistent_storage_counters_ = persistent_storage_counters_;
   return child;
 }
 
-void RuntimeContext::AccumulateAttentionCacheStatistics(
-    const AttentionCacheStatistics &statistics) {
-  const std::lock_guard<std::mutex> lock(attention_cache_stats_->mutex);
-  auto &values = attention_cache_stats_->values;
-  values.allocations += statistics.allocations;
-  values.allocated_bytes += statistics.allocated_bytes;
-  values.prefix_copied_bytes += statistics.prefix_copied_bytes;
-  values.append_copied_bytes += statistics.append_copied_bytes;
-  values.reuse_count += statistics.reuse_count;
+void RuntimeContext::AccumulatePersistentStorageStatistics(
+    const PersistentStorageStatistics &statistics) {
+  persistent_storage_counters_->Accumulate(statistics);
 }
 
-void RuntimeContext::RecordAttentionCacheCopy(size_t allocated, size_t prefix, size_t appended,
-                                              bool reused) {
-  AccumulateAttentionCacheStatistics(
+void RuntimeContext::RecordPersistentStorageCopy(size_t allocated, size_t prefix, size_t appended,
+                                                 bool reused) {
+  AccumulatePersistentStorageStatistics(
       {reused ? 0u : 1u, allocated, prefix, appended, reused ? 1u : 0u});
 }
 
@@ -516,7 +510,7 @@ std::optional<Tensor> RuntimeContext::TryAppendAttentionCache(const Tensor &past
     auto candidate = binding->append->TryAppend(past, current, shape);
     if (candidate) {
       binding->candidate = std::move(candidate);
-      RecordAttentionCacheCopy(0, 0, appended, true);
+      RecordPersistentStorageCopy(0, 0, appended, true);
       return binding->candidate->BorrowView();
     }
   }
@@ -534,9 +528,9 @@ std::optional<Tensor> RuntimeContext::TryAppendAttentionCache(const Tensor &past
   }
   const size_t allocated = capacity * row_bytes;
   Tensor storage = MakeOutputTensor(output_slot, DataType::FLOAT, shape, allocated);
-  RecordAttentionCacheCopy(allocated, 0, 0);
+  RecordPersistentStorageCopy(allocated, 0, 0);
   binding->candidate = PersistentTensor::Concatenate(std::move(storage), past, current, shape);
-  AccumulateAttentionCacheStatistics(
+  AccumulatePersistentStorageStatistics(
       {.prefix_copied_bytes = prefix, .append_copied_bytes = appended});
   return binding->candidate->BorrowView();
 }
@@ -556,7 +550,7 @@ RuntimeContext RuntimeContext::MakeFunctionContext() const {
   child.custom_kernels() = custom_kernels_;
   child.set_model_owner(model_owner_);
   child.set_cpu_executor(cpu_executor_);
-  child.attention_cache_stats_ = attention_cache_stats_;
+  child.persistent_storage_counters_ = persistent_storage_counters_;
   return child;
 }
 

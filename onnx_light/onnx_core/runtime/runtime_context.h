@@ -662,7 +662,7 @@ public:
   std::optional<PersistentTensor::AppendReservation>
   ReservePersistentAppend(const Tensor &past, const Shape &shape, size_t axis, int input_slot,
                           int output_slot);
-  /** Seals a kernel-written candidate for later atomic feedback publication. */
+  /** Records the completed append; FeedbackState adopts it only if the entire run succeeds. */
   Tensor CommitPersistentAppend(int output_slot, PersistentTensor::AppendReservation reservation,
                                 size_t initialized_bytes);
 

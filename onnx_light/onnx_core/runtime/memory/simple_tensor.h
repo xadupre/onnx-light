@@ -7,7 +7,6 @@
 #include "onnx.h"
 
 #include <algorithm>
-#include <atomic>
 #include <cstdint>
 #include <cstring>
 #include <limits>
@@ -818,20 +817,6 @@ struct Tensor {
   std::vector<std::string> &AsStrings();
 
 private:
-  friend class FeedbackState;
-  friend class RuntimeContext;
-  struct AppendStorage {
-    std::weak_ptr<void> owner;
-    const uint8_t *base;
-    size_t capacity;
-  };
-  // Certification follows read-only views; the one-use write permit only moves.
-  std::shared_ptr<const AppendStorage> append_storage_;
-  mutable std::atomic<bool> append_permit_{false};
-  size_t append_offset_ = 0;
-  Tensor BorrowForAppend() const;
-  bool ClaimAppend(size_t required_bytes) const;
-
   /// Move-only ownership of allocator-backed bytes.
   AllocationHandle allocation_;
   /// Non-null only for borrowed (non-owning) tensors created via

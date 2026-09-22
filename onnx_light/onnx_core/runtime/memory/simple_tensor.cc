@@ -85,9 +85,9 @@ void AllocationHandle::Reset() noexcept {
 
 Tensor::Tensor(const Tensor &other)
     : name(other.name), data_type(other.data_type), shape(other.shape), data(other.data),
-      string_data(other.string_data), append_storage_(other.append_storage_),
-      borrow_ptr_(other.borrow_ptr_), borrow_size_(other.borrow_size_),
-      borrow_string_data_(other.borrow_string_data_), borrow_owner_(other.borrow_owner_) {
+      string_data(other.string_data), borrow_ptr_(other.borrow_ptr_),
+      borrow_size_(other.borrow_size_), borrow_string_data_(other.borrow_string_data_),
+      borrow_owner_(other.borrow_owner_) {
   if (other.allocation_) {
     RawBuffer *allocated = other.allocation_.owner()->Allocate(other.allocation_.logical_size());
     EXT_ENFORCE(allocated != nullptr,
@@ -103,9 +103,6 @@ Tensor &Tensor::operator=(const Tensor &other) {
     return *this;
   }
   allocation_.Reset();
-  append_storage_ = other.append_storage_;
-  append_permit_ = false;
-  append_offset_ = 0;
   name = other.name;
   data_type = other.data_type;
   shape = other.shape;
@@ -129,8 +126,6 @@ Tensor &Tensor::operator=(const Tensor &other) {
 Tensor::Tensor(Tensor &&other) noexcept
     : name(std::move(other.name)), data_type(other.data_type), shape(std::move(other.shape)),
       data(std::move(other.data)), string_data(std::move(other.string_data)),
-      append_storage_(std::move(other.append_storage_)),
-      append_permit_(other.append_permit_.exchange(false)), append_offset_(other.append_offset_),
       allocation_(std::move(other.allocation_)), borrow_ptr_(other.borrow_ptr_),
       borrow_size_(other.borrow_size_), borrow_string_data_(other.borrow_string_data_),
       borrow_owner_(std::move(other.borrow_owner_)) {
@@ -149,9 +144,6 @@ Tensor &Tensor::operator=(Tensor &&other) noexcept {
   shape = std::move(other.shape);
   data = std::move(other.data);
   string_data = std::move(other.string_data);
-  append_storage_ = std::move(other.append_storage_);
-  append_permit_ = other.append_permit_.exchange(false);
-  append_offset_ = other.append_offset_;
   allocation_ = std::move(other.allocation_);
   borrow_ptr_ = other.borrow_ptr_;
   borrow_size_ = other.borrow_size_;
@@ -410,27 +402,7 @@ Tensor Tensor::BorrowView() const {
   if (static_cast<DataType>(data_type) == DataType::STRING) {
     return Tensor::BorrowStrings(name, shape, AsStrings());
   }
-  Tensor result = Tensor::Borrow(name, data_type, shape, bytes(), size_bytes(), borrow_owner_);
-  result.append_storage_ = append_storage_;
-  return result;
-}
-
-Tensor Tensor::BorrowForAppend() const {
-  // Check before creating the invocation's additional read-only owner.
-  const bool exclusive = borrow_owner_.use_count() == 1;
-  Tensor result = BorrowView();
-  result.append_permit_ = exclusive && append_storage_ != nullptr;
-  result.append_offset_ = size_bytes();
-  return result;
-}
-
-bool Tensor::ClaimAppend(size_t required_bytes) const {
-  if (!append_permit_.exchange(false) || !append_storage_)
-    return false;
-  return bytes() == append_storage_->base && size_bytes() == append_offset_ &&
-         required_bytes >= append_offset_ && required_bytes <= append_storage_->capacity &&
-         !borrow_owner_.owner_before(append_storage_->owner) &&
-         !append_storage_->owner.owner_before(borrow_owner_);
+  return Tensor::Borrow(name, data_type, shape, bytes(), size_bytes(), borrow_owner_);
 }
 
 Tensor Tensor::ToOwned() const {

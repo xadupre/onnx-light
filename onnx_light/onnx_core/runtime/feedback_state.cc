@@ -147,8 +147,8 @@ FeedbackState::FeedbackState(std::shared_ptr<const ModelProto> model, RuntimeVal
     : FeedbackState(RequireModel(model), std::move(initial), std::move(options),
                     std::shared_ptr<void>(model, const_cast<ModelProto *>(model.get()))) {}
 
-std::vector<RuntimeValue> FeedbackState::ValidateInitial(RuntimeValueMap initial) const {
-  std::vector<RuntimeValue> result;
+std::vector<PersistentValue> FeedbackState::ValidateInitial(RuntimeValueMap initial) const {
+  std::vector<PersistentValue> result;
   result.reserve(bindings_.size());
   Symbols symbols;
   for (const auto &binding : bindings_) {
@@ -156,22 +156,10 @@ std::vector<RuntimeValue> FeedbackState::ValidateInitial(RuntimeValueMap initial
     EXT_ENFORCE_INVALID(it != initial.end(), "FeedbackState: missing initial whole input '",
                         binding.input, "'.");
     Validate(it->second, *binding.input_type, catalogue_, symbols);
-    result.push_back(std::move(it->second).Retain(catalogue_));
+    result.emplace_back(std::move(it->second), catalogue_);
   }
   EXT_ENFORCE_INVALID(initial.size() == bindings_.size(),
                       "FeedbackState: initial values must name exactly the retained whole inputs.");
-  return result;
-}
-
-RuntimeValue FeedbackState::BorrowForInvocation(const RuntimeValue &value) const {
-  if (value.kind == RuntimeValue::Kind::kTensor)
-    return RuntimeValue(value.tensor.BorrowForAppend());
-  if (value.kind != RuntimeValue::Kind::kStruct)
-    return value.BorrowView();
-  RuntimeValue result;
-  result.kind = RuntimeValue::Kind::kStruct;
-  for (const auto &[name, field] : value.fields)
-    result.fields.emplace(name, BorrowForInvocation(field));
   return result;
 }
 
@@ -181,9 +169,21 @@ RuntimeValueMap FeedbackState::Run(RuntimeContext &context, const RuntimeValueMa
   EXT_ENFORCE_INVALID(session_ != nullptr, "FeedbackState: state is closed.");
   EXT_ENFORCE_INVALID(completion == nullptr || completion->status() == TaskStatus::kPending,
                       "FeedbackState: invocation was cancelled or completion is not pending.");
+  RuntimeContext invocation = context.MakeFunctionContext();
+  invocation.attention_cache_stats_ = attention_cache_stats_;
+  invocation.attention_cache_initial_capacity_ = attention_cache_initial_capacity_;
+  invocation.attention_cache_graph_ = &model_.graph();
+  invocation.persistent_tensors_ =
+      std::make_shared<std::vector<RuntimeContext::PersistentTensorBinding>>();
   RuntimeValueMap inputs;
-  for (size_t i = 0; i < bindings_.size(); ++i)
-    inputs.emplace(bindings_[i].input, BorrowForInvocation(values_[i]));
+  for (size_t i = 0; i < bindings_.size(); ++i) {
+    if (const auto *tensor = values_[i].tensor()) {
+      invocation.persistent_tensors_->push_back({bindings_[i].input, bindings_[i].output, nullptr,
+                                                 tensor->capacity_bytes(),
+                                                 tensor->AcquireAppendLease(), std::nullopt});
+    }
+    inputs.emplace(bindings_[i].input, values_[i].BorrowView());
+  }
   for (const auto &[name, value] : feeds) {
     InputType(name, model_.graph().input());
     EXT_ENFORCE_INVALID(inputs.find(name) == inputs.end(),
@@ -191,10 +191,6 @@ RuntimeValueMap FeedbackState::Run(RuntimeContext &context, const RuntimeValueMa
     inputs.emplace(name, value.BorrowView());
   }
   Symbols symbols;
-  RuntimeContext invocation = context.MakeFunctionContext();
-  invocation.attention_cache_stats_ = attention_cache_stats_;
-  invocation.attention_cache_initial_capacity_ = attention_cache_initial_capacity_;
-  invocation.attention_cache_graph_ = &model_.graph();
   std::unordered_set<std::string> retained_outputs;
   for (const auto &binding : bindings_)
     retained_outputs.insert(binding.output);
@@ -217,6 +213,8 @@ RuntimeValueMap FeedbackState::Run(RuntimeContext &context, const RuntimeValueMa
     else
       invocation.values().emplace(input.name(), std::move(it->second));
   }
+  for (auto &binding : *invocation.persistent_tensors_)
+    binding.input_view = &invocation.Get(binding.input);
   if (allocators_captured_) {
     EXT_ENFORCE_INVALID(execution_allocator_ == context.execution_allocator() &&
                             io_allocator_ == context.io_allocator(),
@@ -241,14 +239,24 @@ RuntimeValueMap FeedbackState::Run(RuntimeContext &context, const RuntimeValueMa
     Validate(value, output.type(), catalogue_, symbols);
     outputs.emplace(output.name(), std::move(value));
   }
-  std::vector<RuntimeValue> next;
+  std::vector<PersistentValue> next;
   next.reserve(bindings_.size());
   Symbols next_symbols;
   for (const auto &binding : bindings_) {
     RuntimeValue &value = outputs.at(binding.output);
     Validate(value, *binding.input_type, catalogue_, next_symbols);
     value = std::move(value).Retain(catalogue_);
-    next.push_back(value.BorrowView());
+    auto candidate = std::find_if(invocation.persistent_tensors_->begin(),
+                                  invocation.persistent_tensors_->end(), [&](const auto &item) {
+                                    return item.input == binding.input &&
+                                           item.output == binding.output && item.candidate &&
+                                           value.kind == RuntimeValue::Kind::kTensor &&
+                                           item.candidate->Matches(value.tensor);
+                                  });
+    if (candidate != invocation.persistent_tensors_->end())
+      next.emplace_back(std::move(*candidate->candidate));
+    else
+      next.emplace_back(value.BorrowView(), catalogue_);
   }
   if (completion != nullptr) {
     EXT_ENFORCE_INVALID(completion->status() == TaskStatus::kPending,

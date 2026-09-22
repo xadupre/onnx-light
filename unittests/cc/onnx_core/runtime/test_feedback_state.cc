@@ -1925,28 +1925,27 @@ TEST(FeedbackState, AttentionCacheZeroCapacityUsesMeasuredFunctionalPath) {
 TEST(FeedbackState, AttentionCacheOrdinaryInvocationBorrowsAndCopiesNeverCarryWritePermit) {
   for (bool copy : {false, true}) {
     ModelProto model = AttentionModel();
-    RuntimeContext seed_context(KernelContext(DefaultOpset(23)));
-    FeedbackState seed(model, EmptyAttentionCache());
-    seed.Run(seed_context, AttentionFeeds(1));
-    auto initial = seed.Values();
-    seed.Close();
     RuntimeContext context(KernelContext(DefaultOpset(23)));
-    context.RegisterCustomKernel("", "Attention", [copy](const NodeProto &, RuntimeContext &rt) {
+    bool indirect = false;
+    context.RegisterCustomKernel("", "Attention", [&](const NodeProto &, RuntimeContext &rt) {
       Tensor key = copy ? Tensor(rt.Get("past_key")) : rt.Get("past_key").BorrowView();
       Tensor value = copy ? Tensor(rt.Get("past_value")) : rt.Get("past_value").BorrowView();
       onnx_kernels::kernel::Attention attention(rt.kernel_ctx());
       auto result = attention(rt.Get("Q"), rt.Get("K"), rt.Get("V"),
-                              onnx_kernels::kernel::Attention::Attributes{}, nullptr, &key, &value,
-                              nullptr, &rt);
+                              onnx_kernels::kernel::Attention::Attributes{}, nullptr,
+                              indirect ? &key : &rt.Get("past_key"),
+                              indirect ? &value : &rt.Get("past_value"), nullptr, &rt);
       rt.Put("Y", std::move(result.Y));
       rt.Put("present_key", std::move(result.present_key));
       rt.Put("present_value", std::move(result.present_value));
     });
-    FeedbackState state(model, std::move(initial));
+    FeedbackState state(model, EmptyAttentionCache());
+    state.Run(context, AttentionFeeds(1));
+    indirect = true;
     for (int step = 0; step < 3; ++step)
       state.Run(context, AttentionFeeds(step));
     EXPECT_EQ(state.AttentionCacheStats().reuse_count, 0u);
-    EXPECT_EQ(state.AttentionCacheStats().allocations, 6u);
+    EXPECT_EQ(state.AttentionCacheStats().allocations, 8u);
     EXPECT_EQ(state.AttentionCacheStats().prefix_copied_bytes, 2u * 6 * 2 * sizeof(float));
   }
 }
@@ -1966,15 +1965,51 @@ TEST(FeedbackState, AttentionCacheRequiresExactPastToPresentDeclaration) {
   EXPECT_EQ(stats.prefix_copied_bytes, 2u * 3 * 2 * sizeof(float));
 }
 
+TEST(FeedbackState, AttentionCacheChildContextsAndCopiesCannotUseInvocationPermissions) {
+  for (int mode = 0; mode < 3; ++mode) {
+    SCOPED_TRACE(mode);
+    ModelProto model = AttentionModel();
+    RuntimeContext context(KernelContext(DefaultOpset(23)));
+    bool use_child = false;
+    context.RegisterCustomKernel("", "Attention", [&](const NodeProto &, RuntimeContext &rt) {
+      const auto compute = [](RuntimeContext &active) {
+        onnx_kernels::kernel::Attention attention(active.kernel_ctx());
+        return attention(active.Get("Q"), active.Get("K"), active.Get("V"),
+                         onnx_kernels::kernel::Attention::Attributes{}, nullptr,
+                         &active.Get("past_key"), &active.Get("past_value"), nullptr, &active);
+      };
+      auto result = [&] {
+        if (!use_child)
+          return compute(rt);
+        RuntimeContext child = mode == 0   ? rt.MakeFunctionContext()
+                               : mode == 1 ? rt.MakeSubgraphContext("body")
+                                           : rt;
+        for (const auto &name : {"Q", "K", "V", "past_key", "past_value"})
+          child.Put(name, rt.Get(name).BorrowView(), RuntimeEventKind::kInput);
+        child.set_current_node_index(rt.current_node_index());
+        return compute(child);
+      }();
+      rt.Put("Y", std::move(result.Y));
+      rt.Put("present_key", std::move(result.present_key));
+      rt.Put("present_value", std::move(result.present_value));
+    });
+    FeedbackState state(model, EmptyAttentionCache());
+    state.Run(context, AttentionFeeds(1));
+    use_child = true;
+    for (int step = 2; step <= 3; ++step) {
+      const auto output = state.Run(context, AttentionFeeds(step));
+      EXPECT_FLOAT_EQ(output.at("present_key").tensor.AsFloat()[2 * (step - 1)], step);
+    }
+    EXPECT_EQ(state.AttentionCacheStats().reuse_count, 0u);
+    EXPECT_EQ(state.AttentionCacheStats().allocations, 6u);
+  }
+}
+
 TEST(FeedbackState, AttentionCacheDuplicateConsumersConsumePermitOnlyOnce) {
   ModelProto model = AttentionModel();
-  RuntimeContext seed_context(KernelContext(DefaultOpset(23)));
-  FeedbackState seed(model, EmptyAttentionCache());
-  seed.Run(seed_context, AttentionFeeds(1));
-  auto initial = seed.Values();
-  seed.Close();
   RuntimeContext context(KernelContext(DefaultOpset(23)));
   Tensor earlier;
+  bool duplicate = false;
   context.RegisterCustomKernel("", "Attention", [&](const NodeProto &, RuntimeContext &rt) {
     onnx_kernels::kernel::Attention attention(rt.kernel_ctx());
     const auto &key = rt.Get("past_key");
@@ -1982,6 +2017,12 @@ TEST(FeedbackState, AttentionCacheDuplicateConsumersConsumePermitOnlyOnce) {
     auto first = attention(rt.Get("Q"), rt.Get("K"), rt.Get("V"),
                            onnx_kernels::kernel::Attention::Attributes{}, nullptr, &key, &value,
                            nullptr, &rt);
+    if (!duplicate) {
+      rt.Put("Y", std::move(first.Y));
+      rt.Put("present_key", std::move(first.present_key));
+      rt.Put("present_value", std::move(first.present_value));
+      return;
+    }
     earlier = first.present_key.BorrowView();
     auto second = attention(rt.Get("Q"), rt.Get("V"), rt.Get("K"),
                             onnx_kernels::kernel::Attention::Attributes{}, nullptr, &key, &value,
@@ -1993,12 +2034,60 @@ TEST(FeedbackState, AttentionCacheDuplicateConsumersConsumePermitOnlyOnce) {
     rt.Put("present_key", std::move(second.present_key));
     rt.Put("present_value", std::move(second.present_value));
   });
-  FeedbackState state(model, std::move(initial));
+  FeedbackState state(model, EmptyAttentionCache());
+  state.Run(context, AttentionFeeds(1));
+  duplicate = true;
   const auto output = state.Run(context, AttentionFeeds(2));
   EXPECT_FLOAT_EQ(earlier.AsFloat()[2], 2);
   EXPECT_FLOAT_EQ(output.at("present_key").tensor.AsFloat()[2], -2);
   EXPECT_EQ(state.AttentionCacheStats().reuse_count, 2u);
-  EXPECT_EQ(state.AttentionCacheStats().allocations, 2u);
+  EXPECT_EQ(state.AttentionCacheStats().allocations, 4u);
+}
+
+TEST(FeedbackState, AttentionCacheReimportedViewsDoNotCertifyAppendCapacity) {
+  for (bool reset : {false, true}) {
+    SCOPED_TRACE(reset);
+    ModelProto model = AttentionModel();
+    RuntimeContext context(KernelContext(DefaultOpset(23)));
+    FeedbackState original(model, EmptyAttentionCache());
+    original.Run(context, AttentionFeeds(1));
+    auto values = original.Values();
+    const uint8_t *old_key = values.at("past_key").tensor.bytes();
+    if (reset) {
+      original.Reset(std::move(values));
+      const auto output = original.Run(context, AttentionFeeds(2));
+      EXPECT_NE(output.at("present_key").tensor.bytes(), old_key);
+      EXPECT_EQ(original.AttentionCacheStats().reuse_count, 0u);
+    } else {
+      original.Close();
+      FeedbackState imported(model, std::move(values));
+      const auto output = imported.Run(context, AttentionFeeds(2));
+      EXPECT_NE(output.at("present_key").tensor.bytes(), old_key);
+      EXPECT_EQ(imported.AttentionCacheStats().reuse_count, 0u);
+    }
+  }
+}
+
+TEST(FeedbackState, AttentionCachePublishesCapacityOnlyForTheExactCandidate) {
+  ModelProto model = AttentionModel();
+  RuntimeContext context(KernelContext(DefaultOpset(23)));
+  context.RegisterCustomKernel("", "Attention", [](const NodeProto &, RuntimeContext &rt) {
+    onnx_kernels::kernel::Attention attention(rt.kernel_ctx());
+    auto result = attention(rt.Get("Q"), rt.Get("K"), rt.Get("V"),
+                            onnx_kernels::kernel::Attention::Attributes{}, nullptr,
+                            &rt.Get("past_key"), &rt.Get("past_value"), nullptr, &rt);
+    rt.Put("Y", std::move(result.Y));
+    // Replacing a candidate with an ordinary tensor must discard its capacity.
+    rt.Put("present_key", result.present_key.ToOwned());
+    rt.Put("present_value", result.present_value.ToOwned());
+  });
+  FeedbackState state(model, EmptyAttentionCache());
+  for (int step = 1; step <= 3; ++step) {
+    const auto output = state.Run(context, AttentionFeeds(step));
+    EXPECT_FLOAT_EQ(output.at("present_key").tensor.AsFloat()[2 * (step - 1)], step);
+  }
+  EXPECT_EQ(state.AttentionCacheStats().reuse_count, 0u);
+  EXPECT_EQ(state.AttentionCacheStats().allocations, 6u);
 }
 
 TEST(FeedbackState, UnselectedAttentionUsesExecutionArenaWithUnrelatedRetainedState) {

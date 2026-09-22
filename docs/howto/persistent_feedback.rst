@@ -230,6 +230,14 @@ the ordinary graph bindings. The native CPU ``Attention`` consumer can then
 retain extra allocation capacity for subsequent appends. There is no separate
 cache identifier, state mapping or executor.
 
+Internally, ``FeedbackState`` retains ``PersistentValue`` objects, with a
+``PersistentTensor`` at each tensor leaf. ``PersistentTensor`` composes an ordinary
+``Tensor`` with certified allocation capacity; it does not inherit from ``Tensor``.
+The runtime receives ordinary tensor views and separate, move-only ``AppendLease``
+permissions for eligible root bindings. Neither tensor copies nor borrowed views
+carry capacity metadata or write permissions. Child function and subgraph contexts
+do not inherit these permissions.
+
 The reusable layout is dense rank-four ``FLOAT`` with shape
 ``[1, 1, valid_length, head_size]`` for each K/V tensor. Query tensors can
 have multiple heads (multi-query attention). The tensor's sequence dimension
@@ -250,13 +258,18 @@ Reuse is deliberately conservative:
 
 * Only internally created append buffers are eligible. An arbitrary borrowed
   NumPy/DLPack buffer, even one with an owner token, does not grant write access.
+  Importing returned tensors or ``Values()`` views into a new state, or through
+  ``Reset``, retains their bytes without copying but does not import append
+  capacity. Their first append allocates a new certified buffer.
 * Ownership is checked before creating invocation-local aliases. Keeping a
   previous output or ``Values()`` view alive prevents reuse of that allocation.
   The next result instead receives a fresh allocation; the old view's bytes,
   shape and lifetime do not change.
 * An eligible append writes only the new token range. It does not move or
   rewrite the valid prefix. The previous state's logical extent remains
-  unchanged until successful publication.
+  unchanged until successful publication. Capacity is published only when the
+  returned tensor still matches the kernel's candidate owner, pointer, type,
+  shape and logical byte extent.
 * Capacity exhaustion allocates a larger buffer and copies the valid prefix
   once inside the Attention kernel. State publication still only transfers
   owner handles.

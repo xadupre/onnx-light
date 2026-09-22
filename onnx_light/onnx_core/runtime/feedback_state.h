@@ -69,8 +69,7 @@ private:
     std::string output;
     const TypeProto *input_type;
   };
-  std::vector<RuntimeValue> ValidateInitial(RuntimeValueMap initial) const;
-  RuntimeValue BorrowForInvocation(const RuntimeValue &value) const;
+  std::vector<PersistentValue> ValidateInitial(RuntimeValueMap initial) const;
 
   const ModelProto &model_;
   std::shared_ptr<void> model_owner_;
@@ -78,7 +77,7 @@ private:
   StructTypeCatalogue catalogue_;
   std::vector<Binding> bindings_;
   std::unique_ptr<RuntimeSession> session_;
-  std::vector<RuntimeValue> values_;
+  std::vector<PersistentValue> values_;
   std::shared_ptr<RuntimeContext::AttentionCacheCounterState> attention_cache_stats_ =
       std::make_shared<RuntimeContext::AttentionCacheCounterState>();
   size_t attention_cache_initial_capacity_ = 0;

@@ -485,11 +485,14 @@ std::optional<Tensor> RuntimeContext::TryAppendAttentionCache(const Tensor &past
   const auto input = tensors_.find(node.input(input_slot));
   if (input == tensors_.end() || &input->second != &past)
     return std::nullopt;
-  bool declared = false;
-  for (const auto &binding : attention_cache_graph_->persistent_bindings())
-    declared = declared || (binding.input_name().value() == node.input(input_slot) &&
-                            binding.output_name().value() == node.output(output_slot));
-  if (!declared)
+  if (!persistent_tensors_)
+    return std::nullopt;
+  auto binding =
+      std::find_if(persistent_tensors_->begin(), persistent_tensors_->end(), [&](const auto &item) {
+        return item.input == node.input(input_slot) && item.output == node.output(output_slot) &&
+               item.input_view == &past;
+      });
+  if (binding == persistent_tensors_->end())
     return std::nullopt;
   const int64_t previous = past.shape[2], added = current.shape[2];
   EXT_ENFORCE_INVALID(previous >= 0 && added >= 0 &&
@@ -509,23 +512,21 @@ std::optional<Tensor> RuntimeContext::TryAppendAttentionCache(const Tensor &past
   const size_t appended = float_bytes(current.shape);
   EXT_ENFORCE_INVALID(past.size_bytes() == prefix && current.size_bytes() == appended,
                       "Attention cache: tensor byte extent mismatch.");
-  if (past.ClaimAppend(logical)) {
-    Tensor result = past.BorrowView();
-    result.shape = std::move(shape);
-    result.borrow_size_ = logical;
-    if (appended != 0)
-      std::memmove(result.mutable_bytes() + prefix, current.bytes(), appended);
-    RecordAttentionCacheCopy(0, 0, appended, true);
-    return result;
+  if (binding->append) {
+    auto candidate = binding->append->TryAppend(past, current, shape);
+    if (candidate) {
+      binding->candidate = std::move(candidate);
+      RecordAttentionCacheCopy(0, 0, appended, true);
+      return binding->candidate->BorrowView();
+    }
   }
   const size_t row_bytes = float_bytes({past.shape[3]});
   const size_t max_capacity = std::numeric_limits<size_t>::max() / row_bytes;
-  size_t capacity = attention_cache_initial_capacity_;
-  if (past.append_storage_)
-    capacity = std::max(capacity, past.append_storage_->capacity / row_bytes);
+  size_t capacity =
+      std::max(attention_cache_initial_capacity_, binding->capacity_bytes / row_bytes);
   EXT_ENFORCE_INVALID(capacity <= max_capacity,
                       "Attention cache: initial capacity byte size overflow.");
-  const size_t required = static_cast<size_t>(shape[2]);
+  const size_t required = logical / row_bytes;
   while (capacity < required) {
     capacity = capacity > max_capacity / 2 ? max_capacity : capacity * 2;
     EXT_ENFORCE_INVALID(capacity >= required || capacity < max_capacity,
@@ -534,18 +535,10 @@ std::optional<Tensor> RuntimeContext::TryAppendAttentionCache(const Tensor &past
   const size_t allocated = capacity * row_bytes;
   Tensor storage = MakeOutputTensor(output_slot, DataType::FLOAT, shape, allocated);
   RecordAttentionCacheCopy(allocated, 0, 0);
-  // RetainStorage rejects execution-arena memory without a self-owning lease.
-  Tensor result = std::move(storage).RetainStorage();
-  result.borrow_size_ = logical;
-  result.append_storage_ = std::make_shared<Tensor::AppendStorage>(
-      Tensor::AppendStorage{result.borrow_owner_, result.bytes(), allocated});
-  if (prefix != 0)
-    std::memcpy(result.mutable_bytes(), past.bytes(), prefix);
-  if (appended != 0)
-    std::memcpy(result.mutable_bytes() + prefix, current.bytes(), appended);
+  binding->candidate = PersistentTensor::Concatenate(std::move(storage), past, current, shape);
   AccumulateAttentionCacheStatistics(
       {.prefix_copied_bytes = prefix, .append_copied_bytes = appended});
-  return result;
+  return binding->candidate->BorrowView();
 }
 
 RuntimeContext RuntimeContext::MakeFunctionContext() const {

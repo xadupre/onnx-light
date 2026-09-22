@@ -10,6 +10,7 @@
 #include "onnx_core/runtime/memory/simple_map.h"
 #include "onnx_core/runtime/memory/simple_sequence.h"
 #include "onnx_core/runtime/memory/simple_tensor.h"
+#include "onnx_core/runtime/persistent_value.h"
 #include "onnx_core/runtime/runtime_value.h"
 #include "onnx_core/runtime/tuning/runtime_parameters.h"
 #include "onnx_core/symbolic/sym_tensor.h"
@@ -1006,6 +1007,16 @@ private:
       std::make_shared<AttentionCacheCounterState>();
   size_t attention_cache_initial_capacity_ = 0;
   const GraphProto *attention_cache_graph_ = nullptr;
+  struct PersistentTensorBinding {
+    std::string input;
+    std::string output;
+    const Tensor *input_view = nullptr;
+    size_t capacity_bytes = 0;
+    std::optional<PersistentTensor::AppendLease> append;
+    std::optional<PersistentTensor> candidate;
+  };
+  // Created only for feedback execution; child contexts do not inherit permissions.
+  std::shared_ptr<std::vector<PersistentTensorBinding>> persistent_tensors_;
 
   struct KernelUsageState {
     std::atomic<bool> enabled{false};

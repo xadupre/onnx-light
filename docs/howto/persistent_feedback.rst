@@ -321,6 +321,9 @@ Reuse is deliberately conservative:
   the sequence dimension changes the stride between heads, so prefix-preserving
   tail append is not possible in that layout. Half-precision promotion and
   other unsupported reuse paths keep their ordinary computation semantics.
+* Empty prefixes and empty appended chunks contribute no copied bytes.
+  Zero-width value caches use the dense fallback and keep their declared
+  shapes, including the empty final dimension of the Attention output.
 
 Cancellation is a publication gate, not kernel preemption. A failed or
 cancelled invocation can have written unused tail bytes, but cannot change the

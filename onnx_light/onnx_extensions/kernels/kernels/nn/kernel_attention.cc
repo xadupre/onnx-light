@@ -179,6 +179,8 @@ Tensor ConcatAxis2(const Tensor &a, const Tensor &b, int output_slot, RuntimeCon
                                       .allocated_bytes = out_n_bytes,
                                       .prefix_copied_bytes = prefix,
                                       .append_copied_bytes = appended});
+  if (out_n_bytes == 0)
+    return out;
   const float *pa = a.AsFloat();
   const float *pb = b.AsFloat();
   float *po = out.AsFloat();
@@ -187,9 +189,11 @@ Tensor ConcatAxis2(const Tensor &a, const Tensor &b, int output_slot, RuntimeCon
       // copy ``a`` slice
       const int64_t off_a = (bi * heads + h) * la * d;
       const int64_t off_o = (bi * heads + h) * lc * d;
-      std::copy(pa + off_a, pa + off_a + la * d, po + off_o);
+      if (la != 0)
+        std::copy(pa + off_a, pa + off_a + la * d, po + off_o);
       const int64_t off_b = (bi * heads + h) * lb * d;
-      std::copy(pb + off_b, pb + off_b + lb * d, po + off_o + la * d);
+      if (lb != 0)
+        std::copy(pb + off_b, pb + off_b + lb * d, po + off_o + la * d);
     }
   }
   return out;
@@ -405,11 +409,11 @@ Attention::Result ComputeAttentionRank4(const Tensor &Q4, const Tensor &K4, cons
     }
     for (int64_t h = 0; h < q_num_heads; ++h) {
       const int64_t kv_h = h / group_size;
-      const float *Qbh = pQ + b * q_batch_stride + h * q_head_stride;
-      const float *Kbh = pK + b * k_batch_stride + kv_h * k_head_stride;
-      const float *Vbh = pV + b * v_batch_stride + kv_h * v_head_stride;
-      float *Ybh = pY + b * y_batch_stride + h * y_head_stride;
-      float *QKbh = pQK + b * qk_batch_stride + h * qk_head_stride;
+      const float *Qbh = q_head_stride != 0 ? pQ + b * q_batch_stride + h * q_head_stride : pQ;
+      const float *Kbh = k_head_stride != 0 ? pK + b * k_batch_stride + kv_h * k_head_stride : pK;
+      const float *Vbh = v_head_stride != 0 ? pV + b * v_batch_stride + kv_h * v_head_stride : pV;
+      float *Ybh = y_head_stride != 0 ? pY + b * y_batch_stride + h * y_head_stride : pY;
+      float *QKbh = qk_head_stride != 0 ? pQK + b * qk_batch_stride + h * qk_head_stride : pQK;
 
       for (int64_t i = 0; i < q_seq_len; ++i) {
         // Compute raw scaled QK scores and assemble bias.
@@ -510,7 +514,7 @@ Attention::Result ComputeAttentionRank4(const Tensor &Q4, const Tensor &K4, cons
             break;
           }
         }
-        if (row_fully_masked) {
+        if (row_fully_masked && total_kv_seq_len != 0) {
           std::fill(scores, scores + total_kv_seq_len, 0.0);
         }
         // qk_matmul_output_mode 3: after softmax (with the fully-masked-row
@@ -601,7 +605,8 @@ void Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, fl
                       "q_num_heads, q_seq_len, v_head_size).");
   EXT_ENFORCE_INVALID(output.size_bytes() == r.Y.size_bytes(),
                       "kernel::Attention preallocated output buffer has unexpected size in bytes.");
-  std::memcpy(output.mutable_bytes(), r.Y.bytes(), r.Y.size_bytes());
+  if (r.Y.size_bytes() != 0)
+    std::memcpy(output.mutable_bytes(), r.Y.bytes(), r.Y.size_bytes());
 }
 
 Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V,

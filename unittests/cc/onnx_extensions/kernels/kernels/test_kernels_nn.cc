@@ -22,6 +22,7 @@
 using namespace ONNX_LIGHT_NAMESPACE;
 using core::backend_test::DefaultOpset;
 using core::runtime::RuntimeContext;
+using core::runtime::Shape;
 using core::runtime::Tensor;
 using onnx_kernels::SimpleRawBufferAllocator;
 using onnx_kernels::kernel::Attention;
@@ -1366,6 +1367,102 @@ TEST(KernelClass, AttentionCacheFunctionalConcatenationReportsEveryCopiedByte) {
   EXPECT_EQ(stats.append_copied_bytes, 4 * sizeof(float));
   EXPECT_EQ(stats.reuse_count, 0u);
   EXPECT_NE(result.present_key.bytes(), past.bytes());
+}
+
+TEST(KernelClass, AttentionEmptyBuffersPreserveShapesAndValues) {
+  struct Dimensions {
+    int64_t batch, queries, past, current, key_width, value_width;
+  };
+  const Dimensions cases[] = {
+      {2, 2, 0, 2, 2, 2}, {2, 2, 2, 0, 2, 2}, {2, 2, 0, 0, 2, 2}, {2, 0, 2, 2, 2, 2},
+      {2, 2, 2, 2, 0, 2}, {2, 2, 2, 2, 2, 0}, {2, 2, 0, 0, 0, 0}, {0, 2, 2, 2, 2, 2},
+  };
+  const Attention attention{AttentionKernelContext()};
+  for (int32_t dtype : {TensorProto::FLOAT, TensorProto::FLOAT16, TensorProto::BFLOAT16}) {
+    SCOPED_TRACE(dtype);
+    const auto make_tensor = [dtype](const Shape &shape, float value) {
+      const size_t count = static_cast<size_t>(shape.product());
+      if (count == 0)
+        return Tensor::Borrow("", dtype, shape, nullptr, 0);
+      const std::vector<float> values(count, value);
+      if (dtype == TensorProto::FLOAT16)
+        return core::runtime::MakeFloat16Tensor("", shape, values);
+      if (dtype == TensorProto::BFLOAT16)
+        return core::runtime::MakeBfloat16Tensor("", shape, values);
+      return Tensor::FromFloat("", shape, values);
+    };
+    for (int rank : {3, 4}) {
+      SCOPED_TRACE(rank);
+      for (const auto &d : cases) {
+        SCOPED_TRACE(testing::Message() << d.batch << "," << d.queries << "," << d.past << ","
+                                        << d.current << "," << d.key_width << "," << d.value_width);
+        const auto input_shape = [rank, &d](int64_t heads, int64_t length, int64_t width) {
+          return rank == 4 ? Shape{d.batch, heads, length, width}
+                           : Shape{d.batch, length, heads * width};
+        };
+        const Tensor query = make_tensor(input_shape(4, d.queries, d.key_width), 0);
+        const Tensor key = make_tensor(input_shape(2, d.current, d.key_width), 1);
+        const Tensor value = make_tensor(input_shape(2, d.current, d.value_width), 3);
+        const Tensor past_key = make_tensor({d.batch, 2, d.past, d.key_width}, 2);
+        const Tensor past_value = make_tensor({d.batch, 2, d.past, d.value_width}, 5);
+        for (const Tensor *tensor : {&query, &key, &value, &past_key, &past_value}) {
+          if (tensor->element_count() == 0) {
+            ASSERT_EQ(tensor->bytes(), nullptr);
+          }
+        }
+        Attention::Attributes attrs;
+        attrs.has_scale = true;
+        attrs.scale = 1;
+        attrs.q_num_heads = 4;
+        attrs.kv_num_heads = 2;
+        attrs.qk_matmul_output_mode = 3;
+        for (const bool with_context : {false, true}) {
+          SCOPED_TRACE(with_context);
+          RuntimeContext context(AttentionKernelContext(), {.events_enabled = true});
+          const auto result = attention(query, key, value, attrs, nullptr, &past_key, &past_value,
+                                        nullptr, with_context ? &context : nullptr);
+          const int64_t total = d.past + d.current;
+          const Shape expected_y = input_shape(4, d.queries, d.value_width);
+          EXPECT_EQ(result.Y.shape, expected_y);
+          EXPECT_EQ(result.present_key.shape, (Shape{d.batch, 2, total, d.key_width}));
+          EXPECT_EQ(result.present_value.shape, (Shape{d.batch, 2, total, d.value_width}));
+          EXPECT_EQ(result.qk_matmul_output.shape, (Shape{d.batch, 4, d.queries, total}));
+          for (const Tensor *tensor :
+               {&result.Y, &result.present_key, &result.present_value, &result.qk_matmul_output}) {
+            EXPECT_EQ(tensor->data_type, dtype);
+            EXPECT_EQ(tensor->size_bytes(),
+                      static_cast<size_t>(tensor->element_count()) *
+                          (dtype == TensorProto::FLOAT ? sizeof(float) : sizeof(uint16_t)));
+          }
+          const Tensor y = core::runtime::PromoteToFloat32(result.Y);
+          const float expected_value =
+              total == 0 ? 0 : static_cast<float>(5 * d.past + 3 * d.current) / total;
+          for (int64_t i = 0; i < y.element_count(); ++i)
+            EXPECT_FLOAT_EQ(y.AsFloat()[i], expected_value);
+          const Tensor qk = core::runtime::PromoteToFloat32(result.qk_matmul_output);
+          for (int64_t i = 0; i < qk.element_count(); ++i)
+            EXPECT_FLOAT_EQ(qk.AsFloat()[i], 1.0f / total);
+          const Tensor present_key = core::runtime::PromoteToFloat32(result.present_key);
+          const Tensor present_value = core::runtime::PromoteToFloat32(result.present_value);
+          for (int64_t bh = 0; bh < d.batch * 2; ++bh)
+            for (int64_t i = 0; i < total; ++i) {
+              for (int64_t k = 0; k < d.key_width; ++k)
+                EXPECT_FLOAT_EQ(present_key.AsFloat()[(bh * total + i) * d.key_width + k],
+                                i < d.past ? 2 : 1);
+              for (int64_t v = 0; v < d.value_width; ++v)
+                EXPECT_FLOAT_EQ(present_value.AsFloat()[(bh * total + i) * d.value_width + v],
+                                i < d.past ? 5 : 3);
+            }
+        }
+        if (rank == 4 && (d.batch == 0 || d.queries == 0 || d.value_width == 0)) {
+          Tensor output = make_tensor(input_shape(4, d.queries, d.value_width), 0);
+          ASSERT_EQ(output.mutable_bytes(), nullptr);
+          attention(query, key, value, 1.0f, nullptr, output);
+          EXPECT_EQ(output.size_bytes(), 0u);
+        }
+      }
+    }
+  }
 }
 
 TEST(KernelClass, AttentionCacheRejectsLengthByteOverflowAndInvalidExtent) {

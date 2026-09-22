@@ -43,6 +43,8 @@ public:
    * An optional pending completion acts as a cancellation/commit gate. Cancelling
    * it before publication aborts feedback; success makes publication irrevocable.
    * The token is single-use and must not be marked running by the caller.
+   * When context.events_enabled() is true, invocation events are appended to
+   * context.events(), including work preceding a failure or cancellation.
    */
   RuntimeValueMap Run(RuntimeContext &context, const RuntimeValueMap &feeds,
                       const TaskCompletion *completion = nullptr);
@@ -60,8 +62,6 @@ public:
   void Close();
   /** Returns read-only aliases keyed by exact retained graph input names. */
   RuntimeValueMap Values() const;
-  /** Returns reported storage work, including failed attempts; Reset preserves counters. */
-  PersistentStorageStatistics PersistentStorageStats() const;
 
 private:
   struct Binding {
@@ -78,8 +78,6 @@ private:
   std::vector<Binding> bindings_;
   std::unique_ptr<RuntimeSession> session_;
   std::vector<PersistentValue> values_;
-  std::shared_ptr<PersistentStorageCounters> persistent_storage_counters_ =
-      std::make_shared<PersistentStorageCounters>();
   size_t persistent_tensor_initial_capacity_ = 0;
   bool allocators_captured_ = false;
   RawBufferAllocator *execution_allocator_ = nullptr;

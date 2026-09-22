@@ -14,6 +14,14 @@ using namespace ONNX_LIGHT_NAMESPACE::core::runtime;
 
 namespace {
 
+PersistentStorageStatistics StorageStatistics(const RuntimeContext &context) {
+  PersistentStorageStatistics result;
+  for (const auto &event : context.events())
+    if (event.action == RuntimeEventAction::kPersistentStorage)
+      result += event.persistent_storage;
+  return result;
+}
+
 TypeProto FloatType() {
   TypeProto type;
   type.mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
@@ -123,13 +131,46 @@ void EqualAttentionTensor(const Tensor &actual, const Tensor &expected) {
 
 } // namespace
 
+TEST(FeedbackState, AttentionStorageEventsAreOptInAndDoNotChangeCacheReuse) {
+  std::vector<Tensor> unaudited;
+  for (bool enabled : {false, true}) {
+    SCOPED_TRACE(enabled);
+    ModelProto model = AttentionModel();
+    RuntimeContext context(KernelContext(DefaultOpset(23)),
+                           RuntimeContextOptions{.events_enabled = enabled});
+    FeedbackState state(model, EmptyAttentionCache());
+    const uint8_t *pointer = nullptr;
+    for (int step = 1; step <= 3; ++step) {
+      const auto output = state.Run(context, AttentionFeeds(static_cast<float>(step)));
+      const auto &key = output.at("present_key").tensor;
+      if (step == 1)
+        pointer = key.bytes();
+      EXPECT_EQ(key.bytes(), pointer);
+      EXPECT_EQ(key.shape[2], step);
+      EXPECT_FLOAT_EQ(key.AsFloat()[2 * (step - 1)], step);
+      if (enabled) {
+        EqualAttentionTensor(output.at("Y").tensor, unaudited[static_cast<size_t>(step - 1)]);
+      } else {
+        unaudited.push_back(output.at("Y").tensor.ToOwned());
+      }
+    }
+    EXPECT_EQ(context.events().empty(), !enabled);
+    const auto statistics = StorageStatistics(context);
+    EXPECT_EQ(statistics.allocations, enabled ? 2u : 0u);
+    EXPECT_EQ(statistics.prefix_copied_bytes, 0u);
+    EXPECT_EQ(statistics.append_copied_bytes, enabled ? 12 * sizeof(float) : 0u);
+    EXPECT_EQ(statistics.reuse_count, enabled ? 4u : 0u);
+  }
+}
+
 TEST(FeedbackState, AttentionCacheDefaultCapacityMatchesFunctionalGQAWithoutPrefixCopies) {
   for (int64_t query_heads : {1, 3}) {
     SCOPED_TRACE(query_heads);
     ModelProto model = AttentionModel(1, 1, query_heads);
     const auto serialized = model.SerializeAsString();
     FeedbackState state(model, EmptyAttentionCache());
-    RuntimeContext context(KernelContext(DefaultOpset(23)));
+    RuntimeContext context(KernelContext(DefaultOpset(23)),
+                           RuntimeContextOptions{.events_enabled = true});
     onnx_kernels::kernel::Attention reference(context.kernel_ctx());
     onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.is_causal = true;
@@ -156,7 +197,7 @@ TEST(FeedbackState, AttentionCacheDefaultCapacityMatchesFunctionalGQAWithoutPref
       key = std::move(expected.present_key);
       value = std::move(expected.present_value);
     }
-    const auto stats = state.PersistentStorageStats();
+    const auto stats = StorageStatistics(context);
     EXPECT_EQ(stats.allocations, 2u);
     EXPECT_EQ(stats.allocated_bytes, 2u * 32 * 2 * sizeof(float));
     EXPECT_EQ(stats.prefix_copied_bytes, 0u);
@@ -169,7 +210,8 @@ TEST(FeedbackState, AttentionCacheDefaultCapacityMatchesFunctionalGQAWithoutPref
 TEST(FeedbackState, AttentionCacheSnapshotsAndOutputsBlockWritesAndSurviveResetClose) {
   ModelProto model = AttentionModel();
   FeedbackState state(model, EmptyAttentionCache());
-  RuntimeContext context(KernelContext(DefaultOpset(23)));
+  RuntimeContext context(KernelContext(DefaultOpset(23)),
+                         RuntimeContextOptions{.events_enabled = true});
   auto first = state.Run(context, AttentionFeeds(1));
   auto snapshot = state.Values();
   const Tensor frozen = first.at("present_key").tensor.ToOwned();
@@ -190,11 +232,11 @@ TEST(FeedbackState, AttentionCacheSnapshotsAndOutputsBlockWritesAndSurviveResetC
   EqualAttentionTensor(snapshot.at("past_key").tensor, frozen);
   EXPECT_EQ(third.at("present_key").tensor.shape[2], 3);
   EXPECT_FLOAT_EQ(third.at("present_key").tensor.AsFloat()[4], 3);
-  const auto before_reset = state.PersistentStorageStats();
+  const auto before_reset = StorageStatistics(context);
   state.Reset(EmptyAttentionCache());
-  EXPECT_EQ(state.PersistentStorageStats().allocations, before_reset.allocations);
+  EXPECT_EQ(StorageStatistics(context).allocations, before_reset.allocations);
   state.Run(context, AttentionFeeds(7));
-  EXPECT_EQ(state.PersistentStorageStats().allocations, before_reset.allocations + 2);
+  EXPECT_EQ(StorageStatistics(context).allocations, before_reset.allocations + 2);
   state.Close();
   EqualAttentionTensor(snapshot.at("past_key").tensor, frozen);
   EXPECT_FLOAT_EQ(third.at("present_key").tensor.AsFloat()[4], 3);
@@ -205,7 +247,8 @@ TEST(FeedbackState, AttentionCacheGeometricGrowthCopiesOnlyAtCapacityBoundaries)
   RuntimeSessionOptions options;
   options.persistent_tensor_initial_capacity = 2;
   FeedbackState state(model, EmptyAttentionCache(), options);
-  RuntimeContext context(KernelContext(DefaultOpset(23)));
+  RuntimeContext context(KernelContext(DefaultOpset(23)),
+                         RuntimeContextOptions{.events_enabled = true});
   const uint8_t *previous = nullptr;
   for (int step = 1; step <= 9; ++step) {
     const auto result = state.Run(context, AttentionFeeds(static_cast<float>(step)));
@@ -217,7 +260,7 @@ TEST(FeedbackState, AttentionCacheGeometricGrowthCopiesOnlyAtCapacityBoundaries)
     }
     previous = pointer;
   }
-  const auto stats = state.PersistentStorageStats();
+  const auto stats = StorageStatistics(context);
   EXPECT_EQ(stats.allocations, 8u);
   EXPECT_EQ(stats.allocated_bytes, 2u * (2 + 4 + 8 + 16) * 2 * sizeof(float));
   EXPECT_EQ(stats.prefix_copied_bytes, 2u * (2 + 4 + 8) * 2 * sizeof(float));
@@ -232,7 +275,8 @@ TEST(FeedbackState, AttentionCacheDenseMultiBatchAndMultiHeadFallbackIsMeasured)
     SCOPED_TRACE(heads);
     ModelProto model = AttentionModel(batch, heads, heads);
     FeedbackState state(model, EmptyAttentionCache(batch, heads));
-    RuntimeContext context(KernelContext(DefaultOpset(23)));
+    RuntimeContext context(KernelContext(DefaultOpset(23)),
+                           RuntimeContextOptions{.events_enabled = true});
     onnx_kernels::kernel::Attention reference(context.kernel_ctx());
     onnx_kernels::kernel::Attention::Attributes attrs;
     attrs.is_causal = true;
@@ -250,7 +294,7 @@ TEST(FeedbackState, AttentionCacheDenseMultiBatchAndMultiHeadFallbackIsMeasured)
       value = std::move(expected.present_value);
     }
     const uint64_t step_bytes = batch * heads * 2 * sizeof(float) * 2;
-    const auto stats = state.PersistentStorageStats();
+    const auto stats = StorageStatistics(context);
     EXPECT_EQ(stats.allocations, 10u);
     EXPECT_EQ(stats.allocated_bytes, step_bytes * 15);
     EXPECT_EQ(stats.prefix_copied_bytes, step_bytes * 10);
@@ -274,13 +318,14 @@ TEST(FeedbackState, AttentionCacheInitialBorrowedOrSharedPayloadIsNeverCertified
     if (share)
       external = initial;
     FeedbackState state(model, std::move(initial));
-    RuntimeContext context(KernelContext(DefaultOpset(23)));
+    RuntimeContext context(KernelContext(DefaultOpset(23)),
+                           RuntimeContextOptions{.events_enabled = true});
     const auto output = state.Run(context, AttentionFeeds(2));
     EXPECT_NE(output.at("present_key").tensor.bytes(),
               reinterpret_cast<const uint8_t *>(backing->data()));
     EXPECT_EQ(*backing, std::vector<float>(32, 19.f));
-    EXPECT_EQ(state.PersistentStorageStats().prefix_copied_bytes, 4 * sizeof(float));
-    EXPECT_EQ(state.PersistentStorageStats().reuse_count, 0u);
+    EXPECT_EQ(StorageStatistics(context).prefix_copied_bytes, 4 * sizeof(float));
+    EXPECT_EQ(StorageStatistics(context).reuse_count, 0u);
   }
 }
 
@@ -289,7 +334,8 @@ TEST(FeedbackState, AttentionCacheFailureCancellationAndLeakedOutputAreRetrySafe
     SCOPED_TRACE(failure_mode);
     ModelProto model = AttentionModel(1, 1, 1, true);
     FeedbackState state(model, EmptyAttentionCache());
-    RuntimeContext context(KernelContext(DefaultOpset(23)));
+    RuntimeContext context(KernelContext(DefaultOpset(23)),
+                           RuntimeContextOptions{.events_enabled = true});
     TaskCompletion completion(TaskId{1});
     int mode = 0;
     Tensor leaked;
@@ -311,7 +357,7 @@ TEST(FeedbackState, AttentionCacheFailureCancellationAndLeakedOutputAreRetrySafe
     EXPECT_EQ(state.Values().at("past_key").tensor.bytes(), original);
     EXPECT_EQ(state.Values().at("past_key").tensor.shape[2], 1);
     EXPECT_FLOAT_EQ(state.Values().at("past_key").tensor.AsFloat()[0], 1);
-    EXPECT_EQ(state.PersistentStorageStats().reuse_count, 2u);
+    EXPECT_EQ(StorageStatistics(context).reuse_count, 2u);
     mode = 0;
     const auto retry = state.Run(context, AttentionFeeds(3));
     const auto &key = retry.at("present_key").tensor;
@@ -332,7 +378,8 @@ TEST(FeedbackState, AttentionCacheOneUsePermitHandlesSamePastKeyAndValue) {
   ModelProto model = AttentionModel();
   *model.mutable_graph()->mutable_node(0)->mutable_input(5) = "past_key";
   FeedbackState state(model, EmptyAttentionCache());
-  RuntimeContext context(KernelContext(DefaultOpset(23)));
+  RuntimeContext context(KernelContext(DefaultOpset(23)),
+                         RuntimeContextOptions{.events_enabled = true});
   state.Run(context, AttentionFeeds(1));
   const auto output = state.Run(context, AttentionFeeds(2));
   const auto &key = output.at("present_key").tensor;
@@ -342,14 +389,15 @@ TEST(FeedbackState, AttentionCacheOneUsePermitHandlesSamePastKeyAndValue) {
   EXPECT_FLOAT_EQ(value.AsFloat()[2], -2);
   EXPECT_FLOAT_EQ(key.AsFloat()[0], 1);
   EXPECT_FLOAT_EQ(value.AsFloat()[0], 1);
-  EXPECT_EQ(state.PersistentStorageStats().reuse_count, 1u);
-  EXPECT_EQ(state.PersistentStorageStats().allocations, 3u);
+  EXPECT_EQ(StorageStatistics(context).reuse_count, 1u);
+  EXPECT_EQ(StorageStatistics(context).allocations, 3u);
 }
 
 TEST(FeedbackState, AttentionCacheBranchingRequestsCannotOverwriteEachOther) {
   ModelProto model = AttentionModel();
   FeedbackState first(model, EmptyAttentionCache());
-  RuntimeContext context(KernelContext(DefaultOpset(23)));
+  RuntimeContext context(KernelContext(DefaultOpset(23)),
+                         RuntimeContextOptions{.events_enabled = true});
   first.Run(context, AttentionFeeds(1));
   FeedbackState second(model, first.Values());
   const auto a = first.Run(context, AttentionFeeds(2));
@@ -367,9 +415,10 @@ TEST(FeedbackState, AttentionCacheIOLeasesSurviveStateAndAllocatorOwner) {
     auto arena = IOArena::Create(8);
     weak = arena;
     SimpleRawBufferAllocator execution(8);
-    RuntimeContext context(
-        KernelContext(DefaultOpset(23)),
-        RuntimeContextOptions{.allocator = &execution, .io_allocator = arena.get()});
+    RuntimeContext context(KernelContext(DefaultOpset(23)),
+                           RuntimeContextOptions{.allocator = &execution,
+                                                 .io_allocator = arena.get(),
+                                                 .events_enabled = true});
     FeedbackState state(model, EmptyAttentionCache());
     const uint8_t *pointer = nullptr;
     for (int step = 1; step <= 4; ++step) {
@@ -403,28 +452,30 @@ TEST(FeedbackState, AttentionCacheRejectsUnretainableAllocationAndCapacityOverfl
   ModelProto model = AttentionModel();
   SimpleRawBufferAllocator allocator(8);
   RuntimeContext context(KernelContext(DefaultOpset(23)),
-                         RuntimeContextOptions{.allocator = &allocator});
+                         RuntimeContextOptions{.allocator = &allocator, .events_enabled = true});
   FeedbackState state(model, EmptyAttentionCache());
   EXPECT_THROW(state.Run(context, AttentionFeeds(1)), std::invalid_argument);
   EXPECT_EQ(state.Values().at("past_key").tensor.shape[2], 0);
-  EXPECT_EQ(state.PersistentStorageStats().allocations, 1u);
+  EXPECT_EQ(StorageStatistics(context).allocations, 1u);
   RuntimeSessionOptions options;
   options.persistent_tensor_initial_capacity = std::numeric_limits<size_t>::max();
   FeedbackState overflow(model, EmptyAttentionCache(), options);
-  RuntimeContext ordinary(KernelContext(DefaultOpset(23)));
+  RuntimeContext ordinary(KernelContext(DefaultOpset(23)),
+                          RuntimeContextOptions{.events_enabled = true});
   EXPECT_THROW(overflow.Run(ordinary, AttentionFeeds(1)), std::invalid_argument);
-  EXPECT_EQ(overflow.PersistentStorageStats().allocations, 0u);
+  EXPECT_EQ(StorageStatistics(ordinary).allocations, 0u);
 }
 
 TEST(FeedbackState, AttentionCacheIndependentConcurrentRequests) {
   ModelProto model = AttentionModel();
   auto run = [&model](float start) {
-    RuntimeContext context(KernelContext(DefaultOpset(23)));
+    RuntimeContext context(KernelContext(DefaultOpset(23)),
+                           RuntimeContextOptions{.events_enabled = true});
     FeedbackState state(model, EmptyAttentionCache());
     for (int step = 0; step < 10; ++step)
       state.Run(context, AttentionFeeds(start + step));
-    EXPECT_EQ(state.PersistentStorageStats().allocations, 2u);
-    EXPECT_EQ(state.PersistentStorageStats().reuse_count, 18u);
+    EXPECT_EQ(StorageStatistics(context).allocations, 2u);
+    EXPECT_EQ(StorageStatistics(context).reuse_count, 18u);
     return state.Values();
   };
   auto first = std::async(std::launch::async, run, 1.f);
@@ -441,10 +492,11 @@ TEST(FeedbackState, AttentionCacheZeroCapacityUsesMeasuredFunctionalPath) {
   RuntimeSessionOptions options;
   options.persistent_tensor_initial_capacity = 0;
   FeedbackState state(model, EmptyAttentionCache(), options);
-  RuntimeContext context(KernelContext(DefaultOpset(23)));
+  RuntimeContext context(KernelContext(DefaultOpset(23)),
+                         RuntimeContextOptions{.events_enabled = true});
   for (int i = 0; i < 4; ++i)
     state.Run(context, AttentionFeeds(i + 1));
-  const auto stats = state.PersistentStorageStats();
+  const auto stats = StorageStatistics(context);
   EXPECT_EQ(stats.allocations, 8u);
   EXPECT_EQ(stats.allocated_bytes, 2u * 10 * 2 * sizeof(float));
   EXPECT_EQ(stats.prefix_copied_bytes, 2u * 6 * 2 * sizeof(float));
@@ -455,7 +507,8 @@ TEST(FeedbackState, AttentionCacheZeroCapacityUsesMeasuredFunctionalPath) {
 TEST(FeedbackState, AttentionCacheOrdinaryInvocationBorrowsAndCopiesNeverCarryWritePermit) {
   for (bool copy : {false, true}) {
     ModelProto model = AttentionModel();
-    RuntimeContext context(KernelContext(DefaultOpset(23)));
+    RuntimeContext context(KernelContext(DefaultOpset(23)),
+                           RuntimeContextOptions{.events_enabled = true});
     bool indirect = false;
     context.RegisterCustomKernel("", "Attention", [&](const NodeProto &, RuntimeContext &rt) {
       Tensor key = copy ? Tensor(rt.Get("past_key")) : rt.Get("past_key").BorrowView();
@@ -474,9 +527,9 @@ TEST(FeedbackState, AttentionCacheOrdinaryInvocationBorrowsAndCopiesNeverCarryWr
     indirect = true;
     for (int step = 0; step < 3; ++step)
       state.Run(context, AttentionFeeds(step));
-    EXPECT_EQ(state.PersistentStorageStats().reuse_count, 0u);
-    EXPECT_EQ(state.PersistentStorageStats().allocations, 8u);
-    EXPECT_EQ(state.PersistentStorageStats().prefix_copied_bytes, 2u * 6 * 2 * sizeof(float));
+    EXPECT_EQ(StorageStatistics(context).reuse_count, 0u);
+    EXPECT_EQ(StorageStatistics(context).allocations, 8u);
+    EXPECT_EQ(StorageStatistics(context).prefix_copied_bytes, 2u * 6 * 2 * sizeof(float));
   }
 }
 
@@ -485,10 +538,11 @@ TEST(FeedbackState, AttentionCacheRequiresExactPastToPresentDeclaration) {
   model.mutable_graph()->mutable_persistent_bindings(0)->set_output_name("present_value");
   model.mutable_graph()->mutable_persistent_bindings(1)->set_output_name("present_key");
   FeedbackState state(model, EmptyAttentionCache());
-  RuntimeContext context(KernelContext(DefaultOpset(23)));
+  RuntimeContext context(KernelContext(DefaultOpset(23)),
+                         RuntimeContextOptions{.events_enabled = true});
   for (int step = 0; step < 3; ++step)
     state.Run(context, AttentionFeeds(step));
-  const auto stats = state.PersistentStorageStats();
+  const auto stats = StorageStatistics(context);
   EXPECT_EQ(stats.reuse_count, 0u);
   EXPECT_EQ(stats.allocations, 6u);
   EXPECT_EQ(stats.allocated_bytes, 2u * 6 * 2 * sizeof(float));
@@ -499,7 +553,8 @@ TEST(FeedbackState, AttentionCacheChildContextsAndCopiesCannotUseInvocationPermi
   for (int mode = 0; mode < 3; ++mode) {
     SCOPED_TRACE(mode);
     ModelProto model = AttentionModel();
-    RuntimeContext context(KernelContext(DefaultOpset(23)));
+    RuntimeContext context(KernelContext(DefaultOpset(23)),
+                           RuntimeContextOptions{.events_enabled = true});
     bool use_child = false;
     context.RegisterCustomKernel("", "Attention", [&](const NodeProto &, RuntimeContext &rt) {
       const auto compute = [](RuntimeContext &active) {
@@ -517,6 +572,7 @@ TEST(FeedbackState, AttentionCacheChildContextsAndCopiesCannotUseInvocationPermi
         for (const auto &name : {"Q", "K", "V", "past_key", "past_value"})
           child.Put(name, rt.Get(name).BorrowView(), RuntimeEventKind::kInput);
         child.set_current_node_index(rt.current_node_index());
+        const RuntimeEventForwarder forward_events(child, &rt);
         return compute(child);
       }();
       rt.Put("Y", std::move(result.Y));
@@ -530,14 +586,15 @@ TEST(FeedbackState, AttentionCacheChildContextsAndCopiesCannotUseInvocationPermi
       const auto output = state.Run(context, AttentionFeeds(step));
       EXPECT_FLOAT_EQ(output.at("present_key").tensor.AsFloat()[2 * (step - 1)], step);
     }
-    EXPECT_EQ(state.PersistentStorageStats().reuse_count, 0u);
-    EXPECT_EQ(state.PersistentStorageStats().allocations, 6u);
+    EXPECT_EQ(StorageStatistics(context).reuse_count, 0u);
+    EXPECT_EQ(StorageStatistics(context).allocations, 6u);
   }
 }
 
 TEST(FeedbackState, AttentionCacheDuplicateConsumersConsumePermitOnlyOnce) {
   ModelProto model = AttentionModel();
-  RuntimeContext context(KernelContext(DefaultOpset(23)));
+  RuntimeContext context(KernelContext(DefaultOpset(23)),
+                         RuntimeContextOptions{.events_enabled = true});
   Tensor earlier;
   bool duplicate = false;
   context.RegisterCustomKernel("", "Attention", [&](const NodeProto &, RuntimeContext &rt) {
@@ -570,15 +627,16 @@ TEST(FeedbackState, AttentionCacheDuplicateConsumersConsumePermitOnlyOnce) {
   const auto output = state.Run(context, AttentionFeeds(2));
   EXPECT_FLOAT_EQ(earlier.AsFloat()[2], 2);
   EXPECT_FLOAT_EQ(output.at("present_key").tensor.AsFloat()[2], -2);
-  EXPECT_EQ(state.PersistentStorageStats().reuse_count, 2u);
-  EXPECT_EQ(state.PersistentStorageStats().allocations, 4u);
+  EXPECT_EQ(StorageStatistics(context).reuse_count, 2u);
+  EXPECT_EQ(StorageStatistics(context).allocations, 4u);
 }
 
 TEST(FeedbackState, AttentionCacheReimportedViewsDoNotCertifyAppendCapacity) {
   for (bool reset : {false, true}) {
     SCOPED_TRACE(reset);
     ModelProto model = AttentionModel();
-    RuntimeContext context(KernelContext(DefaultOpset(23)));
+    RuntimeContext context(KernelContext(DefaultOpset(23)),
+                           RuntimeContextOptions{.events_enabled = true});
     FeedbackState original(model, EmptyAttentionCache());
     original.Run(context, AttentionFeeds(1));
     auto values = original.Values();
@@ -587,20 +645,21 @@ TEST(FeedbackState, AttentionCacheReimportedViewsDoNotCertifyAppendCapacity) {
       original.Reset(std::move(values));
       const auto output = original.Run(context, AttentionFeeds(2));
       EXPECT_NE(output.at("present_key").tensor.bytes(), old_key);
-      EXPECT_EQ(original.PersistentStorageStats().reuse_count, 0u);
+      EXPECT_EQ(StorageStatistics(context).reuse_count, 0u);
     } else {
       original.Close();
       FeedbackState imported(model, std::move(values));
       const auto output = imported.Run(context, AttentionFeeds(2));
       EXPECT_NE(output.at("present_key").tensor.bytes(), old_key);
-      EXPECT_EQ(imported.PersistentStorageStats().reuse_count, 0u);
+      EXPECT_EQ(StorageStatistics(context).reuse_count, 0u);
     }
   }
 }
 
 TEST(FeedbackState, AttentionCachePublishesCapacityOnlyForTheExactCandidate) {
   ModelProto model = AttentionModel();
-  RuntimeContext context(KernelContext(DefaultOpset(23)));
+  RuntimeContext context(KernelContext(DefaultOpset(23)),
+                         RuntimeContextOptions{.events_enabled = true});
   context.RegisterCustomKernel("", "Attention", [](const NodeProto &, RuntimeContext &rt) {
     onnx_kernels::kernel::Attention attention(rt.kernel_ctx());
     auto result = attention(rt.Get("Q"), rt.Get("K"), rt.Get("V"),
@@ -616,8 +675,8 @@ TEST(FeedbackState, AttentionCachePublishesCapacityOnlyForTheExactCandidate) {
     const auto output = state.Run(context, AttentionFeeds(step));
     EXPECT_FLOAT_EQ(output.at("present_key").tensor.AsFloat()[2 * (step - 1)], step);
   }
-  EXPECT_EQ(state.PersistentStorageStats().reuse_count, 0u);
-  EXPECT_EQ(state.PersistentStorageStats().allocations, 6u);
+  EXPECT_EQ(StorageStatistics(context).reuse_count, 0u);
+  EXPECT_EQ(StorageStatistics(context).allocations, 6u);
 }
 
 TEST(FeedbackState, UnselectedAttentionUsesExecutionArenaWithUnrelatedRetainedState) {
@@ -650,7 +709,8 @@ TEST(FeedbackState, UnselectedAttentionUsesExecutionArenaWithUnrelatedRetainedSt
     auto io = IOArena::Create(20);
     RuntimeContext context(KernelContext(DefaultOpset(23)),
                            RuntimeContextOptions{.allocator = &execution,
-                                                 .io_allocator = with_io ? io.get() : nullptr});
+                                                 .io_allocator = with_io ? io.get() : nullptr,
+                                                 .events_enabled = true});
     context.RegisterCustomKernel(
         "test.feedback", "Unrelated", [](const NodeProto &, RuntimeContext &rt) {
           rt.Put("next", Tensor::FromFloat("", {1}, {rt.Get("state").AsFloat()[0] + 1}));
@@ -661,7 +721,7 @@ TEST(FeedbackState, UnselectedAttentionUsesExecutionArenaWithUnrelatedRetainedSt
       feeds.emplace(name, RuntimeValue(Tensor::FromFloat("", {1, 1, 1, 2}, {0, 0})));
     const auto output = state.Run(context, feeds);
     EXPECT_FLOAT_EQ(Number(output.at("next")), 1);
-    const auto stats = state.PersistentStorageStats();
+    const auto stats = StorageStatistics(context);
     EXPECT_EQ(stats.allocations, 2u);
     EXPECT_EQ(stats.allocated_bytes, 8 * sizeof(float));
     EXPECT_EQ(stats.prefix_copied_bytes, 4 * sizeof(float));
@@ -680,7 +740,8 @@ TEST(FeedbackState, AttentionCacheVariableAndEmptyChunksPreserveNonemptyInitialP
   RuntimeSessionOptions options;
   options.persistent_tensor_initial_capacity = 8;
   FeedbackState state(model, std::move(initial), options);
-  RuntimeContext context(KernelContext(DefaultOpset(23)));
+  RuntimeContext context(KernelContext(DefaultOpset(23)),
+                         RuntimeContextOptions{.events_enabled = true});
   onnx_kernels::kernel::Attention reference(context.kernel_ctx());
   onnx_kernels::kernel::Attention::Attributes attributes;
   attributes.is_causal = true;
@@ -711,7 +772,7 @@ TEST(FeedbackState, AttentionCacheVariableAndEmptyChunksPreserveNonemptyInitialP
     key = std::move(expected.present_key);
     value = std::move(expected.present_value);
   }
-  const auto stats = state.PersistentStorageStats();
+  const auto stats = StorageStatistics(context);
   EXPECT_EQ(stats.allocations, 4u);
   EXPECT_EQ(stats.allocated_bytes, 2u * (8 + 16) * 2 * sizeof(float));
   EXPECT_EQ(stats.prefix_copied_bytes, 2u * (2 + 7) * 2 * sizeof(float));
@@ -740,7 +801,8 @@ TEST(FeedbackState, AttentionCacheZeroWidthValueUsesMeasuredDenseFallback) {
   auto initial = EmptyAttentionCache();
   initial.at("past_value") = RuntimeValue(Tensor::FromFloat("", {1, 1, 0, 0}, {}));
   FeedbackState state(model, std::move(initial));
-  RuntimeContext context(KernelContext(DefaultOpset(23)));
+  RuntimeContext context(KernelContext(DefaultOpset(23)),
+                         RuntimeContextOptions{.events_enabled = true});
   for (int64_t length = 1; length <= 3; ++length) {
     auto feeds = AttentionFeeds(static_cast<float>(length));
     feeds.at("V") = RuntimeValue(Tensor::FromFloat("", {1, 1, 1, 0}, {}));
@@ -750,7 +812,7 @@ TEST(FeedbackState, AttentionCacheZeroWidthValueUsesMeasuredDenseFallback) {
     EXPECT_EQ(output.at("Y").tensor.shape, (Shape{1, 1, 1, 0}));
     EXPECT_EQ(output.at("Y").tensor.size_bytes(), 0u);
   }
-  const auto stats = state.PersistentStorageStats();
+  const auto stats = StorageStatistics(context);
   EXPECT_EQ(stats.allocations, 4u);
   EXPECT_EQ(stats.allocated_bytes, 32u * 2 * sizeof(float));
   EXPECT_EQ(stats.prefix_copied_bytes, 0u);

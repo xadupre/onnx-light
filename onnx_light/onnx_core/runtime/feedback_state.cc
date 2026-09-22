@@ -170,7 +170,7 @@ RuntimeValueMap FeedbackState::Run(RuntimeContext &context, const RuntimeValueMa
   EXT_ENFORCE_INVALID(completion == nullptr || completion->status() == TaskStatus::kPending,
                       "FeedbackState: invocation was cancelled or completion is not pending.");
   RuntimeContext invocation = context.MakeFunctionContext();
-  invocation.persistent_storage_counters_ = persistent_storage_counters_;
+  const RuntimeEventForwarder forward_events(invocation, &context);
   invocation.persistent_tensor_initial_capacity_ = persistent_tensor_initial_capacity_;
   invocation.persistent_graph_ = &model_.graph();
   invocation.persistent_tensors_ =
@@ -300,11 +300,6 @@ RuntimeValueMap FeedbackState::Values() const {
   for (size_t i = 0; i < bindings_.size(); ++i)
     snapshot.emplace(bindings_[i].input, values_[i].BorrowView());
   return snapshot;
-}
-
-PersistentStorageStatistics FeedbackState::PersistentStorageStats() const {
-  const Operation operation(busy_);
-  return persistent_storage_counters_->Snapshot();
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

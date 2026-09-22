@@ -314,39 +314,45 @@ returned views remain readable after either operation. Use independent states
 and contexts for concurrent requests; sharing retained owners disables unsafe
 reuse rather than making either request mutate the other's state.
 
-Operator-independent storage accounting
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Opt-in storage auditing through runtime events
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``PersistentStorageStatistics`` and ``PersistentStorageCounters`` belong to the
-generic persistence layer. Kernels report storage work through
-``RuntimeContext::RecordPersistentStorageCopy`` or
-``RuntimeContext::AccumulatePersistentStorageStatistics``; neither API depends
-on Attention. Function and subgraph contexts share the invocation's counters.
-Reservations report allocation, prefix relocation and reuse themselves. Kernels
-report copied append bytes only when they actually copy data; computing new
-elements directly into the writable region is not a copy.
-``RuntimeContext::persistent_storage_statistics()`` exposes their cumulative
-snapshot, including instrumented paths outside feedback execution.
+Storage auditing uses the existing runtime event API. Set
+``RuntimeContextOptions::events_enabled = true`` and read ``context.events()``.
+With events disabled (the default), persistence works identically but creates
+no storage audit events, counter objects or auditing mutexes.
 
-These are explicit kernel reports, not automatic counters for every runtime
+``RuntimeEventAction::kPersistentStorage`` identifies storage reports. Each
+event's ``persistent_storage`` payload is a ``PersistentStorageStatistics``
+containing the work for that event: ``allocations``, ``allocated_bytes``,
+``prefix_copied_bytes``, ``append_copied_bytes`` and ``reuse_count``.
+Kernels use ``RuntimeContext::RecordPersistentStorageEvent``; contiguous
+reservations supply allocation, prefix-relocation and reuse reports through an
+optional callback. Producing new elements directly into the writable region
+does not count as copying them.
+
+These are explicit reports, not automatic counters for every runtime
 allocation or tensor copy. Attention currently reports K/V construction on
 both reusable and ordinary dense paths. Other consumers can use the same
-accounting without adding operator-specific state to ``RuntimeContext``.
+event API without adding operator-specific state to ``RuntimeContext``.
 
 State forwarding and kernel storage construction have different costs.
 Pointer identity at retention, invocation and publication boundaries verifies
-that the state layer does not copy tensor payloads. The counters include work
-preceding a failed or cancelled publication. Attention's reports exclude its
+that the state layer does not copy tensor payloads. Feedback invocations and
+child contexts forward their events to the caller, including work preceding
+a failure or cancellation. Attention's storage reports exclude its
 score/output allocations, arithmetic workspace, feed construction, or
 half-precision conversion.
 
-``FeedbackState::PersistentStorageStats()`` returns cumulative ``allocations``,
-``allocated_bytes``, ``prefix_copied_bytes``, ``append_copied_bytes`` and
-``reuse_count``. Subtract consecutive snapshots to obtain per-token costs.
-Reset preserves these counters. ``allocated_bytes`` counts requested storage
-capacity, not physical heap allocations: an I/O arena may satisfy a request
-from its free lists. The ordinary arena metrics separately describe live and
-peak memory, including other outputs.
+Sum the storage payloads explicitly when totals are needed. Call
+``context.ClearEvents()`` before a run to obtain per-token reports; otherwise
+events accumulate in that context, including runs of different feedback states.
+Resetting or closing a state does not clear the caller's log.
+``event.persistent_storage.allocated_bytes`` counts requested storage capacity,
+not physical heap allocations: an I/O arena may satisfy a request from its free
+lists. The existing ``event.allocated_bytes`` and ``event.peak_bytes`` fields
+still describe allocator live and peak memory and have not changed meaning.
+The decode example enables events explicitly, so its timing includes auditing.
 
 For one new token with ``FLOAT`` K/V head sizes ``Dk`` and ``Dv``, appending
 copies ``4 * (Dk + Dv)`` bytes. Reuse within capacity allocates no new KV

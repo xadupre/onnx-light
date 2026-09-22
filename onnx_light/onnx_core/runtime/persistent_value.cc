@@ -8,18 +8,14 @@
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
-PersistentStorageStatistics PersistentStorageCounters::Snapshot() const {
-  const std::lock_guard<std::mutex> lock(mutex_);
-  return values_;
-}
-
-void PersistentStorageCounters::Accumulate(const PersistentStorageStatistics &statistics) {
-  const std::lock_guard<std::mutex> lock(mutex_);
-  values_.allocations += statistics.allocations;
-  values_.allocated_bytes += statistics.allocated_bytes;
-  values_.prefix_copied_bytes += statistics.prefix_copied_bytes;
-  values_.append_copied_bytes += statistics.append_copied_bytes;
-  values_.reuse_count += statistics.reuse_count;
+PersistentStorageStatistics &
+PersistentStorageStatistics::operator+=(const PersistentStorageStatistics &statistics) noexcept {
+  allocations += statistics.allocations;
+  allocated_bytes += statistics.allocated_bytes;
+  prefix_copied_bytes += statistics.prefix_copied_bytes;
+  append_copied_bytes += statistics.append_copied_bytes;
+  reuse_count += statistics.reuse_count;
+  return *this;
 }
 
 PersistentTensor::PersistentTensor(Tensor value) : value_(std::move(value).RetainStorage()) {}
@@ -53,10 +49,9 @@ PersistentTensor::AppendLease::operator=(AppendLease &&other) noexcept {
   return *this;
 }
 
-std::optional<PersistentTensor::AppendReservation>
-PersistentTensor::AppendLease::Reserve(const Shape &shape, size_t axis, size_t initial_capacity,
-                                       RawBufferAllocator *allocator,
-                                       PersistentStorageCounters &counters) {
+std::optional<PersistentTensor::AppendReservation> PersistentTensor::AppendLease::Reserve(
+    const Shape &shape, size_t axis, size_t initial_capacity, RawBufferAllocator *allocator,
+    const std::function<void(const PersistentStorageStatistics &)> &on_storage_event) {
   const Tensor &prefix = prefix_.value_;
   EXT_ENFORCE_INVALID(prefix.borrowed_owner().use_count() != 0,
                       "PersistentTensor: append lease has been moved.");
@@ -91,7 +86,8 @@ PersistentTensor::AppendLease::Reserve(const Shape &shape, size_t axis, size_t i
     PersistentTensor candidate(Tensor::Borrow(prefix.name, prefix.data_type, shape, prefix.bytes(),
                                               logical, prefix.borrowed_owner()));
     candidate.capacity_bytes_ = prefix_.capacity_bytes_;
-    counters.Accumulate({.reuse_count = 1});
+    if (on_storage_event)
+      on_storage_event({.reuse_count = 1});
     return AppendReservation(std::move(candidate), previous);
   }
   const size_t max_capacity = std::numeric_limits<size_t>::max() / row_bytes;
@@ -106,11 +102,14 @@ PersistentTensor::AppendLease::Reserve(const Shape &shape, size_t axis, size_t i
   }
   const size_t allocated = capacity * row_bytes;
   Tensor storage = MakeOutputTensor(prefix.data_type, shape, allocated, allocator);
-  counters.Accumulate({.allocations = 1, .allocated_bytes = allocated});
+  if (on_storage_event)
+    on_storage_event({.allocations = 1, .allocated_bytes = allocated});
   PersistentTensor candidate(std::move(storage));
-  if (previous != 0)
+  if (previous != 0) {
     std::memcpy(candidate.value_.mutable_bytes(), prefix.bytes(), previous);
-  counters.Accumulate({.prefix_copied_bytes = previous});
+    if (on_storage_event)
+      on_storage_event({.prefix_copied_bytes = previous});
+  }
   candidate.value_ = Tensor::Borrow(prefix.name, prefix.data_type, shape, candidate.value_.bytes(),
                                     logical, candidate.value_.borrowed_owner());
   candidate.capacity_bytes_ = allocated;

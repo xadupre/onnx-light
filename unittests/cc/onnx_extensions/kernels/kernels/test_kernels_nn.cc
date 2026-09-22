@@ -41,6 +41,18 @@ using onnx_kernels::kernel::RotaryEmbedding;
 
 namespace Test {
 
+namespace {
+
+core::runtime::PersistentStorageStatistics StorageStatistics(const RuntimeContext &context) {
+  core::runtime::PersistentStorageStatistics result;
+  for (const auto &event : context.events())
+    if (event.action == core::runtime::RuntimeEventAction::kPersistentStorage)
+      result += event.persistent_storage;
+  return result;
+}
+
+} // namespace
+
 TEST(KernelClass, GlobalLpPoolDtypes) {
   const KernelContext ctx{DefaultOpset(22)};
   const onnx_kernels::kernel::GlobalLpPool pool{ctx};
@@ -1341,13 +1353,13 @@ TEST(KernelClass, AttentionPastKVConcatenatesIntoPresent) {
 }
 
 TEST(KernelClass, AttentionCacheFunctionalConcatenationReportsEveryCopiedByte) {
-  RuntimeContext rt(AttentionKernelContext());
+  RuntimeContext rt(AttentionKernelContext(), {.events_enabled = true});
   const Attention attention{rt.kernel_ctx()};
   const Tensor current = Tensor::FromFloat("", {1, 1, 1, 2}, {1, 2});
   const Tensor past = Tensor::FromFloat("", {1, 1, 2, 2}, {3, 4, 5, 6});
   const auto result = attention(current, current, current, Attention::Attributes{}, nullptr, &past,
                                 &past, nullptr, &rt);
-  const auto stats = rt.persistent_storage_statistics();
+  const auto stats = StorageStatistics(rt);
   EXPECT_EQ(stats.allocations, 2u);
   EXPECT_EQ(stats.allocated_bytes, 12 * sizeof(float));
   EXPECT_EQ(stats.prefix_copied_bytes, 8 * sizeof(float));
@@ -1375,7 +1387,7 @@ TEST(KernelClass, AttentionCacheRejectsLengthByteOverflowAndInvalidExtent) {
 }
 
 TEST(KernelClass, AttentionCacheStatisticsAggregateConcurrentIndependentChildren) {
-  RuntimeContext parent(AttentionKernelContext());
+  RuntimeContext parent(AttentionKernelContext(), {.events_enabled = true});
   const auto run = [&parent] {
     RuntimeContext child = parent.MakeFunctionContext();
     const Attention attention{child.kernel_ctx()};
@@ -1384,12 +1396,18 @@ TEST(KernelClass, AttentionCacheStatisticsAggregateConcurrentIndependentChildren
     for (int i = 0; i < 100; ++i)
       attention(current, current, current, Attention::Attributes{}, nullptr, &past, &past, nullptr,
                 &child);
+    return child;
   };
   auto first = std::async(std::launch::async, run);
   auto second = std::async(std::launch::async, run);
-  first.get();
-  second.get();
-  const auto stats = parent.persistent_storage_statistics();
+  auto first_child = first.get();
+  auto second_child = second.get();
+  EXPECT_TRUE(parent.events().empty());
+  {
+    const core::runtime::RuntimeEventForwarder first_events(first_child, &parent);
+    const core::runtime::RuntimeEventForwarder second_events(second_child, &parent);
+  }
+  const auto stats = StorageStatistics(parent);
   EXPECT_EQ(stats.allocations, 400u);
   EXPECT_EQ(stats.allocated_bytes, 200u * 12 * sizeof(float));
   EXPECT_EQ(stats.prefix_copied_bytes, 200u * 8 * sizeof(float));
@@ -1804,14 +1822,21 @@ TEST(KernelClass, AttentionHalfPrecisionCacheConcatenationIsMeasured) {
   const Tensor current = Tensor::FromFloat("", {1, 1, 1, 2}, {1, 2});
   const Tensor past = Tensor::FromFloat("", {1, 1, 2, 2}, {3, 4, 5, 6});
   for (int32_t dtype : {core::runtime::DataType::FLOAT16, core::runtime::DataType::BFLOAT16}) {
-    RuntimeContext rt(AttentionKernelContext());
+    RuntimeContext rt(AttentionKernelContext(), {.events_enabled = true});
+    rt.set_current_node_index(5);
+    rt.set_current_subgraph(2, "body");
     const Attention attention{rt.kernel_ctx()};
     const Tensor half_current = DemoteToHalf(current, dtype);
     const Tensor half_past = DemoteToHalf(past, dtype);
     const auto result = attention(half_current, half_current, half_current, Attention::Attributes{},
                                   nullptr, &half_past, &half_past, nullptr, &rt);
     EXPECT_EQ(result.present_key.data_type, dtype);
-    const auto stats = rt.persistent_storage_statistics();
+    const auto stats = StorageStatistics(rt);
+    for (const auto &event : rt.events()) {
+      EXPECT_EQ(event.node_index, 5);
+      EXPECT_EQ(event.subgraph_node_index, 2);
+      EXPECT_EQ(event.subgraph_attr_name, "body");
+    }
     EXPECT_EQ(stats.allocations, 2u);
     EXPECT_EQ(stats.allocated_bytes, 12 * sizeof(float));
     EXPECT_EQ(stats.prefix_copied_bytes, 8 * sizeof(float));

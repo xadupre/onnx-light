@@ -21,15 +21,6 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
 
-struct StorageStatisticsForwarder {
-  RuntimeContext *destination;
-  const RuntimeContext &source;
-  ~StorageStatisticsForwarder() {
-    if (destination)
-      destination->AccumulatePersistentStorageStatistics(source.persistent_storage_statistics());
-  }
-};
-
 // Validates that ``t`` is a rank-4 tensor whose element type is supported
 // by the Attention kernel (FLOAT, FLOAT16, or BFLOAT16). The caller is
 // identified by ``label`` for clearer error messages.
@@ -175,15 +166,19 @@ Tensor ConcatAxis2(const Tensor &a, const Tensor &b, int output_slot, RuntimeCon
                           "kernel::Attention: reserved append byte extent mismatch.");
       if (appended != 0)
         std::memmove(destination.data(), b.bytes(), appended);
-      rt->AccumulatePersistentStorageStatistics({.append_copied_bytes = appended});
+      if (rt->events_enabled())
+        rt->RecordPersistentStorageEvent({.append_copied_bytes = appended});
       return rt->CommitPersistentAppend(output_slot, std::move(*reservation), appended);
     }
   }
   // Multiple dense batch/head slices change stride when the sequence grows.
   // They must be repacked rather than treated as a contiguous append buffer.
   Tensor out = AllocateResult(rt, output_slot, DataType::FLOAT, {batch, heads, lc, d}, out_n_bytes);
-  if (rt != nullptr)
-    rt->RecordPersistentStorageCopy(out_n_bytes, prefix, appended);
+  if (rt != nullptr && rt->events_enabled())
+    rt->RecordPersistentStorageEvent({.allocations = 1,
+                                      .allocated_bytes = out_n_bytes,
+                                      .prefix_copied_bytes = prefix,
+                                      .append_copied_bytes = appended});
   const float *pa = a.AsFloat();
   const float *pb = b.AsFloat();
   float *po = out.AsFloat();
@@ -202,8 +197,10 @@ Tensor ConcatAxis2(const Tensor &a, const Tensor &b, int output_slot, RuntimeCon
 
 Tensor CopyOutput(const Tensor &src, int output_slot, RuntimeContext *rt) {
   Tensor out = AllocateResult(rt, output_slot, src.data_type, src.shape, src.size_bytes());
-  if (rt != nullptr)
-    rt->RecordPersistentStorageCopy(src.size_bytes(), 0, src.size_bytes());
+  if (rt != nullptr && rt->events_enabled())
+    rt->RecordPersistentStorageEvent({.allocations = 1,
+                                      .allocated_bytes = src.size_bytes(),
+                                      .append_copied_bytes = src.size_bytes()});
   if (src.size_bytes() != 0) {
     std::memcpy(out.mutable_bytes(), src.bytes(), src.size_bytes());
   }
@@ -622,8 +619,14 @@ Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const 
     const int32_t target_dtype = Q.data_type;
     RuntimeContext scratch_rt(
         rt ? rt->kernel_ctx() : ctx_,
-        RuntimeContextOptions{.allocator = rt ? rt->execution_allocator() : nullptr});
-    const StorageStatisticsForwarder forwarder{rt, scratch_rt};
+        RuntimeContextOptions{.allocator = rt ? rt->execution_allocator() : nullptr,
+                              .events_enabled = rt && rt->events_enabled()});
+    const core::runtime::RuntimeEventForwarder forwarder(scratch_rt, rt);
+    if (rt) {
+      scratch_rt.set_current_node_index(rt->current_node_index());
+      scratch_rt.set_current_subgraph(rt->current_subgraph_node_index(),
+                                      rt->current_subgraph_attr_name());
+    }
     RuntimeContext *compute_rt = rt ? &scratch_rt : nullptr;
     const Tensor Q_f = PromoteToFloat32(Q, compute_rt);
     const Tensor K_f = PromoteToFloat32(K, compute_rt);

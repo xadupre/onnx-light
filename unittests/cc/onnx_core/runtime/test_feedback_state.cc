@@ -12,6 +12,14 @@ using namespace ONNX_LIGHT_NAMESPACE::core::runtime;
 
 namespace {
 
+PersistentStorageStatistics StorageStatistics(const RuntimeContext &context) {
+  PersistentStorageStatistics result;
+  for (const auto &event : context.events())
+    if (event.action == RuntimeEventAction::kPersistentStorage)
+      result += event.persistent_storage;
+  return result;
+}
+
 TypeProto FloatType(int64_t size = 1) {
   TypeProto type;
   type.mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
@@ -113,14 +121,16 @@ void RegisterStructuredStep(RuntimeContext &context, const uint8_t **expected = 
 
 TEST(FeedbackState, PersistentStorageAccountingDoesNotDependOnAttention) {
   ModelProto model = Model();
-  RuntimeContext context(KernelContext(DefaultOpset(18)));
+  RuntimeContext context(KernelContext(DefaultOpset(18)),
+                         RuntimeContextOptions{.events_enabled = true});
   bool fail = false;
   context.RegisterCustomKernel(
       "test.feedback", "Step", [&](const NodeProto &node, RuntimeContext &rt) {
         RuntimeContext child = rt.MakeFunctionContext();
+        const RuntimeEventForwarder forward_events(child, &rt);
         Tensor next = child.MakeOutputTensor(0, DataType::FLOAT, {1}, sizeof(float));
         next.AsFloat()[0] = rt.Get("past").AsFloat()[0] + rt.Get("tokens").AsFloat()[0];
-        child.RecordPersistentStorageCopy(sizeof(float), 0, 0);
+        child.RecordPersistentStorageEvent({.allocations = 1, .allocated_bytes = sizeof(float)});
         rt.Put(node.output(0), std::move(next));
         if (fail)
           throw std::invalid_argument("failure after reporting persistent storage work");
@@ -130,12 +140,12 @@ TEST(FeedbackState, PersistentStorageAccountingDoesNotDependOnAttention) {
   fail = true;
   EXPECT_THROW(state.Run(context, {{"tokens", Number(1)}}), std::invalid_argument);
   EXPECT_EQ(Number(state.Values().at("past")), 3);
-  EXPECT_EQ(state.PersistentStorageStats().allocations, 2u);
+  EXPECT_EQ(StorageStatistics(context).allocations, 2u);
   state.Reset({{"past", Number(7)}});
-  EXPECT_EQ(state.PersistentStorageStats().allocations, 2u);
+  EXPECT_EQ(StorageStatistics(context).allocations, 2u);
   fail = false;
   EXPECT_EQ(Number(state.Run(context, {{"tokens", Number(1)}}).at("present")), 8);
-  const auto statistics = state.PersistentStorageStats();
+  const auto statistics = StorageStatistics(context);
   EXPECT_EQ(statistics.allocations, 3u);
   EXPECT_EQ(statistics.allocated_bytes, 3 * sizeof(float));
   EXPECT_EQ(statistics.prefix_copied_bytes, 0u);
@@ -143,74 +153,186 @@ TEST(FeedbackState, PersistentStorageAccountingDoesNotDependOnAttention) {
   EXPECT_EQ(statistics.reuse_count, 0u);
   FeedbackState other(model, {{"past", Number(0)}});
   other.Run(context, {{"tokens", Number(1)}});
-  EXPECT_EQ(other.PersistentStorageStats().allocations, 1u);
-  EXPECT_EQ(state.PersistentStorageStats().allocations, 3u);
-  EXPECT_EQ(context.persistent_storage_statistics().allocations, 0u);
+  EXPECT_EQ(StorageStatistics(context).allocations, 4u);
+  context.ClearEvents();
+  EXPECT_TRUE(context.events().empty());
+  EXPECT_EQ(StorageStatistics(context).allocations, 0u);
+  EXPECT_EQ(Number(state.Values().at("past")), 8);
+  other.Run(context, {{"tokens", Number(1)}});
+  EXPECT_EQ(StorageStatistics(context).allocations, 1u);
 }
 
 TEST(FeedbackState, GenericProducerComputesDirectlyIntoPersistentTail) {
-  ModelProto model = Model();
-  TypeProto dynamic;
-  dynamic.mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
-  dynamic.mutable_tensor_type()->mutable_shape()->add_dim();
-  *model.mutable_graph()->mutable_input(0)->mutable_type() = dynamic;
-  *model.mutable_graph()->mutable_output(0)->mutable_type() = dynamic;
-  auto arena = IOArena::Create(4);
-  SimpleRawBufferAllocator execution(8);
-  RuntimeContext context(
-      KernelContext(DefaultOpset(18)),
-      RuntimeContextOptions{.allocator = &execution, .io_allocator = arena.get()});
-  bool fail = false;
-  context.RegisterCustomKernel(
-      "test.feedback", "Step", [&](const NodeProto &node, RuntimeContext &rt) {
-        const Tensor &past = rt.Get(node.input(0));
-        const Shape shape{past.shape[0] + 1};
-        EXPECT_FALSE(rt.ReservePersistentAppend(past, shape, 0, 1, 0));
-        auto reservation = rt.ReservePersistentAppend(past, shape, 0, 0, 0);
-        EXT_ENFORCE(reservation.has_value(), "Expected a bound contiguous reservation.");
-        const auto tail = reservation->writable_bytes();
-        EXT_ENFORCE(tail.size() == sizeof(float), "Expected one new float.");
-        *reinterpret_cast<float *>(tail.data()) = rt.Get(node.input(1)).AsFloat()[0] * 2;
-        if (fail)
-          throw std::invalid_argument("failure after direct tail write");
-        rt.Put(node.output(0), rt.CommitPersistentAppend(0, std::move(*reservation), tail.size()));
-      });
-  RuntimeSessionOptions options;
-  options.persistent_tensor_initial_capacity = 4;
-  options.check_shapes = true;
-  FeedbackState state(model, {{"past", RuntimeValue(Tensor::FromFloat("", {0}, {}))}}, options);
-  const uint8_t *previous = nullptr;
-  for (int64_t step = 1; step <= 5; ++step) {
-    if (step == 3) {
-      fail = true;
-      EXPECT_THROW(state.Run(context, {{"tokens", Number(9)}}), std::invalid_argument);
-      EXPECT_EQ(state.Values().at("past").tensor.shape, Shape{2});
-      EXPECT_FLOAT_EQ(state.Values().at("past").tensor.AsFloat()[1], 4);
-      fail = false;
+  for (bool events_enabled : {false, true}) {
+    SCOPED_TRACE(events_enabled);
+    ModelProto model = Model();
+    TypeProto dynamic;
+    dynamic.mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+    dynamic.mutable_tensor_type()->mutable_shape()->add_dim();
+    *model.mutable_graph()->mutable_input(0)->mutable_type() = dynamic;
+    *model.mutable_graph()->mutable_output(0)->mutable_type() = dynamic;
+    auto arena = IOArena::Create(4);
+    SimpleRawBufferAllocator execution(8);
+    RuntimeContext context(KernelContext(DefaultOpset(18)),
+                           RuntimeContextOptions{.allocator = &execution,
+                                                 .io_allocator = arena.get(),
+                                                 .events_enabled = events_enabled});
+    bool fail = false;
+    context.RegisterCustomKernel(
+        "test.feedback", "Step", [&](const NodeProto &node, RuntimeContext &rt) {
+          const Tensor &past = rt.Get(node.input(0));
+          const Shape shape{past.shape[0] + 1};
+          EXPECT_FALSE(rt.ReservePersistentAppend(past, shape, 0, 1, 0));
+          auto reservation = rt.ReservePersistentAppend(past, shape, 0, 0, 0);
+          EXT_ENFORCE(reservation.has_value(), "Expected a bound contiguous reservation.");
+          const auto tail = reservation->writable_bytes();
+          EXT_ENFORCE(tail.size() == sizeof(float), "Expected one new float.");
+          *reinterpret_cast<float *>(tail.data()) = rt.Get(node.input(1)).AsFloat()[0] * 2;
+          if (fail)
+            throw std::invalid_argument("failure after direct tail write");
+          rt.Put(node.output(0),
+                 rt.CommitPersistentAppend(0, std::move(*reservation), tail.size()));
+        });
+    RuntimeSessionOptions options;
+    options.persistent_tensor_initial_capacity = 4;
+    options.check_shapes = true;
+    FeedbackState state(model, {{"past", RuntimeValue(Tensor::FromFloat("", {0}, {}))}}, options);
+    const uint8_t *previous = nullptr;
+    for (int64_t step = 1; step <= 5; ++step) {
+      if (step == 3) {
+        fail = true;
+        EXPECT_THROW(state.Run(context, {{"tokens", Number(9)}}), std::invalid_argument);
+        EXPECT_EQ(state.Values().at("past").tensor.shape, Shape{2});
+        EXPECT_FLOAT_EQ(state.Values().at("past").tensor.AsFloat()[1], 4);
+        fail = false;
+      }
+      const auto output = state.Run(context, {{"tokens", Number(static_cast<float>(step))}});
+      const Tensor &present = output.at("present").tensor;
+      EXPECT_EQ(present.shape, Shape{step});
+      for (int64_t i = 0; i < step; ++i)
+        EXPECT_FLOAT_EQ(present.AsFloat()[i], static_cast<float>(2 * (i + 1)));
+      if (step > 1 && step <= 4) {
+        EXPECT_EQ(present.bytes(), previous);
+      }
+      if (step == 5) {
+        EXPECT_NE(present.bytes(), previous);
+      }
+      previous = present.bytes();
     }
-    const auto output = state.Run(context, {{"tokens", Number(static_cast<float>(step))}});
-    const Tensor &present = output.at("present").tensor;
-    EXPECT_EQ(present.shape, Shape{step});
-    for (int64_t i = 0; i < step; ++i)
-      EXPECT_FLOAT_EQ(present.AsFloat()[i], static_cast<float>(2 * (i + 1)));
-    if (step > 1 && step <= 4) {
-      EXPECT_EQ(present.bytes(), previous);
-    }
-    if (step == 5) {
-      EXPECT_NE(present.bytes(), previous);
-    }
-    previous = present.bytes();
+    const auto statistics = StorageStatistics(context);
+    EXPECT_EQ(statistics.allocations, events_enabled ? 2u : 0u);
+    EXPECT_EQ(statistics.allocated_bytes, events_enabled ? 12 * sizeof(float) : 0u);
+    EXPECT_EQ(statistics.prefix_copied_bytes, events_enabled ? 4 * sizeof(float) : 0u);
+    EXPECT_EQ(statistics.append_copied_bytes, 0u);
+    EXPECT_EQ(statistics.reuse_count, events_enabled ? 4u : 0u);
+    EXPECT_EQ(context.events().empty(), !events_enabled);
+    EXPECT_EQ(execution.TotalAllocatedSize(), 0u);
+    EXPECT_EQ(arena->leased_count(), 1u);
+    state.Close();
+    EXPECT_EQ(arena->leased_count(), 0u);
   }
-  const auto statistics = state.PersistentStorageStats();
-  EXPECT_EQ(statistics.allocations, 2u);
-  EXPECT_EQ(statistics.allocated_bytes, 12 * sizeof(float));
-  EXPECT_EQ(statistics.prefix_copied_bytes, 4 * sizeof(float));
-  EXPECT_EQ(statistics.append_copied_bytes, 0u);
-  EXPECT_EQ(statistics.reuse_count, 4u);
-  EXPECT_EQ(execution.TotalAllocatedSize(), 0u);
-  EXPECT_EQ(arena->leased_count(), 1u);
-  state.Close();
-  EXPECT_EQ(arena->leased_count(), 0u);
+}
+
+TEST(FeedbackState, StorageEventUsesExistingActivationMetadataAndClearing) {
+  SimpleRawBufferAllocator allocator(4);
+  RuntimeContext context(KernelContext(DefaultOpset(18)),
+                         RuntimeContextOptions{.allocator = &allocator, .events_enabled = true});
+  const Tensor value = Tensor::FromFloat("", {1}, {1}, &allocator);
+  context.set_current_node_index(7);
+  context.set_current_subgraph(3, "body");
+  context.RecordPersistentStorageEvent({1, 64, 8, 4, 2});
+  ASSERT_EQ(context.events().size(), 1u);
+  const auto &event = context.events().front();
+  EXPECT_EQ(event.action, RuntimeEventAction::kPersistentStorage);
+  EXPECT_STREQ(RuntimeEventActionName(event.action), "persistent_storage");
+  EXPECT_EQ(event.node_index, 7);
+  EXPECT_EQ(event.subgraph_node_index, 3);
+  EXPECT_EQ(event.subgraph_attr_name, "body");
+  EXPECT_GT(event.timestamp_ns, 0);
+  EXPECT_EQ(event.value_count, 0);
+  EXPECT_EQ(event.allocated_bytes, sizeof(float));
+  EXPECT_EQ(event.persistent_storage.allocated_bytes, 64u);
+  EXPECT_EQ(event.persistent_storage.prefix_copied_bytes, 8u);
+  EXPECT_EQ(event.persistent_storage.append_copied_bytes, 4u);
+  EXPECT_EQ(event.persistent_storage.reuse_count, 2u);
+  EXPECT_NE(event.summary().find("storage_bytes=64"), std::string::npos);
+  context.ClearEvents();
+  EXPECT_TRUE(context.events().empty());
+  RuntimeContext disabled(KernelContext(DefaultOpset(18)));
+  disabled.RecordPersistentStorageEvent({1, 64, 8, 4, 2});
+  EXPECT_TRUE(disabled.events().empty());
+}
+
+TEST(FeedbackState, FunctionAndSubgraphStorageEventsSurviveFailure) {
+  for (bool subgraph : {false, true}) {
+    SCOPED_TRACE(subgraph);
+    ModelProto model = Model();
+    auto add_audit = [](NodeProto *node) {
+      node->set_domain("test.feedback");
+      node->set_op_type("Audit");
+      node->add_input("past");
+      node->add_input("tokens");
+      node->add_output("present");
+    };
+    if (subgraph) {
+      model.add_opset_import()->set_version(18);
+      auto *node = model.mutable_graph()->mutable_node(0);
+      node->set_domain("");
+      node->set_op_type("If");
+      node->clear_input();
+      node->add_input("condition");
+      auto *condition = model.mutable_graph()->add_initializer();
+      condition->set_name("condition");
+      condition->set_data_type(TensorProto::BOOL);
+      condition->add_int32_data(1);
+      for (const char *name : {"then_branch", "else_branch"}) {
+        auto *attribute = node->add_attribute();
+        attribute->set_name(name);
+        attribute->set_type(AttributeProto::GRAPH);
+        auto *branch = attribute->mutable_g();
+        add_audit(branch->add_node());
+        auto *output = branch->add_output();
+        output->set_name("present");
+        *output->mutable_type() = FloatType();
+      }
+    } else {
+      auto *function = model.add_functions();
+      function->set_domain("test.feedback");
+      function->set_name("Step");
+      function->add_input("past");
+      function->add_input("tokens");
+      function->add_output("present");
+      auto *opset = function->add_opset_import();
+      opset->set_domain("test.feedback");
+      opset->set_version(1);
+      add_audit(function->add_node());
+    }
+    RuntimeContext context(KernelContext(DefaultOpset(18)),
+                           RuntimeContextOptions{.events_enabled = true});
+    bool fail = false;
+    context.RegisterCustomKernel(
+        "test.feedback", "Audit", [&](const NodeProto &node, RuntimeContext &rt) {
+          Tensor result = rt.MakeOutputTensor(0, DataType::FLOAT, {1}, sizeof(float));
+          result.AsFloat()[0] = rt.Get("past").AsFloat()[0] + rt.Get("tokens").AsFloat()[0];
+          rt.RecordPersistentStorageEvent({.allocations = 1, .allocated_bytes = sizeof(float)});
+          if (fail)
+            throw std::invalid_argument("failure in nested audited kernel");
+          rt.Put(node.output(0), std::move(result));
+        });
+    FeedbackState state(model, {{"past", Number(2)}});
+    EXPECT_EQ(Number(state.Run(context, {{"tokens", Number(1)}}).at("present")), 3);
+    fail = true;
+    EXPECT_THROW(state.Run(context, {{"tokens", Number(1)}}), std::invalid_argument);
+    EXPECT_EQ(Number(state.Values().at("past")), 3);
+    EXPECT_EQ(StorageStatistics(context).allocations, 2u);
+    for (const auto &event : context.events()) {
+      if (event.action != RuntimeEventAction::kPersistentStorage)
+        continue;
+      EXPECT_EQ(event.node_index, 0);
+      EXPECT_EQ(event.subgraph_node_index, subgraph ? 0 : -1);
+      EXPECT_EQ(event.subgraph_attr_name, subgraph ? "then_branch" : "");
+    }
+  }
 }
 
 TEST(FeedbackState, WholeTensorMatchesManualLoopAndSharesReadOnlyViews) {

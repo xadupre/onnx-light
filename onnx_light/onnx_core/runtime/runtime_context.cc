@@ -235,6 +235,13 @@ std::string RuntimeEvent::summary() const {
       oss << " executor#" << cpu_executor_instance_id << "/" << cpu_effective_threads;
     }
   }
+  if (action == RuntimeEventAction::kPersistentStorage) {
+    oss << " storage_allocations=" << persistent_storage.allocations
+        << " storage_bytes=" << persistent_storage.allocated_bytes
+        << " prefix_copied=" << persistent_storage.prefix_copied_bytes
+        << " append_copied=" << persistent_storage.append_copied_bytes
+        << " reused=" << persistent_storage.reuse_count;
+  }
   oss << " mem=" << allocated_bytes << "B peak=" << peak_bytes << "B";
   return oss.str();
 }
@@ -282,6 +289,16 @@ void RuntimeContext::RecordRunNodeEvent(const NodeProto &node, const std::string
 }
 
 RuntimeContext::~RuntimeContext() = default;
+
+RuntimeEventForwarder::~RuntimeEventForwarder() {
+  if (destination_ == nullptr || !destination_->events_enabled() || destination_ == &source_)
+    return;
+  auto &destination = destination_->events();
+  auto &source = source_.events();
+  destination.insert(destination.end(), std::make_move_iterator(source.begin()),
+                     std::make_move_iterator(source.end()));
+  source.clear();
+}
 
 RuntimeContext::RuntimeContext(KernelContext kernel_ctx, RuntimeContextOptions options,
                                std::shared_ptr<KernelUsageState> kernel_usage)
@@ -441,19 +458,21 @@ RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name)
   child.sequences() = sequences_;
   child.set_cpu_executor(cpu_executor_);
   child.set_current_subgraph(current_node_index_, attr_name);
-  child.persistent_storage_counters_ = persistent_storage_counters_;
   return child;
 }
 
-void RuntimeContext::AccumulatePersistentStorageStatistics(
-    const PersistentStorageStatistics &statistics) {
-  persistent_storage_counters_->Accumulate(statistics);
-}
-
-void RuntimeContext::RecordPersistentStorageCopy(size_t allocated, size_t prefix, size_t appended,
-                                                 bool reused) {
-  AccumulatePersistentStorageStatistics(
-      {reused ? 0u : 1u, allocated, prefix, appended, reused ? 1u : 0u});
+void RuntimeContext::RecordPersistentStorageEvent(const PersistentStorageStatistics &statistics) {
+  if (!events_enabled_)
+    return;
+  RuntimeEvent event;
+  event.action = RuntimeEventAction::kPersistentStorage;
+  event.timestamp_ns = NowNanos();
+  event.node_index = current_node_index_;
+  event.subgraph_node_index = current_subgraph_node_index_;
+  event.subgraph_attr_name = current_subgraph_attr_name_;
+  event.persistent_storage = statistics;
+  StampAllocatorMemory(event);
+  events_.push_back(std::move(event));
 }
 
 std::optional<PersistentTensor::AppendReservation>
@@ -478,8 +497,13 @@ RuntimeContext::ReservePersistentAppend(const Tensor &past, const Shape &shape, 
       });
   if (binding == persistent_tensors_->end())
     return std::nullopt;
+  std::function<void(const PersistentStorageStatistics &)> on_storage_event;
+  if (events_enabled_)
+    on_storage_event = [this](const PersistentStorageStatistics &statistics) {
+      RecordPersistentStorageEvent(statistics);
+    };
   return binding->append.Reserve(shape, axis, persistent_tensor_initial_capacity_,
-                                 AllocatorForOutput(output_slot), *persistent_storage_counters_);
+                                 AllocatorForOutput(output_slot), on_storage_event);
 }
 
 Tensor RuntimeContext::CommitPersistentAppend(int output_slot,
@@ -506,7 +530,7 @@ RuntimeContext RuntimeContext::MakeFunctionContext() const {
                        RuntimeContextOptions{
                            .allocator = allocator_,
                            .io_allocator = io_allocator_,
-                           .events_enabled = false,
+                           .events_enabled = events_enabled_,
                            .verbose = verbose_,
                            .release_intermediates = release_intermediates_,
                            .device = device_,
@@ -516,7 +540,7 @@ RuntimeContext RuntimeContext::MakeFunctionContext() const {
   child.custom_kernels() = custom_kernels_;
   child.set_model_owner(model_owner_);
   child.set_cpu_executor(cpu_executor_);
-  child.persistent_storage_counters_ = persistent_storage_counters_;
+  child.set_current_subgraph(current_subgraph_node_index_, current_subgraph_attr_name_);
   return child;
 }
 

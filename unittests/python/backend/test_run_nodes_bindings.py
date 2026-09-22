@@ -95,6 +95,7 @@ class TestRunNodesBindings(ExtTestCase):
             "RuntimeParameters",
             "RuntimeEvent",
             "RuntimeEventAction",
+            "PersistentStorageStatistics",
             "ExecutionPlan",
             "RuntimeSession",
             "default_opset",
@@ -115,6 +116,7 @@ class TestRunNodesBindings(ExtTestCase):
         self.assertEqual(int(rt.RuntimeEventAction.kReplace), 1)
         self.assertEqual(int(rt.RuntimeEventAction.kRemove), 2)
         self.assertEqual(int(rt.RuntimeEventAction.kRunNode), 3)
+        self.assertEqual(int(rt.RuntimeEventAction.kPersistentStorage), 4)
 
     def test_runtime_session_from_model_builds_plan(self):
         # A session can be constructed directly from a ModelProto (no plan
@@ -305,6 +307,17 @@ class TestRunNodesBindings(ExtTestCase):
         self.assertEqual(d0["device"], -1)
         self.assertEqual(events[0].node_index, -1)
         self.assertEqual(events[0].device, -1)
+        for event in events:
+            self.assertNotIn("persistent_storage", event.as_dict())
+            self.assertIsInstance(event.persistent_storage, rt.PersistentStorageStatistics)
+            for field in (
+                "allocations",
+                "allocated_bytes",
+                "prefix_copied_bytes",
+                "append_copied_bytes",
+                "reuse_count",
+            ):
+                self.assertEqual(getattr(event.persistent_storage, field), 0)
 
         ctx.clear_events()
         self.assertEqual(ctx.events(), [])

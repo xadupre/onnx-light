@@ -74,14 +74,15 @@ int main() {
     const ModelProto model = DecodeModel(heads);
     SimpleRawBufferAllocator execution(64);
     auto io = IOArena::Create(32);
-    RuntimeContext context(
-        KernelContext(DefaultOpset(24)),
-        RuntimeContextOptions{.allocator = &execution, .io_allocator = io.get()});
+    RuntimeContext context(KernelContext(DefaultOpset(24)),
+                           RuntimeContextOptions{.allocator = &execution,
+                                                 .io_allocator = io.get(),
+                                                 .events_enabled = true});
     FeedbackState state(model,
                         {{"past_key", Filled(heads, 0, 0)}, {"past_value", Filled(heads, 0, 0)}},
                         RuntimeSessionOptions{.persistent_tensor_initial_capacity = 4});
-    PersistentStorageStatistics previous;
     for (int step = 0; step < 20; ++step) {
+      context.ClearEvents();
       RuntimeValueMap feeds{{"q", Filled(heads, 1, 0)},
                             {"k", Filled(heads, 1, 0)},
                             {"v", Filled(heads, 1, static_cast<float>(step + 1))}};
@@ -102,15 +103,14 @@ int main() {
         std::cerr << "State forwarding unexpectedly copied a KV payload.\n";
         return 1;
       }
-      const auto counters = state.PersistentStorageStats();
-      std::cout << heads << "," << step + 1 << "," << elapsed.count() << ","
-                << counters.allocations - previous.allocations << ","
-                << counters.allocated_bytes - previous.allocated_bytes << ","
-                << counters.prefix_copied_bytes - previous.prefix_copied_bytes << ","
-                << counters.append_copied_bytes - previous.append_copied_bytes << ","
-                << counters.reuse_count - previous.reuse_count << "," << io->TotalAllocatedSize()
-                << "," << io->PeakAllocatedSize() << ",1\n";
-      previous = counters;
+      PersistentStorageStatistics counters;
+      for (const auto &event : context.events())
+        if (event.action == RuntimeEventAction::kPersistentStorage)
+          counters += event.persistent_storage;
+      std::cout << heads << "," << step + 1 << "," << elapsed.count() << "," << counters.allocations
+                << "," << counters.allocated_bytes << "," << counters.prefix_copied_bytes << ","
+                << counters.append_copied_bytes << "," << counters.reuse_count << ","
+                << io->TotalAllocatedSize() << "," << io->PeakAllocatedSize() << ",1\n";
     }
   }
 }

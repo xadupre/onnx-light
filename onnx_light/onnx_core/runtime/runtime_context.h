@@ -176,8 +176,15 @@ inline constexpr int64_t kRuntimeEventValueLimit = 8;
  *                   it consumed, and the wall-clock ``duration_ns`` of
  *                   the dispatch (start time stored in ``timestamp_ns``).
  *                   Does not mutate the tensor map by itself.
+ *  * ``kPersistentStorage`` — reports allocation, copies or reuse of persistent-capable storage.
  */
-enum class RuntimeEventAction : int32_t { kAdd = 0, kReplace = 1, kRemove = 2, kRunNode = 3 };
+enum class RuntimeEventAction : int32_t {
+  kAdd = 0,
+  kReplace = 1,
+  kRemove = 2,
+  kRunNode = 3,
+  kPersistentStorage = 4
+};
 
 /**
  * Role of the tensor at the moment the event was recorded. Set by the
@@ -203,8 +210,8 @@ enum class RuntimeEventKind : int32_t {
 
 /**
  * Returns a short lowercase label for ``action`` (``"add"``, ``"replace"``,
- * ``"remove"``, ``"run_node"``). Useful for human-readable rendering of the
- * event log.
+ * ``"remove"``, ``"run_node"``, ``"persistent_storage"``). Useful for human-readable rendering of
+ * the event log.
  */
 inline constexpr const char *RuntimeEventActionName(RuntimeEventAction action) noexcept {
   switch (action) {
@@ -216,6 +223,8 @@ inline constexpr const char *RuntimeEventActionName(RuntimeEventAction action) n
     return "remove";
   case RuntimeEventAction::kRunNode:
     return "run_node";
+  case RuntimeEventAction::kPersistentStorage:
+    return "persistent_storage";
   }
   return "unknown";
 }
@@ -361,6 +370,10 @@ struct RuntimeEvent {
   /// this event was recorded (:cpp:func:`RawBufferAllocator::PeakAllocatedSize`).
   /// ``0`` when no allocator is attached to the context.
   int64_t peak_bytes = 0;
+  /// Work reported by a ``kPersistentStorage`` event, not cumulative totals.
+  /// Zero for other actions. Its allocated_bytes measures requested storage
+  /// capacity, separately from this event's allocator live/peak memory fields.
+  PersistentStorageStatistics persistent_storage;
 
   /// Returns a concise, human-readable one-line summary of the event: the
   /// action / kind, the tensor name (or ``op_type(inputs)`` for ``kRunNode``
@@ -649,15 +662,8 @@ public:
                                                                  AllocatorForOutput(slot));
   }
 
-  /** Returns reported storage work; allocation bytes count requested capacity. */
-  PersistentStorageStatistics persistent_storage_statistics() const {
-    return persistent_storage_counters_->Snapshot();
-  }
-  /** Accumulates storage work performed in a separate temporary computation context. */
-  void AccumulatePersistentStorageStatistics(const PersistentStorageStatistics &statistics);
-  /** Records one storage construction, including allocation/copy fallback or reuse. */
-  void RecordPersistentStorageCopy(size_t allocated, size_t prefix, size_t appended,
-                                   bool reused = false);
+  /** Records storage work in events() only when events_enabled() is true. */
+  void RecordPersistentStorageEvent(const PersistentStorageStatistics &statistics);
   /** Reserves a writable tail for an exact graph-declared persistent input/output pair. */
   std::optional<PersistentTensor::AppendReservation>
   ReservePersistentAppend(const Tensor &past, const Shape &shape, size_t axis, int input_slot,
@@ -781,8 +787,7 @@ public:
   const Tensor &Get(const std::string &name) const;
   Tensor &Get(const std::string &name);
 
-  /// Append-only log of every tensor map mutation performed through
-  /// :cpp:func:`Set`, :cpp:func:`Put` and :cpp:func:`Remove`. See
+  /// Append-only log of tensor mutations, node execution and reported storage work. See
   /// :cpp:class:`RuntimeEvent` for the captured fields.
   const RuntimeEventLog &events() const noexcept { return events_; }
   RuntimeEventLog &events() noexcept { return events_; }
@@ -808,7 +813,8 @@ public:
 
   /// Creates a fresh child context for executing a model-local function.
   /// The child inherits the parent's kernel context, allocator, function
-  /// and local factory registries, verbosity and runtime parameters, but starts with an empty
+  /// and local factory registries, event-logging flag, verbosity and runtime parameters,
+  /// but starts with an empty
   /// tensor and sequence map so the function's formal inputs are bound
   /// explicitly by the caller.
   /// Kernel usage recording shares the parent's diagnostic state.
@@ -993,8 +999,6 @@ public:
 
 private:
   friend class FeedbackState;
-  std::shared_ptr<PersistentStorageCounters> persistent_storage_counters_ =
-      std::make_shared<PersistentStorageCounters>();
   size_t persistent_tensor_initial_capacity_ = 0;
   const GraphProto *persistent_graph_ = nullptr;
   struct PersistentTensorBinding {
@@ -1069,6 +1073,25 @@ private:
   std::vector<bool> output_slot_io_roles_;
   /// Logical device the graph is evaluated on. See :cpp:func:`device`.
   symbolic::Device device_ = symbolic::Device::kUndefined;
+};
+
+/**
+ * Appends a child context's events to its parent when the scope ends, including on failure.
+ *
+ * Both contexts must remain alive and must not be moved while the guard exists.
+ * A null parent or a parent with events disabled receives no events.
+ */
+class ONNX_LIGHT_CORE_API RuntimeEventForwarder {
+public:
+  RuntimeEventForwarder(RuntimeContext &source, RuntimeContext *destination)
+      : source_(source), destination_(destination) {}
+  ~RuntimeEventForwarder();
+  RuntimeEventForwarder(const RuntimeEventForwarder &) = delete;
+  RuntimeEventForwarder &operator=(const RuntimeEventForwarder &) = delete;
+
+private:
+  RuntimeContext &source_;
+  RuntimeContext *destination_;
 };
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

@@ -33,6 +33,41 @@ def make_model():
     return model
 
 
+def make_attention_model(data_type=onnx.TensorProto.FLOAT):
+    """Returns Attention with graph-declared key/value feedback."""
+    model = helper.make_model(
+        helper.make_graph(
+            [
+                helper.make_node(
+                    "Attention",
+                    ["Q", "K", "V", "", "past_key", "past_value"],
+                    ["Y", "present_key", "present_value"],
+                    is_causal=1,
+                )
+            ],
+            "attention_feedback",
+            [
+                helper.make_tensor_value_info(name, data_type, [1, 1, 1, 2])
+                for name in ("Q", "K", "V")
+            ]
+            + [
+                helper.make_tensor_value_info(name, data_type, [1, 1, None, 2])
+                for name in ("past_key", "past_value")
+            ],
+            [helper.make_tensor_value_info("Y", data_type, [1, 1, 1, 2])]
+            + [
+                helper.make_tensor_value_info(name, data_type, [1, 1, None, 2])
+                for name in ("present_key", "present_value")
+            ],
+        ),
+        opset_imports=[helper.make_opsetid("", 23)],
+        ir_version=10,
+    )
+    add_binding(model, "past_key", "present_key")
+    add_binding(model, "past_value", "present_value")
+    return model
+
+
 def add_binding(model, input_name, output_name):
     """Declares a persistent input/output binding."""
     binding = model.graph.persistent_bindings.add()
@@ -51,6 +86,183 @@ def array(tensor):
 
 
 class TestFeedbackState(unittest.TestCase):
+    def test_attention_persistent_storage_events_are_opt_in(self):
+        fields = (
+            "allocations",
+            "allocated_bytes",
+            "prefix_copied_bytes",
+            "append_copied_bytes",
+            "reuse_count",
+        )
+        for dtype, data_type in (
+            (numpy.float32, onnx.TensorProto.FLOAT),
+            (numpy.float16, onnx.TensorProto.FLOAT16),
+        ):
+            results = {}
+            for enabled in (False, True):
+                with self.subTest(dtype=dtype, events_enabled=enabled):
+                    model = make_attention_model(data_type)
+                    state = runtime.FeedbackState(
+                        model,
+                        {
+                            "past_key": numpy.array([0.25, 0.5], dtype=dtype).reshape(1, 1, 1, 2),
+                            "past_value": numpy.array([-0.25, 0.5], dtype=dtype).reshape(
+                                1, 1, 1, 2
+                            ),
+                        },
+                    )
+                    context = runtime.RuntimeContext(
+                        runtime.KernelContext(runtime.default_opset(23)), events_enabled=enabled
+                    )
+                    self.assertEqual(context.events_enabled, enabled)
+                    context.set(
+                        "sentinel",
+                        runtime.tensor_from_proto(
+                            numpy_helper.from_array(numpy.ones(1, dtype=dtype), name="sentinel")
+                        ),
+                    )
+                    previous = [event.as_dict() for event in context.events()]
+                    results[enabled] = []
+                    for step in range(1, 4):
+                        token = numpy.array([step * 0.125, step * 0.125 + 0.25], dtype=dtype)
+                        outputs = state.run(
+                            context,
+                            {
+                                "Q": token.reshape(1, 1, 1, 2),
+                                "K": token.reshape(1, 1, 1, 2),
+                                "V": -token.reshape(1, 1, 1, 2),
+                            },
+                        )
+                        results[enabled].append(
+                            {name: array(value).copy() for name, value in outputs.items()}
+                        )
+                        del outputs
+                        events = context.events()
+                        if enabled:
+                            self.assertGreater(len(events), len(previous))
+                            self.assertEqual(
+                                [event.as_dict() for event in events[: len(previous)]], previous
+                            )
+                            self.assertTrue(
+                                any(
+                                    event.action == runtime.RuntimeEventAction.kPersistentStorage
+                                    for event in events[len(previous) :]
+                                )
+                            )
+                        else:
+                            self.assertEqual(events, [])
+                        previous = [event.as_dict() for event in events]
+
+                    if enabled:
+                        storage_events = [
+                            event
+                            for event in events
+                            if event.action == runtime.RuntimeEventAction.kPersistentStorage
+                        ]
+                        self.assertTrue(storage_events)
+                        totals = dict.fromkeys(fields, 0)
+                        for event in events:
+                            record = event.as_dict()
+                            if event.action != runtime.RuntimeEventAction.kPersistentStorage:
+                                self.assertNotIn("persistent_storage", record)
+                                continue
+                            self.assertEqual(record["action"], "persistent_storage")
+                            self.assertIsInstance(
+                                event.persistent_storage, runtime.PersistentStorageStatistics
+                            )
+                            self.assertEqual(set(record["persistent_storage"]), set(fields))
+                            for field in fields:
+                                value = record["persistent_storage"][field]
+                                self.assertIsInstance(value, int)
+                                self.assertGreaterEqual(value, 0)
+                                self.assertEqual(value, getattr(event.persistent_storage, field))
+                                totals[field] += value
+                                with self.assertRaises(AttributeError):
+                                    setattr(event.persistent_storage, field, value)
+                            self.assertEqual(event.allocated_bytes, 0)
+                            self.assertEqual(event.peak_bytes, 0)
+                            self.assertEqual(record["allocated_bytes"], 0)
+                            self.assertEqual(record["peak_bytes"], 0)
+                        self.assertGreater(totals["allocations"], 0)
+                        self.assertGreater(totals["allocated_bytes"], 0)
+                        self.assertGreater(totals["prefix_copied_bytes"], 0)
+                        self.assertGreater(totals["append_copied_bytes"], 0)
+                        if dtype == numpy.float32:
+                            self.assertEqual(totals["allocations"], 2)
+                            self.assertEqual(totals["prefix_copied_bytes"], 2 * 2 * 4)
+                            self.assertEqual(totals["append_copied_bytes"], 3 * 2 * 2 * 4)
+                            self.assertEqual(totals["reuse_count"], 4)
+                    before_clear = {
+                        name: array(value).copy() for name, value in state.values.items()
+                    }
+                    context.clear_events()
+                    self.assertEqual(context.events(), [])
+                    self.assertEqual(context.events_enabled, enabled)
+                    self.assertTrue(context.has("sentinel"))
+                    for name, value in state.values.items():
+                        numpy.testing.assert_array_equal(array(value), before_clear[name])
+                    state.close()
+            for disabled, enabled in zip(results[False], results[True]):
+                self.assertEqual(set(disabled), set(enabled))
+                for name in disabled:
+                    numpy.testing.assert_array_equal(disabled[name], enabled[name])
+
+    def test_attention_persistent_storage_events_survive_failure(self):
+        model = make_attention_model()
+        model.graph.input.append(
+            helper.make_tensor_value_info("target_shape", onnx.TensorProto.INT64, [1])
+        )
+        model.graph.node.append(
+            helper.make_node("Reshape", ["present_key", "target_shape"], ["invalid"])
+        )
+        model.graph.output.append(
+            helper.make_tensor_value_info("invalid", onnx.TensorProto.FLOAT, [None])
+        )
+        for enabled in (False, True):
+            with self.subTest(events_enabled=enabled):
+                state = runtime.FeedbackState(
+                    model,
+                    {
+                        name: numpy.empty((1, 1, 0, 2), dtype=numpy.float32)
+                        for name in ("past_key", "past_value")
+                    },
+                )
+                context = runtime.RuntimeContext(
+                    runtime.KernelContext(runtime.default_opset(23)), events_enabled=enabled
+                )
+                context.set(
+                    "sentinel",
+                    runtime.tensor_from_proto(
+                        numpy_helper.from_array(numpy.ones(1, dtype=numpy.float32))
+                    ),
+                )
+                previous = [event.as_dict() for event in context.events()]
+                feeds = {
+                    name: numpy.ones((1, 1, 1, 2), dtype=numpy.float32)
+                    for name in ("Q", "K", "V")
+                }
+                feeds["target_shape"] = numpy.array([3], dtype=numpy.int64)
+                with self.assertRaisesRegex((ValueError, RuntimeError), "Reshape|reshape"):
+                    state.run(context, feeds)
+                events = context.events()
+                if enabled:
+                    self.assertEqual(
+                        [event.as_dict() for event in events[: len(previous)]], previous
+                    )
+                    self.assertTrue(
+                        any(
+                            event.action == runtime.RuntimeEventAction.kPersistentStorage
+                            for event in events[len(previous) :]
+                        )
+                    )
+                else:
+                    self.assertEqual(events, [])
+                for value in state.values.values():
+                    self.assertEqual(array(value).shape, (1, 1, 0, 2))
+                context.clear_events()
+                self.assertEqual(context.events(), [])
+                state.close()
+
     def test_loop_uses_normal_runtime_with_selected_result(self):
         body = helper.make_graph(
             [helper.make_node("Add", ["state", "one"], ["next"])],

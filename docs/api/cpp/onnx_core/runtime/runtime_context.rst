@@ -15,6 +15,70 @@ Kernel resolution is unchanged.
 Ordinary tensors remain in ``tensors()``. ``values()`` carries the structured
 and encoded representations documented in :doc:`runtime_value`.
 
+Persistent-storage events
+--------------------------
+
+``RuntimeContextOptions.events_enabled`` controls all runtime event recording,
+including persistent-storage auditing, and defaults to ``false``. In Python,
+pass ``events_enabled=True`` when constructing ``RuntimeContext``. There is no
+separate persistent-storage statistics getter or always-on counter collection.
+
+``RuntimeEventAction::kPersistentStorage`` (integer value ``4``) is rendered as
+``"persistent_storage"`` by ``RuntimeEventActionName`` and Python ``as_dict()``.
+Its ``RuntimeEvent::persistent_storage`` payload is a
+``PersistentStorageStatistics`` value with five unsigned integer fields:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 70
+
+   * - Field
+     - Meaning
+   * - ``allocations``
+     - Number of persistent-storage allocations.
+   * - ``allocated_bytes``
+     - Bytes allocated for persistent storage.
+   * - ``prefix_copied_bytes``
+     - Bytes copied from an existing persistent prefix.
+   * - ``append_copied_bytes``
+     - Bytes copied from newly appended values.
+   * - ``reuse_count``
+     - Number of persistent-storage reservations reused without allocation.
+
+These fields describe work for that event, not cumulative totals. Sum the
+payload fields over the desired interval to obtain totals. All payload fields
+default to zero, and are read-only in Python. ``RuntimeEvent.allocated_bytes``
+and ``RuntimeEvent.peak_bytes`` continue to describe allocator live/peak memory;
+they are not persistent-storage allocation traffic.
+
+The existing ``events()`` API returns these records alongside tensor mutations
+and node dispatches. Python ``RuntimeEvent.as_dict()`` includes a nested
+``"persistent_storage"`` dictionary only for ``kPersistentStorage`` events,
+preserving the dictionary schema of other event actions:
+
+.. code-block:: python
+
+   from onnx_light.onnx_py._onnxpykernels import runtime
+
+   context = runtime.RuntimeContext(
+       runtime.KernelContext(runtime.default_opset(23)), events_enabled=True
+   )
+   # Runs an existing FeedbackState with its ordinary non-retained feeds.
+   outputs = state.run(context, feeds)
+   storage = [
+       event.as_dict()["persistent_storage"]
+       for event in context.events()
+       if event.action == runtime.RuntimeEventAction.kPersistentStorage
+   ]
+   copied = sum(event["prefix_copied_bytes"] for event in storage)
+   context.clear_events()
+
+``FeedbackState.Run`` appends each invocation's events to the supplied context,
+preserving existing entries even when execution fails. Half-precision internal
+scratch contexts forward their events when recording is enabled. The existing
+``clear_events()`` / ``ClearEvents()`` clears the log without changing feedback
+values or disabling recording.
+
 Kernel usage recording
 ----------------------
 

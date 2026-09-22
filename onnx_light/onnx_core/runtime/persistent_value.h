@@ -6,7 +6,7 @@
 
 #include "onnx_core/runtime/runtime_value.h"
 #include <atomic>
-#include <mutex>
+#include <functional>
 #include <optional>
 #include <span>
 
@@ -18,25 +18,14 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
  * Includes allocation/copy fallback and failed attempts, independently of the
  * consuming operator. These counters do not automatically track all runtime work.
  */
-struct PersistentStorageStatistics {
+struct ONNX_LIGHT_CORE_API PersistentStorageStatistics {
   uint64_t allocations = 0;
   uint64_t allocated_bytes = 0;
   uint64_t prefix_copied_bytes = 0;
   uint64_t append_copied_bytes = 0;
   uint64_t reuse_count = 0;
-};
-
-/** Aggregates operator-independent storage work across an invocation's contexts. */
-class ONNX_LIGHT_CORE_API PersistentStorageCounters {
-public:
-  /** Returns a consistent snapshot of all cumulative counters. */
-  PersistentStorageStatistics Snapshot() const;
-  /** Adds reported work atomically with respect to other updates and snapshots. */
-  void Accumulate(const PersistentStorageStatistics &statistics);
-
-private:
-  mutable std::mutex mutex_;
-  PersistentStorageStatistics values_;
+  /** Adds an event's reported work to an explicitly requested total. */
+  PersistentStorageStatistics &operator+=(const PersistentStorageStatistics &statistics) noexcept;
 };
 
 /**
@@ -100,12 +89,13 @@ public:
    *
    * Only the append axis may grow, and the product of preceding dimensions must
    * be one. Initial capacity is measured along that axis, not in bytes.
-   * Records allocation, prefix copies and reuse, including work before a failure.
+   * Reports allocation, prefix copies and reuse only when a callback is supplied,
+   * including work before a failure. The callback is invoked synchronously.
    * The caller supplies the output allocator; no alternate allocator is used.
    */
-  std::optional<AppendReservation> Reserve(const Shape &shape, size_t axis, size_t initial_capacity,
-                                           RawBufferAllocator *allocator,
-                                           PersistentStorageCounters &counters);
+  std::optional<AppendReservation>
+  Reserve(const Shape &shape, size_t axis, size_t initial_capacity, RawBufferAllocator *allocator,
+          const std::function<void(const PersistentStorageStatistics &)> &on_storage_event = {});
 
 private:
   friend class PersistentTensor;

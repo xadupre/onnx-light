@@ -658,9 +658,13 @@ public:
   /** Records one storage construction, including allocation/copy fallback or reuse. */
   void RecordPersistentStorageCopy(size_t allocated, size_t prefix, size_t appended,
                                    bool reused = false);
-  /** Appends to a certified contiguous cache, or declines unsupported/disabled layouts. */
-  std::optional<Tensor> TryAppendAttentionCache(const Tensor &past, const Tensor &current,
-                                                int output_slot);
+  /** Reserves a writable tail for an exact graph-declared persistent input/output pair. */
+  std::optional<PersistentTensor::AppendReservation>
+  ReservePersistentAppend(const Tensor &past, const Shape &shape, size_t axis, int input_slot,
+                          int output_slot);
+  /** Seals a kernel-written candidate for later atomic feedback publication. */
+  Tensor CommitPersistentAppend(int output_slot, PersistentTensor::AppendReservation reservation,
+                                size_t initialized_bytes);
 
   /// Allocates a temporary/workspace tensor that never crosses the runtime
   /// boundary, always routing it through :cpp:func:`execution_allocator`
@@ -991,14 +995,13 @@ private:
   friend class FeedbackState;
   std::shared_ptr<PersistentStorageCounters> persistent_storage_counters_ =
       std::make_shared<PersistentStorageCounters>();
-  size_t attention_cache_initial_capacity_ = 0;
-  const GraphProto *attention_cache_graph_ = nullptr;
+  size_t persistent_tensor_initial_capacity_ = 0;
+  const GraphProto *persistent_graph_ = nullptr;
   struct PersistentTensorBinding {
     std::string input;
     std::string output;
     const Tensor *input_view = nullptr;
-    size_t capacity_bytes = 0;
-    std::optional<PersistentTensor::AppendLease> append;
+    PersistentTensor::AppendLease append;
     std::optional<PersistentTensor> candidate;
   };
   // Created only for feedback execution; child contexts do not inherit permissions.

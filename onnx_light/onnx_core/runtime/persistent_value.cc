@@ -3,32 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/runtime/persistent_value.h"
+#include <cstring>
+#include <limits>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
-namespace {
-
-size_t AppendSize(const Tensor &prefix, const Tensor &tail, const Shape &shape) {
-  EXT_ENFORCE_INVALID(prefix.data_type != DataType::STRING && prefix.data_type == tail.data_type,
-                      "PersistentTensor: append requires matching numeric element types.");
-  const auto bytes = [&](const Shape &dimensions) {
-    return PackedByteSize(prefix.data_type,
-                          dimensions.product(0, dimensions.size(), "PersistentTensor"));
-  };
-  const size_t logical = bytes(shape);
-  EXT_ENFORCE_INVALID(
-      prefix.size_bytes() == bytes(prefix.shape) && tail.size_bytes() == bytes(tail.shape) &&
-          prefix.size_bytes() <= logical && tail.size_bytes() == logical - prefix.size_bytes(),
-      "PersistentTensor: append byte extent mismatch.");
-  // Packed sub-byte values require bit-level concatenation, not a byte append.
-  EXT_ENFORCE_INVALID(bytes({1}) * 2 == bytes({2}),
-                      "PersistentTensor: append requires byte-aligned elements.");
-  EXT_ENFORCE_INVALID((prefix.size_bytes() == 0 || prefix.bytes() != nullptr) &&
-                          (tail.size_bytes() == 0 || tail.bytes() != nullptr),
-                      "PersistentTensor: append input has a null data pointer.");
-  return logical;
-}
-
-} // namespace
 
 PersistentStorageStatistics PersistentStorageCounters::Snapshot() const {
   const std::lock_guard<std::mutex> lock(mutex_);
@@ -53,35 +31,13 @@ bool PersistentTensor::Matches(const Tensor &view) const noexcept {
          !value_.borrowed_owner().owner_before(view.borrowed_owner());
 }
 
-std::optional<PersistentTensor::AppendLease> PersistentTensor::AcquireAppendLease() const {
-  if (capacity_bytes_ == 0 || value_.borrowed_owner().use_count() != 1)
-    return std::nullopt;
-  return AppendLease(*this);
+PersistentTensor::AppendLease PersistentTensor::PrepareAppend() const {
+  const bool available = capacity_bytes_ != 0 && value_.borrowed_owner().use_count() == 1;
+  return AppendLease(*this, available);
 }
 
-PersistentTensor PersistentTensor::Concatenate(Tensor storage, const Tensor &prefix,
-                                               const Tensor &tail, const Shape &shape) {
-  const size_t logical = AppendSize(prefix, tail, shape);
-  EXT_ENFORCE_INVALID(!storage.is_borrowed() && storage.borrowed_owner().use_count() == 0 &&
-                          storage.data_type == prefix.data_type &&
-                          storage.size_bytes() >= logical &&
-                          (storage.size_bytes() == 0 || storage.bytes() != nullptr),
-                      "PersistentTensor: append storage must be a fresh owned allocation.");
-  const size_t capacity = storage.size_bytes();
-  PersistentTensor result(std::move(storage));
-  if (prefix.size_bytes() != 0)
-    std::memcpy(result.value_.mutable_bytes(), prefix.bytes(), prefix.size_bytes());
-  if (tail.size_bytes() != 0)
-    std::memcpy(result.value_.mutable_bytes() + prefix.size_bytes(), tail.bytes(),
-                tail.size_bytes());
-  result.value_ = Tensor::Borrow(result.value_.name, result.value_.data_type, shape,
-                                 result.value_.bytes(), logical, result.value_.borrowed_owner());
-  result.capacity_bytes_ = capacity;
-  return result;
-}
-
-PersistentTensor::AppendLease::AppendLease(const PersistentTensor &tensor)
-    : prefix_(tensor.BorrowView()) {
+PersistentTensor::AppendLease::AppendLease(const PersistentTensor &tensor, bool available)
+    : prefix_(tensor.BorrowView()), available_(available) {
   prefix_.capacity_bytes_ = tensor.capacity_bytes_;
 }
 
@@ -97,21 +53,81 @@ PersistentTensor::AppendLease::operator=(AppendLease &&other) noexcept {
   return *this;
 }
 
-std::optional<PersistentTensor> PersistentTensor::AppendLease::TryAppend(const Tensor &prefix,
-                                                                         const Tensor &tail,
-                                                                         const Shape &shape) {
-  if (!available_.exchange(false) || !prefix_.Matches(prefix))
+std::optional<PersistentTensor::AppendReservation>
+PersistentTensor::AppendLease::Reserve(const Shape &shape, size_t axis, size_t initial_capacity,
+                                       RawBufferAllocator *allocator,
+                                       PersistentStorageCounters &counters) {
+  const Tensor &prefix = prefix_.value_;
+  EXT_ENFORCE_INVALID(prefix.borrowed_owner().use_count() != 0,
+                      "PersistentTensor: append lease has been moved.");
+  EXT_ENFORCE_INVALID(initial_capacity > 0 && axis < shape.size() &&
+                          shape.size() == prefix.shape.size(),
+                      "PersistentTensor: invalid append axis, rank or initial capacity.");
+  for (size_t i = 0; i < shape.size(); ++i)
+    EXT_ENFORCE_INVALID(i == axis ? shape[i] >= prefix.shape[i] : shape[i] == prefix.shape[i],
+                        "PersistentTensor: only the append axis may grow.");
+  const size_t element_bytes = PackedByteSize(prefix.data_type, 1);
+  // Packed sub-byte elements and multiple outer slices need repacking, not a tail write.
+  if (shape.product(0, axis, "PersistentTensor") != 1 ||
+      element_bytes * 8 != PackedByteSize(prefix.data_type, 8))
     return std::nullopt;
-  const size_t logical = AppendSize(prefix, tail, shape);
-  if (logical > prefix_.capacity_bytes_)
+  const auto bytes = [&](const Shape &dimensions) {
+    const int64_t count = dimensions.product(0, dimensions.size(), "PersistentTensor");
+    EXT_ENFORCE_INVALID(static_cast<uint64_t>(count) <=
+                            std::numeric_limits<size_t>::max() / element_bytes,
+                        "PersistentTensor: byte size overflow.");
+    return static_cast<size_t>(count) * element_bytes;
+  };
+  const size_t logical = bytes(shape);
+  const size_t previous = bytes(prefix.shape);
+  EXT_ENFORCE_INVALID(prefix.size_bytes() == previous &&
+                          (previous == 0 || prefix.bytes() != nullptr),
+                      "PersistentTensor: retained prefix byte extent mismatch.");
+  const int64_t row_elements = shape.product(axis + 1, shape.size(), "PersistentTensor");
+  const size_t row_bytes = bytes({row_elements});
+  if (row_bytes == 0)
     return std::nullopt;
-  Tensor view = Tensor::Borrow(prefix.name, prefix.data_type, shape, prefix.bytes(), logical,
-                               prefix.borrowed_owner());
-  if (tail.size_bytes() != 0)
-    std::memmove(view.mutable_bytes() + prefix.size_bytes(), tail.bytes(), tail.size_bytes());
-  PersistentTensor result(std::move(view));
-  result.capacity_bytes_ = prefix_.capacity_bytes_;
-  return result;
+  if (available_.exchange(false) && logical <= prefix_.capacity_bytes_) {
+    PersistentTensor candidate(Tensor::Borrow(prefix.name, prefix.data_type, shape, prefix.bytes(),
+                                              logical, prefix.borrowed_owner()));
+    candidate.capacity_bytes_ = prefix_.capacity_bytes_;
+    counters.Accumulate({.reuse_count = 1});
+    return AppendReservation(std::move(candidate), previous);
+  }
+  const size_t max_capacity = std::numeric_limits<size_t>::max() / row_bytes;
+  size_t capacity = std::max(initial_capacity, prefix_.capacity_bytes_ / row_bytes);
+  EXT_ENFORCE_INVALID(capacity <= max_capacity,
+                      "PersistentTensor: initial capacity byte size overflow.");
+  const size_t required = logical / row_bytes;
+  while (capacity < required) {
+    capacity = capacity > max_capacity / 2 ? max_capacity : capacity * 2;
+    EXT_ENFORCE_INVALID(capacity >= required || capacity < max_capacity,
+                        "PersistentTensor: capacity overflow.");
+  }
+  const size_t allocated = capacity * row_bytes;
+  Tensor storage = MakeOutputTensor(prefix.data_type, shape, allocated, allocator);
+  counters.Accumulate({.allocations = 1, .allocated_bytes = allocated});
+  PersistentTensor candidate(std::move(storage));
+  if (previous != 0)
+    std::memcpy(candidate.value_.mutable_bytes(), prefix.bytes(), previous);
+  counters.Accumulate({.prefix_copied_bytes = previous});
+  candidate.value_ = Tensor::Borrow(prefix.name, prefix.data_type, shape, candidate.value_.bytes(),
+                                    logical, candidate.value_.borrowed_owner());
+  candidate.capacity_bytes_ = allocated;
+  return AppendReservation(std::move(candidate), previous);
+}
+
+std::span<uint8_t> PersistentTensor::AppendReservation::writable_bytes() {
+  EXT_ENFORCE_INVALID(candidate_.value_.borrowed_owner().use_count() != 0,
+                      "PersistentTensor: append reservation has been moved or committed.");
+  return {candidate_.value_.mutable_bytes() + prefix_bytes_,
+          candidate_.value_.size_bytes() - prefix_bytes_};
+}
+
+PersistentTensor PersistentTensor::AppendReservation::Commit(size_t initialized_bytes) {
+  EXT_ENFORCE_INVALID(initialized_bytes == writable_bytes().size(),
+                      "PersistentTensor: the entire reserved tail must be initialized.");
+  return std::move(candidate_);
 }
 
 PersistentValue::PersistentValue(RuntimeValue value, const StructTypeCatalogue &catalogue)

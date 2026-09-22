@@ -150,6 +150,71 @@ TEST(FeedbackState, PersistentStorageAccountingDoesNotDependOnAttention) {
   EXPECT_EQ(context.persistent_storage_statistics().allocations, 0u);
 }
 
+TEST(FeedbackState, GenericProducerComputesDirectlyIntoPersistentTail) {
+  ModelProto model = Model();
+  TypeProto dynamic;
+  dynamic.mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+  dynamic.mutable_tensor_type()->mutable_shape()->add_dim();
+  *model.mutable_graph()->mutable_input(0)->mutable_type() = dynamic;
+  *model.mutable_graph()->mutable_output(0)->mutable_type() = dynamic;
+  auto arena = IOArena::Create(4);
+  SimpleRawBufferAllocator execution(8);
+  RuntimeContext context(
+      KernelContext(DefaultOpset(18)),
+      RuntimeContextOptions{.allocator = &execution, .io_allocator = arena.get()});
+  bool fail = false;
+  context.RegisterCustomKernel(
+      "test.feedback", "Step", [&](const NodeProto &node, RuntimeContext &rt) {
+        const Tensor &past = rt.Get(node.input(0));
+        const Shape shape{past.shape[0] + 1};
+        EXPECT_FALSE(rt.ReservePersistentAppend(past, shape, 0, 1, 0));
+        auto reservation = rt.ReservePersistentAppend(past, shape, 0, 0, 0);
+        EXT_ENFORCE(reservation.has_value(), "Expected a bound contiguous reservation.");
+        const auto tail = reservation->writable_bytes();
+        EXT_ENFORCE(tail.size() == sizeof(float), "Expected one new float.");
+        *reinterpret_cast<float *>(tail.data()) = rt.Get(node.input(1)).AsFloat()[0] * 2;
+        if (fail)
+          throw std::invalid_argument("failure after direct tail write");
+        rt.Put(node.output(0), rt.CommitPersistentAppend(0, std::move(*reservation), tail.size()));
+      });
+  RuntimeSessionOptions options;
+  options.persistent_tensor_initial_capacity = 4;
+  options.check_shapes = true;
+  FeedbackState state(model, {{"past", RuntimeValue(Tensor::FromFloat("", {0}, {}))}}, options);
+  const uint8_t *previous = nullptr;
+  for (int64_t step = 1; step <= 5; ++step) {
+    if (step == 3) {
+      fail = true;
+      EXPECT_THROW(state.Run(context, {{"tokens", Number(9)}}), std::invalid_argument);
+      EXPECT_EQ(state.Values().at("past").tensor.shape, Shape{2});
+      EXPECT_FLOAT_EQ(state.Values().at("past").tensor.AsFloat()[1], 4);
+      fail = false;
+    }
+    const auto output = state.Run(context, {{"tokens", Number(static_cast<float>(step))}});
+    const Tensor &present = output.at("present").tensor;
+    EXPECT_EQ(present.shape, Shape{step});
+    for (int64_t i = 0; i < step; ++i)
+      EXPECT_FLOAT_EQ(present.AsFloat()[i], static_cast<float>(2 * (i + 1)));
+    if (step > 1 && step <= 4) {
+      EXPECT_EQ(present.bytes(), previous);
+    }
+    if (step == 5) {
+      EXPECT_NE(present.bytes(), previous);
+    }
+    previous = present.bytes();
+  }
+  const auto statistics = state.PersistentStorageStats();
+  EXPECT_EQ(statistics.allocations, 2u);
+  EXPECT_EQ(statistics.allocated_bytes, 12 * sizeof(float));
+  EXPECT_EQ(statistics.prefix_copied_bytes, 4 * sizeof(float));
+  EXPECT_EQ(statistics.append_copied_bytes, 0u);
+  EXPECT_EQ(statistics.reuse_count, 4u);
+  EXPECT_EQ(execution.TotalAllocatedSize(), 0u);
+  EXPECT_EQ(arena->leased_count(), 1u);
+  state.Close();
+  EXPECT_EQ(arena->leased_count(), 0u);
+}
+
 TEST(FeedbackState, WholeTensorMatchesManualLoopAndSharesReadOnlyViews) {
   ModelProto model = Model();
   RuntimeContext context(KernelContext(DefaultOpset(18)));
@@ -1634,7 +1699,7 @@ TEST(FeedbackState, AttentionCacheFixedCapacityMatchesFunctionalGQAWithoutPrefix
     ModelProto model = AttentionModel(1, 1, query_heads);
     const auto serialized = model.SerializeAsString();
     RuntimeSessionOptions options;
-    options.attention_cache_initial_capacity = 32;
+    options.persistent_tensor_initial_capacity = 32;
     FeedbackState state(model, EmptyAttentionCache(), options);
     RuntimeContext context(KernelContext(DefaultOpset(23)));
     onnx_kernels::kernel::Attention reference(context.kernel_ctx());
@@ -1710,7 +1775,7 @@ TEST(FeedbackState, AttentionCacheSnapshotsAndOutputsBlockWritesAndSurviveResetC
 TEST(FeedbackState, AttentionCacheGeometricGrowthCopiesOnlyAtCapacityBoundaries) {
   ModelProto model = AttentionModel();
   RuntimeSessionOptions options;
-  options.attention_cache_initial_capacity = 2;
+  options.persistent_tensor_initial_capacity = 2;
   FeedbackState state(model, EmptyAttentionCache(), options);
   RuntimeContext context(KernelContext(DefaultOpset(23)));
   const uint8_t *previous = nullptr;
@@ -1916,7 +1981,7 @@ TEST(FeedbackState, AttentionCacheRejectsUnretainableAllocationAndCapacityOverfl
   EXPECT_EQ(state.Values().at("past_key").tensor.shape[2], 0);
   EXPECT_EQ(state.PersistentStorageStats().allocations, 1u);
   RuntimeSessionOptions options;
-  options.attention_cache_initial_capacity = std::numeric_limits<size_t>::max();
+  options.persistent_tensor_initial_capacity = std::numeric_limits<size_t>::max();
   FeedbackState overflow(model, EmptyAttentionCache(), options);
   RuntimeContext ordinary(KernelContext(DefaultOpset(23)));
   EXPECT_THROW(overflow.Run(ordinary, AttentionFeeds(1)), std::invalid_argument);
@@ -1946,7 +2011,7 @@ TEST(FeedbackState, AttentionCacheIndependentConcurrentRequests) {
 TEST(FeedbackState, AttentionCacheZeroCapacityUsesMeasuredFunctionalPath) {
   ModelProto model = AttentionModel();
   RuntimeSessionOptions options;
-  options.attention_cache_initial_capacity = 0;
+  options.persistent_tensor_initial_capacity = 0;
   FeedbackState state(model, EmptyAttentionCache(), options);
   RuntimeContext context(KernelContext(DefaultOpset(23)));
   for (int i = 0; i < 4; ++i)
@@ -2185,7 +2250,7 @@ TEST(FeedbackState, AttentionCacheVariableAndEmptyChunksPreserveNonemptyInitialP
   Tensor value = Tensor::FromFloat("", {1, 1, 2, 2}, {-1, -2, -3, -4});
   RuntimeValueMap initial{{"past_key", RuntimeValue(key)}, {"past_value", RuntimeValue(value)}};
   RuntimeSessionOptions options;
-  options.attention_cache_initial_capacity = 8;
+  options.persistent_tensor_initial_capacity = 8;
   FeedbackState state(model, std::move(initial), options);
   RuntimeContext context(KernelContext(DefaultOpset(23)));
   onnx_kernels::kernel::Attention reference(context.kernel_ctx());

@@ -76,8 +76,9 @@ struct RuntimeSessionOptions {
   /// check is skipped so a kernel may legitimately return an output allocated
   /// outside the common allocator.
   bool allow_external_output_allocators = false;
-  /// Initial token capacity for contiguous FeedbackState Attention caches; zero disables reuse.
-  size_t attention_cache_initial_capacity = 16;
+  /// Initial capacity along a kernel's append axis for contiguous persistent tensors.
+  /// Zero disables append reservations; kernels use their ordinary allocation path.
+  size_t persistent_tensor_initial_capacity = 16;
 };
 
 /** Reports the one-time kernel tuning work performed by a runtime session. */

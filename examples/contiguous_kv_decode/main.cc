@@ -79,7 +79,7 @@ int main() {
         RuntimeContextOptions{.allocator = &execution, .io_allocator = io.get()});
     FeedbackState state(model,
                         {{"past_key", Filled(heads, 0, 0)}, {"past_value", Filled(heads, 0, 0)}},
-                        RuntimeSessionOptions{.attention_cache_initial_capacity = 4});
+                        RuntimeSessionOptions{.persistent_tensor_initial_capacity = 4});
     PersistentStorageStatistics previous;
     for (int step = 0; step < 20; ++step) {
       RuntimeValueMap feeds{{"q", Filled(heads, 1, 0)},

@@ -234,9 +234,35 @@ Internally, ``FeedbackState`` retains ``PersistentValue`` objects, with a
 ``PersistentTensor`` at each tensor leaf. ``PersistentTensor`` composes an ordinary
 ``Tensor`` with certified allocation capacity; it does not inherit from ``Tensor``.
 The runtime receives ordinary tensor views and separate, move-only ``AppendLease``
-permissions for eligible root bindings. Neither tensor copies nor borrowed views
-carry capacity metadata or write permissions. Child function and subgraph contexts
-do not inherit these permissions.
+objects for eligible root bindings. Neither tensor copies nor borrowed views carry
+capacity metadata or write permissions. Child function and subgraph contexts do
+not inherit these permissions.
+
+The reservation API is operator-independent:
+
+1. A kernel calls ``RuntimeContext::ReservePersistentAppend`` with the desired
+   result shape, append axis and input/output slots. The context resolves the
+   exact declared binding and selects the output allocator.
+2. ``PersistentTensor::AppendLease::Reserve`` handles layout eligibility,
+   geometric growth and prefix relocation. It either reuses spare capacity or
+   allocates a new contiguous buffer and copies only the committed prefix.
+   Unsupported layouts return no reservation so the kernel can use its
+   ordinary implementation.
+3. The kernel initializes the entire ``AppendReservation::writable_bytes()``
+   span directly. There is no temporary tail tensor required by this API.
+4. ``RuntimeContext::CommitPersistentAppend`` checks the declared initialized
+   byte count, seals the candidate and returns an ordinary tensor view. This
+   does not publish the state: ``FeedbackState`` still validates all outputs
+   and publishes them together only after successful completion.
+
+A producer can compute new elements directly into that span. Attention instead
+copies the current K/V inputs, which already exist as model inputs, straight into
+the reserved region. Those copies remain necessary; the reservation API does not
+add an intermediate tensor or a second copy.
+
+This storage implementation is contiguous. A future ``PersistentPagedTensor``
+would own a different allocation policy and expose page-aware writable regions;
+paged storage and paged Attention kernels are not implemented here.
 
 The reusable layout is dense rank-four ``FLOAT`` with shape
 ``[1, 1, valid_length, head_size]`` for each K/V tensor. Query tensors can
@@ -248,9 +274,11 @@ K/V inputs and outputs. Intermediate tensors, function/control-flow transport
 and unmatched input/output pairs keep ordinary kernel concatenation; they do
 not acquire append permissions merely because another graph output is retained.
 
-``RuntimeSessionOptions::attention_cache_initial_capacity`` selects the initial
-token capacity (16 by default); zero disables this optimization. Capacity
-grows geometrically when necessary. This option affects ``FeedbackState``
+``RuntimeSessionOptions::persistent_tensor_initial_capacity`` selects the initial
+capacity along the kernel's append axis (16 by default; tokens for Attention);
+zero disables reservations. ``PersistentTensor`` grows capacity geometrically
+when necessary, using the selected allocator without an alternate allocator or
+automatic retry after allocation failure. This option affects ``FeedbackState``
 execution, not ordinary stateless ``RuntimeSession`` calls. It is a native
 C++ option; the Python feedback API uses the default.
 
@@ -270,9 +298,9 @@ Reuse is deliberately conservative:
   unchanged until successful publication. Capacity is published only when the
   returned tensor still matches the kernel's candidate owner, pointer, type,
   shape and logical byte extent.
-* Capacity exhaustion allocates a larger buffer and copies the valid prefix
-  once inside the Attention kernel. State publication still only transfers
-  owner handles.
+* Capacity exhaustion makes ``PersistentTensor`` allocate a larger buffer and
+  copy the valid prefix once. State publication still only transfers owner
+  handles.
 * Multiple batches or KV heads use ordinary dense concatenation: increasing
   the sequence dimension changes the stride between heads, so prefix-preserving
   tail append is not possible in that layout. Half-precision promotion and
@@ -294,6 +322,9 @@ generic persistence layer. Kernels report storage work through
 ``RuntimeContext::RecordPersistentStorageCopy`` or
 ``RuntimeContext::AccumulatePersistentStorageStatistics``; neither API depends
 on Attention. Function and subgraph contexts share the invocation's counters.
+Reservations report allocation, prefix relocation and reuse themselves. Kernels
+report copied append bytes only when they actually copy data; computing new
+elements directly into the writable region is not a copy.
 ``RuntimeContext::persistent_storage_statistics()`` exposes their cumulative
 snapshot, including instrumented paths outside feedback execution.
 

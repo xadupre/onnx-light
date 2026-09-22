@@ -80,7 +80,7 @@ private:
   std::vector<PersistentValue> values_;
   std::shared_ptr<PersistentStorageCounters> persistent_storage_counters_ =
       std::make_shared<PersistentStorageCounters>();
-  size_t attention_cache_initial_capacity_ = 0;
+  size_t persistent_tensor_initial_capacity_ = 0;
   bool allocators_captured_ = false;
   RawBufferAllocator *execution_allocator_ = nullptr;
   RawBufferAllocator *io_allocator_ = nullptr;

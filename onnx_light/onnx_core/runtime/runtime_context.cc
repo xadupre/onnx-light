@@ -10,7 +10,6 @@
 #include <algorithm>
 #include <chrono>
 #include <cstring>
-#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <unordered_set>
@@ -457,81 +456,48 @@ void RuntimeContext::RecordPersistentStorageCopy(size_t allocated, size_t prefix
       {reused ? 0u : 1u, allocated, prefix, appended, reused ? 1u : 0u});
 }
 
-std::optional<Tensor> RuntimeContext::TryAppendAttentionCache(const Tensor &past,
-                                                              const Tensor &current,
-                                                              int output_slot) {
-  if (attention_cache_initial_capacity_ == 0 || past.data_type != DataType::FLOAT ||
-      current.data_type != DataType::FLOAT || past.shape.size() != 4 || current.shape.size() != 4 ||
-      past.shape[0] != 1 || past.shape[1] != 1 || current.shape[0] != 1 || current.shape[1] != 1 ||
-      past.shape[3] <= 0 || past.shape[3] != current.shape[3] ||
+std::optional<PersistentTensor::AppendReservation>
+RuntimeContext::ReservePersistentAppend(const Tensor &past, const Shape &shape, size_t axis,
+                                        int input_slot, int output_slot) {
+  if (persistent_tensor_initial_capacity_ == 0 || persistent_graph_ == nullptr ||
+      !persistent_tensors_ || current_node_index_ < 0 ||
+      current_node_index_ >= persistent_graph_->node_size() || input_slot < 0 || output_slot < 0)
+    return std::nullopt;
+  const NodeProto &node = persistent_graph_->node(current_node_index_);
+  if (node.input_size() <= input_slot || node.output_size() <= output_slot ||
       (!output_slot_io_roles_.empty() &&
        static_cast<size_t>(output_slot) >= output_slot_io_roles_.size()))
-    return std::nullopt;
-  if (attention_cache_graph_ == nullptr || current_node_index_ < 0 ||
-      current_node_index_ >= attention_cache_graph_->node_size() ||
-      (output_slot != 1 && output_slot != 2))
-    return std::nullopt;
-  const NodeProto &node = attention_cache_graph_->node(current_node_index_);
-  const int input_slot = output_slot + 3;
-  if (node.op_type() != "Attention" || (!node.domain().empty() && node.domain() != "ai.onnx") ||
-      node.input_size() <= input_slot || node.output_size() <= output_slot)
     return std::nullopt;
   const auto input = tensors_.find(node.input(input_slot));
   if (input == tensors_.end() || &input->second != &past)
     return std::nullopt;
-  if (!persistent_tensors_)
-    return std::nullopt;
   auto binding =
       std::find_if(persistent_tensors_->begin(), persistent_tensors_->end(), [&](const auto &item) {
         return item.input == node.input(input_slot) && item.output == node.output(output_slot) &&
-               item.input_view == &past;
+               item.input_view == &past && item.append.Matches(past);
       });
   if (binding == persistent_tensors_->end())
     return std::nullopt;
-  const int64_t previous = past.shape[2], added = current.shape[2];
-  EXT_ENFORCE_INVALID(previous >= 0 && added >= 0 &&
-                          previous <= std::numeric_limits<int64_t>::max() - added,
-                      "Attention cache: sequence length overflow.");
-  Shape shape = past.shape;
-  shape[2] = previous + added;
-  const auto float_bytes = [](const Shape &dimensions) {
-    const int64_t count = dimensions.product(0, dimensions.size(), "Attention cache");
-    EXT_ENFORCE_INVALID(static_cast<uint64_t>(count) <=
-                            std::numeric_limits<size_t>::max() / sizeof(float),
-                        "Attention cache: byte size overflow.");
-    return static_cast<size_t>(count) * sizeof(float);
-  };
-  const size_t logical = float_bytes(shape);
-  const size_t prefix = float_bytes(past.shape);
-  const size_t appended = float_bytes(current.shape);
-  EXT_ENFORCE_INVALID(past.size_bytes() == prefix && current.size_bytes() == appended,
-                      "Attention cache: tensor byte extent mismatch.");
-  if (binding->append) {
-    auto candidate = binding->append->TryAppend(past, current, shape);
-    if (candidate) {
-      binding->candidate = std::move(candidate);
-      RecordPersistentStorageCopy(0, 0, appended, true);
-      return binding->candidate->BorrowView();
-    }
-  }
-  const size_t row_bytes = float_bytes({past.shape[3]});
-  const size_t max_capacity = std::numeric_limits<size_t>::max() / row_bytes;
-  size_t capacity =
-      std::max(attention_cache_initial_capacity_, binding->capacity_bytes / row_bytes);
-  EXT_ENFORCE_INVALID(capacity <= max_capacity,
-                      "Attention cache: initial capacity byte size overflow.");
-  const size_t required = logical / row_bytes;
-  while (capacity < required) {
-    capacity = capacity > max_capacity / 2 ? max_capacity : capacity * 2;
-    EXT_ENFORCE_INVALID(capacity >= required || capacity < max_capacity,
-                        "Attention cache: capacity overflow.");
-  }
-  const size_t allocated = capacity * row_bytes;
-  Tensor storage = MakeOutputTensor(output_slot, DataType::FLOAT, shape, allocated);
-  RecordPersistentStorageCopy(allocated, 0, 0);
-  binding->candidate = PersistentTensor::Concatenate(std::move(storage), past, current, shape);
-  AccumulatePersistentStorageStatistics(
-      {.prefix_copied_bytes = prefix, .append_copied_bytes = appended});
+  return binding->append.Reserve(shape, axis, persistent_tensor_initial_capacity_,
+                                 AllocatorForOutput(output_slot), *persistent_storage_counters_);
+}
+
+Tensor RuntimeContext::CommitPersistentAppend(int output_slot,
+                                              PersistentTensor::AppendReservation reservation,
+                                              size_t initialized_bytes) {
+  EXT_ENFORCE_INVALID(persistent_graph_ != nullptr && persistent_tensors_ &&
+                          current_node_index_ >= 0 &&
+                          current_node_index_ < persistent_graph_->node_size(),
+                      "RuntimeContext: no active persistent invocation.");
+  const NodeProto &node = persistent_graph_->node(current_node_index_);
+  EXT_ENFORCE_INVALID(output_slot >= 0 && output_slot < node.output_size(),
+                      "RuntimeContext: invalid persistent output slot.");
+  auto binding =
+      std::find_if(persistent_tensors_->begin(), persistent_tensors_->end(),
+                   [&](const auto &item) { return item.output == node.output(output_slot); });
+  EXT_ENFORCE_INVALID(binding != persistent_tensors_->end(),
+                      "RuntimeContext: output has no persistent binding.");
+  binding->candidate = reservation.Commit(initialized_bytes);
   return binding->candidate->BorrowView();
 }
 

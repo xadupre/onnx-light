@@ -8,6 +8,7 @@
 #include <atomic>
 #include <mutex>
 #include <optional>
+#include <span>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
@@ -44,11 +45,12 @@ private:
  * Ordinary Tensor views carry lifetime ownership, never capacity or write permissions.
  * Importing such a view retains its payload without certifying it for append.
  * The owner serializes access, as FeedbackState does; competing consumers of an
- * acquired AppendLease may atomically claim that lease only once.
+ * prepared AppendLease may atomically claim in-place reuse only once.
  */
 class ONNX_LIGHT_CORE_API PersistentTensor {
 public:
   class AppendLease;
+  class AppendReservation;
 
   explicit PersistentTensor(Tensor value);
   PersistentTensor(PersistentTensor &&) noexcept = default;
@@ -64,17 +66,13 @@ public:
   size_t capacity_bytes() const noexcept { return capacity_bytes_; }
   /** Returns whether a view has this exact owner, extent, type and shape. */
   bool Matches(const Tensor &view) const noexcept;
-  /** Acquires a one-use append lease before invocation-local views are created. */
-  std::optional<AppendLease> AcquireAppendLease() const;
-
   /**
-   * Copies a prefix and tail into fresh owned storage and retains its spare capacity.
+   * Prepares append reservations before invocation-local views are created.
    *
-   * The caller supplies a byte-concatenable layout and routes the allocation through
-   * the output allocator. Borrowed storage and unretainable allocations are rejected.
+   * Captures the prefix and its capacity. Only exclusive certified storage grants
+   * a one-use in-place permission; other reservations allocate independent storage.
    */
-  static PersistentTensor Concatenate(Tensor storage, const Tensor &prefix, const Tensor &tail,
-                                      const Shape &shape);
+  AppendLease PrepareAppend() const;
 
 private:
   Tensor value_;
@@ -82,10 +80,11 @@ private:
 };
 
 /**
- * Carries a move-only, one-use permission to write beyond a retained tensor's valid prefix.
+ * Reserves append destinations using the contiguous tensor's storage policy.
  *
- * A successful append produces a candidate; it does not publish a new state value.
- * An abandoned candidate may leave tail bytes written but never changes the old extent.
+ * Captures the retained prefix and may extend its logical extent in place once.
+ * Further reservations allocate independently. Allocation, geometric growth and prefix
+ * relocation belong here; producing the new elements belongs to the kernel.
  */
 class ONNX_LIGHT_CORE_API PersistentTensor::AppendLease {
 public:
@@ -94,15 +93,57 @@ public:
   AppendLease(const AppendLease &) = delete;
   AppendLease &operator=(const AppendLease &) = delete;
 
-  /** Appends once if the original prefix still matches and the candidate fits. */
-  std::optional<PersistentTensor> TryAppend(const Tensor &prefix, const Tensor &tail,
-                                            const Shape &shape);
+  /** Returns whether the invocation input still matches the captured prefix. */
+  bool Matches(const Tensor &view) const noexcept { return prefix_.Matches(view); }
+  /**
+   * Reserves an uninitialized tail, declining layouts that cannot append contiguously.
+   *
+   * Only the append axis may grow, and the product of preceding dimensions must
+   * be one. Initial capacity is measured along that axis, not in bytes.
+   * Records allocation, prefix copies and reuse, including work before a failure.
+   * The caller supplies the output allocator; no alternate allocator is used.
+   */
+  std::optional<AppendReservation> Reserve(const Shape &shape, size_t axis, size_t initial_capacity,
+                                           RawBufferAllocator *allocator,
+                                           PersistentStorageCounters &counters);
 
 private:
   friend class PersistentTensor;
-  explicit AppendLease(const PersistentTensor &tensor);
+  AppendLease(const PersistentTensor &tensor, bool available);
   PersistentTensor prefix_;
-  std::atomic<bool> available_{true};
+  std::atomic<bool> available_;
+};
+
+/**
+ * Exposes only the writable tail of an unpublished contiguous result.
+ *
+ * The kernel initializes the entire region directly, then seals the candidate.
+ * Destruction without Commit abandons it without changing the retained prefix
+ * or logical extent. Written tail bytes need not be restored on abandonment.
+ */
+class ONNX_LIGHT_CORE_API PersistentTensor::AppendReservation {
+public:
+  AppendReservation(AppendReservation &&) noexcept = default;
+  AppendReservation &operator=(AppendReservation &&) noexcept = default;
+  AppendReservation(const AppendReservation &) = delete;
+  AppendReservation &operator=(const AppendReservation &) = delete;
+
+  /** Returns the reserved tail, valid until this reservation is committed or destroyed. */
+  std::span<uint8_t> writable_bytes();
+  /**
+   * Seals a fully initialized candidate without publishing the feedback state.
+   *
+   * Requires initialized_bytes to match the whole tail; the caller guarantees
+   * that these bytes were written. No writable span may be used after this call.
+   */
+  PersistentTensor Commit(size_t initialized_bytes);
+
+private:
+  friend class AppendLease;
+  AppendReservation(PersistentTensor candidate, size_t prefix_bytes)
+      : candidate_(std::move(candidate)), prefix_bytes_(prefix_bytes) {}
+  PersistentTensor candidate_;
+  size_t prefix_bytes_;
 };
 
 /** Retains a whole feedback value with PersistentTensor at its numeric tensor leaves. */

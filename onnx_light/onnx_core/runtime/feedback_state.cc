@@ -137,7 +137,7 @@ FeedbackState::FeedbackState(const ModelProto &model, RuntimeValueMap initial,
     bindings_.push_back({declared.input_name(), declared.output_name(),
                          &InputType(declared.input_name(), model.graph().input())});
   }
-  attention_cache_initial_capacity_ = options.attention_cache_initial_capacity;
+  persistent_tensor_initial_capacity_ = options.persistent_tensor_initial_capacity;
   session_ = std::make_unique<RuntimeSession>(model, std::move(options));
   values_ = ValidateInitial(std::move(initial));
 }
@@ -171,16 +171,15 @@ RuntimeValueMap FeedbackState::Run(RuntimeContext &context, const RuntimeValueMa
                       "FeedbackState: invocation was cancelled or completion is not pending.");
   RuntimeContext invocation = context.MakeFunctionContext();
   invocation.persistent_storage_counters_ = persistent_storage_counters_;
-  invocation.attention_cache_initial_capacity_ = attention_cache_initial_capacity_;
-  invocation.attention_cache_graph_ = &model_.graph();
+  invocation.persistent_tensor_initial_capacity_ = persistent_tensor_initial_capacity_;
+  invocation.persistent_graph_ = &model_.graph();
   invocation.persistent_tensors_ =
       std::make_shared<std::vector<RuntimeContext::PersistentTensorBinding>>();
   RuntimeValueMap inputs;
   for (size_t i = 0; i < bindings_.size(); ++i) {
     if (const auto *tensor = values_[i].tensor()) {
       invocation.persistent_tensors_->push_back({bindings_[i].input, bindings_[i].output, nullptr,
-                                                 tensor->capacity_bytes(),
-                                                 tensor->AcquireAppendLease(), std::nullopt});
+                                                 tensor->PrepareAppend(), std::nullopt});
     }
     inputs.emplace(bindings_[i].input, values_[i].BorrowView());
   }

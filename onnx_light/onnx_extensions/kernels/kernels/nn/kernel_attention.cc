@@ -164,10 +164,20 @@ Tensor ConcatAxis2(const Tensor &a, const Tensor &b, int output_slot, RuntimeCon
   const size_t appended = FloatCacheBytes(b.shape);
   EXT_ENFORCE_INVALID(a.size_bytes() == prefix && b.size_bytes() == appended,
                       "kernel::Attention: cache tensor byte extent mismatch.");
+  EXT_ENFORCE_INVALID((prefix == 0 || a.bytes() != nullptr) &&
+                          (appended == 0 || b.bytes() != nullptr),
+                      "kernel::Attention: cache tensor has a null data pointer.");
   if (rt != nullptr && allow_capacity) {
-    auto result = rt->TryAppendAttentionCache(a, b, output_slot);
-    if (result)
-      return std::move(*result);
+    auto reservation = rt->ReservePersistentAppend(a, shape, 2, output_slot + 3, output_slot);
+    if (reservation) {
+      const auto destination = reservation->writable_bytes();
+      EXT_ENFORCE_INVALID(destination.size() == appended,
+                          "kernel::Attention: reserved append byte extent mismatch.");
+      if (appended != 0)
+        std::memmove(destination.data(), b.bytes(), appended);
+      rt->AccumulatePersistentStorageStatistics({.append_copied_bytes = appended});
+      return rt->CommitPersistentAppend(output_slot, std::move(*reservation), appended);
+    }
   }
   // Multiple dense batch/head slices change stride when the sequence grows.
   // They must be repacked rather than treated as a contiguous append buffer.

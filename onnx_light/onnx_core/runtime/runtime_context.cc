@@ -490,8 +490,7 @@ void RuntimeContext::RecordPersistentStorageEvent(const PersistentStorageStatist
 std::optional<PersistentTensor::AppendReservation>
 RuntimeContext::ReservePersistentAppend(const Tensor &past, const Shape &shape, size_t axis,
                                         int input_slot, int output_slot) {
-  if (persistent_tensor_initial_capacity_ == 0 || persistent_graph_ == nullptr ||
-      !persistent_tensors_ || current_node_index_ < 0 ||
+  if (persistent_graph_ == nullptr || !persistent_tensors_ || current_node_index_ < 0 ||
       current_node_index_ >= persistent_graph_->node_size() || input_slot < 0 || output_slot < 0)
     return std::nullopt;
   const NodeProto &node = persistent_graph_->node(current_node_index_);

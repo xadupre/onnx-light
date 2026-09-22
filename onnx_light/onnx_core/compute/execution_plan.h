@@ -65,7 +65,8 @@ public:
   ExecutionPlan() = default;
 
   /// Builds the plan for ``graph``. ``keep`` is seeded with the graph's
-  /// declared inputs, initializers and declared outputs.
+  /// declared inputs, initializers and declared outputs. Rejects persistent
+  /// inputs that do not have exactly one value-use in the graph.
   explicit ExecutionPlan(const GraphProto &graph);
 
   /// Builds the plan for ``func``. ``keep`` is seeded with the

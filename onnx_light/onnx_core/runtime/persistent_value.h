@@ -33,8 +33,8 @@ struct ONNX_LIGHT_CORE_API PersistentStorageStatistics {
  *
  * Ordinary Tensor views carry lifetime ownership, never capacity or write permissions.
  * Importing such a view retains its payload without certifying it for append.
- * The owner serializes access, as FeedbackState does; competing consumers of an
- * prepared AppendLease may atomically claim in-place reuse only once.
+ * The owner serializes access, as FeedbackState does; each prepared AppendLease
+ * may be consumed only once, even when an append requires a copy or is declined.
  */
 class ONNX_LIGHT_CORE_API PersistentTensor {
 public:
@@ -58,8 +58,8 @@ public:
   /**
    * Prepares append reservations before invocation-local views are created.
    *
-   * Captures the prefix and its capacity. Only exclusive certified storage grants
-   * a one-use in-place permission; other reservations allocate independent storage.
+   * Captures the prefix and its capacity for one append attempt. Only exclusive
+   * certified storage grants in-place permission; otherwise the append allocates.
    */
   AppendLease PrepareAppend() const;
 
@@ -71,9 +71,9 @@ private:
 /**
  * Reserves append destinations using the contiguous tensor's storage policy.
  *
- * Captures the retained prefix and may extend its logical extent in place once.
- * Further reservations allocate independently. Allocation, geometric growth and prefix
- * relocation belong here; producing the new elements belongs to the kernel.
+ * Captures the retained prefix for one append attempt. Further reservations are
+ * rejected. Allocation, geometric growth and prefix relocation belong here;
+ * producing the new elements belongs to the kernel.
  */
 class ONNX_LIGHT_CORE_API PersistentTensor::AppendLease {
 public:
@@ -89,6 +89,7 @@ public:
    *
    * Only the append axis may grow, and the product of preceding dimensions must
    * be one. Initial capacity is measured along that axis, not in bytes.
+   * Zero capacity declines the reservation but still consumes this lease.
    * Reports allocation, prefix copies and reuse only when a callback is supplied,
    * including work before a failure. The callback is invoked synchronously.
    * The caller supplies the output allocator; no alternate allocator is used.
@@ -100,8 +101,9 @@ public:
 private:
   friend class PersistentTensor;
   AppendLease(const PersistentTensor &tensor, bool available);
+  enum class State : uint8_t { kReusable, kCopyRequired, kConsumed };
   PersistentTensor prefix_;
-  std::atomic<bool> available_;
+  std::atomic<State> state_;
 };
 
 /**

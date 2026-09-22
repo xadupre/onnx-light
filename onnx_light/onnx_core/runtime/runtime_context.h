@@ -664,7 +664,12 @@ public:
 
   /** Records storage work in events() only when events_enabled() is true. */
   void RecordPersistentStorageEvent(const PersistentStorageStatistics &statistics);
-  /** Reserves a writable tail for an exact graph-declared persistent input/output pair. */
+  /**
+   * Reserves a writable tail for an exact graph-declared persistent input/output pair.
+   *
+   * Rejects a second attempt for the same binding in one invocation, including when
+   * the first attempt declined because capacity is disabled or the layout is unsupported.
+   */
   std::optional<PersistentTensor::AppendReservation>
   ReservePersistentAppend(const Tensor &past, const Shape &shape, size_t axis, int input_slot,
                           int output_slot);

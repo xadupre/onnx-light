@@ -15,6 +15,7 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
  * Retains graph-declared outputs for the next ordinary session invocation.
  *
  * Each binding selects one whole input and one whole output by exact graph name.
+ * Each bound input must have exactly one value-use in the graph, including read-only uses.
  * Structured values retain all fields; current feeds cannot override retained inputs.
  * The final model must not be changed. A reference-only caller must keep it alive
  * until this state and all model-backed output views are released. The shared-model

@@ -29,6 +29,36 @@ ModelProto MakeValidModel() {
   return model;
 }
 
+ModelProto MakePersistentModel() {
+  ModelProto model = MakeValidModel();
+  auto *binding = model.mutable_graph()->add_persistent_bindings();
+  binding->set_input_name("x");
+  binding->set_output_name("y");
+  return model;
+}
+
+GraphProto MakeCapturingGraph() {
+  GraphProto graph = MakeValidModel().graph();
+  graph.clear_input();
+  return graph;
+}
+
+GraphProto *AddNestedGraph(NodeProto &node, bool repeated) {
+  auto *attribute = node.add_attribute();
+  attribute->set_name(repeated ? "bodies" : "body");
+  attribute->set_type(repeated ? AttributeProto::GRAPHS : AttributeProto::GRAPH);
+  return repeated ? attribute->add_graphs() : attribute->mutable_g();
+}
+
+void ExpectPersistentBindingError(const GraphProto &graph, const std::string &message) {
+  try {
+    VerifyPersistentBindings(nullptr, graph);
+    FAIL() << "Invalid persistent binding was accepted.";
+  } catch (const std::invalid_argument &error) {
+    EXPECT_NE(std::string(error.what()).find(message), std::string::npos) << error.what();
+  }
+}
+
 } // namespace
 
 TEST(onnx_verify, VerifyModel_Valid) {
@@ -180,15 +210,17 @@ TEST(onnx_verify, PersistentBindings_ExactNamesAndDuplicateSources) {
   ModelProto model = MakeValidModel();
   model.mutable_graph()->mutable_input(0)->set_name("state.in");
   model.mutable_graph()->mutable_output(0)->set_name("state.out");
+  model.mutable_graph()->mutable_node(0)->ref_input()[0] = "state.in";
+  model.mutable_graph()->mutable_node(0)->ref_output()[0] = "state.out";
   auto *binding = model.mutable_graph()->add_persistent_bindings();
   binding->set_input_name("state.in");
   binding->set_output_name("state.out");
-  EXPECT_NO_THROW(VerifyPersistentBindings(nullptr, model.graph()));
+  EXPECT_NO_THROW(VerifyModel(model));
   binding->set_input_name("state.in.cache");
-  EXPECT_THROW(VerifyPersistentBindings(nullptr, model.graph()), std::invalid_argument);
+  ExpectPersistentBindingError(model.graph(), "exact existing typed graph input/output name");
   binding->set_input_name("state.in");
   binding->set_output_name("state.out.cache");
-  EXPECT_THROW(VerifyPersistentBindings(nullptr, model.graph()), std::invalid_argument);
+  ExpectPersistentBindingError(model.graph(), "exact existing typed graph input/output name");
   binding->set_output_name("state.out");
   auto *input = model.mutable_graph()->add_input();
   input->set_name("other");
@@ -196,7 +228,293 @@ TEST(onnx_verify, PersistentBindings_ExactNamesAndDuplicateSources) {
   auto *second = model.mutable_graph()->add_persistent_bindings();
   second->set_input_name("other");
   second->set_output_name("state.out");
-  EXPECT_THROW(VerifyPersistentBindings(nullptr, model.graph()), std::invalid_argument);
+  ExpectPersistentBindingError(model.graph(), "duplicate output names");
+}
+
+TEST(onnx_verify, PersistentBindings_RejectsUnusedInput) {
+  ModelProto model = MakePersistentModel();
+  auto &graph = *model.mutable_graph();
+  auto *ordinary = graph.add_input();
+  ordinary->set_name("ordinary");
+  *ordinary->mutable_type() = graph.input(0).type();
+  graph.mutable_node(0)->ref_input()[0] = "ordinary";
+  *graph.add_value_info() = graph.input(0);
+  ExpectPersistentBindingError(
+      graph, "Persistent input 'x' must be used exactly once; found 0 value-uses");
+  EXPECT_THROW(VerifyModel(model), std::invalid_argument);
+  graph.clear_persistent_bindings();
+  EXPECT_NO_THROW(VerifyModel(model));
+}
+
+TEST(onnx_verify, PersistentBindings_IgnoresMetadataAndEmptyOptionalInputs) {
+  ModelProto model = MakePersistentModel();
+  auto &graph = *model.mutable_graph();
+  *graph.add_value_info() = graph.input(0);
+  *graph.add_value_info() = graph.output(0);
+  graph.mutable_node(0)->add_input("");
+  EXPECT_NO_THROW(VerifyModel(model));
+}
+
+TEST(onnx_verify, PersistentBindings_RejectsMultipleConsumersIncludingReadOnly) {
+  for (const char *consumer : {"Identity", "Shape"}) {
+    SCOPED_TRACE(consumer);
+    ModelProto model = MakePersistentModel();
+    auto &graph = *model.mutable_graph();
+    graph.mutable_node(0)->set_op_type("Attention");
+    auto *second = graph.add_node();
+    second->set_op_type(consumer);
+    second->add_input("x");
+    second->add_output("observed");
+    ExpectPersistentBindingError(
+        graph, "Persistent input 'x' must be used exactly once; found 2 value-uses");
+    EXPECT_THROW(VerifyModel(model), std::invalid_argument);
+    graph.clear_persistent_bindings();
+    EXPECT_NO_THROW(VerifyModel(model));
+  }
+}
+
+TEST(onnx_verify, PersistentBindings_CountsEveryInputPosition) {
+  ModelProto model = MakePersistentModel();
+  auto *node = model.mutable_graph()->mutable_node(0);
+  node->set_op_type("Add");
+  node->add_input("x");
+  ExpectPersistentBindingError(
+      model.graph(), "Persistent input 'x' must be used exactly once; found 2 value-uses");
+  EXPECT_THROW(VerifyModel(model), std::invalid_argument);
+  node->add_input("x");
+  ExpectPersistentBindingError(
+      model.graph(), "Persistent input 'x' must be used exactly once; found 3 value-uses");
+}
+
+TEST(onnx_verify, PersistentBindings_ChecksEveryBoundInput) {
+  ModelProto model = MakePersistentModel();
+  auto &graph = *model.mutable_graph();
+  auto *input = graph.add_input();
+  *input = graph.input(0);
+  input->set_name("other");
+  auto *output = graph.add_output();
+  *output = graph.output(0);
+  output->set_name("next");
+  auto *node = graph.add_node();
+  node->set_op_type("Identity");
+  node->add_input("other");
+  node->add_output("next");
+  auto *binding = graph.add_persistent_bindings();
+  binding->set_input_name("other");
+  binding->set_output_name("next");
+  EXPECT_NO_THROW(VerifyModel(model));
+
+  node->add_input("other");
+  ExpectPersistentBindingError(
+      graph, "Persistent input 'other' must be used exactly once; found 2 value-uses");
+  node->clear_input();
+  ExpectPersistentBindingError(
+      graph, "Persistent input 'other' must be used exactly once; found 0 value-uses");
+}
+
+TEST(onnx_verify, PersistentBindings_CountsDirectGraphOutput) {
+  ModelProto model = MakePersistentModel();
+  auto &graph = *model.mutable_graph();
+  graph.clear_node();
+  graph.mutable_output(0)->set_name("x");
+  graph.mutable_persistent_bindings(0)->set_output_name("x");
+  EXPECT_NO_THROW(VerifyModel(model));
+
+  auto *node = graph.add_node();
+  node->set_op_type("Identity");
+  node->add_input("x");
+  node->add_output("y");
+  ExpectPersistentBindingError(
+      graph, "Persistent input 'x' must be used exactly once; found 2 value-uses");
+  EXPECT_THROW(VerifyModel(model), std::invalid_argument);
+  graph.clear_persistent_bindings();
+  EXPECT_NO_THROW(VerifyModel(model));
+}
+
+TEST(onnx_verify, PersistentBindings_CountsNestedGraphAndGraphsCaptures) {
+  for (bool outer_repeated : {false, true}) {
+    for (bool inner_repeated : {false, true}) {
+      SCOPED_TRACE(outer_repeated);
+      SCOPED_TRACE(inner_repeated);
+      ModelProto model = MakePersistentModel();
+      auto *node = model.mutable_graph()->mutable_node(0);
+      node->set_op_type("WithSubgraph");
+      node->clear_input();
+      auto *outer = AddNestedGraph(*node, outer_repeated);
+      *outer = MakeCapturingGraph();
+      *outer->add_value_info() = model.graph().input(0);
+      auto *nested = outer->mutable_node(0);
+      nested->set_op_type("WithSubgraph");
+      nested->clear_input();
+      auto *inner = AddNestedGraph(*nested, inner_repeated);
+      *inner = MakeCapturingGraph();
+      *inner->add_value_info() = model.graph().input(0);
+      EXPECT_NO_THROW(VerifyModel(model));
+
+      node->add_input("x");
+      ExpectPersistentBindingError(
+          model.graph(), "Persistent input 'x' must be used exactly once; found 2 value-uses");
+      EXPECT_THROW(VerifyModel(model), std::invalid_argument);
+      inner->mutable_node(0)->add_input("x");
+      ExpectPersistentBindingError(
+          model.graph(), "Persistent input 'x' must be used exactly once; found 3 value-uses");
+    }
+  }
+}
+
+TEST(onnx_verify, PersistentBindings_CountsEveryBranchOutputCapture) {
+  for (bool repeated : {false, true}) {
+    SCOPED_TRACE(repeated);
+    ModelProto model = MakePersistentModel();
+    auto *node = model.mutable_graph()->mutable_node(0);
+    node->clear_input();
+    node->set_op_type(repeated ? "WithSubgraphs" : "If");
+    if (!repeated) {
+      auto *condition = model.mutable_graph()->add_input();
+      condition->set_name("condition");
+      auto *type = condition->mutable_type()->mutable_tensor_type();
+      type->set_elem_type(TensorProto::BOOL);
+      type->mutable_shape()->ref_dim();
+      node->add_input("condition");
+    }
+    auto *first = AddNestedGraph(*node, repeated);
+    first->set_name("then");
+    first->add_output()->set_name("x");
+    EXPECT_NO_THROW(VerifyModel(model));
+
+    GraphProto *second;
+    if (repeated) {
+      second = node->mutable_attribute(0)->add_graphs();
+    } else {
+      node->mutable_attribute(0)->set_name("then_branch");
+      second = AddNestedGraph(*node, false);
+      node->mutable_attribute(1)->set_name("else_branch");
+    }
+    second->set_name("else");
+    second->add_output()->set_name("x");
+    ExpectPersistentBindingError(
+        model.graph(), "Persistent input 'x' must be used exactly once; found 2 value-uses");
+    EXPECT_THROW(VerifyModel(model), std::invalid_argument);
+    model.mutable_graph()->clear_persistent_bindings();
+    EXPECT_NO_THROW(VerifyModel(model));
+  }
+}
+
+TEST(onnx_verify, PersistentBindings_RespectsLocalDefinitionsAndRestoresSiblingScope) {
+  for (int definition = 0; definition < 5; ++definition) {
+    SCOPED_TRACE(definition);
+    ModelProto model = MakePersistentModel();
+    auto *node = model.mutable_graph()->mutable_node(0);
+    auto *outer = AddNestedGraph(*node, false);
+    outer->set_name("shadowing");
+    switch (definition) {
+    case 0:
+      outer->add_input()->set_name("x");
+      break;
+    case 1:
+      outer->add_initializer()->set_name("x");
+      break;
+    case 2:
+      outer->add_sparse_initializer()->mutable_values()->set_name("x");
+      break;
+    case 3:
+      outer->add_encoded_initializer()->set_name("x");
+      break;
+    case 4:
+      auto *producer = outer->add_node();
+      producer->set_op_type("Constant");
+      producer->add_output("x");
+      break;
+    }
+    outer->add_output()->set_name("x");
+    auto *nested = outer->add_node();
+    nested->set_op_type("WithSubgraph");
+    nested->add_output("nested");
+    auto *inner = AddNestedGraph(*nested, false);
+    *inner = MakeCapturingGraph();
+    inner->add_input()->set_name("x");
+    *AddNestedGraph(*nested, true) = MakeCapturingGraph();
+    // Tests the binding counter alone; VerifyGraph separately enforces SSA and tensor validity.
+    EXPECT_NO_THROW(VerifyPersistentBindings(nullptr, model.graph()));
+    auto *sibling = AddNestedGraph(*node, true);
+    *sibling = MakeCapturingGraph();
+    ExpectPersistentBindingError(
+        model.graph(), "Persistent input 'x' must be used exactly once; found 2 value-uses");
+  }
+}
+
+TEST(onnx_verify, PersistentBindings_CountsFunctionCallArgumentsWithoutExpandingBodies) {
+  ModelProto model = MakePersistentModel();
+  model.add_opset("custom", 1);
+  auto *function = model.add_functions();
+  function->set_name("UseTwice");
+  function->set_domain("custom");
+  function->add_input("state");
+  function->add_output("result");
+  auto *body = function->add_node();
+  body->set_op_type("Add");
+  body->add_input("state");
+  body->add_input("state");
+  body->add_output("result");
+  auto *call = model.mutable_graph()->mutable_node(0);
+  call->set_op_type("UseTwice");
+  call->set_domain("custom");
+  EXPECT_NO_THROW(VerifyModel(model));
+
+  function->add_input("other");
+  call->add_input("x");
+  ExpectPersistentBindingError(
+      model.graph(), "Persistent input 'x' must be used exactly once; found 2 value-uses");
+  EXPECT_THROW(VerifyModel(model), std::invalid_argument);
+}
+
+TEST(onnx_verify, PersistentBindings_TypeErrorsPrecedeUseCountErrors) {
+  ModelProto model = MakePersistentModel();
+  model.mutable_graph()->mutable_node(0)->clear_input();
+  model.mutable_graph()->mutable_output(0)->mutable_type()->mutable_tensor_type()->set_elem_type(
+      TensorProto::INT32);
+  ExpectPersistentBindingError(model.graph(), "compatible tensor/struct types");
+  model.mutable_graph()->mutable_output(0)->mutable_type()->mutable_tensor_type()->set_elem_type(
+      TensorProto::STRING);
+  ExpectPersistentBindingError(model.graph(), "String tensors cannot be persistent");
+}
+
+TEST(onnx_verify, PersistentInputUses_DoesNotRequireTypeCatalogue) {
+  ModelProto model = MakePersistentModel();
+  auto &graph = *model.mutable_graph();
+  TypeProto type;
+  type.mutable_struct_type()->set_type_ref(123);
+  *graph.mutable_input(0)->mutable_type() = type;
+  *graph.mutable_output(0)->mutable_type() = type;
+  EXPECT_NO_THROW(VerifyPersistentInputUses(graph));
+  EXPECT_THROW(VerifyPersistentBindings(nullptr, graph), std::invalid_argument);
+
+  graph.mutable_node(0)->add_input("x");
+  try {
+    VerifyPersistentInputUses(graph);
+    FAIL() << "Repeated persistent input was accepted.";
+  } catch (const std::invalid_argument &error) {
+    EXPECT_NE(std::string(error.what())
+                  .find("Persistent input 'x' must be used exactly once; found 2 value-uses"),
+              std::string::npos);
+  }
+  graph.mutable_node(0)->clear_input();
+  EXPECT_THROW(VerifyPersistentInputUses(graph), std::invalid_argument);
+}
+
+TEST(onnx_verify, PersistentInputUses_DoesNotValidateDeclarations) {
+  ModelProto model = MakePersistentModel();
+  auto &graph = *model.mutable_graph();
+  graph.clear_input();
+  graph.clear_output();
+  const auto binding = graph.persistent_bindings(0);
+  graph.add_persistent_bindings(binding);
+  EXPECT_NO_THROW(VerifyPersistentInputUses(graph));
+  EXPECT_THROW(VerifyPersistentBindings(nullptr, graph), std::invalid_argument);
+
+  graph.clear_persistent_bindings();
+  graph.mutable_node(0)->add_input("x");
+  EXPECT_NO_THROW(VerifyPersistentInputUses(graph));
 }
 
 TEST(onnx_verify, PersistentBindings_PartialTensorDeclarations) {

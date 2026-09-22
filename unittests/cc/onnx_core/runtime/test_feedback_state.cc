@@ -90,6 +90,15 @@ void RegisterStep(RuntimeContext &context) {
       });
 }
 
+void RegisterIdentity(RuntimeContext &context) {
+  context.RegisterCustomKernel("", "Identity", [](const NodeProto &node, RuntimeContext &rt) {
+    if (rt.Has(node.input(0)))
+      rt.Put(node.output(0), rt.Get(node.input(0)).BorrowView());
+    else
+      rt.values()[node.output(0)] = rt.values().at(node.input(0)).BorrowView();
+  });
+}
+
 RuntimeValue Cache(float key, float value) {
   return RuntimeValue(RuntimeValueMap{{"keys", Number(key)}, {"values", Number(value)}});
 }
@@ -233,6 +242,57 @@ TEST(FeedbackState, GenericProducerComputesDirectlyIntoPersistentTail) {
   }
 }
 
+TEST(FeedbackState, RuntimeRejectsPersistentInputsWithoutExactlyOneUse) {
+  for (int mode = 0; mode < 4; ++mode) {
+    SCOPED_TRACE(mode);
+    ModelProto model = Model();
+    GraphProto &graph = *model.mutable_graph();
+    if (mode == 0) {
+      *graph.mutable_node(0)->mutable_input(0) = "tokens";
+    } else if (mode == 1) {
+      graph.mutable_node(0)->add_input("past");
+    } else if (mode == 2) {
+      NodeProto *observer = graph.add_node();
+      observer->set_op_type("Shape");
+      observer->add_input("past");
+      observer->add_output("past_shape");
+    } else {
+      *graph.add_output() = graph.input(0);
+    }
+    EXPECT_THROW({ ExecutionPlan plan(graph); }, std::invalid_argument);
+    EXPECT_THROW({ RuntimeSession session(model); }, std::invalid_argument);
+    EXPECT_THROW({ FeedbackState state(model, {{"past", Number(0)}}); }, std::invalid_argument);
+    graph.clear_persistent_bindings();
+    EXPECT_NO_THROW({ RuntimeSession session(model); });
+  }
+}
+
+TEST(FeedbackState, RuntimeRejectsSecondAppendAttemptEvenWhenCapacityIsDisabled) {
+  for (size_t capacity : {0u, 4u}) {
+    SCOPED_TRACE(capacity);
+    ModelProto model = Model();
+    auto *input_type = model.mutable_graph()->mutable_input(0)->mutable_type();
+    input_type->mutable_tensor_type()->mutable_shape()->mutable_dim(0)->clear_dim_value();
+    *model.mutable_graph()->mutable_output(0)->mutable_type() = *input_type;
+    RuntimeSessionOptions options;
+    options.persistent_tensor_initial_capacity = capacity;
+    FeedbackState state(model, {{"past", Number(0)}}, options);
+    RuntimeContext context(KernelContext(DefaultOpset(18)));
+    bool first_attempt_finished = false;
+    context.RegisterCustomKernel("test.feedback", "Step",
+                                 [&](const NodeProto &node, RuntimeContext &rt) {
+                                   const Tensor &past = rt.Get("past");
+                                   auto first = rt.ReservePersistentAppend(past, {2}, 0, 0, 0);
+                                   EXPECT_EQ(first.has_value(), capacity != 0);
+                                   first_attempt_finished = true;
+                                   rt.ReservePersistentAppend(past, {2}, 0, 0, 0);
+                                   rt.Put(node.output(0), past.BorrowView());
+                                 });
+    EXPECT_THROW(state.Run(context, {{"tokens", Number(1)}}), std::invalid_argument);
+    EXPECT_TRUE(first_attempt_finished);
+  }
+}
+
 TEST(FeedbackState, StorageEventUsesExistingActivationMetadataAndClearing) {
   SimpleRawBufferAllocator allocator(4);
   RuntimeContext context(KernelContext(DefaultOpset(18)),
@@ -292,7 +352,14 @@ TEST(FeedbackState, FunctionAndSubgraphStorageEventsRespectActivationAndSurviveF
         attribute->set_name(name);
         attribute->set_type(AttributeProto::GRAPH);
         auto *branch = attribute->mutable_g();
-        add_audit(branch->add_node());
+        if (std::string(name) == "then_branch") {
+          add_audit(branch->add_node());
+        } else {
+          auto *identity = branch->add_node();
+          identity->set_op_type("Identity");
+          identity->add_input("tokens");
+          identity->add_output("present");
+        }
         auto *output = branch->add_output();
         output->set_name("present");
         *output->mutable_type() = FloatType();
@@ -311,6 +378,7 @@ TEST(FeedbackState, FunctionAndSubgraphStorageEventsRespectActivationAndSurviveF
     }
     RuntimeContext context(KernelContext(DefaultOpset(18)),
                            RuntimeContextOptions{.events_enabled = enabled});
+    RegisterIdentity(context);
     bool fail = false;
     context.RegisterCustomKernel(
         "test.feedback", "Audit", [&](const NodeProto &node, RuntimeContext &rt) {
@@ -930,14 +998,20 @@ TEST(FeedbackState, StructuredValuesCrossIfBranches) {
   auto *opset = model.add_opset_import();
   opset->set_domain("");
   opset->set_version(18);
+  NodeProto step = model.graph().node(0);
+  *step.mutable_output(0) = "next_response";
   GraphProto branch;
-  *branch.add_node() = model.graph().node(0);
+  auto *identity = branch.add_node();
+  identity->set_op_type("Identity");
+  identity->add_input("next_response");
+  identity->add_output("response");
   *branch.add_output() = model.graph().output(0);
   auto *cond = model.mutable_graph()->add_input();
   cond->set_name("cond");
   cond->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::BOOL);
   cond->mutable_type()->mutable_tensor_type()->mutable_shape();
   model.mutable_graph()->clear_node();
+  *model.mutable_graph()->add_node() = step;
   auto *node = model.mutable_graph()->add_node();
   node->set_op_type("If");
   node->add_input("cond");
@@ -953,6 +1027,7 @@ TEST(FeedbackState, StructuredValuesCrossIfBranches) {
   const uint8_t *expected =
       initial.at("request").fields.at("cache").fields.at("keys").tensor.bytes();
   RegisterStructuredStep(context, &expected);
+  RegisterIdentity(context);
   FeedbackState state(model, initial);
   for (uint8_t condition : {1, 0})
     state.Run(context, {{"tokens", Number(3)},
@@ -980,6 +1055,10 @@ TEST(FeedbackState, SelectedIfInitializerRetainsItsModelStorage) {
   result->set_name("constant");
   *result->mutable_type() = FloatType();
   model.mutable_graph()->clear_node();
+  auto *consume = model.mutable_graph()->add_node();
+  consume->set_op_type("Identity");
+  consume->add_input("past");
+  consume->add_output("previous");
   auto *node = model.mutable_graph()->add_node();
   node->set_op_type("If");
   node->add_input("condition");
@@ -991,6 +1070,7 @@ TEST(FeedbackState, SelectedIfInitializerRetainsItsModelStorage) {
     *attribute->mutable_g() = branch;
   }
   RuntimeContext context(KernelContext(DefaultOpset(18)));
+  RegisterIdentity(context);
   FeedbackState state(model, {{"past", Number(0)}});
   RuntimeValueMap feeds{{"tokens", Number(0)},
                         {"condition", RuntimeValue(Tensor::FromBool("", {}, {1}))}};
@@ -1370,9 +1450,14 @@ TEST(FeedbackState, InitializerViewsRetainImmutableModelAndPayload) {
         payload = reinterpret_cast<const uint8_t *>(initializer->float_data().values().data());
       }
       model->mutable_graph()->clear_node();
+      auto *consume = model->mutable_graph()->add_node();
+      consume->set_op_type("Identity");
+      consume->add_input("past");
+      consume->add_output("previous");
       model->mutable_graph()->mutable_output(0)->set_name("constant");
       model->mutable_graph()->mutable_persistent_bindings(0)->set_output_name("constant");
       RuntimeContext context(KernelContext(DefaultOpset(18)));
+      RegisterIdentity(context);
       context.set_model_owner(std::make_shared<int>(0));
       std::unique_ptr<FeedbackState> state;
       const RuntimeValueMap initial{{"past", Number(1)}};
@@ -1486,10 +1571,15 @@ TEST(FeedbackState, ModelOwnerDoesNotReplaceBorrowedInitializerBackingOwner) {
     initializer->mutable_raw_data()->assign_borrowed(
         payload, sizeof(float), retained_backing ? data : std::shared_ptr<void>{});
     model->mutable_graph()->clear_node();
+    auto *consume = model->mutable_graph()->add_node();
+    consume->set_op_type("Identity");
+    consume->add_input("past");
+    consume->add_output("previous");
     model->mutable_graph()->mutable_output(0)->set_name("constant");
     model->mutable_graph()->mutable_persistent_bindings(0)->set_output_name("constant");
     FeedbackState state(std::shared_ptr<const ModelProto>(model), {{"past", Number(1)}});
     RuntimeContext context(KernelContext(DefaultOpset(18)));
+    RegisterIdentity(context);
     RuntimeValueMap output;
     if (retained_backing) {
       output = state.Run(context, {{"tokens", Number(0)}});

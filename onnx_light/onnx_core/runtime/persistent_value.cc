@@ -33,18 +33,18 @@ PersistentTensor::AppendLease PersistentTensor::PrepareAppend() const {
 }
 
 PersistentTensor::AppendLease::AppendLease(const PersistentTensor &tensor, bool available)
-    : prefix_(tensor.BorrowView()), available_(available) {
+    : prefix_(tensor.BorrowView()), state_(available ? State::kReusable : State::kCopyRequired) {
   prefix_.capacity_bytes_ = tensor.capacity_bytes_;
 }
 
 PersistentTensor::AppendLease::AppendLease(AppendLease &&other) noexcept
-    : prefix_(std::move(other.prefix_)), available_(other.available_.exchange(false)) {}
+    : prefix_(std::move(other.prefix_)), state_(other.state_.exchange(State::kConsumed)) {}
 
 PersistentTensor::AppendLease &
 PersistentTensor::AppendLease::operator=(AppendLease &&other) noexcept {
   if (this != &other) {
     prefix_ = std::move(other.prefix_);
-    available_ = other.available_.exchange(false);
+    state_ = other.state_.exchange(State::kConsumed);
   }
   return *this;
 }
@@ -52,15 +52,19 @@ PersistentTensor::AppendLease::operator=(AppendLease &&other) noexcept {
 std::optional<PersistentTensor::AppendReservation> PersistentTensor::AppendLease::Reserve(
     const Shape &shape, size_t axis, size_t initial_capacity, RawBufferAllocator *allocator,
     const std::function<void(const PersistentStorageStatistics &)> &on_storage_event) {
+  const State state = state_.exchange(State::kConsumed);
+  EXT_ENFORCE_INVALID(state != State::kConsumed,
+                      "PersistentTensor: append lease has already been consumed.");
   const Tensor &prefix = prefix_.value_;
   EXT_ENFORCE_INVALID(prefix.borrowed_owner().use_count() != 0,
                       "PersistentTensor: append lease has been moved.");
-  EXT_ENFORCE_INVALID(initial_capacity > 0 && axis < shape.size() &&
-                          shape.size() == prefix.shape.size(),
-                      "PersistentTensor: invalid append axis, rank or initial capacity.");
+  EXT_ENFORCE_INVALID(axis < shape.size() && shape.size() == prefix.shape.size(),
+                      "PersistentTensor: invalid append axis or rank.");
   for (size_t i = 0; i < shape.size(); ++i)
     EXT_ENFORCE_INVALID(i == axis ? shape[i] >= prefix.shape[i] : shape[i] == prefix.shape[i],
                         "PersistentTensor: only the append axis may grow.");
+  if (initial_capacity == 0)
+    return std::nullopt;
   const size_t element_bytes = PackedByteSize(prefix.data_type, 1);
   // Packed sub-byte elements and multiple outer slices need repacking, not a tail write.
   if (shape.product(0, axis, "PersistentTensor") != 1 ||
@@ -82,7 +86,7 @@ std::optional<PersistentTensor::AppendReservation> PersistentTensor::AppendLease
   const size_t row_bytes = bytes({row_elements});
   if (row_bytes == 0)
     return std::nullopt;
-  if (available_.exchange(false) && logical <= prefix_.capacity_bytes_) {
+  if (state == State::kReusable && logical <= prefix_.capacity_bytes_) {
     PersistentTensor candidate(Tensor::Borrow(prefix.name, prefix.data_type, shape, prefix.bytes(),
                                               logical, prefix.borrowed_owner()));
     candidate.capacity_bytes_ = prefix_.capacity_bytes_;

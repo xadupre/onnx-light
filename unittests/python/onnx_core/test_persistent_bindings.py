@@ -46,6 +46,31 @@ def model_with_binding(input_type=None, output_type=None):
 
 
 class TestPersistentBindings(unittest.TestCase):
+    def test_requires_exactly_one_persistent_input_use(self):
+        for mode in ("unused", "two_nodes", "two_slots", "returned_input"):
+            with self.subTest(mode=mode):
+                model = model_with_binding()
+                if mode == "unused":
+                    model.graph.input.append(
+                        onnx.ValueInfoProto(name="other", type=tensor_type())
+                    )
+                    model.graph.node[0].input[0] = "other"
+                elif mode == "two_nodes":
+                    model.graph.node.append(
+                        helper.make_node("Shape", ["state.in"], ["state.shape"])
+                    )
+                elif mode == "two_slots":
+                    model.graph.node[0].op_type = "Add"
+                    model.graph.node[0].input.append("state.in")
+                else:
+                    model.graph.output.append(
+                        onnx.ValueInfoProto(name="state.in", type=tensor_type())
+                    )
+                with self.assertRaisesRegex(ValueError, "state.in.*exactly once"):
+                    verify.verify_model(model)
+                model.graph.persistent_bindings.clear()
+                verify.verify_model(model)
+
     def test_rejects_direct_and_nested_string_tensors(self):
         strings = tensor_type(onnx.TensorProto.STRING)
         for value_type in (

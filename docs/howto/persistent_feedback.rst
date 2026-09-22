@@ -9,6 +9,15 @@ types come from its final input/output declarations. The caller supplies
 initial values, not a separate feedback mapping. Execution uses the existing
 session and allocator infrastructure, not a separate executor.
 
+Each bound input must have **exactly one value-use** in the graph. Every node
+input position counts, including read-only operations such as ``Shape`` and
+two positions of the same node. A graph output that directly returns that input
+also counts, as do captures in nested graph attributes. The check counts
+references statically, including references in mutually exclusive branches.
+Input declarations, bindings and ``value_info`` metadata do not count as uses.
+Both ONNX validation and runtime graph-plan construction enforce this rule;
+graphs without persistent bindings retain their ordinary sharing semantics.
+
 The native :cpp:class:`onnx_light::core::runtime::FeedbackState` uses the
 existing runtime execution and value ownership contracts. Create one state
 per independent request. Python initialization/reset, C++ ownership transfer,
@@ -247,7 +256,9 @@ The reservation API is operator-independent:
    geometric growth and prefix relocation. It either reuses spare capacity or
    allocates a new contiguous buffer and copies only the committed prefix.
    Unsupported layouts return no reservation so the kernel can use its
-   ordinary implementation.
+   ordinary implementation. Each lease accepts only one attempt, including
+   attempts declined for disabled capacity or unsupported layouts. A second
+   attempt raises an error instead of allocating another buffer.
 3. The kernel initializes the entire ``AppendReservation::writable_bytes()``
    span directly. There is no temporary tail tensor required by this API.
 4. ``RuntimeContext::CommitPersistentAppend`` checks the declared initialized

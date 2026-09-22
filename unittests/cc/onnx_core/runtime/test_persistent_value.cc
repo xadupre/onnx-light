@@ -112,14 +112,10 @@ TEST(PersistentTensor, ExplicitLeaseReservesInPlaceOnceAndPreservesCommittedPref
   EXPECT_FLOAT_EQ(candidate.value().AsFloat()[0], 1);
   EXPECT_FLOAT_EQ(candidate.value().AsFloat()[1], 2);
   EXPECT_FLOAT_EQ(candidate.value().AsFloat()[2], 3);
-  auto second = moved.Reserve({3}, 0, 4, nullptr, std::ref(events));
-  ASSERT_TRUE(second);
-  WriteTail(*second, {9});
-  const auto other = second->Commit(sizeof(float));
-  EXPECT_NE(other.value().bytes(), candidate.value().bytes());
+  EXPECT_THROW(moved.Reserve({3}, 0, 4, nullptr, std::ref(events)), std::invalid_argument);
   EXPECT_FLOAT_EQ(candidate.value().AsFloat()[2], 3);
   EXPECT_EQ(events.Snapshot().reuse_count, 1u);
-  EXPECT_EQ(events.Snapshot().allocations, 1u);
+  EXPECT_EQ(events.Snapshot().allocations, 0u);
 }
 
 TEST(PersistentTensor, ViewsBlockInPlaceReservationsAndCannotRestoreCapacity) {
@@ -179,7 +175,7 @@ TEST(PersistentTensor, LeaseMatchesExactOwnerPointerShapeExtentAndType) {
   }
 }
 
-TEST(PersistentTensor, ConcurrentConsumersShareOneExplicitLease) {
+TEST(PersistentTensor, ConcurrentConsumersRejectSecondUseOfOneLease) {
   auto cache = Cache();
   auto lease = cache.PrepareAppend();
   const auto append = [&] {
@@ -191,16 +187,39 @@ TEST(PersistentTensor, ConcurrentConsumersShareOneExplicitLease) {
   };
   auto first = std::async(std::launch::async, append);
   auto second = std::async(std::launch::async, append);
-  auto [a, a_statistics] = first.get();
-  auto [b, b_statistics] = second.get();
-  EXPECT_NE(a.value().bytes(), b.value().bytes());
-  EXPECT_TRUE(a.value().bytes() == cache.value().bytes() ||
-              b.value().bytes() == cache.value().bytes());
-  EXPECT_FLOAT_EQ(a.value().AsFloat()[2], 3);
-  EXPECT_FLOAT_EQ(b.value().AsFloat()[2], 3);
-  a_statistics += b_statistics;
-  EXPECT_EQ(a_statistics.reuse_count, 1u);
-  EXPECT_EQ(a_statistics.allocations, 1u);
+  int succeeded = 0, rejected = 0;
+  for (auto *attempt : {&first, &second}) {
+    try {
+      auto [value, statistics] = attempt->get();
+      ++succeeded;
+      EXPECT_EQ(value.value().bytes(), cache.value().bytes());
+      EXPECT_FLOAT_EQ(value.value().AsFloat()[2], 3);
+      EXPECT_EQ(statistics.reuse_count, 1u);
+      EXPECT_EQ(statistics.allocations, 0u);
+    } catch (const std::invalid_argument &error) {
+      ++rejected;
+      EXPECT_NE(std::string(error.what()).find("already been consumed"), std::string::npos);
+    }
+  }
+  EXPECT_EQ(succeeded, 1);
+  EXPECT_EQ(rejected, 1);
+}
+
+TEST(PersistentTensor, RejectsSecondReservationAfterCopyGrowthOrDecline) {
+  for (int mode = 0; mode < 5; ++mode) {
+    SCOPED_TRACE(mode);
+    auto cache = mode == 0 ? PersistentTensor(Tensor::FromFloat("", {2}, {1, 2})) : Cache();
+    if (mode == 3)
+      cache = PersistentTensor(Tensor::FromFloat("", {1, 0}, {}));
+    auto lease = cache.PrepareAppend();
+    const Shape shape = mode == 3 ? Shape{2, 0} : Shape{mode == 1 ? 5 : 3};
+    const size_t capacity = mode == 2 ? 0 : 4;
+    auto first = lease.Reserve(shape, 0, capacity, nullptr);
+    EXPECT_EQ(first.has_value(), mode != 2 && mode != 3);
+    if (mode == 4)
+      first.reset();
+    EXPECT_THROW(lease.Reserve(shape, 0, capacity, nullptr), std::invalid_argument);
+  }
 }
 
 TEST(PersistentTensor, FailedAppendDoesNotPublishAndRetryRewritesTail) {
@@ -282,21 +301,25 @@ TEST(PersistentTensor, SupportsOtherElementTypesAxesAndEmptyTails) {
 
 TEST(PersistentTensor, RejectsInvalidReservationsAndUnretainableAllocations) {
   auto cache = Cache();
-  auto lease = cache.PrepareAppend();
   StorageEvents events;
-  EXPECT_THROW(lease.Reserve({1}, 0, 4, nullptr, std::ref(events)), std::invalid_argument);
-  EXPECT_THROW(lease.Reserve({3}, 1, 4, nullptr, std::ref(events)), std::invalid_argument);
-  EXPECT_THROW(lease.Reserve({1, 3}, 0, 4, nullptr, std::ref(events)), std::invalid_argument);
-  EXPECT_THROW(lease.Reserve({3}, 0, 0, nullptr, std::ref(events)), std::invalid_argument);
-  EXPECT_THROW(lease.Reserve({-1}, 0, 4, nullptr, std::ref(events)), std::invalid_argument);
-  EXPECT_THROW(
-      lease.Reserve({std::numeric_limits<int64_t>::max()}, 0, 4, nullptr, std::ref(events)),
-      std::invalid_argument);
-  EXPECT_THROW(lease.Reserve({5}, 0, std::numeric_limits<size_t>::max(), nullptr, std::ref(events)),
+  EXPECT_THROW(cache.PrepareAppend().Reserve({1}, 0, 4, nullptr, std::ref(events)),
+               std::invalid_argument);
+  EXPECT_THROW(cache.PrepareAppend().Reserve({3}, 1, 4, nullptr, std::ref(events)),
+               std::invalid_argument);
+  EXPECT_THROW(cache.PrepareAppend().Reserve({1, 3}, 0, 4, nullptr, std::ref(events)),
+               std::invalid_argument);
+  EXPECT_THROW(cache.PrepareAppend().Reserve({-1}, 0, 4, nullptr, std::ref(events)),
+               std::invalid_argument);
+  EXPECT_THROW(cache.PrepareAppend().Reserve({std::numeric_limits<int64_t>::max()}, 0, 4, nullptr,
+                                             std::ref(events)),
+               std::invalid_argument);
+  EXPECT_THROW(cache.PrepareAppend().Reserve({5}, 0, std::numeric_limits<size_t>::max(), nullptr,
+                                             std::ref(events)),
                std::invalid_argument);
   EXPECT_EQ(events.Snapshot().allocations, 0u);
   SimpleRawBufferAllocator arena(4);
-  EXPECT_THROW(lease.Reserve({5}, 0, 4, &arena, std::ref(events)), std::invalid_argument);
+  EXPECT_THROW(cache.PrepareAppend().Reserve({5}, 0, 4, &arena, std::ref(events)),
+               std::invalid_argument);
   EXPECT_EQ(events.Snapshot().allocations, 1u);
   EXPECT_EQ(events.Snapshot().prefix_copied_bytes, 0u);
   Tensor invalid = Tensor::FromFloat("", {2}, {1, 2});

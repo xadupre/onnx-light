@@ -374,23 +374,10 @@ TEST(FeedbackState, AttentionCacheFailureCancellationAndLeakedOutputAreRetrySafe
   }
 }
 
-TEST(FeedbackState, AttentionCacheOneUsePermitHandlesSamePastKeyAndValue) {
+TEST(FeedbackState, AttentionCacheRejectsSamePastKeyInTwoInputSlots) {
   ModelProto model = AttentionModel();
   *model.mutable_graph()->mutable_node(0)->mutable_input(5) = "past_key";
-  FeedbackState state(model, EmptyAttentionCache());
-  RuntimeContext context(KernelContext(DefaultOpset(23)),
-                         RuntimeContextOptions{.events_enabled = true});
-  state.Run(context, AttentionFeeds(1));
-  const auto output = state.Run(context, AttentionFeeds(2));
-  const auto &key = output.at("present_key").tensor;
-  const auto &value = output.at("present_value").tensor;
-  EXPECT_NE(key.bytes(), value.bytes());
-  EXPECT_FLOAT_EQ(key.AsFloat()[2], 2);
-  EXPECT_FLOAT_EQ(value.AsFloat()[2], -2);
-  EXPECT_FLOAT_EQ(key.AsFloat()[0], 1);
-  EXPECT_FLOAT_EQ(value.AsFloat()[0], 1);
-  EXPECT_EQ(StorageStatistics(context).reuse_count, 1u);
-  EXPECT_EQ(StorageStatistics(context).allocations, 3u);
+  EXPECT_THROW({ FeedbackState state(model, EmptyAttentionCache()); }, std::invalid_argument);
 }
 
 TEST(FeedbackState, AttentionCacheBranchingRequestsCannotOverwriteEachOther) {
@@ -591,44 +578,36 @@ TEST(FeedbackState, AttentionCacheChildContextsAndCopiesCannotUseInvocationPermi
   }
 }
 
-TEST(FeedbackState, AttentionCacheDuplicateConsumersConsumePermitOnlyOnce) {
-  ModelProto model = AttentionModel();
-  RuntimeContext context(KernelContext(DefaultOpset(23)),
-                         RuntimeContextOptions{.events_enabled = true});
-  Tensor earlier;
-  bool duplicate = false;
-  context.RegisterCustomKernel("", "Attention", [&](const NodeProto &, RuntimeContext &rt) {
-    onnx_kernels::kernel::Attention attention(rt.kernel_ctx());
-    const auto &key = rt.Get("past_key");
-    const auto &value = rt.Get("past_value");
-    auto first = attention(rt.Get("Q"), rt.Get("K"), rt.Get("V"),
-                           onnx_kernels::kernel::Attention::Attributes{}, nullptr, &key, &value,
-                           nullptr, &rt);
-    if (!duplicate) {
-      rt.Put("Y", std::move(first.Y));
-      rt.Put("present_key", std::move(first.present_key));
-      rt.Put("present_value", std::move(first.present_value));
-      return;
-    }
-    earlier = first.present_key.BorrowView();
-    auto second = attention(rt.Get("Q"), rt.Get("V"), rt.Get("K"),
-                            onnx_kernels::kernel::Attention::Attributes{}, nullptr, &key, &value,
-                            nullptr, &rt);
-    EXPECT_NE(first.present_key.bytes(), second.present_key.bytes());
-    EXPECT_FLOAT_EQ(first.present_key.AsFloat()[2], 2);
-    EXPECT_FLOAT_EQ(second.present_key.AsFloat()[2], -2);
-    rt.Put("Y", std::move(second.Y));
-    rt.Put("present_key", std::move(second.present_key));
-    rt.Put("present_value", std::move(second.present_value));
-  });
-  FeedbackState state(model, EmptyAttentionCache());
-  state.Run(context, AttentionFeeds(1));
-  duplicate = true;
-  const auto output = state.Run(context, AttentionFeeds(2));
-  EXPECT_FLOAT_EQ(earlier.AsFloat()[2], 2);
-  EXPECT_FLOAT_EQ(output.at("present_key").tensor.AsFloat()[2], -2);
-  EXPECT_EQ(StorageStatistics(context).reuse_count, 2u);
-  EXPECT_EQ(StorageStatistics(context).allocations, 4u);
+TEST(FeedbackState, AttentionCacheRejectsDuplicateConsumersEvenWithoutReservations) {
+  for (size_t capacity : {0u, 32u}) {
+    SCOPED_TRACE(capacity);
+    ModelProto model = AttentionModel();
+    RuntimeContext context(KernelContext(DefaultOpset(23)),
+                           RuntimeContextOptions{.events_enabled = true});
+    bool duplicate = false;
+    context.RegisterCustomKernel("", "Attention", [&](const NodeProto &, RuntimeContext &rt) {
+      onnx_kernels::kernel::Attention attention(rt.kernel_ctx());
+      const auto compute = [&] {
+        return attention(rt.Get("Q"), rt.Get("K"), rt.Get("V"),
+                         onnx_kernels::kernel::Attention::Attributes{}, nullptr,
+                         &rt.Get("past_key"), &rt.Get("past_value"), nullptr, &rt);
+      };
+      auto result = compute();
+      if (duplicate)
+        result = compute();
+      rt.Put("Y", std::move(result.Y));
+      rt.Put("present_key", std::move(result.present_key));
+      rt.Put("present_value", std::move(result.present_value));
+    });
+    RuntimeSessionOptions options;
+    options.persistent_tensor_initial_capacity = capacity;
+    FeedbackState state(model, EmptyAttentionCache(), options);
+    state.Run(context, AttentionFeeds(1));
+    duplicate = true;
+    EXPECT_THROW(state.Run(context, AttentionFeeds(2)), std::invalid_argument);
+    EXPECT_EQ(StorageStatistics(context).reuse_count, capacity == 0 ? 0u : 2u);
+    EXPECT_EQ(StorageStatistics(context).allocations, capacity == 0 ? 4u : 2u);
+  }
 }
 
 TEST(FeedbackState, AttentionCacheReimportedViewsDoNotCertifyAppendCapacity) {

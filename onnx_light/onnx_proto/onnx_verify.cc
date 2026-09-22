@@ -6,6 +6,7 @@
 #include <cstring>
 #include <limits>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -1516,6 +1517,65 @@ const TypeProto &PersistentIOType(const utils::RepeatedProtoField<ValueInfoProto
           "partial field paths are unsupported.");
 }
 
+/** Counts references to bound root inputs, excluding names defined in nested graph scopes. */
+void CountPersistentInputUses(const GraphProto &graph,
+                              std::unordered_map<std::string, size_t> &uses,
+                              std::unordered_set<std::string> &shadowed, bool is_root = false) {
+  std::vector<std::string> shadowed_here;
+  if (!is_root) {
+    const auto shadow = [&](const auto &name) {
+      const auto key = ToStdString(name);
+      if (uses.count(key) != 0 && shadowed.insert(key).second) {
+        shadowed_here.push_back(key);
+      }
+    };
+    for (const auto &input : graph.input()) {
+      shadow(input.name());
+    }
+    for (const auto &initializer : graph.initializer()) {
+      shadow(initializer.name());
+    }
+    for (const auto &initializer : graph.sparse_initializer()) {
+      shadow(initializer.values().name());
+    }
+    for (const auto &initializer : graph.encoded_initializer()) {
+      shadow(initializer.name());
+    }
+    for (const auto &node : graph.node()) {
+      for (const auto &output : node.output()) {
+        shadow(output);
+      }
+    }
+  }
+
+  const auto count_use = [&](const auto &name) {
+    const auto key = ToStdString(name);
+    const auto found = uses.find(key);
+    if (found != uses.end() && shadowed.count(key) == 0) {
+      ++found->second;
+    }
+  };
+  for (const auto &node : graph.node()) {
+    for (const auto &input : node.input()) {
+      count_use(input);
+    }
+    for (const auto &attribute : node.attribute()) {
+      if (attribute.has_g()) {
+        CountPersistentInputUses(attribute.g(), uses, shadowed);
+      }
+      for (const auto &nested : attribute.graphs()) {
+        CountPersistentInputUses(nested, uses, shadowed);
+      }
+    }
+  }
+  for (const auto &output : graph.output()) {
+    count_use(output.name());
+  }
+  for (const auto &name : shadowed_here) {
+    shadowed.erase(name);
+  }
+}
+
 } // namespace
 
 void ValidatePersistentType(const StructTypeCatalogue &catalogue, const TypeProto &type) {
@@ -1578,6 +1638,29 @@ void VerifyPersistentBindings(const StructTypeCatalogue *struct_types, const Gra
         Invalid("Persistent bindings have duplicate input names.");
       if (bindings[j].output_name() == binding.output_name())
         Invalid("Persistent bindings have duplicate output names.");
+    }
+  }
+  VerifyPersistentInputUses(graph);
+}
+
+void VerifyPersistentInputUses(const GraphProto &graph) {
+  const auto &bindings = graph.persistent_bindings();
+  if (bindings.empty()) {
+    return;
+  }
+  std::unordered_map<std::string, size_t> uses;
+  uses.reserve(bindings.size());
+  for (const auto &binding : bindings) {
+    uses.emplace(ToStdString(binding.input_name()), 0);
+  }
+  std::unordered_set<std::string> shadowed;
+  CountPersistentInputUses(graph, uses, shadowed, /*is_root=*/true);
+  for (const auto &binding : bindings) {
+    const auto name = ToStdString(binding.input_name());
+    const auto count = uses.at(name);
+    if (count != 1) {
+      Invalid("Persistent input '" + name + "' must be used exactly once; found " +
+              std::to_string(count) + " value-uses.");
     }
   }
 }

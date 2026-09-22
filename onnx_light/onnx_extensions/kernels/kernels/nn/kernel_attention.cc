@@ -621,8 +621,9 @@ Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const 
         rt ? rt->kernel_ctx() : ctx_,
         RuntimeContextOptions{.allocator = rt ? rt->execution_allocator() : nullptr,
                               .events_enabled = rt && rt->events_enabled()});
-    const core::runtime::RuntimeEventForwarder forwarder(scratch_rt, rt);
-    if (rt) {
+    std::optional<core::runtime::RuntimeEventForwarder> forwarder;
+    if (rt && rt->events_enabled()) {
+      forwarder.emplace(scratch_rt, rt);
       scratch_rt.set_current_node_index(rt->current_node_index());
       scratch_rt.set_current_subgraph(rt->current_subgraph_node_index(),
                                       rt->current_subgraph_attr_name());

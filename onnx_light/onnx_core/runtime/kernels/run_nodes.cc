@@ -197,7 +197,9 @@ SubgraphSession::RunChild(std::vector<std::pair<std::string, Tensor>> bindings,
     child.PutSequence(kv.first, std::move(kv.second));
   }
   {
-    const RuntimeEventForwarder forward_events(child, &rt);
+    std::optional<RuntimeEventForwarder> forward_events;
+    if (rt.events_enabled())
+      forward_events.emplace(child, &rt);
     RuntimeSession::Run(child);
   }
   return child;
@@ -272,7 +274,9 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt, SubgraphSession &then_
       retained.insert(branch.output(i).name());
   child.set_retained_outputs(std::move(retained));
   {
-    const RuntimeEventForwarder forward_events(child, &rt);
+    std::optional<RuntimeEventForwarder> forward_events;
+    if (rt.events_enabled())
+      forward_events.emplace(child, &rt);
     session.RuntimeSession::Run(child);
   }
 
@@ -866,7 +870,9 @@ public:
     child.set_retained_outputs(std::move(retained));
 
     {
-      const RuntimeEventForwarder forward_events(child, &rt);
+      std::optional<RuntimeEventForwarder> forward_events;
+      if (rt.events_enabled())
+        forward_events.emplace(child, &rt);
       // The parent context remains alive throughout the function invocation.
       for (size_t i = 0; i < static_cast<std::size_t>(func_.input_size()); ++i) {
         const std::string caller_name = node_->input(i);

@@ -263,9 +263,11 @@ TEST(FeedbackState, StorageEventUsesExistingActivationMetadataAndClearing) {
   EXPECT_TRUE(disabled.events().empty());
 }
 
-TEST(FeedbackState, FunctionAndSubgraphStorageEventsSurviveFailure) {
-  for (bool subgraph : {false, true}) {
+TEST(FeedbackState, FunctionAndSubgraphStorageEventsRespectActivationAndSurviveFailure) {
+  for (const auto &[subgraph, enabled] : {std::pair{false, false}, std::pair{false, true},
+                                          std::pair{true, false}, std::pair{true, true}}) {
     SCOPED_TRACE(subgraph);
+    SCOPED_TRACE(enabled);
     ModelProto model = Model();
     auto add_audit = [](NodeProto *node) {
       node->set_domain("test.feedback");
@@ -308,7 +310,7 @@ TEST(FeedbackState, FunctionAndSubgraphStorageEventsSurviveFailure) {
       add_audit(function->add_node());
     }
     RuntimeContext context(KernelContext(DefaultOpset(18)),
-                           RuntimeContextOptions{.events_enabled = true});
+                           RuntimeContextOptions{.events_enabled = enabled});
     bool fail = false;
     context.RegisterCustomKernel(
         "test.feedback", "Audit", [&](const NodeProto &node, RuntimeContext &rt) {
@@ -324,7 +326,8 @@ TEST(FeedbackState, FunctionAndSubgraphStorageEventsSurviveFailure) {
     fail = true;
     EXPECT_THROW(state.Run(context, {{"tokens", Number(1)}}), std::invalid_argument);
     EXPECT_EQ(Number(state.Values().at("past")), 3);
-    EXPECT_EQ(StorageStatistics(context).allocations, 2u);
+    EXPECT_EQ(StorageStatistics(context).allocations, enabled ? 2u : 0u);
+    EXPECT_EQ(context.events().empty(), !enabled);
     for (const auto &event : context.events()) {
       if (event.action != RuntimeEventAction::kPersistentStorage)
         continue;
@@ -332,6 +335,19 @@ TEST(FeedbackState, FunctionAndSubgraphStorageEventsSurviveFailure) {
       EXPECT_EQ(event.subgraph_node_index, subgraph ? 0 : -1);
       EXPECT_EQ(event.subgraph_attr_name, subgraph ? "then_branch" : "");
     }
+  }
+}
+
+TEST(FeedbackState, FunctionDiagnosticMetadataIsCopiedOnlyWhenEventsAreEnabled) {
+  for (bool enabled : {false, true}) {
+    RuntimeContext context(KernelContext(DefaultOpset(18)),
+                           RuntimeContextOptions{.events_enabled = enabled});
+    const std::string attribute(64, 'x');
+    context.set_current_subgraph(7, attribute);
+    auto child = context.MakeFunctionContext();
+    EXPECT_EQ(child.events_enabled(), enabled);
+    EXPECT_EQ(child.current_subgraph_node_index(), enabled ? 7 : -1);
+    EXPECT_EQ(child.current_subgraph_attr_name(), enabled ? attribute : "");
   }
 }
 

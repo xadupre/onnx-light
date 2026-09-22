@@ -1821,27 +1821,37 @@ TEST(KernelClass, AttentionHalfPrecisionMatchesFloatReference) {
 TEST(KernelClass, AttentionHalfPrecisionCacheConcatenationIsMeasured) {
   const Tensor current = Tensor::FromFloat("", {1, 1, 1, 2}, {1, 2});
   const Tensor past = Tensor::FromFloat("", {1, 1, 2, 2}, {3, 4, 5, 6});
-  for (int32_t dtype : {core::runtime::DataType::FLOAT16, core::runtime::DataType::BFLOAT16}) {
-    RuntimeContext rt(AttentionKernelContext(), {.events_enabled = true});
-    rt.set_current_node_index(5);
-    rt.set_current_subgraph(2, "body");
-    const Attention attention{rt.kernel_ctx()};
-    const Tensor half_current = DemoteToHalf(current, dtype);
-    const Tensor half_past = DemoteToHalf(past, dtype);
-    const auto result = attention(half_current, half_current, half_current, Attention::Attributes{},
-                                  nullptr, &half_past, &half_past, nullptr, &rt);
-    EXPECT_EQ(result.present_key.data_type, dtype);
-    const auto stats = StorageStatistics(rt);
-    for (const auto &event : rt.events()) {
-      EXPECT_EQ(event.node_index, 5);
-      EXPECT_EQ(event.subgraph_node_index, 2);
-      EXPECT_EQ(event.subgraph_attr_name, "body");
+  for (bool enabled : {false, true}) {
+    SCOPED_TRACE(enabled);
+    for (int32_t dtype : {core::runtime::DataType::FLOAT16, core::runtime::DataType::BFLOAT16}) {
+      RuntimeContext rt(AttentionKernelContext(), {.events_enabled = enabled});
+      rt.set_current_node_index(5);
+      rt.set_current_subgraph(2, "body");
+      const Attention attention{rt.kernel_ctx()};
+      const Tensor half_current = DemoteToHalf(current, dtype);
+      const Tensor half_past = DemoteToHalf(past, dtype);
+      const auto result =
+          attention(half_current, half_current, half_current, Attention::Attributes{}, nullptr,
+                    &half_past, &half_past, nullptr, &rt);
+      const auto expected = attention(half_current, half_current, half_current,
+                                      Attention::Attributes{}, nullptr, &half_past, &half_past);
+      EXPECT_EQ(result.present_key.data_type, dtype);
+      EXPECT_EQ(DecodeHalf(result.Y), DecodeHalf(expected.Y));
+      EXPECT_EQ(DecodeHalf(result.present_key), DecodeHalf(expected.present_key));
+      EXPECT_EQ(DecodeHalf(result.present_value), DecodeHalf(expected.present_value));
+      EXPECT_EQ(rt.events().empty(), !enabled);
+      const auto stats = StorageStatistics(rt);
+      for (const auto &event : rt.events()) {
+        EXPECT_EQ(event.node_index, 5);
+        EXPECT_EQ(event.subgraph_node_index, 2);
+        EXPECT_EQ(event.subgraph_attr_name, "body");
+      }
+      EXPECT_EQ(stats.allocations, enabled ? 2u : 0u);
+      EXPECT_EQ(stats.allocated_bytes, enabled ? 12 * sizeof(float) : 0u);
+      EXPECT_EQ(stats.prefix_copied_bytes, enabled ? 8 * sizeof(float) : 0u);
+      EXPECT_EQ(stats.append_copied_bytes, enabled ? 4 * sizeof(float) : 0u);
+      EXPECT_EQ(stats.reuse_count, 0u);
     }
-    EXPECT_EQ(stats.allocations, 2u);
-    EXPECT_EQ(stats.allocated_bytes, 12 * sizeof(float));
-    EXPECT_EQ(stats.prefix_copied_bytes, 8 * sizeof(float));
-    EXPECT_EQ(stats.append_copied_bytes, 4 * sizeof(float));
-    EXPECT_EQ(stats.reuse_count, 0u);
   }
 }
 

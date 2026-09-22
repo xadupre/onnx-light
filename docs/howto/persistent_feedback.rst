@@ -320,7 +320,9 @@ Opt-in storage auditing through runtime events
 Storage auditing uses the existing runtime event API. Set
 ``RuntimeContextOptions::events_enabled = true`` and read ``context.events()``.
 With events disabled (the default), persistence works identically but creates
-no storage audit events, counter objects or auditing mutexes.
+no storage audit events, counter objects, event-forwarding guards or auditing
+mutexes. Diagnostic metadata is not copied into function or half-precision
+scratch contexts on this path.
 
 ``RuntimeEventAction::kPersistentStorage`` identifies storage reports. Each
 event's ``persistent_storage`` payload is a ``PersistentStorageStatistics``

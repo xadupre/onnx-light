@@ -540,7 +540,8 @@ RuntimeContext RuntimeContext::MakeFunctionContext() const {
   child.custom_kernels() = custom_kernels_;
   child.set_model_owner(model_owner_);
   child.set_cpu_executor(cpu_executor_);
-  child.set_current_subgraph(current_subgraph_node_index_, current_subgraph_attr_name_);
+  if (events_enabled_)
+    child.set_current_subgraph(current_subgraph_node_index_, current_subgraph_attr_name_);
   return child;
 }
 

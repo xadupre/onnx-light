@@ -86,6 +86,65 @@ def array(tensor):
 
 
 class TestFeedbackState(unittest.TestCase):
+    def test_attention_persistent_tensor_initial_capacity(self):
+        model = make_attention_model()
+        initial_key = numpy.array([0.25, 0.5], dtype=numpy.float32).reshape(1, 1, 1, 2)
+        bytes_per_token = 2 * initial_key.nbytes
+        results = {}
+        for capacity, allocated_capacities in ((0, (2, 3, 4, 5)), (4, (4, 0, 0, 8))):
+            options = runtime.RuntimeSessionOptions(persistent_tensor_initial_capacity=capacity)
+            state = runtime.FeedbackState(
+                model, {"past_key": initial_key, "past_value": -initial_key}, options
+            )
+            context = runtime.RuntimeContext(
+                runtime.KernelContext(runtime.default_opset(23)), events_enabled=True
+            )
+            expected_key = initial_key.copy()
+            results[capacity] = []
+            for step, allocated_capacity in enumerate(allocated_capacities, 1):
+                with self.subTest(capacity=capacity, step=step):
+                    token = numpy.array(
+                        [step * 0.125, step * 0.125 + 0.25], dtype=numpy.float32
+                    ).reshape(1, 1, 1, 2)
+                    context.clear_events()
+                    outputs = state.run(context, {"Q": token, "K": token, "V": -token})
+                    snapshot = {name: array(value).copy() for name, value in outputs.items()}
+                    # Returned views must be released before the next call can reuse capacity.
+                    del outputs
+                    results[capacity].append(snapshot)
+                    expected_key = numpy.concatenate((expected_key, token), axis=2)
+                    numpy.testing.assert_array_equal(snapshot["present_key"], expected_key)
+                    numpy.testing.assert_array_equal(snapshot["present_value"], -expected_key)
+
+                    statistics = [
+                        event.persistent_storage
+                        for event in context.events()
+                        if event.action == runtime.RuntimeEventAction.kPersistentStorage
+                    ]
+                    self.assertTrue(statistics)
+                    expected = {
+                        "allocations": 2 if allocated_capacity else 0,
+                        "allocated_bytes": allocated_capacity * bytes_per_token,
+                        "prefix_copied_bytes": (
+                            step * bytes_per_token if allocated_capacity else 0
+                        ),
+                        "append_copied_bytes": bytes_per_token,
+                        "reuse_count": 0 if allocated_capacity else 2,
+                    }
+                    self.assertEqual(
+                        {
+                            field: sum(getattr(statistic, field) for statistic in statistics)
+                            for field in expected
+                        },
+                        expected,
+                    )
+            state.close()
+
+        for disabled, enabled in zip(results[0], results[4]):
+            self.assertEqual(set(disabled), set(enabled))
+            for name in disabled:
+                numpy.testing.assert_array_equal(disabled[name], enabled[name])
+
     def test_attention_persistent_storage_events_are_opt_in(self):
         fields = (
             "allocations",

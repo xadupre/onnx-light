@@ -1080,6 +1080,8 @@ private:
  *
  * Both contexts must remain alive and must not be moved while the guard exists.
  * A null parent or a parent with events disabled receives no events.
+ * If the parent log cannot grow, reports a warning to stderr and leaves the
+ * events in the child without interrupting execution or replacing an active exception.
  */
 class ONNX_LIGHT_CORE_API RuntimeEventForwarder {
 public:

@@ -9,7 +9,9 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdio>
 #include <cstring>
+#include <new>
 #include <sstream>
 #include <stdexcept>
 #include <unordered_set>
@@ -295,9 +297,19 @@ RuntimeEventForwarder::~RuntimeEventForwarder() {
     return;
   auto &destination = destination_->events();
   auto &source = source_.events();
-  destination.insert(destination.end(), std::make_move_iterator(source.begin()),
-                     std::make_move_iterator(source.end()));
-  source.clear();
+  try {
+    destination.insert(destination.end(), std::make_move_iterator(source.begin()),
+                       std::make_move_iterator(source.end()));
+    source.clear();
+  } catch (const std::bad_alloc &) {
+    std::fputs("RuntimeEventForwarder: insufficient memory to forward runtime events; "
+               "the parent event log is incomplete.\n",
+               stderr);
+  } catch (const std::length_error &) {
+    std::fputs("RuntimeEventForwarder: runtime event log size limit exceeded; "
+               "the parent event log is incomplete.\n",
+               stderr);
+  }
 }
 
 RuntimeContext::RuntimeContext(KernelContext kernel_ctx, RuntimeContextOptions options,

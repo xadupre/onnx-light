@@ -1551,7 +1551,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           [](RuntimeSessionOptions *self, nb::object parameters_obj,
              std::optional<CpuExecutionPolicy> cpu_execution, bool cpu_execution_counters,
              std::shared_ptr<ParallelRegionCollector> parallel_region_collector, int verbose,
-             bool check_shapes, bool allow_external_output_allocators) {
+             bool check_shapes, bool allow_external_output_allocators,
+             size_t persistent_tensor_initial_capacity) {
             RuntimeParameters parameters = parameters_obj.is_none()
                                                ? RuntimeParameters()
                                                : nb::cast<RuntimeParameters>(parameters_obj);
@@ -1563,12 +1564,14 @@ void AddOnnxPyRuntime(nb::module_ &m) {
                 .verbose = verbose,
                 .check_shapes = check_shapes,
                 .allow_external_output_allocators = allow_external_output_allocators,
+                .persistent_tensor_initial_capacity = persistent_tensor_initial_capacity,
             };
           },
           nb::kw_only(), nb::arg("parameters").none() = nb::none(),
           nb::arg("cpu_execution").none() = nb::none(), nb::arg("cpu_execution_counters") = false,
           nb::arg("parallel_region_collector").none() = nb::none(), nb::arg("verbose") = 0,
           nb::arg("check_shapes") = false, nb::arg("allow_external_output_allocators") = false,
+          nb::arg("persistent_tensor_initial_capacity") = 32,
           "Builds the options bundle. All fields are keyword-only and optional; each "
           "defaults to the same value :class:`RuntimeSession` uses when the field is "
           "omitted.")
@@ -1588,7 +1591,12 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def_rw("allow_external_output_allocators",
               &RuntimeSessionOptions::allow_external_output_allocators,
               "When ``True``, :func:`RuntimeSession.run` does not require a node's "
-              "allocator-backed outputs to be owned by the session's unique allocator.");
+              "allocator-backed outputs to be owned by the session's unique allocator.")
+      .def_rw("persistent_tensor_initial_capacity",
+              &RuntimeSessionOptions::persistent_tensor_initial_capacity,
+              "Sets the initial capacity along a kernel's append axis for contiguous persistent "
+              "tensors in :class:`FeedbackState` (32 by default; tokens for Attention). "
+              "Zero disables append reservations. Does not affect stateless RuntimeSession runs.");
 
   // RuntimeSession — reusable execution session binding an ExecutionPlan.
   // Every node list the runtime executes (a graph, a function body, a

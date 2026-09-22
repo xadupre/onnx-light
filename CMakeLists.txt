@@ -916,6 +916,9 @@ if(ONNX_LIGHT_BUILD_TESTS)
   set(ONNX_CPP_PATTERN_REGISTRY_CORE_TEST
       "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_core/builder/test_pattern_registry.cc")
   list(REMOVE_ITEM ONNX_CPP_CORE_TEST_SOURCES "${ONNX_CPP_PATTERN_REGISTRY_CORE_TEST}")
+  set(ONNX_CPP_RUNTIME_EVENT_FORWARDER_TEST
+      "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_core/runtime/test_runtime_event_forwarder.cc")
+  list(REMOVE_ITEM ONNX_CPP_CORE_TEST_SOURCES "${ONNX_CPP_RUNTIME_EVENT_FORWARDER_TEST}")
   set(ONNX_CPP_PROTO_STREAM_CLASS_PRINT_TEST
       "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_proto/test_stream_class_print.cc")
   list(REMOVE_ITEM ONNX_CPP_PROTO_TEST_SOURCES "${ONNX_CPP_PROTO_STREAM_CLASS_PRINT_TEST}")
@@ -939,7 +942,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
   endif()
   set(ONNX_CPP_ALL_TEST_SOURCES ${ONNX_CPP_TEST_SOURCES}
       ${ONNX_CPP_PATTERN_REGISTRY_CORE_TEST} ${ONNX_CPP_PROTO_STREAM_CLASS_PRINT_TEST}
-      ${ONNX_CPP_PROTO_DLPACK_TEST})
+      ${ONNX_CPP_PROTO_DLPACK_TEST} ${ONNX_CPP_RUNTIME_EVENT_FORWARDER_TEST})
 
   enable_testing()
 
@@ -1023,6 +1026,20 @@ if(ONNX_LIGHT_BUILD_TESTS)
   )
   target_link_libraries(test_pattern_registry_core PRIVATE lib_onnx_core GTest::gtest_main)
   gtest_discover_tests(test_pattern_registry_core DISCOVERY_TIMEOUT 120 DISCOVERY_MODE PRE_TEST)
+
+  # Isolates allocation-failure injection from all other runtime tests.
+  add_executable(test_runtime_event_forwarder "${ONNX_CPP_RUNTIME_EVENT_FORWARDER_TEST}")
+  target_include_directories(test_runtime_event_forwarder PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light"
+    "${ROOT_INCLUDE_PATH}"
+    "${ONNX_PROTO_PATH}"
+  )
+  target_link_libraries(test_runtime_event_forwarder PRIVATE lib_onnx_core GTest::gtest_main)
+  if(_onnx_light_lib_type STREQUAL "STATIC")
+    target_compile_definitions(test_runtime_event_forwarder PRIVATE
+        ONNX_LIGHT_TEST_EVENT_ALLOCATION_FAILURE)
+  endif()
+  gtest_discover_tests(test_runtime_event_forwarder DISCOVERY_TIMEOUT 120 DISCOVERY_MODE PRE_TEST)
 
   add_executable(test_stream_class_print "${ONNX_CPP_PROTO_STREAM_CLASS_PRINT_TEST}")
   target_include_directories(test_stream_class_print PRIVATE

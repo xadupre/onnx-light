@@ -279,8 +279,24 @@ capacity along the kernel's append axis (32 by default; tokens for Attention);
 zero disables reservations. ``PersistentTensor`` grows capacity geometrically
 when necessary, using the selected allocator without an alternate allocator or
 automatic retry after allocation failure. This option affects ``FeedbackState``
-execution, not ordinary stateless ``RuntimeSession`` calls. It is a native
-C++ option; the Python feedback API uses the default.
+execution, not ordinary stateless ``RuntimeSession`` calls.
+
+Python exposes the same option as a keyword-only constructor argument and a
+read/write property on ``runtime.RuntimeSessionOptions``. It accepts a
+nonnegative integer representable as C++ ``size_t``. Pass the options to
+``FeedbackState`` when constructing the state:
+
+.. code-block:: python
+
+    options = runtime.RuntimeSessionOptions(persistent_tensor_initial_capacity=64)
+    state = runtime.FeedbackState(model, initial, options=options)
+
+    # Disables reservations for a separate state, without changing the first state.
+    options.persistent_tensor_initial_capacity = 0
+    ordinary_state = runtime.FeedbackState(model, initial, options=options)
+
+Options are copied at construction; changing the bundle later does not change
+an existing state.
 
 Reuse is deliberately conservative:
 
@@ -342,7 +358,10 @@ State forwarding and kernel storage construction have different costs.
 Pointer identity at retention, invocation and publication boundaries verifies
 that the state layer does not copy tensor payloads. Feedback invocations and
 child contexts forward their events to the caller, including work preceding
-a failure or cancellation. Attention's storage reports exclude its
+a failure or cancellation. If the caller's event log cannot grow, forwarding
+reports a warning on standard error instead of terminating execution or
+replacing the original exception; the caller's log is then incomplete.
+Attention's storage reports exclude its
 score/output allocations, arithmetic workspace, feed construction, or
 half-precision conversion.
 

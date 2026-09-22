@@ -165,12 +165,36 @@ class TestRunNodesBindings(ExtTestCase):
         self.assertFalse(options.allow_external_output_allocators)
         self.assertFalse(options.check_shapes)
         self.assertEqual(options.verbose, 0)
+        self.assertEqual(options.persistent_tensor_initial_capacity, 32)
 
         options = rt.RuntimeSessionOptions(allow_external_output_allocators=True)
         self.assertTrue(options.allow_external_output_allocators)
 
         session = rt.RuntimeSession(model, options)
         self.assertTrue(session.allow_external_output_allocators)
+
+    def test_runtime_session_options_persistent_tensor_initial_capacity(self):
+        for capacity in (0, 4, 64):
+            with self.subTest(capacity=capacity):
+                options = rt.RuntimeSessionOptions(persistent_tensor_initial_capacity=capacity)
+                self.assertEqual(options.persistent_tensor_initial_capacity, capacity)
+                self.assertFalse(options.allow_external_output_allocators)
+                self.assertFalse(options.check_shapes)
+                self.assertEqual(options.verbose, 0)
+
+                options.persistent_tensor_initial_capacity = 32
+                self.assertEqual(options.persistent_tensor_initial_capacity, 32)
+                options.persistent_tensor_initial_capacity = capacity
+                self.assertEqual(options.persistent_tensor_initial_capacity, capacity)
+
+        options = rt.RuntimeSessionOptions()
+        for capacity in (-1, 1 << (8 * struct.calcsize("P"))):
+            with self.subTest(invalid_capacity=capacity):
+                with self.assertRaises(TypeError):
+                    rt.RuntimeSessionOptions(persistent_tensor_initial_capacity=capacity)
+                with self.assertRaises(TypeError):
+                    options.persistent_tensor_initial_capacity = capacity
+                self.assertEqual(options.persistent_tensor_initial_capacity, 32)
 
     def test_runtime_session_parallel_region_report(self):
         model = parser.parse_model(

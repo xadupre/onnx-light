@@ -1016,8 +1016,13 @@ void AddOnnxPyRuntime(nb::module_ &m) {
             plan.blocks[index] = block;
           },
           nb::arg("index"), nb::arg("block"), "Replaces a block with an owned copy.");
-  rt_mod.def("quantization_formats", &core::runtime::QuantizationFormats,
-             "Returns portable onnx-light profiles, not vendor packing ABIs.");
+  rt_mod.def(
+      "quantization_formats",
+      []() {
+        constexpr auto formats = core::runtime::QuantizationFormats();
+        return std::vector<std::string>(formats.begin(), formats.end());
+      },
+      "Returns portable onnx-light profiles, not vendor packing ABIs.");
   rt_mod.def("make_quantization_plan", &core::runtime::MakeQuantizationPlan, nb::arg("format"),
              nb::arg("count"), nb::arg("block_size") = 128,
              "Creates block defaults; requires supplied learned codebooks and transforms.");

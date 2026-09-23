@@ -13,6 +13,21 @@ using namespace ONNX_LIGHT_NAMESPACE::core::runtime;
 
 namespace {
 
+constexpr auto kQuantizationFormats = QuantizationFormats();
+static_assert(kQuantizationFormats.size() == 40);
+static_assert(kQuantizationFormats.front() == "int8");
+static_assert(kQuantizationFormats.back() == "column_major");
+static_assert([] {
+  for (size_t i = 0; i < kQuantizationFormats.size(); ++i) {
+    if (kQuantizationFormats[i].empty())
+      return false;
+    for (size_t j = 0; j < i; ++j)
+      if (kQuantizationFormats[i] == kQuantizationFormats[j])
+        return false;
+  }
+  return true;
+}());
+
 void ExpectValues(const Tensor &tensor, const std::vector<float> &expected, float tolerance = 0) {
   ASSERT_EQ(tensor.data_type, TensorProto::FLOAT);
   ASSERT_EQ(tensor.element_count(), static_cast<int64_t>(expected.size()));
@@ -72,7 +87,7 @@ TEST(Quantization, EveryCatalogueProfileProducesSelfContainedValues) {
   EXPECT_EQ(QuantizationFormats().size(), 40u);
   for (const auto &format : QuantizationFormats()) {
     SCOPED_TRACE(format);
-    auto plan = WithTables(format, 8);
+    auto plan = WithTables(std::string(format), 8);
     if (format == "iq4_nl")
       plan.blocks[0].scale = plan.blocks[1].scale = 0.01;
     const auto encoded = QuantizeTensor(tensor, plan);
@@ -98,6 +113,21 @@ TEST(Quantization, MixedPrecisionOffsetsAndIndependentBlockScales) {
   const auto tensor = Tensor::FromFloat("", {2, 3}, {0.625, 1.125, 1.375, -32, 0, 30});
   ExpectValues(DequantizeTensor(WireRoundTrip(QuantizeTensor(tensor, plan))),
                {0.625, 1.125, 1.375, -32, 0, 30});
+}
+
+TEST(Quantization, ConstantProfileTablesRemainIndependent) {
+  const std::vector<double> expected{0,  0.125, -0.125, 0.25, -0.25, 0.5, -0.5, 1,
+                                     -1, 2,     -2,     4,    -4,    8,   -8};
+  auto plan = MakeQuantizationPlan("log", 2, 1);
+  ASSERT_EQ(plan.blocks.size(), 2u);
+  EXPECT_EQ(plan.blocks[0].codebook, expected);
+  EXPECT_EQ(plan.blocks[1].codebook, expected);
+  plan.blocks[0].codebook[0] = 99;
+  EXPECT_EQ(plan.blocks[1].codebook, expected);
+  EXPECT_EQ(MakeQuantizationPlan("log", 1).blocks[0].codebook, expected);
+  ExpectValues(DequantizeTensor(QuantizeTensor(Tensor::FromFloat("", {4}, {0.125f, -0.25f, 4, -8}),
+                                               MakeQuantizationPlan("log", 4))),
+               {0.125f, -0.25f, 4, -8});
 }
 
 TEST(Quantization, Base3GoldenBytesAndShortTail) {

@@ -16,20 +16,42 @@ namespace {
 
 constexpr const char *kPrefix = "onnx_light.quantization.v1/";
 
-size_t Product(uint64_t a, uint64_t b) {
+constexpr double kNf4[] = {-1,
+                           -0.6961928009986877,
+                           -0.5250730514526367,
+                           -0.39491748809814453,
+                           -0.28444138169288635,
+                           -0.18477343022823334,
+                           -0.09105003625154495,
+                           0,
+                           0.07958029955625534,
+                           0.16093020141124725,
+                           0.24611230194568634,
+                           0.33791524171829224,
+                           0.44070982933044434,
+                           0.5626170039176941,
+                           0.7229568362236023,
+                           1};
+constexpr double kIq4Nl[] = {-127, -104, -83, -65, -49, -35, -22, -10,
+                             1,    13,   25,  38,  53,  69,  89,  113};
+constexpr double kBinary[] = {-1, 1};
+constexpr double kTernary[] = {-1, 0, 1};
+constexpr double kLog[] = {0, 0.125, -0.125, 0.25, -0.25, 0.5, -0.5, 1, -1, 2, -2, 4, -4, 8, -8};
+
+constexpr size_t Product(uint64_t a, uint64_t b) {
   EXT_ENFORCE_INVALID(b == 0 || a <= std::numeric_limits<size_t>::max() / b,
                       "Quantization size overflow.");
   return static_cast<size_t>(a * b);
 }
 
-size_t CeilDiv(size_t n, size_t d) { return n / d + (n % d != 0); }
+constexpr size_t CeilDiv(size_t n, size_t d) { return n / d + (n % d != 0); }
 
-bool Floating(int32_t type) {
+constexpr bool Floating(int32_t type) {
   return type == TensorProto::FLOAT || type == TensorProto::DOUBLE ||
          type == TensorProto::FLOAT16 || type == TensorProto::BFLOAT16;
 }
 
-size_t FloatBytes(int32_t type) {
+constexpr size_t FloatBytes(int32_t type) {
   EXT_ENFORCE_INVALID(Floating(type), "Quantization requires FLOAT, DOUBLE, FLOAT16 or BFLOAT16.");
   return type == TensorProto::DOUBLE ? 8 : type == TensorProto::FLOAT ? 4 : 2;
 }
@@ -100,13 +122,13 @@ struct ByteReader {
   double GetDouble() { return std::bit_cast<double>(Get(8)); }
 };
 
-size_t CodeCount(const QuantizationBlock &block) {
+constexpr size_t CodeCount(const QuantizationBlock &block) {
   return block.method == QuantizationMethod::kCodebook
              ? Product(CeilDiv(block.count, block.vector_size), block.books)
              : block.count;
 }
 
-size_t CodeBytes(const QuantizationBlock &block) {
+constexpr size_t CodeBytes(const QuantizationBlock &block) {
   if (block.method == QuantizationMethod::kCast)
     return Product(block.count, FloatBytes(block.cast_type));
   if (block.base3)
@@ -114,7 +136,7 @@ size_t CodeBytes(const QuantizationBlock &block) {
   return CeilDiv(Product(CodeCount(block), block.bits), 8);
 }
 
-size_t TableSize(const QuantizationBlock &block) {
+constexpr size_t TableSize(const QuantizationBlock &block) {
   return block.method == QuantizationMethod::kCodebook
              ? Product(Product(block.books, block.entries), block.vector_size)
              : 0;
@@ -236,11 +258,35 @@ void Array(StructTypeProto &type, const std::string &name, int32_t dtype,
     tensor->mutable_shape()->add_dim()->set_dim_value(dim);
 }
 
-std::array<int64_t, 9> BlockHeader(const QuantizationBlock &block) {
+constexpr std::array<int64_t, 9> BlockHeader(const QuantizationBlock &block) {
   return {int64_t(block.count),        int64_t(block.method), int64_t(block.bits),
           int64_t(block.signed_codes), int64_t(block.books),  int64_t(block.entries),
           int64_t(block.vector_size),  int64_t(block.base3),  int64_t(block.cast_type)};
 }
+
+static_assert(Product(7, 4) == 28 && CeilDiv(7, 4) == 2);
+static_assert(Floating(TensorProto::FLOAT16) && !Floating(TensorProto::INT8));
+static_assert(FloatBytes(TensorProto::DOUBLE) == 8 && FloatBytes(TensorProto::FLOAT) == 4 &&
+              FloatBytes(TensorProto::BFLOAT16) == 2);
+static_assert([] {
+  QuantizationBlock block;
+  block.count = 7;
+  if (CodeCount(block) != 7 || CodeBytes(block) != 4 || TableSize(block) != 0 ||
+      BlockHeader(block)[0] != 7)
+    return false;
+  block.method = QuantizationMethod::kCodebook;
+  block.entries = 3;
+  block.base3 = true;
+  if (CodeBytes(block) != 2 || TableSize(block) != 3)
+    return false;
+  block.base3 = false;
+  block.books = 2;
+  block.vector_size = 4;
+  if (CodeCount(block) != 4 || TableSize(block) != 24)
+    return false;
+  block.method = QuantizationMethod::kCast;
+  return CodeBytes(block) == 14;
+}());
 
 StructTypeProto Schema(const QuantizationPlan &plan) {
   StructTypeProto root;
@@ -526,42 +572,19 @@ std::vector<int64_t> ReadIndices(ByteReader &payload, size_t count) {
   return values;
 }
 
-void SetTable(QuantizationBlock &block, const std::vector<double> &values, uint32_t bits) {
+void SetTable(QuantizationBlock &block, std::span<const double> values, uint32_t bits) {
   block.method = QuantizationMethod::kCodebook;
   block.signed_codes = false;
   block.bits = bits;
   block.entries = static_cast<uint32_t>(values.size());
-  block.codebook = values;
+  block.codebook.assign(values.begin(), values.end());
 }
 
 } // namespace
 
-std::vector<std::string> QuantizationFormats() {
-  return {"int8",        "int8_per_channel",
-          "int4",        "gptq",
-          "awq",         "eetq",
-          "matmulnbits", "q2_k",
-          "q3_k",        "q4_k",
-          "q5_k",        "q6_k",
-          "hqq",         "exl2",
-          "exl3",        "nf4",
-          "iq4_nl",      "binary",
-          "ternary",     "tq1_0",
-          "tq2_0",       "bitnet",
-          "paretoq",     "tequila",
-          "stq1_0",      "iq1_s",
-          "aqlm",        "quip_sharp",
-          "spqr",        "squeezellm",
-          "log",         "fp6_llm",
-          "fp8_e4m3",    "mxfp4",
-          "mxfp6",       "nvfp4",
-          "quarot",      "smoothquant",
-          "tiled_float", "column_major"};
-}
-
 QuantizationPlan MakeQuantizationPlan(const std::string &format, uint64_t count,
                                       uint64_t block_size) {
-  const auto formats = QuantizationFormats();
+  constexpr auto formats = QuantizationFormats();
   EXT_ENFORCE_INVALID(std::find(formats.begin(), formats.end(), format) != formats.end(),
                       "Unknown quantization format: ", format);
   EXT_ENFORCE_INVALID(block_size > 0 && block_size <= std::numeric_limits<uint32_t>::max(),
@@ -579,19 +602,14 @@ QuantizationPlan MakeQuantizationPlan(const std::string &format, uint64_t count,
     block.zero_point = 8;
   }
   if (format == "nf4")
-    SetTable(block,
-             {-1, -0.6961928009986877, -0.5250730514526367, -0.39491748809814453,
-              -0.28444138169288635, -0.18477343022823334, -0.09105003625154495, 0,
-              0.07958029955625534, 0.16093020141124725, 0.24611230194568634, 0.33791524171829224,
-              0.44070982933044434, 0.5626170039176941, 0.7229568362236023, 1},
-             4);
+    SetTable(block, kNf4, 4);
   if (format == "iq4_nl")
-    SetTable(block, {-127, -104, -83, -65, -49, -35, -22, -10, 1, 13, 25, 38, 53, 69, 89, 113}, 4);
+    SetTable(block, kIq4Nl, 4);
   if (format == "binary")
-    SetTable(block, {-1, 1}, 1);
+    SetTable(block, kBinary, 1);
   if (format == "ternary" || format == "tq1_0" || format == "tq2_0" || format == "bitnet" ||
       format == "paretoq" || format == "tequila") {
-    SetTable(block, {-1, 0, 1}, 2);
+    SetTable(block, kTernary, 2);
     block.base3 = format != "tq2_0";
   }
   if (format == "stq1_0" || format == "iq1_s" || format == "aqlm" || format == "quip_sharp") {
@@ -621,14 +639,8 @@ QuantizationPlan MakeQuantizationPlan(const std::string &format, uint64_t count,
     }
     SetTable(block, table, bits);
   }
-  if (format == "log") {
-    std::vector<double> table{0};
-    for (int i = -3; i <= 3; ++i) {
-      table.push_back(std::exp2(i));
-      table.push_back(-std::exp2(i));
-    }
-    SetTable(block, table, 4);
-  }
+  if (format == "log")
+    SetTable(block, kLog, 4);
   if (format == "tiled_float" || format == "column_major") {
     block.method = QuantizationMethod::kCast;
     block.cast_type = TensorProto::FLOAT;

@@ -34,7 +34,12 @@ class TestQuantizedValues(unittest.TestCase):
     def test_public_module_and_block_mutation(self):
         from onnx_light.onnx_core.quantization import make_quantization_plan, quantization_formats
 
-        self.assertEqual(len(quantization_formats()), 40)
+        formats = quantization_formats()
+        self.assertIsInstance(formats, list)
+        self.assertEqual(len(formats), 40)
+        self.assertTrue(all(isinstance(name, str) for name in formats))
+        self.assertEqual(formats[0], "int8")
+        self.assertEqual(formats[-1], "column_major")
         plan = make_quantization_plan("int4", 6, 3)
         blocks = plan.blocks
         blocks[0].scale = 0.5

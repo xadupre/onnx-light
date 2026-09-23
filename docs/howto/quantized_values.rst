@@ -23,6 +23,12 @@ bindings, as do other Python reference-runtime utilities.
 Python
 ------
 
+The runnable :ref:`Python profile tutorial <l-example-quantization-profiles>`
+demonstrates **all 40 profiles**, including per-channel grouping, mixed
+precision, supplied vector/additive codebooks, sparse outliers, rotations,
+tiling and serialization. The examples use small explicit parameters; they
+do not train or calibrate a model.
+
 .. code-block:: python
 
     import numpy
@@ -52,6 +58,132 @@ potentially invalidated element of a C++ vector.
 ``Tensor``. As with runtime structured feeds, Python represents an encoded
 ``RuntimeValue`` as ``EncodedValueProto`` rather than introducing another wrapper.
 
+Choosing a profile
+~~~~~~~~~~~~~~~~~~
+
+Start with ``int8`` or ``int4`` for ordinary affine quantization, ``nf4`` for
+a fixed nonlinear scalar table, or ``tiled_float`` for a floating-point cast.
+Use ``int8_per_channel`` with explicit channel grouping when each channel needs
+a different scale. Use ``exl2`` or ``exl3`` with explicit block overrides for
+mixed bit widths. A named algorithm such as ``gptq`` or ``aqlm`` only selects
+the representation defaults described in the catalogue below; it does not
+apply that algorithm's optimization procedure.
+
+``make_quantization_plan(format, count, block_size=128)`` divides ``count``
+scalar elements into contiguous blocks of at most ``block_size`` elements.
+It does not infer grouping from the source tensor shape. Both sizes are
+element counts, not bytes or codebook-vector counts. For a NumPy array, pass
+``array.size`` as ``count``. The last block may be shorter. Inputs are flattened
+in logical row-major order, then reordered by any supplied permutation.
+
+Python parameter reference
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The returned ``QuantizationPlan`` is mutable. Its fields are:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 75
+
+   * - Field
+     - Meaning
+   * - ``format``
+     - Profile name saved in the encoded layout. Changing this string alone
+       does not reconfigure existing blocks; create a new plan to change defaults.
+   * - ``blocks``
+     - List of ``QuantizationBlock`` copies. Their counts must sum to the
+       number of source elements. Assign the modified list back to the plan.
+   * - ``permutation``
+     - List of all flattened source indices, each exactly once, or an empty
+       list for identity. Encoding gathers ``source[permutation[i]]``.
+   * - ``transform_size``
+     - Width of each row vector transformed before encoding; zero disables
+       the transform. A nonzero width must divide the total element count.
+   * - ``forward``, ``inverse``
+     - Flat row-major lists, each containing ``transform_size ** 2`` numbers.
+       Supply mutually inverse matrices, not only the forward rotation.
+   * - ``outliers``
+     - Unique flattened indices in the original source, before permutation.
+       Values at these indices bypass quantization and are restored exactly.
+
+Each ``QuantizationBlock`` has these parameters. All profiles initially use
+``scale=1``, ``offset=0`` and ``zero_point=0``, except ``gptq``, ``awq`` and
+``matmulnbits``, whose zero point defaults to 8.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 75
+
+   * - Field
+     - Meaning and constraints
+   * - ``count``
+     - Number of consecutive scalar elements covered by this block,
+       at most ``UINT32_MAX``.
+   * - ``method``
+     - ``QuantizationMethod.AFFINE``, ``CODEBOOK`` or ``CAST``.
+       Changing it requires consistent parameters for the new method.
+   * - ``bits``
+     - Code/index width, from 1 to 16. For codebooks, at least
+       ``ceil(log2(entries))``. It is not necessarily the bits per source
+       value for vector/additive books, and excludes metadata.
+   * - ``signed_codes``
+     - Selects signed versus unsigned affine codes. A signed b-bit code
+       ranges from ``-2**(b-1)`` to ``2**(b-1)-1``.
+   * - ``scale``
+     - Finite, strictly positive reconstruction multiplier, including for
+       codebooks and casts. It is never automatically estimated.
+   * - ``zero_point``
+     - Integer in the affine code range. Must be zero for codebooks and casts.
+   * - ``offset``
+     - Finite real additive offset for affine reconstruction; zero otherwise.
+   * - ``books``, ``entries``, ``vector_size``
+     - Positive codebook dimensions. Defaults for each vector family appear
+       in the catalogue below; scalar books have ``vector_size=1``.
+   * - ``codebook``
+     - Flat list of ``books * entries * vector_size`` finite numbers ordered
+       by book, entry, then component. Must be empty for affine/cast blocks.
+   * - ``base3``
+     - Packs five ternary indices per byte. Requires exactly one scalar
+       three-entry codebook; set it to false for ordinary binary packing.
+   * - ``cast_type``
+     - Physical dtype for ``CAST``: ``onnx.TensorProto.FLOAT``, ``DOUBLE``,
+       ``FLOAT16`` or ``BFLOAT16``. Does not change the logical output dtype.
+
+For example, updating a single block without losing the change:
+
+.. code-block:: python
+
+    block = plan.block(0)
+    block.scale = 0.25
+    plan.set_block(0, block)
+
+Do not write ``plan.blocks[0].scale = 0.25`` and expect the plan to change:
+the assignment only modifies a temporary copy.
+
+Output, serialization and errors
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``quantize_tensor_proto(source, plan)`` returns an owned ``EncodedValueProto``.
+``dequantize_tensor_proto(encoded, model=None)`` returns a ``TensorProto``
+with the original logical shape and dtype, not the physical code dtype.
+Convert it with ``numpy_helper.to_array``. The decoder does not need the
+original plan; scales, tables, transforms and outliers are encoded with the data.
+
+Use ``encoded.SerializeToString()`` and
+``onnx.EncodedValueProto().ParseFromString(...)`` to round-trip the message
+through bytes. Keep its inline ``struct_type``, or save the model catalogue
+and pass ``model=model`` when decoding a ``type_ref``. The tutorial includes
+both forms. External tensor payloads must be loaded first.
+
+Invalid parameters, missing codebooks/transforms, nonfinite values and
+malformed payloads raise ``ValueError``. Affine values outside the code
+range are clipped, not rejected: choose scales deliberately and measure
+reconstruction error on representative data.
+
+An encoded message is not a drop-in tensor initializer for an ordinary
+``MatMul`` or ``Attention``. Dequantize it first or supply an operator whose
+schema and kernel explicitly support that representation.
+
 C++
 ---
 
@@ -70,6 +202,16 @@ C++
 message conversions. C++ dequantizers accept a ``StructTypeCatalogue`` for
 model-scoped references; Python dequantizers accept an optional ``model``.
 The C++ tensor dequantizer also accepts an allocator.
+
+``QuantizationFormats()`` is defined in the header as a ``constexpr`` function
+returning ``std::array<std::string_view, 40>`` without dynamic allocation:
+
+.. code-block:: cpp
+
+    constexpr auto formats = QuantizationFormats();
+    static_assert(formats.front() == "int8");
+
+The Python ``quantization_formats()`` function still returns a list of strings.
 
 Numerical contract
 ------------------
@@ -123,58 +265,301 @@ can be overridden: a profile supplies starting values, not a vendor schema.
 In particular, hierarchical scale products are supplied as effective per-block
 scales/offsets; this representation does not reproduce compressed scale layouts.
 
+The third column contains executable plan configurations using this common
+setup. Each row is independent. Loops show how to configure every profile in
+the row; quantize inside the loop to use each resulting plan.
+The scales and synthetic codebooks are illustrative, not calibrated or trained.
+Replace them with your own parameters for real weights.
+
+.. code-block:: python
+
+    import numpy
+    from onnx_light import onnx
+    from onnx_light.onnx import numpy_helper
+    from onnx_light.onnx_core.quantization import (
+        make_quantization_plan,
+        quantize_tensor_proto,
+        dequantize_tensor_proto,
+    )
+
+    weights = numpy.linspace(-1, 1, 16, dtype=numpy.float32).reshape(4, 4)
+    n = weights.size
+
 .. list-table::
    :header-rows: 1
-   :widths: 35 65
+   :widths: 20 35 45
 
    * - Profiles
      - Portable representation and caller inputs
-   * - ``int8``, ``int8_per_channel``, ``eetq``, ``int4``
-     - Signed affine codes; scales and channel grouping supplied.
+     - Python plan configuration
+   * - ``int8``, ``eetq``, ``int4``
+     - Signed affine codes: 8 bits for the first two, 4 for ``int4``.
+       Scales supplied explicitly.
+     - .. code-block:: python
+
+           for profile in ("int8", "eetq", "int4"):
+               plan = make_quantization_plan(profile, n)
+               block = plan.block(0)
+               block.scale = 1 / (2 ** (block.bits - 1) - 1)
+               plan.set_block(0, block)
+
+   * - ``int8_per_channel``
+     - Signed INT8 with explicit channel grouping. Here columns are channels,
+       gathered into blocks before encoding; decoding restores row-major order.
+     - .. code-block:: python
+
+           plan = make_quantization_plan(
+               "int8_per_channel", n, block_size=weights.shape[0]
+           )
+           plan.permutation = (
+               numpy.arange(n).reshape(weights.shape).T.ravel().tolist()
+           )
+           for i in range(weights.shape[1]):
+               block = plan.block(i)
+               maximum = float(numpy.abs(weights[:, i]).max())
+               block.scale = maximum / 127 if maximum > 0 else 1
+               plan.set_block(i, block)
+
    * - ``gptq``, ``awq``, ``matmulnbits``
      - Unsigned INT4 affine codes, default zero point 8; supplied group parameters.
+     - .. code-block:: python
+
+           for profile in ("gptq", "awq", "matmulnbits"):
+               plan = make_quantization_plan(profile, n, block_size=4)
+               blocks = plan.blocks
+               for block, scale in zip(blocks, [0.15, 0.05, 0.05, 0.15]):
+                   block.scale = scale
+                   block.zero_point = 8
+               plan.blocks = blocks
+
    * - ``q2_k``, ``q3_k``, ``q4_k``, ``q5_k``, ``q6_k``
      - 2--6-bit affine blocks; supplied effective sub-block scales and offsets.
+     - .. code-block:: python
+
+           for profile in ("q2_k", "q3_k", "q4_k", "q5_k", "q6_k"):
+               plan = make_quantization_plan(profile, n, block_size=4)
+               blocks = plan.blocks
+               for block in blocks:
+                   block.scale = 1 / (2 ** (block.bits - 1) - 1)
+                   block.offset = 0.125
+               plan.blocks = blocks
+
    * - ``hqq``, ``exl2``, ``exl3``
-     - Independently configurable affine blocks; override bits, counts and parameters
+     - Signed 4-bit affine defaults; override bits, counts and parameters
        for mixed precision, or select a codebook block explicitly.
+     - .. code-block:: python
+
+           for profile in ("hqq", "exl2", "exl3"):
+               plan = make_quantization_plan(profile, n, block_size=8)
+               blocks = plan.blocks
+               blocks[0].bits, blocks[0].scale = 3, 0.25
+               blocks[1].bits, blocks[1].scale = 5, 0.125
+               plan.blocks = blocks
+
    * - ``nf4``, ``iq4_nl``
      - Fixed scalar codebooks and supplied scales. NF4 uses the full-precision
        normal-float table; IQ4_NL uses its 16 signed integer levels.
+     - .. code-block:: python
+
+           for profile in ("nf4", "iq4_nl"):
+               plan = make_quantization_plan(profile, n)
+               block = plan.block(0)
+               block.scale = 1 if profile == "nf4" else 1 / 127
+               plan.set_block(0, block)
+
    * - ``binary``
      - One-bit indices into ``[-1, 1]``.
+     - .. code-block:: python
+
+           plan = make_quantization_plan("binary", n)
+           block = plan.block(0)
+           block.scale = 0.5
+           plan.set_block(0, block)
+
    * - ``ternary``, ``tq1_0``, ``bitnet``, ``paretoq``, ``tequila``
      - Indices into ``[-1, 0, 1]``; five base-3 digits per byte.
        This represents ternary weights, not the associated training procedures.
+     - .. code-block:: python
+
+           for profile in ("ternary", "tq1_0", "bitnet", "paretoq", "tequila"):
+               plan = make_quantization_plan(profile, n)
+               block = plan.block(0)
+               block.scale = 0.75
+               plan.set_block(0, block)
+
    * - ``tq2_0``
      - The same ternary table with two bits per index.
+     - .. code-block:: python
+
+           plan = make_quantization_plan("tq2_0", n)
+           block = plan.block(0)
+           block.scale = 0.75
+           plan.set_block(0, block)
+
    * - ``stq1_0``
      - Supplied vector codebook; defaults to 32 four-component entries and 5-bit
        indices. Code/sign splitting and vendor scatter layouts are not emitted.
-   * - ``iq1_s``, ``quip_sharp``
+     - .. code-block:: python
+
+           plan = make_quantization_plan("stq1_0", n)
+           block = plan.block(0)
+           table = numpy.linspace(-1, 1, 128).reshape(1, 32, 4)
+           block.codebook = table.ravel().tolist()
+           plan.set_block(0, block)
+
+   * - ``iq1_s``
      - Supplied vector codebooks; defaults to 256 eight-component entries.
-       QuIP# also requires an explicit transform pair.
+     - .. code-block:: python
+
+           plan = make_quantization_plan("iq1_s", n)
+           block = plan.block(0)
+           table = numpy.linspace(-1, 1, 2048).reshape(1, 256, 8)
+           block.codebook = table.ravel().tolist()
+           plan.set_block(0, block)
+
+   * - ``quip_sharp``
+     - The same default table dimensions as ``iq1_s``, plus an explicit
+       transform pair. This example uses a two-component orthogonal rotation.
+     - .. code-block:: python
+
+           plan = make_quantization_plan("quip_sharp", n)
+           block = plan.block(0)
+           table = numpy.linspace(-1, 1, 2048).reshape(1, 256, 8)
+           block.codebook = table.ravel().tolist()
+           plan.set_block(0, block)
+           rotation = numpy.array([[1, 1], [1, -1]]) / numpy.sqrt(2)
+           plan.transform_size = 2
+           plan.forward = rotation.ravel().tolist()
+           plan.inverse = rotation.T.ravel().tolist()
+
    * - ``aqlm``
      - Supplied additive vector codebooks; defaults to two 256-entry,
        eight-component books with 8-bit indices.
-   * - ``spqr``, ``squeezellm``
-     - Affine or supplied scalar-codebook base, respectively, plus exact sparse
-       outliers. SqueezeLLM defaults to 16 supplied levels. Outlier selection is
-       the caller's responsibility.
+     - .. code-block:: python
+
+           plan = make_quantization_plan("aqlm", n)
+           block = plan.block(0)
+           table = numpy.empty((2, 256, 8))
+           table[0] = numpy.linspace(-1, 1, 256)[:, None]
+           table[1] = numpy.linspace(-0.125, 0.125, 256)[:, None]
+           block.codebook = table.ravel().tolist()
+           plan.set_block(0, block)
+
+   * - ``spqr``
+     - Signed 4-bit affine base plus exact sparse outliers. Indices refer to
+       the original flattened tensor; selection is the caller's responsibility.
+     - .. code-block:: python
+
+           plan = make_quantization_plan("spqr", n)
+           plan.outliers = [0, 15]
+           block = plan.block(0)
+           block.scale = 0.125
+           plan.set_block(0, block)
+
+   * - ``squeezellm``
+     - Supplied scalar-codebook base plus exact sparse outliers.
+       Defaults to 16 supplied levels.
+     - .. code-block:: python
+
+           plan = make_quantization_plan("squeezellm", n)
+           plan.outliers = [0, 15]
+           block = plan.block(0)
+           block.codebook = numpy.linspace(-1, 1, 16).tolist()
+           plan.set_block(0, block)
+
    * - ``log``
      - Scalar codebook with zero and signed powers of two from ``2**-3`` through
        ``2**3``. Supply another table for a different base, range or logarithmic rule.
+     - .. code-block:: python
+
+           plan = make_quantization_plan("log", n)
+           block = plan.block(0)
+           block.scale = 0.125
+           plan.set_block(0, block)
+
    * - ``fp6_llm``, ``mxfp6``
      - E3M2 finite levels and supplied scales, using 6-bit codebook indices.
+     - .. code-block:: python
+
+           for profile in ("fp6_llm", "mxfp6"):
+               plan = make_quantization_plan(profile, n)
+               block = plan.block(0)
+               block.scale = 0.25
+               plan.set_block(0, block)
+
    * - ``mxfp4``, ``nvfp4``
      - E2M1 finite levels and supplied effective scales. The caller rounds scales
        to E8M0/FP8 and combines scale levels if required by their numerical profile.
+     - .. code-block:: python
+
+           for profile in ("mxfp4", "nvfp4"):
+               plan = make_quantization_plan(profile, n, block_size=8)
+               blocks = plan.blocks
+               for block, scale in zip(blocks, [0.25, 0.5]):
+                   block.scale = scale
+               plan.blocks = blocks
+
    * - ``fp8_e4m3``
      - Finite E4M3FN levels with 8-bit codebook indices; nonfinite levels excluded.
+     - .. code-block:: python
+
+           plan = make_quantization_plan("fp8_e4m3", n)
+           block = plan.block(0)
+           block.scale = 0.5
+           plan.set_block(0, block)
+
    * - ``quarot``, ``smoothquant``
-     - Affine blocks with explicit forward/inverse rotations or rescaling.
-   * - ``tiled_float``, ``column_major``
-     - FLOAT casts plus an explicitly supplied ordering permutation.
+     - Signed affine blocks (4 and 8 bits respectively), with explicit
+       forward/inverse rotations or rescaling.
+     - .. code-block:: python
+
+           for profile in ("quarot", "smoothquant"):
+               plan = make_quantization_plan(profile, n)
+               matrix = (
+                   numpy.array([[1, 1], [1, -1]]) / numpy.sqrt(2)
+                   if profile == "quarot"
+                   else numpy.diag([2.0, 0.5])
+               )
+               plan.transform_size = 2
+               plan.forward = matrix.ravel().tolist()
+               plan.inverse = numpy.linalg.inv(matrix).ravel().tolist()
+               block = plan.block(0)
+               block.scale = 0.25
+               plan.set_block(0, block)
+
+   * - ``tiled_float``
+     - FLOAT casts by default. Here an explicit permutation groups 2-by-2
+       tiles and the physical storage is changed to FLOAT16.
+     - .. code-block:: python
+
+           plan = make_quantization_plan("tiled_float", n, block_size=4)
+           indices = numpy.arange(n).reshape(4, 4)
+           plan.permutation = (
+               indices.reshape(2, 2, 2, 2).transpose(0, 2, 1, 3).ravel().tolist()
+           )
+           blocks = plan.blocks
+           for block in blocks:
+               block.cast_type = onnx.TensorProto.FLOAT16
+           plan.blocks = blocks
+
+   * - ``column_major``
+     - FLOAT casts with a supplied column-major ordering permutation.
+       Decoding restores the original logical shape and order.
+     - .. code-block:: python
+
+           plan = make_quantization_plan("column_major", n)
+           plan.permutation = (
+               numpy.arange(n).reshape(weights.shape).T.ravel().tolist()
+           )
+
+After any row, use its configured plan as follows (or put these lines inside
+the profile loop to encode each profile):
+
+.. code-block:: python
+
+    encoded = quantize_tensor_proto(numpy_helper.from_array(weights), plan)
+    restored = numpy_helper.to_array(dequantize_tensor_proto(encoded))
+    print(plan.format, numpy.max(numpy.abs(restored - weights)))
 
 All floating-point/codebook profiles use closest-level encoding, with first-entry
 ties. They do not promise the external format's float bit patterns or tie-breaking.

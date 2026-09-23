@@ -5,6 +5,8 @@
 #pragma once
 
 #include "onnx_core/runtime/runtime_value.h"
+#include <array>
+#include <string_view>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
@@ -54,8 +56,29 @@ struct QuantizationPlan {
   std::vector<int64_t> outliers;
 };
 
-/** Returns the names of the portable catalogue profiles. */
-std::vector<std::string> QuantizationFormats();
+/** Returns the portable profile names as a compile-time array without dynamic allocation. */
+constexpr std::array<std::string_view, 40> QuantizationFormats() {
+  return {"int8",        "int8_per_channel",
+          "int4",        "gptq",
+          "awq",         "eetq",
+          "matmulnbits", "q2_k",
+          "q3_k",        "q4_k",
+          "q5_k",        "q6_k",
+          "hqq",         "exl2",
+          "exl3",        "nf4",
+          "iq4_nl",      "binary",
+          "ternary",     "tq1_0",
+          "tq2_0",       "bitnet",
+          "paretoq",     "tequila",
+          "stq1_0",      "iq1_s",
+          "aqlm",        "quip_sharp",
+          "spqr",        "squeezellm",
+          "log",         "fp6_llm",
+          "fp8_e4m3",    "mxfp4",
+          "mxfp6",       "nvfp4",
+          "quarot",      "smoothquant",
+          "tiled_float", "column_major"};
+}
 
 /**
  * Creates block defaults for a catalogue profile.

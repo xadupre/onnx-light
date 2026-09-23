@@ -65,6 +65,7 @@ struct QuantizationBlock {
  * remain those of the source, regardless of the physical code or cast dtype.
  * The converters do not modify source storage; encoded and decoded results own their data.
  * External TensorProto payloads must be loaded before quantization.
+ * TensorProto::LoadExternalData() may retain EXTERNAL metadata; loaded raw_data is accepted.
  *
  * @par Block coverage and numerical methods
  * Counts and block sizes measure scalar elements, not bytes or codebook vectors.
@@ -273,6 +274,8 @@ struct QuantizationBlock {
  * The factory can therefore return a plan that is not yet ready to encode.
  * The selected profile name is saved after the prefix @c onnx_light.quantization.v1/;
  * changing format alone does not update existing block parameters.
+ * Encoding and decoding reject names not returned by QuantizationFormats(), even after
+ * editing a plan or an encoded layout.
  *
  * The encoded value stores the tables, scales, transforms, permutation and exact outliers,
  * with an inline layout or a model-scoped type reference. Serialize the EncodedValueProto

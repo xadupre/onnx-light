@@ -221,6 +221,9 @@ Input shapes are concrete, including scalars and empty tensors. Inputs must
 be finite. Source storage is never modified and results own their storage.
 Nonfinite reconstructions and floating-point cast overflows are rejected.
 External messages must have their payload loaded before conversion.
+For a Python ``TensorProto``, call ``tensor.load_external_data(base_dir)``.
+The loader preserves ``data_location=EXTERNAL`` and its file metadata;
+quantization accepts it once ``raw_data`` is loaded, without changing that metadata.
 
 Blocks cover the flattened tensor exactly, in order. Each can select:
 
@@ -241,6 +244,9 @@ Callers supply their scales, integer zero points, real offsets, trained
 codebooks, rotations and selected outlier indices. Missing learned tables
 and required rotations raise an error. No GPTQ Hessian calculation, AWQ
 calibration, QAT or codebook training is performed.
+Both encoding and decoding reject profile names absent from
+``quantization_formats()``, including when a caller edits ``plan.format``
+after construction or changes the encoded layout's name.
 
 The plan applies these steps:
 

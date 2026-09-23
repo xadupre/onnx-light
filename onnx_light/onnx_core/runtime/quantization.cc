@@ -187,7 +187,14 @@ void ValidateBlock(const QuantizationBlock &block) {
   CodeBytes(block);
 }
 
+constexpr void ValidateFormat(const std::string &format) {
+  constexpr auto formats = QuantizationFormats();
+  EXT_ENFORCE_INVALID(std::find(formats.begin(), formats.end(), format) != formats.end(),
+                      "Unknown quantization format: ", format);
+}
+
 void ValidatePlan(const QuantizationPlan &plan, size_t count) {
+  ValidateFormat(plan.format);
   size_t consumed = 0;
   for (const auto &block : plan.blocks) {
     ValidateBlock(block);
@@ -584,9 +591,7 @@ void SetTable(QuantizationBlock &block, std::span<const double> values, uint32_t
 
 QuantizationPlan MakeQuantizationPlan(const std::string &format, uint64_t count,
                                       uint64_t block_size) {
-  constexpr auto formats = QuantizationFormats();
-  EXT_ENFORCE_INVALID(std::find(formats.begin(), formats.end(), format) != formats.end(),
-                      "Unknown quantization format: ", format);
+  ValidateFormat(format);
   EXT_ENFORCE_INVALID(block_size > 0 && block_size <= std::numeric_limits<uint32_t>::max(),
                       "Invalid quantization block size.");
   QuantizationPlan plan;
@@ -807,7 +812,7 @@ Tensor DequantizeTensor(const RuntimeValue &value, const StructTypeCatalogue &ca
 }
 
 EncodedValueProto QuantizeTensorProto(const TensorProto &tensor, const QuantizationPlan &plan) {
-  EXT_ENFORCE_INVALID(tensor.data_location() != TensorProto::EXTERNAL,
+  EXT_ENFORCE_INVALID(tensor.data_location() != TensorProto::EXTERNAL || tensor.is_raw_data(),
                       "Load external TensorProto data before quantization.");
   auto value = QuantizeTensor(TensorFromProto(tensor), plan);
   EncodedValueProto result = value.Encoded();

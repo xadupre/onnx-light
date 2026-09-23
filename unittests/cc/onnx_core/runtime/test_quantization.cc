@@ -276,6 +276,65 @@ TEST(Quantization, RejectsIncompleteAndInvalidPlans) {
   EXPECT_THROW(QuantizeTensor(source, plan), std::invalid_argument);
 }
 
+TEST(Quantization, RejectsUnknownProfilesInMutablePlansAndEncodedLayouts) {
+  const auto source = Tensor::FromFloat("", {2}, {1, 2});
+  const auto valid = QuantizeTensor(source, MakeQuantizationPlan("int4", 2)).Encoded();
+  for (const std::string name : {"", "unknown", "QUAROT"}) {
+    SCOPED_TRACE(name);
+    auto plan = MakeQuantizationPlan("quarot", 2);
+    plan.format = name;
+    EXPECT_THROW(QuantizeTensor(source, plan), std::invalid_argument);
+    auto encoded = valid;
+    encoded.mutable_struct_type()->set_name("onnx_light.quantization.v1/" + name);
+    EXPECT_THROW(DequantizeTensor(RuntimeValue(encoded)), std::invalid_argument);
+  }
+  auto renamed = valid;
+  renamed.mutable_struct_type()->set_name("onnx_light.quantization.v1/quarot");
+  EXPECT_THROW(DequantizeTensor(RuntimeValue(renamed)), std::invalid_argument);
+}
+
+TEST(Quantization, OptionalNamesAndDocumentationMayBeAbsent) {
+  TensorProto source;
+  source.set_data_type(TensorProto::FLOAT);
+  source.add_dims(2);
+  source.add_float_data(1);
+  source.add_float_data(2);
+  ASSERT_FALSE(source.has_name());
+  ASSERT_FALSE(source.has_doc_string());
+  auto encoded = QuantizeTensorProto(source, MakeQuantizationPlan("int4", 2));
+  encoded.clear_name();
+  encoded.clear_doc_string();
+  EncodedValueProto loaded;
+  loaded.ParseFromString(encoded.SerializeAsString());
+  ASSERT_FALSE(loaded.has_name());
+  ASSERT_FALSE(loaded.has_doc_string());
+  auto tensor = DequantizeTensor(RuntimeValue(loaded));
+  EXPECT_TRUE(tensor.name.empty());
+  ExpectValues(tensor, {1, 2});
+  const auto decoded = DequantizeTensorProto(loaded);
+  EXPECT_TRUE(decoded.name().empty());
+  EXPECT_TRUE(decoded.doc_string().empty());
+  ExpectValues(TensorFromProto(decoded), {1, 2});
+}
+
+TEST(Quantization, AcceptsLoadedExternalRawDataWithoutChangingMetadata) {
+  TensorProto external;
+  external.set_data_type(TensorProto::FLOAT);
+  external.add_dims(2);
+  external.set_data_location(TensorProto::EXTERNAL);
+  auto *location = external.add_external_data();
+  location->set_key("location");
+  location->set_value("weights.bin");
+  external.set_raw_data(std::string("\0\0\x80\x3f\0\0\0\x40", 8));
+  const auto original = external.SerializeAsString();
+  const auto encoded = QuantizeTensorProto(external, MakeQuantizationPlan("int4", 2));
+  ExpectValues(DequantizeTensor(RuntimeValue(encoded)), {1, 2});
+  EXPECT_EQ(external.SerializeAsString(), original);
+  external.set_raw_data(std::string("\0", 1));
+  EXPECT_THROW(QuantizeTensorProto(external, MakeQuantizationPlan("int4", 2)),
+               std::invalid_argument);
+}
+
 TEST(Quantization, RejectsCorruptPayloadAndSchema) {
   const auto source = Tensor::FromFloat("", {3}, {1, 0, -1});
   auto valid = QuantizeTensor(source, MakeQuantizationPlan("int4", 3)).Encoded();

@@ -4,6 +4,8 @@
 """Tests portable quantization through actual native bindings."""
 
 import gc
+from pathlib import Path
+import tempfile
 import unittest
 
 import numpy
@@ -152,6 +154,43 @@ class TestQuantizedValues(unittest.TestCase):
         encoded.raw_data = bytes(encoded.raw_data)[:-1]
         with self.assertRaises(ValueError):
             runtime.dequantize_tensor_proto(encoded)
+
+    def test_mutated_profile_names(self):
+        source = numpy_helper.from_array(numpy.array([1, 2], dtype=numpy.float32))
+        valid = runtime.quantize_tensor_proto(source, runtime.make_quantization_plan("int4", 2))
+        for name in ("", "unknown", "QUAROT"):
+            with self.subTest(format=name):
+                plan = runtime.make_quantization_plan("quarot", 2)
+                plan.format = name
+                with self.assertRaisesRegex(ValueError, "Unknown quantization format"):
+                    runtime.quantize_tensor_proto(source, plan)
+                encoded = onnx.EncodedValueProto()
+                encoded.ParseFromString(valid.SerializeToString())
+                encoded.struct_type.name = f"onnx_light.quantization.v1/{name}"
+                with self.assertRaisesRegex(ValueError, "Unknown quantization format"):
+                    runtime.dequantize_tensor_proto(encoded)
+
+    def test_loaded_external_tensor(self):
+        values = numpy.array([1, 2], dtype=numpy.float32)
+        plan = runtime.make_quantization_plan("int4", values.size)
+        with tempfile.TemporaryDirectory() as directory:
+            Path(directory, "weights.bin").write_bytes(values.astype("<f4").tobytes())
+            source = onnx.TensorProto()
+            source.data_type = onnx.TensorProto.FLOAT
+            source.dims.append(values.size)
+            source.data_location = onnx.TensorProto.EXTERNAL
+            location = source.external_data.add()
+            location.key = "location"
+            location.value = "weights.bin"
+            with self.assertRaisesRegex(ValueError, "Load external"):
+                runtime.quantize_tensor_proto(source, plan)
+            source.load_external_data(directory)
+            self.assertEqual(source.data_location, onnx.TensorProto.EXTERNAL)
+            original = source.SerializeToString()
+            encoded = runtime.quantize_tensor_proto(source, plan)
+            self.assertEqual(source.SerializeToString(), original)
+        restored = numpy_helper.to_array(runtime.dequantize_tensor_proto(encoded))
+        numpy.testing.assert_array_equal(restored, values)
 
     def test_catalogue_reference(self):
         source = numpy.array([1, 2, 3], dtype=numpy.float32)

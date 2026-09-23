@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/compute/execution_plan.h"
 #include "onnx_core/runtime/persistent_value_state.h"
 #include <future>
 #include <gtest/gtest.h>
@@ -1315,13 +1316,14 @@ TEST(PersistentValueState, OrdinarySequenceOutputsMigrateAndDetachNestedPayloads
         "test.feedback", "Step", [&](const NodeProto &node, RuntimeContext &rt) {
           RuntimeValue block = Block(false);
           block.fields.at("key") =
-              RuntimeValue(Tensor::Borrow("", DataType::FLOAT, {1, 1, 2, 1}, dense, sizeof(dense)));
+              RuntimeValue(Tensor::Borrow("", DataType::FLOAT, {1, 1, 2, 1},
+                                          reinterpret_cast<const uint8_t *>(dense), sizeof(dense)));
           auto encoded = AffineBlock();
           encoded.mutable_raw_data()->assign_borrowed(codes, sizeof(codes));
           block.fields.at("value") = RuntimeValue(std::move(encoded));
           RuntimeValue sequence(std::vector<RuntimeValue>{std::move(block)});
-          rt.values()[node.output(0)] = sequence.BorrowView();
-          rt.values()[node.output(1)] = sequence.BorrowView();
+          rt.values()[node.output(0)] = sequence;
+          rt.values()[node.output(1)] = std::move(sequence);
         });
     context.Put("past", Number(0).tensor);
     context.Put("tokens", Number(0).tensor);
@@ -1383,6 +1385,65 @@ TEST(PersistentValueState, OrdinarySessionReleasesStructuredIntermediates) {
   EXPECT_EQ(execution.TotalAllocatedSize(), 0u);
   EXPECT_TRUE(context.Remove("response"));
   EXPECT_EQ(io.TotalAllocatedSize(), 0u);
+}
+
+TEST(PersistentValueState, OrdinarySessionReleasesTypedSequenceAfterLastUse) {
+  for (bool release : {false, true}) {
+    SCOPED_TRACE(release);
+    ModelProto model = Model();
+    auto *graph = model.mutable_graph();
+    graph->clear_persistent_bindings();
+    graph->mutable_node(0)->clear_output();
+    graph->mutable_node(0)->add_output("sequence");
+    auto *info = graph->add_value_info();
+    info->set_name("sequence");
+    *info->mutable_type()->mutable_sequence_type()->mutable_elem_type() = FloatType();
+    auto *consume = graph->add_node();
+    consume->set_domain("test.feedback");
+    consume->set_op_type("Consume");
+    consume->add_input("sequence");
+    consume->add_output("copied");
+    auto *finish = graph->add_node();
+    finish->set_domain("test.feedback");
+    finish->set_op_type("Finish");
+    finish->add_input("copied");
+    finish->add_output("present");
+    RuntimeContext context(KernelContext(DefaultOpset(18)),
+                           RuntimeContextOptions{.release_intermediates = release});
+    std::weak_ptr<std::vector<float>> weak;
+    context.RegisterCustomKernel(
+        "test.feedback", "Step", [&](const NodeProto &node, RuntimeContext &rt) {
+          auto owner = std::make_shared<std::vector<float>>(1, 7);
+          weak = owner;
+          rt.values()[node.output(0)] =
+              RuntimeValue(std::vector<RuntimeValue>{RuntimeValue(Tensor::Borrow(
+                  "", DataType::FLOAT, {1}, reinterpret_cast<const uint8_t *>(owner->data()),
+                  sizeof(float), owner))});
+        });
+    context.RegisterCustomKernel(
+        "test.feedback", "Consume", [&](const NodeProto &node, RuntimeContext &rt) {
+          EXPECT_FALSE(weak.expired());
+          const auto &sequence = rt.values().at(node.input(0));
+          rt.Put(node.output(0), Tensor::FromFloat("", {1}, {Number(sequence.elements.at(0))}));
+        });
+    context.RegisterCustomKernel("test.feedback", "Finish",
+                                 [&](const NodeProto &node, RuntimeContext &rt) {
+                                   EXPECT_EQ(weak.expired(), release);
+                                   EXPECT_EQ(rt.values().count("sequence"), release ? 0u : 1u);
+                                   rt.Put(node.output(0), rt.Get(node.input(0)).ToOwned());
+                                 });
+    context.Put("past", Number(0).tensor);
+    context.Put("tokens", Number(0).tensor);
+    RuntimeSession session(model);
+    session.Run(context);
+    EXPECT_EQ(context.Get("present").AsFloat()[0], 7);
+    EXPECT_EQ(weak.expired(), release);
+    if (!release) {
+      context.GetExecutionPlan(model.graph()).ReleaseAfter(model.graph().node(1), context);
+      EXPECT_TRUE(weak.expired());
+      EXPECT_EQ(context.values().count("sequence"), 0u);
+    }
+  }
 }
 
 TEST(PersistentValueState, EncodedFieldsUseNativeCatalogueAndOwnedPayloads) {
@@ -2083,4 +2144,45 @@ TEST(PersistentValueState, RetainsExternalOwnersAcrossFailedInitializationUntilC
   EXPECT_TRUE(context_lifetime.expired());
   auto owner = std::make_shared<int>(1);
   EXPECT_THROW(state.RetainOwner(owner), std::invalid_argument);
+}
+
+TEST(PersistentValueState, RejectsNullAffinePayloadsBeforeContentValidation) {
+  ModelProto model = Model();
+  PersistentValueState state(model, {{"past", Number(1)}});
+  auto owner = std::make_shared<int>(0);
+  for (TensorProto::DataType storage : {TensorProto::INT4, TensorProto::INT8})
+    for (int part = 0; part < 5; ++part) {
+      SCOPED_TRACE(storage);
+      SCOPED_TRACE(part);
+      EncodedValueProto encoded;
+      *encoded.mutable_logical_type() = FloatType();
+      const uint8_t code = 0;
+      encoded.set_raw_data(&code, 1);
+      auto *affine = encoded.mutable_affine();
+      affine->set_storage_type(storage);
+      affine->mutable_scale()->set_data_type(TensorProto::FLOAT);
+      affine->mutable_scale()->add_float_data(1);
+      affine->mutable_zero_point()->set_data_type(storage);
+      affine->mutable_zero_point()->set_raw_data(&code, 1);
+      if (part == 0)
+        encoded.ref_raw_data().assign_borrowed(nullptr, 1, owner);
+      else if (part == 1 || part == 3) {
+        affine->mutable_scale()->clear_float_data();
+        if (part == 3)
+          affine->mutable_scale()->set_data_type(TensorProto::FLOAT6E2M3);
+        affine->mutable_scale()->ref_raw_data().assign_borrowed(
+            nullptr, part == 3 ? 1 : sizeof(float), owner);
+      } else {
+        if (part == 4)
+          affine->mutable_zero_point()->set_data_type(TensorProto::FLOAT6E2M3);
+        affine->mutable_zero_point()->ref_raw_data().assign_borrowed(nullptr, 1, owner);
+      }
+      RuntimeValue value(std::move(encoded));
+      EXPECT_THROW(StructTypeCatalogue().ValidateEncodedValue(value.Encoded()),
+                   std::invalid_argument);
+      EXPECT_THROW((PersistentValueState(model, {{"past", value.BorrowView()}})),
+                   std::invalid_argument);
+      EXPECT_THROW(state.Reset({{"past", value.BorrowView()}}), std::invalid_argument);
+      EXPECT_EQ(Number(state.Values().at("past")), 1);
+    }
 }

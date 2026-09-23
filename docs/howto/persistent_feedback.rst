@@ -421,7 +421,7 @@ Register the native kernel on the context used by the state:
 
 The node takes ``Q, K, V, past`` and returns ``Y, present``. This first consumer
 accepts finite FLOAT ``[1, 1, sequence, head_size]`` tensors with equal new
-Q/K/V sequence lengths: multiple batches/heads,
+Q/K/V sequence lengths and positive head sizes: multiple batches/heads,
 masks and other unsupported attributes fail explicitly. Kernel instances,
 execution and allocator routing use the normal runtime contracts.
 Paged feedback is currently a native C++ API; Python feedback sequence
@@ -466,13 +466,21 @@ The direct C++ call returns ``Result::statistics``:
   retained payloads and collection metadata.
 
 These are kernel costs, not state-forwarding copies. Native tests also check
-payload/owner identity across publication and append. Quantization rounds ties
+payload/owner identity across publication and append. For example, the native
+windowed fixture starts with six retained tokens, appends two tokens with
+INT8 keys (width 2) and UINT4 values (width 3), and uses a left window of one:
+it writes 7 new payload bytes, decodes 80 FLOAT bytes across the two queries,
+and uses 24 bytes of numerical scratch. No prior block payload is copied.
+The dense fixture appends three tokens with widths 3 and 2 on each call:
+its 60 append bytes and 16 scratch bytes stay constant as the cache grows.
+
+Quantization rounds ties
 to even and saturates to the selected code range. For non-saturated inputs,
 each affine reconstruction differs from its source by at most half its scale
 (plus floating-point rounding). Attention error also depends on Q/K magnitudes
 and softmax conditioning; no format alone guarantees a universal output error
 bound. The numerical fixtures compare the paged consumer to dense Attention
-using the reconstructed values with absolute tolerance ``2e-6`` for all four
+using the reconstructed values with absolute tolerance ``1e-5`` for all four
 affine storage types, separately from quantization error. The end-to-end
 four-step fixture uses Q/K/V components ``+/-(0.173 * step)`` and compares to
 unquantized dense Attention with these absolute output tolerances:

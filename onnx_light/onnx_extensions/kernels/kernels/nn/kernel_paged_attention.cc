@@ -79,8 +79,12 @@ int ReadCode(const uint8_t *bytes, size_t index, int32_t type) {
 
 float ReadScale(const TensorProto &tensor, size_t index) {
   if (tensor.has_raw_data()) {
+    const uint8_t *bytes = tensor.raw_data().data() + index * sizeof(float);
+    const uint32_t bits = static_cast<uint32_t>(bytes[0]) | (static_cast<uint32_t>(bytes[1]) << 8) |
+                          (static_cast<uint32_t>(bytes[2]) << 16) |
+                          (static_cast<uint32_t>(bytes[3]) << 24);
     float value;
-    std::memcpy(&value, tensor.raw_data().data() + index * sizeof(float), sizeof(float));
+    std::memcpy(&value, &bits, sizeof(float));
     return value;
   }
   return tensor.float_data()[index];
@@ -144,7 +148,8 @@ struct PageView {
                                 parameter->raw_data().data() != nullptr,
                             "PagedAttention: null affine parameter payload.");
     const auto layout = StructTypeCatalogue().ValidateEncodedValue(encoded);
-    EXT_ENFORCE_INVALID(!layout.external, "PagedAttention: external pages are unsupported.");
+    EXT_ENFORCE_INVALID(!layout.external && layout.content_verified,
+                        "PagedAttention: pages require verified inline payloads.");
     const auto &type = encoded.logical_type().tensor_type();
     EXT_ENFORCE_INVALID(type.elem_type() == DataType::FLOAT && type.shape().dim_size() == 4 &&
                             type.shape().dim(0).dim_value() == 1 &&

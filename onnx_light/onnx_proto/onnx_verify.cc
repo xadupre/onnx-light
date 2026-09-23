@@ -687,6 +687,8 @@ uint64_t ValidatePayloadLocation(const EncodedValueProto &value, bool &external)
   if (!external) {
     Require(!has_external, kind, value.name(),
             "carries 'external_data' without data_location EXTERNAL.");
+    Require(value.ref_raw_data().empty() || value.ref_raw_data().data() != nullptr, kind,
+            value.name(), "has a non-empty null payload.");
     return value.ref_raw_data().size();
   }
   Require(!has_raw, kind, value.name(), "is stored externally but also carries an inline payload.");
@@ -1081,6 +1083,8 @@ void VerifyTensor(const TensorProto &tensor) {
   const bool has_string = !tensor.string_data().empty();
   const bool has_int64 = !tensor.int64_data().empty();
   const bool has_raw = !tensor.raw_data().empty();
+  EXT_ENFORCE_INVALID(!has_raw || tensor.raw_data().data() != nullptr, "TensorProto '",
+                      tensor.name(), "' has a non-empty null raw_data payload.");
   const bool has_double = !tensor.double_data().empty();
   const bool has_uint64 = !tensor.uint64_data().empty();
   const int num_value_fields = static_cast<int>(has_float) + static_cast<int>(has_int32) +

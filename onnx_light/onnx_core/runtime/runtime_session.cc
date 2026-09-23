@@ -654,6 +654,7 @@ void RuntimeSession::Run(RuntimeContext &rt) {
         break;
       }
       rt.RemoveSequence(action.name());
+      rt.Remove(action.name());
       break;
     case ExecuteActionKind::kDeleteMap:
       if (!rt.release_intermediates()) {

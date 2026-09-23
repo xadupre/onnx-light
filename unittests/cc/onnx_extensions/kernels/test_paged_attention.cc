@@ -91,12 +91,16 @@ TEST(PagedAttention, DenseMatchesAttentionAcrossAppendsAndWindows) {
       attributes.left_window_size = window;
       RuntimeValue cache = PagedAttention::EmptyCache();
       Tensor past_key = Input(0, 3), past_value = Input(0, 2);
+      uint64_t cumulative_copied_bytes = 0;
       for (int step = 0; step < 3; ++step) {
         const Tensor q = Input(3, 3, 0.25f * step), k = Input(3, 3), v = Input(3, 2, step);
         auto actual = paged(q, k, v, cache, options);
         auto expected = dense(q, k, v, attributes, nullptr, &past_key, &past_value);
         Near(actual.Y, expected.Y);
         EXPECT_EQ(actual.statistics.copied_bytes, 3u * (3 + 2) * sizeof(float));
+        cumulative_copied_bytes += actual.statistics.copied_bytes;
+        EXPECT_EQ(cumulative_copied_bytes,
+                  static_cast<uint64_t>(step + 1) * 3 * (3 + 2) * sizeof(float));
         EXPECT_EQ(actual.statistics.dequantized_bytes, 0u);
         EXPECT_EQ(actual.statistics.peak_workspace_bytes, 2u * sizeof(double));
         cache = std::move(actual.present);
@@ -276,7 +280,7 @@ TEST(PagedAttention, PackedTypedZeroPointsAndRawScales) {
   PagedAttention kernel(KernelContext(DefaultOpset(23)));
   auto encoded = Affine(DataType::INT4, -1);
   auto *affine = encoded.mutable_affine();
-  const float scales[] = {0.25f, 0.5f};
+  const uint8_t scales[] = {0, 0, 0x80, 0x3e, 0, 0, 0, 0x3f};
   affine->mutable_scale()->clear_float_data();
   affine->mutable_scale()->set_raw_data(scales, sizeof(scales));
   auto *zero = affine->mutable_zero_point();

@@ -52,6 +52,7 @@ public:
     bool is_causal = true;
     int64_t left_window_size = -1;
   };
+  /// Reports one successful direct invocation; Run publishes only Y and present, not statistics.
   struct Statistics {
     /// Counts new stored payload bytes written by copying or conversion, excluding metadata/Y.
     uint64_t copied_bytes = 0;

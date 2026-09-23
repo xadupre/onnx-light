@@ -84,6 +84,11 @@ TEST(Quantization, AffineGoldenBytesRoundingClippingAndOwnership) {
 
 TEST(Quantization, EveryCatalogueProfileProducesSelfContainedValues) {
   const auto tensor = Tensor::FromFloat("", {8}, {-1, -1, 0, 0, 1, 1, 1, 1});
+  TensorProto proto;
+  proto.set_data_type(TensorProto::FLOAT);
+  proto.add_dims(8);
+  for (float value : {-1, -1, 0, 0, 1, 1, 1, 1})
+    proto.add_float_data(value);
   EXPECT_EQ(QuantizationFormats().size(), 40u);
   for (const auto &format : QuantizationFormats()) {
     SCOPED_TRACE(format);
@@ -92,6 +97,15 @@ TEST(Quantization, EveryCatalogueProfileProducesSelfContainedValues) {
       plan.blocks[0].scale = plan.blocks[1].scale = 0.01;
     const auto encoded = QuantizeTensor(tensor, plan);
     const auto decoded = DequantizeTensor(WireRoundTrip(encoded));
+    const auto encoded_proto = QuantizeTensorProto(proto, plan);
+    EXPECT_EQ(encoded_proto.raw_data(), encoded.Encoded().raw_data());
+    EXPECT_EQ(encoded_proto.struct_type().SerializeAsString(),
+              encoded.Encoded().struct_type().SerializeAsString());
+    const auto decoded_proto = DequantizeTensorProto(encoded_proto);
+    const auto decoded_direct = DequantizeTensor(encoded_proto);
+    const auto proto_tensor = TensorFromProto(decoded_proto);
+    EXPECT_EQ(std::memcmp(decoded.bytes(), proto_tensor.bytes(), decoded.size_bytes()), 0);
+    EXPECT_EQ(std::memcmp(decoded.bytes(), decoded_direct.bytes(), decoded.size_bytes()), 0);
     ASSERT_EQ(decoded.shape, tensor.shape);
     for (int i = 0; i < 8; ++i) {
       EXPECT_TRUE(std::isfinite(decoded.AsFloat()[i]));
@@ -198,10 +212,16 @@ TEST(Quantization, PreservesScalarEmptyTensorAndSourceDtypes) {
       source = MakeFloat16Tensor("", {3}, {-2, 0, 2});
     else
       source = MakeBfloat16Tensor("", {3}, {-2, 0, 2});
-    const auto result = DequantizeTensor(WireRoundTrip(QuantizeTensor(source, plan)));
+    const auto encoded = WireRoundTrip(QuantizeTensor(source, plan));
+    const auto result = DequantizeTensor(encoded);
     EXPECT_EQ(result.data_type, dtype);
     EXPECT_EQ(result.size_bytes(), source.size_bytes());
     EXPECT_EQ(std::memcmp(result.bytes(), source.bytes(), source.size_bytes()), 0);
+    const auto proto = DequantizeTensorProto(encoded.Encoded());
+    const auto proto_tensor = TensorFromProto(proto);
+    EXPECT_EQ(proto.data_type(), dtype);
+    EXPECT_EQ(proto_tensor.size_bytes(), source.size_bytes());
+    EXPECT_EQ(std::memcmp(proto_tensor.bytes(), source.bytes(), source.size_bytes()), 0);
   }
 }
 
@@ -238,10 +258,26 @@ TEST(Quantization, ResolvesRootCatalogueReferenceAndUsesAllocator) {
   StructTypeCatalogue catalogue;
   catalogue.Build(model);
   SimpleRawBufferAllocator allocator(4);
-  auto decoded = DequantizeTensor(RuntimeValue(encoded), catalogue, &allocator);
+  auto decoded = DequantizeTensor(encoded, catalogue, &allocator);
   ExpectValues(decoded, {1, 2});
   EXPECT_GE(allocator.TotalAllocatedSize(), 2 * sizeof(float));
   EXPECT_THROW(DequantizeTensor(RuntimeValue(encoded)), std::invalid_argument);
+}
+
+TEST(Quantization, DirectMessageDecodingOwnsOutputsAfterSourceRelease) {
+  auto encoded =
+      QuantizeTensor(Tensor::FromFloat("", {3}, {-1, 0, 1}), MakeQuantizationPlan("int4", 3))
+          .Encoded();
+  const auto *payload = encoded.raw_data().data();
+  const auto original = encoded.SerializeAsString();
+  auto tensor = DequantizeTensor(encoded);
+  auto proto = DequantizeTensorProto(encoded);
+  EXPECT_EQ(encoded.raw_data().data(), payload);
+  EXPECT_EQ(encoded.SerializeAsString(), original);
+  EXPECT_FALSE(proto.raw_data().is_borrowed());
+  encoded.Clear();
+  ExpectValues(tensor, {-1, 0, 1});
+  ExpectValues(TensorFromProto(proto), {-1, 0, 1});
 }
 
 TEST(Quantization, RejectsIncompleteAndInvalidPlans) {

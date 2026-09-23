@@ -64,6 +64,10 @@ struct QuantizationBlock {
  * shape. Scalars and empty tensors are supported. The logical output shape and dtype
  * remain those of the source, regardless of the physical code or cast dtype.
  * The converters do not modify source storage; encoded and decoded results own their data.
+ * Proto conversions write directly into exactly sized output raw_data buffers.
+ * Dequantization reads EncodedValueProto by const reference, without copying its payload;
+ * the RuntimeValue overload delegates to the same decoder. Numerical workspace is still
+ * allocated for reconstructed values, transforms and codebook search.
  * External TensorProto payloads must be loaded before quantization.
  * TensorProto::LoadExternalData() may retain EXTERNAL metadata; loaded raw_data is accepted.
  *
@@ -358,6 +362,10 @@ RuntimeValue QuantizeTensor(const Tensor &tensor, const QuantizationPlan &plan);
 
 /** Dequantizes a supported encoded runtime value to its declared floating-point tensor type. */
 Tensor DequantizeTensor(const RuntimeValue &value, const StructTypeCatalogue &catalogue = {},
+                        RawBufferAllocator *allocator = nullptr);
+
+/** Dequantizes a message by const reference without copying its encoded payload. */
+Tensor DequantizeTensor(const EncodedValueProto &value, const StructTypeCatalogue &catalogue = {},
                         RawBufferAllocator *allocator = nullptr);
 
 /** Quantizes a loaded TensorProto without changing the source message. */

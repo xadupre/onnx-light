@@ -202,6 +202,16 @@ C++
 message conversions. C++ dequantizers accept a ``StructTypeCatalogue`` for
 model-scoped references; Python dequantizers accept an optional ``model``.
 The C++ tensor dequantizer also accepts an allocator.
+Its ``EncodedValueProto`` overload reads the message by const reference, without
+first copying it into a ``RuntimeValue``. The Python tensor dequantizer uses
+this overload too.
+
+The converters allocate the final ``raw_data`` buffer at its exact size and
+write into it directly. Proto encoding does not copy a completed encoded
+message out of a runtime wrapper; proto decoding does not materialize an
+intermediate output ``Tensor``. Numerical workspace (decoded values, transforms
+and codebook search) is still allocated: these are reference codecs, not
+zero-allocation conversions. Outputs own their storage independently of inputs.
 
 ``QuantizationFormats()`` is defined in the header as a ``constexpr`` function
 returning ``std::array<std::string_view, 40>`` without dynamic allocation:

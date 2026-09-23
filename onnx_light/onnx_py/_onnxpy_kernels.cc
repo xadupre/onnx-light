@@ -1051,7 +1051,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
         StructTypeCatalogue catalogue;
         if (model)
           catalogue.Build(*model);
-        return core::runtime::DequantizeTensor(RuntimeValue(value), catalogue);
+        return core::runtime::DequantizeTensor(value, catalogue);
       },
       nb::arg("value"), nb::arg("model") = nullptr,
       "Dequantizes an encoded runtime value into a Tensor.");

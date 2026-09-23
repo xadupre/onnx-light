@@ -76,35 +76,44 @@ double ReadFloat(const Tensor &tensor, size_t index) {
   }
 }
 
-void WriteFloat(Tensor &tensor, size_t index, double value) {
+void WriteFloat(uint8_t *p, int32_t type, double value) {
   EXT_ENFORCE_INVALID(std::isfinite(value), "Dequantization produced a nonfinite value.");
-  auto *p = tensor.mutable_bytes() + index * FloatBytes(tensor.data_type);
-  if (tensor.data_type == TensorProto::DOUBLE) {
+  if (type == TensorProto::DOUBLE) {
     std::memcpy(p, &value, sizeof(value));
-  } else if (tensor.data_type == TensorProto::FLOAT) {
+  } else if (type == TensorProto::FLOAT) {
     const float f = static_cast<float>(value);
     EXT_ENFORCE_INVALID(std::isfinite(f), "Dequantization output dtype overflow.");
     std::memcpy(p, &f, sizeof(f));
   } else {
-    const uint16_t bits = tensor.data_type == TensorProto::FLOAT16
+    const uint16_t bits = type == TensorProto::FLOAT16
                               ? FloatToFloat16Bits(static_cast<float>(value))
                               : FloatToBfloat16Bits(static_cast<float>(value));
-    EXT_ENFORCE_INVALID(std::isfinite(tensor.data_type == TensorProto::FLOAT16
-                                          ? Float16BitsToFloat(bits)
-                                          : Bfloat16BitsToFloat(bits)),
+    EXT_ENFORCE_INVALID(std::isfinite(type == TensorProto::FLOAT16 ? Float16BitsToFloat(bits)
+                                                                   : Bfloat16BitsToFloat(bits)),
                         "Dequantization output dtype overflow.");
     std::memcpy(p, &bits, sizeof(bits));
   }
 }
 
 struct ByteWriter {
-  std::string data;
+  std::span<uint8_t> data;
+  size_t position = 0;
+
+  ByteWriter(utils::ByteSpan &target, size_t size) {
+    target.resize(size);
+    data = {target.data(), target.size()};
+  }
 
   void Put(uint64_t value, size_t width) {
+    EXT_ENFORCE_INVALID(position <= data.size() && width <= data.size() - position,
+                        "Quantization payload size exceeded.");
     for (size_t i = 0; i < width; ++i)
-      data.push_back(static_cast<char>((value >> (8 * i)) & 255));
+      data[position++] = static_cast<uint8_t>((value >> (8 * i)) & 255);
   }
   void PutDouble(double value) { Put(std::bit_cast<uint64_t>(value), 8); }
+  void Finish() const {
+    EXT_ENFORCE_INVALID(position == data.size(), "Quantization payload size mismatch.");
+  }
 };
 
 struct ByteReader {
@@ -140,6 +149,24 @@ constexpr size_t TableSize(const QuantizationBlock &block) {
   return block.method == QuantizationMethod::kCodebook
              ? Product(Product(block.books, block.entries), block.vector_size)
              : 0;
+}
+
+constexpr size_t PayloadBytes(const QuantizationPlan &plan) {
+  size_t size = 1;
+  const auto add = [&size](size_t bytes) {
+    EXT_ENFORCE_INVALID(bytes <= std::numeric_limits<size_t>::max() - size,
+                        "Quantization size overflow.");
+    size += bytes;
+  };
+  for (size_t count : {plan.permutation.size(), plan.forward.size(), plan.inverse.size(),
+                       plan.outliers.size(), plan.outliers.size()})
+    add(Product(count, sizeof(double)));
+  for (const auto &block : plan.blocks) {
+    add(3 * sizeof(double));
+    add(Product(TableSize(block), sizeof(double)));
+    add(CodeBytes(block));
+  }
+  return size;
 }
 
 void ValidateBlock(const QuantizationBlock &block) {
@@ -658,7 +685,9 @@ QuantizationPlan MakeQuantizationPlan(const std::string &format, uint64_t count,
   return plan;
 }
 
-RuntimeValue QuantizeTensor(const Tensor &tensor, const QuantizationPlan &plan) {
+namespace {
+
+EncodedValueProto EncodeTensor(const Tensor &tensor, const QuantizationPlan &plan) {
   size_t count = 1;
   for (int64_t dim : tensor.shape) {
     EXT_ENFORCE_INVALID(dim >= 0, "Quantization input shape must be concrete.");
@@ -683,7 +712,8 @@ RuntimeValue QuantizeTensor(const Tensor &tensor, const QuantizationPlan &plan) 
       values[i] = original[plan.permutation[i]];
   }
   Transform(values, plan.forward, plan.transform_size);
-  ByteWriter payload;
+  EncodedValueProto result;
+  ByteWriter payload(*result.mutable_raw_data(), PayloadBytes(plan));
   payload.Put(0, 1);
   for (int64_t index : plan.permutation)
     payload.Put(static_cast<uint64_t>(index), 8);
@@ -700,7 +730,7 @@ RuntimeValue QuantizeTensor(const Tensor &tensor, const QuantizationPlan &plan) 
     EncodeBlock(payload, block, values, offset);
     offset += block.count;
   }
-  EncodedValueProto result;
+  payload.Finish();
   result.set_name(tensor.name);
   *result.mutable_struct_type() = Schema(plan);
   auto *logical = result.mutable_logical_type()->mutable_tensor_type();
@@ -708,16 +738,17 @@ RuntimeValue QuantizeTensor(const Tensor &tensor, const QuantizationPlan &plan) 
   logical->mutable_shape();
   for (int64_t dim : tensor.shape)
     logical->mutable_shape()->add_dim()->set_dim_value(dim);
-  result.set_raw_data(payload.data);
   StructTypeCatalogue{}.ValidateEncodedValue(result);
-  return RuntimeValue(std::move(result));
+  return result;
 }
 
-Tensor DequantizeTensor(const RuntimeValue &value, const StructTypeCatalogue &catalogue,
-                        RawBufferAllocator *allocator) {
-  EXT_ENFORCE_INVALID(value.kind == RuntimeValue::Kind::kEncoded,
-                      "Dequantization requires an encoded RuntimeValue.");
-  const auto &encoded = value.Encoded();
+struct DecodedValues {
+  Shape shape;
+  int32_t type;
+  std::vector<double> values;
+};
+
+DecodedValues DecodeValues(const EncodedValueProto &encoded, const StructTypeCatalogue &catalogue) {
   const auto layout = catalogue.ValidateEncodedValue(encoded);
   EXT_ENFORCE_INVALID(!layout.external && layout.root && layout.record_count == 1,
                       "Expected one loaded structured quantization record.");
@@ -803,36 +834,57 @@ Tensor DequantizeTensor(const RuntimeValue &value, const StructTypeCatalogue &ca
   }
   for (size_t i = 0; i < plan.outliers.size(); ++i)
     values[plan.outliers[i]] = exceptions[i];
-  Tensor result = MakeOutputTensor(logical.elem_type(), shape,
-                                   Product(count, FloatBytes(logical.elem_type())), allocator);
-  result.name = encoded.name().value();
-  for (size_t i = 0; i < count; ++i)
-    WriteFloat(result, i, values[i]);
+  return {std::move(shape), logical.elem_type(), std::move(values)};
+}
+
+} // namespace
+
+RuntimeValue QuantizeTensor(const Tensor &tensor, const QuantizationPlan &plan) {
+  return RuntimeValue(EncodeTensor(tensor, plan));
+}
+
+Tensor DequantizeTensor(const EncodedValueProto &value, const StructTypeCatalogue &catalogue,
+                        RawBufferAllocator *allocator) {
+  const auto decoded = DecodeValues(value, catalogue);
+  const size_t width = FloatBytes(decoded.type);
+  Tensor result = MakeOutputTensor(decoded.type, decoded.shape,
+                                   Product(decoded.values.size(), width), allocator);
+  result.name = value.name().value();
+  for (size_t i = 0; i < decoded.values.size(); ++i)
+    WriteFloat(result.mutable_bytes() + i * width, decoded.type, decoded.values[i]);
   return result;
+}
+
+Tensor DequantizeTensor(const RuntimeValue &value, const StructTypeCatalogue &catalogue,
+                        RawBufferAllocator *allocator) {
+  EXT_ENFORCE_INVALID(value.kind == RuntimeValue::Kind::kEncoded,
+                      "Dequantization requires an encoded RuntimeValue.");
+  return DequantizeTensor(value.Encoded(), catalogue, allocator);
 }
 
 EncodedValueProto QuantizeTensorProto(const TensorProto &tensor, const QuantizationPlan &plan) {
   EXT_ENFORCE_INVALID(tensor.data_location() != TensorProto::EXTERNAL || tensor.is_raw_data(),
                       "Load external TensorProto data before quantization.");
-  auto value = QuantizeTensor(TensorFromProto(tensor), plan);
-  EncodedValueProto result = value.Encoded();
+  EncodedValueProto result = EncodeTensor(TensorFromProto(tensor), plan);
   result.set_doc_string(tensor.doc_string().value());
   return result;
 }
 
 TensorProto DequantizeTensorProto(const EncodedValueProto &value,
                                   const StructTypeCatalogue &catalogue) {
-  const Tensor tensor = DequantizeTensor(RuntimeValue(value), catalogue);
+  const auto decoded = DecodeValues(value, catalogue);
   TensorProto result;
-  result.set_name(tensor.name);
+  result.set_name(value.name().value());
   result.set_doc_string(value.doc_string().value());
-  result.set_data_type(tensor.data_type);
-  for (int64_t dim : tensor.shape)
+  result.set_data_type(decoded.type);
+  for (int64_t dim : decoded.shape)
     result.add_dims(dim);
-  ByteWriter payload;
-  const size_t width = FloatBytes(tensor.data_type);
-  for (size_t i = 0; i < static_cast<size_t>(tensor.element_count()); ++i) {
-    const auto *p = tensor.bytes() + i * width;
+  const size_t width = FloatBytes(decoded.type);
+  ByteWriter payload(*result.mutable_raw_data(), Product(decoded.values.size(), width));
+  for (double number : decoded.values) {
+    std::array<uint8_t, sizeof(double)> scalar;
+    WriteFloat(scalar.data(), decoded.type, number);
+    const auto *p = scalar.data();
     if (width == 8)
       payload.Put(Load<uint64_t>(p), 8);
     else if (width == 4)
@@ -840,7 +892,7 @@ TensorProto DequantizeTensorProto(const EncodedValueProto &value,
     else
       payload.Put(Load<uint16_t>(p), 2);
   }
-  result.set_raw_data(payload.data);
+  payload.Finish();
   return result;
 }
 

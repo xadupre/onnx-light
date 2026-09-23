@@ -463,17 +463,14 @@ public:
   RuntimeContext() = default;
   ~RuntimeContext();
   explicit RuntimeContext(KernelContext kernel_ctx, RuntimeContextOptions options = {})
-      : kernel_ctx_(std::move(kernel_ctx)),
-        events_(options.events_enabled ? std::make_shared<EventState>() : nullptr),
-        events_enabled_(options.events_enabled), verbose_(options.verbose),
-        release_intermediates_(options.release_intermediates), allocator_(options.allocator),
-        io_allocator_(options.io_allocator), active_allocator_(options.allocator),
-        device_(options.device) {
+      : kernel_ctx_(std::move(kernel_ctx)), events_enabled_(options.events_enabled),
+        verbose_(options.verbose), release_intermediates_(options.release_intermediates),
+        allocator_(options.allocator), io_allocator_(options.io_allocator),
+        active_allocator_(options.allocator), device_(options.device) {
     kernel_ctx_.allocator = active_allocator_;
   }
   RuntimeContext(KernelContext kernel_ctx, TensorMap tensors, RuntimeContextOptions options = {})
       : tensors_(std::move(tensors)), kernel_ctx_(std::move(kernel_ctx)),
-        events_(options.events_enabled ? std::make_shared<EventState>() : nullptr),
         events_enabled_(options.events_enabled), verbose_(options.verbose),
         release_intermediates_(options.release_intermediates), allocator_(options.allocator),
         io_allocator_(options.io_allocator), active_allocator_(options.allocator),
@@ -481,8 +478,7 @@ public:
     kernel_ctx_.allocator = active_allocator_;
   }
   explicit RuntimeContext(RuntimeContextOptions options)
-      : events_(options.events_enabled ? std::make_shared<EventState>() : nullptr),
-        events_enabled_(options.events_enabled), verbose_(options.verbose),
+      : events_enabled_(options.events_enabled), verbose_(options.verbose),
         release_intermediates_(options.release_intermediates), allocator_(options.allocator),
         io_allocator_(options.io_allocator), active_allocator_(options.allocator),
         device_(options.device) {
@@ -808,22 +804,16 @@ public:
   const Tensor &Get(const std::string &name) const;
   Tensor &Get(const std::string &name);
 
-  /// Returns the log shared by this context, its children and copies when recording is enabled.
+  /// Returns the log shared by this context, its children and copies.
   /// Runtime recording serializes appends; direct access requires no concurrent recording,
   /// clearing or modification through another context.
-  const RuntimeEventLog &events() const noexcept {
-    return events_ ? events_->log : disabled_events_;
-  }
-  RuntimeEventLog &events() noexcept { return events_ ? events_->log : disabled_events_; }
+  const RuntimeEventLog &events() const noexcept { return events_->log; }
+  RuntimeEventLog &events() noexcept { return events_->log; }
 
   /// Empties the shared event log without changing any context's tensor map.
   void ClearEvents() noexcept {
-    if (events_) {
-      std::lock_guard<std::mutex> lock(events_->mutex);
-      events_->log.clear();
-    } else {
-      disabled_events_.clear();
-    }
+    std::lock_guard<std::mutex> lock(events_->mutex);
+    events_->log.clear();
   }
 
   /// Creates a fresh child context for executing a subgraph (e.g. the
@@ -1060,8 +1050,7 @@ private:
   FunctionMap functions_;
   CustomKernelMap custom_kernels_;
   std::shared_ptr<KernelUsageState> kernel_usage_ = std::make_shared<KernelUsageState>();
-  std::shared_ptr<EventState> events_;
-  RuntimeEventLog disabled_events_;
+  std::shared_ptr<EventState> events_ = std::make_shared<EventState>();
   SequenceMap sequences_;
   OnnxMapMap maps_;
   ShapeMap shapes_;

@@ -114,6 +114,10 @@ TEST(RuntimeEvents, LeavesIndependentContextsIsolatedAndDisabledContextsSilent) 
   RuntimeContext disabled;
   auto child = disabled.MakeSubgraphContext("body");
   auto function = child.MakeFunctionContext();
+  auto copy = disabled;
+  EXPECT_EQ(&disabled.events(), &child.events());
+  EXPECT_EQ(&disabled.events(), &function.events());
+  EXPECT_EQ(&disabled.events(), &copy.events());
   for (auto *context : {&disabled, &child, &function}) {
     PutNumber(*context, "value");
     context->RecordPersistentStorageEvent({.storage_allocations = 1});
@@ -123,6 +127,11 @@ TEST(RuntimeEvents, LeavesIndependentContextsIsolatedAndDisabledContextsSilent) 
     EXPECT_FALSE(context->events_enabled());
     EXPECT_TRUE(context->events().empty());
   }
+  disabled.events().push_back(RuntimeEvent{});
+  EXPECT_EQ(function.events().size(), 1u);
+  copy.ClearEvents();
+  EXPECT_TRUE(disabled.events().empty());
+  EXPECT_TRUE(child.events().empty());
 }
 
 TEST(RuntimeEvents, SerializesRecordingFromConcurrentChildren) {

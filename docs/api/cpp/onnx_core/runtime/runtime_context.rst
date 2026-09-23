@@ -71,8 +71,9 @@ preserving the dictionary schema of other event actions:
    )
    context.clear_events()
 
-When recording is enabled, context copies, subgraphs, functions, feedback
-invocations and half-precision scratch contexts share the same event log.
+Context copies, subgraphs, functions, feedback invocations and half-precision
+scratch contexts share the same event log, even when recording is disabled.
+The ``events_enabled`` flag controls recording, not the existence of the log.
 Events are recorded directly in this log, preserving existing entries even
 when execution fails, without any forwarding or scope-exit merge. Independent
 root contexts keep independent logs; a child keeps its log alive even after

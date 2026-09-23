@@ -9,9 +9,7 @@
 
 #include <algorithm>
 #include <chrono>
-#include <cstdio>
 #include <cstring>
-#include <new>
 #include <sstream>
 #include <stdexcept>
 #include <unordered_set>
@@ -258,7 +256,7 @@ void RuntimeContext::StampAllocatorMemory(RuntimeEvent &ev) const noexcept {
 
 void RuntimeContext::RecordRunNodeEvent(const NodeProto &node, const std::string &domain,
                                         const std::string &op_type, int64_t start_time_ns,
-                                        int64_t duration_ns) noexcept {
+                                        int64_t duration_ns) {
   if (!events_enabled_) {
     return;
   }
@@ -287,38 +285,24 @@ void RuntimeContext::RecordRunNodeEvent(const NodeProto &node, const std::string
   ev.subgraph_node_index = current_subgraph_node_index_;
   ev.subgraph_attr_name = current_subgraph_attr_name_;
   StampAllocatorMemory(ev);
-  events_.push_back(std::move(ev));
+  RecordEvent(std::move(ev));
 }
 
 RuntimeContext::~RuntimeContext() = default;
 
-RuntimeEventForwarder::~RuntimeEventForwarder() {
-  if (destination_ == nullptr || !destination_->events_enabled() || destination_ == &source_)
-    return;
-  auto &destination = destination_->events();
-  auto &source = source_.events();
-  try {
-    destination.insert(destination.end(), std::make_move_iterator(source.begin()),
-                       std::make_move_iterator(source.end()));
-    source.clear();
-  } catch (const std::bad_alloc &) {
-    std::fputs("RuntimeEventForwarder: insufficient memory to forward runtime events; "
-               "the parent event log is incomplete.\n",
-               stderr);
-  } catch (const std::length_error &) {
-    std::fputs("RuntimeEventForwarder: runtime event log size limit exceeded; "
-               "the parent event log is incomplete.\n",
-               stderr);
-  }
+void RuntimeContext::RecordEvent(RuntimeEvent event) {
+  std::lock_guard<std::mutex> lock(events_->mutex);
+  events_->log.push_back(std::move(event));
 }
 
 RuntimeContext::RuntimeContext(KernelContext kernel_ctx, RuntimeContextOptions options,
-                               std::shared_ptr<KernelUsageState> kernel_usage)
+                               std::shared_ptr<KernelUsageState> kernel_usage,
+                               std::shared_ptr<EventState> events)
     : kernel_ctx_(std::move(kernel_ctx)), kernel_usage_(std::move(kernel_usage)),
-      events_enabled_(options.events_enabled), verbose_(options.verbose),
-      release_intermediates_(options.release_intermediates), allocator_(options.allocator),
-      io_allocator_(options.io_allocator), active_allocator_(options.allocator),
-      device_(options.device) {
+      events_(std::move(events)), events_enabled_(options.events_enabled),
+      verbose_(options.verbose), release_intermediates_(options.release_intermediates),
+      allocator_(options.allocator), io_allocator_(options.io_allocator),
+      active_allocator_(options.allocator), device_(options.device) {
   kernel_ctx_.allocator = active_allocator_;
 }
 
@@ -357,7 +341,7 @@ void RuntimeContext::Set(const std::string &name, Tensor tensor, RuntimeEventKin
         MakeAddOrReplaceEvent(RuntimeEventAction::kAdd, kind, name, tensor, current_node_index_,
                               current_subgraph_node_index_, current_subgraph_attr_name_);
     StampAllocatorMemory(ev);
-    events_.push_back(std::move(ev));
+    RecordEvent(std::move(ev));
   }
   tensors_[name] = std::move(tensor);
 }
@@ -372,7 +356,7 @@ void RuntimeContext::Put(const std::string &name, Tensor tensor, RuntimeEventKin
         MakeAddOrReplaceEvent(action, kind, name, tensor, current_node_index_,
                               current_subgraph_node_index_, current_subgraph_attr_name_);
     StampAllocatorMemory(ev);
-    events_.push_back(std::move(ev));
+    RecordEvent(std::move(ev));
   }
   tensors_[name] = std::move(tensor);
 }
@@ -388,7 +372,7 @@ bool RuntimeContext::Remove(const std::string &name) {
     RuntimeEvent ev = MakeRemoveEvent(RuntimeEventKind::kUnknown, name,
                                       current_subgraph_node_index_, current_subgraph_attr_name_);
     StampAllocatorMemory(ev);
-    events_.push_back(std::move(ev));
+    RecordEvent(std::move(ev));
   }
   return true;
 }
@@ -454,7 +438,7 @@ RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name)
                            .release_intermediates = release_intermediates_,
                            .device = device_,
                        },
-                       kernel_usage_);
+                       kernel_usage_, events_);
   // Subgraph contexts do not inherit the parent allocator. Body kernels use
   // inline tensor storage, and the parent's EnsureAllocatorBacked (called in
   // Put/Set) migrates final outputs to the parent allocator when results are
@@ -484,7 +468,7 @@ void RuntimeContext::RecordPersistentStorageEvent(const PersistentStorageStatist
   event.subgraph_attr_name = current_subgraph_attr_name_;
   event.persistent_storage = statistics;
   StampAllocatorMemory(event);
-  events_.push_back(std::move(event));
+  RecordEvent(std::move(event));
 }
 
 std::optional<PersistentTensor::AppendReservation>
@@ -546,7 +530,7 @@ RuntimeContext RuntimeContext::MakeFunctionContext() const {
                            .release_intermediates = release_intermediates_,
                            .device = device_,
                        },
-                       kernel_usage_);
+                       kernel_usage_, events_);
   child.functions() = functions_;
   child.custom_kernels() = custom_kernels_;
   child.set_model_owner(model_owner_);

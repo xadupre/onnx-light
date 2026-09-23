@@ -444,21 +444,29 @@ struct RuntimeContextOptions {
 class RuntimeContext {
 private:
   struct KernelUsageState;
+  struct EventState {
+    std::mutex mutex;
+    RuntimeEventLog log;
+  };
   RuntimeContext(KernelContext kernel_ctx, RuntimeContextOptions options,
-                 std::shared_ptr<KernelUsageState> kernel_usage);
+                 std::shared_ptr<KernelUsageState> kernel_usage,
+                 std::shared_ptr<EventState> events);
 
 public:
   RuntimeContext() = default;
   ~RuntimeContext();
   explicit RuntimeContext(KernelContext kernel_ctx, RuntimeContextOptions options = {})
-      : kernel_ctx_(std::move(kernel_ctx)), events_enabled_(options.events_enabled),
-        verbose_(options.verbose), release_intermediates_(options.release_intermediates),
-        allocator_(options.allocator), io_allocator_(options.io_allocator),
-        active_allocator_(options.allocator), device_(options.device) {
+      : kernel_ctx_(std::move(kernel_ctx)),
+        events_(options.events_enabled ? std::make_shared<EventState>() : nullptr),
+        events_enabled_(options.events_enabled), verbose_(options.verbose),
+        release_intermediates_(options.release_intermediates), allocator_(options.allocator),
+        io_allocator_(options.io_allocator), active_allocator_(options.allocator),
+        device_(options.device) {
     kernel_ctx_.allocator = active_allocator_;
   }
   RuntimeContext(KernelContext kernel_ctx, TensorMap tensors, RuntimeContextOptions options = {})
       : tensors_(std::move(tensors)), kernel_ctx_(std::move(kernel_ctx)),
+        events_(options.events_enabled ? std::make_shared<EventState>() : nullptr),
         events_enabled_(options.events_enabled), verbose_(options.verbose),
         release_intermediates_(options.release_intermediates), allocator_(options.allocator),
         io_allocator_(options.io_allocator), active_allocator_(options.allocator),
@@ -466,7 +474,8 @@ public:
     kernel_ctx_.allocator = active_allocator_;
   }
   explicit RuntimeContext(RuntimeContextOptions options)
-      : events_enabled_(options.events_enabled), verbose_(options.verbose),
+      : events_(options.events_enabled ? std::make_shared<EventState>() : nullptr),
+        events_enabled_(options.events_enabled), verbose_(options.verbose),
         release_intermediates_(options.release_intermediates), allocator_(options.allocator),
         io_allocator_(options.io_allocator), active_allocator_(options.allocator),
         device_(options.device) {
@@ -792,13 +801,23 @@ public:
   const Tensor &Get(const std::string &name) const;
   Tensor &Get(const std::string &name);
 
-  /// Append-only log of tensor mutations, node execution and reported storage work. See
-  /// :cpp:class:`RuntimeEvent` for the captured fields.
-  const RuntimeEventLog &events() const noexcept { return events_; }
-  RuntimeEventLog &events() noexcept { return events_; }
+  /// Returns the log shared by this context, its children and copies when recording is enabled.
+  /// Runtime recording serializes appends; direct access requires no concurrent recording,
+  /// clearing or modification through another context.
+  const RuntimeEventLog &events() const noexcept {
+    return events_ ? events_->log : disabled_events_;
+  }
+  RuntimeEventLog &events() noexcept { return events_ ? events_->log : disabled_events_; }
 
-  /// Empties the event log without otherwise touching the tensor map.
-  void ClearEvents() noexcept { events_.clear(); }
+  /// Empties the shared event log without changing any context's tensor map.
+  void ClearEvents() noexcept {
+    if (events_) {
+      std::lock_guard<std::mutex> lock(events_->mutex);
+      events_->log.clear();
+    } else {
+      disabled_events_.clear();
+    }
+  }
 
   /// Creates a fresh child context for executing a subgraph (e.g. the
   /// ``then_branch`` or ``else_branch`` of ``If``, or the ``body`` of
@@ -809,8 +828,8 @@ public:
   /// inherit the allocator; results are migrated when propagated to the parent.
   /// :cpp:func:`current_subgraph`
   /// is set to ``(current_node_index(), attr_name)`` on the child.
-  /// The subgraph's writes remain local and do not pollute this context.
-  /// Kernel usage recording shares the parent's diagnostic state.
+  /// The subgraph's tensor writes remain local and do not pollute this context.
+  /// Events and kernel usage recording share the parent's diagnostic state.
   ///
   /// Returns:
   ///   A new :cpp:class:`RuntimeContext` initialised for subgraph execution.
@@ -822,14 +841,14 @@ public:
   /// but starts with an empty
   /// tensor and sequence map so the function's formal inputs are bound
   /// explicitly by the caller.
-  /// Kernel usage recording shares the parent's diagnostic state.
+  /// Events and kernel usage recording share the parent's diagnostic state.
   ///
   /// Returns:
   ///   A new :cpp:class:`RuntimeContext` initialised for function execution.
   RuntimeContext MakeFunctionContext() const;
 
   /// Resets the per-invocation state so the context can be reused for a
-  /// fresh run: clears the tensor map, the sequence map and the event
+  /// fresh run: clears the tensor map, the sequence map and the shared event
   /// log, and resets :cpp:func:`current_node_index` to ``-1``. The kernel
   /// context, registered model-local functions and custom kernels, the
   /// cached :cpp:class:`ExecutionPlan` instances and the
@@ -842,7 +861,7 @@ public:
     tensors_.clear();
     sequences_.clear();
     maps_.clear();
-    events_.clear();
+    ClearEvents();
     current_node_index_ = -1;
   }
 
@@ -858,8 +877,7 @@ public:
   /// :cpp:class:`RuntimeSession` so both the resolve-on-demand and the
   /// resolve-once execution paths log identically.
   void RecordRunNodeEvent(const NodeProto &node, const std::string &domain,
-                          const std::string &op_type, int64_t start_time_ns,
-                          int64_t duration_ns) noexcept;
+                          const std::string &op_type, int64_t start_time_ns, int64_t duration_ns);
 
   /// Returns the cached :cpp:class:`ExecutionPlan` for ``graph``,
   /// building it on first use. The plan precomputes, for every node in
@@ -1027,6 +1045,7 @@ private:
   /// and :cpp:func:`RawBufferAllocator::PeakAllocatedSize`). Leaves both at
   /// ``0`` when no allocator is attached.
   void StampAllocatorMemory(RuntimeEvent &ev) const noexcept;
+  void RecordEvent(RuntimeEvent event);
 
   TensorMap tensors_;
   RuntimeValueMap values_;
@@ -1034,7 +1053,8 @@ private:
   FunctionMap functions_;
   CustomKernelMap custom_kernels_;
   std::shared_ptr<KernelUsageState> kernel_usage_ = std::make_shared<KernelUsageState>();
-  RuntimeEventLog events_;
+  std::shared_ptr<EventState> events_;
+  RuntimeEventLog disabled_events_;
   SequenceMap sequences_;
   OnnxMapMap maps_;
   ShapeMap shapes_;
@@ -1078,27 +1098,6 @@ private:
   std::vector<bool> output_slot_io_roles_;
   /// Logical device the graph is evaluated on. See :cpp:func:`device`.
   symbolic::Device device_ = symbolic::Device::kUndefined;
-};
-
-/**
- * Appends a child context's events to its parent when the scope ends, including on failure.
- *
- * Both contexts must remain alive and must not be moved while the guard exists.
- * A null parent or a parent with events disabled receives no events.
- * If the parent log cannot grow, reports a warning to stderr and leaves the
- * events in the child without interrupting execution or replacing an active exception.
- */
-class ONNX_LIGHT_CORE_API RuntimeEventForwarder {
-public:
-  RuntimeEventForwarder(RuntimeContext &source, RuntimeContext *destination)
-      : source_(source), destination_(destination) {}
-  ~RuntimeEventForwarder();
-  RuntimeEventForwarder(const RuntimeEventForwarder &) = delete;
-  RuntimeEventForwarder &operator=(const RuntimeEventForwarder &) = delete;
-
-private:
-  RuntimeContext &source_;
-  RuntimeContext *destination_;
 };
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

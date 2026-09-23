@@ -196,12 +196,7 @@ SubgraphSession::RunChild(std::vector<std::pair<std::string, Tensor>> bindings,
   for (auto &kv : sequence_bindings) {
     child.PutSequence(kv.first, std::move(kv.second));
   }
-  {
-    std::optional<RuntimeEventForwarder> forward_events;
-    if (rt.events_enabled())
-      forward_events.emplace(child, &rt);
-    RuntimeSession::Run(child);
-  }
+  RuntimeSession::Run(child);
   return child;
 }
 
@@ -273,12 +268,7 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt, SubgraphSession &then_
     if (rt.retains_output(node.output(i)))
       retained.insert(branch.output(i).name());
   child.set_retained_outputs(std::move(retained));
-  {
-    std::optional<RuntimeEventForwarder> forward_events;
-    if (rt.events_enabled())
-      forward_events.emplace(child, &rt);
-    session.RuntimeSession::Run(child);
-  }
+  session.RuntimeSession::Run(child);
 
   for (int i = 0; i < branch.output_size(); ++i) {
     const std::string out_name = branch.output()[i].name();
@@ -869,38 +859,33 @@ public:
         retained.insert(func_.output(i));
     child.set_retained_outputs(std::move(retained));
 
-    {
-      std::optional<RuntimeEventForwarder> forward_events;
-      if (rt.events_enabled())
-        forward_events.emplace(child, &rt);
-      // The parent context remains alive throughout the function invocation.
-      for (size_t i = 0; i < static_cast<std::size_t>(func_.input_size()); ++i) {
-        const std::string caller_name = node_->input(i);
-        const std::string param_name = func_.input(i);
-        if (caller_name.empty() || param_name.empty()) {
-          continue;
-        }
-        auto value = rt.values().find(caller_name);
-        if (value != rt.values().end()) {
-          child.values().emplace(param_name, value->second.BorrowView());
-          continue;
-        }
-        auto it = rt.tensors().find(caller_name);
-        EXT_ENFORCE_INVALID(it != rt.tensors().end(), "RunNode: input '", caller_name,
-                            "' of call to model-local function '", op_type,
-                            "' is missing from the tensor map.");
-        const Tensor &src = it->second;
-        Tensor bound = src.BorrowView();
-        bound.name = param_name;
-        child.Put(param_name, std::move(bound), RuntimeEventKind::kInput);
+    // The parent context remains alive throughout the function invocation.
+    for (size_t i = 0; i < static_cast<std::size_t>(func_.input_size()); ++i) {
+      const std::string caller_name = node_->input(i);
+      const std::string param_name = func_.input(i);
+      if (caller_name.empty() || param_name.empty()) {
+        continue;
       }
-
-      // Resolve kernels once on first run, reuse on subsequent calls.
-      if (!session_) {
-        session_ = std::make_unique<RuntimeSession>(*plan_);
+      auto value = rt.values().find(caller_name);
+      if (value != rt.values().end()) {
+        child.values().emplace(param_name, value->second.BorrowView());
+        continue;
       }
-      session_->Run(child);
+      auto it = rt.tensors().find(caller_name);
+      EXT_ENFORCE_INVALID(it != rt.tensors().end(), "RunNode: input '", caller_name,
+                          "' of call to model-local function '", op_type,
+                          "' is missing from the tensor map.");
+      const Tensor &src = it->second;
+      Tensor bound = src.BorrowView();
+      bound.name = param_name;
+      child.Put(param_name, std::move(bound), RuntimeEventKind::kInput);
     }
+
+    // Resolve kernels once on first run, reuse on subsequent calls.
+    if (!session_) {
+      session_ = std::make_unique<RuntimeSession>(*plan_);
+    }
+    session_->Run(child);
 
     // Propagate formal outputs back to the caller's value maps.
     for (size_t i = 0; i < static_cast<std::size_t>(func_.output_size()); ++i) {

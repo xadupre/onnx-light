@@ -136,10 +136,13 @@ TEST(FeedbackState, PersistentStorageAccountingDoesNotDependOnAttention) {
   context.RegisterCustomKernel(
       "test.feedback", "Step", [&](const NodeProto &node, RuntimeContext &rt) {
         RuntimeContext child = rt.MakeFunctionContext();
-        const RuntimeEventForwarder forward_events(child, &rt);
+        EXPECT_EQ(&context.events(), &rt.events());
+        EXPECT_EQ(&context.events(), &child.events());
+        const auto previous_allocations = StorageStatistics(context).allocations;
         Tensor next = child.MakeOutputTensor(0, DataType::FLOAT, {1}, sizeof(float));
         next.AsFloat()[0] = rt.Get("past").AsFloat()[0] + rt.Get("tokens").AsFloat()[0];
         child.RecordPersistentStorageEvent({.allocations = 1, .allocated_bytes = sizeof(float)});
+        EXPECT_EQ(StorageStatistics(context).allocations, previous_allocations + 1);
         rt.Put(node.output(0), std::move(next));
         if (fail)
           throw std::invalid_argument("failure after reporting persistent storage work");

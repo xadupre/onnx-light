@@ -183,8 +183,8 @@ Tensors RunModel(const ModelProto &model, Tensors inputs, int verbose = 0);
  * subsequent one.
  *
  * When the caller's context has event logging enabled
- * (:cpp:func:`RuntimeContext::events_enabled`), child events are appended to
- * the caller's event log after the subgraph finishes. Each propagated event
+ * (:cpp:func:`RuntimeContext::events_enabled`), child events are recorded directly
+ * in the caller's shared event log, including before a failure. Each event
  * carries :cpp:var:`RuntimeEvent::subgraph_node_index` set to
  * ``rt.current_node_index()`` (the index of the control-flow node in the
  * parent graph) and :cpp:var:`RuntimeEvent::subgraph_attr_name` set to
@@ -264,8 +264,8 @@ public:
    * into a fresh child :cpp:class:`RuntimeContext` (as :cpp:func:`Run`
    * does), evaluates the cached :cpp:class:`RuntimeSession` once, and
    * returns the resulting child context so the caller can pull out
-   * whatever outputs (tensor- or sequence-typed) it needs. Propagates
-   * child events to ``rt`` exactly like :cpp:func:`Run`.
+   * whatever outputs (tensor- or sequence-typed) it needs. Shares
+   * ``rt``'s event log exactly like :cpp:func:`Run`.
    *
    * @param bindings           Formal-input <-> actual-input tensor pairs.
    * @param sequence_bindings  Formal-input <-> actual-input sequence pairs.

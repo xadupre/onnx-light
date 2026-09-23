@@ -73,11 +73,19 @@ preserving the dictionary schema of other event actions:
    copied = sum(event["prefix_copied_bytes"] for event in storage)
    context.clear_events()
 
-``FeedbackState.Run`` appends each invocation's events to the supplied context,
-preserving existing entries even when execution fails. Half-precision internal
-scratch contexts forward their events when recording is enabled. The existing
-``clear_events()`` / ``ClearEvents()`` clears the log without changing feedback
-values or disabling recording.
+When recording is enabled, context copies, subgraphs, functions, feedback
+invocations and half-precision scratch contexts share the same event log.
+Events are recorded directly in this log, preserving existing entries even
+when execution fails, without any forwarding or scope-exit merge. Independent
+root contexts keep independent logs; a child keeps its log alive even after
+its parent is destroyed.
+
+Runtime recording serializes appends from concurrent children. Direct access
+through ``events()`` requires no concurrent recording, clearing or modification.
+The existing ``clear_events()`` / ``ClearEvents()`` clears the shared log for all
+related contexts without changing feedback values or disabling recording.
+``Clear()`` also clears the shared log but resets only the receiving context's
+value maps. Allocation failures while recording propagate normally.
 
 Kernel usage recording
 ----------------------

@@ -559,7 +559,6 @@ TEST(FeedbackState, AttentionCacheChildContextsAndCopiesCannotUseInvocationPermi
         for (const auto &name : {"Q", "K", "V", "past_key", "past_value"})
           child.Put(name, rt.Get(name).BorrowView(), RuntimeEventKind::kInput);
         child.set_current_node_index(rt.current_node_index());
-        const RuntimeEventForwarder forward_events(child, &rt);
         return compute(child);
       }();
       rt.Put("Y", std::move(result.Y));

@@ -622,17 +622,9 @@ Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const 
     EXT_ENFORCE_INVALID(K.data_type == Q.data_type && V.data_type == Q.data_type,
                         "kernel::Attention: Q, K, V must share the same dtype.");
     const int32_t target_dtype = Q.data_type;
-    RuntimeContext scratch_rt(
-        rt ? rt->kernel_ctx() : ctx_,
-        RuntimeContextOptions{.allocator = rt ? rt->execution_allocator() : nullptr,
-                              .events_enabled = rt && rt->events_enabled()});
-    std::optional<core::runtime::RuntimeEventForwarder> forwarder;
-    if (rt && rt->events_enabled()) {
-      forwarder.emplace(scratch_rt, rt);
+    RuntimeContext scratch_rt = rt ? rt->MakeFunctionContext() : RuntimeContext(ctx_);
+    if (rt && rt->events_enabled())
       scratch_rt.set_current_node_index(rt->current_node_index());
-      scratch_rt.set_current_subgraph(rt->current_subgraph_node_index(),
-                                      rt->current_subgraph_attr_name());
-    }
     RuntimeContext *compute_rt = rt ? &scratch_rt : nullptr;
     const Tensor Q_f = PromoteToFloat32(Q, compute_rt);
     const Tensor K_f = PromoteToFloat32(K, compute_rt);

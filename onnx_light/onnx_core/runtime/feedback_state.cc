@@ -170,9 +170,6 @@ RuntimeValueMap FeedbackState::Run(RuntimeContext &context, const RuntimeValueMa
   EXT_ENFORCE_INVALID(completion == nullptr || completion->status() == TaskStatus::kPending,
                       "FeedbackState: invocation was cancelled or completion is not pending.");
   RuntimeContext invocation = context.MakeFunctionContext();
-  std::optional<RuntimeEventForwarder> forward_events;
-  if (context.events_enabled())
-    forward_events.emplace(invocation, &context);
   invocation.persistent_tensor_initial_capacity_ = persistent_tensor_initial_capacity_;
   invocation.persistent_graph_ = &model_.graph();
   invocation.persistent_tensors_ =

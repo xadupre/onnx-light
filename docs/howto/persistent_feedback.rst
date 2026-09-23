@@ -350,8 +350,8 @@ Opt-in storage auditing through runtime events
 Storage auditing uses the existing runtime event API. Set
 ``RuntimeContextOptions::events_enabled = true`` and read ``context.events()``.
 With events disabled (the default), persistence works identically but creates
-no storage audit events, counter objects, event-forwarding guards or auditing
-mutexes. Diagnostic metadata is not copied into function or half-precision
+no storage audit events, counter objects or shared event-log state.
+Diagnostic metadata is not copied into function or half-precision
 scratch contexts on this path.
 
 ``RuntimeEventAction::kPersistentStorage`` identifies storage reports. Each
@@ -370,11 +370,15 @@ event API without adding operator-specific state to ``RuntimeContext``.
 
 State forwarding and kernel storage construction have different costs.
 Pointer identity at retention, invocation and publication boundaries verifies
-that the state layer does not copy tensor payloads. Feedback invocations and
-child contexts forward their events to the caller, including work preceding
-a failure or cancellation. If the caller's event log cannot grow, forwarding
-reports a warning on standard error instead of terminating execution or
-replacing the original exception; the caller's log is then incomplete.
+that the state layer does not copy tensor payloads. Feedback invocations,
+subgraphs, functions and half-precision scratch contexts share the caller's
+event log. Events are visible as soon as they are recorded, including work
+preceding a failure or cancellation; no forwarding or end-of-scope merge occurs.
+Runtime recording serializes appends from concurrent children. Read or modify
+``events()`` only when no other context is recording or clearing the log.
+``ClearEvents()`` clears the shared log for all these contexts. Independently
+constructed contexts keep independent logs. Allocation failures while recording
+propagate to the caller, just like other runtime allocation failures.
 Attention's storage reports exclude its
 score/output allocations, arithmetic workspace, feed construction, or
 half-precision conversion.

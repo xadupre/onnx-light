@@ -2248,9 +2248,11 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "``persistent_storage`` payload with allocation, copy and reuse statistics; "
           "they are recorded only when :attr:`events_enabled` is true. Call "
           ":meth:`RuntimeEvent.as_dict` to convert an individual entry to a "
-          "plain Python ``dict``.")
+          "plain Python ``dict``. Child contexts record directly in the same log. "
+          "Reads require that no related context is recording or clearing events.")
       .def("clear_events", &RuntimeContext::ClearEvents,
-           "Empties the event log without otherwise touching the tensor map.")
+           "Empties the shared event log for this context and its children without "
+           "otherwise touching their tensor maps.")
       .def("clear", &RuntimeContext::Clear,
            "Resets the per-invocation state so the context can be reused for a fresh "
            "run: clears the tensor map, the sequence map and the event log, and resets "

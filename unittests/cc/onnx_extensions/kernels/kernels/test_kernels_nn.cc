@@ -1499,11 +1499,8 @@ TEST(KernelClass, AttentionCacheStatisticsAggregateConcurrentIndependentChildren
   auto second = std::async(std::launch::async, run);
   auto first_child = first.get();
   auto second_child = second.get();
-  EXPECT_TRUE(parent.events().empty());
-  {
-    const core::runtime::RuntimeEventForwarder first_events(first_child, &parent);
-    const core::runtime::RuntimeEventForwarder second_events(second_child, &parent);
-  }
+  EXPECT_EQ(&parent.events(), &first_child.events());
+  EXPECT_EQ(&parent.events(), &second_child.events());
   const auto stats = StorageStatistics(parent);
   EXPECT_EQ(stats.allocations, 400u);
   EXPECT_EQ(stats.allocated_bytes, 200u * 12 * sizeof(float));

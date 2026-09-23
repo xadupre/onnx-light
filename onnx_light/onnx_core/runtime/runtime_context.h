@@ -288,7 +288,7 @@ struct RuntimeEvent {
   int64_t timestamp_ns = 0;
   /// Name under which the tensor is (or was) stored in the
   /// :cpp:class:`RuntimeContext` tensor map.
-  std::string name;
+  std::string name{};
   /// Element data type of the tensor at the moment of the event, encoded
   /// as a ``TensorProto::DataType`` integer value. Set to
   /// ``DataType::UNDEFINED`` for ``kRemove`` events, and to ``-1`` for
@@ -301,7 +301,7 @@ struct RuntimeEvent {
   /// scalar tensors (``element_count == 1``), and for ``kAdd`` /
   /// ``kReplace`` events whose tensor exceeds
   /// :cpp:var:`kRuntimeEventValueLimit` elements (truncated payload).
-  std::vector<int64_t> shape;
+  std::vector<int64_t> shape{};
   /// Number of populated entries in ``values`` / ``string_values``
   /// (``min(element_count, kRuntimeEventValueLimit)``). Zero for
   /// ``kRemove`` events.
@@ -318,14 +318,14 @@ struct RuntimeEvent {
   /// For ``kRunNode`` events: ONNX op domain of the node that was
   /// dispatched, normalised so the default domain is reported as
   /// ``"ai.onnx"``. Empty for all other event actions.
-  std::string op_domain;
+  std::string op_domain{};
   /// For ``kRunNode`` events: ONNX ``op_type`` of the node that was
   /// dispatched. Empty for all other event actions.
-  std::string op_type;
+  std::string op_type{};
   /// For ``kRunNode`` events: ordered list of input names consumed by
   /// the node, matching ``NodeProto::input``. Empty for all other event
   /// actions.
-  std::vector<std::string> inputs;
+  std::vector<std::string> inputs{};
   /// For ``kRunNode`` events: wall-clock duration of the kernel
   /// dispatch in nanoseconds (``std::chrono::steady_clock``). Zero for
   /// all other event actions.
@@ -359,7 +359,7 @@ struct RuntimeEvent {
   /// by :cpp:var:`subgraph_node_index`: ``"body"`` for :onnx:`Loop` /
   /// :onnx:`Scan` / :onnx:`SequenceMap`, ``"then_branch"`` or
   /// ``"else_branch"`` for :onnx:`If`. Empty for top-level-graph events.
-  std::string subgraph_attr_name;
+  std::string subgraph_attr_name{};
   /// Total number of bytes held by every buffer currently alive in the
   /// :cpp:class:`RuntimeContext`'s allocator at the moment this event was
   /// recorded (:cpp:func:`RawBufferAllocator::TotalAllocatedSize`), i.e. the
@@ -370,10 +370,17 @@ struct RuntimeEvent {
   /// this event was recorded (:cpp:func:`RawBufferAllocator::PeakAllocatedSize`).
   /// ``0`` when no allocator is attached to the context.
   int64_t peak_bytes = 0;
-  /// Work reported by a ``kPersistentStorage`` event, not cumulative totals.
-  /// Zero for other actions. Its allocated_bytes measures requested storage
-  /// capacity, separately from this event's allocator live/peak memory fields.
-  PersistentStorageStatistics persistent_storage;
+  /// Number of storage allocations reported by this ``kPersistentStorage`` event.
+  /// Storage fields describe this event only and are zero for other actions.
+  uint64_t storage_allocations = 0;
+  /// Requested storage capacity in bytes, not the allocator's live memory.
+  uint64_t storage_allocated_bytes = 0;
+  /// Bytes copied from an existing persistent prefix.
+  uint64_t storage_prefix_copied_bytes = 0;
+  /// Bytes copied from newly appended values; direct computation is not a copy.
+  uint64_t storage_append_copied_bytes = 0;
+  /// Number of storage reservations reused without allocation.
+  uint64_t storage_reuse_count = 0;
 
   /// Returns a concise, human-readable one-line summary of the event: the
   /// action / kind, the tensor name (or ``op_type(inputs)`` for ``kRunNode``
@@ -671,8 +678,8 @@ public:
                                                                  AllocatorForOutput(slot));
   }
 
-  /** Records storage work in events() only when events_enabled() is true. */
-  void RecordPersistentStorageEvent(const PersistentStorageStatistics &statistics);
+  /** Records storage work with the current node, timestamp and allocator memory. */
+  void RecordPersistentStorageEvent(RuntimeEvent event);
   /**
    * Reserves a writable tail for an exact graph-declared persistent input/output pair.
    *

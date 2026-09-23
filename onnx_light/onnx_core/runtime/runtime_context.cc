@@ -236,11 +236,10 @@ std::string RuntimeEvent::summary() const {
     }
   }
   if (action == RuntimeEventAction::kPersistentStorage) {
-    oss << " storage_allocations=" << persistent_storage.allocations
-        << " storage_bytes=" << persistent_storage.allocated_bytes
-        << " prefix_copied=" << persistent_storage.prefix_copied_bytes
-        << " append_copied=" << persistent_storage.append_copied_bytes
-        << " reused=" << persistent_storage.reuse_count;
+    oss << " storage_allocations=" << storage_allocations
+        << " storage_bytes=" << storage_allocated_bytes
+        << " prefix_copied=" << storage_prefix_copied_bytes
+        << " append_copied=" << storage_append_copied_bytes << " reused=" << storage_reuse_count;
   }
   oss << " mem=" << allocated_bytes << "B peak=" << peak_bytes << "B";
   return oss.str();
@@ -457,16 +456,14 @@ RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name)
   return child;
 }
 
-void RuntimeContext::RecordPersistentStorageEvent(const PersistentStorageStatistics &statistics) {
+void RuntimeContext::RecordPersistentStorageEvent(RuntimeEvent event) {
   if (!events_enabled_)
     return;
-  RuntimeEvent event;
   event.action = RuntimeEventAction::kPersistentStorage;
   event.timestamp_ns = NowNanos();
   event.node_index = current_node_index_;
   event.subgraph_node_index = current_subgraph_node_index_;
   event.subgraph_attr_name = current_subgraph_attr_name_;
-  event.persistent_storage = statistics;
   StampAllocatorMemory(event);
   RecordEvent(std::move(event));
 }
@@ -492,13 +489,8 @@ RuntimeContext::ReservePersistentAppend(const Tensor &past, const Shape &shape, 
       });
   if (binding == persistent_tensors_->end())
     return std::nullopt;
-  std::function<void(const PersistentStorageStatistics &)> on_storage_event;
-  if (events_enabled_)
-    on_storage_event = [this](const PersistentStorageStatistics &statistics) {
-      RecordPersistentStorageEvent(statistics);
-    };
   return binding->append.Reserve(shape, axis, persistent_tensor_initial_capacity_,
-                                 AllocatorForOutput(output_slot), on_storage_event);
+                                 AllocatorForOutput(output_slot), this);
 }
 
 Tensor RuntimeContext::CommitPersistentAppend(int output_slot,

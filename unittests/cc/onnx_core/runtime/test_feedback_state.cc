@@ -12,11 +12,11 @@ using namespace ONNX_LIGHT_NAMESPACE::core::runtime;
 
 namespace {
 
-PersistentStorageStatistics StorageStatistics(const RuntimeContext &context) {
-  PersistentStorageStatistics result;
-  for (const auto &event : context.events())
+uint64_t StorageTotal(const RuntimeEventLog &events, uint64_t RuntimeEvent::*field) {
+  uint64_t result = 0;
+  for (const auto &event : events)
     if (event.action == RuntimeEventAction::kPersistentStorage)
-      result += event.persistent_storage;
+      result += event.*field;
   return result;
 }
 
@@ -138,11 +138,14 @@ TEST(FeedbackState, PersistentStorageAccountingDoesNotDependOnAttention) {
         RuntimeContext child = rt.MakeFunctionContext();
         EXPECT_EQ(&context.events(), &rt.events());
         EXPECT_EQ(&context.events(), &child.events());
-        const auto previous_allocations = StorageStatistics(context).allocations;
+        const auto previous_allocations =
+            StorageTotal(context.events(), &RuntimeEvent::storage_allocations);
         Tensor next = child.MakeOutputTensor(0, DataType::FLOAT, {1}, sizeof(float));
         next.AsFloat()[0] = rt.Get("past").AsFloat()[0] + rt.Get("tokens").AsFloat()[0];
-        child.RecordPersistentStorageEvent({.allocations = 1, .allocated_bytes = sizeof(float)});
-        EXPECT_EQ(StorageStatistics(context).allocations, previous_allocations + 1);
+        child.RecordPersistentStorageEvent(
+            {.storage_allocations = 1, .storage_allocated_bytes = sizeof(float)});
+        EXPECT_EQ(StorageTotal(context.events(), &RuntimeEvent::storage_allocations),
+                  previous_allocations + 1);
         rt.Put(node.output(0), std::move(next));
         if (fail)
           throw std::invalid_argument("failure after reporting persistent storage work");
@@ -152,26 +155,26 @@ TEST(FeedbackState, PersistentStorageAccountingDoesNotDependOnAttention) {
   fail = true;
   EXPECT_THROW(state.Run(context, {{"tokens", Number(1)}}), std::invalid_argument);
   EXPECT_EQ(Number(state.Values().at("past")), 3);
-  EXPECT_EQ(StorageStatistics(context).allocations, 2u);
+  EXPECT_EQ(StorageTotal(context.events(), &RuntimeEvent::storage_allocations), 2u);
   state.Reset({{"past", Number(7)}});
-  EXPECT_EQ(StorageStatistics(context).allocations, 2u);
+  EXPECT_EQ(StorageTotal(context.events(), &RuntimeEvent::storage_allocations), 2u);
   fail = false;
   EXPECT_EQ(Number(state.Run(context, {{"tokens", Number(1)}}).at("present")), 8);
-  const auto statistics = StorageStatistics(context);
-  EXPECT_EQ(statistics.allocations, 3u);
-  EXPECT_EQ(statistics.allocated_bytes, 3 * sizeof(float));
-  EXPECT_EQ(statistics.prefix_copied_bytes, 0u);
-  EXPECT_EQ(statistics.append_copied_bytes, 0u);
-  EXPECT_EQ(statistics.reuse_count, 0u);
+  const auto statistics = context.events();
+  EXPECT_EQ(StorageTotal(statistics, &RuntimeEvent::storage_allocations), 3u);
+  EXPECT_EQ(StorageTotal(statistics, &RuntimeEvent::storage_allocated_bytes), 3 * sizeof(float));
+  EXPECT_EQ(StorageTotal(statistics, &RuntimeEvent::storage_prefix_copied_bytes), 0u);
+  EXPECT_EQ(StorageTotal(statistics, &RuntimeEvent::storage_append_copied_bytes), 0u);
+  EXPECT_EQ(StorageTotal(statistics, &RuntimeEvent::storage_reuse_count), 0u);
   FeedbackState other(model, {{"past", Number(0)}});
   other.Run(context, {{"tokens", Number(1)}});
-  EXPECT_EQ(StorageStatistics(context).allocations, 4u);
+  EXPECT_EQ(StorageTotal(context.events(), &RuntimeEvent::storage_allocations), 4u);
   context.ClearEvents();
   EXPECT_TRUE(context.events().empty());
-  EXPECT_EQ(StorageStatistics(context).allocations, 0u);
+  EXPECT_EQ(StorageTotal(context.events(), &RuntimeEvent::storage_allocations), 0u);
   EXPECT_EQ(Number(state.Values().at("past")), 8);
   other.Run(context, {{"tokens", Number(1)}});
-  EXPECT_EQ(StorageStatistics(context).allocations, 1u);
+  EXPECT_EQ(StorageTotal(context.events(), &RuntimeEvent::storage_allocations), 1u);
 }
 
 TEST(FeedbackState, GenericProducerComputesDirectlyIntoPersistentTail) {
@@ -231,12 +234,16 @@ TEST(FeedbackState, GenericProducerComputesDirectlyIntoPersistentTail) {
       }
       previous = present.bytes();
     }
-    const auto statistics = StorageStatistics(context);
-    EXPECT_EQ(statistics.allocations, events_enabled ? 2u : 0u);
-    EXPECT_EQ(statistics.allocated_bytes, events_enabled ? 12 * sizeof(float) : 0u);
-    EXPECT_EQ(statistics.prefix_copied_bytes, events_enabled ? 4 * sizeof(float) : 0u);
-    EXPECT_EQ(statistics.append_copied_bytes, 0u);
-    EXPECT_EQ(statistics.reuse_count, events_enabled ? 4u : 0u);
+    const auto statistics = context.events();
+    EXPECT_EQ(StorageTotal(statistics, &RuntimeEvent::storage_allocations),
+              events_enabled ? 2u : 0u);
+    EXPECT_EQ(StorageTotal(statistics, &RuntimeEvent::storage_allocated_bytes),
+              events_enabled ? 12 * sizeof(float) : 0u);
+    EXPECT_EQ(StorageTotal(statistics, &RuntimeEvent::storage_prefix_copied_bytes),
+              events_enabled ? 4 * sizeof(float) : 0u);
+    EXPECT_EQ(StorageTotal(statistics, &RuntimeEvent::storage_append_copied_bytes), 0u);
+    EXPECT_EQ(StorageTotal(statistics, &RuntimeEvent::storage_reuse_count),
+              events_enabled ? 4u : 0u);
     EXPECT_EQ(context.events().empty(), !events_enabled);
     EXPECT_EQ(execution.TotalAllocatedSize(), 0u);
     EXPECT_EQ(arena->leased_count(), 1u);
@@ -303,7 +310,11 @@ TEST(FeedbackState, StorageEventUsesExistingActivationMetadataAndClearing) {
   const Tensor value = Tensor::FromFloat("", {1}, {1}, &allocator);
   context.set_current_node_index(7);
   context.set_current_subgraph(3, "body");
-  context.RecordPersistentStorageEvent({1, 64, 8, 4, 2});
+  context.RecordPersistentStorageEvent({.storage_allocations = 1,
+                                        .storage_allocated_bytes = 64,
+                                        .storage_prefix_copied_bytes = 8,
+                                        .storage_append_copied_bytes = 4,
+                                        .storage_reuse_count = 2});
   ASSERT_EQ(context.events().size(), 1u);
   const auto &event = context.events().front();
   EXPECT_EQ(event.action, RuntimeEventAction::kPersistentStorage);
@@ -314,15 +325,19 @@ TEST(FeedbackState, StorageEventUsesExistingActivationMetadataAndClearing) {
   EXPECT_GT(event.timestamp_ns, 0);
   EXPECT_EQ(event.value_count, 0);
   EXPECT_EQ(event.allocated_bytes, sizeof(float));
-  EXPECT_EQ(event.persistent_storage.allocated_bytes, 64u);
-  EXPECT_EQ(event.persistent_storage.prefix_copied_bytes, 8u);
-  EXPECT_EQ(event.persistent_storage.append_copied_bytes, 4u);
-  EXPECT_EQ(event.persistent_storage.reuse_count, 2u);
+  EXPECT_EQ(event.storage_allocated_bytes, 64u);
+  EXPECT_EQ(event.storage_prefix_copied_bytes, 8u);
+  EXPECT_EQ(event.storage_append_copied_bytes, 4u);
+  EXPECT_EQ(event.storage_reuse_count, 2u);
   EXPECT_NE(event.summary().find("storage_bytes=64"), std::string::npos);
   context.ClearEvents();
   EXPECT_TRUE(context.events().empty());
   RuntimeContext disabled(KernelContext(DefaultOpset(18)));
-  disabled.RecordPersistentStorageEvent({1, 64, 8, 4, 2});
+  disabled.RecordPersistentStorageEvent({.storage_allocations = 1,
+                                         .storage_allocated_bytes = 64,
+                                         .storage_prefix_copied_bytes = 8,
+                                         .storage_append_copied_bytes = 4,
+                                         .storage_reuse_count = 2});
   EXPECT_TRUE(disabled.events().empty());
 }
 
@@ -387,7 +402,8 @@ TEST(FeedbackState, FunctionAndSubgraphStorageEventsRespectActivationAndSurviveF
         "test.feedback", "Audit", [&](const NodeProto &node, RuntimeContext &rt) {
           Tensor result = rt.MakeOutputTensor(0, DataType::FLOAT, {1}, sizeof(float));
           result.AsFloat()[0] = rt.Get("past").AsFloat()[0] + rt.Get("tokens").AsFloat()[0];
-          rt.RecordPersistentStorageEvent({.allocations = 1, .allocated_bytes = sizeof(float)});
+          rt.RecordPersistentStorageEvent(
+              {.storage_allocations = 1, .storage_allocated_bytes = sizeof(float)});
           if (fail)
             throw std::invalid_argument("failure in nested audited kernel");
           rt.Put(node.output(0), std::move(result));
@@ -397,7 +413,8 @@ TEST(FeedbackState, FunctionAndSubgraphStorageEventsRespectActivationAndSurviveF
     fail = true;
     EXPECT_THROW(state.Run(context, {{"tokens", Number(1)}}), std::invalid_argument);
     EXPECT_EQ(Number(state.Values().at("past")), 3);
-    EXPECT_EQ(StorageStatistics(context).allocations, enabled ? 2u : 0u);
+    EXPECT_EQ(StorageTotal(context.events(), &RuntimeEvent::storage_allocations),
+              enabled ? 2u : 0u);
     EXPECT_EQ(context.events().empty(), !enabled);
     for (const auto &event : context.events()) {
       if (event.action != RuntimeEventAction::kPersistentStorage)

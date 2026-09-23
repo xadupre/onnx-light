@@ -182,9 +182,9 @@ print(f"y =\n{y}")
 #
 # Persistent-storage auditing uses this same opt-in event log. Graphs with
 # persistent feedback may emit ``RuntimeEventAction.kPersistentStorage``;
-# their ``as_dict()`` alone includes a nested ``"persistent_storage"``
-# dictionary with ``allocations``, ``allocated_bytes``,
-# ``prefix_copied_bytes``, ``append_copied_bytes`` and ``reuse_count``.
+# their ``as_dict()`` includes the top-level fields ``storage_allocations``,
+# ``storage_allocated_bytes``, ``storage_prefix_copied_bytes``,
+# ``storage_append_copied_bytes`` and ``storage_reuse_count``.
 # These are per-event amounts; sum them over the desired interval for totals.
 # The top-level ``allocated_bytes`` / ``peak_bytes`` still describe allocator
 # live/peak memory. Other actions keep their existing dictionary schema.

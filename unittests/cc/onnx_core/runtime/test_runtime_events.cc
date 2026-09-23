@@ -31,7 +31,7 @@ TEST(RuntimeEvents, SharesOneLogAcrossNestedContextsAndCopies) {
   PutNumber(parent, "parent");
   PutNumber(child, "child");
   function.set_current_node_index(3);
-  function.RecordPersistentStorageEvent({.allocations = 1, .allocated_bytes = 64});
+  function.RecordPersistentStorageEvent({.storage_allocations = 1, .storage_allocated_bytes = 64});
   PutNumber(copy, "copy");
   NodeProto node;
   node.set_op_type("Identity");
@@ -46,7 +46,7 @@ TEST(RuntimeEvents, SharesOneLogAcrossNestedContextsAndCopies) {
   EXPECT_EQ(parent.events()[1].name, "child");
   const auto &storage = parent.events()[2];
   EXPECT_EQ(storage.action, RuntimeEventAction::kPersistentStorage);
-  EXPECT_EQ(storage.persistent_storage.allocated_bytes, 64u);
+  EXPECT_EQ(storage.storage_allocated_bytes, 64u);
   EXPECT_EQ(storage.node_index, 3);
   EXPECT_EQ(storage.subgraph_node_index, 7);
   EXPECT_EQ(storage.subgraph_attr_name, "body");
@@ -63,14 +63,14 @@ TEST(RuntimeEvents, PreservesEventsBeforeFailureWithoutScopeCleanup) {
   EXPECT_THROW(
       {
         PutNumber(child, "before failure");
-        child.RecordPersistentStorageEvent({.prefix_copied_bytes = 16});
+        child.RecordPersistentStorageEvent({.storage_prefix_copied_bytes = 16});
         ASSERT_EQ(parent.events().size(), 2u);
         throw std::runtime_error("kernel failure");
       },
       std::runtime_error);
   ASSERT_EQ(parent.events().size(), 2u);
   EXPECT_EQ(parent.events()[0].name, "before failure");
-  EXPECT_EQ(parent.events()[1].persistent_storage.prefix_copied_bytes, 16u);
+  EXPECT_EQ(parent.events()[1].storage_prefix_copied_bytes, 16u);
 }
 
 TEST(RuntimeEvents, KeepsLogAliveAfterParentDestructionAndMoves) {
@@ -95,7 +95,7 @@ TEST(RuntimeEvents, ClearsSharedLogWithoutClearingOtherContextsValues) {
   EXPECT_TRUE(parent.events().empty());
   EXPECT_TRUE(parent.Has("parent"));
   EXPECT_TRUE(child.Has("child"));
-  child.RecordPersistentStorageEvent({.reuse_count = 1});
+  child.RecordPersistentStorageEvent({.storage_reuse_count = 1});
   ASSERT_EQ(parent.events().size(), 1u);
   parent.Clear();
   EXPECT_TRUE(child.events().empty());
@@ -116,7 +116,7 @@ TEST(RuntimeEvents, LeavesIndependentContextsIsolatedAndDisabledContextsSilent) 
   auto function = child.MakeFunctionContext();
   for (auto *context : {&disabled, &child, &function}) {
     PutNumber(*context, "value");
-    context->RecordPersistentStorageEvent({.allocations = 1});
+    context->RecordPersistentStorageEvent({.storage_allocations = 1});
     NodeProto node;
     context->RecordRunNodeEvent(node, "", "Identity", 0, 1);
     context->Remove("value");
@@ -130,7 +130,7 @@ TEST(RuntimeEvents, SerializesRecordingFromConcurrentChildren) {
   auto run = [](RuntimeContext child) {
     for (int i = 0; i < 100; ++i) {
       PutNumber(child, "value");
-      child.RecordPersistentStorageEvent({.allocations = 1, .allocated_bytes = 4});
+      child.RecordPersistentStorageEvent({.storage_allocations = 1, .storage_allocated_bytes = 4});
       NodeProto node;
       child.RecordRunNodeEvent(node, "", "Identity", i, 1);
       child.Remove("value");
@@ -141,13 +141,14 @@ TEST(RuntimeEvents, SerializesRecordingFromConcurrentChildren) {
   first.get();
   second.get();
   ASSERT_EQ(parent.events().size(), 800u);
-  PersistentStorageStatistics total;
+  uint64_t allocations = 0, allocated_bytes = 0;
   size_t body_events = 0;
   for (const auto &event : parent.events()) {
-    total += event.persistent_storage;
+    allocations += event.storage_allocations;
+    allocated_bytes += event.storage_allocated_bytes;
     body_events += event.subgraph_attr_name == "body";
   }
-  EXPECT_EQ(total.allocations, 200u);
-  EXPECT_EQ(total.allocated_bytes, 800u);
+  EXPECT_EQ(allocations, 200u);
+  EXPECT_EQ(allocated_bytes, 800u);
   EXPECT_EQ(body_events, 400u);
 }

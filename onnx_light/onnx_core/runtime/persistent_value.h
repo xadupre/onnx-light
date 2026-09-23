@@ -6,27 +6,12 @@
 
 #include "onnx_core/runtime/runtime_value.h"
 #include <atomic>
-#include <functional>
 #include <optional>
 #include <span>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
-/**
- * Measures reported kernel work on persistent-capable storage.
- *
- * Includes allocation/copy fallback and failed attempts, independently of the
- * consuming operator. These counters do not automatically track all runtime work.
- */
-struct ONNX_LIGHT_CORE_API PersistentStorageStatistics {
-  uint64_t allocations = 0;
-  uint64_t allocated_bytes = 0;
-  uint64_t prefix_copied_bytes = 0;
-  uint64_t append_copied_bytes = 0;
-  uint64_t reuse_count = 0;
-  /** Adds an event's reported work to an explicitly requested total. */
-  PersistentStorageStatistics &operator+=(const PersistentStorageStatistics &statistics) noexcept;
-};
+class RuntimeContext;
 
 /**
  * Retains a tensor value and, for internally allocated append buffers, spare capacity.
@@ -90,13 +75,13 @@ public:
    * Only the append axis may grow, and the product of preceding dimensions must
    * be one. Initial capacity is measured along that axis, not in bytes.
    * Zero capacity declines the reservation but still consumes this lease.
-   * Reports allocation, prefix copies and reuse only when a callback is supplied,
-   * including work before a failure. The callback is invoked synchronously.
+   * Records allocation, prefix copies and reuse in the supplied runtime context
+   * when events are enabled, including work before a failure.
    * The caller supplies the output allocator; no alternate allocator is used.
    */
-  std::optional<AppendReservation>
-  Reserve(const Shape &shape, size_t axis, size_t initial_capacity, RawBufferAllocator *allocator,
-          const std::function<void(const PersistentStorageStatistics &)> &on_storage_event = {});
+  std::optional<AppendReservation> Reserve(const Shape &shape, size_t axis, size_t initial_capacity,
+                                           RawBufferAllocator *allocator,
+                                           RuntimeContext *context = nullptr);
 
 private:
   friend class PersistentTensor;

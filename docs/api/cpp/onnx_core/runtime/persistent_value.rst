@@ -10,13 +10,13 @@ feedback state. Ordinary ``Tensor`` copies and borrowed views carry no such perm
 ``PersistentValue`` preserves whole structured and encoded feedback values, using
 ``PersistentTensor`` for tensor leaves.
 
-``PersistentStorageStatistics`` describes the allocations, copied bytes and reuse
-reported by one storage event, independently of the consuming operator.
-Reservations report this work only when a callback is supplied. The runtime
-supplies that callback only when its existing ``events_enabled`` option is true;
-reports then appear in ``RuntimeContext::events()`` as ``kPersistentStorage`` events.
-There are no always-on counters or auditing mutexes. Explicit consumers can add
-event payloads with ``operator+=`` to calculate totals.
+Reservations record allocations, copied bytes and reuse directly through the
+optional ``RuntimeContext`` supplied to ``Reserve`` when its existing
+``events_enabled`` option is true. Reports appear in the shared
+``RuntimeContext::events()`` log as ``kPersistentStorage`` events.
+Their ``storage_*`` fields describe the work for that event, independently of
+the consuming operator. There is no separate statistics object or cumulative
+counter state; consumers sum fields from the event list when totals are needed.
 
 .. doxygenfile:: onnx_core/runtime/persistent_value.h
    :project: onnx-light

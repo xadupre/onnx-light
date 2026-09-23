@@ -95,7 +95,6 @@ class TestRunNodesBindings(ExtTestCase):
             "RuntimeParameters",
             "RuntimeEvent",
             "RuntimeEventAction",
-            "PersistentStorageStatistics",
             "ExecutionPlan",
             "RuntimeSession",
             "default_opset",
@@ -110,6 +109,7 @@ class TestRunNodesBindings(ExtTestCase):
             "clear_custom_kernels",
         ]:
             self.assertTrue(hasattr(rt, name), name)
+        self.assertFalse(hasattr(rt, "PersistentStorageStatistics"))
 
     def test_runtime_event_action_enum_values(self):
         self.assertEqual(int(rt.RuntimeEventAction.kAdd), 0)
@@ -333,15 +333,16 @@ class TestRunNodesBindings(ExtTestCase):
         self.assertEqual(events[0].device, -1)
         for event in events:
             self.assertNotIn("persistent_storage", event.as_dict())
-            self.assertIsInstance(event.persistent_storage, rt.PersistentStorageStatistics)
+            self.assertFalse(hasattr(event, "persistent_storage"))
             for field in (
-                "allocations",
-                "allocated_bytes",
-                "prefix_copied_bytes",
-                "append_copied_bytes",
-                "reuse_count",
+                "storage_allocations",
+                "storage_allocated_bytes",
+                "storage_prefix_copied_bytes",
+                "storage_append_copied_bytes",
+                "storage_reuse_count",
             ):
-                self.assertEqual(getattr(event.persistent_storage, field), 0)
+                self.assertEqual(getattr(event, field), 0)
+                self.assertNotIn(field, event.as_dict())
 
         ctx.clear_events()
         self.assertEqual(ctx.events(), [])

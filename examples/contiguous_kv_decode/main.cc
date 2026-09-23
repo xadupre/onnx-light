@@ -103,14 +103,20 @@ int main() {
         std::cerr << "State forwarding unexpectedly copied a KV payload.\n";
         return 1;
       }
-      PersistentStorageStatistics counters;
-      for (const auto &event : context.events())
-        if (event.action == RuntimeEventAction::kPersistentStorage)
-          counters += event.persistent_storage;
-      std::cout << heads << "," << step + 1 << "," << elapsed.count() << "," << counters.allocations
-                << "," << counters.allocated_bytes << "," << counters.prefix_copied_bytes << ","
-                << counters.append_copied_bytes << "," << counters.reuse_count << ","
-                << io->TotalAllocatedSize() << "," << io->PeakAllocatedSize() << ",1\n";
+      uint64_t allocations = 0, allocated_bytes = 0, prefix_copied = 0, append_copied = 0,
+               reused = 0;
+      for (const auto &event : context.events()) {
+        if (event.action != RuntimeEventAction::kPersistentStorage)
+          continue;
+        allocations += event.storage_allocations;
+        allocated_bytes += event.storage_allocated_bytes;
+        prefix_copied += event.storage_prefix_copied_bytes;
+        append_copied += event.storage_append_copied_bytes;
+        reused += event.storage_reuse_count;
+      }
+      std::cout << heads << "," << step + 1 << "," << elapsed.count() << "," << allocations << ","
+                << allocated_bytes << "," << prefix_copied << "," << append_copied << "," << reused
+                << "," << io->TotalAllocatedSize() << "," << io->PeakAllocatedSize() << ",1\n";
     }
   }
 }

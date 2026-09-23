@@ -73,10 +73,10 @@ Runtime events remain opt-in through the supplied context's ``events_enabled``
 option. When enabled, ``Run`` appends invocation events to that context's
 existing ``events()`` log, including events recorded before a failed invocation.
 ``kPersistentStorage`` events expose allocation, prefix-copy, append-copy and
-reuse work through their ``persistent_storage`` payload; there is no separate
+reuse work through their direct ``storage_*`` fields; there is no separate
 feedback-state statistics getter. Python uses the same ``context.events()``
 and ``event.as_dict()`` APIs. ``context.clear_events()`` clears the log without
-resetting feedback values. See :doc:`runtime_context` for the payload schema.
+resetting feedback values. See :doc:`runtime_context` for the event fields.
 
 All runtime sessions use read-only model views for initializer raw storage and native
 float, double, int32, int64 and uint64 typed fields. Other representations,

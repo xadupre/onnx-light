@@ -60,7 +60,6 @@ using core::runtime::OpsetId;
 using core::runtime::ParallelRegionCollector;
 using core::runtime::ParallelRegionReport;
 using core::runtime::ParallelRegionReportEvent;
-using core::runtime::PersistentStorageStatistics;
 using core::runtime::RawBufferAllocator;
 using core::runtime::ResolvedCpuExecutionPolicy;
 using core::runtime::ResolvedSpinPolicy;
@@ -1036,22 +1035,6 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .value("kPersistentStorage", core::runtime::RuntimeEventAction::kPersistentStorage,
              "Persistent storage was allocated, copied or reused.");
 
-  nb::class_<PersistentStorageStatistics>(
-      rt_mod, "PersistentStorageStatistics",
-      "Read-only audit payload of a ``kPersistentStorage`` :class:`RuntimeEvent`. "
-      "Reports work for this event, not cumulative totals. Recording is controlled "
-      "by :attr:`RuntimeContext.events_enabled`.")
-      .def_ro("allocations", &PersistentStorageStatistics::allocations,
-              "Number of persistent-storage allocations.")
-      .def_ro("allocated_bytes", &PersistentStorageStatistics::allocated_bytes,
-              "Bytes allocated for persistent storage, distinct from allocator live bytes.")
-      .def_ro("prefix_copied_bytes", &PersistentStorageStatistics::prefix_copied_bytes,
-              "Bytes copied from an existing persistent prefix.")
-      .def_ro("append_copied_bytes", &PersistentStorageStatistics::append_copied_bytes,
-              "Bytes copied from newly appended values.")
-      .def_ro("reuse_count", &PersistentStorageStatistics::reuse_count,
-              "Number of persistent-storage reservations reused without allocation.");
-
   // RuntimeEvent — append-only runtime log entry.
   // Mirrors :cpp:class:`core::runtime::RuntimeEvent`; ``values`` / ``string_values``
   // expose the populated prefix of the underlying fixed-size buffer as Python
@@ -1068,8 +1051,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       "``data_type`` is set to ``-1`` and ``shape`` is empty to signal the "
       "truncated payload. ``remove`` events carry ``data_type = UNDEFINED``, "
       "empty ``shape`` and ``value_count = 0`` (the tensor is already gone). "
-      "Persistent-storage events carry a :class:`PersistentStorageStatistics` payload "
-      "in :attr:`persistent_storage`; allocator live/peak bytes keep their usual meaning.")
+      "Persistent-storage events report work in their storage_* fields; "
+      "allocator live/peak bytes keep their usual meaning.")
       .def_prop_ro(
           "action", [](const core::runtime::RuntimeEvent &ev) { return ev.action; },
           ":class:`RuntimeEventAction` member describing the event kind: "
@@ -1136,10 +1119,18 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def_ro("peak_bytes", &core::runtime::RuntimeEvent::peak_bytes,
               "Peak value ever reached by :attr:`allocated_bytes` up to the moment "
               "this event was recorded. ``0`` when no allocator is attached.")
-      .def_ro("persistent_storage", &core::runtime::RuntimeEvent::persistent_storage,
-              "Read-only :class:`PersistentStorageStatistics` payload for "
-              "``kPersistentStorage`` events; all fields are zero for other actions. "
-              "Its ``allocated_bytes`` measures allocation traffic, not allocator live bytes.")
+      .def_ro("storage_allocations", &core::runtime::RuntimeEvent::storage_allocations,
+              "Number of storage allocations reported by this event; zero for other actions.")
+      .def_ro("storage_allocated_bytes", &core::runtime::RuntimeEvent::storage_allocated_bytes,
+              "Requested storage capacity in bytes, distinct from allocator live bytes.")
+      .def_ro("storage_prefix_copied_bytes",
+              &core::runtime::RuntimeEvent::storage_prefix_copied_bytes,
+              "Bytes copied from an existing persistent prefix.")
+      .def_ro("storage_append_copied_bytes",
+              &core::runtime::RuntimeEvent::storage_append_copied_bytes,
+              "Bytes copied from newly appended values.")
+      .def_ro("storage_reuse_count", &core::runtime::RuntimeEvent::storage_reuse_count,
+              "Number of storage reservations reused without allocation.")
       .def_prop_ro(
           "values",
           [](const core::runtime::RuntimeEvent &ev) {
@@ -1192,13 +1183,11 @@ void AddOnnxPyRuntime(nb::module_ &m) {
             d["allocated_bytes"] = ev.allocated_bytes;
             d["peak_bytes"] = ev.peak_bytes;
             if (ev.action == core::runtime::RuntimeEventAction::kPersistentStorage) {
-              nb::dict storage;
-              storage["allocations"] = ev.persistent_storage.allocations;
-              storage["allocated_bytes"] = ev.persistent_storage.allocated_bytes;
-              storage["prefix_copied_bytes"] = ev.persistent_storage.prefix_copied_bytes;
-              storage["append_copied_bytes"] = ev.persistent_storage.append_copied_bytes;
-              storage["reuse_count"] = ev.persistent_storage.reuse_count;
-              d["persistent_storage"] = std::move(storage);
+              d["storage_allocations"] = ev.storage_allocations;
+              d["storage_allocated_bytes"] = ev.storage_allocated_bytes;
+              d["storage_prefix_copied_bytes"] = ev.storage_prefix_copied_bytes;
+              d["storage_append_copied_bytes"] = ev.storage_append_copied_bytes;
+              d["storage_reuse_count"] = ev.storage_reuse_count;
             }
             const int32_t n = ev.value_count;
             if (static_cast<core::runtime::DataType>(ev.data_type) ==
@@ -1221,9 +1210,9 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           },
           "Returns the event fields as a plain Python ``dict`` (trivially "
           "renderable as a table, serialisable, etc.). Only ``kPersistentStorage`` "
-          "events include the nested ``persistent_storage`` dictionary, containing "
-          "``allocations``, ``allocated_bytes``, ``prefix_copied_bytes``, "
-          "``append_copied_bytes`` and ``reuse_count`` as integers. The top-level "
+          "events include ``storage_allocations``, ``storage_allocated_bytes``, "
+          "``storage_prefix_copied_bytes``, ``storage_append_copied_bytes`` and "
+          "``storage_reuse_count`` as top-level integers. "
           "``allocated_bytes`` and ``peak_bytes`` remain allocator live/peak bytes.")
       .def("summary", &core::runtime::RuntimeEvent::summary,
            "Returns a concise, human-readable one-line summary of the event: the "
@@ -2244,8 +2233,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "than 8 elements only the first 8 are kept, ``data_type`` is set to "
           "``-1`` and ``shape`` is empty to signal the truncated payload. Node "
           "dispatch events also identify the exact process-local CPU executor and "
-          "its effective participants. Persistent-storage events carry a read-only "
-          "``persistent_storage`` payload with allocation, copy and reuse statistics; "
+          "its effective participants. Persistent-storage events carry read-only "
+          "``storage_*`` fields describing allocation, copying and reuse; "
           "they are recorded only when :attr:`events_enabled` is true. Call "
           ":meth:`RuntimeEvent.as_dict` to convert an individual entry to a "
           "plain Python ``dict``. Child contexts record directly in the same log. "

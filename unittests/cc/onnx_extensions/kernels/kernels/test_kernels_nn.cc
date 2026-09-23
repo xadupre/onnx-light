@@ -22,6 +22,8 @@
 using namespace ONNX_LIGHT_NAMESPACE;
 using core::backend_test::DefaultOpset;
 using core::runtime::RuntimeContext;
+using core::runtime::RuntimeEvent;
+using core::runtime::RuntimeEventLog;
 using core::runtime::Shape;
 using core::runtime::Tensor;
 using onnx_kernels::SimpleRawBufferAllocator;
@@ -44,11 +46,11 @@ namespace Test {
 
 namespace {
 
-core::runtime::PersistentStorageStatistics StorageStatistics(const RuntimeContext &context) {
-  core::runtime::PersistentStorageStatistics result;
-  for (const auto &event : context.events())
+uint64_t StorageTotal(const RuntimeEventLog &events, uint64_t RuntimeEvent::*field) {
+  uint64_t result = 0;
+  for (const auto &event : events)
     if (event.action == core::runtime::RuntimeEventAction::kPersistentStorage)
-      result += event.persistent_storage;
+      result += event.*field;
   return result;
 }
 
@@ -1360,12 +1362,12 @@ TEST(KernelClass, AttentionCacheFunctionalConcatenationReportsEveryCopiedByte) {
   const Tensor past = Tensor::FromFloat("", {1, 1, 2, 2}, {3, 4, 5, 6});
   const auto result = attention(current, current, current, Attention::Attributes{}, nullptr, &past,
                                 &past, nullptr, &rt);
-  const auto stats = StorageStatistics(rt);
-  EXPECT_EQ(stats.allocations, 2u);
-  EXPECT_EQ(stats.allocated_bytes, 12 * sizeof(float));
-  EXPECT_EQ(stats.prefix_copied_bytes, 8 * sizeof(float));
-  EXPECT_EQ(stats.append_copied_bytes, 4 * sizeof(float));
-  EXPECT_EQ(stats.reuse_count, 0u);
+  const auto stats = rt.events();
+  EXPECT_EQ(StorageTotal(stats, &RuntimeEvent::storage_allocations), 2u);
+  EXPECT_EQ(StorageTotal(stats, &RuntimeEvent::storage_allocated_bytes), 12 * sizeof(float));
+  EXPECT_EQ(StorageTotal(stats, &RuntimeEvent::storage_prefix_copied_bytes), 8 * sizeof(float));
+  EXPECT_EQ(StorageTotal(stats, &RuntimeEvent::storage_append_copied_bytes), 4 * sizeof(float));
+  EXPECT_EQ(StorageTotal(stats, &RuntimeEvent::storage_reuse_count), 0u);
   EXPECT_NE(result.present_key.bytes(), past.bytes());
 }
 
@@ -1501,12 +1503,14 @@ TEST(KernelClass, AttentionCacheStatisticsAggregateConcurrentIndependentChildren
   auto second_child = second.get();
   EXPECT_EQ(&parent.events(), &first_child.events());
   EXPECT_EQ(&parent.events(), &second_child.events());
-  const auto stats = StorageStatistics(parent);
-  EXPECT_EQ(stats.allocations, 400u);
-  EXPECT_EQ(stats.allocated_bytes, 200u * 12 * sizeof(float));
-  EXPECT_EQ(stats.prefix_copied_bytes, 200u * 8 * sizeof(float));
-  EXPECT_EQ(stats.append_copied_bytes, 200u * 4 * sizeof(float));
-  EXPECT_EQ(stats.reuse_count, 0u);
+  const auto stats = parent.events();
+  EXPECT_EQ(StorageTotal(stats, &RuntimeEvent::storage_allocations), 400u);
+  EXPECT_EQ(StorageTotal(stats, &RuntimeEvent::storage_allocated_bytes), 200u * 12 * sizeof(float));
+  EXPECT_EQ(StorageTotal(stats, &RuntimeEvent::storage_prefix_copied_bytes),
+            200u * 8 * sizeof(float));
+  EXPECT_EQ(StorageTotal(stats, &RuntimeEvent::storage_append_copied_bytes),
+            200u * 4 * sizeof(float));
+  EXPECT_EQ(StorageTotal(stats, &RuntimeEvent::storage_reuse_count), 0u);
 }
 
 TEST(KernelClass, AttentionQkMatmulOutputModes) {
@@ -1934,17 +1938,20 @@ TEST(KernelClass, AttentionHalfPrecisionCacheConcatenationIsMeasured) {
       EXPECT_EQ(DecodeHalf(result.present_key), DecodeHalf(expected.present_key));
       EXPECT_EQ(DecodeHalf(result.present_value), DecodeHalf(expected.present_value));
       EXPECT_EQ(rt.events().empty(), !enabled);
-      const auto stats = StorageStatistics(rt);
+      const auto stats = rt.events();
       for (const auto &event : rt.events()) {
         EXPECT_EQ(event.node_index, 5);
         EXPECT_EQ(event.subgraph_node_index, 2);
         EXPECT_EQ(event.subgraph_attr_name, "body");
       }
-      EXPECT_EQ(stats.allocations, enabled ? 2u : 0u);
-      EXPECT_EQ(stats.allocated_bytes, enabled ? 12 * sizeof(float) : 0u);
-      EXPECT_EQ(stats.prefix_copied_bytes, enabled ? 8 * sizeof(float) : 0u);
-      EXPECT_EQ(stats.append_copied_bytes, enabled ? 4 * sizeof(float) : 0u);
-      EXPECT_EQ(stats.reuse_count, 0u);
+      EXPECT_EQ(StorageTotal(stats, &RuntimeEvent::storage_allocations), enabled ? 2u : 0u);
+      EXPECT_EQ(StorageTotal(stats, &RuntimeEvent::storage_allocated_bytes),
+                enabled ? 12 * sizeof(float) : 0u);
+      EXPECT_EQ(StorageTotal(stats, &RuntimeEvent::storage_prefix_copied_bytes),
+                enabled ? 8 * sizeof(float) : 0u);
+      EXPECT_EQ(StorageTotal(stats, &RuntimeEvent::storage_append_copied_bytes),
+                enabled ? 4 * sizeof(float) : 0u);
+      EXPECT_EQ(StorageTotal(stats, &RuntimeEvent::storage_reuse_count), 0u);
     }
   }
 }

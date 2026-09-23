@@ -25,8 +25,7 @@ separate persistent-storage statistics getter or always-on counter collection.
 
 ``RuntimeEventAction::kPersistentStorage`` (integer value ``4``) is rendered as
 ``"persistent_storage"`` by ``RuntimeEventActionName`` and Python ``as_dict()``.
-Its ``RuntimeEvent::persistent_storage`` payload is a
-``PersistentStorageStatistics`` value with five unsigned integer fields:
+The work is stored directly in five unsigned integer fields of ``RuntimeEvent``:
 
 .. list-table::
    :header-rows: 1
@@ -34,26 +33,26 @@ Its ``RuntimeEvent::persistent_storage`` payload is a
 
    * - Field
      - Meaning
-   * - ``allocations``
+   * - ``storage_allocations``
      - Number of persistent-storage allocations.
-   * - ``allocated_bytes``
+   * - ``storage_allocated_bytes``
      - Bytes allocated for persistent storage.
-   * - ``prefix_copied_bytes``
+   * - ``storage_prefix_copied_bytes``
      - Bytes copied from an existing persistent prefix.
-   * - ``append_copied_bytes``
+   * - ``storage_append_copied_bytes``
      - Bytes copied from newly appended values.
-   * - ``reuse_count``
+   * - ``storage_reuse_count``
      - Number of persistent-storage reservations reused without allocation.
 
 These fields describe work for that event, not cumulative totals. Sum the
-payload fields over the desired interval to obtain totals. All payload fields
+event fields over the desired interval to obtain totals. All storage fields
 default to zero, and are read-only in Python. ``RuntimeEvent.allocated_bytes``
 and ``RuntimeEvent.peak_bytes`` continue to describe allocator live/peak memory;
 they are not persistent-storage allocation traffic.
 
 The existing ``events()`` API returns these records alongside tensor mutations
-and node dispatches. Python ``RuntimeEvent.as_dict()`` includes a nested
-``"persistent_storage"`` dictionary only for ``kPersistentStorage`` events,
+and node dispatches. Python ``RuntimeEvent.as_dict()`` includes the five
+``storage_*`` fields as top-level integers only for ``kPersistentStorage`` events,
 preserving the dictionary schema of other event actions:
 
 .. code-block:: python
@@ -65,12 +64,11 @@ preserving the dictionary schema of other event actions:
    )
    # Runs an existing FeedbackState with its ordinary non-retained feeds.
    outputs = state.run(context, feeds)
-   storage = [
-       event.as_dict()["persistent_storage"]
+   copied = sum(
+       event.storage_prefix_copied_bytes
        for event in context.events()
        if event.action == runtime.RuntimeEventAction.kPersistentStorage
-   ]
-   copied = sum(event["prefix_copied_bytes"] for event in storage)
+   )
    context.clear_events()
 
 When recording is enabled, context copies, subgraphs, functions, feedback

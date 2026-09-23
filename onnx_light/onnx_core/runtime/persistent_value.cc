@@ -3,20 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/runtime/persistent_value.h"
+#include "onnx_core/runtime/runtime_context.h"
 #include <cstring>
 #include <limits>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
-
-PersistentStorageStatistics &
-PersistentStorageStatistics::operator+=(const PersistentStorageStatistics &statistics) noexcept {
-  allocations += statistics.allocations;
-  allocated_bytes += statistics.allocated_bytes;
-  prefix_copied_bytes += statistics.prefix_copied_bytes;
-  append_copied_bytes += statistics.append_copied_bytes;
-  reuse_count += statistics.reuse_count;
-  return *this;
-}
 
 PersistentTensor::PersistentTensor(Tensor value) : value_(std::move(value).RetainStorage()) {}
 
@@ -49,9 +40,9 @@ PersistentTensor::AppendLease::operator=(AppendLease &&other) noexcept {
   return *this;
 }
 
-std::optional<PersistentTensor::AppendReservation> PersistentTensor::AppendLease::Reserve(
-    const Shape &shape, size_t axis, size_t initial_capacity, RawBufferAllocator *allocator,
-    const std::function<void(const PersistentStorageStatistics &)> &on_storage_event) {
+std::optional<PersistentTensor::AppendReservation>
+PersistentTensor::AppendLease::Reserve(const Shape &shape, size_t axis, size_t initial_capacity,
+                                       RawBufferAllocator *allocator, RuntimeContext *context) {
   const State state = state_.exchange(State::kConsumed);
   EXT_ENFORCE_INVALID(state != State::kConsumed,
                       "PersistentTensor: append lease has already been consumed.");
@@ -90,8 +81,8 @@ std::optional<PersistentTensor::AppendReservation> PersistentTensor::AppendLease
     PersistentTensor candidate(Tensor::Borrow(prefix.name, prefix.data_type, shape, prefix.bytes(),
                                               logical, prefix.borrowed_owner()));
     candidate.capacity_bytes_ = prefix_.capacity_bytes_;
-    if (on_storage_event)
-      on_storage_event({.reuse_count = 1});
+    if (context && context->events_enabled())
+      context->RecordPersistentStorageEvent({.storage_reuse_count = 1});
     return AppendReservation(std::move(candidate), previous);
   }
   const size_t max_capacity = std::numeric_limits<size_t>::max() / row_bytes;
@@ -106,13 +97,14 @@ std::optional<PersistentTensor::AppendReservation> PersistentTensor::AppendLease
   }
   const size_t allocated = capacity * row_bytes;
   Tensor storage = MakeOutputTensor(prefix.data_type, shape, allocated, allocator);
-  if (on_storage_event)
-    on_storage_event({.allocations = 1, .allocated_bytes = allocated});
+  if (context && context->events_enabled())
+    context->RecordPersistentStorageEvent(
+        {.storage_allocations = 1, .storage_allocated_bytes = allocated});
   PersistentTensor candidate(std::move(storage));
   if (previous != 0) {
     std::memcpy(candidate.value_.mutable_bytes(), prefix.bytes(), previous);
-    if (on_storage_event)
-      on_storage_event({.prefix_copied_bytes = previous});
+    if (context && context->events_enabled())
+      context->RecordPersistentStorageEvent({.storage_prefix_copied_bytes = previous});
   }
   candidate.value_ = Tensor::Borrow(prefix.name, prefix.data_type, shape, candidate.value_.bytes(),
                                     logical, candidate.value_.borrowed_owner());

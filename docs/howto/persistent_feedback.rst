@@ -355,12 +355,12 @@ Diagnostic metadata is not copied into function or half-precision
 scratch contexts on this path.
 
 ``RuntimeEventAction::kPersistentStorage`` identifies storage reports. Each
-event's ``persistent_storage`` payload is a ``PersistentStorageStatistics``
-containing the work for that event: ``allocations``, ``allocated_bytes``,
-``prefix_copied_bytes``, ``append_copied_bytes`` and ``reuse_count``.
-Kernels use ``RuntimeContext::RecordPersistentStorageEvent``; contiguous
-reservations supply allocation, prefix-relocation and reuse reports through an
-optional callback. Producing new elements directly into the writable region
+``RuntimeEvent`` directly records the work in ``storage_allocations``,
+``storage_allocated_bytes``, ``storage_prefix_copied_bytes``,
+``storage_append_copied_bytes`` and ``storage_reuse_count``.
+Kernels and contiguous reservations use
+``RuntimeContext::RecordPersistentStorageEvent`` to record this work in the
+existing shared log. Producing new elements directly into the writable region
 does not count as copying them.
 
 These are explicit reports, not automatic counters for every runtime
@@ -383,11 +383,11 @@ Attention's storage reports exclude its
 score/output allocations, arithmetic workspace, feed construction, or
 half-precision conversion.
 
-Sum the storage payloads explicitly when totals are needed. Call
+Sum fields from the event list when totals are needed. Call
 ``context.ClearEvents()`` before a run to obtain per-token reports; otherwise
 events accumulate in that context, including runs of different feedback states.
 Resetting or closing a state does not clear the caller's log.
-``event.persistent_storage.allocated_bytes`` counts requested storage capacity,
+``event.storage_allocated_bytes`` counts requested storage capacity,
 not physical heap allocations: an I/O arena may satisfy a request from its free
 lists. The existing ``event.allocated_bytes`` and ``event.peak_bytes`` fields
 still describe allocator live and peak memory and have not changed meaning.

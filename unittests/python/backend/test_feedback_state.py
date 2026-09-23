@@ -116,24 +116,24 @@ class TestFeedbackState(unittest.TestCase):
                     numpy.testing.assert_array_equal(snapshot["present_key"], expected_key)
                     numpy.testing.assert_array_equal(snapshot["present_value"], -expected_key)
 
-                    statistics = [
-                        event.persistent_storage
+                    storage_events = [
+                        event
                         for event in context.events()
                         if event.action == runtime.RuntimeEventAction.kPersistentStorage
                     ]
-                    self.assertTrue(statistics)
+                    self.assertTrue(storage_events)
                     expected = {
-                        "allocations": 2 if allocated_capacity else 0,
-                        "allocated_bytes": allocated_capacity * bytes_per_token,
-                        "prefix_copied_bytes": (
+                        "storage_allocations": 2 if allocated_capacity else 0,
+                        "storage_allocated_bytes": allocated_capacity * bytes_per_token,
+                        "storage_prefix_copied_bytes": (
                             step * bytes_per_token if allocated_capacity else 0
                         ),
-                        "append_copied_bytes": bytes_per_token,
-                        "reuse_count": 0 if allocated_capacity else 2,
+                        "storage_append_copied_bytes": bytes_per_token,
+                        "storage_reuse_count": 0 if allocated_capacity else 2,
                     }
                     self.assertEqual(
                         {
-                            field: sum(getattr(statistic, field) for statistic in statistics)
+                            field: sum(getattr(event, field) for event in storage_events)
                             for field in expected
                         },
                         expected,
@@ -147,11 +147,11 @@ class TestFeedbackState(unittest.TestCase):
 
     def test_attention_persistent_storage_events_are_opt_in(self):
         fields = (
-            "allocations",
-            "allocated_bytes",
-            "prefix_copied_bytes",
-            "append_copied_bytes",
-            "reuse_count",
+            "storage_allocations",
+            "storage_allocated_bytes",
+            "storage_prefix_copied_bytes",
+            "storage_append_copied_bytes",
+            "storage_reuse_count",
         )
         for dtype, data_type in (
             (numpy.float32, onnx.TensorProto.FLOAT),
@@ -222,35 +222,37 @@ class TestFeedbackState(unittest.TestCase):
                         totals = dict.fromkeys(fields, 0)
                         for event in events:
                             record = event.as_dict()
+                            self.assertNotIn("persistent_storage", record)
                             if event.action != runtime.RuntimeEventAction.kPersistentStorage:
-                                self.assertNotIn("persistent_storage", record)
+                                for field in fields:
+                                    self.assertNotIn(field, record)
+                                    self.assertEqual(getattr(event, field), 0)
                                 continue
                             self.assertEqual(record["action"], "persistent_storage")
-                            self.assertIsInstance(
-                                event.persistent_storage, runtime.PersistentStorageStatistics
+                            self.assertEqual(
+                                {key for key in record if key.startswith("storage_")}, set(fields)
                             )
-                            self.assertEqual(set(record["persistent_storage"]), set(fields))
                             for field in fields:
-                                value = record["persistent_storage"][field]
+                                value = record[field]
                                 self.assertIsInstance(value, int)
                                 self.assertGreaterEqual(value, 0)
-                                self.assertEqual(value, getattr(event.persistent_storage, field))
+                                self.assertEqual(value, getattr(event, field))
                                 totals[field] += value
                                 with self.assertRaises(AttributeError):
-                                    setattr(event.persistent_storage, field, value)
+                                    setattr(event, field, value)
                             self.assertEqual(event.allocated_bytes, 0)
                             self.assertEqual(event.peak_bytes, 0)
                             self.assertEqual(record["allocated_bytes"], 0)
                             self.assertEqual(record["peak_bytes"], 0)
-                        self.assertGreater(totals["allocations"], 0)
-                        self.assertGreater(totals["allocated_bytes"], 0)
-                        self.assertGreater(totals["prefix_copied_bytes"], 0)
-                        self.assertGreater(totals["append_copied_bytes"], 0)
+                        self.assertGreater(totals["storage_allocations"], 0)
+                        self.assertGreater(totals["storage_allocated_bytes"], 0)
+                        self.assertGreater(totals["storage_prefix_copied_bytes"], 0)
+                        self.assertGreater(totals["storage_append_copied_bytes"], 0)
                         if dtype == numpy.float32:
-                            self.assertEqual(totals["allocations"], 2)
-                            self.assertEqual(totals["prefix_copied_bytes"], 2 * 2 * 4)
-                            self.assertEqual(totals["append_copied_bytes"], 3 * 2 * 2 * 4)
-                            self.assertEqual(totals["reuse_count"], 4)
+                            self.assertEqual(totals["storage_allocations"], 2)
+                            self.assertEqual(totals["storage_prefix_copied_bytes"], 2 * 2 * 4)
+                            self.assertEqual(totals["storage_append_copied_bytes"], 3 * 2 * 2 * 4)
+                            self.assertEqual(totals["storage_reuse_count"], 4)
                     before_clear = {
                         name: array(value).copy() for name, value in state.values.items()
                     }

@@ -28,7 +28,8 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
  * Requirements:
  * - Each binding names a whole input/output pair; the input has exactly one value-use.
  * - Current feeds cannot replace persistent inputs.
- * - Supports tensors, named structures and inline encoded values with retained storage owners.
+ * - Supports tensors, typed sequences, named structures and inline encoded values.
+ * - Tensor leaves may use dense storage or inline affine encoding of the declared logical type.
  * - Shared payloads are read-only to callers; ownerless borrows are rejected.
  * - The model stays immutable. All calls use the same allocators, kept alive by the caller.
  */

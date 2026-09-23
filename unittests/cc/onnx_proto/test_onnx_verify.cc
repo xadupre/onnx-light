@@ -196,6 +196,46 @@ TEST(onnx_verify, PersistentTypes_TraversesContainerFieldsAndCatalogueDiamonds) 
   EXPECT_THROW(ValidatePersistentType(empty, root), std::invalid_argument);
 }
 
+TEST(onnx_verify, PersistentTypes_SequenceCompatibilityAndUnsupportedElements) {
+  StructTypeCatalogue catalogue;
+  TypeProto sequence;
+  auto *tensor = sequence.mutable_sequence_type()->mutable_elem_type()->mutable_tensor_type();
+  tensor->set_elem_type(TensorProto::FLOAT);
+  tensor->mutable_shape()->add_dim()->set_dim_value(2);
+  EXPECT_NO_THROW(ValidatePersistentType(catalogue, sequence));
+  EXPECT_TRUE(CompatiblePersistentTypes(catalogue, sequence, sequence));
+  TypeProto other = sequence;
+  other.mutable_sequence_type()
+      ->mutable_elem_type()
+      ->mutable_tensor_type()
+      ->mutable_shape()
+      ->mutable_dim(0)
+      ->set_dim_value(3);
+  EXPECT_FALSE(CompatiblePersistentTypes(catalogue, sequence, other));
+  other = sequence;
+  other.mutable_sequence_type()->mutable_elem_type()->mutable_tensor_type()->set_elem_type(
+      TensorProto::INT64);
+  EXPECT_FALSE(CompatiblePersistentTypes(catalogue, sequence, other));
+  EXPECT_FALSE(
+      CompatiblePersistentTypes(catalogue, sequence, sequence.sequence_type().elem_type()));
+  TypeProto optional, map, unset;
+  *optional.mutable_optional_type()->mutable_elem_type() = sequence;
+  map.mutable_map_type()->set_key_type(TensorProto::INT64);
+  *map.mutable_map_type()->mutable_value_type() = sequence;
+  for (const auto &type : {optional, map, unset}) {
+    EXPECT_THROW(ValidatePersistentType(catalogue, type), std::invalid_argument);
+    TypeProto nested;
+    *nested.mutable_sequence_type()->mutable_elem_type() = type;
+    EXPECT_THROW(ValidatePersistentType(catalogue, nested), std::invalid_argument);
+  }
+  TypeProto nested;
+  auto *element = &nested;
+  for (size_t i = 0; i < 65; ++i)
+    element = element->mutable_sequence_type()->mutable_elem_type();
+  element->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+  EXPECT_THROW(ValidatePersistentType(catalogue, nested), std::invalid_argument);
+}
+
 TEST(onnx_verify, PersistentBindings_RejectsLegacyFieldPathWire) {
   for (const auto &wire : {std::string("\x1a\x05"
                                        "cache"),

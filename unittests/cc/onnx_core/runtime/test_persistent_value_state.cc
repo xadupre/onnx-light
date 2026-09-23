@@ -1122,6 +1122,232 @@ TEST(PersistentValueState, RejectsExcessiveRuntimeValueNesting) {
   EXPECT_THROW(value.BorrowView(), std::invalid_argument);
 }
 
+TEST(PersistentValueState, SequenceViewsCopiesRetentionAndDepth) {
+  RuntimeValue value(
+      std::vector<RuntimeValue>{RuntimeValue(RuntimeValueMap{{"value", Number(3)}}), Number(4)});
+  const auto *bytes = value.elements[0].fields.at("value").tensor.bytes();
+  const auto borrowed = value.BorrowView();
+  const auto copied = value.DeepCopy();
+  EXPECT_EQ(borrowed.kind, RuntimeValue::Kind::kSequence);
+  EXPECT_EQ(borrowed.elements[0].fields.at("value").tensor.bytes(), bytes);
+  EXPECT_NE(copied.elements[0].fields.at("value").tensor.bytes(), bytes);
+  PersistentValue retained(std::move(value));
+  const auto view = retained.BorrowView();
+  EXPECT_EQ(view.elements[0].fields.at("value").tensor.bytes(), bytes);
+  EXPECT_EQ(Number(view.elements[1]), 4);
+  RuntimeValue nested = Number(1);
+  for (size_t i = 0; i <= RuntimeValue::kMaxDepth; ++i) {
+    RuntimeValue parent(std::vector<RuntimeValue>{});
+    parent.elements.push_back(std::move(nested));
+    nested = std::move(parent);
+  }
+  EXPECT_THROW(nested.BorrowView(), std::invalid_argument);
+  EXPECT_THROW(nested.DeepCopy(), std::invalid_argument);
+  EXPECT_THROW(std::move(nested).Retain(), std::invalid_argument);
+  EXPECT_THROW(PersistentValue(std::move(nested)), std::invalid_argument);
+}
+
+namespace {
+
+EncodedValueProto AffineBlock(int64_t length = 2) {
+  EncodedValueProto encoded;
+  auto *logical = encoded.mutable_logical_type()->mutable_tensor_type();
+  logical->set_elem_type(TensorProto::FLOAT);
+  for (int64_t dim : {int64_t{1}, int64_t{1}, length, int64_t{1}})
+    logical->mutable_shape()->add_dim()->set_dim_value(dim);
+  auto *affine = encoded.mutable_affine();
+  affine->set_storage_type(TensorProto::INT8);
+  affine->mutable_scale()->set_data_type(TensorProto::FLOAT);
+  affine->mutable_scale()->add_float_data(0.5f);
+  affine->mutable_zero_point()->set_data_type(TensorProto::INT8);
+  affine->mutable_zero_point()->add_int32_data(0);
+  *encoded.mutable_raw_data() = std::vector<uint8_t>(static_cast<size_t>(length), 2);
+  return encoded;
+}
+
+TypeProto BlockSequenceType() {
+  TypeProto scalar;
+  scalar.mutable_tensor_type()->set_elem_type(TensorProto::INT64);
+  scalar.mutable_tensor_type()->mutable_shape();
+  TypeProto tensor = AffineBlock().logical_type();
+  tensor.mutable_tensor_type()->mutable_shape()->mutable_dim(2)->clear_dim_value();
+  TypeProto type;
+  *type.mutable_sequence_type()->mutable_elem_type() =
+      Structure({{"start", scalar}, {"length", scalar}, {"key", tensor}, {"value", tensor}});
+  return type;
+}
+
+RuntimeValue Block(bool encoded, int64_t length = 2) {
+  auto leaf = [=]() {
+    return encoded ? RuntimeValue(AffineBlock(length))
+                   : RuntimeValue(
+                         Tensor::FromFloat("", {1, 1, length, 1}, std::vector<float>(length, 1)));
+  };
+  return RuntimeValue(RuntimeValueMap{{"start", RuntimeValue(Tensor::FromInt64("", {}, {0}))},
+                                      {"length", RuntimeValue(Tensor::FromInt64("", {}, {length}))},
+                                      {"key", leaf()},
+                                      {"value", leaf()}});
+}
+
+} // namespace
+
+TEST(PersistentValueState, TypedBlockSequencesMixDenseAndAffineWithoutMaterializing) {
+  ModelProto model = Model();
+  const auto type = BlockSequenceType();
+  *model.mutable_graph()->mutable_input(0)->mutable_type() = type;
+  *model.mutable_graph()->mutable_output(0)->mutable_type() = type;
+  RuntimeValue blocks(std::vector<RuntimeValue>{Block(false), Block(true, 3)});
+  blocks = std::move(blocks).Retain();
+  const auto *dense = blocks.elements[0].fields.at("key").tensor.bytes();
+  const auto *encoded = blocks.elements[1].fields.at("key").Encoded().raw_data().data();
+  PersistentValueState state(model, {{"past", blocks}});
+  RuntimeContext context;
+  context.RegisterCustomKernel(
+      "test.feedback", "Step", [](const NodeProto &node, RuntimeContext &rt) {
+        rt.values()[node.output(0)] = rt.values().at(node.input(0)).BorrowView();
+      });
+  const auto output = state.Run(context, {{"tokens", Number(0)}});
+  EXPECT_EQ(output.at("present").elements[0].fields.at("key").tensor.bytes(), dense);
+  EXPECT_EQ(output.at("present").elements[1].fields.at("key").Encoded().raw_data().data(), encoded);
+  state.Reset({{"past", RuntimeValue(std::vector<RuntimeValue>{})}});
+  EXPECT_TRUE(state.Values().at("past").elements.empty());
+  EXPECT_TRUE(state.Run(context, {{"tokens", Number(0)}}).at("present").elements.empty());
+  state.Close();
+  EXPECT_EQ(output.at("present").elements[1].fields.at("key").Encoded().raw_data()[0], 2);
+
+  blocks.elements[1].fields.at("length") = Number(1);
+  EXPECT_THROW((PersistentValueState(model, {{"past", blocks}})), std::invalid_argument);
+  EXPECT_THROW((PersistentValueState(model, {{"past", Block(false)}})), std::invalid_argument);
+}
+
+TEST(PersistentValueState, AffineTensorValidationChecksLogicalTypeShapeSymbolsAndPayload) {
+  for (int mode = 0; mode < 6; ++mode) {
+    SCOPED_TRACE(mode);
+    ModelProto model = Model();
+    TypeProto type = AffineBlock().logical_type();
+    if (mode == 3) {
+      auto *dim = type.mutable_tensor_type()->mutable_shape()->mutable_dim(2);
+      dim->set_dim_param("N");
+      model.mutable_graph()
+          ->mutable_input(1)
+          ->mutable_type()
+          ->mutable_tensor_type()
+          ->mutable_shape()
+          ->mutable_dim(0)
+          ->set_dim_param("N");
+    }
+    *model.mutable_graph()->mutable_input(0)->mutable_type() = type;
+    *model.mutable_graph()->mutable_output(0)->mutable_type() = type;
+    auto encoded = AffineBlock();
+    if (mode == 0)
+      encoded.mutable_logical_type()->mutable_tensor_type()->set_elem_type(TensorProto::DOUBLE);
+    if (mode == 1) {
+      encoded.mutable_logical_type()->mutable_tensor_type()->mutable_shape()->clear_dim();
+      encoded.mutable_logical_type()
+          ->mutable_tensor_type()
+          ->mutable_shape()
+          ->add_dim()
+          ->set_dim_value(2);
+    }
+    if (mode == 2)
+      encoded = AffineBlock(3);
+    if (mode == 4)
+      *encoded.mutable_raw_data() = std::vector<uint8_t>{1};
+    if (mode == 5) {
+      encoded.clear_raw_data();
+      encoded.set_data_location(TensorProto::EXTERNAL);
+      auto *location = encoded.add_external_data();
+      location->set_key("location");
+      location->set_value("unused.bin");
+      auto *length = encoded.add_external_data();
+      length->set_key("length");
+      length->set_value("2");
+    }
+    if (mode != 3) {
+      EXPECT_THROW((PersistentValueState(model, {{"past", RuntimeValue(encoded)}})),
+                   std::invalid_argument);
+    } else {
+      PersistentValueState state(model, {{"past", RuntimeValue(encoded)}});
+      RuntimeContext context;
+      EXPECT_THROW(state.Run(context, {{"tokens", Number(0)}}), std::invalid_argument);
+    }
+  }
+}
+
+TEST(PersistentValueState, AffineParameterBackingRequiresItsOwnOwner) {
+  for (bool scale : {false, true}) {
+    auto message = std::make_shared<EncodedValueProto>(AffineBlock());
+    auto *parameter = scale ? message->mutable_affine()->mutable_scale()
+                            : message->mutable_affine()->mutable_zero_point();
+    parameter->clear_float_data();
+    parameter->clear_int32_data();
+    auto owner = std::make_shared<std::vector<uint8_t>>(scale ? sizeof(float) : 1, 0);
+    parameter->mutable_raw_data()->assign_borrowed(owner->data(), owner->size());
+    RuntimeValue value = RuntimeValue::FromEncodedView(*message, message);
+    EXPECT_THROW(std::move(value).Retain(), std::invalid_argument);
+    const auto copy = value.DeepCopy();
+    EXPECT_NO_THROW(RuntimeValue(copy).Retain());
+    parameter->mutable_raw_data()->assign_borrowed(owner->data(), owner->size(), owner);
+    const auto *bytes = owner->data();
+    auto retained = std::move(value).Retain();
+    owner.reset();
+    message.reset();
+    const auto &affine = retained.Encoded().affine();
+    EXPECT_EQ((scale ? affine.scale() : affine.zero_point()).raw_data().data(), bytes);
+  }
+}
+
+TEST(PersistentValueState, OrdinarySequenceOutputsMigrateAndDetachNestedPayloads) {
+  for (bool use_allocators : {false, true}) {
+    SCOPED_TRACE(use_allocators);
+    ModelProto model = Model();
+    model.mutable_graph()->clear_persistent_bindings();
+    *model.mutable_graph()->mutable_output(0)->mutable_type() = BlockSequenceType();
+    model.mutable_graph()->mutable_node(0)->add_output("intermediate");
+    SimpleRawBufferAllocator execution(20);
+    SimpleRawBufferAllocator io(20);
+    RuntimeContext context(KernelContext(DefaultOpset(18)),
+                           RuntimeContextOptions{.allocator = use_allocators ? &execution : nullptr,
+                                                 .io_allocator = use_allocators ? &io : nullptr});
+    float dense[] = {2, 3};
+    uint8_t codes[] = {4, 6};
+    context.RegisterCustomKernel(
+        "test.feedback", "Step", [&](const NodeProto &node, RuntimeContext &rt) {
+          RuntimeValue block = Block(false);
+          block.fields.at("key") =
+              RuntimeValue(Tensor::Borrow("", DataType::FLOAT, {1, 1, 2, 1}, dense, sizeof(dense)));
+          auto encoded = AffineBlock();
+          encoded.mutable_raw_data()->assign_borrowed(codes, sizeof(codes));
+          block.fields.at("value") = RuntimeValue(std::move(encoded));
+          RuntimeValue sequence(std::vector<RuntimeValue>{std::move(block)});
+          rt.values()[node.output(0)] = sequence.BorrowView();
+          rt.values()[node.output(1)] = sequence.BorrowView();
+        });
+    context.Put("past", Number(0).tensor);
+    context.Put("tokens", Number(0).tensor);
+    RuntimeSession session(model);
+    session.Run(context);
+    const auto &block = context.values().at("present").elements.at(0);
+    const auto &key = block.fields.at("key").tensor;
+    EXPECT_NE(key.bytes(), reinterpret_cast<const uint8_t *>(dense));
+    EXPECT_FALSE(key.is_borrowed());
+    const auto &value = block.fields.at("value").Encoded();
+    EXPECT_NE(value.raw_data().data(), codes);
+    EXPECT_FALSE(value.raw_data().is_borrowed());
+    if (use_allocators) {
+      EXPECT_EQ(key.allocation_owner(), &io);
+      const auto &intermediate =
+          context.values().at("intermediate").elements.at(0).fields.at("key").tensor;
+      EXPECT_EQ(intermediate.allocation_owner(), &execution);
+      EXPECT_NE(intermediate.bytes(), reinterpret_cast<const uint8_t *>(dense));
+    }
+    dense[0] = 99;
+    codes[0] = 99;
+    EXPECT_EQ(key.AsFloat()[0], 2);
+    EXPECT_EQ(value.raw_data()[0], 4);
+  }
+}
+
 TEST(PersistentValueState, OrdinarySessionReleasesStructuredIntermediates) {
   ModelProto model = Model(true);
   *model.mutable_graph()->mutable_output(0)->mutable_type() = model.graph().input(0).type();

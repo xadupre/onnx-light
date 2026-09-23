@@ -134,27 +134,40 @@ PersistentValue::PersistentValue(RuntimeValue value, const StructTypeCatalogue &
 PersistentValue::PersistentValue(PersistentTensor tensor)
     : kind_(RuntimeValue::Kind::kTensor), tensor_(std::move(tensor)) {}
 
-PersistentValue PersistentValue::FromRetained(RuntimeValue value) {
+PersistentValue PersistentValue::FromRetained(RuntimeValue value, size_t depth) {
+  EXT_ENFORCE_INVALID(depth <= RuntimeValue::kMaxDepth,
+                      "PersistentValue: maximum nesting depth exceeded.");
   PersistentValue result;
   result.kind_ = value.kind;
   if (value.kind == RuntimeValue::Kind::kTensor)
     result.tensor_.emplace(std::move(value.tensor));
   else if (value.kind == RuntimeValue::Kind::kEncoded)
     result.encoded_ = std::move(value.encoded);
-  else
+  else if (value.kind == RuntimeValue::Kind::kSequence) {
+    result.elements_.reserve(value.elements.size());
+    for (auto &element : value.elements)
+      result.elements_.push_back(FromRetained(std::move(element), depth + 1));
+  } else
     for (auto &[name, field] : value.fields)
-      result.fields_.emplace(name, FromRetained(std::move(field)));
+      result.fields_.emplace(name, FromRetained(std::move(field), depth + 1));
   return result;
 }
 
-RuntimeValue PersistentValue::BorrowView() const {
+RuntimeValue PersistentValue::BorrowView() const { return BorrowAtDepth(0); }
+
+RuntimeValue PersistentValue::BorrowAtDepth(size_t depth) const {
+  EXT_ENFORCE_INVALID(depth <= RuntimeValue::kMaxDepth,
+                      "PersistentValue: maximum nesting depth exceeded.");
   if (tensor_)
     return RuntimeValue(tensor_->BorrowView());
   RuntimeValue result;
   result.kind = kind_;
   result.encoded = encoded_;
   for (const auto &[name, field] : fields_)
-    result.fields.emplace(name, field.BorrowView());
+    result.fields.emplace(name, field.BorrowAtDepth(depth + 1));
+  result.elements.reserve(elements_.size());
+  for (const auto &element : elements_)
+    result.elements.push_back(element.BorrowAtDepth(depth + 1));
   return result;
 }
 

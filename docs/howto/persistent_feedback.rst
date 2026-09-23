@@ -216,8 +216,12 @@ tensor kernels continue to use the existing tensor API. In C++, structured
 and encoded edges live in ``RuntimeContext::values()`` as ``RuntimeValue``
 objects containing existing tensors or ``EncodedValueProto`` payloads.
 Inline structured encoded payloads can be retained as whole values; external
-payloads must first be loaded. This API currently supports tensors, named
-structs and inline structured encodings, not sequence/map/optional state.
+payloads must first be loaded. The native API supports tensors, named
+structs, typed sequences and inline structured or affine encodings. Affine
+values are checked against their declared logical tensor type without decoding.
+Map and optional state remain unsupported and are rejected explicitly.
+Python feedback supports tensors, named structs and inline encoded values,
+but not sequence conversion.
 ``If`` and model-local functions forward selected whole output names and move
 those results without persistence-related copies. Function attributes,
 ``Loop`` and ``Scan`` use their ordinary runtime implementations: their normal
@@ -388,6 +392,116 @@ Sum fields from the event list when totals are needed. Call
 ``context.ClearEvents()`` before a run to obtain per-token reports; otherwise
 events accumulate in that context, including runs of different feedback states.
 Resetting or closing a state does not clear the caller's log.
+
+Optional heterogeneous paged KV
+-------------------------------
+
+The native ``onnx_kernels::kernel::PagedAttention`` consumer provides an
+opt-in alternative to dense Attention caches. It does not change the standard
+ONNX ``Attention`` operator or introduce another state subsystem. Declare
+``past`` and ``present`` with ``PagedAttention::CacheType()`` and bind
+``past <- present`` in ``GraphProto.persistent_bindings``. Initialize each
+request with ``PagedAttention::EmptyCache()``.
+
+Register the native kernel on the context used by the state:
+
+.. code-block:: cpp
+
+    using namespace onnx_light;
+    using namespace onnx_light::core::runtime;
+
+    context.RegisterKernelFn(
+        "onnx_light", "PagedAttention", core::symbolic::Device::kCPU,
+        [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<KernelBase> {
+          auto kernel =
+              std::make_unique<onnx_kernels::kernel::PagedAttention>(rt.kernel_ctx());
+          kernel->set_node(node);
+          return kernel;
+        });
+
+The node takes ``Q, K, V, past`` and returns ``Y, present``. This first consumer
+accepts finite FLOAT ``[1, 1, sequence, head_size]`` tensors with equal new
+Q/K/V sequence lengths: multiple batches/heads,
+masks and other unsupported attributes fail explicitly. Kernel instances,
+execution and allocator routing use the normal runtime contracts.
+Paged feedback is currently a native C++ API; Python feedback sequence
+conversion is not supported.
+
+The cache is a named structure containing ``blocks``, a typed runtime sequence.
+Each block is a structure with scalar INT64 ``start`` and ``length`` fields and
+``key``/``value`` fields. Starts are contiguous logical token offsets; length is
+the valid prefix of the block's physical token capacity. Key/value payloads are
+independently owned dense tensors or affine ``EncodedValueProto`` values whose
+logical shapes are ``[1, 1, capacity, head_size]``. Their affine descriptors carry
+format identity, scales and zero points, independently for K, V and each block.
+There are no persistent flags or new quantization layouts.
+
+``block_size`` bounds each block's token capacity and ``max_tokens`` bounds the
+retained logical length. New chunks are converted according to
+``key_storage_type``/``value_storage_type``, ``key_scale``/``value_scale`` and
+``key_zero_point``/``value_zero_point``. FLOAT, INT8, UINT8, INT4 and UINT4 are
+supported for new blocks; affine append uses scalar parameters. Existing blocks
+may use different formats, including per-axis and blocked affine parameters
+with FLOAT scales. Other scale types, external payloads and custom structured
+encodings require another consumer and are rejected.
+Partial blocks are sealed: an append adds new blocks
+rather than rewriting the previous partial block. This can use more metadata
+than filling partial blocks, but guarantees that even live aliases never force
+a prefix payload copy or conversion.
+
+Attention applies causal masking by default. ``is_causal`` and
+``left_window_size`` control the visible token range. It reads only valid,
+visible tokens and uses online softmax instead of concatenating K/V or allocating
+a cache-length score matrix. Retention, invocation, publication and state views
+share payload owners. Kernel conversion of new blocks is separate from those
+zero-copy state operations.
+
+The direct C++ call returns ``Result::statistics``:
+
+* ``copied_bytes`` counts new stored payload bytes written by copying or
+  conversion, excluding metadata and Y.
+* ``dequantized_bytes`` counts decoded FLOAT bytes for visible quantized
+  tokens, including repeated reads for different queries.
+* ``peak_workspace_bytes`` counts peak numerical scratch, excluding output,
+  retained payloads and collection metadata.
+
+These are kernel costs, not state-forwarding copies. Native tests also check
+payload/owner identity across publication and append. Quantization rounds ties
+to even and saturates to the selected code range. For non-saturated inputs,
+each affine reconstruction differs from its source by at most half its scale
+(plus floating-point rounding). Attention error also depends on Q/K magnitudes
+and softmax conditioning; no format alone guarantees a universal output error
+bound. The numerical fixtures compare the paged consumer to dense Attention
+using the reconstructed values with absolute tolerance ``2e-6`` for all four
+affine storage types, separately from quantization error. The end-to-end
+four-step fixture uses Q/K/V components ``+/-(0.173 * step)`` and compares to
+unquantized dense Attention with these absolute output tolerances:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Storage
+     - Scale
+     - Zero point
+     - Fixture tolerance
+   * - INT8 / UINT8
+     - 0.01
+     - 0 / 128
+     - 0.01
+   * - INT4 / UINT4
+     - 0.25
+     - 0 / 8
+     - 0.15
+
+These fixture-specific bounds do not apply to arbitrary models or saturated
+inputs.
+
+Validation rejects malformed ranges, invalid layouts, unsupported consumers
+and capacity violations. A failing or cancelled invocation cannot publish part
+of a block collection. Cancellation remains a publication gate, not preemption.
+Reset/close drop the state's owners; exported views and other requests retain
+their blocks until their last owner is released. The bound model is never
+serialized or cloned by this path.
 ``event.storage_allocated_bytes`` counts requested storage capacity,
 not physical heap allocations: an I/O arena may satisfy a request from its free
 lists. The existing ``event.allocated_bytes`` and ``event.peak_bytes`` fields

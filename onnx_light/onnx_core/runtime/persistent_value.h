@@ -133,17 +133,19 @@ public:
   PersistentValue(const PersistentValue &) = delete;
   PersistentValue &operator=(const PersistentValue &) = delete;
 
-  /** Returns a root tensor, or null for structured and encoded values. */
+  /** Returns a root tensor, or null for structured, sequence and encoded values. */
   const PersistentTensor *tensor() const noexcept { return tensor_ ? &*tensor_ : nullptr; }
   /** Returns ordinary views without exposing capacity or append permissions. */
   RuntimeValue BorrowView() const;
 
 private:
   PersistentValue() = default;
-  static PersistentValue FromRetained(RuntimeValue value);
+  static PersistentValue FromRetained(RuntimeValue value, size_t depth = 0);
+  RuntimeValue BorrowAtDepth(size_t depth) const;
   RuntimeValue::Kind kind_ = RuntimeValue::Kind::kStruct;
   std::optional<PersistentTensor> tensor_;
   std::unordered_map<std::string, PersistentValue> fields_;
+  std::vector<PersistentValue> elements_;
   std::shared_ptr<const EncodedValueProto> encoded_;
 };
 

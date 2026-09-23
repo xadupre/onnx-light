@@ -42,9 +42,18 @@ void RuntimeValue::RetainAtDepth(size_t depth, const StructTypeCatalogue &catalo
       ValidatePersistentStructType(catalogue, Encoded().struct_type());
     if (Encoded().has_logical_type())
       ValidatePersistentType(catalogue, Encoded().logical_type());
-    const auto &raw = Encoded().raw_data();
-    EXT_ENFORCE_INVALID(!raw.is_borrowed() || raw.owner().use_count() != 0 || raw.empty(),
-                        "RuntimeValue::Retain: cannot retain an ownerless encoded payload.");
+    const auto retain_payload = [](const auto &raw) {
+      EXT_ENFORCE_INVALID(!raw.is_borrowed() || raw.owner().use_count() != 0 || raw.empty(),
+                          "RuntimeValue::Retain: cannot retain an ownerless encoded payload.");
+    };
+    retain_payload(Encoded().raw_data());
+    if (Encoded().has_affine()) {
+      retain_payload(Encoded().affine().scale().raw_data());
+      retain_payload(Encoded().affine().zero_point().raw_data());
+    }
+  } else if (kind == Kind::kSequence) {
+    for (auto &value : elements)
+      value.RetainAtDepth(depth + 1, catalogue);
   } else
     for (auto &[name, value] : fields)
       value.RetainAtDepth(depth + 1, catalogue);
@@ -67,8 +76,15 @@ RuntimeValue RuntimeValue::CopyAtDepth(size_t depth, bool owned) const {
     return RuntimeValue(std::move(copy));
   }
   RuntimeValue result;
-  for (const auto &[name, value] : fields)
-    result.fields.emplace(name, value.CopyAtDepth(depth + 1, owned));
+  result.kind = kind;
+  if (kind == Kind::kSequence) {
+    result.elements.reserve(elements.size());
+    for (const auto &value : elements)
+      result.elements.push_back(value.CopyAtDepth(depth + 1, owned));
+  } else {
+    for (const auto &[name, value] : fields)
+      result.fields.emplace(name, value.CopyAtDepth(depth + 1, owned));
+  }
   return result;
 }
 

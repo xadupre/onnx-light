@@ -468,6 +468,8 @@ RuntimeValueMap FeedbackValuesFromPython(nb::dict values) {
 }
 
 nb::object FeedbackValueToPython(RuntimeValue value) {
+  EXT_ENFORCE_INVALID(value.kind != RuntimeValue::Kind::kSequence,
+                      "Feedback sequence values currently require the native C++ API.");
   if (value.kind == RuntimeValue::Kind::kTensor)
     return nb::cast(std::move(value.tensor));
   if (value.kind == RuntimeValue::Kind::kEncoded) {

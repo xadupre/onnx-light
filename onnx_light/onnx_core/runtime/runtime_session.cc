@@ -413,6 +413,9 @@ void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContex
         } else if (item.kind == RuntimeValue::Kind::kStruct) {
           for (auto &[field, child] : item.fields)
             self(self, child, depth + 1);
+        } else if (item.kind == RuntimeValue::Kind::kSequence) {
+          for (auto &child : item.elements)
+            self(self, child, depth + 1);
         }
       };
       migrate(migrate, value->second, 0);
@@ -696,6 +699,9 @@ void RuntimeSession::MaterializeBorrowedOutputs(RuntimeContext &rt) const {
           item = item.DeepCopy();
         else if (item.kind == RuntimeValue::Kind::kStruct)
           for (auto &[field, child] : item.fields)
+            self(self, child, depth + 1);
+        else if (item.kind == RuntimeValue::Kind::kSequence)
+          for (auto &child : item.elements)
             self(self, child, depth + 1);
       };
       detach(detach, value->second, 0);

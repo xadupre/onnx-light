@@ -42,8 +42,34 @@ const TypeProto &InputType(const std::string &name, const Declarations &declarat
                     "'; names are literal and partial field paths are unsupported.");
 }
 
+void ValidateTensorShape(const Shape &shape, const TypeProto::Tensor &declared, Symbols &symbols) {
+  if (!declared.has_shape())
+    return;
+  EXT_ENFORCE_INVALID(static_cast<size_t>(declared.shape().dim_size()) == shape.size(),
+                      "PersistentValueState: rank mismatch.");
+  for (size_t i = 0; i < shape.size(); ++i) {
+    const auto &dim = declared.shape().dim(static_cast<int>(i));
+    EXT_ENFORCE_INVALID(!dim.has_dim_value() || dim.dim_value() == shape[i],
+                        "PersistentValueState: shape mismatch.");
+    if (dim.has_dim_param() && !dim.dim_param().empty()) {
+      auto [it, inserted] = symbols.emplace(dim.dim_param(), shape[i]);
+      EXT_ENFORCE_INVALID(inserted || it->second == shape[i],
+                          "PersistentValueState: symbolic shape mismatch.");
+    }
+  }
+}
+
 void Validate(const RuntimeValue &value, const TypeProto &type,
-              const StructTypeCatalogue &catalogue, Symbols &symbols) {
+              const StructTypeCatalogue &catalogue, Symbols &symbols, size_t depth = 0) {
+  EXT_ENFORCE_INVALID(depth <= RuntimeValue::kMaxDepth,
+                      "PersistentValueState: maximum nesting depth exceeded.");
+  if (value.kind == RuntimeValue::Kind::kSequence) {
+    EXT_ENFORCE_INVALID(type.has_sequence_type() && type.sequence_type().has_elem_type(),
+                        "PersistentValueState: expected a sequence type.");
+    for (const auto &element : value.elements)
+      Validate(element, type.sequence_type().elem_type(), catalogue, symbols, depth + 1);
+    return;
+  }
   if (value.kind == RuntimeValue::Kind::kTensor) {
     EXT_ENFORCE_INVALID(type.has_tensor_type(),
                         "PersistentValueState: expected a structured value.");
@@ -60,20 +86,21 @@ void Validate(const RuntimeValue &value, const TypeProto &type,
                               (tensor.size_bytes() == 0 || tensor.bytes() != nullptr),
                           "PersistentValueState: tensor byte extent mismatch.");
     }
-    if (declared.has_shape()) {
-      EXT_ENFORCE_INVALID(static_cast<size_t>(declared.shape().dim_size()) == tensor.shape.size(),
-                          "PersistentValueState: rank mismatch.");
-      for (size_t i = 0; i < tensor.shape.size(); ++i) {
-        const auto &dim = declared.shape().dim(static_cast<int>(i));
-        EXT_ENFORCE_INVALID(!dim.has_dim_value() || dim.dim_value() == tensor.shape[i],
-                            "PersistentValueState: shape mismatch.");
-        if (dim.has_dim_param() && !dim.dim_param().empty()) {
-          auto [it, inserted] = symbols.emplace(dim.dim_param(), tensor.shape[i]);
-          EXT_ENFORCE_INVALID(inserted || it->second == tensor.shape[i],
-                              "PersistentValueState: symbolic shape mismatch.");
-        }
-      }
-    }
+    ValidateTensorShape(tensor.shape, declared, symbols);
+    return;
+  }
+  if (value.kind == RuntimeValue::Kind::kEncoded && type.has_tensor_type()) {
+    const auto &encoded = value.Encoded();
+    const auto layout = catalogue.ValidateEncodedValue(encoded);
+    EXT_ENFORCE_INVALID(!layout.external && layout.content_verified && encoded.has_affine(),
+                        "PersistentValueState: requires an inline affine encoded payload.");
+    const auto &logical = encoded.logical_type().tensor_type();
+    EXT_ENFORCE_INVALID(logical.elem_type() == type.tensor_type().elem_type(),
+                        "PersistentValueState: dtype mismatch.");
+    Shape shape;
+    for (const auto &dim : logical.shape().dim())
+      shape.push_back(dim.dim_value());
+    ValidateTensorShape(shape, type.tensor_type(), symbols);
     return;
   }
   EXT_ENFORCE_INVALID(type.has_struct_type(), "PersistentValueState: expected a tensor.");
@@ -88,6 +115,8 @@ void Validate(const RuntimeValue &value, const TypeProto &type,
                         "PersistentValueState: encoded representation mismatch.");
     return;
   }
+  EXT_ENFORCE_INVALID(value.kind == RuntimeValue::Kind::kStruct,
+                      "PersistentValueState: expected a structured value.");
   EXT_ENFORCE_INVALID(declared.has_structure(),
                       "PersistentValueState: requires named structured fields.");
   size_t expected = 0;
@@ -98,7 +127,7 @@ void Validate(const RuntimeValue &value, const TypeProto &type,
     auto it = value.fields.find(field.name());
     EXT_ENFORCE_INVALID(it != value.fields.end(), "PersistentValueState: missing field '",
                         field.name(), "'.");
-    Validate(it->second, field.type(), catalogue, symbols);
+    Validate(it->second, field.type(), catalogue, symbols, depth + 1);
   }
   EXT_ENFORCE_INVALID(value.fields.size() == expected,
                       "PersistentValueState: unexpected structured field.");

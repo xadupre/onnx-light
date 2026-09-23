@@ -372,12 +372,18 @@ void ValidateTypeProto(Walk &walk, const TypeProto &type) {
     ValidateTypeProto(walk, type.ref_sequence_type().ref_elem_type());
     break;
   case TypeProto::kOptionalType:
+    if (walk.persistent) {
+      Invalid("Optional types cannot be persistent.");
+    }
     if (!type.ref_optional_type().has_elem_type()) {
       Invalid("An optional type is missing its 'elem_type'.");
     }
     ValidateTypeProto(walk, type.ref_optional_type().ref_elem_type());
     break;
   case TypeProto::kMapType:
+    if (walk.persistent) {
+      Invalid("Map types cannot be persistent.");
+    }
     if (!IsAllowedMapKeyType(type.ref_map_type().ref_key_type())) {
       Invalid("A map type must use an integral or STRING 'key_type', got " +
               std::to_string(type.ref_map_type().ref_key_type()) + ".");
@@ -1436,6 +1442,10 @@ bool CompatiblePersistentType(const StructTypeCatalogue &catalogue, const TypePr
       }
     }
     return true;
+  }
+  if (left.has_sequence_type()) {
+    return CompatiblePersistentType(catalogue, left.sequence_type().elem_type(),
+                                    right.sequence_type().elem_type(), depth + 1);
   }
   if (!left.has_struct_type()) {
     return false;

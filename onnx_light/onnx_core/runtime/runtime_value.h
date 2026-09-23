@@ -7,11 +7,12 @@
 #include "onnx_core/runtime/memory/simple_tensor.h"
 #include "onnx_proto/onnx_verify.h"
 #include <unordered_map>
+#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 /**
- * Represents tensor fields, named structures and immutable encoded proto values.
+ * Represents tensors, typed sequences, named structures and immutable encoded proto values.
  *
  * RuntimeContext stores ordinary tensor edges in its existing tensor map, not
  * here. This recursive representation supplies the structured/encoded edges
@@ -19,16 +20,19 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
  */
 struct RuntimeValue {
   static constexpr size_t kMaxDepth = 64;
-  enum class Kind { kTensor, kStruct, kEncoded };
+  enum class Kind { kTensor, kStruct, kEncoded, kSequence };
   Kind kind = Kind::kStruct;
   Tensor tensor;
   std::unordered_map<std::string, RuntimeValue> fields;
+  std::vector<RuntimeValue> elements;
   std::shared_ptr<const EncodedValueProto> encoded;
 
   RuntimeValue() = default;
   explicit RuntimeValue(Tensor value) : kind(Kind::kTensor), tensor(std::move(value)) {}
   explicit RuntimeValue(std::unordered_map<std::string, RuntimeValue> value)
       : kind(Kind::kStruct), fields(std::move(value)) {}
+  explicit RuntimeValue(std::vector<RuntimeValue> value)
+      : kind(Kind::kSequence), elements(std::move(value)) {}
   explicit RuntimeValue(EncodedValueProto value);
 
   /** Returns an immutable message view with an explicit lifetime owner. */

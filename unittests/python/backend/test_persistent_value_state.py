@@ -987,10 +987,16 @@ class TestPersistentValueState(unittest.TestCase):
         weights = numpy.ones(2, dtype=numpy.float32)
         model = helper.make_model(
             helper.make_graph(
-                [helper.make_node("Identity", ["W"], ["present"])],
+                [
+                    helper.make_node("Identity", ["W"], ["present"]),
+                    helper.make_node("Shape", ["past"], ["past_shape"]),
+                ],
                 "initializer_feedback",
                 [helper.make_tensor_value_info("past", onnx.TensorProto.FLOAT, [2])],
-                [helper.make_tensor_value_info("present", onnx.TensorProto.FLOAT, [2])],
+                [
+                    helper.make_tensor_value_info("present", onnx.TensorProto.FLOAT, [2]),
+                    helper.make_tensor_value_info("past_shape", onnx.TensorProto.INT64, [1]),
+                ],
                 [numpy_helper.from_array(weights, name="W")],
             ),
             opset_imports=[helper.make_opsetid("", 18)],
@@ -998,6 +1004,7 @@ class TestPersistentValueState(unittest.TestCase):
         add_binding(model, "past", "present")
         state = runtime.PersistentValueState(model, {"past": numpy.zeros(2, dtype=numpy.float32)})
         output = state.run(make_context(), {})
+        numpy.testing.assert_array_equal(array(output["past_shape"]), [2])
         self.assertEqual(
             array(output["present"]).ctypes.data, array(state.values["past"]).ctypes.data
         )

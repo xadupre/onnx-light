@@ -54,7 +54,8 @@ class TestPersistentBindings(unittest.TestCase):
                     model.graph.input.append(
                         onnx.ValueInfoProto(name="other", type=tensor_type())
                     )
-                    model.graph.node[0].input[0] = "other"
+                    model.graph.node[0].input.clear()
+                    model.graph.node[0].input.append("other")
                 elif mode == "two_nodes":
                     model.graph.node.append(
                         helper.make_node("Shape", ["state.in"], ["state.shape"])

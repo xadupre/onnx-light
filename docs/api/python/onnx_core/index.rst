@@ -8,6 +8,7 @@ onnx_light.onnx_core
     gradient
     graph_builder
     optimization
+    quantization
     shape_inference
 
 .. automodule:: onnx_light.onnx_core

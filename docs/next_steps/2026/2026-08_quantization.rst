@@ -8,6 +8,11 @@ Quantization
 
 **consolidated design reference**
 
+Portable reference conversions for these numerical families are documented in
+:ref:`l-quantized-values`. They use self-contained structured encoded values,
+caller-supplied parameters and native C++ consumers, not the external formats'
+binary layouts or calibration algorithms.
+
 .. note::
 
     The implementation sequence is now

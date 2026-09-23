@@ -15,6 +15,7 @@
 #include "onnx_core/runtime/kernels/run_nodes.h"
 #include "onnx_core/runtime/memory/simple_tensor.h"
 #include "onnx_core/runtime/persistent_value_state.h"
+#include "onnx_core/runtime/quantization.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/runtime_session.h"
 #include "onnx_core/runtime/tuning/kernel_tuning_cache.h"
@@ -969,6 +970,86 @@ void AddOnnxPyRuntime(nb::module_ &m) {
   // KernelContext / OpsetId types and the TensorFromProto helper.
   // -----------------------------------------------------------------------
   auto rt_mod = m.def_submodule("runtime");
+
+  nb::enum_<core::runtime::QuantizationMethod>(rt_mod, "QuantizationMethod")
+      .value("AFFINE", core::runtime::QuantizationMethod::kAffine)
+      .value("CODEBOOK", core::runtime::QuantizationMethod::kCodebook)
+      .value("CAST", core::runtime::QuantizationMethod::kCast);
+  nb::class_<core::runtime::QuantizationBlock>(rt_mod, "QuantizationBlock")
+      .def(nb::init<>())
+      .def_rw("count", &core::runtime::QuantizationBlock::count)
+      .def_rw("method", &core::runtime::QuantizationBlock::method)
+      .def_rw("bits", &core::runtime::QuantizationBlock::bits)
+      .def_rw("signed_codes", &core::runtime::QuantizationBlock::signed_codes)
+      .def_rw("scale", &core::runtime::QuantizationBlock::scale)
+      .def_rw("zero_point", &core::runtime::QuantizationBlock::zero_point)
+      .def_rw("offset", &core::runtime::QuantizationBlock::offset)
+      .def_rw("books", &core::runtime::QuantizationBlock::books)
+      .def_rw("entries", &core::runtime::QuantizationBlock::entries)
+      .def_rw("vector_size", &core::runtime::QuantizationBlock::vector_size)
+      .def_rw("codebook", &core::runtime::QuantizationBlock::codebook)
+      .def_rw("base3", &core::runtime::QuantizationBlock::base3)
+      .def_rw("cast_type", &core::runtime::QuantizationBlock::cast_type);
+  nb::class_<core::runtime::QuantizationPlan>(rt_mod, "QuantizationPlan")
+      .def(nb::init<>())
+      .def_rw("format", &core::runtime::QuantizationPlan::format)
+      .def_rw("blocks", &core::runtime::QuantizationPlan::blocks)
+      .def_rw("permutation", &core::runtime::QuantizationPlan::permutation)
+      .def_rw("transform_size", &core::runtime::QuantizationPlan::transform_size)
+      .def_rw("forward", &core::runtime::QuantizationPlan::forward)
+      .def_rw("inverse", &core::runtime::QuantizationPlan::inverse)
+      .def_rw("outliers", &core::runtime::QuantizationPlan::outliers)
+      .def(
+          "block",
+          [](const core::runtime::QuantizationPlan &plan, size_t index) {
+            EXT_ENFORCE_INVALID(index < plan.blocks.size(),
+                                "Quantization block index out of range.");
+            return plan.blocks[index];
+          },
+          nb::arg("index"), "Returns a copy of a block; uses set_block to replace it.")
+      .def(
+          "set_block",
+          [](core::runtime::QuantizationPlan &plan, size_t index,
+             const core::runtime::QuantizationBlock &block) {
+            EXT_ENFORCE_INVALID(index < plan.blocks.size(),
+                                "Quantization block index out of range.");
+            plan.blocks[index] = block;
+          },
+          nb::arg("index"), nb::arg("block"), "Replaces a block with an owned copy.");
+  rt_mod.def("quantization_formats", &core::runtime::QuantizationFormats,
+             "Returns portable onnx-light profiles, not vendor packing ABIs.");
+  rt_mod.def("make_quantization_plan", &core::runtime::MakeQuantizationPlan, nb::arg("format"),
+             nb::arg("count"), nb::arg("block_size") = 128,
+             "Creates block defaults; requires supplied learned codebooks and transforms.");
+  rt_mod.def("quantize_tensor_proto", &core::runtime::QuantizeTensorProto, nb::arg("tensor"),
+             nb::arg("plan"), "Quantizes a loaded TensorProto into an owned EncodedValueProto.");
+  rt_mod.def(
+      "dequantize_tensor_proto",
+      [](const EncodedValueProto &value, const ModelProto *model) {
+        StructTypeCatalogue catalogue;
+        if (model)
+          catalogue.Build(*model);
+        return core::runtime::DequantizeTensorProto(value, catalogue);
+      },
+      nb::arg("value"), nb::arg("model") = nullptr,
+      "Dequantizes an EncodedValueProto, optionally resolving a model's type catalogue.");
+  rt_mod.def(
+      "quantize_tensor",
+      [](const Tensor &tensor, const core::runtime::QuantizationPlan &plan) {
+        return FeedbackValueToPython(core::runtime::QuantizeTensor(tensor, plan));
+      },
+      nb::arg("tensor"), nb::arg("plan"),
+      "Quantizes a Tensor; represents the encoded RuntimeValue as EncodedValueProto in Python.");
+  rt_mod.def(
+      "dequantize_tensor",
+      [](const EncodedValueProto &value, const ModelProto *model) {
+        StructTypeCatalogue catalogue;
+        if (model)
+          catalogue.Build(*model);
+        return core::runtime::DequantizeTensor(RuntimeValue(value), catalogue);
+      },
+      nb::arg("value"), nb::arg("model") = nullptr,
+      "Dequantizes an encoded runtime value into a Tensor.");
   rt_mod.doc() = "C++ kernel dispatcher exposed to Python. RunNode and "
                  "RuntimeSession evaluate one or more nodes through the static "
                  "KernelDispatchTable (with transparent dispatch to model-local "

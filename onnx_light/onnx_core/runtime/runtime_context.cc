@@ -152,17 +152,11 @@ int64_t ResolveNodeIndex(RuntimeEventKind kind, int64_t current_node_index) noex
 }
 
 RuntimeEvent MakeAddOrReplaceEvent(RuntimeEventAction action, RuntimeEventKind kind,
-                                   const std::string &name, const Tensor &tensor,
-                                   int64_t current_node_index, int64_t subgraph_node_index,
-                                   const std::string &subgraph_attr_name) {
+                                   const std::string &name, const Tensor &tensor) {
   RuntimeEvent ev;
   ev.action = action;
   ev.kind = kind;
-  ev.timestamp_ns = NowNanos();
   ev.name = name;
-  ev.node_index = ResolveNodeIndex(kind, current_node_index);
-  ev.subgraph_node_index = subgraph_node_index;
-  ev.subgraph_attr_name = subgraph_attr_name;
   const int64_t count = tensor.element_count();
   const int32_t capacity = static_cast<int32_t>(kRuntimeEventValueLimit);
   const int32_t truncated_count = static_cast<int32_t>(std::min<int64_t>(count, capacity));
@@ -189,20 +183,6 @@ RuntimeEvent MakeAddOrReplaceEvent(RuntimeEventAction action, RuntimeEventKind k
     ev.data_type = tensor.data_type;
     ev.shape = tensor.shape;
   }
-  return ev;
-}
-
-RuntimeEvent MakeRemoveEvent(RuntimeEventKind kind, const std::string &name,
-                             int64_t subgraph_node_index, const std::string &subgraph_attr_name) {
-  RuntimeEvent ev;
-  ev.action = RuntimeEventAction::kRemove;
-  ev.kind = kind;
-  ev.timestamp_ns = NowNanos();
-  ev.name = name;
-  ev.data_type = static_cast<int32_t>(DataType::UNDEFINED);
-  ev.value_count = 0;
-  ev.subgraph_node_index = subgraph_node_index;
-  ev.subgraph_attr_name = subgraph_attr_name;
   return ev;
 }
 
@@ -268,7 +248,6 @@ void RuntimeContext::RecordRunNodeEvent(const NodeProto &node, const std::string
   ev.timestamp_ns = start_time_ns;
   ev.data_type = static_cast<int32_t>(DataType::UNDEFINED);
   ev.value_count = 0;
-  ev.node_index = current_node_index_;
   ev.op_domain = domain;
   ev.op_type = op_type;
   const size_t input_count = static_cast<size_t>(node.input_size());
@@ -281,15 +260,22 @@ void RuntimeContext::RecordRunNodeEvent(const NodeProto &node, const std::string
     ev.cpu_executor_instance_id = cpu_executor_->instance_id();
     ev.cpu_effective_threads = cpu_executor_->effective_threads();
   }
-  ev.subgraph_node_index = current_subgraph_node_index_;
-  ev.subgraph_attr_name = current_subgraph_attr_name_;
-  StampAllocatorMemory(ev);
   RecordEvent(std::move(ev));
 }
 
 RuntimeContext::~RuntimeContext() = default;
 
 void RuntimeContext::RecordEvent(RuntimeEvent event) {
+  if (!events_enabled_)
+    return;
+  if (event.timestamp_ns == 0)
+    event.timestamp_ns = NowNanos();
+  event.node_index = event.action == RuntimeEventAction::kRemove
+                         ? -1
+                         : ResolveNodeIndex(event.kind, current_node_index_);
+  event.subgraph_node_index = current_subgraph_node_index_;
+  event.subgraph_attr_name = current_subgraph_attr_name_;
+  StampAllocatorMemory(event);
   std::lock_guard<std::mutex> lock(events_->mutex);
   events_->log.push_back(std::move(event));
 }
@@ -336,11 +322,7 @@ void RuntimeContext::Set(const std::string &name, Tensor tensor, RuntimeEventKin
   if (!retains_output(name))
     EnsureAllocatorBacked(tensor, allocator_, kind, device_);
   if (events_enabled_) {
-    RuntimeEvent ev =
-        MakeAddOrReplaceEvent(RuntimeEventAction::kAdd, kind, name, tensor, current_node_index_,
-                              current_subgraph_node_index_, current_subgraph_attr_name_);
-    StampAllocatorMemory(ev);
-    RecordEvent(std::move(ev));
+    RecordEvent(MakeAddOrReplaceEvent(RuntimeEventAction::kAdd, kind, name, tensor));
   }
   tensors_[name] = std::move(tensor);
 }
@@ -351,11 +333,7 @@ void RuntimeContext::Put(const std::string &name, Tensor tensor, RuntimeEventKin
   if (events_enabled_) {
     const RuntimeEventAction action =
         Has(name) ? RuntimeEventAction::kReplace : RuntimeEventAction::kAdd;
-    RuntimeEvent ev =
-        MakeAddOrReplaceEvent(action, kind, name, tensor, current_node_index_,
-                              current_subgraph_node_index_, current_subgraph_attr_name_);
-    StampAllocatorMemory(ev);
-    RecordEvent(std::move(ev));
+    RecordEvent(MakeAddOrReplaceEvent(action, kind, name, tensor));
   }
   tensors_[name] = std::move(tensor);
 }
@@ -368,10 +346,7 @@ bool RuntimeContext::Remove(const std::string &name) {
   }
   tensors_.erase(it);
   if (events_enabled_) {
-    RuntimeEvent ev = MakeRemoveEvent(RuntimeEventKind::kUnknown, name,
-                                      current_subgraph_node_index_, current_subgraph_attr_name_);
-    StampAllocatorMemory(ev);
-    RecordEvent(std::move(ev));
+    RecordEvent({.action = RuntimeEventAction::kRemove, .name = name});
   }
   return true;
 }
@@ -454,18 +429,6 @@ RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name)
   child.set_cpu_executor(cpu_executor_);
   child.set_current_subgraph(current_node_index_, attr_name);
   return child;
-}
-
-void RuntimeContext::RecordPersistentStorageEvent(RuntimeEvent event) {
-  if (!events_enabled_)
-    return;
-  event.action = RuntimeEventAction::kPersistentStorage;
-  event.timestamp_ns = NowNanos();
-  event.node_index = current_node_index_;
-  event.subgraph_node_index = current_subgraph_node_index_;
-  event.subgraph_attr_name = current_subgraph_attr_name_;
-  StampAllocatorMemory(event);
-  RecordEvent(std::move(event));
 }
 
 std::optional<PersistentTensor::AppendReservation>

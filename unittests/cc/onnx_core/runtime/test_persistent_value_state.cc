@@ -142,8 +142,9 @@ TEST(PersistentValueState, PersistentStorageAccountingDoesNotDependOnAttention) 
             StorageTotal(context.events(), &RuntimeEvent::storage_allocations);
         Tensor next = child.MakeOutputTensor(0, DataType::FLOAT, {1}, sizeof(float));
         next.AsFloat()[0] = rt.Get("past").AsFloat()[0] + rt.Get("tokens").AsFloat()[0];
-        child.RecordPersistentStorageEvent(
-            {.storage_allocations = 1, .storage_allocated_bytes = sizeof(float)});
+        child.RecordEvent({.action = RuntimeEventAction::kPersistentStorage,
+                           .storage_allocations = 1,
+                           .storage_allocated_bytes = sizeof(float)});
         EXPECT_EQ(StorageTotal(context.events(), &RuntimeEvent::storage_allocations),
                   previous_allocations + 1);
         rt.Put(node.output(0), std::move(next));
@@ -312,11 +313,12 @@ TEST(PersistentValueState, StorageEventUsesExistingActivationMetadataAndClearing
   const Tensor value = Tensor::FromFloat("", {1}, {1}, &allocator);
   context.set_current_node_index(7);
   context.set_current_subgraph(3, "body");
-  context.RecordPersistentStorageEvent({.storage_allocations = 1,
-                                        .storage_allocated_bytes = 64,
-                                        .storage_prefix_copied_bytes = 8,
-                                        .storage_append_copied_bytes = 4,
-                                        .storage_reuse_count = 2});
+  context.RecordEvent({.action = RuntimeEventAction::kPersistentStorage,
+                       .storage_allocations = 1,
+                       .storage_allocated_bytes = 64,
+                       .storage_prefix_copied_bytes = 8,
+                       .storage_append_copied_bytes = 4,
+                       .storage_reuse_count = 2});
   ASSERT_EQ(context.events().size(), 1u);
   const auto &event = context.events().front();
   EXPECT_EQ(event.action, RuntimeEventAction::kPersistentStorage);
@@ -335,11 +337,12 @@ TEST(PersistentValueState, StorageEventUsesExistingActivationMetadataAndClearing
   context.ClearEvents();
   EXPECT_TRUE(context.events().empty());
   RuntimeContext disabled(KernelContext(DefaultOpset(18)));
-  disabled.RecordPersistentStorageEvent({.storage_allocations = 1,
-                                         .storage_allocated_bytes = 64,
-                                         .storage_prefix_copied_bytes = 8,
-                                         .storage_append_copied_bytes = 4,
-                                         .storage_reuse_count = 2});
+  disabled.RecordEvent({.action = RuntimeEventAction::kPersistentStorage,
+                        .storage_allocations = 1,
+                        .storage_allocated_bytes = 64,
+                        .storage_prefix_copied_bytes = 8,
+                        .storage_append_copied_bytes = 4,
+                        .storage_reuse_count = 2});
   EXPECT_TRUE(disabled.events().empty());
 }
 
@@ -404,8 +407,9 @@ TEST(PersistentValueState, FunctionAndSubgraphStorageEventsRespectActivationAndS
         "test.feedback", "Audit", [&](const NodeProto &node, RuntimeContext &rt) {
           Tensor result = rt.MakeOutputTensor(0, DataType::FLOAT, {1}, sizeof(float));
           result.AsFloat()[0] = rt.Get("past").AsFloat()[0] + rt.Get("tokens").AsFloat()[0];
-          rt.RecordPersistentStorageEvent(
-              {.storage_allocations = 1, .storage_allocated_bytes = sizeof(float)});
+          rt.RecordEvent({.action = RuntimeEventAction::kPersistentStorage,
+                          .storage_allocations = 1,
+                          .storage_allocated_bytes = sizeof(float)});
           if (fail)
             throw std::invalid_argument("failure in nested audited kernel");
           rt.Put(node.output(0), std::move(result));

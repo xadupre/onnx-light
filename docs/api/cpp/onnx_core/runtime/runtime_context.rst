@@ -23,6 +23,17 @@ including persistent-storage auditing, and defaults to ``false``. In Python,
 pass ``events_enabled=True`` when constructing ``RuntimeContext``. There is no
 separate persistent-storage statistics getter or always-on counter collection.
 
+All producers use ``RecordEvent(RuntimeEvent)``. The caller supplies the action
+and payload; the context supplies node/subgraph metadata and allocator memory.
+A nonzero timestamp is preserved (for example, the start of a kernel dispatch);
+otherwise the recording time is used. Disabled recording leaves the log unchanged.
+
+.. code-block:: cpp
+
+   if (rt.events_enabled())
+     rt.RecordEvent({.action = RuntimeEventAction::kPersistentStorage,
+                     .storage_append_copied_bytes = copied_bytes});
+
 ``RuntimeEventAction::kPersistentStorage`` (integer value ``4``) is rendered as
 ``"persistent_storage"`` by ``RuntimeEventActionName`` and Python ``as_dict()``.
 The work is stored directly in five unsigned integer fields of ``RuntimeEvent``:

@@ -167,7 +167,8 @@ Tensor ConcatAxis2(const Tensor &a, const Tensor &b, int output_slot, RuntimeCon
       if (appended != 0)
         std::memmove(destination.data(), b.bytes(), appended);
       if (rt->events_enabled())
-        rt->RecordPersistentStorageEvent({.storage_append_copied_bytes = appended});
+        rt->RecordEvent({.action = RuntimeEventAction::kPersistentStorage,
+                         .storage_append_copied_bytes = appended});
       return rt->CommitPersistentAppend(output_slot, std::move(*reservation), appended);
     }
   }
@@ -175,10 +176,11 @@ Tensor ConcatAxis2(const Tensor &a, const Tensor &b, int output_slot, RuntimeCon
   // They must be repacked rather than treated as a contiguous append buffer.
   Tensor out = AllocateResult(rt, output_slot, DataType::FLOAT, {batch, heads, lc, d}, out_n_bytes);
   if (rt != nullptr && rt->events_enabled())
-    rt->RecordPersistentStorageEvent({.storage_allocations = 1,
-                                      .storage_allocated_bytes = out_n_bytes,
-                                      .storage_prefix_copied_bytes = prefix,
-                                      .storage_append_copied_bytes = appended});
+    rt->RecordEvent({.action = RuntimeEventAction::kPersistentStorage,
+                     .storage_allocations = 1,
+                     .storage_allocated_bytes = out_n_bytes,
+                     .storage_prefix_copied_bytes = prefix,
+                     .storage_append_copied_bytes = appended});
   if (out_n_bytes == 0)
     return out;
   const float *pa = a.AsFloat();
@@ -202,9 +204,10 @@ Tensor ConcatAxis2(const Tensor &a, const Tensor &b, int output_slot, RuntimeCon
 Tensor CopyOutput(const Tensor &src, int output_slot, RuntimeContext *rt) {
   Tensor out = AllocateResult(rt, output_slot, src.data_type, src.shape, src.size_bytes());
   if (rt != nullptr && rt->events_enabled())
-    rt->RecordPersistentStorageEvent({.storage_allocations = 1,
-                                      .storage_allocated_bytes = src.size_bytes(),
-                                      .storage_append_copied_bytes = src.size_bytes()});
+    rt->RecordEvent({.action = RuntimeEventAction::kPersistentStorage,
+                     .storage_allocations = 1,
+                     .storage_allocated_bytes = src.size_bytes(),
+                     .storage_append_copied_bytes = src.size_bytes()});
   if (src.size_bytes() != 0) {
     std::memcpy(out.mutable_bytes(), src.bytes(), src.size_bytes());
   }

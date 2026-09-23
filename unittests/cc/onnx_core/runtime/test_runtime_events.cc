@@ -22,6 +22,56 @@ void PutNumber(RuntimeContext &context, const char *name) {
 
 } // namespace
 
+TEST(RuntimeEvents, GenericRecordingStampsMetadataAndPreservesPayloadAndTimestamp) {
+  SimpleRawBufferAllocator allocator(4);
+  RuntimeContext context(RuntimeContextOptions{.allocator = &allocator, .events_enabled = true});
+  const Tensor live = Tensor::FromFloat("", {1}, {1}, &allocator);
+  context.set_current_node_index(9);
+  context.set_current_subgraph(2, "body");
+  context.RecordEvent({.action = RuntimeEventAction::kPersistentStorage,
+                       .timestamp_ns = 123,
+                       .name = "cache",
+                       .storage_allocated_bytes = 64});
+  ASSERT_EQ(context.events().size(), 1u);
+  const auto &event = context.events().front();
+  EXPECT_EQ(event.action, RuntimeEventAction::kPersistentStorage);
+  EXPECT_EQ(event.timestamp_ns, 123);
+  EXPECT_EQ(event.name, "cache");
+  EXPECT_EQ(event.node_index, 9);
+  EXPECT_EQ(event.subgraph_node_index, 2);
+  EXPECT_EQ(event.subgraph_attr_name, "body");
+  EXPECT_EQ(event.allocated_bytes, sizeof(float));
+  EXPECT_EQ(event.peak_bytes, sizeof(float));
+  EXPECT_EQ(event.storage_allocated_bytes, 64u);
+
+  context.RecordEvent({.action = RuntimeEventAction::kAdd, .kind = RuntimeEventKind::kInput});
+  context.RecordEvent({.action = RuntimeEventAction::kAdd, .kind = RuntimeEventKind::kInitializer});
+  context.RecordEvent({.action = RuntimeEventAction::kReplace});
+  context.RecordEvent({.action = RuntimeEventAction::kRemove});
+  context.RecordEvent(
+      {.action = RuntimeEventAction::kRunNode, .timestamp_ns = 456, .duration_ns = 20});
+  ASSERT_EQ(context.events().size(), 6u);
+  EXPECT_EQ(context.events()[1].node_index, -1);
+  EXPECT_GT(context.events()[1].timestamp_ns, 0);
+  EXPECT_EQ(context.events()[2].node_index, -2);
+  EXPECT_EQ(context.events()[3].node_index, 9);
+  EXPECT_EQ(context.events()[4].node_index, -1);
+  EXPECT_EQ(context.events()[5].node_index, 9);
+  EXPECT_EQ(context.events()[5].timestamp_ns, 456);
+  EXPECT_EQ(context.events()[5].duration_ns, 20);
+}
+
+TEST(RuntimeEvents, GenericRecordingDoesNothingWhenDisabled) {
+  RuntimeContext context;
+  context.events().push_back({.name = "existing"});
+  for (auto action :
+       {RuntimeEventAction::kAdd, RuntimeEventAction::kReplace, RuntimeEventAction::kRemove,
+        RuntimeEventAction::kRunNode, RuntimeEventAction::kPersistentStorage})
+    context.RecordEvent({.action = action, .name = "ignored"});
+  ASSERT_EQ(context.events().size(), 1u);
+  EXPECT_EQ(context.events().front().name, "existing");
+}
+
 TEST(RuntimeEvents, SharesOneLogAcrossNestedContextsAndCopies) {
   auto parent = EventContext();
   parent.set_current_node_index(7);
@@ -31,7 +81,9 @@ TEST(RuntimeEvents, SharesOneLogAcrossNestedContextsAndCopies) {
   PutNumber(parent, "parent");
   PutNumber(child, "child");
   function.set_current_node_index(3);
-  function.RecordPersistentStorageEvent({.storage_allocations = 1, .storage_allocated_bytes = 64});
+  function.RecordEvent({.action = RuntimeEventAction::kPersistentStorage,
+                        .storage_allocations = 1,
+                        .storage_allocated_bytes = 64});
   PutNumber(copy, "copy");
   NodeProto node;
   node.set_op_type("Identity");
@@ -52,8 +104,10 @@ TEST(RuntimeEvents, SharesOneLogAcrossNestedContextsAndCopies) {
   EXPECT_EQ(storage.subgraph_attr_name, "body");
   EXPECT_EQ(parent.events()[3].name, "copy");
   EXPECT_EQ(parent.events()[4].action, RuntimeEventAction::kRunNode);
+  EXPECT_EQ(parent.events()[4].timestamp_ns, 10);
   EXPECT_EQ(parent.events()[4].duration_ns, 20);
   EXPECT_EQ(parent.events()[5].action, RuntimeEventAction::kRemove);
+  EXPECT_EQ(parent.events()[5].node_index, -1);
   EXPECT_FALSE(parent.Has("copy"));
 }
 
@@ -63,7 +117,8 @@ TEST(RuntimeEvents, PreservesEventsBeforeFailureWithoutScopeCleanup) {
   EXPECT_THROW(
       {
         PutNumber(child, "before failure");
-        child.RecordPersistentStorageEvent({.storage_prefix_copied_bytes = 16});
+        child.RecordEvent(
+            {.action = RuntimeEventAction::kPersistentStorage, .storage_prefix_copied_bytes = 16});
         ASSERT_EQ(parent.events().size(), 2u);
         throw std::runtime_error("kernel failure");
       },
@@ -95,7 +150,7 @@ TEST(RuntimeEvents, ClearsSharedLogWithoutClearingOtherContextsValues) {
   EXPECT_TRUE(parent.events().empty());
   EXPECT_TRUE(parent.Has("parent"));
   EXPECT_TRUE(child.Has("child"));
-  child.RecordPersistentStorageEvent({.storage_reuse_count = 1});
+  child.RecordEvent({.action = RuntimeEventAction::kPersistentStorage, .storage_reuse_count = 1});
   ASSERT_EQ(parent.events().size(), 1u);
   parent.Clear();
   EXPECT_TRUE(child.events().empty());
@@ -120,7 +175,8 @@ TEST(RuntimeEvents, LeavesIndependentContextsIsolatedAndDisabledContextsSilent) 
   EXPECT_EQ(&disabled.events(), &copy.events());
   for (auto *context : {&disabled, &child, &function}) {
     PutNumber(*context, "value");
-    context->RecordPersistentStorageEvent({.storage_allocations = 1});
+    context->RecordEvent(
+        {.action = RuntimeEventAction::kPersistentStorage, .storage_allocations = 1});
     NodeProto node;
     context->RecordRunNodeEvent(node, "", "Identity", 0, 1);
     context->Remove("value");
@@ -139,7 +195,9 @@ TEST(RuntimeEvents, SerializesRecordingFromConcurrentChildren) {
   auto run = [](RuntimeContext child) {
     for (int i = 0; i < 100; ++i) {
       PutNumber(child, "value");
-      child.RecordPersistentStorageEvent({.storage_allocations = 1, .storage_allocated_bytes = 4});
+      child.RecordEvent({.action = RuntimeEventAction::kPersistentStorage,
+                         .storage_allocations = 1,
+                         .storage_allocated_bytes = 4});
       NodeProto node;
       child.RecordRunNodeEvent(node, "", "Identity", i, 1);
       child.Remove("value");

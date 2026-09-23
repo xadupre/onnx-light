@@ -82,7 +82,8 @@ PersistentTensor::AppendLease::Reserve(const Shape &shape, size_t axis, size_t i
                                               logical, prefix.borrowed_owner()));
     candidate.capacity_bytes_ = prefix_.capacity_bytes_;
     if (context && context->events_enabled())
-      context->RecordPersistentStorageEvent({.storage_reuse_count = 1});
+      context->RecordEvent(
+          {.action = RuntimeEventAction::kPersistentStorage, .storage_reuse_count = 1});
     return AppendReservation(std::move(candidate), previous);
   }
   const size_t max_capacity = std::numeric_limits<size_t>::max() / row_bytes;
@@ -98,13 +99,15 @@ PersistentTensor::AppendLease::Reserve(const Shape &shape, size_t axis, size_t i
   const size_t allocated = capacity * row_bytes;
   Tensor storage = MakeOutputTensor(prefix.data_type, shape, allocated, allocator);
   if (context && context->events_enabled())
-    context->RecordPersistentStorageEvent(
-        {.storage_allocations = 1, .storage_allocated_bytes = allocated});
+    context->RecordEvent({.action = RuntimeEventAction::kPersistentStorage,
+                          .storage_allocations = 1,
+                          .storage_allocated_bytes = allocated});
   PersistentTensor candidate(std::move(storage));
   if (previous != 0) {
     std::memcpy(candidate.value_.mutable_bytes(), prefix.bytes(), previous);
     if (context && context->events_enabled())
-      context->RecordPersistentStorageEvent({.storage_prefix_copied_bytes = previous});
+      context->RecordEvent({.action = RuntimeEventAction::kPersistentStorage,
+                            .storage_prefix_copied_bytes = previous});
   }
   candidate.value_ = Tensor::Borrow(prefix.name, prefix.data_type, shape, candidate.value_.bytes(),
                                     logical, candidate.value_.borrowed_owner());

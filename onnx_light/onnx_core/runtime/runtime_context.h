@@ -674,8 +674,14 @@ public:
                                                                  AllocatorForOutput(slot));
   }
 
-  /** Records storage work with the current node, timestamp and allocator memory. */
-  void RecordPersistentStorageEvent(RuntimeEvent event);
+  /**
+   * Records an event in the shared log when events_enabled() is true.
+   *
+   * The caller supplies the action and payload. Sets the current node/subgraph
+   * and allocator memory; preserves a supplied timestamp or sets it when zero.
+   * Input/initializer node indices are -1/-2; removal events keep index -1.
+   */
+  void RecordEvent(RuntimeEvent event);
   /**
    * Reserves a writable tail for an exact graph-declared persistent input/output pair.
    *
@@ -1043,7 +1049,6 @@ private:
   /// and :cpp:func:`RawBufferAllocator::PeakAllocatedSize`). Leaves both at
   /// ``0`` when no allocator is attached.
   void StampAllocatorMemory(RuntimeEvent &ev) const noexcept;
-  void RecordEvent(RuntimeEvent event);
 
   TensorMap tensors_;
   RuntimeValueMap values_;

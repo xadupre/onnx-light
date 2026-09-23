@@ -360,9 +360,9 @@ scratch contexts on this path.
 ``storage_allocated_bytes``, ``storage_prefix_copied_bytes``,
 ``storage_append_copied_bytes`` and ``storage_reuse_count``.
 Kernels and contiguous reservations use
-``RuntimeContext::RecordPersistentStorageEvent`` to record this work in the
-existing shared log. Producing new elements directly into the writable region
-does not count as copying them.
+``RuntimeContext::RecordEvent`` with action ``kPersistentStorage`` to record
+this work in the existing shared log. Producing new elements directly into the
+writable region does not count as copying them.
 
 These are explicit reports, not automatic counters for every runtime
 allocation or tensor copy. Attention currently reports K/V construction on

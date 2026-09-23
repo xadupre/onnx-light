@@ -231,12 +231,35 @@ ONNX_LIGHT_PROTO_API bool CompatiblePersistentStructTypes(const StructTypeCatalo
                                                           const StructTypeProto &right);
 
 /**
+ * Validates only the value-use counts of the persistent input names bound by @p graph.
+ *
+ * Each bound root input must have exactly one value-use: every node input position
+ * (including read-only consumers and function-call arguments) and every graph output
+ * naming that value counts separately. Counts include captures recursively through
+ * GRAPH/GRAPHS attributes, even across mutually exclusive branches, but exclude locally
+ * defined names that shadow the root input. Bindings, graph-input declarations and
+ * ``graph.value_info`` metadata are not uses.
+ * Function bodies are not expanded and aliases are not inferred.
+ *
+ * Does not validate declarations, duplicate bindings, root-only placement or types,
+ * and does not require a struct-type catalogue. Returns immediately when @p graph
+ * has no persistent bindings.
+ *
+ * @throws std::invalid_argument Thrown when a bound name has a use count other than one;
+ * the error names the input and its actual count.
+ */
+ONNX_LIGHT_PROTO_API void VerifyPersistentInputUses(const GraphProto &graph);
+
+/**
  * Validates root-graph persistent declarations without reading or copying state payloads.
  *
  * Resolves exact whole-input/output names, rejects duplicate inputs or outputs, and
  * rejects conflicting tensor dtypes, known ranks, concrete dimensions and struct layouts.
  * String tensors are forbidden, including nested fields and structured constants.
  * A null catalogue resolves inline types only. Nested graphs must not declare bindings.
+ *
+ * Calls VerifyPersistentInputUses() after all declaration/type/duplicate checks, preserving
+ * their error precedence. Graphs without persistent bindings are unaffected.
  */
 ONNX_LIGHT_PROTO_API void VerifyPersistentBindings(const StructTypeCatalogue *struct_types,
                                                    const GraphProto &graph,

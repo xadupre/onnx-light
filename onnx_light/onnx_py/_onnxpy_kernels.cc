@@ -8,13 +8,13 @@
 #include "onnx_core/compute/execute_action.h"
 #include "onnx_core/compute/execution_plan.h"
 #include "onnx_core/compute/raw_buffer_allocator.h"
-#include "onnx_core/runtime/feedback_state.h"
 #include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/kernels/cast_sub_byte.h"
 #include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
 #include "onnx_core/runtime/kernels/random.h"
 #include "onnx_core/runtime/kernels/run_nodes.h"
 #include "onnx_core/runtime/memory/simple_tensor.h"
+#include "onnx_core/runtime/persistent_value_state.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/runtime_session.h"
 #include "onnx_core/runtime/tuning/kernel_tuning_cache.h"
@@ -51,7 +51,6 @@ using core::runtime::ExecuteAction;
 using core::runtime::ExecuteActionKind;
 using core::runtime::ExecutionArena;
 using core::runtime::ExecutionPlan;
-using core::runtime::FeedbackState;
 using core::runtime::HardwareCounterStatusName;
 using core::runtime::IOArena;
 using core::runtime::KernelContext;
@@ -60,6 +59,7 @@ using core::runtime::OpsetId;
 using core::runtime::ParallelRegionCollector;
 using core::runtime::ParallelRegionReport;
 using core::runtime::ParallelRegionReportEvent;
+using core::runtime::PersistentValueState;
 using core::runtime::RawBufferAllocator;
 using core::runtime::ResolvedCpuExecutionPolicy;
 using core::runtime::ResolvedSpinPolicy;
@@ -1022,7 +1022,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
                                                "Action kind recorded in a :class:`RuntimeEvent`. "
                                                "``kAdd`` / ``kReplace`` / ``kRemove`` mark tensor "
                                                "map mutations; ``kRunNode`` marks the dispatch of "
-                                               "a single kernel.")
+                                               "a single kernel; ``kPersistentStorage`` audits "
+                                               "persistent-storage allocation, copying or reuse.")
       .value("kAdd", core::runtime::RuntimeEventAction::kAdd,
              "A new tensor was inserted into the runtime tensor map.")
       .value("kReplace", core::runtime::RuntimeEventAction::kReplace,
@@ -1030,27 +1031,32 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .value("kRemove", core::runtime::RuntimeEventAction::kRemove,
              "A tensor was removed from the runtime tensor map.")
       .value("kRunNode", core::runtime::RuntimeEventAction::kRunNode,
-             "A kernel was dispatched for a node.");
+             "A kernel was dispatched for a node.")
+      .value("kPersistentStorage", core::runtime::RuntimeEventAction::kPersistentStorage,
+             "Persistent storage was allocated, copied or reused.");
 
-  // RuntimeEvent — append-only log entry for a single tensor map mutation.
+  // RuntimeEvent — append-only runtime log entry.
   // Mirrors :cpp:class:`core::runtime::RuntimeEvent`; ``values`` / ``string_values``
   // expose the populated prefix of the underlying fixed-size buffer as Python
   // lists of length ``value_count``.
   nb::class_<core::runtime::RuntimeEvent>(
       rt_mod, "RuntimeEvent",
       "One entry of the :meth:`RuntimeContext.events` log describing a tensor map "
-      "mutation (``add`` / ``replace`` / ``remove``) or a node dispatch. For ``add`` and "
+      "mutation (``add`` / ``replace`` / ``remove``), a node dispatch (``run_node``), "
+      "or a persistent-storage audit (``persistent_storage``). For ``add`` and "
       "``replace`` events the first ``value_count`` element values of the tensor "
       "are captured inline (``values`` for numeric dtypes, ``string_values`` for "
       "``STRING``); the underlying buffer is fixed-size (capped at 8 entries). "
       "For tensors with more than 8 elements only the first 8 are kept, "
       "``data_type`` is set to ``-1`` and ``shape`` is empty to signal the "
       "truncated payload. ``remove`` events carry ``data_type = UNDEFINED``, "
-      "empty ``shape`` and ``value_count = 0`` (the tensor is already gone).")
+      "empty ``shape`` and ``value_count = 0`` (the tensor is already gone). "
+      "Persistent-storage events report work in their storage_* fields; "
+      "allocator live/peak bytes keep their usual meaning.")
       .def_prop_ro(
           "action", [](const core::runtime::RuntimeEvent &ev) { return ev.action; },
-          ":class:`RuntimeEventAction` member describing the mutation kind: "
-          "``kAdd``, ``kReplace``, ``kRemove`` or ``kRunNode``.")
+          ":class:`RuntimeEventAction` member describing the event kind: "
+          "``kAdd``, ``kReplace``, ``kRemove``, ``kRunNode`` or ``kPersistentStorage``.")
       .def_prop_ro(
           "kind",
           [](const core::runtime::RuntimeEvent &ev) {
@@ -1068,7 +1074,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
               "Tensor shape, or empty list when truncated / for ``remove`` events.")
       .def_ro("value_count", &core::runtime::RuntimeEvent::value_count,
               "Number of populated entries in :attr:`values` / :attr:`string_values` "
-              "(``min(element_count, 8)``, ``0`` for ``remove`` and ``run_node`` events).")
+              "(``min(element_count, 8)``, ``0`` for ``remove``, ``run_node`` and "
+              "``persistent_storage`` events).")
       .def_ro("op_domain", &core::runtime::RuntimeEvent::op_domain,
               "For ``run_node`` events: normalised ONNX op domain of the dispatched "
               "node (default domain reported as ``\"ai.onnx\"``). Empty for other "
@@ -1112,6 +1119,18 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def_ro("peak_bytes", &core::runtime::RuntimeEvent::peak_bytes,
               "Peak value ever reached by :attr:`allocated_bytes` up to the moment "
               "this event was recorded. ``0`` when no allocator is attached.")
+      .def_ro("storage_allocations", &core::runtime::RuntimeEvent::storage_allocations,
+              "Number of storage allocations reported by this event; zero for other actions.")
+      .def_ro("storage_allocated_bytes", &core::runtime::RuntimeEvent::storage_allocated_bytes,
+              "Requested storage capacity in bytes, distinct from allocator live bytes.")
+      .def_ro("storage_prefix_copied_bytes",
+              &core::runtime::RuntimeEvent::storage_prefix_copied_bytes,
+              "Bytes copied from an existing persistent prefix.")
+      .def_ro("storage_append_copied_bytes",
+              &core::runtime::RuntimeEvent::storage_append_copied_bytes,
+              "Bytes copied from newly appended values.")
+      .def_ro("storage_reuse_count", &core::runtime::RuntimeEvent::storage_reuse_count,
+              "Number of storage reservations reused without allocation.")
       .def_prop_ro(
           "values",
           [](const core::runtime::RuntimeEvent &ev) {
@@ -1163,6 +1182,13 @@ void AddOnnxPyRuntime(nb::module_ &m) {
             d["subgraph_attr_name"] = ev.subgraph_attr_name;
             d["allocated_bytes"] = ev.allocated_bytes;
             d["peak_bytes"] = ev.peak_bytes;
+            if (ev.action == core::runtime::RuntimeEventAction::kPersistentStorage) {
+              d["storage_allocations"] = ev.storage_allocations;
+              d["storage_allocated_bytes"] = ev.storage_allocated_bytes;
+              d["storage_prefix_copied_bytes"] = ev.storage_prefix_copied_bytes;
+              d["storage_append_copied_bytes"] = ev.storage_append_copied_bytes;
+              d["storage_reuse_count"] = ev.storage_reuse_count;
+            }
             const int32_t n = ev.value_count;
             if (static_cast<core::runtime::DataType>(ev.data_type) ==
                 core::runtime::DataType::STRING) {
@@ -1183,7 +1209,11 @@ void AddOnnxPyRuntime(nb::module_ &m) {
             return d;
           },
           "Returns the event fields as a plain Python ``dict`` (trivially "
-          "renderable as a table, serialisable, etc.).")
+          "renderable as a table, serialisable, etc.). Only ``kPersistentStorage`` "
+          "events include ``storage_allocations``, ``storage_allocated_bytes``, "
+          "``storage_prefix_copied_bytes``, ``storage_append_copied_bytes`` and "
+          "``storage_reuse_count`` as top-level integers. "
+          "``allocated_bytes`` and ``peak_bytes`` remain allocator live/peak bytes.")
       .def("summary", &core::runtime::RuntimeEvent::summary,
            "Returns a concise, human-readable one-line summary of the event: the "
            "action / kind, the tensor name (or ``op_type(inputs)`` for ``run_node`` "
@@ -1510,7 +1540,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           [](RuntimeSessionOptions *self, nb::object parameters_obj,
              std::optional<CpuExecutionPolicy> cpu_execution, bool cpu_execution_counters,
              std::shared_ptr<ParallelRegionCollector> parallel_region_collector, int verbose,
-             bool check_shapes, bool allow_external_output_allocators) {
+             bool check_shapes, bool allow_external_output_allocators,
+             size_t persistent_tensor_initial_capacity) {
             RuntimeParameters parameters = parameters_obj.is_none()
                                                ? RuntimeParameters()
                                                : nb::cast<RuntimeParameters>(parameters_obj);
@@ -1522,12 +1553,14 @@ void AddOnnxPyRuntime(nb::module_ &m) {
                 .verbose = verbose,
                 .check_shapes = check_shapes,
                 .allow_external_output_allocators = allow_external_output_allocators,
+                .persistent_tensor_initial_capacity = persistent_tensor_initial_capacity,
             };
           },
           nb::kw_only(), nb::arg("parameters").none() = nb::none(),
           nb::arg("cpu_execution").none() = nb::none(), nb::arg("cpu_execution_counters") = false,
           nb::arg("parallel_region_collector").none() = nb::none(), nb::arg("verbose") = 0,
           nb::arg("check_shapes") = false, nb::arg("allow_external_output_allocators") = false,
+          nb::arg("persistent_tensor_initial_capacity") = 32,
           "Builds the options bundle. All fields are keyword-only and optional; each "
           "defaults to the same value :class:`RuntimeSession` uses when the field is "
           "omitted.")
@@ -1547,7 +1580,12 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def_rw("allow_external_output_allocators",
               &RuntimeSessionOptions::allow_external_output_allocators,
               "When ``True``, :func:`RuntimeSession.run` does not require a node's "
-              "allocator-backed outputs to be owned by the session's unique allocator.");
+              "allocator-backed outputs to be owned by the session's unique allocator.")
+      .def_rw("persistent_tensor_initial_capacity",
+              &RuntimeSessionOptions::persistent_tensor_initial_capacity,
+              "Sets the initial capacity along a kernel's append axis for contiguous persistent "
+              "tensors in :class:`PersistentValueState` (32 by default; tokens for Attention). "
+              "Zero disables append reservations. Does not affect stateless RuntimeSession runs.");
 
   // RuntimeSession — reusable execution session binding an ExecutionPlan.
   // Every node list the runtime executes (a graph, a function body, a
@@ -1703,16 +1741,23 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def("is_ready", &core::runtime::TaskCompletion::IsReady,
            "Returns whether the task reached a terminal state.");
 
-  nb::class_<FeedbackState>(
-      rt_mod, "FeedbackState",
-      "Retains whole outputs as whole next-call inputs by exact names from the final model.")
+  nb::class_<PersistentValueState>(
+      rt_mod, "PersistentValueState",
+      "Carries graph-declared persistent values between model calls.\n\n"
+      "Each run:\n"
+      "1. Binds retained values to persistent inputs and adds current feeds.\n"
+      "2. Executes the model, reusing eligible buffers or allocating new ones.\n"
+      "3. Validates outputs and checks cancellation.\n"
+      "4. Publishes the next state only on success.\n\n"
+      "Views share tensor data but keep separate names and shapes. "
+      "Failure leaves the previous logical state unchanged.")
       .def(
           "__init__",
-          [](FeedbackState *self, const ModelProto &model, nb::dict initial,
+          [](PersistentValueState *self, const ModelProto &model, nb::dict initial,
              RuntimeSessionOptions options) {
-            new (self)
-                FeedbackState(model, FeedbackValuesFromPython(initial), options,
-                              RetainFeedbackOwner(nb::cast(&model, nb::rv_policy::reference)));
+            new (self) PersistentValueState(
+                model, FeedbackValuesFromPython(initial), options,
+                RetainFeedbackOwner(nb::cast(&model, nb::rv_policy::reference)));
           },
           nb::arg("model"), nb::arg("initial"), nb::arg("options") = RuntimeSessionOptions{},
           nb::keep_alive<1, 2>(),
@@ -1721,11 +1766,12 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "The model must remain immutable. Inputs and retained/returned buffers can alias; "
           "callers must not mutate them while shared or retained.")
       .def(
-          "_retain_context", [](FeedbackState &, RuntimeContext &) {}, nb::keep_alive<1, 2>(),
+          "_retain_context", [](PersistentValueState &, RuntimeContext &) {},
+          nb::keep_alive<1, 2>(),
           "Retains a context before native kernel initialization, including failing calls.")
       .def(
           "run",
-          [](FeedbackState &self, RuntimeContext &context, nb::dict feeds,
+          [](PersistentValueState &self, RuntimeContext &context, nb::dict feeds,
              const core::runtime::TaskCompletion *completion) {
             RuntimeValueMap inputs = FeedbackValuesFromPython(feeds);
             // Kernel initialization can retain allocator pointers even when execution fails.
@@ -1742,17 +1788,21 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "Runs the model and commits feedback only after successful validation. "
           "Feeds name whole non-retained graph inputs; retained inputs cannot be overridden. "
           "Returns lifetime-safe shared tensors, nested dictionaries or encoded values. "
-          "Uses an optional single-use TaskCompletion to cancel before publication.")
+          "Uses an optional single-use TaskCompletion to cancel before publication. "
+          "When context.events_enabled is true, appends invocation events to context.events(), "
+          "including events recorded before failure; existing entries are preserved. "
+          "The caller clears the log with context.clear_events().")
       .def(
           "reset",
-          [](FeedbackState &self, nb::dict initial) {
+          [](PersistentValueState &self, nb::dict initial) {
             self.Reset(FeedbackValuesFromPython(initial));
           },
           nb::arg("initial"), "Replaces retained state with explicitly supplied initial values.")
-      .def("close", &FeedbackState::Close,
+      .def("close", &PersistentValueState::Close,
            "Releases retained values and permanently closes the state.")
       .def_prop_ro(
-          "values", [](const FeedbackState &self) { return FeedbackValuesToPython(self.Values()); },
+          "values",
+          [](const PersistentValueState &self) { return FeedbackValuesToPython(self.Values()); },
           "Returns shared read-only payload views keyed by exact retained graph input names.");
 
   nb::class_<ReferenceEvaluatorRunner>(
@@ -1956,7 +2006,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def_prop_ro(
           "events_enabled", [](const RuntimeContext &rt) { return rt.events_enabled(); },
           "When ``True``, :func:`set` / :func:`put` / :func:`remove` and "
-          ":func:`run_node` record events (incl. clock reads and value decoding). "
+          ":func:`run_node` record events (incl. clock reads and value decoding), "
+          "and kernels record persistent-storage allocation/copy/reuse audit events. "
           "Default is ``False`` for maximum throughput; enable only when profiling "
           "is required.")
       .def_prop_ro(
@@ -2177,7 +2228,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
             // for serialisation or tabular rendering).
             return rt.events();
           },
-          "Returns the append-only log of tensor map mutations and node dispatches "
+          "Returns the append-only log of tensor map mutations, node dispatches "
+          "and persistent-storage audits "
           "as a list of :class:`RuntimeEvent` instances. Each entry carries "
           "``action`` (:class:`RuntimeEventAction` enum), ``kind`` "
           "(``\"unknown\"`` / ``\"initializer\"`` / ``\"input\"`` / "
@@ -2190,11 +2242,15 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "than 8 elements only the first 8 are kept, ``data_type`` is set to "
           "``-1`` and ``shape`` is empty to signal the truncated payload. Node "
           "dispatch events also identify the exact process-local CPU executor and "
-          "its effective participants. Call "
+          "its effective participants. Persistent-storage events carry read-only "
+          "``storage_*`` fields describing allocation, copying and reuse; "
+          "they are recorded only when :attr:`events_enabled` is true. Call "
           ":meth:`RuntimeEvent.as_dict` to convert an individual entry to a "
-          "plain Python ``dict``.")
+          "plain Python ``dict``. Child contexts record directly in the same log. "
+          "Reads require that no related context is recording or clearing events.")
       .def("clear_events", &RuntimeContext::ClearEvents,
-           "Empties the event log without otherwise touching the tensor map.")
+           "Empties the shared event log for this context and its children without "
+           "otherwise touching their tensor maps.")
       .def("clear", &RuntimeContext::Clear,
            "Resets the per-invocation state so the context can be reused for a fresh "
            "run: clears the tensor map, the sequence map and the event log, and resets "

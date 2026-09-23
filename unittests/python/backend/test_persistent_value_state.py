@@ -1,7 +1,7 @@
 # Copyright (c) ONNX Project Contributors
 #
 # SPDX-License-Identifier: Apache-2.0
-"""Tests persistent model feedback through the native bindings."""
+"""Tests persistent value state through the native bindings."""
 
 import gc
 import subprocess
@@ -33,6 +33,41 @@ def make_model():
     return model
 
 
+def make_attention_model(data_type=onnx.TensorProto.FLOAT):
+    """Returns Attention with graph-declared key/value feedback."""
+    model = helper.make_model(
+        helper.make_graph(
+            [
+                helper.make_node(
+                    "Attention",
+                    ["Q", "K", "V", "", "past_key", "past_value"],
+                    ["Y", "present_key", "present_value"],
+                    is_causal=1,
+                )
+            ],
+            "attention_feedback",
+            [
+                helper.make_tensor_value_info(name, data_type, [1, 1, 1, 2])
+                for name in ("Q", "K", "V")
+            ]
+            + [
+                helper.make_tensor_value_info(name, data_type, [1, 1, None, 2])
+                for name in ("past_key", "past_value")
+            ],
+            [helper.make_tensor_value_info("Y", data_type, [1, 1, 1, 2])]
+            + [
+                helper.make_tensor_value_info(name, data_type, [1, 1, None, 2])
+                for name in ("present_key", "present_value")
+            ],
+        ),
+        opset_imports=[helper.make_opsetid("", 23)],
+        ir_version=10,
+    )
+    add_binding(model, "past_key", "present_key")
+    add_binding(model, "past_value", "present_value")
+    return model
+
+
 def add_binding(model, input_name, output_name):
     """Declares a persistent input/output binding."""
     binding = model.graph.persistent_bindings.add()
@@ -50,7 +85,245 @@ def array(tensor):
     return numpy.from_dlpack(tensor)
 
 
-class TestFeedbackState(unittest.TestCase):
+class TestPersistentValueState(unittest.TestCase):
+    def test_attention_persistent_tensor_initial_capacity(self):
+        model = make_attention_model()
+        initial_key = numpy.array([0.25, 0.5], dtype=numpy.float32).reshape(1, 1, 1, 2)
+        bytes_per_token = 2 * initial_key.nbytes
+        results = {}
+        for capacity, allocated_capacities in ((0, (2, 3, 4, 5)), (4, (4, 0, 0, 8))):
+            options = runtime.RuntimeSessionOptions(persistent_tensor_initial_capacity=capacity)
+            state = runtime.PersistentValueState(
+                model, {"past_key": initial_key, "past_value": -initial_key}, options
+            )
+            context = runtime.RuntimeContext(
+                runtime.KernelContext(runtime.default_opset(23)), events_enabled=True
+            )
+            expected_key = initial_key.copy()
+            results[capacity] = []
+            for step, allocated_capacity in enumerate(allocated_capacities, 1):
+                with self.subTest(capacity=capacity, step=step):
+                    token = numpy.array(
+                        [step * 0.125, step * 0.125 + 0.25], dtype=numpy.float32
+                    ).reshape(1, 1, 1, 2)
+                    context.clear_events()
+                    outputs = state.run(context, {"Q": token, "K": token, "V": -token})
+                    snapshot = {name: array(value).copy() for name, value in outputs.items()}
+                    # Returned views must be released before the next call can reuse capacity.
+                    del outputs
+                    results[capacity].append(snapshot)
+                    expected_key = numpy.concatenate((expected_key, token), axis=2)
+                    numpy.testing.assert_array_equal(snapshot["present_key"], expected_key)
+                    numpy.testing.assert_array_equal(snapshot["present_value"], -expected_key)
+
+                    storage_events = [
+                        event
+                        for event in context.events()
+                        if event.action == runtime.RuntimeEventAction.kPersistentStorage
+                    ]
+                    self.assertTrue(storage_events)
+                    expected = {
+                        "storage_allocations": 2 if allocated_capacity else 0,
+                        "storage_allocated_bytes": allocated_capacity * bytes_per_token,
+                        "storage_prefix_copied_bytes": (
+                            step * bytes_per_token if allocated_capacity else 0
+                        ),
+                        "storage_append_copied_bytes": bytes_per_token,
+                        "storage_reuse_count": 0 if allocated_capacity else 2,
+                    }
+                    self.assertEqual(
+                        {
+                            field: sum(getattr(event, field) for event in storage_events)
+                            for field in expected
+                        },
+                        expected,
+                    )
+            state.close()
+
+        for disabled, enabled in zip(results[0], results[4]):
+            self.assertEqual(set(disabled), set(enabled))
+            for name in disabled:
+                numpy.testing.assert_array_equal(disabled[name], enabled[name])
+
+    def test_attention_persistent_storage_events_are_opt_in(self):
+        fields = (
+            "storage_allocations",
+            "storage_allocated_bytes",
+            "storage_prefix_copied_bytes",
+            "storage_append_copied_bytes",
+            "storage_reuse_count",
+        )
+        for dtype, data_type in (
+            (numpy.float32, onnx.TensorProto.FLOAT),
+            (numpy.float16, onnx.TensorProto.FLOAT16),
+        ):
+            results = {}
+            for enabled in (False, True):
+                with self.subTest(dtype=dtype, events_enabled=enabled):
+                    model = make_attention_model(data_type)
+                    state = runtime.PersistentValueState(
+                        model,
+                        {
+                            "past_key": numpy.array([0.25, 0.5], dtype=dtype).reshape(1, 1, 1, 2),
+                            "past_value": numpy.array([-0.25, 0.5], dtype=dtype).reshape(
+                                1, 1, 1, 2
+                            ),
+                        },
+                    )
+                    context = runtime.RuntimeContext(
+                        runtime.KernelContext(runtime.default_opset(23)), events_enabled=enabled
+                    )
+                    self.assertEqual(context.events_enabled, enabled)
+                    context.set(
+                        "sentinel",
+                        runtime.tensor_from_proto(
+                            numpy_helper.from_array(numpy.ones(1, dtype=dtype), name="sentinel")
+                        ),
+                    )
+                    previous = [event.as_dict() for event in context.events()]
+                    results[enabled] = []
+                    for step in range(1, 4):
+                        token = numpy.array([step * 0.125, step * 0.125 + 0.25], dtype=dtype)
+                        outputs = state.run(
+                            context,
+                            {
+                                "Q": token.reshape(1, 1, 1, 2),
+                                "K": token.reshape(1, 1, 1, 2),
+                                "V": -token.reshape(1, 1, 1, 2),
+                            },
+                        )
+                        results[enabled].append(
+                            {name: array(value).copy() for name, value in outputs.items()}
+                        )
+                        del outputs
+                        events = context.events()
+                        if enabled:
+                            self.assertGreater(len(events), len(previous))
+                            self.assertEqual(
+                                [event.as_dict() for event in events[: len(previous)]], previous
+                            )
+                            self.assertTrue(
+                                any(
+                                    event.action == runtime.RuntimeEventAction.kPersistentStorage
+                                    for event in events[len(previous) :]
+                                )
+                            )
+                        else:
+                            self.assertEqual(events, [])
+                        previous = [event.as_dict() for event in events]
+
+                    if enabled:
+                        storage_events = [
+                            event
+                            for event in events
+                            if event.action == runtime.RuntimeEventAction.kPersistentStorage
+                        ]
+                        self.assertTrue(storage_events)
+                        totals = dict.fromkeys(fields, 0)
+                        for event in events:
+                            record = event.as_dict()
+                            self.assertNotIn("persistent_storage", record)
+                            if event.action != runtime.RuntimeEventAction.kPersistentStorage:
+                                for field in fields:
+                                    self.assertNotIn(field, record)
+                                    self.assertEqual(getattr(event, field), 0)
+                                continue
+                            self.assertEqual(record["action"], "persistent_storage")
+                            self.assertEqual(
+                                {key for key in record if key.startswith("storage_")}, set(fields)
+                            )
+                            for field in fields:
+                                value = record[field]
+                                self.assertIsInstance(value, int)
+                                self.assertGreaterEqual(value, 0)
+                                self.assertEqual(value, getattr(event, field))
+                                totals[field] += value
+                                with self.assertRaises(AttributeError):
+                                    setattr(event, field, value)
+                            self.assertEqual(event.allocated_bytes, 0)
+                            self.assertEqual(event.peak_bytes, 0)
+                            self.assertEqual(record["allocated_bytes"], 0)
+                            self.assertEqual(record["peak_bytes"], 0)
+                        self.assertGreater(totals["storage_allocations"], 0)
+                        self.assertGreater(totals["storage_allocated_bytes"], 0)
+                        self.assertGreater(totals["storage_prefix_copied_bytes"], 0)
+                        self.assertGreater(totals["storage_append_copied_bytes"], 0)
+                        if dtype == numpy.float32:
+                            self.assertEqual(totals["storage_allocations"], 2)
+                            self.assertEqual(totals["storage_prefix_copied_bytes"], 2 * 2 * 4)
+                            self.assertEqual(totals["storage_append_copied_bytes"], 3 * 2 * 2 * 4)
+                            self.assertEqual(totals["storage_reuse_count"], 4)
+                    before_clear = {
+                        name: array(value).copy() for name, value in state.values.items()
+                    }
+                    context.clear_events()
+                    self.assertEqual(context.events(), [])
+                    self.assertEqual(context.events_enabled, enabled)
+                    self.assertTrue(context.has("sentinel"))
+                    for name, value in state.values.items():
+                        numpy.testing.assert_array_equal(array(value), before_clear[name])
+                    state.close()
+            for disabled, enabled in zip(results[False], results[True]):
+                self.assertEqual(set(disabled), set(enabled))
+                for name in disabled:
+                    numpy.testing.assert_array_equal(disabled[name], enabled[name])
+
+    def test_attention_persistent_storage_events_survive_failure(self):
+        model = make_attention_model()
+        model.graph.input.append(
+            helper.make_tensor_value_info("target_shape", onnx.TensorProto.INT64, [1])
+        )
+        model.graph.node.append(
+            helper.make_node("Reshape", ["present_key", "target_shape"], ["invalid"])
+        )
+        model.graph.output.append(
+            helper.make_tensor_value_info("invalid", onnx.TensorProto.FLOAT, [None])
+        )
+        for enabled in (False, True):
+            with self.subTest(events_enabled=enabled):
+                state = runtime.PersistentValueState(
+                    model,
+                    {
+                        name: numpy.empty((1, 1, 0, 2), dtype=numpy.float32)
+                        for name in ("past_key", "past_value")
+                    },
+                )
+                context = runtime.RuntimeContext(
+                    runtime.KernelContext(runtime.default_opset(23)), events_enabled=enabled
+                )
+                context.set(
+                    "sentinel",
+                    runtime.tensor_from_proto(
+                        numpy_helper.from_array(numpy.ones(1, dtype=numpy.float32))
+                    ),
+                )
+                previous = [event.as_dict() for event in context.events()]
+                feeds = {
+                    name: numpy.ones((1, 1, 1, 2), dtype=numpy.float32)
+                    for name in ("Q", "K", "V")
+                }
+                feeds["target_shape"] = numpy.array([3], dtype=numpy.int64)
+                with self.assertRaisesRegex((ValueError, RuntimeError), "Reshape|reshape"):
+                    state.run(context, feeds)
+                events = context.events()
+                if enabled:
+                    self.assertEqual(
+                        [event.as_dict() for event in events[: len(previous)]], previous
+                    )
+                    self.assertTrue(
+                        any(
+                            event.action == runtime.RuntimeEventAction.kPersistentStorage
+                            for event in events[len(previous) :]
+                        )
+                    )
+                else:
+                    self.assertEqual(events, [])
+                for value in state.values.values():
+                    self.assertEqual(array(value).shape, (1, 1, 0, 2))
+                context.clear_events()
+                self.assertEqual(context.events(), [])
+                state.close()
+
     def test_loop_uses_normal_runtime_with_selected_result(self):
         body = helper.make_graph(
             [helper.make_node("Add", ["state", "one"], ["next"])],
@@ -84,7 +357,7 @@ class TestFeedbackState(unittest.TestCase):
             opset_imports=[helper.make_opsetid("", 18)],
         )
         add_binding(model, "past", "present")
-        state = runtime.FeedbackState(model, {"past": numpy.zeros(2, dtype=numpy.float32)})
+        state = runtime.PersistentValueState(model, {"past": numpy.zeros(2, dtype=numpy.float32)})
         context = make_context()
         for expected in (2, 4):
             output = state.run(context, {})
@@ -133,7 +406,7 @@ class TestFeedbackState(unittest.TestCase):
             opset_imports=[helper.make_opsetid("", 18)],
         )
         add_binding(model, "past", "present")
-        state = runtime.FeedbackState(model, {"past": numpy.zeros(2, dtype=numpy.float32)})
+        state = runtime.PersistentValueState(model, {"past": numpy.zeros(2, dtype=numpy.float32)})
         context = make_context()
         outputs = []
         for expected in (3, 6):
@@ -178,7 +451,7 @@ class TestFeedbackState(unittest.TestCase):
         text = runtime.tensor_from_proto(
             numpy_helper.from_array(numpy.array(["a", "b"], dtype=object))
         )
-        state = runtime.FeedbackState(model, {"past": numpy.zeros(2, dtype=numpy.float32)})
+        state = runtime.PersistentValueState(model, {"past": numpy.zeros(2, dtype=numpy.float32)})
         context = make_context()
         for expected, condition in enumerate((True, False), 1):
             output = state.run(
@@ -196,7 +469,9 @@ class TestFeedbackState(unittest.TestCase):
             self.assertEqual(set(state.values), {"past"})
 
     def test_context_retention_is_bounded(self):
-        state = runtime.FeedbackState(make_model(), {"past": numpy.zeros(2, dtype=numpy.float32)})
+        state = runtime.PersistentValueState(
+            make_model(), {"past": numpy.zeros(2, dtype=numpy.float32)}
+        )
         context = make_context()
         feeds = {"delta": numpy.ones(2, dtype=numpy.float32)}
         state.run(context, feeds)
@@ -216,7 +491,7 @@ class TestFeedbackState(unittest.TestCase):
             numpy_helper.from_array(numpy.array(["a", "b"], dtype=object))
         )
         with self.assertRaisesRegex(ValueError, "String tensors cannot be persistent"):
-            runtime.FeedbackState(model, {"past": initial})
+            runtime.PersistentValueState(model, {"past": initial})
 
     def test_ordinary_string_computation_with_numeric_state(self):
         model = parser.parse_model(
@@ -226,7 +501,7 @@ class TestFeedbackState(unittest.TestCase):
             "{ present = Add(past, delta) text_out = StringConcat(text, suffix) }"
         )
         add_binding(model, "past", "present")
-        state = runtime.FeedbackState(model, {"past": numpy.zeros(2, dtype=numpy.float32)})
+        state = runtime.PersistentValueState(model, {"past": numpy.zeros(2, dtype=numpy.float32)})
         context = runtime.RuntimeContext(runtime.KernelContext(runtime.default_opset(20)))
         for expected in (1, 2):
             feeds = {
@@ -267,7 +542,7 @@ class TestFeedbackState(unittest.TestCase):
     def test_matches_manual_loop_and_reset(self):
         model = make_model()
         initial = numpy.zeros(2, dtype=numpy.float32)
-        state = runtime.FeedbackState(model, {"past": initial})
+        state = runtime.PersistentValueState(model, {"past": initial})
         context = make_context()
         manual = runtime.tensor_from_proto(numpy_helper.from_array(initial, name="past"))
         for index in range(4):
@@ -289,8 +564,8 @@ class TestFeedbackState(unittest.TestCase):
     def test_ownership_and_request_isolation(self):
         model = make_model()
         initial = numpy.ones(2, dtype=numpy.float32)
-        first = runtime.FeedbackState(model, {"past": initial})
-        second = runtime.FeedbackState(model, {"past": initial})
+        first = runtime.PersistentValueState(model, {"past": initial})
+        second = runtime.PersistentValueState(model, {"past": initial})
         self.assertEqual(array(first.values["past"]).ctypes.data, initial.ctypes.data)
         self.assertEqual(array(second.values["past"]).ctypes.data, initial.ctypes.data)
         del model
@@ -312,13 +587,13 @@ class TestFeedbackState(unittest.TestCase):
         model = make_model()
         model.graph.persistent_bindings[0].input_name = "absent"
         with self.assertRaises(ValueError):
-            runtime.FeedbackState(model, {"absent": initial})
+            runtime.PersistentValueState(model, {"absent": initial})
         model = make_model()
         with self.assertRaises(ValueError):
-            runtime.FeedbackState(model, {})
+            runtime.PersistentValueState(model, {})
         with self.assertRaises(ValueError):
-            runtime.FeedbackState(model, {"past": numpy.zeros(3, dtype=numpy.float32)})
-        state = runtime.FeedbackState(model, {"past": initial})
+            runtime.PersistentValueState(model, {"past": numpy.zeros(3, dtype=numpy.float32)})
+        state = runtime.PersistentValueState(model, {"past": initial})
         with self.assertRaises(ValueError):
             state.run(make_context(), {})
         with self.assertRaises(ValueError):
@@ -326,10 +601,12 @@ class TestFeedbackState(unittest.TestCase):
         rewritten = make_model()
         rewritten.graph.output[0].name = "rewritten"
         with self.assertRaises(ValueError):
-            runtime.FeedbackState(rewritten, {"past": initial})
+            runtime.PersistentValueState(rewritten, {"past": initial})
 
     def test_cancelled_call_preserves_state(self):
-        state = runtime.FeedbackState(make_model(), {"past": numpy.zeros(2, dtype=numpy.float32)})
+        state = runtime.PersistentValueState(
+            make_model(), {"past": numpy.zeros(2, dtype=numpy.float32)}
+        )
         completion = runtime.TaskCompletion()
         completion.cancel("request cancelled")
         with self.assertRaises((ValueError, RuntimeError)):
@@ -347,7 +624,7 @@ class TestFeedbackState(unittest.TestCase):
         for global_registration in (False, True):
             with self.subTest(global_registration=global_registration):
                 initial = numpy.zeros(2, dtype=numpy.float32)
-                state = runtime.FeedbackState(model, {"past": initial})
+                state = runtime.PersistentValueState(model, {"past": initial})
                 context = make_context()
                 entered = threading.Event()
                 resume = threading.Event()
@@ -421,7 +698,7 @@ class TestFeedbackState(unittest.TestCase):
         initial_cache = numpy.zeros(2, dtype=numpy.float32)
         initial_logits = numpy.zeros(2, dtype=numpy.float32)
         cache_ref, logits_ref = weakref.ref(initial_cache), weakref.ref(initial_logits)
-        state = runtime.FeedbackState(
+        state = runtime.PersistentValueState(
             model, {"request": {"cache": initial_cache, "logits": initial_logits}}
         )
         snapshot = state.values
@@ -489,7 +766,7 @@ class TestFeedbackState(unittest.TestCase):
         initial = numpy.zeros(2, dtype=numpy.float32)
         source_ref = weakref.ref(initial)
         address = initial.ctypes.data
-        state = runtime.FeedbackState(make_model(), {"past": initial})
+        state = runtime.PersistentValueState(make_model(), {"past": initial})
         retained = state.values["past"]
         self.assertEqual(array(retained).ctypes.data, address)
         del initial
@@ -515,7 +792,7 @@ class TestFeedbackState(unittest.TestCase):
         )
         add_binding(model, "past", "present")
         initial = numpy.zeros(2, dtype=numpy.float32)
-        state = runtime.FeedbackState(model, {"past": initial})
+        state = runtime.PersistentValueState(model, {"past": initial})
         context = make_context()
         addresses = []
 
@@ -537,7 +814,7 @@ class TestFeedbackState(unittest.TestCase):
             numpy_helper.from_array(numpy.ones(2, dtype=numpy.float32))
         )
         address = array(source).ctypes.data
-        state = runtime.FeedbackState(make_model(), {"past": source})
+        state = runtime.PersistentValueState(make_model(), {"past": source})
         self.assertEqual(array(state.values["past"]).ctypes.data, address)
         del source
         gc.collect()
@@ -550,7 +827,7 @@ class TestFeedbackState(unittest.TestCase):
         )
         add_binding(model, "past", "present")
         initial = numpy.array(3.0, dtype=numpy.float32)
-        state = runtime.FeedbackState(model, {"past": initial})
+        state = runtime.PersistentValueState(model, {"past": initial})
         self.assertEqual(array(state.values["past"]).ctypes.data, initial.ctypes.data)
         output = state.run(make_context(), {})
         self.assertEqual(
@@ -564,7 +841,7 @@ class TestFeedbackState(unittest.TestCase):
         torch = import_or_skip("torch")
         source = torch.zeros(2, dtype=torch.float32)
         address = source.data_ptr()
-        state = runtime.FeedbackState(make_model(), {"past": source})
+        state = runtime.PersistentValueState(make_model(), {"past": source})
         self.assertEqual(array(state.values["past"]).ctypes.data, address)
         del source
         gc.collect()
@@ -582,7 +859,7 @@ class TestFeedbackState(unittest.TestCase):
             [0.0, 0.0],
         ):
             with self.subTest(initial=initial), self.assertRaises((TypeError, ValueError)):
-                runtime.FeedbackState(make_model(), {"past": initial})
+                runtime.PersistentValueState(make_model(), {"past": initial})
 
     def test_literal_dots_in_whole_structured_state(self):
         tensor_type = helper.make_tensor_type_proto(onnx.TensorProto.FLOAT, [2])
@@ -614,7 +891,7 @@ class TestFeedbackState(unittest.TestCase):
         verify.verify_model(model)
         first = numpy.ones(2, dtype=numpy.float32)
         second = numpy.full(2, 2, dtype=numpy.float32)
-        state = runtime.FeedbackState(model, {"x": {"a.b": first, "a": {"b": second}}})
+        state = runtime.PersistentValueState(model, {"x": {"a.b": first, "a": {"b": second}}})
         context = make_context()
 
         def echo(node, context):
@@ -632,7 +909,7 @@ class TestFeedbackState(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "exact.*input/output"):
                 verify.verify_model(model)
             with self.assertRaisesRegex(ValueError, "exact.*input/output"):
-                runtime.FeedbackState(model, {"x": {"a.b": first, "a": {"b": second}}})
+                runtime.PersistentValueState(model, {"x": {"a.b": first, "a": {"b": second}}})
             setattr(
                 model.graph.persistent_bindings[0], field, "x" if field == "input_name" else "y"
             )
@@ -650,7 +927,7 @@ class TestFeedbackState(unittest.TestCase):
         add_binding(model, "past.part", "present.part")
         verify.verify_model(model)
         initial = numpy.ones(2, dtype=numpy.float32)
-        state = runtime.FeedbackState(model, {"past.part": initial})
+        state = runtime.PersistentValueState(model, {"past.part": initial})
         output = state.run(make_context(), {})
         self.assertEqual(set(state.values), {"past.part"})
         self.assertEqual(
@@ -685,7 +962,7 @@ class TestFeedbackState(unittest.TestCase):
         verify.verify_model(model)
         first = numpy.ones(2, dtype=numpy.float32)
         second = numpy.full(2, 2, dtype=numpy.float32)
-        state = runtime.FeedbackState(model, {"past": first})
+        state = runtime.PersistentValueState(model, {"past": first})
         output = state.run(make_context(), {"past.part": second})
         self.assertNotEqual(array(output["present.part"]).ctypes.data, second.ctypes.data)
         numpy.testing.assert_array_equal(array(output["present.part"]), second)
@@ -695,7 +972,7 @@ class TestFeedbackState(unittest.TestCase):
         state.close()
         add_binding(model, "past.part", "present.part")
         verify.verify_model(model)
-        state = runtime.FeedbackState(model, {"past": first, "past.part": second})
+        state = runtime.PersistentValueState(model, {"past": first, "past.part": second})
         output = state.run(make_context(), {})
         self.assertEqual(set(state.values), {"past", "past.part"})
         self.assertEqual(
@@ -710,17 +987,24 @@ class TestFeedbackState(unittest.TestCase):
         weights = numpy.ones(2, dtype=numpy.float32)
         model = helper.make_model(
             helper.make_graph(
-                [helper.make_node("Identity", ["W"], ["present"])],
+                [
+                    helper.make_node("Identity", ["W"], ["present"]),
+                    helper.make_node("Shape", ["past"], ["past_shape"]),
+                ],
                 "initializer_feedback",
                 [helper.make_tensor_value_info("past", onnx.TensorProto.FLOAT, [2])],
-                [helper.make_tensor_value_info("present", onnx.TensorProto.FLOAT, [2])],
+                [
+                    helper.make_tensor_value_info("present", onnx.TensorProto.FLOAT, [2]),
+                    helper.make_tensor_value_info("past_shape", onnx.TensorProto.INT64, [1]),
+                ],
                 [numpy_helper.from_array(weights, name="W")],
             ),
             opset_imports=[helper.make_opsetid("", 18)],
         )
         add_binding(model, "past", "present")
-        state = runtime.FeedbackState(model, {"past": numpy.zeros(2, dtype=numpy.float32)})
+        state = runtime.PersistentValueState(model, {"past": numpy.zeros(2, dtype=numpy.float32)})
         output = state.run(make_context(), {})
+        numpy.testing.assert_array_equal(array(output["past_shape"]), [2])
         self.assertEqual(
             array(output["present"]).ctypes.data, array(state.values["past"]).ctypes.data
         )

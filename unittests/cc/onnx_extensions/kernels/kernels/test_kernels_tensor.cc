@@ -136,11 +136,11 @@ void CheckStructuredIdentityLifetime(bool retained) {
 
 } // namespace
 
-TEST(FeedbackState, OrdinaryStructuredIdentitySurvivesReleasedInlineIntermediates) {
+TEST(PersistentValueState, OrdinaryStructuredIdentitySurvivesReleasedInlineIntermediates) {
   CheckStructuredIdentityLifetime(false);
 }
 
-TEST(FeedbackState, SelectedStructuredIdentitySurvivesReleasedInlineIntermediates) {
+TEST(PersistentValueState, SelectedStructuredIdentitySurvivesReleasedInlineIntermediates) {
   CheckStructuredIdentityLifetime(true);
 }
 

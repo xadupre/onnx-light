@@ -95,6 +95,7 @@ class TestRunNodesBindings(ExtTestCase):
             "RuntimeParameters",
             "RuntimeEvent",
             "RuntimeEventAction",
+            "PersistentValueState",
             "ExecutionPlan",
             "RuntimeSession",
             "default_opset",
@@ -109,12 +110,14 @@ class TestRunNodesBindings(ExtTestCase):
             "clear_custom_kernels",
         ]:
             self.assertTrue(hasattr(rt, name), name)
+        self.assertFalse(hasattr(rt, "PersistentStorageStatistics"))
 
     def test_runtime_event_action_enum_values(self):
         self.assertEqual(int(rt.RuntimeEventAction.kAdd), 0)
         self.assertEqual(int(rt.RuntimeEventAction.kReplace), 1)
         self.assertEqual(int(rt.RuntimeEventAction.kRemove), 2)
         self.assertEqual(int(rt.RuntimeEventAction.kRunNode), 3)
+        self.assertEqual(int(rt.RuntimeEventAction.kPersistentStorage), 4)
 
     def test_runtime_session_from_model_builds_plan(self):
         # A session can be constructed directly from a ModelProto (no plan
@@ -163,12 +166,36 @@ class TestRunNodesBindings(ExtTestCase):
         self.assertFalse(options.allow_external_output_allocators)
         self.assertFalse(options.check_shapes)
         self.assertEqual(options.verbose, 0)
+        self.assertEqual(options.persistent_tensor_initial_capacity, 32)
 
         options = rt.RuntimeSessionOptions(allow_external_output_allocators=True)
         self.assertTrue(options.allow_external_output_allocators)
 
         session = rt.RuntimeSession(model, options)
         self.assertTrue(session.allow_external_output_allocators)
+
+    def test_runtime_session_options_persistent_tensor_initial_capacity(self):
+        for capacity in (0, 4, 64):
+            with self.subTest(capacity=capacity):
+                options = rt.RuntimeSessionOptions(persistent_tensor_initial_capacity=capacity)
+                self.assertEqual(options.persistent_tensor_initial_capacity, capacity)
+                self.assertFalse(options.allow_external_output_allocators)
+                self.assertFalse(options.check_shapes)
+                self.assertEqual(options.verbose, 0)
+
+                options.persistent_tensor_initial_capacity = 32
+                self.assertEqual(options.persistent_tensor_initial_capacity, 32)
+                options.persistent_tensor_initial_capacity = capacity
+                self.assertEqual(options.persistent_tensor_initial_capacity, capacity)
+
+        options = rt.RuntimeSessionOptions()
+        for capacity in (-1, 1 << (8 * struct.calcsize("P"))):
+            with self.subTest(invalid_capacity=capacity):
+                with self.assertRaises(TypeError):
+                    rt.RuntimeSessionOptions(persistent_tensor_initial_capacity=capacity)
+                with self.assertRaises(TypeError):
+                    options.persistent_tensor_initial_capacity = capacity
+                self.assertEqual(options.persistent_tensor_initial_capacity, 32)
 
     def test_runtime_session_parallel_region_report(self):
         model = parser.parse_model(
@@ -305,6 +332,18 @@ class TestRunNodesBindings(ExtTestCase):
         self.assertEqual(d0["device"], -1)
         self.assertEqual(events[0].node_index, -1)
         self.assertEqual(events[0].device, -1)
+        for event in events:
+            self.assertNotIn("persistent_storage", event.as_dict())
+            self.assertFalse(hasattr(event, "persistent_storage"))
+            for field in (
+                "storage_allocations",
+                "storage_allocated_bytes",
+                "storage_prefix_copied_bytes",
+                "storage_append_copied_bytes",
+                "storage_reuse_count",
+            ):
+                self.assertEqual(getattr(event, field), 0)
+                self.assertNotIn(field, event.as_dict())
 
         ctx.clear_events()
         self.assertEqual(ctx.events(), [])

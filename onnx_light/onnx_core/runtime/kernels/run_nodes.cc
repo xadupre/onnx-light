@@ -197,12 +197,6 @@ SubgraphSession::RunChild(std::vector<std::pair<std::string, Tensor>> bindings,
     child.PutSequence(kv.first, std::move(kv.second));
   }
   RuntimeSession::Run(child);
-
-  if (rt.events_enabled()) {
-    for (auto &ev : child.events()) {
-      rt.events().push_back(std::move(ev));
-    }
-  }
   return child;
 }
 
@@ -275,9 +269,6 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt, SubgraphSession &then_
       retained.insert(branch.output(i).name());
   child.set_retained_outputs(std::move(retained));
   session.RuntimeSession::Run(child);
-  if (rt.events_enabled())
-    for (auto &event : child.events())
-      rt.events().push_back(std::move(event));
 
   for (int i = 0; i < branch.output_size(); ++i) {
     const std::string out_name = branch.output()[i].name();

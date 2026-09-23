@@ -152,17 +152,11 @@ int64_t ResolveNodeIndex(RuntimeEventKind kind, int64_t current_node_index) noex
 }
 
 RuntimeEvent MakeAddOrReplaceEvent(RuntimeEventAction action, RuntimeEventKind kind,
-                                   const std::string &name, const Tensor &tensor,
-                                   int64_t current_node_index, int64_t subgraph_node_index,
-                                   const std::string &subgraph_attr_name) {
+                                   const std::string &name, const Tensor &tensor) {
   RuntimeEvent ev;
   ev.action = action;
   ev.kind = kind;
-  ev.timestamp_ns = NowNanos();
   ev.name = name;
-  ev.node_index = ResolveNodeIndex(kind, current_node_index);
-  ev.subgraph_node_index = subgraph_node_index;
-  ev.subgraph_attr_name = subgraph_attr_name;
   const int64_t count = tensor.element_count();
   const int32_t capacity = static_cast<int32_t>(kRuntimeEventValueLimit);
   const int32_t truncated_count = static_cast<int32_t>(std::min<int64_t>(count, capacity));
@@ -189,20 +183,6 @@ RuntimeEvent MakeAddOrReplaceEvent(RuntimeEventAction action, RuntimeEventKind k
     ev.data_type = tensor.data_type;
     ev.shape = tensor.shape;
   }
-  return ev;
-}
-
-RuntimeEvent MakeRemoveEvent(RuntimeEventKind kind, const std::string &name,
-                             int64_t subgraph_node_index, const std::string &subgraph_attr_name) {
-  RuntimeEvent ev;
-  ev.action = RuntimeEventAction::kRemove;
-  ev.kind = kind;
-  ev.timestamp_ns = NowNanos();
-  ev.name = name;
-  ev.data_type = static_cast<int32_t>(DataType::UNDEFINED);
-  ev.value_count = 0;
-  ev.subgraph_node_index = subgraph_node_index;
-  ev.subgraph_attr_name = subgraph_attr_name;
   return ev;
 }
 
@@ -235,6 +215,12 @@ std::string RuntimeEvent::summary() const {
       oss << " executor#" << cpu_executor_instance_id << "/" << cpu_effective_threads;
     }
   }
+  if (action == RuntimeEventAction::kPersistentStorage) {
+    oss << " storage_allocations=" << storage_allocations
+        << " storage_bytes=" << storage_allocated_bytes
+        << " prefix_copied=" << storage_prefix_copied_bytes
+        << " append_copied=" << storage_append_copied_bytes << " reused=" << storage_reuse_count;
+  }
   oss << " mem=" << allocated_bytes << "B peak=" << peak_bytes << "B";
   return oss.str();
 }
@@ -249,7 +235,7 @@ void RuntimeContext::StampAllocatorMemory(RuntimeEvent &ev) const noexcept {
 
 void RuntimeContext::RecordRunNodeEvent(const NodeProto &node, const std::string &domain,
                                         const std::string &op_type, int64_t start_time_ns,
-                                        int64_t duration_ns) noexcept {
+                                        int64_t duration_ns) {
   if (!events_enabled_) {
     return;
   }
@@ -262,7 +248,6 @@ void RuntimeContext::RecordRunNodeEvent(const NodeProto &node, const std::string
   ev.timestamp_ns = start_time_ns;
   ev.data_type = static_cast<int32_t>(DataType::UNDEFINED);
   ev.value_count = 0;
-  ev.node_index = current_node_index_;
   ev.op_domain = domain;
   ev.op_type = op_type;
   const size_t input_count = static_cast<size_t>(node.input_size());
@@ -275,21 +260,34 @@ void RuntimeContext::RecordRunNodeEvent(const NodeProto &node, const std::string
     ev.cpu_executor_instance_id = cpu_executor_->instance_id();
     ev.cpu_effective_threads = cpu_executor_->effective_threads();
   }
-  ev.subgraph_node_index = current_subgraph_node_index_;
-  ev.subgraph_attr_name = current_subgraph_attr_name_;
-  StampAllocatorMemory(ev);
-  events_.push_back(std::move(ev));
+  RecordEvent(std::move(ev));
 }
 
 RuntimeContext::~RuntimeContext() = default;
 
+void RuntimeContext::RecordEvent(RuntimeEvent event) {
+  if (!events_enabled_)
+    return;
+  if (event.timestamp_ns == 0)
+    event.timestamp_ns = NowNanos();
+  event.node_index = event.action == RuntimeEventAction::kRemove
+                         ? -1
+                         : ResolveNodeIndex(event.kind, current_node_index_);
+  event.subgraph_node_index = current_subgraph_node_index_;
+  event.subgraph_attr_name = current_subgraph_attr_name_;
+  StampAllocatorMemory(event);
+  std::lock_guard<std::mutex> lock(events_->mutex);
+  events_->log.push_back(std::move(event));
+}
+
 RuntimeContext::RuntimeContext(KernelContext kernel_ctx, RuntimeContextOptions options,
-                               std::shared_ptr<KernelUsageState> kernel_usage)
+                               std::shared_ptr<KernelUsageState> kernel_usage,
+                               std::shared_ptr<EventState> events)
     : kernel_ctx_(std::move(kernel_ctx)), kernel_usage_(std::move(kernel_usage)),
-      events_enabled_(options.events_enabled), verbose_(options.verbose),
-      release_intermediates_(options.release_intermediates), allocator_(options.allocator),
-      io_allocator_(options.io_allocator), active_allocator_(options.allocator),
-      device_(options.device) {
+      events_(std::move(events)), events_enabled_(options.events_enabled),
+      verbose_(options.verbose), release_intermediates_(options.release_intermediates),
+      allocator_(options.allocator), io_allocator_(options.io_allocator),
+      active_allocator_(options.allocator), device_(options.device) {
   kernel_ctx_.allocator = active_allocator_;
 }
 
@@ -324,11 +322,7 @@ void RuntimeContext::Set(const std::string &name, Tensor tensor, RuntimeEventKin
   if (!retains_output(name))
     EnsureAllocatorBacked(tensor, allocator_, kind, device_);
   if (events_enabled_) {
-    RuntimeEvent ev =
-        MakeAddOrReplaceEvent(RuntimeEventAction::kAdd, kind, name, tensor, current_node_index_,
-                              current_subgraph_node_index_, current_subgraph_attr_name_);
-    StampAllocatorMemory(ev);
-    events_.push_back(std::move(ev));
+    RecordEvent(MakeAddOrReplaceEvent(RuntimeEventAction::kAdd, kind, name, tensor));
   }
   tensors_[name] = std::move(tensor);
 }
@@ -339,11 +333,7 @@ void RuntimeContext::Put(const std::string &name, Tensor tensor, RuntimeEventKin
   if (events_enabled_) {
     const RuntimeEventAction action =
         Has(name) ? RuntimeEventAction::kReplace : RuntimeEventAction::kAdd;
-    RuntimeEvent ev =
-        MakeAddOrReplaceEvent(action, kind, name, tensor, current_node_index_,
-                              current_subgraph_node_index_, current_subgraph_attr_name_);
-    StampAllocatorMemory(ev);
-    events_.push_back(std::move(ev));
+    RecordEvent(MakeAddOrReplaceEvent(action, kind, name, tensor));
   }
   tensors_[name] = std::move(tensor);
 }
@@ -356,10 +346,7 @@ bool RuntimeContext::Remove(const std::string &name) {
   }
   tensors_.erase(it);
   if (events_enabled_) {
-    RuntimeEvent ev = MakeRemoveEvent(RuntimeEventKind::kUnknown, name,
-                                      current_subgraph_node_index_, current_subgraph_attr_name_);
-    StampAllocatorMemory(ev);
-    events_.push_back(std::move(ev));
+    RecordEvent({.action = RuntimeEventAction::kRemove, .name = name});
   }
   return true;
 }
@@ -425,7 +412,7 @@ RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name)
                            .release_intermediates = release_intermediates_,
                            .device = device_,
                        },
-                       kernel_usage_);
+                       kernel_usage_, events_);
   // Subgraph contexts do not inherit the parent allocator. Body kernels use
   // inline tensor storage, and the parent's EnsureAllocatorBacked (called in
   // Put/Set) migrates final outputs to the parent allocator when results are
@@ -444,21 +431,67 @@ RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name)
   return child;
 }
 
+std::optional<PersistentTensor::AppendReservation>
+RuntimeContext::ReservePersistentAppend(const Tensor &past, const Shape &shape, size_t axis,
+                                        int input_slot, int output_slot) {
+  if (persistent_graph_ == nullptr || !persistent_tensors_ || current_node_index_ < 0 ||
+      current_node_index_ >= persistent_graph_->node_size() || input_slot < 0 || output_slot < 0)
+    return std::nullopt;
+  const NodeProto &node = persistent_graph_->node(current_node_index_);
+  if (node.input_size() <= input_slot || node.output_size() <= output_slot ||
+      (!output_slot_io_roles_.empty() &&
+       static_cast<size_t>(output_slot) >= output_slot_io_roles_.size()))
+    return std::nullopt;
+  const auto input = tensors_.find(node.input(input_slot));
+  if (input == tensors_.end() || &input->second != &past)
+    return std::nullopt;
+  auto binding =
+      std::find_if(persistent_tensors_->begin(), persistent_tensors_->end(), [&](const auto &item) {
+        return item.input == node.input(input_slot) && item.output == node.output(output_slot) &&
+               item.input_view == &past && item.append.Matches(past);
+      });
+  if (binding == persistent_tensors_->end())
+    return std::nullopt;
+  return binding->append.Reserve(shape, axis, persistent_tensor_initial_capacity_,
+                                 AllocatorForOutput(output_slot), this);
+}
+
+Tensor RuntimeContext::CommitPersistentAppend(int output_slot,
+                                              PersistentTensor::AppendReservation reservation,
+                                              size_t initialized_bytes) {
+  EXT_ENFORCE_INVALID(persistent_graph_ != nullptr && persistent_tensors_ &&
+                          current_node_index_ >= 0 &&
+                          current_node_index_ < persistent_graph_->node_size(),
+                      "RuntimeContext: no active persistent invocation.");
+  const NodeProto &node = persistent_graph_->node(current_node_index_);
+  EXT_ENFORCE_INVALID(output_slot >= 0 && output_slot < node.output_size(),
+                      "RuntimeContext: invalid persistent output slot.");
+  auto binding =
+      std::find_if(persistent_tensors_->begin(), persistent_tensors_->end(),
+                   [&](const auto &item) { return item.output == node.output(output_slot); });
+  EXT_ENFORCE_INVALID(binding != persistent_tensors_->end(),
+                      "RuntimeContext: output has no persistent binding.");
+  binding->candidate = reservation.Commit(initialized_bytes);
+  return binding->candidate->BorrowView();
+}
+
 RuntimeContext RuntimeContext::MakeFunctionContext() const {
   RuntimeContext child(kernel_ctx_,
                        RuntimeContextOptions{
                            .allocator = allocator_,
                            .io_allocator = io_allocator_,
-                           .events_enabled = false,
+                           .events_enabled = events_enabled_,
                            .verbose = verbose_,
                            .release_intermediates = release_intermediates_,
                            .device = device_,
                        },
-                       kernel_usage_);
+                       kernel_usage_, events_);
   child.functions() = functions_;
   child.custom_kernels() = custom_kernels_;
   child.set_model_owner(model_owner_);
   child.set_cpu_executor(cpu_executor_);
+  if (events_enabled_)
+    child.set_current_subgraph(current_subgraph_node_index_, current_subgraph_attr_name_);
   return child;
 }
 

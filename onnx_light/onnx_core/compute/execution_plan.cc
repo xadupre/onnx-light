@@ -7,6 +7,7 @@
 #include "onnx_core/compute/peak_memory.h"
 #include "onnx_core/graph/graph_manipulations.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_proto/onnx_verify.h"
 
 #include <cstddef>
 #include <cstdlib>
@@ -103,6 +104,7 @@ ExecutionPlan::ExecutionPlan(const utils::RepeatedProtoField<NodeProto> &nodes,
 }
 
 ExecutionPlan::ExecutionPlan(const GraphProto &graph) {
+  VerifyPersistentInputUses(graph);
   inputs_.reserve(graph.input().size());
   for (size_t i = 0; i < graph.input().size(); ++i) {
     const std::string name = graph.input()[i].name();

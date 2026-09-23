@@ -11,7 +11,7 @@ Persistent declarations
 ``StructTypeCatalogue``. ``VerifyGraph`` and ``VerifyModel`` call it automatically.
 Bindings select whole inputs and outputs by exact graph names; dots and
 backslashes are literal. Unknown names and duplicate input or output selections
-are rejected. ``FeedbackState`` uses this same declaration validator.
+are rejected. ``PersistentValueState`` uses this same declaration validator.
 String tensors cannot be persistent, including tensor fields and constants
 inside whole structures or encoded layouts. ``ValidatePersistentType`` and
 ``ValidatePersistentStructType`` reuse the catalogue's recursive validation walk,

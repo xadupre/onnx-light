@@ -167,7 +167,8 @@ print(f"y =\n{y}")
 #
 # :meth:`~onnx_light.reference.ReferenceEvaluator.events` returns a list of
 # :class:`RuntimeEvent` entries. Each event carries the
-# ``action`` (``"add"`` / ``"replace"`` / ``"remove"``), the
+# ``action`` enum (rendered by ``as_dict()`` as ``"add"``, ``"replace"``,
+# ``"remove"``, ``"run_node"`` or ``"persistent_storage"``), the
 # ``kind`` of value (``"input"``, ``"initializer"``,
 # ``"intermediate"`` or ``"output"``), the tensor ``name``,
 # ``data_type``, ``shape``, the number of element values captured
@@ -178,6 +179,18 @@ print(f"y =\n{y}")
 # elements are summarised: ``data_type`` is set to ``-1`` and
 # ``shape`` is left empty to signal the truncated payload. The
 # total number of events in the log itself is unbounded.
+#
+# Persistent-storage auditing uses this same opt-in event log. Graphs with
+# persistent feedback may emit ``RuntimeEventAction.kPersistentStorage``;
+# their ``as_dict()`` includes the top-level fields ``storage_allocations``,
+# ``storage_allocated_bytes``, ``storage_prefix_copied_bytes``,
+# ``storage_append_copied_bytes`` and ``storage_reuse_count``.
+# These are per-event amounts; sum them over the desired interval for totals.
+# The top-level ``allocated_bytes`` / ``peak_bytes`` still describe allocator
+# live/peak memory. Other actions keep their existing dictionary schema.
+# Auditing is absent when ``events_enabled=False``. ``PersistentValueState.run``
+# appends its invocation events to the supplied context, including events
+# recorded before failure; ``context.clear_events()`` clears the log.
 
 events = sess.events()
 print(f"Recorded {len(events)} event(s):")

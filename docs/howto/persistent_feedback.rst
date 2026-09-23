@@ -9,14 +9,24 @@ types come from its final input/output declarations. The caller supplies
 initial values, not a separate feedback mapping. Execution uses the existing
 session and allocator infrastructure, not a separate executor.
 
-The native :cpp:class:`onnx_light::core::runtime::FeedbackState` uses the
+Each bound input must have **exactly one value-use** in the graph. Every node
+input position counts, including read-only operations such as ``Shape`` and
+two positions of the same node. A graph output that directly returns that input
+also counts, as do captures in nested graph attributes. The check counts
+references statically, including references in mutually exclusive branches.
+Input declarations, bindings and ``value_info`` metadata do not count as uses.
+Both ONNX validation and runtime graph-plan construction enforce this rule;
+graphs without persistent bindings retain their ordinary sharing semantics.
+
+The native :cpp:class:`onnx_light::core::runtime::PersistentValueState` uses the
 existing runtime execution and value ownership contracts. Create one state
 per independent request. Python initialization/reset, C++ ownership transfer,
 state forwarding and state-value access retain buffer owners without copying payloads.
 Shapes, metadata and owner handles may be copied. Kernels can allocate new
 computed results; the state layer does not duplicate those results merely
-to retain or return them. In-place KV append and capacity management are
-separate optimizations.
+to retain or return them. The CPU Attention append optimization described
+below reduces kernel allocations and prefix copies independently of this
+zero-copy state forwarding.
 
 .. warning::
 
@@ -52,7 +62,7 @@ The Python binding is available from the native runtime module:
         runtime.KernelContext(runtime.default_opset(18))
     )
     initial = numpy.zeros(2, dtype=numpy.float32)
-    state = runtime.FeedbackState(model, initial={"past": initial})
+    state = runtime.PersistentValueState(model, initial={"past": initial})
     delta = numpy.ones(2, dtype=numpy.float32)
     first = state.run(context, {"delta": delta})
     second = state.run(context, {"delta": delta})
@@ -110,7 +120,7 @@ The corresponding C++ entry points are:
     auto *binding = model.mutable_graph()->add_persistent_bindings();
     binding->set_input_name("past");
     binding->set_output_name("present");
-    FeedbackState state(
+    PersistentValueState state(
         model,
         {{"past", RuntimeValue(Tensor::FromFloat("past", {2}, {0.f, 0.f}))}});
     RuntimeContext context(KernelContext(18));
@@ -197,7 +207,7 @@ structured ``cache`` and ``next_cache`` values and a separate ``tokens`` input:
     binding = model.graph.persistent_bindings.add()
     binding.input_name = "cache"
     binding.output_name = "next_cache"
-    state = runtime.FeedbackState(model, {"cache": initial_cache})
+    state = runtime.PersistentValueState(model, {"cache": initial_cache})
     output = state.run(context, {"tokens": tokens})
 
 Custom kernels use ``context.get_value(name)`` and
@@ -220,3 +230,180 @@ An export to standard ONNX
 that cannot preserve this contract must be rejected, not silently strip
 the bindings. Explicit model saving serializes the declarations, not the
 current request's retained state; execution itself does not serialize them.
+
+Contiguous CPU Attention feedback
+--------------------------------
+
+Declare ``past_key <- present_key`` and ``past_value <- present_value`` using
+the ordinary graph bindings. The native CPU ``Attention`` consumer can then
+retain extra allocation capacity for subsequent appends. There is no separate
+cache identifier, state mapping or executor.
+
+Internally, ``PersistentValueState`` retains ``PersistentValue`` objects, with a
+``PersistentTensor`` at each tensor leaf. ``PersistentTensor`` composes an ordinary
+``Tensor`` with certified allocation capacity; it does not inherit from ``Tensor``.
+The runtime receives ordinary tensor views and separate, move-only ``AppendLease``
+objects for eligible root bindings. Neither tensor copies nor borrowed views carry
+capacity metadata or write permissions. Child function and subgraph contexts do
+not inherit these permissions.
+
+The reservation API is operator-independent:
+
+1. A kernel calls ``RuntimeContext::ReservePersistentAppend`` with the desired
+   result shape, append axis and input/output slots. The context resolves the
+   exact declared binding and selects the output allocator.
+2. ``PersistentTensor::AppendLease::Reserve`` handles layout eligibility,
+   geometric growth and prefix relocation. It either reuses spare capacity or
+   allocates a new contiguous buffer and copies only the committed prefix.
+   Unsupported layouts return no reservation so the kernel can use its
+   ordinary implementation. Each lease accepts only one attempt, including
+   attempts declined for disabled capacity or unsupported layouts. A second
+   attempt raises an error instead of allocating another buffer.
+3. The kernel initializes the entire ``AppendReservation::writable_bytes()``
+   span directly. There is no temporary tail tensor required by this API.
+4. ``RuntimeContext::CommitPersistentAppend`` checks the declared initialized
+   byte count, seals the candidate and returns an ordinary tensor view. This
+   does not publish the state: ``PersistentValueState`` still validates all outputs
+   and publishes them together only after successful completion.
+
+A producer can compute new elements directly into that span. Attention instead
+copies the current K/V inputs, which already exist as model inputs, straight into
+the reserved region. Those copies remain necessary; the reservation API does not
+add an intermediate tensor or a second copy.
+
+This storage implementation is contiguous. A future ``PersistentPagedTensor``
+would own a different allocation policy and expose page-aware writable regions;
+paged storage and paged Attention kernels are not implemented here.
+
+The reusable layout is dense rank-four ``FLOAT`` with shape
+``[1, 1, valid_length, head_size]`` for each K/V tensor. Query tensors can
+have multiple heads (multi-query attention). The tensor's sequence dimension
+and logical byte extent describe only valid tokens, never spare capacity.
+K and V may have different head sizes.
+The Attention node must directly consume and produce the bound root-graph
+K/V inputs and outputs. Intermediate tensors, function/control-flow transport
+and unmatched input/output pairs keep ordinary kernel concatenation; they do
+not acquire append permissions merely because another graph output is retained.
+
+``RuntimeSessionOptions::persistent_tensor_initial_capacity`` selects the initial
+capacity along the kernel's append axis (32 by default; tokens for Attention);
+zero disables reservations. ``PersistentTensor`` grows capacity geometrically
+when necessary, using the selected allocator without an alternate allocator or
+automatic retry after allocation failure. This option affects ``PersistentValueState``
+execution, not ordinary stateless ``RuntimeSession`` calls.
+
+Python exposes the same option as a keyword-only constructor argument and a
+read/write property on ``runtime.RuntimeSessionOptions``. It accepts a
+nonnegative integer representable as C++ ``size_t``. Pass the options to
+``PersistentValueState`` when constructing the state:
+
+.. code-block:: python
+
+    options = runtime.RuntimeSessionOptions(persistent_tensor_initial_capacity=64)
+    state = runtime.PersistentValueState(model, initial, options=options)
+
+    # Disables reservations for a separate state, without changing the first state.
+    options.persistent_tensor_initial_capacity = 0
+    ordinary_state = runtime.PersistentValueState(model, initial, options=options)
+
+Options are copied at construction; changing the bundle later does not change
+an existing state.
+
+Reuse is deliberately conservative:
+
+* Only internally created append buffers are eligible. An arbitrary borrowed
+  NumPy/DLPack buffer, even one with an owner token, does not grant write access.
+  Importing returned tensors or ``Values()`` views into a new state, or through
+  ``Reset``, retains their bytes without copying but does not import append
+  capacity. Their first append allocates a new certified buffer.
+* Ownership is checked before creating invocation-local aliases. Keeping a
+  previous output or ``Values()`` view alive prevents reuse of that allocation.
+  The next result instead receives a fresh allocation; the old view's bytes,
+  shape and lifetime do not change.
+* An eligible append writes only the new token range. It does not move or
+  rewrite the valid prefix. The previous state's logical extent remains
+  unchanged until successful publication. Capacity is published only when the
+  returned tensor still matches the kernel's candidate owner, pointer, type,
+  shape and logical byte extent.
+* Capacity exhaustion makes ``PersistentTensor`` allocate a larger buffer and
+  copy the valid prefix once. State publication still only transfers owner
+  handles.
+* Multiple batches or KV heads use ordinary dense concatenation: increasing
+  the sequence dimension changes the stride between heads, so prefix-preserving
+  tail append is not possible in that layout. Half-precision promotion and
+  other unsupported reuse paths keep their ordinary computation semantics.
+* Empty prefixes and empty appended chunks contribute no copied bytes.
+  Zero-width value caches use the dense fallback and keep their declared
+  shapes, including the empty final dimension of the Attention output.
+
+Cancellation is a publication gate, not kernel preemption. A failed or
+cancelled invocation can have written unused tail bytes, but cannot change the
+previous state's valid prefix or length. A retry must fully write its new
+token range. Reset replaces the retained owners; close releases them. Existing
+returned views remain readable after either operation. Use independent states
+and contexts for concurrent requests; sharing retained owners disables unsafe
+reuse rather than making either request mutate the other's state.
+
+Opt-in storage auditing through runtime events
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Storage auditing uses the existing runtime event API. Set
+``RuntimeContextOptions::events_enabled = true`` and read ``context.events()``.
+Every context has a shared event log. With events disabled (the default),
+persistence works identically but creates no storage audit events or counters
+and takes no event-recording locks.
+Diagnostic metadata is not copied into function or half-precision
+scratch contexts on this path.
+
+``RuntimeEventAction::kPersistentStorage`` identifies storage reports. Each
+``RuntimeEvent`` directly records the work in ``storage_allocations``,
+``storage_allocated_bytes``, ``storage_prefix_copied_bytes``,
+``storage_append_copied_bytes`` and ``storage_reuse_count``.
+Kernels and contiguous reservations use
+``RuntimeContext::RecordEvent`` with action ``kPersistentStorage`` to record
+this work in the existing shared log. Producing new elements directly into the
+writable region does not count as copying them.
+
+These are explicit reports, not automatic counters for every runtime
+allocation or tensor copy. Attention currently reports K/V construction on
+both reusable and ordinary dense paths. Other consumers can use the same
+event API without adding operator-specific state to ``RuntimeContext``.
+
+State forwarding and kernel storage construction have different costs.
+Pointer identity at retention, invocation and publication boundaries verifies
+that the state layer does not copy tensor payloads. Feedback invocations,
+subgraphs, functions and half-precision scratch contexts share the caller's
+event log. Events are visible as soon as they are recorded, including work
+preceding a failure or cancellation; no forwarding or end-of-scope merge occurs.
+Runtime recording serializes appends from concurrent children. Read or modify
+``events()`` only when no other context is recording or clearing the log.
+``ClearEvents()`` clears the shared log for all these contexts. Independently
+constructed contexts keep independent logs. Allocation failures while recording
+propagate to the caller, just like other runtime allocation failures.
+Attention's storage reports exclude its
+score/output allocations, arithmetic workspace, feed construction, or
+half-precision conversion.
+
+Sum fields from the event list when totals are needed. Call
+``context.ClearEvents()`` before a run to obtain per-token reports; otherwise
+events accumulate in that context, including runs of different feedback states.
+Resetting or closing a state does not clear the caller's log.
+``event.storage_allocated_bytes`` counts requested storage capacity,
+not physical heap allocations: an I/O arena may satisfy a request from its free
+lists. The existing ``event.allocated_bytes`` and ``event.peak_bytes`` fields
+still describe allocator live and peak memory and have not changed meaning.
+The decode example enables events explicitly, so its timing includes auditing.
+
+For one new token with ``FLOAT`` K/V head sizes ``Dk`` and ``Dv``, appending
+copies ``4 * (Dk + Dv)`` bytes. Reuse within capacity allocates no new KV
+buffers and copies zero prefix bytes. Growth or an outstanding external alias
+requires a new buffer for each affected K/V tensor and copies its valid prefix.
+For ``B`` batches, ``H`` KV heads and a prefix of ``L`` tokens, the dense
+fallback allocates two result buffers and copies
+``4 * B * H * L * (Dk + Dv)`` prefix bytes, plus
+``4 * B * H * (Dk + Dv)`` append bytes per token. None of these kernel-level
+copies is a state-management copy.
+
+A runnable native example, including per-token allocation/copy measurements
+and a multi-head fallback, is provided in
+:doc:`../examples_cc/contiguous_kv_decode_example`.

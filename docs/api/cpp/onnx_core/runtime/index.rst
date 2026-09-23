@@ -37,7 +37,7 @@ a dependency from ``onnx_core`` back onto ``onnx_kernels``.
     runtime_parameters
     run_nodes
     runtime_session
-    feedback_state
+    persistent_value_state
     persistent_value
     runtime_value
     kernel_dispatch_table

@@ -188,7 +188,7 @@ print(f"y =\n{y}")
 # These are per-event amounts; sum them over the desired interval for totals.
 # The top-level ``allocated_bytes`` / ``peak_bytes`` still describe allocator
 # live/peak memory. Other actions keep their existing dictionary schema.
-# Auditing is absent when ``events_enabled=False``. ``FeedbackState.run``
+# Auditing is absent when ``events_enabled=False``. ``PersistentValueState.run``
 # appends its invocation events to the supplied context, including events
 # recorded before failure; ``context.clear_events()`` clears the log.
 

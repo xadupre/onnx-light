@@ -18,7 +18,7 @@ class RuntimeContext;
  *
  * Ordinary Tensor views carry lifetime ownership, never capacity or write permissions.
  * Importing such a view retains its payload without certifying it for append.
- * The owner serializes access, as FeedbackState does; each prepared AppendLease
+ * The owner serializes access, as PersistentValueState does; each prepared AppendLease
  * may be consumed only once, even when an append requires a copy or is declined.
  */
 class ONNX_LIGHT_CORE_API PersistentTensor {

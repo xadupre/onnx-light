@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/compute/raw_buffer_allocator.h"
-#include "onnx_core/runtime/feedback_state.h"
+#include "onnx_core/runtime/persistent_value_state.h"
 #include "onnx_extensions/kernels/kernel_dispatch_table.h"
 #include <chrono>
 #include <cmath>
@@ -78,9 +78,9 @@ int main() {
                            RuntimeContextOptions{.allocator = &execution,
                                                  .io_allocator = io.get(),
                                                  .events_enabled = true});
-    FeedbackState state(model,
-                        {{"past_key", Filled(heads, 0, 0)}, {"past_value", Filled(heads, 0, 0)}},
-                        RuntimeSessionOptions{.persistent_tensor_initial_capacity = 4});
+    PersistentValueState state(
+        model, {{"past_key", Filled(heads, 0, 0)}, {"past_value", Filled(heads, 0, 0)}},
+        RuntimeSessionOptions{.persistent_tensor_initial_capacity = 4});
     for (int step = 0; step < 20; ++step) {
       context.ClearEvents();
       RuntimeValueMap feeds{{"q", Filled(heads, 1, 0)},

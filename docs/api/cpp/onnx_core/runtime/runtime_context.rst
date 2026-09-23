@@ -5,7 +5,7 @@ Selected result ownership
 -------------------------
 
 ``set_retained_outputs`` lists exact whole result names whose storage will be
-transferred to an external owner. ``FeedbackState`` supplies this list from
+transferred to an external owner. ``PersistentValueState`` supplies this list from
 the graph declarations. Only those names bypass allocator migration and final
 output materialization; other values use the ordinary runtime policies.
 New function/subgraph contexts do not inherit the list. ``If`` and function
@@ -62,7 +62,7 @@ preserving the dictionary schema of other event actions:
    context = runtime.RuntimeContext(
        runtime.KernelContext(runtime.default_opset(23)), events_enabled=True
    )
-   # Runs an existing FeedbackState with its ordinary non-retained feeds.
+   # Runs an existing PersistentValueState with its ordinary non-retained feeds.
    outputs = state.run(context, feeds)
    copied = sum(
        event.storage_prefix_copied_bytes

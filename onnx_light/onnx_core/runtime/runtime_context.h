@@ -685,7 +685,8 @@ public:
   std::optional<PersistentTensor::AppendReservation>
   ReservePersistentAppend(const Tensor &past, const Shape &shape, size_t axis, int input_slot,
                           int output_slot);
-  /** Records the completed append; FeedbackState adopts it only if the entire run succeeds. */
+  /** Records the completed append; PersistentValueState adopts it only if the entire run succeeds.
+   */
   Tensor CommitPersistentAppend(int output_slot, PersistentTensor::AppendReservation reservation,
                                 size_t initialized_bytes);
 
@@ -1018,7 +1019,7 @@ public:
   }
 
 private:
-  friend class FeedbackState;
+  friend class PersistentValueState;
   size_t persistent_tensor_initial_capacity_ = 0;
   const GraphProto *persistent_graph_ = nullptr;
   struct PersistentTensorBinding {

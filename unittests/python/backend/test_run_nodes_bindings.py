@@ -95,6 +95,7 @@ class TestRunNodesBindings(ExtTestCase):
             "RuntimeParameters",
             "RuntimeEvent",
             "RuntimeEventAction",
+            "PersistentValueState",
             "ExecutionPlan",
             "RuntimeSession",
             "default_opset",

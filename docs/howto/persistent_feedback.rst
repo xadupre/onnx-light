@@ -18,7 +18,7 @@ Input declarations, bindings and ``value_info`` metadata do not count as uses.
 Both ONNX validation and runtime graph-plan construction enforce this rule;
 graphs without persistent bindings retain their ordinary sharing semantics.
 
-The native :cpp:class:`onnx_light::core::runtime::FeedbackState` uses the
+The native :cpp:class:`onnx_light::core::runtime::PersistentValueState` uses the
 existing runtime execution and value ownership contracts. Create one state
 per independent request. Python initialization/reset, C++ ownership transfer,
 state forwarding and state-value access retain buffer owners without copying payloads.
@@ -62,7 +62,7 @@ The Python binding is available from the native runtime module:
         runtime.KernelContext(runtime.default_opset(18))
     )
     initial = numpy.zeros(2, dtype=numpy.float32)
-    state = runtime.FeedbackState(model, initial={"past": initial})
+    state = runtime.PersistentValueState(model, initial={"past": initial})
     delta = numpy.ones(2, dtype=numpy.float32)
     first = state.run(context, {"delta": delta})
     second = state.run(context, {"delta": delta})
@@ -120,7 +120,7 @@ The corresponding C++ entry points are:
     auto *binding = model.mutable_graph()->add_persistent_bindings();
     binding->set_input_name("past");
     binding->set_output_name("present");
-    FeedbackState state(
+    PersistentValueState state(
         model,
         {{"past", RuntimeValue(Tensor::FromFloat("past", {2}, {0.f, 0.f}))}});
     RuntimeContext context(KernelContext(18));
@@ -207,7 +207,7 @@ structured ``cache`` and ``next_cache`` values and a separate ``tokens`` input:
     binding = model.graph.persistent_bindings.add()
     binding.input_name = "cache"
     binding.output_name = "next_cache"
-    state = runtime.FeedbackState(model, {"cache": initial_cache})
+    state = runtime.PersistentValueState(model, {"cache": initial_cache})
     output = state.run(context, {"tokens": tokens})
 
 Custom kernels use ``context.get_value(name)`` and
@@ -239,7 +239,7 @@ the ordinary graph bindings. The native CPU ``Attention`` consumer can then
 retain extra allocation capacity for subsequent appends. There is no separate
 cache identifier, state mapping or executor.
 
-Internally, ``FeedbackState`` retains ``PersistentValue`` objects, with a
+Internally, ``PersistentValueState`` retains ``PersistentValue`` objects, with a
 ``PersistentTensor`` at each tensor leaf. ``PersistentTensor`` composes an ordinary
 ``Tensor`` with certified allocation capacity; it does not inherit from ``Tensor``.
 The runtime receives ordinary tensor views and separate, move-only ``AppendLease``
@@ -263,7 +263,7 @@ The reservation API is operator-independent:
    span directly. There is no temporary tail tensor required by this API.
 4. ``RuntimeContext::CommitPersistentAppend`` checks the declared initialized
    byte count, seals the candidate and returns an ordinary tensor view. This
-   does not publish the state: ``FeedbackState`` still validates all outputs
+   does not publish the state: ``PersistentValueState`` still validates all outputs
    and publishes them together only after successful completion.
 
 A producer can compute new elements directly into that span. Attention instead
@@ -289,22 +289,22 @@ not acquire append permissions merely because another graph output is retained.
 capacity along the kernel's append axis (32 by default; tokens for Attention);
 zero disables reservations. ``PersistentTensor`` grows capacity geometrically
 when necessary, using the selected allocator without an alternate allocator or
-automatic retry after allocation failure. This option affects ``FeedbackState``
+automatic retry after allocation failure. This option affects ``PersistentValueState``
 execution, not ordinary stateless ``RuntimeSession`` calls.
 
 Python exposes the same option as a keyword-only constructor argument and a
 read/write property on ``runtime.RuntimeSessionOptions``. It accepts a
 nonnegative integer representable as C++ ``size_t``. Pass the options to
-``FeedbackState`` when constructing the state:
+``PersistentValueState`` when constructing the state:
 
 .. code-block:: python
 
     options = runtime.RuntimeSessionOptions(persistent_tensor_initial_capacity=64)
-    state = runtime.FeedbackState(model, initial, options=options)
+    state = runtime.PersistentValueState(model, initial, options=options)
 
     # Disables reservations for a separate state, without changing the first state.
     options.persistent_tensor_initial_capacity = 0
-    ordinary_state = runtime.FeedbackState(model, initial, options=options)
+    ordinary_state = runtime.PersistentValueState(model, initial, options=options)
 
 Options are copied at construction; changing the bundle later does not change
 an existing state.

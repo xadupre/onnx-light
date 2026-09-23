@@ -12,31 +12,39 @@
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 /**
- * Retains graph-declared outputs for the next ordinary session invocation.
+ * Carries graph-declared persistent values between model calls.
  *
- * Each binding selects one whole input and one whole output by exact graph name.
- * Each bound input must have exactly one value-use in the graph, including read-only uses.
- * Structured values retain all fields; current feeds cannot override retained inputs.
- * The final model must not be changed. A reference-only caller must keep it alive
- * until this state and all model-backed output views are released. The shared-model
- * overload or an explicit model_owner token retains that lifetime automatically.
- * Each operation
- * uses cached declaration pointers without cloning or checking the model.
- * Initial/reset maps transfer ownership by value: move owned maps to avoid copies.
- * Selected outputs and Values() share read-only payloads. Current feeds borrow
- * for the invocation; only a selected result requires independently valid ownership.
- * Callers and kernels must not mutate shared storage. Ownerless borrows and
- * execution-arena allocations lacking self-owning leases are rejected.
- * Only tensors, named structures and inline encoded values are supported.
- * The first context's allocators must outlive the state. Later calls must use
- * those same allocators, as required by the retained RuntimeSession kernels.
+ * Each Run:
+ * 1. Binds retained values to persistent inputs and adds the current feeds.
+ * 2. Executes the session, reusing eligible append buffers or allocating new ones.
+ * 3. Validates the outputs and checks cancellation.
+ * 4. Publishes selected outputs as the next state only on success.
+ *
+ * Storage:
+ * - Views share tensor data but have separate names and shapes.
+ * - In-place append writes only the new region; growth may copy the old prefix.
+ * - Failure leaves the previous logical state unchanged.
+ *
+ * Requirements:
+ * - Each binding names a whole input/output pair; the input has exactly one value-use.
+ * - Current feeds cannot replace persistent inputs.
+ * - Supports tensors, named structures and inline encoded values with retained storage owners.
+ * - Shared payloads are read-only to callers; ownerless borrows are rejected.
+ * - The model stays immutable. All calls use the same allocators, kept alive by the caller.
  */
-class ONNX_LIGHT_CORE_API FeedbackState {
+class ONNX_LIGHT_CORE_API PersistentValueState {
 public:
-  FeedbackState(const ModelProto &model, RuntimeValueMap initial,
-                RuntimeSessionOptions options = {}, std::shared_ptr<void> model_owner = {});
-  FeedbackState(std::shared_ptr<const ModelProto> model, RuntimeValueMap initial,
-                RuntimeSessionOptions options = {});
+  /**
+   * Initializes retained values from the graph's persistent bindings.
+   *
+   * Accepts std::move(initial) to avoid copying owned payloads.
+   * Without model_owner, the caller keeps the model alive through the state and exported views.
+   */
+  PersistentValueState(const ModelProto &model, RuntimeValueMap initial,
+                       RuntimeSessionOptions options = {}, std::shared_ptr<void> model_owner = {});
+  /** Initializes retained values and keeps the shared model alive. */
+  PersistentValueState(std::shared_ptr<const ModelProto> model, RuntimeValueMap initial,
+                       RuntimeSessionOptions options = {});
 
   /**
    * Runs with current feeds and atomically replaces the selected retained values.
@@ -54,7 +62,7 @@ public:
    *
    * The caller registers owners before Run, including attempts that may fail during initialization.
    * Repeated calls with the same shared owner are deduplicated. The token must
-   * not own this FeedbackState, which would create a lifetime cycle.
+   * not own this PersistentValueState, which would create a lifetime cycle.
    */
   void RetainOwner(std::shared_ptr<void> owner);
   /** Replaces retained values with explicitly transferred initial contents. */

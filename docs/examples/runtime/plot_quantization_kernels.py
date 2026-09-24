@@ -5,7 +5,8 @@ Calibrates quantization with graph kernels
 =========================================
 
 This example runs ``ai.rt::Quantize`` and ``ai.rt::Dequantize`` in a native
-runtime session. It compares automatic INT4 block calibration with explicit
+runtime session. It first demonstrates linear INT8 quantization with a scale
+and zero point, then compares automatic INT4 block calibration with explicit
 scales, inspects the encoded graph output, and reuses it as an initializer.
 These operators are onnx-light extensions, not ONNX ``QuantizeLinear`` and
 ``DequantizeLinear``. See :ref:`l-quantized-values` for supported formats and
@@ -28,6 +29,68 @@ from onnx_light.onnx_py._onnxpykernels.runtime import (
     RuntimeSession,
     tensor_from_proto,
 )
+
+# %%
+# Linear quantization and dequantization with INT8
+# -----------------------------------------------
+#
+# This graph uses **Quantize and Dequantize**, not QuantizeLinear and
+# DequantizeLinear, to implement the familiar affine equations:
+#
+# * ``q = clip(round(X / scale) + zero_point, -128, 127)``
+# * ``Y = (q - zero_point) * scale``
+#
+# One block covers the whole tensor, so a scalar scale and zero point apply
+# to every element. They are supplied as floating tensor initializers; the
+# zero point must still have an integer value. Unlike QuantizeLinear, the
+# intermediate ``Q`` is an EncodedValueProto containing both the INT8 codes
+# and their reconstruction parameters, not a bare INT8 tensor.
+#
+# Dequantize only needs that encoded value and its requested output dtype.
+# The endpoints below deliberately demonstrate saturation to the code range.
+
+linear_values = numpy.array([-40, -1, -0.6, 0, 0.6, 1, 40], dtype=numpy.float32)
+linear_scale = numpy.array(0.25, dtype=numpy.float32)
+linear_zero_point = numpy.array(-3, dtype=numpy.float32)
+linear_plan = make_quantization_plan(
+    QuantizationFormat.INT8, linear_values.size, block_size=linear_values.size
+)
+linear_type = onnx.TypeProto()
+linear_type.struct_type.CopyFrom(make_quantization_type(linear_plan))
+linear_graph = oh.make_graph(
+    [
+        oh.make_node(
+            "Quantize", ["X", "scale", "zero_point"], ["Q"], domain="ai.rt", type=linear_type
+        ),
+        oh.make_node("Dequantize", ["Q"], ["Y"], domain="ai.rt", dtype=onnx.TensorProto.FLOAT),
+    ],
+    "linear_quantization",
+    [oh.make_tensor_value_info("X", onnx.TensorProto.FLOAT, [linear_values.size])],
+    [oh.make_tensor_value_info("Y", onnx.TensorProto.FLOAT, [linear_values.size])],
+    initializer=[
+        onh.from_array(linear_scale, name="scale"),
+        onh.from_array(linear_zero_point, name="zero_point"),
+    ],
+)
+linear_model = oh.make_model(
+    linear_graph, opset_imports=[oh.make_opsetid("", 21), oh.make_opsetid("ai.rt", 1)]
+)
+linear_context = RuntimeContext()
+linear_context.set("X", tensor_from_proto(onh.from_array(linear_values, name="X")))
+linear_session = RuntimeSession(linear_model)
+linear_session.run(linear_context)
+linear_output = numpy.from_dlpack(linear_context.get("Y"))
+reference_codes = numpy.clip(
+    numpy.rint(linear_values / linear_scale) + linear_zero_point, -128, 127
+).astype(numpy.int8)
+reference_output = (reference_codes.astype(numpy.float32) - linear_zero_point) * linear_scale
+numpy.testing.assert_array_equal(reference_codes, [-128, -7, -5, -3, -1, 1, 127])
+numpy.testing.assert_array_equal(linear_output, reference_output)
+numpy.testing.assert_array_equal(linear_output, [-31.25, -1, -0.5, 0, 0.5, 1, 32.5])
+assert linear_output.dtype == numpy.float32
+print("Linear input:          ", linear_values)
+print("Reference INT8 codes:  ", reference_codes)
+print("Quantize -> Dequantize:", linear_output)
 
 # %%
 # Build a graph with an encoded edge

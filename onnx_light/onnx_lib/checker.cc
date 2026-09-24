@@ -22,6 +22,7 @@
 #include "onnx_manipulations/tensor_proto_util.h"
 #include "onnx_proto/onnx_helper.h"
 #include "onnx_proto/onnx_tree_ensemble.h"
+#include "onnx_proto/onnx_verify.h"
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -61,6 +62,11 @@ struct open_how {
 namespace ONNX_LIGHT_NAMESPACE::checker {
 
 ValidationError::~ValidationError() = default;
+
+const StructTypeCatalogue &CheckerContext::get_struct_type_catalogue() const {
+  static const StructTypeCatalogue empty;
+  return struct_type_catalogue_ ? *struct_type_catalogue_ : empty;
+}
 
 #define enforce_has_field(proto, field)                                                            \
   do {                                                                                             \

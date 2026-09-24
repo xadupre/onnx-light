@@ -17,12 +17,13 @@
 namespace ONNX_LIGHT_NAMESPACE::onnx_proto {
 
 /**
- * Identifies an element or sequence tensor type supported by onnx-light.
+ * Identifies a tensor, container or structured value type supported by onnx-light.
  *
  * Each enumerator corresponds to a concrete ONNX element type or to a
- * sequence-of-tensor or optional-tensor type used in type-constraint
- * definitions. The mapping from an enumerator to its canonical ONNX type
- * string is implemented exhaustively by ToTypeString(); the naming
+ * sequence, map, optional or structured type used in type-constraint
+ * definitions. The mapping from an enumerator to its canonical type
+ * string (including the onnx-light extension `"struct"`) is implemented
+ * exhaustively by ToTypeString(); the naming
  * convention is:
  *
  * - `kXxx` → `"tensor(xxx)"`, e.g. `kFloat` → `"tensor(float)"`,
@@ -37,6 +38,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_proto {
  * - `kOptXxx` → `"optional(tensor(xxx))"` and `kOptSeqXxx` →
  *   `"optional(seq(tensor(xxx)))"`.
  * - `kUndefined` → `"tensor(undefined)"`.
+ * - `kStruct` → `"struct"`, for values described by `StructTypeProto`,
+ *   including encoded values accepted by structured-value kernels.
  */
 enum class TensorType : uint8_t {
   kBool,
@@ -164,11 +167,11 @@ enum class TensorType : uint8_t {
 };
 
 /**
- * Returns the ONNX type-string representation of a TensorType value.
+ * Returns the type-string representation of a TensorType value.
  *
  * @param type Tensor type enumerator to convert.
  * @return Null-terminated string such as `"tensor(float)"` or
- *         `"seq(tensor(int64))"`.
+ *         `"seq(tensor(int64))"` or the onnx-light extension `"struct"`.
  */
 inline constexpr const char *ToTypeString(TensorType type) {
   switch (type) {

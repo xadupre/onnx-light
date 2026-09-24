@@ -2,7 +2,7 @@
 .. _l-example-quantization-kernels:
 
 Calibrates quantization with graph kernels
-=========================================
+==========================================
 
 This example runs ``ai.rt::Quantize`` and ``ai.rt::Dequantize`` in a native
 runtime session. It first demonstrates linear INT8 quantization with a scale
@@ -32,7 +32,7 @@ from onnx_light.onnx_py._onnxpykernels.runtime import (
 
 # %%
 # Linear quantization and dequantization with INT8
-# -----------------------------------------------
+# ------------------------------------------------
 #
 # This graph uses **Quantize and Dequantize**, not QuantizeLinear and
 # DequantizeLinear, to implement the familiar affine equations:
@@ -94,7 +94,7 @@ print("Quantize -> Dequantize:", linear_output)
 
 # %%
 # Nonlinear quantization with an NF4 codebook
-# -----------------------------------------
+# -------------------------------------------
 #
 # NF4 stores four-bit indices into a fixed table of 16 nonuniform values,
 # rather than uniformly spaced integer codes. Quantize selects the nearest
@@ -196,7 +196,7 @@ print("Explicit:  ", explicit)
 
 # %%
 # Serialize and reuse the encoded value
-# ------------------------------------
+# -------------------------------------
 #
 # The encoded message contains its inline storage type and calibrated
 # parameters. A Dequantize-only graph can therefore reconstruct it without

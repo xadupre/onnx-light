@@ -106,6 +106,9 @@ encoded initializers and resolve model-scoped types; child contexts inherit the
 catalogue. Shape inference records Quantize's physical structured type.
 Dequantize propagates a concrete encoded initializer's logical shape; otherwise
 only its requested dtype is known.
+These inference rules belong to ``onnx_core.shape_inference.infer_shapes_model``;
+the ONNX-compatible ``onnx.shape_inference.infer_shapes`` does not register these
+``ai.rt`` extension operators.
 The model checker validates encoded initializer names, layouts and model-scoped
 type references, including inside nested graphs.
 

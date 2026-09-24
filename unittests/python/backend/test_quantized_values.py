@@ -153,6 +153,9 @@ class TestSharedQuantizationParameters(unittest.TestCase):
         model.graph.output.clear()
         model.graph.output.append(helper.make_tensor_value_info("Y", onnx.TensorProto.FLOAT, [8]))
         model.graph.encoded_initializer.append(encoded)
+        serialized = model.SerializeToString()
+        model = onnx.ModelProto()
+        model.ParseFromString(serialized)
         checker.check_model(model)
         context, session = self.run_model(model)
         retained = context.get_value("I")
@@ -409,6 +412,27 @@ class TestSharedQuantizationParameters(unittest.TestCase):
             runtime.RuntimeSession(replacement).run(context)
         numpy.testing.assert_array_equal(
             numpy.from_dlpack(runtime.dequantize_tensor(retained)), [-8, -4, 0, 7, -16, -4, 8, 14]
+        )
+
+    def test_session_snapshot_ignores_model_mutation_and_tensor_shadowing(self):
+        model, _ = self.make_model()
+        context, session = self.run_model(model)
+        scales = model.graph.initializer[-1]
+        scales.CopyFrom(
+            numpy_helper.from_array(
+                numpy.array([100, 100], dtype=numpy.float64), name=scales.name
+            )
+        )
+        shadow = numpy.array([999, 999], dtype=numpy.float64)
+        context.put_value(
+            scales.name,
+            runtime.tensor_from_numpy(
+                scales.name, onnx.TensorProto.DOUBLE, [2], shadow.view(numpy.uint8)
+            ),
+        )
+        session.run(context)
+        numpy.testing.assert_array_equal(
+            numpy.from_dlpack(context.get("Y")), [-8, -4, 0, 7, -16, -4, 8, 14]
         )
 
 

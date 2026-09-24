@@ -296,7 +296,7 @@ class GraphGraph(_C.GraphGraph):
                         if pattern in available
                         else _patterns.create_pattern(pattern)
                     )
-                elif isinstance(pattern, PatternOptimization):
+                elif isinstance(pattern, _C.PatternOptimization):
                     resolved = pattern
                 else:
                     raise TypeError(

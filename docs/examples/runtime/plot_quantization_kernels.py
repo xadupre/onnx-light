@@ -16,7 +16,8 @@ import matplotlib.pyplot
 import numpy
 
 from onnx_light import onnx
-from onnx_light.onnx import helper
+import onnx_light.onnx.helper as oh
+import onnx_light.onnx.numpy_helper as onh
 from onnx_light.onnx_core.quantization import (
     QuantizationFormat,
     make_quantization_plan,
@@ -25,7 +26,7 @@ from onnx_light.onnx_core.quantization import (
 from onnx_light.onnx_py._onnxpykernels.runtime import (
     RuntimeContext,
     RuntimeSession,
-    tensor_from_numpy,
+    tensor_from_proto,
 )
 
 # %%
@@ -45,22 +46,18 @@ values = numpy.array([-8, -3.3, 0.2, 7, -16, -1.2, 8.5, 14], dtype=numpy.float32
 plan = make_quantization_plan(QuantizationFormat.INT4, values.size, block_size=4)
 destination = onnx.TypeProto()
 destination.struct_type.CopyFrom(make_quantization_type(plan))
-encode = helper.make_node("Quantize", ["X"], ["Q"], domain="ai.rt", type=destination)
-decode = helper.make_node(
-    "Dequantize", ["Q"], ["Y"], domain="ai.rt", dtype=onnx.TensorProto.DOUBLE
-)
-graph = helper.make_graph(
+encode = oh.make_node("Quantize", ["X"], ["Q"], domain="ai.rt", type=destination)
+decode = oh.make_node("Dequantize", ["Q"], ["Y"], domain="ai.rt", dtype=onnx.TensorProto.DOUBLE)
+graph = oh.make_graph(
     [encode, decode],
     "automatic_quantization",
-    [helper.make_tensor_value_info("X", onnx.TensorProto.FLOAT, [values.size])],
+    [oh.make_tensor_value_info("X", onnx.TensorProto.FLOAT, [values.size])],
     [
-        helper.make_value_info("Q", destination),
-        helper.make_tensor_value_info("Y", onnx.TensorProto.DOUBLE, [values.size]),
+        oh.make_value_info("Q", destination),
+        oh.make_tensor_value_info("Y", onnx.TensorProto.DOUBLE, [values.size]),
     ],
 )
-model = helper.make_model(
-    graph, opset_imports=[helper.make_opsetid("", 21), helper.make_opsetid("ai.rt", 1)]
-)
+model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 21), oh.make_opsetid("ai.rt", 1)])
 
 # %%
 # Calibrate scales from the input
@@ -71,10 +68,7 @@ model = helper.make_model(
 # DOUBLE output does not recover precision lost during quantization.
 
 context = RuntimeContext()
-context.set(
-    "X",
-    tensor_from_numpy("X", onnx.TensorProto.FLOAT, list(values.shape), values.view(numpy.uint8)),
-)
+context.set("X", tensor_from_proto(onh.from_array(values, name="X")))
 session = RuntimeSession(model)
 session.run(context)
 automatic = numpy.from_dlpack(context.get("Y"))
@@ -100,14 +94,12 @@ explicit_model = onnx.ModelProto()
 explicit_model.CopyFrom(model)
 explicit_model.graph.node[0].input.append("scales")
 explicit_model.graph.input.append(
-    helper.make_tensor_value_info("scales", onnx.TensorProto.DOUBLE, [2])
+    oh.make_tensor_value_info("scales", onnx.TensorProto.DOUBLE, [2])
 )
 scales = numpy.array([2, 4], dtype=numpy.float64)
 explicit_context = RuntimeContext()
 explicit_context.set("X", context.get("X"))
-explicit_context.set(
-    "scales", tensor_from_numpy("scales", onnx.TensorProto.DOUBLE, [2], scales.view(numpy.uint8))
-)
+explicit_context.set("scales", tensor_from_proto(onh.from_array(scales, name="scales")))
 explicit_session = RuntimeSession(explicit_model)
 explicit_session.run(explicit_context)
 explicit = numpy.from_dlpack(explicit_context.get("Y"))
@@ -125,16 +117,14 @@ print("Explicit:  ", explicit)
 
 restored = onnx.EncodedValueProto()
 restored.ParseFromString(encoded.SerializeToString())
-initializer_graph = helper.make_graph(
+initializer_graph = oh.make_graph(
     [decode],
     "decode_encoded_initializer",
     [],
-    [helper.make_tensor_value_info("Y", onnx.TensorProto.DOUBLE, [values.size])],
+    [oh.make_tensor_value_info("Y", onnx.TensorProto.DOUBLE, [values.size])],
 )
 initializer_graph.encoded_initializer.append(restored)
-initializer_model = helper.make_model(
-    initializer_graph, opset_imports=[helper.make_opsetid("ai.rt", 1)]
-)
+initializer_model = oh.make_model(initializer_graph, opset_imports=[oh.make_opsetid("ai.rt", 1)])
 initializer_context = RuntimeContext()
 initializer_session = RuntimeSession(initializer_model)
 initializer_session.run(initializer_context)

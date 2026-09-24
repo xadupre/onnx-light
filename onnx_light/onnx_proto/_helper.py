@@ -435,6 +435,7 @@ def make_attribute(
                 (TensorProto, AttributeProto.TENSORS),
                 (SparseTensorProto, AttributeProto.SPARSE_TENSORS),
                 (GraphProto, AttributeProto.GRAPHS),
+                (TypeProto, AttributeProto.TYPE_PROTOS),
             ):
                 if all(issubclass(t, exp_t) for t in types):
                     attr_type = exp_enum
@@ -463,6 +464,9 @@ def make_attribute(
         elif int(attr_type) == AttributeProto.GRAPHS:
             attr.graphs.extend(value)
             attr.type = AttributeProto.GRAPHS
+        elif int(attr_type) == AttributeProto.TYPE_PROTOS:
+            attr.type_protos.extend(value)
+            attr.type = AttributeProto.TYPE_PROTOS
         else:
             raise AssertionError(f"Unexpected type={attr_type} for an attribute.")
     else:
@@ -543,6 +547,8 @@ def get_attribute_value(attr: AttributeProto) -> Any:
         return list(attr.sparse_tensors)
     if int(attr.type) == AttributeProto.GRAPHS:
         return list(attr.graphs)
+    if int(attr.type) == AttributeProto.TYPE_PROTOS:
+        return list(attr.type_protos)
     if int(attr.type) == AttributeProto.UNDEFINED:
         return None
     raise ValueError(f"Unsupported ONNX attribute {attr.type} in {attr}")

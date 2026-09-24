@@ -20,8 +20,10 @@ import numpy
 from onnx_light import onnx
 from onnx_light.onnx import numpy_helper
 from onnx_light.onnx_core.quantization import (
+    QuantizationFormat,
     dequantize_tensor_proto,
     make_quantization_plan,
+    quantization_format_name,
     quantization_formats,
     quantize_tensor_proto,
 )
@@ -48,7 +50,11 @@ def roundtrip(values, plan):
     assert restored.dtype == values.dtype
     assert numpy.isfinite(restored).all()
     error = float(numpy.max(numpy.abs(restored.astype(numpy.float64) - values)))
-    print(f"{plan.format:16s} blocks={len(plan.blocks):2d} max_abs_error={error:.6g}")
+    block_count = sum(len(run.blocks) for run in plan.runs)
+    print(
+        f"{quantization_format_name(plan.format):16s} "
+        f"runs={len(plan.runs):2d} blocks={block_count:2d} max_abs_error={error:.6g}"
+    )
     covered.add(plan.format)
     return encoded, restored
 
@@ -67,28 +73,31 @@ def roundtrip(values, plan):
 # not GPTQ, AWQ or K-quant calibration. For imported K-quant parameters,
 # supply effective sub-block scales/offsets, not GGUF packed scale bytes.
 #
-# ``plan.blocks`` and ``plan.block(i)`` return copies. Always assign the
-# modified list back, or use ``plan.set_block(i, block)``.
+# ``plan.runs`` and ``plan.run(i)`` return copies, as do ``run.blocks`` and
+# ``run.block(i)``. Assign modified lists back or use the corresponding setters.
+# A run shares one layout; its blocks store only scales, offsets and codebooks.
 
 weights = numpy.linspace(-1, 1, 16, dtype=numpy.float32).reshape(4, 4)
 for profile in (
-    "int8",
-    "eetq",
-    "int4",
-    "gptq",
-    "awq",
-    "matmulnbits",
-    "q2_k",
-    "q3_k",
-    "q4_k",
-    "q5_k",
-    "q6_k",
+    QuantizationFormat.INT8,
+    QuantizationFormat.EETQ,
+    QuantizationFormat.INT4,
+    QuantizationFormat.GPTQ,
+    QuantizationFormat.AWQ,
+    QuantizationFormat.MATMULNBITS,
+    QuantizationFormat.Q2_K,
+    QuantizationFormat.Q3_K,
+    QuantizationFormat.Q4_K,
+    QuantizationFormat.Q5_K,
+    QuantizationFormat.Q6_K,
 ):
     plan = make_quantization_plan(profile, weights.size, block_size=4)
-    blocks = plan.blocks
+    run = plan.run(0)
+    blocks = run.blocks
     for block in blocks:
-        block.scale = 1.0 / (2 ** (block.bits - 1) - 1)
-    plan.blocks = blocks
+        block.scale = 1.0 / (2 ** (run.layout.bits - 1) - 1)
+    run.blocks = blocks
+    plan.set_run(0, run)
     roundtrip(weights, plan)
 
 
@@ -103,13 +112,17 @@ for profile in (
 # be strictly positive.
 
 weights = numpy.array([[-1, -10, 0], [1, 10, 0]], dtype=numpy.float32)
-plan = make_quantization_plan("int8_per_channel", weights.size, block_size=weights.shape[0])
+plan = make_quantization_plan(
+    QuantizationFormat.INT8_PER_CHANNEL, weights.size, block_size=weights.shape[0]
+)
 plan.permutation = numpy.arange(weights.size).reshape(weights.shape).T.ravel().tolist()
 for channel in range(weights.shape[1]):
-    block = plan.block(channel)
+    run = plan.run(0)
+    block = run.block(channel)
     maximum = float(numpy.max(numpy.abs(weights[:, channel])))
     block.scale = maximum / 127 if maximum > 0 else 1.0
-    plan.set_block(channel, block)
+    run.set_block(channel, block)
+    plan.set_run(0, run)
 _, restored = roundtrip(weights, plan)
 numpy.testing.assert_allclose(restored, weights, rtol=0, atol=1e-6)
 
@@ -123,12 +136,17 @@ numpy.testing.assert_allclose(restored, weights, rtol=0, atol=1e-6)
 # select a trained allocation, an EXL vendor layout or an HQQ optimizer.
 
 weights = numpy.array([-1, 0, 1, -2, 0, 2], dtype=numpy.float32)
-for profile in ("hqq", "exl2", "exl3"):
+for profile in (QuantizationFormat.HQQ, QuantizationFormat.EXL2, QuantizationFormat.EXL3):
     plan = make_quantization_plan(profile, weights.size, block_size=3)
-    blocks = plan.blocks
-    blocks[0].bits, blocks[0].scale = 2, 1.0
-    blocks[1].bits, blocks[1].scale = 5, 0.5
-    plan.blocks = blocks
+    runs = []
+    for bits, scale in ((2, 1.0), (5, 0.5)):
+        run = plan.run(0)
+        run.layout.bits = bits
+        block = run.block(0)
+        block.scale = scale
+        run.blocks = [block]
+        runs.append(run)
+    plan.runs = runs
     _, restored = roundtrip(weights, plan)
     numpy.testing.assert_array_equal(restored, weights)
 
@@ -153,26 +171,28 @@ for profile in ("hqq", "exl2", "exl3"):
 
 weights = numpy.linspace(-1, 1, 17, dtype=numpy.float32)
 for profile in (
-    "nf4",
-    "iq4_nl",
-    "log",
-    "binary",
-    "ternary",
-    "tq1_0",
-    "tq2_0",
-    "bitnet",
-    "paretoq",
-    "tequila",
-    "mxfp4",
-    "nvfp4",
-    "mxfp6",
-    "fp6_llm",
-    "fp8_e4m3",
+    QuantizationFormat.NF4,
+    QuantizationFormat.IQ4_NL,
+    QuantizationFormat.LOG,
+    QuantizationFormat.BINARY,
+    QuantizationFormat.TERNARY,
+    QuantizationFormat.TQ1_0,
+    QuantizationFormat.TQ2_0,
+    QuantizationFormat.BITNET,
+    QuantizationFormat.PARETOQ,
+    QuantizationFormat.TEQUILA,
+    QuantizationFormat.MXFP4,
+    QuantizationFormat.NVFP4,
+    QuantizationFormat.MXFP6,
+    QuantizationFormat.FP6_LLM,
+    QuantizationFormat.FP8_E4M3,
 ):
     plan = make_quantization_plan(profile, weights.size, block_size=weights.size)
-    block = plan.block(0)
-    block.scale = 1.0 / 127 if profile == "iq4_nl" else 1.0
-    plan.set_block(0, block)
+    run = plan.run(0)
+    block = run.block(0)
+    block.scale = 1.0 / 127 if profile == QuantizationFormat.IQ4_NL else 1.0
+    run.set_block(0, block)
+    plan.set_run(0, run)
     levels = numpy.array(block.codebook) * block.scale
     indices = numpy.abs(weights[:, None] - levels[None, :]).argmin(axis=1)
     _, restored = roundtrip(weights, plan)
@@ -195,16 +215,23 @@ for profile in (
 # the required fields, not as a useful QuIP# rotation.
 
 weights = numpy.linspace(-1, 1, 16, dtype=numpy.float32)
-for profile in ("stq1_0", "iq1_s", "aqlm", "quip_sharp"):
+for profile in (
+    QuantizationFormat.STQ1_0,
+    QuantizationFormat.IQ1_S,
+    QuantizationFormat.AQLM,
+    QuantizationFormat.QUIP_SHARP,
+):
     plan = make_quantization_plan(profile, weights.size, block_size=weights.size)
-    block = plan.block(0)
-    table = numpy.empty((block.books, block.entries, block.vector_size))
-    for book in range(block.books):
-        levels = numpy.linspace(-1, 1, block.entries) / (book + 1)
+    run = plan.run(0)
+    block = run.block(0)
+    table = numpy.empty((run.layout.books, run.layout.entries, run.layout.vector_size))
+    for book in range(run.layout.books):
+        levels = numpy.linspace(-1, 1, run.layout.entries) / (book + 1)
         table[book] = levels[:, None]
     block.codebook = table.ravel().tolist()
-    plan.set_block(0, block)
-    if profile == "quip_sharp":
+    run.set_block(0, block)
+    plan.set_run(0, run)
+    if profile == QuantizationFormat.QUIP_SHARP:
         plan.transform_size = 8
         plan.forward = numpy.eye(8).ravel().tolist()
         plan.inverse = plan.forward
@@ -222,15 +249,17 @@ for profile in ("stq1_0", "iq1_s", "aqlm", "quip_sharp"):
 # and restored exactly; selection of these indices is not automatic.
 
 weights = numpy.array([0.125, 1000, -0.25, 0.5], dtype=numpy.float32)
-for profile in ("spqr", "squeezellm"):
+for profile in (QuantizationFormat.SPQR, QuantizationFormat.SQUEEZELLM):
     plan = make_quantization_plan(profile, weights.size)
     plan.outliers = [1]
-    block = plan.block(0)
-    if profile == "spqr":
+    run = plan.run(0)
+    block = run.block(0)
+    if profile == QuantizationFormat.SPQR:
         block.scale = 0.125
     else:
-        block.codebook = numpy.linspace(-1, 1, block.entries).tolist()
-    plan.set_block(0, block)
+        block.codebook = numpy.linspace(-1, 1, run.layout.entries).tolist()
+    run.set_block(0, block)
+    plan.set_run(0, run)
     _, restored = roundtrip(weights, plan)
     assert restored[1] == weights[1]
 
@@ -247,19 +276,21 @@ for profile in ("spqr", "squeezellm"):
 # neither is calibrated automatically.
 
 weights = numpy.array([1, 2, -1, -2], dtype=numpy.float32)
-for profile in ("quarot", "smoothquant"):
+for profile in (QuantizationFormat.QUAROT, QuantizationFormat.SMOOTHQUANT):
     plan = make_quantization_plan(profile, weights.size)
     matrix = (
         numpy.array([[1, 1], [1, -1]]) / numpy.sqrt(2)
-        if profile == "quarot"
+        if profile == QuantizationFormat.QUAROT
         else numpy.diag([2.0, 0.5])
     )
     plan.transform_size = 2
     plan.forward = matrix.ravel().tolist()
     plan.inverse = numpy.linalg.inv(matrix).ravel().tolist()
-    block = plan.block(0)
+    run = plan.run(0)
+    block = run.block(0)
     block.scale = 0.5
-    plan.set_block(0, block)
+    run.set_block(0, block)
+    plan.set_run(0, run)
     roundtrip(weights, plan)
 
 
@@ -275,16 +306,15 @@ for profile in ("quarot", "smoothquant"):
 
 weights = numpy.arange(16, dtype=numpy.float32).reshape(4, 4) / 8
 indices = numpy.arange(weights.size).reshape(weights.shape)
-for profile in ("tiled_float", "column_major"):
+for profile in (QuantizationFormat.TILED_FLOAT, QuantizationFormat.COLUMN_MAJOR):
     plan = make_quantization_plan(profile, weights.size, block_size=4)
-    if profile == "tiled_float":
+    if profile == QuantizationFormat.TILED_FLOAT:
         plan.permutation = indices.reshape(2, 2, 2, 2).transpose(0, 2, 1, 3).ravel().tolist()
     else:
         plan.permutation = indices.T.ravel().tolist()
-    blocks = plan.blocks
-    for block in blocks:
-        block.cast_type = onnx.TensorProto.FLOAT16
-    plan.blocks = blocks
+    run = plan.run(0)
+    run.layout.cast_type = onnx.TensorProto.FLOAT16
+    plan.set_run(0, run)
     encoded, restored = roundtrip(weights, plan)
     numpy.testing.assert_array_equal(restored, weights)
 

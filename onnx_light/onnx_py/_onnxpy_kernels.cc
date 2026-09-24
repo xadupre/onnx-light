@@ -34,6 +34,7 @@
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/shared_ptr.h>
 #include <nanobind/stl/string.h>
+#include <nanobind/stl/string_view.h>
 #include <nanobind/stl/unordered_set.h>
 #include <nanobind/stl/vector.h>
 #include <sstream>
@@ -975,56 +976,123 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .value("AFFINE", core::runtime::QuantizationMethod::kAffine)
       .value("CODEBOOK", core::runtime::QuantizationMethod::kCodebook)
       .value("CAST", core::runtime::QuantizationMethod::kCast);
-  nb::class_<core::runtime::QuantizationBlock>(rt_mod, "QuantizationBlock")
+  nb::enum_<core::runtime::QuantizationFormat>(rt_mod, "QuantizationFormat")
+      .value("INT8", core::runtime::QuantizationFormat::kInt8)
+      .value("INT8_PER_CHANNEL", core::runtime::QuantizationFormat::kInt8PerChannel)
+      .value("INT4", core::runtime::QuantizationFormat::kInt4)
+      .value("GPTQ", core::runtime::QuantizationFormat::kGptq)
+      .value("AWQ", core::runtime::QuantizationFormat::kAwq)
+      .value("EETQ", core::runtime::QuantizationFormat::kEetq)
+      .value("MATMULNBITS", core::runtime::QuantizationFormat::kMatmulnbits)
+      .value("Q2_K", core::runtime::QuantizationFormat::kQ2K)
+      .value("Q3_K", core::runtime::QuantizationFormat::kQ3K)
+      .value("Q4_K", core::runtime::QuantizationFormat::kQ4K)
+      .value("Q5_K", core::runtime::QuantizationFormat::kQ5K)
+      .value("Q6_K", core::runtime::QuantizationFormat::kQ6K)
+      .value("HQQ", core::runtime::QuantizationFormat::kHqq)
+      .value("EXL2", core::runtime::QuantizationFormat::kExl2)
+      .value("EXL3", core::runtime::QuantizationFormat::kExl3)
+      .value("NF4", core::runtime::QuantizationFormat::kNf4)
+      .value("IQ4_NL", core::runtime::QuantizationFormat::kIq4Nl)
+      .value("BINARY", core::runtime::QuantizationFormat::kBinary)
+      .value("TERNARY", core::runtime::QuantizationFormat::kTernary)
+      .value("TQ1_0", core::runtime::QuantizationFormat::kTq10)
+      .value("TQ2_0", core::runtime::QuantizationFormat::kTq20)
+      .value("BITNET", core::runtime::QuantizationFormat::kBitnet)
+      .value("PARETOQ", core::runtime::QuantizationFormat::kParetoq)
+      .value("TEQUILA", core::runtime::QuantizationFormat::kTequila)
+      .value("STQ1_0", core::runtime::QuantizationFormat::kStq10)
+      .value("IQ1_S", core::runtime::QuantizationFormat::kIq1S)
+      .value("AQLM", core::runtime::QuantizationFormat::kAqlm)
+      .value("QUIP_SHARP", core::runtime::QuantizationFormat::kQuipSharp)
+      .value("SPQR", core::runtime::QuantizationFormat::kSpqr)
+      .value("SQUEEZELLM", core::runtime::QuantizationFormat::kSqueezellm)
+      .value("LOG", core::runtime::QuantizationFormat::kLog)
+      .value("FP6_LLM", core::runtime::QuantizationFormat::kFp6Llm)
+      .value("FP8_E4M3", core::runtime::QuantizationFormat::kFp8E4m3)
+      .value("MXFP4", core::runtime::QuantizationFormat::kMxfp4)
+      .value("MXFP6", core::runtime::QuantizationFormat::kMxfp6)
+      .value("NVFP4", core::runtime::QuantizationFormat::kNvfp4)
+      .value("QUAROT", core::runtime::QuantizationFormat::kQuarot)
+      .value("SMOOTHQUANT", core::runtime::QuantizationFormat::kSmoothquant)
+      .value("TILED_FLOAT", core::runtime::QuantizationFormat::kTiledFloat)
+      .value("COLUMN_MAJOR", core::runtime::QuantizationFormat::kColumnMajor);
+  nb::class_<core::runtime::QuantizationBlockLayout>(rt_mod, "QuantizationBlockLayout")
       .def(nb::init<>())
-      .def_rw("count", &core::runtime::QuantizationBlock::count)
-      .def_rw("method", &core::runtime::QuantizationBlock::method)
-      .def_rw("bits", &core::runtime::QuantizationBlock::bits)
-      .def_rw("signed_codes", &core::runtime::QuantizationBlock::signed_codes)
-      .def_rw("scale", &core::runtime::QuantizationBlock::scale)
-      .def_rw("zero_point", &core::runtime::QuantizationBlock::zero_point)
-      .def_rw("offset", &core::runtime::QuantizationBlock::offset)
-      .def_rw("books", &core::runtime::QuantizationBlock::books)
-      .def_rw("entries", &core::runtime::QuantizationBlock::entries)
-      .def_rw("vector_size", &core::runtime::QuantizationBlock::vector_size)
-      .def_rw("codebook", &core::runtime::QuantizationBlock::codebook)
-      .def_rw("base3", &core::runtime::QuantizationBlock::base3)
-      .def_rw("cast_type", &core::runtime::QuantizationBlock::cast_type);
+      .def_rw("count", &core::runtime::QuantizationBlockLayout::count)
+      .def_rw("method", &core::runtime::QuantizationBlockLayout::method)
+      .def_rw("bits", &core::runtime::QuantizationBlockLayout::bits)
+      .def_rw("signed_codes", &core::runtime::QuantizationBlockLayout::signed_codes)
+      .def_rw("books", &core::runtime::QuantizationBlockLayout::books)
+      .def_rw("entries", &core::runtime::QuantizationBlockLayout::entries)
+      .def_rw("vector_size", &core::runtime::QuantizationBlockLayout::vector_size)
+      .def_rw("base3", &core::runtime::QuantizationBlockLayout::base3)
+      .def_rw("cast_type", &core::runtime::QuantizationBlockLayout::cast_type);
+  nb::class_<core::runtime::QuantizationBlockParameters>(rt_mod, "QuantizationBlockParameters")
+      .def(nb::init<>())
+      .def_rw("scale", &core::runtime::QuantizationBlockParameters::scale)
+      .def_rw("zero_point", &core::runtime::QuantizationBlockParameters::zero_point)
+      .def_rw("offset", &core::runtime::QuantizationBlockParameters::offset)
+      .def_rw("codebook", &core::runtime::QuantizationBlockParameters::codebook);
+  nb::class_<core::runtime::QuantizationRun>(rt_mod, "QuantizationRun")
+      .def(nb::init<>())
+      .def_rw("layout", &core::runtime::QuantizationRun::layout)
+      .def_rw("blocks", &core::runtime::QuantizationRun::blocks, nb::rv_policy::copy)
+      .def(
+          "block",
+          [](const core::runtime::QuantizationRun &self, size_t index) {
+            EXT_ENFORCE_INVALID(index < self.blocks.size(),
+                                "Quantization block index out of range.");
+            return self.blocks[index];
+          },
+          nb::arg("index"), "Returns an owned copy; uses set_block to replace it.")
+      .def(
+          "set_block",
+          [](core::runtime::QuantizationRun &self, size_t index,
+             const core::runtime::QuantizationBlockParameters &value) {
+            EXT_ENFORCE_INVALID(index < self.blocks.size(),
+                                "Quantization block index out of range.");
+            self.blocks[index] = value;
+          },
+          nb::arg("index"), nb::arg("block"), "Replaces a block with an owned copy.");
   nb::class_<core::runtime::QuantizationPlan>(rt_mod, "QuantizationPlan")
       .def(nb::init<>())
-      .def_rw("format", &core::runtime::QuantizationPlan::format)
-      .def_rw("blocks", &core::runtime::QuantizationPlan::blocks)
+      .def_rw("format", &core::runtime::QuantizationPlan::format,
+              nb::for_setter(nb::arg("value").noconvert()))
+      .def_rw("runs", &core::runtime::QuantizationPlan::runs, nb::rv_policy::copy)
       .def_rw("permutation", &core::runtime::QuantizationPlan::permutation)
       .def_rw("transform_size", &core::runtime::QuantizationPlan::transform_size)
       .def_rw("forward", &core::runtime::QuantizationPlan::forward)
       .def_rw("inverse", &core::runtime::QuantizationPlan::inverse)
       .def_rw("outliers", &core::runtime::QuantizationPlan::outliers)
       .def(
-          "block",
-          [](const core::runtime::QuantizationPlan &plan, size_t index) {
-            EXT_ENFORCE_INVALID(index < plan.blocks.size(),
-                                "Quantization block index out of range.");
-            return plan.blocks[index];
+          "run",
+          [](const core::runtime::QuantizationPlan &self, size_t index) {
+            EXT_ENFORCE_INVALID(index < self.runs.size(), "Quantization run index out of range.");
+            return self.runs[index];
           },
-          nb::arg("index"), "Returns a copy of a block; uses set_block to replace it.")
+          nb::arg("index"), "Returns an owned copy; uses set_run to replace it.")
       .def(
-          "set_block",
-          [](core::runtime::QuantizationPlan &plan, size_t index,
-             const core::runtime::QuantizationBlock &block) {
-            EXT_ENFORCE_INVALID(index < plan.blocks.size(),
-                                "Quantization block index out of range.");
-            plan.blocks[index] = block;
+          "set_run",
+          [](core::runtime::QuantizationPlan &self, size_t index,
+             const core::runtime::QuantizationRun &value) {
+            EXT_ENFORCE_INVALID(index < self.runs.size(), "Quantization run index out of range.");
+            self.runs[index] = value;
           },
-          nb::arg("index"), nb::arg("block"), "Replaces a block with an owned copy.");
+          nb::arg("index"), nb::arg("run"), "Replaces a run with an owned copy.");
   rt_mod.def(
       "quantization_formats",
       []() {
         constexpr auto formats = core::runtime::QuantizationFormats();
-        return std::vector<std::string>(formats.begin(), formats.end());
+        return std::vector<core::runtime::QuantizationFormat>(formats.begin(), formats.end());
       },
-      "Returns portable onnx-light profiles, not vendor packing ABIs.");
-  rt_mod.def("make_quantization_plan", &core::runtime::MakeQuantizationPlan, nb::arg("format"),
-             nb::arg("count"), nb::arg("block_size") = 128,
+      "Returns portable onnx-light profile enum values, not vendor packing ABIs.");
+  rt_mod.def("quantization_format_name", &core::runtime::QuantizationFormatName, nb::arg("format"),
+             "Returns the stable wire name of a profile.");
+  rt_mod.def("parse_quantization_format", &core::runtime::ParseQuantizationFormat, nb::arg("name"),
+             "Parses a stable profile name; rejects unknown names.");
+  rt_mod.def("make_quantization_plan", &core::runtime::MakeQuantizationPlan,
+             nb::arg("format").noconvert(), nb::arg("count"), nb::arg("block_size") = 128,
              "Creates block defaults; requires supplied learned codebooks and transforms.");
   rt_mod.def("quantize_tensor_proto", &core::runtime::QuantizeTensorProto, nb::arg("tensor"),
              nb::arg("plan"), "Quantizes a loaded TensorProto into an owned EncodedValueProto.");

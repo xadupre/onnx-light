@@ -181,6 +181,12 @@ TEST(Quantization, SharedTransformsPermutationAndLocalOutliers) {
   auto shared = QuantizeTensorShared(source, full.Encoded().struct_type(), "weights", parameters);
   EXPECT_EQ(shared.Encoded().raw_data().size(), 1u + 16u + 8u);
   EXPECT_EQ(MaterializeQuantizedValue(shared).raw_data(), full.Encoded().raw_data());
+  auto unnamed = shared.Encoded();
+  unnamed.clear_name();
+  unnamed.clear_doc_string();
+  const auto materialized = MaterializeQuantizedValue(unnamed, parameters.get());
+  EXPECT_FALSE(materialized.has_name());
+  EXPECT_FALSE(materialized.has_doc_string());
   source.AsFloat()[3] = 200;
   auto second = QuantizeTensorShared(source, full.Encoded().struct_type(), "weights", parameters);
   EXPECT_EQ(DequantizeTensor(shared).AsFloat()[3], 100);

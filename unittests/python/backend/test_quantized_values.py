@@ -91,6 +91,11 @@ class TestSharedQuantizationParameters(unittest.TestCase):
         self.assertIsInstance(shared, runtime.SharedQuantizedValue)
         self.assertEqual(shared.parameter_ref, "common")
         self.assertEqual(len(shared.raw_data), 5)
+        snapshot = shared.encoded
+        snapshot.raw_data = b"invalid"
+        snapshot.parameter_ref = "missing"
+        self.assertEqual(shared.parameter_ref, "common")
+        self.assertEqual(len(shared.raw_data), 5)
         numpy.testing.assert_array_equal(
             numpy.from_dlpack(context.get("Y")), [-8, -4, 0, 7, -16, -4, 8, 14]
         )
@@ -228,7 +233,16 @@ class TestSharedQuantizationParameters(unittest.TestCase):
         )
 
     def test_invalid_references_and_ambiguity(self):
-        for failure in ("missing", "explicit", "no_scales", "missing_initializer", "duplicate"):
+        for failure in (
+            "missing",
+            "explicit",
+            "no_scales",
+            "missing_initializer",
+            "duplicate",
+            "empty_encoded_ref",
+            "missing_encoded_ref",
+            "affine_encoded_ref",
+        ):
             with self.subTest(failure=failure):
                 model, _ = self.make_model()
                 annotation = model.graph.quantization_annotation[0]
@@ -242,8 +256,19 @@ class TestSharedQuantizationParameters(unittest.TestCase):
                     annotation.quant_parameter_tensor_names[-1].key = "zero_points"
                 elif failure == "missing_initializer":
                     model.graph.initializer[-1].name = "renamed_missing_initializer"
-                else:
+                elif failure == "duplicate":
                     model.graph.quantization_annotation.append(annotation)
+                else:
+                    context, _ = self.run_model(model)
+                    encoded = context.get_value("I").encoded
+                    encoded.name = "unused"
+                    if failure == "empty_encoded_ref":
+                        encoded.parameter_ref = ""
+                    elif failure == "missing_encoded_ref":
+                        encoded.parameter_ref = "missing"
+                    else:
+                        encoded.affine = onnx.AffineLayoutProto()
+                    model.graph.encoded_initializer.append(encoded)
                 with self.assertRaises(checker.ValidationError):
                     checker.check_model(model)
                 with self.assertRaises((ValueError, RuntimeError)):
@@ -364,6 +389,26 @@ class TestSharedQuantizationParameters(unittest.TestCase):
         )
         numpy.testing.assert_array_equal(
             numpy.from_dlpack(context.get("W")), [0, 2, 4, 4, 2, 4, 6, 8]
+        )
+
+    def test_reused_context_replaces_and_resets_catalogue(self):
+        model, _ = self.make_model()
+        context, _ = self.run_model(model)
+        retained = context.get_value("I")
+        replacement, _ = self.make_model()
+        scales = replacement.graph.initializer[-1]
+        scales.CopyFrom(
+            numpy_helper.from_array(numpy.array([2, 4], dtype=numpy.float64), name=scales.name)
+        )
+        runtime.RuntimeSession(replacement).run(context)
+        numpy.testing.assert_array_equal(
+            numpy.from_dlpack(context.get("Y")), [-8, -4, 0, 8, -16, -4, 8, 16]
+        )
+        replacement.graph.quantization_annotation.clear()
+        with self.assertRaisesRegex(ValueError, "Missing quantization parameter_ref"):
+            runtime.RuntimeSession(replacement).run(context)
+        numpy.testing.assert_array_equal(
+            numpy.from_dlpack(runtime.dequantize_tensor(retained)), [-8, -4, 0, 7, -16, -4, 8, 14]
         )
 
 

@@ -343,6 +343,12 @@ TEST(QuantizedValueKernels, SharedParametersStayIndependentOfTypeReferences) {
     EXPECT_EQ(retained.Encoded().raw_data().size(), 3);
     EXPECT_EQ(retained.Encoded().struct_type().SerializeAsString(),
               MakeSharedQuantizationType(type).SerializeAsString());
+    auto malformed_reference = reference;
+    malformed_reference.set_name("not-an-exact-reference");
+    EXPECT_THROW(QuantizeTensorShared(source, malformed_reference, "fixed",
+                                      context.quantization_parameters(),
+                                      context.struct_type_catalogue()),
+                 std::invalid_argument);
     quantize.add_input("X");
     onnx_kernels::kernel::Quantize kernel{KernelContext(OpsetId{"ai.rt", 1})};
     kernel.set_node(quantize);

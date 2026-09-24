@@ -1746,6 +1746,9 @@ RuntimeValue QuantizeTensorShared(const Tensor &tensor, const StructTypeProto &t
                                   const StructTypeCatalogue &catalogue) {
   EXT_ENFORCE_INVALID(parameters != nullptr, "Missing shared quantization parameter catalogue.");
   const auto &entry = parameters->Get(parameter_ref);
+  TypeProto declared;
+  *declared.mutable_struct_type() = type;
+  catalogue.ValidateType(declared);
   StructTypeProto requested = catalogue.Resolve(type);
   requested.clear_type_id();
   EXT_ENFORCE_INVALID(requested.SerializeAsString() == entry.storage_type.SerializeAsString(),
@@ -1804,7 +1807,8 @@ EncodedValueProto MaterializeQuantizedValue(const EncodedValueProto &value,
                           value.raw_data().size() == 1 + entry.full_size - entry.common.size() &&
                           value.raw_data()[0] == 0,
                       "Shared encoded value has incompatible type, shape, dtype or payload.");
-  result.set_name(value.name().value());
+  if (value.has_name())
+    result.set_name(value.name().value());
   if (value.has_doc_string())
     result.set_doc_string(value.doc_string().value());
   *result.mutable_logical_type() = entry.logical_type;

@@ -1517,7 +1517,7 @@ QuantizationPlan CalibratePlan(const Tensor &tensor, const StructTypeProto &root
           const size_t column = position / groups, first = (position % groups) * run.layout.count;
           std::vector<double> group;
           for (size_t row = first;
-               row < std::min(first + run.layout.count, size_t(tensor.shape[0])); ++row)
+               row < std::min<uint64_t>(first + run.layout.count, tensor.shape[0]); ++row)
             group.push_back(values[row * tensor.shape[1] + column]);
           block.scale = CalibratedScale(group, run.layout, block);
           ++position;

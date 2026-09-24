@@ -50,6 +50,9 @@ void RegisterCodecCases(std::vector<TestCase> &registry, bool quantize, TestMode
         type->set_name("type");
         type->set_type(AttributeProto::TYPE_PROTO);
         *type->mutable_tp()->mutable_struct_type() = MakeQuantizationType(plan);
+        auto *intermediate = graph->add_value_info();
+        intermediate->set_name("Q");
+        *intermediate->mutable_type() = type->tp();
         data.inputs.push_back(input);
       } else {
         auto encoded = QuantizeTensor(input, plan).Encoded();

@@ -76,6 +76,13 @@ ValidationError::~ValidationError() = default;
     }                                                                                              \
   } while (0)
 
+template <typename Validator> static void check_structured(Validator validate) {
+  ONNX_TRY { validate(); }
+  ONNX_CATCH(const std::invalid_argument &ex) {
+    ONNX_HANDLE_EXCEPTION([&]() { fail_check(ex.what()); });
+  }
+}
+
 void check_value_info(const ValueInfoProto &value_info, const CheckerContext &ctx) {
   enforce_non_empty_field(value_info, name);
   // Relax constraint for subgraph input/output.
@@ -116,6 +123,10 @@ void check_value_info(const ValueInfoProto &value_info, const CheckerContext &ct
     const auto &type = value_info.type().opaque_type();
     enforce_non_empty_field(type, name);
   } break;
+
+  case TypeProto::kStructType:
+    check_structured([&]() { ctx.get_struct_type_catalogue().ValidateType(value_info.type()); });
+    break;
 
   default:
     fail_check("Unrecognized type value case (value_info name: ", value_info.name(),
@@ -782,6 +793,15 @@ void check_graph(const GraphProto &graph, const CheckerContext &ctx,
     check_sparse_tensor(sparse_init, ctx);
     lex_ctx.add(name);
   }
+  for (const auto &init : graph.encoded_initializer()) {
+    enforce_non_empty_field(init, name);
+    const std::string &name = init.name();
+    if (!initializer_name_checker.insert(name).second) {
+      fail_check(name + " encoded initializer name is not unique across initializers");
+    }
+    check_structured([&]() { ctx.get_struct_type_catalogue().ValidateEncodedValue(init); });
+    lex_ctx.add(name);
+  }
   std::unordered_set<std::string> used_experimental_ops;
   for (const auto &node : graph.node()) {
     // nodes must be in topologically sorted order
@@ -1162,6 +1182,9 @@ static void check_model(const ModelProto &model, CheckerContext &ctx) {
     }
   }
   ctx.set_opset_imports(opset_imports);
+  StructTypeCatalogue catalogue;
+  check_structured([&]() { catalogue.Build(model); });
+  ctx.set_struct_type_catalogue(catalogue);
   LexicalScopeContext lex_ctx;
   check_graph(model.graph(), ctx, lex_ctx);
 

@@ -11,6 +11,7 @@ import unittest
 import numpy
 
 from onnx_light import onnx
+import onnx_light.onnx.checker as checker
 from onnx_light.ext_test_case import import_or_skip
 from onnx_light.onnx import helper, numpy_helper
 
@@ -68,7 +69,8 @@ class TestQuantizedValues(unittest.TestCase):
             numpy.from_dlpack(context.get("Y")), [-8, -4, 0, 8, -16, 0, 8, 16]
         )
 
-    def test_graph_encoded_initializer_and_catalogue(self):
+    def make_encoded_initializer_model(self):
+        """Returns a model with a referenced encoded initializer and its source values."""
         values = numpy.array([-1, 0, 1], dtype=numpy.float32)
         plan = runtime.make_quantization_plan(QuantizationFormat.INT4, 3)
         encoded = runtime.quantize_tensor_proto(numpy_helper.from_array(values, name="Q"), plan)
@@ -88,9 +90,75 @@ class TestQuantizedValues(unittest.TestCase):
         graph.encoded_initializer.append(encoded)
         model = helper.make_model(graph, opset_imports=[helper.make_opsetid("ai.rt", 1)])
         model.struct_types.append(declaration)
+        return model, values
+
+    def test_graph_encoded_initializer_and_catalogue(self):
+        model, values = self.make_encoded_initializer_model()
+        checker.check_model(model)
         context = runtime.RuntimeContext()
         runtime.RuntimeSession(model).run(context)
         numpy.testing.assert_array_equal(numpy.from_dlpack(context.get("Y")), values)
+
+    def test_checker_encoded_initializer_failures(self):
+        for failure in (
+            "empty_name",
+            "duplicate",
+            "tensor_collision",
+            "unknown_reference",
+            "duplicate_type_id",
+            "truncated_payload",
+            "node_output_collision",
+        ):
+            with self.subTest(failure=failure):
+                model, values = self.make_encoded_initializer_model()
+                encoded = model.graph.encoded_initializer[0]
+                if failure == "empty_name":
+                    encoded.name = ""
+                elif failure == "duplicate":
+                    model.graph.encoded_initializer.append(encoded)
+                elif failure == "tensor_collision":
+                    model.graph.initializer.append(numpy_helper.from_array(values, name="Q"))
+                elif failure == "unknown_reference":
+                    encoded.struct_type = onnx.StructTypeProto(type_ref=99)
+                elif failure == "duplicate_type_id":
+                    model.struct_types.append(model.struct_types[0])
+                elif failure == "truncated_payload":
+                    encoded.raw_data = bytes(encoded.raw_data)[:-1]
+                elif failure == "node_output_collision":
+                    model.graph.node[0].output.clear()
+                    model.graph.node[0].output.append("Q")
+                with self.assertRaises(checker.ValidationError):
+                    checker.check_model(model)
+
+    def test_checker_structured_graph_output(self):
+        model, _ = self.make_encoded_initializer_model()
+        output_type = onnx.TypeProto()
+        output_type.struct_type = onnx.StructTypeProto(type_ref=1)
+        model.graph.output.append(helper.make_value_info("Q", output_type))
+        checker.check_model(model)
+        model.graph.output[-1].type.struct_type = onnx.StructTypeProto(type_ref=99)
+        with self.assertRaises(checker.ValidationError):
+            checker.check_model(model)
+
+    def test_checker_nested_encoded_initializer(self):
+        model, _ = self.make_encoded_initializer_model()
+        conditional = helper.make_node(
+            "If", ["condition"], ["Y"], then_branch=model.graph, else_branch=model.graph
+        )
+        graph = helper.make_graph(
+            [conditional],
+            "nested_encoded",
+            [],
+            list(model.graph.output),
+            initializer=[helper.make_tensor("condition", onnx.TensorProto.BOOL, [], [True])],
+        )
+        model.graph = graph
+        model.opset_import.append(helper.make_opsetid("", 21))
+        checker.check_model(model)
+        branch = model.graph.node[0].attribute[0].g
+        branch.encoded_initializer[0].struct_type = onnx.StructTypeProto(type_ref=99)
+        with self.assertRaises(checker.ValidationError):
+            checker.check_model(model)
 
     def roundtrip(self, values, plan):
         """Returns reconstructed values after serialization and source release."""

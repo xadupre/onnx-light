@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 """Backend tests that exercise the runtime's model execution path
-(``ExecutionPlan`` + ``RuntimeSession``, exposed through
+(``RuntimeSession`` with its model execution plan, exposed through
 ``onnx_light.onnx_py._onnxpykernels.runtime``) against every backend test
 case whose top-level graph contains a single node of an op registered in
 ``KernelDispatchTable``.
@@ -42,7 +42,7 @@ def _default_opset_version(model: onnxl.ModelProto) -> int:
 
 def run_model_backend(model: onnxl.ModelProto, *inputs: np.ndarray) -> list[np.ndarray]:
     """Executes ``model`` by registering its local functions and driving
-    ``model.graph``'s :class:`ExecutionPlan` through a :class:`RuntimeSession`.
+    ``model`` through a :class:`RuntimeSession` that loads its initializers.
 
     Mirrors the signature expected by :func:`make_test_class` (the same as
     :func:`onnxruntime_backend` in ``test_backend_with_onnxruntime.py``):
@@ -63,11 +63,8 @@ def run_model_backend(model: onnxl.ModelProto, *inputs: np.ndarray) -> list[np.n
         ctx.set(name, rt.tensor_from_proto(tp))
 
     rt.register_model_functions(model, ctx)
-    for init in model.graph.initializer:
-        if not ctx.has(init.name):
-            ctx.set(init.name, rt.tensor_from_proto(init), "initializer")
-    plan = rt.ExecutionPlan(model.graph)
-    rt.RuntimeSession(plan).run(ctx)
+    session = rt.RuntimeSession(model)
+    session.run(ctx)
 
     outputs: list[np.ndarray] = []
     for vi in model.graph.output:

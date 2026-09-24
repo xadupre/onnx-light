@@ -23,6 +23,7 @@
 #include "onnx_lib/defs/schema.h"
 #include "onnx_lib/onnx-data.pb.h"
 #include "onnx_lib/string_utils.h"
+#include "onnx_proto/onnx_verify.h"
 
 namespace ONNX_LIGHT_NAMESPACE::checker {
 /**
@@ -93,6 +94,14 @@ public:
   /** Selects whether the next graph to validate is the main graph. */
   void set_is_main_graph(bool is_main_graph) { is_main_graph_ = is_main_graph; }
 
+  /** Borrows validated type declarations for the duration of checking. */
+  void set_struct_type_catalogue(const StructTypeCatalogue &catalogue) {
+    struct_type_catalogue_ = catalogue;
+  }
+
+  /** Returns the catalogue shared with nested graph and function checks. */
+  const StructTypeCatalogue &get_struct_type_catalogue() const { return struct_type_catalogue_; }
+
   /**
    * Overrides the schema registry used to look up operator definitions.
    *
@@ -148,6 +157,7 @@ public:
 private:
   int ir_version_{-1};
   std::unordered_map<std::string, int> opset_imports_;
+  StructTypeCatalogue struct_type_catalogue_;
   bool is_main_graph_ = true;
   const ISchemaRegistry *schema_registry_ = OpSchemaRegistry::Instance();
   std::string model_dir_;

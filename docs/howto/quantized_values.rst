@@ -106,6 +106,8 @@ encoded initializers and resolve model-scoped types; child contexts inherit the
 catalogue. Shape inference records Quantize's physical structured type.
 Dequantize propagates a concrete encoded initializer's logical shape; otherwise
 only its requested dtype is known.
+The model checker validates encoded initializer names, layouts and model-scoped
+type references, including inside nested graphs.
 
 Python
 ------

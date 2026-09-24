@@ -8,6 +8,13 @@ Quantization
 
 **consolidated design reference**
 
+Portable reference conversions for these numerical families are documented in
+:ref:`l-quantized-values`. They use self-contained structured encoded values,
+caller-supplied parameters and native C++ consumers, not the external formats'
+binary layouts or calibration algorithms.
+The explicit ``ORT_MATMULNBITS_INT2/INT4/INT8`` codecs additionally implement
+the actual :ref:`ORT operator input layouts <l-ort-matmulnbits-inputs>`.
+
 .. note::
 
     The implementation sequence is now
@@ -2979,6 +2986,14 @@ Custom (plugin-based)
 
 MatMulNBits INT4 (onnxruntime, per-group of 32, tiled)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. note::
+
+    The tiling below is a conceptual kernel-oriented layout, not the standard
+    ORT operator input ABI. Implemented 2/4/8-bit ORT input packing instead uses
+    ``B[N, ceil(K/block_size), block_size*bits/8]`` with separate scales and
+    optional zero points; see :ref:`l-ort-matmulnbits-inputs`. There is no fixed
+    N-axis tile of 128 in that input format.
 
 Weights of shape ``[K, N]`` are tiled into blocks of 32 along axis K
 and 128 along axis N (SIMD width). All tiles share the same INT4

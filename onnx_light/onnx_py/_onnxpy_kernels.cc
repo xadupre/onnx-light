@@ -15,6 +15,7 @@
 #include "onnx_core/runtime/kernels/run_nodes.h"
 #include "onnx_core/runtime/memory/simple_tensor.h"
 #include "onnx_core/runtime/persistent_value_state.h"
+#include "onnx_core/runtime/quantization.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/runtime_session.h"
 #include "onnx_core/runtime/tuning/kernel_tuning_cache.h"
@@ -33,6 +34,7 @@
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/shared_ptr.h>
 #include <nanobind/stl/string.h>
+#include <nanobind/stl/string_view.h>
 #include <nanobind/stl/unordered_set.h>
 #include <nanobind/stl/vector.h>
 #include <sstream>
@@ -969,6 +971,199 @@ void AddOnnxPyRuntime(nb::module_ &m) {
   // KernelContext / OpsetId types and the TensorFromProto helper.
   // -----------------------------------------------------------------------
   auto rt_mod = m.def_submodule("runtime");
+  rt_mod.attr("Shape") =
+      nb::module_::import_("onnx_light.onnx_py._onnxpycore").attr("shape_inference").attr("Shape");
+
+  nb::enum_<core::runtime::QuantizationMethod>(rt_mod, "QuantizationMethod")
+      .value("AFFINE", core::runtime::QuantizationMethod::kAffine)
+      .value("CODEBOOK", core::runtime::QuantizationMethod::kCodebook)
+      .value("CAST", core::runtime::QuantizationMethod::kCast);
+  nb::enum_<core::runtime::QuantizationFormat>(rt_mod, "QuantizationFormat")
+      .value("INT8", core::runtime::QuantizationFormat::kInt8)
+      .value("INT8_PER_CHANNEL", core::runtime::QuantizationFormat::kInt8PerChannel)
+      .value("INT4", core::runtime::QuantizationFormat::kInt4)
+      .value("GPTQ", core::runtime::QuantizationFormat::kGptq)
+      .value("AWQ", core::runtime::QuantizationFormat::kAwq)
+      .value("EETQ", core::runtime::QuantizationFormat::kEetq)
+      .value("MATMULNBITS", core::runtime::QuantizationFormat::kMatmulnbits)
+      .value("Q2_K", core::runtime::QuantizationFormat::kQ2K)
+      .value("Q3_K", core::runtime::QuantizationFormat::kQ3K)
+      .value("Q4_K", core::runtime::QuantizationFormat::kQ4K)
+      .value("Q5_K", core::runtime::QuantizationFormat::kQ5K)
+      .value("Q6_K", core::runtime::QuantizationFormat::kQ6K)
+      .value("HQQ", core::runtime::QuantizationFormat::kHqq)
+      .value("EXL2", core::runtime::QuantizationFormat::kExl2)
+      .value("EXL3", core::runtime::QuantizationFormat::kExl3)
+      .value("NF4", core::runtime::QuantizationFormat::kNf4)
+      .value("IQ4_NL", core::runtime::QuantizationFormat::kIq4Nl)
+      .value("BINARY", core::runtime::QuantizationFormat::kBinary)
+      .value("TERNARY", core::runtime::QuantizationFormat::kTernary)
+      .value("TQ1_0", core::runtime::QuantizationFormat::kTq10)
+      .value("TQ2_0", core::runtime::QuantizationFormat::kTq20)
+      .value("BITNET", core::runtime::QuantizationFormat::kBitnet)
+      .value("PARETOQ", core::runtime::QuantizationFormat::kParetoq)
+      .value("TEQUILA", core::runtime::QuantizationFormat::kTequila)
+      .value("STQ1_0", core::runtime::QuantizationFormat::kStq10)
+      .value("IQ1_S", core::runtime::QuantizationFormat::kIq1S)
+      .value("AQLM", core::runtime::QuantizationFormat::kAqlm)
+      .value("QUIP_SHARP", core::runtime::QuantizationFormat::kQuipSharp)
+      .value("SPQR", core::runtime::QuantizationFormat::kSpqr)
+      .value("SQUEEZELLM", core::runtime::QuantizationFormat::kSqueezellm)
+      .value("LOG", core::runtime::QuantizationFormat::kLog)
+      .value("FP6_LLM", core::runtime::QuantizationFormat::kFp6Llm)
+      .value("FP8_E4M3", core::runtime::QuantizationFormat::kFp8E4m3)
+      .value("MXFP4", core::runtime::QuantizationFormat::kMxfp4)
+      .value("MXFP6", core::runtime::QuantizationFormat::kMxfp6)
+      .value("NVFP4", core::runtime::QuantizationFormat::kNvfp4)
+      .value("QUAROT", core::runtime::QuantizationFormat::kQuarot)
+      .value("SMOOTHQUANT", core::runtime::QuantizationFormat::kSmoothquant)
+      .value("TILED_FLOAT", core::runtime::QuantizationFormat::kTiledFloat)
+      .value("COLUMN_MAJOR", core::runtime::QuantizationFormat::kColumnMajor)
+      .value("ORT_MATMULNBITS_INT2", core::runtime::QuantizationFormat::kOrtMatmulnbitsInt2)
+      .value("ORT_MATMULNBITS_INT4", core::runtime::QuantizationFormat::kOrtMatmulnbitsInt4)
+      .value("ORT_MATMULNBITS_INT8", core::runtime::QuantizationFormat::kOrtMatmulnbitsInt8);
+  nb::class_<core::runtime::QuantizationBlockLayout>(rt_mod, "QuantizationBlockLayout")
+      .def(nb::init<>())
+      .def_rw("count", &core::runtime::QuantizationBlockLayout::count)
+      .def_rw("method", &core::runtime::QuantizationBlockLayout::method)
+      .def_rw("bits", &core::runtime::QuantizationBlockLayout::bits)
+      .def_rw("signed_codes", &core::runtime::QuantizationBlockLayout::signed_codes)
+      .def_rw("books", &core::runtime::QuantizationBlockLayout::books)
+      .def_rw("entries", &core::runtime::QuantizationBlockLayout::entries)
+      .def_rw("vector_size", &core::runtime::QuantizationBlockLayout::vector_size)
+      .def_rw("base3", &core::runtime::QuantizationBlockLayout::base3)
+      .def_rw("cast_type", &core::runtime::QuantizationBlockLayout::cast_type);
+  nb::class_<core::runtime::QuantizationBlockParameters>(rt_mod, "QuantizationBlockParameters")
+      .def(nb::init<>())
+      .def_rw("scale", &core::runtime::QuantizationBlockParameters::scale)
+      .def_rw("zero_point", &core::runtime::QuantizationBlockParameters::zero_point)
+      .def_rw("offset", &core::runtime::QuantizationBlockParameters::offset)
+      .def_rw("codebook", &core::runtime::QuantizationBlockParameters::codebook);
+  nb::class_<core::runtime::QuantizationRun>(rt_mod, "QuantizationRun")
+      .def(nb::init<>())
+      .def_rw("layout", &core::runtime::QuantizationRun::layout)
+      .def_rw("blocks", &core::runtime::QuantizationRun::blocks, nb::rv_policy::copy)
+      .def(
+          "block",
+          [](const core::runtime::QuantizationRun &self, size_t index) {
+            EXT_ENFORCE_INVALID(index < self.blocks.size(),
+                                "Quantization block index out of range.");
+            return self.blocks[index];
+          },
+          nb::arg("index"), "Returns an owned copy; uses set_block to replace it.")
+      .def(
+          "set_block",
+          [](core::runtime::QuantizationRun &self, size_t index,
+             const core::runtime::QuantizationBlockParameters &value) {
+            EXT_ENFORCE_INVALID(index < self.blocks.size(),
+                                "Quantization block index out of range.");
+            self.blocks[index] = value;
+          },
+          nb::arg("index"), nb::arg("block"), "Replaces a block with an owned copy.");
+  nb::class_<core::runtime::QuantizationPlan>(rt_mod, "QuantizationPlan")
+      .def(nb::init<>())
+      .def_rw("format", &core::runtime::QuantizationPlan::format,
+              nb::for_setter(nb::arg("value").noconvert()))
+      .def_rw("runs", &core::runtime::QuantizationPlan::runs, nb::rv_policy::copy)
+      .def_prop_rw(
+          "matrix_shape",
+          [](core::runtime::QuantizationPlan &plan) -> Shape & { return plan.matrix_shape; },
+          [](core::runtime::QuantizationPlan &plan, nb::handle shape) {
+            if (nb::isinstance<Shape>(shape))
+              plan.matrix_shape = nb::cast<const Shape &>(shape);
+            else {
+              std::vector<int64_t> dims;
+              if (!nb::try_cast(shape, dims))
+                throw nb::type_error("matrix_shape requires a Shape or an integer sequence.");
+              plan.matrix_shape = dims;
+            }
+          },
+          nb::rv_policy::reference_internal,
+          "Mutable Shape describing [K, N]; assignment accepts Shape or an integer sequence.")
+      .def_rw("permutation", &core::runtime::QuantizationPlan::permutation)
+      .def_rw("transform_size", &core::runtime::QuantizationPlan::transform_size)
+      .def_rw("forward", &core::runtime::QuantizationPlan::forward)
+      .def_rw("inverse", &core::runtime::QuantizationPlan::inverse)
+      .def_rw("outliers", &core::runtime::QuantizationPlan::outliers)
+      .def(
+          "run",
+          [](const core::runtime::QuantizationPlan &self, size_t index) {
+            EXT_ENFORCE_INVALID(index < self.runs.size(), "Quantization run index out of range.");
+            return self.runs[index];
+          },
+          nb::arg("index"), "Returns an owned copy; uses set_run to replace it.")
+      .def(
+          "set_run",
+          [](core::runtime::QuantizationPlan &self, size_t index,
+             const core::runtime::QuantizationRun &value) {
+            EXT_ENFORCE_INVALID(index < self.runs.size(), "Quantization run index out of range.");
+            self.runs[index] = value;
+          },
+          nb::arg("index"), nb::arg("run"), "Replaces a run with an owned copy.");
+  rt_mod.def(
+      "quantization_formats",
+      []() {
+        constexpr auto formats = core::runtime::QuantizationFormats();
+        return std::vector<core::runtime::QuantizationFormat>(formats.begin(), formats.end());
+      },
+      "Returns portable onnx-light profile enum values, not vendor packing ABIs.");
+  rt_mod.def("quantization_format_name", &core::runtime::QuantizationFormatName, nb::arg("format"),
+             "Returns the stable wire name of a profile.");
+  rt_mod.def("parse_quantization_format", &core::runtime::ParseQuantizationFormat, nb::arg("name"),
+             "Parses a stable profile name; rejects unknown names.");
+  rt_mod.def("make_quantization_plan", &core::runtime::MakeQuantizationPlan,
+             nb::arg("format").noconvert(), nb::arg("count"), nb::arg("block_size") = 128,
+             "Creates block defaults; requires supplied learned codebooks and transforms.");
+  rt_mod.def("make_matmul_nbits_plan", &core::runtime::MakeMatMulNBitsPlan,
+             nb::arg("format").noconvert(), nb::arg("k"), nb::arg("n"), nb::arg("block_size") = 128,
+             "Creates an ORT-compatible MatMulNBits input-packing plan for [K,N] weights.");
+  nb::class_<core::runtime::MatMulNBitsInputs>(rt_mod, "MatMulNBitsInputs")
+      .def_ro("k", &core::runtime::MatMulNBitsInputs::k)
+      .def_ro("n", &core::runtime::MatMulNBitsInputs::n)
+      .def_ro("bits", &core::runtime::MatMulNBitsInputs::bits)
+      .def_ro("block_size", &core::runtime::MatMulNBitsInputs::block_size)
+      .def_ro("weights", &core::runtime::MatMulNBitsInputs::weights)
+      .def_ro("scales", &core::runtime::MatMulNBitsInputs::scales)
+      .def_ro("zero_points", &core::runtime::MatMulNBitsInputs::zero_points);
+  rt_mod.def(
+      "export_matmul_nbits_inputs",
+      [](const EncodedValueProto &value, const ModelProto *model) {
+        StructTypeCatalogue catalogue;
+        if (model)
+          catalogue.Build(*model);
+        return core::runtime::ExportMatMulNBitsInputs(value, catalogue);
+      },
+      nb::arg("value"), nb::arg("model").none() = nullptr,
+      "Extracts owned ORT input tensors and attributes without dequantizing.");
+  rt_mod.def("quantize_tensor_proto", &core::runtime::QuantizeTensorProto, nb::arg("tensor"),
+             nb::arg("plan"), "Quantizes a loaded TensorProto into an owned EncodedValueProto.");
+  rt_mod.def(
+      "dequantize_tensor_proto",
+      [](const EncodedValueProto &value, const ModelProto *model) {
+        StructTypeCatalogue catalogue;
+        if (model)
+          catalogue.Build(*model);
+        return core::runtime::DequantizeTensorProto(value, catalogue);
+      },
+      nb::arg("value"), nb::arg("model").none() = nullptr,
+      "Dequantizes an EncodedValueProto, optionally resolving a model's type catalogue.");
+  rt_mod.def(
+      "quantize_tensor",
+      [](const Tensor &tensor, const core::runtime::QuantizationPlan &plan) {
+        return FeedbackValueToPython(core::runtime::QuantizeTensor(tensor, plan));
+      },
+      nb::arg("tensor"), nb::arg("plan"),
+      "Quantizes a Tensor; represents the encoded RuntimeValue as EncodedValueProto in Python.");
+  rt_mod.def(
+      "dequantize_tensor",
+      [](const EncodedValueProto &value, const ModelProto *model) {
+        StructTypeCatalogue catalogue;
+        if (model)
+          catalogue.Build(*model);
+        return core::runtime::DequantizeTensor(value, catalogue);
+      },
+      nb::arg("value"), nb::arg("model").none() = nullptr,
+      "Dequantizes an encoded runtime value into a Tensor.");
   rt_mod.doc() = "C++ kernel dispatcher exposed to Python. RunNode and "
                  "RuntimeSession evaluate one or more nodes through the static "
                  "KernelDispatchTable (with transparent dispatch to model-local "

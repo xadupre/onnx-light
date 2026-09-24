@@ -446,6 +446,47 @@ TEST(Quantization, AcceptsLoadedExternalRawDataWithoutChangingMetadata) {
                std::invalid_argument);
 }
 
+TEST(Quantization, ValidatesCastTypeForEveryPortableMethod) {
+  const auto source = Tensor::FromFloat("", {3}, {-1, 0, 1});
+  for (auto format :
+       {QuantizationFormat::kInt4, QuantizationFormat::kNf4, QuantizationFormat::kTiledFloat}) {
+    SCOPED_TRACE(QuantizationFormatName(format));
+    auto plan = MakeQuantizationPlan(format, 3);
+    const auto valid = QuantizeTensor(source, plan).Encoded();
+    for (int32_t type : {-1, 0, int32_t(TensorProto::INT8), int32_t(TensorProto::STRING),
+                         std::numeric_limits<int32_t>::max()}) {
+      SCOPED_TRACE(type);
+      plan.runs[0].layout.cast_type = type;
+      EXPECT_THROW(QuantizeTensor(source, plan), std::invalid_argument);
+      auto corrupt = valid;
+      auto *parameters = corrupt.mutable_struct_type()
+                             ->mutable_structure()
+                             ->mutable_field(6)
+                             ->mutable_type()
+                             ->mutable_struct_type()
+                             ->mutable_structure()
+                             ->mutable_field(1)
+                             ->mutable_type()
+                             ->mutable_struct_type()
+                             ->mutable_array()
+                             ->mutable_element_type()
+                             ->mutable_struct_type()
+                             ->mutable_structure()
+                             ->mutable_field(0)
+                             ->mutable_constant();
+      parameters->ref_int64_data()[8] = type;
+      EXPECT_THROW(DequantizeTensor(corrupt), std::invalid_argument);
+      EXPECT_THROW(DequantizeTensorProto(corrupt), std::invalid_argument);
+    }
+    for (int32_t type :
+         {TensorProto::FLOAT, TensorProto::DOUBLE, TensorProto::FLOAT16, TensorProto::BFLOAT16}) {
+      SCOPED_TRACE(type);
+      plan.runs[0].layout.cast_type = type;
+      ExpectValues(DequantizeTensor(WireRoundTrip(QuantizeTensor(source, plan))), {-1, 0, 1});
+    }
+  }
+}
+
 TEST(Quantization, RejectsCorruptPayloadAndSchema) {
   const auto source = Tensor::FromFloat("", {3}, {1, 0, -1});
   auto valid = QuantizeTensor(source, MakeQuantizationPlan(QuantizationFormat::kInt4, 3)).Encoded();

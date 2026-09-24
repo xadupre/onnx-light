@@ -175,6 +175,8 @@ All profiles initially use
    * - ``run.layout.cast_type``
      - Physical dtype for ``CAST``: ``onnx.TensorProto.FLOAT``, ``DOUBLE``,
        ``FLOAT16`` or ``BFLOAT16``. Does not change the logical output dtype.
+       Must be one of these four types for every method, since it is serialized
+       in each portable block header even when unused.
 
 For example, updating a single block without losing the change:
 

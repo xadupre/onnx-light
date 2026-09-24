@@ -82,7 +82,8 @@ struct QuantizationBlockLayout {
   uint32_t vector_size = 1;
   /// Packs five trits per byte; requires one scalar codebook with exactly three entries.
   bool base3 = false;
-  /// Selects FLOAT, DOUBLE, FLOAT16 or BFLOAT16 physical storage for the cast method only.
+  /// Must be FLOAT, DOUBLE, FLOAT16 or BFLOAT16 for every method.
+  /// Selects physical storage only for the cast method.
   int32_t cast_type = TensorProto::FLOAT16;
 };
 

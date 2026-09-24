@@ -464,6 +464,34 @@ class TestQuantizedValues(unittest.TestCase):
         expected = (codes - block.zero_point) * block.scale + block.offset
         numpy.testing.assert_allclose(self.roundtrip(source, plan), expected, rtol=0, atol=1e-15)
 
+    def test_cast_type_is_validated_for_every_method(self):
+        values = numpy.array([-1, 0, 1], dtype=numpy.float32)
+        source = numpy_helper.from_array(values)
+        for format_value in (
+            QuantizationFormat.INT4,
+            QuantizationFormat.NF4,
+            QuantizationFormat.TILED_FLOAT,
+        ):
+            plan = runtime.make_quantization_plan(format_value, values.size)
+            for cast_type in (-1, 0, onnx.TensorProto.INT8, onnx.TensorProto.STRING, 2**31 - 1):
+                with self.subTest(format=format_value, cast_type=cast_type):
+                    run = plan.run(0)
+                    run.layout.cast_type = cast_type
+                    plan.set_run(0, run)
+                    with self.assertRaisesRegex(ValueError, "cast_type"):
+                        runtime.quantize_tensor_proto(source, plan)
+            for cast_type in (
+                onnx.TensorProto.FLOAT,
+                onnx.TensorProto.DOUBLE,
+                onnx.TensorProto.FLOAT16,
+                onnx.TensorProto.BFLOAT16,
+            ):
+                with self.subTest(format=format_value, cast_type=cast_type):
+                    run = plan.run(0)
+                    run.layout.cast_type = cast_type
+                    plan.set_run(0, run)
+                    numpy.testing.assert_array_equal(self.roundtrip(values, plan), values)
+
     def test_cast_precision_against_numpy_reference(self):
         source = numpy.linspace(-3, 3, 201, dtype=numpy.float32)
         plan = runtime.make_quantization_plan(

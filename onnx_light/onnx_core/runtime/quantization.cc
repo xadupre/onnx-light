@@ -245,6 +245,8 @@ void ValidateBlock(const QuantizationBlockLayout &layout,
                           layout.method == QuantizationMethod::kCodebook ||
                           layout.method == QuantizationMethod::kCast,
                       "Unknown quantization method.");
+  EXT_ENFORCE_INVALID(Floating(layout.cast_type),
+                      "Quantization cast_type must be FLOAT, DOUBLE, FLOAT16 or BFLOAT16.");
   EXT_ENFORCE_INVALID(std::isfinite(block.scale) && block.scale > 0,
                       "Quantization scale must be finite and positive.");
   EXT_ENFORCE_INVALID(std::isfinite(block.zero_point), "Nonfinite quantization zero point.");
@@ -277,7 +279,6 @@ void ValidateBlock(const QuantizationBlockLayout &layout,
                            layout.books == 1 && layout.vector_size == 1),
                       "Base-3 packing requires a single three-entry scalar codebook.");
   if (layout.method == QuantizationMethod::kCast) {
-    FloatBytes(layout.cast_type);
     EXT_ENFORCE_INVALID(block.zero_point == 0, "Cast zero_point must be zero.");
   }
   CodeBytes(layout);

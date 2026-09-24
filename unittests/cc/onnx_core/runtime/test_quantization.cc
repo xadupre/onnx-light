@@ -14,9 +14,9 @@ using namespace ONNX_LIGHT_NAMESPACE::core::runtime;
 namespace {
 
 constexpr auto kQuantizationFormats = QuantizationFormats();
-static_assert(kQuantizationFormats.size() == 40);
+static_assert(kQuantizationFormats.size() == 43);
 static_assert(kQuantizationFormats.front() == QuantizationFormat::kInt8);
-static_assert(kQuantizationFormats.back() == QuantizationFormat::kColumnMajor);
+static_assert(kQuantizationFormats.back() == QuantizationFormat::kOrtMatmulnbitsInt8);
 static_assert([] {
   for (size_t i = 0; i < kQuantizationFormats.size(); ++i) {
     for (size_t j = 0; j < i; ++j)
@@ -40,6 +40,8 @@ RuntimeValue WireRoundTrip(const RuntimeValue &value) {
 }
 
 QuantizationPlan WithTables(QuantizationFormat format, size_t count) {
+  if (format >= QuantizationFormat::kOrtMatmulnbitsInt2)
+    return MakeMatMulNBitsPlan(format, count / 2, 2, 16);
   auto plan = MakeQuantizationPlan(format, count, 4);
   for (auto &run : plan.runs) {
     auto &layout = run.layout;
@@ -85,13 +87,14 @@ TEST(Quantization, AffineGoldenBytesRoundingClippingAndOwnership) {
 }
 
 TEST(Quantization, EveryCatalogueProfileProducesSelfContainedValues) {
-  const auto tensor = Tensor::FromFloat("", {8}, {-1, -1, 0, 0, 1, 1, 1, 1});
+  const auto tensor = Tensor::FromFloat("", {4, 2}, {-1, -1, 0, 0, 1, 1, 1, 1});
   TensorProto proto;
   proto.set_data_type(TensorProto::FLOAT);
-  proto.add_dims(8);
+  proto.add_dims(4);
+  proto.add_dims(2);
   for (float value : {-1, -1, 0, 0, 1, 1, 1, 1})
     proto.add_float_data(value);
-  EXPECT_EQ(QuantizationFormats().size(), 40u);
+  EXPECT_EQ(QuantizationFormats().size(), 43u);
   for (const auto &format : QuantizationFormats()) {
     SCOPED_TRACE(QuantizationFormatName(format));
     auto plan = WithTables(format, 8);
@@ -336,7 +339,7 @@ TEST(Quantization, RejectsUnknownProfilesInMutablePlansAndEncodedLayouts) {
     EXPECT_THROW(DequantizeTensor(RuntimeValue(encoded)), std::invalid_argument);
   }
   auto plan = MakeQuantizationPlan(QuantizationFormat::kInt4, 2);
-  plan.format = static_cast<QuantizationFormat>(40);
+  plan.format = static_cast<QuantizationFormat>(43);
   EXPECT_THROW(QuantizeTensor(source, plan), std::invalid_argument);
   auto renamed = valid;
   renamed.mutable_struct_type()->set_name("onnx_light.quantization.v1/quarot");
@@ -552,10 +555,13 @@ TEST(Quantization, EnumFormatsHaveStableWireNames) {
   for (const auto format : QuantizationFormats()) {
     const auto name = QuantizationFormatName(format);
     EXPECT_EQ(ParseQuantizationFormat(name), format);
-    EXPECT_EQ(MakeQuantizationPlan(format, 0).format, format);
+    if (format < QuantizationFormat::kOrtMatmulnbitsInt2)
+      EXPECT_EQ(MakeQuantizationPlan(format, 0).format, format);
+    else
+      EXPECT_EQ(MakeMatMulNBitsPlan(format, 1, 1, 16).format, format);
   }
   EXPECT_THROW(QuantizationFormatName(static_cast<QuantizationFormat>(-1)), std::invalid_argument);
-  EXPECT_THROW(QuantizationFormatName(static_cast<QuantizationFormat>(40)), std::invalid_argument);
+  EXPECT_THROW(QuantizationFormatName(static_cast<QuantizationFormat>(43)), std::invalid_argument);
   EXPECT_THROW(ParseQuantizationFormat("INT4"), std::invalid_argument);
 }
 
@@ -623,4 +629,192 @@ TEST(Quantization, RejectsEmptyRunsInvalidLayoutsAndIncompleteCoverage) {
   EXPECT_THROW(QuantizeTensor(source, plan), std::invalid_argument);
   plan.runs.clear();
   EXPECT_THROW(QuantizeTensor(source, plan), std::invalid_argument);
+}
+
+TEST(Quantization, OrtMatMulNBitsGoldenInputsAndColumnPadding) {
+  for (const auto format :
+       {QuantizationFormat::kOrtMatmulnbitsInt2, QuantizationFormat::kOrtMatmulnbitsInt4,
+        QuantizationFormat::kOrtMatmulnbitsInt8}) {
+    SCOPED_TRACE(QuantizationFormatName(format));
+    constexpr size_t k = 35, n = 2, block_size = 16, groups = 3;
+    auto plan = MakeMatMulNBitsPlan(format, k, n, block_size);
+    ASSERT_EQ(plan.runs.size(), 1u);
+    ASSERT_EQ(plan.runs[0].blocks.size(), n * groups);
+    const uint32_t bits = plan.runs[0].layout.bits;
+    const size_t per_byte = 8 / bits;
+    const uint32_t mask = (1u << bits) - 1;
+    std::vector<float> values(k * n);
+    for (size_t column = 0; column < n; ++column) {
+      for (size_t group = 0; group < groups; ++group) {
+        auto &block = plan.runs[0].blocks[column * groups + group];
+        block.scale = 0.5 * (group + 1);
+        block.zero_point = (column + group + 1) & mask;
+      }
+      for (size_t row = 0; row < k; ++row) {
+        const auto &block = plan.runs[0].blocks[column * groups + row / block_size];
+        values[row * n + column] =
+            float(((row + column) & mask) - block.zero_point) * float(block.scale);
+      }
+    }
+    auto encoded = WireRoundTrip(QuantizeTensor(Tensor::FromFloat("", {k, n}, values), plan));
+    auto inputs = ExportMatMulNBitsInputs(encoded.Encoded());
+    EXPECT_EQ(inputs.k, k);
+    EXPECT_EQ(inputs.n, n);
+    EXPECT_EQ(inputs.bits, bits);
+    EXPECT_EQ(inputs.block_size, block_size);
+    EXPECT_EQ(inputs.weights.data_type(), TensorProto::UINT8);
+    ASSERT_EQ(inputs.weights.dims().size(), 3u);
+    EXPECT_EQ(inputs.weights.dims(0), n);
+    EXPECT_EQ(inputs.weights.dims(1), groups);
+    EXPECT_EQ(inputs.weights.dims(2), block_size / per_byte);
+    ASSERT_TRUE(inputs.zero_points.has_value());
+    EXPECT_EQ(inputs.zero_points->data_type(), TensorProto::UINT8);
+    EXPECT_EQ(inputs.zero_points->dims(1), (groups + per_byte - 1) / per_byte);
+    std::vector<uint8_t> expected(n * groups * block_size / per_byte, 0);
+    for (size_t column = 0; column < n; ++column)
+      for (size_t row = 0; row < k; ++row) {
+        const size_t index = column * groups * block_size + row;
+        expected[index / per_byte] |= uint8_t(((row + column) & mask) << ((row % per_byte) * bits));
+      }
+    EXPECT_EQ(inputs.weights.raw_data().size(), expected.size());
+    EXPECT_EQ(std::memcmp(inputs.weights.raw_data().data(), expected.data(), expected.size()), 0);
+    EXPECT_EQ(expected[0], bits == 2 ? 0xe4 : bits == 4 ? 0x10 : 0);
+    const auto &zeros = inputs.zero_points->raw_data();
+    if (bits == 2) {
+      ASSERT_EQ(zeros.size(), 2u);
+      EXPECT_EQ(zeros.data()[0], 0x39);
+      EXPECT_EQ(zeros.data()[1], 0x0e);
+    } else if (bits == 4) {
+      ASSERT_EQ(zeros.size(), 4u);
+      EXPECT_EQ(zeros.data()[0], 0x21);
+      EXPECT_EQ(zeros.data()[1], 0x03);
+      EXPECT_EQ(zeros.data()[2], 0x32);
+      EXPECT_EQ(zeros.data()[3], 0x04);
+    }
+    const auto scales = TensorFromProto(inputs.scales);
+    ExpectValues(scales, {0.5, 1, 1.5, 0.5, 1, 1.5});
+    ExpectValues(DequantizeTensor(encoded), values);
+    encoded = RuntimeValue{};
+    EXPECT_EQ(std::memcmp(inputs.weights.raw_data().data(), expected.data(), expected.size()), 0);
+  }
+}
+
+TEST(Quantization, OrtMatMulNBitsImplicitAndFloatingZeroPoints) {
+  const auto format = QuantizationFormat::kOrtMatmulnbitsInt4;
+  auto plan = MakeMatMulNBitsPlan(format, 3, 2, 16);
+  const auto source = Tensor::FromFloat("", {3, 2}, {-1, 1, 0, 2, 1, 3});
+  auto encoded = QuantizeTensor(source, plan);
+  EXPECT_FALSE(ExportMatMulNBitsInputs(encoded.Encoded()).zero_points.has_value());
+  ExpectValues(DequantizeTensor(encoded), {-1, 1, 0, 2, 1, 3});
+  plan.runs[0].blocks[0].scale = -0.5;
+  plan.runs[0].blocks[0].zero_point = 3.25;
+  plan.runs[0].blocks[1].scale = 0.5;
+  plan.runs[0].blocks[1].zero_point = 4.5;
+  const std::vector<float> values{1.625, -2.25, 0.125, 0.25, -1.875, 2.75};
+  encoded = QuantizeTensor(Tensor::FromFloat("", {3, 2}, values), plan);
+  auto inputs = ExportMatMulNBitsInputs(encoded.Encoded());
+  ASSERT_TRUE(inputs.zero_points.has_value());
+  EXPECT_EQ(inputs.zero_points->data_type(), TensorProto::FLOAT);
+  ExpectValues(TensorFromProto(*inputs.zero_points), {3.25, 4.5});
+  ExpectValues(DequantizeTensor(WireRoundTrip(encoded)), values);
+  ModelProto model;
+  *model.add_struct_types() = encoded.Encoded().struct_type();
+  model.mutable_struct_types(0)->set_type_id(29);
+  auto referenced = encoded.Encoded();
+  referenced.mutable_struct_type()->Clear();
+  referenced.mutable_struct_type()->set_type_ref(29);
+  StructTypeCatalogue catalogue;
+  catalogue.Build(model);
+  const auto exported = ExportMatMulNBitsInputs(referenced, catalogue);
+  EXPECT_EQ(exported.weights.SerializeAsString(), inputs.weights.SerializeAsString());
+  SimpleRawBufferAllocator allocator(4);
+  ExpectValues(DequantizeTensor(referenced, catalogue, &allocator), values);
+}
+
+TEST(Quantization, OrtMatMulNBitsRoundsParametersToSourceDtype) {
+  for (int32_t type : {TensorProto::FLOAT16, TensorProto::BFLOAT16}) {
+    auto plan = MakeMatMulNBitsPlan(QuantizationFormat::kOrtMatmulnbitsInt8, 3, 1, 16);
+    plan.runs[0].blocks[0].scale = 0.10001;
+    plan.runs[0].blocks[0].zero_point = 128.3;
+    const auto source = type == TensorProto::FLOAT16 ? MakeFloat16Tensor("", {3, 1}, {-1, 0, 1})
+                                                     : MakeBfloat16Tensor("", {3, 1}, {-1, 0, 1});
+    const auto encoded = QuantizeTensor(source, plan);
+    const auto inputs = ExportMatMulNBitsInputs(encoded.Encoded());
+    EXPECT_EQ(inputs.scales.data_type(), type);
+    EXPECT_EQ(DequantizeTensor(encoded).data_type, type);
+    const auto expected = type == TensorProto::FLOAT16 ? MakeFloat16Tensor("", {1}, {0.10001f})
+                                                       : MakeBfloat16Tensor("", {1}, {0.10001f});
+    const auto scales = TensorFromProto(inputs.scales);
+    EXPECT_EQ(std::memcmp(scales.bytes(), expected.bytes(), 2), 0);
+  }
+}
+
+TEST(Quantization, OrtMatMulNBitsRejectsUnsupportedPlansAndMalformedValues) {
+  const auto format = QuantizationFormat::kOrtMatmulnbitsInt4;
+  EXPECT_THROW(MakeQuantizationPlan(format, 32), std::invalid_argument);
+  EXPECT_THROW(MakeMatMulNBitsPlan(QuantizationFormat::kInt4, 2, 3), std::invalid_argument);
+  EXPECT_THROW(MakeMatMulNBitsPlan(format, 0, 3), std::invalid_argument);
+  for (uint64_t size : {0, 8, 24})
+    EXPECT_THROW(MakeMatMulNBitsPlan(format, 2, 3, size), std::invalid_argument);
+  auto plan = MakeMatMulNBitsPlan(format, 2, 1, 16);
+  const auto source = Tensor::FromFloat("", {2, 1}, {1, 2});
+  EXPECT_THROW(QuantizeTensor(Tensor::FromFloat("", {2}, {1, 2}), plan), std::invalid_argument);
+  EXPECT_THROW(QuantizeTensor(Tensor::FromDouble("", {2, 1}, {1, 2}), plan), std::invalid_argument);
+  auto changed = plan;
+  changed.runs[0].layout.bits = 2;
+  EXPECT_THROW(QuantizeTensor(source, changed), std::invalid_argument);
+  changed = plan;
+  changed.runs[0].blocks.clear();
+  EXPECT_THROW(QuantizeTensor(source, changed), std::invalid_argument);
+  changed = plan;
+  changed.runs[0].blocks[0].offset = 1;
+  EXPECT_THROW(QuantizeTensor(source, changed), std::invalid_argument);
+  changed = plan;
+  changed.outliers = {0};
+  EXPECT_THROW(QuantizeTensor(source, changed), std::invalid_argument);
+  changed = plan;
+  changed.matrix_shape = {1, 1};
+  EXPECT_THROW(QuantizeTensor(source, changed), std::invalid_argument);
+  changed = plan;
+  changed.runs[0].blocks[0].scale = 0;
+  EXPECT_THROW(QuantizeTensor(source, changed), std::invalid_argument);
+  const auto zero = QuantizeTensor(Tensor::FromFloat("", {2, 1}, {0, 0}), changed);
+  ExpectValues(DequantizeTensor(zero), {0, 0});
+  changed.runs[0].blocks[0].scale = 1e-100;
+  EXPECT_THROW(QuantizeTensor(source, changed), std::invalid_argument);
+  changed.runs[0].blocks[0].scale = std::numeric_limits<double>::infinity();
+  EXPECT_THROW(QuantizeTensor(source, changed), std::invalid_argument);
+  changed = plan;
+  changed.runs[0].blocks[0].zero_point = std::numeric_limits<double>::quiet_NaN();
+  EXPECT_THROW(QuantizeTensor(source, changed), std::invalid_argument);
+  EXPECT_THROW(
+      QuantizeTensor(Tensor::FromFloat("", {2, 1}, {1, std::numeric_limits<float>::infinity()}),
+                     plan),
+      std::invalid_argument);
+  const auto valid = QuantizeTensor(source, plan).Encoded();
+  auto corrupt = valid;
+  corrupt.mutable_struct_type()
+      ->mutable_structure()
+      ->mutable_field(0)
+      ->mutable_constant()
+      ->ref_int64_data()[0] = 2;
+  EXPECT_THROW(DequantizeTensor(corrupt), std::invalid_argument);
+  EXPECT_THROW(ExportMatMulNBitsInputs(corrupt), std::invalid_argument);
+  corrupt = valid;
+  auto raw = std::string(corrupt.raw_data());
+  raw.pop_back();
+  corrupt.set_raw_data(raw);
+  EXPECT_THROW(DequantizeTensor(corrupt), std::invalid_argument);
+  corrupt = valid;
+  raw = std::string(corrupt.raw_data());
+  raw.replace(raw.size() - 4, 4, "\0\0\xc0\x7f", 4);
+  corrupt.set_raw_data(raw);
+  EXPECT_THROW(DequantizeTensor(corrupt), std::invalid_argument);
+  EXPECT_THROW(ExportMatMulNBitsInputs(corrupt), std::invalid_argument);
+  corrupt = valid;
+  corrupt.mutable_struct_type()->mutable_structure()->mutable_field(1)->set_name("weights");
+  EXPECT_THROW(ExportMatMulNBitsInputs(corrupt), std::invalid_argument);
+  const auto portable =
+      QuantizeTensor(source, MakeQuantizationPlan(QuantizationFormat::kMatmulnbits, 2));
+  EXPECT_THROW(ExportMatMulNBitsInputs(portable.Encoded()), std::invalid_argument);
 }

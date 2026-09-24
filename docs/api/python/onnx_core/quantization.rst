@@ -11,6 +11,9 @@ The usual NumPy path is ``numpy_helper.from_array`` ->
 ``dequantize_tensor_proto`` -> ``numpy_helper.to_array``.
 Profiles define portable storage defaults, not calibration algorithms or
 vendor-compatible binary formats.
+The explicit ``ORT_MATMULNBITS_INT2/INT4/INT8`` profiles are the exception:
+``make_matmul_nbits_plan`` and ``export_matmul_nbits_inputs`` produce the
+standard ONNX Runtime operator inputs, not internal kernel prepacking.
 
 .. automodule:: onnx_light.onnx_core.quantization
     :members:

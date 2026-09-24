@@ -4,8 +4,9 @@ Quantizes tensors into encoded values
 ====================================
 
 The converters implement **portable onnx-light representations** of the
-:ref:`quantization catalogue <l-next-steps-quantization>`. They do not emit
-GGUF, Marlin, bitsandbytes or other vendor-compatible buffers. The profile
+:ref:`quantization catalogue <l-next-steps-quantization>`, plus three explicit
+:ref:`ORT MatMulNBits input layouts <l-ort-matmulnbits-inputs>`.
+The portable profiles do not emit GGUF, Marlin or bitsandbytes buffers. Their profile
 names identify numerical families, not those libraries' packing ABIs, published
 bits-per-weight figures, training algorithms or accuracy guarantees.
 
@@ -24,7 +25,7 @@ Python
 ------
 
 The runnable :ref:`Python profile tutorial <l-example-quantization-profiles>`
-demonstrates **all 40 profiles**, including per-channel grouping, mixed
+demonstrates **all 43 profiles**, including per-channel grouping, mixed
 precision, supplied vector/additive codebooks, sparse outliers, rotations,
 tiling and serialization. The examples use small explicit parameters; they
 do not train or calibrate a model.
@@ -82,6 +83,8 @@ element counts, not bytes or codebook-vector counts. For a NumPy array, pass
 in logical row-major order, then reordered by any supplied permutation.
 The factory creates one run for all full blocks and, if needed, a second run
 for the shorter tail. An empty tensor has no runs.
+The three ORT profiles instead use ``make_matmul_nbits_plan`` with explicit
+matrix dimensions, as described below.
 
 Pass a ``QuantizationFormat`` enum, for example ``QuantizationFormat.INT4``.
 ``quantization_format_name(format)`` returns its stable wire name;
@@ -108,6 +111,10 @@ The returned ``QuantizationPlan`` is mutable. Its fields are:
        and a nonempty list of per-block numerical parameters in ``blocks``.
        ``sum(run.layout.count * len(run.blocks) for run in plan.runs)`` must
        equal the number of source elements. Assign modified runs back to the plan.
+       ORT profiles instead include padded elements at each column's tail.
+   * - ``matrix_shape``
+     - Required ``[K,N]`` source shape for ORT profiles, filled by their factory.
+       Empty for portable profiles.
    * - ``permutation``
      - List of all flattened source indices, each exactly once, or an empty
        list for identity. Encoding gathers ``source[permutation[i]]``.
@@ -236,7 +243,7 @@ and codebook search) is still allocated: these are reference codecs, not
 zero-allocation conversions. Outputs own their storage independently of inputs.
 
 ``QuantizationFormats()`` is defined in the header as a ``constexpr`` function
-returning ``std::array<QuantizationFormat, 40>`` without dynamic allocation:
+returning ``std::array<QuantizationFormat, 43>`` without dynamic allocation:
 
 .. code-block:: cpp
 
@@ -249,6 +256,9 @@ The Python ``quantization_formats()`` function returns a list of
 
 Numerical contract
 ------------------
+
+This section describes the portable profiles. The ORT profiles have the
+:ref:`matrix-specific contract below <l-ort-matmulnbits-inputs>`.
 
 Inputs and logical outputs support FLOAT, DOUBLE, FLOAT16 and BFLOAT16.
 Input shapes are concrete, including scalars and empty tensors. Inputs must
@@ -677,6 +687,9 @@ semantics over minimal payload size or fast quantization.
 Wire layout and validation
 --------------------------
 
+This section describes the portable wire layout. The ORT profiles use the
+B/scales/zero_points layout described below instead.
+
 The structured root name is ``onnx_light.quantization.v1/<profile>``. Its fields
 are, in order: one zero reserved byte, an INT64 permutation, DOUBLE forward and
 inverse matrices, INT64 outlier indices, DOUBLE outlier values, and a structure
@@ -708,3 +721,114 @@ layouts are rejected, never interpreted by shape or profile name alone.
 Only this native consumer is implemented: the descriptor is not an automatically
 executable ONNX ``FunctionProto`` decoder, and tensor-only operators cannot consume
 it without explicit dequantization or a matching custom kernel.
+
+.. _l-ort-matmulnbits-inputs:
+
+ONNX Runtime MatMulNBits inputs
+-------------------------------
+
+``QuantizationFormat.ORT_MATMULNBITS_INT2``, ``ORT_MATMULNBITS_INT4`` and
+``ORT_MATMULNBITS_INT8`` implement the input packing of
+``com.microsoft::MatMulNBits`` version 1. They are separate from the original
+``MATMULNBITS`` profile, which remains a portable onnx-light affine codec.
+These formats do **not** implement CPU microkernel or CUDA ``weight_prepacked``
+layouts; the execution provider may still prepack the exported inputs internally.
+
+``make_matmul_nbits_plan(format, k, n, block_size=128)`` accepts a positive
+``[K,N]`` matrix shape and a power-of-two block size of at least 16 (at most
+``UINT32_MAX``). Execution providers may restrict this further; the ORT CPU
+implementation supports 16, 32, 64, 128 and 256. The plan records
+``matrix_shape=[K,N]`` and rejects mismatched sources.
+Sources are FLOAT, FLOAT16 or BFLOAT16 matrices, not DOUBLE or arbitrary-rank tensors.
+BFLOAT16 kernel availability depends on the ORT execution provider and version.
+ORT CPU currently also lacks the 8-bit unpacked-compute path selected by floating
+zero points. For INT8 execution on that provider, use implicit or packed integer
+zero points; floating zero points remain supported by this codec and the operator schema.
+
+There is one shared run layout and ``N * ceil(K/block_size)`` parameter blocks,
+ordered by column first, then by group along K. Each layout count is the full
+block size, including padding. Scales default to one; zero points default to
+``2**(bits-1)``. Supply parameters explicitly; this is packing and conversion,
+not an implementation of ORT's scale-calibration algorithm.
+
+Scales and floating zero points are rounded to the source dtype **before**
+quantization so decoding and ORT use the same values. Codes are unsigned and
+use nearest-even rounding and clipping to ``[0, 2**bits-1]``. The reconstruction
+is ``(code-zero_point)*scale``. Negative finite scales are accepted. A zero
+scale is allowed only for an all-zero source group, and nonzero scales that
+round to zero are rejected. Offsets, codebooks, permutations, transforms,
+outliers, ``g_idx`` and fused bias are not part of these representations.
+
+The encoded root name is
+``onnx_light.quantization.v1/ort_matmulnbits_int{2,4,8}``. Its logical type is
+the original ``[K,N]`` matrix. Its fields are:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Field
+     - Type and shape
+   * - ``parameters``
+     - INT64 type constant ``[bits, block_size]``; consumes no payload bytes.
+   * - ``B``
+     - UINT8 ``[N, ceil(K/block_size), block_size*bits/8]``.
+   * - ``scales``
+     - Source dtype ``[N, ceil(K/block_size)]``.
+   * - ``zero_points`` (optional)
+     - UINT8 ``[N, ceil(ceil(K/block_size)*bits/8)]`` for packed integer zero
+       points, or source dtype ``[N, ceil(K/block_size)]`` for floating zero points.
+
+``raw_data`` concatenates B, scales and optional zero points, with no portable
+codec header or per-block DOUBLE metadata between them. B codes are packed
+least-significant bits first within each K block. The last block of each
+column is padded with zero codes. Packed zero points restart at a byte
+boundary for every column; unused high bits are zero.
+If all effective zero points equal the midpoint, the zero-point tensor is
+omitted. Otherwise all in-range integer zero points use packed UINT8 storage;
+any fractional or out-of-range value selects floating storage for the whole tensor.
+
+``export_matmul_nbits_inputs(encoded, model=None)`` validates the descriptor
+and extracts owned TensorProto inputs without dequantizing. Its result exposes
+``weights``, ``scales``, optional ``zero_points`` (``None`` when implicit),
+and the attributes ``k``, ``n``, ``bits`` and ``block_size``.
+Use the tensors as initializers for a normal ``MatMulNBits`` node, leaving
+``weight_prepacked`` unset. Inline layouts and model-catalogue references both work.
+
+.. code-block:: python
+
+    import numpy
+    from onnx_light.onnx import helper, numpy_helper
+    from onnx_light.onnx_core.quantization import (
+        QuantizationFormat,
+        make_matmul_nbits_plan,
+        quantize_tensor_proto,
+        export_matmul_nbits_inputs,
+    )
+
+    weights = (numpy.arange(35 * 3).reshape(35, 3) % 3 - 1).astype(numpy.float32)
+    plan = make_matmul_nbits_plan(
+        QuantizationFormat.ORT_MATMULNBITS_INT4, 35, 3, block_size=16
+    )
+    encoded = quantize_tensor_proto(numpy_helper.from_array(weights), plan)
+    inputs = export_matmul_nbits_inputs(encoded)
+    initializers = [inputs.weights, inputs.scales]
+    names = ["A", inputs.weights.name, inputs.scales.name]
+    if inputs.zero_points is not None:
+        initializers.append(inputs.zero_points)
+        names.append(inputs.zero_points.name)
+    node = helper.make_node(
+        "MatMulNBits",
+        names,
+        ["Y"],
+        domain="com.microsoft",
+        K=inputs.k,
+        N=inputs.n,
+        bits=inputs.bits,
+        block_size=inputs.block_size,
+    )
+
+The C++ equivalents are ``MakeMatMulNBitsPlan`` and ``ExportMatMulNBitsInputs``.
+The contract follows the `ORT operator schema
+<https://github.com/microsoft/onnxruntime/blob/ee5f6e7cfa1f9e4e4253154e7c719a846280ca83/docs/ContribOperators.md#com.microsoft.MatMulNBits>`_
+and `weight quantizer input shapes
+<https://github.com/microsoft/onnxruntime/blob/ee5f6e7cfa1f9e4e4253154e7c719a846280ca83/onnxruntime/python/tools/quantization/matmul_nbits_quantizer.py>`_.

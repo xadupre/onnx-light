@@ -12,7 +12,7 @@ import numpy
 
 from onnx_light import onnx
 from onnx_light.ext_test_case import import_or_skip
-from onnx_light.onnx import numpy_helper
+from onnx_light.onnx import helper, numpy_helper
 
 runtime = import_or_skip("onnx_light.onnx_py._onnxpykernels", "runtime")
 QuantizationFormat = runtime.QuantizationFormat
@@ -39,10 +39,10 @@ class TestQuantizedValues(unittest.TestCase):
 
         formats = quantization_formats()
         self.assertIsInstance(formats, list)
-        self.assertEqual(len(formats), 40)
+        self.assertEqual(len(formats), 43)
         self.assertTrue(all(isinstance(value, QuantizationFormat) for value in formats))
         self.assertEqual(formats[0], QuantizationFormat.INT8)
-        self.assertEqual(formats[-1], QuantizationFormat.COLUMN_MAJOR)
+        self.assertEqual(formats[-1], QuantizationFormat.ORT_MATMULNBITS_INT8)
         for value in formats:
             self.assertEqual(
                 runtime.parse_quantization_format(runtime.quantization_format_name(value)), value
@@ -64,10 +64,19 @@ class TestQuantizedValues(unittest.TestCase):
             plan.run(2)
 
     def test_all_catalogue_profiles(self):
-        source = numpy.array([-1, -1, 0, 0, 1, 1, 1, 1], dtype=numpy.float32)
+        source = numpy.array([-1, -1, 0, 0, 1, 1, 1, 1], dtype=numpy.float32).reshape(4, 2)
         for name in runtime.quantization_formats():
             with self.subTest(format=name):
-                plan = runtime.make_quantization_plan(name, source.size, 4)
+                plan = (
+                    runtime.make_matmul_nbits_plan(name, 4, 2, 16)
+                    if name
+                    in {
+                        QuantizationFormat.ORT_MATMULNBITS_INT2,
+                        QuantizationFormat.ORT_MATMULNBITS_INT4,
+                        QuantizationFormat.ORT_MATMULNBITS_INT8,
+                    }
+                    else runtime.make_quantization_plan(name, source.size, 4)
+                )
                 run = plan.run(0)
                 blocks = run.blocks
                 for block in blocks:
@@ -344,6 +353,139 @@ class TestQuantizedValues(unittest.TestCase):
         plan.set_run(0, run)
         expected = source.astype(numpy.float16).astype(numpy.float32)
         numpy.testing.assert_array_equal(self.roundtrip(source, plan), expected)
+
+    def make_ort_inputs(self, bits, mode, dtype, k=35, n=3, block_size=16):
+        """Returns weights and encoded ORT inputs with independent column/block parameters."""
+        from onnx_light.onnx_core.quantization import (
+            export_matmul_nbits_inputs,
+            make_matmul_nbits_plan,
+            parse_quantization_format,
+            quantize_tensor_proto,
+        )
+
+        format_value = parse_quantization_format(f"ort_matmulnbits_int{bits}")
+        plan = make_matmul_nbits_plan(format_value, k, n, block_size)
+        groups = (k + block_size - 1) // block_size
+        run = plan.run(0)
+        blocks = run.blocks
+        for index, block in enumerate(blocks):
+            block.scale = ((index % groups) + 1) * (0.5 if index // groups != 1 else -0.5)
+            if mode != "implicit":
+                block.zero_point = index % (1 << bits) + (0.25 if mode == "floating" else 0)
+        run.blocks = blocks
+        plan.set_run(0, run)
+        source = numpy.empty((k, n), dtype=dtype)
+        for row in range(k):
+            for column in range(n):
+                block = blocks[column * groups + row // block_size]
+                code = (row + column) % (1 << bits)
+                source[row, column] = (code - block.zero_point) * block.scale
+        encoded = quantize_tensor_proto(numpy_helper.from_array(source), plan)
+        return source, encoded, export_matmul_nbits_inputs(encoded)
+
+    def test_ort_input_shapes_modes_serialization_and_ownership(self):
+        for bits in (2, 4, 8):
+            for mode in ("implicit", "packed", "floating"):
+                for dtype in (numpy.float32, numpy.float16):
+                    with self.subTest(bits=bits, mode=mode, dtype=dtype):
+                        source, encoded, inputs = self.make_ort_inputs(bits, mode, dtype)
+                        self.assertEqual(
+                            (inputs.k, inputs.n, inputs.bits, inputs.block_size),
+                            (35, 3, bits, 16),
+                        )
+                        self.assertEqual(tuple(inputs.weights.dims), (3, 3, 16 * bits // 8))
+                        self.assertEqual(tuple(inputs.scales.dims), (3, 3))
+                        self.assertEqual(numpy_helper.to_array(inputs.scales).dtype, dtype)
+                        if mode == "implicit":
+                            self.assertIsNone(inputs.zero_points)
+                        else:
+                            shape = (3, (3 * bits + 7) // 8) if mode == "packed" else (3, 3)
+                            self.assertEqual(tuple(inputs.zero_points.dims), shape)
+                            self.assertEqual(
+                                numpy_helper.to_array(inputs.zero_points).dtype,
+                                numpy.uint8 if mode == "packed" else dtype,
+                            )
+                        loaded = onnx.EncodedValueProto()
+                        loaded.ParseFromString(encoded.SerializeToString())
+                        numpy.testing.assert_array_equal(
+                            numpy_helper.to_array(runtime.dequantize_tensor_proto(loaded)), source
+                        )
+                        original = bytes(inputs.weights.raw_data)
+                        model = onnx.ModelProto()
+                        model.struct_types.add().CopyFrom(loaded.struct_type)
+                        model.struct_types[0].type_id = 101
+                        loaded.struct_type = onnx.StructTypeProto(type_ref=101)
+                        exported = runtime.export_matmul_nbits_inputs(loaded, model=model)
+                        self.assertEqual(bytes(exported.weights.raw_data), original)
+                        del encoded, loaded
+                        gc.collect()
+                        self.assertEqual(bytes(inputs.weights.raw_data), original)
+
+    def test_ort_matmul_nbits_interoperability(self):
+        onnxruntime = import_or_skip("onnxruntime")
+        options = onnxruntime.SessionOptions()
+        options.intra_op_num_threads = 1
+        options.inter_op_num_threads = 1
+        for bits in (2, 4, 8):
+            # ORT CPU has no 8-bit unpacked-compute path for floating zero points.
+            modes = ("implicit", "packed") if bits == 8 else ("implicit", "packed", "floating")
+            for mode in modes:
+                for dtype in (numpy.float32, numpy.float16):
+                    for k, block_size in ((35, 16), (65, 32), (64, 64)):
+                        with self.subTest(
+                            bits=bits, mode=mode, dtype=dtype, k=k, block_size=block_size
+                        ):
+                            source, _, inputs = self.make_ort_inputs(
+                                bits, mode, dtype, k=k, block_size=block_size
+                            )
+                            initializers = [inputs.weights, inputs.scales]
+                            names = ["A", "B", "scales"]
+                            if inputs.zero_points is not None:
+                                initializers.append(inputs.zero_points)
+                                names.append("zero_points")
+                            node = helper.make_node(
+                                "MatMulNBits",
+                                names,
+                                ["Y"],
+                                domain="com.microsoft",
+                                K=inputs.k,
+                                N=inputs.n,
+                                bits=inputs.bits,
+                                block_size=inputs.block_size,
+                                accuracy_level=1,
+                            )
+                            elem_type = inputs.scales.data_type
+                            graph = helper.make_graph(
+                                [node],
+                                "ort_input_packing",
+                                [helper.make_tensor_value_info("A", elem_type, [2, k])],
+                                [helper.make_tensor_value_info("Y", elem_type, [2, inputs.n])],
+                                initializers,
+                            )
+                            model = helper.make_model(
+                                graph,
+                                opset_imports=[
+                                    helper.make_opsetid("", 21),
+                                    helper.make_opsetid("com.microsoft", 1),
+                                ],
+                            )
+                            model.ir_version = 10
+                            session = onnxruntime.InferenceSession(
+                                model.SerializeToString(),
+                                options,
+                                providers=["CPUExecutionProvider"],
+                            )
+                            a = ((numpy.arange(2 * k).reshape(2, k) % 7 - 3) / 4).astype(dtype)
+                            expected = (
+                                a.astype(numpy.float32) @ source.astype(numpy.float32)
+                            ).astype(dtype)
+                            actual = session.run(None, {"A": a})[0]
+                            numpy.testing.assert_allclose(
+                                actual,
+                                expected,
+                                rtol=1e-3 if dtype == numpy.float16 else 1e-5,
+                                atol=1e-3 if dtype == numpy.float16 else 1e-5,
+                            )
 
 
 if __name__ == "__main__":

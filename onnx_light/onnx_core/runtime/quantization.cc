@@ -16,27 +16,73 @@ namespace {
 
 constexpr const char *kPrefix = "onnx_light.quantization.v1/";
 
-constexpr std::array<std::string_view, 40> kFormatNames = {"int8",        "int8_per_channel",
-                                                           "int4",        "gptq",
-                                                           "awq",         "eetq",
-                                                           "matmulnbits", "q2_k",
-                                                           "q3_k",        "q4_k",
-                                                           "q5_k",        "q6_k",
-                                                           "hqq",         "exl2",
-                                                           "exl3",        "nf4",
-                                                           "iq4_nl",      "binary",
-                                                           "ternary",     "tq1_0",
-                                                           "tq2_0",       "bitnet",
-                                                           "paretoq",     "tequila",
-                                                           "stq1_0",      "iq1_s",
-                                                           "aqlm",        "quip_sharp",
-                                                           "spqr",        "squeezellm",
-                                                           "log",         "fp6_llm",
-                                                           "fp8_e4m3",    "mxfp4",
-                                                           "mxfp6",       "nvfp4",
-                                                           "quarot",      "smoothquant",
-                                                           "tiled_float", "column_major"};
-static_assert(static_cast<size_t>(QuantizationFormat::kColumnMajor) + 1 == kFormatNames.size());
+constexpr std::array<std::string_view, 43> kFormatNames = {"int8",
+                                                           "int8_per_channel",
+                                                           "int4",
+                                                           "gptq",
+                                                           "awq",
+                                                           "eetq",
+                                                           "matmulnbits",
+                                                           "q2_k",
+                                                           "q3_k",
+                                                           "q4_k",
+                                                           "q5_k",
+                                                           "q6_k",
+                                                           "hqq",
+                                                           "exl2",
+                                                           "exl3",
+                                                           "nf4",
+                                                           "iq4_nl",
+                                                           "binary",
+                                                           "ternary",
+                                                           "tq1_0",
+                                                           "tq2_0",
+                                                           "bitnet",
+                                                           "paretoq",
+                                                           "tequila",
+                                                           "stq1_0",
+                                                           "iq1_s",
+                                                           "aqlm",
+                                                           "quip_sharp",
+                                                           "spqr",
+                                                           "squeezellm",
+                                                           "log",
+                                                           "fp6_llm",
+                                                           "fp8_e4m3",
+                                                           "mxfp4",
+                                                           "mxfp6",
+                                                           "nvfp4",
+                                                           "quarot",
+                                                           "smoothquant",
+                                                           "tiled_float",
+                                                           "column_major",
+                                                           "ort_matmulnbits_int2",
+                                                           "ort_matmulnbits_int4",
+                                                           "ort_matmulnbits_int8"};
+static_assert(static_cast<size_t>(QuantizationFormat::kOrtMatmulnbitsInt8) + 1 ==
+              kFormatNames.size());
+
+constexpr uint32_t OrtBits(QuantizationFormat format) {
+  switch (format) {
+  case QuantizationFormat::kOrtMatmulnbitsInt2:
+    return 2;
+  case QuantizationFormat::kOrtMatmulnbitsInt4:
+    return 4;
+  case QuantizationFormat::kOrtMatmulnbitsInt8:
+    return 8;
+  default:
+    return 0;
+  }
+}
+
+void ValidateOrtDimensions(uint64_t k, uint64_t n, uint64_t block_size) {
+  EXT_ENFORCE_INVALID(k > 0 && n > 0 && k <= std::numeric_limits<int64_t>::max() &&
+                          n <= std::numeric_limits<int64_t>::max(),
+                      "ORT MatMulNBits requires positive K and N dimensions.");
+  EXT_ENFORCE_INVALID(block_size >= 16 && block_size <= std::numeric_limits<uint32_t>::max() &&
+                          (block_size & (block_size - 1)) == 0,
+                      "ORT MatMulNBits block_size must be a power of two in [16, UINT32_MAX].");
+}
 
 constexpr double kNf4[] = {-1,
                            -0.6961928009986877,
@@ -239,6 +285,8 @@ void ValidateBlock(const QuantizationBlockLayout &layout,
 
 void ValidatePlan(const QuantizationPlan &plan, size_t count) {
   QuantizationFormatName(plan.format);
+  EXT_ENFORCE_INVALID(plan.matrix_shape.empty(),
+                      "Only ORT MatMulNBits profiles accept a matrix_shape.");
   size_t consumed = 0;
   for (const auto &run : plan.runs) {
     EXT_ENFORCE_INVALID(!run.blocks.empty() && run.layout.count > 0,
@@ -669,6 +717,8 @@ QuantizationFormat ParseQuantizationFormat(std::string_view name) {
 QuantizationPlan MakeQuantizationPlan(QuantizationFormat format, uint64_t count,
                                       uint64_t block_size) {
   QuantizationFormatName(format);
+  EXT_ENFORCE_INVALID(OrtBits(format) == 0,
+                      "Use MakeMatMulNBitsPlan with K and N for ORT MatMulNBits profiles.");
   EXT_ENFORCE_INVALID(block_size > 0 && block_size <= std::numeric_limits<uint32_t>::max(),
                       "Invalid quantization block size.");
   QuantizationPlan plan;
@@ -747,7 +797,202 @@ QuantizationPlan MakeQuantizationPlan(QuantizationFormat format, uint64_t count,
   return plan;
 }
 
+QuantizationPlan MakeMatMulNBitsPlan(QuantizationFormat format, uint64_t k, uint64_t n,
+                                     uint64_t block_size) {
+  const uint32_t bits = OrtBits(format);
+  EXT_ENFORCE_INVALID(bits != 0, "Expected an ORT MatMulNBits quantization format.");
+  ValidateOrtDimensions(k, n, block_size);
+  const size_t groups = CeilDiv(k, block_size);
+  auto plan = MakeQuantizationPlan(QuantizationFormat::kMatmulnbits,
+                                   Product(Product(n, groups), block_size), block_size);
+  plan.format = format;
+  plan.matrix_shape = {int64_t(k), int64_t(n)};
+  plan.runs[0].layout.bits = bits;
+  for (auto &block : plan.runs[0].blocks)
+    block.zero_point = uint32_t{1} << (bits - 1);
+  return plan;
+}
+
 namespace {
+
+struct OrtStorage {
+  uint64_t k, n, block_size;
+  uint32_t bits;
+  int32_t type, zero_type;
+  size_t groups, blob_size, weight_bytes, scale_bytes, zero_bytes, total_bytes;
+
+  OrtStorage(const Shape &shape, int32_t dtype, QuantizationFormat format, uint64_t size,
+             int32_t zero_dtype)
+      : block_size(size), bits(OrtBits(format)), type(dtype), zero_type(zero_dtype) {
+    EXT_ENFORCE_INVALID(shape.size() == 2 && shape[0] > 0 && shape[1] > 0,
+                        "ORT MatMulNBits requires a nonempty rank-two [K,N] tensor.");
+    k = shape[0];
+    n = shape[1];
+    ValidateOrtDimensions(k, n, block_size);
+    EXT_ENFORCE_INVALID(bits != 0, "Expected an ORT MatMulNBits quantization format.");
+    EXT_ENFORCE_INVALID(type == TensorProto::FLOAT || type == TensorProto::FLOAT16 ||
+                            type == TensorProto::BFLOAT16,
+                        "ORT MatMulNBits requires FLOAT, FLOAT16 or BFLOAT16 weights.");
+    EXT_ENFORCE_INVALID(zero_type == TensorProto::UNDEFINED || zero_type == TensorProto::UINT8 ||
+                            zero_type == type,
+                        "Invalid ORT MatMulNBits zero-point dtype.");
+    groups = CeilDiv(k, block_size);
+    blob_size = Product(block_size, bits) / 8;
+    weight_bytes = Product(Product(n, groups), blob_size);
+    scale_bytes = Product(Product(n, groups), FloatBytes(type));
+    zero_bytes = zero_type == TensorProto::UNDEFINED ? 0
+                 : zero_type == TensorProto::UINT8   ? Product(n, CeilDiv(groups, 8 / bits))
+                                                     : scale_bytes;
+    EXT_ENFORCE_INVALID(weight_bytes <= std::numeric_limits<size_t>::max() - scale_bytes &&
+                            weight_bytes + scale_bytes <=
+                                std::numeric_limits<size_t>::max() - zero_bytes,
+                        "ORT MatMulNBits payload size overflow.");
+    total_bytes = weight_bytes + scale_bytes + zero_bytes;
+  }
+};
+
+StructTypeProto OrtSchema(const OrtStorage &storage, QuantizationFormat format) {
+  StructTypeProto root;
+  root.set_name(std::string(kPrefix) + std::string(QuantizationFormatName(format)));
+  auto *parameters = AddField(root, "parameters")->mutable_constant();
+  parameters->set_data_type(TensorProto::INT64);
+  parameters->add_dims(2);
+  parameters->add_int64_data(storage.bits);
+  parameters->add_int64_data(storage.block_size);
+  Array(root, "B", TensorProto::UINT8,
+        {int64_t(storage.n), int64_t(storage.groups), int64_t(storage.blob_size)});
+  Array(root, "scales", storage.type, {int64_t(storage.n), int64_t(storage.groups)});
+  if (storage.zero_type != TensorProto::UNDEFINED)
+    Array(root, "zero_points", storage.zero_type,
+          {int64_t(storage.n), int64_t(storage.zero_type == TensorProto::UINT8
+                                           ? CeilDiv(storage.groups, 8 / storage.bits)
+                                           : storage.groups)});
+  return root;
+}
+
+double RoundFloat(double value, int32_t type) {
+  std::array<uint8_t, sizeof(double)> bytes;
+  WriteFloat(bytes.data(), type, value);
+  if (type == TensorProto::FLOAT)
+    return Load<float>(bytes.data());
+  if (type == TensorProto::FLOAT16)
+    return Float16BitsToFloat(Load<uint16_t>(bytes.data()));
+  return Bfloat16BitsToFloat(Load<uint16_t>(bytes.data()));
+}
+
+void PutFloat(ByteWriter &payload, double value, int32_t type) {
+  std::array<uint8_t, sizeof(double)> bytes;
+  WriteFloat(bytes.data(), type, value);
+  const size_t width = FloatBytes(type);
+  if (width == 8)
+    payload.Put(Load<uint64_t>(bytes.data()), 8);
+  else if (width == 4)
+    payload.Put(Load<uint32_t>(bytes.data()), 4);
+  else
+    payload.Put(Load<uint16_t>(bytes.data()), 2);
+}
+
+double PackedFloat(std::span<const uint8_t> bytes, int32_t type, size_t index) {
+  ByteReader reader{bytes, Product(index, FloatBytes(type))};
+  if (type == TensorProto::FLOAT)
+    return std::bit_cast<float>(static_cast<uint32_t>(reader.Get(4)));
+  const auto code = static_cast<uint16_t>(reader.Get(2));
+  return type == TensorProto::FLOAT16 ? Float16BitsToFloat(code) : Bfloat16BitsToFloat(code);
+}
+
+void SetLogicalTensor(EncodedValueProto &result, const Tensor &tensor) {
+  result.set_name(tensor.name);
+  auto *logical = result.mutable_logical_type()->mutable_tensor_type();
+  logical->set_elem_type(tensor.data_type);
+  logical->mutable_shape();
+  for (int64_t dim : tensor.shape)
+    logical->mutable_shape()->add_dim()->set_dim_value(dim);
+  StructTypeCatalogue{}.ValidateEncodedValue(result);
+}
+
+EncodedValueProto EncodeOrtTensor(const Tensor &tensor, const QuantizationPlan &plan) {
+  EXT_ENFORCE_INVALID(tensor.shape == plan.matrix_shape,
+                      "ORT MatMulNBits source shape must match the plan's [K,N].");
+  EXT_ENFORCE_INVALID(plan.runs.size() == 1, "ORT MatMulNBits requires one shared block layout.");
+  EXT_ENFORCE_INVALID(plan.permutation.empty() && plan.transform_size == 0 &&
+                          plan.forward.empty() && plan.inverse.empty() && plan.outliers.empty(),
+                      "ORT MatMulNBits does not support permutations, transforms or outliers.");
+  const auto &run = plan.runs[0];
+  const OrtStorage geometry(tensor.shape, tensor.data_type, plan.format, run.layout.count,
+                            TensorProto::UNDEFINED);
+  QuantizationBlockLayout expected;
+  expected.count = geometry.block_size;
+  expected.bits = geometry.bits;
+  expected.signed_codes = false;
+  EXT_ENFORCE_INVALID(BlockHeader(run.layout) == BlockHeader(expected),
+                      "ORT MatMulNBits requires a uniform unsigned affine layout.");
+  EXT_ENFORCE_INVALID(run.blocks.size() == Product(geometry.n, geometry.groups),
+                      "ORT MatMulNBits requires N * ceil(K/block_size) parameter blocks.");
+  std::vector<double> scales, zeros;
+  scales.reserve(run.blocks.size());
+  zeros.reserve(run.blocks.size());
+  const uint32_t midpoint = uint32_t{1} << (geometry.bits - 1);
+  const uint32_t maximum = (uint32_t{1} << geometry.bits) - 1;
+  bool implicit = true, packed = true;
+  for (const auto &block : run.blocks) {
+    EXT_ENFORCE_INVALID(block.offset == 0 && block.codebook.empty(),
+                        "ORT MatMulNBits does not support offsets or codebooks.");
+    const double scale = RoundFloat(block.scale, geometry.type);
+    const double zero = RoundFloat(block.zero_point, geometry.type);
+    EXT_ENFORCE_INVALID(scale != 0 || block.scale == 0,
+                        "ORT MatMulNBits scale underflows the input dtype.");
+    scales.push_back(scale);
+    zeros.push_back(zero);
+    implicit &= zero == midpoint;
+    packed &= zero >= 0 && zero <= maximum && std::trunc(zero) == zero;
+  }
+  const int32_t zero_type = implicit ? TensorProto::UNDEFINED
+                            : packed ? TensorProto::UINT8
+                                     : geometry.type;
+  const OrtStorage storage(tensor.shape, tensor.data_type, plan.format, run.layout.count,
+                           zero_type);
+  EncodedValueProto result;
+  ByteWriter payload(*result.mutable_raw_data(), storage.total_bytes);
+  std::vector<uint32_t> codes(storage.block_size);
+  for (size_t column = 0; column < storage.n; ++column) {
+    for (size_t group = 0; group < storage.groups; ++group) {
+      const size_t index = column * storage.groups + group;
+      for (size_t j = 0; j < storage.block_size; ++j) {
+        const size_t row = group * storage.block_size + j;
+        codes[j] = 0;
+        if (row >= storage.k)
+          continue;
+        const double value = ReadFloat(tensor, row * storage.n + column);
+        EXT_ENFORCE_INVALID(std::isfinite(value), "Quantization input must be finite.");
+        EXT_ENFORCE_INVALID(scales[index] != 0 || value == 0,
+                            "ORT MatMulNBits zero scale requires an all-zero source block.");
+        const long double normalized =
+            scales[index] == 0 ? zeros[index]
+                               : static_cast<long double>(value) / scales[index] + zeros[index];
+        codes[j] = static_cast<uint32_t>(NearestEven(
+            static_cast<double>(std::clamp(normalized, 0.L, static_cast<long double>(maximum)))));
+      }
+      Pack(payload, codes, storage.bits, false);
+    }
+  }
+  for (double scale : scales)
+    PutFloat(payload, scale, storage.type);
+  if (zero_type == TensorProto::UINT8) {
+    codes.resize(storage.groups);
+    for (size_t column = 0; column < storage.n; ++column) {
+      for (size_t group = 0; group < storage.groups; ++group)
+        codes[group] = static_cast<uint32_t>(zeros[column * storage.groups + group]);
+      Pack(payload, codes, storage.bits, false);
+    }
+  } else if (zero_type != TensorProto::UNDEFINED) {
+    for (double zero : zeros)
+      PutFloat(payload, zero, storage.type);
+  }
+  payload.Finish();
+  *result.mutable_struct_type() = OrtSchema(storage, plan.format);
+  SetLogicalTensor(result, tensor);
+  return result;
+}
 
 EncodedValueProto EncodeTensor(const Tensor &tensor, const QuantizationPlan &plan) {
   size_t count = 1;
@@ -758,6 +1003,8 @@ EncodedValueProto EncodeTensor(const Tensor &tensor, const QuantizationPlan &pla
   EXT_ENFORCE_INVALID(tensor.size_bytes() == Product(count, FloatBytes(tensor.data_type)) &&
                           (count == 0 || tensor.bytes() != nullptr),
                       "Invalid quantization source tensor storage.");
+  if (OrtBits(plan.format) != 0)
+    return EncodeOrtTensor(tensor, plan);
   ValidatePlan(plan, count);
   std::vector<double> values(count), exceptions;
   for (size_t i = 0; i < count; ++i) {
@@ -794,14 +1041,8 @@ EncodedValueProto EncodeTensor(const Tensor &tensor, const QuantizationPlan &pla
       offset += run.layout.count;
     }
   payload.Finish();
-  result.set_name(tensor.name);
   *result.mutable_struct_type() = Schema(plan);
-  auto *logical = result.mutable_logical_type()->mutable_tensor_type();
-  logical->set_elem_type(tensor.data_type);
-  logical->mutable_shape();
-  for (int64_t dim : tensor.shape)
-    logical->mutable_shape()->add_dim()->set_dim_value(dim);
-  StructTypeCatalogue{}.ValidateEncodedValue(result);
+  SetLogicalTensor(result, tensor);
   return result;
 }
 
@@ -811,7 +1052,16 @@ struct DecodedValues {
   std::vector<double> values;
 };
 
-DecodedValues DecodeValues(const EncodedValueProto &encoded, const StructTypeCatalogue &catalogue) {
+struct QuantizationHeader {
+  const StructTypeProto *root;
+  QuantizationFormat format;
+  Shape shape;
+  int32_t type;
+  size_t count;
+};
+
+QuantizationHeader ReadQuantizationHeader(const EncodedValueProto &encoded,
+                                          const StructTypeCatalogue &catalogue) {
   const auto layout = catalogue.ValidateEncodedValue(encoded);
   EXT_ENFORCE_INVALID(!layout.external && layout.root && layout.record_count == 1,
                       "Expected one loaded structured quantization record.");
@@ -831,8 +1081,87 @@ DecodedValues DecodeValues(const EncodedValueProto &encoded, const StructTypeCat
     shape.push_back(dim.dim_value());
     count = Product(count, dim.dim_value());
   }
+  return {&root, ParseQuantizationFormat(std::string_view(name).substr(std::strlen(kPrefix))),
+          std::move(shape), logical.elem_type(), count};
+}
+
+struct OrtPackedValue {
+  OrtStorage storage;
+  std::span<const uint8_t> weights, scales, zeros;
+
+  double ZeroPoint(size_t column, size_t group) const {
+    if (storage.zero_type == TensorProto::UNDEFINED)
+      return uint32_t{1} << (storage.bits - 1);
+    if (storage.zero_type != TensorProto::UINT8)
+      return PackedFloat(zeros, storage.type, column * storage.groups + group);
+    const size_t per_byte = 8 / storage.bits;
+    const uint8_t byte = zeros[column * CeilDiv(storage.groups, per_byte) + group / per_byte];
+    return (byte >> ((group % per_byte) * storage.bits)) & ((1u << storage.bits) - 1);
+  }
+};
+
+OrtPackedValue ParseOrtValue(const EncodedValueProto &encoded, const QuantizationHeader &header) {
+  EXT_ENFORCE_INVALID(OrtBits(header.format) != 0, "Expected an ORT MatMulNBits encoded value.");
+  const auto &root = *header.root;
+  const auto &parameters = GetField(root, 0, "parameters");
+  EXT_ENFORCE_INVALID(parameters.has_constant() && parameters.constant().int64_data().size() == 2 &&
+                          parameters.constant().int64_data(0) == OrtBits(header.format),
+                      "Invalid ORT MatMulNBits layout parameters.");
+  int32_t zero_type = TensorProto::UNDEFINED;
+  if (root.structure().field().size() > 3) {
+    const auto &zero = GetField(root, 3, "zero_points");
+    EXT_ENFORCE_INVALID(zero.has_type() && zero.type().has_tensor_type(),
+                        "Invalid ORT MatMulNBits zero-point field.");
+    zero_type = zero.type().tensor_type().elem_type();
+  }
+  OrtStorage storage(header.shape, header.type, header.format, parameters.constant().int64_data(1),
+                     zero_type);
+  StructTypeProto actual = root;
+  actual.clear_type_id();
+  EXT_ENFORCE_INVALID(actual.SerializeAsString() ==
+                          OrtSchema(storage, header.format).SerializeAsString(),
+                      "ORT MatMulNBits descriptor does not match its versioned schema.");
+  EXT_ENFORCE_INVALID(encoded.raw_data().size() == storage.total_bytes,
+                      "ORT MatMulNBits payload size mismatch.");
+  const std::span<const uint8_t> data{encoded.raw_data().data(), encoded.raw_data().size()};
+  OrtPackedValue value{storage, data.first(storage.weight_bytes),
+                       data.subspan(storage.weight_bytes, storage.scale_bytes),
+                       data.subspan(storage.weight_bytes + storage.scale_bytes)};
+  for (size_t column = 0; column < storage.n; ++column)
+    for (size_t group = 0; group < storage.groups; ++group) {
+      EXT_ENFORCE_INVALID(
+          std::isfinite(PackedFloat(value.scales, storage.type, column * storage.groups + group)),
+          "Nonfinite ORT MatMulNBits scale.");
+      EXT_ENFORCE_INVALID(std::isfinite(value.ZeroPoint(column, group)),
+                          "Nonfinite ORT MatMulNBits zero point.");
+    }
+  return value;
+}
+
+DecodedValues DecodeValues(const EncodedValueProto &encoded, const StructTypeCatalogue &catalogue) {
+  auto header = ReadQuantizationHeader(encoded, catalogue);
+  if (OrtBits(header.format) != 0) {
+    const auto packed = ParseOrtValue(encoded, header);
+    const auto &storage = packed.storage;
+    std::vector<double> values(header.count);
+    for (size_t column = 0; column < storage.n; ++column)
+      for (size_t row = 0; row < storage.k; ++row) {
+        const size_t group = row / storage.block_size;
+        const size_t within = row % storage.block_size;
+        const size_t index = column * storage.groups + group;
+        const uint8_t byte =
+            packed.weights[index * storage.blob_size + within / (8 / storage.bits)];
+        const uint32_t code =
+            (byte >> ((within % (8 / storage.bits)) * storage.bits)) & ((1u << storage.bits) - 1);
+        values[row * storage.n + column] = (code - packed.ZeroPoint(column, group)) *
+                                           PackedFloat(packed.scales, storage.type, index);
+      }
+    return {std::move(header.shape), header.type, std::move(values)};
+  }
+  const auto &root = *header.root;
+  const size_t count = header.count;
   QuantizationPlan plan;
-  plan.format = ParseQuantizationFormat(std::string_view(name).substr(std::strlen(kPrefix)));
+  plan.format = header.format;
   ByteReader payload{{encoded.raw_data().data(), encoded.raw_data().size()}};
   EXT_ENFORCE_INVALID(payload.Get(1) == 0, "Nonzero quantization reserved byte.");
   const size_t permutation_size = Extent(GetField(root, 1, "permutation"), TensorProto::INT64, 1);
@@ -902,10 +1231,46 @@ DecodedValues DecodeValues(const EncodedValueProto &encoded, const StructTypeCat
   }
   for (size_t i = 0; i < plan.outliers.size(); ++i)
     values[plan.outliers[i]] = exceptions[i];
-  return {std::move(shape), logical.elem_type(), std::move(values)};
+  return {std::move(header.shape), header.type, std::move(values)};
 }
 
 } // namespace
+
+MatMulNBitsInputs ExportMatMulNBitsInputs(const EncodedValueProto &value,
+                                          const StructTypeCatalogue &catalogue) {
+  const auto packed = ParseOrtValue(value, ReadQuantizationHeader(value, catalogue));
+  const auto &storage = packed.storage;
+  MatMulNBitsInputs result;
+  result.k = storage.k;
+  result.n = storage.n;
+  result.bits = storage.bits;
+  result.block_size = storage.block_size;
+  const auto tensor = [](const char *name, int32_t type, const Shape &shape,
+                         std::span<const uint8_t> bytes) {
+    TensorProto output;
+    output.set_name(name);
+    output.set_data_type(type);
+    for (int64_t dim : shape)
+      output.add_dims(dim);
+    auto *raw = output.mutable_raw_data();
+    raw->resize(bytes.size());
+    std::memcpy(raw->data(), bytes.data(), bytes.size());
+    return output;
+  };
+  result.weights = tensor("B", TensorProto::UINT8,
+                          {int64_t(storage.n), int64_t(storage.groups), int64_t(storage.blob_size)},
+                          packed.weights);
+  result.scales =
+      tensor("scales", storage.type, {int64_t(storage.n), int64_t(storage.groups)}, packed.scales);
+  if (storage.zero_type != TensorProto::UNDEFINED)
+    result.zero_points =
+        tensor("zero_points", storage.zero_type,
+               {int64_t(storage.n), int64_t(storage.zero_type == TensorProto::UINT8
+                                                ? CeilDiv(storage.groups, 8 / storage.bits)
+                                                : storage.groups)},
+               packed.zeros);
+  return result;
+}
 
 RuntimeValue QuantizeTensor(const Tensor &tensor, const QuantizationPlan &plan) {
   return RuntimeValue(EncodeTensor(tensor, plan));
@@ -949,17 +1314,8 @@ TensorProto DequantizeTensorProto(const EncodedValueProto &value,
     result.add_dims(dim);
   const size_t width = FloatBytes(decoded.type);
   ByteWriter payload(*result.mutable_raw_data(), Product(decoded.values.size(), width));
-  for (double number : decoded.values) {
-    std::array<uint8_t, sizeof(double)> scalar;
-    WriteFloat(scalar.data(), decoded.type, number);
-    const auto *p = scalar.data();
-    if (width == 8)
-      payload.Put(Load<uint64_t>(p), 8);
-    else if (width == 4)
-      payload.Put(Load<uint32_t>(p), 4);
-    else
-      payload.Put(Load<uint16_t>(p), 2);
-  }
+  for (double number : decoded.values)
+    PutFloat(payload, number, decoded.type);
   payload.Finish();
   return result;
 }

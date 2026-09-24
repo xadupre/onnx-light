@@ -1016,7 +1016,10 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .value("QUAROT", core::runtime::QuantizationFormat::kQuarot)
       .value("SMOOTHQUANT", core::runtime::QuantizationFormat::kSmoothquant)
       .value("TILED_FLOAT", core::runtime::QuantizationFormat::kTiledFloat)
-      .value("COLUMN_MAJOR", core::runtime::QuantizationFormat::kColumnMajor);
+      .value("COLUMN_MAJOR", core::runtime::QuantizationFormat::kColumnMajor)
+      .value("ORT_MATMULNBITS_INT2", core::runtime::QuantizationFormat::kOrtMatmulnbitsInt2)
+      .value("ORT_MATMULNBITS_INT4", core::runtime::QuantizationFormat::kOrtMatmulnbitsInt4)
+      .value("ORT_MATMULNBITS_INT8", core::runtime::QuantizationFormat::kOrtMatmulnbitsInt8);
   nb::class_<core::runtime::QuantizationBlockLayout>(rt_mod, "QuantizationBlockLayout")
       .def(nb::init<>())
       .def_rw("count", &core::runtime::QuantizationBlockLayout::count)
@@ -1060,6 +1063,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def_rw("format", &core::runtime::QuantizationPlan::format,
               nb::for_setter(nb::arg("value").noconvert()))
       .def_rw("runs", &core::runtime::QuantizationPlan::runs, nb::rv_policy::copy)
+      .def_rw("matrix_shape", &core::runtime::QuantizationPlan::matrix_shape)
       .def_rw("permutation", &core::runtime::QuantizationPlan::permutation)
       .def_rw("transform_size", &core::runtime::QuantizationPlan::transform_size)
       .def_rw("forward", &core::runtime::QuantizationPlan::forward)
@@ -1094,6 +1098,27 @@ void AddOnnxPyRuntime(nb::module_ &m) {
   rt_mod.def("make_quantization_plan", &core::runtime::MakeQuantizationPlan,
              nb::arg("format").noconvert(), nb::arg("count"), nb::arg("block_size") = 128,
              "Creates block defaults; requires supplied learned codebooks and transforms.");
+  rt_mod.def("make_matmul_nbits_plan", &core::runtime::MakeMatMulNBitsPlan,
+             nb::arg("format").noconvert(), nb::arg("k"), nb::arg("n"), nb::arg("block_size") = 128,
+             "Creates an ORT-compatible MatMulNBits input-packing plan for [K,N] weights.");
+  nb::class_<core::runtime::MatMulNBitsInputs>(rt_mod, "MatMulNBitsInputs")
+      .def_ro("k", &core::runtime::MatMulNBitsInputs::k)
+      .def_ro("n", &core::runtime::MatMulNBitsInputs::n)
+      .def_ro("bits", &core::runtime::MatMulNBitsInputs::bits)
+      .def_ro("block_size", &core::runtime::MatMulNBitsInputs::block_size)
+      .def_ro("weights", &core::runtime::MatMulNBitsInputs::weights)
+      .def_ro("scales", &core::runtime::MatMulNBitsInputs::scales)
+      .def_ro("zero_points", &core::runtime::MatMulNBitsInputs::zero_points);
+  rt_mod.def(
+      "export_matmul_nbits_inputs",
+      [](const EncodedValueProto &value, const ModelProto *model) {
+        StructTypeCatalogue catalogue;
+        if (model)
+          catalogue.Build(*model);
+        return core::runtime::ExportMatMulNBitsInputs(value, catalogue);
+      },
+      nb::arg("value"), nb::arg("model") = nullptr,
+      "Extracts owned ORT input tensors and attributes without dequantizing.");
   rt_mod.def("quantize_tensor_proto", &core::runtime::QuantizeTensorProto, nb::arg("tensor"),
              nb::arg("plan"), "Quantizes a loaded TensorProto into an owned EncodedValueProto.");
   rt_mod.def(

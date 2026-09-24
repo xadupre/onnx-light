@@ -6,6 +6,7 @@
 
 #include "onnx_core/runtime/runtime_value.h"
 #include <array>
+#include <optional>
 #include <string_view>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
@@ -13,7 +14,7 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 /** Selects the numerical reconstruction of an independently encoded block. */
 enum class QuantizationMethod { kAffine = 0, kCodebook = 1, kCast = 2 };
 
-/** Selects a portable onnx-light profile, not a vendor packing ABI. */
+/** Selects a portable profile or an explicitly ORT-compatible MatMulNBits input layout. */
 enum class QuantizationFormat {
   kInt8,
   kInt8PerChannel,
@@ -55,6 +56,9 @@ enum class QuantizationFormat {
   kSmoothquant,
   kTiledFloat,
   kColumnMajor,
+  kOrtMatmulnbitsInt2,
+  kOrtMatmulnbitsInt4,
+  kOrtMatmulnbitsInt8,
 };
 
 /**
@@ -84,9 +88,9 @@ struct QuantizationBlockLayout {
 
 /** Stores the per-block numerical parameters carried in the encoded payload. */
 struct QuantizationBlockParameters {
-  /// Multiplies reconstructed values for all methods; must be finite and strictly positive.
+  /// Multiplies reconstructed values; portable profiles require a strictly positive value.
   double scale = 1;
-  /// Sets an integer affine zero point in the code range; must be zero for other methods.
+  /// Sets an affine zero point; ORT profiles also accept floating-point zero points.
   double zero_point = 0;
   /// Adds a finite affine reconstruction offset; must be zero for other methods.
   double offset = 0;
@@ -105,7 +109,10 @@ struct QuantizationRun {
 };
 
 /**
- * Describes a portable onnx-light quantization, not a vendor packing ABI.
+ * Describes portable quantization or explicitly ORT-compatible MatMulNBits inputs.
+ *
+ * The coverage and numerical rules below describe portable profiles. For the three
+ * kOrtMatmulnbitsInt* profiles, use MakeMatMulNBitsPlan and its matrix-specific contract.
  *
  * @par Construction and conversion
  * Calls MakeQuantizationPlan(format, count, block_size) to initialize profile defaults,
@@ -373,6 +380,8 @@ struct QuantizationPlan {
   QuantizationFormat format = QuantizationFormat::kInt4;
   /// Covers the tensor with consecutive runs in post-permutation, post-transform order.
   std::vector<QuantizationRun> runs;
+  /// Records the required [K,N] shape for ORT profiles; remains empty for portable profiles.
+  Shape matrix_shape;
   /// Maps quantization positions to original flattened indices; empty selects identity.
   std::vector<int64_t> permutation;
   /// Sets the row-vector transform width; zero requires empty forward/inverse matrices.
@@ -386,8 +395,8 @@ struct QuantizationPlan {
 };
 
 /** Returns the portable profiles as a compile-time array without dynamic allocation. */
-constexpr std::array<QuantizationFormat, 40> QuantizationFormats() {
-  std::array<QuantizationFormat, 40> formats{};
+constexpr std::array<QuantizationFormat, 43> QuantizationFormats() {
+  std::array<QuantizationFormat, 43> formats{};
   for (size_t i = 0; i < formats.size(); ++i)
     formats[i] = static_cast<QuantizationFormat>(i);
   return formats;
@@ -418,6 +427,46 @@ QuantizationFormat ParseQuantizationFormat(std::string_view name);
  */
 QuantizationPlan MakeQuantizationPlan(QuantizationFormat format, uint64_t count,
                                       uint64_t block_size = 128);
+
+/**
+ * Creates an ORT MatMulNBits input-packing plan for a logical [K,N] weight matrix.
+ *
+ * Accepts kOrtMatmulnbitsInt2, kOrtMatmulnbitsInt4 and kOrtMatmulnbitsInt8. K and N
+ * must be positive; block_size is a power of two in [16, UINT32_MAX].
+ * Creates one shared unsigned affine layout of block_size elements and
+ * N * ceil(K/block_size) parameter blocks, in [column, K-block] order.
+ * The last block of every column includes padding, unlike portable profiles.
+ * Scales default to one and zero points to 2^(bits-1). No calibration is performed.
+ *
+ * QuantizeTensor/QuantizeTensorProto require a rank-two FLOAT, FLOAT16 or BFLOAT16
+ * source. Scales and floating zero points are rounded to that dtype before encoding.
+ * Finite negative scales are supported. A zero scale requires an all-zero source block;
+ * nonzero scales that round to zero are rejected.
+ * All-midpoint zero points are omitted; in-range integer zero points are packed UINT8;
+ * otherwise zero points use the source floating dtype. Offsets, codebooks, permutations,
+ * transforms and outliers are not supported by these profiles.
+ *
+ * The encoded structure stores a [bits,block_size] constant, B, scales and optional
+ * zero_points tensors in their ORT input layouts. It does not contain an EP-specific
+ * prepacked buffer, g_idx or bias. ExportMatMulNBitsInputs extracts ready-to-use inputs.
+ */
+QuantizationPlan MakeMatMulNBitsPlan(QuantizationFormat format, uint64_t k, uint64_t n,
+                                     uint64_t block_size = 128);
+
+/** Stores owned input tensors and attributes for com.microsoft::MatMulNBits, version 1. */
+struct MatMulNBitsInputs {
+  uint64_t k = 0;
+  uint64_t n = 0;
+  uint64_t block_size = 0;
+  uint32_t bits = 0;
+  TensorProto weights;
+  TensorProto scales;
+  std::optional<TensorProto> zero_points;
+};
+
+/** Extracts ORT input tensors without dequantizing, after validating the encoded layout. */
+MatMulNBitsInputs ExportMatMulNBitsInputs(const EncodedValueProto &value,
+                                          const StructTypeCatalogue &catalogue = {});
 
 /** Quantizes a finite floating-point tensor into an owned, self-describing encoded value. */
 RuntimeValue QuantizeTensor(const Tensor &tensor, const QuantizationPlan &plan);

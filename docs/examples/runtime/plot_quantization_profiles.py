@@ -4,13 +4,15 @@
 Uses every portable quantization profile from Python
 ===================================================
 
-This example quantizes and dequantizes all 40 profiles exposed by
+This example quantizes and dequantizes all 43 profiles exposed by
 :mod:`onnx_light.onnx_core.quantization`. It shows the parameters to supply
 for affine, scalar-codebook, vector-codebook, transformed and cast storage.
 The :ref:`profile catalogue <l-quantized-values>` describes their numerical
 contracts and limitations.
 
-These are **onnx-light representations, not vendor-compatible files**.
+The first 40 are **onnx-light representations, not vendor-compatible files**.
+The three ``ORT_MATMULNBITS_INT*`` profiles produce compatible ONNX Runtime
+operator inputs, not execution-provider-specific prepacked buffers.
 In particular, selecting ``gptq`` or ``awq`` does not run calibration;
 selecting ``aqlm`` does not train codebooks. The small synthetic tables below
 demonstrate the API, not trained models or recommended quantization quality.
@@ -22,6 +24,8 @@ from onnx_light.onnx import numpy_helper
 from onnx_light.onnx_core.quantization import (
     QuantizationFormat,
     dequantize_tensor_proto,
+    export_matmul_nbits_inputs,
+    make_matmul_nbits_plan,
     make_quantization_plan,
     quantization_format_name,
     quantization_formats,
@@ -342,6 +346,31 @@ loaded.struct_type = onnx.StructTypeProto(type_ref=91)
 numpy.testing.assert_array_equal(
     numpy_helper.to_array(dequantize_tensor_proto(loaded, model=model)), weights
 )
+
+# %%
+# ONNX Runtime MatMulNBits input packing
+# -------------------------------------
+#
+# These profiles use the actual ORT B/scales/zero_points input layout.
+# Quantization groups run along K within each column, with a padded final
+# group per column. Unlike the portable MATMULNBITS profile, the extracted
+# tensors can directly become initializers of com.microsoft::MatMulNBits.
+
+weights = (numpy.arange(35 * 3).reshape(35, 3) % 3 - 1).astype(numpy.float32)
+for profile in (
+    QuantizationFormat.ORT_MATMULNBITS_INT2,
+    QuantizationFormat.ORT_MATMULNBITS_INT4,
+    QuantizationFormat.ORT_MATMULNBITS_INT8,
+):
+    plan = make_matmul_nbits_plan(profile, 35, 3, block_size=16)
+    encoded, restored = roundtrip(weights, plan)
+    numpy.testing.assert_array_equal(restored, weights)
+    inputs = export_matmul_nbits_inputs(encoded)
+    assert tuple(inputs.weights.dims) == (3, 3, 16 * inputs.bits // 8)
+    assert tuple(inputs.scales.dims) == (3, 3)
+    assert inputs.zero_points is None
+    print(f"ORT: K={inputs.k}, N={inputs.n}, bits={inputs.bits}, block_size={inputs.block_size}")
+
 
 # %%
 # Coverage

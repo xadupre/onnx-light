@@ -6,7 +6,7 @@ Calibrates quantization with graph kernels
 
 This example runs ``ai.rt::Quantize`` and ``ai.rt::Dequantize`` in a native
 runtime session. It first demonstrates linear INT8 quantization with a scale
-and zero point, then compares automatic INT4 block calibration with explicit
+and zero point, then compares automatic NF4 block calibration with explicit
 scales, inspects the encoded graph output, and reuses it as an initializer.
 These operators are onnx-light extensions, not ONNX ``QuantizeLinear`` and
 ``DequantizeLinear``. See :ref:`l-quantized-values` for supported formats and
@@ -93,20 +93,29 @@ print("Reference INT8 codes:  ", reference_codes)
 print("Quantize -> Dequantize:", linear_output)
 
 # %%
-# Build a graph with an encoded edge
-# ---------------------------------
+# Nonlinear quantization with an NF4 codebook
+# -----------------------------------------
 #
-# Each block covers four consecutive elements. The type describes the
-# storage layout, not the numerical scales: Quantize computes those from
-# each input block. The encoded value keeps the logical FLOAT input dtype;
-# Dequantize requests a DOUBLE output independently.
+# NF4 stores four-bit indices into a fixed table of 16 nonuniform values,
+# rather than uniformly spaced integer codes. Quantize selects the nearest
+# table entry after scaling; Dequantize reconstructs ``scale * codebook[index]``.
+# There is no affine zero-point shift.
+#
+# Each block covers four consecutive elements and has its own scale.
+# The type describes the storage layout, not the numerical scales: Quantize
+# computes those from each input block. The encoded value keeps the logical
+# FLOAT input dtype; Dequantize requests a DOUBLE output independently.
 #
 # Declaring ``Q`` as a graph output retains it for inspection after the run.
 # Encoded outputs use ``get_value`` rather than the tensor-only ``get``.
 # Importing the native runtime above registers its built-in kernels.
 
 values = numpy.array([-8, -3.3, 0.2, 7, -16, -1.2, 8.5, 14], dtype=numpy.float32)
-plan = make_quantization_plan(QuantizationFormat.INT4, values.size, block_size=4)
+plan = make_quantization_plan(QuantizationFormat.NF4, values.size, block_size=4)
+codebook = numpy.array(plan.run(0).block(0).codebook, dtype=numpy.float64)
+assert codebook.size == 16
+assert not numpy.allclose(numpy.diff(codebook), numpy.diff(codebook)[0])
+print("Nonuniform NF4 codebook:", codebook)
 destination = onnx.TypeProto()
 destination.struct_type.CopyFrom(make_quantization_type(plan))
 encode = oh.make_node("Quantize", ["X"], ["Q"], domain="ai.rt", type=destination)
@@ -126,9 +135,20 @@ model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 21), oh.make_ops
 # Calibrate scales from the input
 # -------------------------------
 #
-# Signed INT4 codes span [-8, 7]. The two blocks fit that range with scales
-# 1 and 2 respectively. Reconstruction rounds to those grids; requesting a
-# DOUBLE output does not recover precision lost during quantization.
+# The NF4 table spans [-1, 1], so calibration uses each block's maximum
+# absolute value: 8 and 16 here. Unlike linear quantization, reconstruction
+# selects among nonuniform levels. The NumPy reference below searches those
+# levels independently of the native kernels.
+
+
+def reconstruct_nf4(source, block_scales):
+    """Returns the nearest scaled NF4 table entry for each source element."""
+    blocks = source.astype(numpy.float64).reshape(-1, 4)
+    levels = block_scales[:, None] * codebook[None, :]
+    distances = numpy.abs(blocks[:, :, None] - levels[:, None, :])
+    indices = distances.argmin(axis=2)
+    return numpy.take_along_axis(levels, indices, axis=1).reshape(source.shape)
+
 
 context = RuntimeContext()
 context.set("X", tensor_from_proto(onh.from_array(values, name="X")))
@@ -138,7 +158,11 @@ automatic = numpy.from_dlpack(context.get("Y"))
 encoded = context.get_value("Q")
 assert isinstance(encoded, onnx.EncodedValueProto)
 assert automatic.dtype == numpy.float64
-numpy.testing.assert_array_equal(automatic, [-8, -3, 0, 7, -16, -2, 8, 14])
+automatic_scales = numpy.max(numpy.abs(values.reshape(-1, 4)), axis=1).astype(numpy.float64)
+numpy.testing.assert_array_equal(automatic_scales, [8, 16])
+numpy.testing.assert_allclose(
+    automatic, reconstruct_nf4(values, automatic_scales), rtol=1e-12, atol=1e-12
+)
 print("Input:     ", values)
 print("Automatic: ", automatic)
 print("Encoded output:", type(encoded).__name__)
@@ -148,9 +172,10 @@ print("Encoded output:", type(encoded).__name__)
 # ------------------------------
 #
 # The optional second input supplies one scale per block (or a scalar for
-# all blocks). Here scales 2 and 4 deliberately coarsen the reconstruction.
-# The parameter dtype can differ from the input dtype. Other optional inputs
-# supply zero points, offsets, learned tables, transforms and outlier indices;
+# all blocks). Scales 10 and 20 widen the reconstruction ranges and move
+# the nonuniform levels. They need not improve accuracy.
+# The parameter dtype can differ from the input dtype. NF4 zero points and
+# offsets remain zero. Other profiles may require learned tables or transforms;
 # choosing a profile does not train those parameters.
 
 explicit_model = onnx.ModelProto()
@@ -159,14 +184,14 @@ explicit_model.graph.node[0].input.append("scales")
 explicit_model.graph.input.append(
     oh.make_tensor_value_info("scales", onnx.TensorProto.DOUBLE, [2])
 )
-scales = numpy.array([2, 4], dtype=numpy.float64)
+scales = numpy.array([10, 20], dtype=numpy.float64)
 explicit_context = RuntimeContext()
 explicit_context.set("X", context.get("X"))
 explicit_context.set("scales", tensor_from_proto(onh.from_array(scales, name="scales")))
 explicit_session = RuntimeSession(explicit_model)
 explicit_session.run(explicit_context)
 explicit = numpy.from_dlpack(explicit_context.get("Y"))
-numpy.testing.assert_array_equal(explicit, [-8, -4, 0, 8, -16, 0, 8, 16])
+numpy.testing.assert_allclose(explicit, reconstruct_nf4(values, scales), rtol=1e-12, atol=1e-12)
 print("Explicit:  ", explicit)
 
 # %%
@@ -199,15 +224,15 @@ print("Serialized:", reconstructed)
 # Compare reconstruction errors
 # -----------------------------
 #
-# These intentionally coarse scales make the difference visible. Neither
-# simple range calibration nor this small example guarantees optimal
-# accuracy for a real model.
+# The two scale choices yield different NF4 reconstruction levels. Neither
+# simple range calibration nor this small example guarantees optimal accuracy
+# for a real model.
 
 figure, axes = matplotlib.pyplot.subplots(1, 2, figsize=(10, 4))
 axes[0].plot(values, "o-", label="Input")
 axes[0].plot(automatic, "x--", label="Automatic scales")
 axes[0].plot(explicit, "+:", label="Explicit scales")
-axes[0].set_title("INT4 reconstruction")
+axes[0].set_title("NF4 codebook reconstruction")
 axes[0].set_xlabel("Element")
 axes[0].legend()
 indices = numpy.arange(values.size)

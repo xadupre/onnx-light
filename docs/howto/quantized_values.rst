@@ -29,9 +29,9 @@ codecs as CPU kernels, with ``LightOpSchema`` declarations and shape inference.
 They are onnx-light extensions, not ONNX ``QuantizeLinear``/``DequantizeLinear``.
 
 The :ref:`graph-kernel gallery example <l-example-quantization-kernels>`
-demonstrates linear INT8 quantization with a scale and zero point, runs automatic
-calibration, overrides scales explicitly, and serializes an encoded output for
-reuse as an initializer.
+demonstrates linear INT8 quantization with a scale and zero point, then nonlinear
+NF4 codebook quantization with automatic or explicit scales. It also serializes
+an encoded output for reuse as an initializer.
 
 * ``Quantize(X, scales?, zero_points?, offsets?, codebooks?, permutation?,
   forward?, inverse?, outliers?) -> Y`` takes a floating tensor and returns an

@@ -64,8 +64,10 @@ Explicit scales, zero points and offsets accept floating scalar tensors or
 one-dimensional tensors with one value per block. They override calibration.
 Codebooks concatenate all blocks' tables in run order. FLOAT, DOUBLE, FLOAT16
 and BFLOAT16 parameter tensors are supported independently. Permutation and
-outlier indices are one-dimensional INT64 tensors. Transform inputs contain
-the declared square matrices in row-major order.
+outlier indices are one-dimensional INT64 tensors. Transform inputs must have
+rank two and shape ``[n, n]`` matching the declared transform size, with values
+in row-major order. Flattened or reshaped tensors with the same element count
+are rejected.
 
 The kernel supplies the existing fixed scalar tables, but **does not train
 learned codebooks or run GPTQ/AWQ optimization**. Learned codebooks must be

@@ -115,6 +115,38 @@ TEST(QuantizedValueKernels, RequiresAndAppliesTransformsAndPermutation) {
   parameters.inverse = &inverse;
   parameters.scales = &scale;
   ExpectValues(DequantizeTensor(QuantizeTensor(input, type, parameters)), {-4, 6});
+
+  for (const Shape &shape : {Shape{4}, Shape{1, 4}, Shape{4, 1}, Shape{1, 2, 2}}) {
+    const auto bad_forward = Tensor::FromDouble("", shape, plan.forward);
+    const auto bad_inverse = Tensor::FromDouble("", shape, plan.inverse);
+    parameters.forward = &bad_forward;
+    EXPECT_THROW(QuantizeTensor(input, type, parameters), std::invalid_argument);
+    parameters.forward = &forward;
+    parameters.inverse = &bad_inverse;
+    EXPECT_THROW(QuantizeTensor(input, type, parameters), std::invalid_argument);
+    parameters.inverse = &inverse;
+  }
+  ExpectValues(DequantizeTensor(QuantizeTensor(input, type, parameters)), {-4, 6});
+}
+
+TEST(QuantizedValueKernels, RejectsScalarTransformForOneByOneMatrix) {
+  const auto input = Tensor::FromFloat("", {1}, {2});
+  auto plan = MakeQuantizationPlan(QuantizationFormat::kSmoothquant, 1);
+  plan.transform_size = 1;
+  plan.forward = {1};
+  plan.inverse = {1};
+  const auto type = MakeQuantizationType(plan);
+  const auto matrix = Tensor::FromDouble("", {1, 1}, {1});
+  const auto scalar = Tensor::FromDouble("", {}, {1});
+  QuantizationParameters parameters;
+  parameters.forward = &matrix;
+  parameters.inverse = &matrix;
+  ExpectValues(DequantizeTensor(QuantizeTensor(input, type, parameters)), {2});
+  parameters.forward = &scalar;
+  EXPECT_THROW(QuantizeTensor(input, type, parameters), std::invalid_argument);
+  parameters.forward = &matrix;
+  parameters.inverse = &scalar;
+  EXPECT_THROW(QuantizeTensor(input, type, parameters), std::invalid_argument);
 }
 
 TEST(QuantizedValueKernels, DequantizesToEachRequestedDtypeAndRejectsOverflow) {

@@ -1343,6 +1343,13 @@ std::vector<double> OptionalValues(const Tensor *tensor) {
   return tensor ? FloatingValues(*tensor) : std::vector<double>{};
 }
 
+void CheckTransformShape(const Tensor *tensor, size_t dimension, const char *name) {
+  EXT_ENFORCE_INVALID(!tensor || (tensor->shape.size() == 2 &&
+                                  tensor->shape[0] == static_cast<int64_t>(dimension) &&
+                                  tensor->shape[1] == static_cast<int64_t>(dimension)),
+                      "Quantize ", name, " must have shape [", dimension, ", ", dimension, "].");
+}
+
 std::vector<int64_t> IndexValues(const Tensor *tensor, size_t count, const char *name) {
   EXT_ENFORCE_INVALID(tensor != nullptr || count == 0, "Quantize requires explicit ", name, ".");
   if (!tensor)
@@ -1420,6 +1427,8 @@ QuantizationPlan CalibratePlan(const Tensor &tensor, const StructTypeProto &root
     EXT_ENFORCE_INVALID(n <= std::numeric_limits<uint32_t>::max(),
                         "Quantize transform is too large.");
     plan.transform_size = static_cast<uint32_t>(n);
+    CheckTransformShape(parameters.forward, n, "forward");
+    CheckTransformShape(parameters.inverse, n, "inverse");
     plan.forward = OptionalValues(parameters.forward);
     plan.inverse = OptionalValues(parameters.inverse);
     plan.outliers = IndexValues(parameters.outliers,

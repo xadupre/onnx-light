@@ -157,7 +157,8 @@ void AddOnnxPyOp(nb::module_ &m) {
       .value("kOptFloat6e3m2", onnx_proto::TensorType::kOptFloat6e3m2)
       .value("kOptComplex64", onnx_proto::TensorType::kOptComplex64)
       .value("kOptComplex128", onnx_proto::TensorType::kOptComplex128)
-      .value("kUndefined", onnx_proto::TensorType::kUndefined);
+      .value("kUndefined", onnx_proto::TensorType::kUndefined)
+      .value("kStruct", onnx_proto::TensorType::kStruct);
 
   onnx_op_mod.def(
       "ToTypeString",

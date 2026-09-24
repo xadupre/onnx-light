@@ -541,6 +541,7 @@ TEST(BackendRunModelAllCases, RunEveryModelTwiceWithStableMemoryPeak) {
       RuntimeSession session(plan, core::runtime::RuntimeSessionOptions{
                                        .parameters = core::runtime::RuntimeParameters(1),
                                    });
+      session.SetInitializers(graph);
 
       // Seed inputs, maps and initializers once. These are the tensors that
       // must survive between the two runs; every other tensor a run produces is

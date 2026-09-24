@@ -423,6 +423,7 @@ RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name)
   child.functions() = functions_;
   child.custom_kernels() = custom_kernels_;
   child.set_model_owner(model_owner_);
+  child.set_struct_type_catalogue(struct_type_catalogue_);
   child.tensors() = tensors_;
   child.values() = values_;
   child.sequences() = sequences_;
@@ -489,6 +490,7 @@ RuntimeContext RuntimeContext::MakeFunctionContext() const {
   child.functions() = functions_;
   child.custom_kernels() = custom_kernels_;
   child.set_model_owner(model_owner_);
+  child.set_struct_type_catalogue(struct_type_catalogue_);
   child.set_cpu_executor(cpu_executor_);
   if (events_enabled_)
     child.set_current_subgraph(current_subgraph_node_index_, current_subgraph_attr_name_);

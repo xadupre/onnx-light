@@ -22,6 +22,7 @@
 #include "onnx_manipulations/tensor_proto_util.h"
 #include "onnx_proto/onnx_helper.h"
 #include "onnx_proto/onnx_tree_ensemble.h"
+#include "onnx_proto/onnx_verify.h"
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -62,6 +63,11 @@ namespace ONNX_LIGHT_NAMESPACE::checker {
 
 ValidationError::~ValidationError() = default;
 
+const StructTypeCatalogue &CheckerContext::get_struct_type_catalogue() const {
+  static const StructTypeCatalogue empty;
+  return struct_type_catalogue_ ? *struct_type_catalogue_ : empty;
+}
+
 #define enforce_has_field(proto, field)                                                            \
   do {                                                                                             \
     if (!proto.has_##field()) {                                                                    \
@@ -75,6 +81,13 @@ ValidationError::~ValidationError() = default;
       fail_check("Field '", #field, "' of '", #proto, "' is required to be non-empty.");           \
     }                                                                                              \
   } while (0)
+
+template <typename Validator> static void check_structured(Validator validate) {
+  ONNX_TRY { validate(); }
+  ONNX_CATCH(const std::invalid_argument &ex) {
+    ONNX_HANDLE_EXCEPTION([&]() { fail_check(ex.what()); });
+  }
+}
 
 void check_value_info(const ValueInfoProto &value_info, const CheckerContext &ctx) {
   enforce_non_empty_field(value_info, name);
@@ -116,6 +129,10 @@ void check_value_info(const ValueInfoProto &value_info, const CheckerContext &ct
     const auto &type = value_info.type().opaque_type();
     enforce_non_empty_field(type, name);
   } break;
+
+  case TypeProto::kStructType:
+    check_structured([&]() { ctx.get_struct_type_catalogue().ValidateType(value_info.type()); });
+    break;
 
   default:
     fail_check("Unrecognized type value case (value_info name: ", value_info.name(),
@@ -615,6 +632,13 @@ void check_attribute(const AttributeProto &attr, const CheckerContext &ctx,
     check_sparse_tensor(attr.sparse_tensor(), ctx);
   }
 
+  if (attr.has_tp()) {
+    check_structured([&]() { ctx.get_struct_type_catalogue().ValidateType(attr.tp()); });
+  }
+  for (const auto &type : attr.type_protos()) {
+    check_structured([&]() { ctx.get_struct_type_catalogue().ValidateType(type); });
+  }
+
   if (attr.has_g()) {
     CheckerContext subgraph_ctx(ctx);
     subgraph_ctx.set_is_main_graph(false);
@@ -780,6 +804,15 @@ void check_graph(const GraphProto &graph, const CheckerContext &ctx,
           " sparse initializer name is not unique across initializers and sparse_initializers");
     }
     check_sparse_tensor(sparse_init, ctx);
+    lex_ctx.add(name);
+  }
+  for (const auto &init : graph.encoded_initializer()) {
+    enforce_non_empty_field(init, name);
+    const std::string &name = init.name();
+    if (!initializer_name_checker.insert(name).second) {
+      fail_check(name + " encoded initializer name is not unique across initializers");
+    }
+    check_structured([&]() { ctx.get_struct_type_catalogue().ValidateEncodedValue(init); });
     lex_ctx.add(name);
   }
   std::unordered_set<std::string> used_experimental_ops;
@@ -1162,6 +1195,9 @@ static void check_model(const ModelProto &model, CheckerContext &ctx) {
     }
   }
   ctx.set_opset_imports(opset_imports);
+  StructTypeCatalogue catalogue;
+  check_structured([&]() { catalogue.Build(model); });
+  ctx.set_struct_type_catalogue(catalogue);
   LexicalScopeContext lex_ctx;
   check_graph(model.graph(), ctx, lex_ctx);
 

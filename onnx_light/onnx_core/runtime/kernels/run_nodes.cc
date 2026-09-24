@@ -1151,6 +1151,9 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
 void RegisterModelFunctions(const ModelProto &model, RuntimeContext &rt) {
   EXT_ENFORCE_INVALID(model.has_graph(),
                       "RegisterModelFunctions: the ModelProto does not contain a graph.");
+  StructTypeCatalogue catalogue;
+  catalogue.Build(model);
+  rt.set_struct_type_catalogue(catalogue);
   // Register every model-local function so that nodes referring to
   // them by (domain, op_type, overload) are dispatched to
   // ``ModelLocalFunctionKernel`` rather than rejected as unsupported

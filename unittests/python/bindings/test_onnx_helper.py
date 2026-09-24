@@ -335,6 +335,37 @@ class TestOnnxLightHelper(ExtTestCase):
         self.assertEqual(len(attr.strings), 0)
         self.assertRaises(ValueError, oh.make_attribute, "empty", [])
 
+    def test_attr_repeated_type_proto(self) -> None:
+        types = [
+            oh.make_tensor_type_proto(onnxl.TensorProto.FLOAT, [2]),
+            oh.make_sequence_type_proto(oh.make_tensor_type_proto(onnxl.TensorProto.INT64, [])),
+        ]
+        expected = [value.SerializeToString() for value in types]
+        for container in (list, tuple, iter):
+            for attr_type in (None, onnxl.AttributeProto.TYPE_PROTOS):
+                with self.subTest(container=container.__name__, attr_type=attr_type):
+                    attr = oh.make_attribute("types", container(types), attr_type=attr_type)
+                    self.assertEqual(int(attr.type), onnxl.AttributeProto.TYPE_PROTOS)
+                    checker.check_attribute(attr)
+                    restored = onnxl.AttributeProto()
+                    restored.ParseFromString(attr.SerializeToString())
+                    actual = oh.get_attribute_value(restored)
+                    self.assertIsInstance(actual, list)
+                    self.assertEqual([value.SerializeToString() for value in actual], expected)
+
+    def test_attr_repeated_type_proto_empty_and_invalid(self) -> None:
+        attr = oh.make_attribute("types", [], attr_type=onnxl.AttributeProto.TYPE_PROTOS)
+        self.assertEqual(int(attr.type), onnxl.AttributeProto.TYPE_PROTOS)
+        self.assertEqual(oh.get_attribute_value(attr), [])
+        tensor_type = oh.make_tensor_type_proto(onnxl.TensorProto.FLOAT, [2])
+        checker.check_attribute(oh.make_attribute("type", tensor_type))
+        with self.assertRaises(ValueError):
+            oh.make_attribute("types", [tensor_type, 1])
+        with self.assertRaisesRegex(RuntimeError, "Unable to cast"):
+            oh.make_attribute("types", [1], attr_type=onnxl.AttributeProto.TYPE_PROTOS)
+        with self.assertRaisesRegex(RuntimeError, "Unable to cast"):
+            oh.make_attribute("types", [tensor_type], attr_type=onnxl.AttributeProto.TENSORS)
+
     def test_attr_mismatch(self) -> None:
         with self.assertRaisesRegex(TypeError, "Inferred attribute type 'FLOAT'"):
             oh.make_attribute("test", 6.4, attr_type=onnxl.AttributeProto.STRING)

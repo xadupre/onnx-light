@@ -100,6 +100,8 @@ RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions op
       verbose_(options.verbose) {
   SetDeclaredShapes(model.graph());
   SetInitializers(model.graph());
+  struct_type_catalogue_.emplace();
+  struct_type_catalogue_->Build(model);
 }
 
 RuntimeSession::RuntimeSession(const GraphProto &graph, int verbose)
@@ -203,11 +205,22 @@ void RuntimeSession::SetInitializers(const GraphProto &graph) {
 
 std::unordered_set<std::string> RuntimeSession::SeedInitializers(RuntimeContext &rt) const {
   std::unordered_set<std::string> seeded;
+  if (struct_type_catalogue_)
+    rt.set_struct_type_catalogue(*struct_type_catalogue_);
   if (initializer_graph_ != nullptr) {
     for (const TensorProto &initializer : initializer_graph_->initializer())
       if (!rt.Has(initializer.name())) {
         rt.Set(initializer.name(), InitializerView(initializer, rt.model_owner()),
                RuntimeEventKind::kInitializer);
+        seeded.insert(initializer.name());
+      }
+    for (const auto &initializer : initializer_graph_->encoded_initializer())
+      if (!rt.Has(initializer.name()) && rt.values().count(initializer.name()) == 0) {
+        rt.struct_type_catalogue().ValidateEncodedValue(initializer);
+        rt.values().emplace(initializer.name(),
+                            rt.model_owner()
+                                ? RuntimeValue::FromEncodedView(initializer, rt.model_owner())
+                                : RuntimeValue(initializer));
         seeded.insert(initializer.name());
       }
   }

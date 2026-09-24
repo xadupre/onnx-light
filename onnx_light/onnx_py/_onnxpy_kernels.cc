@@ -1114,6 +1114,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
   rt_mod.def("make_quantization_plan", &core::runtime::MakeQuantizationPlan,
              nb::arg("format").noconvert(), nb::arg("count"), nb::arg("block_size") = 128,
              "Creates block defaults; requires supplied learned codebooks and transforms.");
+  rt_mod.def("make_quantization_type", &core::runtime::MakeQuantizationType, nb::arg("plan"),
+             "Returns a portable plan's StructTypeProto without requiring trained parameters.");
   rt_mod.def("make_matmul_nbits_plan", &core::runtime::MakeMatMulNBitsPlan,
              nb::arg("format").noconvert(), nb::arg("k"), nb::arg("n"), nb::arg("block_size") = 128,
              "Creates an ORT-compatible MatMulNBits input-packing plan for [K,N] weights.");

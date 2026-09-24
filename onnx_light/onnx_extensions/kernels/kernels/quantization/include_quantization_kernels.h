@@ -6,6 +6,7 @@
 
 #include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_core/runtime/memory/simple_tensor.h"
+#include "onnx_core/runtime/quantization.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/kernels/kernels/auto_pad.h"
 
@@ -24,6 +25,29 @@ using ::onnx_light::core::runtime::DefaultOpset;
 using ::onnx_light::core::runtime::KernelBase;
 using ::onnx_light::core::runtime::KernelContext;
 using ::onnx_light::core::runtime::OpsetId;
+
+/** Encodes a tensor using a StructTypeProto and optional calibration parameters. */
+class Quantize : public KernelBase {
+public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.rt:Quantize";
+  using KernelBase::KernelBase;
+  void Run(RuntimeContext &rt) override;
+  RuntimeValue operator()(const Tensor &x, const StructTypeProto &type,
+                          const QuantizationParameters &parameters = {},
+                          const StructTypeCatalogue &catalogue = {}) const;
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/** Decodes an encoded value directly into the requested floating-point tensor dtype. */
+class Dequantize : public KernelBase {
+public:
+  static constexpr const char *name = "onnx_kernels:CPU:ai.rt:Dequantize";
+  using KernelBase::KernelBase;
+  void Run(RuntimeContext &rt) override;
+  Tensor operator()(const EncodedValueProto &x, int32_t dtype,
+                    const StructTypeCatalogue &catalogue = {}, RuntimeContext *rt = nullptr) const;
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
 
 // ---------------------------------------------------------------------------
 // Reference implementations of the ``quantization`` backend test kernels.

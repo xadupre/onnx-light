@@ -19,6 +19,7 @@ quantization_formats = runtime.quantization_formats
 quantization_format_name = runtime.quantization_format_name
 parse_quantization_format = runtime.parse_quantization_format
 make_quantization_plan = runtime.make_quantization_plan
+make_quantization_type = runtime.make_quantization_type
 make_matmul_nbits_plan = runtime.make_matmul_nbits_plan
 export_matmul_nbits_inputs = runtime.export_matmul_nbits_inputs
 quantize_tensor = runtime.quantize_tensor
@@ -40,6 +41,7 @@ __all__ = [
     "export_matmul_nbits_inputs",
     "make_matmul_nbits_plan",
     "make_quantization_plan",
+    "make_quantization_type",
     "parse_quantization_format",
     "quantization_format_name",
     "quantization_formats",

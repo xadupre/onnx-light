@@ -472,13 +472,40 @@ MatMulNBitsInputs ExportMatMulNBitsInputs(const EncodedValueProto &value,
 /** Quantizes a finite floating-point tensor into an owned, self-describing encoded value. */
 RuntimeValue QuantizeTensor(const Tensor &tensor, const QuantizationPlan &plan);
 
+/** Supplies optional numerical inputs to automatic quantization; tensors are borrowed. */
+struct QuantizationParameters {
+  const Tensor *scales = nullptr;
+  const Tensor *zero_points = nullptr;
+  const Tensor *offsets = nullptr;
+  const Tensor *codebooks = nullptr;
+  const Tensor *permutation = nullptr;
+  const Tensor *forward = nullptr;
+  const Tensor *inverse = nullptr;
+  const Tensor *outliers = nullptr;
+};
+
+/** Returns the portable plan's storage type without requiring trained numerical parameters. */
+StructTypeProto MakeQuantizationType(const QuantizationPlan &plan);
+
+/**
+ * Quantizes into a portable storage type, calibrating omitted scales from the source.
+ * Scalar parameters broadcast; otherwise scales, zero points and offsets have one entry
+ * per block. Codebooks are concatenated in run/block order. Learned or vector codebooks
+ * and transformations require explicit inputs; no training algorithm is implied.
+ * ORT layouts calibrate per column/K-block and must match the resulting input-packing schema.
+ */
+RuntimeValue QuantizeTensor(const Tensor &tensor, const StructTypeProto &type,
+                            const QuantizationParameters &parameters = {},
+                            const StructTypeCatalogue &catalogue = {});
+
 /** Dequantizes a supported encoded runtime value to its declared floating-point tensor type. */
 Tensor DequantizeTensor(const RuntimeValue &value, const StructTypeCatalogue &catalogue = {},
                         RawBufferAllocator *allocator = nullptr);
 
 /** Dequantizes a message by const reference without copying its encoded payload. */
 Tensor DequantizeTensor(const EncodedValueProto &value, const StructTypeCatalogue &catalogue = {},
-                        RawBufferAllocator *allocator = nullptr);
+                        RawBufferAllocator *allocator = nullptr,
+                        int32_t output_dtype = TensorProto::UNDEFINED);
 
 /** Quantizes a loaded TensorProto without changing the source message. */
 EncodedValueProto QuantizeTensorProto(const TensorProto &tensor, const QuantizationPlan &plan);

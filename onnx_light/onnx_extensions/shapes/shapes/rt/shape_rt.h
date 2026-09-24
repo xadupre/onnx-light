@@ -87,5 +87,11 @@ inline constexpr const char *kAiRtDomain = "ai.rt";
  */
 void ComputeShapeDelayedInitializer(ShapesContext &ctx, const NodeProto &node);
 
+/** Infers the requested structured storage type of Quantize. */
+void ComputeShapeQuantize(ShapesContext &ctx, const NodeProto &node);
+
+/** Infers Dequantize's dtype and, when available, the encoded input's logical shape. */
+void ComputeShapeDequantize(ShapesContext &ctx, const NodeProto &node);
+
 } // namespace rt
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes

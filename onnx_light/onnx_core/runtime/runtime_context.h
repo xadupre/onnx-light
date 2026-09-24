@@ -564,6 +564,14 @@ public:
   RuntimeValueMap &values() noexcept { return values_; }
   const RuntimeValueMap &values() const noexcept { return values_; }
 
+  /** Borrows a model's validated catalogue; the declarations must outlive this context. */
+  void set_struct_type_catalogue(const StructTypeCatalogue &catalogue) {
+    struct_type_catalogue_ = catalogue;
+  }
+  const StructTypeCatalogue &struct_type_catalogue() const noexcept {
+    return struct_type_catalogue_;
+  }
+
   /** Selects whole graph outputs whose storage will be moved to an external owner. */
   void set_retained_outputs(std::unordered_set<std::string> names) {
     retained_outputs_ = std::move(names);
@@ -1052,6 +1060,7 @@ private:
 
   TensorMap tensors_;
   RuntimeValueMap values_;
+  StructTypeCatalogue struct_type_catalogue_;
   KernelContext kernel_ctx_;
   FunctionMap functions_;
   CustomKernelMap custom_kernels_;

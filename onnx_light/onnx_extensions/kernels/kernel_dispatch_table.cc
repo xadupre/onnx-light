@@ -68,6 +68,8 @@ template <class KernelT> NodeKernelFn MakeKernel() {
 const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
   static const std::unordered_map<std::string, NodeKernelFn> table = {
       {"ai.rt:DelayedInitializer", MakeKernel<onnx_kernels::kernel::DelayedInitializer>()},
+      {"ai.rt:Quantize", MakeKernel<onnx_kernels::kernel::Quantize>()},
+      {"ai.rt:Dequantize", MakeKernel<onnx_kernels::kernel::Dequantize>()},
       {"ai.onnx:Abs", MakeKernel<onnx_kernels::kernel::Abs>()},
       {"ai.onnx:Acos", MakeKernel<onnx_kernels::kernel::Acos>()},
       {"ai.onnx:Acosh", MakeKernel<onnx_kernels::kernel::Acosh>()},

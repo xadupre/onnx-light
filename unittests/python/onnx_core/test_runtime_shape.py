@@ -27,6 +27,20 @@ class TestRuntimeShape(unittest.TestCase):
             shape.append(5)
             self.assertEqual(list(shape), [4, 3, 5])
 
+    def test_positional_dimensions(self):
+        for dims in ((), (3,), (2, 3), (2, 0, 4), tuple(range(16))):
+            with self.subTest(dims=dims):
+                self.assertEqual(Shape(*dims), Shape(dims))
+        self.assertEqual(list(Shape(2, 3)), [2, 3])
+        self.assertEqual(list(Shape(3)), [3])
+        self.assertEqual(Shape(dims=[2, 3]), Shape(2, 3))
+        self.assertEqual(Shape(shape=Shape(2, 3)), Shape(2, 3))
+        with self.assertRaisesRegex(ValueError, "maximum"):
+            Shape(*([1] * 17))
+        for dims in ((1.5,), ("N",), (1 << 63,), (2, 3.5), ([2], 3), (None,)):
+            with self.subTest(dims=dims), self.assertRaises(TypeError):
+                Shape(*dims)
+
     def test_independent_copies_and_iteration(self):
         shape = Shape([2, 3])
         copies = (Shape(shape), copy.copy(shape))

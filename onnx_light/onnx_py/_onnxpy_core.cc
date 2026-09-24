@@ -413,6 +413,15 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       .def(nb::init<>())
       .def(nb::init<const Shape &>(), nb::arg("shape"))
       .def(nb::init<const std::vector<int64_t> &>(), nb::arg("dims"))
+      .def(
+          "__init__",
+          [](Shape *self, nb::args dims) {
+            std::vector<int64_t> values;
+            if (!nb::try_cast(dims, values))
+              throw nb::type_error("Shape dimensions must be integers.");
+            new (self) Shape(values);
+          },
+          "Constructs a shape from positional integer dimensions, as in Shape(2, 3).")
       .def_prop_ro_static("max_rank", [](nb::handle) { return Shape::kMaxRank; })
       .def(
           "dims", [](const Shape &shape) { return std::vector<int64_t>(shape); },

@@ -355,8 +355,8 @@ TEST(Quantization, OptionalNamesAndDocumentationMayBeAbsent) {
   ASSERT_FALSE(source.has_name());
   ASSERT_FALSE(source.has_doc_string());
   auto encoded = QuantizeTensorProto(source, MakeQuantizationPlan(QuantizationFormat::kInt4, 2));
-  encoded.clear_name();
-  encoded.clear_doc_string();
+  ASSERT_FALSE(encoded.has_name());
+  ASSERT_FALSE(encoded.has_doc_string());
   EncodedValueProto loaded;
   loaded.ParseFromString(encoded.SerializeAsString());
   ASSERT_FALSE(loaded.has_name());
@@ -365,9 +365,66 @@ TEST(Quantization, OptionalNamesAndDocumentationMayBeAbsent) {
   EXPECT_TRUE(tensor.name.empty());
   ExpectValues(tensor, {1, 2});
   const auto decoded = DequantizeTensorProto(loaded);
+  EXPECT_FALSE(decoded.has_name());
+  EXPECT_FALSE(decoded.has_doc_string());
   EXPECT_TRUE(decoded.name().empty());
   EXPECT_TRUE(decoded.doc_string().empty());
   ExpectValues(TensorFromProto(decoded), {1, 2});
+}
+
+TEST(Quantization, PreservesIndependentMetadataPresenceAcrossProtoRoundTrips) {
+  for (const auto format : {QuantizationFormat::kInt4, QuantizationFormat::kOrtMatmulnbitsInt4}) {
+    const auto plan = format == QuantizationFormat::kInt4 ? MakeQuantizationPlan(format, 2)
+                                                          : MakeMatMulNBitsPlan(format, 2, 1, 16);
+    for (int name = 0; name < 3; ++name)
+      for (int doc = 0; doc < 3; ++doc) {
+        SCOPED_TRACE(QuantizationFormatName(format));
+        SCOPED_TRACE(name);
+        SCOPED_TRACE(doc);
+        TensorProto source;
+        source.set_data_type(TensorProto::FLOAT);
+        source.add_dims(2);
+        source.add_dims(1);
+        source.add_float_data(1);
+        source.add_float_data(2);
+        if (name != 0)
+          source.set_name(name == 1 ? "" : "weight");
+        if (doc != 0)
+          source.set_doc_string(doc == 1 ? "" : "weight documentation");
+        const auto original = source.SerializeAsString();
+        const auto encoded = QuantizeTensorProto(source, plan);
+        EXPECT_EQ(source.SerializeAsString(), original);
+        EXPECT_EQ(encoded.has_name(), source.has_name());
+        EXPECT_EQ(encoded.has_doc_string(), source.has_doc_string());
+        EXPECT_EQ(encoded.name(), source.name());
+        EXPECT_EQ(encoded.doc_string(), source.doc_string());
+        EncodedValueProto loaded;
+        loaded.ParseFromString(encoded.SerializeAsString());
+        const auto decoded = DequantizeTensorProto(loaded);
+        EXPECT_EQ(decoded.has_name(), source.has_name());
+        EXPECT_EQ(decoded.has_doc_string(), source.has_doc_string());
+        EXPECT_EQ(decoded.name(), source.name());
+        EXPECT_EQ(decoded.doc_string(), source.doc_string());
+        ExpectValues(TensorFromProto(decoded), {1, 2});
+      }
+  }
+}
+
+TEST(Quantization, AcceptsPresentEmptyExternalRawData) {
+  TensorProto source;
+  source.set_data_type(TensorProto::FLOAT);
+  source.add_dims(0);
+  source.set_data_location(TensorProto::EXTERNAL);
+  const auto plan = MakeQuantizationPlan(QuantizationFormat::kInt4, 0);
+  EXPECT_THROW(QuantizeTensorProto(source, plan), std::invalid_argument);
+  source.set_raw_data(std::string{});
+  ASSERT_TRUE(source.is_raw_data());
+  const auto original = source.SerializeAsString();
+  const auto encoded = QuantizeTensorProto(source, plan);
+  const auto decoded = DequantizeTensorProto(encoded);
+  EXPECT_EQ(decoded.dims(0), 0);
+  EXPECT_EQ(decoded.raw_data().size(), 0u);
+  EXPECT_EQ(source.SerializeAsString(), original);
 }
 
 TEST(Quantization, AcceptsLoadedExternalRawDataWithoutChangingMetadata) {

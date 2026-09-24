@@ -1299,7 +1299,10 @@ EncodedValueProto QuantizeTensorProto(const TensorProto &tensor, const Quantizat
   EXT_ENFORCE_INVALID(tensor.data_location() != TensorProto::EXTERNAL || tensor.is_raw_data(),
                       "Load external TensorProto data before quantization.");
   EncodedValueProto result = EncodeTensor(TensorFromProto(tensor), plan);
-  result.set_doc_string(tensor.doc_string().value());
+  if (!tensor.has_name())
+    result.clear_name();
+  if (tensor.has_doc_string())
+    result.set_doc_string(tensor.doc_string().value());
   return result;
 }
 
@@ -1307,8 +1310,10 @@ TensorProto DequantizeTensorProto(const EncodedValueProto &value,
                                   const StructTypeCatalogue &catalogue) {
   const auto decoded = DecodeValues(value, catalogue);
   TensorProto result;
-  result.set_name(value.name().value());
-  result.set_doc_string(value.doc_string().value());
+  if (value.has_name())
+    result.set_name(value.name().value());
+  if (value.has_doc_string())
+    result.set_doc_string(value.doc_string().value());
   result.set_data_type(decoded.type);
   for (int64_t dim : decoded.shape)
     result.add_dims(dim);

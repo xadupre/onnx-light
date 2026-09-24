@@ -197,12 +197,17 @@ Output, serialization and errors
 with the original logical shape and dtype, not the physical code dtype.
 Convert it with ``numpy_helper.to_array``. The decoder does not need the
 original plan; scales, tables, transforms and outliers are encoded with the data.
+Proto conversions preserve ``name`` and ``doc_string`` presence independently:
+absent fields remain absent, and explicitly empty fields remain present-empty.
+The runtime ``Tensor`` API has only a plain string name and no documentation field.
 
 Use ``encoded.SerializeToString()`` and
 ``onnx.EncodedValueProto().ParseFromString(...)`` to round-trip the message
 through bytes. Keep its inline ``struct_type``, or save the model catalogue
 and pass ``model=model`` when decoding a ``type_ref``. The tutorial includes
 both forms. External tensor payloads must be loaded first.
+Passing ``model=None`` explicitly is equivalent to omitting it, including for
+``dequantize_tensor`` and ``export_matmul_nbits_inputs``.
 
 Invalid parameters, missing codebooks/transforms, nonfinite values and
 malformed payloads raise ``ValueError``. Affine values outside the code

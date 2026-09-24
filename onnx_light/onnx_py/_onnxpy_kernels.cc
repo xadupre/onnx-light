@@ -1117,7 +1117,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           catalogue.Build(*model);
         return core::runtime::ExportMatMulNBitsInputs(value, catalogue);
       },
-      nb::arg("value"), nb::arg("model") = nullptr,
+      nb::arg("value"), nb::arg("model").none() = nullptr,
       "Extracts owned ORT input tensors and attributes without dequantizing.");
   rt_mod.def("quantize_tensor_proto", &core::runtime::QuantizeTensorProto, nb::arg("tensor"),
              nb::arg("plan"), "Quantizes a loaded TensorProto into an owned EncodedValueProto.");
@@ -1129,7 +1129,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           catalogue.Build(*model);
         return core::runtime::DequantizeTensorProto(value, catalogue);
       },
-      nb::arg("value"), nb::arg("model") = nullptr,
+      nb::arg("value"), nb::arg("model").none() = nullptr,
       "Dequantizes an EncodedValueProto, optionally resolving a model's type catalogue.");
   rt_mod.def(
       "quantize_tensor",
@@ -1146,7 +1146,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           catalogue.Build(*model);
         return core::runtime::DequantizeTensor(value, catalogue);
       },
-      nb::arg("value"), nb::arg("model") = nullptr,
+      nb::arg("value"), nb::arg("model").none() = nullptr,
       "Dequantizes an encoded runtime value into a Tensor.");
   rt_mod.doc() = "C++ kernel dispatcher exposed to Python. RunNode and "
                  "RuntimeSession evaluate one or more nodes through the static "

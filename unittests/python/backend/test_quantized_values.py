@@ -125,6 +125,91 @@ class TestQuantizedValues(unittest.TestCase):
                     self.assertEqual(result.shape, source.shape)
                     numpy.testing.assert_array_equal(result, source)
 
+    def test_proto_metadata_presence(self):
+        values = numpy.array([[1], [2]], dtype=numpy.float32)
+        plans = [
+            runtime.make_quantization_plan(QuantizationFormat.INT4, values.size),
+            runtime.make_matmul_nbits_plan(QuantizationFormat.ORT_MATMULNBITS_INT4, 2, 1, 16),
+        ]
+        for plan in plans:
+            for name in (None, "", "weight"):
+                for doc in (None, "", "weight documentation"):
+                    with self.subTest(format=plan.format, name=name, doc=doc):
+                        source = numpy_helper.from_array(values)
+                        source.ClearField("name")
+                        if name is not None:
+                            source.name = name
+                        if doc is not None:
+                            source.doc_string = doc
+                        original = source.SerializeToString()
+                        encoded = runtime.quantize_tensor_proto(source, plan)
+                        self.assertEqual(source.SerializeToString(), original)
+                        self.assertEqual(encoded.has_name(), name is not None)
+                        self.assertEqual(encoded.has_doc_string(), doc is not None)
+                        loaded = onnx.EncodedValueProto()
+                        loaded.ParseFromString(encoded.SerializeToString())
+                        decoded = runtime.dequantize_tensor_proto(loaded)
+                        self.assertEqual(decoded.has_name(), name is not None)
+                        self.assertEqual(decoded.has_doc_string(), doc is not None)
+                        self.assertEqual(decoded.name, name if name is not None else "")
+                        self.assertEqual(decoded.doc_string, doc if doc is not None else "")
+                        numpy.testing.assert_array_equal(numpy_helper.to_array(decoded), values)
+
+    def test_explicit_none_model(self):
+        values = numpy.array([[1], [2]], dtype=numpy.float32)
+        plans = [
+            runtime.make_quantization_plan(QuantizationFormat.INT4, values.size),
+            runtime.make_matmul_nbits_plan(QuantizationFormat.ORT_MATMULNBITS_INT4, 2, 1, 16),
+        ]
+        for plan in plans:
+            with self.subTest(format=plan.format):
+                encoded = runtime.quantize_tensor_proto(numpy_helper.from_array(values), plan)
+                numpy.testing.assert_array_equal(
+                    numpy_helper.to_array(runtime.dequantize_tensor_proto(encoded, model=None)),
+                    values,
+                )
+                numpy.testing.assert_array_equal(
+                    numpy.from_dlpack(runtime.dequantize_tensor(encoded, model=None)), values
+                )
+                if plan.format == QuantizationFormat.ORT_MATMULNBITS_INT4:
+                    inputs = runtime.export_matmul_nbits_inputs(encoded, model=None)
+                    self.assertEqual(
+                        inputs.weights.SerializeToString(),
+                        runtime.export_matmul_nbits_inputs(encoded).weights.SerializeToString(),
+                    )
+                encoded.struct_type = onnx.StructTypeProto(type_ref=123)
+                with self.assertRaises(ValueError):
+                    runtime.dequantize_tensor_proto(encoded, model=None)
+                with self.assertRaises(ValueError):
+                    runtime.dequantize_tensor(encoded, model=None)
+                if plan.format == QuantizationFormat.ORT_MATMULNBITS_INT4:
+                    with self.assertRaises(ValueError):
+                        runtime.export_matmul_nbits_inputs(encoded, model=None)
+
+    def test_loaded_empty_external_tensor(self):
+        plan = runtime.make_quantization_plan(QuantizationFormat.INT4, 0)
+        with tempfile.TemporaryDirectory() as directory:
+            Path(directory, "empty.bin").write_bytes(b"")
+            source = onnx.TensorProto()
+            source.data_type = onnx.TensorProto.FLOAT
+            source.dims.append(0)
+            source.data_location = onnx.TensorProto.EXTERNAL
+            location = source.external_data.add()
+            location.key = "location"
+            location.value = "empty.bin"
+            with self.assertRaisesRegex(ValueError, "Load external"):
+                runtime.quantize_tensor_proto(source, plan)
+            source.load_external_data(directory)
+            self.assertTrue(source.HasField("raw_data"))
+            self.assertEqual(bytes(source.raw_data), b"")
+            original = source.SerializeToString()
+            encoded = runtime.quantize_tensor_proto(source, plan)
+            self.assertEqual(source.SerializeToString(), original)
+        decoded = runtime.dequantize_tensor_proto(encoded)
+        numpy.testing.assert_array_equal(
+            numpy_helper.to_array(decoded), numpy.empty((0,), dtype=numpy.float32)
+        )
+
     def test_tensor_runtime_value_bridge(self):
         source = numpy.array([1, 2, 3], dtype=numpy.float32)
         tensor = runtime.tensor_from_numpy(

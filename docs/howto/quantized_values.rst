@@ -28,6 +28,10 @@ Graph operators
 codecs as CPU kernels, with ``LightOpSchema`` declarations and shape inference.
 They are onnx-light extensions, not ONNX ``QuantizeLinear``/``DequantizeLinear``.
 
+The :ref:`graph-kernel gallery example <l-example-quantization-kernels>`
+runs automatic calibration, overrides scales explicitly, and serializes an
+encoded output for reuse as an initializer.
+
 * ``Quantize(X, scales?, zero_points?, offsets?, codebooks?, permutation?,
   forward?, inverse?, outliers?) -> Y`` takes a floating tensor and returns an
   ``EncodedValueProto``. Its required ``type`` attribute is a ``TypeProto``

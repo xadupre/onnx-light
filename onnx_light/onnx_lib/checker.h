@@ -25,7 +25,7 @@
 #include "onnx_lib/string_utils.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
-class ONNX_LIGHT_PROTO_API StructTypeCatalogue;
+class StructTypeCatalogue;
 }
 
 namespace ONNX_LIGHT_NAMESPACE::checker {

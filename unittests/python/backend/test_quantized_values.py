@@ -19,6 +19,79 @@ QuantizationFormat = runtime.QuantizationFormat
 
 
 class TestQuantizedValues(unittest.TestCase):
+    def test_graph_quantize_dequantize(self):
+        values = numpy.array([-8, -4, 0, 7, -16, 0, 8, 14], dtype=numpy.float32)
+        plan = runtime.make_quantization_plan(QuantizationFormat.INT4, values.size, 4)
+        destination = onnx.TypeProto()
+        destination.struct_type.CopyFrom(runtime.make_quantization_type(plan))
+        encode = helper.make_node("Quantize", ["X"], ["Q"], domain="ai.rt", type=destination)
+        self.assertEqual(
+            helper.get_attribute_value(encode.attribute[0]).SerializeToString(),
+            destination.SerializeToString(),
+        )
+        with self.assertRaises(TypeError):
+            helper.make_attribute("type", destination, attr_type=onnx.AttributeProto.INT)
+        decode = helper.make_node(
+            "Dequantize", ["Q"], ["Y"], domain="ai.rt", dtype=onnx.TensorProto.DOUBLE
+        )
+        graph = helper.make_graph(
+            [encode, decode],
+            "codecs",
+            [helper.make_tensor_value_info("X", onnx.TensorProto.FLOAT, [8])],
+            [helper.make_tensor_value_info("Y", onnx.TensorProto.DOUBLE, [8])],
+        )
+        model = helper.make_model(
+            graph, opset_imports=[helper.make_opsetid("", 21), helper.make_opsetid("ai.rt", 1)]
+        )
+        context = runtime.RuntimeContext()
+        context.set(
+            "X",
+            runtime.tensor_from_numpy("X", onnx.TensorProto.FLOAT, [8], values.view(numpy.uint8)),
+        )
+        runtime.RuntimeSession(model).run(context)
+        actual = numpy.from_dlpack(context.get("Y"))
+        self.assertEqual(actual.dtype, numpy.float64)
+        numpy.testing.assert_array_equal(actual, values)
+        model.graph.node[0].input.append("scales")
+        model.graph.input.append(
+            helper.make_tensor_value_info("scales", onnx.TensorProto.DOUBLE, [2])
+        )
+        scales = numpy.array([2, 4], dtype=numpy.float64)
+        context.set(
+            "scales",
+            runtime.tensor_from_numpy(
+                "scales", onnx.TensorProto.DOUBLE, [2], scales.view(numpy.uint8)
+            ),
+        )
+        runtime.RuntimeSession(model).run(context)
+        numpy.testing.assert_array_equal(
+            numpy.from_dlpack(context.get("Y")), [-8, -4, 0, 8, -16, 0, 8, 16]
+        )
+
+    def test_graph_encoded_initializer_and_catalogue(self):
+        values = numpy.array([-1, 0, 1], dtype=numpy.float32)
+        plan = runtime.make_quantization_plan(QuantizationFormat.INT4, 3)
+        encoded = runtime.quantize_tensor_proto(numpy_helper.from_array(values, name="Q"), plan)
+        declaration = onnx.StructTypeProto()
+        declaration.CopyFrom(encoded.struct_type)
+        declaration.type_id = 1
+        encoded.struct_type = onnx.StructTypeProto(type_ref=1)
+        decode = helper.make_node(
+            "Dequantize", ["Q"], ["Y"], domain="ai.rt", dtype=onnx.TensorProto.FLOAT
+        )
+        graph = helper.make_graph(
+            [decode],
+            "encoded_initializer",
+            [],
+            [helper.make_tensor_value_info("Y", onnx.TensorProto.FLOAT, [3])],
+        )
+        graph.encoded_initializer.append(encoded)
+        model = helper.make_model(graph, opset_imports=[helper.make_opsetid("ai.rt", 1)])
+        model.struct_types.append(declaration)
+        context = runtime.RuntimeContext()
+        runtime.RuntimeSession(model).run(context)
+        numpy.testing.assert_array_equal(numpy.from_dlpack(context.get("Y")), values)
+
     def roundtrip(self, values, plan):
         """Returns reconstructed values after serialization and source release."""
         source = numpy_helper.from_array(values, name="weight")

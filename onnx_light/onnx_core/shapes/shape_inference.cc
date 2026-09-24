@@ -913,10 +913,11 @@ void ShapesContext::ComputeShapeNode(const NodeProto &node) {
       GetLocalFunction(LocalFunctionKey(node.domain(), node.op_type())) != nullptr;
   const bool custom_inference =
       GetCustomShapeInferenceFunction(node.domain(), node.op_type()) != nullptr;
+  const bool structured_inference = AcceptsStructuredShapeInputs(node.domain(), node.op_type());
   for (const auto &input : node.input()) {
     const std::string name = input;
     EXT_ENFORCE_INVALID(
-        preserving || local_function || custom_inference ||
+        preserving || local_function || custom_inference || structured_inference ||
             (!HasEncodedValue(name) && (!HasType(name) || !HasStructuredType(GetType(name)))),
         "ComputeShapeNode: structured/encoded inference is unsupported for op '", node.op_type(),
         "'.");

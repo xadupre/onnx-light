@@ -89,4 +89,37 @@ void ComputeShapeDelayedInitializer(ShapesContext &ctx, const NodeProto &node) {
   ctx.Set(node.output(0), SymTensor(nullptr, out_dtype, std::move(out_shape)));
 }
 
+void ComputeShapeQuantize(ShapesContext &ctx, const NodeProto &node) {
+  CheckNodeOpAndOutput(node, "Quantize", "ComputeShapeQuantize");
+  EXT_ENFORCE_INVALID(node.input_size() >= 1 && node.input_size() <= 9 && node.output_size() == 1,
+                      "Quantize requires 1 to 9 inputs and one output.");
+  const auto *attribute = FindAttribute(node, "type");
+  EXT_ENFORCE_INVALID(attribute && attribute->type() == AttributeProto::TYPE_PROTO &&
+                          attribute->has_tp() && attribute->tp().has_struct_type(),
+                      "Quantize requires a 'type' attribute containing StructTypeProto.");
+  ctx.SetType(node.output(0), attribute->tp());
+}
+
+void ComputeShapeDequantize(ShapesContext &ctx, const NodeProto &node) {
+  CheckNodeOpAndOutput(node, "Dequantize", "ComputeShapeDequantize");
+  EXT_ENFORCE_INVALID(node.input_size() == 1 && node.output_size() == 1,
+                      "Dequantize requires one input and one output.");
+  const int64_t dtype = RequiredIntAttributeValue(node, "dtype", "Dequantize");
+  EXT_ENFORCE_INVALID(dtype == TensorProto::FLOAT || dtype == TensorProto::DOUBLE ||
+                          dtype == TensorProto::FLOAT16 || dtype == TensorProto::BFLOAT16,
+                      "Dequantize dtype must be FLOAT, DOUBLE, FLOAT16 or BFLOAT16.");
+  if (ctx.HasType(node.input(0)))
+    EXT_ENFORCE_INVALID(ctx.GetType(node.input(0)).has_struct_type(),
+                        "Dequantize requires a structured encoded input.");
+  TypeProto output;
+  if (ctx.HasEncodedValue(node.input(0))) {
+    const auto &encoded = ctx.GetEncodedValue(node.input(0));
+    EXT_ENFORCE_INVALID(encoded.has_logical_type() && encoded.logical_type().has_tensor_type(),
+                        "Dequantize input requires a logical tensor type.");
+    output = encoded.logical_type();
+  }
+  output.mutable_tensor_type()->set_elem_type(static_cast<int32_t>(dtype));
+  ctx.SetType(node.output(0), output);
+}
+
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::rt

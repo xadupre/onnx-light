@@ -440,6 +440,7 @@ private:
   std::unique_ptr<PreparedExecutionState> prepared_execution_state_;
   std::vector<PreparedKernel> kernels_;
   const GraphProto *initializer_graph_ = nullptr;
+  std::optional<StructTypeCatalogue> struct_type_catalogue_;
   std::unordered_set<std::string> immutable_initializer_names_;
   /// One immutable registry generation shared by every kernel in this session.
   /// Kernels copy resolved values during initialization; retaining the snapshot

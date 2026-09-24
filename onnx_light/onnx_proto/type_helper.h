@@ -160,6 +160,7 @@ enum class TensorType : uint8_t {
   kOptComplex64,
   kOptComplex128,
   kUndefined,
+  kStruct,
 };
 
 /**
@@ -413,6 +414,8 @@ inline constexpr const char *ToTypeString(TensorType type) {
     return "optional(tensor(complex128))";
   case TensorType::kUndefined:
     return "tensor(undefined)";
+  case TensorType::kStruct:
+    return "struct";
   }
   throw std::logic_error("Unknown TensorType.");
 }

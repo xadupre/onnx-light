@@ -17,6 +17,13 @@ using namespace ::onnx_light::core::backend_test; // NOLINT(google-build-using-n
 // invoked from ``CollectTestCases()``.
 // ---------------------------------------------------------------------------
 
+/// Registers graph-level Quantize calibration cases.
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterQuantizeCases(std::vector<TestCase> &registry,
+                                                         TestMode mode = TestMode::TEST);
+/// Registers Dequantize cases with encoded initializers.
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterDequantizeCases(std::vector<TestCase> &registry,
+                                                           TestMode mode = TestMode::TEST);
+
 /// Registers the ``QuantizeLinear`` backend test node case(s).
 ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterQuantizeLinearCases(std::vector<TestCase> &registry,
                                                                TestMode mode = TestMode::TEST);

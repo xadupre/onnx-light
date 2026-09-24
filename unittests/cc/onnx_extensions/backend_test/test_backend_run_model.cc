@@ -82,6 +82,7 @@ void RunModelViaSession(const ModelProto &model, RuntimeContext &rt) {
   }
   const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
   RuntimeSession session(plan);
+  session.SetInitializers(graph);
   session.Run(rt);
 }
 
@@ -465,6 +466,8 @@ TEST(BackendRunModel, TfIdfVectorizer) { RunBackendCasesFor("TfIdfVectorizer"); 
 TEST(BackendRunModel, Scan) { RunBackendCasesFor("Scan"); }
 
 // Quantization kernels.
+TEST(BackendRunModel, Dequantize) { RunBackendCasesFor("Dequantize"); }
+
 // The reference QuantizeLinear/DequantizeLinear kernels support per-tensor and
 // per-axis quantization with FLOAT or FLOAT16 inputs and scales, covering
 // integer (UINT8/INT8/UINT16/INT16), float8, and sub-byte

@@ -21,6 +21,87 @@ The implementation lives in ``onnx_core``, not ``lib_onnx_proto``, and does not
 require registered operator kernels. The Python module requires the runtime
 bindings, as do other Python reference-runtime utilities.
 
+Graph operators
+---------------
+
+``ai.rt::Quantize`` and ``ai.rt::Dequantize`` (opset 1) expose the native
+codecs as CPU kernels, with ``LightOpSchema`` declarations and shape inference.
+They are onnx-light extensions, not ONNX ``QuantizeLinear``/``DequantizeLinear``.
+
+* ``Quantize(X, scales?, zero_points?, offsets?, codebooks?, permutation?,
+  forward?, inverse?, outliers?) -> Y`` takes a floating tensor and returns an
+  ``EncodedValueProto``. Its required ``type`` attribute is a ``TypeProto``
+  containing the destination ``StructTypeProto``, inline or a model-catalogue
+  reference. The encoded value retains the input's logical shape and dtype.
+* ``Dequantize(X) -> Y`` takes an encoded value and returns a tensor.
+  Its required integer ``dtype`` attribute selects ``FLOAT``, ``DOUBLE``,
+  ``FLOAT16`` or ``BFLOAT16``. Conversion writes directly to that dtype and
+  rejects nonfinite results and overflow.
+
+``make_quantization_type(plan)`` returns a portable plan's storage descriptor
+without requiring learned codebook values or populated transform matrices.
+The type fixes block coverage and the sizes of tables, permutations and transforms;
+it does not prescribe their numerical contents. For ORT layouts, use the
+``struct_type`` of an existing ORT encoded value as the destination descriptor.
+Its matrix dimensions, scale dtype and zero-point storage must match the new result.
+
+When ``scales`` is omitted, ``Quantize`` calibrates **each block** from the
+actual input, after outlier removal, permutation and the forward transform:
+affine scales use the largest positive/negative ratio to the available code range,
+scalar codebooks use their minimum/maximum entries, and cast blocks use scale one.
+All-zero blocks use scale one. Default affine zero points are zero for signed
+codes and the midpoint for unsigned codes; offsets default to zero. Values
+outside a one-sided codebook/range still saturate or select the nearest entry.
+ORT calibration follows column/K-block order and the existing source-dtype
+rounding rules.
+
+Explicit scales, zero points and offsets accept floating scalar tensors or
+one-dimensional tensors with one value per block. They override calibration.
+Codebooks concatenate all blocks' tables in run order. FLOAT, DOUBLE, FLOAT16
+and BFLOAT16 parameter tensors are supported independently. Permutation and
+outlier indices are one-dimensional INT64 tensors. Transform inputs contain
+the declared square matrices in row-major order.
+
+The kernel supplies the existing fixed scalar tables, but **does not train
+learned codebooks or run GPTQ/AWQ optimization**. Learned codebooks must be
+provided; vector/additive codebooks also require explicit scales. Nonempty
+permutations, transforms and outlier indices must be supplied. Missing or
+incompatible parameters fail explicitly. ORT layouts reject transforms,
+outliers, codebooks and offsets.
+
+For example, this creates a graph that calibrates INT4 blocks automatically:
+
+.. code-block:: python
+
+    from onnx_light import onnx
+    from onnx_light.onnx import helper
+    from onnx_light.onnx_core.quantization import (
+        QuantizationFormat, make_quantization_plan, make_quantization_type,
+    )
+
+    plan = make_quantization_plan(QuantizationFormat.INT4, 8, block_size=4)
+    destination = onnx.TypeProto()
+    destination.struct_type.CopyFrom(make_quantization_type(plan))
+    encode = helper.make_node("Quantize", ["X"], ["Q"], domain="ai.rt", type=destination)
+    decode = helper.make_node(
+        "Dequantize", ["Q"], ["Y"], domain="ai.rt", dtype=onnx.TensorProto.FLOAT,
+    )
+    graph = helper.make_graph(
+        [encode, decode], "quantization",
+        [helper.make_tensor_value_info("X", onnx.TensorProto.FLOAT, [8])],
+        [helper.make_tensor_value_info("Y", onnx.TensorProto.FLOAT, [8])],
+    )
+    model = helper.make_model(
+        graph, opset_imports=[helper.make_opsetid("", 21), helper.make_opsetid("ai.rt", 1)],
+    )
+
+The runtime stores encoded edges in ``RuntimeContext.values()`` (Python
+``get_value``/``put_value``), not in its ordinary tensor map. Sessions load
+encoded initializers and resolve model-scoped types; child contexts inherit the
+catalogue. Shape inference records Quantize's physical structured type.
+Dequantize propagates a concrete encoded initializer's logical shape; otherwise
+only its requested dtype is known.
+
 Python
 ------
 
@@ -158,7 +239,7 @@ All profiles initially use
        ranges from ``-2**(b-1)`` to ``2**(b-1)-1``.
    * - ``block.scale``
      - Finite, strictly positive reconstruction multiplier, including for
-       codebooks and casts. It is never automatically estimated.
+       codebooks and casts. The explicit-plan APIs use it as supplied.
    * - ``block.zero_point``
      - Integer in the affine code range. Must be zero for codebooks and casts.
    * - ``block.offset``
@@ -239,6 +320,11 @@ C++
     RuntimeValue encoded = QuantizeTensor(input, plan);
     Tensor restored = DequantizeTensor(encoded);
 
+``MakeQuantizationType(plan)`` extracts the storage descriptor.
+``QuantizeTensor(input, type, parameters, catalogue)`` applies the same
+calibration as the graph operator; the overload taking a plan uses its
+parameters unchanged.
+
 ``QuantizeTensorProto`` and ``DequantizeTensorProto`` provide the corresponding
 message conversions. C++ dequantizers accept a ``StructTypeCatalogue`` for
 model-scoped references; Python dequantizers accept an optional ``model``.
@@ -295,7 +381,8 @@ Blocks cover the flattened tensor exactly, in order. Each can select:
 * **Cast:** a FLOAT, DOUBLE, FLOAT16 or BFLOAT16 scalar representation,
   with an optional multiplicative scale.
 
-Scales default to **one**, not to an automatically estimated calibration.
+With the explicit-plan APIs, scales default to **one**, not to an
+automatically estimated calibration.
 Callers supply their scales, integer zero points, real offsets, trained
 codebooks, rotations and selected outlier indices. Missing learned tables
 and required rotations raise an error. No GPTQ Hessian calculation, AWQ

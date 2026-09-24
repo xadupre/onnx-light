@@ -418,9 +418,9 @@ def make_attribute(
     elif isinstance(value, GraphProto):
         attr.g = value
         attr.type = AttributeProto.GRAPH
-    # elif isinstance(value, TypeProto):
-    #    attr.tp.CopyFrom(value)
-    #    attr.type = AttributeProto.TYPE_PROTO
+    elif isinstance(value, TypeProto):
+        attr.tp.CopyFrom(value)
+        attr.type = AttributeProto.TYPE_PROTO
     # Iterable cases
     elif isinstance(value, collections.abc.Iterable):
         value = list(value)
@@ -529,6 +529,8 @@ def get_attribute_value(attr: AttributeProto) -> Any:
         return attr.sparse_tensor
     if int(attr.type) == AttributeProto.GRAPH:
         return attr.g
+    if int(attr.type) == AttributeProto.TYPE_PROTO:
+        return attr.tp
     if int(attr.type) == AttributeProto.FLOATS:
         return list(attr.floats)
     if int(attr.type) == AttributeProto.INTS:

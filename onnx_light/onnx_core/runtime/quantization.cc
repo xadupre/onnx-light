@@ -1314,15 +1314,252 @@ RuntimeValue QuantizeTensor(const Tensor &tensor, const QuantizationPlan &plan) 
   return RuntimeValue(EncodeTensor(tensor, plan));
 }
 
+StructTypeProto MakeQuantizationType(const QuantizationPlan &plan) {
+  EXT_ENFORCE_INVALID(OrtBits(plan.format) == 0,
+                      "MakeQuantizationType requires a portable block plan.");
+  return Schema(plan);
+}
+
+namespace {
+
+std::vector<double> FloatingValues(const Tensor &tensor) {
+  size_t count = 1;
+  for (int64_t dim : tensor.shape) {
+    EXT_ENFORCE_INVALID(dim >= 0, "Quantization tensor dimensions must be nonnegative.");
+    count = Product(count, dim);
+  }
+  EXT_ENFORCE_INVALID(tensor.size_bytes() == Product(count, FloatBytes(tensor.data_type)) &&
+                          (count == 0 || tensor.bytes() != nullptr),
+                      "Invalid quantization tensor storage.");
+  std::vector<double> values(count);
+  for (size_t i = 0; i < count; ++i) {
+    values[i] = ReadFloat(tensor, i);
+    EXT_ENFORCE_INVALID(std::isfinite(values[i]), "Quantization inputs must be finite.");
+  }
+  return values;
+}
+
+std::vector<double> OptionalValues(const Tensor *tensor) {
+  return tensor ? FloatingValues(*tensor) : std::vector<double>{};
+}
+
+std::vector<int64_t> IndexValues(const Tensor *tensor, size_t count, const char *name) {
+  EXT_ENFORCE_INVALID(tensor != nullptr || count == 0, "Quantize requires explicit ", name, ".");
+  if (!tensor)
+    return {};
+  EXT_ENFORCE_INVALID(tensor->data_type == TensorProto::INT64 && tensor->shape.size() == 1 &&
+                          tensor->shape[0] == static_cast<int64_t>(count) &&
+                          tensor->size_bytes() == Product(count, sizeof(int64_t)) &&
+                          (count == 0 || tensor->bytes() != nullptr),
+                      "Invalid Quantize ", name, " tensor.");
+  std::vector<int64_t> result(count);
+  for (size_t i = 0; i < count; ++i)
+    result[i] = Load<int64_t>(tensor->bytes() + i * sizeof(int64_t));
+  return result;
+}
+
+void CheckParameterCount(const Tensor *tensor, const std::vector<double> &values, size_t count,
+                         const char *name) {
+  EXT_ENFORCE_INVALID(
+      !tensor || (tensor->shape.size() <= 1 && (values.size() == 1 || values.size() == count)),
+      "Quantize ", name, " must be scalar or have one value per block.");
+}
+
+double CalibratedScale(std::span<const double> values, const QuantizationBlockLayout &layout,
+                       const QuantizationBlockParameters &block) {
+  if (layout.method == QuantizationMethod::kCast)
+    return 1;
+  double low, high;
+  if (layout.method == QuantizationMethod::kAffine) {
+    const int64_t minimum = layout.signed_codes ? -(int64_t{1} << (layout.bits - 1)) : 0;
+    const int64_t maximum = (int64_t{1} << (layout.bits - (layout.signed_codes ? 1 : 0))) - 1;
+    low = minimum - block.zero_point;
+    high = maximum - block.zero_point;
+  } else {
+    EXT_ENFORCE_INVALID(layout.books == 1 && layout.vector_size == 1,
+                        "Quantize requires explicit scales for vector/additive codebooks.");
+    low = *std::min_element(block.codebook.begin(), block.codebook.end());
+    high = *std::max_element(block.codebook.begin(), block.codebook.end());
+  }
+  double scale = 0;
+  for (double value : values) {
+    const double centered = value - block.offset;
+    EXT_ENFORCE_INVALID(std::isfinite(centered), "Quantize calibration offset overflow.");
+    if (centered > 0 && high > 0)
+      scale = std::max(scale, centered / high);
+    if (centered < 0 && low < 0)
+      scale = std::max(scale, centered / low);
+  }
+  EXT_ENFORCE_INVALID(std::isfinite(scale), "Quantize calibration scale overflow.");
+  return scale == 0 ? 1 : scale;
+}
+
+QuantizationPlan CalibratePlan(const Tensor &tensor, const StructTypeProto &root,
+                               const QuantizationParameters &parameters) {
+  const std::string name = root.name().value();
+  EXT_ENFORCE_INVALID(name.starts_with(kPrefix), "Unsupported Quantize storage type.");
+  QuantizationPlan plan;
+  plan.format = ParseQuantizationFormat(std::string_view(name).substr(std::strlen(kPrefix)));
+  auto values = FloatingValues(tensor);
+  const bool ort = OrtBits(plan.format) != 0;
+  if (ort) {
+    const auto &field = GetField(root, 0, "parameters");
+    EXT_ENFORCE_INVALID(field.has_constant() && field.constant().int64_data().size() == 2 &&
+                            field.constant().int64_data(1) > 0 && tensor.shape.size() == 2,
+                        "Invalid ORT Quantize parameters.");
+    plan = MakeMatMulNBitsPlan(plan.format, tensor.shape[0], tensor.shape[1],
+                               field.constant().int64_data(1));
+    EXT_ENFORCE_INVALID(!parameters.codebooks && !parameters.permutation && !parameters.forward &&
+                            !parameters.inverse && !parameters.outliers && !parameters.offsets,
+                        "ORT Quantize does not accept codebooks, transforms, outliers or offsets.");
+  } else {
+    plan.permutation =
+        IndexValues(parameters.permutation,
+                    Extent(GetField(root, 1, "permutation"), TensorProto::INT64, 1), "permutation");
+    const size_t n = Extent(GetField(root, 2, "forward"), TensorProto::DOUBLE, 2);
+    EXT_ENFORCE_INVALID(n <= std::numeric_limits<uint32_t>::max(),
+                        "Quantize transform is too large.");
+    plan.transform_size = static_cast<uint32_t>(n);
+    plan.forward = OptionalValues(parameters.forward);
+    plan.inverse = OptionalValues(parameters.inverse);
+    plan.outliers = IndexValues(parameters.outliers,
+                                Extent(GetField(root, 4, "outlier_indices"), TensorProto::INT64, 1),
+                                "outliers");
+    const auto &blocks = GetField(root, 6, "blocks");
+    EXT_ENFORCE_INVALID(blocks.has_type() && blocks.type().has_struct_type() &&
+                            blocks.type().struct_type().has_structure(),
+                        "Invalid Quantize block structure.");
+    const auto &fields = blocks.type().struct_type().structure().field();
+    size_t count = 0;
+    for (size_t i = 1; i < fields.size(); ++i) {
+      const auto &field = fields[i];
+      EXT_ENFORCE_INVALID(field.has_type() && field.type().has_struct_type() &&
+                              field.type().struct_type().has_array(),
+                          "Invalid Quantize block run.");
+      const auto &array = field.type().struct_type().array();
+      EXT_ENFORCE_INVALID(array.element_type().has_struct_type() && array.dimension() > 0,
+                          "Invalid Quantize block array.");
+      auto layout = BlockParameters(array.element_type().struct_type());
+      EXT_ENFORCE_INVALID(layout.bits >= 1 && layout.bits <= 16,
+                          "Quantize block bits must be between 1 and 16.");
+      EXT_ENFORCE_INVALID(layout.count > 0 &&
+                              layout.count <= (values.size() - count) / array.dimension(),
+                          "Quantize blocks exceed the input size.");
+      auto defaults = MakeQuantizationPlan(plan.format, layout.count, layout.count);
+      auto block = defaults.runs[0].blocks[0];
+      if (layout.method != QuantizationMethod::kCodebook)
+        block.codebook.clear();
+      block.zero_point = 0;
+      if (layout.method == QuantizationMethod::kAffine)
+        block.zero_point = layout.signed_codes ? 0 : double(uint32_t{1} << (layout.bits - 1));
+      plan.runs.push_back(
+          {layout, std::vector<QuantizationBlockParameters>(array.dimension(), block)});
+      count += Product(layout.count, array.dimension());
+    }
+    EXT_ENFORCE_INVALID(count == values.size(), "Quantize blocks must cover the input exactly.");
+  }
+
+  size_t block_count = 0, table_count = 0;
+  for (const auto &run : plan.runs) {
+    block_count += run.blocks.size();
+    const size_t size = Product(run.blocks.size(), TableSize(run.layout));
+    EXT_ENFORCE_INVALID(size <= std::numeric_limits<size_t>::max() - table_count,
+                        "Quantize codebook size overflow.");
+    table_count += size;
+  }
+  const auto scales = OptionalValues(parameters.scales);
+  const auto zeros = OptionalValues(parameters.zero_points);
+  const auto offsets = OptionalValues(parameters.offsets);
+  const auto tables = OptionalValues(parameters.codebooks);
+  CheckParameterCount(parameters.scales, scales, block_count, "scales");
+  CheckParameterCount(parameters.zero_points, zeros, block_count, "zero_points");
+  CheckParameterCount(parameters.offsets, offsets, block_count, "offsets");
+  EXT_ENFORCE_INVALID(!parameters.codebooks || tables.size() == table_count,
+                      "Quantize codebooks must cover every codebook block.");
+  size_t index = 0, table_index = 0;
+  for (auto &run : plan.runs)
+    for (auto &block : run.blocks) {
+      if (parameters.scales)
+        block.scale = scales[scales.size() == 1 ? 0 : index];
+      if (parameters.zero_points)
+        block.zero_point = zeros[zeros.size() == 1 ? 0 : index];
+      if (parameters.offsets)
+        block.offset = offsets[offsets.size() == 1 ? 0 : index];
+      const size_t size = TableSize(run.layout);
+      if (parameters.codebooks)
+        block.codebook.assign(tables.begin() + table_index, tables.begin() + table_index + size);
+      EXT_ENFORCE_INVALID(block.codebook.size() == size,
+                          "Quantize requires explicit codebooks for this layout.");
+      if (!ort)
+        ValidateBlock(run.layout, block);
+      table_index += size;
+      ++index;
+    }
+  if (!ort) {
+    ValidatePlan(plan, values.size());
+    EXT_ENFORCE_INVALID(root.SerializeAsString() == Schema(plan).SerializeAsString(),
+                        "Quantize type does not match its versioned schema.");
+    for (int64_t outlier : plan.outliers)
+      values[outlier] = 0;
+    if (!plan.permutation.empty()) {
+      const auto original = values;
+      for (size_t i = 0; i < values.size(); ++i)
+        values[i] = original[plan.permutation[i]];
+    }
+    Transform(values, plan.forward, plan.transform_size);
+  }
+  if (!parameters.scales) {
+    size_t position = 0;
+    for (auto &run : plan.runs)
+      for (auto &block : run.blocks) {
+        if (ort) {
+          const size_t groups = CeilDiv(tensor.shape[0], run.layout.count);
+          const size_t column = position / groups, first = (position % groups) * run.layout.count;
+          std::vector<double> group;
+          for (size_t row = first;
+               row < std::min(first + run.layout.count, size_t(tensor.shape[0])); ++row)
+            group.push_back(values[row * tensor.shape[1] + column]);
+          block.scale = CalibratedScale(group, run.layout, block);
+          ++position;
+        } else {
+          block.scale =
+              CalibratedScale(std::span<const double>(values).subspan(position, run.layout.count),
+                              run.layout, block);
+          position += run.layout.count;
+        }
+      }
+  }
+  return plan;
+}
+
+} // namespace
+
+RuntimeValue QuantizeTensor(const Tensor &tensor, const StructTypeProto &type,
+                            const QuantizationParameters &parameters,
+                            const StructTypeCatalogue &catalogue) {
+  TypeProto declared;
+  *declared.mutable_struct_type() = type;
+  catalogue.ValidateType(declared);
+  StructTypeProto root = catalogue.Resolve(type);
+  root.clear_type_id();
+  auto result = EncodeTensor(tensor, CalibratePlan(tensor, root, parameters));
+  EXT_ENFORCE_INVALID(root.SerializeAsString() == result.struct_type().SerializeAsString(),
+                      "Quantize parameters do not match the requested storage type.");
+  *result.mutable_struct_type() = type;
+  catalogue.ValidateEncodedValue(result);
+  return RuntimeValue(std::move(result));
+}
+
 Tensor DequantizeTensor(const EncodedValueProto &value, const StructTypeCatalogue &catalogue,
-                        RawBufferAllocator *allocator) {
+                        RawBufferAllocator *allocator, int32_t output_dtype) {
   const auto decoded = DecodeValues(value, catalogue);
-  const size_t width = FloatBytes(decoded.type);
-  Tensor result = MakeOutputTensor(decoded.type, decoded.shape,
-                                   Product(decoded.values.size(), width), allocator);
+  const int32_t type = output_dtype == TensorProto::UNDEFINED ? decoded.type : output_dtype;
+  const size_t width = FloatBytes(type);
+  Tensor result =
+      MakeOutputTensor(type, decoded.shape, Product(decoded.values.size(), width), allocator);
   result.name = value.name().value();
   for (size_t i = 0; i < decoded.values.size(); ++i)
-    WriteFloat(result.mutable_bytes() + i * width, decoded.type, decoded.values[i]);
+    WriteFloat(result.mutable_bytes() + i * width, type, decoded.values[i]);
   return result;
 }
 

@@ -292,3 +292,20 @@ TEST(RuntimeContext, ReplacementPreservesAllocatorOwnershipAndTensorEvents) {
   EXPECT_TRUE(context.Remove("value"));
   EXPECT_EQ(allocator.TotalAllocatedSize(), 0u);
 }
+
+TEST(RuntimeContext, ReplacementAndRemovalPreserveAliasedNames) {
+  auto context = EventContext();
+  const std::string name(80, 'x');
+  context.PutSequence(name, Sequence{});
+  context.Put(context.GetSequence(name).name, Tensor::FromFloat(name, {1}, {42}));
+  ASSERT_TRUE(context.Has(name));
+  EXPECT_FLOAT_EQ(context.Get(name).AsFloat()[0], 42);
+  EXPECT_TRUE(context.Remove(context.Get(name).name));
+  EXPECT_EQ(context.events().back().name, name);
+  context.PutMap(name, Map{});
+  EXPECT_TRUE(context.Remove(context.GetMap(name).name));
+  EXPECT_FALSE(context.HasValue(name));
+  context.PutSequence(name, Sequence{});
+  EXPECT_TRUE(context.Remove(context.GetSequence(name).name));
+  EXPECT_FALSE(context.HasValue(name));
+}

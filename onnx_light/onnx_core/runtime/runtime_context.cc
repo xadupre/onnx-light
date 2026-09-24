@@ -327,7 +327,8 @@ void RuntimeContext::Set(const std::string &name, Tensor tensor, RuntimeEventKin
   tensors_[name] = std::move(tensor);
 }
 
-void RuntimeContext::Put(const std::string &name, Tensor tensor, RuntimeEventKind kind) {
+void RuntimeContext::Put(const std::string &value_name, Tensor tensor, RuntimeEventKind kind) {
+  const std::string name = value_name;
   if (!retains_output(name))
     EnsureAllocatorBacked(tensor, allocator_, kind, device_);
   if (events_enabled_) {
@@ -351,7 +352,8 @@ void RuntimeContext::PutValue(std::string name, RuntimeValue value, RuntimeEvent
   }
 }
 
-bool RuntimeContext::Remove(const std::string &name) {
+bool RuntimeContext::Remove(const std::string &value_name) {
+  const std::string name = value_name;
   size_t removed = values_.erase(name);
   removed += sequences_.erase(name);
   removed += maps_.erase(name);

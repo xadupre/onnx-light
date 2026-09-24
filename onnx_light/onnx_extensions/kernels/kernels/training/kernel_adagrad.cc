@@ -178,7 +178,7 @@ void Adagrad::Run(RuntimeContext &rt) {
   }
   k(R, T, Xs, Gs, Hs, outs, epsilon, decay_factor, norm_coefficient);
   for (int64_t i = 0; i < 2 * n; ++i) {
-    SetOutput(node, static_cast<int>(i), std::move(outs[static_cast<size_t>(i)]), rt.tensors());
+    SetOutput(node, static_cast<int>(i), std::move(outs[static_cast<size_t>(i)]), rt);
   }
 }
 

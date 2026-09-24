@@ -187,7 +187,7 @@ void MelWeightMatrix::Run(RuntimeContext &rt) {
   SetOutput(
       node, 0,
       k(num_mel_bins, dft_length, sample_rate, lower_edge_hertz, upper_edge_hertz, output_dtype),
-      rt.tensors());
+      rt);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

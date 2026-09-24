@@ -343,7 +343,7 @@ void AveragePool::Run(RuntimeContext &rt) {
   SetOutput(node, 0,
             k(x, a.kernel_shape, a.strides, a.pads, a.ceil_mode, count_include_pad, a.dilations,
               a.auto_pad, &rt),
-            rt.tensors());
+            rt);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

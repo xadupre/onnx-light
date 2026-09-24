@@ -2172,7 +2172,7 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
       if (input.empty()) {
         continue;
       }
-      rt.tensors()[input] = core::runtime::TensorFromProto(*const_tensors.at(input));
+      rt.Put(input, core::runtime::TensorFromProto(*const_tensors.at(input)));
     }
     core::runtime::RunNode(node, rt);
 

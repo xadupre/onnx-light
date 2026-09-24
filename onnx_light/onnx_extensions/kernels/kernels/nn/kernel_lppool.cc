@@ -254,7 +254,7 @@ void LpPool::Run(RuntimeContext &rt) {
   onnx_kernels::kernel::LpPool k(rt.kernel_ctx());
   SetOutput(node, 0,
             k(x, a.kernel_shape, a.strides, a.pads, p, a.ceil_mode, a.dilations, a.auto_pad, &rt),
-            rt.tensors());
+            rt);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

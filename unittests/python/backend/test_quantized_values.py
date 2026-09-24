@@ -506,6 +506,40 @@ class TestQuantizedValues(unittest.TestCase):
                         gc.collect()
                         self.assertEqual(bytes(inputs.weights.raw_data), original)
 
+    def test_matrix_shape_is_a_mutable_native_shape(self):
+        from onnx_light.onnx_core.quantization import Shape
+        from onnx_light.onnx_core import shape_inference
+
+        self.assertIs(Shape, shape_inference.Shape)
+        plan = runtime.make_matmul_nbits_plan(QuantizationFormat.ORT_MATMULNBITS_INT4, 2, 1, 16)
+        self.assertIsInstance(plan.matrix_shape, Shape)
+        self.assertEqual(list(plan.matrix_shape), [2, 1])
+        source = numpy_helper.from_array(numpy.array([[1], [2]], dtype=numpy.float32))
+        for dims in ([2, 1], (2, 1), Shape([2, 1])):
+            plan.matrix_shape = dims
+            self.assertEqual(plan.matrix_shape, Shape([2, 1]))
+            runtime.quantize_tensor_proto(source, plan)
+        assigned = Shape([2, 1])
+        plan.matrix_shape = assigned
+        assigned[0] = 9
+        self.assertEqual(list(plan.matrix_shape), [2, 1])
+        for invalid in (["K", 1], [2.5, 1], None):
+            with self.assertRaises(TypeError):
+                plan.matrix_shape = invalid
+            self.assertEqual(list(plan.matrix_shape), [2, 1])
+        with self.assertRaises(ValueError):
+            plan.matrix_shape = [1] * 17
+        self.assertEqual(list(plan.matrix_shape), [2, 1])
+        view = plan.matrix_shape
+        view[0] = 3
+        with self.assertRaisesRegex(ValueError, "shape"):
+            runtime.quantize_tensor_proto(source, plan)
+        del plan
+        gc.collect()
+        self.assertEqual(list(view), [3, 1])
+        view[0] = 2
+        self.assertEqual(list(view), [2, 1])
+
     def test_ort_rejects_nonzero_padding(self):
         for bits in (2, 4, 8):
             for mode in ("implicit", "packed", "floating"):

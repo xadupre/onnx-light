@@ -8,6 +8,7 @@ kernel prepacking. No profile performs calibration. See :doc:`/howto/quantized_v
 from ..onnx_py._onnxpykernels import runtime  # type: ignore[missing-import]
 
 QuantizationMethod = runtime.QuantizationMethod
+Shape = runtime.Shape
 QuantizationFormat = runtime.QuantizationFormat
 QuantizationBlockLayout = runtime.QuantizationBlockLayout
 QuantizationBlockParameters = runtime.QuantizationBlockParameters
@@ -33,6 +34,7 @@ __all__ = [
     "QuantizationMethod",
     "QuantizationPlan",
     "QuantizationRun",
+    "Shape",
     "dequantize_tensor",
     "dequantize_tensor_proto",
     "export_matmul_nbits_inputs",

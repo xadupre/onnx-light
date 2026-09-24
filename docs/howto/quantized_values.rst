@@ -800,6 +800,14 @@ and the attributes ``k``, ``n``, ``bits`` and ``block_size``.
 Use the tensors as initializers for a normal ``MatMulNBits`` node, leaving
 ``weight_prepacked`` unset. Inline layouts and model-catalogue references both work.
 
+``plan.matrix_shape`` is the native Python-visible ``Shape`` holding ``[K, N]``,
+also exported by ``onnx_light.onnx_core.shape_inference`` and
+``onnx_light.onnx_core.quantization``. Its getter returns a mutable view that
+keeps the plan alive; assignment accepts a ``Shape`` or an integer list/tuple
+and copies the dimensions. Use ``list(plan.matrix_shape)`` for a plain list.
+Changing this shape does not rebuild the plan's blocks; incompatible geometry
+is rejected when encoding.
+
 .. code-block:: python
 
     import numpy

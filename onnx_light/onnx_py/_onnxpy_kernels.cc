@@ -971,6 +971,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
   // KernelContext / OpsetId types and the TensorFromProto helper.
   // -----------------------------------------------------------------------
   auto rt_mod = m.def_submodule("runtime");
+  rt_mod.attr("Shape") =
+      nb::module_::import_("onnx_light.onnx_py._onnxpycore").attr("shape_inference").attr("Shape");
 
   nb::enum_<core::runtime::QuantizationMethod>(rt_mod, "QuantizationMethod")
       .value("AFFINE", core::runtime::QuantizationMethod::kAffine)
@@ -1063,7 +1065,21 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def_rw("format", &core::runtime::QuantizationPlan::format,
               nb::for_setter(nb::arg("value").noconvert()))
       .def_rw("runs", &core::runtime::QuantizationPlan::runs, nb::rv_policy::copy)
-      .def_rw("matrix_shape", &core::runtime::QuantizationPlan::matrix_shape)
+      .def_prop_rw(
+          "matrix_shape",
+          [](core::runtime::QuantizationPlan &plan) -> Shape & { return plan.matrix_shape; },
+          [](core::runtime::QuantizationPlan &plan, nb::handle shape) {
+            if (nb::isinstance<Shape>(shape))
+              plan.matrix_shape = nb::cast<const Shape &>(shape);
+            else {
+              std::vector<int64_t> dims;
+              if (!nb::try_cast(shape, dims))
+                throw nb::type_error("matrix_shape requires a Shape or an integer sequence.");
+              plan.matrix_shape = dims;
+            }
+          },
+          nb::rv_policy::reference_internal,
+          "Mutable Shape describing [K, N]; assignment accepts Shape or an integer sequence.")
       .def_rw("permutation", &core::runtime::QuantizationPlan::permutation)
       .def_rw("transform_size", &core::runtime::QuantizationPlan::transform_size)
       .def_rw("forward", &core::runtime::QuantizationPlan::forward)

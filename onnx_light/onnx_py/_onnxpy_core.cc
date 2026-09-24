@@ -4,6 +4,7 @@
 #include "onnx_core/compute/peak_memory.h"
 #include "onnx_core/compute/value_tags.h"
 #include "onnx_core/expressions/expressions.h"
+#include "onnx_core/runtime/memory/simple_tensor.h"
 #include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_core/shapes/shape_inference.h"
 #include "onnx_core/shapes/shapes_context.h"
@@ -397,6 +398,48 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       "``ApplyInferredShapesTo{Graph,Model}`` helpers, together with the value "
       "types (``SymDim``, ``SymShape``, ``SymTensor``) used to describe "
       "tensor descriptors stored in the context.";
+
+  using core::runtime::Shape;
+  const auto shape_index = [](const Shape &shape, int64_t index) {
+    if (index < 0)
+      index += static_cast<int64_t>(shape.size());
+    if (index < 0 || static_cast<uint64_t>(index) >= shape.size())
+      throw nb::index_error("Shape index out of range.");
+    return static_cast<size_t>(index);
+  };
+  nb::class_<Shape>(shape_mod, "Shape",
+                    "A concrete runtime shape with at most 16 integer dimensions. "
+                    "An empty shape represents a scalar.")
+      .def(nb::init<>())
+      .def(nb::init<const Shape &>(), nb::arg("shape"))
+      .def(nb::init<const std::vector<int64_t> &>(), nb::arg("dims"))
+      .def_prop_ro_static("max_rank", [](nb::handle) { return Shape::kMaxRank; })
+      .def(
+          "dims", [](const Shape &shape) { return std::vector<int64_t>(shape); },
+          "Returns a copy of the dimensions as a list.")
+      .def("rank", &Shape::size, "Returns the number of dimensions.")
+      .def("empty", &Shape::empty, "Returns whether this is a scalar shape.")
+      .def("append", &Shape::push_back, nb::arg("dim"), "Appends one integer dimension.")
+      .def(
+          "product", [](const Shape &shape) { return shape.product(0, shape.size(), "Python"); },
+          "Returns the checked dimension product, or one for a scalar.")
+      .def("__len__", &Shape::size)
+      .def("__iter__",
+           [](const Shape &shape) { return nb::iter(nb::cast(std::vector<int64_t>(shape))); })
+      .def("__getitem__", [shape_index](const Shape &shape,
+                                        int64_t index) { return shape[shape_index(shape, index)]; })
+      .def("__setitem__",
+           [shape_index](Shape &shape, int64_t index, int64_t value) {
+             shape[shape_index(shape, index)] = value;
+           })
+      .def("__copy__", [](const Shape &shape) { return Shape(shape); })
+      .def("__repr__",
+           [](const Shape &shape) {
+             return std::string("Shape(") +
+                    nb::cast<std::string>(nb::repr(nb::cast(std::vector<int64_t>(shape)))) + ")";
+           })
+      .def(nb::self == nb::self)
+      .def(nb::self != nb::self);
 
   // Convert an SymDim to a Python object (int when concrete, str otherwise).
   auto dim_to_object = [](const SymDim &d) -> nb::object {

@@ -52,10 +52,12 @@ class TestQuantizedValues(unittest.TestCase):
                     context.put_value("Y", encoded)
                     context.put_value("tensor_copy", encoded)
                 runtime.run_node(decode, context)
-                numpy.testing.assert_array_equal(context.get_value("Y"), values * multiplier)
+                numpy.testing.assert_array_equal(
+                    numpy.from_dlpack(context.get_value("Y")), values * multiplier
+                )
                 runtime.run_node(copy_tensor, context)
                 numpy.testing.assert_array_equal(
-                    context.get_value("tensor_copy"), values * multiplier
+                    numpy.from_dlpack(context.get_value("tensor_copy")), values * multiplier
                 )
         self.assertTrue(context.remove("Q"))
         with self.assertRaises(IndexError):

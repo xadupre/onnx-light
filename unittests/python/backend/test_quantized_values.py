@@ -140,6 +140,20 @@ class TestQuantizedValues(unittest.TestCase):
         with self.assertRaises(checker.ValidationError):
             checker.check_model(model)
 
+    def test_checker_quantize_type_attribute(self):
+        model, _ = self.make_encoded_initializer_model()
+        destination = onnx.TypeProto(struct_type=onnx.StructTypeProto(type_ref=1))
+        encode = helper.make_node("Quantize", ["X"], ["Q"], domain="ai.rt", type=destination)
+        decode = model.graph.node[0]
+        model.graph.node.clear()
+        model.graph.node.extend([encode, decode])
+        model.graph.encoded_initializer.clear()
+        model.graph.input.append(helper.make_tensor_value_info("X", onnx.TensorProto.FLOAT, [3]))
+        checker.check_model(model)
+        model.graph.node[0].attribute[0].tp.struct_type = onnx.StructTypeProto(type_ref=99)
+        with self.assertRaises(checker.ValidationError):
+            checker.check_model(model)
+
     def test_checker_nested_encoded_initializer(self):
         model, _ = self.make_encoded_initializer_model()
         conditional = helper.make_node(

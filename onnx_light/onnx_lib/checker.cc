@@ -632,6 +632,13 @@ void check_attribute(const AttributeProto &attr, const CheckerContext &ctx,
     check_sparse_tensor(attr.sparse_tensor(), ctx);
   }
 
+  if (attr.has_tp()) {
+    check_structured([&]() { ctx.get_struct_type_catalogue().ValidateType(attr.tp()); });
+  }
+  for (const auto &type : attr.type_protos()) {
+    check_structured([&]() { ctx.get_struct_type_catalogue().ValidateType(type); });
+  }
+
   if (attr.has_g()) {
     CheckerContext subgraph_ctx(ctx);
     subgraph_ctx.set_is_main_graph(false);

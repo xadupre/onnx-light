@@ -58,7 +58,7 @@ class TestCollectionPatterns(ExtTestCase):
     def optimize(self, model, pattern_name):
         """Optimizes a model and returns only the isolated pattern's rewrites."""
         builder = optimization.GraphBuilder(model)
-        graph = optimization.GraphGraph(builder, [pattern_name], use_global_patterns=False)
+        graph = optimization.GraphGraph(builder, [pattern_name])
         all_rewrites, report = graph.optimize(report=True)
         self.assertEqual(report.rewrites, len(all_rewrites))
         rewrites = [rewrite for rewrite in all_rewrites if rewrite.pattern_name == pattern_name]

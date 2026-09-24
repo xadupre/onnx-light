@@ -191,7 +191,7 @@ class TestPatternsMatmulNormalization(ExtTestCase):
             if schema_lookup
             else optimization.GraphBuilder(model, schema_lookup=None)
         )
-        graph = optimization.GraphGraph(builder, patterns, use_global_patterns=False)
+        graph = optimization.GraphGraph(builder, patterns)
         rewrites, report = graph.optimize(report=True)
         optimized = builder.to_onnx("model")
         if check_model:

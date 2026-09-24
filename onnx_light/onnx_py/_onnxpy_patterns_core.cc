@@ -114,9 +114,12 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
       .def("__repr__", &OptimizationReport::ToString);
 
   nb::class_<PatternOptimization, PyPatternOptimization>(builder_mod, "PatternOptimization")
-      .def(nb::init<int, std::string>(), nb::arg("priority") = 1, nb::arg("name") = "")
+      .def(nb::init<int, std::string, core::symbolic::Device>(), nb::arg("priority") = 1,
+           nb::arg("name") = "", nb::arg("device") = core::symbolic::Device::kUndefined)
       .def_prop_ro("name", &PatternOptimization::Name)
       .def_rw("priority", &PatternOptimization::priority)
+      .def_rw("device", &PatternOptimization::device,
+              "Exact target device, or Device.kUndefined for a device-independent pattern.")
       .def("fast_op_type", &PatternOptimization::FastOpType)
       .def(
           "result",
@@ -195,6 +198,8 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
           nb::arg("builder"), nb::arg("patterns"), nb::keep_alive<1, 2>())
       .def_prop_ro("builder", &GraphGraph::Builder, nb::rv_policy::reference_internal)
       .def_prop_ro("patterns", &GraphGraph::Patterns)
+      .def("set_target_device", &GraphGraph::SetTargetDevice, nb::arg("device"),
+           "Sets a target on the builder and its subgraphs, rejecting conflicting devices.")
       .def(
           "optimize",
           [](GraphGraph &graph, int max_iter, bool report) -> nb::object {

@@ -124,9 +124,7 @@ class TestGraphBuilder(ExtTestCase):
         original = source.to_onnx("model")
 
         builder = GraphBuilder(original)
-        graph = optimization.GraphGraph(
-            builder, optimization.standard_patterns(["Cast"]), use_global_patterns=False
-        )
+        graph = optimization.GraphGraph(builder, optimization.standard_patterns(["Cast"]))
         rewrites, report = graph.optimize(report=True)
         optimized_graph = builder.build_graph()
         replayed_graph = optimization.replay(original, rewrites)

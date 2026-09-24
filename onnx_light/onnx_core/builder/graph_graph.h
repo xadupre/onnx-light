@@ -61,7 +61,8 @@ public:
   /// Predicate that protects matching nodes from removal.
   using DoNotRemovePredicate = std::function<bool(const NodeProto &)>;
 
-  /// Builds the index from ``builder``. The builder must outlive the index.
+  /// Builds the index with registered device-independent patterns.
+  /// The builder must outlive the index; its device does not change this selection.
   explicit GraphGraph(GraphBuilder &builder);
 
   /// Builds the index and uses the supplied patterns in their given order.
@@ -73,6 +74,10 @@ public:
 
   /// Returns the builder being indexed and optimized.
   GraphBuilder &Builder() noexcept { return builder_; }
+
+  /// Sets a concrete target on this builder and its subgraphs.
+  /// Rejects conflicting existing devices before modifying any builder.
+  void SetTargetDevice(symbolic::Device device);
 
   /**
    * Applies patterns and cleanup passes until convergence.

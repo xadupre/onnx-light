@@ -36,8 +36,14 @@ void RegisterPattern(const std::string &name, PatternFactory factory);
 /// Returns the registered pattern names in registration order.
 std::vector<std::string> RegisteredPatternNames();
 
-/// Creates one pattern instance from every registered factory.
-std::vector<std::unique_ptr<PatternOptimization>> CreateRegisteredPatterns();
+/**
+ * Creates registered patterns, optionally filtering by target device.
+ *
+ * Without a filter, includes every pattern. With a filter, includes device-independent
+ * patterns and those targeting that exact device. kUndefined selects only independent ones.
+ */
+std::vector<std::unique_ptr<PatternOptimization>>
+CreateRegisteredPatterns(std::optional<symbolic::Device> device = std::nullopt);
 
 /**
  * Creates one registered pattern by name.

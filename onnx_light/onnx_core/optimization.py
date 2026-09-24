@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import TypeAlias
+import re
+from typing import Literal, TypeAlias
 
 from ..onnx_lib import GraphProto, ModelProto
 from ..onnx_py._onnxpycore import builder as _C  # type: ignore[attr-defined]
 from ..onnx_py import _onnxpypatterns as _patterns  # type: ignore[attr-defined]
 from .graph_builder import GraphBuilder, SchemaLookup, _default_schema_lookup
+from .shape_inference import Device
 
 PatternOptimization: TypeAlias = _C.PatternOptimization
 MatchResult: TypeAlias = _C.MatchResult
@@ -230,35 +232,84 @@ def render_rst_standard_patterns_table() -> str:
 
 
 class GraphGraph(_C.GraphGraph):
-    """Indexes a builder and runs globally or locally registered patterns.
+    """Indexes a builder and selects the patterns used for rewriting.
 
-    Global patterns are applied first. Patterns registered on ``builder`` then
-    replace global patterns sharing their name, and ``patterns`` passed here
-    have the highest precedence. Set ``use_global_patterns=False`` to start
-    from an empty registry.
+    ``patterns=None`` selects all registered device-independent patterns.
+    ``False`` selects none. A concrete ``Device`` includes independent patterns
+    and patterns targeting that exact device, and sets ``builder.device``;
+    a conflicting builder device raises ``ValueError``.
+
+    A string or compiled regex selects registered names using ``fullmatch``.
+    An iterable selects only its exact names and pattern instances. These
+    explicit selections can include device-specific patterns without changing
+    the builder device. Builder registrations override global registrations
+    before selection; repeated explicit names keep the last instance.
+    Disabling patterns does not disable the optimizer's cleanup passes.
     """
 
     def __init__(
         self,
         builder: GraphBuilder,
-        patterns: Iterable[str | PatternOptimization] | None = None,
-        *,
-        use_global_patterns: bool = True,
+        patterns: (
+            Iterable[str | PatternOptimization]
+            | str
+            | re.Pattern[str]
+            | Device
+            | Literal[False]
+            | None
+        ) = None,
     ) -> None:
-        selected = (
-            {pattern.name: pattern for pattern in registered_patterns()}
-            if use_global_patterns
-            else {}
-        )
+        available = {pattern.name: pattern for pattern in registered_patterns()}
         if hasattr(builder, "registered_patterns"):
-            selected.update((pattern.name, pattern) for pattern in builder.registered_patterns())
-        if patterns is not None:
+            available.update((pattern.name, pattern) for pattern in builder.registered_patterns())
+        target_device = None
+        if patterns is None:
+            selected = {
+                name: pattern
+                for name, pattern in available.items()
+                if pattern.device == Device.kUndefined
+            }
+        elif patterns is False:
+            selected = {}
+        elif isinstance(patterns, Device):
+            target_device = patterns
+            selected = {
+                name: pattern
+                for name, pattern in available.items()
+                if pattern.device in (Device.kUndefined, patterns)
+            }
+        elif isinstance(patterns, (str, re.Pattern)):
+            expression = re.compile(patterns)
+            if not isinstance(expression.pattern, str):
+                raise TypeError("The pattern selection regex must match strings, not bytes.")
+            selected = {
+                name: pattern
+                for name, pattern in available.items()
+                if expression.fullmatch(name) is not None
+            }
+        elif isinstance(patterns, Iterable):
+            selected = {}
             for pattern in patterns:
-                resolved = (
-                    _patterns.create_pattern(pattern) if isinstance(pattern, str) else pattern
-                )
+                if isinstance(pattern, str):
+                    resolved = (
+                        available[pattern]
+                        if pattern in available
+                        else _patterns.create_pattern(pattern)
+                    )
+                elif isinstance(pattern, PatternOptimization):
+                    resolved = pattern
+                else:
+                    raise TypeError(
+                        "A pattern list must contain names or PatternOptimization instances."
+                    )
                 selected[resolved.name] = resolved
+        else:
+            raise TypeError(
+                "patterns must be None, False, a Device, a regex, or an iterable of patterns."
+            )
         super().__init__(builder, list(selected.values()))
+        if target_device is not None:
+            self.set_target_device(target_device)
 
 
 def replay(

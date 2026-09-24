@@ -177,7 +177,7 @@ def _constant_capture_model(then_value, else_value):
 class TestCanonicalizationPatterns(ExtTestCase):
     def _optimize(self, model, pattern):
         builder = optimization.GraphBuilder(model)
-        graph = optimization.GraphGraph(builder, [pattern], use_global_patterns=False)
+        graph = optimization.GraphGraph(builder, [pattern])
         all_rewrites, report = graph.optimize(report=True)
         self.assertEqual(report.rewrites, len(all_rewrites))
         self.assertEqual(

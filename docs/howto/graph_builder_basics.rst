@@ -285,7 +285,6 @@ one :class:`~onnx_light.onnx_core.optimization.LocalRewriting` replaces it with
     graph = GraphGraph(
         builder,
         standard_patterns(["Cast"]),
-        use_global_patterns=False,
     )
     rewrites, report = graph.optimize(report=True)
     optimized_graph = builder.build_graph()

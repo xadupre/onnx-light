@@ -612,7 +612,7 @@ public:
   /// outputs and nested local functions / subgraphs.
   std::string ToString() const;
 
-  /// Logical device used for the peak-memory analysis run by the finalizers.
+  /// Logical target for pattern matching, constant folding and peak-memory analysis.
   void set_device(Device device) noexcept { device_ = device; }
   Device device() const noexcept { return device_; }
 

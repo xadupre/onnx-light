@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <chrono>
 #include <set>
+#include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -91,7 +92,8 @@ void RecordNoMatch(PatternOptimizationStatistics &statistics, std::string_view s
 
 } // namespace
 
-GraphGraph::GraphGraph(GraphBuilder &builder) : GraphGraph(builder, CreateRegisteredPatterns()) {}
+GraphGraph::GraphGraph(GraphBuilder &builder)
+    : GraphGraph(builder, CreateRegisteredPatterns(symbolic::Device::kUndefined)) {}
 
 GraphGraph::GraphGraph(GraphBuilder &builder,
                        std::vector<std::unique_ptr<PatternOptimization>> patterns,
@@ -136,7 +138,25 @@ GraphGraph::GraphGraph(GraphBuilder &builder,
                        std::size_t parent_position_limit)
     : builder_(builder), patterns_(patterns), do_not_remove_(std::move(do_not_remove)),
       parent_graph_(parent_graph), parent_position_limit_(parent_position_limit) {
+  if (builder_.device() == symbolic::Device::kUndefined)
+    builder_.set_device(parent_graph_->builder_.device());
   Rebuild();
+}
+
+void GraphGraph::SetTargetDevice(symbolic::Device device) {
+  if (device != symbolic::Device::kCPU && !symbolic::IsGPU(device))
+    throw std::invalid_argument("Pattern selection requires a concrete device.");
+  std::vector<GraphBuilder *> builders{&builder_};
+  for (size_t index = 0; index < builders.size(); ++index) {
+    const auto &builder = *builders[index];
+    if (builder.device() != symbolic::Device::kUndefined && builder.device() != device)
+      throw std::invalid_argument("Pattern device conflicts with builder device in '" +
+                                  builder.name() + "'.");
+    for (const auto &subgraph : builder.subgraphs_)
+      builders.push_back(subgraph.get());
+  }
+  for (auto *builder : builders)
+    builder->set_device(device);
 }
 
 void GraphGraph::Rebuild() {

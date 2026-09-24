@@ -15,6 +15,7 @@
 #include <utility>
 #include <vector>
 
+#include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx.h"
 
 namespace ONNX_LIGHT_NAMESPACE::core::builder {
@@ -177,9 +178,10 @@ struct MatchResult {
 /// Stateless interface implemented by graph-rewriting patterns.
 class PatternOptimization {
 public:
-  /// Creates a pattern with the given optimization priority.
-  explicit PatternOptimization(int priority = 1, std::string name = {})
-      : priority(priority), name_(std::move(name)) {}
+  /// Creates a pattern; kUndefined marks device-independent patterns.
+  explicit PatternOptimization(int priority = 1, std::string name = {},
+                               symbolic::Device device = symbolic::Device::kUndefined)
+      : priority(priority), device(device), name_(std::move(name)) {}
 
   virtual ~PatternOptimization() = default;
 
@@ -205,6 +207,9 @@ public:
 
   /// Priority used by the optimization driver.
   int priority;
+
+  /// Exact target device, or kUndefined for a device-independent pattern.
+  symbolic::Device device;
 
 protected:
   /**

@@ -2,8 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/builder/graph_graph.h"
 #include "onnx_core/builder/pattern_registry.h"
 
+#include <algorithm>
 #include <memory>
 
 #include <gtest/gtest.h>
@@ -15,7 +17,9 @@ namespace {
 
 class CustomPattern final : public core::builder::PatternOptimization {
 public:
-  CustomPattern() : PatternOptimization(1, "test.CustomPattern") {}
+  explicit CustomPattern(std::string name = "test.CustomPattern",
+                         core::symbolic::Device device = core::symbolic::Device::kUndefined)
+      : PatternOptimization(1, std::move(name), device) {}
 
   core::builder::MatchResult Match(core::builder::GraphGraph &, const NodeProto &) const override {
     return {};
@@ -58,6 +62,51 @@ TEST(PatternRegistry, RegistersAndCreatesCustomPattern) {
   ASSERT_NE(by_name_with_priority, nullptr);
   EXPECT_EQ(by_name_with_priority->Name(), "test.CustomPattern");
   EXPECT_EQ(by_name_with_priority->priority, 7);
+}
+
+TEST(PatternRegistry, FiltersDeviceSpecificPatterns) {
+  using core::symbolic::Device;
+  core::builder::RegisterPattern("test.CPUOnly", []() {
+    return std::make_unique<CustomPattern>("test.CPUOnly", Device::kCPU);
+  });
+  core::builder::RegisterPattern("test.GPUOnly", []() {
+    return std::make_unique<CustomPattern>("test.GPUOnly", Device::kGPU0);
+  });
+  const auto all = core::builder::CreateRegisteredPatterns();
+  const auto generic = core::builder::CreateRegisteredPatterns(Device::kUndefined);
+  EXPECT_EQ(all.size(), generic.size() + 2);
+  for (const auto &pattern : generic)
+    EXPECT_EQ(pattern->device, Device::kUndefined);
+  for (Device device : {Device::kCPU, Device::kGPU0}) {
+    const auto selected = core::builder::CreateRegisteredPatterns(device);
+    EXPECT_EQ(selected.size(), generic.size() + 1);
+    EXPECT_EQ(std::count_if(selected.begin(), selected.end(),
+                            [device](const auto &pattern) { return pattern->device == device; }),
+              1);
+    core::builder::GraphBuilder builder("device_patterns");
+    builder.set_device(device);
+    core::builder::GraphGraph graph(builder);
+    EXPECT_EQ(graph.Patterns().size(), generic.size());
+    EXPECT_EQ(builder.device(), device);
+  }
+  const auto explicit_pattern = core::builder::CreateRegisteredPattern("test.GPUOnly");
+  EXPECT_EQ(explicit_pattern->device, Device::kGPU0);
+}
+
+TEST(PatternRegistry, RecursiveOptimizationInheritsOnlyUndefinedDevices) {
+  using core::symbolic::Device;
+  core::builder::GraphBuilder builder("device_inheritance");
+  builder.set_device(Device::kGPU0);
+  auto &inherited = builder.MakeSubgraph("inherited");
+  auto &explicit_cpu = builder.MakeSubgraph("explicit_cpu");
+  explicit_cpu.set_device(Device::kCPU);
+  auto &grandchild = explicit_cpu.MakeSubgraph("grandchild");
+  core::builder::GraphGraph graph(
+      builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{});
+  graph.Optimize();
+  EXPECT_EQ(inherited.device(), Device::kGPU0);
+  EXPECT_EQ(explicit_cpu.device(), Device::kCPU);
+  EXPECT_EQ(grandchild.device(), Device::kCPU);
 }
 
 TEST(PatternRegistry, RejectsDuplicateName) {

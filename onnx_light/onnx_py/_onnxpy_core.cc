@@ -2196,7 +2196,7 @@ void AddOnnxPyBuilder(nb::module_ &m) {
       .def_prop_rw(
           "device", [](const GraphBuilder &self) { return self.device(); },
           [](GraphBuilder &self, Device device) { self.set_device(device); },
-          "Logical device used for the peak-memory analysis at finalisation.")
+          "Logical target for pattern matching, constant folding and peak-memory analysis.")
       .def("to_graph", &GraphBuilder::ToGraph, "Returns the finalised GraphProto.")
       .def("to_model", &GraphBuilder::ToModel, nb::arg("ir_version") = 0,
            "Returns the finalised graph wrapped in a ModelProto.")

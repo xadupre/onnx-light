@@ -213,6 +213,11 @@ Invalid parameters, missing codebooks/transforms, nonfinite values and
 malformed payloads raise ``ValueError``. Affine values outside the code
 range are clipped, not rejected: choose scales deliberately and measure
 reconstruction error on representative data.
+Encoding rejects codes whose reconstruction would be nonfinite or overflow
+the logical output dtype. For portable profiles this check follows the inverse
+transform, permutation and outlier restoration; wider intermediate values are
+allowed when the final reconstruction fits. ORT profiles use the scales and
+zero points rounded to the source dtype for this check.
 
 An encoded message is not a drop-in tensor initializer for an ordinary
 ``MatMul`` or ``Attention``. Dequantize it first or supply an operator whose

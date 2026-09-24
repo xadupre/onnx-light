@@ -628,6 +628,18 @@ void DecodeBlock(ByteReader &payload, const QuantizationBlockLayout &layout,
   }
 }
 
+void RestoreValues(std::vector<double> &values, const QuantizationPlan &plan,
+                   const std::vector<double> &exceptions) {
+  Transform(values, plan.inverse, plan.transform_size);
+  if (!plan.permutation.empty()) {
+    const auto reordered = values;
+    for (size_t i = 0; i < values.size(); ++i)
+      values[plan.permutation[i]] = reordered[i];
+  }
+  for (size_t i = 0; i < plan.outliers.size(); ++i)
+    values[plan.outliers[i]] = exceptions[i];
+}
+
 const Field &GetField(const StructTypeProto &type, size_t index, const char *name) {
   EXT_ENFORCE_INVALID(type.has_structure() && index < type.structure().field().size(),
                       "Invalid quantization structure.");
@@ -971,6 +983,7 @@ EncodedValueProto EncodeOrtTensor(const Tensor &tensor, const QuantizationPlan &
                                : static_cast<long double>(value) / scales[index] + zeros[index];
         codes[j] = static_cast<uint32_t>(NearestEven(
             static_cast<double>(std::clamp(normalized, 0.L, static_cast<long double>(maximum)))));
+        RoundFloat((codes[j] - zeros[index]) * scales[index], storage.type);
       }
       Pack(payload, codes, storage.bits, false);
     }
@@ -1034,6 +1047,7 @@ EncodedValueProto EncodeTensor(const Tensor &tensor, const QuantizationPlan &pla
     payload.Put(static_cast<uint64_t>(index), 8);
   for (double value : exceptions)
     payload.PutDouble(value);
+  const size_t blocks_start = payload.position;
   size_t offset = 0;
   for (const auto &run : plan.runs)
     for (const auto &block : run.blocks) {
@@ -1041,6 +1055,18 @@ EncodedValueProto EncodeTensor(const Tensor &tensor, const QuantizationPlan &pla
       offset += run.layout.count;
     }
   payload.Finish();
+  // Reuses the numerical workspace and the decoder's arithmetic without copying the payload.
+  values.clear();
+  ByteReader reconstruction{payload.data, blocks_start};
+  for (const auto &run : plan.runs)
+    for (const auto &block : run.blocks) {
+      reconstruction.position += 24 + Product(block.codebook.size(), sizeof(double));
+      DecodeBlock(reconstruction, run.layout, block, values);
+    }
+  RestoreValues(values, plan, exceptions);
+  std::array<uint8_t, sizeof(double)> scratch;
+  for (double value : values)
+    WriteFloat(scratch.data(), tensor.data_type, value);
   *result.mutable_struct_type() = Schema(plan);
   SetLogicalTensor(result, tensor);
   return result;
@@ -1241,14 +1267,7 @@ DecodedValues DecodeValues(const EncodedValueProto &encoded, const StructTypeCat
   EXT_ENFORCE_INVALID(actual.SerializeAsString() == expected.SerializeAsString(),
                       "Quantization descriptor does not match its versioned schema.");
   EXT_ENFORCE_INVALID(payload.position == payload.data.size(), "Trailing quantization payload.");
-  Transform(values, plan.inverse, plan.transform_size);
-  if (!plan.permutation.empty()) {
-    const auto reordered = values;
-    for (size_t i = 0; i < count; ++i)
-      values[plan.permutation[i]] = reordered[i];
-  }
-  for (size_t i = 0; i < plan.outliers.size(); ++i)
-    values[plan.outliers[i]] = exceptions[i];
+  RestoreValues(values, plan, exceptions);
   return {std::move(header.shape), header.type, std::move(values)};
 }
 

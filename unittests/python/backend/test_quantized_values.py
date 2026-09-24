@@ -125,6 +125,42 @@ class TestQuantizedValues(unittest.TestCase):
                     self.assertEqual(result.shape, source.shape)
                     numpy.testing.assert_array_equal(result, source)
 
+    def test_encoding_rejects_affine_reconstruction_overflow(self):
+        for dtype, exponent in ((numpy.float16, 15), (numpy.float32, 127), (numpy.float64, 1023)):
+            scale = float(2**exponent)
+            formats = [QuantizationFormat.INT4]
+            if dtype != numpy.float64:
+                formats += [
+                    QuantizationFormat.ORT_MATMULNBITS_INT2,
+                    QuantizationFormat.ORT_MATMULNBITS_INT4,
+                    QuantizationFormat.ORT_MATMULNBITS_INT8,
+                ]
+            for format_value in formats:
+                with self.subTest(dtype=dtype, format=format_value):
+                    values = numpy.array([[1.5 * scale]], dtype=dtype)
+                    source = numpy_helper.from_array(values)
+                    original = source.SerializeToString()
+                    plan = (
+                        runtime.make_quantization_plan(format_value, 1)
+                        if format_value == QuantizationFormat.INT4
+                        else runtime.make_matmul_nbits_plan(format_value, 1, 1, 16)
+                    )
+                    run = plan.run(0)
+                    block = run.block(0)
+                    block.scale = scale
+                    block.zero_point = 0
+                    run.set_block(0, block)
+                    plan.set_run(0, run)
+                    with self.assertRaisesRegex(ValueError, "overflow|nonfinite"):
+                        runtime.quantize_tensor_proto(source, plan)
+                    self.assertEqual(source.SerializeToString(), original)
+                    block.scale = scale / 2
+                    run.set_block(0, block)
+                    plan.set_run(0, run)
+                    encoded = runtime.quantize_tensor_proto(source, plan)
+                    decoded = runtime.dequantize_tensor_proto(encoded)
+                    numpy.testing.assert_array_equal(numpy_helper.to_array(decoded), values)
+
     def test_proto_metadata_presence(self):
         values = numpy.array([[1], [2]], dtype=numpy.float32)
         plans = [

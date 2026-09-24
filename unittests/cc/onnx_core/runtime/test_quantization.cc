@@ -473,6 +473,70 @@ TEST(Quantization, RejectsCorruptPayloadAndSchema) {
   EXPECT_THROW(DequantizeTensor(RuntimeValue(source)), std::invalid_argument);
 }
 
+TEST(Quantization, RejectsAffineReconstructionOverflowDuringEncoding) {
+  for (int32_t type :
+       {TensorProto::FLOAT16, TensorProto::BFLOAT16, TensorProto::FLOAT, TensorProto::DOUBLE}) {
+    SCOPED_TRACE(type);
+    const double scale = std::ldexp(1., type == TensorProto::FLOAT16  ? 15
+                                        : type == TensorProto::DOUBLE ? 1023
+                                                                      : 127);
+    const auto source = [type](double value) {
+      if (type == TensorProto::DOUBLE)
+        return Tensor::FromDouble("", {1, 1}, {value});
+      if (type == TensorProto::FLOAT)
+        return Tensor::FromFloat("", {1, 1}, {static_cast<float>(value)});
+      if (type == TensorProto::FLOAT16)
+        return MakeFloat16Tensor("", {1, 1}, {static_cast<float>(value)});
+      return MakeBfloat16Tensor("", {1, 1}, {static_cast<float>(value)});
+    };
+    for (double sign : {-1., 1.}) {
+      auto plan = MakeQuantizationPlan(QuantizationFormat::kInt4, 1);
+      plan.runs[0].blocks[0].scale = scale;
+      const auto input = source(sign * 1.5 * scale);
+      EXPECT_THROW(QuantizeTensor(input, plan), std::invalid_argument);
+      plan.runs[0].blocks[0].scale = scale / 2;
+      EXPECT_NO_THROW(DequantizeTensor(QuantizeTensor(input, plan)));
+    }
+    if (type == TensorProto::DOUBLE)
+      continue;
+    for (auto format :
+         {QuantizationFormat::kOrtMatmulnbitsInt2, QuantizationFormat::kOrtMatmulnbitsInt4,
+          QuantizationFormat::kOrtMatmulnbitsInt8}) {
+      SCOPED_TRACE(QuantizationFormatName(format));
+      auto plan = MakeMatMulNBitsPlan(format, 1, 1, 16);
+      plan.runs[0].blocks[0].scale = scale;
+      plan.runs[0].blocks[0].zero_point = 0;
+      const auto input = source(1.5 * scale);
+      EXPECT_THROW(QuantizeTensor(input, plan), std::invalid_argument);
+      plan.runs[0].blocks[0].scale = scale / 2;
+      EXPECT_NO_THROW(DequantizeTensor(QuantizeTensor(input, plan)));
+    }
+  }
+}
+
+TEST(Quantization, ChecksReconstructionAfterInverseTransformsAndOutlierRestoration) {
+  const auto input = MakeFloat16Tensor("", {1}, {49152});
+  auto plan = MakeQuantizationPlan(QuantizationFormat::kInt4, 1);
+  plan.runs[0].blocks[0].scale = 32768;
+  plan.transform_size = 1;
+  plan.forward = {0.5};
+  plan.inverse = {2};
+  EXPECT_THROW(QuantizeTensor(input, plan), std::invalid_argument);
+  plan.forward = {2};
+  plan.inverse = {0.5};
+  const auto decoded = DequantizeTensor(QuantizeTensor(input, plan));
+  EXPECT_EQ(std::memcmp(decoded.bytes(), input.bytes(), input.size_bytes()), 0);
+
+  const auto outlier_input = MakeFloat16Tensor("", {2}, {49152, 1});
+  plan = MakeQuantizationPlan(QuantizationFormat::kInt4, 2, 1);
+  plan.permutation = {1, 0};
+  plan.outliers = {0};
+  plan.runs[0].blocks[1].scale = 1e308;
+  plan.runs[0].blocks[1].offset = 5e307;
+  const auto restored = DequantizeTensor(QuantizeTensor(outlier_input, plan));
+  EXPECT_EQ(std::memcmp(restored.bytes(), outlier_input.bytes(), outlier_input.size_bytes()), 0);
+}
+
 TEST(Quantization, RejectsNonfiniteInputsAndUnloadedExternalData) {
   const auto source = Tensor::FromFloat("", {1}, {std::numeric_limits<float>::quiet_NaN()});
   EXPECT_THROW(QuantizeTensor(source, MakeQuantizationPlan(QuantizationFormat::kInt4, 1)),

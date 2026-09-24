@@ -55,7 +55,7 @@ class TestPatternsReshape(ExtTestCase):
         expected = ReferenceEvaluator(model).run(None, feeds)
 
         builder = optimization.GraphBuilder(model)
-        graph = optimization.GraphGraph(builder, patterns, use_global_patterns=False)
+        graph = optimization.GraphGraph(builder, patterns)
         rewrites = graph.optimize()
         optimized = builder.to_onnx("model")
         checker.check_model(optimized)

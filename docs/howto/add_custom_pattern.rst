@@ -114,7 +114,8 @@ Select the pattern for one optimizer
 -------------------------------------
 
 Passing pattern instances directly to ``GraphGraph`` keeps them local to that
-optimizer; nothing is shared globally.
+optimizer; nothing is shared globally. The list is exclusive: it does not
+implicitly include global or builder registrations.
 
 .. tab-set::
 
@@ -126,7 +127,7 @@ optimizer; nothing is shared globally.
           from onnx_light.onnx_core.optimization import GraphBuilder, GraphGraph
 
           builder_ = GraphBuilder(model)
-          graph = GraphGraph(builder_, [NegNegPattern()])
+          graph = GraphGraph(builder_, patterns=[NegNegPattern()])
           rewrites = graph.optimize()
 
    .. tab-item:: C++
@@ -142,9 +143,9 @@ optimizer; nothing is shared globally.
 Register the pattern globally
 -------------------------------
 
-A registered factory makes the pattern available to every new ``GraphGraph``
-built without an explicit pattern list, alongside (or overriding, by name) the
-standard patterns.
+A registered pattern becomes available for selection. Device-independent
+patterns are included by default, alongside the standard patterns. A
+device-specific pattern requires a device selector or an explicit list or regex.
 
 .. tab-set::
 
@@ -167,7 +168,7 @@ standard patterns.
       builder (``builder_.register_pattern(NegNegPattern())``); see
       "Pattern registration" in
       :doc:`/api/python/onnx_core/optimization`
-      for the full precedence rules (global < builder < ``GraphGraph``).
+      for the selection rules and name-override precedence.
 
    .. tab-item:: C++
       :sync: cpp
@@ -184,6 +185,21 @@ standard patterns.
       already-registered name. ``examples/register_custom_pattern`` is a
       complete, standalone CMake project exercising both the direct and the
       registered selection modes.
+
+Declare a target device
+-----------------------
+
+Patterns are device-independent by default. A Python subclass can pass
+``device=Device.kCPU`` or ``device=Device.kGPU0`` to ``PatternOptimization.__init__``,
+with ``Device`` imported from ``onnx_light.onnx_core.shape_inference``.
+In C++, pass the corresponding ``core::symbolic::Device`` as the third
+``PatternOptimization`` constructor argument.
+
+``GraphGraph(builder, patterns=Device.kCPU)`` includes independent and CPU-specific
+patterns and assigns that target to the builder. An already-defined, different
+builder device is an error. A list or regex can deliberately select a
+device-specific pattern without modifying the target. Declaring a device controls
+automatic selection, not whether a caller may explicitly run the pattern.
 
 Set the priority
 -----------------

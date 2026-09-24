@@ -33,9 +33,7 @@ def _make_model(nodes, inputs, outputs, initializers=(), *, opset=18):
 def _optimize(model, pattern_names):
     """Runs only the requested patterns and returns the optimized model."""
     builder = optimization.GraphBuilder(model)
-    graph = optimization.GraphGraph(
-        builder, optimization.standard_patterns(pattern_names), use_global_patterns=False
-    )
+    graph = optimization.GraphGraph(builder, optimization.standard_patterns(pattern_names))
     rewrites = graph.optimize()
     return builder.to_onnx("model"), [rewrite.pattern_name for rewrite in rewrites]
 

@@ -59,9 +59,7 @@ def _make_model(dtype, *, onesided, frame_length):
 
 def _optimize(model):
     builder = optimization.GraphBuilder(model)
-    graph = optimization.GraphGraph(
-        builder, [optimization.STFTFusionPattern()], use_global_patterns=False
-    )
+    graph = optimization.GraphGraph(builder, [optimization.STFTFusionPattern()])
     rewrites = graph.optimize()
     return builder.to_onnx("model"), rewrites
 

@@ -49,9 +49,7 @@ def _optimize(model, pattern_names, *, schema_lookup="default"):
         if schema_lookup == "default"
         else optimization.GraphBuilder(model, schema_lookup=schema_lookup)
     )
-    graph = optimization.GraphGraph(
-        builder, optimization.standard_patterns(pattern_names), use_global_patterns=False
-    )
+    graph = optimization.GraphGraph(builder, optimization.standard_patterns(pattern_names))
     rewrites = graph.optimize()
     optimized = builder.to_onnx("model")
     _assert_topological(optimized.graph)

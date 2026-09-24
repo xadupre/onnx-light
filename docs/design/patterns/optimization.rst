@@ -34,7 +34,6 @@ type and constant queries) and drives a match/apply loop:
     graph = GraphGraph(
         builder,
         standard_patterns(["Cast"]),
-        use_global_patterns=False,
     )
     rewrites, report = graph.optimize(report=True)
     optimized_model = builder.to_onnx("model")
@@ -59,18 +58,31 @@ records every name it hands out and never reuses one.
 Pattern registration
 --------------------
 
-Patterns use the same global-plus-local model as shape functions.
-Registries are merged by the stable :attr:`PatternOptimization.name`; a
-more local entry replaces an entry with the same name:
+Available registries are merged by the stable :attr:`PatternOptimization.name`;
+the ``patterns`` selector then chooses which entries to run:
 
-* **global** patterns (:func:`register_pattern`) are used by every new
+* **global** patterns (:func:`register_pattern`) are available to every new
   ``GraphGraph``; the standard ONNX patterns are registered globally when
   the module is imported;
 * **builder** patterns (``GraphBuilder.register_pattern``) override a
   global pattern for optimizers built over that builder;
-* **graph** patterns (``GraphGraph(builder, patterns=[...])``) have the
-  highest precedence and are retained for that optimizer, including
-  recursive subgraphs.
+* **graph** patterns (``GraphGraph(builder, patterns=[...])``) form an exclusive
+  selection. Explicit instances override earlier entries with the same name
+  and are retained for that optimizer, including recursive subgraphs.
+
+By default only device-independent patterns are selected. ``patterns=False``
+disables patterns without disabling cleanup. A concrete ``Device`` selects
+independent patterns and patterns targeting that exact device, and sets
+``builder.device`` unless it conflicts with an already-defined target.
+A regex selects available names using ``fullmatch``. Regexes and lists can
+explicitly select device-specific patterns and leave the builder device unchanged.
+See :mod:`onnx_light.onnx_core.optimization` for the selector and migration details.
+
+In C++, ``GraphGraph(builder)`` likewise selects only device-independent
+registered patterns. ``CreateRegisteredPatterns(device)`` returns independent
+and matching-device patterns; the no-argument factory returns all patterns.
+When using a filtered factory result in C++, call ``optimizer.SetTargetDevice(device)``
+before optimizing to set a common target and check for conflicts in subgraphs.
 
 Patterns can be written in C++ or in Python; both share the
 :class:`~onnx_light.onnx_core.optimization.PatternOptimization`

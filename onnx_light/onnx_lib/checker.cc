@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <filesystem> // NOLINT(build/c++17)
+#include <functional>
 #include <iostream>
 #include <limits>
 #include <string>
@@ -1161,6 +1162,66 @@ void check_function(const FunctionProto &function, const CheckerContext &ctx,
   print_warning_if_has_experimental(used_experimental_ops);
 }
 
+static void check_quantization_parameter_references(const ModelProto &model) {
+  std::unordered_set<std::string> initializers, references;
+  for (const auto &tensor : model.graph().initializer())
+    initializers.insert(tensor.name());
+  constexpr std::string_view prefix = "onnx_light.quantization.parameters:";
+  for (const auto &annotation : model.graph().quantization_annotation()) {
+    const std::string name = annotation.tensor_name().value();
+    if (!name.starts_with(prefix))
+      continue;
+    const std::string reference = name.substr(prefix.size());
+    if (reference.empty() || !references.insert(reference).second)
+      fail_check("Empty or duplicate quantization parameter set: ", reference);
+    std::unordered_set<std::string> roles;
+    for (const auto &mapping : annotation.quant_parameter_tensor_names()) {
+      if (!initializers.contains(mapping.value()))
+        fail_check("Missing shared parameter initializer: ", mapping.value());
+      if (!roles.insert(mapping.key()).second)
+        fail_check("Duplicate shared parameter role: ", mapping.key());
+    }
+    if (!roles.contains("scales") || !roles.contains("storage_type") ||
+        !roles.contains("logical_type"))
+      fail_check("Shared quantization requires fixed scales, storage_type and logical_type.");
+  }
+  auto reference = [&](const std::string &name) {
+    if (!references.contains(name))
+      fail_check("Missing quantization parameter_ref: ", name);
+  };
+  std::function<void(const GraphProto &)> graph;
+  auto nodes = [&](const auto &list) {
+    for (const auto &node : list) {
+      for (const auto &attribute : node.attribute()) {
+        if (node.domain() == "ai.rt" && node.op_type() == "Quantize" &&
+            attribute.name() == "parameter_ref") {
+          if (!attribute.has_ref_attr_name()) {
+            if (attribute.type() != AttributeProto::STRING || attribute.s().empty())
+              fail_check("Quantize parameter_ref must be a nonempty string.");
+            reference(attribute.s());
+          }
+          for (size_t i = 1; i < node.input().size(); ++i)
+            if (!node.input(i).empty())
+              fail_check("Quantize parameter_ref excludes explicit optional parameters.");
+        }
+        if (attribute.has_g())
+          graph(attribute.g());
+        for (const auto &nested : attribute.graphs())
+          graph(nested);
+      }
+    }
+  };
+  graph = [&](const GraphProto &value) {
+    for (const auto &encoded : value.encoded_initializer())
+      if (encoded.has_parameter_ref())
+        reference(encoded.parameter_ref().value());
+    nodes(value.node());
+  };
+  graph(model.graph());
+  for (const auto &function : model.functions())
+    nodes(function.node());
+}
+
 static void check_model(const ModelProto &model, CheckerContext &ctx) {
   if (!model.ir_version()) {
     fail_check("The model does not have an ir_version set properly.");
@@ -1198,6 +1259,7 @@ static void check_model(const ModelProto &model, CheckerContext &ctx) {
   StructTypeCatalogue catalogue;
   check_structured([&]() { catalogue.Build(model); });
   ctx.set_struct_type_catalogue(catalogue);
+  check_quantization_parameter_references(model);
   LexicalScopeContext lex_ctx;
   check_graph(model.graph(), ctx, lex_ctx);
 

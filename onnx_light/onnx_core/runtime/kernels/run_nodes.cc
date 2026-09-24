@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/runtime/kernels/run_nodes.h"
+#include "onnx_core/runtime/quantization.h"
 
 #include <chrono>
 #include <cstdint>
@@ -1154,6 +1155,7 @@ void RegisterModelFunctions(const ModelProto &model, RuntimeContext &rt) {
   StructTypeCatalogue catalogue;
   catalogue.Build(model);
   rt.set_struct_type_catalogue(catalogue);
+  rt.set_quantization_parameters(QuantizationParameterCatalogue::Build(model));
   // Register every model-local function so that nodes referring to
   // them by (domain, op_type, overload) are dispatched to
   // ``ModelLocalFunctionKernel`` rather than rejected as unsupported

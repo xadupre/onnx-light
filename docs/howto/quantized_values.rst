@@ -12,7 +12,7 @@ bits-per-weight figures, training algorithms or accuracy guarantees.
 
 ``Tensor`` converts to an owned ``RuntimeValue`` of kind ``kEncoded``.
 ``TensorProto`` converts to ``EncodedValueProto``. Both use the same native
-implementation and can be dequantized without the original plan. The returned
+implementation and can be dequantized without the original plan. A self-contained
 message has an inline ``StructTypeProto`` describing all fields and a versioned
 native consumer identity. It can subsequently be put in a model's catalogue
 and referenced by ``type_ref``.
@@ -60,7 +60,7 @@ outside a one-sided codebook/range still saturate or select the nearest entry.
 ORT calibration follows column/K-block order and the existing source-dtype
 rounding rules.
 
-Explicit scales, zero points and offsets accept floating scalar tensors or
+Explicit per-node scales, zero points and offsets accept floating scalar tensors or
 one-dimensional tensors with one value per block. They override calibration.
 Codebooks concatenate all blocks' tables in run order. FLOAT, DOUBLE, FLOAT16
 and BFLOAT16 parameter tensors are supported independently. Permutation and
@@ -114,6 +114,170 @@ the ONNX-compatible ``onnx.shape_inference.infer_shapes`` does not register thes
 The model checker validates encoded initializer names, layouts and model-scoped
 type references, including inside nested graphs.
 
+.. _l-shared-quantization-parameters:
+
+Model-level shared parameters
+-----------------------------
+
+A storage type describes the arrangement of codes and parameter fields, not
+their numerical values. Two nodes using the same ``StructTypeProto.type_ref``
+do **not** thereby share scales, zero points, codebooks or transforms. Without
+a numerical-parameter reference, each Quantize follows the explicit-input or
+automatic-calibration rules above and produces a self-contained payload.
+
+A shared numerical parameter set is a separate model resource. Selecting it
+fixes the encoding and reconstruction parameters for every input using that
+set; it must not recalibrate scales independently for those inputs. Values
+outside the selected range still follow the codec's existing saturation or
+nearest-code rules. The actual codes and any saved outlier **values** remain
+local to each encoded value.
+
+Declaring and selecting a set
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``add_quantization_parameters(model, name, storage_type, logical_type, *,
+scales, ...)`` declares one named set. The optional numerical arguments have
+the same names, shapes and dtypes as Quantize's optional inputs. ``scales`` is
+required: shared mode never performs automatic calibration. Omitted optional
+parameters retain the codec's fixed defaults; learned tables, nonempty
+permutations, transforms and outlier indices must still be provided when the
+storage descriptor requires them.
+
+The declaration binds the full storage descriptor and a concrete logical tensor
+shape and dtype. Every consumer must match them. Quantize selects it with the
+string attribute ``parameter_ref`` and still supplies its full ``type``
+attribute. Combining a reference with any nonempty optional parameter input
+is an error, rather than an override.
+
+The helper returns the **compact output storage type**. Use that type for
+encoded graph outputs, not Quantize's full input descriptor. A compact value
+contains a reserved byte, local outlier values and packed codes (or ORT ``B``
+bytes), and records the set's name in ``EncodedValueProto.parameter_ref``.
+Its descriptor describes the actual local byte extent; it does not pretend the omitted parameters are
+present in the payload.
+
+For example, two paths can share one scale, including a path through Identity:
+
+.. code-block:: python
+
+    import numpy
+    from onnx_light import onnx
+    from onnx_light.onnx import helper, numpy_helper
+    from onnx_light.onnx_core.quantization import (
+        QuantizationFormat,
+        add_quantization_parameters,
+        make_quantization_plan,
+        make_quantization_type,
+        materialize_quantized_value,
+    )
+    from onnx_light.onnx_py._onnxpykernels import runtime
+
+    plan = make_quantization_plan(QuantizationFormat.INT4, 4, block_size=4)
+    storage = make_quantization_type(plan)
+    destination = onnx.TypeProto(struct_type=storage)
+    logical = helper.make_tensor_type_proto(onnx.TensorProto.FLOAT, [4])
+    graph = helper.make_graph(
+        [], "shared_quantization",
+        [
+            helper.make_tensor_value_info("X0", onnx.TensorProto.FLOAT, [4]),
+            helper.make_tensor_value_info("X1", onnx.TensorProto.FLOAT, [4]),
+        ],
+        [
+            helper.make_tensor_value_info("Y0", onnx.TensorProto.FLOAT, [4]),
+            helper.make_tensor_value_info("Y1", onnx.TensorProto.FLOAT, [4]),
+        ],
+    )
+    model = helper.make_model(
+        graph, opset_imports=[helper.make_opsetid("", 21), helper.make_opsetid("ai.rt", 1)],
+    )
+    compact = add_quantization_parameters(
+        model, "common", storage, logical, scales=numpy.array(0.5, dtype=numpy.float32),
+    )
+    for index in range(2):
+        model.graph.node.append(helper.make_node(
+            "Quantize", [f"X{index}"], [f"Q{index}"], domain="ai.rt",
+            type=destination, parameter_ref="common",
+        ))
+    model.graph.node.append(helper.make_node("Identity", ["Q1"], ["Q1_copy"]))
+    for index, encoded_name in enumerate(("Q0", "Q1_copy")):
+        model.graph.node.append(helper.make_node(
+            "Dequantize", [encoded_name], [f"Y{index}"], domain="ai.rt",
+            dtype=onnx.TensorProto.FLOAT,
+        ))
+    model.graph.output.append(
+        helper.make_value_info("Q0", onnx.TypeProto(struct_type=compact)),
+    )
+
+    # Model serialization keeps the declaration, initializers and references.
+    loaded = onnx.ModelProto()
+    loaded.ParseFromString(model.SerializeToString())
+    context = runtime.RuntimeContext()
+    for name, values in (
+        ("X0", [-4, -0.5, 0.5, 3.5]),
+        ("X1", [-8, -1, 1, 7]),
+    ):
+        context.set(name, runtime.tensor_from_proto(
+            numpy_helper.from_array(numpy.array(values, dtype=numpy.float32), name=name),
+        ))
+    runtime.RuntimeSession(loaded).run(context)
+    numpy.testing.assert_array_equal(numpy.from_dlpack(context.get("Y0")), [-4, -0.5, 0.5, 3.5])
+    numpy.testing.assert_array_equal(numpy.from_dlpack(context.get("Y1")), [-4, -1, 1, 3.5])
+    shared = context.get_value("Q0")
+    assert shared.parameter_ref == "common"
+    assert len(shared.raw_data) == 3  # Reserved byte plus four INT4 codes, no scale.
+    standalone = materialize_quantized_value(shared)
+    assert not standalone.has_parameter_ref()
+
+The second input saturates at the range selected by the shared scale. It is
+not independently recalibrated to accommodate its larger values.
+
+Representation, scope and lifetime
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Declarations reuse the root graph's ``quantization_annotation`` catalogue.
+An annotation named ``onnx_light.quantization.parameters:<name>`` maps roles
+to root ``initializer`` names through ``quant_parameter_tensor_names``.
+``storage_type`` and ``logical_type`` are rank-one UINT8 initializers containing
+serialized ``StructTypeProto`` and ``TypeProto`` descriptors; the other roles
+refer to ordinary numerical TensorProto initializers. Unprefixed annotations
+keep their existing meaning. Duplicate set names, duplicate or unknown roles,
+missing initializers and incompatible descriptors or numerical tensors are errors.
+This representation uses onnx-light's protobuf model serialization. Native ORT
+model serialization rejects quantization annotations and encoded initializers;
+textproto export also rejects unsupported structured/shared values instead of
+silently dropping their references.
+
+These declarations are model-scoped, not lexical graph inputs. Nested graphs
+and model-local functions inherit the model's parameter catalogue; local input
+names do not select a different set. Identity preserves the reference and its
+owner. The runtime takes an owned, immutable snapshot of the resolved numerical
+parameters, so retained encoded outputs can outlive the source model, session
+and context. Changing a model after creating its session does not update that
+session's parameter snapshot.
+
+Python exposes such retained outputs as ``SharedQuantizedValue`` rather than a
+bare proto. ``shared.encoded`` returns an independent snapshot of the compact
+encoded message, not a mutable alias of the runtime's value.
+``dequantize_tensor(shared)`` and ``materialize_quantized_value(shared)`` use its
+retained resource; ``quantize_tensor_shared(tensor, model, name)`` provides the
+same fixed-parameter encoding without constructing a graph.
+
+For compact serialization, serialize ``shared.encoded`` and keep the declaring
+model alongside it. A parsed bare message has no in-memory owner: pass its model
+to the Python dequantization or materialization helper, or place it in that
+model's ``encoded_initializer`` collection. A reference string alone cannot
+recover a missing model resource.
+
+For independent export, call ``materialize_quantized_value(shared)`` first.
+It produces a self-contained ``EncodedValueProto`` with inline storage type and
+numerical parameters and no ``parameter_ref``. Serialize that result when the
+recipient must decode it without the original model. Materialization does not
+change the shared source value.
+
+Sharing reduces retained and serialized per-value payloads. The reference codec
+still uses temporary full-layout buffers while encoding or materializing a shared
+value; this feature does not promise zero-copy quantization or dequantization.
+
 Python
 ------
 
@@ -154,8 +318,9 @@ do not train or calibrate a model.
 Similarly, ``run.block(j)`` and ``run.set_block(j, block)`` access per-block
 parameter copies. No Python object borrows a potentially invalidated vector element.
 ``quantize_tensor`` and ``dequantize_tensor`` accept/return the native runtime
-``Tensor``. As with runtime structured feeds, Python represents an encoded
-``RuntimeValue`` as ``EncodedValueProto`` rather than introducing another wrapper.
+``Tensor``. Python represents a self-contained encoded ``RuntimeValue`` as
+``EncodedValueProto``; shared outputs use the resource-retaining
+``SharedQuantizedValue`` described above.
 
 Choosing a profile
 ~~~~~~~~~~~~~~~~~~
@@ -291,7 +456,9 @@ Output, serialization and errors
 ``dequantize_tensor_proto(encoded, model=None)`` returns a ``TensorProto``
 with the original logical shape and dtype, not the physical code dtype.
 Convert it with ``numpy_helper.to_array``. The decoder does not need the
-original plan; scales, tables, transforms and outliers are encoded with the data.
+original plan. For self-contained values, scales, tables, transforms and outliers
+are encoded with the data; shared values additionally require their model's
+numerical parameter set.
 Proto conversions preserve ``name`` and ``doc_string`` presence independently:
 absent fields remain absent, and explicitly empty fields remain present-empty.
 The runtime ``Tensor`` API has only a plain string name and no documentation field.
@@ -345,9 +512,16 @@ Its ``EncodedValueProto`` overload reads the message by const reference, without
 first copying it into a ``RuntimeValue``. The Python tensor dequantizer uses
 this overload too.
 
-The converters allocate the final ``raw_data`` buffer at its exact size and
-write into it directly. Proto encoding does not copy a completed encoded
-message out of a runtime wrapper; proto decoding does not materialize an
+For shared encoding, build an owned ``QuantizationParameterCatalogue`` from the
+model and pass it to ``QuantizeTensorShared``. The returned ``RuntimeValue``
+retains that catalogue. ``DequantizeTensor(value)`` resolves it automatically;
+``MaterializeQuantizedValue(value)`` exports an independent message. A bare
+compact ``EncodedValueProto`` instead needs the catalogue supplied to
+``MaterializeQuantizedValue`` before calling the ordinary C++ proto decoder.
+
+The self-contained converters allocate the final ``raw_data`` buffer at its
+exact size and write into it directly. Proto encoding does not copy a completed
+encoded message out of a runtime wrapper; proto decoding does not materialize an
 intermediate output ``Tensor``. Numerical workspace (decoded values, transforms
 and codebook search) is still allocated: these are reference codecs, not
 zero-allocation conversions. Outputs own their storage independently of inputs.
@@ -789,17 +963,20 @@ the profile loop to encode each profile):
 
 All floating-point/codebook profiles use closest-level encoding, with first-entry
 ties. They do not promise the external format's float bit patterns or tie-breaking.
-Scale tensors and learned codebooks belong to payload storage, not shared type
-constants. Consecutive blocks with the same physical layout share one array
-element declaration; changing scales or table contents does not duplicate the
-descriptor. This reference representation prioritizes correctness and explicit
-semantics over minimal payload size or fast quantization.
+Scale tensors and learned codebooks belong to numerical parameter storage, not
+shared type constants. They are local to a self-contained value or supplied by
+an explicitly selected model parameter set. Consecutive blocks with the same
+physical layout share one array element declaration; changing scales or table
+contents does not duplicate the descriptor. This reference representation
+prioritizes correctness and explicit semantics over minimal payload size or
+fast quantization.
 
 Wire layout and validation
 --------------------------
 
-This section describes the portable wire layout. The ORT profiles use the
-B/scales/zero_points layout described below instead.
+This section describes the self-contained portable wire layout. The ORT profiles
+use the B/scales/zero_points layout described below instead. Shared values use
+the compact layout described in :ref:`l-shared-quantization-parameters`.
 
 The structured root name is ``onnx_light.quantization.v1/<profile>``. Its fields
 are, in order: one zero reserved byte, an INT64 permutation, DOUBLE forward and

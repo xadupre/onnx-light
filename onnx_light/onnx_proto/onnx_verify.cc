@@ -955,6 +955,10 @@ StructTypeCatalogue::ValidateEncodedValue(const EncodedValueProto &value,
   EncodedValueLayout layout;
   Require(value.has_layout(), kind, value.name(),
           "must select either an affine or a structured layout.");
+  if (value.has_parameter_ref())
+    Require(!value.parameter_ref().empty() && value.has_struct_type() && value.has_logical_type(),
+            kind, value.name(),
+            "parameter_ref requires a nonempty name and structured logical value.");
   layout.payload_bytes = ValidatePayloadLocation(value, layout.external);
   // Only an inline payload lets the bytes themselves be checked; an external
   // payload is validated as metadata alone (see EncodedValueLayout).

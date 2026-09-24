@@ -60,11 +60,14 @@ RuntimeValue RuntimeValue::CopyAtDepth(size_t depth, bool owned) const {
       RuntimeValue result;
       result.kind = kind;
       result.encoded = encoded;
+      result.quantization_parameters = quantization_parameters;
       return result;
     }
     EncodedValueProto copy;
     copy.ParseFromString(Encoded().SerializeAsString());
-    return RuntimeValue(std::move(copy));
+    RuntimeValue result(std::move(copy));
+    result.quantization_parameters = quantization_parameters;
+    return result;
   }
   RuntimeValue result;
   for (const auto &[name, value] : fields)

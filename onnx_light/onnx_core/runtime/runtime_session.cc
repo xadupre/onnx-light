@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/runtime/runtime_session.h"
+#include "onnx_core/runtime/quantization.h"
 
 #include <chrono>
 #include <cstddef>
@@ -102,6 +103,7 @@ RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions op
   SetInitializers(model.graph());
   struct_type_catalogue_.emplace();
   struct_type_catalogue_->Build(model);
+  quantization_parameters_ = QuantizationParameterCatalogue::Build(model);
 }
 
 RuntimeSession::RuntimeSession(const GraphProto &graph, int verbose)
@@ -207,6 +209,8 @@ std::unordered_set<std::string> RuntimeSession::SeedInitializers(RuntimeContext 
   std::unordered_set<std::string> seeded;
   if (struct_type_catalogue_)
     rt.set_struct_type_catalogue(*struct_type_catalogue_);
+  if (quantization_parameters_)
+    rt.set_quantization_parameters(quantization_parameters_);
   if (initializer_graph_ != nullptr) {
     for (const TensorProto &initializer : initializer_graph_->initializer())
       if (!rt.Has(initializer.name())) {
@@ -221,6 +225,16 @@ std::unordered_set<std::string> RuntimeSession::SeedInitializers(RuntimeContext 
                             rt.model_owner()
                                 ? RuntimeValue::FromEncodedView(initializer, rt.model_owner())
                                 : RuntimeValue(initializer));
+        if (initializer.has_parameter_ref()) {
+          MaterializeQuantizedValue(initializer, rt.quantization_parameters().get(),
+                                    rt.struct_type_catalogue());
+          EncodedValueProto owned;
+          owned.ParseFromString(initializer.SerializeAsString());
+          *owned.mutable_struct_type() =
+              rt.quantization_parameters()->Get(initializer.parameter_ref().value()).local_type;
+          rt.values().at(initializer.name()) = RuntimeValue(std::move(owned));
+          rt.values().at(initializer.name()).quantization_parameters = rt.quantization_parameters();
+        }
         seeded.insert(initializer.name());
       }
   }

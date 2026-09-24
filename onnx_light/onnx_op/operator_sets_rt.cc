@@ -55,7 +55,9 @@ LightOpSchema MakeQuantizeSchema() {
       "Fixed scalar codebooks have profile defaults. Learned codebooks, vector/additive "
       "codebook scales and nonempty transforms/permutations/outlier indices must be supplied. "
       "This does not train GPTQ/AWQ/codebooks. Output preserves the source logical shape and "
-      "dtype; physical storage is described by the requested type.",
+      "dtype. With parameter_ref, a model-local fixed parameter set replaces all optional "
+      "inputs and calibration; the output carries only local codes/outlier values in a compact "
+      "storage schema plus the reference. Otherwise physical storage uses the requested type.",
       {{"X", "Floating tensor to encode.", "T"},
        {"scales", "Optional scalar or per-block scales.", "P1"},
        {"zero_points", "Optional scalar or per-block zero points.", "P2"},
@@ -65,7 +67,7 @@ LightOpSchema MakeQuantizeSchema() {
        {"forward", "Optional forward transform matrix.", "P5"},
        {"inverse", "Optional inverse transform matrix.", "P6"},
        {"outliers", "Optional original-source outlier indices.", "I"}},
-      {{"Y", "EncodedValueProto carrying the storage type and numerical parameters.", "E"}},
+      {{"Y", "EncodedValueProto carrying its local storage type and parameter ownership.", "E"}},
       {{"T",
         {TensorType::kFloat, TensorType::kDouble, TensorType::kFloat16, TensorType::kBfloat16},
         ""},
@@ -90,7 +92,9 @@ LightOpSchema MakeQuantizeSchema() {
        {"I", {TensorType::kInt64}, ""},
        {"E", {TensorType::kStruct}, "Structured encoded value."}},
       {{"type", "Required quantization StructTypeProto wrapped in TypeProto.",
-        AttributeType::TYPE_PROTO, true, std::monostate{}}});
+        AttributeType::TYPE_PROTO, true, std::monostate{}},
+       {"parameter_ref", "Model-local fixed numerical parameter set; excludes optional inputs.",
+        AttributeType::STRING, false, std::monostate{}}});
 }
 
 LightOpSchema MakeDequantizeSchema() {

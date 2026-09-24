@@ -15,6 +15,12 @@ The explicit ``ORT_MATMULNBITS_INT2/INT4/INT8`` profiles are the exception:
 ``make_matmul_nbits_plan`` and ``export_matmul_nbits_inputs`` produce the
 standard ONNX Runtime operator inputs, not internal kernel prepacking.
 
+For :ref:`model-level shared parameters <l-shared-quantization-parameters>`,
+``add_quantization_parameters`` declares a fixed set and
+``quantize_tensor_shared`` returns a resource-retaining ``SharedQuantizedValue``.
+``materialize_quantized_value`` exports a self-contained message when the
+declaring model will not accompany the encoded value.
+
 .. automodule:: onnx_light.onnx_core.quantization
     :members:
     :imported-members:

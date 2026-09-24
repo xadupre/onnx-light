@@ -27,6 +27,15 @@ void Dequantize::Run(RuntimeContext &rt) {
   EXT_ENFORCE_INVALID(value != rt.values().end() &&
                           value->second.kind == RuntimeValue::Kind::kEncoded,
                       "Dequantize requires an EncodedValueProto input.");
+  if (value->second.Encoded().has_parameter_ref()) {
+    const auto &parameters = value->second.quantization_parameters
+                                 ? value->second.quantization_parameters
+                                 : rt.quantization_parameters();
+    auto materialized = MaterializeQuantizedValue(value->second.Encoded(), parameters.get(),
+                                                  rt.struct_type_catalogue());
+    SetOutput(node, 0, (*this)(materialized, static_cast<int32_t>(dtype), {}, &rt), rt);
+    return;
+  }
   SetOutput(node, 0,
             (*this)(value->second.Encoded(), static_cast<int32_t>(dtype),
                     rt.struct_type_catalogue(), &rt),

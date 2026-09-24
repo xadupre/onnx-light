@@ -571,6 +571,12 @@ public:
   const StructTypeCatalogue &struct_type_catalogue() const noexcept {
     return struct_type_catalogue_;
   }
+  void set_quantization_parameters(std::shared_ptr<const QuantizationParameterCatalogue> value) {
+    quantization_parameters_ = std::move(value);
+  }
+  const std::shared_ptr<const QuantizationParameterCatalogue> &quantization_parameters() const {
+    return quantization_parameters_;
+  }
 
   /** Selects whole graph outputs whose storage will be moved to an external owner. */
   void set_retained_outputs(std::unordered_set<std::string> names) {
@@ -1061,6 +1067,7 @@ private:
   TensorMap tensors_;
   RuntimeValueMap values_;
   StructTypeCatalogue struct_type_catalogue_;
+  std::shared_ptr<const QuantizationParameterCatalogue> quantization_parameters_;
   KernelContext kernel_ctx_;
   FunctionMap functions_;
   CustomKernelMap custom_kernels_;

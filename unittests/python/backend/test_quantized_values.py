@@ -506,6 +506,44 @@ class TestQuantizedValues(unittest.TestCase):
                         gc.collect()
                         self.assertEqual(bytes(inputs.weights.raw_data), original)
 
+    def test_ort_rejects_nonzero_padding(self):
+        for bits in (2, 4, 8):
+            for mode in ("implicit", "packed", "floating"):
+                source, encoded, inputs = self.make_ort_inputs(bits, mode, numpy.float32)
+                weights_per_column = len(inputs.weights.raw_data) // inputs.n
+                zero_offset = len(inputs.weights.raw_data) + len(inputs.scales.raw_data)
+                for column in range(inputs.n):
+                    corruptions = [
+                        (column * weights_per_column * 8 + inputs.k * bits, "weight padding"),
+                        ((column + 1) * weights_per_column * 8 - 1, "weight padding"),
+                    ]
+                    if mode == "packed" and bits != 8:
+                        zeros_per_column = len(inputs.zero_points.raw_data) // inputs.n
+                        corruptions.append(
+                            (
+                                (zero_offset + (column + 1) * zeros_per_column) * 8 - 1,
+                                "zero-point padding",
+                            )
+                        )
+                    for bit, message in corruptions:
+                        with self.subTest(bits=bits, mode=mode, column=column, bit=bit):
+                            corrupt = onnx.EncodedValueProto()
+                            corrupt.CopyFrom(encoded)
+                            raw = bytearray(encoded.raw_data)
+                            self.assertEqual(raw[bit // 8] & (1 << (bit % 8)), 0)
+                            raw[bit // 8] |= 1 << (bit % 8)
+                            corrupt.raw_data = bytes(raw)
+                            for decode in (
+                                runtime.dequantize_tensor,
+                                runtime.dequantize_tensor_proto,
+                                runtime.export_matmul_nbits_inputs,
+                            ):
+                                with self.assertRaisesRegex(ValueError, message):
+                                    decode(corrupt)
+                numpy.testing.assert_array_equal(
+                    numpy_helper.to_array(runtime.dequantize_tensor_proto(encoded)), source
+                )
+
     def test_ort_matmul_nbits_interoperability(self):
         onnxruntime = import_or_skip("onnxruntime")
         options = onnxruntime.SessionOptions()

@@ -788,6 +788,7 @@ codec header or per-block DOUBLE metadata between them. B codes are packed
 least-significant bits first within each K block. The last block of each
 column is padded with zero codes. Packed zero points restart at a byte
 boundary for every column; unused high bits are zero.
+Both decoding and export reject nonzero weight-tail codes or unused zero-point bits.
 If all effective zero points equal the midpoint, the zero-point tensor is
 omitted. Otherwise all in-range integer zero points use packed UINT8 storage;
 any fractional or out-of-range value selects floating storage for the whole tensor.

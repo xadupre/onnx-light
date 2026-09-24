@@ -1127,7 +1127,24 @@ OrtPackedValue ParseOrtValue(const EncodedValueProto &encoded, const Quantizatio
   OrtPackedValue value{storage, data.first(storage.weight_bytes),
                        data.subspan(storage.weight_bytes, storage.scale_bytes),
                        data.subspan(storage.weight_bytes + storage.scale_bytes)};
-  for (size_t column = 0; column < storage.n; ++column)
+  const size_t per_byte = 8 / storage.bits;
+  const size_t tail_codes = storage.k % storage.block_size;
+  for (size_t column = 0; column < storage.n; ++column) {
+    if (tail_codes != 0) {
+      const auto tail = value.weights.subspan(
+          ((column + 1) * storage.groups - 1) * storage.blob_size, storage.blob_size);
+      for (size_t byte = tail_codes / per_byte; byte < tail.size(); ++byte) {
+        const size_t used_bits =
+            byte == tail_codes / per_byte ? (tail_codes % per_byte) * storage.bits : 0;
+        EXT_ENFORCE_INVALID((tail[byte] >> used_bits) == 0,
+                            "Nonzero ORT MatMulNBits weight padding.");
+      }
+    }
+    if (storage.zero_type == TensorProto::UINT8 && storage.groups % per_byte != 0) {
+      const uint8_t last = value.zeros[(column + 1) * CeilDiv(storage.groups, per_byte) - 1];
+      EXT_ENFORCE_INVALID((last >> ((storage.groups % per_byte) * storage.bits)) == 0,
+                          "Nonzero ORT MatMulNBits zero-point padding.");
+    }
     for (size_t group = 0; group < storage.groups; ++group) {
       EXT_ENFORCE_INVALID(
           std::isfinite(PackedFloat(value.scales, storage.type, column * storage.groups + group)),
@@ -1135,6 +1152,7 @@ OrtPackedValue ParseOrtValue(const EncodedValueProto &encoded, const Quantizatio
       EXT_ENFORCE_INVALID(std::isfinite(value.ZeroPoint(column, group)),
                           "Nonfinite ORT MatMulNBits zero point.");
     }
+  }
   return value;
 }
 

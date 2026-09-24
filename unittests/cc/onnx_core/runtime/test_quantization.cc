@@ -756,6 +756,52 @@ TEST(Quantization, OrtMatMulNBitsGoldenInputsAndColumnPadding) {
   }
 }
 
+TEST(Quantization, OrtMatMulNBitsRejectsEveryNonzeroPaddingBit) {
+  for (const auto format :
+       {QuantizationFormat::kOrtMatmulnbitsInt2, QuantizationFormat::kOrtMatmulnbitsInt4,
+        QuantizationFormat::kOrtMatmulnbitsInt8}) {
+    SCOPED_TRACE(QuantizationFormatName(format));
+    for (size_t k : {35, 36, 48, 64}) {
+      SCOPED_TRACE(k);
+      constexpr size_t n = 2, block_size = 16;
+      auto plan = MakeMatMulNBitsPlan(format, k, n, block_size);
+      for (auto &block : plan.runs[0].blocks)
+        block.zero_point = 0;
+      const size_t bits = plan.runs[0].layout.bits;
+      const size_t groups = (k + block_size - 1) / block_size;
+      const size_t weight_column_bytes = groups * block_size * bits / 8;
+      const size_t zero_column_bytes = (groups * bits + 7) / 8;
+      const std::vector<float> values(k * n, 1);
+      const auto encoded = QuantizeTensor(Tensor::FromFloat("", {int64_t(k), n}, values), plan);
+      const auto valid = encoded.Encoded();
+      ExpectValues(DequantizeTensor(encoded), values);
+      ExpectValues(TensorFromProto(DequantizeTensorProto(valid)), values);
+      const auto inputs = ExportMatMulNBitsInputs(valid);
+      ASSERT_TRUE(inputs.zero_points.has_value());
+      ASSERT_EQ(inputs.zero_points->data_type(), TensorProto::UINT8);
+      const size_t zero_offset = inputs.weights.raw_data().size() + inputs.scales.raw_data().size();
+      const auto reject_bit = [&](size_t bit) {
+        SCOPED_TRACE(bit);
+        auto corrupt = valid;
+        auto raw = std::string(valid.raw_data());
+        ASSERT_EQ(static_cast<uint8_t>(raw[bit / 8]) & (1u << (bit % 8)), 0u);
+        raw[bit / 8] = static_cast<char>(static_cast<uint8_t>(raw[bit / 8]) | (1u << (bit % 8)));
+        corrupt.set_raw_data(raw);
+        EXPECT_THROW(DequantizeTensor(corrupt), std::invalid_argument);
+        EXPECT_THROW(DequantizeTensorProto(corrupt), std::invalid_argument);
+        EXPECT_THROW(ExportMatMulNBitsInputs(corrupt), std::invalid_argument);
+      };
+      for (size_t column = 0; column < n; ++column) {
+        SCOPED_TRACE(column);
+        for (size_t bit = k * bits; bit < weight_column_bytes * 8; ++bit)
+          reject_bit(column * weight_column_bytes * 8 + bit);
+        for (size_t bit = groups * bits; bit < zero_column_bytes * 8; ++bit)
+          reject_bit((zero_offset + column * zero_column_bytes) * 8 + bit);
+      }
+    }
+  }
+}
+
 TEST(Quantization, OrtMatMulNBitsImplicitAndFloatingZeroPoints) {
   const auto format = QuantizationFormat::kOrtMatmulnbitsInt4;
   auto plan = MakeMatMulNBitsPlan(format, 3, 2, 16);

@@ -223,12 +223,13 @@ std::unordered_set<std::string> RuntimeSession::SeedInitializers(RuntimeContext 
         rt.struct_type_catalogue().ValidateEncodedValue(initializer);
         RuntimeValue value;
         if (initializer.has_parameter_ref()) {
-          MaterializeQuantizedValue(initializer, rt.quantization_parameters().get(),
-                                    rt.struct_type_catalogue());
+          EXT_ENFORCE_INVALID(rt.quantization_parameters() != nullptr,
+                              "Missing shared quantization parameter catalogue.");
+          const auto &entry =
+              rt.quantization_parameters()->Validate(initializer, rt.struct_type_catalogue());
           EncodedValueProto owned;
           owned.ParseFromString(initializer.SerializeAsString());
-          *owned.mutable_struct_type() =
-              rt.quantization_parameters()->Get(initializer.parameter_ref().value()).local_type;
+          *owned.mutable_struct_type() = entry.local_type;
           value = RuntimeValue(std::move(owned));
           value.quantization_parameters = rt.quantization_parameters();
         } else {

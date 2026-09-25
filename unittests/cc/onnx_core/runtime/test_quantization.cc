@@ -225,6 +225,11 @@ TEST(Quantization, SharedInitializerRetainsParametersAndRespectsExistingValues) 
     retained = context.values().at("X").DeepCopy();
     session.Run(context);
     EXPECT_EQ(context.values().at("X").quantization_parameters, retained.quantization_parameters);
+    context.Remove("X");
+    session.Run(context);
+    EXPECT_EQ(context.values().at("X").Encoded().raw_data(), shared.Encoded().raw_data());
+    EXPECT_TRUE(context.values().at("X").Encoded().has_parameter_ref());
+    EXPECT_EQ(context.values().at("X").quantization_parameters, retained.quantization_parameters);
 
     context.Put("X", Tensor::FromFloat("X", {1}, {42}));
     session.Run(context);
@@ -233,6 +238,34 @@ TEST(Quantization, SharedInitializerRetainsParametersAndRespectsExistingValues) 
     EXPECT_FLOAT_EQ(context.Get("X").AsFloat()[0], 42);
   }
   ExpectValues(DequantizeTensor(retained), std::vector<float>(16, 1));
+}
+
+TEST(Quantization, SharedInitializerSeedingRejectsInvalidCompactValues) {
+  const auto plan = WithTables(QuantizationFormat::kInt4, 16);
+  const auto source = Tensor::FromFloat("X", {16}, std::vector<float>(16, 1));
+  const auto full = QuantizeTensor(source, plan);
+  for (const auto &failure : {"reference", "logical_type", "payload", "reserved"}) {
+    SCOPED_TRACE(failure);
+    auto model = SharedModel(plan, full.Encoded());
+    const auto parameters = QuantizationParameterCatalogue::Build(model);
+    const auto shared =
+        QuantizeTensorShared(source, full.Encoded().struct_type(), "weights", parameters);
+    auto *encoded = model.mutable_graph()->add_encoded_initializer();
+    *encoded = shared.Encoded();
+    const std::string kind = failure;
+    if (kind == "reference")
+      encoded->set_parameter_ref("missing");
+    else if (kind == "logical_type")
+      encoded->mutable_logical_type()->mutable_tensor_type()->set_elem_type(TensorProto::DOUBLE);
+    else if (kind == "payload")
+      encoded->mutable_raw_data()->resize(1);
+    else
+      (*encoded->mutable_raw_data())[0] = 1;
+    RuntimeSession session(model);
+    RuntimeContext context;
+    EXPECT_THROW(session.Run(context), std::invalid_argument);
+    EXPECT_FALSE(context.HasValue("X"));
+  }
 }
 
 TEST(Quantization, SharedTransformsPermutationAndLocalOutliers) {

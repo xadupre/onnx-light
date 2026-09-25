@@ -1164,7 +1164,8 @@ void check_function(const FunctionProto &function, const CheckerContext &ctx,
   print_warning_if_has_experimental(used_experimental_ops);
 }
 
-static void check_quantization_parameter_references(const ModelProto &model) {
+static void check_quantization_parameter_references(const ModelProto &model,
+                                                    const StructTypeCatalogue &types) {
   std::shared_ptr<const core::runtime::QuantizationParameterCatalogue> parameters;
   check_structured(
       [&]() { parameters = core::runtime::QuantizationParameterCatalogue::Build(model); });
@@ -1176,13 +1177,16 @@ static void check_quantization_parameter_references(const ModelProto &model) {
     functions.emplace(GetFunctionImplId(function), &function);
   std::unordered_set<FunctionImplId> active;
   bool has_bound_references = false;
-  std::function<void(const GraphProto &, bool)> graph;
-  std::function<void(const NodeProto &, bool)> node;
-  node = [&](const NodeProto &value, bool bind_functions) {
+  std::function<void(const GraphProto &, bool, bool)> graph;
+  std::function<void(const NodeProto &, bool, bool)> node;
+  node = [&](const NodeProto &value, bool bind_functions, bool unbound_function) {
     for (const auto &attribute : value.attribute()) {
       if (value.domain() == "ai.rt" && value.op_type() == "Quantize" &&
           attribute.name() == "parameter_ref") {
         if (!attribute.ref_attr_name().empty()) {
+          if (!unbound_function)
+            fail_check(
+                "Quantize parameter_ref attribute references require an unbound function body.");
           has_bound_references = true;
         } else {
           if (attribute.type() != AttributeProto::STRING || attribute.s().empty())
@@ -1194,9 +1198,9 @@ static void check_quantization_parameter_references(const ModelProto &model) {
         }
       }
       if (attribute.has_g())
-        graph(attribute.g(), bind_functions);
+        graph(attribute.g(), bind_functions, unbound_function);
       for (const auto &nested : attribute.graphs())
-        graph(nested, bind_functions);
+        graph(nested, bind_functions, unbound_function);
     }
     if (!bind_functions)
       return;
@@ -1213,24 +1217,27 @@ static void check_quantization_parameter_references(const ModelProto &model) {
       attributes[attribute.name()] = &attribute;
     for (const auto &attribute : value.attribute())
       attributes[attribute.name()] = &attribute;
+    for (const auto &required : found->second->attribute())
+      if (!attributes.contains(required))
+        fail_check("Missing required attribute '", required, "' for model-local function ", id);
     internal::AttributeBinder(attributes).VisitFunction(bound);
     for (const auto &nested : bound.node())
-      node(nested, true);
+      node(nested, true, false);
     active.erase(id);
   };
-  graph = [&](const GraphProto &value, bool bind_functions) {
+  graph = [&](const GraphProto &value, bool bind_functions, bool unbound_function) {
     for (const auto &encoded : value.encoded_initializer())
       if (encoded.has_parameter_ref())
-        reference(encoded.parameter_ref().value());
+        check_structured([&]() { parameters->Validate(encoded, types); });
     for (const auto &nested : value.node())
-      node(nested, bind_functions);
+      node(nested, bind_functions, unbound_function);
   };
-  graph(model.graph(), false);
+  graph(model.graph(), false, false);
   for (const auto &function : model.functions())
     for (const auto &nested : function.node())
-      node(nested, false);
+      node(nested, false, true);
   if (has_bound_references)
-    graph(model.graph(), true);
+    graph(model.graph(), true, false);
 }
 
 static void check_model(const ModelProto &model, CheckerContext &ctx) {
@@ -1270,7 +1277,7 @@ static void check_model(const ModelProto &model, CheckerContext &ctx) {
   StructTypeCatalogue catalogue;
   check_structured([&]() { catalogue.Build(model); });
   ctx.set_struct_type_catalogue(catalogue);
-  check_quantization_parameter_references(model);
+  check_quantization_parameter_references(model, catalogue);
   LexicalScopeContext lex_ctx;
   check_graph(model.graph(), ctx, lex_ctx);
 

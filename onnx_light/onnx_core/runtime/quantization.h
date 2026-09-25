@@ -497,6 +497,9 @@ public:
   };
   static std::shared_ptr<const QuantizationParameterCatalogue> Build(const ModelProto &model);
   const Entry &Get(const std::string &name) const;
+  /** Validates a compact value without materializing it and returns its shared parameters. */
+  const Entry &Validate(const EncodedValueProto &value,
+                        const StructTypeCatalogue &catalogue = {}) const;
 
 private:
   std::unordered_map<std::string, Entry> entries_;

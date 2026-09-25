@@ -1821,21 +1821,12 @@ RuntimeValue QuantizeTensorShared(const Tensor &tensor, const StructTypeProto &t
   return result;
 }
 
-EncodedValueProto MaterializeQuantizedValue(const EncodedValueProto &value,
-                                            const QuantizationParameterCatalogue *parameters,
-                                            const StructTypeCatalogue &catalogue) {
+const QuantizationParameterCatalogue::Entry &
+QuantizationParameterCatalogue::Validate(const EncodedValueProto &value,
+                                         const StructTypeCatalogue &catalogue) const {
   catalogue.ValidateEncodedValue(value);
-  EncodedValueProto result;
-  if (!value.has_parameter_ref()) {
-    result.ParseFromString(value.SerializeAsString());
-    if (result.has_struct_type()) {
-      *result.mutable_struct_type() = catalogue.Resolve(value.struct_type());
-      result.mutable_struct_type()->clear_type_id();
-    }
-    return result;
-  }
-  EXT_ENFORCE_INVALID(parameters != nullptr, "Missing shared quantization parameter catalogue.");
-  const auto &entry = parameters->Get(value.parameter_ref().value());
+  EXT_ENFORCE_INVALID(value.has_parameter_ref(), "Missing shared quantization parameter_ref.");
+  const auto &entry = Get(value.parameter_ref().value());
   StructTypeProto local_type;
   if (value.has_struct_type()) {
     local_type = catalogue.Resolve(value.struct_type());
@@ -1846,6 +1837,24 @@ EncodedValueProto MaterializeQuantizedValue(const EncodedValueProto &value,
                           value.raw_data().size() == 1 + entry.full_size - entry.common.size() &&
                           value.raw_data()[0] == 0,
                       "Shared encoded value has incompatible type, shape, dtype or payload.");
+  return entry;
+}
+
+EncodedValueProto MaterializeQuantizedValue(const EncodedValueProto &value,
+                                            const QuantizationParameterCatalogue *parameters,
+                                            const StructTypeCatalogue &catalogue) {
+  EncodedValueProto result;
+  if (!value.has_parameter_ref()) {
+    catalogue.ValidateEncodedValue(value);
+    result.ParseFromString(value.SerializeAsString());
+    if (result.has_struct_type()) {
+      *result.mutable_struct_type() = catalogue.Resolve(value.struct_type());
+      result.mutable_struct_type()->clear_type_id();
+    }
+    return result;
+  }
+  EXT_ENFORCE_INVALID(parameters != nullptr, "Missing shared quantization parameter catalogue.");
+  const auto &entry = parameters->Validate(value, catalogue);
   if (value.has_name())
     result.set_name(value.name().value());
   if (value.has_doc_string())

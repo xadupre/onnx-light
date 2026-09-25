@@ -252,8 +252,8 @@ def _reshape_or_raise(array: np.ndarray, dims: Sequence[int], tensor: TensorProt
         ) from exc
 
 
-def _load_external_data_for_tensor(tensor: TensorProto, base_dir: str) -> None:
-    """Loads data from an external file into tensor.raw_data.
+def _read_external_data_bytes(tensor: TensorProto, base_dir: str) -> bytes:
+    """Reads external data bytes without mutating the tensor.
 
     Validates that the external data path does not escape *base_dir* via
     path traversal or symlink indirection before reading the file.
@@ -263,6 +263,9 @@ def _load_external_data_for_tensor(tensor: TensorProto, base_dir: str) -> None:
     Args:
         tensor: a TensorProto object whose external_data field describes the file.
         base_dir: directory that contains the external data file.
+
+    Returns:
+        The raw bytes read from the external data file.
 
     Raises:
         ValueError: If the location escapes the base directory, or if
@@ -313,9 +316,23 @@ def _load_external_data_for_tensor(tensor: TensorProto, base_dir: str) -> None:
                     f"({available} bytes from offset {read_start}) "
                     f"for tensor {tensor.name!r}."
                 )
-            tensor.raw_data = data_file.read(length)
-        else:
-            tensor.raw_data = data_file.read()
+            return data_file.read(length)
+        return data_file.read()
+
+
+def _load_external_data_for_tensor(tensor: TensorProto, base_dir: str) -> None:
+    """Loads external data into raw_data and converts the tensor to in-memory storage.
+
+    Replaces any existing raw_data, resets data_location to DEFAULT, and clears
+    external_data after successfully reading the external file.
+
+    Args:
+        tensor: a TensorProto object whose external_data field describes the file.
+        base_dir: directory that contains the external data file.
+    """
+    tensor.raw_data = _read_external_data_bytes(tensor, base_dir)
+    tensor.data_location = TensorProto.DEFAULT
+    tensor.external_data.clear()
 
 
 def to_array(tensor: TensorProto, base_dir: str = "") -> np.ndarray:  # noqa: PLR0911
@@ -346,13 +363,14 @@ def to_array(tensor: TensorProto, base_dir: str = "") -> np.ndarray:  # noqa: PL
         ss = [s.decode("utf-8") if isinstance(s, bytes) else str(s) for s in utf8_strings]
         return _reshape_or_raise(np.asarray(ss).astype(np_dtype), dims, tensor)
 
-    # Load raw data from external tensor if it exists
+    # Read external bytes without changing the tensor's storage or metadata.
+    external_raw_data = None
     if int(tensor.data_location) == int(TensorProto.EXTERNAL):
-        _load_external_data_for_tensor(tensor, base_dir)
+        external_raw_data = _read_external_data_bytes(tensor, base_dir)
 
-    if len(tensor.raw_data) > 0:
+    if external_raw_data is not None or len(tensor.raw_data) > 0:
         # Raw bytes support: using frombuffer.
-        raw_data = bytes(tensor.raw_data)
+        raw_data = external_raw_data if external_raw_data is not None else bytes(tensor.raw_data)
         if sys.byteorder == "big":
             # Convert endian from little to big
             raw_data = np.frombuffer(raw_data, dtype=np_dtype).byteswap().tobytes()

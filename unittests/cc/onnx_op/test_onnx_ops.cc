@@ -130,6 +130,8 @@ TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
   parity_schemas.insert(parity_schemas.end(), training_schemas.begin(), training_schemas.end());
 
   for (const core::schema::LightOpSchema &schema : parity_schemas) {
+    if (schema.domain() == "onnx_light")
+      continue;
     SCOPED_TRACE(schema.name() + "@" + std::to_string(schema.since_version()));
     const std::string domain =
         onnx_light::IsOnnxDomain(schema.domain()) ? onnx_light::ONNX_DOMAIN : schema.domain();

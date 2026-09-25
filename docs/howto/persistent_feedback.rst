@@ -434,6 +434,18 @@ ONNX ``Attention`` operator or introduce another state subsystem. Declare
 ``past <- present`` in ``GraphProto.persistent_bindings``. Initialize each
 request with ``PagedAttention::EmptyCache()``.
 
+``onnx_light::PagedAttention`` has a ``LightOpSchema`` at opset 1 and a
+registered shape-inference function
+:cpp:func:`onnx_shapes::shapes::nn::ComputeShapePagedAttention`.
+Import domain ``onnx_light`` at version 1
+in the model. Inference checks the known Q/K/V dimensions and the cache
+structure, produces FLOAT ``Y`` with shape ``[1,1,L,value_head_size]``, and
+preserves the declared cache type for ``present``, including model-local type
+references. Unknown ranks and symbolic dimensions remain supported. Cache
+page capacities should remain unspecified because appended pages can have
+different lengths. Schema and shape-function registration do not register the
+execution kernel.
+
 Register the native kernel on the context used by the state:
 
 .. code-block:: cpp

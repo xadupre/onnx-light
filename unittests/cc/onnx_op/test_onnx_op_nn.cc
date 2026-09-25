@@ -3,10 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_lib/defs/operator_sets.h"
+#include "onnx_op/operator_sets.h"
 #include "onnx_op/operator_sets_nn.h"
+#include "onnx_proto/onnx_helper.h"
 
 #include <gtest/gtest.h>
 
+#include <optional>
 #include <unordered_map>
 #include <vector>
 
@@ -33,6 +36,7 @@ constexpr size_t kExpectedGroupNormalizationSchemaCount = 2;
 constexpr size_t kExpectedInstanceNormalizationSchemaCount = 3;
 constexpr size_t kExpectedLayerNormalizationSchemaCount = 1;
 constexpr size_t kExpectedLinearAttentionSchemaCount = 1;
+constexpr size_t kExpectedPagedAttentionSchemaCount = 1;
 constexpr size_t kExpectedMeanVarianceNormalizationSchemaCount = 2;
 constexpr size_t kExpectedLRNSchemaCount = 2;
 constexpr size_t kExpectedLpNormalizationSchemaCount = 2;
@@ -58,7 +62,7 @@ constexpr size_t kExpectedNnSchemaCount =
     kExpectedLSTMSchemaCount + kExpectedMaxPoolSchemaCount + kExpectedMaxRoiPoolSchemaCount +
     kExpectedMaxUnpoolSchemaCount + kExpectedMeanVarianceNormalizationSchemaCount +
     kExpectedRNNSchemaCount + kExpectedRMSNormalizationSchemaCount +
-    kExpectedRotaryEmbeddingSchemaCount;
+    kExpectedRotaryEmbeddingSchemaCount + kExpectedPagedAttentionSchemaCount;
 
 static const core::schema::LightOpSchema *
 FindByVersion(const std::vector<core::schema::LightOpSchema> &schemas, int version) {
@@ -108,6 +112,79 @@ TEST(OnnxOpNnRegistrationTest, Attention25MetadataMatchesFullSchema) {
       EXPECT_DOUBLE_EQ(std::get<double>(light_attr.default_value), attr.default_value.f()) << name;
     }
   }
+}
+
+TEST(OnnxOpNnRegistrationTest, PagedAttentionSchemaAndDefaults) {
+  const auto schemas = onnx_op::GetAllOnnxOpSchemasWithHistory("PagedAttention");
+  ASSERT_EQ(schemas.size(), 1u);
+  const auto &schema = schemas.front();
+  EXPECT_EQ(schema.domain(), "onnx_light");
+  EXPECT_EQ(schema.since_version(), 1);
+  EXPECT_EQ(schema.inputs().size(), 4u);
+  EXPECT_EQ(schema.outputs().size(), 2u);
+  EXPECT_EQ(schema.min_output(), 2);
+  EXPECT_EQ(schema.max_output(), 2);
+  ASSERT_EQ(schema.attributes().size(), 10u);
+  const std::unordered_map<std::string, int64_t> defaults = {
+      {"block_size", 16},
+      {"max_tokens", 4096},
+      {"is_causal", 1},
+      {"left_window_size", -1},
+      {"key_storage_type", TensorProto::FLOAT},
+      {"value_storage_type", TensorProto::FLOAT},
+      {"key_zero_point", 0},
+      {"value_zero_point", 0}};
+  for (const auto &attribute : schema.attributes()) {
+    EXPECT_FALSE(attribute.required);
+    if (attribute.type == core::schema::AttributeType::FLOAT)
+      EXPECT_EQ(std::get<double>(attribute.default_value), 1.0);
+    else
+      EXPECT_EQ(std::get<int64_t>(attribute.default_value), defaults.at(attribute.name));
+  }
+}
+
+TEST(OnnxOpNnRegistrationTest, PagedAttentionVerifiesTypesAndAttributes) {
+  const auto schema = onnx_op::GetAllOnnxOpSchemasWithHistory("PagedAttention").front();
+  NodeProto node;
+  node.set_domain("onnx_light");
+  node.set_op_type("PagedAttention");
+  std::vector<std::optional<core::schema::SchemaInputValue>> inputs;
+  for (const char *name : {"Q", "K", "V", "past"}) {
+    node.add_input(name);
+    ValueInfoProto info;
+    info.set_name(name);
+    if (std::string(name) == "past")
+      info.mutable_type()->mutable_struct_type()->mutable_structure();
+    else
+      info.mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+    inputs.emplace_back(info);
+  }
+  node.add_output("Y");
+  node.add_output("present");
+  EXPECT_NO_THROW(schema.Verify(node, &inputs));
+  for (const auto &attribute : schema.attributes()) {
+    if (attribute.type == core::schema::AttributeType::FLOAT)
+      AddAttribute<float>(node, attribute.name.c_str(), 1.0f);
+    else
+      AddAttribute<int64_t>(node, attribute.name.c_str(),
+                            std::get<int64_t>(attribute.default_value));
+  }
+  EXPECT_NO_THROW(schema.Verify(node, &inputs));
+  std::get<ValueInfoProto>(*inputs[0])
+      .mutable_type()
+      ->mutable_tensor_type()
+      ->set_elem_type(TensorProto::DOUBLE);
+  EXPECT_THROW(schema.Verify(node, &inputs), core::schema::SchemaError);
+  node.clear_attribute();
+  AddAttribute<float>(node, "block_size", 16.0f);
+  EXPECT_THROW(schema.Verify(node), core::schema::SchemaError);
+  node.clear_attribute();
+  AddAttribute<int64_t>(node, "unknown_option", 1);
+  EXPECT_THROW(schema.Verify(node), core::schema::SchemaError);
+  node.clear_attribute();
+  node.clear_output();
+  node.add_output("Y");
+  EXPECT_THROW(schema.Verify(node), core::schema::SchemaError);
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsAveragePoolSchemasWithoutShapeInference) {

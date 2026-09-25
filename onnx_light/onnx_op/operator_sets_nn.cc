@@ -1535,6 +1535,46 @@ LightOpSchema MakeLinearAttentionSchema(int since_version) {
       /*has_function_implementation=*/true);
 }
 
+LightOpSchema MakePagedAttentionSchema() {
+  return LightOpSchema(
+      "PagedAttention", "onnx_light", 1,
+      "Appends immutable KV pages and computes attention for finite FLOAT Q/K/V tensors "
+      "of shape [1,1,L,D], with equal new sequence lengths and matching Q/K head sizes. "
+      "The cache is a struct containing blocks, a sequence of structs with INT64 scalar "
+      "start/length and FLOAT logical key/value tensors [1,1,capacity,head_size]. "
+      "Pages may be dense or inline affine INT8/UINT8/INT4/UINT4 encodings. "
+      "Y has shape [1,1,L,value_head_size]; present preserves the cache type. "
+      "Partial pages are sealed. The kernel must be registered explicitly.",
+      {{"Q", "Queries [1,1,L,key_head_size].", "T"},
+       {"K", "New keys [1,1,L,key_head_size].", "T"},
+       {"V", "New values [1,1,L,value_head_size].", "T"},
+       {"past", "Structured cache containing the blocks sequence.", "C"}},
+      {{"Y", "Attention result [1,1,L,value_head_size].", "T"},
+       {"present", "Cache including the newly appended pages.", "C"}},
+      {{"T", {TensorType::kFloat}, "FLOAT tensors."},
+       {"C", {TensorType::kStruct}, "Named paged-cache structure."}},
+      {{"block_size", "Maximum token capacity of each page; positive.", AttributeType::INT, false,
+        int64_t(16)},
+       {"max_tokens", "Maximum total number of cached tokens; positive.", AttributeType::INT, false,
+        int64_t(4096)},
+       {"is_causal", "Uses causal attention when 1; must be 0 or 1.", AttributeType::INT, false,
+        int64_t(1)},
+       {"left_window_size", "Number of preceding tokens to attend, or -1 for no left limit.",
+        AttributeType::INT, false, int64_t(-1)},
+       {"key_storage_type", "New key page dtype: FLOAT, INT8, UINT8, INT4 or UINT4.",
+        AttributeType::INT, false, int64_t(TensorProto::FLOAT)},
+       {"value_storage_type", "New value page dtype: FLOAT, INT8, UINT8, INT4 or UINT4.",
+        AttributeType::INT, false, int64_t(TensorProto::FLOAT)},
+       {"key_scale", "Positive finite key quantization scale; 1 for dense pages.",
+        AttributeType::FLOAT, false, 1.0f},
+       {"value_scale", "Positive finite value quantization scale; 1 for dense pages.",
+        AttributeType::FLOAT, false, 1.0f},
+       {"key_zero_point", "Key zero point in the storage dtype range; 0 for dense pages.",
+        AttributeType::INT, false, int64_t(0)},
+       {"value_zero_point", "Value zero point in the storage dtype range; 0 for dense pages.",
+        AttributeType::INT, false, int64_t(0)}});
+}
+
 // --- LayerNormalization ------------------------------------------------------
 
 // Input/output descriptions reproduced verbatim from the upstream ONNX
@@ -2290,6 +2330,7 @@ std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(const std::string &o
              MakeLinearAttentionSchema(27),
          };
        }},
+      {"PagedAttention", [] { return std::vector<LightOpSchema>{MakePagedAttentionSchema()}; }},
       {"LSTM",
        [] {
          return std::vector<LightOpSchema>{

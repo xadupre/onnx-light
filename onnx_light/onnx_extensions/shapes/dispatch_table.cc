@@ -51,6 +51,7 @@ const std::unordered_map<std::string, ComputeShapeFn> &BuiltinShapeFunctions() {
   static const std::unordered_map<std::string, ComputeShapeFn> table = {
       {"ai.rt:Quantize", rt::ComputeShapeQuantize},
       {"ai.rt:Dequantize", rt::ComputeShapeDequantize},
+      {"onnx_light:PagedAttention", nn::ComputeShapePagedAttention},
       {"ai.onnx:Abs",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
@@ -1364,8 +1365,9 @@ void RegisterShapeFunctions() {
     for (const auto &entry : shapes::BuiltinShapeFunctions()) {
       const std::string &key = entry.first;
       const std::size_t sep = key.find(':');
-      ::onnx_light::core::shapes::RegisterComputeShapeFn(key.substr(0, sep), key.substr(sep + 1),
-                                                         entry.second, key == "ai.rt:Dequantize");
+      ::onnx_light::core::shapes::RegisterComputeShapeFn(
+          key.substr(0, sep), key.substr(sep + 1), entry.second,
+          key == "ai.rt:Dequantize" || key == "onnx_light:PagedAttention");
     }
     return true;
   }();

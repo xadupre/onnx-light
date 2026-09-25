@@ -1656,8 +1656,10 @@ QuantizationParameterCatalogue::Build(const ModelProto &model) {
       return std::string(reinterpret_cast<const char *>(tensor.bytes()), tensor.size_bytes());
     };
     Entry entry;
-    entry.storage_type.ParseFromString(descriptor("storage_type"));
-    entry.logical_type.ParseFromString(descriptor("logical_type"));
+    EXT_ENFORCE_INVALID(entry.storage_type.ParseFromString(descriptor("storage_type")),
+                        "Invalid shared storage_type descriptor.");
+    EXT_ENFORCE_INVALID(entry.logical_type.ParseFromString(descriptor("logical_type")),
+                        "Invalid shared logical_type descriptor.");
     TypeProto declared;
     *declared.mutable_struct_type() = entry.storage_type;
     types.ValidateType(declared);

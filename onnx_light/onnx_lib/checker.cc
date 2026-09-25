@@ -15,10 +15,12 @@
 #include <unordered_set>
 #include <vector>
 
+#include "onnx_core/runtime/quantization.h"
 #include "onnx_lib/common/file_utils.h"
 #include "onnx_lib/common/path.h"
 #include "onnx_lib/common/proto_util.h"
 #include "onnx_lib/common/scoped_resource.h"
+#include "onnx_lib/shape_inference/attribute_binder.h"
 #include "onnx_lib/shape_inference/implementation.h"
 #include "onnx_manipulations/tensor_proto_util.h"
 #include "onnx_proto/onnx_helper.h"
@@ -1163,63 +1165,72 @@ void check_function(const FunctionProto &function, const CheckerContext &ctx,
 }
 
 static void check_quantization_parameter_references(const ModelProto &model) {
-  std::unordered_set<std::string> initializers, references;
-  for (const auto &tensor : model.graph().initializer())
-    initializers.insert(tensor.name());
-  constexpr std::string_view prefix = "onnx_light.quantization.parameters:";
-  for (const auto &annotation : model.graph().quantization_annotation()) {
-    const std::string name = annotation.tensor_name().value();
-    if (!name.starts_with(prefix))
-      continue;
-    const std::string reference = name.substr(prefix.size());
-    if (reference.empty() || !references.insert(reference).second)
-      fail_check("Empty or duplicate quantization parameter set: ", reference);
-    std::unordered_set<std::string> roles;
-    for (const auto &mapping : annotation.quant_parameter_tensor_names()) {
-      if (!initializers.contains(mapping.value()))
-        fail_check("Missing shared parameter initializer: ", mapping.value());
-      if (!roles.insert(mapping.key()).second)
-        fail_check("Duplicate shared parameter role: ", mapping.key());
-    }
-    if (!roles.contains("scales") || !roles.contains("storage_type") ||
-        !roles.contains("logical_type"))
-      fail_check("Shared quantization requires fixed scales, storage_type and logical_type.");
-  }
+  std::shared_ptr<const core::runtime::QuantizationParameterCatalogue> parameters;
+  check_structured(
+      [&]() { parameters = core::runtime::QuantizationParameterCatalogue::Build(model); });
   auto reference = [&](const std::string &name) {
-    if (!references.contains(name))
-      fail_check("Missing quantization parameter_ref: ", name);
+    check_structured([&]() { parameters->Get(name); });
   };
-  std::function<void(const GraphProto &)> graph;
-  auto nodes = [&](const auto &list) {
-    for (const auto &node : list) {
-      for (const auto &attribute : node.attribute()) {
-        if (node.domain() == "ai.rt" && node.op_type() == "Quantize" &&
-            attribute.name() == "parameter_ref") {
-          if (!attribute.has_ref_attr_name()) {
-            if (attribute.type() != AttributeProto::STRING || attribute.s().empty())
-              fail_check("Quantize parameter_ref must be a nonempty string.");
-            reference(attribute.s());
-          }
-          for (size_t i = 1; i < node.input().size(); ++i)
-            if (!node.input(i).empty())
+  std::unordered_map<FunctionImplId, const FunctionProto *> functions;
+  for (const auto &function : model.functions())
+    functions.emplace(GetFunctionImplId(function), &function);
+  std::unordered_set<FunctionImplId> active;
+  bool has_bound_references = false;
+  std::function<void(const GraphProto &, bool)> graph;
+  std::function<void(const NodeProto &, bool)> node;
+  node = [&](const NodeProto &value, bool bind_functions) {
+    for (const auto &attribute : value.attribute()) {
+      if (value.domain() == "ai.rt" && value.op_type() == "Quantize" &&
+          attribute.name() == "parameter_ref") {
+        if (!attribute.ref_attr_name().empty()) {
+          has_bound_references = true;
+        } else {
+          if (attribute.type() != AttributeProto::STRING || attribute.s().empty())
+            fail_check("Quantize parameter_ref must be a nonempty string.");
+          reference(attribute.s());
+          for (size_t i = 1; i < value.input().size(); ++i)
+            if (!value.input(i).empty())
               fail_check("Quantize parameter_ref excludes explicit optional parameters.");
         }
-        if (attribute.has_g())
-          graph(attribute.g());
-        for (const auto &nested : attribute.graphs())
-          graph(nested);
       }
+      if (attribute.has_g())
+        graph(attribute.g(), bind_functions);
+      for (const auto &nested : attribute.graphs())
+        graph(nested, bind_functions);
     }
+    if (!bind_functions)
+      return;
+    const auto id = GetCalleeId(value);
+    const auto found = functions.find(id);
+    if (found == functions.end())
+      return;
+    if (!active.insert(id).second)
+      fail_check("Recursive model-local function: ", id);
+    FunctionProto bound;
+    bound.CopyFrom(*found->second);
+    internal::AttributeMap attributes;
+    for (const auto &attribute : found->second->attribute_proto())
+      attributes[attribute.name()] = &attribute;
+    for (const auto &attribute : value.attribute())
+      attributes[attribute.name()] = &attribute;
+    internal::AttributeBinder(attributes).VisitFunction(bound);
+    for (const auto &nested : bound.node())
+      node(nested, true);
+    active.erase(id);
   };
-  graph = [&](const GraphProto &value) {
+  graph = [&](const GraphProto &value, bool bind_functions) {
     for (const auto &encoded : value.encoded_initializer())
       if (encoded.has_parameter_ref())
         reference(encoded.parameter_ref().value());
-    nodes(value.node());
+    for (const auto &nested : value.node())
+      node(nested, bind_functions);
   };
-  graph(model.graph());
+  graph(model.graph(), false);
   for (const auto &function : model.functions())
-    nodes(function.node());
+    for (const auto &nested : function.node())
+      node(nested, false);
+  if (has_bound_references)
+    graph(model.graph(), true);
 }
 
 static void check_model(const ModelProto &model, CheckerContext &ctx) {

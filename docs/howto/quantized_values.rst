@@ -242,6 +242,9 @@ serialized ``StructTypeProto`` and ``TypeProto`` descriptors; the other roles
 refer to ordinary numerical TensorProto initializers. Unprefixed annotations
 keep their existing meaning. Duplicate set names, duplicate or unknown roles,
 missing initializers and incompatible descriptors or numerical tensors are errors.
+``checker.check_model`` uses the runtime catalogue's declaration validation and
+reports these errors as ``ValidationError``. Numerical parameters stored in
+external data must be loaded before this validation.
 This representation uses onnx-light's protobuf model serialization. Native ORT
 model serialization rejects quantization annotations and encoded initializers;
 textproto export also rejects unsupported structured/shared values instead of
@@ -250,7 +253,9 @@ silently dropping their references.
 These declarations are model-scoped, not lexical graph inputs. Nested graphs
 and model-local functions inherit the model's parameter catalogue; local input
 names do not select a different set. Identity preserves the reference and its
-owner. The runtime takes an owned, immutable snapshot of the resolved numerical
+owner. Model checking resolves function-bound ``parameter_ref`` attributes using
+call-site values or function defaults, including nested calls and subgraphs.
+The runtime takes an owned, immutable snapshot of the resolved numerical
 parameters, so retained encoded outputs can outlive the source model, session
 and context. Changing a model after creating its session does not update that
 session's parameter snapshot.

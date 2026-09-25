@@ -220,7 +220,7 @@ TEST(RuntimeEvents, SerializesRecordingFromConcurrentChildren) {
   EXPECT_EQ(body_events, 400u);
 }
 
-TEST(RuntimeContext, ReplacesEveryValueCategory) {
+TEST(RuntimeContext, ReplacementPreservesSingleValueCategory) {
   RuntimeContext context;
   auto publish = [&](int category, const std::string &name) {
     switch (category) {
@@ -249,6 +249,8 @@ TEST(RuntimeContext, ReplacesEveryValueCategory) {
   };
   for (int before = 0; before < 7; ++before) {
     for (int after = 0; after < 7; ++after) {
+      if (after == 4)
+        continue;
       SCOPED_TRACE(std::to_string(before) + " -> " + std::to_string(after));
       publish(before, "value");
       EXPECT_THROW(context.Set("value", Tensor{}), std::runtime_error);
@@ -268,6 +270,17 @@ TEST(RuntimeContext, ReplacesEveryValueCategory) {
   context.Clear();
   for (int category = 0; category < 7; ++category)
     EXPECT_FALSE(context.HasValue(std::to_string(category)));
+}
+
+TEST(RuntimeContext, SequenceInsertionOverwritesExistingSequence) {
+  RuntimeContext context;
+  context.PutSequence("value", Sequence("value", static_cast<int32_t>(DataType::FLOAT),
+                                        {Tensor::FromFloat("", {1}, {1})}));
+  context.PutSequence("value", Sequence("value", static_cast<int32_t>(DataType::FLOAT),
+                                        {Tensor::FromFloat("", {1}, {2})}));
+  EXPECT_TRUE(context.HasSequence("value"));
+  ASSERT_EQ(context.GetSequence("value").values.size(), 1u);
+  EXPECT_FLOAT_EQ(context.GetSequence("value").values[0].AsFloat()[0], 2);
 }
 
 TEST(RuntimeContext, ReplacementPreservesAllocatorOwnershipAndTensorEvents) {

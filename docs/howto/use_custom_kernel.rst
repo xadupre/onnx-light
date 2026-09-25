@@ -111,12 +111,13 @@ Publishing and replacing values
 -------------------------------
 
 A ``RuntimeContext`` has one value category per name. ``Put`` (Python ``put``),
-``PutValue`` (``put_value``), ``PutSequence`` (``put_sequence``), ``PutMap``
-(``put_map``), and ``PutShape`` replace any previous category under that name.
-``PutValue`` routes ordinary tensors to the tensor store and structures or encoded
-values to the structured-value store. ``Set`` (``set``) rejects a name already
-present in any store. ``Remove`` (``remove``) removes any category, and ``Clear``
-(``clear``) clears all value stores.
+``PutValue`` (``put_value``), ``PutMap`` (``put_map``), and ``PutShape`` replace
+any previous category under that name. ``PutSequence`` (``put_sequence``)
+overwrites an existing sequence without first removing it, which allows a runtime
+context to execute the same graph repeatedly. ``PutValue`` routes ordinary tensors
+to the tensor store and structures or encoded values to the structured-value store.
+``Set`` (``set``) rejects a name already present in any store. ``Remove``
+(``remove``) removes any category, and ``Clear`` (``clear``) clears all value stores.
 
 Kernels must finish computing their result before publishing it: replacing a name
 invalidates references to its previous value, including potentially aliased inputs.

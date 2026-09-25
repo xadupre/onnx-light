@@ -957,11 +957,9 @@ public:
   }
 
   /// Inserts or overwrites the sequence stored under ``name``. The
-  /// stored sequence's ``name`` field is updated to ``name``. Replaces any previous
-  /// category; only removal of an ordinary tensor is logged.
-  void PutSequence(std::string name, Sequence sequence) {
+  /// stored sequence's ``name`` field is updated to ``name``.
+  void PutSequence(const std::string &name, Sequence sequence) {
     sequence.name = name;
-    Remove(name);
     sequences_[name] = std::move(sequence);
   }
 

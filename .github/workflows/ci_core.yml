@@ -205,13 +205,16 @@ jobs:
         # Structural equality adds 39 public Equals methods and field-level diagnostics.
         # Linux CI run 36120766116 measures 1552328 installed bytes, 1085786 text
         # bytes and 852 defined dynamic symbols. The dependency allowlist is unchanged.
+        # Shared quantization adds parameter_ref serialization, comparison and validation.
+        # Linux CI run 36132778661 measures 1556424 installed bytes and 1087098 text
+        # bytes; the symbol limit and dependency allowlist are unchanged.
         run: |
           proto_dir="$(python -c 'import importlib.util, pathlib; print(pathlib.Path(importlib.util.find_spec("onnx_light.onnx_py._onnxpyprotoop").origin).parent)')"
           python .github/scripts/report_proto_binary_size.py \
             "${proto_dir}" \
             --summary "${GITHUB_STEP_SUMMARY}" \
-            --max-installed-size 1552328 \
-            --max-text-size 1085786 \
+            --max-installed-size 1556424 \
+            --max-text-size 1087098 \
             --max-dynamic-symbols 852 \
             --allowed-dependency libcrypto.so.3 \
             --allowed-dependency libstdc++.so.6 \

@@ -1026,3 +1026,32 @@ TEST(Quantization, OrtMatMulNBitsRejectsUnsupportedPlansAndMalformedValues) {
       QuantizeTensor(source, MakeQuantizationPlan(QuantizationFormat::kMatmulnbits, 2));
   EXPECT_THROW(ExportMatMulNBitsInputs(portable.Encoded()), std::invalid_argument);
 }
+
+TEST(Quantization, SchemaMismatchReportsFieldPath) {
+  const auto source = Tensor::FromFloat("", {2, 1}, {1, 2});
+  for (auto format : {QuantizationFormat::kInt4, QuantizationFormat::kOrtMatmulnbitsInt4}) {
+    const auto plan = format == QuantizationFormat::kInt4 ? MakeQuantizationPlan(format, 2)
+                                                          : MakeMatMulNBitsPlan(format, 2, 1, 16);
+    auto encoded = QuantizeTensor(source, plan).Encoded();
+    encoded.mutable_struct_type()->mutable_structure()->mutable_field(1)->set_doc_string("extra");
+    try {
+      DequantizeTensor(encoded);
+      FAIL() << "Expected a schema mismatch";
+    } catch (const std::invalid_argument &error) {
+      const std::string message = error.what();
+      EXPECT_NE(message.find("descriptor does not match its versioned schema"), std::string::npos);
+      EXPECT_NE(message.find("structure.field[1].doc_string: presence differs"), std::string::npos);
+    }
+  }
+  auto encoded =
+      QuantizeTensor(source, MakeMatMulNBitsPlan(QuantizationFormat::kOrtMatmulnbitsInt4, 2, 1, 16))
+          .Encoded();
+  encoded.mutable_struct_type()->mutable_structure()->mutable_field(1)->set_name("weights");
+  try {
+    ExportMatMulNBitsInputs(encoded);
+    FAIL() << "Expected an ORT schema mismatch";
+  } catch (const std::invalid_argument &error) {
+    EXPECT_NE(std::string(error.what()).find("structure.field[1].name: values differ"),
+              std::string::npos);
+  }
+}

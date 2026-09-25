@@ -185,6 +185,25 @@ void RegisterLogSoftmaxCases(std::vector<TestCase> &registry, TestMode mode) {
   }
 
   {
+    const OpsetId opset = DefaultOpset(23);
+    NodeProto node;
+    node.set_op_type("LogSoftmax");
+    node.add_input("input");
+    node.add_output("output");
+    AttributeProto *axis = node.add_attribute();
+    axis->set_name("axis");
+    axis->set_type(AttributeProto::INT);
+    axis->set_i(-1);
+    Expect(registry, std::move(node), "test_cc_logsoftmax_large_finite_gap", {opset},
+           []() -> IoData {
+             // log(softmax(x)) would underflow to -inf for the second class.
+             Tensor x = Tensor::FromFloat("", {1, 2}, {0.0f, -104.0f});
+             Tensor y = Tensor::FromFloat("", {1, 2}, {0.0f, -104.0f});
+             return IoData{{std::move(x)}, {std::move(y)}};
+           });
+  }
+
+  {
     const OpsetId opset = DefaultOpset(13);
 
     NodeProto node;

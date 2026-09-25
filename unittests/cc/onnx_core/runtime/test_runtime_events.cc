@@ -219,3 +219,106 @@ TEST(RuntimeEvents, SerializesRecordingFromConcurrentChildren) {
   EXPECT_EQ(allocated_bytes, 800u);
   EXPECT_EQ(body_events, 400u);
 }
+
+TEST(RuntimeContext, ReplacementPreservesSingleValueCategory) {
+  RuntimeContext context;
+  auto publish = [&](int category, const std::string &name) {
+    switch (category) {
+    case 0:
+      context.Put(name, Tensor::FromFloat(name, {1}, {42}));
+      break;
+    case 1:
+      context.PutValue(name, RuntimeValue(Tensor::FromFloat(name, {1}, {42})));
+      break;
+    case 2:
+      context.PutValue(name, RuntimeValue{});
+      break;
+    case 3:
+      context.PutValue(name, RuntimeValue(EncodedValueProto{}));
+      break;
+    case 4:
+      context.PutSequence(name, Sequence{});
+      break;
+    case 5:
+      context.PutMap(name, Map{});
+      break;
+    case 6:
+      context.PutShape(name, Shape{1});
+      break;
+    }
+  };
+  for (int before = 0; before < 7; ++before) {
+    for (int after = 0; after < 7; ++after) {
+      if (after == 4)
+        continue;
+      SCOPED_TRACE(std::to_string(before) + " -> " + std::to_string(after));
+      publish(before, "value");
+      EXPECT_THROW(context.Set("value", Tensor{}), std::runtime_error);
+      publish(after, "value");
+      EXPECT_TRUE(context.HasValue("value"));
+      EXPECT_EQ(context.Has("value"), after <= 1);
+      EXPECT_EQ(context.values().count("value"), after == 2 || after == 3 ? 1u : 0u);
+      EXPECT_EQ(context.HasSequence("value"), after == 4);
+      EXPECT_EQ(context.HasMap("value"), after == 5);
+      EXPECT_EQ(context.HasShape("value"), after == 6);
+      EXPECT_TRUE(context.Remove("value"));
+      EXPECT_FALSE(context.HasValue("value"));
+      EXPECT_FALSE(context.Remove("value"));
+    }
+    publish(before, std::to_string(before));
+  }
+  context.Clear();
+  for (int category = 0; category < 7; ++category)
+    EXPECT_FALSE(context.HasValue(std::to_string(category)));
+}
+
+TEST(RuntimeContext, SequenceInsertionOverwritesExistingSequence) {
+  RuntimeContext context;
+  context.PutSequence("value", Sequence("value", static_cast<int32_t>(DataType::FLOAT),
+                                        {Tensor::FromFloat("", {1}, {1})}));
+  context.PutSequence("value", Sequence("value", static_cast<int32_t>(DataType::FLOAT),
+                                        {Tensor::FromFloat("", {1}, {2})}));
+  EXPECT_TRUE(context.HasSequence("value"));
+  ASSERT_EQ(context.GetSequence("value").values.size(), 1u);
+  EXPECT_FLOAT_EQ(context.GetSequence("value").values[0].AsFloat()[0], 2);
+}
+
+TEST(RuntimeContext, ReplacementPreservesAllocatorOwnershipAndTensorEvents) {
+  SimpleRawBufferAllocator allocator(4);
+  RuntimeContext context(RuntimeContextOptions{.allocator = &allocator, .events_enabled = true});
+  context.Set("value", Tensor::FromFloat("value", {1}, {42}));
+  EXPECT_EQ(context.Get("value").allocation_owner(), &allocator);
+  RuntimeValue structure;
+  structure.fields.emplace("field", RuntimeValue(context.Get("value")));
+  context.PutValue("value", std::move(structure));
+  EXPECT_FALSE(context.Has("value"));
+  context.PutValue("value", context.values().at("value").fields.at("field"));
+  EXPECT_TRUE(context.values().empty());
+  EXPECT_EQ(context.Get("value").allocation_owner(), &allocator);
+  EXPECT_FLOAT_EQ(context.Get("value").AsFloat()[0], 42);
+  EXPECT_EQ(allocator.TotalAllocatedSize(), sizeof(float));
+  ASSERT_EQ(context.events().size(), 3u);
+  EXPECT_EQ(context.events()[0].action, RuntimeEventAction::kAdd);
+  EXPECT_EQ(context.events()[1].action, RuntimeEventAction::kRemove);
+  EXPECT_EQ(context.events()[2].action, RuntimeEventAction::kReplace);
+  EXPECT_DOUBLE_EQ(context.events()[2].values[0], 42);
+  EXPECT_TRUE(context.Remove("value"));
+  EXPECT_EQ(allocator.TotalAllocatedSize(), 0u);
+}
+
+TEST(RuntimeContext, ReplacementAndRemovalPreserveAliasedNames) {
+  auto context = EventContext();
+  const std::string name(80, 'x');
+  context.PutSequence(name, Sequence{});
+  context.Put(context.GetSequence(name).name, Tensor::FromFloat(name, {1}, {42}));
+  ASSERT_TRUE(context.Has(name));
+  EXPECT_FLOAT_EQ(context.Get(name).AsFloat()[0], 42);
+  EXPECT_TRUE(context.Remove(context.Get(name).name));
+  EXPECT_EQ(context.events().back().name, name);
+  context.PutMap(name, Map{});
+  EXPECT_TRUE(context.Remove(context.GetMap(name).name));
+  EXPECT_FALSE(context.HasValue(name));
+  context.PutSequence(name, Sequence{});
+  EXPECT_TRUE(context.Remove(context.GetSequence(name).name));
+  EXPECT_FALSE(context.HasValue(name));
+}

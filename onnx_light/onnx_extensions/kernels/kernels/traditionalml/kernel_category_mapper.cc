@@ -183,7 +183,7 @@ void CategoryMapper::Run(RuntimeContext &rt) {
   default:
     EXT_THROW_INVALID("RunNode: CategoryMapper input X must have element type STRING or INT64.");
   }
-  SetOutput(node, 0, std::move(y), rt.tensors());
+  SetOutput(node, 0, std::move(y), rt);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

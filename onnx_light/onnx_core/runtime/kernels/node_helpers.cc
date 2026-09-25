@@ -30,14 +30,6 @@ const Tensor *GetOptionalInput(const NodeProto &node, int index, const TensorMap
   return &it->second;
 }
 
-void SetOutput(const NodeProto &node, int index, Tensor result, TensorMap &tensors) {
-  const std::string &name = node.output(index);
-  EXT_ENFORCE_INVALID(!(name.empty()), "RunNode: op '", node.op_type(), "' output #", index,
-                      " is unset (empty name).");
-  result.name = name;
-  tensors[name] = std::move(result);
-}
-
 void SetOutput(const NodeProto &node, int index, Tensor result, RuntimeContext &rt) {
   const std::string &name = node.output(index);
   EXT_ENFORCE_INVALID(!(name.empty()), "RunNode: op '", node.op_type(), "' output #", index,

@@ -281,8 +281,8 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt, SubgraphSession &then_
       rt.PutSequence(caller_name, child.GetSequence(out_name));
     } else if (child.values().count(out_name) != 0) {
       RuntimeValue &value = child.values().at(out_name);
-      rt.values().insert_or_assign(caller_name, rt.retains_output(caller_name) ? std::move(value)
-                                                                               : value.DeepCopy());
+      rt.PutValue(caller_name,
+                  rt.retains_output(caller_name) ? std::move(value) : value.DeepCopy());
     } else {
       auto it = child.tensors().find(out_name);
       EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: If: subgraph output '", out_name,
@@ -868,7 +868,7 @@ public:
       }
       auto value = rt.values().find(caller_name);
       if (value != rt.values().end()) {
-        child.values().emplace(param_name, value->second.BorrowView());
+        child.PutValue(param_name, value->second.BorrowView(), RuntimeEventKind::kInput);
         continue;
       }
       auto it = rt.tensors().find(caller_name);
@@ -896,9 +896,8 @@ public:
       }
       auto value = child.values().find(param_name);
       if (value != child.values().end()) {
-        rt.values().insert_or_assign(caller_name, rt.retains_output(caller_name)
-                                                      ? std::move(value->second)
-                                                      : value->second.DeepCopy());
+        rt.PutValue(caller_name, rt.retains_output(caller_name) ? std::move(value->second)
+                                                                : value->second.DeepCopy());
         continue;
       }
       auto it = child.tensors().find(param_name);

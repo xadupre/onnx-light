@@ -556,7 +556,9 @@ public:
   void set_current_node_index(int64_t index) noexcept { current_node_index_ = index; }
   int64_t current_node_index() const noexcept { return current_node_index_; }
 
-  /// In/out tensor map shared across every node in a chain.
+  /// Returns the tensor map shared across every node in a chain. Publication through
+  /// Set/Put/PutValue/PutMap/PutShape keeps each name in exactly one store.
+  /// PutSequence and direct store mutations require callers to preserve this invariant.
   TensorMap &tensors() noexcept { return tensors_; }
   const TensorMap &tensors() const noexcept { return tensors_; }
 
@@ -780,16 +782,22 @@ public:
   /// Returns ``true`` if a tensor named ``name`` is currently held.
   bool Has(const std::string &name) const { return tensors_.find(name) != tensors_.end(); }
 
-  /// Removes the tensor stored under ``name`` if present. Returns
-  /// ``true`` if an entry was erased, ``false`` otherwise. When an entry
+  /// Returns ``true`` if any value category is stored under ``name``.
+  bool HasValue(const std::string &name) const {
+    return Has(name) || values_.count(name) != 0 || HasSequence(name) || HasMap(name) ||
+           HasShape(name);
+  }
+
+  /// Removes any value stored under ``name``. Returns
+  /// ``true`` if an entry was erased, ``false`` otherwise. When a tensor
   /// is erased a :cpp:class:`RuntimeEvent` with action
   /// :cpp:enumerator:`RuntimeEventAction::kRemove` is appended to the
   /// event log; nothing is logged when ``name`` is not present.
   bool Remove(const std::string &name);
 
   /// Inserts the tensor under ``name``. The name must not already
-  /// be present in the map; use :cpp:func:`Put` (or ``tensors()``
-  /// directly) to overwrite. A :cpp:class:`RuntimeEvent` with action
+  /// be present in any value store; :cpp:func:`Put` supports overwriting.
+  /// A :cpp:class:`RuntimeEvent` with action
   /// :cpp:enumerator:`RuntimeEventAction::kAdd` and the supplied ``kind``
   /// is appended to the event log on successful insertion. ``kind``
   /// defaults to :cpp:enumerator:`RuntimeEventKind::kInput`, which is
@@ -808,8 +816,16 @@ public:
   /// of values written by node kernels through :cpp:func:`SetOutput`.
   /// Borrowed tensors remain zero-copy only when ``kind`` is
   /// :cpp:enumerator:`RuntimeEventKind::kInput`.
+  /// Replaces any previous value category under the name. Callers must finish
+  /// computing the result before publication invalidates references to the old value.
   void Put(const std::string &name, Tensor tensor,
            RuntimeEventKind kind = RuntimeEventKind::kIntermediate);
+
+  /// Publishes a tensor, structure or encoded value, replacing any previous category.
+  /// Routes tensors through Put to preserve allocator and event handling. Non-tensor
+  /// values only emit a removal event when they replace an ordinary tensor.
+  void PutValue(std::string name, RuntimeValue value,
+                RuntimeEventKind kind = RuntimeEventKind::kIntermediate);
 
   /**
    * Returns the tensor stored under ``name``.
@@ -860,7 +876,7 @@ public:
   RuntimeContext MakeFunctionContext() const;
 
   /// Resets the per-invocation state so the context can be reused for a
-  /// fresh run: clears the tensor map, the sequence map and the shared event
+  /// fresh run: clears all value stores and the shared event
   /// log, and resets :cpp:func:`current_node_index` to ``-1``. The kernel
   /// context, registered model-local functions and custom kernels, the
   /// cached :cpp:class:`ExecutionPlan` instances and the
@@ -871,8 +887,10 @@ public:
   /// separately.
   void Clear() noexcept {
     tensors_.clear();
+    values_.clear();
     sequences_.clear();
     maps_.clear();
+    shapes_.clear();
     ClearEvents();
     current_node_index_ = -1;
   }
@@ -939,9 +957,9 @@ public:
   }
 
   /// Inserts or overwrites the sequence stored under ``name``. The
-  /// stored sequence's ``name`` field is updated to ``name``. No event
-  /// is appended to the event log: sequence values are intentionally
-  /// outside the tensor event stream.
+  /// stored sequence's ``name`` field is updated to ``name``.
+  /// Leaves other value stores unchanged; callers must use a name that is
+  /// absent from those stores. Existing sequences may be overwritten on repeated runs.
   void PutSequence(const std::string &name, Sequence sequence) {
     sequence.name = name;
     sequences_[name] = std::move(sequence);
@@ -981,9 +999,11 @@ public:
   /// Returns ``true`` if a map named ``name`` is currently held.
   bool HasMap(const std::string &name) const { return maps_.find(name) != maps_.end(); }
 
-  /// Inserts or overwrites the map stored under ``name``.
-  void PutMap(const std::string &name, Map map) {
+  /// Inserts or overwrites the map under ``name``, replacing any previous category.
+  /// Only removal of an ordinary tensor is logged.
+  void PutMap(std::string name, Map map) {
     map.name = name;
+    Remove(name);
     maps_[name] = std::move(map);
   }
 
@@ -1012,8 +1032,12 @@ public:
   /// Returns ``true`` if a shape named ``name`` is currently held.
   bool HasShape(const std::string &name) const { return shapes_.find(name) != shapes_.end(); }
 
-  /// Inserts or overwrites the shape stored under ``name``.
-  void PutShape(const std::string &name, Shape shape) { shapes_[name] = std::move(shape); }
+  /// Inserts or overwrites the shape under ``name``, replacing any previous category.
+  /// Only removal of an ordinary tensor is logged.
+  void PutShape(std::string name, Shape shape) {
+    Remove(name);
+    shapes_[name] = std::move(shape);
+  }
 
   /// Removes the shape stored under ``name`` if present. Returns ``true`` if
   /// an entry was erased, ``false`` otherwise.

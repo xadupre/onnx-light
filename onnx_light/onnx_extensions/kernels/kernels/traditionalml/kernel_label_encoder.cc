@@ -340,7 +340,7 @@ void LabelEncoder::Run(RuntimeContext &rt) {
   } else {
     EXT_THROW_INVALID("RunNode: LabelEncoder key/value type combination is not supported.");
   }
-  SetOutput(node, 0, std::move(out), rt.tensors());
+  SetOutput(node, 0, std::move(out), rt);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

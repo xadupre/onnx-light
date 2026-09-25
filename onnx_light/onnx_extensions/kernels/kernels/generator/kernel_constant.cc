@@ -69,7 +69,7 @@ void Constant::Run(RuntimeContext &rt) {
                       "value_floats, value_int, value_ints, value_string, value_strings.");
   }
   if (y.is_borrowed()) {
-    SetOutput(node, 0, std::move(y), rt.tensors());
+    SetOutput(node, 0, std::move(y), rt);
     return;
   }
   Tensor output = rt.MakeOutputTensor(0, y.data_type, y.shape, y.size_bytes());
@@ -79,7 +79,7 @@ void Constant::Run(RuntimeContext &rt) {
   } else if (y.size_bytes() > 0) {
     std::memcpy(output.mutable_bytes(), y.bytes(), y.size_bytes());
   }
-  SetOutput(node, 0, std::move(output), rt.tensors());
+  SetOutput(node, 0, std::move(output), rt);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

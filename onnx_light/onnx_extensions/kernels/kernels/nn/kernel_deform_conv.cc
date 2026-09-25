@@ -286,7 +286,7 @@ void DeformConv::Run(RuntimeContext &rt) {
   SetOutput(
       node, 0,
       k(x, w, offset, b != nullptr ? *b : Tensor{}, mask != nullptr ? *mask : Tensor{}, attrs, &rt),
-      rt.tensors());
+      rt);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

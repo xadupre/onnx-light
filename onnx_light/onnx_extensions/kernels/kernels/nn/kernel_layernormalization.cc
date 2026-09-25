@@ -275,12 +275,12 @@ void LayerNormalization::Run(RuntimeContext &rt) {
   onnx_kernels::kernel::LayerNormalization k(rt.kernel_ctx());
   auto [y, mean, inv_std_dev] =
       k(x, scale, b != nullptr ? *b : Tensor{}, GetNormAxis(node), GetEpsilon(node), &rt);
-  SetOutput(node, 0, std::move(y), rt.tensors());
+  SetOutput(node, 0, std::move(y), rt);
   if (node.output_size() >= 2) {
-    SetOutput(node, 1, std::move(mean), rt.tensors());
+    SetOutput(node, 1, std::move(mean), rt);
   }
   if (node.output_size() >= 3) {
-    SetOutput(node, 2, std::move(inv_std_dev), rt.tensors());
+    SetOutput(node, 2, std::move(inv_std_dev), rt);
   }
 }
 

@@ -214,10 +214,7 @@ RuntimeValueMap PersistentValueState::Run(RuntimeContext &context, const Runtime
       continue;
     }
     Validate(it->second, input.type(), catalogue_, symbols);
-    if (it->second.kind == RuntimeValue::Kind::kTensor)
-      invocation.Put(input.name(), std::move(it->second.tensor), RuntimeEventKind::kInput);
-    else
-      invocation.values().emplace(input.name(), std::move(it->second));
+    invocation.PutValue(input.name(), std::move(it->second), RuntimeEventKind::kInput);
   }
   for (auto &binding : *invocation.persistent_tensors_)
     binding.input_view = &invocation.Get(binding.input);

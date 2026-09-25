@@ -256,7 +256,7 @@ void NonMaxSuppression::Run(RuntimeContext &rt) {
   onnx_kernels::kernel::NonMaxSuppression k(rt.kernel_ctx());
   SetOutput(node, 0,
             k(boxes, scores, max_output_boxes_per_class, iou_threshold, score_threshold, attrs),
-            rt.tensors());
+            rt);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

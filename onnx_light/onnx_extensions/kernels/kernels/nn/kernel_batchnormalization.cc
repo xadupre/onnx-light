@@ -248,12 +248,12 @@ void BatchNormalization::Run(RuntimeContext &rt) {
     const float momentum = GetAttributeFloatOrDefault(node, "momentum", 0.9f);
     auto [y, running_mean, running_var] =
         k.TrainingForward(x, scale, bias, input_mean, input_var, GetEpsilon(node), momentum, &rt);
-    SetOutput(node, 0, std::move(y), rt.tensors());
+    SetOutput(node, 0, std::move(y), rt);
     if (node.output_size() >= 2) {
-      SetOutput(node, 1, std::move(running_mean), rt.tensors());
+      SetOutput(node, 1, std::move(running_mean), rt);
     }
     if (node.output_size() >= 3) {
-      SetOutput(node, 2, std::move(running_var), rt.tensors());
+      SetOutput(node, 2, std::move(running_var), rt);
     }
     return;
   }

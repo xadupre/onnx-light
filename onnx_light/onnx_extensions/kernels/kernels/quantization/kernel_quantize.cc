@@ -32,7 +32,7 @@ void Quantize::Run(RuntimeContext &rt) {
   input.name = node.output(0);
   auto result =
       (*this)(input, attribute->tp().struct_type(), parameters, rt.struct_type_catalogue());
-  rt.values().insert_or_assign(node.output(0), std::move(result));
+  rt.PutValue(node.output(0), std::move(result));
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

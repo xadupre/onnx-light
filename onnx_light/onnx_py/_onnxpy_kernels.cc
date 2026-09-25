@@ -2228,7 +2228,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def("has", &RuntimeContext::Has, nb::arg("name"),
            "Returns ``True`` if a tensor named ``name`` is currently held.")
       .def("remove", &RuntimeContext::Remove, nb::arg("name"),
-           "Removes the tensor stored under ``name`` if present. Returns ``True`` if "
+           "Removes any value stored under ``name``. Returns ``True`` if "
            "an entry was erased.")
       .def(
           "set",
@@ -2236,7 +2236,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
             rt.Set(name, std::move(tensor), ParseRuntimeEventKind(kind));
           },
           nb::arg("name"), nb::arg("tensor"), nb::arg("kind") = "input",
-          "Inserts ``tensor`` under ``name``. Raises if ``name`` already exists. "
+          "Inserts ``tensor`` under ``name``. Raises if any value category already uses the name. "
           "Records an ``add`` event in :func:`events` with the supplied ``kind`` "
           "(default ``\"input\"``).")
       .def(
@@ -2245,7 +2245,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
             rt.Put(name, std::move(tensor), ParseRuntimeEventKind(kind));
           },
           nb::arg("name"), nb::arg("tensor"), nb::arg("kind") = "intermediate",
-          "Inserts or overwrites the tensor stored under ``name``. Records an ``add`` "
+          "Stores a tensor under ``name``, replacing any previous category. Records an ``add`` "
           "or ``replace`` event in :func:`events` with the supplied ``kind`` "
           "(default ``\"intermediate\"``).")
       .def(
@@ -2311,22 +2311,16 @@ void AddOnnxPyRuntime(nb::module_ &m) {
             return FeedbackValueToPython(rt.values().at(name));
           },
           nb::arg("name"),
-          "Returns a read-only value, sharing existing owners or copying "
+          "Returns the current tensor, struct or encoded value as a read-only value, "
+          "sharing existing owners or copying "
           "unretained tensor storage without modifying its source.")
       .def(
           "put_value",
           [](RuntimeContext &rt, const std::string &name, nb::handle value) {
-            RuntimeValue converted = FeedbackValueFromPython(name, value);
-            if (converted.kind == RuntimeValue::Kind::kTensor) {
-              rt.values().erase(name);
-              rt.Put(name, std::move(converted.tensor));
-            } else {
-              rt.Remove(name);
-              rt.values().insert_or_assign(name, std::move(converted));
-            }
+            rt.PutValue(name, FeedbackValueFromPython(name, value));
           },
           nb::arg("name"), nb::arg("value"),
-          "Stores an owning tensor, struct or encoded value produced by a custom kernel.")
+          "Stores an owning tensor, struct or encoded value, replacing any previous category.")
       .def(
           "map_names",
           [](const RuntimeContext &rt) {
@@ -2450,7 +2444,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
            "otherwise touching their tensor maps.")
       .def("clear", &RuntimeContext::Clear,
            "Resets the per-invocation state so the context can be reused for a fresh "
-           "run: clears the tensor map, the sequence map and the event log, and resets "
+           "run: clears all value stores and the event log, and resets "
            "the current node index. The kernel context, registered model-local "
            "functions and custom kernels, the cached execution plans and the "
            ":attr:`events_enabled` / :attr:`release_intermediates` settings are "

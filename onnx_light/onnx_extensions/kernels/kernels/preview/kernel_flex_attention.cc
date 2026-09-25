@@ -452,7 +452,7 @@ void FlexAttention::Run(RuntimeContext &rt) {
   } else {
     Y = flex(Q, K, V, scale, &rt);
   }
-  SetOutput(node, 0, std::move(Y), rt.tensors());
+  SetOutput(node, 0, std::move(Y), rt);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

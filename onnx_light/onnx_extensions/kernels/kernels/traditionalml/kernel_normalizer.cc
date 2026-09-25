@@ -158,7 +158,7 @@ void Normalizer::Run(RuntimeContext &rt) {
     (void)tag;
     return normalizer.template operator()<T>(x, norm, &rt);
   });
-  SetOutput(node, 0, std::move(y), rt.tensors());
+  SetOutput(node, 0, std::move(y), rt);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

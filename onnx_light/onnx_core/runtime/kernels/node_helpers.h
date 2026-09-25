@@ -69,10 +69,8 @@ const Tensor &GetInput(const NodeProto &node, int index, const TensorMap &tensor
 // rather than an "absent" optional input.
 const Tensor *GetOptionalInput(const NodeProto &node, int index, const TensorMap &tensors);
 
-void SetOutput(const NodeProto &node, int index, Tensor result, TensorMap &tensors);
-
-// Overload that routes the assignment through :cpp:func:`RuntimeContext::Put`
-// so the tensor map mutation is recorded in the context's event log.
+// Routes the assignment through :cpp:func:`RuntimeContext::Put` so the tensor
+// map mutation is recorded in the context's event log.
 void SetOutput(const NodeProto &node, int index, Tensor result, RuntimeContext &rt);
 
 // Looks up the sequence-typed input at slot ``index`` in

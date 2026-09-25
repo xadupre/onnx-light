@@ -417,13 +417,13 @@ void LinearAttention::Run(RuntimeContext &rt) {
   onnx_kernels::kernel::LinearAttention k(rt.kernel_ctx());
   onnx_kernels::kernel::LinearAttention::Result result =
       k(query, key, value, attrs, past_state, decay, beta, &rt);
-  SetOutput(node, 0, std::move(result.output), rt.tensors());
+  SetOutput(node, 0, std::move(result.output), rt);
 
   if (node.output_size() >= 2) {
     const std::string present_name = node.output(1);
     if (!present_name.empty()) {
       result.present_state.name = present_name;
-      rt.tensors()[present_name] = std::move(result.present_state);
+      rt.Put(present_name, std::move(result.present_state));
     }
   }
 }

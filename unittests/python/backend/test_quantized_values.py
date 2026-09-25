@@ -20,6 +20,52 @@ QuantizationFormat = runtime.QuantizationFormat
 
 
 class TestQuantizedValues(unittest.TestCase):
+    def test_context_category_replacement_and_identity(self):
+        values = numpy.array([-1, 0, 1], dtype=numpy.float32)
+        plan = runtime.make_quantization_plan(QuantizationFormat.INT4, values.size)
+        destination = onnx.TypeProto()
+        destination.struct_type.CopyFrom(runtime.make_quantization_type(plan))
+        encode = helper.make_node("Quantize", ["X"], ["Q"], domain="ai.rt", type=destination)
+        decode = helper.make_node(
+            "Dequantize", ["Q"], ["Y"], domain="ai.rt", dtype=onnx.TensorProto.FLOAT
+        )
+        copy_encoded = helper.make_node("Identity", ["Q"], ["encoded_copy"])
+        copy_tensor = helper.make_node("Identity", ["Y"], ["tensor_copy"])
+        context = runtime.RuntimeContext()
+        context.put_value("Q", numpy.array([999], dtype=numpy.float32))
+        context.put_value("encoded_copy", numpy.array([999], dtype=numpy.float32))
+        for multiplier in (1, 2):
+            with self.subTest(multiplier=multiplier):
+                context.put_value("X", values * multiplier)
+                runtime.run_node(encode, context)
+                encoded = context.get_value("Q")
+                self.assertIsInstance(encoded, onnx.EncodedValueProto)
+                self.assertFalse(context.has("Q"))
+                runtime.run_node(helper.make_node("Identity", ["Q"], ["Q"]), context)
+                runtime.run_node(copy_encoded, context)
+                self.assertEqual(
+                    context.get_value("encoded_copy").SerializeToString(),
+                    encoded.SerializeToString(),
+                )
+                self.assertFalse(context.has("encoded_copy"))
+                if multiplier == 1:
+                    context.put_value("Y", encoded)
+                    context.put_value("tensor_copy", encoded)
+                runtime.run_node(decode, context)
+                numpy.testing.assert_array_equal(
+                    numpy.from_dlpack(context.get_value("Y")), values * multiplier
+                )
+                runtime.run_node(copy_tensor, context)
+                numpy.testing.assert_array_equal(
+                    numpy.from_dlpack(context.get_value("tensor_copy")), values * multiplier
+                )
+        self.assertTrue(context.remove("Q"))
+        with self.assertRaises(IndexError):
+            context.get_value("Q")
+        context.clear()
+        with self.assertRaises(IndexError):
+            context.get_value("encoded_copy")
+
     def test_graph_quantize_dequantize(self):
         values = numpy.array([-8, -4, 0, 7, -16, 0, 8, 14], dtype=numpy.float32)
         plan = runtime.make_quantization_plan(QuantizationFormat.INT4, values.size, 4)

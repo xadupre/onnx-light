@@ -2041,6 +2041,11 @@ void ModelProto::SerializeToStream(utils::BinaryWriteStream &stream,
     // integers, so tensors sharing a location and an offset keep their graph order. Plain
     // strings are used as keys to avoid instantiating another sort implementation, the
     // library keeps a strict binary-size budget (see .github/workflows/ci_core.yml).
+    constexpr size_t kKeyIntegerBytes = sizeof(uint64_t);
+    const auto append_big_endian = [](std::string &key, uint64_t value) {
+      for (size_t byte = kKeyIntegerBytes; byte > 0; --byte)
+        key.push_back(static_cast<char>((value >> ((byte - 1) * 8)) & 0xFF));
+    };
     std::vector<std::string> keys;
     keys.reserve(tensors.size());
     for (size_t index = 0; index < tensors.size(); ++index) {
@@ -2055,16 +2060,14 @@ void ModelProto::SerializeToStream(utils::BinaryWriteStream &stream,
       std::string key(std::move(location));
       // '\0' sorts before every other byte so a location is never confused with a longer one.
       key.push_back('\0');
-      for (int shift = 56; shift >= 0; shift -= 8)
-        key.push_back(static_cast<char>((offset >> shift) & 0xFF));
-      for (int shift = 24; shift >= 0; shift -= 8)
-        key.push_back(static_cast<char>((index >> shift) & 0xFF));
+      append_big_endian(key, offset);
+      append_big_endian(key, static_cast<uint64_t>(index));
       keys.push_back(std::move(key));
     }
     std::sort(keys.begin(), keys.end());
     for (const std::string &key : keys) {
       size_t index = 0;
-      for (size_t byte = key.size() - 4; byte < key.size(); ++byte)
+      for (size_t byte = key.size() - kKeyIntegerBytes; byte < key.size(); ++byte)
         index = (index << 8) | static_cast<unsigned char>(key[byte]);
       tensors[index]->WriteExternalData(stream, options);
     }

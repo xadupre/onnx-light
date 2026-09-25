@@ -209,16 +209,16 @@ jobs:
         # Linux CI run 36132778661 measures 1556424 installed bytes and 1087098 text
         # bytes; the symbol limit and dependency allowlist are unchanged.
         # Writing external payloads in per-file offset order exposes one public method
-        # (TensorProto::WriteExternalData) and raises the measurement to 1560520 installed
-        # bytes, 1090666 text bytes and 853 defined dynamic symbols. The dependency
-        # allowlist is unchanged.
+        # (TensorProto::WriteExternalData) and raises the measurement to 1090234 text bytes
+        # and 853 defined dynamic symbols. The installed size, the dependency allowlist and
+        # the 1556424 installed-byte budget are unchanged.
         run: |
           proto_dir="$(python -c 'import importlib.util, pathlib; print(pathlib.Path(importlib.util.find_spec("onnx_light.onnx_py._onnxpyprotoop").origin).parent)')"
           python .github/scripts/report_proto_binary_size.py \
             "${proto_dir}" \
             --summary "${GITHUB_STEP_SUMMARY}" \
-            --max-installed-size 1560520 \
-            --max-text-size 1090666 \
+            --max-installed-size 1556424 \
+            --max-text-size 1090234 \
             --max-dynamic-symbols 853 \
             --allowed-dependency libcrypto.so.3 \
             --allowed-dependency libstdc++.so.6 \

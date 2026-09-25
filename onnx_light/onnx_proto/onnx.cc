@@ -2039,8 +2039,8 @@ void ModelProto::SerializeToStream(utils::BinaryWriteStream &stream,
     // their preassigned offsets describe (onnx/onnx#8484). Every payload gets a sort key
     // holding the destination file, then the offset and the graph position as big-endian
     // integers, so tensors sharing a location and an offset keep their graph order. Plain
-    // strings are used as keys to avoid instantiating another sort implementation, the
-    // library keeps a strict binary-size budget (see .github/workflows/ci_core.yml).
+    // strings are used as keys to avoid instantiating another sort implementation because
+    // the library keeps a strict binary-size budget (see .github/workflows/ci_core.yml).
     constexpr size_t kKeyIntegerBytes = sizeof(uint64_t);
     const auto append_big_endian = [](std::string &key, uint64_t value) {
       for (size_t byte = kKeyIntegerBytes; byte > 0; --byte)
@@ -2050,17 +2050,19 @@ void ModelProto::SerializeToStream(utils::BinaryWriteStream &stream,
     keys.reserve(tensors.size());
     for (size_t index = 0; index < tensors.size(); ++index) {
       std::string location;
-      uint64_t offset = 0;
+      int64_t offset = 0;
       for (const auto &entry : tensors[index]->ref_external_data()) {
         if (entry.ref_key() == "location")
           location = entry.ref_value();
         else if (entry.ref_key() == "offset")
-          offset = static_cast<uint64_t>(entry.ref_value().toint64());
+          offset = entry.ref_value().toint64();
       }
       std::string key(std::move(location));
       // '\0' sorts before every other byte so a location is never confused with a longer one.
       key.push_back('\0');
-      append_big_endian(key, offset);
+      // Flipping the sign bit keeps the big-endian encoding ordered like the signed offset,
+      // so a malformed negative offset sorts first and is rejected by WriteExternalData.
+      append_big_endian(key, static_cast<uint64_t>(offset) ^ (uint64_t{1} << 63));
       append_big_endian(key, static_cast<uint64_t>(index));
       keys.push_back(std::move(key));
     }

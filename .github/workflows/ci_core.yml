@@ -209,7 +209,7 @@ jobs:
         # Linux CI run 36132778661 measures 1556424 installed bytes and 1087098 text
         # bytes; the symbol limit and dependency allowlist are unchanged.
         # Writing external payloads in per-file offset order exposes one public method
-        # (TensorProto::WriteExternalData) and raises the measurement to 1090234 text bytes
+        # (TensorProto::WriteExternalData) and raises the measurement to 1090298 text bytes
         # and 853 defined dynamic symbols. The installed size, the dependency allowlist and
         # the 1556424 installed-byte budget are unchanged.
         run: |
@@ -218,7 +218,7 @@ jobs:
             "${proto_dir}" \
             --summary "${GITHUB_STEP_SUMMARY}" \
             --max-installed-size 1556424 \
-            --max-text-size 1090234 \
+            --max-text-size 1090298 \
             --max-dynamic-symbols 853 \
             --allowed-dependency libcrypto.so.3 \
             --allowed-dependency libstdc++.so.6 \

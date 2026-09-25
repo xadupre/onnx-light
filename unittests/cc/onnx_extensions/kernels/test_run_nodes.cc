@@ -6269,28 +6269,12 @@ TEST(NodeHelpers, GetOptionalInputReturnsTensor) {
 
 TEST(NodeHelpers, SetOutputEmptyNameThrows) {
   NodeProto node = MakeNode("Abs", {"x"}, {""});
-  TensorMap tensors;
-  EXPECT_THROW(core::runtime::SetOutput(node, 0, Tensor::FromFloat("y", {1}, {1.0f}), tensors),
-               std::invalid_argument);
-}
-
-TEST(NodeHelpers, SetOutputStoresTensor) {
-  NodeProto node = MakeNode("Abs", {"x"}, {"y"});
-  TensorMap tensors;
-  core::runtime::SetOutput(node, 0, Tensor::FromFloat("tmp", {1}, {4.0f}), tensors);
-  ASSERT_TRUE(tensors.count("y"));
-  EXPECT_EQ(tensors["y"].name, "y");
-  EXPECT_FLOAT_EQ(tensors["y"].AsFloat()[0], 4.0f);
-}
-
-TEST(NodeHelpers, SetOutputContextEmptyNameThrows) {
-  NodeProto node = MakeNode("Abs", {"x"}, {""});
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   EXPECT_THROW(core::runtime::SetOutput(node, 0, Tensor::FromFloat("y", {1}, {1.0f}), rt),
                std::invalid_argument);
 }
 
-TEST(NodeHelpers, SetOutputContextStoresTensor) {
+TEST(NodeHelpers, SetOutputStoresTensor) {
   NodeProto node = MakeNode("Abs", {"x"}, {"y"});
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   core::runtime::SetOutput(node, 0, Tensor::FromFloat("tmp", {1}, {5.0f}), rt);

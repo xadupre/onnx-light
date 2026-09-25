@@ -10,6 +10,7 @@ digraph protos {
     ModelProto -> FunctionProto [label="functions"];
     ModelProto -> DeviceConfigurationProto [label="configuration"];
     ModelProto -> StringStringEntryProto [label="metadata_props"];
+    ModelProto -> StructTypeProto [label="struct_types"];
 
     GraphProto -> NodeProto [label="node"];
     GraphProto -> TensorProto [label="initializer"];
@@ -17,6 +18,33 @@ digraph protos {
     GraphProto -> ValueInfoProto [label="input, output, value_info"];
     GraphProto -> TensorAnnotation [label="quantization_annotation"];
     GraphProto -> StringStringEntryProto [label="metadata_props"];
+    GraphProto -> EncodedValueProto [label="encoded_initializer"];
+    GraphProto -> PersistentBindingProto [label="persistent_bindings"];
+    GraphProto -> PagedCacheProto [label="paged_cache_initializer"];
+
+    PagedCacheProto -> PagedCacheBlockProto [label="blocks"];
+    PagedCacheBlockProto -> TensorProto [label="key, value"];
+    PagedCacheBlockProto -> EncodedValueProto [label="encoded_key, encoded_value"];
+    PersistentBindingProto -> ValueInfoProto [label="input_name, output_name (graph IO)", style=dashed];
+
+    EncodedValueProto -> AffineLayoutProto [label="affine"];
+    EncodedValueProto -> StructTypeProto [label="struct_type"];
+    EncodedValueProto -> TypeProto [label="logical_type"];
+    EncodedValueProto -> StringStringEntryProto [label="external_data"];
+    EncodedValueProto -> TensorAnnotation [label="parameter_ref (model catalogue)", style=dashed];
+    AffineLayoutProto -> TensorProto [label="scale, zero_point"];
+
+    StructTypeProto -> "StructTypeProto.Array" [label="array"];
+    StructTypeProto -> "StructTypeProto.Structure" [label="structure"];
+    StructTypeProto -> "StructTypeProto.BitPacking" [label="bit_packing"];
+    StructTypeProto -> FunctionProto [label="decoder, encoder"];
+    StructTypeProto -> StringStringEntryProto [label="metadata_props"];
+    StructTypeProto -> StructTypeProto [label="type_ref (model catalogue ID)", style=dashed];
+    "StructTypeProto.Array" -> TypeProto [label="element_type"];
+    "StructTypeProto.Structure" -> "StructTypeProto.Structure.Field" [label="field"];
+    "StructTypeProto.Structure.Field" -> TypeProto [label="type"];
+    "StructTypeProto.Structure.Field" -> TensorProto [label="constant"];
+    "StructTypeProto.BitPacking" -> "StructTypeProto.BitPacking.Component" [label="component"];
 
     FunctionProto -> AttributeProto [label="attribute_proto"];
     FunctionProto -> NodeProto [label="node"];
@@ -44,6 +72,8 @@ digraph protos {
     TypeProto -> "TypeProto.Sequence" [label="sequence_type"];
     TypeProto -> "TypeProto.Map" [label="map_type"];
     TypeProto -> "TypeProto.Optional" [label="optional_type"];
+    TypeProto -> "TypeProto.Opaque" [label="opaque_type"];
+    TypeProto -> StructTypeProto [label="struct_type"];
     "TypeProto.Tensor" -> TensorShapeProto [label="shape"];
     "TypeProto.SparseTensor" -> TensorShapeProto [label="shape"];
     "TypeProto.Sequence" -> TypeProto [label="elem_type"];

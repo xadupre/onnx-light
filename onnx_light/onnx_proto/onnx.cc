@@ -2036,31 +2036,38 @@ void ModelProto::SerializeToStream(utils::BinaryWriteStream &stream,
     SerializeToStream(stream, local_options);
 
     // Keep graph order in the protobuf, but validate and append payloads in the order
-    // their preassigned offsets describe (onnx/onnx#8484).
-    struct ExternalTensor {
-      const TensorProto *tensor;
+    // their preassigned offsets describe (onnx/onnx#8484). Every payload gets a sort key
+    // holding the destination file, then the offset and the graph position as big-endian
+    // integers, so tensors sharing a location and an offset keep their graph order. Plain
+    // strings are used as keys to avoid instantiating another sort implementation, the
+    // library keeps a strict binary-size budget (see .github/workflows/ci_core.yml).
+    std::vector<std::string> keys;
+    keys.reserve(tensors.size());
+    for (size_t index = 0; index < tensors.size(); ++index) {
       std::string location;
-      int64_t offset;
-    };
-    std::vector<ExternalTensor> writes;
-    writes.reserve(tensors.size());
-    for (const TensorProto *tensor : tensors) {
-      ExternalTensor write{tensor, "", 0};
-      for (const auto &entry : tensor->ref_external_data()) {
+      uint64_t offset = 0;
+      for (const auto &entry : tensors[index]->ref_external_data()) {
         if (entry.ref_key() == "location")
-          write.location = entry.ref_value();
+          location = entry.ref_value();
         else if (entry.ref_key() == "offset")
-          write.offset = entry.ref_value().toint64();
+          offset = static_cast<uint64_t>(entry.ref_value().toint64());
       }
-      writes.push_back(std::move(write));
+      std::string key(std::move(location));
+      // '\0' sorts before every other byte so a location is never confused with a longer one.
+      key.push_back('\0');
+      for (int shift = 56; shift >= 0; shift -= 8)
+        key.push_back(static_cast<char>((offset >> shift) & 0xFF));
+      for (int shift = 24; shift >= 0; shift -= 8)
+        key.push_back(static_cast<char>((index >> shift) & 0xFF));
+      keys.push_back(std::move(key));
     }
-    std::stable_sort(writes.begin(), writes.end(), [](const auto &left, const auto &right) {
-      if (left.location != right.location)
-        return left.location < right.location;
-      return left.offset < right.offset;
-    });
-    for (const auto &write : writes)
-      write.tensor->WriteExternalData(stream, options);
+    std::sort(keys.begin(), keys.end());
+    for (const std::string &key : keys) {
+      size_t index = 0;
+      for (size_t byte = key.size() - 4; byte < key.size(); ++byte)
+        index = (index << 8) | static_cast<unsigned char>(key[byte]);
+      tensors[index]->WriteExternalData(stream, options);
+    }
     return;
   }
   WRITE_FIELD(options, stream, ir_version)

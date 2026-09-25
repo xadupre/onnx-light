@@ -87,8 +87,10 @@ BuiltCase BuildSingleNodeCase(const NodeProto &node, Tensors inputs, Tensors out
     }
   }
   for (size_t i = 0; i < present_outputs.size(); ++i) {
-    if (output_types.empty()) {
+    if (!outputs.empty()) {
       outputs[i].name = present_outputs[i];
+    }
+    if (output_types.empty()) {
       FillValueInfo(outputs[i], *graph->add_output());
     } else {
       AppendValueInfo(*graph->add_output(), present_outputs[i], output_types[i]);

@@ -1149,6 +1149,74 @@ TEST(PersistentValueState, SequenceViewsCopiesRetentionAndDepth) {
   EXPECT_THROW(PersistentValue(std::move(nested)), std::invalid_argument);
 }
 
+TEST(PersistentValueState, SharedSequencesAppendReplaceAndMemoizeWithoutOwningSnapshots) {
+  RuntimeValue sequence(std::vector<RuntimeValue>{Number(0)});
+  sequence = std::move(sequence).Retain();
+  const auto snapshot = sequence.BorrowView();
+  const RuntimeValue *first = &snapshot.elements.front();
+  RuntimeSequence::Memo<int64_t> memo;
+  size_t visited = 0;
+  const auto sum = [&](const RuntimeValue &value) {
+    ++visited;
+    return static_cast<int64_t>(Number(value));
+  };
+  const auto add = [](int64_t left, int64_t right) { return left + right; };
+  for (int64_t i = 1; i <= 1024; ++i) {
+    sequence.elements.push_back(Number(static_cast<float>(i)));
+    sequence = std::move(sequence).Retain();
+    EXPECT_EQ(sequence.elements.Fold(memo, sum, add), i * (i + 1) / 2);
+    EXPECT_EQ(&sequence.elements.front(), first);
+  }
+  EXPECT_EQ(visited, 1025u);
+  EXPECT_EQ(snapshot.elements.size(), 1u);
+  auto branch = sequence.BorrowView();
+  branch.elements.Set(512, Number(-1));
+  EXPECT_EQ(Number(sequence.elements[512]), 512);
+  EXPECT_EQ(branch.elements.Fold(memo, sum, add), 1024 * 1025 / 2 - 513);
+  EXPECT_EQ(visited, 1026u);
+  EXPECT_EQ(Number(snapshot.elements.front()), 0);
+  EXPECT_THROW(branch.elements.Set(branch.elements.size(), Number(1)), std::invalid_argument);
+  EXPECT_THROW(branch.elements.at(branch.elements.size()), std::invalid_argument);
+
+  std::weak_ptr<void> owner;
+  {
+    auto value = Number(3);
+    owner = value.tensor.borrowed_owner();
+    RuntimeSequence temporary(std::vector<RuntimeValue>{std::move(value)});
+    EXPECT_EQ(temporary.Fold(memo, sum, add), 3);
+  }
+  EXPECT_TRUE(owner.expired());
+}
+
+TEST(PersistentValueState, EncodedPersistentValuesRequireConcreteDimensions) {
+  const auto source = Tensor::FromFloat("value", {1}, {1.f});
+  const auto encoded = QuantizeTensor(source, MakeQuantizationPlan(QuantizationFormat::kInt8, 1));
+  for (int mode = 0; mode < 5; ++mode) {
+    SCOPED_TRACE(mode);
+    auto value = encoded.Encoded();
+    auto *tensor = value.mutable_logical_type()->mutable_tensor_type();
+    if (mode == 0)
+      tensor->clear_shape();
+    else if (mode == 1)
+      tensor->mutable_shape()->mutable_dim(0)->set_dim_param("N");
+    else if (mode == 2)
+      tensor->mutable_shape()->mutable_dim(0)->Clear();
+    else if (mode == 4) {
+      tensor->mutable_shape()->mutable_dim(0)->Clear();
+      tensor->mutable_shape()->mutable_dim(0)->set_dim_param("N");
+    }
+    const auto model = Model();
+    if (mode == 3) {
+      EXPECT_NO_THROW((PersistentValueState(model, {{"past", RuntimeValue(value)}})));
+      EXPECT_NO_THROW(RuntimeValue(value).Retain());
+    } else {
+      EXPECT_THROW((PersistentValueState(model, {{"past", RuntimeValue(value)}})),
+                   std::invalid_argument);
+      EXPECT_THROW(RuntimeValue(value).Retain(), std::invalid_argument);
+    }
+  }
+}
+
 namespace {
 
 EncodedValueProto AffineBlock(int64_t length = 2) {
@@ -1217,7 +1285,9 @@ TEST(PersistentValueState, TypedBlockSequencesMixDenseAndAffineWithoutMaterializ
   state.Close();
   EXPECT_EQ(output.at("present").elements[1].fields.at("key").Encoded().raw_data()[0], 2);
 
-  blocks.elements[1].fields.at("length") = Number(1);
+  auto changed = blocks.elements[1].BorrowView();
+  changed.fields.at("length") = Number(1);
+  blocks.elements.Set(1, std::move(changed));
   EXPECT_THROW((PersistentValueState(model, {{"past", blocks}})), std::invalid_argument);
   EXPECT_THROW((PersistentValueState(model, {{"past", Block(false)}})), std::invalid_argument);
 }

@@ -89,7 +89,7 @@ RuntimeValueMap Feeds(float token) {
   return feeds;
 }
 
-const std::vector<RuntimeValue> &Blocks(const RuntimeValue &cache) {
+const RuntimeSequence &Blocks(const RuntimeValue &cache) {
   return cache.fields.at("blocks").elements;
 }
 
@@ -344,4 +344,42 @@ TEST(PagedAttentionFeedback, AllocatorExhaustionDoesNotPublishPartialCache) {
   EXPECT_TRUE(Blocks(state.Values().at("past")).empty());
   EXPECT_THROW(state.Run(context, Feeds(2)), std::bad_alloc);
   EXPECT_TRUE(Blocks(state.Values().at("past")).empty());
+}
+
+TEST(PagedAttentionFeedback, IntermediateCachesKeepOwnersAcrossArenaRouting) {
+  for (int storage :
+       {DataType::FLOAT, DataType::INT8, DataType::UINT8, DataType::INT4, DataType::UINT4}) {
+    SCOPED_TRACE(storage);
+    auto model = PagedModel();
+    for (auto &attribute : *model.mutable_graph()->mutable_node(0)->mutable_attribute())
+      if (attribute.name() == "key_storage_type" || attribute.name() == "value_storage_type")
+        attribute.set_i(storage);
+    model.mutable_graph()->mutable_output(1)->set_name("cache_out");
+    model.mutable_graph()->mutable_persistent_bindings(0)->set_output_name("cache_out");
+    auto *forward = model.mutable_graph()->add_node();
+    forward->set_domain("onnx_light");
+    forward->set_op_type("Forward");
+    forward->add_input("present");
+    forward->add_output("cache_out");
+    VerifyModel(model);
+    SimpleRawBufferAllocator execution(8);
+    auto arena = IOArena::Create(32);
+    RuntimeContext context(
+        KernelContext(DefaultOpset(23)),
+        RuntimeContextOptions{.allocator = &execution, .io_allocator = arena.get()});
+    RegisterPaged(context);
+    context.RegisterCustomKernel(
+        "onnx_light", "Forward", [](const NodeProto &node, RuntimeContext &rt) {
+          rt.PutValue(node.output(0), rt.values().at(node.input(0)).BorrowView());
+        });
+    PersistentValueState state(model, {{"past", PagedAttention::EmptyCache()}});
+    auto first = state.Run(context, Feeds(1));
+    auto second = state.Run(context, Feeds(2));
+    EXPECT_EQ(Blocks(first.at("cache_out")).size(), 1u);
+    EXPECT_EQ(Blocks(second.at("cache_out")).size(), 2u);
+    EXPECT_EQ(&Blocks(first.at("cache_out"))[0], &Blocks(second.at("cache_out"))[0]);
+    auto saved = first.at("cache_out").ToPagedCache().SerializeAsString();
+    state.Close();
+    EXPECT_EQ(first.at("cache_out").ToPagedCache().SerializeAsString(), saved);
+  }
 }

@@ -127,7 +127,7 @@ struct PageView {
   int axis = -1;
   uint64_t block = 0;
 
-  explicit PageView(const RuntimeValue &source) : value(&source) {
+  explicit PageView(const RuntimeValue &source, bool checked = false) : value(&source) {
     if (source.kind == RuntimeValue::Kind::kTensor) {
       CheckTensor(source.tensor);
       capacity = source.tensor.shape[2];
@@ -147,9 +147,11 @@ struct PageView {
         EXT_ENFORCE_INVALID(parameter->raw_data().empty() ||
                                 parameter->raw_data().data() != nullptr,
                             "PagedAttention: null affine parameter payload.");
-    const auto layout = StructTypeCatalogue().ValidateEncodedValue(encoded);
-    EXT_ENFORCE_INVALID(!layout.external && layout.content_verified,
-                        "PagedAttention: pages require verified inline payloads.");
+    if (!checked) {
+      const auto layout = StructTypeCatalogue().ValidateEncodedValue(encoded);
+      EXT_ENFORCE_INVALID(!layout.external && layout.content_verified,
+                          "PagedAttention: pages require verified inline payloads.");
+    }
     const auto &type = encoded.logical_type().tensor_type();
     EXT_ENFORCE_INVALID(type.elem_type() == DataType::FLOAT && type.shape().dim_size() == 4 &&
                             type.shape().dim(0).dim_value() == 1 &&
@@ -169,7 +171,7 @@ struct PageView {
     size_t count = 1;
     for (int i = 0; i < affine.scale().dims_size(); ++i)
       count *= static_cast<size_t>(affine.scale().dims(i));
-    for (size_t i = 0; i < count; ++i) {
+    for (size_t i = 0; !checked && i < count; ++i) {
       const float scale = ReadScale(affine.scale(), i);
       EXT_ENFORCE_INVALID(std::isfinite(scale) && scale > 0,
                           "PagedAttention: affine scales must be finite and positive.");
@@ -201,9 +203,14 @@ struct PageView {
                       (i == axis ? coordinate[i] / block : coordinate[i]);
     }
     AddBytes(statistics.dequantized_bytes, sizeof(float));
-    const double result = (ReadCode(encoded.raw_data().data(), index, affine.storage_type()) -
-                           ReadZero(affine, parameter)) *
-                          static_cast<double>(ReadScale(affine.scale(), parameter));
+    const float scale = ReadScale(affine.scale(), parameter);
+    const int zero = ReadZero(affine, parameter);
+    const auto [low, high] = CodeRange(affine.storage_type());
+    EXT_ENFORCE_INVALID(std::isfinite(scale) && scale > 0 && zero >= low && zero <= high,
+                        "PagedAttention: invalid affine parameter value.");
+    const double result =
+        (ReadCode(encoded.raw_data().data(), index, affine.storage_type()) - zero) *
+        static_cast<double>(scale);
     EXT_ENFORCE_INVALID(std::abs(result) <= std::numeric_limits<float>::max(),
                         "PagedAttention: decoded value exceeds FLOAT range.");
     return static_cast<float>(result);
@@ -223,13 +230,15 @@ RuntimeValue NewPage(const Tensor &input, int64_t begin, int64_t length,
   const Shape shape{1, 1, length, width};
   const float *source = input.AsFloat() + static_cast<size_t>(begin) * width;
   if (format.storage_type == DataType::FLOAT) {
-    Tensor output = Allocate(rt, 1, DataType::FLOAT, shape, CheckedBytes(length, width));
+    Tensor output = MakeOutputTensor(DataType::FLOAT, shape, CheckedBytes(length, width),
+                                     rt ? rt->io_allocator() : nullptr);
     std::memcpy(output.mutable_bytes(), source, output.size_bytes());
     AddBytes(statistics.copied_bytes, output.size_bytes());
     return RuntimeValue(std::move(output)).Retain();
   }
   const size_t bytes = FourBit(format.storage_type) ? count / 2 + count % 2 : count;
-  Tensor storage = Allocate(rt, 1, DataType::UINT8, {static_cast<int64_t>(bytes)}, bytes);
+  Tensor storage = MakeOutputTensor(DataType::UINT8, {static_cast<int64_t>(bytes)}, bytes,
+                                    rt ? rt->io_allocator() : nullptr);
   std::memset(storage.mutable_bytes(), 0, bytes);
   const auto [low, high] = CodeRange(format.storage_type);
   for (size_t i = 0; i < count; ++i) {
@@ -269,6 +278,39 @@ RuntimeValue NewPage(const Tensor &input, int64_t begin, int64_t length,
 
 } // namespace
 
+struct PagedAttention::CacheAnalysis {
+  struct Summary {
+    int64_t first = 0, end = 0, capacity = 0, key_width = 0, value_width = 0;
+  };
+  core::runtime::RuntimeSequence::Memo<Summary> memo;
+
+  Summary Validate(const core::runtime::RuntimeSequence &pages, Statistics &statistics) {
+    return pages.Fold(
+        memo,
+        [&](const RuntimeValue &page) {
+          ++statistics.validated_pages;
+          EXT_ENFORCE_INVALID(page.fields.size() == 4, "PagedAttention: unexpected page fields.");
+          const int64_t start = Scalar(Field(page, "start"));
+          const int64_t length = Scalar(Field(page, "length"));
+          const PageView key(Field(page, "key")), value(Field(page, "value"));
+          EXT_ENFORCE_INVALID(start >= 0 && length > 0 && length <= INT64_MAX - start &&
+                                  length <= key.capacity && key.capacity == value.capacity,
+                              "PagedAttention: invalid page shape, start, length or capacity.");
+          return Summary{start, start + length, key.capacity, key.width, value.width};
+        },
+        [](const Summary &left, const Summary &right) {
+          EXT_ENFORCE_INVALID(left.end == right.first && left.key_width == right.key_width &&
+                                  left.value_width == right.value_width,
+                              "PagedAttention: noncontiguous pages or inconsistent widths.");
+          return Summary{left.first, right.end, std::max(left.capacity, right.capacity),
+                         left.key_width, left.value_width};
+        });
+  }
+};
+
+PagedAttention::PagedAttention(const KernelContext &context)
+    : KernelBase(context), cache_analysis_(std::make_shared<CacheAnalysis>()) {}
+
 TypeProto PagedAttention::CacheType() { return PagedCacheProto::CacheType(); }
 
 RuntimeValue PagedAttention::EmptyCache() {
@@ -285,39 +327,36 @@ PagedAttention::Result PagedAttention::operator()(const Tensor &q, const Tensor 
                       "PagedAttention: invalid block size, capacity or window.");
   CheckFormat(options.key_format);
   CheckFormat(options.value_format);
-  for (const Tensor *input : {&q, &k, &v}) {
+  for (const Tensor *input : {&q, &k, &v})
     CheckTensor(*input);
-    for (size_t i = 0; i < input->size_bytes() / sizeof(float); ++i)
-      EXT_ENFORCE_INVALID(std::isfinite(input->AsFloat()[i]),
-                          "PagedAttention: inputs must be finite.");
-  }
   EXT_ENFORCE_INVALID(q.shape[2] == k.shape[2] && k.shape[2] == v.shape[2] &&
                           q.shape[3] == k.shape[3],
                       "PagedAttention: mismatched query/key/value dimensions.");
   const auto &pages = Field(past, "blocks");
   EXT_ENFORCE_INVALID(past.fields.size() == 1 && pages.kind == RuntimeValue::Kind::kSequence,
                       "PagedAttention: cache must contain only a blocks sequence.");
-  int64_t past_length = 0;
-  for (const auto &page : pages.elements) {
-    EXT_ENFORCE_INVALID(page.fields.size() == 4, "PagedAttention: unexpected page fields.");
-    const int64_t start = Scalar(Field(page, "start")), length = Scalar(Field(page, "length"));
-    const PageView key(Field(page, "key")), value(Field(page, "value"));
-    EXT_ENFORCE_INVALID(start == past_length && length > 0 && length <= key.capacity &&
-                            key.capacity == value.capacity && key.capacity <= options.block_size &&
-                            key.width == k.shape[3] && value.width == v.shape[3] &&
-                            length <= options.max_tokens - past_length,
-                        "PagedAttention: invalid page shape, start, length or capacity.");
-    past_length += length;
-  }
   const int64_t length = k.shape[2];
+  EXT_ENFORCE_INVALID(length <= options.max_tokens, "PagedAttention: max_tokens exceeded.");
+  Result result;
+  const auto summary = cache_analysis_->Validate(pages.elements, result.statistics);
+  const int64_t past_length = summary.end;
+  EXT_ENFORCE_INVALID(pages.elements.empty() ||
+                          (summary.first == 0 && summary.capacity <= options.block_size &&
+                           summary.key_width == k.shape[3] && summary.value_width == v.shape[3] &&
+                           past_length <= options.max_tokens),
+                      "PagedAttention: invalid cache shape or capacity.");
   EXT_ENFORCE_INVALID(length <= options.max_tokens - past_length,
                       "PagedAttention: max_tokens exceeded.");
+  for (const Tensor *input : {&q, &k, &v})
+    for (size_t i = 0; i < input->size_bytes() / sizeof(float); ++i)
+      EXT_ENFORCE_INVALID(std::isfinite(input->AsFloat()[i]),
+                          "PagedAttention: inputs must be finite.");
   const int64_t total = past_length + length;
   const size_t output_bytes = CheckedBytes(length, v.shape[3]);
   const size_t workspace_bytes = length == 0 ? 0 : CheckedBytes(1, v.shape[3], sizeof(double));
-  Result result;
-  // Retaining a borrowed view copies only descriptors; an ownerless cache is rejected.
-  result.present = past.BorrowView().Retain();
+  const StructTypeCatalogue empty_catalogue;
+  const auto &catalogue = rt ? rt->struct_type_catalogue() : empty_catalogue;
+  result.present = past.BorrowView().Retain(catalogue);
   auto &present_pages = result.present.fields.at("blocks").elements;
   for (int64_t begin = 0; begin < length;) {
     const int64_t chunk = std::min(options.block_size, length - begin);
@@ -331,6 +370,9 @@ PagedAttention::Result PagedAttention::operator()(const Tensor &q, const Tensor 
     present_pages.push_back(std::move(page));
     begin += chunk;
   }
+  result.present = std::move(result.present).Retain(catalogue);
+  const auto &retained_pages = result.present.fields.at("blocks").elements;
+  cache_analysis_->Validate(retained_pages, result.statistics);
   result.Y = Allocate(rt, 0, DataType::FLOAT, {1, 1, length, v.shape[3]}, output_bytes);
   if (length == 0)
     return result;
@@ -340,6 +382,29 @@ PagedAttention::Result PagedAttention::operator()(const Tensor &q, const Tensor 
   result.statistics.peak_workspace_bytes = workspace_bytes;
   double *accumulator = workspace.AsDouble();
   const double scale = 1.0 / std::sqrt(static_cast<double>(q.shape[3]));
+  struct ActivePage {
+    int64_t start, length;
+    PageView key, value;
+  };
+  const int64_t first_attended =
+      options.left_window_size < 0 ? 0
+                                   : past_length - std::min(past_length, options.left_window_size);
+  size_t low = 0, high = retained_pages.size();
+  while (low < high) {
+    const size_t middle = low + (high - low) / 2;
+    const auto &page = retained_pages[middle];
+    if (Scalar(Field(page, "start")) + Scalar(Field(page, "length")) <= first_attended)
+      low = middle + 1;
+    else
+      high = middle;
+  }
+  std::vector<ActivePage> active;
+  active.reserve(retained_pages.size() - low);
+  for (size_t i = low; i < retained_pages.size(); ++i) {
+    const auto &page = retained_pages[i];
+    active.push_back({Scalar(Field(page, "start")), Scalar(Field(page, "length")),
+                      PageView(Field(page, "key"), true), PageView(Field(page, "value"), true)});
+  }
   for (int64_t row = 0; row < length; ++row) {
     std::fill(accumulator, accumulator + v.shape[3], 0);
     const int64_t position = past_length + row;
@@ -347,11 +412,12 @@ PagedAttention::Result PagedAttention::operator()(const Tensor &q, const Tensor 
         options.left_window_size < 0 ? 0 : position - std::min(position, options.left_window_size);
     const int64_t end = options.is_causal ? position + 1 : total;
     double maximum = -std::numeric_limits<double>::infinity(), denominator = 0;
-    for (const auto &page : present_pages) {
-      const int64_t start = Scalar(Field(page, "start")), count = Scalar(Field(page, "length"));
+    for (const auto &page : active) {
+      const int64_t start = page.start, count = page.length;
       if (start >= end || start + count <= first)
         continue;
-      const PageView key(Field(page, "key")), value(Field(page, "value"));
+      const auto &key = page.key;
+      const auto &value = page.value;
       for (int64_t token = std::max(first, start); token < std::min(end, start + count); ++token) {
         double score = 0;
         for (int64_t d = 0; d < q.shape[3]; ++d)

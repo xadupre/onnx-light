@@ -145,9 +145,7 @@ PersistentValue PersistentValue::FromRetained(RuntimeValue value, size_t depth) 
     result.encoded_ = std::move(value.encoded);
     result.quantization_parameters_ = std::move(value.quantization_parameters);
   } else if (value.kind == RuntimeValue::Kind::kSequence) {
-    result.elements_.reserve(value.elements.size());
-    for (auto &element : value.elements)
-      result.elements_.push_back(FromRetained(std::move(element), depth + 1));
+    result.elements_ = std::move(value.elements);
   } else
     for (auto &[name, field] : value.fields)
       result.fields_.emplace(name, FromRetained(std::move(field), depth + 1));
@@ -167,9 +165,7 @@ RuntimeValue PersistentValue::BorrowAtDepth(size_t depth) const {
   result.quantization_parameters = quantization_parameters_;
   for (const auto &[name, field] : fields_)
     result.fields.emplace(name, field.BorrowAtDepth(depth + 1));
-  result.elements.reserve(elements_.size());
-  for (const auto &element : elements_)
-    result.elements.push_back(element.BorrowAtDepth(depth + 1));
+  result.elements = elements_;
   return result;
 }
 

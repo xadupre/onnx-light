@@ -40,7 +40,7 @@ using ::onnx_light::core::runtime::OpsetId;
 class PagedAttention : public KernelBase {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:onnx_light:PagedAttention";
-  using KernelBase::KernelBase;
+  explicit PagedAttention(const KernelContext &context);
   struct Format {
     int32_t storage_type = DataType::FLOAT;
     float scale = 1;
@@ -60,6 +60,8 @@ public:
     uint64_t dequantized_bytes = 0;
     /// Counts peak numerical scratch bytes, excluding outputs, cache payloads and metadata.
     uint64_t peak_workspace_bytes = 0;
+    /// Counts pages whose immutable metadata is validated rather than reused.
+    uint64_t validated_pages = 0;
   };
   struct Result {
     Tensor Y;
@@ -77,6 +79,10 @@ public:
   /// Executes four inputs and publishes Y/present only after successful computation.
   void Run(RuntimeContext &rt) override;
   static constexpr bool CanRunInPlace() noexcept { return false; }
+
+private:
+  struct CacheAnalysis;
+  std::shared_ptr<CacheAnalysis> cache_analysis_;
 };
 
 // ---------------------------------------------------------------------------

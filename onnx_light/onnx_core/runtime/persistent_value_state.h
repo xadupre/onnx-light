@@ -89,6 +89,9 @@ private:
   std::shared_ptr<void> model_owner_;
   std::vector<std::shared_ptr<void>> retained_owners_;
   StructTypeCatalogue catalogue_;
+  using ShapeSymbols = std::unordered_map<std::string, int64_t>;
+  mutable std::unordered_map<const TypeProto *, RuntimeSequence::Memo<ShapeSymbols>>
+      sequence_validation_;
   std::vector<Binding> bindings_;
   std::unique_ptr<RuntimeSession> session_;
   std::vector<PersistentValue> values_;

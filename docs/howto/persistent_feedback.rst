@@ -219,6 +219,10 @@ Inline structured encoded payloads can be retained as whole values; external
 payloads must first be loaded. The native API supports tensors, named
 structs, typed sequences and inline structured or affine encodings. Affine
 values are checked against their declared logical tensor type without decoding.
+Persistent values always have concrete dimensions. For an encoded tensor,
+``logical_type`` describes its decoded shape, not an unresolved symbolic shape:
+missing ranks or non-concrete dimensions are rejected. Symbolic dimensions remain
+valid in the model's input/output declarations.
 Map, optional, sparse and opaque state remain unsupported and are rejected
 explicitly, including when nested in a sequence or structure.
 For the supported types, the native correspondence is:
@@ -228,6 +232,21 @@ For the supported types, the native correspondence is:
 * ``struct_type``: named runtime fields, or an encoded value with a compatible
   storage type.
 * ``sequence_type``: runtime elements recursively checked against ``elem_type``.
+
+``RuntimeValue.elements`` is a ``RuntimeSequence`` with immutable element
+metadata and structural sharing. Copying a sequence shares its tree; appending
+or replacing an element copies only a logarithmic path. Read access uses
+``elements[i]`` or ``elements.at(i)``. To edit an element, obtain its
+``BorrowView()``, change that independent descriptor and call
+``elements.Set(i, std::move(value))``. Existing snapshots remain unchanged.
+Payload owners are shared and payloads remain read-only. Deep copies still
+produce independent payloads.
+
+Validation reuses results for unchanged sequence subtrees and merges their
+concrete symbolic bindings, rather than walking historical elements on every
+invocation. Memo tables hold weak references, so they do not prolong page or
+allocator lifetimes. Catalogue-dependent encoded retention still rechecks the
+supplied catalogue.
 
 These are ``TypeProto`` contracts, not a claim that every ``SequenceProto``,
 ``MapProto`` or ``OptionalProto`` has a native persistent representation.
@@ -498,6 +517,8 @@ state initialization/reset uses them when a bound input is omitted from the
 initial-value map. Shape inference, model validation and ``GraphBuilder``
 import/export preserve the declaration and its structured type references.
 ``GraphBuilder::MakePagedCacheInitializer`` adds one directly.
+Non-bound graph inputs with initializer defaults may also be omitted from
+current feeds; an explicit feed overrides the default for that invocation.
 
 Python exposes both messages through ``onnx_light.onnx``. A
 ``PersistentValueState`` accepts and returns ``PagedCacheProto`` for these
@@ -514,6 +535,13 @@ cache initializers explicitly rather than silently losing them; use
 ``GraphBuilder`` for supported graph edits.
 
 The cache is a named structure containing ``blocks``, a typed runtime sequence.
+Historical descriptors are shared, and immutable page validation is memoized
+per kernel instance. A finite attention window uses a binary search to skip
+unattended historical pages; views are prepared once per invocation, not once
+per query row. ``Statistics.validated_pages`` counts newly checked page metadata.
+The memo is synchronized only during metadata analysis, not numerical attention.
+Cache pages use independently retained storage (the I/O arena when supplied),
+even when ``present`` is an intermediate value forwarded to a persistent output.
 Each block is a structure with scalar INT64 ``start`` and ``length`` fields and
 ``key``/``value`` fields. Starts are contiguous logical token offsets; length is
 the valid prefix of the block's physical token capacity. Key/value payloads are

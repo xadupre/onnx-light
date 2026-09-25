@@ -145,7 +145,7 @@ private:
   RuntimeValue::Kind kind_ = RuntimeValue::Kind::kStruct;
   std::optional<PersistentTensor> tensor_;
   std::unordered_map<std::string, PersistentValue> fields_;
-  std::vector<PersistentValue> elements_;
+  RuntimeSequence elements_;
   std::shared_ptr<const EncodedValueProto> encoded_;
   std::shared_ptr<const QuantizationParameterCatalogue> quantization_parameters_;
 };

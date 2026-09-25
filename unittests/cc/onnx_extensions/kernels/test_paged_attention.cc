@@ -21,7 +21,7 @@ Tensor Input(int64_t length, int64_t width, float offset = 0) {
   return Tensor::FromFloat("", {1, 1, length, width}, values);
 }
 
-const std::vector<RuntimeValue> &Pages(const RuntimeValue &cache) {
+const RuntimeSequence &Pages(const RuntimeValue &cache) {
   return cache.fields.at("blocks").elements;
 }
 
@@ -75,6 +75,30 @@ EncodedValueProto Affine(int32_t storage, int axis, uint64_t block = 0) {
 }
 
 } // namespace
+
+TEST(PagedAttention, WindowedDecodeValidatesOnlyNewPages) {
+  PagedAttention kernel{KernelContext(DefaultOpset(23))};
+  PagedAttention::Options options;
+  options.block_size = 16;
+  options.max_tokens = 1024;
+  options.left_window_size = 1;
+  auto input = Input(1, 8);
+  auto cache = PagedAttention::EmptyCache();
+  for (size_t step = 0; step < 1024; ++step) {
+    auto result = kernel(input, input, input, cache, options);
+    EXPECT_EQ(result.statistics.validated_pages, 1u) << step;
+    EXPECT_EQ(result.statistics.copied_bytes, 2 * 8 * sizeof(float));
+    EXPECT_EQ(Pages(result.present).size(), step + 1);
+    cache = std::move(result.present);
+  }
+  auto changed = cache.BorrowView();
+  auto page = Pages(changed)[0].BorrowView();
+  page.fields.at("start") = RuntimeValue(Tensor::FromInt64("", {}, {1})).Retain();
+  changed.fields.at("blocks").elements.Set(0, std::move(page));
+  options.max_tokens = 1025;
+  EXPECT_THROW(kernel(input, input, input, changed, options), std::invalid_argument);
+  EXPECT_EQ(Pages(cache)[0].fields.at("start").tensor.AsInt64()[0], 0);
+}
 
 TEST(PagedAttention, DenseMatchesAttentionAcrossAppendsAndWindows) {
   KernelContext context(DefaultOpset(23));
@@ -233,8 +257,10 @@ TEST(PagedAttention, RejectsBadOptionsDescriptorsAndOverflow) {
   EXPECT_THROW(kernel(input, input, input, result.present, options), std::invalid_argument);
   options = {};
   auto malformed = result.present.DeepCopy();
-  malformed.fields.at("blocks").elements[0].fields.at("start") =
+  auto malformed_page = malformed.fields.at("blocks").elements[0].BorrowView();
+  malformed_page.fields.at("start") =
       RuntimeValue(Tensor::FromInt64("", {}, {std::numeric_limits<int64_t>::max()})).Retain();
+  malformed.fields.at("blocks").elements.Set(0, std::move(malformed_page));
   EXPECT_THROW(kernel(input, input, input, malformed, options), std::invalid_argument);
   auto overflow = Input(0, 2);
   overflow.shape = {1, 1, std::numeric_limits<int64_t>::max(), 2};

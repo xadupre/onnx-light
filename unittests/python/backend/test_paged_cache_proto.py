@@ -99,6 +99,34 @@ class TestPagedCacheProto(unittest.TestCase):
         with self.assertRaises(ValueError):
             runtime.PersistentValueState(model, {})
 
+    def test_nonpersistent_cache_input_uses_default_and_allows_override(self):
+        model = make_model()
+        model.graph.persistent_bindings.clear()
+        for name, values in (
+            ("counter", model.graph.input),
+            ("next_counter", model.graph.output),
+        ):
+            values.add().CopyFrom(
+                helper.make_tensor_value_info(name, onnx.TensorProto.FLOAT, [1])
+            )
+        model.graph.node.add().CopyFrom(
+            helper.make_node("Identity", ["counter"], ["next_counter"])
+        )
+        binding = model.graph.persistent_bindings.add()
+        binding.input_name = "counter"
+        binding.output_name = "next_counter"
+        verify.verify_model(model)
+        state = runtime.PersistentValueState(
+            model, {"counter": numpy.ones(1, dtype=numpy.float32)}
+        )
+        context = runtime.RuntimeContext(runtime.KernelContext(runtime.default_opset(18)))
+        self.assertEqual(len(state.run(context, {})["present"].blocks), 1)
+        self.assertEqual(
+            len(state.run(context, {"past": onnx.PagedCacheProto()})["present"].blocks), 0
+        )
+        self.assertEqual(len(state.run(context, {})["present"].blocks), 1)
+        state.close()
+
     def test_text_export_rejects_cache_instead_of_dropping_it(self):
         with self.assertRaisesRegex(TypeError, "paged_cache_initializer"):
             serialize_to_textproto(make_model())

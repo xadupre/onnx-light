@@ -439,6 +439,7 @@ void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContex
         if (item.kind == RuntimeValue::Kind::kTensor && expected != nullptr) {
           Tensor &tensor = item.tensor;
           if (tensor.size_bytes() > 0 && tensor.data_type != DataType::STRING &&
+              tensor.borrowed_owner().use_count() == 0 &&
               (!tensor.has_allocation() || tensor.allocation_owner() != expected)) {
             EXT_ENFORCE_INVALID(tensor.bytes() != nullptr,
                                 "RuntimeSession: structured output has a null data pointer.");
@@ -451,8 +452,10 @@ void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContex
           for (auto &[field, child] : item.fields)
             self(self, child, depth + 1);
         } else if (item.kind == RuntimeValue::Kind::kSequence) {
-          for (auto &child : item.elements)
-            self(self, child, depth + 1);
+          if (item.elements.retained())
+            return;
+          item.elements.TransformInPlace(
+              [&](RuntimeValue &child) { self(self, child, depth + 1); });
         }
       };
       migrate(migrate, value->second, 0);
@@ -737,9 +740,12 @@ void RuntimeSession::MaterializeBorrowedOutputs(RuntimeContext &rt) const {
         else if (item.kind == RuntimeValue::Kind::kStruct)
           for (auto &[field, child] : item.fields)
             self(self, child, depth + 1);
-        else if (item.kind == RuntimeValue::Kind::kSequence)
-          for (auto &child : item.elements)
-            self(self, child, depth + 1);
+        else if (item.kind == RuntimeValue::Kind::kSequence) {
+          if (item.elements.retained())
+            return;
+          item.elements.TransformInPlace(
+              [&](RuntimeValue &child) { self(self, child, depth + 1); });
+        }
       };
       detach(detach, value->second, 0);
     }

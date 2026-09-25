@@ -318,7 +318,7 @@ void RuntimeContext::ClearKernelUsage() {
 }
 
 void RuntimeContext::Set(const std::string &name, Tensor tensor, RuntimeEventKind kind) {
-  EXT_ENFORCE(!Has(name), "RuntimeContext::Set: a tensor named '", name, "' already exists.");
+  EXT_ENFORCE(!HasValue(name), "RuntimeContext::Set: a value named '", name, "' already exists.");
   if (!retains_output(name))
     EnsureAllocatorBacked(tensor, allocator_, kind, device_);
   if (events_enabled_) {
@@ -327,22 +327,40 @@ void RuntimeContext::Set(const std::string &name, Tensor tensor, RuntimeEventKin
   tensors_[name] = std::move(tensor);
 }
 
-void RuntimeContext::Put(const std::string &name, Tensor tensor, RuntimeEventKind kind) {
+void RuntimeContext::Put(const std::string &value_name, Tensor tensor, RuntimeEventKind kind) {
+  const std::string name = value_name;
   if (!retains_output(name))
     EnsureAllocatorBacked(tensor, allocator_, kind, device_);
   if (events_enabled_) {
     const RuntimeEventAction action =
-        Has(name) ? RuntimeEventAction::kReplace : RuntimeEventAction::kAdd;
+        HasValue(name) ? RuntimeEventAction::kReplace : RuntimeEventAction::kAdd;
     RecordEvent(MakeAddOrReplaceEvent(action, kind, name, tensor));
   }
+  values_.erase(name);
+  sequences_.erase(name);
+  maps_.erase(name);
+  shapes_.erase(name);
   tensors_[name] = std::move(tensor);
 }
 
-bool RuntimeContext::Remove(const std::string &name) {
-  const bool removed_value = values_.erase(name) != 0;
+void RuntimeContext::PutValue(std::string name, RuntimeValue value, RuntimeEventKind kind) {
+  if (value.kind == RuntimeValue::Kind::kTensor) {
+    Put(name, std::move(value.tensor), kind);
+  } else {
+    Remove(name);
+    values_.emplace(std::move(name), std::move(value));
+  }
+}
+
+bool RuntimeContext::Remove(const std::string &value_name) {
+  const std::string name = value_name;
+  size_t removed = values_.erase(name);
+  removed += sequences_.erase(name);
+  removed += maps_.erase(name);
+  removed += shapes_.erase(name);
   auto it = tensors_.find(name);
   if (it == tensors_.end()) {
-    return removed_value;
+    return removed != 0;
   }
   tensors_.erase(it);
   if (events_enabled_) {

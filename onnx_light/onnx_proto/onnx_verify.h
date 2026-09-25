@@ -22,7 +22,7 @@
  * constraints, type/shape inference), use ``onnx_lib::checker::check_model()``
  * instead (declared in ``onnx_lib/checker.h``).
  *
- * Every function below throws ``std::invalid_argument`` (via
+ * Validation functions below throw ``std::invalid_argument`` (via
  * ``EXT_THROW_INVALID`` / ``EXT_ENFORCE_INVALID``) with a descriptive message
  * on the first violation found.
  */

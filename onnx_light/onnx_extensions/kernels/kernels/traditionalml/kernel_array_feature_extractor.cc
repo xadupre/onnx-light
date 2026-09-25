@@ -125,7 +125,7 @@ void ArrayFeatureExtractor::Run(RuntimeContext &rt) {
     (void)tag;
     return afe.template operator()<T>(x, y, &rt);
   });
-  SetOutput(node, 0, std::move(z), rt.tensors());
+  SetOutput(node, 0, std::move(z), rt);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

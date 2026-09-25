@@ -5,6 +5,7 @@
 #include "onnx_core/compute/raw_buffer_allocator.h"
 #include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/quantization.h"
+#include "onnx_core/runtime/runtime_session.h"
 #include <cmath>
 #include <gtest/gtest.h>
 
@@ -164,6 +165,34 @@ TEST(Quantization, SharedParametersEveryFormatAndLifetime) {
         EXPECT_EQ(actual.AsFloat()[i], expected.AsFloat()[i]);
     }
   }
+}
+
+TEST(Quantization, SharedInitializerRetainsParametersAndRespectsExistingValues) {
+  RuntimeValue retained;
+  {
+    auto plan = WithTables(QuantizationFormat::kInt4, 16);
+    const auto source = Tensor::FromFloat("X", {16}, std::vector<float>(16, 1));
+    const auto full = QuantizeTensor(source, plan);
+    auto model = SharedModel(plan, full.Encoded());
+    auto parameters = QuantizationParameterCatalogue::Build(model);
+    auto shared = QuantizeTensorShared(source, full.Encoded().struct_type(), "weights", parameters);
+    *model.mutable_graph()->add_encoded_initializer() = shared.Encoded();
+    RuntimeSession session(model);
+    RuntimeContext context;
+    session.Run(context);
+    ASSERT_EQ(context.values().count("X"), 1u);
+    EXPECT_EQ(context.values().at("X").quantization_parameters, context.quantization_parameters());
+    retained = context.values().at("X").DeepCopy();
+    session.Run(context);
+    EXPECT_EQ(context.values().at("X").quantization_parameters, retained.quantization_parameters);
+
+    context.Put("X", Tensor::FromFloat("X", {1}, {42}));
+    session.Run(context);
+    EXPECT_TRUE(context.Has("X"));
+    EXPECT_EQ(context.values().count("X"), 0u);
+    EXPECT_FLOAT_EQ(context.Get("X").AsFloat()[0], 42);
+  }
+  ExpectValues(DequantizeTensor(retained), std::vector<float>(16, 1));
 }
 
 TEST(Quantization, SharedTransformsPermutationAndLocalOutliers) {
@@ -1166,4 +1195,33 @@ TEST(Quantization, OrtMatMulNBitsRejectsUnsupportedPlansAndMalformedValues) {
   const auto portable =
       QuantizeTensor(source, MakeQuantizationPlan(QuantizationFormat::kMatmulnbits, 2));
   EXPECT_THROW(ExportMatMulNBitsInputs(portable.Encoded()), std::invalid_argument);
+}
+
+TEST(Quantization, SchemaMismatchReportsFieldPath) {
+  const auto source = Tensor::FromFloat("", {2, 1}, {1, 2});
+  for (auto format : {QuantizationFormat::kInt4, QuantizationFormat::kOrtMatmulnbitsInt4}) {
+    const auto plan = format == QuantizationFormat::kInt4 ? MakeQuantizationPlan(format, 2)
+                                                          : MakeMatMulNBitsPlan(format, 2, 1, 16);
+    auto encoded = QuantizeTensor(source, plan).Encoded();
+    encoded.mutable_struct_type()->mutable_structure()->mutable_field(1)->set_doc_string("extra");
+    try {
+      DequantizeTensor(encoded);
+      FAIL() << "Expected a schema mismatch";
+    } catch (const std::invalid_argument &error) {
+      const std::string message = error.what();
+      EXPECT_NE(message.find("descriptor does not match its versioned schema"), std::string::npos);
+      EXPECT_NE(message.find("structure.field[1].doc_string: presence differs"), std::string::npos);
+    }
+  }
+  auto encoded =
+      QuantizeTensor(source, MakeMatMulNBitsPlan(QuantizationFormat::kOrtMatmulnbitsInt4, 2, 1, 16))
+          .Encoded();
+  encoded.mutable_struct_type()->mutable_structure()->mutable_field(1)->set_name("weights");
+  try {
+    ExportMatMulNBitsInputs(encoded);
+    FAIL() << "Expected an ORT schema mismatch";
+  } catch (const std::invalid_argument &error) {
+    EXPECT_NE(std::string(error.what()).find("structure.field[1].name: values differ"),
+              std::string::npos);
+  }
 }

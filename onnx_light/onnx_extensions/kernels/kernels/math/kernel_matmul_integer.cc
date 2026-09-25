@@ -246,8 +246,7 @@ void MatMulInteger::Run(RuntimeContext &rt) {
   const Tensor *b_zp = GetOptionalInput(node, 3, rt.tensors());
   onnx_kernels::kernel::MatMulInteger k(rt.kernel_ctx());
   SetOutput(node, 0,
-            k(a, b, a_zp != nullptr ? *a_zp : Tensor{}, b_zp != nullptr ? *b_zp : Tensor{}),
-            rt.tensors());
+            k(a, b, a_zp != nullptr ? *a_zp : Tensor{}, b_zp != nullptr ? *b_zp : Tensor{}), rt);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

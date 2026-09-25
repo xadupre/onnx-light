@@ -312,7 +312,7 @@ void ConvInteger::Run(RuntimeContext &rt) {
   SetOutput(
       node, 0,
       k(x, w, x_zp != nullptr ? *x_zp : Tensor{}, w_zp != nullptr ? *w_zp : Tensor{}, attrs, &rt),
-      rt.tensors());
+      rt);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

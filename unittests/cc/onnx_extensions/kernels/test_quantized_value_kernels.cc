@@ -74,6 +74,48 @@ TEST(QuantizedValueKernels, CalibratesAffineBlocksAndReusesKernel) {
   }
 }
 
+TEST(QuantizedValueKernels, ReplacesCategoriesAndPreservesAliasedInputs) {
+  onnx_kernels::RegisterKernelFunctions();
+  for (bool alias : {false, true}) {
+    SCOPED_TRACE(alias);
+    SimpleRawBufferAllocator allocator(4);
+    RuntimeContext context(RuntimeContextOptions{.allocator = &allocator});
+    auto encode =
+        QuantizeNode(MakeQuantizationType(MakeQuantizationPlan(QuantizationFormat::kInt4, 3)));
+    encode.clear_output();
+    encode.add_output(alias ? "X" : "Q");
+    NodeProto decode;
+    decode.set_domain("ai.rt");
+    decode.set_op_type("Dequantize");
+    decode.add_input(encode.output(0));
+    decode.add_output(alias ? "X" : "Y");
+    AddAttribute<int64_t>(decode, "dtype", TensorProto::FLOAT);
+    NodeProto identity;
+    identity.set_op_type("Identity");
+    identity.add_input(decode.output(0));
+    identity.add_output("copy");
+    onnx_kernels::kernel::Quantize quantize{KernelContext(OpsetId{"ai.rt", 1})};
+    onnx_kernels::kernel::Dequantize dequantize{KernelContext(OpsetId{"ai.rt", 1})};
+    quantize.set_node(encode);
+    dequantize.set_node(decode);
+    for (float scale : {1.f, 2.f}) {
+      context.Put("X", Tensor::FromFloat("X", {3}, {-scale, 0, scale}));
+      if (!alias) {
+        context.Put("Q", Tensor::FromFloat("Q", {1}, {999}));
+        context.PutValue("Y", RuntimeValue{});
+      }
+      quantize.Run(context);
+      EXPECT_FALSE(context.Has(encode.output(0)));
+      EXPECT_EQ(context.values().at(encode.output(0)).kind, RuntimeValue::Kind::kEncoded);
+      dequantize.Run(context);
+      EXPECT_EQ(context.values().count(decode.output(0)), 0u);
+      EXPECT_EQ(context.Get(decode.output(0)).allocation_owner(), &allocator);
+      RunNode(identity, context);
+      ExpectValues(context.Get("copy"), {-scale, 0, scale});
+    }
+  }
+}
+
 TEST(QuantizedValueKernels, OptionalParametersAndLearnedCodebooks) {
   const auto input = Tensor::FromFloat("", {3}, {-1, 0, 1});
   auto plan = MakeQuantizationPlan(QuantizationFormat::kSqueezellm, 3);
@@ -335,7 +377,10 @@ TEST(QuantizedValueKernels, SharedParametersStayIndependentOfTypeReferences) {
     RuntimeSession session(model);
     RuntimeContext context;
     context.Put("X", source);
+    context.Put("Q", Tensor::FromFloat("Q", {1}, {42}));
     session.Run(context);
+    EXPECT_FALSE(context.Has("Q"));
+    ASSERT_EQ(context.values().count("Q"), 1u);
     ExpectValues(context.Get("Y"), {-2, 0, 2});
     retained = context.values().at("I").DeepCopy();
     auto child = context.MakeFunctionContext();

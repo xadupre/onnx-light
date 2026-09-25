@@ -39,12 +39,12 @@ void Quantize::Run(RuntimeContext &rt) {
                           "Quantize parameter_ref excludes explicit optional parameter inputs.");
     auto result = QuantizeTensorShared(input, attribute->tp().struct_type(), reference->s(),
                                        rt.quantization_parameters(), rt.struct_type_catalogue());
-    rt.values().insert_or_assign(node.output(0), std::move(result));
+    rt.PutValue(node.output(0), std::move(result));
     return;
   }
   auto result =
       (*this)(input, attribute->tp().struct_type(), parameters, rt.struct_type_catalogue());
-  rt.values().insert_or_assign(node.output(0), std::move(result));
+  rt.PutValue(node.output(0), std::move(result));
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

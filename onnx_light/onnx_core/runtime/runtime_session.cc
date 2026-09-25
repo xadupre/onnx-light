@@ -213,18 +213,15 @@ std::unordered_set<std::string> RuntimeSession::SeedInitializers(RuntimeContext 
     rt.set_quantization_parameters(quantization_parameters_);
   if (initializer_graph_ != nullptr) {
     for (const TensorProto &initializer : initializer_graph_->initializer())
-      if (!rt.Has(initializer.name())) {
+      if (!rt.HasValue(initializer.name())) {
         rt.Set(initializer.name(), InitializerView(initializer, rt.model_owner()),
                RuntimeEventKind::kInitializer);
         seeded.insert(initializer.name());
       }
     for (const auto &initializer : initializer_graph_->encoded_initializer())
-      if (!rt.Has(initializer.name()) && rt.values().count(initializer.name()) == 0) {
+      if (!rt.HasValue(initializer.name())) {
         rt.struct_type_catalogue().ValidateEncodedValue(initializer);
-        rt.values().emplace(initializer.name(),
-                            rt.model_owner()
-                                ? RuntimeValue::FromEncodedView(initializer, rt.model_owner())
-                                : RuntimeValue(initializer));
+        RuntimeValue value;
         if (initializer.has_parameter_ref()) {
           MaterializeQuantizedValue(initializer, rt.quantization_parameters().get(),
                                     rt.struct_type_catalogue());
@@ -232,9 +229,13 @@ std::unordered_set<std::string> RuntimeSession::SeedInitializers(RuntimeContext 
           owned.ParseFromString(initializer.SerializeAsString());
           *owned.mutable_struct_type() =
               rt.quantization_parameters()->Get(initializer.parameter_ref().value()).local_type;
-          rt.values().at(initializer.name()) = RuntimeValue(std::move(owned));
-          rt.values().at(initializer.name()).quantization_parameters = rt.quantization_parameters();
+          value = RuntimeValue(std::move(owned));
+          value.quantization_parameters = rt.quantization_parameters();
+        } else {
+          value = rt.model_owner() ? RuntimeValue::FromEncodedView(initializer, rt.model_owner())
+                                   : RuntimeValue(initializer);
         }
+        rt.PutValue(initializer.name(), std::move(value), RuntimeEventKind::kInitializer);
         seeded.insert(initializer.name());
       }
   }

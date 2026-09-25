@@ -40,6 +40,15 @@ struct RuntimeValue {
   /** Returns an immutable message view with an explicit lifetime owner. */
   static RuntimeValue FromEncodedView(const EncodedValueProto &value, std::shared_ptr<void> owner);
 
+  /** Restores a validated cache, retaining proto storage and any shared parameter catalogue. */
+  static RuntimeValue
+  FromPagedCache(PagedCacheProto value, const StructTypeCatalogue &catalogue = {},
+                 std::shared_ptr<const QuantizationParameterCatalogue> parameters = {});
+
+  /** Exports a cache without decoding pages; referenced types remain model-scoped. */
+  PagedCacheProto ToPagedCache(const std::string &name = "",
+                               const StructTypeCatalogue &catalogue = {}) const;
+
   /** Returns the immutable encoded message. */
   const EncodedValueProto &Encoded() const;
 

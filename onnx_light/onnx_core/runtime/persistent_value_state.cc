@@ -4,6 +4,7 @@
 
 #include "onnx_core/runtime/persistent_value_state.h"
 #include "onnx_core/runtime/kernels/run_nodes.h"
+#include "onnx_core/runtime/quantization.h"
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
@@ -183,6 +184,15 @@ PersistentValueState::PersistentValueState(std::shared_ptr<const ModelProto> mod
                            std::shared_ptr<void>(model, const_cast<ModelProto *>(model.get()))) {}
 
 std::vector<PersistentValue> PersistentValueState::ValidateInitial(RuntimeValueMap initial) const {
+  std::shared_ptr<const QuantizationParameterCatalogue> parameters;
+  for (const auto &cache : model_.graph().paged_cache_initializer())
+    if (!initial.contains(cache.name()) &&
+        std::any_of(bindings_.begin(), bindings_.end(),
+                    [&](const auto &binding) { return binding.input == cache.name(); })) {
+      if (!parameters)
+        parameters = QuantizationParameterCatalogue::Build(model_);
+      initial.emplace(cache.name(), RuntimeValue::FromPagedCache(cache, catalogue_, parameters));
+    }
   std::vector<PersistentValue> result;
   result.reserve(bindings_.size());
   Symbols symbols;

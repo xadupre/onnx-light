@@ -178,6 +178,8 @@ std::unordered_map<std::string, ValueInfoProto> BuildValueInfoMap(const GraphPro
 /// containing model.
 GraphProto ExtractGraph(const GraphProto &graph, const std::vector<std::string> &input_names,
                         const std::vector<std::string> &output_names) {
+  EXT_ENFORCE_INVALID(graph.paged_cache_initializer().empty(),
+                      "ExtractGraph does not support paged cache initializers; use GraphBuilder.");
   const std::unordered_map<std::string, ValueInfoProto> vi_map = BuildValueInfoMap(graph);
 
   // Validate requested names.
@@ -266,6 +268,8 @@ void AddPrefixGraphInPlace(GraphProto &g, const std::string &prefix, bool rename
                            bool rename_edges, bool rename_inputs, bool rename_outputs,
                            bool rename_initializers, bool rename_value_infos,
                            std::unordered_map<std::string, std::string> &name_map) {
+  EXT_ENFORCE_INVALID(g.paged_cache_initializer().empty(),
+                      "AddPrefixGraph does not support paged cache initializers.");
   auto pfx = [&](const std::string &s) -> std::string { return s.empty() ? s : prefix + s; };
 
   // Collect edge renames: all node outputs that are not graph outputs.
@@ -601,6 +605,9 @@ GraphProto MergeGraphs(const GraphProto &g1_in, const GraphProto &g2_in,
                        const std::vector<std::string> &outputs, const std::string &prefix1,
                        const std::string &prefix2, const std::string &name,
                        const std::string &doc_string) {
+  EXT_ENFORCE_INVALID(g1_in.paged_cache_initializer().empty() &&
+                          g2_in.paged_cache_initializer().empty(),
+                      "MergeGraphs does not support paged cache initializers; use GraphBuilder.");
   // Apply prefixes if requested.
   GraphProto g1, g2;
   std::vector<std::pair<std::string, std::string>> effective_io_map = io_map;

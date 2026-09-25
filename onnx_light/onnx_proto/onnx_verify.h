@@ -203,6 +203,10 @@ public:
   EncodedValueLayout ValidateEncodedValue(const EncodedValueProto &value,
                                           bool require_resolved_reference = true) const;
 
+  /** Validates contiguous page ranges, concrete logical shapes and inline payload extents. */
+  void ValidatePagedCache(const PagedCacheProto &value, bool require_resolved_reference = true,
+                          const TypeProto *declared_type = nullptr) const;
+
 private:
   const utils::RepeatedProtoField<StructTypeProto> *declarations_ = nullptr;
 };

@@ -247,6 +247,7 @@ TEST(PagedAttentionShape, ModelInferencePreservesReferencesAndFeedback) {
   auto *binding = graph->add_persistent_bindings();
   binding->set_input_name("past");
   binding->set_output_name("present");
+  graph->add_paged_cache_initializer()->set_name("past");
   context.Clear();
   context.ComputeShapeModel(model);
   context.ApplyInferredShapesToModel(model);

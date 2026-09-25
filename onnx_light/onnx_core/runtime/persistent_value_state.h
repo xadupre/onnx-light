@@ -72,6 +72,10 @@ public:
   void Close();
   /** Returns read-only aliases keyed by exact retained graph input names. */
   RuntimeValueMap Values() const;
+  /** Returns the immutable model that supplies initializer and parameter declarations. */
+  const ModelProto &model() const noexcept { return model_; }
+  /** Returns the already validated catalogue for retained value conversions. */
+  const StructTypeCatalogue &struct_type_catalogue() const noexcept { return catalogue_; }
 
 private:
   struct Binding {

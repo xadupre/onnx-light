@@ -239,6 +239,14 @@ std::unordered_set<std::string> RuntimeSession::SeedInitializers(RuntimeContext 
         rt.PutValue(initializer.name(), std::move(value), RuntimeEventKind::kInitializer);
         seeded.insert(initializer.name());
       }
+    for (const auto &initializer : initializer_graph_->paged_cache_initializer())
+      if (!rt.HasValue(initializer.name())) {
+        rt.PutValue(initializer.name(),
+                    RuntimeValue::FromPagedCache(initializer, rt.struct_type_catalogue(),
+                                                 rt.quantization_parameters()),
+                    RuntimeEventKind::kInitializer);
+        seeded.insert(initializer.name());
+      }
   }
   return seeded;
 }

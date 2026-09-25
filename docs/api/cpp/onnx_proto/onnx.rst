@@ -93,7 +93,7 @@ their files. This is structural equality, not model validation or numerical
 tensor equality. Domain-specific comparisons such as ``SameDeclaredType`` remain
 separate and explicitly exclude the fields they ignore.
 
-The 39 public ``Equals`` methods and their diagnostic implementation extend the
+The public ``Equals`` methods and their diagnostic implementation extend the
 Linux proto-library size budget to 1,552,328 installed bytes, 1,085,786 ``.text``
 bytes and 852 defined dynamic symbols, as measured in CI run ``36120766116``.
 Shared quantization adds serialization, comparison and validation of

@@ -2729,6 +2729,41 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
   DECLARE_REPEATED_FIELD_PROTO(EncodedValueProto, rep_encoded_value);
   define_repeated_field_type_proto(rep_encoded_value, rep_encoded_value_proto);
 
+  PYDEFINE_PROTO(m, PagedCacheBlockProto)
+      .PYFIELD_OPTIONAL_INT(PagedCacheBlockProto, start)
+      .PYFIELD_OPTIONAL_INT(PagedCacheBlockProto, length)
+      .PYFIELD_OPTIONAL_PROTO(PagedCacheBlockProto, key)
+      .PYFIELD_OPTIONAL_PROTO(PagedCacheBlockProto, encoded_key)
+      .PYFIELD_OPTIONAL_PROTO(PagedCacheBlockProto, value)
+      .PYFIELD_OPTIONAL_PROTO(PagedCacheBlockProto, encoded_value)
+      .def("WhichOneof",
+           [](const PagedCacheBlockProto &self, const std::string &name) -> nb::object {
+             if (name == "key_payload") {
+               if (self.has_key())
+                 return nb::str("key");
+               if (self.has_encoded_key())
+                 return nb::str("encoded_key");
+             } else if (name == "value_payload") {
+               if (self.has_value())
+                 return nb::str("value");
+               if (self.has_encoded_value())
+                 return nb::str("encoded_value");
+             } else
+               throw nb::value_error("PagedCacheBlockProto has no such oneof.");
+             return nb::none();
+           });
+  PYADD_PROTO_SERIALIZATION(PagedCacheBlockProto);
+  DECLARE_REPEATED_FIELD_PROTO(PagedCacheBlockProto, rep_paged_block);
+  define_repeated_field_type_proto(rep_paged_block, rep_paged_block_proto);
+  PYDEFINE_PROTO(m, PagedCacheProto)
+      .PYFIELD(PagedCacheProto, blocks)
+      .PYFIELD_STR(PagedCacheProto, name)
+      .PYFIELD_STR(PagedCacheProto, doc_string)
+      .def_static("CacheType", &PagedCacheProto::CacheType);
+  PYADD_PROTO_SERIALIZATION(PagedCacheProto);
+  DECLARE_REPEATED_FIELD_PROTO(PagedCacheProto, rep_paged_cache);
+  define_repeated_field_type_proto(rep_paged_cache, rep_paged_cache_proto);
+
   auto bind_structured_presence = [](auto &cls) {
     cls.def(
         "HasField",
@@ -2749,6 +2784,8 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
   bind_structured_presence(nb_sub_StructTypeProtoArray);
   bind_structured_presence(nb_AffineLayoutProto);
   bind_structured_presence(nb_EncodedValueProto);
+  bind_structured_presence(nb_PagedCacheBlockProto);
+  bind_structured_presence(nb_PagedCacheProto);
 
   PYDEFINE_PROTO(m, ValueInfoProto)
       .PYFIELD_STR(ValueInfoProto, name)
@@ -3010,6 +3047,7 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
       .PYFIELD(GraphProto, initializer)
       .PYFIELD(GraphProto, sparse_initializer)
       .PYFIELD(GraphProto, encoded_initializer)
+      .PYFIELD(GraphProto, paged_cache_initializer)
       .PYFIELD(GraphProto, persistent_bindings)
       .PYFIELD_STR(GraphProto, doc_string)
       .PYFIELD(GraphProto, input)
@@ -3034,6 +3072,8 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
               return self.has_sparse_initializer();
             if (field_name == "encoded_initializer")
               return self.has_encoded_initializer();
+            if (field_name == "paged_cache_initializer")
+              return self.has_paged_cache_initializer();
             if (field_name == "input")
               return self.has_input();
             if (field_name == "output")

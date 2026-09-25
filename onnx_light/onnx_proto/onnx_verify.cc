@@ -1010,6 +1010,117 @@ StructTypeCatalogue::ValidateEncodedValue(const EncodedValueProto &value,
   return layout;
 }
 
+void StructTypeCatalogue::ValidatePagedCache(const PagedCacheProto &value,
+                                             bool require_resolved_reference,
+                                             const TypeProto *declared_type) const {
+  const TypeProto::Tensor *declared_key = nullptr, *declared_value = nullptr;
+  if (declared_type) {
+    ValidatePersistentType(*this, *declared_type);
+    const auto structure = [&](const TypeProto &type,
+                               size_t count) -> const StructTypeProto::Structure & {
+      EXT_ENFORCE_INVALID(type.has_struct_type(), "PagedCacheProto: expected a structure type.");
+      const auto &resolved = Resolve(type.struct_type());
+      EXT_ENFORCE_INVALID(resolved.has_structure() && resolved.structure().field().size() == count,
+                          "PagedCacheProto: invalid cache declaration.");
+      return resolved.structure();
+    };
+    const auto &root = structure(*declared_type, 1);
+    const auto &blocks = root.field(0);
+    EXT_ENFORCE_INVALID(blocks.name() == "blocks" && blocks.type().has_sequence_type(),
+                        "PagedCacheProto: declaration requires a blocks sequence.");
+    const auto &page = structure(blocks.type().sequence_type().elem_type(), 4);
+    for (const auto &field : page.field()) {
+      const bool scalar = field.name() == "start" || field.name() == "length";
+      EXT_ENFORCE_INVALID((scalar || field.name() == "key" || field.name() == "value") &&
+                              field.type().has_tensor_type(),
+                          "PagedCacheProto: invalid page field declaration.");
+      const auto &tensor = field.type().tensor_type();
+      EXT_ENFORCE_INVALID(
+          tensor.elem_type() == (scalar ? TensorProto::INT64 : TensorProto::FLOAT) &&
+              (!tensor.has_shape() || tensor.shape().dim_size() == (scalar ? 0 : 4)),
+          "PagedCacheProto: invalid page field type or rank.");
+      if (field.name() == "key")
+        declared_key = &tensor;
+      if (field.name() == "value")
+        declared_value = &tensor;
+    }
+    EXT_ENFORCE_INVALID(declared_key && declared_value,
+                        "PagedCacheProto: missing key/value declarations.");
+  }
+  std::unordered_map<std::string, int64_t> symbols;
+  const auto shape = [&](const TensorProto *dense, const EncodedValueProto *encoded,
+                         const TypeProto::Tensor *declared) {
+    std::vector<int64_t> dims;
+    if (dense) {
+      EXT_ENFORCE_INVALID(
+          dense->data_type() == TensorProto::FLOAT && dense->dims_size() == 4 &&
+              dense->external_data().empty() &&
+              (!dense->has_data_location() || dense->data_location() == TensorProto::DEFAULT),
+          "PagedCacheProto: requires inline FLOAT rank-4 tensors.");
+      for (const auto dim : dense->dims())
+        dims.push_back(dim);
+    } else {
+      const auto layout = ValidateEncodedValue(*encoded, require_resolved_reference);
+      EXT_ENFORCE_INVALID(!layout.external && encoded->has_logical_type() &&
+                              encoded->logical_type().has_tensor_type(),
+                          "PagedCacheProto: requires inline encoded tensors with logical types.");
+      const auto &logical = encoded->logical_type().tensor_type();
+      EXT_ENFORCE_INVALID(logical.elem_type() == TensorProto::FLOAT &&
+                              logical.shape().dim_size() == 4,
+                          "PagedCacheProto: encoded tensors must have FLOAT rank-4 logical types.");
+      for (const auto &dim : logical.shape().dim()) {
+        EXT_ENFORCE_INVALID(dim.has_dim_value(),
+                            "PagedCacheProto: logical dimensions must be concrete.");
+        dims.push_back(dim.dim_value());
+      }
+    }
+    EXT_ENFORCE_INVALID(dims[0] == 1 && dims[1] == 1 && dims[2] > 0 && dims[3] > 0 &&
+                            dims[2] <= INT64_MAX / dims[3] &&
+                            static_cast<uint64_t>(dims[2]) <=
+                                std::numeric_limits<size_t>::max() / sizeof(float) / dims[3],
+                        "PagedCacheProto: invalid [1,1,capacity,width] dimensions.");
+    if (declared && declared->has_shape())
+      for (size_t i = 0; i < dims.size(); ++i) {
+        const auto &dim = declared->shape().dim(i);
+        EXT_ENFORCE_INVALID(!dim.has_dim_value() || dim.dim_value() == dims[i],
+                            "PagedCacheProto: initializer shape differs from declaration.");
+        if (dim.has_dim_param() && !dim.dim_param().empty()) {
+          const auto [it, inserted] = symbols.emplace(dim.dim_param(), dims[i]);
+          EXT_ENFORCE_INVALID(inserted || it->second == dims[i],
+                              "PagedCacheProto: inconsistent symbolic dimensions.");
+        }
+      }
+    if (dense) {
+      VerifyTensor(*dense);
+      const auto count = static_cast<size_t>(dims[2]) * static_cast<size_t>(dims[3]);
+      EXT_ENFORCE_INVALID(dense->has_raw_data() ? dense->raw_data().size() == count * sizeof(float)
+                                                : dense->float_data().size() == count,
+                          "PagedCacheProto: dense payload extent mismatch.");
+    }
+    return dims;
+  };
+  int64_t next = 0, key_width = 0, value_width = 0;
+  for (const auto &block : value.blocks()) {
+    EXT_ENFORCE_INVALID(block.has_start() && block.has_length() && block.start() == next &&
+                            block.length() > 0 && block.length() <= INT64_MAX - next,
+                        "PagedCacheProto: invalid or noncontiguous token range.");
+    EXT_ENFORCE_INVALID(block.has_key() != block.has_encoded_key() &&
+                            block.has_value() != block.has_encoded_value(),
+                        "PagedCacheProto: each page needs exactly one key and value payload.");
+    const auto key = shape(block.has_key() ? &block.key() : nullptr,
+                           block.has_encoded_key() ? &block.encoded_key() : nullptr, declared_key);
+    const auto val =
+        shape(block.has_value() ? &block.value() : nullptr,
+              block.has_encoded_value() ? &block.encoded_value() : nullptr, declared_value);
+    EXT_ENFORCE_INVALID(key[2] == val[2] && block.length() <= key[2] &&
+                            (next == 0 || (key[3] == key_width && val[3] == value_width)),
+                        "PagedCacheProto: inconsistent page capacities or widths.");
+    key_width = key[3];
+    value_width = val[3];
+    next += block.length();
+  }
+}
+
 void VerifyValueInfo(const ValueInfoProto &value_info, bool is_main_graph) {
   EXT_ENFORCE_INVALID(!value_info.name().empty(),
                       "ValueInfoProto is missing a non-empty 'name' field.");
@@ -1562,6 +1673,9 @@ void CountPersistentInputUses(const GraphProto &graph,
     for (const auto &initializer : graph.encoded_initializer()) {
       shadow(initializer.name());
     }
+    for (const auto &initializer : graph.paged_cache_initializer()) {
+      shadow(initializer.name());
+    }
     for (const auto &node : graph.node()) {
       for (const auto &output : node.output()) {
         shadow(output);
@@ -1744,6 +1858,18 @@ void VerifyGraph(const StructTypeCatalogue *struct_types, const GraphProto &grap
                         "encoded_initializers.");
     catalogue.ValidateEncodedValue(encoded, /*require_resolved_reference=*/struct_types != nullptr);
     defined.insert(ToStdString(encoded.name()));
+  }
+  for (const auto &cache : graph.paged_cache_initializer()) {
+    EXT_ENFORCE_INVALID(
+        !cache.name().empty() && initializer_names.insert(ToStdString(cache.name())).second,
+        "Graph '", graph.name(), "' has an empty or duplicate paged cache initializer name.");
+    const auto input = std::find_if(graph.input().begin(), graph.input().end(),
+                                    [&](const auto &vi) { return vi.name() == cache.name(); });
+    catalogue.ValidatePagedCache(cache, struct_types != nullptr,
+                                 struct_types && input != graph.input().end() && input->has_type()
+                                     ? &input->type()
+                                     : nullptr);
+    defined.insert(ToStdString(cache.name()));
   }
 
   for (const auto &node : graph.node()) {

@@ -231,8 +231,9 @@ For the supported types, the native correspondence is:
 
 These are ``TypeProto`` contracts, not a claim that every ``SequenceProto``,
 ``MapProto`` or ``OptionalProto`` has a native persistent representation.
-Python feedback supports tensors, named structs and inline encoded values,
-but not sequence conversion.
+Python feedback supports tensors, named structs, inline encoded values and
+dedicated ``PagedCacheProto`` values. Arbitrary sequence conversion remains
+unsupported.
 ``If`` and model-local functions forward selected whole output names and move
 those results without persistence-related copies. Function attributes,
 ``Loop`` and ``Scan`` use their ordinary runtime implementations: their normal
@@ -467,8 +468,50 @@ accepts finite FLOAT ``[1, 1, sequence, head_size]`` tensors with equal new
 Q/K/V sequence lengths and positive head sizes: multiple batches/heads,
 masks and other unsupported attributes fail explicitly. Kernel instances,
 execution and allocator routing use the normal runtime contracts.
-Paged feedback is currently a native C++ API; Python feedback sequence
-conversion is not supported.
+Python feedback represents this cache with ``PagedCacheProto`` rather than
+converting its internal sequence into a Python list.
+
+Serialized paged caches
+~~~~~~~~~~~~~~~~~~~~~~
+
+``PagedCacheProto`` is the dedicated value representation, distinct from its
+logical ``TypeProto`` declaration. Its ``blocks`` field contains
+``PagedCacheBlockProto`` messages with explicit ``start`` and ``length``.
+Each block selects exactly one dense ``key`` or ``encoded_key``, and one dense
+``value`` or ``encoded_value``. Dense payloads use ``TensorProto``; encoded
+payloads retain ``EncodedValueProto`` layouts and parameter references.
+
+``PagedCacheProto::CacheType()`` is also the source of
+``PagedAttention::CacheType()``. ``RuntimeValue::FromPagedCache`` restores the
+recursive runtime value with retained storage owners; ``ToPagedCache`` exports
+it without decoding pages. Already retained dense buffers and managed encoded
+payloads remain shared. Binary protobuf serialization writes their contents;
+parsing reconstructs owned data. Referenced types and shared quantization
+parameters still belong to the containing model, not to the standalone cache.
+Pass its catalogues to the native conversion functions when needed.
+
+``GraphProto.paged_cache_initializer`` (extension field 1002) stores named
+cache defaults. Names are unique across all initializer categories. A default
+that also names a graph input may be overridden by a caller; otherwise it is a
+constant graph value. Runtime sessions seed these initializers, and persistent
+state initialization/reset uses them when a bound input is omitted from the
+initial-value map. Shape inference, model validation and ``GraphBuilder``
+import/export preserve the declaration and its structured type references.
+``GraphBuilder::MakePagedCacheInitializer`` adds one directly.
+
+Python exposes both messages through ``onnx_light.onnx``. A
+``PersistentValueState`` accepts and returns ``PagedCacheProto`` for these
+values, including through ``values`` and ``reset``. Serializing a returned
+cache and placing it in a new model's ``paged_cache_initializer`` resumes the
+cache independently of the original state.
+
+Validation rejects missing payload alternatives, gaps/overlaps, invalid
+lengths, inconsistent capacities/widths, symbolic payload dimensions and
+external page data. Load external data before constructing the cache.
+This extension is supported by onnx-light binary protobuf, not standard ONNX,
+ORT, or ONNX text export. Legacy graph extraction, prefixing and merging reject
+cache initializers explicitly rather than silently losing them; use
+``GraphBuilder`` for supported graph edits.
 
 The cache is a named structure containing ``blocks``, a typed runtime sequence.
 Each block is a structure with scalar INT64 ``start`` and ``length`` fields and

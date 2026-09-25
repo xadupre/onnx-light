@@ -103,6 +103,38 @@ std::string Payload(const EncodedValueProto &value) {
 
 } // namespace
 
+TEST(PagedAttentionFeedback, SerializedCacheInitializerResumesAttention) {
+  auto model = PagedModel();
+  RuntimeContext original_context;
+  RegisterPaged(original_context);
+  PersistentValueState original(model, {{"past", PagedAttention::EmptyCache()}});
+  original.Run(original_context, Feeds(1));
+  auto initial = original.Values().at("past").ToPagedCache("past");
+  ASSERT_EQ(initial.blocks_size(), 1);
+  EXPECT_TRUE(initial.blocks(0).has_encoded_key());
+  EXPECT_TRUE(initial.blocks(0).has_encoded_value());
+  auto restored_model = model;
+  *restored_model.mutable_graph()->add_paged_cache_initializer() = initial;
+  ModelProto parsed;
+  ASSERT_TRUE(parsed.ParseFromString(restored_model.SerializeAsString()));
+  EXPECT_NO_THROW(VerifyModel(parsed));
+  RuntimeContext restored_context;
+  RegisterPaged(restored_context);
+  PersistentValueState restored(parsed, {});
+  auto expected = original.Run(original_context, Feeds(2));
+  auto actual = restored.Run(restored_context, Feeds(2));
+  ASSERT_EQ(actual.at("Y").tensor.size_bytes(), expected.at("Y").tensor.size_bytes());
+  for (size_t i = 0; i < actual.at("Y").tensor.size_bytes() / sizeof(float); ++i)
+    EXPECT_FLOAT_EQ(actual.at("Y").tensor.AsFloat()[i], expected.at("Y").tensor.AsFloat()[i]);
+  EXPECT_TRUE(actual.at("present").ToPagedCache().Equals(expected.at("present").ToPagedCache()));
+  restored.Reset({});
+  EXPECT_EQ(restored.Values().at("past").ToPagedCache().blocks_size(), 1);
+  auto snapshot = actual.at("present").ToPagedCache();
+  restored.Close();
+  auto value = RuntimeValue::FromPagedCache(std::move(snapshot));
+  EXPECT_EQ(Blocks(value).size(), 2u);
+}
+
 TEST(PagedAttentionFeedback, PublishesOwnersWithoutChangingModelOrPriorPartialBlocks) {
   ModelProto model = PagedModel();
   VerifyModel(model);

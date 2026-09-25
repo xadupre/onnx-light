@@ -818,6 +818,19 @@ void check_graph(const GraphProto &graph, const CheckerContext &ctx,
     check_structured([&]() { ctx.get_struct_type_catalogue().ValidateEncodedValue(init); });
     lex_ctx.add(name);
   }
+  for (const auto &init : graph.paged_cache_initializer()) {
+    enforce_non_empty_field(init, name);
+    const std::string &name = init.name();
+    if (!initializer_name_checker.insert(name).second)
+      fail_check(name + " paged cache initializer name is not unique across initializers");
+    const auto input = std::find_if(graph.input().begin(), graph.input().end(),
+                                    [&](const auto &vi) { return vi.name() == name; });
+    check_structured([&]() {
+      ctx.get_struct_type_catalogue().ValidatePagedCache(
+          init, true, input != graph.input().end() && input->has_type() ? &input->type() : nullptr);
+    });
+    lex_ctx.add(name);
+  }
   std::unordered_set<std::string> used_experimental_ops;
   for (const auto &node : graph.node()) {
     // nodes must be in topologically sorted order
@@ -1229,6 +1242,12 @@ static void check_quantization_parameter_references(const ModelProto &model,
     for (const auto &encoded : value.encoded_initializer())
       if (encoded.has_parameter_ref())
         check_structured([&]() { parameters->Validate(encoded, types); });
+    for (const auto &cache : value.paged_cache_initializer())
+      for (const auto &block : cache.blocks())
+        for (const auto *encoded : {block.has_encoded_key() ? &block.encoded_key() : nullptr,
+                                    block.has_encoded_value() ? &block.encoded_value() : nullptr})
+          if (encoded && encoded->has_parameter_ref())
+            check_structured([&]() { parameters->Validate(*encoded, types); });
     for (const auto &nested : value.node())
       node(nested, bind_functions, unbound_function);
   };

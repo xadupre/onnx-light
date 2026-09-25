@@ -428,20 +428,29 @@ Tensor FeedbackTensorFromArray(const std::string &name, nb::handle value) {
                         bytes, RetainFeedbackOwner(owner));
 }
 
-RuntimeValue FeedbackValueFromPython(const std::string &name, nb::handle value, size_t depth = 0) {
+RuntimeValue FeedbackValueFromPython(const std::string &name, nb::handle value, size_t depth = 0,
+                                     const ModelProto *model = nullptr) {
   EXT_ENFORCE_INVALID(depth <= RuntimeValue::kMaxDepth,
                       "Feedback value exceeds the maximum nesting depth.");
   if (nb::isinstance<nb::dict>(value)) {
     RuntimeValueMap fields;
     for (auto [key, field] : nb::borrow<nb::dict>(value)) {
       std::string field_name = nb::cast<std::string>(key);
-      fields.emplace(field_name, FeedbackValueFromPython(field_name, field, depth + 1));
+      fields.emplace(field_name, FeedbackValueFromPython(field_name, field, depth + 1, model));
     }
     return RuntimeValue(std::move(fields));
   }
   if (nb::isinstance<EncodedValueProto>(value)) {
     return RuntimeValue::FromEncodedView(nb::cast<const EncodedValueProto &>(value),
                                          RetainFeedbackOwner(value));
+  }
+  if (nb::isinstance<PagedCacheProto>(value)) {
+    StructTypeCatalogue catalogue;
+    if (model)
+      catalogue.Build(*model);
+    return RuntimeValue::FromPagedCache(
+        nb::cast<const PagedCacheProto &>(value), catalogue,
+        model ? core::runtime::QuantizationParameterCatalogue::Build(*model) : nullptr);
   }
   if (nb::isinstance<RuntimeValue>(value))
     return nb::cast<const RuntimeValue &>(value).BorrowView();
@@ -462,16 +471,20 @@ RuntimeValue FeedbackValueFromPython(const std::string &name, nb::handle value, 
   return RuntimeValue(FeedbackTensorFromArray(name, value));
 }
 
-RuntimeValueMap FeedbackValuesFromPython(nb::dict values) {
+RuntimeValueMap FeedbackValuesFromPython(nb::dict values, const ModelProto *model = nullptr) {
   RuntimeValueMap result;
   for (auto [key, value] : values) {
     std::string name = nb::cast<std::string>(key);
-    result.emplace(name, FeedbackValueFromPython(name, value));
+    result.emplace(name, FeedbackValueFromPython(name, value, 0, model));
   }
   return result;
 }
 
-nb::object FeedbackValueToPython(RuntimeValue value) {
+nb::object FeedbackValueToPython(RuntimeValue value, const StructTypeCatalogue &catalogue = {}) {
+  if (value.kind == RuntimeValue::Kind::kStruct && value.fields.size() == 1 &&
+      value.fields.contains("blocks") &&
+      value.fields.at("blocks").kind == RuntimeValue::Kind::kSequence)
+    return nb::cast(value.ToPagedCache("", catalogue));
   EXT_ENFORCE_INVALID(value.kind != RuntimeValue::Kind::kSequence,
                       "Feedback sequence values currently require the native C++ API.");
   if (value.kind == RuntimeValue::Kind::kTensor)
@@ -483,14 +496,14 @@ nb::object FeedbackValueToPython(RuntimeValue value) {
   }
   nb::dict fields;
   for (auto &[name, field] : value.fields)
-    fields[nb::str(name.c_str())] = FeedbackValueToPython(std::move(field));
+    fields[nb::str(name.c_str())] = FeedbackValueToPython(std::move(field), catalogue);
   return fields;
 }
 
-nb::dict FeedbackValuesToPython(RuntimeValueMap values) {
+nb::dict FeedbackValuesToPython(RuntimeValueMap values, const StructTypeCatalogue &catalogue = {}) {
   nb::dict result;
   for (auto &[name, value] : values)
-    result[nb::str(name.c_str())] = FeedbackValueToPython(std::move(value));
+    result[nb::str(name.c_str())] = FeedbackValueToPython(std::move(value), catalogue);
   return result;
 }
 
@@ -2012,7 +2025,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           [](PersistentValueState *self, const ModelProto &model, nb::dict initial,
              RuntimeSessionOptions options) {
             new (self) PersistentValueState(
-                model, FeedbackValuesFromPython(initial), options,
+                model, FeedbackValuesFromPython(initial, &model), options,
                 RetainFeedbackOwner(nb::cast(&model, nb::rv_policy::reference)));
           },
           nb::arg("model"), nb::arg("initial"), nb::arg("options") = RuntimeSessionOptions{},
@@ -2029,7 +2042,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "run",
           [](PersistentValueState &self, RuntimeContext &context, nb::dict feeds,
              const core::runtime::TaskCompletion *completion) {
-            RuntimeValueMap inputs = FeedbackValuesFromPython(feeds);
+            RuntimeValueMap inputs = FeedbackValuesFromPython(feeds, &self.model());
             // Kernel initialization can retain allocator pointers even when execution fails.
             nb::cast(&self, nb::rv_policy::reference)
                 .attr("_retain_context")(nb::cast(&context, nb::rv_policy::reference));
@@ -2038,7 +2051,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
               nb::gil_scoped_release release;
               outputs = self.Run(context, inputs, completion);
             }
-            return FeedbackValuesToPython(std::move(outputs));
+            return FeedbackValuesToPython(std::move(outputs), self.struct_type_catalogue());
           },
           nb::arg("context"), nb::arg("feeds"), nb::arg("completion").none() = nb::none(),
           "Runs the model and commits feedback only after successful validation. "
@@ -2051,14 +2064,16 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def(
           "reset",
           [](PersistentValueState &self, nb::dict initial) {
-            self.Reset(FeedbackValuesFromPython(initial));
+            self.Reset(FeedbackValuesFromPython(initial, &self.model()));
           },
           nb::arg("initial"), "Replaces retained state with explicitly supplied initial values.")
       .def("close", &PersistentValueState::Close,
            "Releases retained values and permanently closes the state.")
       .def_prop_ro(
           "values",
-          [](const PersistentValueState &self) { return FeedbackValuesToPython(self.Values()); },
+          [](const PersistentValueState &self) {
+            return FeedbackValuesToPython(self.Values(), self.struct_type_catalogue());
+          },
           "Returns shared read-only payload views keyed by exact retained graph input names.");
 
   nb::class_<ReferenceEvaluatorRunner>(
@@ -2367,7 +2382,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
               return FeedbackValueToPython(RuntimeValue(
                   rt.Get(name).borrowed_owner().use_count() != 0 ? rt.Get(name).BorrowView()
                                                                  : rt.Get(name).ToOwned()));
-            return FeedbackValueToPython(rt.values().at(name));
+            return FeedbackValueToPython(rt.values().at(name), rt.struct_type_catalogue());
           },
           nb::arg("name"),
           "Returns the current tensor, struct or encoded value as a read-only value, "

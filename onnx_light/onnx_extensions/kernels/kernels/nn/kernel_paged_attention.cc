@@ -269,31 +269,7 @@ RuntimeValue NewPage(const Tensor &input, int64_t begin, int64_t length,
 
 } // namespace
 
-TypeProto PagedAttention::CacheType() {
-  TypeProto result;
-  auto *blocks = result.mutable_struct_type()->mutable_structure()->add_field();
-  blocks->set_name("blocks");
-  auto *page = blocks->mutable_type()
-                   ->mutable_sequence_type()
-                   ->mutable_elem_type()
-                   ->mutable_struct_type()
-                   ->mutable_structure();
-  for (const char *name : {"start", "length", "key", "value"}) {
-    auto *field = page->add_field();
-    field->set_name(name);
-    auto *tensor = field->mutable_type()->mutable_tensor_type();
-    const bool scalar = std::string(name) == "start" || std::string(name) == "length";
-    tensor->set_elem_type(scalar ? DataType::INT64 : DataType::FLOAT);
-    auto *shape = tensor->mutable_shape();
-    if (!scalar)
-      for (int i = 0; i < 4; ++i) {
-        auto *dim = shape->add_dim();
-        if (i < 2)
-          dim->set_dim_value(1);
-      }
-  }
-  return result;
-}
+TypeProto PagedAttention::CacheType() { return PagedCacheProto::CacheType(); }
 
 RuntimeValue PagedAttention::EmptyCache() {
   RuntimeValue result;

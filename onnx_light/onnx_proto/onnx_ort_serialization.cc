@@ -742,6 +742,7 @@ private:
       return Graph(normalized, outer, depth);
     }
     Require(graph.encoded_initializer().empty(), "encoded initializers are unsupported");
+    Require(graph.paged_cache_initializer().empty(), "paged cache initializers are unsupported");
     Require(graph.sparse_initializer().empty(), "sparse initializers are unsupported");
     Require(graph.quantization_annotation().empty(), "quantization annotations are unsupported");
     Types types;

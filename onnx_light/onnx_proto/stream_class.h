@@ -65,7 +65,11 @@ template <typename... Fields> inline void reset_fields(Fields &...fields) { (fie
       this->~cls();                                                                                \
       new (this) cls();                                                                            \
     }                                                                                              \
-    void CopyFrom(const cls &proto);
+    void CopyFrom(const cls &proto);                                                               \
+    /** Compares all fields, including presence and floating-point bits, without serialization. */ \
+    /** Sets difference to the first mismatched field path and reason, or clears it on equality.   \
+     */                                                                                            \
+    bool Equals(const cls &other, std::string *difference = nullptr) const;
 
 /** Macro for beginning a generated proto class without adding a default constructor. */
 #define BEGIN_PROTO_NOINIT(cls, doc)                                                               \
@@ -73,7 +77,11 @@ template <typename... Fields> inline void reset_fields(Fields &...fields) { (fie
   public:                                                                                          \
     using ProtoAdapterBase = ProtoMessageAdapter<cls>;                                             \
     static inline constexpr const char *DOC = doc;                                                 \
-    void CopyFrom(const cls &proto);
+    void CopyFrom(const cls &proto);                                                               \
+    /** Compares all fields, including presence and floating-point bits, without serialization. */ \
+    /** Sets difference to the first mismatched field path and reason, or clears it on equality.   \
+     */                                                                                            \
+    bool Equals(const cls &other, std::string *difference = nullptr) const;
 
 /** Macro for ending a generated proto class and injecting the serialization/parsing API. */
 #define END_PROTO()                                                                                \

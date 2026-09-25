@@ -1147,7 +1147,7 @@ OrtPackedValue ParseOrtValue(const EncodedValueProto &encoded, const Quantizatio
   actual.clear_type_id();
   std::string difference;
   EXT_ENFORCE_INVALID(
-      EqualProto(actual, OrtSchema(storage, header.format), &difference),
+      actual.Equals(OrtSchema(storage, header.format), &difference),
       "ORT MatMulNBits descriptor does not match its versioned schema: ", difference);
   EXT_ENFORCE_INVALID(encoded.raw_data().size() == storage.total_bytes,
                       "ORT MatMulNBits payload size mismatch.");
@@ -1267,7 +1267,7 @@ DecodedValues DecodeValues(const EncodedValueProto &encoded, const StructTypeCat
   StructTypeProto actual = root;
   actual.clear_type_id();
   std::string difference;
-  EXT_ENFORCE_INVALID(EqualProto(actual, expected, &difference),
+  EXT_ENFORCE_INVALID(actual.Equals(expected, &difference),
                       "Quantization descriptor does not match its versioned schema: ", difference);
   EXT_ENFORCE_INVALID(payload.position == payload.data.size(), "Trailing quantization payload.");
   RestoreValues(values, plan, exceptions);
@@ -1509,7 +1509,7 @@ QuantizationPlan CalibratePlan(const Tensor &tensor, const StructTypeProto &root
   if (!ort) {
     ValidatePlan(plan, values.size());
     std::string difference;
-    EXT_ENFORCE_INVALID(EqualProto(root, Schema(plan), &difference),
+    EXT_ENFORCE_INVALID(root.Equals(Schema(plan), &difference),
                         "Quantize type does not match its versioned schema: ", difference);
     for (int64_t outlier : plan.outliers)
       values[outlier] = 0;
@@ -1556,7 +1556,7 @@ RuntimeValue QuantizeTensor(const Tensor &tensor, const StructTypeProto &type,
   root.clear_type_id();
   auto result = EncodeTensor(tensor, CalibratePlan(tensor, root, parameters));
   std::string difference;
-  EXT_ENFORCE_INVALID(EqualProto(root, result.struct_type(), &difference),
+  EXT_ENFORCE_INVALID(root.Equals(result.struct_type(), &difference),
                       "Quantize parameters do not match the requested storage type: ", difference);
   *result.mutable_struct_type() = type;
   catalogue.ValidateEncodedValue(result);

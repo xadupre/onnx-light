@@ -32,7 +32,7 @@ bool SameDeclaredType(const TypeProto &left, const TypeProto &right, std::string
   TypeProto rhs = right;
   lhs.clear_denotation();
   rhs.clear_denotation();
-  return EqualProto(lhs, rhs, difference);
+  return lhs.Equals(rhs, difference);
 }
 
 bool CompatibleEncodedDefault(const TypeProto &declared, const TypeProto &actual) {
@@ -79,7 +79,7 @@ void CheckCatalogueCompatibility(const ShapesContext &left, const ShapesContext 
     const auto &right_type = right.ResolveStructType(structure);
     std::string difference;
     EXT_ENFORCE_INVALID(
-        EqualProto(left_type, right_type, &difference),
+        left_type.Equals(right_type, &difference),
         "Structured values reference incompatible model declarations: ", difference);
     if (left_type.has_array()) {
       CheckCatalogueCompatibility(left, right, left_type.ref_array().ref_element_type(), visited);
@@ -253,7 +253,7 @@ void ShapesContext::CheckStructuredCompatibility(const std::string &name,
     right.set_name("");
     std::string difference;
     EXT_ENFORCE_INVALID(
-        EqualProto(left, right, &difference),
+        left.Equals(right, &difference),
         "Control-flow merging of different encoded values is unsupported: ", difference);
   }
 }

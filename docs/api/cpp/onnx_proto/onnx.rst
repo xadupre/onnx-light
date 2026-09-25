@@ -69,6 +69,30 @@ following serialization / deserialization methods (added by
 See :doc:`stream_class` for :cpp:class:`onnx_light::ParseOptions`,
 :cpp:class:`onnx_light::SerializeOptions`, and :cpp:class:`onnx_light::Message`.
 
+Structural equality
+-------------------
+
+Every proto class provides ``Equals`` for comparing two messages of the same
+type without serialization:
+
+.. code-block:: cpp
+
+    std::string difference;
+    bool equal = actual.Equals(expected, &difference);
+
+The optional diagnostic receives the first differing field path and reason,
+for example ``structure.field[1].name: values differ``. It is cleared when the
+messages are equal. Omitting it performs the same comparison without collecting
+the diagnostic.
+
+Comparison includes field presence, nested messages, repeated-field order,
+metadata and payload bytes. Floating-point fields are compared bit for bit:
+identical NaN representations compare equal, while positive and negative zero
+compare unequal. External data references are compared as stored, without loading
+their files. This is structural equality, not model validation or numerical
+tensor equality. Domain-specific comparisons such as ``SameDeclaredType`` remain
+separate and explicitly exclude the fields they ignore.
+
 API reference
 -------------
 

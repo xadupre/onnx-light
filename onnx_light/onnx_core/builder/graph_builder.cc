@@ -127,7 +127,7 @@ bool SameEncodedContent(const EncodedValueProto &lhs, const EncodedValueProto &r
   EncodedValueProto right = rhs;
   left.clear_name();
   right.clear_name();
-  return EqualProto(left, right);
+  return left.Equals(right);
 }
 
 bool HasStructuredType(const TypeProto &type) {

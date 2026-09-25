@@ -361,6 +361,12 @@ def _scalar_is_set(obj: Any, name: str, kind: Any, value: Any) -> bool:
 def _write_message(obj: Any, indent: int, lines: list[str]) -> None:
     """Appends the textproto lines of *obj* (without a header) to *lines*."""
     schema = _build_schema()
+    if type(obj) not in schema:
+        raise TypeError(f"Cannot serialize {type(obj)!r} to textproto.")
+    for field in ("struct_types", "encoded_initializer", "struct_type", "parameter_ref"):
+        presence = getattr(obj, "has_" + field, None)
+        if callable(presence) and presence():
+            raise TypeError(f"textproto does not support the {field!r} extension; use protobuf.")
     pad = "  " * indent
     for name, kind, repeated in schema[type(obj)]:
         is_message = isinstance(kind, tuple) and kind[0] == "msg"

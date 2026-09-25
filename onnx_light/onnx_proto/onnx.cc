@@ -1566,6 +1566,7 @@ SerializeSizeResult EncodedValueProto::SerializeSize(utils::BinaryWriteStream &s
   SIZE_ENUM_FIELD(size, options, stream, data_location)
   SIZE_FIELD(size, options, stream, name)
   SIZE_FIELD(size, options, stream, doc_string)
+  SIZE_FIELD(size, options, stream, parameter_ref)
   return size;
 }
 void EncodedValueProto::SerializeToStream(utils::BinaryWriteStream &stream,
@@ -1578,6 +1579,7 @@ void EncodedValueProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_ENUM_FIELD(options, stream, data_location)
   WRITE_FIELD(options, stream, name)
   WRITE_FIELD(options, stream, doc_string)
+  WRITE_FIELD(options, stream, parameter_ref)
 }
 bool EncodedValueProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, EncodedValueProto)           //
@@ -1592,15 +1594,17 @@ bool EncodedValueProto::ParseFromStream(utils::BinaryStream &stream, ParseOption
   READ_OPTIONAL_ENUM_FIELD(options, stream, data_location) //
   READ_FIELD(options, stream, name)                        //
   READ_FIELD(options, stream, doc_string)                  //
+  READ_FIELD(options, stream, parameter_ref)               //
   READ_END(options, stream, EncodedValueProto)             //
   return true;
 }
 void EncodedValueProto::PrintToStringStream(std::stringstream &ss,
                                             utils::PrintOptions &options) const {
-  write_proto_into_vector_string(
-      ss, options, NAME_EXIST_VALUE(affine), NAME_EXIST_VALUE(struct_type),
-      NAME_EXIST_VALUE(logical_type), NAME_EXIST_VALUE(raw_data), NAME_EXIST_VALUE(external_data),
-      NAME_EXIST_VALUE(data_location), NAME_EXIST_VALUE(name), NAME_EXIST_VALUE(doc_string));
+  write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(affine),
+                                 NAME_EXIST_VALUE(struct_type), NAME_EXIST_VALUE(logical_type),
+                                 NAME_EXIST_VALUE(raw_data), NAME_EXIST_VALUE(external_data),
+                                 NAME_EXIST_VALUE(data_location), NAME_EXIST_VALUE(name),
+                                 NAME_EXIST_VALUE(doc_string), NAME_EXIST_VALUE(parameter_ref));
 }
 
 // ValueInfoProto
@@ -2741,6 +2745,7 @@ bool EncodedValueProto::Equals(const EncodedValueProto &right, std::string *diff
   COMPARE_FIELD(data_location)
   COMPARE_FIELD(name)
   COMPARE_FIELD(doc_string)
+  COMPARE_FIELD(parameter_ref)
   return true;
 }
 

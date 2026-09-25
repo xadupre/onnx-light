@@ -14,6 +14,7 @@
 #include <cstring>
 #include <string>
 
+#include "onnx_core/runtime/quantization.h"
 #include "onnx_lib/checker.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -48,7 +49,347 @@ TensorProto MakeFloatScalar(const std::string &name, float value) {
   return t;
 }
 
+ModelProto MakeSharedParameterModel(uint64_t count = 8, uint64_t block_size = 4) {
+  ModelProto model;
+  model.set_ir_version(IR_VERSION);
+  for (const auto &domain : {"", "ai.rt", "local"}) {
+    auto *opset = model.add_opset_import();
+    opset->set_domain(domain);
+    opset->set_version(std::string(domain).empty() ? 21 : 1);
+  }
+  auto *graph = model.mutable_graph();
+  graph->set_name("shared");
+  const auto plan = core::runtime::MakeQuantizationPlan(core::runtime::QuantizationFormat::kInt4,
+                                                        count, block_size);
+  const auto storage = core::runtime::MakeQuantizationType(plan);
+  TypeProto logical;
+  logical.mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+  logical.mutable_tensor_type()->mutable_shape()->add_dim()->set_dim_value(count);
+  auto *input = graph->add_input();
+  input->set_name("X");
+  *input->mutable_type() = logical;
+  auto *output = graph->add_output();
+  output->set_name("Q");
+  *output->mutable_type()->mutable_struct_type() =
+      core::runtime::MakeSharedQuantizationType(storage);
+  auto *annotation = graph->add_quantization_annotation();
+  annotation->set_tensor_name("onnx_light.quantization.parameters:common");
+  auto descriptor = [&](const char *role, const std::string &bytes) {
+    auto *tensor = graph->add_initializer();
+    tensor->set_name(role);
+    tensor->set_data_type(TensorProto::UINT8);
+    tensor->add_dims(bytes.size());
+    tensor->set_raw_data(bytes);
+    auto *mapping = annotation->add_quant_parameter_tensor_names();
+    mapping->set_key(role);
+    mapping->set_value(role);
+  };
+  descriptor("storage_type", storage.SerializeAsString());
+  descriptor("logical_type", logical.SerializeAsString());
+  auto *scales = graph->add_initializer();
+  scales->set_name("scales");
+  scales->set_data_type(TensorProto::FLOAT);
+  for (const auto &run : plan.runs)
+    for (size_t i = 0; i < run.blocks.size(); ++i)
+      scales->add_float_data(static_cast<float>(i + 1));
+  scales->add_dims(scales->float_data().size());
+  auto *mapping = annotation->add_quant_parameter_tensor_names();
+  mapping->set_key("scales");
+  mapping->set_value("scales");
+  auto *node = graph->add_node();
+  node->set_domain("ai.rt");
+  node->set_op_type("Quantize");
+  node->add_input("X");
+  node->add_output("Q");
+  auto *type = node->add_attribute();
+  type->set_name("type");
+  type->set_type(AttributeProto::TYPE_PROTO);
+  *type->mutable_tp()->mutable_struct_type() = storage;
+  auto *reference = node->add_attribute();
+  reference->set_name("parameter_ref");
+  reference->set_type(AttributeProto::STRING);
+  reference->set_s("common");
+  return model;
+}
+
+ModelProto MakeSharedParameterFunctionModel() {
+  auto model = MakeSharedParameterModel();
+  auto *function = model.add_functions();
+  function->set_domain("local");
+  function->set_name("Shared");
+  function->add_input("X");
+  function->add_output("Q");
+  function->add_attribute("parameters");
+  for (const auto &opset : model.opset_import())
+    *function->add_opset_import() = opset;
+  *function->add_node() = model.graph().node(0);
+  auto *reference = function->mutable_node(0)->mutable_attribute(1);
+  reference->clear_s();
+  reference->set_ref_attr_name("parameters");
+  model.mutable_graph()->clear_node();
+  auto *call = model.mutable_graph()->add_node();
+  call->set_domain("local");
+  call->set_op_type("Shared");
+  call->add_input("X");
+  call->add_output("Q");
+  auto *argument = call->add_attribute();
+  argument->set_name("parameters");
+  argument->set_type(AttributeProto::STRING);
+  argument->set_s("common");
+  return model;
+}
+
 } // namespace
+
+TEST(CHECKER_COVERAGE, SharedParameterDeclarationsMatchRuntimeValidation) {
+  const auto original = MakeSharedParameterModel();
+  ASSERT_NO_THROW(checker::check_model(original));
+  for (const auto &failure :
+       {"unknown_role", "descriptor_dtype", "descriptor_rank", "descriptor_wire", "logical_dtype",
+        "logical_shape", "scales_dtype", "scales_count", "scales_value"}) {
+    SCOPED_TRACE(failure);
+    ModelProto model;
+    model.CopyFrom(original);
+    auto *graph = model.mutable_graph();
+    auto *scales = graph->mutable_initializer(2);
+    const std::string kind = failure;
+    if (kind == "unknown_role") {
+      auto *mapping = graph->mutable_quantization_annotation(0)->add_quant_parameter_tensor_names();
+      mapping->set_key("unknown");
+      mapping->set_value("scales");
+    } else if (kind == "descriptor_dtype") {
+      graph->mutable_initializer(0)->set_data_type(TensorProto::INT8);
+    } else if (kind == "descriptor_rank") {
+      graph->mutable_initializer(0)->add_dims(1);
+    } else if (kind == "descriptor_wire") {
+      auto *descriptor = graph->mutable_initializer(0);
+      const auto &raw = descriptor->raw_data();
+      std::string bytes(reinterpret_cast<const char *>(raw.data()), raw.size());
+      bytes.push_back('\0');
+      descriptor->clear_dims();
+      descriptor->add_dims(bytes.size());
+      descriptor->set_raw_data(bytes);
+    } else if (kind == "logical_dtype" || kind == "logical_shape") {
+      TypeProto logical;
+      const auto &raw = graph->initializer(1).raw_data();
+      logical.ParseFromString(std::string(reinterpret_cast<const char *>(raw.data()), raw.size()));
+      if (kind == "logical_dtype")
+        logical.mutable_tensor_type()->set_elem_type(TensorProto::INT64);
+      else
+        logical.mutable_tensor_type()->mutable_shape()->mutable_dim(0)->set_dim_value(7);
+      const auto bytes = logical.SerializeAsString();
+      auto *descriptor = graph->mutable_initializer(1);
+      descriptor->clear_dims();
+      descriptor->add_dims(bytes.size());
+      descriptor->set_raw_data(bytes);
+    } else if (kind == "scales_dtype") {
+      scales->set_data_type(TensorProto::INT64);
+      scales->clear_float_data();
+      scales->add_int64_data(1);
+      scales->add_int64_data(2);
+    } else if (kind == "scales_count") {
+      scales->clear_dims();
+      scales->add_dims(3);
+      scales->add_float_data(3);
+    } else {
+      scales->clear_float_data();
+      scales->add_float_data(0);
+      scales->add_float_data(2);
+    }
+    EXPECT_THROW(core::runtime::QuantizationParameterCatalogue::Build(model),
+                 std::invalid_argument);
+    EXPECT_THROW(checker::check_model(model), ValidationError);
+  }
+}
+
+TEST(CHECKER_COVERAGE, SharedParameterValidationDoesNotMaterializeLargeLogicalShape) {
+  const uint64_t count = uint64_t{1} << (sizeof(size_t) > 4 ? 30 : 27);
+  auto model = MakeSharedParameterModel(count, count);
+  EXPECT_NO_THROW(checker::check_model(model));
+  TypeProto logical;
+  logical.CopyFrom(model.graph().input(0).type());
+  logical.mutable_tensor_type()->mutable_shape()->mutable_dim(0)->set_dim_value(count - 1);
+  const auto bytes = logical.SerializeAsString();
+  auto *descriptor = model.mutable_graph()->mutable_initializer(1);
+  descriptor->clear_dims();
+  descriptor->add_dims(bytes.size());
+  descriptor->set_raw_data(bytes);
+  EXPECT_THROW(checker::check_model(model), ValidationError);
+}
+
+TEST(CHECKER_COVERAGE, SharedParameterFunctionArgumentsAndDefaults) {
+  auto model = MakeSharedParameterFunctionModel();
+  ASSERT_NO_THROW(checker::check_model(model));
+  auto *call = model.mutable_graph()->mutable_node(0);
+  call->mutable_attribute(0)->set_s("missing");
+  EXPECT_THROW(checker::check_model(model), ValidationError);
+  call->mutable_attribute(0)->clear_s();
+  call->mutable_attribute(0)->set_type(AttributeProto::INT);
+  call->mutable_attribute(0)->set_i(1);
+  EXPECT_THROW(checker::check_model(model), ValidationError);
+  call->clear_attribute();
+  EXPECT_THROW(checker::check_model(model), ValidationError);
+  auto *function = model.mutable_functions(0);
+  function->clear_attribute();
+  auto *default_value = function->add_attribute_proto();
+  default_value->set_name("parameters");
+  default_value->set_type(AttributeProto::STRING);
+  default_value->set_s("common");
+  call->clear_attribute();
+  ASSERT_NO_THROW(checker::check_model(model));
+  default_value->set_s("missing");
+  EXPECT_THROW(checker::check_model(model), ValidationError);
+  auto *override_value = call->add_attribute();
+  override_value->set_name("parameters");
+  override_value->set_type(AttributeProto::STRING);
+  override_value->set_s("common");
+  EXPECT_NO_THROW(checker::check_model(model));
+}
+
+TEST(CHECKER_COVERAGE, SharedParameterAttributeReferencesRequireFunctionScope) {
+  for (bool nested : {false, true}) {
+    SCOPED_TRACE(nested);
+    auto model = MakeSharedParameterModel();
+    auto *reference = model.mutable_graph()->mutable_node(0)->mutable_attribute(1);
+    reference->clear_s();
+    reference->set_ref_attr_name("parameters");
+    if (nested) {
+      GraphProto branch;
+      branch.CopyFrom(model.graph());
+      branch.clear_input();
+      branch.clear_initializer();
+      branch.clear_quantization_annotation();
+      model.mutable_graph()->clear_node();
+      auto *node = model.mutable_graph()->add_node();
+      node->set_op_type("If");
+      node->add_input("condition");
+      node->add_output("Q");
+      for (const auto &name : {"then_branch", "else_branch"}) {
+        auto *attribute = node->add_attribute();
+        attribute->set_name(name);
+        attribute->set_type(AttributeProto::GRAPH);
+        *attribute->mutable_g() = branch;
+      }
+      auto *condition = model.mutable_graph()->add_initializer();
+      condition->set_name("condition");
+      condition->set_data_type(TensorProto::BOOL);
+      condition->add_int32_data(1);
+    }
+    try {
+      checker::check_model(model);
+      FAIL() << "Unbound graph attribute reference was accepted.";
+    } catch (const ValidationError &error) {
+      EXPECT_NE(std::string(error.what()).find("require an unbound function body"),
+                std::string::npos);
+    }
+  }
+}
+
+TEST(CHECKER_COVERAGE, SharedParameterInitializersMatchTheirCatalogue) {
+  auto original = MakeSharedParameterModel();
+  const auto parameters = core::runtime::QuantizationParameterCatalogue::Build(original);
+  const auto source = core::runtime::Tensor::FromFloat("Q", {8}, std::vector<float>(8, 1));
+  const auto shared = core::runtime::QuantizeTensorShared(
+      source, original.graph().node(0).attribute(0).tp().struct_type(), "common", parameters);
+  original.mutable_graph()->clear_node();
+  *original.mutable_graph()->add_encoded_initializer() = shared.Encoded();
+  ASSERT_NO_THROW(checker::check_model(original));
+  for (const auto &failure : {"dtype", "shape", "compact_type", "payload", "reserved"}) {
+    SCOPED_TRACE(failure);
+    ModelProto model;
+    model.CopyFrom(original);
+    auto *encoded = model.mutable_graph()->mutable_encoded_initializer(0);
+    const std::string kind = failure;
+    if (kind == "dtype") {
+      encoded->mutable_logical_type()->mutable_tensor_type()->set_elem_type(TensorProto::DOUBLE);
+    } else if (kind == "shape") {
+      auto *shape = encoded->mutable_logical_type()->mutable_tensor_type()->mutable_shape();
+      shape->mutable_dim(0)->set_dim_value(4);
+      shape->add_dim()->set_dim_value(2);
+    } else if (kind == "compact_type") {
+      encoded->mutable_struct_type()->set_name("different_compact_format");
+    } else if (kind == "payload") {
+      encoded->mutable_raw_data()->resize(4);
+      encoded->mutable_struct_type()
+          ->mutable_structure()
+          ->mutable_field(0)
+          ->mutable_type()
+          ->mutable_tensor_type()
+          ->mutable_shape()
+          ->mutable_dim(0)
+          ->set_dim_value(4);
+    } else {
+      (*encoded->mutable_raw_data())[0] = 1;
+    }
+    EXPECT_NO_THROW(StructTypeCatalogue{}.ValidateEncodedValue(*encoded));
+    EXPECT_THROW(checker::check_model(model), ValidationError);
+  }
+  auto *definition = original.add_struct_types();
+  *definition = shared.Encoded().struct_type();
+  definition->set_type_id(1);
+  auto *encoded = original.mutable_graph()->mutable_encoded_initializer(0);
+  *encoded->mutable_struct_type() = StructTypeProto{};
+  encoded->mutable_struct_type()->set_type_ref(1);
+  EXPECT_NO_THROW(checker::check_model(original));
+}
+
+TEST(CHECKER_COVERAGE, SharedParameterNestedFunctionBindings) {
+  auto model = MakeSharedParameterFunctionModel();
+  FunctionProto wrapper;
+  wrapper.CopyFrom(model.functions(0));
+  wrapper.set_name("Wrapper");
+  wrapper.clear_node();
+  auto *inner = wrapper.add_node();
+  *inner = model.graph().node(0);
+  inner->mutable_attribute(0)->clear_s();
+  inner->mutable_attribute(0)->set_ref_attr_name("parameters");
+  *model.add_functions() = wrapper;
+  auto *call = model.mutable_graph()->mutable_node(0);
+  call->set_op_type("Wrapper");
+  ASSERT_NO_THROW(checker::check_model(model));
+  call->mutable_attribute(0)->set_s("missing");
+  EXPECT_THROW(checker::check_model(model), ValidationError);
+  call->mutable_attribute(0)->set_s("common");
+  auto *second = model.mutable_graph()->add_node();
+  *second = model.graph().node(0);
+  second->clear_output();
+  second->add_output("R");
+  second->mutable_attribute(0)->set_s("missing");
+  EXPECT_THROW(checker::check_model(model), ValidationError);
+  second->clear_attribute();
+  EXPECT_THROW(checker::check_model(model), ValidationError);
+}
+
+TEST(CHECKER_COVERAGE, SharedParameterFunctionSubgraphBindings) {
+  auto model = MakeSharedParameterFunctionModel();
+  auto *function = model.mutable_functions(0);
+  NodeProto quantize;
+  quantize.CopyFrom(function->node(0));
+  function->clear_node();
+  function->add_input("condition");
+  auto *branch = function->add_node();
+  branch->set_op_type("If");
+  branch->add_input("condition");
+  branch->add_output("Q");
+  for (const auto &name : {"then_branch", "else_branch"}) {
+    auto *attribute = branch->add_attribute();
+    attribute->set_name(name);
+    attribute->set_type(AttributeProto::GRAPH);
+    auto *graph = attribute->mutable_g();
+    graph->set_name(name);
+    *graph->add_node() = quantize;
+    *graph->add_output() = model.graph().output(0);
+  }
+  auto *condition = model.mutable_graph()->add_initializer();
+  condition->set_name("condition");
+  condition->set_data_type(TensorProto::BOOL);
+  condition->add_int32_data(1);
+  auto *call = model.mutable_graph()->mutable_node(0);
+  call->add_input("condition");
+  ASSERT_NO_THROW(checker::check_model(model));
+  call->mutable_attribute(0)->set_s("missing");
+  EXPECT_THROW(checker::check_model(model), ValidationError);
+}
 
 // ---------------------------------------------------------------------------
 // check_value_info

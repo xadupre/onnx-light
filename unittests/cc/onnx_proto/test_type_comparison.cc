@@ -180,6 +180,16 @@ TEST(TypeComparison, EncodedPayloadAndAffineLayout) {
   right.mutable_affine()->set_axis(int64_t{0});
   EXPECT_FALSE(left.Equals(right, &difference));
   EXPECT_EQ(difference, "affine.axis: presence differs");
+  right = left;
+  right.set_parameter_ref("common");
+  EXPECT_FALSE(left.Equals(right, &difference));
+  EXPECT_EQ(difference, "parameter_ref: presence differs");
+  left.set_parameter_ref("other");
+  EXPECT_FALSE(left.Equals(right, &difference));
+  EXPECT_EQ(difference, "parameter_ref: values differ");
+  left.set_parameter_ref("common");
+  EXPECT_TRUE(left.Equals(right, &difference));
+  EXPECT_TRUE(difference.empty());
 }
 
 TEST(TypeComparison, ModelMembersAndNestedDiagnostics) {

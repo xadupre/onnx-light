@@ -5,6 +5,7 @@
 #include "onnx_core/compute/raw_buffer_allocator.h"
 #include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/quantization.h"
+#include "onnx_core/runtime/runtime_session.h"
 #include <cmath>
 #include <gtest/gtest.h>
 
@@ -68,7 +69,231 @@ QuantizationPlan WithTables(QuantizationFormat format, size_t count) {
   return plan;
 }
 
+ModelProto SharedModel(const QuantizationPlan &plan, const EncodedValueProto &encoded) {
+  ModelProto model;
+  auto *graph = model.mutable_graph();
+  auto *annotation = graph->add_quantization_annotation();
+  annotation->set_tensor_name("onnx_light.quantization.parameters:weights");
+  auto add = [&](const std::string &role, int32_t type, const std::vector<int64_t> &shape,
+                 const void *data, size_t bytes) {
+    auto *tensor = graph->add_initializer();
+    tensor->set_name(role);
+    tensor->set_data_type(type);
+    for (auto dim : shape)
+      tensor->add_dims(dim);
+    tensor->set_raw_data(data, bytes);
+    auto *mapping = annotation->add_quant_parameter_tensor_names();
+    mapping->set_key(role);
+    mapping->set_value(role);
+  };
+  auto schema = encoded.struct_type().SerializeAsString();
+  auto logical = encoded.logical_type().SerializeAsString();
+  add("storage_type", TensorProto::UINT8, {static_cast<int64_t>(schema.size())}, schema.data(),
+      schema.size());
+  add("logical_type", TensorProto::UINT8, {static_cast<int64_t>(logical.size())}, logical.data(),
+      logical.size());
+  std::vector<double> scales, zeros, offsets, tables;
+  for (const auto &run : plan.runs)
+    for (const auto &block : run.blocks) {
+      scales.push_back(block.scale);
+      zeros.push_back(block.zero_point);
+      offsets.push_back(block.offset);
+      tables.insert(tables.end(), block.codebook.begin(), block.codebook.end());
+    }
+  auto floating = [&](const std::string &role, const std::vector<double> &values,
+                      const std::vector<int64_t> &shape) {
+    if (!values.empty())
+      add(role, TensorProto::DOUBLE, shape, values.data(), values.size() * sizeof(double));
+  };
+  if (scales.empty())
+    floating("scales", {1}, {});
+  else
+    floating("scales", scales, {static_cast<int64_t>(scales.size())});
+  floating("zero_points", zeros, {static_cast<int64_t>(zeros.size())});
+  if (plan.format < QuantizationFormat::kOrtMatmulnbitsInt2)
+    floating("offsets", offsets, {static_cast<int64_t>(offsets.size())});
+  floating("codebooks", tables, {static_cast<int64_t>(tables.size())});
+  floating("forward", plan.forward, {plan.transform_size, plan.transform_size});
+  floating("inverse", plan.inverse, {plan.transform_size, plan.transform_size});
+  if (!plan.permutation.empty())
+    add("permutation", TensorProto::INT64, {static_cast<int64_t>(plan.permutation.size())},
+        plan.permutation.data(), plan.permutation.size() * sizeof(int64_t));
+  if (!plan.outliers.empty())
+    add("outliers", TensorProto::INT64, {static_cast<int64_t>(plan.outliers.size())},
+        plan.outliers.data(), plan.outliers.size() * sizeof(int64_t));
+  return model;
+}
+
 } // namespace
+
+TEST(Quantization, SharedParametersEveryFormatAndLifetime) {
+  for (auto format : QuantizationFormats()) {
+    SCOPED_TRACE(std::string(QuantizationFormatName(format)));
+    auto plan = WithTables(format, 16);
+    auto source = Tensor::FromFloat(
+        "X", format >= QuantizationFormat::kOrtMatmulnbitsInt2 ? Shape{8, 2} : Shape{16},
+        std::vector<float>(16, 1));
+    const auto full = QuantizeTensor(source, plan);
+    RuntimeValue shared;
+    {
+      auto model = SharedModel(plan, full.Encoded());
+      auto parameters = QuantizationParameterCatalogue::Build(model);
+      shared = QuantizeTensorShared(source, full.Encoded().struct_type(), "weights", parameters);
+      EXPECT_EQ(shared.quantization_parameters, parameters);
+      const auto second =
+          QuantizeTensorShared(source, full.Encoded().struct_type(), "weights", parameters);
+      EXPECT_EQ(shared.quantization_parameters, second.quantization_parameters);
+      EXPECT_LT(shared.Encoded().raw_data().size(), full.Encoded().raw_data().size());
+      EXPECT_EQ(StructTypeCatalogue{}.ValidateEncodedValue(shared.Encoded()).record_count, 1);
+      auto wire = WireRoundTrip(shared);
+      EXPECT_EQ(wire.Encoded().parameter_ref().value(), "weights");
+      EXPECT_THROW(MaterializeQuantizedValue(wire), std::invalid_argument);
+      wire.quantization_parameters = parameters;
+      EXPECT_EQ(MaterializeQuantizedValue(wire).raw_data(), full.Encoded().raw_data());
+      auto bad = source.ToOwned();
+      bad.shape = Shape{16, 1};
+      EXPECT_THROW(QuantizeTensorShared(bad, full.Encoded().struct_type(), "weights", parameters),
+                   std::invalid_argument);
+      EXPECT_THROW(
+          QuantizeTensorShared(source, full.Encoded().struct_type(), "missing", parameters),
+          std::invalid_argument);
+    }
+    const auto expected = DequantizeTensor(full);
+    for (auto value : {shared.BorrowView(), shared.DeepCopy()}) {
+      const auto actual = DequantizeTensor(value);
+      for (int64_t i = 0; i < actual.element_count(); ++i)
+        EXPECT_EQ(actual.AsFloat()[i], expected.AsFloat()[i]);
+    }
+  }
+}
+
+TEST(Quantization, SharedCatalogueDoesNotMaterializeLogicalTensorOrCodes) {
+  const uint64_t count = uint64_t{1} << (sizeof(size_t) > 4 ? 30 : 27);
+  for (auto format : {QuantizationFormat::kInt4, QuantizationFormat::kOrtMatmulnbitsInt4}) {
+    SCOPED_TRACE(QuantizationFormatName(format));
+    const bool ort = format == QuantizationFormat::kOrtMatmulnbitsInt4;
+    auto plan = ort ? MakeMatMulNBitsPlan(format, count, 1, count)
+                    : MakeQuantizationPlan(format, count, count);
+    EncodedValueProto descriptor;
+    auto *logical = descriptor.mutable_logical_type()->mutable_tensor_type();
+    logical->set_elem_type(TensorProto::FLOAT);
+    logical->mutable_shape()->add_dim()->set_dim_value(count);
+    if (ort) {
+      logical->mutable_shape()->add_dim()->set_dim_value(1);
+      const auto small = QuantizeTensor(Tensor::FromFloat("", {16, 1}, std::vector<float>(16, 0)),
+                                        MakeMatMulNBitsPlan(format, 16, 1, 16));
+      *descriptor.mutable_struct_type() = small.Encoded().struct_type();
+      auto *fields = descriptor.mutable_struct_type()->mutable_structure();
+      fields->mutable_field(0)->mutable_constant()->ref_int64_data()[1] = count;
+      fields->mutable_field(1)
+          ->mutable_type()
+          ->mutable_tensor_type()
+          ->mutable_shape()
+          ->mutable_dim(2)
+          ->set_dim_value(count / 2);
+    } else {
+      *descriptor.mutable_struct_type() = MakeQuantizationType(plan);
+    }
+    const auto model = SharedModel(plan, descriptor);
+    const auto parameters = QuantizationParameterCatalogue::Build(model);
+    const auto &entry = parameters->Get("weights");
+    EXPECT_EQ(entry.common.size(), ort ? 4u : 25u);
+    EXPECT_EQ(entry.full_size, count / 2 + entry.common.size());
+    ASSERT_FALSE(entry.local_ranges.empty());
+    EXPECT_EQ(entry.local_ranges.back().second, count / 2);
+    ASSERT_EQ(entry.plan.runs.size(), 1u);
+    EXPECT_EQ(entry.plan.runs[0].blocks.size(), 1u);
+    EXPECT_EQ(entry.plan.runs[0].layout.count, count);
+  }
+}
+
+TEST(Quantization, SharedInitializerRetainsParametersAndRespectsExistingValues) {
+  RuntimeValue retained;
+  {
+    auto plan = WithTables(QuantizationFormat::kInt4, 16);
+    const auto source = Tensor::FromFloat("X", {16}, std::vector<float>(16, 1));
+    const auto full = QuantizeTensor(source, plan);
+    auto model = SharedModel(plan, full.Encoded());
+    auto parameters = QuantizationParameterCatalogue::Build(model);
+    auto shared = QuantizeTensorShared(source, full.Encoded().struct_type(), "weights", parameters);
+    *model.mutable_graph()->add_encoded_initializer() = shared.Encoded();
+    RuntimeSession session(model);
+    RuntimeContext context;
+    session.Run(context);
+    ASSERT_EQ(context.values().count("X"), 1u);
+    EXPECT_EQ(context.values().at("X").quantization_parameters, context.quantization_parameters());
+    retained = context.values().at("X").DeepCopy();
+    session.Run(context);
+    EXPECT_EQ(context.values().at("X").quantization_parameters, retained.quantization_parameters);
+    context.Remove("X");
+    session.Run(context);
+    EXPECT_EQ(context.values().at("X").Encoded().raw_data(), shared.Encoded().raw_data());
+    EXPECT_TRUE(context.values().at("X").Encoded().has_parameter_ref());
+    EXPECT_EQ(context.values().at("X").quantization_parameters, retained.quantization_parameters);
+
+    context.Put("X", Tensor::FromFloat("X", {1}, {42}));
+    session.Run(context);
+    EXPECT_TRUE(context.Has("X"));
+    EXPECT_EQ(context.values().count("X"), 0u);
+    EXPECT_FLOAT_EQ(context.Get("X").AsFloat()[0], 42);
+  }
+  ExpectValues(DequantizeTensor(retained), std::vector<float>(16, 1));
+}
+
+TEST(Quantization, SharedInitializerSeedingRejectsInvalidCompactValues) {
+  const auto plan = WithTables(QuantizationFormat::kInt4, 16);
+  const auto source = Tensor::FromFloat("X", {16}, std::vector<float>(16, 1));
+  const auto full = QuantizeTensor(source, plan);
+  for (const auto &failure : {"reference", "logical_type", "payload", "reserved"}) {
+    SCOPED_TRACE(failure);
+    auto model = SharedModel(plan, full.Encoded());
+    const auto parameters = QuantizationParameterCatalogue::Build(model);
+    const auto shared =
+        QuantizeTensorShared(source, full.Encoded().struct_type(), "weights", parameters);
+    auto *encoded = model.mutable_graph()->add_encoded_initializer();
+    *encoded = shared.Encoded();
+    const std::string kind = failure;
+    if (kind == "reference")
+      encoded->set_parameter_ref("missing");
+    else if (kind == "logical_type")
+      encoded->mutable_logical_type()->mutable_tensor_type()->set_elem_type(TensorProto::DOUBLE);
+    else if (kind == "payload")
+      encoded->mutable_raw_data()->resize(1);
+    else
+      (*encoded->mutable_raw_data())[0] = 1;
+    RuntimeSession session(model);
+    RuntimeContext context;
+    EXPECT_THROW(session.Run(context), std::invalid_argument);
+    EXPECT_FALSE(context.HasValue("X"));
+  }
+}
+
+TEST(Quantization, SharedTransformsPermutationAndLocalOutliers) {
+  auto plan = WithTables(QuantizationFormat::kInt4, 16);
+  plan.permutation = {15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0};
+  plan.transform_size = 2;
+  plan.forward = {1, 0, 0, 1};
+  plan.inverse = plan.forward;
+  plan.outliers = {3, 8};
+  auto source = Tensor::FromFloat("X", {16}, std::vector<float>(16, 2));
+  source.AsFloat()[3] = 100;
+  auto full = QuantizeTensor(source, plan);
+  auto model = SharedModel(plan, full.Encoded());
+  auto parameters = QuantizationParameterCatalogue::Build(model);
+  auto shared = QuantizeTensorShared(source, full.Encoded().struct_type(), "weights", parameters);
+  EXPECT_EQ(shared.Encoded().raw_data().size(), 1u + 16u + 8u);
+  EXPECT_EQ(MaterializeQuantizedValue(shared).raw_data(), full.Encoded().raw_data());
+  auto unnamed = shared.Encoded();
+  unnamed.clear_name();
+  unnamed.clear_doc_string();
+  const auto materialized = MaterializeQuantizedValue(unnamed, parameters.get());
+  EXPECT_FALSE(materialized.has_name());
+  EXPECT_FALSE(materialized.has_doc_string());
+  source.AsFloat()[3] = 200;
+  auto second = QuantizeTensorShared(source, full.Encoded().struct_type(), "weights", parameters);
+  EXPECT_EQ(DequantizeTensor(shared).AsFloat()[3], 100);
+  EXPECT_EQ(DequantizeTensor(second).AsFloat()[3], 200);
+}
 
 TEST(Quantization, AffineGoldenBytesRoundingClippingAndOwnership) {
   auto source = Tensor::FromFloat("weights", {7}, {-9, -7.5f, -0.5f, 0.5f, 1.5f, 6.5f, 8});
@@ -209,6 +434,12 @@ TEST(Quantization, PreservesScalarEmptyTensorAndSourceDtypes) {
     auto decoded = DequantizeTensor(WireRoundTrip(QuantizeTensor(source, plan)));
     EXPECT_EQ(decoded.shape, shape);
     EXPECT_EQ(decoded.element_count(), static_cast<int64_t>(count));
+    const auto full = QuantizeTensor(source, plan);
+    auto model = SharedModel(plan, full.Encoded());
+    auto parameters = QuantizationParameterCatalogue::Build(model);
+    auto shared = QuantizeTensorShared(source, full.Encoded().struct_type(), "weights", parameters);
+    EXPECT_EQ(DequantizeTensor(shared).shape, shape);
+    EXPECT_EQ(MaterializeQuantizedValue(shared).raw_data(), full.Encoded().raw_data());
   }
   auto plan = MakeQuantizationPlan(QuantizationFormat::kInt8, 3);
   for (int32_t dtype :
@@ -233,6 +464,13 @@ TEST(Quantization, PreservesScalarEmptyTensorAndSourceDtypes) {
     EXPECT_EQ(proto.data_type(), dtype);
     EXPECT_EQ(proto_tensor.size_bytes(), source.size_bytes());
     EXPECT_EQ(std::memcmp(proto_tensor.bytes(), source.bytes(), source.size_bytes()), 0);
+    auto model = SharedModel(plan, encoded.Encoded());
+    auto parameters = QuantizationParameterCatalogue::Build(model);
+    auto shared =
+        QuantizeTensorShared(source, encoded.Encoded().struct_type(), "weights", parameters);
+    const auto shared_result = DequantizeTensor(shared);
+    EXPECT_EQ(shared_result.data_type, dtype);
+    EXPECT_EQ(std::memcmp(shared_result.bytes(), source.bytes(), source.size_bytes()), 0);
   }
 }
 
@@ -819,6 +1057,12 @@ TEST(Quantization, OrtMatMulNBitsGoldenInputsAndColumnPadding) {
       }
     }
     auto encoded = WireRoundTrip(QuantizeTensor(Tensor::FromFloat("", {k, n}, values), plan));
+    const auto model = SharedModel(plan, encoded.Encoded());
+    const auto parameters = QuantizationParameterCatalogue::Build(model);
+    const auto shared =
+        QuantizeTensorShared(Tensor::FromFloat("", {k, n}, values), encoded.Encoded().struct_type(),
+                             "weights", parameters);
+    EXPECT_EQ(MaterializeQuantizedValue(shared).raw_data(), encoded.Encoded().raw_data());
     auto inputs = ExportMatMulNBitsInputs(encoded.Encoded());
     EXPECT_EQ(inputs.k, k);
     EXPECT_EQ(inputs.n, n);
@@ -954,6 +1198,11 @@ TEST(Quantization, OrtMatMulNBitsRoundsParametersToSourceDtype) {
                                                        : MakeBfloat16Tensor("", {1}, {0.10001f});
     const auto scales = TensorFromProto(inputs.scales);
     EXPECT_EQ(std::memcmp(scales.bytes(), expected.bytes(), 2), 0);
+    auto model = SharedModel(plan, encoded.Encoded());
+    auto parameters = QuantizationParameterCatalogue::Build(model);
+    auto shared =
+        QuantizeTensorShared(source, encoded.Encoded().struct_type(), "weights", parameters);
+    EXPECT_EQ(MaterializeQuantizedValue(shared).raw_data(), encoded.Encoded().raw_data());
   }
 }
 

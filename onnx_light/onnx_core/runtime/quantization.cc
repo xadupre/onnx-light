@@ -167,6 +167,8 @@ struct ByteWriter {
   std::span<uint8_t> data;
   size_t position = 0;
 
+  explicit ByteWriter(std::span<uint8_t> target) : data(target) {}
+
   ByteWriter(utils::ByteSpan &target, size_t size) {
     target.resize(size);
     data = {target.data(), target.size()};
@@ -505,14 +507,18 @@ std::vector<uint32_t> Unpack(ByteReader &payload, size_t count, uint32_t bits, b
   return codes;
 }
 
-void EncodeBlock(ByteWriter &payload, const QuantizationBlockLayout &layout,
-                 const QuantizationBlockParameters &block, const std::vector<double> &values,
-                 size_t offset) {
+void WriteBlockParameters(ByteWriter &payload, const QuantizationBlockParameters &block) {
   payload.PutDouble(block.scale);
   payload.PutDouble(block.zero_point);
   payload.PutDouble(block.offset);
   for (double value : block.codebook)
     payload.PutDouble(value);
+}
+
+void EncodeBlock(ByteWriter &payload, const QuantizationBlockLayout &layout,
+                 const QuantizationBlockParameters &block, const std::vector<double> &values,
+                 size_t offset) {
+  WriteBlockParameters(payload, block);
   if (layout.method == QuantizationMethod::kCast) {
     for (size_t i = 0; i < layout.count; ++i) {
       const double value = values[offset + i] / block.scale;
@@ -923,16 +929,20 @@ void SetLogicalTensor(EncodedValueProto &result, const Tensor &tensor) {
   StructTypeCatalogue{}.ValidateEncodedValue(result);
 }
 
-EncodedValueProto EncodeOrtTensor(const Tensor &tensor, const QuantizationPlan &plan) {
-  EXT_ENFORCE_INVALID(tensor.shape == plan.matrix_shape,
+struct OrtParameters {
+  OrtStorage storage;
+  std::vector<double> scales, zeros;
+};
+
+OrtParameters PrepareOrtParameters(const Shape &shape, int32_t type, const QuantizationPlan &plan) {
+  EXT_ENFORCE_INVALID(shape == plan.matrix_shape,
                       "ORT MatMulNBits source shape must match the plan's [K,N].");
   EXT_ENFORCE_INVALID(plan.runs.size() == 1, "ORT MatMulNBits requires one shared block layout.");
   EXT_ENFORCE_INVALID(plan.permutation.empty() && plan.transform_size == 0 &&
                           plan.forward.empty() && plan.inverse.empty() && plan.outliers.empty(),
                       "ORT MatMulNBits does not support permutations, transforms or outliers.");
   const auto &run = plan.runs[0];
-  const OrtStorage geometry(tensor.shape, tensor.data_type, plan.format, run.layout.count,
-                            TensorProto::UNDEFINED);
+  const OrtStorage geometry(shape, type, plan.format, run.layout.count, TensorProto::UNDEFINED);
   QuantizationBlockLayout expected;
   expected.count = geometry.block_size;
   expected.bits = geometry.bits;
@@ -962,8 +972,33 @@ EncodedValueProto EncodeOrtTensor(const Tensor &tensor, const QuantizationPlan &
   const int32_t zero_type = implicit ? TensorProto::UNDEFINED
                             : packed ? TensorProto::UINT8
                                      : geometry.type;
-  const OrtStorage storage(tensor.shape, tensor.data_type, plan.format, run.layout.count,
-                           zero_type);
+  return {OrtStorage(shape, type, plan.format, run.layout.count, zero_type), std::move(scales),
+          std::move(zeros)};
+}
+
+void WriteOrtParameters(ByteWriter &payload, const OrtParameters &parameters) {
+  const auto &storage = parameters.storage;
+  for (double scale : parameters.scales)
+    PutFloat(payload, scale, storage.type);
+  if (storage.zero_type == TensorProto::UINT8) {
+    std::vector<uint32_t> codes(storage.groups);
+    for (size_t column = 0; column < storage.n; ++column) {
+      for (size_t group = 0; group < storage.groups; ++group)
+        codes[group] = static_cast<uint32_t>(parameters.zeros[column * storage.groups + group]);
+      Pack(payload, codes, storage.bits, false);
+    }
+  } else if (storage.zero_type != TensorProto::UNDEFINED) {
+    for (double zero : parameters.zeros)
+      PutFloat(payload, zero, storage.type);
+  }
+}
+
+EncodedValueProto EncodeOrtTensor(const Tensor &tensor, const QuantizationPlan &plan) {
+  const auto parameters = PrepareOrtParameters(tensor.shape, tensor.data_type, plan);
+  const auto &storage = parameters.storage;
+  const auto &scales = parameters.scales;
+  const auto &zeros = parameters.zeros;
+  const uint32_t maximum = (uint32_t{1} << storage.bits) - 1;
   EncodedValueProto result;
   ByteWriter payload(*result.mutable_raw_data(), storage.total_bytes);
   std::vector<uint32_t> codes(storage.block_size);
@@ -989,23 +1024,23 @@ EncodedValueProto EncodeOrtTensor(const Tensor &tensor, const QuantizationPlan &
       Pack(payload, codes, storage.bits, false);
     }
   }
-  for (double scale : scales)
-    PutFloat(payload, scale, storage.type);
-  if (zero_type == TensorProto::UINT8) {
-    codes.resize(storage.groups);
-    for (size_t column = 0; column < storage.n; ++column) {
-      for (size_t group = 0; group < storage.groups; ++group)
-        codes[group] = static_cast<uint32_t>(zeros[column * storage.groups + group]);
-      Pack(payload, codes, storage.bits, false);
-    }
-  } else if (zero_type != TensorProto::UNDEFINED) {
-    for (double zero : zeros)
-      PutFloat(payload, zero, storage.type);
-  }
+  WriteOrtParameters(payload, parameters);
   payload.Finish();
   *result.mutable_struct_type() = OrtSchema(storage, plan.format);
   SetLogicalTensor(result, tensor);
   return result;
+}
+
+void WritePortableParameters(ByteWriter &payload, const QuantizationPlan &plan) {
+  payload.Put(0, 1);
+  for (int64_t index : plan.permutation)
+    payload.Put(static_cast<uint64_t>(index), 8);
+  for (double value : plan.forward)
+    payload.PutDouble(value);
+  for (double value : plan.inverse)
+    payload.PutDouble(value);
+  for (int64_t index : plan.outliers)
+    payload.Put(static_cast<uint64_t>(index), 8);
 }
 
 EncodedValueProto EncodeTensor(const Tensor &tensor, const QuantizationPlan &plan) {
@@ -1037,15 +1072,7 @@ EncodedValueProto EncodeTensor(const Tensor &tensor, const QuantizationPlan &pla
   Transform(values, plan.forward, plan.transform_size);
   EncodedValueProto result;
   ByteWriter payload(*result.mutable_raw_data(), PayloadBytes(plan));
-  payload.Put(0, 1);
-  for (int64_t index : plan.permutation)
-    payload.Put(static_cast<uint64_t>(index), 8);
-  for (double value : plan.forward)
-    payload.PutDouble(value);
-  for (double value : plan.inverse)
-    payload.PutDouble(value);
-  for (int64_t index : plan.outliers)
-    payload.Put(static_cast<uint64_t>(index), 8);
+  WritePortableParameters(payload, plan);
   for (double value : exceptions)
     payload.PutDouble(value);
   const size_t blocks_start = payload.position;
@@ -1322,6 +1349,43 @@ StructTypeProto MakeQuantizationType(const QuantizationPlan &plan) {
   return Schema(plan);
 }
 
+StructTypeProto MakeSharedQuantizationType(const StructTypeProto &type) {
+  const std::string name = type.name().value();
+  EXT_ENFORCE_INVALID(name.starts_with(kPrefix), "Unsupported shared quantization storage type.");
+  const auto format = ParseQuantizationFormat(std::string_view(name).substr(std::strlen(kPrefix)));
+  size_t size = 1;
+  auto add = [&](size_t bytes) {
+    EXT_ENFORCE_INVALID(bytes <= size_t(std::numeric_limits<int64_t>::max()) - size,
+                        "Shared quantization payload size overflow.");
+    size += bytes;
+  };
+  if (OrtBits(format)) {
+    const auto &weights = GetField(type, 1, "B");
+    EXT_ENFORCE_INVALID(weights.has_type() && weights.type().has_tensor_type() &&
+                            weights.type().tensor_type().elem_type() == TensorProto::UINT8,
+                        "Invalid ORT shared weight storage.");
+    size_t count = 1;
+    for (const auto &dim : weights.type().tensor_type().shape().dim()) {
+      EXT_ENFORCE_INVALID(dim.has_dim_value() && dim.dim_value() >= 0,
+                          "Shared weight storage requires concrete dimensions.");
+      count = Product(count, dim.dim_value());
+    }
+    add(count);
+  } else {
+    add(Product(Extent(GetField(type, 4, "outlier_indices"), TensorProto::INT64, 1), 8));
+    const auto &fields = GetField(type, 6, "blocks").type().struct_type().structure().field();
+    for (size_t i = 1; i < fields.size(); ++i) {
+      const auto &array = fields[i].type().struct_type().array();
+      add(Product(array.dimension(),
+                  CodeBytes(BlockParameters(array.element_type().struct_type()))));
+    }
+  }
+  StructTypeProto result;
+  result.set_name("onnx_light.quantization.shared.v1");
+  Array(result, "local", TensorProto::UINT8, {static_cast<int64_t>(size)});
+  return result;
+}
+
 namespace {
 
 std::vector<double> FloatingValues(const Tensor &tensor) {
@@ -1403,21 +1467,20 @@ double CalibratedScale(std::span<const double> values, const QuantizationBlockLa
   return scale == 0 ? 1 : scale;
 }
 
-QuantizationPlan CalibratePlan(const Tensor &tensor, const StructTypeProto &root,
-                               const QuantizationParameters &parameters) {
+QuantizationPlan PlanFromParameters(const Shape &shape, size_t value_count,
+                                    const StructTypeProto &root,
+                                    const QuantizationParameters &parameters) {
   const std::string name = root.name().value();
   EXT_ENFORCE_INVALID(name.starts_with(kPrefix), "Unsupported Quantize storage type.");
   QuantizationPlan plan;
   plan.format = ParseQuantizationFormat(std::string_view(name).substr(std::strlen(kPrefix)));
-  auto values = FloatingValues(tensor);
   const bool ort = OrtBits(plan.format) != 0;
   if (ort) {
     const auto &field = GetField(root, 0, "parameters");
     EXT_ENFORCE_INVALID(field.has_constant() && field.constant().int64_data().size() == 2 &&
-                            field.constant().int64_data(1) > 0 && tensor.shape.size() == 2,
+                            field.constant().int64_data(1) > 0 && shape.size() == 2,
                         "Invalid ORT Quantize parameters.");
-    plan = MakeMatMulNBitsPlan(plan.format, tensor.shape[0], tensor.shape[1],
-                               field.constant().int64_data(1));
+    plan = MakeMatMulNBitsPlan(plan.format, shape[0], shape[1], field.constant().int64_data(1));
     EXT_ENFORCE_INVALID(!parameters.codebooks && !parameters.permutation && !parameters.forward &&
                             !parameters.inverse && !parameters.outliers && !parameters.offsets,
                         "ORT Quantize does not accept codebooks, transforms, outliers or offsets.");
@@ -1454,7 +1517,7 @@ QuantizationPlan CalibratePlan(const Tensor &tensor, const StructTypeProto &root
       EXT_ENFORCE_INVALID(layout.bits >= 1 && layout.bits <= 16,
                           "Quantize block bits must be between 1 and 16.");
       EXT_ENFORCE_INVALID(layout.count > 0 &&
-                              layout.count <= (values.size() - count) / array.dimension(),
+                              layout.count <= (value_count - count) / array.dimension(),
                           "Quantize blocks exceed the input size.");
       auto defaults = MakeQuantizationPlan(plan.format, layout.count, layout.count);
       auto block = defaults.runs[0].blocks[0];
@@ -1467,7 +1530,7 @@ QuantizationPlan CalibratePlan(const Tensor &tensor, const StructTypeProto &root
           {layout, std::vector<QuantizationBlockParameters>(array.dimension(), block)});
       count += Product(layout.count, array.dimension());
     }
-    EXT_ENFORCE_INVALID(count == values.size(), "Quantize blocks must cover the input exactly.");
+    EXT_ENFORCE_INVALID(count == value_count, "Quantize blocks must cover the input exactly.");
   }
 
   size_t block_count = 0, table_count = 0;
@@ -1507,10 +1570,20 @@ QuantizationPlan CalibratePlan(const Tensor &tensor, const StructTypeProto &root
       ++index;
     }
   if (!ort) {
-    ValidatePlan(plan, values.size());
+    ValidatePlan(plan, value_count);
     std::string difference;
     EXT_ENFORCE_INVALID(root.Equals(Schema(plan), &difference),
                         "Quantize type does not match its versioned schema: ", difference);
+  }
+  return plan;
+}
+
+QuantizationPlan CalibratePlan(const Tensor &tensor, const StructTypeProto &root,
+                               const QuantizationParameters &parameters) {
+  auto values = FloatingValues(tensor);
+  auto plan = PlanFromParameters(tensor.shape, values.size(), root, parameters);
+  const bool ort = OrtBits(plan.format) != 0;
+  if (!ort) {
     for (int64_t outlier : plan.outliers)
       values[outlier] = 0;
     if (!plan.permutation.empty()) {
@@ -1563,8 +1636,257 @@ RuntimeValue QuantizeTensor(const Tensor &tensor, const StructTypeProto &type,
   return RuntimeValue(std::move(result));
 }
 
+const QuantizationParameterCatalogue::Entry &
+QuantizationParameterCatalogue::Get(const std::string &name) const {
+  auto found = entries_.find(name);
+  EXT_ENFORCE_INVALID(found != entries_.end(), "Missing quantization parameter_ref: ", name);
+  return found->second;
+}
+
+std::shared_ptr<const QuantizationParameterCatalogue>
+QuantizationParameterCatalogue::Build(const ModelProto &model) {
+  auto result = std::make_shared<QuantizationParameterCatalogue>();
+  constexpr std::string_view prefix = "onnx_light.quantization.parameters:";
+  bool has_parameters = false;
+  for (const auto &annotation : model.graph().quantization_annotation())
+    has_parameters |= annotation.tensor_name().value().starts_with(prefix);
+  if (!has_parameters)
+    return result;
+  StructTypeCatalogue types;
+  types.Build(model);
+  std::unordered_map<std::string, const TensorProto *> initializers;
+  for (const auto &tensor : model.graph().initializer())
+    EXT_ENFORCE_INVALID(initializers.emplace(tensor.name().value(), &tensor).second,
+                        "Duplicate root initializer.");
+  for (const auto &annotation : model.graph().quantization_annotation()) {
+    const std::string name = annotation.tensor_name().value();
+    if (!name.starts_with(prefix))
+      continue;
+    const std::string reference = name.substr(prefix.size());
+    EXT_ENFORCE_INVALID(!reference.empty() && !result->entries_.contains(reference),
+                        "Empty or duplicate quantization parameter set.");
+    std::unordered_map<std::string, const TensorProto *> tensors;
+    for (const auto &mapping : annotation.quant_parameter_tensor_names()) {
+      const std::string key = mapping.key().value();
+      const auto found = initializers.find(mapping.value().value());
+      EXT_ENFORCE_INVALID(found != initializers.end(),
+                          "Missing shared parameter initializer: ", mapping.value().value());
+      EXT_ENFORCE_INVALID(tensors.emplace(key, found->second).second,
+                          "Duplicate shared parameter role: ", key);
+      EXT_ENFORCE_INVALID(key == "storage_type" || key == "logical_type" || key == "scales" ||
+                              key == "zero_points" || key == "offsets" || key == "codebooks" ||
+                              key == "permutation" || key == "forward" || key == "inverse" ||
+                              key == "outliers",
+                          "Unknown shared parameter role: ", key);
+    }
+    EXT_ENFORCE_INVALID(tensors.contains("scales"), "Shared quantization requires fixed scales.");
+    auto descriptor = [&](const char *role) {
+      EXT_ENFORCE_INVALID(tensors.contains(role), "Missing shared parameter ", role);
+      const auto &proto = *tensors.at(role);
+      EXT_ENFORCE_INVALID(proto.data_location() != TensorProto::EXTERNAL,
+                          "Shared descriptors must have inline storage.");
+      auto tensor = TensorFromProto(proto);
+      EXT_ENFORCE_INVALID(tensor.data_type == TensorProto::UINT8 && tensor.shape.size() == 1 &&
+                              tensor.shape[0] == static_cast<int64_t>(tensor.size_bytes()),
+                          "Shared descriptor must be a rank-one UINT8 tensor.");
+      return std::string(reinterpret_cast<const char *>(tensor.bytes()), tensor.size_bytes());
+    };
+    Entry entry;
+    EXT_ENFORCE_INVALID(entry.storage_type.ParseFromString(descriptor("storage_type")),
+                        "Invalid shared storage_type descriptor.");
+    EXT_ENFORCE_INVALID(entry.logical_type.ParseFromString(descriptor("logical_type")),
+                        "Invalid shared logical_type descriptor.");
+    TypeProto declared;
+    *declared.mutable_struct_type() = entry.storage_type;
+    types.ValidateType(declared);
+    StructTypeProto resolved;
+    resolved.ParseFromString(types.Resolve(entry.storage_type).SerializeAsString());
+    entry.storage_type = std::move(resolved);
+    entry.storage_type.clear_type_id();
+    EXT_ENFORCE_INVALID(entry.logical_type.has_tensor_type() &&
+                            entry.logical_type.tensor_type().has_shape(),
+                        "Shared quantization requires a concrete tensor logical type.");
+    const auto &logical = entry.logical_type.tensor_type();
+    Shape shape;
+    size_t count = 1;
+    for (const auto &dim : logical.shape().dim()) {
+      EXT_ENFORCE_INVALID(dim.has_dim_value() && dim.dim_value() >= 0,
+                          "Shared quantization requires concrete dimensions.");
+      shape.push_back(dim.dim_value());
+      count = Product(count, dim.dim_value());
+    }
+    Product(count, FloatBytes(logical.elem_type()));
+    std::unordered_map<std::string, Tensor> owned;
+    for (const auto &[key, proto] : tensors) {
+      if (key == "storage_type" || key == "logical_type")
+        continue;
+      EXT_ENFORCE_INVALID(proto->data_location() != TensorProto::EXTERNAL || proto->is_raw_data(),
+                          "Load external shared numerical parameters before execution.");
+      owned.emplace(key, TensorFromProto(*proto));
+    }
+    auto optional = [&](const char *key) -> const Tensor * {
+      auto found = owned.find(key);
+      return found == owned.end() ? nullptr : &found->second;
+    };
+    QuantizationParameters parameters{optional("scales"),      optional("zero_points"),
+                                      optional("offsets"),     optional("codebooks"),
+                                      optional("permutation"), optional("forward"),
+                                      optional("inverse"),     optional("outliers")};
+    entry.plan = PlanFromParameters(shape, count, entry.storage_type, parameters);
+    entry.local_type = MakeSharedQuantizationType(entry.storage_type);
+    if (OrtBits(entry.plan.format)) {
+      const auto packed = PrepareOrtParameters(shape, logical.elem_type(), entry.plan);
+      const auto &storage = packed.storage;
+      EXT_ENFORCE_INVALID(OrtSchema(storage, entry.plan.format).Equals(entry.storage_type),
+                          "Shared parameters do not match the requested storage type.");
+      entry.full_size = storage.total_bytes;
+      entry.local_ranges.emplace_back(0, storage.weight_bytes);
+      entry.common.resize(storage.total_bytes - storage.weight_bytes);
+      ByteWriter common(entry.common);
+      WriteOrtParameters(common, packed);
+      common.Finish();
+    } else {
+      const auto &plan = entry.plan;
+      entry.full_size = PayloadBytes(plan);
+      size_t common_size = entry.full_size;
+      auto local = [&](size_t offset, size_t size) {
+        EXT_ENFORCE_INVALID(offset <= entry.full_size && size <= entry.full_size - offset &&
+                                size <= common_size,
+                            "Invalid shared payload geometry.");
+        entry.local_ranges.emplace_back(offset, size);
+        common_size -= size;
+      };
+      size_t offset = 1 + Product(plan.permutation.size(), 8) +
+                      Product(plan.forward.size() + plan.inverse.size(), 8) +
+                      Product(plan.outliers.size(), 8);
+      local(offset, Product(plan.outliers.size(), 8));
+      offset += Product(plan.outliers.size(), 8);
+      for (const auto &run : plan.runs)
+        for (const auto &block : run.blocks) {
+          offset += 24 + Product(block.codebook.size(), 8);
+          local(offset, CodeBytes(run.layout));
+          offset += CodeBytes(run.layout);
+        }
+      EXT_ENFORCE_INVALID(offset == entry.full_size, "Invalid shared payload geometry.");
+      entry.common.resize(common_size);
+      ByteWriter common(entry.common);
+      WritePortableParameters(common, plan);
+      for (const auto &run : plan.runs)
+        for (const auto &block : run.blocks)
+          WriteBlockParameters(common, block);
+      common.Finish();
+    }
+    result->entries_.emplace(reference, std::move(entry));
+  }
+  return result;
+}
+
+RuntimeValue QuantizeTensorShared(const Tensor &tensor, const StructTypeProto &type,
+                                  const std::string &parameter_ref,
+                                  std::shared_ptr<const QuantizationParameterCatalogue> parameters,
+                                  const StructTypeCatalogue &catalogue) {
+  EXT_ENFORCE_INVALID(parameters != nullptr, "Missing shared quantization parameter catalogue.");
+  const auto &entry = parameters->Get(parameter_ref);
+  TypeProto declared;
+  *declared.mutable_struct_type() = type;
+  catalogue.ValidateType(declared);
+  StructTypeProto requested = catalogue.Resolve(type);
+  requested.clear_type_id();
+  EXT_ENFORCE_INVALID(requested.Equals(entry.storage_type),
+                      "Quantize type is incompatible with shared parameters.");
+  const auto &logical = entry.logical_type.tensor_type();
+  EXT_ENFORCE_INVALID(tensor.data_type == logical.elem_type() &&
+                          tensor.shape.size() == logical.shape().dim().size(),
+                      "Quantize dtype or shape is incompatible with shared parameters.");
+  for (size_t i = 0; i < tensor.shape.size(); ++i)
+    EXT_ENFORCE_INVALID(tensor.shape[i] == logical.shape().dim(i).dim_value(),
+                        "Quantize shape is incompatible with shared parameters.");
+  auto full = EncodeTensor(tensor, entry.plan);
+  EncodedValueProto compact;
+  compact.set_name(tensor.name);
+  compact.set_parameter_ref(parameter_ref);
+  *compact.mutable_logical_type() = entry.logical_type;
+  *compact.mutable_struct_type() = entry.local_type;
+  auto &bytes = *compact.mutable_raw_data();
+  bytes.resize(1 + entry.full_size - entry.common.size());
+  bytes[0] = 0;
+  size_t offset = 1;
+  for (auto [first, size] : entry.local_ranges) {
+    std::memcpy(bytes.data() + offset, full.raw_data().data() + first, size);
+    offset += size;
+  }
+  catalogue.ValidateEncodedValue(compact);
+  RuntimeValue result(std::move(compact));
+  result.quantization_parameters = std::move(parameters);
+  return result;
+}
+
+const QuantizationParameterCatalogue::Entry &
+QuantizationParameterCatalogue::Validate(const EncodedValueProto &value,
+                                         const StructTypeCatalogue &catalogue) const {
+  catalogue.ValidateEncodedValue(value);
+  EXT_ENFORCE_INVALID(value.has_parameter_ref(), "Missing shared quantization parameter_ref.");
+  const auto &entry = Get(value.parameter_ref().value());
+  StructTypeProto local_type;
+  if (value.has_struct_type()) {
+    local_type = catalogue.Resolve(value.struct_type());
+    local_type.clear_type_id();
+  }
+  EXT_ENFORCE_INVALID(value.has_struct_type() && local_type.Equals(entry.local_type) &&
+                          value.logical_type().Equals(entry.logical_type) &&
+                          value.raw_data().size() == 1 + entry.full_size - entry.common.size() &&
+                          value.raw_data()[0] == 0,
+                      "Shared encoded value has incompatible type, shape, dtype or payload.");
+  return entry;
+}
+
+EncodedValueProto MaterializeQuantizedValue(const EncodedValueProto &value,
+                                            const QuantizationParameterCatalogue *parameters,
+                                            const StructTypeCatalogue &catalogue) {
+  EncodedValueProto result;
+  if (!value.has_parameter_ref()) {
+    catalogue.ValidateEncodedValue(value);
+    result.ParseFromString(value.SerializeAsString());
+    if (result.has_struct_type()) {
+      *result.mutable_struct_type() = catalogue.Resolve(value.struct_type());
+      result.mutable_struct_type()->clear_type_id();
+    }
+    return result;
+  }
+  EXT_ENFORCE_INVALID(parameters != nullptr, "Missing shared quantization parameter catalogue.");
+  const auto &entry = parameters->Validate(value, catalogue);
+  if (value.has_name())
+    result.set_name(value.name().value());
+  if (value.has_doc_string())
+    result.set_doc_string(value.doc_string().value());
+  *result.mutable_logical_type() = entry.logical_type;
+  *result.mutable_struct_type() = entry.storage_type;
+  auto &bytes = *result.mutable_raw_data();
+  bytes.resize(entry.full_size);
+  size_t full_offset = 0, common_offset = 0, local_offset = 1;
+  for (auto [first, size] : entry.local_ranges) {
+    const size_t common_size = first - full_offset;
+    std::memcpy(bytes.data() + full_offset, entry.common.data() + common_offset, common_size);
+    std::memcpy(bytes.data() + first, value.raw_data().data() + local_offset, size);
+    common_offset += common_size;
+    local_offset += size;
+    full_offset = first + size;
+  }
+  std::memcpy(bytes.data() + full_offset, entry.common.data() + common_offset,
+              entry.full_size - full_offset);
+  catalogue.ValidateEncodedValue(result);
+  return result;
+}
+
+EncodedValueProto MaterializeQuantizedValue(const RuntimeValue &value,
+                                            const StructTypeCatalogue &catalogue) {
+  return MaterializeQuantizedValue(value.Encoded(), value.quantization_parameters.get(), catalogue);
+}
+
 Tensor DequantizeTensor(const EncodedValueProto &value, const StructTypeCatalogue &catalogue,
                         RawBufferAllocator *allocator, int32_t output_dtype) {
+  EXT_ENFORCE_INVALID(!value.has_parameter_ref(),
+                      "Materialize shared parameters before decoding an EncodedValueProto.");
   const auto decoded = DecodeValues(value, catalogue);
   const int32_t type = output_dtype == TensorProto::UNDEFINED ? decoded.type : output_dtype;
   const size_t width = FloatBytes(type);
@@ -1580,6 +1902,8 @@ Tensor DequantizeTensor(const RuntimeValue &value, const StructTypeCatalogue &ca
                         RawBufferAllocator *allocator) {
   EXT_ENFORCE_INVALID(value.kind == RuntimeValue::Kind::kEncoded,
                       "Dequantization requires an encoded RuntimeValue.");
+  if (value.Encoded().has_parameter_ref())
+    return DequantizeTensor(MaterializeQuantizedValue(value, catalogue), {}, allocator);
   return DequantizeTensor(value.Encoded(), catalogue, allocator);
 }
 

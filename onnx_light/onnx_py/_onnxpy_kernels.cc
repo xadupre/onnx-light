@@ -443,6 +443,8 @@ RuntimeValue FeedbackValueFromPython(const std::string &name, nb::handle value, 
     return RuntimeValue::FromEncodedView(nb::cast<const EncodedValueProto &>(value),
                                          RetainFeedbackOwner(value));
   }
+  if (nb::isinstance<RuntimeValue>(value))
+    return nb::cast<const RuntimeValue &>(value).BorrowView();
   if (nb::isinstance<Tensor>(value)) {
     const Tensor &source = nb::cast<const Tensor &>(value);
     if (source.data_type == TensorProto::STRING) {
@@ -473,6 +475,8 @@ nb::object FeedbackValueToPython(RuntimeValue value) {
   if (value.kind == RuntimeValue::Kind::kTensor)
     return nb::cast(std::move(value.tensor));
   if (value.kind == RuntimeValue::Kind::kEncoded) {
+    if (value.quantization_parameters && value.Encoded().has_parameter_ref())
+      return nb::cast(std::move(value));
     return nb::cast(std::move(value.encoded));
   }
   nb::dict fields;
@@ -486,6 +490,26 @@ nb::dict FeedbackValuesToPython(RuntimeValueMap values) {
   for (auto &[name, value] : values)
     result[nb::str(name.c_str())] = FeedbackValueToPython(std::move(value));
   return result;
+}
+
+template <typename Function>
+auto WithQuantizedValue(nb::handle value, const ModelProto *model, Function function) {
+  StructTypeCatalogue catalogue;
+  if (model)
+    catalogue.Build(*model);
+  if (nb::isinstance<RuntimeValue>(value)) {
+    const auto &runtime_value = nb::cast<const RuntimeValue &>(value);
+    if (!runtime_value.Encoded().has_parameter_ref())
+      return function(runtime_value.Encoded(), catalogue);
+    return function(core::runtime::MaterializeQuantizedValue(runtime_value, catalogue),
+                    StructTypeCatalogue{});
+  }
+  const auto &encoded = nb::cast<const EncodedValueProto &>(value);
+  if (!encoded.has_parameter_ref())
+    return function(encoded, catalogue);
+  auto parameters = model ? core::runtime::QuantizationParameterCatalogue::Build(*model) : nullptr;
+  return function(core::runtime::MaterializeQuantizedValue(encoded, parameters.get(), catalogue),
+                  StructTypeCatalogue{});
 }
 
 void PutMapFromDict(RuntimeContext &rt, const std::string &name, nb::dict dictionary) {
@@ -1129,11 +1153,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def_ro("zero_points", &core::runtime::MatMulNBitsInputs::zero_points);
   rt_mod.def(
       "export_matmul_nbits_inputs",
-      [](const EncodedValueProto &value, const ModelProto *model) {
-        StructTypeCatalogue catalogue;
-        if (model)
-          catalogue.Build(*model);
-        return core::runtime::ExportMatMulNBitsInputs(value, catalogue);
+      [](nb::handle value, const ModelProto *model) {
+        return WithQuantizedValue(value, model, core::runtime::ExportMatMulNBitsInputs);
       },
       nb::arg("value"), nb::arg("model").none() = nullptr,
       "Extracts owned ORT input tensors and attributes without dequantizing.");
@@ -1141,11 +1162,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
              nb::arg("plan"), "Quantizes a loaded TensorProto into an owned EncodedValueProto.");
   rt_mod.def(
       "dequantize_tensor_proto",
-      [](const EncodedValueProto &value, const ModelProto *model) {
-        StructTypeCatalogue catalogue;
-        if (model)
-          catalogue.Build(*model);
-        return core::runtime::DequantizeTensorProto(value, catalogue);
+      [](nb::handle value, const ModelProto *model) {
+        return WithQuantizedValue(value, model, core::runtime::DequantizeTensorProto);
       },
       nb::arg("value"), nb::arg("model").none() = nullptr,
       "Dequantizes an EncodedValueProto, optionally resolving a model's type catalogue.");
@@ -1158,14 +1176,53 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       "Quantizes a Tensor; represents the encoded RuntimeValue as EncodedValueProto in Python.");
   rt_mod.def(
       "dequantize_tensor",
-      [](const EncodedValueProto &value, const ModelProto *model) {
-        StructTypeCatalogue catalogue;
-        if (model)
-          catalogue.Build(*model);
-        return core::runtime::DequantizeTensor(value, catalogue);
+      [](nb::handle value, const ModelProto *model) {
+        return WithQuantizedValue(
+            value, model,
+            [](const EncodedValueProto &encoded, const StructTypeCatalogue &catalogue) {
+              return core::runtime::DequantizeTensor(encoded, catalogue);
+            });
       },
       nb::arg("value"), nb::arg("model").none() = nullptr,
       "Dequantizes an encoded runtime value into a Tensor.");
+  nb::class_<RuntimeValue>(rt_mod, "SharedQuantizedValue")
+      .def_prop_ro("encoded",
+                   [](const RuntimeValue &value) {
+                     EncodedValueProto result;
+                     result.ParseFromString(value.Encoded().SerializeAsString());
+                     return result;
+                   })
+      .def_prop_ro(
+          "parameter_ref",
+          [](const RuntimeValue &value) { return value.Encoded().parameter_ref().value(); })
+      .def_prop_ro("raw_data", [](const RuntimeValue &value) {
+        const auto &raw = value.Encoded().raw_data();
+        return nb::bytes(raw.data(), raw.size());
+      });
+  rt_mod.def(
+      "materialize_quantized_value",
+      [](nb::handle value, const ModelProto *model) {
+        return WithQuantizedValue(
+            value, model,
+            [](const EncodedValueProto &encoded, const StructTypeCatalogue &catalogue) {
+              return core::runtime::MaterializeQuantizedValue(encoded, nullptr, catalogue);
+            });
+      },
+      nb::arg("value"), nb::arg("model").none() = nullptr);
+  rt_mod.def(
+      "make_shared_quantization_type",
+      [](const ModelProto &model, const std::string &name) {
+        return core::runtime::QuantizationParameterCatalogue::Build(model)->Get(name).local_type;
+      },
+      nb::arg("model"), nb::arg("name"));
+  rt_mod.def(
+      "quantize_tensor_shared",
+      [](const Tensor &tensor, const ModelProto &model, const std::string &name) {
+        auto parameters = core::runtime::QuantizationParameterCatalogue::Build(model);
+        return FeedbackValueToPython(core::runtime::QuantizeTensorShared(
+            tensor, parameters->Get(name).storage_type, name, parameters));
+      },
+      nb::arg("tensor"), nb::arg("model"), nb::arg("name"));
   rt_mod.doc() = "C++ kernel dispatcher exposed to Python. RunNode and "
                  "RuntimeSession evaluate one or more nodes through the static "
                  "KernelDispatchTable (with transparent dispatch to model-local "

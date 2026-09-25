@@ -286,6 +286,12 @@ TEST(QuantizedValueKernels, ResolvesModelTypesInSessionsAndChildren) {
   onnx_kernels::RegisterKernelFunctions();
   auto type = MakeQuantizationType(MakeQuantizationPlan(QuantizationFormat::kInt4, 3));
   ModelProto model;
+  auto *opset = model.add_opset_import();
+  opset->set_domain("ai.rt");
+  opset->set_version(1);
+  opset = model.add_opset_import();
+  opset->set_domain("");
+  opset->set_version(21);
   type.set_type_id(1);
   *model.add_struct_types() = type;
   auto *graph = model.mutable_graph();
@@ -306,6 +312,94 @@ TEST(QuantizedValueKernels, ResolvesModelTypesInSessionsAndChildren) {
   *value.mutable_struct_type() = reference;
   onnx_kernels::kernel::Dequantize kernel{KernelContext(OpsetId{"ai.rt", 1})};
   ExpectValues(kernel(value, TensorProto::FLOAT, child.struct_type_catalogue()), {-1, 0, 1});
+}
+
+TEST(QuantizedValueKernels, SharedParametersStayIndependentOfTypeReferences) {
+  onnx_kernels::RegisterKernelFunctions();
+  onnx_shapes::RegisterShapeFunctions();
+  RuntimeValue retained;
+  {
+    const auto source = Tensor::FromFloat("X", {3}, {-2, 0, 2});
+    auto type = MakeQuantizationType(MakeQuantizationPlan(QuantizationFormat::kInt4, 3));
+    ModelProto model;
+    type.set_type_id(7);
+    *model.add_struct_types() = type;
+    auto *graph = model.mutable_graph();
+    graph->set_name("shared");
+    StructTypeProto reference;
+    reference.set_type_ref(7);
+    auto *annotation = graph->add_quantization_annotation();
+    annotation->set_tensor_name("onnx_light.quantization.parameters:fixed");
+    auto add = [&](const std::string &role, const std::string &bytes) {
+      auto *tensor = graph->add_initializer();
+      tensor->set_name(role);
+      tensor->set_data_type(TensorProto::UINT8);
+      tensor->add_dims(bytes.size());
+      tensor->set_raw_data(bytes);
+      auto *mapping = annotation->add_quant_parameter_tensor_names();
+      mapping->set_key(role);
+      mapping->set_value(role);
+    };
+    add("storage_type", reference.SerializeAsString());
+    const auto encoded = QuantizeTensor(source, MakeQuantizationPlan(QuantizationFormat::kInt4, 3));
+    add("logical_type", encoded.Encoded().logical_type().SerializeAsString());
+    auto *scales = graph->add_initializer();
+    scales->set_name("scales");
+    scales->set_data_type(TensorProto::DOUBLE);
+    scales->add_double_data(2);
+    auto *mapping = annotation->add_quant_parameter_tensor_names();
+    mapping->set_key("scales");
+    mapping->set_value("scales");
+    auto quantize = QuantizeNode(reference);
+    AddAttribute<std::string>(quantize, "parameter_ref", "fixed");
+    *graph->add_node() = quantize;
+    auto *identity = graph->add_node();
+    identity->set_op_type("Identity");
+    identity->add_input("Q");
+    identity->add_output("I");
+    auto *decode = graph->add_node();
+    decode->set_op_type("Dequantize");
+    decode->set_domain("ai.rt");
+    decode->add_input("I");
+    decode->add_output("Y");
+    AddAttribute<int64_t>(*decode, "dtype", TensorProto::FLOAT);
+    auto *input = graph->add_input();
+    input->set_name("X");
+    *input->mutable_type() = encoded.Encoded().logical_type();
+    auto *output = graph->add_output();
+    output->set_name("I");
+    *output->mutable_type()->mutable_struct_type() = MakeSharedQuantizationType(type);
+    output = graph->add_output();
+    output->set_name("Y");
+    *output->mutable_type() = encoded.Encoded().logical_type();
+    auto inferred = model;
+    EXPECT_NO_THROW(core::shapes::InferShapesModel(inferred));
+    RuntimeSession session(model);
+    RuntimeContext context;
+    context.Put("X", source);
+    context.Put("Q", Tensor::FromFloat("Q", {1}, {42}));
+    session.Run(context);
+    EXPECT_FALSE(context.Has("Q"));
+    ASSERT_EQ(context.values().count("Q"), 1u);
+    ExpectValues(context.Get("Y"), {-2, 0, 2});
+    retained = context.values().at("I").DeepCopy();
+    auto child = context.MakeFunctionContext();
+    EXPECT_EQ(child.quantization_parameters(), context.quantization_parameters());
+    EXPECT_EQ(retained.Encoded().raw_data().size(), 3);
+    EXPECT_EQ(retained.Encoded().struct_type().SerializeAsString(),
+              MakeSharedQuantizationType(type).SerializeAsString());
+    auto malformed_reference = reference;
+    malformed_reference.set_name("not-an-exact-reference");
+    EXPECT_THROW(QuantizeTensorShared(source, malformed_reference, "fixed",
+                                      context.quantization_parameters(),
+                                      context.struct_type_catalogue()),
+                 std::invalid_argument);
+    quantize.add_input("X");
+    onnx_kernels::kernel::Quantize kernel{KernelContext(OpsetId{"ai.rt", 1})};
+    kernel.set_node(quantize);
+    EXPECT_THROW(kernel.Run(context), std::invalid_argument);
+  }
+  ExpectValues(DequantizeTensor(retained), {-2, 0, 2});
 }
 
 TEST(QuantizedValueKernels, CalibratesOrtColumnsAndAllBitWidths) {

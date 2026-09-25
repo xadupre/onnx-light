@@ -484,8 +484,46 @@ struct QuantizationParameters {
   const Tensor *outliers = nullptr;
 };
 
+/** Owns model-local immutable fixed numerical parameters, independently of storage type IDs. */
+class QuantizationParameterCatalogue {
+public:
+  struct Entry {
+    QuantizationPlan plan;
+    StructTypeProto storage_type, local_type;
+    TypeProto logical_type;
+    std::vector<std::pair<size_t, size_t>> local_ranges;
+    std::vector<uint8_t> common;
+    size_t full_size = 0;
+  };
+  static std::shared_ptr<const QuantizationParameterCatalogue> Build(const ModelProto &model);
+  const Entry &Get(const std::string &name) const;
+  /** Validates a compact value without materializing it and returns its shared parameters. */
+  const Entry &Validate(const EncodedValueProto &value,
+                        const StructTypeCatalogue &catalogue = {}) const;
+
+private:
+  std::unordered_map<std::string, Entry> entries_;
+};
+
+/** Quantizes with fixed shared parameters and retains their immutable catalogue. */
+RuntimeValue QuantizeTensorShared(const Tensor &tensor, const StructTypeProto &type,
+                                  const std::string &parameter_ref,
+                                  std::shared_ptr<const QuantizationParameterCatalogue> parameters,
+                                  const StructTypeCatalogue &catalogue = {});
+
+/** Returns an independent self-contained encoded message, resolving shared parameters. */
+EncodedValueProto
+MaterializeQuantizedValue(const EncodedValueProto &value,
+                          const QuantizationParameterCatalogue *parameters = nullptr,
+                          const StructTypeCatalogue &catalogue = {});
+EncodedValueProto MaterializeQuantizedValue(const RuntimeValue &value,
+                                            const StructTypeCatalogue &catalogue = {});
+
 /** Returns the portable plan's storage type without requiring trained numerical parameters. */
 StructTypeProto MakeQuantizationType(const QuantizationPlan &plan);
+
+/** Returns the truthful compact schema for codes and local outlier values. */
+StructTypeProto MakeSharedQuantizationType(const StructTypeProto &type);
 
 /**
  * Quantizes into a portable storage type, calibrating omitted scales from the source.

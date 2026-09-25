@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_extensions/shapes/shapes/rt/shape_rt.h"
+#include "onnx_core/runtime/quantization.h"
 
 #include <cstdint>
 #include <limits>
@@ -97,7 +98,19 @@ void ComputeShapeQuantize(ShapesContext &ctx, const NodeProto &node) {
   EXT_ENFORCE_INVALID(attribute && attribute->type() == AttributeProto::TYPE_PROTO &&
                           attribute->has_tp() && attribute->tp().has_struct_type(),
                       "Quantize requires a 'type' attribute containing StructTypeProto.");
-  ctx.SetType(node.output(0), attribute->tp());
+  if (const auto *reference = FindAttribute(node, "parameter_ref")) {
+    EXT_ENFORCE_INVALID(reference->type() == AttributeProto::STRING && !reference->s().empty(),
+                        "Quantize parameter_ref must be a nonempty string.");
+    for (size_t i = 1; i < node.input().size(); ++i)
+      EXT_ENFORCE_INVALID(node.input(i).empty(),
+                          "Quantize parameter_ref excludes optional parameters.");
+    TypeProto compact;
+    *compact.mutable_struct_type() = core::runtime::MakeSharedQuantizationType(
+        ctx.ResolveStructType(attribute->tp().struct_type()));
+    ctx.SetType(node.output(0), compact);
+  } else {
+    ctx.SetType(node.output(0), attribute->tp());
+  }
 }
 
 void ComputeShapeDequantize(ShapesContext &ctx, const NodeProto &node) {

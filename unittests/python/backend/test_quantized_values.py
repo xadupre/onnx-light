@@ -19,6 +19,423 @@ runtime = import_or_skip("onnx_light.onnx_py._onnxpykernels", "runtime")
 QuantizationFormat = runtime.QuantizationFormat
 
 
+class TestSharedQuantizationParameters(unittest.TestCase):
+    def make_model(self):
+        """Returns a two-path model using one fixed parameter set."""
+        from onnx_light.onnx_core.quantization import add_quantization_parameters
+
+        plan = runtime.make_quantization_plan(QuantizationFormat.INT4, 8, 4)
+        storage = runtime.make_quantization_type(plan)
+        destination = onnx.TypeProto(struct_type=storage)
+        logical = helper.make_tensor_type_proto(onnx.TensorProto.FLOAT, [8])
+        nodes = [
+            helper.make_node(
+                "Quantize", ["X"], ["Q"], domain="ai.rt", type=destination, parameter_ref="common"
+            ),
+            helper.make_node(
+                "Quantize", ["Z"], ["R"], domain="ai.rt", type=destination, parameter_ref="common"
+            ),
+            helper.make_node("Identity", ["Q"], ["I"]),
+            helper.make_node(
+                "Dequantize", ["I"], ["Y"], domain="ai.rt", dtype=onnx.TensorProto.FLOAT
+            ),
+            helper.make_node(
+                "Dequantize", ["R"], ["W"], domain="ai.rt", dtype=onnx.TensorProto.FLOAT
+            ),
+        ]
+        graph = helper.make_graph(
+            nodes,
+            "shared",
+            [helper.make_value_info(name, logical) for name in ("X", "Z")],
+            [helper.make_value_info(name, logical) for name in ("Y", "W")],
+        )
+        model = helper.make_model(
+            graph, opset_imports=[helper.make_opsetid("", 21), helper.make_opsetid("ai.rt", 1)]
+        )
+        compact = add_quantization_parameters(
+            model, "common", storage, logical, scales=numpy.array([1, 2], dtype=numpy.float64)
+        )
+        model.graph.output.append(
+            helper.make_value_info("I", onnx.TypeProto(struct_type=compact))
+        )
+        return model, plan
+
+    def run_model(self, model):
+        """Runs the model with two distinct quantization sources."""
+        context = runtime.RuntimeContext()
+        runtime.register_model_functions(model, context)
+        for name, value in (
+            ("X", [-8, -4, 0, 7, -16, -4, 8, 14]),
+            ("Z", [1, 2, 3, 4, 2, 4, 6, 8]),
+        ):
+            values = numpy.array(value, dtype=numpy.float32)
+            context.set(
+                name,
+                runtime.tensor_from_numpy(
+                    name, onnx.TensorProto.FLOAT, [8], values.view(numpy.uint8)
+                ),
+            )
+        session = runtime.RuntimeSession(model)
+        session.run(context)
+        return context, session
+
+    def test_graph_roundtrip_identity_and_lifetime(self):
+        from onnx_light.onnx_core.quantization import materialize_quantized_value
+
+        model, _ = self.make_model()
+        checker.check_model(model)
+        restored = onnx.ModelProto()
+        restored.ParseFromString(model.SerializeToString())
+        context, session = self.run_model(restored)
+        shared = context.get_value("I")
+        self.assertIsInstance(shared, runtime.SharedQuantizedValue)
+        self.assertEqual(shared.parameter_ref, "common")
+        self.assertEqual(len(shared.raw_data), 5)
+        snapshot = shared.encoded
+        snapshot.raw_data = b"invalid"
+        snapshot.parameter_ref = "missing"
+        self.assertEqual(shared.parameter_ref, "common")
+        self.assertEqual(len(shared.raw_data), 5)
+        numpy.testing.assert_array_equal(
+            numpy.from_dlpack(context.get("Y")), [-8, -4, 0, 7, -16, -4, 8, 14]
+        )
+        numpy.testing.assert_array_equal(
+            numpy.from_dlpack(context.get("W")), [1, 2, 3, 4, 2, 4, 6, 8]
+        )
+        wire = onnx.EncodedValueProto()
+        wire.ParseFromString(shared.encoded.SerializeToString())
+        self.assertEqual(wire.parameter_ref, "common")
+        self.assertIn("parameter_ref", str(wire))
+        with self.assertRaises(ValueError):
+            runtime.dequantize_tensor(wire)
+        numpy.testing.assert_array_equal(
+            numpy.from_dlpack(runtime.dequantize_tensor(wire, restored)),
+            numpy.from_dlpack(context.get("Y")),
+        )
+        standalone = materialize_quantized_value(shared)
+        self.assertFalse(standalone.has_parameter_ref())
+        self.assertEqual(len(standalone.raw_data), 53)
+        del context, session, model, restored
+        gc.collect()
+        numpy.testing.assert_array_equal(
+            numpy.from_dlpack(runtime.dequantize_tensor(shared)),
+            numpy.from_dlpack(runtime.dequantize_tensor(standalone)),
+        )
+        exported = runtime.dequantize_tensor_proto(shared)
+        numpy.testing.assert_array_equal(
+            numpy_helper.to_array(exported), [-8, -4, 0, 7, -16, -4, 8, 14]
+        )
+
+    def test_initializer_and_python_helper(self):
+        model, _ = self.make_model()
+        values = numpy.array([-8, -4, 0, 7, -16, -4, 8, 14], dtype=numpy.float32)
+        tensor = runtime.tensor_from_numpy(
+            "Q", onnx.TensorProto.FLOAT, [8], values.view(numpy.uint8)
+        )
+        shared = runtime.quantize_tensor_shared(tensor, model, "common")
+        encoded = onnx.EncodedValueProto()
+        encoded.CopyFrom(shared.encoded)
+        encoded.name = "Q"
+        compact = onnx.StructTypeProto()
+        compact.CopyFrom(encoded.struct_type)
+        compact.type_id = 22
+        model.struct_types.append(compact)
+        encoded.struct_type = onnx.StructTypeProto(type_ref=22)
+        model.graph.node.clear()
+        model.graph.node.extend(
+            [
+                helper.make_node("Identity", ["Q"], ["I"]),
+                helper.make_node(
+                    "Dequantize", ["I"], ["Y"], domain="ai.rt", dtype=onnx.TensorProto.FLOAT
+                ),
+            ]
+        )
+        model.graph.output.clear()
+        model.graph.output.append(helper.make_tensor_value_info("Y", onnx.TensorProto.FLOAT, [8]))
+        model.graph.encoded_initializer.append(encoded)
+        serialized = model.SerializeToString()
+        model = onnx.ModelProto()
+        model.ParseFromString(serialized)
+        checker.check_model(model)
+        context, session = self.run_model(model)
+        retained = context.get_value("I")
+        del session, context, shared, model
+        gc.collect()
+        numpy.testing.assert_array_equal(
+            numpy.from_dlpack(runtime.dequantize_tensor(retained)), values
+        )
+
+    def test_subgraph_and_function(self):
+        model, _ = self.make_model()
+        body = []
+        for node in model.graph.node:
+            copied = onnx.NodeProto()
+            copied.CopyFrom(node)
+            body.append(copied)
+        logical = helper.make_tensor_type_proto(onnx.TensorProto.FLOAT, [8])
+        model.graph.node.clear()
+        branch = helper.make_graph(
+            body, "branch", [], [helper.make_value_info(n, logical) for n in ("Y", "W")]
+        )
+        model.graph.node.append(
+            helper.make_node(
+                "If", ["condition"], ["Y", "W"], then_branch=branch, else_branch=branch
+            )
+        )
+        model.graph.initializer.append(numpy_helper.from_array(numpy.array(True), "condition"))
+        model.graph.output.clear()
+        model.graph.output.extend(helper.make_value_info(name, logical) for name in ("Y", "W"))
+        checker.check_model(model)
+        context, _ = self.run_model(model)
+        numpy.testing.assert_array_equal(
+            numpy.from_dlpack(context.get("Y")), [-8, -4, 0, 7, -16, -4, 8, 14]
+        )
+        model.graph.node.clear()
+        function = helper.make_function(
+            "local",
+            "Shared",
+            ["X", "Z"],
+            ["Y", "W"],
+            body,
+            [helper.make_opsetid("", 21), helper.make_opsetid("ai.rt", 1)],
+        )
+        model.functions.append(function)
+        model.opset_import.append(helper.make_opsetid("local", 1))
+        model.graph.node.append(
+            helper.make_node("Shared", ["X", "Z"], ["Y", "W"], domain="local")
+        )
+        checker.check_model(model)
+        context, _ = self.run_model(model)
+        numpy.testing.assert_array_equal(
+            numpy.from_dlpack(context.get("W")), [1, 2, 3, 4, 2, 4, 6, 8]
+        )
+
+        model.functions[0].attribute.append("parameters")
+        for node in model.functions[0].node:
+            attributes = []
+            for attribute in node.attribute:
+                if attribute.name == "parameter_ref":
+                    attributes.append(
+                        helper.make_attribute_ref(
+                            "parameter_ref",
+                            onnx.AttributeProto.STRING,
+                            ref_attr_name="parameters",
+                        )
+                    )
+                else:
+                    copied = onnx.AttributeProto()
+                    copied.CopyFrom(attribute)
+                    attributes.append(copied)
+            node.attribute.clear()
+            node.attribute.extend(attributes)
+        model.graph.node[0].attribute.append(helper.make_attribute("parameters", "common"))
+        checker.check_model(model)
+        context, _ = self.run_model(model)
+        numpy.testing.assert_array_equal(
+            numpy.from_dlpack(context.get("W")), [1, 2, 3, 4, 2, 4, 6, 8]
+        )
+
+    def test_invalid_references_and_ambiguity(self):
+        for failure in (
+            "missing",
+            "explicit",
+            "no_scales",
+            "missing_initializer",
+            "duplicate",
+            "empty_encoded_ref",
+            "missing_encoded_ref",
+            "affine_encoded_ref",
+        ):
+            with self.subTest(failure=failure):
+                model, _ = self.make_model()
+                annotation = model.graph.quantization_annotation[0]
+                if failure == "missing":
+                    for attribute in model.graph.node[0].attribute:
+                        if attribute.name == "parameter_ref":
+                            attribute.s = "missing"
+                elif failure == "explicit":
+                    model.graph.node[0].input.append("X")
+                elif failure == "no_scales":
+                    annotation.quant_parameter_tensor_names[-1].key = "zero_points"
+                elif failure == "missing_initializer":
+                    model.graph.initializer[-1].name = "renamed_missing_initializer"
+                elif failure == "duplicate":
+                    model.graph.quantization_annotation.append(annotation)
+                else:
+                    context, _ = self.run_model(model)
+                    encoded = context.get_value("I").encoded
+                    encoded.name = "unused"
+                    if failure == "empty_encoded_ref":
+                        encoded.parameter_ref = ""
+                    elif failure == "missing_encoded_ref":
+                        encoded.parameter_ref = "missing"
+                    else:
+                        encoded.affine = onnx.AffineLayoutProto()
+                    model.graph.encoded_initializer.append(encoded)
+                with self.assertRaises(checker.ValidationError):
+                    checker.check_model(model)
+                with self.assertRaises((ValueError, RuntimeError)):
+                    self.run_model(model)
+
+    def test_invalid_shapes_dtypes_and_compact_payload(self):
+        model, _ = self.make_model()
+        for shape, dtype in (([4, 2], onnx.TensorProto.FLOAT), ([8], onnx.TensorProto.DOUBLE)):
+            with self.subTest(shape=shape, dtype=dtype):
+                values = numpy.ones(
+                    shape,
+                    dtype=numpy.float32 if dtype == onnx.TensorProto.FLOAT else numpy.float64,
+                )
+                tensor = runtime.tensor_from_numpy(
+                    "X", dtype, shape, values.view(numpy.uint8).reshape(-1)
+                )
+                with self.assertRaises(ValueError):
+                    runtime.quantize_tensor_shared(tensor, model, "common")
+        context, _ = self.run_model(model)
+        encoded = onnx.EncodedValueProto()
+        encoded.CopyFrom(context.get_value("I").encoded)
+        encoded.raw_data = encoded.raw_data[:-1]
+        with self.assertRaises(ValueError):
+            runtime.materialize_quantized_value(encoded, model)
+        from onnx_light.onnx_core.quantization import add_quantization_parameters
+
+        original = model.SerializeToString()
+        with self.assertRaises(ValueError):
+            add_quantization_parameters(
+                model,
+                "bad",
+                runtime.make_quantization_type(
+                    runtime.make_quantization_plan(QuantizationFormat.INT4, 8, 4)
+                ),
+                helper.make_tensor_type_proto(onnx.TensorProto.FLOAT, [8]),
+                scales=numpy.array([1, 2, 3], dtype=numpy.float64),
+            )
+        self.assertEqual(model.SerializeToString(), original)
+
+    def test_storage_type_mismatch_and_unsupported_text_export(self):
+        from onnx_light.onnx_proto._text_format import serialize_to_textproto
+
+        model, _ = self.make_model()
+        with self.assertRaises(TypeError):
+            serialize_to_textproto(model)
+        for attribute in model.graph.node[0].attribute:
+            if attribute.name == "type":
+                attribute.tp.struct_type.CopyFrom(
+                    runtime.make_quantization_type(
+                        runtime.make_quantization_plan(QuantizationFormat.INT8, 8, 4)
+                    )
+                )
+        with self.assertRaises(ValueError):
+            self.run_model(model)
+
+    def test_shared_ort_export(self):
+        from onnx_light.onnx_core.quantization import add_quantization_parameters
+
+        values = numpy.arange(6, dtype=numpy.float32).reshape(3, 2)
+        tensor = runtime.tensor_from_numpy(
+            "Q", onnx.TensorProto.FLOAT, [3, 2], values.view(numpy.uint8).reshape(-1)
+        )
+        for fmt in (
+            QuantizationFormat.ORT_MATMULNBITS_INT2,
+            QuantizationFormat.ORT_MATMULNBITS_INT4,
+            QuantizationFormat.ORT_MATMULNBITS_INT8,
+        ):
+            with self.subTest(format=fmt):
+                plan = runtime.make_matmul_nbits_plan(fmt, 3, 2, 16)
+                full = runtime.quantize_tensor(tensor, plan)
+                model = helper.make_model(helper.make_graph([], "parameters", [], []))
+                add_quantization_parameters(
+                    model,
+                    "common",
+                    full.struct_type,
+                    full.logical_type,
+                    scales=numpy.array(1, dtype=numpy.float64),
+                )
+                shared = runtime.quantize_tensor_shared(tensor, model, "common")
+                exported = runtime.export_matmul_nbits_inputs(shared)
+                expected = runtime.export_matmul_nbits_inputs(full)
+                numpy.testing.assert_array_equal(
+                    numpy_helper.to_array(exported.weights),
+                    numpy_helper.to_array(expected.weights),
+                )
+                numpy.testing.assert_array_equal(
+                    numpy_helper.to_array(exported.scales), numpy_helper.to_array(expected.scales)
+                )
+                self.assertEqual(
+                    runtime.materialize_quantized_value(shared).raw_data, full.raw_data
+                )
+
+    def test_parameter_sets_are_independent_of_storage_types(self):
+        from onnx_light.onnx_core.quantization import add_quantization_parameters
+
+        model, plan = self.make_model()
+        declared = runtime.make_quantization_type(plan)
+        declared.type_id = 7
+        model.struct_types.append(declared)
+        reference = onnx.StructTypeProto(type_ref=7)
+        add_quantization_parameters(
+            model,
+            "second",
+            reference,
+            helper.make_tensor_type_proto(onnx.TensorProto.FLOAT, [8]),
+            scales=numpy.array(2, dtype=numpy.float64),
+        )
+        for node in (model.graph.node[0], model.graph.node[1]):
+            for attribute in node.attribute:
+                if attribute.name == "type":
+                    attribute.tp.struct_type = reference
+                elif attribute.name == "parameter_ref" and node.output[0] == "R":
+                    attribute.s = "second"
+        checker.check_model(model)
+        context, _ = self.run_model(model)
+        numpy.testing.assert_array_equal(
+            numpy.from_dlpack(context.get("Y")), [-8, -4, 0, 7, -16, -4, 8, 14]
+        )
+        numpy.testing.assert_array_equal(
+            numpy.from_dlpack(context.get("W")), [0, 2, 4, 4, 2, 4, 6, 8]
+        )
+
+    def test_reused_context_replaces_and_resets_catalogue(self):
+        model, _ = self.make_model()
+        context, _ = self.run_model(model)
+        retained = context.get_value("I")
+        replacement, _ = self.make_model()
+        scales = replacement.graph.initializer[-1]
+        scales.CopyFrom(
+            numpy_helper.from_array(numpy.array([2, 4], dtype=numpy.float64), name=scales.name)
+        )
+        runtime.RuntimeSession(replacement).run(context)
+        numpy.testing.assert_array_equal(
+            numpy.from_dlpack(context.get("Y")), [-8, -4, 0, 8, -16, -4, 8, 16]
+        )
+        replacement.graph.quantization_annotation.clear()
+        with self.assertRaisesRegex(ValueError, "Missing quantization parameter_ref"):
+            runtime.RuntimeSession(replacement).run(context)
+        numpy.testing.assert_array_equal(
+            numpy.from_dlpack(runtime.dequantize_tensor(retained)), [-8, -4, 0, 7, -16, -4, 8, 14]
+        )
+
+    def test_session_snapshot_ignores_model_mutation_and_tensor_shadowing(self):
+        model, _ = self.make_model()
+        context, session = self.run_model(model)
+        scales = model.graph.initializer[-1]
+        scales.CopyFrom(
+            numpy_helper.from_array(
+                numpy.array([100, 100], dtype=numpy.float64), name=scales.name
+            )
+        )
+        shadow = numpy.array([999, 999], dtype=numpy.float64)
+        context.put_value(
+            scales.name,
+            runtime.tensor_from_numpy(
+                scales.name, onnx.TensorProto.DOUBLE, [2], shadow.view(numpy.uint8)
+            ),
+        )
+        session.run(context)
+        numpy.testing.assert_array_equal(
+            numpy.from_dlpack(context.get("Y")), [-8, -4, 0, 7, -16, -4, 8, 14]
+        )
+
+
 class TestQuantizedValues(unittest.TestCase):
     def test_context_category_replacement_and_identity(self):
         values = numpy.array([-1, 0, 1], dtype=numpy.float32)

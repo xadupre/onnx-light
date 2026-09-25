@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/runtime/runtime_session.h"
+#include "onnx_core/runtime/quantization.h"
 
 #include <chrono>
 #include <cstddef>
@@ -102,6 +103,7 @@ RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions op
   SetInitializers(model.graph());
   struct_type_catalogue_.emplace();
   struct_type_catalogue_->Build(model);
+  quantization_parameters_ = QuantizationParameterCatalogue::Build(model);
 }
 
 RuntimeSession::RuntimeSession(const GraphProto &graph, int verbose)
@@ -207,6 +209,8 @@ std::unordered_set<std::string> RuntimeSession::SeedInitializers(RuntimeContext 
   std::unordered_set<std::string> seeded;
   if (struct_type_catalogue_)
     rt.set_struct_type_catalogue(*struct_type_catalogue_);
+  if (quantization_parameters_)
+    rt.set_quantization_parameters(quantization_parameters_);
   if (initializer_graph_ != nullptr) {
     for (const TensorProto &initializer : initializer_graph_->initializer())
       if (!rt.HasValue(initializer.name())) {
@@ -217,10 +221,22 @@ std::unordered_set<std::string> RuntimeSession::SeedInitializers(RuntimeContext 
     for (const auto &initializer : initializer_graph_->encoded_initializer())
       if (!rt.HasValue(initializer.name())) {
         rt.struct_type_catalogue().ValidateEncodedValue(initializer);
-        rt.PutValue(initializer.name(),
-                    rt.model_owner() ? RuntimeValue::FromEncodedView(initializer, rt.model_owner())
-                                     : RuntimeValue(initializer),
-                    RuntimeEventKind::kInitializer);
+        RuntimeValue value;
+        if (initializer.has_parameter_ref()) {
+          EXT_ENFORCE_INVALID(rt.quantization_parameters() != nullptr,
+                              "Missing shared quantization parameter catalogue.");
+          const auto &entry =
+              rt.quantization_parameters()->Validate(initializer, rt.struct_type_catalogue());
+          EncodedValueProto owned;
+          owned.ParseFromString(initializer.SerializeAsString());
+          *owned.mutable_struct_type() = entry.local_type;
+          value = RuntimeValue(std::move(owned));
+          value.quantization_parameters = rt.quantization_parameters();
+        } else {
+          value = rt.model_owner() ? RuntimeValue::FromEncodedView(initializer, rt.model_owner())
+                                   : RuntimeValue(initializer);
+        }
+        rt.PutValue(initializer.name(), std::move(value), RuntimeEventKind::kInitializer);
         seeded.insert(initializer.name());
       }
   }

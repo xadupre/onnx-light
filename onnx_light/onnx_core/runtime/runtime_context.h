@@ -557,8 +557,8 @@ public:
   int64_t current_node_index() const noexcept { return current_node_index_; }
 
   /// Returns the tensor map shared across every node in a chain. Publication through
-  /// Set/Put/PutValue/PutSequence/PutMap/PutShape keeps each name in exactly one store.
-  /// Direct mutation of any value store must preserve this invariant.
+  /// Set/Put/PutValue/PutMap/PutShape keeps each name in exactly one store.
+  /// PutSequence and direct store mutations require callers to preserve this invariant.
   TensorMap &tensors() noexcept { return tensors_; }
   const TensorMap &tensors() const noexcept { return tensors_; }
 
@@ -958,6 +958,8 @@ public:
 
   /// Inserts or overwrites the sequence stored under ``name``. The
   /// stored sequence's ``name`` field is updated to ``name``.
+  /// Leaves other value stores unchanged; callers must use a name that is
+  /// absent from those stores. Existing sequences may be overwritten on repeated runs.
   void PutSequence(const std::string &name, Sequence sequence) {
     sequence.name = name;
     sequences_[name] = std::move(sequence);

@@ -110,20 +110,23 @@ register the replacement on it before its first run.
 Publishing and replacing values
 -------------------------------
 
-A ``RuntimeContext`` has one value category per name. ``Put`` (Python ``put``),
+A ``RuntimeContext`` is expected to have one value category per name. ``Put`` (Python ``put``),
 ``PutValue`` (``put_value``), ``PutMap`` (``put_map``), and ``PutShape`` replace
 any previous category under that name. ``PutSequence`` (``put_sequence``)
 overwrites an existing sequence without first removing it, which allows a runtime
-context to execute the same graph repeatedly. ``PutValue`` routes ordinary tensors
+context to execute the same graph repeatedly. It neither checks nor modifies other
+value stores: callers must ensure the sequence name is absent from those stores.
+``PutValue`` routes ordinary tensors
 to the tensor store and structures or encoded values to the structured-value store.
 ``Set`` (``set``) rejects a name already present in any store. ``Remove``
 (``remove``) removes any category, and ``Clear`` (``clear``) clears all value stores.
 
 Kernels must finish computing their result before publishing it: replacing a name
 invalidates references to its previous value, including potentially aliased inputs.
-C++ kernels should use these publication APIs or the ``SetOutput`` overload taking
+C++ kernels should use these publication APIs or ``SetOutput``, which takes
 a ``RuntimeContext``, rather than inserting into the mutable maps directly.
-Low-level map mutation must preserve the single-category invariant. Thus Python
+Callers of ``PutSequence`` and low-level map mutations must preserve the
+single-category invariant. With that invariant maintained, Python
 ``get_value`` and native consumers such as ``Identity`` cannot select different
 values based on lookup order.
 

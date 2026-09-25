@@ -513,7 +513,31 @@ TEST(StructuredInference, RejectsIncompatibleNestedStructuredOutputDeclaration) 
       .ref_struct_type()
       .set_type_ref(uint64_t(2));
   core::shapes::ShapesContext context;
-  EXPECT_THROW(context.ComputeShapeModel(model), std::invalid_argument);
+  try {
+    context.ComputeShapeModel(model);
+    FAIL() << "Expected an incompatible structured output type.";
+  } catch (const std::invalid_argument &error) {
+    const std::string message = error.what();
+    EXPECT_NE(message.find("incompatible structured output type for 'output'"), std::string::npos);
+    EXPECT_NE(message.find("sequence_type.elem_type.struct_type.type_ref: values differ"),
+              std::string::npos);
+  }
+}
+
+TEST(StructuredInference, ReportsMissingInferredStructuredOutputType) {
+  auto model = StructuredModel();
+  auto *output = model.mutable_graph()->mutable_output(0);
+  output->set_name("missing");
+  output->mutable_type()->mutable_struct_type()->set_type_ref(uint64_t{2});
+  core::shapes::ShapesContext context;
+  try {
+    context.ComputeShapeModel(model);
+    FAIL() << "Expected a missing inferred structured output type.";
+  } catch (const std::invalid_argument &error) {
+    EXPECT_NE(std::string(error.what())
+                  .find("ComputeShapeGraph: no inferred type for structured output 'missing'."),
+              std::string::npos);
+  }
 }
 
 TEST(StructuredInference, EncodedDefaultsPreservePublicTensorShapeAndValidatePayload) {

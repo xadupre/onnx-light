@@ -22,12 +22,26 @@
  * constraints, type/shape inference), use ``onnx_lib::checker::check_model()``
  * instead (declared in ``onnx_lib/checker.h``).
  *
- * Every function below throws ``std::invalid_argument`` (via
+ * Validation functions below throw ``std::invalid_argument`` (via
  * ``EXT_THROW_INVALID`` / ``EXT_ENFORCE_INVALID``) with a descriptive message
  * on the first violation found.
  */
 
 namespace ONNX_LIGHT_NAMESPACE {
+
+/**
+ * Compares messages field by field, including presence, without serialization.
+ * Sets @p difference to the first mismatched field path and reason, or clears it
+ * on equality. Floating-point constants are compared by their bit patterns.
+ */
+ONNX_LIGHT_PROTO_API bool EqualProto(const TypeProto &left, const TypeProto &right,
+                                     std::string *difference = nullptr);
+/** Compares complete structured declarations, including constants, codecs and metadata. */
+ONNX_LIGHT_PROTO_API bool EqualProto(const StructTypeProto &left, const StructTypeProto &right,
+                                     std::string *difference = nullptr);
+/** Compares encoded values, including their declarations and payload bytes. */
+ONNX_LIGHT_PROTO_API bool EqualProto(const EncodedValueProto &left, const EncodedValueProto &right,
+                                     std::string *difference = nullptr);
 
 /** Returns true when @p data_type is one of the supported affine storage types. */
 inline constexpr bool IsAffineStorageType(TensorProto::DataType data_type) {

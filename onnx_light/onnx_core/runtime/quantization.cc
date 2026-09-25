@@ -1145,9 +1145,10 @@ OrtPackedValue ParseOrtValue(const EncodedValueProto &encoded, const Quantizatio
                      zero_type);
   StructTypeProto actual = root;
   actual.clear_type_id();
-  EXT_ENFORCE_INVALID(actual.SerializeAsString() ==
-                          OrtSchema(storage, header.format).SerializeAsString(),
-                      "ORT MatMulNBits descriptor does not match its versioned schema.");
+  std::string difference;
+  EXT_ENFORCE_INVALID(
+      EqualProto(actual, OrtSchema(storage, header.format), &difference),
+      "ORT MatMulNBits descriptor does not match its versioned schema: ", difference);
   EXT_ENFORCE_INVALID(encoded.raw_data().size() == storage.total_bytes,
                       "ORT MatMulNBits payload size mismatch.");
   const std::span<const uint8_t> data{encoded.raw_data().data(), encoded.raw_data().size()};
@@ -1265,8 +1266,9 @@ DecodedValues DecodeValues(const EncodedValueProto &encoded, const StructTypeCat
   auto expected = Schema(plan);
   StructTypeProto actual = root;
   actual.clear_type_id();
-  EXT_ENFORCE_INVALID(actual.SerializeAsString() == expected.SerializeAsString(),
-                      "Quantization descriptor does not match its versioned schema.");
+  std::string difference;
+  EXT_ENFORCE_INVALID(EqualProto(actual, expected, &difference),
+                      "Quantization descriptor does not match its versioned schema: ", difference);
   EXT_ENFORCE_INVALID(payload.position == payload.data.size(), "Trailing quantization payload.");
   RestoreValues(values, plan, exceptions);
   return {std::move(header.shape), header.type, std::move(values)};
@@ -1506,8 +1508,9 @@ QuantizationPlan CalibratePlan(const Tensor &tensor, const StructTypeProto &root
     }
   if (!ort) {
     ValidatePlan(plan, values.size());
-    EXT_ENFORCE_INVALID(root.SerializeAsString() == Schema(plan).SerializeAsString(),
-                        "Quantize type does not match its versioned schema.");
+    std::string difference;
+    EXT_ENFORCE_INVALID(EqualProto(root, Schema(plan), &difference),
+                        "Quantize type does not match its versioned schema: ", difference);
     for (int64_t outlier : plan.outliers)
       values[outlier] = 0;
     if (!plan.permutation.empty()) {
@@ -1552,8 +1555,9 @@ RuntimeValue QuantizeTensor(const Tensor &tensor, const StructTypeProto &type,
   StructTypeProto root = catalogue.Resolve(type);
   root.clear_type_id();
   auto result = EncodeTensor(tensor, CalibratePlan(tensor, root, parameters));
-  EXT_ENFORCE_INVALID(root.SerializeAsString() == result.struct_type().SerializeAsString(),
-                      "Quantize parameters do not match the requested storage type.");
+  std::string difference;
+  EXT_ENFORCE_INVALID(EqualProto(root, result.struct_type(), &difference),
+                      "Quantize parameters do not match the requested storage type: ", difference);
   *result.mutable_struct_type() = type;
   catalogue.ValidateEncodedValue(result);
   return RuntimeValue(std::move(result));

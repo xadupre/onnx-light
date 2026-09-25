@@ -1014,9 +1014,11 @@ void ShapesContext::ComputeShapeGraph(const GraphProto &graph) {
   ComputeShapes(graph.node());
   for (const auto &vi : graph.output()) {
     if (vi.has_type() && HasStructuredType(vi.type())) {
-      EXT_ENFORCE_INVALID(HasType(vi.name()) && SameDeclaredType(GetType(vi.name()), vi.type()),
+      std::string difference;
+      EXT_ENFORCE_INVALID(HasType(vi.name()) &&
+                              SameDeclaredType(GetType(vi.name()), vi.type(), &difference),
                           "ComputeShapeGraph: incompatible structured output type for '", vi.name(),
-                          "'.");
+                          "': ", difference);
     }
   }
 }

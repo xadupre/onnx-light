@@ -27,12 +27,12 @@ bool HasStructuredType(const TypeProto &type) {
   return false;
 }
 
-bool SameDeclaredType(const TypeProto &left, const TypeProto &right) {
+bool SameDeclaredType(const TypeProto &left, const TypeProto &right, std::string *difference) {
   TypeProto lhs = left;
   TypeProto rhs = right;
   lhs.clear_denotation();
   rhs.clear_denotation();
-  return lhs.SerializeAsString() == rhs.SerializeAsString();
+  return EqualProto(lhs, rhs, difference);
 }
 
 bool CompatibleEncodedDefault(const TypeProto &declared, const TypeProto &actual) {
@@ -77,8 +77,10 @@ void CheckCatalogueCompatibility(const ShapesContext &left, const ShapesContext 
     }
     const auto &left_type = left.ResolveStructType(structure);
     const auto &right_type = right.ResolveStructType(structure);
-    EXT_ENFORCE_INVALID(left_type.SerializeAsString() == right_type.SerializeAsString(),
-                        "Structured values reference incompatible model declarations.");
+    std::string difference;
+    EXT_ENFORCE_INVALID(
+        EqualProto(left_type, right_type, &difference),
+        "Structured values reference incompatible model declarations: ", difference);
     if (left_type.has_array()) {
       CheckCatalogueCompatibility(left, right, left_type.ref_array().ref_element_type(), visited);
     } else if (left_type.has_structure()) {
@@ -238,8 +240,9 @@ void ShapesContext::CheckStructuredCompatibility(const std::string &name,
                       "Control-flow outputs have incompatible structured types.");
   if (structured) {
     CheckCatalogueCompatibility(*this, other, GetType(name));
-    EXT_ENFORCE_INVALID(SameDeclaredType(GetType(name), other.GetType(other_name)),
-                        "Control-flow outputs have incompatible structured types.");
+    std::string difference;
+    EXT_ENFORCE_INVALID(SameDeclaredType(GetType(name), other.GetType(other_name), &difference),
+                        "Control-flow outputs have incompatible structured types: ", difference);
   }
   EXT_ENFORCE_INVALID(HasEncodedValue(name) == other.HasEncodedValue(other_name),
                       "Control-flow outputs have incompatible encoded layouts.");
@@ -248,8 +251,10 @@ void ShapesContext::CheckStructuredCompatibility(const std::string &name,
     EncodedValueProto right = other.GetEncodedValue(other_name);
     left.set_name("");
     right.set_name("");
-    EXT_ENFORCE_INVALID(left.SerializeAsString() == right.SerializeAsString(),
-                        "Control-flow merging of different encoded values is unsupported.");
+    std::string difference;
+    EXT_ENFORCE_INVALID(
+        EqualProto(left, right, &difference),
+        "Control-flow merging of different encoded values is unsupported: ", difference);
   }
 }
 

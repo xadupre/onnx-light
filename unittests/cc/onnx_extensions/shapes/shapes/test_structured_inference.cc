@@ -79,6 +79,34 @@ NodeProto IfNode(const GraphProto &left, const GraphProto &right) {
 
 } // namespace
 
+TEST(StructuredInference, SameDeclaredTypeIgnoresOnlyOuterDenotation) {
+  TypeProto left;
+  left.set_denotation("outer-left");
+  *left.mutable_optional_type()->mutable_elem_type() = LogicalTensor();
+  auto right = left;
+  right.set_denotation("outer-right");
+  EXPECT_TRUE(core::shapes::SameDeclaredType(left, right));
+  EXPECT_EQ(left.denotation(), "outer-left");
+  EXPECT_EQ(right.denotation(), "outer-right");
+  right.mutable_optional_type()->mutable_elem_type()->set_denotation("");
+  std::string difference;
+  EXPECT_FALSE(core::shapes::SameDeclaredType(left, right, &difference));
+  EXPECT_EQ(difference, "optional_type.elem_type.denotation: presence differs");
+  right = left;
+  right.mutable_optional_type()
+      ->mutable_elem_type()
+      ->mutable_tensor_type()
+      ->mutable_shape()
+      ->mutable_dim(0)
+      ->set_dim_value(9);
+  EXPECT_FALSE(core::shapes::SameDeclaredType(left, right, &difference));
+  EXPECT_EQ(difference,
+            "optional_type.elem_type.tensor_type.shape.dim[0].dim_value: values differ");
+  right = left;
+  EXPECT_TRUE(core::shapes::SameDeclaredType(left, right, &difference));
+  EXPECT_TRUE(difference.empty());
+}
+
 TEST(StructuredInference, NestedReferencesLogicalAndPhysicalIdentity) {
   ModelProto model = StructuredModel();
   core::shapes::ShapesContext context;

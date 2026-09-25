@@ -127,7 +127,7 @@ bool SameEncodedContent(const EncodedValueProto &lhs, const EncodedValueProto &r
   EncodedValueProto right = rhs;
   left.clear_name();
   right.clear_name();
-  return left.SerializeAsString() == right.SerializeAsString();
+  return EqualProto(left, right);
 }
 
 bool HasStructuredType(const TypeProto &type) {
@@ -163,9 +163,10 @@ void SeedDeclaredOutputs(ShapesContext &shapes, const NodeProto &node,
       continue;
     }
     if (shapes.HasType(name)) {
-      if (!SameDeclaredType(shapes.GetType(name), *declared->second)) {
+      std::string difference;
+      if (!SameDeclaredType(shapes.GetType(name), *declared->second, &difference)) {
         throw BuilderError("GraphBuilder: incompatible declared structured type for '" +
-                           std::string(name) + "'.");
+                           std::string(name) + "': " + difference);
       }
     } else if (!shapes.Has(name) && !shapes.HasSequence(name)) {
       shapes.SetType(name, *declared->second);

@@ -259,6 +259,12 @@ and model-local functions inherit the model's parameter catalogue; local input
 names do not select a different set. Identity preserves the reference and its
 owner. Model checking resolves function-bound ``parameter_ref`` attributes using
 call-site values or function defaults, including nested calls and subgraphs.
+Unresolved attribute references in graph execution scope and omitted required
+function attributes are rejected. Shared encoded initializers must match their
+catalogue entry's logical type, compact storage type and payload extent;
+validation does not reconstruct the full encoded payload.
+Session initialization uses the same non-materializing validation before
+retaining the compact initializer and its shared parameter catalogue.
 The runtime takes an owned, immutable snapshot of the resolved numerical
 parameters, so retained encoded outputs can outlive the source model, session
 and context. Changing a model after creating its session does not update that

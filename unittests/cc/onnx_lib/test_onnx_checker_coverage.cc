@@ -227,6 +227,8 @@ TEST(CHECKER_COVERAGE, SharedParameterFunctionArgumentsAndDefaults) {
   call->mutable_attribute(0)->set_type(AttributeProto::INT);
   call->mutable_attribute(0)->set_i(1);
   EXPECT_THROW(checker::check_model(model), ValidationError);
+  call->clear_attribute();
+  EXPECT_THROW(checker::check_model(model), ValidationError);
   auto *function = model.mutable_functions(0);
   function->clear_attribute();
   auto *default_value = function->add_attribute_proto();
@@ -242,6 +244,93 @@ TEST(CHECKER_COVERAGE, SharedParameterFunctionArgumentsAndDefaults) {
   override_value->set_type(AttributeProto::STRING);
   override_value->set_s("common");
   EXPECT_NO_THROW(checker::check_model(model));
+}
+
+TEST(CHECKER_COVERAGE, SharedParameterAttributeReferencesRequireFunctionScope) {
+  for (bool nested : {false, true}) {
+    SCOPED_TRACE(nested);
+    auto model = MakeSharedParameterModel();
+    auto *reference = model.mutable_graph()->mutable_node(0)->mutable_attribute(1);
+    reference->clear_s();
+    reference->set_ref_attr_name("parameters");
+    if (nested) {
+      GraphProto branch;
+      branch.CopyFrom(model.graph());
+      branch.clear_input();
+      branch.clear_initializer();
+      branch.clear_quantization_annotation();
+      model.mutable_graph()->clear_node();
+      auto *node = model.mutable_graph()->add_node();
+      node->set_op_type("If");
+      node->add_input("condition");
+      node->add_output("Q");
+      for (const auto &name : {"then_branch", "else_branch"}) {
+        auto *attribute = node->add_attribute();
+        attribute->set_name(name);
+        attribute->set_type(AttributeProto::GRAPH);
+        *attribute->mutable_g() = branch;
+      }
+      auto *condition = model.mutable_graph()->add_initializer();
+      condition->set_name("condition");
+      condition->set_data_type(TensorProto::BOOL);
+      condition->add_int32_data(1);
+    }
+    try {
+      checker::check_model(model);
+      FAIL() << "Unbound graph attribute reference was accepted.";
+    } catch (const ValidationError &error) {
+      EXPECT_NE(std::string(error.what()).find("require an unbound function body"),
+                std::string::npos);
+    }
+  }
+}
+
+TEST(CHECKER_COVERAGE, SharedParameterInitializersMatchTheirCatalogue) {
+  auto original = MakeSharedParameterModel();
+  const auto parameters = core::runtime::QuantizationParameterCatalogue::Build(original);
+  const auto source = core::runtime::Tensor::FromFloat("Q", {8}, std::vector<float>(8, 1));
+  const auto shared = core::runtime::QuantizeTensorShared(
+      source, original.graph().node(0).attribute(0).tp().struct_type(), "common", parameters);
+  original.mutable_graph()->clear_node();
+  *original.mutable_graph()->add_encoded_initializer() = shared.Encoded();
+  ASSERT_NO_THROW(checker::check_model(original));
+  for (const auto &failure : {"dtype", "shape", "compact_type", "payload", "reserved"}) {
+    SCOPED_TRACE(failure);
+    ModelProto model;
+    model.CopyFrom(original);
+    auto *encoded = model.mutable_graph()->mutable_encoded_initializer(0);
+    const std::string kind = failure;
+    if (kind == "dtype") {
+      encoded->mutable_logical_type()->mutable_tensor_type()->set_elem_type(TensorProto::DOUBLE);
+    } else if (kind == "shape") {
+      auto *shape = encoded->mutable_logical_type()->mutable_tensor_type()->mutable_shape();
+      shape->mutable_dim(0)->set_dim_value(4);
+      shape->add_dim()->set_dim_value(2);
+    } else if (kind == "compact_type") {
+      encoded->mutable_struct_type()->set_name("different_compact_format");
+    } else if (kind == "payload") {
+      encoded->mutable_raw_data()->resize(4);
+      encoded->mutable_struct_type()
+          ->mutable_structure()
+          ->mutable_field(0)
+          ->mutable_type()
+          ->mutable_tensor_type()
+          ->mutable_shape()
+          ->mutable_dim(0)
+          ->set_dim_value(4);
+    } else {
+      (*encoded->mutable_raw_data())[0] = 1;
+    }
+    EXPECT_NO_THROW(StructTypeCatalogue{}.ValidateEncodedValue(*encoded));
+    EXPECT_THROW(checker::check_model(model), ValidationError);
+  }
+  auto *definition = original.add_struct_types();
+  *definition = shared.Encoded().struct_type();
+  definition->set_type_id(1);
+  auto *encoded = original.mutable_graph()->mutable_encoded_initializer(0);
+  *encoded->mutable_struct_type() = StructTypeProto{};
+  encoded->mutable_struct_type()->set_type_ref(1);
+  EXPECT_NO_THROW(checker::check_model(original));
 }
 
 TEST(CHECKER_COVERAGE, SharedParameterNestedFunctionBindings) {
@@ -266,6 +355,8 @@ TEST(CHECKER_COVERAGE, SharedParameterNestedFunctionBindings) {
   second->clear_output();
   second->add_output("R");
   second->mutable_attribute(0)->set_s("missing");
+  EXPECT_THROW(checker::check_model(model), ValidationError);
+  second->clear_attribute();
   EXPECT_THROW(checker::check_model(model), ValidationError);
 }
 

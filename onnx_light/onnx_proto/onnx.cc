@@ -2057,7 +2057,7 @@ void ModelProto::SerializeToStream(utils::BinaryWriteStream &stream,
         else if (entry.ref_key() == "offset")
           offset = entry.ref_value().toint64();
       }
-      std::string key(std::move(location));
+      std::string key(std::filesystem::path(location).lexically_normal().string());
       // '\0' sorts before every other byte so a location is never confused with a longer one.
       key.push_back('\0');
       // Flipping the sign bit keeps the big-endian encoding ordered like the signed offset,

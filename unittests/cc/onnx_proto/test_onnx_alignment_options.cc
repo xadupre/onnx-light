@@ -650,3 +650,19 @@ TEST(onnx_alignment_options, SerializeExternalDataOffsetOrderRejectsOverlap) {
   std::remove(onnx_file.c_str());
   std::remove(weights_file.c_str());
 }
+
+TEST(onnx_alignment_options, SerializeExternalDataOffsetOrderRejectsLocationAliasOverlap) {
+  const std::string onnx_file = "test_external_offset_alias_overlap.onnx";
+  const std::string weights_file = "test_external_offset_alias_overlap.data";
+  ModelProto model = MakeModelWithExternalOffset(weights_file, 0);
+  ModelProto second = MakeModelWithExternalOffset("./" + weights_file, 0);
+  model.ref_graph().add_initializer()->CopyFrom(second.ref_graph().ref_initializer()[0]);
+  {
+    utils::TwoFilesWriteStream wstream(onnx_file, weights_file);
+    SerializeOptions sopts;
+    sopts.raw_data_threshold = 0;
+    EXPECT_THROW(SerializeProtoToStream(model, wstream, sopts), std::runtime_error);
+  }
+  std::remove(onnx_file.c_str());
+  std::remove(weights_file.c_str());
+}

@@ -568,6 +568,10 @@ TEST(onnx_alignment_options, SerializeExternalDataInOffsetOrder) {
         SerializeOptions sopts;
         sopts.raw_data_threshold = 0;
         sopts.num_threads = num_threads;
+        if (num_threads > 1) {
+          wstream.pre_allocate_weights(gap + 8);
+          wstream.StartWriteThreadPool(num_threads);
+        }
         ASSERT_TRUE(SerializeProtoToStream(model, wstream, sopts, false));
       }
       {

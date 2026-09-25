@@ -928,6 +928,11 @@ PreparedExecutionPlan::Run(PreparedExecutionState &state, const PreparedTaskExec
 
   size_t terminal_count = 0;
   while (terminal_count < run_tasks.size()) {
+    size_t observed_epoch;
+    {
+      std::lock_guard<std::mutex> lock(progress_mutex);
+      observed_epoch = progress_epoch;
+    }
     terminal_count = 0;
     bool critical_pending = false;
     for (const RunTask &task : run_tasks) {
@@ -1083,9 +1088,12 @@ PreparedExecutionPlan::Run(PreparedExecutionState &state, const PreparedTaskExec
       }
       if (!waited) {
         std::unique_lock<std::mutex> lock(progress_mutex);
+        // A worker may have completed after the readiness scan started.
+        if (progress_epoch != observed_epoch) {
+          continue;
+        }
         if (active_io != 0 || active_session_cpu) {
           ++continuation_suspensions;
-          const size_t observed_epoch = progress_epoch;
           progress.wait(lock, [&]() { return progress_epoch != observed_epoch; });
         } else {
           EXT_ENFORCE(false, "Prepared scheduler could not admit a ready task.");

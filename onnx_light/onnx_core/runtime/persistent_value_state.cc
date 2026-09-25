@@ -92,8 +92,9 @@ void Validate(const RuntimeValue &value, const TypeProto &type,
   if (value.kind == RuntimeValue::Kind::kEncoded && type.has_tensor_type()) {
     const auto &encoded = value.Encoded();
     const auto layout = catalogue.ValidateEncodedValue(encoded);
-    EXT_ENFORCE_INVALID(!layout.external && layout.content_verified && encoded.has_affine(),
-                        "PersistentValueState: requires an inline affine encoded payload.");
+    EXT_ENFORCE_INVALID(!layout.external && layout.content_verified && encoded.has_logical_type() &&
+                            encoded.logical_type().has_tensor_type(),
+                        "PersistentValueState: requires an inline encoded tensor payload.");
     const auto &logical = encoded.logical_type().tensor_type();
     EXT_ENFORCE_INVALID(logical.elem_type() == type.tensor_type().elem_type(),
                         "PersistentValueState: dtype mismatch.");
@@ -243,10 +244,7 @@ RuntimeValueMap PersistentValueState::Run(RuntimeContext &context, const Runtime
       continue;
     }
     Validate(it->second, input.type(), catalogue_, symbols);
-    if (it->second.kind == RuntimeValue::Kind::kTensor)
-      invocation.Put(input.name(), std::move(it->second.tensor), RuntimeEventKind::kInput);
-    else
-      invocation.values().emplace(input.name(), std::move(it->second));
+    invocation.PutValue(input.name(), std::move(it->second), RuntimeEventKind::kInput);
   }
   for (auto &binding : *invocation.persistent_tensors_)
     binding.input_view = &invocation.Get(binding.input);

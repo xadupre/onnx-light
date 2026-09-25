@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -40,6 +41,11 @@ std::unordered_map<std::string, ComputeShapeFn> &MutableDispatchTable() {
   return table;
 }
 
+std::unordered_set<std::string> &StructuredShapeInputs() {
+  static std::unordered_set<std::string> keys;
+  return keys;
+}
+
 // Returns the mutable peak-memory dispatch table singleton. Only
 // :cpp:func:`RegisterComputePeakMemoryFn` writes to it;
 // :cpp:func:`PeakMemoryDispatchTable` exposes a read-only view for lookups.
@@ -55,8 +61,17 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
 }
 
 void RegisterComputeShapeFn(const std::string &domain, const std::string &op_type,
-                            ComputeShapeFn fn) {
-  MutableDispatchTable()[DispatchKey(domain, op_type)] = std::move(fn);
+                            ComputeShapeFn fn, bool accepts_structured_inputs) {
+  const auto key = DispatchKey(domain, op_type);
+  MutableDispatchTable()[key] = std::move(fn);
+  if (accepts_structured_inputs)
+    StructuredShapeInputs().insert(key);
+  else
+    StructuredShapeInputs().erase(key);
+}
+
+bool AcceptsStructuredShapeInputs(const std::string &domain, const std::string &op_type) {
+  return StructuredShapeInputs().count(DispatchKey(domain, op_type)) != 0;
 }
 
 const std::unordered_map<std::string, ComputePeakMemoryFn> &PeakMemoryDispatchTable() {

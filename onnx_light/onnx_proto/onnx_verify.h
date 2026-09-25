@@ -22,7 +22,7 @@
  * constraints, type/shape inference), use ``onnx_lib::checker::check_model()``
  * instead (declared in ``onnx_lib/checker.h``).
  *
- * Every function below throws ``std::invalid_argument`` (via
+ * Validation functions below throw ``std::invalid_argument`` (via
  * ``EXT_THROW_INVALID`` / ``EXT_ENFORCE_INVALID``) with a descriptive message
  * on the first violation found.
  */
@@ -207,7 +207,7 @@ private:
   const utils::RepeatedProtoField<StructTypeProto> *declarations_ = nullptr;
 };
 
-/** Validates a persistent type, rejecting strings, maps and optionals at every nesting level. */
+/** Validates a persistent type, rejecting strings, maps, optionals, sparse and opaque values. */
 ONNX_LIGHT_PROTO_API void ValidatePersistentType(const StructTypeCatalogue &catalogue,
                                                  const TypeProto &type);
 

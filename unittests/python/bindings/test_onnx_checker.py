@@ -52,6 +52,48 @@ class TestChecker(ExtTestCase):
         with self.assertRaises(checker.ValidationError):
             checker.check_attribute(attr)
 
+    def test_check_model_type_attributes(self) -> None:
+        """Checks singular and repeated types against the model catalogue."""
+        declaration = onnxl.StructTypeProto(
+            type_id=1,
+            bit_packing=onnxl.StructTypeProto.BitPacking(
+                dimension=1,
+                component=[onnxl.StructTypeProto.BitPacking.Component(name="code", bit_width=8)],
+            ),
+        )
+        tensor_type = oh.make_tensor_type_proto(onnxl.TensorProto.FLOAT, [1])
+        types = {
+            "tensor": tensor_type,
+            "known_reference": onnxl.TypeProto(struct_type=onnxl.StructTypeProto(type_ref=1)),
+            "unknown_reference": onnxl.TypeProto(struct_type=onnxl.StructTypeProto(type_ref=99)),
+            "empty": onnxl.TypeProto(),
+        }
+        for repeated in (False, True):
+            for name, value in types.items():
+                with self.subTest(repeated=repeated, value=name):
+                    attribute = onnxl.AttributeProto(name="type")
+                    if repeated:
+                        attribute.type = onnxl.AttributeProto.TYPE_PROTOS
+                        attribute.type_protos.extend([tensor_type, value])
+                    else:
+                        attribute.type = onnxl.AttributeProto.TYPE_PROTO
+                        attribute.tp.CopyFrom(value)
+                    node = oh.make_node("TypeCarrier", ["X"], ["Y"], domain="test.types")
+                    node.attribute.append(attribute)
+                    graph = oh.make_graph(
+                        [node],
+                        "type_attributes",
+                        [oh.make_value_info("X", tensor_type)],
+                        [oh.make_value_info("Y", tensor_type)],
+                    )
+                    model = oh.make_model(graph, opset_imports=[oh.make_opsetid("test.types", 1)])
+                    model.struct_types.append(declaration)
+                    if name in {"tensor", "known_reference"}:
+                        checker.check_model(model)
+                    else:
+                        with self.assertRaises(checker.ValidationError):
+                            checker.check_model(model)
+
     def test_check_sparse_tensor(self) -> None:
         """Checks that a 2D sparse tensor shape passes checker validation."""
         sparse = self.make_sparse((2, 3), [1, 2], (2, 2), [0, 1, 1, 2])

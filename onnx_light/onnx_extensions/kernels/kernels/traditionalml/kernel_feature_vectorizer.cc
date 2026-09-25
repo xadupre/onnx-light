@@ -175,7 +175,7 @@ void FeatureVectorizer::Run(RuntimeContext &rt) {
   const std::vector<int64_t> inputdimensions =
       GetAttributeIntsOrDefault(node, "inputdimensions", {});
   onnx_kernels::kernel::FeatureVectorizer fv(rt.kernel_ctx());
-  SetOutput(node, 0, fv(inputs, inputdimensions, &rt), rt.tensors());
+  SetOutput(node, 0, fv(inputs, inputdimensions, &rt), rt);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

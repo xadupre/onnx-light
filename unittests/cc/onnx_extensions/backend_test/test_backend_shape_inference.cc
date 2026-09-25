@@ -62,6 +62,7 @@ struct ExpectedOutput {
   int32_t elem_type = 0;
   std::vector<int64_t> shape;
   bool had_shape = false;
+  std::string structured_type;
 };
 
 // Returns the underlying ``TypeProto::Tensor`` carried by ``type``, drilling
@@ -126,7 +127,8 @@ std::vector<ExpectedOutput> SnapshotAndStripOutputs(ModelProto &model) {
 // ``value_info`` entries declared by the graph. Used for ``kind == "model"``
 // test cases that record expected intermediate shapes in ``value_info``: we
 // strip them so shape inference must recover them, then compare the snapshot
-// to the post-inference ``value_info``.
+// to the post-inference ``value_info``. Structured extension types are retained
+// and checked for preservation; their inference is tested with the native engine.
 std::vector<ExpectedOutput> SnapshotAndStripValueInfo(ModelProto &model) {
   std::vector<ExpectedOutput> snapshot;
   auto &value_infos = model.mutable_graph()->ref_value_info();
@@ -136,6 +138,9 @@ std::vector<ExpectedOutput> SnapshotAndStripValueInfo(ModelProto &model) {
     ExpectedOutput exp;
     exp.name.assign(vi.ref_name().data(), vi.ref_name().size());
     if (vi.has_type()) {
+      if (vi.type().has_struct_type()) {
+        exp.structured_type = vi.type().struct_type().SerializeAsString();
+      }
       if (auto *tt = MutableTensorTypeOf(*vi.mutable_type()); tt != nullptr) {
         exp.elem_type = static_cast<int32_t>(tt->elem_type());
         exp.had_shape = tt->has_shape();
@@ -172,6 +177,12 @@ void CheckValueInfoMatchesExpected(const GraphProto &graph,
                                  << " missing from graph after shape inference";
     const auto &vi = *it->second;
     ASSERT_TRUE(vi.has_type()) << "value_info " << exp.name << " missing type";
+    if (!exp.structured_type.empty()) {
+      ASSERT_TRUE(vi.type().has_struct_type()) << "value_info " << exp.name << " not structured";
+      EXPECT_EQ(vi.type().struct_type().SerializeAsString(), exp.structured_type)
+          << "structured type mismatch on value_info " << exp.name;
+      continue;
+    }
     const TypeProto::Tensor *tt_ptr = TensorTypeOf(vi.ref_type());
     ASSERT_NE(tt_ptr, nullptr) << "value_info " << exp.name << " not a tensor";
     const auto &tt = *tt_ptr;

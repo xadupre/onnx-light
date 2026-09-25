@@ -147,6 +147,7 @@ private:
   std::unordered_map<std::string, PersistentValue> fields_;
   std::vector<PersistentValue> elements_;
   std::shared_ptr<const EncodedValueProto> encoded_;
+  std::shared_ptr<const QuantizationParameterCatalogue> quantization_parameters_;
 };
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

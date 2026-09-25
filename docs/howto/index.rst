@@ -37,6 +37,7 @@ How-to Python / C++
 
     use_custom_kernel
     persistent_feedback
+    quantized_values
     tune_kernel_thresholds
     use_custom_shape_inference
     register_builtin_operators

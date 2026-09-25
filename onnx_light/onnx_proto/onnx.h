@@ -1064,6 +1064,7 @@ END_PROTO()
 //   optional TensorProto.DataLocation data_location = 6;
 //   string name = 7;
 //   string doc_string = 8;
+//   string parameter_ref = 10;
 // }
 BEGIN_PROTO(EncodedValueProto,
             "One value container with an optional logical tensor type and shape, a layout "
@@ -1088,6 +1089,7 @@ FIELD_OPTIONAL_ENUM(TensorProto::DataLocation, data_location, 6,
                     "DEFAULT reads raw_data, EXTERNAL reads the external payload.")
 FIELD_STR(name, 7, "Name of the value; graph-scoped and unique across all initializers.")
 FIELD_STR(doc_string, 8, "A human-readable documentation for this value. Markdown is allowed.")
+FIELD_STR(parameter_ref, 10, "Model-level shared numerical quantization parameter set.")
 inline bool has_layout() const { return has_affine() || has_struct_type(); }
 enum LayoutCase : int32_t {
   LAYOUT_NOT_SET = 0,

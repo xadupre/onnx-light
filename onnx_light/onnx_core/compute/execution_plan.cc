@@ -458,7 +458,6 @@ void ExecutionPlan::ReleaseAfter(const NodeProto &node, RuntimeContext &rt) cons
       break;
     case ExecuteActionKind::kDeleteSequence:
       rt.Remove(action.name());
-      rt.RemoveSequence(action.name());
       break;
     case ExecuteActionKind::kDeleteMap:
       rt.RemoveMap(action.name());

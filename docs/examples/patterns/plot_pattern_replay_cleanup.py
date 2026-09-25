@@ -46,7 +46,7 @@ model = oh.make_model(
 )
 
 builder = GraphBuilder(model)
-graph = GraphGraph(builder, use_global_patterns=False)
+graph = GraphGraph(builder, patterns=False)
 rewrites = list(graph.optimize())
 optimized_graph = builder.build_graph()
 

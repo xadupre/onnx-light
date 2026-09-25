@@ -52,7 +52,7 @@ void Identity::Run(RuntimeContext &rt) {
     SetOutputSequence(node, 0, rt.GetSequence(input_name), rt);
   } else if (auto value = rt.values().find(input_name); value != rt.values().end()) {
     // Copies inline storage while sharing existing owners, so releasing the input is safe.
-    rt.values().insert_or_assign(node.output(0), value->second);
+    rt.PutValue(node.output(0), value->second);
   } else {
     const Tensor &x = GetInput(node, 0, rt.tensors());
     onnx_kernels::kernel::Identity k(rt.kernel_ctx());

@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <filesystem> // NOLINT(build/c++17)
+#include <functional>
 #include <iostream>
 #include <limits>
 #include <string>
@@ -14,14 +15,17 @@
 #include <unordered_set>
 #include <vector>
 
+#include "onnx_core/runtime/quantization.h"
 #include "onnx_lib/common/file_utils.h"
 #include "onnx_lib/common/path.h"
 #include "onnx_lib/common/proto_util.h"
 #include "onnx_lib/common/scoped_resource.h"
+#include "onnx_lib/shape_inference/attribute_binder.h"
 #include "onnx_lib/shape_inference/implementation.h"
 #include "onnx_manipulations/tensor_proto_util.h"
 #include "onnx_proto/onnx_helper.h"
 #include "onnx_proto/onnx_tree_ensemble.h"
+#include "onnx_proto/onnx_verify.h"
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -62,6 +66,11 @@ namespace ONNX_LIGHT_NAMESPACE::checker {
 
 ValidationError::~ValidationError() = default;
 
+const StructTypeCatalogue &CheckerContext::get_struct_type_catalogue() const {
+  static const StructTypeCatalogue empty;
+  return struct_type_catalogue_ ? *struct_type_catalogue_ : empty;
+}
+
 #define enforce_has_field(proto, field)                                                            \
   do {                                                                                             \
     if (!proto.has_##field()) {                                                                    \
@@ -75,6 +84,13 @@ ValidationError::~ValidationError() = default;
       fail_check("Field '", #field, "' of '", #proto, "' is required to be non-empty.");           \
     }                                                                                              \
   } while (0)
+
+template <typename Validator> static void check_structured(Validator validate) {
+  ONNX_TRY { validate(); }
+  ONNX_CATCH(const std::invalid_argument &ex) {
+    ONNX_HANDLE_EXCEPTION([&]() { fail_check(ex.what()); });
+  }
+}
 
 void check_value_info(const ValueInfoProto &value_info, const CheckerContext &ctx) {
   enforce_non_empty_field(value_info, name);
@@ -116,6 +132,10 @@ void check_value_info(const ValueInfoProto &value_info, const CheckerContext &ct
     const auto &type = value_info.type().opaque_type();
     enforce_non_empty_field(type, name);
   } break;
+
+  case TypeProto::kStructType:
+    check_structured([&]() { ctx.get_struct_type_catalogue().ValidateType(value_info.type()); });
+    break;
 
   default:
     fail_check("Unrecognized type value case (value_info name: ", value_info.name(),
@@ -615,6 +635,13 @@ void check_attribute(const AttributeProto &attr, const CheckerContext &ctx,
     check_sparse_tensor(attr.sparse_tensor(), ctx);
   }
 
+  if (attr.has_tp()) {
+    check_structured([&]() { ctx.get_struct_type_catalogue().ValidateType(attr.tp()); });
+  }
+  for (const auto &type : attr.type_protos()) {
+    check_structured([&]() { ctx.get_struct_type_catalogue().ValidateType(type); });
+  }
+
   if (attr.has_g()) {
     CheckerContext subgraph_ctx(ctx);
     subgraph_ctx.set_is_main_graph(false);
@@ -780,6 +807,15 @@ void check_graph(const GraphProto &graph, const CheckerContext &ctx,
           " sparse initializer name is not unique across initializers and sparse_initializers");
     }
     check_sparse_tensor(sparse_init, ctx);
+    lex_ctx.add(name);
+  }
+  for (const auto &init : graph.encoded_initializer()) {
+    enforce_non_empty_field(init, name);
+    const std::string &name = init.name();
+    if (!initializer_name_checker.insert(name).second) {
+      fail_check(name + " encoded initializer name is not unique across initializers");
+    }
+    check_structured([&]() { ctx.get_struct_type_catalogue().ValidateEncodedValue(init); });
     lex_ctx.add(name);
   }
   std::unordered_set<std::string> used_experimental_ops;
@@ -1128,6 +1164,75 @@ void check_function(const FunctionProto &function, const CheckerContext &ctx,
   print_warning_if_has_experimental(used_experimental_ops);
 }
 
+static void check_quantization_parameter_references(const ModelProto &model) {
+  std::shared_ptr<const core::runtime::QuantizationParameterCatalogue> parameters;
+  check_structured(
+      [&]() { parameters = core::runtime::QuantizationParameterCatalogue::Build(model); });
+  auto reference = [&](const std::string &name) {
+    check_structured([&]() { parameters->Get(name); });
+  };
+  std::unordered_map<FunctionImplId, const FunctionProto *> functions;
+  for (const auto &function : model.functions())
+    functions.emplace(GetFunctionImplId(function), &function);
+  std::unordered_set<FunctionImplId> active;
+  bool has_bound_references = false;
+  std::function<void(const GraphProto &, bool)> graph;
+  std::function<void(const NodeProto &, bool)> node;
+  node = [&](const NodeProto &value, bool bind_functions) {
+    for (const auto &attribute : value.attribute()) {
+      if (value.domain() == "ai.rt" && value.op_type() == "Quantize" &&
+          attribute.name() == "parameter_ref") {
+        if (!attribute.ref_attr_name().empty()) {
+          has_bound_references = true;
+        } else {
+          if (attribute.type() != AttributeProto::STRING || attribute.s().empty())
+            fail_check("Quantize parameter_ref must be a nonempty string.");
+          reference(attribute.s());
+          for (size_t i = 1; i < value.input().size(); ++i)
+            if (!value.input(i).empty())
+              fail_check("Quantize parameter_ref excludes explicit optional parameters.");
+        }
+      }
+      if (attribute.has_g())
+        graph(attribute.g(), bind_functions);
+      for (const auto &nested : attribute.graphs())
+        graph(nested, bind_functions);
+    }
+    if (!bind_functions)
+      return;
+    const auto id = GetCalleeId(value);
+    const auto found = functions.find(id);
+    if (found == functions.end())
+      return;
+    if (!active.insert(id).second)
+      fail_check("Recursive model-local function: ", id);
+    FunctionProto bound;
+    bound.CopyFrom(*found->second);
+    internal::AttributeMap attributes;
+    for (const auto &attribute : found->second->attribute_proto())
+      attributes[attribute.name()] = &attribute;
+    for (const auto &attribute : value.attribute())
+      attributes[attribute.name()] = &attribute;
+    internal::AttributeBinder(attributes).VisitFunction(bound);
+    for (const auto &nested : bound.node())
+      node(nested, true);
+    active.erase(id);
+  };
+  graph = [&](const GraphProto &value, bool bind_functions) {
+    for (const auto &encoded : value.encoded_initializer())
+      if (encoded.has_parameter_ref())
+        reference(encoded.parameter_ref().value());
+    for (const auto &nested : value.node())
+      node(nested, bind_functions);
+  };
+  graph(model.graph(), false);
+  for (const auto &function : model.functions())
+    for (const auto &nested : function.node())
+      node(nested, false);
+  if (has_bound_references)
+    graph(model.graph(), true);
+}
+
 static void check_model(const ModelProto &model, CheckerContext &ctx) {
   if (!model.ir_version()) {
     fail_check("The model does not have an ir_version set properly.");
@@ -1162,6 +1267,10 @@ static void check_model(const ModelProto &model, CheckerContext &ctx) {
     }
   }
   ctx.set_opset_imports(opset_imports);
+  StructTypeCatalogue catalogue;
+  check_structured([&]() { catalogue.Build(model); });
+  ctx.set_struct_type_catalogue(catalogue);
+  check_quantization_parameter_references(model);
   LexicalScopeContext lex_ctx;
   check_graph(model.graph(), ctx, lex_ctx);
 

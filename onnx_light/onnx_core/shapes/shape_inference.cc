@@ -913,10 +913,11 @@ void ShapesContext::ComputeShapeNode(const NodeProto &node) {
       GetLocalFunction(LocalFunctionKey(node.domain(), node.op_type())) != nullptr;
   const bool custom_inference =
       GetCustomShapeInferenceFunction(node.domain(), node.op_type()) != nullptr;
+  const bool structured_inference = AcceptsStructuredShapeInputs(node.domain(), node.op_type());
   for (const auto &input : node.input()) {
     const std::string name = input;
     EXT_ENFORCE_INVALID(
-        preserving || local_function || custom_inference ||
+        preserving || local_function || custom_inference || structured_inference ||
             (!HasEncodedValue(name) && (!HasType(name) || !HasStructuredType(GetType(name)))),
         "ComputeShapeNode: structured/encoded inference is unsupported for op '", node.op_type(),
         "'.");
@@ -1013,9 +1014,13 @@ void ShapesContext::ComputeShapeGraph(const GraphProto &graph) {
   ComputeShapes(graph.node());
   for (const auto &vi : graph.output()) {
     if (vi.has_type() && HasStructuredType(vi.type())) {
-      EXT_ENFORCE_INVALID(HasType(vi.name()) && SameDeclaredType(GetType(vi.name()), vi.type()),
-                          "ComputeShapeGraph: incompatible structured output type for '", vi.name(),
+      EXT_ENFORCE_INVALID(HasType(vi.name()),
+                          "ComputeShapeGraph: no inferred type for structured output '", vi.name(),
                           "'.");
+      std::string difference;
+      EXT_ENFORCE_INVALID(SameDeclaredType(GetType(vi.name()), vi.type(), &difference),
+                          "ComputeShapeGraph: incompatible structured output type for '", vi.name(),
+                          "': ", difference);
     }
   }
 }

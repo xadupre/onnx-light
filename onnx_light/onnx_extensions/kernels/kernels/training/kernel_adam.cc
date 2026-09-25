@@ -215,7 +215,7 @@ void Adam::Run(RuntimeContext &rt) {
   }
   k(R, T, Xs, Gs, Vs, Hs, outs, alpha, beta, epsilon, norm_coefficient, norm_coefficient_post);
   for (int64_t i = 0; i < 3 * n; ++i) {
-    SetOutput(node, static_cast<int>(i), std::move(outs[static_cast<size_t>(i)]), rt.tensors());
+    SetOutput(node, static_cast<int>(i), std::move(outs[static_cast<size_t>(i)]), rt);
   }
 }
 

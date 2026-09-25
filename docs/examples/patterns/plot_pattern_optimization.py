@@ -161,3 +161,28 @@ fully_optimized = builder.to_onnx("model")
 print(pretty_onnx(fully_optimized))
 print([rewrite.pattern_name for rewrite in rewrites])
 assert [node.op_type for node in fully_optimized.graph.node] == ["Identity"]
+
+#####################################
+# Select patterns by name, regex or target device
+# ++++++++++++++++++++++++++++++++++++++++++++++
+#
+# Lists are exclusive; they do not implicitly add registered defaults.
+# Regexes use ``fullmatch``. ``None`` selects all device-independent defaults,
+# and ``False`` disables patterns while retaining cleanup passes.
+
+builder = GraphBuilder(model)
+graph = GraphGraph(builder, patterns=r"Cast.*")
+assert graph.patterns
+assert all(pattern.name.startswith("Cast") for pattern in graph.patterns)
+graph = GraphGraph(builder, patterns=False)
+assert not graph.patterns
+
+# A device selector adds only patterns targeting that exact device to the
+# independent defaults and sets the builder target. Existing standard patterns
+# are independent, even when their matching heuristics inspect the target.
+
+from onnx_light.onnx_core.shape_inference import Device
+
+graph = GraphGraph(builder, patterns=Device.kCPU)
+assert builder.device == Device.kCPU
+assert all(pattern.device in (Device.kUndefined, Device.kCPU) for pattern in graph.patterns)

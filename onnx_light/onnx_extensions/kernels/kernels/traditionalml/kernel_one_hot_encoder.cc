@@ -201,7 +201,7 @@ void OneHotEncoder::Run(RuntimeContext &rt) {
                         "of element type STRING.");
     y = one_hot(x, cats, zeros, &rt);
   }
-  SetOutput(node, 0, std::move(y), rt.tensors());
+  SetOutput(node, 0, std::move(y), rt);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

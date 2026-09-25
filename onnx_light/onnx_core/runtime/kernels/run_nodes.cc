@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/runtime/kernels/run_nodes.h"
+#include "onnx_core/runtime/quantization.h"
 
 #include <chrono>
 #include <cstdint>
@@ -281,8 +282,8 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt, SubgraphSession &then_
       rt.PutSequence(caller_name, child.GetSequence(out_name));
     } else if (child.values().count(out_name) != 0) {
       RuntimeValue &value = child.values().at(out_name);
-      rt.values().insert_or_assign(caller_name, rt.retains_output(caller_name) ? std::move(value)
-                                                                               : value.DeepCopy());
+      rt.PutValue(caller_name,
+                  rt.retains_output(caller_name) ? std::move(value) : value.DeepCopy());
     } else {
       auto it = child.tensors().find(out_name);
       EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: If: subgraph output '", out_name,
@@ -868,7 +869,7 @@ public:
       }
       auto value = rt.values().find(caller_name);
       if (value != rt.values().end()) {
-        child.values().emplace(param_name, value->second.BorrowView());
+        child.PutValue(param_name, value->second.BorrowView(), RuntimeEventKind::kInput);
         continue;
       }
       auto it = rt.tensors().find(caller_name);
@@ -896,9 +897,8 @@ public:
       }
       auto value = child.values().find(param_name);
       if (value != child.values().end()) {
-        rt.values().insert_or_assign(caller_name, rt.retains_output(caller_name)
-                                                      ? std::move(value->second)
-                                                      : value->second.DeepCopy());
+        rt.PutValue(caller_name, rt.retains_output(caller_name) ? std::move(value->second)
+                                                                : value->second.DeepCopy());
         continue;
       }
       auto it = child.tensors().find(param_name);
@@ -1151,6 +1151,10 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
 void RegisterModelFunctions(const ModelProto &model, RuntimeContext &rt) {
   EXT_ENFORCE_INVALID(model.has_graph(),
                       "RegisterModelFunctions: the ModelProto does not contain a graph.");
+  StructTypeCatalogue catalogue;
+  catalogue.Build(model);
+  rt.set_struct_type_catalogue(catalogue);
+  rt.set_quantization_parameters(QuantizationParameterCatalogue::Build(model));
   // Register every model-local function so that nodes referring to
   // them by (domain, op_type, overload) are dispatched to
   // ``ModelLocalFunctionKernel`` rather than rejected as unsupported

@@ -141,9 +141,10 @@ PersistentValue PersistentValue::FromRetained(RuntimeValue value, size_t depth) 
   result.kind_ = value.kind;
   if (value.kind == RuntimeValue::Kind::kTensor)
     result.tensor_.emplace(std::move(value.tensor));
-  else if (value.kind == RuntimeValue::Kind::kEncoded)
+  else if (value.kind == RuntimeValue::Kind::kEncoded) {
     result.encoded_ = std::move(value.encoded);
-  else if (value.kind == RuntimeValue::Kind::kSequence) {
+    result.quantization_parameters_ = std::move(value.quantization_parameters);
+  } else if (value.kind == RuntimeValue::Kind::kSequence) {
     result.elements_.reserve(value.elements.size());
     for (auto &element : value.elements)
       result.elements_.push_back(FromRetained(std::move(element), depth + 1));
@@ -163,6 +164,7 @@ RuntimeValue PersistentValue::BorrowAtDepth(size_t depth) const {
   RuntimeValue result;
   result.kind = kind_;
   result.encoded = encoded_;
+  result.quantization_parameters = quantization_parameters_;
   for (const auto &[name, field] : fields_)
     result.fields.emplace(name, field.BorrowAtDepth(depth + 1));
   result.elements.reserve(elements_.size());

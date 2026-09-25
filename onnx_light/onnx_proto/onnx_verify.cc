@@ -355,8 +355,8 @@ void ValidateTypeProto(Walk &walk, const TypeProto &type) {
     }
     break;
   case TypeProto::kSparseTensorType:
-    if (walk.persistent && type.ref_sparse_tensor_type().elem_type() == TensorProto::STRING) {
-      Invalid("String tensors cannot be persistent, including fields of structured values.");
+    if (walk.persistent) {
+      Invalid("Sparse tensor types cannot be persistent.");
     }
     if (!type.ref_sparse_tensor_type().has_elem_type() ||
         type.ref_sparse_tensor_type().elem_type() == TensorProto::UNDEFINED) {
@@ -364,6 +364,9 @@ void ValidateTypeProto(Walk &walk, const TypeProto &type) {
     }
     break;
   case TypeProto::kOpaqueType:
+    if (walk.persistent) {
+      Invalid("Opaque types cannot be persistent.");
+    }
     break;
   case TypeProto::kSequenceType:
     if (!type.ref_sequence_type().has_elem_type()) {
@@ -963,6 +966,10 @@ StructTypeCatalogue::ValidateEncodedValue(const EncodedValueProto &value,
   EncodedValueLayout layout;
   Require(value.has_layout(), kind, value.name(),
           "must select either an affine or a structured layout.");
+  if (value.has_parameter_ref())
+    Require(!value.parameter_ref().empty() && value.has_struct_type() && value.has_logical_type(),
+            kind, value.name(),
+            "parameter_ref requires a nonempty name and structured logical value.");
   layout.payload_bytes = ValidatePayloadLocation(value, layout.external);
   // Only an inline payload lets the bytes themselves be checked; an external
   // payload is validated as metadata alone (see EncodedValueLayout).
@@ -1644,8 +1651,8 @@ void VerifyPersistentBindings(const StructTypeCatalogue *struct_types, const Gra
     ValidatePersistentType(catalogue, input);
     ValidatePersistentType(catalogue, output);
     if (!CompatiblePersistentTypes(catalogue, input, output)) {
-      Invalid(
-          "Persistent binding requires compatible tensor/struct types and declared dimensions.");
+      Invalid("Persistent binding requires compatible tensor/struct/sequence types and declared "
+              "dimensions.");
     }
     for (size_t j = 0; j < i; ++j) {
       if (bindings[j].input_name() == binding.input_name())

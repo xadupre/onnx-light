@@ -799,6 +799,38 @@ TEST(PreparedExecutionPlan, EnforcesGlobalAndIoMemoryBudgets) {
   EXPECT_LE(result.peak_in_flight_bytes, 8u);
 }
 
+TEST(PreparedExecutionPlan, FastWorkerCompletionsDoNotCauseFalseAdmissionFailure) {
+  TaskDescriptor background{TaskId{129}, TaskScope::kSession, TaskKind::kPersist,
+                            ResourceClass::kIo};
+  background.priority = TaskPriority::kBackground;
+  std::vector<TaskDescriptor> tasks{background};
+  for (uint64_t id = 1; id <= 128; ++id) {
+    TaskDescriptor task{TaskId{id}, TaskScope::kSession,
+                        id % 2 ? TaskKind::kReadPayload : TaskKind::kPrepare,
+                        id % 2 ? ResourceClass::kIo : ResourceClass::kCpu};
+    task.priority = TaskPriority::kCritical;
+    if (id > 1) {
+      task.dependencies.push_back(TaskId{id - 1});
+    }
+    tasks.push_back(std::move(task));
+  }
+  PreparedExecutionPlan plan(tasks);
+  for (int iteration = 0; iteration < 10; ++iteration) {
+    SCOPED_TRACE(iteration);
+    PreparedExecutionState state(1, 1, std::numeric_limits<size_t>::max(),
+                                 std::numeric_limits<size_t>::max(),
+                                 PreparedSchedulerOptions{.io_workers = 1});
+    std::atomic<size_t> executed{0};
+    const PreparedExecutionResult result = plan.RunSequential(
+        state, [&](const TaskDescriptor &, PreparedExecutionState &) { ++executed; });
+    EXPECT_EQ(executed.load(), tasks.size());
+    ASSERT_EQ(result.diagnostics.size(), tasks.size());
+    for (const TaskDiagnostic &diagnostic : result.diagnostics) {
+      EXPECT_EQ(diagnostic.status, TaskStatus::kSucceeded);
+    }
+  }
+}
+
 TEST(PreparedExecutionPlan, EnforcesPreparedAndExecutionMemoryBudgets) {
   TaskDescriptor prepare{TaskId{1}, TaskScope::kSession, TaskKind::kPrepare, ResourceClass::kCpu};
   prepare.estimated_output_bytes = 9;

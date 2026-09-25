@@ -447,7 +447,7 @@ void PagedAttention::Run(RuntimeContext &rt) {
   Result result = (*this)(GetInput(node, 0, rt.tensors()), GetInput(node, 1, rt.tensors()),
                           GetInput(node, 2, rt.tensors()), past->second, options, &rt);
   SetOutput(node, 0, std::move(result.Y), rt);
-  rt.values().insert_or_assign(node.output(1), std::move(result.present));
+  rt.PutValue(node.output(1), std::move(result.present));
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

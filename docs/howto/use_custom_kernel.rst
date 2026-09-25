@@ -107,6 +107,34 @@ only**. Already-resolved kernels retain their callable until their session is
 destroyed. To use a replacement for those nodes, create a new evaluator and
 register the replacement on it before its first run.
 
+Publishing and replacing values
+-------------------------------
+
+A ``RuntimeContext`` is expected to have one value category per name. ``Put`` (Python ``put``),
+``PutValue`` (``put_value``), ``PutMap`` (``put_map``), and ``PutShape`` replace
+any previous category under that name. ``PutSequence`` (``put_sequence``)
+overwrites an existing sequence without first removing it, which allows a runtime
+context to execute the same graph repeatedly. It neither checks nor modifies other
+value stores: callers must ensure the sequence name is absent from those stores.
+``PutValue`` routes ordinary tensors
+to the tensor store and structures or encoded values to the structured-value store.
+``Set`` (``set``) rejects a name already present in any store. ``Remove``
+(``remove``) removes any category, and ``Clear`` (``clear``) clears all value stores.
+
+Kernels must finish computing their result before publishing it: replacing a name
+invalidates references to its previous value, including potentially aliased inputs.
+C++ kernels should use these publication APIs or ``SetOutput``, which takes
+a ``RuntimeContext``, rather than inserting into the mutable maps directly.
+Callers of ``PutSequence`` and low-level map mutations must preserve the
+single-category invariant. With that invariant maintained, Python
+``get_value`` and native consumers such as ``Identity`` cannot select different
+values based on lookup order.
+
+Tensor publication retains its allocator handling and add/replace events; changing
+from another category to a tensor records a replacement. Non-tensor publication
+does not emit add/replace events, but removing an old tensor emits a removal event.
+Existing values of any category override graph initializers with the same name.
+
 Prepare a native kernel once
 ----------------------------
 

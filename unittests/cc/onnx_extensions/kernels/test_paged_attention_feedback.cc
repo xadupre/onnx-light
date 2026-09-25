@@ -131,6 +131,21 @@ TEST(PagedAttentionFeedback, PublishesOwnersWithoutChangingModelOrPriorPartialBl
   EXPECT_EQ(model.SerializeAsString(), original);
 }
 
+TEST(PagedAttentionFeedback, NativePublicationReplacesOtherValueKinds) {
+  const auto model = PagedModel();
+  RuntimeContext context;
+  for (auto &[name, value] : Feeds(1))
+    context.PutValue(name, std::move(value));
+  context.PutValue("past", PagedAttention::EmptyCache());
+  context.Put("present", Tensor::FromFloat("", {1}, {0}));
+  PagedAttention kernel(context.kernel_ctx());
+  kernel.set_node(model.graph().node(0));
+  kernel.Run(context);
+  EXPECT_FALSE(context.Has("present"));
+  ASSERT_EQ(context.values().count("present"), 1u);
+  EXPECT_EQ(Blocks(context.values().at("present")).size(), 1u);
+}
+
 TEST(PagedAttentionFeedback, QuantizedFormatsMatchUnquantizedReferenceWithinFixtureTolerance) {
   for (int32_t storage : {DataType::INT8, DataType::UINT8, DataType::INT4, DataType::UINT4}) {
     SCOPED_TRACE(storage);

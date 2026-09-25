@@ -38,6 +38,7 @@ compute_shape_node = _C.compute_shape_node
 compute_peak_memory = _C.compute_peak_memory
 peak_memory_dispatch_table_keys = _C.peak_memory_dispatch_table_keys
 Device = _C.Device
+Shape = _C.Shape
 infer_value_and_node_tags = compute_value_and_node_tags
 kUnknownOpsetVersion = _C.kUnknownOpsetVersion
 kOnnxDomain = _C.kOnnxDomain

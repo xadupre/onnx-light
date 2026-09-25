@@ -364,15 +364,15 @@ void MaxPool::Run(RuntimeContext &rt) {
   if (need_indices) {
     auto result = k.WithIndices(x, a.kernel_shape, a.strides, a.pads, a.ceil_mode, a.dilations,
                                 storage_order, a.auto_pad, &rt);
-    SetOutput(node, 0, std::move(result.first), rt.tensors());
+    SetOutput(node, 0, std::move(result.first), rt);
     const std::string indices_name = node.output(1);
     result.second.name = indices_name;
-    rt.tensors()[indices_name] = std::move(result.second);
+    rt.Put(indices_name, std::move(result.second));
   } else {
     SetOutput(node, 0,
               k(x, a.kernel_shape, a.strides, a.pads, a.ceil_mode, a.dilations, storage_order,
                 a.auto_pad, &rt),
-              rt.tensors());
+              rt);
   }
 }
 

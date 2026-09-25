@@ -4,6 +4,7 @@
 
 #include "onnx_core/compute/execution_plan.h"
 #include "onnx_core/runtime/persistent_value_state.h"
+#include "onnx_core/runtime/quantization.h"
 #include <future>
 #include <gtest/gtest.h>
 #include <limits>
@@ -1219,6 +1220,77 @@ TEST(PersistentValueState, TypedBlockSequencesMixDenseAndAffineWithoutMaterializ
   blocks.elements[1].fields.at("length") = Number(1);
   EXPECT_THROW((PersistentValueState(model, {{"past", blocks}})), std::invalid_argument);
   EXPECT_THROW((PersistentValueState(model, {{"past", Block(false)}})), std::invalid_argument);
+}
+
+TEST(PersistentValueState, TypedSequencesRetainPortableAndSharedQuantizationOwners) {
+  RuntimeValue retained;
+  std::weak_ptr<const QuantizationParameterCatalogue> weak;
+  {
+    auto model = Model();
+    *model.mutable_graph()->mutable_input(0)->mutable_type() = BlockSequenceType();
+    *model.mutable_graph()->mutable_output(0)->mutable_type() = BlockSequenceType();
+    const auto source = Tensor::FromFloat("", {1, 1, 2, 1}, {1, -2});
+    const auto plan = MakeQuantizationPlan(QuantizationFormat::kInt4, 2, 2);
+    auto full = QuantizeTensor(source, plan);
+    auto *graph = model.mutable_graph();
+    auto *annotation = graph->add_quantization_annotation();
+    annotation->set_tensor_name("onnx_light.quantization.parameters:common");
+    auto descriptor = [&](const char *name, const std::string &bytes) {
+      auto *tensor = graph->add_initializer();
+      tensor->set_name(name);
+      tensor->set_data_type(TensorProto::UINT8);
+      tensor->add_dims(bytes.size());
+      tensor->set_raw_data(bytes);
+    };
+    descriptor("storage_type", full.Encoded().struct_type().SerializeAsString());
+    descriptor("logical_type", full.Encoded().logical_type().SerializeAsString());
+    auto *scale = graph->add_initializer();
+    scale->set_name("scales");
+    scale->set_data_type(TensorProto::FLOAT);
+    scale->add_float_data(1);
+    for (const auto &name : {"storage_type", "logical_type", "scales"}) {
+      auto *mapping = annotation->add_quant_parameter_tensor_names();
+      mapping->set_key(name);
+      mapping->set_value(name);
+    }
+    VerifyModel(model);
+    auto parameters = QuantizationParameterCatalogue::Build(model);
+    weak = parameters;
+    auto shared = QuantizeTensorShared(source, full.Encoded().struct_type(), "common", parameters);
+    EXPECT_THROW(RuntimeValue(shared.Encoded()).Retain(), std::invalid_argument);
+    auto wrong = shared.Encoded();
+    wrong.set_parameter_ref("missing");
+    RuntimeValue bad(std::move(wrong));
+    bad.quantization_parameters = parameters;
+    EXPECT_THROW(std::move(bad).Retain(), std::invalid_argument);
+    auto block = Block(false);
+    block.fields.at("key") = full;
+    block.fields.at("value") = shared;
+    RuntimeValue sequence(std::vector<RuntimeValue>{std::move(block)});
+    const auto *payload = shared.Encoded().raw_data().data();
+    PersistentValueState state(model, {{"past", sequence}});
+    RuntimeContext context;
+    context.RegisterCustomKernel(
+        "test.feedback", "Step", [](const NodeProto &node, RuntimeContext &rt) {
+          rt.PutValue(node.output(0), rt.values().at(node.input(0)).BorrowView());
+        });
+    auto output = state.Run(context, {{"tokens", Number(0)}});
+    const auto &published = output.at("present").elements[0].fields.at("value");
+    EXPECT_EQ(published.Encoded().raw_data().data(), payload);
+    EXPECT_EQ(published.quantization_parameters, parameters);
+    EXPECT_EQ(state.Values().at("past").elements[0].fields.at("value").quantization_parameters,
+              parameters);
+    retained = published.BorrowView();
+    state.Reset({{"past", RuntimeValue(std::vector<RuntimeValue>{})}});
+    state.Close();
+  }
+  ASSERT_FALSE(weak.expired());
+  const auto decoded = DequantizeTensor(retained);
+  ASSERT_EQ(decoded.element_count(), 2);
+  EXPECT_EQ(decoded.AsFloat()[0], 1);
+  EXPECT_EQ(decoded.AsFloat()[1], -2);
+  retained = RuntimeValue{};
+  EXPECT_TRUE(weak.expired());
 }
 
 TEST(PersistentValueState, AffineTensorValidationChecksLogicalTypeShapeSymbolsAndPayload) {

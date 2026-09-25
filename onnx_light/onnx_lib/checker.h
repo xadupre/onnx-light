@@ -24,6 +24,10 @@
 #include "onnx_lib/onnx-data.pb.h"
 #include "onnx_lib/string_utils.h"
 
+namespace ONNX_LIGHT_NAMESPACE {
+class StructTypeCatalogue;
+}
+
 namespace ONNX_LIGHT_NAMESPACE::checker {
 /**
  * Exception type thrown by checker routines when validation fails.
@@ -93,6 +97,14 @@ public:
   /** Selects whether the next graph to validate is the main graph. */
   void set_is_main_graph(bool is_main_graph) { is_main_graph_ = is_main_graph; }
 
+  /** Borrows a catalogue and its declarations, which must outlive the checking calls. */
+  void set_struct_type_catalogue(const StructTypeCatalogue &catalogue) {
+    struct_type_catalogue_ = &catalogue;
+  }
+
+  /** Returns the catalogue shared with nested graph and function checks. */
+  ONNX_LIGHT_LIB_API const StructTypeCatalogue &get_struct_type_catalogue() const;
+
   /**
    * Overrides the schema registry used to look up operator definitions.
    *
@@ -148,6 +160,7 @@ public:
 private:
   int ir_version_{-1};
   std::unordered_map<std::string, int> opset_imports_;
+  const StructTypeCatalogue *struct_type_catalogue_ = nullptr;
   bool is_main_graph_ = true;
   const ISchemaRegistry *schema_registry_ = OpSchemaRegistry::Instance();
   std::string model_dir_;

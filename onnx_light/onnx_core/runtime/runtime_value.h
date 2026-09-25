@@ -11,6 +11,7 @@
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
+class QuantizationParameterCatalogue;
 /**
  * Represents tensors, typed sequences, named structures and immutable encoded proto values.
  *
@@ -26,6 +27,7 @@ struct RuntimeValue {
   std::unordered_map<std::string, RuntimeValue> fields;
   std::vector<RuntimeValue> elements;
   std::shared_ptr<const EncodedValueProto> encoded;
+  std::shared_ptr<const QuantizationParameterCatalogue> quantization_parameters;
 
   RuntimeValue() = default;
   explicit RuntimeValue(Tensor value) : kind(Kind::kTensor), tensor(std::move(value)) {}

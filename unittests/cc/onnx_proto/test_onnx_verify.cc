@@ -218,11 +218,13 @@ TEST(onnx_verify, PersistentTypes_SequenceCompatibilityAndUnsupportedElements) {
   EXPECT_FALSE(CompatiblePersistentTypes(catalogue, sequence, other));
   EXPECT_FALSE(
       CompatiblePersistentTypes(catalogue, sequence, sequence.sequence_type().elem_type()));
-  TypeProto optional, map, unset;
+  TypeProto optional, map, sparse, opaque, unset;
   *optional.mutable_optional_type()->mutable_elem_type() = sequence;
   map.mutable_map_type()->set_key_type(TensorProto::INT64);
   *map.mutable_map_type()->mutable_value_type() = sequence;
-  for (const auto &type : {optional, map, unset}) {
+  sparse.mutable_sparse_tensor_type()->set_elem_type(TensorProto::FLOAT);
+  opaque.mutable_opaque_type();
+  for (const auto &type : {optional, map, sparse, opaque, unset}) {
     EXPECT_THROW(ValidatePersistentType(catalogue, type), std::invalid_argument);
     TypeProto nested;
     *nested.mutable_sequence_type()->mutable_elem_type() = type;
@@ -513,7 +515,7 @@ TEST(onnx_verify, PersistentBindings_TypeErrorsPrecedeUseCountErrors) {
   model.mutable_graph()->mutable_node(0)->clear_input();
   model.mutable_graph()->mutable_output(0)->mutable_type()->mutable_tensor_type()->set_elem_type(
       TensorProto::INT32);
-  ExpectPersistentBindingError(model.graph(), "compatible tensor/struct types");
+  ExpectPersistentBindingError(model.graph(), "compatible tensor/struct/sequence types");
   model.mutable_graph()->mutable_output(0)->mutable_type()->mutable_tensor_type()->set_elem_type(
       TensorProto::STRING);
   ExpectPersistentBindingError(model.graph(), "String tensors cannot be persistent");

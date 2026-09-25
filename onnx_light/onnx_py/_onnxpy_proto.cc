@@ -2711,6 +2711,7 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
       .def("has_data_location", &EncodedValueProto::has_data_location)
       .PYFIELD_STR(EncodedValueProto, name)
       .PYFIELD_STR(EncodedValueProto, doc_string)
+      .PYFIELD_STR(EncodedValueProto, parameter_ref)
       .def("has_layout", &EncodedValueProto::has_layout)
       .def(
           "WhichOneof",

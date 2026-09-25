@@ -219,7 +219,18 @@ Inline structured encoded payloads can be retained as whole values; external
 payloads must first be loaded. The native API supports tensors, named
 structs, typed sequences and inline structured or affine encodings. Affine
 values are checked against their declared logical tensor type without decoding.
-Map and optional state remain unsupported and are rejected explicitly.
+Map, optional, sparse and opaque state remain unsupported and are rejected
+explicitly, including when nested in a sequence or structure.
+For the supported types, the native correspondence is:
+
+* ``tensor_type``: a runtime tensor, or an encoded value with a matching logical
+  tensor type.
+* ``struct_type``: named runtime fields, or an encoded value with a compatible
+  storage type.
+* ``sequence_type``: runtime elements recursively checked against ``elem_type``.
+
+These are ``TypeProto`` contracts, not a claim that every ``SequenceProto``,
+``MapProto`` or ``OptionalProto`` has a native persistent representation.
 Python feedback supports tensors, named structs and inline encoded values,
 but not sequence conversion.
 ``If`` and model-local functions forward selected whole output names and move
@@ -393,6 +404,26 @@ Sum fields from the event list when totals are needed. Call
 events accumulate in that context, including runs of different feedback states.
 Resetting or closing a state does not clear the caller's log.
 
+``event.storage_allocated_bytes`` counts requested storage capacity,
+not physical heap allocations: an I/O arena may satisfy a request from its free
+lists. The existing ``event.allocated_bytes`` and ``event.peak_bytes`` fields
+still describe allocator live and peak memory and have not changed meaning.
+The decode example enables events explicitly, so its timing includes auditing.
+
+For one new token with ``FLOAT`` K/V head sizes ``Dk`` and ``Dv``, appending
+copies ``4 * (Dk + Dv)`` bytes. Reuse within capacity allocates no new KV
+buffers and copies zero prefix bytes. Growth or an outstanding external alias
+requires a new buffer for each affected K/V tensor and copies its valid prefix.
+For ``B`` batches, ``H`` KV heads and a prefix of ``L`` tokens, the dense
+fallback allocates two result buffers and copies
+``4 * B * H * L * (Dk + Dv)`` prefix bytes, plus
+``4 * B * H * (Dk + Dv)`` append bytes per token. None of these kernel-level
+copies is a state-management copy.
+
+A runnable native example, including per-token allocation/copy measurements
+and a multi-head fallback, is provided in
+:doc:`../examples_cc/contiguous_kv_decode_example`.
+
 Optional heterogeneous paged KV
 -------------------------------
 
@@ -435,6 +466,20 @@ independently owned dense tensors or affine ``EncodedValueProto`` values whose
 logical shapes are ``[1, 1, capacity, head_size]``. Their affine descriptors carry
 format identity, scales and zero points, independently for K, V and each block.
 There are no persistent flags or new quantization layouts.
+
+Persistent values also retain the shared parameter catalogue introduced by
+:doc:`quantized_values`, recursively through structures and sequences. A tensor
+declaration is checked against an encoded value's logical tensor type; a
+structured declaration is checked against its storage type. Retaining or
+validating a compact shared value checks its reference, types and byte extent
+without materializing it. Borrowed views survive reset and close with both
+their payload and their shared parameters.
+
+This general runtime support does not broaden the native ``PagedAttention``
+decoder: its supported page formats remain the dense and affine formats below.
+Portable structured and shared encodings can be retained and forwarded by other
+consumers, but this kernel rejects them explicitly rather than materializing a
+whole cache or silently converting its representation.
 
 ``block_size`` bounds each block's token capacity and ``max_tokens`` bounds the
 retained logical length. New chunks are converted according to
@@ -510,22 +555,3 @@ of a block collection. Cancellation remains a publication gate, not preemption.
 Reset/close drop the state's owners; exported views and other requests retain
 their blocks until their last owner is released. The bound model is never
 serialized or cloned by this path.
-``event.storage_allocated_bytes`` counts requested storage capacity,
-not physical heap allocations: an I/O arena may satisfy a request from its free
-lists. The existing ``event.allocated_bytes`` and ``event.peak_bytes`` fields
-still describe allocator live and peak memory and have not changed meaning.
-The decode example enables events explicitly, so its timing includes auditing.
-
-For one new token with ``FLOAT`` K/V head sizes ``Dk`` and ``Dv``, appending
-copies ``4 * (Dk + Dv)`` bytes. Reuse within capacity allocates no new KV
-buffers and copies zero prefix bytes. Growth or an outstanding external alias
-requires a new buffer for each affected K/V tensor and copies its valid prefix.
-For ``B`` batches, ``H`` KV heads and a prefix of ``L`` tokens, the dense
-fallback allocates two result buffers and copies
-``4 * B * H * L * (Dk + Dv)`` prefix bytes, plus
-``4 * B * H * (Dk + Dv)`` append bytes per token. None of these kernel-level
-copies is a state-management copy.
-
-A runnable native example, including per-token allocation/copy measurements
-and a multi-head fallback, is provided in
-:doc:`../examples_cc/contiguous_kv_decode_example`.

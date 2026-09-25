@@ -42,7 +42,7 @@ public:
           const AttributeProto *replacement = it->second;
           // Copy value of attribute, but retain original name:
           std::string name = attr.name();
-          attr.CopyFrom(*replacement);
+          attr = *replacement;
           attr.set_name(name);
           ++attr_iter;
         } else {

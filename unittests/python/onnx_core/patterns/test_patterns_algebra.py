@@ -58,7 +58,7 @@ def _run(model, feeds):
 def _optimize(model, pattern_name: str, *, report: bool = False):
     builder = optimization.GraphBuilder(model)
     pattern = getattr(optimization, f"{pattern_name}Pattern")()
-    graph = optimization.GraphGraph(builder, [pattern], use_global_patterns=False)
+    graph = optimization.GraphGraph(builder, [pattern])
     result = graph.optimize(report=report)
     return builder.to_onnx("model"), result
 

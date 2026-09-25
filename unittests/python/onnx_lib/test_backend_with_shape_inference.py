@@ -44,6 +44,10 @@ def shape_inference_check(model: onnxl.ModelProto, *inputs):
 TestShapeInferenceBackend = make_test_class(
     shape_inference_check,
     exclude_regex=[
+        # ai.rt Quantize/Dequantize have LightOpSchemas, not ONNX OpSchemas.
+        # Their structured types are inferred and checked by
+        # test_backend_with_optim_shape_inference.py and the native kernel tests.
+        "test_cc_(?:de)?quantize_.*",
         "test_cc_shape_inference_add_concat_reshape.*",
         "test_cc_shape_inference_nonzero_chain_anon.*",
         "test_cc_shape_inference_nonzero_chain_named.*",

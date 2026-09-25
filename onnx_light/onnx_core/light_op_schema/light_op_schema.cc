@@ -46,6 +46,8 @@ using onnx_proto::SeqTypeOf;
 /// nested sequence/map inside a Sequence/Optional); callers should skip the check in that case.
 std::optional<TensorType> TensorTypeFromTypeProto(const TypeProto &type) {
   switch (type.value_case()) {
+  case TypeProto::kStructType:
+    return TensorType::kStruct;
   case TypeProto::kTensorType:
     return symbolic::DataTypeToTensorType(type.tensor_type().elem_type());
   case TypeProto::kSequenceType: {

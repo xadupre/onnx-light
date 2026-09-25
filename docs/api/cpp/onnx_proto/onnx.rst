@@ -69,6 +69,39 @@ following serialization / deserialization methods (added by
 See :doc:`stream_class` for :cpp:class:`onnx_light::ParseOptions`,
 :cpp:class:`onnx_light::SerializeOptions`, and :cpp:class:`onnx_light::Message`.
 
+Structural equality
+-------------------
+
+Every proto class provides ``Equals`` for comparing two messages of the same
+type without serialization:
+
+.. code-block:: cpp
+
+    std::string difference;
+    bool equal = actual.Equals(expected, &difference);
+
+The optional diagnostic receives the first differing field path and reason,
+for example ``structure.field[1].name: values differ``. It is cleared when the
+messages are equal. Omitting it performs the same comparison without collecting
+the diagnostic.
+
+Comparison includes field presence, nested messages, repeated-field order,
+metadata and payload bytes. Floating-point fields are compared bit for bit:
+identical NaN representations compare equal, while positive and negative zero
+compare unequal. External data references are compared as stored, without loading
+their files. This is structural equality, not model validation or numerical
+tensor equality. Domain-specific comparisons such as ``SameDeclaredType`` remain
+separate and explicitly exclude the fields they ignore.
+
+The 39 public ``Equals`` methods and their diagnostic implementation extend the
+Linux proto-library size budget to 1,552,328 installed bytes, 1,085,786 ``.text``
+bytes and 852 defined dynamic symbols, as measured in CI run ``36120766116``.
+Shared quantization adds serialization, comparison and validation of
+``EncodedValueProto.parameter_ref``. CI run ``36132778661`` measures the updated
+budget at 1,556,424 installed bytes and 1,087,098 ``.text`` bytes, an increase of
+4,096 and 1,312 bytes respectively. The limit of 852 defined dynamic symbols
+and the shared-library dependency allowlist are unchanged.
+
 API reference
 -------------
 

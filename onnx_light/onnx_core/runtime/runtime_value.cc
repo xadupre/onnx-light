@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/runtime/runtime_value.h"
+#include "onnx_core/runtime/quantization.h"
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
@@ -38,6 +39,11 @@ void RuntimeValue::RetainAtDepth(size_t depth, const StructTypeCatalogue &catalo
   if (kind == Kind::kTensor)
     tensor = std::move(tensor).RetainStorage();
   else if (kind == Kind::kEncoded) {
+    if (Encoded().has_parameter_ref()) {
+      EXT_ENFORCE_INVALID(quantization_parameters != nullptr,
+                          "RuntimeValue::Retain: missing shared quantization parameter catalogue.");
+      quantization_parameters->Validate(Encoded(), catalogue);
+    }
     if (Encoded().has_struct_type())
       ValidatePersistentStructType(catalogue, Encoded().struct_type());
     if (Encoded().has_logical_type())
@@ -69,11 +75,14 @@ RuntimeValue RuntimeValue::CopyAtDepth(size_t depth, bool owned) const {
       RuntimeValue result;
       result.kind = kind;
       result.encoded = encoded;
+      result.quantization_parameters = quantization_parameters;
       return result;
     }
     EncodedValueProto copy;
     copy.ParseFromString(Encoded().SerializeAsString());
-    return RuntimeValue(std::move(copy));
+    RuntimeValue result(std::move(copy));
+    result.quantization_parameters = quantization_parameters;
+    return result;
   }
   RuntimeValue result;
   result.kind = kind;

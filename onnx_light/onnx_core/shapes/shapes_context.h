@@ -42,7 +42,8 @@ namespace ONNX_LIGHT_NAMESPACE::core::shapes {
 bool HasStructuredType(const TypeProto &type);
 
 /// Compares declared types without their outer denotation annotations.
-bool SameDeclaredType(const TypeProto &left, const TypeProto &right);
+bool SameDeclaredType(const TypeProto &left, const TypeProto &right,
+                      std::string *difference = nullptr);
 
 /// Checks whether an encoded default is compatible with a public input declaration.
 bool CompatibleEncodedDefault(const TypeProto &declared, const TypeProto &actual);

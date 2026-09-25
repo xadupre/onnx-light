@@ -9,6 +9,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 void CollectQuantizationTestCases(std::vector<TestCase> &registry, const std::string &op_type,
                                   TestMode mode) {
   static const OpRegisterModeMap kEntries = {
+      {"Quantize", &RegisterQuantizeCases},
+      {"Dequantize", &RegisterDequantizeCases},
       {"QuantizeLinear", &RegisterQuantizeLinearCases},
       {"DequantizeLinear", &RegisterDequantizeLinearCases},
       {"DynamicQuantizeLinear", &RegisterDynamicQuantizeLinearCases},

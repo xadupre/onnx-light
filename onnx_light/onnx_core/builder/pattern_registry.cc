@@ -72,7 +72,8 @@ std::vector<std::string> RegisteredPatternNames() {
   return names;
 }
 
-std::vector<std::unique_ptr<PatternOptimization>> CreateRegisteredPatterns() {
+std::vector<std::unique_ptr<PatternOptimization>>
+CreateRegisteredPatterns(std::optional<symbolic::Device> device) {
   PatternRegistry &registry = MutablePatternRegistry();
   std::vector<PatternRegistration> registrations;
   {
@@ -89,7 +90,9 @@ std::vector<std::unique_ptr<PatternOptimization>> CreateRegisteredPatterns() {
                                      "' returned null.");
     }
     pattern->SetRegisteredName(registration.name);
-    patterns.push_back(std::move(pattern));
+    if (!device.has_value() || pattern->device == symbolic::Device::kUndefined ||
+        pattern->device == *device)
+      patterns.push_back(std::move(pattern));
   }
   return patterns;
 }

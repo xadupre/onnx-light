@@ -156,6 +156,26 @@ void RegisterGridSampleCases(std::vector<TestCase> &registry, TestMode mode) {
     return;
   }
 
+  for (int64_t version : {16, 19, 20, 22}) {
+    const OpsetId versioned_opset = DefaultOpset(version);
+    const std::string suffix = "_opset_" + std::to_string(version);
+    for (const std::string &sample_mode :
+         {std::string(), std::string(version < 20 ? "bilinear" : "linear")}) {
+      AddCase(registry, versioned_opset,
+              "test_gridsample_" + (sample_mode.empty() ? "default" : sample_mode) + suffix,
+              sample_mode, "", 0, MakeX_3x2(), MakeGrid_2x4_Mode(), {1, 1, 2, 4},
+              {0.0f, 0.5f, 1.70000005f, 2.5f, 2.5f, 1.70000005f, 4.5f, 1.25f});
+    }
+    AddCase(registry, versioned_opset, "test_gridsample_nearest" + suffix, "nearest", "", 0,
+            MakeX_3x2(), MakeGrid_2x4_Mode(), {1, 1, 2, 4},
+            {0.0f, 0.0f, 2.0f, 2.0f, 2.0f, 2.0f, 5.0f, 0.0f});
+    AddCase(registry, versioned_opset, "test_gridsample_bicubic" + suffix,
+            version < 20 ? "bicubic" : "cubic", "", 0, MakeX_3x2(), MakeGrid_2x4_Mode(),
+            {1, 1, 2, 4},
+            {-0.140625f, 0.3828125f, 1.75555158f, 2.96875f, 2.96875f, 1.75555158f, 5.14453125f,
+             1.390625f});
+  }
+
   // ---- test_gridsample ----------------------------------------------------
   AddCase(registry, opset, "test_gridsample", "linear", "zeros", /*align_corners=*/0, MakeX_4x4(),
           MakeGrid_6x6(), {1, 1, 6, 6},

@@ -1266,6 +1266,42 @@ TEST(KernelClass, GridSamplePaddingModes) {
   }
 }
 
+TEST(KernelClass, GridSampleOpsetDefaults) {
+  const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  const Tensor grid = Tensor::FromFloat("", {1, 1, 1, 2}, {0.0f, 0.0f});
+  for (int64_t version : {16, 19, 20, 22}) {
+    SCOPED_TRACE(version);
+    const KernelContext ctx{DefaultOpset(version)};
+    const GridSample gs{ctx};
+    const GridSample::Attributes attrs;
+    const Tensor output = gs(X, grid, attrs);
+    ASSERT_EQ(output.shape, (std::vector<int64_t>{1, 1, 1, 1}));
+    EXPECT_FLOAT_EQ(output.AsFloat()[0], 2.5f);
+    Tensor preallocated = Tensor::FromFloat("", {1, 1, 1, 1}, {0.0f});
+    gs(X, grid, attrs, preallocated);
+    EXPECT_FLOAT_EQ(preallocated.AsFloat()[0], 2.5f);
+  }
+}
+
+TEST(KernelClass, GridSampleRejectsWrongOpsetModeNames) {
+  const Tensor X = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  const Tensor grid = Tensor::FromFloat("", {1, 1, 1, 2}, {0.0f, 0.0f});
+  for (int64_t version : {16, 19, 20, 22}) {
+    SCOPED_TRACE(version);
+    const KernelContext ctx{DefaultOpset(version)};
+    const GridSample gs{ctx};
+    for (const char *mode : {version < 20 ? "linear" : "bilinear",
+                             version < 20 ? "cubic" : "bicubic", "", "quintic"}) {
+      SCOPED_TRACE(mode);
+      GridSample::Attributes attrs;
+      attrs.mode = mode;
+      EXPECT_THROW((void)gs(X, grid, attrs), std::invalid_argument);
+      Tensor output = Tensor::FromFloat("", {1, 1, 1, 1}, {0.0f});
+      EXPECT_THROW(gs(X, grid, attrs, output), std::invalid_argument);
+    }
+  }
+}
+
 TEST(KernelClass, GridSampleRejectsBadInputs) {
   const KernelContext ctx{DefaultOpset(20)};
   GridSample gs{ctx};

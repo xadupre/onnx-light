@@ -245,6 +245,10 @@ missing initializers and incompatible descriptors or numerical tensors are error
 ``checker.check_model`` uses the runtime catalogue's declaration validation and
 reports these errors as ``ValidationError``. Numerical parameters stored in
 external data must be loaded before this validation.
+Catalogue construction derives the fixed plan, shared bytes and local byte
+ranges directly from descriptors and supplied parameters. It does not allocate
+a logical tensor or a full encoded payload. Its storage depends on parameter
+blocks, tables, transforms and indices, not on the number of local code bytes.
 This representation uses onnx-light's protobuf model serialization. Native ORT
 model serialization rejects quantization annotations and encoded initializers;
 textproto export also rejects unsupported structured/shared values instead of

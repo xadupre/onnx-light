@@ -167,6 +167,46 @@ TEST(Quantization, SharedParametersEveryFormatAndLifetime) {
   }
 }
 
+TEST(Quantization, SharedCatalogueDoesNotMaterializeLogicalTensorOrCodes) {
+  const uint64_t count = uint64_t{1} << (sizeof(size_t) > 4 ? 30 : 27);
+  for (auto format : {QuantizationFormat::kInt4, QuantizationFormat::kOrtMatmulnbitsInt4}) {
+    SCOPED_TRACE(QuantizationFormatName(format));
+    const bool ort = format == QuantizationFormat::kOrtMatmulnbitsInt4;
+    auto plan = ort ? MakeMatMulNBitsPlan(format, count, 1, count)
+                    : MakeQuantizationPlan(format, count, count);
+    EncodedValueProto descriptor;
+    auto *logical = descriptor.mutable_logical_type()->mutable_tensor_type();
+    logical->set_elem_type(TensorProto::FLOAT);
+    logical->mutable_shape()->add_dim()->set_dim_value(count);
+    if (ort) {
+      logical->mutable_shape()->add_dim()->set_dim_value(1);
+      const auto small = QuantizeTensor(Tensor::FromFloat("", {16, 1}, std::vector<float>(16, 0)),
+                                        MakeMatMulNBitsPlan(format, 16, 1, 16));
+      *descriptor.mutable_struct_type() = small.Encoded().struct_type();
+      auto *fields = descriptor.mutable_struct_type()->mutable_structure();
+      fields->mutable_field(0)->mutable_constant()->ref_int64_data()[1] = count;
+      fields->mutable_field(1)
+          ->mutable_type()
+          ->mutable_tensor_type()
+          ->mutable_shape()
+          ->mutable_dim(2)
+          ->set_dim_value(count / 2);
+    } else {
+      *descriptor.mutable_struct_type() = MakeQuantizationType(plan);
+    }
+    const auto model = SharedModel(plan, descriptor);
+    const auto parameters = QuantizationParameterCatalogue::Build(model);
+    const auto &entry = parameters->Get("weights");
+    EXPECT_EQ(entry.common.size(), ort ? 4u : 25u);
+    EXPECT_EQ(entry.full_size, count / 2 + entry.common.size());
+    ASSERT_FALSE(entry.local_ranges.empty());
+    EXPECT_EQ(entry.local_ranges.back().second, count / 2);
+    ASSERT_EQ(entry.plan.runs.size(), 1u);
+    EXPECT_EQ(entry.plan.runs[0].blocks.size(), 1u);
+    EXPECT_EQ(entry.plan.runs[0].layout.count, count);
+  }
+}
+
 TEST(Quantization, SharedInitializerRetainsParametersAndRespectsExistingValues) {
   RuntimeValue retained;
   {
@@ -984,6 +1024,12 @@ TEST(Quantization, OrtMatMulNBitsGoldenInputsAndColumnPadding) {
       }
     }
     auto encoded = WireRoundTrip(QuantizeTensor(Tensor::FromFloat("", {k, n}, values), plan));
+    const auto model = SharedModel(plan, encoded.Encoded());
+    const auto parameters = QuantizationParameterCatalogue::Build(model);
+    const auto shared =
+        QuantizeTensorShared(Tensor::FromFloat("", {k, n}, values), encoded.Encoded().struct_type(),
+                             "weights", parameters);
+    EXPECT_EQ(MaterializeQuantizedValue(shared).raw_data(), encoded.Encoded().raw_data());
     auto inputs = ExportMatMulNBitsInputs(encoded.Encoded());
     EXPECT_EQ(inputs.k, k);
     EXPECT_EQ(inputs.n, n);

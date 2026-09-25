@@ -49,7 +49,7 @@ TensorProto MakeFloatScalar(const std::string &name, float value) {
   return t;
 }
 
-ModelProto MakeSharedParameterModel() {
+ModelProto MakeSharedParameterModel(uint64_t count = 8, uint64_t block_size = 4) {
   ModelProto model;
   model.set_ir_version(IR_VERSION);
   for (const auto &domain : {"", "ai.rt", "local"}) {
@@ -59,12 +59,12 @@ ModelProto MakeSharedParameterModel() {
   }
   auto *graph = model.mutable_graph();
   graph->set_name("shared");
-  const auto plan =
-      core::runtime::MakeQuantizationPlan(core::runtime::QuantizationFormat::kInt4, 8, 4);
+  const auto plan = core::runtime::MakeQuantizationPlan(core::runtime::QuantizationFormat::kInt4,
+                                                        count, block_size);
   const auto storage = core::runtime::MakeQuantizationType(plan);
   TypeProto logical;
   logical.mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
-  logical.mutable_tensor_type()->mutable_shape()->add_dim()->set_dim_value(8);
+  logical.mutable_tensor_type()->mutable_shape()->add_dim()->set_dim_value(count);
   auto *input = graph->add_input();
   input->set_name("X");
   *input->mutable_type() = logical;
@@ -89,9 +89,10 @@ ModelProto MakeSharedParameterModel() {
   auto *scales = graph->add_initializer();
   scales->set_name("scales");
   scales->set_data_type(TensorProto::FLOAT);
-  scales->add_dims(2);
-  scales->add_float_data(1);
-  scales->add_float_data(2);
+  for (const auto &run : plan.runs)
+    for (size_t i = 0; i < run.blocks.size(); ++i)
+      scales->add_float_data(static_cast<float>(i + 1));
+  scales->add_dims(scales->float_data().size());
   auto *mapping = annotation->add_quant_parameter_tensor_names();
   mapping->set_key("scales");
   mapping->set_value("scales");
@@ -199,6 +200,21 @@ TEST(CHECKER_COVERAGE, SharedParameterDeclarationsMatchRuntimeValidation) {
                  std::invalid_argument);
     EXPECT_THROW(checker::check_model(model), ValidationError);
   }
+}
+
+TEST(CHECKER_COVERAGE, SharedParameterValidationDoesNotMaterializeLargeLogicalShape) {
+  const uint64_t count = uint64_t{1} << (sizeof(size_t) > 4 ? 30 : 27);
+  auto model = MakeSharedParameterModel(count, count);
+  EXPECT_NO_THROW(checker::check_model(model));
+  TypeProto logical;
+  logical.CopyFrom(model.graph().input(0).type());
+  logical.mutable_tensor_type()->mutable_shape()->mutable_dim(0)->set_dim_value(count - 1);
+  const auto bytes = logical.SerializeAsString();
+  auto *descriptor = model.mutable_graph()->mutable_initializer(1);
+  descriptor->clear_dims();
+  descriptor->add_dims(bytes.size());
+  descriptor->set_raw_data(bytes);
+  EXPECT_THROW(checker::check_model(model), ValidationError);
 }
 
 TEST(CHECKER_COVERAGE, SharedParameterFunctionArgumentsAndDefaults) {

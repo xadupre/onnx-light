@@ -195,7 +195,8 @@ public:
   void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``GridSample`` operator.
   struct Attributes {
-    std::string mode = "linear";
+    /// Uses the opset default when omitted: bilinear before opset 20, linear otherwise.
+    std::optional<std::string> mode = std::nullopt;
     std::string padding_mode = "zeros";
     int64_t align_corners = 0;
   };

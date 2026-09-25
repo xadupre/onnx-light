@@ -614,10 +614,9 @@ SerializeSizeResult TensorProto::SerializeSize(utils::BinaryWriteStream &stream,
   SIZE_REPEATED_FIELD(size, options, stream, string_data)
   return size;
 }
-void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
-                                    SerializeOptions &options) const {
+void TensorProto::WriteExternalData(utils::BinaryWriteStream &stream,
+                                    const SerializeOptions &options) const {
   // Validation for external data.
-  bool write_external_raw_data = false;
   const utils::OptionalString *external_location = nullptr;
   if (options.use_external_data_location && has_data_location() &&
       ref_data_location() == DataLocation::EXTERNAL && stream.ExternalWeights()) {
@@ -699,21 +698,32 @@ void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
                 " != ", stream.weights_size_for_location(*(external_location)), " name='",
                 ref_name(), "'");
     // TODO Checks sparse initializer as well.
-    write_external_raw_data = true;
+    if (has_raw_data()) {
+      stream.write_raw_bytes_in_second_stream(raw_data_.data(),
+                                              static_cast<utils::offset_t>(raw_data_.size()),
+                                              std::string(*(external_location)));
+    }
+  }
+}
+void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
+                                    SerializeOptions &options) const {
+  const bool write_external_raw_data = options.use_external_data_location && has_data_location() &&
+                                       ref_data_location() == DataLocation::EXTERNAL &&
+                                       stream.ExternalWeights();
+  if (write_external_raw_data) {
+    if (options._external_data_tensors != nullptr) {
+      options._external_data_tensors->push_back(this);
+    } else {
+      WriteExternalData(stream, options);
+    }
   }
   WRITE_REPEATED_FIELD(options, stream, dims)
   WRITE_ENUM_FIELD(options, stream, data_type)
   WRITE_OPTIONAL_PROTO_FIELD(options, stream, segment)
   WRITE_ENUM_FIELD(options, stream, data_location)
   WRITE_FIELD_NULL(options, stream, name)
-  if (has_raw_data()) {
-    if (write_external_raw_data) {
-      stream.write_raw_bytes_in_second_stream(raw_data_.data(),
-                                              static_cast<utils::offset_t>(raw_data_.size()),
-                                              std::string(*(external_location)));
-    } else {
-      write_field_limit(stream, order_raw_data(), raw_data_, options);
-    }
+  if (has_raw_data() && !write_external_raw_data) {
+    write_field_limit(stream, order_raw_data(), raw_data_, options);
   }
   WRITE_FIELD(options, stream, doc_string)
   WRITE_REPEATED_FIELD(options, stream, external_data)
@@ -2016,6 +2026,41 @@ void ModelProto::SerializeToStream(utils::BinaryWriteStream &stream,
                 "SerializeToStream: output exceeded SerializeOptions.max_serialized_size_bytes.");
     stream.write_raw_bytes(reinterpret_cast<const uint8_t *>(buffer.data()),
                            static_cast<utils::offset_t>(buffer.size()));
+    return;
+  }
+  if (stream.ExternalWeights() && options.use_external_data_location &&
+      options._external_data_tensors == nullptr) {
+    std::vector<const TensorProto *> tensors;
+    SerializeOptions local_options = options;
+    local_options._external_data_tensors = &tensors;
+    SerializeToStream(stream, local_options);
+
+    // Keep graph order in the protobuf, but validate and append payloads in the order
+    // their preassigned offsets describe (onnx/onnx#8484).
+    struct ExternalTensor {
+      const TensorProto *tensor;
+      std::string location;
+      int64_t offset;
+    };
+    std::vector<ExternalTensor> writes;
+    writes.reserve(tensors.size());
+    for (const TensorProto *tensor : tensors) {
+      ExternalTensor write{tensor, "", 0};
+      for (const auto &entry : tensor->ref_external_data()) {
+        if (entry.ref_key() == "location")
+          write.location = entry.ref_value();
+        else if (entry.ref_key() == "offset")
+          write.offset = entry.ref_value().toint64();
+      }
+      writes.push_back(std::move(write));
+    }
+    std::stable_sort(writes.begin(), writes.end(), [](const auto &left, const auto &right) {
+      if (left.location != right.location)
+        return left.location < right.location;
+      return left.offset < right.offset;
+    });
+    for (const auto &write : writes)
+      write.tensor->WriteExternalData(stream, options);
     return;
   }
   WRITE_FIELD(options, stream, ir_version)

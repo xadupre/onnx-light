@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <fstream>
 #include <gtest/gtest.h>
 #include <string>
 #include <unordered_map>
@@ -545,6 +546,103 @@ TEST(onnx_alignment_options, SerializeAcceptsBoundedExternalDataPadding) {
     EXPECT_NO_THROW(SerializeProtoToStream(model, wstream, sopts));
   }
 
+  std::remove(onnx_file.c_str());
+  std::remove(weights_file.c_str());
+}
+
+TEST(onnx_alignment_options, SerializeExternalDataInOffsetOrder) {
+  for (const int num_threads : {1, 2}) {
+    for (const int64_t gap : {0, 64 * 1024}) {
+      SCOPED_TRACE(::testing::Message() << "num_threads=" << num_threads << ", gap=" << gap);
+      const std::string onnx_file = "test_external_offset_order.onnx";
+      const std::string weights_file = "test_external_offset_order.data";
+      ModelProto model = MakeModelWithExternalOffset(weights_file, 4 + gap);
+      model.ref_graph().ref_initializer()[0].set_name("first");
+      ModelProto second = MakeModelWithExternalOffset(weights_file, 0);
+      second.ref_graph().ref_initializer()[0].set_name("second");
+      second.ref_graph().ref_initializer()[0].ref_raw_data() = std::vector<uint8_t>{5, 6, 7, 8};
+      model.ref_graph().add_initializer()->CopyFrom(second.ref_graph().ref_initializer()[0]);
+
+      {
+        utils::TwoFilesWriteStream wstream(onnx_file, weights_file);
+        SerializeOptions sopts;
+        sopts.raw_data_threshold = 0;
+        sopts.num_threads = num_threads;
+        ASSERT_TRUE(SerializeProtoToStream(model, wstream, sopts, false));
+      }
+      {
+        std::ifstream file(weights_file, std::ios::binary);
+        std::string bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+        EXPECT_EQ(bytes, std::string("\5\6\7\10", 4) + std::string(gap, '\0') +
+                             std::string("\1\2\3\4", 4));
+      }
+      ModelProto loaded;
+      {
+        utils::TwoFilesStream rstream(onnx_file, weights_file);
+        ParseOptions popts;
+        ParseProtoFromStream(loaded, rstream, popts, false);
+      }
+      const auto &initializers = loaded.ref_graph().ref_initializer();
+      ASSERT_EQ(initializers.size(), 2u);
+      EXPECT_EQ(initializers[0].ref_name(), "first");
+      EXPECT_EQ(initializers[1].ref_name(), "second");
+      EXPECT_EQ(get_external_i64(initializers[0], "offset"), 4 + gap);
+      EXPECT_EQ(get_external_i64(initializers[1], "offset"), 0);
+      for (size_t i = 0; i < initializers.size(); ++i) {
+        ASSERT_EQ(initializers[i].ref_raw_data().size(), 4u);
+        EXPECT_EQ(std::memcmp(initializers[i].ref_raw_data().data(),
+                              model.ref_graph().ref_initializer()[i].ref_raw_data().data(), 4),
+                  0);
+      }
+      std::remove(onnx_file.c_str());
+      std::remove(weights_file.c_str());
+    }
+  }
+}
+
+TEST(onnx_alignment_options, SerializeExternalDataOffsetOrderAcrossFilesAndAttributes) {
+  const std::string onnx_file = "test_external_offset_files.onnx";
+  const std::string weights_file = "test_external_offset_files.data";
+  const std::string other_file = "test_external_offset_files_other.data";
+  ModelProto model = MakeModelWithExternalOffset(weights_file, 0);
+  auto *node = model.ref_graph().add_node();
+  node->set_op_type("Constant");
+  auto *attribute = node->add_attribute();
+  attribute->set_name("value");
+  attribute->set_type(AttributeProto::AttributeType::TENSOR);
+  ModelProto later = MakeModelWithExternalOffset(weights_file, 4);
+  attribute->add_t()->CopyFrom(later.ref_graph().ref_initializer()[0]);
+  ModelProto other = MakeModelWithExternalOffset(other_file, 0);
+  model.ref_graph().add_initializer()->CopyFrom(other.ref_graph().ref_initializer()[0]);
+  {
+    utils::TwoFilesWriteStream wstream(onnx_file, weights_file);
+    SerializeOptions sopts;
+    sopts.raw_data_threshold = 0;
+    ASSERT_TRUE(SerializeProtoToStream(model, wstream, sopts, false));
+  }
+  for (const auto &location : {weights_file, other_file}) {
+    std::ifstream file(location, std::ios::binary);
+    std::string bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    EXPECT_EQ(bytes, location == weights_file ? std::string("\1\2\3\4\1\2\3\4", 8)
+                                              : std::string("\1\2\3\4", 4));
+  }
+  std::remove(onnx_file.c_str());
+  std::remove(weights_file.c_str());
+  std::remove(other_file.c_str());
+}
+
+TEST(onnx_alignment_options, SerializeExternalDataOffsetOrderRejectsOverlap) {
+  const std::string onnx_file = "test_external_offset_overlap.onnx";
+  const std::string weights_file = "test_external_offset_overlap.data";
+  ModelProto model = MakeModelWithExternalOffset(weights_file, 2);
+  ModelProto second = MakeModelWithExternalOffset(weights_file, 0);
+  model.ref_graph().add_initializer()->CopyFrom(second.ref_graph().ref_initializer()[0]);
+  {
+    utils::TwoFilesWriteStream wstream(onnx_file, weights_file);
+    SerializeOptions sopts;
+    sopts.raw_data_threshold = 0;
+    EXPECT_THROW(SerializeProtoToStream(model, wstream, sopts), std::runtime_error);
+  }
   std::remove(onnx_file.c_str());
   std::remove(weights_file.c_str());
 }

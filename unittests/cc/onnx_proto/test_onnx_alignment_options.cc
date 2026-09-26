@@ -685,8 +685,10 @@ TEST(onnx_alignment_options, SerializeExternalDataRejectsCaseAliasedLocations) {
     }
     std::remove(onnx_file.c_str());
     std::remove(weights_file.c_str());
-    std::remove(other_file.c_str());
-    std::remove(alias.c_str());
+    if (location == other_file) {
+      std::remove(other_file.c_str());
+      std::remove(alias.c_str());
+    }
   }
 }
 

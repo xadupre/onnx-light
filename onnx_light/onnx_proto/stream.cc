@@ -49,15 +49,6 @@ std::filesystem::path normalized_model_parent(const std::string &model_path) {
   return parent.lexically_normal();
 }
 
-void reject_windows_trailing_filename_alias(const std::filesystem::path &filename,
-                                            const std::string &location) {
-  const std::string value = filename.string();
-  EXT_ENFORCE(value.back() != '.' && value.back() != ' ',
-              "External data filename must not end with a dot or space because Windows aliases "
-              "such names. location=",
-              location);
-}
-
 std::string validate_weights_file_is_next_to_model(const std::string &model_path,
                                                    const std::string &weights_file) {
   std::filesystem::path weights_path(weights_file);
@@ -72,12 +63,15 @@ std::string validate_weights_file_is_next_to_model(const std::string &model_path
   const bool same_dir = (weights_parent == normalized_parent);
   EXT_ENFORCE(same_dir, "External weights file must be next to model file. model=", model_path,
               ", weights=", weights_file);
-  EXT_ENFORCE(!normalized_weights.filename().empty(),
-              "External weights file must include a filename. model=", model_path,
-              ", weights=", weights_file);
-  reject_windows_trailing_filename_alias(normalized_weights.filename(), weights_file);
+  const std::filesystem::path weights_filename = normalized_weights.filename();
+  const auto &native_weights_filename = weights_filename.native();
+  EXT_ENFORCE(!native_weights_filename.empty() && native_weights_filename.back() != '.' &&
+                  native_weights_filename.back() != ' ',
+              "External weights file must include a filename that does not end with a dot or "
+              "space. model=",
+              model_path, ", weights=", weights_file);
 
-  std::filesystem::path final_path = weights_parent / normalized_weights.filename();
+  std::filesystem::path final_path = weights_parent / weights_filename;
   // Reject symlinks as write targets to prevent TOCTOU-based arbitrary file overwrites
   // (GHSA-8qff-7g33-75mx). Defense-in-depth: FileWriteStream also checks at open time.
   if (std::filesystem::is_symlink(final_path)) {
@@ -102,12 +96,15 @@ std::filesystem::path validate_external_location_is_next_to_model(const std::str
   EXT_ENFORCE(
       same_dir,
       "External data location must be a file name next to the model file. location=", location);
-  EXT_ENFORCE(!normalized_location.filename().empty(),
-              "External data location must include a filename. location=", location);
-  reject_windows_trailing_filename_alias(normalized_location.filename(), location);
+  const std::filesystem::path location_filename = normalized_location.filename();
+  const auto &native_location_filename = location_filename.native();
+  EXT_ENFORCE(!native_location_filename.empty() && native_location_filename.back() != '.' &&
+                  native_location_filename.back() != ' ',
+              "External data location must include a filename that does not end with a dot or "
+              "space. location=",
+              location);
 
-  std::filesystem::path final_path =
-      normalized_model_parent(model_path) / normalized_location.filename();
+  std::filesystem::path final_path = normalized_model_parent(model_path) / location_filename;
   // Reject symlinks as write targets to prevent TOCTOU-based arbitrary file overwrites
   // (GHSA-8qff-7g33-75mx). Defense-in-depth: FileWriteStream also checks at open time.
   if (std::filesystem::is_symlink(final_path)) {

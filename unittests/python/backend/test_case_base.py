@@ -247,6 +247,23 @@ class TestBackendFunction(ExtTestCase):
 
         self.assertTrue(tc.materialized)
 
+    def test_sequence_construct_expected_outputs(self):
+        """Preserves sequence elements when materializing native expected outputs."""
+        cases = collect_test_case()
+        for name in ("test_cc_sequence_construct", "test_cc_sequence_construct_int64_single"):
+            with self.subTest(name=name):
+                tc = cases[name]
+                for _ in range(2):
+                    inputs, outputs = tc.data_sets[0]
+                    self.assertEqual(len(outputs), 1)
+                    self.assertIsInstance(outputs[0], list)
+                    self.assertEqual(len(outputs[0]), len(inputs))
+                    for expected, value in zip(inputs, outputs[0]):
+                        self.assertEqual(value.dtype, expected.dtype)
+                        self.assertEqual(value.shape, expected.shape)
+                        np.testing.assert_array_equal(value, expected)
+                    tc.unload()
+
     def test_collect_test_case_finds_blackmanwindow_tests(self):
         """Tests that collect_test_case finds BlackmanWindow test cases (from C++)."""
         result = collect_test_case()

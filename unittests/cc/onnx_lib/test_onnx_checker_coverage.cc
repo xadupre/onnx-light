@@ -141,6 +141,43 @@ ModelProto MakeSharedParameterFunctionModel() {
 
 } // namespace
 
+TEST(CHECKER_COVERAGE, PagedCacheValidatesSharedParameterReferences) {
+  auto model = MakeSharedParameterModel();
+  TypeProto logical;
+  logical.mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+  for (int64_t dim : {1, 1, 2, 4})
+    logical.mutable_tensor_type()->mutable_shape()->add_dim()->set_dim_value(dim);
+  for (auto &tensor : *model.mutable_graph()->mutable_initializer())
+    if (tensor.name() == "logical_type") {
+      tensor.set_raw_data(logical.SerializeAsString());
+      (*tensor.mutable_dims())[0] = tensor.raw_data().size();
+    }
+  *model.mutable_graph()->mutable_input(0)->mutable_type() = logical;
+  const auto parameters = core::runtime::QuantizationParameterCatalogue::Build(model);
+  const auto plan =
+      core::runtime::MakeQuantizationPlan(core::runtime::QuantizationFormat::kInt4, 8, 4);
+  const auto source =
+      core::runtime::Tensor::FromFloat("K", {1, 1, 2, 4}, std::vector<float>(8, 2.f));
+  const auto shared = core::runtime::QuantizeTensorShared(
+      source, core::runtime::MakeQuantizationType(plan), "common", parameters);
+  auto *cache = model.mutable_graph()->add_paged_cache_initializer();
+  cache->set_name("cache");
+  auto *block = cache->add_blocks();
+  block->set_start(0);
+  block->set_length(1);
+  *block->mutable_encoded_key() = shared.Encoded();
+  *block->mutable_encoded_value() = shared.Encoded();
+  auto *output = model.mutable_graph()->add_output();
+  output->set_name("cache");
+  *output->mutable_type() = PagedKVCacheTypeV1();
+  ASSERT_NO_THROW(checker::check_model(model));
+  block->mutable_encoded_key()->set_parameter_ref("missing");
+  EXPECT_THROW(checker::check_model(model), ValidationError);
+  block->mutable_encoded_key()->set_parameter_ref("common");
+  block->set_length(3);
+  EXPECT_THROW(checker::check_model(model), ValidationError);
+}
+
 TEST(CHECKER_COVERAGE, SharedParameterDeclarationsMatchRuntimeValidation) {
   const auto original = MakeSharedParameterModel();
   ASSERT_NO_THROW(checker::check_model(original));

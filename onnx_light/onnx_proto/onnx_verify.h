@@ -203,11 +203,15 @@ public:
   EncodedValueLayout ValidateEncodedValue(const EncodedValueProto &value,
                                           bool require_resolved_reference = true) const;
 
+  /** Validates contiguous page ranges, concrete logical shapes and inline payload extents. */
+  void ValidatePagedCache(const PagedCacheProto &value, bool require_resolved_reference = true,
+                          const TypeProto *declared_type = nullptr) const;
+
 private:
   const utils::RepeatedProtoField<StructTypeProto> *declarations_ = nullptr;
 };
 
-/** Validates a persistent type, rejecting string tensors at every nesting level. */
+/** Validates a persistent type, rejecting strings, maps, optionals, sparse and opaque values. */
 ONNX_LIGHT_PROTO_API void ValidatePersistentType(const StructTypeCatalogue &catalogue,
                                                  const TypeProto &type);
 
@@ -216,7 +220,7 @@ ONNX_LIGHT_PROTO_API void ValidatePersistentStructType(const StructTypeCatalogue
                                                        const StructTypeProto &type);
 
 /**
- * Returns whether validated tensor/struct declarations are compatible.
+ * Returns whether validated tensor/struct/sequence declarations are compatible.
  * Compares ranks when both are known and dimensions when both are concrete.
  * Allows symbolic dimensions and unknown ranks in ordinary runtime values.
  * Compares declarations directly, without serialization, hashing or payload copies.

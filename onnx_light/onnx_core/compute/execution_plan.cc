@@ -448,8 +448,7 @@ void ExecutionPlan::ReleaseAfter(const NodeProto &node, RuntimeContext &rt) cons
     if (action.node_index() != index) {
       continue;
     }
-    // Each delete kind targets a single map, so exactly one remover is called
-    // depending on the action's kind.
+    // Sequence edges may use either the tensor sequence map or RuntimeValue storage.
     switch (action.kind()) {
     case ExecuteActionKind::kDeleteBuffer:
       rt.Remove(action.name());
@@ -458,7 +457,7 @@ void ExecutionPlan::ReleaseAfter(const NodeProto &node, RuntimeContext &rt) cons
       rt.RemoveShape(action.name());
       break;
     case ExecuteActionKind::kDeleteSequence:
-      rt.RemoveSequence(action.name());
+      rt.Remove(action.name());
       break;
     case ExecuteActionKind::kDeleteMap:
       rt.RemoveMap(action.name());

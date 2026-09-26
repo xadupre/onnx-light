@@ -1617,6 +1617,114 @@ void EncodedValueProto::PrintToStringStream(std::stringstream &ss,
                                  NAME_EXIST_VALUE(doc_string), NAME_EXIST_VALUE(parameter_ref));
 }
 
+void PagedCacheBlockProto::CopyFrom(const PagedCacheBlockProto &proto) {
+  PagedCacheBlockProto copy;
+  CopyProtoFrom(copy, proto);
+  *this = std::move(copy);
+}
+SerializeSizeResult PagedCacheBlockProto::SerializeSize(utils::BinaryWriteStream &stream,
+                                                        SerializeOptions &options) const {
+  SerializeSizeResult size;
+  SIZE_FIELD(size, options, stream, start)
+  SIZE_FIELD(size, options, stream, length)
+  SIZE_OPTIONAL_PROTO_FIELD(size, options, stream, key)
+  SIZE_OPTIONAL_PROTO_FIELD(size, options, stream, encoded_key)
+  SIZE_OPTIONAL_PROTO_FIELD(size, options, stream, value)
+  SIZE_OPTIONAL_PROTO_FIELD(size, options, stream, encoded_value)
+  return size;
+}
+void PagedCacheBlockProto::SerializeToStream(utils::BinaryWriteStream &stream,
+                                             SerializeOptions &options) const {
+  WRITE_FIELD(options, stream, start)
+  WRITE_FIELD(options, stream, length)
+  WRITE_OPTIONAL_PROTO_FIELD(options, stream, key)
+  WRITE_OPTIONAL_PROTO_FIELD(options, stream, encoded_key)
+  WRITE_OPTIONAL_PROTO_FIELD(options, stream, value)
+  WRITE_OPTIONAL_PROTO_FIELD(options, stream, encoded_value)
+}
+bool PagedCacheBlockProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, PagedCacheBlockProto)
+  READ_FIELD(options, stream, start)
+  READ_FIELD(options, stream, length)
+  READ_ONEOF_PROTO_FIELD(options, stream, key)
+  READ_ONEOF_PROTO_FIELD(options, stream, encoded_key)
+  READ_ONEOF_PROTO_FIELD(options, stream, value)
+  READ_ONEOF_PROTO_FIELD(options, stream, encoded_value)
+  READ_END(options, stream, PagedCacheBlockProto)
+  return true;
+}
+void PagedCacheBlockProto::PrintToStringStream(std::stringstream &ss,
+                                               utils::PrintOptions &options) const {
+  write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(start), NAME_EXIST_VALUE(length),
+                                 NAME_EXIST_VALUE(key), NAME_EXIST_VALUE(encoded_key),
+                                 NAME_EXIST_VALUE(value), NAME_EXIST_VALUE(encoded_value));
+}
+
+void PagedCacheProto::CopyFrom(const PagedCacheProto &proto) {
+  PagedCacheProto copy;
+  CopyProtoFrom(copy, proto);
+  *this = std::move(copy);
+}
+SerializeSizeResult PagedCacheProto::SerializeSize(utils::BinaryWriteStream &stream,
+                                                   SerializeOptions &options) const {
+  SerializeSizeResult size;
+  SIZE_REPEATED_FIELD(size, options, stream, blocks)
+  SIZE_FIELD(size, options, stream, name)
+  SIZE_FIELD(size, options, stream, doc_string)
+  return size;
+}
+void PagedCacheProto::SerializeToStream(utils::BinaryWriteStream &stream,
+                                        SerializeOptions &options) const {
+  WRITE_REPEATED_FIELD(options, stream, blocks)
+  WRITE_FIELD(options, stream, name)
+  WRITE_FIELD(options, stream, doc_string)
+}
+bool PagedCacheProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, PagedCacheProto)
+  READ_REPEATED_FIELD(options, stream, blocks)
+  READ_FIELD(options, stream, name)
+  READ_FIELD(options, stream, doc_string)
+  READ_END(options, stream, PagedCacheProto)
+  return true;
+}
+void PagedCacheProto::PrintToStringStream(std::stringstream &ss,
+                                          utils::PrintOptions &options) const {
+  write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(blocks), NAME_EXIST_VALUE(name),
+                                 NAME_EXIST_VALUE(doc_string));
+}
+
+TypeProto PagedKVCacheTypeV1() {
+  TypeProto result;
+  auto *root = result.mutable_struct_type();
+  root->set_name("onnx_light.PagedKVCache");
+  root->set_doc_string("Version 1 logical type for paged key/value attention state.");
+  auto *version = root->add_metadata_props();
+  version->set_key("onnx_light.type_version");
+  version->set_value("1");
+  auto *blocks = root->mutable_structure()->add_field();
+  blocks->set_name("blocks");
+  auto *page = blocks->mutable_type()
+                   ->mutable_sequence_type()
+                   ->mutable_elem_type()
+                   ->mutable_struct_type()
+                   ->mutable_structure();
+  for (const char *name : {"start", "length", "key", "value"}) {
+    auto *field = page->add_field();
+    field->set_name(name);
+    auto *tensor = field->mutable_type()->mutable_tensor_type();
+    const bool scalar = std::string(name) == "start" || std::string(name) == "length";
+    tensor->set_elem_type(scalar ? TensorProto::INT64 : TensorProto::FLOAT);
+    auto *shape = tensor->mutable_shape();
+    if (!scalar) {
+      shape->add_dim()->set_dim_value(1);
+      shape->add_dim()->set_dim_value(1);
+      shape->add_dim();
+      shape->add_dim();
+    }
+  }
+  return result;
+}
+
 // ValueInfoProto
 
 IMPLEMENT_PROTO(ValueInfoProto)
@@ -1862,6 +1970,7 @@ SerializeSizeResult GraphProto::SerializeSize(utils::BinaryWriteStream &stream,
   SIZE_REPEATED_FIELD(size, options, stream, quantization_annotation)
   SIZE_REPEATED_FIELD(size, options, stream, metadata_props)
   SIZE_REPEATED_FIELD(size, options, stream, encoded_initializer)
+  SIZE_REPEATED_FIELD(size, options, stream, paged_cache_initializer)
   SIZE_REPEATED_FIELD(size, options, stream, persistent_bindings)
   return size;
 }
@@ -1878,6 +1987,7 @@ void GraphProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, quantization_annotation)
   WRITE_REPEATED_FIELD(options, stream, metadata_props)
   WRITE_REPEATED_FIELD(options, stream, encoded_initializer)
+  WRITE_REPEATED_FIELD(options, stream, paged_cache_initializer)
   WRITE_REPEATED_FIELD(options, stream, persistent_bindings)
 }
 bool GraphProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
@@ -1897,6 +2007,7 @@ bool GraphProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opti
   READ_REPEATED_FIELD(options, stream, quantization_annotation) //
   READ_REPEATED_FIELD(options, stream, metadata_props)          //
   READ_REPEATED_FIELD(options, stream, encoded_initializer)     //
+  READ_REPEATED_FIELD(options, stream, paged_cache_initializer) //
   READ_REPEATED_FIELD(options, stream, persistent_bindings)     //
   READ_END(options, stream, GraphProto)                         //  // NOLINT
   if (options.node_callback) {
@@ -1912,7 +2023,8 @@ void GraphProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions 
       NAME_EXIST_VALUE(output), NAME_EXIST_VALUE(metadata_props), NAME_EXIST_VALUE(node),
       NAME_EXIST_VALUE(initializer), NAME_EXIST_VALUE(sparse_initializer),
       NAME_EXIST_VALUE(value_info), NAME_EXIST_VALUE(quantization_annotation),
-      NAME_EXIST_VALUE(encoded_initializer), NAME_EXIST_VALUE(persistent_bindings));
+      NAME_EXIST_VALUE(encoded_initializer), NAME_EXIST_VALUE(persistent_bindings),
+      NAME_EXIST_VALUE(paged_cache_initializer));
 }
 
 // FunctionProto
@@ -2770,6 +2882,7 @@ bool GraphProto::Equals(const GraphProto &right, std::string *difference) const 
   COMPARE_FIELD(quantization_annotation)
   COMPARE_FIELD(metadata_props)
   COMPARE_FIELD(encoded_initializer)
+  COMPARE_FIELD(paged_cache_initializer)
   COMPARE_FIELD(persistent_bindings)
   return true;
 }
@@ -2788,6 +2901,28 @@ bool PersistentBindingProto::Equals(const PersistentBindingProto &right,
   ProtoComparison comparison(difference);
   COMPARE_FIELD(input_name)
   COMPARE_FIELD(output_name)
+  return true;
+}
+
+bool PagedCacheBlockProto::Equals(const PagedCacheBlockProto &right,
+                                  std::string *difference) const {
+  const auto &left = *this;
+  ProtoComparison comparison(difference);
+  COMPARE_FIELD(start)
+  COMPARE_FIELD(length)
+  COMPARE_FIELD(key)
+  COMPARE_FIELD(encoded_key)
+  COMPARE_FIELD(value)
+  COMPARE_FIELD(encoded_value)
+  return true;
+}
+
+bool PagedCacheProto::Equals(const PagedCacheProto &right, std::string *difference) const {
+  const auto &left = *this;
+  ProtoComparison comparison(difference);
+  COMPARE_FIELD(blocks)
+  COMPARE_FIELD(name)
+  COMPARE_FIELD(doc_string)
   return true;
 }
 

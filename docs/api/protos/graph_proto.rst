@@ -17,8 +17,11 @@ or entirely supplied by current feeds. Former field-path wire fields 3 and 4
 are rejected on load rather than silently changing partial persistence to whole
 persistence.
 
-Validation resolves catalogue references and requires compatible tensor or
-structure declarations. Tensor ranks are compared when both are known, and
+Validation resolves catalogue references and requires compatible tensor,
+sequence or structure declarations. Root sequences of tensors are bridged to
+the standard runtime sequence store, so standard sequence operators can consume
+and produce persistent values. Nested sequences remain part of their enclosing
+structured runtime value. Tensor ranks are compared when both are known, and
 dimensions when both are concrete; symbolic dimensions and unknown ranks are
 accepted. Byte-encoded values still require fixed geometry under the encoded
 layout validators. Catalogue identities must agree for whole referenced

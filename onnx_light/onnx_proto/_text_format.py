@@ -363,7 +363,13 @@ def _write_message(obj: Any, indent: int, lines: list[str]) -> None:
     schema = _build_schema()
     if type(obj) not in schema:
         raise TypeError(f"Cannot serialize {type(obj)!r} to textproto.")
-    for field in ("struct_types", "encoded_initializer", "struct_type", "parameter_ref"):
+    for field in (
+        "struct_types",
+        "encoded_initializer",
+        "paged_cache_initializer",
+        "struct_type",
+        "parameter_ref",
+    ):
         presence = getattr(obj, "has_" + field, None)
         if callable(presence) and presence():
             raise TypeError(f"textproto does not support the {field!r} extension; use protobuf.")

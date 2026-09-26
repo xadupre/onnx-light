@@ -2079,6 +2079,10 @@ void AddOnnxPyBuilder(nb::module_ &m) {
            "Appends an encoded initializer and returns its name.")
       .def("encoded_initializers", &GraphBuilder::EncodedInitializers, nb::rv_policy::copy,
            "Returns a copy of the encoded initializers.")
+      .def("make_paged_cache_initializer", &GraphBuilder::MakePagedCacheInitializer,
+           nb::arg("value"), "Appends a validated paged cache initializer.")
+      .def("paged_cache_initializers", &GraphBuilder::PagedCacheInitializers, nb::rv_policy::copy,
+           "Returns a copy of the paged cache initializers.")
       .def_prop_ro("shapes", &GraphBuilder::Shapes, nb::rv_policy::reference_internal,
                    "Returns the builder's shape, type and encoded-layout context.")
       .def(

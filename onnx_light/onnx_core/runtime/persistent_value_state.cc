@@ -4,12 +4,41 @@
 
 #include "onnx_core/runtime/persistent_value_state.h"
 #include "onnx_core/runtime/kernels/run_nodes.h"
+#include "onnx_core/runtime/quantization.h"
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
 
 using Symbols = std::unordered_map<std::string, int64_t>;
+using ValidationMemos = std::unordered_map<const TypeProto *, RuntimeSequence::Memo<Symbols>>;
 using Declarations = utils::RepeatedProtoField<ValueInfoProto>;
+
+bool IsTensorSequence(const TypeProto &type) {
+  return type.has_sequence_type() && type.sequence_type().has_elem_type() &&
+         type.sequence_type().elem_type().has_tensor_type();
+}
+
+Sequence ToTensorSequence(const std::string &name, const RuntimeValue &value,
+                          const TypeProto::Sequence &type) {
+  EXT_ENFORCE_INVALID(value.kind == RuntimeValue::Kind::kSequence,
+                      "PersistentValueState: expected a sequence value.");
+  Tensors tensors;
+  tensors.reserve(value.elements.size());
+  for (const RuntimeValue &element : value.elements) {
+    EXT_ENFORCE_INVALID(element.kind == RuntimeValue::Kind::kTensor,
+                        "PersistentValueState: standard sequences require tensor elements.");
+    tensors.push_back(element.tensor.BorrowView());
+  }
+  return Sequence(name, type.elem_type().tensor_type().elem_type(), std::move(tensors));
+}
+
+RuntimeValue FromTensorSequence(Sequence sequence) {
+  std::vector<RuntimeValue> elements;
+  elements.reserve(sequence.values.size());
+  for (Tensor &tensor : sequence.values)
+    elements.emplace_back(std::move(tensor));
+  return RuntimeValue(std::move(elements));
+}
 
 const ModelProto &RequireModel(const std::shared_ptr<const ModelProto> &model) {
   EXT_ENFORCE_INVALID(model != nullptr, "PersistentValueState: model owner must not be null.");
@@ -42,8 +71,53 @@ const TypeProto &InputType(const std::string &name, const Declarations &declarat
                     "'; names are literal and partial field paths are unsupported.");
 }
 
+void ValidateTensorShape(const Shape &shape, const TypeProto::Tensor &declared, Symbols &symbols) {
+  if (!declared.has_shape())
+    return;
+  EXT_ENFORCE_INVALID(static_cast<size_t>(declared.shape().dim_size()) == shape.size(),
+                      "PersistentValueState: rank mismatch.");
+  for (size_t i = 0; i < shape.size(); ++i) {
+    const auto &dim = declared.shape().dim(static_cast<int>(i));
+    EXT_ENFORCE_INVALID(!dim.has_dim_value() || dim.dim_value() == shape[i],
+                        "PersistentValueState: shape mismatch.");
+    if (dim.has_dim_param() && !dim.dim_param().empty()) {
+      auto [it, inserted] = symbols.emplace(dim.dim_param(), shape[i]);
+      EXT_ENFORCE_INVALID(inserted || it->second == shape[i],
+                          "PersistentValueState: symbolic shape mismatch.");
+    }
+  }
+}
+
 void Validate(const RuntimeValue &value, const TypeProto &type,
-              const StructTypeCatalogue &catalogue, Symbols &symbols) {
+              const StructTypeCatalogue &catalogue, Symbols &symbols, ValidationMemos &memos,
+              size_t depth = 0) {
+  EXT_ENFORCE_INVALID(depth <= RuntimeValue::kMaxDepth,
+                      "PersistentValueState: maximum nesting depth exceeded.");
+  if (value.kind == RuntimeValue::Kind::kSequence) {
+    EXT_ENFORCE_INVALID(type.has_sequence_type() && type.sequence_type().has_elem_type(),
+                        "PersistentValueState: expected a sequence type.");
+    EXT_ENFORCE_INVALID(value.elements.empty() ||
+                            depth + 1 + value.elements.depth() <= RuntimeValue::kMaxDepth,
+                        "PersistentValueState: maximum nesting depth exceeded.");
+    const auto merge = [](Symbols left, const Symbols &right) {
+      for (const auto &[name, dimension] : right) {
+        const auto [it, inserted] = left.emplace(name, dimension);
+        EXT_ENFORCE_INVALID(inserted || it->second == dimension,
+                            "PersistentValueState: symbolic shape mismatch.");
+      }
+      return left;
+    };
+    auto sequence_symbols = value.elements.Fold(
+        memos[&type],
+        [&](const RuntimeValue &element) {
+          Symbols local;
+          Validate(element, type.sequence_type().elem_type(), catalogue, local, memos, depth + 1);
+          return local;
+        },
+        merge);
+    symbols = merge(std::move(symbols), sequence_symbols);
+    return;
+  }
   if (value.kind == RuntimeValue::Kind::kTensor) {
     EXT_ENFORCE_INVALID(type.has_tensor_type(),
                         "PersistentValueState: expected a structured value.");
@@ -60,20 +134,27 @@ void Validate(const RuntimeValue &value, const TypeProto &type,
                               (tensor.size_bytes() == 0 || tensor.bytes() != nullptr),
                           "PersistentValueState: tensor byte extent mismatch.");
     }
-    if (declared.has_shape()) {
-      EXT_ENFORCE_INVALID(static_cast<size_t>(declared.shape().dim_size()) == tensor.shape.size(),
-                          "PersistentValueState: rank mismatch.");
-      for (size_t i = 0; i < tensor.shape.size(); ++i) {
-        const auto &dim = declared.shape().dim(static_cast<int>(i));
-        EXT_ENFORCE_INVALID(!dim.has_dim_value() || dim.dim_value() == tensor.shape[i],
-                            "PersistentValueState: shape mismatch.");
-        if (dim.has_dim_param() && !dim.dim_param().empty()) {
-          auto [it, inserted] = symbols.emplace(dim.dim_param(), tensor.shape[i]);
-          EXT_ENFORCE_INVALID(inserted || it->second == tensor.shape[i],
-                              "PersistentValueState: symbolic shape mismatch.");
-        }
-      }
+    ValidateTensorShape(tensor.shape, declared, symbols);
+    return;
+  }
+  if (value.kind == RuntimeValue::Kind::kEncoded && type.has_tensor_type()) {
+    const auto &encoded = value.Encoded();
+    const auto layout = catalogue.ValidateEncodedValue(encoded);
+    EXT_ENFORCE_INVALID(!layout.external && layout.content_verified && encoded.has_logical_type() &&
+                            encoded.logical_type().has_tensor_type(),
+                        "PersistentValueState: requires an inline encoded tensor payload.");
+    const auto &logical = encoded.logical_type().tensor_type();
+    EXT_ENFORCE_INVALID(logical.elem_type() == type.tensor_type().elem_type(),
+                        "PersistentValueState: dtype mismatch.");
+    EXT_ENFORCE_INVALID(logical.has_shape(),
+                        "PersistentValueState: encoded values require a concrete shape.");
+    Shape shape;
+    for (const auto &dim : logical.shape().dim()) {
+      EXT_ENFORCE_INVALID(dim.has_dim_value() && !dim.has_dim_param() && dim.dim_value() >= 0,
+                          "PersistentValueState: encoded values require concrete dimensions.");
+      shape.push_back(dim.dim_value());
     }
+    ValidateTensorShape(shape, type.tensor_type(), symbols);
     return;
   }
   EXT_ENFORCE_INVALID(type.has_struct_type(), "PersistentValueState: expected a tensor.");
@@ -88,6 +169,8 @@ void Validate(const RuntimeValue &value, const TypeProto &type,
                         "PersistentValueState: encoded representation mismatch.");
     return;
   }
+  EXT_ENFORCE_INVALID(value.kind == RuntimeValue::Kind::kStruct,
+                      "PersistentValueState: expected a structured value.");
   EXT_ENFORCE_INVALID(declared.has_structure(),
                       "PersistentValueState: requires named structured fields.");
   size_t expected = 0;
@@ -98,7 +181,7 @@ void Validate(const RuntimeValue &value, const TypeProto &type,
     auto it = value.fields.find(field.name());
     EXT_ENFORCE_INVALID(it != value.fields.end(), "PersistentValueState: missing field '",
                         field.name(), "'.");
-    Validate(it->second, field.type(), catalogue, symbols);
+    Validate(it->second, field.type(), catalogue, symbols, memos, depth + 1);
   }
   EXT_ENFORCE_INVALID(value.fields.size() == expected,
                       "PersistentValueState: unexpected structured field.");
@@ -153,6 +236,15 @@ PersistentValueState::PersistentValueState(std::shared_ptr<const ModelProto> mod
                            std::shared_ptr<void>(model, const_cast<ModelProto *>(model.get()))) {}
 
 std::vector<PersistentValue> PersistentValueState::ValidateInitial(RuntimeValueMap initial) const {
+  std::shared_ptr<const QuantizationParameterCatalogue> parameters;
+  for (const auto &cache : model_.graph().paged_cache_initializer())
+    if (!initial.contains(cache.name()) &&
+        std::any_of(bindings_.begin(), bindings_.end(),
+                    [&](const auto &binding) { return binding.input == cache.name(); })) {
+      if (!parameters)
+        parameters = QuantizationParameterCatalogue::Build(model_);
+      initial.emplace(cache.name(), RuntimeValue::FromPagedCache(cache, catalogue_, parameters));
+    }
   std::vector<PersistentValue> result;
   result.reserve(bindings_.size());
   Symbols symbols;
@@ -160,7 +252,7 @@ std::vector<PersistentValue> PersistentValueState::ValidateInitial(RuntimeValueM
     const auto it = initial.find(binding.input);
     EXT_ENFORCE_INVALID(it != initial.end(), "PersistentValueState: missing initial whole input '",
                         binding.input, "'.");
-    Validate(it->second, *binding.input_type, catalogue_, symbols);
+    Validate(it->second, *binding.input_type, catalogue_, symbols, sequence_validation_);
     result.emplace_back(std::move(it->second), catalogue_);
   }
   EXT_ENFORCE_INVALID(
@@ -209,12 +301,20 @@ RuntimeValueMap PersistentValueState::Run(RuntimeContext &context, const Runtime
       bool initializer = false;
       for (const auto &tensor : model_.graph().initializer())
         initializer = initializer || tensor.name() == input.name();
+      for (const auto &encoded : model_.graph().encoded_initializer())
+        initializer = initializer || encoded.name() == input.name();
+      for (const auto &cache : model_.graph().paged_cache_initializer())
+        initializer = initializer || cache.name() == input.name();
       EXT_ENFORCE_INVALID(initializer, "PersistentValueState: missing current input '",
                           input.name(), "'.");
       continue;
     }
-    Validate(it->second, input.type(), catalogue_, symbols);
-    invocation.PutValue(input.name(), std::move(it->second), RuntimeEventKind::kInput);
+    Validate(it->second, input.type(), catalogue_, symbols, sequence_validation_);
+    if (IsTensorSequence(input.type()))
+      invocation.PutSequence(
+          input.name(), ToTensorSequence(input.name(), it->second, input.type().sequence_type()));
+    else
+      invocation.PutValue(input.name(), std::move(it->second), RuntimeEventKind::kInput);
   }
   for (auto &binding : *invocation.persistent_tensors_)
     binding.input_view = &invocation.Get(binding.input);
@@ -233,13 +333,18 @@ RuntimeValueMap PersistentValueState::Run(RuntimeContext &context, const Runtime
     RuntimeValue value;
     if (invocation.Has(output.name()))
       value = RuntimeValue(std::move(invocation.Get(output.name())));
-    else {
+    else if (IsTensorSequence(output.type())) {
+      auto it = invocation.sequences().find(output.name());
+      EXT_ENFORCE_INVALID(it != invocation.sequences().end(),
+                          "PersistentValueState: missing output '", output.name(), "'.");
+      value = FromTensorSequence(std::move(it->second));
+    } else {
       auto it = invocation.values().find(output.name());
       EXT_ENFORCE_INVALID(it != invocation.values().end(), "PersistentValueState: missing output '",
                           output.name(), "'.");
       value = std::move(it->second);
     }
-    Validate(value, output.type(), catalogue_, symbols);
+    Validate(value, output.type(), catalogue_, symbols, sequence_validation_);
     outputs.emplace(output.name(), std::move(value));
   }
   std::vector<PersistentValue> next;
@@ -247,7 +352,7 @@ RuntimeValueMap PersistentValueState::Run(RuntimeContext &context, const Runtime
   Symbols next_symbols;
   for (const auto &binding : bindings_) {
     RuntimeValue &value = outputs.at(binding.output);
-    Validate(value, *binding.input_type, catalogue_, next_symbols);
+    Validate(value, *binding.input_type, catalogue_, next_symbols, sequence_validation_);
     value = std::move(value).Retain(catalogue_);
     auto candidate = std::find_if(invocation.persistent_tensors_->begin(),
                                   invocation.persistent_tensors_->end(), [&](const auto &item) {

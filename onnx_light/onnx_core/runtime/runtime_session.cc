@@ -239,6 +239,14 @@ std::unordered_set<std::string> RuntimeSession::SeedInitializers(RuntimeContext 
         rt.PutValue(initializer.name(), std::move(value), RuntimeEventKind::kInitializer);
         seeded.insert(initializer.name());
       }
+    for (const auto &initializer : initializer_graph_->paged_cache_initializer())
+      if (!rt.HasValue(initializer.name())) {
+        rt.PutValue(initializer.name(),
+                    RuntimeValue::FromPagedCache(initializer, rt.struct_type_catalogue(),
+                                                 rt.quantization_parameters()),
+                    RuntimeEventKind::kInitializer);
+        seeded.insert(initializer.name());
+      }
   }
   return seeded;
 }
@@ -431,6 +439,7 @@ void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContex
         if (item.kind == RuntimeValue::Kind::kTensor && expected != nullptr) {
           Tensor &tensor = item.tensor;
           if (tensor.size_bytes() > 0 && tensor.data_type != DataType::STRING &&
+              tensor.borrowed_owner().use_count() == 0 &&
               (!tensor.has_allocation() || tensor.allocation_owner() != expected)) {
             EXT_ENFORCE_INVALID(tensor.bytes() != nullptr,
                                 "RuntimeSession: structured output has a null data pointer.");
@@ -442,6 +451,11 @@ void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContex
         } else if (item.kind == RuntimeValue::Kind::kStruct) {
           for (auto &[field, child] : item.fields)
             self(self, child, depth + 1);
+        } else if (item.kind == RuntimeValue::Kind::kSequence) {
+          if (item.elements.retained())
+            return;
+          item.elements.TransformInPlace(
+              [&](RuntimeValue &child) { self(self, child, depth + 1); });
         }
       };
       migrate(migrate, value->second, 0);
@@ -679,7 +693,7 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       if (!rt.release_intermediates()) {
         break;
       }
-      rt.RemoveSequence(action.name());
+      rt.Remove(action.name());
       break;
     case ExecuteActionKind::kDeleteMap:
       if (!rt.release_intermediates()) {
@@ -726,6 +740,12 @@ void RuntimeSession::MaterializeBorrowedOutputs(RuntimeContext &rt) const {
         else if (item.kind == RuntimeValue::Kind::kStruct)
           for (auto &[field, child] : item.fields)
             self(self, child, depth + 1);
+        else if (item.kind == RuntimeValue::Kind::kSequence) {
+          if (item.elements.retained())
+            return;
+          item.elements.TransformInPlace(
+              [&](RuntimeValue &child) { self(self, child, depth + 1); });
+        }
       };
       detach(detach, value->second, 0);
     }

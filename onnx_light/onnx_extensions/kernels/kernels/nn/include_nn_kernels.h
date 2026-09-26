@@ -10,6 +10,7 @@
 #include "onnx_extensions/kernels/kernels/auto_pad.h"
 
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -25,6 +26,71 @@ using ::onnx_light::core::runtime::DefaultOpset;
 using ::onnx_light::core::runtime::KernelBase;
 using ::onnx_light::core::runtime::KernelContext;
 using ::onnx_light::core::runtime::OpsetId;
+
+/**
+ * Computes opt-in paged attention for finite FLOAT Q/K/V of shape [1,1,L,D].
+ *
+ * Registers through RuntimeContext::RegisterKernelFn in domain ``onnx_light``
+ * as ``PagedAttention``; it does not replace ONNX Attention. Q and new K/V
+ * have equal sequence lengths. Prior pages remain immutable, including partial
+ * pages. Dense FLOAT and inline INT8/UINT8/INT4/UINT4 affine pages may coexist.
+ * Affine decoding supports scalar, per-axis and blocked FLOAT scales; other
+ * scale types, external payloads and structured encodings are rejected.
+ * Prior dense pages require owner-retaining storage (RuntimeValue::Retain).
+ */
+class PagedAttention : public KernelBase {
+public:
+  static constexpr const char *name = "onnx_kernels:CPU:onnx_light:PagedAttention";
+  explicit PagedAttention(const KernelContext &context);
+  struct Format {
+    int32_t storage_type = DataType::FLOAT;
+    float scale = 1;
+    int32_t zero_point = 0;
+  };
+  struct Formats {
+    Format key, value;
+  };
+  struct Options {
+    int64_t block_size = 16, max_tokens = 4096;
+    Format key_format, value_format;
+    bool is_causal = true;
+    int64_t left_window_size = -1;
+  };
+  using FormatSelector = std::function<Formats(const Tensor &key, const Tensor &value,
+                                               int64_t past_length, const Formats &defaults)>;
+  /// Constructs a kernel whose policy selects the appended page formats for every execution.
+  PagedAttention(const KernelContext &context, FormatSelector format_selector);
+  /// Reports one successful direct invocation; Run publishes only Y and present, not statistics.
+  struct Statistics {
+    /// Counts new stored payload bytes written by copying or conversion, excluding metadata/Y.
+    uint64_t copied_bytes = 0;
+    /// Counts FLOAT bytes decoded for attended tokens, counting repeated queries separately.
+    uint64_t dequantized_bytes = 0;
+    /// Counts peak numerical scratch bytes, excluding outputs, cache payloads and metadata.
+    uint64_t peak_workspace_bytes = 0;
+    /// Counts pages whose immutable metadata is validated rather than reused.
+    uint64_t validated_pages = 0;
+  };
+  struct Result {
+    Tensor Y;
+    RuntimeValue present;
+    Statistics statistics;
+  };
+
+  /// Returns an empty cache ready for a first append.
+  static RuntimeValue EmptyCache();
+  /// Appends independently formatted pages and computes bounded-workspace attention.
+  Result operator()(const Tensor &q, const Tensor &k, const Tensor &v, const RuntimeValue &past,
+                    const Options &options, RuntimeContext *rt = nullptr) const;
+  /// Executes four inputs and publishes Y/present only after successful computation.
+  void Run(RuntimeContext &rt) override;
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+
+private:
+  struct CacheAnalysis;
+  std::shared_ptr<CacheAnalysis> cache_analysis_;
+  FormatSelector format_selector_;
+};
 
 // ---------------------------------------------------------------------------
 // Reference implementations of the ``nn`` (neural network) backend test

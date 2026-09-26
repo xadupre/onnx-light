@@ -66,6 +66,45 @@ TEST(onnx_verify, VerifyModel_Valid) {
   EXPECT_NO_THROW(VerifyModel(model));
 }
 
+TEST(onnx_verify, PagedKVCacheTypeIsNamedAndVersioned) {
+  const auto type = PagedKVCacheTypeV1();
+  ASSERT_TRUE(type.has_struct_type());
+  EXPECT_EQ(type.struct_type().name(), "onnx_light.PagedKVCache");
+  ASSERT_EQ(type.struct_type().metadata_props().size(), 1u);
+  EXPECT_EQ(type.struct_type().metadata_props(0).key(), "onnx_light.type_version");
+  EXPECT_EQ(type.struct_type().metadata_props(0).value(), "1");
+  StructTypeCatalogue catalogue;
+  EXPECT_NO_THROW(ValidatePersistentType(catalogue, type));
+}
+
+TEST(onnx_verify, PagedCacheRejectsEncodedLogicalDimensionsWithSymbolicAlternatives) {
+  ModelProto model = MakeValidModel();
+  auto *cache = model.mutable_graph()->add_paged_cache_initializer();
+  cache->set_name("cache");
+  auto *block = cache->add_blocks();
+  block->set_start(0);
+  block->set_length(1);
+  auto *encoded = block->mutable_encoded_key();
+  encoded->mutable_affine()->set_storage_type(TensorProto::INT8);
+  auto *scale = encoded->mutable_affine()->mutable_scale();
+  scale->set_data_type(TensorProto::FLOAT);
+  scale->add_float_data(1.f);
+  auto *tensor = encoded->mutable_logical_type()->mutable_tensor_type();
+  tensor->set_elem_type(TensorProto::FLOAT);
+  for (int64_t dim : {1, 1, 2, 2})
+    tensor->mutable_shape()->add_dim()->set_dim_value(dim);
+  encoded->set_raw_data(std::string(4, '\0'));
+  auto *value = block->mutable_value();
+  value->set_data_type(TensorProto::FLOAT);
+  for (int64_t dim : {1, 1, 2, 2})
+    value->add_dims(dim);
+  for (float element : {1.f, 2.f, 3.f, 4.f})
+    value->add_float_data(element);
+  EXPECT_NO_THROW(VerifyModel(model));
+  tensor->mutable_shape()->mutable_dim(0)->set_dim_param("N");
+  EXPECT_THROW(VerifyModel(model), std::invalid_argument);
+}
+
 TEST(onnx_verify, PersistentBindings_RoundtripAndRootOnly) {
   ModelProto model = MakeValidModel();
   auto *binding = model.mutable_graph()->add_persistent_bindings();
@@ -194,6 +233,48 @@ TEST(onnx_verify, PersistentTypes_TraversesContainerFieldsAndCatalogueDiamonds) 
   EXPECT_THROW(ValidatePersistentType(catalogue, root), std::invalid_argument);
   StructTypeCatalogue empty;
   EXPECT_THROW(ValidatePersistentType(empty, root), std::invalid_argument);
+}
+
+TEST(onnx_verify, PersistentTypes_SequenceCompatibilityAndUnsupportedElements) {
+  StructTypeCatalogue catalogue;
+  TypeProto sequence;
+  auto *tensor = sequence.mutable_sequence_type()->mutable_elem_type()->mutable_tensor_type();
+  tensor->set_elem_type(TensorProto::FLOAT);
+  tensor->mutable_shape()->add_dim()->set_dim_value(2);
+  EXPECT_NO_THROW(ValidatePersistentType(catalogue, sequence));
+  EXPECT_TRUE(CompatiblePersistentTypes(catalogue, sequence, sequence));
+  TypeProto other = sequence;
+  other.mutable_sequence_type()
+      ->mutable_elem_type()
+      ->mutable_tensor_type()
+      ->mutable_shape()
+      ->mutable_dim(0)
+      ->set_dim_value(3);
+  EXPECT_FALSE(CompatiblePersistentTypes(catalogue, sequence, other));
+  other = sequence;
+  other.mutable_sequence_type()->mutable_elem_type()->mutable_tensor_type()->set_elem_type(
+      TensorProto::INT64);
+  EXPECT_FALSE(CompatiblePersistentTypes(catalogue, sequence, other));
+  EXPECT_FALSE(
+      CompatiblePersistentTypes(catalogue, sequence, sequence.sequence_type().elem_type()));
+  TypeProto optional, map, sparse, opaque, unset;
+  *optional.mutable_optional_type()->mutable_elem_type() = sequence;
+  map.mutable_map_type()->set_key_type(TensorProto::INT64);
+  *map.mutable_map_type()->mutable_value_type() = sequence;
+  sparse.mutable_sparse_tensor_type()->set_elem_type(TensorProto::FLOAT);
+  opaque.mutable_opaque_type();
+  for (const auto &type : {optional, map, sparse, opaque, unset}) {
+    EXPECT_THROW(ValidatePersistentType(catalogue, type), std::invalid_argument);
+    TypeProto nested;
+    *nested.mutable_sequence_type()->mutable_elem_type() = type;
+    EXPECT_THROW(ValidatePersistentType(catalogue, nested), std::invalid_argument);
+  }
+  TypeProto nested;
+  auto *element = &nested;
+  for (size_t i = 0; i < 65; ++i)
+    element = element->mutable_sequence_type()->mutable_elem_type();
+  element->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+  EXPECT_THROW(ValidatePersistentType(catalogue, nested), std::invalid_argument);
 }
 
 TEST(onnx_verify, PersistentBindings_RejectsLegacyFieldPathWire) {
@@ -473,7 +554,7 @@ TEST(onnx_verify, PersistentBindings_TypeErrorsPrecedeUseCountErrors) {
   model.mutable_graph()->mutable_node(0)->clear_input();
   model.mutable_graph()->mutable_output(0)->mutable_type()->mutable_tensor_type()->set_elem_type(
       TensorProto::INT32);
-  ExpectPersistentBindingError(model.graph(), "compatible tensor/struct types");
+  ExpectPersistentBindingError(model.graph(), "compatible tensor/struct/sequence types");
   model.mutable_graph()->mutable_output(0)->mutable_type()->mutable_tensor_type()->set_elem_type(
       TensorProto::STRING);
   ExpectPersistentBindingError(model.graph(), "String tensors cannot be persistent");

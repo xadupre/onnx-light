@@ -1139,6 +1139,37 @@ template <typename Deleter> inline void attach_raw_data_deleter(Deleter &&delete
 }
 END_PROTO()
 
+BEGIN_PROTO(PagedCacheBlockProto, "One immutable KV page with a contiguous logical token range.")
+FIELD_OPTIONAL(int64_t, start, 1, "Logical offset of the first token.")
+FIELD_OPTIONAL(int64_t, length, 2, "Number of valid tokens, positive and no greater than capacity.")
+FIELD_OPTIONAL_ONEOF(TensorProto, key, 3, key_payload, "Inline dense key tensor.")
+FIELD_OPTIONAL_ONEOF(EncodedValueProto, encoded_key, 5, key_payload, "Inline encoded key tensor.")
+ONEOF(key_payload, key_, encoded_key_)
+FIELD_OPTIONAL_ONEOF(TensorProto, value, 4, value_payload, "Inline dense value tensor.")
+FIELD_OPTIONAL_ONEOF(EncodedValueProto, encoded_value, 6, value_payload,
+                     "Inline encoded value tensor.")
+ONEOF(value_payload, value_, encoded_value_)
+inline bool has_key_payload() const { return has_key() || has_encoded_key(); }
+inline bool has_value_payload() const { return has_value() || has_encoded_value(); }
+END_PROTO()
+
+BEGIN_PROTO(PagedCacheProto,
+            "A serializable KV cache. Pages have contiguous token ranges and independently "
+            "dense or encoded FLOAT [1,1,capacity,width] key/value payloads. Model-local type "
+            "and quantization parameter references are resolved against the containing model.")
+FIELD_REPEATED_PROTO(PagedCacheBlockProto, blocks, 1, "Ordered immutable KV pages.")
+FIELD_STR(name, 2, "Graph-scoped initializer name, unique across initializer categories.")
+FIELD_STR(doc_string, 3, "Human-readable documentation.")
+END_PROTO()
+
+/**
+ * Returns the named version-1 logical type for an onnx-light paged KV cache.
+ *
+ * Describes a structure containing a sequence of pages; it does not contain or
+ * serialize cache state. Use ``PagedCacheProto`` to represent serialized pages.
+ */
+ONNX_LIGHT_PROTO_API TypeProto PagedKVCacheTypeV1();
+
 // ValueInfoProto
 
 // message ValueInfoProto {
@@ -1461,6 +1492,9 @@ FIELD_REPEATED_PROTO(
     PersistentBindingProto, persistent_bindings, 1001,
     "Declares persistent output-to-input wiring on the model root graph only. "
     "Destinations must not overlap. Standard ONNX cannot represent this extension.")
+FIELD_REPEATED_PROTO(PagedCacheProto, paged_cache_initializer, 1002,
+                     "Named paged KV cache defaults. Names are unique across all initializers "
+                     "and may also name graph inputs (onnx-light extension).")
 /**
  * Appends a new node built from *op_type*, *inputs*, *outputs* and the
  * optional *domain* / *name* to the graph and returns a reference to it.

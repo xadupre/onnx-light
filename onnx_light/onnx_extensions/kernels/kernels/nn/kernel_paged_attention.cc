@@ -311,8 +311,6 @@ struct PagedAttention::CacheAnalysis {
 PagedAttention::PagedAttention(const KernelContext &context)
     : KernelBase(context), cache_analysis_(std::make_shared<CacheAnalysis>()) {}
 
-TypeProto PagedAttention::CacheType() { return PagedCacheProto::CacheType(); }
-
 RuntimeValue PagedAttention::EmptyCache() {
   RuntimeValue result;
   result.fields.emplace("blocks", RuntimeValue(std::vector<RuntimeValue>{}));

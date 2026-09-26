@@ -1222,6 +1222,7 @@ void define_repeated_field_type_proto(nb::class_<utils::RepeatedField<T>> &nbcls
 void AddOnnxPyProto(nb::module_ &m) {
   m.doc() = "onnx from python without protobuf but using the same format";
   m.attr("IR_VERSION") = static_cast<int>(IR_VERSION);
+  m.def("PagedKVCacheTypeV1", &PagedKVCacheTypeV1);
 
   m.def(
       "utils_onnx_read_varint64",
@@ -2758,8 +2759,7 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
   PYDEFINE_PROTO(m, PagedCacheProto)
       .PYFIELD(PagedCacheProto, blocks)
       .PYFIELD_STR(PagedCacheProto, name)
-      .PYFIELD_STR(PagedCacheProto, doc_string)
-      .def_static("CacheType", &PagedCacheProto::CacheType);
+      .PYFIELD_STR(PagedCacheProto, doc_string);
   PYADD_PROTO_SERIALIZATION(PagedCacheProto);
   DECLARE_REPEATED_FIELD_PROTO(PagedCacheProto, rep_paged_cache);
   define_repeated_field_type_proto(rep_paged_cache, rep_paged_cache_proto);

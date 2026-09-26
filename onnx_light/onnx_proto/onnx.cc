@@ -1683,9 +1683,15 @@ void PagedCacheProto::PrintToStringStream(std::stringstream &ss,
                                  NAME_EXIST_VALUE(doc_string));
 }
 
-TypeProto PagedCacheProto::CacheType() {
+TypeProto PagedKVCacheTypeV1() {
   TypeProto result;
-  auto *blocks = result.mutable_struct_type()->mutable_structure()->add_field();
+  auto *root = result.mutable_struct_type();
+  root->set_name("onnx_light.PagedKVCache");
+  root->set_doc_string("Version 1 logical type for paged key/value attention state.");
+  auto *version = root->add_metadata_props();
+  version->set_key("onnx_light.type_version");
+  version->set_value("1");
+  auto *blocks = root->mutable_structure()->add_field();
   blocks->set_name("blocks");
   auto *page = blocks->mutable_type()
                    ->mutable_sequence_type()
@@ -1699,12 +1705,12 @@ TypeProto PagedCacheProto::CacheType() {
     const bool scalar = std::string(name) == "start" || std::string(name) == "length";
     tensor->set_elem_type(scalar ? TensorProto::INT64 : TensorProto::FLOAT);
     auto *shape = tensor->mutable_shape();
-    if (!scalar)
-      for (int i = 0; i < 4; ++i) {
-        auto *dim = shape->add_dim();
-        if (i < 2)
-          dim->set_dim_value(1);
-      }
+    if (!scalar) {
+      shape->add_dim()->set_dim_value(1);
+      shape->add_dim()->set_dim_value(1);
+      shape->add_dim();
+      shape->add_dim();
+    }
   }
   return result;
 }

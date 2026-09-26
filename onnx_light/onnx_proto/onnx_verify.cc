@@ -1014,6 +1014,7 @@ void StructTypeCatalogue::ValidatePagedCache(const PagedCacheProto &value,
                                              bool require_resolved_reference,
                                              const TypeProto *declared_type) const {
   const TypeProto::Tensor *declared_key = nullptr, *declared_value = nullptr;
+  const TypeProto cache_contract = PagedKVCacheTypeV1();
   if (declared_type) {
     ValidatePersistentType(*this, *declared_type);
     const auto structure = [&](const TypeProto &type,
@@ -1025,19 +1026,33 @@ void StructTypeCatalogue::ValidatePagedCache(const PagedCacheProto &value,
       return resolved.structure();
     };
     const auto &root = structure(*declared_type, 1);
+    const auto &contract_root = structure(cache_contract, 1);
     const auto &blocks = root.field(0);
-    EXT_ENFORCE_INVALID(blocks.name() == "blocks" && blocks.type().has_sequence_type(),
+    const auto &contract_blocks = contract_root.field(0);
+    EXT_ENFORCE_INVALID(blocks.name() == contract_blocks.name() &&
+                            blocks.type().has_sequence_type(),
                         "PagedCacheProto: declaration requires a blocks sequence.");
     const auto &page = structure(blocks.type().sequence_type().elem_type(), 4);
-    for (const auto &field : page.field()) {
-      const bool scalar = field.name() == "start" || field.name() == "length";
-      EXT_ENFORCE_INVALID((scalar || field.name() == "key" || field.name() == "value") &&
-                              field.type().has_tensor_type(),
+    const auto &contract_page = structure(contract_blocks.type().sequence_type().elem_type(), 4);
+    for (size_t i = 0; i < page.field().size(); ++i) {
+      const auto &field = page.field(i);
+      const auto &contract_field = contract_page.field(i);
+      EXT_ENFORCE_INVALID(field.name() == contract_field.name() && field.type().has_tensor_type() &&
+                              contract_field.type().has_tensor_type(),
                           "PagedCacheProto: invalid page field declaration.");
       const auto &tensor = field.type().tensor_type();
+      const auto &contract_tensor = contract_field.type().tensor_type();
+      const bool scalar = contract_tensor.shape().dim_size() == 0;
       EXT_ENFORCE_INVALID(
-          tensor.elem_type() == (scalar ? TensorProto::INT64 : TensorProto::FLOAT) &&
-              (!tensor.has_shape() || tensor.shape().dim_size() == (scalar ? 0 : 4)),
+          tensor.elem_type() == contract_tensor.elem_type() && tensor.has_shape() &&
+              tensor.shape().dim_size() == (scalar ? 0 : 4) &&
+              (scalar ||
+               (tensor.shape().dim(0).has_dim_value() ==
+                    contract_tensor.shape().dim(0).has_dim_value() &&
+                tensor.shape().dim(0).dim_value() == contract_tensor.shape().dim(0).dim_value() &&
+                tensor.shape().dim(1).has_dim_value() ==
+                    contract_tensor.shape().dim(1).has_dim_value() &&
+                tensor.shape().dim(1).dim_value() == contract_tensor.shape().dim(1).dim_value())),
           "PagedCacheProto: invalid page field type or rank.");
       if (field.name() == "key")
         declared_key = &tensor;

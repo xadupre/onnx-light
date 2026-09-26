@@ -1538,40 +1538,43 @@ LightOpSchema MakeLinearAttentionSchema(int since_version) {
 LightOpSchema MakePagedAttentionSchema() {
   return LightOpSchema(
       "PagedAttention", "onnx_light", 1,
-      "Appends immutable KV pages and computes attention for finite FLOAT Q/K/V tensors "
-      "of shape [1,1,L,D], with equal new sequence lengths and matching Q/K head sizes. "
-      "The cache is a struct containing blocks, a sequence of structs with INT64 scalar "
-      "start/length and FLOAT logical key/value tensors [1,1,capacity,head_size]. "
-      "Pages may be dense or inline affine INT8/UINT8/INT4/UINT4 encodings. "
-      "Y has shape [1,1,L,value_head_size]; present preserves the cache type. "
-      "Partial pages are sealed. The kernel must be registered explicitly.",
-      {{"Q", "Queries [1,1,L,key_head_size].", "T"},
-       {"K", "New keys [1,1,L,key_head_size].", "T"},
-       {"V", "New values [1,1,L,value_head_size].", "T"},
-       {"past", "Structured cache containing the blocks sequence.", "C"}},
-      {{"Y", "Attention result [1,1,L,value_head_size].", "T"},
-       {"present", "Cache including the newly appended pages.", "C"}},
-      {{"T", {TensorType::kFloat}, "FLOAT tensors."},
-       {"C", {TensorType::kStruct}, "Named paged-cache structure."}},
-      {{"block_size", "Maximum token capacity of each page; positive.", AttributeType::INT, false,
-        int64_t(16)},
-       {"max_tokens", "Maximum total number of cached tokens; positive.", AttributeType::INT, false,
-        int64_t(4096)},
-       {"is_causal", "Uses causal attention when 1; must be 0 or 1.", AttributeType::INT, false,
-        int64_t(1)},
-       {"left_window_size", "Number of preceding tokens to attend, or -1 for no left limit.",
+      "Version 1 appends immutable KV pages and computes attention for finite FLOAT Q/K/V tensors "
+      "of shape [1,1,L,D], with equal new sequence lengths and matching Q/K head sizes. The "
+      "structured past/present type is onnx_light.PagedKVCache version 1: blocks is a dynamic "
+      "sequence of pages with INT64 scalar start/length and FLOAT logical key/value tensors "
+      "[1,1,capacity,head_size]. Runtime pages may store dense FLOAT or inline affine "
+      "INT8/UINT8/INT4/UINT4 data. Shape inference produces FLOAT Y [1,1,L,value_head_size] and "
+      "preserves the declared cache type on present. The schema does not register an execution "
+      "kernel; kernels must be registered explicitly.",
+      {{"Q", "FLOAT queries [1,1,L,key_head_size].", "T"},
+       {"K", "FLOAT new keys [1,1,L,key_head_size].", "T"},
+       {"V", "FLOAT new values [1,1,L,value_head_size].", "T"},
+       {"past", "Version-1 onnx_light.PagedKVCache structured value.", "C"}},
+      {{"Y", "FLOAT attention result [1,1,L,value_head_size].", "T"},
+       {"present", "Version-1 cache after appending the new pages.", "C"}},
+      {{"T", {TensorType::kFloat}, "Constrain Q/K/V and Y to FLOAT tensors."},
+       {"C", {TensorType::kStruct}, "Version-1 named paged-cache structure."}},
+      {{"block_size", "Positive maximum token capacity for each new page.", AttributeType::INT,
+        false, int64_t(16)},
+       {"max_tokens", "Positive maximum retained token count, including past and new tokens.",
+        AttributeType::INT, false, int64_t(4096)},
+       {"is_causal", "Whether to apply causal masking; only 0 or 1 is valid.", AttributeType::INT,
+        false, int64_t(1)},
+       {"left_window_size", "Past-token window; -1 is unbounded and non-negative values limit it.",
         AttributeType::INT, false, int64_t(-1)},
-       {"key_storage_type", "New key page dtype: FLOAT, INT8, UINT8, INT4 or UINT4.",
+       {"key_storage_type", "Storage type for new key pages: FLOAT, INT8, UINT8, INT4 or UINT4.",
         AttributeType::INT, false, int64_t(TensorProto::FLOAT)},
-       {"value_storage_type", "New value page dtype: FLOAT, INT8, UINT8, INT4 or UINT4.",
-        AttributeType::INT, false, int64_t(TensorProto::FLOAT)},
-       {"key_scale", "Positive finite key quantization scale; 1 for dense pages.",
+       {"value_storage_type",
+        "Storage type for new value pages: FLOAT, INT8, UINT8, INT4 or UINT4.", AttributeType::INT,
+        false, int64_t(TensorProto::FLOAT)},
+       {"key_scale", "Positive finite scalar quantization scale for new key pages; 1 for FLOAT.",
         AttributeType::FLOAT, false, 1.0f},
-       {"value_scale", "Positive finite value quantization scale; 1 for dense pages.",
+       {"value_scale",
+        "Positive finite scalar quantization scale for new value pages; 1 for FLOAT.",
         AttributeType::FLOAT, false, 1.0f},
-       {"key_zero_point", "Key zero point in the storage dtype range; 0 for dense pages.",
+       {"key_zero_point", "Key zero point within its storage range; 0 for FLOAT.",
         AttributeType::INT, false, int64_t(0)},
-       {"value_zero_point", "Value zero point in the storage dtype range; 0 for dense pages.",
+       {"value_zero_point", "Value zero point within its storage range; 0 for FLOAT.",
         AttributeType::INT, false, int64_t(0)}});
 }
 

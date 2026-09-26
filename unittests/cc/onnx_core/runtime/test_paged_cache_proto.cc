@@ -37,7 +37,7 @@ ModelProto CacheModel() {
   *model.mutable_graph()->add_paged_cache_initializer() = Cache();
   auto *output = model.mutable_graph()->add_output();
   output->set_name("cache");
-  *output->mutable_type() = PagedCacheProto::CacheType();
+  *output->mutable_type() = PagedKVCacheTypeV1();
   return model;
 }
 
@@ -68,7 +68,7 @@ TEST(PagedCacheProto, OneofSwitchesAndRoundTrips) {
   auto *block = cache.mutable_blocks(0);
   auto *encoded = block->mutable_encoded_key();
   EXPECT_FALSE(block->has_key());
-  *encoded->mutable_logical_type() = PagedCacheProto::CacheType();
+  encoded->mutable_logical_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
   encoded->mutable_affine()->set_storage_type(TensorProto::INT8);
   PagedCacheBlockProto parsed;
   ASSERT_TRUE(parsed.ParseFromString(block->SerializeAsString()));

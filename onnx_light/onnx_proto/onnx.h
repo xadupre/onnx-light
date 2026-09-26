@@ -1158,9 +1158,15 @@ BEGIN_PROTO(PagedCacheProto,
 FIELD_REPEATED_PROTO(PagedCacheBlockProto, blocks, 1, "Ordered immutable KV pages.")
 FIELD_STR(name, 2, "Graph-scoped initializer name, unique across initializer categories.")
 FIELD_STR(doc_string, 3, "Human-readable documentation.")
-/** Returns the logical runtime cache declaration, independently of page storage formats. */
-static TypeProto CacheType();
 END_PROTO()
+
+/**
+ * Returns the named version-1 logical type for an onnx-light paged KV cache.
+ *
+ * Describes a structure containing a sequence of pages; it does not contain or
+ * serialize cache state. Use ``PagedCacheProto`` to represent serialized pages.
+ */
+ONNX_LIGHT_PROTO_API TypeProto PagedKVCacheTypeV1();
 
 // ValueInfoProto
 

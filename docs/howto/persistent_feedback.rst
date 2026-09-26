@@ -447,24 +447,51 @@ and a multi-head fallback, is provided in
 Optional heterogeneous paged KV
 -------------------------------
 
-The native ``onnx_kernels::kernel::PagedAttention`` consumer provides an
-opt-in alternative to dense Attention caches. It does not change the standard
-ONNX ``Attention`` operator or introduce another state subsystem. Declare
-``past`` and ``present`` with ``PagedAttention::CacheType()`` and bind
+Versioned logical cache type
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The kernel-independent ``PagedKVCacheTypeV1()`` declaration in ``onnx_proto``
+defines the named type ``onnx_light.PagedKVCache``, version 1 (recorded as
+``onnx_light.type_version = "1"``). The root is a structure containing
+``blocks``, a dynamic sequence of page structures. Each page has scalar INT64
+``start`` and ``length`` fields and logical FLOAT ``key`` and ``value`` tensors
+with shape ``[1,1,capacity,head_size]``. Capacity and head size are not fixed
+by the type; K and V may have different head sizes. The type describes the
+logical structure, not a physical encoding or cache contents.
+
+Versioned operator schema
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``onnx_light::PagedAttention`` has an independent ``LightOpSchema`` at domain
+``onnx_light``, opset 1. It takes ``Q, K, V, past`` and produces ``Y, present``.
+Q/K/V and Y are FLOAT ``[1,1,L,D]`` tensors; Q/K/V use the same new-token
+length, and Q/K head sizes match. ``past`` and ``present`` use the version-1
+paged-cache structure. Shape inference checks known ranks and dimensions,
+returns Y as ``[1,1,L,value_head_size]``, and preserves the declared cache type
+for ``present`` (including a model-local struct type reference).
+
+All attributes are optional: ``block_size=16`` and ``max_tokens=4096`` must be
+positive; ``is_causal=1`` accepts only 0 or 1; ``left_window_size=-1`` means
+unbounded and non-negative values bound preceding tokens. ``key_storage_type``
+and ``value_storage_type`` default to FLOAT and accept FLOAT, INT8, UINT8, INT4
+or UINT4. Their scalar ``key_scale``/``value_scale`` default to 1 and must be
+positive and finite; ``key_zero_point``/``value_zero_point`` default to 0 and
+must fit the selected storage range. FLOAT uses identity scale and zero point.
+These attribute value checks and data-dependent cache checks happen at
+execution. The schema and shape-function registration do not register a kernel.
+
+Kernel implementation
+~~~~~~~~~~~~~~~~~~~~~
+
+The native ``onnx_kernels::kernel::PagedAttention`` is an opt-in consumer. It
+does not change standard ONNX ``Attention`` or add another state subsystem.
+Declare ``past`` and ``present`` with ``PagedKVCacheTypeV1()`` and bind
 ``past <- present`` in ``GraphProto.persistent_bindings``. Initialize each
 request with ``PagedAttention::EmptyCache()``.
 
-``onnx_light::PagedAttention`` has a ``LightOpSchema`` at opset 1 and a
-registered shape-inference function
-:cpp:func:`onnx_shapes::shapes::nn::ComputeShapePagedAttention`.
-Import domain ``onnx_light`` at version 1
-in the model. Inference checks the known Q/K/V dimensions and the cache
-structure, produces FLOAT ``Y`` with shape ``[1,1,L,value_head_size]``, and
-preserves the declared cache type for ``present``, including model-local type
-references. Unknown ranks and symbolic dimensions remain supported. Cache
-page capacities should remain unspecified because appended pages can have
-different lengths. Schema and shape-function registration do not register the
-execution kernel.
+Import domain ``onnx_light`` at version 1 in the model. Unknown ranks and
+symbolic Q/K/V dimensions remain supported. Cache page capacities should remain
+unspecified because appended pages can have different lengths.
 
 Register the native kernel on the context used by the state:
 
@@ -490,24 +517,35 @@ execution and allocator routing use the normal runtime contracts.
 Python feedback represents this cache with ``PagedCacheProto`` rather than
 converting its internal sequence into a Python list.
 
-Serialized paged caches
-~~~~~~~~~~~~~~~~~~~~~~
+Serialized cache values
+~~~~~~~~~~~~~~~~~~~~~~~
 
-``PagedCacheProto`` is the dedicated value representation, distinct from its
-logical ``TypeProto`` declaration. Its ``blocks`` field contains
+The logical type returned by ``PagedKVCacheTypeV1()`` does not serialize a
+cache value. At runtime, a cache is a ``RuntimeValue`` structure containing a
+dynamic ``RuntimeSequence`` of pages. The sequence cannot be represented as one
+fixed-layout ``EncodedValueProto``; an encoded value represents one tensor (or
+one fixed-layout structured value), not the complete cache and its dynamic
+page sequence.
+
+``PagedCacheProto`` is the dedicated onnx-light serialized value representation,
+separate from the logical ``TypeProto``. Its ``blocks`` field contains
 ``PagedCacheBlockProto`` messages with explicit ``start`` and ``length``.
 Each block selects exactly one dense ``key`` or ``encoded_key``, and one dense
 ``value`` or ``encoded_value``. Dense payloads use ``TensorProto``; encoded
 payloads retain ``EncodedValueProto`` layouts and parameter references.
+The current kernel accepts inline dense FLOAT pages or affine INT8, UINT8, INT4
+or UINT4 pages with FLOAT scales; K and V may use independent per-axis or
+blocked formats. Page ranges start at zero, are contiguous and have positive
+lengths no greater than their physical capacities. K/V capacities match within
+each block, and each tensor's head width is consistent across blocks.
 
-``PagedCacheProto::CacheType()`` is also the source of
-``PagedAttention::CacheType()``. ``RuntimeValue::FromPagedCache`` restores the
-recursive runtime value with retained storage owners; ``ToPagedCache`` exports
-it without decoding pages. Already retained dense buffers and managed encoded
-payloads remain shared. Binary protobuf serialization writes their contents;
-parsing reconstructs owned data. Referenced types and shared quantization
-parameters still belong to the containing model, not to the standalone cache.
-Pass its catalogues to the native conversion functions when needed.
+``RuntimeValue::FromPagedCache`` restores the recursive runtime value with
+retained storage owners; ``ToPagedCache`` exports it without decoding pages.
+Already retained dense buffers and managed encoded payloads remain shared.
+Binary protobuf serialization writes their contents; parsing reconstructs
+owned data. Referenced types and shared quantization parameters still belong to
+the containing model, not to the standalone cache. Pass its catalogues to the
+native conversion functions when needed.
 
 ``GraphProto.paged_cache_initializer`` (extension field 1002) stores named
 cache defaults. Names are unique across all initializer categories. A default
@@ -526,9 +564,12 @@ values, including through ``values`` and ``reset``. Serializing a returned
 cache and placing it in a new model's ``paged_cache_initializer`` resumes the
 cache independently of the original state.
 
-Validation rejects missing payload alternatives, gaps/overlaps, invalid
-lengths, inconsistent capacities/widths, symbolic payload dimensions and
-external page data. Load external data before constructing the cache.
+Validation rejects missing payload alternatives, negative or non-contiguous
+starts, non-positive lengths, lengths larger than page capacity, inconsistent
+K/V capacities or widths, non-concrete encoded payload dimensions, and external
+page data. The runtime kernel additionally validates these ranges and
+capacities on actual page values before attention. Load external data before
+constructing the serialized cache.
 This extension is supported by onnx-light binary protobuf, not standard ONNX,
 ORT, or ONNX text export. Legacy graph extraction, prefixing and merging reject
 cache initializers explicitly rather than silently losing them; use

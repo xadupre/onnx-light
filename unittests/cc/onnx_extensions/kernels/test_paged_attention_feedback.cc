@@ -31,13 +31,12 @@ ModelProto PagedModel(bool gate = false, int64_t max_tokens = 8) {
   for (const auto &name : {"Q", "K", "V", "past"}) {
     auto *input = graph->add_input();
     input->set_name(name);
-    *input->mutable_type() = std::string(name) == "past" ? PagedAttention::CacheType() : FeedType();
+    *input->mutable_type() = std::string(name) == "past" ? PagedKVCacheTypeV1() : FeedType();
   }
   for (const auto &name : {"Y", "present"}) {
     auto *output = graph->add_output();
     output->set_name(name);
-    *output->mutable_type() =
-        std::string(name) == "present" ? PagedAttention::CacheType() : FeedType();
+    *output->mutable_type() = std::string(name) == "present" ? PagedKVCacheTypeV1() : FeedType();
   }
   auto *node = graph->add_node();
   node->set_domain("onnx_light");

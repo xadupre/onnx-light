@@ -69,8 +69,6 @@ public:
     Statistics statistics;
   };
 
-  /// Returns the cache declaration with a sequence of named page structures.
-  static TypeProto CacheType();
   /// Returns an empty cache ready for a first append.
   static RuntimeValue EmptyCache();
   /// Appends independently formatted pages and computes bounded-workspace attention.

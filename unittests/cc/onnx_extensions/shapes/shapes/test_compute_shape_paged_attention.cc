@@ -116,7 +116,7 @@ TEST(PagedAttentionShape, AcceptsSymbolicTensorDescriptorsAndEmptyAppend) {
   auto context = PagedContext();
   for (const char *name : {"Q", "K", "V"})
     context.Set(name, core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
-                                                core::symbolic::SymShape{1, 1, 0, 4}));
+                                                core::symbolic::SymShape{1, 1, int64_t{0}, 4}));
   context.ComputeShapeNode(PagedNode());
   EXPECT_TRUE(context.GetType("Y").Equals(PagedTensor({1, 1, 0, 4})));
 }

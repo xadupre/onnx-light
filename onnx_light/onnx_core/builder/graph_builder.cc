@@ -456,7 +456,7 @@ void GraphBuilder::RebuildStructuredState() {
   }
   for (const auto &initializer : paged_cache_initializers_)
     if (input_names.count(initializer.name().value()) == 0)
-      shapes.SetType(initializer.name().value(), PagedCacheProto::CacheType());
+      shapes.SetType(initializer.name().value(), PagedKVCacheTypeV1());
   const auto declarations = StructuredDeclarations(value_infos_);
   RefreshLocalFunctions();
   for (std::size_t i = 0; i < nodes_.size(); ++i) {
@@ -556,7 +556,7 @@ const std::string &GraphBuilder::MakePagedCacheInitializer(const PagedCacheProto
                                is_input && input->has_type() ? &input->type() : nullptr);
   ShapesContext validated = Shapes();
   if (!is_input)
-    validated.SetType(name, PagedCacheProto::CacheType());
+    validated.SetType(name, PagedKVCacheTypeV1());
   const std::string &reserved = is_input ? *names_.find(name) : ReserveName(name);
   paged_cache_initializers_.push_back(PagedCacheProto(value));
   compute_.Shapes() = std::move(validated);

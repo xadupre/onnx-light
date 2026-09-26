@@ -36,7 +36,7 @@ def make_model():
     for name, values in (("past", inputs), ("present", outputs)):
         info = onnx.ValueInfoProto()
         info.name = name
-        info.type.CopyFrom(onnx.PagedCacheProto.CacheType())
+        info.type.CopyFrom(onnx.PagedKVCacheTypeV1())
         values.append(info)
     model = helper.make_model(
         helper.make_graph(

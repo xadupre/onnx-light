@@ -978,7 +978,7 @@ void ShapesContext::ComputeShapeGraph(const GraphProto &graph) {
     catalogue.ValidatePagedCache(
         init, true, input != graph.input().end() && input->has_type() ? &input->type() : nullptr);
     if (input == graph.input().end())
-      SetType(init.name(), PagedCacheProto::CacheType());
+      SetType(init.name(), PagedKVCacheTypeV1());
   }
   for (const auto &init : graph.ref_encoded_initializer()) {
     const auto input = std::find_if(graph.input().begin(), graph.input().end(),

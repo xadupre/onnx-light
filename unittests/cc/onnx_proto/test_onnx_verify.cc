@@ -66,6 +66,17 @@ TEST(onnx_verify, VerifyModel_Valid) {
   EXPECT_NO_THROW(VerifyModel(model));
 }
 
+TEST(onnx_verify, PagedKVCacheTypeIsNamedAndVersioned) {
+  const auto type = PagedKVCacheTypeV1();
+  ASSERT_TRUE(type.has_struct_type());
+  EXPECT_EQ(type.struct_type().name(), "onnx_light.PagedKVCache");
+  ASSERT_EQ(type.struct_type().metadata_props().size(), 1u);
+  EXPECT_EQ(type.struct_type().metadata_props(0).key(), "onnx_light.type_version");
+  EXPECT_EQ(type.struct_type().metadata_props(0).value(), "1");
+  StructTypeCatalogue catalogue;
+  EXPECT_NO_THROW(ValidatePersistentType(catalogue, type));
+}
+
 TEST(onnx_verify, PagedCacheRejectsEncodedLogicalDimensionsWithSymbolicAlternatives) {
   ModelProto model = MakeValidModel();
   auto *cache = model.mutable_graph()->add_paged_cache_initializer();

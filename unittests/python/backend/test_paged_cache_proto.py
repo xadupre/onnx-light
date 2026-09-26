@@ -9,11 +9,13 @@ import unittest
 import numpy
 
 from onnx_light import onnx
+from onnx_light.ext_test_case import import_or_skip
 from onnx_light.onnx import compose, helper, numpy_helper
 from onnx_light.onnx_proto import verify
 from onnx_light.onnx_proto._text_format import serialize_to_textproto
 from onnx_light.onnx_py._onnxpycore import builder
-from onnx_light.onnx_py._onnxpykernels import runtime
+
+runtime = import_or_skip("onnx_light.onnx_py._onnxpykernels", "runtime")
 
 
 def make_cache():

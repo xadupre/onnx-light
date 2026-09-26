@@ -708,3 +708,46 @@ TEST(onnx_alignment_options, PreAllocateExternalDataRejectsCaseAliasedLocations)
   std::remove(weights_file.c_str());
   std::remove(other_file.c_str());
 }
+
+TEST(onnx_alignment_options, SerializeExternalDataRejectsWindowsTrailingAliases) {
+  const std::string onnx_file = "test_external_windows_alias.onnx";
+  const std::string weights_file = "test_external_windows_alias.data";
+  const std::string other_file = "test_external_windows_alias_other.data";
+  for (const char *suffix : {".", " "}) {
+    for (const std::string &location : {weights_file, other_file}) {
+      const std::string alias = location + suffix;
+      ModelProto model = MakeModelWithExternalOffset(location, 0);
+      ModelProto second = MakeModelWithExternalOffset(alias, 0);
+      model.ref_graph().add_initializer()->CopyFrom(second.ref_graph().ref_initializer()[0]);
+      {
+        utils::TwoFilesWriteStream wstream(onnx_file, weights_file);
+        SerializeOptions sopts;
+        sopts.raw_data_threshold = 0;
+        EXPECT_THROW(SerializeProtoToStream(model, wstream, sopts), std::runtime_error);
+      }
+      std::remove(onnx_file.c_str());
+      std::remove(weights_file.c_str());
+      std::remove(other_file.c_str());
+      std::remove(alias.c_str());
+    }
+  }
+}
+
+TEST(onnx_alignment_options, PreAllocateExternalDataRejectsWindowsTrailingAliases) {
+  const std::string onnx_file = "test_external_windows_alias_preallocate.onnx";
+  const std::string weights_file = "test_external_windows_alias_preallocate.data";
+  const std::string other_file = "test_external_windows_alias_preallocate_other.data";
+  for (const char *suffix : {".", " "}) {
+    {
+      utils::TwoFilesWriteStream wstream(onnx_file, weights_file);
+      EXPECT_THROW(wstream.pre_allocate_weights(weights_file + suffix, 4), std::runtime_error);
+      wstream.pre_allocate_weights(other_file, 4);
+      EXPECT_THROW(wstream.pre_allocate_weights(other_file + suffix, 4), std::runtime_error);
+    }
+    std::remove(onnx_file.c_str());
+    std::remove(weights_file.c_str());
+    std::remove(other_file.c_str());
+    std::remove((weights_file + suffix).c_str());
+    std::remove((other_file + suffix).c_str());
+  }
+}

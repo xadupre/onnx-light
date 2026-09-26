@@ -49,6 +49,15 @@ std::filesystem::path normalized_model_parent(const std::string &model_path) {
   return parent.lexically_normal();
 }
 
+void reject_windows_trailing_filename_alias(const std::filesystem::path &filename,
+                                            const std::string &location) {
+  const std::string value = filename.string();
+  EXT_ENFORCE(value.back() != '.' && value.back() != ' ',
+              "External data filename must not end with a dot or space because Windows aliases "
+              "such names. location=",
+              location);
+}
+
 std::string validate_weights_file_is_next_to_model(const std::string &model_path,
                                                    const std::string &weights_file) {
   std::filesystem::path weights_path(weights_file);
@@ -66,6 +75,7 @@ std::string validate_weights_file_is_next_to_model(const std::string &model_path
   EXT_ENFORCE(!normalized_weights.filename().empty(),
               "External weights file must include a filename. model=", model_path,
               ", weights=", weights_file);
+  reject_windows_trailing_filename_alias(normalized_weights.filename(), weights_file);
 
   std::filesystem::path final_path = weights_parent / normalized_weights.filename();
   // Reject symlinks as write targets to prevent TOCTOU-based arbitrary file overwrites
@@ -94,6 +104,7 @@ std::filesystem::path validate_external_location_is_next_to_model(const std::str
       "External data location must be a file name next to the model file. location=", location);
   EXT_ENFORCE(!normalized_location.filename().empty(),
               "External data location must include a filename. location=", location);
+  reject_windows_trailing_filename_alias(normalized_location.filename(), location);
 
   std::filesystem::path final_path =
       normalized_model_parent(model_path) / normalized_location.filename();

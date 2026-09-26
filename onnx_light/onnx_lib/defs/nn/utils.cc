@@ -130,6 +130,22 @@ void AttentionPropagateElemTypeFromInputToOutput(InferenceContext &ctx) {
 
   if (ctx.hasOutput(3)) { // has qk_matmul_output
     propagateElemTypeFromInputToOutput(ctx, 0, 3);
+    if (qk_matmul_shape.dim_size() == 4 && ctx.hasInput(4) && ctx.hasInput(5)) {
+      // The cached length is a sum, not the current KV length or its symbol.
+      auto *total_length = qk_matmul_shape.mutable_dim(3);
+      total_length->clear_dim_value();
+      total_length->clear_dim_param();
+      if (hasInputShape(ctx, 4)) {
+        const auto &past_key_shape = getInputShape(ctx, 4);
+        if (past_key_shape.dim_size() != 4) {
+          fail_shape_inference("The past_key input shall be 4 dimensions");
+        }
+        if (kv_sequence_length >= 0 && past_key_shape.dim(2).has_dim_value()) {
+          total_length->set_dim_value(
+              checkedAdd(kv_sequence_length, past_key_shape.dim(2).dim_value()));
+        }
+      }
+    }
     updateOutputShape(ctx, 3, qk_matmul_shape);
   }
 
@@ -166,11 +182,6 @@ void AttentionPropagateElemTypeFromInputToOutput(InferenceContext &ctx) {
           TensorShapeProto present_value_shape;
           for (const auto &dim : past_value_dims) {
             *present_value_shape.add_dim() = dim;
-          }
-
-          if (ctx.hasOutput(3)) { // has qk_matmul_output with bias
-            qk_matmul_shape.mutable_dim(3)->set_dim_value(total_sequence_length);
-            updateOutputShape(ctx, 3, qk_matmul_shape);
           }
 
           // shape of present key/value is (batch_size, kv_num_heads, total_sequence_length,

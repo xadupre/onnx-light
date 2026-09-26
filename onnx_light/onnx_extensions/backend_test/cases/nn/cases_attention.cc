@@ -1648,6 +1648,65 @@ void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
            });
   }
 
+  // Independent expectations: zero Q/K yield uniform probabilities over the
+  // intersection of the explicit and causal masks, including the past-KV offset.
+  for (int mask_rank : {2, 3, 4}) {
+    for (bool boolean_mask : {false, true}) {
+      for (bool with_past : {false, true}) {
+        NodeProto node =
+            with_past ? MakeAttentionNode({"Q", "K", "V", "attn_mask", "past_key", "past_value"},
+                                          {"Y", "present_key", "present_value", "qk_matmul_output"})
+                      : MakeAttentionNode({"Q", "K", "V", "attn_mask"},
+                                          {"Y", "", "", "qk_matmul_output"});
+        AddInt(node, "is_causal", 1);
+        AddInt(node, "qk_matmul_output_mode", 3);
+        const std::string name =
+            "test_cc_attention_causal_mask_composition_" + std::to_string(mask_rank) + "d_" +
+            (boolean_mask ? "bool" : "float") + (with_past ? "_with_past" : "");
+        Expect(registry, std::move(node), name, {opset},
+               [mask_rank, boolean_mask, with_past]() -> IoData {
+                 const int64_t kv_length = with_past ? 5 : 3;
+                 std::vector<int64_t> mask_shape(static_cast<size_t>(mask_rank - 2), 1);
+                 mask_shape.insert(mask_shape.end(), {3, kv_length});
+                 std::vector<uint8_t> allowed(static_cast<size_t>(3 * kv_length), 0);
+                 allowed[0] = allowed[kv_length - 1] = 1;
+                 allowed[kv_length] = allowed[2 * kv_length - 1] = 1;
+                 allowed[3 * kv_length - 2] = allowed[3 * kv_length - 1] = 1;
+                 Tensor mask;
+                 if (boolean_mask) {
+                   mask = Tensor::FromBool("", mask_shape, allowed);
+                 } else {
+                   std::vector<float> bias(allowed.size());
+                   for (size_t i = 0; i < allowed.size(); ++i) {
+                     bias[i] = allowed[i] ? 0.0f : -std::numeric_limits<float>::infinity();
+                   }
+                   mask = Tensor::FromFloat("", mask_shape, bias);
+                 }
+                 IoData io;
+                 io.inputs = {MakeConstantFloatTensor({1, 1, 3, 1}, 0.0f),
+                              MakeConstantFloatTensor({1, 1, 3, 1}, 0.0f),
+                              Tensor::FromFloat("", {1, 1, 3, 1},
+                                                with_past ? std::vector<float>{8, 16, 32}
+                                                          : std::vector<float>{2, 4, 8}),
+                              std::move(mask)};
+                 io.outputs = {
+                     Tensor::FromFloat("", {1, 1, 3, 1}, {2, 2, with_past ? 24.0f : 6.0f})};
+                 if (with_past) {
+                   io.inputs.push_back(MakeConstantFloatTensor({1, 1, 2, 1}, 0.0f));
+                   io.inputs.push_back(Tensor::FromFloat("", {1, 1, 2, 1}, {2, 4}));
+                   io.outputs.push_back(MakeConstantFloatTensor({1, 1, 5, 1}, 0.0f));
+                   io.outputs.push_back(Tensor::FromFloat("", {1, 1, 5, 1}, {2, 4, 8, 16, 32}));
+                 }
+                 std::vector<float> probabilities(allowed.size(), 0.0f);
+                 probabilities[0] = probabilities[kv_length] = 1.0f;
+                 probabilities[3 * kv_length - 2] = probabilities[3 * kv_length - 1] = 0.5f;
+                 io.outputs.push_back(Tensor::FromFloat("", {1, 1, 3, kv_length}, probabilities));
+                 return io;
+               });
+      }
+    }
+  }
+
   // 4D BOOL ``attn_mask`` with 4D shape.
   {
     Tensor Q = MakeQ_1_2_2_2();

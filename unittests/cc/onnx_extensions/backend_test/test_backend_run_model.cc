@@ -363,12 +363,20 @@ TEST(BackendRunModel, Attention) {
   });
 }
 
-// Covers the four expanded causal-mask cases re-enabled by onnx/onnx#8489.
+// Covers onnx/onnx#8489 and independent boolean/float causal-mask backend cases.
 TEST(BackendRunModel, AttentionCausalMaskExpanded) {
-  const std::vector<std::string> names = {
+  std::vector<std::string> names = {
       "test_cc_attention_4d_attn_mask_4d_causal", "test_cc_attention_4d_attn_mask_3d_causal",
       "test_cc_attention_4d_with_past_and_present_qk_matmul_bias_4d_mask_causal",
       "test_cc_attention_4d_with_past_and_present_qk_matmul_bias_3d_mask_causal"};
+  for (int mask_rank : {2, 3, 4}) {
+    for (const char *mask_type : {"bool", "float"}) {
+      for (const char *suffix : {"", "_with_past"}) {
+        names.push_back("test_cc_attention_causal_mask_composition_" + std::to_string(mask_rank) +
+                        "d_" + mask_type + suffix);
+      }
+    }
+  }
   auto cases = CollectTestCases("Attention");
   for (const auto &name : names) {
     SCOPED_TRACE(name);

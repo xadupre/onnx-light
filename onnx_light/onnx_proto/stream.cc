@@ -49,6 +49,17 @@ std::filesystem::path normalized_model_parent(const std::string &model_path) {
   return parent.lexically_normal();
 }
 
+#if defined(_MSC_VER)
+__declspec(noinline)
+#elif defined(__GNUC__) || defined(__clang__)
+__attribute__((noinline))
+#endif
+// Keeps the shared validation smaller than two inlined copies under the proto binary-size budget.
+bool is_windows_compatible_filename(const std::filesystem::path &filename) {
+  const auto &value = filename.native();
+  return !value.empty() && value.back() != '.' && value.back() != ' ';
+}
+
 std::string validate_weights_file_is_next_to_model(const std::string &model_path,
                                                    const std::string &weights_file) {
   std::filesystem::path weights_path(weights_file);
@@ -64,9 +75,7 @@ std::string validate_weights_file_is_next_to_model(const std::string &model_path
   EXT_ENFORCE(same_dir, "External weights file must be next to model file. model=", model_path,
               ", weights=", weights_file);
   const std::filesystem::path weights_filename = normalized_weights.filename();
-  const auto &native_weights_filename = weights_filename.native();
-  EXT_ENFORCE(!native_weights_filename.empty() && native_weights_filename.back() != '.' &&
-                  native_weights_filename.back() != ' ',
+  EXT_ENFORCE(is_windows_compatible_filename(weights_filename),
               "External weights file must include a filename that does not end with a dot or "
               "space. model=",
               model_path, ", weights=", weights_file);
@@ -97,9 +106,7 @@ std::filesystem::path validate_external_location_is_next_to_model(const std::str
       same_dir,
       "External data location must be a file name next to the model file. location=", location);
   const std::filesystem::path location_filename = normalized_location.filename();
-  const auto &native_location_filename = location_filename.native();
-  EXT_ENFORCE(!native_location_filename.empty() && native_location_filename.back() != '.' &&
-                  native_location_filename.back() != ' ',
+  EXT_ENFORCE(is_windows_compatible_filename(location_filename),
               "External data location must include a filename that does not end with a dot or "
               "space. location=",
               location);

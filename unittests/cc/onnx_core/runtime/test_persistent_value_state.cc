@@ -1555,7 +1555,7 @@ TEST(PersistentValueState, OrdinarySessionReleasesTypedSequenceAfterLastUse) {
     std::weak_ptr<std::vector<float>> weak;
     context.RegisterCustomKernel(
         "test.feedback", "Step", [&](const NodeProto &node, RuntimeContext &rt) {
-          auto owner = std::make_shared<std::vector<float>>(1, 7);
+          auto owner = std::make_shared<std::vector<float>>(1, 7.0f);
           weak = owner;
           rt.values()[node.output(0)] =
               RuntimeValue(std::vector<RuntimeValue>{RuntimeValue(Tensor::Borrow(

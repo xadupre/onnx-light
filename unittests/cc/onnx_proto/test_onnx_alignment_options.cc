@@ -666,3 +666,43 @@ TEST(onnx_alignment_options, SerializeExternalDataOffsetOrderRejectsLocationAlia
   std::remove(onnx_file.c_str());
   std::remove(weights_file.c_str());
 }
+
+TEST(onnx_alignment_options, SerializeExternalDataRejectsCaseAliasedLocations) {
+  const std::string onnx_file = "test_external_case_alias.onnx";
+  const std::string weights_file = "test_external_case_alias.data";
+  const std::string other_file = "test_external_case_other.data";
+  for (const std::string &location : {weights_file, other_file}) {
+    ModelProto model = MakeModelWithExternalOffset(location, 0);
+    std::string alias = location;
+    alias[0] = 'T';
+    ModelProto second = MakeModelWithExternalOffset(alias, 0);
+    model.ref_graph().add_initializer()->CopyFrom(second.ref_graph().ref_initializer()[0]);
+    {
+      utils::TwoFilesWriteStream wstream(onnx_file, weights_file);
+      SerializeOptions sopts;
+      sopts.raw_data_threshold = 0;
+      EXPECT_THROW(SerializeProtoToStream(model, wstream, sopts), std::runtime_error);
+    }
+    std::remove(onnx_file.c_str());
+    std::remove(weights_file.c_str());
+    std::remove(other_file.c_str());
+    std::remove(alias.c_str());
+  }
+}
+
+TEST(onnx_alignment_options, PreAllocateExternalDataRejectsCaseAliasedLocations) {
+  const std::string onnx_file = "test_external_case_preallocate.onnx";
+  const std::string weights_file = "test_external_case_preallocate.data";
+  const std::string other_file = "test_external_case_preallocate_other.data";
+  {
+    utils::TwoFilesWriteStream wstream(onnx_file, weights_file);
+    EXPECT_THROW(wstream.pre_allocate_weights("Test_external_case_preallocate.data", 4),
+                 std::runtime_error);
+    wstream.pre_allocate_weights(other_file, 4);
+    EXPECT_THROW(wstream.pre_allocate_weights("Test_external_case_preallocate_other.data", 4),
+                 std::runtime_error);
+  }
+  std::remove(onnx_file.c_str());
+  std::remove(weights_file.c_str());
+  std::remove(other_file.c_str());
+}

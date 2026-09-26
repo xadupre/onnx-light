@@ -1,5 +1,6 @@
 #include "stream.h"
 #include <algorithm>
+#include <cctype>
 #include <cerrno>
 #include <cstddef>
 #include <cstdlib>
@@ -1277,12 +1278,29 @@ TwoFilesWriteStream::TwoFilesWriteStream(const std::string &file_path,
   }
 }
 
+void TwoFilesWriteStream::reject_case_aliased_weights_location(const std::string &location) const {
+  const std::string filename = std::filesystem::path(location).filename().string();
+  const auto is_case_alias = [&filename](const std::string &existing) {
+    const std::string existing_filename = std::filesystem::path(existing).filename().string();
+    return filename != existing_filename &&
+           std::equal(
+               filename.begin(), filename.end(), existing_filename.begin(), existing_filename.end(),
+               [](unsigned char a, unsigned char b) { return std::tolower(a) == std::tolower(b); });
+  };
+  EXT_ENFORCE(!is_case_alias(default_weights_location_),
+              "Case-aliased external weights location: ", location);
+  for (const auto &entry : extra_weights_streams_) {
+    EXT_ENFORCE(!is_case_alias(entry.first), "Case-aliased external weights location: ", location);
+  }
+}
+
 void TwoFilesWriteStream::set_active_weights_location(const std::string &location) {
   const std::string normalized_location = normalize_external_location(location);
   if (normalized_location.empty()) {
     active_weights_location_ = weights_stream_.file_path();
     return;
   }
+  reject_case_aliased_weights_location(normalized_location);
   if (normalized_location == active_weights_location_) {
     return;
   }
@@ -1369,6 +1387,8 @@ void TwoFilesWriteStream::pre_allocate_weights(const std::string &location, int6
   if (total_bytes == 0)
     return;
   const std::string normalized_location = normalize_external_location(location);
+  if (!normalized_location.empty())
+    reject_case_aliased_weights_location(normalized_location);
   if (normalized_location.empty() ||
       normalized_location == normalize_external_location(weights_stream_.file_path()) ||
       normalized_location == default_weights_location_) {

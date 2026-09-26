@@ -806,6 +806,8 @@ protected:
   FileWriteStream weights_stream_;
   /** Additional writers when external_data.location points to multiple files. */
   std::unordered_map<std::string, std::unique_ptr<FileWriteStream>> extra_weights_streams_;
+  /** Rejects differently cased names that may refer to an already-open weights file. */
+  void reject_case_aliased_weights_location(const std::string &location) const;
   /** Active external location used by the current tensor raw-data write. */
   std::string active_weights_location_;
   /** Relative location key associated with the default weights stream. */

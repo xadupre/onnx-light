@@ -4,6 +4,7 @@
 
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/runtime/kernels/kernel_context.h"
+#include "onnx_core/runtime/persistent_value_state.h"
 #include "onnx_extensions/kernels/kernels/sequence/include_sequence_kernels.h"
 
 #include <gtest/gtest.h>
@@ -15,6 +16,9 @@
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using core::backend_test::DefaultOpset;
+using core::runtime::PersistentValueState;
+using core::runtime::RuntimeContext;
+using core::runtime::RuntimeValue;
 using core::runtime::Tensor;
 using core::runtime::Tensors;
 using onnx_kernels::Sequence;
@@ -29,6 +33,49 @@ using onnx_kernels::kernel::SequenceLength;
 using onnx_kernels::kernel::SplitToSequence;
 
 namespace Test {
+
+TEST(KernelClass, PersistentTensorSequenceUsesStandardSequenceStore) {
+  ModelProto model;
+  model.set_ir_version(10);
+  model.add_opset_import()->set_version(18);
+  auto *graph = model.mutable_graph();
+  graph->set_name("persistent_sequence");
+  TypeProto sequence_type;
+  auto *element_type = sequence_type.mutable_sequence_type()->mutable_elem_type();
+  element_type->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+  element_type->mutable_tensor_type()->mutable_shape()->add_dim()->set_dim_value(1);
+  auto *past = graph->add_input();
+  past->set_name("past");
+  *past->mutable_type() = sequence_type;
+  auto *item = graph->add_input();
+  item->set_name("item");
+  *item->mutable_type()->mutable_tensor_type() = element_type->tensor_type();
+  auto *present = graph->add_output();
+  present->set_name("present");
+  *present->mutable_type() = sequence_type;
+  auto *node = graph->add_node();
+  node->set_op_type("SequenceInsert");
+  node->add_input("past");
+  node->add_input("item");
+  node->add_output("present");
+  auto *binding = graph->add_persistent_bindings();
+  binding->set_input_name("past");
+  binding->set_output_name("present");
+
+  RuntimeValue initial(
+      std::vector<RuntimeValue>{RuntimeValue(Tensor::FromFloat("", {1}, {1.0f})).Retain()});
+  PersistentValueState state(model, {{"past", std::move(initial)}});
+  RuntimeContext context;
+  auto first =
+      state.Run(context, {{"item", RuntimeValue(Tensor::FromFloat("", {1}, {2.0f})).Retain()}});
+  ASSERT_EQ(first.at("present").elements.size(), 2u);
+  EXPECT_FLOAT_EQ(first.at("present").elements[0].tensor.AsFloat()[0], 1.0f);
+  EXPECT_FLOAT_EQ(first.at("present").elements[1].tensor.AsFloat()[0], 2.0f);
+  auto second =
+      state.Run(context, {{"item", RuntimeValue(Tensor::FromFloat("", {1}, {3.0f})).Retain()}});
+  ASSERT_EQ(second.at("present").elements.size(), 3u);
+  EXPECT_FLOAT_EQ(second.at("present").elements[2].tensor.AsFloat()[0], 3.0f);
+}
 
 TEST(KernelClass, SequenceConstructStacksInputsAlongNewAxis) {
   const KernelContext ctx{DefaultOpset(11)};

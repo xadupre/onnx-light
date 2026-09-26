@@ -10,6 +10,7 @@
 #include "onnx_extensions/kernels/kernels/auto_pad.h"
 
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -46,12 +47,19 @@ public:
     float scale = 1;
     int32_t zero_point = 0;
   };
+  struct Formats {
+    Format key, value;
+  };
   struct Options {
     int64_t block_size = 16, max_tokens = 4096;
     Format key_format, value_format;
     bool is_causal = true;
     int64_t left_window_size = -1;
   };
+  using FormatSelector = std::function<Formats(const Tensor &key, const Tensor &value,
+                                               int64_t past_length, const Formats &defaults)>;
+  /// Constructs a kernel whose policy selects the appended page formats for every execution.
+  PagedAttention(const KernelContext &context, FormatSelector format_selector);
   /// Reports one successful direct invocation; Run publishes only Y and present, not statistics.
   struct Statistics {
     /// Counts new stored payload bytes written by copying or conversion, excluding metadata/Y.
@@ -81,6 +89,7 @@ public:
 private:
   struct CacheAnalysis;
   std::shared_ptr<CacheAnalysis> cache_analysis_;
+  FormatSelector format_selector_;
 };
 
 // ---------------------------------------------------------------------------

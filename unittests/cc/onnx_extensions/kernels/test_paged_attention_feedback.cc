@@ -71,11 +71,14 @@ ModelProto PagedModel(bool gate = false, int64_t max_tokens = 8) {
   return model;
 }
 
-void RegisterPaged(RuntimeContext &context) {
+void RegisterPaged(RuntimeContext &context, PagedAttention::FormatSelector format_selector = {}) {
   context.RegisterKernelFn(
       "onnx_light", "PagedAttention", core::symbolic::Device::kCPU,
-      [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<KernelBase> {
-        auto kernel = std::make_unique<PagedAttention>(rt.kernel_ctx());
+      [format_selector = std::move(format_selector)](
+          const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<KernelBase> {
+        auto kernel = format_selector
+                          ? std::make_unique<PagedAttention>(rt.kernel_ctx(), format_selector)
+                          : std::make_unique<PagedAttention>(rt.kernel_ctx());
         kernel->set_node(node);
         return kernel;
       });
@@ -175,6 +178,32 @@ TEST(PagedAttentionFeedback, NativePublicationReplacesOtherValueKinds) {
   EXPECT_FALSE(context.Has("present"));
   ASSERT_EQ(context.values().count("present"), 1u);
   EXPECT_EQ(Blocks(context.values().at("present")).size(), 1u);
+}
+
+TEST(PagedAttentionFeedback, KernelSelectsFormatsForEachExecution) {
+  const auto model = PagedModel();
+  RuntimeContext context;
+  RegisterPaged(context, [](const Tensor &, const Tensor &, int64_t past_length,
+                            const PagedAttention::Formats &defaults) {
+    if (past_length == 0)
+      return defaults;
+    return PagedAttention::Formats{{DataType::INT8, 0.25f, 0}, {DataType::UINT4, 0.25f, 8}};
+  });
+  PersistentValueState state(model, {{"past", PagedAttention::EmptyCache()}});
+  const auto first = state.Run(context, Feeds(1));
+  ASSERT_EQ(Blocks(first.at("present")).size(), 1u);
+  EXPECT_EQ(Blocks(first.at("present"))[0].fields.at("key").Encoded().affine().storage_type(),
+            DataType::INT4);
+  EXPECT_EQ(Blocks(first.at("present"))[0].fields.at("value").Encoded().affine().storage_type(),
+            DataType::INT8);
+  const auto second = state.Run(context, Feeds(2));
+  ASSERT_EQ(Blocks(second.at("present")).size(), 2u);
+  EXPECT_EQ(Blocks(second.at("present"))[0].fields.at("key").Encoded().affine().storage_type(),
+            DataType::INT4);
+  EXPECT_EQ(Blocks(second.at("present"))[1].fields.at("key").Encoded().affine().storage_type(),
+            DataType::INT8);
+  EXPECT_EQ(Blocks(second.at("present"))[1].fields.at("value").Encoded().affine().storage_type(),
+            DataType::UINT4);
 }
 
 TEST(PagedAttentionFeedback, QuantizedFormatsMatchUnquantizedReferenceWithinFixtureTolerance) {

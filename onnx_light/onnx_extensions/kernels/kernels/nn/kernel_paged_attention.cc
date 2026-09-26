@@ -311,6 +311,13 @@ struct PagedAttention::CacheAnalysis {
 PagedAttention::PagedAttention(const KernelContext &context)
     : KernelBase(context), cache_analysis_(std::make_shared<CacheAnalysis>()) {}
 
+PagedAttention::PagedAttention(const KernelContext &context, FormatSelector format_selector)
+    : KernelBase(context), cache_analysis_(std::make_shared<CacheAnalysis>()),
+      format_selector_(std::move(format_selector)) {
+  EXT_ENFORCE_INVALID(format_selector_ != nullptr,
+                      "PagedAttention: format selector must not be empty.");
+}
+
 RuntimeValue PagedAttention::EmptyCache() {
   RuntimeValue result;
   result.fields.emplace("blocks", RuntimeValue(std::vector<RuntimeValue>{}));
@@ -352,6 +359,11 @@ PagedAttention::Result PagedAttention::operator()(const Tensor &q, const Tensor 
   const int64_t total = past_length + length;
   const size_t output_bytes = CheckedBytes(length, v.shape[3]);
   const size_t workspace_bytes = length == 0 ? 0 : CheckedBytes(1, v.shape[3], sizeof(double));
+  Formats formats{options.key_format, options.value_format};
+  if (length > 0 && format_selector_)
+    formats = format_selector_(k, v, past_length, formats);
+  CheckFormat(formats.key);
+  CheckFormat(formats.value);
   const StructTypeCatalogue empty_catalogue;
   const auto &catalogue = rt ? rt->struct_type_catalogue() : empty_catalogue;
   result.present = past.BorrowView().Retain(catalogue);
@@ -362,9 +374,8 @@ PagedAttention::Result PagedAttention::operator()(const Tensor &q, const Tensor 
     page.fields.emplace("start",
                         RuntimeValue(Tensor::FromInt64("", {}, {past_length + begin})).Retain());
     page.fields.emplace("length", RuntimeValue(Tensor::FromInt64("", {}, {chunk})).Retain());
-    page.fields.emplace("key", NewPage(k, begin, chunk, options.key_format, rt, result.statistics));
-    page.fields.emplace("value",
-                        NewPage(v, begin, chunk, options.value_format, rt, result.statistics));
+    page.fields.emplace("key", NewPage(k, begin, chunk, formats.key, rt, result.statistics));
+    page.fields.emplace("value", NewPage(v, begin, chunk, formats.value, rt, result.statistics));
     present_pages.push_back(std::move(page));
     begin += chunk;
   }

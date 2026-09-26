@@ -13,6 +13,33 @@ using Symbols = std::unordered_map<std::string, int64_t>;
 using ValidationMemos = std::unordered_map<const TypeProto *, RuntimeSequence::Memo<Symbols>>;
 using Declarations = utils::RepeatedProtoField<ValueInfoProto>;
 
+bool IsTensorSequence(const TypeProto &type) {
+  return type.has_sequence_type() && type.sequence_type().has_elem_type() &&
+         type.sequence_type().elem_type().has_tensor_type();
+}
+
+Sequence ToTensorSequence(const std::string &name, const RuntimeValue &value,
+                          const TypeProto::Sequence &type) {
+  EXT_ENFORCE_INVALID(value.kind == RuntimeValue::Kind::kSequence,
+                      "PersistentValueState: expected a sequence value.");
+  Tensors tensors;
+  tensors.reserve(value.elements.size());
+  for (const RuntimeValue &element : value.elements) {
+    EXT_ENFORCE_INVALID(element.kind == RuntimeValue::Kind::kTensor,
+                        "PersistentValueState: standard sequences require tensor elements.");
+    tensors.push_back(element.tensor.BorrowView());
+  }
+  return Sequence(name, type.elem_type().tensor_type().elem_type(), std::move(tensors));
+}
+
+RuntimeValue FromTensorSequence(Sequence sequence) {
+  std::vector<RuntimeValue> elements;
+  elements.reserve(sequence.values.size());
+  for (Tensor &tensor : sequence.values)
+    elements.emplace_back(std::move(tensor));
+  return RuntimeValue(std::move(elements));
+}
+
 const ModelProto &RequireModel(const std::shared_ptr<const ModelProto> &model) {
   EXT_ENFORCE_INVALID(model != nullptr, "PersistentValueState: model owner must not be null.");
   return *model;
@@ -283,7 +310,11 @@ RuntimeValueMap PersistentValueState::Run(RuntimeContext &context, const Runtime
       continue;
     }
     Validate(it->second, input.type(), catalogue_, symbols, sequence_validation_);
-    invocation.PutValue(input.name(), std::move(it->second), RuntimeEventKind::kInput);
+    if (IsTensorSequence(input.type()))
+      invocation.PutSequence(
+          input.name(), ToTensorSequence(input.name(), it->second, input.type().sequence_type()));
+    else
+      invocation.PutValue(input.name(), std::move(it->second), RuntimeEventKind::kInput);
   }
   for (auto &binding : *invocation.persistent_tensors_)
     binding.input_view = &invocation.Get(binding.input);
@@ -302,7 +333,12 @@ RuntimeValueMap PersistentValueState::Run(RuntimeContext &context, const Runtime
     RuntimeValue value;
     if (invocation.Has(output.name()))
       value = RuntimeValue(std::move(invocation.Get(output.name())));
-    else {
+    else if (IsTensorSequence(output.type())) {
+      auto it = invocation.sequences().find(output.name());
+      EXT_ENFORCE_INVALID(it != invocation.sequences().end(),
+                          "PersistentValueState: missing output '", output.name(), "'.");
+      value = FromTensorSequence(std::move(it->second));
+    } else {
       auto it = invocation.values().find(output.name());
       EXT_ENFORCE_INVALID(it != invocation.values().end(), "PersistentValueState: missing output '",
                           output.name(), "'.");

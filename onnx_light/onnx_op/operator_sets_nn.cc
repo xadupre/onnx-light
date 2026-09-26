@@ -1562,19 +1562,21 @@ LightOpSchema MakePagedAttentionSchema() {
         false, int64_t(1)},
        {"left_window_size", "Past-token window; -1 is unbounded and non-negative values limit it.",
         AttributeType::INT, false, int64_t(-1)},
-       {"key_storage_type", "Storage type for new key pages: FLOAT, INT8, UINT8, INT4 or UINT4.",
+       {"key_storage_type",
+        "Default storage type for new key pages: FLOAT, INT8, UINT8, INT4 or UINT4. A registered "
+        "kernel may select another supported format for each execution.",
         AttributeType::INT, false, int64_t(TensorProto::FLOAT)},
        {"value_storage_type",
-        "Storage type for new value pages: FLOAT, INT8, UINT8, INT4 or UINT4.", AttributeType::INT,
-        false, int64_t(TensorProto::FLOAT)},
-       {"key_scale", "Positive finite scalar quantization scale for new key pages; 1 for FLOAT.",
+        "Default storage type for new value pages: FLOAT, INT8, UINT8, INT4 or UINT4. A registered "
+        "kernel may select another supported format for each execution.",
+        AttributeType::INT, false, int64_t(TensorProto::FLOAT)},
+       {"key_scale", "Default positive finite scalar scale for new key pages; 1 for FLOAT.",
         AttributeType::FLOAT, false, 1.0f},
-       {"value_scale",
-        "Positive finite scalar quantization scale for new value pages; 1 for FLOAT.",
+       {"value_scale", "Default positive finite scalar scale for new value pages; 1 for FLOAT.",
         AttributeType::FLOAT, false, 1.0f},
-       {"key_zero_point", "Key zero point within its storage range; 0 for FLOAT.",
+       {"key_zero_point", "Default key zero point within its storage range; 0 for FLOAT.",
         AttributeType::INT, false, int64_t(0)},
-       {"value_zero_point", "Value zero point within its storage range; 0 for FLOAT.",
+       {"value_zero_point", "Default value zero point within its storage range; 0 for FLOAT.",
         AttributeType::INT, false, int64_t(0)}});
 }
 

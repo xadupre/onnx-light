@@ -32,17 +32,18 @@ using core::backend_test::DataSet;
 using core::backend_test::DefaultOpset;
 using core::backend_test::TestCase;
 using core::backend_test::TestCaseUnloadGuard;
-using core::runtime::DataType;
 using core::runtime::ExecutionPlan;
 using core::runtime::Map;
 using core::runtime::RegisterModelFunctions;
 using core::runtime::RuntimeContext;
 using core::runtime::RuntimeSession;
-using core::runtime::Tensor;
 using core::runtime::TensorFromProto;
 using onnx_kernels::kernel::KernelContext;
 
 namespace Test {
+
+using core::runtime::DataType;
+using core::runtime::Tensor;
 
 namespace {
 

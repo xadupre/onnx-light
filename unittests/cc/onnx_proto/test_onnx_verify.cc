@@ -66,6 +66,34 @@ TEST(onnx_verify, VerifyModel_Valid) {
   EXPECT_NO_THROW(VerifyModel(model));
 }
 
+TEST(onnx_verify, PagedCacheRejectsEncodedLogicalDimensionsWithSymbolicAlternatives) {
+  ModelProto model = MakeValidModel();
+  auto *cache = model.mutable_graph()->add_paged_cache_initializer();
+  cache->set_name("cache");
+  auto *block = cache->add_blocks();
+  block->set_start(0);
+  block->set_length(1);
+  auto *encoded = block->mutable_encoded_key();
+  encoded->mutable_affine()->set_storage_type(TensorProto::INT8);
+  auto *scale = encoded->mutable_affine()->mutable_scale();
+  scale->set_data_type(TensorProto::FLOAT);
+  scale->add_float_data(1.f);
+  auto *tensor = encoded->mutable_logical_type()->mutable_tensor_type();
+  tensor->set_elem_type(TensorProto::FLOAT);
+  for (int64_t dim : {1, 1, 2, 2})
+    tensor->mutable_shape()->add_dim()->set_dim_value(dim);
+  encoded->set_raw_data(std::string(4, '\0'));
+  auto *value = block->mutable_value();
+  value->set_data_type(TensorProto::FLOAT);
+  for (int64_t dim : {1, 1, 2, 2})
+    value->add_dims(dim);
+  for (float element : {1.f, 2.f, 3.f, 4.f})
+    value->add_float_data(element);
+  EXPECT_NO_THROW(VerifyModel(model));
+  tensor->mutable_shape()->mutable_dim(0)->set_dim_param("N");
+  EXPECT_THROW(VerifyModel(model), std::invalid_argument);
+}
+
 TEST(onnx_verify, PersistentBindings_RoundtripAndRootOnly) {
   ModelProto model = MakeValidModel();
   auto *binding = model.mutable_graph()->add_persistent_bindings();

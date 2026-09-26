@@ -208,14 +208,17 @@ jobs:
         # Shared quantization adds parameter_ref serialization, comparison and validation.
         # Linux CI run 36132778661 measures 1556424 installed bytes and 1087098 text
         # bytes; the symbol limit and dependency allowlist are unchanged.
+        # The paged-cache messages add copy, serialization, comparison and validation code.
+        # A Linux Release build measures 1597480 installed bytes, 1121690 text bytes and
+        # 874 defined dynamic symbols; the dependency allowlist is unchanged.
         run: |
           proto_dir="$(python -c 'import importlib.util, pathlib; print(pathlib.Path(importlib.util.find_spec("onnx_light.onnx_py._onnxpyprotoop").origin).parent)')"
           python .github/scripts/report_proto_binary_size.py \
             "${proto_dir}" \
             --summary "${GITHUB_STEP_SUMMARY}" \
-            --max-installed-size 1556424 \
-            --max-text-size 1087098 \
-            --max-dynamic-symbols 852 \
+            --max-installed-size 1597480 \
+            --max-text-size 1121690 \
+            --max-dynamic-symbols 874 \
             --allowed-dependency libcrypto.so.3 \
             --allowed-dependency libstdc++.so.6 \
             --allowed-dependency libgcc_s.so.1 \

@@ -1069,7 +1069,7 @@ void StructTypeCatalogue::ValidatePagedCache(const PagedCacheProto &value,
                               logical.shape().dim_size() == 4,
                           "PagedCacheProto: encoded tensors must have FLOAT rank-4 logical types.");
       for (const auto &dim : logical.shape().dim()) {
-        EXT_ENFORCE_INVALID(dim.has_dim_value(),
+        EXT_ENFORCE_INVALID(dim.has_dim_value() && !dim.has_dim_param(),
                             "PagedCacheProto: logical dimensions must be concrete.");
         dims.push_back(dim.dim_value());
       }

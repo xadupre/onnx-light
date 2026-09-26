@@ -251,6 +251,9 @@ struct SerializeOptions : TensorBufferOptions {
   /** if true, tensors already marked with data_location=EXTERNAL are serialized using their
    * external_data metadata location (can target multiple weights files). */
   bool use_external_data_location = true;
+  /** Internal queue collecting external tensors during model serialization so their payloads
+   *  can be written in per-file offset order without reordering protobuf fields. */
+  std::vector<const TensorProto *> *_external_data_tensors = nullptr;
   /** Maximum serialized size in bytes allowed for one serialization operation.
    *  The limit applies to the total output size (protobuf payload + external data,
    *  or the complete ORT FlatBuffer).

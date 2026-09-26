@@ -639,6 +639,8 @@ template <typename Deleter> inline void attach_raw_data_deleter(Deleter &&delete
  *        as-is.
  */
 void LoadExternalData(const std::string &base_dir = "");
+/** Writes the external payload after validating its metadata, offset, and padding. */
+void WriteExternalData(utils::BinaryWriteStream &stream, const SerializeOptions &options) const;
 /**
  * Computes a hash of the tensor content, ignoring the tensor ``name``.
  *

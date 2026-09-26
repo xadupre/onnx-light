@@ -11,6 +11,7 @@
 #include "onnx_core/runtime/runtime_session.h"
 #include "onnx_extensions/kernels/kernels/sequence/include_sequence_kernels.h"
 #include "onnx_extensions/patterns/algebra/common_pattern.h"
+#include "onnx_lib/defs/function.h"
 #include "onnx_op/operator_sets.h"
 #include "onnx_proto/onnx_helper.h"
 #include "test_case_utils.h"
@@ -18,6 +19,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -30,17 +32,18 @@ using core::backend_test::DataSet;
 using core::backend_test::DefaultOpset;
 using core::backend_test::TestCase;
 using core::backend_test::TestCaseUnloadGuard;
-using core::runtime::DataType;
 using core::runtime::ExecutionPlan;
 using core::runtime::Map;
 using core::runtime::RegisterModelFunctions;
 using core::runtime::RuntimeContext;
 using core::runtime::RuntimeSession;
-using core::runtime::Tensor;
 using core::runtime::TensorFromProto;
 using onnx_kernels::kernel::KernelContext;
 
 namespace Test {
+
+using core::runtime::DataType;
+using core::runtime::Tensor;
 
 namespace {
 
@@ -359,6 +362,81 @@ TEST(BackendRunModel, Attention) {
            ds.inputs[1].data_type == DataType::FLOAT && ds.inputs[2].data_type == DataType::FLOAT;
   });
 }
+
+// Covers onnx/onnx#8489 and independent boolean/float causal-mask backend cases.
+TEST(BackendRunModel, AttentionCausalMaskExpanded) {
+  std::vector<std::string> names = {
+      "test_cc_attention_4d_attn_mask_4d_causal", "test_cc_attention_4d_attn_mask_3d_causal",
+      "test_cc_attention_4d_with_past_and_present_qk_matmul_bias_4d_mask_causal",
+      "test_cc_attention_4d_with_past_and_present_qk_matmul_bias_3d_mask_causal"};
+  for (int mask_rank : {2, 3, 4}) {
+    for (const char *mask_type : {"bool", "float"}) {
+      for (const char *suffix : {"", "_with_past"}) {
+        names.push_back("test_cc_attention_causal_mask_composition_" + std::to_string(mask_rank) +
+                        "d_" + mask_type + suffix);
+      }
+    }
+  }
+  auto cases = CollectTestCases("Attention");
+  for (const auto &name : names) {
+    SCOPED_TRACE(name);
+    auto it = std::find_if(cases.begin(), cases.end(),
+                           [&](const TestCase &test_case) { return test_case.name == name; });
+    ASSERT_NE(it, cases.end());
+    TestCaseUnloadGuard unload_guard(*it);
+    const ModelProto &model = it->model();
+    const NodeProto &node = model.graph().node(0);
+    std::vector<TypeProto> input_types;
+    for (const auto &input : model.graph().input()) {
+      input_types.push_back(input.type());
+    }
+    ASSERT_EQ(input_types.size(), static_cast<size_t>(node.input_size()));
+    ASSERT_FALSE(it->data_sets().empty());
+    for (int version : {23, 24}) {
+      SCOPED_TRACE(version);
+      const auto *schema = OpSchemaRegistry::Schema("Attention", version, "");
+      ASSERT_NE(schema, nullptr);
+      FunctionBodyBuildContextImpl ctx(node, input_types);
+      FunctionProto function;
+      schema->BuildContextDependentFunction(ctx, function);
+      ASSERT_GT(function.node_size(), 0);
+
+      ModelProto expanded = model;
+      expanded.mutable_graph()->clear_node();
+      FunctionExpandHelper(node, function, *expanded.mutable_graph());
+      expanded.clear_opset_import();
+      for (const auto &opset : function.opset_import()) {
+        *expanded.add_opset_import() = opset;
+      }
+      for (const auto &expanded_node : expanded.graph().node()) {
+        ASSERT_NE(expanded_node.op_type().value(), "Attention");
+      }
+      for (const DataSet &ds : it->data_sets()) {
+        RuntimeContext rt(KernelContext(DefaultOpset(GetDefaultOpsetVersion(expanded))));
+        for (const Tensor &input : ds.inputs) {
+          rt.tensors()[input.name] = input;
+        }
+        RunModelViaSession(expanded, rt);
+        for (const Tensor &expected : ds.outputs) {
+          SCOPED_TRACE(expected.name);
+          ASSERT_TRUE(rt.Has(expected.name));
+          const Tensor &actual = rt.Get(expected.name);
+          ASSERT_EQ(actual.data_type, DataType::FLOAT);
+          ASSERT_EQ(actual.shape, expected.shape);
+          for (int64_t i = 0; i < expected.element_count(); ++i) {
+            const float value = expected.AsFloat()[i];
+            if (std::isinf(value)) {
+              EXPECT_EQ(actual.AsFloat()[i], value);
+            } else {
+              EXPECT_NEAR(actual.AsFloat()[i], value, 1e-5f + 1e-5f * std::abs(value));
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 TEST(BackendRunModel, Cast) { RunBackendCasesFor("Cast"); }
 TEST(BackendRunModel, CastLike) { RunBackendCasesFor("CastLike"); }
 TEST(BackendRunModel, CenterCropPad) { RunBackendCasesFor("CenterCropPad"); }

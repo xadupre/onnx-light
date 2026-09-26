@@ -210,16 +210,19 @@ jobs:
         # bytes; the symbol limit and dependency allowlist are unchanged.
         # The paged-cache messages add copy, serialization, comparison and validation code.
         # The versioned cache-type API adds 112 bytes of text. A Linux Release build measures
-        # 1597480 installed bytes, 1121802 text bytes and
-        # 874 defined dynamic symbols; the dependency allowlist is unchanged.
+        # 1597480 installed bytes, 1121802 text bytes and 874 defined dynamic symbols.
+        # Writing external payloads in per-file offset order exposes one public method
+        # (TensorProto::WriteExternalData), then normalizes and validates destination aliases.
+        # Applying its measured delta gives combined limits of 1605704 installed bytes,
+        # 1131754 text bytes and 876 symbols; the dependency allowlist is unchanged.
         run: |
           proto_dir="$(python -c 'import importlib.util, pathlib; print(pathlib.Path(importlib.util.find_spec("onnx_light.onnx_py._onnxpyprotoop").origin).parent)')"
           python .github/scripts/report_proto_binary_size.py \
             "${proto_dir}" \
             --summary "${GITHUB_STEP_SUMMARY}" \
-            --max-installed-size 1597480 \
-            --max-text-size 1121802 \
-            --max-dynamic-symbols 874 \
+            --max-installed-size 1605704 \
+            --max-text-size 1131754 \
+            --max-dynamic-symbols 876 \
             --allowed-dependency libcrypto.so.3 \
             --allowed-dependency libstdc++.so.6 \
             --allowed-dependency libgcc_s.so.1 \

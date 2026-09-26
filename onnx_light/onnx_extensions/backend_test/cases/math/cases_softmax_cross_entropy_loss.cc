@@ -160,6 +160,38 @@ void RegisterSoftmaxCrossEntropyLossCases(std::vector<TestCase> &registry, TestM
     return;
   }
 
+  // Independent expected values for the finite-gap regressions from ONNX #8423.
+  for (bool with_log_prob : {false, true}) {
+    NodeProto node = BuildSCENode(false, with_log_prob, "none", false, 0);
+    const std::string suffix = with_log_prob ? "_log_prob" : "";
+    Expect(registry, std::move(node),
+           "test_cc_softmax_cross_entropy_loss_large_finite_gap" + suffix, {DefaultOpset(23)},
+           [with_log_prob]() -> IoData {
+             Tensor scores = Tensor::FromFloat("", {1, 2}, {0.0f, -104.0f});
+             Tensor labels = Tensor::FromInt64("", {1}, {1});
+             std::vector<Tensor> outputs{Tensor::FromFloat("", {1}, {104.0f})};
+             if (with_log_prob) {
+               outputs.push_back(Tensor::FromFloat("", {1, 2}, {0.0f, -104.0f}));
+             }
+             return IoData{{std::move(scores), std::move(labels)}, std::move(outputs)};
+           });
+  }
+
+  {
+    NodeProto node = BuildSCENode(true, true, "mean", false, 0);
+    Expect(registry, std::move(node),
+           "test_cc_softmax_cross_entropy_loss_large_finite_gap_weighted_mean", {DefaultOpset(23)},
+           []() -> IoData {
+             Tensor scores = Tensor::FromFloat("", {1, 2}, {0.0f, -104.0f});
+             Tensor labels = Tensor::FromInt64("", {1}, {1});
+             Tensor weights = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+             Tensor loss = Tensor::FromFloat("", {}, {104.0f});
+             Tensor log_prob = Tensor::FromFloat("", {1, 2}, {0.0f, -104.0f});
+             return IoData{{std::move(scores), std::move(labels), std::move(weights)},
+                           {std::move(loss), std::move(log_prob)}};
+           });
+  }
+
   // 3 samples x 5 classes — simple "mean" reduction (default).
   {
     NodeProto node;

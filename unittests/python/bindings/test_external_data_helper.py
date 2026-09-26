@@ -13,7 +13,8 @@ from onnx_light.onnx_lib.external_data_helper import (
     load_external_data_for_model,
     uses_external_data,
 )
-from onnx_light.onnx.external_data_helper import ExternalDataInfo
+from onnx_light.onnx.external_data_helper import ExternalDataInfo, load_external_data_for_tensor
+from onnx_light.onnx.numpy_helper import to_array
 
 
 def _make_model(values: np.ndarray) -> onnxl.ModelProto:
@@ -29,6 +30,63 @@ def _make_model(values: np.ndarray) -> onnxl.ModelProto:
 
 
 class TestExternalDataHelper(ExtTestCase):
+    def test_to_array_does_not_mutate_external_tensor(self):
+        values = np.arange(64, dtype=np.float32)
+        with tempfile.TemporaryDirectory() as tmp:
+            model_path = os.path.join(tmp, "model.onnx")
+            onnxl.save_model(
+                _make_model(values), model_path, save_as_external_data=True, size_threshold=0
+            )
+            model = onnxl.load(model_path, load_external_data=False)
+            tensor = model.graph.initializer[0]
+            self.assertEqual(tensor.data_location, onnxl.TensorProto.EXTERNAL)
+            self.assertFalse(tensor.HasField("raw_data"))
+            before = tensor.SerializeToString()
+
+            for _ in range(2):
+                np.testing.assert_array_equal(to_array(tensor, tmp), values)
+                self.assertEqual(tensor.SerializeToString(), before)
+
+            resaved_path = os.path.join(tmp, "resaved.onnx")
+            onnxl.save_model(model, resaved_path)
+            reloaded = onnxl.load(resaved_path, load_external_data=True)
+            np.testing.assert_array_equal(to_array(reloaded.graph.initializer[0]), values)
+
+    def test_external_tensor_read_and_load(self):
+        for size in (0, 4):
+            values = np.arange(size, dtype=np.float32)
+            for length in (None, values.nbytes):
+                for raw_data in (b"", b"stale"):
+                    with (
+                        self.subTest(size=size, length=length, raw_data=raw_data),
+                        tempfile.TemporaryDirectory() as tmp,
+                    ):
+                        with open(os.path.join(tmp, "data.bin"), "wb") as f:
+                            f.write(b"PAD" + values.tobytes())
+                        tensor = onnxl.TensorProto()
+                        tensor.name = "t"
+                        tensor.data_type = onnxl.TensorProto.FLOAT
+                        tensor.dims.extend([size])
+                        tensor.data_location = onnxl.TensorProto.EXTERNAL
+                        tensor.raw_data = raw_data
+                        entries = [("location", "data.bin"), ("offset", "3")]
+                        if length is not None:
+                            entries.append(("length", str(length)))
+                        for key, value in entries:
+                            entry = tensor.external_data.add()
+                            entry.key = key
+                            entry.value = value
+                        before = tensor.SerializeToString()
+
+                        np.testing.assert_array_equal(to_array(tensor, tmp), values)
+                        self.assertEqual(tensor.SerializeToString(), before)
+
+                        load_external_data_for_tensor(tensor, tmp)
+                        self.assertEqual(bytes(tensor.raw_data), values.tobytes())
+                        self.assertEqual(tensor.data_location, onnxl.TensorProto.DEFAULT)
+                        self.assertEqual(len(tensor.external_data), 0)
+                        np.testing.assert_array_equal(to_array(tensor), values)
+
     def test_convert_and_load_round_trip(self):
         values = np.arange(64, dtype=np.float32)
         raw = values.tobytes()
@@ -240,8 +298,11 @@ class TestExternalDataHelper(ExtTestCase):
                 entry.key = k
                 entry.value = v
 
-            with self.assertRaises(ValueError):
-                _load_external_data_for_tensor(tensor, tmp)
+            before = tensor.SerializeToString()
+            for read in (to_array, _load_external_data_for_tensor):
+                with self.assertRaises(ValueError):
+                    read(tensor, tmp)
+                self.assertEqual(tensor.SerializeToString(), before)
 
     def test_load_external_data_length_exceeds_available_raises(self):
         """_load_external_data_for_tensor must raise when length > available bytes."""
@@ -330,6 +391,8 @@ class TestExternalDataHelper(ExtTestCase):
                 entry.value = v
 
             _load_external_data_for_tensor(tensor, tmp)
+            self.assertEqual(tensor.data_location, onnxl.TensorProto.DEFAULT)
+            self.assertEqual(len(tensor.external_data), 0)
             got = np.frombuffer(tensor.raw_data, dtype=np.float32)
             np.testing.assert_array_equal(got, values[4:])
 

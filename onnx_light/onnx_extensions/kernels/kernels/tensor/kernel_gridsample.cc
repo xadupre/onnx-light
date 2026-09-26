@@ -24,18 +24,21 @@ namespace {
 enum class Interp { Nearest, Linear, Cubic };
 enum class Padding { Zeros, Border, Reflection };
 
-Interp ParseMode(const std::string &mode) {
-  if (mode == "linear" || mode == "bilinear") {
+Interp ParseMode(const std::string &mode, int64_t opset_version) {
+  const bool legacy = opset_version < 20;
+  if (mode == (legacy ? "bilinear" : "linear")) {
     return Interp::Linear;
   }
   if (mode == "nearest") {
     return Interp::Nearest;
   }
-  if (mode == "cubic" || mode == "bicubic") {
+  if (mode == (legacy ? "bicubic" : "cubic")) {
     return Interp::Cubic;
   }
-  EXT_THROW_INVALID("kernel::GridSample: unknown mode '", mode,
-                    "' (expected one of 'linear'/'bilinear', 'nearest', 'cubic'/'bicubic').");
+  EXT_THROW_INVALID("kernel::GridSample: unexpected value '", mode,
+                    "' for attribute 'mode' at opset ", opset_version, " (expected one of ",
+                    legacy ? "'bilinear', 'nearest', 'bicubic'" : "'linear', 'nearest', 'cubic'",
+                    ").");
 }
 
 Padding ParsePaddingMode(const std::string &pm) {
@@ -412,7 +415,6 @@ Tensor GridSample::operator()(const Tensor &X, const Tensor &grid, const Attribu
 
 void GridSample::operator()(const Tensor &X, const Tensor &grid, const Attributes &attrs,
                             Tensor &output, RawBufferAllocator *allocator) const {
-  (void)ctx_;
   ValidateInputs(X, grid);
   const onnx_kernels::Shape expected_shape = ComputeOutputShape(X, grid);
   EXT_ENFORCE_INVALID(output.data_type == X.data_type,
@@ -428,7 +430,8 @@ void GridSample::operator()(const Tensor &X, const Tensor &grid, const Attribute
   EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<size_t>(total) * elt,
                       "kernel::GridSample: preallocated output buffer has unexpected size.");
 
-  const Interp interp = ParseMode(attrs.mode);
+  const Interp interp = ParseMode(
+      attrs.mode.value_or(ctx_.opset.version < 20 ? "bilinear" : "linear"), ctx_.opset.version);
   const Padding pad = ParsePaddingMode(attrs.padding_mode);
   const bool align_corners = attrs.align_corners != 0;
 
@@ -450,7 +453,8 @@ void GridSample::Run(RuntimeContext &rt) {
   const Tensor &x = GetInput(node, 0, rt.tensors());
   const Tensor &grid = GetInput(node, 1, rt.tensors());
   onnx_kernels::kernel::GridSample::Attributes attrs;
-  attrs.mode = GetAttributeStringOrDefault(node, "mode", attrs.mode);
+  attrs.mode = GetAttributeStringOrDefault(
+      node, "mode", rt.kernel_ctx().opset.version < 20 ? "bilinear" : "linear");
   attrs.padding_mode = GetAttributeStringOrDefault(node, "padding_mode", attrs.padding_mode);
   attrs.align_corners = GetAttributeIntOrDefault(node, "align_corners", attrs.align_corners);
   onnx_kernels::kernel::GridSample k(rt.kernel_ctx());

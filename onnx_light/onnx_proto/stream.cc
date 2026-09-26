@@ -1,5 +1,6 @@
 #include "stream.h"
 #include <algorithm>
+#include <cctype>
 #include <cerrno>
 #include <cstddef>
 #include <cstdlib>
@@ -48,6 +49,17 @@ std::filesystem::path normalized_model_parent(const std::string &model_path) {
   return parent.lexically_normal();
 }
 
+#if defined(_MSC_VER)
+__declspec(noinline)
+#elif defined(__GNUC__) || defined(__clang__)
+__attribute__((noinline))
+#endif
+// Keeps the shared validation smaller than two inlined copies under the proto binary-size budget.
+bool is_windows_compatible_filename(const std::filesystem::path &filename) {
+  const auto &value = filename.native();
+  return !value.empty() && value.back() != '.' && value.back() != ' ';
+}
+
 std::string validate_weights_file_is_next_to_model(const std::string &model_path,
                                                    const std::string &weights_file) {
   std::filesystem::path weights_path(weights_file);
@@ -62,11 +74,13 @@ std::string validate_weights_file_is_next_to_model(const std::string &model_path
   const bool same_dir = (weights_parent == normalized_parent);
   EXT_ENFORCE(same_dir, "External weights file must be next to model file. model=", model_path,
               ", weights=", weights_file);
-  EXT_ENFORCE(!normalized_weights.filename().empty(),
-              "External weights file must include a filename. model=", model_path,
-              ", weights=", weights_file);
+  const std::filesystem::path weights_filename = normalized_weights.filename();
+  EXT_ENFORCE(is_windows_compatible_filename(weights_filename),
+              "External weights file must include a filename that does not end with a dot or "
+              "space. model=",
+              model_path, ", weights=", weights_file);
 
-  std::filesystem::path final_path = weights_parent / normalized_weights.filename();
+  std::filesystem::path final_path = weights_parent / weights_filename;
   // Reject symlinks as write targets to prevent TOCTOU-based arbitrary file overwrites
   // (GHSA-8qff-7g33-75mx). Defense-in-depth: FileWriteStream also checks at open time.
   if (std::filesystem::is_symlink(final_path)) {
@@ -91,11 +105,13 @@ std::filesystem::path validate_external_location_is_next_to_model(const std::str
   EXT_ENFORCE(
       same_dir,
       "External data location must be a file name next to the model file. location=", location);
-  EXT_ENFORCE(!normalized_location.filename().empty(),
-              "External data location must include a filename. location=", location);
+  const std::filesystem::path location_filename = normalized_location.filename();
+  EXT_ENFORCE(is_windows_compatible_filename(location_filename),
+              "External data location must include a filename that does not end with a dot or "
+              "space. location=",
+              location);
 
-  std::filesystem::path final_path =
-      normalized_model_parent(model_path) / normalized_location.filename();
+  std::filesystem::path final_path = normalized_model_parent(model_path) / location_filename;
   // Reject symlinks as write targets to prevent TOCTOU-based arbitrary file overwrites
   // (GHSA-8qff-7g33-75mx). Defense-in-depth: FileWriteStream also checks at open time.
   if (std::filesystem::is_symlink(final_path)) {
@@ -104,6 +120,10 @@ std::filesystem::path validate_external_location_is_next_to_model(const std::str
               "(see GHSA-8qff-7g33-75mx).");
   }
   return final_path;
+}
+
+std::string normalize_external_location(const std::string &location) {
+  return location.empty() ? location : std::filesystem::path(location).lexically_normal().string();
 }
 
 } // namespace
@@ -1273,25 +1293,45 @@ TwoFilesWriteStream::TwoFilesWriteStream(const std::string &file_path,
   }
 }
 
+void TwoFilesWriteStream::reject_case_aliased_weights_location(const std::string &location) const {
+  const std::string filename = std::filesystem::path(location).filename().string();
+  const auto is_case_alias = [&filename](const std::string &existing) {
+    const std::string existing_filename = std::filesystem::path(existing).filename().string();
+    return filename != existing_filename &&
+           std::equal(
+               filename.begin(), filename.end(), existing_filename.begin(), existing_filename.end(),
+               [](unsigned char a, unsigned char b) { return std::tolower(a) == std::tolower(b); });
+  };
+  EXT_ENFORCE(!is_case_alias(default_weights_location_),
+              "Case-aliased external weights location: ", location);
+  for (const auto &entry : extra_weights_streams_) {
+    EXT_ENFORCE(!is_case_alias(entry.first), "Case-aliased external weights location: ", location);
+  }
+}
+
 void TwoFilesWriteStream::set_active_weights_location(const std::string &location) {
-  if (location.empty()) {
+  const std::string normalized_location = normalize_external_location(location);
+  if (normalized_location.empty()) {
     active_weights_location_ = weights_stream_.file_path();
     return;
   }
-  if (location == active_weights_location_) {
+  reject_case_aliased_weights_location(normalized_location);
+  if (normalized_location == active_weights_location_) {
     return;
   }
-  if (location == weights_stream_.file_path() || location == default_weights_location_) {
-    active_weights_location_ = location;
+  if (normalized_location == normalize_external_location(weights_stream_.file_path()) ||
+      normalized_location == default_weights_location_) {
+    active_weights_location_ = normalized_location;
     return;
   }
-  auto it = extra_weights_streams_.find(location);
+  auto it = extra_weights_streams_.find(normalized_location);
   if (it == extra_weights_streams_.end()) {
-    std::filesystem::path path = validate_external_location_is_next_to_model(file_path_, location);
+    std::filesystem::path path =
+        validate_external_location_is_next_to_model(file_path_, normalized_location);
     auto stream = std::make_unique<FileWriteStream>(path.string());
-    extra_weights_streams_.emplace(location, std::move(stream));
+    extra_weights_streams_.emplace(normalized_location, std::move(stream));
   }
-  active_weights_location_ = location;
+  active_weights_location_ = normalized_location;
 }
 
 void TwoFilesWriteStream::write_raw_bytes(const uint8_t *data, offset_t n_bytes) {
@@ -1329,16 +1369,18 @@ int64_t TwoFilesWriteStream::weights_size() const {
 }
 
 int64_t TwoFilesWriteStream::weights_size(const std::string &location) const {
-  if (location.empty() || location == weights_stream_.file_path() ||
-      location == default_weights_location_) {
+  const std::string normalized_location = normalize_external_location(location);
+  if (normalized_location.empty() ||
+      normalized_location == normalize_external_location(weights_stream_.file_path()) ||
+      normalized_location == default_weights_location_) {
     return parallel_write_ ? virtual_write_pos_ : weights_stream_.size();
   }
-  auto it = extra_weights_streams_.find(location);
+  auto it = extra_weights_streams_.find(normalized_location);
   if (it == extra_weights_streams_.end()) {
     return 0;
   }
   if (parallel_write_) {
-    auto pit = extra_virtual_write_pos_.find(location);
+    auto pit = extra_virtual_write_pos_.find(normalized_location);
     return pit == extra_virtual_write_pos_.end() ? 0 : pit->second;
   }
   return it->second->size();
@@ -1359,16 +1401,21 @@ void TwoFilesWriteStream::pre_allocate_weights(const std::string &location, int6
   EXT_ENFORCE(total_bytes >= 0, "total_bytes must be non-negative, got ", total_bytes);
   if (total_bytes == 0)
     return;
-  if (location.empty() || location == weights_stream_.file_path() ||
-      location == default_weights_location_) {
+  const std::string normalized_location = normalize_external_location(location);
+  if (!normalized_location.empty())
+    reject_case_aliased_weights_location(normalized_location);
+  if (normalized_location.empty() ||
+      normalized_location == normalize_external_location(weights_stream_.file_path()) ||
+      normalized_location == default_weights_location_) {
     weights_stream_.pre_allocate(total_bytes);
     return;
   }
-  auto it = extra_weights_streams_.find(location);
+  auto it = extra_weights_streams_.find(normalized_location);
   if (it == extra_weights_streams_.end()) {
-    std::filesystem::path path = validate_external_location_is_next_to_model(file_path_, location);
+    std::filesystem::path path =
+        validate_external_location_is_next_to_model(file_path_, normalized_location);
     auto stream = std::make_unique<FileWriteStream>(path.string());
-    it = extra_weights_streams_.emplace(location, std::move(stream)).first;
+    it = extra_weights_streams_.emplace(normalized_location, std::move(stream)).first;
   }
   it->second->pre_allocate(total_bytes);
 }
@@ -1461,37 +1508,41 @@ TwoFilesStream::TwoFilesStream(const std::string &file_path, const std::string &
 }
 
 void TwoFilesStream::set_active_weights_location(const std::string &location) {
+  const std::string normalized_location = normalize_external_location(location);
   std::filesystem::path model_parent = std::filesystem::path(file_path_).parent_path();
   if (model_parent.empty()) {
     model_parent = std::filesystem::path(".");
   }
-  if (location.empty()) {
+  if (normalized_location.empty()) {
     active_weights_location_ = weights_stream_.file_path();
     return;
   }
-  if (location == active_weights_location_) {
+  if (normalized_location == active_weights_location_) {
     return;
   }
-  if (location == weights_stream_.file_path() || location == default_weights_location_) {
-    active_weights_location_ = location;
+  if (normalized_location == normalize_external_location(weights_stream_.file_path()) ||
+      normalized_location == normalize_external_location(default_weights_location_)) {
+    active_weights_location_ = normalized_location;
     return;
   }
-  auto it = extra_weights_streams_.find(location);
+  auto it = extra_weights_streams_.find(normalized_location);
   if (it == extra_weights_streams_.end()) {
-    std::filesystem::path path(location);
+    std::filesystem::path path(normalized_location);
     if (!path.is_absolute()) {
       path = model_parent / path;
     }
     validate_external_weights_read_path(path, model_parent);
     auto stream = std::make_unique<FileStream>(path.string());
-    extra_weights_streams_.emplace(location, std::move(stream));
+    extra_weights_streams_.emplace(normalized_location, std::move(stream));
   }
-  active_weights_location_ = location;
+  active_weights_location_ = normalized_location;
 }
 
 bool TwoFilesStream::using_default_weights_location() const {
-  return active_weights_location_ == weights_stream_.file_path() ||
-         active_weights_location_ == default_weights_location_;
+  const std::string normalized_active_location =
+      normalize_external_location(active_weights_location_);
+  return normalized_active_location == normalize_external_location(weights_stream_.file_path()) ||
+         normalized_active_location == normalize_external_location(default_weights_location_);
 }
 
 FileStream &TwoFilesStream::active_weights_stream() {
@@ -1515,11 +1566,13 @@ const FileStream &TwoFilesStream::active_weights_stream() const {
 }
 
 int64_t TwoFilesStream::weights_size(const std::string &location) const {
-  if (location.empty() || location == weights_stream_.file_path() ||
-      location == default_weights_location_) {
+  const std::string normalized_location = normalize_external_location(location);
+  if (normalized_location.empty() ||
+      normalized_location == normalize_external_location(weights_stream_.file_path()) ||
+      normalized_location == normalize_external_location(default_weights_location_)) {
     return weights_stream_.size();
   }
-  auto it = extra_weights_streams_.find(location);
+  auto it = extra_weights_streams_.find(normalized_location);
   if (it == extra_weights_streams_.end()) {
     return 0;
   }

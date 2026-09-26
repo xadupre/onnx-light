@@ -798,6 +798,58 @@ TEST(onnx_shape_inference, InferShapesImpl_SplitToSequenceOmittedSplit) {
   }
 }
 
+TEST(onnx_shape_inference, InferShapesImpl_AttentionCachedQkSequenceLength) {
+  RegisterAllOnnxOperatorSchemas();
+  const std::vector<std::tuple<std::string, std::string, int64_t>> lengths = {
+      {"S", "P", -1}, {"3", "P", -1}, {"S", "2", -1}, {"3", "2", 5},
+      {"0", "2", 2},  {"3", "0", 3},  {"S", "", -1},  {"3", "", 3}};
+  for (int version : {23, 24, 25}) {
+    for (bool packed : {false, true}) {
+      for (bool present_outputs : {false, true}) {
+        for (const auto &[current, past, total] : lengths) {
+          SCOPED_TRACE(version);
+          SCOPED_TRACE(packed);
+          SCOPED_TRACE(present_outputs);
+          SCOPED_TRACE(current + "+" + past);
+          const std::string shape = packed ? "1," + current + ",4" : "1,1," + current + ",4";
+          const std::string cache_inputs =
+              past.empty()
+                  ? ""
+                  : ", float[1,1," + past + ",4] past_key, float[1,1," + past + ",4] past_value";
+          const std::string code =
+              "<ir_version: 10, opset_import: [\"\" : " + std::to_string(version) +
+              "]> graph (float[" + shape + "] Q, float[" + shape + "] K, float[" + shape + "] V" +
+              cache_inputs + ") => (float[] Y, " +
+              (present_outputs ? "float[] present_key, float[] present_value, " : "") +
+              "float[] weights) { Y, " + (present_outputs ? "present_key, present_value" : ",") +
+              ", weights = Attention" + (packed ? " <q_num_heads = 1, kv_num_heads = 1>" : "") +
+              " (Q, K, V" + (past.empty() ? "" : ", , past_key, past_value") + ") }";
+          ModelProto model;
+          OnnxParser parser(code.c_str());
+          const auto status = parser.Parse(model);
+          ASSERT_TRUE(status.IsOK()) << status.ErrorMessage();
+          shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                       ShapeInferenceOptions(false, 1, false));
+          const auto &weights = model.graph().output(present_outputs ? 3 : 1);
+          const auto &dims = weights.type().tensor_type().shape();
+          ASSERT_EQ(dims.dim_size(), 4);
+          const auto &last = dims.dim(3);
+          if (total >= 0) {
+            ASSERT_TRUE(last.has_dim_value());
+            EXPECT_EQ(last.dim_value(), total);
+          } else if (past.empty()) {
+            EXPECT_EQ(last.dim_param(), current);
+          } else {
+            EXPECT_FALSE(last.has_dim_value());
+            EXPECT_NE(last.dim_param(), "S");
+            EXPECT_NE(last.dim_param(), "P");
+          }
+        }
+      }
+    }
+  }
+}
+
 TEST(onnx_shape_inference, InferShapesImpl_SpaceDepthDivisibility) {
   const std::vector<std::tuple<std::string, std::string, int64_t>> cases = {
       {"SpaceToDepth", "1,1,7,8", 2}, {"SpaceToDepth", "1,1,8,7", 2},

@@ -342,6 +342,29 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry, TestMode mode) 
            });
   }
 
+  // Regression for onnx/onnx#8446: each group writes all W.shape[1] output
+  // channels, not just one. Uses distinct weights and two batches.
+  {
+    NodeProto node = MakeConvTransposeNode({"X", "W"}, {"Y"});
+    AddAttribute<int64_t>(node, "group", 2);
+    Expect(registry, std::move(node), "test_cc_convtranspose_group_2_multiple_output_channels",
+           {opset}, []() -> IoData {
+             Tensor X = Tensor::FromFloat("X", {2, 4, 1, 2},
+                                          {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, -1.0f,
+                                           -2.0f, -3.0f, -4.0f, -5.0f, -6.0f, -7.0f, -8.0f});
+             Tensor W = Tensor::FromFloat(
+                 "W", {4, 3, 1, 1},
+                 {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f});
+             // Each output plane is the weighted sum of its group's two input planes.
+             Tensor Y = Tensor::FromFloat("Y", {2, 6, 1, 2},
+                                          {13.0f,   18.0f,   17.0f,   24.0f,   21.0f,   30.0f,
+                                           105.0f,  122.0f,  117.0f,  136.0f,  129.0f,  150.0f,
+                                           -13.0f,  -18.0f,  -17.0f,  -24.0f,  -21.0f,  -30.0f,
+                                           -105.0f, -122.0f, -117.0f, -136.0f, -129.0f, -150.0f});
+             return IoData{{std::move(X), std::move(W)}, {std::move(Y)}};
+           });
+  }
+
   // -------------------------------------------------------------------
   // Cases 10/11: ConvTranspose with output_shape and with kernel_shape +
   // output_padding (mirrors ``test_convtranspose_output_shape`` and

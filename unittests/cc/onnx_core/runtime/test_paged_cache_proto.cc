@@ -27,6 +27,33 @@ PagedCacheProto Cache() {
   return cache;
 }
 
+PagedCacheProto EncodedCache() {
+  PagedCacheProto cache;
+  cache.set_name("encoded_cache");
+  auto *block = cache.add_blocks();
+  block->set_start(0);
+  block->set_length(1);
+  for (auto *encoded : {block->mutable_encoded_key(), block->mutable_encoded_value()}) {
+    auto *logical = encoded->mutable_logical_type()->mutable_tensor_type();
+    logical->set_elem_type(TensorProto::FLOAT);
+    for (int64_t dim : {1, 1, 2, 2})
+      logical->mutable_shape()->add_dim()->set_dim_value(dim);
+    auto *affine = encoded->mutable_affine();
+    affine->set_storage_type(TensorProto::INT8);
+    auto *scale = affine->mutable_scale();
+    scale->set_data_type(TensorProto::FLOAT);
+    const float scale_value = 0.25f;
+    scale->set_raw_data(&scale_value, sizeof(scale_value));
+    auto *zero = affine->mutable_zero_point();
+    zero->set_data_type(TensorProto::INT8);
+    const uint8_t zero_value = 0;
+    zero->set_raw_data(&zero_value, sizeof(zero_value));
+    const uint8_t payload[] = {1, 2, 3, 4};
+    encoded->set_raw_data(payload, sizeof(payload));
+  }
+  return cache;
+}
+
 ModelProto CacheModel() {
   ModelProto model;
   model.set_ir_version(10);
@@ -135,6 +162,32 @@ TEST(PagedCacheProto, RuntimeRetainsStorageAfterProtoDestructionAndExports) {
   EXPECT_EQ(copy.size_bytes(), key.size_bytes());
   EXPECT_FLOAT_EQ(copy.AsFloat()[3], 4.f);
   EXPECT_EQ(copy.bytes(), key.bytes());
+}
+
+TEST(PagedCacheProto, EncodedExportBorrowsPayloadAndAffineParameters) {
+  PagedCacheProto parsed;
+  ASSERT_TRUE(parsed.ParseFromString(EncodedCache().SerializeAsString()));
+  PagedCacheProto exported;
+  const uint8_t *payload = nullptr;
+  const uint8_t *scale = nullptr;
+  const uint8_t *zero = nullptr;
+  {
+    RuntimeValue value = RuntimeValue::FromPagedCache(std::move(parsed));
+    const auto &encoded = value.fields.at("blocks").elements[0].fields.at("key").Encoded();
+    payload = encoded.raw_data().data();
+    scale = encoded.affine().scale().raw_data().data();
+    zero = encoded.affine().zero_point().raw_data().data();
+    exported = value.ToPagedCache();
+    EXPECT_EQ(exported.blocks(0).encoded_key().raw_data().data(), payload);
+    EXPECT_EQ(exported.blocks(0).encoded_key().affine().scale().raw_data().data(), scale);
+    EXPECT_EQ(exported.blocks(0).encoded_key().affine().zero_point().raw_data().data(), zero);
+  }
+  EXPECT_EQ(exported.blocks(0).encoded_key().raw_data().data(), payload);
+  EXPECT_EQ(exported.blocks(0).encoded_key().affine().scale().raw_data().data(), scale);
+  EXPECT_EQ(exported.blocks(0).encoded_key().affine().zero_point().raw_data().data(), zero);
+  EXPECT_EQ(exported.blocks(0).encoded_key().raw_data()[0], 1);
+  EXPECT_EQ(exported.blocks(0).encoded_key().affine().scale().raw_data().size(), sizeof(float));
+  EXPECT_EQ(exported.blocks(0).encoded_key().affine().zero_point().raw_data()[0], 0);
 }
 
 TEST(PagedCacheProto, SessionSeedsAndReseedsWithoutOverridingCallerValues) {

@@ -163,6 +163,73 @@ bool RuntimeValue::CatalogueIndependent(size_t depth) const {
   return true;
 }
 
+namespace {
+
+TensorProto BorrowTensorProto(const TensorProto &source, const std::shared_ptr<void> &owner) {
+  TensorProto result;
+  result.ref_dims() = source.ref_dims();
+  if (source.has_data_type())
+    result.set_data_type(source.data_type());
+  if (source.has_segment())
+    result.mutable_segment()->CopyFrom(source.segment());
+  result.ref_float_data() = source.ref_float_data();
+  result.ref_int32_data() = source.ref_int32_data();
+  result.ref_string_data() = source.ref_string_data();
+  result.ref_int64_data() = source.ref_int64_data();
+  if (source.has_name())
+    result.set_name(source.name().value());
+  if (source.has_raw_data())
+    result.ref_raw_data().assign_borrowed(source.raw_data().data(), source.raw_data().size(),
+                                          owner);
+  result.ref_double_data() = source.ref_double_data();
+  result.ref_uint64_data() = source.ref_uint64_data();
+  if (source.has_doc_string())
+    result.set_doc_string(source.doc_string().value());
+  result.ref_external_data() = source.ref_external_data();
+  if (source.has_data_location())
+    result.set_data_location(source.data_location());
+  result.ref_metadata_props() = source.ref_metadata_props();
+  return result;
+}
+
+EncodedValueProto BorrowEncodedValue(const RuntimeValue &source) {
+  const EncodedValueProto &value = source.Encoded();
+  const std::shared_ptr<void> owner(source.encoded,
+                                    const_cast<EncodedValueProto *>(source.encoded.get()));
+  EncodedValueProto result;
+  if (value.has_affine()) {
+    auto *affine = result.mutable_affine();
+    if (value.affine().has_storage_type())
+      affine->set_storage_type(value.affine().storage_type());
+    if (value.affine().has_scale())
+      *affine->mutable_scale() = BorrowTensorProto(value.affine().scale(), owner);
+    if (value.affine().has_zero_point())
+      *affine->mutable_zero_point() = BorrowTensorProto(value.affine().zero_point(), owner);
+    if (value.affine().has_axis())
+      affine->set_axis(value.affine().axis());
+    if (value.affine().has_block_size())
+      affine->set_block_size(value.affine().block_size());
+  } else if (value.has_struct_type()) {
+    result.mutable_struct_type()->CopyFrom(value.struct_type());
+  }
+  if (value.has_logical_type())
+    result.mutable_logical_type()->CopyFrom(value.logical_type());
+  if (value.has_raw_data())
+    result.ref_raw_data().assign_borrowed(value.raw_data().data(), value.raw_data().size(), owner);
+  result.ref_external_data() = value.ref_external_data();
+  if (value.has_data_location())
+    result.set_data_location(value.data_location());
+  if (value.has_name())
+    result.set_name(value.name().value());
+  if (value.has_doc_string())
+    result.set_doc_string(value.doc_string().value());
+  if (value.has_parameter_ref())
+    result.set_parameter_ref(value.parameter_ref().value());
+  return result;
+}
+
+} // namespace
+
 RuntimeValue::RuntimeValue(EncodedValueProto value)
     : kind(Kind::kEncoded), encoded(std::make_shared<EncodedValueProto>(std::move(value))) {}
 
@@ -261,7 +328,7 @@ PagedCacheProto RuntimeValue::ToPagedCache(const std::string &name,
           source.quantization_parameters->Validate(source.Encoded(), catalogue);
         }
         *(is_key ? block->mutable_encoded_key() : block->mutable_encoded_value()) =
-            source.Encoded();
+            BorrowEncodedValue(source);
       } else {
         EXT_ENFORCE_INVALID(source.kind == Kind::kTensor &&
                                 source.tensor.data_type == DataType::FLOAT,

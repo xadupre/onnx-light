@@ -90,15 +90,15 @@ float ReadScale(const TensorProto &tensor, size_t index) {
   return tensor.float_data()[index];
 }
 
-int ReadZero(const AffineLayoutProto &affine, size_t index) {
+int ReadZero(const AffineLayoutProto &affine, size_t index, int32_t storage_type) {
   if (!affine.has_zero_point())
     return 0;
   const auto &tensor = affine.zero_point();
   if (tensor.has_raw_data())
-    return ReadCode(tensor.raw_data().data(), index, affine.storage_type());
-  if (FourBit(affine.storage_type())) {
+    return ReadCode(tensor.raw_data().data(), index, storage_type);
+  if (FourBit(storage_type)) {
     int code = (static_cast<uint32_t>(tensor.int32_data()[index / 8]) >> (4 * (index % 8))) & 15;
-    return affine.storage_type() == DataType::INT4 && code >= 8 ? code - 16 : code;
+    return storage_type == DataType::INT4 && code >= 8 ? code - 16 : code;
   }
   return tensor.int32_data()[index];
 }
@@ -124,6 +124,7 @@ int64_t Scalar(const RuntimeValue &value) {
 struct PageView {
   const RuntimeValue *value;
   int64_t capacity, width;
+  int32_t storage_type = DataType::FLOAT;
   int axis = -1;
   uint64_t block = 0;
 
@@ -148,9 +149,21 @@ struct PageView {
                                 parameter->raw_data().data() != nullptr,
                             "PagedAttention: null affine parameter payload.");
     if (!checked) {
-      const auto layout = StructTypeCatalogue().ValidateEncodedValue(encoded);
+      const EncodedValueLayout layout = StructTypeCatalogue().ValidateEncodedValue(encoded);
       EXT_ENFORCE_INVALID(!layout.external && layout.content_verified,
                           "PagedAttention: pages require verified inline payloads.");
+      storage_type = layout.storage_type;
+    } else if (encoded.affine().has_storage_type()) {
+      storage_type = encoded.affine().storage_type();
+    } else {
+      const auto &shape = encoded.logical_type().tensor_type().shape();
+      uint64_t elements = 1;
+      for (int i = 0; i < shape.dim_size(); ++i)
+        elements *= static_cast<uint64_t>(shape.dim(i).dim_value());
+      storage_type =
+          encoded.affine().signed_storage()
+              ? (encoded.raw_data().size() == elements ? DataType::INT8 : DataType::INT4)
+              : (encoded.raw_data().size() == elements ? DataType::UINT8 : DataType::UINT4);
     }
     const auto &type = encoded.logical_type().tensor_type();
     EXT_ENFORCE_INVALID(type.elem_type() == DataType::FLOAT && type.shape().dim_size() == 4 &&
@@ -161,7 +174,7 @@ struct PageView {
     width = type.shape().dim(3).dim_value();
     CheckedBytes(capacity, width);
     const auto &affine = encoded.affine();
-    CodeRange(affine.storage_type());
+    CodeRange(storage_type);
     EXT_ENFORCE_INVALID(affine.scale().data_type() == DataType::FLOAT,
                         "PagedAttention: affine scale parameters must be FLOAT.");
     if (affine.has_axis()) {
@@ -175,8 +188,8 @@ struct PageView {
       const float scale = ReadScale(affine.scale(), i);
       EXT_ENFORCE_INVALID(std::isfinite(scale) && scale > 0,
                           "PagedAttention: affine scales must be finite and positive.");
-      const auto [low, high] = CodeRange(affine.storage_type());
-      const int zero = ReadZero(affine, i);
+      const auto [low, high] = CodeRange(storage_type);
+      const int zero = ReadZero(affine, i, storage_type);
       EXT_ENFORCE_INVALID(zero >= low && zero <= high,
                           "PagedAttention: affine zero point is out of range.");
     }
@@ -204,13 +217,12 @@ struct PageView {
     }
     AddBytes(statistics.dequantized_bytes, sizeof(float));
     const float scale = ReadScale(affine.scale(), parameter);
-    const int zero = ReadZero(affine, parameter);
-    const auto [low, high] = CodeRange(affine.storage_type());
+    const int zero = ReadZero(affine, parameter, storage_type);
+    const auto [low, high] = CodeRange(storage_type);
     EXT_ENFORCE_INVALID(std::isfinite(scale) && scale > 0 && zero >= low && zero <= high,
                         "PagedAttention: invalid affine parameter value.");
-    const double result =
-        (ReadCode(encoded.raw_data().data(), index, affine.storage_type()) - zero) *
-        static_cast<double>(scale);
+    const double result = (ReadCode(encoded.raw_data().data(), index, storage_type) - zero) *
+                          static_cast<double>(scale);
     EXT_ENFORCE_INVALID(std::abs(result) <= std::numeric_limits<float>::max(),
                         "PagedAttention: decoded value exceeds FLOAT range.");
     return static_cast<float>(result);
@@ -263,7 +275,11 @@ RuntimeValue NewPage(const Tensor &input, int64_t begin, int64_t length,
   for (int64_t d : shape)
     logical->mutable_shape()->add_dim()->set_dim_value(d);
   auto *affine = encoded.mutable_affine();
-  affine->set_storage_type(static_cast<TensorProto::DataType>(format.storage_type));
+  if (count == 1)
+    affine->set_storage_type(static_cast<TensorProto::DataType>(format.storage_type));
+  else
+    affine->set_signed_storage(format.storage_type == DataType::INT4 ||
+                               format.storage_type == DataType::INT8);
   affine->mutable_scale()->set_data_type(DataType::FLOAT);
   affine->mutable_scale()->add_float_data(format.scale);
   affine->mutable_zero_point()->set_data_type(format.storage_type);
@@ -330,8 +346,6 @@ PagedAttention::Result PagedAttention::operator()(const Tensor &q, const Tensor 
   EXT_ENFORCE_INVALID(options.block_size > 0 && options.max_tokens > 0 &&
                           options.left_window_size >= -1,
                       "PagedAttention: invalid block size, capacity or window.");
-  CheckFormat(options.key_format);
-  CheckFormat(options.value_format);
   for (const Tensor *input : {&q, &k, &v})
     CheckTensor(*input);
   EXT_ENFORCE_INVALID(q.shape[2] == k.shape[2] && k.shape[2] == v.shape[2] &&
@@ -359,32 +373,18 @@ PagedAttention::Result PagedAttention::operator()(const Tensor &q, const Tensor 
   const int64_t total = past_length + length;
   const size_t output_bytes = CheckedBytes(length, v.shape[3]);
   const size_t workspace_bytes = length == 0 ? 0 : CheckedBytes(1, v.shape[3], sizeof(double));
-  Formats formats{options.key_format, options.value_format};
+  Formats formats;
   if (length > 0 && format_selector_)
-    formats = format_selector_(k, v, past_length, formats);
+    formats = format_selector_(k, v, past_length);
   CheckFormat(formats.key);
   CheckFormat(formats.value);
   const StructTypeCatalogue empty_catalogue;
   const auto &catalogue = rt ? rt->struct_type_catalogue() : empty_catalogue;
-  result.present = past.BorrowView().Retain(catalogue);
-  auto &present_pages = result.present.fields.at("blocks").elements;
-  for (int64_t begin = 0; begin < length;) {
-    const int64_t chunk = std::min(options.block_size, length - begin);
-    RuntimeValue page;
-    page.fields.emplace("start",
-                        RuntimeValue(Tensor::FromInt64("", {}, {past_length + begin})).Retain());
-    page.fields.emplace("length", RuntimeValue(Tensor::FromInt64("", {}, {chunk})).Retain());
-    page.fields.emplace("key", NewPage(k, begin, chunk, formats.key, rt, result.statistics));
-    page.fields.emplace("value", NewPage(v, begin, chunk, formats.value, rt, result.statistics));
-    present_pages.push_back(std::move(page));
-    begin += chunk;
-  }
-  result.present = std::move(result.present).Retain(catalogue);
-  const auto &retained_pages = result.present.fields.at("blocks").elements;
-  cache_analysis_->Validate(retained_pages, result.statistics);
   result.Y = Allocate(rt, 0, DataType::FLOAT, {1, 1, length, v.shape[3]}, output_bytes);
-  if (length == 0)
+  if (length == 0) {
+    result.present = past.BorrowView().Retain(catalogue);
     return result;
+  }
   Tensor workspace =
       rt ? rt->MakeTemporaryTensor(DataType::DOUBLE, {v.shape[3]}, workspace_bytes)
          : MakeOutputTensor(DataType::DOUBLE, {v.shape[3]}, workspace_bytes, nullptr);
@@ -398,19 +398,19 @@ PagedAttention::Result PagedAttention::operator()(const Tensor &q, const Tensor 
   const int64_t first_attended =
       options.left_window_size < 0 ? 0
                                    : past_length - std::min(past_length, options.left_window_size);
-  size_t low = 0, high = retained_pages.size();
+  size_t low = 0, high = pages.elements.size();
   while (low < high) {
     const size_t middle = low + (high - low) / 2;
-    const auto &page = retained_pages[middle];
+    const auto &page = pages.elements[middle];
     if (Scalar(Field(page, "start")) + Scalar(Field(page, "length")) <= first_attended)
       low = middle + 1;
     else
       high = middle;
   }
   std::vector<ActivePage> active;
-  active.reserve(retained_pages.size() - low);
-  for (size_t i = low; i < retained_pages.size(); ++i) {
-    const auto &page = retained_pages[i];
+  active.reserve(pages.elements.size() - low);
+  for (size_t i = low; i < pages.elements.size(); ++i) {
+    const auto &page = pages.elements[i];
     active.push_back({Scalar(Field(page, "start")), Scalar(Field(page, "length")),
                       PageView(Field(page, "key"), true), PageView(Field(page, "value"), true)});
   }
@@ -443,10 +443,41 @@ PagedAttention::Result PagedAttention::operator()(const Tensor &q, const Tensor 
         maximum = next_maximum;
       }
     }
+    for (int64_t token = std::max(first, past_length); token < end; ++token) {
+      const size_t current = static_cast<size_t>(token - past_length);
+      double score = 0;
+      for (int64_t d = 0; d < q.shape[3]; ++d)
+        score += static_cast<double>(q.AsFloat()[static_cast<size_t>(row) * q.shape[3] + d]) *
+                 k.AsFloat()[current * k.shape[3] + d];
+      score *= scale;
+      const double next_maximum = std::max(maximum, score);
+      const double previous_weight = std::exp(maximum - next_maximum);
+      const double weight = std::exp(score - next_maximum);
+      denominator = denominator * previous_weight + weight;
+      for (int64_t d = 0; d < v.shape[3]; ++d)
+        accumulator[d] =
+            accumulator[d] * previous_weight + weight * v.AsFloat()[current * v.shape[3] + d];
+      maximum = next_maximum;
+    }
     for (int64_t d = 0; d < v.shape[3]; ++d)
       result.Y.AsFloat()[static_cast<size_t>(row) * v.shape[3] + d] =
           static_cast<float>(accumulator[d] / denominator);
   }
+  result.present = past.BorrowView().Retain(catalogue);
+  auto &present_pages = result.present.fields.at("blocks").elements;
+  for (int64_t begin = 0; begin < length;) {
+    const int64_t chunk = std::min(options.block_size, length - begin);
+    RuntimeValue page;
+    page.fields.emplace("start",
+                        RuntimeValue(Tensor::FromInt64("", {}, {past_length + begin})).Retain());
+    page.fields.emplace("length", RuntimeValue(Tensor::FromInt64("", {}, {chunk})).Retain());
+    page.fields.emplace("key", NewPage(k, begin, chunk, formats.key, rt, result.statistics));
+    page.fields.emplace("value", NewPage(v, begin, chunk, formats.value, rt, result.statistics));
+    present_pages.push_back(std::move(page));
+    begin += chunk;
+  }
+  result.present = std::move(result.present).Retain(catalogue);
+  cache_analysis_->Validate(result.present.fields.at("blocks").elements, result.statistics);
   return result;
 }
 
@@ -462,12 +493,6 @@ void PagedAttention::Run(RuntimeContext &rt) {
   for (const auto &attribute : node.attribute()) {
     const std::string &name = attribute.name();
     EXT_ENFORCE_INVALID(seen.insert(name).second, "PagedAttention: duplicate attribute ", name);
-    if (name == "key_scale" || name == "value_scale") {
-      EXT_ENFORCE_INVALID(attribute.type() == AttributeProto::FLOAT && attribute.has_f(),
-                          "PagedAttention: scale attribute must be FLOAT.");
-      (name == "key_scale" ? options.key_format : options.value_format).scale = attribute.f();
-      continue;
-    }
     EXT_ENFORCE_INVALID(attribute.type() == AttributeProto::INT && attribute.has_i(),
                         "PagedAttention: unsupported attribute or attribute type: ", name);
     const int64_t value = attribute.i();
@@ -480,16 +505,6 @@ void PagedAttention::Run(RuntimeContext &rt) {
     else if (name == "is_causal") {
       EXT_ENFORCE_INVALID(value == 0 || value == 1, "PagedAttention: is_causal must be 0 or 1.");
       options.is_causal = value != 0;
-    } else if (name == "key_storage_type" || name == "value_storage_type" ||
-               name == "key_zero_point" || name == "value_zero_point") {
-      EXT_ENFORCE_INVALID(value >= std::numeric_limits<int32_t>::min() &&
-                              value <= std::numeric_limits<int32_t>::max(),
-                          "PagedAttention: integer attribute out of range.");
-      auto &format = name.compare(0, 4, "key_") == 0 ? options.key_format : options.value_format;
-      if (name.find("storage_type") != std::string::npos)
-        format.storage_type = static_cast<int32_t>(value);
-      else
-        format.zero_point = static_cast<int32_t>(value);
     } else
       EXT_THROW_INVALID("PagedAttention: unsupported attribute: ", name);
   }

@@ -124,22 +124,12 @@ TEST(OnnxOpNnRegistrationTest, PagedAttentionSchemaAndDefaults) {
   EXPECT_EQ(schema.outputs().size(), 2u);
   EXPECT_EQ(schema.min_output(), 2);
   EXPECT_EQ(schema.max_output(), 2);
-  ASSERT_EQ(schema.attributes().size(), 10u);
+  ASSERT_EQ(schema.attributes().size(), 4u);
   const std::unordered_map<std::string, int64_t> defaults = {
-      {"block_size", 16},
-      {"max_tokens", 4096},
-      {"is_causal", 1},
-      {"left_window_size", -1},
-      {"key_storage_type", TensorProto::FLOAT},
-      {"value_storage_type", TensorProto::FLOAT},
-      {"key_zero_point", 0},
-      {"value_zero_point", 0}};
+      {"block_size", 16}, {"max_tokens", 4096}, {"is_causal", 1}, {"left_window_size", -1}};
   for (const auto &attribute : schema.attributes()) {
     EXPECT_FALSE(attribute.required);
-    if (attribute.type == core::schema::AttributeType::FLOAT)
-      EXPECT_EQ(std::get<double>(attribute.default_value), 1.0);
-    else
-      EXPECT_EQ(std::get<int64_t>(attribute.default_value), defaults.at(attribute.name));
+    EXPECT_EQ(std::get<int64_t>(attribute.default_value), defaults.at(attribute.name));
   }
 }
 

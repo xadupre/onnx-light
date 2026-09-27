@@ -1075,6 +1075,7 @@ TEST(custom_values, AffineInt8PerTensor) {
   const EncodedValueLayout layout = catalogue.ValidateEncodedValue(*value);
   EXPECT_EQ(layout.record_count, 4u);
   EXPECT_EQ(layout.element_bits, 8u);
+  EXPECT_EQ(layout.storage_type, TensorProto::INT8);
   EXPECT_EQ(layout.payload_bytes, 4u);
   ASSERT_NE(layout.affine, nullptr);
   EXPECT_EQ(layout.root, nullptr);
@@ -1104,6 +1105,7 @@ TEST(custom_values, AffineInt4OddElementCountPadsTheLastNibble) {
   const EncodedValueLayout layout = catalogue.ValidateEncodedValue(*value);
   EXPECT_EQ(layout.record_count, 5u);
   EXPECT_EQ(layout.element_bits, 4u);
+  EXPECT_EQ(layout.storage_type, TensorProto::INT4);
   EXPECT_EQ(layout.payload_bytes, 3u);
   EXPECT_TRUE(layout.content_verified);
   EXPECT_NO_THROW(VerifyModel(model));
@@ -1121,6 +1123,44 @@ TEST(custom_values, AffineInt4OddElementCountPadsTheLastNibble) {
   affine.clear_block_size();
   affine.set_storage_type(TensorProto::FLOAT);
   EXPECT_THROW(catalogue.ValidateEncodedValue(*value), std::invalid_argument);
+}
+
+TEST(custom_values, AffineInfersSignedStorageWidthFromPayload) {
+  StructTypeCatalogue catalogue;
+  EncodedValueProto value;
+  value.set_name("inferred_signed");
+  auto &affine = value.ref_affine();
+  affine.set_signed_storage(true);
+  affine.set_scale(MakeFloatConstant({0.5f}, {}));
+  value.ref_logical_type() = MakeTensorType(TensorProto::FLOAT, {6});
+  value.set_raw_data(std::string("\x21\x43\x65", 3));
+
+  auto layout = catalogue.ValidateEncodedValue(value);
+  EXPECT_EQ(layout.storage_type, TensorProto::INT4);
+  EXPECT_EQ(layout.element_bits, 4u);
+
+  EncodedValueProto parsed;
+  ASSERT_TRUE(parsed.ParseFromString(value.SerializeAsString()));
+  EXPECT_TRUE(parsed.affine().has_signed_storage());
+  EXPECT_TRUE(parsed.affine().signed_storage());
+  EXPECT_FALSE(parsed.affine().has_storage_type());
+
+  value.ref_logical_type() = MakeTensorType(TensorProto::FLOAT, {4});
+  value.set_raw_data(std::string("\x01\x02\x03\x04", 4));
+  layout = catalogue.ValidateEncodedValue(value);
+  EXPECT_EQ(layout.storage_type, TensorProto::INT8);
+  EXPECT_EQ(layout.element_bits, 8u);
+
+  affine.set_signed_storage(false);
+  layout = catalogue.ValidateEncodedValue(value);
+  EXPECT_EQ(layout.storage_type, TensorProto::UINT8);
+
+  value.ref_logical_type() = MakeTensorType(TensorProto::FLOAT, {1});
+  value.set_raw_data(std::string("\x01", 1));
+  EXPECT_THROW(catalogue.ValidateEncodedValue(value), std::invalid_argument);
+
+  affine.set_storage_type(TensorProto::INT8);
+  EXPECT_THROW(catalogue.ValidateEncodedValue(value), std::invalid_argument);
 }
 
 TEST(custom_values, AffineParameterShapesFollowQuantizeLinear) {

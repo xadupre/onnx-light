@@ -41,6 +41,8 @@ struct EncodedValueLayout {
   const StructTypeProto *root = nullptr;
   /** Affine descriptor, or null for the structured branch. */
   const AffineLayoutProto *affine = nullptr;
+  /** Resolved affine code type, including an inferred code width, or UNDEFINED otherwise. */
+  TensorProto::DataType storage_type = TensorProto::UNDEFINED;
   /** Size of one record in bits: the element size, or the storage width for the affine branch. */
   uint64_t element_bits = 0;
   /** Byte extent of the payload, inline or declared by the external metadata. */

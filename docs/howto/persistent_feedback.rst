@@ -472,16 +472,11 @@ for ``present`` (including a model-local struct type reference).
 
 All attributes are optional: ``block_size=16`` and ``max_tokens=4096`` must be
 positive; ``is_causal=1`` accepts only 0 or 1; ``left_window_size=-1`` means
-unbounded and non-negative values bound preceding tokens. ``key_storage_type``
-and ``value_storage_type`` provide default formats and accept FLOAT, INT8,
-UINT8, INT4 or UINT4. Their scalar ``key_scale``/``value_scale`` default to 1
-and must be positive and finite; ``key_zero_point``/``value_zero_point`` default
-to 0 and must fit the selected storage range. FLOAT uses identity scale and
-zero point. A kernel may override these defaults independently for K and V on
-each execution; the selected format is recorded in each page rather than in
-the logical cache type. These attribute value checks and data-dependent cache
-checks happen at execution. The schema and shape-function registration do not
-register a kernel.
+unbounded and non-negative values bound preceding tokens. Physical cache
+storage is deliberately absent from the operator attributes: every page is
+self-describing, and the registered kernel may choose a different K/V format
+on every execution. Data-dependent cache checks happen at execution. The
+schema and shape-function registration do not register a kernel.
 
 Kernel implementation
 ~~~~~~~~~~~~~~~~~~~~~
@@ -513,17 +508,17 @@ Register the native kernel on the context used by the state:
         });
 
 To select storage dynamically, construct the kernel with a ``FormatSelector``.
-The selector receives the current K/V tensors, the retained token count and the
-attribute-derived defaults. It returns the formats for the pages appended by
-that execution. For example, a policy can switch formats as the cache grows:
+The selector receives the current K/V tensors and retained token count. It
+returns the formats for the pages appended by that execution. Without a
+selector the native kernel stores new pages as dense FLOAT. For example, a
+policy can switch formats as the cache grows:
 
 .. code-block:: cpp
 
     auto select_formats =
-        [](const Tensor &, const Tensor &, int64_t past_length,
-           const onnx_kernels::kernel::PagedAttention::Formats &defaults) {
+        [](const Tensor &, const Tensor &, int64_t past_length) {
           if (past_length < 1024)
-            return defaults;
+            return onnx_kernels::kernel::PagedAttention::Formats{};
           return onnx_kernels::kernel::PagedAttention::Formats{
               {TensorProto::INT8, 0.01f, 0},
               {TensorProto::UINT4, 0.25f, 8}};
@@ -638,17 +633,18 @@ consumers, but this kernel rejects them explicitly rather than materializing a
 whole cache or silently converting its representation.
 
 ``block_size`` bounds each block's token capacity and ``max_tokens`` bounds the
-retained logical length. New chunks are converted according to
-``key_storage_type``/``value_storage_type``, ``key_scale``/``value_scale`` and
-``key_zero_point``/``value_zero_point``. These attributes are defaults: a
-registered kernel may provide a ``FormatSelector`` that chooses independent K/V
-formats from the current inputs and retained length on every execution. FLOAT,
-INT8, UINT8, INT4 and UINT4 are supported for new blocks; affine append uses
-scalar parameters. The selected descriptor is stored in every new page, so
-successive executions may append different formats without converting prior
-pages. Existing blocks may also use per-axis and blocked affine parameters with
-FLOAT scales. Other scale types, external payloads and custom structured
-encodings require another consumer and are rejected.
+retained logical length. A registered kernel may provide a ``FormatSelector``
+that chooses independent K/V formats from the current inputs and retained
+length on every execution. FLOAT, INT8, UINT8, INT4 and UINT4 are supported for
+new blocks; affine append uses scalar parameters. The selected descriptor is
+stored in every new page, so successive executions may append different
+formats without converting prior pages. An affine descriptor may omit its
+concrete ``storage_type`` and provide ``signed_storage`` instead. Validation
+then infers the unique supported code width from the logical element count and
+payload byte size; ambiguous sizes are rejected. Existing blocks may also use
+per-axis and blocked affine parameters with FLOAT scales. Other scale types,
+external payloads and custom structured encodings require another consumer and
+are rejected.
 Partial blocks are sealed: an append adds new blocks
 rather than rewriting the previous partial block. This can use more metadata
 than filling partial blocks, but guarantees that even live aliases never force
@@ -657,9 +653,11 @@ a prefix payload copy or conversion.
 Attention applies causal masking by default. ``is_causal`` and
 ``left_window_size`` control the visible token range. It reads only valid,
 visible tokens and uses online softmax instead of concatenating K/V or allocating
-a cache-length score matrix. Retention, invocation, publication and state views
-share payload owners. Kernel conversion of new blocks is separate from those
-zero-copy state operations.
+a cache-length score matrix. Current K/V participate in this calculation as
+uncompressed FLOAT values and are encoded only afterward for publication in
+``present``. Retention, invocation, publication and state views share payload
+owners. Kernel conversion of new blocks is separate from those zero-copy state
+operations.
 
 The direct C++ call returns ``Result::statistics``:
 

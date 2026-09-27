@@ -854,6 +854,7 @@ END_PROTO()
 //   optional TensorProto zero_point = 3;
 //   optional int64 axis = 4;
 //   optional uint64 block_size = 5;
+//   optional int32 signed_storage = 6;
 // }
 BEGIN_PROTO(AffineLayoutProto,
             "Describes the built-in affine (linear) quantization layout of an EncodedValueProto. "
@@ -873,6 +874,10 @@ FIELD_OPTIONAL(int64_t, axis, 4,
                "parameters.")
 FIELD_OPTIONAL(uint64_t, block_size, 5,
                "Blocked quantization along axis. It is valid only together with axis.")
+FIELD_OPTIONAL(int32_t, signed_storage, 6,
+               "Signedness of stored integer codes when storage_type is absent: 0 is unsigned "
+               "and 1 is signed. The code width is inferred from the logical shape and payload "
+               "size and must identify exactly one supported width.")
 END_PROTO()
 
 // StructTypeProto

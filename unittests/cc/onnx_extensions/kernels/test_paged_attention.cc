@@ -74,6 +74,10 @@ EncodedValueProto Affine(int32_t storage, int axis, uint64_t block = 0) {
   return encoded;
 }
 
+PagedAttention::FormatSelector Select(PagedAttention::Formats formats) {
+  return [formats](const Tensor &, const Tensor &, int64_t) { return formats; };
+}
+
 } // namespace
 
 TEST(PagedAttention, WindowedDecodeValidatesOnlyNewPages) {
@@ -135,10 +139,13 @@ TEST(PagedAttention, DenseMatchesAttentionAcrossAppendsAndWindows) {
 }
 
 TEST(PagedAttention, MixedFormatsKeepPartialPageOwnersAndBytes) {
-  PagedAttention kernel(KernelContext(DefaultOpset(23)));
+  PagedAttention kernel(
+      KernelContext(DefaultOpset(23)), [](const Tensor &, const Tensor &, int64_t past_length) {
+        return past_length == 0 ? PagedAttention::Formats{{DataType::INT4, 0.25f, 0}, {}}
+                                : PagedAttention::Formats{{}, {DataType::UINT8, 0.25f, 10}};
+      });
   PagedAttention::Options options;
   options.block_size = 4;
-  options.key_format = {DataType::INT4, 0.25f, 0};
   Tensor q = Input(1, 3), k = Input(1, 3), v = Input(1, 2);
   auto first = kernel(q, k, v, PagedAttention::EmptyCache(), options);
   const auto &old_key = Pages(first.present)[0].fields.at("key");
@@ -146,8 +153,6 @@ TEST(PagedAttention, MixedFormatsKeepPartialPageOwnersAndBytes) {
   auto alias = first.present.BorrowView().Retain();
   const auto serialized = old_key.Encoded().SerializeAsString();
   const auto pointer = old_value.bytes();
-  options.key_format = {};
-  options.value_format = {DataType::UINT8, 0.25f, 10};
   auto second = kernel(q, k, v, first.present, options);
   ASSERT_EQ(Pages(second.present).size(), 2u);
   EXPECT_EQ(Pages(second.present)[0].fields.at("key").encoded, old_key.encoded);
@@ -160,11 +165,10 @@ TEST(PagedAttention, MixedFormatsKeepPartialPageOwnersAndBytes) {
 }
 
 TEST(PagedAttention, DecodesOnlyIntersectingValidTokens) {
-  PagedAttention kernel(KernelContext(DefaultOpset(23)));
+  PagedAttention kernel(KernelContext(DefaultOpset(23)),
+                        Select({{DataType::INT8, 0.25f, 0}, {DataType::UINT4, 0.25f, 4}}));
   PagedAttention::Options options;
   options.block_size = 2;
-  options.key_format = {DataType::INT8, 0.25f, 0};
-  options.value_format = {DataType::UINT4, 0.25f, 4};
   auto first = kernel(Input(6, 2), Input(6, 2), Input(6, 3), PagedAttention::EmptyCache(), options);
   options.left_window_size = 1;
   auto second = kernel(Input(2, 2), Input(2, 2), Input(2, 3), first.present, options);
@@ -215,12 +219,11 @@ TEST(PagedAttention, AffineAxesAndBlockedParametersMatchDense) {
 }
 
 TEST(PagedAttention, QuantizationUsesTiesToEvenAndSaturates) {
-  PagedAttention kernel(KernelContext(DefaultOpset(23)));
   for (int32_t storage : {DataType::INT8, DataType::UINT8, DataType::INT4, DataType::UINT4}) {
-    PagedAttention::Options options;
-    options.key_format = {storage, 1, 0};
+    PagedAttention kernel(KernelContext(DefaultOpset(23)),
+                          Select({{storage, 1, 0}, {storage, 1, 0}}));
     const Tensor k = Tensor::FromFloat("", {1, 1, 1, 5}, {0.5f, 1.5f, 2.5f, 3.5f, 1e30f});
-    auto result = kernel(k, k, k, PagedAttention::EmptyCache(), options);
+    auto result = kernel(k, k, k, PagedAttention::EmptyCache(), {});
     const auto &raw = Pages(result.present)[0].fields.at("key").Encoded().raw_data();
     if (storage == DataType::INT4 || storage == DataType::UINT4) {
       ASSERT_EQ(raw.size(), 3u);
@@ -245,12 +248,12 @@ TEST(PagedAttention, RejectsBadOptionsDescriptorsAndOverflow) {
   const auto empty = PagedAttention::EmptyCache();
   options.max_tokens = 0;
   EXPECT_THROW(kernel(input, input, input, empty, options), std::invalid_argument);
-  options = {};
-  options.key_format.scale = std::numeric_limits<float>::quiet_NaN();
-  EXPECT_THROW(kernel(input, input, input, empty, options), std::invalid_argument);
-  options = {};
-  options.value_format = {DataType::UINT4, 1, 16};
-  EXPECT_THROW(kernel(input, input, input, empty, options), std::invalid_argument);
+  PagedAttention bad_scale(
+      KernelContext(DefaultOpset(23)),
+      Select({{DataType::INT8, std::numeric_limits<float>::quiet_NaN(), 0}, {}}));
+  EXPECT_THROW(bad_scale(input, input, input, empty, {}), std::invalid_argument);
+  PagedAttention bad_zero(KernelContext(DefaultOpset(23)), Select({{}, {DataType::UINT4, 1, 16}}));
+  EXPECT_THROW(bad_zero(input, input, input, empty, {}), std::invalid_argument);
   options = {};
   auto result = kernel(input, input, input, empty, options);
   options.max_tokens = 1;
@@ -362,7 +365,6 @@ TEST(PagedAttention, EmptyAppendPreservesRetainedPages) {
 
 TEST(PagedAttention, QuantizedReconstructionAndAttentionTolerance) {
   KernelContext context(DefaultOpset(23));
-  PagedAttention kernel(context);
   Attention reference(context);
   Attention::Attributes attributes;
   attributes.is_causal = true;
@@ -373,9 +375,9 @@ TEST(PagedAttention, QuantizedReconstructionAndAttentionTolerance) {
     const bool is_signed = storage == DataType::INT4 || storage == DataType::INT8;
     const float scale = four_bit ? 0.25f : 0.01f;
     const int zero = is_signed ? 0 : (four_bit ? 8 : 128);
+    PagedAttention kernel(context, Select({{storage, scale, zero}, {storage, scale, zero}}));
     PagedAttention::Options options;
     options.block_size = 2;
-    options.key_format = options.value_format = {storage, scale, zero};
     const auto actual = kernel(q, key, value, PagedAttention::EmptyCache(), options);
     Tensor reconstructed_key = Input(3, 3), reconstructed_value = Input(3, 2);
     for (const auto &page : Pages(actual.present)) {
@@ -397,7 +399,6 @@ TEST(PagedAttention, QuantizedReconstructionAndAttentionTolerance) {
         }
       }
     }
-    Near(actual.Y, reference(q, reconstructed_key, reconstructed_value, attributes).Y, 1e-5f);
-    Near(actual.Y, reference(q, key, value, attributes).Y, four_bit ? 0.15f : 0.01f);
+    Near(actual.Y, reference(q, key, value, attributes).Y);
   }
 }

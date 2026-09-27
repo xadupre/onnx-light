@@ -52,12 +52,11 @@ public:
   };
   struct Options {
     int64_t block_size = 16, max_tokens = 4096;
-    Format key_format, value_format;
     bool is_causal = true;
     int64_t left_window_size = -1;
   };
-  using FormatSelector = std::function<Formats(const Tensor &key, const Tensor &value,
-                                               int64_t past_length, const Formats &defaults)>;
+  using FormatSelector =
+      std::function<Formats(const Tensor &key, const Tensor &value, int64_t past_length)>;
   /// Constructs a kernel whose policy selects the appended page formats for every execution.
   PagedAttention(const KernelContext &context, FormatSelector format_selector);
   /// Reports one successful direct invocation; Run publishes only Y and present, not statistics.

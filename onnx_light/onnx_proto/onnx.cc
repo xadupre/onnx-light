@@ -1333,6 +1333,7 @@ SerializeSizeResult AffineLayoutProto::SerializeSize(utils::BinaryWriteStream &s
   SIZE_OPTIONAL_PROTO_FIELD(size, options, stream, zero_point)
   SIZE_FIELD(size, options, stream, axis)
   SIZE_FIELD(size, options, stream, block_size)
+  SIZE_FIELD(size, options, stream, signed_storage)
   return size;
 }
 void AffineLayoutProto::SerializeToStream(utils::BinaryWriteStream &stream,
@@ -1342,6 +1343,7 @@ void AffineLayoutProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_OPTIONAL_PROTO_FIELD(options, stream, zero_point)
   WRITE_FIELD(options, stream, axis)
   WRITE_FIELD(options, stream, block_size)
+  WRITE_FIELD(options, stream, signed_storage)
 }
 bool AffineLayoutProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   READ_BEGIN(options, stream, AffineLayoutProto)          //
@@ -1350,6 +1352,7 @@ bool AffineLayoutProto::ParseFromStream(utils::BinaryStream &stream, ParseOption
   READ_OPTIONAL_PROTO_FIELD(options, stream, zero_point)  //
   READ_FIELD(options, stream, axis)                       //
   READ_FIELD(options, stream, block_size)                 //
+  READ_FIELD(options, stream, signed_storage)             //
   READ_END(options, stream, AffineLayoutProto)            //
   return true;
 }
@@ -1357,7 +1360,8 @@ void AffineLayoutProto::PrintToStringStream(std::stringstream &ss,
                                             utils::PrintOptions &options) const {
   write_proto_into_vector_string(ss, options, NAME_EXIST_VALUE(storage_type),
                                  NAME_EXIST_VALUE(scale), NAME_EXIST_VALUE(zero_point),
-                                 NAME_EXIST_VALUE(axis), NAME_EXIST_VALUE(block_size));
+                                 NAME_EXIST_VALUE(axis), NAME_EXIST_VALUE(block_size),
+                                 NAME_EXIST_VALUE(signed_storage));
 }
 
 // StructTypeProto::Structure::Field
@@ -2949,6 +2953,7 @@ bool AffineLayoutProto::Equals(const AffineLayoutProto &right, std::string *diff
   COMPARE_FIELD(zero_point)
   COMPARE_FIELD(axis)
   COMPARE_FIELD(block_size)
+  COMPARE_FIELD(signed_storage)
   return true;
 }
 

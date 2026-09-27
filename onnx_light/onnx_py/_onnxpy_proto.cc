@@ -2681,7 +2681,8 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
       .PYFIELD_OPTIONAL_PROTO(AffineLayoutProto, scale)
       .PYFIELD_OPTIONAL_PROTO(AffineLayoutProto, zero_point)
       .PYFIELD_OPTIONAL_INT(AffineLayoutProto, axis)
-      .PYFIELD_OPTIONAL_INT(AffineLayoutProto, block_size);
+      .PYFIELD_OPTIONAL_INT(AffineLayoutProto, block_size)
+      .PYFIELD_OPTIONAL_INT(AffineLayoutProto, signed_storage);
   PYADD_PROTO_SERIALIZATION(AffineLayoutProto);
 
   PYDEFINE_PROTO(m, EncodedValueProto)

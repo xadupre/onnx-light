@@ -1543,9 +1543,11 @@ LightOpSchema MakePagedAttentionSchema() {
       "structured past/present type is onnx_light.PagedKVCache version 1: blocks is a dynamic "
       "sequence of pages with INT64 scalar start/length and FLOAT logical key/value tensors "
       "[1,1,capacity,head_size]. Runtime pages may store dense FLOAT or inline affine "
-      "INT8/UINT8/INT4/UINT4 data. Shape inference produces FLOAT Y [1,1,L,value_head_size] and "
-      "preserves the declared cache type on present. The schema does not register an execution "
-      "kernel; kernels must be registered explicitly.",
+      "integer data. Every encoded page describes its own storage, independently of other pages. "
+      "Shape inference produces FLOAT Y [1,1,L,value_head_size] and preserves the declared cache "
+      "type on present. Storage policy belongs to the registered kernel and is not part of the "
+      "operator attributes. The schema does not register an execution kernel; kernels must be "
+      "registered explicitly.",
       {{"Q", "FLOAT queries [1,1,L,key_head_size].", "T"},
        {"K", "FLOAT new keys [1,1,L,key_head_size].", "T"},
        {"V", "FLOAT new values [1,1,L,value_head_size].", "T"},
@@ -1561,23 +1563,7 @@ LightOpSchema MakePagedAttentionSchema() {
        {"is_causal", "Whether to apply causal masking; only 0 or 1 is valid.", AttributeType::INT,
         false, int64_t(1)},
        {"left_window_size", "Past-token window; -1 is unbounded and non-negative values limit it.",
-        AttributeType::INT, false, int64_t(-1)},
-       {"key_storage_type",
-        "Default storage type for new key pages: FLOAT, INT8, UINT8, INT4 or UINT4. A registered "
-        "kernel may select another supported format for each execution.",
-        AttributeType::INT, false, int64_t(TensorProto::FLOAT)},
-       {"value_storage_type",
-        "Default storage type for new value pages: FLOAT, INT8, UINT8, INT4 or UINT4. A registered "
-        "kernel may select another supported format for each execution.",
-        AttributeType::INT, false, int64_t(TensorProto::FLOAT)},
-       {"key_scale", "Default positive finite scalar scale for new key pages; 1 for FLOAT.",
-        AttributeType::FLOAT, false, 1.0f},
-       {"value_scale", "Default positive finite scalar scale for new value pages; 1 for FLOAT.",
-        AttributeType::FLOAT, false, 1.0f},
-       {"key_zero_point", "Default key zero point within its storage range; 0 for FLOAT.",
-        AttributeType::INT, false, int64_t(0)},
-       {"value_zero_point", "Default value zero point within its storage range; 0 for FLOAT.",
-        AttributeType::INT, false, int64_t(0)}});
+        AttributeType::INT, false, int64_t(-1)}});
 }
 
 // --- LayerNormalization ------------------------------------------------------

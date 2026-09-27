@@ -45,11 +45,8 @@ ModelProto PagedModel(bool gate = false, int64_t max_tokens = 8) {
     node->add_input(name);
   for (const auto &name : {"Y", "present"})
     node->add_output(name);
-  for (const auto &[name, value] :
-       std::vector<std::pair<std::string, int64_t>>{{"block_size", 2},
-                                                    {"max_tokens", max_tokens},
-                                                    {"key_storage_type", DataType::INT4},
-                                                    {"value_storage_type", DataType::INT8}}) {
+  for (const auto &[name, value] : std::vector<std::pair<std::string, int64_t>>{
+           {"block_size", 2}, {"max_tokens", max_tokens}}) {
     auto *attribute = node->add_attribute();
     attribute->set_name(name);
     attribute->set_type(AttributeProto::INT);
@@ -72,13 +69,15 @@ ModelProto PagedModel(bool gate = false, int64_t max_tokens = 8) {
 }
 
 void RegisterPaged(RuntimeContext &context, PagedAttention::FormatSelector format_selector = {}) {
+  if (!format_selector)
+    format_selector = [](const Tensor &, const Tensor &, int64_t) {
+      return PagedAttention::Formats{{DataType::INT4, 0.25f, 0}, {DataType::INT8, 0.25f, 0}};
+    };
   context.RegisterKernelFn(
       "onnx_light", "PagedAttention", core::symbolic::Device::kCPU,
       [format_selector = std::move(format_selector)](
           const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<KernelBase> {
-        auto kernel = format_selector
-                          ? std::make_unique<PagedAttention>(rt.kernel_ctx(), format_selector)
-                          : std::make_unique<PagedAttention>(rt.kernel_ctx());
+        auto kernel = std::make_unique<PagedAttention>(rt.kernel_ctx(), format_selector);
         kernel->set_node(node);
         return kernel;
       });
@@ -101,6 +100,10 @@ const EncodedValueProto *Key(const RuntimeValue &cache, size_t index = 0) {
 
 std::string Payload(const EncodedValueProto &value) {
   return {reinterpret_cast<const char *>(value.raw_data().data()), value.raw_data().size()};
+}
+
+TensorProto::DataType StorageType(const EncodedValueProto &value) {
+  return StructTypeCatalogue().ValidateEncodedValue(value).storage_type;
 }
 
 } // namespace
@@ -149,8 +152,8 @@ TEST(PagedAttentionFeedback, PublishesOwnersWithoutChangingModelOrPriorPartialBl
   ASSERT_EQ(Blocks(first.at("present")).size(), 1u);
   const auto *key = Key(first.at("present"));
   const auto payload = Payload(*key);
-  EXPECT_EQ(key->affine().storage_type(), DataType::INT4);
-  EXPECT_EQ(Blocks(first.at("present"))[0].fields.at("value").Encoded().affine().storage_type(),
+  EXPECT_EQ(StorageType(*key), DataType::INT4);
+  EXPECT_EQ(StorageType(Blocks(first.at("present"))[0].fields.at("value").Encoded()),
             DataType::INT8);
   EXPECT_EQ(Key(state.Values().at("past")), key);
   auto second = state.Run(context, Feeds(2));
@@ -183,26 +186,24 @@ TEST(PagedAttentionFeedback, NativePublicationReplacesOtherValueKinds) {
 TEST(PagedAttentionFeedback, KernelSelectsFormatsForEachExecution) {
   const auto model = PagedModel();
   RuntimeContext context;
-  RegisterPaged(context, [](const Tensor &, const Tensor &, int64_t past_length,
-                            const PagedAttention::Formats &defaults) {
+  RegisterPaged(context, [](const Tensor &, const Tensor &, int64_t past_length) {
     if (past_length == 0)
-      return defaults;
+      return PagedAttention::Formats{{DataType::INT4, 0.25f, 0}, {DataType::INT8, 0.25f, 0}};
     return PagedAttention::Formats{{DataType::INT8, 0.25f, 0}, {DataType::UINT4, 0.25f, 8}};
   });
   PersistentValueState state(model, {{"past", PagedAttention::EmptyCache()}});
   const auto first = state.Run(context, Feeds(1));
   ASSERT_EQ(Blocks(first.at("present")).size(), 1u);
-  EXPECT_EQ(Blocks(first.at("present"))[0].fields.at("key").Encoded().affine().storage_type(),
-            DataType::INT4);
-  EXPECT_EQ(Blocks(first.at("present"))[0].fields.at("value").Encoded().affine().storage_type(),
+  EXPECT_EQ(StorageType(Blocks(first.at("present"))[0].fields.at("key").Encoded()), DataType::INT4);
+  EXPECT_EQ(StorageType(Blocks(first.at("present"))[0].fields.at("value").Encoded()),
             DataType::INT8);
   const auto second = state.Run(context, Feeds(2));
   ASSERT_EQ(Blocks(second.at("present")).size(), 2u);
-  EXPECT_EQ(Blocks(second.at("present"))[0].fields.at("key").Encoded().affine().storage_type(),
+  EXPECT_EQ(StorageType(Blocks(second.at("present"))[0].fields.at("key").Encoded()),
             DataType::INT4);
-  EXPECT_EQ(Blocks(second.at("present"))[1].fields.at("key").Encoded().affine().storage_type(),
+  EXPECT_EQ(StorageType(Blocks(second.at("present"))[1].fields.at("key").Encoded()),
             DataType::INT8);
-  EXPECT_EQ(Blocks(second.at("present"))[1].fields.at("value").Encoded().affine().storage_type(),
+  EXPECT_EQ(StorageType(Blocks(second.at("present"))[1].fields.at("value").Encoded()),
             DataType::UINT4);
 }
 
@@ -213,24 +214,11 @@ TEST(PagedAttentionFeedback, QuantizedFormatsMatchUnquantizedReferenceWithinFixt
     const float scale = four_bit ? 0.25f : 0.01f;
     const int64_t zero = storage == DataType::UINT4 ? 8 : storage == DataType::UINT8 ? 128 : 0;
     ModelProto model = PagedModel();
-    auto *node = model.mutable_graph()->mutable_node(0);
-    for (auto &attribute : *node->mutable_attribute())
-      if (attribute.name() == "key_storage_type" || attribute.name() == "value_storage_type")
-        attribute.set_i(storage);
-    for (const auto &name : {"key_scale", "value_scale"}) {
-      auto *attribute = node->add_attribute();
-      attribute->set_name(name);
-      attribute->set_type(AttributeProto::FLOAT);
-      attribute->set_f(scale);
-    }
-    for (const auto &name : {"key_zero_point", "value_zero_point"}) {
-      auto *attribute = node->add_attribute();
-      attribute->set_name(name);
-      attribute->set_type(AttributeProto::INT);
-      attribute->set_i(zero);
-    }
     RuntimeContext context(KernelContext(DefaultOpset(23)));
-    RegisterPaged(context);
+    RegisterPaged(context, [storage, scale, zero](const Tensor &, const Tensor &, int64_t) {
+      return PagedAttention::Formats{{storage, scale, static_cast<int32_t>(zero)},
+                                     {storage, scale, static_cast<int32_t>(zero)}};
+    });
     PersistentValueState state(model, {{"past", PagedAttention::EmptyCache()}});
     onnx_kernels::kernel::Attention reference(context.kernel_ctx());
     onnx_kernels::kernel::Attention::Attributes attributes;
@@ -379,9 +367,6 @@ TEST(PagedAttentionFeedback, IntermediateCachesKeepOwnersAcrossArenaRouting) {
        {DataType::FLOAT, DataType::INT8, DataType::UINT8, DataType::INT4, DataType::UINT4}) {
     SCOPED_TRACE(storage);
     auto model = PagedModel();
-    for (auto &attribute : *model.mutable_graph()->mutable_node(0)->mutable_attribute())
-      if (attribute.name() == "key_storage_type" || attribute.name() == "value_storage_type")
-        attribute.set_i(storage);
     model.mutable_graph()->mutable_output(1)->set_name("cache_out");
     model.mutable_graph()->mutable_persistent_bindings(0)->set_output_name("cache_out");
     auto *forward = model.mutable_graph()->add_node();
@@ -395,7 +380,13 @@ TEST(PagedAttentionFeedback, IntermediateCachesKeepOwnersAcrossArenaRouting) {
     RuntimeContext context(
         KernelContext(DefaultOpset(23)),
         RuntimeContextOptions{.allocator = &execution, .io_allocator = arena.get()});
-    RegisterPaged(context);
+    RegisterPaged(context, [storage](const Tensor &, const Tensor &, int64_t) {
+      const bool four_bit = storage == DataType::INT4 || storage == DataType::UINT4;
+      const bool is_unsigned = storage == DataType::UINT4 || storage == DataType::UINT8;
+      const float scale = four_bit ? 0.25f : 0.01f;
+      const int32_t zero = is_unsigned ? (four_bit ? 8 : 128) : 0;
+      return PagedAttention::Formats{{storage, scale, zero}, {storage, scale, zero}};
+    });
     context.RegisterCustomKernel(
         "onnx_light", "Forward", [](const NodeProto &node, RuntimeContext &rt) {
           rt.PutValue(node.output(0), rt.values().at(node.input(0)).BorrowView());

@@ -844,10 +844,8 @@ void ValidateAffineLayout(const EncodedValueProto &value, EncodedValueLayout &la
   const utils::OptionalString &name = value.name();
   const AffineLayoutProto &affine = value.ref_affine();
   layout.affine = &affine;
-  Require(affine.has_storage_type(), kind, name, "affine layout is missing its 'storage_type'.");
-  const TensorProto::DataType storage = affine.storage_type();
-  Require(IsAffineStorageType(storage), kind, name,
-          "affine 'storage_type' must be INT8, UINT8, INT4 or UINT4.");
+  Require(affine.has_storage_type() != affine.has_signed_storage(), kind, name,
+          "affine layout needs exactly one of 'storage_type' and 'signed_storage'.");
   Require(affine.has_scale(), kind, name, "affine layout is missing its 'scale'.");
   VerifyTensor(affine.ref_scale());
   Require(IsFloatingType(affine.ref_scale().data_type()), kind, name,
@@ -874,6 +872,24 @@ void ValidateAffineLayout(const EncodedValueProto &value, EncodedValueLayout &la
     Require(CheckedMultiply(elements, dim, elements), kind, name,
             "affine logical element count overflows uint64.");
   }
+  TensorProto::DataType storage = TensorProto::UNDEFINED;
+  if (affine.has_storage_type()) {
+    storage = affine.storage_type();
+    Require(IsAffineStorageType(storage), kind, name,
+            "affine 'storage_type' must be INT8, UINT8, INT4 or UINT4.");
+  } else {
+    Require(affine.signed_storage() == 0 || affine.signed_storage() == 1, kind, name,
+            "affine 'signed_storage' must be 0 or 1.");
+    const bool matches_four_bits = layout.payload_bytes == elements / 2 + elements % 2;
+    const bool matches_eight_bits = layout.payload_bytes == elements;
+    Require(matches_four_bits != matches_eight_bits, kind, name,
+            "affine payload size does not identify exactly one supported inferred code width.");
+    if (matches_four_bits)
+      storage = affine.signed_storage() ? TensorProto::INT4 : TensorProto::UINT4;
+    else
+      storage = affine.signed_storage() ? TensorProto::INT8 : TensorProto::UINT8;
+  }
+  layout.storage_type = storage;
 
   const std::vector<uint64_t> scale_dims = ParameterDims(
       affine.ref_scale(), kind, name, "affine 'scale' needs non-negative dimensions.");

@@ -209,6 +209,8 @@ EncodedValueProto BorrowEncodedValue(const RuntimeValue &source) {
       affine->set_axis(value.affine().axis());
     if (value.affine().has_block_size())
       affine->set_block_size(value.affine().block_size());
+    if (value.affine().has_signed_storage())
+      affine->set_signed_storage(value.affine().signed_storage());
   } else if (value.has_struct_type()) {
     result.mutable_struct_type()->CopyFrom(value.struct_type());
   }

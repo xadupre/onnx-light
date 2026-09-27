@@ -18,6 +18,13 @@ bool IsTensorSequence(const TypeProto &type) {
          type.sequence_type().elem_type().has_tensor_type();
 }
 
+bool IsDenseTensorSequence(const RuntimeValue &value) {
+  return value.kind == RuntimeValue::Kind::kSequence &&
+         std::all_of(value.elements.begin(), value.elements.end(), [](const RuntimeValue &element) {
+           return element.kind == RuntimeValue::Kind::kTensor;
+         });
+}
+
 Sequence ToTensorSequence(const std::string &name, const RuntimeValue &value,
                           const TypeProto::Sequence &type) {
   EXT_ENFORCE_INVALID(value.kind == RuntimeValue::Kind::kSequence,
@@ -310,7 +317,7 @@ RuntimeValueMap PersistentValueState::Run(RuntimeContext &context, const Runtime
       continue;
     }
     Validate(it->second, input.type(), catalogue_, symbols, sequence_validation_);
-    if (IsTensorSequence(input.type()))
+    if (IsTensorSequence(input.type()) && IsDenseTensorSequence(it->second))
       invocation.PutSequence(
           input.name(), ToTensorSequence(input.name(), it->second, input.type().sequence_type()));
     else
@@ -334,10 +341,15 @@ RuntimeValueMap PersistentValueState::Run(RuntimeContext &context, const Runtime
     if (invocation.Has(output.name()))
       value = RuntimeValue(std::move(invocation.Get(output.name())));
     else if (IsTensorSequence(output.type())) {
-      auto it = invocation.sequences().find(output.name());
-      EXT_ENFORCE_INVALID(it != invocation.sequences().end(),
-                          "PersistentValueState: missing output '", output.name(), "'.");
-      value = FromTensorSequence(std::move(it->second));
+      auto sequence = invocation.sequences().find(output.name());
+      if (sequence != invocation.sequences().end())
+        value = FromTensorSequence(std::move(sequence->second));
+      else {
+        auto structured = invocation.values().find(output.name());
+        EXT_ENFORCE_INVALID(structured != invocation.values().end(),
+                            "PersistentValueState: missing output '", output.name(), "'.");
+        value = std::move(structured->second);
+      }
     } else {
       auto it = invocation.values().find(output.name());
       EXT_ENFORCE_INVALID(it != invocation.values().end(), "PersistentValueState: missing output '",

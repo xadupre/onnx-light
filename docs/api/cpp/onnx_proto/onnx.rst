@@ -102,10 +102,10 @@ budget at 1,556,424 installed bytes and 1,087,098 ``.text`` bytes, an increase o
 4,096 and 1,312 bytes respectively. The limit of 852 defined dynamic symbols
 and the shared-library dependency allowlist are unchanged.
 
-The paged-cache messages add copy, serialization, comparison and validation code.
-A Linux Release build measures 1,597,480 installed bytes, 1,121,802 ``.text``
-bytes and 874 defined dynamic symbols. The CI limits match these measurements;
-the shared-library dependency allowlist is unchanged.
+The paged-cache messages plus external-payload ordering and destination
+validation measure 1,617,992 installed bytes, 1,132,698 ``.text`` bytes and 876
+defined dynamic symbols in Linux CI. The limits match these measurements; the
+shared-library dependency allowlist is unchanged.
 
 API reference
 -------------

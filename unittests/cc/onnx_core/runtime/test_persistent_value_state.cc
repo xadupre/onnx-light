@@ -1292,6 +1292,33 @@ TEST(PersistentValueState, TypedBlockSequencesMixDenseAndAffineWithoutMaterializ
   EXPECT_THROW((PersistentValueState(model, {{"past", Block(false)}})), std::invalid_argument);
 }
 
+TEST(PersistentValueState, EncodedTensorSequencesRemainInStructuredValueStore) {
+  ModelProto model = Model();
+  TypeProto type;
+  *type.mutable_sequence_type()->mutable_elem_type() = AffineBlock().logical_type();
+  type.mutable_sequence_type()
+      ->mutable_elem_type()
+      ->mutable_tensor_type()
+      ->mutable_shape()
+      ->mutable_dim(2)
+      ->clear_dim_value();
+  *model.mutable_graph()->mutable_input(0)->mutable_type() = type;
+  *model.mutable_graph()->mutable_output(0)->mutable_type() = type;
+  RuntimeValue sequence(
+      std::vector<RuntimeValue>{RuntimeValue(AffineBlock()), RuntimeValue(AffineBlock(3))});
+  PersistentValueState state(model, {{"past", std::move(sequence)}});
+  RuntimeContext context;
+  context.RegisterCustomKernel(
+      "test.feedback", "Step", [](const NodeProto &node, RuntimeContext &rt) {
+        EXPECT_EQ(rt.sequences().count(node.input(0)), 0u);
+        rt.PutValue(node.output(0), rt.values().at(node.input(0)).BorrowView());
+      });
+  const auto output = state.Run(context, {{"tokens", Number(0)}});
+  ASSERT_EQ(output.at("present").elements.size(), 2u);
+  EXPECT_EQ(output.at("present").elements[0].Encoded().raw_data()[0], 2);
+  EXPECT_EQ(output.at("present").elements[1].Encoded().raw_data().size(), 3u);
+}
+
 TEST(PersistentValueState, TypedSequencesRetainPortableAndSharedQuantizationOwners) {
   RuntimeValue retained;
   std::weak_ptr<const QuantizationParameterCatalogue> weak;

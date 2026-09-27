@@ -613,13 +613,15 @@ logical shapes are ``[1, 1, capacity, head_size]``. Their affine descriptors car
 format identity, scales and zero points, independently for K, V and each block.
 There are no persistent flags or new quantization layouts.
 
-A root persistent sequence whose element type is a tensor is bridged to the
+A root persistent sequence containing only dense tensors is bridged to the
 standard ``RuntimeContext::sequences()`` representation while the graph runs,
 then converted back to ``RuntimeValue`` at the persistent output boundary.
 Standard sequence operators such as ``SequenceInsert`` can therefore consume
-and produce persistent tensor sequences. Nested sequences, including the
-``blocks`` field above, remain part of their enclosing structured
-``RuntimeValue``.
+and produce persistent tensor sequences. A root sequence containing encoded
+tensor values remains in ``RuntimeContext::values()`` for consumers that support
+those encodings, and outputs are accepted symmetrically from either store.
+Nested sequences, including the ``blocks`` field above, remain part of their
+enclosing structured ``RuntimeValue``.
 
 Persistent values also retain the shared parameter catalogue introduced by
 :doc:`quantized_values`, recursively through structures and sequences. A tensor

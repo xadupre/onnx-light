@@ -7,6 +7,7 @@
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 #include "onnx_extensions/kernels/kernels/quantization/include_quantization_kernels.h"
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
+#include "onnx_proto/onnx_helper.h"
 #include "onnx_proto/onnx_verify.h"
 
 #include <cmath>
@@ -65,12 +66,32 @@ RuntimeValue QuantizePayload(const RuntimeValue &source, int64_t length, const T
                              const StructTypeCatalogue &catalogue, RuntimeContext *rt) {
   Tensor decoded =
       DecodePagedCachePayload(source, length, catalogue, rt ? rt->allocator() : context.allocator);
+  const int64_t capacity =
+      source.kind == RuntimeValue::Kind::kTensor
+          ? source.tensor.shape[2]
+          : source.Encoded().logical_type().tensor_type().shape().dim(2).dim_value();
+  if (capacity != length) {
+    auto shape = decoded.shape;
+    shape[2] = capacity;
+    Tensor padded =
+        MakeOutputTensor(DataType::FLOAT, shape, PackedByteSize(DataType::FLOAT, shape.product()),
+                         rt ? rt->allocator() : context.allocator);
+    // Unused rows need initialized storage, not reads from the source's invalid tail.
+    std::memset(padded.mutable_bytes(), 0, padded.size_bytes());
+    std::memcpy(padded.mutable_bytes(), decoded.bytes(), decoded.size_bytes());
+    decoded = std::move(padded);
+  }
   if (!IsAffineStorageType(static_cast<TensorProto::DataType>(zero_point.data_type))) {
     Cast cast(context);
     return RuntimeValue(cast(decoded, zero_point.data_type, rt).RetainStorage());
   }
   QuantizeLinear quantize(context);
   Tensor codes = quantize(decoded, scale, zero_point, rt);
+  const uint32_t width = FixedBitWidth(static_cast<TensorProto::DataType>(codes.data_type));
+  const uint32_t used_bits = static_cast<uint32_t>(codes.element_count() % (8 / width)) * width;
+  // EncodedValueProto requires zero padding in the last packed byte.
+  if (used_bits != 0)
+    codes.mutable_bytes()[codes.size_bytes() - 1] &= static_cast<uint8_t>((1U << used_bits) - 1);
   codes = std::move(codes).RetainStorage();
 
   EncodedValueProto encoded;

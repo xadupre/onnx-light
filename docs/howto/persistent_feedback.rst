@@ -581,7 +581,11 @@ dtype agreement.
 
 For every selected block, the kernel decodes either its dense floating-point
 payload or its existing affine payload, then converts the valid ``length``
-prefix to the selected format. Unselected blocks retain their payload storage
+prefix to the selected format. The original capacity and ``length`` are preserved.
+Unused rows are initialized from logical zeros in the destination format without
+reading the source's unused rows. This also preserves fixed-capacity cache
+declarations through quantization, requantization and dequantization.
+Unselected blocks retain their payload storage
 and owners. Indices and quantization parameters are all checked before the
 output is published, so an invalid request does not partially modify the
 cache. Shape inference preserves the input cache's structured declaration on

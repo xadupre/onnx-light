@@ -5,6 +5,7 @@
 #include "onnx_core/runtime/persistent_value_state.h"
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 #include <gtest/gtest.h>
+#include <limits>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using namespace ONNX_LIGHT_NAMESPACE::core::runtime;
@@ -117,7 +118,7 @@ TEST(QuantizePagedCache, RejectsInvalidIndicesAndParametersWithoutChangingInput)
   EXPECT_FALSE(Blocks(cache)[0].fields.at("key").encoded);
 }
 
-TEST(QuantizePagedCache, FloatingStorageCommitsThroughTypedPersistentCache) {
+TEST(QuantizePagedCache, PartialPageCommitsThroughFixedCapacityPersistentCache) {
   ModelProto model;
   model.set_ir_version(10);
   model.add_opset_import()->set_version(23);
@@ -179,6 +180,9 @@ TEST(QuantizePagedCache, FloatingStorageCommitsThroughTypedPersistentCache) {
   });
   auto cache =
       append(Input(2, 2), Input(2, 2), Input(2, 2), PagedAttention::EmptyCache(), {}).present;
+  auto partial = Blocks(cache)[0].BorrowView();
+  partial.fields.at("length") = RuntimeValue(Tensor::FromInt64("", {}, {1}));
+  cache.fields.at("blocks").elements.Set(0, std::move(partial));
   PersistentValueState state(model, {{"past", cache}});
   RuntimeContext context;
   const RuntimeValueMap feeds{{"indices", RuntimeValue(Tensor::FromInt64("", {1}, {0}))},
@@ -191,8 +195,11 @@ TEST(QuantizePagedCache, FloatingStorageCommitsThroughTypedPersistentCache) {
     const auto &converted = Blocks(output.at("present"))[0];
     EXPECT_EQ(converted.fields.at("key").tensor.data_type, DataType::FLOAT16);
     EXPECT_EQ(converted.fields.at("value").tensor.data_type, DataType::BFLOAT16);
-    const auto key = DecodePagedCachePayload(converted.fields.at("key"), 2);
-    const auto expected = Input(2, 2);
+    EXPECT_EQ(converted.fields.at("key").tensor.shape, (Shape{1, 1, 2, 2}));
+    EXPECT_EQ(converted.fields.at("value").tensor.shape, (Shape{1, 1, 2, 2}));
+    EXPECT_EQ(converted.fields.at("length").tensor.AsInt64()[0], 1);
+    const auto key = DecodePagedCachePayload(converted.fields.at("key"), 1);
+    const auto expected = Input(1, 2);
     for (int64_t i = 0; i < key.element_count(); ++i)
       EXPECT_FLOAT_EQ(key.AsFloat()[i], expected.AsFloat()[i]);
   }
@@ -203,6 +210,53 @@ TEST(QuantizePagedCache, FloatingStorageCommitsThroughTypedPersistentCache) {
   malformed.fields.at("blocks").elements.Set(0, RuntimeValue{});
   EXPECT_THROW(state.Reset({{"past", malformed}}), std::invalid_argument);
   EXPECT_NO_THROW(state.Run(context, feeds));
+}
+
+TEST(QuantizePagedCache, PreservesPartialCapacityAcrossAllConversionsWithoutReadingUnusedRows) {
+  KernelContext context(DefaultOpset(23));
+  QuantizePagedCache quantize(context);
+  const float unused = std::numeric_limits<float>::quiet_NaN();
+  RuntimeValue page;
+  page.fields.emplace("start", RuntimeValue(Tensor::FromInt64("", {}, {0})));
+  page.fields.emplace("length", RuntimeValue(Tensor::FromInt64("", {}, {1})));
+  page.fields.emplace("key", RuntimeValue(Tensor::FromFloat("", {1, 1, 3, 3},
+                                                            {-0.25f, 0, 0.25f, unused, unused,
+                                                             unused, unused, unused, unused})));
+  page.fields.emplace(
+      "value", RuntimeValue(Tensor::FromFloat("", {1, 1, 3, 2},
+                                              {-0.25f, 0.25f, unused, unused, unused, unused})));
+  RuntimeValue cache;
+  cache.fields.emplace("blocks", RuntimeValue(std::vector<RuntimeValue>{std::move(page)}));
+  cache = std::move(cache).Retain();
+  const auto indices = Tensor::FromInt64("", {1}, {0});
+  const auto scale = Tensor::FromFloat("", {}, {0.25f});
+  for (int32_t dtype :
+       {DataType::INT2, DataType::UINT2, DataType::INT4, DataType::UINT4, DataType::INT8,
+        DataType::UINT8, DataType::FLOAT, DataType::FLOAT16, DataType::BFLOAT16}) {
+    SCOPED_TRACE(dtype);
+    const auto zero = dtype == DataType::UINT2   ? ZeroPoint(dtype, 2)
+                      : dtype == DataType::UINT4 ? ZeroPoint(dtype, 8)
+                      : dtype == DataType::UINT8 ? ZeroPoint(dtype, 128)
+                                                 : TypeMarker(dtype);
+    auto converted = quantize(cache, indices, scale, zero, scale, zero);
+    for (int iteration = 0; iteration < 2; ++iteration) {
+      SCOPED_TRACE(iteration);
+      const auto &block = Blocks(converted)[0];
+      EXPECT_EQ(block.fields.at("start").tensor.AsInt64()[0], 0);
+      EXPECT_EQ(block.fields.at("length").tensor.AsInt64()[0], 1);
+      for (const char *name : {"key", "value"}) {
+        const int64_t width = std::string(name) == "key" ? 3 : 2;
+        const auto decoded = DecodePagedCachePayload(block.fields.at(name), 3);
+        ASSERT_EQ(decoded.shape, (Shape{1, 1, 3, width}));
+        const auto &original = Blocks(cache)[0].fields.at(name).tensor;
+        for (int64_t i = 0; i < decoded.element_count(); ++i)
+          EXPECT_FLOAT_EQ(decoded.AsFloat()[i], i < width ? original.AsFloat()[i] : 0);
+      }
+      const auto exported = converted.ToPagedCache();
+      converted = quantize(RuntimeValue::FromPagedCache(exported), indices, scale,
+                           ZeroPoint(DataType::INT8, 0), scale, ZeroPoint(DataType::INT8, 0));
+    }
+  }
 }
 
 TEST(QuantizePagedCache, RejectsMalformedIndexStorageBeforeReadingOrReserving) {

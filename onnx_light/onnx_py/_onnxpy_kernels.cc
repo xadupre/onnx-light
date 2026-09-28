@@ -8,6 +8,7 @@
 #include "onnx_core/compute/execute_action.h"
 #include "onnx_core/compute/execution_plan.h"
 #include "onnx_core/compute/raw_buffer_allocator.h"
+#include "onnx_core/runtime/generation.h"
 #include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/kernels/cast_sub_byte.h"
 #include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
@@ -2017,6 +2018,34 @@ void AddOnnxPyRuntime(nb::module_ &m) {
            "Returns the normalized ``'<domain>:<op_type>'`` identifiers of the resolved "
            "kernels in execution order. Repeated operators are preserved. Returns an "
            "empty list until the first :func:`run`.");
+
+  nb::class_<core::runtime::GenerationOptions>(rt_mod, "GenerationOptions",
+                                               "Configures autoregressive token generation.")
+      .def(nb::init<>())
+      .def_rw("max_new_tokens", &core::runtime::GenerationOptions::max_new_tokens)
+      .def_rw("temperature", &core::runtime::GenerationOptions::temperature)
+      .def_rw("seed", &core::runtime::GenerationOptions::seed)
+      .def_rw("eos_token_id", &core::runtime::GenerationOptions::eos_token_id)
+      .def_rw("pad_token_id", &core::runtime::GenerationOptions::pad_token_id)
+      .def_rw("input_ids_name", &core::runtime::GenerationOptions::input_ids_name)
+      .def_rw("logits_name", &core::runtime::GenerationOptions::logits_name)
+      .def_rw("attention_mask_name", &core::runtime::GenerationOptions::attention_mask_name)
+      .def_rw("position_ids_name", &core::runtime::GenerationOptions::position_ids_name);
+
+  rt_mod.def(
+      "generate",
+      [](const ModelProto &model, RuntimeContext &context, nb::dict feeds,
+         const core::runtime::GenerationOptions &options, RuntimeSessionOptions session_options) {
+        auto inputs = FeedbackValuesFromPython(feeds, &model);
+        nb::gil_scoped_release release;
+        return core::runtime::Generate(model, context, inputs, options, std::move(session_options));
+      },
+      nb::arg("model"), nb::arg("context"), nb::arg("feeds"),
+      nb::arg("options") = core::runtime::GenerationOptions{},
+      nb::arg("session_options") = RuntimeSessionOptions{},
+      "Generates INT64 token IDs including the prompt. Zero temperature selects greedy decoding; "
+      "positive temperature samples softmax-scaled logits. Graph persistent bindings enable cached "
+      "decoding; other models evaluate the full prefix. State is local to this call.");
 
   nb::class_<core::runtime::TaskCompletion>(
       rt_mod, "TaskCompletion", "Shares a single-use task completion and cancellation gate.")

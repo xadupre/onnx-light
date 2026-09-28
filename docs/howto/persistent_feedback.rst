@@ -39,6 +39,54 @@ The model is immutable for the entire bound session lifetime. State creation
 and execution do not serialize, clone or hash the model to check for changes.
 To rewrite the graph, create a new state/session after rewriting instead.
 
+Autoregressive generation
+-------------------------
+
+``ReferenceEvaluator.generate`` runs the token loop in the native runtime:
+
+.. code-block:: python
+
+    from onnx_light.onnx.reference import ReferenceEvaluator
+
+    evaluator = ReferenceEvaluator(model)
+    tokens = evaluator.generate(
+        {"input_ids": input_ids, **initial_empty_caches},
+        max_new_tokens=32,
+        temperature=0.7,
+        seed=42,
+        eos_token_id=2,
+    )
+
+The result is an INT64 ``[batch, prompt_length + generated_length]`` array,
+including the prompt. ``temperature=0`` (the default) uses greedy decoding;
+positive temperatures sample ``softmax(logits / temperature)``. A seed makes
+sampling repeatable within the same runtime implementation. Generation stops
+at the token limit or when every row emits EOS; finished rows are padded with
+``pad_token_id`` (EOS by default).
+
+Models without ``persistent_bindings`` use an ordinary ``RuntimeSession`` and
+evaluate the full growing prefix. No persistent state is created, and no cache
+bindings are guessed from operator or tensor names. Models with bindings use
+``PersistentValueState``: supply initial empty caches in the feeds, or declare
+paged-cache initializers. The prompt is evaluated once, then each call consumes
+one new token. Eligible kernels reuse persistent buffers; other kernels retain
+their ordinary allocation behavior. Each generation call owns fresh state and
+leaves the model and caller feeds unchanged.
+
+The model accepts INT64 ``input_ids`` and returns floating-point ``logits``
+of shape ``[batch, sequence, vocabulary]`` or ``[batch, vocabulary]``.
+FLOAT, DOUBLE, FLOAT16 and BFLOAT16 logits are supported. Declared INT64
+``attention_mask`` and ``position_ids`` inputs are created if absent and updated
+at each step. Prompts must be unpadded or left-padded; the final logit position
+predicts the next token. Other supplied inputs remain fixed across iterations.
+Initial caches must represent an empty prefix.
+
+The lower-level ``runtime.generate(model, context, feeds, options,
+session_options)`` returns a runtime tensor. ``runtime.GenerationOptions``
+also allows configuring the token, logits, mask and position input/output names.
+C++ callers use :cpp:func:`onnx_light::core::runtime::Generate` with the same
+options and an existing ``RuntimeContext``.
+
 A basic feedback loop
 ---------------------
 

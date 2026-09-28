@@ -313,6 +313,8 @@ void RegisterAttentionBenchmark(std::vector<TestCase> &registry, const OpsetId &
 } // namespace
 
 void RegisterAttentionCases(std::vector<TestCase> &registry, TestMode mode) {
+  if (mode == TestMode::TEST)
+    RegisterGenerationCases(registry);
   const OpsetId opset = DefaultOpset(23);
 
   if (mode == TestMode::BENCHMARK) {

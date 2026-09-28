@@ -468,6 +468,10 @@ cache fields, directly or through a model-catalogue reference. Array and bit-pac
 layouts are not cache declarations. Declared ``key`` and ``value`` tensors have
 logical dtype FLOAT; FLOAT16 and BFLOAT16 are physical dense page formats, not
 alternative logical declarations.
+Dense pages accept ONNX ``raw_data`` or the matching typed field: ``float_data``
+for FLOAT and ``int32_data`` carrying 16-bit element representations for FLOAT16
+and BFLOAT16. Importing typed 16-bit data packs it into owned runtime storage;
+raw payloads retain the existing borrowing behavior.
 
 Versioned operator schema
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -767,8 +771,9 @@ each affine reconstruction differs from its source by at most half its scale
 (plus floating-point rounding). Attention error also depends on Q/K magnitudes
 and softmax conditioning; no format alone guarantees a universal output error
 bound. The numerical fixtures compare the paged consumer to dense Attention
-using the reconstructed values with absolute tolerance ``1e-5`` for all four
-affine storage types, separately from quantization error. The end-to-end
+using the reconstructed values with absolute tolerance ``1e-5`` for the four
+tested affine storage types (INT4, UINT4, INT8 and UINT8), separately from
+quantization error. The end-to-end
 four-step fixture uses Q/K/V components ``+/-(0.173 * step)`` and compares to
 unquantized dense Attention with these absolute output tolerances:
 
@@ -789,7 +794,8 @@ unquantized dense Attention with these absolute output tolerances:
      - 0.15
 
 These fixture-specific bounds do not apply to arbitrary models or saturated
-inputs.
+inputs. INT2 and UINT2 are supported, but are not covered by these four-format
+accuracy fixtures or the table above.
 
 Validation rejects malformed ranges, invalid layouts, unsupported consumers
 and capacity violations. A failing or cancelled invocation cannot publish part

@@ -4,6 +4,7 @@
 
 #include "onnx_core/builder/graph_builder.h"
 #include "onnx_core/runtime/runtime_session.h"
+#include <cstring>
 #include <gtest/gtest.h>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -192,6 +193,47 @@ TEST(PagedCacheProto, EncodedExportBorrowsPayloadAndAffineParameters) {
   EXPECT_EQ(exported.blocks(0).encoded_key().raw_data()[0], 1);
   EXPECT_EQ(exported.blocks(0).encoded_key().affine().scale().raw_data().size(), sizeof(float));
   EXPECT_EQ(exported.blocks(0).encoded_key().affine().zero_point().raw_data()[0], 0);
+}
+
+TEST(PagedCacheProto, ImportsTypedFloat16AndBfloat16PagesWithOwnedStorage) {
+  for (int32_t dtype : {TensorProto::FLOAT16, TensorProto::BFLOAT16}) {
+    SCOPED_TRACE(dtype);
+    const uint16_t one = dtype == TensorProto::FLOAT16 ? 0x3c00 : 0x3f80;
+    const uint16_t expected[] = {one, static_cast<uint16_t>(one | 0x8000), 0, 0x8000};
+    RuntimeValue value;
+    {
+      auto model = CacheModel();
+      auto *block = model.mutable_graph()->mutable_paged_cache_initializer(0)->mutable_blocks(0);
+      for (auto *tensor : {block->mutable_key(), block->mutable_value()}) {
+        tensor->clear_float_data();
+        tensor->set_data_type(dtype);
+        for (uint16_t bits : expected)
+          tensor->add_int32_data(bits);
+      }
+      EXPECT_NO_THROW(VerifyModel(model));
+      value = RuntimeValue::FromPagedCache(model.graph().paged_cache_initializer(0));
+      for (int count : {0, 3, 5}) {
+        auto malformed = model.graph().paged_cache_initializer(0);
+        auto *key = malformed.mutable_blocks(0)->mutable_key();
+        key->clear_int32_data();
+        for (int i = 0; i < count; ++i)
+          key->add_int32_data(one);
+        EXPECT_THROW(StructTypeCatalogue().ValidatePagedCache(malformed), std::invalid_argument);
+        EXPECT_THROW(RuntimeValue::FromPagedCache(malformed), std::invalid_argument);
+      }
+    }
+    for (const char *name : {"key", "value"}) {
+      const auto &tensor = value.fields.at("blocks").elements[0].fields.at(name).tensor;
+      EXPECT_EQ(tensor.data_type, dtype);
+      ASSERT_EQ(tensor.size_bytes(), sizeof(expected));
+      EXPECT_EQ(std::memcmp(tensor.bytes(), expected, sizeof(expected)), 0);
+      EXPECT_GT(tensor.borrowed_owner().use_count(), 0);
+    }
+    const auto exported = value.ToPagedCache();
+    EXPECT_EQ(exported.blocks(0).key().data_type(), dtype);
+    EXPECT_EQ(exported.blocks(0).key().raw_data().size(), sizeof(expected));
+    EXPECT_NO_THROW(RuntimeValue::FromPagedCache(exported));
+  }
 }
 
 TEST(PagedCacheProto, RecognizesCacheFromStructureWithoutImportMetadata) {

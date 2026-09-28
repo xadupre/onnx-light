@@ -145,6 +145,7 @@ TEST(QuantizePagedCache, FloatingStorageCommitsThroughTypedPersistentCache) {
       for (int64_t dimension : {1, 1, 2, 2})
         tensor->mutable_shape()->add_dim()->set_dim_value(dimension);
   }
+
   auto *past = graph->add_input();
   past->set_name("past");
   *past->mutable_type() = cache_type;
@@ -202,4 +203,36 @@ TEST(QuantizePagedCache, FloatingStorageCommitsThroughTypedPersistentCache) {
   malformed.fields.at("blocks").elements.Set(0, RuntimeValue{});
   EXPECT_THROW(state.Reset({{"past", malformed}}), std::invalid_argument);
   EXPECT_NO_THROW(state.Run(context, feeds));
+}
+
+TEST(QuantizePagedCache, RejectsMalformedIndexStorageBeforeReadingOrReserving) {
+  KernelContext context(DefaultOpset(23));
+  PagedAttention append(context);
+  auto cache =
+      append(Input(1, 2), Input(1, 2), Input(1, 2), PagedAttention::EmptyCache(), {}).present;
+  const auto *payload = Blocks(cache)[0].fields.at("key").tensor.bytes();
+  QuantizePagedCache quantize(context);
+  const auto scale = Tensor::FromFloat("", {}, {0.25f});
+  const auto zero = ZeroPoint(DataType::INT8, 0);
+  const std::vector<Tensor> invalid{
+      Tensor("", DataType::INT64, {-1}, {}),
+      Tensor("", DataType::INT64, {INT64_MAX}, {}),
+      Tensor("", DataType::INT64, {int64_t{1} << 61}, {}),
+      Tensor("", DataType::INT64, {1}, {}),
+      Tensor("", DataType::INT64, {1}, std::vector<uint8_t>(7)),
+      Tensor("", DataType::INT64, {1}, std::vector<uint8_t>(16)),
+      Tensor("", DataType::INT64, {0}, std::vector<uint8_t>(8)),
+      Tensor::FromInt64("", {}, {0}),
+      Tensor::FromInt64("", {1, 1}, {0}),
+      Tensor::FromFloat("", {1}, {0}),
+      Tensor::Borrow("", DataType::INT64, {1}, nullptr, sizeof(int64_t)),
+  };
+  for (size_t i = 0; i < invalid.size(); ++i) {
+    SCOPED_TRACE(i);
+    EXPECT_THROW(quantize(cache, invalid[i], scale, zero, scale, zero), std::invalid_argument);
+    EXPECT_EQ(Blocks(cache)[0].fields.at("key").tensor.bytes(), payload);
+    EXPECT_EQ(Blocks(cache)[0].fields.at("key").kind, RuntimeValue::Kind::kTensor);
+  }
+  auto unchanged = quantize(cache, Tensor::FromInt64("", {0}, {}), scale, zero, scale, zero);
+  EXPECT_EQ(Blocks(unchanged)[0].fields.at("key").tensor.bytes(), payload);
 }

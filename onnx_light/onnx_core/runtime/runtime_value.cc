@@ -267,8 +267,8 @@ RuntimeValue::FromPagedCache(PagedCacheProto value, const StructTypeCatalogue &c
       shape.push_back(static_cast<int64_t>(dim));
     const auto &raw = dense->raw_data();
     const bool has_raw = dense->has_raw_data();
-    EXT_ENFORCE_INVALID(has_raw || dense->data_type() == DataType::FLOAT,
-                        "FromPagedCache: non-FLOAT dense pages require raw_data.");
+    if (!has_raw && dense->data_type() != DataType::FLOAT)
+      return RuntimeValue(TensorFromProto(*dense));
     return RuntimeValue(Tensor::Borrow(
         dense->name(), dense->data_type(), shape,
         has_raw ? raw.data() : reinterpret_cast<const uint8_t *>(dense->float_data().data()),

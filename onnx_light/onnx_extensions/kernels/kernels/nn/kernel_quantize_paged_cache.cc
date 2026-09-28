@@ -11,6 +11,7 @@
 
 #include <cmath>
 #include <cstring>
+#include <limits>
 #include <unordered_set>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
@@ -98,18 +99,23 @@ RuntimeValue QuantizePagedCache::operator()(const RuntimeValue &cache, const Ten
                           blocks_value.kind == RuntimeValue::Kind::kSequence,
                       "QuantizePagedCache: cache must contain only a blocks sequence.");
   EXT_ENFORCE_INVALID(block_indices.data_type == DataType::INT64 &&
-                          block_indices.shape.size() == 1 &&
-                          (block_indices.element_count() == 0 || block_indices.bytes() != nullptr),
+                          block_indices.shape.size() == 1 && block_indices.shape[0] >= 0,
                       "QuantizePagedCache: block_indices must be a rank-one INT64 tensor.");
+  const int64_t index_count = block_indices.shape[0];
+  EXT_ENFORCE_INVALID(
+      static_cast<uint64_t>(index_count) <= std::numeric_limits<size_t>::max() / sizeof(int64_t) &&
+          block_indices.size_bytes() == static_cast<size_t>(index_count) * sizeof(int64_t) &&
+          (index_count == 0 || block_indices.bytes() != nullptr),
+      "QuantizePagedCache: block_indices buffer extent does not match its shape.");
   CheckScale(key_scale, "key_scale");
   CheckScale(value_scale, "value_scale");
   CheckZeroPoint(key_zero_point, "key_zero_point");
   CheckZeroPoint(value_zero_point, "value_zero_point");
 
   std::vector<size_t> indices;
-  indices.reserve(static_cast<size_t>(block_indices.element_count()));
+  indices.reserve(static_cast<size_t>(index_count));
   std::unordered_set<size_t> seen;
-  for (int64_t i = 0; i < block_indices.element_count(); ++i) {
+  for (int64_t i = 0; i < index_count; ++i) {
     const int64_t index = block_indices.AsInt64()[i];
     EXT_ENFORCE_INVALID(index >= 0 && static_cast<size_t>(index) < blocks_value.elements.size(),
                         "QuantizePagedCache: block index is out of range.");

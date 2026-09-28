@@ -1141,8 +1141,9 @@ void StructTypeCatalogue::ValidatePagedCache(const PagedCacheProto &value,
       const auto bytes =
           count * (dense->data_type() == TensorProto::FLOAT ? sizeof(float) : sizeof(uint16_t));
       EXT_ENFORCE_INVALID(dense->has_raw_data() ? dense->raw_data().size() == bytes
-                                                : (dense->data_type() == TensorProto::FLOAT &&
-                                                   dense->float_data().size() == count),
+                          : dense->data_type() == TensorProto::FLOAT
+                              ? dense->float_data().size() == count
+                              : dense->int32_data().size() == count,
                           "PagedCacheProto: dense payload extent mismatch.");
     }
     return dims;

@@ -114,7 +114,9 @@ jobs:
     # observable as a required PR status check.
     name: no-onnx (ubuntu-latest, py3.13)
     runs-on: ubuntu-latest
-    timeout-minutes: 19
+    # A partial sccache miss can spend 15 minutes building; reserve time for
+    # the full Python suite as well as cold-build variance.
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:

@@ -1538,10 +1538,10 @@ LightOpSchema MakeLinearAttentionSchema(int since_version) {
 LightOpSchema MakePagedAttentionSchema() {
   return LightOpSchema(
       "PagedAttention", "onnx_light", 1,
-      "Version 1 appends immutable KV pages and computes attention for finite FLOAT Q/K/V tensors "
+      "Appends immutable KV pages and computes attention for finite FLOAT Q/K/V tensors "
       "of shape [1,1,L,D], with equal new sequence lengths and matching Q/K head sizes. The "
-      "structured past/present type is onnx_light.PagedKVCache version 1: blocks is a dynamic "
-      "sequence of pages with INT64 scalar start/length and FLOAT logical key/value tensors "
+      "past/present are structured cache values whose blocks form a dynamic sequence of pages "
+      "with INT64 scalar start/length and FLOAT logical key/value tensors "
       "[1,1,capacity,head_size]. Runtime pages may store dense FLOAT or inline affine "
       "integer data. Every encoded page describes its own storage, independently of other pages. "
       "Shape inference produces FLOAT Y [1,1,L,value_head_size] and preserves the declared cache "
@@ -1551,11 +1551,11 @@ LightOpSchema MakePagedAttentionSchema() {
       {{"Q", "FLOAT queries [1,1,L,key_head_size].", "T"},
        {"K", "FLOAT new keys [1,1,L,key_head_size].", "T"},
        {"V", "FLOAT new values [1,1,L,value_head_size].", "T"},
-       {"past", "Version-1 onnx_light.PagedKVCache structured value.", "C"}},
+       {"past", "Paged cache structured value.", "C"}},
       {{"Y", "FLOAT attention result [1,1,L,value_head_size].", "T"},
-       {"present", "Version-1 cache after appending the new pages.", "C"}},
+       {"present", "Cache after appending the new pages.", "C"}},
       {{"T", {TensorType::kFloat}, "Constrain Q/K/V and Y to FLOAT tensors."},
-       {"C", {TensorType::kStruct}, "Version-1 named paged-cache structure."}},
+       {"C", {TensorType::kStruct}, "Named paged-cache structure."}},
       {{"block_size", "Positive maximum token capacity for each new page.", AttributeType::INT,
         false, int64_t(16)},
        {"max_tokens", "Positive maximum retained token count, including past and new tokens.",
@@ -1564,6 +1564,34 @@ LightOpSchema MakePagedAttentionSchema() {
         false, int64_t(1)},
        {"left_window_size", "Past-token window; -1 is unbounded and non-negative values limit it.",
         AttributeType::INT, false, int64_t(-1)}});
+}
+
+LightOpSchema MakeQuantizePagedCacheSchema() {
+  const std::vector<TensorType> storage_types{
+      TensorType::kInt8,  TensorType::kUint8,   TensorType::kInt4,
+      TensorType::kUint4, TensorType::kInt2,    TensorType::kUint2,
+      TensorType::kFloat, TensorType::kFloat16, TensorType::kBfloat16};
+  return LightOpSchema(
+      "QuantizePagedCache", "onnx_light", 1,
+      "Quantizes the key and value payloads of selected immutable paged-cache blocks. "
+      "block_indices contains unique zero-based block indices. key_scale and value_scale are "
+      "positive scalar FLOAT tensors. The scalar key_zero_point and value_zero_point tensors "
+      "select independent INT8, UINT8, INT4, UINT4, INT2, UINT2, FLOAT, FLOAT16 or BFLOAT16 "
+      "storage formats. Integer types quantize to affine storage; floating types dequantize to "
+      "dense storage. Selected dense or affine blocks are converted; unselected blocks retain "
+      "their existing storage and ownership.",
+      {{"cache", "Input paged-cache structured value.", "C"},
+       {"block_indices", "Unique zero-based indices of blocks to quantize.", "I"},
+       {"key_scale", "Scalar FLOAT key quantization scale.", "S"},
+       {"key_zero_point", "Scalar key zero point selecting the key storage type.", "ZK"},
+       {"value_scale", "Scalar FLOAT value quantization scale.", "S"},
+       {"value_zero_point", "Scalar value zero point selecting the value storage type.", "ZV"}},
+      {{"quantized_cache", "Cache with the selected blocks requantized.", "C"}},
+      {{"C", {TensorType::kStruct}, "Constrain cache input and output to structured values."},
+       {"I", {TensorType::kInt64}, "Constrain block indices to INT64."},
+       {"S", {TensorType::kFloat}, "Constrain scales to FLOAT."},
+       {"ZK", storage_types, "Select the key's affine integer or dense floating storage type."},
+       {"ZV", storage_types, "Select the value's affine integer or dense floating storage type."}});
 }
 
 // --- LayerNormalization ------------------------------------------------------
@@ -2322,6 +2350,8 @@ std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(const std::string &o
          };
        }},
       {"PagedAttention", [] { return std::vector<LightOpSchema>{MakePagedAttentionSchema()}; }},
+      {"QuantizePagedCache",
+       [] { return std::vector<LightOpSchema>{MakeQuantizePagedCacheSchema()}; }},
       {"LSTM",
        [] {
          return std::vector<LightOpSchema>{

@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 #include <algorithm>
@@ -38,6 +39,18 @@ void CheckTensor(const Tensor &tensor) {
                       "PagedAttention: invalid tensor payload extent.");
 }
 
+void CheckDensePageTensor(const Tensor &tensor) {
+  EXT_ENFORCE_INVALID(
+      (tensor.data_type == DataType::FLOAT || tensor.data_type == DataType::FLOAT16 ||
+       tensor.data_type == DataType::BFLOAT16) &&
+          tensor.shape.size() == 4 && tensor.shape[0] == 1 && tensor.shape[1] == 1,
+      "PagedAttention: dense cache pages must be FLOAT, FLOAT16 or BFLOAT16 [1,1,L,D] tensors.");
+  const int64_t count = tensor.shape.product(0, tensor.shape.size(), "PagedAttention");
+  const size_t bytes = PackedByteSize(tensor.data_type, count);
+  EXT_ENFORCE_INVALID(tensor.size_bytes() == bytes && (bytes == 0 || tensor.bytes() != nullptr),
+                      "PagedAttention: invalid dense cache payload extent.");
+}
+
 std::pair<int, int> CodeRange(int32_t type) {
   switch (type) {
   case DataType::INT8:
@@ -48,12 +61,20 @@ std::pair<int, int> CodeRange(int32_t type) {
     return {-8, 7};
   case DataType::UINT4:
     return {0, 15};
+  case DataType::INT2:
+    return {-2, 1};
+  case DataType::UINT2:
+    return {0, 3};
   default:
     EXT_THROW_INVALID("PagedAttention: unsupported storage type.");
   }
 }
 
-bool FourBit(int32_t type) { return type == DataType::INT4 || type == DataType::UINT4; }
+int BitWidth(int32_t type) {
+  return type == DataType::INT2 || type == DataType::UINT2
+             ? 2
+             : (type == DataType::INT4 || type == DataType::UINT4 ? 4 : 8);
+}
 
 void CheckFormat(const PagedAttention::Format &format) {
   EXT_ENFORCE_INVALID(std::isfinite(format.scale) && format.scale > 0,
@@ -69,7 +90,11 @@ void CheckFormat(const PagedAttention::Format &format) {
 }
 
 int ReadCode(const uint8_t *bytes, size_t index, int32_t type) {
-  int value = FourBit(type) ? ((bytes[index / 2] >> (4 * (index % 2))) & 15) : bytes[index];
+  const int width = BitWidth(type);
+  const size_t per_byte = 8 / static_cast<size_t>(width);
+  int value = (bytes[index / per_byte] >> (width * (index % per_byte))) & ((1 << width) - 1);
+  if (type == DataType::INT2 && value >= 2)
+    value -= 4;
   if (type == DataType::INT4 && value >= 8)
     value -= 16;
   if (type == DataType::INT8 && value >= 128)
@@ -96,8 +121,14 @@ int ReadZero(const AffineLayoutProto &affine, size_t index, int32_t storage_type
   const auto &tensor = affine.zero_point();
   if (tensor.has_raw_data())
     return ReadCode(tensor.raw_data().data(), index, storage_type);
-  if (FourBit(storage_type)) {
-    int code = (static_cast<uint32_t>(tensor.int32_data()[index / 8]) >> (4 * (index % 8))) & 15;
+  const int width = BitWidth(storage_type);
+  if (width < 8) {
+    const size_t per_word = 32 / static_cast<size_t>(width);
+    int code = (static_cast<uint32_t>(tensor.int32_data()[index / per_word]) >>
+                (width * (index % per_word))) &
+               ((1 << width) - 1);
+    if (storage_type == DataType::INT2 && code >= 2)
+      return code - 4;
     return storage_type == DataType::INT4 && code >= 8 ? code - 16 : code;
   }
   return tensor.int32_data()[index];
@@ -128,9 +159,11 @@ struct PageView {
   int axis = -1;
   uint64_t block = 0;
 
-  explicit PageView(const RuntimeValue &source, bool checked = false) : value(&source) {
+  explicit PageView(const RuntimeValue &source, bool checked = false,
+                    const StructTypeCatalogue *catalogue = nullptr)
+      : value(&source) {
     if (source.kind == RuntimeValue::Kind::kTensor) {
-      CheckTensor(source.tensor);
+      CheckDensePageTensor(source.tensor);
       capacity = source.tensor.shape[2];
       width = source.tensor.shape[3];
       return;
@@ -149,7 +182,9 @@ struct PageView {
                                 parameter->raw_data().data() != nullptr,
                             "PagedAttention: null affine parameter payload.");
     if (!checked) {
-      const EncodedValueLayout layout = StructTypeCatalogue().ValidateEncodedValue(encoded);
+      const EncodedValueLayout layout = catalogue
+                                            ? catalogue->ValidateEncodedValue(encoded)
+                                            : StructTypeCatalogue().ValidateEncodedValue(encoded);
       EXT_ENFORCE_INVALID(!layout.external && layout.content_verified,
                           "PagedAttention: pages require verified inline payloads.");
       storage_type = layout.storage_type;
@@ -162,8 +197,14 @@ struct PageView {
         elements *= static_cast<uint64_t>(shape.dim(i).dim_value());
       storage_type =
           encoded.affine().signed_storage()
-              ? (encoded.raw_data().size() == elements ? DataType::INT8 : DataType::INT4)
-              : (encoded.raw_data().size() == elements ? DataType::UINT8 : DataType::UINT4);
+              ? (encoded.raw_data().size() == elements
+                     ? DataType::INT8
+                     : (encoded.raw_data().size() == (elements + 1) / 2 ? DataType::INT4
+                                                                        : DataType::INT2))
+              : (encoded.raw_data().size() == elements
+                     ? DataType::UINT8
+                     : (encoded.raw_data().size() == (elements + 1) / 2 ? DataType::UINT4
+                                                                        : DataType::UINT2));
     }
     const auto &type = encoded.logical_type().tensor_type();
     EXT_ENFORCE_INVALID(type.elem_type() == DataType::FLOAT && type.shape().dim_size() == 4 &&
@@ -198,7 +239,14 @@ struct PageView {
   double Read(int64_t row, int64_t column, PagedAttention::Statistics &statistics) const {
     const size_t index = static_cast<size_t>(row) * width + column;
     if (value->kind == RuntimeValue::Kind::kTensor) {
-      const float result = value->tensor.AsFloat()[index];
+      float result;
+      if (value->tensor.data_type == DataType::FLOAT)
+        result = value->tensor.AsFloat()[index];
+      else {
+        const uint16_t bits = reinterpret_cast<const uint16_t *>(value->tensor.bytes())[index];
+        result = value->tensor.data_type == DataType::FLOAT16 ? Float16BitsToFloat(bits)
+                                                              : Bfloat16BitsToFloat(bits);
+      }
       EXT_ENFORCE_INVALID(std::isfinite(result), "PagedAttention: non-finite dense cache value.");
       return result;
     }
@@ -248,7 +296,9 @@ RuntimeValue NewPage(const Tensor &input, int64_t begin, int64_t length,
     AddBytes(statistics.copied_bytes, output.size_bytes());
     return RuntimeValue(std::move(output)).Retain();
   }
-  const size_t bytes = FourBit(format.storage_type) ? count / 2 + count % 2 : count;
+  const int code_width = BitWidth(format.storage_type);
+  const size_t per_byte = 8 / static_cast<size_t>(code_width);
+  const size_t bytes = count / per_byte + (count % per_byte != 0);
   Tensor storage = MakeOutputTensor(DataType::UINT8, {static_cast<int64_t>(bytes)}, bytes,
                                     rt ? rt->io_allocator() : nullptr);
   std::memset(storage.mutable_bytes(), 0, bytes);
@@ -263,10 +313,8 @@ RuntimeValue NewPage(const Tensor &input, int64_t begin, int64_t length,
     const int base = static_cast<int>(floor);
     const int rounded = base + (fraction > 0.5 || (fraction == 0.5 && base % 2 != 0));
     const int code = std::clamp(rounded + format.zero_point, low, high);
-    if (FourBit(format.storage_type))
-      storage.mutable_bytes()[i / 2] |= static_cast<uint8_t>((code & 15) << (4 * (i % 2)));
-    else
-      storage.mutable_bytes()[i] = static_cast<uint8_t>(code);
+    storage.mutable_bytes()[i / per_byte] |=
+        static_cast<uint8_t>((code & ((1 << code_width) - 1)) << (code_width * (i % per_byte)));
   }
   storage = std::move(storage).RetainStorage();
   EncodedValueProto encoded;
@@ -275,7 +323,12 @@ RuntimeValue NewPage(const Tensor &input, int64_t begin, int64_t length,
   for (int64_t d : shape)
     logical->mutable_shape()->add_dim()->set_dim_value(d);
   auto *affine = encoded.mutable_affine();
-  if (count == 1)
+  const bool matches_two_bits = bytes == count / 4 + (count % 4 != 0);
+  const bool matches_four_bits = bytes == count / 2 + count % 2;
+  const bool matches_eight_bits = bytes == count;
+  if (static_cast<int>(matches_two_bits) + static_cast<int>(matches_four_bits) +
+          static_cast<int>(matches_eight_bits) !=
+      1)
     affine->set_storage_type(static_cast<TensorProto::DataType>(format.storage_type));
   else
     affine->set_signed_storage(format.storage_type == DataType::INT4 ||
@@ -283,9 +336,8 @@ RuntimeValue NewPage(const Tensor &input, int64_t begin, int64_t length,
   affine->mutable_scale()->set_data_type(DataType::FLOAT);
   affine->mutable_scale()->add_float_data(format.scale);
   affine->mutable_zero_point()->set_data_type(format.storage_type);
-  // Packed raw data also represents a scalar four-bit zero point unambiguously.
-  const uint8_t zero =
-      static_cast<uint8_t>(format.zero_point) & (FourBit(format.storage_type) ? 15 : 255);
+  // Packed raw data represents scalar sub-byte zero points unambiguously.
+  const uint8_t zero = static_cast<uint8_t>(format.zero_point) & ((1 << code_width) - 1);
   affine->mutable_zero_point()->set_raw_data(&zero, 1);
   encoded.ref_raw_data().assign_borrowed(storage.bytes(), bytes, storage.borrowed_owner());
   AddBytes(statistics.copied_bytes, bytes);
@@ -293,6 +345,22 @@ RuntimeValue NewPage(const Tensor &input, int64_t begin, int64_t length,
 }
 
 } // namespace
+
+Tensor DecodePagedCachePayload(const RuntimeValue &value, int64_t length,
+                               const StructTypeCatalogue &catalogue,
+                               RawBufferAllocator *allocator) {
+  PageView page(value, false, &catalogue);
+  EXT_ENFORCE_INVALID(length > 0 && length <= page.capacity,
+                      "Paged cache payload: invalid valid-prefix length.");
+  Tensor result = MakeOutputTensor(DataType::FLOAT, {1, 1, length, page.width},
+                                   CheckedBytes(length, page.width), allocator);
+  PagedAttention::Statistics statistics;
+  for (int64_t row = 0; row < length; ++row)
+    for (int64_t column = 0; column < page.width; ++column)
+      result.AsFloat()[static_cast<size_t>(row) * page.width + column] =
+          static_cast<float>(page.Read(row, column, statistics));
+  return result;
+}
 
 struct PagedAttention::CacheAnalysis {
   struct Summary {

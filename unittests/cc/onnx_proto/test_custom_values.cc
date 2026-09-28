@@ -1125,6 +1125,26 @@ TEST(custom_values, AffineInt4OddElementCountPadsTheLastNibble) {
   EXPECT_THROW(catalogue.ValidateEncodedValue(*value), std::invalid_argument);
 }
 
+TEST(custom_values, AffineInt2PadsTheLastByte) {
+  EncodedValueProto value;
+  value.set_name("affine_int2");
+  auto &affine = value.ref_affine();
+  affine.set_storage_type(TensorProto::INT2);
+  affine.set_scale(MakeFloatConstant({0.5f}, {}));
+  value.ref_logical_type() = MakeTensorType(TensorProto::FLOAT, {5});
+  value.set_raw_data(std::string("\xE4\x01", 2));
+
+  StructTypeCatalogue catalogue;
+  const auto layout = catalogue.ValidateEncodedValue(value);
+  EXPECT_EQ(layout.record_count, 5u);
+  EXPECT_EQ(layout.element_bits, 2u);
+  EXPECT_EQ(layout.storage_type, TensorProto::INT2);
+  EXPECT_EQ(layout.payload_bytes, 2u);
+
+  value.set_raw_data(std::string("\xE4\xFD", 2));
+  EXPECT_THROW(catalogue.ValidateEncodedValue(value), std::invalid_argument);
+}
+
 TEST(custom_values, AffineInfersSignedStorageWidthFromPayload) {
   StructTypeCatalogue catalogue;
   EncodedValueProto value;
@@ -1154,6 +1174,12 @@ TEST(custom_values, AffineInfersSignedStorageWidthFromPayload) {
   affine.set_signed_storage(false);
   layout = catalogue.ValidateEncodedValue(value);
   EXPECT_EQ(layout.storage_type, TensorProto::UINT8);
+
+  value.ref_logical_type() = MakeTensorType(TensorProto::FLOAT, {6});
+  value.set_raw_data(std::string("\xE4\x01", 2));
+  layout = catalogue.ValidateEncodedValue(value);
+  EXPECT_EQ(layout.storage_type, TensorProto::UINT2);
+  EXPECT_EQ(layout.element_bits, 2u);
 
   value.ref_logical_type() = MakeTensorType(TensorProto::FLOAT, {1});
   value.set_raw_data(std::string("\x01", 1));

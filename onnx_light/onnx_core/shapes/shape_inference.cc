@@ -977,8 +977,11 @@ void ShapesContext::ComputeShapeGraph(const GraphProto &graph) {
                                     [&](const auto &vi) { return vi.name() == init.name(); });
     catalogue.ValidatePagedCache(
         init, true, input != graph.input().end() && input->has_type() ? &input->type() : nullptr);
-    if (input == graph.input().end())
-      SetType(init.name(), PagedKVCacheTypeV1());
+    if (input == graph.input().end()) {
+      TypeProto type;
+      type.mutable_struct_type();
+      SetType(init.name(), type);
+    }
   }
   for (const auto &init : graph.ref_encoded_initializer()) {
     const auto input = std::find_if(graph.input().begin(), graph.input().end(),

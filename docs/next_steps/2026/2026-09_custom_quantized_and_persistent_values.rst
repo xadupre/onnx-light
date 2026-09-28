@@ -222,11 +222,11 @@ use field 1000 in their respective messages.
 
 The specialized affine branch is deliberately closed:
 
-* ``storage_type`` is one of ``INT8``, ``UINT8``, ``INT4`` or ``UINT4``.
-  ``raw_data`` or the external payload contains only row-major codes using
-  the corresponding ``TensorProto.raw_data`` packing. INT4/UINT4 stores
-  the first element in the low nibble and the second in the high nibble;
-  an unused final high nibble is zero.
+* ``storage_type`` is one of ``INT8``, ``UINT8``, ``INT4``, ``UINT4``,
+  ``INT2`` or ``UINT2``. ``raw_data`` or the external payload contains only
+  row-major codes using the corresponding ``TensorProto.raw_data`` packing.
+  Four-bit types pack two codes per byte and two-bit types pack four, starting
+  with the least-significant bits; unused final high bits are zero.
 * ``scale`` is a scalar or parameter tensor with floating element type;
   ``zero_point`` is optional, has ``storage_type``, and defaults to zero.
 * Omitting ``axis`` selects per-tensor quantization. Setting ``axis``

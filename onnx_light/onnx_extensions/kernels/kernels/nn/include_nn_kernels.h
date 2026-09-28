@@ -33,7 +33,7 @@ using ::onnx_light::core::runtime::OpsetId;
  * Registers through RuntimeContext::RegisterKernelFn in domain ``onnx_light``
  * as ``PagedAttention``; it does not replace ONNX Attention. Q and new K/V
  * have equal sequence lengths. Prior pages remain immutable, including partial
- * pages. Dense FLOAT and inline INT8/UINT8/INT4/UINT4 affine pages may coexist.
+ * pages. Dense FLOAT and inline INT8/UINT8/INT4/UINT4/INT2/UINT2 affine pages may coexist.
  * Affine decoding supports scalar, per-axis and blocked FLOAT scales; other
  * scale types, external payloads and structured encodings are rejected.
  * Prior dense pages require owner-retaining storage (RuntimeValue::Retain).
@@ -89,6 +89,42 @@ private:
   struct CacheAnalysis;
   std::shared_ptr<CacheAnalysis> cache_analysis_;
   FormatSelector format_selector_;
+};
+
+/**
+ * Decodes the valid prefix of one dense or affine paged-cache payload to FLOAT.
+ *
+ * @param value Payload stored in a page's key or value field.
+ * @param length Number of valid leading rows to decode.
+ * @param catalogue Structured-type catalogue used to validate encoded values.
+ * @param allocator Optional destination allocator.
+ * @return Owned FLOAT tensor with shape ``[1,1,length,width]``.
+ */
+Tensor DecodePagedCachePayload(const RuntimeValue &value, int64_t length,
+                               const StructTypeCatalogue &catalogue = {},
+                               RawBufferAllocator *allocator = nullptr);
+
+/**
+ * Quantizes selected paged-cache blocks with independent scalar K/V parameters.
+ *
+ * ``block_indices`` is a rank-one INT64 tensor of unique zero-based block
+ * indices. Scales are positive scalar FLOAT tensors. Each scalar zero point
+ * selects its output storage type. INT8, UINT8, INT4, UINT4, INT2 and UINT2
+ * produce affine pages; FLOAT, FLOAT16 and BFLOAT16 produce dense pages.
+ * Selected dense or affine blocks are decoded and converted; unselected
+ * immutable blocks retain their existing storage.
+ */
+class QuantizePagedCache : public KernelBase {
+public:
+  static constexpr const char *name = "onnx_kernels:CPU:onnx_light:QuantizePagedCache";
+  using KernelBase::KernelBase;
+  void Run(RuntimeContext &rt) override;
+  RuntimeValue operator()(const RuntimeValue &cache, const Tensor &block_indices,
+                          const Tensor &key_scale, const Tensor &key_zero_point,
+                          const Tensor &value_scale, const Tensor &value_zero_point,
+                          const StructTypeCatalogue &catalogue = {},
+                          RuntimeContext *rt = nullptr) const;
+  static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
 // ---------------------------------------------------------------------------

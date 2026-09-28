@@ -32,7 +32,8 @@ namespace ONNX_LIGHT_NAMESPACE {
 /** Returns true when @p data_type is one of the supported affine storage types. */
 inline constexpr bool IsAffineStorageType(TensorProto::DataType data_type) {
   return data_type == TensorProto::INT8 || data_type == TensorProto::UINT8 ||
-         data_type == TensorProto::INT4 || data_type == TensorProto::UINT4;
+         data_type == TensorProto::INT4 || data_type == TensorProto::UINT4 ||
+         data_type == TensorProto::INT2 || data_type == TensorProto::UINT2;
 }
 
 /** Describes the validated payload geometry of one ``EncodedValueProto``. */

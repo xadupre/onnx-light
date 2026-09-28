@@ -64,7 +64,7 @@ ModelProto CacheModel() {
   *model.mutable_graph()->add_paged_cache_initializer() = Cache();
   auto *output = model.mutable_graph()->add_output();
   output->set_name("cache");
-  *output->mutable_type() = PagedKVCacheTypeV1();
+  output->mutable_type()->mutable_struct_type();
   return model;
 }
 

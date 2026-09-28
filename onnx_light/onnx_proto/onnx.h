@@ -861,9 +861,21 @@ BEGIN_PROTO(AffineLayoutProto,
             "The branch is deliberately closed: other affine forms use a structured layout "
             "instead of extending this message.")
 FIELD_OPTIONAL_ENUM(TensorProto::DataType, storage_type, 1,
-                    "Element type of the stored codes. It MUST be one of INT8, UINT8, INT4 or "
-                    "UINT4 and the payload holds only row-major codes packed like "
-                    "TensorProto.raw_data.")
+                    "Element type of the stored codes. It MUST be one of INT8, UINT8, INT4, "
+                    "UINT4, INT2 or UINT2 and the payload holds only row-major codes packed like "
+                    "TensorProto.raw_data. Exactly one of storage_type and signed_storage MUST "
+                    "be present. When storage_type is absent, signed_storage determines "
+                    "signedness and the code width is inferred from the logical element count "
+                    "and payload byte length; the payload MUST identify exactly one of the "
+                    "supported 2-bit, 4-bit or 8-bit widths. N is the product of the concrete "
+                    "dimensions in EncodedValueProto.logical_type.tensor_type.shape. B is either "
+                    "EncodedValueProto.raw_data.size() for an inline payload or the numeric "
+                    "'length' entry in EncodedValueProto.external_data when data_location is "
+                    "EXTERNAL. Two-bit storage matches when B == ceil(N / 4) == N / 4 + "
+                    "(N % 4 != 0), 4-bit storage matches when B == ceil(N / 2) == N / 2 + N % 2, "
+                    "and 8-bit storage matches when B == N. Exactly one equality MUST hold; "
+                    "signed_storage then selects the signed INT2, INT4 or INT8 type when equal to "
+                    "1, and the corresponding unsigned type otherwise.")
 FIELD_OPTIONAL(TensorProto, scale, 2,
                "Scalar or parameter tensor with a floating element type. This field MUST be "
                "present for a valid affine layout.")
@@ -1166,14 +1178,6 @@ FIELD_REPEATED_PROTO(PagedCacheBlockProto, blocks, 1, "Ordered immutable KV page
 FIELD_STR(name, 2, "Graph-scoped initializer name, unique across initializer categories.")
 FIELD_STR(doc_string, 3, "Human-readable documentation.")
 END_PROTO()
-
-/**
- * Returns the named version-1 logical type for an onnx-light paged KV cache.
- *
- * Describes a structure containing a sequence of pages; it does not contain or
- * serialize cache state. Use ``PagedCacheProto`` to represent serialized pages.
- */
-ONNX_LIGHT_PROTO_API TypeProto PagedKVCacheTypeV1();
 
 // ValueInfoProto
 

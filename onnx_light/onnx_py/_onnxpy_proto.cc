@@ -1222,7 +1222,6 @@ void define_repeated_field_type_proto(nb::class_<utils::RepeatedField<T>> &nbcls
 void AddOnnxPyProto(nb::module_ &m) {
   m.doc() = "onnx from python without protobuf but using the same format";
   m.attr("IR_VERSION") = static_cast<int>(IR_VERSION);
-  m.def("PagedKVCacheTypeV1", &PagedKVCacheTypeV1);
 
   m.def(
       "utils_onnx_read_varint64",

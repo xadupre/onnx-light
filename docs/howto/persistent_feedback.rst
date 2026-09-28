@@ -447,17 +447,15 @@ and a multi-head fallback, is provided in
 Optional heterogeneous paged KV
 -------------------------------
 
-Versioned logical cache type
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Cache value declaration
+~~~~~~~~~~~~~~~~~~~~~~~
 
-The kernel-independent ``PagedKVCacheTypeV1()`` declaration in ``onnx_proto``
-defines the named type ``onnx_light.PagedKVCache``, version 1 (recorded as
-``onnx_light.type_version = "1"``). The root is a structure containing
-``blocks``, a dynamic sequence of page structures. Each page has scalar INT64
-``start`` and ``length`` fields and logical FLOAT ``key`` and ``value`` tensors
-with shape ``[1,1,capacity,head_size]``. Capacity and head size are not fixed
-by the type; K and V may have different head sizes. The type describes the
-logical structure, not a physical encoding or cache contents.
+``PagedAttention`` declares ``past`` and ``present`` as structured values.
+Their concrete serialized representation is ``PagedCacheProto``, whose
+``blocks`` sequence contains pages with scalar INT64 ``start`` and ``length``
+fields and floating-point ``key`` and ``value`` tensors. The proto and runtime
+validation define the cache layout directly; there is no separate cache-type
+factory or physical encoding in the graph declaration.
 
 Versioned operator schema
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -465,10 +463,10 @@ Versioned operator schema
 ``onnx_light::PagedAttention`` has an independent ``LightOpSchema`` at domain
 ``onnx_light``, opset 1. It takes ``Q, K, V, past`` and produces ``Y, present``.
 Q/K/V and Y are FLOAT ``[1,1,L,D]`` tensors; Q/K/V use the same new-token
-length, and Q/K head sizes match. ``past`` and ``present`` use the version-1
-paged-cache structure. Shape inference checks known ranks and dimensions,
-returns Y as ``[1,1,L,value_head_size]``, and preserves the declared cache type
-for ``present`` (including a model-local struct type reference).
+length, and Q/K head sizes match. ``past`` and ``present`` use the paged-cache
+structure. Shape inference checks known Q/K/V ranks and dimensions, returns Y
+as ``[1,1,L,value_head_size]``, and preserves the structured declaration of
+``past`` for ``present``.
 
 All attributes are optional: ``block_size=16`` and ``max_tokens=4096`` must be
 positive; ``is_causal=1`` accepts only 0 or 1; ``left_window_size=-1`` means
@@ -483,9 +481,9 @@ Kernel implementation
 
 The native ``onnx_kernels::kernel::PagedAttention`` is an opt-in consumer. It
 does not change standard ONNX ``Attention`` or add another state subsystem.
-Declare ``past`` and ``present`` with ``PagedKVCacheTypeV1()`` and bind
-``past <- present`` in ``GraphProto.persistent_bindings``. Initialize each
-request with ``PagedAttention::EmptyCache()``.
+Declare ``past`` and ``present`` as structured values and bind ``past <-
+present`` in ``GraphProto.persistent_bindings``. Initialize each request with
+``PagedAttention::EmptyCache()``.
 
 Import domain ``onnx_light`` at version 1 in the model. Unknown ranks and
 symbolic Q/K/V dimensions remain supported. Cache page capacities should remain
@@ -534,12 +532,63 @@ execution and allocator routing use the normal runtime contracts.
 Python feedback represents this cache with ``PagedCacheProto`` rather than
 converting its internal sequence into a Python list.
 
+Selected-block quantization
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``onnx_light::QuantizePagedCache`` converts selected cache blocks without
+rebuilding the remaining cache. Its opset-1 signature is::
+
+    QuantizePagedCache(
+        cache, block_indices,
+        key_scale, key_zero_point,
+        value_scale, value_zero_point) -> quantized_cache
+
+``block_indices`` is a rank-one INT64 tensor of unique, zero-based block
+indices. The K and V scales are positive finite scalar FLOAT tensors. Each
+scalar zero point selects the corresponding payload storage type, so K and V
+may use different formats. INT8, UINT8, INT4, UINT4, INT2 and UINT2 request
+affine quantization. FLOAT, FLOAT16 and BFLOAT16 request dense dequantization;
+the floating-point marker's value and the corresponding scale are ignored.
+
+For every selected block, the kernel decodes either its dense floating-point
+payload or its existing affine payload, then converts the valid ``length``
+prefix to the selected format. Unselected blocks retain their payload storage
+and owners. Indices and quantization parameters are all checked before the
+output is published, so an invalid request does not partially modify the
+cache. Shape inference preserves the input cache's structured declaration on
+``quantized_cache``.
+
+For example, this graph first quantizes block 3 to INT2 keys and UINT4 values,
+then uses the same operator to materialize FLOAT16 keys and BFLOAT16 values.
+The floating zero-point inputs are type markers:
+
+.. code-block:: text
+
+    key_scale       = FLOAT scalar 0.25
+    key_zero_int2   = INT2 scalar 0
+    value_scale     = FLOAT scalar 0.125
+    value_zero_u4   = UINT4 scalar 8
+    ignored_scale   = FLOAT scalar 1
+    key_float16     = FLOAT16 scalar 0
+    value_bfloat16  = BFLOAT16 scalar 0
+    selected_blocks = INT64[1] {3}
+
+    quantized_cache = onnx_light.QuantizePagedCache(
+        cache, selected_blocks,
+        key_scale, key_zero_int2,
+        value_scale, value_zero_u4)
+
+    dequantized_cache = onnx_light.QuantizePagedCache(
+        quantized_cache, selected_blocks,
+        ignored_scale, key_float16,
+        ignored_scale, value_bfloat16)
+
 Serialized cache values
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-The logical type returned by ``PagedKVCacheTypeV1()`` does not serialize a
-cache value. At runtime, a cache is a ``RuntimeValue`` structure containing a
-dynamic ``RuntimeSequence`` of pages. The sequence cannot be represented as one
+The graph's structured declaration does not serialize a cache value. At
+runtime, a cache is a ``RuntimeValue`` structure containing a dynamic
+``RuntimeSequence`` of pages. The sequence cannot be represented as one
 fixed-layout ``EncodedValueProto``; an encoded value represents one tensor (or
 one fixed-layout structured value), not the complete cache and its dynamic
 page sequence.
@@ -550,11 +599,12 @@ separate from the logical ``TypeProto``. Its ``blocks`` field contains
 Each block selects exactly one dense ``key`` or ``encoded_key``, and one dense
 ``value`` or ``encoded_value``. Dense payloads use ``TensorProto``; encoded
 payloads retain ``EncodedValueProto`` layouts and parameter references.
-The current kernel accepts inline dense FLOAT pages or affine INT8, UINT8, INT4
-or UINT4 pages with FLOAT scales; K and V may use independent per-axis or
-blocked formats. Page ranges start at zero, are contiguous and have positive
-lengths no greater than their physical capacities. K/V capacities match within
-each block, and each tensor's head width is consistent across blocks.
+The current kernel accepts inline dense FLOAT, FLOAT16 or BFLOAT16 pages, or
+affine INT8, UINT8, INT4, UINT4, INT2 or UINT2 pages with FLOAT scales; K and V
+may use independent per-axis or blocked formats. Page ranges start at zero, are
+contiguous and have positive lengths no greater than their physical capacities.
+K/V capacities match within each block, and each tensor's head width is
+consistent across blocks.
 
 ``RuntimeValue::FromPagedCache`` restores the recursive runtime value with
 retained storage owners; ``ToPagedCache`` exports it without decoding pages.
@@ -635,8 +685,8 @@ whole cache or silently converting its representation.
 ``block_size`` bounds each block's token capacity and ``max_tokens`` bounds the
 retained logical length. A registered kernel may provide a ``FormatSelector``
 that chooses independent K/V formats from the current inputs and retained
-length on every execution. FLOAT, INT8, UINT8, INT4 and UINT4 are supported for
-new blocks; affine append uses scalar parameters. The selected descriptor is
+length on every execution. FLOAT, INT8, UINT8, INT4, UINT4, INT2 and UINT2 are
+supported for new blocks; affine append uses scalar parameters. The selected descriptor is
 stored in every new page, so successive executions may append different
 formats without converting prior pages. An affine descriptor may omit its
 concrete ``storage_type`` and provide ``signed_storage`` instead. Validation

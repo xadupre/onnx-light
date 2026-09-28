@@ -85,22 +85,26 @@ void ComputeShapePagedAttention(ShapesContext &ctx, const NodeProto &node) {
 
   EXT_ENFORCE_INVALID(ctx.HasType(node.input(3)), "PagedAttention: missing past cache type.");
   const TypeProto past = ctx.GetType(node.input(3));
-  const auto &blocks = Field(Structure(ctx, past, 1), "blocks");
-  EXT_ENFORCE_INVALID(blocks.has_sequence_type() && blocks.sequence_type().has_elem_type(),
-                      "PagedAttention: blocks must be a typed sequence.");
-  const auto &page = Structure(ctx, blocks.sequence_type().elem_type(), 4);
-  for (const char *name : {"start", "length"}) {
-    const auto &type = Field(page, name);
-    EXT_ENFORCE_INVALID(
-        type.has_tensor_type() && type.tensor_type().elem_type() == TensorProto::INT64 &&
-            (!type.tensor_type().has_shape() || type.tensor_type().shape().dim_size() == 0),
-        "PagedAttention: start/length must be INT64 scalars.");
+  EXT_ENFORCE_INVALID(past.has_struct_type(), "PagedAttention: expected a cache structure.");
+  const auto &resolved = ctx.ResolveStructType(past.struct_type());
+  if (resolved.has_structure()) {
+    const auto &blocks = Field(Structure(ctx, past, 1), "blocks");
+    EXT_ENFORCE_INVALID(blocks.has_sequence_type() && blocks.sequence_type().has_elem_type(),
+                        "PagedAttention: blocks must be a typed sequence.");
+    const auto &page = Structure(ctx, blocks.sequence_type().elem_type(), 4);
+    for (const char *name : {"start", "length"}) {
+      const auto &type = Field(page, name);
+      EXT_ENFORCE_INVALID(
+          type.has_tensor_type() && type.tensor_type().elem_type() == TensorProto::INT64 &&
+              (!type.tensor_type().has_shape() || type.tensor_type().shape().dim_size() == 0),
+          "PagedAttention: start/length must be INT64 scalars.");
+    }
+    const auto cached_key = TensorDimensions(Field(page, "key"));
+    const auto cached_value = TensorDimensions(Field(page, "value"));
+    MergeDimension(cached_key[2], cached_value[2]);
+    MergeDimension(key_width, cached_key[3]);
+    value_width = MergeDimension(value_width, cached_value[3]);
   }
-  const auto cached_key = TensorDimensions(Field(page, "key"));
-  const auto cached_value = TensorDimensions(Field(page, "value"));
-  MergeDimension(cached_key[2], cached_value[2]);
-  MergeDimension(key_width, cached_key[3]);
-  value_width = MergeDimension(value_width, cached_value[3]);
 
   TypeProto output;
   auto *tensor = output.mutable_tensor_type();

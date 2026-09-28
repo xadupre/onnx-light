@@ -178,8 +178,8 @@ void Validate(const RuntimeValue &value, const TypeProto &type,
   }
   EXT_ENFORCE_INVALID(value.kind == RuntimeValue::Kind::kStruct,
                       "PersistentValueState: expected a structured value.");
-  EXT_ENFORCE_INVALID(declared.has_structure(),
-                      "PersistentValueState: requires named structured fields.");
+  if (!declared.has_structure())
+    return;
   size_t expected = 0;
   for (const auto &field : declared.structure().field()) {
     if (!field.has_type())

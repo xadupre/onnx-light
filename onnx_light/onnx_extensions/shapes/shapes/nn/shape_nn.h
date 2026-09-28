@@ -75,6 +75,9 @@ namespace nn {
  */
 void ComputeShapePagedAttention(ShapesContext &ctx, const NodeProto &node);
 
+/** Preserves the structured cache type after validating quantization parameter inputs. */
+void ComputeShapeQuantizePagedCache(ShapesContext &ctx, const NodeProto &node);
+
 /**
  * Computes the output :cpp:class:`SymTensor` of an ``AveragePool`` node
  * and stores it in ``ctx``.

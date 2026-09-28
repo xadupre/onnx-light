@@ -169,7 +169,7 @@ TEST(CHECKER_COVERAGE, PagedCacheValidatesSharedParameterReferences) {
   *block->mutable_encoded_value() = shared.Encoded();
   auto *output = model.mutable_graph()->add_output();
   output->set_name("cache");
-  *output->mutable_type() = PagedKVCacheTypeV1();
+  output->mutable_type()->mutable_struct_type();
   ASSERT_NO_THROW(checker::check_model(model));
   block->mutable_encoded_key()->set_parameter_ref("missing");
   EXPECT_THROW(checker::check_model(model), ValidationError);

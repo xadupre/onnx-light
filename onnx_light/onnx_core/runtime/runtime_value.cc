@@ -266,8 +266,10 @@ RuntimeValue::FromPagedCache(PagedCacheProto value, const StructTypeCatalogue &c
       shape.push_back(static_cast<int64_t>(dim));
     const auto &raw = dense->raw_data();
     const bool has_raw = dense->has_raw_data();
+    EXT_ENFORCE_INVALID(has_raw || dense->data_type() == DataType::FLOAT,
+                        "FromPagedCache: non-FLOAT dense pages require raw_data.");
     return RuntimeValue(Tensor::Borrow(
-        dense->name(), DataType::FLOAT, shape,
+        dense->name(), dense->data_type(), shape,
         has_raw ? raw.data() : reinterpret_cast<const uint8_t *>(dense->float_data().data()),
         has_raw ? raw.size() : dense->float_data().size() * sizeof(float),
         has_raw && raw.is_borrowed() ? raw.owner() : owner));
@@ -332,16 +334,18 @@ PagedCacheProto RuntimeValue::ToPagedCache(const std::string &name,
         *(is_key ? block->mutable_encoded_key() : block->mutable_encoded_value()) =
             BorrowEncodedValue(source);
       } else {
-        EXT_ENFORCE_INVALID(source.kind == Kind::kTensor &&
-                                source.tensor.data_type == DataType::FLOAT,
-                            "ToPagedCache: requires FLOAT tensor or encoded pages.");
+        EXT_ENFORCE_INVALID(
+            source.kind == Kind::kTensor && (source.tensor.data_type == DataType::FLOAT ||
+                                             source.tensor.data_type == DataType::FLOAT16 ||
+                                             source.tensor.data_type == DataType::BFLOAT16),
+            "ToPagedCache: requires a FLOAT, FLOAT16 or BFLOAT16 tensor or encoded pages.");
         const auto &tensor = source.tensor;
         const auto count = tensor.shape.product(0, tensor.shape.size(), "ToPagedCache");
-        EXT_ENFORCE_INVALID(tensor.size_bytes() == PackedByteSize(DataType::FLOAT, count) &&
+        EXT_ENFORCE_INVALID(tensor.size_bytes() == PackedByteSize(tensor.data_type, count) &&
                                 (tensor.size_bytes() == 0 || tensor.bytes() != nullptr),
                             "ToPagedCache: invalid tensor payload.");
         auto *dense = is_key ? block->mutable_key() : block->mutable_value();
-        dense->set_data_type(DataType::FLOAT);
+        dense->set_data_type(source.tensor.data_type);
         for (const auto dim : tensor.shape)
           dense->add_dims(dim);
         Tensor storage =

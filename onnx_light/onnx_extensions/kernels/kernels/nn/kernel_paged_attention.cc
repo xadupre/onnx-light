@@ -404,6 +404,7 @@ PagedAttention::PagedAttention(const KernelContext &context, FormatSelector form
 
 RuntimeValue PagedAttention::EmptyCache() {
   RuntimeValue result;
+  result.is_paged_cache = true;
   result.fields.emplace("blocks", RuntimeValue(std::vector<RuntimeValue>{}));
   return result;
 }
@@ -451,6 +452,7 @@ PagedAttention::Result PagedAttention::operator()(const Tensor &q, const Tensor 
   result.Y = Allocate(rt, 0, DataType::FLOAT, {1, 1, length, v.shape[3]}, output_bytes);
   if (length == 0) {
     result.present = past.BorrowView().Retain(catalogue);
+    result.present.is_paged_cache = true;
     return result;
   }
   Tensor workspace =
@@ -532,6 +534,7 @@ PagedAttention::Result PagedAttention::operator()(const Tensor &q, const Tensor 
           static_cast<float>(accumulator[d] / denominator);
   }
   result.present = past.BorrowView().Retain(catalogue);
+  result.present.is_paged_cache = true;
   auto &present_pages = result.present.fields.at("blocks").elements;
   for (int64_t begin = 0; begin < length;) {
     const int64_t chunk = std::min(options.block_size, length - begin);

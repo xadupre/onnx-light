@@ -531,6 +531,10 @@ masks and other unsupported attributes fail explicitly. Kernel instances,
 execution and allocator routing use the normal runtime contracts.
 Python feedback represents this cache with ``PagedCacheProto`` rather than
 converting its internal sequence into a Python list.
+This conversion uses an explicit runtime representation marker, preserved by
+cache import, views and cache operators. An ordinary dictionary with a
+``blocks`` sequence remains a dictionary, even if its fields resemble a cache;
+ordinary sequence fields round-trip as Python lists.
 
 Selected-block quantization
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~

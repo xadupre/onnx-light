@@ -139,6 +139,7 @@ PersistentValue PersistentValue::FromRetained(RuntimeValue value, size_t depth) 
                       "PersistentValue: maximum nesting depth exceeded.");
   PersistentValue result;
   result.kind_ = value.kind;
+  result.is_paged_cache_ = value.is_paged_cache;
   if (value.kind == RuntimeValue::Kind::kTensor)
     result.tensor_.emplace(std::move(value.tensor));
   else if (value.kind == RuntimeValue::Kind::kEncoded) {
@@ -161,6 +162,7 @@ RuntimeValue PersistentValue::BorrowAtDepth(size_t depth) const {
     return RuntimeValue(tensor_->BorrowView());
   RuntimeValue result;
   result.kind = kind_;
+  result.is_paged_cache = is_paged_cache_;
   result.encoded = encoded_;
   result.quantization_parameters = quantization_parameters_;
   for (const auto &[name, field] : fields_)

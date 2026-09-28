@@ -50,6 +50,7 @@ TEST(QuantizePagedCache, QuantizesSelectedBlocksAndRequantizesEncodedPayloads) {
                          Tensor::FromFloat("", {}, {0.25f}), ZeroPoint(DataType::UINT8, 128));
 
   ASSERT_EQ(Blocks(result).size(), 2u);
+  EXPECT_TRUE(result.is_paged_cache);
   EXPECT_EQ(Blocks(result)[0].fields.at("key").tensor.bytes(), unselected_key);
   EXPECT_EQ(Blocks(initial)[1].fields.at("key").tensor.bytes(), selected_key.bytes());
   ASSERT_TRUE(Blocks(result)[1].fields.at("key").encoded);
@@ -76,6 +77,7 @@ TEST(QuantizePagedCache, QuantizesSelectedBlocksAndRequantizesEncodedPayloads) {
     auto dequantized =
         quantize(result, Tensor::FromInt64("", {1}, {1}), Tensor::FromFloat("", {}, {1}),
                  TypeMarker(key_type), Tensor::FromFloat("", {}, {1}), TypeMarker(value_type));
+    EXPECT_TRUE(dequantized.is_paged_cache);
     const auto &key = Blocks(dequantized)[1].fields.at("key");
     const auto &value = Blocks(dequantized)[1].fields.at("value");
     EXPECT_EQ(key.kind, RuntimeValue::Kind::kTensor);

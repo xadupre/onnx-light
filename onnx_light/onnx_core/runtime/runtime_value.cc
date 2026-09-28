@@ -288,6 +288,7 @@ RuntimeValue::FromPagedCache(PagedCacheProto value, const StructTypeCatalogue &c
     blocks.push_back(std::move(page));
   }
   RuntimeValue result;
+  result.is_paged_cache = true;
   result.fields.emplace("blocks", RuntimeValue(std::move(blocks)));
   return std::move(result).Retain(catalogue);
 }
@@ -430,6 +431,7 @@ RuntimeValue RuntimeValue::CopyAtDepth(size_t depth, bool owned) const {
   }
   RuntimeValue result;
   result.kind = kind;
+  result.is_paged_cache = is_paged_cache;
   if (kind == Kind::kSequence) {
     EXT_ENFORCE_INVALID(elements.empty() || depth + 1 + elements.depth() <= kMaxDepth,
                         "RuntimeValue: maximum nesting depth exceeded.");

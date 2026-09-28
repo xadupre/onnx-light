@@ -442,6 +442,12 @@ RuntimeValue FeedbackValueFromPython(
     }
     return RuntimeValue(std::move(fields));
   }
+  if (nb::isinstance<nb::list>(value)) {
+    std::vector<RuntimeValue> elements;
+    for (nb::handle element : nb::borrow<nb::list>(value))
+      elements.push_back(FeedbackValueFromPython(name, element, depth + 1, model, parameters));
+    return RuntimeValue(std::move(elements));
+  }
   if (nb::isinstance<EncodedValueProto>(value)) {
     RuntimeValue result = RuntimeValue::FromEncodedView(nb::cast<const EncodedValueProto &>(value),
                                                         RetainFeedbackOwner(value));
@@ -494,12 +500,14 @@ RuntimeValueMap FeedbackValuesFromPython(nb::dict values, const ModelProto *mode
 }
 
 nb::object FeedbackValueToPython(RuntimeValue value, const StructTypeCatalogue &catalogue = {}) {
-  if (value.kind == RuntimeValue::Kind::kStruct && value.fields.size() == 1 &&
-      value.fields.contains("blocks") &&
-      value.fields.at("blocks").kind == RuntimeValue::Kind::kSequence)
+  if (value.kind == RuntimeValue::Kind::kStruct && value.is_paged_cache)
     return nb::cast(value.ToPagedCache("", catalogue));
-  EXT_ENFORCE_INVALID(value.kind != RuntimeValue::Kind::kSequence,
-                      "Feedback sequence values currently require the native C++ API.");
+  if (value.kind == RuntimeValue::Kind::kSequence) {
+    nb::list elements;
+    for (const auto &element : value.elements)
+      elements.append(FeedbackValueToPython(element.BorrowView(), catalogue));
+    return elements;
+  }
   if (value.kind == RuntimeValue::Kind::kTensor)
     return nb::cast(std::move(value.tensor));
   if (value.kind == RuntimeValue::Kind::kEncoded) {

@@ -86,6 +86,49 @@ def array(tensor):
 
 
 class TestPersistentValueState(unittest.TestCase):
+    def test_blocks_sequence_is_not_implicitly_a_paged_cache(self):
+        value_type = onnx.TypeProto(struct_type=onnx.StructTypeProto())
+        model = helper.make_model(
+            helper.make_graph(
+                [helper.make_node("Identity", ["past"], ["present"])],
+                "ordinary_blocks",
+                [helper.make_value_info("past", value_type)],
+                [helper.make_value_info("present", value_type)],
+            ),
+            opset_imports=[helper.make_opsetid("", 18)],
+            ir_version=10,
+        )
+        add_binding(model, "past", "present")
+        payload = numpy.ones((1, 1, 1, 2), dtype=numpy.float32)
+        for blocks in (
+            [],
+            [payload],
+            [
+                {
+                    "start": numpy.array(0, dtype=numpy.int64),
+                    "length": numpy.array(1, dtype=numpy.int64),
+                    "key": payload,
+                    "value": payload,
+                }
+            ],
+        ):
+            with self.subTest(block_count=len(blocks)):
+                state = runtime.PersistentValueState(model, {"past": {"blocks": blocks}})
+                context = make_context()
+                output = state.run(context, {})["present"]
+                self.assertIsInstance(output, dict)
+                self.assertIsInstance(output["blocks"], list)
+                self.assertEqual(len(output["blocks"]), len(blocks))
+                state.reset({"past": output})
+                snapshot = state.values["past"]
+                state.close()
+                if blocks:
+                    value = snapshot["blocks"][0]
+                    if isinstance(value, dict):
+                        self.assertEqual(set(value), {"start", "length", "key", "value"})
+                        value = value["key"]
+                    numpy.testing.assert_array_equal(array(value), payload)
+
     def test_attention_persistent_tensor_initial_capacity(self):
         model = make_attention_model()
         initial_key = numpy.array([0.25, 0.5], dtype=numpy.float32).reshape(1, 1, 1, 2)

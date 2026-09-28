@@ -154,6 +154,10 @@ TEST(PagedCacheProto, RuntimeRetainsStorageAfterProtoDestructionAndExports) {
     value = RuntimeValue::FromPagedCache(std::move(cache));
   }
   const auto &key = value.fields.at("blocks").elements[0].fields.at("key").tensor;
+  EXPECT_TRUE(value.is_paged_cache);
+  EXPECT_TRUE(value.BorrowView().is_paged_cache);
+  EXPECT_TRUE(value.DeepCopy().is_paged_cache);
+  EXPECT_FALSE(RuntimeValue{}.is_paged_cache);
   EXPECT_FLOAT_EQ(key.AsFloat()[0], 1.f);
   EXPECT_GT(key.borrowed_owner().use_count(), 0);
   auto restored = RuntimeValue::FromPagedCache(value.ToPagedCache("roundtrip"));

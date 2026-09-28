@@ -89,6 +89,29 @@ void RunModelViaSession(const ModelProto &model, RuntimeContext &rt) {
   session.Run(rt);
 }
 
+TEST(BackendRunModel, TopKRejectsNonPositiveK) {
+  auto cases = CollectTestCases("TopK");
+  size_t checked = 0;
+  for (TestCase &tc : cases) {
+    if (tc.name.find("test_cc_top_k_positive_k_opset_") != 0) {
+      continue;
+    }
+    SCOPED_TRACE(tc.name);
+    TestCaseUnloadGuard unload_guard(tc);
+    const auto &model = tc.model();
+    const auto &inputs = tc.data_sets()[0].inputs;
+    for (const int64_t k : {0, -1}) {
+      SCOPED_TRACE(k);
+      RuntimeContext rt(KernelContext{DefaultOpset(GetDefaultOpsetVersion(model))});
+      rt.tensors()[inputs[0].name] = inputs[0];
+      rt.tensors()[inputs[1].name] = Tensor::FromInt64(inputs[1].name, {1}, {k});
+      EXPECT_THROW(RunModelViaSession(model, rt), std::invalid_argument);
+    }
+    ++checked;
+  }
+  EXPECT_EQ(checked, 3u);
+}
+
 TEST(BackendRunModel, ShapeBasedIdentityPreservesDynamicSlice) {
   for (bool computed_end : {false, true}) {
     SCOPED_TRACE(computed_end);

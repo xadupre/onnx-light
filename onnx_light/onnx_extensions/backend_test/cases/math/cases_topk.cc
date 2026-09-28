@@ -66,6 +66,16 @@ void RegisterTopKCases(std::vector<TestCase> &registry, TestMode mode) {
     return;
   }
 
+  for (const int version : {10, 11, 24}) {
+    Expect(registry, MakeTopKNode(/*axis=*/0),
+           "test_cc_top_k_positive_k_opset_" + std::to_string(version), {DefaultOpset(version)},
+           []() -> IoData {
+             return IoData{
+                 {Tensor::FromFloat("", {3}, {3.0f, 1.0f, 2.0f}), Tensor::FromInt64("", {1}, {1})},
+                 {Tensor::FromFloat("", {1}, {3.0f}), Tensor::FromInt64("", {1}, {0})}};
+           });
+  }
+
   // test_cc_top_k — 3x4 float input, axis=1, k=3, largest=1 (default).
   {
     NodeProto node = MakeTopKNode(/*axis=*/1);

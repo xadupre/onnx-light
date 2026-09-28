@@ -778,15 +778,6 @@ protected:
   }
 };
 
-TEST_P(TopKShapeInferenceTest, RejectsNonPositiveK) {
-  auto *k = AddK(0);
-  for (const int64_t value : {0, -1}) {
-    SCOPED_TRACE(value);
-    *k->mutable_int64_data(0) = value;
-    EXPECT_THROW(Infer(), InferenceError);
-  }
-}
-
 TEST_P(TopKShapeInferenceTest, RejectsInvalidKShape) {
   auto *k = AddK(2);
   k->clear_dims();

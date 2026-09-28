@@ -560,6 +560,10 @@ fields round-trip as Python lists.
 Selected-block quantization
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+The :ref:`Python example <l-example-quantize-paged-cache>` builds and executes
+a graph that quantizes one cache page, dequantizes it, and serializes the
+mixed-format cache.
+
 ``onnx_light::QuantizePagedCache`` converts selected cache blocks without
 rebuilding the remaining cache. Its opset-1 signature is::
 

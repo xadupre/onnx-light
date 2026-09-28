@@ -2277,6 +2277,19 @@ TEST(KernelClass, TopKLargestSortedMatchesReference) {
   EXPECT_EQ(pi[8], 2);
 }
 
+TEST(KernelClass, TopKRejectsNonPositiveK) {
+  const Tensor x = Tensor::FromFloat("", {3}, {3.0f, 1.0f, 2.0f});
+  for (const int version : {1, 10, 11, 24}) {
+    SCOPED_TRACE(version);
+    const KernelContext ctx{DefaultOpset(version)};
+    TopK topk_kernel{ctx};
+    for (const int64_t k : {0, -1}) {
+      SCOPED_TRACE(k);
+      EXPECT_THROW(topk_kernel(x, k, 0, true, true), std::invalid_argument);
+    }
+  }
+}
+
 TEST(KernelClass, TopKSmallestPicksMinima) {
   const KernelContext ctx{DefaultOpset(11)};
   TopK topk_kernel{ctx};

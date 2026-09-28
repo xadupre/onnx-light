@@ -119,7 +119,6 @@ RuntimeValue QuantizePagedCache::operator()(const RuntimeValue &cache, const Ten
   }
 
   RuntimeValue result = cache.BorrowView().Retain(catalogue);
-  result.is_paged_cache = true;
   auto &blocks = result.fields.at("blocks").elements;
   for (size_t index : indices) {
     RuntimeValue page = blocks[index].BorrowView();

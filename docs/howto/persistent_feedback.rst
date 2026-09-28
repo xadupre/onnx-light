@@ -247,7 +247,7 @@ concrete symbolic bindings, rather than walking historical elements on every
 invocation. Memo tables hold weak references, so they do not prolong page or
 allocator lifetimes. Catalogue-dependent encoded retention still rechecks the
 supplied catalogue.
-Explicitly marked paged-cache snapshots additionally validate their complete
+Structurally recognized paged-cache snapshots additionally validate their complete
 page structure and ranges before state publication, without decoding payloads.
 
 These are ``TypeProto`` contracts, not a claim that every ``SequenceProto``,
@@ -258,7 +258,7 @@ Lists are converted recursively without converting their tensor payloads;
 their elements must match the declared ``sequence_type.elem_type``. Empty
 lists are supported. Tuples and arbitrary iterables are not sequence inputs.
 Ordinary dictionaries require named field declarations. Layout-less
-``struct_type`` declarations are reserved for explicitly marked paged caches,
+``struct_type`` declarations are reserved for structurally recognized paged caches,
 whose page ranges, fields and payloads are validated independently.
 ``If`` and model-local functions forward selected whole output names and move
 those results without persistence-related copies. Function attributes,
@@ -463,6 +463,11 @@ Their concrete serialized representation is ``PagedCacheProto``, whose
 fields and floating-point ``key`` and ``value`` tensors. The proto and runtime
 validation define the cache layout directly; there is no separate cache-type
 factory or physical encoding in the graph declaration.
+The declaration may leave ``struct_type`` unset internally or specify the named
+cache fields, directly or through a model-catalogue reference. Array and bit-packing
+layouts are not cache declarations. Declared ``key`` and ``value`` tensors have
+logical dtype FLOAT; FLOAT16 and BFLOAT16 are physical dense page formats, not
+alternative logical declarations.
 
 Versioned operator schema
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -538,10 +543,15 @@ masks and other unsupported attributes fail explicitly. Kernel instances,
 execution and allocator routing use the normal runtime contracts.
 Python feedback represents this cache with ``PagedCacheProto`` rather than
 converting its internal sequence into a Python list.
-This conversion uses an explicit runtime representation marker, preserved by
-cache import, views and cache operators. An ordinary dictionary with a
-``blocks`` sequence remains a dictionary, even if its fields resemble a cache;
-ordinary sequence fields round-trip as Python lists.
+This conversion recognizes the runtime structure: a single ``blocks`` sequence,
+whose elements have exactly ``start``, ``length``, ``key`` and ``value`` fields.
+The first two fields are INT64 scalar tensors; the payloads are tensors or encoded
+values. Payload types, shapes and page ranges are validated before export.
+No separate runtime marker records the value's origin. A Python dictionary with
+this structure is therefore also treated as a cache and returned as
+``PagedCacheProto``. A structure containing only ``{"blocks": []}`` represents an
+empty cache. Other structures remain dictionaries, and their ordinary sequence
+fields round-trip as Python lists.
 
 Selected-block quantization
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -690,6 +700,9 @@ structured declaration is checked against its storage type. Retaining or
 validating a compact shared value checks its reference, types and byte extent
 without materializing it. Borrowed views survive reset and close with both
 their payload and their shared parameters.
+Native C++ current feeds undergo this reference validation before execution,
+including when an encoded value is only forwarded to a nonpersistent output.
+They must carry their shared parameter catalogue in ``RuntimeValue``.
 
 Python construction, ``reset`` and ``run`` resolve ``EncodedValueProto.parameter_ref``
 against the state's model, including encoded values nested in dictionaries.

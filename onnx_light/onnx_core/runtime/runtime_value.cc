@@ -6,6 +6,7 @@
 #include "onnx_core/runtime/quantization.h"
 
 #include <cstring>
+#include <string_view>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
@@ -288,9 +289,34 @@ RuntimeValue::FromPagedCache(PagedCacheProto value, const StructTypeCatalogue &c
     blocks.push_back(std::move(page));
   }
   RuntimeValue result;
-  result.is_paged_cache = true;
   result.fields.emplace("blocks", RuntimeValue(std::move(blocks)));
   return std::move(result).Retain(catalogue);
+}
+
+bool RuntimeValue::HasPagedCacheStructure() const {
+  if (kind != Kind::kStruct || fields.size() != 1)
+    return false;
+  const auto blocks = fields.find("blocks");
+  if (blocks == fields.end() || blocks->second.kind != Kind::kSequence)
+    return false;
+  for (const auto &page : blocks->second.elements) {
+    if (page.kind != Kind::kStruct || page.fields.size() != 4)
+      return false;
+    for (const char *name : {"start", "length", "key", "value"}) {
+      const auto field = page.fields.find(name);
+      if (field == page.fields.end())
+        return false;
+      const auto &value = field->second;
+      if (std::string_view(name) == "start" || std::string_view(name) == "length") {
+        if (value.kind != Kind::kTensor || value.tensor.data_type != DataType::INT64 ||
+            !value.tensor.shape.empty())
+          return false;
+      } else if (value.kind != Kind::kTensor && value.kind != Kind::kEncoded) {
+        return false;
+      }
+    }
+  }
+  return true;
 }
 
 PagedCacheProto RuntimeValue::ToPagedCache(const std::string &name,
@@ -431,7 +457,6 @@ RuntimeValue RuntimeValue::CopyAtDepth(size_t depth, bool owned) const {
   }
   RuntimeValue result;
   result.kind = kind;
-  result.is_paged_cache = is_paged_cache;
   if (kind == Kind::kSequence) {
     EXT_ENFORCE_INVALID(elements.empty() || depth + 1 + elements.depth() <= kMaxDepth,
                         "RuntimeValue: maximum nesting depth exceeded.");

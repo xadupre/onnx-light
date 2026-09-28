@@ -101,6 +101,35 @@ void RegisterIdentity(RuntimeContext &context) {
   });
 }
 
+RuntimeValue SharedQuantizedValue(ModelProto &model, const Tensor &source) {
+  const auto plan = MakeQuantizationPlan(QuantizationFormat::kInt4, source.element_count(),
+                                         source.element_count());
+  auto full = QuantizeTensor(source, plan);
+  auto *graph = model.mutable_graph();
+  auto *annotation = graph->add_quantization_annotation();
+  annotation->set_tensor_name("onnx_light.quantization.parameters:common");
+  const auto descriptor = [&](const char *name, const std::string &bytes) {
+    auto *tensor = graph->add_initializer();
+    tensor->set_name(name);
+    tensor->set_data_type(TensorProto::UINT8);
+    tensor->add_dims(bytes.size());
+    tensor->set_raw_data(bytes);
+  };
+  descriptor("storage_type", full.Encoded().struct_type().SerializeAsString());
+  descriptor("logical_type", full.Encoded().logical_type().SerializeAsString());
+  auto *scale = graph->add_initializer();
+  scale->set_name("scales");
+  scale->set_data_type(TensorProto::FLOAT);
+  scale->add_float_data(1);
+  for (const auto &name : {"storage_type", "logical_type", "scales"}) {
+    auto *mapping = annotation->add_quant_parameter_tensor_names();
+    mapping->set_key(name);
+    mapping->set_value(name);
+  }
+  return QuantizeTensorShared(source, full.Encoded().struct_type(), "common",
+                              QuantizationParameterCatalogue::Build(model));
+}
+
 RuntimeValue Cache(float key, float value) {
   return RuntimeValue(RuntimeValueMap{{"keys", Number(key)}, {"values", Number(value)}});
 }
@@ -1363,31 +1392,10 @@ TEST(PersistentValueState, TypedSequencesRetainPortableAndSharedQuantizationOwne
     const auto source = Tensor::FromFloat("", {1, 1, 2, 1}, {1, -2});
     const auto plan = MakeQuantizationPlan(QuantizationFormat::kInt4, 2, 2);
     auto full = QuantizeTensor(source, plan);
-    auto *graph = model.mutable_graph();
-    auto *annotation = graph->add_quantization_annotation();
-    annotation->set_tensor_name("onnx_light.quantization.parameters:common");
-    auto descriptor = [&](const char *name, const std::string &bytes) {
-      auto *tensor = graph->add_initializer();
-      tensor->set_name(name);
-      tensor->set_data_type(TensorProto::UINT8);
-      tensor->add_dims(bytes.size());
-      tensor->set_raw_data(bytes);
-    };
-    descriptor("storage_type", full.Encoded().struct_type().SerializeAsString());
-    descriptor("logical_type", full.Encoded().logical_type().SerializeAsString());
-    auto *scale = graph->add_initializer();
-    scale->set_name("scales");
-    scale->set_data_type(TensorProto::FLOAT);
-    scale->add_float_data(1);
-    for (const auto &name : {"storage_type", "logical_type", "scales"}) {
-      auto *mapping = annotation->add_quant_parameter_tensor_names();
-      mapping->set_key(name);
-      mapping->set_value(name);
-    }
+    auto shared = SharedQuantizedValue(model, source);
     VerifyModel(model);
-    auto parameters = QuantizationParameterCatalogue::Build(model);
+    auto parameters = shared.quantization_parameters;
     weak = parameters;
-    auto shared = QuantizeTensorShared(source, full.Encoded().struct_type(), "common", parameters);
     EXPECT_THROW(RuntimeValue(shared.Encoded()).Retain(), std::invalid_argument);
     auto wrong = shared.Encoded();
     wrong.set_parameter_ref("missing");
@@ -1422,6 +1430,70 @@ TEST(PersistentValueState, TypedSequencesRetainPortableAndSharedQuantizationOwne
   EXPECT_EQ(decoded.AsFloat()[1], -2);
   retained = RuntimeValue{};
   EXPECT_TRUE(weak.expired());
+}
+
+TEST(PersistentValueState, ValidatesSharedCurrentFeedsBeforeExecutionWithoutRetention) {
+  for (bool structured : {false, true}) {
+    for (bool nested : {false, true}) {
+      SCOPED_TRACE(structured);
+      SCOPED_TRACE(nested);
+      auto model = Model();
+      auto shared = SharedQuantizedValue(model, Tensor::FromFloat("", {2}, {1, -2}));
+      TypeProto type = shared.Encoded().logical_type();
+      if (structured)
+        *type.mutable_struct_type() = shared.Encoded().struct_type();
+      if (nested)
+        type = Structure({{"value", type}});
+      auto *opset = model.add_opset_import();
+      opset->set_version(18);
+      auto *input = model.mutable_graph()->add_input();
+      input->set_name("current");
+      *input->mutable_type() = type;
+      auto *output = model.mutable_graph()->add_output();
+      output->set_name("echo");
+      *output->mutable_type() = type;
+      auto *node = model.mutable_graph()->add_node();
+      node->set_op_type("Identity");
+      node->add_input("current");
+      node->add_output("echo");
+      VerifyModel(model);
+      PersistentValueState state(model, {{"past", Number(0)}});
+      RuntimeContext context;
+      RegisterIdentity(context);
+      int executions = 0;
+      context.RegisterCustomKernel("test.feedback", "Step",
+                                   [&](const NodeProto &node, RuntimeContext &rt) {
+                                     ++executions;
+                                     rt.Put(node.output(0), rt.Get(node.input(0)).BorrowView());
+                                   });
+      const auto wrap = [&](RuntimeValue value) {
+        return nested ? RuntimeValue(RuntimeValueMap{{"value", std::move(value)}})
+                      : std::move(value);
+      };
+      for (int failure = 0; failure < 3; ++failure) {
+        SCOPED_TRACE(failure);
+        auto message = shared.Encoded();
+        if (failure == 1)
+          message.set_parameter_ref("missing");
+        if (failure == 2)
+          message.mutable_raw_data()->resize(message.raw_data().size() + 1);
+        RuntimeValue invalid(std::move(message));
+        if (failure != 0)
+          invalid.quantization_parameters = shared.quantization_parameters;
+        EXPECT_THROW(
+            state.Run(context, {{"tokens", Number(0)}, {"current", wrap(std::move(invalid))}}),
+            std::invalid_argument);
+        EXPECT_EQ(executions, 0);
+        EXPECT_EQ(Number(state.Values().at("past")), 0);
+      }
+      const auto outputs =
+          state.Run(context, {{"tokens", Number(0)}, {"current", wrap(shared.BorrowView())}});
+      EXPECT_EQ(executions, 1);
+      const auto &echo = nested ? outputs.at("echo").fields.at("value") : outputs.at("echo");
+      EXPECT_EQ(echo.quantization_parameters, shared.quantization_parameters);
+      EXPECT_TRUE(echo.Encoded().Equals(shared.Encoded()));
+    }
+  }
 }
 
 TEST(PersistentValueState, AffineTensorValidationChecksLogicalTypeShapeSymbolsAndPayload) {

@@ -500,7 +500,7 @@ RuntimeValueMap FeedbackValuesFromPython(nb::dict values, const ModelProto *mode
 }
 
 nb::object FeedbackValueToPython(RuntimeValue value, const StructTypeCatalogue &catalogue = {}) {
-  if (value.kind == RuntimeValue::Kind::kStruct && value.is_paged_cache)
+  if (value.HasPagedCacheStructure())
     return nb::cast(value.ToPagedCache("", catalogue));
   if (value.kind == RuntimeValue::Kind::kSequence) {
     nb::list elements;

@@ -154,10 +154,10 @@ TEST(PagedCacheProto, RuntimeRetainsStorageAfterProtoDestructionAndExports) {
     value = RuntimeValue::FromPagedCache(std::move(cache));
   }
   const auto &key = value.fields.at("blocks").elements[0].fields.at("key").tensor;
-  EXPECT_TRUE(value.is_paged_cache);
-  EXPECT_TRUE(value.BorrowView().is_paged_cache);
-  EXPECT_TRUE(value.DeepCopy().is_paged_cache);
-  EXPECT_FALSE(RuntimeValue{}.is_paged_cache);
+  EXPECT_TRUE(value.HasPagedCacheStructure());
+  EXPECT_TRUE(value.BorrowView().HasPagedCacheStructure());
+  EXPECT_TRUE(value.DeepCopy().HasPagedCacheStructure());
+  EXPECT_FALSE(RuntimeValue{}.HasPagedCacheStructure());
   EXPECT_FLOAT_EQ(key.AsFloat()[0], 1.f);
   EXPECT_GT(key.borrowed_owner().use_count(), 0);
   auto restored = RuntimeValue::FromPagedCache(value.ToPagedCache("roundtrip"));
@@ -192,6 +192,40 @@ TEST(PagedCacheProto, EncodedExportBorrowsPayloadAndAffineParameters) {
   EXPECT_EQ(exported.blocks(0).encoded_key().raw_data()[0], 1);
   EXPECT_EQ(exported.blocks(0).encoded_key().affine().scale().raw_data().size(), sizeof(float));
   EXPECT_EQ(exported.blocks(0).encoded_key().affine().zero_point().raw_data()[0], 0);
+}
+
+TEST(PagedCacheProto, RecognizesCacheFromStructureWithoutImportMetadata) {
+  RuntimeValue empty;
+  empty.fields.emplace("blocks", RuntimeValue(std::vector<RuntimeValue>{}));
+  EXPECT_TRUE(empty.HasPagedCacheStructure());
+  EXPECT_EQ(empty.ToPagedCache().blocks_size(), 0);
+
+  for (const auto &proto : {Cache(), EncodedCache()}) {
+    RuntimeValue cache(RuntimeValue::FromPagedCache(proto).fields);
+    EXPECT_TRUE(cache.HasPagedCacheStructure());
+    EXPECT_EQ(cache.ToPagedCache().blocks_size(), 1);
+    auto page = cache.fields.at("blocks").elements[0].BorrowView();
+    for (const char *name : {"start", "length", "key", "value"}) {
+      auto missing = page.BorrowView();
+      missing.fields.erase(name);
+      cache.fields.at("blocks").elements.Set(0, std::move(missing));
+      EXPECT_FALSE(cache.HasPagedCacheStructure());
+    }
+    cache.fields.at("blocks").elements.Set(0, page);
+    cache.fields.at("blocks").elements.push_back(RuntimeValue{});
+    EXPECT_FALSE(cache.HasPagedCacheStructure());
+    cache.fields.at("blocks").elements.Set(1, page);
+    EXPECT_TRUE(cache.HasPagedCacheStructure());
+    // Structural recognition does not replace range validation.
+    EXPECT_THROW(cache.ToPagedCache(), std::invalid_argument);
+  }
+
+  RuntimeValue ordinary;
+  ordinary.fields.emplace("blocks", RuntimeValue(std::vector<RuntimeValue>{
+                                        RuntimeValue(Tensor::FromFloat("", {1}, {1.f}))}));
+  EXPECT_FALSE(ordinary.HasPagedCacheStructure());
+  empty.fields.emplace("metadata", RuntimeValue{});
+  EXPECT_FALSE(empty.HasPagedCacheStructure());
 }
 
 TEST(PagedCacheProto, SessionSeedsAndReseedsWithoutOverridingCallerValues) {
@@ -239,4 +273,101 @@ TEST(PagedCacheProto, RejectsInitializerNameCollisionsAndMismatchedDeclaredDefau
   input->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
   input->mutable_type()->mutable_tensor_type()->mutable_shape();
   EXPECT_THROW(VerifyModel(model), std::invalid_argument);
+}
+
+TEST(PagedCacheProto, RejectsArrayAndBitPackingDeclarationsIncludingReferences) {
+  for (bool array : {false, true}) {
+    for (bool reference : {false, true}) {
+      SCOPED_TRACE(array);
+      SCOPED_TRACE(reference);
+      auto model = CacheModel();
+      StructTypeProto storage;
+      if (array) {
+        auto *layout = storage.mutable_array();
+        layout->set_dimension(2);
+        auto *tensor = layout->mutable_element_type()->mutable_tensor_type();
+        tensor->set_elem_type(TensorProto::FLOAT);
+        tensor->mutable_shape();
+      } else {
+        auto *layout = storage.mutable_bit_packing();
+        layout->set_dimension(1);
+        auto *component = layout->add_component();
+        component->set_name("code");
+        component->set_bit_width(8);
+      }
+      TypeProto type;
+      if (reference) {
+        storage.set_type_id(1);
+        *model.add_struct_types() = storage;
+        type.mutable_struct_type()->set_type_ref(1);
+      } else {
+        *type.mutable_struct_type() = storage;
+      }
+      *model.mutable_graph()->mutable_output(0)->mutable_type() = type;
+      auto *input = model.mutable_graph()->add_input();
+      input->set_name("cache");
+      *input->mutable_type() = type;
+      StructTypeCatalogue catalogue;
+      catalogue.Build(model);
+      EXPECT_NO_THROW(ValidatePersistentType(catalogue, type));
+      EXPECT_THROW(catalogue.ValidatePagedCache(Cache(), true, &type), std::invalid_argument);
+      EXPECT_THROW(VerifyModel(model), std::invalid_argument);
+      model.mutable_graph()->clear_paged_cache_initializer();
+      EXPECT_NO_THROW(VerifyModel(model));
+    }
+  }
+}
+
+TEST(PagedCacheProto, RequiresLogicalFloatDeclarationsRegardlessOfPhysicalStorage) {
+  for (int32_t physical : {TensorProto::FLOAT, TensorProto::FLOAT16, TensorProto::BFLOAT16}) {
+    for (int32_t logical : {TensorProto::FLOAT, TensorProto::FLOAT16, TensorProto::BFLOAT16}) {
+      for (const char *payload : {"key", "value"}) {
+        SCOPED_TRACE(physical);
+        SCOPED_TRACE(logical);
+        SCOPED_TRACE(payload);
+        auto model = CacheModel();
+        auto *block = model.mutable_graph()->mutable_paged_cache_initializer(0)->mutable_blocks(0);
+        if (physical != TensorProto::FLOAT) {
+          for (auto *tensor : {block->mutable_key(), block->mutable_value()}) {
+            tensor->set_data_type(physical);
+            tensor->clear_float_data();
+            const uint16_t zeros[4] = {};
+            tensor->set_raw_data(zeros, sizeof(zeros));
+          }
+        }
+        auto *blocks = model.mutable_graph()
+                           ->mutable_output(0)
+                           ->mutable_type()
+                           ->mutable_struct_type()
+                           ->mutable_structure()
+                           ->add_field();
+        blocks->set_name("blocks");
+        auto *page = blocks->mutable_type()
+                         ->mutable_sequence_type()
+                         ->mutable_elem_type()
+                         ->mutable_struct_type()
+                         ->mutable_structure();
+        for (const char *name : {"start", "length", "key", "value"}) {
+          auto *field = page->add_field();
+          field->set_name(name);
+          auto *tensor = field->mutable_type()->mutable_tensor_type();
+          const bool scalar = std::string(name) == "start" || std::string(name) == "length";
+          tensor->set_elem_type(scalar                         ? TensorProto::INT64
+                                : std::string(name) == payload ? logical
+                                                               : TensorProto::FLOAT);
+          tensor->mutable_shape();
+          if (!scalar)
+            for (int64_t dimension : {1, 1, 2, 2})
+              tensor->mutable_shape()->add_dim()->set_dim_value(dimension);
+        }
+        auto *input = model.mutable_graph()->add_input();
+        input->set_name("cache");
+        *input->mutable_type() = model.graph().output(0).type();
+        if (logical == TensorProto::FLOAT)
+          EXPECT_NO_THROW(VerifyModel(model));
+        else
+          EXPECT_THROW(VerifyModel(model), std::invalid_argument);
+      }
+    }
+  }
 }

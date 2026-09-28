@@ -100,6 +100,11 @@ void Validate(const RuntimeValue &value, const TypeProto &type,
               size_t depth = 0, bool paged_cache = false) {
   EXT_ENFORCE_INVALID(depth <= RuntimeValue::kMaxDepth,
                       "PersistentValueState: maximum nesting depth exceeded.");
+  if (value.kind == RuntimeValue::Kind::kEncoded && value.Encoded().has_parameter_ref()) {
+    EXT_ENFORCE_INVALID(value.quantization_parameters != nullptr,
+                        "PersistentValueState: missing shared quantization parameter catalogue.");
+    value.quantization_parameters->Validate(value.Encoded(), catalogue);
+  }
   if (value.kind == RuntimeValue::Kind::kSequence) {
     EXT_ENFORCE_INVALID(type.has_sequence_type() && type.sequence_type().has_elem_type(),
                         "PersistentValueState: expected a sequence type.");
@@ -182,18 +187,18 @@ void Validate(const RuntimeValue &value, const TypeProto &type,
   }
   EXT_ENFORCE_INVALID(value.kind == RuntimeValue::Kind::kStruct,
                       "PersistentValueState: expected a structured value.");
-  if (value.is_paged_cache) {
+  const bool cache_structure = value.HasPagedCacheStructure();
+  if (cache_structure) {
     catalogue.ValidatePagedCache(value.ToPagedCache("", catalogue), true, &type);
     paged_cache = true;
   }
   if (!declared.has_structure()) {
-    EXT_ENFORCE_INVALID(value.is_paged_cache &&
-                            declared.kind_case() == StructTypeProto::KIND_NOT_SET,
+    EXT_ENFORCE_INVALID(cache_structure && declared.kind_case() == StructTypeProto::KIND_NOT_SET,
                         "PersistentValueState: ordinary structures require named fields.");
     return;
   }
   ValidationMemos cache_memos;
-  auto &field_memos = value.is_paged_cache ? cache_memos : memos;
+  auto &field_memos = cache_structure ? cache_memos : memos;
   size_t expected = 0;
   for (const auto &field : declared.structure().field()) {
     if (!field.has_type())

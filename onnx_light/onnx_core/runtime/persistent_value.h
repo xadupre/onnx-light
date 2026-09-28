@@ -143,7 +143,6 @@ private:
   static PersistentValue FromRetained(RuntimeValue value, size_t depth = 0);
   RuntimeValue BorrowAtDepth(size_t depth) const;
   RuntimeValue::Kind kind_ = RuntimeValue::Kind::kStruct;
-  bool is_paged_cache_ = false;
   std::optional<PersistentTensor> tensor_;
   std::unordered_map<std::string, PersistentValue> fields_;
   RuntimeSequence elements_;

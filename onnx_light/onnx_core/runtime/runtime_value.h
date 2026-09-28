@@ -146,8 +146,6 @@ struct RuntimeValue {
   static constexpr size_t kMaxDepth = 64;
   enum class Kind { kTensor, kStruct, kEncoded, kSequence };
   Kind kind = Kind::kStruct;
-  /** Identifies the paged-cache representation without inferring it from field names. */
-  bool is_paged_cache = false;
   Tensor tensor;
   std::unordered_map<std::string, RuntimeValue> fields;
   RuntimeSequence elements;
@@ -169,6 +167,9 @@ struct RuntimeValue {
   static RuntimeValue
   FromPagedCache(PagedCacheProto value, const StructTypeCatalogue &catalogue = {},
                  std::shared_ptr<const QuantizationParameterCatalogue> parameters = {});
+
+  /** Recognizes the cache's named structure; payloads and ranges require separate validation. */
+  bool HasPagedCacheStructure() const;
 
   /** Exports a cache without decoding pages; referenced types remain model-scoped. */
   PagedCacheProto ToPagedCache(const std::string &name = "",

@@ -86,7 +86,7 @@ def array(tensor):
 
 
 class TestPersistentValueState(unittest.TestCase):
-    def test_blocks_sequence_is_not_implicitly_a_paged_cache(self):
+    def test_cache_is_reconstructed_from_struct_fields(self):
         payload = numpy.ones((1, 1, 1, 2), dtype=numpy.float32)
         for blocks in (
             [],
@@ -102,7 +102,8 @@ class TestPersistentValueState(unittest.TestCase):
         ):
             with self.subTest(block_count=len(blocks)):
                 element_type = helper.make_tensor_type_proto(onnx.TensorProto.FLOAT, [1, 1, 1, 2])
-                if blocks and isinstance(blocks[0], dict):
+                cache_structure = not blocks or isinstance(blocks[0], dict)
+                if cache_structure:
                     element_type = onnx.TypeProto(
                         struct_type=onnx.StructTypeProto(
                             structure=onnx.StructTypeProto.Structure(
@@ -148,18 +149,23 @@ class TestPersistentValueState(unittest.TestCase):
                 state = runtime.PersistentValueState(model, {"past": {"blocks": blocks}})
                 context = make_context()
                 output = state.run(context, {})["present"]
-                self.assertIsInstance(output, dict)
-                self.assertIsInstance(output["blocks"], list)
-                self.assertEqual(len(output["blocks"]), len(blocks))
+                if cache_structure:
+                    self.assertIsInstance(output, onnx.PagedCacheProto)
+                    self.assertEqual(len(output.blocks), len(blocks))
+                else:
+                    self.assertIsInstance(output, dict)
+                    self.assertIsInstance(output["blocks"], list)
+                    self.assertEqual(len(output["blocks"]), len(blocks))
                 state.reset({"past": output})
                 snapshot = state.values["past"]
                 state.close()
                 if blocks:
-                    value = snapshot["blocks"][0]
-                    if isinstance(value, dict):
-                        self.assertEqual(set(value), {"start", "length", "key", "value"})
-                        value = value["key"]
-                    numpy.testing.assert_array_equal(array(value), payload)
+                    value = (
+                        numpy_helper.to_array(snapshot.blocks[0].key)
+                        if cache_structure
+                        else array(snapshot["blocks"][0])
+                    )
+                    numpy.testing.assert_array_equal(value, payload)
 
     def test_root_list_feedback_uses_standard_sequence_kernel(self):
         tensor_type = helper.make_tensor_type_proto(onnx.TensorProto.FLOAT, [2])

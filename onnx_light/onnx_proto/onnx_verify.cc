@@ -1049,6 +1049,9 @@ void StructTypeCatalogue::ValidatePagedCache(const PagedCacheProto &value,
     EXT_ENFORCE_INVALID(declared_type->has_struct_type(),
                         "PagedCacheProto: expected a structure type.");
     const auto &root_type = Resolve(declared_type->struct_type());
+    EXT_ENFORCE_INVALID(root_type.has_structure() ||
+                            root_type.kind_case() == StructTypeProto::KIND_NOT_SET,
+                        "PagedCacheProto: expected an unset or named-structure declaration.");
     const auto structure = [&](const TypeProto &type,
                                size_t count) -> const StructTypeProto::Structure & {
       EXT_ENFORCE_INVALID(type.has_struct_type(), "PagedCacheProto: expected a structure type.");
@@ -1072,11 +1075,8 @@ void StructTypeCatalogue::ValidatePagedCache(const PagedCacheProto &value,
                             "PagedCacheProto: invalid page field declaration.");
         const auto &tensor = field.type().tensor_type();
         const bool scalar = i < 2;
-        const bool payload_type = tensor.elem_type() == TensorProto::FLOAT ||
-                                  tensor.elem_type() == TensorProto::FLOAT16 ||
-                                  tensor.elem_type() == TensorProto::BFLOAT16;
         EXT_ENFORCE_INVALID(
-            (scalar ? tensor.elem_type() == TensorProto::INT64 : payload_type) &&
+            tensor.elem_type() == (scalar ? TensorProto::INT64 : TensorProto::FLOAT) &&
                 tensor.has_shape() && tensor.shape().dim_size() == (scalar ? 0 : 4) &&
                 (scalar ||
                  (tensor.shape().dim(0).has_dim_value() && tensor.shape().dim(0).dim_value() == 1 &&

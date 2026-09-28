@@ -55,6 +55,32 @@ def make_model():
 
 
 class TestPagedCacheProto(unittest.TestCase):
+    def test_dictionary_cache_with_layoutless_declaration(self):
+        payload = numpy.arange(4, dtype=numpy.float32).reshape(1, 1, 2, 2)
+        block = {
+            "start": numpy.array(0, dtype=numpy.int64),
+            "length": numpy.array(1, dtype=numpy.int64),
+            "key": payload,
+            "value": -payload,
+        }
+        state = runtime.PersistentValueState(make_model(), {"past": {"blocks": [block]}})
+        context = runtime.RuntimeContext(runtime.KernelContext(runtime.default_opset(18)))
+        output = state.run(context, {})["present"]
+        self.assertIsInstance(output, onnx.PagedCacheProto)
+        numpy.testing.assert_array_equal(numpy_helper.to_array(output.blocks[0].key), payload)
+        for invalid_block in (
+            {**block, "length": numpy.array(3, dtype=numpy.int64)},
+            {**block, "start": numpy.array(1, dtype=numpy.int64)},
+            {**block, "key": numpy.ones(2, dtype=numpy.float32)},
+            {**block, "extra": payload},
+        ):
+            with self.subTest(fields=list(invalid_block)), self.assertRaises(ValueError):
+                state.reset({"past": {"blocks": [invalid_block]}})
+        self.assertEqual(state.values["past"].blocks[0].length, 1)
+        state.reset({"past": {"blocks": []}})
+        self.assertEqual(len(state.run(context, {})["present"].blocks), 0)
+        state.close()
+
     def test_closed_state_rejects_model_aware_conversion(self):
         state = runtime.PersistentValueState(make_model(), {})
         state.close()

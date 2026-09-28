@@ -483,6 +483,8 @@ TEST(CHECKER_COVERAGE, ModelDataTypeRequiresIRVersion) {
     tensor.add_dims(0);
     SparseTensorProto sparse;
     *sparse.mutable_values() = tensor;
+    sparse.mutable_indices()->set_data_type(TensorProto::INT64);
+    sparse.mutable_indices()->add_dims(0);
     sparse.add_dims(1);
     ValueInfoProto annotation;
     annotation.set_name("y");
@@ -515,7 +517,10 @@ TEST(CHECKER_COVERAGE, ModelDataTypeRequiresIRVersion) {
         auto *branch = attr->mutable_g();
         branch->set_name(name);
         *branch->add_output() = annotation;
-        branch->mutable_output(0)->set_name("x");
+        auto *identity = branch->add_node();
+        identity->set_op_type("Identity");
+        identity->add_input("x");
+        identity->add_output("y");
       }
     } else {
       auto *function = model.add_functions();

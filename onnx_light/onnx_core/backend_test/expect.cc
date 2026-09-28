@@ -66,7 +66,14 @@ BuiltCase BuildSingleNodeCase(const NodeProto &node, Tensors inputs, Tensors out
   }
 
   BuiltCase built;
-  InitModel(built.model, kDefaultIrVersion, opset_imports, producer_name);
+  int64_t ir_version = kDefaultIrVersion;
+  for (const auto &opset : opset_imports) {
+    // ONNX opset 28 introduces FLOAT6 types, which require IR version 14.
+    if (opset.domain.empty() && opset.version >= 28) {
+      ir_version = 14;
+    }
+  }
+  InitModel(built.model, ir_version, opset_imports, producer_name);
 
   GraphProto *graph = built.model.add_graph();
   graph->set_name(name);

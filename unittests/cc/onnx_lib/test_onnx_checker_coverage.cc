@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <utility>
 
 #include "onnx_core/runtime/quantization.h"
 #include "onnx_lib/checker.h"
@@ -431,6 +432,171 @@ TEST(CHECKER_COVERAGE, SharedParameterFunctionSubgraphBindings) {
 // ---------------------------------------------------------------------------
 // check_value_info
 // ---------------------------------------------------------------------------
+
+TEST(CHECKER_COVERAGE, DataTypeRequiresIRVersion) {
+  const std::pair<int, int> versions[] = {
+      {TensorProto::BFLOAT16, 4},       {TensorProto::FLOAT8E4M3FN, 9},
+      {TensorProto::FLOAT8E4M3FNUZ, 9}, {TensorProto::FLOAT8E5M2, 9},
+      {TensorProto::FLOAT8E5M2FNUZ, 9}, {TensorProto::UINT4, 10},
+      {TensorProto::INT4, 10},          {TensorProto::FLOAT4E2M1, 11},
+      {TensorProto::FLOAT8E8M0, 12},    {TensorProto::UINT2, 13},
+      {TensorProto::INT2, 13},          {TensorProto::FLOAT6E2M3, 14},
+      {TensorProto::FLOAT6E3M2, 14}};
+  for (const auto &[dtype, min_ir_version] : versions) {
+    SCOPED_TRACE(dtype);
+    TensorProto tensor;
+    tensor.set_name("t");
+    tensor.set_data_type(dtype);
+    tensor.add_dims(0);
+    EXPECT_THROW(checker::check_tensor(tensor, MakeCtx(min_ir_version - 1)), ValidationError);
+    for (int version : {-1, 0, min_ir_version, static_cast<int>(IR_VERSION)}) {
+      EXPECT_NO_THROW(checker::check_tensor(tensor, MakeCtx(version)));
+    }
+
+    for (const std::string kind :
+         {"tensor", "sparse", "sequence", "optional", "map_value", "map_key", "nested"}) {
+      SCOPED_TRACE(kind);
+      ValueInfoProto vi;
+      vi.set_name("x");
+      auto *type = vi.mutable_type();
+      if (kind == "sequence" || kind == "nested")
+        type = type->mutable_sequence_type()->mutable_elem_type();
+      if (kind == "optional" || kind == "nested")
+        type = type->mutable_optional_type()->mutable_elem_type();
+      if (kind == "map_value" || kind == "map_key" || kind == "nested") {
+        auto *map = type->mutable_map_type();
+        map->set_key_type(kind == "map_key" ? dtype : TensorProto::INT64);
+        type = map->mutable_value_type();
+      }
+      if (kind == "sparse") {
+        type->mutable_sparse_tensor_type()->set_elem_type(dtype);
+        type->mutable_sparse_tensor_type()->mutable_shape();
+      } else {
+        type->mutable_tensor_type()->set_elem_type(kind == "map_key" ? TensorProto::FLOAT : dtype);
+        type->mutable_tensor_type()->mutable_shape();
+      }
+      for (bool main_graph : {false, true}) {
+        auto ctx = MakeCtx(min_ir_version - 1);
+        ctx.set_is_main_graph(main_graph);
+        EXPECT_THROW(checker::check_value_info(vi, ctx), ValidationError);
+        for (int version : {-1, 0, min_ir_version, static_cast<int>(IR_VERSION)}) {
+          ctx.set_ir_version(version);
+          EXPECT_NO_THROW(checker::check_value_info(vi, ctx));
+        }
+      }
+    }
+  }
+  EXPECT_NO_THROW(checker::check_tensor(MakeFloatScalar("original_type", 1.0f), MakeCtx(1)));
+}
+
+TEST(CHECKER_COVERAGE, ModelDataTypeRequiresIRVersion) {
+  for (const std::string location :
+       {"initializer", "sparse_initializer", "input", "output", "graph_value_info",
+        "function_value_info", "function_tensor", "function_tensors", "function_sparse_tensor",
+        "function_sparse_tensors", "constant", "subgraph"}) {
+    SCOPED_TRACE(location);
+    ModelProto model;
+    model.set_ir_version(10);
+    auto *opset = model.add_opset_import();
+    opset->set_domain("");
+    opset->set_version(21);
+    auto *graph = model.mutable_graph();
+    graph->set_name("g");
+    auto *input = graph->add_input();
+    input->set_name("x");
+    input->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+    input->mutable_type()->mutable_tensor_type()->mutable_shape();
+    auto *output = graph->add_output();
+    *output = *input;
+    output->set_name("y");
+    auto *node = graph->add_node();
+    node->set_op_type("Identity");
+    node->add_input("x");
+    node->add_output("y");
+
+    TensorProto tensor;
+    tensor.set_name("w");
+    tensor.set_data_type(TensorProto::FLOAT4E2M1);
+    tensor.add_dims(0);
+    SparseTensorProto sparse;
+    *sparse.mutable_values() = tensor;
+    sparse.mutable_indices()->set_data_type(TensorProto::INT64);
+    sparse.mutable_indices()->add_dims(0);
+    sparse.add_dims(1);
+    ValueInfoProto annotation;
+    annotation.set_name("y");
+    annotation.mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT4E2M1);
+    // Annotations need not have a shape; only input/output types require one.
+    if (location == "initializer") {
+      *graph->add_initializer() = tensor;
+    } else if (location == "sparse_initializer") {
+      *graph->add_sparse_initializer() = sparse;
+    } else if (location == "input") {
+      input->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT4E2M1);
+    } else if (location == "output") {
+      output->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT4E2M1);
+    } else if (location == "graph_value_info") {
+      *graph->add_value_info() = annotation;
+    } else if (location == "constant") {
+      node->set_op_type("Constant");
+      node->clear_input();
+      auto *attr = node->add_attribute();
+      attr->set_name("value");
+      attr->set_type(AttributeProto::TENSOR);
+      *attr->mutable_t() = tensor;
+    } else if (location == "subgraph") {
+      input->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::BOOL);
+      node->set_op_type("If");
+      for (const auto &name : {"then_branch", "else_branch"}) {
+        auto *attr = node->add_attribute();
+        attr->set_name(name);
+        attr->set_type(AttributeProto::GRAPH);
+        auto *branch = attr->mutable_g();
+        branch->set_name(name);
+        *branch->add_output() = annotation;
+        auto *identity = branch->add_node();
+        identity->set_op_type("Identity");
+        identity->add_input("x");
+        identity->add_output("y");
+      }
+    } else {
+      auto *function = model.add_functions();
+      function->set_name("f");
+      function->set_domain("local");
+      function->add_input("x");
+      function->add_output("y");
+      *function->add_opset_import() = *opset;
+      *function->add_node() = *node;
+      auto *local_opset = model.add_opset_import();
+      local_opset->set_domain("local");
+      local_opset->set_version(1);
+      node->set_op_type("f");
+      node->set_domain("local");
+      if (location == "function_value_info") {
+        *function->add_value_info() = annotation;
+      } else {
+        auto *attr = function->add_attribute_proto();
+        attr->set_name("value");
+        if (location == "function_tensor") {
+          attr->set_type(AttributeProto::TENSOR);
+          *attr->mutable_t() = tensor;
+        } else if (location == "function_tensors") {
+          attr->set_type(AttributeProto::TENSORS);
+          *attr->add_tensors() = tensor;
+        } else if (location == "function_sparse_tensor") {
+          attr->set_type(AttributeProto::SPARSE_TENSOR);
+          *attr->mutable_sparse_tensor() = sparse;
+        } else {
+          attr->set_type(AttributeProto::SPARSE_TENSORS);
+          *attr->add_sparse_tensors() = sparse;
+        }
+      }
+    }
+    EXPECT_THROW(checker::check_model(model), ValidationError);
+    model.set_ir_version(11);
+    EXPECT_NO_THROW(checker::check_model(model));
+  }
+}
 
 TEST(CHECKER_COVERAGE, ValueInfoEmptyNameRejected) {
   ValueInfoProto vi;

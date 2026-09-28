@@ -290,3 +290,59 @@ TEST(QuantizePagedCache, RejectsMalformedIndexStorageBeforeReadingOrReserving) {
   auto unchanged = quantize(cache, Tensor::FromInt64("", {0}, {}), scale, zero, scale, zero);
   EXPECT_EQ(Blocks(unchanged)[0].fields.at("key").tensor.bytes(), payload);
 }
+
+TEST(QuantizePagedCache, ValidatesAllPagesIncludingEmptyAndPartialSelections) {
+  KernelContext context(DefaultOpset(23));
+  PagedAttention append(context);
+  PagedAttention::Options options;
+  options.block_size = 1;
+  auto cache =
+      append(Input(2, 2), Input(2, 2), Input(2, 3), PagedAttention::EmptyCache(), options).present;
+  const auto *first_payload = Blocks(cache)[0].fields.at("key").tensor.bytes();
+  QuantizePagedCache quantize(context);
+  const auto scale = Tensor::FromFloat("", {}, {0.25f});
+  const auto zero = ZeroPoint(DataType::INT8, 0);
+  for (int failure = 0; failure < 9; ++failure) {
+    SCOPED_TRACE(failure);
+    auto invalid = cache.BorrowView();
+    auto page = Blocks(invalid)[1].BorrowView();
+    if (failure == 0)
+      page.fields.at("start") = RuntimeValue(Tensor::FromInt64("", {}, {2}));
+    else if (failure == 1)
+      page.fields.at("start") = RuntimeValue(Tensor::FromInt64("", {}, {INT64_MAX}));
+    else if (failure == 2)
+      page.fields.at("length") = RuntimeValue(Tensor::FromInt64("", {}, {0}));
+    else if (failure == 3)
+      page.fields.at("length") = RuntimeValue(Tensor::FromInt64("", {}, {2}));
+    else if (failure == 4)
+      page.fields.at("value") = RuntimeValue(Input(2, 3)).Retain();
+    else if (failure == 5)
+      page.fields.at("key") = RuntimeValue(Input(1, 3)).Retain();
+    else if (failure == 6)
+      page.fields.emplace("extra", RuntimeValue(Tensor::FromInt64("", {}, {0})));
+    else if (failure == 7)
+      page.fields.at("key") = RuntimeValue(Tensor("", DataType::FLOAT, {1, 1, 1, 2},
+                                                  std::vector<uint8_t>(sizeof(float))))
+                                  .Retain();
+    else
+      page.fields.erase("value");
+    invalid.fields.at("blocks").elements.Set(1, std::move(page));
+    for (const auto &indices : {Tensor::FromInt64("", {0}, {}), Tensor::FromInt64("", {1}, {0})}) {
+      SCOPED_TRACE(indices.element_count());
+      EXPECT_THROW(quantize(invalid, indices, scale, zero, scale, zero), std::invalid_argument);
+      EXPECT_EQ(Blocks(invalid)[0].fields.at("key").tensor.bytes(), first_payload);
+      EXPECT_EQ(Blocks(invalid)[0].fields.at("key").kind, RuntimeValue::Kind::kTensor);
+    }
+  }
+
+  auto encoded = quantize(cache, Tensor::FromInt64("", {2}, {0, 1}), scale, zero, scale, zero);
+  auto unchanged = quantize(encoded, Tensor::FromInt64("", {0}, {}), scale, zero, scale, zero);
+  for (size_t i = 0; i < Blocks(encoded).size(); ++i)
+    EXPECT_EQ(Blocks(unchanged)[i].fields.at("key").Encoded().raw_data().data(),
+              Blocks(encoded)[i].fields.at("key").Encoded().raw_data().data());
+  EXPECT_EQ(quantize(PagedAttention::EmptyCache(), Tensor::FromInt64("", {0}, {}), scale, zero,
+                     scale, zero)
+                .ToPagedCache()
+                .blocks_size(),
+            0);
+}

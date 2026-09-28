@@ -33,7 +33,8 @@ using ::onnx_light::core::runtime::OpsetId;
  * Registers through RuntimeContext::RegisterKernelFn in domain ``onnx_light``
  * as ``PagedAttention``; it does not replace ONNX Attention. Q and new K/V
  * have equal sequence lengths. Prior pages remain immutable, including partial
- * pages. Dense FLOAT and inline INT8/UINT8/INT4/UINT4/INT2/UINT2 affine pages may coexist.
+ * pages. Dense FLOAT/FLOAT16/BFLOAT16 and inline INT8/UINT8/INT4/UINT4/INT2/UINT2
+ * affine pages may coexist.
  * Affine decoding supports scalar, per-axis and blocked FLOAT scales; other
  * scale types, external payloads and structured encodings are rejected.
  * Prior dense pages require owner-retaining storage (RuntimeValue::Retain).

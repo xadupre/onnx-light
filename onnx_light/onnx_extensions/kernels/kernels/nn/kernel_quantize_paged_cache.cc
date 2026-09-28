@@ -133,6 +133,10 @@ RuntimeValue QuantizePagedCache::operator()(const RuntimeValue &cache, const Ten
   CheckZeroPoint(key_zero_point, "key_zero_point");
   CheckZeroPoint(value_zero_point, "value_zero_point");
 
+  RuntimeValue result = cache.BorrowView().Retain(catalogue);
+  // Validates every page through the owner-preserving exporter without decoding payloads.
+  result.ToPagedCache("", catalogue);
+
   std::vector<size_t> indices;
   indices.reserve(static_cast<size_t>(index_count));
   std::unordered_set<size_t> seen;
@@ -145,7 +149,6 @@ RuntimeValue QuantizePagedCache::operator()(const RuntimeValue &cache, const Ten
     indices.push_back(static_cast<size_t>(index));
   }
 
-  RuntimeValue result = cache.BorrowView().Retain(catalogue);
   auto &blocks = result.fields.at("blocks").elements;
   for (size_t index : indices) {
     RuntimeValue page = blocks[index].BorrowView();

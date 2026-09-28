@@ -585,6 +585,9 @@ prefix to the selected format. The original capacity and ``length`` are preserve
 Unused rows are initialized from logical zeros in the destination format without
 reading the source's unused rows. This also preserves fixed-capacity cache
 declarations through quantization, requantization and dequantization.
+The whole input cache is validated before applying the block selection, including
+page fields, contiguous ranges, K/V capacities and payload extents. This also
+applies to unselected pages and an empty selection, without decoding payloads.
 Unselected blocks retain their payload storage
 and owners. Indices and quantization parameters are all checked before the
 output is published, so an invalid request does not partially modify the

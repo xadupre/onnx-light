@@ -30,6 +30,21 @@ TEST(BackendTestCaseShapeInference, GeneratedModelsUseInteroperableIrVersion) {
   EXPECT_EQ(built.model.ir_version(), 13);
 }
 
+TEST(BackendTestCaseShapeInference, GeneratedModelsUseIrVersionForOpset) {
+  NodeProto node;
+  node.set_op_type("Constant");
+
+  for (int64_t version : {27, 28}) {
+    for (const std::string domain : {"", "custom"}) {
+      SCOPED_TRACE(domain);
+      SCOPED_TRACE(version);
+      const auto built = BuildSingleNodeCase(
+          node, {}, {}, "ir_version", {core::runtime::OpsetId(domain, version)}, "backend-test");
+      EXPECT_EQ(built.model.ir_version(), domain.empty() && version == 28 ? 14 : 13);
+    }
+  }
+}
+
 TEST(BackendTestCaseShapeInference, AllCollectedCasesPassChecker) {
   std::vector<TestCase> cases = CollectTestCases();
   ASSERT_FALSE(cases.empty());

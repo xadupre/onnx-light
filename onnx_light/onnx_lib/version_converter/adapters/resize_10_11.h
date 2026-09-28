@@ -36,6 +36,16 @@ public:
     for (int i = 0; i < input_rank; i++)
       data.emplace_back(static_cast<float>(1));
 
+    const Symbol coordinate_transformation_mode("coordinate_transformation_mode");
+    node->s_(coordinate_transformation_mode, "asymmetric");
+
+    const Symbol mode("mode");
+    std::string mode_val = node->hasAttribute(mode) ? node->s(mode) : "nearest";
+    if (mode_val == "nearest") {
+      const Symbol nearest_mode("nearest_mode");
+      node->s_(nearest_mode, "floor");
+    }
+
     Node *constant = graph->create(kConstant);
     constant->insertBefore(node);
     constant->t_(kvalue, t);

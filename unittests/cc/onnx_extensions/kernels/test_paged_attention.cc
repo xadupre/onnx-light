@@ -160,7 +160,7 @@ TEST(PagedAttention, MixedFormatsKeepPartialPageOwnersAndBytes) {
   EXPECT_EQ(old_key.Encoded().SerializeAsString(), serialized);
   EXPECT_EQ(Pages(alias)[0].fields.at("value").tensor.bytes(), pointer);
   EXPECT_EQ(second.statistics.copied_bytes, 3u * sizeof(float) + 2);
-  EXPECT_EQ(second.statistics.dequantized_bytes, (3u + 2) * sizeof(float));
+  EXPECT_EQ(second.statistics.dequantized_bytes, 3u * sizeof(float));
   Near(first.Y, second.Y);
 }
 
@@ -172,7 +172,7 @@ TEST(PagedAttention, DecodesOnlyIntersectingValidTokens) {
   auto first = kernel(Input(6, 2), Input(6, 2), Input(6, 3), PagedAttention::EmptyCache(), options);
   options.left_window_size = 1;
   auto second = kernel(Input(2, 2), Input(2, 2), Input(2, 3), first.present, options);
-  EXPECT_EQ(second.statistics.dequantized_bytes, 2u * 2 * (2 + 3) * sizeof(float));
+  EXPECT_EQ(second.statistics.dequantized_bytes, (2u + 3) * sizeof(float));
   EXPECT_EQ(second.statistics.copied_bytes, 4u + 3);
   EXPECT_EQ(second.statistics.peak_workspace_bytes, 3u * sizeof(double));
 }

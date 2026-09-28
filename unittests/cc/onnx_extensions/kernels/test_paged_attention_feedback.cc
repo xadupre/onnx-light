@@ -383,7 +383,7 @@ TEST(PagedAttentionFeedback, IntermediateCachesKeepOwnersAcrossArenaRouting) {
     RegisterPaged(context, [storage](const Tensor &, const Tensor &, int64_t) {
       const bool four_bit = storage == DataType::INT4 || storage == DataType::UINT4;
       const bool is_unsigned = storage == DataType::UINT4 || storage == DataType::UINT8;
-      const float scale = four_bit ? 0.25f : 0.01f;
+      const float scale = storage == DataType::FLOAT ? 1.0f : (four_bit ? 0.25f : 0.01f);
       const int32_t zero = is_unsigned ? (four_bit ? 8 : 128) : 0;
       return PagedAttention::Formats{{storage, scale, zero}, {storage, scale, zero}};
     });

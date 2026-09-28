@@ -126,6 +126,38 @@ ModelProto SharedModel(const QuantizationPlan &plan, const EncodedValueProto &en
 
 } // namespace
 
+TEST(Quantization, PagedCacheRetainsSharedParametersAcrossSerialization) {
+  RuntimeValue retained;
+  Tensor expected;
+  {
+    const auto source = Tensor::FromFloat("K", {1, 1, 4, 4}, std::vector<float>(16, 2.f));
+    const auto plan = MakeQuantizationPlan(QuantizationFormat::kInt4, 16, 4);
+    const auto full = QuantizeTensor(source, plan);
+    auto model = SharedModel(plan, full.Encoded());
+    const auto parameters = QuantizationParameterCatalogue::Build(model);
+    auto shared = QuantizeTensorShared(source, full.Encoded().struct_type(), "weights", parameters);
+    expected = DequantizeTensor(shared);
+    PagedCacheProto cache;
+    auto *block = cache.add_blocks();
+    block->set_start(0);
+    block->set_length(1);
+    *block->mutable_encoded_key() = shared.Encoded();
+    *block->mutable_encoded_value() = shared.Encoded();
+    EXPECT_THROW(RuntimeValue::FromPagedCache(cache), std::invalid_argument);
+    retained = RuntimeValue::FromPagedCache(cache, {}, parameters);
+    block->mutable_encoded_key()->set_parameter_ref("missing");
+    EXPECT_THROW(RuntimeValue::FromPagedCache(cache, {}, parameters), std::invalid_argument);
+  }
+  const auto &key = retained.fields.at("blocks").elements[0].fields.at("key");
+  PagedCacheProto parsed;
+  ASSERT_TRUE(parsed.ParseFromString(retained.ToPagedCache().SerializeAsString()));
+  EXPECT_EQ(parsed.blocks(0).encoded_key().parameter_ref(), "weights");
+  const auto restored = RuntimeValue::FromPagedCache(parsed, {}, key.quantization_parameters);
+  const auto actual = DequantizeTensor(restored.fields.at("blocks").elements[0].fields.at("key"));
+  EXPECT_EQ(actual.shape, expected.shape);
+  EXPECT_EQ(std::memcmp(actual.bytes(), expected.bytes(), expected.size_bytes()), 0);
+}
+
 TEST(Quantization, SharedParametersEveryFormatAndLifetime) {
   for (auto format : QuantizationFormats()) {
     SCOPED_TRACE(std::string(QuantizationFormatName(format)));

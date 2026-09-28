@@ -28,7 +28,8 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
  * Requirements:
  * - Each binding names a whole input/output pair; the input has exactly one value-use.
  * - Current feeds cannot replace persistent inputs.
- * - Supports tensors, named structures and inline encoded values with retained storage owners.
+ * - Supports tensors, typed sequences, named structures and inline encoded values.
+ * - Tensor leaves may use dense storage or inline affine encoding of the declared logical type.
  * - Shared payloads are read-only to callers; ownerless borrows are rejected.
  * - The model stays immutable. All calls use the same allocators, kept alive by the caller.
  */
@@ -71,6 +72,16 @@ public:
   void Close();
   /** Returns read-only aliases keyed by exact retained graph input names. */
   RuntimeValueMap Values() const;
+  /** Returns the immutable model; rejects access after Close(). */
+  const ModelProto &model() const {
+    EXT_ENFORCE_INVALID(session_ != nullptr, "PersistentValueState: state is closed.");
+    return model_;
+  }
+  /** Returns the validated catalogue; rejects access after Close(). */
+  const StructTypeCatalogue &struct_type_catalogue() const {
+    EXT_ENFORCE_INVALID(session_ != nullptr, "PersistentValueState: state is closed.");
+    return catalogue_;
+  }
 
 private:
   struct Binding {
@@ -84,6 +95,9 @@ private:
   std::shared_ptr<void> model_owner_;
   std::vector<std::shared_ptr<void>> retained_owners_;
   StructTypeCatalogue catalogue_;
+  using ShapeSymbols = std::unordered_map<std::string, int64_t>;
+  mutable std::unordered_map<const TypeProto *, RuntimeSequence::Memo<ShapeSymbols>>
+      sequence_validation_;
   std::vector<Binding> bindings_;
   std::unique_ptr<RuntimeSession> session_;
   std::vector<PersistentValue> values_;

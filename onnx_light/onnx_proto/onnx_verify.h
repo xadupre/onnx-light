@@ -32,7 +32,8 @@ namespace ONNX_LIGHT_NAMESPACE {
 /** Returns true when @p data_type is one of the supported affine storage types. */
 inline constexpr bool IsAffineStorageType(TensorProto::DataType data_type) {
   return data_type == TensorProto::INT8 || data_type == TensorProto::UINT8 ||
-         data_type == TensorProto::INT4 || data_type == TensorProto::UINT4;
+         data_type == TensorProto::INT4 || data_type == TensorProto::UINT4 ||
+         data_type == TensorProto::INT2 || data_type == TensorProto::UINT2;
 }
 
 /** Describes the validated payload geometry of one ``EncodedValueProto``. */
@@ -41,6 +42,8 @@ struct EncodedValueLayout {
   const StructTypeProto *root = nullptr;
   /** Affine descriptor, or null for the structured branch. */
   const AffineLayoutProto *affine = nullptr;
+  /** Resolved affine code type, including an inferred code width, or UNDEFINED otherwise. */
+  TensorProto::DataType storage_type = TensorProto::UNDEFINED;
   /** Size of one record in bits: the element size, or the storage width for the affine branch. */
   uint64_t element_bits = 0;
   /** Byte extent of the payload, inline or declared by the external metadata. */
@@ -203,11 +206,15 @@ public:
   EncodedValueLayout ValidateEncodedValue(const EncodedValueProto &value,
                                           bool require_resolved_reference = true) const;
 
+  /** Validates contiguous page ranges, concrete logical shapes and inline payload extents. */
+  void ValidatePagedCache(const PagedCacheProto &value, bool require_resolved_reference = true,
+                          const TypeProto *declared_type = nullptr) const;
+
 private:
   const utils::RepeatedProtoField<StructTypeProto> *declarations_ = nullptr;
 };
 
-/** Validates a persistent type, rejecting string tensors at every nesting level. */
+/** Validates a persistent type, rejecting strings, maps, optionals, sparse and opaque values. */
 ONNX_LIGHT_PROTO_API void ValidatePersistentType(const StructTypeCatalogue &catalogue,
                                                  const TypeProto &type);
 
@@ -216,7 +223,7 @@ ONNX_LIGHT_PROTO_API void ValidatePersistentStructType(const StructTypeCatalogue
                                                        const StructTypeProto &type);
 
 /**
- * Returns whether validated tensor/struct declarations are compatible.
+ * Returns whether validated tensor/struct/sequence declarations are compatible.
  * Compares ranks when both are known and dimensions when both are concrete.
  * Allows symbolic dimensions and unknown ranks in ordinary runtime values.
  * Compares declarations directly, without serialization, hashing or payload copies.

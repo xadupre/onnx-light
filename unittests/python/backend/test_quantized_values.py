@@ -79,6 +79,62 @@ class TestSharedQuantizationParameters(unittest.TestCase):
         session.run(context)
         return context, session
 
+    def test_persistent_shared_encoded_inputs_use_model_parameters(self):
+        for nested in (False, True):
+            with self.subTest(nested=nested):
+                model, _ = self.make_model()
+                source_context, source_session = self.run_model(model)
+                encoded = source_context.get_value("I").encoded
+                expected = numpy.from_dlpack(source_context.get("Y")).copy()
+                value_type = encoded.logical_type
+                if nested:
+                    value_type = onnx.TypeProto(
+                        struct_type=onnx.StructTypeProto(
+                            structure=onnx.StructTypeProto.Structure(
+                                field=[
+                                    onnx.StructTypeProto.Structure.Field(
+                                        name="payload", type=value_type
+                                    )
+                                ]
+                            )
+                        )
+                    )
+                model.graph.node.clear()
+                model.graph.input.clear()
+                model.graph.output.clear()
+                for input_name, output_name in (("past", "present"), ("current", "forwarded")):
+                    model.graph.input.append(helper.make_value_info(input_name, value_type))
+                    model.graph.output.append(helper.make_value_info(output_name, value_type))
+                    model.graph.node.append(
+                        helper.make_node("Identity", [input_name], [output_name])
+                    )
+                binding = model.graph.persistent_bindings.add()
+                binding.input_name = "past"
+                binding.output_name = "present"
+                initial = {"payload": encoded} if nested else encoded
+                state = runtime.PersistentValueState(model, {"past": initial})
+                context = runtime.RuntimeContext()
+                state.reset({"past": initial})
+                output = state.run(context, {"current": initial})
+                invalid = onnx.EncodedValueProto()
+                invalid.CopyFrom(encoded)
+                invalid.parameter_ref = "missing"
+                bad = {"payload": invalid} if nested else invalid
+                with self.assertRaisesRegex(ValueError, "parameter_ref"):
+                    state.reset({"past": bad})
+                with self.assertRaisesRegex(ValueError, "parameter_ref"):
+                    state.run(context, {"current": bad})
+                with self.assertRaisesRegex(ValueError, "parameter_ref"):
+                    runtime.PersistentValueState(model, {"past": bad})
+                state.close()
+                del state, context, model, source_context, source_session, initial, encoded
+                gc.collect()
+                for name in ("present", "forwarded"):
+                    value = output[name]["payload"] if nested else output[name]
+                    numpy.testing.assert_array_equal(
+                        numpy.from_dlpack(runtime.dequantize_tensor(value)), expected
+                    )
+
     def test_graph_roundtrip_identity_and_lifetime(self):
         from onnx_light.onnx_core.quantization import materialize_quantized_value
 

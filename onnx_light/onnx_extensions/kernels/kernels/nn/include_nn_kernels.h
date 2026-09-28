@@ -10,6 +10,7 @@
 #include "onnx_extensions/kernels/kernels/auto_pad.h"
 
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -25,6 +26,107 @@ using ::onnx_light::core::runtime::DefaultOpset;
 using ::onnx_light::core::runtime::KernelBase;
 using ::onnx_light::core::runtime::KernelContext;
 using ::onnx_light::core::runtime::OpsetId;
+
+/**
+ * Computes opt-in paged attention for finite FLOAT Q/K/V of shape [1,1,L,D].
+ *
+ * Registers through RuntimeContext::RegisterKernelFn in domain ``onnx_light``
+ * as ``PagedAttention``; it does not replace ONNX Attention. Q and new K/V
+ * have equal sequence lengths. Prior pages remain immutable, including partial
+ * pages. Dense FLOAT/FLOAT16/BFLOAT16 and inline INT8/UINT8/INT4/UINT4/INT2/UINT2
+ * affine pages may coexist.
+ * Affine decoding supports scalar, per-axis and blocked FLOAT scales; other
+ * scale types, external payloads and structured encodings are rejected.
+ * Prior dense pages require owner-retaining storage (RuntimeValue::Retain).
+ */
+class PagedAttention : public KernelBase {
+public:
+  static constexpr const char *name = "onnx_kernels:CPU:onnx_light:PagedAttention";
+  explicit PagedAttention(const KernelContext &context);
+  struct Format {
+    int32_t storage_type = DataType::FLOAT;
+    float scale = 1;
+    int32_t zero_point = 0;
+  };
+  struct Formats {
+    Format key, value;
+  };
+  struct Options {
+    int64_t block_size = 16, max_tokens = 4096;
+    bool is_causal = true;
+    int64_t left_window_size = -1;
+  };
+  using FormatSelector =
+      std::function<Formats(const Tensor &key, const Tensor &value, int64_t past_length)>;
+  /// Constructs a kernel whose policy selects the appended page formats for every execution.
+  PagedAttention(const KernelContext &context, FormatSelector format_selector);
+  /// Reports one successful direct invocation; Run publishes only Y and present, not statistics.
+  struct Statistics {
+    /// Counts new stored payload bytes written by copying or conversion, excluding metadata/Y.
+    uint64_t copied_bytes = 0;
+    /// Counts FLOAT bytes decoded for attended tokens, counting repeated queries separately.
+    uint64_t dequantized_bytes = 0;
+    /// Counts peak numerical scratch bytes, excluding outputs, cache payloads and metadata.
+    uint64_t peak_workspace_bytes = 0;
+    /// Counts pages whose immutable metadata is validated rather than reused.
+    uint64_t validated_pages = 0;
+  };
+  struct Result {
+    Tensor Y;
+    RuntimeValue present;
+    Statistics statistics;
+  };
+
+  /// Returns an empty cache ready for a first append.
+  static RuntimeValue EmptyCache();
+  /// Appends independently formatted pages and computes bounded-workspace attention.
+  Result operator()(const Tensor &q, const Tensor &k, const Tensor &v, const RuntimeValue &past,
+                    const Options &options, RuntimeContext *rt = nullptr) const;
+  /// Executes four inputs and publishes Y/present only after successful computation.
+  void Run(RuntimeContext &rt) override;
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+
+private:
+  struct CacheAnalysis;
+  std::shared_ptr<CacheAnalysis> cache_analysis_;
+  FormatSelector format_selector_;
+};
+
+/**
+ * Decodes the valid prefix of one dense or affine paged-cache payload to FLOAT.
+ *
+ * @param value Payload stored in a page's key or value field.
+ * @param length Number of valid leading rows to decode.
+ * @param catalogue Structured-type catalogue used to validate encoded values.
+ * @param allocator Optional destination allocator.
+ * @return Owned FLOAT tensor with shape ``[1,1,length,width]``.
+ */
+Tensor DecodePagedCachePayload(const RuntimeValue &value, int64_t length,
+                               const StructTypeCatalogue &catalogue = {},
+                               RawBufferAllocator *allocator = nullptr);
+
+/**
+ * Quantizes selected paged-cache blocks with independent scalar K/V parameters.
+ *
+ * ``block_indices`` is a rank-one INT64 tensor of unique zero-based block
+ * indices. Scales are positive scalar FLOAT tensors. Each scalar zero point
+ * selects its output storage type. INT8, UINT8, INT4, UINT4, INT2 and UINT2
+ * produce affine pages; FLOAT, FLOAT16 and BFLOAT16 produce dense pages.
+ * Selected dense or affine blocks are decoded and converted; unselected
+ * immutable blocks retain their existing storage.
+ */
+class QuantizePagedCache : public KernelBase {
+public:
+  static constexpr const char *name = "onnx_kernels:CPU:onnx_light:QuantizePagedCache";
+  using KernelBase::KernelBase;
+  void Run(RuntimeContext &rt) override;
+  RuntimeValue operator()(const RuntimeValue &cache, const Tensor &block_indices,
+                          const Tensor &key_scale, const Tensor &key_zero_point,
+                          const Tensor &value_scale, const Tensor &value_zero_point,
+                          const StructTypeCatalogue &catalogue = {},
+                          RuntimeContext *rt = nullptr) const;
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
 
 // ---------------------------------------------------------------------------
 // Reference implementations of the ``nn`` (neural network) backend test

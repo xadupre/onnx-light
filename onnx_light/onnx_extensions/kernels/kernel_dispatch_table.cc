@@ -297,6 +297,7 @@ const std::unordered_map<std::string, NodeKernelFn> &BuiltinKernelFunctions() {
       {"ai.onnx.ml:OneHotEncoder", MakeKernel<onnx_kernels::kernel::OneHotEncoder>()},
       {"ai.onnx.ml:FeatureVectorizer", MakeKernel<onnx_kernels::kernel::FeatureVectorizer>()},
       {"ai.onnx.ml:TreeEnsemble", MakeKernel<onnx_kernels::kernel::TreeEnsemble>()},
+      {"onnx_light:QuantizePagedCache", MakeKernel<onnx_kernels::kernel::QuantizePagedCache>()},
   };
   return table;
 }

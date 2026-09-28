@@ -216,8 +216,50 @@ tensor kernels continue to use the existing tensor API. In C++, structured
 and encoded edges live in ``RuntimeContext::values()`` as ``RuntimeValue``
 objects containing existing tensors or ``EncodedValueProto`` payloads.
 Inline structured encoded payloads can be retained as whole values; external
-payloads must first be loaded. This API currently supports tensors, named
-structs and inline structured encodings, not sequence/map/optional state.
+payloads must first be loaded. The native API supports tensors, named
+structs, typed sequences and inline structured or affine encodings. Affine
+values are checked against their declared logical tensor type without decoding.
+Persistent values always have concrete dimensions. For an encoded tensor,
+``logical_type`` describes its decoded shape, not an unresolved symbolic shape:
+missing ranks or non-concrete dimensions are rejected. Symbolic dimensions remain
+valid in the model's input/output declarations.
+Map, optional, sparse and opaque state remain unsupported and are rejected
+explicitly, including when nested in a sequence or structure.
+For the supported types, the native correspondence is:
+
+* ``tensor_type``: a runtime tensor, or an encoded value with a matching logical
+  tensor type.
+* ``struct_type``: named runtime fields, or an encoded value with a compatible
+  storage type.
+* ``sequence_type``: runtime elements recursively checked against ``elem_type``.
+
+``RuntimeValue.elements`` is a ``RuntimeSequence`` with immutable element
+metadata and structural sharing. Copying a sequence shares its tree; appending
+or replacing an element copies only a logarithmic path. Read access uses
+``elements[i]`` or ``elements.at(i)``. To edit an element, obtain its
+``BorrowView()``, change that independent descriptor and call
+``elements.Set(i, std::move(value))``. Existing snapshots remain unchanged.
+Payload owners are shared and payloads remain read-only. Deep copies still
+produce independent payloads.
+
+Validation reuses results for unchanged sequence subtrees and merges their
+concrete symbolic bindings, rather than walking historical elements on every
+invocation. Memo tables hold weak references, so they do not prolong page or
+allocator lifetimes. Catalogue-dependent encoded retention still rechecks the
+supplied catalogue.
+Structurally recognized paged-cache snapshots additionally validate their complete
+page structure and ranges before state publication, without decoding payloads.
+
+These are ``TypeProto`` contracts, not a claim that every ``SequenceProto``,
+``MapProto`` or ``OptionalProto`` has a native persistent representation.
+Python feedback supports tensors, named structs as dictionaries, typed sequences
+as lists, inline encoded values and dedicated ``PagedCacheProto`` values.
+Lists are converted recursively without converting their tensor payloads;
+their elements must match the declared ``sequence_type.elem_type``. Empty
+lists are supported. Tuples and arbitrary iterables are not sequence inputs.
+Ordinary dictionaries require named field declarations. Layout-less
+``struct_type`` declarations are reserved for structurally recognized paged caches,
+whose page ranges, fields and payloads are validated independently.
 ``If`` and model-local functions forward selected whole output names and move
 those results without persistence-related copies. Function attributes,
 ``Loop`` and ``Scan`` use their ordinary runtime implementations: their normal
@@ -388,6 +430,7 @@ Sum fields from the event list when totals are needed. Call
 ``context.ClearEvents()`` before a run to obtain per-token reports; otherwise
 events accumulate in that context, including runs of different feedback states.
 Resetting or closing a state does not clear the caller's log.
+
 ``event.storage_allocated_bytes`` counts requested storage capacity,
 not physical heap allocations: an I/O arena may satisfy a request from its free
 lists. The existing ``event.allocated_bytes`` and ``event.peak_bytes`` fields
@@ -407,3 +450,363 @@ copies is a state-management copy.
 A runnable native example, including per-token allocation/copy measurements
 and a multi-head fallback, is provided in
 :doc:`../examples_cc/contiguous_kv_decode_example`.
+
+Optional heterogeneous paged KV
+-------------------------------
+
+Cache value declaration
+~~~~~~~~~~~~~~~~~~~~~~~
+
+``PagedAttention`` declares ``past`` and ``present`` as structured values.
+Their concrete serialized representation is ``PagedCacheProto``, whose
+``blocks`` sequence contains pages with scalar INT64 ``start`` and ``length``
+fields and floating-point ``key`` and ``value`` tensors. The proto and runtime
+validation define the cache layout directly; there is no separate cache-type
+factory or physical encoding in the graph declaration.
+The declaration may leave ``struct_type`` unset internally or specify the named
+cache fields, directly or through a model-catalogue reference. Array and bit-packing
+layouts are not cache declarations. Declared ``key`` and ``value`` tensors have
+logical dtype FLOAT; FLOAT16 and BFLOAT16 are physical dense page formats, not
+alternative logical declarations.
+Dense pages accept ONNX ``raw_data`` or the matching typed field: ``float_data``
+for FLOAT and ``int32_data`` carrying 16-bit element representations for FLOAT16
+and BFLOAT16. Importing typed 16-bit data packs it into owned runtime storage;
+raw payloads retain the existing borrowing behavior.
+
+Versioned operator schema
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``onnx_light::PagedAttention`` has an independent ``LightOpSchema`` at domain
+``onnx_light``, opset 1. It takes ``Q, K, V, past`` and produces ``Y, present``.
+Q/K/V and Y are FLOAT ``[1,1,L,D]`` tensors; Q/K/V use the same new-token
+length, and Q/K head sizes match. ``past`` and ``present`` use the paged-cache
+structure. Shape inference checks known Q/K/V ranks and dimensions, returns Y
+as ``[1,1,L,value_head_size]``, and preserves the structured declaration of
+``past`` for ``present``.
+
+All attributes are optional: ``block_size=16`` and ``max_tokens=4096`` must be
+positive; ``is_causal=1`` accepts only 0 or 1; ``left_window_size=-1`` means
+unbounded and non-negative values bound preceding tokens. Physical cache
+storage is deliberately absent from the operator attributes: every page is
+self-describing, and the registered kernel may choose a different K/V format
+on every execution. Data-dependent cache checks happen at execution. The
+schema and shape-function registration do not register a kernel.
+
+Kernel implementation
+~~~~~~~~~~~~~~~~~~~~~
+
+The native ``onnx_kernels::kernel::PagedAttention`` is an opt-in consumer. It
+does not change standard ONNX ``Attention`` or add another state subsystem.
+Declare ``past`` and ``present`` as structured values and bind ``past <-
+present`` in ``GraphProto.persistent_bindings``. Initialize each request with
+``PagedAttention::EmptyCache()``.
+
+Import domain ``onnx_light`` at version 1 in the model. Unknown ranks and
+symbolic Q/K/V dimensions remain supported. Cache page capacities should remain
+unspecified because appended pages can have different lengths.
+
+Register the native kernel on the context used by the state:
+
+.. code-block:: cpp
+
+    using namespace onnx_light;
+    using namespace onnx_light::core::runtime;
+
+    context.RegisterKernelFn(
+        "onnx_light", "PagedAttention", core::symbolic::Device::kCPU,
+        [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<KernelBase> {
+          auto kernel =
+              std::make_unique<onnx_kernels::kernel::PagedAttention>(rt.kernel_ctx());
+          kernel->set_node(node);
+          return kernel;
+        });
+
+To select storage dynamically, construct the kernel with a ``FormatSelector``.
+The selector receives the current K/V tensors and retained token count. It
+returns the formats for the pages appended by that execution. Without a
+selector the native kernel stores new pages as dense FLOAT. For example, a
+policy can switch formats as the cache grows:
+
+.. code-block:: cpp
+
+    auto select_formats =
+        [](const Tensor &, const Tensor &, int64_t past_length) {
+          if (past_length < 1024)
+            return onnx_kernels::kernel::PagedAttention::Formats{};
+          return onnx_kernels::kernel::PagedAttention::Formats{
+              {TensorProto::INT8, 0.01f, 0},
+              {TensorProto::UINT4, 0.25f, 8}};
+        };
+    auto kernel = std::make_unique<onnx_kernels::kernel::PagedAttention>(
+        context.kernel_ctx(), select_formats);
+
+The node takes ``Q, K, V, past`` and returns ``Y, present``. This first consumer
+accepts finite FLOAT ``[1, 1, sequence, head_size]`` tensors with equal new
+Q/K/V sequence lengths and positive head sizes: multiple batches/heads,
+masks and other unsupported attributes fail explicitly. Kernel instances,
+execution and allocator routing use the normal runtime contracts.
+Python feedback represents this cache with ``PagedCacheProto`` rather than
+converting its internal sequence into a Python list.
+This conversion recognizes the runtime structure: a single ``blocks`` sequence,
+whose elements have exactly ``start``, ``length``, ``key`` and ``value`` fields.
+The first two fields are INT64 scalar tensors; the payloads are tensors or encoded
+values. Payload types, shapes and page ranges are validated before export.
+No separate runtime marker records the value's origin. A Python dictionary with
+this structure is therefore also treated as a cache and returned as
+``PagedCacheProto``. A structure containing only ``{"blocks": []}`` represents an
+empty cache. Other structures remain dictionaries, and their ordinary sequence
+fields round-trip as Python lists.
+
+Selected-block quantization
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``onnx_light::QuantizePagedCache`` converts selected cache blocks without
+rebuilding the remaining cache. Its opset-1 signature is::
+
+    QuantizePagedCache(
+        cache, block_indices,
+        key_scale, key_zero_point,
+        value_scale, value_zero_point) -> quantized_cache
+
+``block_indices`` is a rank-one INT64 tensor of unique, zero-based block
+indices. The K and V scales are positive finite scalar FLOAT tensors. Each
+scalar zero point selects the corresponding payload storage type, so K and V
+may use different formats. INT8, UINT8, INT4, UINT4, INT2 and UINT2 request
+affine quantization. FLOAT, FLOAT16 and BFLOAT16 request dense dequantization;
+the floating-point marker's value and the corresponding scale are ignored.
+For a paged cache declared with logical FLOAT K/V fields, dense FLOAT16 and
+BFLOAT16 pages are physical storage alternatives and remain valid across
+persistent bindings. Ordinary non-cache tensor fields still require exact
+dtype agreement.
+
+For every selected block, the kernel decodes either its dense floating-point
+payload or its existing affine payload, then converts the valid ``length``
+prefix to the selected format. The original capacity and ``length`` are preserved.
+Unused rows are initialized from logical zeros in the destination format without
+reading the source's unused rows. This also preserves fixed-capacity cache
+declarations through quantization, requantization and dequantization.
+The whole input cache is validated before applying the block selection, including
+page fields, contiguous ranges, K/V capacities and payload extents. This also
+applies to unselected pages and an empty selection, without decoding payloads.
+Unselected blocks retain their payload storage
+and owners. Indices and quantization parameters are all checked before the
+output is published, so an invalid request does not partially modify the
+cache. Shape inference preserves the input cache's structured declaration on
+``quantized_cache``.
+
+For example, this graph first quantizes block 3 to INT2 keys and UINT4 values,
+then uses the same operator to materialize FLOAT16 keys and BFLOAT16 values.
+The floating zero-point inputs are type markers:
+
+.. code-block:: text
+
+    key_scale       = FLOAT scalar 0.25
+    key_zero_int2   = INT2 scalar 0
+    value_scale     = FLOAT scalar 0.125
+    value_zero_u4   = UINT4 scalar 8
+    ignored_scale   = FLOAT scalar 1
+    key_float16     = FLOAT16 scalar 0
+    value_bfloat16  = BFLOAT16 scalar 0
+    selected_blocks = INT64[1] {3}
+
+    quantized_cache = onnx_light.QuantizePagedCache(
+        cache, selected_blocks,
+        key_scale, key_zero_int2,
+        value_scale, value_zero_u4)
+
+    dequantized_cache = onnx_light.QuantizePagedCache(
+        quantized_cache, selected_blocks,
+        ignored_scale, key_float16,
+        ignored_scale, value_bfloat16)
+
+Serialized cache values
+~~~~~~~~~~~~~~~~~~~~~~~
+
+The graph's structured declaration does not serialize a cache value. At
+runtime, a cache is a ``RuntimeValue`` structure containing a dynamic
+``RuntimeSequence`` of pages. The sequence cannot be represented as one
+fixed-layout ``EncodedValueProto``; an encoded value represents one tensor (or
+one fixed-layout structured value), not the complete cache and its dynamic
+page sequence.
+
+``PagedCacheProto`` is the dedicated onnx-light serialized value representation,
+separate from the logical ``TypeProto``. Its ``blocks`` field contains
+``PagedCacheBlockProto`` messages with explicit ``start`` and ``length``.
+Each block selects exactly one dense ``key`` or ``encoded_key``, and one dense
+``value`` or ``encoded_value``. Dense payloads use ``TensorProto``; encoded
+payloads retain ``EncodedValueProto`` layouts and parameter references.
+The current kernel accepts inline dense FLOAT, FLOAT16 or BFLOAT16 pages, or
+affine INT8, UINT8, INT4, UINT4, INT2 or UINT2 pages with FLOAT scales; K and V
+may use independent per-axis or blocked formats. Page ranges start at zero, are
+contiguous and have positive lengths no greater than their physical capacities.
+K/V capacities match within each block, and each tensor's head width is
+consistent across blocks.
+
+``RuntimeValue::FromPagedCache`` restores the recursive runtime value with
+retained storage owners; ``ToPagedCache`` exports it without decoding pages.
+Already retained dense buffers and managed encoded payloads remain shared.
+Binary protobuf serialization writes their contents; parsing reconstructs
+owned data. Referenced types and shared quantization parameters still belong to
+the containing model, not to the standalone cache. Pass its catalogues to the
+native conversion functions when needed.
+
+``GraphProto.paged_cache_initializer`` (extension field 1002) stores named
+cache defaults. Names are unique across all initializer categories. A default
+that also names a graph input may be overridden by a caller; otherwise it is a
+constant graph value. Runtime sessions seed these initializers, and persistent
+state initialization/reset uses them when a bound input is omitted from the
+initial-value map. Shape inference, model validation and ``GraphBuilder``
+import/export preserve the declaration and its structured type references.
+``GraphBuilder::MakePagedCacheInitializer`` adds one directly.
+Non-bound graph inputs with initializer defaults may also be omitted from
+current feeds; an explicit feed overrides the default for that invocation.
+
+Python exposes both messages through ``onnx_light.onnx``. A
+``PersistentValueState`` accepts and returns ``PagedCacheProto`` for these
+values, including through ``values`` and ``reset``. Serializing a returned
+cache and placing it in a new model's ``paged_cache_initializer`` resumes the
+cache independently of the original state.
+
+Validation rejects missing payload alternatives, negative or non-contiguous
+starts, non-positive lengths, lengths larger than page capacity, inconsistent
+K/V capacities or widths, non-concrete encoded payload dimensions, and external
+page data. The runtime kernel additionally validates these ranges and
+capacities on actual page values before attention. Load external data before
+constructing the serialized cache.
+This extension is supported by onnx-light binary protobuf, not standard ONNX,
+ORT, or ONNX text export. Legacy graph extraction, prefixing and merging reject
+cache initializers explicitly rather than silently losing them; use
+``GraphBuilder`` for supported graph edits.
+
+The cache is a named structure containing ``blocks``, a typed runtime sequence.
+Historical descriptors are shared, and immutable page validation is memoized
+per kernel instance. A finite attention window uses a binary search to skip
+unattended historical pages; views are prepared once per invocation, not once
+per query row. ``Statistics.validated_pages`` counts newly checked page metadata.
+The memo is synchronized only during metadata analysis, not numerical attention.
+Cache pages use independently retained storage (the I/O arena when supplied),
+even when ``present`` is an intermediate value forwarded to a persistent output.
+Each block is a structure with scalar INT64 ``start`` and ``length`` fields and
+``key``/``value`` fields. Starts are contiguous logical token offsets; length is
+the valid prefix of the block's physical token capacity. Key/value payloads are
+independently owned dense tensors or affine ``EncodedValueProto`` values whose
+logical shapes are ``[1, 1, capacity, head_size]``. Their affine descriptors carry
+format identity, scales and zero points, independently for K, V and each block.
+There are no persistent flags or new quantization layouts.
+
+A root persistent sequence containing only dense tensors is bridged to the
+standard ``RuntimeContext::sequences()`` representation while the graph runs,
+then converted back to ``RuntimeValue`` at the persistent output boundary.
+Standard sequence operators such as ``SequenceInsert`` can therefore consume
+and produce persistent tensor sequences. A root sequence containing encoded
+tensor values remains in ``RuntimeContext::values()`` for consumers that support
+those encodings, and outputs are accepted symmetrically from either store.
+Nested sequences, including the ``blocks`` field above, remain part of their
+enclosing structured ``RuntimeValue``.
+
+Persistent values also retain the shared parameter catalogue introduced by
+:doc:`quantized_values`, recursively through structures and sequences. A tensor
+declaration is checked against an encoded value's logical tensor type; a
+structured declaration is checked against its storage type. Retaining or
+validating a compact shared value checks its reference, types and byte extent
+without materializing it. Borrowed views survive reset and close with both
+their payload and their shared parameters.
+Native C++ current feeds undergo this reference validation before execution,
+including when an encoded value is only forwarded to a nonpersistent output.
+They must carry their shared parameter catalogue in ``RuntimeValue``.
+
+Python construction, ``reset`` and ``run`` resolve ``EncodedValueProto.parameter_ref``
+against the state's model, including encoded values nested in dictionaries.
+Conversions reject missing references and reuse one shared parameter catalogue
+per input dictionary. After ``close``, state operations and the native model
+and type-catalogue accessors reject access; already exported values remain valid.
+
+This general runtime support does not broaden the native ``PagedAttention``
+decoder: its supported page formats remain the dense and affine formats below.
+Portable structured and shared encodings can be retained and forwarded by other
+consumers, but this kernel rejects them explicitly rather than materializing a
+whole cache or silently converting its representation.
+
+``block_size`` bounds each block's token capacity and ``max_tokens`` bounds the
+retained logical length. A registered kernel may provide a ``FormatSelector``
+that chooses independent K/V formats from the current inputs and retained
+length on every execution. FLOAT, INT8, UINT8, INT4, UINT4, INT2 and UINT2 are
+supported for new blocks; affine append uses scalar parameters. The selected descriptor is
+stored in every new page, so successive executions may append different
+formats without converting prior pages. An affine descriptor may omit its
+concrete ``storage_type`` and provide ``signed_storage`` instead. Validation
+then infers the unique supported code width from the logical element count and
+payload byte size; ambiguous sizes are rejected. Existing blocks may also use
+per-axis and blocked affine parameters with FLOAT scales. Other scale types,
+external payloads and custom structured encodings require another consumer and
+are rejected.
+Partial blocks are sealed: an append adds new blocks
+rather than rewriting the previous partial block. This can use more metadata
+than filling partial blocks, but guarantees that even live aliases never force
+a prefix payload copy or conversion.
+
+Attention applies causal masking by default. ``is_causal`` and
+``left_window_size`` control the visible token range. It reads only valid,
+visible tokens and uses online softmax instead of concatenating K/V or allocating
+a cache-length score matrix. Current K/V participate in this calculation as
+uncompressed FLOAT values and are encoded only afterward for publication in
+``present``. Retention, invocation, publication and state views share payload
+owners. Kernel conversion of new blocks is separate from those zero-copy state
+operations.
+
+The direct C++ call returns ``Result::statistics``:
+
+* ``copied_bytes`` counts new stored payload bytes written by copying or
+  conversion, excluding metadata and Y.
+* ``dequantized_bytes`` counts decoded FLOAT bytes for visible quantized
+  tokens, including repeated reads for different queries.
+* ``peak_workspace_bytes`` counts peak numerical scratch, excluding output,
+  retained payloads and collection metadata.
+
+These are kernel costs, not state-forwarding copies. Native tests also check
+payload/owner identity across publication and append. For example, the native
+windowed fixture starts with six retained tokens, appends two tokens with
+INT8 keys (width 2) and UINT4 values (width 3), and uses a left window of one:
+it writes 7 new payload bytes, decodes 80 FLOAT bytes across the two queries,
+and uses 24 bytes of numerical scratch. No prior block payload is copied.
+The dense fixture appends three tokens with widths 3 and 2 on each call:
+its 60 append bytes and 16 scratch bytes stay constant as the cache grows.
+
+Quantization rounds ties
+to even and saturates to the selected code range. For non-saturated inputs,
+each affine reconstruction differs from its source by at most half its scale
+(plus floating-point rounding). Attention error also depends on Q/K magnitudes
+and softmax conditioning; no format alone guarantees a universal output error
+bound. The numerical fixtures compare the paged consumer to dense Attention
+using the reconstructed values with absolute tolerance ``1e-5`` for the four
+tested affine storage types (INT4, UINT4, INT8 and UINT8), separately from
+quantization error. The end-to-end
+four-step fixture uses Q/K/V components ``+/-(0.173 * step)`` and compares to
+unquantized dense Attention with these absolute output tolerances:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Storage
+     - Scale
+     - Zero point
+     - Fixture tolerance
+   * - INT8 / UINT8
+     - 0.01
+     - 0 / 128
+     - 0.01
+   * - INT4 / UINT4
+     - 0.25
+     - 0 / 8
+     - 0.15
+
+These fixture-specific bounds do not apply to arbitrary models or saturated
+inputs. INT2 and UINT2 are supported, but are not covered by these four-format
+accuracy fixtures or the table above.
+
+Validation rejects malformed ranges, invalid layouts, unsupported consumers
+and capacity violations. A failing or cancelled invocation cannot publish part
+of a block collection. Cancellation remains a publication gate, not preemption.
+Reset/close drop the state's owners; exported views and other requests retain
+their blocks until their last owner is released. The bound model is never
+serialized or cloned by this path.

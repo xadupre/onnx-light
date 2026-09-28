@@ -499,6 +499,8 @@ void ProtoPrinter::print(const NodeList &nodelist) {
 }
 
 void ProtoPrinter::print(const GraphProto &graph) {
+  EXT_ENFORCE_INVALID(graph.paged_cache_initializer().empty(),
+                      "ONNX text format cannot represent paged cache initializers.");
   printId(graph.name());
   output_ << " " << graph.input() << " => " << graph.output() << " ";
   if ((graph.initializer_size() > 0) || (graph.value_info_size() > 0)) {

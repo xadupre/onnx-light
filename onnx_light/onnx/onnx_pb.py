@@ -16,6 +16,8 @@ from . import (  # noqa: F401
     NodeProto,
     OperatorSetIdProto,
     OptionalProto,
+    PagedCacheBlockProto,
+    PagedCacheProto,
     PersistentBindingProto,
     SequenceProto,
     SparseTensorProto,

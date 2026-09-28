@@ -20,6 +20,8 @@ void CollectGraphExternalInputs(const GraphProto &graph, std::vector<std::string
   for (size_t i = 0; i < graph.initializer().size(); ++i) {
     local.insert(graph.initializer()[i].name());
   }
+  for (const auto &initializer : graph.paged_cache_initializer())
+    local.insert(initializer.name());
   for (size_t i = 0; i < graph.node().size(); ++i) {
     const NodeProto &nd = graph.node()[i];
     for (size_t j = 0; j < nd.output().size(); ++j) {

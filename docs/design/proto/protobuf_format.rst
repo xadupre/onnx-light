@@ -163,6 +163,30 @@ by older tools.  ``onnx_light`` skips unknown fields by consulting the
 wire type byte and reading the appropriate number of bytes (varint,
 4 bytes, 8 bytes, or *length* bytes for ``LEN``).
 
+Paged cache extension
+---------------------
+
+``GraphProto.paged_cache_initializer`` uses field 1002 (repeated, ``LEN``),
+after encoded initializers (1000) and persistent bindings (1001). Its entries
+are ``PagedCacheProto`` messages:
+
+* field 1: repeated ``PagedCacheBlockProto`` blocks (``LEN``);
+* field 2: optional ``name`` (``LEN``);
+* field 3: optional ``doc_string`` (``LEN``).
+
+Each block has optional ``int64 start`` (field 1, ``VARINT``) and
+``int64 length`` (field 2, ``VARINT``), both required by semantic validation.
+Presence is retained even for a zero start. The ``key_payload`` oneof selects
+``TensorProto key`` (field 3) or ``EncodedValueProto encoded_key`` (field 5).
+The ``value_payload`` oneof selects ``TensorProto value`` (field 4) or
+``EncodedValueProto encoded_value`` (field 6). All payloads use ``LEN``.
+The last member of each oneof wins during parsing; validation requires both
+payload groups, contiguous positive-length blocks and valid page dimensions.
+
+These are onnx-light extensions, not upstream ONNX messages. Shared type and
+quantization references remain model-scoped. See
+:doc:`../../howto/persistent_feedback` for initialization and runtime conversion.
+
 How ONNX uses the wire format
 -----------------------------
 

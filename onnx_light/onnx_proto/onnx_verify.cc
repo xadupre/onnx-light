@@ -355,8 +355,8 @@ void ValidateTypeProto(Walk &walk, const TypeProto &type) {
     }
     break;
   case TypeProto::kSparseTensorType:
-    if (walk.persistent && type.ref_sparse_tensor_type().elem_type() == TensorProto::STRING) {
-      Invalid("String tensors cannot be persistent, including fields of structured values.");
+    if (walk.persistent) {
+      Invalid("Sparse tensor types cannot be persistent.");
     }
     if (!type.ref_sparse_tensor_type().has_elem_type() ||
         type.ref_sparse_tensor_type().elem_type() == TensorProto::UNDEFINED) {
@@ -364,6 +364,9 @@ void ValidateTypeProto(Walk &walk, const TypeProto &type) {
     }
     break;
   case TypeProto::kOpaqueType:
+    if (walk.persistent) {
+      Invalid("Opaque types cannot be persistent.");
+    }
     break;
   case TypeProto::kSequenceType:
     if (!type.ref_sequence_type().has_elem_type()) {
@@ -372,12 +375,18 @@ void ValidateTypeProto(Walk &walk, const TypeProto &type) {
     ValidateTypeProto(walk, type.ref_sequence_type().ref_elem_type());
     break;
   case TypeProto::kOptionalType:
+    if (walk.persistent) {
+      Invalid("Optional types cannot be persistent.");
+    }
     if (!type.ref_optional_type().has_elem_type()) {
       Invalid("An optional type is missing its 'elem_type'.");
     }
     ValidateTypeProto(walk, type.ref_optional_type().ref_elem_type());
     break;
   case TypeProto::kMapType:
+    if (walk.persistent) {
+      Invalid("Map types cannot be persistent.");
+    }
     if (!IsAllowedMapKeyType(type.ref_map_type().ref_key_type())) {
       Invalid("A map type must use an integral or STRING 'key_type', got " +
               std::to_string(type.ref_map_type().ref_key_type()) + ".");
@@ -681,6 +690,8 @@ uint64_t ValidatePayloadLocation(const EncodedValueProto &value, bool &external)
   if (!external) {
     Require(!has_external, kind, value.name(),
             "carries 'external_data' without data_location EXTERNAL.");
+    Require(value.ref_raw_data().empty() || value.ref_raw_data().data() != nullptr, kind,
+            value.name(), "has a non-empty null payload.");
     return value.ref_raw_data().size();
   }
   Require(!has_raw, kind, value.name(), "is stored externally but also carries an inline payload.");
@@ -819,6 +830,11 @@ void ValidateAffineParameterPayload(const TensorProto &tensor, const char *kind,
       stored = tensor.ref_int32_data().size();
       expected = elements / 8 + (elements % 8 == 0 ? 0 : 1);
       break;
+    case TensorProto::UINT2:
+    case TensorProto::INT2:
+      stored = tensor.ref_int32_data().size();
+      expected = elements / 16 + (elements % 16 == 0 ? 0 : 1);
+      break;
     default:
       stored = tensor.ref_int32_data().size();
       break;
@@ -833,10 +849,8 @@ void ValidateAffineLayout(const EncodedValueProto &value, EncodedValueLayout &la
   const utils::OptionalString &name = value.name();
   const AffineLayoutProto &affine = value.ref_affine();
   layout.affine = &affine;
-  Require(affine.has_storage_type(), kind, name, "affine layout is missing its 'storage_type'.");
-  const TensorProto::DataType storage = affine.storage_type();
-  Require(IsAffineStorageType(storage), kind, name,
-          "affine 'storage_type' must be INT8, UINT8, INT4 or UINT4.");
+  Require(affine.has_storage_type() != affine.has_signed_storage(), kind, name,
+          "affine layout needs exactly one of 'storage_type' and 'signed_storage'.");
   Require(affine.has_scale(), kind, name, "affine layout is missing its 'scale'.");
   VerifyTensor(affine.ref_scale());
   Require(IsFloatingType(affine.ref_scale().data_type()), kind, name,
@@ -863,6 +877,30 @@ void ValidateAffineLayout(const EncodedValueProto &value, EncodedValueLayout &la
     Require(CheckedMultiply(elements, dim, elements), kind, name,
             "affine logical element count overflows uint64.");
   }
+  TensorProto::DataType storage = TensorProto::UNDEFINED;
+  if (affine.has_storage_type()) {
+    storage = affine.storage_type();
+    Require(IsAffineStorageType(storage), kind, name,
+            "affine 'storage_type' must be INT8, UINT8, INT4, UINT4, INT2 or UINT2.");
+  } else {
+    Require(affine.signed_storage() == 0 || affine.signed_storage() == 1, kind, name,
+            "affine 'signed_storage' must be 0 or 1.");
+    const bool matches_two_bits = layout.payload_bytes == elements / 4 + (elements % 4 != 0);
+    const bool matches_four_bits = layout.payload_bytes == elements / 2 + elements % 2;
+    const bool matches_eight_bits = layout.payload_bytes == elements;
+    Require(static_cast<int>(matches_two_bits) + static_cast<int>(matches_four_bits) +
+                    static_cast<int>(matches_eight_bits) ==
+                1,
+            kind, name,
+            "affine payload size does not identify exactly one supported inferred code width.");
+    if (matches_two_bits)
+      storage = affine.signed_storage() ? TensorProto::INT2 : TensorProto::UINT2;
+    else if (matches_four_bits)
+      storage = affine.signed_storage() ? TensorProto::INT4 : TensorProto::UINT4;
+    else
+      storage = affine.signed_storage() ? TensorProto::INT8 : TensorProto::UINT8;
+  }
+  layout.storage_type = storage;
 
   const std::vector<uint64_t> scale_dims = ParameterDims(
       affine.ref_scale(), kind, name, "affine 'scale' needs non-negative dimensions.");
@@ -892,9 +930,12 @@ void ValidateAffineLayout(const EncodedValueProto &value, EncodedValueLayout &la
     Invalid(Named(kind, name) + "affine payload must hold exactly " + std::to_string(expected) +
             " code bytes, got " + std::to_string(layout.payload_bytes) + ".");
   }
-  if (!layout.external && width == 4 && elements % 2 == 1 && expected > 0) {
-    Require((value.ref_raw_data()[expected - 1] & 0xF0U) == 0, kind, name,
-            "leaves a non-zero unused high nibble in its packed 4-bit payload.");
+  const uint32_t codes_per_byte = 8 / width;
+  if (!layout.external && width < 8 && elements % codes_per_byte != 0 && expected > 0) {
+    const uint32_t used_bits = static_cast<uint32_t>(elements % codes_per_byte) * width;
+    const uint8_t unused_mask = static_cast<uint8_t>(0xFFU << used_bits);
+    Require((value.ref_raw_data()[expected - 1] & unused_mask) == 0, kind, name,
+            "leaves non-zero unused high bits in its packed payload.");
   }
   layout.element_bits = width;
   layout.record_count = elements;
@@ -999,6 +1040,136 @@ StructTypeCatalogue::ValidateEncodedValue(const EncodedValueProto &value,
   return layout;
 }
 
+void StructTypeCatalogue::ValidatePagedCache(const PagedCacheProto &value,
+                                             bool require_resolved_reference,
+                                             const TypeProto *declared_type) const {
+  const TypeProto::Tensor *declared_key = nullptr, *declared_value = nullptr;
+  if (declared_type) {
+    ValidatePersistentType(*this, *declared_type);
+    EXT_ENFORCE_INVALID(declared_type->has_struct_type(),
+                        "PagedCacheProto: expected a structure type.");
+    const auto &root_type = Resolve(declared_type->struct_type());
+    EXT_ENFORCE_INVALID(root_type.has_structure() ||
+                            root_type.kind_case() == StructTypeProto::KIND_NOT_SET,
+                        "PagedCacheProto: expected an unset or named-structure declaration.");
+    const auto structure = [&](const TypeProto &type,
+                               size_t count) -> const StructTypeProto::Structure & {
+      EXT_ENFORCE_INVALID(type.has_struct_type(), "PagedCacheProto: expected a structure type.");
+      const auto &resolved = Resolve(type.struct_type());
+      EXT_ENFORCE_INVALID(resolved.has_structure() && resolved.structure().field().size() == count,
+                          "PagedCacheProto: invalid cache declaration.");
+      return resolved.structure();
+    };
+    if (root_type.has_structure()) {
+      EXT_ENFORCE_INVALID(root_type.structure().field().size() == 1,
+                          "PagedCacheProto: invalid cache declaration.");
+      const auto &blocks = root_type.structure().field(0);
+      EXT_ENFORCE_INVALID(blocks.name() == "blocks" && blocks.type().has_sequence_type() &&
+                              blocks.type().sequence_type().has_elem_type(),
+                          "PagedCacheProto: declaration requires a blocks sequence.");
+      const auto &page = structure(blocks.type().sequence_type().elem_type(), 4);
+      const char *names[] = {"start", "length", "key", "value"};
+      for (size_t i = 0; i < page.field().size(); ++i) {
+        const auto &field = page.field(i);
+        EXT_ENFORCE_INVALID(field.name() == names[i] && field.type().has_tensor_type(),
+                            "PagedCacheProto: invalid page field declaration.");
+        const auto &tensor = field.type().tensor_type();
+        const bool scalar = i < 2;
+        EXT_ENFORCE_INVALID(
+            tensor.elem_type() == (scalar ? TensorProto::INT64 : TensorProto::FLOAT) &&
+                tensor.has_shape() && tensor.shape().dim_size() == (scalar ? 0 : 4) &&
+                (scalar ||
+                 (tensor.shape().dim(0).has_dim_value() && tensor.shape().dim(0).dim_value() == 1 &&
+                  tensor.shape().dim(1).has_dim_value() && tensor.shape().dim(1).dim_value() == 1)),
+            "PagedCacheProto: invalid page field type or rank.");
+        if (field.name() == "key")
+          declared_key = &tensor;
+        if (field.name() == "value")
+          declared_value = &tensor;
+      }
+      EXT_ENFORCE_INVALID(declared_key && declared_value,
+                          "PagedCacheProto: missing key/value declarations.");
+    }
+  }
+  std::unordered_map<std::string, int64_t> symbols;
+  const auto shape = [&](const TensorProto *dense, const EncodedValueProto *encoded,
+                         const TypeProto::Tensor *declared) {
+    std::vector<int64_t> dims;
+    if (dense) {
+      EXT_ENFORCE_INVALID(
+          (dense->data_type() == TensorProto::FLOAT || dense->data_type() == TensorProto::FLOAT16 ||
+           dense->data_type() == TensorProto::BFLOAT16) &&
+              dense->dims_size() == 4 && dense->external_data().empty() &&
+              (!dense->has_data_location() || dense->data_location() == TensorProto::DEFAULT),
+          "PagedCacheProto: requires inline FLOAT, FLOAT16 or BFLOAT16 rank-4 tensors.");
+      for (const auto dim : dense->dims())
+        dims.push_back(dim);
+    } else {
+      const auto layout = ValidateEncodedValue(*encoded, require_resolved_reference);
+      EXT_ENFORCE_INVALID(!layout.external && encoded->has_logical_type() &&
+                              encoded->logical_type().has_tensor_type(),
+                          "PagedCacheProto: requires inline encoded tensors with logical types.");
+      const auto &logical = encoded->logical_type().tensor_type();
+      EXT_ENFORCE_INVALID(logical.elem_type() == TensorProto::FLOAT &&
+                              logical.shape().dim_size() == 4,
+                          "PagedCacheProto: encoded tensors must have FLOAT rank-4 logical types.");
+      for (const auto &dim : logical.shape().dim()) {
+        EXT_ENFORCE_INVALID(dim.has_dim_value() && !dim.has_dim_param(),
+                            "PagedCacheProto: logical dimensions must be concrete.");
+        dims.push_back(dim.dim_value());
+      }
+    }
+    EXT_ENFORCE_INVALID(dims[0] == 1 && dims[1] == 1 && dims[2] > 0 && dims[3] > 0 &&
+                            dims[2] <= INT64_MAX / dims[3] &&
+                            static_cast<uint64_t>(dims[2]) <=
+                                std::numeric_limits<size_t>::max() / sizeof(float) / dims[3],
+                        "PagedCacheProto: invalid [1,1,capacity,width] dimensions.");
+    if (declared && declared->has_shape())
+      for (size_t i = 0; i < dims.size(); ++i) {
+        const auto &dim = declared->shape().dim(i);
+        EXT_ENFORCE_INVALID(!dim.has_dim_value() || dim.dim_value() == dims[i],
+                            "PagedCacheProto: initializer shape differs from declaration.");
+        if (dim.has_dim_param() && !dim.dim_param().empty()) {
+          const auto [it, inserted] = symbols.emplace(dim.dim_param(), dims[i]);
+          EXT_ENFORCE_INVALID(inserted || it->second == dims[i],
+                              "PagedCacheProto: inconsistent symbolic dimensions.");
+        }
+      }
+    if (dense) {
+      VerifyTensor(*dense);
+      const auto count = static_cast<size_t>(dims[2]) * static_cast<size_t>(dims[3]);
+      const auto bytes =
+          count * (dense->data_type() == TensorProto::FLOAT ? sizeof(float) : sizeof(uint16_t));
+      EXT_ENFORCE_INVALID(dense->has_raw_data() ? dense->raw_data().size() == bytes
+                          : dense->data_type() == TensorProto::FLOAT
+                              ? dense->float_data().size() == count
+                              : dense->int32_data().size() == count,
+                          "PagedCacheProto: dense payload extent mismatch.");
+    }
+    return dims;
+  };
+  int64_t next = 0, key_width = 0, value_width = 0;
+  for (const auto &block : value.blocks()) {
+    EXT_ENFORCE_INVALID(block.has_start() && block.has_length() && block.start() == next &&
+                            block.length() > 0 && block.length() <= INT64_MAX - next,
+                        "PagedCacheProto: invalid or noncontiguous token range.");
+    EXT_ENFORCE_INVALID(block.has_key() != block.has_encoded_key() &&
+                            block.has_value() != block.has_encoded_value(),
+                        "PagedCacheProto: each page needs exactly one key and value payload.");
+    const auto key = shape(block.has_key() ? &block.key() : nullptr,
+                           block.has_encoded_key() ? &block.encoded_key() : nullptr, declared_key);
+    const auto val =
+        shape(block.has_value() ? &block.value() : nullptr,
+              block.has_encoded_value() ? &block.encoded_value() : nullptr, declared_value);
+    EXT_ENFORCE_INVALID(key[2] == val[2] && block.length() <= key[2] &&
+                            (next == 0 || (key[3] == key_width && val[3] == value_width)),
+                        "PagedCacheProto: inconsistent page capacities or widths.");
+    key_width = key[3];
+    value_width = val[3];
+    next += block.length();
+  }
+}
+
 void VerifyValueInfo(const ValueInfoProto &value_info, bool is_main_graph) {
   EXT_ENFORCE_INVALID(!value_info.name().empty(),
                       "ValueInfoProto is missing a non-empty 'name' field.");
@@ -1079,6 +1250,8 @@ void VerifyTensor(const TensorProto &tensor) {
   const bool has_string = !tensor.string_data().empty();
   const bool has_int64 = !tensor.int64_data().empty();
   const bool has_raw = !tensor.raw_data().empty();
+  EXT_ENFORCE_INVALID(!has_raw || tensor.raw_data().data() != nullptr, "TensorProto '",
+                      tensor.name(), "' has a non-empty null raw_data payload.");
   const bool has_double = !tensor.double_data().empty();
   const bool has_uint64 = !tensor.uint64_data().empty();
   const int num_value_fields = static_cast<int>(has_float) + static_cast<int>(has_int32) +
@@ -1441,6 +1614,10 @@ bool CompatiblePersistentType(const StructTypeCatalogue &catalogue, const TypePr
     }
     return true;
   }
+  if (left.has_sequence_type()) {
+    return CompatiblePersistentType(catalogue, left.sequence_type().elem_type(),
+                                    right.sequence_type().elem_type(), depth + 1);
+  }
   if (!left.has_struct_type()) {
     return false;
   }
@@ -1469,6 +1646,9 @@ bool CompatiblePersistentStruct(const StructTypeCatalogue &catalogue, const Stru
   }
   if (a.kind_case() != b.kind_case()) {
     return false;
+  }
+  if (a.kind_case() == StructTypeProto::KIND_NOT_SET) {
+    return true;
   }
   if (a.has_array()) {
     return a.array().dimension() == b.array().dimension() &&
@@ -1543,6 +1723,9 @@ void CountPersistentInputUses(const GraphProto &graph,
       shadow(initializer.values().name());
     }
     for (const auto &initializer : graph.encoded_initializer()) {
+      shadow(initializer.name());
+    }
+    for (const auto &initializer : graph.paged_cache_initializer()) {
       shadow(initializer.name());
     }
     for (const auto &node : graph.node()) {
@@ -1634,8 +1817,8 @@ void VerifyPersistentBindings(const StructTypeCatalogue *struct_types, const Gra
     ValidatePersistentType(catalogue, input);
     ValidatePersistentType(catalogue, output);
     if (!CompatiblePersistentTypes(catalogue, input, output)) {
-      Invalid(
-          "Persistent binding requires compatible tensor/struct types and declared dimensions.");
+      Invalid("Persistent binding requires compatible tensor/struct/sequence types and declared "
+              "dimensions.");
     }
     for (size_t j = 0; j < i; ++j) {
       if (bindings[j].input_name() == binding.input_name())
@@ -1727,6 +1910,18 @@ void VerifyGraph(const StructTypeCatalogue *struct_types, const GraphProto &grap
                         "encoded_initializers.");
     catalogue.ValidateEncodedValue(encoded, /*require_resolved_reference=*/struct_types != nullptr);
     defined.insert(ToStdString(encoded.name()));
+  }
+  for (const auto &cache : graph.paged_cache_initializer()) {
+    EXT_ENFORCE_INVALID(
+        !cache.name().empty() && initializer_names.insert(ToStdString(cache.name())).second,
+        "Graph '", graph.name(), "' has an empty or duplicate paged cache initializer name.");
+    const auto input = std::find_if(graph.input().begin(), graph.input().end(),
+                                    [&](const auto &vi) { return vi.name() == cache.name(); });
+    catalogue.ValidatePagedCache(cache, struct_types != nullptr,
+                                 struct_types && input != graph.input().end() && input->has_type()
+                                     ? &input->type()
+                                     : nullptr);
+    defined.insert(ToStdString(cache.name()));
   }
 
   for (const auto &node : graph.node()) {

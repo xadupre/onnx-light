@@ -854,15 +854,28 @@ END_PROTO()
 //   optional TensorProto zero_point = 3;
 //   optional int64 axis = 4;
 //   optional uint64 block_size = 5;
+//   optional int32 signed_storage = 6;
 // }
 BEGIN_PROTO(AffineLayoutProto,
             "Describes the built-in affine (linear) quantization layout of an EncodedValueProto. "
             "The branch is deliberately closed: other affine forms use a structured layout "
             "instead of extending this message.")
 FIELD_OPTIONAL_ENUM(TensorProto::DataType, storage_type, 1,
-                    "Element type of the stored codes. It MUST be one of INT8, UINT8, INT4 or "
-                    "UINT4 and the payload holds only row-major codes packed like "
-                    "TensorProto.raw_data.")
+                    "Element type of the stored codes. It MUST be one of INT8, UINT8, INT4, "
+                    "UINT4, INT2 or UINT2 and the payload holds only row-major codes packed like "
+                    "TensorProto.raw_data. Exactly one of storage_type and signed_storage MUST "
+                    "be present. When storage_type is absent, signed_storage determines "
+                    "signedness and the code width is inferred from the logical element count "
+                    "and payload byte length; the payload MUST identify exactly one of the "
+                    "supported 2-bit, 4-bit or 8-bit widths. N is the product of the concrete "
+                    "dimensions in EncodedValueProto.logical_type.tensor_type.shape. B is either "
+                    "EncodedValueProto.raw_data.size() for an inline payload or the numeric "
+                    "'length' entry in EncodedValueProto.external_data when data_location is "
+                    "EXTERNAL. Two-bit storage matches when B == ceil(N / 4) == N / 4 + "
+                    "(N % 4 != 0), 4-bit storage matches when B == ceil(N / 2) == N / 2 + N % 2, "
+                    "and 8-bit storage matches when B == N. Exactly one equality MUST hold; "
+                    "signed_storage then selects the signed INT2, INT4 or INT8 type when equal to "
+                    "1, and the corresponding unsigned type otherwise.")
 FIELD_OPTIONAL(TensorProto, scale, 2,
                "Scalar or parameter tensor with a floating element type. This field MUST be "
                "present for a valid affine layout.")
@@ -873,6 +886,10 @@ FIELD_OPTIONAL(int64_t, axis, 4,
                "parameters.")
 FIELD_OPTIONAL(uint64_t, block_size, 5,
                "Blocked quantization along axis. It is valid only together with axis.")
+FIELD_OPTIONAL(int32_t, signed_storage, 6,
+               "Signedness of stored integer codes when storage_type is absent: 0 is unsigned "
+               "and 1 is signed. The code width is inferred from the logical shape and payload "
+               "size and must identify exactly one supported width.")
 END_PROTO()
 
 // StructTypeProto
@@ -1137,6 +1154,29 @@ inline void set_raw_data_with_deleter(const uint8_t *ptr, size_t sz, Deleter &&d
 template <typename Deleter> inline void attach_raw_data_deleter(Deleter &&deleter) {
   raw_data_.attach_deleter(std::forward<Deleter>(deleter));
 }
+END_PROTO()
+
+BEGIN_PROTO(PagedCacheBlockProto, "One immutable KV page with a contiguous logical token range.")
+FIELD_OPTIONAL(int64_t, start, 1, "Logical offset of the first token.")
+FIELD_OPTIONAL(int64_t, length, 2, "Number of valid tokens, positive and no greater than capacity.")
+FIELD_OPTIONAL_ONEOF(TensorProto, key, 3, key_payload, "Inline dense key tensor.")
+FIELD_OPTIONAL_ONEOF(EncodedValueProto, encoded_key, 5, key_payload, "Inline encoded key tensor.")
+ONEOF(key_payload, key_, encoded_key_)
+FIELD_OPTIONAL_ONEOF(TensorProto, value, 4, value_payload, "Inline dense value tensor.")
+FIELD_OPTIONAL_ONEOF(EncodedValueProto, encoded_value, 6, value_payload,
+                     "Inline encoded value tensor.")
+ONEOF(value_payload, value_, encoded_value_)
+inline bool has_key_payload() const { return has_key() || has_encoded_key(); }
+inline bool has_value_payload() const { return has_value() || has_encoded_value(); }
+END_PROTO()
+
+BEGIN_PROTO(PagedCacheProto,
+            "A serializable KV cache. Pages have contiguous token ranges and independently "
+            "dense or encoded FLOAT [1,1,capacity,width] key/value payloads. Model-local type "
+            "and quantization parameter references are resolved against the containing model.")
+FIELD_REPEATED_PROTO(PagedCacheBlockProto, blocks, 1, "Ordered immutable KV pages.")
+FIELD_STR(name, 2, "Graph-scoped initializer name, unique across initializer categories.")
+FIELD_STR(doc_string, 3, "Human-readable documentation.")
 END_PROTO()
 
 // ValueInfoProto
@@ -1461,6 +1501,9 @@ FIELD_REPEATED_PROTO(
     PersistentBindingProto, persistent_bindings, 1001,
     "Declares persistent output-to-input wiring on the model root graph only. "
     "Destinations must not overlap. Standard ONNX cannot represent this extension.")
+FIELD_REPEATED_PROTO(PagedCacheProto, paged_cache_initializer, 1002,
+                     "Named paged KV cache defaults. Names are unique across all initializers "
+                     "and may also name graph inputs (onnx-light extension).")
 /**
  * Appends a new node built from *op_type*, *inputs*, *outputs* and the
  * optional *domain* / *name* to the graph and returns a reference to it.

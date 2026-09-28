@@ -168,18 +168,63 @@ else()
 endif()
 
 if(ONNX_LIGHT_BUILD_PYTHON)
-  # Find Python. Development.SABIModule (CMake >= 3.26) is needed to enable
-  # nanobind's STABLE_ABI mode, which produces a single abi3-tagged extension
-  # that is forward-compatible across all CPython 3.12+ versions. It is
-  # requested as an optional component so that older CMake installations (and
-  # free-threaded interpreters, which do not expose this target) continue to
-  # work without error.
+  set(python_dev_component Development.Module)
   if(CMAKE_CROSSCOMPILING)
     # When cross-compiling, the interpreter and target dev libraries must be
     # located independently (host ``Python`` interpreter + target ``Python3``
     # development package).
-    find_package(Python3 3.12 REQUIRED COMPONENTS Development.Module
-      OPTIONAL_COMPONENTS Development.SABIModule)
+    # The target interpreter cannot be queried; request a free-threaded target
+    # explicitly with -DPython3_FIND_ABI=ANY;ANY;ANY;ON.
+    set(python_gil_disabled OFF)
+    list(LENGTH Python3_FIND_ABI python_find_abi_length)
+    if(python_find_abi_length GREATER 3)
+      list(GET Python3_FIND_ABI 3 python_gil_disabled)
+      string(TOUPPER "${python_gil_disabled}" python_gil_disabled)
+      if(NOT python_gil_disabled STREQUAL "ON")
+        set(python_gil_disabled OFF)
+      endif()
+    endif()
+  else()
+    find_package(Python 3.12 REQUIRED COMPONENTS Interpreter)
+    execute_process(
+      COMMAND "${Python_EXECUTABLE}" -c
+              "import sysconfig; print(sysconfig.get_config_var('Py_GIL_DISABLED') or 0)"
+      OUTPUT_VARIABLE python_gil_disabled
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      COMMAND_ERROR_IS_FATAL ANY)
+    if(python_gil_disabled AND CMAKE_VERSION VERSION_GREATER_EQUAL "3.30")
+      if(NOT WIN32 AND CMAKE_VERSION VERSION_LESS "4.1")
+        # FindPython in CMake 3.30-4.0 rejects Development.Module on POSIX
+        # whenever *_FIND_ABI is set (including by scikit-build-core >= 1.1).
+        # It can find the free-threaded headers through the interpreter instead.
+        unset(Python3_FIND_ABI)
+        unset(Python3_FIND_ABI CACHE)
+        unset(Python_FIND_ABI)
+        unset(Python_FIND_ABI CACHE)
+      else()
+        # Do not mix regular and free-threaded development files installed
+        # alongside one another. Preserve explicit ABI requests.
+        if(NOT DEFINED Python3_FIND_ABI)
+          set(Python3_FIND_ABI "ANY" "ANY" "ANY" "ON")
+        endif()
+        if(NOT DEFINED Python_FIND_ABI)
+          set(Python_FIND_ABI "ANY" "ANY" "ANY" "ON")
+        endif()
+      endif()
+    endif()
+  endif()
+
+  if(DEFINED SKBUILD_SABI_COMPONENT)
+    # scikit-build-core requests the stable ABI exactly when the wheel is abi3.
+    list(APPEND python_dev_component ${SKBUILD_SABI_COMPONENT})
+  elseif(NOT python_gil_disabled AND CMAKE_VERSION VERSION_GREATER_EQUAL "3.26")
+    # Plain CMake builds use nanobind's STABLE_ABI mode when supported.
+    # Free-threaded CPython has no stable ABI.
+    list(APPEND python_dev_component Development.SABIModule)
+  endif()
+
+  if(CMAKE_CROSSCOMPILING)
+    find_package(Python3 3.12 REQUIRED COMPONENTS ${python_dev_component})
     find_package(Python 3.12 REQUIRED COMPONENTS Interpreter)
 
     # nanobind >= 2.13 only auto-runs its own find_package(Python ...) when
@@ -194,8 +239,8 @@ if(ONNX_LIGHT_BUILD_PYTHON)
       add_library(Python::SABIModule ALIAS Python3::SABIModule)
     endif()
   else()
-    find_package(Python 3.12 REQUIRED COMPONENTS Interpreter Development.Module
-      OPTIONAL_COMPONENTS Development.SABIModule)
+    # Request Interpreter again so FindPython locates development files through it.
+    find_package(Python 3.12 REQUIRED COMPONENTS Interpreter ${python_dev_component})
   endif()
 
   # Find nanobind

@@ -54,7 +54,7 @@ TEST(Generation, BackendAttentionModels) {
         ASSERT_EQ(actual.size_bytes(), expected.size_bytes());
         EXPECT_EQ(std::memcmp(actual.bytes(), expected.bytes(), actual.size_bytes()), 0);
       }
-      context.clear_events();
+      context.ClearEvents();
       GenerationOptions options;
       options.max_new_tokens = 4;
       RuntimeSessionOptions session_options;
@@ -72,13 +72,16 @@ TEST(Generation, BackendAttentionModels) {
                 (persistent ? std::vector<int64_t>{2, 1, 1, 1} : std::vector<int64_t>{2, 3, 4, 5}));
       EXPECT_EQ(StorageTotal(events, &RuntimeEvent::storage_reuse_count),
                 persistent && capacity ? 6u : 0u);
-      EXPECT_EQ(StorageTotal(events, &RuntimeEvent::storage_prefix_copied_bytes), 0u);
-      if (!persistent)
+      EXPECT_EQ(StorageTotal(events, &RuntimeEvent::storage_prefix_copied_bytes),
+                persistent && !capacity ? 144u : 0u);
+      if (!persistent) {
         EXPECT_EQ(StorageTotal(events, &RuntimeEvent::storage_allocations), 0u);
+      }
       // Existing caller context values and the initial caches remain unchanged.
       EXPECT_EQ(context.Get("input_ids").shape, (Shape{1, 2}));
-      if (persistent)
+      if (persistent) {
         EXPECT_EQ(feeds.at("past_key").tensor.shape, (Shape{1, 1, 0, 2}));
+      }
       EXPECT_EQ(model.SerializeAsString(), original);
       EXPECT_EQ(Tokens(Generate(model, context, feeds, options, session_options)), Tokens(output));
       options.eos_token_id = 1;
@@ -105,4 +108,43 @@ TEST(Generation, TemperatureMatchesCachedAndFullPrefixDecoding) {
   }
   ASSERT_EQ(results.size(), 2u);
   EXPECT_EQ(results[0], results[1]);
+}
+
+TEST(Generation, RetainsOwnedInitialCounterWithoutChangingCaller) {
+  onnx_kernels::RegisterKernelFunctions();
+  auto cases =
+      core::backend_test::CollectTestCasesByName("^test_cc_generation_attention_persistent$");
+  ASSERT_EQ(cases.size(), 1u);
+  ModelProto model;
+  model.CopyFrom(cases[0].model());
+  auto &graph = *model.mutable_graph();
+  auto *input = graph.add_input();
+  input->set_name("counter");
+  input->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::INT64);
+  input->mutable_type()->mutable_tensor_type()->mutable_shape();
+  auto *output = graph.add_output();
+  output->CopyFrom(*input);
+  output->set_name("next_counter");
+  auto *initializer = graph.add_initializer();
+  initializer->set_name("one");
+  initializer->set_data_type(TensorProto::INT64);
+  initializer->add_int64_data(1);
+  auto *node = graph.add_node();
+  node->set_op_type("Add");
+  node->add_input("counter");
+  node->add_input("one");
+  node->add_output("next_counter");
+  auto *binding = graph.add_persistent_bindings();
+  binding->set_input_name("counter");
+  binding->set_output_name("next_counter");
+  RuntimeValueMap feeds;
+  for (const auto &tensor : cases[0].data_sets()[0].inputs)
+    feeds.emplace(tensor.name, RuntimeValue(tensor.ToOwned()));
+  feeds.emplace("counter", RuntimeValue(Tensor::FromInt64("counter", {}, {0})));
+  RuntimeContext context(KernelContext(DefaultOpset(23)));
+  GenerationOptions options;
+  options.max_new_tokens = 3;
+  EXPECT_EQ(Tokens(Generate(model, context, feeds, options)),
+            (std::vector<int64_t>{0, 1, 1, 1, 1}));
+  EXPECT_EQ(feeds.at("counter").tensor.AsInt64()[0], 0);
 }

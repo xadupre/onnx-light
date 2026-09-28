@@ -162,9 +162,10 @@ Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeV
                               (!has_mask || name != options.attention_mask_name) &&
                               (!has_positions || name != options.position_ids_name),
                           "Generate: token, mask and position inputs cannot be persistent.");
-      auto value = current.extract(name);
-      if (!value.empty())
-        initial.insert(std::move(value));
+      const auto value = feeds.find(name);
+      if (value != feeds.end())
+        initial.emplace(name, value->second);
+      current.erase(name);
     }
     state = std::make_unique<PersistentValueState>(model, std::move(initial), session_options);
   } else {
@@ -201,8 +202,29 @@ Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeV
     } else {
       auto invocation = context.MakeFunctionContext();
       RegisterModelFunctions(model, invocation);
-      for (const auto &[name, value] : current)
-        invocation.PutValue(name, value.BorrowView(), RuntimeEventKind::kInput);
+      for (const auto &input : model.graph().input()) {
+        const auto found = current.find(input.name());
+        if (found == current.end())
+          continue;
+        const auto &value = found->second;
+        if (input.type().has_sequence_type() &&
+            input.type().sequence_type().elem_type().has_tensor_type() &&
+            value.kind == RuntimeValue::Kind::kSequence &&
+            std::all_of(value.elements.begin(), value.elements.end(), [](const auto &element) {
+              return element.kind == RuntimeValue::Kind::kTensor;
+            })) {
+          Tensors tensors;
+          for (const auto &element : value.elements)
+            tensors.push_back(element.tensor.BorrowView());
+          invocation.PutSequence(
+              input.name(),
+              Sequence(input.name(),
+                       input.type().sequence_type().elem_type().tensor_type().elem_type(),
+                       std::move(tensors)));
+        } else {
+          invocation.PutValue(input.name(), value.BorrowView(), RuntimeEventKind::kInput);
+        }
+      }
       session->Run(invocation);
       EXT_ENFORCE_INVALID(invocation.Has(options.logits_name), "Generate: missing logits tensor.");
       logits = std::move(invocation.Get(options.logits_name));

@@ -95,6 +95,21 @@ class TestGeneration(unittest.TestCase):
                 )
                 numpy.testing.assert_array_equal(result, [[0, 1, 2, 0]])
 
+    def test_fixed_tensor_sequence_feed(self):
+        model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 23]>'
+            "sequence_feed (int64[B, S] input_ids, seq(float[3, 3]) tables)"
+            " => (float[B, S, 3] logits)"
+            "<int64 index = {0}>"
+            "{ table = SequenceAt(tables, index) logits = Gather(table, input_ids) }"
+        )
+        table = numpy.array([[0, 4, 0], [0, 0, 4], [4, 0, 0]], dtype=numpy.float32)
+        result = ReferenceEvaluator(model).generate(
+            {"input_ids": numpy.array([[0]], dtype=numpy.int64), "tables": [table]},
+            max_new_tokens=3,
+        )
+        numpy.testing.assert_array_equal(result, [[0, 1, 2, 0]])
+
     def test_masks_positions_and_custom_names(self):
         model = parser.parse_model(
             '<ir_version: 10, opset_import: ["" : 23]>'

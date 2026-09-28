@@ -97,7 +97,7 @@ void ValidateTensorShape(const Shape &shape, const TypeProto::Tensor &declared, 
 
 void Validate(const RuntimeValue &value, const TypeProto &type,
               const StructTypeCatalogue &catalogue, Symbols &symbols, ValidationMemos &memos,
-              size_t depth = 0) {
+              size_t depth = 0, bool paged_cache = false) {
   EXT_ENFORCE_INVALID(depth <= RuntimeValue::kMaxDepth,
                       "PersistentValueState: maximum nesting depth exceeded.");
   if (value.kind == RuntimeValue::Kind::kSequence) {
@@ -118,7 +118,8 @@ void Validate(const RuntimeValue &value, const TypeProto &type,
         memos[&type],
         [&](const RuntimeValue &element) {
           Symbols local;
-          Validate(element, type.sequence_type().elem_type(), catalogue, local, memos, depth + 1);
+          Validate(element, type.sequence_type().elem_type(), catalogue, local, memos, depth + 1,
+                   paged_cache);
           return local;
         },
         merge);
@@ -130,7 +131,10 @@ void Validate(const RuntimeValue &value, const TypeProto &type,
                         "PersistentValueState: expected a structured value.");
     const auto &declared = type.tensor_type();
     const Tensor &tensor = value.tensor;
-    EXT_ENFORCE_INVALID(tensor.data_type == declared.elem_type(),
+    const bool floating_cache_storage =
+        paged_cache && declared.elem_type() == DataType::FLOAT &&
+        (tensor.data_type == DataType::FLOAT16 || tensor.data_type == DataType::BFLOAT16);
+    EXT_ENFORCE_INVALID(tensor.data_type == declared.elem_type() || floating_cache_storage,
                         "PersistentValueState: dtype mismatch.");
     const int64_t count = tensor.shape.product(0, tensor.shape.size(), "PersistentValueState");
     if (tensor.data_type == DataType::STRING) {
@@ -178,8 +182,18 @@ void Validate(const RuntimeValue &value, const TypeProto &type,
   }
   EXT_ENFORCE_INVALID(value.kind == RuntimeValue::Kind::kStruct,
                       "PersistentValueState: expected a structured value.");
-  if (!declared.has_structure())
+  if (value.is_paged_cache) {
+    catalogue.ValidatePagedCache(value.ToPagedCache("", catalogue), true, &type);
+    paged_cache = true;
+  }
+  if (!declared.has_structure()) {
+    EXT_ENFORCE_INVALID(value.is_paged_cache &&
+                            declared.kind_case() == StructTypeProto::KIND_NOT_SET,
+                        "PersistentValueState: ordinary structures require named fields.");
     return;
+  }
+  ValidationMemos cache_memos;
+  auto &field_memos = value.is_paged_cache ? cache_memos : memos;
   size_t expected = 0;
   for (const auto &field : declared.structure().field()) {
     if (!field.has_type())
@@ -188,7 +202,7 @@ void Validate(const RuntimeValue &value, const TypeProto &type,
     auto it = value.fields.find(field.name());
     EXT_ENFORCE_INVALID(it != value.fields.end(), "PersistentValueState: missing field '",
                         field.name(), "'.");
-    Validate(it->second, field.type(), catalogue, symbols, memos, depth + 1);
+    Validate(it->second, field.type(), catalogue, symbols, field_memos, depth + 1, paged_cache);
   }
   EXT_ENFORCE_INVALID(value.fields.size() == expected,
                       "PersistentValueState: unexpected structured field.");

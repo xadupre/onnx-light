@@ -241,6 +241,22 @@ TEST(PagedAttention, QuantizationUsesTiesToEvenAndSaturates) {
   }
 }
 
+TEST(PagedAttention, SignedInt2InferredStorageSurvivesAppendAndDecode) {
+  PagedAttention kernel(KernelContext(DefaultOpset(23)),
+                        Select({{DataType::INT2, 1, 0}, {DataType::INT2, 1, 0}}));
+  const Tensor input = Tensor::FromFloat("", {1, 1, 1, 4}, {-2, -1, 0, 1});
+  auto first = kernel(input, input, input, PagedAttention::EmptyCache(), {});
+  const auto &encoded = Pages(first.present)[0].fields.at("key").Encoded();
+  EXPECT_FALSE(encoded.affine().has_storage_type());
+  EXPECT_EQ(encoded.affine().signed_storage(), 1);
+  EXPECT_EQ(StructTypeCatalogue().ValidateEncodedValue(encoded).storage_type, DataType::INT2);
+  Near(onnx_kernels::kernel::DecodePagedCachePayload(Pages(first.present)[0].fields.at("key"), 1),
+       input);
+  auto second = kernel(input, input, input, first.present, {});
+  Near(second.Y, input);
+  EXPECT_EQ(Pages(second.present).size(), 2u);
+}
+
 TEST(PagedAttention, RejectsBadOptionsDescriptorsAndOverflow) {
   PagedAttention kernel(KernelContext(DefaultOpset(23)));
   PagedAttention::Options options;

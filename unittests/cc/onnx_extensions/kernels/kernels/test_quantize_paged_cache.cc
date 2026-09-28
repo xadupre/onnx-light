@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/runtime/persistent_value_state.h"
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 #include <gtest/gtest.h>
 
@@ -114,4 +115,92 @@ TEST(QuantizePagedCache, RejectsInvalidIndicesAndParametersWithoutChangingInput)
                std::invalid_argument);
   EXPECT_EQ(Blocks(cache)[0].fields.at("key").tensor.bytes(), pointer);
   EXPECT_FALSE(Blocks(cache)[0].fields.at("key").encoded);
+}
+
+TEST(QuantizePagedCache, FloatingStorageCommitsThroughTypedPersistentCache) {
+  ModelProto model;
+  model.set_ir_version(10);
+  model.add_opset_import()->set_version(23);
+  auto *opset = model.add_opset_import();
+  opset->set_domain("onnx_light");
+  opset->set_version(1);
+  auto *graph = model.mutable_graph();
+  graph->set_name("convert_typed_cache");
+  TypeProto cache_type;
+  auto *blocks = cache_type.mutable_struct_type()->mutable_structure()->add_field();
+  blocks->set_name("blocks");
+  auto *page = blocks->mutable_type()
+                   ->mutable_sequence_type()
+                   ->mutable_elem_type()
+                   ->mutable_struct_type()
+                   ->mutable_structure();
+  for (const char *name : {"start", "length", "key", "value"}) {
+    auto *field = page->add_field();
+    field->set_name(name);
+    auto *tensor = field->mutable_type()->mutable_tensor_type();
+    const bool scalar = std::string(name) == "start" || std::string(name) == "length";
+    tensor->set_elem_type(scalar ? DataType::INT64 : DataType::FLOAT);
+    tensor->mutable_shape();
+    if (!scalar)
+      for (int64_t dimension : {1, 1, 2, 2})
+        tensor->mutable_shape()->add_dim()->set_dim_value(dimension);
+  }
+  auto *past = graph->add_input();
+  past->set_name("past");
+  *past->mutable_type() = cache_type;
+  auto *present = graph->add_output();
+  present->set_name("present");
+  *present->mutable_type() = cache_type;
+  auto *binding = graph->add_persistent_bindings();
+  binding->set_input_name("past");
+  binding->set_output_name("present");
+  auto *node = graph->add_node();
+  node->set_domain("onnx_light");
+  node->set_op_type("QuantizePagedCache");
+  node->add_input("past");
+  node->add_output("present");
+  for (const auto &[name, dtype] :
+       {std::pair{"indices", DataType::INT64}, std::pair{"key_scale", DataType::FLOAT},
+        std::pair{"key_zero", DataType::FLOAT16}, std::pair{"value_scale", DataType::FLOAT},
+        std::pair{"value_zero", DataType::BFLOAT16}}) {
+    node->add_input(name);
+    auto *input = graph->add_input();
+    input->set_name(name);
+    auto *tensor = input->mutable_type()->mutable_tensor_type();
+    tensor->set_elem_type(dtype);
+    tensor->mutable_shape();
+    if (dtype == DataType::INT64)
+      tensor->mutable_shape()->add_dim()->set_dim_value(1);
+  }
+  KernelContext kernel_context(DefaultOpset(23));
+  PagedAttention append(kernel_context, [](const Tensor &, const Tensor &, int64_t) {
+    return PagedAttention::Formats{{DataType::INT8, 0.25f, 0}, {DataType::INT8, 0.25f, 0}};
+  });
+  auto cache =
+      append(Input(2, 2), Input(2, 2), Input(2, 2), PagedAttention::EmptyCache(), {}).present;
+  PersistentValueState state(model, {{"past", cache}});
+  RuntimeContext context;
+  const RuntimeValueMap feeds{{"indices", RuntimeValue(Tensor::FromInt64("", {1}, {0}))},
+                              {"key_scale", RuntimeValue(Tensor::FromFloat("", {}, {1}))},
+                              {"value_scale", RuntimeValue(Tensor::FromFloat("", {}, {1}))},
+                              {"key_zero", RuntimeValue(TypeMarker(DataType::FLOAT16))},
+                              {"value_zero", RuntimeValue(TypeMarker(DataType::BFLOAT16))}};
+  for (int iteration = 0; iteration < 2; ++iteration) {
+    auto output = state.Run(context, feeds);
+    const auto &converted = Blocks(output.at("present"))[0];
+    EXPECT_EQ(converted.fields.at("key").tensor.data_type, DataType::FLOAT16);
+    EXPECT_EQ(converted.fields.at("value").tensor.data_type, DataType::BFLOAT16);
+    const auto key = DecodePagedCachePayload(converted.fields.at("key"), 2);
+    const auto expected = Input(2, 2);
+    for (int64_t i = 0; i < key.element_count(); ++i)
+      EXPECT_FLOAT_EQ(key.AsFloat()[i], expected.AsFloat()[i]);
+  }
+  state.Reset(state.Values());
+  auto ordinary = state.Values().at("past");
+  ordinary.is_paged_cache = false;
+  EXPECT_THROW(state.Reset({{"past", ordinary}}), std::invalid_argument);
+  auto malformed = state.Values().at("past");
+  malformed.fields.at("blocks").elements.Set(0, RuntimeValue{});
+  EXPECT_THROW(state.Reset({{"past", malformed}}), std::invalid_argument);
+  EXPECT_NO_THROW(state.Run(context, feeds));
 }

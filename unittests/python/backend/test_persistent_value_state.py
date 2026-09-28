@@ -87,18 +87,6 @@ def array(tensor):
 
 class TestPersistentValueState(unittest.TestCase):
     def test_blocks_sequence_is_not_implicitly_a_paged_cache(self):
-        value_type = onnx.TypeProto(struct_type=onnx.StructTypeProto())
-        model = helper.make_model(
-            helper.make_graph(
-                [helper.make_node("Identity", ["past"], ["present"])],
-                "ordinary_blocks",
-                [helper.make_value_info("past", value_type)],
-                [helper.make_value_info("present", value_type)],
-            ),
-            opset_imports=[helper.make_opsetid("", 18)],
-            ir_version=10,
-        )
-        add_binding(model, "past", "present")
         payload = numpy.ones((1, 1, 1, 2), dtype=numpy.float32)
         for blocks in (
             [],
@@ -113,6 +101,50 @@ class TestPersistentValueState(unittest.TestCase):
             ],
         ):
             with self.subTest(block_count=len(blocks)):
+                element_type = helper.make_tensor_type_proto(onnx.TensorProto.FLOAT, [1, 1, 1, 2])
+                if blocks and isinstance(blocks[0], dict):
+                    element_type = onnx.TypeProto(
+                        struct_type=onnx.StructTypeProto(
+                            structure=onnx.StructTypeProto.Structure(
+                                field=[
+                                    onnx.StructTypeProto.Structure.Field(
+                                        name=name,
+                                        type=(
+                                            helper.make_tensor_type_proto(
+                                                onnx.TensorProto.INT64, []
+                                            )
+                                            if name in ("start", "length")
+                                            else element_type
+                                        ),
+                                    )
+                                    for name in ("start", "length", "key", "value")
+                                ]
+                            )
+                        )
+                    )
+                value_type = onnx.TypeProto(
+                    struct_type=onnx.StructTypeProto(
+                        structure=onnx.StructTypeProto.Structure(
+                            field=[
+                                onnx.StructTypeProto.Structure.Field(
+                                    name="blocks",
+                                    type=helper.make_sequence_type_proto(element_type),
+                                )
+                            ]
+                        )
+                    )
+                )
+                model = helper.make_model(
+                    helper.make_graph(
+                        [helper.make_node("Identity", ["past"], ["present"])],
+                        "ordinary_blocks",
+                        [helper.make_value_info("past", value_type)],
+                        [helper.make_value_info("present", value_type)],
+                    ),
+                    opset_imports=[helper.make_opsetid("", 18)],
+                    ir_version=10,
+                )
+                add_binding(model, "past", "present")
                 state = runtime.PersistentValueState(model, {"past": {"blocks": blocks}})
                 context = make_context()
                 output = state.run(context, {})["present"]
@@ -128,6 +160,39 @@ class TestPersistentValueState(unittest.TestCase):
                         self.assertEqual(set(value), {"start", "length", "key", "value"})
                         value = value["key"]
                     numpy.testing.assert_array_equal(array(value), payload)
+
+    def test_root_list_feedback_uses_standard_sequence_kernel(self):
+        tensor_type = helper.make_tensor_type_proto(onnx.TensorProto.FLOAT, [2])
+        sequence_type = helper.make_sequence_type_proto(tensor_type)
+        model = helper.make_model(
+            helper.make_graph(
+                [helper.make_node("SequenceInsert", ["past", "item"], ["present"])],
+                "list_feedback",
+                [
+                    helper.make_value_info("past", sequence_type),
+                    helper.make_value_info("item", tensor_type),
+                ],
+                [helper.make_value_info("present", sequence_type)],
+            ),
+            opset_imports=[helper.make_opsetid("", 18)],
+            ir_version=10,
+        )
+        add_binding(model, "past", "present")
+        state = runtime.PersistentValueState(model, {"past": []})
+        context = make_context()
+        item = numpy.ones(2, dtype=numpy.float32)
+        first = state.run(context, {"item": item})["present"]
+        second = state.run(context, {"item": item * 2})["present"]
+        self.assertIsInstance(second, list)
+        self.assertEqual(len(second), 2)
+        numpy.testing.assert_array_equal(array(second[0]), item)
+        numpy.testing.assert_array_equal(array(second[1]), item * 2)
+        with self.assertRaises(ValueError):
+            state.reset({"past": [numpy.ones(2, dtype=numpy.float64)]})
+        state.reset({"past": first})
+        self.assertEqual(len(state.values["past"]), 1)
+        state.close()
+        numpy.testing.assert_array_equal(array(second[1]), item * 2)
 
     def test_attention_persistent_tensor_initial_capacity(self):
         model = make_attention_model()

@@ -331,7 +331,8 @@ RuntimeValue NewPage(const Tensor &input, int64_t begin, int64_t length,
       1)
     affine->set_storage_type(static_cast<TensorProto::DataType>(format.storage_type));
   else
-    affine->set_signed_storage(format.storage_type == DataType::INT4 ||
+    affine->set_signed_storage(format.storage_type == DataType::INT2 ||
+                               format.storage_type == DataType::INT4 ||
                                format.storage_type == DataType::INT8);
   affine->mutable_scale()->set_data_type(DataType::FLOAT);
   affine->mutable_scale()->add_float_data(format.scale);

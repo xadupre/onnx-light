@@ -247,12 +247,19 @@ concrete symbolic bindings, rather than walking historical elements on every
 invocation. Memo tables hold weak references, so they do not prolong page or
 allocator lifetimes. Catalogue-dependent encoded retention still rechecks the
 supplied catalogue.
+Explicitly marked paged-cache snapshots additionally validate their complete
+page structure and ranges before state publication, without decoding payloads.
 
 These are ``TypeProto`` contracts, not a claim that every ``SequenceProto``,
 ``MapProto`` or ``OptionalProto`` has a native persistent representation.
-Python feedback supports tensors, named structs, inline encoded values and
-dedicated ``PagedCacheProto`` values. Arbitrary sequence conversion remains
-unsupported.
+Python feedback supports tensors, named structs as dictionaries, typed sequences
+as lists, inline encoded values and dedicated ``PagedCacheProto`` values.
+Lists are converted recursively without converting their tensor payloads;
+their elements must match the declared ``sequence_type.elem_type``. Empty
+lists are supported. Tuples and arbitrary iterables are not sequence inputs.
+Ordinary dictionaries require named field declarations. Layout-less
+``struct_type`` declarations are reserved for explicitly marked paged caches,
+whose page ranges, fields and payloads are validated independently.
 ``If`` and model-local functions forward selected whole output names and move
 those results without persistence-related copies. Function attributes,
 ``Loop`` and ``Scan`` use their ordinary runtime implementations: their normal
@@ -553,6 +560,10 @@ scalar zero point selects the corresponding payload storage type, so K and V
 may use different formats. INT8, UINT8, INT4, UINT4, INT2 and UINT2 request
 affine quantization. FLOAT, FLOAT16 and BFLOAT16 request dense dequantization;
 the floating-point marker's value and the corresponding scale are ignored.
+For a paged cache declared with logical FLOAT K/V fields, dense FLOAT16 and
+BFLOAT16 pages are physical storage alternatives and remain valid across
+persistent bindings. Ordinary non-cache tensor fields still require exact
+dtype agreement.
 
 For every selected block, the kernel decodes either its dense floating-point
 payload or its existing affine payload, then converts the valid ``length``

@@ -499,6 +499,24 @@ TEST(PersistentValueState, ClosedAccessorsRejectReleasedModelStorage) {
   EXPECT_THROW(state.struct_type_catalogue(), std::invalid_argument);
 }
 
+TEST(PersistentValueState, LayoutlessOrdinaryStructuresCannotHideUnsupportedLeaves) {
+  auto model = Model();
+  TypeProto untyped;
+  untyped.mutable_struct_type();
+  *model.mutable_graph()->mutable_input(0)->mutable_type() = untyped;
+  *model.mutable_graph()->mutable_output(0)->mutable_type() = untyped;
+  for (bool nested : {false, true}) {
+    RuntimeValue value(
+        RuntimeValueMap{{"text", RuntimeValue(Tensor::FromStrings("", {1}, {"unsupported"}))}});
+    if (nested)
+      value = RuntimeValue(
+          RuntimeValueMap{{"items", RuntimeValue(std::vector<RuntimeValue>{std::move(value)})}});
+    EXPECT_THROW((PersistentValueState(model, {{"past", std::move(value)}})),
+                 std::invalid_argument);
+  }
+  EXPECT_THROW((PersistentValueState(model, {{"past", RuntimeValue{}}})), std::invalid_argument);
+}
+
 TEST(PersistentValueState, RetainsWholeStructureAndRequiresSeparateFreshTokens) {
   ModelProto model = Model(true);
   SimpleRawBufferAllocator allocator(20);

@@ -428,29 +428,41 @@ Tensor FeedbackTensorFromArray(const std::string &name, nb::handle value) {
                         bytes, RetainFeedbackOwner(owner));
 }
 
-RuntimeValue FeedbackValueFromPython(const std::string &name, nb::handle value, size_t depth = 0,
-                                     const ModelProto *model = nullptr) {
+RuntimeValue FeedbackValueFromPython(
+    const std::string &name, nb::handle value, size_t depth = 0, const ModelProto *model = nullptr,
+    std::shared_ptr<const core::runtime::QuantizationParameterCatalogue> *parameters = nullptr) {
   EXT_ENFORCE_INVALID(depth <= RuntimeValue::kMaxDepth,
                       "Feedback value exceeds the maximum nesting depth.");
   if (nb::isinstance<nb::dict>(value)) {
     RuntimeValueMap fields;
     for (auto [key, field] : nb::borrow<nb::dict>(value)) {
       std::string field_name = nb::cast<std::string>(key);
-      fields.emplace(field_name, FeedbackValueFromPython(field_name, field, depth + 1, model));
+      fields.emplace(field_name,
+                     FeedbackValueFromPython(field_name, field, depth + 1, model, parameters));
     }
     return RuntimeValue(std::move(fields));
   }
   if (nb::isinstance<EncodedValueProto>(value)) {
-    return RuntimeValue::FromEncodedView(nb::cast<const EncodedValueProto &>(value),
-                                         RetainFeedbackOwner(value));
+    RuntimeValue result = RuntimeValue::FromEncodedView(nb::cast<const EncodedValueProto &>(value),
+                                                        RetainFeedbackOwner(value));
+    if (model && parameters && result.Encoded().has_parameter_ref()) {
+      if (!*parameters)
+        *parameters = core::runtime::QuantizationParameterCatalogue::Build(*model);
+      StructTypeCatalogue catalogue;
+      catalogue.Build(*model);
+      (*parameters)->Validate(result.Encoded(), catalogue);
+      result.quantization_parameters = *parameters;
+    }
+    return result;
   }
   if (nb::isinstance<PagedCacheProto>(value)) {
     StructTypeCatalogue catalogue;
     if (model)
       catalogue.Build(*model);
-    return RuntimeValue::FromPagedCache(
-        nb::cast<const PagedCacheProto &>(value), catalogue,
-        model ? core::runtime::QuantizationParameterCatalogue::Build(*model) : nullptr);
+    if (model && parameters && !*parameters)
+      *parameters = core::runtime::QuantizationParameterCatalogue::Build(*model);
+    return RuntimeValue::FromPagedCache(nb::cast<const PagedCacheProto &>(value), catalogue,
+                                        parameters ? *parameters : nullptr);
   }
   if (nb::isinstance<RuntimeValue>(value))
     return nb::cast<const RuntimeValue &>(value).BorrowView();
@@ -473,9 +485,10 @@ RuntimeValue FeedbackValueFromPython(const std::string &name, nb::handle value, 
 
 RuntimeValueMap FeedbackValuesFromPython(nb::dict values, const ModelProto *model = nullptr) {
   RuntimeValueMap result;
+  std::shared_ptr<const core::runtime::QuantizationParameterCatalogue> parameters;
   for (auto [key, value] : values) {
     std::string name = nb::cast<std::string>(key);
-    result.emplace(name, FeedbackValueFromPython(name, value, 0, model));
+    result.emplace(name, FeedbackValueFromPython(name, value, 0, model, &parameters));
   }
   return result;
 }

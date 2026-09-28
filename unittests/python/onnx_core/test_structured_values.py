@@ -153,6 +153,30 @@ class TestStructuredValues(unittest.TestCase):
         self.assertFalse(restored.HasField("affine"))
         self.assertEqual(restored.WhichOneof("layout"), "struct_type")
 
+    def test_context_resolved_affine_storage_type(self):
+        for signed, types in (
+            (True, (onnx.TensorProto.INT2, onnx.TensorProto.INT4, onnx.TensorProto.INT8)),
+            (False, (onnx.TensorProto.UINT2, onnx.TensorProto.UINT4, onnx.TensorProto.UINT8)),
+        ):
+            for bits, storage_type in zip((2, 4, 8), types):
+                with self.subTest(signed=signed, bits=bits):
+                    context = ShapesContext()
+                    value = EncodedValueProto(
+                        name="weights",
+                        logical_type=tensor_type(shape=(8,)),
+                        affine=AffineLayoutProto(
+                            signed_storage=int(signed),
+                            scale=helper.make_tensor("", onnx.TensorProto.FLOAT, [], [0.5]),
+                        ),
+                        raw_data=bytes(bits),
+                    )
+                    self.assertFalse(value.affine.HasField("storage_type"))
+                    context.set_encoded_value("weights", value)
+                    layout = context.get_encoded_layout("weights")
+                    self.assertEqual(layout.storage_type, storage_type)
+                    self.assertEqual(layout.element_bits, bits)
+                    self.assertEqual(layout.record_count, 8)
+
     def test_context_type_and_layout(self):
         context = ShapesContext()
         context.set_struct_types([declaration()])

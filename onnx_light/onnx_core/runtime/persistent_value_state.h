@@ -72,10 +72,16 @@ public:
   void Close();
   /** Returns read-only aliases keyed by exact retained graph input names. */
   RuntimeValueMap Values() const;
-  /** Returns the immutable model that supplies initializer and parameter declarations. */
-  const ModelProto &model() const noexcept { return model_; }
-  /** Returns the already validated catalogue for retained value conversions. */
-  const StructTypeCatalogue &struct_type_catalogue() const noexcept { return catalogue_; }
+  /** Returns the immutable model; rejects access after Close(). */
+  const ModelProto &model() const {
+    EXT_ENFORCE_INVALID(session_ != nullptr, "PersistentValueState: state is closed.");
+    return model_;
+  }
+  /** Returns the validated catalogue; rejects access after Close(). */
+  const StructTypeCatalogue &struct_type_catalogue() const {
+    EXT_ENFORCE_INVALID(session_ != nullptr, "PersistentValueState: state is closed.");
+    return catalogue_;
+  }
 
 private:
   struct Binding {

@@ -55,6 +55,18 @@ def make_model():
 
 
 class TestPagedCacheProto(unittest.TestCase):
+    def test_closed_state_rejects_model_aware_conversion(self):
+        state = runtime.PersistentValueState(make_model(), {})
+        state.close()
+        gc.collect()
+        context = runtime.RuntimeContext(runtime.KernelContext(runtime.default_opset(18)))
+        with self.assertRaisesRegex(ValueError, "state is closed"):
+            state.reset({"past": make_cache()})
+        with self.assertRaisesRegex(ValueError, "state is closed"):
+            state.run(context, {"cache": make_cache()})
+        with self.assertRaisesRegex(ValueError, "state is closed"):
+            _ = state.values
+
     def test_wire_roundtrip_and_presence(self):
         cache = make_cache()
         self.assertIsInstance(cache.blocks[0], onnx.PagedCacheBlockProto)

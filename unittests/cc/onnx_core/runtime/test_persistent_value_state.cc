@@ -478,9 +478,25 @@ TEST(PersistentValueState, WholeTensorMatchesManualLoopAndSharesReadOnlyViews) {
   EXPECT_EQ(Number(state.Run(context, {{"tokens", Number(2)}}).at("present")), 7);
   state.Close();
   EXPECT_THROW(state.Values(), std::invalid_argument);
+  EXPECT_THROW(state.model(), std::invalid_argument);
+  EXPECT_THROW(state.struct_type_catalogue(), std::invalid_argument);
   EXPECT_THROW(state.Run(context, {}), std::invalid_argument);
   EXPECT_THROW(state.Reset({{"past", Number(1)}}), std::invalid_argument);
   EXPECT_NO_THROW(state.Close());
+}
+
+TEST(PersistentValueState, ClosedAccessorsRejectReleasedModelStorage) {
+  auto model = std::make_shared<ModelProto>(Model());
+  std::weak_ptr<ModelProto> weak = model;
+  PersistentValueState state(model, {{"past", Number(2)}});
+  EXPECT_EQ(&state.model(), model.get());
+  EXPECT_NO_THROW(state.struct_type_catalogue());
+  model.reset();
+  EXPECT_FALSE(weak.expired());
+  state.Close();
+  EXPECT_TRUE(weak.expired());
+  EXPECT_THROW(state.model(), std::invalid_argument);
+  EXPECT_THROW(state.struct_type_catalogue(), std::invalid_argument);
 }
 
 TEST(PersistentValueState, RetainsWholeStructureAndRequiresSeparateFreshTokens) {

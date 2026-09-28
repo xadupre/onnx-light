@@ -801,6 +801,7 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
   // ShapesContext
   // -----------------------------------------------------------------------
   nb::class_<EncodedValueLayout>(shape_mod, "EncodedValueLayout")
+      .def_ro("storage_type", &EncodedValueLayout::storage_type)
       .def_ro("element_bits", &EncodedValueLayout::element_bits)
       .def_ro("payload_bytes", &EncodedValueLayout::payload_bytes)
       .def_ro("record_count", &EncodedValueLayout::record_count)

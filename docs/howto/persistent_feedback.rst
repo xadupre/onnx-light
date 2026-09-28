@@ -676,6 +676,12 @@ validating a compact shared value checks its reference, types and byte extent
 without materializing it. Borrowed views survive reset and close with both
 their payload and their shared parameters.
 
+Python construction, ``reset`` and ``run`` resolve ``EncodedValueProto.parameter_ref``
+against the state's model, including encoded values nested in dictionaries.
+Conversions reject missing references and reuse one shared parameter catalogue
+per input dictionary. After ``close``, state operations and the native model
+and type-catalogue accessors reject access; already exported values remain valid.
+
 This general runtime support does not broaden the native ``PagedAttention``
 decoder: its supported page formats remain the dense and affine formats below.
 Portable structured and shared encodings can be retained and forwarded by other

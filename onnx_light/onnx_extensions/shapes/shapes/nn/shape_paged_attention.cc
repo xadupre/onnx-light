@@ -97,7 +97,7 @@ void ComputeShapePagedAttention(ShapesContext &ctx, const NodeProto &node) {
     if (candidate != TensorProto::UNDEFINED)
       elem_type = candidate;
   }
-  const auto batch = MergeDimension(MergeDimension(q[0], k[0]), v[0]);
+  auto batch = MergeDimension(MergeDimension(q[0], k[0]), v[0]);
   auto kv_heads = MergeDimension(k[1], v[1]);
   EXT_ENFORCE_INVALID(!q[1].has_dim_value() || !kv_heads.has_dim_value() ||
                           q[1].dim_value() % kv_heads.dim_value() == 0,
@@ -124,8 +124,7 @@ void ComputeShapePagedAttention(ShapesContext &ctx, const NodeProto &node) {
     }
     const auto cached_key = TensorDimensions(Field(page, "key"), true);
     const auto cached_value = TensorDimensions(Field(page, "value"), true);
-    MergeDimension(batch, cached_key[0]);
-    MergeDimension(batch, cached_value[0]);
+    batch = MergeDimension(MergeDimension(batch, cached_key[0]), cached_value[0]);
     kv_heads = MergeDimension(MergeDimension(kv_heads, cached_key[1]), cached_value[1]);
     EXT_ENFORCE_INVALID(!q[1].has_dim_value() || !kv_heads.has_dim_value() ||
                             q[1].dim_value() % kv_heads.dim_value() == 0,

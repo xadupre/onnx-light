@@ -157,39 +157,35 @@ TEST(PagedAttention, DenseMatchesAttentionAcrossAppendsAndWindows) {
 }
 
 TEST(PagedAttention, SupportsBatchesGroupedQueryHeadsAndReducedPrecision) {
-  PagedAttention kernel(KernelContext(DefaultOpset(23)));
+  KernelContext context(DefaultOpset(23));
+  PagedAttention kernel(context);
+  Attention dense(context);
   const Shape query_shape{2, 4, 1, 2};
   const Shape kv_shape{2, 2, 1, 2};
-  const std::vector<float> query(16, 0);
+  const std::vector<float> query{1, -1, 2, 1, -2, 1, 1, 2, -1, 2, 1, -2, 2, 2, -1, -1};
+  const std::vector<float> first_keys{1, 2, -1, 1, 2, -1, 1, 1};
+  const std::vector<float> second_keys{-2, 1, 1, 2, 1, 1, -1, 2};
   const std::vector<float> first_values{1, 2, 3, 4, 5, 6, 7, 8};
   const std::vector<float> second_values{3, 4, 5, 6, 7, 8, 9, 10};
   for (int32_t type : {DataType::FLOAT16, DataType::BFLOAT16}) {
     SCOPED_TRACE(type);
     const Tensor q = ReducedPrecisionInput(type, query_shape, query);
-    const Tensor first_k = ReducedPrecisionInput(type, kv_shape, std::vector<float>(8, 0));
+    const Tensor first_k = ReducedPrecisionInput(type, kv_shape, first_keys);
     const Tensor first_v = ReducedPrecisionInput(type, kv_shape, first_values);
     auto first = kernel(q, first_k, first_v, PagedAttention::EmptyCache(), {});
+    Attention::Attributes attributes;
+    auto first_expected = dense(q, first_k, first_v, attributes);
     EXPECT_EQ(first.Y.data_type, type);
     EXPECT_EQ(first.Y.shape, query_shape);
-    for (int64_t batch = 0; batch < 2; ++batch)
-      for (int64_t query_head = 0; query_head < 4; ++query_head)
-        for (int64_t d = 0; d < 2; ++d) {
-          const int64_t kv_head = query_head / 2;
-          const size_t output = (batch * 4 + query_head) * 2 + d;
-          const size_t value = (batch * 2 + kv_head) * 2 + d;
-          EXPECT_EQ(Read(first.Y, output), first_values[value]);
-        }
-    const Tensor second_k = ReducedPrecisionInput(type, kv_shape, std::vector<float>(8, 0));
+    for (size_t i = 0; i < query.size(); ++i)
+      EXPECT_NEAR(Read(first.Y, i), Read(first_expected.Y, i), 0.01f);
+    const Tensor second_k = ReducedPrecisionInput(type, kv_shape, second_keys);
     const Tensor second_v = ReducedPrecisionInput(type, kv_shape, second_values);
     auto second = kernel(q, second_k, second_v, first.present, {});
-    for (int64_t batch = 0; batch < 2; ++batch)
-      for (int64_t query_head = 0; query_head < 4; ++query_head)
-        for (int64_t d = 0; d < 2; ++d) {
-          const int64_t kv_head = query_head / 2;
-          const size_t output = (batch * 4 + query_head) * 2 + d;
-          const size_t value = (batch * 2 + kv_head) * 2 + d;
-          EXPECT_EQ(Read(second.Y, output), (first_values[value] + second_values[value]) / 2);
-        }
+    auto second_expected = dense(q, second_k, second_v, attributes, nullptr,
+                                 &first_expected.present_key, &first_expected.present_value);
+    for (size_t i = 0; i < query.size(); ++i)
+      EXPECT_NEAR(Read(second.Y, i), Read(second_expected.Y, i), 0.01f);
   }
 }
 

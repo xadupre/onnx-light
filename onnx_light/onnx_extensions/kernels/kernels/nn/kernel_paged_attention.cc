@@ -319,15 +319,26 @@ RuntimeValue NewPage(const Tensor &input, int64_t begin, int64_t length,
   if (format.storage_type == DataType::FLOAT) {
     Tensor output = MakeOutputTensor(DataType::FLOAT, shape, CheckedBytes(outer * length, width),
                                      rt ? rt->io_allocator() : nullptr);
-    for (int64_t outer_index = 0; outer_index < outer; ++outer_index)
-      for (int64_t row = 0; row < length; ++row)
-        for (int64_t column = 0; column < width; ++column) {
-          const size_t source_index =
-              (static_cast<size_t>(outer_index) * input.shape[2] + begin + row) * width + column;
-          const size_t target_index =
-              (static_cast<size_t>(outer_index) * length + row) * width + column;
-          output.AsFloat()[target_index] = ReadTensorElement(input, source_index);
-        }
+    if (input.data_type == DataType::FLOAT) {
+      const size_t copy_bytes = CheckedBytes(length, width);
+      for (int64_t outer_index = 0; outer_index < outer; ++outer_index) {
+        const size_t source_row =
+            static_cast<size_t>(outer_index) * input.shape[2] + static_cast<size_t>(begin);
+        std::memcpy(output.mutable_bytes() + static_cast<size_t>(outer_index) * copy_bytes,
+                    input.bytes() + source_row * static_cast<size_t>(width) * sizeof(float),
+                    copy_bytes);
+      }
+    } else {
+      for (int64_t outer_index = 0; outer_index < outer; ++outer_index)
+        for (int64_t row = 0; row < length; ++row)
+          for (int64_t column = 0; column < width; ++column) {
+            const size_t source_index =
+                (static_cast<size_t>(outer_index) * input.shape[2] + begin + row) * width + column;
+            const size_t target_index =
+                (static_cast<size_t>(outer_index) * length + row) * width + column;
+            output.AsFloat()[target_index] = ReadTensorElement(input, source_index);
+          }
+    }
     AddBytes(statistics.copied_bytes, output.size_bytes());
     return RuntimeValue(std::move(output)).Retain();
   }

@@ -106,7 +106,7 @@ TEST(PagedAttentionShape, UnknownInputsStillInferRankFourAndFloat) {
   const auto &output = context.GetType("Y").tensor_type();
   EXPECT_EQ(output.elem_type(), TensorProto::FLOAT);
   ASSERT_EQ(output.shape().dim_size(), 4);
-  EXPECT_FALSE(output.shape().dim(0).has_dim_value());
+  EXPECT_EQ(output.shape().dim(0).dim_value(), 1);
   EXPECT_FALSE(output.shape().dim(1).has_dim_value());
   EXPECT_FALSE(output.shape().dim(2).has_dim_value());
   EXPECT_FALSE(output.shape().dim(3).has_dim_value());
@@ -175,6 +175,43 @@ TEST(PagedAttentionShape, RefinesUnknownValueWidthFromCache) {
   context.ComputeShapeNode(PagedNode());
   EXPECT_TRUE(context.GetType("Y").Equals(PagedTensor({1, 1, 3, 6})));
   EXPECT_TRUE(context.GetType("present").Equals(cache));
+}
+
+TEST(PagedAttentionShape, RefinesUnknownBatchFromCache) {
+  auto context = PagedContext();
+  for (const char *name : {"Q", "K", "V"}) {
+    auto type = context.GetType(name);
+    type.mutable_tensor_type()->mutable_shape()->mutable_dim(0)->clear_dim_value();
+    context.SetType(name, type);
+  }
+  auto cache = PagedCache();
+  auto *page = cache.mutable_struct_type()
+                   ->mutable_structure()
+                   ->mutable_field(0)
+                   ->mutable_type()
+                   ->mutable_sequence_type()
+                   ->mutable_elem_type()
+                   ->mutable_struct_type()
+                   ->mutable_structure();
+  for (int field : {2, 3})
+    page->mutable_field(field)
+        ->mutable_type()
+        ->mutable_tensor_type()
+        ->mutable_shape()
+        ->mutable_dim(0)
+        ->set_dim_value(2);
+  context.SetType("past", cache);
+  context.ComputeShapeNode(PagedNode());
+  EXPECT_EQ(context.GetType("Y").tensor_type().shape().dim(0).dim_value(), 2);
+
+  page->mutable_field(3)
+      ->mutable_type()
+      ->mutable_tensor_type()
+      ->mutable_shape()
+      ->mutable_dim(0)
+      ->set_dim_value(3);
+  context.SetType("past", cache);
+  EXPECT_THROW(context.ComputeShapeNode(PagedNode()), std::invalid_argument);
 }
 
 TEST(PagedAttentionShape, RejectsKnownTensorMismatches) {

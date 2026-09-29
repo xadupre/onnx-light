@@ -16,6 +16,8 @@ void Declare(ValueInfoProto &info, const std::string &name, int32_t dtype, const
     auto *dimension = tensor->mutable_shape()->add_dim();
     if (size >= 0)
       dimension->set_dim_value(size);
+    else
+      dimension->set_dim_param("sequence");
   }
 }
 
@@ -47,6 +49,10 @@ void RegisterGenerationCases(std::vector<TestCase> &registry) {
       graph.set_name(name);
       Declare(*graph.add_input(), "input_ids", TensorProto::INT64, {1, -1});
       Declare(*graph.add_output(), "logits", TensorProto::FLOAT, {1, -1, 2});
+      Declare(*graph.add_value_info(), "embedded", TensorProto::FLOAT, {1, -1, 2});
+      Declare(*graph.add_value_info(), "V", TensorProto::FLOAT, {1, 1, -1, 2});
+      Declare(*graph.add_value_info(), "QK", TensorProto::FLOAT, {1, 1, -1, 2});
+      Declare(*graph.add_value_info(), "Y", TensorProto::FLOAT, {1, 1, -1, 2});
       *graph.add_initializer() = MakeInitializer<float>("embedding", {2, 2}, {2, 0, 0, 4});
       *graph.add_initializer() = MakeInitializer<float>("zero", {}, {0});
       *graph.add_initializer() = MakeInitializer<int64_t>("axis", {1}, {1});

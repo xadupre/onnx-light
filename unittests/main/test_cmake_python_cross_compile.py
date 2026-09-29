@@ -160,7 +160,7 @@ message(STATUS "test_python_module=${Python_Development.Module_FOUND}")
             ("3.30", False, ""),
             ("3.31", False, ""),
             ("4.0", False, ""),
-            ("4.1", False, abi),
+            ("4.1", False, ""),
             ("3.30", True, abi),
             ("4.1", True, abi),
         ]:
@@ -177,7 +177,9 @@ message(STATUS "test_python_module=${Python_Development.Module_FOUND}")
                             f'set(Python3_FIND_ABI "{abi}" CACHE STRING "")\n'
                         )
                     result = self.configure_discovery(settings)
-                    expected_abi = abi if cached and version == "3.29" else expected
+                    expected_abi = (
+                        abi if cached and (version == "3.29" or version == "4.1") else expected
+                    )
                     self.assertEqual(result["abi"], [f"{expected_abi}|{expected_abi}"])
                     expected_cache = expected_abi if cached else ""
                     self.assertEqual(result["cache_abi"], [f"{expected_cache}|{expected_cache}"])

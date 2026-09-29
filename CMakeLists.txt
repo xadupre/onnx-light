@@ -201,6 +201,9 @@ if(ONNX_LIGHT_BUILD_PYTHON)
         unset(Python3_FIND_ABI CACHE)
         unset(Python_FIND_ABI)
         unset(Python_FIND_ABI CACHE)
+      elseif(NOT WIN32)
+        # On CMake 4.1+, let FindPython infer the ABI from the native interpreter.
+        # Explicit ABI requests are still honored.
       else()
         # Do not mix regular and free-threaded development files installed
         # alongside one another. Preserve explicit ABI requests.

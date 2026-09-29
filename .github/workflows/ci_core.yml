@@ -56,6 +56,8 @@ jobs:
 
   free_threaded:
     name: free-threaded build (CMake ${{ matrix.cmake }}, Python 3.13t)
+    needs: changes
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -63,7 +65,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        cmake: ["3.30.9", "3.31.6", "4.0.3", "4.1.0"]
+        cmake: ["3.30.9", "4.0.3", "4.1.0", "4.1.2"]
     steps:
       - uses: actions/checkout@v7
 

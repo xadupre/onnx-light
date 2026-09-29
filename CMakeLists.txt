@@ -206,9 +206,28 @@ if(ONNX_LIGHT_BUILD_PYTHON)
         unset(Python3_FIND_ABI CACHE)
         unset(Python_FIND_ABI)
         unset(Python_FIND_ABI CACHE)
-      elseif(NOT WIN32)
-        # CMake 4.1+ infers the ABI from the native interpreter on POSIX.
-        # Preserve an explicit ABI request, but do not add one here.
+      elseif(NOT WIN32 AND CMAKE_VERSION VERSION_EQUAL "4.1.0")
+        # CMake 4.1.0 rejects free-threaded Development.Module when an ABI
+        # selector is present. Pin the headers to this interpreter instead;
+        # CMake 4.1.1+ fixes the selector bug.
+        unset(Python3_FIND_ABI)
+        unset(Python3_FIND_ABI CACHE)
+        unset(Python_FIND_ABI)
+        unset(Python_FIND_ABI CACHE)
+        if(NOT DEFINED Python_INCLUDE_DIR)
+          execute_process(
+            COMMAND "${Python_EXECUTABLE}" -c
+                    "import sysconfig; print(sysconfig.get_path('include'))"
+            OUTPUT_VARIABLE Python_INCLUDE_DIR
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            RESULT_VARIABLE python_include_query_result
+            ERROR_VARIABLE python_include_query_error)
+          if(NOT python_include_query_result STREQUAL "0" OR
+             NOT IS_DIRECTORY "${Python_INCLUDE_DIR}")
+            message(FATAL_ERROR "Failed to query Python's include directory: "
+                                "${python_include_query_error}")
+          endif()
+        endif()
       else()
         # CMake 3.30+ only searches for free-threaded development files when
         # asked to. Request exactly this ABI so regular development files

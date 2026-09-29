@@ -28,6 +28,29 @@ to retain or return them. The CPU Attention append optimization described
 below reduces kernel allocations and prefix copies independently of this
 zero-copy state forwarding.
 
+To reproduce a tensor-cache decode comparison, refresh the target revision
+and run the native benchmark from the repository root:
+
+.. code-block:: console
+
+    git fetch origin main
+    PYTHONPATH=. python benchmarks/bench_persistent_feedback.py --tokens 16
+
+The JSON records both source revisions, model identity, execution policy,
+separate setup times and raw per-token latency for a persistent state and an
+explicit stateless session. The latter feeds selected outputs back using
+``model.graph.persistent_bindings``, without guessing names or providing a
+second mapping. Numerical output and retained pointer identity are checked
+at each step. ``retained_logical_bytes`` measures visible tensor lengths,
+not reserved cache capacity; ``event_workspace_peak_bytes`` is the peak
+reported by runtime events, not whole-process RSS. The storage allocation,
+prefix-copy and append-copy counters describe the **Attention kernel**,
+not state forwarding. The zero-copy state layer has no payload-copy counter:
+its forwarding is checked by pointer identity, while wall times include
+kernel work, Python conversion and state management. The stateless session
+does not use contiguous persistent capacity, so this is not a matched-kernel
+isolation of state-management time. Results vary by CPU and build flags.
+
 .. warning::
 
    Inputs, retained state and returned views can share the same payload.

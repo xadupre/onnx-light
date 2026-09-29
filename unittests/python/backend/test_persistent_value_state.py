@@ -260,6 +260,41 @@ class TestPersistentValueState(unittest.TestCase):
             for name in disabled:
                 numpy.testing.assert_array_equal(disabled[name], enabled[name])
 
+    def test_attention_decode_matches_graph_declared_stateless_feedback(self):
+        model = make_attention_model()
+        bindings = {
+            binding.input_name: binding.output_name for binding in model.graph.persistent_bindings
+        }
+        initial = {name: numpy.empty((1, 1, 0, 2), dtype=numpy.float32) for name in bindings}
+        state = runtime.PersistentValueState(
+            model, initial, runtime.RuntimeSessionOptions(persistent_tensor_initial_capacity=4)
+        )
+        stateless = runtime.RuntimeSession(model)
+        state_context = runtime.RuntimeContext(runtime.KernelContext(runtime.default_opset(23)))
+        manual = initial.copy()
+        held = []
+        for index in range(1, 5):
+            token = numpy.array([index / 8, index / 4], dtype=numpy.float32).reshape(1, 1, 1, 2)
+            feeds = {"Q": token, "K": token, "V": -token}
+            context = runtime.RuntimeContext(runtime.KernelContext(runtime.default_opset(23)))
+            for name, value in {**manual, **feeds}.items():
+                context.put_value(name, value)
+            stateless.run(context)
+            actual = state.run(state_context, feeds)
+            for name, source in bindings.items():
+                expected = context.get_value(source)
+                numpy.testing.assert_array_equal(array(actual[source]), array(expected))
+                self.assertEqual(
+                    array(actual[source]).ctypes.data, array(state.values[name]).ctypes.data
+                )
+                manual[name] = expected
+            numpy.testing.assert_array_equal(array(actual["Y"]), array(context.get_value("Y")))
+            held.append(actual["present_key"])
+        state.close()
+        for index, value in enumerate(held, 1):
+            self.assertEqual(array(value).shape[2], index)
+            numpy.testing.assert_array_equal(array(value)[0, 0, -1], [index / 8, index / 4])
+
     def test_attention_persistent_storage_events_are_opt_in(self):
         fields = (
             "storage_allocations",
@@ -832,10 +867,22 @@ class TestPersistentValueState(unittest.TestCase):
                 raise RuntimeError("failed after producing outputs")
 
         context.register_custom_kernel("feedback.test", "Step", step)
+        stateless = runtime.RuntimeSession(model)
+        manual = snapshot["request"]
         for expected in (1, 2):
-            output = state.run(context, {"tokens": numpy.ones(2, dtype=numpy.float32)})
+            tokens = numpy.ones(2, dtype=numpy.float32)
+            manual_context = make_context()
+            manual_context.register_custom_kernel("feedback.test", "Step", step)
+            manual_context.put_value(model.graph.persistent_bindings[0].input_name, manual)
+            manual_context.put_value("tokens", tokens)
+            stateless.run(manual_context)
+            manual = manual_context.get_value(model.graph.persistent_bindings[0].output_name)
+            output = state.run(context, {"tokens": tokens})
             numpy.testing.assert_array_equal(array(output["response"]["cache"]), [expected] * 2)
             for field in ("cache", "logits"):
+                numpy.testing.assert_array_equal(
+                    array(output["response"][field]), array(manual[field])
+                )
                 self.assertEqual(
                     array(state.values["request"][field]).ctypes.data,
                     array(output["response"][field]).ctypes.data,

@@ -54,6 +54,33 @@ jobs:
           done <<< "${changed}"
           echo "docs_only=${docs_only}" >> "$GITHUB_OUTPUT"
 
+  python_discovery:
+    name: Python discovery (CMake ${{ matrix.cmake }}, Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        cmake: ["3.30.9", "3.31.6", "4.0.3", "4.1.0"]
+        python: ["3.13", "3.13t"]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install CMake
+        run: python -m pip install cmake==${{ matrix.cmake }}
+
+      - name: Test real Python development-file discovery
+        env:
+          ONNX_LIGHT_REQUIRE_FREE_THREADED: ${{ matrix.python == '3.13t' && '1' || '0' }}
+        run: python -m unittest unittests.main.test_cmake_python_cross_compile.TestCMakePythonCrossCompile.test_real_python_development_discovery
+
   reduced_tests_ubuntu:
     # Fastest preflight: builds onnx-light without the operator-kernel runtime
     # and backend-test registries (ONNX_LIGHT_BUILD_KERNELS=OFF). Runs in

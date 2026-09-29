@@ -1,5 +1,8 @@
+import os
 import shutil
 import subprocess
+import sys
+import sysconfig
 import tempfile
 import unittest
 
@@ -96,6 +99,59 @@ message(STATUS "test_cache_abi=$CACHE{Python_FIND_ABI}|$CACHE{Python3_FIND_ABI}"
             ]
             for key in ("find", "abi", "cache_abi")
         }
+
+    def test_real_python_development_discovery(self):
+        cmake = shutil.which("cmake")
+        if cmake is None:
+            self.skipTest("cmake is unavailable")
+        gil_disabled = bool(sysconfig.get_config_var("Py_GIL_DISABLED"))
+        if os.environ.get("ONNX_LIGHT_REQUIRE_FREE_THREADED") == "1":
+            self.assertTrue(gil_disabled, "CI requested a free-threaded Python interpreter")
+
+        root = Path(__file__).resolve().parents[2]
+        content = (root / "CMakeLists.txt").read_text(encoding="utf-8")
+        start = content.index("if(ONNX_LIGHT_BUILD_PYTHON)\n")
+        end = content.index("  # Find nanobind", start)
+        discovery = content[start:end] + "endif()\n"
+        project = (
+            """cmake_minimum_required(VERSION 3.15)
+project(PythonDiscovery NONE)
+set(ONNX_LIGHT_BUILD_PYTHON ON)
+"""
+            + discovery
+            + """
+message(STATUS "test_python_executable=${Python_EXECUTABLE}")
+message(STATUS "test_python_include=${Python_INCLUDE_DIRS}")
+message(STATUS "test_python_module=${Python_Development.Module_FOUND}")
+"""
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp)
+            (source / "CMakeLists.txt").write_text(project, encoding="utf-8")
+            result = subprocess.run(
+                [cmake, "-S", str(source), "-B", str(source / "build")],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        output = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, output)
+        values = {
+            key: [
+                line.split("=", 1)[1]
+                for line in result.stdout.splitlines()
+                if line.startswith(f"-- test_{key}=")
+            ]
+            for key in ("python_executable", "python_include", "python_module")
+        }
+        self.assertEqual(len(values["python_executable"]), 1, output)
+        self.assertEqual(
+            Path(values["python_executable"][0]).resolve(), Path(sys.executable).resolve()
+        )
+        self.assertEqual(values["python_module"], ["TRUE"], output)
+        expected_include = Path(sysconfig.get_path("include")).resolve()
+        include_dirs = [Path(path).resolve() for path in values["python_include"][0].split(";")]
+        self.assertIn(expected_include, include_dirs, output)
 
     def test_native_free_threaded_abi(self):
         abi = "ANY;ANY;ANY;ON"

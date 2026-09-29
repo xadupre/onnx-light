@@ -51,6 +51,57 @@ kernel work, Python conversion and state management. The stateless session
 does not use contiguous persistent capacity, so this is not a matched-kernel
 isolation of state-management time. Results vary by CPU and build flags.
 
+One raw four-token run on an AMD EPYC 9V74 (Linux, Python 3.13.15,
+Release build), with source revision
+``f6efe8829202eb654024d9809f62143cd4110bf1`` and freshly fetched target
+``72c65c505fcd6f08c84a1b8a05295733bb0bec9b``, produced stateful setup
+145690 ns and stateless session setup 10245 ns. Times are single observations,
+not comparative performance claims:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Token
+     - Stateful ns
+     - Stateless ns
+     - Retained logical bytes
+     - Event workspace peak bytes
+     - Kernel allocations / allocated bytes
+     - Kernel prefix / append copied bytes
+     - Kernel reuse count
+   * - 1
+     - 236216
+     - 358640
+     - 16
+     - 0
+     - 2 / 64
+     - 0 / 16
+     - 0
+   * - 2
+     - 34542
+     - 18268
+     - 32
+     - 0
+     - 0 / 0
+     - 0 / 16
+     - 2
+   * - 3
+     - 22253
+     - 6079
+     - 48
+     - 0
+     - 0 / 0
+     - 0 / 16
+     - 2
+   * - 4
+     - 20891
+     - 5308
+     - 64
+     - 0
+     - 0 / 0
+     - 0 / 16
+     - 2
+
 .. warning::
 
    Inputs, retained state and returned views can share the same payload.

@@ -35,10 +35,11 @@ struct GenerationOptions {
  * Without graph persistent_bindings, each iteration evaluates the full prefix
  * using an ordinary RuntimeSession. With bindings, initial cache values come
  * from feeds (or paged-cache initializers), and PersistentValueState carries
- * them across calls: the prompt is evaluated once, then one token per call.
- * Kernels without append support keep their ordinary allocation behavior.
- * Initial caches must represent an empty prefix. State is local to this call;
- * neither the model, feeds nor the caller's context values are modified.
+ * them across decoding iterations: the prompt is evaluated once, then one token
+ * per iteration. Kernels without append support keep their ordinary allocation
+ * behavior. Initial caches must represent an empty prefix. State is local to
+ * this Generate call; neither the model, feeds nor the caller's context values
+ * are modified.
  *
  * Finished batch rows receive pad_token_id until every row has emitted EOS.
  * All context/model/allocator owners must outlive this synchronous call.

@@ -68,10 +68,10 @@ Models without ``persistent_bindings`` use an ordinary ``RuntimeSession`` and
 evaluate the full growing prefix. No persistent state is created, and no cache
 bindings are guessed from operator or tensor names. Models with bindings use
 ``PersistentValueState``: supply initial empty caches in the feeds, or declare
-paged-cache initializers. The prompt is evaluated once, then each call consumes
-one new token. Eligible kernels reuse persistent buffers; other kernels retain
-their ordinary allocation behavior. Each generation call owns fresh state and
-leaves the model and caller feeds unchanged.
+paged-cache initializers. The prompt is evaluated once; each subsequent decoding
+iteration within the same generation call consumes one new token. Eligible kernels
+reuse persistent buffers; other kernels retain their ordinary allocation behavior.
+Each generation call owns fresh state and leaves the model and caller feeds unchanged.
 
 The model accepts INT64 ``input_ids`` and returns floating-point ``logits``
 of shape ``[batch, sequence, vocabulary]`` or ``[batch, vocabulary]``.

@@ -55,21 +55,36 @@ void AppendColumn(std::vector<int64_t> &matrix, const std::vector<int64_t> &colu
 
 int64_t Sample(const Tensor &logits, int64_t offset, int64_t vocabulary, double temperature,
                std::mt19937_64 &random) {
-  std::vector<double> weights(static_cast<size_t>(vocabulary));
   int64_t best = 0;
+  double maximum = -std::numeric_limits<double>::infinity();
+  if (temperature == 0.) {
+    for (int64_t token = 0; token < vocabulary; ++token) {
+      const double value = logits.data_type == DataType::DOUBLE ? logits.AsDouble()[offset + token]
+                                                                : logits.AsFloat()[offset + token];
+      EXT_ENFORCE_INVALID(!std::isnan(value) && value != std::numeric_limits<double>::infinity(),
+                          "Generate: logits must not contain NaN or positive infinity.");
+      if (value > maximum) {
+        maximum = value;
+        best = token;
+      }
+    }
+    EXT_ENFORCE_INVALID(std::isfinite(maximum), "Generate: all logits are negative infinity.");
+    return best;
+  }
+
+  std::vector<double> weights(static_cast<size_t>(vocabulary));
   for (int64_t token = 0; token < vocabulary; ++token) {
     const double value = logits.data_type == DataType::DOUBLE ? logits.AsDouble()[offset + token]
                                                               : logits.AsFloat()[offset + token];
     EXT_ENFORCE_INVALID(!std::isnan(value) && value != std::numeric_limits<double>::infinity(),
                         "Generate: logits must not contain NaN or positive infinity.");
     weights[token] = value;
-    if (value > weights[best])
+    if (value > maximum) {
+      maximum = value;
       best = token;
+    }
   }
-  const double maximum = weights[best];
   EXT_ENFORCE_INVALID(std::isfinite(maximum), "Generate: all logits are negative infinity.");
-  if (temperature == 0.)
-    return best;
   for (double &value : weights)
     value = std::exp((value - maximum) / temperature);
   std::discrete_distribution<int64_t> distribution(weights.begin(), weights.end());

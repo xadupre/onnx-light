@@ -25,6 +25,9 @@ ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterAveragePoolCases(std::vector<TestCase
 ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterAttentionCases(std::vector<TestCase> &registry,
                                                           TestMode mode = TestMode::TEST);
 
+/// Registers tiny causal language models with and without persistent caches.
+ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterGenerationCases(std::vector<TestCase> &registry);
+
 /// Registers the ``BatchNormalization`` backend test node case(s).
 ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterBatchNormalizationCases(std::vector<TestCase> &registry,
                                                                    TestMode mode = TestMode::TEST);

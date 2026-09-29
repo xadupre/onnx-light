@@ -518,15 +518,16 @@ class ReferenceEvaluator:
             execution_root = self._function
         else:
             execution_root = self._graph
+        self._session_options = _runtime.RuntimeSessionOptions(
+            cpu_execution=self._cpu_execution, cpu_execution_counters=cpu_execution_counters
+        )
         self._runner = _runtime.ReferenceEvaluatorRunner(
             execution_root,
             self._input_names,
             self._map_inputs,
             self._sequence_inputs | self._optional_sequence_inputs,
             self._output_names,
-            _runtime.RuntimeSessionOptions(
-                cpu_execution=self._cpu_execution, cpu_execution_counters=cpu_execution_counters
-            ),
+            self._session_options,
         )
         self._last_ctx = self._ctx
 
@@ -782,6 +783,45 @@ class ReferenceEvaluator:
         must not be used as a tuning-cache key.
         """
         return self._runner.cpu_executor_instance_id
+
+    def generate(
+        self,
+        feed_inputs: dict[str, Any],
+        max_new_tokens: int = 20,
+        temperature: float = 0.0,
+        eos_token_id: int | None = None,
+        pad_token_id: int | None = None,
+        seed: int | None = None,
+    ) -> np.ndarray:
+        """Generates token IDs with the native runtime.
+
+        ``feed_inputs`` contains INT64 ``input_ids`` of shape ``[batch, sequence]``
+        and any other model inputs, including initial empty caches. Declared
+        ``attention_mask`` and ``position_ids`` inputs are maintained automatically;
+        prompts may be unpadded or left-padded. Graph persistent bindings enable
+        cached decoding; models without bindings evaluate the full prefix.
+
+        Zero temperature selects greedy decoding. Positive temperature samples
+        softmax-scaled logits, reproducibly when ``seed`` is supplied. Generation
+        stops at ``max_new_tokens`` or when every row emits ``eos_token_id``.
+        Finished rows receive ``pad_token_id`` (EOS by default). Each call starts
+        fresh state and does not modify the supplied feeds.
+
+        Returns:
+            numpy.ndarray: INT64 token IDs containing the prompt and generated tokens.
+        """
+        if self._model is None:
+            raise ValueError("generate requires a ModelProto, not a graph or function.")
+        options = _runtime.GenerationOptions()
+        options.max_new_tokens = max_new_tokens
+        options.temperature = temperature
+        options.eos_token_id = eos_token_id
+        options.pad_token_id = pad_token_id
+        options.seed = seed
+        result = _runtime.generate(
+            self._model, self._ctx, feed_inputs, options, self._session_options
+        )
+        return _cpp_tensor_to_numpy(result)
 
     def run(
         self, output_names: list[str] | None, feed_inputs: dict[str, Any]

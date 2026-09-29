@@ -50,6 +50,10 @@ its forwarding is checked by pointer identity, while wall times include
 kernel work, Python conversion and state management. The stateless session
 does not use contiguous persistent capacity, so this is not a matched-kernel
 isolation of state-management time. Results vary by CPU and build flags.
+This small synthetic fixture avoids external model assets; it does not measure
+Qwen weights, multi-layer decode or whole-process peak memory. Use a
+materialized Qwen model with its required operators and assets for those
+workloads rather than extrapolating these timings.
 
 One raw four-token run on an AMD EPYC 9V74 (Linux, Python 3.13.15,
 Release build), with source revision

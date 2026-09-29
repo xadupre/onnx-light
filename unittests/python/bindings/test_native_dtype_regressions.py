@@ -8,7 +8,8 @@ import unittest
 import numpy
 
 from onnx_light.ext_test_case import import_or_skip
-from onnx_light.onnx import TensorProto, helper, numpy_helper
+import onnx_light.onnx.numpy_helper as onh
+from onnx_light.onnx import TensorProto, helper
 
 ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
 
@@ -35,7 +36,7 @@ class TestNativeDtypeRegressions(unittest.TestCase):
                 "strings",
                 [helper.make_tensor_value_info("X", TensorProto.STRING, [3])],
                 [helper.make_tensor_value_info("Y", TensorProto.BOOL, [3])],
-                [numpy_helper.from_array(values, "labels")],
+                [onh.from_array(values, "labels")],
             ),
             opset_imports=[helper.make_opsetid("", 18)],
         )

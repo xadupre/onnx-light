@@ -20,7 +20,7 @@ demonstrate the API, not trained models or recommended quantization quality.
 
 import numpy
 from onnx_light import onnx
-from onnx_light.onnx import numpy_helper
+import onnx_light.onnx.numpy_helper as onh
 from onnx_light.onnx_core.quantization import (
     QuantizationFormat,
     dequantize_tensor_proto,
@@ -47,9 +47,9 @@ covered = set()
 
 def roundtrip(values, plan):
     """Returns the encoded message and reconstructed NumPy array."""
-    source = numpy_helper.from_array(values, name="weights")
+    source = onh.from_array(values, name="weights")
     encoded = quantize_tensor_proto(source, plan)
-    restored = numpy_helper.to_array(dequantize_tensor_proto(encoded))
+    restored = onh.to_array(dequantize_tensor_proto(encoded))
     assert restored.shape == values.shape
     assert restored.dtype == values.dtype
     assert numpy.isfinite(restored).all()
@@ -336,7 +336,7 @@ for profile in (QuantizationFormat.TILED_FLOAT, QuantizationFormat.COLUMN_MAJOR)
 wire = encoded.SerializeToString()
 loaded = onnx.EncodedValueProto()
 loaded.ParseFromString(wire)
-numpy.testing.assert_array_equal(numpy_helper.to_array(dequantize_tensor_proto(loaded)), weights)
+numpy.testing.assert_array_equal(onh.to_array(dequantize_tensor_proto(loaded)), weights)
 
 model = onnx.ModelProto()
 declaration = model.struct_types.add()
@@ -344,7 +344,7 @@ declaration.CopyFrom(loaded.struct_type)
 declaration.type_id = 91
 loaded.struct_type = onnx.StructTypeProto(type_ref=91)
 numpy.testing.assert_array_equal(
-    numpy_helper.to_array(dequantize_tensor_proto(loaded, model=model)), weights
+    onh.to_array(dequantize_tensor_proto(loaded, model=model)), weights
 )
 
 # %%

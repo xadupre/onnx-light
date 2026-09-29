@@ -243,12 +243,12 @@ The serialization of tensors usually happens like the following:
     :showcode:
 
     import numpy
-    from onnx_light.onnx.numpy_helper import from_array
+    import onnx_light.onnx.numpy_helper as onh
 
     numpy_tensor = numpy.array([0, 1, 4, 5, 3], dtype=numpy.float32)
     print(type(numpy_tensor))
 
-    onnx_tensor = from_array(numpy_tensor)
+    onnx_tensor = onh.from_array(numpy_tensor)
     print(type(onnx_tensor))
 
     serialized_tensor = onnx_tensor.SerializeToString()
@@ -263,7 +263,7 @@ And the deserialization like:
     :showcode:
 
     from onnx_light.onnx_lib import TensorProto
-    from onnx_light.onnx.numpy_helper import to_array
+    import onnx_light.onnx.numpy_helper as onh
 
     with open("saved_tensor.pb", "rb") as f:
         serialized_tensor = f.read()
@@ -273,7 +273,7 @@ And the deserialization like:
     onnx_tensor.ParseFromString(serialized_tensor)
     print(type(onnx_tensor))
 
-    numpy_tensor = to_array(onnx_tensor)
+    numpy_tensor = onh.to_array(onnx_tensor)
     print(numpy_tensor)
 
 The same schema can be used for any of the ``*Proto`` message types:
@@ -307,7 +307,8 @@ to convert from numpy into onnx and the other way around.
     :showcode:
 
     import numpy
-    from onnx_light.onnx_lib import numpy_helper, TensorProto
+    import onnx_light.onnx.numpy_helper as onh
+    from onnx_light.onnx_lib import TensorProto
     from onnx_light.onnx.helper import (
         make_model, make_node, make_graph,
         make_tensor_value_info)
@@ -315,10 +316,10 @@ to convert from numpy into onnx and the other way around.
 
     # initializers
     value = numpy.array([0.5, -0.6], dtype=numpy.float32)
-    A = numpy_helper.from_array(value, name='A')
+    A = onh.from_array(value, name='A')
 
     value = numpy.array([0.4], dtype=numpy.float32)
-    C = numpy_helper.from_array(value, name='C')
+    C = onh.from_array(value, name='C')
 
     # the part which does not change
     X = make_tensor_value_info('X', TensorProto.FLOAT, [None, None])
@@ -340,7 +341,8 @@ initializers look like.
     :showcode:
 
     import numpy
-    from onnx_light.onnx_lib import numpy_helper, TensorProto
+    import onnx_light.onnx.numpy_helper as onh
+    from onnx_light.onnx_lib import TensorProto
     from onnx_light.onnx.helper import (
         make_model, make_node, make_graph,
         make_tensor_value_info)
@@ -348,10 +350,10 @@ initializers look like.
 
     # initializers
     value = numpy.array([0.5, -0.6], dtype=numpy.float32)
-    A = numpy_helper.from_array(value, name='A')
+    A = onh.from_array(value, name='A')
 
     value = numpy.array([0.4], dtype=numpy.float32)
-    C = numpy_helper.from_array(value, name='C')
+    C = onh.from_array(value, name='C')
 
     # the part which does not change
     X = make_tensor_value_info('X', TensorProto.FLOAT, [None, None])
@@ -527,12 +529,12 @@ on the sign, returns 1 or -1.
     from onnx_light import onnx_lib
     from onnx_light.onnx.helper import (
         make_node, make_graph, make_model, make_tensor_value_info)
-    from onnx_light.onnx.numpy_helper import from_array
+    import onnx_light.onnx.numpy_helper as onh
     from onnx_light.onnx_lib.checker import check_model
 
     # initializers
     value = numpy.array([0], dtype=numpy.float32)
-    zero = from_array(value, name='zero')
+    zero = onh.from_array(value, name='zero')
 
     # Same as before, X is the input, Y is the output.
     X = make_tensor_value_info('X', onnx_lib.TensorProto.FLOAT, [None, None])
@@ -549,7 +551,7 @@ on the sign, returns 1 or -1.
     then_out = make_tensor_value_info(
         'then_out', onnx_lib.TensorProto.FLOAT, None)
     # The constant to return.
-    then_cst = from_array(numpy.array([1]).astype(numpy.float32))
+    then_cst = onh.from_array(numpy.array([1]).astype(numpy.float32))
 
     # The only node.
     then_const_node = make_node(
@@ -564,7 +566,7 @@ on the sign, returns 1 or -1.
     # Same process for the else branch.
     else_out = make_tensor_value_info(
         'else_out', onnx_lib.TensorProto.FLOAT, [5])
-    else_cst = from_array(numpy.array([-1]).astype(numpy.float32))
+    else_cst = onh.from_array(numpy.array([-1]).astype(numpy.float32))
 
     else_const_node = make_node(
         'Constant', inputs=[],
@@ -626,7 +628,8 @@ followed by an operator *TopK* which extracts the *k* nearest neighbors.
     :showcode:
 
     import numpy
-    from onnx_light.onnx_lib import numpy_helper, TensorProto
+    import onnx_light.onnx.numpy_helper as onh
+    from onnx_light.onnx_lib import TensorProto
     from onnx_light.onnx.helper import (
         make_model, make_node, set_model_props, make_tensor, make_graph,
         make_tensor_value_info)
@@ -697,7 +700,7 @@ followed by an operator *TopK* which extracts the *k* nearest neighbors.
         -70.37105466673813, 65.5755688281476, 108.68676290979731,
         -78.36748960443065]
     value = numpy.array(list_value, dtype=numpy.float64).reshape((2, 20))
-    tensor = numpy_helper.from_array(
+    tensor = onh.from_array(
         value, name='knny_ArrayFeatureExtractorcst')
     initializers.append(tensor)
 
@@ -730,15 +733,15 @@ followed by an operator *TopK* which extracts the *k* nearest neighbors.
         0.14404356479644775, -0.8877857327461243, 0.15634897351264954,
         -1.980796456336975, -0.34791216254234314]
     value = numpy.array(list_value, dtype=numpy.float32).reshape((20, 4))
-    tensor = numpy_helper.from_array(value, name='Sc_Scancst')
+    tensor = onh.from_array(value, name='Sc_Scancst')
     initializers.append(tensor)
 
     value = numpy.array([2], dtype=numpy.int64)
-    tensor = numpy_helper.from_array(value, name='To_TopKcst')
+    tensor = onh.from_array(value, name='To_TopKcst')
     initializers.append(tensor)
 
     value = numpy.array([2, -1, 2], dtype=numpy.int64)
-    tensor = numpy_helper.from_array(value, name='knny_Reshapecst')
+    tensor = onh.from_array(value, name='knny_Reshapecst')
     initializers.append(tensor)
 
     # inputs

@@ -162,7 +162,8 @@ For example, two paths can share one scale, including a path through Identity:
 
     import numpy
     from onnx_light import onnx
-    from onnx_light.onnx import helper, numpy_helper
+    import onnx_light.onnx.numpy_helper as onh
+    from onnx_light.onnx import helper
     from onnx_light.onnx_core.quantization import (
         QuantizationFormat,
         add_quantization_parameters,
@@ -217,7 +218,7 @@ For example, two paths can share one scale, including a path through Identity:
         ("X1", [-8, -1, 1, 7]),
     ):
         context.set(name, runtime.tensor_from_proto(
-            numpy_helper.from_array(numpy.array(values, dtype=numpy.float32), name=name),
+            onh.from_array(numpy.array(values, dtype=numpy.float32), name=name),
         ))
     runtime.RuntimeSession(loaded).run(context)
     numpy.testing.assert_array_equal(numpy.from_dlpack(context.get("Y0")), [-4, -0.5, 0.5, 3.5])
@@ -305,7 +306,7 @@ do not train or calibrate a model.
 .. code-block:: python
 
     import numpy
-    from onnx_light.onnx import numpy_helper
+    import onnx_light.onnx.numpy_helper as onh
     from onnx_light.onnx_core.quantization import (
         QuantizationFormat,
         make_quantization_plan,
@@ -324,8 +325,8 @@ do not train or calibrate a model.
         run.blocks = [block]
         runs.append(run)
     plan.runs = runs
-    encoded = quantize_tensor_proto(numpy_helper.from_array(weights), plan)
-    restored = numpy_helper.to_array(dequantize_tensor_proto(encoded))
+    encoded = quantize_tensor_proto(onh.from_array(weights), plan)
+    restored = onh.to_array(dequantize_tensor_proto(encoded))
     numpy.testing.assert_array_equal(restored, weights)
 
 ``plan.runs`` and ``run.blocks`` are converted to/from Python lists of copies.
@@ -625,7 +626,7 @@ Replace them with your own parameters for real weights.
 
     import numpy
     from onnx_light import onnx
-    from onnx_light.onnx import numpy_helper
+    import onnx_light.onnx.numpy_helper as onh
     from onnx_light.onnx_core.quantization import (
         QuantizationFormat,
         make_quantization_plan,
@@ -972,8 +973,8 @@ the profile loop to encode each profile):
 
 .. code-block:: python
 
-    encoded = quantize_tensor_proto(numpy_helper.from_array(weights), plan)
-    restored = numpy_helper.to_array(dequantize_tensor_proto(encoded))
+    encoded = quantize_tensor_proto(onh.from_array(weights), plan)
+    restored = onh.to_array(dequantize_tensor_proto(encoded))
     print(plan.format, numpy.max(numpy.abs(restored - weights)))
 
 All floating-point/codebook profiles use closest-level encoding, with first-entry
@@ -1109,7 +1110,8 @@ is rejected when encoding.
 .. code-block:: python
 
     import numpy
-    from onnx_light.onnx import helper, numpy_helper
+    import onnx_light.onnx.numpy_helper as onh
+    from onnx_light.onnx import helper
     from onnx_light.onnx_core.quantization import (
         QuantizationFormat,
         make_matmul_nbits_plan,
@@ -1121,7 +1123,7 @@ is rejected when encoding.
     plan = make_matmul_nbits_plan(
         QuantizationFormat.ORT_MATMULNBITS_INT4, 35, 3, block_size=16
     )
-    encoded = quantize_tensor_proto(numpy_helper.from_array(weights), plan)
+    encoded = quantize_tensor_proto(onh.from_array(weights), plan)
     inputs = export_matmul_nbits_inputs(encoded)
     initializers = [inputs.weights, inputs.scales]
     names = ["A", inputs.weights.name, inputs.scales.name]

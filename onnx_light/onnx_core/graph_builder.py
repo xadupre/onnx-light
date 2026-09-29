@@ -35,7 +35,8 @@ from typing import TypeAlias
 
 import numpy
 
-from ..onnx import TensorProto, helper, numpy_helper
+from ..onnx import TensorProto, helper
+import onnx_light.onnx.numpy_helper as onh
 from ..onnx_op import GetAllOnnxOpSchemasWithHistory, LightOpSchema
 from ..onnx_py._onnxpycore import builder as _C  # type: ignore[attr-defined]
 
@@ -250,7 +251,7 @@ class GraphBuilder(_C.GraphBuilder):
                     name = candidate
                     break
         if copy:
-            return self.make_initializer(numpy_helper.from_array(value, name=name))
+            return self.make_initializer(onh.from_array(value, name=name))
         tensor = TensorProto(
             name=name, dims=value.shape, data_type=helper.np_dtype_to_tensor_dtype(value.dtype)
         )

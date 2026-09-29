@@ -10,7 +10,8 @@ import numpy
 
 from onnx_light import onnx
 from onnx_light.ext_test_case import import_or_skip
-from onnx_light.onnx import compose, helper, numpy_helper
+import onnx_light.onnx.numpy_helper as onh
+from onnx_light.onnx import compose, helper
 from onnx_light.onnx_proto import verify
 from onnx_light.onnx_proto._text_format import serialize_to_textproto
 from onnx_light.onnx_py._onnxpycore import builder
@@ -26,8 +27,8 @@ def make_cache():
     block.start = 0
     block.length = 1
     data = numpy.arange(4, dtype=numpy.float32).reshape(1, 1, 2, 2)
-    block.key.CopyFrom(numpy_helper.from_array(data))
-    block.value.CopyFrom(numpy_helper.from_array(-data))
+    block.key.CopyFrom(onh.from_array(data))
+    block.value.CopyFrom(onh.from_array(-data))
     return cache
 
 
@@ -67,7 +68,7 @@ class TestPagedCacheProto(unittest.TestCase):
         context = runtime.RuntimeContext(runtime.KernelContext(runtime.default_opset(18)))
         output = state.run(context, {})["present"]
         self.assertIsInstance(output, onnx.PagedCacheProto)
-        numpy.testing.assert_array_equal(numpy_helper.to_array(output.blocks[0].key), payload)
+        numpy.testing.assert_array_equal(onh.to_array(output.blocks[0].key), payload)
         for invalid_block in (
             {**block, "length": numpy.array(3, dtype=numpy.int64)},
             {**block, "start": numpy.array(1, dtype=numpy.int64)},
@@ -121,7 +122,7 @@ class TestPagedCacheProto(unittest.TestCase):
         del outputs, state, context, model
         gc.collect()
         numpy.testing.assert_array_equal(
-            numpy_helper.to_array(cache.blocks[0].key),
+            onh.to_array(cache.blocks[0].key),
             numpy.arange(4, dtype=numpy.float32).reshape(1, 1, 2, 2),
         )
         restored_model = make_model()

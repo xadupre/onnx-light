@@ -37,6 +37,9 @@ class TestPackageVersionConsistency(unittest.TestCase):
         cpp_version_value = self._extract(
             r'kVersion\s*=\s*"([^"]+)"', cpp_version, "onnx_light/_version.cc"
         )
+        cpp_documented_version = self._extract(
+            r'@return Version string "([^"]+)"', cpp_version, "onnx_light/_version.cc"
+        )
         cmake_version = self._extract(
             r"project\(onnx_light VERSION ([0-9]+\.[0-9]+\.[0-9]+)", cmake, "CMakeLists.txt"
         )
@@ -45,6 +48,7 @@ class TestPackageVersionConsistency(unittest.TestCase):
         self.assertEqual(pyproject_version, package_init_version)
         self.assertEqual(pyproject_version, setup_py_version)
         self.assertEqual(pyproject_version, cpp_version_value)
+        self.assertEqual(pyproject_version, cpp_documented_version)
         self.assertEqual(pyproject_version, cmake_version)
         self.assertEqual(pyproject_version, changelog_version)
 

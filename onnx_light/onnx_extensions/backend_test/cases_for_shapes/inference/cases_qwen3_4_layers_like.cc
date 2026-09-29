@@ -106,12 +106,23 @@ void RemoveUnusedQwenNodes(GraphProto &graph) {
     if (!used)
       continue;
     kept.push_back(node);
+    for (const auto &output : node.output())
+      required.insert(output);
     for (const auto &input : node.input())
       required.insert(input);
   }
   graph.clear_node();
   for (auto it = kept.rbegin(); it != kept.rend(); ++it)
     *graph.add_node() = std::move(*it);
+
+  std::vector<ValueInfoProto> value_infos;
+  value_infos.reserve(graph.value_info_size());
+  for (auto &value_info : graph.ref_value_info())
+    if (required.contains(value_info.name()))
+      value_infos.push_back(std::move(value_info));
+  graph.clear_value_info();
+  for (auto &value_info : value_infos)
+    *graph.add_value_info() = std::move(value_info);
 }
 
 void ConvertQwenToPagedCache(ModelProto &model) {

@@ -54,32 +54,62 @@ jobs:
           done <<< "${changed}"
           echo "docs_only=${docs_only}" >> "$GITHUB_OUTPUT"
 
-  python_discovery:
-    name: Python discovery (CMake ${{ matrix.cmake }}, Python ${{ matrix.python }})
+  free_threaded:
+    name: free-threaded build (CMake ${{ matrix.cmake }}, Python 3.13t)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     permissions:
       contents: read
     strategy:
       fail-fast: false
       matrix:
         cmake: ["3.30.9", "3.31.6", "4.0.3", "4.1.0"]
-        python: ["3.13", "3.13t"]
     steps:
       - uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
-          python-version: ${{ matrix.python }}
+          python-version: "3.13t"
 
-      - name: Install CMake
-        run: python -m pip install cmake==${{ matrix.cmake }}
+      - name: Install build and test dependencies
+        run: |
+          sudo apt-get install -y libssl-dev
+          python -m pip install cmake==${{ matrix.cmake }} setuptools "nanobind>=3.0.1" "numpy>=2.2" "ml-dtypes>=0.5.0" "openpyxl>=3.1" pytest
 
-      - name: Test real Python development-file discovery
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
+
+      - name: Build all Python extensions with free-threaded Python
         env:
-          ONNX_LIGHT_REQUIRE_FREE_THREADED: ${{ matrix.python == '3.13t' && '1' || '0' }}
-        run: python -m unittest unittests.main.test_cmake_python_cross_compile.TestCMakePythonCrossCompile.test_real_python_development_discovery
+          SCCACHE_GHA_ENABLED: "true"
+          CMAKE_ARGS: >-
+            -DONNX_LIGHT_BUILD_KERNELS=ON
+            -DCMAKE_C_COMPILER_LAUNCHER=sccache
+            -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+        run: |
+          python -c "import sysconfig; assert sysconfig.get_config_var('Py_GIL_DISABLED') == 1"
+          export CMAKE_BUILD_PARALLEL_LEVEL=$(python -c 'import os; print(os.cpu_count() or 1)')
+          python setup.py build_ext --inplace
+
+      - name: Import every compiled extension
+        run: |
+          python - <<'PY'
+          from onnx_light.onnx_py import (
+              _onnxpyprotoop,
+              _onnxpyprotolib,
+              _onnxpycore,
+              _onnxpypatterns,
+              _onnxpykernels,
+              _onnxpybackend,
+              _onnxpygradient,
+          )
+          PY
+
+      - name: Run Python binding tests
+        env:
+          UNITTEST_GOING: "1"
+        run: python -m pytest --durations=10 unittests/python/bindings
 
   reduced_tests_ubuntu:
     # Fastest preflight: builds onnx-light without the operator-kernel runtime

@@ -23,7 +23,7 @@ TypeProto TensorType(int32_t data_type, std::initializer_list<int64_t> dimension
 
 NodeProto Node() {
   NodeProto node;
-  node.set_domain("onnx_light");
+  node.set_domain("ai.rt");
   node.set_op_type("QuantizePagedCache");
   for (const char *name :
        {"cache", "indices", "key_scale", "key_zero", "value_scale", "value_zero"})
@@ -35,7 +35,7 @@ NodeProto Node() {
 core::shapes::ShapesContext Context() {
   ::ONNX_LIGHT_NAMESPACE::onnx_shapes::RegisterShapeFunctions();
   core::shapes::ShapesContext context;
-  context.SetOpsetVersion("onnx_light", 1);
+  context.SetOpsetVersion("ai.rt", 1);
   TypeProto cache;
   cache.mutable_struct_type();
   context.SetType("cache", cache);

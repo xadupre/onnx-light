@@ -40,7 +40,7 @@ void CheckZeroPoint(const ShapesContext &ctx, const std::string &name) {
 
 void ComputeShapeQuantizePagedCache(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "QuantizePagedCache", "ComputeShapeQuantizePagedCache");
-  EXT_ENFORCE_INVALID(node.domain() == "onnx_light" && node.input_size() == 6 &&
+  EXT_ENFORCE_INVALID(node.domain() == "ai.rt" && node.input_size() == 6 &&
                           node.output_size() == 1 && !node.output(0).empty(),
                       "QuantizePagedCache: expects six inputs and one output.");
   for (const auto &input : node.input())

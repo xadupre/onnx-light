@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 #include <cmath>
 #include <gtest/gtest.h>
@@ -19,6 +20,23 @@ Tensor Input(int64_t length, int64_t width, float offset = 0) {
   for (size_t i = 0; i < values.size(); ++i)
     values[i] = offset + static_cast<float>(static_cast<int>(i % 7) - 3) * 0.25f;
   return Tensor::FromFloat("", {1, 1, length, width}, values);
+}
+
+Tensor ReducedPrecisionInput(int32_t type, const Shape &shape, const std::vector<float> &values) {
+  Tensor result = MakeOutputTensor(type, shape, values.size() * sizeof(uint16_t), nullptr);
+  auto *data = reinterpret_cast<uint16_t *>(result.mutable_bytes());
+  for (size_t i = 0; i < values.size(); ++i)
+    data[i] =
+        type == DataType::FLOAT16 ? FloatToFloat16Bits(values[i]) : FloatToBfloat16Bits(values[i]);
+  return result;
+}
+
+float Read(const Tensor &tensor, size_t index) {
+  if (tensor.data_type == DataType::FLOAT)
+    return tensor.AsFloat()[index];
+  const uint16_t bits = reinterpret_cast<const uint16_t *>(tensor.bytes())[index];
+  return tensor.data_type == DataType::FLOAT16 ? Float16BitsToFloat(bits)
+                                               : Bfloat16BitsToFloat(bits);
 }
 
 const RuntimeSequence &Pages(const RuntimeValue &cache) {
@@ -136,6 +154,39 @@ TEST(PagedAttention, DenseMatchesAttentionAcrossAppendsAndWindows) {
         past_value = std::move(expected.present_value);
       }
     }
+}
+
+TEST(PagedAttention, SupportsBatchesGroupedQueryHeadsAndReducedPrecision) {
+  KernelContext context(DefaultOpset(23));
+  PagedAttention kernel(context);
+  Attention dense(context);
+  const Shape query_shape{2, 4, 1, 2};
+  const Shape kv_shape{2, 2, 1, 2};
+  const std::vector<float> query{1, -1, 2, 1, -2, 1, 1, 2, -1, 2, 1, -2, 2, 2, -1, -1};
+  const std::vector<float> first_keys{1, 2, -1, 1, 2, -1, 1, 1};
+  const std::vector<float> second_keys{-2, 1, 1, 2, 1, 1, -1, 2};
+  const std::vector<float> first_values{1, 2, 3, 4, 5, 6, 7, 8};
+  const std::vector<float> second_values{3, 4, 5, 6, 7, 8, 9, 10};
+  for (int32_t type : {DataType::FLOAT16, DataType::BFLOAT16}) {
+    SCOPED_TRACE(type);
+    const Tensor q = ReducedPrecisionInput(type, query_shape, query);
+    const Tensor first_k = ReducedPrecisionInput(type, kv_shape, first_keys);
+    const Tensor first_v = ReducedPrecisionInput(type, kv_shape, first_values);
+    auto first = kernel(q, first_k, first_v, PagedAttention::EmptyCache(), {});
+    Attention::Attributes attributes;
+    auto first_expected = dense(q, first_k, first_v, attributes);
+    EXPECT_EQ(first.Y.data_type, type);
+    EXPECT_EQ(first.Y.shape, query_shape);
+    for (size_t i = 0; i < query.size(); ++i)
+      EXPECT_NEAR(Read(first.Y, i), Read(first_expected.Y, i), 0.01f);
+    const Tensor second_k = ReducedPrecisionInput(type, kv_shape, second_keys);
+    const Tensor second_v = ReducedPrecisionInput(type, kv_shape, second_values);
+    auto second = kernel(q, second_k, second_v, first.present, {});
+    auto second_expected = dense(q, second_k, second_v, attributes, nullptr,
+                                 &first_expected.present_key, &first_expected.present_value);
+    for (size_t i = 0; i < query.size(); ++i)
+      EXPECT_NEAR(Read(second.Y, i), Read(second_expected.Y, i), 0.01f);
+  }
 }
 
 TEST(PagedAttention, MixedFormatsKeepPartialPageOwnersAndBytes) {
@@ -284,16 +335,19 @@ TEST(PagedAttention, RejectsBadOptionsDescriptorsAndOverflow) {
   auto overflow = Input(0, 2);
   overflow.shape = {1, 1, std::numeric_limits<int64_t>::max(), 2};
   EXPECT_THROW(kernel(overflow, overflow, overflow, empty, options), std::invalid_argument);
-  for (int variant = 0; variant < 4; ++variant) {
-    Tensor unsupported = Input(1, 2);
-    if (variant < 2)
-      unsupported.shape[variant] = 2;
-    else if (variant == 2)
-      unsupported.data_type = DataType::INT32;
-    else
-      unsupported.shape[3] = 0;
-    EXPECT_THROW(kernel(unsupported, input, input, empty, options), std::invalid_argument);
-  }
+  Tensor mismatched_batch = Input(1, 2);
+  mismatched_batch.shape[0] = 2;
+  EXPECT_THROW(kernel(mismatched_batch, input, input, empty, options), std::invalid_argument);
+  Tensor mismatched_heads = Input(1, 2);
+  mismatched_heads.shape[1] = 2;
+  EXPECT_THROW(kernel(input, mismatched_heads, mismatched_heads, empty, options),
+               std::invalid_argument);
+  Tensor unsupported_type = Input(1, 2);
+  unsupported_type.data_type = DataType::INT32;
+  EXPECT_THROW(kernel(unsupported_type, input, input, empty, options), std::invalid_argument);
+  Tensor zero_width = Input(1, 2);
+  zero_width.shape[3] = 0;
+  EXPECT_THROW(kernel(zero_width, input, input, empty, options), std::invalid_argument);
   input.AsFloat()[0] = std::numeric_limits<float>::infinity();
   EXPECT_THROW(kernel(input, input, input, empty, options), std::invalid_argument);
 }
@@ -342,7 +396,7 @@ TEST(PagedAttention, PackedTypedZeroPointsAndRawScales) {
 TEST(PagedAttention, RunRejectsUnsupportedAttributesWithoutPublishing) {
   RuntimeContext context(KernelContext(DefaultOpset(23)));
   NodeProto node;
-  node.set_domain("onnx_light");
+  node.set_domain("ai.rt");
   node.set_op_type("PagedAttention");
   for (const char *name : {"Q", "K", "V", "past"})
     node.add_input(name);

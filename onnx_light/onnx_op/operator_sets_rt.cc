@@ -114,6 +114,66 @@ LightOpSchema MakeDequantizeSchema() {
         AttributeType::INT, true, std::monostate{}}});
 }
 
+LightOpSchema MakePagedAttentionSchema() {
+  return LightOpSchema(
+      "PagedAttention", kAiRtDomain, 1,
+      "Appends immutable KV pages and computes grouped-query attention for finite Q/K/V tensors "
+      "of shape [batch,heads,L,D]. Q may have a multiple of the K/V head count; K and V have "
+      "equal head counts and all inputs have equal batch and new sequence dimensions. The "
+      "past/present values are structured caches whose blocks form a dynamic sequence of pages "
+      "with INT64 scalar start/length and logical key/value tensors "
+      "[batch,kv_heads,capacity,head_size]. Runtime pages may store dense FLOAT/FLOAT16/BFLOAT16 "
+      "or inline affine integer data. Shape inference produces Y with Q's batch, head and "
+      "sequence dimensions, V's head size and the input floating-point type. Storage policy "
+      "belongs to the registered kernel and is not part of the operator attributes.",
+      {{"Q", "Queries [batch,q_heads,L,key_head_size].", "T"},
+       {"K", "New keys [batch,kv_heads,L,key_head_size].", "T"},
+       {"V", "New values [batch,kv_heads,L,value_head_size].", "T"},
+       {"past", "Paged cache structured value.", "C"}},
+      {{"Y", "Attention result [batch,q_heads,L,value_head_size].", "T"},
+       {"present", "Cache after appending the new pages.", "C"}},
+      {{"T",
+        {TensorType::kFloat, TensorType::kFloat16, TensorType::kBfloat16},
+        "Constrain Q/K/V and Y to one floating-point type."},
+       {"C", {TensorType::kStruct}, "Named paged-cache structure."}},
+      {{"block_size", "Positive maximum token capacity for each new page.", AttributeType::INT,
+        false, int64_t(16)},
+       {"max_tokens", "Positive maximum retained token count, including past and new tokens.",
+        AttributeType::INT, false, int64_t(4096)},
+       {"is_causal", "Whether to apply causal masking; only 0 or 1 is valid.", AttributeType::INT,
+        false, int64_t(1)},
+       {"left_window_size", "Past-token window; -1 is unbounded and non-negative values limit it.",
+        AttributeType::INT, false, int64_t(-1)}});
+}
+
+LightOpSchema MakeQuantizePagedCacheSchema() {
+  const std::vector<TensorType> storage_types{
+      TensorType::kInt8,  TensorType::kUint8,   TensorType::kInt4,
+      TensorType::kUint4, TensorType::kInt2,    TensorType::kUint2,
+      TensorType::kFloat, TensorType::kFloat16, TensorType::kBfloat16};
+  return LightOpSchema(
+      "QuantizePagedCache", kAiRtDomain, 1,
+      "Quantizes the key and value payloads of selected immutable paged-cache blocks. "
+      "block_indices contains unique zero-based block indices. key_scale and value_scale are "
+      "positive scalar FLOAT tensors. The scalar key_zero_point and value_zero_point tensors "
+      "select independent INT8, UINT8, INT4, UINT4, INT2, UINT2, FLOAT, FLOAT16 or BFLOAT16 "
+      "storage formats. Integer types quantize to affine storage; floating types dequantize to "
+      "dense storage. Selected dense or affine blocks are converted; unselected blocks retain "
+      "their existing storage and ownership.",
+      {{"cache", "Input paged-cache structured value.", "C"},
+       {"block_indices", "Unique zero-based indices of blocks to quantize.", "I"},
+       {"key_scale", "Scalar FLOAT key quantization scale.", "S"},
+       {"key_zero_point", "Scalar key zero point selecting the key storage type.", "ZK"},
+       {"value_scale", "Scalar FLOAT value quantization scale.", "S"},
+       {"value_zero_point", "Scalar value zero point selecting the value storage type.", "ZV"}},
+      {{"quantized_cache", "Cache with the selected blocks requantized.", "C"}},
+      {{"C", {TensorType::kStruct}, "Constrain cache input and output to structured values."},
+       {"I", {TensorType::kInt64}, "Constrain block indices to INT64."},
+       {"S", {TensorType::kFloat}, "Constrain scales to FLOAT."},
+       {"ZK", storage_types, "Select the key's affine integer or dense floating storage type."},
+       {"ZV", storage_types, "Select the value's affine integer or dense floating storage type."}});
+}
+
 } // namespace
 
 std::vector<LightOpSchema> GetAllOnnxOpRtSchemasWithHistory(const std::string &op_type,
@@ -123,6 +183,9 @@ std::vector<LightOpSchema> GetAllOnnxOpRtSchemasWithHistory(const std::string &o
        [] { return std::vector<LightOpSchema>{MakeDelayedInitializerSchema()}; }},
       {"Quantize", [] { return std::vector<LightOpSchema>{MakeQuantizeSchema()}; }},
       {"Dequantize", [] { return std::vector<LightOpSchema>{MakeDequantizeSchema()}; }},
+      {"PagedAttention", [] { return std::vector<LightOpSchema>{MakePagedAttentionSchema()}; }},
+      {"QuantizePagedCache",
+       [] { return std::vector<LightOpSchema>{MakeQuantizePagedCacheSchema()}; }},
   };
   return CollectSchemasFromBuilders(builders, op_type, init_doc);
 }

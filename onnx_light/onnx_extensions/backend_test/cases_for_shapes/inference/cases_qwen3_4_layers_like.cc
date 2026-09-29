@@ -13,13 +13,233 @@
 #include <cstdint>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
+namespace {
+
+void MakeQwenCacheInputsExclusive(GraphProto &graph) {
+  constexpr const char *past_shape = "past_key_values_key_0::Shape2:3";
+  constexpr const char *total_shape =
+      "SqueezeAddPattern_SwapRangeAddScalarPattern--sym_size_int_25";
+  NodeProto *shape_node = nullptr;
+  NodeProto *batch_shape_node = nullptr;
+  NodeProto *length_node = nullptr;
+  for (auto &node : graph.ref_node()) {
+    if (node.output_size() == 1 && node.output(0) == past_shape) {
+      shape_node = &node;
+    } else if (node.output_size() == 1 && node.output(0) == "past_key_values_value_2::Shape:1") {
+      batch_shape_node = &node;
+    } else if (node.output_size() == 1 && node.output(0) == total_shape) {
+      length_node = &node;
+    }
+  }
+  EXT_ENFORCE_INVALID(shape_node != nullptr && batch_shape_node != nullptr &&
+                          length_node != nullptr,
+                      "Qwen persistent case: missing sequence-length nodes.");
+  *shape_node->mutable_input(0) = "attention_mask";
+  shape_node->mutable_attribute(0)->set_i(2);
+  shape_node->mutable_attribute(1)->set_i(1);
+  *batch_shape_node->mutable_input(0) = "input_ids";
+  length_node->set_op_type("Sub");
+  *length_node->mutable_input(0) = past_shape;
+  *length_node->mutable_input(1) = "input_ids::Shape1:2";
+  for (auto &node : graph.ref_node()) {
+    if (&node == shape_node || &node == batch_shape_node || &node == length_node)
+      continue;
+    for (auto &input : node.ref_input()) {
+      if (input == past_shape)
+        input = total_shape;
+      else if (input == total_shape)
+        input = past_shape;
+    }
+  }
+  for (int layer = 0; layer < 4; ++layer) {
+    const std::string suffix = std::to_string(layer);
+    for (const char *kind : {"key", "value"}) {
+      auto *binding = graph.add_persistent_bindings();
+      binding->set_input_name("past_key_values_" + std::string(kind) + "_" + suffix);
+      binding->set_output_name("present_key_values_" + std::string(kind) + "_" + suffix);
+    }
+  }
+}
+
+TypeProto QwenPagedCacheType() {
+  TypeProto type;
+  auto *blocks = type.mutable_struct_type()->mutable_structure()->add_field();
+  blocks->set_name("blocks");
+  auto *page = blocks->mutable_type()
+                   ->mutable_sequence_type()
+                   ->mutable_elem_type()
+                   ->mutable_struct_type()
+                   ->mutable_structure();
+  for (const char *name : {"start", "length", "key", "value"}) {
+    auto *field = page->add_field();
+    field->set_name(name);
+    auto *tensor = field->mutable_type()->mutable_tensor_type();
+    if (std::string(name) == "start" || std::string(name) == "length") {
+      tensor->set_elem_type(DataType::INT64);
+      tensor->mutable_shape();
+    } else {
+      tensor->set_elem_type(DataType::FLOAT);
+      tensor->mutable_shape()->add_dim()->set_dim_param("batch_size");
+      tensor->mutable_shape()->add_dim()->set_dim_value(8);
+      tensor->mutable_shape()->add_dim();
+      tensor->mutable_shape()->add_dim()->set_dim_value(128);
+    }
+  }
+  return type;
+}
+
+void RemoveUnusedQwenNodes(GraphProto &graph) {
+  std::unordered_set<std::string> required;
+  for (const auto &output : graph.output())
+    required.insert(output.name());
+  std::vector<NodeProto> kept;
+  kept.reserve(graph.node_size());
+  for (int index = graph.node_size() - 1; index >= 0; --index) {
+    const auto &node = graph.node(index);
+    bool used = false;
+    for (const auto &output : node.output())
+      used |= required.contains(output);
+    if (!used)
+      continue;
+    kept.push_back(node);
+    for (const auto &output : node.output())
+      required.insert(output);
+    for (const auto &input : node.input())
+      required.insert(input);
+  }
+  graph.clear_node();
+  for (auto it = kept.rbegin(); it != kept.rend(); ++it)
+    *graph.add_node() = std::move(*it);
+
+  std::vector<ValueInfoProto> value_infos;
+  value_infos.reserve(graph.value_info_size());
+  for (auto &value_info : graph.ref_value_info())
+    if (required.contains(value_info.name()))
+      value_infos.push_back(std::move(value_info));
+  graph.clear_value_info();
+  for (auto &value_info : value_infos)
+    *graph.add_value_info() = std::move(value_info);
+}
+
+void ConvertQwenToPagedCache(ModelProto &model) {
+  model.set_ir_version(13);
+  GraphProto &graph = *model.mutable_graph();
+  auto *opset = model.add_opset_import();
+  opset->set_domain("ai.rt");
+  opset->set_version(1);
+  for (int layer = 0; layer < 4; ++layer) {
+    const std::string suffix = std::to_string(layer);
+    const std::string cache = "paged_cache_" + suffix;
+    const std::string present = "present_paged_cache_" + suffix;
+    NodeProto *attention = nullptr;
+    for (auto &node : graph.ref_node()) {
+      if (node.op_type() == "Attention" && node.output_size() == 3 &&
+          node.output(1) == "present_key_values_key_" + suffix) {
+        attention = &node;
+        break;
+      }
+    }
+    EXT_ENFORCE_INVALID(attention != nullptr, "Qwen paged case: missing fused attention for layer ",
+                        suffix, ".");
+    const std::vector<std::string> inputs{attention->input(0), attention->input(1),
+                                          attention->input(2), cache};
+    const std::vector<std::string> outputs{attention->output(0), present};
+    attention->set_domain("ai.rt");
+    attention->set_op_type("PagedAttention");
+    attention->clear_input();
+    attention->clear_output();
+    for (const auto &input : inputs)
+      attention->add_input(input);
+    for (const auto &output : outputs)
+      attention->add_output(output);
+
+    auto *input = graph.add_input();
+    input->set_name(cache);
+    *input->mutable_type() = QwenPagedCacheType();
+    auto *output = graph.add_output();
+    output->set_name(present);
+    *output->mutable_type() = QwenPagedCacheType();
+    graph.add_paged_cache_initializer()->set_name(cache);
+    auto *binding = graph.add_persistent_bindings();
+    binding->set_input_name(cache);
+    binding->set_output_name(present);
+  }
+
+  std::vector<ValueInfoProto> inputs, outputs;
+  for (const auto &input : graph.input())
+    if (input.name().find("past_key_values_") != 0)
+      inputs.push_back(input);
+  for (const auto &output : graph.output())
+    if (output.name().find("present_key_values_") != 0)
+      outputs.push_back(output);
+  graph.clear_input();
+  graph.clear_output();
+  for (auto &input : inputs)
+    *graph.add_input() = std::move(input);
+  for (auto &output : outputs)
+    *graph.add_output() = std::move(output);
+
+  graph.clear_persistent_bindings();
+  for (int layer = 0; layer < 4; ++layer) {
+    const std::string suffix = std::to_string(layer);
+    auto *binding = graph.add_persistent_bindings();
+    binding->set_input_name("paged_cache_" + suffix);
+    binding->set_output_name("present_paged_cache_" + suffix);
+  }
+
+  for (auto &input : graph.ref_input()) {
+    if (input.name() != "attention_mask")
+      continue;
+    input.set_name("total_sequence_length");
+    auto *tensor = input.mutable_type()->mutable_tensor_type();
+    tensor->set_elem_type(DataType::INT64);
+    tensor->mutable_shape()->clear_dim();
+    tensor->mutable_shape()->add_dim()->set_dim_value(1);
+  }
+  for (auto &node : graph.ref_node()) {
+    if (node.output_size() != 1 || node.output(0) != "past_key_values_key_0::Shape2:3")
+      continue;
+    node.set_op_type("Identity");
+    node.clear_attribute();
+    node.clear_input();
+    node.add_input("total_sequence_length");
+  }
+  RemoveUnusedQwenNodes(graph);
+}
+
+void AddQwenPersistentCases(std::vector<TestCase> &registry, const ModelProto &source) {
+  const std::string persistent_name = "test_cc_shape_inference_big_qwen3_4_layers_like_persistent";
+  TestCase persistent(persistent_name, persistent_name, TestCaseKind::MODEL,
+                      TestCaseTag::INFERENCE);
+  persistent.rtol = 1e-3f;
+  persistent.atol = 1e-5f;
+  ModelProto &persistent_model = persistent.emplace_model();
+  persistent_model = source;
+  persistent_model.mutable_graph()->set_name(persistent_name);
+  MakeQwenCacheInputsExclusive(*persistent_model.mutable_graph());
+  registry.emplace_back(std::move(persistent));
+
+  const std::string paged_name = "test_cc_shape_inference_big_qwen3_4_layers_like_persistent_paged";
+  TestCase paged(paged_name, paged_name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
+  paged.rtol = 1e-3f;
+  paged.atol = 1e-5f;
+  ModelProto &paged_model = paged.emplace_model();
+  paged_model = source;
+  paged_model.mutable_graph()->set_name(paged_name);
+  MakeQwenCacheInputsExclusive(*paged_model.mutable_graph());
+  ConvertQwenToPagedCache(paged_model);
+  registry.emplace_back(std::move(paged));
+}
+
+} // namespace
 
 // ---------------------------------------------------------------------------
 // ``qwen3_4_layers_like`` -- a 4-layer Qwen3-style causal language model,
-// registered in two variants selected by a single ``fused`` switch:
+// registered in four variants:
 //
 //   * unfused (``test_cc_shape_inference_big_qwen3_4_layers_like``, opset 21):
 //     RMSNorm is spelled out (Cast + Pow + ReduceMean + Add + Sqrt +
@@ -30,13 +250,20 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 //     opset 23): every RMSNorm collapses to one ``RMSNormalization`` node and
 //     the whole attention core collapses to one ``Attention`` node (which also
 //     emits the per-layer present key/value cache).
+//   * persistent: the fused tensor caches are bound back to their inputs, with
+//     every bound input consumed exactly once;
+//   * persistent paged: each layer uses one ``ai.rt::PagedAttention`` node and
+//     one bound structured paged cache. Since PagedAttention has no padding-mask
+//     input, this variant replaces attention_mask with an explicit total sequence
+//     length and only represents unpadded inputs.
 //
-// Both variants share the same public signature; RoPE and the causal-mask
-// construction stay explicit in both because they have no fused equivalent.
-// The unfused variant additionally carries the golden in-place-reuse,
-// value-tag and constant metadata verified by the ``BigModels*`` tests.
+// The unfused, fused and persistent tensor-cache variants share the signature
+// below. RoPE stays explicit in all four variants; causal-mask construction
+// stays explicit only in the tensor-cache variants. The unfused variant
+// additionally carries the golden in-place-reuse, value-tag and constant
+// metadata verified by the ``BigModels*`` tests.
 //
-// Graph signature (identical for both variants):
+// Tensor-cache graph signature:
 //
 //   Inputs:
 //     input_ids               INT64[batch_size, sequence_length]
@@ -48,6 +275,17 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 //     output_0                FP16[batch_size, sequence_length, 32000]
 //     present_key_values_key_N    FP16[batch_size, 8, past_seq+seq, 128]
 //     present_key_values_value_N  FP16[batch_size, 8, past_seq+seq, 128]
+//
+// Persistent paged graph signature:
+//
+//   Inputs:
+//     input_ids               INT64[batch_size, sequence_length]
+//     total_sequence_length   INT64[1]
+//     paged_cache_N           PagedCache
+//
+//   Outputs:
+//     output_0                FP16[batch_size, sequence_length, 32000]
+//     present_paged_cache_N   PagedCache
 // ---------------------------------------------------------------------------
 void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registry,
                                                   TestMode /*mode*/) {
@@ -1883,6 +2121,8 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
       core::compute::WriteConstantInfoToMetadata(model);
     }
 
+    if (fused)
+      AddQwenPersistentCases(registry, model);
     registry.emplace_back(std::move(tc));
   }
 }

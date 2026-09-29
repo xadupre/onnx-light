@@ -4,7 +4,7 @@
 Quantizes and dequantizes selected pages of a KV cache
 =====================================================
 
-This example executes ``onnx_light::QuantizePagedCache`` twice in one graph:
+This example executes ``ai.rt::QuantizePagedCache`` twice in one graph:
 first to quantize one page, then to restore its dense floating-point storage.
 Other pages remain unchanged. The cache is a ``PagedCacheProto``, not one
 uniformly quantized tensor: K and V can use different formats on each page.
@@ -77,13 +77,13 @@ model = helper.make_model(
                 "QuantizePagedCache",
                 ["past", "indices", "key_scale", "key_zero", "value_scale", "value_zero"],
                 ["quantized"],
-                domain="onnx_light",
+                domain="ai.rt",
             ),
             helper.make_node(
                 "QuantizePagedCache",
                 ["quantized", "indices", "one", "float16_marker", "one", "bfloat16_marker"],
                 ["restored"],
-                domain="onnx_light",
+                domain="ai.rt",
             ),
         ],
         "selected_page_roundtrip",
@@ -105,7 +105,7 @@ model = helper.make_model(
             helper.make_tensor("bfloat16_marker", onnx.TensorProto.BFLOAT16, [], [0]),
         ],
     ),
-    opset_imports=[helper.make_opsetid("", 23), helper.make_opsetid("onnx_light", 1)],
+    opset_imports=[helper.make_opsetid("", 23), helper.make_opsetid("ai.rt", 1)],
     ir_version=10,
 )
 verify.verify_model(model)

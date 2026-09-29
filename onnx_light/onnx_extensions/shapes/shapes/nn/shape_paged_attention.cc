@@ -20,12 +20,19 @@ Dimension MergeDimension(const Dimension &left, const Dimension &right) {
   return right;
 }
 
-std::array<Dimension, 4> TensorDimensions(const TypeProto &type) {
+std::array<Dimension, 4> TensorDimensions(const TypeProto &type, bool logical_cache = false) {
   EXT_ENFORCE_INVALID(type.has_tensor_type(), "PagedAttention: expected a tensor type.");
   const auto &tensor = type.tensor_type();
-  EXT_ENFORCE_INVALID(tensor.elem_type() == TensorProto::UNDEFINED ||
-                          tensor.elem_type() == TensorProto::FLOAT,
-                      "PagedAttention: tensors must be FLOAT.");
+  if (logical_cache) {
+    EXT_ENFORCE_INVALID(tensor.elem_type() == TensorProto::FLOAT,
+                        "PagedAttention: logical cache tensors must be FLOAT.");
+  } else {
+    EXT_ENFORCE_INVALID(tensor.elem_type() == TensorProto::UNDEFINED ||
+                            tensor.elem_type() == TensorProto::FLOAT ||
+                            tensor.elem_type() == TensorProto::FLOAT16 ||
+                            tensor.elem_type() == TensorProto::BFLOAT16,
+                        "PagedAttention: tensors must be FLOAT, FLOAT16, or BFLOAT16.");
+  }
   std::array<Dimension, 4> dims;
   if (tensor.has_shape()) {
     EXT_ENFORCE_INVALID(tensor.shape().dim_size() == 4,
@@ -34,10 +41,9 @@ std::array<Dimension, 4> TensorDimensions(const TypeProto &type) {
       dims[i] = tensor.shape().dim(static_cast<int>(i));
   }
   for (size_t i = 0; i < dims.size(); ++i)
-    EXT_ENFORCE_INVALID(!dims[i].has_dim_value() ||
-                            (i < 2 ? dims[i].dim_value() == 1
-                                   : (i == 2 ? dims[i].dim_value() >= 0 : dims[i].dim_value() > 0)),
-                        "PagedAttention: expected [1,1,L,D] with L >= 0 and D > 0.");
+    EXT_ENFORCE_INVALID(
+        !dims[i].has_dim_value() || (i == 2 ? dims[i].dim_value() >= 0 : dims[i].dim_value() > 0),
+        "PagedAttention: expected [batch,heads,L,D] with positive batch, heads and D, and L >= 0.");
   return dims;
 }
 
@@ -70,15 +76,32 @@ const TypeProto &Field(const StructTypeProto::Structure &structure, const char *
 
 void ComputeShapePagedAttention(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "PagedAttention", "ComputeShapePagedAttention");
-  EXT_ENFORCE_INVALID(node.domain() == "onnx_light" && node.input_size() == 4 &&
+  EXT_ENFORCE_INVALID(node.domain() == "ai.rt" && node.input_size() == 4 &&
                           node.output_size() == 2 && !node.output(0).empty() &&
                           !node.output(1).empty() && node.output(0) != node.output(1),
-                      "PagedAttention: expects Q,K,V,past and Y,present in domain onnx_light.");
+                      "PagedAttention: expects Q,K,V,past and Y,present in domain ai.rt.");
   for (const auto &input : node.input())
     EXT_ENFORCE_INVALID(!input.empty(), "PagedAttention: inputs must not be omitted.");
-  const auto q = TensorDimensions(InputType(ctx, node.input(0)));
-  const auto k = TensorDimensions(InputType(ctx, node.input(1)));
-  const auto v = TensorDimensions(InputType(ctx, node.input(2)));
+  const TypeProto q_type = InputType(ctx, node.input(0));
+  const TypeProto k_type = InputType(ctx, node.input(1));
+  const TypeProto v_type = InputType(ctx, node.input(2));
+  const auto q = TensorDimensions(q_type);
+  const auto k = TensorDimensions(k_type);
+  const auto v = TensorDimensions(v_type);
+  int elem_type = TensorProto::UNDEFINED;
+  for (const TypeProto *type : {&q_type, &k_type, &v_type}) {
+    const int candidate = type->tensor_type().elem_type();
+    EXT_ENFORCE_INVALID(candidate == TensorProto::UNDEFINED ||
+                            elem_type == TensorProto::UNDEFINED || candidate == elem_type,
+                        "PagedAttention: Q, K, and V must have the same element type.");
+    if (candidate != TensorProto::UNDEFINED)
+      elem_type = candidate;
+  }
+  auto batch = MergeDimension(MergeDimension(q[0], k[0]), v[0]);
+  auto kv_heads = MergeDimension(k[1], v[1]);
+  EXT_ENFORCE_INVALID(!q[1].has_dim_value() || !kv_heads.has_dim_value() ||
+                          q[1].dim_value() % kv_heads.dim_value() == 0,
+                      "PagedAttention: query heads must be a multiple of KV heads.");
   const auto length = MergeDimension(MergeDimension(q[2], k[2]), v[2]);
   const auto key_width = MergeDimension(q[3], k[3]);
   auto value_width = v[3];
@@ -99,8 +122,13 @@ void ComputeShapePagedAttention(ShapesContext &ctx, const NodeProto &node) {
               (!type.tensor_type().has_shape() || type.tensor_type().shape().dim_size() == 0),
           "PagedAttention: start/length must be INT64 scalars.");
     }
-    const auto cached_key = TensorDimensions(Field(page, "key"));
-    const auto cached_value = TensorDimensions(Field(page, "value"));
+    const auto cached_key = TensorDimensions(Field(page, "key"), true);
+    const auto cached_value = TensorDimensions(Field(page, "value"), true);
+    batch = MergeDimension(MergeDimension(batch, cached_key[0]), cached_value[0]);
+    kv_heads = MergeDimension(MergeDimension(kv_heads, cached_key[1]), cached_value[1]);
+    EXT_ENFORCE_INVALID(!q[1].has_dim_value() || !kv_heads.has_dim_value() ||
+                            q[1].dim_value() % kv_heads.dim_value() == 0,
+                        "PagedAttention: query heads must be a multiple of KV heads.");
     MergeDimension(cached_key[2], cached_value[2]);
     MergeDimension(key_width, cached_key[3]);
     value_width = MergeDimension(value_width, cached_value[3]);
@@ -108,9 +136,9 @@ void ComputeShapePagedAttention(ShapesContext &ctx, const NodeProto &node) {
 
   TypeProto output;
   auto *tensor = output.mutable_tensor_type();
-  tensor->set_elem_type(TensorProto::FLOAT);
-  tensor->mutable_shape()->add_dim()->set_dim_value(1);
-  tensor->mutable_shape()->add_dim()->set_dim_value(1);
+  tensor->set_elem_type(elem_type);
+  *tensor->mutable_shape()->add_dim() = batch;
+  *tensor->mutable_shape()->add_dim() = q[1];
   *tensor->mutable_shape()->add_dim() = length;
   *tensor->mutable_shape()->add_dim() = value_width;
   ctx.SetType(node.output(0), output);

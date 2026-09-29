@@ -1172,8 +1172,9 @@ END_PROTO()
 
 BEGIN_PROTO(PagedCacheProto,
             "A serializable KV cache. Pages have contiguous token ranges and independently "
-            "dense or encoded FLOAT [1,1,capacity,width] key/value payloads. Model-local type "
-            "and quantization parameter references are resolved against the containing model.")
+            "dense or encoded FLOAT [batch,heads,capacity,width] key/value payloads. Model-local "
+            "type and quantization parameter references are resolved against the containing "
+            "model.")
 FIELD_REPEATED_PROTO(PagedCacheBlockProto, blocks, 1, "Ordered immutable KV pages.")
 FIELD_STR(name, 2, "Graph-scoped initializer name, unique across initializer categories.")
 FIELD_STR(doc_string, 3, "Human-readable documentation.")

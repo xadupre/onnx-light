@@ -14,10 +14,10 @@ using namespace ONNX_LIGHT_NAMESPACE;
 namespace Test {
 namespace {
 
-TypeProto PagedTensor(std::initializer_list<int64_t> dims) {
+TypeProto PagedTensor(std::initializer_list<int64_t> dims, int32_t elem_type = TensorProto::FLOAT) {
   TypeProto type;
   auto *tensor = type.mutable_tensor_type();
-  tensor->set_elem_type(TensorProto::FLOAT);
+  tensor->set_elem_type(elem_type);
   tensor->mutable_shape();
   for (int64_t dim : dims) {
     auto *dimension = tensor->mutable_shape()->add_dim();
@@ -50,7 +50,7 @@ TypeProto PagedCache() {
 
 NodeProto PagedNode() {
   NodeProto node;
-  node.set_domain("onnx_light");
+  node.set_domain("ai.rt");
   node.set_op_type("PagedAttention");
   for (const char *input : {"Q", "K", "V", "past"})
     node.add_input(input);
@@ -62,7 +62,7 @@ NodeProto PagedNode() {
 core::shapes::ShapesContext PagedContext() {
   onnx_shapes::RegisterShapeFunctions();
   core::shapes::ShapesContext context;
-  context.SetOpsetVersion("onnx_light", 1);
+  context.SetOpsetVersion("ai.rt", 1);
   context.SetType("Q", PagedTensor({1, 1, 3, 4}));
   context.SetType("K", PagedTensor({1, 1, 3, 4}));
   context.SetType("V", PagedTensor({1, 1, 3, 6}));
@@ -107,9 +107,41 @@ TEST(PagedAttentionShape, UnknownInputsStillInferRankFourAndFloat) {
   EXPECT_EQ(output.elem_type(), TensorProto::FLOAT);
   ASSERT_EQ(output.shape().dim_size(), 4);
   EXPECT_EQ(output.shape().dim(0).dim_value(), 1);
-  EXPECT_EQ(output.shape().dim(1).dim_value(), 1);
+  EXPECT_FALSE(output.shape().dim(1).has_dim_value());
   EXPECT_FALSE(output.shape().dim(2).has_dim_value());
   EXPECT_FALSE(output.shape().dim(3).has_dim_value());
+}
+
+TEST(PagedAttentionShape, SupportsGroupedQueryAttentionAndReducedPrecision) {
+  auto context = PagedContext();
+  context.SetType("Q", PagedTensor({2, 16, 3, 4}, TensorProto::FLOAT16));
+  context.SetType("K", PagedTensor({2, 8, 3, 4}, TensorProto::FLOAT16));
+  context.SetType("V", PagedTensor({2, 8, 3, 6}, TensorProto::FLOAT16));
+  auto cache = PagedCache();
+  auto *page = cache.mutable_struct_type()
+                   ->mutable_structure()
+                   ->mutable_field(0)
+                   ->mutable_type()
+                   ->mutable_sequence_type()
+                   ->mutable_elem_type()
+                   ->mutable_struct_type()
+                   ->mutable_structure();
+  for (int field : {2, 3}) {
+    auto *shape =
+        page->mutable_field(field)->mutable_type()->mutable_tensor_type()->mutable_shape();
+    shape->mutable_dim(0)->set_dim_value(2);
+    shape->mutable_dim(1)->set_dim_value(8);
+  }
+  context.SetType("past", cache);
+  context.ComputeShapeNode(PagedNode());
+  EXPECT_TRUE(context.GetType("Y").Equals(PagedTensor({2, 16, 3, 6}, TensorProto::FLOAT16)));
+}
+
+TEST(PagedAttentionShape, RejectsMismatchedSupportedInputTypes) {
+  auto context = PagedContext();
+  context.SetType("K", PagedTensor({1, 1, 3, 4}, TensorProto::FLOAT16));
+  context.SetType("V", PagedTensor({1, 1, 3, 6}, TensorProto::BFLOAT16));
+  EXPECT_THROW(context.ComputeShapeNode(PagedNode()), std::invalid_argument);
 }
 
 TEST(PagedAttentionShape, AcceptsSymbolicTensorDescriptorsAndEmptyAppend) {
@@ -145,13 +177,46 @@ TEST(PagedAttentionShape, RefinesUnknownValueWidthFromCache) {
   EXPECT_TRUE(context.GetType("present").Equals(cache));
 }
 
+TEST(PagedAttentionShape, RefinesUnknownBatchFromCache) {
+  auto context = PagedContext();
+  for (const char *name : {"Q", "K", "V"}) {
+    auto type = context.GetType(name);
+    type.mutable_tensor_type()->mutable_shape()->mutable_dim(0)->clear_dim_value();
+    context.SetType(name, type);
+  }
+  auto cache = PagedCache();
+  auto *page = cache.mutable_struct_type()
+                   ->mutable_structure()
+                   ->mutable_field(0)
+                   ->mutable_type()
+                   ->mutable_sequence_type()
+                   ->mutable_elem_type()
+                   ->mutable_struct_type()
+                   ->mutable_structure();
+  for (int field : {2, 3})
+    page->mutable_field(field)
+        ->mutable_type()
+        ->mutable_tensor_type()
+        ->mutable_shape()
+        ->mutable_dim(0)
+        ->set_dim_value(2);
+  context.SetType("past", cache);
+  context.ComputeShapeNode(PagedNode());
+  EXPECT_EQ(context.GetType("Y").tensor_type().shape().dim(0).dim_value(), 2);
+
+  page->mutable_field(3)
+      ->mutable_type()
+      ->mutable_tensor_type()
+      ->mutable_shape()
+      ->mutable_dim(0)
+      ->set_dim_value(3);
+  context.SetType("past", cache);
+  EXPECT_THROW(context.ComputeShapeNode(PagedNode()), std::invalid_argument);
+}
+
 TEST(PagedAttentionShape, RejectsKnownTensorMismatches) {
-  for (const auto &dims : {std::vector<int64_t>{1, 3, 4},
-                           {2, 1, 3, 4},
-                           {1, 2, 3, 4},
-                           {1, 1, 2, 4},
-                           {1, 1, 3, 5},
-                           {1, 1, 3, 0}}) {
+  for (const auto &dims :
+       {std::vector<int64_t>{1, 3, 4}, {2, 1, 3, 4}, {1, 1, 2, 4}, {1, 1, 3, 5}, {1, 1, 3, 0}}) {
     auto context = PagedContext();
     TypeProto query;
     auto *tensor = query.mutable_tensor_type();
@@ -170,7 +235,7 @@ TEST(PagedAttentionShape, RejectsKnownTensorMismatches) {
 }
 
 TEST(PagedAttentionShape, RejectsMalformedCacheAndNode) {
-  for (int failure = 0; failure < 5; ++failure) {
+  for (int failure = 0; failure < 7; ++failure) {
     auto context = PagedContext();
     auto cache = PagedCache();
     auto *blocks = cache.mutable_struct_type()->mutable_structure()->mutable_field(0);
@@ -193,8 +258,28 @@ TEST(PagedAttentionShape, RejectsMalformedCacheAndNode) {
           ->set_dim_value(8);
     else if (failure == 3)
       page->mutable_field(3)->set_name("wrong");
-    else
+    else if (failure == 4)
       *blocks->mutable_type() = PagedTensor({1});
+    else if (failure == 5)
+      page->mutable_field(2)->mutable_type()->mutable_tensor_type()->set_elem_type(
+          TensorProto::FLOAT16);
+    else {
+      context.SetType("Q", PagedTensor({1, 3, 3, 4}));
+      context.SetType("K", PagedTensor({1, -1, 3, 4}));
+      context.SetType("V", PagedTensor({1, -1, 3, 6}));
+      page->mutable_field(2)
+          ->mutable_type()
+          ->mutable_tensor_type()
+          ->mutable_shape()
+          ->mutable_dim(1)
+          ->set_dim_value(2);
+      page->mutable_field(3)
+          ->mutable_type()
+          ->mutable_tensor_type()
+          ->mutable_shape()
+          ->mutable_dim(1)
+          ->set_dim_value(2);
+    }
     context.SetType("past", cache);
     EXPECT_THROW(context.ComputeShapeNode(PagedNode()), std::invalid_argument);
   }
@@ -215,7 +300,7 @@ TEST(PagedAttentionShape, ModelInferencePreservesReferencesAndFeedback) {
   ModelProto model;
   model.set_ir_version(13);
   auto *opset = model.add_opset_import();
-  opset->set_domain("onnx_light");
+  opset->set_domain("ai.rt");
   opset->set_version(1);
   auto cache = PagedCache();
   auto *definition = model.add_struct_types();

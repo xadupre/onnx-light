@@ -68,7 +68,8 @@ using ::onnx_light::core::symbolic::TensorTypeToDataType;
 namespace nn {
 
 /**
- * Infers FLOAT Y [1,1,L,value_head_size] and preserves the structured paged-cache type.
+ * Infers Y [batch,q_heads,L,value_head_size] and preserves its floating-point type and the
+ * structured paged-cache type.
  *
  * Checks Q/K/V dimensions and the recursively resolved cache declaration. Unknown
  * ranks and symbolic dimensions are supported; incompatible known dimensions fail.

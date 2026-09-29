@@ -28,9 +28,10 @@ using ::onnx_light::core::runtime::KernelContext;
 using ::onnx_light::core::runtime::OpsetId;
 
 /**
- * Computes opt-in paged attention for finite FLOAT Q/K/V of shape [1,1,L,D].
+ * Computes opt-in paged attention for finite FLOAT/FLOAT16/BFLOAT16 Q/K/V of
+ * shape [batch,heads,L,D], including grouped-query attention.
  *
- * Registers through RuntimeContext::RegisterKernelFn in domain ``onnx_light``
+ * Registers through RuntimeContext::RegisterKernelFn in domain ``ai.rt``
  * as ``PagedAttention``; it does not replace ONNX Attention. Q and new K/V
  * have equal sequence lengths. Prior pages remain immutable, including partial
  * pages. Dense FLOAT/FLOAT16/BFLOAT16 and inline INT8/UINT8/INT4/UINT4/INT2/UINT2
@@ -41,7 +42,7 @@ using ::onnx_light::core::runtime::OpsetId;
  */
 class PagedAttention : public KernelBase {
 public:
-  static constexpr const char *name = "onnx_kernels:CPU:onnx_light:PagedAttention";
+  static constexpr const char *name = "onnx_kernels:CPU:ai.rt:PagedAttention";
   explicit PagedAttention(const KernelContext &context);
   struct Format {
     int32_t storage_type = DataType::FLOAT;
@@ -99,7 +100,7 @@ private:
  * @param length Number of valid leading rows to decode.
  * @param catalogue Structured-type catalogue used to validate encoded values.
  * @param allocator Optional destination allocator.
- * @return Owned FLOAT tensor with shape ``[1,1,length,width]``.
+ * @return Owned FLOAT tensor with shape ``[batch,heads,length,width]``.
  */
 Tensor DecodePagedCachePayload(const RuntimeValue &value, int64_t length,
                                const StructTypeCatalogue &catalogue = {},
@@ -117,7 +118,7 @@ Tensor DecodePagedCachePayload(const RuntimeValue &value, int64_t length,
  */
 class QuantizePagedCache : public KernelBase {
 public:
-  static constexpr const char *name = "onnx_kernels:CPU:onnx_light:QuantizePagedCache";
+  static constexpr const char *name = "onnx_kernels:CPU:ai.rt:QuantizePagedCache";
   using KernelBase::KernelBase;
   void Run(RuntimeContext &rt) override;
   RuntimeValue operator()(const RuntimeValue &cache, const Tensor &block_indices,

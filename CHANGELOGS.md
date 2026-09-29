@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Added opt-in paged KV attention with independent per-page K/V formats,
   `PagedCacheProto` serialization, graph cache initializers, and persistent state
   integration ([#5024](https://github.com/xadupre/onnx-light/pull/5024)).
-- Added `onnx_light::QuantizePagedCache` to quantize selected pages into affine
+- Added `ai.rt::QuantizePagedCache` to quantize selected pages into affine
   INT2/UINT2, INT4/UINT4, or INT8/UINT8 storage and dequantize them into
   FLOAT/FLOAT16/BFLOAT16. Conversions preserve valid lengths and page capacities,
   retain unselected payloads, and validate the complete cache before publication.

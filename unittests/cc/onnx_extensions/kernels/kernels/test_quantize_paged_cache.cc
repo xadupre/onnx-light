@@ -123,7 +123,7 @@ TEST(QuantizePagedCache, PartialPageCommitsThroughFixedCapacityPersistentCache) 
   model.set_ir_version(10);
   model.add_opset_import()->set_version(23);
   auto *opset = model.add_opset_import();
-  opset->set_domain("onnx_light");
+  opset->set_domain("ai.rt");
   opset->set_version(1);
   auto *graph = model.mutable_graph();
   graph->set_name("convert_typed_cache");
@@ -157,7 +157,7 @@ TEST(QuantizePagedCache, PartialPageCommitsThroughFixedCapacityPersistentCache) 
   binding->set_input_name("past");
   binding->set_output_name("present");
   auto *node = graph->add_node();
-  node->set_domain("onnx_light");
+  node->set_domain("ai.rt");
   node->set_op_type("QuantizePagedCache");
   node->add_input("past");
   node->add_output("present");
@@ -216,15 +216,20 @@ TEST(QuantizePagedCache, PreservesPartialCapacityAcrossAllConversionsWithoutRead
   KernelContext context(DefaultOpset(23));
   QuantizePagedCache quantize(context);
   const float unused = std::numeric_limits<float>::quiet_NaN();
+  const auto partial_values = [unused](int64_t width) {
+    std::vector<float> values(static_cast<size_t>(2 * 2 * 3 * width), unused);
+    for (int64_t outer = 0; outer < 4; ++outer)
+      for (int64_t column = 0; column < width; ++column)
+        values[static_cast<size_t>(outer * 3 * width + column)] =
+            static_cast<float>((outer + column) % 4 - 2) * 0.25f;
+    return values;
+  };
   RuntimeValue page;
   page.fields.emplace("start", RuntimeValue(Tensor::FromInt64("", {}, {0})));
   page.fields.emplace("length", RuntimeValue(Tensor::FromInt64("", {}, {1})));
-  page.fields.emplace("key", RuntimeValue(Tensor::FromFloat("", {1, 1, 3, 3},
-                                                            {-0.25f, 0, 0.25f, unused, unused,
-                                                             unused, unused, unused, unused})));
-  page.fields.emplace(
-      "value", RuntimeValue(Tensor::FromFloat("", {1, 1, 3, 2},
-                                              {-0.25f, 0.25f, unused, unused, unused, unused})));
+  page.fields.emplace("key", RuntimeValue(Tensor::FromFloat("", {2, 2, 3, 3}, partial_values(3))));
+  page.fields.emplace("value",
+                      RuntimeValue(Tensor::FromFloat("", {2, 2, 3, 2}, partial_values(2))));
   RuntimeValue cache;
   cache.fields.emplace("blocks", RuntimeValue(std::vector<RuntimeValue>{std::move(page)}));
   cache = std::move(cache).Retain();
@@ -247,10 +252,14 @@ TEST(QuantizePagedCache, PreservesPartialCapacityAcrossAllConversionsWithoutRead
       for (const char *name : {"key", "value"}) {
         const int64_t width = std::string(name) == "key" ? 3 : 2;
         const auto decoded = DecodePagedCachePayload(block.fields.at(name), 3);
-        ASSERT_EQ(decoded.shape, (Shape{1, 1, 3, width}));
+        ASSERT_EQ(decoded.shape, (Shape{2, 2, 3, width}));
         const auto &original = Blocks(cache)[0].fields.at(name).tensor;
-        for (int64_t i = 0; i < decoded.element_count(); ++i)
-          EXPECT_FLOAT_EQ(decoded.AsFloat()[i], i < width ? original.AsFloat()[i] : 0);
+        for (int64_t outer = 0; outer < 4; ++outer)
+          for (int64_t row = 0; row < 3; ++row)
+            for (int64_t column = 0; column < width; ++column) {
+              const int64_t index = (outer * 3 + row) * width + column;
+              EXPECT_FLOAT_EQ(decoded.AsFloat()[index], row == 0 ? original.AsFloat()[index] : 0);
+            }
       }
       const auto exported = converted.ToPagedCache();
       converted = quantize(RuntimeValue::FromPagedCache(exported), indices, scale,

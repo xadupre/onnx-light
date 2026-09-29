@@ -736,6 +736,94 @@ TEST(onnx_shape_inference, InferShapesImpl_SplitRejectsTooManyOutputs) {
                ONNX_LIGHT_NAMESPACE::InferenceError);
 }
 
+class TopKShapeInferenceTest : public ::testing::TestWithParam<std::tuple<int, bool>> {
+protected:
+  ModelProto model;
+
+  void SetUp() override {
+    RegisterAllOnnxOperatorSchemas();
+    OnnxParser parser(R"ONNX(
+      <ir_version: 10, opset_import: ["" : 10]>
+      graph (float[3,4,5,10] X, int64[1] K) => (float[] Y, int64[] Z) {
+        Y, Z = TopK <axis = 2> (X, K)
+      }
+    )ONNX");
+    const auto status = parser.Parse(model);
+    ASSERT_TRUE(status.IsOK()) << status.ErrorMessage();
+    model.mutable_opset_import(0)->set_version(std::get<0>(GetParam()));
+    if (!std::get<1>(GetParam())) {
+      model.mutable_graph()
+          ->mutable_input(0)
+          ->mutable_type()
+          ->mutable_tensor_type()
+          ->mutable_shape()
+          ->mutable_dim(2)
+          ->clear_dim_value();
+    }
+  }
+
+  TensorProto *AddK(int64_t value) {
+    model.mutable_graph()->mutable_input()->resize(1);
+    auto *k = model.mutable_graph()->add_initializer();
+    k->set_name("K");
+    k->set_data_type(TensorProto::INT64);
+    k->add_dims(1);
+    k->add_int64_data(value);
+    return k;
+  }
+
+  void Infer() {
+    shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                 ShapeInferenceOptions(false, 1, false));
+  }
+};
+
+TEST_P(TopKShapeInferenceTest, RejectsInvalidKShape) {
+  auto *k = AddK(2);
+  k->clear_dims();
+  EXPECT_THROW(Infer(), InferenceError);
+  k->add_dims(2);
+  k->add_int64_data(1);
+  EXPECT_THROW(Infer(), InferenceError);
+}
+
+TEST_P(TopKShapeInferenceTest, RejectsInvalidKType) {
+  auto *k = AddK(2);
+  k->set_data_type(TensorProto::FLOAT);
+  k->clear_int64_data();
+  k->add_float_data(2.0f);
+  EXPECT_THROW(Infer(), InferenceError);
+}
+
+TEST_P(TopKShapeInferenceTest, InfersPositiveK) {
+  AddK(2);
+  ASSERT_NO_THROW(Infer());
+  for (const auto &output : model.graph().output()) {
+    const auto &shape = output.type().tensor_type().shape();
+    ASSERT_EQ(shape.dim_size(), 4);
+    if (std::get<1>(GetParam())) {
+      EXPECT_EQ(shape.dim(0).dim_value(), 3);
+      EXPECT_EQ(shape.dim(1).dim_value(), 4);
+      EXPECT_EQ(shape.dim(2).dim_value(), 2);
+      EXPECT_EQ(shape.dim(3).dim_value(), 10);
+    } else {
+      EXPECT_FALSE(shape.dim(2).has_dim_value());
+    }
+  }
+}
+
+TEST_P(TopKShapeInferenceTest, InfersRankWithDynamicK) {
+  ASSERT_NO_THROW(Infer());
+  for (const auto &output : model.graph().output()) {
+    const auto &shape = output.type().tensor_type().shape();
+    ASSERT_EQ(shape.dim_size(), 4);
+    EXPECT_FALSE(shape.dim(2).has_dim_value());
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(TopK, TopKShapeInferenceTest,
+                         ::testing::Combine(::testing::Values(10, 11, 24), ::testing::Bool()));
+
 TEST(onnx_shape_inference, InferShapesImpl_SplitAllowsOmittedTrailingOutputs) {
   for (const int64_t num_outputs : {2, 3}) {
     SCOPED_TRACE(num_outputs);

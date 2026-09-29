@@ -10,6 +10,7 @@
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_lib/checker.h"
 #include "onnx_lib/shape_inference/implementation.h"
+#include "onnx_proto/onnx_helper.h"
 #include "test_case_utils.h"
 
 #include <gtest/gtest.h>
@@ -206,6 +207,57 @@ void CheckValueInfoMatchesExpected(const GraphProto &graph,
 }
 
 } // namespace
+
+TEST(BackendTestCaseShapeInference, TopKValidatesConstantK) {
+  auto cases = CollectTestCases("TopK");
+  size_t checked = 0;
+  for (TestCase &tc : cases) {
+    if (tc.name.find("test_cc_top_k_positive_k_opset_") != 0) {
+      continue;
+    }
+    SCOPED_TRACE(tc.name);
+    TestCaseUnloadGuard unload_guard(tc);
+    for (const bool known_axis_dim : {true, false}) {
+      SCOPED_TRACE(known_axis_dim);
+      for (const int64_t k : {1, 0, -1}) {
+        SCOPED_TRACE(k);
+        ModelProto model = tc.model();
+        auto *graph = model.mutable_graph();
+        graph->mutable_input()->resize(1);
+        *graph->add_initializer() = MakeInitializer<int64_t>("k", {1}, {k});
+        if (!known_axis_dim) {
+          graph->mutable_input(0)
+              ->mutable_type()
+              ->mutable_tensor_type()
+              ->mutable_shape()
+              ->mutable_dim(0)
+              ->clear_dim_value();
+        }
+        SnapshotAndStripOutputs(model);
+        auto infer = [&]() {
+          shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                       ShapeInferenceOptions(false, 1, false));
+        };
+        if (k > 0) {
+          ASSERT_NO_THROW(infer());
+          for (const auto &output : graph->output()) {
+            const auto &shape = output.type().tensor_type().shape();
+            ASSERT_EQ(shape.dim_size(), 1);
+            if (known_axis_dim) {
+              EXPECT_EQ(shape.dim(0).dim_value(), 1);
+            } else {
+              EXPECT_FALSE(shape.dim(0).has_dim_value());
+            }
+          }
+        } else {
+          EXPECT_THROW(infer(), InferenceError);
+        }
+      }
+    }
+    ++checked;
+  }
+  EXPECT_EQ(checked, 3u);
+}
 
 TEST(BackendTestCaseShapeInference, ZipMapInfersSequenceOfMapsOutputType) {
   ModelProto model;

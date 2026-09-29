@@ -54,6 +54,70 @@ jobs:
           done <<< "${changed}"
           echo "docs_only=${docs_only}" >> "$GITHUB_OUTPUT"
 
+  free_threaded:
+    name: free-threaded build (CMake ${{ matrix.cmake }}, Python 3.13t)
+    needs: changes
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        cmake: ["3.30.9", "4.0.3", "4.1.0", "4.1.2"]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13t"
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get install -y libssl-dev
+          python -m pip install cmake==${{ matrix.cmake }} setuptools "nanobind>=3.0.1" "numpy>=2.2"
+
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
+
+      - name: Build all Python extensions with free-threaded Python
+        env:
+          SCCACHE_GHA_ENABLED: "true"
+          CMAKE_ARGS: >-
+            -DONNX_LIGHT_BUILD_KERNELS=ON
+            -DPython_FIND_ABI=ANY;ANY;ANY;ON
+            -DPython3_FIND_ABI=ANY;ANY;ANY;ON
+            -DCMAKE_C_COMPILER_LAUNCHER=sccache
+            -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+        run: |
+          python -c "import sysconfig; assert sysconfig.get_config_var('Py_GIL_DISABLED') == 1"
+          export CMAKE_BUILD_PARALLEL_LEVEL=$(python -c 'import os; print(os.cpu_count() or 1)')
+          python setup.py build_ext --inplace
+
+      - name: Import every compiled extension
+        run: |
+          python - <<'PY'
+          import sys
+          from types import ModuleType
+
+          # ml-dtypes does not publish free-threaded wheels yet. The extension
+          # package imports it for dtype helpers, but extension initialization
+          # itself does not use it.
+          sys.modules["ml_dtypes"] = ModuleType("ml_dtypes")
+
+          from onnx_light.onnx_py import (
+              _onnxpyprotoop,
+              _onnxpyprotolib,
+              _onnxpycore,
+              _onnxpypatterns,
+              _onnxpykernels,
+              _onnxpybackend,
+              _onnxpygradient,
+          )
+          PY
+
   reduced_tests_ubuntu:
     # Fastest preflight: builds onnx-light without the operator-kernel runtime
     # and backend-test registries (ONNX_LIGHT_BUILD_KERNELS=OFF). Runs in

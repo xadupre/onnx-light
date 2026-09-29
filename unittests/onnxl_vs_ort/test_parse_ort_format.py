@@ -11,7 +11,7 @@ import onnxruntime
 
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as helper
-import onnx_light.onnx.numpy_helper as numpy_helper
+import onnx_light.onnx.numpy_helper as onh
 from onnx_light.ext_test_case import ExtTestCase
 
 
@@ -26,7 +26,7 @@ def make_model():
             "reader",
             [helper.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [None, 2])],
             [helper.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [None, 3])],
-            [numpy_helper.from_array(np.arange(6, dtype=np.float32).reshape(2, 3), name="W")],
+            [onh.from_array(np.arange(6, dtype=np.float32).reshape(2, 3), name="W")],
         ),
         opset_imports=[helper.make_opsetid("", 18)],
         ir_version=9,
@@ -255,7 +255,7 @@ class TestParseOrtFormat(ExtTestCase):
                 "strings",
                 [],
                 [helper.make_tensor_value_info("Y", onnxl.TensorProto.STRING, [2])],
-                [numpy_helper.from_array(values, name="W")],
+                [onh.from_array(values, name="W")],
             ),
             opset_imports=[helper.make_opsetid("", 18)],
             ir_version=9,
@@ -265,7 +265,7 @@ class TestParseOrtFormat(ExtTestCase):
         options.max_tensor_size_bytes = 8
         parsed = onnxl.ModelProto()
         parsed.ParseFromString(data, options)
-        np.testing.assert_array_equal(numpy_helper.to_array(parsed.graph.initializer[0]), values)
+        np.testing.assert_array_equal(onh.to_array(parsed.graph.initializer[0]), values)
         options.max_tensor_size_bytes = 7
         with self.assertRaisesRegex(RuntimeError, "max_tensor_size_bytes"):
             parsed.ParseFromString(data, options)
@@ -273,7 +273,7 @@ class TestParseOrtFormat(ExtTestCase):
     def test_scalar_and_empty_tensors(self):
         for values in (np.array(-3, dtype=np.int64), np.empty((0, 3), dtype=np.float32)):
             with self.subTest(shape=values.shape):
-                tensor = numpy_helper.from_array(values, name="W")
+                tensor = onh.from_array(values, name="W")
                 model = helper.make_model(
                     helper.make_graph(
                         [helper.make_node("Identity", ["W"], ["Y"])],
@@ -291,9 +291,7 @@ class TestParseOrtFormat(ExtTestCase):
                 )
                 parsed = onnxl.ModelProto()
                 parsed.ParseFromString(serialize_ort(model), parse_options())
-                np.testing.assert_array_equal(
-                    numpy_helper.to_array(parsed.graph.initializer[0]), values
-                )
+                np.testing.assert_array_equal(onh.to_array(parsed.graph.initializer[0]), values)
                 session = onnxruntime.InferenceSession(
                     parsed.SerializeToString(),
                     sess_options=runtime_options(),

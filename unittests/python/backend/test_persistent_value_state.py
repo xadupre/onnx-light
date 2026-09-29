@@ -15,7 +15,8 @@ import numpy
 
 from onnx_light import onnx
 from onnx_light.ext_test_case import import_or_skip
-from onnx_light.onnx import helper, numpy_helper
+import onnx_light.onnx.numpy_helper as onh
+from onnx_light.onnx import helper
 from onnx_light.onnx_lib import parser
 from onnx_light.onnx_proto import verify
 
@@ -161,7 +162,7 @@ class TestPersistentValueState(unittest.TestCase):
                 state.close()
                 if blocks:
                     value = (
-                        numpy_helper.to_array(snapshot.blocks[0].key)
+                        onh.to_array(snapshot.blocks[0].key)
                         if cache_structure
                         else array(snapshot["blocks"][0])
                     )
@@ -291,7 +292,7 @@ class TestPersistentValueState(unittest.TestCase):
                     context.set(
                         "sentinel",
                         runtime.tensor_from_proto(
-                            numpy_helper.from_array(numpy.ones(1, dtype=dtype), name="sentinel")
+                            onh.from_array(numpy.ones(1, dtype=dtype), name="sentinel")
                         ),
                     )
                     previous = [event.as_dict() for event in context.events()]
@@ -407,9 +408,7 @@ class TestPersistentValueState(unittest.TestCase):
                 )
                 context.set(
                     "sentinel",
-                    runtime.tensor_from_proto(
-                        numpy_helper.from_array(numpy.ones(1, dtype=numpy.float32))
-                    ),
+                    runtime.tensor_from_proto(onh.from_array(numpy.ones(1, dtype=numpy.float32))),
                 )
                 previous = [event.as_dict() for event in context.events()]
                 feeds = {
@@ -562,9 +561,7 @@ class TestPersistentValueState(unittest.TestCase):
             opset_imports=[helper.make_opsetid("", 18)],
         )
         add_binding(model, "past", "present")
-        text = runtime.tensor_from_proto(
-            numpy_helper.from_array(numpy.array(["a", "b"], dtype=object))
-        )
+        text = runtime.tensor_from_proto(onh.from_array(numpy.array(["a", "b"], dtype=object)))
         state = runtime.PersistentValueState(model, {"past": numpy.zeros(2, dtype=numpy.float32)})
         context = make_context()
         for expected, condition in enumerate((True, False), 1):
@@ -577,7 +574,7 @@ class TestPersistentValueState(unittest.TestCase):
                 },
             )
             numpy.testing.assert_array_equal(
-                numpy_helper.to_array(runtime.tensor_to_proto(output["text_out"])), ["a", "b"]
+                onh.to_array(runtime.tensor_to_proto(output["text_out"])), ["a", "b"]
             )
             numpy.testing.assert_array_equal(array(state.values["past"]), [expected, expected])
             self.assertEqual(set(state.values), {"past"})
@@ -601,9 +598,7 @@ class TestPersistentValueState(unittest.TestCase):
             "{ present = StringConcat(past, suffix) }"
         )
         add_binding(model, "past", "present")
-        initial = runtime.tensor_from_proto(
-            numpy_helper.from_array(numpy.array(["a", "b"], dtype=object))
-        )
+        initial = runtime.tensor_from_proto(onh.from_array(numpy.array(["a", "b"], dtype=object)))
         with self.assertRaisesRegex(ValueError, "String tensors cannot be persistent"):
             runtime.PersistentValueState(model, {"past": initial})
 
@@ -620,17 +615,17 @@ class TestPersistentValueState(unittest.TestCase):
         for expected in (1, 2):
             feeds = {
                 "text": runtime.tensor_from_proto(
-                    numpy_helper.from_array(numpy.array(["a", "b"], dtype=object))
+                    onh.from_array(numpy.array(["a", "b"], dtype=object))
                 ),
                 "suffix": runtime.tensor_from_proto(
-                    numpy_helper.from_array(numpy.array(["!", "?"], dtype=object))
+                    onh.from_array(numpy.array(["!", "?"], dtype=object))
                 ),
                 "delta": numpy.ones(2, dtype=numpy.float32),
             }
             result = state.run(context, feeds)
             del feeds
             numpy.testing.assert_array_equal(
-                numpy_helper.to_array(runtime.tensor_to_proto(result["text_out"])), ["a!", "b?"]
+                onh.to_array(runtime.tensor_to_proto(result["text_out"])), ["a!", "b?"]
             )
             numpy.testing.assert_array_equal(array(result["present"]), [expected, expected])
             self.assertEqual(set(state.values), {"past"})
@@ -658,12 +653,11 @@ class TestPersistentValueState(unittest.TestCase):
         initial = numpy.zeros(2, dtype=numpy.float32)
         state = runtime.PersistentValueState(model, {"past": initial})
         context = make_context()
-        manual = runtime.tensor_from_proto(numpy_helper.from_array(initial, name="past"))
+        manual = runtime.tensor_from_proto(onh.from_array(initial, name="past"))
         for index in range(4):
             delta = numpy.array([index, 1], dtype=numpy.float32)
             expected = runtime.run_model(
-                model,
-                [runtime.tensor_from_proto(numpy_helper.from_array(delta, name="delta")), manual],
+                model, [runtime.tensor_from_proto(onh.from_array(delta, name="delta")), manual]
             )[0]
             actual = state.run(context, {"delta": delta})["present"]
             numpy.testing.assert_array_equal(array(expected), array(actual))
@@ -924,9 +918,7 @@ class TestPersistentValueState(unittest.TestCase):
         self.assertEqual(addresses, [initial.ctypes.data] * 3)
 
     def test_runtime_tensor_input_without_copy(self):
-        source = runtime.tensor_from_proto(
-            numpy_helper.from_array(numpy.ones(2, dtype=numpy.float32))
-        )
+        source = runtime.tensor_from_proto(onh.from_array(numpy.ones(2, dtype=numpy.float32)))
         address = array(source).ctypes.data
         state = runtime.PersistentValueState(make_model(), {"past": source})
         self.assertEqual(array(state.values["past"]).ctypes.data, address)
@@ -1111,7 +1103,7 @@ class TestPersistentValueState(unittest.TestCase):
                     helper.make_tensor_value_info("present", onnx.TensorProto.FLOAT, [2]),
                     helper.make_tensor_value_info("past_shape", onnx.TensorProto.INT64, [1]),
                 ],
-                [numpy_helper.from_array(weights, name="W")],
+                [onh.from_array(weights, name="W")],
             ),
             opset_imports=[helper.make_opsetid("", 18)],
         )

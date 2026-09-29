@@ -5,7 +5,8 @@ import numpy as np
 from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
-from onnx_light.onnx import numpy_helper, parser
+import onnx_light.onnx.numpy_helper as onh
+from onnx_light.onnx import parser
 from onnx_light.onnx.printer import to_text
 from onnx_light.onnx_lib.printer import to_text as lib_to_text
 
@@ -61,11 +62,11 @@ class TestPrinter(ExtTestCase):
 
     def test_float16_initializer_roundtrip(self):
         values = np.array([1.0, -2.0, 0.5], dtype=np.float16)
-        text = self._print_initializer(numpy_helper.from_array(values, name="weights"))
+        text = self._print_initializer(onh.from_array(values, name="weights"))
 
         self.assertIn("{15360,49152,14336}", text)
         parsed = parser.parse_graph(text)
-        np.testing.assert_array_equal(numpy_helper.to_array(parsed.initializer[0]), values)
+        np.testing.assert_array_equal(onh.to_array(parsed.initializer[0]), values)
 
     def test_raw_initializers_roundtrip(self):
         cases = [
@@ -84,10 +85,10 @@ class TestPrinter(ExtTestCase):
         for dtype, values, expected in cases:
             with self.subTest(dtype=dtype):
                 array = np.array(values, dtype=dtype)
-                text = self._print_initializer(numpy_helper.from_array(array, name="weights"))
+                text = self._print_initializer(onh.from_array(array, name="weights"))
                 self.assertIn(expected, text)
                 parsed = parser.parse_graph(text)
-                np.testing.assert_array_equal(numpy_helper.to_array(parsed.initializer[0]), array)
+                np.testing.assert_array_equal(onh.to_array(parsed.initializer[0]), array)
 
     def test_raw_float_bit_patterns(self):
         cases = [

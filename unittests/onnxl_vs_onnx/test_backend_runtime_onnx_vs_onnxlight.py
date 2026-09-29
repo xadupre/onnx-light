@@ -45,7 +45,6 @@ from onnx.backend.test.loader import load_model_tests
 import onnx_light.onnx as onnxl
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 import onnx_light.onnx.helper as onnxl_helper
-import onnx_light.onnx.numpy_helper as onnxl_numpy_helper
 
 # The reference runtime is only available in the full build; skip this module on
 # a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
@@ -198,7 +197,7 @@ def _load_optional_value(path: str) -> np.ndarray | list[np.ndarray] | None:
     optional = onnxl.OptionalProto()
     with open(path, "rb") as f:
         optional.ParseFromString(f.read())
-    return onnxl_numpy_helper.to_optional(optional)
+    return onnxl.numpy_helper.to_optional(optional)
 
 
 def _load_value(path: str, kind: str) -> np.ndarray | list[np.ndarray] | None:

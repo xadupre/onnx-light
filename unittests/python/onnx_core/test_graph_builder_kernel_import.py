@@ -32,12 +32,13 @@ class TestGraphBuilderKernelImport(unittest.TestCase):
             sys.meta_path.insert(0, BlockEvaluator())
             import numpy
             from onnx_light.onnx_core.graph_builder import GraphBuilder
-            from onnx_light.onnx import TensorProto, numpy_helper
+            import onnx_light.onnx.numpy_helper as onh
+            from onnx_light.onnx import TensorProto
 
             builder = GraphBuilder("fresh_process")
             builder.make_input("x", TensorProto.FLOAT, [6])
-            builder.make_initializer(numpy_helper.from_array(numpy.array([2]), "a"))
-            builder.make_initializer(numpy_helper.from_array(numpy.array([3]), "b"))
+            builder.make_initializer(onh.from_array(numpy.array([2]), "a"))
+            builder.make_initializer(onh.from_array(numpy.array([3]), "b"))
             builder.make_node("Concat", ["a", "b"], outputs=["shape"], attributes={"axis": 0})
             builder.make_node("Reshape", ["x", "shape"], outputs=["y"])
             builder.make_output("y")
@@ -46,7 +47,7 @@ class TestGraphBuilderKernelImport(unittest.TestCase):
             assert not any(node.op_type == "Concat" for node in model.graph.node)
             assert any(
                 tensor.name == "shape"
-                and numpy.array_equal(numpy_helper.to_array(tensor), [2, 3])
+                and numpy.array_equal(onh.to_array(tensor), [2, 3])
                 for tensor in model.graph.initializer
             )
             assert "onnx_light.onnx_py._onnxpykernels" in sys.modules
@@ -64,12 +65,13 @@ class TestGraphBuilderKernelImport(unittest.TestCase):
             import unittest
             import numpy
             from onnx_light.onnx_core.graph_builder import GraphBuilder
-            from onnx_light.onnx import TensorProto, numpy_helper
+            import onnx_light.onnx.numpy_helper as onh
+            from onnx_light.onnx import TensorProto
 
             builder = GraphBuilder("reduced")
             builder.make_input("x", TensorProto.FLOAT, [6])
-            builder.make_initializer(numpy_helper.from_array(numpy.array([2]), "a"))
-            builder.make_initializer(numpy_helper.from_array(numpy.array([3]), "b"))
+            builder.make_initializer(onh.from_array(numpy.array([2]), "a"))
+            builder.make_initializer(onh.from_array(numpy.array([3]), "b"))
             builder.make_node("Concat", ["a", "b"], outputs=["shape"], attributes={"axis": 0})
             builder.make_node("Reshape", ["x", "shape"], outputs=["y"])
             builder.make_output("y")

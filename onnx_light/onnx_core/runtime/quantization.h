@@ -333,7 +333,7 @@ struct QuantizationRun {
  * plan.run(i) and run.block(j) return copies; set_run and set_block replace stored values.
  * @code{.py}
  * import numpy
- * from onnx_light.onnx import numpy_helper
+ * import onnx_light.onnx.numpy_helper as onh
  * from onnx_light.onnx_core.quantization import (
  *     QuantizationFormat, make_quantization_plan, quantize_tensor_proto, dequantize_tensor_proto,
  * )
@@ -344,8 +344,8 @@ struct QuantizationRun {
  * block.scale = 0.25
  * run.set_block(0, block)
  * plan.set_run(0, run)
- * encoded = quantize_tensor_proto(numpy_helper.from_array(weights), plan)
- * restored = numpy_helper.to_array(dequantize_tensor_proto(encoded))
+ * encoded = quantize_tensor_proto(onh.from_array(weights), plan)
+ * restored = onh.to_array(dequantize_tensor_proto(encoded))
  * @endcode
  * The Python guide docs/howto/quantized_values.rst contains configuration examples for
  * every profile; docs/examples/runtime/plot_quantization_profiles.py executes all of them.

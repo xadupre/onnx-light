@@ -3,7 +3,7 @@ import unittest
 import numpy
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
-import onnx_light.onnx.numpy_helper
+import onnx_light.onnx.numpy_helper as onh
 from onnx_light.ext_test_case import ExtTestCase
 from onnx_light.onnx_core import shape_inference as si
 
@@ -308,9 +308,7 @@ class TestInPlaceReuse(ExtTestCase):
         nodes = [oh.make_node("Add", ["X", "W"], ["Y"])]
         x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2, 2])
         y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [2, 2])
-        w = onnx_light.onnx.numpy_helper.from_array(
-            numpy.ones((2, 2), dtype=numpy.float32), name="W"
-        )
+        w = onh.from_array(numpy.ones((2, 2), dtype=numpy.float32), name="W")
         model = self._build_model(nodes, [x], [y])
         model.graph.initializer.extend([w])
 

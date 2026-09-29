@@ -20,7 +20,8 @@ from typing import Any
 
 import numpy as np
 
-from ..onnx_lib import FunctionProto, GraphProto, ModelProto, TensorProto, load, numpy_helper
+from ..onnx_lib import FunctionProto, GraphProto, ModelProto, TensorProto, load
+import onnx_light.onnx.numpy_helper as onh
 
 try:
     from ..onnx_py._onnxpykernels import runtime as _runtime  # type: ignore[missing-import]
@@ -192,7 +193,7 @@ def _cpp_tensor_to_numpy(t: Any, steal: bool = False) -> np.ndarray:
     borrowed view never dangles. bfloat16/float8 tensors are reinterpreted from
     the raw byte view returned by :func:`_runtime.tensor_to_numpy` (DLPack has
     no stock NumPy dtype for them), and sub-byte packed types and STRING
-    tensors fall back to the full :func:`numpy_helper.to_array` path.
+    tensors fall back to the full :func:`onh.to_array` path.
 
     When ``steal`` is ``True`` and ``t`` owns its bytes inline (the case for a
     graph output produced without an allocator), the raw-byte path transfers
@@ -219,7 +220,7 @@ def _cpp_tensor_to_numpy(t: Any, steal: bool = False) -> np.ndarray:
             arr = arr.byteswap()
         return arr.reshape(shape)
     # Fallback for sub-byte types (INT4/UINT4/INT2/UINT2/FLOAT4E2M1) and STRING.
-    return numpy_helper.to_array(_runtime.tensor_to_proto(t))
+    return onh.to_array(_runtime.tensor_to_proto(t))
 
 
 def _numpy_to_cpp_tensor(name: str, arr: np.ndarray, copy: bool = True) -> Any:
@@ -248,7 +249,7 @@ def _numpy_to_cpp_tensor(name: str, arr: np.ndarray, copy: bool = True) -> Any:
             raw = arr.view(np.uint8).ravel()
         return _runtime.tensor_from_numpy(name, onnx_dtype, list(arr.shape), raw, copy=needs_copy)
     # Fallback for strings, sub-byte types, and exotic dtypes.
-    tp = numpy_helper.from_array(arr, name=name)
+    tp = onh.from_array(arr, name=name)
     return _runtime.tensor_from_proto(tp)
 
 

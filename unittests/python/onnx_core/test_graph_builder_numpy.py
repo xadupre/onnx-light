@@ -16,7 +16,8 @@ import ml_dtypes
 import numpy
 
 from onnx_light.ext_test_case import import_or_skip
-from onnx_light.onnx import ModelProto, TensorProto, checker, numpy_helper
+import onnx_light.onnx.numpy_helper as onh
+from onnx_light.onnx import ModelProto, TensorProto, checker
 from onnx_light.onnx_core.graph_builder import GraphBuilder
 
 
@@ -59,7 +60,7 @@ class TestGraphBuilderNumpy(unittest.TestCase):
                         self.assertEqual(list(tensor.dims), list(shape))
                         if array.size:
                             self.assertPointer(tensor, array)
-                        expected = numpy_helper.from_array(array, name="init")
+                        expected = onh.from_array(array, name="init")
                         expected.metadata_props.extend(tensor.metadata_props)
                         self.assertEqual(tensor.SerializeToString(), expected.SerializeToString())
                         del tensor, model, builder
@@ -147,9 +148,7 @@ class TestGraphBuilderNumpy(unittest.TestCase):
                     tensor.CopyFrom(TensorProto())
                 else:
                     tensor.ParseFromString(
-                        numpy_helper.from_array(
-                            numpy.zeros(4, dtype=numpy.float32)
-                        ).SerializeToString()
+                        onh.from_array(numpy.zeros(4, dtype=numpy.float32)).SerializeToString()
                     )
                 gc.collect()
                 self.assertEqual(sys.getrefcount(array), references)
@@ -274,7 +273,7 @@ class TestGraphBuilderNumpy(unittest.TestCase):
             GraphBuilder().init([1, 2], copy=False)
 
     def test_buffer_acquisition_failure_preserves_tensor(self):
-        tensor = numpy_helper.from_array(numpy.ones(2, dtype=numpy.float32))
+        tensor = onh.from_array(numpy.ones(2, dtype=numpy.float32))
         expected = tensor.SerializeToString()
         array = numpy.arange(6, dtype=numpy.float32)[::2]
         references = sys.getrefcount(array)
@@ -305,7 +304,7 @@ class TestGraphBuilderNumpy(unittest.TestCase):
                 self.assertEqual(len(builder.to_onnx().graph.initializer), 0)
                 self.assertEqual(builder.init(array, copy=True), "init")
                 tensor = builder.to_onnx().graph.initializer[0]
-                numpy.testing.assert_array_equal(numpy_helper.to_array(tensor), array)
+                numpy.testing.assert_array_equal(onh.to_array(tensor), array)
 
     def test_name_collision_releases_buffer(self):
         builder = GraphBuilder()

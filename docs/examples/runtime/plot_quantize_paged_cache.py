@@ -18,7 +18,8 @@ import matplotlib.pyplot
 import numpy
 
 from onnx_light import onnx
-from onnx_light.onnx import helper, numpy_helper
+import onnx_light.onnx.numpy_helper as onh
+from onnx_light.onnx import helper
 from onnx_light.onnx_proto import verify
 from onnx_light.onnx_py._onnxpykernels.runtime import (
     RuntimeContext,
@@ -40,8 +41,8 @@ first = cache.blocks.add()
 first.start = 0
 first.length = 2
 first_keys = numpy.linspace(-0.5, 0.5, 8, dtype=numpy.float32).reshape(1, 1, 2, 4)
-first.key.CopyFrom(numpy_helper.from_array(first_keys))
-first.value.CopyFrom(numpy_helper.from_array(-first_keys))
+first.key.CopyFrom(onh.from_array(first_keys))
+first.value.CopyFrom(onh.from_array(-first_keys))
 
 second = cache.blocks.add()
 second.start = 2
@@ -52,8 +53,8 @@ keys = numpy.array(
 values = numpy.array(
     [-0.8, -0.3, 0.2, 0.7, numpy.nan, numpy.nan, numpy.nan, numpy.nan], dtype=numpy.float32
 ).reshape(1, 1, 2, 4)
-second.key.CopyFrom(numpy_helper.from_array(keys))
-second.value.CopyFrom(numpy_helper.from_array(values))
+second.key.CopyFrom(onh.from_array(keys))
+second.value.CopyFrom(onh.from_array(values))
 
 # %%
 # Build the quantization/dequantization graph
@@ -119,7 +120,7 @@ verify.verify_model(model)
 
 context = RuntimeContext()
 context.put_value("past", cache)
-context.set("indices", tensor_from_proto(numpy_helper.from_array(numpy.array([1], numpy.int64))))
+context.set("indices", tensor_from_proto(onh.from_array(numpy.array([1], numpy.int64))))
 session = RuntimeSession(model)
 session.run(context)
 quantized = context.get_value("quantized")
@@ -129,8 +130,8 @@ assert isinstance(restored, onnx.PagedCacheProto)
 
 for output in (quantized, restored):
     assert len(output.blocks) == 2
-    numpy.testing.assert_array_equal(numpy_helper.to_array(output.blocks[0].key), first_keys)
-    numpy.testing.assert_array_equal(numpy_helper.to_array(output.blocks[0].value), -first_keys)
+    numpy.testing.assert_array_equal(onh.to_array(output.blocks[0].key), first_keys)
+    numpy.testing.assert_array_equal(onh.to_array(output.blocks[0].value), -first_keys)
     assert output.blocks[1].start == 2
     assert output.blocks[1].length == 1
 
@@ -150,8 +151,8 @@ print("Page 1: INT4 K / UINT4 V, 8 payload bytes instead of 64 (excluding metada
 # values. The chosen inputs do not saturate; the maximum error is half the
 # corresponding scale. Only the selected page becomes FLOAT16/BFLOAT16.
 
-restored_keys = numpy_helper.to_array(restored.blocks[1].key)
-restored_values = numpy_helper.to_array(restored.blocks[1].value)
+restored_keys = onh.to_array(restored.blocks[1].key)
+restored_values = onh.to_array(restored.blocks[1].value)
 assert restored_keys.shape == restored_values.shape == (1, 1, 2, 4)
 assert restored.blocks[1].key.data_type == onnx.TensorProto.FLOAT16
 assert restored.blocks[1].value.data_type == onnx.TensorProto.BFLOAT16
@@ -183,9 +184,9 @@ reloaded.ParseFromString(quantized.SerializeToString())
 context.put_value("past", reloaded)
 session.run(context)
 again = context.get_value("restored")
-numpy.testing.assert_array_equal(numpy_helper.to_array(again.blocks[1].key), restored_keys)
+numpy.testing.assert_array_equal(onh.to_array(again.blocks[1].key), restored_keys)
 numpy.testing.assert_array_equal(
-    numpy_helper.to_array(again.blocks[1].value).astype(numpy.float32),
+    onh.to_array(again.blocks[1].value).astype(numpy.float32),
     restored_values.astype(numpy.float32),
 )
 

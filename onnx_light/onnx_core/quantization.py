@@ -56,7 +56,7 @@ def add_quantization_parameters(
     """
     import numpy
     from .. import onnx
-    from ..onnx import numpy_helper
+    import onnx_light.onnx.numpy_helper as onh
 
     prefix = "onnx_light.quantization.parameters:"
     if not isinstance(name, str) or not name:
@@ -93,7 +93,7 @@ def add_quantization_parameters(
             tensor.CopyFrom(value)
             tensor.name = tensor_name
         else:
-            tensor = numpy_helper.from_array(numpy.asarray(value), name=tensor_name)
+            tensor = onh.from_array(numpy.asarray(value), name=tensor_name)
         candidate.graph.initializer.append(tensor)
         additions.append(tensor)
         annotation.quant_parameter_tensor_names.append(

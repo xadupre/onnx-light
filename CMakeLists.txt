@@ -191,7 +191,12 @@ if(ONNX_LIGHT_BUILD_PYTHON)
               "import sysconfig; print(sysconfig.get_config_var('Py_GIL_DISABLED') or 0)"
       OUTPUT_VARIABLE python_gil_disabled
       OUTPUT_STRIP_TRAILING_WHITESPACE
-      COMMAND_ERROR_IS_FATAL ANY)
+      RESULT_VARIABLE python_gil_query_result
+      ERROR_VARIABLE python_gil_query_error)
+    if(NOT python_gil_query_result STREQUAL "0")
+      message(FATAL_ERROR "Failed to query Python's free-threaded status: "
+                          "${python_gil_query_error}")
+    endif()
     if(python_gil_disabled AND CMAKE_VERSION VERSION_GREATER_EQUAL "3.30")
       if(NOT WIN32 AND CMAKE_VERSION VERSION_LESS "4.1")
         # FindPython in CMake 3.30-4.0 rejects Development.Module on POSIX
@@ -201,12 +206,10 @@ if(ONNX_LIGHT_BUILD_PYTHON)
         unset(Python3_FIND_ABI CACHE)
         unset(Python_FIND_ABI)
         unset(Python_FIND_ABI CACHE)
-      elseif(NOT WIN32)
-        # On CMake 4.1+, let FindPython infer the ABI from the native interpreter.
-        # Explicit ABI requests are still honored.
       else()
-        # Do not mix regular and free-threaded development files installed
-        # alongside one another. Preserve explicit ABI requests.
+        # CMake 3.30+ only searches for free-threaded development files when
+        # asked to. Request exactly this ABI so regular development files
+        # installed alongside them cannot be selected instead.
         if(NOT DEFINED Python3_FIND_ABI)
           set(Python3_FIND_ABI "ANY" "ANY" "ANY" "ON")
         endif()
@@ -258,7 +261,12 @@ if(ONNX_LIGHT_BUILD_PYTHON)
     COMMAND "${Python_EXECUTABLE}" -c "import numpy; print(numpy.get_include())"
     OUTPUT_STRIP_TRAILING_WHITESPACE
     OUTPUT_VARIABLE NumPy_INCLUDE_DIR
-    COMMAND_ERROR_IS_FATAL ANY)
+    RESULT_VARIABLE numpy_include_query_result
+    ERROR_VARIABLE numpy_include_query_error)
+  if(NOT numpy_include_query_result STREQUAL "0")
+    message(FATAL_ERROR "Failed to query NumPy's include directory: "
+                        "${numpy_include_query_error}")
+  endif()
 endif()
 
 # Find OpenMP (optional)

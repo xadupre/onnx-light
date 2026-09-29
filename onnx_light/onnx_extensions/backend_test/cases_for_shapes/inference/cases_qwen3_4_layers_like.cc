@@ -257,12 +257,13 @@ void AddQwenPersistentCases(std::vector<TestCase> &registry, const ModelProto &s
 //     input, this variant replaces attention_mask with an explicit total sequence
 //     length and only represents unpadded inputs.
 //
-// Both variants share the same public signature; RoPE and the causal-mask
-// construction stay explicit in both because they have no fused equivalent.
-// The unfused variant additionally carries the golden in-place-reuse,
-// value-tag and constant metadata verified by the ``BigModels*`` tests.
+// The unfused, fused and persistent tensor-cache variants share the signature
+// below. RoPE stays explicit in all four variants; causal-mask construction
+// stays explicit only in the tensor-cache variants. The unfused variant
+// additionally carries the golden in-place-reuse, value-tag and constant
+// metadata verified by the ``BigModels*`` tests.
 //
-// Graph signature (identical for both variants):
+// Tensor-cache graph signature:
 //
 //   Inputs:
 //     input_ids               INT64[batch_size, sequence_length]
@@ -274,6 +275,17 @@ void AddQwenPersistentCases(std::vector<TestCase> &registry, const ModelProto &s
 //     output_0                FP16[batch_size, sequence_length, 32000]
 //     present_key_values_key_N    FP16[batch_size, 8, past_seq+seq, 128]
 //     present_key_values_value_N  FP16[batch_size, 8, past_seq+seq, 128]
+//
+// Persistent paged graph signature:
+//
+//   Inputs:
+//     input_ids               INT64[batch_size, sequence_length]
+//     total_sequence_length   INT64[1]
+//     paged_cache_N           PagedCache
+//
+//   Outputs:
+//     output_0                FP16[batch_size, sequence_length, 32000]
+//     present_paged_cache_N   PagedCache
 // ---------------------------------------------------------------------------
 void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registry,
                                                   TestMode /*mode*/) {

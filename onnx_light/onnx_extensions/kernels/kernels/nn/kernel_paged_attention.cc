@@ -31,24 +31,48 @@ void AddBytes(uint64_t &total, size_t bytes) {
 }
 
 void CheckTensor(const Tensor &tensor) {
-  EXT_ENFORCE_INVALID(tensor.data_type == DataType::FLOAT && tensor.shape.size() == 4 &&
-                          tensor.shape[0] == 1 && tensor.shape[1] == 1,
-                      "PagedAttention: only FLOAT [1,1,L,D] tensors are supported.");
-  const size_t bytes = CheckedBytes(tensor.shape[2], tensor.shape[3]);
+  EXT_ENFORCE_INVALID(
+      (tensor.data_type == DataType::FLOAT || tensor.data_type == DataType::FLOAT16 ||
+       tensor.data_type == DataType::BFLOAT16) &&
+          tensor.shape.size() == 4 && tensor.shape[0] > 0 && tensor.shape[1] > 0 &&
+          tensor.shape[2] >= 0 && tensor.shape[3] > 0,
+      "PagedAttention: expected FLOAT, FLOAT16 or BFLOAT16 [batch,heads,L,D] tensors.");
+  const int64_t count = tensor.shape.product(0, tensor.shape.size(), "PagedAttention");
+  const size_t bytes = PackedByteSize(tensor.data_type, count);
   EXT_ENFORCE_INVALID(tensor.size_bytes() == bytes && (bytes == 0 || tensor.bytes() != nullptr),
                       "PagedAttention: invalid tensor payload extent.");
 }
 
 void CheckDensePageTensor(const Tensor &tensor) {
-  EXT_ENFORCE_INVALID(
-      (tensor.data_type == DataType::FLOAT || tensor.data_type == DataType::FLOAT16 ||
-       tensor.data_type == DataType::BFLOAT16) &&
-          tensor.shape.size() == 4 && tensor.shape[0] == 1 && tensor.shape[1] == 1,
-      "PagedAttention: dense cache pages must be FLOAT, FLOAT16 or BFLOAT16 [1,1,L,D] tensors.");
+  EXT_ENFORCE_INVALID((tensor.data_type == DataType::FLOAT ||
+                       tensor.data_type == DataType::FLOAT16 ||
+                       tensor.data_type == DataType::BFLOAT16) &&
+                          tensor.shape.size() == 4 && tensor.shape[0] > 0 && tensor.shape[1] > 0 &&
+                          tensor.shape[2] >= 0 && tensor.shape[3] > 0,
+                      "PagedAttention: dense cache pages must be FLOAT, FLOAT16 or BFLOAT16 "
+                      "[batch,heads,L,D] tensors.");
   const int64_t count = tensor.shape.product(0, tensor.shape.size(), "PagedAttention");
   const size_t bytes = PackedByteSize(tensor.data_type, count);
   EXT_ENFORCE_INVALID(tensor.size_bytes() == bytes && (bytes == 0 || tensor.bytes() != nullptr),
                       "PagedAttention: invalid dense cache payload extent.");
+}
+
+float ReadTensorElement(const Tensor &tensor, size_t index) {
+  if (tensor.data_type == DataType::FLOAT)
+    return tensor.AsFloat()[index];
+  const uint16_t bits = reinterpret_cast<const uint16_t *>(tensor.bytes())[index];
+  return tensor.data_type == DataType::FLOAT16 ? Float16BitsToFloat(bits)
+                                               : Bfloat16BitsToFloat(bits);
+}
+
+void WriteTensorElement(Tensor &tensor, size_t index, float value) {
+  if (tensor.data_type == DataType::FLOAT) {
+    tensor.AsFloat()[index] = value;
+    return;
+  }
+  reinterpret_cast<uint16_t *>(tensor.mutable_bytes())[index] =
+      tensor.data_type == DataType::FLOAT16 ? FloatToFloat16Bits(value)
+                                            : FloatToBfloat16Bits(value);
 }
 
 std::pair<int, int> CodeRange(int32_t type) {
@@ -154,7 +178,7 @@ int64_t Scalar(const RuntimeValue &value) {
 
 struct PageView {
   const RuntimeValue *value;
-  int64_t capacity, width;
+  int64_t batch, heads, capacity, width;
   int32_t storage_type = DataType::FLOAT;
   int axis = -1;
   uint64_t block = 0;
@@ -164,6 +188,8 @@ struct PageView {
       : value(&source) {
     if (source.kind == RuntimeValue::Kind::kTensor) {
       CheckDensePageTensor(source.tensor);
+      batch = source.tensor.shape[0];
+      heads = source.tensor.shape[1];
       capacity = source.tensor.shape[2];
       width = source.tensor.shape[3];
       return;
@@ -208,12 +234,17 @@ struct PageView {
     }
     const auto &type = encoded.logical_type().tensor_type();
     EXT_ENFORCE_INVALID(type.elem_type() == DataType::FLOAT && type.shape().dim_size() == 4 &&
-                            type.shape().dim(0).dim_value() == 1 &&
-                            type.shape().dim(1).dim_value() == 1,
-                        "PagedAttention: affine logical type must be FLOAT [1,1,L,D].");
+                            type.shape().dim(0).dim_value() > 0 &&
+                            type.shape().dim(1).dim_value() > 0,
+                        "PagedAttention: affine logical type must be FLOAT [batch,heads,L,D].");
+    batch = type.shape().dim(0).dim_value();
+    heads = type.shape().dim(1).dim_value();
     capacity = type.shape().dim(2).dim_value();
     width = type.shape().dim(3).dim_value();
-    CheckedBytes(capacity, width);
+    EXT_ENFORCE_INVALID(static_cast<uint64_t>(batch) * static_cast<uint64_t>(heads) <=
+                            static_cast<uint64_t>(std::numeric_limits<int64_t>::max()),
+                        "PagedAttention: affine logical shape overflow.");
+    CheckedBytes(batch * heads * capacity, width);
     const auto &affine = encoded.affine();
     CodeRange(storage_type);
     EXT_ENFORCE_INVALID(affine.scale().data_type() == DataType::FLOAT,
@@ -236,17 +267,12 @@ struct PageView {
     }
   }
 
-  double Read(int64_t row, int64_t column, PagedAttention::Statistics &statistics) const {
-    const size_t index = static_cast<size_t>(row) * width + column;
+  double Read(int64_t batch_index, int64_t head, int64_t row, int64_t column,
+              PagedAttention::Statistics &statistics) const {
+    const size_t index =
+        ((static_cast<size_t>(batch_index) * heads + head) * capacity + row) * width + column;
     if (value->kind == RuntimeValue::Kind::kTensor) {
-      float result;
-      if (value->tensor.data_type == DataType::FLOAT)
-        result = value->tensor.AsFloat()[index];
-      else {
-        const uint16_t bits = reinterpret_cast<const uint16_t *>(value->tensor.bytes())[index];
-        result = value->tensor.data_type == DataType::FLOAT16 ? Float16BitsToFloat(bits)
-                                                              : Bfloat16BitsToFloat(bits);
-      }
+      const float result = ReadTensorElement(value->tensor, index);
       EXT_ENFORCE_INVALID(std::isfinite(result), "PagedAttention: non-finite dense cache value.");
       return result;
     }
@@ -254,7 +280,8 @@ struct PageView {
     const auto &affine = encoded.affine();
     size_t parameter = 0;
     if (axis >= 0) {
-      const uint64_t coordinate[4] = {0, 0, static_cast<uint64_t>(row),
+      const uint64_t coordinate[4] = {static_cast<uint64_t>(batch_index),
+                                      static_cast<uint64_t>(head), static_cast<uint64_t>(row),
                                       static_cast<uint64_t>(column)};
       if (block == 0)
         parameter = coordinate[axis];
@@ -286,13 +313,21 @@ RuntimeValue NewPage(const Tensor &input, int64_t begin, int64_t length,
                      const PagedAttention::Format &format, RuntimeContext *rt,
                      PagedAttention::Statistics &statistics) {
   const int64_t width = input.shape[3];
-  const size_t count = CheckedBytes(length, width, 1);
-  const Shape shape{1, 1, length, width};
-  const float *source = input.AsFloat() + static_cast<size_t>(begin) * width;
+  const int64_t outer = input.shape.product(0, 2, "PagedAttention");
+  const size_t count = CheckedBytes(outer * length, width, 1);
+  const Shape shape{input.shape[0], input.shape[1], length, width};
   if (format.storage_type == DataType::FLOAT) {
-    Tensor output = MakeOutputTensor(DataType::FLOAT, shape, CheckedBytes(length, width),
+    Tensor output = MakeOutputTensor(DataType::FLOAT, shape, CheckedBytes(outer * length, width),
                                      rt ? rt->io_allocator() : nullptr);
-    std::memcpy(output.mutable_bytes(), source, output.size_bytes());
+    for (int64_t outer_index = 0; outer_index < outer; ++outer_index)
+      for (int64_t row = 0; row < length; ++row)
+        for (int64_t column = 0; column < width; ++column) {
+          const size_t source_index =
+              (static_cast<size_t>(outer_index) * input.shape[2] + begin + row) * width + column;
+          const size_t target_index =
+              (static_cast<size_t>(outer_index) * length + row) * width + column;
+          output.AsFloat()[target_index] = ReadTensorElement(input, source_index);
+        }
     AddBytes(statistics.copied_bytes, output.size_bytes());
     return RuntimeValue(std::move(output)).Retain();
   }
@@ -303,19 +338,25 @@ RuntimeValue NewPage(const Tensor &input, int64_t begin, int64_t length,
                                     rt ? rt->io_allocator() : nullptr);
   std::memset(storage.mutable_bytes(), 0, bytes);
   const auto [low, high] = CodeRange(format.storage_type);
-  for (size_t i = 0; i < count; ++i) {
-    // Clamping before conversion keeps even very small scales within integer bounds.
-    const double scaled = std::clamp(static_cast<double>(source[i]) / format.scale,
-                                     static_cast<double>(low - format.zero_point),
-                                     static_cast<double>(high - format.zero_point));
-    const double floor = std::floor(scaled);
-    const double fraction = scaled - floor;
-    const int base = static_cast<int>(floor);
-    const int rounded = base + (fraction > 0.5 || (fraction == 0.5 && base % 2 != 0));
-    const int code = std::clamp(rounded + format.zero_point, low, high);
-    storage.mutable_bytes()[i / per_byte] |=
-        static_cast<uint8_t>((code & ((1 << code_width) - 1)) << (code_width * (i % per_byte)));
-  }
+  for (int64_t outer_index = 0; outer_index < outer; ++outer_index)
+    for (int64_t row = 0; row < length; ++row)
+      for (int64_t column = 0; column < width; ++column) {
+        const size_t i = (static_cast<size_t>(outer_index) * length + row) * width + column;
+        const size_t source_index =
+            (static_cast<size_t>(outer_index) * input.shape[2] + begin + row) * width + column;
+        // Clamping before conversion keeps even very small scales within integer bounds.
+        const double scaled =
+            std::clamp(static_cast<double>(ReadTensorElement(input, source_index)) / format.scale,
+                       static_cast<double>(low - format.zero_point),
+                       static_cast<double>(high - format.zero_point));
+        const double floor = std::floor(scaled);
+        const double fraction = scaled - floor;
+        const int base = static_cast<int>(floor);
+        const int rounded = base + (fraction > 0.5 || (fraction == 0.5 && base % 2 != 0));
+        const int code = std::clamp(rounded + format.zero_point, low, high);
+        storage.mutable_bytes()[i / per_byte] |=
+            static_cast<uint8_t>((code & ((1 << code_width) - 1)) << (code_width * (i % per_byte)));
+      }
   storage = std::move(storage).RetainStorage();
   EncodedValueProto encoded;
   auto *logical = encoded.mutable_logical_type()->mutable_tensor_type();
@@ -353,19 +394,26 @@ Tensor DecodePagedCachePayload(const RuntimeValue &value, int64_t length,
   PageView page(value, false, &catalogue);
   EXT_ENFORCE_INVALID(length > 0 && length <= page.capacity,
                       "Paged cache payload: invalid valid-prefix length.");
-  Tensor result = MakeOutputTensor(DataType::FLOAT, {1, 1, length, page.width},
-                                   CheckedBytes(length, page.width), allocator);
+  Tensor result =
+      MakeOutputTensor(DataType::FLOAT, {page.batch, page.heads, length, page.width},
+                       CheckedBytes(page.batch * page.heads * length, page.width), allocator);
   PagedAttention::Statistics statistics;
-  for (int64_t row = 0; row < length; ++row)
-    for (int64_t column = 0; column < page.width; ++column)
-      result.AsFloat()[static_cast<size_t>(row) * page.width + column] =
-          static_cast<float>(page.Read(row, column, statistics));
+  for (int64_t batch = 0; batch < page.batch; ++batch)
+    for (int64_t head = 0; head < page.heads; ++head)
+      for (int64_t row = 0; row < length; ++row)
+        for (int64_t column = 0; column < page.width; ++column) {
+          const size_t index =
+              ((static_cast<size_t>(batch) * page.heads + head) * length + row) * page.width +
+              column;
+          result.AsFloat()[index] =
+              static_cast<float>(page.Read(batch, head, row, column, statistics));
+        }
   return result;
 }
 
 struct PagedAttention::CacheAnalysis {
   struct Summary {
-    int64_t first = 0, end = 0, capacity = 0, key_width = 0, value_width = 0;
+    int64_t first = 0, end = 0, capacity = 0, batch = 0, heads = 0, key_width = 0, value_width = 0;
   };
   core::runtime::RuntimeSequence::Memo<Summary> memo;
 
@@ -381,14 +429,19 @@ struct PagedAttention::CacheAnalysis {
           EXT_ENFORCE_INVALID(start >= 0 && length > 0 && length <= INT64_MAX - start &&
                                   length <= key.capacity && key.capacity == value.capacity,
                               "PagedAttention: invalid page shape, start, length or capacity.");
-          return Summary{start, start + length, key.capacity, key.width, value.width};
+          EXT_ENFORCE_INVALID(key.batch == value.batch && key.heads == value.heads,
+                              "PagedAttention: inconsistent key/value page batch or heads.");
+          return Summary{start,     start + length, key.capacity, key.batch,
+                         key.heads, key.width,      value.width};
         },
         [](const Summary &left, const Summary &right) {
           EXT_ENFORCE_INVALID(left.end == right.first && left.key_width == right.key_width &&
-                                  left.value_width == right.value_width,
-                              "PagedAttention: noncontiguous pages or inconsistent widths.");
-          return Summary{left.first, right.end, std::max(left.capacity, right.capacity),
-                         left.key_width, left.value_width};
+                                  left.value_width == right.value_width &&
+                                  left.batch == right.batch && left.heads == right.heads,
+                              "PagedAttention: noncontiguous pages or inconsistent shapes.");
+          return Summary{left.first,      right.end,  std::max(left.capacity, right.capacity),
+                         left.batch,      left.heads, left.key_width,
+                         left.value_width};
         });
   }
 };
@@ -417,9 +470,11 @@ PagedAttention::Result PagedAttention::operator()(const Tensor &q, const Tensor 
                       "PagedAttention: invalid block size, capacity or window.");
   for (const Tensor *input : {&q, &k, &v})
     CheckTensor(*input);
-  EXT_ENFORCE_INVALID(q.shape[2] == k.shape[2] && k.shape[2] == v.shape[2] &&
-                          q.shape[3] == k.shape[3],
-                      "PagedAttention: mismatched query/key/value dimensions.");
+  EXT_ENFORCE_INVALID(
+      q.data_type == k.data_type && k.data_type == v.data_type && q.shape[0] == k.shape[0] &&
+          k.shape[0] == v.shape[0] && q.shape[1] % k.shape[1] == 0 && k.shape[1] == v.shape[1] &&
+          q.shape[2] == k.shape[2] && k.shape[2] == v.shape[2] && q.shape[3] == k.shape[3],
+      "PagedAttention: mismatched query/key/value dimensions.");
   const auto &pages = Field(past, "blocks");
   EXT_ENFORCE_INVALID(past.fields.size() == 1 && pages.kind == RuntimeValue::Kind::kSequence,
                       "PagedAttention: cache must contain only a blocks sequence.");
@@ -430,17 +485,20 @@ PagedAttention::Result PagedAttention::operator()(const Tensor &q, const Tensor 
   const int64_t past_length = summary.end;
   EXT_ENFORCE_INVALID(pages.elements.empty() ||
                           (summary.first == 0 && summary.capacity <= options.block_size &&
+                           summary.batch == k.shape[0] && summary.heads == k.shape[1] &&
                            summary.key_width == k.shape[3] && summary.value_width == v.shape[3] &&
                            past_length <= options.max_tokens),
                       "PagedAttention: invalid cache shape or capacity.");
   EXT_ENFORCE_INVALID(length <= options.max_tokens - past_length,
                       "PagedAttention: max_tokens exceeded.");
   for (const Tensor *input : {&q, &k, &v})
-    for (size_t i = 0; i < input->size_bytes() / sizeof(float); ++i)
-      EXT_ENFORCE_INVALID(std::isfinite(input->AsFloat()[i]),
+    for (int64_t i = 0; i < input->shape.product(0, input->shape.size(), "PagedAttention"); ++i)
+      EXT_ENFORCE_INVALID(std::isfinite(ReadTensorElement(*input, static_cast<size_t>(i))),
                           "PagedAttention: inputs must be finite.");
   const int64_t total = past_length + length;
-  const size_t output_bytes = CheckedBytes(length, v.shape[3]);
+  const Shape output_shape{q.shape[0], q.shape[1], length, v.shape[3]};
+  const int64_t output_count = output_shape.product(0, output_shape.size(), "PagedAttention");
+  const size_t output_bytes = PackedByteSize(q.data_type, output_count);
   const size_t workspace_bytes = length == 0 ? 0 : CheckedBytes(1, v.shape[3], sizeof(double));
   Formats formats;
   if (length > 0 && format_selector_)
@@ -449,7 +507,7 @@ PagedAttention::Result PagedAttention::operator()(const Tensor &q, const Tensor 
   CheckFormat(formats.value);
   const StructTypeCatalogue empty_catalogue;
   const auto &catalogue = rt ? rt->struct_type_catalogue() : empty_catalogue;
-  result.Y = Allocate(rt, 0, DataType::FLOAT, {1, 1, length, v.shape[3]}, output_bytes);
+  result.Y = Allocate(rt, 0, q.data_type, output_shape, output_bytes);
   if (length == 0) {
     result.present = past.BorrowView().Retain(catalogue);
     return result;
@@ -483,55 +541,71 @@ PagedAttention::Result PagedAttention::operator()(const Tensor &q, const Tensor 
     active.push_back({Scalar(Field(page, "start")), Scalar(Field(page, "length")),
                       PageView(Field(page, "key"), true), PageView(Field(page, "value"), true)});
   }
-  for (int64_t row = 0; row < length; ++row) {
-    std::fill(accumulator, accumulator + v.shape[3], 0);
-    const int64_t position = past_length + row;
-    const int64_t first =
-        options.left_window_size < 0 ? 0 : position - std::min(position, options.left_window_size);
-    const int64_t end = options.is_causal ? position + 1 : total;
-    double maximum = -std::numeric_limits<double>::infinity(), denominator = 0;
-    for (const auto &page : active) {
-      const int64_t start = page.start, count = page.length;
-      if (start >= end || start + count <= first)
-        continue;
-      const auto &key = page.key;
-      const auto &value = page.value;
-      for (int64_t token = std::max(first, start); token < std::min(end, start + count); ++token) {
-        double score = 0;
-        for (int64_t d = 0; d < q.shape[3]; ++d)
-          score += static_cast<double>(q.AsFloat()[static_cast<size_t>(row) * q.shape[3] + d]) *
-                   key.Read(token - start, d, result.statistics);
-        score *= scale;
-        const double next_maximum = std::max(maximum, score);
-        const double previous_weight = std::exp(maximum - next_maximum);
-        const double weight = std::exp(score - next_maximum);
-        denominator = denominator * previous_weight + weight;
+  const int64_t query_heads_per_kv_head = q.shape[1] / k.shape[1];
+  for (int64_t batch = 0; batch < q.shape[0]; ++batch)
+    for (int64_t query_head = 0; query_head < q.shape[1]; ++query_head) {
+      const int64_t kv_head = query_head / query_heads_per_kv_head;
+      for (int64_t row = 0; row < length; ++row) {
+        std::fill(accumulator, accumulator + v.shape[3], 0);
+        const int64_t position = past_length + row;
+        const int64_t first = options.left_window_size < 0
+                                  ? 0
+                                  : position - std::min(position, options.left_window_size);
+        const int64_t end = options.is_causal ? position + 1 : total;
+        double maximum = -std::numeric_limits<double>::infinity(), denominator = 0;
+        const size_t query_base =
+            ((static_cast<size_t>(batch) * q.shape[1] + query_head) * length + row) * q.shape[3];
+        for (const auto &page : active) {
+          const int64_t start = page.start, count = page.length;
+          if (start >= end || start + count <= first)
+            continue;
+          const auto &key = page.key;
+          const auto &value = page.value;
+          for (int64_t token = std::max(first, start); token < std::min(end, start + count);
+               ++token) {
+            double score = 0;
+            for (int64_t d = 0; d < q.shape[3]; ++d)
+              score += static_cast<double>(ReadTensorElement(q, query_base + d)) *
+                       key.Read(batch, kv_head, token - start, d, result.statistics);
+            score *= scale;
+            const double next_maximum = std::max(maximum, score);
+            const double previous_weight = std::exp(maximum - next_maximum);
+            const double weight = std::exp(score - next_maximum);
+            denominator = denominator * previous_weight + weight;
+            for (int64_t d = 0; d < v.shape[3]; ++d)
+              accumulator[d] =
+                  accumulator[d] * previous_weight +
+                  weight * value.Read(batch, kv_head, token - start, d, result.statistics);
+            maximum = next_maximum;
+          }
+        }
+        for (int64_t token = std::max(first, past_length); token < end; ++token) {
+          const size_t current = static_cast<size_t>(token - past_length);
+          const size_t key_base =
+              ((static_cast<size_t>(batch) * k.shape[1] + kv_head) * length + current) * k.shape[3];
+          const size_t value_base =
+              ((static_cast<size_t>(batch) * v.shape[1] + kv_head) * length + current) * v.shape[3];
+          double score = 0;
+          for (int64_t d = 0; d < q.shape[3]; ++d)
+            score += static_cast<double>(ReadTensorElement(q, query_base + d)) *
+                     ReadTensorElement(k, key_base + d);
+          score *= scale;
+          const double next_maximum = std::max(maximum, score);
+          const double previous_weight = std::exp(maximum - next_maximum);
+          const double weight = std::exp(score - next_maximum);
+          denominator = denominator * previous_weight + weight;
+          for (int64_t d = 0; d < v.shape[3]; ++d)
+            accumulator[d] =
+                accumulator[d] * previous_weight + weight * ReadTensorElement(v, value_base + d);
+          maximum = next_maximum;
+        }
+        const size_t output_base =
+            ((static_cast<size_t>(batch) * q.shape[1] + query_head) * length + row) * v.shape[3];
         for (int64_t d = 0; d < v.shape[3]; ++d)
-          accumulator[d] = accumulator[d] * previous_weight +
-                           weight * value.Read(token - start, d, result.statistics);
-        maximum = next_maximum;
+          WriteTensorElement(result.Y, output_base + d,
+                             static_cast<float>(accumulator[d] / denominator));
       }
     }
-    for (int64_t token = std::max(first, past_length); token < end; ++token) {
-      const size_t current = static_cast<size_t>(token - past_length);
-      double score = 0;
-      for (int64_t d = 0; d < q.shape[3]; ++d)
-        score += static_cast<double>(q.AsFloat()[static_cast<size_t>(row) * q.shape[3] + d]) *
-                 k.AsFloat()[current * k.shape[3] + d];
-      score *= scale;
-      const double next_maximum = std::max(maximum, score);
-      const double previous_weight = std::exp(maximum - next_maximum);
-      const double weight = std::exp(score - next_maximum);
-      denominator = denominator * previous_weight + weight;
-      for (int64_t d = 0; d < v.shape[3]; ++d)
-        accumulator[d] =
-            accumulator[d] * previous_weight + weight * v.AsFloat()[current * v.shape[3] + d];
-      maximum = next_maximum;
-    }
-    for (int64_t d = 0; d < v.shape[3]; ++d)
-      result.Y.AsFloat()[static_cast<size_t>(row) * v.shape[3] + d] =
-          static_cast<float>(accumulator[d] / denominator);
-  }
   result.present = past.BorrowView().Retain(catalogue);
   auto &present_pages = result.present.fields.at("blocks").elements;
   for (int64_t begin = 0; begin < length;) {

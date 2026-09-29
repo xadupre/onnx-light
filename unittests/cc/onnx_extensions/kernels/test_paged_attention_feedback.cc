@@ -24,7 +24,7 @@ ModelProto PagedModel(bool gate = false, int64_t max_tokens = 8) {
   ModelProto model;
   model.set_ir_version(10);
   auto *opset = model.add_opset_import();
-  opset->set_domain("onnx_light");
+  opset->set_domain("ai.rt");
   opset->set_version(1);
   auto *graph = model.mutable_graph();
   graph->set_name("paged_feedback");
@@ -45,7 +45,7 @@ ModelProto PagedModel(bool gate = false, int64_t max_tokens = 8) {
       *output->mutable_type() = FeedType();
   }
   auto *node = graph->add_node();
-  node->set_domain("onnx_light");
+  node->set_domain("ai.rt");
   node->set_op_type("PagedAttention");
   for (const auto &name : {"Q", "K", "V", "past"})
     node->add_input(name);
@@ -80,7 +80,7 @@ void RegisterPaged(RuntimeContext &context, PagedAttention::FormatSelector forma
       return PagedAttention::Formats{{DataType::INT4, 0.25f, 0}, {DataType::INT8, 0.25f, 0}};
     };
   context.RegisterKernelFn(
-      "onnx_light", "PagedAttention", core::symbolic::Device::kCPU,
+      "ai.rt", "PagedAttention", core::symbolic::Device::kCPU,
       [format_selector = std::move(format_selector)](
           const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<KernelBase> {
         auto kernel = std::make_unique<PagedAttention>(rt.kernel_ctx(), format_selector);

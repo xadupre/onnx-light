@@ -78,7 +78,12 @@ RuntimeValue QuantizePayload(const RuntimeValue &source, int64_t length, const T
                          rt ? rt->allocator() : context.allocator);
     // Unused rows need initialized storage, not reads from the source's invalid tail.
     std::memset(padded.mutable_bytes(), 0, padded.size_bytes());
-    std::memcpy(padded.mutable_bytes(), decoded.bytes(), decoded.size_bytes());
+    const int64_t outer = decoded.shape.product(0, 2, "QuantizePagedCache");
+    const size_t valid_bytes = PackedByteSize(DataType::FLOAT, length * decoded.shape[3]);
+    const size_t capacity_bytes = PackedByteSize(DataType::FLOAT, capacity * decoded.shape[3]);
+    for (int64_t i = 0; i < outer; ++i)
+      std::memcpy(padded.mutable_bytes() + static_cast<size_t>(i) * capacity_bytes,
+                  decoded.bytes() + static_cast<size_t>(i) * valid_bytes, valid_bytes);
     decoded = std::move(padded);
   }
   if (!IsAffineStorageType(static_cast<TensorProto::DataType>(zero_point.data_type))) {

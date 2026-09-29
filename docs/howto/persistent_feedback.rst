@@ -524,13 +524,14 @@ raw payloads retain the existing borrowing behavior.
 Versioned operator schema
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``onnx_light::PagedAttention`` has an independent ``LightOpSchema`` at domain
-``onnx_light``, opset 1. It takes ``Q, K, V, past`` and produces ``Y, present``.
-Q/K/V and Y are FLOAT ``[1,1,L,D]`` tensors; Q/K/V use the same new-token
-length, and Q/K head sizes match. ``past`` and ``present`` use the paged-cache
-structure. Shape inference checks known Q/K/V ranks and dimensions, returns Y
-as ``[1,1,L,value_head_size]``, and preserves the structured declaration of
-``past`` for ``present``.
+``ai.rt::PagedAttention`` has an independent ``LightOpSchema`` at domain
+``ai.rt``, opset 1. It takes ``Q, K, V, past`` and produces ``Y, present``.
+Q/K/V and Y are FLOAT, FLOAT16, or BFLOAT16 ``[batch,heads,L,D]`` tensors;
+Q/K/V use the same batch and new-token dimensions, K/V use the same head count,
+and the query head count is a multiple of the K/V head count. ``past`` and
+``present`` use the paged-cache structure. Shape inference returns Y with Q's
+batch, heads, sequence length and element type, V's head size, and preserves
+the structured declaration of ``past`` for ``present``.
 
 All attributes are optional: ``block_size=16`` and ``max_tokens=4096`` must be
 positive; ``is_causal=1`` accepts only 0 or 1; ``left_window_size=-1`` means
@@ -549,7 +550,7 @@ Declare ``past`` and ``present`` as structured values and bind ``past <-
 present`` in ``GraphProto.persistent_bindings``. Initialize each request with
 ``PagedAttention::EmptyCache()``.
 
-Import domain ``onnx_light`` at version 1 in the model. Unknown ranks and
+Import domain ``ai.rt`` at version 1 in the model. Unknown ranks and
 symbolic Q/K/V dimensions remain supported. Cache page capacities should remain
 unspecified because appended pages can have different lengths.
 
@@ -561,7 +562,7 @@ Register the native kernel on the context used by the state:
     using namespace onnx_light::core::runtime;
 
     context.RegisterKernelFn(
-        "onnx_light", "PagedAttention", core::symbolic::Device::kCPU,
+        "ai.rt", "PagedAttention", core::symbolic::Device::kCPU,
         [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<KernelBase> {
           auto kernel =
               std::make_unique<onnx_kernels::kernel::PagedAttention>(rt.kernel_ctx());
@@ -588,11 +589,11 @@ policy can switch formats as the cache grows:
     auto kernel = std::make_unique<onnx_kernels::kernel::PagedAttention>(
         context.kernel_ctx(), select_formats);
 
-The node takes ``Q, K, V, past`` and returns ``Y, present``. This first consumer
-accepts finite FLOAT ``[1, 1, sequence, head_size]`` tensors with equal new
-Q/K/V sequence lengths and positive head sizes: multiple batches/heads,
-masks and other unsupported attributes fail explicitly. Kernel instances,
-execution and allocator routing use the normal runtime contracts.
+The node takes ``Q, K, V, past`` and returns ``Y, present``. It accepts finite
+FLOAT, FLOAT16, or BFLOAT16 tensors, supports multiple batches and grouped-query
+attention, and requires equal new Q/K/V sequence lengths and positive head
+sizes. Masks and other unsupported attributes fail explicitly. Kernel
+instances, execution and allocator routing use the normal runtime contracts.
 Python feedback represents this cache with ``PagedCacheProto`` rather than
 converting its internal sequence into a Python list.
 This conversion recognizes the runtime structure: a single ``blocks`` sequence,
@@ -612,7 +613,7 @@ The :ref:`Python example <l-example-quantize-paged-cache>` builds and executes
 a graph that quantizes one cache page, dequantizes it, and serializes the
 mixed-format cache.
 
-``onnx_light::QuantizePagedCache`` converts selected cache blocks without
+``ai.rt::QuantizePagedCache`` converts selected cache blocks without
 rebuilding the remaining cache. Its opset-1 signature is::
 
     QuantizePagedCache(
@@ -661,12 +662,12 @@ The floating zero-point inputs are type markers:
     value_bfloat16  = BFLOAT16 scalar 0
     selected_blocks = INT64[1] {3}
 
-    quantized_cache = onnx_light.QuantizePagedCache(
+    quantized_cache = ai.rt::QuantizePagedCache(
         cache, selected_blocks,
         key_scale, key_zero_int2,
         value_scale, value_zero_u4)
 
-    dequantized_cache = onnx_light.QuantizePagedCache(
+    dequantized_cache = ai.rt::QuantizePagedCache(
         quantized_cache, selected_blocks,
         ignored_scale, key_float16,
         ignored_scale, value_bfloat16)

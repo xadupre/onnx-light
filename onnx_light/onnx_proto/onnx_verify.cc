@@ -1075,13 +1075,15 @@ void StructTypeCatalogue::ValidatePagedCache(const PagedCacheProto &value,
                             "PagedCacheProto: invalid page field declaration.");
         const auto &tensor = field.type().tensor_type();
         const bool scalar = i < 2;
-        EXT_ENFORCE_INVALID(
-            tensor.elem_type() == (scalar ? TensorProto::INT64 : TensorProto::FLOAT) &&
-                tensor.has_shape() && tensor.shape().dim_size() == (scalar ? 0 : 4) &&
-                (scalar ||
-                 (tensor.shape().dim(0).has_dim_value() && tensor.shape().dim(0).dim_value() == 1 &&
-                  tensor.shape().dim(1).has_dim_value() && tensor.shape().dim(1).dim_value() == 1)),
-            "PagedCacheProto: invalid page field type or rank.");
+        EXT_ENFORCE_INVALID(tensor.elem_type() ==
+                                    (scalar ? TensorProto::INT64 : TensorProto::FLOAT) &&
+                                tensor.has_shape() && tensor.shape().dim_size() == (scalar ? 0 : 4),
+                            "PagedCacheProto: invalid page field type or rank.");
+        if (!scalar)
+          for (int axis : {0, 1})
+            EXT_ENFORCE_INVALID(!tensor.shape().dim(axis).has_dim_value() ||
+                                    tensor.shape().dim(axis).dim_value() > 0,
+                                "PagedCacheProto: batch and head dimensions must be positive.");
         if (field.name() == "key")
           declared_key = &tensor;
         if (field.name() == "value")
@@ -1119,11 +1121,13 @@ void StructTypeCatalogue::ValidatePagedCache(const PagedCacheProto &value,
         dims.push_back(dim.dim_value());
       }
     }
-    EXT_ENFORCE_INVALID(dims[0] == 1 && dims[1] == 1 && dims[2] > 0 && dims[3] > 0 &&
-                            dims[2] <= INT64_MAX / dims[3] &&
-                            static_cast<uint64_t>(dims[2]) <=
-                                std::numeric_limits<size_t>::max() / sizeof(float) / dims[3],
-                        "PagedCacheProto: invalid [1,1,capacity,width] dimensions.");
+    size_t count = 1;
+    for (int64_t dim : dims) {
+      EXT_ENFORCE_INVALID(dim > 0 && static_cast<uint64_t>(dim) <=
+                                         std::numeric_limits<size_t>::max() / count,
+                          "PagedCacheProto: invalid [batch,heads,capacity,width] dimensions.");
+      count *= static_cast<size_t>(dim);
+    }
     if (declared && declared->has_shape())
       for (size_t i = 0; i < dims.size(); ++i) {
         const auto &dim = declared->shape().dim(i);
@@ -1137,9 +1141,11 @@ void StructTypeCatalogue::ValidatePagedCache(const PagedCacheProto &value,
       }
     if (dense) {
       VerifyTensor(*dense);
-      const auto count = static_cast<size_t>(dims[2]) * static_cast<size_t>(dims[3]);
-      const auto bytes =
-          count * (dense->data_type() == TensorProto::FLOAT ? sizeof(float) : sizeof(uint16_t));
+      const size_t item_size =
+          dense->data_type() == TensorProto::FLOAT ? sizeof(float) : sizeof(uint16_t);
+      EXT_ENFORCE_INVALID(count <= std::numeric_limits<size_t>::max() / item_size,
+                          "PagedCacheProto: dense payload extent overflow.");
+      const auto bytes = count * item_size;
       EXT_ENFORCE_INVALID(dense->has_raw_data() ? dense->raw_data().size() == bytes
                           : dense->data_type() == TensorProto::FLOAT
                               ? dense->float_data().size() == count
@@ -1148,7 +1154,7 @@ void StructTypeCatalogue::ValidatePagedCache(const PagedCacheProto &value,
     }
     return dims;
   };
-  int64_t next = 0, key_width = 0, value_width = 0;
+  int64_t next = 0, batch = 0, heads = 0, key_width = 0, value_width = 0;
   for (const auto &block : value.blocks()) {
     EXT_ENFORCE_INVALID(block.has_start() && block.has_length() && block.start() == next &&
                             block.length() > 0 && block.length() <= INT64_MAX - next,
@@ -1161,9 +1167,13 @@ void StructTypeCatalogue::ValidatePagedCache(const PagedCacheProto &value,
     const auto val =
         shape(block.has_value() ? &block.value() : nullptr,
               block.has_encoded_value() ? &block.encoded_value() : nullptr, declared_value);
-    EXT_ENFORCE_INVALID(key[2] == val[2] && block.length() <= key[2] &&
-                            (next == 0 || (key[3] == key_width && val[3] == value_width)),
-                        "PagedCacheProto: inconsistent page capacities or widths.");
+    EXT_ENFORCE_INVALID(key[0] == val[0] && key[1] == val[1] && key[2] == val[2] &&
+                            block.length() <= key[2] &&
+                            (next == 0 || (key[0] == batch && key[1] == heads &&
+                                           key[3] == key_width && val[3] == value_width)),
+                        "PagedCacheProto: inconsistent page shapes.");
+    batch = key[0];
+    heads = key[1];
     key_width = key[3];
     value_width = val[3];
     next += block.length();

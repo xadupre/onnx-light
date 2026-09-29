@@ -123,7 +123,7 @@ TEST(QuantizePagedCache, PartialPageCommitsThroughFixedCapacityPersistentCache) 
   model.set_ir_version(10);
   model.add_opset_import()->set_version(23);
   auto *opset = model.add_opset_import();
-  opset->set_domain("onnx_light");
+  opset->set_domain("ai.rt");
   opset->set_version(1);
   auto *graph = model.mutable_graph();
   graph->set_name("convert_typed_cache");
@@ -157,7 +157,7 @@ TEST(QuantizePagedCache, PartialPageCommitsThroughFixedCapacityPersistentCache) 
   binding->set_input_name("past");
   binding->set_output_name("present");
   auto *node = graph->add_node();
-  node->set_domain("onnx_light");
+  node->set_domain("ai.rt");
   node->set_op_type("QuantizePagedCache");
   node->add_input("past");
   node->add_output("present");

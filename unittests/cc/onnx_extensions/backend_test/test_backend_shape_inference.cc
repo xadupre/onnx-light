@@ -63,7 +63,8 @@ struct ExpectedOutput {
   int32_t elem_type = 0;
   std::vector<int64_t> shape;
   bool had_shape = false;
-  std::string structured_type;
+  bool has_structured_type = false;
+  TypeProto structured_type;
 };
 
 // Returns the underlying ``TypeProto::Tensor`` carried by ``type``, drilling
@@ -117,6 +118,9 @@ std::vector<ExpectedOutput> SnapshotAndStripOutputs(ModelProto &model) {
         // Strip the recorded shape so InferShapes has to recover it.
         // We keep elem_type so the ValueInfo remains well-formed.
         tt->clear_shape();
+      } else {
+        exp.has_structured_type = true;
+        exp.structured_type = out.type();
       }
     }
     snapshot.emplace_back(std::move(exp));
@@ -140,7 +144,8 @@ std::vector<ExpectedOutput> SnapshotAndStripValueInfo(ModelProto &model) {
     exp.name.assign(vi.ref_name().data(), vi.ref_name().size());
     if (vi.has_type()) {
       if (vi.type().has_struct_type()) {
-        exp.structured_type = vi.type().struct_type().SerializeAsString();
+        exp.has_structured_type = true;
+        exp.structured_type = vi.type();
       }
       if (auto *tt = MutableTensorTypeOf(*vi.mutable_type()); tt != nullptr) {
         exp.elem_type = static_cast<int32_t>(tt->elem_type());
@@ -178,9 +183,9 @@ void CheckValueInfoMatchesExpected(const GraphProto &graph,
                                  << " missing from graph after shape inference";
     const auto &vi = *it->second;
     ASSERT_TRUE(vi.has_type()) << "value_info " << exp.name << " missing type";
-    if (!exp.structured_type.empty()) {
+    if (exp.has_structured_type) {
       ASSERT_TRUE(vi.type().has_struct_type()) << "value_info " << exp.name << " not structured";
-      EXPECT_EQ(vi.type().struct_type().SerializeAsString(), exp.structured_type)
+      EXPECT_TRUE(vi.type().Equals(exp.structured_type))
           << "structured type mismatch on value_info " << exp.name;
       continue;
     }
@@ -405,6 +410,11 @@ TEST(BackendTestCaseShapeInference, AllCollectedCasesInferOutputShapes) {
     for (size_t i = 0; i < outputs.size(); ++i) {
       const auto &out = outputs[i];
       ASSERT_TRUE(out.has_type()) << "output " << expected[i].name << " missing type";
+      if (expected[i].has_structured_type) {
+        EXPECT_TRUE(out.type().Equals(expected[i].structured_type))
+            << "structured type mismatch on output " << expected[i].name;
+        continue;
+      }
       const TypeProto::Tensor *tt_ptr = TensorTypeOf(out.ref_type());
       ASSERT_NE(tt_ptr, nullptr) << "output " << expected[i].name << " not a tensor";
       const auto &tt = *tt_ptr;
@@ -588,6 +598,11 @@ TEST(BackendTestCaseShapeInference, AllCollectedCasesPropagateSymbolicDims) {
     for (size_t i = 0; i < outputs.size(); ++i) {
       const auto &out = outputs[i];
       ASSERT_TRUE(out.has_type()) << "output " << expected[i].name << " missing type";
+      if (expected[i].has_structured_type) {
+        EXPECT_TRUE(out.type().Equals(expected[i].structured_type))
+            << "structured type mismatch on output " << expected[i].name;
+        continue;
+      }
       const TypeProto::Tensor *tt_ptr = TensorTypeOf(out.ref_type());
       ASSERT_NE(tt_ptr, nullptr) << "output " << expected[i].name << " not a tensor";
       const auto &tt = *tt_ptr;
@@ -2474,6 +2489,11 @@ TEST(BackendTestCaseShapeInference, BigModelsOptimShapeInference) {
     for (size_t i = 0; i < outputs.size(); ++i) {
       const auto &out = outputs[i];
       ASSERT_TRUE(out.has_type()) << "output " << expected[i].name << " missing type";
+      if (expected[i].has_structured_type) {
+        EXPECT_TRUE(out.type().Equals(expected[i].structured_type))
+            << "structured type mismatch on output " << expected[i].name;
+        continue;
+      }
       const TypeProto::Tensor *tt_ptr = TensorTypeOf(out.ref_type());
       ASSERT_NE(tt_ptr, nullptr) << "output " << expected[i].name << " not a tensor";
       const auto &tt = *tt_ptr;
@@ -2725,6 +2745,48 @@ TEST(BackendTestCaseShapeInference, Qwen3FusedUsesFusedOperators) {
             inlined->model().ref_graph().ref_input().size());
   EXPECT_EQ(fused->model().ref_graph().ref_output().size(),
             inlined->model().ref_graph().ref_output().size());
+}
+
+TEST(BackendTestCaseShapeInference, Qwen3PersistentCachesAreExclusiveAndPaged) {
+  const std::vector<TestCase> cases = CollectTestCases("", /*include_big=*/true);
+  const TestCase *persistent = nullptr;
+  const TestCase *paged = nullptr;
+  for (const TestCase &tc : cases) {
+    if (tc.name == "test_cc_shape_inference_big_qwen3_4_layers_like_persistent")
+      persistent = &tc;
+    else if (tc.name == "test_cc_shape_inference_big_qwen3_4_layers_like_persistent_paged")
+      paged = &tc;
+  }
+  ASSERT_NE(persistent, nullptr);
+  ASSERT_NE(paged, nullptr);
+
+  const auto input_use_count = [](const GraphProto &graph, const std::string &name) {
+    size_t count = 0;
+    for (const auto &node : graph.node())
+      for (const auto &input : node.input())
+        count += input == name;
+    return count;
+  };
+  const GraphProto &persistent_graph = persistent->model().ref_graph();
+  ASSERT_EQ(persistent_graph.persistent_bindings_size(), 8);
+  for (const auto &binding : persistent_graph.persistent_bindings())
+    EXPECT_EQ(input_use_count(persistent_graph, binding.input_name()), 1u) << binding.input_name();
+
+  const GraphProto &paged_graph = paged->model().ref_graph();
+  EXPECT_EQ(paged_graph.paged_cache_initializer_size(), 4);
+  EXPECT_EQ(paged_graph.persistent_bindings_size(), 4);
+  size_t paged_attention_count = 0;
+  for (const auto &node : paged_graph.node()) {
+    if (node.op_type() != "PagedAttention")
+      continue;
+    ++paged_attention_count;
+    EXPECT_EQ(node.domain(), "ai.rt");
+    ASSERT_EQ(node.input_size(), 4);
+    ASSERT_EQ(node.output_size(), 2);
+  }
+  EXPECT_EQ(paged_attention_count, 4u);
+  for (const auto &binding : paged_graph.persistent_bindings())
+    EXPECT_EQ(input_use_count(paged_graph, binding.input_name()), 1u) << binding.input_name();
 }
 
 } // namespace Test

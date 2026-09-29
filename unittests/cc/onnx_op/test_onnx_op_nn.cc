@@ -36,8 +36,6 @@ constexpr size_t kExpectedGroupNormalizationSchemaCount = 2;
 constexpr size_t kExpectedInstanceNormalizationSchemaCount = 3;
 constexpr size_t kExpectedLayerNormalizationSchemaCount = 1;
 constexpr size_t kExpectedLinearAttentionSchemaCount = 1;
-constexpr size_t kExpectedPagedAttentionSchemaCount = 1;
-constexpr size_t kExpectedQuantizePagedCacheSchemaCount = 1;
 constexpr size_t kExpectedMeanVarianceNormalizationSchemaCount = 2;
 constexpr size_t kExpectedLRNSchemaCount = 2;
 constexpr size_t kExpectedLpNormalizationSchemaCount = 2;
@@ -63,8 +61,7 @@ constexpr size_t kExpectedNnSchemaCount =
     kExpectedLSTMSchemaCount + kExpectedMaxPoolSchemaCount + kExpectedMaxRoiPoolSchemaCount +
     kExpectedMaxUnpoolSchemaCount + kExpectedMeanVarianceNormalizationSchemaCount +
     kExpectedRNNSchemaCount + kExpectedRMSNormalizationSchemaCount +
-    kExpectedRotaryEmbeddingSchemaCount + kExpectedPagedAttentionSchemaCount +
-    kExpectedQuantizePagedCacheSchemaCount;
+    kExpectedRotaryEmbeddingSchemaCount;
 
 static const core::schema::LightOpSchema *
 FindByVersion(const std::vector<core::schema::LightOpSchema> &schemas, int version) {
@@ -120,7 +117,7 @@ TEST(OnnxOpNnRegistrationTest, PagedAttentionSchemaAndDefaults) {
   const auto schemas = onnx_op::GetAllOnnxOpSchemasWithHistory("PagedAttention");
   ASSERT_EQ(schemas.size(), 1u);
   const auto &schema = schemas.front();
-  EXPECT_EQ(schema.domain(), "onnx_light");
+  EXPECT_EQ(schema.domain(), "ai.rt");
   EXPECT_EQ(schema.since_version(), 1);
   EXPECT_EQ(schema.inputs().size(), 4u);
   EXPECT_EQ(schema.outputs().size(), 2u);
@@ -139,7 +136,7 @@ TEST(OnnxOpNnRegistrationTest, QuantizePagedCacheSchema) {
   const auto schemas = onnx_op::GetAllOnnxOpSchemasWithHistory("QuantizePagedCache");
   ASSERT_EQ(schemas.size(), 1u);
   const auto &schema = schemas.front();
-  EXPECT_EQ(schema.domain(), "onnx_light");
+  EXPECT_EQ(schema.domain(), "ai.rt");
   EXPECT_EQ(schema.since_version(), 1);
   EXPECT_EQ(schema.inputs().size(), 6u);
   EXPECT_EQ(schema.outputs().size(), 1u);
@@ -149,7 +146,7 @@ TEST(OnnxOpNnRegistrationTest, QuantizePagedCacheSchema) {
 TEST(OnnxOpNnRegistrationTest, PagedAttentionVerifiesTypesAndAttributes) {
   const auto schema = onnx_op::GetAllOnnxOpSchemasWithHistory("PagedAttention").front();
   NodeProto node;
-  node.set_domain("onnx_light");
+  node.set_domain("ai.rt");
   node.set_op_type("PagedAttention");
   std::vector<std::optional<core::schema::SchemaInputValue>> inputs;
   for (const char *name : {"Q", "K", "V", "past"}) {

@@ -8,7 +8,8 @@
 namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 namespace {
 
-void Declare(ValueInfoProto &info, const std::string &name, int32_t dtype, const Shape &shape) {
+void Declare(ValueInfoProto &info, const std::string &name, int32_t dtype, const Shape &shape,
+             const std::string &symbol = "sequence") {
   info.set_name(name);
   auto *tensor = info.mutable_type()->mutable_tensor_type();
   tensor->set_elem_type(dtype);
@@ -17,7 +18,7 @@ void Declare(ValueInfoProto &info, const std::string &name, int32_t dtype, const
     if (size >= 0)
       dimension->set_dim_value(size);
     else
-      dimension->set_dim_param("sequence");
+      dimension->set_dim_param(symbol);
   }
 }
 
@@ -75,8 +76,9 @@ void RegisterGenerationCases(std::vector<TestCase> &registry) {
         for (const auto &suffix : {"key", "value"}) {
           const std::string input = std::string("past_") + suffix;
           const std::string output = std::string("present_") + suffix;
-          Declare(*graph.add_input(), input, TensorProto::FLOAT, {1, 1, -1, 2});
-          Declare(*graph.add_output(), output, TensorProto::FLOAT, {1, 1, -1, 2});
+          Declare(*graph.add_input(), input, TensorProto::FLOAT, {1, 1, -1, 2}, "past_sequence");
+          Declare(*graph.add_output(), output, TensorProto::FLOAT, {1, 1, -1, 2},
+                  "present_sequence");
           auto *binding = graph.add_persistent_bindings();
           binding->set_input_name(input);
           binding->set_output_name(output);

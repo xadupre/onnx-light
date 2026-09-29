@@ -137,6 +137,13 @@ TEST(PagedAttentionShape, SupportsGroupedQueryAttentionAndReducedPrecision) {
   EXPECT_TRUE(context.GetType("Y").Equals(PagedTensor({2, 16, 3, 6}, TensorProto::FLOAT16)));
 }
 
+TEST(PagedAttentionShape, RejectsMismatchedSupportedInputTypes) {
+  auto context = PagedContext();
+  context.SetType("K", PagedTensor({1, 1, 3, 4}, TensorProto::FLOAT16));
+  context.SetType("V", PagedTensor({1, 1, 3, 6}, TensorProto::BFLOAT16));
+  EXPECT_THROW(context.ComputeShapeNode(PagedNode()), std::invalid_argument);
+}
+
 TEST(PagedAttentionShape, AcceptsSymbolicTensorDescriptorsAndEmptyAppend) {
   auto context = PagedContext();
   for (const char *name : {"Q", "K", "V"})
@@ -191,7 +198,7 @@ TEST(PagedAttentionShape, RejectsKnownTensorMismatches) {
 }
 
 TEST(PagedAttentionShape, RejectsMalformedCacheAndNode) {
-  for (int failure = 0; failure < 5; ++failure) {
+  for (int failure = 0; failure < 7; ++failure) {
     auto context = PagedContext();
     auto cache = PagedCache();
     auto *blocks = cache.mutable_struct_type()->mutable_structure()->mutable_field(0);
@@ -214,8 +221,28 @@ TEST(PagedAttentionShape, RejectsMalformedCacheAndNode) {
           ->set_dim_value(8);
     else if (failure == 3)
       page->mutable_field(3)->set_name("wrong");
-    else
+    else if (failure == 4)
       *blocks->mutable_type() = PagedTensor({1});
+    else if (failure == 5)
+      page->mutable_field(2)->mutable_type()->mutable_tensor_type()->set_elem_type(
+          TensorProto::FLOAT16);
+    else {
+      context.SetType("Q", PagedTensor({1, 3, 3, 4}));
+      context.SetType("K", PagedTensor({1, -1, 3, 4}));
+      context.SetType("V", PagedTensor({1, -1, 3, 6}));
+      page->mutable_field(2)
+          ->mutable_type()
+          ->mutable_tensor_type()
+          ->mutable_shape()
+          ->mutable_dim(1)
+          ->set_dim_value(2);
+      page->mutable_field(3)
+          ->mutable_type()
+          ->mutable_tensor_type()
+          ->mutable_shape()
+          ->mutable_dim(1)
+          ->set_dim_value(2);
+    }
     context.SetType("past", cache);
     EXPECT_THROW(context.ComputeShapeNode(PagedNode()), std::invalid_argument);
   }

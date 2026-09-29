@@ -2775,6 +2775,15 @@ TEST(BackendTestCaseShapeInference, Qwen3PersistentCachesAreExclusiveAndPaged) {
   const GraphProto &paged_graph = paged->model().ref_graph();
   EXPECT_EQ(paged_graph.paged_cache_initializer_size(), 4);
   EXPECT_EQ(paged_graph.persistent_bindings_size(), 4);
+  EXPECT_EQ(std::count_if(paged_graph.input().begin(), paged_graph.input().end(),
+                          [](const auto &input) { return input.name() == "attention_mask"; }),
+            0);
+  EXPECT_EQ(
+      std::count_if(paged_graph.input().begin(), paged_graph.input().end(),
+                    [](const auto &input) { return input.name() == "total_sequence_length"; }),
+      1);
+  EXPECT_EQ(input_use_count(paged_graph, "attention_mask"), 0u);
+  EXPECT_EQ(input_use_count(paged_graph, "total_sequence_length"), 1u);
   size_t paged_attention_count = 0;
   for (const auto &node : paged_graph.node()) {
     if (node.op_type() != "PagedAttention")

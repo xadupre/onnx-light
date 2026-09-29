@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
@@ -91,6 +92,28 @@ TypeProto QwenPagedCacheType() {
   return type;
 }
 
+void RemoveUnusedQwenNodes(GraphProto &graph) {
+  std::unordered_set<std::string> required;
+  for (const auto &output : graph.output())
+    required.insert(output.name());
+  std::vector<NodeProto> kept;
+  kept.reserve(graph.node_size());
+  for (int index = graph.node_size() - 1; index >= 0; --index) {
+    const auto &node = graph.node(index);
+    bool used = false;
+    for (const auto &output : node.output())
+      used |= required.contains(output);
+    if (!used)
+      continue;
+    kept.push_back(node);
+    for (const auto &input : node.input())
+      required.insert(input);
+  }
+  graph.clear_node();
+  for (auto it = kept.rbegin(); it != kept.rend(); ++it)
+    *graph.add_node() = std::move(*it);
+}
+
 void ConvertQwenToPagedCache(ModelProto &model) {
   model.set_ir_version(13);
   GraphProto &graph = *model.mutable_graph();
@@ -156,6 +179,25 @@ void ConvertQwenToPagedCache(ModelProto &model) {
     binding->set_input_name("paged_cache_" + suffix);
     binding->set_output_name("present_paged_cache_" + suffix);
   }
+
+  for (auto &input : graph.ref_input()) {
+    if (input.name() != "attention_mask")
+      continue;
+    input.set_name("total_sequence_length");
+    auto *tensor = input.mutable_type()->mutable_tensor_type();
+    tensor->set_elem_type(DataType::INT64);
+    tensor->mutable_shape()->clear_dim();
+    tensor->mutable_shape()->add_dim()->set_dim_value(1);
+  }
+  for (auto &node : graph.ref_node()) {
+    if (node.output_size() != 1 || node.output(0) != "past_key_values_key_0::Shape2:3")
+      continue;
+    node.set_op_type("Identity");
+    node.clear_attribute();
+    node.clear_input();
+    node.add_input("total_sequence_length");
+  }
+  RemoveUnusedQwenNodes(graph);
 }
 
 void AddQwenPersistentCases(std::vector<TestCase> &registry, const ModelProto &source) {
@@ -200,7 +242,9 @@ void AddQwenPersistentCases(std::vector<TestCase> &registry, const ModelProto &s
 //   * persistent: the fused tensor caches are bound back to their inputs, with
 //     every bound input consumed exactly once;
 //   * persistent paged: each layer uses one ``ai.rt::PagedAttention`` node and
-//     one bound structured paged cache.
+//     one bound structured paged cache. Since PagedAttention has no padding-mask
+//     input, this variant replaces attention_mask with an explicit total sequence
+//     length and only represents unpadded inputs.
 //
 // Both variants share the same public signature; RoPE and the causal-mask
 // construction stay explicit in both because they have no fused equivalent.

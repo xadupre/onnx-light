@@ -20,13 +20,19 @@ Dimension MergeDimension(const Dimension &left, const Dimension &right) {
   return right;
 }
 
-std::array<Dimension, 4> TensorDimensions(const TypeProto &type) {
+std::array<Dimension, 4> TensorDimensions(const TypeProto &type, bool logical_cache = false) {
   EXT_ENFORCE_INVALID(type.has_tensor_type(), "PagedAttention: expected a tensor type.");
   const auto &tensor = type.tensor_type();
-  EXT_ENFORCE_INVALID(
-      tensor.elem_type() == TensorProto::UNDEFINED || tensor.elem_type() == TensorProto::FLOAT ||
-          tensor.elem_type() == TensorProto::FLOAT16 || tensor.elem_type() == TensorProto::BFLOAT16,
-      "PagedAttention: tensors must be FLOAT, FLOAT16, or BFLOAT16.");
+  if (logical_cache) {
+    EXT_ENFORCE_INVALID(tensor.elem_type() == TensorProto::FLOAT,
+                        "PagedAttention: logical cache tensors must be FLOAT.");
+  } else {
+    EXT_ENFORCE_INVALID(tensor.elem_type() == TensorProto::UNDEFINED ||
+                            tensor.elem_type() == TensorProto::FLOAT ||
+                            tensor.elem_type() == TensorProto::FLOAT16 ||
+                            tensor.elem_type() == TensorProto::BFLOAT16,
+                        "PagedAttention: tensors must be FLOAT, FLOAT16, or BFLOAT16.");
+  }
   std::array<Dimension, 4> dims;
   if (tensor.has_shape()) {
     EXT_ENFORCE_INVALID(tensor.shape().dim_size() == 4,
@@ -82,15 +88,17 @@ void ComputeShapePagedAttention(ShapesContext &ctx, const NodeProto &node) {
   const auto q = TensorDimensions(q_type);
   const auto k = TensorDimensions(k_type);
   const auto v = TensorDimensions(v_type);
-  const int elem_type = q_type.tensor_type().elem_type();
-  EXT_ENFORCE_INVALID(elem_type == TensorProto::UNDEFINED ||
-                          ((k_type.tensor_type().elem_type() == TensorProto::UNDEFINED ||
-                            k_type.tensor_type().elem_type() == elem_type) &&
-                           (v_type.tensor_type().elem_type() == TensorProto::UNDEFINED ||
-                            v_type.tensor_type().elem_type() == elem_type)),
-                      "PagedAttention: Q, K, and V must have the same element type.");
+  int elem_type = TensorProto::UNDEFINED;
+  for (const TypeProto *type : {&q_type, &k_type, &v_type}) {
+    const int candidate = type->tensor_type().elem_type();
+    EXT_ENFORCE_INVALID(candidate == TensorProto::UNDEFINED ||
+                            elem_type == TensorProto::UNDEFINED || candidate == elem_type,
+                        "PagedAttention: Q, K, and V must have the same element type.");
+    if (candidate != TensorProto::UNDEFINED)
+      elem_type = candidate;
+  }
   const auto batch = MergeDimension(MergeDimension(q[0], k[0]), v[0]);
-  const auto kv_heads = MergeDimension(k[1], v[1]);
+  auto kv_heads = MergeDimension(k[1], v[1]);
   EXT_ENFORCE_INVALID(!q[1].has_dim_value() || !kv_heads.has_dim_value() ||
                           q[1].dim_value() % kv_heads.dim_value() == 0,
                       "PagedAttention: query heads must be a multiple of KV heads.");
@@ -114,12 +122,14 @@ void ComputeShapePagedAttention(ShapesContext &ctx, const NodeProto &node) {
               (!type.tensor_type().has_shape() || type.tensor_type().shape().dim_size() == 0),
           "PagedAttention: start/length must be INT64 scalars.");
     }
-    const auto cached_key = TensorDimensions(Field(page, "key"));
-    const auto cached_value = TensorDimensions(Field(page, "value"));
+    const auto cached_key = TensorDimensions(Field(page, "key"), true);
+    const auto cached_value = TensorDimensions(Field(page, "value"), true);
     MergeDimension(batch, cached_key[0]);
     MergeDimension(batch, cached_value[0]);
-    MergeDimension(kv_heads, cached_key[1]);
-    MergeDimension(kv_heads, cached_value[1]);
+    kv_heads = MergeDimension(MergeDimension(kv_heads, cached_key[1]), cached_value[1]);
+    EXT_ENFORCE_INVALID(!q[1].has_dim_value() || !kv_heads.has_dim_value() ||
+                            q[1].dim_value() % kv_heads.dim_value() == 0,
+                        "PagedAttention: query heads must be a multiple of KV heads.");
     MergeDimension(cached_key[2], cached_value[2]);
     MergeDimension(key_width, cached_key[3]);
     value_width = MergeDimension(value_width, cached_value[3]);

@@ -46,6 +46,7 @@ else()
 endif()
 message(STATUS "test_module_alias=${module_alias}")
 message(STATUS "test_sabi_alias=${sabi_alias}")
+message(STATUS "test_cmake_version=${CMAKE_VERSION}")
 """
         )
         with tempfile.TemporaryDirectory() as tmp:
@@ -71,8 +72,12 @@ message(STATUS "test_sabi_alias=${sabi_alias}")
             abi = f"ANY;ANY;ANY;{'ON' if gil_disabled else 'OFF'}"
             with self.subTest(abi=abi):
                 values = self._configure(abi)
+                cmake_version = tuple(
+                    int(part) for part in values["cmake_version"][0].split(".")[:2]
+                )
+                has_stable_abi = not gil_disabled and cmake_version >= (3, 26)
                 components = "Development.Module"
-                if not gil_disabled:
+                if has_stable_abi:
                     components += ";Development.SABIModule"
                 self.assertEqual(
                     values["find"],
@@ -83,7 +88,7 @@ message(STATUS "test_sabi_alias=${sabi_alias}")
                 )
                 self.assertEqual(values["module_alias"], ["Python3::Module"])
                 self.assertEqual(
-                    values["sabi_alias"], ["" if gil_disabled else "Python3::SABIModule"]
+                    values["sabi_alias"], ["Python3::SABIModule" if has_stable_abi else ""]
                 )
 
 

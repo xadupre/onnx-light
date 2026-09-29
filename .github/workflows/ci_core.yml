@@ -87,6 +87,8 @@ jobs:
           SCCACHE_GHA_ENABLED: "true"
           CMAKE_ARGS: >-
             -DONNX_LIGHT_BUILD_KERNELS=ON
+            -DPython_FIND_ABI=ANY;ANY;ANY;ON
+            -DPython3_FIND_ABI=ANY;ANY;ANY;ON
             -DCMAKE_C_COMPILER_LAUNCHER=sccache
             -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
         run: |

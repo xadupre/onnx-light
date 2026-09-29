@@ -1396,12 +1396,12 @@ class TestReferenceEvaluatorTensorConversion(ExtTestCase):
         ]
         with (
             unittest.mock.patch.object(
-                self._evaluator.numpy_helper,
+                self._evaluator.onh,
                 "from_array",
                 side_effect=AssertionError("Python input helper was called"),
             ),
             unittest.mock.patch.object(
-                self._evaluator.numpy_helper,
+                self._evaluator.onh,
                 "to_array",
                 side_effect=AssertionError("Python output helper was called"),
             ),

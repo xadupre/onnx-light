@@ -72,6 +72,7 @@ def run_model_backend(model: onnxl.ModelProto, *inputs: np.ndarray) -> list[np.n
         if int(t.data_type) in {
             int(onnxl.TensorProto.FLOAT6E2M3),
             int(onnxl.TensorProto.FLOAT6E3M2),
+            int(onnxl.TensorProto.STRING),
         }:
             outputs.append(onh.to_array(rt.tensor_to_proto(t)))
             continue
@@ -175,8 +176,7 @@ TestRunModelBackend = make_test_class(
         "sequence_map_add_1_sequence_1_tensor",
         "sequence_map_add_2_sequences",
         "sequence_map_extract_shapes",
-        # run_model_backend cannot convert STRING tensors to numpy; the
-        # ``.*STRING.*`` regex above is uppercase-only and misses this case.
+        # The ``.*STRING.*`` regex above is uppercase-only and misses these cases.
         "test_cc_where_string",
         "test_cc_label_encoder_int64_to_string",
         "test_cc_label_encoder_string_to_string_tensor_attributes",

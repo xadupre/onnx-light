@@ -1113,6 +1113,7 @@ TEST(BackendTestCase, OneHotCasesRegistered) {
     std::vector<int64_t> output_shape;
   };
   const std::vector<Expected> expected{
+      {"test_onehot_with_string_values", {2, 2}},
       {"test_onehot_without_axis", {3, 12}},
       {"test_onehot_with_axis", {2, 10, 2}},
       {"test_onehot_negative_indices", {3, 10}},

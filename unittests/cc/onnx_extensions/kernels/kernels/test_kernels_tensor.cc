@@ -2093,6 +2093,44 @@ TEST(KernelClass, OneHotDefaultAxisMatchesReference) {
   }
 }
 
+TEST(KernelClass, OneHotSelectsExtremeFloatValuesExactly) {
+  const KernelContext ctx{DefaultOpset(11)};
+  onnx_kernels::kernel::OneHot one_hot{ctx};
+  Tensor indices = Tensor::FromInt64("", {2}, {0, 1});
+  Tensor depth = Tensor::FromInt64("", {}, {2});
+  Tensor values = Tensor::FromFloat("", {2}, {-3e38f, 3e38f});
+  Tensor y = one_hot(indices, depth, values, {});
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 2}));
+  EXPECT_EQ((std::vector<float>{y.AsFloat(), y.AsFloat() + 4}),
+            (std::vector<float>{3e38f, -3e38f, -3e38f, 3e38f}));
+}
+
+TEST(KernelClass, OneHotSelectsBooleanValues) {
+  const KernelContext ctx{DefaultOpset(11)};
+  onnx_kernels::kernel::OneHot one_hot{ctx};
+  Tensor indices = Tensor::FromInt64("", {2}, {0, 1});
+  Tensor depth = Tensor::FromInt64("", {}, {2});
+  Tensor values = Tensor::FromBool("", {2}, {0, 1});
+  Tensor y = one_hot(indices, depth, values, {});
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 2}));
+  EXPECT_EQ((std::vector<uint8_t>{y.AsBool(), y.AsBool() + 4}), (std::vector<uint8_t>{1, 0, 0, 1}));
+}
+
+TEST(KernelClass, OneHotSelectsStringValues) {
+  const KernelContext ctx{DefaultOpset(11)};
+  onnx_kernels::kernel::OneHot one_hot{ctx};
+  Tensor indices = Tensor::FromInt64("", {3}, {0, 1, 2});
+  Tensor depth = Tensor::FromInt64("", {}, {2});
+  Tensor values = Tensor::FromStrings("", {2}, {"off", "on"});
+  Tensor y = one_hot(indices, depth, values, {});
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{3, 2}));
+  EXPECT_EQ(y.AsStrings(), (std::vector<std::string>{"on", "off", "off", "on", "off", "off"}));
+
+  Tensor preallocated = Tensor::FromStrings("", {3, 2}, {"", "", "", "", "", ""});
+  one_hot(indices, depth, values, {}, preallocated);
+  EXPECT_EQ(preallocated.AsStrings(), y.AsStrings());
+}
+
 TEST(KernelClass, OneHotWithAxisInsertsDimensionAtPosition) {
   const KernelContext ctx{DefaultOpset(11)};
   onnx_kernels::kernel::OneHot one_hot{ctx};

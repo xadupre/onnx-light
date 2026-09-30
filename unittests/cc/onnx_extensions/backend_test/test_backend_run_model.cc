@@ -370,6 +370,7 @@ TEST(BackendRunModel, Gelu) { RunBackendCasesFor("Gelu"); }
 TEST(BackendRunModel, Mod) { RunBackendCasesFor("Mod"); }
 TEST(BackendRunModel, Clip) { RunBackendCasesFor("Clip"); }
 TEST(BackendRunModel, Compress) { RunBackendCasesFor("Compress"); }
+TEST(BackendRunModel, OneHot) { RunBackendCasesFor("OneHot"); }
 TEST(BackendRunModel, Unique) { RunBackendCasesFor("Unique"); }
 TEST(BackendRunModel, NonZero) { RunBackendCasesFor("NonZero"); }
 TEST(BackendRunModel, Concat) { RunBackendCasesFor("Concat"); }

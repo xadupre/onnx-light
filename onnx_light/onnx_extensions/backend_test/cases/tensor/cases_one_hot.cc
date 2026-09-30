@@ -66,6 +66,18 @@ void RegisterOneHotCases(std::vector<TestCase> &registry, TestMode mode) {
   }
 
   {
+    Expect(registry, MakeOneHotNode(false, -1), "test_onehot_with_string_values", {opset},
+           []() -> IoData {
+             Tensor indices = Tensor::FromInt64("indices", {2}, {0, 1});
+             Tensor depth = Tensor::FromInt64("depth", {}, {2});
+             Tensor values = Tensor::FromStrings("values", {2}, {"off", "on"});
+             Tensor output = Tensor::FromStrings("y", {2, 2}, {"on", "off", "off", "on"});
+             return IoData{{std::move(indices), std::move(depth), std::move(values)},
+                           {std::move(output)}};
+           });
+  }
+
+  {
     Expect(registry, MakeOneHotNode(true, 1), "test_onehot_with_bfloat16_values",
            {DefaultOpset(28)}, []() -> IoData {
              Tensor indices = Tensor::FromInt64("indices", {2}, {0, 2});

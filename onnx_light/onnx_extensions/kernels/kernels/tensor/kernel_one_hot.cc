@@ -106,11 +106,13 @@ Tensor OneHot::operator()(const Tensor &indices, const Tensor &depth, const Tens
   const onnx_kernels::Shape out_shape = ComputeOneHotShape(indices.shape, axis_pos, depth_val);
 
   const int64_t out_count = out_shape.product();
-  EXT_ENFORCE_INVALID(values.data_type != static_cast<int32_t>(DataType::STRING),
-                      "kernel::OneHot: STRING element type is not supported.");
-  const std::size_t n_bytes = PackedByteSize(values.data_type, out_count);
+  const bool is_string = values.data_type == static_cast<int32_t>(DataType::STRING);
+  const std::size_t n_bytes = is_string ? 0 : PackedByteSize(values.data_type, out_count);
   Tensor output = rt ? rt->MakeOutputTensor(0, values.data_type, out_shape, n_bytes)
                      : MakeOutputTensor(values.data_type, out_shape, n_bytes, nullptr);
+  if (is_string) {
+    output.AsStrings().resize(static_cast<std::size_t>(out_count));
+  }
   (*this)(indices, depth, values, attrs, output);
   return output;
 }
@@ -120,8 +122,6 @@ void OneHot::operator()(const Tensor &indices, const Tensor &depth, const Tensor
   EXT_ENFORCE_INVALID(values.shape.size() == 1 && values.element_count() == 2,
                       "kernel::OneHot: input 'values' must be a rank-1 tensor with exactly two "
                       "elements [off_value, on_value].");
-  EXT_ENFORCE_INVALID(values.data_type != static_cast<int32_t>(DataType::STRING),
-                      "kernel::OneHot: STRING element type is not supported.");
   EXT_ENFORCE_INVALID(output.data_type == values.data_type,
                       "kernel::OneHot: preallocated output dtype must match 'values' dtype.");
 
@@ -132,14 +132,22 @@ void OneHot::operator()(const Tensor &indices, const Tensor &depth, const Tensor
   EXT_ENFORCE_INVALID(output.shape == expected_shape,
                       "kernel::OneHot: preallocated output shape mismatch.");
 
-  const std::size_t elem_size = ElementSize(values.data_type);
-  const uint8_t *off_value = values.bytes();
-  const uint8_t *on_value = values.bytes() + elem_size;
   const int64_t out_count = output.element_count();
 
-  // Initialise the whole buffer with ``off_value``.
-  FillScalarRepeat(off_value, elem_size, static_cast<std::size_t>(out_count),
-                   output.mutable_bytes());
+  const bool is_string = values.data_type == static_cast<int32_t>(DataType::STRING);
+  const std::size_t elem_size = is_string ? 0 : ElementSize(values.data_type);
+  const uint8_t *off_value = is_string ? nullptr : values.bytes();
+  const uint8_t *on_value = is_string ? nullptr : off_value + elem_size;
+  if (is_string) {
+    EXT_ENFORCE_INVALID(values.AsStrings().size() == 2,
+                        "kernel::OneHot: input string_data size must be two.");
+    EXT_ENFORCE_INVALID(output.AsStrings().size() == static_cast<std::size_t>(out_count),
+                        "kernel::OneHot: output string_data size does not match shape.");
+    output.AsStrings().assign(static_cast<std::size_t>(out_count), values.AsStrings()[0]);
+  } else {
+    FillScalarRepeat(off_value, elem_size, static_cast<std::size_t>(out_count),
+                     output.mutable_bytes());
+  }
 
   // Compute strides for the output and for the "indices half" of the output
   // (i.e. the output without the axis dimension). ``inner_size`` is the
@@ -173,8 +181,12 @@ void OneHot::operator()(const Tensor &indices, const Tensor &depth, const Tensor
     if (k < 0 || k >= depth_val) {
       continue; // Leave the corresponding row filled with off_value.
     }
-    std::memcpy(output.mutable_bytes() + (base + k * inner_size) * static_cast<int64_t>(elem_size),
-                on_value, elem_size);
+    const std::size_t offset = static_cast<std::size_t>(base + k * inner_size);
+    if (is_string) {
+      output.AsStrings()[offset] = values.AsStrings()[1];
+    } else {
+      std::memcpy(output.mutable_bytes() + offset * elem_size, on_value, elem_size);
+    }
   }
 }
 

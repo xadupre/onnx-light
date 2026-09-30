@@ -492,7 +492,7 @@ public:
 /// The output has rank ``rank(indices) + 1``; its element type matches
 /// ``values``. The reference implementation supports all numeric element
 /// types for ``indices`` and ``depth`` (cast to ``int64`` before use) and
-/// all numeric and ``BOOL`` element types for ``values`` / the output.
+/// all numeric, ``BOOL``, and ``STRING`` element types for ``values`` / the output.
 class OneHot : public KernelBase {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:OneHot";

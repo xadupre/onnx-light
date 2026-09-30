@@ -20,6 +20,7 @@ using core::runtime::Tensor;
 using onnx_kernels::kernel::KernelContext;
 using onnx_kernels::kernel::ReduceL1;
 using onnx_kernels::kernel::ReduceL2;
+using onnx_kernels::kernel::ReduceLogSumExp;
 using onnx_kernels::kernel::ReduceMax;
 using onnx_kernels::kernel::ReduceMean;
 using onnx_kernels::kernel::ReduceMin;
@@ -28,6 +29,24 @@ using onnx_kernels::kernel::ReduceSum;
 using onnx_kernels::kernel::ReduceSumSquare;
 
 namespace Test {
+
+TEST(KernelClass, ReduceLogSumExpNonFiniteInputs) {
+  const float inf = std::numeric_limits<float>::infinity();
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const Tensor data =
+      Tensor::FromFloat("", {5, 2}, {inf, -inf, -inf, -inf, -inf, 2.0f, inf, nan, 0.0f, 0.0f});
+  const Tensor axes = Tensor::FromInt64("", {1}, {1});
+  for (int64_t opset : {13, 18}) {
+    const ReduceLogSumExp kernel{KernelContext{DefaultOpset(opset)}};
+    const Tensor result = kernel(data, axes, /*keepdims=*/false);
+    ASSERT_EQ(result.shape, (std::vector<int64_t>{5}));
+    EXPECT_EQ(result.AsFloat()[0], inf);
+    EXPECT_EQ(result.AsFloat()[1], -inf);
+    EXPECT_FLOAT_EQ(result.AsFloat()[2], 2.0f);
+    EXPECT_TRUE(std::isnan(result.AsFloat()[3]));
+    EXPECT_FLOAT_EQ(result.AsFloat()[4], std::log(2.0f));
+  }
+}
 
 TEST(KernelClass, NativeReductionDoublePrecisionAndEmptyIdentities) {
   const KernelContext ctx{DefaultOpset(18)};

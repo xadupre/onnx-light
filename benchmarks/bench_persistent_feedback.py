@@ -14,15 +14,16 @@ import time
 
 import numpy
 
-from onnx_light.onnx import TensorProto, helper
+import onnx_light.onnx.helper as oh
+from onnx_light.onnx import TensorProto
 from onnx_light.onnx_py._onnxpykernels import runtime
 
 
 def make_model():
     """Returns an Attention model with graph-declared key/value feedback."""
-    graph = helper.make_graph(
+    graph = oh.make_graph(
         [
-            helper.make_node(
+            oh.make_node(
                 "Attention",
                 ["Q", "K", "V", "", "past_key", "past_value"],
                 ["Y", "present_key", "present_value"],
@@ -31,16 +32,16 @@ def make_model():
         ],
         "contiguous_decode",
         [
-            helper.make_tensor_value_info(name, TensorProto.FLOAT, [1, 1, 1, 2])
+            oh.make_tensor_value_info(name, TensorProto.FLOAT, [1, 1, 1, 2])
             for name in ("Q", "K", "V")
         ]
         + [
-            helper.make_tensor_value_info(name, TensorProto.FLOAT, [1, 1, None, 2])
+            oh.make_tensor_value_info(name, TensorProto.FLOAT, [1, 1, None, 2])
             for name in ("past_key", "past_value")
         ],
-        [helper.make_tensor_value_info("Y", TensorProto.FLOAT, [1, 1, 1, 2])]
+        [oh.make_tensor_value_info("Y", TensorProto.FLOAT, [1, 1, 1, 2])]
         + [
-            helper.make_tensor_value_info(name, TensorProto.FLOAT, [1, 1, None, 2])
+            oh.make_tensor_value_info(name, TensorProto.FLOAT, [1, 1, None, 2])
             for name in ("present_key", "present_value")
         ],
     )
@@ -48,7 +49,7 @@ def make_model():
         binding = graph.persistent_bindings.add()
         binding.input_name = past
         binding.output_name = present
-    return helper.make_model(graph, opset_imports=[helper.make_opsetid("", 23)], ir_version=10)
+    return oh.make_model(graph, opset_imports=[oh.make_opsetid("", 23)], ir_version=10)
 
 
 def main():

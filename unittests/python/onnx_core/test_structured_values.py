@@ -7,7 +7,7 @@ import gc
 import unittest
 
 from onnx_light import onnx
-from onnx_light.onnx import helper
+import onnx_light.onnx.helper as oh
 from onnx_light.onnx.onnx_pb import AffineLayoutProto, EncodedValueProto, StructTypeProto
 from onnx_light.onnx_core.graph_builder import GraphBuilder
 from onnx_light.onnx_core.shape_inference import ShapesContext
@@ -15,7 +15,7 @@ from onnx_light.onnx_core.shape_inference import ShapesContext
 
 def tensor_type(elem_type=onnx.TensorProto.FLOAT, shape=(2,)):
     """Returns a concrete tensor type."""
-    return helper.make_tensor_type_proto(elem_type, list(shape))
+    return oh.make_tensor_type_proto(elem_type, list(shape))
 
 
 def declaration(type_id=1):
@@ -52,7 +52,7 @@ class TestStructuredValues(unittest.TestCase):
                     ),
                     StructTypeProto.Structure.Field(
                         name="constant",
-                        constant=helper.make_tensor("scale", onnx.TensorProto.FLOAT, [], [0.5]),
+                        constant=oh.make_tensor("scale", onnx.TensorProto.FLOAT, [], [0.5]),
                     ),
                     StructTypeProto.Structure.Field(
                         name="array",
@@ -111,7 +111,7 @@ class TestStructuredValues(unittest.TestCase):
         value.type_ref = None
         self.assertIsNone(value.WhichOneof("kind"))
         field = StructTypeProto.Structure.Field(name="x", type=tensor_type())
-        field.constant = helper.make_tensor("c", onnx.TensorProto.INT64, [], [1])
+        field.constant = oh.make_tensor("c", onnx.TensorProto.INT64, [], [1])
         self.assertFalse(field.HasField("type"))
         self.assertTrue(field.HasField("constant"))
         with self.assertRaises(ValueError):
@@ -122,8 +122,8 @@ class TestStructuredValues(unittest.TestCase):
     def test_affine_and_external_proto_roundtrip(self):
         layout = AffineLayoutProto(
             storage_type=onnx.TensorProto.UINT4,
-            scale=helper.make_tensor("scale", onnx.TensorProto.FLOAT, [], [0.5]),
-            zero_point=helper.make_tensor("zero", onnx.TensorProto.UINT4, [], [0]),
+            scale=oh.make_tensor("scale", onnx.TensorProto.FLOAT, [], [0.5]),
+            zero_point=oh.make_tensor("zero", onnx.TensorProto.UINT4, [], [0]),
             axis=-1,
             block_size=2**40,
         )
@@ -166,7 +166,7 @@ class TestStructuredValues(unittest.TestCase):
                         logical_type=tensor_type(shape=(8,)),
                         affine=AffineLayoutProto(
                             signed_storage=int(signed),
-                            scale=helper.make_tensor("", onnx.TensorProto.FLOAT, [], [0.5]),
+                            scale=oh.make_tensor("", onnx.TensorProto.FLOAT, [], [0.5]),
                         ),
                         raw_data=bytes(bits),
                     )
@@ -310,7 +310,7 @@ class TestStructuredValues(unittest.TestCase):
                 name="weights",
                 affine=AffineLayoutProto(
                     storage_type=onnx.TensorProto.UINT8,
-                    scale=helper.make_tensor("scale", onnx.TensorProto.FLOAT, [], [1.0]),
+                    scale=oh.make_tensor("scale", onnx.TensorProto.FLOAT, [], [1.0]),
                 ),
                 logical_type=tensor_type(),
                 raw_data=b"\x01\x02",
@@ -344,22 +344,22 @@ class TestStructuredValues(unittest.TestCase):
                 elem_type=onnx.TypeProto(struct_type=StructTypeProto(type_ref=1))
             )
         )
-        branch = helper.make_graph(
-            [helper.make_node("Identity", ["records"], ["forwarded"])],
+        branch = oh.make_graph(
+            [oh.make_node("Identity", ["records"], ["forwarded"])],
             "branch",
             [],
             [onnx.ValueInfoProto(name="forwarded", type=value_type)],
         )
-        model = helper.make_model(
-            helper.make_graph(
+        model = oh.make_model(
+            oh.make_graph(
                 [
-                    helper.make_node(
+                    oh.make_node(
                         "If", ["condition"], ["output"], then_branch=branch, else_branch=branch
                     )
                 ],
                 "nested",
                 [
-                    helper.make_tensor_value_info("condition", onnx.TensorProto.BOOL, []),
+                    oh.make_tensor_value_info("condition", onnx.TensorProto.BOOL, []),
                     onnx.ValueInfoProto(name="records", type=value_type),
                 ],
                 [onnx.ValueInfoProto(name="output", type=value_type)],

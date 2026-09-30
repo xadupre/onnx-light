@@ -11,7 +11,8 @@ import numpy
 from onnx_light import onnx
 from onnx_light.ext_test_case import import_or_skip
 import onnx_light.onnx.numpy_helper as onh
-from onnx_light.onnx import compose, helper
+import onnx_light.onnx.helper as oh
+from onnx_light.onnx import compose
 from onnx_light.onnx_proto import verify
 from onnx_light.onnx_proto._text_format import serialize_to_textproto
 from onnx_light.onnx_py._onnxpycore import builder
@@ -41,11 +42,11 @@ def make_model():
         info.name = name
         info.type.struct_type = onnx.StructTypeProto()
         values.append(info)
-    model = helper.make_model(
-        helper.make_graph(
-            [helper.make_node("Identity", ["past"], ["present"])], "paged_cache", inputs, outputs
+    model = oh.make_model(
+        oh.make_graph(
+            [oh.make_node("Identity", ["past"], ["present"])], "paged_cache", inputs, outputs
         ),
-        opset_imports=[helper.make_opsetid("", 18)],
+        opset_imports=[oh.make_opsetid("", 18)],
         ir_version=10,
     )
     model.graph.paged_cache_initializer.add().CopyFrom(make_cache())
@@ -147,12 +148,8 @@ class TestPagedCacheProto(unittest.TestCase):
             ("counter", model.graph.input),
             ("next_counter", model.graph.output),
         ):
-            values.add().CopyFrom(
-                helper.make_tensor_value_info(name, onnx.TensorProto.FLOAT, [1])
-            )
-        model.graph.node.add().CopyFrom(
-            helper.make_node("Identity", ["counter"], ["next_counter"])
-        )
+            values.add().CopyFrom(oh.make_tensor_value_info(name, onnx.TensorProto.FLOAT, [1]))
+        model.graph.node.add().CopyFrom(oh.make_node("Identity", ["counter"], ["next_counter"]))
         binding = model.graph.persistent_bindings.add()
         binding.input_name = "counter"
         binding.output_name = "next_counter"
@@ -191,7 +188,7 @@ class TestPagedCacheProto(unittest.TestCase):
             compose.merge_graphs(model.graph, model.graph, [])
 
     def test_ort_export_rejects_cache_instead_of_dropping_it(self):
-        model = helper.make_model(helper.make_graph([], "cache", [], []))
+        model = oh.make_model(oh.make_graph([], "cache", [], []))
         model.graph.paged_cache_initializer.add().CopyFrom(make_cache())
         options = onnx.SerializeOptions()
         options.format = onnx.SerializeFormat.ORT_FLATBUFFERS

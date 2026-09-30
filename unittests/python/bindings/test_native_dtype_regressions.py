@@ -9,7 +9,8 @@ import numpy
 
 from onnx_light.ext_test_case import import_or_skip
 import onnx_light.onnx.numpy_helper as onh
-from onnx_light.onnx import TensorProto, helper
+import onnx_light.onnx.helper as oh
+from onnx_light.onnx import TensorProto
 
 ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
 
@@ -17,28 +18,28 @@ ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvalu
 class TestNativeDtypeRegressions(unittest.TestCase):
     def run_node(self, op_type, feeds, opset=18, **attributes):
         """Runs a node using only compiled native kernels."""
-        node = helper.make_node(op_type, list(feeds), ["result"], **attributes)
-        function = helper.make_function(
+        node = oh.make_node(op_type, list(feeds), ["result"], **attributes)
+        function = oh.make_function(
             "",
             "native_regression",
             list(feeds),
             ["result"],
             [node],
-            opset_imports=[helper.make_opsetid("", opset)],
+            opset_imports=[oh.make_opsetid("", opset)],
         )
         return ReferenceEvaluator(function).run(None, feeds)[0]
 
     def test_string_initializer_cache_and_callback(self):
         values = numpy.array(["\u00e9t\u00e9", "", "\u6771\u4eac"], dtype=object)
-        model = helper.make_model(
-            helper.make_graph(
-                [helper.make_node("Equal", ["X", "labels"], ["Y"])],
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Equal", ["X", "labels"], ["Y"])],
                 "strings",
-                [helper.make_tensor_value_info("X", TensorProto.STRING, [3])],
-                [helper.make_tensor_value_info("Y", TensorProto.BOOL, [3])],
+                [oh.make_tensor_value_info("X", TensorProto.STRING, [3])],
+                [oh.make_tensor_value_info("Y", TensorProto.BOOL, [3])],
                 [onh.from_array(values, "labels")],
             ),
-            opset_imports=[helper.make_opsetid("", 18)],
+            opset_imports=[oh.make_opsetid("", 18)],
         )
         serialized = model.SerializeToString()
         for custom in (False, True):

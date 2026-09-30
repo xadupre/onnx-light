@@ -2,7 +2,7 @@ import re
 from typing import Any, Callable, Sequence, TypeAlias
 import numpy as np
 from ..... import onnx
-from .....onnx import helper as onnx_helper
+import onnx_light.onnx.helper as oh
 
 try:
     from .....onnx_py._onnxpybackend import backend_test as _backend_test_cc  # type: ignore
@@ -292,14 +292,14 @@ def _extract_vi(arr, arr_name):
     if isinstance(arr, onnx.TensorProto):
         elem_type = arr.data_type
         shape = tuple(arr.dims)
-        return onnx_helper.make_tensor_value_info(arr_name, elem_type, shape)
+        return oh.make_tensor_value_info(arr_name, elem_type, shape)
     if isinstance(arr, list):
-        elem_type = onnx_helper.np_dtype_to_tensor_dtype(arr[0].dtype)
-        return onnx_helper.make_tensor_sequence_value_info(arr_name, elem_type, None)
+        elem_type = oh.np_dtype_to_tensor_dtype(arr[0].dtype)
+        return oh.make_tensor_sequence_value_info(arr_name, elem_type, None)
     if isinstance(arr, (int, float, str, np.integer, np.floating, np.str_)):
         arr = np.array(arr)
-    elem_type = onnx_helper.np_dtype_to_tensor_dtype(arr.dtype)
-    return onnx_helper.make_tensor_value_info(arr_name, elem_type, list(arr.shape))
+    elem_type = oh.np_dtype_to_tensor_dtype(arr.dtype)
+    return oh.make_tensor_value_info(arr_name, elem_type, list(arr.shape))
 
 
 def expect(
@@ -337,14 +337,12 @@ def expect(
 
     # create a model based on that specification
     if "opset_imports" not in kwargs:
-        opset_imports = [onnx_helper.make_opsetid(domain, schema_since_version)]
+        opset_imports = [oh.make_opsetid(domain, schema_since_version)]
     else:
         opset_imports = kwargs.pop("opset_imports")
 
-    graph = onnx_helper.make_graph(
-        nodes=[node_op], name=name, inputs=inputs_vi, outputs=outputs_vi
-    )
-    model = onnx_helper.make_model(
+    graph = oh.make_graph(nodes=[node_op], name=name, inputs=inputs_vi, outputs=outputs_vi)
+    model = oh.make_model(
         graph,
         opset_imports=opset_imports,
         producer_name=kwargs.pop("producer_name", "backend-test"),

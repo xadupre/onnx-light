@@ -156,6 +156,24 @@ void RegisterNegativeLogLikelihoodLossCases(std::vector<TestCase> &registry, Tes
            });
   }
 
+  for (int64_t ignore_index : {-1, -100}) {
+    NodeProto node;
+    node.set_op_type("NegativeLogLikelihoodLoss");
+    node.add_input("input");
+    node.add_input("target");
+    node.add_output("loss");
+    AddAttribute(node, "ignore_index", ignore_index);
+    Expect(registry, std::move(node),
+           "test_cc_negative_log_likelihood_loss_mean_ignore_" + std::to_string(ignore_index),
+           {opset}, [ignore_index]() -> IoData {
+             Tensor input = Tensor::FromFloat("", {2, 2},
+                                              {-1.3862944f, -0.2876821f, -0.6931472f, -0.6931472f});
+             Tensor target = Tensor::FromInt64("", {2}, {0, ignore_index});
+             Tensor loss = Tensor::FromFloat("", {}, {1.3862944f});
+             return IoData{{std::move(input), std::move(target)}, {std::move(loss)}};
+           });
+  }
+
   // K-dimensional input: shape (N, C, D1) with a per-sample 2-D target.
   {
     NodeProto node;

@@ -2612,14 +2612,25 @@ TEST(BackendTestCaseShapeInference, BigModelsInplaceInfo) {
     // metadata is verified against a fresh recomputation below.
     const GraphProto &expected_graph = tc.model().ref_graph();
     const MetadataMap expected_graph_meta = MetadataOf(expected_graph);
+    const bool fused_qwen = tc.name == "test_cc_shape_inference_big_qwen3_4_layers_like_fused";
     bool has_expected = false;
     std::vector<MetadataMap> expected_node_meta;
+    size_t expected_inplace_count = 0;
     for (const auto &node : expected_graph.ref_node()) {
       MetadataMap subset = checked_subset(MetadataOf(node));
+      if (fused_qwen) {
+        const auto it = subset.find(core::compute::kInPlaceReuseMetadataKey);
+        subset = it == subset.end() ? MetadataMap{} : MetadataMap{*it};
+        expected_inplace_count += !subset.empty();
+      }
       if (!subset.empty()) {
         has_expected = true;
       }
       expected_node_meta.push_back(std::move(subset));
+    }
+    if (fused_qwen) {
+      EXPECT_EQ(expected_inplace_count, 114u);
+      EXPECT_EQ(expected_node_meta.size(), 193u);
     }
     // A case may embed only per-value tags (onnx_light.value_tag) without any
     // in-place-reuse node metadata; treat those as golden too.
@@ -2692,13 +2703,35 @@ TEST(BackendTestCaseShapeInference, BigModelsInplaceInfo) {
     const auto &result_nodes = graph->ref_node();
     ASSERT_EQ(result_nodes.size(), expected_node_meta.size());
     for (size_t i = 0; i < result_nodes.size(); ++i) {
-      EXPECT_EQ(checked_subset(MetadataOf(result_nodes[i])), expected_node_meta[i])
+      MetadataMap computed = checked_subset(MetadataOf(result_nodes[i]));
+      if (fused_qwen) {
+        const auto it = computed.find(core::compute::kInPlaceReuseMetadataKey);
+        computed = it == computed.end() ? MetadataMap{} : MetadataMap{*it};
+      }
+      EXPECT_EQ(computed, expected_node_meta[i])
           << "in-place-reuse metadata mismatch on node " << i << " in case " << tc.name;
     }
   }
   EXPECT_TRUE(found) << "no big-model backend cases were collected";
   EXPECT_TRUE(verified_expected)
       << "no big-model backend case carried expected in-place-reuse metadata";
+}
+
+TEST(BackendTestCaseShapeInference, Qwen3PersistentDoesNotInheritFusedInplaceMetadata) {
+  const std::vector<TestCase> cases = CollectTestCases("", /*include_big=*/true);
+  size_t checked = 0;
+  for (const TestCase &tc : cases) {
+    if (tc.name != "test_cc_shape_inference_big_qwen3_4_layers_like_persistent" &&
+        tc.name != "test_cc_shape_inference_big_qwen3_4_layers_like_persistent_paged") {
+      continue;
+    }
+    SCOPED_TRACE(tc.name);
+    for (const auto &node : tc.model().ref_graph().ref_node()) {
+      EXPECT_EQ(MetadataOf(node).count(core::compute::kInPlaceReuseMetadataKey), 0u);
+    }
+    ++checked;
+  }
+  EXPECT_EQ(checked, 2u);
 }
 
 // Verifies that the fused Qwen3 case exists alongside its inlined sibling and

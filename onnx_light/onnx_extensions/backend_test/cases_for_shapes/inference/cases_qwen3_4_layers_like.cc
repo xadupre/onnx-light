@@ -212,6 +212,22 @@ void ConvertQwenToPagedCache(ModelProto &model) {
 }
 
 void AddQwenPersistentCases(std::vector<TestCase> &registry, const ModelProto &source) {
+  // The cache rewrites change value lifetimes, invalidating the fused graph's
+  // in-place expectations without changing its other metadata.
+  const auto clear_inplace = [](GraphProto &graph) {
+    for (auto &node : graph.ref_node()) {
+      auto *metadata = node.mutable_metadata_props();
+      size_t kept = 0;
+      for (size_t i = 0; i < metadata->size(); ++i) {
+        if ((*metadata)[i].key() != core::compute::kInPlaceReuseMetadataKey) {
+          if (kept != i)
+            (*metadata)[kept] = std::move((*metadata)[i]);
+          ++kept;
+        }
+      }
+      metadata->resize(kept);
+    }
+  };
   const std::string persistent_name = "test_cc_shape_inference_big_qwen3_4_layers_like_persistent";
   TestCase persistent(persistent_name, persistent_name, TestCaseKind::MODEL,
                       TestCaseTag::INFERENCE);
@@ -220,6 +236,7 @@ void AddQwenPersistentCases(std::vector<TestCase> &registry, const ModelProto &s
   ModelProto &persistent_model = persistent.emplace_model();
   persistent_model = source;
   persistent_model.mutable_graph()->set_name(persistent_name);
+  clear_inplace(*persistent_model.mutable_graph());
   MakeQwenCacheInputsExclusive(*persistent_model.mutable_graph());
   registry.emplace_back(std::move(persistent));
 
@@ -230,6 +247,7 @@ void AddQwenPersistentCases(std::vector<TestCase> &registry, const ModelProto &s
   ModelProto &paged_model = paged.emplace_model();
   paged_model = source;
   paged_model.mutable_graph()->set_name(paged_name);
+  clear_inplace(*paged_model.mutable_graph());
   MakeQwenCacheInputsExclusive(*paged_model.mutable_graph());
   ConvertQwenToPagedCache(paged_model);
   registry.emplace_back(std::move(paged));
@@ -260,8 +278,8 @@ void AddQwenPersistentCases(std::vector<TestCase> &registry, const ModelProto &s
 // The unfused, fused and persistent tensor-cache variants share the signature
 // below. RoPE stays explicit in all four variants; causal-mask construction
 // stays explicit only in the tensor-cache variants. The unfused variant
-// additionally carries the golden in-place-reuse, value-tag and constant
-// metadata verified by the ``BigModels*`` tests.
+// additionally carries golden value-tag and constant metadata. Both variants
+// carry golden in-place-reuse metadata verified by the ``BigModels*`` tests.
 //
 // Tensor-cache graph signature:
 //
@@ -920,6 +938,21 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
                          DimSpec("past_sequence_length+sequence_length"), DimSpec(INT64_C(128))});
       }
 
+      // Expected reuse for the fused graph, indexed by node in construction
+      // order. All these opportunities reuse the sole data input with equal
+      // byte size; nodes not listed must not have an in-place annotation.
+      constexpr int inplace_nodes[] = {
+          3,   7,   9,   12,  15,  19,  20,  25,  26,  29,  30,  31,  34,  35,  37,  39,  41,
+          45,  46,  47,  49,  50,  51,  52,  53,  54,  56,  58,  59,  60,  62,  64,  65,  66,
+          67,  68,  69,  71,  75,  77,  79,  82,  83,  84,  86,  87,  88,  89,  90,  91,  93,
+          95,  96,  97,  99,  101, 102, 103, 104, 105, 106, 108, 112, 114, 116, 119, 120, 121,
+          123, 124, 125, 126, 127, 128, 130, 132, 133, 134, 136, 138, 139, 140, 141, 142, 143,
+          145, 149, 151, 153, 156, 157, 158, 160, 161, 162, 163, 164, 165, 167, 169, 170, 171,
+          173, 175, 176, 177, 178, 179, 180, 182, 186, 188, 190, 191};
+      for (int index : inplace_nodes) {
+        graph->mutable_node(index)->add_metadata(core::compute::kInPlaceReuseMetadataKey,
+                                                 "0:0:equal");
+      }
     } else {
       // ---- Constant-node initializers ----------------------------------------
       // Constant nodes from the original model are emitted as graph initializers.

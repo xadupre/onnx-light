@@ -11,6 +11,7 @@
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
+#include <span>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -211,6 +212,27 @@ void ConvertQwenToPagedCache(ModelProto &model) {
   RemoveUnusedQwenNodes(graph);
 }
 
+void ReplaceQwenInplaceExpectations(GraphProto &graph, std::span<const int> indices,
+                                    int second_input_index) {
+  for (auto &node : graph.ref_node()) {
+    auto *metadata = node.mutable_metadata_props();
+    size_t kept = 0;
+    for (size_t i = 0; i < metadata->size(); ++i) {
+      if ((*metadata)[i].key() != core::compute::kInPlaceReuseMetadataKey) {
+        if (kept != i)
+          (*metadata)[kept] = std::move((*metadata)[i]);
+        ++kept;
+      }
+    }
+    metadata->resize(kept);
+  }
+  for (int index : indices) {
+    graph.mutable_node(index)->add_metadata(core::compute::kInPlaceReuseMetadataKey,
+                                            index == second_input_index ? "0:1:equal"
+                                                                        : "0:0:equal");
+  }
+}
+
 void AddQwenPersistentCases(std::vector<TestCase> &registry, const ModelProto &source) {
   const std::string persistent_name = "test_cc_shape_inference_big_qwen3_4_layers_like_persistent";
   TestCase persistent(persistent_name, persistent_name, TestCaseKind::MODEL,
@@ -221,6 +243,14 @@ void AddQwenPersistentCases(std::vector<TestCase> &registry, const ModelProto &s
   persistent_model = source;
   persistent_model.mutable_graph()->set_name(persistent_name);
   MakeQwenCacheInputsExclusive(*persistent_model.mutable_graph());
+  // The node order and shapes stay the same, but node 3 now reuses input 1
+  // and node 36 has an additional opportunity.
+  persistent_model.mutable_graph()->mutable_node(36)->add_metadata(
+      core::compute::kInPlaceReuseMetadataKey, "0:0:equal");
+  for (auto &entry : persistent_model.mutable_graph()->mutable_node(3)->ref_metadata_props()) {
+    if (entry.key() == core::compute::kInPlaceReuseMetadataKey)
+      entry.set_value("0:1:equal");
+  }
   registry.emplace_back(std::move(persistent));
 
   const std::string paged_name = "test_cc_shape_inference_big_qwen3_4_layers_like_persistent_paged";
@@ -232,6 +262,14 @@ void AddQwenPersistentCases(std::vector<TestCase> &registry, const ModelProto &s
   paged_model.mutable_graph()->set_name(paged_name);
   MakeQwenCacheInputsExclusive(*paged_model.mutable_graph());
   ConvertQwenToPagedCache(paged_model);
+  // The paged cache removes unused shape nodes and changes the node indices.
+  constexpr int paged_inplace_nodes[] = {
+      2,   3,   4,   6,   8,   11,  15,  17,  21,  22,  23,  25,  26,  27,  28,  29,  30,
+      32,  36,  38,  42,  43,  44,  45,  51,  53,  55,  58,  59,  60,  62,  63,  64,  65,
+      66,  67,  69,  73,  75,  79,  80,  81,  82,  88,  90,  92,  95,  96,  97,  99,  100,
+      101, 102, 103, 104, 106, 110, 112, 116, 117, 118, 119, 125, 127, 129, 132, 133, 134,
+      136, 137, 138, 139, 140, 141, 143, 147, 149, 153, 154, 155, 156, 162, 164, 166, 167};
+  ReplaceQwenInplaceExpectations(*paged_model.mutable_graph(), paged_inplace_nodes, 2);
   registry.emplace_back(std::move(paged));
 }
 
@@ -260,8 +298,8 @@ void AddQwenPersistentCases(std::vector<TestCase> &registry, const ModelProto &s
 // The unfused, fused and persistent tensor-cache variants share the signature
 // below. RoPE stays explicit in all four variants; causal-mask construction
 // stays explicit only in the tensor-cache variants. The unfused variant
-// additionally carries the golden in-place-reuse, value-tag and constant
-// metadata verified by the ``BigModels*`` tests.
+// additionally carries golden value-tag and constant metadata. Both variants
+// carry golden in-place-reuse metadata verified by the ``BigModels*`` tests.
 //
 // Tensor-cache graph signature:
 //
@@ -920,6 +958,21 @@ void RegisterQwen3_4LayersLikeShapeInferenceCases(std::vector<TestCase> &registr
                          DimSpec("past_sequence_length+sequence_length"), DimSpec(INT64_C(128))});
       }
 
+      // Expected reuse for the fused graph, indexed by node in construction
+      // order. All these opportunities reuse the sole data input with equal
+      // byte size; nodes not listed must not have an in-place annotation.
+      constexpr int inplace_nodes[] = {
+          3,   7,   9,   12,  15,  19,  20,  25,  26,  29,  30,  31,  34,  35,  37,  39,  41,
+          45,  46,  47,  49,  50,  51,  52,  53,  54,  56,  58,  59,  60,  62,  64,  65,  66,
+          67,  68,  69,  71,  75,  77,  79,  82,  83,  84,  86,  87,  88,  89,  90,  91,  93,
+          95,  96,  97,  99,  101, 102, 103, 104, 105, 106, 108, 112, 114, 116, 119, 120, 121,
+          123, 124, 125, 126, 127, 128, 130, 132, 133, 134, 136, 138, 139, 140, 141, 142, 143,
+          145, 149, 151, 153, 156, 157, 158, 160, 161, 162, 163, 164, 165, 167, 169, 170, 171,
+          173, 175, 176, 177, 178, 179, 180, 182, 186, 188, 190, 191};
+      for (int index : inplace_nodes) {
+        graph->mutable_node(index)->add_metadata(core::compute::kInPlaceReuseMetadataKey,
+                                                 "0:0:equal");
+      }
     } else {
       // ---- Constant-node initializers ----------------------------------------
       // Constant nodes from the original model are emitted as graph initializers.

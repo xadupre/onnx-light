@@ -19,7 +19,7 @@ import numpy
 
 from onnx_light import onnx
 import onnx_light.onnx.numpy_helper as onh
-from onnx_light.onnx import helper
+import onnx_light.onnx.helper as oh
 from onnx_light.onnx_proto import verify
 from onnx_light.onnx_py._onnxpykernels.runtime import (
     RuntimeContext,
@@ -70,16 +70,16 @@ second.value.CopyFrom(onh.from_array(values))
 # These nodes are onnx-light extensions, not standard ONNX operators.
 
 cache_type = onnx.TypeProto(struct_type=onnx.StructTypeProto())
-model = helper.make_model(
-    helper.make_graph(
+model = oh.make_model(
+    oh.make_graph(
         [
-            helper.make_node(
+            oh.make_node(
                 "QuantizePagedCache",
                 ["past", "indices", "key_scale", "key_zero", "value_scale", "value_zero"],
                 ["quantized"],
                 domain="ai.rt",
             ),
-            helper.make_node(
+            oh.make_node(
                 "QuantizePagedCache",
                 ["quantized", "indices", "one", "float16_marker", "one", "bfloat16_marker"],
                 ["restored"],
@@ -88,24 +88,21 @@ model = helper.make_model(
         ],
         "selected_page_roundtrip",
         [
-            helper.make_value_info("past", cache_type),
-            helper.make_tensor_value_info("indices", onnx.TensorProto.INT64, [1]),
+            oh.make_value_info("past", cache_type),
+            oh.make_tensor_value_info("indices", onnx.TensorProto.INT64, [1]),
         ],
-        [
-            helper.make_value_info("quantized", cache_type),
-            helper.make_value_info("restored", cache_type),
-        ],
+        [oh.make_value_info("quantized", cache_type), oh.make_value_info("restored", cache_type)],
         initializer=[
-            helper.make_tensor("key_scale", onnx.TensorProto.FLOAT, [], [0.25]),
-            helper.make_tensor("key_zero", onnx.TensorProto.INT4, [], [0]),
-            helper.make_tensor("value_scale", onnx.TensorProto.FLOAT, [], [0.125]),
-            helper.make_tensor("value_zero", onnx.TensorProto.UINT4, [], [8]),
-            helper.make_tensor("one", onnx.TensorProto.FLOAT, [], [1]),
-            helper.make_tensor("float16_marker", onnx.TensorProto.FLOAT16, [], [0]),
-            helper.make_tensor("bfloat16_marker", onnx.TensorProto.BFLOAT16, [], [0]),
+            oh.make_tensor("key_scale", onnx.TensorProto.FLOAT, [], [0.25]),
+            oh.make_tensor("key_zero", onnx.TensorProto.INT4, [], [0]),
+            oh.make_tensor("value_scale", onnx.TensorProto.FLOAT, [], [0.125]),
+            oh.make_tensor("value_zero", onnx.TensorProto.UINT4, [], [8]),
+            oh.make_tensor("one", onnx.TensorProto.FLOAT, [], [1]),
+            oh.make_tensor("float16_marker", onnx.TensorProto.FLOAT16, [], [0]),
+            oh.make_tensor("bfloat16_marker", onnx.TensorProto.BFLOAT16, [], [0]),
         ],
     ),
-    opset_imports=[helper.make_opsetid("", 23), helper.make_opsetid("ai.rt", 1)],
+    opset_imports=[oh.make_opsetid("", 23), oh.make_opsetid("ai.rt", 1)],
     ir_version=10,
 )
 verify.verify_model(model)

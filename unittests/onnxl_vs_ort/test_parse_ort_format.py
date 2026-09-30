@@ -10,25 +10,22 @@ import numpy as np
 import onnxruntime
 
 import onnx_light.onnx as onnxl
-import onnx_light.onnx.helper as helper
+import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
 from onnx_light.ext_test_case import ExtTestCase
 
 
 def make_model():
     """Builds a model with an initializer and an intermediate value."""
-    model = helper.make_model(
-        helper.make_graph(
-            [
-                helper.make_node("MatMul", ["X", "W"], ["M"]),
-                helper.make_node("Relu", ["M"], ["Y"]),
-            ],
+    model = oh.make_model(
+        oh.make_graph(
+            [oh.make_node("MatMul", ["X", "W"], ["M"]), oh.make_node("Relu", ["M"], ["Y"])],
             "reader",
-            [helper.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [None, 2])],
-            [helper.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [None, 3])],
+            [oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [None, 2])],
+            [oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [None, 3])],
             [onh.from_array(np.arange(6, dtype=np.float32).reshape(2, 3), name="W")],
         ),
-        opset_imports=[helper.make_opsetid("", 18)],
+        opset_imports=[oh.make_opsetid("", 18)],
         ir_version=9,
     )
     model.producer_name = "native-reader-test"
@@ -109,33 +106,33 @@ class TestParseOrtFormat(ExtTestCase):
                     self.assert_model_runs(parsed)
 
     def test_parse_onnxruntime_control_flow(self):
-        then_branch = helper.make_graph(
-            [helper.make_node("Identity", ["X"], ["branch_output"])],
+        then_branch = oh.make_graph(
+            [oh.make_node("Identity", ["X"], ["branch_output"])],
             "then",
             [],
-            [helper.make_tensor_value_info("branch_output", onnxl.TensorProto.FLOAT, [2])],
+            [oh.make_tensor_value_info("branch_output", onnxl.TensorProto.FLOAT, [2])],
         )
-        else_branch = helper.make_graph(
-            [helper.make_node("Neg", ["X"], ["branch_output"])],
+        else_branch = oh.make_graph(
+            [oh.make_node("Neg", ["X"], ["branch_output"])],
             "else",
             [],
-            [helper.make_tensor_value_info("branch_output", onnxl.TensorProto.FLOAT, [2])],
+            [oh.make_tensor_value_info("branch_output", onnxl.TensorProto.FLOAT, [2])],
         )
-        model = helper.make_model(
-            helper.make_graph(
+        model = oh.make_model(
+            oh.make_graph(
                 [
-                    helper.make_node(
+                    oh.make_node(
                         "If", ["cond"], ["Y"], then_branch=then_branch, else_branch=else_branch
                     )
                 ],
                 "conditional",
                 [
-                    helper.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2]),
-                    helper.make_tensor_value_info("cond", onnxl.TensorProto.BOOL, []),
+                    oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2]),
+                    oh.make_tensor_value_info("cond", onnxl.TensorProto.BOOL, []),
                 ],
-                [helper.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [2])],
+                [oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [2])],
             ),
-            opset_imports=[helper.make_opsetid("", 18)],
+            opset_imports=[oh.make_opsetid("", 18)],
             ir_version=9,
         )
         with tempfile.TemporaryDirectory() as folder:
@@ -161,17 +158,17 @@ class TestParseOrtFormat(ExtTestCase):
             )
 
     def test_parse_sequence_types(self):
-        model = helper.make_model(
-            helper.make_graph(
-                [helper.make_node("SequenceConstruct", ["X", "Y"], ["S"])],
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("SequenceConstruct", ["X", "Y"], ["S"])],
                 "sequence",
                 [
-                    helper.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2]),
-                    helper.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [2]),
+                    oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2]),
+                    oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [2]),
                 ],
-                [helper.make_tensor_sequence_value_info("S", onnxl.TensorProto.FLOAT, [2])],
+                [oh.make_tensor_sequence_value_info("S", onnxl.TensorProto.FLOAT, [2])],
             ),
-            opset_imports=[helper.make_opsetid("", 18)],
+            opset_imports=[oh.make_opsetid("", 18)],
             ir_version=9,
         )
         with tempfile.TemporaryDirectory() as folder:
@@ -249,15 +246,15 @@ class TestParseOrtFormat(ExtTestCase):
 
     def test_string_tensor_limit(self):
         values = np.array(["abc", "abc\u00e9"])
-        model = helper.make_model(
-            helper.make_graph(
-                [helper.make_node("Identity", ["W"], ["Y"])],
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Identity", ["W"], ["Y"])],
                 "strings",
                 [],
-                [helper.make_tensor_value_info("Y", onnxl.TensorProto.STRING, [2])],
+                [oh.make_tensor_value_info("Y", onnxl.TensorProto.STRING, [2])],
                 [onh.from_array(values, name="W")],
             ),
-            opset_imports=[helper.make_opsetid("", 18)],
+            opset_imports=[oh.make_opsetid("", 18)],
             ir_version=9,
         )
         data = serialize_ort(model)
@@ -274,19 +271,15 @@ class TestParseOrtFormat(ExtTestCase):
         for values in (np.array(-3, dtype=np.int64), np.empty((0, 3), dtype=np.float32)):
             with self.subTest(shape=values.shape):
                 tensor = onh.from_array(values, name="W")
-                model = helper.make_model(
-                    helper.make_graph(
-                        [helper.make_node("Identity", ["W"], ["Y"])],
+                model = oh.make_model(
+                    oh.make_graph(
+                        [oh.make_node("Identity", ["W"], ["Y"])],
                         "tensor",
                         [],
-                        [
-                            helper.make_tensor_value_info(
-                                "Y", tensor.data_type, list(values.shape)
-                            )
-                        ],
+                        [oh.make_tensor_value_info("Y", tensor.data_type, list(values.shape))],
                         [tensor],
                     ),
-                    opset_imports=[helper.make_opsetid("", 18)],
+                    opset_imports=[oh.make_opsetid("", 18)],
                     ir_version=9,
                 )
                 parsed = onnxl.ModelProto()

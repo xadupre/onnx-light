@@ -16,7 +16,7 @@ import numpy
 from onnx_light import onnx
 from onnx_light.ext_test_case import import_or_skip
 import onnx_light.onnx.numpy_helper as onh
-from onnx_light.onnx import helper
+import onnx_light.onnx.helper as oh
 from onnx_light.onnx_lib import parser
 from onnx_light.onnx_proto import verify
 
@@ -36,10 +36,10 @@ def make_model():
 
 def make_attention_model(data_type=onnx.TensorProto.FLOAT):
     """Returns Attention with graph-declared key/value feedback."""
-    model = helper.make_model(
-        helper.make_graph(
+    model = oh.make_model(
+        oh.make_graph(
             [
-                helper.make_node(
+                oh.make_node(
                     "Attention",
                     ["Q", "K", "V", "", "past_key", "past_value"],
                     ["Y", "present_key", "present_value"],
@@ -47,21 +47,18 @@ def make_attention_model(data_type=onnx.TensorProto.FLOAT):
                 )
             ],
             "attention_feedback",
-            [
-                helper.make_tensor_value_info(name, data_type, [1, 1, 1, 2])
-                for name in ("Q", "K", "V")
-            ]
+            [oh.make_tensor_value_info(name, data_type, [1, 1, 1, 2]) for name in ("Q", "K", "V")]
             + [
-                helper.make_tensor_value_info(name, data_type, [1, 1, None, 2])
+                oh.make_tensor_value_info(name, data_type, [1, 1, None, 2])
                 for name in ("past_key", "past_value")
             ],
-            [helper.make_tensor_value_info("Y", data_type, [1, 1, 1, 2])]
+            [oh.make_tensor_value_info("Y", data_type, [1, 1, 1, 2])]
             + [
-                helper.make_tensor_value_info(name, data_type, [1, 1, None, 2])
+                oh.make_tensor_value_info(name, data_type, [1, 1, None, 2])
                 for name in ("present_key", "present_value")
             ],
         ),
-        opset_imports=[helper.make_opsetid("", 23)],
+        opset_imports=[oh.make_opsetid("", 23)],
         ir_version=10,
     )
     add_binding(model, "past_key", "present_key")
@@ -102,7 +99,7 @@ class TestPersistentValueState(unittest.TestCase):
             ],
         ):
             with self.subTest(block_count=len(blocks)):
-                element_type = helper.make_tensor_type_proto(onnx.TensorProto.FLOAT, [1, 1, 1, 2])
+                element_type = oh.make_tensor_type_proto(onnx.TensorProto.FLOAT, [1, 1, 1, 2])
                 cache_structure = not blocks or isinstance(blocks[0], dict)
                 if cache_structure:
                     element_type = onnx.TypeProto(
@@ -112,9 +109,7 @@ class TestPersistentValueState(unittest.TestCase):
                                     onnx.StructTypeProto.Structure.Field(
                                         name=name,
                                         type=(
-                                            helper.make_tensor_type_proto(
-                                                onnx.TensorProto.INT64, []
-                                            )
+                                            oh.make_tensor_type_proto(onnx.TensorProto.INT64, [])
                                             if name in ("start", "length")
                                             else element_type
                                         ),
@@ -129,21 +124,20 @@ class TestPersistentValueState(unittest.TestCase):
                         structure=onnx.StructTypeProto.Structure(
                             field=[
                                 onnx.StructTypeProto.Structure.Field(
-                                    name="blocks",
-                                    type=helper.make_sequence_type_proto(element_type),
+                                    name="blocks", type=oh.make_sequence_type_proto(element_type)
                                 )
                             ]
                         )
                     )
                 )
-                model = helper.make_model(
-                    helper.make_graph(
-                        [helper.make_node("Identity", ["past"], ["present"])],
+                model = oh.make_model(
+                    oh.make_graph(
+                        [oh.make_node("Identity", ["past"], ["present"])],
                         "ordinary_blocks",
-                        [helper.make_value_info("past", value_type)],
-                        [helper.make_value_info("present", value_type)],
+                        [oh.make_value_info("past", value_type)],
+                        [oh.make_value_info("present", value_type)],
                     ),
-                    opset_imports=[helper.make_opsetid("", 18)],
+                    opset_imports=[oh.make_opsetid("", 18)],
                     ir_version=10,
                 )
                 add_binding(model, "past", "present")
@@ -169,19 +163,19 @@ class TestPersistentValueState(unittest.TestCase):
                     numpy.testing.assert_array_equal(value, payload)
 
     def test_root_list_feedback_uses_standard_sequence_kernel(self):
-        tensor_type = helper.make_tensor_type_proto(onnx.TensorProto.FLOAT, [2])
-        sequence_type = helper.make_sequence_type_proto(tensor_type)
-        model = helper.make_model(
-            helper.make_graph(
-                [helper.make_node("SequenceInsert", ["past", "item"], ["present"])],
+        tensor_type = oh.make_tensor_type_proto(onnx.TensorProto.FLOAT, [2])
+        sequence_type = oh.make_sequence_type_proto(tensor_type)
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("SequenceInsert", ["past", "item"], ["present"])],
                 "list_feedback",
                 [
-                    helper.make_value_info("past", sequence_type),
-                    helper.make_value_info("item", tensor_type),
+                    oh.make_value_info("past", sequence_type),
+                    oh.make_value_info("item", tensor_type),
                 ],
-                [helper.make_value_info("present", sequence_type)],
+                [oh.make_value_info("present", sequence_type)],
             ),
-            opset_imports=[helper.make_opsetid("", 18)],
+            opset_imports=[oh.make_opsetid("", 18)],
             ir_version=10,
         )
         add_binding(model, "past", "present")
@@ -259,6 +253,41 @@ class TestPersistentValueState(unittest.TestCase):
             self.assertEqual(set(disabled), set(enabled))
             for name in disabled:
                 numpy.testing.assert_array_equal(disabled[name], enabled[name])
+
+    def test_attention_decode_matches_graph_declared_stateless_feedback(self):
+        model = make_attention_model()
+        bindings = {
+            binding.input_name: binding.output_name for binding in model.graph.persistent_bindings
+        }
+        initial = {name: numpy.empty((1, 1, 0, 2), dtype=numpy.float32) for name in bindings}
+        state = runtime.PersistentValueState(
+            model, initial, runtime.RuntimeSessionOptions(persistent_tensor_initial_capacity=4)
+        )
+        stateless = runtime.RuntimeSession(model)
+        state_context = runtime.RuntimeContext(runtime.KernelContext(runtime.default_opset(23)))
+        manual = initial.copy()
+        held = []
+        for index in range(1, 5):
+            token = numpy.array([index / 8, index / 4], dtype=numpy.float32).reshape(1, 1, 1, 2)
+            feeds = {"Q": token, "K": token, "V": -token}
+            context = runtime.RuntimeContext(runtime.KernelContext(runtime.default_opset(23)))
+            for name, value in {**manual, **feeds}.items():
+                context.put_value(name, value)
+            stateless.run(context)
+            actual = state.run(state_context, feeds)
+            for name, source in bindings.items():
+                expected = context.get_value(source)
+                numpy.testing.assert_array_equal(array(actual[source]), array(expected))
+                self.assertEqual(
+                    array(actual[source]).ctypes.data, array(state.values[name]).ctypes.data
+                )
+                manual[name] = expected
+            numpy.testing.assert_array_equal(array(actual["Y"]), array(context.get_value("Y")))
+            held.append(actual["present_key"])
+        state.close()
+        for index, value in enumerate(held, 1):
+            self.assertEqual(array(value).shape[2], index)
+            numpy.testing.assert_array_equal(array(value)[0, 0, -1], [index / 8, index / 4])
 
     def test_attention_persistent_storage_events_are_opt_in(self):
         fields = (
@@ -386,13 +415,13 @@ class TestPersistentValueState(unittest.TestCase):
     def test_attention_persistent_storage_events_survive_failure(self):
         model = make_attention_model()
         model.graph.input.append(
-            helper.make_tensor_value_info("target_shape", onnx.TensorProto.INT64, [1])
+            oh.make_tensor_value_info("target_shape", onnx.TensorProto.INT64, [1])
         )
         model.graph.node.append(
-            helper.make_node("Reshape", ["present_key", "target_shape"], ["invalid"])
+            oh.make_node("Reshape", ["present_key", "target_shape"], ["invalid"])
         )
         model.graph.output.append(
-            helper.make_tensor_value_info("invalid", onnx.TensorProto.FLOAT, [None])
+            oh.make_tensor_value_info("invalid", onnx.TensorProto.FLOAT, [None])
         )
         for enabled in (False, True):
             with self.subTest(events_enabled=enabled):
@@ -438,36 +467,32 @@ class TestPersistentValueState(unittest.TestCase):
                 state.close()
 
     def test_loop_uses_normal_runtime_with_selected_result(self):
-        body = helper.make_graph(
-            [helper.make_node("Add", ["state", "one"], ["next"])],
+        body = oh.make_graph(
+            [oh.make_node("Add", ["state", "one"], ["next"])],
             "body",
             [
-                helper.make_tensor_value_info("iteration", onnx.TensorProto.INT64, []),
-                helper.make_tensor_value_info("keep", onnx.TensorProto.BOOL, []),
-                helper.make_tensor_value_info("state", onnx.TensorProto.FLOAT, [2]),
+                oh.make_tensor_value_info("iteration", onnx.TensorProto.INT64, []),
+                oh.make_tensor_value_info("keep", onnx.TensorProto.BOOL, []),
+                oh.make_tensor_value_info("state", onnx.TensorProto.FLOAT, [2]),
             ],
             [
-                helper.make_tensor_value_info("keep", onnx.TensorProto.BOOL, []),
-                helper.make_tensor_value_info("next", onnx.TensorProto.FLOAT, [2]),
+                oh.make_tensor_value_info("keep", onnx.TensorProto.BOOL, []),
+                oh.make_tensor_value_info("next", onnx.TensorProto.FLOAT, [2]),
             ],
-            [helper.make_tensor("one", onnx.TensorProto.FLOAT, [2], [1.0, 1.0])],
+            [oh.make_tensor("one", onnx.TensorProto.FLOAT, [2], [1.0, 1.0])],
         )
-        model = helper.make_model(
-            helper.make_graph(
-                [
-                    helper.make_node(
-                        "Loop", ["count", "condition", "past"], ["present"], body=body
-                    )
-                ],
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Loop", ["count", "condition", "past"], ["present"], body=body)],
                 "loop",
-                [helper.make_tensor_value_info("past", onnx.TensorProto.FLOAT, [2])],
-                [helper.make_tensor_value_info("present", onnx.TensorProto.FLOAT, [2])],
+                [oh.make_tensor_value_info("past", onnx.TensorProto.FLOAT, [2])],
+                [oh.make_tensor_value_info("present", onnx.TensorProto.FLOAT, [2])],
                 [
-                    helper.make_tensor("count", onnx.TensorProto.INT64, [], [2]),
-                    helper.make_tensor("condition", onnx.TensorProto.BOOL, [], [True]),
+                    oh.make_tensor("count", onnx.TensorProto.INT64, [], [2]),
+                    oh.make_tensor("condition", onnx.TensorProto.BOOL, [], [True]),
                 ],
             ),
-            opset_imports=[helper.make_opsetid("", 18)],
+            opset_imports=[oh.make_opsetid("", 18)],
         )
         add_binding(model, "past", "present")
         state = runtime.PersistentValueState(model, {"past": numpy.zeros(2, dtype=numpy.float32)})
@@ -480,25 +505,25 @@ class TestPersistentValueState(unittest.TestCase):
             )
 
     def test_scan_keeps_nonpersistent_output_ordinary(self):
-        body = helper.make_graph(
+        body = oh.make_graph(
             [
-                helper.make_node("Add", ["state", "item"], ["next"]),
-                helper.make_node("Identity", ["next"], ["trace"]),
+                oh.make_node("Add", ["state", "item"], ["next"]),
+                oh.make_node("Identity", ["next"], ["trace"]),
             ],
             "body",
             [
-                helper.make_tensor_value_info("state", onnx.TensorProto.FLOAT, [2]),
-                helper.make_tensor_value_info("item", onnx.TensorProto.FLOAT, [2]),
+                oh.make_tensor_value_info("state", onnx.TensorProto.FLOAT, [2]),
+                oh.make_tensor_value_info("item", onnx.TensorProto.FLOAT, [2]),
             ],
             [
-                helper.make_tensor_value_info("next", onnx.TensorProto.FLOAT, [2]),
-                helper.make_tensor_value_info("trace", onnx.TensorProto.FLOAT, [2]),
+                oh.make_tensor_value_info("next", onnx.TensorProto.FLOAT, [2]),
+                oh.make_tensor_value_info("trace", onnx.TensorProto.FLOAT, [2]),
             ],
         )
-        model = helper.make_model(
-            helper.make_graph(
+        model = oh.make_model(
+            oh.make_graph(
                 [
-                    helper.make_node(
+                    oh.make_node(
                         "Scan",
                         ["past", "items"],
                         ["present", "traces"],
@@ -508,15 +533,15 @@ class TestPersistentValueState(unittest.TestCase):
                 ],
                 "scan",
                 [
-                    helper.make_tensor_value_info("past", onnx.TensorProto.FLOAT, [2]),
-                    helper.make_tensor_value_info("items", onnx.TensorProto.FLOAT, [3, 2]),
+                    oh.make_tensor_value_info("past", onnx.TensorProto.FLOAT, [2]),
+                    oh.make_tensor_value_info("items", onnx.TensorProto.FLOAT, [3, 2]),
                 ],
                 [
-                    helper.make_tensor_value_info("present", onnx.TensorProto.FLOAT, [2]),
-                    helper.make_tensor_value_info("traces", onnx.TensorProto.FLOAT, [3, 2]),
+                    oh.make_tensor_value_info("present", onnx.TensorProto.FLOAT, [2]),
+                    oh.make_tensor_value_info("traces", onnx.TensorProto.FLOAT, [3, 2]),
                 ],
             ),
-            opset_imports=[helper.make_opsetid("", 18)],
+            opset_imports=[oh.make_opsetid("", 18)],
         )
         add_binding(model, "past", "present")
         state = runtime.PersistentValueState(model, {"past": numpy.zeros(2, dtype=numpy.float32)})
@@ -530,35 +555,35 @@ class TestPersistentValueState(unittest.TestCase):
         numpy.testing.assert_array_equal(array(outputs[0]["traces"]), [[1, 1], [2, 2], [3, 3]])
 
     def test_ordinary_strings_cross_sequence_and_if(self):
-        branch = helper.make_graph(
-            [helper.make_node("SequenceAt", ["sequence", "index"], ["result"])],
+        branch = oh.make_graph(
+            [oh.make_node("SequenceAt", ["sequence", "index"], ["result"])],
             "branch",
             [],
-            [helper.make_tensor_value_info("result", onnx.TensorProto.STRING, [2])],
-            [helper.make_tensor("index", onnx.TensorProto.INT64, [], [0])],
+            [oh.make_tensor_value_info("result", onnx.TensorProto.STRING, [2])],
+            [oh.make_tensor("index", onnx.TensorProto.INT64, [], [0])],
         )
-        model = helper.make_model(
-            helper.make_graph(
+        model = oh.make_model(
+            oh.make_graph(
                 [
-                    helper.make_node("Add", ["past", "delta"], ["present"]),
-                    helper.make_node("SequenceConstruct", ["text"], ["sequence"]),
-                    helper.make_node(
+                    oh.make_node("Add", ["past", "delta"], ["present"]),
+                    oh.make_node("SequenceConstruct", ["text"], ["sequence"]),
+                    oh.make_node(
                         "If", ["condition"], ["text_out"], then_branch=branch, else_branch=branch
                     ),
                 ],
                 "string_sequence",
                 [
-                    helper.make_tensor_value_info("past", onnx.TensorProto.FLOAT, [2]),
-                    helper.make_tensor_value_info("delta", onnx.TensorProto.FLOAT, [2]),
-                    helper.make_tensor_value_info("text", onnx.TensorProto.STRING, [2]),
-                    helper.make_tensor_value_info("condition", onnx.TensorProto.BOOL, []),
+                    oh.make_tensor_value_info("past", onnx.TensorProto.FLOAT, [2]),
+                    oh.make_tensor_value_info("delta", onnx.TensorProto.FLOAT, [2]),
+                    oh.make_tensor_value_info("text", onnx.TensorProto.STRING, [2]),
+                    oh.make_tensor_value_info("condition", onnx.TensorProto.BOOL, []),
                 ],
                 [
-                    helper.make_tensor_value_info("present", onnx.TensorProto.FLOAT, [2]),
-                    helper.make_tensor_value_info("text_out", onnx.TensorProto.STRING, [2]),
+                    oh.make_tensor_value_info("present", onnx.TensorProto.FLOAT, [2]),
+                    oh.make_tensor_value_info("text_out", onnx.TensorProto.STRING, [2]),
                 ],
             ),
-            opset_imports=[helper.make_opsetid("", 18)],
+            opset_imports=[oh.make_opsetid("", 18)],
         )
         add_binding(model, "past", "present")
         text = runtime.tensor_from_proto(onh.from_array(numpy.array(["a", "b"], dtype=object)))
@@ -770,7 +795,7 @@ class TestPersistentValueState(unittest.TestCase):
                     registry.unregister_custom_kernel("feedback.test", "Block")
 
     def test_whole_structured_feedback_and_kernel_failure(self):
-        tensor_type = helper.make_tensor_type_proto(onnx.TensorProto.FLOAT, [2])
+        tensor_type = oh.make_tensor_type_proto(onnx.TensorProto.FLOAT, [2])
 
         def struct_type(*names):
             """Returns a declaration containing named tensor fields."""
@@ -785,10 +810,10 @@ class TestPersistentValueState(unittest.TestCase):
                 )
             )
 
-        model = helper.make_model(
-            helper.make_graph(
+        model = oh.make_model(
+            oh.make_graph(
                 [
-                    helper.make_node(
+                    oh.make_node(
                         "Step", ["request", "tokens"], ["response"], domain="feedback.test"
                     )
                 ],
@@ -799,7 +824,7 @@ class TestPersistentValueState(unittest.TestCase):
                 ],
                 [onnx.ValueInfoProto(name="response", type=struct_type("logits", "cache"))],
             ),
-            opset_imports=[helper.make_opsetid("", 18), helper.make_opsetid("feedback.test", 1)],
+            opset_imports=[oh.make_opsetid("", 18), oh.make_opsetid("feedback.test", 1)],
         )
         add_binding(model, "request", "response")
         verify.verify_model(model)
@@ -832,10 +857,22 @@ class TestPersistentValueState(unittest.TestCase):
                 raise RuntimeError("failed after producing outputs")
 
         context.register_custom_kernel("feedback.test", "Step", step)
+        stateless = runtime.RuntimeSession(model)
+        manual = snapshot["request"]
         for expected in (1, 2):
-            output = state.run(context, {"tokens": numpy.ones(2, dtype=numpy.float32)})
+            tokens = numpy.ones(2, dtype=numpy.float32)
+            manual_context = make_context()
+            manual_context.register_custom_kernel("feedback.test", "Step", step)
+            manual_context.put_value(model.graph.persistent_bindings[0].input_name, manual)
+            manual_context.put_value("tokens", tokens)
+            stateless.run(manual_context)
+            manual = manual_context.get_value(model.graph.persistent_bindings[0].output_name)
+            output = state.run(context, {"tokens": tokens})
             numpy.testing.assert_array_equal(array(output["response"]["cache"]), [expected] * 2)
             for field in ("cache", "logits"):
+                numpy.testing.assert_array_equal(
+                    array(output["response"][field]), array(manual[field])
+                )
                 self.assertEqual(
                     array(state.values["request"][field]).ctypes.data,
                     array(output["response"][field]).ctypes.data,
@@ -968,7 +1005,7 @@ class TestPersistentValueState(unittest.TestCase):
                 runtime.PersistentValueState(make_model(), {"past": initial})
 
     def test_literal_dots_in_whole_structured_state(self):
-        tensor_type = helper.make_tensor_type_proto(onnx.TensorProto.FLOAT, [2])
+        tensor_type = oh.make_tensor_type_proto(onnx.TensorProto.FLOAT, [2])
 
         def structure(fields):
             """Returns a named structure declaration."""
@@ -984,14 +1021,14 @@ class TestPersistentValueState(unittest.TestCase):
             )
 
         value_type = structure([("a.b", tensor_type), ("a", structure([("b", tensor_type)]))])
-        model = helper.make_model(
-            helper.make_graph(
-                [helper.make_node("Echo", ["x"], ["y"], domain="feedback.test")],
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Echo", ["x"], ["y"], domain="feedback.test")],
                 "literal_fields",
                 [onnx.ValueInfoProto(name="x", type=value_type)],
                 [onnx.ValueInfoProto(name="y", type=value_type)],
             ),
-            opset_imports=[helper.make_opsetid("", 18), helper.make_opsetid("feedback.test", 1)],
+            opset_imports=[oh.make_opsetid("", 18), oh.make_opsetid("feedback.test", 1)],
         )
         add_binding(model, "x", "y")
         verify.verify_model(model)
@@ -1021,14 +1058,14 @@ class TestPersistentValueState(unittest.TestCase):
             )
 
     def test_literal_dotted_graph_name(self):
-        model = helper.make_model(
-            helper.make_graph(
-                [helper.make_node("Identity", ["past.part"], ["present.part"])],
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Identity", ["past.part"], ["present.part"])],
                 "literal_root",
-                [helper.make_tensor_value_info("past.part", onnx.TensorProto.FLOAT, [2])],
-                [helper.make_tensor_value_info("present.part", onnx.TensorProto.FLOAT, [2])],
+                [oh.make_tensor_value_info("past.part", onnx.TensorProto.FLOAT, [2])],
+                [oh.make_tensor_value_info("present.part", onnx.TensorProto.FLOAT, [2])],
             ),
-            opset_imports=[helper.make_opsetid("", 18)],
+            opset_imports=[oh.make_opsetid("", 18)],
         )
         add_binding(model, "past.part", "present.part")
         verify.verify_model(model)
@@ -1046,23 +1083,23 @@ class TestPersistentValueState(unittest.TestCase):
             state.reset({r"past\.part": initial})
 
     def test_graph_name_prefixes_are_independent_inputs(self):
-        model = helper.make_model(
-            helper.make_graph(
+        model = oh.make_model(
+            oh.make_graph(
                 [
-                    helper.make_node("Identity", ["past"], ["present"]),
-                    helper.make_node("Identity", ["past.part"], ["present.part"]),
+                    oh.make_node("Identity", ["past"], ["present"]),
+                    oh.make_node("Identity", ["past.part"], ["present.part"]),
                 ],
                 "literal_prefixes",
                 [
-                    helper.make_tensor_value_info(name, onnx.TensorProto.FLOAT, [2])
+                    oh.make_tensor_value_info(name, onnx.TensorProto.FLOAT, [2])
                     for name in ("past", "past.part")
                 ],
                 [
-                    helper.make_tensor_value_info(name, onnx.TensorProto.FLOAT, [2])
+                    oh.make_tensor_value_info(name, onnx.TensorProto.FLOAT, [2])
                     for name in ("present", "present.part")
                 ],
             ),
-            opset_imports=[helper.make_opsetid("", 18)],
+            opset_imports=[oh.make_opsetid("", 18)],
         )
         add_binding(model, "past", "present")
         verify.verify_model(model)
@@ -1091,21 +1128,21 @@ class TestPersistentValueState(unittest.TestCase):
 
     def test_initializer_output_retains_model(self):
         weights = numpy.ones(2, dtype=numpy.float32)
-        model = helper.make_model(
-            helper.make_graph(
+        model = oh.make_model(
+            oh.make_graph(
                 [
-                    helper.make_node("Identity", ["W"], ["present"]),
-                    helper.make_node("Shape", ["past"], ["past_shape"]),
+                    oh.make_node("Identity", ["W"], ["present"]),
+                    oh.make_node("Shape", ["past"], ["past_shape"]),
                 ],
                 "initializer_feedback",
-                [helper.make_tensor_value_info("past", onnx.TensorProto.FLOAT, [2])],
+                [oh.make_tensor_value_info("past", onnx.TensorProto.FLOAT, [2])],
                 [
-                    helper.make_tensor_value_info("present", onnx.TensorProto.FLOAT, [2]),
-                    helper.make_tensor_value_info("past_shape", onnx.TensorProto.INT64, [1]),
+                    oh.make_tensor_value_info("present", onnx.TensorProto.FLOAT, [2]),
+                    oh.make_tensor_value_info("past_shape", onnx.TensorProto.INT64, [1]),
                 ],
                 [onh.from_array(weights, name="W")],
             ),
-            opset_imports=[helper.make_opsetid("", 18)],
+            opset_imports=[oh.make_opsetid("", 18)],
         )
         add_binding(model, "past", "present")
         state = runtime.PersistentValueState(model, {"past": numpy.zeros(2, dtype=numpy.float32)})

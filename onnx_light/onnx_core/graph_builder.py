@@ -35,7 +35,8 @@ from typing import TypeAlias
 
 import numpy
 
-from ..onnx import TensorProto, helper
+import onnx_light.onnx.helper as oh
+from ..onnx import TensorProto
 import onnx_light.onnx.numpy_helper as onh
 from ..onnx_op import GetAllOnnxOpSchemasWithHistory, LightOpSchema
 from ..onnx_py._onnxpycore import builder as _C  # type: ignore[attr-defined]
@@ -182,7 +183,7 @@ class GraphBuilder(_C.GraphBuilder):
 
     def inp(self, name: str, elem_type: int, shape: list[str | int | None]) -> str:
         """Declares and returns a compact graph input."""
-        return self.make_input(helper.make_tensor_value_info(name, elem_type, shape))
+        return self.make_input(oh.make_tensor_value_info(name, elem_type, shape))
 
     def out(
         self, name: str, elem_type: int | None = None, shape: list[str | int | None] | None = None
@@ -193,7 +194,7 @@ class GraphBuilder(_C.GraphBuilder):
                 raise ValueError("An output shape requires an element type.")
             self.make_output(name)
         else:
-            self.make_output(helper.make_tensor_value_info(name, elem_type, shape))
+            self.make_output(oh.make_tensor_value_info(name, elem_type, shape))
         return name
 
     def init(self, value: numpy.ndarray, name: str | None = None, *, copy: bool = True) -> str:
@@ -253,7 +254,7 @@ class GraphBuilder(_C.GraphBuilder):
         if copy:
             return self.make_initializer(onh.from_array(value, name=name))
         tensor = TensorProto(
-            name=name, dims=value.shape, data_type=helper.np_dtype_to_tensor_dtype(value.dtype)
+            name=name, dims=value.shape, data_type=oh.np_dtype_to_tensor_dtype(value.dtype)
         )
         tensor._set_raw_data_from_buffer(value)
         return self.make_initializer_move(tensor)

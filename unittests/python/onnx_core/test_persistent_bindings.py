@@ -3,7 +3,7 @@
 import unittest
 
 from onnx_light import onnx
-from onnx_light.onnx import helper
+import onnx_light.onnx.helper as oh
 from onnx_light.onnx.onnx_pb import PersistentBindingProto
 from onnx_light.onnx_core.graph_builder import GraphBuilder
 from onnx_light.onnx_lib import PersistentBindingProto as LibraryPersistentBindingProto
@@ -12,7 +12,7 @@ from onnx_light.onnx_proto import verify
 
 def tensor_type(dtype=onnx.TensorProto.FLOAT, shape=(2,)):
     """Returns a concrete tensor type."""
-    return helper.make_tensor_type_proto(dtype, list(shape))
+    return oh.make_tensor_type_proto(dtype, list(shape))
 
 
 def structure_type(fields):
@@ -37,12 +37,12 @@ def model_with_binding(input_type=None, output_type=None):
         name="persistent",
         input=[onnx.ValueInfoProto(name="state.in", type=input_type)],
         output=[onnx.ValueInfoProto(name="state.out", type=output_type)],
-        node=[helper.make_node("Identity", ["state.in"], ["state.out"])],
+        node=[oh.make_node("Identity", ["state.in"], ["state.out"])],
         persistent_bindings=[
             PersistentBindingProto(input_name="state.in", output_name="state.out")
         ],
     )
-    return helper.make_model(graph, opset_imports=[helper.make_opsetid("", 18)])
+    return oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
 
 
 class TestPersistentBindings(unittest.TestCase):
@@ -57,9 +57,7 @@ class TestPersistentBindings(unittest.TestCase):
                     model.graph.node[0].input.clear()
                     model.graph.node[0].input.append("other")
                 elif mode == "two_nodes":
-                    model.graph.node.append(
-                        helper.make_node("Shape", ["state.in"], ["state.shape"])
-                    )
+                    model.graph.node.append(oh.make_node("Shape", ["state.in"], ["state.shape"]))
                 elif mode == "two_slots":
                     model.graph.node[0].op_type = "Add"
                     model.graph.node[0].input.append("state.in")
@@ -120,7 +118,7 @@ class TestPersistentBindings(unittest.TestCase):
         value_type.struct_type.structure.field.append(
             onnx.StructTypeProto.Structure.Field(
                 name="label",
-                constant=helper.make_tensor("label", onnx.TensorProto.STRING, [1], ["text"]),
+                constant=oh.make_tensor("label", onnx.TensorProto.STRING, [1], ["text"]),
             )
         )
         model = model_with_binding(value_type)
@@ -215,7 +213,7 @@ class TestPersistentBindings(unittest.TestCase):
                 model.graph.output.append(
                     onnx.ValueInfoProto(name="other.out", type=tensor_type())
                 )
-                model.graph.node.append(helper.make_node("Identity", ["other.in"], ["other.out"]))
+                model.graph.node.append(oh.make_node("Identity", ["other.in"], ["other.out"]))
                 model.graph.persistent_bindings.append(
                     PersistentBindingProto(
                         input_name="state.in" if duplicate == "input" else "other.in",
@@ -253,7 +251,7 @@ class TestPersistentBindings(unittest.TestCase):
         value_type.struct_type.structure.field.append(
             onnx.StructTypeProto.Structure.Field(
                 name="constant",
-                constant=helper.make_tensor("constant", onnx.TensorProto.FLOAT, [], [1.0]),
+                constant=oh.make_tensor("constant", onnx.TensorProto.FLOAT, [], [1.0]),
             )
         )
         verify.verify_model(model_with_binding(value_type))
@@ -301,12 +299,12 @@ class TestPersistentBindings(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "root graph"):
             verify.verify_graph(model.graph, is_main_graph=False)
         child = model.graph
-        parent = helper.make_model(
-            helper.make_graph(
-                [helper.make_node("Custom", [], ["out"], body=child)],
+        parent = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Custom", [], ["out"], body=child)],
                 "parent",
                 [],
-                [helper.make_tensor_value_info("out", onnx.TensorProto.FLOAT, [2])],
+                [oh.make_tensor_value_info("out", onnx.TensorProto.FLOAT, [2])],
             )
         )
         with self.assertRaisesRegex(ValueError, "root graph"):

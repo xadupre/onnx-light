@@ -14,7 +14,7 @@ from onnx_light import onnx
 import onnx_light.onnx.checker as checker
 from onnx_light.ext_test_case import import_or_skip
 import onnx_light.onnx.numpy_helper as onh
-from onnx_light.onnx import helper
+import onnx_light.onnx.helper as oh
 
 runtime = import_or_skip("onnx_light.onnx_py._onnxpykernels", "runtime")
 QuantizationFormat = runtime.QuantizationFormat
@@ -28,37 +28,35 @@ class TestSharedQuantizationParameters(unittest.TestCase):
         plan = runtime.make_quantization_plan(QuantizationFormat.INT4, 8, 4)
         storage = runtime.make_quantization_type(plan)
         destination = onnx.TypeProto(struct_type=storage)
-        logical = helper.make_tensor_type_proto(onnx.TensorProto.FLOAT, [8])
+        logical = oh.make_tensor_type_proto(onnx.TensorProto.FLOAT, [8])
         nodes = [
-            helper.make_node(
+            oh.make_node(
                 "Quantize", ["X"], ["Q"], domain="ai.rt", type=destination, parameter_ref="common"
             ),
-            helper.make_node(
+            oh.make_node(
                 "Quantize", ["Z"], ["R"], domain="ai.rt", type=destination, parameter_ref="common"
             ),
-            helper.make_node("Identity", ["Q"], ["I"]),
-            helper.make_node(
+            oh.make_node("Identity", ["Q"], ["I"]),
+            oh.make_node(
                 "Dequantize", ["I"], ["Y"], domain="ai.rt", dtype=onnx.TensorProto.FLOAT
             ),
-            helper.make_node(
+            oh.make_node(
                 "Dequantize", ["R"], ["W"], domain="ai.rt", dtype=onnx.TensorProto.FLOAT
             ),
         ]
-        graph = helper.make_graph(
+        graph = oh.make_graph(
             nodes,
             "shared",
-            [helper.make_value_info(name, logical) for name in ("X", "Z")],
-            [helper.make_value_info(name, logical) for name in ("Y", "W")],
+            [oh.make_value_info(name, logical) for name in ("X", "Z")],
+            [oh.make_value_info(name, logical) for name in ("Y", "W")],
         )
-        model = helper.make_model(
-            graph, opset_imports=[helper.make_opsetid("", 21), helper.make_opsetid("ai.rt", 1)]
+        model = oh.make_model(
+            graph, opset_imports=[oh.make_opsetid("", 21), oh.make_opsetid("ai.rt", 1)]
         )
         compact = add_quantization_parameters(
             model, "common", storage, logical, scales=numpy.array([1, 2], dtype=numpy.float64)
         )
-        model.graph.output.append(
-            helper.make_value_info("I", onnx.TypeProto(struct_type=compact))
-        )
+        model.graph.output.append(oh.make_value_info("I", onnx.TypeProto(struct_type=compact)))
         return model, plan
 
     def run_model(self, model):
@@ -104,11 +102,9 @@ class TestSharedQuantizationParameters(unittest.TestCase):
                 model.graph.input.clear()
                 model.graph.output.clear()
                 for input_name, output_name in (("past", "present"), ("current", "forwarded")):
-                    model.graph.input.append(helper.make_value_info(input_name, value_type))
-                    model.graph.output.append(helper.make_value_info(output_name, value_type))
-                    model.graph.node.append(
-                        helper.make_node("Identity", [input_name], [output_name])
-                    )
+                    model.graph.input.append(oh.make_value_info(input_name, value_type))
+                    model.graph.output.append(oh.make_value_info(output_name, value_type))
+                    model.graph.node.append(oh.make_node("Identity", [input_name], [output_name]))
                 binding = model.graph.persistent_bindings.add()
                 binding.input_name = "past"
                 binding.output_name = "present"
@@ -199,14 +195,14 @@ class TestSharedQuantizationParameters(unittest.TestCase):
         model.graph.node.clear()
         model.graph.node.extend(
             [
-                helper.make_node("Identity", ["Q"], ["I"]),
-                helper.make_node(
+                oh.make_node("Identity", ["Q"], ["I"]),
+                oh.make_node(
                     "Dequantize", ["I"], ["Y"], domain="ai.rt", dtype=onnx.TensorProto.FLOAT
                 ),
             ]
         )
         model.graph.output.clear()
-        model.graph.output.append(helper.make_tensor_value_info("Y", onnx.TensorProto.FLOAT, [8]))
+        model.graph.output.append(oh.make_tensor_value_info("Y", onnx.TensorProto.FLOAT, [8]))
         model.graph.encoded_initializer.append(encoded)
         serialized = model.SerializeToString()
         model = onnx.ModelProto()
@@ -227,38 +223,34 @@ class TestSharedQuantizationParameters(unittest.TestCase):
             copied = onnx.NodeProto()
             copied.CopyFrom(node)
             body.append(copied)
-        logical = helper.make_tensor_type_proto(onnx.TensorProto.FLOAT, [8])
+        logical = oh.make_tensor_type_proto(onnx.TensorProto.FLOAT, [8])
         model.graph.node.clear()
-        branch = helper.make_graph(
-            body, "branch", [], [helper.make_value_info(n, logical) for n in ("Y", "W")]
+        branch = oh.make_graph(
+            body, "branch", [], [oh.make_value_info(n, logical) for n in ("Y", "W")]
         )
         model.graph.node.append(
-            helper.make_node(
-                "If", ["condition"], ["Y", "W"], then_branch=branch, else_branch=branch
-            )
+            oh.make_node("If", ["condition"], ["Y", "W"], then_branch=branch, else_branch=branch)
         )
         model.graph.initializer.append(onh.from_array(numpy.array(True), "condition"))
         model.graph.output.clear()
-        model.graph.output.extend(helper.make_value_info(name, logical) for name in ("Y", "W"))
+        model.graph.output.extend(oh.make_value_info(name, logical) for name in ("Y", "W"))
         checker.check_model(model)
         context, _ = self.run_model(model)
         numpy.testing.assert_array_equal(
             numpy.from_dlpack(context.get("Y")), [-8, -4, 0, 7, -16, -4, 8, 14]
         )
         model.graph.node.clear()
-        function = helper.make_function(
+        function = oh.make_function(
             "local",
             "Shared",
             ["X", "Z"],
             ["Y", "W"],
             body,
-            [helper.make_opsetid("", 21), helper.make_opsetid("ai.rt", 1)],
+            [oh.make_opsetid("", 21), oh.make_opsetid("ai.rt", 1)],
         )
         model.functions.append(function)
-        model.opset_import.append(helper.make_opsetid("local", 1))
-        model.graph.node.append(
-            helper.make_node("Shared", ["X", "Z"], ["Y", "W"], domain="local")
-        )
+        model.opset_import.append(oh.make_opsetid("local", 1))
+        model.graph.node.append(oh.make_node("Shared", ["X", "Z"], ["Y", "W"], domain="local"))
         checker.check_model(model)
         context, _ = self.run_model(model)
         numpy.testing.assert_array_equal(
@@ -271,7 +263,7 @@ class TestSharedQuantizationParameters(unittest.TestCase):
             for attribute in node.attribute:
                 if attribute.name == "parameter_ref":
                     attributes.append(
-                        helper.make_attribute_ref(
+                        oh.make_attribute_ref(
                             "parameter_ref",
                             onnx.AttributeProto.STRING,
                             ref_attr_name="parameters",
@@ -283,7 +275,7 @@ class TestSharedQuantizationParameters(unittest.TestCase):
                     attributes.append(copied)
             node.attribute.clear()
             node.attribute.extend(attributes)
-        model.graph.node[0].attribute.append(helper.make_attribute("parameters", "common"))
+        model.graph.node[0].attribute.append(oh.make_attribute("parameters", "common"))
         checker.check_model(model)
         context, _ = self.run_model(model)
         numpy.testing.assert_array_equal(
@@ -361,7 +353,7 @@ class TestSharedQuantizationParameters(unittest.TestCase):
                 runtime.make_quantization_type(
                     runtime.make_quantization_plan(QuantizationFormat.INT4, 8, 4)
                 ),
-                helper.make_tensor_type_proto(onnx.TensorProto.FLOAT, [8]),
+                oh.make_tensor_type_proto(onnx.TensorProto.FLOAT, [8]),
                 scales=numpy.array([1, 2, 3], dtype=numpy.float64),
             )
         self.assertEqual(model.SerializeToString(), original)
@@ -397,7 +389,7 @@ class TestSharedQuantizationParameters(unittest.TestCase):
             with self.subTest(format=fmt):
                 plan = runtime.make_matmul_nbits_plan(fmt, 3, 2, 16)
                 full = runtime.quantize_tensor(tensor, plan)
-                model = helper.make_model(helper.make_graph([], "parameters", [], []))
+                model = oh.make_model(oh.make_graph([], "parameters", [], []))
                 add_quantization_parameters(
                     model,
                     "common",
@@ -430,7 +422,7 @@ class TestSharedQuantizationParameters(unittest.TestCase):
             model,
             "second",
             reference,
-            helper.make_tensor_type_proto(onnx.TensorProto.FLOAT, [8]),
+            oh.make_tensor_type_proto(onnx.TensorProto.FLOAT, [8]),
             scales=numpy.array(2, dtype=numpy.float64),
         )
         for node in (model.graph.node[0], model.graph.node[1]):
@@ -494,12 +486,12 @@ class TestQuantizedValues(unittest.TestCase):
         plan = runtime.make_quantization_plan(QuantizationFormat.INT4, values.size)
         destination = onnx.TypeProto()
         destination.struct_type.CopyFrom(runtime.make_quantization_type(plan))
-        encode = helper.make_node("Quantize", ["X"], ["Q"], domain="ai.rt", type=destination)
-        decode = helper.make_node(
+        encode = oh.make_node("Quantize", ["X"], ["Q"], domain="ai.rt", type=destination)
+        decode = oh.make_node(
             "Dequantize", ["Q"], ["Y"], domain="ai.rt", dtype=onnx.TensorProto.FLOAT
         )
-        copy_encoded = helper.make_node("Identity", ["Q"], ["encoded_copy"])
-        copy_tensor = helper.make_node("Identity", ["Y"], ["tensor_copy"])
+        copy_encoded = oh.make_node("Identity", ["Q"], ["encoded_copy"])
+        copy_tensor = oh.make_node("Identity", ["Y"], ["tensor_copy"])
         context = runtime.RuntimeContext()
         context.put_value("Q", numpy.array([999], dtype=numpy.float32))
         context.put_value("encoded_copy", numpy.array([999], dtype=numpy.float32))
@@ -510,7 +502,7 @@ class TestQuantizedValues(unittest.TestCase):
                 encoded = context.get_value("Q")
                 self.assertIsInstance(encoded, onnx.EncodedValueProto)
                 self.assertFalse(context.has("Q"))
-                runtime.run_node(helper.make_node("Identity", ["Q"], ["Q"]), context)
+                runtime.run_node(oh.make_node("Identity", ["Q"], ["Q"]), context)
                 runtime.run_node(copy_encoded, context)
                 self.assertEqual(
                     context.get_value("encoded_copy").SerializeToString(),
@@ -540,24 +532,24 @@ class TestQuantizedValues(unittest.TestCase):
         plan = runtime.make_quantization_plan(QuantizationFormat.INT4, values.size, 4)
         destination = onnx.TypeProto()
         destination.struct_type.CopyFrom(runtime.make_quantization_type(plan))
-        encode = helper.make_node("Quantize", ["X"], ["Q"], domain="ai.rt", type=destination)
+        encode = oh.make_node("Quantize", ["X"], ["Q"], domain="ai.rt", type=destination)
         self.assertEqual(
-            helper.get_attribute_value(encode.attribute[0]).SerializeToString(),
+            oh.get_attribute_value(encode.attribute[0]).SerializeToString(),
             destination.SerializeToString(),
         )
         with self.assertRaises(TypeError):
-            helper.make_attribute("type", destination, attr_type=onnx.AttributeProto.INT)
-        decode = helper.make_node(
+            oh.make_attribute("type", destination, attr_type=onnx.AttributeProto.INT)
+        decode = oh.make_node(
             "Dequantize", ["Q"], ["Y"], domain="ai.rt", dtype=onnx.TensorProto.DOUBLE
         )
-        graph = helper.make_graph(
+        graph = oh.make_graph(
             [encode, decode],
             "codecs",
-            [helper.make_tensor_value_info("X", onnx.TensorProto.FLOAT, [8])],
-            [helper.make_tensor_value_info("Y", onnx.TensorProto.DOUBLE, [8])],
+            [oh.make_tensor_value_info("X", onnx.TensorProto.FLOAT, [8])],
+            [oh.make_tensor_value_info("Y", onnx.TensorProto.DOUBLE, [8])],
         )
-        model = helper.make_model(
-            graph, opset_imports=[helper.make_opsetid("", 21), helper.make_opsetid("ai.rt", 1)]
+        model = oh.make_model(
+            graph, opset_imports=[oh.make_opsetid("", 21), oh.make_opsetid("ai.rt", 1)]
         )
         context = runtime.RuntimeContext()
         context.set(
@@ -570,7 +562,7 @@ class TestQuantizedValues(unittest.TestCase):
         numpy.testing.assert_array_equal(actual, values)
         model.graph.node[0].input.append("scales")
         model.graph.input.append(
-            helper.make_tensor_value_info("scales", onnx.TensorProto.DOUBLE, [2])
+            oh.make_tensor_value_info("scales", onnx.TensorProto.DOUBLE, [2])
         )
         scales = numpy.array([2, 4], dtype=numpy.float64)
         context.set(
@@ -593,17 +585,17 @@ class TestQuantizedValues(unittest.TestCase):
         declaration.CopyFrom(encoded.struct_type)
         declaration.type_id = 1
         encoded.struct_type = onnx.StructTypeProto(type_ref=1)
-        decode = helper.make_node(
+        decode = oh.make_node(
             "Dequantize", ["Q"], ["Y"], domain="ai.rt", dtype=onnx.TensorProto.FLOAT
         )
-        graph = helper.make_graph(
+        graph = oh.make_graph(
             [decode],
             "encoded_initializer",
             [],
-            [helper.make_tensor_value_info("Y", onnx.TensorProto.FLOAT, [3])],
+            [oh.make_tensor_value_info("Y", onnx.TensorProto.FLOAT, [3])],
         )
         graph.encoded_initializer.append(encoded)
-        model = helper.make_model(graph, opset_imports=[helper.make_opsetid("ai.rt", 1)])
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("ai.rt", 1)])
         model.struct_types.append(declaration)
         return model, values
 
@@ -649,7 +641,7 @@ class TestQuantizedValues(unittest.TestCase):
         model, _ = self.make_encoded_initializer_model()
         output_type = onnx.TypeProto()
         output_type.struct_type = onnx.StructTypeProto(type_ref=1)
-        model.graph.output.append(helper.make_value_info("Q", output_type))
+        model.graph.output.append(oh.make_value_info("Q", output_type))
         checker.check_model(model)
         model.graph.output[-1].type.struct_type = onnx.StructTypeProto(type_ref=99)
         with self.assertRaises(checker.ValidationError):
@@ -658,12 +650,12 @@ class TestQuantizedValues(unittest.TestCase):
     def test_checker_quantize_type_attribute(self):
         model, _ = self.make_encoded_initializer_model()
         destination = onnx.TypeProto(struct_type=onnx.StructTypeProto(type_ref=1))
-        encode = helper.make_node("Quantize", ["X"], ["Q"], domain="ai.rt", type=destination)
+        encode = oh.make_node("Quantize", ["X"], ["Q"], domain="ai.rt", type=destination)
         decode = model.graph.node[0]
         model.graph.node.clear()
         model.graph.node.extend([encode, decode])
         model.graph.encoded_initializer.clear()
-        model.graph.input.append(helper.make_tensor_value_info("X", onnx.TensorProto.FLOAT, [3]))
+        model.graph.input.append(oh.make_tensor_value_info("X", onnx.TensorProto.FLOAT, [3]))
         checker.check_model(model)
         model.graph.node[0].attribute[0].tp.struct_type = onnx.StructTypeProto(type_ref=99)
         with self.assertRaises(checker.ValidationError):
@@ -671,18 +663,18 @@ class TestQuantizedValues(unittest.TestCase):
 
     def test_checker_nested_encoded_initializer(self):
         model, _ = self.make_encoded_initializer_model()
-        conditional = helper.make_node(
+        conditional = oh.make_node(
             "If", ["condition"], ["Y"], then_branch=model.graph, else_branch=model.graph
         )
-        graph = helper.make_graph(
+        graph = oh.make_graph(
             [conditional],
             "nested_encoded",
             [],
             list(model.graph.output),
-            initializer=[helper.make_tensor("condition", onnx.TensorProto.BOOL, [], [True])],
+            initializer=[oh.make_tensor("condition", onnx.TensorProto.BOOL, [], [True])],
         )
         model.graph = graph
-        model.opset_import.append(helper.make_opsetid("", 21))
+        model.opset_import.append(oh.make_opsetid("", 21))
         checker.check_model(model)
         branch = model.graph.node[0].attribute[0].g
         branch.encoded_initializer[0].struct_type = onnx.StructTypeProto(type_ref=99)
@@ -1332,7 +1324,7 @@ class TestQuantizedValues(unittest.TestCase):
                             if inputs.zero_points is not None:
                                 initializers.append(inputs.zero_points)
                                 names.append("zero_points")
-                            node = helper.make_node(
+                            node = oh.make_node(
                                 "MatMulNBits",
                                 names,
                                 ["Y"],
@@ -1344,18 +1336,18 @@ class TestQuantizedValues(unittest.TestCase):
                                 accuracy_level=1,
                             )
                             elem_type = inputs.scales.data_type
-                            graph = helper.make_graph(
+                            graph = oh.make_graph(
                                 [node],
                                 "ort_input_packing",
-                                [helper.make_tensor_value_info("A", elem_type, [2, k])],
-                                [helper.make_tensor_value_info("Y", elem_type, [2, inputs.n])],
+                                [oh.make_tensor_value_info("A", elem_type, [2, k])],
+                                [oh.make_tensor_value_info("Y", elem_type, [2, inputs.n])],
                                 initializers,
                             )
-                            model = helper.make_model(
+                            model = oh.make_model(
                                 graph,
                                 opset_imports=[
-                                    helper.make_opsetid("", 21),
-                                    helper.make_opsetid("com.microsoft", 1),
+                                    oh.make_opsetid("", 21),
+                                    oh.make_opsetid("com.microsoft", 1),
                                 ],
                             )
                             model.ir_version = 10

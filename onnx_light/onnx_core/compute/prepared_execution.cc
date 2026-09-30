@@ -273,6 +273,9 @@ std::optional<PreparedObjectView> PreparedObjectStore::Find(const PreparedKey &k
     std::shared_ptr<ResidencyTracker> tracker;
 
     ~PinLease() {
+      // Release the allocation before waking an admission that may need its arena slot.
+      allocation.reset();
+      owner.reset();
       std::lock_guard<std::mutex> lock(tracker->mutex);
       --pins->active;
       tracker->changed.notify_all();

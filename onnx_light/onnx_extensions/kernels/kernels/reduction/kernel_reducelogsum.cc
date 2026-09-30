@@ -129,7 +129,7 @@ void LogSumReduceT(const T *px, T *py, int64_t out_count, int64_t total, int64_t
       }
     }
     const T v = px[i];
-    if (v > max_vals[static_cast<size_t>(out_offset)]) {
+    if (std::isnan(v) || v > max_vals[static_cast<size_t>(out_offset)]) {
       max_vals[static_cast<size_t>(out_offset)] = v;
     }
     for (int64_t d = rank - 1; d >= 0; --d) {
@@ -155,9 +155,8 @@ void LogSumReduceT(const T *px, T *py, int64_t out_count, int64_t total, int64_t
       }
     }
     const T m = max_vals[static_cast<size_t>(out_offset)];
-    if (std::isfinite(m)) {
-      py[out_offset] += std::exp(px[i] - m);
-    }
+    const T shift = std::isfinite(m) ? m : static_cast<T>(0);
+    py[out_offset] += std::exp(px[i] - shift);
     for (int64_t d = rank - 1; d >= 0; --d) {
       ++idx[static_cast<size_t>(d)];
       if (idx[static_cast<size_t>(d)] < data_shape[static_cast<size_t>(d)]) {
@@ -168,11 +167,8 @@ void LogSumReduceT(const T *px, T *py, int64_t out_count, int64_t total, int64_t
   }
   for (int64_t i = 0; i < out_count; ++i) {
     const T m = max_vals[static_cast<size_t>(i)];
-    if (!std::isfinite(m)) {
-      py[i] = m;
-    } else {
-      py[i] = m + std::log(py[i]);
-    }
+    const T shift = std::isfinite(m) ? m : static_cast<T>(0);
+    py[i] = shift + std::log(py[i]);
   }
 }
 

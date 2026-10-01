@@ -5,6 +5,7 @@
 #include "onnx_extensions/patterns/transpose/transpose_pattern.h"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -60,6 +61,21 @@ bool IsIdentityPerm(const std::vector<int64_t> &perm) {
   return true;
 }
 
+bool IsFoldableElementType(TensorProto::DataType data_type) {
+  constexpr std::array<TensorProto::DataType, 18> supported = {
+      TensorProto::DataType::FLOAT,          TensorProto::DataType::DOUBLE,
+      TensorProto::DataType::INT32,          TensorProto::DataType::INT64,
+      TensorProto::DataType::UINT8,          TensorProto::DataType::INT8,
+      TensorProto::DataType::BOOL,           TensorProto::DataType::FLOAT8E4M3FN,
+      TensorProto::DataType::FLOAT8E4M3FNUZ, TensorProto::DataType::FLOAT8E5M2,
+      TensorProto::DataType::FLOAT8E5M2FNUZ, TensorProto::DataType::FLOAT8E8M0,
+      TensorProto::DataType::UINT16,         TensorProto::DataType::INT16,
+      TensorProto::DataType::FLOAT16,        TensorProto::DataType::BFLOAT16,
+      TensorProto::DataType::UINT32,         TensorProto::DataType::UINT64,
+  };
+  return std::find(supported.begin(), supported.end(), data_type) != supported.end();
+}
+
 /// Returns the rank of ``name`` when its shape is known.
 bool GetRank(core::builder::GraphGraph &graph, const std::string &name, std::size_t &rank) {
   if (!graph.HasShape(name)) {
@@ -70,6 +86,63 @@ bool GetRank(core::builder::GraphGraph &graph, const std::string &name, std::siz
 }
 
 } // namespace
+
+std::set<std::string> TransposeToInitializerPattern::FastOpType() const { return {"Transpose"}; }
+
+core::builder::MatchResult TransposeToInitializerPattern::Match(core::builder::GraphGraph &graph,
+                                                                const NodeProto &candidate) const {
+  if (!IsDefaultOp(candidate, "Transpose") || candidate.input_size() != 1 ||
+      candidate.output_size() != 1) {
+    return NoMatch(candidate, "candidate is not a default-domain Transpose");
+  }
+  if (candidate.name().value().starts_with("TransposeToInitializerPattern--")) {
+    return NoMatch(candidate, "candidate was already emitted for constant folding");
+  }
+  const std::string &input = candidate.input()[0].value();
+  if (graph.NodeBefore(input) != nullptr) {
+    return NoMatch(candidate, "the Transpose input is produced by a node");
+  }
+  const TensorProto *initializer = graph.GetComputedConstant(input);
+  if (initializer == nullptr) {
+    return NoMatch(candidate, "the Transpose input is not a materialized initializer");
+  }
+  if (initializer->data_location() == TensorProto::DataLocation::EXTERNAL) {
+    return NoMatch(candidate, "external initializer data is not materialized");
+  }
+  if (!IsFoldableElementType(initializer->data_type())) {
+    return NoMatch(candidate, "the initializer element type is not supported by Transpose");
+  }
+
+  std::vector<int64_t> perm;
+  if (!GetAttributeInts(candidate, "perm", perm)) {
+    perm.resize(initializer->dims().size());
+    for (std::size_t i = 0; i < perm.size(); ++i) {
+      perm[i] = static_cast<int64_t>(perm.size() - 1 - i);
+    }
+  }
+  if (perm.size() != initializer->dims().size() || !IsValidPerm(perm)) {
+    return NoMatch(candidate, "the Transpose perm is invalid for the initializer rank");
+  }
+  return core::builder::MatchResult{this, {&candidate}, &candidate};
+}
+
+utils::RepeatedProtoField<NodeProto>
+TransposeToInitializerPattern::Apply(core::builder::GraphGraph &graph,
+                                     const std::vector<const NodeProto *> &nodes) const {
+  if (nodes.size() != 1 || nodes[0] == nullptr) {
+    throw BuilderError("TransposeToInitializerPattern::Apply expects one Transpose node.");
+  }
+  const core::builder::MatchResult verified = Match(graph, *nodes[0]);
+  if (verified.pattern == nullptr || verified.nodes != nodes) {
+    throw BuilderError(
+        "TransposeToInitializerPattern::Apply received an unsafe or inconsistent match.");
+  }
+  NodeProto replacement = *nodes[0];
+  replacement.set_name("TransposeToInitializerPattern--" + nodes[0]->name().value());
+  utils::RepeatedProtoField<NodeProto> replacements;
+  replacements.push_back(std::move(replacement));
+  return replacements;
+}
 
 std::set<std::string> TransposeTransposePattern::FastOpType() const { return {"Transpose"}; }
 

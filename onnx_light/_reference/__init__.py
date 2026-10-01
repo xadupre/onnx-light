@@ -15,3 +15,4 @@ delegating every operator evaluation to the static
 from __future__ import annotations
 
 from ._evaluator import ReferenceEvaluator
+from ._mixed_evaluator import MixedReferenceEvaluator

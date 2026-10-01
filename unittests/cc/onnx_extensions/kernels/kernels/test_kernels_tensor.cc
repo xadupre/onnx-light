@@ -36,6 +36,7 @@ using onnx_kernels::kernel::Pad;
 using onnx_kernels::kernel::Reshape;
 using onnx_kernels::kernel::Slice;
 using onnx_kernels::kernel::Squeeze;
+using onnx_kernels::kernel::Transpose;
 using onnx_kernels::kernel::Unique;
 using onnx_kernels::kernel::Unsqueeze;
 
@@ -2266,6 +2267,82 @@ TEST(KernelClass, OneHotRejectsAxisOutOfRange) {
   onnx_kernels::kernel::OneHot::Attributes attrs;
   attrs.axis = 5;
   EXPECT_THROW((void)one_hot(indices, depth, values, attrs), std::invalid_argument);
+}
+
+TEST(KernelClass, TransposeParallelPathCopiesContiguousSuffixes) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Transpose transpose{ctx};
+  transpose.Configure(
+      {transpose.TuningKey(static_cast<int32_t>(onnx_kernels::DataType::FLOAT)),
+       {{std::string(onnx_kernels::tuning::kParallelMinimumElements), int64_t{1}}}});
+  core::runtime::ParallelRegionCollector collector(2);
+  core::runtime::ParallelRegionCollectorScope collector_scope(&collector);
+
+  std::vector<float> values(2 * 3 * 4);
+  for (std::size_t i = 0; i < values.size(); ++i) {
+    values[i] = static_cast<float>(i);
+  }
+  Tensor input = Tensor::FromFloat("", {2, 3, 4}, values);
+  Tensor output = transpose(input, {1, 0, 2});
+
+  ASSERT_EQ(output.shape, (std::vector<int64_t>{3, 2, 4}));
+  const float *actual = output.AsFloat();
+  for (int64_t j = 0; j < 3; ++j) {
+    for (int64_t i = 0; i < 2; ++i) {
+      for (int64_t k = 0; k < 4; ++k) {
+        EXPECT_FLOAT_EQ(actual[(j * 2 + i) * 4 + k], values[(i * 3 + j) * 4 + k]);
+      }
+    }
+  }
+  ASSERT_EQ(collector.events().size(), 1u);
+  EXPECT_EQ(collector.events()[0].label, "Transpose");
+  EXPECT_EQ(collector.events()[0].total_iterations, 6);
+}
+
+TEST(KernelClass, TransposeRunUsesConfiguredKernelInstance) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Transpose transpose{ctx};
+  transpose.Configure(
+      {transpose.TuningKey(static_cast<int32_t>(onnx_kernels::DataType::FLOAT)),
+       {{std::string(onnx_kernels::tuning::kParallelMinimumElements), int64_t{1}}}});
+  NodeProto node;
+  node.set_op_type("Transpose");
+  node.add_input("x");
+  node.add_output("y");
+  transpose.set_node(node);
+
+  RuntimeContext rt(ctx);
+  std::vector<float> values(2 * 3 * 4);
+  for (std::size_t i = 0; i < values.size(); ++i) {
+    values[i] = static_cast<float>(i);
+  }
+  rt.Set("x", Tensor::FromFloat("x", {2, 3, 4}, values));
+  core::runtime::ParallelRegionCollector collector(2);
+  core::runtime::ParallelRegionCollectorScope collector_scope(&collector);
+
+  transpose.Run(rt);
+
+  ASSERT_EQ(rt.Get("y").shape, (std::vector<int64_t>{4, 3, 2}));
+  ASSERT_EQ(collector.events().size(), 1u);
+  EXPECT_EQ(collector.events()[0].label, "Transpose");
+  EXPECT_EQ(collector.events()[0].total_iterations, 24);
+}
+
+TEST(KernelClass, TransposeIdentityUsesSingleMemcpyWithoutParallelRegion) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Transpose transpose{ctx};
+  transpose.Configure(
+      {transpose.TuningKey(static_cast<int32_t>(onnx_kernels::DataType::FLOAT)),
+       {{std::string(onnx_kernels::tuning::kParallelMinimumElements), int64_t{1}}}});
+  core::runtime::ParallelRegionCollector collector(2);
+  core::runtime::ParallelRegionCollectorScope collector_scope(&collector);
+
+  Tensor input = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+  Tensor output = transpose(input, {0, 1});
+
+  ASSERT_EQ(output.shape, input.shape);
+  EXPECT_EQ(std::memcmp(output.bytes(), input.bytes(), input.size_bytes()), 0);
+  EXPECT_TRUE(collector.events().empty());
 }
 
 // ---------------------------------------------------------------------------

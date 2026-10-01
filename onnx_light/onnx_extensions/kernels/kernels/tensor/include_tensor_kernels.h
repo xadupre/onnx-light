@@ -71,22 +71,20 @@ public:
 /// mirroring the ``Cast`` operator's required ``to`` attribute). The output
 /// shape always matches the input shape.
 ///
-/// The reference implementation supports the numeric element types in the
-/// backend test library — ``FLOAT``, ``DOUBLE``, ``INT32``, ``INT64``,
-/// ``INT8``, ``UINT8``, ``INT16``, ``UINT16`` and ``BOOL`` — as well as
-/// ``STRING`` in either direction (numeric ↔ STRING uses the canonical
-/// decimal representation). Other dtypes will cause the kernel to throw
-/// ``std::invalid_argument``: this is sufficient for the backend test
-/// cases registered today and keeps the implementation small.
+/// Supports whole-byte numeric types and ``STRING`` conversions, as well as
+/// FLOAT8 and packed sub-byte types with their supported floating-point or
+/// integer partners. Packed destination writes remain serial because adjacent
+/// elements share bytes; other conversions use the configured parallel threshold.
 /// Out-of-range floating-point values when casting to an integer dtype
 /// follow C++ ``static_cast`` semantics, which matches the behaviour
 /// exercised by the upstream ``test_cast_FLOAT_to_*`` node tests for the
 /// supported conversions.
-class Cast : public KernelBase {
+class Cast : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Cast";
+  explicit Cast(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, int32_t to, RuntimeContext *rt = nullptr) const;
   Tensor operator()(const Tensor &x, int32_t to, bool saturate, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, int32_t to, Tensor &output) const;

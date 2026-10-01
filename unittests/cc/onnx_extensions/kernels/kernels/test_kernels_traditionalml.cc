@@ -630,6 +630,19 @@ TEST(KernelClass, SVMClassifierStringLabelsBinaryLinear) {
   EXPECT_EQ(labels[0], "pos");
 }
 
+TEST(KernelClass, SVMClassifierBinaryProbabilityCalibration) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  SVMClassifier svm{ctx};
+  Tensor x = Tensor::FromFloat("", {1, 1}, {1.0f / 3.0f});
+  auto yz = svm.operator()<float>(
+      x, /*support_vectors=*/{1.0f}, /*coefficients=*/{1.0f}, /*rho=*/{0.0f},
+      /*vectors_per_class=*/{1, 0}, /*class_labels=*/{0, 1}, "LINEAR", 0.0f, 0.0f, 0.0f,
+      /*prob_a=*/{-1.0f}, /*prob_b=*/{0.0f});
+  const float *scores = yz.second.AsFloat();
+  EXPECT_NEAR(scores[0], 0.58227766f, 1.0e-7f);
+  EXPECT_NEAR(scores[1], 0.4177223f, 1.0e-7f);
+}
+
 TEST(KernelClass, SVMRegressorLinearKernelMatchesReference) {
   const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
   SVMRegressor svm{ctx};
@@ -891,6 +904,30 @@ TEST(KernelClass, TreeEnsembleClassifierInt64BinaryMatchesReference) {
   const int64_t *labels = yz.first.AsInt64();
   EXPECT_EQ(labels[0], 0); // x[0]=0.0 <= 0.5 -> class 0
   EXPECT_EQ(labels[1], 1); // x[1]=1.0  > 0.5 -> class 1
+}
+
+TEST(KernelClass, TreeEnsembleClassifierSingleClassIdUsesBinaryMargin) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 3)};
+  Tensor x = Tensor::FromFloat("", {2, 1}, {0.0f, 1.0f});
+  onnx_kernels::kernel::TreeEnsembleClassifier cls{ctx,
+                                                   /*nodes_treeids=*/{0, 0, 0},
+                                                   /*nodes_nodeids=*/{0, 1, 2},
+                                                   /*nodes_featureids=*/{0, 0, 0},
+                                                   /*nodes_values=*/{0.5f, 0.0f, 0.0f},
+                                                   /*nodes_modes=*/{"BRANCH_LEQ", "LEAF", "LEAF"},
+                                                   /*nodes_truenodeids=*/{1, 0, 0},
+                                                   /*nodes_falsenodeids=*/{2, 0, 0},
+                                                   /*nodes_missing=*/{},
+                                                   /*class_treeids=*/{0, 0},
+                                                   /*class_nodeids=*/{1, 2},
+                                                   /*class_ids=*/{0, 0},
+                                                   /*class_weights=*/{0.25f, -0.5f}};
+  auto yz = cls.operator()<float>(x, std::vector<int64_t>{0, 1}, {}, "NONE");
+  const float *scores = yz.second.AsFloat();
+  EXPECT_FLOAT_EQ(scores[0], -0.25f);
+  EXPECT_FLOAT_EQ(scores[1], 0.25f);
+  EXPECT_FLOAT_EQ(scores[2], 0.5f);
+  EXPECT_FLOAT_EQ(scores[3], -0.5f);
 }
 
 TEST(KernelClass, TreeEnsembleV5SingleTreeMatchesReference) {

@@ -93,12 +93,12 @@ Tensor Reshape::operator()(const Tensor &data, const Tensor &shape, int64_t allo
                            RuntimeContext *rt) const {
   const onnx_kernels::Shape target = ReadShapeTensor(shape);
   const onnx_kernels::Shape out_shape = ComputeOutputShape(data, target, allowzero);
-  const std::size_t elem_size = ElementSize(data.data_type);
   int64_t element_count = 1;
   for (int64_t d : out_shape) {
     element_count *= d;
   }
-  const size_t out_n_bytes = static_cast<std::size_t>(element_count) * elem_size;
+  const bool is_string = static_cast<DataType>(data.data_type) == DataType::STRING;
+  const size_t out_n_bytes = is_string ? 0 : PackedByteSize(data.data_type, element_count);
   Tensor out = (rt ? rt->MakeOutputTensor(0, data.data_type, out_shape, out_n_bytes)
                    : MakeOutputTensor(data.data_type, out_shape, out_n_bytes, nullptr));
   (*this)(data, shape, allowzero, out);
@@ -115,6 +115,10 @@ void Reshape::operator()(const Tensor &data, const Tensor &shape, int64_t allowz
                       "kernel::Reshape: preallocated output shape mismatch.");
   EXT_ENFORCE_INVALID(output.size_bytes() == data.size_bytes(),
                       "kernel::Reshape: preallocated output byte-size mismatch.");
+  if (static_cast<DataType>(data.data_type) == DataType::STRING) {
+    output.AsStrings() = data.AsStrings();
+    return;
+  }
   std::memcpy(output.mutable_bytes(), data.bytes(), data.size_bytes());
 }
 

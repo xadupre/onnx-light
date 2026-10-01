@@ -11,6 +11,7 @@
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_extensions/kernels/kernel_run_helpers.h"
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -19,6 +20,56 @@
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
+
+float SigmoidProbability(float score, float prob_a, float prob_b) {
+  const float value = score * prob_a + prob_b;
+  return value >= 0.0f ? std::exp(-value) / (1.0f + std::exp(-value))
+                       : 1.0f / (1.0f + std::exp(value));
+}
+
+void CoupleBinaryProbability(float pairwise_probability, float *probabilities) {
+  const float bounded = std::min(std::max(pairwise_probability, 1.0e-7f), 1.0f - 1.0e-7f);
+  const float r[4] = {0.0f, bounded, 1.0f - bounded, 0.0f};
+  float q[4] = {};
+  float qp[2] = {};
+  probabilities[0] = 0.5f;
+  probabilities[1] = 0.5f;
+
+  for (size_t i = 0; i < 2; ++i) {
+    for (size_t j = 0; j < i; ++j) {
+      q[i * 2 + i] += r[j * 2 + i] * r[j * 2 + i];
+      q[i * 2 + j] = q[j * 2 + i];
+    }
+    for (size_t j = i + 1; j < 2; ++j) {
+      q[i * 2 + i] += r[j * 2 + i] * r[j * 2 + i];
+      q[i * 2 + j] = -r[j * 2 + i] * r[i * 2 + j];
+    }
+  }
+
+  for (size_t iteration = 0; iteration < 100; ++iteration) {
+    float pqp = 0.0f;
+    for (size_t i = 0; i < 2; ++i) {
+      qp[i] = 0.0f;
+      for (size_t j = 0; j < 2; ++j) {
+        qp[i] += q[i * 2 + j] * probabilities[j];
+      }
+      pqp += probabilities[i] * qp[i];
+    }
+    const float max_error = std::max(std::fabs(qp[0] - pqp), std::fabs(qp[1] - pqp));
+    if (max_error < 0.0025f) {
+      break;
+    }
+    for (size_t i = 0; i < 2; ++i) {
+      const float diff = (-qp[i] + pqp) / q[i * 2 + i];
+      probabilities[i] += diff;
+      pqp = (pqp + diff * (diff * q[i * 2 + i] + 2.0f * qp[i])) / ((1.0f + diff) * (1.0f + diff));
+      for (size_t j = 0; j < 2; ++j) {
+        qp[j] = (qp[j] + diff * q[i * 2 + j]) / (1.0f + diff);
+        probabilities[j] /= 1.0f + diff;
+      }
+    }
+  }
+}
 
 Tensor ComputeBinaryDecisionScores(const std::vector<double> &x_values, int64_t sample_count,
                                    int64_t feature_count, const std::vector<float> &support_vectors,
@@ -69,12 +120,16 @@ SVMClassifier::operator()(const Tensor &x, const std::vector<float> &support_vec
                           const std::vector<float> &coefficients, const std::vector<float> &rho,
                           const std::vector<int64_t> &vectors_per_class,
                           const std::vector<int64_t> &class_labels, const char *kernel_type,
-                          float gamma, float coef0, float degree, RuntimeContext *rt) const {
+                          float gamma, float coef0, float degree, const std::vector<float> &prob_a,
+                          const std::vector<float> &prob_b, RuntimeContext *rt) const {
   int64_t sample_count = 0;
   int64_t feature_count = 0;
   ValidateFeatureMatrixShape(x, sample_count, feature_count);
   EXT_ENFORCE_INVALID(class_labels.size() == 2,
                       "kernel::SVMClassifier requires exactly two int64 class labels.");
+  EXT_ENFORCE_INVALID(prob_a.size() == prob_b.size() && (prob_a.empty() || prob_a.size() == 1),
+                      "kernel::SVMClassifier binary probability attributes must both contain one "
+                      "value or both be empty.");
   const std::vector<double> x_values = ToDoubleRowMajor<T>(x, sample_count, feature_count);
   const Tensor scores_buf = ComputeBinaryDecisionScores(
       x_values, sample_count, feature_count, support_vectors, coefficients, rho, vectors_per_class,
@@ -89,8 +144,12 @@ SVMClassifier::operator()(const Tensor &x, const std::vector<float> &support_vec
   for (int64_t i = 0; i < sample_count; ++i) {
     const float s = scores[static_cast<size_t>(i)];
     labels[static_cast<size_t>(i)] = s > 0.0f ? class_labels[0] : class_labels[1];
-    expanded_scores[i * 2] = -s;
-    expanded_scores[i * 2 + 1] = s;
+    if (prob_a.empty()) {
+      expanded_scores[i * 2] = -s;
+      expanded_scores[i * 2 + 1] = s;
+    } else {
+      CoupleBinaryProbability(SigmoidProbability(s, prob_a[0], prob_b[0]), expanded_scores + i * 2);
+    }
   }
   Tensor y = rt ? rt->MakeOutputTensor(0, DataType::INT64, {sample_count},
                                        static_cast<size_t>(sample_count) * sizeof(int64_t))
@@ -107,12 +166,16 @@ SVMClassifier::operator()(const Tensor &x, const std::vector<float> &support_vec
                           const std::vector<float> &coefficients, const std::vector<float> &rho,
                           const std::vector<int64_t> &vectors_per_class,
                           const ParamStrings &class_labels, const char *kernel_type, float gamma,
-                          float coef0, float degree, RuntimeContext *rt) const {
+                          float coef0, float degree, const std::vector<float> &prob_a,
+                          const std::vector<float> &prob_b, RuntimeContext *rt) const {
   int64_t sample_count = 0;
   int64_t feature_count = 0;
   ValidateFeatureMatrixShape(x, sample_count, feature_count);
   EXT_ENFORCE_INVALID(class_labels.size() == 2,
                       "kernel::SVMClassifier requires exactly two string class labels.");
+  EXT_ENFORCE_INVALID(prob_a.size() == prob_b.size() && (prob_a.empty() || prob_a.size() == 1),
+                      "kernel::SVMClassifier binary probability attributes must both contain one "
+                      "value or both be empty.");
   const std::vector<double> x_values = ToDoubleRowMajor<T>(x, sample_count, feature_count);
   const Tensor scores_buf = ComputeBinaryDecisionScores(
       x_values, sample_count, feature_count, support_vectors, coefficients, rho, vectors_per_class,
@@ -127,8 +190,12 @@ SVMClassifier::operator()(const Tensor &x, const std::vector<float> &support_vec
   for (int64_t i = 0; i < sample_count; ++i) {
     const float s = scores[static_cast<size_t>(i)];
     labels[static_cast<size_t>(i)] = s > 0.0f ? class_labels[0] : class_labels[1];
-    expanded_scores[i * 2] = -s;
-    expanded_scores[i * 2 + 1] = s;
+    if (prob_a.empty()) {
+      expanded_scores[i * 2] = -s;
+      expanded_scores[i * 2 + 1] = s;
+    } else {
+      CoupleBinaryProbability(SigmoidProbability(s, prob_a[0], prob_b[0]), expanded_scores + i * 2);
+    }
   }
   Tensor y = rt ? rt->MakeOutputTensor(0, DataType::STRING, {sample_count}, 0)
                 : Tensor::FromStrings("", {sample_count}, labels);
@@ -142,11 +209,13 @@ SVMClassifier::operator()(const Tensor &x, const std::vector<float> &support_vec
   template std::pair<Tensor, Tensor> SVMClassifier::operator()<T>(                                 \
       const Tensor &, const std::vector<float> &, const std::vector<float> &,                      \
       const std::vector<float> &, const std::vector<int64_t> &, const std::vector<int64_t> &,      \
-      const char *, float, float, float, RuntimeContext *) const;                                  \
+      const char *, float, float, float, const std::vector<float> &, const std::vector<float> &,   \
+      RuntimeContext *) const;                                                                     \
   template std::pair<Tensor, Tensor> SVMClassifier::operator()<T>(                                 \
       const Tensor &, const std::vector<float> &, const std::vector<float> &,                      \
       const std::vector<float> &, const std::vector<int64_t> &, const ParamStrings &,              \
-      const char *, float, float, float, RuntimeContext *) const
+      const char *, float, float, float, const std::vector<float> &, const std::vector<float> &,   \
+      RuntimeContext *) const
 
 ONNX_LIGHT_INSTANTIATE_SVM_CLASSIFIER(float);
 ONNX_LIGHT_INSTANTIATE_SVM_CLASSIFIER(double);
@@ -167,6 +236,8 @@ void SVMClassifier::Run(RuntimeContext &rt) {
       GetAttributeIntsOrDefault(node, "classlabels_ints", {});
   const ParamStrings classlabels_strings =
       GetAttributeStringsOrDefault(node, "classlabels_strings", {});
+  const std::vector<float> prob_a = GetAttributeFloatsOrDefault(node, "prob_a", {});
+  const std::vector<float> prob_b = GetAttributeFloatsOrDefault(node, "prob_b", {});
   const bool use_strings = !classlabels_strings.empty();
   const bool has_ints = !classlabels_ints.empty();
   EXT_ENFORCE_INVALID(use_strings != has_ints,
@@ -176,13 +247,14 @@ void SVMClassifier::Run(RuntimeContext &rt) {
   std::pair<Tensor, Tensor> yz = DispatchSVMByDataType(x, "SVMClassifier", [&](auto *tag) {
     using T = std::remove_pointer_t<decltype(tag)>;
     (void)tag;
-    return use_strings
-               ? svm.template operator()<T>(x, a.support_vectors, a.coefficients, a.rho,
-                                            vectors_per_class, classlabels_strings,
-                                            a.kernel_type.c_str(), a.gamma, a.coef0, a.degree, &rt)
-               : svm.template operator()<T>(x, a.support_vectors, a.coefficients, a.rho,
-                                            vectors_per_class, classlabels_ints,
-                                            a.kernel_type.c_str(), a.gamma, a.coef0, a.degree, &rt);
+    return use_strings ? svm.template operator()<T>(x, a.support_vectors, a.coefficients, a.rho,
+                                                    vectors_per_class, classlabels_strings,
+                                                    a.kernel_type.c_str(), a.gamma, a.coef0,
+                                                    a.degree, prob_a, prob_b, &rt)
+                       : svm.template operator()<T>(x, a.support_vectors, a.coefficients, a.rho,
+                                                    vectors_per_class, classlabels_ints,
+                                                    a.kernel_type.c_str(), a.gamma, a.coef0,
+                                                    a.degree, prob_a, prob_b, &rt);
   });
   SetOutput(node, 0, std::move(yz.first), rt);
   SetOutput(node, 1, std::move(yz.second), rt);

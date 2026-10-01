@@ -2634,7 +2634,7 @@ TEST(BackendTestCaseShapeInference, BigModelsInplaceInfo) {
       expected_node_meta.push_back(std::move(subset));
     }
     if (qwen_reuse) {
-      EXPECT_EQ(expected_inplace_count, fused_qwen ? 114u : persistent_qwen ? 115u : 85u);
+      EXPECT_EQ(expected_inplace_count, fused_qwen ? 114u : persistent_qwen ? 115u : 105u);
       EXPECT_EQ(expected_node_meta.size(), paged_qwen ? 169u : 193u);
     }
     // A case may embed only per-value tags (onnx_light.value_tag) without any

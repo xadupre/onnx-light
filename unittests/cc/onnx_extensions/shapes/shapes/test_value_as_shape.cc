@@ -237,4 +237,49 @@ TEST(OnnxOptimShapeInference, ValueAsShapePropagatesThroughShapeConcatAddSubExpa
   EXPECT_TRUE(DimEqualsExpr(z1[1], "B"));
 }
 
+TEST(OnnxOptimShapeInference, SliceShapeTensorPropagatesThroughConcatExpand) {
+  ModelProto model;
+  model.set_ir_version(10);
+  auto *opset = model.add_opset_import();
+  opset->set_domain("");
+  opset->set_version(20);
+  GraphProto *graph = model.add_graph();
+  graph->set_name("slice_shape_tensor");
+  AddFloatInput(*graph, "x", {-1, 15}, {"batch"});
+  AddFloatOutput(*graph, "y", {-1, 5}, {"batch"});
+
+  for (const auto &[name, value] :
+       {std::pair{"start", int64_t{0}}, {"end", int64_t{1}}, {"five", int64_t{5}}}) {
+    TensorProto *init = graph->add_initializer();
+    init->set_name(name);
+    init->set_data_type(static_cast<int>(TensorProto::DataType::INT64));
+    init->add_dims(std::vector<int64_t>{1});
+    init->add_int64_data(std::vector<int64_t>{value});
+  }
+  TensorProto *ones = graph->add_initializer();
+  ones->set_name("ones");
+  ones->set_data_type(static_cast<int>(TensorProto::DataType::FLOAT));
+  ones->add_dims(std::vector<int64_t>{1, 5});
+  ones->add_float_data(std::vector<float>{1, 1, 1, 1, 1});
+
+  *graph->add_node() = MakeNode("Shape", {"x"}, {"x_shape"});
+  *graph->add_node() = MakeNode("Slice", {"x_shape", "start", "end"}, {"batch"});
+  NodeProto concat = MakeNode("Concat", {"batch", "five"}, {"target"});
+  AddIntAttribute(concat, "axis", 0);
+  *graph->add_node() = std::move(concat);
+  *graph->add_node() = MakeNode("Expand", {"ones", "target"}, {"y"});
+
+  core::shapes::ShapesContext ctx;
+  ctx.ComputeShapeModel(model);
+
+  ASSERT_TRUE(ctx.Get("batch").HasValueAsShape());
+  EXPECT_EQ(ctx.Get("batch").ValueAsShape(),
+            (core::symbolic::SymShape{core::symbolic::SymDim("batch")}));
+  ASSERT_TRUE(ctx.Get("target").HasValueAsShape());
+  EXPECT_EQ(ctx.Get("target").ValueAsShape(),
+            (core::symbolic::SymShape{core::symbolic::SymDim("batch"), core::symbolic::SymDim(5)}));
+  EXPECT_EQ(ctx.Get("y").Shape(),
+            (core::symbolic::SymShape{core::symbolic::SymDim("batch"), core::symbolic::SymDim(5)}));
+}
+
 } // namespace Test

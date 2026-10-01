@@ -344,6 +344,7 @@ void RegisterKernelFunctions() {
     onnx_kernels::kernel::Less::RegisterTuningSchemas();
     onnx_kernels::kernel::LessOrEqual::RegisterTuningSchemas();
     onnx_kernels::kernel::Log::RegisterTuningSchemas();
+    onnx_kernels::kernel::MatMul::RegisterTuningSchemas();
     onnx_kernels::kernel::Mish::RegisterTuningSchemas();
     onnx_kernels::kernel::Mod::RegisterTuningSchemas();
     onnx_kernels::kernel::Mul::RegisterTuningSchemas();

@@ -1075,11 +1075,12 @@ private:
 /// - rank-1 x rank-1 -> scalar
 /// - rank-2 x rank-2 -> matrix
 /// - higher-rank prefixes are broadcast, then batched matrix multiply
-class MatMul : public KernelBase {
+class MatMul : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:MatMul";
+  explicit MatMul(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &a, const Tensor &b, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &a, const Tensor &b, Tensor &output) const;
 

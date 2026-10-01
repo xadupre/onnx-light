@@ -126,7 +126,7 @@ TEST(OnnxKernelsDispatchTable, RegistersBroadcastingAddCalibrationFunctions) {
   }
 }
 
-TEST(OnnxKernelsDispatchTable, RegistersEveryBinaryElementwiseTuningSchema) {
+TEST(OnnxKernelsDispatchTable, RegistersEveryBinaryTuningSchema) {
   ::onnx_light::onnx_kernels::RegisterKernelFunctions();
   struct ExpectedSchema {
     const char *kernel;
@@ -149,6 +149,7 @@ TEST(OnnxKernelsDispatchTable, RegistersEveryBinaryElementwiseTuningSchema) {
       ExpectedSchema{"GreaterOrEqual", TensorProto::DataType::FLOAT},
       ExpectedSchema{"Less", TensorProto::DataType::FLOAT},
       ExpectedSchema{"LessOrEqual", TensorProto::DataType::FLOAT},
+      ExpectedSchema{"MatMul", TensorProto::DataType::FLOAT},
       ExpectedSchema{"BitwiseAnd", TensorProto::DataType::INT32},
       ExpectedSchema{"BitwiseOr", TensorProto::DataType::INT32},
       ExpectedSchema{"BitwiseXor", TensorProto::DataType::INT32},

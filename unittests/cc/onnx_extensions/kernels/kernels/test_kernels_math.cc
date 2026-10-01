@@ -1665,6 +1665,38 @@ TEST(KernelClass, MatMulInPlaceWritesToPreallocatedOutput) {
   EXPECT_EQ(py[3], 64u);
 }
 
+TEST(KernelClass, MatMulUsesTunableParallelOutputRanges) {
+  const KernelContext ctx{DefaultOpset(13)};
+  MatMul matmul_kernel{ctx};
+  const core::runtime::KernelTuningKey key =
+      matmul_kernel.TuningKey(static_cast<int32_t>(onnx_kernels::DataType::FLOAT));
+  matmul_kernel.Configure(
+      {key, {{std::string(onnx_kernels::tuning::kParallelMinimumElements), int64_t{1}}}});
+
+  std::vector<float> a_values(2 * 4 * 8);
+  std::vector<float> b_values(1 * 8 * 6);
+  for (size_t i = 0; i < a_values.size(); ++i) {
+    a_values[i] = static_cast<float>(i % 11) - 5.0f;
+  }
+  for (size_t i = 0; i < b_values.size(); ++i) {
+    b_values[i] = static_cast<float>(i % 7) - 3.0f;
+  }
+  Tensor a = Tensor::FromFloat("", {2, 4, 8}, a_values);
+  Tensor b = Tensor::FromFloat("", {1, 8, 6}, b_values);
+  MatMul serial_kernel{ctx};
+  Tensor expected = serial_kernel(a, b);
+  core::runtime::ParallelRegionCollector collector(2);
+  core::runtime::ParallelRegionCollectorScope collector_scope(&collector);
+  Tensor y = matmul_kernel(a, b);
+
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 4, 6}));
+  ASSERT_EQ(y.size_bytes(), expected.size_bytes());
+  EXPECT_EQ(std::memcmp(y.bytes(), expected.bytes(), y.size_bytes()), 0);
+  ASSERT_EQ(collector.events().size(), 1u);
+  EXPECT_EQ(collector.events()[0].label, "MatMul");
+  EXPECT_EQ(collector.events()[0].total_iterations, 2 * 4 * 6);
+}
+
 TEST(KernelClass, MatMulIntegerUint8MatchesONNXReference) {
   // Mirrors the ONNX reference ``test_matmulinteger`` example with per-tensor
   // UINT8 zero points: Y = matmul(A - a_zp, B - b_zp).

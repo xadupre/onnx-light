@@ -195,12 +195,15 @@ void GraphGraph::Rebuild() {
   RebuildSuccessors();
 }
 
-std::vector<LocalRewriting> GraphGraph::Optimize(int max_iter, OptimizationReport *report) {
-  return OptimizeImpl(max_iter, report, {});
+std::vector<LocalRewriting> GraphGraph::Optimize(int max_iter, OptimizationReport *report,
+                                                 const ConstantFoldingOptions &folding_options) {
+  return OptimizeImpl(max_iter, report, {}, folding_options);
 }
 
-std::vector<LocalRewriting> GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report,
-                                                     const std::vector<std::string> &graph_path) {
+std::vector<LocalRewriting>
+GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report,
+                         const std::vector<std::string> &graph_path,
+                         const ConstantFoldingOptions &folding_options) {
   if (max_iter < -1) {
     throw BuilderError("GraphGraph::Optimize: max_iter must be at least -1.");
   }
@@ -230,8 +233,8 @@ std::vector<LocalRewriting> GraphGraph::OptimizeImpl(int max_iter, OptimizationR
       subgraph_start = std::chrono::steady_clock::now();
     }
     GraphGraph child_graph(subgraph, patterns_, do_not_remove_, this, position_limit);
-    std::vector<LocalRewriting> child_rewrites =
-        child_graph.OptimizeImpl(max_iter, report == nullptr ? nullptr : &child_report, child_path);
+    std::vector<LocalRewriting> child_rewrites = child_graph.OptimizeImpl(
+        max_iter, report == nullptr ? nullptr : &child_report, child_path, folding_options);
 
     for (LocalRewriting &rewriting : child_rewrites) {
       rewriting.iteration += rewrite_batch;
@@ -483,7 +486,7 @@ std::vector<LocalRewriting> GraphGraph::OptimizeImpl(int max_iter, OptimizationR
 
       const std::size_t initializers_before_folding = builder_.initializers_.size();
       const auto constant_folding_start = std::chrono::steady_clock::now();
-      builder_.ConstantFoldNodes(ConstantFoldingOptions{}, replacement_outputs);
+      builder_.ConstantFoldNodes(folding_options, replacement_outputs);
       constant_folding_time_ns = ElapsedNanoseconds(constant_folding_start);
       if (report != nullptr) {
         report->constant_folding_time_ns += constant_folding_time_ns;

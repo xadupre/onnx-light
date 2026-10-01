@@ -85,12 +85,13 @@ public:
    * Patterns are considered in ascending priority order. A negative
    * ``max_iter`` selects ``max(node_count, 10) * priority_count``.
    * Replacement nodes whose inputs are all materialized constants are folded
-   * into initializers before cleanup.
+   * into initializers before cleanup, subject to ``folding_options``.
    *
    * Returns:
    *   Self-contained records of the applied rewrites, in application order.
    */
-  std::vector<LocalRewriting> Optimize(int max_iter = -1, OptimizationReport *report = nullptr);
+  std::vector<LocalRewriting> Optimize(int max_iter = -1, OptimizationReport *report = nullptr,
+                                       const ConstantFoldingOptions &folding_options = {});
 
   /// Returns the patterns shared by this graph optimizer and its rewrites.
   const std::vector<std::shared_ptr<PatternOptimization>> &Patterns() const noexcept {
@@ -204,7 +205,8 @@ private:
              std::size_t parent_position_limit);
 
   std::vector<LocalRewriting> OptimizeImpl(int max_iterations, OptimizationReport *report,
-                                           const std::vector<std::string> &graph_path);
+                                           const std::vector<std::string> &graph_path,
+                                           const ConstantFoldingOptions &folding_options);
 
   GraphBuilder &builder_;
   std::vector<std::shared_ptr<PatternOptimization>> patterns_;

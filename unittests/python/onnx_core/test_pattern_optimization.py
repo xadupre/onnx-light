@@ -13,6 +13,7 @@ from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 import onnx_light.onnx.helper as oh
 from onnx_light.onnx import TensorProto
 from onnx_light.onnx_lib import parser
+from onnx_light.onnx_core.graph_builder import ConstantFoldingOptions
 from onnx_light.onnx_core.shape_inference import Device
 
 optim = import_or_skip("onnx_light.onnx_core.optimization")
@@ -452,6 +453,7 @@ class TestPatternOptimization(ExtTestCase):
             "SwapUnsqueezeTranspose",
             "TransposeEqualReshape",
             "TransposeReshapeTranspose",
+            "TransposeToInitializer",
             "MulMulMulScalar",
             "SwitchOrderBinary",
             "SwapRangeAddScalar",
@@ -507,6 +509,22 @@ class TestPatternOptimization(ExtTestCase):
                 self.assertIsInstance(
                     getattr(optim, f"{name}Pattern")(), optim.PatternOptimization
                 )
+
+    def test_transpose_folding_options_are_forwarded(self):
+        graph = oh.make_graph(
+            [oh.make_node("Transpose", ["weight"], ["y"], perm=[1, 0])],
+            "g",
+            [],
+            [oh.make_tensor_value_info("y", TensorProto.FLOAT, [3, 2])],
+            initializer=[oh.make_tensor("weight", TensorProto.FLOAT, [2, 3], range(6))],
+        )
+        builder = optim.GraphBuilder(
+            oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+        )
+        options = ConstantFoldingOptions()
+        options.enabled = False
+        optim.GraphGraph(builder, ["TransposeToInitializer"]).optimize(folding_options=options)
+        self.assertEqual([node.op_type for node in builder.build_graph().node], ["Transpose"])
 
     def test_python_pattern_runs_recursively_in_subgraph(self):
         then_branch = oh.make_graph(

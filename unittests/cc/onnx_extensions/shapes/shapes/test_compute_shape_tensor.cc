@@ -527,6 +527,83 @@ TEST(OnnxOptimShapesTensorSlice, UsesDefaultAxesWhenOmitted) {
             (core::symbolic::SymShape{core::symbolic::SymDim(1), core::symbolic::SymDim(3)}));
 }
 
+TEST(OnnxOptimShapesTensorSlice, SlicesValueAsShapeWithNegativeIndicesAndSteps) {
+  for (const auto &slice : {std::vector<int64_t>{-1, -4, -2}, std::vector<int64_t>{-3, 4, 2}}) {
+    SCOPED_TRACE(::testing::PrintToString(slice));
+    NodeProto node = MakeSliceNode("X", "Starts", "Ends", "Axes", "Steps");
+    core::shapes::ShapesContext ctx;
+    core::symbolic::SymTensor data(nullptr, core::symbolic::TensorType::kInt64,
+                                   {core::symbolic::SymDim(4)});
+    data.SetValueAsShape({core::symbolic::SymDim("batch"), core::symbolic::SymDim(15),
+                          core::symbolic::SymDim("width"), core::symbolic::SymDim(5)});
+    ctx.Set("X", std::move(data));
+    ctx.Set("Starts", MakeShapeInput({slice[0]}));
+    ctx.Set("Ends", MakeShapeInput({slice[1]}));
+    ctx.Set("Axes", MakeShapeInput({-1}));
+    ctx.Set("Steps", MakeShapeInput({slice[2]}));
+
+    onnx_shapes::shapes::tensor::ComputeShapeSlice(ctx, node);
+
+    ASSERT_TRUE(ctx.Get("Y").HasValueAsShape());
+    EXPECT_EQ(ctx.Get("Y").Shape(), (core::symbolic::SymShape{core::symbolic::SymDim(2)}));
+    EXPECT_EQ(
+        ctx.Get("Y").ValueAsShape(),
+        (slice[2] < 0
+             ? core::symbolic::SymShape{core::symbolic::SymDim(5), core::symbolic::SymDim(15)}
+             : core::symbolic::SymShape{core::symbolic::SymDim(15), core::symbolic::SymDim(5)}));
+  }
+}
+
+TEST(OnnxOptimShapesTensorSlice, DoesNotPropagateValueAsShapeWithUnknownBounds) {
+  NodeProto node = MakeSliceNode();
+  core::shapes::ShapesContext ctx;
+  core::symbolic::SymTensor data(nullptr, core::symbolic::TensorType::kInt64,
+                                 {core::symbolic::SymDim(2)});
+  data.SetValueAsShape({core::symbolic::SymDim("batch"), core::symbolic::SymDim(15)});
+  ctx.Set("X", std::move(data));
+  ctx.Set("Starts", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt64,
+                                              {core::symbolic::SymDim(1)}));
+  ctx.Set("Ends", MakeShapeInput({1}));
+
+  onnx_shapes::shapes::tensor::ComputeShapeSlice(ctx, node);
+
+  EXPECT_FALSE(ctx.Get("Y").HasValueAsShape());
+}
+
+TEST(OnnxOptimShapesTensorSlice, UsesValueAsShapeLengthWhenInputDimensionIsSymbolic) {
+  NodeProto node = MakeSliceNode();
+  core::shapes::ShapesContext ctx;
+  core::symbolic::SymTensor data(nullptr, core::symbolic::TensorType::kInt64,
+                                 {core::symbolic::SymDim("length")});
+  data.SetValueAsShape({core::symbolic::SymDim("batch"), core::symbolic::SymDim(15)});
+  ctx.Set("X", std::move(data));
+  ctx.Set("Starts", MakeShapeInput({0}));
+  ctx.Set("Ends", MakeShapeInput({1}));
+
+  onnx_shapes::shapes::tensor::ComputeShapeSlice(ctx, node);
+
+  EXPECT_EQ(ctx.Get("Y").Shape(), (core::symbolic::SymShape{core::symbolic::SymDim(1)}));
+  ASSERT_TRUE(ctx.Get("Y").HasValueAsShape());
+  EXPECT_EQ(ctx.Get("Y").ValueAsShape(),
+            (core::symbolic::SymShape{core::symbolic::SymDim("batch")}));
+}
+
+TEST(OnnxOptimShapesTensorSlice, SkipsInconsistentValueAsShapeLength) {
+  NodeProto node = MakeSliceNode();
+  core::shapes::ShapesContext ctx;
+  core::symbolic::SymTensor data(nullptr, core::symbolic::TensorType::kInt64,
+                                 {core::symbolic::SymDim(3)});
+  data.SetValueAsShape({core::symbolic::SymDim("batch"), core::symbolic::SymDim(15)});
+  ctx.Set("X", std::move(data));
+  ctx.Set("Starts", MakeShapeInput({0}));
+  ctx.Set("Ends", MakeShapeInput({1}));
+
+  onnx_shapes::shapes::tensor::ComputeShapeSlice(ctx, node);
+
+  EXPECT_FALSE(ctx.Get("Y").HasValueAsShape());
+  EXPECT_EQ(ctx.Get("Y").Shape(), (core::symbolic::SymShape{core::symbolic::SymDim(1)}));
+}
+
 TEST(OnnxOptimShapesTensorSlice, KeepsAnchorDimsAndBuildsSliceExpression) {
   NodeProto node = MakeSliceNode("X", "Starts", "Ends", "Axes");
   core::shapes::ShapesContext ctx;

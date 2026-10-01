@@ -178,6 +178,7 @@ void ComputeShapeSlice(ShapesContext &ctx, const NodeProto &node) {
       axis += rank;
     }
     EXT_ENFORCE_INVALID(!(axis < 0 || axis >= rank), "ComputeShapeSlice: axis out of range.");
+    axes[i] = axis;
     if (!ends_opt.has_value()) {
       // When ends include symbols, only infer dimensions for proven full slices.
       if (starts[i] != 0 || step != 1 || ends[i] != data_shape[static_cast<size_t>(axis)]) {
@@ -197,7 +198,30 @@ void ComputeShapeSlice(ShapesContext &ctx, const NodeProto &node) {
     out_shape[static_cast<size_t>(axis)] = SymDim(SliceLength(start, end, step));
   }
 
-  ctx.Set(node.output(0), SymTensor(nullptr, data.Dtype(), std::move(out_shape)));
+  SymTensor output(nullptr, data.Dtype(), std::move(out_shape));
+  if (rank == 1 && data.HasValueAsShape() && starts.size() == 1 && axes[0] == 0 &&
+      ends_opt.has_value()) {
+    const SymShape &values = data.ValueAsShape();
+    const int64_t count = static_cast<int64_t>(values.Rank());
+    if (!data_shape[0].IsInt() || data_shape[0].AsInt() == count) {
+      int64_t start = starts[0];
+      int64_t end = (*ends_opt)[0];
+      const int64_t step = steps[0];
+      ProcessSliceInputs(count, start, end, step);
+      const int64_t length = SliceLength(start, end, step);
+      SymShape sliced_values;
+      int64_t index = start;
+      for (int64_t i = 0; i < length; ++i) {
+        sliced_values.PushBack(values[static_cast<size_t>(index)]);
+        if (i + 1 < length) {
+          index += step;
+        }
+      }
+      output.Shape()[0] = SymDim(length);
+      output.SetValueAsShape(std::move(sliced_values));
+    }
+  }
+  ctx.Set(node.output(0), std::move(output));
 }
 
 } // namespace shapes::tensor

@@ -368,6 +368,7 @@ void RegisterKernelFunctions() {
     onnx_kernels::kernel::StringConcat::RegisterTuningSchemas();
     onnx_kernels::kernel::Tan::RegisterTuningSchemas();
     onnx_kernels::kernel::Tanh::RegisterTuningSchemas();
+    onnx_kernels::kernel::Transpose::RegisterTuningSchemas();
     onnx_kernels::kernel::Xor::RegisterTuningSchemas();
     for (const auto &entry : BuiltinKernelFunctions()) {
       const std::string &key = entry.first;

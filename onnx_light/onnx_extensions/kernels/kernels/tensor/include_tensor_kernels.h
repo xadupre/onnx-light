@@ -435,11 +435,13 @@ public:
 ///
 /// The reference implementation supports whole-byte tensor element types
 /// supported by :cpp:func:`ElementSize`.
-class Transpose : public KernelBase {
+class Transpose : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Transpose";
+  explicit Transpose(const KernelContext &ctx);
+  /// Registers the portable parallel tuning schema.
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &data, const onnx_kernels::Shape &perm,
                     RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &data, const onnx_kernels::Shape &perm, Tensor &output) const;

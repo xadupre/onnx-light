@@ -363,7 +363,8 @@ public:
              const std::vector<float> &coefficients, const std::vector<float> &rho,
              const std::vector<int64_t> &vectors_per_class,
              const std::vector<int64_t> &class_labels, const char *kernel_type, float gamma,
-             float coef0, float degree, RuntimeContext *rt = nullptr) const;
+             float coef0, float degree, const std::vector<float> &prob_a = {},
+             const std::vector<float> &prob_b = {}, RuntimeContext *rt = nullptr) const;
 
   template <typename T>
   std::pair<Tensor, Tensor>
@@ -371,6 +372,7 @@ public:
              const std::vector<float> &coefficients, const std::vector<float> &rho,
              const std::vector<int64_t> &vectors_per_class, const ParamStrings &class_labels,
              const char *kernel_type, float gamma, float coef0, float degree,
+             const std::vector<float> &prob_a = {}, const std::vector<float> &prob_b = {},
              RuntimeContext *rt = nullptr) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
@@ -611,6 +613,7 @@ private:
   ClassicNodeMap node_map_;
   ClassicLeafMap leaf_map_;
   std::vector<int64_t> tree_ids_;
+  int64_t binary_class_id_ = -1;
 };
 
 /// Reference implementation helper for the ``ai.onnx.ml`` ``TreeEnsemble``

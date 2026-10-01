@@ -28,7 +28,8 @@ void ComputeClassifierScores(const ClassicNodeMap &node_map, const ClassicLeafMa
                              const std::vector<int64_t> &tree_ids, const double *x_values,
                              int64_t sample_count, int64_t feature_count, int64_t n_classes,
                              const std::vector<float> &base_values,
-                             const std::string &post_transform, float *scores) {
+                             const std::string &post_transform, int64_t binary_class_id,
+                             float *scores) {
   for (int64_t n = 0; n < sample_count; ++n) {
     const double *x_row = x_values + n * feature_count;
     float *row = scores + n * n_classes;
@@ -55,6 +56,12 @@ void ComputeClassifierScores(const ClassicNodeMap &node_map, const ClassicLeafMa
       for (int64_t c = 0; c < n_classes; ++c) {
         row[static_cast<size_t>(c)] += base_values[static_cast<size_t>(c)];
       }
+    }
+
+    if (n_classes == 2 && binary_class_id == 0) {
+      const float margin = row[0];
+      row[0] = -margin;
+      row[1] = margin;
     }
 
     ApplyPostTransform(row, static_cast<size_t>(n_classes), post_transform);
@@ -107,6 +114,11 @@ TreeEnsembleClassifier::TreeEnsembleClassifier(
   for (size_t i = 0; i < n_leaves; ++i) {
     leaf_map_[{class_treeids[i], class_nodeids[i]}].push_back({class_ids[i], class_weights[i]});
   }
+  if (!class_ids.empty() && std::all_of(class_ids.begin(), class_ids.end(), [&](int64_t class_id) {
+        return class_id == class_ids.front();
+      })) {
+    binary_class_id_ = class_ids.front();
+  }
 }
 
 template <typename T>
@@ -130,7 +142,8 @@ TreeEnsembleClassifier::operator()(const Tensor &x, const std::vector<int64_t> &
                                    ctx_.allocator);
   float *scores = z.AsFloat();
   ComputeClassifierScores(node_map_, leaf_map_, tree_ids_, x_values.data(), sample_count,
-                          feature_count, n_classes, base_values, post_transform, scores);
+                          feature_count, n_classes, base_values, post_transform, binary_class_id_,
+                          scores);
 
   std::vector<int64_t> labels(static_cast<size_t>(sample_count));
   for (int64_t n = 0; n < sample_count; ++n) {
@@ -168,7 +181,8 @@ TreeEnsembleClassifier::operator()(const Tensor &x, const ParamStrings &classlab
                                    ctx_.allocator);
   float *scores = z.AsFloat();
   ComputeClassifierScores(node_map_, leaf_map_, tree_ids_, x_values.data(), sample_count,
-                          feature_count, n_classes, base_values, post_transform, scores);
+                          feature_count, n_classes, base_values, post_transform, binary_class_id_,
+                          scores);
 
   std::vector<std::string> labels(static_cast<size_t>(sample_count));
   for (int64_t n = 0; n < sample_count; ++n) {

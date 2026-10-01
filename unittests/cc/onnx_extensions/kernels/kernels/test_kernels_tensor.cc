@@ -350,6 +350,17 @@ TEST(KernelClass, ReshapeClassAllowZeroHonoursLiteralZero) {
   EXPECT_EQ(y.shape, (std::vector<int64_t>{0, 2}));
 }
 
+TEST(KernelClass, ReshapeClassPreservesStringValues) {
+  const KernelContext ctx{DefaultOpset(21)};
+  Reshape reshape_kernel{ctx};
+  Tensor data = Tensor::FromStrings("", {2}, {"left", "right"});
+  Tensor shape = Tensor::FromInt64("", {2}, {2, 1});
+  Tensor output = reshape_kernel(data, shape, /*allowzero=*/0);
+  EXPECT_EQ(output.data_type, static_cast<int32_t>(core::runtime::DataType::STRING));
+  EXPECT_EQ(output.shape, (std::vector<int64_t>{2, 1}));
+  EXPECT_EQ(output.AsStrings(), (std::vector<std::string>{"left", "right"}));
+}
+
 TEST(KernelClass, SliceClassSlicesWithAxesAndSteps) {
   const KernelContext ctx{DefaultOpset(13)};
   Slice slice_kernel{ctx};

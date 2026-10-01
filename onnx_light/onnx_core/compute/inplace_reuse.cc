@@ -79,13 +79,24 @@ std::optional<int64_t> ConcreteByteSize(const SymTensor &t) {
 
 std::optional<expressions::DimType>
 ByteSizeExpr(const SymTensor &t, expressions::SimplifiedExpressionCache *cache = nullptr) {
+  // Byte sizes are optional annotations for reuse and memory profiling. Do not
+  // parse or simplify unbounded symbolic dimensions from partially inferred graphs.
+  constexpr std::size_t kMaxSymbolicSize = 4096;
   const int bits = ElementBitWidth(t.Dtype());
   if (bits == 0) {
     return std::nullopt;
   }
   expressions::DimType num_elements = int64_t{1};
+  std::size_t symbolic_size = 0;
   for (std::size_t i = 0; i < t.Shape().Rank(); ++i) {
-    num_elements = expressions::dim_mul(num_elements, ToDimType(t.Shape()[i]));
+    const auto &dim = t.Shape()[i];
+    if (!dim.IsInt()) {
+      if (dim.AsExpr().size() > kMaxSymbolicSize - symbolic_size) {
+        return std::nullopt;
+      }
+      symbolic_size += dim.AsExpr().size();
+    }
+    num_elements = expressions::dim_mul(num_elements, ToDimType(dim));
   }
   if (bits % 8 == 0) {
     return expressions::simplify_dim_type(

@@ -6,6 +6,8 @@
 
 #include <algorithm>
 #include <string>
+#include <string_view>
+#include <unordered_set>
 #include <variant>
 #include <vector>
 
@@ -17,13 +19,38 @@ namespace ONNX_LIGHT_NAMESPACE::core::shapes {
 
 namespace {
 
-// Returns a textual representation of ``dim`` suitable for embedding in
-// a synthesised symbolic expression.
-std::string DimToString(const SymDim &dim) {
-  if (dim.IsInt()) {
-    return std::to_string(dim.AsInt());
+// Treats only complete, binary broadcast calls as composite dimensions;
+// other symbolic expressions remain opaque operands.
+bool SplitBroadcast(std::string_view expr, std::string_view &left, std::string_view &right) {
+  constexpr std::string_view prefix = "broadcast(";
+  if (!expr.starts_with(prefix) || !expr.ends_with(')')) {
+    return false;
   }
-  return dim.AsExpr();
+  int depth = 0;
+  std::size_t comma = std::string_view::npos;
+  for (std::size_t i = prefix.size(); i + 1 < expr.size(); ++i) {
+    if (expr[i] == '(') {
+      ++depth;
+    } else if (expr[i] == ')') {
+      if (--depth < 0) {
+        return false;
+      }
+    } else if (expr[i] == ',' && depth == 0) {
+      if (comma != std::string_view::npos) {
+        return false;
+      }
+      comma = i;
+    }
+  }
+  if (depth != 0 || comma == std::string_view::npos) {
+    return false;
+  }
+  left = expr.substr(prefix.size(), comma - prefix.size());
+  right = expr.substr(comma + 1, expr.size() - comma - 2);
+  if (right.starts_with(' ')) {
+    right.remove_prefix(1);
+  }
+  return !left.empty() && !right.empty();
 }
 
 // Pairs the trailing dimensions of ``a`` and ``b`` (right-aligned) and
@@ -64,9 +91,27 @@ SymDim BroadcastDim(const SymDim &a, const SymDim &b) {
   if (b.IsInt()) {
     return b;
   }
-  // Two different symbolic dimensions: produce a synthesised symbolic
-  // expression that records the broadcast.
-  return SymDim("broadcast(" + DimToString(a) + ", " + DimToString(b) + ")");
+  // Flatten nested broadcasts and remove repeated operands before serializing.
+  // Otherwise broadcast(x, broadcast(y, x)) duplicates x on every iteration.
+  std::vector<std::string_view> pending{b.AsExpr(), a.AsExpr()};
+  std::vector<std::string_view> operands;
+  std::unordered_set<std::string_view> seen;
+  while (!pending.empty()) {
+    const std::string_view expr = pending.back();
+    pending.pop_back();
+    std::string_view left, right;
+    if (SplitBroadcast(expr, left, right)) {
+      pending.push_back(right);
+      pending.push_back(left);
+    } else if (seen.insert(expr).second) {
+      operands.push_back(expr);
+    }
+  }
+  std::string result(operands.front());
+  for (std::size_t i = 1; i < operands.size(); ++i) {
+    result = "broadcast(" + result + ", " + std::string(operands[i]) + ")";
+  }
+  return SymDim(std::move(result));
 }
 
 } // namespace

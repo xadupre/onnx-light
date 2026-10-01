@@ -43,7 +43,8 @@ namespace ONNX_LIGHT_NAMESPACE::core::shapes {
  *   - if both are different symbolic expressions: a fresh symbolic
  *     dimension is produced, encoding the broadcast as
  *     ``"broadcast(<a>, <b>)"`` so that the symbolic information is
- *     preserved.
+ *     preserved. Nested broadcasts are flattened and duplicate symbolic
+ *     operands removed.
  *
  * @throws std::invalid_argument when two concrete integer dimensions
  *         are incompatible under broadcasting.

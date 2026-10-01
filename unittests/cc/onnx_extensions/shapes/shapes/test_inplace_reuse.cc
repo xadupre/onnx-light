@@ -21,6 +21,7 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <optional>
 #include <set>
 #include <stdexcept>
 #include <string>
@@ -159,6 +160,30 @@ TEST(OnnxOptimInPlaceReuse, AbsChainReusesIntermediates) {
   EXPECT_EQ(reuse[1][0], (InPlaceReuse{0, 0, InPlaceReuseKind::kEqual}));
   ASSERT_EQ(reuse[2].size(), 1u);
   EXPECT_EQ(reuse[2][0], (InPlaceReuse{0, 0, InPlaceReuseKind::kEqual}));
+}
+
+TEST(OnnxOptimInPlaceReuse, OversizedSymbolicDimensionSkipsByteSizeAnalysis) {
+  ShapesContext ctx;
+  ctx.Set("large",
+          SymTensor(nullptr, TensorType::kFloat, SymShape{SymDim(std::string(5000, 'x'))}));
+  ctx.Set("small", SymTensor(nullptr, TensorType::kFloat, SymShape{SymDim("batch")}));
+  std::unordered_map<std::string, std::optional<core::expressions::DimType>> cache;
+  EXPECT_FALSE(core::compute::GetCachedByteSizeExpr(ctx, "large", cache).has_value());
+  EXPECT_TRUE(core::compute::GetCachedByteSizeExpr(ctx, "small", cache).has_value());
+
+  ctx.Set("other",
+          SymTensor(nullptr, TensorType::kFloat, SymShape{SymDim(std::string(5000, 'y'))}));
+  core::expressions::SimplifiedExpressionCache simplified;
+  const NodeProto node = MakeNode("Add", {"large", "small"}, {"other"});
+  EXPECT_TRUE(core::compute::ComputeSingleNodeReuse(node, 1, ctx, {}, {{"large", 0}, {"small", 0}},
+                                                    {{"large", 1}, {"small", 1}}, cache, simplified)
+                  .empty());
+  ctx.Set("same", SymTensor(nullptr, TensorType::kFloat, ctx.Get("large").Shape()));
+  const NodeProto same = MakeNode("Abs", {"large"}, {"same"});
+  const auto reuse = core::compute::ComputeSingleNodeReuse(same, 1, ctx, {}, {{"large", 0}},
+                                                           {{"large", 1}}, cache, simplified);
+  ASSERT_EQ(reuse.size(), 1u);
+  EXPECT_EQ(reuse[0], (InPlaceReuse{0, 0, InPlaceReuseKind::kEqual}));
 }
 
 // An intermediate that is read by more than one later node cannot be reused

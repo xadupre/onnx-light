@@ -111,7 +111,10 @@ def _attention(node, q, k, v, mask=None, past_key=None, past_value=None, nonpad_
         v_scores = np.repeat(v, repeats, axis=1)
     else:
         k_scores, v_scores = k, v
-    scores = (q @ k_scores.swapaxes(-1, -2)) * get_float("scale", q.shape[-1] ** -0.5)
+    compute_dtype = np.float32 if output_dtype.itemsize < 4 else output_dtype
+    scores = (q.astype(compute_dtype) @ k_scores.astype(compute_dtype).swapaxes(-1, -2)) * (
+        get_float("scale", q.shape[-1] ** -0.5)
+    )
     mode = get_int("qk_matmul_output_mode", 0)
     qk = scores.copy() if mode == 0 else None
     softcap = get_float("softcap", 0.0)
@@ -157,10 +160,10 @@ def _attention(node, q, k, v, mask=None, past_key=None, past_value=None, nonpad_
     weights = np.divide(weights, denominator, out=np.zeros_like(weights), where=denominator != 0)
     if mode == 3:
         qk = weights.copy()
-    y = (weights @ v_scores).astype(output_dtype)
+    y = (weights @ v_scores.astype(compute_dtype)).astype(output_dtype)
     if rank3:
         y = y.transpose(0, 2, 1, 3).reshape(y.shape[0], y.shape[2], -1)
-    outputs = (y, k, v, qk)
+    outputs = (y, k, v, None if qk is None else qk.astype(output_dtype))
     return outputs[: len(node.output)] if len(node.output) > 1 else y
 
 

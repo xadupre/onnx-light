@@ -82,13 +82,13 @@ class TestMixedReferenceEvaluator(ExtTestCase):
 
     def test_conv_same_lower(self):
         x = np.arange(16, dtype=np.float32).reshape(1, 1, 4, 4)
-        w = np.ones((1, 1, 2, 2), dtype=np.float32)
+        w = np.ones((1, 1, 3, 3), dtype=np.float32)
         result = MixedReferenceEvaluator(
             _model("Conv", ["x", "w"], ["y"], auto_pad="SAME_LOWER", strides=[2, 2])
         ).run(None, {"x": x, "w": w})[0]
         padded = np.pad(x, ((0, 0), (0, 0), (1, 0), (1, 0)))
         expected = np.array(
-            [[[[padded[0, 0, i : i + 2, j : j + 2].sum() for j in (0, 2)] for i in (0, 2)]]],
+            [[[[padded[0, 0, i : i + 3, j : j + 3].sum() for j in (0, 2)] for i in (0, 2)]]],
             dtype=np.float32,
         )
         np.testing.assert_array_equal(result, expected)
@@ -135,3 +135,12 @@ class TestMixedReferenceEvaluator(ExtTestCase):
             0
         ]
         np.testing.assert_array_equal(result, np.array([[[[3]]]], dtype=np.float32))
+
+    def test_attention_rank3_grouped_heads(self):
+        q = np.ones((1, 2, 2), dtype=np.float32)
+        k = np.ones((1, 2, 1), dtype=np.float32)
+        v = np.array([[[2], [6]]], dtype=np.float32)
+        y = MixedReferenceEvaluator(
+            _model("Attention", ["q", "k", "v"], ["y"], q_num_heads=2, kv_num_heads=1)
+        ).run(None, {"q": q, "k": k, "v": v})[0]
+        np.testing.assert_array_equal(y, np.full((1, 2, 2), 4, dtype=np.float32))

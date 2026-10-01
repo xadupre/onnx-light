@@ -5,6 +5,7 @@
 
 import numpy as np
 
+from onnx_light._reference.ops import _attention
 import onnx_light.onnx.helper as oh
 from onnx_light.onnx.reference import MixedReferenceEvaluator, ReferenceEvaluator
 from onnx_light.onnx_lib import TensorProto
@@ -37,6 +38,18 @@ def _model(op_type, inputs, outputs, **attributes):
 
 class TestMixedReferenceEvaluator(ExtTestCase):
     """Exercises the automatically registered NumPy overrides."""
+
+    def test_attention_rejects_incomplete_cache(self):
+        node = oh.make_node("Attention", ["q", "k", "v"], ["y"])
+        tensor = np.ones((1, 1, 1, 1), dtype=np.float32)
+        for cache in ({"past_key": tensor}, {"past_value": tensor}):
+            with (
+                self.subTest(cache=tuple(cache)),
+                self.assertRaisesRegex(
+                    ValueError, "past_key and past_value must be provided together"
+                ),
+            ):
+                _attention(node, tensor, tensor, tensor, **cache)
 
     def test_inherits_and_preserves_native_ops(self):
         model = _model("Abs", ["x"], ["y"])

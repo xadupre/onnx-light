@@ -99,8 +99,10 @@ def _attention(node, q, k, v, mask=None, past_key=None, past_value=None, nonpad_
         q = promote(q, get_int("q_num_heads", 0))
         k = promote(k, get_int("kv_num_heads", 0))
         v = promote(v, get_int("kv_num_heads", 0))
+    if (past_key is None) != (past_value is None):
+        raise ValueError("Attention: past_key and past_value must be provided together.")
     past = 0 if past_key is None else past_key.shape[2]
-    if past_key is not None:
+    if past_key is not None and past_value is not None:
         k = np.concatenate((past_key, k), axis=2)
         v = np.concatenate((past_value, v), axis=2)
     if q.shape[1] != k.shape[1]:

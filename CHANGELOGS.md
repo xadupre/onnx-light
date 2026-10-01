@@ -5,14 +5,61 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.1.29] – Unreleased
 
+### New Features
+
+- Added `MixedReferenceEvaluator`, which uses NumPy for `Gemm`, `MatMul`, `Conv`,
+  and `Attention` and native kernels for other operators
+  ([#5082](https://github.com/xadupre/onnx-light/pull/5082)).
+- Added string-valued `OneHot` outputs
+  ([#5076](https://github.com/xadupre/onnx-light/pull/5076)).
+
+### Improvements
+
+- Parallelized native `MatMul` across output ranges
+  ([#5083](https://github.com/xadupre/onnx-light/pull/5083)).
+
+### Fixes
+
+- Preserved symbolic shape values through statically known `Slice` operations
+  ([#5086](https://github.com/xadupre/onnx-light/pull/5086)).
+- Fixed native sklearn classifier execution for string `Reshape`, binary
+  `TreeEnsembleClassifier` margins, and `SVMClassifier` probability calibration
+  ([#5088](https://github.com/xadupre/onnx-light/pull/5088)).
+- Aligned `ReduceLogSumExp` behavior for non-finite inputs with upstream ONNX
+  ([#5072](https://github.com/xadupre/onnx-light/pull/5072)).
+
 ### Documentation & CI
 
+- Added persistent-feedback decode validation and revision-stamped measurements,
+  plus guidance to reduce wasted CI runs
+  ([#5070](https://github.com/xadupre/onnx-light/pull/5070),
+  [#5078](https://github.com/xadupre/onnx-light/pull/5078)).
 - Bumped the release version to `0.1.29`.
 
-## [0.1.28] – Unreleased
+## [0.1.28] – 2026-09-30
 
 ### New Features
 
+- Added graph-declared persistent input/output bindings with zero-copy feedback
+  state and contiguous KV-buffer reuse for eligible CPU Attention consumers
+  ([#5016](https://github.com/xadupre/onnx-light/pull/5016),
+  [#5023](https://github.com/xadupre/onnx-light/pull/5023)).
+- Added autoregressive generation in C++ and Python with greedy or seeded
+  temperature sampling and optional persistent-cache decoding; models without
+  persistent bindings execute the full prefix
+  ([#5062](https://github.com/xadupre/onnx-light/pull/5062)).
+- Added portable tensor and encoded-value quantization codecs, native `ai.rt`
+  `Quantize`/`Dequantize` graph kernels, and shared model-level quantization
+  parameters ([#5025](https://github.com/xadupre/onnx-light/pull/5025),
+  [#5027](https://github.com/xadupre/onnx-light/pull/5027),
+  [#5031](https://github.com/xadupre/onnx-light/pull/5031)).
+- Added zero-copy `TensorProto` DLPack import/export and opt-in borrowed NumPy
+  initializers with retained owners
+  ([#5015](https://github.com/xadupre/onnx-light/pull/5015),
+  [#5021](https://github.com/xadupre/onnx-light/pull/5021),
+  [#5022](https://github.com/xadupre/onnx-light/pull/5022)).
+- Integrated structured values with `GraphBuilder`, inference, and export
+  ([#5007](https://github.com/xadupre/onnx-light/pull/5007)).
 - Added opt-in paged KV attention with independent per-page K/V formats,
   `PagedCacheProto` serialization, graph cache initializers, and persistent state
   integration ([#5024](https://github.com/xadupre/onnx-light/pull/5024)).
@@ -32,8 +79,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   Unsupported constructs and external tensor offsets are rejected explicitly; the
   writer does not support minimal ONNX Runtime builds or low-bit tensor types.
 
+### Improvements
+
+- Prepacked immutable `Gemm` weights per runtime session and added
+  ownership-transferring initializer insertion to `GraphBuilder`
+  ([#5009](https://github.com/xadupre/onnx-light/pull/5009),
+  [#5012](https://github.com/xadupre/onnx-light/pull/5012)).
+- Made graph-pattern selection device-aware and compared proto fields directly
+  rather than comparing serialized representations
+  ([#5026](https://github.com/xadupre/onnx-light/pull/5026),
+  [#5033](https://github.com/xadupre/onnx-light/pull/5033)).
+
 ### Fixes
 
+- Fixed `Identity` and `ShapeBasedIdentity` optimization of constants and
+  dynamic `Slice` bounds, and honored optional output arity in `GraphBuilder`
+  ([#5003](https://github.com/xadupre/onnx-light/pull/5003),
+  [#5004](https://github.com/xadupre/onnx-light/pull/5004),
+  [#5005](https://github.com/xadupre/onnx-light/pull/5005)).
+- Preserved external tensor data on NumPy conversion and wrote external payloads
+  in per-file offset order
+  ([#5035](https://github.com/xadupre/onnx-light/pull/5035),
+  [#5045](https://github.com/xadupre/onnx-light/pull/5045)).
+- Enforced declared IR-version tensor types and corrected `GridSample` mode
+  defaults and opset-10-to-11 `Resize` conversion
+  ([#5051](https://github.com/xadupre/onnx-light/pull/5051),
+  [#5039](https://github.com/xadupre/onnx-light/pull/5039),
+  [#5055](https://github.com/xadupre/onnx-light/pull/5055)).
 - Fixed repeated-message `add(**kwargs)` to populate repeated fields using the same
   logic as proto constructors, including repeated string values
   ([#4989](https://github.com/xadupre/onnx-light/pull/4989)).

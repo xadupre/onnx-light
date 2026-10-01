@@ -5,11 +5,13 @@
 
 import numpy as np
 
-from onnx_light._reference.ops import _attention
 import onnx_light.onnx.helper as oh
-from onnx_light.onnx.reference import MixedReferenceEvaluator, ReferenceEvaluator
 from onnx_light.onnx_lib import TensorProto
-from onnx_light.ext_test_case import ExtTestCase
+from onnx_light.ext_test_case import ExtTestCase, import_or_skip
+
+MixedReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "MixedReferenceEvaluator")
+ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
+_attention = import_or_skip("onnx_light._reference.ops", "_attention")
 
 
 def _model(op_type, inputs, outputs, **attributes):

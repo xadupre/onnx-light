@@ -24,6 +24,7 @@ CastOpCastPattern: TypeAlias = _patterns.CastOpCastPattern
 ClipClipPattern: TypeAlias = _patterns.ClipClipPattern
 ReluClipFusionPattern: TypeAlias = _patterns.ReluClipFusionPattern
 ConstantToInitializerPattern: TypeAlias = _patterns.ConstantToInitializerPattern
+InitializerUnsqueezeCastPattern: TypeAlias = _patterns.InitializerUnsqueezeCastPattern
 ConvBiasNullPattern: TypeAlias = _patterns.ConvBiasNullPattern
 ConvAddFusionPattern: TypeAlias = _patterns.ConvAddFusionPattern
 ConvMulFusionPattern: TypeAlias = _patterns.ConvMulFusionPattern
@@ -366,6 +367,7 @@ __all__ = [
     "GraphBuilder",
     "GraphGraph",
     "IdentityPattern",
+    "InitializerUnsqueezeCastPattern",
     "LabelEncoderFusionPattern",
     "LayerNormalizationPattern",
     "LayerNormalizationScalePattern",

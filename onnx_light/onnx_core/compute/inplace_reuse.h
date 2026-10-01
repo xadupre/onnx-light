@@ -71,7 +71,8 @@ using ::onnx_light::core::shapes::ShapesContext;
 
 /// Returns (and memoizes in ``cache``) the packed byte-size expression of the
 /// tensor named ``name`` in ``ctx``, or ``std::nullopt`` when its element type
-/// has no fixed bit width (strings, sequences, maps, optionals, undefined).
+/// has no fixed bit width (strings, sequences, maps, optionals, undefined), or
+/// its symbolic dimensions exceed the complexity limit for optional analysis.
 const std::optional<expressions::DimType> &
 GetCachedByteSizeExpr(const ShapesContext &ctx, const std::string &name,
                       std::unordered_map<std::string, std::optional<expressions::DimType>> &cache,

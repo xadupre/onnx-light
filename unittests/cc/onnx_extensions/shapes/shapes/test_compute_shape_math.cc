@@ -921,6 +921,26 @@ TEST(OnnxOptimShapesBroadcast, TwoDifferentSymbolicProducesSynthesisedExpr) {
   EXPECT_EQ(out[0].AsExpr(), "broadcast(N, M)");
 }
 
+TEST(OnnxOptimShapesBroadcast, RepeatedNestedBroadcastStaysBounded) {
+  core::symbolic::SymShape previous{core::symbolic::SymDim("Expand_dim0")};
+  const core::symbolic::SymShape batch{core::symbolic::SymDim("batch")};
+  for (int i = 0; i < 30; ++i) {
+    const auto inner = core::shapes::BroadcastShapes(batch, previous);
+    previous = core::shapes::BroadcastShapes(previous, inner);
+    EXPECT_EQ(previous[0].AsExpr(), "broadcast(Expand_dim0, batch)");
+  }
+}
+
+TEST(OnnxOptimShapesBroadcast, DistinctNestedBroadcastOperandsGrowLinearly) {
+  core::symbolic::SymShape previous{core::symbolic::SymDim("first")};
+  for (int i = 0; i < 30; ++i) {
+    const core::symbolic::SymShape next{core::symbolic::SymDim("d" + std::to_string(i))};
+    const auto inner = core::shapes::BroadcastShapes(next, previous);
+    previous = core::shapes::BroadcastShapes(previous, inner);
+  }
+  EXPECT_LT(previous[0].AsExpr().size(), 700u);
+}
+
 TEST(OnnxOptimShapesBroadcast, IncompatibleConcreteThrows) {
   core::symbolic::SymShape a{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
   core::symbolic::SymShape b{core::symbolic::SymDim(2), core::symbolic::SymDim(4)};

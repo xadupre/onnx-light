@@ -2299,6 +2299,35 @@ TEST(KernelClass, TransposeParallelPathCopiesContiguousSuffixes) {
   EXPECT_EQ(collector.events()[0].total_iterations, 6);
 }
 
+TEST(KernelClass, TransposeRunUsesConfiguredKernelInstance) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Transpose transpose{ctx};
+  transpose.Configure(
+      {transpose.TuningKey(static_cast<int32_t>(onnx_kernels::DataType::FLOAT)),
+       {{std::string(onnx_kernels::tuning::kParallelMinimumElements), int64_t{1}}}});
+  NodeProto node;
+  node.set_op_type("Transpose");
+  node.add_input("x");
+  node.add_output("y");
+  transpose.set_node(node);
+
+  RuntimeContext rt(ctx);
+  std::vector<float> values(2 * 3 * 4);
+  for (std::size_t i = 0; i < values.size(); ++i) {
+    values[i] = static_cast<float>(i);
+  }
+  rt.Set("x", Tensor::FromFloat("x", {2, 3, 4}, values));
+  core::runtime::ParallelRegionCollector collector(2);
+  core::runtime::ParallelRegionCollectorScope collector_scope(&collector);
+
+  transpose.Run(rt);
+
+  ASSERT_EQ(rt.Get("y").shape, (std::vector<int64_t>{4, 3, 2}));
+  ASSERT_EQ(collector.events().size(), 1u);
+  EXPECT_EQ(collector.events()[0].label, "Transpose");
+  EXPECT_EQ(collector.events()[0].total_iterations, 24);
+}
+
 TEST(KernelClass, TransposeIdentityUsesSingleMemcpyWithoutParallelRegion) {
   const KernelContext ctx{DefaultOpset(13)};
   Transpose transpose{ctx};

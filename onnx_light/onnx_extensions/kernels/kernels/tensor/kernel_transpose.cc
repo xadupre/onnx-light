@@ -163,8 +163,7 @@ void Transpose::Run(RuntimeContext &rt) {
   RequireOutputCount(node, 1);
   const Tensor &data = GetInput(node, 0, rt.tensors());
   const onnx_kernels::Shape perm = GetAttributeIntsOrDefault(node, "perm", {});
-  onnx_kernels::kernel::Transpose k(rt.kernel_ctx());
-  SetOutput(node, 0, k(data, perm, &rt), rt);
+  SetOutput(node, 0, (*this)(data, perm, &rt), rt);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

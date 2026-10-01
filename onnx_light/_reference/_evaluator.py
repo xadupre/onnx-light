@@ -302,6 +302,11 @@ def _make_numpy_custom_kernel(domain: str, op_type: str, fn: Any) -> Any:
 class ReferenceEvaluator:
     """Evaluates an ONNX model using the C++ ``KernelDispatchTable``.
 
+    For models where native ``Gemm``, ``MatMul``, ``Conv``, or ``Attention``
+    kernels are slow, :class:`~onnx_light.onnx.reference.MixedReferenceEvaluator`
+    substitutes NumPy implementations while retaining native dispatch for
+    other operators.
+
     The class is constructed from a ``ModelProto`` / ``GraphProto`` /
     ``FunctionProto`` (or the bytes / file path of a serialised
     ``ModelProto``). :meth:`run` then takes a feed dictionary whose tensor

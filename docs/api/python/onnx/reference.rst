@@ -1,6 +1,23 @@
 onnx_light.onnx.reference
 =========================
 
+Mixed native and NumPy evaluation
+---------------------------------
+
+Use :class:`~onnx_light.onnx.reference.MixedReferenceEvaluator` when
+the native ``Gemm``, ``MatMul``, ``Conv``, or ``Attention`` kernels are
+too slow for a model. It has the same constructor and ``run`` API as
+:class:`~onnx_light.onnx.reference.ReferenceEvaluator`, but automatically
+registers NumPy implementations for these four operators in each session.
+Other operators continue to use native kernels. Performance varies with
+the model, tensor sizes, and the cost of crossing the NumPy/native boundary.
+
+.. code-block:: python
+
+    from onnx_light.onnx.reference import MixedReferenceEvaluator
+
+    outputs = MixedReferenceEvaluator(model).run(None, feeds)
+
 Native dtype behavior
 ---------------------
 

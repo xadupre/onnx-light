@@ -635,7 +635,7 @@ void RegisterResizeCasesFromUpstream(std::vector<TestCase> &registry) {
                  "X", {1, 1, 2, 4}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
              const Tensor input_2 =
                  Tensor::FromFloat("scales", {4}, {1.0f, 1.0f, 0.600000024f, 0.600000024f});
-             const Tensor output_0 = Tensor::FromFloat("Y", {1, 1, 1, 2}, {1.0f, 3.14285707f});
+             const Tensor output_0 = Tensor::FromFloat("Y", {1, 1, 1, 2}, {1.0f, 4.0f});
              return IoData{{std::move(input_0), std::move(input_2)}, {std::move(output_0)}};
            });
   }
@@ -949,10 +949,8 @@ void RegisterResizeCasesFromUpstream(std::vector<TestCase> &registry) {
                                     11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
              const Tensor input_2 =
                  Tensor::FromFloat("scales", {4}, {1.0f, 1.0f, 0.800000012f, 0.800000012f});
-             const Tensor output_0 =
-                 Tensor::FromFloat("Y", {1, 1, 3, 3},
-                                   {1.0f, 2.39519167f, 3.7903831f, 6.5807662f, 7.97595787f,
-                                    9.37114906f, 12.1615324f, 13.5567236f, 14.9519157f});
+             const Tensor output_0 = Tensor::FromFloat(
+                 "Y", {1, 1, 3, 3}, {1.0f, 2.5f, 4.0f, 7.0f, 8.5f, 10.0f, 13.0f, 14.5f, 16.0f});
              return IoData{{std::move(input_0), std::move(input_2)}, {std::move(output_0)}};
            });
   }

@@ -307,6 +307,9 @@ def expect(
     inputs: Sequence[np.ndarray | onnx.TensorProto | float | int],
     outputs: Sequence[np.ndarray | onnx.TensorProto | float | int],
     name: str,
+    *,
+    rtol: float = 1e-3,
+    atol: float = 1e-7,
     **kwargs: Any,
 ) -> None:
     """
@@ -322,6 +325,7 @@ def expect(
     the latest opset version that supports before targeted opset version.
 
     float or int are converted into numpy arrays with an empty shape.
+    Tolerances apply to numeric outputs; other keyword arguments are passed to model construction.
     """
     # retrieve the specifications for this node
     op_type = node_op.op_type
@@ -361,8 +365,8 @@ def expect(
         model=model,
         data_sets=[(list(inputs_dict.values()), list(outputs_dict.values()))],
         kind=TestCaseKind.NODE,
-        atol=1e-7,
-        rtol=1e-3,
+        atol=atol,
+        rtol=rtol,
     )
 
 

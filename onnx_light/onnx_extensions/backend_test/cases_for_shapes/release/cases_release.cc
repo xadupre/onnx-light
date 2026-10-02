@@ -162,6 +162,47 @@ void RegisterReleaseCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
     };
     registry.emplace_back(std::move(lazy_case));
   }
+
+  // ---- case 3: partially annotated release schedule ---------------------------
+  {
+    const std::string name = "test_cc_release_partial_metadata";
+    TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::RELEASE);
+    lazy_case.build = [name](bool) -> BuiltCase {
+      TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::RELEASE);
+      tc.rtol = 1e-3;
+      tc.atol = 1e-7;
+
+      ModelProto &model = tc.emplace_model();
+      InitModel(model, kDefaultIrVersion, {DefaultOpset(18)});
+
+      GraphProto *graph = model.add_graph();
+      graph->set_name(name);
+
+      AddNode(*graph, "Add", {"X", "W"}, {"A"});
+      AddNode(*graph, "Relu", {"A"}, {"B"});
+      AddNode(*graph, "Identity", {"B"}, {"Y"});
+
+      AppendValueInfo(*graph->add_input(), "X", DataType::FLOAT, {DimSpec(2)});
+      AppendValueInfo(*graph->add_value_info(), "A", DataType::FLOAT, {DimSpec(2)});
+      AppendValueInfo(*graph->add_value_info(), "B", DataType::FLOAT, {DimSpec(2)});
+      AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {DimSpec(2)});
+      AddInitializer<float>(*graph, "W", {2}, {1.0f, 1.0f});
+
+      // This reproduces the partial lifetime annotations found on the mbext
+      // Tiny-LLM graph: lock metadata makes the plan strict and one release
+      // entry makes it metadata-driven, but the consumed intermediate B has
+      // no release_after entry on its Identity consumer.
+      (*graph->mutable_node())[0].add_metadata(core::compute::kNotUsedAfterMetadataKey, "X;W");
+      (*graph->mutable_node())[1].add_metadata(core::compute::kReleaseAfterMetadataKey, "A");
+
+      const Tensor x = Tensor::FromFloat("X", {2}, {-2.0f, 2.0f});
+      const Tensor y = Tensor::FromFloat("Y", {2}, {0.0f, 3.0f});
+      AppendDataSet(tc, {x}, {y});
+
+      return tc.take_materialized();
+    };
+    registry.emplace_back(std::move(lazy_case));
+  }
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

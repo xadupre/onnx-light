@@ -698,6 +698,67 @@ TEST(KernelClass, DetClassRejectsNonSquareInput) {
   EXPECT_THROW(det_kernel(x), std::exception);
 }
 
+TEST(KernelClass, DetClassPreservesInputTypesAndBatchShape) {
+  const KernelContext ctx{DefaultOpset(11)};
+  Det det_kernel{ctx};
+  const Shape shape{2, 2, 2, 2};
+  const std::vector<float> values{1, 2, 3, 4, 1, 2, 2, 4, 1, 2, 2, 1, 1, 0, 0, 1};
+
+  for (DataType dtype :
+       {DataType::FLOAT16, DataType::BFLOAT16, DataType::FLOAT, DataType::DOUBLE}) {
+    Tensor x;
+    if (dtype == DataType::FLOAT16)
+      x = core::runtime::MakeFloat16Tensor("", shape, values);
+    else if (dtype == DataType::BFLOAT16)
+      x = core::runtime::MakeBfloat16Tensor("", shape, values);
+    else if (dtype == DataType::FLOAT)
+      x = Tensor::FromFloat("", shape, values);
+    else
+      x = Tensor::FromDouble("", shape, {1, 2, 3, 4, 1, 2, 2, 4, 1, 2, 2, 1, 1, 0, 0, 1});
+
+    Tensor y = det_kernel(x);
+    EXPECT_EQ(y.data_type, static_cast<int32_t>(dtype));
+    EXPECT_EQ(y.shape, (Shape{2, 2}));
+    Tensor preallocated = y;
+    std::fill(preallocated.data.begin(), preallocated.data.end(), uint8_t{0});
+    det_kernel(x, preallocated);
+    EXPECT_EQ(preallocated.data, y.data);
+    preallocated.data_type = static_cast<int32_t>(DataType::INT32);
+    EXPECT_THROW(det_kernel(x, preallocated), std::invalid_argument);
+    const std::vector<float> expected{-2, 0, -3, 1};
+    for (size_t i = 0; i < expected.size(); ++i) {
+      double got;
+      if (dtype == DataType::FLOAT16)
+        got = core::runtime::Float16BitsToFloat(reinterpret_cast<const uint16_t *>(y.bytes())[i]);
+      else if (dtype == DataType::BFLOAT16)
+        got = core::runtime::Bfloat16BitsToFloat(reinterpret_cast<const uint16_t *>(y.bytes())[i]);
+      else if (dtype == DataType::FLOAT)
+        got = y.AsFloat()[i];
+      else
+        got = y.AsDouble()[i];
+      EXPECT_NEAR(got, expected[i], 1e-5);
+    }
+
+    Tensor empty = x;
+    empty.shape = {0, 2, 2};
+    empty.data.resize(0);
+    Tensor empty_y = det_kernel(empty);
+    EXPECT_EQ(empty_y.data_type, static_cast<int32_t>(dtype));
+    EXPECT_EQ(empty_y.shape, (Shape{0}));
+    EXPECT_EQ(empty_y.size_bytes(), 0u);
+  }
+}
+
+TEST(KernelClass, DetClassRetainsDoublePrecision) {
+  const KernelContext ctx{DefaultOpset(11)};
+  Det det_kernel{ctx};
+  Tensor x = Tensor::FromDouble("", {2, 2}, {1, 1, 1, 1 + std::ldexp(1.0, -40)});
+  Tensor y = det_kernel(x);
+  EXPECT_TRUE(y.shape.empty());
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(DataType::DOUBLE));
+  EXPECT_DOUBLE_EQ(y.AsDouble()[0], std::ldexp(1.0, -40));
+}
+
 TEST(KernelClass, SoftmaxClassMatchesReferenceAxis1) {
   const KernelContext ctx{DefaultOpset(13)};
   Softmax softmax_kernel{ctx};

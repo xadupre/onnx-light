@@ -171,6 +171,45 @@ TEST(FunctionInliner, Renaming) {
   }
 }
 
+TEST(FunctionInliner, RenamesLifetimeMetadata) {
+  const char *code = R"ONNX(
+  <ir_version: 8, opset_import: [ "" : 17, "local" : 1 ]>
+  agraph (float[N] X) => (float[N] Y)
+  {
+    Y = local.foo (X)
+  }
+
+  <opset_import: [ "" : 17 ], domain: "local">
+  foo (x) => (y) {
+    temp = Add(x, x)
+    y = Neg(temp)
+  }
+  )ONNX";
+
+  ModelProto model;
+  auto status = OnnxParser::Parse(model, code);
+  ASSERT_TRUE(status.IsOK()) << status.ErrorMessage();
+  auto *add_metadata = model.mutable_functions(0)->mutable_node(0)->add_metadata_props();
+  add_metadata->set_key("onnx_light.release_after");
+  add_metadata->set_value("temp");
+  auto *shape_metadata = model.mutable_functions(0)->mutable_node(0)->add_metadata_props();
+  shape_metadata->set_key("onnx_light.release_after_shape_tag");
+  shape_metadata->set_value("temp");
+  auto *neg_metadata = model.mutable_functions(0)->mutable_node(1)->add_metadata_props();
+  neg_metadata->set_key("onnx_light.not_used_after");
+  neg_metadata->set_value("x;temp");
+
+  inliner::InlineLocalFunctions(model, true);
+
+  const auto &add = model.ref_graph().ref_node()[0];
+  const auto &neg = model.ref_graph().ref_node()[1];
+  const std::string renamed_temp = add.ref_output()[0];
+  ASSERT_NE(renamed_temp, "temp");
+  ASSERT_EQ(add.ref_metadata_props()[0].ref_value(), renamed_temp);
+  ASSERT_EQ(add.ref_metadata_props()[1].ref_value(), renamed_temp);
+  ASSERT_EQ(neg.ref_metadata_props()[0].ref_value(), "X;" + renamed_temp);
+}
+
 TEST(FunctionInliner, ValueInfoPropagation) {
   const char *code = R"ONNX(
   <ir_version: 10, opset_import: [ "" : 17, "local" : 1 ]>

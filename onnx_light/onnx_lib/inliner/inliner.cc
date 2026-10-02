@@ -252,6 +252,9 @@ public:
       LookupOrRename(s, true);
       y = s;
     }
+    RenameLifetimeMetadata(node, "onnx_light.release_after");
+    RenameLifetimeMetadata(node, "onnx_light.not_used_after");
+    RenameLifetimeMetadata(node, "onnx_light.release_after_shape_tag");
     return true; // Process attribute subgraphs in traversal
   }
 
@@ -281,6 +284,29 @@ public:
   }
 
 private:
+  void RenameLifetimeMetadata(NodeProto &node, const char *key) {
+    for (std::size_t i = 0; i < node.metadata_props().size(); ++i) {
+      auto *entry = node.mutable_metadata_props(i);
+      if (entry->key() != key)
+        continue;
+      const std::string value = entry->value();
+      std::string renamed;
+      std::size_t begin = 0;
+      while (begin <= value.size()) {
+        const std::size_t end = value.find(';', begin);
+        std::string name = value.substr(begin, end - begin);
+        LookupOrRename(name, false);
+        if (!renamed.empty())
+          renamed.push_back(';');
+        renamed += name;
+        if (end == std::string::npos)
+          break;
+        begin = end + 1;
+      }
+      entry->set_value(renamed);
+    }
+  }
+
   // Replace given name with a unique version of the name, and cache the
   // renaming-binding in current scope.
   void Rename(std::string &name) {

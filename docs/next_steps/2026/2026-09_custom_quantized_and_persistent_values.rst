@@ -5,9 +5,9 @@ Custom, quantized, and persistent values
 ================================================================================
 
 :Date: 2026-09
-:Updated: 2026-09-20
+:Updated: 2026-10-02
 
-**in progress**
+**in progress (core integration implemented; final acceptance pending)**
 
 Objective and consolidation
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -31,18 +31,18 @@ and scheduling stay owned by :ref:`l-next-steps-prepared-execution`, whose compl
 plan builds on. :ref:`l-next-steps-proto-inheritance` is independent and
 not a prerequisite.
 
-Existing foundations and missing integration
+Implemented foundations and integration
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-``onnx_core/runtime/memory/simple_tensor.h`` already supplies ordinary
-``Tensor`` storage owners, borrowed views and allocation handles. Prepared
-execution already owns prepared-object identity, publication, residency,
-eviction and persistence. ``StructTypeProto`` and ``EncodedValueProto``
-and their initial GraphBuilder integration are implemented. The remaining
-work connects the graph's persistence declarations to these ownership
-facilities and feeds retained outputs into the next call without copying
-their payloads. The graph attribute described below is planned, not yet
-implemented by the completed representation PRs.
+``onnx_core/runtime/memory/simple_tensor.h`` supplies ordinary ``Tensor``
+storage owners, borrowed views and allocation handles. Prepared execution
+owns prepared-object identity, publication, residency, eviction and
+persistence. ``StructTypeProto`` and ``EncodedValueProto`` are integrated
+with ``GraphBuilder``. Graph-declared persistent bindings now retain outputs
+across calls without copying state payloads; contiguous and paged KV cache
+consumers and end-to-end decode validation are also implemented. Final
+end-to-end acceptance and size-budget checks remain. The implementation
+sequence below records the original design and its acceptance criteria.
 
 Three independent decisions
 +++++++++++++++++++++++++++
@@ -928,7 +928,7 @@ dependency allowlist remains unchanged.
        data: unsupported structured constructs are rejected explicitly.
      - PR02
    * - PR04a
-     - Graph-declared persistence
+     - Graph-declared persistence (**done**)
      - Add ``PersistentBindingProto`` and
        ``GraphProto.persistent_bindings``; native/Python bindings,
        parsing/serialization, validation and GraphBuilder preservation
@@ -936,7 +936,7 @@ dependency allowlist remains unchanged.
        export that would drop persistence semantics.
      - PR02, PR03
    * - PR04b
-     - Zero-copy request-local feedback execution
+     - Zero-copy request-local feedback execution (**done**)
      - Resolve graph bindings once against an immutable model. Retain
        buffers across initialization, reset, calls and state views without
        payload copies or model serialization. Verify aliases, lifetimes,
@@ -944,7 +944,7 @@ dependency allowlist remains unchanged.
        structured/function/If paths.
      - PR04a; existing allocation/task infrastructure
    * - PR05
-     - Contiguous KV and CPU consumer integration
+     - Contiguous KV and CPU consumer integration (**done**)
      - Optimize past/present inputs when ownership permits buffer reuse:
        append touches only new tokens and matches functional execution.
        Verify capacity/cancellation and allocation/copy costs without
@@ -952,7 +952,7 @@ dependency allowlist remains unchanged.
        is already required by PR04b; this step optimizes kernel writes.
      - PR04b; CPU backend integration
    * - PR06
-     - Optional paged KV with heterogeneous quantization
+     - Optional paged KV with heterogeneous quantization (**done**)
      - The shared ``EncodedValueProto`` representation supports
        different K/V and per-block formats. Blockwise append/conversion
        and Attention preserve validity and bounded workspace without

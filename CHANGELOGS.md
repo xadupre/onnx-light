@@ -17,9 +17,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - Parallelized native `MatMul` across output ranges
   ([#5083](https://github.com/xadupre/onnx-light/pull/5083)).
+- Parallelized non-identity `Transpose` over contiguous copy blocks while
+  retaining a single-copy path for identity permutations
+  ([#5093](https://github.com/xadupre/onnx-light/pull/5093)).
 
 ### Fixes
 
+- Bounded symbolic broadcast-expression growth during graph construction
+  ([#5087](https://github.com/xadupre/onnx-light/pull/5087)).
 - Preserved symbolic shape values through statically known `Slice` operations
   ([#5086](https://github.com/xadupre/onnx-light/pull/5086)).
 - Fixed native sklearn classifier execution for string `Reshape`, binary
@@ -30,6 +35,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Documentation & CI
 
+- Retired the proposed split-wheel refactoring; the existing wheel packaging
+  remains unchanged.
 - Added persistent-feedback decode validation and revision-stamped measurements,
   plus guidance to reduce wasted CI runs
   ([#5070](https://github.com/xadupre/onnx-light/pull/5070),

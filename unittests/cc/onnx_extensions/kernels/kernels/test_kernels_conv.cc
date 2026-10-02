@@ -5,6 +5,7 @@
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_core/runtime/kernels/parallel_for.h"
+#include "onnx_core/runtime/tuning/cpu_executor.h"
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
 #include <gtest/gtest.h>
@@ -38,6 +39,11 @@ void ExpectNear(const Tensor &y, const std::vector<float> &expected, float tol =
 // 1x1x3x3 kernel of ones, default stride 1, no padding. Output is the
 // sum of each 3x3 window.
 TEST(KernelClass, ConvBasicWithoutPaddingMatchesUpstream) {
+  core::runtime::CpuExecutionPolicy policy;
+  policy.num_threads = 2;
+  policy.affinity_policy = core::runtime::CpuAffinityPolicy::kNone;
+  const auto executor = core::runtime::GlobalCpuExecutorRegistry().Acquire(policy);
+  const core::runtime::CpuExecutorScope executor_scope(executor.get());
   const KernelContext ctx{DefaultOpset(22)};
   Conv conv{ctx};
   conv.Configure({conv.TuningKey(DataType::FLOAT), {{"parallel.minimum_elements", int64_t{1}}}});
@@ -58,9 +64,7 @@ TEST(KernelClass, ConvBasicWithoutPaddingMatchesUpstream) {
   ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 1, 3, 3}));
   ASSERT_EQ(collector.events().size(), 1u);
   EXPECT_EQ(collector.events()[0].label, "Conv");
-  if (core::runtime::ParallelForThreadCount() > 1) {
-    EXPECT_GT(collector.events()[0].admitted_threads, 1);
-  }
+  EXPECT_EQ(collector.events()[0].admitted_threads, 2);
 }
 
 // Mirrors upstream ``test_basic_conv_with_padding``: same data, pads=[1,1,1,1].

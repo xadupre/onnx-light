@@ -242,7 +242,7 @@ void ValidateAttentionMask(const Tensor *mask, int64_t batch_size, int64_t q_num
   for (int k = 0; k < 3; ++k) {
     EXT_ENFORCE_INVALID(shape4[k] == 1 || shape4[k] == out_dims[k],
                         "kernel::Attention: 'attn_mask' is not broadcastable to (batch_size, "
-                        "q_num_heads, q_seq_len, kv_seq_len).");
+                        "q_num_heads, q_seq_len); its last axis defines the mask KV length.");
   }
 }
 

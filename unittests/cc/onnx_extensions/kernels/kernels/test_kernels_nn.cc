@@ -8,6 +8,7 @@
 #include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/tuning/cpu_executor.h"
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
 #include <gtest/gtest.h>
@@ -1186,6 +1187,11 @@ TEST(KernelClass, AttentionSupportsGQAHeadSharing) {
 }
 
 TEST(KernelClass, LinearAttentionParallelHeadsPreserveRecurrence) {
+  core::runtime::CpuExecutionPolicy policy;
+  policy.num_threads = 2;
+  policy.affinity_policy = core::runtime::CpuAffinityPolicy::kNone;
+  const auto executor = core::runtime::GlobalCpuExecutorRegistry().Acquire(policy);
+  const core::runtime::CpuExecutorScope executor_scope(executor.get());
   const KernelContext ctx{DefaultOpset(27)};
   LinearAttention kernel{ctx};
   kernel.Configure(
@@ -1206,10 +1212,10 @@ TEST(KernelClass, LinearAttentionParallelHeadsPreserveRecurrence) {
 
   EXPECT_EQ(std::vector<float>(result.output.AsFloat(), result.output.AsFloat() + 8),
             (std::vector<float>{1.0f, 1.0f, 2.0f, 2.0f, 1.0f, 1.0f, 2.0f, 2.0f}));
-  ASSERT_EQ(collector.events().size(), 1u);
-  EXPECT_EQ(collector.events()[0].label, "LinearAttention");
-  if (core::runtime::ParallelForThreadCount() > 1) {
-    EXPECT_GT(collector.events()[0].admitted_threads, 1);
+  ASSERT_EQ(collector.events().size(), 2u);
+  for (const auto &event : collector.events()) {
+    EXPECT_EQ(event.label, "LinearAttention");
+    EXPECT_EQ(event.admitted_threads, 2);
   }
 }
 

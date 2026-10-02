@@ -87,7 +87,7 @@ The batches are ordered by expected model impact. A batch starts only after the
 previous batch has a published baseline and a reviewed list of serial
 exemptions.
 
-The first implementation wave is now implemented in the source tree: ``Conv``,
+The first implementation wave is now in the source tree: ``Conv``,
 ``ConvTranspose``, ``ConvInteger``, ``QLinearConv``, ``Attention``,
 ``LinearAttention`` and ``FlexAttention`` use typed
 ``parallel.minimum_elements`` tuning and partition independent output planes

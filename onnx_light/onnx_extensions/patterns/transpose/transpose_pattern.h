@@ -9,6 +9,44 @@
 namespace ONNX_LIGHT_NAMESPACE::onnx_patterns {
 
 /**
+ * Folds a ``Transpose`` whose input is an initializer.
+ *
+ * @code
+ * Before:
+ *          ┌───────────────────┐
+ *   W ────→│ Transpose [1,0]   │────→ WT
+ *          └───────────────────┘
+ *   initializer
+ *
+ * After:
+ *   WT
+ *   transposed initializer
+ * @endcode
+ *
+ * The replacement remains a ``Transpose`` until the optimizer's constant-folding
+ * phase evaluates it. This keeps folding subject to the shared constant-folding
+ * controls and preserves the output name, element type, and transposed shape.
+ */
+class TransposeToInitializerPattern final : public core::builder::PatternOptimization {
+public:
+  /// Creates the pattern with the given optimization priority.
+  explicit TransposeToInitializerPattern(int priority = 1)
+      : PatternOptimization(priority, "TransposeToInitializer") {}
+
+  /// Returns ``Transpose`` as the only possible root operator.
+  std::set<std::string> FastOpType() const override;
+
+  /// Finds a default-domain ``Transpose`` whose input is a materialized initializer.
+  core::builder::MatchResult Match(core::builder::GraphGraph &graph,
+                                   const NodeProto &candidate) const override;
+
+  /// Re-emits the ``Transpose`` for the optimizer's constant-folding phase.
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &graph,
+        const std::vector<const NodeProto *> &nodes) const override;
+};
+
+/**
  * Merges two consecutive ``Transpose`` nodes into a single one.
  *
  * @code

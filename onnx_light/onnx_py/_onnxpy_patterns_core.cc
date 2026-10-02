@@ -202,15 +202,18 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
            "Sets a target on the builder and its subgraphs, rejecting conflicting devices.")
       .def(
           "optimize",
-          [](GraphGraph &graph, int max_iter, bool report) -> nb::object {
+          [](GraphGraph &graph, int max_iter, bool report,
+             const core::builder::ConstantFoldingOptions &folding_options) -> nb::object {
             if (!report) {
-              return nb::cast(graph.Optimize(max_iter));
+              return nb::cast(graph.Optimize(max_iter, nullptr, folding_options));
             }
             OptimizationReport statistics;
-            std::vector<LocalRewriting> rewrites = graph.Optimize(max_iter, &statistics);
+            std::vector<LocalRewriting> rewrites =
+                graph.Optimize(max_iter, &statistics, folding_options);
             return nb::make_tuple(std::move(rewrites), std::move(statistics));
           },
-          nb::arg("max_iter") = -1, nb::kw_only(), nb::arg("report") = false)
+          nb::arg("max_iter") = -1, nb::kw_only(), nb::arg("report") = false,
+          nb::arg("folding_options") = core::builder::ConstantFoldingOptions{})
       .def(
           "node_before",
           [](const GraphGraph &graph, nb::handle name) {

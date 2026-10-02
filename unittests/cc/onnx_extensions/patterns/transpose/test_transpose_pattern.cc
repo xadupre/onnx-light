@@ -3,11 +3,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/builder/graph_graph.h"
+#include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
+#include "onnx_core/runtime/memory/simple_tensor.h"
+#include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/patterns/transpose/transpose_pattern.h"
 #include "onnx_op/operator_sets.h"
 #include "onnx_proto/onnx_helper.h"
 
+#include <numeric>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -55,6 +60,171 @@ std::vector<int64_t> AttributeInts(const NodeProto &node, const char *name) {
   std::vector<int64_t> values;
   GetAttributeInts(node, name, values);
   return values;
+}
+
+class ScopedTransposeKernel {
+public:
+  ScopedTransposeKernel() {
+    const auto existing =
+        core::runtime::GlobalCustomKernels().find(kDefaultOnnxDomain + ":Transpose");
+    if (existing != core::runtime::GlobalCustomKernels().end()) {
+      previous_ = existing->second;
+    }
+    core::runtime::RegisterGlobalCustomKernel(
+        "", "Transpose", [](const NodeProto &node, core::runtime::RuntimeContext &runtime) {
+          const core::runtime::Tensor &input = runtime.tensors().at(node.input()[0].value());
+          std::vector<int64_t> perm = AttributeInts(node, "perm");
+          if (perm.empty()) {
+            perm.resize(input.shape.size());
+            std::iota(perm.rbegin(), perm.rend(), 0);
+          }
+          core::runtime::Shape shape;
+          for (int64_t axis : perm) {
+            shape.push_back(input.shape[axis]);
+          }
+          std::vector<int64_t> strides(input.shape.size(), 1);
+          for (std::size_t axis = input.shape.size(); axis > 1; --axis) {
+            strides[axis - 2] = strides[axis - 1] * input.shape[axis - 1];
+          }
+          const auto transpose = [&](const auto *values) {
+            using Value = std::remove_cv_t<std::remove_pointer_t<decltype(values)>>;
+            std::vector<Value> result(input.element_count());
+            for (std::size_t i = 0; i < result.size(); ++i) {
+              std::size_t index = i;
+              std::size_t source = 0;
+              for (std::size_t axis = perm.size(); axis > 0; --axis) {
+                const auto coordinate = index % shape[axis - 1];
+                index /= shape[axis - 1];
+                source += coordinate * strides[perm[axis - 1]];
+              }
+              result[i] = values[source];
+            }
+            return core::runtime::Tensor::From<Value>(node.output()[0].value(), shape, result);
+          };
+          runtime.tensors()[node.output()[0].value()] =
+              input.data_type == TensorProto::DataType::FLOAT ? transpose(input.AsFloat())
+                                                              : transpose(input.AsInt64());
+        });
+  }
+
+  ~ScopedTransposeKernel() {
+    if (previous_) {
+      core::runtime::RegisterGlobalCustomKernelFactory("", "Transpose", std::move(previous_));
+    } else {
+      core::runtime::UnregisterGlobalCustomKernel("", "Transpose");
+    }
+  }
+
+private:
+  core::runtime::NodeKernelFn previous_;
+};
+
+TEST(TransposeToInitializerPattern, FoldsFloatInitializer) {
+  ScopedTransposeKernel kernel;
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInitializer(
+      MakeInitializer<float>("weight", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f}));
+  builder.MakeNode("Transpose", {"weight"}, {"weight_t"}, "", "transpose_weight", PermAttr({1, 0}));
+  builder.MakeOutput("weight_t");
+
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<onnx_patterns::TransposeToInitializerPattern>());
+  core::builder::GraphGraph graph(builder, std::move(patterns));
+  graph.Optimize();
+
+  EXPECT_TRUE(builder.Nodes().empty());
+  ASSERT_EQ(builder.Initializers().size(), 1u);
+  const TensorProto &folded = builder.Initializers()[0];
+  EXPECT_EQ(folded.name().value(), "weight_t");
+  EXPECT_EQ(folded.data_type(), TensorProto::DataType::FLOAT);
+  ASSERT_EQ(folded.dims().size(), 2u);
+  EXPECT_EQ(folded.dims()[0], 3);
+  EXPECT_EQ(folded.dims()[1], 2);
+  const core::runtime::Tensor tensor = core::runtime::TensorFromProto(folded);
+  ASSERT_EQ(tensor.element_count(), 6);
+  const float *values = tensor.AsFloat();
+  EXPECT_EQ(std::vector<float>(values, values + 6),
+            (std::vector<float>{1.0f, 4.0f, 2.0f, 5.0f, 3.0f, 6.0f}));
+}
+
+TEST(TransposeToInitializerPattern, UsesDefaultReversePermutation) {
+  ScopedTransposeKernel kernel;
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInitializer(MakeInitializer<int64_t>("weight", {2, 1, 3}, {1, 2, 3, 4, 5, 6}));
+  builder.MakeNode("Transpose", {"weight"}, {"weight_t"});
+  builder.MakeOutput("weight_t");
+
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<onnx_patterns::TransposeToInitializerPattern>());
+  core::builder::GraphGraph graph(builder, std::move(patterns));
+  graph.Optimize();
+
+  EXPECT_TRUE(builder.Nodes().empty());
+  ASSERT_EQ(builder.Initializers().size(), 1u);
+  const TensorProto &folded = builder.Initializers()[0];
+  EXPECT_EQ(folded.data_type(), TensorProto::DataType::INT64);
+  ASSERT_EQ(folded.dims().size(), 3u);
+  EXPECT_EQ(folded.dims()[0], 3);
+  EXPECT_EQ(folded.dims()[1], 1);
+  EXPECT_EQ(folded.dims()[2], 2);
+}
+
+TEST(TransposeToInitializerPattern, RespectsFoldingOptions) {
+  ScopedTransposeKernel kernel;
+  for (int setting = 0; setting < 4; ++setting) {
+    core::builder::GraphBuilder builder("g", SchemaLookup());
+    builder.MakeInitializer(MakeInitializer<float>("weight", {2, 3}, {1, 2, 3, 4, 5, 6}));
+    builder.MakeNode("Transpose", {"weight"}, {"weight_t"}, "", "", PermAttr({1, 0}));
+    builder.MakeOutput("weight_t");
+
+    core::builder::ConstantFoldingOptions options;
+    if (setting == 0) {
+      options.enabled = false;
+    } else if (setting == 1) {
+      options.excluded_ops.insert({"", "Transpose"});
+    } else if (setting == 2) {
+      options.fold_weights = false;
+    } else {
+      options.max_element_count = 5;
+    }
+    std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+    patterns.push_back(std::make_unique<onnx_patterns::TransposeToInitializerPattern>());
+    core::builder::GraphGraph graph(builder, std::move(patterns));
+    graph.Optimize(-1, nullptr, options);
+
+    ASSERT_EQ(builder.Nodes().size(), 1u) << setting;
+    EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Transpose");
+    EXPECT_EQ(builder.Initializers().size(), 1u);
+  }
+}
+
+TEST(TransposeToInitializerPattern, RejectsRuntimeInput) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
+  builder.MakeNode("Transpose", {"x"}, {"y"}, "", "", PermAttr({1, 0}));
+  builder.MakeOutput("y");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::TransposeToInitializerPattern pattern;
+  const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[0]);
+  EXPECT_EQ(match.pattern, nullptr);
+}
+
+TEST(TransposeToInitializerPattern, RejectsConstantNodeOutput) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  AttributeProto &value = attributes.add();
+  value.set_name("value");
+  value.set_type(AttributeProto::AttributeType::TENSOR);
+  *value.mutable_t() = MakeInitializer<float>("", {2, 3}, {1, 2, 3, 4, 5, 6});
+  builder.MakeNode("Constant", {}, {"weight"}, "", "", attributes);
+  builder.MakeNode("Transpose", {"weight"}, {"weight_t"}, "", "", PermAttr({1, 0}));
+  builder.MakeOutput("weight_t");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::TransposeToInitializerPattern pattern;
+  const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[1]);
+  EXPECT_EQ(match.pattern, nullptr);
 }
 
 TEST(TransposeTransposePattern, CancelsOppositeTransposes) {

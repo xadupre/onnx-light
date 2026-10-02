@@ -461,6 +461,10 @@ NB_MODULE(_onnxpypatterns, m) {
       "Merges two consecutive ``Transpose`` nodes into a single ``Transpose`` "
       "or an ``Identity`` when the permutations cancel out.")
       .def(nb::init<int>(), nb::arg("priority") = 0);
+  nb::class_<onnx_patterns::TransposeToInitializerPattern, core::builder::PatternOptimization>(
+      m, "TransposeToInitializerPattern",
+      "Folds a ``Transpose`` applied to an initializer into a transposed initializer.")
+      .def(nb::init<int>(), nb::arg("priority") = 1);
   nb::class_<onnx_patterns::TransposeGatherPattern, core::builder::PatternOptimization>(
       m, "TransposeGatherPattern",
       "Removes or reorders a ``Transpose`` feeding a ``Gather`` with a scalar "

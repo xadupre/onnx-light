@@ -329,6 +329,7 @@ void RegisterKernelFunctions() {
     onnx_kernels::kernel::BitwiseAnd::RegisterTuningSchemas();
     onnx_kernels::kernel::BitwiseOr::RegisterTuningSchemas();
     onnx_kernels::kernel::BitwiseXor::RegisterTuningSchemas();
+    onnx_kernels::kernel::Cast::RegisterTuningSchemas();
     onnx_kernels::kernel::Ceil::RegisterTuningSchemas();
     onnx_kernels::kernel::Cos::RegisterTuningSchemas();
     onnx_kernels::kernel::Cosh::RegisterTuningSchemas();

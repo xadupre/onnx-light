@@ -23,6 +23,7 @@ default shape-inference behavior is included in the construction timings.
 
 from __future__ import annotations
 
+import gc
 import statistics
 import time
 
@@ -139,14 +140,22 @@ def check_models(node_count: int) -> None:
 def measure(build, node_count: int, serialize: bool, repeats: int = 3) -> float:
     """Returns the median construction time in milliseconds."""
     samples = []
-    for _ in range(repeats):
-        start = time.perf_counter()
-        model = build(node_count)
-        if serialize:
-            model.SerializeToString()
-        elapsed = (time.perf_counter() - start) * 1000
-        samples.append(elapsed)
-        del model
+    gc_was_enabled = gc.isenabled()
+    gc.disable()
+    try:
+        for _ in range(repeats):
+            gc.collect()
+            start = time.perf_counter()
+            model = build(node_count)
+            if serialize:
+                model.SerializeToString()
+            elapsed = (time.perf_counter() - start) * 1000
+            samples.append(elapsed)
+            del model
+    finally:
+        gc.collect()
+        if gc_was_enabled:
+            gc.enable()
     return statistics.median(samples)
 
 

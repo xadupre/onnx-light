@@ -1,3 +1,4 @@
+import gc
 import importlib.util
 from pathlib import Path
 
@@ -35,10 +36,12 @@ def test_timing_modes():
 @pytest.mark.parametrize("serialize", (False, True))
 def test_timing_releases_each_model_between_samples(serialize):
     alive = [0]
+    gc_was_enabled = gc.isenabled()
 
     class TrackedModel:
         def __init__(self):
             alive[0] += 1
+            self.cycle = self
 
         def SerializeToString(self):
             return b"model"
@@ -48,10 +51,12 @@ def test_timing_releases_each_model_between_samples(serialize):
 
     def build(_):
         assert alive[0] == 0
+        assert not gc.isenabled()
         return TrackedModel()
 
     assert example.measure(build, 20, serialize, repeats=3) >= 0
     assert alive[0] == 0
+    assert gc.isenabled() == gc_was_enabled
 
 
 @pytest.mark.parametrize("build", (example.build_light, example.build_onnxscript))

@@ -125,10 +125,9 @@ exemptions.
      - Representative backend models identify which paths merit migration;
        every retained serial path has measured justification.
    * - 5
-     - Generators, sequences, optionals, text, metadata and remaining utility
-       paths
-     - Parallelize only payload-scale independent work. Preserve RNG stream
-       reproducibility and sequence ordering.
+     - Sequences, optionals, text, metadata and remaining utility paths
+     - Parallelize only payload-scale independent work. Preserve sequence
+       ordering.
      - The inventory contains no unexplained serial path and no fixed-policy
        parallel path.
 
@@ -170,6 +169,22 @@ remains ``serial``. Each exemption contains:
 ``validate_inventory`` fails when a serial path has no current disposition,
 when a source change invalidates its implementation fingerprint, or when a
 ``parallel_fixed_policy`` path reappears.
+
+Random generators are serial exemptions by design
+++++++++++++++++++++++++++++++++++++++++++++++++++
+
+``RandomNormal``, ``RandomNormalLike``, ``RandomUniform``,
+``RandomUniformLike``, ``Bernoulli`` and ``Multinomial`` consume an ordered
+pseudo-random sequence. Splitting their output across workers would change the
+mapping between stream positions and tensor elements, and can also change how
+many values are consumed by rejection-based algorithms. They remain serial so
+seeded execution preserves the current bit-for-bit sequence and state
+advancement. This plan does not introduce per-worker seeds, skip-ahead streams,
+or a counter-based replacement generator.
+
+Deterministic construction operators such as ``ConstantOfShape``, ``Range`` and
+``EyeLike`` are not covered by this exemption. They may use parallel fill or
+copy ranges when measurements show that the payload is large enough.
 
 Benchmark and attribution contract
 ++++++++++++++++++++++++++++++++++

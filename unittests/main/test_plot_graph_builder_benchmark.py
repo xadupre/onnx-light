@@ -3,9 +3,9 @@ from pathlib import Path
 
 import pytest
 import numpy
-import onnx
-from onnx.reference import ReferenceEvaluator
 
+onnx = pytest.importorskip("onnx")
+ReferenceEvaluator = importlib.import_module("onnx.reference").ReferenceEvaluator
 pytest.importorskip("onnxscript")
 pytest.importorskip("onnx_light.onnx_core.graph_builder")
 

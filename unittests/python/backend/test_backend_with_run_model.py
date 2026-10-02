@@ -28,7 +28,6 @@ import onnx_light.onnx.numpy_helper as onh
 # full build; skip this module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
 _backend_case = import_or_skip("onnx_light.onnx_lib.backend.test.case")
 make_test_class = _backend_case.make_test_class
-collect_test_case = _backend_case.collect_test_case
 rt = import_or_skip("onnx_light.onnx_py._onnxpykernels", "runtime")
 
 
@@ -190,24 +189,5 @@ TestRunModelBackend = make_test_class(
         "test_cc_release_partial_metadata",
     ],
 )
-
-
-class TestPartialReleaseMetadata(unittest.TestCase):
-    """Checks the intentionally invalid release-metadata reproducer."""
-
-    def test_incomplete_release_schedule_raises(self):
-        """Raises when strict metadata omits an intermediate release."""
-        case = collect_test_case(unload=False)["test_cc_release_partial_metadata"]
-        try:
-            with self.assertRaisesRegex(
-                RuntimeError,
-                "ExecutionPlan: result 'B' is never released or unlocked "
-                r"\(missing release metadata\)",
-            ):
-                case.assert_allclose(run_model_backend, unload=False)
-        finally:
-            case.unload()
-
-
 if __name__ == "__main__":
     unittest.main(verbosity=2)

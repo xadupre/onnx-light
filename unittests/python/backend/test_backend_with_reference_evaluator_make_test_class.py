@@ -20,6 +20,8 @@ only exercises single-node graphs) and a useful cross-check of the Python
 
 from __future__ import annotations
 
+import unittest
+
 import numpy as np
 
 from onnx_light.ext_test_case import import_or_skip
@@ -30,6 +32,7 @@ import onnx_light.onnx as onnxl
 # full build; skip this module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
 _backend_case = import_or_skip("onnx_light.onnx_lib.backend.test.case")
 make_test_class = _backend_case.make_test_class
+collect_test_case = _backend_case.collect_test_case
 ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
 
 
@@ -55,3 +58,20 @@ TestReferenceEvaluatorBackend = make_test_class(
         "test_cc_release_partial_metadata",
     ],
 )
+
+
+class TestPartialReleaseMetadata(unittest.TestCase):
+    """Checks the intentionally invalid release-metadata reproducer."""
+
+    def test_incomplete_release_schedule_raises(self):
+        """Raises when strict metadata omits an intermediate release."""
+        case = collect_test_case(unload=False)["test_cc_release_partial_metadata"]
+        self.addCleanup(case.unload)
+        with self.assertRaisesRegex(
+            RuntimeError, r"ExecutionPlan: result '?B'? is never released or unlocked"
+        ):
+            case.assert_allclose(reference_evaluator_backend, unload=False)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

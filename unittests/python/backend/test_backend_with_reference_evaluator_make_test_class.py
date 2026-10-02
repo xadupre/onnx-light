@@ -52,5 +52,6 @@ TestReferenceEvaluatorBackend = make_test_class(
         "image_decoder_decode_jpeg_bgr",
         "image_decoder_decode_jpeg_grayscale",
         "image_decoder_decode_jpeg_rgb",
+        "test_cc_release_partial_metadata",
     ],
 )

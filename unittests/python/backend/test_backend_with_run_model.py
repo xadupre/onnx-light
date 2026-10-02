@@ -186,8 +186,27 @@ TestRunModelBackend = make_test_class(
         # TopK k input exceeds the axis length for the scan/loop topk variants.
         "test_cc_shape_inference_loop_topk_pairwise_distance.*",
         "test_cc_shape_inference_scan_topk_pairwise_distance.*",
+        # Intentional issue #5102 reproducer with an incomplete release schedule.
+        "test_cc_release_partial_metadata",
     ],
 )
+
+
+class TestPartialReleaseMetadata(unittest.TestCase):
+    """Checks the intentionally invalid release-metadata reproducer."""
+
+    def test_incomplete_release_schedule_raises(self):
+        """Raises when strict metadata omits an intermediate release."""
+        case = collect_test_case(unload=False)["test_cc_release_partial_metadata"]
+        try:
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "ExecutionPlan: result 'B' is never released or unlocked "
+                r"\(missing release metadata\)",
+            ):
+                case.assert_allclose(run_model_backend, unload=False)
+        finally:
+            case.unload()
 
 
 if __name__ == "__main__":

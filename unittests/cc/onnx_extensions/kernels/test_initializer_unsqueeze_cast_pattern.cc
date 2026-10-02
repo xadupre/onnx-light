@@ -130,6 +130,28 @@ TEST(InitializerUnsqueezeCastPattern, FoldsShapeAndDtypeBeforeAdd) {
   }
 }
 
+TEST(InitializerUnsqueezeCastPattern, FoldsEmptyAxesWithoutChangingShape) {
+  onnx_kernels::RegisterKernelFunctions();
+  GraphOptions options;
+  options.axes.clear();
+  options.axes_shape = {0};
+  auto builder = MakeGraph(options);
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<onnx_patterns::InitializerUnsqueezeCastPattern>());
+  core::builder::GraphGraph graph(builder, std::move(patterns));
+  graph.Optimize();
+
+  ASSERT_EQ(builder.Nodes().size(), 1u);
+  const TensorProto *folded = graph.GetComputedConstant(builder.Nodes()[0].input()[1].value());
+  ASSERT_NE(folded, nullptr);
+  EXPECT_EQ(folded->data_type(), TensorProto::DataType::DOUBLE);
+  ASSERT_EQ(folded->dims_size(), 1);
+  EXPECT_EQ(folded->dims(0), 2);
+  auto tensor = core::runtime::TensorFromProto(*folded);
+  EXPECT_DOUBLE_EQ(tensor.As<double>()[0], 1.25);
+  EXPECT_DOUBLE_EQ(tensor.As<double>()[1], 2.5);
+}
+
 TEST(InitializerUnsqueezeCastPattern, RejectsSharedAndOverridableInputs) {
   onnx_kernels::RegisterKernelFunctions();
   onnx_patterns::InitializerUnsqueezeCastPattern pattern;

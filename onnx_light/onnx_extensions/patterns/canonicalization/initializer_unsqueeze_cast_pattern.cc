@@ -47,7 +47,7 @@ bool FoldedDims(const TensorProto &source, const TensorProto &axes, std::vector<
     return false;
   }
   std::vector<int64_t> values;
-  if (!ReadIntegerValues(axes, values) || values.empty() ||
+  if ((axes.dims(0) != 0 && !ReadIntegerValues(axes, values)) ||
       values.size() != static_cast<std::size_t>(axes.dims(0)) ||
       source.dims_size() + values.size() > core::runtime::Shape::kMaxRank) {
     return false;

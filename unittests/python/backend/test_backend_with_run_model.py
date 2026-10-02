@@ -28,7 +28,6 @@ import onnx_light.onnx.numpy_helper as onh
 # full build; skip this module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
 _backend_case = import_or_skip("onnx_light.onnx_lib.backend.test.case")
 make_test_class = _backend_case.make_test_class
-collect_test_case = _backend_case.collect_test_case
 rt = import_or_skip("onnx_light.onnx_py._onnxpykernels", "runtime")
 
 
@@ -186,9 +185,9 @@ TestRunModelBackend = make_test_class(
         # TopK k input exceeds the axis length for the scan/loop topk variants.
         "test_cc_shape_inference_loop_topk_pairwise_distance.*",
         "test_cc_shape_inference_scan_topk_pairwise_distance.*",
+        # Intentional issue #5102 reproducer with an incomplete release schedule.
+        "test_cc_release_partial_metadata",
     ],
 )
-
-
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -174,6 +174,8 @@ ORT_EXCLUDE_REGEX = [
     r"^test_mod_mixed_sign_bfloat16$",
     r"^test_cc_mod_bfloat16_fmod$",
     r"^test_cc_pow_types_bfloat16_float32$",
+    # ORT has no CPU implementation for Mean(DOUBLE).
+    r"^test_cc_mean_.*_double_opset_(8|13)$",
     # ORT diverges from the reference on align_corners Resize downsample
     # cases where scale * input_width is fractional:
     # ONNX reference / onnx-light use (scale * input_width - 1) in the

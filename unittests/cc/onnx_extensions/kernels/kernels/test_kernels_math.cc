@@ -812,6 +812,23 @@ TEST(KernelClass, MeanBroadcastsAcrossAllInputs) {
   }
 }
 
+TEST(KernelClass, MeanExpandingBroadcastPreservesNegativeZeroAndUsesOneAllocatorSlot) {
+  const Mean mean{KernelContext{DefaultOpset(13)}};
+  const Tensor scalar1 = Tensor::FromFloat("", {}, {-0.0f});
+  const Tensor scalar2 = Tensor::FromFloat("", {}, {-0.0f});
+  const Tensor row = Tensor::FromFloat("", {2}, {-0.0f, -0.0f});
+  SimpleRawBufferAllocator alloc(1);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
+
+  const Tensor result = mean({scalar1, scalar2, row}, &rt);
+
+  ASSERT_EQ(result.shape, (Shape{2}));
+  EXPECT_TRUE(std::signbit(result.AsFloat()[0]));
+  EXPECT_TRUE(std::signbit(result.AsFloat()[1]));
+  EXPECT_EQ(alloc.allocated_count(), 1u);
+  EXPECT_FALSE(Mean::CanRunInPlace());
+}
+
 TEST(KernelClass, MinMaxMeanSumUseAllocatorWhenRuntimeContextHasOne) {
   const KernelContext ctx{DefaultOpset(13)};
   Min min_kernel{ctx};

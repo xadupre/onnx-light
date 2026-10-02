@@ -174,12 +174,6 @@ ORT_EXCLUDE_REGEX = [
     r"^test_mod_mixed_sign_bfloat16$",
     r"^test_cc_mod_bfloat16_fmod$",
     r"^test_cc_pow_types_bfloat16_float32$",
-    # ORT diverges from the reference on align_corners Resize downsample
-    # cases where scale * input_width is fractional:
-    # ONNX reference / onnx-light use (scale * input_width - 1) in the
-    # denominator, while ORT uses (output_width_int - 1).
-    r"^test_resize_downsample_scales_linear_align_corners$",
-    r"^test_resize_downsample_scales_cubic_align_corners$",
     # ORT IRFFT mishandles the ``inverse=1, onesided=1`` combination.
     r"^test_cc_dft_irfft(_opset19|_roundtrip|_roundtrip_opset19)?$",
     # ORT does not support Optional loop-carried state in this graph structure.

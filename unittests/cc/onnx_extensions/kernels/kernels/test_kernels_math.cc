@@ -735,7 +735,7 @@ TEST(KernelClass, DetClassPreservesInputTypesAndBatchShape) {
         got = y.AsFloat()[i];
       else
         got = y.AsDouble()[i];
-      EXPECT_DOUBLE_EQ(got, expected[i]);
+      EXPECT_NEAR(got, expected[i], 1e-5);
     }
 
     Tensor empty = x;

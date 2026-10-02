@@ -80,8 +80,17 @@ void AccumulateAndScale(const char *dtype_name, int32_t dtype, const Tensors &in
                 static_cast<size_t>(inputs[0].element_count()) * sizeof(T));
     return;
   }
-  BroadcastCopyFirst<T>(dtype_name, dtype, inputs[0], output);
-  for (size_t i = 1; i < inputs.size(); ++i) {
+  const bool first_pair_fills_output =
+      detail::BroadcastShape(kMeanName, inputs[0].shape, inputs[1].shape) == output.shape;
+  size_t next_input = 1;
+  if (first_pair_fills_output) {
+    detail::BinaryElementwise<T, T>(kMeanName, dtype_name, dtype, inputs[0], inputs[1], output,
+                                    MeanAddOf<T>);
+    next_input = 2;
+  } else {
+    BroadcastCopyFirst<T>(dtype_name, dtype, inputs[0], output);
+  }
+  for (size_t i = next_input; i < inputs.size(); ++i) {
     detail::BinaryElementwise<T, T>(kMeanName, dtype_name, dtype, output, inputs[i], output,
                                     MeanAddOf<T>);
   }

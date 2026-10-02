@@ -176,6 +176,8 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_pow_types_bfloat16_float32$",
     # ORT has no CPU implementation for Mean(DOUBLE).
     r"^test_cc_mean_.*_double_opset_(8|13)$",
+    # ORT restricts linear and cubic Resize to rank-2 through rank-5 inputs.
+    r"^test_cc_resize_(crop_(fractional|singleton)_linear|pytorch_singleton_(linear|cubic))$",
     # ORT rejects Det(BFLOAT16) and has no CPU implementation for Det(DOUBLE).
     r"^test_cc_det_(bfloat16|double)$",
     # ORT IRFFT mishandles the ``inverse=1, onesided=1`` combination.

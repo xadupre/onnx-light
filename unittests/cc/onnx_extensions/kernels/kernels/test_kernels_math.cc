@@ -837,6 +837,59 @@ TEST(KernelClass, Float16DemoteUsesAllocatorWhenRuntimeContextHasOne) {
   }
 }
 
+TEST(KernelClass, MeanBroadcastsAcrossAllInputs) {
+  for (int opset : {8, 13}) {
+    SCOPED_TRACE(opset);
+    const KernelContext ctx{DefaultOpset(opset)};
+    Mean mean{ctx};
+    const Tensor scalar = Tensor::FromFloat("", {}, {0.0f});
+    const Tensor row = Tensor::FromFloat("", {2}, {3.0f, 6.0f});
+    const Tensor column = Tensor::FromFloat("", {2, 1}, {0.0f, 3.0f});
+
+    const Tensor result = mean({scalar, row, column});
+    ASSERT_EQ(result.shape, (Shape{2, 2}));
+    const std::vector<float> expected_float{1.0f, 2.0f, 2.0f, 3.0f};
+    for (size_t i = 0; i < expected_float.size(); ++i) {
+      EXPECT_FLOAT_EQ(result.AsFloat()[i], expected_float[i]);
+    }
+    EXPECT_FLOAT_EQ(scalar.AsFloat()[0], 0.0f);
+    EXPECT_FLOAT_EQ(row.AsFloat()[0], 3.0f);
+    EXPECT_FLOAT_EQ(row.AsFloat()[1], 6.0f);
+    EXPECT_FLOAT_EQ(column.AsFloat()[0], 0.0f);
+    EXPECT_FLOAT_EQ(column.AsFloat()[1], 3.0f);
+
+    Tensor output = Tensor::FromFloat("", {2, 2}, {-1.0f, -1.0f, -1.0f, -1.0f});
+    mean({scalar, row, column}, output);
+    EXPECT_EQ(output.data, result.data);
+
+    const Tensor left = Tensor::FromDouble("", {2, 1}, {2.0, 4.0});
+    const Tensor right = Tensor::FromDouble("", {1, 3}, {2.0, 4.0, 6.0});
+    const Tensor crossed = mean({left, right});
+    ASSERT_EQ(crossed.shape, (Shape{2, 3}));
+    const std::vector<double> expected{2.0, 3.0, 4.0, 3.0, 4.0, 5.0};
+    for (size_t i = 0; i < expected.size(); ++i) {
+      EXPECT_DOUBLE_EQ(crossed.AsDouble()[i], expected[i]);
+    }
+  }
+}
+
+TEST(KernelClass, MeanExpandingBroadcastPreservesNegativeZeroAndUsesOneAllocatorSlot) {
+  const Mean mean{KernelContext{DefaultOpset(13)}};
+  const Tensor scalar1 = Tensor::FromFloat("", {}, {-0.0f});
+  const Tensor scalar2 = Tensor::FromFloat("", {}, {-0.0f});
+  const Tensor row = Tensor::FromFloat("", {2}, {-0.0f, -0.0f});
+  SimpleRawBufferAllocator alloc(1);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
+
+  const Tensor result = mean({scalar1, scalar2, row}, &rt);
+
+  ASSERT_EQ(result.shape, (Shape{2}));
+  EXPECT_TRUE(std::signbit(result.AsFloat()[0]));
+  EXPECT_TRUE(std::signbit(result.AsFloat()[1]));
+  EXPECT_EQ(alloc.allocated_count(), 1u);
+  EXPECT_FALSE(Mean::CanRunInPlace());
+}
+
 TEST(KernelClass, MinMaxMeanSumUseAllocatorWhenRuntimeContextHasOne) {
   const KernelContext ctx{DefaultOpset(13)};
   Min min_kernel{ctx};

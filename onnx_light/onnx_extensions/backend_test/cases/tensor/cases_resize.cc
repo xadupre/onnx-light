@@ -124,6 +124,54 @@ void RegisterResizeCases(std::vector<TestCase> &registry, TestMode mode) {
     return;
   }
 
+  // Regression cases for fractional scales: the coordinate transform uses the
+  // integer output length, and a singleton PyTorch output samples position 0.
+  struct FractionalResizeCase {
+    const char *name;
+    const char *coordinate_mode;
+    const char *interpolation_mode;
+    float scale;
+    std::vector<float> roi;
+    std::vector<float> expected;
+  };
+  const std::vector<FractionalResizeCase> fractional_cases = {
+      {"test_cc_resize_crop_fractional_linear",
+       "tf_crop_and_resize",
+       "linear",
+       0.7f,
+       {0.0f, 1.0f},
+       {1.0f, 3.0f, 5.0f}},
+      {"test_cc_resize_crop_singleton_linear",
+       "tf_crop_and_resize",
+       "linear",
+       0.3f,
+       {0.25f, 0.75f},
+       {3.0f}},
+      {"test_cc_resize_pytorch_singleton_linear", "pytorch_half_pixel", "linear", 0.3f, {}, {1.0f}},
+      {"test_cc_resize_pytorch_singleton_cubic", "pytorch_half_pixel", "cubic", 0.2f, {}, {1.0f}},
+  };
+  for (const auto &test : fractional_cases) {
+    NodeProto node;
+    node.set_op_type("Resize");
+    node.add_input("X");
+    node.add_input(test.roi.empty() ? "" : "roi");
+    node.add_input("scales");
+    node.add_output("Y");
+    AddAttribute<std::string>(node, "mode", test.interpolation_mode);
+    AddAttribute<std::string>(node, "coordinate_transformation_mode", test.coordinate_mode);
+    Expect(registry, std::move(node), test.name, {opset18}, [test]() -> IoData {
+      Tensor X = Tensor::FromFloat("X", {5}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
+      Tensor scales = MakeScalesTensor({test.scale});
+      Tensor Y =
+          Tensor::FromFloat("Y", {static_cast<int64_t>(test.expected.size())}, test.expected);
+      if (!test.roi.empty()) {
+        Tensor roi = Tensor::FromFloat("roi", {2}, test.roi);
+        return IoData{{std::move(X), std::move(roi), std::move(scales)}, {std::move(Y)}};
+      }
+      return IoData{{std::move(X), std::move(scales)}, {std::move(Y)}};
+    });
+  }
+
   // test_cc_resize_upsample_scales_nearest_asymmetric — NCHW input shape
   // [1, 1, 2, 2] upsampled by [1, 1, 2, 3] using nearest mode and the
   // asymmetric coordinate transformation; expected output is the upstream

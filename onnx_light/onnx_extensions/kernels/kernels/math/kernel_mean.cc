@@ -7,6 +7,7 @@
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
@@ -20,6 +21,39 @@ constexpr const char *kMeanName = "kernel::Mean";
 constexpr const char *kSupportedMeanTypesMsg = " only supports FLOAT and DOUBLE inputs.";
 
 template <typename T> T MeanAddOf(T a, T b) { return a + b; }
+
+template <typename T>
+void BroadcastCopyFirst(const char *dtype_name, int32_t dtype, const Tensor &input,
+                        Tensor &output) {
+  const detail::BroadcastInfo bi =
+      detail::CheckBinaryBroadcast(kMeanName, dtype_name, dtype, input, output);
+  const T *src = reinterpret_cast<const T *>(input.bytes());
+  T *dst = reinterpret_cast<T *>(output.mutable_bytes());
+  if (input.shape == output.shape) {
+    std::memcpy(dst, src, static_cast<size_t>(bi.element_count) * sizeof(T));
+    return;
+  }
+  if (bi.nx == 1) {
+    std::fill_n(dst, bi.element_count, src[0]);
+    return;
+  }
+  const size_t rank = bi.shape.size();
+  Shape index;
+  index.assign(rank, 0);
+  for (int64_t flat = 0; flat < bi.element_count; ++flat) {
+    int64_t offset = 0;
+    for (size_t d = 0; d < rank; ++d) {
+      offset += index[d] * bi.strides_x[d];
+    }
+    dst[flat] = src[offset];
+    for (size_t d = rank; d-- > 0;) {
+      if (++index[d] < bi.shape[d]) {
+        break;
+      }
+      index[d] = 0;
+    }
+  }
+}
 
 // Computes the broadcast shape of every tensor in ``inputs``. ``inputs`` must
 // be non-empty and all tensors must share ``expected_dtype``.
@@ -46,14 +80,18 @@ void AccumulateAndScale(const char *dtype_name, int32_t dtype, const Tensors &in
                 static_cast<size_t>(inputs[0].element_count()) * sizeof(T));
     return;
   }
-  // First pair: accumulate into the output buffer.
-  detail::BinaryElementwise<T, T>(kMeanName, dtype_name, dtype, inputs[0], inputs[1], output,
-                                  MeanAddOf<T>);
-  // Subsequent inputs: accumulate in place by re-running the binary
-  // element-wise driver with ``output`` as both an input and the output.
-  for (size_t i = 2; i < inputs.size(); ++i) {
-    Tensor partial = output;
-    detail::BinaryElementwise<T, T>(kMeanName, dtype_name, dtype, partial, inputs[i], output,
+  const bool first_pair_fills_output =
+      detail::BroadcastShape(kMeanName, inputs[0].shape, inputs[1].shape) == output.shape;
+  size_t next_input = 1;
+  if (first_pair_fills_output) {
+    detail::BinaryElementwise<T, T>(kMeanName, dtype_name, dtype, inputs[0], inputs[1], output,
+                                    MeanAddOf<T>);
+    next_input = 2;
+  } else {
+    BroadcastCopyFirst<T>(dtype_name, dtype, inputs[0], output);
+  }
+  for (size_t i = next_input; i < inputs.size(); ++i) {
+    detail::BinaryElementwise<T, T>(kMeanName, dtype_name, dtype, output, inputs[i], output,
                                     MeanAddOf<T>);
   }
   // Divide the accumulated sum by the input count to obtain the mean.

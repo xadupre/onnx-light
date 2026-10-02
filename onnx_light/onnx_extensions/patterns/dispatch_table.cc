@@ -20,6 +20,7 @@
 #include "onnx_extensions/patterns/canonicalization/conv_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/dropout_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/identity_pattern.h"
+#include "onnx_extensions/patterns/canonicalization/initializer_unsqueeze_cast_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/not_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/pad_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/stft_pattern.h"
@@ -70,6 +71,10 @@ void RegisterPatterns() {
     core::builder::RegisterPattern("ConstantToInitializer",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<ConstantToInitializerPattern>();
+                                   });
+    core::builder::RegisterPattern("InitializerUnsqueezeCast",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<InitializerUnsqueezeCastPattern>();
                                    });
     core::builder::RegisterPattern("ConvBiasNull",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {

@@ -17,6 +17,7 @@
 #include "onnx_extensions/patterns/canonicalization/conv_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/dropout_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/identity_pattern.h"
+#include "onnx_extensions/patterns/canonicalization/initializer_unsqueeze_cast_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/not_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/pad_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/stft_pattern.h"
@@ -111,6 +112,10 @@ NB_MODULE(_onnxpypatterns, m) {
   nb::class_<onnx_patterns::ConstantToInitializerPattern, core::builder::PatternOptimization>(
       m, "ConstantToInitializerPattern",
       "Replaces a Constant node by an initializer and an Identity node.")
+      .def(nb::init<int>(), nb::arg("priority") = 1);
+  nb::class_<onnx_patterns::InitializerUnsqueezeCastPattern, core::builder::PatternOptimization>(
+      m, "InitializerUnsqueezeCastPattern",
+      "Folds an initializer's Unsqueeze and Cast into the initializer consumed by Add.")
       .def(nb::init<int>(), nb::arg("priority") = 1);
   nb::class_<onnx_patterns::ConvBiasNullPattern, core::builder::PatternOptimization>(
       m, "ConvBiasNullPattern", "Removes a null (all-zero) bias input from a Conv node.")

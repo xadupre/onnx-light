@@ -14,6 +14,7 @@
 #include "onnx_extensions/patterns/canonicalization/conv_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/dropout_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/identity_pattern.h"
+#include "onnx_extensions/patterns/canonicalization/initializer_unsqueeze_cast_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/not_pattern.h"
 #include "onnx_extensions/patterns/dispatch_table.h"
 #include "onnx_extensions/patterns/transpose/transpose_pattern.h"
@@ -855,6 +856,7 @@ TEST(PatternOptimization, RegistersBuiltInPatternsOnce) {
   EXPECT_EQ(std::count(names.begin(), names.end(), "ConvMulFusion"), 1);
   EXPECT_EQ(std::count(names.begin(), names.end(), "Dropout"), 1);
   EXPECT_EQ(std::count(names.begin(), names.end(), "Identity"), 1);
+  EXPECT_EQ(std::count(names.begin(), names.end(), "InitializerUnsqueezeCast"), 1);
   EXPECT_EQ(std::count(names.begin(), names.end(), "NotNot"), 1);
   EXPECT_EQ(std::count(names.begin(), names.end(), "PadConv"), 1);
   const std::vector<std::string> new_pattern_names = {
@@ -989,6 +991,11 @@ TEST(PatternOptimization, RegistersBuiltInPatternsOnce) {
       std::any_of(patterns.begin(), patterns.end(), [](const auto &pattern) {
         return dynamic_cast<onnx_patterns::IdentityPattern *>(pattern.get()) != nullptr;
       });
+  const bool found_initializer_unsqueeze_cast =
+      std::any_of(patterns.begin(), patterns.end(), [](const auto &pattern) {
+        return dynamic_cast<onnx_patterns::InitializerUnsqueezeCastPattern *>(pattern.get()) !=
+               nullptr;
+      });
   const bool found_not_not = std::any_of(patterns.begin(), patterns.end(), [](const auto &pattern) {
     return dynamic_cast<onnx_patterns::NotNotPattern *>(pattern.get()) != nullptr;
   });
@@ -1013,6 +1020,7 @@ TEST(PatternOptimization, RegistersBuiltInPatternsOnce) {
   EXPECT_TRUE(found_conv_mul_fusion);
   EXPECT_TRUE(found_dropout);
   EXPECT_TRUE(found_identity);
+  EXPECT_TRUE(found_initializer_unsqueeze_cast);
   EXPECT_TRUE(found_not_not);
   EXPECT_TRUE(found_pad_conv);
   EXPECT_TRUE(found_transpose_to_initializer);
@@ -1030,6 +1038,13 @@ TEST(PatternOptimization, CreatesBuiltInPatternByName) {
   ASSERT_NE(cast_with_priority, nullptr);
   EXPECT_EQ(cast_with_priority->Name(), "Cast");
   EXPECT_EQ(cast_with_priority->priority, 9);
+
+  std::unique_ptr<core::builder::PatternOptimization> initializer_unsqueeze_cast =
+      onnx_patterns::CreatePattern("InitializerUnsqueezeCast");
+  ASSERT_NE(initializer_unsqueeze_cast, nullptr);
+  EXPECT_NE(dynamic_cast<onnx_patterns::InitializerUnsqueezeCastPattern *>(
+                initializer_unsqueeze_cast.get()),
+            nullptr);
 
   std::unique_ptr<core::builder::PatternOptimization> transpose =
       onnx_patterns::CreatePattern("TransposeToInitializer");

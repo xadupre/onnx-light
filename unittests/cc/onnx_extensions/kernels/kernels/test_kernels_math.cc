@@ -720,6 +720,7 @@ TEST(KernelClass, DetClassPreservesInputTypesAndBatchShape) {
     EXPECT_EQ(y.data_type, static_cast<int32_t>(dtype));
     EXPECT_EQ(y.shape, (Shape{2, 2}));
     Tensor preallocated = y;
+    std::fill(preallocated.data.begin(), preallocated.data.end(), uint8_t{0});
     det_kernel(x, preallocated);
     EXPECT_EQ(preallocated.data, y.data);
     preallocated.data_type = static_cast<int32_t>(DataType::INT32);

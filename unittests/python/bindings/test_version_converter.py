@@ -431,6 +431,43 @@ class TestVersionConverter(ExtTestCase):
         assert converted_model.graph.node[0].op_type == "Mul"
         assert converted_model.opset_import[0].version == 8
 
+    def test_mul_14_13_float(self) -> None:
+        graph = oh.make_graph(
+            [oh.make_node("Mul", ["X1", "X2"], ["Y"])],
+            "test",
+            [
+                oh.make_tensor_value_info("X1", onnxl.TensorProto.FLOAT, (5,)),
+                oh.make_tensor_value_info("X2", onnxl.TensorProto.FLOAT, (5,)),
+            ],
+            [oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, (5,))],
+        )
+        converted = self._converted(graph, oh.make_operatorsetid("", 14), 13)
+        assert converted.graph.node[0].op_type == "Mul"
+        assert converted.graph.output[0].type.tensor_type.elem_type == onnxl.TensorProto.FLOAT
+        assert converted.opset_import[0].version == 13
+
+    def test_mul_14_13_rejects_opset14_only_types(self) -> None:
+        for data_type in (
+            onnxl.TensorProto.UINT8,
+            onnxl.TensorProto.INT8,
+            onnxl.TensorProto.UINT16,
+            onnxl.TensorProto.INT16,
+        ):
+            with self.subTest(data_type=data_type):
+                graph = oh.make_graph(
+                    [oh.make_node("Mul", ["X1", "X2"], ["Y"])],
+                    "test",
+                    [
+                        oh.make_tensor_value_info("X1", data_type, (5,)),
+                        oh.make_tensor_value_info("X2", data_type, (5,)),
+                    ],
+                    [oh.make_tensor_value_info("Y", data_type, (5,))],
+                )
+                with self.assertRaisesRegex(
+                    RuntimeError, "operator 'Mul' is unallowed for Opset Version 13"
+                ):
+                    self._converted(graph, oh.make_operatorsetid("", 14), 13)
+
     # Test Gemm Adapter: 1 -> 8
     def test_gemm_up(self) -> None:
         nodes = [oh.make_node("Gemm", ["A", "B", "C"], ["Y"])]

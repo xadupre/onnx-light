@@ -1178,12 +1178,8 @@ sess.run(
 
     def _check_resize_backend_case(self, test_name):
         # Regression test for the ``Resize`` ``align_corners`` downsample
-        # variants: the ONNX reference uses ``output_width = scale *
-        # input_width`` (a float) in the denominator of the coordinate
-        # transformation, so sample positions land on non-integer indices
-        # when ``scale * input_width`` is fractional. The C++ ``Resize``
-        # kernel mirrors that convention; this test locks in bit-exact
-        # agreement with the upstream backend reference outputs.
+        # variants: the coordinate transformation uses the integer output
+        # dimension so the last output pixel lands on the last input pixel.
         from onnx_light.onnx_lib.backend.test.case import get_test_case
 
         tc = get_test_case(test_name)

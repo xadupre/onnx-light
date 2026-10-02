@@ -12,6 +12,7 @@ Next Steps
 
     2026/2026-08_kernel_parallelization
     2026/2026-10_kernel_parallelization_completion
+    2026/2026-10_gradient_completion
     2026/2026-08_onnxruntime_fast_model_loading
     2026/2026-08_proto_inheritance
     2026/2026-08_quantization
@@ -49,6 +50,10 @@ Started
       - Migrate every measured payload-scale kernel family to the session
         executor or record a benchmark-backed serial exemption; finish
         ``Gemm`` tuning, ARM64/x86-64 default promotion, and ORT attribution.
+    * - :ref:`l-next-steps-gradient-completion`
+      - Make backward functions valid and executable, correct broadcasting and
+        opset-sensitive rules, add numerical validation, then close the
+        differentiable operator inventory for training graphs.
     * - :ref:`l-next-steps-model-loading`
       - Implement issue #4612 in an ONNX Runtime fork: retain mapped-payload
         owners in ``SessionState``, use direct reads for ineligible tensors,

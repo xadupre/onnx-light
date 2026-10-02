@@ -119,7 +119,10 @@ Coverage is the set of operators with a registered rule; differentiating a
 graph that uses an unregistered operator raises rather than guessing.  The
 ``inputs`` parameter is reserved for future gradient pruning based on graph
 connectivity, and higher-order derivatives (differentiating the backward graph
-again) are possible in principle but not exercised.
+again) are possible in principle but not exercised. Executable numerical
+validation, complete forward-value capture, broadcasting, multi-output
+dispatch and operator coverage continue in
+:ref:`l-next-steps-gradient-completion`.
 
 See also
 ++++++++

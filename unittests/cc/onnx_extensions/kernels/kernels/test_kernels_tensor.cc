@@ -11,6 +11,7 @@
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/runtime_session.h"
 #include "onnx_core/runtime/tuning/parallel_region_collector.h"
+#include "onnx_extensions/kernels/kernel_dispatch_table.h"
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 
 #include <gtest/gtest.h>
@@ -19,6 +20,7 @@
 #include <cmath>
 #include <cstring>
 #include <limits>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -441,6 +443,175 @@ TEST(KernelClass, CastClassFloatToDouble) {
   EXPECT_DOUBLE_EQ(py[0], -1.5);
   EXPECT_DOUBLE_EQ(py[1], 0.0);
   EXPECT_DOUBLE_EQ(py[2], 2.25);
+}
+
+TEST(KernelClass, CastUsesTypedTuningAndParallelNumericConversion) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Cast cast_kernel{ctx};
+  onnx_kernels::RegisterKernelFunctions();
+  const auto float_key =
+      cast_kernel.TuningKey(static_cast<int32_t>(core::runtime::DataType::FLOAT));
+  const auto string_key =
+      cast_kernel.TuningKey(static_cast<int32_t>(core::runtime::DataType::STRING));
+  const auto packed_key =
+      cast_kernel.TuningKey(static_cast<int32_t>(core::runtime::DataType::INT4));
+  EXPECT_NE(float_key, string_key);
+  EXPECT_NE(float_key, packed_key);
+  EXPECT_NE(core::runtime::GetKernelTuningRegistry().FindSchema(float_key), nullptr);
+  EXPECT_NE(core::runtime::GetKernelTuningRegistry().FindSchema(string_key), nullptr);
+  EXPECT_NE(core::runtime::GetKernelTuningRegistry().FindSchema(packed_key), nullptr);
+  EXPECT_EQ(cast_kernel.TuningKey(static_cast<int32_t>(core::runtime::DataType::UINT32)).device,
+            core::symbolic::Device::kUndefined);
+
+  cast_kernel.Configure({float_key, {{"parallel.minimum_elements", int64_t{1}}}});
+  const int64_t n = 2 * core::runtime::kParallelForGrainSize + 1;
+  std::vector<float> values(static_cast<size_t>(n));
+  for (int64_t i = 0; i < n; ++i)
+    values[static_cast<size_t>(i)] = static_cast<float>(i);
+  const Tensor input = Tensor::FromFloat("", {n}, values);
+  core::runtime::ParallelRegionCollector collector(4);
+  core::runtime::ParallelRegionCollectorScope scope(&collector);
+  const Tensor output = cast_kernel(input, static_cast<int32_t>(core::runtime::DataType::INT64));
+  ASSERT_EQ(collector.events().size(), 1u);
+  EXPECT_EQ(collector.events()[0].label, "Cast");
+  EXPECT_EQ(collector.events()[0].total_iterations, n);
+  if (core::runtime::ParallelForThreadCount() > 1) {
+    EXPECT_GT(collector.events()[0].admitted_threads, 1);
+  }
+  for (int64_t i = 0; i < n; ++i)
+    ASSERT_EQ(output.AsInt64()[i], i);
+
+  Cast default_cast{ctx};
+  const Tensor small_input = Tensor::FromFloat("", {3}, {1, 2, 3});
+  const Tensor small_output =
+      default_cast(small_input, static_cast<int32_t>(core::runtime::DataType::INT64));
+  ASSERT_EQ(collector.events().size(), 2u);
+  EXPECT_EQ(collector.events()[1].admitted_threads, 1);
+  EXPECT_EQ(small_output.AsInt64()[2], 3);
+
+  const Tensor copy = cast_kernel(input, static_cast<int32_t>(core::runtime::DataType::FLOAT));
+  EXPECT_EQ(collector.events().size(), 2u);
+  EXPECT_EQ(std::memcmp(copy.bytes(), input.bytes(), input.size_bytes()), 0);
+}
+
+TEST(KernelClass, CastRunAndSessionUseConfiguredThreshold) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Cast cast_kernel{ctx};
+  const auto key = cast_kernel.TuningKey(static_cast<int32_t>(core::runtime::DataType::FLOAT));
+  cast_kernel.Configure({key, {{"parallel.minimum_elements", int64_t{1}}}});
+  NodeProto node;
+  node.set_op_type("Cast");
+  node.add_input("x");
+  node.add_output("y");
+  auto *attribute = node.add_attribute();
+  attribute->set_name("to");
+  attribute->set_type(AttributeProto::AttributeType::INT);
+  attribute->set_i(static_cast<int64_t>(core::runtime::DataType::DOUBLE));
+  cast_kernel.set_node(node);
+  RuntimeContext rt(ctx);
+  rt.Set("x", Tensor::FromFloat("x", {5}, {1, 2, 3, 4, 5}));
+  core::runtime::ParallelRegionCollector collector(4);
+  core::runtime::ParallelRegionCollectorScope scope(&collector);
+  cast_kernel.Run(rt);
+  ASSERT_EQ(collector.events().size(), 1u);
+  if (core::runtime::ParallelForThreadCount() > 1) {
+    EXPECT_GT(collector.events()[0].admitted_threads, 1);
+  }
+  EXPECT_DOUBLE_EQ(rt.Get("y").AsDouble()[4], 5);
+
+  onnx_kernels::RegisterKernelFunctions();
+  core::runtime::KernelTuningParameters profile{key,
+                                                {{"parallel.minimum_elements", int64_t{1000}}}};
+  core::runtime::GetKernelTuningRegistry().PublishProfiles(
+      std::span<const core::runtime::KernelTuningParameters>(&profile, 1));
+  GraphProto graph;
+  graph.add_input()->set_name("x");
+  graph.add_output()->set_name("y");
+  *graph.add_node() = node;
+  RuntimeContext session_rt(ctx);
+  session_rt.Set("x", Tensor::FromFloat("x", {5}, {1, 2, 3, 4, 5}));
+  core::runtime::RuntimeSession session(session_rt.GetExecutionPlan(graph));
+  session.Run(session_rt);
+  core::runtime::GetKernelTuningRegistry().PublishProfiles(
+      {}, std::span<const core::runtime::KernelTuningKey>(&key, 1));
+  ASSERT_EQ(collector.events().size(), 2u);
+  EXPECT_EQ(session.tuning_resolution_statistics().resolved_profiles, 1u);
+  EXPECT_EQ(collector.events()[1].admitted_threads, 1);
+  EXPECT_EQ(collector.events()[1].grain_size, 5);
+  EXPECT_DOUBLE_EQ(session_rt.Get("y").AsDouble()[4], 5);
+}
+
+TEST(KernelClass, CastParallelHalfFloat8StringsAndPackedOddCounts) {
+  const KernelContext ctx{DefaultOpset(28)};
+  Cast cast_kernel{ctx};
+  cast_kernel.Configure(
+      {cast_kernel.TuningKey(static_cast<int32_t>(core::runtime::DataType::FLOAT)),
+       {{"parallel.minimum_elements", int64_t{1}}}});
+  std::vector<float> values(257);
+  for (size_t i = 0; i < values.size(); ++i)
+    values[i] = static_cast<float>(i % 3);
+  const Tensor input = Tensor::FromFloat("", {257}, values);
+  core::runtime::ParallelRegionCollector collector(16);
+  core::runtime::ParallelRegionCollectorScope scope(&collector);
+  for (const auto half_type :
+       {core::runtime::DataType::FLOAT16, core::runtime::DataType::BFLOAT16}) {
+    const Tensor half = cast_kernel(input, static_cast<int32_t>(half_type));
+    const Tensor roundtrip =
+        cast_kernel(half, static_cast<int32_t>(core::runtime::DataType::FLOAT));
+    for (size_t i = 0; i < values.size(); ++i)
+      ASSERT_FLOAT_EQ(roundtrip.AsFloat()[i], values[i]);
+  }
+  const Tensor float8 =
+      cast_kernel(input, static_cast<int32_t>(core::runtime::DataType::FLOAT8E5M2));
+  const Tensor float8_copy =
+      cast_kernel(float8, static_cast<int32_t>(core::runtime::DataType::FLOAT8E5M2));
+  EXPECT_EQ(float8_copy.data, float8.data);
+  const Tensor float8_roundtrip =
+      cast_kernel(float8, static_cast<int32_t>(core::runtime::DataType::FLOAT));
+  for (size_t i = 0; i < values.size(); ++i)
+    ASSERT_FLOAT_EQ(float8_roundtrip.AsFloat()[i], values[i]);
+  const Tensor strings = cast_kernel(input, static_cast<int32_t>(core::runtime::DataType::STRING));
+  const Tensor parsed = cast_kernel(strings, static_cast<int32_t>(core::runtime::DataType::FLOAT));
+  for (size_t i = 0; i < values.size(); ++i)
+    ASSERT_FLOAT_EQ(parsed.AsFloat()[i], values[i]);
+  Tensor invalid_strings = strings;
+  invalid_strings.string_data.back() = "not a number";
+  EXPECT_THROW(
+      (void)cast_kernel(invalid_strings, static_cast<int32_t>(core::runtime::DataType::FLOAT)),
+      std::invalid_argument);
+
+  for (const auto packed_type :
+       {core::runtime::DataType::UINT4, core::runtime::DataType::UINT2,
+        core::runtime::DataType::FLOAT4E2M1, core::runtime::DataType::FLOAT6E2M3}) {
+    const size_t before_packing = collector.events().size();
+    const Tensor packed = cast_kernel(input, static_cast<int32_t>(packed_type));
+    EXPECT_EQ(collector.events().size(), before_packing);
+    ASSERT_EQ(packed.size_bytes(),
+              onnx_kernels::PackedByteSize(static_cast<int32_t>(packed_type), 257));
+    const Tensor packed_copy = cast_kernel(packed, static_cast<int32_t>(packed_type));
+    EXPECT_EQ(packed_copy.data, packed.data);
+    EXPECT_EQ(collector.events().size(), before_packing);
+    const Tensor unpacked =
+        cast_kernel(packed, static_cast<int32_t>(core::runtime::DataType::FLOAT));
+    ASSERT_EQ(collector.events().size(), before_packing + 1);
+    for (size_t i = 0; i < values.size(); ++i)
+      ASSERT_FLOAT_EQ(unpacked.AsFloat()[i], values[i]);
+  }
+  Tensor preallocated("", core::runtime::DataType::UINT4, {257}, std::vector<uint8_t>(129, 0xff));
+  cast_kernel(input, static_cast<int32_t>(core::runtime::DataType::UINT4), preallocated);
+  EXPECT_EQ(preallocated.bytes()[128], 1u);
+  const Tensor signed_input = Tensor::FromFloat("", {5}, {-2, -1, 0, 1, -2});
+  for (const auto signed_type : {core::runtime::DataType::INT2, core::runtime::DataType::INT4}) {
+    const Tensor packed = cast_kernel(signed_input, static_cast<int32_t>(signed_type));
+    const Tensor unpacked =
+        cast_kernel(packed, static_cast<int32_t>(core::runtime::DataType::FLOAT));
+    for (int64_t i = 0; i < 5; ++i)
+      EXPECT_FLOAT_EQ(unpacked.AsFloat()[i], signed_input.AsFloat()[i]);
+  }
+
+  const Tensor small = cast_kernel(Tensor::FromFloat("", {1}, {2}),
+                                   static_cast<int32_t>(core::runtime::DataType::DOUBLE));
+  EXPECT_DOUBLE_EQ(small.AsDouble()[0], 2);
 }
 
 TEST(KernelClass, CastClassFloatToInt32TruncatesTowardZero) {

@@ -9,9 +9,12 @@
 #include "onnx_core/runtime/kernels/cast_sub_byte.h"
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
+#include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
 
 #include <algorithm>
+#include <array>
+#include <atomic>
 #include <cctype>
 #include <cerrno>
 #include <cmath>
@@ -22,13 +25,27 @@
 #include <limits>
 #include <stdexcept>
 #include <string>
-#include <string_view>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
 
+constexpr uint32_t kTuningAbi = 1;
+constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
+constexpr std::array<int32_t, 24> kSupportedElementTypes = {
+    static_cast<int32_t>(DataType::FLOAT),        static_cast<int32_t>(DataType::DOUBLE),
+    static_cast<int32_t>(DataType::INT32),        static_cast<int32_t>(DataType::INT64),
+    static_cast<int32_t>(DataType::INT8),         static_cast<int32_t>(DataType::UINT8),
+    static_cast<int32_t>(DataType::INT16),        static_cast<int32_t>(DataType::UINT16),
+    static_cast<int32_t>(DataType::BOOL),         static_cast<int32_t>(DataType::FLOAT16),
+    static_cast<int32_t>(DataType::BFLOAT16),     static_cast<int32_t>(DataType::STRING),
+    static_cast<int32_t>(DataType::FLOAT8E4M3FN), static_cast<int32_t>(DataType::FLOAT8E4M3FNUZ),
+    static_cast<int32_t>(DataType::FLOAT8E5M2),   static_cast<int32_t>(DataType::FLOAT8E5M2FNUZ),
+    static_cast<int32_t>(DataType::FLOAT8E8M0),   static_cast<int32_t>(DataType::INT4),
+    static_cast<int32_t>(DataType::UINT4),        static_cast<int32_t>(DataType::INT2),
+    static_cast<int32_t>(DataType::UINT2),        static_cast<int32_t>(DataType::FLOAT4E2M1),
+    static_cast<int32_t>(DataType::FLOAT6E2M3),   static_cast<int32_t>(DataType::FLOAT6E3M2),
+};
 // Returns true when ``dtype`` is one of the numeric (non-STRING) element
 // types supported by ``Cast``. Element bytes for these types live in
 // ``Tensor::data``; their fixed element size is given by
@@ -358,9 +375,8 @@ std::string ElementToString(const Tensor &x, int64_t i) {
 // This intentionally remains locale-sensitive because forcing a C-locale parse
 // would change the old ``std::stod`` contract for callers that rely on the
 // process locale.
-bool TryParseAsDouble(std::string_view text, double &value) {
-  const std::string buffer(text);
-  const char *const begin = buffer.c_str();
+bool TryParseAsDouble(const std::string &text, double &value) {
+  const char *const begin = text.c_str();
   char *end = nullptr;
   errno = 0;
   value = std::strtod(begin, &end);
@@ -379,6 +395,12 @@ double ParseAsDouble(const std::string &s) {
 }
 
 } // namespace
+
+Cast::Cast(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "Cast", kSupportedElementTypes, kPortableParallelMinimum,
+                            kTuningAbi) {}
+
+ONNX_LIGHT_REGISTER_PARALLEL_TUNING_SCHEMA(Cast)
 
 Tensor Cast::operator()(const Tensor &x, int32_t to, RuntimeContext *rt) const {
   return (*this)(x, to, true, rt);
@@ -441,6 +463,15 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
   const bool to_sub_byte = IsSubByteCastDtype(to);
   const bool from_sub_byte = IsSubByteCastDtype(x.data_type);
 
+  if (x.data_type == to && (to_sub_byte || to_float8)) {
+    const size_t expected_bytes = PackedByteSize(to, n);
+    EXT_ENFORCE_INVALID(output.size_bytes() == expected_bytes && x.size_bytes() == expected_bytes,
+                        "kernel::Cast preallocated output buffer has unexpected size in bytes.");
+    if (expected_bytes > 0)
+      std::memcpy(output.mutable_bytes(), x.bytes(), expected_bytes);
+    return;
+  }
+
   // Sub-byte (INT4 / UINT4 / INT2 / UINT2) dtypes only round-trip against
   // ``FLOAT`` and their companion whole-byte integer (``INT8`` for the
   // signed variants, ``UINT8`` for the unsigned variants). Cross-casting
@@ -453,6 +484,7 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
     EXT_ENFORCE_INVALID(output.size_bytes() == expected_bytes,
                         "kernel::Cast preallocated output buffer has unexpected size in bytes.");
     if (to_sub_byte) {
+      // Adjacent elements share destination bytes, so per-element parallel writes would race.
       // Reset trailing padding bytes so the unused nibble / bit-pair stays
       // zero regardless of the previous buffer contents. Allocator-backed
       // tensors keep their bytes outside ``output.data``, so drive the clear
@@ -534,61 +566,71 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
       // FLOAT4E2M1 decodes to a non-integer real value; route through a
       // separate float path so 0.5/1.5/etc. survive the conversion.
       if (from_dt == DataType::FLOAT4E2M1 || IsFloat6CastDtype(x.data_type)) {
-        for (int64_t i = 0; i < n; ++i) {
-          const float fv = from_dt == DataType::FLOAT4E2M1
-                               ? Float4E2M1NibbleToFloat(Read4BitElement(src, i))
-                               : Float6BitsToFloat(Read6BitElement(src, i), from_dt);
-          switch (to_dt) {
-          case DataType::FLOAT:
-            output.AsFloat()[i] = fv;
-            break;
-          case DataType::FLOAT16:
-          case DataType::BFLOAT16:
-            StoreFromDouble(output, i, static_cast<double>(fv));
-            break;
-          default:
-            EXT_THROW_INVALID("kernel::Cast: unsupported 'to' dtype from FLOAT4E2M1.");
-          }
-        }
+        ParallelFor(
+            n, tuning().parallel_minimum_elements,
+            [&](int64_t begin, int64_t end) {
+              for (int64_t i = begin; i < end; ++i) {
+                const float fv = from_dt == DataType::FLOAT4E2M1
+                                     ? Float4E2M1NibbleToFloat(Read4BitElement(src, i))
+                                     : Float6BitsToFloat(Read6BitElement(src, i), from_dt);
+                switch (to_dt) {
+                case DataType::FLOAT:
+                  output.AsFloat()[i] = fv;
+                  break;
+                case DataType::FLOAT16:
+                case DataType::BFLOAT16:
+                  StoreFromDouble(output, i, static_cast<double>(fv));
+                  break;
+                default:
+                  EXT_THROW_INVALID("kernel::Cast: unsupported 'to' dtype from FLOAT4E2M1.");
+                }
+              }
+            },
+            "Cast");
         return;
       }
-      for (int64_t i = 0; i < n; ++i) {
-        // Read the unpacked sub-byte value (sign-extended into ``int``).
-        int value = 0;
-        switch (from_dt) {
-        case DataType::INT4:
-          value = static_cast<int>(Int4NibbleToInt8(Read4BitElement(src, i)));
-          break;
-        case DataType::UINT4:
-          value = static_cast<int>(Uint4NibbleToUint8(Read4BitElement(src, i)));
-          break;
-        case DataType::INT2:
-          value = static_cast<int>(Int2BitsToInt8(Read2BitElement(src, i)));
-          break;
-        case DataType::UINT2:
-          value = static_cast<int>(Uint2BitsToUint8(Read2BitElement(src, i)));
-          break;
-        default:
-          EXT_THROW_INVALID("kernel::Cast: unsupported sub-byte 'from' dtype.");
-        }
-        switch (to_dt) {
-        case DataType::FLOAT:
-          output.AsFloat()[i] = static_cast<float>(value);
-          break;
-        case DataType::FLOAT16:
-        case DataType::BFLOAT16:
-          StoreFromDouble(output, i, static_cast<double>(value));
-          break;
-        case DataType::INT8:
-          output.AsInt8()[i] = static_cast<int8_t>(value);
-          break;
-        case DataType::UINT8:
-          output.AsUint8()[i] = static_cast<uint8_t>(value);
-          break;
-        default:
-          EXT_THROW_INVALID("kernel::Cast: unsupported sub-byte 'to' dtype.");
-        }
-      }
+      ParallelFor(
+          n, tuning().parallel_minimum_elements,
+          [&](int64_t begin, int64_t end) {
+            for (int64_t i = begin; i < end; ++i) {
+              // Read the unpacked sub-byte value (sign-extended into ``int``).
+              int value = 0;
+              switch (from_dt) {
+              case DataType::INT4:
+                value = static_cast<int>(Int4NibbleToInt8(Read4BitElement(src, i)));
+                break;
+              case DataType::UINT4:
+                value = static_cast<int>(Uint4NibbleToUint8(Read4BitElement(src, i)));
+                break;
+              case DataType::INT2:
+                value = static_cast<int>(Int2BitsToInt8(Read2BitElement(src, i)));
+                break;
+              case DataType::UINT2:
+                value = static_cast<int>(Uint2BitsToUint8(Read2BitElement(src, i)));
+                break;
+              default:
+                EXT_THROW_INVALID("kernel::Cast: unsupported sub-byte 'from' dtype.");
+              }
+              switch (to_dt) {
+              case DataType::FLOAT:
+                output.AsFloat()[i] = static_cast<float>(value);
+                break;
+              case DataType::FLOAT16:
+              case DataType::BFLOAT16:
+                StoreFromDouble(output, i, static_cast<double>(value));
+                break;
+              case DataType::INT8:
+                output.AsInt8()[i] = static_cast<int8_t>(value);
+                break;
+              case DataType::UINT8:
+                output.AsUint8()[i] = static_cast<uint8_t>(value);
+                break;
+              default:
+                EXT_THROW_INVALID("kernel::Cast: unsupported sub-byte 'to' dtype.");
+              }
+            }
+          },
+          "Cast");
     }
     return;
   }
@@ -608,16 +650,26 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
                         "kernel::Cast preallocated output buffer has unexpected size in bytes.");
     if (to_float8) {
       uint8_t *dst = output.mutable_bytes();
-      for (int64_t i = 0; i < n; ++i) {
-        const float v = static_cast<float>(LoadAsDouble(x, i));
-        dst[i] = FloatToFloat8Bits(v, to, saturate);
-      }
+      ParallelFor(
+          n, tuning().parallel_minimum_elements,
+          [&](int64_t begin, int64_t end) {
+            for (int64_t i = begin; i < end; ++i) {
+              const float v = static_cast<float>(LoadAsDouble(x, i));
+              dst[i] = FloatToFloat8Bits(v, to, saturate);
+            }
+          },
+          "Cast");
     } else {
       const uint8_t *src = x.bytes();
-      for (int64_t i = 0; i < n; ++i) {
-        const float v = Float8BitsToFloat(src[i], x.data_type);
-        StoreFromDouble(output, i, static_cast<double>(v));
-      }
+      ParallelFor(
+          n, tuning().parallel_minimum_elements,
+          [&](int64_t begin, int64_t end) {
+            for (int64_t i = begin; i < end; ++i) {
+              const float v = Float8BitsToFloat(src[i], x.data_type);
+              StoreFromDouble(output, i, static_cast<double>(v));
+            }
+          },
+          "Cast");
     }
     return;
   }
@@ -629,9 +681,14 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
       output.string_data = x.string_data;
       return;
     }
-    for (int64_t i = 0; i < n; ++i) {
-      output.string_data[static_cast<size_t>(i)] = ElementToString(x, i);
-    }
+    ParallelFor(
+        n, tuning().parallel_minimum_elements,
+        [&](int64_t begin, int64_t end) {
+          for (int64_t i = begin; i < end; ++i) {
+            output.string_data[static_cast<size_t>(i)] = ElementToString(x, i);
+          }
+        },
+        "Cast");
     return;
   }
 
@@ -643,8 +700,31 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
   if (from_string) {
     EXT_ENFORCE_INVALID(static_cast<int64_t>(x.string_data.size()) == n,
                         "kernel::Cast STRING input must have one entry per element.");
-    for (int64_t i = 0; i < n; ++i) {
-      StoreFromDouble(output, i, ParseAsDouble(x.string_data[static_cast<size_t>(i)]));
+    if (n < tuning().parallel_minimum_elements || n == 1) {
+      for (int64_t i = 0; i < n; ++i) {
+        StoreFromDouble(output, i, ParseAsDouble(x.string_data[static_cast<size_t>(i)]));
+      }
+    } else {
+      std::atomic<int64_t> first_invalid{n};
+      ParallelFor(
+          n, tuning().parallel_minimum_elements,
+          [&](int64_t begin, int64_t end) {
+            for (int64_t i = begin; i < end; ++i) {
+              double value = 0.0;
+              if (TryParseAsDouble(x.string_data[static_cast<size_t>(i)], value)) {
+                StoreFromDouble(output, i, value);
+              } else {
+                int64_t previous = first_invalid.load(std::memory_order_relaxed);
+                while (i < previous && !first_invalid.compare_exchange_weak(
+                                           previous, i, std::memory_order_relaxed)) {
+                }
+              }
+            }
+          },
+          "Cast");
+      if (const int64_t invalid = first_invalid.load(std::memory_order_relaxed); invalid < n)
+        EXT_THROW_INVALID("kernel::Cast: cannot parse string '",
+                          x.string_data[static_cast<size_t>(invalid)], "' as a numeric value.");
     }
     return;
   }
@@ -659,9 +739,14 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
     return;
   }
 
-  for (int64_t i = 0; i < n; ++i) {
-    StoreFromDouble(output, i, LoadAsDouble(x, i));
-  }
+  ParallelFor(
+      n, tuning().parallel_minimum_elements,
+      [&](int64_t begin, int64_t end) {
+        for (int64_t i = begin; i < end; ++i) {
+          StoreFromDouble(output, i, LoadAsDouble(x, i));
+        }
+      },
+      "Cast");
 }
 
 void Cast::Run(RuntimeContext &rt) {
@@ -672,8 +757,7 @@ void Cast::Run(RuntimeContext &rt) {
   const int32_t to = static_cast<int32_t>(GetAttributeIntOrDefault(node, "to", -1));
   EXT_ENFORCE_INVALID(!(to < 0), "RunNode: Cast requires INT attribute 'to'.");
   const bool saturate = GetAttributeIntOrDefault(node, "saturate", 1) != 0;
-  onnx_kernels::kernel::Cast kernel(rt.kernel_ctx());
-  SetOutput(node, 0, kernel(x, to, saturate, &rt), rt);
+  SetOutput(node, 0, (*this)(x, to, saturate, &rt), rt);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

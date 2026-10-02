@@ -57,6 +57,9 @@ std::optional<uint64_t> NormalizeSeed(int64_t seed) {
   return static_cast<uint64_t>(seed);
 }
 
+// Random operators intentionally generate serially: row-major output indices
+// consume one ordered PRNG stream, so worker partitioning would change seeded
+// results and stream advancement.
 Tensor MakeUniform(const onnx_kernels::Shape &shape, double low, double high,
                    std::optional<uint64_t> seed, int32_t dtype, const char *op_name,
                    RuntimeContext *rt) {

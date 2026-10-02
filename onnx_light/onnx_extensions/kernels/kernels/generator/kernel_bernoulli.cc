@@ -125,6 +125,8 @@ void Bernoulli::operator()(const Tensor &input, int64_t seed, int32_t dtype, Ten
   EXT_ENFORCE_INVALID(n >= 0, "kernel::Bernoulli: input shape contains negative dimensions.");
   const uint32_t engine_seed =
       (seed == kNoSeed) ? kDefaultBernoulliSeed : static_cast<uint32_t>(seed);
+  // Keep one serial engine: output index i must consume draw i for seeded
+  // execution, independent of executor size or scheduling.
   std::mt19937 engine(engine_seed);
   std::uniform_real_distribution<double> uniform(0.0, 1.0);
 

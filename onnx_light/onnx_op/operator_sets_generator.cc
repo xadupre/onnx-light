@@ -133,6 +133,8 @@ std::vector<TensorType> BernoulliT2(int since_version) {
   }
 }
 
+// The native Bernoulli kernel intentionally consumes one serial PRNG stream so
+// seeded results do not depend on worker partitioning.
 LightOpSchema MakeBernoulliSchema(int since_version) {
   return LightOpSchema(
              "Bernoulli", kOnnxDomain, since_version, MakeBernoulliDoc(),
@@ -407,6 +409,9 @@ std::vector<TensorType> RandomLikeT1Types(int since_version) {
   }
 }
 
+// Native Random* kernels intentionally remain serial: row-major output indices
+// consume one ordered PRNG stream, preserving seeded results across executor
+// sizes and schedules.
 LightOpSchema MakeRandomNormalSchema(int since_version) {
   return LightOpSchema(
              "RandomNormal", kOnnxDomain, since_version, MakeRandomNormalDoc(), {},
@@ -554,6 +559,8 @@ std::vector<TensorType> MultinomialT1(int since_version) {
   }
 }
 
+// The native Multinomial kernel intentionally keeps one serial PRNG stream
+// across batches and samples to preserve seeded output ordering.
 LightOpSchema MakeMultinomialSchema(int since_version) {
   return LightOpSchema(
              "Multinomial", kOnnxDomain, since_version, MakeMultinomialDoc(),

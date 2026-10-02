@@ -162,6 +162,9 @@ void Multinomial::operator()(const Tensor &input, int64_t sample_size, int64_t s
 
   const uint32_t engine_seed =
       (seed == kNoSeed) ? kDefaultMultinomialSeed : static_cast<uint32_t>(seed);
+  // Keep one serial engine across rows and samples. Parallel row sampling
+  // would assign different stream positions to outputs and change seeded
+  // results.
   std::mt19937 engine(engine_seed);
   std::uniform_real_distribution<double> uniform(0.0, 1.0);
 

@@ -2,7 +2,7 @@
 Benchmark GraphBuilder against onnxscript GraphBuilder
 ======================================================
 
-This example builds the same alternating Add/Relu chain with 100, 200, and
+This example builds the same attention-style graph with 100, 200, and
 500 nodes using :class:`onnx_light.onnx_core.graph_builder.GraphBuilder` and
 :class:`onnxscript.GraphBuilder`. It checks that both models produce the same
 outputs before measuring model construction with and without final protobuf
@@ -10,6 +10,15 @@ serialization. The timings include model finalization (``to_onnx`` or
 ``onnx_ir.to_proto``), but exclude imports, input generation, and execution.
 
 Run this example with the ``docs`` optional dependencies installed.
+
+Each 20-node block splits a symbolic width into two heads using runtime
+``Shape``, ``Gather``, ``Div``, and ``Concat`` operations. It reshapes and
+transposes the input, computes scaled dot-product self-attention, then merges
+the heads and applies an averaged residual connection and ``Relu``. Batch size,
+sequence length, and width are all dynamic; width must be divisible by two.
+The same exported models are checked on several shapes, including a singleton
+sequence. Both builders receive identical operators and initializers; their
+default shape-inference behavior is included in the construction timings.
 """
 
 from __future__ import annotations
@@ -28,62 +37,103 @@ from onnx_light.onnx_core.graph_builder import GraphBuilder
 
 NODE_COUNTS = (100, 200, 500)
 OPSET = 18
-SHAPE = [2, 3]
+SHAPE = ["batch", "sequence", "width"]
+INPUT_SHAPES = ((1, 1, 4), (2, 3, 6), (3, 5, 8))
+BLOCK_SIZE = 20
+
+
+def attention_blocks(op, value, constants, node_count: int):
+    """Builds attention blocks with runtime-derived head and output shapes."""
+    if node_count <= 0 or node_count % BLOCK_SIZE:
+        raise ValueError(f"node_count must be a positive multiple of {BLOCK_SIZE}.")
+    batch_index, sequence_index, width_index, heads, half = constants
+    for _ in range(node_count // BLOCK_SIZE):
+        shape = op.Shape(value)
+        batch = op.Gather(shape, batch_index, axis=0)
+        sequence = op.Gather(shape, sequence_index, axis=0)
+        width = op.Gather(shape, width_index, axis=0)
+        head_width = op.Div(width, heads)
+        head_shape = op.Concat(batch, sequence, heads, head_width, axis=0)
+        query = op.Reshape(value, head_shape)
+        query = op.Transpose(query, perm=[0, 2, 1, 3])
+        key = op.Transpose(query, perm=[0, 1, 3, 2])
+        scores = op.MatMul(query, key)
+        scale = op.Cast(head_width, to=TensorProto.FLOAT)
+        scale = op.Sqrt(scale)
+        scores = op.Div(scores, scale)
+        weights = op.Softmax(scores, axis=-1)
+        context = op.MatMul(weights, query)
+        context = op.Transpose(context, perm=[0, 2, 1, 3])
+        context = op.Reshape(context, shape)
+        value = op.Add(value, context)
+        value = op.Mul(value, half)
+        value = op.Relu(value)
+    return value
+
+
+def constants():
+    """Returns the shared shape indices, head count, and residual scale."""
+    return (
+        numpy.array([0], dtype=numpy.int64),
+        numpy.array([1], dtype=numpy.int64),
+        numpy.array([2], dtype=numpy.int64),
+        numpy.array([2], dtype=numpy.int64),
+        numpy.array(0.5, dtype=numpy.float32),
+    )
 
 
 def build_light(node_count: int):
-    """Builds a chain with onnx-light and returns its model."""
-    builder = GraphBuilder("chain")
+    """Builds dynamic attention blocks with onnx-light and returns its model."""
+    builder = GraphBuilder("attention")
     builder.set_opset_version("", OPSET)
     value = builder.inp("X", TensorProto.FLOAT, SHAPE)
-    bias = builder.inp("B", TensorProto.FLOAT, SHAPE)
-    for index in range(node_count):
-        value = (
-            builder.op.Add(value, bias, outputs=f"v{index}")
-            if index % 2 == 0
-            else builder.op.Relu(value, outputs=f"v{index}")
-        )
+    initializers = [
+        builder.init(array, name=f"c{index}") for index, array in enumerate(constants())
+    ]
+    value = attention_blocks(builder.op, value, initializers, node_count)
     builder.out(value, TensorProto.FLOAT, SHAPE)
     return builder.to_onnx("model")
 
 
 def build_onnxscript(node_count: int):
-    """Builds the same chain with onnxscript and returns its model."""
+    """Builds the same dynamic attention blocks with onnxscript."""
     graph = onnx_ir.Graph(
-        inputs=[], outputs=[], nodes=[], opset_imports={"": OPSET}, name="chain"
+        inputs=[], outputs=[], nodes=[], opset_imports={"": OPSET}, name="attention"
     )
     builder = onnxscript.GraphBuilder(graph)
     value = builder.input("X", dtype=onnx_ir.DataType.FLOAT, shape=SHAPE)
-    bias = builder.input("B", dtype=onnx_ir.DataType.FLOAT, shape=SHAPE)
-    for index in range(node_count):
-        value = builder.op.Add(value, bias) if index % 2 == 0 else builder.op.Relu(value)
-        value.name = f"v{index}"
+    initializers = [
+        builder.initializer(onnx_ir.tensor(array), name=f"c{index}")
+        for index, array in enumerate(constants())
+    ]
+    value = attention_blocks(builder.op, value, initializers, node_count)
+    value.shape = onnx_ir.Shape(SHAPE)
+    value.type = onnx_ir.TensorType(onnx_ir.DataType.FLOAT)
     builder.add_output(value, None)
     return onnx_ir.to_proto(onnx_ir.Model(graph, ir_version=10))
 
 
 def check_models(node_count: int) -> None:
-    """Checks both models and compares their outputs on the same inputs."""
+    """Checks both models and compares outputs across dynamic input shapes."""
     light = onnx.load_from_string(build_light(node_count).SerializeToString())
     scripted = build_onnxscript(node_count)
-    for model in (light, scripted):
-        onnx.checker.check_model(model)
-        assert len(model.graph.node) == node_count
-    assert [output.name for output in light.graph.output] == [
-        output.name for output in scripted.graph.output
-    ]
-    # ReferenceEvaluator expects the default domain as "" rather than "ai.onnx".
+    # ONNX's checker and evaluator expect "" rather than "ai.onnx".
     for opset in light.opset_import:
         if opset.domain == "ai.onnx":
             opset.domain = ""
-    feeds = {
-        "X": numpy.arange(6, dtype=numpy.float32).reshape(SHAPE) - 2,
-        "B": numpy.full(SHAPE, 0.25, dtype=numpy.float32),
-    }
-    light_outputs = ReferenceEvaluator(light).run(None, feeds)
-    scripted_outputs = ReferenceEvaluator(scripted).run(None, feeds)
-    assert len(light_outputs) == len(scripted_outputs) == 1
-    numpy.testing.assert_allclose(light_outputs[0], scripted_outputs[0], rtol=0, atol=0)
+    for model in (light, scripted):
+        onnx.checker.check_model(model)
+        assert len(model.graph.node) == node_count
+    light_session = ReferenceEvaluator(light)
+    scripted_session = ReferenceEvaluator(scripted)
+    rng = numpy.random.default_rng(0)
+    for shape in INPUT_SHAPES:
+        feeds = {"X": rng.standard_normal(shape).astype(numpy.float32)}
+        light_outputs = light_session.run(None, feeds)
+        scripted_outputs = scripted_session.run(None, feeds)
+        assert len(light_outputs) == len(scripted_outputs) == 1
+        assert light_outputs[0].shape == scripted_outputs[0].shape == shape
+        numpy.testing.assert_allclose(light_outputs[0], scripted_outputs[0], rtol=0, atol=0)
 
 
 def measure(build, node_count: int, serialize: bool, repeats: int = 3) -> float:

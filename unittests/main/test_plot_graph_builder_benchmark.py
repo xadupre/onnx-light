@@ -2,6 +2,9 @@ import importlib.util
 from pathlib import Path
 
 import pytest
+import numpy
+import onnx
+from onnx.reference import ReferenceEvaluator
 
 pytest.importorskip("onnxscript")
 pytest.importorskip("onnx_light.onnx_core.graph_builder")
@@ -25,5 +28,36 @@ def test_equivalent_models(count):
 
 def test_timing_modes():
     for build in (example.build_light, example.build_onnxscript):
-        assert example.measure(build, 2, False, repeats=1) >= 0
-        assert example.measure(build, 2, True, repeats=1) >= 0
+        assert example.measure(build, 20, False, repeats=1) >= 0
+        assert example.measure(build, 20, True, repeats=1) >= 0
+
+
+@pytest.mark.parametrize("build", (example.build_light, example.build_onnxscript))
+@pytest.mark.parametrize("shape", example.INPUT_SHAPES)
+def test_dynamic_attention(build, shape):
+    model = onnx.load_from_string(build(20).SerializeToString())
+    for opset in model.opset_import:
+        if opset.domain == "ai.onnx":
+            opset.domain = ""
+    onnx.checker.check_model(model)
+    assert [
+        dim.dim_param for dim in model.graph.input[0].type.tensor_type.shape.dim
+    ] == example.SHAPE
+    assert len(model.graph.node) == 20
+    assert len(model.graph.initializer) == 5
+    x = numpy.random.default_rng(1).standard_normal(shape).astype(numpy.float32)
+    query = x.reshape(*shape[:2], 2, shape[2] // 2).transpose(0, 2, 1, 3)
+    scores = query @ query.transpose(0, 1, 3, 2) / numpy.sqrt(numpy.float32(shape[2] // 2))
+    weights = numpy.exp(scores - scores.max(axis=-1, keepdims=True))
+    weights /= weights.sum(axis=-1, keepdims=True)
+    context = (weights @ query).transpose(0, 2, 1, 3).reshape(shape)
+    expected = numpy.maximum((x + context) * 0.5, 0)
+    (actual,) = ReferenceEvaluator(model).run(None, {"X": x})
+    numpy.testing.assert_allclose(actual, expected, rtol=1e-5, atol=1e-6)
+
+
+@pytest.mark.parametrize("build", (example.build_light, example.build_onnxscript))
+@pytest.mark.parametrize("count", (0, -20, 21))
+def test_invalid_node_counts(build, count):
+    with pytest.raises(ValueError, match="positive multiple of 20"):
+        build(count)

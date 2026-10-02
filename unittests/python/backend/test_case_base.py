@@ -152,6 +152,47 @@ class TestBackendFunction(ExtTestCase):
         self.assertEqual(tc.rtol, 1e-3)
         self.assertEqual(tc.atol, 1e-7)
 
+    def test_expect_custom_tolerances(self):
+        """Tests that custom tolerances reach the test case, not model construction."""
+        node = onnxl.helper.make_node("Abs", inputs=["x"], outputs=["y"])
+        x = np.array([-1.0], dtype=np.float32)
+        for tolerances, expected in (
+            ({"rtol": 0.0}, (0.0, 1e-7)),
+            ({"atol": 0.0}, (1e-3, 0.0)),
+            ({"rtol": 0.125, "atol": 0.25}, (0.125, 0.25)),
+        ):
+            with self.subTest(tolerances=tolerances):
+                expect(
+                    node,
+                    inputs=[x],
+                    outputs=[np.abs(x)],
+                    name="test_abs_custom_tolerances",
+                    doc_string="Custom tolerance model",
+                    **tolerances,
+                )
+                tc = ALL_TESTS["test_abs_custom_tolerances"]
+                self.assertEqual((tc.rtol, tc.atol), expected)
+                self.assertEqual(tc.model.doc_string, "Custom tolerance model")
+
+    def test_expect_custom_tolerance_comparison_and_override(self):
+        """Tests that comparisons use case tolerances unless explicitly overridden."""
+        node = onnxl.helper.make_node("Abs", inputs=["x"], outputs=["y"])
+        x = np.array([-1.0], dtype=np.float32)
+        expect(
+            node,
+            inputs=[x],
+            outputs=[np.abs(x)],
+            name="test_abs_tolerance_comparison",
+            rtol=0.0,
+            atol=0.25,
+        )
+        tc = ALL_TESTS["test_abs_tolerance_comparison"]
+        tc.assert_allclose(lambda model, value: [np.abs(value) + 0.25])
+        with self.assertRaises(AssertionError):
+            tc.assert_allclose(lambda model, value: [np.abs(value) + 0.5])
+        with self.assertRaises(AssertionError):
+            tc.assert_allclose(lambda model, value: [np.abs(value) + 0.25], atol=0.0)
+
     def test_test_case_repr(self):
         """TestCase has a useful __repr__ showing name and kind."""
         # Python subclass instance.

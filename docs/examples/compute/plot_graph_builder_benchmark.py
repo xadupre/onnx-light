@@ -72,6 +72,10 @@ def check_models(node_count: int) -> None:
     assert [output.name for output in light.graph.output] == [
         output.name for output in scripted.graph.output
     ]
+    # ReferenceEvaluator expects the default domain as "" rather than "ai.onnx".
+    for opset in light.opset_import:
+        if opset.domain == "ai.onnx":
+            opset.domain = ""
     feeds = {
         "X": numpy.arange(6, dtype=numpy.float32).reshape(SHAPE) - 2,
         "B": numpy.full(SHAPE, 0.25, dtype=numpy.float32),

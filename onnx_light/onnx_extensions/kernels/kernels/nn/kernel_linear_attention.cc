@@ -182,6 +182,9 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
 
   // Determine update rule
   const std::string &rule = attrs.update_rule;
+  EXT_ENFORCE_INVALID(rule == "linear" || rule == "gated" || rule == "delta" ||
+                          rule == "gated_delta",
+                      "kernel::LinearAttention: unknown update_rule '", rule, "'.");
   const bool use_decay = (rule == "gated" || rule == "gated_delta");
   const bool use_beta = (rule == "delta" || rule == "gated_delta");
 
@@ -378,9 +381,6 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
                   S[static_cast<size_t>(i * d_v + j)] = decayed + beta_val * k_t[i] * diff;
                 }
               }
-            } else {
-              EXT_ENFORCE_INVALID(false, "kernel::LinearAttention: unknown update_rule '", rule,
-                                  "'.");
             }
 
             // Compute output for each query head that shares this KV head

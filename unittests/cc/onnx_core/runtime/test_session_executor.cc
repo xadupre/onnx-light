@@ -31,6 +31,7 @@ using core::runtime::CpuExecutor;
 using core::runtime::CurrentCpuExecutor;
 using core::runtime::CurrentParallelRegionCollector;
 using core::runtime::ExecutionPlan;
+using core::runtime::ExecuteActionKind;
 using core::runtime::KernelContext;
 using core::runtime::ParallelFor;
 using core::runtime::ParallelForThreadCount;
@@ -107,6 +108,77 @@ void RunObserver(RuntimeSession &session, RuntimeContext &rt, ExecutorObservatio
 }
 
 } // namespace
+
+TEST(ExecutionPlan, DerivesMissingReleasesFromPartialMetadata) {
+  GraphProto graph;
+  graph.add_input()->set_name("X");
+  graph.add_input()->set_name("W");
+  graph.add_output()->set_name("Y");
+  NodeProto *add = graph.add_node();
+  add->set_op_type("Add");
+  add->add_input("X");
+  add->add_input("W");
+  add->add_output("A");
+  add->add_metadata(core::compute::kNotUsedAfterMetadataKey, "X;W");
+  NodeProto *relu = graph.add_node();
+  relu->set_op_type("Relu");
+  relu->add_input("A");
+  relu->add_output("B");
+  relu->add_metadata(core::compute::kReleaseAfterMetadataKey, "A");
+  NodeProto *identity = graph.add_node();
+  identity->set_op_type("Identity");
+  identity->add_input("B");
+  identity->add_output("Y");
+
+  const ExecutionPlan plan(graph);
+  const auto &actions = plan.actions();
+  const auto releases = [&](const std::string &name, size_t node_index) {
+    return std::count_if(actions.begin(), actions.end(), [&](const auto &action) {
+      return action.kind() == ExecuteActionKind::kDeleteBuffer && action.name() == name &&
+             action.node_index() == node_index;
+    });
+  };
+  EXPECT_EQ(releases("A", 1), 1);
+  EXPECT_EQ(releases("B", 2), 1);
+  EXPECT_EQ(std::count_if(actions.begin(), actions.end(), [](const auto &action) {
+              return action.kind() == ExecuteActionKind::kDeleteBuffer;
+            }),
+            2);
+}
+
+TEST(ExecutionPlan, PreservesExplicitReleaseAndDerivesMissingShapeRelease) {
+  GraphProto graph;
+  graph.add_input()->set_name("X");
+  graph.add_output()->set_name("Y");
+  NodeProto *first = graph.add_node();
+  first->set_op_type("Identity");
+  first->add_input("X");
+  first->add_output("A");
+  first->add_metadata(core::compute::kNotUsedAfterMetadataKey, "X");
+  NodeProto *second = graph.add_node();
+  second->set_op_type("Identity");
+  second->add_input("A");
+  second->add_output("B");
+  second->add_metadata(core::compute::kReleaseAfterShapeTagMetadataKey, "B");
+  NodeProto *third = graph.add_node();
+  third->set_op_type("Identity");
+  third->add_input("B");
+  third->add_output("Y");
+  third->add_metadata(core::compute::kReleaseAfterMetadataKey, "A");
+
+  const ExecutionPlan plan(graph);
+  const auto &actions = plan.actions();
+  EXPECT_EQ(std::count_if(actions.begin(), actions.end(), [](const auto &action) {
+              return action.kind() == ExecuteActionKind::kDeleteBuffer && action.name() == "A" &&
+                     action.node_index() == 2;
+            }),
+            1);
+  EXPECT_EQ(std::count_if(actions.begin(), actions.end(), [](const auto &action) {
+              return action.kind() == ExecuteActionKind::kDeleteShape && action.name() == "B" &&
+                     action.node_index() == 2;
+            }),
+            1);
+}
 
 TEST(SessionExecutor, MakeSessionKernelInstallsBackendExecutionScope) {
   RuntimeContext rt(KernelContext(core::runtime::DefaultOpset(18)));

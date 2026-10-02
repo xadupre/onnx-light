@@ -47,6 +47,9 @@ TEST(KernelClass, ConvTransposeBasicMatchesUpstream) {
   EXPECT_NEAR(py[2 * 5 + 2], 36.0f, 1e-4f);
   ASSERT_EQ(collector.events().size(), 1u);
   EXPECT_EQ(collector.events()[0].label, "ConvTranspose");
+  if (core::runtime::ParallelForThreadCount() > 1) {
+    EXPECT_GT(collector.events()[0].admitted_threads, 1);
+  }
 }
 
 // ConvTranspose with explicit pads cropping the output.

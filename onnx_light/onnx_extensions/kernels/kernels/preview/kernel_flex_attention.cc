@@ -198,44 +198,51 @@ void ComputeFlexAttentionTyped(const Tensor &Q, const Tensor &K, const Tensor &V
   // Handle the all-``-inf`` row produced by an exhaustively masked
   // position by leaving the probabilities at zero, matching ONNX's
   // reference semantics.
-  detail::TemporaryTypedBuffer<double> row_buf(static_cast<size_t>(task_count * kv_seq_len),
+  const int64_t scratch_slots =
+      std::min<int64_t>(task_count, std::max<int64_t>(1, ParallelForThreadCount()));
+  detail::TemporaryTypedBuffer<double> row_buf(static_cast<size_t>(scratch_slots * kv_seq_len),
                                                allocator, "kernel::FlexAttention softmax rows");
-  ParallelFor(
-      task_count, task_grain,
-      [&](int64_t begin, int64_t end) {
-        for (int64_t task = begin; task < end; ++task) {
-          double *row = row_buf.data() + task * kv_seq_len;
-          const int64_t b = task / q_num_heads;
-          const int64_t h = task % q_num_heads;
-          T *Pbh = pProbs + b * probs_batch_stride + h * probs_head_stride;
-          for (int64_t i = 0; i < q_seq_len; ++i) {
-            double max_score = static_cast<double>(Pbh[i * kv_seq_len + 0]);
-            for (int64_t j = 1; j < kv_seq_len; ++j) {
-              const double s = static_cast<double>(Pbh[i * kv_seq_len + j]);
-              if (s > max_score) {
-                max_score = s;
+  for (int64_t wave_begin = 0; wave_begin < task_count; wave_begin += scratch_slots) {
+    const int64_t wave_count = std::min<int64_t>(scratch_slots, task_count - wave_begin);
+    ParallelFor(
+        wave_count, task_grain,
+        [&](int64_t begin, int64_t end) {
+          for (int64_t slot = begin; slot < end; ++slot) {
+            const int64_t task = wave_begin + slot;
+            double *row = row_buf.data() + slot * kv_seq_len;
+            const int64_t b = task / q_num_heads;
+            const int64_t h = task % q_num_heads;
+            T *Pbh = pProbs + b * probs_batch_stride + h * probs_head_stride;
+            for (int64_t i = 0; i < q_seq_len; ++i) {
+              double max_score = static_cast<double>(Pbh[i * kv_seq_len + 0]);
+              for (int64_t j = 1; j < kv_seq_len; ++j) {
+                const double s = static_cast<double>(Pbh[i * kv_seq_len + j]);
+                if (s > max_score) {
+                  max_score = s;
+                }
               }
-            }
-            double denom = 0.0;
-            if (std::isfinite(max_score)) {
+              double denom = 0.0;
+              if (std::isfinite(max_score)) {
+                for (int64_t j = 0; j < kv_seq_len; ++j) {
+                  const double e =
+                      std::exp(static_cast<double>(Pbh[i * kv_seq_len + j]) - max_score);
+                  row[static_cast<size_t>(j)] = e;
+                  denom += e;
+                }
+              } else {
+                for (int64_t j = 0; j < kv_seq_len; ++j) {
+                  row[static_cast<size_t>(j)] = 0.0;
+                }
+              }
+              const double inv_denom = denom != 0.0 ? 1.0 / denom : 0.0;
               for (int64_t j = 0; j < kv_seq_len; ++j) {
-                const double e = std::exp(static_cast<double>(Pbh[i * kv_seq_len + j]) - max_score);
-                row[static_cast<size_t>(j)] = e;
-                denom += e;
+                Pbh[i * kv_seq_len + j] = static_cast<T>(row[static_cast<size_t>(j)] * inv_denom);
               }
-            } else {
-              for (int64_t j = 0; j < kv_seq_len; ++j) {
-                row[static_cast<size_t>(j)] = 0.0;
-              }
-            }
-            const double inv_denom = denom != 0.0 ? 1.0 / denom : 0.0;
-            for (int64_t j = 0; j < kv_seq_len; ++j) {
-              Pbh[i * kv_seq_len + j] = static_cast<T>(row[static_cast<size_t>(j)] * inv_denom);
             }
           }
-        }
-      },
-      "FlexAttentionSoftmax");
+        },
+        "FlexAttentionSoftmax");
+  }
 
   // Apply the optional ``prob_mod`` modifier subgraph callback. The
   // callback may freely rewrite the probability values but must preserve

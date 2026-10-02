@@ -53,6 +53,9 @@ TEST(KernelClass, ConvIntegerBasicWithoutPaddingMatchesUpstream) {
   }
   ASSERT_EQ(collector.events().size(), 1u);
   EXPECT_EQ(collector.events()[0].label, "ConvInteger");
+  if (core::runtime::ParallelForThreadCount() > 1) {
+    EXPECT_GT(collector.events()[0].admitted_threads, 1);
+  }
 }
 
 TEST(KernelClass, ConvIntegerCanRunInPlaceIsFalse) { EXPECT_FALSE(ConvInteger::CanRunInPlace()); }

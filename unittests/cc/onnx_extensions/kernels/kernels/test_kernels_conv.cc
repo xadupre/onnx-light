@@ -58,6 +58,9 @@ TEST(KernelClass, ConvBasicWithoutPaddingMatchesUpstream) {
   ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 1, 3, 3}));
   ASSERT_EQ(collector.events().size(), 1u);
   EXPECT_EQ(collector.events()[0].label, "Conv");
+  if (core::runtime::ParallelForThreadCount() > 1) {
+    EXPECT_GT(collector.events()[0].admitted_threads, 1);
+  }
 }
 
 // Mirrors upstream ``test_basic_conv_with_padding``: same data, pads=[1,1,1,1].

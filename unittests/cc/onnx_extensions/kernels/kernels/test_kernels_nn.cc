@@ -1180,6 +1180,9 @@ TEST(KernelClass, AttentionSupportsGQAHeadSharing) {
   }
   ASSERT_EQ(collector.events().size(), 1u);
   EXPECT_EQ(collector.events()[0].label, "Attention");
+  if (core::runtime::ParallelForThreadCount() > 1) {
+    EXPECT_GT(collector.events()[0].admitted_threads, 1);
+  }
 }
 
 TEST(KernelClass, LinearAttentionParallelHeadsPreserveRecurrence) {
@@ -1205,6 +1208,9 @@ TEST(KernelClass, LinearAttentionParallelHeadsPreserveRecurrence) {
             (std::vector<float>{1.0f, 1.0f, 2.0f, 2.0f, 1.0f, 1.0f, 2.0f, 2.0f}));
   ASSERT_EQ(collector.events().size(), 1u);
   EXPECT_EQ(collector.events()[0].label, "LinearAttention");
+  if (core::runtime::ParallelForThreadCount() > 1) {
+    EXPECT_GT(collector.events()[0].admitted_threads, 1);
+  }
 }
 
 TEST(KernelClass, LinearAttentionRejectsUnknownRuleBeforeForcedParallelDispatch) {

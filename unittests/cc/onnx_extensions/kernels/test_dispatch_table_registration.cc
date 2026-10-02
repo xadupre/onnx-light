@@ -178,11 +178,22 @@ TEST(OnnxKernelsDispatchTable, RegistersFirstWaveParallelTuningSchemas) {
   };
   constexpr std::array expected{
       ExpectedSchema{"Attention", TensorProto::DataType::FLOAT},
+      ExpectedSchema{"Attention", TensorProto::DataType::FLOAT16},
+      ExpectedSchema{"Attention", TensorProto::DataType::BFLOAT16},
       ExpectedSchema{"Conv", TensorProto::DataType::FLOAT},
+      ExpectedSchema{"Conv", TensorProto::DataType::FLOAT16},
+      ExpectedSchema{"Conv", TensorProto::DataType::BFLOAT16},
+      ExpectedSchema{"ConvInteger", TensorProto::DataType::INT8},
       ExpectedSchema{"ConvInteger", TensorProto::DataType::UINT8},
       ExpectedSchema{"ConvTranspose", TensorProto::DataType::FLOAT},
       ExpectedSchema{"FlexAttention", TensorProto::DataType::FLOAT},
+      ExpectedSchema{"FlexAttention", TensorProto::DataType::DOUBLE},
+      ExpectedSchema{"FlexAttention", TensorProto::DataType::FLOAT16},
+      ExpectedSchema{"FlexAttention", TensorProto::DataType::BFLOAT16},
       ExpectedSchema{"LinearAttention", TensorProto::DataType::FLOAT},
+      ExpectedSchema{"LinearAttention", TensorProto::DataType::FLOAT16},
+      ExpectedSchema{"LinearAttention", TensorProto::DataType::BFLOAT16},
+      ExpectedSchema{"QLinearConv", TensorProto::DataType::INT8},
       ExpectedSchema{"QLinearConv", TensorProto::DataType::UINT8},
   };
 

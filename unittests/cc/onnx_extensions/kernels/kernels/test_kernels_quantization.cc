@@ -60,6 +60,9 @@ TEST(KernelClass, QLinearConvParallelPathMatchesReference) {
             (std::vector<uint8_t>{1, 2, 2, 4, 3, 4, 6, 8}));
   ASSERT_EQ(collector.events().size(), 1u);
   EXPECT_EQ(collector.events()[0].label, "QLinearConv");
+  if (core::runtime::ParallelForThreadCount() > 1) {
+    EXPECT_GT(collector.events()[0].admitted_threads, 1);
+  }
 }
 
 class TrackingRawBufferAllocator : public RawBufferAllocator {

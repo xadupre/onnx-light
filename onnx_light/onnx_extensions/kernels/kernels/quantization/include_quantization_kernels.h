@@ -9,6 +9,7 @@
 #include "onnx_core/runtime/quantization.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/kernels/kernels/auto_pad.h"
+#include "onnx_extensions/kernels/tuning/portable_parallel_tuning.h"
 
 #include <string>
 #include <tuple>
@@ -237,9 +238,11 @@ public:
 /// ``y = saturate(round(((x - x_zp) * x_scale) * ((w - w_zp) * w_scale) /
 /// y_scale + bias * x_scale * w_scale / y_scale) + y_zp)`` using the standard
 /// :cpp:class:`Conv` shape/padding/dilation rules.
-class QLinearConv : public KernelBase {
+class QLinearConv : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:QLinearConv";
+  explicit QLinearConv(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``QLinearConv`` operator.
   struct Attributes {
@@ -250,8 +253,6 @@ public:
     int64_t group = 1;
     AutoPad auto_pad = AutoPad::kNotSet;
   };
-
-  using KernelBase::KernelBase;
 
   /// Returning overload. ``B`` may be a default-constructed (empty) ``Tensor``
   /// to indicate the optional bias is missing.

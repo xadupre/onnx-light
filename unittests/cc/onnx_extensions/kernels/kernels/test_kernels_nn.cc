@@ -6,6 +6,7 @@
 #include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/kernels/float16_promote.h"
 #include "onnx_core/runtime/kernels/kernel_context.h"
+#include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
@@ -21,6 +22,7 @@
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using core::backend_test::DefaultOpset;
+using core::runtime::DataType;
 using core::runtime::RuntimeContext;
 using core::runtime::RuntimeEvent;
 using core::runtime::RuntimeEventLog;
@@ -35,6 +37,7 @@ using onnx_kernels::kernel::Dropout;
 using onnx_kernels::kernel::GRU;
 using onnx_kernels::kernel::KernelContext;
 using onnx_kernels::kernel::LayerNormalization;
+using onnx_kernels::kernel::LinearAttention;
 using onnx_kernels::kernel::LSTM;
 using onnx_kernels::kernel::MaxPool;
 using onnx_kernels::kernel::MaxUnpool;
@@ -1164,13 +1167,44 @@ TEST(KernelClass, AttentionSupportsGQAHeadSharing) {
   const Tensor V = Tensor::FromFloat("", {1, 1, 1, 2}, {7.0f, -3.0f});
 
   const KernelContext ctx = AttentionKernelContext();
-  const Attention attention{ctx};
+  Attention attention{ctx};
+  attention.Configure(
+      {attention.TuningKey(DataType::FLOAT), {{"parallel.minimum_elements", int64_t{1}}}});
+  core::runtime::ParallelRegionCollector collector(2);
+  core::runtime::ParallelRegionCollectorScope collector_scope(&collector);
   const Tensor Y = attention(Q, K, V);
   ASSERT_EQ(Y.shape, (std::vector<int64_t>{1, 2, 1, 2}));
   for (int64_t h = 0; h < 2; ++h) {
     EXPECT_FLOAT_EQ(Y.AsFloat()[h * 2 + 0], 7.0f);
     EXPECT_FLOAT_EQ(Y.AsFloat()[h * 2 + 1], -3.0f);
   }
+  ASSERT_EQ(collector.events().size(), 1u);
+  EXPECT_EQ(collector.events()[0].label, "Attention");
+}
+
+TEST(KernelClass, LinearAttentionParallelHeadsPreserveRecurrence) {
+  const KernelContext ctx{DefaultOpset(27)};
+  LinearAttention kernel{ctx};
+  kernel.Configure(
+      {kernel.TuningKey(DataType::FLOAT), {{"parallel.minimum_elements", int64_t{1}}}});
+  const Tensor query = Tensor::FromFloat("", {2, 2, 2}, std::vector<float>(8, 1.0f));
+  const Tensor key = Tensor::FromFloat("", {2, 2, 2}, std::vector<float>(8, 1.0f));
+  const Tensor value = Tensor::FromFloat("", {2, 2, 2}, std::vector<float>(8, 1.0f));
+  LinearAttention::Attributes attrs;
+  attrs.update_rule = "linear";
+  attrs.has_scale = true;
+  attrs.scale = 1.0f;
+  attrs.q_num_heads = 2;
+  attrs.kv_num_heads = 2;
+
+  core::runtime::ParallelRegionCollector collector(2);
+  core::runtime::ParallelRegionCollectorScope collector_scope(&collector);
+  const LinearAttention::Result result = kernel(query, key, value, attrs);
+
+  EXPECT_EQ(std::vector<float>(result.output.AsFloat(), result.output.AsFloat() + 8),
+            (std::vector<float>{1.0f, 1.0f, 2.0f, 2.0f, 1.0f, 1.0f, 2.0f, 2.0f}));
+  ASSERT_EQ(collector.events().size(), 1u);
+  EXPECT_EQ(collector.events()[0].label, "LinearAttention");
 }
 
 TEST(KernelClass, AttentionCausalMasksFuturePositions) {

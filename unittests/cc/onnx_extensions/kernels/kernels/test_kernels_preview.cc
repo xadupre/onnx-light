@@ -5,6 +5,7 @@
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/runtime/kernels/float16_promote.h"
 #include "onnx_core/runtime/kernels/kernel_context.h"
+#include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_extensions/kernels/kernels/preview/include_preview_kernels.h"
 
 #include <gtest/gtest.h>
@@ -15,6 +16,7 @@
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using core::backend_test::OpsetId;
+using core::runtime::DataType;
 using core::runtime::Tensor;
 using onnx_kernels::kernel::FlexAttention;
 using onnx_kernels::kernel::KernelContext;
@@ -72,13 +74,20 @@ TEST(KernelClass, FlexAttentionSupportsGQAHeadSharing) {
   const Tensor V = Tensor::FromFloat("", {1, 1, 1, 2}, {7.0f, -3.0f});
 
   const KernelContext ctx = PreviewKernelContext();
-  const FlexAttention flex{ctx};
+  FlexAttention flex{ctx};
+  flex.Configure({flex.TuningKey(DataType::FLOAT), {{"parallel.minimum_elements", int64_t{1}}}});
+  core::runtime::ParallelRegionCollector collector(3);
+  core::runtime::ParallelRegionCollectorScope collector_scope(&collector);
   const Tensor Y = flex(Q, K, V);
   ASSERT_EQ(Y.shape, (std::vector<int64_t>{1, 2, 1, 2}));
   for (int64_t h = 0; h < 2; ++h) {
     EXPECT_FLOAT_EQ(Y.AsFloat()[h * 2 + 0], 7.0f);
     EXPECT_FLOAT_EQ(Y.AsFloat()[h * 2 + 1], -3.0f);
   }
+  ASSERT_EQ(collector.events().size(), 3u);
+  EXPECT_EQ(collector.events()[0].label, "FlexAttentionScores");
+  EXPECT_EQ(collector.events()[1].label, "FlexAttentionSoftmax");
+  EXPECT_EQ(collector.events()[2].label, "FlexAttentionOutput");
 }
 
 TEST(KernelClass, FlexAttentionRejectsInvalidInputs) {

@@ -5,11 +5,13 @@
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
 #include "onnx_core/runtime/kernels/float16_promote.h"
+#include "onnx_core/runtime/kernels/parallel_for.h"
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/memory/temporary_buffer.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -19,6 +21,12 @@
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
+
+constexpr uint32_t kTuningAbi = 1;
+constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
+constexpr std::array<int32_t, 3> kSupportedElementTypes = {
+    static_cast<int32_t>(DataType::FLOAT), static_cast<int32_t>(DataType::FLOAT16),
+    static_cast<int32_t>(DataType::BFLOAT16)};
 
 // Validates a 3D packed FLOAT tensor and returns its shape components.
 void Check3DFloat(const Tensor &t, const char *label, int64_t &B, int64_t &T, int64_t &last) {
@@ -32,6 +40,12 @@ void Check3DFloat(const Tensor &t, const char *label, int64_t &B, int64_t &T, in
 }
 
 } // namespace
+
+LinearAttention::LinearAttention(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "LinearAttention", kSupportedElementTypes,
+                            kPortableParallelMinimum, kTuningAbi) {}
+
+ONNX_LIGHT_REGISTER_PARALLEL_TUNING_SCHEMA(LinearAttention)
 
 Tensor LinearAttention::operator()(const Tensor &query, const Tensor &key, const Tensor &value,
                                    RuntimeContext *rt) const {
@@ -250,136 +264,144 @@ LinearAttention::Result LinearAttention::operator()(const Tensor &query, const T
   const float *k_ptr = key.AsFloat();
   const float *v_ptr = value.AsFloat();
 
-  // Sequential recurrence over time steps
-  for (int64_t b = 0; b < B; ++b) {
-    for (int64_t t = 0; t < T; ++t) {
-      // Process each KV head
-      for (int64_t h_kv = 0; h_kv < kv_num_heads; ++h_kv) {
-        // State offset: state[b, h_kv, :, :] is at b*H_kv*d_k*d_v + h_kv*d_k*d_v
-        float *S = state + static_cast<size_t>((b * kv_num_heads + h_kv) * d_k * d_v);
+  // Each batch/KV-head pair owns an independent recurrent state. Time stays
+  // ordered within the task so the numerical recurrence is unchanged.
+  const int64_t task_count = B * kv_num_heads;
+  const int64_t task_work = std::max<int64_t>(1, T * d_k * d_v);
+  const int64_t task_grain = std::max<int64_t>(1, tuning().parallel_minimum_elements / task_work);
+  detail::TemporaryTypedBuffer<float> g_exp_buf(static_cast<std::size_t>(task_count * d_k),
+                                                rt ? rt->execution_allocator() : nullptr,
+                                                "kernel::LinearAttention g_exp");
+  detail::TemporaryTypedBuffer<float> auxiliary_buf(static_cast<std::size_t>(task_count * d_v),
+                                                    rt ? rt->execution_allocator() : nullptr,
+                                                    "kernel::LinearAttention auxiliary");
+  ParallelFor(
+      task_count, task_grain,
+      [&](int64_t begin, int64_t end) {
+        for (int64_t task = begin; task < end; ++task) {
+          const int64_t b = task / kv_num_heads;
+          const int64_t h_kv = task % kv_num_heads;
+          float *g_exp = g_exp_buf.data() + task * d_k;
+          float *auxiliary = auxiliary_buf.data() + task * d_v;
+          for (int64_t t = 0; t < T; ++t) {
+            // State offset: state[b, h_kv, :, :] is at b*H_kv*d_k*d_v + h_kv*d_k*d_v
+            float *S = state + static_cast<size_t>((b * kv_num_heads + h_kv) * d_k * d_v);
 
-        // Key vector for this head at this time step
-        // k[b, t, h_kv*d_k : (h_kv+1)*d_k]
-        const float *k_t = k_ptr + static_cast<size_t>((b * T + t) * hidden_k + h_kv * d_k);
-        // Value vector for this head
-        const float *v_t = v_ptr + static_cast<size_t>((b * T + t) * hidden_v + h_kv * d_v);
+            // Key vector for this head at this time step
+            // k[b, t, h_kv*d_k : (h_kv+1)*d_k]
+            const float *k_t = k_ptr + static_cast<size_t>((b * T + t) * hidden_k + h_kv * d_k);
+            // Value vector for this head
+            const float *v_t = v_ptr + static_cast<size_t>((b * T + t) * hidden_v + h_kv * d_v);
 
-        // Get decay for this head/timestep
-        // decay_last == kv_num_heads*d_k: per-key-dim
-        // decay_last == kv_num_heads: per-head scalar
-        detail::TemporaryTypedBuffer<float> g_exp_buf(static_cast<std::size_t>(d_k),
-                                                      rt ? rt->execution_allocator() : nullptr,
-                                                      "kernel::LinearAttention g_exp");
-        float *g_exp = g_exp_buf.data();
-        std::fill(g_exp, g_exp + d_k, 1.0f);
-        if (use_decay) {
-          if (decay_last == kv_num_heads * d_k) {
-            const float *g_ptr =
-                decay_ptr + static_cast<size_t>((b * T + t) * decay_last + h_kv * d_k);
-            for (int64_t i = 0; i < d_k; ++i) {
-              g_exp[static_cast<size_t>(i)] = std::exp(g_ptr[i]);
+            // Get decay for this head/timestep
+            // decay_last == kv_num_heads*d_k: per-key-dim
+            // decay_last == kv_num_heads: per-head scalar
+            std::fill(g_exp, g_exp + d_k, 1.0f);
+            if (use_decay) {
+              if (decay_last == kv_num_heads * d_k) {
+                const float *g_ptr =
+                    decay_ptr + static_cast<size_t>((b * T + t) * decay_last + h_kv * d_k);
+                for (int64_t i = 0; i < d_k; ++i) {
+                  g_exp[static_cast<size_t>(i)] = std::exp(g_ptr[i]);
+                }
+              } else {
+                // Per-head scalar: broadcast over d_k
+                float g_val = decay_ptr[static_cast<size_t>((b * T + t) * decay_last + h_kv)];
+                float eg = std::exp(g_val);
+                for (int64_t i = 0; i < d_k; ++i) {
+                  g_exp[static_cast<size_t>(i)] = eg;
+                }
+              }
             }
-          } else {
-            // Per-head scalar: broadcast over d_k
-            float g_val = decay_ptr[static_cast<size_t>((b * T + t) * decay_last + h_kv)];
-            float eg = std::exp(g_val);
-            for (int64_t i = 0; i < d_k; ++i) {
-              g_exp[static_cast<size_t>(i)] = eg;
+
+            // Get beta for this head/timestep
+            float beta_val = 1.0f;
+            if (use_beta) {
+              if (beta_last == kv_num_heads) {
+                beta_val = beta_ptr[static_cast<size_t>((b * T + t) * beta_last + h_kv)];
+              } else {
+                // beta_last == 1: broadcast
+                beta_val = beta_ptr[static_cast<size_t>((b * T + t) * beta_last)];
+              }
+            }
+
+            // Apply update rule
+            if (rule == "linear") {
+              // S_t = S_{t-1} + k_t ⊗ v_t
+              for (int64_t i = 0; i < d_k; ++i) {
+                for (int64_t j = 0; j < d_v; ++j) {
+                  S[static_cast<size_t>(i * d_v + j)] += k_t[i] * v_t[j];
+                }
+              }
+            } else if (rule == "gated") {
+              // S_t = exp(g_t) * S_{t-1} + k_t ⊗ v_t
+              for (int64_t i = 0; i < d_k; ++i) {
+                for (int64_t j = 0; j < d_v; ++j) {
+                  S[static_cast<size_t>(i * d_v + j)] =
+                      g_exp[static_cast<size_t>(i)] * S[static_cast<size_t>(i * d_v + j)] +
+                      k_t[i] * v_t[j];
+                }
+              }
+            } else if (rule == "delta") {
+              // S_t = S_{t-1} + β_t * k_t ⊗ (v_t - S_{t-1}^T k_t)
+              // S_{t-1}^T k_t = sum_i(S[i,:] * k_t[i]) => vector of d_v
+              float *Sk = auxiliary;
+              std::fill(Sk, Sk + d_v, 0.0f);
+              for (int64_t i = 0; i < d_k; ++i) {
+                for (int64_t j = 0; j < d_v; ++j) {
+                  Sk[static_cast<size_t>(j)] += S[static_cast<size_t>(i * d_v + j)] * k_t[i];
+                }
+              }
+              for (int64_t i = 0; i < d_k; ++i) {
+                for (int64_t j = 0; j < d_v; ++j) {
+                  float diff = v_t[j] - Sk[static_cast<size_t>(j)];
+                  S[static_cast<size_t>(i * d_v + j)] += beta_val * k_t[i] * diff;
+                }
+              }
+            } else if (rule == "gated_delta") {
+              // S_t = exp(g_t)*S_{t-1} + β_t * k_t ⊗ (v_t - exp(g_t)*S_{t-1}^T k_t)
+              // First compute exp(g_t)*S_{t-1}^T k_t
+              float *gSk = auxiliary;
+              std::fill(gSk, gSk + d_v, 0.0f);
+              for (int64_t i = 0; i < d_k; ++i) {
+                for (int64_t j = 0; j < d_v; ++j) {
+                  gSk[static_cast<size_t>(j)] +=
+                      g_exp[static_cast<size_t>(i)] * S[static_cast<size_t>(i * d_v + j)] * k_t[i];
+                }
+              }
+              // Apply decay to state and add delta
+              for (int64_t i = 0; i < d_k; ++i) {
+                for (int64_t j = 0; j < d_v; ++j) {
+                  float decayed =
+                      g_exp[static_cast<size_t>(i)] * S[static_cast<size_t>(i * d_v + j)];
+                  float diff = v_t[j] - gSk[static_cast<size_t>(j)];
+                  S[static_cast<size_t>(i * d_v + j)] = decayed + beta_val * k_t[i] * diff;
+                }
+              }
+            } else {
+              EXT_ENFORCE_INVALID(false, "kernel::LinearAttention: unknown update_rule '", rule,
+                                  "'.");
+            }
+
+            // Compute output for each query head that shares this KV head
+            for (int64_t qg = 0; qg < heads_per_kv; ++qg) {
+              int64_t h_q = h_kv * heads_per_kv + qg;
+              // q[b, t, h_q*d_k : (h_q+1)*d_k]
+              const float *q_t = q_ptr + static_cast<size_t>((b * T + t) * hidden_q + h_q * d_k);
+              // o_t = scale * q_t^T S_t => vector of d_v
+              float *out_t = output + static_cast<size_t>((b * T + t) * out_hidden + h_q * d_v);
+              for (int64_t j = 0; j < d_v; ++j) {
+                float dot = 0.0f;
+                for (int64_t i = 0; i < d_k; ++i) {
+                  dot += q_t[i] * S[static_cast<size_t>(i * d_v + j)];
+                }
+                out_t[j] = scale * dot;
+              }
             }
           }
         }
-
-        // Get beta for this head/timestep
-        float beta_val = 1.0f;
-        if (use_beta) {
-          if (beta_last == kv_num_heads) {
-            beta_val = beta_ptr[static_cast<size_t>((b * T + t) * beta_last + h_kv)];
-          } else {
-            // beta_last == 1: broadcast
-            beta_val = beta_ptr[static_cast<size_t>((b * T + t) * beta_last)];
-          }
-        }
-
-        // Apply update rule
-        if (rule == "linear") {
-          // S_t = S_{t-1} + k_t ⊗ v_t
-          for (int64_t i = 0; i < d_k; ++i) {
-            for (int64_t j = 0; j < d_v; ++j) {
-              S[static_cast<size_t>(i * d_v + j)] += k_t[i] * v_t[j];
-            }
-          }
-        } else if (rule == "gated") {
-          // S_t = exp(g_t) * S_{t-1} + k_t ⊗ v_t
-          for (int64_t i = 0; i < d_k; ++i) {
-            for (int64_t j = 0; j < d_v; ++j) {
-              S[static_cast<size_t>(i * d_v + j)] =
-                  g_exp[static_cast<size_t>(i)] * S[static_cast<size_t>(i * d_v + j)] +
-                  k_t[i] * v_t[j];
-            }
-          }
-        } else if (rule == "delta") {
-          // S_t = S_{t-1} + β_t * k_t ⊗ (v_t - S_{t-1}^T k_t)
-          // S_{t-1}^T k_t = sum_i(S[i,:] * k_t[i]) => vector of d_v
-          detail::TemporaryTypedBuffer<float> Sk_buf(static_cast<std::size_t>(d_v),
-                                                     rt ? rt->execution_allocator() : nullptr,
-                                                     "kernel::LinearAttention Sk");
-          float *Sk = Sk_buf.data();
-          std::fill(Sk, Sk + d_v, 0.0f);
-          for (int64_t i = 0; i < d_k; ++i) {
-            for (int64_t j = 0; j < d_v; ++j) {
-              Sk[static_cast<size_t>(j)] += S[static_cast<size_t>(i * d_v + j)] * k_t[i];
-            }
-          }
-          for (int64_t i = 0; i < d_k; ++i) {
-            for (int64_t j = 0; j < d_v; ++j) {
-              float diff = v_t[j] - Sk[static_cast<size_t>(j)];
-              S[static_cast<size_t>(i * d_v + j)] += beta_val * k_t[i] * diff;
-            }
-          }
-        } else if (rule == "gated_delta") {
-          // S_t = exp(g_t)*S_{t-1} + β_t * k_t ⊗ (v_t - exp(g_t)*S_{t-1}^T k_t)
-          // First compute exp(g_t)*S_{t-1}^T k_t
-          detail::TemporaryTypedBuffer<float> gSk_buf(static_cast<std::size_t>(d_v),
-                                                      rt ? rt->execution_allocator() : nullptr,
-                                                      "kernel::LinearAttention gSk");
-          float *gSk = gSk_buf.data();
-          std::fill(gSk, gSk + d_v, 0.0f);
-          for (int64_t i = 0; i < d_k; ++i) {
-            for (int64_t j = 0; j < d_v; ++j) {
-              gSk[static_cast<size_t>(j)] +=
-                  g_exp[static_cast<size_t>(i)] * S[static_cast<size_t>(i * d_v + j)] * k_t[i];
-            }
-          }
-          // Apply decay to state and add delta
-          for (int64_t i = 0; i < d_k; ++i) {
-            for (int64_t j = 0; j < d_v; ++j) {
-              float decayed = g_exp[static_cast<size_t>(i)] * S[static_cast<size_t>(i * d_v + j)];
-              float diff = v_t[j] - gSk[static_cast<size_t>(j)];
-              S[static_cast<size_t>(i * d_v + j)] = decayed + beta_val * k_t[i] * diff;
-            }
-          }
-        } else {
-          EXT_ENFORCE_INVALID(false, "kernel::LinearAttention: unknown update_rule '", rule, "'.");
-        }
-
-        // Compute output for each query head that shares this KV head
-        for (int64_t qg = 0; qg < heads_per_kv; ++qg) {
-          int64_t h_q = h_kv * heads_per_kv + qg;
-          // q[b, t, h_q*d_k : (h_q+1)*d_k]
-          const float *q_t = q_ptr + static_cast<size_t>((b * T + t) * hidden_q + h_q * d_k);
-          // o_t = scale * q_t^T S_t => vector of d_v
-          float *out_t = output + static_cast<size_t>((b * T + t) * out_hidden + h_q * d_v);
-          for (int64_t j = 0; j < d_v; ++j) {
-            float dot = 0.0f;
-            for (int64_t i = 0; i < d_k; ++i) {
-              dot += q_t[i] * S[static_cast<size_t>(i * d_v + j)];
-            }
-            out_t[j] = scale * dot;
-          }
-        }
-      }
-    }
-  }
+      },
+      "LinearAttention");
 
   Result result;
   result.output = std::move(output_tensor);
@@ -414,9 +436,8 @@ void LinearAttention::Run(RuntimeContext &rt) {
   attrs.kv_num_heads = GetAttributeIntOrDefault(node, "kv_num_heads", 0);
   attrs.chunk_size = GetAttributeIntOrDefault(node, "chunk_size", 64);
 
-  onnx_kernels::kernel::LinearAttention k(rt.kernel_ctx());
   onnx_kernels::kernel::LinearAttention::Result result =
-      k(query, key, value, attrs, past_state, decay, beta, &rt);
+      (*this)(query, key, value, attrs, past_state, decay, beta, &rt);
   SetOutput(node, 0, std::move(result.output), rt);
 
   if (node.output_size() >= 2) {

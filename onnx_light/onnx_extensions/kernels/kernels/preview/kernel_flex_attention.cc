@@ -6,11 +6,13 @@
 
 #include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/kernels/float16_promote.h"
+#include "onnx_core/runtime/kernels/parallel_for.h"
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/kernels/run_nodes.h"
 #include "onnx_core/runtime/memory/temporary_buffer.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -20,6 +22,12 @@
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
+
+constexpr uint32_t kTuningAbi = 1;
+constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
+constexpr std::array<int32_t, 4> kSupportedElementTypes = {
+    static_cast<int32_t>(DataType::FLOAT), static_cast<int32_t>(DataType::DOUBLE),
+    static_cast<int32_t>(DataType::FLOAT16), static_cast<int32_t>(DataType::BFLOAT16)};
 
 // Validates that ``t`` is a rank-4 tensor with a supported element type
 // (FLOAT, DOUBLE, FLOAT16, or BFLOAT16). The caller is identified by ``label``
@@ -59,6 +67,7 @@ template <typename T>
 void ComputeFlexAttentionTyped(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
                                const FlexAttention::ScoreModFn &score_mod,
                                const FlexAttention::ProbModFn &prob_mod, Tensor &output,
+                               int64_t parallel_minimum_elements,
                                RawBufferAllocator *allocator = nullptr) {
   constexpr int32_t kElementType = TensorElementType<T>::value;
 
@@ -133,29 +142,38 @@ void ComputeFlexAttentionTyped(const Tensor &Q, const Tensor &K, const Tensor &V
 
   const int64_t probs_head_stride = q_seq_len * kv_seq_len;
   const int64_t probs_batch_stride = q_num_heads * probs_head_stride;
+  const int64_t task_count = batch_size * q_num_heads;
+  const int64_t task_work =
+      std::max<int64_t>(1, q_seq_len * kv_seq_len * (head_size + v_head_size));
+  const int64_t task_grain = std::max<int64_t>(1, parallel_minimum_elements / task_work);
 
   // Phase 1: scores = (Q @ K^T) * scale, written into ``probs`` so the
   // optional ``score_mod`` callback can rewrite it in place.
-  for (int64_t b = 0; b < batch_size; ++b) {
-    for (int64_t h = 0; h < q_num_heads; ++h) {
-      const int64_t kv_h = h / group_size;
-      const T *Qbh = pQ + b * q_batch_stride + h * q_head_stride;
-      const T *Kbh = pK + b * k_batch_stride + kv_h * k_head_stride;
-      T *Sbh = pProbs + b * probs_batch_stride + h * probs_head_stride;
+  ParallelFor(
+      task_count, task_grain,
+      [&](int64_t begin, int64_t end) {
+        for (int64_t task = begin; task < end; ++task) {
+          const int64_t b = task / q_num_heads;
+          const int64_t h = task % q_num_heads;
+          const int64_t kv_h = h / group_size;
+          const T *Qbh = pQ + b * q_batch_stride + h * q_head_stride;
+          const T *Kbh = pK + b * k_batch_stride + kv_h * k_head_stride;
+          T *Sbh = pProbs + b * probs_batch_stride + h * probs_head_stride;
 
-      for (int64_t i = 0; i < q_seq_len; ++i) {
-        for (int64_t j = 0; j < kv_seq_len; ++j) {
-          double s = 0.0;
-          for (int64_t d = 0; d < head_size; ++d) {
-            s += static_cast<double>(Qbh[i * head_size + d]) *
-                 static_cast<double>(Kbh[j * head_size + d]);
+          for (int64_t i = 0; i < q_seq_len; ++i) {
+            for (int64_t j = 0; j < kv_seq_len; ++j) {
+              double s = 0.0;
+              for (int64_t d = 0; d < head_size; ++d) {
+                s += static_cast<double>(Qbh[i * head_size + d]) *
+                     static_cast<double>(Kbh[j * head_size + d]);
+              }
+              s *= static_cast<double>(scale);
+              Sbh[i * kv_seq_len + j] = static_cast<T>(s);
+            }
           }
-          s *= static_cast<double>(scale);
-          Sbh[i * kv_seq_len + j] = static_cast<T>(s);
         }
-      }
-    }
-  }
+      },
+      "FlexAttentionScores");
 
   // Apply the optional ``score_mod`` modifier subgraph callback. The
   // callback may freely rewrite the score values but must preserve the
@@ -180,39 +198,44 @@ void ComputeFlexAttentionTyped(const Tensor &Q, const Tensor &K, const Tensor &V
   // Handle the all-``-inf`` row produced by an exhaustively masked
   // position by leaving the probabilities at zero, matching ONNX's
   // reference semantics.
-  detail::TemporaryTypedBuffer<double> row_buf(static_cast<size_t>(kv_seq_len), allocator,
-                                               "kernel::FlexAttention softmax row");
-  double *row = row_buf.data();
-  for (int64_t b = 0; b < batch_size; ++b) {
-    for (int64_t h = 0; h < q_num_heads; ++h) {
-      T *Pbh = pProbs + b * probs_batch_stride + h * probs_head_stride;
-      for (int64_t i = 0; i < q_seq_len; ++i) {
-        double max_score = static_cast<double>(Pbh[i * kv_seq_len + 0]);
-        for (int64_t j = 1; j < kv_seq_len; ++j) {
-          const double s = static_cast<double>(Pbh[i * kv_seq_len + j]);
-          if (s > max_score) {
-            max_score = s;
+  detail::TemporaryTypedBuffer<double> row_buf(static_cast<size_t>(task_count * kv_seq_len),
+                                               allocator, "kernel::FlexAttention softmax rows");
+  ParallelFor(
+      task_count, task_grain,
+      [&](int64_t begin, int64_t end) {
+        for (int64_t task = begin; task < end; ++task) {
+          double *row = row_buf.data() + task * kv_seq_len;
+          const int64_t b = task / q_num_heads;
+          const int64_t h = task % q_num_heads;
+          T *Pbh = pProbs + b * probs_batch_stride + h * probs_head_stride;
+          for (int64_t i = 0; i < q_seq_len; ++i) {
+            double max_score = static_cast<double>(Pbh[i * kv_seq_len + 0]);
+            for (int64_t j = 1; j < kv_seq_len; ++j) {
+              const double s = static_cast<double>(Pbh[i * kv_seq_len + j]);
+              if (s > max_score) {
+                max_score = s;
+              }
+            }
+            double denom = 0.0;
+            if (std::isfinite(max_score)) {
+              for (int64_t j = 0; j < kv_seq_len; ++j) {
+                const double e = std::exp(static_cast<double>(Pbh[i * kv_seq_len + j]) - max_score);
+                row[static_cast<size_t>(j)] = e;
+                denom += e;
+              }
+            } else {
+              for (int64_t j = 0; j < kv_seq_len; ++j) {
+                row[static_cast<size_t>(j)] = 0.0;
+              }
+            }
+            const double inv_denom = denom != 0.0 ? 1.0 / denom : 0.0;
+            for (int64_t j = 0; j < kv_seq_len; ++j) {
+              Pbh[i * kv_seq_len + j] = static_cast<T>(row[static_cast<size_t>(j)] * inv_denom);
+            }
           }
         }
-        double denom = 0.0;
-        if (std::isfinite(max_score)) {
-          for (int64_t j = 0; j < kv_seq_len; ++j) {
-            const double e = std::exp(static_cast<double>(Pbh[i * kv_seq_len + j]) - max_score);
-            row[static_cast<size_t>(j)] = e;
-            denom += e;
-          }
-        } else {
-          for (int64_t j = 0; j < kv_seq_len; ++j) {
-            row[static_cast<size_t>(j)] = 0.0;
-          }
-        }
-        const double inv_denom = denom != 0.0 ? 1.0 / denom : 0.0;
-        for (int64_t j = 0; j < kv_seq_len; ++j) {
-          Pbh[i * kv_seq_len + j] = static_cast<T>(row[static_cast<size_t>(j)] * inv_denom);
-        }
-      }
-    }
-  }
+      },
+      "FlexAttentionSoftmax");
 
   // Apply the optional ``prob_mod`` modifier subgraph callback. The
   // callback may freely rewrite the probability values but must preserve
@@ -234,27 +257,38 @@ void ComputeFlexAttentionTyped(const Tensor &Q, const Tensor &K, const Tensor &V
   }
 
   // Phase 3: Y = probs @ V, per (batch, query-head, query-pos, value-dim).
-  for (int64_t b = 0; b < batch_size; ++b) {
-    for (int64_t h = 0; h < q_num_heads; ++h) {
-      const int64_t kv_h = h / group_size;
-      const T *Vbh = pV + b * v_batch_stride + kv_h * v_head_stride;
-      const T *Pbh = pProbs + b * probs_batch_stride + h * probs_head_stride;
-      T *Ybh = pY + b * y_batch_stride + h * y_head_stride;
-      for (int64_t i = 0; i < q_seq_len; ++i) {
-        for (int64_t dv = 0; dv < v_head_size; ++dv) {
-          double y = 0.0;
-          for (int64_t j = 0; j < kv_seq_len; ++j) {
-            y += static_cast<double>(Pbh[i * kv_seq_len + j]) *
-                 static_cast<double>(Vbh[j * v_head_size + dv]);
+  ParallelFor(
+      task_count, task_grain,
+      [&](int64_t begin, int64_t end) {
+        for (int64_t task = begin; task < end; ++task) {
+          const int64_t b = task / q_num_heads;
+          const int64_t h = task % q_num_heads;
+          const int64_t kv_h = h / group_size;
+          const T *Vbh = pV + b * v_batch_stride + kv_h * v_head_stride;
+          const T *Pbh = pProbs + b * probs_batch_stride + h * probs_head_stride;
+          T *Ybh = pY + b * y_batch_stride + h * y_head_stride;
+          for (int64_t i = 0; i < q_seq_len; ++i) {
+            for (int64_t dv = 0; dv < v_head_size; ++dv) {
+              double y = 0.0;
+              for (int64_t j = 0; j < kv_seq_len; ++j) {
+                y += static_cast<double>(Pbh[i * kv_seq_len + j]) *
+                     static_cast<double>(Vbh[j * v_head_size + dv]);
+              }
+              Ybh[i * v_head_size + dv] = static_cast<T>(y);
+            }
           }
-          Ybh[i * v_head_size + dv] = static_cast<T>(y);
         }
-      }
-    }
-  }
+      },
+      "FlexAttentionOutput");
 }
 
 } // namespace
+
+FlexAttention::FlexAttention(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "FlexAttention", kSupportedElementTypes, kPortableParallelMinimum,
+                            kTuningAbi) {}
+
+ONNX_LIGHT_REGISTER_PARALLEL_TUNING_SCHEMA(FlexAttention)
 
 Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V,
                                  RuntimeContext *rt) const {
@@ -389,9 +423,11 @@ void FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V
   // promote/compute/demote fast path above.)
   if (Q.data_type == DataType::DOUBLE) {
     ComputeFlexAttentionTyped<double>(Q, K, V, scale, score_mod, prob_mod, output,
+                                      tuning().parallel_minimum_elements,
                                       rt ? rt->execution_allocator() : nullptr);
   } else {
     ComputeFlexAttentionTyped<float>(Q, K, V, scale, score_mod, prob_mod, output,
+                                     tuning().parallel_minimum_elements,
                                      rt ? rt->execution_allocator() : nullptr);
   }
 }
@@ -410,7 +446,6 @@ void FlexAttention::Run(RuntimeContext &rt) {
                           ? GetAttributeFloatOrDefault(node, "scale", 1.0f)
                           : 1.0f / std::sqrt(static_cast<float>(Q.shape[3]));
 
-  onnx_kernels::kernel::FlexAttention flex(rt.kernel_ctx());
   Tensor Y;
   onnx_kernels::kernel::FlexAttention::ScoreModFn score_mod_fn;
   onnx_kernels::kernel::FlexAttention::ProbModFn prob_mod_fn;
@@ -448,9 +483,9 @@ void FlexAttention::Run(RuntimeContext &rt) {
     };
   }
   if (score_mod_fn || prob_mod_fn) {
-    Y = flex(Q, K, V, scale, score_mod_fn, prob_mod_fn, &rt);
+    Y = (*this)(Q, K, V, scale, score_mod_fn, prob_mod_fn, &rt);
   } else {
-    Y = flex(Q, K, V, scale, &rt);
+    Y = (*this)(Q, K, V, scale, &rt);
   }
   SetOutput(node, 0, std::move(Y), rt);
 }

@@ -5,14 +5,20 @@
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
+#include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <stdexcept>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
+
+constexpr uint32_t kTuningAbi = 1;
+constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
+constexpr std::array<int32_t, 1> kSupportedElementTypes = {static_cast<int32_t>(DataType::FLOAT)};
 
 // Resolves the spatial attribute vectors to canonical sizes. ``pads`` (when
 // ``output_shape`` or ``auto_pad`` is set) is recomputed in
@@ -136,6 +142,12 @@ onnx_kernels::Shape ComputeOutputShape(const Tensor &x, ConvTranspose::Attribute
 
 } // namespace
 
+ConvTranspose::ConvTranspose(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "ConvTranspose", kSupportedElementTypes, kPortableParallelMinimum,
+                            kTuningAbi) {}
+
+ONNX_LIGHT_REGISTER_PARALLEL_TUNING_SCHEMA(ConvTranspose)
+
 Tensor ConvTranspose::operator()(const Tensor &x, const Tensor &w, const Tensor &b,
                                  const Attributes &attrs, RuntimeContext *rt) const {
   Attributes resolved = attrs;
@@ -228,70 +240,68 @@ void ConvTranspose::operator()(const Tensor &x, const Tensor &w, const Tensor &b
   const float *pb = b.shape.empty() ? nullptr : b.AsFloat();
   float *py = output.AsFloat();
 
-  // Initialize output with bias (or zero).
-  for (int64_t n = 0; n < N; ++n) {
-    for (int64_t m = 0; m < M; ++m) {
-      const float bias = pb ? pb[m] : 0.0f;
-      float *plane = py + ((n * M + m) * out_spatial_size);
-      std::fill(plane, plane + out_spatial_size, bias);
-    }
-  }
-
   // Scatter-add x * w into y. For each input spatial position and each
   // kernel position, the output position is
   // ``oa = ia * stride - pad_begin + ka * dilation``.
-  onnx_kernels::Shape iidx;
-  iidx.assign(spatial_rank, 0);
-  onnx_kernels::Shape kidx;
-  kidx.assign(spatial_rank, 0);
-
-  for (int64_t n = 0; n < N; ++n) {
-    for (int64_t g = 0; g < resolved.group; ++g) {
-      for (int64_t m_in_group = 0; m_in_group < M_per_group; ++m_in_group) {
-        const int64_t m = g * M_per_group + m_in_group;
-        float *out_plane = py + ((n * M + m) * out_spatial_size);
-        for (int64_t c_in_group = 0; c_in_group < C_per_group; ++c_in_group) {
-          const int64_t c = g * C_per_group + c_in_group;
-          const float *x_plane = px + ((n * C + c) * in_spatial_size);
-          // W is laid out (C, M/group, k1..kk). Channel-first index 'c'.
-          const float *w_plane = pw + ((c * M_per_group + m_in_group) * kernel_size);
-          std::fill(iidx.begin(), iidx.end(), 0);
-          for (int64_t ip = 0; ip < in_spatial_size; ++ip) {
-            const float xv = x_plane[ip];
-            std::fill(kidx.begin(), kidx.end(), 0);
-            for (int64_t kp = 0; kp < kernel_size; ++kp) {
-              bool in_bounds = true;
-              int64_t out_off = 0;
-              for (size_t a = 0; a < spatial_rank; ++a) {
-                const int64_t oa = iidx[a] * resolved.strides[a] - resolved.pads[a] +
-                                   kidx[a] * resolved.dilations[a];
-                if (oa < 0 || oa >= oD[a]) {
-                  in_bounds = false;
-                  break;
+  const int64_t plane_count = N * M;
+  const int64_t plane_grain = std::max<int64_t>(1, tuning().parallel_minimum_elements /
+                                                       std::max<int64_t>(1, out_spatial_size));
+  ParallelFor(
+      plane_count, plane_grain,
+      [&](int64_t begin, int64_t end) {
+        onnx_kernels::Shape iidx;
+        iidx.assign(spatial_rank, 0);
+        onnx_kernels::Shape kidx;
+        kidx.assign(spatial_rank, 0);
+        for (int64_t plane = begin; plane < end; ++plane) {
+          const int64_t n = plane / M;
+          const int64_t m = plane % M;
+          const int64_t g = m / M_per_group;
+          const int64_t m_in_group = m % M_per_group;
+          float *out_plane = py + ((n * M + m) * out_spatial_size);
+          std::fill(out_plane, out_plane + out_spatial_size, pb ? pb[m] : 0.0f);
+          for (int64_t c_in_group = 0; c_in_group < C_per_group; ++c_in_group) {
+            const int64_t c = g * C_per_group + c_in_group;
+            const float *x_plane = px + ((n * C + c) * in_spatial_size);
+            // W is laid out (C, M/group, k1..kk). Channel-first index 'c'.
+            const float *w_plane = pw + ((c * M_per_group + m_in_group) * kernel_size);
+            std::fill(iidx.begin(), iidx.end(), 0);
+            for (int64_t ip = 0; ip < in_spatial_size; ++ip) {
+              const float xv = x_plane[ip];
+              std::fill(kidx.begin(), kidx.end(), 0);
+              for (int64_t kp = 0; kp < kernel_size; ++kp) {
+                bool in_bounds = true;
+                int64_t out_off = 0;
+                for (size_t a = 0; a < spatial_rank; ++a) {
+                  const int64_t oa = iidx[a] * resolved.strides[a] - resolved.pads[a] +
+                                     kidx[a] * resolved.dilations[a];
+                  if (oa < 0 || oa >= oD[a]) {
+                    in_bounds = false;
+                    break;
+                  }
+                  out_off += oa * out_strides[a];
                 }
-                out_off += oa * out_strides[a];
-              }
-              if (in_bounds) {
-                out_plane[out_off] += xv * w_plane[kp];
+                if (in_bounds) {
+                  out_plane[out_off] += xv * w_plane[kp];
+                }
+                for (int a = static_cast<int>(spatial_rank) - 1; a >= 0; --a) {
+                  if (++kidx[a] < k_shape[a]) {
+                    break;
+                  }
+                  kidx[a] = 0;
+                }
               }
               for (int a = static_cast<int>(spatial_rank) - 1; a >= 0; --a) {
-                if (++kidx[a] < k_shape[a]) {
+                if (++iidx[a] < iD[a]) {
                   break;
                 }
-                kidx[a] = 0;
+                iidx[a] = 0;
               }
-            }
-            for (int a = static_cast<int>(spatial_rank) - 1; a >= 0; --a) {
-              if (++iidx[a] < iD[a]) {
-                break;
-              }
-              iidx[a] = 0;
             }
           }
         }
-      }
-    }
-  }
+      },
+      "ConvTranspose");
 }
 
 void ConvTranspose::Run(RuntimeContext &rt) {
@@ -314,8 +324,7 @@ void ConvTranspose::Run(RuntimeContext &rt) {
   attrs.group = GetAttributeIntOrDefault(node, "group", 1);
   attrs.auto_pad = onnx_kernels::kernel::AutoPadFromString(
       GetAttributeStringOrDefault(node, "auto_pad", "NOTSET"));
-  onnx_kernels::kernel::ConvTranspose k(rt.kernel_ctx());
-  SetOutput(node, 0, k(x, w, b != nullptr ? *b : Tensor{}, attrs, &rt), rt);
+  SetOutput(node, 0, (*this)(x, w, b != nullptr ? *b : Tensor{}, attrs, &rt), rt);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

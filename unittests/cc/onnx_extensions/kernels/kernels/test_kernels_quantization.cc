@@ -6,6 +6,7 @@
 #include "onnx_core/compute/raw_buffer_allocator.h"
 #include "onnx_core/runtime/kernels/cast_float8.h"
 #include "onnx_core/runtime/kernels/kernel_context.h"
+#include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/kernels/kernels/quantization/include_quantization_kernels.h"
 
@@ -19,6 +20,7 @@
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using core::backend_test::DefaultOpset;
+using core::runtime::DataType;
 using core::runtime::RuntimeContext;
 using core::runtime::Tensor;
 using onnx_kernels::RawBuffer;
@@ -27,9 +29,38 @@ using onnx_kernels::SimpleRawBufferAllocator;
 using onnx_kernels::kernel::DequantizeLinear;
 using onnx_kernels::kernel::DynamicQuantizeLinear;
 using onnx_kernels::kernel::KernelContext;
+using onnx_kernels::kernel::QLinearConv;
 using onnx_kernels::kernel::QuantizeLinear;
 
 namespace Test {
+
+TEST(KernelClass, QLinearConvParallelPathMatchesReference) {
+  const KernelContext ctx{DefaultOpset(10)};
+  QLinearConv kernel{ctx};
+  kernel.Configure(
+      {kernel.TuningKey(DataType::UINT8), {{"parallel.minimum_elements", int64_t{1}}}});
+  const Tensor x = Tensor::FromUint8("", {2, 1, 1, 2}, {1, 2, 3, 4});
+  const Tensor x_scale = Tensor::FromFloat("", {}, {1.0f});
+  const Tensor x_zero_point = Tensor::FromUint8("", {}, {0});
+  const Tensor w = Tensor::FromUint8("", {2, 1, 1, 1}, {1, 2});
+  const Tensor w_scale = Tensor::FromFloat("", {}, {1.0f});
+  const Tensor w_zero_point = Tensor::FromUint8("", {}, {0});
+  const Tensor y_scale = Tensor::FromFloat("", {}, {1.0f});
+  const Tensor y_zero_point = Tensor::FromUint8("", {}, {0});
+  QLinearConv::Attributes attrs;
+  attrs.kernel_shape = {1, 1};
+
+  core::runtime::ParallelRegionCollector collector(2);
+  core::runtime::ParallelRegionCollectorScope collector_scope(&collector);
+  const Tensor y = kernel(x, x_scale, x_zero_point, w, w_scale, w_zero_point, y_scale, y_zero_point,
+                          Tensor{}, attrs);
+
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2, 2, 1, 2}));
+  EXPECT_EQ(std::vector<uint8_t>(y.AsUint8(), y.AsUint8() + 8),
+            (std::vector<uint8_t>{1, 2, 2, 4, 3, 4, 6, 8}));
+  ASSERT_EQ(collector.events().size(), 1u);
+  EXPECT_EQ(collector.events()[0].label, "QLinearConv");
+}
 
 class TrackingRawBufferAllocator : public RawBufferAllocator {
 public:

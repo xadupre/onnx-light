@@ -244,8 +244,10 @@ void ConvTranspose::operator()(const Tensor &x, const Tensor &w, const Tensor &b
   // kernel position, the output position is
   // ``oa = ia * stride - pad_begin + ka * dilation``.
   const int64_t plane_count = N * M;
-  const int64_t plane_grain = std::max<int64_t>(1, tuning().parallel_minimum_elements /
-                                                       std::max<int64_t>(1, out_spatial_size));
+  const int64_t plane_work = std::max<int64_t>(1, out_spatial_size);
+  const int64_t plane_grain = std::max<int64_t>(
+      1, tuning().parallel_minimum_elements / plane_work +
+             static_cast<int64_t>(tuning().parallel_minimum_elements % plane_work != 0));
   ParallelFor(
       plane_count, plane_grain,
       [&](int64_t begin, int64_t end) {

@@ -145,7 +145,9 @@ void ComputeFlexAttentionTyped(const Tensor &Q, const Tensor &K, const Tensor &V
   const int64_t task_count = batch_size * q_num_heads;
   const int64_t task_work =
       std::max<int64_t>(1, q_seq_len * kv_seq_len * (head_size + v_head_size));
-  const int64_t task_grain = std::max<int64_t>(1, parallel_minimum_elements / task_work);
+  const int64_t task_grain =
+      std::max<int64_t>(1, parallel_minimum_elements / task_work +
+                               static_cast<int64_t>(parallel_minimum_elements % task_work != 0));
 
   // Phase 1: scores = (Q @ K^T) * scale, written into ``probs`` so the
   // optional ``score_mod`` callback can rewrite it in place.

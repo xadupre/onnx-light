@@ -401,10 +401,13 @@ Attention::Result ComputeAttentionRank4(const Tensor &Q4, const Tensor &K4, cons
   const int64_t task_count = batch_size * q_num_heads;
   const int64_t task_work =
       std::max<int64_t>(1, q_seq_len * total_kv_seq_len * (head_size + v_head_size));
-  const int64_t task_grain = std::max<int64_t>(1, parallel_minimum_elements / task_work);
+  const int64_t task_grain =
+      std::max<int64_t>(1, parallel_minimum_elements / task_work +
+                               static_cast<int64_t>(parallel_minimum_elements % task_work != 0));
   ValidateAttentionMask(attn_mask, batch_size, q_num_heads, q_seq_len);
-  const int64_t scratch_slots =
-      std::min<int64_t>(task_count, std::max<int64_t>(1, ParallelForThreadCount()));
+  const int64_t participants = std::max<int64_t>(1, ParallelForThreadCount());
+  const bool parallel_tasks = participants > 1 && task_count > 1 && task_count >= task_grain;
+  const int64_t scratch_slots = parallel_tasks ? std::min<int64_t>(task_count, participants) : 1;
   const size_t scratch_count = static_cast<size_t>(scratch_slots * total_kv_seq_len);
   const size_t scratch_n_bytes = scratch_count * sizeof(double);
   Tensor scores_buf = rt ? rt->MakeTemporaryTensor(
@@ -419,16 +422,18 @@ Attention::Result ComputeAttentionRank4(const Tensor &Q4, const Tensor &K4, cons
                               DataType::DOUBLE, {scratch_slots, total_kv_seq_len}, scratch_n_bytes)
                         : MakeOutputTensor(DataType::DOUBLE, {scratch_slots, total_kv_seq_len},
                                            scratch_n_bytes, nullptr);
-  for (int64_t wave_begin = 0; wave_begin < task_count; wave_begin += scratch_slots) {
-    const int64_t wave_count = std::min<int64_t>(scratch_slots, task_count - wave_begin);
+  const int64_t wave_size = parallel_tasks ? scratch_slots : task_count;
+  for (int64_t wave_begin = 0; wave_begin < task_count; wave_begin += wave_size) {
+    const int64_t wave_count = std::min<int64_t>(wave_size, task_count - wave_begin);
     ParallelFor(
-        wave_count, task_grain,
+        wave_count, parallel_tasks ? 1 : task_grain,
         [&](int64_t begin, int64_t end) {
           for (int64_t slot = begin; slot < end; ++slot) {
             const int64_t task = wave_begin + slot;
-            double *scores = scores_buf.AsDouble() + slot * total_kv_seq_len;
-            double *bias = bias_buf.AsDouble() + slot * total_kv_seq_len;
-            double *qkraw = qkraw_buf.AsDouble() + slot * total_kv_seq_len;
+            const int64_t scratch_slot = parallel_tasks ? slot : 0;
+            double *scores = scores_buf.AsDouble() + scratch_slot * total_kv_seq_len;
+            double *bias = bias_buf.AsDouble() + scratch_slot * total_kv_seq_len;
+            double *qkraw = qkraw_buf.AsDouble() + scratch_slot * total_kv_seq_len;
             const int64_t b = task / q_num_heads;
             const int64_t h = task % q_num_heads;
             // Bottom-right / offset-aware causal frontier (mirrors onnx/onnx#8068):

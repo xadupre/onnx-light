@@ -8,6 +8,7 @@
 #include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/tuning/cpu_executor.h"
 #include "onnx_extensions/kernels/kernels/preview/include_preview_kernels.h"
 
 #include <gtest/gtest.h>
@@ -96,6 +97,55 @@ TEST(KernelClass, FlexAttentionSupportsGQAHeadSharing) {
       EXPECT_GT(event.admitted_threads, 1) << event.label;
     }
   }
+}
+
+TEST(KernelClass, FlexAttentionSerialPolicyReportsOneEventPerPhase) {
+  core::runtime::CpuExecutionPolicy policy;
+  policy.num_threads = 1;
+  policy.affinity_policy = core::runtime::CpuAffinityPolicy::kNone;
+  const auto executor = core::runtime::GlobalCpuExecutorRegistry().Acquire(policy);
+  const core::runtime::CpuExecutorScope executor_scope(executor.get());
+  const Tensor Q = Tensor::FromFloat("", {1, 2, 1, 1}, {0.0f, 0.0f});
+  const Tensor K = Tensor::FromFloat("", {1, 1, 1, 1}, {0.0f});
+  const Tensor V = Tensor::FromFloat("", {1, 1, 1, 1}, {1.0f});
+  FlexAttention flex{PreviewKernelContext()};
+  flex.Configure({flex.TuningKey(DataType::FLOAT), {{"parallel.minimum_elements", int64_t{1}}}});
+  core::runtime::ParallelRegionCollector collector(3);
+  core::runtime::ParallelRegionCollectorScope collector_scope(&collector);
+
+  const Tensor Y = flex(Q, K, V);
+
+  EXPECT_EQ(std::vector<float>(Y.AsFloat(), Y.AsFloat() + 2), (std::vector<float>{1.0f, 1.0f}));
+  ASSERT_EQ(collector.events().size(), 3u);
+  EXPECT_EQ(collector.events()[0].label, "FlexAttentionScores");
+  EXPECT_EQ(collector.events()[1].label, "FlexAttentionSoftmax");
+  EXPECT_EQ(collector.events()[2].label, "FlexAttentionOutput");
+  for (const auto &event : collector.events()) {
+    EXPECT_EQ(event.admitted_threads, 1) << event.label;
+  }
+}
+
+TEST(KernelClass, FlexAttentionSoftmaxAdmissionUsesTotalTaskCount) {
+  core::runtime::CpuExecutionPolicy policy;
+  policy.num_threads = 2;
+  policy.affinity_policy = core::runtime::CpuAffinityPolicy::kNone;
+  const auto executor = core::runtime::GlobalCpuExecutorRegistry().Acquire(policy);
+  const core::runtime::CpuExecutorScope executor_scope(executor.get());
+  const Tensor Q = Tensor::FromFloat("", {1, 4, 1, 1}, std::vector<float>(4, 0.0f));
+  const Tensor K = Tensor::FromFloat("", {1, 1, 1, 1}, {0.0f});
+  const Tensor V = Tensor::FromFloat("", {1, 1, 1, 1}, {1.0f});
+  FlexAttention flex{PreviewKernelContext()};
+  flex.Configure({flex.TuningKey(DataType::FLOAT), {{"parallel.minimum_elements", int64_t{6}}}});
+  core::runtime::ParallelRegionCollector collector(3);
+  core::runtime::ParallelRegionCollectorScope collector_scope(&collector);
+
+  const Tensor Y = flex(Q, K, V);
+
+  EXPECT_EQ(std::vector<float>(Y.AsFloat(), Y.AsFloat() + 4),
+            (std::vector<float>{1.0f, 1.0f, 1.0f, 1.0f}));
+  ASSERT_EQ(collector.events().size(), 3u);
+  EXPECT_EQ(collector.events()[1].label, "FlexAttentionSoftmax");
+  EXPECT_EQ(collector.events()[1].admitted_threads, 2);
 }
 
 TEST(KernelClass, FlexAttentionScratchIsBoundedByAvailableParticipants) {

@@ -7,6 +7,7 @@
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
@@ -46,12 +47,17 @@ void AccumulateAndScale(const char *dtype_name, int32_t dtype, const Tensors &in
                 static_cast<size_t>(inputs[0].element_count()) * sizeof(T));
     return;
   }
-  // First pair: accumulate into the output buffer.
-  detail::BinaryElementwise<T, T>(kMeanName, dtype_name, dtype, inputs[0], inputs[1], output,
-                                  MeanAddOf<T>);
-  // Subsequent inputs: accumulate in place by re-running the binary
-  // element-wise driver with ``output`` as both an input and the output.
-  for (size_t i = 2; i < inputs.size(); ++i) {
+  // The first pair can fill the output directly only if it already broadcasts
+  // to the final shape.
+  const bool first_pair_fills_output =
+      detail::BroadcastShape(kMeanName, inputs[0].shape, inputs[1].shape) == output.shape;
+  if (first_pair_fills_output) {
+    detail::BinaryElementwise<T, T>(kMeanName, dtype_name, dtype, inputs[0], inputs[1], output,
+                                    MeanAddOf<T>);
+  } else {
+    std::fill_n(reinterpret_cast<T *>(output.mutable_bytes()), output.element_count(), T{0});
+  }
+  for (size_t i = first_pair_fills_output ? 2 : 0; i < inputs.size(); ++i) {
     Tensor partial = output;
     detail::BinaryElementwise<T, T>(kMeanName, dtype_name, dtype, partial, inputs[i], output,
                                     MeanAddOf<T>);

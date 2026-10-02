@@ -148,7 +148,7 @@ double TransformCoord(int64_t out_coord, int64_t in_dim, int64_t out_dim, double
   }
   if (mode == "pytorch_half_pixel") {
     if (out_dim == 1) {
-      return -0.5;
+      return 0.0;
     }
     return (x + 0.5) / scale - 0.5;
   }

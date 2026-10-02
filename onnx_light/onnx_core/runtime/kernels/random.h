@@ -122,6 +122,9 @@ Tensor RandnTensor(int32_t element_type, const Shape &shape,
  * @param low   Inclusive lower bound.
  * @param high  Exclusive upper bound.
  * @param seed  Optional 64-bit seed. ``std::nullopt`` selects the default seed.
+ *
+ * @note Generation is intentionally serial. Output indices consume one ordered
+ * pseudo-random stream; partitioning the stream would change seeded results.
  */
 template <typename T>
 void RandUniformInto(T *dst, int64_t count, double low, double high,
@@ -145,6 +148,9 @@ extern template void RandUniformInto<float>(float *dst, int64_t count, double lo
  * @param mean  Distribution mean.
  * @param scale Distribution standard deviation.
  * @param seed  Optional 64-bit seed. ``std::nullopt`` selects the default seed.
+ *
+ * @note Generation is intentionally serial. Each output consumes a fixed
+ * sequence of uniform draws, which must not depend on worker partitioning.
  */
 template <typename T>
 void RandNormalInto(T *dst, int64_t count, double mean, double scale,

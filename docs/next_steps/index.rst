@@ -4,19 +4,19 @@ Next Steps
 ==========
 
 :Date: 2026-08
-:Updated: 2026-09
+:Updated: 2026-10
 
 .. toctree::
     :maxdepth: 1
     :hidden:
 
     2026/2026-08_kernel_parallelization
+    2026/2026-10_kernel_parallelization_completion
     2026/2026-08_onnxruntime_fast_model_loading
     2026/2026-08_proto_inheritance
     2026/2026-08_quantization
     2026/2026-08_graph_builder_quantized_tensor
     2026/2026-08_model_resolution
-    2026/2026-08_split_wheels
     2026/2026-08_fast_loading_sequence
     2026/2026-08_model_loading_bug_fixes
     2026/2026-08_prepared_execution
@@ -45,22 +45,15 @@ Started
 
     * - Plan
       - Remaining work
-    * - :ref:`l-next-steps-kernel-parallelization`
-      - Publish the ARM64 baseline and calibration reports, compare them with
-        the x86-64 results, calibrate the remaining ``Gemm`` parameters, decide
-        which values are safe portable defaults, and complete cross-platform
-        acceptance and ORT attribution.
+    * - :ref:`l-next-steps-kernel-parallelization-completion`
+      - Migrate every measured payload-scale kernel family to the session
+        executor or record a benchmark-backed serial exemption; finish
+        ``Gemm`` tuning, ARM64/x86-64 default promotion, and ORT attribution.
     * - :ref:`l-next-steps-model-loading`
       - Implement issue #4612 in an ONNX Runtime fork: retain mapped-payload
         owners in ``SessionState``, use direct reads for ineligible tensors,
         run the four-configuration benchmark, and submit the upstream PR. All
         native dependencies through #4623 are complete.
-    * - :ref:`l-next-steps-custom-quantized-persistent-values`
-      - The frozen custom-value representation is implemented in
-        ``lib_onnx_proto``; integrate it next with ``GraphBuilder``, then with
-        model input/output feedback, contiguous KV reuse, and optional paged
-        quantized caches.
-
 Discussion
 ----------
 
@@ -77,8 +70,6 @@ Discussion
     * - :ref:`l-next-steps-model-resolution`
       - Determines the final graph and live payloads before parallel reads or
         ONNX Runtime handoff.
-    * - :ref:`l-next-steps-split-wheels`
-      - Packages runtime capabilities independently from their execution order.
 
 Completed
 ---------
@@ -149,6 +140,10 @@ Completed
     * - :ref:`l-next-steps-session-execution-pools`
       - Supplies the shared executor used by parallel kernels and startup
         tasks.
+    * - :ref:`l-next-steps-custom-quantized-persistent-values`
+      - Supplies structured and quantized values, graph-declared zero-copy
+        feedback, contiguous KV reuse, paged quantized caches, and end-to-end
+        decode validation with allocation and copy measurements.
 
 Consolidated design references
 ----------------------------------------

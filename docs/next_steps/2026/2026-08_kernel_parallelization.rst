@@ -4,8 +4,10 @@ Kernel parallelization and tuning sequence
 ==========================================
 
 :Date: 2026-08
+:Updated: 2026-10-02
 
-**Step G in progress (x86-64 calibrated; ARM64 measurements pending)**
+**Measurement and tuning foundation implemented; remaining migrations continue
+in :ref:`l-next-steps-kernel-parallelization-completion`.**
 
 Native measurement workflow
 ===========================

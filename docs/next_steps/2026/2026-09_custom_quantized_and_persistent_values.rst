@@ -5,9 +5,9 @@ Custom, quantized, and persistent values
 ================================================================================
 
 :Date: 2026-09
-:Updated: 2026-09-20
+:Updated: 2026-10-02
 
-**in progress**
+**completed**
 
 Objective and consolidation
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -31,18 +31,18 @@ and scheduling stay owned by :ref:`l-next-steps-prepared-execution`, whose compl
 plan builds on. :ref:`l-next-steps-proto-inheritance` is independent and
 not a prerequisite.
 
-Existing foundations and missing integration
+Implemented foundations and integration
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-``onnx_core/runtime/memory/simple_tensor.h`` already supplies ordinary
-``Tensor`` storage owners, borrowed views and allocation handles. Prepared
-execution already owns prepared-object identity, publication, residency,
-eviction and persistence. ``StructTypeProto`` and ``EncodedValueProto``
-and their initial GraphBuilder integration are implemented. The remaining
-work connects the graph's persistence declarations to these ownership
-facilities and feeds retained outputs into the next call without copying
-their payloads. The graph attribute described below is planned, not yet
-implemented by the completed representation PRs.
+``onnx_core/runtime/memory/simple_tensor.h`` supplies ordinary ``Tensor``
+storage owners, borrowed views and allocation handles. Prepared execution
+owns prepared-object identity, publication, residency, eviction and
+persistence. ``StructTypeProto`` and ``EncodedValueProto`` are integrated
+with ``GraphBuilder``. Graph-declared persistent bindings now retain outputs
+across calls without copying state payloads; contiguous and paged KV cache
+consumers and end-to-end decode validation are also implemented. The
+implementation sequence below records the completed design and its acceptance
+criteria.
 
 Three independent decisions
 +++++++++++++++++++++++++++
@@ -884,8 +884,7 @@ integrates the representation with ``GraphBuilder`` authoring,
 deduplication and inference; see
 :ref:`l-howto-graph-builder-basics` for the supported native workflow and
 export boundaries. The 2026-09-20 revision adds a graph-level persistence
-declaration and makes zero-copy state forwarding mandatory. These are new
-requirements, not claims that the completed PRs already implement them.
+declaration and makes zero-copy state forwarding mandatory.
 `PR #5016 <https://github.com/xadupre/onnx-light/pull/5016>`_
 implements the PR04a declaration and PR04b runtime together: the
 caller-supplied mapping, model-serialization guard and defensive
@@ -896,6 +895,10 @@ the post-ORT limits, PR04 receives a bounded allowance of 32 KiB installed,
 16 KiB of ``.text`` and eight symbols, setting the corresponding CI limits
 to 1,423,320 bytes, 970,090 bytes and 800 symbols. The shared-library
 dependency allowlist remains unchanged.
+`PR #5070 <https://github.com/xadupre/onnx-light/pull/5070>`_
+completes PR07 with end-to-end structured feedback validation, repeated
+Attention decode comparison and revision-stamped allocation and copy
+measurements.
 
 .. list-table::
    :header-rows: 1
@@ -928,7 +931,7 @@ dependency allowlist remains unchanged.
        data: unsupported structured constructs are rejected explicitly.
      - PR02
    * - PR04a
-     - Graph-declared persistence
+     - Graph-declared persistence (**done**)
      - Add ``PersistentBindingProto`` and
        ``GraphProto.persistent_bindings``; native/Python bindings,
        parsing/serialization, validation and GraphBuilder preservation
@@ -936,7 +939,7 @@ dependency allowlist remains unchanged.
        export that would drop persistence semantics.
      - PR02, PR03
    * - PR04b
-     - Zero-copy request-local feedback execution
+     - Zero-copy request-local feedback execution (**done**)
      - Resolve graph bindings once against an immutable model. Retain
        buffers across initialization, reset, calls and state views without
        payload copies or model serialization. Verify aliases, lifetimes,
@@ -944,7 +947,7 @@ dependency allowlist remains unchanged.
        structured/function/If paths.
      - PR04a; existing allocation/task infrastructure
    * - PR05
-     - Contiguous KV and CPU consumer integration
+     - Contiguous KV and CPU consumer integration (**done**)
      - Optimize past/present inputs when ownership permits buffer reuse:
        append touches only new tokens and matches functional execution.
        Verify capacity/cancellation and allocation/copy costs without
@@ -952,23 +955,23 @@ dependency allowlist remains unchanged.
        is already required by PR04b; this step optimizes kernel writes.
      - PR04b; CPU backend integration
    * - PR06
-     - Optional paged KV with heterogeneous quantization
+     - Optional paged KV with heterogeneous quantization (**done**)
      - The shared ``EncodedValueProto`` representation supports
        different K/V and per-block formats. Blockwise append/conversion
        and Attention preserve validity and bounded workspace without
        copying or dequantizing the entire cache.
      - PR02, PR05; CPU backend integration
    * - PR07
-     - End-to-end structured/stateful acceptance
+     - End-to-end structured/stateful acceptance (**done**)
      - Measure repeated decode and simultaneous independent feedback
        states; report state/scratch bytes and per-token copies, and
        verify request reset/isolation and the final proto-size budget.
      - PR03, PR04a, PR04b, PR05
 
-PR04 is now split into the wire/GraphBuilder declaration (PR04a) and its
+PR04 is split into the wire/GraphBuilder declaration (PR04a) and its
 zero-copy runtime consumer (PR04b), in that order. Basic feedback does not
-depend on quantization format or paging. PR06 is optional and does not
-block PR07. Later work extends the same graph-declared feedback contract
+depend on quantization format or paging. PR06 was optional and did not
+block PR07. Later work can extend the same graph-declared feedback contract
 without a second state system; explicit snapshots, alias annotations and
 mutation scheduling stay outside these initial steps.
 

@@ -8,6 +8,7 @@
 #include "onnx_core/runtime/memory/simple_tensor.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/kernels/kernels/auto_pad.h"
+#include "onnx_extensions/kernels/tuning/portable_parallel_tuning.h"
 
 #include <cstdint>
 #include <functional>
@@ -917,12 +918,12 @@ public:
 ///     masked out with ``-inf``.
 ///
 /// Not modeled: the ``softmax_precision`` attribute.
-class Attention : public KernelBase {
+class Attention : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Attention";
+  explicit Attention(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
-
   /// Bundles every optional scalar/string attribute of the upstream
   /// ``ai.onnx::Attention`` operator. ``has_scale`` controls whether
   /// ``scale`` overrides the default ``1 / sqrt(head_size)``. When the
@@ -1058,9 +1059,11 @@ public:
 /// shape is ``(N, M, oD1, ..., oDk)``. Supports the ``kernel_shape``,
 /// ``strides``, ``pads``, ``dilations``, ``group`` and ``auto_pad``
 /// attributes (``NOTSET``, ``SAME_UPPER``, ``SAME_LOWER``, ``VALID``).
-class Conv : public KernelBase {
+class Conv : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Conv";
+  explicit Conv(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``Conv`` operator.
   struct Attributes {
@@ -1071,8 +1074,6 @@ public:
     int64_t group = 1;                   ///< Number of conv groups.
     AutoPad auto_pad = AutoPad::kNotSet; ///< Padding strategy.
   };
-
-  using KernelBase::KernelBase;
 
   /// Returning overload. ``B`` may be a default-constructed (empty-shape)
   /// ``Tensor`` to indicate the optional bias is missing.
@@ -1094,9 +1095,11 @@ public:
 /// a scalar with the same dtype as ``x``; the optional ``w_zero_point`` may
 /// be a scalar or a 1-D length-``M`` tensor (per-output-channel) with the
 /// same dtype as ``w``. Empty-shape ``Tensor`` indicates absence.
-class ConvInteger : public KernelBase {
+class ConvInteger : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:ConvInteger";
+  explicit ConvInteger(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``ConvInteger`` operator.
   struct Attributes {
@@ -1107,8 +1110,6 @@ public:
     int64_t group = 1;
     AutoPad auto_pad = AutoPad::kNotSet;
   };
-
-  using KernelBase::KernelBase;
 
   /// Returning overload.
   Tensor operator()(const Tensor &x, const Tensor &w, const Tensor &x_zero_point,
@@ -1131,9 +1132,11 @@ public:
 /// the upstream spec; otherwise the output spatial dim is
 /// ``stride[i] * (iD[i] - 1) + output_padding[i] +
 ///  ((k[i]-1)*dil[i]+1) - pads[start] - pads[end]``.
-class ConvTranspose : public KernelBase {
+class ConvTranspose : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:ConvTranspose";
+  explicit ConvTranspose(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``ConvTranspose`` operator.
   struct Attributes {
@@ -1146,8 +1149,6 @@ public:
     int64_t group = 1;
     AutoPad auto_pad = AutoPad::kNotSet;
   };
-
-  using KernelBase::KernelBase;
 
   /// Returning overload.
   Tensor operator()(const Tensor &x, const Tensor &w, const Tensor &b, const Attributes &attrs,
@@ -1316,9 +1317,11 @@ public:
 /// (GQA) is supported when ``q_num_heads`` is a positive multiple of
 /// ``kv_num_heads``. Half-precision (FLOAT16/BFLOAT16) activations are
 /// promoted to FLOAT32 for the recurrence and the outputs are demoted back.
-class LinearAttention : public KernelBase {
+class LinearAttention : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:LinearAttention";
+  explicit LinearAttention(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
   /// Attributes carried by the ONNX ``LinearAttention`` operator.
   struct Attributes {
@@ -1335,8 +1338,6 @@ public:
     Tensor output;        ///< 3D packed ``(B, T, H_q * d_v)``.
     Tensor present_state; ///< 4D ``(B, H_kv, d_k, d_v)``.
   };
-
-  using KernelBase::KernelBase;
 
   /// Default-attribute overload (update_rule="linear", scale=auto).
   Tensor operator()(const Tensor &query, const Tensor &key, const Tensor &value,

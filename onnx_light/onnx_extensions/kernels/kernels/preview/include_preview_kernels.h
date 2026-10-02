@@ -7,6 +7,7 @@
 #include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_core/runtime/memory/simple_tensor.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_extensions/kernels/tuning/portable_parallel_tuning.h"
 
 #include <functional>
 
@@ -73,12 +74,12 @@ using ::onnx_light::core::runtime::OpsetId;
 /// FLOAT and DOUBLE tensors are supported (and FLOAT16/BFLOAT16 via internal
 /// promotion to FLOAT32). ``Q``, ``K`` and ``V`` must share the same element
 /// type.
-class FlexAttention : public KernelBase {
+class FlexAttention : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx.preview:FlexAttention";
+  explicit FlexAttention(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
-
   /// Callback used to apply the ``score_mod`` modifier subgraph to the
   /// pre-softmax score tensor of shape
   /// ``(batch_size, q_num_heads, q_seq_len, kv_seq_len)``. The callback

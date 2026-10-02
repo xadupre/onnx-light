@@ -4,6 +4,7 @@
 
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/runtime/kernels/kernel_context.h"
+#include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
 #include <gtest/gtest.h>
@@ -13,6 +14,7 @@
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using core::backend_test::DefaultOpset;
+using core::runtime::DataType;
 using core::runtime::Tensor;
 using onnx_kernels::kernel::ConvInteger;
 using onnx_kernels::kernel::KernelContext;
@@ -30,13 +32,16 @@ namespace Test {
 //   Y[1,1] = (6-1)+(7-1)+(9-1)+(10-1) = 28
 TEST(KernelClass, ConvIntegerBasicWithoutPaddingMatchesUpstream) {
   const KernelContext ctx{DefaultOpset(10)};
-  const ConvInteger ci{ctx};
+  ConvInteger ci{ctx};
+  ci.Configure({ci.TuningKey(DataType::UINT8), {{"parallel.minimum_elements", int64_t{1}}}});
   Tensor x = Tensor::FromUint8("", {1, 1, 3, 3}, {2, 3, 4, 5, 6, 7, 8, 9, 10});
   Tensor w = Tensor::FromUint8("", {1, 1, 2, 2}, {1, 1, 1, 1});
   Tensor xzp = Tensor::FromUint8("", {}, {1});
   Tensor wzp;
   ConvInteger::Attributes attrs;
   attrs.kernel_shape = {2, 2};
+  core::runtime::ParallelRegionCollector collector(2);
+  core::runtime::ParallelRegionCollectorScope collector_scope(&collector);
   Tensor y = ci(x, w, xzp, wzp, attrs);
   ASSERT_EQ(y.data_type, 6 /* INT32 */);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 1, 2, 2}));
@@ -45,6 +50,11 @@ TEST(KernelClass, ConvIntegerBasicWithoutPaddingMatchesUpstream) {
   const int32_t *py = y.AsInt32();
   for (size_t i = 0; i < expected.size(); ++i) {
     EXPECT_EQ(py[i], expected[i]) << "index " << i;
+  }
+  ASSERT_EQ(collector.events().size(), 1u);
+  EXPECT_EQ(collector.events()[0].label, "ConvInteger");
+  if (core::runtime::ParallelForThreadCount() > 1) {
+    EXPECT_GT(collector.events()[0].admitted_threads, 1);
   }
 }
 

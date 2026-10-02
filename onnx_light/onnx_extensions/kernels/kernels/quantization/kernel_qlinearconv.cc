@@ -5,8 +5,10 @@
 #include "onnx_extensions/kernels/kernels/quantization/include_quantization_kernels.h"
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
+#include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -18,6 +20,10 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 namespace {
 
 constexpr const char *kName = "kernel::QLinearConv";
+constexpr uint32_t kTuningAbi = 1;
+constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
+constexpr std::array<int32_t, 2> kSupportedElementTypes = {static_cast<int32_t>(DataType::INT8),
+                                                           static_cast<int32_t>(DataType::UINT8)};
 
 inline bool IsInt8OrUint8(int32_t dt) {
   return dt == static_cast<int32_t>(DataType::INT8) || dt == static_cast<int32_t>(DataType::UINT8);
@@ -127,6 +133,12 @@ template <typename Y> inline Y SaturateRound(float scaled, float y_zp_f) {
 }
 
 } // namespace
+
+QLinearConv::QLinearConv(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "QLinearConv", kSupportedElementTypes, kPortableParallelMinimum,
+                            kTuningAbi) {}
+
+ONNX_LIGHT_REGISTER_PARALLEL_TUNING_SCHEMA(QLinearConv)
 
 Tensor QLinearConv::operator()(const Tensor &x, const Tensor &x_scale, const Tensor &x_zero_point,
                                const Tensor &w, const Tensor &w_scale, const Tensor &w_zero_point,
@@ -267,72 +279,75 @@ void QLinearConv::operator()(const Tensor &x, const Tensor &x_scale, const Tenso
   const int32_t *pB = has_bias ? B.AsInt32() : nullptr;
   const bool out_is_int8 = output.data_type == static_cast<int32_t>(DataType::INT8);
 
-  onnx_kernels::Shape oidx;
-  oidx.assign(spatial_rank, 0);
-  onnx_kernels::Shape kidx;
-  kidx.assign(spatial_rank, 0);
+  const int64_t total = N * M * out_spatial_size;
+  ParallelFor(
+      total, tuning().parallel_minimum_elements,
+      [&](int64_t begin, int64_t end) {
+        onnx_kernels::Shape oidx;
+        oidx.assign(spatial_rank, 0);
+        onnx_kernels::Shape kidx;
+        kidx.assign(spatial_rank, 0);
+        for (int64_t flat = begin; flat < end; ++flat) {
+          const int64_t plane = flat / out_spatial_size;
+          const int64_t op = flat % out_spatial_size;
+          const int64_t n = plane / M;
+          const int64_t m = plane % M;
+          int64_t spatial = op;
+          for (size_t a = spatial_rank; a-- > 0;) {
+            oidx[a] = spatial % oD[a];
+            spatial /= oD[a];
+          }
+          const int64_t g = m / M_per_group;
+          const int32_t w_zp =
+              w_zp_per_channel ? ReadElem(w_zero_point, m) : ReadElem(w_zero_point, 0);
+          const float w_s =
+              w_scale_per_channel ? ReadFloatElem(w_scale, m) : ReadFloatElem(w_scale, 0);
+          const float combined_scale = x_s * w_s / y_s;
+          const int64_t out_plane_off = (n * M + m) * out_spatial_size;
 
-  for (int64_t n = 0; n < N; ++n) {
-    for (int64_t m = 0; m < M; ++m) {
-      const int64_t g = m / M_per_group;
-      const int32_t w_zp = w_zp_per_channel ? ReadElem(w_zero_point, m) : ReadElem(w_zero_point, 0);
-      const float w_s = w_scale_per_channel ? ReadFloatElem(w_scale, m) : ReadFloatElem(w_scale, 0);
-      const float combined_scale = x_s * w_s / y_s;
-      const int64_t out_plane_off = (n * M + m) * out_spatial_size;
-
-      std::fill(oidx.begin(), oidx.end(), 0);
-      for (int64_t op = 0; op < out_spatial_size; ++op) {
-        int64_t acc = 0;
-        for (int64_t ic_in_group = 0; ic_in_group < C_per_group; ++ic_in_group) {
-          const int64_t ic = g * C_per_group + ic_in_group;
-          const int64_t x_off_base = (n * C + ic) * in_spatial_size;
-          const int64_t w_off_base = (m * C_per_group + ic_in_group) * kernel_size;
-          std::fill(kidx.begin(), kidx.end(), 0);
-          for (int64_t kp = 0; kp < kernel_size; ++kp) {
-            bool in_bounds = true;
-            int64_t in_off = 0;
-            for (size_t a = 0; a < spatial_rank; ++a) {
-              const int64_t ia = oidx[a] * resolved.strides[a] + kidx[a] * resolved.dilations[a] -
-                                 resolved.pads[a];
-              if (ia < 0 || ia >= iD[a]) {
-                in_bounds = false;
-                break;
+          int64_t acc = 0;
+          for (int64_t ic_in_group = 0; ic_in_group < C_per_group; ++ic_in_group) {
+            const int64_t ic = g * C_per_group + ic_in_group;
+            const int64_t x_off_base = (n * C + ic) * in_spatial_size;
+            const int64_t w_off_base = (m * C_per_group + ic_in_group) * kernel_size;
+            std::fill(kidx.begin(), kidx.end(), 0);
+            for (int64_t kp = 0; kp < kernel_size; ++kp) {
+              bool in_bounds = true;
+              int64_t in_off = 0;
+              for (size_t a = 0; a < spatial_rank; ++a) {
+                const int64_t ia = oidx[a] * resolved.strides[a] + kidx[a] * resolved.dilations[a] -
+                                   resolved.pads[a];
+                if (ia < 0 || ia >= iD[a]) {
+                  in_bounds = false;
+                  break;
+                }
+                in_off += ia * in_strides[a];
               }
-              in_off += ia * in_strides[a];
-            }
-            if (in_bounds) {
-              const int32_t xv = ReadElem(x, x_off_base + in_off);
-              const int32_t wv = ReadElem(w, w_off_base + kp);
-              acc += static_cast<int64_t>(xv - x_zp) * static_cast<int64_t>(wv - w_zp);
-            }
-            for (int a = static_cast<int>(spatial_rank) - 1; a >= 0; --a) {
-              if (++kidx[a] < k_shape[a]) {
-                break;
+              if (in_bounds) {
+                const int32_t xv = ReadElem(x, x_off_base + in_off);
+                const int32_t wv = ReadElem(w, w_off_base + kp);
+                acc += static_cast<int64_t>(xv - x_zp) * static_cast<int64_t>(wv - w_zp);
               }
-              kidx[a] = 0;
+              for (int a = static_cast<int>(spatial_rank) - 1; a >= 0; --a) {
+                if (++kidx[a] < k_shape[a]) {
+                  break;
+                }
+                kidx[a] = 0;
+              }
             }
           }
-        }
-        // Bias is pre-quantized: bias is added in the integer accumulator
-        // domain because it shares scale ``x_scale * w_scale`` (per ONNX).
-        if (pB != nullptr) {
-          acc += static_cast<int64_t>(pB[m]);
-        }
-        const float scaled = static_cast<float>(acc) * combined_scale;
-        if (out_is_int8) {
-          output.AsInt8()[out_plane_off + op] = SaturateRound<int8_t>(scaled, y_zp_f);
-        } else {
-          output.AsUint8()[out_plane_off + op] = SaturateRound<uint8_t>(scaled, y_zp_f);
-        }
-        for (int a = static_cast<int>(spatial_rank) - 1; a >= 0; --a) {
-          if (++oidx[a] < oD[a]) {
-            break;
+          if (pB != nullptr) {
+            acc += static_cast<int64_t>(pB[m]);
           }
-          oidx[a] = 0;
+          const float scaled = static_cast<float>(acc) * combined_scale;
+          if (out_is_int8) {
+            output.AsInt8()[out_plane_off + op] = SaturateRound<int8_t>(scaled, y_zp_f);
+          } else {
+            output.AsUint8()[out_plane_off + op] = SaturateRound<uint8_t>(scaled, y_zp_f);
+          }
         }
-      }
-    }
-  }
+      },
+      "QLinearConv");
 }
 
 void QLinearConv::Run(RuntimeContext &rt) {
@@ -359,10 +374,9 @@ void QLinearConv::Run(RuntimeContext &rt) {
   attrs.group = GetAttributeIntOrDefault(node, "group", 1);
   attrs.auto_pad = onnx_kernels::kernel::AutoPadFromString(
       GetAttributeStringOrDefault(node, "auto_pad", "NOTSET"));
-  onnx_kernels::kernel::QLinearConv k(rt.kernel_ctx());
   SetOutput(node, 0,
-            k(x, x_scale, x_zero_point, w, w_scale, w_zero_point, y_scale, y_zero_point,
-              b != nullptr ? *b : Tensor{}, attrs, &rt),
+            (*this)(x, x_scale, x_zero_point, w, w_scale, w_zero_point, y_scale, y_zero_point,
+                    b != nullptr ? *b : Tensor{}, attrs, &rt),
             rt);
 }
 

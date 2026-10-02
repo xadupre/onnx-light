@@ -5,10 +5,12 @@
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
 #include "onnx_core/runtime/kernels/float16_promote.h"
+#include "onnx_core/runtime/kernels/parallel_for.h"
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -20,6 +22,12 @@
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
+
+constexpr uint32_t kTuningAbi = 1;
+constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
+constexpr std::array<int32_t, 3> kSupportedElementTypes = {
+    static_cast<int32_t>(DataType::FLOAT), static_cast<int32_t>(DataType::FLOAT16),
+    static_cast<int32_t>(DataType::BFLOAT16)};
 
 // Validates that ``t`` is a rank-4 tensor whose element type is supported
 // by the Attention kernel (FLOAT, FLOAT16, or BFLOAT16). The caller is
@@ -214,26 +222,37 @@ Tensor CopyOutput(const Tensor &src, int output_slot, RuntimeContext *rt) {
   return out;
 }
 
-// Returns the value of a FLOAT or BOOL ``attn_mask`` at the broadcasted index
-// ``(b, h, i, j)``. The mask is treated as if its shape were left-padded
-// with leading 1s up to rank 4. Each axis must either equal 1 (broadcast) or
-// the corresponding output dimension. BOOL masks return ``0`` for true (no
-// penalty) and ``-inf`` for false (mask out).
-double BroadcastedMaskValue(const Tensor &mask, int64_t batch_size, int64_t q_num_heads,
-                            int64_t q_seq_len, int64_t kv_seq_len, int64_t b, int64_t h, int64_t i,
-                            int64_t j) {
-  const int rank = static_cast<int>(mask.shape.size());
+void ValidateAttentionMask(const Tensor *mask, int64_t batch_size, int64_t q_num_heads,
+                           int64_t q_seq_len) {
+  if (mask == nullptr) {
+    return;
+  }
+  EXT_ENFORCE_INVALID(mask->data_type == DataType::FLOAT || mask->data_type == DataType::BOOL,
+                      "kernel::Attention: 'attn_mask' must be FLOAT or BOOL.");
+  const int rank = static_cast<int>(mask->shape.size());
   EXT_ENFORCE_INVALID(rank >= 1 && rank <= 4,
                       "kernel::Attention: 'attn_mask' must have rank between 1 and 4.");
   int64_t shape4[4] = {1, 1, 1, 1};
   for (int k = 0; k < rank; ++k) {
-    shape4[4 - rank + k] = mask.shape[static_cast<size_t>(k)];
+    const int64_t dim = mask->shape[static_cast<size_t>(k)];
+    EXT_ENFORCE_INVALID(dim >= 0, "kernel::Attention: 'attn_mask' has a negative dimension.");
+    shape4[4 - rank + k] = dim;
   }
-  const int64_t out_dims[4] = {batch_size, q_num_heads, q_seq_len, kv_seq_len};
-  for (int k = 0; k < 4; ++k) {
+  const int64_t out_dims[3] = {batch_size, q_num_heads, q_seq_len};
+  for (int k = 0; k < 3; ++k) {
     EXT_ENFORCE_INVALID(shape4[k] == 1 || shape4[k] == out_dims[k],
                         "kernel::Attention: 'attn_mask' is not broadcastable to (batch_size, "
-                        "q_num_heads, q_seq_len, kv_seq_len).");
+                        "q_num_heads, q_seq_len); its last axis defines the mask KV length.");
+  }
+}
+
+// Returns the value of a validated FLOAT or BOOL ``attn_mask`` at the
+// broadcasted index ``(b, h, i, j)``.
+double BroadcastedMaskValue(const Tensor &mask, int64_t b, int64_t h, int64_t i, int64_t j) {
+  const int rank = static_cast<int>(mask.shape.size());
+  int64_t shape4[4] = {1, 1, 1, 1};
+  for (int k = 0; k < rank; ++k) {
+    shape4[4 - rank + k] = mask.shape[static_cast<size_t>(k)];
   }
   const int64_t idx[4] = {b, h, i, j};
   int64_t linear = 0;
@@ -249,7 +268,6 @@ double BroadcastedMaskValue(const Tensor &mask, int64_t batch_size, int64_t q_nu
   if (mask.data_type == DataType::BOOL) {
     return mask.AsBool()[linear] != 0 ? 0.0 : -std::numeric_limits<double>::infinity();
   }
-  EXT_ENFORCE_INVALID(false, "kernel::Attention: 'attn_mask' must be FLOAT or BOOL.");
   return 0.0;
 }
 
@@ -258,19 +276,16 @@ double BroadcastedMaskValue(const Tensor &mask, int64_t batch_size, int64_t q_nu
 // are treated as ``-inf`` (FLOAT) / ``false`` (BOOL), matching the upstream
 // ``np.pad(..., constant_values=-inf)`` behaviour. Returns ``0.0`` when
 // ``mask == nullptr``.
-double MaskValuePadded(const Tensor *mask, int64_t batch_size, int64_t q_num_heads,
-                       int64_t q_seq_len, int64_t /*kv_seq_len*/, int64_t b, int64_t h, int64_t i,
-                       int64_t j) {
+double MaskValuePadded(const Tensor *mask, int64_t b, int64_t h, int64_t i, int64_t j) {
   if (mask == nullptr) {
     return 0.0;
   }
   const int rank = static_cast<int>(mask->shape.size());
-  EXT_ENFORCE_INVALID(rank >= 1, "kernel::Attention: 'attn_mask' must have rank >= 1.");
   const int64_t mask_kv = mask->shape[static_cast<size_t>(rank - 1)];
   if (j >= mask_kv) {
     return -std::numeric_limits<double>::infinity();
   }
-  return BroadcastedMaskValue(*mask, batch_size, q_num_heads, q_seq_len, mask_kv, b, h, i, j);
+  return BroadcastedMaskValue(*mask, b, h, i, j);
 }
 
 // Core rank-4 Attention. ``Q4``/``K4``/``V4`` are already in the internal
@@ -282,7 +297,8 @@ Attention::Result ComputeAttentionRank4(const Tensor &Q4, const Tensor &K4, cons
                                         const Attention::Attributes &attrs, const Tensor *attn_mask,
                                         const Tensor *past_key, const Tensor *past_value,
                                         const Tensor *nonpad_kv_seqlen, RuntimeContext *rt,
-                                        bool temporary_y = false, bool allow_capacity = true) {
+                                        bool temporary_y, bool allow_capacity,
+                                        int64_t parallel_minimum_elements) {
   CheckRank4Float(Q4, "Q");
   CheckRank4Float(K4, "K");
   CheckRank4Float(V4, "V");
@@ -382,161 +398,195 @@ Attention::Result ComputeAttentionRank4(const Tensor &Q4, const Tensor &K4, cons
   // The per-row scratch buffers are acquired from the runtime allocator (when
   // one is provided) so no working memory is allocated outside it; they fall
   // back to inline storage when ``allocator`` is null.
-  const size_t scratch_n_bytes = static_cast<size_t>(total_kv_seq_len) * sizeof(double);
-  Tensor scores_buf =
-      rt ? rt->MakeTemporaryTensor(DataType::DOUBLE, {total_kv_seq_len}, scratch_n_bytes)
-         : MakeOutputTensor(DataType::DOUBLE, {total_kv_seq_len}, scratch_n_bytes, nullptr);
-  Tensor bias_buf =
-      rt ? rt->MakeTemporaryTensor(DataType::DOUBLE, {total_kv_seq_len}, scratch_n_bytes)
-         : MakeOutputTensor(DataType::DOUBLE, {total_kv_seq_len}, scratch_n_bytes, nullptr);
-  Tensor qkraw_buf =
-      rt ? rt->MakeTemporaryTensor(DataType::DOUBLE, {total_kv_seq_len}, scratch_n_bytes)
-         : MakeOutputTensor(DataType::DOUBLE, {total_kv_seq_len}, scratch_n_bytes, nullptr);
-  double *scores = scores_buf.AsDouble();
-  double *bias = bias_buf.AsDouble();
-  double *qkraw = qkraw_buf.AsDouble();
-  for (int64_t b = 0; b < batch_size; ++b) {
-    // Bottom-right / offset-aware causal frontier (mirrors onnx/onnx#8068):
-    // a query at in-block index ``i`` attends key ``j`` iff ``j <= i + offset``,
-    // where ``offset`` is the number of valid keys that precede this query block:
-    //   * past_key present (internal cache):    offset = past_kv_seq_len
-    //   * nonpad_kv_seqlen present, no past_key (external/static cache):
-    //                                           offset = nonpad_kv_seqlen[b] - q_seq_len
-    //   * neither:                              offset = 0 (ordinary top-left causal)
-    // ``offset`` is intentionally not clamped to ``>= 0``: a negative offset
-    // (out-of-contract over-long query block) fully masks the affected rows,
-    // which the fully-masked-row guard below then zeroes.
-    int64_t causal_offset = past_kv_seq_len;
-    if (past_key == nullptr && nonpad_lengths != nullptr) {
-      causal_offset = nonpad_lengths[b] - q_seq_len;
-    }
-    for (int64_t h = 0; h < q_num_heads; ++h) {
-      const int64_t kv_h = h / group_size;
-      const float *Qbh = q_head_stride != 0 ? pQ + b * q_batch_stride + h * q_head_stride : pQ;
-      const float *Kbh = k_head_stride != 0 ? pK + b * k_batch_stride + kv_h * k_head_stride : pK;
-      const float *Vbh = v_head_stride != 0 ? pV + b * v_batch_stride + kv_h * v_head_stride : pV;
-      float *Ybh = y_head_stride != 0 ? pY + b * y_batch_stride + h * y_head_stride : pY;
-      float *QKbh = qk_head_stride != 0 ? pQK + b * qk_batch_stride + h * qk_head_stride : pQK;
+  const int64_t task_count = batch_size * q_num_heads;
+  const int64_t task_work =
+      std::max<int64_t>(1, q_seq_len * total_kv_seq_len * (head_size + v_head_size));
+  const int64_t task_grain =
+      std::max<int64_t>(1, parallel_minimum_elements / task_work +
+                               static_cast<int64_t>(parallel_minimum_elements % task_work != 0));
+  ValidateAttentionMask(attn_mask, batch_size, q_num_heads, q_seq_len);
+  const int64_t participants = std::max<int64_t>(1, ParallelForThreadCount());
+  const bool parallel_tasks = participants > 1 && task_count > 1 && task_count >= task_grain;
+  const int64_t scratch_slots = parallel_tasks ? std::min<int64_t>(task_count, participants) : 1;
+  const size_t scratch_count = static_cast<size_t>(scratch_slots * total_kv_seq_len);
+  const size_t scratch_n_bytes = scratch_count * sizeof(double);
+  Tensor scores_buf = rt ? rt->MakeTemporaryTensor(
+                               DataType::DOUBLE, {scratch_slots, total_kv_seq_len}, scratch_n_bytes)
+                         : MakeOutputTensor(DataType::DOUBLE, {scratch_slots, total_kv_seq_len},
+                                            scratch_n_bytes, nullptr);
+  Tensor bias_buf = rt ? rt->MakeTemporaryTensor(DataType::DOUBLE,
+                                                 {scratch_slots, total_kv_seq_len}, scratch_n_bytes)
+                       : MakeOutputTensor(DataType::DOUBLE, {scratch_slots, total_kv_seq_len},
+                                          scratch_n_bytes, nullptr);
+  Tensor qkraw_buf = rt ? rt->MakeTemporaryTensor(
+                              DataType::DOUBLE, {scratch_slots, total_kv_seq_len}, scratch_n_bytes)
+                        : MakeOutputTensor(DataType::DOUBLE, {scratch_slots, total_kv_seq_len},
+                                           scratch_n_bytes, nullptr);
+  const int64_t wave_size = parallel_tasks ? scratch_slots : task_count;
+  for (int64_t wave_begin = 0; wave_begin < task_count; wave_begin += wave_size) {
+    const int64_t wave_count = std::min<int64_t>(wave_size, task_count - wave_begin);
+    ParallelFor(
+        wave_count, parallel_tasks ? 1 : task_grain,
+        [&](int64_t begin, int64_t end) {
+          for (int64_t slot = begin; slot < end; ++slot) {
+            const int64_t task = wave_begin + slot;
+            const int64_t scratch_slot = parallel_tasks ? slot : 0;
+            double *scores = scores_buf.AsDouble() + scratch_slot * total_kv_seq_len;
+            double *bias = bias_buf.AsDouble() + scratch_slot * total_kv_seq_len;
+            double *qkraw = qkraw_buf.AsDouble() + scratch_slot * total_kv_seq_len;
+            const int64_t b = task / q_num_heads;
+            const int64_t h = task % q_num_heads;
+            // Bottom-right / offset-aware causal frontier (mirrors onnx/onnx#8068):
+            // a query at in-block index ``i`` attends key ``j`` iff ``j <= i + offset``,
+            // where ``offset`` is the number of valid keys that precede this query block:
+            //   * past_key present (internal cache):    offset = past_kv_seq_len
+            //   * nonpad_kv_seqlen present, no past_key (external/static cache):
+            //                                           offset = nonpad_kv_seqlen[b] - q_seq_len
+            //   * neither:                              offset = 0 (ordinary top-left causal)
+            // ``offset`` is intentionally not clamped to ``>= 0``: a negative offset
+            // (out-of-contract over-long query block) fully masks the affected rows,
+            // which the fully-masked-row guard below then zeroes.
+            int64_t causal_offset = past_kv_seq_len;
+            if (past_key == nullptr && nonpad_lengths != nullptr) {
+              causal_offset = nonpad_lengths[b] - q_seq_len;
+            }
+            const int64_t kv_h = h / group_size;
+            const float *Qbh =
+                q_head_stride != 0 ? pQ + b * q_batch_stride + h * q_head_stride : pQ;
+            const float *Kbh =
+                k_head_stride != 0 ? pK + b * k_batch_stride + kv_h * k_head_stride : pK;
+            const float *Vbh =
+                v_head_stride != 0 ? pV + b * v_batch_stride + kv_h * v_head_stride : pV;
+            float *Ybh = y_head_stride != 0 ? pY + b * y_batch_stride + h * y_head_stride : pY;
+            float *QKbh =
+                qk_head_stride != 0 ? pQK + b * qk_batch_stride + h * qk_head_stride : pQK;
 
-      for (int64_t i = 0; i < q_seq_len; ++i) {
-        // Compute raw scaled QK scores and assemble bias.
-        for (int64_t j = 0; j < total_kv_seq_len; ++j) {
-          double s = 0.0;
-          for (int64_t d = 0; d < head_size; ++d) {
-            s += static_cast<double>(Qbh[i * head_size + d]) *
-                 static_cast<double>(Kbh[j * head_size + d]);
-          }
-          s *= static_cast<double>(scale);
-          qkraw[static_cast<size_t>(j)] = s;
+            for (int64_t i = 0; i < q_seq_len; ++i) {
+              // Compute raw scaled QK scores and assemble bias.
+              for (int64_t j = 0; j < total_kv_seq_len; ++j) {
+                double s = 0.0;
+                for (int64_t d = 0; d < head_size; ++d) {
+                  s += static_cast<double>(Qbh[i * head_size + d]) *
+                       static_cast<double>(Kbh[j * head_size + d]);
+                }
+                s *= static_cast<double>(scale);
+                qkraw[static_cast<size_t>(j)] = s;
 
-          double b_val = MaskValuePadded(attn_mask, batch_size, q_num_heads, q_seq_len,
-                                         total_kv_seq_len, b, h, i, j);
-          if (attrs.is_causal) {
-            // Bottom-right / offset-aware causal mask: key ``j`` is masked for
-            // query ``i`` iff ``j > i + causal_offset``.
-            if (j > i + causal_offset) {
-              b_val = -std::numeric_limits<double>::infinity();
+                double b_val = MaskValuePadded(attn_mask, b, h, i, j);
+                if (attrs.is_causal) {
+                  // Bottom-right / offset-aware causal mask: key ``j`` is masked for
+                  // query ``i`` iff ``j > i + causal_offset``.
+                  if (j > i + causal_offset) {
+                    b_val = -std::numeric_limits<double>::infinity();
+                  }
+                }
+                const int64_t window_diff = i + causal_offset - j;
+                if ((attrs.left_window_size >= 0 && window_diff > attrs.left_window_size) ||
+                    (attrs.right_window_size >= 0 && -window_diff > attrs.right_window_size)) {
+                  b_val = -std::numeric_limits<double>::infinity();
+                }
+                if (nonpad_lengths != nullptr && j >= nonpad_lengths[b]) {
+                  // Padding position: suppressed regardless of the supplied mask.
+                  b_val = -std::numeric_limits<double>::infinity();
+                }
+                bias[static_cast<size_t>(j)] = b_val;
+              }
+              // qk_matmul_output_mode 0: raw QK^T * scale (no softcap, no bias).
+              if (attrs.qk_matmul_output_mode == 0) {
+                for (int64_t j = 0; j < total_kv_seq_len; ++j) {
+                  QKbh[i * total_kv_seq_len + j] =
+                      static_cast<float>(qkraw[static_cast<size_t>(j)]);
+                }
+              }
+              // Apply softcap to raw QK BEFORE adding mask/bias. This matches
+              // upstream's ordering so that ``-inf`` mask values survive into
+              // softmax (yielding zero probability on masked positions). If
+              // softcap were applied after the mask, ``sc * tanh(-inf / sc)``
+              // would saturate to ``-sc`` (finite) and leak probability.
+              if (attrs.softcap > 0.0f) {
+                const double sc = static_cast<double>(attrs.softcap);
+                for (int64_t j = 0; j < total_kv_seq_len; ++j) {
+                  scores[static_cast<size_t>(j)] =
+                      sc * std::tanh(qkraw[static_cast<size_t>(j)] / sc);
+                }
+              } else {
+                for (int64_t j = 0; j < total_kv_seq_len; ++j) {
+                  scores[static_cast<size_t>(j)] = qkraw[static_cast<size_t>(j)];
+                }
+              }
+              // qk_matmul_output_mode 1: softcap output (before mask), or raw
+              // when no softcap is requested.
+              if (attrs.qk_matmul_output_mode == 1) {
+                for (int64_t j = 0; j < total_kv_seq_len; ++j) {
+                  QKbh[i * total_kv_seq_len + j] =
+                      static_cast<float>(scores[static_cast<size_t>(j)]);
+                }
+              }
+              // Add mask/bias to the (possibly softcapped) scores.
+              double max_score = -std::numeric_limits<double>::infinity();
+              for (int64_t j = 0; j < total_kv_seq_len; ++j) {
+                const double s = scores[static_cast<size_t>(j)] + bias[static_cast<size_t>(j)];
+                scores[static_cast<size_t>(j)] = s;
+                if (s > max_score) {
+                  max_score = s;
+                }
+              }
+              // qk_matmul_output_mode 2: includes attention mask and softcap.
+              if (attrs.qk_matmul_output_mode == 2) {
+                for (int64_t j = 0; j < total_kv_seq_len; ++j) {
+                  QKbh[i * total_kv_seq_len + j] =
+                      static_cast<float>(scores[static_cast<size_t>(j)]);
+                }
+              }
+              // Softmax over last axis.
+              double denom = 0.0;
+              for (int64_t j = 0; j < total_kv_seq_len; ++j) {
+                const double e = std::exp(scores[static_cast<size_t>(j)] - max_score);
+                scores[static_cast<size_t>(j)] = e;
+                denom += e;
+              }
+              const double inv_denom = denom != 0.0 ? 1.0 / denom : 0.0;
+              for (int64_t j = 0; j < total_kv_seq_len; ++j) {
+                scores[static_cast<size_t>(j)] *= inv_denom;
+              }
+              // A fully-masked row (every key masked out) has no attendable key: by
+              // convention it softmaxes to all-zero probabilities. Detect it on the
+              // additive bias (not the possibly-NaN logits) and zero the row BEFORE
+              // capturing the mode-3 output so the exposed ``qk_matmul_output`` row is
+              // also zeroed, consistent with the primary output ``Y`` (both 0). This
+              // mirrors upstream's guard, which runs before the mode-3 capture.
+              bool row_fully_masked = true;
+              for (int64_t j = 0; j < total_kv_seq_len; ++j) {
+                const double b = bias[static_cast<size_t>(j)];
+                if (!(std::isinf(b) && b < 0.0)) {
+                  row_fully_masked = false;
+                  break;
+                }
+              }
+              if (row_fully_masked && total_kv_seq_len != 0) {
+                std::fill(scores, scores + total_kv_seq_len, 0.0);
+              }
+              // qk_matmul_output_mode 3: after softmax (with the fully-masked-row
+              // guard applied above).
+              if (attrs.qk_matmul_output_mode == 3) {
+                for (int64_t j = 0; j < total_kv_seq_len; ++j) {
+                  QKbh[i * total_kv_seq_len + j] =
+                      static_cast<float>(scores[static_cast<size_t>(j)]);
+                }
+              }
+              // Y[i, dv] = sum_j probs[j] * V[j, dv]
+              for (int64_t dv = 0; dv < v_head_size; ++dv) {
+                double y = 0.0;
+                for (int64_t j = 0; j < total_kv_seq_len; ++j) {
+                  y += scores[static_cast<size_t>(j)] *
+                       static_cast<double>(Vbh[j * v_head_size + dv]);
+                }
+                Ybh[i * v_head_size + dv] = static_cast<float>(y);
+              }
             }
           }
-          const int64_t window_diff = i + causal_offset - j;
-          if ((attrs.left_window_size >= 0 && window_diff > attrs.left_window_size) ||
-              (attrs.right_window_size >= 0 && -window_diff > attrs.right_window_size)) {
-            b_val = -std::numeric_limits<double>::infinity();
-          }
-          if (nonpad_lengths != nullptr && j >= nonpad_lengths[b]) {
-            // Padding position: suppressed regardless of the supplied mask.
-            b_val = -std::numeric_limits<double>::infinity();
-          }
-          bias[static_cast<size_t>(j)] = b_val;
-        }
-        // qk_matmul_output_mode 0: raw QK^T * scale (no softcap, no bias).
-        if (attrs.qk_matmul_output_mode == 0) {
-          for (int64_t j = 0; j < total_kv_seq_len; ++j) {
-            QKbh[i * total_kv_seq_len + j] = static_cast<float>(qkraw[static_cast<size_t>(j)]);
-          }
-        }
-        // Apply softcap to raw QK BEFORE adding mask/bias. This matches
-        // upstream's ordering so that ``-inf`` mask values survive into
-        // softmax (yielding zero probability on masked positions). If
-        // softcap were applied after the mask, ``sc * tanh(-inf / sc)``
-        // would saturate to ``-sc`` (finite) and leak probability.
-        if (attrs.softcap > 0.0f) {
-          const double sc = static_cast<double>(attrs.softcap);
-          for (int64_t j = 0; j < total_kv_seq_len; ++j) {
-            scores[static_cast<size_t>(j)] = sc * std::tanh(qkraw[static_cast<size_t>(j)] / sc);
-          }
-        } else {
-          for (int64_t j = 0; j < total_kv_seq_len; ++j) {
-            scores[static_cast<size_t>(j)] = qkraw[static_cast<size_t>(j)];
-          }
-        }
-        // qk_matmul_output_mode 1: softcap output (before mask), or raw
-        // when no softcap is requested.
-        if (attrs.qk_matmul_output_mode == 1) {
-          for (int64_t j = 0; j < total_kv_seq_len; ++j) {
-            QKbh[i * total_kv_seq_len + j] = static_cast<float>(scores[static_cast<size_t>(j)]);
-          }
-        }
-        // Add mask/bias to the (possibly softcapped) scores.
-        double max_score = -std::numeric_limits<double>::infinity();
-        for (int64_t j = 0; j < total_kv_seq_len; ++j) {
-          const double s = scores[static_cast<size_t>(j)] + bias[static_cast<size_t>(j)];
-          scores[static_cast<size_t>(j)] = s;
-          if (s > max_score) {
-            max_score = s;
-          }
-        }
-        // qk_matmul_output_mode 2: includes attention mask and softcap.
-        if (attrs.qk_matmul_output_mode == 2) {
-          for (int64_t j = 0; j < total_kv_seq_len; ++j) {
-            QKbh[i * total_kv_seq_len + j] = static_cast<float>(scores[static_cast<size_t>(j)]);
-          }
-        }
-        // Softmax over last axis.
-        double denom = 0.0;
-        for (int64_t j = 0; j < total_kv_seq_len; ++j) {
-          const double e = std::exp(scores[static_cast<size_t>(j)] - max_score);
-          scores[static_cast<size_t>(j)] = e;
-          denom += e;
-        }
-        const double inv_denom = denom != 0.0 ? 1.0 / denom : 0.0;
-        for (int64_t j = 0; j < total_kv_seq_len; ++j) {
-          scores[static_cast<size_t>(j)] *= inv_denom;
-        }
-        // A fully-masked row (every key masked out) has no attendable key: by
-        // convention it softmaxes to all-zero probabilities. Detect it on the
-        // additive bias (not the possibly-NaN logits) and zero the row BEFORE
-        // capturing the mode-3 output so the exposed ``qk_matmul_output`` row is
-        // also zeroed, consistent with the primary output ``Y`` (both 0). This
-        // mirrors upstream's guard, which runs before the mode-3 capture.
-        bool row_fully_masked = true;
-        for (int64_t j = 0; j < total_kv_seq_len; ++j) {
-          const double b = bias[static_cast<size_t>(j)];
-          if (!(std::isinf(b) && b < 0.0)) {
-            row_fully_masked = false;
-            break;
-          }
-        }
-        if (row_fully_masked && total_kv_seq_len != 0) {
-          std::fill(scores, scores + total_kv_seq_len, 0.0);
-        }
-        // qk_matmul_output_mode 3: after softmax (with the fully-masked-row
-        // guard applied above).
-        if (attrs.qk_matmul_output_mode == 3) {
-          for (int64_t j = 0; j < total_kv_seq_len; ++j) {
-            QKbh[i * total_kv_seq_len + j] = static_cast<float>(scores[static_cast<size_t>(j)]);
-          }
-        }
-        // Y[i, dv] = sum_j probs[j] * V[j, dv]
-        for (int64_t dv = 0; dv < v_head_size; ++dv) {
-          double y = 0.0;
-          for (int64_t j = 0; j < total_kv_seq_len; ++j) {
-            y += scores[static_cast<size_t>(j)] * static_cast<double>(Vbh[j * v_head_size + dv]);
-          }
-          Ybh[i * v_head_size + dv] = static_cast<float>(y);
-        }
-      }
-    }
+        },
+        "Attention");
   }
 
   Attention::Result r;
@@ -555,18 +605,25 @@ Attention::Result ComputeAttentionRank4(const Tensor &Q4, const Tensor &K4, cons
 Attention::Result ComputeAttentionRank3(const Tensor &Q, const Tensor &K, const Tensor &V,
                                         const Attention::Attributes &attrs, const Tensor *attn_mask,
                                         const Tensor *past_key, const Tensor *past_value,
-                                        const Tensor *nonpad_kv_seqlen, RuntimeContext *rt) {
+                                        const Tensor *nonpad_kv_seqlen, RuntimeContext *rt,
+                                        int64_t parallel_minimum_elements) {
   Tensor Q4 = PromoteRank3(Q, attrs.q_num_heads, "Q", rt);
   Tensor K4 = PromoteRank3(K, attrs.kv_num_heads, "K", rt);
   Tensor V4 = PromoteRank3(V, attrs.kv_num_heads, "V", rt);
   Attention::Result r = ComputeAttentionRank4(Q4, K4, V4, attrs, attn_mask, past_key, past_value,
                                               nonpad_kv_seqlen, rt, /*temporary_y=*/true,
-                                              /*allow_capacity=*/false);
+                                              /*allow_capacity=*/false, parallel_minimum_elements);
   r.Y = CollapseToRank3(r.Y, rt);
   return r;
 }
 
 } // namespace
+
+Attention::Attention(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "Attention", kSupportedElementTypes, kPortableParallelMinimum,
+                            kTuningAbi) {}
+
+ONNX_LIGHT_REGISTER_PARALLEL_TUNING_SCHEMA(Attention)
 
 Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V,
                              RuntimeContext *rt) const {
@@ -680,10 +737,10 @@ Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const 
                       "kernel::Attention: Q, K, V must be rank-3 or rank-4.");
   if (Q.shape.size() == 3) {
     return ComputeAttentionRank3(Q, K, V, attrs, attn_mask, past_key, past_value, nonpad_kv_seqlen,
-                                 rt);
+                                 rt, tuning().parallel_minimum_elements);
   }
   return ComputeAttentionRank4(Q, K, V, attrs, attn_mask, past_key, past_value, nonpad_kv_seqlen,
-                               rt);
+                               rt, false, true, tuning().parallel_minimum_elements);
 }
 
 void Attention::Run(RuntimeContext &rt) {
@@ -716,9 +773,8 @@ void Attention::Run(RuntimeContext &rt) {
   attrs.left_window_size = GetAttributeIntOrDefault(node, "left_window_size", -1);
   attrs.right_window_size = GetAttributeIntOrDefault(node, "right_window_size", -1);
 
-  onnx_kernels::kernel::Attention kernel(rt.kernel_ctx());
   onnx_kernels::kernel::Attention::Result result =
-      kernel(q, k, v, attrs, attn_mask, past_key, past_value, nonpad_kv_seqlen, &rt);
+      (*this)(q, k, v, attrs, attn_mask, past_key, past_value, nonpad_kv_seqlen, &rt);
   SetOutput(node, 0, std::move(result.Y), rt);
 
   auto set_optional_output = [&node, &rt](int index, Tensor output) {

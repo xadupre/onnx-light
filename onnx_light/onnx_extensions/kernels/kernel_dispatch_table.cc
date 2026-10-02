@@ -321,6 +321,7 @@ void RegisterKernelFunctions() {
     onnx_kernels::kernel::Add::RegisterTuningSchemas();
     onnx_kernels::kernel::AffineGrid::RegisterTuningSchemas();
     onnx_kernels::kernel::And::RegisterTuningSchemas();
+    onnx_kernels::kernel::Attention::RegisterTuningSchemas();
     onnx_kernels::kernel::Asin::RegisterTuningSchemas();
     onnx_kernels::kernel::Asinh::RegisterTuningSchemas();
     onnx_kernels::kernel::Atan::RegisterTuningSchemas();
@@ -330,6 +331,9 @@ void RegisterKernelFunctions() {
     onnx_kernels::kernel::BitwiseOr::RegisterTuningSchemas();
     onnx_kernels::kernel::BitwiseXor::RegisterTuningSchemas();
     onnx_kernels::kernel::Cast::RegisterTuningSchemas();
+    onnx_kernels::kernel::Conv::RegisterTuningSchemas();
+    onnx_kernels::kernel::ConvInteger::RegisterTuningSchemas();
+    onnx_kernels::kernel::ConvTranspose::RegisterTuningSchemas();
     onnx_kernels::kernel::Ceil::RegisterTuningSchemas();
     onnx_kernels::kernel::Cos::RegisterTuningSchemas();
     onnx_kernels::kernel::Cosh::RegisterTuningSchemas();
@@ -337,6 +341,7 @@ void RegisterKernelFunctions() {
     onnx_kernels::kernel::Equal::RegisterTuningSchemas();
     onnx_kernels::kernel::Erf::RegisterTuningSchemas();
     onnx_kernels::kernel::Exp::RegisterTuningSchemas();
+    onnx_kernels::kernel::FlexAttention::RegisterTuningSchemas();
     onnx_kernels::kernel::Floor::RegisterTuningSchemas();
     onnx_kernels::kernel::Gemm::RegisterTuningSchemas();
     onnx_kernels::kernel::Greater::RegisterTuningSchemas();
@@ -344,6 +349,7 @@ void RegisterKernelFunctions() {
     onnx_kernels::kernel::HardSwish::RegisterTuningSchemas();
     onnx_kernels::kernel::Less::RegisterTuningSchemas();
     onnx_kernels::kernel::LessOrEqual::RegisterTuningSchemas();
+    onnx_kernels::kernel::LinearAttention::RegisterTuningSchemas();
     onnx_kernels::kernel::Log::RegisterTuningSchemas();
     onnx_kernels::kernel::MatMul::RegisterTuningSchemas();
     onnx_kernels::kernel::Mish::RegisterTuningSchemas();
@@ -354,6 +360,7 @@ void RegisterKernelFunctions() {
     onnx_kernels::kernel::Or::RegisterTuningSchemas();
     onnx_kernels::kernel::Pow::RegisterTuningSchemas();
     onnx_kernels::kernel::PRelu::RegisterTuningSchemas();
+    onnx_kernels::kernel::QLinearConv::RegisterTuningSchemas();
     onnx_kernels::kernel::Reciprocal::RegisterTuningSchemas();
     onnx_kernels::kernel::Relu::RegisterTuningSchemas();
     onnx_kernels::kernel::Round::RegisterTuningSchemas();

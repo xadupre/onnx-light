@@ -5,14 +5,21 @@
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
+#include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <stdexcept>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
+
+constexpr uint32_t kTuningAbi = 1;
+constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
+constexpr std::array<int32_t, 2> kSupportedElementTypes = {static_cast<int32_t>(DataType::INT8),
+                                                           static_cast<int32_t>(DataType::UINT8)};
 
 void ResolveAttributes(const Tensor &x, const Tensor &w, ConvInteger::Attributes &attrs) {
   const size_t spatial_rank = x.shape.size() - 2;
@@ -136,6 +143,12 @@ onnx_kernels::Shape ComputeOutputSpatial(const Tensor &x, ConvInteger::Attribute
 
 } // namespace
 
+ConvInteger::ConvInteger(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "ConvInteger", kSupportedElementTypes, kPortableParallelMinimum,
+                            kTuningAbi) {}
+
+ONNX_LIGHT_REGISTER_PARALLEL_TUNING_SCHEMA(ConvInteger)
+
 Tensor ConvInteger::operator()(const Tensor &x, const Tensor &w, const Tensor &x_zero_point,
                                const Tensor &w_zero_point, const Attributes &attrs,
                                RuntimeContext *rt) const {
@@ -188,7 +201,6 @@ void ConvInteger::operator()(const Tensor &x, const Tensor &w, const Tensor &x_z
                       "kernel::ConvInteger preallocated output buffer has unexpected size.");
 
   const size_t spatial_rank = x.shape.size() - 2;
-  const int64_t N = x.shape[0];
   const int64_t C = x.shape[1];
   const int64_t M = w.shape[0];
   const int64_t C_per_group = w.shape[1];
@@ -234,59 +246,61 @@ void ConvInteger::operator()(const Tensor &x, const Tensor &w, const Tensor &x_z
   const int32_t w_zp_scalar = w_zp_present && !w_zp_per_channel ? ReadElem(w_zero_point, 0) : 0;
 
   int32_t *py = output.AsInt32();
-  onnx_kernels::Shape oidx;
-  oidx.assign(spatial_rank, 0);
-  onnx_kernels::Shape kidx;
-  kidx.assign(spatial_rank, 0);
-
-  for (int64_t n = 0; n < N; ++n) {
-    for (int64_t m = 0; m < M; ++m) {
-      const int64_t g = m / M_per_group;
-      const int32_t w_zp = w_zp_per_channel ? ReadElem(w_zero_point, m) : w_zp_scalar;
-      int32_t *out_plane = py + ((n * M + m) * out_spatial_size);
-      std::fill(oidx.begin(), oidx.end(), 0);
-      for (int64_t op = 0; op < out_spatial_size; ++op) {
-        int32_t acc = 0;
-        for (int64_t ic_in_group = 0; ic_in_group < C_per_group; ++ic_in_group) {
-          const int64_t ic = g * C_per_group + ic_in_group;
-          const int64_t x_off_base = (n * C + ic) * in_spatial_size;
-          const int64_t w_off_base = (m * C_per_group + ic_in_group) * kernel_size;
-          std::fill(kidx.begin(), kidx.end(), 0);
-          for (int64_t kp = 0; kp < kernel_size; ++kp) {
-            bool in_bounds = true;
-            int64_t in_off = 0;
-            for (size_t a = 0; a < spatial_rank; ++a) {
-              const int64_t ia = oidx[a] * resolved.strides[a] + kidx[a] * resolved.dilations[a] -
-                                 resolved.pads[a];
-              if (ia < 0 || ia >= iD[a]) {
-                in_bounds = false;
-                break;
+  ParallelFor(
+      total, tuning().parallel_minimum_elements,
+      [&](int64_t begin, int64_t end) {
+        onnx_kernels::Shape oidx;
+        oidx.assign(spatial_rank, 0);
+        onnx_kernels::Shape kidx;
+        kidx.assign(spatial_rank, 0);
+        for (int64_t flat = begin; flat < end; ++flat) {
+          const int64_t plane = flat / out_spatial_size;
+          const int64_t op = flat % out_spatial_size;
+          const int64_t n = plane / M;
+          const int64_t m = plane % M;
+          int64_t spatial = op;
+          for (size_t a = spatial_rank; a-- > 0;) {
+            oidx[a] = spatial % oD[a];
+            spatial /= oD[a];
+          }
+          const int64_t g = m / M_per_group;
+          const int32_t w_zp = w_zp_per_channel ? ReadElem(w_zero_point, m) : w_zp_scalar;
+          int32_t *out_plane = py + ((n * M + m) * out_spatial_size);
+          int32_t acc = 0;
+          for (int64_t ic_in_group = 0; ic_in_group < C_per_group; ++ic_in_group) {
+            const int64_t ic = g * C_per_group + ic_in_group;
+            const int64_t x_off_base = (n * C + ic) * in_spatial_size;
+            const int64_t w_off_base = (m * C_per_group + ic_in_group) * kernel_size;
+            std::fill(kidx.begin(), kidx.end(), 0);
+            for (int64_t kp = 0; kp < kernel_size; ++kp) {
+              bool in_bounds = true;
+              int64_t in_off = 0;
+              for (size_t a = 0; a < spatial_rank; ++a) {
+                const int64_t ia = oidx[a] * resolved.strides[a] + kidx[a] * resolved.dilations[a] -
+                                   resolved.pads[a];
+                if (ia < 0 || ia >= iD[a]) {
+                  in_bounds = false;
+                  break;
+                }
+                in_off += ia * in_strides[a];
               }
-              in_off += ia * in_strides[a];
-            }
-            if (in_bounds) {
-              const int32_t xv = ReadElem(x, x_off_base + in_off);
-              const int32_t wv = ReadElem(w, w_off_base + kp);
-              acc += (xv - x_zp) * (wv - w_zp);
-            }
-            for (int a = static_cast<int>(spatial_rank) - 1; a >= 0; --a) {
-              if (++kidx[a] < k_shape[a]) {
-                break;
+              if (in_bounds) {
+                const int32_t xv = ReadElem(x, x_off_base + in_off);
+                const int32_t wv = ReadElem(w, w_off_base + kp);
+                acc += (xv - x_zp) * (wv - w_zp);
               }
-              kidx[a] = 0;
+              for (int a = static_cast<int>(spatial_rank) - 1; a >= 0; --a) {
+                if (++kidx[a] < k_shape[a]) {
+                  break;
+                }
+                kidx[a] = 0;
+              }
             }
           }
+          out_plane[op] = acc;
         }
-        out_plane[op] = acc;
-        for (int a = static_cast<int>(spatial_rank) - 1; a >= 0; --a) {
-          if (++oidx[a] < oD[a]) {
-            break;
-          }
-          oidx[a] = 0;
-        }
-      }
-    }
-  }
+      },
+      "ConvInteger");
 }
 
 void ConvInteger::Run(RuntimeContext &rt) {
@@ -308,11 +322,10 @@ void ConvInteger::Run(RuntimeContext &rt) {
   attrs.group = GetAttributeIntOrDefault(node, "group", 1);
   attrs.auto_pad = onnx_kernels::kernel::AutoPadFromString(
       GetAttributeStringOrDefault(node, "auto_pad", "NOTSET"));
-  onnx_kernels::kernel::ConvInteger k(rt.kernel_ctx());
-  SetOutput(
-      node, 0,
-      k(x, w, x_zp != nullptr ? *x_zp : Tensor{}, w_zp != nullptr ? *w_zp : Tensor{}, attrs, &rt),
-      rt);
+  SetOutput(node, 0,
+            (*this)(x, w, x_zp != nullptr ? *x_zp : Tensor{}, w_zp != nullptr ? *w_zp : Tensor{},
+                    attrs, &rt),
+            rt);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

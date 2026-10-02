@@ -170,6 +170,46 @@ TEST(OnnxKernelsDispatchTable, RegistersEveryBinaryTuningSchema) {
   }
 }
 
+TEST(OnnxKernelsDispatchTable, RegistersFirstWaveParallelTuningSchemas) {
+  ::onnx_light::onnx_kernels::RegisterKernelFunctions();
+  struct ExpectedSchema {
+    const char *kernel;
+    int32_t element_type;
+  };
+  constexpr std::array expected{
+      ExpectedSchema{"Attention", TensorProto::DataType::FLOAT},
+      ExpectedSchema{"Attention", TensorProto::DataType::FLOAT16},
+      ExpectedSchema{"Attention", TensorProto::DataType::BFLOAT16},
+      ExpectedSchema{"Conv", TensorProto::DataType::FLOAT},
+      ExpectedSchema{"Conv", TensorProto::DataType::FLOAT16},
+      ExpectedSchema{"Conv", TensorProto::DataType::BFLOAT16},
+      ExpectedSchema{"ConvInteger", TensorProto::DataType::INT8},
+      ExpectedSchema{"ConvInteger", TensorProto::DataType::UINT8},
+      ExpectedSchema{"ConvTranspose", TensorProto::DataType::FLOAT},
+      ExpectedSchema{"FlexAttention", TensorProto::DataType::FLOAT},
+      ExpectedSchema{"FlexAttention", TensorProto::DataType::DOUBLE},
+      ExpectedSchema{"FlexAttention", TensorProto::DataType::FLOAT16},
+      ExpectedSchema{"FlexAttention", TensorProto::DataType::BFLOAT16},
+      ExpectedSchema{"LinearAttention", TensorProto::DataType::FLOAT},
+      ExpectedSchema{"LinearAttention", TensorProto::DataType::FLOAT16},
+      ExpectedSchema{"LinearAttention", TensorProto::DataType::BFLOAT16},
+      ExpectedSchema{"QLinearConv", TensorProto::DataType::INT8},
+      ExpectedSchema{"QLinearConv", TensorProto::DataType::UINT8},
+  };
+
+  for (const ExpectedSchema &expected_schema : expected) {
+    const core::runtime::KernelTuningKey key = onnx_kernels::tuning::MakePortableTuningKey(
+        expected_schema.kernel, expected_schema.element_type);
+    const std::shared_ptr<const core::runtime::KernelTuningSchema> schema =
+        core::runtime::GetKernelTuningRegistry().FindSchema(key);
+    ASSERT_NE(schema, nullptr) << expected_schema.kernel;
+    EXPECT_EQ(
+        schema->portable_defaults().Get<int64_t>(onnx_kernels::tuning::kParallelMinimumElements),
+        core::runtime::kParallelForGrainSize)
+        << expected_schema.kernel;
+  }
+}
+
 // The device is part of a kernel's identifier: a factory registered for a GPU
 // device is keyed separately from the CPU/default entry so both can coexist.
 TEST(OnnxKernelsDispatchTable, DeviceIsPartOfIdentifier) {

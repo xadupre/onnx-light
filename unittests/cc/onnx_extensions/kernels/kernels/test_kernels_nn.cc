@@ -6,7 +6,9 @@
 #include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/kernels/float16_promote.h"
 #include "onnx_core/runtime/kernels/kernel_context.h"
+#include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/tuning/cpu_executor.h"
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
 #include <gtest/gtest.h>
@@ -21,6 +23,7 @@
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using core::backend_test::DefaultOpset;
+using core::runtime::DataType;
 using core::runtime::RuntimeContext;
 using core::runtime::RuntimeEvent;
 using core::runtime::RuntimeEventLog;
@@ -35,6 +38,7 @@ using onnx_kernels::kernel::Dropout;
 using onnx_kernels::kernel::GRU;
 using onnx_kernels::kernel::KernelContext;
 using onnx_kernels::kernel::LayerNormalization;
+using onnx_kernels::kernel::LinearAttention;
 using onnx_kernels::kernel::LSTM;
 using onnx_kernels::kernel::MaxPool;
 using onnx_kernels::kernel::MaxUnpool;
@@ -1164,13 +1168,109 @@ TEST(KernelClass, AttentionSupportsGQAHeadSharing) {
   const Tensor V = Tensor::FromFloat("", {1, 1, 1, 2}, {7.0f, -3.0f});
 
   const KernelContext ctx = AttentionKernelContext();
-  const Attention attention{ctx};
+  Attention attention{ctx};
+  attention.Configure(
+      {attention.TuningKey(DataType::FLOAT), {{"parallel.minimum_elements", int64_t{1}}}});
+  core::runtime::ParallelRegionCollector collector(2);
+  core::runtime::ParallelRegionCollectorScope collector_scope(&collector);
   const Tensor Y = attention(Q, K, V);
   ASSERT_EQ(Y.shape, (std::vector<int64_t>{1, 2, 1, 2}));
   for (int64_t h = 0; h < 2; ++h) {
     EXPECT_FLOAT_EQ(Y.AsFloat()[h * 2 + 0], 7.0f);
     EXPECT_FLOAT_EQ(Y.AsFloat()[h * 2 + 1], -3.0f);
   }
+  ASSERT_EQ(collector.events().size(), 1u);
+  EXPECT_EQ(collector.events()[0].label, "Attention");
+  if (core::runtime::ParallelForThreadCount() > 1) {
+    EXPECT_GT(collector.events()[0].admitted_threads, 1);
+  }
+}
+
+TEST(KernelClass, LinearAttentionParallelHeadsPreserveRecurrence) {
+  core::runtime::CpuExecutionPolicy policy;
+  policy.num_threads = 2;
+  policy.affinity_policy = core::runtime::CpuAffinityPolicy::kNone;
+  const auto executor = core::runtime::GlobalCpuExecutorRegistry().Acquire(policy);
+  const core::runtime::CpuExecutorScope executor_scope(executor.get());
+  const KernelContext ctx{DefaultOpset(27)};
+  LinearAttention kernel{ctx};
+  kernel.Configure(
+      {kernel.TuningKey(DataType::FLOAT), {{"parallel.minimum_elements", int64_t{1}}}});
+  const Tensor query = Tensor::FromFloat("", {2, 2, 2}, std::vector<float>(8, 1.0f));
+  const Tensor key = Tensor::FromFloat("", {2, 2, 2}, std::vector<float>(8, 1.0f));
+  const Tensor value = Tensor::FromFloat("", {2, 2, 2}, std::vector<float>(8, 1.0f));
+  LinearAttention::Attributes attrs;
+  attrs.update_rule = "linear";
+  attrs.has_scale = true;
+  attrs.scale = 1.0f;
+  attrs.q_num_heads = 2;
+  attrs.kv_num_heads = 2;
+
+  core::runtime::ParallelRegionCollector collector(2);
+  core::runtime::ParallelRegionCollectorScope collector_scope(&collector);
+  const LinearAttention::Result result = kernel(query, key, value, attrs);
+
+  EXPECT_EQ(std::vector<float>(result.output.AsFloat(), result.output.AsFloat() + 8),
+            (std::vector<float>{1.0f, 1.0f, 2.0f, 2.0f, 1.0f, 1.0f, 2.0f, 2.0f}));
+  ASSERT_EQ(collector.events().size(), 2u);
+  for (const auto &event : collector.events()) {
+    EXPECT_EQ(event.label, "LinearAttention");
+    EXPECT_EQ(event.admitted_threads, 2);
+  }
+}
+
+TEST(KernelClass, LinearAttentionRejectsUnknownRuleBeforeForcedParallelDispatch) {
+  const KernelContext ctx{DefaultOpset(27)};
+  LinearAttention kernel{ctx};
+  kernel.Configure(
+      {kernel.TuningKey(DataType::FLOAT), {{"parallel.minimum_elements", int64_t{1}}}});
+  const Tensor input = Tensor::FromFloat("", {2, 1, 1}, {1.0f, 1.0f});
+  LinearAttention::Attributes attrs;
+  attrs.update_rule = "unknown";
+  attrs.q_num_heads = 1;
+  attrs.kv_num_heads = 1;
+
+  EXPECT_THROW(kernel(input, input, input, attrs), std::invalid_argument);
+}
+
+TEST(KernelClass, AttentionScratchIsBoundedByAvailableParticipants) {
+  class RecordingAllocator : public core::runtime::RawBufferAllocator {
+  public:
+    core::runtime::RawBuffer *Allocate(size_t n_bytes) override {
+      requests.push_back(n_bytes);
+      return pool.Allocate(n_bytes);
+    }
+    void Free(core::runtime::RawBuffer *buffer) override { pool.Free(buffer); }
+    size_t TotalAllocatedSize() const override { return pool.TotalAllocatedSize(); }
+    size_t PeakAllocatedSize() const override { return pool.PeakAllocatedSize(); }
+    void ResetPeak() override { pool.ResetPeak(); }
+
+    std::vector<size_t> requests;
+    core::runtime::SimpleRawBufferAllocator pool{16};
+  };
+
+  const int64_t participants = core::runtime::ParallelForThreadCount();
+  const int64_t task_count = participants + 1;
+  const int64_t kv_seq_len = 4;
+  const Tensor Q =
+      Tensor::FromFloat("", {1, task_count, 1, 1}, std::vector<float>(task_count, 0.0f));
+  const Tensor K =
+      Tensor::FromFloat("", {1, 1, kv_seq_len, 1}, std::vector<float>(kv_seq_len, 0.0f));
+  const Tensor V =
+      Tensor::FromFloat("", {1, 1, kv_seq_len, 1}, std::vector<float>(kv_seq_len, 1.0f));
+  RecordingAllocator allocator;
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &allocator});
+  Attention attention{AttentionKernelContext()};
+  attention.Configure(
+      {attention.TuningKey(DataType::FLOAT), {{"parallel.minimum_elements", int64_t{1}}}});
+
+  const Attention::Result result =
+      attention(Q, K, V, Attention::Attributes{}, nullptr, nullptr, nullptr, nullptr, &rt);
+  EXPECT_EQ(result.Y.shape, (Shape{1, task_count, 1, 1}));
+  const size_t unbounded_scratch = static_cast<size_t>(task_count * kv_seq_len) * sizeof(double);
+  const size_t bounded_scratch = static_cast<size_t>(participants * kv_seq_len) * sizeof(double);
+  EXPECT_EQ(std::count(allocator.requests.begin(), allocator.requests.end(), unbounded_scratch), 0);
+  EXPECT_EQ(std::count(allocator.requests.begin(), allocator.requests.end(), bounded_scratch), 3);
 }
 
 TEST(KernelClass, AttentionCausalMasksFuturePositions) {
@@ -1709,6 +1809,20 @@ TEST(KernelClass, AttentionRejectsInvalidInputs) {
     Attention::Attributes attrs;
     EXPECT_THROW(attention(Q, K, V, attrs, &bad_mask), std::invalid_argument);
   }
+}
+
+TEST(KernelClass, AttentionRejectsInvalidMaskBeforeForcedParallelDispatch) {
+  Attention attention{AttentionKernelContext()};
+  attention.Configure(
+      {attention.TuningKey(DataType::FLOAT), {{"parallel.minimum_elements", int64_t{1}}}});
+  const Tensor Q = Tensor::FromFloat("", {1, 2, 1, 1}, {0.0f, 0.0f});
+  const Tensor K = Tensor::FromFloat("", {1, 1, 2, 1}, {0.0f, 0.0f});
+  const Tensor V = Tensor::FromFloat("", {1, 1, 2, 1}, {1.0f, 2.0f});
+  const Tensor bad_mask = Tensor::FromInt32("", {1, 1, 1, 2}, std::vector<int32_t>{0, 0});
+
+  EXPECT_THROW(
+      attention(Q, K, V, Attention::Attributes{}, &bad_mask, nullptr, nullptr, nullptr, nullptr),
+      std::invalid_argument);
 }
 
 TEST(KernelClass, MaxPool2DDefault) {

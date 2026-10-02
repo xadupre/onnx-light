@@ -87,14 +87,25 @@ The batches are ordered by expected model impact. A batch starts only after the
 previous batch has a published baseline and a reviewed list of serial
 exemptions.
 
+The first implementation wave is now in the source tree: ``Conv``,
+``ConvTranspose``, ``ConvInteger``, ``QLinearConv``, ``Attention``,
+``LinearAttention`` and ``FlexAttention`` use typed
+``parallel.minimum_elements`` tuning and partition independent output planes
+or batch/head recurrences. Attention scratch is allocated before worker
+launches and sliced by task, so workers never concurrently access the
+non-thread-safe runtime allocator. The migration is implemented; the batch
+remains open until the required x86-64 and ARM64 crossover reports are
+published and portable defaults are accepted.
+
 .. list-table::
    :header-rows: 1
-   :widths: 12 25 38 25
+   :widths: 10 22 33 22 13
 
    * - Batch
      - Kernel families
      - Required parallel decomposition
      - Exit evidence
+     - Status
    * - 1
      - ``Conv``, ``ConvTranspose``, ``ConvInteger``, ``QLinearConv``,
        ``Attention``, ``LinearAttention``, ``FlexAttention``
@@ -102,6 +113,7 @@ exemptions.
        per-worker accumulation and no duplicate cache decoding.
      - CNN and transformer shapes beat or match serial execution on x86-64 and
        ARM64 without memory or determinism regressions.
+     - Migration implemented; cross-platform calibration pending.
    * - 2
      - Reductions, ``Softmax``, ``LogSoftmax``, normalization, global/local
        pooling, ``TopK``
@@ -109,6 +121,7 @@ exemptions.
        deterministic partials only when measurements justify the merge cost.
      - Scalar, empty, strided, dynamic-axis, low-precision, and large-axis
        correctness plus crossover measurements.
+     - Not started.
    * - 3
      - ``Cast``, quantize/dequantize, ``Gather*``, ``Scatter*``, ``Where``,
        ``Pad``, ``Resize``, ``Slice``, ``Concat``, ``Split``, ``Tile``,
@@ -117,6 +130,7 @@ exemptions.
        Scatter paths must prove writes cannot conflict before parallelizing.
      - Memory-bandwidth scaling, overlap/alias safety, and bounded participant
        counts across contiguous and non-contiguous cases.
+     - Not started.
    * - 4
      - Recurrent operators, ``DFT``, ``STFT``, ``Einsum``, image/object
        detection, traditional-ML and training kernels
@@ -124,12 +138,14 @@ exemptions.
        dependencies permit.
      - Representative backend models identify which paths merit migration;
        every retained serial path has measured justification.
+     - Not started.
    * - 5
      - Sequences, optionals, text, metadata and remaining utility paths
      - Parallelize only payload-scale independent work. Preserve sequence
        ordering.
      - The inventory contains no unexplained serial path and no fixed-policy
        parallel path.
+     - Not started.
 
 The operator lists seed measurement; they do not authorize speculative
 parallel code. Within each batch, rank families by serial wall time and model

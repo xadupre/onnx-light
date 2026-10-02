@@ -30,8 +30,8 @@ using core::runtime::CpuExecutionPolicy;
 using core::runtime::CpuExecutor;
 using core::runtime::CurrentCpuExecutor;
 using core::runtime::CurrentParallelRegionCollector;
-using core::runtime::ExecutionPlan;
 using core::runtime::ExecuteActionKind;
+using core::runtime::ExecutionPlan;
 using core::runtime::KernelContext;
 using core::runtime::ParallelFor;
 using core::runtime::ParallelForThreadCount;
@@ -140,9 +140,10 @@ TEST(ExecutionPlan, DerivesMissingReleasesFromPartialMetadata) {
   };
   EXPECT_EQ(releases("A", 1), 1);
   EXPECT_EQ(releases("B", 2), 1);
-  EXPECT_EQ(std::count_if(actions.begin(), actions.end(), [](const auto &action) {
-              return action.kind() == ExecuteActionKind::kDeleteBuffer;
-            }),
+  EXPECT_EQ(std::count_if(actions.begin(), actions.end(),
+                          [](const auto &action) {
+                            return action.kind() == ExecuteActionKind::kDeleteBuffer;
+                          }),
             2);
 }
 
@@ -168,15 +169,17 @@ TEST(ExecutionPlan, PreservesExplicitReleaseAndDerivesMissingShapeRelease) {
 
   const ExecutionPlan plan(graph);
   const auto &actions = plan.actions();
-  EXPECT_EQ(std::count_if(actions.begin(), actions.end(), [](const auto &action) {
-              return action.kind() == ExecuteActionKind::kDeleteBuffer && action.name() == "A" &&
-                     action.node_index() == 2;
-            }),
+  EXPECT_EQ(std::count_if(actions.begin(), actions.end(),
+                          [](const auto &action) {
+                            return action.kind() == ExecuteActionKind::kDeleteBuffer &&
+                                   action.name() == "A" && action.node_index() == 2;
+                          }),
             1);
-  EXPECT_EQ(std::count_if(actions.begin(), actions.end(), [](const auto &action) {
-              return action.kind() == ExecuteActionKind::kDeleteShape && action.name() == "B" &&
-                     action.node_index() == 2;
-            }),
+  EXPECT_EQ(std::count_if(actions.begin(), actions.end(),
+                          [](const auto &action) {
+                            return action.kind() == ExecuteActionKind::kDeleteShape &&
+                                   action.name() == "B" && action.node_index() == 2;
+                          }),
             1);
 }
 

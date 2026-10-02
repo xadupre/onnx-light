@@ -44,6 +44,7 @@ std::ptrdiff_t OnnxLightNumpyArraySize(OnnxLightNumpyArray *array);
 std::ptrdiff_t OnnxLightNumpyArrayItemSize(OnnxLightNumpyArray *array);
 std::ptrdiff_t OnnxLightNumpyArrayByteSize(OnnxLightNumpyArray *array);
 void *OnnxLightNumpyArrayData(OnnxLightNumpyArray *array);
+bool OnnxLightNumpyArrayIsContiguousAligned(OnnxLightNumpyArray *array);
 PyObject *OnnxLightNumpyArrayGetItem(OnnxLightNumpyArray *array, char *pointer);
 int OnnxLightNumpyArraySetItem(OnnxLightNumpyArray *array, char *pointer, PyObject *value);
 OnnxLightNumpyDtype *OnnxLightNumpyDtypeFromName(const char *name);

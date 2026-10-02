@@ -95,6 +95,40 @@ class TestGeneration(unittest.TestCase):
                 )
                 numpy.testing.assert_array_equal(result, [[0, 1, 2, 0]])
 
+    def test_bfloat16_key_value_feedback(self):
+        import ml_dtypes
+
+        model = transition_model()
+        for suffix in ("key", "value"):
+            past = f"past_key_values.0.{suffix}"
+            present = f"present.0.{suffix}"
+            model.graph.input.append(
+                helper.make_tensor_value_info(past, TensorProto.BFLOAT16, [1, 4, None, 64])
+            )
+            model.graph.output.append(
+                helper.make_tensor_value_info(present, TensorProto.BFLOAT16, [1, 4, None, 64])
+            )
+            model.graph.node.append(
+                helper.make_node("Concat", [past, "new_cache"], [present], axis=2)
+            )
+            binding = model.graph.persistent_bindings.add()
+            binding.input_name = past
+            binding.output_name = present
+        model.graph.initializer.append(
+            numpy_helper.from_array(
+                numpy.ones((1, 4, 1, 64), dtype=ml_dtypes.bfloat16), name="new_cache"
+            )
+        )
+        feeds = {
+            "input_ids": numpy.array([[0]], dtype=numpy.int64),
+            "past_key_values.0.key": numpy.empty((1, 4, 0, 64), dtype=ml_dtypes.bfloat16),
+            "past_key_values.0.value": numpy.empty((1, 4, 0, 64), dtype=ml_dtypes.bfloat16),
+        }
+        numpy.testing.assert_array_equal(
+            ReferenceEvaluator(model).generate(feeds, max_new_tokens=3), [[0, 1, 2, 0]]
+        )
+        self.assertEqual(feeds["past_key_values.0.key"].shape, (1, 4, 0, 64))
+
     def test_fixed_tensor_sequence_feed(self):
         model = parser.parse_model(
             '<ir_version: 10, opset_import: ["" : 23]>'

@@ -399,9 +399,27 @@ int32_t FeedbackDtype(nb::dlpack::dtype dtype) {
 }
 
 Tensor FeedbackTensorFromArray(const std::string &name, nb::handle value) {
-  if (nb::isinstance(value, nb::module_::import_("numpy").attr("ndarray")) &&
-      !nb::cast<bool>(value.attr("dtype").attr("isnative")))
-    throw nb::value_error("Feedback arrays require native byte order; byte swapping would copy.");
+  if (nb::isinstance(value, nb::module_::import_("numpy").attr("ndarray"))) {
+    if (!nb::cast<bool>(value.attr("dtype").attr("isnative")))
+      throw nb::value_error("Feedback arrays require native byte order; byte swapping would copy.");
+    auto *numpy_array = OnnxLightNumpyArrayCast(value.ptr());
+    if (OnnxTypeFromNumpyDtype(OnnxLightNumpyArrayDtype(numpy_array)) == TensorProto::BFLOAT16 &&
+        OnnxLightNumpyArrayIsContiguousAligned(numpy_array)) {
+      Shape shape;
+      const int rank = OnnxLightNumpyArrayRank(numpy_array);
+      EXT_ENFORCE_INVALID(rank <= static_cast<int>(Shape::kMaxRank),
+                          "Feedback array rank is too large.");
+      for (int i = 0; i < rank; ++i)
+        shape.push_back(static_cast<int64_t>(OnnxLightNumpyArrayDimension(numpy_array, i)));
+      const size_t bytes = static_cast<size_t>(OnnxLightNumpyArrayByteSize(numpy_array));
+      const auto *data = static_cast<const uint8_t *>(OnnxLightNumpyArrayData(numpy_array));
+      EXT_ENFORCE_INVALID(bytes == 0 ||
+                              (data != nullptr && reinterpret_cast<uintptr_t>(data) % 2 == 0),
+                          "Feedback array storage is null or unaligned.");
+      return Tensor::Borrow(name, TensorProto::BFLOAT16, std::move(shape), data, bytes,
+                            RetainFeedbackOwner(value));
+    }
+  }
   nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu> array;
   if (!nb::try_cast(value, array, false))
     throw nb::type_error("Feedback inputs require a contiguous CPU array with a supported "

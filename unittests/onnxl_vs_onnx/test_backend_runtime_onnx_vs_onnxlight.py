@@ -81,6 +81,25 @@ _CUSTOM_FLOAT_TOLERANCES: dict[str, tuple[float, float]] = {
     "test_dft_inverse_opset19": (1e-3, 1e-5),
 }
 
+# ONNX changed these expected outputs to apply the specification's integer
+# resized length in the ``align_corners`` transform. Released ONNX packages may
+# still provide the older scale-derived values, while an ONNX source checkout
+# provides these corrected values.
+_INTEGER_ALIGN_CORNERS_OUTPUTS: dict[str, list[float]] = {
+    "test_resize_downsample_scales_linear_align_corners": [1.0, 4.0],
+    "test_resize_downsample_scales_cubic_align_corners": [
+        1.0,
+        2.5,
+        4.0,
+        7.0,
+        8.5,
+        10.0,
+        13.0,
+        14.5,
+        16.0,
+    ],
+}
+
 
 def _should_exclude_runtime_test_name(test_name: str) -> bool:
     """Returns whether a backend runtime test name should be excluded from comparison."""
@@ -530,6 +549,27 @@ class TestBackendRuntimeOnnxVsOnnxLight(ExtTestCase):
         known = _load_known_discrepancies()
         outcome, detail = self._run_one(test)
         snapshot = os.path.basename(_KNOWN_DISCREPANCIES_FILE)
+        if name in _INTEGER_ALIGN_CORNERS_OUTPUTS:
+            model = self._model_for_test(test)
+            data_sets = self._data_sets_for_test(test, model) if model is not None else None
+            reference_is_corrected = (
+                data_sets is not None
+                and len(data_sets) == 1
+                and len(data_sets[0][1]) == 1
+                and np.array_equal(
+                    np.asarray(data_sets[0][1][0]).reshape(-1),
+                    np.asarray(_INTEGER_ALIGN_CORNERS_OUTPUTS[name]),
+                )
+            )
+            if reference_is_corrected:
+                if outcome == "skip":
+                    self.skipTest(f"onnx-light runtime cannot execute {name!r} today")
+                if outcome == "fail":
+                    self.fail(
+                        f"The onnx-light runtime does not reproduce corrected {name!r} "
+                        f"reference outputs ({detail})."
+                    )
+                return
         if name in known:
             if outcome != "fail":
                 self.fail(

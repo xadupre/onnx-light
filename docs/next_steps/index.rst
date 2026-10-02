@@ -55,11 +55,6 @@ Started
         owners in ``SessionState``, use direct reads for ineligible tensors,
         run the four-configuration benchmark, and submit the upstream PR. All
         native dependencies through #4623 are complete.
-    * - :ref:`l-next-steps-custom-quantized-persistent-values`
-      - Structured values, persistent feedback, contiguous KV reuse and paged
-        quantized caches are implemented; complete the remaining end-to-end
-        acceptance and size-budget checks.
-
 Discussion
 ----------
 
@@ -146,6 +141,10 @@ Completed
     * - :ref:`l-next-steps-session-execution-pools`
       - Supplies the shared executor used by parallel kernels and startup
         tasks.
+    * - :ref:`l-next-steps-custom-quantized-persistent-values`
+      - Supplies structured and quantized values, graph-declared zero-copy
+        feedback, contiguous KV reuse, paged quantized caches, and end-to-end
+        decode validation with allocation and copy measurements.
 
 Consolidated design references
 ----------------------------------------

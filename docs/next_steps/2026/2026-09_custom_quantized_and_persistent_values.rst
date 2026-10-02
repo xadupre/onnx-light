@@ -7,7 +7,7 @@ Custom, quantized, and persistent values
 :Date: 2026-09
 :Updated: 2026-10-02
 
-**in progress (core integration implemented; final acceptance pending)**
+**completed**
 
 Objective and consolidation
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -40,9 +40,9 @@ owns prepared-object identity, publication, residency, eviction and
 persistence. ``StructTypeProto`` and ``EncodedValueProto`` are integrated
 with ``GraphBuilder``. Graph-declared persistent bindings now retain outputs
 across calls without copying state payloads; contiguous and paged KV cache
-consumers and end-to-end decode validation are also implemented. Final
-end-to-end acceptance and size-budget checks remain. The implementation
-sequence below records the original design and its acceptance criteria.
+consumers and end-to-end decode validation are also implemented. The
+implementation sequence below records the completed design and its acceptance
+criteria.
 
 Three independent decisions
 +++++++++++++++++++++++++++
@@ -884,8 +884,7 @@ integrates the representation with ``GraphBuilder`` authoring,
 deduplication and inference; see
 :ref:`l-howto-graph-builder-basics` for the supported native workflow and
 export boundaries. The 2026-09-20 revision adds a graph-level persistence
-declaration and makes zero-copy state forwarding mandatory. These are new
-requirements, not claims that the completed PRs already implement them.
+declaration and makes zero-copy state forwarding mandatory.
 `PR #5016 <https://github.com/xadupre/onnx-light/pull/5016>`_
 implements the PR04a declaration and PR04b runtime together: the
 caller-supplied mapping, model-serialization guard and defensive
@@ -896,6 +895,10 @@ the post-ORT limits, PR04 receives a bounded allowance of 32 KiB installed,
 16 KiB of ``.text`` and eight symbols, setting the corresponding CI limits
 to 1,423,320 bytes, 970,090 bytes and 800 symbols. The shared-library
 dependency allowlist remains unchanged.
+`PR #5070 <https://github.com/xadupre/onnx-light/pull/5070>`_
+completes PR07 with end-to-end structured feedback validation, repeated
+Attention decode comparison and revision-stamped allocation and copy
+measurements.
 
 .. list-table::
    :header-rows: 1
@@ -959,16 +962,16 @@ dependency allowlist remains unchanged.
        copying or dequantizing the entire cache.
      - PR02, PR05; CPU backend integration
    * - PR07
-     - End-to-end structured/stateful acceptance
+     - End-to-end structured/stateful acceptance (**done**)
      - Measure repeated decode and simultaneous independent feedback
        states; report state/scratch bytes and per-token copies, and
        verify request reset/isolation and the final proto-size budget.
      - PR03, PR04a, PR04b, PR05
 
-PR04 is now split into the wire/GraphBuilder declaration (PR04a) and its
+PR04 is split into the wire/GraphBuilder declaration (PR04a) and its
 zero-copy runtime consumer (PR04b), in that order. Basic feedback does not
-depend on quantization format or paging. PR06 is optional and does not
-block PR07. Later work extends the same graph-declared feedback contract
+depend on quantization format or paging. PR06 was optional and did not
+block PR07. Later work can extend the same graph-declared feedback contract
 without a second state system; explicit snapshots, alias annotations and
 mutation scheduling stay outside these initial steps.
 

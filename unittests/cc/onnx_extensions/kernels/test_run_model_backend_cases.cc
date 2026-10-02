@@ -80,6 +80,9 @@ int64_t GetDefaultOpsetVersion(const ModelProto &model) {
 //     least-significant bits differ across JPEG libraries, so a byte-exact
 //     comparison is inappropriate. (The lossless bmp / png / pnm decoder
 //     cases use the bundled decoders and still run and match everywhere.)
+//   * ``test_cc_release_partial_metadata`` intentionally omits one release
+//     annotation to reproduce issue #5102. Its dedicated Python test asserts
+//     the resulting execution-plan failure.
 //
 // The Python counterpart excludes the same cases.
 const std::unordered_set<std::string> &ExcludedCaseNames() {
@@ -87,6 +90,7 @@ const std::unordered_set<std::string> &ExcludedCaseNames() {
       "test_cc_image_decoder_decode_jpeg_bgr",
       "test_cc_image_decoder_decode_jpeg_grayscale",
       "test_cc_image_decoder_decode_jpeg_rgb",
+      "test_cc_release_partial_metadata",
   };
   return kExcluded;
 }

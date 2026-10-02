@@ -32,6 +32,28 @@ def test_timing_modes():
         assert example.measure(build, 20, True, repeats=1) >= 0
 
 
+@pytest.mark.parametrize("serialize", (False, True))
+def test_timing_releases_each_model_between_samples(serialize):
+    alive = [0]
+
+    class TrackedModel:
+        def __init__(self):
+            alive[0] += 1
+
+        def SerializeToString(self):
+            return b"model"
+
+        def __del__(self):
+            alive[0] -= 1
+
+    def build(_):
+        assert alive[0] == 0
+        return TrackedModel()
+
+    assert example.measure(build, 20, serialize, repeats=3) >= 0
+    assert alive[0] == 0
+
+
 @pytest.mark.parametrize("build", (example.build_light, example.build_onnxscript))
 @pytest.mark.parametrize("shape", example.INPUT_SHAPES)
 def test_dynamic_attention(build, shape):

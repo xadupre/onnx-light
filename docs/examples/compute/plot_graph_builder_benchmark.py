@@ -144,7 +144,9 @@ def measure(build, node_count: int, serialize: bool, repeats: int = 3) -> float:
         model = build(node_count)
         if serialize:
             model.SerializeToString()
-        samples.append((time.perf_counter() - start) * 1000)
+        elapsed = (time.perf_counter() - start) * 1000
+        samples.append(elapsed)
+        del model
     return statistics.median(samples)
 
 

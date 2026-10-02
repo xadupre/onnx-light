@@ -1151,6 +1151,29 @@ TEST(RunNodes, RunNodeResizeScalesFromDispatchTable) {
   }
 }
 
+TEST(RunNodes, ResizeAlignCornersUsesIntegerOutputSize) {
+  RuntimeContext rt(KernelContext(DefaultOpset(19)));
+  const onnx_kernels::kernel::Resize resize_kernel(rt.kernel_ctx());
+  const Tensor x =
+      Tensor::FromFloat("X", {1, 1, 2, 4}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
+  const Tensor scales = Tensor::FromFloat("scales", {4}, {1.0f, 1.0f, 0.6f, 0.6f});
+  const Tensor sizes = Tensor::FromInt64("sizes", {4}, {1, 1, 1, 2});
+  for (const char *mode : {"linear", "cubic"}) {
+    SCOPED_TRACE(mode);
+    onnx_kernels::kernel::Resize::Attributes attrs;
+    attrs.mode = mode;
+    attrs.coordinate_transformation_mode = "align_corners";
+    const Tensor actual = resize_kernel(x, scales, attrs);
+    const Tensor from_sizes = resize_kernel.ResizeSizes(x, sizes, attrs);
+    ASSERT_EQ(actual.shape, (std::vector<int64_t>{1, 1, 1, 2}));
+    ASSERT_EQ(from_sizes.shape, actual.shape);
+    for (int64_t i = 0; i < actual.element_count(); ++i) {
+      EXPECT_FLOAT_EQ(actual.AsFloat()[i], i == 0 ? 1.0f : 4.0f);
+      EXPECT_FLOAT_EQ(from_sizes.AsFloat()[i], actual.AsFloat()[i]);
+    }
+  }
+}
+
 TEST(RunNodes, RunNodeResizeSizesFromDispatchTable) {
   // Resize via the (X, roi="", scales="", sizes) input form.
   RuntimeContext rt(KernelContext(DefaultOpset(13)));

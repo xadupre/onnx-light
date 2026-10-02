@@ -20,6 +20,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Parallelized non-identity `Transpose` over contiguous copy blocks while
   retaining a single-copy path for identity permutations
   ([#5093](https://github.com/xadupre/onnx-light/pull/5093)).
+- Parallelized supported `Cast` conversions with type-specific runtime tuning,
+  while keeping packed-output writes serial to avoid byte-level races
+  ([#5097](https://github.com/xadupre/onnx-light/pull/5097)).
+- Folded initializer-backed `Transpose` and `Unsqueeze`–`Cast` chains during
+  optimization, preserving dtype, shape, output names, folding controls, and
+  externally visible values
+  ([#5094](https://github.com/xadupre/onnx-light/pull/5094),
+  [#5095](https://github.com/xadupre/onnx-light/pull/5095)).
 
 ### Fixes
 
@@ -35,8 +43,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Documentation & CI
 
-- Retired the proposed split-wheel refactoring; the existing wheel packaging
-  remains unchanged.
+- Added a completion roadmap for native kernel parallelization, documented
+  seeded random generators as intentionally serial, completed the
+  custom/quantized/persistent-value roadmap, and retired the proposed
+  split-wheel refactoring
+  ([#5099](https://github.com/xadupre/onnx-light/pull/5099)).
 - Added persistent-feedback decode validation and revision-stamped measurements,
   plus guidance to reduce wasted CI runs
   ([#5070](https://github.com/xadupre/onnx-light/pull/5070),

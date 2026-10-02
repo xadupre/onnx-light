@@ -32,7 +32,7 @@ import onnx_light.onnx as onnxl
 # full build; skip this module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
 _backend_case = import_or_skip("onnx_light.onnx_lib.backend.test.case")
 make_test_class = _backend_case.make_test_class
-collect_test_case = _backend_case.collect_test_case
+get_test_case = _backend_case.get_test_case
 ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
 
 
@@ -65,7 +65,8 @@ class TestPartialReleaseMetadata(unittest.TestCase):
 
     def test_incomplete_release_schedule_raises(self):
         """Raises when strict metadata omits an intermediate release."""
-        case = collect_test_case(unload=False)["test_cc_release_partial_metadata"]
+        case = get_test_case("test_cc_release_partial_metadata", unload=False)
+        self.assertIsNotNone(case)
         self.addCleanup(case.unload)
         with self.assertRaisesRegex(
             RuntimeError, r"ExecutionPlan: result '?B'? is never released or unlocked"

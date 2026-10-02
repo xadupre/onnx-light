@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
+#include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/memory/temporary_buffer.h"
 #include "onnx_core/runtime/runtime_context.h"
@@ -18,35 +19,35 @@ namespace {
 
 // Computes the determinant of a single M x M matrix in row-major layout using
 // LU decomposition with partial pivoting. The matrix is modified in place.
-float DeterminantInPlace(float *a, int64_t m) {
-  float det = 1.0f;
+template <typename T> T DeterminantInPlace(T *a, int64_t m) {
+  T det = 1;
   for (int64_t i = 0; i < m; ++i) {
     // Find pivot row.
     int64_t pivot = i;
-    float max_val = std::fabs(a[i * m + i]);
+    T max_val = std::fabs(a[i * m + i]);
     for (int64_t r = i + 1; r < m; ++r) {
-      const float v = std::fabs(a[r * m + i]);
+      const T v = std::fabs(a[r * m + i]);
       if (v > max_val) {
         max_val = v;
         pivot = r;
       }
     }
     if (max_val == 0.0f) {
-      return 0.0f;
+      return 0;
     }
     if (pivot != i) {
       for (int64_t c = 0; c < m; ++c) {
-        const float tmp = a[i * m + c];
+        const T tmp = a[i * m + c];
         a[i * m + c] = a[pivot * m + c];
         a[pivot * m + c] = tmp;
       }
       det = -det;
     }
-    const float diag = a[i * m + i];
+    const T diag = a[i * m + i];
     det *= diag;
     // Eliminate below the pivot.
     for (int64_t r = i + 1; r < m; ++r) {
-      const float factor = a[r * m + i] / diag;
+      const T factor = a[r * m + i] / diag;
       if (factor != 0.0f) {
         for (int64_t c = i + 1; c < m; ++c) {
           a[r * m + c] -= factor * a[i * m + c];
@@ -57,9 +58,29 @@ float DeterminantInPlace(float *a, int64_t m) {
   return det;
 }
 
+template <typename T, typename Stored, typename Decode, typename Encode>
+void ComputeDet(const Tensor &x, Tensor &output, int64_t batch, int64_t m,
+                RawBufferAllocator *allocator, Decode decode, Encode encode) {
+  const Stored *px = reinterpret_cast<const Stored *>(x.bytes());
+  Stored *py = reinterpret_cast<Stored *>(output.mutable_bytes());
+  const int64_t matrix_size = m * m;
+  detail::TemporaryTypedBuffer<T> work(static_cast<std::size_t>(matrix_size), allocator,
+                                       "kernel::Det work");
+  T *work_data = work.data();
+  for (int64_t b = 0; b < batch; ++b) {
+    const Stored *src = px + b * matrix_size;
+    for (int64_t i = 0; i < matrix_size; ++i)
+      work_data[static_cast<size_t>(i)] = decode(src[i]);
+    py[static_cast<size_t>(b)] = encode(DeterminantInPlace(work_data, m));
+  }
+}
+
 } // namespace
 
 Tensor Det::operator()(const Tensor &x, RuntimeContext *rt) const {
+  EXT_ENFORCE_INVALID(x.data_type == DataType::FLOAT || x.data_type == DataType::DOUBLE ||
+                          x.data_type == DataType::FLOAT16 || x.data_type == DataType::BFLOAT16,
+                      "kernel::Det only supports FLOAT, DOUBLE, FLOAT16, and BFLOAT16 tensors.");
   EXT_ENFORCE_INVALID(x.shape.size() >= 2, "kernel::Det requires an input tensor of rank >= 2.");
   const int64_t m = x.shape[x.shape.size() - 1];
   const int64_t m2 = x.shape[x.shape.size() - 2];
@@ -69,18 +90,20 @@ Tensor Det::operator()(const Tensor &x, RuntimeContext *rt) const {
   int64_t batch = 1;
   for (int64_t d : out_shape)
     batch *= d;
-  const size_t y_n_bytes = static_cast<size_t>(batch) * sizeof(float);
-  Tensor y = rt ? rt->MakeOutputTensor(0, DataType::FLOAT, out_shape, y_n_bytes)
-                : MakeOutputTensor(DataType::FLOAT, out_shape, y_n_bytes, nullptr);
+  const size_t y_n_bytes = static_cast<size_t>(batch) * x.element_size();
+  Tensor y = rt ? rt->MakeOutputTensor(0, x.data_type, out_shape, y_n_bytes)
+                : MakeOutputTensor(x.data_type, out_shape, y_n_bytes, nullptr);
   (*this)(x, y, rt ? rt->execution_allocator() : nullptr);
   return y;
 }
 
 void Det::operator()(const Tensor &x, Tensor &output,
                      RawBufferAllocator *temporary_allocator) const {
-  EXT_ENFORCE_INVALID(x.data_type == DataType::FLOAT, "kernel::Det only supports FLOAT tensors.");
-  EXT_ENFORCE_INVALID(output.data_type == DataType::FLOAT,
-                      "kernel::Det preallocated output must be a FLOAT tensor.");
+  EXT_ENFORCE_INVALID(x.data_type == DataType::FLOAT || x.data_type == DataType::DOUBLE ||
+                          x.data_type == DataType::FLOAT16 || x.data_type == DataType::BFLOAT16,
+                      "kernel::Det only supports FLOAT, DOUBLE, FLOAT16, and BFLOAT16 tensors.");
+  EXT_ENFORCE_INVALID(output.data_type == x.data_type,
+                      "kernel::Det preallocated output must match the input type.");
   EXT_ENFORCE_INVALID(x.shape.size() >= 2, "kernel::Det requires an input tensor of rank >= 2.");
   const int64_t m = x.shape[x.shape.size() - 1];
   const int64_t m2 = x.shape[x.shape.size() - 2];
@@ -94,21 +117,31 @@ void Det::operator()(const Tensor &x, Tensor &output,
   int64_t batch = 1;
   for (int64_t d : expected_out_shape)
     batch *= d;
-  const size_t expected_bytes = static_cast<size_t>(batch) * sizeof(float);
+  const size_t expected_bytes = static_cast<size_t>(batch) * x.element_size();
   EXT_ENFORCE_INVALID(output.size_bytes() == expected_bytes,
                       "kernel::Det preallocated output buffer has unexpected size in bytes.");
 
-  const float *px = x.AsFloat();
-  float *py = output.AsFloat();
-  const int64_t matrix_size = m * m;
-  detail::TemporaryTypedBuffer<float> work(static_cast<std::size_t>(matrix_size),
-                                           temporary_allocator, "kernel::Det work");
-  float *work_data = work.data();
-  for (int64_t b = 0; b < batch; ++b) {
-    const float *src = px + b * matrix_size;
-    for (int64_t i = 0; i < matrix_size; ++i)
-      work_data[static_cast<size_t>(i)] = src[i];
-    py[static_cast<size_t>(b)] = DeterminantInPlace(work_data, m);
+  switch (static_cast<DataType>(x.data_type)) {
+  case DataType::FLOAT:
+    ComputeDet<float, float>(
+        x, output, batch, m, temporary_allocator, [](float v) { return v; },
+        [](float v) { return v; });
+    break;
+  case DataType::DOUBLE:
+    ComputeDet<double, double>(
+        x, output, batch, m, temporary_allocator, [](double v) { return v; },
+        [](double v) { return v; });
+    break;
+  case DataType::FLOAT16:
+    ComputeDet<float, uint16_t>(x, output, batch, m, temporary_allocator, Float16BitsToFloat,
+                                FloatToFloat16Bits);
+    break;
+  case DataType::BFLOAT16:
+    ComputeDet<float, uint16_t>(x, output, batch, m, temporary_allocator, Bfloat16BitsToFloat,
+                                FloatToBfloat16Bits);
+    break;
+  default:
+    break;
   }
 }
 

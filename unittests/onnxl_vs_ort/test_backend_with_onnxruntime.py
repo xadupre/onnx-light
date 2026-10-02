@@ -174,6 +174,8 @@ ORT_EXCLUDE_REGEX = [
     r"^test_mod_mixed_sign_bfloat16$",
     r"^test_cc_mod_bfloat16_fmod$",
     r"^test_cc_pow_types_bfloat16_float32$",
+    # ORT rejects Det(BFLOAT16) and has no CPU implementation for Det(DOUBLE).
+    r"^test_cc_det_(bfloat16|double)$",
     # ORT IRFFT mishandles the ``inverse=1, onesided=1`` combination.
     r"^test_cc_dft_irfft(_opset19|_roundtrip|_roundtrip_opset19)?$",
     # ORT does not support Optional loop-carried state in this graph structure.

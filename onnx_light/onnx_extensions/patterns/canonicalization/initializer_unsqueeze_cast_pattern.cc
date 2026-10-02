@@ -103,8 +103,10 @@ InitializerUnsqueezeCastPattern::Match(core::builder::GraphGraph &graph,
   const TensorProto *source = graph.GetComputedConstant(source_name);
   const TensorProto *axes = graph.GetComputedConstant(unsqueeze->input()[1].value());
   std::vector<int64_t> dims;
-  if (source == nullptr || axes == nullptr || !IsNumericType(source->data_type()) ||
-      !IsNumericType(FindAttribute(candidate, "to")->i()) || !FoldedDims(*source, *axes, dims)) {
+  if (source == nullptr || axes == nullptr ||
+      (source->data_location() == TensorProto::DataLocation::EXTERNAL && !source->has_raw_data()) ||
+      !IsNumericType(source->data_type()) || !IsNumericType(FindAttribute(candidate, "to")->i()) ||
+      !FoldedDims(*source, *axes, dims)) {
     return NoMatch(candidate, "Unsqueeze axes are not valid constant axes");
   }
   const auto &kernels = core::runtime::KernelDispatchTable();

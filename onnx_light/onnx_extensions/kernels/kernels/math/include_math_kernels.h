@@ -1181,9 +1181,9 @@ public:
   Tensor operator()(const Tensors &inputs, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensors &inputs, Tensor &output) const;
 
-  /// Variadic element-wise kernel: the output buffer may alias an input
-  /// buffer when that input is not broadcast-expanded.
-  static constexpr bool CanRunInPlace() noexcept { return true; }
+  /// Mean initializes the output before reading every input, so aliasing a
+  /// later input could overwrite values that have not been consumed yet.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
 /// MelWeightMatrix generates the triangular Mel filter-bank weight matrix

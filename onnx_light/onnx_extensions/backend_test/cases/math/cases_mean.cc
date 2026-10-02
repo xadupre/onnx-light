@@ -152,6 +152,67 @@ void RegisterMeanCases(std::vector<TestCase> &registry, TestMode mode) {
       return IoData{{std::move(x0), std::move(x1)}, {std::move(z)}};
     });
   }
+
+  // Independent expectations cover both accumulation paths and later shape expansion.
+  for (int version : {8, 13}) {
+    for (bool use_double : {false, true}) {
+      const std::string suffix =
+          std::string(use_double ? "_double" : "_float") + "_opset_" + std::to_string(version);
+      const auto make_tensor = [use_double](const std::vector<int64_t> &shape,
+                                            const std::vector<float> &values) {
+        if (use_double) {
+          return Tensor::FromDouble("", shape, std::vector<double>(values.begin(), values.end()));
+        }
+        return Tensor::FromFloat("", shape, values);
+      };
+      const auto make_node = [](int input_count) {
+        NodeProto node;
+        node.set_op_type("Mean");
+        for (int i = 0; i < input_count; ++i) {
+          node.add_input("data_" + std::to_string(i));
+        }
+        node.add_output("result");
+        return node;
+      };
+
+      Expect(registry, make_node(3), "test_cc_mean_scalar_row_column" + suffix,
+             {DefaultOpset(version)}, [make_tensor]() -> IoData {
+               return IoData{{make_tensor({}, {3.0f}), make_tensor({3}, {3.0f, 6.0f, 9.0f}),
+                              make_tensor({2, 1}, {0.0f, 3.0f})},
+                             {make_tensor({2, 3}, {2.0f, 3.0f, 4.0f, 3.0f, 4.0f, 5.0f})}};
+             });
+
+      Expect(registry, make_node(3), "test_cc_mean_two_scalars_column" + suffix,
+             {DefaultOpset(version)}, [make_tensor]() -> IoData {
+               return IoData{{make_tensor({}, {3.0f}), make_tensor({}, {6.0f}),
+                              make_tensor({2, 1}, {0.0f, 3.0f})},
+                             {make_tensor({2, 1}, {3.0f, 4.0f})}};
+             });
+
+      Expect(registry, make_node(2), "test_cc_mean_crossed_dimensions" + suffix,
+             {DefaultOpset(version)}, [make_tensor]() -> IoData {
+               return IoData{
+                   {make_tensor({2, 1}, {2.0f, 4.0f}), make_tensor({1, 3}, {2.0f, 4.0f, 6.0f})},
+                   {make_tensor({2, 3}, {2.0f, 3.0f, 4.0f, 3.0f, 4.0f, 5.0f})}};
+             });
+
+      Expect(registry, make_node(3), "test_cc_mean_column_row_scalar" + suffix,
+             {DefaultOpset(version)}, [make_tensor]() -> IoData {
+               return IoData{{make_tensor({2, 1}, {0.0f, 3.0f}),
+                              make_tensor({3}, {3.0f, 6.0f, 9.0f}), make_tensor({}, {3.0f})},
+                             {make_tensor({2, 3}, {2.0f, 3.0f, 4.0f, 3.0f, 4.0f, 5.0f})}};
+             });
+
+      Expect(registry, make_node(4), "test_cc_mean_successive_rank_expansion" + suffix,
+             {DefaultOpset(version)}, [make_tensor]() -> IoData {
+               return IoData{{make_tensor({}, {4.0f}), make_tensor({3}, {0.0f, 4.0f, 8.0f}),
+                              make_tensor({2, 1}, {0.0f, 4.0f}),
+                              make_tensor({2, 1, 1}, {0.0f, 8.0f})},
+                             {make_tensor({2, 2, 3}, {1.0f, 2.0f, 3.0f, 2.0f, 3.0f, 4.0f, 3.0f,
+                                                      4.0f, 5.0f, 4.0f, 5.0f, 6.0f})}};
+             });
+    }
+  }
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

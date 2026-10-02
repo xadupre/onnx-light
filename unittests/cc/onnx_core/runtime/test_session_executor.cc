@@ -169,10 +169,16 @@ TEST(ExecutionPlan, PreservesExplicitReleaseAndDerivesMissingShapeRelease) {
 
   const ExecutionPlan plan(graph);
   const auto &actions = plan.actions();
+  const auto explicit_release =
+      std::find_if(actions.begin(), actions.end(), [](const auto &action) {
+        return action.kind() == ExecuteActionKind::kDeleteBuffer && action.name() == "A";
+      });
+  ASSERT_NE(explicit_release, actions.end());
+  EXPECT_EQ(explicit_release->node_index(), 2);
   EXPECT_EQ(std::count_if(actions.begin(), actions.end(),
                           [](const auto &action) {
                             return action.kind() == ExecuteActionKind::kDeleteBuffer &&
-                                   action.name() == "A" && action.node_index() == 2;
+                                   action.name() == "A";
                           }),
             1);
   EXPECT_EQ(std::count_if(actions.begin(), actions.end(),

@@ -11,6 +11,7 @@ Next Steps
     :hidden:
 
     2026/2026-08_kernel_parallelization
+    2026/2026-10_kernel_parallelization_completion
     2026/2026-08_onnxruntime_fast_model_loading
     2026/2026-08_proto_inheritance
     2026/2026-08_quantization
@@ -44,12 +45,10 @@ Started
 
     * - Plan
       - Remaining work
-    * - :ref:`l-next-steps-kernel-parallelization`
-      - Publish the ARM64 baseline and calibration reports, compare them with
-        the x86-64 results, calibrate the remaining ``Gemm`` parameters, decide
-        which values are safe portable defaults, and complete cross-platform
-        acceptance and ORT attribution. ``MatMul`` and ``Transpose`` now have
-        parallel CPU implementations.
+    * - :ref:`l-next-steps-kernel-parallelization-completion`
+      - Migrate every measured payload-scale kernel family to the session
+        executor or record a benchmark-backed serial exemption; finish
+        ``Gemm`` tuning, ARM64/x86-64 default promotion, and ORT attribution.
     * - :ref:`l-next-steps-model-loading`
       - Implement issue #4612 in an ONNX Runtime fork: retain mapped-payload
         owners in ``SessionState``, use direct reads for ineligible tensors,

@@ -61,8 +61,8 @@ template <typename T> T DeterminantInPlace(T *a, int64_t m) {
 template <typename T, typename Stored, typename Decode, typename Encode>
 void ComputeDet(const Tensor &x, Tensor &output, int64_t batch, int64_t m,
                 RawBufferAllocator *allocator, Decode decode, Encode encode) {
-  const Stored *px = x.As<Stored>();
-  Stored *py = output.As<Stored>();
+  const Stored *px = reinterpret_cast<const Stored *>(x.bytes());
+  Stored *py = reinterpret_cast<Stored *>(output.mutable_bytes());
   const int64_t matrix_size = m * m;
   detail::TemporaryTypedBuffer<T> work(static_cast<std::size_t>(matrix_size), allocator,
                                        "kernel::Det work");

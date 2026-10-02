@@ -728,9 +728,9 @@ TEST(KernelClass, DetClassPreservesInputTypesAndBatchShape) {
     for (size_t i = 0; i < expected.size(); ++i) {
       double got;
       if (dtype == DataType::FLOAT16)
-        got = core::runtime::Float16BitsToFloat(y.As<uint16_t>()[i]);
+        got = core::runtime::Float16BitsToFloat(reinterpret_cast<const uint16_t *>(y.bytes())[i]);
       else if (dtype == DataType::BFLOAT16)
-        got = core::runtime::Bfloat16BitsToFloat(y.As<uint16_t>()[i]);
+        got = core::runtime::Bfloat16BitsToFloat(reinterpret_cast<const uint16_t *>(y.bytes())[i]);
       else if (dtype == DataType::FLOAT)
         got = y.AsFloat()[i];
       else

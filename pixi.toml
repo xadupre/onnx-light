@@ -57,6 +57,9 @@ sphinx-issues = "*"
 myst-parser = "*"
 sphinxcontrib-mermaid = "*"
 
+[feature.docs.pypi-dependencies]
+onnxscript = ">=0.7.2"
+
 [environments]
 default = { solve-group = "default" }
 dev-no-onnx = { features = ["dev-no-onnx"], solve-group = "default" }

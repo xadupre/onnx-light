@@ -1158,7 +1158,7 @@ TEST(RunNodes, ResizeAlignCornersUsesIntegerOutputSize) {
       Tensor::FromFloat("X", {1, 1, 2, 4}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
   const Tensor scales = Tensor::FromFloat("scales", {4}, {1.0f, 1.0f, 0.6f, 0.6f});
   const Tensor sizes = Tensor::FromInt64("sizes", {4}, {1, 1, 1, 2});
-  for (const std::string &mode : {"linear", "cubic"}) {
+  for (const char *mode : {"linear", "cubic"}) {
     SCOPED_TRACE(mode);
     onnx_kernels::kernel::Resize::Attributes attrs;
     attrs.mode = mode;

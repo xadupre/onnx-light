@@ -16,6 +16,7 @@
 #include "onnx_extensions/patterns/canonicalization/identity_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/not_pattern.h"
 #include "onnx_extensions/patterns/dispatch_table.h"
+#include "onnx_extensions/patterns/transpose/transpose_pattern.h"
 
 #include "onnx_helper.h"
 #include "onnx_op/operator_sets.h"
@@ -881,6 +882,7 @@ TEST(PatternOptimization, RegistersBuiltInPatternsOnce) {
       "SwapUnsqueezeTranspose",
       "TransposeEqualReshape",
       "TransposeReshapeTranspose",
+      "TransposeToInitializer",
       "MulMulMulScalar",
       "SwitchOrderBinary",
       "SwapRangeAddScalar",
@@ -994,6 +996,11 @@ TEST(PatternOptimization, RegistersBuiltInPatternsOnce) {
       std::any_of(patterns.begin(), patterns.end(), [](const auto &pattern) {
         return dynamic_cast<onnx_patterns::PadConvPattern *>(pattern.get()) != nullptr;
       });
+  const bool found_transpose_to_initializer =
+      std::any_of(patterns.begin(), patterns.end(), [](const auto &pattern) {
+        return dynamic_cast<onnx_patterns::TransposeToInitializerPattern *>(pattern.get()) !=
+               nullptr;
+      });
   EXPECT_TRUE(found_cast);
   EXPECT_TRUE(found_cast_cast);
   EXPECT_TRUE(found_cast_cast_binary);
@@ -1008,6 +1015,7 @@ TEST(PatternOptimization, RegistersBuiltInPatternsOnce) {
   EXPECT_TRUE(found_identity);
   EXPECT_TRUE(found_not_not);
   EXPECT_TRUE(found_pad_conv);
+  EXPECT_TRUE(found_transpose_to_initializer);
 }
 
 TEST(PatternOptimization, CreatesBuiltInPatternByName) {
@@ -1022,6 +1030,11 @@ TEST(PatternOptimization, CreatesBuiltInPatternByName) {
   ASSERT_NE(cast_with_priority, nullptr);
   EXPECT_EQ(cast_with_priority->Name(), "Cast");
   EXPECT_EQ(cast_with_priority->priority, 9);
+
+  std::unique_ptr<core::builder::PatternOptimization> transpose =
+      onnx_patterns::CreatePattern("TransposeToInitializer");
+  ASSERT_NE(transpose, nullptr);
+  EXPECT_NE(dynamic_cast<onnx_patterns::TransposeToInitializerPattern *>(transpose.get()), nullptr);
 
   EXPECT_THROW(onnx_patterns::CreatePattern("UnknownPattern"),
                core::builder::PatternRegistrationError);

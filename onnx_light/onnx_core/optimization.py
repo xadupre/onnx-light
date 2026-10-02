@@ -138,6 +138,7 @@ SoftmaxCrossEntropyLossCastPattern: TypeAlias = _patterns.SoftmaxCrossEntropyLos
 TreeEnsemblePattern: TypeAlias = _patterns.TreeEnsemblePattern
 LabelEncoderFusionPattern: TypeAlias = _patterns.LabelEncoderFusionPattern
 TransposeTransposePattern: TypeAlias = _patterns.TransposeTransposePattern
+TransposeToInitializerPattern: TypeAlias = _patterns.TransposeToInitializerPattern
 TransposeGatherPattern: TypeAlias = _patterns.TransposeGatherPattern
 UnsqueezeUnsqueezePattern: TypeAlias = _patterns.UnsqueezeUnsqueezePattern
 SqueezeUnsqueezePattern: TypeAlias = _patterns.SqueezeUnsqueezePattern
@@ -444,6 +445,7 @@ __all__ = [
     "TransposeMatMulPattern",
     "TransposeReshapeMatMulPattern",
     "TransposeReshapeTransposePattern",
+    "TransposeToInitializerPattern",
     "TransposeTransposePattern",
     "TreeEnsemblePattern",
     "UnsqueezeEqualPattern",

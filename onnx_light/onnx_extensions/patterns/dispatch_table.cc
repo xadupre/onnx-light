@@ -385,6 +385,10 @@ void RegisterPatterns() {
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<TransposeTransposePattern>();
                                    });
+    core::builder::RegisterPattern("TransposeToInitializer",
+                                   []() -> std::unique_ptr<core::builder::PatternOptimization> {
+                                     return std::make_unique<TransposeToInitializerPattern>();
+                                   });
     core::builder::RegisterPattern("TransposeGather",
                                    []() -> std::unique_ptr<core::builder::PatternOptimization> {
                                      return std::make_unique<TransposeGatherPattern>();

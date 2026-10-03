@@ -121,7 +121,8 @@ published and portable defaults are accepted.
        deterministic partials only when measurements justify the merge cost.
      - Scalar, empty, strided, dynamic-axis, low-precision, and large-axis
        correctness plus crossover measurements.
-     - Not started.
+     - ``Softmax`` and ``LogSoftmax`` migration implemented; other families
+       and crossover measurements pending.
    * - 3
      - ``Cast``, quantize/dequantize, ``Gather*``, ``Scatter*``, ``Where``,
        ``Pad``, ``Resize``, ``Slice``, ``Concat``, ``Split``, ``Tile``,

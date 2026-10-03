@@ -5,10 +5,12 @@
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
 #include "onnx_core/runtime/kernels/float16_promote.h"
+#include "onnx_core/runtime/kernels/parallel_for.h"
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 #include <stdexcept>
@@ -17,6 +19,12 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
 
+constexpr uint32_t kTuningAbi = 1;
+constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
+constexpr std::array<int32_t, 4> kSupportedElementTypes = {
+    static_cast<int32_t>(DataType::FLOAT), static_cast<int32_t>(DataType::DOUBLE),
+    static_cast<int32_t>(DataType::FLOAT16), static_cast<int32_t>(DataType::BFLOAT16)};
+
 int64_t ResolveAxis(int64_t axis, int64_t rank) {
   const int64_t resolved = axis < 0 ? axis + rank : axis;
   EXT_ENFORCE_INVALID(resolved >= 0 && resolved < rank, "kernel::Softmax: axis is out of range.");
@@ -24,6 +32,12 @@ int64_t ResolveAxis(int64_t axis, int64_t rank) {
 }
 
 } // namespace
+
+Softmax::Softmax(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "Softmax", kSupportedElementTypes, kPortableParallelMinimum,
+                            kTuningAbi) {}
+
+ONNX_LIGHT_REGISTER_PARALLEL_TUNING_SCHEMA(Softmax)
 
 Tensor Softmax::operator()(const Tensor &x, int64_t axis, RuntimeContext *rt) const {
   // FLOAT16/BFLOAT16 inputs are computed in float32 and demoted back, mirroring
@@ -75,51 +89,70 @@ void Softmax::operator()(const Tensor &x, int64_t axis, Tensor &output) const {
   for (int64_t d = resolved_axis + 1; d < rank; ++d) {
     inner *= x.shape[static_cast<size_t>(d)];
   }
+  if (n == 0) {
+    return;
+  }
+  const int64_t rows = outer * inner;
+  const int64_t grain = std::max<int64_t>(
+      1, tuning().parallel_minimum_elements / axis_dim +
+             static_cast<int64_t>(tuning().parallel_minimum_elements % axis_dim != 0));
 
   if (is_double) {
     const double *px = x.AsDouble();
     double *py = output.AsDouble();
-    for (int64_t o = 0; o < outer; ++o) {
-      for (int64_t i = 0; i < inner; ++i) {
-        double max_v = -std::numeric_limits<double>::infinity();
-        for (int64_t a = 0; a < axis_dim; ++a) {
-          const int64_t offset = (o * axis_dim + a) * inner + i;
-          max_v = std::max(max_v, px[static_cast<size_t>(offset)]);
-        }
-        double sum = 0.0;
-        for (int64_t a = 0; a < axis_dim; ++a) {
-          const int64_t offset = (o * axis_dim + a) * inner + i;
-          sum += std::exp(px[static_cast<size_t>(offset)] - max_v);
-        }
-        for (int64_t a = 0; a < axis_dim; ++a) {
-          const int64_t offset = (o * axis_dim + a) * inner + i;
-          py[static_cast<size_t>(offset)] = std::exp(px[static_cast<size_t>(offset)] - max_v) / sum;
-        }
-      }
-    }
+    ParallelFor(
+        rows, grain,
+        [&](int64_t begin, int64_t end) {
+          for (int64_t row = begin; row < end; ++row) {
+            const int64_t o = row / inner;
+            const int64_t i = row % inner;
+            double max_v = -std::numeric_limits<double>::infinity();
+            for (int64_t a = 0; a < axis_dim; ++a) {
+              const int64_t offset = (o * axis_dim + a) * inner + i;
+              max_v = std::max(max_v, px[static_cast<size_t>(offset)]);
+            }
+            double sum = 0.0;
+            for (int64_t a = 0; a < axis_dim; ++a) {
+              const int64_t offset = (o * axis_dim + a) * inner + i;
+              sum += std::exp(px[static_cast<size_t>(offset)] - max_v);
+            }
+            for (int64_t a = 0; a < axis_dim; ++a) {
+              const int64_t offset = (o * axis_dim + a) * inner + i;
+              py[static_cast<size_t>(offset)] =
+                  std::exp(px[static_cast<size_t>(offset)] - max_v) / sum;
+            }
+          }
+        },
+        "Softmax");
     return;
   }
 
   const float *px = x.AsFloat();
   float *py = output.AsFloat();
-  for (int64_t o = 0; o < outer; ++o) {
-    for (int64_t i = 0; i < inner; ++i) {
-      float max_v = -std::numeric_limits<float>::infinity();
-      for (int64_t a = 0; a < axis_dim; ++a) {
-        const int64_t offset = (o * axis_dim + a) * inner + i;
-        max_v = std::max(max_v, px[static_cast<size_t>(offset)]);
-      }
-      float sum = 0.0f;
-      for (int64_t a = 0; a < axis_dim; ++a) {
-        const int64_t offset = (o * axis_dim + a) * inner + i;
-        sum += std::exp(px[static_cast<size_t>(offset)] - max_v);
-      }
-      for (int64_t a = 0; a < axis_dim; ++a) {
-        const int64_t offset = (o * axis_dim + a) * inner + i;
-        py[static_cast<size_t>(offset)] = std::exp(px[static_cast<size_t>(offset)] - max_v) / sum;
-      }
-    }
-  }
+  ParallelFor(
+      rows, grain,
+      [&](int64_t begin, int64_t end) {
+        for (int64_t row = begin; row < end; ++row) {
+          const int64_t o = row / inner;
+          const int64_t i = row % inner;
+          float max_v = -std::numeric_limits<float>::infinity();
+          for (int64_t a = 0; a < axis_dim; ++a) {
+            const int64_t offset = (o * axis_dim + a) * inner + i;
+            max_v = std::max(max_v, px[static_cast<size_t>(offset)]);
+          }
+          float sum = 0.0f;
+          for (int64_t a = 0; a < axis_dim; ++a) {
+            const int64_t offset = (o * axis_dim + a) * inner + i;
+            sum += std::exp(px[static_cast<size_t>(offset)] - max_v);
+          }
+          for (int64_t a = 0; a < axis_dim; ++a) {
+            const int64_t offset = (o * axis_dim + a) * inner + i;
+            py[static_cast<size_t>(offset)] =
+                std::exp(px[static_cast<size_t>(offset)] - max_v) / sum;
+          }
+        }
+      },
+      "Softmax");
 }
 
 void Softmax::Run(RuntimeContext &rt) {

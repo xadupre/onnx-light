@@ -6,8 +6,10 @@
 
 #include "onnx_core/runtime/kernels/float16_promote.h"
 #include "onnx_core/runtime/kernels/node_helpers.h"
+#include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -26,31 +28,48 @@ int64_t ResolveAxis(int64_t axis, int64_t rank) {
 
 template <typename T>
 void LogSoftmaxTyped(const Tensor &x, Tensor &output, int64_t outer, int64_t axis_dim,
-                     int64_t inner) {
+                     int64_t inner, int64_t grain) {
   const T *px = x.As<T>();
   T *py = output.As<T>();
-  for (int64_t o = 0; o < outer; ++o) {
-    for (int64_t i = 0; i < inner; ++i) {
-      T max_v = -std::numeric_limits<T>::infinity();
-      for (int64_t a = 0; a < axis_dim; ++a) {
-        const int64_t offset = (o * axis_dim + a) * inner + i;
-        max_v = std::max(max_v, px[offset]);
-      }
-      T sum = 0;
-      for (int64_t a = 0; a < axis_dim; ++a) {
-        const int64_t offset = (o * axis_dim + a) * inner + i;
-        sum += std::exp(px[offset] - max_v);
-      }
-      const T log_sum = std::log(sum);
-      for (int64_t a = 0; a < axis_dim; ++a) {
-        const int64_t offset = (o * axis_dim + a) * inner + i;
-        py[offset] = (px[offset] - max_v) - log_sum;
-      }
-    }
-  }
+  ParallelFor(
+      outer * inner, grain,
+      [&](int64_t begin, int64_t end) {
+        for (int64_t row = begin; row < end; ++row) {
+          const int64_t o = row / inner;
+          const int64_t i = row % inner;
+          T max_v = -std::numeric_limits<T>::infinity();
+          for (int64_t a = 0; a < axis_dim; ++a) {
+            const int64_t offset = (o * axis_dim + a) * inner + i;
+            max_v = std::max(max_v, px[offset]);
+          }
+          T sum = 0;
+          for (int64_t a = 0; a < axis_dim; ++a) {
+            const int64_t offset = (o * axis_dim + a) * inner + i;
+            sum += std::exp(px[offset] - max_v);
+          }
+          const T log_sum = std::log(sum);
+          for (int64_t a = 0; a < axis_dim; ++a) {
+            const int64_t offset = (o * axis_dim + a) * inner + i;
+            py[offset] = (px[offset] - max_v) - log_sum;
+          }
+        }
+      },
+      "LogSoftmax");
 }
 
+constexpr uint32_t kTuningAbi = 1;
+constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
+constexpr std::array<int32_t, 3> kSupportedElementTypes = {static_cast<int32_t>(DataType::FLOAT),
+                                                           static_cast<int32_t>(DataType::DOUBLE),
+                                                           static_cast<int32_t>(DataType::FLOAT16)};
+
 } // namespace
+
+LogSoftmax::LogSoftmax(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "LogSoftmax", kSupportedElementTypes, kPortableParallelMinimum,
+                            kTuningAbi) {}
+
+ONNX_LIGHT_REGISTER_PARALLEL_TUNING_SCHEMA(LogSoftmax)
 
 Tensor LogSoftmax::operator()(const Tensor &x, int64_t axis, RuntimeContext *rt) const {
   const size_t y_n_bytes = static_cast<size_t>(x.element_count()) * ElementSize(x.data_type);
@@ -98,16 +117,19 @@ void LogSoftmax::operator()(const Tensor &x, int64_t axis, Tensor &output) const
   if (n == 0) {
     return;
   }
+  const int64_t grain = std::max<int64_t>(
+      1, tuning().parallel_minimum_elements / axis_dim +
+             static_cast<int64_t>(tuning().parallel_minimum_elements % axis_dim != 0));
   if (x.data_type == DataType::FLOAT16) {
     Tensor promoted = core::runtime::PromoteToFloat32(x);
     Tensor result = MakeOutputTensor(DataType::FLOAT, x.shape, n * sizeof(float), nullptr);
-    LogSoftmaxTyped<float>(promoted, result, outer, axis_dim, inner);
+    LogSoftmaxTyped<float>(promoted, result, outer, axis_dim, inner, grain);
     Tensor demoted = core::runtime::DemoteFromFloat32(result, x.data_type);
     std::memcpy(output.mutable_bytes(), demoted.bytes(), output.size_bytes());
   } else if (x.data_type == DataType::DOUBLE) {
-    LogSoftmaxTyped<double>(x, output, outer, axis_dim, inner);
+    LogSoftmaxTyped<double>(x, output, outer, axis_dim, inner, grain);
   } else {
-    LogSoftmaxTyped<float>(x, output, outer, axis_dim, inner);
+    LogSoftmaxTyped<float>(x, output, outer, axis_dim, inner, grain);
   }
 }
 

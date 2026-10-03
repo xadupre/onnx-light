@@ -480,11 +480,12 @@ public:
 };
 
 /// Softmax normalized exponential along a selected axis.
-class Softmax : public KernelBase {
+class Softmax : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Softmax";
+  explicit Softmax(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, int64_t axis, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, int64_t axis, Tensor &output) const;
 
@@ -494,11 +495,12 @@ public:
 };
 
 /// LogSoftmax: log of the normalized exponential along a selected axis.
-class LogSoftmax : public KernelBase {
+class LogSoftmax : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:LogSoftmax";
+  explicit LogSoftmax(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, int64_t axis, RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &x, int64_t axis, Tensor &output) const;
 

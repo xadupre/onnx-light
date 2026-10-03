@@ -191,14 +191,26 @@ TEST(ExecutionPlan, PreservesExplicitReleaseAndDerivesMissingRelease) {
 TEST(ExecutionPlan, DerivesMissingUnlockFromPartialMetadata) {
   GraphProto graph;
   graph.add_input()->set_name("X");
+  graph.add_input()->set_name("Z");
   graph.add_initializer()->set_name("W");
   graph.add_output()->set_name("Y");
-  NodeProto *add = graph.add_node();
-  add->set_op_type("Add");
-  add->add_input("X");
-  add->add_input("W");
-  add->add_output("Y");
-  add->add_metadata(core::compute::kNotUsedAfterMetadataKey, "X");
+  NodeProto *first = graph.add_node();
+  first->set_op_type("If");
+  first->add_input("X");
+  first->add_output("A");
+  first->add_metadata(core::compute::kNotUsedAfterMetadataKey, "X");
+  AttributeProto *body_attribute = first->add_attribute();
+  body_attribute->set_name("then_branch");
+  body_attribute->set_type(AttributeProto::GRAPH);
+  NodeProto *capturing_node = body_attribute->mutable_g()->add_node();
+  capturing_node->set_op_type("Identity");
+  capturing_node->add_input("W");
+  capturing_node->add_output("inner");
+  NodeProto *second = graph.add_node();
+  second->set_op_type("Identity");
+  second->add_input("Z");
+  second->add_output("Y");
+  second->add_metadata(core::compute::kNotUsedAfterMetadataKey, "Z");
 
   const ExecutionPlan plan(graph);
   const auto &actions = plan.actions();
@@ -208,12 +220,25 @@ TEST(ExecutionPlan, DerivesMissingUnlockFromPartialMetadata) {
                                    action.name() == "X";
                           }),
             1);
-  EXPECT_EQ(std::count_if(actions.begin(), actions.end(),
-                          [](const auto &action) {
-                            return action.kind() == ExecuteActionKind::kUnlockInitializer &&
-                                   action.name() == "W";
-                          }),
-            1);
+  const auto lock_w = std::find_if(actions.begin(), actions.end(), [](const auto &action) {
+    return action.kind() == ExecuteActionKind::kLockInitializer && action.name() == "W";
+  });
+  const auto first_execute = std::find_if(actions.begin(), actions.end(), [](const auto &action) {
+    return action.kind() == ExecuteActionKind::kExecuteNode && action.node_index() == 0;
+  });
+  const auto unlock_w = std::find_if(actions.begin(), actions.end(), [](const auto &action) {
+    return action.kind() == ExecuteActionKind::kUnlockInitializer && action.name() == "W";
+  });
+  const auto second_execute = std::find_if(actions.begin(), actions.end(), [](const auto &action) {
+    return action.kind() == ExecuteActionKind::kExecuteNode && action.node_index() == 1;
+  });
+  ASSERT_NE(lock_w, actions.end());
+  ASSERT_NE(first_execute, actions.end());
+  ASSERT_NE(unlock_w, actions.end());
+  ASSERT_NE(second_execute, actions.end());
+  EXPECT_LT(lock_w, first_execute);
+  EXPECT_LT(first_execute, unlock_w);
+  EXPECT_LT(unlock_w, second_execute);
 }
 
 TEST(SessionExecutor, MakeSessionKernelInstallsBackendExecutionScope) {

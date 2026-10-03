@@ -214,9 +214,9 @@ void ExecutionPlan::BuildActions() {
   // after their last topological use.
   std::vector<std::vector<std::string>> topology_releases;
   std::vector<std::vector<std::string>> topology_unlocks;
+  std::vector<std::vector<std::string>> per_node_inputs;
   {
     const size_t n = nodes_.size();
-    std::vector<std::vector<std::string>> per_node_inputs;
     per_node_inputs.reserve(n);
     std::unordered_map<std::string, size_t> last_use;
     for (size_t i = 0; i < n; ++i) {
@@ -231,19 +231,17 @@ void ExecutionPlan::BuildActions() {
     topology_unlocks.assign(n, {});
     for (size_t i = 0; i < n; ++i) {
       for (const std::string &name : per_node_inputs[i]) {
-        if (keep_.count(name) != 0 || explicit_releases.count(name) != 0) {
+        const auto it = last_use.find(name);
+        if (it == last_use.end() || it->second != i) {
           continue;
         }
-        auto it = last_use.find(name);
-        if (it != last_use.end() && it->second == i) {
+        if (keep_.count(name) == 0 && explicit_releases.count(name) == 0) {
           topology_releases[i].push_back(name);
         }
-      }
-    }
-    for (const auto &[name, node_index] : last_use) {
-      if ((input_set.count(name) != 0 || initializer_set.count(name) != 0) &&
-          output_set.count(name) == 0 && explicit_unlocks.count(name) == 0) {
-        topology_unlocks[node_index].push_back(name);
+        if ((input_set.count(name) != 0 || initializer_set.count(name) != 0) &&
+            output_set.count(name) == 0 && explicit_unlocks.count(name) == 0) {
+          topology_unlocks[i].push_back(name);
+        }
       }
     }
   }
@@ -284,12 +282,10 @@ void ExecutionPlan::BuildActions() {
   for (size_t i = 0; i < nodes_.size(); ++i) {
     const NodeProto &node = *nodes_[i];
 
-    // Lock an input / initializer the first time it is referenced.
-    for (int in = 0; in < node.input_size(); ++in) {
-      const std::string name = node.input(in);
-      if (!name.empty()) {
-        lock_if_needed(name);
-      }
+    // Lock an input / initializer the first time it is referenced, including
+    // external inputs captured by a subgraph.
+    for (const std::string &name : per_node_inputs[i]) {
+      lock_if_needed(name);
     }
 
     // Read the in-place reuse decisions attached to this node so that an output
@@ -406,13 +402,8 @@ void ExecutionPlan::BuildActions() {
     // reaches its last use must be unlocked. Anything left unresolved means the
     // ComputeContext annotation is incomplete.
     std::unordered_set<std::string> consumed;
-    for (const NodeProto *node_ptr : nodes_) {
-      for (int in = 0; in < node_ptr->input_size(); ++in) {
-        const std::string name = node_ptr->input(in);
-        if (!name.empty()) {
-          consumed.insert(name);
-        }
-      }
+    for (const auto &node_inputs : per_node_inputs) {
+      consumed.insert(node_inputs.begin(), node_inputs.end());
     }
     for (const NodeProto *node_ptr : nodes_) {
       for (int o = 0; o < node_ptr->output_size(); ++o) {

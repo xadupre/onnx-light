@@ -11,6 +11,7 @@
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/tuning/cpu_executor.h"
 #include "onnx_core/runtime/tuning/kernel_tuning.h"
+#include "onnx_extensions/kernels/kernel_dispatch_table.h"
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
 #include <gtest/gtest.h>
@@ -776,6 +777,18 @@ TEST(KernelClass, SoftmaxClassMatchesReferenceAxis1) {
 }
 
 TEST(KernelClass, SoftmaxAndLogSoftmaxParallelRowsMatchSerial) {
+  onnx_kernels::RegisterKernelFunctions();
+  const KernelContext schema_ctx{DefaultOpset(18)};
+  const Softmax schema_softmax{schema_ctx};
+  const LogSoftmax schema_logsoftmax{schema_ctx};
+  for (const auto *kernel : {static_cast<const core::runtime::KernelBase *>(&schema_softmax),
+                             static_cast<const core::runtime::KernelBase *>(&schema_logsoftmax)}) {
+    const auto key = kernel->TuningKey(static_cast<int32_t>(DataType::FLOAT));
+    const auto schema = core::runtime::GetKernelTuningRegistry().FindSchema(key);
+    ASSERT_NE(schema, nullptr);
+    EXPECT_EQ(schema->portable_defaults().Get<int64_t>("parallel.minimum_elements"),
+              core::runtime::kParallelForGrainSize);
+  }
   core::runtime::CpuExecutionPolicy policy;
   policy.num_threads = 2;
   policy.affinity_policy = core::runtime::CpuAffinityPolicy::kNone;

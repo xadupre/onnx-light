@@ -45,14 +45,12 @@ class RuntimeContext;
  *    :cpp:class:`compute::ComputeContext` and
  *    :cpp:func:`compute::WritePeakMemoryToMetadata`.
  *
- * The memory-management schedule is entirely metadata-driven: the
- * :cpp:class:`ComputeContext` is responsible for annotating each node
- * with the in-place reuse, release and last-use information, and
- * :cpp:func:`BuildActions` consumes it. When a node range carries those
- * annotations, :cpp:func:`BuildActions` also *validates* that the
- * metadata is complete (every intermediate result is released, every
- * input / initializer is unlocked at its last use, every released shape
- * was created) and throws otherwise.
+ * :cpp:func:`BuildActions` uses the in-place reuse, release and last-use
+ * annotations written by :cpp:class:`ComputeContext`, deriving releases
+ * for intermediates without explicit release metadata from graph topology.
+ * When a node range carries lock-lifetime metadata, it validates that every
+ * consumed intermediate is released, every input / initializer is unlocked,
+ * and every released shape was created.
  *
  * The analysis depends only on the graph topology / metadata and not on
  * any runtime value, so a single plan can be reused across every
@@ -139,26 +137,23 @@ protected:
   /// (:cpp:var:`compute::kNotUsedAfterMetadataKey`); each output is either
   /// allocated as a result (or reused in place per the in-place annotation) or
   /// created as a shape when value-tagged ``"shape"``, and freed on its last
-  /// use. When at least one node carries
-  /// :cpp:var:`compute::kReleaseAfterMetadataKey`, that metadata drives the
-  /// :cpp:enumerator:`ExecuteActionKind::kDeleteBuffer` /
-  /// :cpp:enumerator:`ExecuteActionKind::kDeleteShape` schedule; otherwise the
-  /// releases are derived from graph topology (each intermediate is freed after
-  /// its last use, excluding :cpp:func:`keep` names). When a node
-  /// carries a peak-memory estimate
+  /// use. :cpp:var:`compute::kReleaseAfterMetadataKey` drives explicitly
+  /// annotated releases; releases for other intermediates are derived from
+  /// graph topology (after their last use, excluding :cpp:func:`keep` names).
+  /// When a node carries a peak-memory estimate
   /// (:cpp:var:`compute::kNodePeakMemoryMetadataKey`, written by
   /// :cpp:func:`compute::WritePeakMemoryToMetadata`), a temporary buffer of
   /// that size is allocated right before the node runs and deleted right after.
   ///
   /// When the node range carries explicit lock-lifetime metadata
   /// (:cpp:var:`compute::kNotUsedAfterMetadataKey`), that metadata is
-  /// treated as the single source of truth and its completeness is enforced: an
-  /// exception is thrown when an intermediate result is never released, when an
-  /// input / initializer reaching its last use is never unlocked, or when a
-  /// released shape was never created. When the node range carries no lifetime
-  /// metadata (e.g. a model executed without first running the in-place reuse
-  /// pass, or annotated only for memory profiling), the plan is built
-  /// best-effort and no completeness check is performed.
+  /// used to unlock inputs and initializers, and schedule completeness is
+  /// enforced: an exception is thrown when an intermediate result is never
+  /// released, when an input / initializer reaching its last use is never
+  /// unlocked, or when a released shape was never created. When the node range
+  /// carries no lifetime metadata (e.g. a model executed without first running
+  /// the in-place reuse pass, or annotated only for memory profiling), the plan
+  /// is built best-effort and no completeness check is performed.
   ///
   /// Every constructor calls this once, after seeding, so derived plans can
   /// override the action schedule. Overrides run against the base-class

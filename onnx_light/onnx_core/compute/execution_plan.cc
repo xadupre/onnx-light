@@ -179,38 +179,36 @@ void ExecutionPlan::BuildActions() {
   // are read from the node metadata written by :cpp:class:`compute::
   // ComputeContext`:
   //
-  //   * ``annotated`` (any ``release_after`` entry) selects the source of the
-  //     per-node release schedule: the ``release_after`` metadata when present,
-  //     or a topology fallback (each intermediate freed after its last use) for
-  //     un-annotated node ranges. Either way the schedule is materialised as
+  //   * ``release_after`` metadata specifies releases explicitly; intermediates
+  //     without an explicit release are freed after their last topological use.
+  //     Either way the schedule is materialised as
   //     :cpp:enumerator:`ExecuteActionKind::kDeleteBuffer` /
   //     :cpp:enumerator:`ExecuteActionKind::kDeleteShape` actions tagged with
   //     the releasing node index, so :cpp:func:`ReleaseAfter` reads it back
   //     from :cpp:func:`actions` alone.
   //   * ``strict`` (any ``not_used_after`` entry) means the node range carries
   //     explicit lock-lifetime information; the plan then enforces that the
-  //     metadata fully covers the schedule (every consumed result is released,
-  //     every input / initializer is unlocked at its last use, every released
-  //     shape was created) and unlocks at last use instead of at the very end.
+  //     schedule releases every consumed result, unlocks every input /
+  //     initializer at its last use, and creates every released shape.
   //     Node ranges without lifetime metadata (e.g. a model run without the
   //     in-place reuse pass, or annotated only for memory profiling) are built
   //     best-effort and the completeness checks are skipped.
-  bool annotated = false;
+  std::unordered_set<std::string> explicit_releases;
   bool strict = false;
   for (const NodeProto *node_ptr : nodes_) {
-    if (!ReadNodeMetadata(*node_ptr, compute::kReleaseAfterMetadataKey).empty()) {
-      annotated = true;
+    for (const std::string &name :
+         SplitNames(ReadNodeMetadata(*node_ptr, compute::kReleaseAfterMetadataKey))) {
+      explicit_releases.insert(name);
     }
     if (!ReadNodeMetadata(*node_ptr, compute::kNotUsedAfterMetadataKey).empty()) {
       strict = true;
     }
   }
 
-  // When the node range is not annotated with ``release_after`` metadata, the
-  // per-node release schedule is derived from graph topology: each intermediate
-  // is freed after its last use, excluding the structural ``keep`` names.
+  // Derive releases for intermediates not named by any explicit annotation,
+  // after their last topological use and excluding structural ``keep`` names.
   std::vector<std::vector<std::string>> topology_releases;
-  if (!annotated) {
+  {
     const size_t n = nodes_.size();
     std::vector<std::vector<std::string>> per_node_inputs;
     per_node_inputs.reserve(n);
@@ -226,7 +224,7 @@ void ExecutionPlan::BuildActions() {
     topology_releases.assign(n, {});
     for (size_t i = 0; i < n; ++i) {
       for (const std::string &name : per_node_inputs[i]) {
-        if (keep_.count(name) != 0) {
+        if (keep_.count(name) != 0 || explicit_releases.count(name) != 0) {
           continue;
         }
         auto it = last_use.find(name);
@@ -266,7 +264,7 @@ void ExecutionPlan::BuildActions() {
   };
 
   // Names for which a shape was created / a buffer was released, used by the
-  // completeness checks in annotated mode.
+  // completeness checks in strict mode.
   std::unordered_set<std::string> created_shapes;
   std::unordered_set<std::string> released;
 
@@ -344,30 +342,28 @@ void ExecutionPlan::BuildActions() {
     }
 
     // Free the intermediates whose last use falls at this node and unlock the
-    // inputs / initializers reaching their last use here (not_used_after). When
-    // the node range is annotated, the releases come from the per-node
-    // ``release_after`` metadata; otherwise they come from the topology
-    // fallback computed above. Both are emitted as delete actions tagged with
+    // inputs / initializers reaching their last use here (not_used_after). The
+    // explicitly annotated releases take precedence over the topology
+    // fallback for names absent from all release metadata. Both are tagged with
     // the releasing node index ``i`` so :cpp:func:`ReleaseAfter` can read them
     // back from :cpp:func:`actions`.
-    if (annotated) {
-      for (const std::string &name :
-           SplitNames(ReadNodeMetadata(node, compute::kReleaseAfterMetadataKey))) {
-        if (shape_tagged.count(name) != 0) {
-          // A shape is destroyed: it must have been created earlier.
-          EXT_ENFORCE(!strict || created_shapes.count(name) != 0, "ExecutionPlan: shape '", name,
-                      "' is released but was never created (missing shape metadata).");
-          actions_.emplace_back(ExecuteActionKind::kDeleteShape, name, i);
-        } else {
-          actions_.emplace_back(ExecuteActionKind::kDeleteBuffer, name, i);
-        }
-        released.insert(name);
-      }
-    } else {
-      for (const std::string &name : topology_releases[i]) {
+    for (const std::string &name :
+         SplitNames(ReadNodeMetadata(node, compute::kReleaseAfterMetadataKey))) {
+      if (shape_tagged.count(name) != 0) {
+        // A shape is destroyed: it must have been created earlier.
+        EXT_ENFORCE(!strict || created_shapes.count(name) != 0, "ExecutionPlan: shape '", name,
+                    "' is released but was never created (missing shape metadata).");
+        actions_.emplace_back(ExecuteActionKind::kDeleteShape, name, i);
+      } else {
         actions_.emplace_back(ExecuteActionKind::kDeleteBuffer, name, i);
-        released.insert(name);
       }
+      released.insert(name);
+    }
+    for (const std::string &name : topology_releases[i]) {
+      actions_.emplace_back(shape_tagged.count(name) != 0 ? ExecuteActionKind::kDeleteShape
+                                                          : ExecuteActionKind::kDeleteBuffer,
+                            name, i);
+      released.insert(name);
     }
     for (const std::string &name :
          SplitNames(ReadNodeMetadata(node, compute::kNotUsedAfterMetadataKey))) {

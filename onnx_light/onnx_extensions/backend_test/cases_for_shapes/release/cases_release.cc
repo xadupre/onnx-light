@@ -189,9 +189,8 @@ void RegisterReleaseCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
       AddInitializer<float>(*graph, "W", {2}, {1.0f, 1.0f});
 
       // This reproduces the partial lifetime annotations found on the mbext
-      // Tiny-LLM graph: lock metadata makes the plan strict and one release
-      // entry makes it metadata-driven, but the consumed intermediate B has
-      // no release_after entry on its Identity consumer.
+      // Tiny-LLM graph: A has an explicit release, while the execution plan
+      // must derive B's release from its last topological use.
       (*graph->mutable_node())[0].add_metadata(core::compute::kNotUsedAfterMetadataKey, "X;W");
       (*graph->mutable_node())[1].add_metadata(core::compute::kReleaseAfterMetadataKey, "A");
 

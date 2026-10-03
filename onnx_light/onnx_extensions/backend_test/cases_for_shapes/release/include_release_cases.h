@@ -28,16 +28,16 @@ using namespace ::onnx_light::core::backend_test; // NOLINT(google-build-using-n
 ///    case that verifies both a graph input and a graph initializer appear
 ///    under ``onnx_light.not_used_after`` at the node where they reach their
 ///    last use.
-///  - ``test_cc_release_partial_metadata``: intentionally incomplete
-///    ``Add → Relu → Identity`` release schedule that reproduces the strict
-///    execution-plan failure from issue #5102. This case is excluded from
-///    generic successful-model runners and tested as an expected failure.
+///  - ``test_cc_release_partial_metadata``: partially annotated
+///    ``Add → Relu → Identity`` release schedule that reproduces issue #5102
+///    and verifies that the execution plan derives the missing release.
 ///
 /// The expected ``onnx_light.release_after`` and
 /// ``onnx_light.not_used_after`` node metadata are pre-embedded in the first
-/// two complete models so tests can verify that
+/// two fully annotated models so tests can verify that
 /// ``ComputeContext::ComputeInPlaceReuseGraph`` reproduces them. The partial
-/// metadata case deliberately omits the release for ``B``.
+/// metadata case deliberately omits the release for ``B`` so the execution
+/// plan must derive it from graph topology.
 ONNX_LIGHT_BACKEND_TEST_LOCAL void RegisterReleaseCases(std::vector<TestCase> &registry,
                                                         TestMode mode = TestMode::TEST);
 

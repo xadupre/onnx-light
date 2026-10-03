@@ -32,7 +32,6 @@ import onnx_light.onnx as onnxl
 # full build; skip this module on a reduced build (ONNX_LIGHT_BUILD_KERNELS=OFF).
 _backend_case = import_or_skip("onnx_light.onnx_lib.backend.test.case")
 make_test_class = _backend_case.make_test_class
-get_test_case = _backend_case.get_test_case
 ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
 
 
@@ -55,23 +54,8 @@ TestReferenceEvaluatorBackend = make_test_class(
         "image_decoder_decode_jpeg_bgr",
         "image_decoder_decode_jpeg_grayscale",
         "image_decoder_decode_jpeg_rgb",
-        "test_cc_release_partial_metadata",
     ],
 )
-
-
-class TestPartialReleaseMetadata(unittest.TestCase):
-    """Checks the intentionally invalid release-metadata reproducer."""
-
-    def test_incomplete_release_schedule_raises(self):
-        """Raises when strict metadata omits an intermediate release."""
-        case = get_test_case("test_cc_release_partial_metadata", unload=False)
-        self.assertIsNotNone(case)
-        self.addCleanup(case.unload)
-        with self.assertRaisesRegex(
-            RuntimeError, r"ExecutionPlan: result '?B'? is never released or unlocked"
-        ):
-            case.assert_allclose(reference_evaluator_backend, unload=False)
 
 
 if __name__ == "__main__":

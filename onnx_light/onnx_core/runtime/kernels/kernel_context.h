@@ -150,6 +150,15 @@ public:
   virtual KernelTuningKey TuningKey(int32_t element_type) const;
 
   /**
+   * Returns the node input whose element type selects the tuning key.
+   *
+   * The default ``-1`` preserves generic first-available-input selection.
+   * Kernels whose control input has a different type override this with the
+   * zero-based index of the data input that determines their implementation.
+   */
+  virtual int32_t TuningInputIndex() const noexcept;
+
+  /**
    * Validates and copies resolved parameters into this kernel's typed,
    * immutable configuration.
    *

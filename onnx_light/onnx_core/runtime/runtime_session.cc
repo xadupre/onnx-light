@@ -323,15 +323,25 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt,
     const size_t index = action.node_index();
     const NodeProto &node = *nodes[index];
     int32_t element_type = static_cast<int32_t>(DataType::UNDEFINED);
-    for (int input_index = 0; input_index < node.input_size(); ++input_index) {
-      const std::string &input = node.input(input_index);
-      if (!input.empty() && rt.Has(input)) {
-        element_type = rt.Get(input).data_type;
-        break;
+    PreparedKernel &prepared = kernels_[index];
+    const int32_t tuning_input_index = prepared.instance->TuningInputIndex();
+    if (tuning_input_index >= 0) {
+      if (tuning_input_index < node.input_size()) {
+        const std::string &input = node.input(tuning_input_index);
+        if (!input.empty() && rt.Has(input)) {
+          element_type = rt.Get(input).data_type;
+        }
+      }
+    } else {
+      for (int input_index = 0; input_index < node.input_size(); ++input_index) {
+        const std::string &input = node.input(input_index);
+        if (!input.empty() && rt.Has(input)) {
+          element_type = rt.Get(input).data_type;
+          break;
+        }
       }
     }
 
-    PreparedKernel &prepared = kernels_[index];
     const KernelTuningKey tuning_key = prepared.instance->TuningKey(element_type);
     if (tuning_key.device == Device::kUndefined) {
       continue;

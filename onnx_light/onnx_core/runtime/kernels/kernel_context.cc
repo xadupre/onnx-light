@@ -53,6 +53,8 @@ void KernelBase::Run(RuntimeContext & /*rt*/) {
 
 KernelTuningKey KernelBase::TuningKey(int32_t) const { return {}; }
 
+int32_t KernelBase::TuningInputIndex() const noexcept { return -1; }
+
 void KernelBase::Configure(const KernelTuningParameters &) {
   EXT_THROW_INVALID("KernelBase::Configure is not implemented for this tunable kernel.");
 }

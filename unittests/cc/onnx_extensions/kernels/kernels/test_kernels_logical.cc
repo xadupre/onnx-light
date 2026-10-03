@@ -8,6 +8,7 @@
 #include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/runtime_session.h"
 #include "onnx_core/runtime/tuning/cpu_executor.h"
 #include "onnx_core/runtime/tuning/kernel_tuning.h"
 #include "onnx_extensions/kernels/kernel_dispatch_table.h"
@@ -691,6 +692,51 @@ TEST(KernelClass, WhereParallelBroadcastMatchesSerialAndProtectsAliases) {
   EXPECT_EQ(collector.events()[4].admitted_threads, 1);
 }
 
+TEST(KernelClass, WhereSessionTunesForValueInputType) {
+  onnx_kernels::RegisterKernelFunctions();
+  const KernelContext ctx{DefaultOpset(18)};
+  Where where{ctx};
+  const auto bool_key = where.TuningKey(static_cast<int32_t>(core::runtime::DataType::BOOL));
+  const auto int32_key = where.TuningKey(static_cast<int32_t>(core::runtime::DataType::INT32));
+  std::vector<core::runtime::KernelTuningParameters> profiles{
+      {bool_key, {{"parallel.minimum_elements", int64_t{1000}}}},
+      {int32_key, {{"parallel.minimum_elements", int64_t{1}}}}};
+  core::runtime::GetKernelTuningRegistry().PublishProfiles(profiles);
+
+  GraphProto graph;
+  graph.add_input()->set_name("condition");
+  graph.add_input()->set_name("x");
+  graph.add_input()->set_name("y");
+  graph.add_output()->set_name("output");
+  NodeProto *node = graph.add_node();
+  node->set_op_type("Where");
+  node->add_input("condition");
+  node->add_input("x");
+  node->add_input("y");
+  node->add_output("output");
+
+  constexpr int64_t count = 64;
+  RuntimeContext rt(ctx);
+  rt.Set("condition", Tensor::FromBool("condition", {count}, std::vector<uint8_t>(count, 1)));
+  rt.Set("x", Tensor::FromInt32("x", {count}, std::vector<int32_t>(count, 7)));
+  rt.Set("y", Tensor::FromInt32("y", {count}, std::vector<int32_t>(count, 9)));
+  auto collector = std::make_shared<core::runtime::ParallelRegionCollector>(4);
+  core::runtime::RuntimeSession session(rt.GetExecutionPlan(graph),
+                                        core::runtime::RuntimeSessionOptions{
+                                            .parameters = core::runtime::RuntimeParameters(2),
+                                            .parallel_region_collector = collector,
+                                        });
+  session.Run(rt);
+
+  const std::vector<core::runtime::KernelTuningKey> keys{bool_key, int32_key};
+  core::runtime::GetKernelTuningRegistry().PublishProfiles({}, keys);
+  ASSERT_EQ(collector->events().size(), 1u);
+  EXPECT_EQ(session.tuning_resolution_statistics().resolved_profiles, 1u);
+  EXPECT_EQ(collector->events()[0].label, "Where");
+  EXPECT_GT(collector->events()[0].admitted_threads, 1);
+  EXPECT_EQ(rt.Get("output").AsInt32()[count - 1], 7);
+}
+
 TEST(KernelClass, WhereRejectsNonBoolCondition) {
   const KernelContext ctx{DefaultOpset(16)};
   Where where_kernel{ctx};
@@ -731,6 +777,14 @@ TEST(KernelClass, WhereRejectsBroadcastedAndPartialOutputAliases) {
       Tensor::Borrow("", core::runtime::DataType::BOOL, {2}, storage.data() + 1, 2);
   const Tensor independent_condition = Tensor::FromBool("", {2}, {1, 1});
   EXPECT_THROW(where(independent_condition, partial_x, y, partial_output), std::invalid_argument);
+
+  Tensor wide_output = Tensor::FromInt32("", {2}, {1, 1});
+  const Tensor narrow_condition =
+      Tensor::Borrow("", core::runtime::DataType::BOOL, {2}, wide_output.bytes(), 2);
+  const Tensor int_x = Tensor::FromInt32("", {2}, {0, 7});
+  const Tensor int_y = Tensor::FromInt32("", {2}, {9, 9});
+  EXPECT_THROW(where(narrow_condition, int_x, int_y, wide_output), std::invalid_argument);
+  EXPECT_EQ(wide_output.AsInt32()[1], 1);
 }
 
 TEST(KernelClass, WhereUsesAllocatorWhenRuntimeContextHasOne) {

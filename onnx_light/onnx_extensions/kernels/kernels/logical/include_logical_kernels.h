@@ -258,6 +258,7 @@ public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Where";
   explicit Where(const KernelContext &ctx);
   static void RegisterTuningSchemas();
+  int32_t TuningInputIndex() const noexcept override { return 1; }
   void Run(RuntimeContext &rt) override;
   Tensor operator()(const Tensor &condition, const Tensor &x, const Tensor &y,
                     RuntimeContext *rt = nullptr) const;

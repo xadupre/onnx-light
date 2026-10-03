@@ -184,7 +184,8 @@ void WhereInPlaceTyped(const Tensor &condition, const Tensor &x, const Tensor &y
   for (const Tensor *input : {&condition, &x, &y}) {
     if (overlaps(*input)) {
       EXT_ENFORCE_INVALID(
-          input->bytes() == output.mutable_bytes() && input->shape == bi.shape,
+          input->bytes() == output.mutable_bytes() && input->shape == bi.shape &&
+              input->size_bytes() == output.size_bytes(),
           "kernel::Where cannot write over a broadcasted or partially overlapping input.");
       aliased = true;
     }

@@ -194,20 +194,26 @@ void ExecutionPlan::BuildActions() {
   //     in-place reuse pass, or annotated only for memory profiling) are built
   //     best-effort and the completeness checks are skipped.
   std::unordered_set<std::string> explicit_releases;
+  std::unordered_set<std::string> explicit_unlocks;
   bool strict = false;
   for (const NodeProto *node_ptr : nodes_) {
     for (const std::string &name :
          SplitNames(ReadNodeMetadata(*node_ptr, compute::kReleaseAfterMetadataKey))) {
       explicit_releases.insert(name);
     }
-    if (!ReadNodeMetadata(*node_ptr, compute::kNotUsedAfterMetadataKey).empty()) {
+    const std::vector<std::string> not_used_after =
+        SplitNames(ReadNodeMetadata(*node_ptr, compute::kNotUsedAfterMetadataKey));
+    if (!not_used_after.empty()) {
       strict = true;
+      explicit_unlocks.insert(not_used_after.begin(), not_used_after.end());
     }
   }
 
   // Derive releases for intermediates not named by any explicit annotation,
-  // after their last topological use and excluding structural ``keep`` names.
+  // and unlocks for inputs / initializers missing an explicit annotation,
+  // after their last topological use.
   std::vector<std::vector<std::string>> topology_releases;
+  std::vector<std::vector<std::string>> topology_unlocks;
   {
     const size_t n = nodes_.size();
     std::vector<std::vector<std::string>> per_node_inputs;
@@ -222,6 +228,7 @@ void ExecutionPlan::BuildActions() {
       per_node_inputs.push_back(std::move(node_inputs));
     }
     topology_releases.assign(n, {});
+    topology_unlocks.assign(n, {});
     for (size_t i = 0; i < n; ++i) {
       for (const std::string &name : per_node_inputs[i]) {
         if (keep_.count(name) != 0 || explicit_releases.count(name) != 0) {
@@ -231,6 +238,12 @@ void ExecutionPlan::BuildActions() {
         if (it != last_use.end() && it->second == i) {
           topology_releases[i].push_back(name);
         }
+      }
+    }
+    for (const auto &[name, node_index] : last_use) {
+      if ((input_set.count(name) != 0 || initializer_set.count(name) != 0) &&
+          output_set.count(name) == 0 && explicit_unlocks.count(name) == 0) {
+        topology_unlocks[node_index].push_back(name);
       }
     }
   }
@@ -367,6 +380,15 @@ void ExecutionPlan::BuildActions() {
     }
     for (const std::string &name :
          SplitNames(ReadNodeMetadata(node, compute::kNotUsedAfterMetadataKey))) {
+      if (initializer_set.count(name) != 0) {
+        actions_.emplace_back(ExecuteActionKind::kUnlockInitializer, name);
+        locked.erase(name);
+      } else if (input_set.count(name) != 0) {
+        actions_.emplace_back(ExecuteActionKind::kUnlockInput, name);
+        locked.erase(name);
+      }
+    }
+    for (const std::string &name : topology_unlocks[i]) {
       if (initializer_set.count(name) != 0) {
         actions_.emplace_back(ExecuteActionKind::kUnlockInitializer, name);
         locked.erase(name);

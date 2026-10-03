@@ -188,6 +188,34 @@ TEST(ExecutionPlan, PreservesExplicitReleaseAndDerivesMissingRelease) {
             1);
 }
 
+TEST(ExecutionPlan, DerivesMissingUnlockFromPartialMetadata) {
+  GraphProto graph;
+  graph.add_input()->set_name("X");
+  graph.add_initializer()->set_name("W");
+  graph.add_output()->set_name("Y");
+  NodeProto *add = graph.add_node();
+  add->set_op_type("Add");
+  add->add_input("X");
+  add->add_input("W");
+  add->add_output("Y");
+  add->add_metadata(core::compute::kNotUsedAfterMetadataKey, "X");
+
+  const ExecutionPlan plan(graph);
+  const auto &actions = plan.actions();
+  EXPECT_EQ(std::count_if(actions.begin(), actions.end(),
+                          [](const auto &action) {
+                            return action.kind() == ExecuteActionKind::kUnlockInput &&
+                                   action.name() == "X";
+                          }),
+            1);
+  EXPECT_EQ(std::count_if(actions.begin(), actions.end(),
+                          [](const auto &action) {
+                            return action.kind() == ExecuteActionKind::kUnlockInitializer &&
+                                   action.name() == "W";
+                          }),
+            1);
+}
+
 TEST(SessionExecutor, MakeSessionKernelInstallsBackendExecutionScope) {
   RuntimeContext rt(KernelContext(core::runtime::DefaultOpset(18)));
   NodeProto node;

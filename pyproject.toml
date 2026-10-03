@@ -46,6 +46,7 @@ docs = [
     "onnx-light[style]",
     "breathe",
     "onnx-ir",
+    "onnxscript>=0.7.2",
     "matplotlib",
     "onnx>=1.21.0",
     "onnxruntime",

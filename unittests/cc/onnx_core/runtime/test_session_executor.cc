@@ -147,7 +147,7 @@ TEST(ExecutionPlan, DerivesMissingReleasesFromPartialMetadata) {
             2);
 }
 
-TEST(ExecutionPlan, PreservesExplicitReleaseAndDerivesMissingShapeRelease) {
+TEST(ExecutionPlan, PreservesExplicitReleaseAndDerivesMissingRelease) {
   GraphProto graph;
   graph.add_input()->set_name("X");
   graph.add_output()->set_name("Y");
@@ -160,7 +160,6 @@ TEST(ExecutionPlan, PreservesExplicitReleaseAndDerivesMissingShapeRelease) {
   second->set_op_type("Identity");
   second->add_input("A");
   second->add_output("B");
-  second->add_metadata(core::compute::kReleaseAfterShapeTagMetadataKey, "B");
   NodeProto *third = graph.add_node();
   third->set_op_type("Identity");
   third->add_input("B");
@@ -183,7 +182,7 @@ TEST(ExecutionPlan, PreservesExplicitReleaseAndDerivesMissingShapeRelease) {
             1);
   EXPECT_EQ(std::count_if(actions.begin(), actions.end(),
                           [](const auto &action) {
-                            return action.kind() == ExecuteActionKind::kDeleteShape &&
+                            return action.kind() == ExecuteActionKind::kDeleteBuffer &&
                                    action.name() == "B" && action.node_index() == 2;
                           }),
             1);

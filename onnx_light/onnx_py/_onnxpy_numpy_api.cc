@@ -64,6 +64,10 @@ std::ptrdiff_t OnnxLightNumpyArrayByteSize(OnnxLightNumpyArray *array) {
 
 void *OnnxLightNumpyArrayData(OnnxLightNumpyArray *array) { return PyArray_DATA(Array(array)); }
 
+bool OnnxLightNumpyArrayIsContiguousAligned(OnnxLightNumpyArray *array) {
+  return PyArray_IS_C_CONTIGUOUS(Array(array)) && PyArray_ISALIGNED(Array(array));
+}
+
 PyObject *OnnxLightNumpyArrayGetItem(OnnxLightNumpyArray *array, char *pointer) {
   return PyArray_GETITEM(Array(array), pointer);
 }

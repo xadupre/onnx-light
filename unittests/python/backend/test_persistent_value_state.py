@@ -963,6 +963,24 @@ class TestPersistentValueState(unittest.TestCase):
         gc.collect()
         numpy.testing.assert_array_equal(array(state.values["past"]), [1, 1])
 
+    def test_bfloat16_numpy_input_without_copy(self):
+        import ml_dtypes
+
+        model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 23]>'
+            "bf16_feedback (bfloat16[2] past) => (bfloat16[2] present)"
+            "{ present = Identity(past) }"
+        )
+        add_binding(model, "past", "present")
+        initial = numpy.array([1, 2], dtype=ml_dtypes.bfloat16)
+        state = runtime.PersistentValueState(model, {"past": initial})
+        self.assertEqual(
+            runtime.tensor_to_numpy(state.values["past"]).ctypes.data, initial.ctypes.data
+        )
+        with self.assertRaises(TypeError):
+            state.reset({"past": numpy.zeros(4, dtype=ml_dtypes.bfloat16)[::2]})
+        state.close()
+
     def test_scalar_numpy_input_without_copy(self):
         model = parser.parse_model(
             '<ir_version: 10, opset_import: ["" : 18]>'

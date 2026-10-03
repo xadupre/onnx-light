@@ -351,6 +351,7 @@ void RegisterKernelFunctions() {
     onnx_kernels::kernel::LessOrEqual::RegisterTuningSchemas();
     onnx_kernels::kernel::LinearAttention::RegisterTuningSchemas();
     onnx_kernels::kernel::Log::RegisterTuningSchemas();
+    onnx_kernels::kernel::LogSoftmax::RegisterTuningSchemas();
     onnx_kernels::kernel::MatMul::RegisterTuningSchemas();
     onnx_kernels::kernel::Mish::RegisterTuningSchemas();
     onnx_kernels::kernel::Mod::RegisterTuningSchemas();
@@ -368,6 +369,7 @@ void RegisterKernelFunctions() {
     onnx_kernels::kernel::Sign::RegisterTuningSchemas();
     onnx_kernels::kernel::Sin::RegisterTuningSchemas();
     onnx_kernels::kernel::Sinh::RegisterTuningSchemas();
+    onnx_kernels::kernel::Softmax::RegisterTuningSchemas();
     onnx_kernels::kernel::Softplus::RegisterTuningSchemas();
     onnx_kernels::kernel::Softsign::RegisterTuningSchemas();
     onnx_kernels::kernel::Sqrt::RegisterTuningSchemas();

@@ -180,10 +180,17 @@ void WhereInPlaceTyped(const Tensor &condition, const Tensor &x, const Tensor &y
     const auto src = reinterpret_cast<uintptr_t>(input.bytes());
     return dst >= src ? dst - src < input.size_bytes() : src - dst < output.size_bytes();
   };
+  bool aliased = false;
+  for (const Tensor *input : {&condition, &x, &y}) {
+    if (overlaps(*input)) {
+      EXT_ENFORCE_INVALID(
+          input->bytes() == output.mutable_bytes() && input->shape == bi.shape,
+          "kernel::Where cannot write over a broadcasted or partially overlapping input.");
+      aliased = true;
+    }
+  }
   WhereWriteTyped<T>(bi, condition, x, y, output,
-                     overlaps(condition) || overlaps(x) || overlaps(y)
-                         ? std::numeric_limits<int64_t>::max()
-                         : grain);
+                     aliased ? std::numeric_limits<int64_t>::max() : grain);
 }
 
 Tensor WhereAllocString(const Tensor &condition, const Tensor &x, const Tensor &y) {

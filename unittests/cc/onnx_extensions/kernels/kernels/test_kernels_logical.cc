@@ -713,6 +713,26 @@ TEST(KernelClass, WhereParallelHandlesEmptyAndScalarInputs) {
   EXPECT_EQ(where(scalar_condition, scalar_x, scalar_y).AsInt32()[0], 7);
 }
 
+TEST(KernelClass, WhereRejectsBroadcastedAndPartialOutputAliases) {
+  const KernelContext ctx{DefaultOpset(18)};
+  Where where{ctx};
+  Tensor output = Tensor::FromBool("", {2}, {1, 1});
+  const Tensor condition =
+      Tensor::Borrow("", core::runtime::DataType::BOOL, {1}, output.bytes(), 1);
+  const Tensor x = Tensor::FromBool("", {2}, {0, 0});
+  const Tensor y = Tensor::FromBool("", {2}, {1, 1});
+  EXPECT_THROW(where(condition, x, y, output), std::invalid_argument);
+  EXPECT_EQ(output.AsBool()[0], 1);
+
+  std::vector<uint8_t> storage{0, 1, 1};
+  const Tensor partial_x =
+      Tensor::Borrow("", core::runtime::DataType::BOOL, {2}, storage.data(), 2);
+  Tensor partial_output =
+      Tensor::Borrow("", core::runtime::DataType::BOOL, {2}, storage.data() + 1, 2);
+  const Tensor independent_condition = Tensor::FromBool("", {2}, {1, 1});
+  EXPECT_THROW(where(independent_condition, partial_x, y, partial_output), std::invalid_argument);
+}
+
 TEST(KernelClass, WhereUsesAllocatorWhenRuntimeContextHasOne) {
   const KernelContext ctx{DefaultOpset(16)};
   Where where_kernel{ctx};

@@ -11,6 +11,7 @@
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/tuning/cpu_executor.h"
 #include "onnx_core/runtime/tuning/kernel_tuning.h"
+#include "onnx_extensions/kernels/kernel_dispatch_table.h"
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
 #include <gtest/gtest.h>
@@ -773,6 +774,69 @@ TEST(KernelClass, SoftmaxClassMatchesReferenceAxis1) {
   EXPECT_NEAR(py[3], 0.09003057f, 1e-6f);
   EXPECT_NEAR(py[4], 0.24472848f, 1e-6f);
   EXPECT_NEAR(py[5], 0.66524094f, 1e-6f);
+}
+
+TEST(KernelClass, SoftmaxAndLogSoftmaxParallelRowsMatchSerial) {
+  onnx_kernels::RegisterKernelFunctions();
+  const KernelContext schema_ctx{DefaultOpset(18)};
+  const Softmax schema_softmax{schema_ctx};
+  const LogSoftmax schema_logsoftmax{schema_ctx};
+  for (const auto *kernel : {static_cast<const core::runtime::KernelBase *>(&schema_softmax),
+                             static_cast<const core::runtime::KernelBase *>(&schema_logsoftmax)}) {
+    const auto key = kernel->TuningKey(static_cast<int32_t>(DataType::FLOAT));
+    const auto schema = core::runtime::GetKernelTuningRegistry().FindSchema(key);
+    ASSERT_NE(schema, nullptr);
+    EXPECT_EQ(schema->portable_defaults().Get<int64_t>("parallel.minimum_elements"),
+              core::runtime::kParallelForGrainSize);
+  }
+  core::runtime::CpuExecutionPolicy policy;
+  policy.num_threads = 2;
+  policy.affinity_policy = core::runtime::CpuAffinityPolicy::kNone;
+  const auto executor = core::runtime::GlobalCpuExecutorRegistry().Acquire(policy);
+  const core::runtime::CpuExecutorScope scope(executor.get());
+
+  std::vector<float> values(16 * 8 * 64);
+  for (size_t i = 0; i < values.size(); ++i) {
+    values[i] = static_cast<float>(static_cast<int>(i % 23) - 11);
+  }
+  const Tensor x = Tensor::FromFloat("", {16, 8, 64}, values);
+  for (int64_t axis : {int64_t{1}, int64_t{-1}}) {
+    for (int64_t opset : {int64_t{11}, int64_t{18}}) {
+      const KernelContext ctx{DefaultOpset(opset)};
+      Softmax serial_softmax{ctx};
+      Softmax parallel_softmax{ctx};
+      LogSoftmax serial_logsoftmax{ctx};
+      LogSoftmax parallel_logsoftmax{ctx};
+      for (auto *kernel : {static_cast<core::runtime::KernelBase *>(&serial_softmax),
+                           static_cast<core::runtime::KernelBase *>(&serial_logsoftmax)}) {
+        const auto key = kernel->TuningKey(static_cast<int32_t>(DataType::FLOAT));
+        kernel->Configure(
+            {key, {{"parallel.minimum_elements", std::numeric_limits<int64_t>::max()}}});
+      }
+      for (auto *kernel : {static_cast<core::runtime::KernelBase *>(&parallel_softmax),
+                           static_cast<core::runtime::KernelBase *>(&parallel_logsoftmax)}) {
+        const auto key = kernel->TuningKey(static_cast<int32_t>(DataType::FLOAT));
+        kernel->Configure({key, {{"parallel.minimum_elements", int64_t{1}}}});
+      }
+      const Tensor expected_softmax = serial_softmax(x, axis);
+      const Tensor expected_logsoftmax = serial_logsoftmax(x, axis);
+      core::runtime::ParallelRegionCollector collector(4);
+      core::runtime::ParallelRegionCollectorScope collector_scope(&collector);
+      const Tensor actual_softmax = parallel_softmax(x, axis);
+      const Tensor actual_logsoftmax = parallel_logsoftmax(x, axis);
+      EXPECT_EQ(std::memcmp(actual_softmax.bytes(), expected_softmax.bytes(),
+                            expected_softmax.size_bytes()),
+                0);
+      EXPECT_EQ(std::memcmp(actual_logsoftmax.bytes(), expected_logsoftmax.bytes(),
+                            expected_logsoftmax.size_bytes()),
+                0);
+      ASSERT_EQ(collector.events().size(), 2u);
+      EXPECT_EQ(collector.events()[0].label, "Softmax");
+      EXPECT_EQ(collector.events()[1].label, "LogSoftmax");
+      EXPECT_EQ(collector.events()[0].admitted_threads, 2);
+      EXPECT_EQ(collector.events()[1].admitted_threads, 2);
+    }
+  }
 }
 
 TEST(KernelClass, SoftmaxClassSupportsFloat16) {

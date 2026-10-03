@@ -705,20 +705,27 @@ TEST(KernelClass, WhereSessionTunesForValueInputType) {
 
   GraphProto graph;
   graph.add_input()->set_name("condition");
-  graph.add_input()->set_name("x");
+  graph.add_input()->set_name("x_source");
   graph.add_input()->set_name("y");
   graph.add_output()->set_name("output");
-  NodeProto *node = graph.add_node();
-  node->set_op_type("Where");
-  node->add_input("condition");
-  node->add_input("x");
-  node->add_input("y");
-  node->add_output("output");
+  ValueInfoProto *x_info = graph.add_value_info();
+  x_info->set_name("x");
+  x_info->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::INT32);
+  NodeProto *identity = graph.add_node();
+  identity->set_op_type("Identity");
+  identity->add_input("x_source");
+  identity->add_output("x");
+  NodeProto *where_node = graph.add_node();
+  where_node->set_op_type("Where");
+  where_node->add_input("condition");
+  where_node->add_input("x");
+  where_node->add_input("y");
+  where_node->add_output("output");
 
   constexpr int64_t count = 64;
   RuntimeContext rt(ctx);
   rt.Set("condition", Tensor::FromBool("condition", {count}, std::vector<uint8_t>(count, 1)));
-  rt.Set("x", Tensor::FromInt32("x", {count}, std::vector<int32_t>(count, 7)));
+  rt.Set("x_source", Tensor::FromInt32("x_source", {count}, std::vector<int32_t>(count, 7)));
   rt.Set("y", Tensor::FromInt32("y", {count}, std::vector<int32_t>(count, 9)));
   auto collector = std::make_shared<core::runtime::ParallelRegionCollector>(4);
   core::runtime::RuntimeSession session(rt.GetExecutionPlan(graph),
@@ -726,6 +733,7 @@ TEST(KernelClass, WhereSessionTunesForValueInputType) {
                                             .parameters = core::runtime::RuntimeParameters(2),
                                             .parallel_region_collector = collector,
                                         });
+  session.SetDeclaredShapes(graph);
   session.Run(rt);
 
   const std::vector<core::runtime::KernelTuningKey> keys{bool_key, int32_key};

@@ -317,13 +317,13 @@ public:
                                                  : ParallelRegionReport{};
   }
 
-  /// Records the declared (possibly symbolic) shapes carried by ``graph``'s
-  /// inputs, outputs and ``value_info`` so that, when :cpp:func:`check_shapes`
-  /// is enabled, :cpp:func:`Run` can validate concrete tensor shapes against
-  /// them. Only tensor-typed values whose type carries a shape are recorded;
-  /// values without a shape (unknown rank) are ignored. Calling this replaces
-  /// any previously recorded declarations for the listed names. ``graph`` is
-  /// read but not retained, so it need not outlive the session.
+  /// Records the declared tensor element types and (possibly symbolic) shapes
+  /// carried by ``graph``'s inputs, outputs and ``value_info``. Element types
+  /// are used to resolve tuning keys for inputs not yet produced; shapes are
+  /// used by :cpp:func:`Run` when :cpp:func:`check_shapes` is enabled. Only
+  /// tensor-typed values are recorded. Calling this replaces any previously
+  /// recorded declarations for the listed names. ``graph`` is read but not
+  /// retained, so it need not outlive the session.
   void SetDeclaredShapes(const GraphProto &graph);
 
   /// Records ``graph`` as the source of read-only initializer views. A
@@ -453,6 +453,10 @@ private:
   /// :cpp:func:`SetDeclaredShapes` and consulted by :cpp:func:`Run` when
   /// :cpp:member:`check_shapes_` is enabled.
   std::unordered_map<std::string, core::symbolic::SymShape> declared_shapes_;
+  /// Declared tensor element types keyed by value name, populated by
+  /// :cpp:func:`SetDeclaredShapes` and consulted during kernel tuning when the
+  /// selected input is an intermediate not yet present in the runtime context.
+  std::unordered_map<std::string, int32_t> declared_tensor_types_;
   /// Names of the graph's declared outputs, populated from the
   /// :cpp:class:`ModelProto` / :cpp:class:`GraphProto` the session is built
   /// from (empty for a session built from a bare :cpp:class:`ExecutionPlan`).

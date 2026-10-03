@@ -151,6 +151,9 @@ void RuntimeSession::SetDeclaredShapes(const GraphProto &graph) {
       return;
     }
     const TypeProto::Tensor &tt = vi.type().tensor_type();
+    if (tt.has_elem_type() && tt.elem_type() != TensorProto::UNDEFINED) {
+      declared_tensor_types_[vi.name().value()] = static_cast<int32_t>(tt.elem_type());
+    }
     if (!tt.has_shape()) {
       return;
     }
@@ -330,6 +333,11 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt,
         const std::string &input = node.input(tuning_input_index);
         if (!input.empty() && rt.Has(input)) {
           element_type = rt.Get(input).data_type;
+        } else if (!input.empty()) {
+          const auto declared_type = declared_tensor_types_.find(input);
+          if (declared_type != declared_tensor_types_.end()) {
+            element_type = declared_type->second;
+          }
         }
       }
     } else {

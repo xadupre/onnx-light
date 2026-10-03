@@ -8,7 +8,9 @@
 #include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/tuning/cpu_executor.h"
 #include "onnx_core/runtime/tuning/kernel_tuning.h"
+#include "onnx_extensions/kernels/kernel_dispatch_table.h"
 #include "onnx_extensions/kernels/kernels/logical/include_logical_kernels.h"
 
 #include <gtest/gtest.h>
@@ -627,6 +629,68 @@ TEST(KernelClass, WhereClassBroadcastsInputs) {
   EXPECT_EQ(values[5], 30);
 }
 
+TEST(KernelClass, WhereParallelBroadcastMatchesSerialAndProtectsAliases) {
+  onnx_kernels::RegisterKernelFunctions();
+  const KernelContext ctx{DefaultOpset(18)};
+  Where serial{ctx}, parallel{ctx};
+  const auto key = parallel.TuningKey(static_cast<int32_t>(core::runtime::DataType::INT32));
+  const auto schema = core::runtime::GetKernelTuningRegistry().FindSchema(key);
+  ASSERT_NE(schema, nullptr);
+  EXPECT_EQ(parallel.TuningKey(static_cast<int32_t>(core::runtime::DataType::STRING)).device,
+            core::symbolic::Device::kUndefined);
+  EXPECT_EQ(schema->portable_defaults().Get<int64_t>("parallel.minimum_elements"),
+            core::runtime::kParallelForGrainSize);
+  serial.Configure({key, {{"parallel.minimum_elements", std::numeric_limits<int64_t>::max()}}});
+  parallel.Configure({key, {{"parallel.minimum_elements", int64_t{1}}}});
+  EXPECT_THROW(parallel.Configure({key, {{"parallel.minimum_elements", int64_t{0}}}}),
+               std::invalid_argument);
+
+  core::runtime::CpuExecutionPolicy policy;
+  policy.num_threads = 2;
+  policy.affinity_policy = core::runtime::CpuAffinityPolicy::kNone;
+  const auto executor = core::runtime::GlobalCpuExecutorRegistry().Acquire(policy);
+  const core::runtime::CpuExecutorScope scope(executor.get());
+
+  std::vector<uint8_t> flags(128);
+  std::vector<int32_t> x_values(512), y_values(128 * 512);
+  for (size_t i = 0; i < flags.size(); ++i)
+    flags[i] = static_cast<uint8_t>(i % 2);
+  for (size_t i = 0; i < x_values.size(); ++i)
+    x_values[i] = static_cast<int32_t>(i);
+  for (size_t i = 0; i < y_values.size(); ++i)
+    y_values[i] = -static_cast<int32_t>(i);
+  const Tensor condition = Tensor::FromBool("", {128, 1}, flags);
+  const Tensor x = Tensor::FromInt32("", {1, 512}, x_values);
+  const Tensor y = Tensor::FromInt32("", {128, 512}, y_values);
+  core::runtime::ParallelRegionCollector collector(5);
+  core::runtime::ParallelRegionCollectorScope collector_scope(&collector);
+  const Tensor expected = serial(condition, x, y);
+  const Tensor actual = parallel(condition, x, y);
+  EXPECT_EQ(actual.data, expected.data);
+  Tensor output = Tensor::FromInt32("", {128, 512}, std::vector<int32_t>(128 * 512));
+  parallel(condition, x, y, output);
+  EXPECT_EQ(output.data, expected.data);
+  SimpleRawBufferAllocator alloc(1);
+  RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
+  const Tensor allocated = parallel(condition, x, y, &rt);
+  ASSERT_TRUE(allocated.has_allocation());
+  EXPECT_EQ(alloc.allocated_count(), 1u);
+  for (int64_t i = 0; i < expected.element_count(); ++i)
+    EXPECT_EQ(allocated.AsInt32()[i], expected.AsInt32()[i]);
+  ASSERT_EQ(collector.events().size(), 4u);
+  EXPECT_EQ(collector.events()[0].admitted_threads, 1);
+  EXPECT_EQ(collector.events()[1].label, "Where");
+  EXPECT_EQ(collector.events()[1].admitted_threads, 2);
+  EXPECT_EQ(collector.events()[2].admitted_threads, 2);
+  EXPECT_EQ(collector.events()[3].admitted_threads, 2);
+
+  Tensor aliased = Tensor::FromInt32("", {128, 512}, y_values);
+  parallel(condition, x, aliased, aliased);
+  EXPECT_EQ(aliased.data, expected.data);
+  ASSERT_EQ(collector.events().size(), 5u);
+  EXPECT_EQ(collector.events()[4].admitted_threads, 1);
+}
+
 TEST(KernelClass, WhereRejectsNonBoolCondition) {
   const KernelContext ctx{DefaultOpset(16)};
   Where where_kernel{ctx};
@@ -634,6 +698,19 @@ TEST(KernelClass, WhereRejectsNonBoolCondition) {
   Tensor x = Tensor::FromInt32("x", {2}, {1, 2});
   Tensor y = Tensor::FromInt32("y", {2}, {3, 4});
   EXPECT_THROW((void)where_kernel(condition, x, y), std::invalid_argument);
+}
+
+TEST(KernelClass, WhereParallelHandlesEmptyAndScalarInputs) {
+  const KernelContext ctx{DefaultOpset(18)};
+  Where where{ctx};
+  const auto key = where.TuningKey(static_cast<int32_t>(core::runtime::DataType::INT32));
+  where.Configure({key, {{"parallel.minimum_elements", int64_t{1}}}});
+  const Tensor empty_condition = Tensor::FromBool("", {0}, {});
+  const Tensor scalar_x = Tensor::FromInt32("", {}, {7});
+  const Tensor scalar_y = Tensor::FromInt32("", {}, {9});
+  EXPECT_EQ(where(empty_condition, scalar_x, scalar_y).element_count(), 0);
+  const Tensor scalar_condition = Tensor::FromBool("", {}, {1});
+  EXPECT_EQ(where(scalar_condition, scalar_x, scalar_y).AsInt32()[0], 7);
 }
 
 TEST(KernelClass, WhereUsesAllocatorWhenRuntimeContextHasOne) {

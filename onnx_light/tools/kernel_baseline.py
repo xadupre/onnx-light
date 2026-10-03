@@ -56,6 +56,7 @@ _GEMM_SHAPES = (("small", 32), ("medium", 256), ("large", 1024))
 BENCHMARK_CORPUS: tuple[dict[str, Any], ...] = (
     {"op_type": "Abs", "arity": "unary", "element_type": "FLOAT", "shapes": _DEFAULT_SHAPES},
     {"op_type": "Not", "arity": "unary", "element_type": "BOOL", "shapes": _DEFAULT_SHAPES},
+    {"op_type": "Where", "arity": "where", "element_type": "BOOL", "shapes": _DEFAULT_SHAPES},
     {"op_type": "Gemm", "arity": "gemm", "element_type": "FLOAT", "shapes": _GEMM_SHAPES},
 )
 
@@ -110,6 +111,13 @@ def _make_model(case: dict[str, Any], size: int):
             [oh.make_tensor_value_info("X", elem_type, [size])],
             [oh.make_tensor_value_info("Y", elem_type, [size])],
         )
+    elif case["arity"] == "where":
+        graph = oh.make_graph(
+            [oh.make_node("Where", ["C", "X", "Z"], ["Y"])],
+            "Where_baseline",
+            [oh.make_tensor_value_info(name, elem_type, [size]) for name in ("C", "X", "Z")],
+            [oh.make_tensor_value_info("Y", elem_type, [size])],
+        )
     elif case["arity"] == "gemm":
         graph = oh.make_graph(
             [oh.make_node("Gemm", ["A", "B"], ["Y"])],
@@ -137,6 +145,8 @@ def _make_inputs(case: dict[str, Any], size: int, seed: int) -> dict[str, numpy.
 
     if case["arity"] == "unary":
         return {"X": make_array((size,))}
+    if case["arity"] == "where":
+        return {name: make_array((size,)) for name in ("C", "X", "Z")}
     if case["arity"] == "gemm":
         return {"A": make_array((size, size)), "B": make_array((size, size))}
     raise ValueError(f"Unsupported benchmark arity: {case['arity']!r}")

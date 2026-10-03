@@ -131,7 +131,8 @@ published and portable defaults are accepted.
        Scatter paths must prove writes cannot conflict before parallelizing.
      - Memory-bandwidth scaling, overlap/alias safety, and bounded participant
        counts across contiguous and non-contiguous cases.
-     - Not started.
+     - ``Cast`` and numeric ``Where`` migrations implemented; other families
+       and crossover measurements pending.
    * - 4
      - Recurrent operators, ``DFT``, ``STFT``, ``Einsum``, image/object
        detection, traditional-ML and training kernels

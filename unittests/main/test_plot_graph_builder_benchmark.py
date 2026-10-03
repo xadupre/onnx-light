@@ -2,6 +2,7 @@ import gc
 import importlib.util
 from pathlib import Path
 
+import matplotlib.pyplot
 import pytest
 import numpy
 
@@ -88,3 +89,37 @@ def test_dynamic_attention(build, shape):
 def test_invalid_node_counts(build, count):
     with pytest.raises(ValueError, match="positive multiple of 20"):
         build(count)
+
+
+def test_node_type_distribution_table():
+    distribution = example.node_type_distribution(example.build_light(20))
+    assert distribution == {
+        "Add": 1,
+        "Cast": 1,
+        "Concat": 1,
+        "Div": 2,
+        "Gather": 3,
+        "MatMul": 2,
+        "Mul": 1,
+        "Relu": 1,
+        "Reshape": 2,
+        "Shape": 1,
+        "Softmax": 1,
+        "Sqrt": 1,
+        "Transpose": 3,
+    }
+    table = example.format_node_type_table({20: distribution})
+    assert "Gather             3" in table
+    assert "Total             20" in table
+
+
+def test_plot_benchmark():
+    results = [
+        {"nodes": count, "builder": builder, "model": count / 10, "serialized": count / 5}
+        for count in (100, 200)
+        for builder in ("onnx-light", "onnxscript")
+    ]
+    figure = example.plot_benchmark(results)
+    assert len(figure.axes) == 2
+    assert all(len(axis.lines) == 2 for axis in figure.axes)
+    matplotlib.pyplot.close(figure)

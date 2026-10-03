@@ -8,6 +8,8 @@ This example builds the same attention-style graph with 100, 200, and
 outputs before measuring model construction with and without final protobuf
 serialization. The timings include model finalization (``to_onnx`` or
 ``onnx_ir.to_proto``), but exclude imports, input generation, and execution.
+The example also reports the operator-type distribution and plots both timing
+modes against the graph size.
 
 Run this example with the ``docs`` optional dependencies installed.
 
@@ -23,10 +25,12 @@ default shape-inference behavior is included in the construction timings.
 
 from __future__ import annotations
 
+from collections import Counter
 import gc
 import statistics
 import time
 
+import matplotlib.pyplot
 import numpy
 import onnx
 import onnx_ir
@@ -159,12 +163,90 @@ def measure(build, node_count: int, serialize: bool, repeats: int = 3) -> float:
     return statistics.median(samples)
 
 
+def node_type_distribution(model) -> Counter:
+    """Counts nodes by operator type."""
+    return Counter(node.op_type for node in model.graph.node)
+
+
+def format_node_type_table(distributions: dict[int, Counter]) -> str:
+    """Formats node-type counts for every benchmark graph size."""
+    node_counts = sorted(distributions)
+    operator_types = sorted(
+        {
+            operator_type
+            for distribution in distributions.values()
+            for operator_type in distribution
+        }
+    )
+    header = f"{'operator':<12}" + "".join(f"{node_count:>8}" for node_count in node_counts)
+    separator = "-" * len(header)
+    rows = [header, separator]
+    for operator_type in operator_types:
+        rows.append(
+            f"{operator_type:<12}"
+            + "".join(
+                f"{distributions[node_count].get(operator_type, 0):>8}"
+                for node_count in node_counts
+            )
+        )
+    rows.extend(
+        [
+            separator,
+            f"{'Total':<12}"
+            + "".join(
+                f"{sum(distributions[node_count].values()):>8}" for node_count in node_counts
+            ),
+        ]
+    )
+    return "\n".join(rows)
+
+
+def plot_benchmark(results: list[dict]):
+    """Plots construction times with and without serialization."""
+    figure, axes = matplotlib.pyplot.subplots(1, 2, figsize=(11, 4), sharex=True)
+    for axis, key, title in (
+        (axes[0], "model", "Model construction"),
+        (axes[1], "serialized", "Model construction and serialization"),
+    ):
+        for builder_name in ("onnx-light", "onnxscript"):
+            rows = [row for row in results if row["builder"] == builder_name]
+            axis.plot(
+                [row["nodes"] for row in rows],
+                [row[key] for row in rows],
+                "o-",
+                label=builder_name,
+            )
+        axis.set_title(title)
+        axis.set_xlabel("number of nodes")
+        axis.set_ylabel("median time (ms)")
+        axis.grid(True, alpha=0.3)
+        axis.legend()
+    figure.tight_layout()
+    return figure
+
+
 if __name__ == "__main__":
     print("nodes  builder       model (ms)  model + serialization (ms)")
+    results = []
+    distributions = {}
     for count in NODE_COUNTS:
         check_models(count)
+        distribution_model = build_light(count)
+        distributions[count] = node_type_distribution(distribution_model)
+        del distribution_model
         for name, build in (("onnx-light", build_light), ("onnxscript", build_onnxscript)):
-            print(
-                f"{count:5}  {name:12}  {measure(build, count, False):10.2f}"
-                f"  {measure(build, count, True):26.2f}"
+            model_time = measure(build, count, False)
+            serialized_time = measure(build, count, True)
+            results.append(
+                {
+                    "nodes": count,
+                    "builder": name,
+                    "model": model_time,
+                    "serialized": serialized_time,
+                }
             )
+            print(f"{count:5}  {name:12}  {model_time:10.2f}  {serialized_time:26.2f}")
+    print("\nNode-type distribution (identical for both builders):")
+    print(format_node_type_table(distributions))
+    plot_benchmark(results)
+    matplotlib.pyplot.show()

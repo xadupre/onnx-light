@@ -10,12 +10,45 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Parallelized numeric `Where` over disjoint output ranges with typed runtime
   tuning, while preserving serial execution for strings and aliased outputs
   ([#5127](https://github.com/xadupre/onnx-light/pull/5127)).
+- Parallelized native convolution and attention kernels with typed tuning,
+  partitioning independent output elements, planes, batches, or heads
+  ([#5104](https://github.com/xadupre/onnx-light/pull/5104)).
+- Parallelized `Softmax` and `LogSoftmax` over independent rows while preserving
+  each row's reduction order
+  ([#5124](https://github.com/xadupre/onnx-light/pull/5124)).
+- Supported downgrading `Mul` from opset 14 to 13 for compatible input types
+  ([#5106](https://github.com/xadupre/onnx-light/pull/5106)).
+
+### Fixes
+
+- Supported INT64 inputs and outputs in the native `ReduceSum` kernel, including
+  wrapping integer accumulation
+  ([#5133](https://github.com/xadupre/onnx-light/pull/5133)).
+- Accepted contiguous BFLOAT16 KV-cache feedback without a copy during generation
+  ([#5122](https://github.com/xadupre/onnx-light/pull/5122)).
+- Derived missing last-use releases and unlocks when execution-plan metadata is
+  only partially annotated
+  ([#5120](https://github.com/xadupre/onnx-light/pull/5120),
+  [#5125](https://github.com/xadupre/onnx-light/pull/5125)).
+- Corrected `Resize` coordinates for fractional-scale `align_corners` and
+  singleton `pytorch_half_pixel` outputs
+  ([#5110](https://github.com/xadupre/onnx-light/pull/5110),
+  [#5114](https://github.com/xadupre/onnx-light/pull/5114)).
+- Preserved input dtype for FLOAT16, BFLOAT16, and DOUBLE `Det` outputs
+  ([#5112](https://github.com/xadupre/onnx-light/pull/5112)).
+- Handled variadic `Mean` inputs whose broadcast shape expands after the first
+  two inputs ([#5116](https://github.com/xadupre/onnx-light/pull/5116)).
 
 ### Documentation & CI
 
+- Made the Python stable ABI optional through `ONNX_LIGHT_PYTHON_STABLE_ABI`,
+  retaining it as the default
+  ([#5128](https://github.com/xadupre/onnx-light/pull/5128)).
+- Added a gallery benchmark comparing `GraphBuilder` with onnxscript
+  ([#5119](https://github.com/xadupre/onnx-light/pull/5119)).
 - Bumped the release version to `0.1.30`.
 
-## [0.1.29] – Unreleased
+## [0.1.29] – 2026-10-02
 
 ### New Features
 

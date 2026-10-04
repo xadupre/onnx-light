@@ -29,6 +29,8 @@ option(ONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX
     "Fetch and build upstream onnx (protobuf-based) to enable the side-by-side BENCH_HAS_UPSTREAM_ONNX comparison block in bench_load_file."
     OFF)
 option(ONNX_LIGHT_BUILD_PYTHON "Build Python extension." ON)
+option(ONNX_LIGHT_PYTHON_STABLE_ABI
+    "Build Python extensions with CPython's stable ABI." ON)
 option(ONNX_LIGHT_INSTALL "Install the C++ library and headers." ON)
 option(ONNX_LIGHT_BUILD_KERNELS
     "Build the operator-kernel runtime (lib_onnx_kernels) and the backend-test registry (lib_onnx_backend_test). Turn OFF to install only the schema / checker / shape-inference / version-converter libraries (useful for downstream projects that only need onnx_light::lib_onnx_lib or onnx_light::lib_onnx_proto)."
@@ -242,13 +244,15 @@ if(ONNX_LIGHT_BUILD_PYTHON)
     endif()
   endif()
 
-  if(DEFINED SKBUILD_SABI_COMPONENT)
-    # scikit-build-core requests the stable ABI exactly when the wheel is abi3.
-    list(APPEND python_dev_component ${SKBUILD_SABI_COMPONENT})
-  elseif(NOT python_gil_disabled AND CMAKE_VERSION VERSION_GREATER_EQUAL "3.26")
-    # Plain CMake builds use nanobind's STABLE_ABI mode when supported.
-    # Free-threaded CPython has no stable ABI.
-    list(APPEND python_dev_component Development.SABIModule)
+  if(ONNX_LIGHT_PYTHON_STABLE_ABI)
+    if(DEFINED SKBUILD_SABI_COMPONENT)
+      # scikit-build-core requests the stable ABI exactly when the wheel is abi3.
+      list(APPEND python_dev_component ${SKBUILD_SABI_COMPONENT})
+    elseif(NOT python_gil_disabled AND CMAKE_VERSION VERSION_GREATER_EQUAL "3.26")
+      # Plain CMake builds use nanobind's STABLE_ABI mode when supported.
+      # Free-threaded CPython has no stable ABI.
+      list(APPEND python_dev_component Development.SABIModule)
+    endif()
   endif()
 
   if(CMAKE_CROSSCOMPILING)
@@ -849,18 +853,23 @@ endif()
 
 
 if(ONNX_LIGHT_BUILD_PYTHON)
+  set(_onnx_light_nanobind_abi)
+  if(ONNX_LIGHT_PYTHON_STABLE_ABI)
+    list(APPEND _onnx_light_nanobind_abi STABLE_ABI)
+  endif()
+
   # _onnxpyprotoop: proto bindings + onnx_op schema bindings.
-  # STABLE_ABI: emit an abi3-tagged extension on CPython >= 3.12 so a single
-  # wheel covers all future minor versions. nanobind silently drops the flag on
-  # older interpreters and on free-threaded builds (which use their own ABI).
-  nanobind_add_module(_onnxpyprotoop STABLE_ABI ${ONNX_PY_PROTOOP_SOURCES})
+  # ONNX_LIGHT_PYTHON_STABLE_ABI emits abi3-tagged extensions on CPython >= 3.12
+  # so one wheel covers future minor versions. nanobind silently drops the flag
+  # on older interpreters and free-threaded builds (which use their own ABI).
+  nanobind_add_module(_onnxpyprotoop ${_onnx_light_nanobind_abi} ${ONNX_PY_PROTOOP_SOURCES})
   target_include_directories(_onnxpyprotoop PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
   target_link_libraries(_onnxpyprotoop PRIVATE lib_onnx_op lib_onnx_manipulations)
 
   # _onnxpyprotolib: onnx_lib bindings (defs/parser/checker/inliner/
   # shape/version_converter). This module does not register proto classes;
   # those are registered by _onnxpyprotoop.
-  nanobind_add_module(_onnxpyprotolib STABLE_ABI ${ONNX_PY_PROTOLIB_SOURCES})
+  nanobind_add_module(_onnxpyprotolib ${_onnx_light_nanobind_abi} ${ONNX_PY_PROTOLIB_SOURCES})
   target_include_directories(_onnxpyprotolib PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
   target_link_libraries(_onnxpyprotolib PRIVATE lib_onnx_lib)
 
@@ -868,13 +877,13 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # graph-pattern optimizer interfaces).
   # Split from _onnxpyproto* so the schema bindings and the shape-inference
   # bindings live in distinct extensions.
-  nanobind_add_module(_onnxpycore STABLE_ABI ${ONNX_PY_CORE_SOURCES})
+  nanobind_add_module(_onnxpycore ${_onnx_light_nanobind_abi} ${ONNX_PY_CORE_SOURCES})
   target_include_directories(_onnxpycore PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
   target_link_libraries(_onnxpycore PRIVATE lib_onnx_shape)
 
   # _onnxpypatterns: concrete ONNX rewrite patterns. The optimizer interfaces
   # remain in _onnxpycore so the core extension does not depend on this library.
-  nanobind_add_module(_onnxpypatterns STABLE_ABI ${ONNX_PY_PATTERNS_SOURCES})
+  nanobind_add_module(_onnxpypatterns ${_onnx_light_nanobind_abi} ${ONNX_PY_PATTERNS_SOURCES})
   target_include_directories(_onnxpypatterns PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
   target_link_libraries(_onnxpypatterns PRIVATE lib_onnx_patterns)
 
@@ -887,7 +896,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # omitted and the Python package raises an explicit error when the reference
   # runtime or backend-test helpers are requested.
   if(ONNX_LIGHT_BUILD_KERNELS)
-  nanobind_add_module(_onnxpykernels STABLE_ABI ${ONNX_PY_KERNELS_SOURCES})
+  nanobind_add_module(_onnxpykernels ${_onnx_light_nanobind_abi} ${ONNX_PY_KERNELS_SOURCES})
   # Only the NumPy C-API bridge needs full CPython declarations. Keeping the
   # binding translation unit limited preserves the extension's abi3 contract.
   if(MSVC)
@@ -918,7 +927,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # special ordering is required; in the pure C++ STATIC variant we repeat
   # ``lib_onnx_backend_test`` after ``lib_onnx_kernels`` to break the
   # circular reference between the two static archives.
-  nanobind_add_module(_onnxpybackend STABLE_ABI ${ONNX_PY_BACKEND_SOURCES})
+  nanobind_add_module(_onnxpybackend ${_onnx_light_nanobind_abi} ${ONNX_PY_BACKEND_SOURCES})
   target_include_directories(_onnxpybackend PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
   if(_onnx_light_lib_type STREQUAL "SHARED")
     target_link_libraries(_onnxpybackend PRIVATE lib_onnx_backend_test lib_onnx_kernels)
@@ -931,7 +940,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # Only built in the extended variant (ONNX_LIGHT_BUILD_KERNELS=ON) because the
   # gradient library links lib_onnx_gradient which depends on lib_onnx_proto.
   if(ONNX_LIGHT_BUILD_KERNELS)
-  nanobind_add_module(_onnxpygradient STABLE_ABI ${ONNX_PY_GRADIENT_SOURCES})
+  nanobind_add_module(_onnxpygradient ${_onnx_light_nanobind_abi} ${ONNX_PY_GRADIENT_SOURCES})
   target_include_directories(_onnxpygradient PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
   target_link_libraries(_onnxpygradient PRIVATE lib_onnx_gradient)
   endif() # ONNX_LIGHT_BUILD_KERNELS (gradient)

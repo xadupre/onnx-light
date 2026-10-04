@@ -4,7 +4,7 @@ Complete native kernel parallelization
 ======================================
 
 :Date: 2026-10
-:Updated: 2026-10-02
+:Updated: 2026-10-04
 
 **started**
 
@@ -140,7 +140,8 @@ published and portable defaults are accepted.
        dependencies permit.
      - Representative backend models identify which paths merit migration;
        every retained serial path has measured justification.
-     - Not started.
+     - ``DFT`` frequency bins migrated with a typed parallel threshold;
+       other families and representative-model crossover evidence pending.
    * - 5
      - Sequences, optionals, text, metadata and remaining utility paths
      - Parallelize only payload-scale independent work. Preserve sequence
@@ -153,6 +154,14 @@ The operator lists seed measurement; they do not authorize speculative
 parallel code. Within each batch, rank families by serial wall time and model
 attribution, then migrate the highest impact family first. A low-impact family
 may receive a serial exemption without waiting for the rest of its batch.
+
+The batch-four ``DFT`` migration partitions independent output frequency bins
+without splitting each bin's reduction, preserving the existing summation order.
+Its ``parallel.minimum_elements`` threshold counts transform-sample work per
+bin; the existing DFT backend benchmark supplies a large-case fixture.
+``STFT``, ``Einsum``, recurrent, detection, traditional-ML and training paths
+remain to be assessed individually against representative models before their
+migration or documented serial exemption.
 
 Gemm and portable tuning completion
 +++++++++++++++++++++++++++++++++++

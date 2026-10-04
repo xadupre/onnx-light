@@ -42,7 +42,7 @@ using ::onnx_light::core::runtime::OpsetId;
 //
 // ``ReduceSum`` mirrors the ONNX ``ReduceSum`` operator at opset 13, where
 // ``axes`` is an optional second input tensor (int64) rather than an
-// attribute. The kernel supports FLOAT tensors and the standard ``keepdims``
+// attribute. The kernel supports FLOAT, DOUBLE and INT64 tensors and the standard ``keepdims``
 // and ``noop_with_empty_axes`` attributes. When ``axes`` is omitted (or
 // empty), the kernel either reduces over all dimensions (the default,
 // ``noop_with_empty_axes == false``) or performs an identity copy
@@ -100,7 +100,7 @@ public:
   explicit ArgMin(const KernelContext &ctx) : ArgReduce(ctx, ArgReduce::Mode::kMin) {}
 };
 
-/// Sum reduction of a FLOAT or DOUBLE input ``data`` along the dimensions listed in the
+/// Sum reduction of a FLOAT, DOUBLE or INT64 input ``data`` along the dimensions listed in the
 /// optional ``axes`` int64 tensor. If ``axes`` is omitted (or empty), the
 /// kernel reduces over all dimensions unless ``noop_with_empty_axes`` is true
 /// in which case it performs an identity copy.

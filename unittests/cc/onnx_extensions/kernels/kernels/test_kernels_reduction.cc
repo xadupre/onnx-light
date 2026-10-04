@@ -91,6 +91,33 @@ TEST(KernelClass, ReduceSumDefaultAxesReducesAll) {
   EXPECT_FLOAT_EQ(y.AsFloat()[0], 21.0f);
 }
 
+TEST(KernelClass, ReduceSumInt64DefaultAndPreallocatedAxes) {
+  const ReduceSum reduce_sum{KernelContext{DefaultOpset(13)}};
+  const Tensor data = Tensor::FromInt64("", {2, 2}, {9007199254740993LL, -2, 4, 5});
+  const Tensor axes = Tensor::FromInt64("", {1}, {1});
+
+  const Tensor total = reduce_sum(data, /*keepdims=*/false);
+  EXPECT_EQ(total.data_type, static_cast<int32_t>(core::runtime::DataType::INT64));
+  EXPECT_EQ(total.shape, (std::vector<int64_t>{}));
+  EXPECT_EQ(total.AsInt64()[0], 9007199254741000LL);
+
+  Tensor out = Tensor::FromInt64("", {2}, {0, 0});
+  reduce_sum(data, axes, /*keepdims=*/false, /*noop_with_empty_axes=*/false, out);
+  EXPECT_EQ(out.AsInt64()[0], 9007199254740991LL);
+  EXPECT_EQ(out.AsInt64()[1], 9);
+
+  const Tensor noop = reduce_sum(data, /*keepdims=*/true, /*noop_with_empty_axes=*/true);
+  EXPECT_EQ(noop.data_type, data.data_type);
+  EXPECT_EQ(noop.data, data.data);
+
+  const Tensor overflow = Tensor::FromInt64("", {2}, {std::numeric_limits<int64_t>::max(), 1});
+  EXPECT_EQ(reduce_sum(overflow, /*keepdims=*/false).AsInt64()[0],
+            std::numeric_limits<int64_t>::min());
+
+  Tensor wrong_type = Tensor::FromDouble("", {2}, {0, 0});
+  EXPECT_THROW(reduce_sum(data, axes, false, false, wrong_type), std::invalid_argument);
+}
+
 TEST(KernelClass, ReduceSumDefaultAxesNoKeepdimsProducesScalar) {
   const KernelContext ctx{DefaultOpset(13)};
   ReduceSum reduce_sum{ctx};

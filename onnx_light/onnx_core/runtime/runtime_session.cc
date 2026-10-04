@@ -151,6 +151,9 @@ void RuntimeSession::SetDeclaredShapes(const GraphProto &graph) {
       return;
     }
     const TypeProto::Tensor &tt = vi.type().tensor_type();
+    if (tt.has_elem_type() && tt.elem_type() != TensorProto::UNDEFINED) {
+      declared_tensor_types_[vi.name().value()] = static_cast<int32_t>(tt.elem_type());
+    }
     if (!tt.has_shape()) {
       return;
     }
@@ -323,15 +326,30 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt,
     const size_t index = action.node_index();
     const NodeProto &node = *nodes[index];
     int32_t element_type = static_cast<int32_t>(DataType::UNDEFINED);
-    for (int input_index = 0; input_index < node.input_size(); ++input_index) {
-      const std::string &input = node.input(input_index);
-      if (!input.empty() && rt.Has(input)) {
-        element_type = rt.Get(input).data_type;
-        break;
+    PreparedKernel &prepared = kernels_[index];
+    const int32_t tuning_input_index = prepared.instance->TuningInputIndex();
+    if (tuning_input_index >= 0) {
+      if (tuning_input_index < node.input_size()) {
+        const std::string &input = node.input(tuning_input_index);
+        if (!input.empty() && rt.Has(input)) {
+          element_type = rt.Get(input).data_type;
+        } else if (!input.empty()) {
+          const auto declared_type = declared_tensor_types_.find(input);
+          if (declared_type != declared_tensor_types_.end()) {
+            element_type = declared_type->second;
+          }
+        }
+      }
+    } else {
+      for (int input_index = 0; input_index < node.input_size(); ++input_index) {
+        const std::string &input = node.input(input_index);
+        if (!input.empty() && rt.Has(input)) {
+          element_type = rt.Get(input).data_type;
+          break;
+        }
       }
     }
 
-    PreparedKernel &prepared = kernels_[index];
     const KernelTuningKey tuning_key = prepared.instance->TuningKey(element_type);
     if (tuning_key.device == Device::kUndefined) {
       continue;

@@ -56,6 +56,7 @@ _GEMM_SHAPES = (("small", 32), ("medium", 256), ("large", 1024))
 BENCHMARK_CORPUS: tuple[dict[str, Any], ...] = (
     {"op_type": "Abs", "arity": "unary", "element_type": "FLOAT", "shapes": _DEFAULT_SHAPES},
     {"op_type": "Not", "arity": "unary", "element_type": "BOOL", "shapes": _DEFAULT_SHAPES},
+    {"op_type": "Where", "arity": "where", "element_type": "BOOL", "shapes": _DEFAULT_SHAPES},
     {"op_type": "Gemm", "arity": "gemm", "element_type": "FLOAT", "shapes": _GEMM_SHAPES},
 )
 
@@ -110,6 +111,17 @@ def _make_model(case: dict[str, Any], size: int):
             [oh.make_tensor_value_info("X", elem_type, [size])],
             [oh.make_tensor_value_info("Y", elem_type, [size])],
         )
+    elif case["arity"] == "where":
+        graph = oh.make_graph(
+            [oh.make_node("Where", ["C", "X", "Z"], ["Y"])],
+            "Where_baseline",
+            [
+                oh.make_tensor_value_info("C", TensorProto.BOOL, [size]),
+                oh.make_tensor_value_info("X", elem_type, [size]),
+                oh.make_tensor_value_info("Z", elem_type, [size]),
+            ],
+            [oh.make_tensor_value_info("Y", elem_type, [size])],
+        )
     elif case["arity"] == "gemm":
         graph = oh.make_graph(
             [oh.make_node("Gemm", ["A", "B"], ["Y"])],
@@ -137,6 +149,9 @@ def _make_inputs(case: dict[str, Any], size: int, seed: int) -> dict[str, numpy.
 
     if case["arity"] == "unary":
         return {"X": make_array((size,))}
+    if case["arity"] == "where":
+        condition = generator.integers(0, 2, size=(size,)).astype(numpy.bool_)
+        return {"C": condition, "X": make_array((size,)), "Z": make_array((size,))}
     if case["arity"] == "gemm":
         return {"A": make_array((size, size)), "B": make_array((size, size))}
     raise ValueError(f"Unsupported benchmark arity: {case['arity']!r}")
@@ -146,13 +161,13 @@ def _run_policy_case(
     model: Any,
     inputs: dict[str, numpy.ndarray],
     *,
-    elem_type: int,
     num_threads: int,
     repeat: int,
     warmup: int,
     collect_diagnostics: bool,
 ) -> dict[str, Any]:
     """Runs one ``(model, cpu policy)`` combination and measures timing and CPU use."""
+    import onnx_light.onnx.helper as oh
     from onnx_light.onnx_py import _onnxpykernels  # type: ignore[attr-defined]
 
     runtime = _onnxpykernels.runtime
@@ -167,7 +182,11 @@ def _run_policy_case(
         for name, array in inputs.items():
             raw = numpy.ascontiguousarray(array).view(numpy.uint8).ravel()
             tensor = runtime.tensor_from_numpy(
-                name, elem_type, list(array.shape), raw, copy=False
+                name,
+                int(oh.np_dtype_to_tensor_dtype(array.dtype)),
+                list(array.shape),
+                raw,
+                copy=False,
             )
             context.set(name, tensor)
         return session, context
@@ -258,8 +277,6 @@ def run_benchmark_corpus(
         A flat list of result rows; see :func:`run_kernel_baseline_report` for
         the combined report schema.
     """
-    from onnx_light.onnx import TensorProto
-
     if cases is None:
         cases = BENCHMARK_CORPUS
     if cpu_policies is None:
@@ -267,7 +284,6 @@ def run_benchmark_corpus(
 
     results = []
     for case in cases:
-        elem_type = int(getattr(TensorProto, case["element_type"]))
         for shape_label, size in case["shapes"]:
             model = _make_model(case, size)
             inputs = _make_inputs(case, size, seed)
@@ -275,7 +291,6 @@ def run_benchmark_corpus(
                 measurement = _run_policy_case(
                     model,
                     inputs,
-                    elem_type=elem_type,
                     num_threads=num_threads,
                     repeat=repeat,
                     warmup=warmup,

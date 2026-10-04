@@ -68,6 +68,34 @@ class TestKernelBaseline(ExtTestCase):
         self.assertIsNotNone(row["diagnostics"])
         self.assertIn("dropped_events", row["diagnostics"])
 
+    def test_where_benchmark_fixture(self):
+        from onnx_light.onnx import TensorProto
+
+        case = {
+            "op_type": "Where",
+            "arity": "where",
+            "element_type": "FLOAT",
+            "shapes": (("small", 64),),
+        }
+        model = kernel_baseline._make_model(case, 64)
+        inputs = kernel_baseline._make_inputs(case, 64, 17)
+        self.assertEqual(len(model.graph.node), 1)
+        self.assertEqual(
+            [value.type.tensor_type.elem_type for value in model.graph.input],
+            [TensorProto.BOOL, TensorProto.FLOAT, TensorProto.FLOAT],
+        )
+        self.assertEqual(set(inputs), {"C", "X", "Z"})
+        self.assertEqual(inputs["C"].dtype.name, "bool")
+        self.assertEqual({inputs[name].dtype.name for name in ("X", "Z")}, {"float32"})
+        rows = kernel_baseline.run_benchmark_corpus(
+            cases=(case,),
+            cpu_policies=(("serial", 1),),
+            repeat=1,
+            warmup=0,
+            collect_diagnostics=False,
+        )
+        self.assertEqual(rows[0]["op_type"], "Where")
+
     def test_run_kernel_baseline_report_does_not_modify_tuning_cache(self):
         from onnx_light.kernel_tuning import kernel_tuning_parameters
 

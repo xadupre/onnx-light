@@ -6,9 +6,12 @@
 #include "onnx_light_helpers.h"
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
+#include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
+#include <array>
 #include <cstdint>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
@@ -18,6 +21,15 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 namespace {
 
 constexpr const char *kWhereName = "kernel::Where";
+constexpr uint32_t kTuningAbi = 1;
+constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
+constexpr std::array<int32_t, 12> kSupportedElementTypes = {
+    static_cast<int32_t>(DataType::BOOL),    static_cast<int32_t>(DataType::FLOAT),
+    static_cast<int32_t>(DataType::DOUBLE),  static_cast<int32_t>(DataType::INT8),
+    static_cast<int32_t>(DataType::INT16),   static_cast<int32_t>(DataType::INT32),
+    static_cast<int32_t>(DataType::INT64),   static_cast<int32_t>(DataType::UINT8),
+    static_cast<int32_t>(DataType::FLOAT16), static_cast<int32_t>(DataType::UINT16),
+    static_cast<int32_t>(DataType::UINT32),  static_cast<int32_t>(DataType::UINT64)};
 
 // ``uint8_t`` aliases both ``UINT8`` and ``BOOL`` storage, but ``Tensor::As``
 // validates the element type strictly. These helpers route ``BOOL`` tensors
@@ -106,40 +118,54 @@ TernaryBroadcastInfo CheckWhereBroadcast(const Tensor &condition, const Tensor &
 }
 
 template <typename T>
-Tensor WhereAllocTyped(const Tensor &condition, const Tensor &x, const Tensor &y,
-                       RawBufferAllocator *allocator) {
-  const TernaryBroadcastInfo bi = CheckWhereBroadcast(condition, x, y);
-  const size_t out_n_bytes = static_cast<size_t>(bi.element_count) * sizeof(T);
-  Tensor out = MakeOutputTensor(x.data_type, bi.shape, out_n_bytes, allocator);
+void WhereWriteTyped(const TernaryBroadcastInfo &bi, const Tensor &condition, const Tensor &x,
+                     const Tensor &y, Tensor &out, int64_t grain) {
   const uint8_t *pc = condition.AsBool();
   const T *px = WhereTypedInput<T>(x);
   const T *py = WhereTypedInput<T>(y);
   T *po = WhereTypedOutput<T>(out);
-
   const size_t rank = bi.shape.size();
-  onnx_kernels::Shape idx;
-  idx.assign(rank, 0);
-  for (int64_t flat = 0; flat < bi.element_count; ++flat) {
-    int64_t oc = 0, ox = 0, oy = 0;
-    for (size_t d = 0; d < rank; ++d) {
-      oc += idx[d] * bi.strides_c[d];
-      ox += idx[d] * bi.strides_x[d];
-      oy += idx[d] * bi.strides_y[d];
-    }
-    po[static_cast<size_t>(flat)] = pc[oc] != 0 ? px[ox] : py[oy];
-    for (size_t d = rank; d-- > 0;) {
-      if (++idx[d] < bi.shape[d]) {
-        break;
-      }
-      idx[d] = 0;
-    }
-  }
+  ParallelFor(
+      bi.element_count, grain,
+      [&](int64_t begin, int64_t end) {
+        onnx_kernels::Shape idx;
+        idx.assign(rank, 0);
+        int64_t remaining = begin;
+        for (size_t d = rank; d-- > 0;) {
+          idx[d] = remaining % bi.shape[d];
+          remaining /= bi.shape[d];
+        }
+        for (int64_t flat = begin; flat < end; ++flat) {
+          int64_t oc = 0, ox = 0, oy = 0;
+          for (size_t d = 0; d < rank; ++d) {
+            oc += idx[d] * bi.strides_c[d];
+            ox += idx[d] * bi.strides_x[d];
+            oy += idx[d] * bi.strides_y[d];
+          }
+          po[static_cast<size_t>(flat)] = pc[oc] != 0 ? px[ox] : py[oy];
+          for (size_t d = rank; d-- > 0;) {
+            if (++idx[d] < bi.shape[d])
+              break;
+            idx[d] = 0;
+          }
+        }
+      },
+      "Where");
+}
 
+template <typename T>
+Tensor WhereAllocTyped(const Tensor &condition, const Tensor &x, const Tensor &y,
+                       RawBufferAllocator *allocator, int64_t grain) {
+  const TernaryBroadcastInfo bi = CheckWhereBroadcast(condition, x, y);
+  const size_t out_n_bytes = static_cast<size_t>(bi.element_count) * sizeof(T);
+  Tensor out = MakeOutputTensor(x.data_type, bi.shape, out_n_bytes, allocator);
+  WhereWriteTyped<T>(bi, condition, x, y, out, grain);
   return out;
 }
 
 template <typename T>
-void WhereInPlaceTyped(const Tensor &condition, const Tensor &x, const Tensor &y, Tensor &output) {
+void WhereInPlaceTyped(const Tensor &condition, const Tensor &x, const Tensor &y, Tensor &output,
+                       int64_t grain) {
   const TernaryBroadcastInfo bi = CheckWhereBroadcast(condition, x, y);
   EXT_ENFORCE_INVALID(output.data_type == x.data_type,
                       "kernel::Where preallocated output dtype must match x/y dtype.");
@@ -149,29 +175,26 @@ void WhereInPlaceTyped(const Tensor &condition, const Tensor &x, const Tensor &y
   EXT_ENFORCE_INVALID(output.size_bytes() == static_cast<size_t>(bi.element_count) * sizeof(T),
                       "kernel::Where preallocated output buffer has unexpected size in bytes.");
 
-  const uint8_t *pc = condition.AsBool();
-  const T *px = WhereTypedInput<T>(x);
-  const T *py = WhereTypedInput<T>(y);
-  T *po = WhereTypedOutput<T>(output);
-
-  const size_t rank = bi.shape.size();
-  onnx_kernels::Shape idx;
-  idx.assign(rank, 0);
-  for (int64_t flat = 0; flat < bi.element_count; ++flat) {
-    int64_t oc = 0, ox = 0, oy = 0;
-    for (size_t d = 0; d < rank; ++d) {
-      oc += idx[d] * bi.strides_c[d];
-      ox += idx[d] * bi.strides_x[d];
-      oy += idx[d] * bi.strides_y[d];
+  const auto overlaps = [&](const Tensor &input) {
+    if (output.size_bytes() == 0 || input.size_bytes() == 0) {
+      return false;
     }
-    po[static_cast<size_t>(flat)] = pc[oc] != 0 ? px[ox] : py[oy];
-    for (size_t d = rank; d-- > 0;) {
-      if (++idx[d] < bi.shape[d]) {
-        break;
-      }
-      idx[d] = 0;
+    const auto dst = reinterpret_cast<uintptr_t>(output.mutable_bytes());
+    const auto src = reinterpret_cast<uintptr_t>(input.bytes());
+    return dst >= src ? dst - src < input.size_bytes() : src - dst < output.size_bytes();
+  };
+  bool aliased = false;
+  for (const Tensor *input : {&condition, &x, &y}) {
+    if (overlaps(*input)) {
+      EXT_ENFORCE_INVALID(
+          input->bytes() == output.mutable_bytes() && input->shape == bi.shape &&
+              input->size_bytes() == output.size_bytes(),
+          "kernel::Where cannot write over a broadcasted or partially overlapping input.");
+      aliased = true;
     }
   }
+  WhereWriteTyped<T>(bi, condition, x, y, output,
+                     aliased ? std::numeric_limits<int64_t>::max() : grain);
 }
 
 Tensor WhereAllocString(const Tensor &condition, const Tensor &x, const Tensor &y) {
@@ -245,44 +268,55 @@ void WhereInPlaceString(const Tensor &condition, const Tensor &x, const Tensor &
 
 } // namespace
 
+Where::Where(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "Where", kSupportedElementTypes, kPortableParallelMinimum,
+                            kTuningAbi) {}
+
+ONNX_LIGHT_REGISTER_PARALLEL_TUNING_SCHEMA(Where)
+
 Tensor Where::operator()(const Tensor &condition, const Tensor &x, const Tensor &y,
                          RuntimeContext *rt) const {
   if (rt != nullptr) {
-    Tensor produced = (*this)(condition, x, y, nullptr);
-    Tensor output =
-        rt->MakeOutputTensor(0, produced.data_type, produced.shape, produced.size_bytes());
-    if (produced.data_type == static_cast<int32_t>(DataType::STRING)) {
+    if (x.data_type == static_cast<int32_t>(DataType::STRING)) {
+      Tensor produced = WhereAllocString(condition, x, y);
+      Tensor output =
+          rt->MakeOutputTensor(0, produced.data_type, produced.shape, produced.size_bytes());
       output.string_data = std::move(produced.string_data);
-    } else {
-      (*this)(condition, x, y, output);
+      return output;
     }
+    const TernaryBroadcastInfo bi = CheckWhereBroadcast(condition, x, y);
+    Tensor output = rt->MakeOutputTensor(0, x.data_type, bi.shape,
+                                         static_cast<size_t>(bi.element_count) *
+                                             onnx_kernels::ElementSize(x.data_type));
+    (*this)(condition, x, y, output);
     return output;
   }
   RawBufferAllocator *allocator = nullptr;
+  const int64_t grain = tuning().parallel_minimum_elements;
   switch (x.data_type) {
   case DataType::BOOL:
-    return WhereAllocTyped<uint8_t>(condition, x, y, allocator);
+    return WhereAllocTyped<uint8_t>(condition, x, y, allocator, grain);
   case DataType::FLOAT:
-    return WhereAllocTyped<float>(condition, x, y, allocator);
+    return WhereAllocTyped<float>(condition, x, y, allocator, grain);
   case DataType::DOUBLE:
-    return WhereAllocTyped<double>(condition, x, y, allocator);
+    return WhereAllocTyped<double>(condition, x, y, allocator, grain);
   case DataType::INT8:
-    return WhereAllocTyped<int8_t>(condition, x, y, allocator);
+    return WhereAllocTyped<int8_t>(condition, x, y, allocator, grain);
   case DataType::INT16:
-    return WhereAllocTyped<int16_t>(condition, x, y, allocator);
+    return WhereAllocTyped<int16_t>(condition, x, y, allocator, grain);
   case DataType::INT32:
-    return WhereAllocTyped<int32_t>(condition, x, y, allocator);
+    return WhereAllocTyped<int32_t>(condition, x, y, allocator, grain);
   case DataType::INT64:
-    return WhereAllocTyped<int64_t>(condition, x, y, allocator);
+    return WhereAllocTyped<int64_t>(condition, x, y, allocator, grain);
   case DataType::UINT8:
-    return WhereAllocTyped<uint8_t>(condition, x, y, allocator);
+    return WhereAllocTyped<uint8_t>(condition, x, y, allocator, grain);
   case DataType::FLOAT16:
   case DataType::UINT16:
-    return WhereAllocTyped<uint16_t>(condition, x, y, allocator);
+    return WhereAllocTyped<uint16_t>(condition, x, y, allocator, grain);
   case DataType::UINT32:
-    return WhereAllocTyped<uint32_t>(condition, x, y, allocator);
+    return WhereAllocTyped<uint32_t>(condition, x, y, allocator, grain);
   case DataType::UINT64:
-    return WhereAllocTyped<uint64_t>(condition, x, y, allocator);
+    return WhereAllocTyped<uint64_t>(condition, x, y, allocator, grain);
   case DataType::STRING:
     return WhereAllocString(condition, x, y);
   default:
@@ -294,30 +328,31 @@ Tensor Where::operator()(const Tensor &condition, const Tensor &x, const Tensor 
 
 void Where::operator()(const Tensor &condition, const Tensor &x, const Tensor &y,
                        Tensor &output) const {
+  const int64_t grain = tuning().parallel_minimum_elements;
   switch (x.data_type) {
   case DataType::BOOL:
-    return WhereInPlaceTyped<uint8_t>(condition, x, y, output);
+    return WhereInPlaceTyped<uint8_t>(condition, x, y, output, grain);
   case DataType::FLOAT:
-    return WhereInPlaceTyped<float>(condition, x, y, output);
+    return WhereInPlaceTyped<float>(condition, x, y, output, grain);
   case DataType::DOUBLE:
-    return WhereInPlaceTyped<double>(condition, x, y, output);
+    return WhereInPlaceTyped<double>(condition, x, y, output, grain);
   case DataType::INT8:
-    return WhereInPlaceTyped<int8_t>(condition, x, y, output);
+    return WhereInPlaceTyped<int8_t>(condition, x, y, output, grain);
   case DataType::INT16:
-    return WhereInPlaceTyped<int16_t>(condition, x, y, output);
+    return WhereInPlaceTyped<int16_t>(condition, x, y, output, grain);
   case DataType::INT32:
-    return WhereInPlaceTyped<int32_t>(condition, x, y, output);
+    return WhereInPlaceTyped<int32_t>(condition, x, y, output, grain);
   case DataType::INT64:
-    return WhereInPlaceTyped<int64_t>(condition, x, y, output);
+    return WhereInPlaceTyped<int64_t>(condition, x, y, output, grain);
   case DataType::UINT8:
-    return WhereInPlaceTyped<uint8_t>(condition, x, y, output);
+    return WhereInPlaceTyped<uint8_t>(condition, x, y, output, grain);
   case DataType::FLOAT16:
   case DataType::UINT16:
-    return WhereInPlaceTyped<uint16_t>(condition, x, y, output);
+    return WhereInPlaceTyped<uint16_t>(condition, x, y, output, grain);
   case DataType::UINT32:
-    return WhereInPlaceTyped<uint32_t>(condition, x, y, output);
+    return WhereInPlaceTyped<uint32_t>(condition, x, y, output, grain);
   case DataType::UINT64:
-    return WhereInPlaceTyped<uint64_t>(condition, x, y, output);
+    return WhereInPlaceTyped<uint64_t>(condition, x, y, output, grain);
   case DataType::STRING:
     return WhereInPlaceString(condition, x, y, output);
   default:

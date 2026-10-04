@@ -253,11 +253,13 @@ public:
 /// ``condition`` must be BOOL; ``x`` and ``y`` must share the same dtype and
 /// may be BOOL, FLOAT, DOUBLE, INT8, INT16, INT32, INT64, UINT8, UINT16,
 /// UINT32, UINT64 or STRING. Output dtype equals ``x``/``y`` dtype.
-class Where : public KernelBase {
+class Where : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:Where";
+  explicit Where(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
+  int32_t TuningInputIndex() const noexcept override { return 1; }
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &condition, const Tensor &x, const Tensor &y,
                     RuntimeContext *rt = nullptr) const;
   void operator()(const Tensor &condition, const Tensor &x, const Tensor &y, Tensor &output) const;

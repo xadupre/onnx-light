@@ -912,7 +912,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   target_include_directories(_onnxpykernels PRIVATE
       "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}" "${NumPy_INCLUDE_DIR}")
   target_link_libraries(_onnxpykernels PRIVATE lib_onnx_kernels)
-  if(MSVC)
+  if(MSVC AND ONNX_LIGHT_PYTHON_STABLE_ABI)
     target_link_options(_onnxpykernels PRIVATE
         "/NODEFAULTLIB:python${Python_VERSION_MAJOR}${Python_VERSION_MINOR}.lib")
   endif()

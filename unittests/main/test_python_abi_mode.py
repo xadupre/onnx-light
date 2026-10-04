@@ -23,7 +23,10 @@ def test_python_abi_mode_is_configurable():
     }
     for module, sources in modules.items():
         assert (
-            f"nanobind_add_module({module} "
-            f"${{_onnx_light_nanobind_abi}} ${{{sources}}})"
+            f"nanobind_add_module({module} ${{_onnx_light_nanobind_abi}} ${{{sources}}})"
         ) in cmake
         assert f"nanobind_add_module({module} STABLE_ABI " not in cmake
+
+    assert "if(MSVC AND ONNX_LIGHT_PYTHON_STABLE_ABI)" in cmake
+    link_option = '"/NODEFAULTLIB:python${Python_VERSION_MAJOR}${Python_VERSION_MINOR}.lib"'
+    assert link_option in cmake

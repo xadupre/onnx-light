@@ -176,6 +176,9 @@ void WhereInPlaceTyped(const Tensor &condition, const Tensor &x, const Tensor &y
                       "kernel::Where preallocated output buffer has unexpected size in bytes.");
 
   const auto overlaps = [&](const Tensor &input) {
+    if (output.size_bytes() == 0 || input.size_bytes() == 0) {
+      return false;
+    }
     const auto dst = reinterpret_cast<uintptr_t>(output.mutable_bytes());
     const auto src = reinterpret_cast<uintptr_t>(input.bytes());
     return dst >= src ? dst - src < input.size_bytes() : src - dst < output.size_bytes();

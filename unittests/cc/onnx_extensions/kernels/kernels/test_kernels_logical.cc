@@ -760,9 +760,12 @@ TEST(KernelClass, WhereParallelHandlesEmptyAndScalarInputs) {
   const auto key = where.TuningKey(static_cast<int32_t>(core::runtime::DataType::INT32));
   where.Configure({key, {{"parallel.minimum_elements", int64_t{1}}}});
   const Tensor empty_condition = Tensor::FromBool("", {0}, {});
-  const Tensor scalar_x = Tensor::FromInt32("", {}, {7});
+  Tensor scalar_x = Tensor::FromInt32("", {}, {7});
   const Tensor scalar_y = Tensor::FromInt32("", {}, {9});
   EXPECT_EQ(where(empty_condition, scalar_x, scalar_y).element_count(), 0);
+  Tensor empty_output =
+      Tensor::Borrow("", core::runtime::DataType::INT32, {0}, scalar_x.mutable_bytes(), 0);
+  EXPECT_NO_THROW(where(empty_condition, scalar_x, scalar_y, empty_output));
   const Tensor scalar_condition = Tensor::FromBool("", {}, {1});
   EXPECT_EQ(where(scalar_condition, scalar_x, scalar_y).AsInt32()[0], 7);
 }

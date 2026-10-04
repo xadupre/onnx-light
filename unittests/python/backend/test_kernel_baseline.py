@@ -69,17 +69,24 @@ class TestKernelBaseline(ExtTestCase):
         self.assertIn("dropped_events", row["diagnostics"])
 
     def test_where_benchmark_fixture(self):
+        from onnx_light.onnx import TensorProto
+
         case = {
             "op_type": "Where",
             "arity": "where",
-            "element_type": "BOOL",
+            "element_type": "FLOAT",
             "shapes": (("small", 64),),
         }
         model = kernel_baseline._make_model(case, 64)
         inputs = kernel_baseline._make_inputs(case, 64, 17)
         self.assertEqual(len(model.graph.node), 1)
+        self.assertEqual(
+            [value.type.tensor_type.elem_type for value in model.graph.input],
+            [TensorProto.BOOL, TensorProto.FLOAT, TensorProto.FLOAT],
+        )
         self.assertEqual(set(inputs), {"C", "X", "Z"})
-        self.assertEqual({array.dtype.name for array in inputs.values()}, {"bool"})
+        self.assertEqual(inputs["C"].dtype.name, "bool")
+        self.assertEqual({inputs[name].dtype.name for name in ("X", "Z")}, {"float32"})
         rows = kernel_baseline.run_benchmark_corpus(
             cases=(case,),
             cpu_policies=(("serial", 1),),

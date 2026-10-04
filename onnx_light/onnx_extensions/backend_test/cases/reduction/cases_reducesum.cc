@@ -177,6 +177,20 @@ void RegisterReduceSumCases(std::vector<TestCase> &registry, TestMode mode) {
   const std::vector<float> example_values = {1.0f, 2.0f, 3.0f, 4.0f,  5.0f,  6.0f,
                                              7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f};
 
+  {
+    NodeProto node;
+    node.set_op_type("ReduceSum");
+    node.add_input("data");
+    node.add_input("axes");
+    node.add_output("reduced");
+    AddAttribute<int64_t>(node, "keepdims", 0);
+    Expect(registry, std::move(node), "test_cc_reducesum_int64", {opset}, []() -> IoData {
+      return IoData{{Tensor::FromInt64("", {2, 2}, {9007199254740993LL, -2, 4, 5}),
+                     Tensor::FromInt64("", {1}, {1})},
+                    {Tensor::FromInt64("", {2}, {9007199254740991LL, 9})}};
+    });
+  }
+
   // ``axes`` omitted, default ``keepdims = 1``: result is a fully-reduced
   // 1x1x1 tensor.
   {

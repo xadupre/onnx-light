@@ -7,10 +7,12 @@
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
+#include <bit>
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
@@ -82,7 +84,12 @@ void SumReduceT(const Tensor &data, const Shape &is_reduced, const Shape &output
         ++out_dim;
       }
     }
-    py[out_offset] += px[i];
+    if constexpr (std::is_same_v<T, int64_t>) {
+      py[out_offset] = std::bit_cast<int64_t>(std::bit_cast<uint64_t>(py[out_offset]) +
+                                              std::bit_cast<uint64_t>(px[i]));
+    } else {
+      py[out_offset] += px[i];
+    }
 
     // Increment the multi-dimensional index (row-major / C order).
     for (int64_t d = rank - 1; d >= 0; --d) {
@@ -99,25 +106,28 @@ void SumReduce(const Tensor &data, const Shape &is_reduced, const Shape &output_
                Tensor &output) {
   if (data.data_type == static_cast<int32_t>(DataType::DOUBLE)) {
     SumReduceT<double>(data, is_reduced, output_shape_noreduce, output);
+  } else if (data.data_type == static_cast<int32_t>(DataType::INT64)) {
+    SumReduceT<int64_t>(data, is_reduced, output_shape_noreduce, output);
   } else {
     SumReduceT<float>(data, is_reduced, output_shape_noreduce, output);
   }
 }
 
-void ValidateFloatOrDouble(const Tensor &t, const char *name) {
+void ValidateReduceSumType(const Tensor &t, const char *name) {
   EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::FLOAT) ||
-                          t.data_type == static_cast<int32_t>(DataType::DOUBLE),
-                      "kernel::ReduceSum: ", name, " must be a FLOAT or DOUBLE tensor.");
+                          t.data_type == static_cast<int32_t>(DataType::DOUBLE) ||
+                          t.data_type == static_cast<int32_t>(DataType::INT64),
+                      "kernel::ReduceSum: ", name, " must be a FLOAT, DOUBLE or INT64 tensor.");
 }
 
 } // namespace
 
 Tensor ReduceSum::operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes,
                              RuntimeContext *rt) const {
-  ValidateFloatOrDouble(data, "data");
+  ValidateReduceSumType(data, "data");
   const int64_t rank = static_cast<int64_t>(data.shape.size());
   const size_t elem_size =
-      data.data_type == static_cast<int32_t>(DataType::DOUBLE) ? sizeof(double) : sizeof(float);
+      data.data_type == static_cast<int32_t>(DataType::FLOAT) ? sizeof(float) : sizeof(int64_t);
 
   Shape is_reduced;
   is_reduced.assign(static_cast<size_t>(rank), 0);
@@ -143,10 +153,11 @@ Tensor ReduceSum::operator()(const Tensor &data, bool keepdims, bool noop_with_e
 
 void ReduceSum::operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes,
                            Tensor &output) const {
-  ValidateFloatOrDouble(data, "data");
-  ValidateFloatOrDouble(output, "output");
+  ValidateReduceSumType(data, "data");
+  EXT_ENFORCE_INVALID(output.data_type == data.data_type,
+                      "kernel::ReduceSum: output type must match data type.");
   const size_t elem_size =
-      data.data_type == static_cast<int32_t>(DataType::DOUBLE) ? sizeof(double) : sizeof(float);
+      data.data_type == static_cast<int32_t>(DataType::FLOAT) ? sizeof(float) : sizeof(int64_t);
   const int64_t rank = static_cast<int64_t>(data.shape.size());
 
   Shape is_reduced;
@@ -173,12 +184,12 @@ void ReduceSum::operator()(const Tensor &data, bool keepdims, bool noop_with_emp
 
 Tensor ReduceSum::operator()(const Tensor &data, const Tensor &axes, bool keepdims,
                              bool noop_with_empty_axes, RuntimeContext *rt) const {
-  ValidateFloatOrDouble(data, "data");
+  ValidateReduceSumType(data, "data");
   EXT_ENFORCE_INVALID(axes.data_type == static_cast<int32_t>(DataType::INT64),
                       "kernel::ReduceSum: axes must be an INT64 tensor.");
   const int64_t rank = static_cast<int64_t>(data.shape.size());
   const size_t elem_size =
-      data.data_type == static_cast<int32_t>(DataType::DOUBLE) ? sizeof(double) : sizeof(float);
+      data.data_type == static_cast<int32_t>(DataType::FLOAT) ? sizeof(float) : sizeof(int64_t);
 
   Shape is_reduced;
   is_reduced.assign(static_cast<size_t>(rank), 0);
@@ -209,13 +220,14 @@ Tensor ReduceSum::operator()(const Tensor &data, const Tensor &axes, bool keepdi
 
 void ReduceSum::operator()(const Tensor &data, const Tensor &axes, bool keepdims,
                            bool noop_with_empty_axes, Tensor &output) const {
-  ValidateFloatOrDouble(data, "data");
-  ValidateFloatOrDouble(output, "output");
+  ValidateReduceSumType(data, "data");
+  EXT_ENFORCE_INVALID(output.data_type == data.data_type,
+                      "kernel::ReduceSum: output type must match data type.");
   EXT_ENFORCE_INVALID(axes.data_type == static_cast<int32_t>(DataType::INT64),
                       "kernel::ReduceSum: axes must be an INT64 tensor.");
   const int64_t rank = static_cast<int64_t>(data.shape.size());
   const size_t elem_size =
-      data.data_type == static_cast<int32_t>(DataType::DOUBLE) ? sizeof(double) : sizeof(float);
+      data.data_type == static_cast<int32_t>(DataType::FLOAT) ? sizeof(float) : sizeof(int64_t);
 
   Shape is_reduced;
   is_reduced.assign(static_cast<size_t>(rank), 0);

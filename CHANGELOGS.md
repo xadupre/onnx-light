@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.1.30] – Unreleased
 
+### Improvements
+
+- Parallelized numeric `Where` over disjoint output ranges with typed runtime
+  tuning, while preserving serial execution for strings and aliased outputs
+  ([#5127](https://github.com/xadupre/onnx-light/pull/5127)).
+
 ### Documentation & CI
 
 - Bumped the release version to `0.1.30`.

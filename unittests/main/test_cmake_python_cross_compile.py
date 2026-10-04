@@ -8,7 +8,7 @@ from onnx_light.ext_test_case import ExtTestCase
 
 
 class TestCMakePythonCrossCompile(ExtTestCase):
-    def _configure(self, abi):
+    def _configure(self, abi, stable_abi=True):
         """Runs the production Python discovery block in cross-compiling mode."""
         cmake = shutil.which("cmake")
         if cmake is None:
@@ -23,6 +23,7 @@ class TestCMakePythonCrossCompile(ExtTestCase):
             """cmake_minimum_required(VERSION 3.15)
 project(PythonDiscovery NONE)
 set(ONNX_LIGHT_BUILD_PYTHON ON)
+set(ONNX_LIGHT_PYTHON_STABLE_ABI @STABLE_ABI@)
 set(CMAKE_CROSSCOMPILING ON)
 set(Python3_FIND_ABI "@ABI@")
 macro(find_package package)
@@ -35,7 +36,7 @@ macro(find_package package)
     endif()
   endforeach()
 endmacro()
-""".replace("@ABI@", abi)
+""".replace("@ABI@", abi).replace("@STABLE_ABI@", "ON" if stable_abi else "OFF")
             + discovery
             + """
 get_target_property(module_alias Python::Module ALIASED_TARGET)
@@ -90,6 +91,18 @@ message(STATUS "test_cmake_version=${CMAKE_VERSION}")
                 self.assertEqual(
                     values["sabi_alias"], ["Python3::SABIModule" if has_stable_abi else ""]
                 )
+
+    def test_cross_compile_native_abi_omits_sabi_component(self):
+        values = self._configure("ANY;ANY;ANY;OFF", stable_abi=False)
+        self.assertEqual(
+            values["find"],
+            [
+                "Python3;3.12;REQUIRED;COMPONENTS;Development.Module",
+                "Python;3.12;REQUIRED;COMPONENTS;Interpreter",
+            ],
+        )
+        self.assertEqual(values["module_alias"], ["Python3::Module"])
+        self.assertEqual(values["sabi_alias"], [""])
 
 
 if __name__ == "__main__":

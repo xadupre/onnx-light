@@ -866,7 +866,11 @@ TEST(KernelClass, DFTParallelBinsMatchSerial) {
         for (size_t i = 0; i < values.size(); ++i) {
           values[i] = static_cast<double>(static_cast<int>(i % 13) - 6) / 13.0;
         }
-        std::vector<float> float_values(values.begin(), values.end());
+        std::vector<float> float_values;
+        float_values.reserve(values.size());
+        for (const double value : values) {
+          float_values.push_back(static_cast<float>(value));
+        }
         const Tensor input =
             type == DataType::FLOAT
                 ? Tensor::FromFloat("", {2, axis_size, 8, components}, float_values)

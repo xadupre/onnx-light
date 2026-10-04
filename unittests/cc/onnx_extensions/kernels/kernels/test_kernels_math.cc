@@ -9,6 +9,7 @@
 #include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/runtime_session.h"
 #include "onnx_core/runtime/tuning/cpu_executor.h"
 #include "onnx_core/runtime/tuning/kernel_tuning.h"
 #include "onnx_extensions/kernels/kernel_dispatch_table.h"
@@ -894,6 +895,44 @@ TEST(KernelClass, DFTParallelBinsMatchSerial) {
   const Tensor result = schema_kernel(empty, nullptr, 1);
   EXPECT_EQ(result.shape, (Shape{2, 0, 8, 2}));
   EXPECT_EQ(result.element_count(), 0);
+}
+
+TEST(KernelClass, DFTRuntimeUsesResolvedParallelTuning) {
+  onnx_kernels::RegisterKernelFunctions();
+  const KernelContext ctx{DefaultOpset(20)};
+  const DFT dft{ctx};
+  const auto key = dft.TuningKey(static_cast<int32_t>(DataType::FLOAT));
+  const core::runtime::KernelTuningParameters profile{key,
+                                                      {{"parallel.minimum_elements", int64_t{1}}}};
+  core::runtime::GetKernelTuningRegistry().PublishProfiles(
+      std::span<const core::runtime::KernelTuningParameters>(&profile, 1));
+
+  GraphProto graph;
+  graph.add_input()->set_name("input");
+  graph.add_output()->set_name("output");
+  NodeProto *node = graph.add_node();
+  node->set_op_type("DFT");
+  node->add_input("input");
+  node->add_output("output");
+
+  constexpr int64_t axis_size = 32;
+  RuntimeContext rt(ctx);
+  rt.Set("input",
+         Tensor::FromFloat("input", {2, axis_size, 1}, std::vector<float>(2 * axis_size, 1.0f)));
+  auto collector = std::make_shared<core::runtime::ParallelRegionCollector>(2);
+  core::runtime::RuntimeSession session(rt.GetExecutionPlan(graph),
+                                        core::runtime::RuntimeSessionOptions{
+                                            .parameters = core::runtime::RuntimeParameters(2),
+                                            .parallel_region_collector = collector,
+                                        });
+  session.Run(rt);
+  core::runtime::GetKernelTuningRegistry().PublishProfiles(
+      {}, std::span<const core::runtime::KernelTuningKey>(&key, 1));
+
+  EXPECT_EQ(session.tuning_resolution_statistics().resolved_profiles, 1u);
+  ASSERT_EQ(collector->events().size(), 1u);
+  EXPECT_EQ(collector->events()[0].label, "DFT");
+  EXPECT_GT(collector->events()[0].admitted_threads, 1);
 }
 
 TEST(KernelClass, SoftmaxClassSupportsFloat16) {

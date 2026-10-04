@@ -273,8 +273,7 @@ void DFT::Run(RuntimeContext &rt) {
   } else {
     axis = GetAttributeIntOrDefault(node, "axis", 1);
   }
-  onnx_kernels::kernel::DFT k(rt.kernel_ctx());
-  SetOutput(node, 0, k(input, dft_length, axis, onesided, inverse, &rt), rt);
+  SetOutput(node, 0, (*this)(input, dft_length, axis, onesided, inverse, &rt), rt);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

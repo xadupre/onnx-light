@@ -9,6 +9,7 @@
 #include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/runtime_session.h"
 #include "onnx_core/runtime/tuning/cpu_executor.h"
 #include "onnx_core/runtime/tuning/kernel_tuning.h"
 #include "onnx_extensions/kernels/kernel_dispatch_table.h"
@@ -50,6 +51,7 @@ using onnx_kernels::kernel::Cosh;
 using onnx_kernels::kernel::CumProd;
 using onnx_kernels::kernel::CumSum;
 using onnx_kernels::kernel::Det;
+using onnx_kernels::kernel::DFT;
 using onnx_kernels::kernel::Div;
 using onnx_kernels::kernel::Einsum;
 using onnx_kernels::kernel::Erf;
@@ -837,6 +839,104 @@ TEST(KernelClass, SoftmaxAndLogSoftmaxParallelRowsMatchSerial) {
       EXPECT_EQ(collector.events()[1].admitted_threads, 2);
     }
   }
+}
+
+TEST(KernelClass, DFTParallelBinsMatchSerial) {
+  onnx_kernels::RegisterKernelFunctions();
+  const KernelContext ctx{DefaultOpset(20)};
+  const DFT schema_kernel{ctx};
+  const auto key = schema_kernel.TuningKey(static_cast<int32_t>(DataType::FLOAT));
+  const auto schema = core::runtime::GetKernelTuningRegistry().FindSchema(key);
+  ASSERT_NE(schema, nullptr);
+  EXPECT_EQ(schema->portable_defaults().Get<int64_t>("parallel.minimum_elements"),
+            core::runtime::kParallelForGrainSize);
+
+  core::runtime::CpuExecutionPolicy policy;
+  policy.num_threads = 2;
+  policy.affinity_policy = core::runtime::CpuAffinityPolicy::kNone;
+  const auto executor = core::runtime::GlobalCpuExecutorRegistry().Acquire(policy);
+  const core::runtime::CpuExecutorScope scope(executor.get());
+
+  for (const auto type : {DataType::FLOAT, DataType::DOUBLE}) {
+    for (const bool inverse : {false, true}) {
+      for (const bool onesided : {false, true}) {
+        const int64_t axis_size = inverse && onesided ? 17 : 32;
+        const int64_t components = inverse && onesided ? 2 : 1;
+        std::vector<double> values(static_cast<size_t>(2 * axis_size * 8 * components));
+        for (size_t i = 0; i < values.size(); ++i) {
+          values[i] = static_cast<double>(static_cast<int>(i % 13) - 6) / 13.0;
+        }
+        std::vector<float> float_values;
+        float_values.reserve(values.size());
+        for (const double value : values) {
+          float_values.push_back(static_cast<float>(value));
+        }
+        const Tensor input =
+            type == DataType::FLOAT
+                ? Tensor::FromFloat("", {2, axis_size, 8, components}, float_values)
+                : Tensor::FromDouble("", {2, axis_size, 8, components}, values);
+        const Tensor length = Tensor::FromInt64("", {}, {32});
+        DFT serial{ctx};
+        DFT parallel{ctx};
+        const auto tuning_key = serial.TuningKey(static_cast<int32_t>(type));
+        serial.Configure(
+            {tuning_key, {{"parallel.minimum_elements", std::numeric_limits<int64_t>::max()}}});
+        parallel.Configure({tuning_key, {{"parallel.minimum_elements", int64_t{1}}}});
+        const int64_t axis = inverse ? -3 : 1;
+        const Tensor expected = serial(input, &length, axis, onesided, inverse);
+        core::runtime::ParallelRegionCollector collector(1);
+        const core::runtime::ParallelRegionCollectorScope collector_scope(&collector);
+        const Tensor actual = parallel(input, &length, axis, onesided, inverse);
+        EXPECT_EQ(actual.shape, expected.shape);
+        EXPECT_EQ(std::memcmp(actual.bytes(), expected.bytes(), expected.size_bytes()), 0);
+        ASSERT_EQ(collector.events().size(), 1u);
+        EXPECT_EQ(collector.events()[0].label, "DFT");
+        EXPECT_EQ(collector.events()[0].admitted_threads, 2);
+      }
+    }
+  }
+  const Tensor empty = Tensor::FromFloat("", {2, 0, 8, 1}, {});
+  const Tensor result = schema_kernel(empty, nullptr, 1);
+  EXPECT_EQ(result.shape, (Shape{2, 0, 8, 2}));
+  EXPECT_EQ(result.element_count(), 0);
+}
+
+TEST(KernelClass, DFTRuntimeUsesResolvedParallelTuning) {
+  onnx_kernels::RegisterKernelFunctions();
+  const KernelContext ctx{DefaultOpset(20)};
+  const DFT dft{ctx};
+  const auto key = dft.TuningKey(static_cast<int32_t>(DataType::FLOAT));
+  const core::runtime::KernelTuningParameters profile{key,
+                                                      {{"parallel.minimum_elements", int64_t{1}}}};
+  core::runtime::GetKernelTuningRegistry().PublishProfiles(
+      std::span<const core::runtime::KernelTuningParameters>(&profile, 1));
+
+  GraphProto graph;
+  graph.add_input()->set_name("input");
+  graph.add_output()->set_name("output");
+  NodeProto *node = graph.add_node();
+  node->set_op_type("DFT");
+  node->add_input("input");
+  node->add_output("output");
+
+  constexpr int64_t axis_size = 32;
+  RuntimeContext rt(ctx);
+  rt.Set("input",
+         Tensor::FromFloat("input", {2, axis_size, 1}, std::vector<float>(2 * axis_size, 1.0f)));
+  auto collector = std::make_shared<core::runtime::ParallelRegionCollector>(2);
+  core::runtime::RuntimeSession session(rt.GetExecutionPlan(graph),
+                                        core::runtime::RuntimeSessionOptions{
+                                            .parameters = core::runtime::RuntimeParameters(2),
+                                            .parallel_region_collector = collector,
+                                        });
+  session.Run(rt);
+  core::runtime::GetKernelTuningRegistry().PublishProfiles(
+      {}, std::span<const core::runtime::KernelTuningKey>(&key, 1));
+
+  EXPECT_EQ(session.tuning_resolution_statistics().resolved_profiles, 1u);
+  ASSERT_EQ(collector->events().size(), 1u);
+  EXPECT_EQ(collector->events()[0].label, "DFT");
+  EXPECT_GT(collector->events()[0].admitted_threads, 1);
 }
 
 TEST(KernelClass, SoftmaxClassSupportsFloat16) {

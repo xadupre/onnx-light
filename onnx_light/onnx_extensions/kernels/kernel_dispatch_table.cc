@@ -334,6 +334,7 @@ void RegisterKernelFunctions() {
     onnx_kernels::kernel::Conv::RegisterTuningSchemas();
     onnx_kernels::kernel::ConvInteger::RegisterTuningSchemas();
     onnx_kernels::kernel::ConvTranspose::RegisterTuningSchemas();
+    onnx_kernels::kernel::DFT::RegisterTuningSchemas();
     onnx_kernels::kernel::Ceil::RegisterTuningSchemas();
     onnx_kernels::kernel::Cos::RegisterTuningSchemas();
     onnx_kernels::kernel::Cosh::RegisterTuningSchemas();

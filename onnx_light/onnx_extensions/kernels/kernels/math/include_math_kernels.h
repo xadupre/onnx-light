@@ -1299,11 +1299,12 @@ private:
 /// When ``dft_length`` is specified the signal is zero-padded or truncated
 /// along ``axis``; otherwise the axis dimension is used (or
 /// ``2 * (signal_dim_axis - 1)`` for the IRFFT default).
-class DFT : public KernelBase {
+class DFT : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:DFT";
+  explicit DFT(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   /// ``axis`` is the signal axis (must satisfy ``-rank <= axis``, ``axis !=
   /// -1`` and ``axis < rank - 1``). ``dft_length`` is a pointer to a 0-D
   /// INT32/INT64 tensor; pass ``nullptr`` to use the default.

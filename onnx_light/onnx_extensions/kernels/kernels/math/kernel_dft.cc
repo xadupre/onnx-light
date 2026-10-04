@@ -5,7 +5,10 @@
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
+#include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -18,6 +21,10 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 namespace {
 
 constexpr const char *kDFTName = "kernel::DFT";
+constexpr uint32_t kTuningAbi = 1;
+constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
+constexpr std::array<int32_t, 2> kSupportedElementTypes = {static_cast<int32_t>(DataType::FLOAT),
+                                                           static_cast<int32_t>(DataType::DOUBLE)};
 
 int64_t ReadDFTLength(const Tensor &len) {
   EXT_ENFORCE_INVALID(len.element_count() == 1, kDFTName, ": dft_length must be a 0-D tensor.");
@@ -73,7 +80,7 @@ void ReadSampleIRFFT(const T *data, const onnx_kernels::Shape &strides, int64_t 
 template <typename T>
 void DftCompute(const T *in, T *out, int64_t outer, int64_t in_axis, int64_t out_axis,
                 int64_t inner, int64_t in_last, int64_t out_last, int64_t n_dft, bool inverse,
-                bool onesided) {
+                bool onesided, int64_t minimum_elements) {
   // Strides for INPUT  (outer, axis, inner_with_last). inner_with_last = inner * in_last.
   const onnx_kernels::Shape in_strides = {in_axis * inner * in_last, inner * in_last, in_last};
   // Strides for OUTPUT.
@@ -87,42 +94,56 @@ void DftCompute(const T *in, T *out, int64_t outer, int64_t in_axis, int64_t out
 
   const bool irfft = onesided && inverse;
 
-  for (int64_t o = 0; o < outer; ++o) {
-    for (int64_t i = 0; i < inner; ++i) {
-      for (int64_t k = 0; k < out_axis; ++k) {
-        double acc_re = 0.0, acc_im = 0.0;
-        for (int64_t n = 0; n < n_dft; ++n) {
-          double xr = 0.0, xi = 0.0;
-          if (irfft) {
-            ReadSampleIRFFT<T>(in, in_strides, in_axis, outer, inner, o, n, i, in_last, n_dft, xr,
-                               xi);
-          } else {
-            ReadSample<T>(in, in_strides, in_axis, outer, inner, o, n, i, in_last, xr, xi);
+  const int64_t total = outer * inner * out_axis;
+  const int64_t grain =
+      std::max<int64_t>(1, minimum_elements / std::max<int64_t>(1, n_dft) +
+                               (minimum_elements % std::max<int64_t>(1, n_dft) != 0));
+  ParallelFor(
+      total, grain,
+      [&](int64_t begin, int64_t end) {
+        for (int64_t row = begin; row < end; ++row) {
+          const int64_t o = row / (out_axis * inner);
+          const int64_t k = (row / inner) % out_axis;
+          const int64_t i = row % inner;
+          double acc_re = 0.0, acc_im = 0.0;
+          for (int64_t n = 0; n < n_dft; ++n) {
+            double xr = 0.0, xi = 0.0;
+            if (irfft) {
+              ReadSampleIRFFT<T>(in, in_strides, in_axis, outer, inner, o, n, i, in_last, n_dft, xr,
+                                 xi);
+            } else {
+              ReadSample<T>(in, in_strides, in_axis, outer, inner, o, n, i, in_last, xr, xi);
+            }
+            const double theta = sign * two_pi * static_cast<double>(k) * static_cast<double>(n) /
+                                 static_cast<double>(n_dft);
+            const double c = std::cos(theta);
+            const double s = std::sin(theta);
+            // (xr + i*xi) * (c + i*s) = (xr*c - xi*s) + i*(xr*s + xi*c)
+            acc_re += xr * c - xi * s;
+            acc_im += xr * s + xi * c;
           }
-          const double theta = sign * two_pi * static_cast<double>(k) * static_cast<double>(n) /
-                               static_cast<double>(n_dft);
-          const double c = std::cos(theta);
-          const double s = std::sin(theta);
-          // (xr + i*xi) * (c + i*s) = (xr*c - xi*s) + i*(xr*s + xi*c)
-          acc_re += xr * c - xi * s;
-          acc_im += xr * s + xi * c;
+          acc_re *= norm;
+          acc_im *= norm;
+          const int64_t base = o * out_outer_stride + k * out_axis_stride + i * out_inner_stride;
+          if (out_last == 2) {
+            out[base] = static_cast<T>(acc_re);
+            out[base + 1] = static_cast<T>(acc_im);
+          } else {
+            // IRFFT: take the real part only.
+            out[base] = static_cast<T>(acc_re);
+          }
         }
-        acc_re *= norm;
-        acc_im *= norm;
-        const int64_t base = o * out_outer_stride + k * out_axis_stride + i * out_inner_stride;
-        if (out_last == 2) {
-          out[base] = static_cast<T>(acc_re);
-          out[base + 1] = static_cast<T>(acc_im);
-        } else {
-          // IRFFT: take the real part only.
-          out[base] = static_cast<T>(acc_re);
-        }
-      }
-    }
-  }
+      },
+      "DFT");
 }
 
 } // namespace
+
+DFT::DFT(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "DFT", kSupportedElementTypes, kPortableParallelMinimum,
+                            kTuningAbi) {}
+
+ONNX_LIGHT_REGISTER_PARALLEL_TUNING_SCHEMA(DFT)
 
 Tensor DFT::operator()(const Tensor &input, const Tensor *dft_length, int64_t axis, bool onesided,
                        bool inverse, RuntimeContext *rt) const {
@@ -192,11 +213,12 @@ Tensor DFT::operator()(const Tensor &input, const Tensor *dft_length, int64_t ax
   switch (input.data_type) {
   case DataType::FLOAT:
     DftCompute<float>(input.AsFloat(), output.AsFloat(), outer, in_axis, out_axis, inner, last_dim,
-                      out_last, n_dft, inverse, onesided);
+                      out_last, n_dft, inverse, onesided, tuning().parallel_minimum_elements);
     break;
   case DataType::DOUBLE:
     DftCompute<double>(input.AsDouble(), output.AsDouble(), outer, in_axis, out_axis, inner,
-                       last_dim, out_last, n_dft, inverse, onesided);
+                       last_dim, out_last, n_dft, inverse, onesided,
+                       tuning().parallel_minimum_elements);
     break;
   default:
     EXT_THROW_INVALID(kDFTName, ": unsupported data type ", input.data_type,
@@ -251,8 +273,7 @@ void DFT::Run(RuntimeContext &rt) {
   } else {
     axis = GetAttributeIntOrDefault(node, "axis", 1);
   }
-  onnx_kernels::kernel::DFT k(rt.kernel_ctx());
-  SetOutput(node, 0, k(input, dft_length, axis, onesided, inverse, &rt), rt);
+  SetOutput(node, 0, (*this)(input, dft_length, axis, onesided, inverse, &rt), rt);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

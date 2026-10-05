@@ -140,3 +140,26 @@ def test_plot_benchmark():
     assert len(figure.axes) == 2
     assert all(len(axis.lines) == 2 for axis in figure.axes)
     matplotlib.pyplot.close(figure)
+
+
+def test_pattern_fusion_benchmark():
+    model = example.build_fusion_model(4)
+    assert len(model.graph.node) == 8
+    for fuse in (example.fuse_light, example.fuse_onnxscript):
+        optimized = fuse(model)
+        assert len(optimized.graph.node) == 4
+        assert all(node.op_type == "FusedAddMul" for node in optimized.graph.node)
+        assert all(node.domain == "onnx_light.benchmark" for node in optimized.graph.node)
+        assert example.measure_fusion(fuse, model, repeats=1) >= 0
+
+
+def test_pattern_fusion_plot():
+    results = [
+        {"patterns": count, "optimizer": optimizer, "time": count / 10}
+        for count in (100, 200)
+        for optimizer in ("onnx-light", "onnxscript")
+    ]
+    figure = example.plot_fusion_benchmark(results)
+    assert len(figure.axes) == 1
+    assert len(figure.axes[0].lines) == 2
+    matplotlib.pyplot.close(figure)

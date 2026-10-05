@@ -45,11 +45,10 @@ def get_cpp_build_info() -> dict[str, str]:
         A dictionary with the nanobind version and platform ABI tag, compiler
         identity and version, C++ standard, stable-ABI mode, ``include_dir``,
         ``library_dir`` and one ``<component>_library`` entry per runtime
-        library built as a shared library. Windows and macOS link every runtime
-        library but ``lib_onnx_proto`` statically into each Python extension,
-        so ``core_library`` is only reported on Linux. On Windows, the matching
-        ``<component>_import_library`` is added when the build tree is
-        available.
+        library built as a shared library. Python builds use shared core and
+        proto libraries on every platform so extensions observe one runtime
+        identity. On Windows, the matching ``<component>_import_library`` is
+        added when the build tree is available.
 
     The following example displays the ABI metadata and the exact headers and
     libraries selected by the imported package:

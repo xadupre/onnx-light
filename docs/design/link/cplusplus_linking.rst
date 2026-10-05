@@ -100,15 +100,18 @@ Configure-time options
      - ``OFF``
      - Enables supported OpenSSF compiler and linker hardening flags.
 
-Keep ``ONNX_LIGHT_PYTHON_STABLE_ABI`` enabled for published wheels and match
-the setting in every nanobind extension that exchanges onnx-light C++ objects.
-A native ABI build is valid only when onnx-light and all such extensions are
-rebuilt together with the option disabled. Matching the ABI mode is necessary
-but not sufficient: consumers must link the exact shared onnx-light libraries
-loaded by Python, because a separately built or statically linked copy owns a
-different type and registry universe. Wheel tags are controlled independently
-by the packaging frontend, so a CPython-specific tag does not by itself mean
-that the extensions were compiled without the stable ABI.
+Keep ``ONNX_LIGHT_PYTHON_STABLE_ABI`` enabled for published wheels. This option
+requests the stable ABI, but nanobind may use the native ABI when the requested
+mode is unavailable, notably on unsupported or free-threaded Python builds.
+Extensions that exchange onnx-light C++ objects must therefore match the
+effective ``python_stable_abi`` value reported by
+:func:`onnx_light.get_cpp_build_info`, rather than relying on the CMake option
+alone. Matching the effective ABI mode is necessary but not sufficient:
+consumers must link the exact shared onnx-light libraries loaded by Python,
+because a separately built or statically linked copy owns a different type and
+registry universe. Wheel tags are controlled independently by the packaging
+frontend, so a CPython-specific tag does not by itself mean that the extensions
+were compiled without the stable ABI.
 
 The nanobind FAQ describes the complete
 `cross-extension ABI compatibility contract

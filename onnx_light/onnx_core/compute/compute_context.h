@@ -643,30 +643,7 @@ public:
   void WriteToMetadata(GraphProto &graph) const;
 
   /// Empties the stored result.
-  void Clear() noexcept {
-    value_tags_.clear();
-    node_tags_.clear();
-    constant_values_.clear();
-    node_constant_.clear();
-    reuse_.clear();
-    release_after_.clear();
-    not_used_after_.clear();
-    release_after_shape_tagged_.clear();
-    memory_.clear();
-    peak_memory_.clear();
-    shapes_.Clear();
-    node_tag_custom_override_.clear();
-    tag_producer_node_.clear();
-    tag_consumers_.clear();
-    incr_producer_.clear();
-    incr_last_use_.clear();
-    incr_keep_.clear();
-    incr_graph_inputs_.clear();
-    incr_graph_initializers_.clear();
-    incr_graph_outputs_.clear();
-    incr_byte_size_expr_cache_.clear();
-    incr_simplified_dim_cache_ = expressions::SimplifiedExpressionCache{};
-  }
+  void Clear() noexcept;
 
   /**
    * Clears only incrementally maintained annotations and their indexing state.
@@ -675,29 +652,7 @@ public:
    * event history so a graph editor can replay the current nodes after a
    * localized rewrite without rebuilding unrelated compute state.
    */
-  void ClearIncrementalAnnotations() noexcept {
-    value_tags_.clear();
-    node_tags_.clear();
-    constant_values_.clear();
-    node_constant_.clear();
-    reuse_.clear();
-    release_after_.clear();
-    not_used_after_.clear();
-    release_after_shape_tagged_.clear();
-    memory_.clear();
-    peak_memory_.clear();
-    node_tag_custom_override_.clear();
-    tag_producer_node_.clear();
-    tag_consumers_.clear();
-    incr_producer_.clear();
-    incr_last_use_.clear();
-    incr_keep_.clear();
-    incr_graph_inputs_.clear();
-    incr_graph_initializers_.clear();
-    incr_graph_outputs_.clear();
-    incr_byte_size_expr_cache_.clear();
-    incr_simplified_dim_cache_ = expressions::SimplifiedExpressionCache{};
-  }
+  void ClearIncrementalAnnotations() noexcept;
 
 private:
   template <typename GraphOrFunction>

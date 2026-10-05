@@ -104,6 +104,35 @@ NodeMemoryProfile MakeEmptyNodeMemoryProfile() {
 
 // ── ComputeContext method implementations ────────────────────────────────────
 
+void ComputeContext::Clear() noexcept {
+  ClearIncrementalAnnotations();
+  shapes_.Clear();
+}
+
+void ComputeContext::ClearIncrementalAnnotations() noexcept {
+  value_tags_.clear();
+  node_tags_.clear();
+  constant_values_.clear();
+  node_constant_.clear();
+  reuse_.clear();
+  release_after_.clear();
+  not_used_after_.clear();
+  release_after_shape_tagged_.clear();
+  memory_.clear();
+  peak_memory_.clear();
+  node_tag_custom_override_.clear();
+  tag_producer_node_.clear();
+  tag_consumers_.clear();
+  incr_producer_.clear();
+  incr_last_use_.clear();
+  incr_keep_.clear();
+  incr_graph_inputs_.clear();
+  incr_graph_initializers_.clear();
+  incr_graph_outputs_.clear();
+  incr_byte_size_expr_cache_.clear();
+  incr_simplified_dim_cache_ = expressions::SimplifiedExpressionCache{};
+}
+
 std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
 ComputeContext::ComputeValueAndNodeTags(const GraphProto &graph) {
   value_tags_.clear();

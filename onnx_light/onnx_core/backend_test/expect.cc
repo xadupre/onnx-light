@@ -183,7 +183,7 @@ TestCaseTag ResolveTag(const NodeProto &node, TestCaseTag tag) {
 void Expect(const NodeProto &node, const Tensors &inputs, const Tensors &outputs,
             const std::string &name, const std::vector<OpsetId> &opset_imports,
             const std::string &producer_name, std::vector<TestCase> &registry, TestCaseTag tag,
-            const std::vector<TypeSpec> &output_types) {
+            const std::vector<TypeSpec> &output_types, double rtol, double atol) {
   const TestCaseTag resolved_tag = ResolveTag(node, tag);
 
   // Validate arity eagerly so callers still get an immediate error at
@@ -199,8 +199,8 @@ void Expect(const NodeProto &node, const Tensors &inputs, const Tensors &outputs
       "Expect: output_types, when provided, must have one entry per output tensor.");
 
   TestCase tc(name, name, TestCaseKind::NODE, resolved_tag);
-  tc.rtol = 1e-3;
-  tc.atol = 1e-7;
+  tc.rtol = rtol;
+  tc.atol = atol;
   for (const auto &t : inputs) {
     tc.declared_input_element_counts.push_back(t.element_count());
   }
@@ -224,7 +224,8 @@ void Expect(const NodeProto &node, const Tensors &inputs, const Tensors &outputs
 void Expect(std::vector<TestCase> &registry, NodeProto node, std::string name,
             std::vector<OpsetId> opset_imports, std::vector<int64_t> in_counts,
             std::vector<int64_t> out_counts, std::function<IoData()> make_io,
-            std::string producer_name, TestCaseTag tag, std::vector<TypeSpec> output_types) {
+            std::string producer_name, TestCaseTag tag, std::vector<TypeSpec> output_types,
+            double rtol, double atol) {
   const TestCaseTag resolved_tag = ResolveTag(node, tag);
 
   auto state = std::make_shared<LazyCaseState>();
@@ -236,8 +237,8 @@ void Expect(std::vector<TestCase> &registry, NodeProto node, std::string name,
   state->make_io = [make_io = std::move(make_io)](bool) mutable { return make_io(); };
 
   TestCase tc(name, name, TestCaseKind::NODE, resolved_tag);
-  tc.rtol = 1e-3;
-  tc.atol = 1e-7;
+  tc.rtol = rtol;
+  tc.atol = atol;
   tc.declared_input_element_counts = std::move(in_counts);
   tc.declared_output_element_counts = std::move(out_counts);
   tc.build = MakeLazyBuild(std::move(state));
@@ -248,7 +249,8 @@ void Expect(std::vector<TestCase> &registry, NodeProto node, std::string name,
 void Expect(std::vector<TestCase> &registry, NodeProto node, std::string name,
             std::vector<OpsetId> opset_imports, std::vector<int64_t> in_counts,
             std::vector<int64_t> out_counts, std::function<IoData(bool)> make_io,
-            std::string producer_name, TestCaseTag tag, std::vector<TypeSpec> output_types) {
+            std::string producer_name, TestCaseTag tag, std::vector<TypeSpec> output_types,
+            double rtol, double atol) {
   const TestCaseTag resolved_tag = ResolveTag(node, tag);
 
   auto state = std::make_shared<LazyCaseState>();
@@ -260,8 +262,8 @@ void Expect(std::vector<TestCase> &registry, NodeProto node, std::string name,
   state->make_io = std::move(make_io);
 
   TestCase tc(name, name, TestCaseKind::NODE, resolved_tag);
-  tc.rtol = 1e-3;
-  tc.atol = 1e-7;
+  tc.rtol = rtol;
+  tc.atol = atol;
   tc.declared_input_element_counts = std::move(in_counts);
   tc.declared_output_element_counts = std::move(out_counts);
   tc.build = MakeLazyBuild(std::move(state));

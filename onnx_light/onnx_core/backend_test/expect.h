@@ -50,6 +50,8 @@ namespace ONNX_LIGHT_NAMESPACE::core::backend_test {
  *                     of the materialized tensor type. Used to declare
  *                     ``Sequence`` / ``Map`` valued outputs whose runtime
  *                     representation is a plain ``Tensor``.
+ * @param rtol Relative tolerance for numeric outputs (default 1e-3).
+ * @param atol Absolute tolerance for numeric outputs (default 1e-7).
  * @throws std::invalid_argument if ``inputs.size()`` does not equal the number
  *         of non-empty entries in ``node.input`` or if ``outputs.size()`` does
  *         not equal the number of non-empty entries in ``node.output``, or if
@@ -59,7 +61,8 @@ namespace ONNX_LIGHT_NAMESPACE::core::backend_test {
 void Expect(const NodeProto &node, const Tensors &inputs, const Tensors &outputs,
             const std::string &name, const std::vector<OpsetId> &opset_imports,
             const std::string &producer_name, std::vector<TestCase> &registry,
-            TestCaseTag tag = TestCaseTag::NONE, const std::vector<TypeSpec> &output_types = {});
+            TestCaseTag tag = TestCaseTag::NONE, const std::vector<TypeSpec> &output_types = {},
+            double rtol = 1e-3, double atol = 1e-7);
 
 /**
  * Builds a single-node ``ModelProto`` and its one data set from ``node`` and
@@ -108,12 +111,14 @@ BuiltCase BuildSingleNodeCase(const NodeProto &node, Tensors inputs, Tensors out
  *            non-default operator domains).
  * @param output_types Optional per-output declared type specs (see
  *                     :func:`Expect`).
+ * @param rtol Relative tolerance for numeric outputs (default 1e-3).
+ * @param atol Absolute tolerance for numeric outputs (default 1e-7).
  */
 void Expect(std::vector<TestCase> &registry, NodeProto node, std::string name,
             std::vector<OpsetId> opset_imports, std::vector<int64_t> in_counts,
             std::vector<int64_t> out_counts, std::function<IoData()> make_io,
             std::string producer_name = "backend-test", TestCaseTag tag = TestCaseTag::NONE,
-            std::vector<TypeSpec> output_types = {});
+            std::vector<TypeSpec> output_types = {}, double rtol = 1e-3, double atol = 1e-7);
 
 /// Variant of the lazy :func:`Expect` callback which receives whether expected
 /// outputs were requested. It lets benchmark collectors generate inputs without
@@ -122,7 +127,7 @@ void Expect(std::vector<TestCase> &registry, NodeProto node, std::string name,
             std::vector<OpsetId> opset_imports, std::vector<int64_t> in_counts,
             std::vector<int64_t> out_counts, std::function<IoData(bool)> make_io,
             std::string producer_name = "backend-test", TestCaseTag tag = TestCaseTag::NONE,
-            std::vector<TypeSpec> output_types = {});
+            std::vector<TypeSpec> output_types = {}, double rtol = 1e-3, double atol = 1e-7);
 
 /**
  * Convenience overload of the lazy :func:`Expect` that omits the element-count
@@ -133,9 +138,10 @@ void Expect(std::vector<TestCase> &registry, NodeProto node, std::string name,
 inline void Expect(std::vector<TestCase> &registry, NodeProto node, std::string name,
                    std::vector<OpsetId> opset_imports, std::function<IoData()> make_io,
                    std::string producer_name = "backend-test", TestCaseTag tag = TestCaseTag::NONE,
-                   std::vector<TypeSpec> output_types = {}) {
+                   std::vector<TypeSpec> output_types = {}, double rtol = 1e-3,
+                   double atol = 1e-7) {
   Expect(registry, std::move(node), std::move(name), std::move(opset_imports), {}, {},
-         std::move(make_io), std::move(producer_name), std::move(tag), std::move(output_types));
+         std::move(make_io), std::move(producer_name), tag, std::move(output_types), rtol, atol);
 }
 
 /// Default element count for a 1-D float benchmark input of a cheap

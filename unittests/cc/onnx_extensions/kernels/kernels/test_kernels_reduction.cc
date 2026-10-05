@@ -137,12 +137,16 @@ TEST(KernelClass, ReduceSumParallelLeadingSlicesMatchSerial) {
   for (size_t i = 0; i < integers.size(); ++i)
     integers[i] = static_cast<int64_t>(i % 17) - 8;
   const Tensor int_data = Tensor::FromInt64("", {2, 4, 257}, integers);
+  sum.Configure({sum.TuningKey(core::runtime::DataType::INT64),
+                 {{"parallel.minimum_elements", std::numeric_limits<int64_t>::max()}}});
   const Tensor int_serial = sum(int_data, last_axis, false);
   sum.Configure(
       {sum.TuningKey(core::runtime::DataType::INT64), {{"parallel.minimum_elements", int64_t{1}}}});
   EXPECT_EQ(sum(int_data, last_axis, false).data, int_serial.data);
   std::vector<double> doubles(values.begin(), values.end());
   const Tensor double_data = Tensor::FromDouble("", {2, 4, 257}, doubles);
+  sum.Configure({sum.TuningKey(core::runtime::DataType::DOUBLE),
+                 {{"parallel.minimum_elements", std::numeric_limits<int64_t>::max()}}});
   const Tensor double_serial = sum(double_data, middle_axis, false);
   sum.Configure({sum.TuningKey(core::runtime::DataType::DOUBLE),
                  {{"parallel.minimum_elements", int64_t{1}}}});

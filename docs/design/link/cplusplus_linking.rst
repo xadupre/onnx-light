@@ -110,6 +110,20 @@ different type and registry universe. Wheel tags are controlled independently
 by the packaging frontend, so a CPython-specific tag does not by itself mean
 that the extensions were compiled without the stable ABI.
 
+The nanobind FAQ describes the complete
+`cross-extension ABI compatibility contract
+<https://nanobind.readthedocs.io/en/latest/faq.html#what-does-the-term-abi-compatible-mean-in-this-project>`_
+and the related
+`type-visibility requirements
+<https://nanobind.readthedocs.io/en/latest/faq.html#how-can-i-avoid-conflicts-with-other-projects-using-nanobind>`_.
+Call :func:`onnx_light.get_cpp_build_info` before building a downstream
+extension to obtain ``nanobind_version``, ``nanobind_platform_abi``,
+``python_stable_abi``, ``compiler_id``, ``compiler_version`` and
+``cxx_standard`` together with the exact headers and runtime-library paths.
+Downstream builds can compare these values with their own configuration and
+reject an incompatible toolchain or ABI mode before a cross-module conversion
+fails at runtime.
+
 .. _l-design-cpp-linking-no-kernels:
 
 Reduced build without runtime kernels

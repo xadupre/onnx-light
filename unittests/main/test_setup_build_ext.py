@@ -60,6 +60,12 @@ class TestSetupBuildExt(ExtTestCase):
         library_dir = Path(_onnxpyprotoop.__file__).resolve().parent
         self.assertEqual(Path(info["include_dir"]), Path(onnx_light.__file__).resolve().parent)
         self.assertEqual(Path(info["library_dir"]), library_dir)
+        self.assertRegex(info["nanobind_version"], r"^\d+\.\d+\.\d+$")
+        self.assertTrue(info["nanobind_platform_abi"].startswith("nanobind_"))
+        self.assertIn(info["python_stable_abi"], {"ON", "OFF"})
+        self.assertRegex(info["compiler_id"], r"^\w+$")
+        self.assertRegex(info["compiler_version"], r"^\d+(?:\.\d+)+$")
+        self.assertEqual(info["cxx_standard"], "20")
         # lib_onnx_proto is built shared on every platform when the Python
         # extensions are built, so it is always reported here.
         self.assertIn("proto_library", info)

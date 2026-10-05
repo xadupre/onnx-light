@@ -66,6 +66,10 @@ Configure-time options
      - ``ON``
      - Builds the nanobind modules and shared C++ libraries. ``OFF`` builds
        static libraries for pure C++ consumers.
+   * - ``ONNX_LIGHT_PYTHON_STABLE_ABI``
+     - ``ON``
+     - Builds the Python extensions with CPython's stable ABI. Disable only
+       for a coordinated native-ABI build of all nanobind consumers.
    * - ``ONNX_LIGHT_BUILD_KERNELS``
      - ``ON``
      - Builds kernels, backend tests, gradients, and their Python modules.
@@ -95,6 +99,35 @@ Configure-time options
    * - ``ONNX_HARDENING``
      - ``OFF``
      - Enables supported OpenSSF compiler and linker hardening flags.
+
+Keep ``ONNX_LIGHT_PYTHON_STABLE_ABI`` enabled for published wheels. This option
+requests the stable ABI, but nanobind may use the native ABI when the requested
+mode is unavailable, notably on unsupported or free-threaded Python builds.
+Extensions that exchange onnx-light C++ objects must therefore match the
+effective ``python_stable_abi`` value reported by
+:func:`onnx_light.get_cpp_build_info`, rather than relying on the CMake option
+alone. Matching the effective ABI mode is necessary but not sufficient:
+consumers must link the exact shared onnx-light libraries loaded by Python,
+because a separately built or statically linked copy owns a different type and
+registry universe. Wheel tags are controlled independently by the packaging
+frontend, so a CPython-specific tag does not by itself mean that the extensions
+were compiled without the stable ABI.
+
+The nanobind FAQ describes the complete
+`cross-extension ABI compatibility contract
+<https://nanobind.readthedocs.io/en/latest/faq.html#what-does-the-term-abi-compatible-mean-in-this-project>`_
+and the related
+`type-visibility requirements
+<https://nanobind.readthedocs.io/en/latest/faq.html#how-can-i-avoid-conflicts-with-other-projects-using-nanobind>`_.
+Call :func:`onnx_light.get_cpp_build_info` before building a downstream
+extension to obtain ``nanobind_version``, ``nanobind_platform_abi``,
+``python_stable_abi``, ``compiler_id``, ``compiler_version`` and
+``cxx_standard`` together with the exact headers and runtime-library paths.
+Downstream builds can compare these values with their own configuration and
+reject an incompatible toolchain or ABI mode before a cross-module conversion
+fails at runtime.
+
+.. autofunction:: onnx_light.get_cpp_build_info
 
 .. _l-design-cpp-linking-no-kernels:
 

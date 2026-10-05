@@ -864,6 +864,10 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # on older interpreters and free-threaded builds (which use their own ABI).
   nanobind_add_module(_onnxpyprotoop ${_onnx_light_nanobind_abi} ${ONNX_PY_PROTOOP_SOURCES})
   target_include_directories(_onnxpyprotoop PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
+  target_compile_definitions(_onnxpyprotoop PRIVATE
+      ONNX_LIGHT_COMPILER_ID="${CMAKE_CXX_COMPILER_ID}"
+      ONNX_LIGHT_COMPILER_VERSION="${CMAKE_CXX_COMPILER_VERSION}"
+      ONNX_LIGHT_CXX_STANDARD=${CMAKE_CXX_STANDARD})
   target_link_libraries(_onnxpyprotoop PRIVATE lib_onnx_op lib_onnx_manipulations)
 
   # _onnxpyprotolib: onnx_lib bindings (defs/parser/checker/inliner/

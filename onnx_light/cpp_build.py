@@ -34,7 +34,7 @@ def _find_import_library(source_root: Path, name: str) -> Path | None:
 
 
 def get_cpp_build_info() -> dict[str, str]:
-    """Returns the headers and shared libraries used by the Python runtime.
+    """Returns ABI metadata, headers and libraries used by the Python runtime.
 
     The libraries are looked up next to the loaded ``_onnxpyprotoop``
     extension, not in the source tree, so the result is correct for editable
@@ -42,17 +42,32 @@ def get_cpp_build_info() -> dict[str, str]:
     of ``lib_onnx_core`` would create a second process-wide kernel registry.
 
     Returns:
-        A dictionary with ``include_dir``, ``library_dir`` and one
-        ``<component>_library`` entry per runtime library built as a shared
-        library. Windows and macOS link every runtime library but
-        ``lib_onnx_proto`` statically into each Python extension, so
-        ``core_library`` is only reported on Linux. On Windows, the matching
-        ``<component>_import_library`` is added when the build tree is
-        available.
+        A dictionary with the nanobind version and platform ABI tag, compiler
+        identity and version, C++ standard, stable-ABI mode, ``include_dir``,
+        ``library_dir`` and one ``<component>_library`` entry per runtime
+        library built as a shared library. Python builds use shared core and
+        proto libraries on every platform so extensions observe one runtime
+        identity. On Windows, the matching ``<component>_import_library`` is
+        added when the build tree is available.
+
+    The following example displays the ABI metadata and the exact headers and
+    libraries selected by the imported package:
+
+    .. runpython::
+        :showcode:
+
+        from pprint import pprint
+
+        from onnx_light import get_cpp_build_info
+
+        pprint(get_cpp_build_info())
     """
+    from onnx_light.onnx_py import _onnxpyprotoop
+
     package_dir = Path(__file__).resolve().parent
     library_dir = _extension_directory()
-    info = {"include_dir": str(package_dir), "library_dir": str(library_dir)}
+    info = dict(_onnxpyprotoop.get_cpp_build_metadata())
+    info.update({"include_dir": str(package_dir), "library_dir": str(library_dir)})
     for component in ("core", "proto"):
         name = f"lib_onnx_{component}"
         library = _find_runtime_library(library_dir, name)

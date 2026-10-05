@@ -414,6 +414,8 @@ void GraphBuilder::MakeStructType(const StructTypeProto &type) {
 }
 
 void GraphBuilder::RebuildStructuredState() {
+  metadata_dirty_ = true;
+  peak_memory_dirty_ = true;
   const bool structured =
       !Shapes().StructTypes().empty() || !encoded_initializers_.empty() ||
       !paged_cache_initializers_.empty() ||
@@ -1278,6 +1280,7 @@ GraphBuilder::MakeNode(const std::string &op_type, const std::vector<std::string
   CollectNodeReferences(stored, references);
   compute_.AppendNodeReuse(nodes_, node_index, compute_.Shapes(), references);
   compute_.AppendNodeConstant(stored, node_index);
+  peak_memory_dirty_ = true;
 
   return resolved_outputs;
 }
@@ -1827,6 +1830,8 @@ std::size_t GraphBuilder::MoveShapeAndSizeNodesImpl(bool recursive) {
     ordered.push_back(std::move(nodes_[index]));
   }
   nodes_ = std::move(ordered);
+  metadata_dirty_ = true;
+  peak_memory_dirty_ = true;
 
   return moved + local_moved;
 }
@@ -2785,6 +2790,13 @@ void GraphBuilder::SortNodesTopologically() {
   if (order.size() != count) {
     throw BuilderError("GraphBuilder: cyclic node dependencies prevent topological ordering.");
   }
+  for (std::size_t i = 0; i < count; ++i) {
+    if (order[i] != i) {
+      metadata_dirty_ = true;
+      peak_memory_dirty_ = true;
+      break;
+    }
+  }
   utils::RepeatedProtoField<NodeProto> sorted;
   sorted.reserve(count);
   for (std::size_t i : order) {
@@ -2841,10 +2853,16 @@ template <typename Proto> void GraphBuilder::Finalize(Proto &graph) {
       }
     }
   }
-  const auto tags = compute_.ComputeValueAndNodeTags(graph);
-  compute_.ComputeInPlaceReuseGraph(graph, compute_.Shapes(), /*allow_input_overwrite=*/false,
-                                    tags.first);
-  compute_.ComputePeakMemory(graph, device_);
+  if (metadata_dirty_ || compute_.Size() != graph.node().size()) {
+    const auto tags = compute_.ComputeValueAndNodeTags(graph);
+    compute_.ComputeInPlaceReuseGraph(graph, compute_.Shapes(), /*allow_input_overwrite=*/false,
+                                      tags.first);
+    metadata_dirty_ = false;
+  }
+  if (peak_memory_dirty_ || compute_.PeakMemory().size() != graph.node().size()) {
+    compute_.ComputePeakMemory(graph, device_);
+    peak_memory_dirty_ = false;
+  }
   // Writes inferred shapes (value_info), in-place / release-after / shape-tag
   // metadata and per-node peak memory.
   if constexpr (std::is_same_v<Proto, GraphProto>) {
@@ -2921,7 +2939,6 @@ GraphProto GraphBuilder::ToGraph() {
   if (parent_ == nullptr) {
     RefreshLocalFunctions();
   }
-  RebuildStructuredState();
   GraphProto graph = BuildGraph();
   Finalize(graph);
   if (!graph.persistent_bindings().empty()) {
@@ -2985,7 +3002,6 @@ FunctionProto GraphBuilder::ExportFunction(const std::string &domain, bool model
   if (parent_ == nullptr) {
     RefreshLocalFunctions();
   }
-  RebuildStructuredState();
   FunctionProto function = BuildFunction(domain);
   for (std::size_t i = 0; i < inputs_.size(); ++i) {
     ValueInfoProto &input = function.ref_value_info()[i];

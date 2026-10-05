@@ -1988,6 +1988,36 @@ TEST(GraphBuilderStructured, RetainsStructuredInputAndIdentityOutput) {
   EXPECT_EQ(model.graph().output()[0].type().struct_type().type_ref(), 1u);
 }
 
+TEST(GraphBuilderStructured, InfersConstructionMetadataExactlyOnce) {
+  core::builder::GraphBuilder builder("typed", SchemaLookup());
+  builder.MakeStructType(BuilderRecord());
+  builder.MakeInput(BuilderStructuredInfo("x"));
+  auto &compute = const_cast<core::compute::ComputeContext &>(builder.Compute());
+  compute.Shapes().set_events_enabled(true);
+  compute.set_events_enabled(true);
+
+  builder.MakeNode("Identity", {"x"}, {"y"});
+  builder.MakeOutput("y");
+  const auto count_shape_inference = [&]() {
+    return std::count_if(compute.Shapes().Events().begin(), compute.Shapes().Events().end(),
+                         [](const auto &event) {
+                           return event.action == core::shapes::ShapeEventAction::kComputeNode;
+                         });
+  };
+  EXPECT_EQ(count_shape_inference(), 1);
+  EXPECT_TRUE(compute.Events().empty());
+
+  const auto first = builder.ToModel();
+  EXPECT_EQ(count_shape_inference(), 1);
+  EXPECT_TRUE(compute.Events().empty());
+  EXPECT_TRUE(first.graph().output()[0].type().has_struct_type());
+
+  const auto second = builder.ToModel();
+  EXPECT_EQ(count_shape_inference(), 1);
+  EXPECT_TRUE(compute.Events().empty());
+  EXPECT_EQ(second.SerializeAsString(), first.SerializeAsString());
+}
+
 TEST(GraphBuilderStructured, RejectsBadPayloadAndNamesWithoutMutation) {
   core::builder::GraphBuilder builder("invalid", SchemaLookup());
   builder.MakeStructType(BuilderRecord());

@@ -619,7 +619,12 @@ public:
   std::string ToString() const;
 
   /// Logical target for pattern matching, constant folding and peak-memory analysis.
-  void set_device(Device device) noexcept { device_ = device; }
+  void set_device(Device device) noexcept {
+    if (device_ != device) {
+      device_ = device;
+      peak_memory_dirty_ = true;
+    }
+  }
   Device device() const noexcept { return device_; }
 
   // ── Finalization ─────────────────────────────────────────────────────
@@ -779,9 +784,9 @@ private:
   // inline (GRAPH / GRAPHS attribute) or through a builder ``*_ref`` reference.
   static bool NodeCarriesSubgraph(const NodeProto &node);
 
-  // Runs the whole-graph compute analyses and writes their result into
-  // ``graph`` (shapes, in-place / release-after / value-tag metadata and
-  // per-node peak memory).
+  // Writes the incrementally inferred shapes, types, and metadata into
+  // ``graph``. Whole-graph analyses run only after a rewrite or reordering
+  // invalidated the incremental state.
   template <typename Proto> void Finalize(Proto &graph);
 
   // Returns the nested builder named ``name`` in ``builders`` or nullptr.
@@ -801,6 +806,8 @@ private:
   utils::RepeatedProtoField<StringStringEntryProto> metadata_;
   std::optional<std::string> doc_string_;
   GraphBuilder *parent_ = nullptr;
+  bool metadata_dirty_ = false;
+  bool peak_memory_dirty_ = true;
   SchemaLookupFn schema_lookup_;
   // Lazily-built lookup table: op_type -> normalised domain -> schema history.
   std::unordered_map<std::string, std::unordered_map<std::string, std::vector<LightOpSchema>>>

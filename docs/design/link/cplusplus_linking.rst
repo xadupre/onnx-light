@@ -66,6 +66,10 @@ Configure-time options
      - ``ON``
      - Builds the nanobind modules and shared C++ libraries. ``OFF`` builds
        static libraries for pure C++ consumers.
+   * - ``ONNX_LIGHT_PYTHON_STABLE_ABI``
+     - ``ON``
+     - Builds the Python extensions with CPython's stable ABI. Disable only
+       for a coordinated native-ABI build of all nanobind consumers.
    * - ``ONNX_LIGHT_BUILD_KERNELS``
      - ``ON``
      - Builds kernels, backend tests, gradients, and their Python modules.
@@ -95,6 +99,16 @@ Configure-time options
    * - ``ONNX_HARDENING``
      - ``OFF``
      - Enables supported OpenSSF compiler and linker hardening flags.
+
+Keep ``ONNX_LIGHT_PYTHON_STABLE_ABI`` enabled for published wheels and match
+the setting in every nanobind extension that exchanges onnx-light C++ objects.
+A native ABI build is valid only when onnx-light and all such extensions are
+rebuilt together with the option disabled. Matching the ABI mode is necessary
+but not sufficient: consumers must link the exact shared onnx-light libraries
+loaded by Python, because a separately built or statically linked copy owns a
+different type and registry universe. Wheel tags are controlled independently
+by the packaging frontend, so a CPython-specific tag does not by itself mean
+that the extensions were compiled without the stable ABI.
 
 .. _l-design-cpp-linking-no-kernels:
 

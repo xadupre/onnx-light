@@ -38,6 +38,15 @@ using ::onnx_light::core::symbolic::TensorTypeToDataType;
 
 namespace {
 
+template <typename Proto> std::string DeclaredValueTag(const Proto &value) {
+  for (const auto &entry : value.metadata_props()) {
+    if (entry.key() == core::compute::kValueTagMetadataKey) {
+      return entry.value();
+    }
+  }
+  return {};
+}
+
 bool HasUnboundAttributes(const NodeProto &node) {
   for (const auto &attribute : node.attribute()) {
     if (!attribute.ref_attr_name().empty() ||
@@ -633,6 +642,7 @@ template <typename Tensor> const std::string &GraphBuilder::MakeInitializerImpl(
   const std::string &reserved =
       is_input && !has_initializer ? *names_.find(tensor_name) : ReserveName(tensor_name);
   initializers_.push_back(std::forward<Tensor>(tensor));
+  compute_.SeedValueTag(reserved, DeclaredValueTag(initializers_.back()), nodes_);
   if (is_input) {
     // Defaults remain overridable; neither their values nor their dimensions
     // specialize the public input declaration.
@@ -697,6 +707,7 @@ const std::string &GraphBuilder::MakeInput(const ValueInfoProto &value_info) {
     SeedShape(reserved, std::move(descriptor));
   }
   SeedInputAnnotations(reserved);
+  compute_.SeedValueTag(reserved, DeclaredValueTag(value_info), nodes_);
   return reserved;
 }
 
@@ -733,7 +744,8 @@ void GraphBuilder::MakeOutput(const ValueInfoProto &value_info) {
     compute_.Shapes().SetType(value_info.name().value(), value_info.type());
   }
   outputs_.push_back(value_info);
-  compute_.SeedReuseOutput(value_info.name().value());
+  compute_.SeedValueTag(name, DeclaredValueTag(value_info), nodes_);
+  compute_.SeedReuseOutput(value_info.name().value(), nodes_, compute_.Shapes());
 }
 
 void GraphBuilder::MakeOutput(const std::string &name, const SymTensor &type) {
@@ -751,7 +763,7 @@ void GraphBuilder::MakeOutput(const std::string &name) {
   ValueInfoProto vi;
   vi.set_name(name);
   outputs_.add() = std::move(vi);
-  compute_.SeedReuseOutput(name);
+  compute_.SeedReuseOutput(name, nodes_, compute_.Shapes());
 }
 
 // Seeds the incremental annotations for a declared graph input: it is a
@@ -865,6 +877,9 @@ void GraphBuilder::ImportGraph(const GraphProto &graph) {
   graph_template_.ref_node().clear();
   graph_template_.ref_value_info().clear();
   value_infos_ = graph.value_info();
+  for (const auto &value : value_infos_) {
+    compute_.SeedValueTag(value.name().value(), DeclaredValueTag(value), nodes_);
+  }
   for (const auto &input : graph.input()) {
     MakeInput(input);
   }
@@ -1259,7 +1274,9 @@ GraphBuilder::MakeNode(const std::string &op_type, const std::vector<std::string
   // can extend it.
   const std::size_t node_index = nodes_.size() - 1;
   compute_.AppendNodeTags(nodes_, node_index);
-  compute_.AppendNodeReuse(stored, node_index, compute_.Shapes());
+  std::vector<std::string> references;
+  CollectNodeReferences(stored, references);
+  compute_.AppendNodeReuse(nodes_, node_index, compute_.Shapes(), references);
   compute_.AppendNodeConstant(stored, node_index);
 
   return resolved_outputs;

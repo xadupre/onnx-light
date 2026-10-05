@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/builder/graph_builder.h"
+#include "onnx_core/compute/value_tags.h"
 
 #include "onnx_helper.h"
 #include "onnx_lib/checker.h"
@@ -99,6 +100,94 @@ TEST(GraphBuilder, MakeNodeMaintainsTagsAndReuseIncrementally) {
   const std::vector<std::string> abs_out = builder.MakeNode("Abs", {"x"});
   ASSERT_EQ(abs_out.size(), 1u);
   EXPECT_EQ(builder.Compute().Size(), builder.Nodes().size());
+}
+
+TEST(GraphBuilder, LaterConsumerRevokesEarlierIncrementalReuse) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeNode("Abs", {"x"}, {"intermediate"});
+  builder.MakeNode("Abs", {"intermediate"}, {"first"});
+  ASSERT_EQ(builder.Compute().NodeReuse(1).size(), 1u);
+
+  builder.MakeNode("Abs", {"intermediate"}, {"second"});
+  EXPECT_TRUE(builder.Compute().NodeReuse(1).empty());
+  builder.MakeOutput("first");
+  builder.MakeOutput("second");
+  core::compute::ComputeContext expected;
+  expected.ComputeInPlaceReuseGraph(builder.BuildGraph(), builder.Shapes());
+  EXPECT_EQ(builder.Compute().Reuse().size(), expected.Reuse().size());
+  EXPECT_EQ(builder.Compute().NodeReuse(1).size(), expected.NodeReuse(1).size());
+  const auto graph = builder.ToGraph();
+  EXPECT_EQ(builder.Compute().Reuse().size(), graph.node().size());
+  EXPECT_TRUE(builder.Compute().NodeReuse(1).empty());
+}
+
+TEST(GraphBuilder, OutputDeclaredAfterNodesRevokesIncrementalReuse) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeNode("Abs", {"x"}, {"intermediate"});
+  builder.MakeNode("Abs", {"intermediate"}, {"result"});
+  ASSERT_EQ(builder.Compute().NodeReuse(1).size(), 1u);
+
+  builder.MakeOutput("intermediate");
+  EXPECT_TRUE(builder.Compute().NodeReuse(1).empty());
+  builder.MakeOutput("result");
+  core::compute::ComputeContext expected;
+  expected.ComputeInPlaceReuseGraph(builder.BuildGraph(), builder.Shapes());
+  EXPECT_EQ(builder.Compute().NodeReuse(1).size(), expected.NodeReuse(1).size());
+}
+
+TEST(GraphBuilder, DeclaredOutputTagPropagatesToEarlierNodes) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeNode("Abs", {"x"}, {"intermediate"});
+  builder.MakeNode("Abs", {"intermediate"}, {"result"});
+
+  ValueInfoProto output;
+  output.set_name("intermediate");
+  auto *tag = output.add_metadata_props();
+  tag->set_key(core::compute::kValueTagMetadataKey);
+  tag->set_value("shape");
+  builder.MakeOutput(output);
+  EXPECT_EQ(builder.Compute().ValueTags().at("intermediate"), "shape");
+  EXPECT_EQ(builder.Compute().NodeTag(1), "shape");
+  EXPECT_EQ(builder.Compute().ValueTags().at("result"), "shape");
+  core::compute::ComputeContext expected;
+  const auto whole_graph = expected.ComputeValueAndNodeTags(builder.BuildGraph());
+  EXPECT_EQ(builder.Compute().ValueTags(), whole_graph.first);
+  EXPECT_EQ(builder.Compute().NodeTags(), whole_graph.second);
+}
+
+TEST(GraphBuilder, LateTagRefreshesReleaseWithoutDownstreamConsumers) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeNode("Abs", {"x"}, {"intermediate"});
+  builder.MakeNode("Abs", {"intermediate"}, {"result"});
+  EXPECT_TRUE(builder.Compute().NodeReleaseAfterShapeTagged(1).empty());
+
+  core::compute::ComputeContext incremental = builder.Compute();
+  incremental.SeedValueTag("intermediate", "shape", builder.Nodes());
+  EXPECT_EQ(incremental.NodeReleaseAfterShapeTagged(1), std::vector<std::string>{"intermediate"});
+}
+
+TEST(GraphBuilder, RepeatedGraphExportPreservesMetadataAfterAppending) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeNode("Abs", {"x"}, {"intermediate"});
+  builder.MakeNode("Abs", {"intermediate"}, {"first"});
+  builder.MakeOutput("first");
+
+  const GraphProto initial = builder.ToGraph();
+  EXPECT_EQ(builder.ToGraph().SerializeAsString(), initial.SerializeAsString());
+
+  builder.MakeNode("Abs", {"intermediate"}, {"second"});
+  builder.MakeOutput("second");
+  core::compute::ComputeContext expected;
+  expected.ComputeInPlaceReuseGraph(builder.BuildGraph(), builder.Shapes());
+  ASSERT_EQ(builder.Compute().Reuse().size(), expected.Reuse().size());
+  EXPECT_EQ(builder.Compute().NodeReuse(1).size(), expected.NodeReuse(1).size());
+  const GraphProto extended = builder.ToGraph();
+  EXPECT_EQ(builder.ToGraph().SerializeAsString(), extended.SerializeAsString());
 }
 
 TEST(GraphBuilder, MaintainsConstantInfoIncrementally) {
@@ -671,6 +760,15 @@ TEST(GraphBuilder, RemoveDuplicateInitializersCollapsesEqual) {
   EXPECT_EQ(builder.Nodes()[1].input(1), "w1");
   // A second pass has nothing left to collapse.
   EXPECT_EQ(builder.RemoveDuplicateInitializers(), 0u);
+  const GraphProto graph = builder.ToGraph();
+  EXPECT_EQ(builder.ToGraph().SerializeAsString(), graph.SerializeAsString());
+  core::compute::ComputeContext expected;
+  const auto tags = expected.ComputeValueAndNodeTags(graph);
+  expected.ComputeInPlaceReuseGraph(graph, builder.Shapes(), false, tags.first);
+  expected.ComputePeakMemory(graph, builder.device());
+  EXPECT_EQ(builder.Compute().Reuse(), expected.Reuse());
+  EXPECT_EQ(builder.Compute().Memory(), expected.Memory());
+  EXPECT_EQ(builder.Compute().PeakMemory(), expected.PeakMemory());
 }
 
 TEST(GraphBuilder, RemoveDuplicateInitializersKeepsDistinctContent) {

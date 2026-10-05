@@ -15,7 +15,7 @@ SOURCE = (
     Path(__file__).resolve().parents[2]
     / "docs"
     / "examples"
-    / "compute"
+    / "builder"
     / "plot_graph_builder_benchmark.py"
 )
 SPEC = importlib.util.spec_from_file_location("plot_graph_builder_benchmark", SOURCE)

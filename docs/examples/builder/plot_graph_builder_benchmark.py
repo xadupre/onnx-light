@@ -142,6 +142,8 @@ def build_onnxscript(node_count: int, large_initializers: bool = False):
         payload = large_initializer()
         for index in range(LARGE_INITIALIZER_COUNT):
             initializer = builder.initializer(onnx_ir.tensor(payload), name=f"large{index}")
+            initializer.type = onnx_ir.TensorType(onnx_ir.DataType.UINT8)
+            initializer.shape = onnx_ir.Shape([LARGE_INITIALIZER_BYTES])
             builder.add_output(initializer, None)
     return onnx_ir.to_proto(onnx_ir.Model(graph, ir_version=10))
 

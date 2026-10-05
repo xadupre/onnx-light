@@ -29,11 +29,12 @@ builders are running, but each initializer is present in the final model, whose
 serialized size is approximately 1.5 GB. The functional checks omit this large
 payload.
 
-The final section compares pattern-fusion throughput with three rules:
-``Add``-``Mul``, ``MatMul``-``Add``, and ``Add``-``Relu``. Both
-implementations start from the same ONNX model and include conversion into
-their native graph representation, matching, rewriting, and conversion back
-to ONNX in the measured time.
+The final section compares pattern-fusion throughput with four rules:
+``Add``-``Mul``, ``MatMul``-``Add``, ``Add``-``Relu``, and a six-node
+``Sub``-``Abs``-``Sqrt``-``Neg``-``Exp``-``Log`` chain. Both implementations
+start from the same ONNX model and include conversion into their native graph
+representation, matching, rewriting, and conversion back to ONNX in the
+measured time.
 """
 
 from __future__ import annotations
@@ -69,7 +70,7 @@ LARGE_INITIALIZER_BYTES = 375_000_000
 LARGE_INITIALIZER_COUNT = 4
 _LARGE_INITIALIZER = None
 FUSION_BLOCK_COUNTS = (50, 100, 250, 500)
-FUSIONS_PER_BLOCK = 3
+FUSIONS_PER_BLOCK = 4
 
 
 def attention_blocks(op, value, constants, node_count: int):
@@ -304,6 +305,45 @@ class AddReluFusionPattern(PatternOptimization):
         ]
 
 
+class SixNodeFusionPattern(PatternOptimization):
+    """Fuses a six-node chain into one benchmark operator."""
+
+    def __init__(self):
+        super().__init__(priority=1, name="SixNodeFusion")
+
+    def fast_op_type(self):
+        """Returns the candidate root operator."""
+        return {"Log"}
+
+    def match(self, graph, node):
+        """Matches the chain with exclusive intermediate values."""
+        matched = [node]
+        current = node
+        for op_type in ("Exp", "Neg", "Sqrt", "Abs", "Sub"):
+            previous = graph.node_before(current.input[0])
+            if previous is None or previous.op_type != op_type:
+                return self.no_match(node, f"the chain does not contain {op_type}")
+            if len(graph.next_nodes(previous.output[0])) != 1:
+                return self.no_match(node, f"the {op_type} output has multiple consumers")
+            matched.append(previous)
+            current = previous
+        matched.reverse()
+        return self.result(matched, insert_at=node)
+
+    def apply(self, graph, nodes):
+        """Builds the fused replacement node."""
+        del graph
+        first, *_, last = nodes
+        return [
+            oh.make_node(
+                "FusedSixNode",
+                list(first.input),
+                list(last.output),
+                domain="onnx_light.benchmark",
+            )
+        ]
+
+
 def _onnxscript_add_mul_pattern(op, x, bias, scale):
     return op.Mul(op.Add(x, bias), scale)
 
@@ -328,6 +368,14 @@ def _onnxscript_fused_add_relu(op, x, bias):
     return op.FusedAddRelu(x, bias, _domain="onnx_light.benchmark", _version=1)
 
 
+def _onnxscript_six_node_pattern(op, x, bias):
+    return op.Log(op.Exp(op.Neg(op.Sqrt(op.Abs(op.Sub(x, bias))))))
+
+
+def _onnxscript_fused_six_node(op, x, bias):
+    return op.FusedSixNode(x, bias, _domain="onnx_light.benchmark", _version=1)
+
+
 ONNXSCRIPT_FUSION_RULES = rewriter.RewriteRuleSet(
     [
         rewriter.RewriteRule(
@@ -339,12 +387,15 @@ ONNXSCRIPT_FUSION_RULES = rewriter.RewriteRuleSet(
         rewriter.RewriteRule(
             _onnxscript_add_relu_pattern, _onnxscript_fused_add_relu, name="AddReluFusion"
         ),
+        rewriter.RewriteRule(
+            _onnxscript_six_node_pattern, _onnxscript_fused_six_node, name="SixNodeFusion"
+        ),
     ]
 )
 
 
 def build_fusion_model(block_count: int):
-    """Builds a graph containing three different fusible pairs per block."""
+    """Builds a graph containing four fusion types per block."""
     if block_count <= 0:
         raise ValueError("block_count must be positive.")
     builder = GraphBuilder("fusion")
@@ -357,25 +408,35 @@ def build_fusion_model(block_count: int):
         value = builder.op.Mul(builder.op.Add(value, bias), scale)
         value = builder.op.Add(builder.op.MatMul(value, weight), bias)
         value = builder.op.Relu(builder.op.Add(value, bias))
+        value = builder.op.Log(
+            builder.op.Exp(
+                builder.op.Neg(builder.op.Sqrt(builder.op.Abs(builder.op.Sub(value, bias))))
+            )
+        )
     builder.out(value, TensorProto.FLOAT, ["N", 16])
     return builder.to_onnx("model")
 
 
 def fuse_light(model):
-    """Runs the three fusion patterns with onnx-light."""
+    """Runs the four fusion patterns with onnx-light."""
     builder = OptimizationGraphBuilder(model)
-    patterns = [AddMulFusionPattern(), MatMulAddFusionPattern(), AddReluFusionPattern()]
+    patterns = [
+        AddMulFusionPattern(),
+        MatMulAddFusionPattern(),
+        AddReluFusionPattern(),
+        SixNodeFusionPattern(),
+    ]
     rewrites = GraphGraph(builder, patterns).optimize()
-    assert len(rewrites) == len(model.graph.node) // 2
+    assert len(rewrites) == len(model.graph.node) // 3
     return builder.to_onnx("model")
 
 
 def fuse_onnxscript(model):
-    """Runs the three fusion patterns with onnxscript."""
+    """Runs the four fusion patterns with onnxscript."""
     proto = onnx.load_from_string(model.SerializeToString())
     ir_model = onnx_ir.from_proto(proto)
     count = ONNXSCRIPT_FUSION_RULES.apply_to_model(ir_model)
-    assert count == len(model.graph.node) // 2
+    assert count == len(model.graph.node) // 3
     return onnx_ir.to_proto(ir_model)
 
 
@@ -464,7 +525,7 @@ def plot_fusion_benchmark(results: list[dict]):
             "o-",
             label=optimizer,
         )
-    axis.set_title("Three pattern fusions")
+    axis.set_title("Four pattern fusions (including one six-node pattern)")
     axis.set_xlabel("number of fused patterns")
     axis.set_ylabel("median time (ms)")
     axis.grid(True, alpha=0.3)

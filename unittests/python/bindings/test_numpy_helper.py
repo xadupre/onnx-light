@@ -223,6 +223,25 @@ class TestNumpyHelper(ExtTestCase):
         self.assertEqual(map_proto.name, "mymap")
         self.assertEqual(int(map_proto.key_type), int(onnxl.TensorProto.INT64))
 
+    def test_from_dict_string_keys(self) -> None:
+        values = {"a": np.array([0.1]), "été": np.array([0.9])}
+        map_proto = onh.from_dict(values)
+        self.assertEqual(map_proto.key_type, onnxl.TensorProto.STRING)
+        self.assertEqual(list(map_proto.string_keys), [b"a", "été".encode()])
+        self.assertEqual(len(map_proto.keys), 0)
+        result = onh.to_dict(map_proto)
+        np.testing.assert_equal(result, values)
+        self.assertEqual(onh.from_dict(result), map_proto)
+        self.assertEqual(onh.from_dict({b"a": np.array([0.1])}).string_keys, [b"a"])
+
+    def test_from_dict_duplicate_str_and_bytes_keys(self) -> None:
+        with self.assertRaisesRegex(ValueError, "not unique"):
+            onh.from_dict({"a": np.array(0.1), b"a": np.array(0.9)})
+
+    def test_from_dict_differing_string_and_int_key_types(self) -> None:
+        with self.assertRaises(TypeError):
+            onh.from_dict({"a": np.array(0.1), 1: np.array(0.9)})
+
     def test_from_dict_empty_raises(self) -> None:
         with self.assertRaises(ValueError):
             onh.from_dict({})

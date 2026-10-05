@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/backend_test/expect.h"
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
 #include "onnx_extensions/backend_test/cases/math/include_math_cases.h"
@@ -52,6 +53,70 @@ private:
 using core::backend_test::TestCase;
 
 namespace Test {
+
+TEST(BackendTestCase, ExpectPreservesDefaultAndCustomTolerances) {
+  using namespace core::backend_test;
+  NodeProto node;
+  node.set_op_type("Abs");
+  node.add_input("x");
+  node.add_output("y");
+  const Tensors inputs{core::runtime::Tensor::FromFloat("", {1}, {-2.0f})};
+  const Tensors outputs{core::runtime::Tensor::FromFloat("", {1}, {2.0f})};
+  std::vector<TestCase> cases;
+  Expect(node, inputs, outputs, "default", {{"", 13}}, "backend-test", cases);
+  Expect(node, inputs, outputs, "custom", {{"", 13}}, "backend-test", cases, TestCaseTag::NONE, {},
+         0.0, 0.25);
+
+  ASSERT_EQ(cases.size(), 2u);
+  EXPECT_DOUBLE_EQ(cases[0].rtol, 1e-3);
+  EXPECT_DOUBLE_EQ(cases[0].atol, 1e-7);
+  EXPECT_DOUBLE_EQ(cases[1].rtol, 0.0);
+  EXPECT_DOUBLE_EQ(cases[1].atol, 0.25);
+  for (auto &tc : cases) {
+    EXPECT_FALSE(tc.materialized());
+    EXPECT_EQ(tc.model().graph().node_size(), 1);
+    EXPECT_FLOAT_EQ(tc.data_sets()[0].outputs[0].AsFloat()[0], 2.0f);
+  }
+}
+
+TEST(BackendTestCase, LazyExpectPreservesCustomTolerances) {
+  using namespace core::backend_test;
+  auto node = [] {
+    NodeProto result;
+    result.set_op_type("Abs");
+    result.add_input("x");
+    result.add_output("y");
+    return result;
+  };
+  auto make_io = []() -> IoData {
+    return {{core::runtime::Tensor::FromFloat("", {1}, {-2.0f})},
+            {core::runtime::Tensor::FromFloat("", {1}, {2.0f})}};
+  };
+  std::vector<TestCase> cases;
+  Expect(cases, node(), "default", {{"", 13}}, make_io);
+  Expect(cases, node(), "custom", {{"", 13}}, {1}, {1}, std::function<IoData()>(make_io),
+         "backend-test", TestCaseTag::NONE, {}, 0.125, 0.0);
+  Expect(cases, node(), "custom_bool", {{"", 13}}, {1}, {1},
+         std::function<IoData(bool)>([make_io](bool) { return make_io(); }), "backend-test",
+         TestCaseTag::NONE, {}, 0.0, 1.0);
+  Expect(cases, node(), "custom_short", {{"", 13}}, make_io, "backend-test", TestCaseTag::NONE, {},
+         0.5, 0.0);
+
+  ASSERT_EQ(cases.size(), 4u);
+  EXPECT_DOUBLE_EQ(cases[0].rtol, 1e-3);
+  EXPECT_DOUBLE_EQ(cases[0].atol, 1e-7);
+  EXPECT_DOUBLE_EQ(cases[1].rtol, 0.125);
+  EXPECT_DOUBLE_EQ(cases[1].atol, 0.0);
+  EXPECT_DOUBLE_EQ(cases[2].rtol, 0.0);
+  EXPECT_DOUBLE_EQ(cases[2].atol, 1.0);
+  EXPECT_DOUBLE_EQ(cases[3].rtol, 0.5);
+  EXPECT_DOUBLE_EQ(cases[3].atol, 0.0);
+  for (auto &tc : cases) {
+    EXPECT_FALSE(tc.materialized());
+    EXPECT_EQ(tc.model().graph().node_size(), 1);
+    EXPECT_FLOAT_EQ(tc.data_sets()[0].outputs[0].AsFloat()[0], 2.0f);
+  }
+}
 
 TEST(BackendTestCase, AcosCaseOutputsMatchStdAcos) {
   auto cases = CollectTestCases("Acos");

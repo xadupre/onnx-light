@@ -345,6 +345,9 @@ void RegisterKernelFunctions() {
     onnx_kernels::kernel::FlexAttention::RegisterTuningSchemas();
     onnx_kernels::kernel::Floor::RegisterTuningSchemas();
     onnx_kernels::kernel::Gemm::RegisterTuningSchemas();
+    onnx_kernels::kernel::GlobalAveragePool::RegisterTuningSchemas();
+    onnx_kernels::kernel::GlobalLpPool::RegisterTuningSchemas();
+    onnx_kernels::kernel::GlobalMaxPool::RegisterTuningSchemas();
     onnx_kernels::kernel::Greater::RegisterTuningSchemas();
     onnx_kernels::kernel::GreaterOrEqual::RegisterTuningSchemas();
     onnx_kernels::kernel::HardSwish::RegisterTuningSchemas();

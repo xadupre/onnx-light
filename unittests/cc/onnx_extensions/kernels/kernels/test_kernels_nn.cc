@@ -9,6 +9,7 @@
 #include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/tuning/cpu_executor.h"
+#include "onnx_extensions/kernels/kernel_dispatch_table.h"
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
 #include <gtest/gtest.h>
@@ -59,6 +60,72 @@ uint64_t StorageTotal(const RuntimeEventLog &events, uint64_t RuntimeEvent::*fie
 }
 
 } // namespace
+
+TEST(KernelClass, GlobalPoolsParallelSlicesMatchSerial) {
+  core::runtime::CpuExecutionPolicy policy;
+  policy.num_threads = 2;
+  policy.affinity_policy = core::runtime::CpuAffinityPolicy::kNone;
+  const auto executor = core::runtime::GlobalCpuExecutorRegistry().Acquire(policy);
+  const core::runtime::CpuExecutorScope executor_scope(executor.get());
+  const KernelContext ctx{DefaultOpset(22)};
+  std::vector<float> values(8 * 257);
+  for (size_t i = 0; i < values.size(); ++i)
+    values[i] = static_cast<float>(static_cast<int>(i % 23) - 11) / 7;
+  const Tensor x = Tensor::FromFloat("", {2, 4, 257}, values);
+
+  onnx_kernels::kernel::GlobalAveragePool average{ctx};
+  onnx_kernels::kernel::GlobalMaxPool maximum{ctx};
+  onnx_kernels::kernel::GlobalLpPool lp{ctx};
+  onnx_kernels::RegisterKernelFunctions();
+  for (const auto *kernel : {static_cast<const core::runtime::KernelBase *>(&average),
+                             static_cast<const core::runtime::KernelBase *>(&maximum),
+                             static_cast<const core::runtime::KernelBase *>(&lp)}) {
+    const auto schema =
+        core::runtime::GetKernelTuningRegistry().FindSchema(kernel->TuningKey(DataType::FLOAT));
+    ASSERT_NE(schema, nullptr);
+    EXPECT_EQ(schema->portable_defaults().Get<int64_t>("parallel.minimum_elements"),
+              core::runtime::kParallelForGrainSize);
+  }
+  EXPECT_NE(core::runtime::GetKernelTuningRegistry().FindSchema(lp.TuningKey(DataType::FLOAT16)),
+            nullptr);
+  const Tensor average_serial = average(x);
+  const Tensor maximum_serial = maximum(x);
+  const Tensor lp_serial = lp(x);
+  for (auto *kernel : {static_cast<onnx_kernels::tuning::ParallelTunableKernel *>(&average),
+                       static_cast<onnx_kernels::tuning::ParallelTunableKernel *>(&maximum),
+                       static_cast<onnx_kernels::tuning::ParallelTunableKernel *>(&lp)}) {
+    kernel->Configure(
+        {kernel->TuningKey(DataType::FLOAT), {{"parallel.minimum_elements", int64_t{1}}}});
+  }
+
+  core::runtime::ParallelRegionCollector collector(4);
+  const core::runtime::ParallelRegionCollectorScope collector_scope(&collector);
+  const Tensor average_parallel = average(x);
+  const Tensor maximum_parallel = maximum(x);
+  const Tensor lp_parallel = lp(x);
+  for (int64_t i = 0; i < 8; ++i) {
+    EXPECT_EQ(average_parallel.AsFloat()[i], average_serial.AsFloat()[i]);
+    EXPECT_EQ(maximum_parallel.AsFloat()[i], maximum_serial.AsFloat()[i]);
+    EXPECT_EQ(lp_parallel.AsFloat()[i], lp_serial.AsFloat()[i]);
+  }
+  ASSERT_EQ(collector.events().size(), 3u);
+  for (const auto &event : collector.events())
+    EXPECT_EQ(event.admitted_threads, 2);
+
+  const Tensor half = core::runtime::MakeFloat16Tensor("", {2, 4, 257}, values);
+  const Tensor half_result = lp(half);
+  const Tensor promoted = core::runtime::PromoteToFloat32(half_result);
+  for (int64_t i = 0; i < 8; ++i)
+    EXPECT_NEAR(promoted.AsFloat()[i], lp_parallel.AsFloat()[i], 0.01f);
+  EXPECT_THROW(lp(x, 0.0), std::invalid_argument);
+
+  const Tensor empty = Tensor::FromFloat("", {0, 4, 257}, {});
+  EXPECT_EQ(average(empty).element_count(), 0);
+  EXPECT_EQ(maximum(empty).element_count(), 0);
+  EXPECT_EQ(lp(empty).element_count(), 0);
+  EXPECT_THROW(average(Tensor::FromFloat("", {1, 2, 0}, {})), std::invalid_argument);
+  EXPECT_THROW(maximum(Tensor::FromFloat("", {1, 2, 0}, {})), std::invalid_argument);
+}
 
 TEST(KernelClass, GlobalLpPoolDtypes) {
   const KernelContext ctx{DefaultOpset(22)};

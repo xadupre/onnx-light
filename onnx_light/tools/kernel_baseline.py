@@ -45,10 +45,12 @@ __all__ = [
 ]
 
 # ``(label, size)`` pairs shared by every benchmark case unless overridden.
-# ``size`` is the flat element count for elementwise cases and the square
-# matrix dimension (M = N = K) for ``Gemm``.
+# ``size`` is the flat element count for elementwise cases, the square matrix
+# dimension for ``Gemm``, and the channel count for global pooling.
 _DEFAULT_SHAPES = (("small", 1_000), ("medium", 100_000), ("large", 4_000_000))
 _GEMM_SHAPES = (("small", 32), ("medium", 256), ("large", 1024))
+# Global pooling sizes are channel counts; each channel reduces 256 spatial values.
+_GLOBAL_POOL_SHAPES = (("small", 8), ("medium", 128), ("large", 1024))
 
 # Representative kernels: one memory-bound unary float kernel with an existing
 # tuning schema (Abs), one compute-bound tunable kernel (Gemm), and one
@@ -58,6 +60,15 @@ BENCHMARK_CORPUS: tuple[dict[str, Any], ...] = (
     {"op_type": "Not", "arity": "unary", "element_type": "BOOL", "shapes": _DEFAULT_SHAPES},
     {"op_type": "Where", "arity": "where", "element_type": "BOOL", "shapes": _DEFAULT_SHAPES},
     {"op_type": "Gemm", "arity": "gemm", "element_type": "FLOAT", "shapes": _GEMM_SHAPES},
+    *(
+        {
+            "op_type": op,
+            "arity": "global_pool",
+            "element_type": "FLOAT",
+            "shapes": _GLOBAL_POOL_SHAPES,
+        }
+        for op in ("GlobalAveragePool", "GlobalMaxPool", "GlobalLpPool")
+    ),
 )
 
 # ``(label, num_threads)`` CPU policies. ``num_threads = 1`` forces the
@@ -132,6 +143,13 @@ def _make_model(case: dict[str, Any], size: int):
             ],
             [oh.make_tensor_value_info("Y", elem_type, [size, size])],
         )
+    elif case["arity"] == "global_pool":
+        graph = oh.make_graph(
+            [oh.make_node(case["op_type"], ["X"], ["Y"])],
+            f"{case['op_type']}_baseline",
+            [oh.make_tensor_value_info("X", elem_type, [1, size, 256])],
+            [oh.make_tensor_value_info("Y", elem_type, [1, size, 1])],
+        )
     else:
         raise ValueError(f"Unsupported benchmark arity: {case['arity']!r}")
     model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
@@ -154,6 +172,8 @@ def _make_inputs(case: dict[str, Any], size: int, seed: int) -> dict[str, numpy.
         return {"C": condition, "X": make_array((size,)), "Z": make_array((size,))}
     if case["arity"] == "gemm":
         return {"A": make_array((size, size)), "B": make_array((size, size))}
+    if case["arity"] == "global_pool":
+        return {"X": make_array((1, size, 256))}
     raise ValueError(f"Unsupported benchmark arity: {case['arity']!r}")
 
 

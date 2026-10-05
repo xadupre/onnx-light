@@ -651,6 +651,57 @@ TEST(KernelClass, ReduceProdRejectsNonFloatData) {
 
 // ── ReduceMean ────────────────────────────────────────────────────────────
 
+TEST(KernelClass, ReduceMeanParallelLeadingSlicesMatchSerial) {
+  core::runtime::CpuExecutionPolicy policy;
+  policy.num_threads = 2;
+  policy.affinity_policy = core::runtime::CpuAffinityPolicy::kNone;
+  const auto executor = core::runtime::GlobalCpuExecutorRegistry().Acquire(policy);
+  const core::runtime::CpuExecutorScope executor_scope(executor.get());
+  onnx_kernels::RegisterKernelFunctions();
+  ReduceMean mean{KernelContext{DefaultOpset(18)}};
+  for (int32_t dtype : {core::runtime::DataType::FLOAT, core::runtime::DataType::DOUBLE,
+                        core::runtime::DataType::FLOAT16, core::runtime::DataType::BFLOAT16}) {
+    ASSERT_NE(core::runtime::GetKernelTuningRegistry().FindSchema(mean.TuningKey(dtype)), nullptr);
+  }
+
+  std::vector<float> values(2 * 4 * 257);
+  for (size_t i = 0; i < values.size(); ++i)
+    values[i] = static_cast<float>(static_cast<int>(i % 17) - 8) / 7;
+  const Tensor data = Tensor::FromFloat("", {2, 4, 257}, values);
+  const Tensor last_axis = Tensor::FromInt64("", {1}, {-1});
+  const Tensor middle_axis = Tensor::FromInt64("", {1}, {1});
+  const Tensor first_axis = Tensor::FromInt64("", {1}, {0});
+  const Tensor serial = mean(data, last_axis, false);
+  const Tensor serial_middle = mean(data, middle_axis, true);
+  const Tensor serial_first = mean(data, first_axis, false);
+  mean.Configure({mean.TuningKey(core::runtime::DataType::FLOAT),
+                  {{"parallel.minimum_elements", int64_t{1}}}});
+  core::runtime::ParallelRegionCollector collector(8);
+  const core::runtime::ParallelRegionCollectorScope collector_scope(&collector);
+  EXPECT_EQ(mean(data, last_axis, false).data, serial.data);
+  ASSERT_EQ(collector.events().size(), 1u);
+  EXPECT_EQ(collector.events()[0].admitted_threads, 2);
+  EXPECT_EQ(mean(data, middle_axis, true).data, serial_middle.data);
+  ASSERT_EQ(collector.events().size(), 2u);
+  EXPECT_EQ(collector.events()[1].admitted_threads, 2);
+  EXPECT_EQ(mean(data, first_axis, false).data, serial_first.data);
+  ASSERT_EQ(collector.events().size(), 3u);
+  EXPECT_EQ(collector.events()[2].admitted_threads, 1);
+
+  std::vector<double> doubles(values.begin(), values.end());
+  const Tensor double_data = Tensor::FromDouble("", {2, 4, 257}, doubles);
+  mean.Configure({mean.TuningKey(core::runtime::DataType::DOUBLE),
+                  {{"parallel.minimum_elements", std::numeric_limits<int64_t>::max()}}});
+  const Tensor double_serial = mean(double_data, last_axis, false);
+  mean.Configure({mean.TuningKey(core::runtime::DataType::DOUBLE),
+                  {{"parallel.minimum_elements", int64_t{1}}}});
+  EXPECT_EQ(mean(double_data, last_axis, false).data, double_serial.data);
+  const Tensor empty = Tensor::FromFloat("", {2, 0, 257}, {});
+  EXPECT_EQ(mean(empty, last_axis, false).element_count(), 0);
+  const Tensor empty_reduced = Tensor::FromFloat("", {2, 257, 0}, {});
+  EXPECT_TRUE(std::isnan(mean(empty_reduced, last_axis, false).AsFloat()[0]));
+}
+
 TEST(KernelClass, ReduceMeanDefaultAxesReducesAll) {
   const KernelContext ctx{DefaultOpset(18)};
   ReduceMean reduce_mean{ctx};

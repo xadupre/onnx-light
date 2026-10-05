@@ -67,6 +67,12 @@ BENCHMARK_CORPUS: tuple[dict[str, Any], ...] = (
         "element_type": "FLOAT",
         "shapes": _REDUCE_SUM_SHAPES,
     },
+    {
+        "op_type": "ReduceMean",
+        "arity": "reduce_sum",
+        "element_type": "FLOAT",
+        "shapes": _REDUCE_SUM_SHAPES,
+    },
     *(
         {
             "op_type": op,
@@ -159,8 +165,8 @@ def _make_model(case: dict[str, Any], size: int):
         )
     elif case["arity"] == "reduce_sum":
         graph = oh.make_graph(
-            [oh.make_node("ReduceSum", ["X", "axes"], ["Y"], keepdims=0)],
-            "ReduceSum_baseline",
+            [oh.make_node(case["op_type"], ["X", "axes"], ["Y"], keepdims=0)],
+            f"{case['op_type']}_baseline",
             [
                 oh.make_tensor_value_info("X", elem_type, [size, 256]),
                 oh.make_tensor_value_info("axes", TensorProto.INT64, [1]),

@@ -297,11 +297,12 @@ public:
 /// ``axes`` may either be omitted (reduce-all unless
 /// ``noop_with_empty_axes == true``) or supplied as an int64 tensor (opset
 /// 18+). Negative axes follow ONNX semantics.
-class ReduceMean : public KernelBase {
+class ReduceMean : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:ReduceMean";
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
+  explicit ReduceMean(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
 
   Tensor operator()(const Tensor &data, bool keepdims = true, bool noop_with_empty_axes = false,
                     RuntimeContext *rt = nullptr) const;

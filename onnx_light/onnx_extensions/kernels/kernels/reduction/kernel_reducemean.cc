@@ -6,8 +6,10 @@
 
 #include "onnx_core/runtime/kernels/float16_promote.h"
 #include "onnx_core/runtime/kernels/node_helpers.h"
+#include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstring>
 #include <limits>
@@ -17,6 +19,12 @@
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
+
+constexpr uint32_t kTuningAbi = 1;
+constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
+constexpr std::array<int32_t, 4> kSupportedTypes = {
+    static_cast<int32_t>(DataType::FLOAT), static_cast<int32_t>(DataType::DOUBLE),
+    static_cast<int32_t>(DataType::FLOAT16), static_cast<int32_t>(DataType::BFLOAT16)};
 
 int64_t ResolveAxis(int64_t axis, int64_t rank) {
   const int64_t resolved = axis < 0 ? axis + rank : axis;
@@ -59,7 +67,7 @@ void ValidateFloat(const Tensor &t, const char *name) {
 // dimensions. Empty reductions produce NaN rather than a spurious zero mean.
 template <typename T>
 void MeanReduceTyped(const Tensor &data, const Shape &is_reduced,
-                     const Shape &output_shape_noreduce, Tensor &output) {
+                     const Shape &output_shape_noreduce, Tensor &output, int64_t minimum_elements) {
   const Shape out_strides = RowMajorStrides(output_shape_noreduce);
   T *py = output.As<T>();
   const int64_t out_count = output.element_count();
@@ -78,26 +86,49 @@ void MeanReduceTyped(const Tensor &data, const Shape &is_reduced,
 
   const T *px = data.As<T>();
   const int64_t rank = static_cast<int64_t>(data.shape.size());
-  Shape idx;
-  idx.assign(static_cast<size_t>(rank), 0);
   const int64_t total = data.element_count();
-  for (int64_t i = 0; i < total; ++i) {
-    int64_t out_offset = 0;
-    size_t out_dim = 0;
-    for (int64_t d = 0; d < rank; ++d) {
-      if (!is_reduced[static_cast<size_t>(d)]) {
-        out_offset += idx[static_cast<size_t>(d)] * out_strides[out_dim];
-        ++out_dim;
-      }
+  if (total > 0) {
+    int64_t prefix_count = 1;
+    size_t prefix_rank = 0;
+    while (prefix_rank < data.shape.size() && !is_reduced[prefix_rank]) {
+      prefix_count *= data.shape[prefix_rank++];
     }
-    py[out_offset] += px[i];
-    for (int64_t d = rank - 1; d >= 0; --d) {
-      ++idx[static_cast<size_t>(d)];
-      if (idx[static_cast<size_t>(d)] < data.shape[static_cast<size_t>(d)]) {
-        break;
+    const int64_t block = total / prefix_count;
+    const int64_t grain =
+        std::max<int64_t>(1, minimum_elements / block + (minimum_elements % block != 0));
+    const auto reduce_range = [&](int64_t begin, int64_t end) {
+      Shape idx;
+      idx.assign(static_cast<size_t>(rank), 0);
+      int64_t prefix = begin;
+      for (size_t d = prefix_rank; d-- > 0;) {
+        idx[d] = prefix % data.shape[d];
+        prefix /= data.shape[d];
       }
-      idx[static_cast<size_t>(d)] = 0;
-    }
+      for (int64_t i = begin * block; i < end * block; ++i) {
+        int64_t out_offset = 0;
+        size_t out_dim = 0;
+        for (int64_t d = 0; d < rank; ++d) {
+          if (!is_reduced[static_cast<size_t>(d)]) {
+            out_offset += idx[static_cast<size_t>(d)] * out_strides[out_dim];
+            ++out_dim;
+          }
+        }
+        py[out_offset] += px[i];
+        for (int64_t d = rank - 1; d >= 0; --d) {
+          ++idx[static_cast<size_t>(d)];
+          if (idx[static_cast<size_t>(d)] < data.shape[static_cast<size_t>(d)]) {
+            break;
+          }
+          idx[static_cast<size_t>(d)] = 0;
+        }
+      }
+    };
+    const auto dst = reinterpret_cast<uintptr_t>(output.mutable_bytes());
+    const auto src = reinterpret_cast<uintptr_t>(data.bytes());
+    const bool overlaps =
+        dst >= src ? dst - src < data.size_bytes() : src - dst < output.size_bytes();
+    ParallelFor(prefix_count, overlaps ? std::numeric_limits<int64_t>::max() : grain, reduce_range,
+                "ReduceMean");
   }
 
   for (int64_t i = 0; i < out_count; ++i) {
@@ -107,24 +138,33 @@ void MeanReduceTyped(const Tensor &data, const Shape &is_reduced,
 }
 
 void MeanReduce(const Tensor &data, const Shape &is_reduced, const Shape &output_shape_noreduce,
-                Tensor &output) {
+                Tensor &output, int64_t minimum_elements) {
   if (core::runtime::IsHalfPrecision(data.data_type)) {
     Tensor promoted = core::runtime::PromoteToFloat32(data);
     Tensor reduced = MakeOutputTensor(DataType::FLOAT, output.shape,
                                       output.element_count() * sizeof(float), nullptr);
-    MeanReduceTyped<float>(promoted, is_reduced, output_shape_noreduce, reduced);
+    MeanReduceTyped<float>(promoted, is_reduced, output_shape_noreduce, reduced, minimum_elements);
     Tensor demoted = core::runtime::DemoteFromFloat32(reduced, data.data_type);
     if (output.size_bytes() > 0) {
       std::memcpy(output.mutable_bytes(), demoted.bytes(), output.size_bytes());
     }
   } else if (data.data_type == DataType::DOUBLE) {
-    MeanReduceTyped<double>(data, is_reduced, output_shape_noreduce, output);
+    MeanReduceTyped<double>(data, is_reduced, output_shape_noreduce, output, minimum_elements);
   } else {
-    MeanReduceTyped<float>(data, is_reduced, output_shape_noreduce, output);
+    MeanReduceTyped<float>(data, is_reduced, output_shape_noreduce, output, minimum_elements);
   }
 }
 
 } // namespace
+
+ReduceMean::ReduceMean(const KernelContext &ctx)
+    : tuning::ParallelTunableKernel(ctx, "ReduceMean", kSupportedTypes, kPortableParallelMinimum,
+                                    kTuningAbi) {}
+
+void ReduceMean::RegisterTuningSchemas() {
+  tuning::RegisterParallelTuningSchemas("ReduceMean", kSupportedTypes, kPortableParallelMinimum,
+                                        kTuningAbi);
+}
 
 Tensor ReduceMean::operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes,
                               RuntimeContext *rt) const {
@@ -174,7 +214,7 @@ void ReduceMean::operator()(const Tensor &data, bool keepdims, bool noop_with_em
     return;
   }
   const Shape out_shape_noreduce = ComputeOutputShape(data.shape, is_reduced, /*keepdims=*/false);
-  MeanReduce(data, is_reduced, out_shape_noreduce, output);
+  MeanReduce(data, is_reduced, out_shape_noreduce, output, tuning().parallel_minimum_elements);
 }
 
 Tensor ReduceMean::operator()(const Tensor &data, const Tensor &axes, bool keepdims,
@@ -248,7 +288,7 @@ void ReduceMean::operator()(const Tensor &data, const Tensor &axes, bool keepdim
     return;
   }
   const Shape out_shape_noreduce = ComputeOutputShape(data.shape, is_reduced, /*keepdims=*/false);
-  MeanReduce(data, is_reduced, out_shape_noreduce, output);
+  MeanReduce(data, is_reduced, out_shape_noreduce, output, tuning().parallel_minimum_elements);
 }
 
 void ReduceMean::Run(RuntimeContext &rt) {

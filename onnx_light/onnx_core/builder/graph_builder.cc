@@ -393,6 +393,14 @@ void GraphBuilder::SeedShape(const std::string &name, SymTensor tensor) {
   compute_.Shapes().Set(name, std::move(tensor));
 }
 
+void GraphBuilder::set_device(Device device) {
+  if (device_ == device) {
+    return;
+  }
+  device_ = device;
+  compute_.ComputePeakMemory(BuildGraph(), device_);
+}
+
 void GraphBuilder::SetStructTypes(const utils::RepeatedProtoField<StructTypeProto> &types) {
   compute_.Shapes().SetStructTypes(types);
   for (const auto &child : subgraphs_) {
@@ -413,15 +421,23 @@ void GraphBuilder::MakeStructType(const StructTypeProto &type) {
   SetStructTypes(declarations);
 }
 
+void GraphBuilder::RebuildMetadata() {
+  GraphProto graph = BuildGraph();
+  const auto tags = compute_.ComputeValueAndNodeTags(graph);
+  compute_.ComputeConstants(graph);
+  compute_.ComputeInPlaceReuseGraph(graph, compute_.Shapes(), /*allow_input_overwrite=*/false,
+                                    tags.first);
+  compute_.ComputePeakMemory(graph, device_);
+}
+
 void GraphBuilder::RebuildStructuredState() {
-  metadata_dirty_ = true;
-  peak_memory_dirty_ = true;
   const bool structured =
       !Shapes().StructTypes().empty() || !encoded_initializers_.empty() ||
       !paged_cache_initializers_.empty() ||
       std::any_of(Shapes().Types().begin(), Shapes().Types().end(),
                   [](const auto &entry) { return HasStructuredType(entry.second); });
   if (!structured) {
+    RebuildMetadata();
     return;
   }
   const auto previous = Shapes();
@@ -499,6 +515,7 @@ void GraphBuilder::RebuildStructuredState() {
   for (const auto &child : subgraphs_) {
     child->RebuildStructuredState();
   }
+  RebuildMetadata();
 }
 
 const std::string &GraphBuilder::MakeEncodedInitializer(const EncodedValueProto &value) {
@@ -1280,7 +1297,7 @@ GraphBuilder::MakeNode(const std::string &op_type, const std::vector<std::string
   CollectNodeReferences(stored, references);
   compute_.AppendNodeReuse(nodes_, node_index, compute_.Shapes(), references);
   compute_.AppendNodeConstant(stored, node_index);
-  peak_memory_dirty_ = true;
+  compute_.AppendNodePeakMemory(stored, node_index, device_);
 
   return resolved_outputs;
 }
@@ -1830,8 +1847,7 @@ std::size_t GraphBuilder::MoveShapeAndSizeNodesImpl(bool recursive) {
     ordered.push_back(std::move(nodes_[index]));
   }
   nodes_ = std::move(ordered);
-  metadata_dirty_ = true;
-  peak_memory_dirty_ = true;
+  RebuildMetadata();
 
   return moved + local_moved;
 }
@@ -2104,11 +2120,16 @@ std::size_t GraphBuilder::InlineLocalFunctions(
       }
     }
   }
+  if (inlined != 0) {
+    RebuildStructuredState();
+  }
   return inlined;
 }
 
 std::size_t GraphBuilder::ConstantFold(const ConstantFoldingOptions &options) {
-  return ConstantFoldImpl(options, nullptr);
+  const auto removed = ConstantFoldImpl(options, nullptr);
+  RebuildStructuredState();
+  return removed;
 }
 
 std::size_t
@@ -2790,10 +2811,10 @@ void GraphBuilder::SortNodesTopologically() {
   if (order.size() != count) {
     throw BuilderError("GraphBuilder: cyclic node dependencies prevent topological ordering.");
   }
+  bool reordered = false;
   for (std::size_t i = 0; i < count; ++i) {
     if (order[i] != i) {
-      metadata_dirty_ = true;
-      peak_memory_dirty_ = true;
+      reordered = true;
       break;
     }
   }
@@ -2811,6 +2832,9 @@ void GraphBuilder::SortNodesTopologically() {
     for (std::size_t i = 0; i < node.output().size(); ++i) {
       available.insert(node.output(i));
     }
+  }
+  if (reordered) {
+    RebuildMetadata();
   }
 }
 
@@ -2853,16 +2877,11 @@ template <typename Proto> void GraphBuilder::Finalize(Proto &graph) {
       }
     }
   }
-  if (metadata_dirty_ || compute_.Size() != graph.node().size()) {
-    const auto tags = compute_.ComputeValueAndNodeTags(graph);
-    compute_.ComputeInPlaceReuseGraph(graph, compute_.Shapes(), /*allow_input_overwrite=*/false,
-                                      tags.first);
-    metadata_dirty_ = false;
-  }
-  if (peak_memory_dirty_ || compute_.PeakMemory().size() != graph.node().size()) {
-    compute_.ComputePeakMemory(graph, device_);
-    peak_memory_dirty_ = false;
-  }
+  EXT_ENFORCE_INVALID(compute_.Size() == graph.node().size(),
+                      "GraphBuilder::Finalize: metadata is not aligned with the graph.");
+  EXT_ENFORCE_INVALID(
+      compute_.PeakMemory().size() == graph.node().size(),
+      "GraphBuilder::Finalize: peak-memory metadata is not aligned with the graph.");
   // Writes inferred shapes (value_info), in-place / release-after / shape-tag
   // metadata and per-node peak memory.
   if constexpr (std::is_same_v<Proto, GraphProto>) {

@@ -214,6 +214,12 @@ void ComputeContext::AppendNodeConstant(const NodeProto &node, std::size_t node_
   }
 }
 
+void ComputeContext::ComputeConstants(const GraphProto &graph) {
+  auto constants = InferConstants(graph);
+  constant_values_ = std::move(constants.first);
+  node_constant_ = std::move(constants.second);
+}
+
 void ComputeContext::AppendNodeTags(const utils::RepeatedProtoField<NodeProto> &nodes,
                                     std::size_t node_index) {
   if (node_tags_.size() <= node_index) {
@@ -449,14 +455,31 @@ void ComputeContext::AppendNodeReuse(const utils::RepeatedProtoField<NodeProto> 
   }
 
   // Append exactly one entry to every per-node vector so they stay aligned with
-  // reuse_ (Size()). The per-node memory profile is only meaningful once the
-  // whole graph is known, so it is left empty here and recomputed by the
-  // finalizers' whole-graph ComputeInPlaceReuseGraph pass.
+  // reuse_ (Size()). Node memory profiles are populated by whole-graph analysis;
+  // the incrementally maintained serialized annotations use the vectors above.
   reuse_.push_back(std::move(matches));
   release_after_.push_back(std::move(release_after));
   not_used_after_.push_back(std::move(not_used_after));
   release_after_shape_tagged_.push_back(std::move(release_after_shape_tagged));
   memory_.push_back(MakeEmptyNodeMemoryProfile());
+}
+
+void ComputeContext::AppendNodePeakMemory(const NodeProto &node, std::size_t node_index,
+                                          Device device) {
+  if (peak_memory_.size() <= node_index) {
+    peak_memory_.resize(node_index + 1, 0);
+  }
+  std::vector<SymShape> input_shapes;
+  input_shapes.reserve(node.input().size());
+  for (const auto &input_name : node.input()) {
+    if (!input_name.empty() && shapes_.Has(input_name)) {
+      input_shapes.push_back(shapes_.Get(input_name).Shape());
+    } else {
+      input_shapes.emplace_back();
+    }
+  }
+  peak_memory_[node_index] =
+      shapes::ComputePeakMemory(node.domain(), node.op_type(), device, input_shapes);
 }
 
 void ComputeContext::ComputeInPlaceReuseGraph(
@@ -828,6 +851,7 @@ ComputeContext::ComputePeakMemoryNodes(const utils::RepeatedProtoField<NodeProto
 void ComputeContext::Compute(const GraphProto &graph, Device device, bool allow_input_overwrite) {
   ComputeShapes(graph);
   const auto tags = ComputeValueAndNodeTags(graph);
+  ComputeConstants(graph);
   ComputeInPlaceReuseGraph(graph, shapes_, allow_input_overwrite, tags.first);
   ComputePeakMemory(graph, device);
 }
@@ -837,6 +861,7 @@ void ComputeContext::Compute(const ModelProto &model, Device device, bool allow_
   ComputeShapes(model, prefill_with_value_info_output);
   const GraphProto &graph = model.graph();
   const auto tags = ComputeValueAndNodeTags(graph);
+  ComputeConstants(graph);
   ComputeInPlaceReuseGraph(graph, shapes_, allow_input_overwrite, tags.first);
   ComputePeakMemory(graph, device);
 }

@@ -619,12 +619,7 @@ public:
   std::string ToString() const;
 
   /// Logical target for pattern matching, constant folding and peak-memory analysis.
-  void set_device(Device device) noexcept {
-    if (device_ != device) {
-      device_ = device;
-      peak_memory_dirty_ = true;
-    }
-  }
+  void set_device(Device device);
   Device device() const noexcept { return device_; }
 
   // ── Finalization ─────────────────────────────────────────────────────
@@ -744,6 +739,7 @@ private:
   template <typename Tensor> const std::string &MakeInitializerImpl(Tensor &&tensor);
 
   void SetStructTypes(const utils::RepeatedProtoField<StructTypeProto> &types);
+  void RebuildMetadata();
   void RebuildStructuredState();
   std::size_t DeduplicateEncodedInitializers(std::vector<const EncodedValueProto *> &index,
                                              std::unordered_map<std::string, std::string> &rename);
@@ -784,9 +780,7 @@ private:
   // inline (GRAPH / GRAPHS attribute) or through a builder ``*_ref`` reference.
   static bool NodeCarriesSubgraph(const NodeProto &node);
 
-  // Writes the incrementally inferred shapes, types, and metadata into
-  // ``graph``. Whole-graph analyses run only after a rewrite or reordering
-  // invalidated the incremental state.
+  // Writes the already inferred shapes, types, and metadata into ``graph``.
   template <typename Proto> void Finalize(Proto &graph);
 
   // Returns the nested builder named ``name`` in ``builders`` or nullptr.
@@ -806,8 +800,6 @@ private:
   utils::RepeatedProtoField<StringStringEntryProto> metadata_;
   std::optional<std::string> doc_string_;
   GraphBuilder *parent_ = nullptr;
-  bool metadata_dirty_ = false;
-  bool peak_memory_dirty_ = true;
   SchemaLookupFn schema_lookup_;
   // Lazily-built lookup table: op_type -> normalised domain -> schema history.
   std::unordered_map<std::string, std::unordered_map<std::string, std::vector<LightOpSchema>>>

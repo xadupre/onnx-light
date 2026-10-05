@@ -257,6 +257,9 @@ public:
     return constant_values_.count(name) != 0;
   }
 
+  /// Recomputes constant values and per-node classifications for ``graph``.
+  void ComputeConstants(const GraphProto &graph);
+
   /// Read-only access to the incremental per-node constant classifications. One
   /// entry per appended node, in graph order.
   const std::vector<ConstantInfo> &NodeConstant() const noexcept { return node_constant_; }
@@ -379,6 +382,11 @@ public:
   /// the per-node result vectors so they stay aligned with :cpp:func:`Size`.
   void AppendNodeReuse(const utils::RepeatedProtoField<NodeProto> &nodes, std::size_t node_index,
                        const ShapesContext &ctx, const std::vector<std::string> &references);
+
+  /// Appends the peak-memory estimate for a newly appended node, using the
+  /// shapes already inferred into the owned :cpp:class:`ShapesContext`.
+  void AppendNodePeakMemory(const NodeProto &node, std::size_t node_index,
+                            Device device = Device::kUndefined);
 
   /// Number of nodes for which reuse has been computed (one entry per node of
   /// the analysed graph, in ``graph.node()`` order). Zero before

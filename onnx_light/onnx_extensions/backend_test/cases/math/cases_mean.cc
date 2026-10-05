@@ -175,6 +175,20 @@ void RegisterMeanCases(std::vector<TestCase> &registry, TestMode mode) {
         return node;
       };
 
+      Expect(registry, make_node(2), "test_cc_mean_scalar_first" + suffix, {DefaultOpset(version)},
+             [make_tensor]() -> IoData {
+               return IoData{
+                   {make_tensor({}, {2.0f}), make_tensor({2, 2}, {2.0f, 4.0f, 6.0f, 8.0f})},
+                   {make_tensor({2, 2}, {2.0f, 3.0f, 4.0f, 5.0f})}};
+             });
+
+      Expect(registry, make_node(2), "test_cc_mean_scalar_last" + suffix, {DefaultOpset(version)},
+             [make_tensor]() -> IoData {
+               return IoData{
+                   {make_tensor({2, 2}, {2.0f, 4.0f, 6.0f, 8.0f}), make_tensor({}, {2.0f})},
+                   {make_tensor({2, 2}, {2.0f, 3.0f, 4.0f, 5.0f})}};
+             });
+
       Expect(registry, make_node(3), "test_cc_mean_scalar_row_column" + suffix,
              {DefaultOpset(version)}, [make_tensor]() -> IoData {
                return IoData{{make_tensor({}, {3.0f}), make_tensor({3}, {3.0f, 6.0f, 9.0f}),

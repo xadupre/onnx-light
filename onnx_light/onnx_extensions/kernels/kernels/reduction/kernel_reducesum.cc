@@ -5,11 +5,14 @@
 #include "onnx_extensions/kernels/kernels/reduction/include_reduction_kernels.h"
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
+#include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
@@ -17,6 +20,12 @@
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
+
+constexpr uint32_t kTuningAbi = 1;
+constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
+constexpr std::array<int32_t, 3> kSupportedTypes = {static_cast<int32_t>(DataType::FLOAT),
+                                                    static_cast<int32_t>(DataType::DOUBLE),
+                                                    static_cast<int32_t>(DataType::INT64)};
 
 // Resolves a possibly-negative axis (ONNX semantics: ``axis`` in
 // ``[-rank, rank - 1]``) to a non-negative axis. Throws on out-of-range.
@@ -60,7 +69,7 @@ Shape RowMajorStrides(const Shape &shape) {
 // keepdims layout reshape the same byte buffer afterwards.
 template <typename T>
 void SumReduceT(const Tensor &data, const Shape &is_reduced, const Shape &output_shape_noreduce,
-                Tensor &output) {
+                Tensor &output, int64_t minimum_elements) {
   const Shape out_strides = RowMajorStrides(output_shape_noreduce);
 
   // Zero-initialize the output bytes so we can accumulate into it.
@@ -69,47 +78,71 @@ void SumReduceT(const Tensor &data, const Shape &is_reduced, const Shape &output
   const T *px = reinterpret_cast<const T *>(data.bytes());
   T *py = reinterpret_cast<T *>(output.mutable_bytes());
 
-  // Iterate over every element of the input using a multi-dimensional index.
-  const int64_t rank = static_cast<int64_t>(data.shape.size());
-  Shape idx;
-  idx.assign(static_cast<size_t>(rank), 0);
-  const int64_t total = data.element_count();
-  for (int64_t i = 0; i < total; ++i) {
-    // Compute the output offset by walking through the non-reduced dims.
-    int64_t out_offset = 0;
-    size_t out_dim = 0;
-    for (int64_t d = 0; d < rank; ++d) {
-      if (!is_reduced[static_cast<size_t>(d)]) {
-        out_offset += idx[static_cast<size_t>(d)] * out_strides[out_dim];
-        ++out_dim;
-      }
-    }
-    if constexpr (std::is_same_v<T, int64_t>) {
-      py[out_offset] = std::bit_cast<int64_t>(std::bit_cast<uint64_t>(py[out_offset]) +
-                                              std::bit_cast<uint64_t>(px[i]));
-    } else {
-      py[out_offset] += px[i];
-    }
-
-    // Increment the multi-dimensional index (row-major / C order).
-    for (int64_t d = rank - 1; d >= 0; --d) {
-      ++idx[static_cast<size_t>(d)];
-      if (idx[static_cast<size_t>(d)] < data.shape[static_cast<size_t>(d)]) {
-        break;
-      }
-      idx[static_cast<size_t>(d)] = 0;
-    }
+  // Only a non-reduced leading prefix gives disjoint contiguous output slices.
+  int64_t prefix_count = 1;
+  size_t prefix_rank = 0;
+  while (prefix_rank < data.shape.size() && !is_reduced[prefix_rank]) {
+    prefix_count *= data.shape[prefix_rank++];
   }
+  const int64_t total = data.element_count();
+  if (total == 0) {
+    return;
+  }
+  const int64_t block = total / prefix_count;
+  const int64_t grain =
+      std::max<int64_t>(1, minimum_elements / block + (minimum_elements % block != 0));
+  const int64_t rank = static_cast<int64_t>(data.shape.size());
+  const auto reduce_range = [&](int64_t begin, int64_t end) {
+    Shape idx;
+    idx.assign(static_cast<size_t>(rank), 0);
+    int64_t prefix = begin;
+    for (size_t d = prefix_rank; d-- > 0;) {
+      idx[d] = prefix % data.shape[d];
+      prefix /= data.shape[d];
+    }
+    for (int64_t i = begin * block; i < end * block; ++i) {
+      // Compute the output offset by walking through the non-reduced dims.
+      int64_t out_offset = 0;
+      size_t out_dim = 0;
+      for (int64_t d = 0; d < rank; ++d) {
+        if (!is_reduced[static_cast<size_t>(d)]) {
+          out_offset += idx[static_cast<size_t>(d)] * out_strides[out_dim];
+          ++out_dim;
+        }
+      }
+      if constexpr (std::is_same_v<T, int64_t>) {
+        py[out_offset] = std::bit_cast<int64_t>(std::bit_cast<uint64_t>(py[out_offset]) +
+                                                std::bit_cast<uint64_t>(px[i]));
+      } else {
+        py[out_offset] += px[i];
+      }
+
+      // Increment the multi-dimensional index (row-major / C order).
+      for (int64_t d = rank - 1; d >= 0; --d) {
+        ++idx[static_cast<size_t>(d)];
+        if (idx[static_cast<size_t>(d)] < data.shape[static_cast<size_t>(d)]) {
+          break;
+        }
+        idx[static_cast<size_t>(d)] = 0;
+      }
+    }
+  };
+  const auto dst = reinterpret_cast<uintptr_t>(output.mutable_bytes());
+  const auto src = reinterpret_cast<uintptr_t>(data.bytes());
+  const bool overlaps =
+      dst >= src ? dst - src < data.size_bytes() : src - dst < output.size_bytes();
+  ParallelFor(prefix_count, overlaps ? std::numeric_limits<int64_t>::max() : grain, reduce_range,
+              "ReduceSum");
 }
 
 void SumReduce(const Tensor &data, const Shape &is_reduced, const Shape &output_shape_noreduce,
-               Tensor &output) {
+               Tensor &output, int64_t minimum_elements) {
   if (data.data_type == static_cast<int32_t>(DataType::DOUBLE)) {
-    SumReduceT<double>(data, is_reduced, output_shape_noreduce, output);
+    SumReduceT<double>(data, is_reduced, output_shape_noreduce, output, minimum_elements);
   } else if (data.data_type == static_cast<int32_t>(DataType::INT64)) {
-    SumReduceT<int64_t>(data, is_reduced, output_shape_noreduce, output);
+    SumReduceT<int64_t>(data, is_reduced, output_shape_noreduce, output, minimum_elements);
   } else {
-    SumReduceT<float>(data, is_reduced, output_shape_noreduce, output);
+    SumReduceT<float>(data, is_reduced, output_shape_noreduce, output, minimum_elements);
   }
 }
 
@@ -121,6 +154,15 @@ void ValidateReduceSumType(const Tensor &t, const char *name) {
 }
 
 } // namespace
+
+ReduceSum::ReduceSum(const KernelContext &ctx)
+    : tuning::ParallelTunableKernel(ctx, "ReduceSum", kSupportedTypes, kPortableParallelMinimum,
+                                    kTuningAbi) {}
+
+void ReduceSum::RegisterTuningSchemas() {
+  tuning::RegisterParallelTuningSchemas("ReduceSum", kSupportedTypes, kPortableParallelMinimum,
+                                        kTuningAbi);
+}
 
 Tensor ReduceSum::operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes,
                              RuntimeContext *rt) const {
@@ -179,7 +221,7 @@ void ReduceSum::operator()(const Tensor &data, bool keepdims, bool noop_with_emp
   }
 
   const Shape out_shape_noreduce = ComputeOutputShape(data.shape, is_reduced, /*keepdims=*/false);
-  SumReduce(data, is_reduced, out_shape_noreduce, output);
+  SumReduce(data, is_reduced, out_shape_noreduce, output, tuning().parallel_minimum_elements);
 }
 
 Tensor ReduceSum::operator()(const Tensor &data, const Tensor &axes, bool keepdims,
@@ -257,7 +299,7 @@ void ReduceSum::operator()(const Tensor &data, const Tensor &axes, bool keepdims
   }
 
   const Shape out_shape_noreduce = ComputeOutputShape(data.shape, is_reduced, /*keepdims=*/false);
-  SumReduce(data, is_reduced, out_shape_noreduce, output);
+  SumReduce(data, is_reduced, out_shape_noreduce, output, tuning().parallel_minimum_elements);
 }
 
 void ReduceSum::Run(RuntimeContext &rt) {

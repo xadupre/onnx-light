@@ -7,6 +7,7 @@
 #include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_core/runtime/memory/simple_tensor.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_extensions/kernels/tuning/portable_parallel_tuning.h"
 
 #include <cstdint>
 
@@ -104,11 +105,12 @@ public:
 /// optional ``axes`` int64 tensor. If ``axes`` is omitted (or empty), the
 /// kernel reduces over all dimensions unless ``noop_with_empty_axes`` is true
 /// in which case it performs an identity copy.
-class ReduceSum : public KernelBase {
+class ReduceSum : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:ReduceSum";
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
+  explicit ReduceSum(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
 
   /// ``axes`` omitted: reduces over all dimensions of ``data`` (the default
   /// when ``noop_with_empty_axes`` is false) or returns a copy of ``data``

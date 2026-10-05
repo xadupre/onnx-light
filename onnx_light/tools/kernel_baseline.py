@@ -51,6 +51,7 @@ _DEFAULT_SHAPES = (("small", 1_000), ("medium", 100_000), ("large", 4_000_000))
 _GEMM_SHAPES = (("small", 32), ("medium", 256), ("large", 1024))
 # Global pooling sizes are channel counts; each channel reduces 256 spatial values.
 _GLOBAL_POOL_SHAPES = (("small", 8), ("medium", 128), ("large", 1024))
+_REDUCE_SUM_SHAPES = (("small", 8), ("medium", 128), ("large", 1024))
 
 # Representative kernels: one memory-bound unary float kernel with an existing
 # tuning schema (Abs), one compute-bound tunable kernel (Gemm), and one
@@ -60,6 +61,12 @@ BENCHMARK_CORPUS: tuple[dict[str, Any], ...] = (
     {"op_type": "Not", "arity": "unary", "element_type": "BOOL", "shapes": _DEFAULT_SHAPES},
     {"op_type": "Where", "arity": "where", "element_type": "BOOL", "shapes": _DEFAULT_SHAPES},
     {"op_type": "Gemm", "arity": "gemm", "element_type": "FLOAT", "shapes": _GEMM_SHAPES},
+    {
+        "op_type": "ReduceSum",
+        "arity": "reduce_sum",
+        "element_type": "FLOAT",
+        "shapes": _REDUCE_SUM_SHAPES,
+    },
     *(
         {
             "op_type": op,
@@ -150,6 +157,16 @@ def _make_model(case: dict[str, Any], size: int):
             [oh.make_tensor_value_info("X", elem_type, [1, size, 256])],
             [oh.make_tensor_value_info("Y", elem_type, [1, size, 1])],
         )
+    elif case["arity"] == "reduce_sum":
+        graph = oh.make_graph(
+            [oh.make_node("ReduceSum", ["X", "axes"], ["Y"], keepdims=0)],
+            "ReduceSum_baseline",
+            [
+                oh.make_tensor_value_info("X", elem_type, [size, 256]),
+                oh.make_tensor_value_info("axes", TensorProto.INT64, [1]),
+            ],
+            [oh.make_tensor_value_info("Y", elem_type, [size])],
+        )
     else:
         raise ValueError(f"Unsupported benchmark arity: {case['arity']!r}")
     model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
@@ -174,6 +191,8 @@ def _make_inputs(case: dict[str, Any], size: int, seed: int) -> dict[str, numpy.
         return {"A": make_array((size, size)), "B": make_array((size, size))}
     if case["arity"] == "global_pool":
         return {"X": make_array((1, size, 256))}
+    if case["arity"] == "reduce_sum":
+        return {"X": make_array((size, 256)), "axes": numpy.array([1], dtype=numpy.int64)}
     raise ValueError(f"Unsupported benchmark arity: {case['arity']!r}")
 
 

@@ -4,6 +4,9 @@
 
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/runtime/kernels/kernel_context.h"
+#include "onnx_core/runtime/kernels/parallel_for.h"
+#include "onnx_core/runtime/tuning/cpu_executor.h"
+#include "onnx_extensions/kernels/kernel_dispatch_table.h"
 #include "onnx_extensions/kernels/kernels/reduction/include_reduction_kernels.h"
 
 #include <gtest/gtest.h>
@@ -89,6 +92,65 @@ TEST(KernelClass, ReduceSumDefaultAxesReducesAll) {
   ASSERT_EQ(y.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 1}));
   EXPECT_FLOAT_EQ(y.AsFloat()[0], 21.0f);
+}
+
+TEST(KernelClass, ReduceSumParallelLeadingSlicesMatchSerial) {
+  core::runtime::CpuExecutionPolicy policy;
+  policy.num_threads = 2;
+  policy.affinity_policy = core::runtime::CpuAffinityPolicy::kNone;
+  const auto executor = core::runtime::GlobalCpuExecutorRegistry().Acquire(policy);
+  const core::runtime::CpuExecutorScope executor_scope(executor.get());
+  onnx_kernels::RegisterKernelFunctions();
+  ReduceSum sum{KernelContext{DefaultOpset(18)}};
+  for (int32_t dtype : {core::runtime::DataType::FLOAT, core::runtime::DataType::DOUBLE,
+                        core::runtime::DataType::INT64}) {
+    ASSERT_NE(core::runtime::GetKernelTuningRegistry().FindSchema(sum.TuningKey(dtype)), nullptr);
+  }
+
+  std::vector<float> values(2 * 4 * 257);
+  for (size_t i = 0; i < values.size(); ++i)
+    values[i] = static_cast<float>(static_cast<int>(i % 17) - 8) / 7;
+  const Tensor data = Tensor::FromFloat("", {2, 4, 257}, values);
+  const Tensor last_axis = Tensor::FromInt64("", {1}, {-1});
+  const Tensor middle_axis = Tensor::FromInt64("", {1}, {1});
+  const Tensor first_axis = Tensor::FromInt64("", {1}, {0});
+  const Tensor serial = sum(data, last_axis, false);
+  const Tensor serial_middle = sum(data, middle_axis, false);
+  const Tensor serial_first = sum(data, first_axis, false);
+  sum.Configure(
+      {sum.TuningKey(core::runtime::DataType::FLOAT), {{"parallel.minimum_elements", int64_t{1}}}});
+  core::runtime::ParallelRegionCollector collector(8);
+  const core::runtime::ParallelRegionCollectorScope collector_scope(&collector);
+  EXPECT_EQ(sum(data, last_axis, false).data, serial.data);
+  ASSERT_EQ(collector.events().size(), 1u);
+  EXPECT_EQ(collector.events()[0].admitted_threads, 2);
+  EXPECT_EQ(sum(data, middle_axis, false).data, serial_middle.data);
+  ASSERT_EQ(collector.events().size(), 2u);
+  EXPECT_EQ(collector.events()[1].admitted_threads, 2);
+  EXPECT_EQ(sum(data, first_axis, false).data, serial_first.data);
+  ASSERT_EQ(collector.events().size(), 3u);
+  EXPECT_EQ(collector.events()[2].admitted_threads, 1);
+
+  const Tensor empty = Tensor::FromFloat("", {2, 0, 257}, {});
+  EXPECT_EQ(sum(empty, last_axis, false).element_count(), 0);
+  std::vector<int64_t> integers(values.size());
+  for (size_t i = 0; i < integers.size(); ++i)
+    integers[i] = static_cast<int64_t>(i % 17) - 8;
+  const Tensor int_data = Tensor::FromInt64("", {2, 4, 257}, integers);
+  sum.Configure({sum.TuningKey(core::runtime::DataType::INT64),
+                 {{"parallel.minimum_elements", std::numeric_limits<int64_t>::max()}}});
+  const Tensor int_serial = sum(int_data, last_axis, false);
+  sum.Configure(
+      {sum.TuningKey(core::runtime::DataType::INT64), {{"parallel.minimum_elements", int64_t{1}}}});
+  EXPECT_EQ(sum(int_data, last_axis, false).data, int_serial.data);
+  std::vector<double> doubles(values.begin(), values.end());
+  const Tensor double_data = Tensor::FromDouble("", {2, 4, 257}, doubles);
+  sum.Configure({sum.TuningKey(core::runtime::DataType::DOUBLE),
+                 {{"parallel.minimum_elements", std::numeric_limits<int64_t>::max()}}});
+  const Tensor double_serial = sum(double_data, middle_axis, false);
+  sum.Configure({sum.TuningKey(core::runtime::DataType::DOUBLE),
+                 {{"parallel.minimum_elements", int64_t{1}}}});
+  EXPECT_EQ(sum(double_data, middle_axis, false).data, double_serial.data);
 }
 
 TEST(KernelClass, ReduceSumInt64DefaultAndPreallocatedAxes) {

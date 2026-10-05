@@ -5,7 +5,10 @@
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
+#include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -17,6 +20,10 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 namespace {
 
 constexpr const char *kSTFTName = "kernel::STFT";
+constexpr uint32_t kTuningAbi = 1;
+constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
+constexpr std::array<int32_t, 2> kSupportedElementTypes = {static_cast<int32_t>(DataType::FLOAT),
+                                                           static_cast<int32_t>(DataType::DOUBLE)};
 
 int64_t ReadInt32OrInt64Scalar(const Tensor &t, const char *field) {
   EXT_ENFORCE_INVALID(t.element_count() == 1, kSTFTName, ": ", field, " must be a 0-D tensor.");
@@ -34,8 +41,7 @@ int64_t ReadInt32OrInt64Scalar(const Tensor &t, const char *field) {
 template <typename T>
 void StftCompute(const T *signal, const T *window, T *out, int64_t batch_size,
                  int64_t signal_length, int64_t in_last, int64_t n_frames, int64_t frame_step,
-                 int64_t frame_length, int64_t dft_unique_bins, bool onesided) {
-  (void)onesided;
+                 int64_t frame_length, int64_t dft_unique_bins, int64_t minimum_elements) {
   const double two_pi = 2.0 * 3.14159265358979323846;
   // Layout of input signal: [batch_size, signal_length, in_last].
   const int64_t in_batch_stride = signal_length * in_last;
@@ -44,43 +50,56 @@ void StftCompute(const T *signal, const T *window, T *out, int64_t batch_size,
   const int64_t out_frame_stride = dft_unique_bins * out_bin_stride;
   const int64_t out_batch_stride = n_frames * out_frame_stride;
 
-  for (int64_t b = 0; b < batch_size; ++b) {
-    for (int64_t f = 0; f < n_frames; ++f) {
-      const int64_t start = f * frame_step;
-      for (int64_t k = 0; k < dft_unique_bins; ++k) {
-        double acc_re = 0.0, acc_im = 0.0;
-        for (int64_t n = 0; n < frame_length; ++n) {
-          const int64_t sample_idx = start + n;
-          double xr = 0.0, xi = 0.0;
-          if (sample_idx >= 0 && sample_idx < signal_length) {
-            const int64_t off = b * in_batch_stride + sample_idx * in_last;
-            xr = static_cast<double>(signal[off]);
-            if (in_last == 2) {
-              xi = static_cast<double>(signal[off + 1]);
+  const int64_t total = batch_size * n_frames * dft_unique_bins;
+  const int64_t grain = std::max<int64_t>(1, minimum_elements / frame_length +
+                                                 (minimum_elements % frame_length != 0));
+  ParallelFor(
+      total, grain,
+      [&](int64_t begin, int64_t end) {
+        for (int64_t row = begin; row < end; ++row) {
+          const int64_t b = row / (n_frames * dft_unique_bins);
+          const int64_t f = (row / dft_unique_bins) % n_frames;
+          const int64_t k = row % dft_unique_bins;
+          const int64_t start = f * frame_step;
+          double acc_re = 0.0, acc_im = 0.0;
+          for (int64_t n = 0; n < frame_length; ++n) {
+            const int64_t sample_idx = start + n;
+            double xr = 0.0, xi = 0.0;
+            if (sample_idx >= 0 && sample_idx < signal_length) {
+              const int64_t off = b * in_batch_stride + sample_idx * in_last;
+              xr = static_cast<double>(signal[off]);
+              if (in_last == 2) {
+                xi = static_cast<double>(signal[off + 1]);
+              }
             }
+            if (window != nullptr) {
+              const double w = static_cast<double>(window[n]);
+              xr *= w;
+              xi *= w;
+            }
+            const double theta = -two_pi * static_cast<double>(k) * static_cast<double>(n) /
+                                 static_cast<double>(frame_length);
+            const double c = std::cos(theta);
+            const double s = std::sin(theta);
+            // (xr + i*xi) * (c + i*s) = (xr*c - xi*s) + i*(xr*s + xi*c)
+            acc_re += xr * c - xi * s;
+            acc_im += xr * s + xi * c;
           }
-          if (window != nullptr) {
-            const double w = static_cast<double>(window[n]);
-            xr *= w;
-            xi *= w;
-          }
-          const double theta = -two_pi * static_cast<double>(k) * static_cast<double>(n) /
-                               static_cast<double>(frame_length);
-          const double c = std::cos(theta);
-          const double s = std::sin(theta);
-          // (xr + i*xi) * (c + i*s) = (xr*c - xi*s) + i*(xr*s + xi*c)
-          acc_re += xr * c - xi * s;
-          acc_im += xr * s + xi * c;
+          const int64_t base = b * out_batch_stride + f * out_frame_stride + k * out_bin_stride;
+          out[base] = static_cast<T>(acc_re);
+          out[base + 1] = static_cast<T>(acc_im);
         }
-        const int64_t base = b * out_batch_stride + f * out_frame_stride + k * out_bin_stride;
-        out[base] = static_cast<T>(acc_re);
-        out[base + 1] = static_cast<T>(acc_im);
-      }
-    }
-  }
+      },
+      "STFT");
 }
 
 } // namespace
+
+STFT::STFT(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "STFT", kSupportedElementTypes, kPortableParallelMinimum,
+                            kTuningAbi) {}
+
+ONNX_LIGHT_REGISTER_PARALLEL_TUNING_SCHEMA(STFT)
 
 Tensor STFT::operator()(const Tensor &signal, const Tensor &frame_step, const Tensor *window,
                         const Tensor *frame_length, bool onesided, RuntimeContext *rt) const {
@@ -142,12 +161,14 @@ Tensor STFT::operator()(const Tensor &signal, const Tensor &frame_step, const Te
   case DataType::FLOAT:
     StftCompute<float>(signal.AsFloat(), window != nullptr ? window->AsFloat() : nullptr,
                        output.AsFloat(), batch_size, signal_length, in_last, n_frames,
-                       frame_step_value, frame_length_value, dft_unique_bins, onesided);
+                       frame_step_value, frame_length_value, dft_unique_bins,
+                       tuning().parallel_minimum_elements);
     break;
   case DataType::DOUBLE:
     StftCompute<double>(signal.AsDouble(), window != nullptr ? window->AsDouble() : nullptr,
                         output.AsDouble(), batch_size, signal_length, in_last, n_frames,
-                        frame_step_value, frame_length_value, dft_unique_bins, onesided);
+                        frame_step_value, frame_length_value, dft_unique_bins,
+                        tuning().parallel_minimum_elements);
     break;
   default:
     EXT_THROW_INVALID(kSTFTName, ": unsupported data type ", signal.data_type,
@@ -181,8 +202,7 @@ void STFT::Run(RuntimeContext &rt) {
   const Tensor *window = GetOptionalInput(node, 2, rt.tensors());
   const Tensor *frame_length = GetOptionalInput(node, 3, rt.tensors());
   const bool onesided = GetAttributeIntOrDefault(node, "onesided", 1) != 0;
-  onnx_kernels::kernel::STFT k(rt.kernel_ctx());
-  SetOutput(node, 0, k(signal, frame_step, window, frame_length, onesided, &rt), rt);
+  SetOutput(node, 0, (*this)(signal, frame_step, window, frame_length, onesided, &rt), rt);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

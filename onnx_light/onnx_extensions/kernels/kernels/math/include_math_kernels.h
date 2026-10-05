@@ -1336,11 +1336,12 @@ public:
 /// pointer to a 0-D INT32/INT64 tensor; pass ``nullptr`` to derive
 /// ``frame_length`` from the ``window`` shape. At least one of ``window``
 /// or ``frame_length`` must be provided.
-class STFT : public KernelBase {
+class STFT : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:STFT";
+  explicit STFT(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &signal, const Tensor &frame_step, const Tensor *window,
                     const Tensor *frame_length, bool onesided = true,
                     RuntimeContext *rt = nullptr) const;

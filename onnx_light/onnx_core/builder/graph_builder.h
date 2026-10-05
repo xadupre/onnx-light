@@ -758,9 +758,8 @@ private:
   FunctionProto BuildFunction(const std::string &domain) const;
   FunctionProto ExportFunction(const std::string &domain, bool model_scoped);
 
-  // Orders producers before consumers, including lexical subgraph captures,
-  // and returns whether any builder's node order changed.
-  bool SortNodesTopologically();
+  // Orders producers before consumers, including lexical subgraph captures.
+  void SortNodesTopologically();
 
   // Converts node attributes from proto form to builder form: GRAPH/GRAPHS
   // attributes become ``*_ref`` STRING/STRINGS attributes that reference nested
@@ -780,13 +779,10 @@ private:
   // inline (GRAPH / GRAPHS attribute) or through a builder ``*_ref`` reference.
   static bool NodeCarriesSubgraph(const NodeProto &node);
 
-  // Writes compute metadata into ``graph``. The incremental results are reused
-  // directly because every graph edit refreshes the affected builder.
+  // Runs the whole-graph compute analyses and writes their result into
+  // ``graph`` (shapes, in-place / release-after / value-tag metadata and
+  // per-node peak memory).
   template <typename Proto> void Finalize(Proto &graph);
-
-  // Replays incremental annotations for this builder after its node list has
-  // been edited. Shapes, callbacks, and nested builders are preserved.
-  void RebuildIncrementalAnnotations();
 
   // Returns the nested builder named ``name`` in ``builders`` or nullptr.
   static GraphBuilder *FindNamedBuilder(const std::vector<std::unique_ptr<GraphBuilder>> &builders,

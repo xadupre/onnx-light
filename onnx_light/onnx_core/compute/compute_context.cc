@@ -104,35 +104,6 @@ NodeMemoryProfile MakeEmptyNodeMemoryProfile() {
 
 // ── ComputeContext method implementations ────────────────────────────────────
 
-void ComputeContext::Clear() noexcept {
-  ClearIncrementalAnnotations();
-  shapes_.Clear();
-}
-
-void ComputeContext::ClearIncrementalAnnotations() noexcept {
-  value_tags_.clear();
-  node_tags_.clear();
-  constant_values_.clear();
-  node_constant_.clear();
-  reuse_.clear();
-  release_after_.clear();
-  not_used_after_.clear();
-  release_after_shape_tagged_.clear();
-  memory_.clear();
-  peak_memory_.clear();
-  node_tag_custom_override_.clear();
-  tag_producer_node_.clear();
-  tag_consumers_.clear();
-  incr_producer_.clear();
-  incr_last_use_.clear();
-  incr_keep_.clear();
-  incr_graph_inputs_.clear();
-  incr_graph_initializers_.clear();
-  incr_graph_outputs_.clear();
-  incr_byte_size_expr_cache_.clear();
-  incr_simplified_dim_cache_ = expressions::SimplifiedExpressionCache{};
-}
-
 std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
 ComputeContext::ComputeValueAndNodeTags(const GraphProto &graph) {
   value_tags_.clear();
@@ -425,42 +396,6 @@ void ComputeContext::AppendNodeReuse(const NodeProto &node, std::size_t node_ind
   not_used_after_.push_back(std::move(not_used_after));
   release_after_shape_tagged_.push_back(std::move(release_after_shape_tagged));
   memory_.push_back(MakeEmptyNodeMemoryProfile());
-}
-
-namespace {
-
-void RefreshShapeTaggedReleases(const std::vector<std::vector<std::string>> &release_after,
-                                const std::unordered_map<std::string, std::string> &value_tags,
-                                std::vector<std::vector<std::string>> &release_after_shape_tagged) {
-  release_after_shape_tagged.assign(release_after.size(), {});
-  for (std::size_t i = 0; i < release_after.size(); ++i) {
-    for (const std::string &name : release_after[i]) {
-      auto tag = value_tags.find(name);
-      if (tag != value_tags.end() && tag->second == "shape") {
-        release_after_shape_tagged[i].push_back(name);
-      }
-    }
-  }
-}
-
-} // namespace
-
-void ComputeContext::FinalizeIncrementalMetadata(const GraphProto &graph, Device device) {
-  EXT_ENFORCE_INVALID(reuse_.size() == graph.node().size(),
-                      "ComputeContext::FinalizeIncrementalMetadata: graph has ",
-                      graph.node().size(), " node(s) but the incremental result has ",
-                      reuse_.size(), " entry(ies).");
-  RefreshShapeTaggedReleases(release_after_, value_tags_, release_after_shape_tagged_);
-  ComputePeakMemory(graph, device);
-}
-
-void ComputeContext::FinalizeIncrementalMetadata(const FunctionProto &function, Device device) {
-  EXT_ENFORCE_INVALID(reuse_.size() == function.node().size(),
-                      "ComputeContext::FinalizeIncrementalMetadata: function has ",
-                      function.node().size(), " node(s) but the incremental result has ",
-                      reuse_.size(), " entry(ies).");
-  RefreshShapeTaggedReleases(release_after_, value_tags_, release_after_shape_tagged_);
-  ComputePeakMemory(function, device);
 }
 
 void ComputeContext::ComputeInPlaceReuseGraph(

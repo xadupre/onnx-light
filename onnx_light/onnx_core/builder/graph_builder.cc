@@ -762,55 +762,6 @@ void GraphBuilder::SeedInputAnnotations(const std::string &name) {
                           /*allow_input_overwrite=*/false);
 }
 
-void GraphBuilder::RebuildIncrementalAnnotations() {
-  compute_.ClearIncrementalAnnotations();
-  std::unordered_set<std::string> input_names;
-  for (const ValueInfoProto &input : inputs_) {
-    const std::string name = input.name().value();
-    input_names.insert(name);
-    SeedInputAnnotations(name);
-  }
-  for (const TensorProto &initializer : initializers_) {
-    const std::string name = initializer.name().value();
-    const bool is_input = input_names.count(name) != 0;
-    compute_.SeedReuseInput(name, is_input, /*is_initializer=*/true,
-                            /*allow_input_overwrite=*/false);
-    if (!is_input) {
-      compute_.SeedValueTag(name, "weight");
-      compute_.SeedConstant(name);
-    }
-  }
-  for (const EncodedValueProto &initializer : encoded_initializers_) {
-    const std::string name = initializer.name().value();
-    const bool is_input = input_names.count(name) != 0;
-    compute_.SeedReuseInput(name, is_input, /*is_initializer=*/true,
-                            /*allow_input_overwrite=*/false);
-    compute_.SeedValueTag(name, "weight");
-    if (!is_input) {
-      compute_.SeedConstant(name);
-    }
-  }
-  for (const PagedCacheProto &initializer : paged_cache_initializers_) {
-    const std::string name = initializer.name().value();
-    const bool is_input = input_names.count(name) != 0;
-    compute_.SeedReuseInput(name, is_input, /*is_initializer=*/true,
-                            /*allow_input_overwrite=*/false);
-    compute_.SeedValueTag(name, "weight");
-    if (!is_input) {
-      compute_.SeedConstant(name);
-    }
-  }
-  for (std::size_t i = 0; i < nodes_.size(); ++i) {
-    const NodeProto &node = nodes_[i];
-    compute_.AppendNodeTags(nodes_, i);
-    compute_.AppendNodeReuse(node, i, compute_.Shapes());
-    compute_.AppendNodeConstant(node, i);
-  }
-  for (const ValueInfoProto &output : outputs_) {
-    compute_.SeedReuseOutput(output.name().value());
-  }
-}
-
 bool GraphBuilder::HasGraphReferenceSuffix(const std::string &name) {
   static constexpr const char *kSuffix = "_ref";
   const std::size_t suffix_len = 4;
@@ -1400,9 +1351,6 @@ void GraphBuilder::CollectNodeReferences(const NodeProto &node,
 std::size_t GraphBuilder::RemoveUnusedNodes() {
   const auto removed = RemoveUnusedNodesImpl(true);
   RebuildStructuredState();
-  if (removed != 0) {
-    RebuildIncrementalAnnotations();
-  }
   return removed;
 }
 
@@ -1467,9 +1415,6 @@ std::size_t GraphBuilder::RemoveUnusedNodesImpl(bool recursive) {
     }
   }
   nodes_ = std::move(kept);
-  if (local_removed != 0) {
-    RebuildIncrementalAnnotations();
-  }
   std::unordered_set<std::string> used;
   for (const ValueInfoProto &input : inputs_) {
     used.insert(input.name().value());
@@ -1577,9 +1522,6 @@ bool CanReuseOutputs(const NodeProto &node, const std::vector<std::string> &surv
 std::size_t GraphBuilder::RemoveIdentityNodes() {
   const auto removed = RemoveIdentityNodesImpl(true, nullptr);
   RebuildStructuredState();
-  if (removed != 0) {
-    RebuildIncrementalAnnotations();
-  }
   return removed;
 }
 
@@ -1625,9 +1567,6 @@ std::size_t GraphBuilder::RemoveIdentityNodesImpl(
     kept.push_back(std::move(node));
   }
   nodes_ = std::move(kept);
-  if (local_removed != 0) {
-    RebuildIncrementalAnnotations();
-  }
 
   // Collapse chains of identities: an identity input can itself be another
   // removed identity's output, so follow each rename target to its final value.
@@ -1655,9 +1594,6 @@ std::size_t GraphBuilder::RemoveIdentityNodesImpl(
 std::size_t GraphBuilder::RemoveDuplicateNodes() {
   const auto removed = RemoveDuplicateNodesImpl(true, nullptr);
   RebuildStructuredState();
-  if (removed != 0) {
-    RebuildIncrementalAnnotations();
-  }
   return removed;
 }
 
@@ -1749,9 +1685,6 @@ std::size_t GraphBuilder::RemoveDuplicateNodesImpl(
     kept.push_back(std::move(node));
   }
   nodes_ = std::move(kept);
-  if (local_removed != 0) {
-    RebuildIncrementalAnnotations();
-  }
 
   // Rewrite every consumer of a dropped node's output, descending into
   // subgraphs whose bodies capture values from this enclosing scope.
@@ -1877,7 +1810,6 @@ std::size_t GraphBuilder::MoveShapeAndSizeNodesImpl(bool recursive) {
     ordered.push_back(std::move(nodes_[index]));
   }
   nodes_ = std::move(ordered);
-  RebuildIncrementalAnnotations();
 
   return moved + local_moved;
 }
@@ -2069,9 +2001,6 @@ std::size_t GraphBuilder::InlineFunctionCalls(const std::vector<GraphBuilder *> 
       }
     }
     nodes_ = std::move(kept);
-    if (changed) {
-      RebuildIncrementalAnnotations();
-    }
   }
   return inlined;
 }
@@ -2365,9 +2294,6 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
   }
 
   nodes_ = std::move(kept);
-  if (local_removed != 0) {
-    RebuildIncrementalAnnotations();
-  }
   // Append the folded results as initializers, in fold order.
   for (const std::string &name : folded_order) {
     initializers_.push_back(std::move(folded.at(name)));
@@ -2378,9 +2304,6 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
 std::size_t GraphBuilder::RemoveDuplicateInitializers() {
   const auto removed = DeduplicateInitializers(InitializerContentIndex{}, true, nullptr);
   RebuildStructuredState();
-  if (removed != 0) {
-    RebuildIncrementalAnnotations();
-  }
   return removed;
 }
 
@@ -2778,10 +2701,9 @@ std::string GraphBuilder::ToString() const {
 
 // ── Finalization ───────────────────────────────────────────────────────
 
-bool GraphBuilder::SortNodesTopologically() {
-  bool changed = false;
+void GraphBuilder::SortNodesTopologically() {
   for (const auto &child : local_functions_) {
-    changed = child->SortNodesTopologically() || changed;
+    child->SortNodesTopologically();
   }
   const std::size_t count = nodes_.size();
   std::unordered_map<std::string, std::size_t> producers;
@@ -2846,29 +2768,21 @@ bool GraphBuilder::SortNodesTopologically() {
   if (order.size() != count) {
     throw BuilderError("GraphBuilder: cyclic node dependencies prevent topological ordering.");
   }
-  const bool local_changed = std::any_of(
-      order.begin(), order.end(),
-      [index = std::size_t{0}](std::size_t node_index) mutable { return node_index != index++; });
-  if (local_changed) {
-    utils::RepeatedProtoField<NodeProto> sorted;
-    sorted.reserve(count);
-    for (std::size_t i : order) {
-      sorted.push_back(std::move(nodes_[i]));
-    }
-    nodes_ = std::move(sorted);
-    RebuildIncrementalAnnotations();
-    changed = true;
+  utils::RepeatedProtoField<NodeProto> sorted;
+  sorted.reserve(count);
+  for (std::size_t i : order) {
+    sorted.push_back(std::move(nodes_[i]));
   }
+  nodes_ = std::move(sorted);
   for (const NodeProto &node : nodes_) {
     for (GraphBuilder *child : ReferencedSubgraphs(node)) {
       child->inherited_names_ = available;
-      changed = child->SortNodesTopologically() || changed;
+      child->SortNodesTopologically();
     }
     for (std::size_t i = 0; i < node.output().size(); ++i) {
       available.insert(node.output(i));
     }
   }
-  return changed;
 }
 
 template <typename Proto> void GraphBuilder::Finalize(Proto &graph) {
@@ -2910,10 +2824,10 @@ template <typename Proto> void GraphBuilder::Finalize(Proto &graph) {
       }
     }
   }
-  EXT_ENFORCE_INVALID(compute_.Size() == graph.node().size(),
-                      "GraphBuilder::Finalize: incremental metadata has ", compute_.Size(),
-                      " entries for ", graph.node().size(), " nodes.");
-  compute_.FinalizeIncrementalMetadata(graph, device_);
+  const auto tags = compute_.ComputeValueAndNodeTags(graph);
+  compute_.ComputeInPlaceReuseGraph(graph, compute_.Shapes(), /*allow_input_overwrite=*/false,
+                                    tags.first);
+  compute_.ComputePeakMemory(graph, device_);
   // Writes inferred shapes (value_info), in-place / release-after / shape-tag
   // metadata and per-node peak memory.
   if constexpr (std::is_same_v<Proto, GraphProto>) {

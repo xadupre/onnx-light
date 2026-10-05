@@ -372,21 +372,6 @@ public:
   /// the per-node result vectors so they stay aligned with :cpp:func:`Size`.
   void AppendNodeReuse(const NodeProto &node, std::size_t node_index, const ShapesContext &ctx);
 
-  /**
-   * Finalizes metadata maintained by the incremental append path.
-   *
-   * Refreshes the shape-tagged release subset from the final value tags and
-   * computes per-operator peak memory. Unlike
-   * :cpp:func:`ComputeInPlaceReuseGraph`, this does not rescan tags, lifetimes,
-   * or in-place reuse that :cpp:func:`AppendNodeTags` and
-   * :cpp:func:`AppendNodeReuse` already keep current.
-   */
-  void FinalizeIncrementalMetadata(const GraphProto &graph, Device device);
-
-  /// Same as :cpp:func:`FinalizeIncrementalMetadata(const GraphProto&, Device)`
-  /// for a function body.
-  void FinalizeIncrementalMetadata(const FunctionProto &function, Device device);
-
   /// Number of nodes for which reuse has been computed (one entry per node of
   /// the analysed graph, in ``graph.node()`` order). Zero before
   /// :cpp:func:`ComputeInPlaceReuseGraph` has been called.
@@ -643,16 +628,30 @@ public:
   void WriteToMetadata(GraphProto &graph) const;
 
   /// Empties the stored result.
-  void Clear() noexcept;
-
-  /**
-   * Clears only incrementally maintained annotations and their indexing state.
-   *
-   * Preserves inferred shapes, custom tag functions, event configuration, and
-   * event history so a graph editor can replay the current nodes after a
-   * localized rewrite without rebuilding unrelated compute state.
-   */
-  void ClearIncrementalAnnotations() noexcept;
+  void Clear() noexcept {
+    value_tags_.clear();
+    node_tags_.clear();
+    constant_values_.clear();
+    node_constant_.clear();
+    reuse_.clear();
+    release_after_.clear();
+    not_used_after_.clear();
+    release_after_shape_tagged_.clear();
+    memory_.clear();
+    peak_memory_.clear();
+    shapes_.Clear();
+    node_tag_custom_override_.clear();
+    tag_producer_node_.clear();
+    tag_consumers_.clear();
+    incr_producer_.clear();
+    incr_last_use_.clear();
+    incr_keep_.clear();
+    incr_graph_inputs_.clear();
+    incr_graph_initializers_.clear();
+    incr_graph_outputs_.clear();
+    incr_byte_size_expr_cache_.clear();
+    incr_simplified_dim_cache_ = expressions::SimplifiedExpressionCache{};
+  }
 
 private:
   template <typename GraphOrFunction>

@@ -23,7 +23,7 @@ example = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(example)
 
 
-@pytest.mark.parametrize("count", (100, 200, 500))
+@pytest.mark.parametrize("count", example.NODE_COUNTS)
 def test_equivalent_models(count):
     example.check_models(count)
 

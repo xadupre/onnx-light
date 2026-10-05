@@ -47,7 +47,7 @@ from onnx.reference import ReferenceEvaluator
 from onnx_light.onnx import TensorProto
 from onnx_light.onnx_core.graph_builder import GraphBuilder
 
-NODE_COUNTS = (100, 200, 500)
+NODE_COUNTS = (100, 200, 500, 1000, 2000)
 OPSET = 18
 SHAPE = ["batch", "sequence", "width"]
 INPUT_SHAPES = ((1, 1, 4), (2, 3, 6), (3, 5, 8))

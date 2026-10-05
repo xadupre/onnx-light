@@ -179,7 +179,7 @@ ORT_EXCLUDE_REGEX = [
     # ORT restricts linear and cubic Resize to rank-2 through rank-5 inputs.
     r"^test_cc_resize_(crop_(fractional|singleton)_linear|pytorch_singleton_(linear|cubic))$",
     # ORT rejects Det(BFLOAT16) and has no CPU implementation for Det(DOUBLE).
-    r"^test_cc_det_(bfloat16|double)$",
+    r"^test_cc_det_(bfloat16(?:_.*)?|double)$",
     # ORT IRFFT mishandles the ``inverse=1, onesided=1`` combination.
     r"^test_cc_dft_irfft(_opset19|_roundtrip|_roundtrip_opset19)?$",
     # ORT does not support Optional loop-carried state in this graph structure.

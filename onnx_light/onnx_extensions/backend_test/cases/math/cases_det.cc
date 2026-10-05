@@ -80,16 +80,17 @@ void RegisterDetCases(std::vector<TestCase> &registry, TestMode mode) {
     node.add_input("X");
     node.add_output("Y");
     const std::string name = use_bfloat16 ? "test_cc_det_bfloat16" : "test_cc_det_float16";
-    Expect(registry, std::move(node), name, {opset}, [use_bfloat16]() -> IoData {
-      const std::vector<float> values{0.0f, 1.0f, 2.0f, 3.0f, 1.0f, 2.0f,
-                                      2.0f, 4.0f, 1.0f, 2.0f, 3.0f, 4.0f};
-      if (use_bfloat16) {
-        return IoData{{MakeBfloat16Tensor("", {3, 2, 2}, values)},
-                      {MakeBfloat16Tensor("", {3}, {-2.0f, 0.0f, -2.0f})}};
-      }
-      return IoData{{MakeFloat16Tensor("", {3, 2, 2}, values)},
-                    {MakeFloat16Tensor("", {3}, {-2.0f, 0.0f, -2.0f})}};
-    });
+    Expect(registry, std::move(node), name, {use_bfloat16 ? DefaultOpset(22) : opset},
+           [use_bfloat16]() -> IoData {
+             const std::vector<float> values{0.0f, 1.0f, 2.0f, 3.0f, 1.0f, 2.0f,
+                                             2.0f, 4.0f, 1.0f, 2.0f, 3.0f, 4.0f};
+             if (use_bfloat16) {
+               return IoData{{MakeBfloat16Tensor("", {3, 2, 2}, values)},
+                             {MakeBfloat16Tensor("", {3}, {-2.0f, 0.0f, -2.0f})}};
+             }
+             return IoData{{MakeFloat16Tensor("", {3, 2, 2}, values)},
+                           {MakeFloat16Tensor("", {3}, {-2.0f, 0.0f, -2.0f})}};
+           });
   }
 
   // Low-precision scalar and empty-batch outputs retain their input type.
@@ -102,21 +103,22 @@ void RegisterDetCases(std::vector<TestCase> &registry, TestMode mode) {
       const std::string name = std::string("test_cc_det_") +
                                (use_bfloat16 ? "bfloat16" : "float16") +
                                (empty_batch ? "_empty_batch" : "_scalar");
-      Expect(registry, std::move(node), name, {opset}, [use_bfloat16, empty_batch]() -> IoData {
-        const std::vector<int64_t> input_shape =
-            empty_batch ? std::vector<int64_t>{0, 2, 2} : std::vector<int64_t>{2, 2};
-        const std::vector<int64_t> output_shape =
-            empty_batch ? std::vector<int64_t>{0} : std::vector<int64_t>{};
-        const std::vector<float> input =
-            empty_batch ? std::vector<float>{} : std::vector<float>{1, 2, 3, 4};
-        const std::vector<float> output =
-            empty_batch ? std::vector<float>{} : std::vector<float>{-2};
-        if (use_bfloat16)
-          return IoData{{MakeBfloat16Tensor("", input_shape, input)},
-                        {MakeBfloat16Tensor("", output_shape, output)}};
-        return IoData{{MakeFloat16Tensor("", input_shape, input)},
-                      {MakeFloat16Tensor("", output_shape, output)}};
-      });
+      Expect(registry, std::move(node), name, {use_bfloat16 ? DefaultOpset(22) : opset},
+             [use_bfloat16, empty_batch]() -> IoData {
+               const std::vector<int64_t> input_shape =
+                   empty_batch ? std::vector<int64_t>{0, 2, 2} : std::vector<int64_t>{2, 2};
+               const std::vector<int64_t> output_shape =
+                   empty_batch ? std::vector<int64_t>{0} : std::vector<int64_t>{};
+               const std::vector<float> input =
+                   empty_batch ? std::vector<float>{} : std::vector<float>{1, 2, 3, 4};
+               const std::vector<float> output =
+                   empty_batch ? std::vector<float>{} : std::vector<float>{-2};
+               if (use_bfloat16)
+                 return IoData{{MakeBfloat16Tensor("", input_shape, input)},
+                               {MakeBfloat16Tensor("", output_shape, output)}};
+               return IoData{{MakeFloat16Tensor("", input_shape, input)},
+                             {MakeFloat16Tensor("", output_shape, output)}};
+             });
     }
   }
 

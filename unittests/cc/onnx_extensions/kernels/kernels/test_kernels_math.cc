@@ -91,6 +91,7 @@ using onnx_kernels::kernel::Softmax;
 using onnx_kernels::kernel::Softplus;
 using onnx_kernels::kernel::Softsign;
 using onnx_kernels::kernel::Sqrt;
+using onnx_kernels::kernel::STFT;
 using onnx_kernels::kernel::Sub;
 using onnx_kernels::kernel::Sum;
 using onnx_kernels::kernel::Tan;
@@ -936,6 +937,111 @@ TEST(KernelClass, DFTRuntimeUsesResolvedParallelTuning) {
   EXPECT_EQ(session.tuning_resolution_statistics().resolved_profiles, 1u);
   ASSERT_EQ(collector->events().size(), 1u);
   EXPECT_EQ(collector->events()[0].label, "DFT");
+  EXPECT_GT(collector->events()[0].admitted_threads, 1);
+}
+
+TEST(KernelClass, STFTParallelBinsMatchSerial) {
+  onnx_kernels::RegisterKernelFunctions();
+  const KernelContext ctx{DefaultOpset(17)};
+  const STFT schema_kernel{ctx};
+  const auto schema = core::runtime::GetKernelTuningRegistry().FindSchema(
+      schema_kernel.TuningKey(static_cast<int32_t>(DataType::FLOAT)));
+  ASSERT_NE(schema, nullptr);
+  EXPECT_EQ(schema->portable_defaults().Get<int64_t>("parallel.minimum_elements"),
+            core::runtime::kParallelForGrainSize);
+
+  core::runtime::CpuExecutionPolicy policy;
+  policy.num_threads = 2;
+  policy.affinity_policy = core::runtime::CpuAffinityPolicy::kNone;
+  const auto executor = core::runtime::GlobalCpuExecutorRegistry().Acquire(policy);
+  const core::runtime::CpuExecutorScope scope(executor.get());
+
+  for (const auto type : {DataType::FLOAT, DataType::DOUBLE}) {
+    for (const int64_t components : {1, 2}) {
+      const bool onesided = components == 1;
+      std::vector<double> values(static_cast<size_t>(2 * 64 * components));
+      for (size_t i = 0; i < values.size(); ++i) {
+        values[i] = static_cast<double>(static_cast<int>(i % 13) - 6) / 13.0;
+      }
+      std::vector<float> float_values;
+      float_values.reserve(values.size());
+      for (const double value : values) {
+        float_values.push_back(static_cast<float>(value));
+      }
+      const Tensor signal = type == DataType::FLOAT
+                                ? Tensor::FromFloat("", {2, 64, components}, float_values)
+                                : Tensor::FromDouble("", {2, 64, components}, values);
+      const Tensor window = type == DataType::FLOAT
+                                ? Tensor::FromFloat("", {16}, std::vector<float>(16, 0.5f))
+                                : Tensor::FromDouble("", {16}, std::vector<double>(16, 0.5));
+      const Tensor step = Tensor::FromInt64("", {}, {8});
+      const Tensor length = Tensor::FromInt64("", {}, {16});
+      STFT serial{ctx};
+      STFT parallel{ctx};
+      const auto key = serial.TuningKey(static_cast<int32_t>(type));
+      serial.Configure({key, {{"parallel.minimum_elements", std::numeric_limits<int64_t>::max()}}});
+      parallel.Configure({key, {{"parallel.minimum_elements", int64_t{1}}}});
+      const Tensor expected = serial(signal, step, &window, &length, onesided);
+      core::runtime::ParallelRegionCollector collector(1);
+      const core::runtime::ParallelRegionCollectorScope collector_scope(&collector);
+      const Tensor actual = parallel(signal, step, &window, &length, onesided);
+      EXPECT_EQ(actual.shape, expected.shape);
+      EXPECT_EQ(std::memcmp(actual.bytes(), expected.bytes(), expected.size_bytes()), 0);
+      ASSERT_EQ(collector.events().size(), 1u);
+      EXPECT_EQ(collector.events()[0].label, "STFT");
+      EXPECT_EQ(collector.events()[0].admitted_threads, 2);
+    }
+  }
+  const Tensor empty = Tensor::FromFloat("", {0, 64, 1}, {});
+  const Tensor step = Tensor::FromInt64("", {}, {8});
+  const Tensor length = Tensor::FromInt64("", {}, {16});
+  const Tensor result = schema_kernel(empty, step, nullptr, &length);
+  EXPECT_EQ(result.shape, (Shape{0, 7, 9, 2}));
+  EXPECT_EQ(result.element_count(), 0);
+  EXPECT_THROW(schema_kernel(empty, Tensor::FromInt64("", {}, {0}), nullptr, &length),
+               std::invalid_argument);
+}
+
+TEST(KernelClass, STFTRuntimeUsesResolvedParallelTuning) {
+  onnx_kernels::RegisterKernelFunctions();
+  const KernelContext ctx{DefaultOpset(17)};
+  const STFT stft{ctx};
+  const auto key = stft.TuningKey(static_cast<int32_t>(DataType::FLOAT));
+  const core::runtime::KernelTuningParameters profile{key,
+                                                      {{"parallel.minimum_elements", int64_t{1}}}};
+  core::runtime::GetKernelTuningRegistry().PublishProfiles(
+      std::span<const core::runtime::KernelTuningParameters>(&profile, 1));
+
+  GraphProto graph;
+  graph.add_input()->set_name("signal");
+  graph.add_input()->set_name("step");
+  graph.add_input()->set_name("length");
+  graph.add_output()->set_name("output");
+  NodeProto *node = graph.add_node();
+  node->set_op_type("STFT");
+  node->add_input("signal");
+  node->add_input("step");
+  node->add_input("");
+  node->add_input("length");
+  node->add_output("output");
+
+  RuntimeContext rt(ctx);
+  rt.Set("signal", Tensor::FromFloat("signal", {2, 64, 1}, std::vector<float>(128, 1.0f)));
+  rt.Set("step", Tensor::FromInt64("step", {}, {8}));
+  rt.Set("length", Tensor::FromInt64("length", {}, {16}));
+  auto collector = std::make_shared<core::runtime::ParallelRegionCollector>(2);
+  core::runtime::RuntimeSession session(rt.GetExecutionPlan(graph),
+                                        core::runtime::RuntimeSessionOptions{
+                                            .parameters = core::runtime::RuntimeParameters(2),
+                                            .parallel_region_collector = collector,
+                                        });
+  session.Run(rt);
+  core::runtime::GetKernelTuningRegistry().PublishProfiles(
+      {}, std::span<const core::runtime::KernelTuningKey>(&key, 1));
+
+  EXPECT_EQ(session.tuning_resolution_statistics().resolved_profiles, 1u);
+  ASSERT_EQ(collector->events().size(), 1u);
+  EXPECT_EQ(collector->events()[0].label, "STFT");
   EXPECT_GT(collector->events()[0].admitted_threads, 1);
 }
 

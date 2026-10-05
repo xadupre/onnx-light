@@ -140,8 +140,9 @@ published and portable defaults are accepted.
        dependencies permit.
      - Representative backend models identify which paths merit migration;
        every retained serial path has measured justification.
-     - ``DFT`` frequency bins migrated with a typed parallel threshold;
-       other families and representative-model crossover evidence pending.
+     - ``DFT`` frequency bins and ``STFT`` frame/bin ranges migrated with
+       typed parallel thresholds; other families and representative-model
+       crossover evidence pending.
    * - 5
      - Sequences, optionals, text, metadata and remaining utility paths
      - Parallelize only payload-scale independent work. Preserve sequence
@@ -155,13 +156,13 @@ parallel code. Within each batch, rank families by serial wall time and model
 attribution, then migrate the highest impact family first. A low-impact family
 may receive a serial exemption without waiting for the rest of its batch.
 
-The batch-four ``DFT`` migration partitions independent output frequency bins
-without splitting each bin's reduction, preserving the existing summation order.
-Its ``parallel.minimum_elements`` threshold counts transform-sample work per
-bin; the existing DFT backend benchmark supplies a large-case fixture.
-``STFT``, ``Einsum``, recurrent, detection, traditional-ML and training paths
-remain to be assessed individually against representative models before their
-migration or documented serial exemption.
+The batch-four ``DFT`` and ``STFT`` migrations partition independent output
+frequency bins and frame/bin ranges without splitting each bin's reduction,
+preserving the existing summation order. Their ``parallel.minimum_elements``
+thresholds count transform-sample work per bin; existing DFT and STFT backend
+benchmarks supply large-case fixtures. ``Einsum``, recurrent, detection,
+traditional-ML and training paths remain to be assessed individually against
+representative models before their migration or documented serial exemption.
 
 Gemm and portable tuning completion
 +++++++++++++++++++++++++++++++++++

@@ -374,6 +374,7 @@ void RegisterKernelFunctions() {
     onnx_kernels::kernel::Softplus::RegisterTuningSchemas();
     onnx_kernels::kernel::Softsign::RegisterTuningSchemas();
     onnx_kernels::kernel::Sqrt::RegisterTuningSchemas();
+    onnx_kernels::kernel::STFT::RegisterTuningSchemas();
     onnx_kernels::kernel::Sub::RegisterTuningSchemas();
     onnx_kernels::kernel::SwiGLU::RegisterTuningSchemas();
     onnx_kernels::kernel::StringConcat::RegisterTuningSchemas();

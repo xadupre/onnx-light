@@ -55,7 +55,7 @@ def get_cpp_build_info() -> dict[str, str]:
 
     package_dir = Path(__file__).resolve().parent
     library_dir = _extension_directory()
-    info = dict(_onnxpyprotoop._cpp_build_info())
+    info = dict(_onnxpyprotoop.get_cpp_build_metadata())
     info.update({"include_dir": str(package_dir), "library_dir": str(library_dir)})
     for component in ("core", "proto"):
         name = f"lib_onnx_{component}"

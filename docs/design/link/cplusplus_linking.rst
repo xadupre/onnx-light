@@ -124,6 +124,20 @@ Downstream builds can compare these values with their own configuration and
 reject an incompatible toolchain or ABI mode before a cross-module conversion
 fails at runtime.
 
+.. autofunction:: onnx_light.get_cpp_build_info
+
+The following example displays the ABI metadata and the exact headers and
+libraries selected by the imported package:
+
+.. runpython::
+    :showcode:
+
+    from pprint import pprint
+
+    from onnx_light import get_cpp_build_info
+
+    pprint(get_cpp_build_info())
+
 .. _l-design-cpp-linking-no-kernels:
 
 Reduced build without runtime kernels

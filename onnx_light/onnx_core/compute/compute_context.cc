@@ -398,6 +398,42 @@ void ComputeContext::AppendNodeReuse(const NodeProto &node, std::size_t node_ind
   memory_.push_back(MakeEmptyNodeMemoryProfile());
 }
 
+namespace {
+
+void RefreshShapeTaggedReleases(const std::vector<std::vector<std::string>> &release_after,
+                                const std::unordered_map<std::string, std::string> &value_tags,
+                                std::vector<std::vector<std::string>> &release_after_shape_tagged) {
+  release_after_shape_tagged.assign(release_after.size(), {});
+  for (std::size_t i = 0; i < release_after.size(); ++i) {
+    for (const std::string &name : release_after[i]) {
+      auto tag = value_tags.find(name);
+      if (tag != value_tags.end() && tag->second == "shape") {
+        release_after_shape_tagged[i].push_back(name);
+      }
+    }
+  }
+}
+
+} // namespace
+
+void ComputeContext::FinalizeIncrementalMetadata(const GraphProto &graph, Device device) {
+  EXT_ENFORCE_INVALID(reuse_.size() == graph.node().size(),
+                      "ComputeContext::FinalizeIncrementalMetadata: graph has ",
+                      graph.node().size(), " node(s) but the incremental result has ",
+                      reuse_.size(), " entry(ies).");
+  RefreshShapeTaggedReleases(release_after_, value_tags_, release_after_shape_tagged_);
+  ComputePeakMemory(graph, device);
+}
+
+void ComputeContext::FinalizeIncrementalMetadata(const FunctionProto &function, Device device) {
+  EXT_ENFORCE_INVALID(reuse_.size() == function.node().size(),
+                      "ComputeContext::FinalizeIncrementalMetadata: function has ",
+                      function.node().size(), " node(s) but the incremental result has ",
+                      reuse_.size(), " entry(ies).");
+  RefreshShapeTaggedReleases(release_after_, value_tags_, release_after_shape_tagged_);
+  ComputePeakMemory(function, device);
+}
+
 void ComputeContext::ComputeInPlaceReuseGraph(
     const GraphProto &graph, const ShapesContext &ctx, bool allow_input_overwrite,
     const std::unordered_map<std::string, std::string> &value_tags) {

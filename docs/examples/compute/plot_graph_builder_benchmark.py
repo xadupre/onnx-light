@@ -5,11 +5,12 @@ Benchmark GraphBuilder against onnxscript GraphBuilder
 This example builds the same attention-style graph with 100, 200, and
 500 nodes using :class:`onnx_light.onnx_core.graph_builder.GraphBuilder` and
 :class:`onnxscript.GraphBuilder`. It checks that both models produce the same
-outputs before measuring model construction with and without final protobuf
+outputs before measuring model construction with and without in-memory
 serialization. The timings include model finalization (``to_onnx`` or
 ``onnx_ir.to_proto``), but exclude imports, input generation, and execution.
-The example also reports the operator-type distribution and plots both timing
-modes against the graph size.
+The serialization column additionally calls ``SerializeToString``: it creates
+the complete protobuf wire representation in memory rather than writing it to
+a file.
 
 Run this example with the ``docs`` optional dependencies installed.
 
@@ -21,6 +22,12 @@ sequence length, and width are all dynamic; width must be divisible by two.
 The same exported models are checked on several shapes, including a singleton
 sequence. Both builders receive identical operators and initializers; their
 default shape-inference behavior is included in the construction timings.
+
+To make the serialization cost visible, the timed models also expose four
+large ``UINT8`` initializers as outputs. They share one source array while the
+builders are running, but each initializer is present in the final model, whose
+serialized size is approximately 1.5 GB. The functional checks omit this large
+payload.
 """
 
 from __future__ import annotations
@@ -45,6 +52,9 @@ OPSET = 18
 SHAPE = ["batch", "sequence", "width"]
 INPUT_SHAPES = ((1, 1, 4), (2, 3, 6), (3, 5, 8))
 BLOCK_SIZE = 20
+LARGE_INITIALIZER_BYTES = 375_000_000
+LARGE_INITIALIZER_COUNT = 4
+_LARGE_INITIALIZER = None
 
 
 def attention_blocks(op, value, constants, node_count: int):
@@ -87,7 +97,15 @@ def constants():
     )
 
 
-def build_light(node_count: int):
+def large_initializer():
+    """Returns the shared array used to produce an approximately 1.5 GB model."""
+    global _LARGE_INITIALIZER
+    if _LARGE_INITIALIZER is None:
+        _LARGE_INITIALIZER = numpy.zeros(LARGE_INITIALIZER_BYTES, dtype=numpy.uint8)
+    return _LARGE_INITIALIZER
+
+
+def build_light(node_count: int, large_initializers: bool = False):
     """Builds dynamic attention blocks with onnx-light and returns its model."""
     builder = GraphBuilder("attention")
     builder.set_opset_version("", OPSET)
@@ -97,10 +115,15 @@ def build_light(node_count: int):
     ]
     value = attention_blocks(builder.op, value, initializers, node_count)
     builder.out(value, TensorProto.FLOAT, SHAPE)
+    if large_initializers:
+        payload = large_initializer()
+        for index in range(LARGE_INITIALIZER_COUNT):
+            name = builder.init(payload, name=f"large{index}", copy=False)
+            builder.out(name, TensorProto.UINT8, [LARGE_INITIALIZER_BYTES])
     return builder.to_onnx("model")
 
 
-def build_onnxscript(node_count: int):
+def build_onnxscript(node_count: int, large_initializers: bool = False):
     """Builds the same dynamic attention blocks with onnxscript."""
     graph = onnx_ir.Graph(
         inputs=[], outputs=[], nodes=[], opset_imports={"": OPSET}, name="attention"
@@ -115,6 +138,11 @@ def build_onnxscript(node_count: int):
     value.shape = onnx_ir.Shape(SHAPE)
     value.type = onnx_ir.TensorType(onnx_ir.DataType.FLOAT)
     builder.add_output(value, None)
+    if large_initializers:
+        payload = large_initializer()
+        for index in range(LARGE_INITIALIZER_COUNT):
+            initializer = builder.initializer(onnx_ir.tensor(payload), name=f"large{index}")
+            builder.add_output(initializer, None)
     return onnx_ir.to_proto(onnx_ir.Model(graph, ir_version=10))
 
 
@@ -202,11 +230,11 @@ def format_node_type_table(distributions: dict[int, Counter]) -> str:
 
 
 def plot_benchmark(results: list[dict]):
-    """Plots construction times with and without serialization."""
+    """Plots construction times with and without in-memory serialization."""
     figure, axes = matplotlib.pyplot.subplots(1, 2, figsize=(11, 4), sharex=True)
     for axis, key, title in (
         (axes[0], "model", "Model construction"),
-        (axes[1], "serialized", "Model construction and serialization"),
+        (axes[1], "serialized", "Model construction and in-memory serialization"),
     ):
         for builder_name in ("onnx-light", "onnxscript"):
             rows = [row for row in results if row["builder"] == builder_name]
@@ -226,7 +254,7 @@ def plot_benchmark(results: list[dict]):
 
 
 if __name__ == "__main__":
-    print("nodes  builder       model (ms)  model + serialization (ms)")
+    print("nodes  builder       model (ms)  model + in-memory serialization (ms)")
     results = []
     distributions = {}
     for count in NODE_COUNTS:
@@ -234,7 +262,10 @@ if __name__ == "__main__":
         distribution_model = build_light(count)
         distributions[count] = node_type_distribution(distribution_model)
         del distribution_model
-        for name, build in (("onnx-light", build_light), ("onnxscript", build_onnxscript)):
+        for name, build in (
+            ("onnx-light", lambda n: build_light(n, large_initializers=True)),
+            ("onnxscript", lambda n: build_onnxscript(n, large_initializers=True)),
+        ):
             model_time = measure(build, count, False)
             serialized_time = measure(build, count, True)
             results.append(
@@ -245,7 +276,7 @@ if __name__ == "__main__":
                     "serialized": serialized_time,
                 }
             )
-            print(f"{count:5}  {name:12}  {model_time:10.2f}  {serialized_time:26.2f}")
+            print(f"{count:5}  {name:12}  {model_time:10.2f}  {serialized_time:36.2f}")
     print("\nNode-type distribution (identical for both builders):")
     print(format_node_type_table(distributions))
     plot_benchmark(results)

@@ -372,6 +372,21 @@ public:
   /// the per-node result vectors so they stay aligned with :cpp:func:`Size`.
   void AppendNodeReuse(const NodeProto &node, std::size_t node_index, const ShapesContext &ctx);
 
+  /**
+   * Finalizes metadata maintained by the incremental append path.
+   *
+   * Refreshes the shape-tagged release subset from the final value tags and
+   * computes per-operator peak memory. Unlike
+   * :cpp:func:`ComputeInPlaceReuseGraph`, this does not rescan tags, lifetimes,
+   * or in-place reuse that :cpp:func:`AppendNodeTags` and
+   * :cpp:func:`AppendNodeReuse` already keep current.
+   */
+  void FinalizeIncrementalMetadata(const GraphProto &graph, Device device);
+
+  /// Same as :cpp:func:`FinalizeIncrementalMetadata(const GraphProto&, Device)`
+  /// for a function body.
+  void FinalizeIncrementalMetadata(const FunctionProto &function, Device device);
+
   /// Number of nodes for which reuse has been computed (one entry per node of
   /// the analysed graph, in ``graph.node()`` order). Zero before
   /// :cpp:func:`ComputeInPlaceReuseGraph` has been called.

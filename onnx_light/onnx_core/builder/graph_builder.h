@@ -758,8 +758,9 @@ private:
   FunctionProto BuildFunction(const std::string &domain) const;
   FunctionProto ExportFunction(const std::string &domain, bool model_scoped);
 
-  // Orders producers before consumers, including lexical subgraph captures.
-  void SortNodesTopologically();
+  // Orders producers before consumers, including lexical subgraph captures,
+  // and returns whether any builder's node order changed.
+  bool SortNodesTopologically();
 
   // Converts node attributes from proto form to builder form: GRAPH/GRAPHS
   // attributes become ``*_ref`` STRING/STRINGS attributes that reference nested
@@ -779,9 +780,8 @@ private:
   // inline (GRAPH / GRAPHS attribute) or through a builder ``*_ref`` reference.
   static bool NodeCarriesSubgraph(const NodeProto &node);
 
-  // Runs the whole-graph compute analyses and writes their result into
-  // ``graph`` (shapes, in-place / release-after / value-tag metadata and
-  // per-node peak memory).
+  // Writes compute metadata into ``graph``. The incremental results are reused
+  // while valid; builders changed by whole-graph rewrites are recomputed.
   template <typename Proto> void Finalize(Proto &graph);
 
   // Returns the nested builder named ``name`` in ``builders`` or nullptr.
@@ -806,6 +806,7 @@ private:
   std::unordered_map<std::string, std::unordered_map<std::string, std::vector<LightOpSchema>>>
       schema_table_;
   ComputeContext compute_;
+  bool incremental_compute_valid_ = true;
   utils::RepeatedProtoField<ValueInfoProto> inputs_;
   utils::RepeatedProtoField<ValueInfoProto> outputs_;
   utils::RepeatedProtoField<ValueInfoProto> value_infos_;

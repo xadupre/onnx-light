@@ -23,7 +23,7 @@ example = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(example)
 
 
-@pytest.mark.parametrize("count", (100, 200, 500))
+@pytest.mark.parametrize("count", example.NODE_COUNTS)
 def test_equivalent_models(count):
     example.check_models(count)
 
@@ -32,6 +32,19 @@ def test_timing_modes():
     for build in (example.build_light, example.build_onnxscript):
         assert example.measure(build, 20, False, repeats=1) >= 0
         assert example.measure(build, 20, True, repeats=1) >= 0
+
+
+@pytest.mark.parametrize("build", (example.build_light, example.build_onnxscript))
+def test_large_initializers_are_model_outputs(build, monkeypatch):
+    monkeypatch.setattr(example, "LARGE_INITIALIZER_BYTES", 16)
+    monkeypatch.setattr(example, "_LARGE_INITIALIZER", numpy.zeros(16, dtype=numpy.uint8))
+    model = onnx.load_from_string(build(20, large_initializers=True).SerializeToString())
+    assert len(model.graph.initializer) == 5 + example.LARGE_INITIALIZER_COUNT
+    assert len(model.graph.output) == 1 + example.LARGE_INITIALIZER_COUNT
+    assert all(
+        initializer.raw_data == bytes(16)
+        for initializer in model.graph.initializer[-example.LARGE_INITIALIZER_COUNT :]
+    )
 
 
 @pytest.mark.parametrize("serialize", (False, True))
@@ -44,11 +57,11 @@ def test_timing_releases_each_model_between_samples(serialize):
             alive[0] += 1
             self.cycle = self
 
-        def SerializeToString(self):
-            return b"model"
-
         def __del__(self):
             alive[0] -= 1
+
+        def SerializeToString(self):
+            return b"model"
 
     def build(_):
         assert alive[0] == 0

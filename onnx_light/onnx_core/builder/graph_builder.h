@@ -781,8 +781,12 @@ private:
   static bool NodeCarriesSubgraph(const NodeProto &node);
 
   // Writes compute metadata into ``graph``. The incremental results are reused
-  // while valid; builders changed by whole-graph rewrites are recomputed.
+  // directly because every graph edit refreshes the affected builder.
   template <typename Proto> void Finalize(Proto &graph);
+
+  // Replays incremental annotations for this builder after its node list has
+  // been edited. Shapes, callbacks, and nested builders are preserved.
+  void RebuildIncrementalAnnotations();
 
   // Returns the nested builder named ``name`` in ``builders`` or nullptr.
   static GraphBuilder *FindNamedBuilder(const std::vector<std::unique_ptr<GraphBuilder>> &builders,
@@ -806,7 +810,6 @@ private:
   std::unordered_map<std::string, std::unordered_map<std::string, std::vector<LightOpSchema>>>
       schema_table_;
   ComputeContext compute_;
-  bool incremental_compute_valid_ = true;
   utils::RepeatedProtoField<ValueInfoProto> inputs_;
   utils::RepeatedProtoField<ValueInfoProto> outputs_;
   utils::RepeatedProtoField<ValueInfoProto> value_infos_;

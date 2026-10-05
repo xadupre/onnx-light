@@ -581,6 +581,7 @@ GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report,
     }
 
     if (!matches.empty() || cleaned != 0) {
+      builder_.RebuildIncrementalAnnotations();
       continue;
     }
     if (priority_index + 1 == priorities.size()) {
@@ -841,6 +842,7 @@ void GraphGraph::ApplyRewritingBatch(const std::vector<LocalRewriting> &rewrites
         "Replay: added node positions do not leave enough slots for retained nodes.");
   }
   builder_.nodes_ = std::move(rebuilt);
+  builder_.RebuildIncrementalAnnotations();
   builder_.PruneValueInfos();
   Rebuild();
 }

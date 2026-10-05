@@ -305,7 +305,6 @@ GraphBuilder &GraphBuilder::operator=(GraphBuilder &&other) noexcept {
   schema_lookup_ = std::move(other.schema_lookup_);
   schema_table_ = std::move(other.schema_table_);
   compute_ = std::move(other.compute_);
-  incremental_compute_valid_ = other.incremental_compute_valid_;
   inputs_ = std::move(other.inputs_);
   outputs_ = std::move(other.outputs_);
   value_infos_ = std::move(other.value_infos_);
@@ -761,6 +760,55 @@ void GraphBuilder::SeedInputAnnotations(const std::string &name) {
   compute_.SeedValueTag(name, "weight");
   compute_.SeedReuseInput(name, /*is_graph_input=*/true, /*is_initializer=*/false,
                           /*allow_input_overwrite=*/false);
+}
+
+void GraphBuilder::RebuildIncrementalAnnotations() {
+  compute_.ClearIncrementalAnnotations();
+  std::unordered_set<std::string> input_names;
+  for (const ValueInfoProto &input : inputs_) {
+    const std::string name = input.name().value();
+    input_names.insert(name);
+    SeedInputAnnotations(name);
+  }
+  for (const TensorProto &initializer : initializers_) {
+    const std::string name = initializer.name().value();
+    const bool is_input = input_names.count(name) != 0;
+    compute_.SeedReuseInput(name, is_input, /*is_initializer=*/true,
+                            /*allow_input_overwrite=*/false);
+    if (!is_input) {
+      compute_.SeedValueTag(name, "weight");
+      compute_.SeedConstant(name);
+    }
+  }
+  for (const EncodedValueProto &initializer : encoded_initializers_) {
+    const std::string name = initializer.name().value();
+    const bool is_input = input_names.count(name) != 0;
+    compute_.SeedReuseInput(name, is_input, /*is_initializer=*/true,
+                            /*allow_input_overwrite=*/false);
+    compute_.SeedValueTag(name, "weight");
+    if (!is_input) {
+      compute_.SeedConstant(name);
+    }
+  }
+  for (const PagedCacheProto &initializer : paged_cache_initializers_) {
+    const std::string name = initializer.name().value();
+    const bool is_input = input_names.count(name) != 0;
+    compute_.SeedReuseInput(name, is_input, /*is_initializer=*/true,
+                            /*allow_input_overwrite=*/false);
+    compute_.SeedValueTag(name, "weight");
+    if (!is_input) {
+      compute_.SeedConstant(name);
+    }
+  }
+  for (std::size_t i = 0; i < nodes_.size(); ++i) {
+    const NodeProto &node = nodes_[i];
+    compute_.AppendNodeTags(nodes_, i);
+    compute_.AppendNodeReuse(node, i, compute_.Shapes());
+    compute_.AppendNodeConstant(node, i);
+  }
+  for (const ValueInfoProto &output : outputs_) {
+    compute_.SeedReuseOutput(output.name().value());
+  }
 }
 
 bool GraphBuilder::HasGraphReferenceSuffix(const std::string &name) {
@@ -1352,6 +1400,9 @@ void GraphBuilder::CollectNodeReferences(const NodeProto &node,
 std::size_t GraphBuilder::RemoveUnusedNodes() {
   const auto removed = RemoveUnusedNodesImpl(true);
   RebuildStructuredState();
+  if (removed != 0) {
+    RebuildIncrementalAnnotations();
+  }
   return removed;
 }
 
@@ -1417,7 +1468,7 @@ std::size_t GraphBuilder::RemoveUnusedNodesImpl(bool recursive) {
   }
   nodes_ = std::move(kept);
   if (local_removed != 0) {
-    incremental_compute_valid_ = false;
+    RebuildIncrementalAnnotations();
   }
   std::unordered_set<std::string> used;
   for (const ValueInfoProto &input : inputs_) {
@@ -1526,6 +1577,9 @@ bool CanReuseOutputs(const NodeProto &node, const std::vector<std::string> &surv
 std::size_t GraphBuilder::RemoveIdentityNodes() {
   const auto removed = RemoveIdentityNodesImpl(true, nullptr);
   RebuildStructuredState();
+  if (removed != 0) {
+    RebuildIncrementalAnnotations();
+  }
   return removed;
 }
 
@@ -1572,7 +1626,7 @@ std::size_t GraphBuilder::RemoveIdentityNodesImpl(
   }
   nodes_ = std::move(kept);
   if (local_removed != 0) {
-    incremental_compute_valid_ = false;
+    RebuildIncrementalAnnotations();
   }
 
   // Collapse chains of identities: an identity input can itself be another
@@ -1601,6 +1655,9 @@ std::size_t GraphBuilder::RemoveIdentityNodesImpl(
 std::size_t GraphBuilder::RemoveDuplicateNodes() {
   const auto removed = RemoveDuplicateNodesImpl(true, nullptr);
   RebuildStructuredState();
+  if (removed != 0) {
+    RebuildIncrementalAnnotations();
+  }
   return removed;
 }
 
@@ -1693,7 +1750,7 @@ std::size_t GraphBuilder::RemoveDuplicateNodesImpl(
   }
   nodes_ = std::move(kept);
   if (local_removed != 0) {
-    incremental_compute_valid_ = false;
+    RebuildIncrementalAnnotations();
   }
 
   // Rewrite every consumer of a dropped node's output, descending into
@@ -1820,7 +1877,7 @@ std::size_t GraphBuilder::MoveShapeAndSizeNodesImpl(bool recursive) {
     ordered.push_back(std::move(nodes_[index]));
   }
   nodes_ = std::move(ordered);
-  incremental_compute_valid_ = false;
+  RebuildIncrementalAnnotations();
 
   return moved + local_moved;
 }
@@ -2013,7 +2070,7 @@ std::size_t GraphBuilder::InlineFunctionCalls(const std::vector<GraphBuilder *> 
     }
     nodes_ = std::move(kept);
     if (changed) {
-      incremental_compute_valid_ = false;
+      RebuildIncrementalAnnotations();
     }
   }
   return inlined;
@@ -2309,7 +2366,7 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
 
   nodes_ = std::move(kept);
   if (local_removed != 0) {
-    incremental_compute_valid_ = false;
+    RebuildIncrementalAnnotations();
   }
   // Append the folded results as initializers, in fold order.
   for (const std::string &name : folded_order) {
@@ -2321,6 +2378,9 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
 std::size_t GraphBuilder::RemoveDuplicateInitializers() {
   const auto removed = DeduplicateInitializers(InitializerContentIndex{}, true, nullptr);
   RebuildStructuredState();
+  if (removed != 0) {
+    RebuildIncrementalAnnotations();
+  }
   return removed;
 }
 
@@ -2796,7 +2856,7 @@ bool GraphBuilder::SortNodesTopologically() {
       sorted.push_back(std::move(nodes_[i]));
     }
     nodes_ = std::move(sorted);
-    incremental_compute_valid_ = false;
+    RebuildIncrementalAnnotations();
     changed = true;
   }
   for (const NodeProto &node : nodes_) {
@@ -2850,14 +2910,10 @@ template <typename Proto> void GraphBuilder::Finalize(Proto &graph) {
       }
     }
   }
-  if (incremental_compute_valid_ && compute_.Size() == graph.node().size()) {
-    compute_.FinalizeIncrementalMetadata(graph, device_);
-  } else {
-    const auto tags = compute_.ComputeValueAndNodeTags(graph);
-    compute_.ComputeInPlaceReuseGraph(graph, compute_.Shapes(), /*allow_input_overwrite=*/false,
-                                      tags.first);
-    compute_.ComputePeakMemory(graph, device_);
-  }
+  EXT_ENFORCE_INVALID(compute_.Size() == graph.node().size(),
+                      "GraphBuilder::Finalize: incremental metadata has ", compute_.Size(),
+                      " entries for ", graph.node().size(), " nodes.");
+  compute_.FinalizeIncrementalMetadata(graph, device_);
   // Writes inferred shapes (value_info), in-place / release-after / shape-tag
   // metadata and per-node peak memory.
   if constexpr (std::is_same_v<Proto, GraphProto>) {

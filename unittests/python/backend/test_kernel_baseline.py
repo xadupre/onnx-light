@@ -96,6 +96,24 @@ class TestKernelBaseline(ExtTestCase):
         )
         self.assertEqual(rows[0]["op_type"], "Where")
 
+    def test_global_pool_benchmark_fixtures(self):
+        for case in kernel_baseline.BENCHMARK_CORPUS:
+            if case["arity"] != "global_pool":
+                continue
+            with self.subTest(op_type=case["op_type"]):
+                model = kernel_baseline._make_model(case, 4)
+                inputs = kernel_baseline._make_inputs(case, 4, 17)
+                self.assertEqual(model.graph.node[0].op_type, case["op_type"])
+                self.assertEqual(inputs["X"].shape, (1, 4, 256))
+                rows = kernel_baseline.run_benchmark_corpus(
+                    cases=({**case, "shapes": (("small", 4),)},),
+                    cpu_policies=(("serial", 1),),
+                    repeat=1,
+                    warmup=0,
+                    collect_diagnostics=False,
+                )
+                self.assertEqual(rows[0]["op_type"], case["op_type"])
+
     def test_run_kernel_baseline_report_does_not_modify_tuning_cache(self):
         from onnx_light.kernel_tuning import kernel_tuning_parameters
 

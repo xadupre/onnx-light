@@ -6,8 +6,10 @@
 
 #include "onnx_core/runtime/kernels/float16_promote.h"
 #include "onnx_core/runtime/kernels/node_helpers.h"
+#include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -16,6 +18,19 @@
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
+
+constexpr uint32_t kTuningAbi = 1;
+constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
+constexpr std::array<int32_t, 1> kFloatTypes = {static_cast<int32_t>(DataType::FLOAT)};
+constexpr std::array<int32_t, 4> kLpTypes = {
+    static_cast<int32_t>(DataType::FLOAT), static_cast<int32_t>(DataType::DOUBLE),
+    static_cast<int32_t>(DataType::FLOAT16), static_cast<int32_t>(DataType::BFLOAT16)};
+
+int64_t SliceGrain(int64_t minimum_elements, int64_t spatial) {
+  const int64_t work_per_slice = std::max<int64_t>(1, spatial);
+  return std::max<int64_t>(1, minimum_elements / work_per_slice +
+                                  (minimum_elements % work_per_slice != 0));
+}
 
 // Returns the total number of spatial elements per (n, c) slice.
 int64_t SpatialCount(const Tensor &x) {
@@ -27,8 +42,8 @@ int64_t SpatialCount(const Tensor &x) {
 }
 
 template <typename T>
-void GlobalLpPoolLoop(const T *x, T *y, int64_t slices, int64_t spatial, double p) {
-  for (int64_t i = 0; i < slices; ++i) {
+void GlobalLpPoolLoop(const T *x, T *y, int64_t begin, int64_t end, int64_t spatial, double p) {
+  for (int64_t i = begin; i < end; ++i) {
     double log_sum = -std::numeric_limits<double>::infinity();
     for (int64_t s = 0; s < spatial; ++s) {
       const double value = p * std::log(std::abs(static_cast<double>(x[i * spatial + s])));
@@ -48,6 +63,28 @@ void GlobalLpPoolLoop(const T *x, T *y, int64_t slices, int64_t spatial, double 
 }
 
 } // namespace
+
+GlobalAveragePool::GlobalAveragePool(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "GlobalAveragePool", kFloatTypes, kPortableParallelMinimum,
+                            kTuningAbi) {}
+GlobalMaxPool::GlobalMaxPool(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "GlobalMaxPool", kFloatTypes, kPortableParallelMinimum,
+                            kTuningAbi) {}
+GlobalLpPool::GlobalLpPool(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "GlobalLpPool", kLpTypes, kPortableParallelMinimum, kTuningAbi) {}
+
+void GlobalAveragePool::RegisterTuningSchemas() {
+  tuning::RegisterParallelTuningSchemas("GlobalAveragePool", kFloatTypes, kPortableParallelMinimum,
+                                        kTuningAbi);
+}
+void GlobalMaxPool::RegisterTuningSchemas() {
+  tuning::RegisterParallelTuningSchemas("GlobalMaxPool", kFloatTypes, kPortableParallelMinimum,
+                                        kTuningAbi);
+}
+void GlobalLpPool::RegisterTuningSchemas() {
+  tuning::RegisterParallelTuningSchemas("GlobalLpPool", kLpTypes, kPortableParallelMinimum,
+                                        kTuningAbi);
+}
 
 // ---------------------------------------------------------------------------
 // GlobalAveragePool
@@ -79,16 +116,19 @@ Tensor GlobalAveragePool::operator()(const Tensor &x, RuntimeContext *rt) const 
   const float *px = x.AsFloat();
   float *py = reinterpret_cast<float *>(out.mutable_bytes());
 
-  for (int64_t n = 0; n < N; ++n) {
-    for (int64_t c = 0; c < C; ++c) {
-      const int64_t base = (n * C + c) * spatial;
-      double sum = 0.0;
-      for (int64_t s = 0; s < spatial; ++s) {
-        sum += static_cast<double>(px[base + s]);
-      }
-      py[n * C + c] = static_cast<float>(sum / static_cast<double>(spatial));
-    }
-  }
+  ParallelFor(
+      N * C, SliceGrain(tuning().parallel_minimum_elements, spatial),
+      [&](int64_t begin, int64_t end) {
+        for (int64_t i = begin; i < end; ++i) {
+          const int64_t base = i * spatial;
+          double sum = 0.0;
+          for (int64_t s = 0; s < spatial; ++s) {
+            sum += static_cast<double>(px[base + s]);
+          }
+          py[i] = static_cast<float>(sum / static_cast<double>(spatial));
+        }
+      },
+      "GlobalAveragePool");
   return out;
 }
 
@@ -121,16 +161,19 @@ Tensor GlobalMaxPool::operator()(const Tensor &x, RuntimeContext *rt) const {
   const float *px = x.AsFloat();
   float *py = reinterpret_cast<float *>(out.mutable_bytes());
 
-  for (int64_t n = 0; n < N; ++n) {
-    for (int64_t c = 0; c < C; ++c) {
-      const int64_t base = (n * C + c) * spatial;
-      float val = px[base];
-      for (int64_t s = 1; s < spatial; ++s) {
-        val = std::max(val, px[base + s]);
-      }
-      py[n * C + c] = val;
-    }
-  }
+  ParallelFor(
+      N * C, SliceGrain(tuning().parallel_minimum_elements, spatial),
+      [&](int64_t begin, int64_t end) {
+        for (int64_t i = begin; i < end; ++i) {
+          const int64_t base = i * spatial;
+          float val = px[base];
+          for (int64_t s = 1; s < spatial; ++s) {
+            val = std::max(val, px[base + s]);
+          }
+          py[i] = val;
+        }
+      },
+      "GlobalMaxPool");
   return out;
 }
 
@@ -166,9 +209,19 @@ Tensor GlobalLpPool::operator()(const Tensor &x, double p, RuntimeContext *rt) c
   Tensor out = rt ? rt->MakeOutputTensor(0, x.data_type, out_shape, out_n_bytes)
                   : MakeOutputTensor(x.data_type, out_shape, out_n_bytes, nullptr);
   if (x.data_type == static_cast<int32_t>(DataType::DOUBLE)) {
-    GlobalLpPoolLoop(x.AsDouble(), out.AsDouble(), N * C, spatial, p);
+    ParallelFor(
+        N * C, SliceGrain(tuning().parallel_minimum_elements, spatial),
+        [&](int64_t begin, int64_t end) {
+          GlobalLpPoolLoop(x.AsDouble(), out.AsDouble(), begin, end, spatial, p);
+        },
+        "GlobalLpPool");
   } else {
-    GlobalLpPoolLoop(x.AsFloat(), out.AsFloat(), N * C, spatial, p);
+    ParallelFor(
+        N * C, SliceGrain(tuning().parallel_minimum_elements, spatial),
+        [&](int64_t begin, int64_t end) {
+          GlobalLpPoolLoop(x.AsFloat(), out.AsFloat(), begin, end, spatial, p);
+        },
+        "GlobalLpPool");
   }
   return out;
 }
@@ -178,8 +231,7 @@ void GlobalAveragePool::Run(RuntimeContext &rt) {
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
   const Tensor &x = GetInput(node, 0, rt.tensors());
-  onnx_kernels::kernel::GlobalAveragePool k(rt.kernel_ctx());
-  SetOutput(node, 0, k(x, &rt), rt);
+  SetOutput(node, 0, (*this)(x, &rt), rt);
 }
 
 void GlobalLpPool::Run(RuntimeContext &rt) {
@@ -190,8 +242,7 @@ void GlobalLpPool::Run(RuntimeContext &rt) {
   const double p = rt.kernel_ctx().opset.version == 1
                        ? static_cast<double>(GetAttributeFloatOrDefault(node, "p", 2.0f))
                        : static_cast<double>(GetAttributeIntOrDefault(node, "p", 2));
-  onnx_kernels::kernel::GlobalLpPool k(rt.kernel_ctx());
-  SetOutput(node, 0, k(x, p, &rt), rt);
+  SetOutput(node, 0, (*this)(x, p, &rt), rt);
 }
 
 void GlobalMaxPool::Run(RuntimeContext &rt) {
@@ -199,8 +250,7 @@ void GlobalMaxPool::Run(RuntimeContext &rt) {
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
   const Tensor &x = GetInput(node, 0, rt.tensors());
-  onnx_kernels::kernel::GlobalMaxPool k(rt.kernel_ctx());
-  SetOutput(node, 0, k(x, &rt), rt);
+  SetOutput(node, 0, (*this)(x, &rt), rt);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

@@ -201,11 +201,12 @@ public:
 /// Global average pooling on a FLOAT tensor laid out as ``(N, C, D1, ..., Dk)``.
 /// The output shape is ``(N, C, 1, 1, ..., 1)`` — each spatial dimension is
 /// reduced to 1 by computing the mean over all elements in that dimension.
-class GlobalAveragePool : public KernelBase {
+class GlobalAveragePool : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:GlobalAveragePool";
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
+  explicit GlobalAveragePool(const KernelContext &ctx);
 
   /// Returns a FLOAT output tensor of shape ``(N, C, 1, 1, ..., 1)``.
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -217,11 +218,12 @@ public:
 /// Global max pooling on a FLOAT tensor laid out as ``(N, C, D1, ..., Dk)``.
 /// The output shape is ``(N, C, 1, 1, ..., 1)`` — each spatial dimension is
 /// reduced to 1 by computing the maximum over all elements in that dimension.
-class GlobalMaxPool : public KernelBase {
+class GlobalMaxPool : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:GlobalMaxPool";
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
+  explicit GlobalMaxPool(const KernelContext &ctx);
 
   /// Returns a FLOAT output tensor of shape ``(N, C, 1, 1, ..., 1)``.
   Tensor operator()(const Tensor &x, RuntimeContext *rt = nullptr) const;
@@ -236,11 +238,12 @@ public:
 /// reduced to 1 by computing the Lp norm over all elements in that dimension.
 /// The default value of ``p`` is 2 (L2 norm). When ``p == 1`` this is L1
 /// pooling; ``p == 2`` (default) gives L2 pooling (without averaging).
-class GlobalLpPool : public KernelBase {
+class GlobalLpPool : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:GlobalLpPool";
+  static void RegisterTuningSchemas();
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
+  explicit GlobalLpPool(const KernelContext &ctx);
 
   /// Returns an output tensor of shape ``(N, C, 1, 1, ..., 1)`` with the input dtype.
   /// ``p`` is a finite positive exponent (default 2); opset 1 allows fractional values.

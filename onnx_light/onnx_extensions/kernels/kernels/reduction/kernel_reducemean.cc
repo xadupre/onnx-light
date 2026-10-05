@@ -140,11 +140,12 @@ void MeanReduceTyped(const Tensor &data, const Shape &is_reduced,
 void MeanReduce(const Tensor &data, const Shape &is_reduced, const Shape &output_shape_noreduce,
                 Tensor &output, int64_t minimum_elements) {
   if (core::runtime::IsHalfPrecision(data.data_type)) {
-    Tensor promoted = core::runtime::PromoteToFloat32(data);
+    Tensor promoted = core::runtime::PromoteToFloat32(data, nullptr, minimum_elements);
     Tensor reduced = MakeOutputTensor(DataType::FLOAT, output.shape,
                                       output.element_count() * sizeof(float), nullptr);
     MeanReduceTyped<float>(promoted, is_reduced, output_shape_noreduce, reduced, minimum_elements);
-    Tensor demoted = core::runtime::DemoteFromFloat32(reduced, data.data_type);
+    Tensor demoted =
+        core::runtime::DemoteFromFloat32(reduced, data.data_type, nullptr, minimum_elements);
     if (output.size_bytes() > 0) {
       std::memcpy(output.mutable_bytes(), demoted.bytes(), output.size_bytes());
     }

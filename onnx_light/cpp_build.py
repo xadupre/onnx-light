@@ -50,6 +50,18 @@ def get_cpp_build_info() -> dict[str, str]:
         so ``core_library`` is only reported on Linux. On Windows, the matching
         ``<component>_import_library`` is added when the build tree is
         available.
+
+    The following example displays the ABI metadata and the exact headers and
+    libraries selected by the imported package:
+
+    .. runpython::
+        :showcode:
+
+        from pprint import pprint
+
+        from onnx_light import get_cpp_build_info
+
+        pprint(get_cpp_build_info())
     """
     from onnx_light.onnx_py import _onnxpyprotoop
 

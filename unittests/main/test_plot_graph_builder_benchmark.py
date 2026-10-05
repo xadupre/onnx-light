@@ -144,11 +144,15 @@ def test_plot_benchmark():
 
 def test_pattern_fusion_benchmark():
     model = example.build_fusion_model(4)
-    assert len(model.graph.node) == 8
+    assert len(model.graph.node) == 24
     for fuse in (example.fuse_light, example.fuse_onnxscript):
         optimized = fuse(model)
-        assert len(optimized.graph.node) == 4
-        assert all(node.op_type == "FusedAddMul" for node in optimized.graph.node)
+        assert len(optimized.graph.node) == 12
+        assert {node.op_type for node in optimized.graph.node} == {
+            "FusedAddMul",
+            "FusedMatMulAdd",
+            "FusedAddRelu",
+        }
         assert all(node.domain == "onnx_light.benchmark" for node in optimized.graph.node)
         assert example.measure_fusion(fuse, model, repeats=1) >= 0
 

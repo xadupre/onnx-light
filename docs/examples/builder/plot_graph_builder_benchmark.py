@@ -29,11 +29,11 @@ builders are running, but each initializer is present in the final model, whose
 serialized size is approximately 1.5 GB. The functional checks omit this large
 payload.
 
-The final section compares pattern-fusion throughput. It builds chains of
-``Add`` followed by ``Mul`` and fuses every pair into one custom
-``FusedAddMul`` node. Both implementations start from the same ONNX model and
-include conversion into their native graph representation, matching,
-rewriting, and conversion back to ONNX in the measured time.
+The final section compares pattern-fusion throughput with three rules:
+``Add``-``Mul``, ``MatMul``-``Add``, and ``Add``-``Relu``. Both
+implementations start from the same ONNX model and include conversion into
+their native graph representation, matching, rewriting, and conversion back
+to ONNX in the measured time.
 """
 
 from __future__ import annotations
@@ -68,7 +68,8 @@ BLOCK_SIZE = 20
 LARGE_INITIALIZER_BYTES = 375_000_000
 LARGE_INITIALIZER_COUNT = 4
 _LARGE_INITIALIZER = None
-FUSION_BLOCK_COUNTS = (100, 200, 500, 1000)
+FUSION_BLOCK_COUNTS = (50, 100, 250, 500)
+FUSIONS_PER_BLOCK = 3
 
 
 def attention_blocks(op, value, constants, node_count: int):
@@ -240,6 +241,69 @@ class AddMulFusionPattern(PatternOptimization):
         ]
 
 
+class MatMulAddFusionPattern(PatternOptimization):
+    """Fuses MatMul followed by Add into one benchmark operator."""
+
+    def __init__(self):
+        super().__init__(priority=1, name="MatMulAddFusion")
+
+    def fast_op_type(self):
+        """Returns the candidate root operator."""
+        return {"Add"}
+
+    def match(self, graph, node):
+        """Matches a MatMul consumed only by the candidate Add."""
+        previous = graph.node_before(node.input[0])
+        if previous is None or previous.op_type != "MatMul":
+            return self.no_match(node, "the first input is not produced by MatMul")
+        if len(graph.next_nodes(previous.output[0])) != 1:
+            return self.no_match(node, "the MatMul output has multiple consumers")
+        return self.result([previous, node], insert_at=node)
+
+    def apply(self, graph, nodes):
+        """Builds the fused replacement node."""
+        del graph
+        matmul, add = nodes
+        return [
+            oh.make_node(
+                "FusedMatMulAdd",
+                [matmul.input[0], matmul.input[1], add.input[1]],
+                list(add.output),
+                domain="onnx_light.benchmark",
+            )
+        ]
+
+
+class AddReluFusionPattern(PatternOptimization):
+    """Fuses Add followed by Relu into one benchmark operator."""
+
+    def __init__(self):
+        super().__init__(priority=1, name="AddReluFusion")
+
+    def fast_op_type(self):
+        """Returns the candidate root operator."""
+        return {"Relu"}
+
+    def match(self, graph, node):
+        """Matches an Add consumed only by the candidate Relu."""
+        previous = graph.node_before(node.input[0])
+        if previous is None or previous.op_type != "Add":
+            return self.no_match(node, "the input is not produced by Add")
+        if len(graph.next_nodes(previous.output[0])) != 1:
+            return self.no_match(node, "the Add output has multiple consumers")
+        return self.result([previous, node], insert_at=node)
+
+    def apply(self, graph, nodes):
+        """Builds the fused replacement node."""
+        del graph
+        add, relu = nodes
+        return [
+            oh.make_node(
+                "FusedAddRelu", list(add.input), list(relu.output), domain="onnx_light.benchmark"
+            )
+        ]
+
+
 def _onnxscript_add_mul_pattern(op, x, bias, scale):
     return op.Mul(op.Add(x, bias), scale)
 
@@ -248,13 +312,39 @@ def _onnxscript_fused_add_mul(op, x, bias, scale):
     return op.FusedAddMul(x, bias, scale, _domain="onnx_light.benchmark", _version=1)
 
 
-ONNXSCRIPT_ADD_MUL_RULE = rewriter.RewriteRule(
-    _onnxscript_add_mul_pattern, _onnxscript_fused_add_mul, name="AddMulFusion"
+def _onnxscript_matmul_add_pattern(op, x, weight, bias):
+    return op.Add(op.MatMul(x, weight), bias)
+
+
+def _onnxscript_fused_matmul_add(op, x, weight, bias):
+    return op.FusedMatMulAdd(x, weight, bias, _domain="onnx_light.benchmark", _version=1)
+
+
+def _onnxscript_add_relu_pattern(op, x, bias):
+    return op.Relu(op.Add(x, bias))
+
+
+def _onnxscript_fused_add_relu(op, x, bias):
+    return op.FusedAddRelu(x, bias, _domain="onnx_light.benchmark", _version=1)
+
+
+ONNXSCRIPT_FUSION_RULES = rewriter.RewriteRuleSet(
+    [
+        rewriter.RewriteRule(
+            _onnxscript_add_mul_pattern, _onnxscript_fused_add_mul, name="AddMulFusion"
+        ),
+        rewriter.RewriteRule(
+            _onnxscript_matmul_add_pattern, _onnxscript_fused_matmul_add, name="MatMulAddFusion"
+        ),
+        rewriter.RewriteRule(
+            _onnxscript_add_relu_pattern, _onnxscript_fused_add_relu, name="AddReluFusion"
+        ),
+    ]
 )
 
 
 def build_fusion_model(block_count: int):
-    """Builds a graph containing one fusible Add-Mul pair per block."""
+    """Builds a graph containing three different fusible pairs per block."""
     if block_count <= 0:
         raise ValueError("block_count must be positive.")
     builder = GraphBuilder("fusion")
@@ -262,25 +352,29 @@ def build_fusion_model(block_count: int):
     value = builder.inp("X", TensorProto.FLOAT, ["N", 16])
     bias = builder.init(numpy.ones((1, 16), dtype=numpy.float32), name="bias")
     scale = builder.init(numpy.array(0.5, dtype=numpy.float32), name="scale")
+    weight = builder.init(numpy.eye(16, dtype=numpy.float32), name="weight")
     for _ in range(block_count):
         value = builder.op.Mul(builder.op.Add(value, bias), scale)
+        value = builder.op.Add(builder.op.MatMul(value, weight), bias)
+        value = builder.op.Relu(builder.op.Add(value, bias))
     builder.out(value, TensorProto.FLOAT, ["N", 16])
     return builder.to_onnx("model")
 
 
 def fuse_light(model):
-    """Fuses every Add-Mul pair with onnx-light."""
+    """Runs the three fusion patterns with onnx-light."""
     builder = OptimizationGraphBuilder(model)
-    rewrites = GraphGraph(builder, [AddMulFusionPattern()]).optimize()
+    patterns = [AddMulFusionPattern(), MatMulAddFusionPattern(), AddReluFusionPattern()]
+    rewrites = GraphGraph(builder, patterns).optimize()
     assert len(rewrites) == len(model.graph.node) // 2
     return builder.to_onnx("model")
 
 
 def fuse_onnxscript(model):
-    """Fuses every Add-Mul pair with onnxscript."""
+    """Runs the three fusion patterns with onnxscript."""
     proto = onnx.load_from_string(model.SerializeToString())
     ir_model = onnx_ir.from_proto(proto)
-    count = ONNXSCRIPT_ADD_MUL_RULE.apply_to_model(ir_model)
+    count = ONNXSCRIPT_FUSION_RULES.apply_to_model(ir_model)
     assert count == len(model.graph.node) // 2
     return onnx_ir.to_proto(ir_model)
 
@@ -360,7 +454,7 @@ def plot_benchmark(results: list[dict]):
 
 
 def plot_fusion_benchmark(results: list[dict]):
-    """Plots Add-Mul pattern-fusion times."""
+    """Plots multi-pattern fusion times."""
     figure, axis = matplotlib.pyplot.subplots(figsize=(6, 4))
     for optimizer in ("onnx-light", "onnxscript"):
         rows = [row for row in results if row["optimizer"] == optimizer]
@@ -370,7 +464,7 @@ def plot_fusion_benchmark(results: list[dict]):
             "o-",
             label=optimizer,
         )
-    axis.set_title("Add-Mul pattern fusion")
+    axis.set_title("Three pattern fusions")
     axis.set_xlabel("number of fused patterns")
     axis.set_ylabel("median time (ms)")
     axis.grid(True, alpha=0.3)
@@ -411,9 +505,10 @@ if __name__ == "__main__":
     fusion_results = []
     for count in FUSION_BLOCK_COUNTS:
         source = build_fusion_model(count)
+        pattern_count = count * FUSIONS_PER_BLOCK
         for name, fuse in (("onnx-light", fuse_light), ("onnxscript", fuse_onnxscript)):
             elapsed = measure_fusion(fuse, source)
-            fusion_results.append({"patterns": count, "optimizer": name, "time": elapsed})
-            print(f"{count:8}  {name:12}  {elapsed:11.2f}")
+            fusion_results.append({"patterns": pattern_count, "optimizer": name, "time": elapsed})
+            print(f"{pattern_count:8}  {name:12}  {elapsed:11.2f}")
     plot_fusion_benchmark(fusion_results)
     matplotlib.pyplot.show()

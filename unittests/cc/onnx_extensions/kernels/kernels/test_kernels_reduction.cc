@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/runtime/kernels/float16_promote.h"
 #include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/tuning/cpu_executor.h"
@@ -11,6 +12,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -676,7 +678,7 @@ TEST(KernelClass, ReduceMeanParallelLeadingSlicesMatchSerial) {
   const Tensor serial_first = mean(data, first_axis, false);
   mean.Configure({mean.TuningKey(core::runtime::DataType::FLOAT),
                   {{"parallel.minimum_elements", int64_t{1}}}});
-  core::runtime::ParallelRegionCollector collector(8);
+  core::runtime::ParallelRegionCollector collector(32);
   const core::runtime::ParallelRegionCollectorScope collector_scope(&collector);
   EXPECT_EQ(mean(data, last_axis, false).data, serial.data);
   ASSERT_EQ(collector.events().size(), 1u);
@@ -696,6 +698,19 @@ TEST(KernelClass, ReduceMeanParallelLeadingSlicesMatchSerial) {
   mean.Configure({mean.TuningKey(core::runtime::DataType::DOUBLE),
                   {{"parallel.minimum_elements", int64_t{1}}}});
   EXPECT_EQ(mean(double_data, last_axis, false).data, double_serial.data);
+  for (int32_t dtype : {core::runtime::DataType::FLOAT16, core::runtime::DataType::BFLOAT16}) {
+    const Tensor half_data = core::runtime::DemoteFromFloat32(data, dtype);
+    mean.Configure({mean.TuningKey(dtype),
+                    {{"parallel.minimum_elements", std::numeric_limits<int64_t>::max()}}});
+    const Tensor half_serial = mean(half_data, last_axis, false);
+    mean.Configure({mean.TuningKey(dtype), {{"parallel.minimum_elements", int64_t{1}}}});
+    EXPECT_EQ(mean(half_data, last_axis, false).data, half_serial.data);
+    const auto parallel_event =
+        std::find_if(collector.events().rbegin(), collector.events().rend(),
+                     [](const auto &event) { return event.label == "ReduceMean"; });
+    ASSERT_NE(parallel_event, collector.events().rend());
+    EXPECT_EQ(parallel_event->admitted_threads, 2);
+  }
   const Tensor empty = Tensor::FromFloat("", {2, 0, 257}, {});
   EXPECT_EQ(mean(empty, last_axis, false).element_count(), 0);
   const Tensor empty_reduced = Tensor::FromFloat("", {2, 257, 0}, {});

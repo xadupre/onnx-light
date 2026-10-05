@@ -612,6 +612,12 @@ def to_dict(map_proto: MapProto) -> dict[Any, Any]:
     return dict(zip(key_list, value_list, strict=False))
 
 
+def _map_key_dtype(key: Any) -> np.dtype:
+    if isinstance(key, (str, bytes)):
+        return np.dtype(object)
+    return np.result_type(key)
+
+
 def from_dict(dict_: dict[Any, Any], name: str | None = None) -> MapProto:
     """Converts a Python dictionary into a MapProto.
 
@@ -628,7 +634,7 @@ def from_dict(dict_: dict[Any, Any], name: str | None = None) -> MapProto:
     if not dict_:
         raise ValueError("Cannot convert an empty dictionary to MapProto.")
     keys = list(dict_)
-    raw_key_type = np.result_type(keys[0])
+    raw_key_type = _map_key_dtype(keys[0])
     key_type = helper.np_dtype_to_tensor_dtype(raw_key_type)
 
     valid_key_int_types = {
@@ -642,7 +648,7 @@ def from_dict(dict_: dict[Any, Any], name: str | None = None) -> MapProto:
         TensorProto.UINT64,
     }
 
-    if not (all(np.result_type(key) == raw_key_type for key in keys)):
+    if not (all(_map_key_dtype(key) == raw_key_type for key in keys)):
         raise TypeError(
             "The key type in the input dictionary is not the same "
             "for all keys and therefore is not valid as a map."
@@ -660,7 +666,14 @@ def from_dict(dict_: dict[Any, Any], name: str | None = None) -> MapProto:
 
     map_proto.key_type = key_type  # type: ignore[assignment]
     if key_type == TensorProto.STRING:
-        map_proto.string_keys.extend(keys)
+        string_keys = [key.encode("utf-8") if isinstance(key, str) else key for key in keys]
+        if len(set(string_keys)) != len(string_keys):
+            raise ValueError(
+                "The keys in the input dictionary are not unique after "
+                "encoding str keys as UTF-8 bytes and therefore are not "
+                "valid as a map."
+            )
+        map_proto.string_keys.extend(string_keys)
     elif key_type in valid_key_int_types:
         map_proto.keys.extend(keys)
     else:

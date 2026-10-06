@@ -98,7 +98,7 @@ void RegisterSqueezeCases(std::vector<TestCase> &registry, TestMode mode) {
       const KernelContext squeeze_kernel_ctx{opset};
       const onnx_kernels::kernel::Squeeze squeeze_kernel{squeeze_kernel_ctx};
 
-      const Tensor data = Tensor::FromFloat("", {1, 2, 1, 3}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
+      const Tensor data = Tensor::FromFloat("", {1, 2, 1, 3, 1}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
       const Tensor axes = MakeAxesTensor({});
       const Tensor squeezed = squeeze_kernel(data, {});
       return IoData{{std::move(data), std::move(axes)}, {std::move(squeezed)}};

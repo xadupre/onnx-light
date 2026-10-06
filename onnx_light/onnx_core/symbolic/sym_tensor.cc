@@ -744,7 +744,7 @@ bool SymTensorToValueInfo(const SymTensor &tensor, ValueInfoProto &vi) {
     TensorShapeProto::Dimension *dim = sp->add_dim();
     if (d.IsInt()) {
       dim->set_dim_value(d.AsInt());
-    } else {
+    } else if (!d.AsExpr().empty()) {
       dim->set_dim_param(d.AsExpr());
     }
   }

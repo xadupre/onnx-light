@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/shapes/shape_broadcast.h"
 #include "onnx_core/symbolic/sym_tensor.h"
 
 #include <array>
@@ -536,6 +537,32 @@ TEST(OnnxOptimValueInfo, ToValueInfoWritesTypeShape) {
   EXPECT_EQ(vi.metadata_props().size(), 0u);
   // The original name is preserved.
   EXPECT_EQ(vi.name(), "y");
+}
+
+TEST(OnnxOptimValueInfo, UnknownDimensionRemainsUnknownAfterInference) {
+  ValueInfoProto vi =
+      MakeTensorValueInfo("x", TensorProto::DataType::FLOAT, {core::symbolic::SymDim(1)});
+  vi.mutable_type()->mutable_tensor_type()->mutable_shape()->mutable_dim(0)->clear_dim_value();
+  core::symbolic::SymTensor tensor;
+  ASSERT_TRUE(core::symbolic::SymTensorFromValueInfo(vi, tensor));
+  ASSERT_TRUE(tensor.Shape()[0].IsExpr());
+  EXPECT_TRUE(tensor.Shape()[0].AsExpr().empty());
+
+  ASSERT_TRUE(core::symbolic::SymTensorToValueInfo(tensor, vi));
+  const auto &dim = vi.type().tensor_type().shape().dim(0);
+  EXPECT_FALSE(dim.has_dim_value());
+  EXPECT_FALSE(dim.has_dim_param());
+
+  std::string serialized;
+  vi.SerializeToString(serialized);
+  ValueInfoProto parsed;
+  parsed.ParseFromString(serialized);
+  EXPECT_FALSE(parsed.type().tensor_type().shape().dim(0).has_dim_value());
+  EXPECT_FALSE(parsed.type().tensor_type().shape().dim(0).has_dim_param());
+  core::symbolic::SymTensor restored;
+  ASSERT_TRUE(core::symbolic::SymTensorFromValueInfo(parsed, restored));
+  EXPECT_EQ(core::shapes::BroadcastShapes(restored.Shape(), core::symbolic::SymShape{96}),
+            (core::symbolic::SymShape{96}));
 }
 
 TEST(OnnxOptimValueInfo, ToValueInfoUndefinedDtypeReturnsFalse) {

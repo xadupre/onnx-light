@@ -1310,6 +1310,22 @@ void AddOnnxPyProto(nb::module_ &m) {
               "If > 0, each tensor's offset within the buffer is padded to a multiple of this many "
               "bytes. 0 disables alignment. Use 4096 for mmap-friendly page-aligned offsets.");
 
+  nb::object callback_owners = nb::module_::import_("weakref").attr("WeakSet")();
+  nb::module_::import_("atexit").attr("register")(nb::cpp_function([callback_owners]() {
+    for (nb::handle owner : nb::borrow<nb::iterable>(callback_owners)) {
+      if (nb::isinstance<RawDataCallback>(owner)) {
+        nb::cast<RawDataCallback &>(owner).on_tensor = nb::none();
+      } else if (nb::isinstance<ParseOptions>(owner)) {
+        auto &options = nb::cast<ParseOptions &>(owner);
+        options.raw_data_callback = {};
+        options.node_callback = {};
+      } else {
+        auto &options = nb::cast<SerializeOptions &>(owner);
+        options.raw_data_callback = {};
+        options.node_callback = {};
+      }
+    }
+  }));
   nb::class_<RawDataCallback>(
       m, "RawDataCallback",
       "Reusable :attr:`ParseOptions.raw_data_callback` that keeps the default C++ allocation "
@@ -1320,14 +1336,24 @@ void AddOnnxPyProto(nb::module_ &m) {
       "the optional ``on_tensor`` callable (for example to print progress) and always returns "
       "``None``, so the tensor's ``raw_data`` is left to the default allocator. Assign an "
       "instance to :attr:`ParseOptions.raw_data_callback`, or subclass it and override "
-      "``__call__`` for richer behavior.")
-      .def(nb::init<nb::object>(), nb::arg("on_tensor").none() = nb::none(),
-           "Builds the callback. ``on_tensor`` is an optional callable invoked as "
-           "``on_tensor(tensor)`` for every parsed tensor; pass ``None`` (the default) for a "
-           "no-op that simply preserves the default allocation.")
+      "``__call__`` for richer behavior.",
+      nb::is_weak_referenceable())
+      .def(
+          "__init__",
+          [callback_owners](RawDataCallback *self, nb::object on_tensor) {
+            new (self) RawDataCallback{std::move(on_tensor)};
+            callback_owners.attr("add")(nb::find(*self));
+          },
+          nb::arg("on_tensor").none() = nb::none(),
+          "Builds the callback. ``on_tensor`` is an optional callable invoked as "
+          "``on_tensor(tensor)`` for every parsed tensor; pass ``None`` (the default) for a "
+          "no-op that simply preserves the default allocation.")
       .def_prop_rw(
           "on_tensor", [](RawDataCallback &self) -> nb::object { return self.on_tensor; },
-          [](RawDataCallback &self, nb::object value) { self.on_tensor = value; },
+          [callback_owners](RawDataCallback &self, nb::object value) {
+            callback_owners.attr("add")(nb::find(self));
+            self.on_tensor = value;
+          },
           "Optional callable invoked as ``on_tensor(tensor)`` for every parsed tensor; "
           "``None`` disables it.",
           nb::for_setter(nb::arg("value").none()))
@@ -1344,8 +1370,8 @@ void AddOnnxPyProto(nb::module_ &m) {
           "``raw_data`` keeps the default C++ allocation. ``graph`` is the tensor's parent "
           "GraphProto (or ``None``) and is accepted but ignored.");
 
-  nb::class_<ParseOptions, TensorBufferOptions>(m, "ParseOptions",
-                                                "Parsing options for proto classes")
+  nb::class_<ParseOptions, TensorBufferOptions>(
+      m, "ParseOptions", "Parsing options for proto classes", nb::is_weak_referenceable())
       .def(nb::init<>())
       .def_rw("skip_raw_data", &ParseOptions::skip_raw_data,
               "if true, raw data will not be read but skipped, tensors are not valid in that "
@@ -1417,10 +1443,11 @@ void AddOnnxPyProto(nb::module_ &m) {
             }
             return nb::none();
           },
-          [](ParseOptions &options, nb::object fn) {
+          [callback_owners](ParseOptions &options, nb::object fn) {
             if (fn.is_none()) {
               options.raw_data_callback = {};
             } else {
+              callback_owners.attr("add")(nb::find(options));
               options.raw_data_callback = PyRawDataCallback{fn};
             }
           },
@@ -1445,10 +1472,11 @@ void AddOnnxPyProto(nb::module_ &m) {
             }
             return nb::none();
           },
-          [](ParseOptions &options, nb::object fn) {
+          [callback_owners](ParseOptions &options, nb::object fn) {
             if (fn.is_none()) {
               options.node_callback = {};
             } else {
+              callback_owners.attr("add")(nb::find(options));
               options.node_callback = PyNodeCallback{fn};
             }
           },
@@ -1458,8 +1486,8 @@ void AddOnnxPyProto(nb::module_ &m) {
           "default) disables the callback.",
           nb::for_setter(nb::arg("value").none()));
 
-  nb::class_<SerializeOptions, TensorBufferOptions>(m, "SerializeOptions",
-                                                    "Serializing options for proto classes")
+  nb::class_<SerializeOptions, TensorBufferOptions>(
+      m, "SerializeOptions", "Serializing options for proto classes", nb::is_weak_referenceable())
       .def(nb::init<>())
       .def_rw("skip_raw_data", &SerializeOptions::skip_raw_data,
               "if true, raw data will not be written but skipped, tensors are not valid in that "
@@ -1504,10 +1532,11 @@ void AddOnnxPyProto(nb::module_ &m) {
             }
             return nb::none();
           },
-          [](SerializeOptions &options, nb::object fn) {
+          [callback_owners](SerializeOptions &options, nb::object fn) {
             if (fn.is_none()) {
               options.raw_data_callback = {};
             } else {
+              callback_owners.attr("add")(nb::find(options));
               options.raw_data_callback = PySerializeRawDataCallback{fn};
             }
           },
@@ -1537,10 +1566,11 @@ void AddOnnxPyProto(nb::module_ &m) {
             }
             return nb::none();
           },
-          [](SerializeOptions &options, nb::object fn) {
+          [callback_owners](SerializeOptions &options, nb::object fn) {
             if (fn.is_none()) {
               options.node_callback = {};
             } else {
+              callback_owners.attr("add")(nb::find(options));
               options.node_callback = PyNodeCallback{fn};
             }
           },

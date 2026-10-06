@@ -189,7 +189,13 @@ void AddOnnxPyLib(nb::module_ &m) {
   nb::exception<SchemaError>(
       defs, "SchemaError"); // NOLINT(bugprone-unused-raii,bugprone-throw-keyword-missing)
 
-  nb::class_<OpSchema> op_schema(defs, "OpSchema", "Schema of an operator.");
+  nb::object callback_schemas = nb::module_::import_("weakref").attr("WeakSet")();
+  nb::module_::import_("atexit").attr("register")(nb::cpp_function([callback_schemas]() {
+    for (nb::handle schema : nb::borrow<nb::iterable>(callback_schemas))
+      nb::cast<OpSchema &>(schema).TypeAndShapeInferenceFunction({});
+  }));
+  nb::class_<OpSchema> op_schema(defs, "OpSchema", "Schema of an operator.",
+                                 nb::is_weak_referenceable());
 
   nb::enum_<OpSchema::FormalParameterOption>(op_schema, "FormalParameterOption",
                                              nb::is_arithmetic())
@@ -378,7 +384,9 @@ void AddOnnxPyLib(nb::module_ &m) {
       .def_prop_ro("has_context_dependent_function", &OpSchema::HasContextDependentFunction)
       .def(
           "set_type_and_shape_inference_function",
-          [](OpSchema &op, std::function<void(InferenceContext *)> func) -> OpSchema & {
+          [callback_schemas](OpSchema &op,
+                             std::function<void(InferenceContext *)> func) -> OpSchema & {
+            callback_schemas.attr("add")(nb::find(op));
             // Move nanobind's guarded Python-callable wrapper into the registered
             // inference function so it remains valid after this binding returns.
             auto wrapper = [func = std::move(func)](InferenceContext &ctx) { func(&ctx); };

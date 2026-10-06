@@ -198,6 +198,9 @@ public:
   GraphBuilder(const GraphBuilder &) = delete;
   GraphBuilder &operator=(const GraphBuilder &) = delete;
 
+  /// Releases the optional schema provider and any Python callable it owns.
+  void ClearSchemaLookup() { schema_lookup_ = {}; }
+
   /// Name given to the produced graph / function.
   const std::string &name() const noexcept { return name_; }
 

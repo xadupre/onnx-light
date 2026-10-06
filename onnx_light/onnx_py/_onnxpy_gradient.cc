@@ -24,8 +24,14 @@ void AddOnnxPyGradient(nb::module_ &m) {
   // Expose GradRegistry as an opaque class so Python code can create a
   // customised copy of the default registry and pass it to the gradient
   // functions.
+  nb::object callback_registries = nb::module_::import_("weakref").attr("WeakSet")();
+  nb::module_::import_("atexit").attr("register")(nb::cpp_function([callback_registries]() {
+    for (nb::handle registry : nb::borrow<nb::iterable>(callback_registries))
+      nb::cast<onnx_gradient::GradRegistry &>(registry).clear();
+  }));
   nb::class_<onnx_gradient::GradRegistry>(
-      m, "GradRegistry", "Maps (domain, op_type) pairs to backward gradient functions.")
+      m, "GradRegistry", "Maps (domain, op_type) pairs to backward gradient functions.",
+      nb::is_weak_referenceable())
       .def(nb::init<>(), "Creates an empty registry.")
       .def_static(
           "default",
@@ -64,8 +70,9 @@ list[str]
 
   m.def(
       "register_gradient_function",
-      [](const std::string &domain, const std::string &op_type, nb::callable fn,
-         onnx_gradient::GradRegistry &registry) {
+      [callback_registries](const std::string &domain, const std::string &op_type, nb::callable fn,
+                            onnx_gradient::GradRegistry &registry) {
+        callback_registries.attr("add")(nb::find(registry));
         onnx_gradient::RegisterGradientFunction(
             domain, op_type,
             // Capture fn by value so the GradFn closure keeps the Python callable alive

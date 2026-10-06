@@ -98,6 +98,9 @@ public:
     return patterns_;
   }
 
+  /// Releases patterns retained by this optimizer during interpreter teardown.
+  void ClearPatterns() { patterns_.clear(); }
+
   // ── Structural queries ───────────────────────────────────────────────
 
   /// Returns the node producing ``name``, or ``nullptr`` when ``name`` is a

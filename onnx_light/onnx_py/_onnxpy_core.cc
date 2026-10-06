@@ -800,6 +800,11 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
   // -----------------------------------------------------------------------
   // ShapesContext
   // -----------------------------------------------------------------------
+  nb::object callback_contexts = nb::module_::import_("weakref").attr("WeakSet")();
+  nb::module_::import_("atexit").attr("register")(nb::cpp_function([callback_contexts]() {
+    for (nb::handle context : nb::borrow<nb::iterable>(callback_contexts))
+      nb::cast<onnx_shapes::ShapesContext &>(context).ClearCustomShapeInferenceFunctions();
+  }));
   nb::class_<EncodedValueLayout>(shape_mod, "EncodedValueLayout")
       .def_ro("storage_type", &EncodedValueLayout::storage_type)
       .def_ro("element_bits", &EncodedValueLayout::element_bits)
@@ -812,7 +817,8 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       shape_mod, "ShapesContext",
       "In/out container shared by the per-operator ``ComputeShape*`` shape-inference "
       "functions. Holds a ``name -> SymTensor`` map, a ``name -> SymSequence`` map "
-      "and a ``domain -> opset_version`` map mirroring ``opset_import``.")
+      "and a ``domain -> opset_version`` map mirroring ``opset_import``.",
+      nb::is_weak_referenceable())
       .def(nb::init<>())
       .def(
           "set_struct_types",
@@ -1007,8 +1013,9 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
       // Custom shape-inference callbacks.
       .def(
           "set_custom_shape_inference_function",
-          [](onnx_shapes::ShapesContext &c, const std::string &domain, const std::string &op_type,
-             nb::callable fn) {
+          [callback_contexts](onnx_shapes::ShapesContext &c, const std::string &domain,
+                              const std::string &op_type, nb::callable fn) {
+            callback_contexts.attr("add")(nb::find(c));
             c.SetCustomShapeInferenceFunction(
                 domain, op_type,
                 [py_fn = std::move(fn)](onnx_shapes::ShapesContext &ctx, const NodeProto &node) {
@@ -1415,13 +1422,19 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
     return fn(copied);
   };
 
+  nb::object callback_compute_contexts = nb::module_::import_("weakref").attr("WeakSet")();
+  nb::module_::import_("atexit").attr("register")(nb::cpp_function([callback_compute_contexts]() {
+    for (nb::handle context : nb::borrow<nb::iterable>(callback_compute_contexts))
+      nb::cast<onnx_compute::ComputeContext &>(context).ClearCustomValueTagFunctions();
+  }));
   nb::class_<onnx_compute::ComputeContext>(
       shape_mod, "ComputeContext",
       "Holds the in-place reuse opportunities computed for a graph, mirroring the way "
       "``ShapesContext`` holds inferred descriptors. Populate it with "
       "``compute_inplace_reuse_graph`` (consuming a ``ShapesContext``), then read the result "
       "through ``reuse`` / ``node_reuse`` / ``memory`` or persist it with "
-      "``write_to_metadata``.")
+      "``write_to_metadata``.",
+      nb::is_weak_referenceable())
       .def(nb::init<>())
       .def(
           "compute_value_and_node_tags",
@@ -1487,8 +1500,9 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
            "Raises ``IndexError`` when ``node_index`` is out of bounds.")
       .def(
           "set_custom_value_tag_function",
-          [](onnx_compute::ComputeContext &c, const std::string &domain, const std::string &op_type,
-             nb::callable fn) {
+          [callback_compute_contexts](onnx_compute::ComputeContext &c, const std::string &domain,
+                                      const std::string &op_type, nb::callable fn) {
+            callback_compute_contexts.attr("add")(nb::find(c));
             c.SetCustomValueTagFunction(
                 domain, op_type,
                 [py_fn = std::move(fn)](onnx_compute::ComputeContext &ctx, const NodeProto &node,
@@ -2015,17 +2029,25 @@ void AddOnnxPyBuilder(nb::module_ &m) {
   // schema-driven opset resolution and node validation, it injects a schema
   // provider (see ``onnx_core/graph_builder.py``, which wires the schemas
   // exposed by the ``_onnxpyprotoop`` extension).
+  nb::object callback_builders = nb::module_::import_("weakref").attr("WeakSet")();
+  nb::module_::import_("atexit").attr("register")(nb::cpp_function([callback_builders]() {
+    for (nb::handle builder : nb::borrow<nb::iterable>(callback_builders))
+      nb::cast<GraphBuilder &>(builder).ClearSchemaLookup();
+  }));
   nb::class_<GraphBuilder>(builder_mod, "GraphBuilder",
-                           "Incrementally builds an ONNX graph, model or function.")
+                           "Incrementally builds an ONNX graph, model or function.",
+                           nb::is_weak_referenceable())
       .def(
           "__init__",
-          [](GraphBuilder *self, const ModelProto &model, nb::object schema_lookup) {
+          [callback_builders](GraphBuilder *self, const ModelProto &model,
+                              nb::object schema_lookup) {
             if (schema_lookup.is_none()) {
               new (self) GraphBuilder(model, GraphBuilder::SchemaLookupFn{});
               return;
             }
             auto fn = nb::cast<GraphBuilder::SchemaLookupFn>(schema_lookup);
             new (self) GraphBuilder(model, std::move(fn));
+            callback_builders.attr("add")(nb::find(*self));
           },
           nb::arg("model"), nb::arg("schema_lookup") = nb::none(),
           "Constructs a builder by importing ``model`` node-by-node. GRAPH/GRAPHS attributes "
@@ -2033,13 +2055,15 @@ void AddOnnxPyBuilder(nb::module_ &m) {
           "builders, and are materialized back on export.")
       .def(
           "__init__",
-          [](GraphBuilder *self, const std::string &name, nb::object schema_lookup) {
+          [callback_builders](GraphBuilder *self, const std::string &name,
+                              nb::object schema_lookup) {
             if (schema_lookup.is_none()) {
               new (self) GraphBuilder(name, GraphBuilder::SchemaLookupFn{});
               return;
             }
             auto fn = nb::cast<GraphBuilder::SchemaLookupFn>(schema_lookup);
             new (self) GraphBuilder(name, std::move(fn));
+            callback_builders.attr("add")(nb::find(*self));
           },
           nb::arg("name") = "graph", nb::arg("schema_lookup") = nb::none(),
           "Constructs an empty builder. ``schema_lookup`` is an optional callable "

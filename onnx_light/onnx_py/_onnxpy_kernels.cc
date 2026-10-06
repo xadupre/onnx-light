@@ -2307,12 +2307,18 @@ void AddOnnxPyRuntime(nb::module_ &m) {
            "number of bytes released. Live and leased buffers are left untouched.");
 
   // RuntimeContext — name-keyed tensor map + kernel context + function registry.
+  nb::object callback_contexts = nb::module_::import_("weakref").attr("WeakSet")();
+  nb::module_::import_("atexit").attr("register")(nb::cpp_function([callback_contexts]() {
+    for (nb::handle context : nb::borrow<nb::iterable>(callback_contexts))
+      nb::cast<RuntimeContext &>(context).ClearCustomKernels();
+  }));
   nb::class_<RuntimeContext>(
       rt_mod, "RuntimeContext",
       "Per-invocation runtime state passed to :func:`RunNode` / "
       ":class:`RuntimeSession`. Owns the name-keyed "
       "tensor map carrying graph inputs/initializers and every intermediate value "
-      "produced by previously executed nodes.")
+      "produced by previously executed nodes.",
+      nb::is_weak_referenceable())
       .def(nb::init<>())
       .def(
           "__init__",
@@ -2594,8 +2600,9 @@ void AddOnnxPyRuntime(nb::module_ &m) {
            "of the same model.")
       .def(
           "register_custom_kernel",
-          [](RuntimeContext &rt, const std::string &domain, const std::string &op_type,
-             nb::callable fn) {
+          [callback_contexts](RuntimeContext &rt, const std::string &domain,
+                              const std::string &op_type, nb::callable fn) {
+            callback_contexts.attr("add")(nb::find(rt));
             rt.RegisterCustomKernel(domain, op_type, PythonCustomKernel(std::move(fn)));
           },
           nb::arg("domain"), nb::arg("op_type"), nb::arg("fn"),

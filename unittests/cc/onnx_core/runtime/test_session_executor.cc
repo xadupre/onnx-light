@@ -241,6 +241,45 @@ TEST(ExecutionPlan, DerivesMissingUnlockFromPartialMetadata) {
   EXPECT_LT(unlock_w, second_execute);
 }
 
+TEST(ExecutionPlan, DefersStaleUnlockUntilLastUse) {
+  GraphProto graph;
+  graph.add_input()->set_name("X");
+  graph.add_output()->set_name("Y");
+  NodeProto *first = graph.add_node();
+  first->set_op_type("Identity");
+  first->add_input("X");
+  first->add_output("A");
+  first->add_metadata(core::compute::kNotUsedAfterMetadataKey, "X");
+  NodeProto *second = graph.add_node();
+  second->set_op_type("Identity");
+  second->add_input("X");
+  second->add_output("Y");
+
+  const ExecutionPlan plan(graph);
+  const auto &actions = plan.actions();
+  EXPECT_EQ(std::count_if(actions.begin(), actions.end(),
+                          [](const auto &action) {
+                            return action.kind() == ExecuteActionKind::kLockInput &&
+                                   action.name() == "X";
+                          }),
+            1);
+  EXPECT_EQ(std::count_if(actions.begin(), actions.end(),
+                          [](const auto &action) {
+                            return action.kind() == ExecuteActionKind::kUnlockInput &&
+                                   action.name() == "X";
+                          }),
+            1);
+  const auto second_execute = std::find_if(actions.begin(), actions.end(), [](const auto &action) {
+    return action.kind() == ExecuteActionKind::kExecuteNode && action.node_index() == 1;
+  });
+  const auto unlock_x = std::find_if(actions.begin(), actions.end(), [](const auto &action) {
+    return action.kind() == ExecuteActionKind::kUnlockInput && action.name() == "X";
+  });
+  ASSERT_NE(second_execute, actions.end());
+  ASSERT_NE(unlock_x, actions.end());
+  EXPECT_LT(second_execute, unlock_x);
+}
+
 TEST(SessionExecutor, MakeSessionKernelInstallsBackendExecutionScope) {
   RuntimeContext rt(KernelContext(core::runtime::DefaultOpset(18)));
   NodeProto node;

@@ -554,10 +554,11 @@ SymShape ShapeFromTensorShapeProto(const TensorShapeProto &sp) {
     const TensorShapeProto::Dimension &d = sp.dim()[i];
     if (d.has_dim_value()) {
       shape.PushBack(SymDim(static_cast<int64_t>(d.dim_value())));
-    } else if (d.has_dim_param()) {
+    } else if (d.has_dim_param() && !d.dim_param().empty()) {
       shape.PushBack(SymDim(d.dim_param()));
     } else {
-      shape.PushBack(SymDim(std::string()));
+      EXT_ENFORCE_INVALID(false, "SymTensorFromValueInfo: dimension ", i,
+                          " must have a concrete value or a non-empty symbolic expression.");
     }
   }
   return shape;
@@ -732,6 +733,12 @@ bool SymTensorToValueInfo(const SymTensor &tensor, ValueInfoProto &vi) {
   if (dtype == TensorProto::DataType::UNDEFINED) {
     return false;
   }
+  for (std::size_t i = 0; i < tensor.Shape().Rank(); ++i) {
+    const SymDim &dim = tensor.Shape()[i];
+    EXT_ENFORCE_INVALID(dim.IsInt() || (dim.IsExpr() && !dim.AsExpr().empty()),
+                        "SymTensorToValueInfo: dimension ", i,
+                        " must have a concrete value or a non-empty symbolic expression.");
+  }
   // Reset any pre-existing type/shape information so it is replaced
   // wholesale by the inferred descriptor.
   vi.clear_type();
@@ -744,7 +751,7 @@ bool SymTensorToValueInfo(const SymTensor &tensor, ValueInfoProto &vi) {
     TensorShapeProto::Dimension *dim = sp->add_dim();
     if (d.IsInt()) {
       dim->set_dim_value(d.AsInt());
-    } else if (!d.AsExpr().empty()) {
+    } else {
       dim->set_dim_param(d.AsExpr());
     }
   }

@@ -739,9 +739,11 @@ private:
   template <typename Tensor> const std::string &MakeInitializerImpl(Tensor &&tensor);
 
   void SetStructTypes(const utils::RepeatedProtoField<StructTypeProto> &types);
-  void InvalidateAncestorMetadata() noexcept;
+  void RefreshMemoryProfiles();
+  void RefreshAfterMutation();
+  void RefreshAncestors();
   void RebuildMetadata();
-  void RebuildStructuredState();
+  void RebuildStructuredState(bool refresh_ancestors = true);
   std::size_t DeduplicateEncodedInitializers(std::vector<const EncodedValueProto *> &index,
                                              std::unordered_map<std::string, std::string> &rename);
 
@@ -828,7 +830,6 @@ private:
   std::unordered_set<std::string> user_opsets_;
   Device device_ = Device::kUndefined;
   std::uint64_t auto_counter_ = 0;
-  bool shape_state_dirty_ = false;
 };
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::builder

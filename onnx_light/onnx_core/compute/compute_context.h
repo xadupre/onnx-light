@@ -433,12 +433,6 @@ public:
   /// the memory footprint observed while running ``graph.node()[i]``.
   const std::vector<NodeMemoryProfile> &Memory() const noexcept { return memory_; }
 
-  /// Whether the stored memory profiles reflect the complete current graph.
-  bool MemoryComplete() const noexcept { return memory_complete_; }
-
-  /// Marks memory profiles stale after a related nested graph changes.
-  void InvalidateMemory() noexcept { memory_complete_ = false; }
-
   /// Memory snapshot for the node at ``node_index``.
   ///
   /// @throws std::out_of_range when ``node_index`` is out of bounds.
@@ -660,7 +654,6 @@ public:
     not_used_after_.clear();
     release_after_shape_tagged_.clear();
     memory_.clear();
-    memory_complete_ = false;
     peak_memory_.clear();
     shapes_.Clear();
     node_tag_custom_override_.clear();
@@ -688,7 +681,6 @@ public:
     not_used_after_.clear();
     release_after_shape_tagged_.clear();
     memory_.clear();
-    memory_complete_ = false;
     peak_memory_.clear();
     custom_value_tags_changed_ = false;
     node_tag_custom_override_.clear();
@@ -743,7 +735,6 @@ private:
   std::vector<std::vector<std::string>> not_used_after_;
   std::vector<std::vector<std::string>> release_after_shape_tagged_;
   std::vector<NodeMemoryProfile> memory_;
-  bool memory_complete_ = false;
   ShapesContext shapes_;
   std::vector<int64_t> peak_memory_;
   ComputeEventLog events_;

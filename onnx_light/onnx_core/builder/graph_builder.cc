@@ -332,6 +332,7 @@ GraphBuilder &GraphBuilder::operator=(GraphBuilder &&other) noexcept {
   user_opsets_ = std::move(other.user_opsets_);
   device_ = other.device_;
   auto_counter_ = other.auto_counter_;
+  shape_state_dirty_ = other.shape_state_dirty_;
   for (const auto &child : local_functions_) {
     child->parent_ = this;
   }
@@ -424,6 +425,7 @@ void GraphBuilder::MakeStructType(const StructTypeProto &type) {
 void GraphBuilder::InvalidateAncestorMetadata() noexcept {
   for (GraphBuilder *ancestor = parent_; ancestor != nullptr; ancestor = ancestor->parent_) {
     ancestor->compute_.InvalidateMemory();
+    ancestor->shape_state_dirty_ = true;
   }
 }
 
@@ -501,7 +503,7 @@ void GraphBuilder::RebuildStructuredState() {
       !paged_cache_initializers_.empty() ||
       std::any_of(Shapes().Types().begin(), Shapes().Types().end(),
                   [](const auto &entry) { return HasStructuredType(entry.second); });
-  if (!structured) {
+  if (!structured && !shape_state_dirty_) {
     RebuildMetadata();
     return;
   }
@@ -581,6 +583,7 @@ void GraphBuilder::RebuildStructuredState() {
     child->RebuildStructuredState();
   }
   RebuildMetadata();
+  shape_state_dirty_ = false;
 }
 
 const std::string &GraphBuilder::MakeEncodedInitializer(const EncodedValueProto &value) {
@@ -3022,6 +3025,9 @@ template <typename Proto> void GraphBuilder::Finalize(Proto &graph) {
 }
 
 GraphProto GraphBuilder::ToGraph() {
+  if (shape_state_dirty_) {
+    RebuildStructuredState();
+  }
   SortNodesTopologically();
   // Hoist Shape/Size nodes next to their producers before exporting so the
   // finalisation analyses (in-place reuse, peak memory) see the tighter order.
@@ -3086,6 +3092,9 @@ FunctionProto GraphBuilder::ExportFunction(const std::string &domain, bool model
       !paged_cache_initializers_.empty()) {
     throw BuilderError("GraphBuilder: a FunctionProto cannot carry initializers; remove them or "
                        "produce a model / graph instead.");
+  }
+  if (shape_state_dirty_) {
+    RebuildStructuredState();
   }
   SortNodesTopologically();
   MoveShapeAndSizeNodes();

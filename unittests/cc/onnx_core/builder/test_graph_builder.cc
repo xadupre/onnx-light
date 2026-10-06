@@ -253,6 +253,27 @@ TEST(GraphBuilder, ChildMutationInvalidatesParentLifetimeMetadata) {
   EXPECT_EQ(released_after, after.node()[1].metadata_props().end());
 }
 
+TEST(GraphBuilder, ChildMutationInvalidatesParentShapeMetadata) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.SetOpsetVersion("local", 1);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeNode("F", {"x"}, {"result"}, "local");
+  builder.MakeOutput("result");
+  EXPECT_FALSE(builder.HasShape("result"));
+
+  auto &function = builder.MakeLocalFunction("F", "local");
+  function.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  function.MakeNode("Identity", {"a"}, {"r"});
+  function.MakeOutput("r");
+
+  const GraphProto graph = builder.ToGraph();
+  EXPECT_EQ(builder.GetShape("result").Shape(), MakeShape({2, 3}));
+  ASSERT_EQ(graph.output().size(), 1u);
+  ASSERT_TRUE(graph.output()[0].has_type());
+  ASSERT_TRUE(graph.output()[0].type().has_tensor_type());
+  EXPECT_EQ(graph.output()[0].type().tensor_type().shape().dim().size(), 2u);
+}
+
 TEST(GraphBuilder, MaintainsConstantInfoIncrementally) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   TensorProto initializer;

@@ -828,6 +828,7 @@ private:
   std::unordered_set<std::string> user_opsets_;
   Device device_ = Device::kUndefined;
   std::uint64_t auto_counter_ = 0;
+  bool shape_state_dirty_ = false;
 };
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::builder

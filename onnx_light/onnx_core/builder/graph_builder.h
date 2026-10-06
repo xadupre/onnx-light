@@ -619,7 +619,7 @@ public:
   std::string ToString() const;
 
   /// Logical target for pattern matching, constant folding and peak-memory analysis.
-  void set_device(Device device) noexcept { device_ = device; }
+  void set_device(Device device);
   Device device() const noexcept { return device_; }
 
   // ── Finalization ─────────────────────────────────────────────────────
@@ -739,7 +739,12 @@ private:
   template <typename Tensor> const std::string &MakeInitializerImpl(Tensor &&tensor);
 
   void SetStructTypes(const utils::RepeatedProtoField<StructTypeProto> &types);
-  void RebuildStructuredState();
+  void RefreshMemoryProfiles();
+  void RefreshAfterMutation();
+  void RefreshAncestors();
+  void RebuildMetadata();
+  void RebuildStructuredState(bool refresh_ancestors = true);
+  GraphProto BuildGraphImpl(bool validate_persistent_bindings) const;
   std::size_t DeduplicateEncodedInitializers(std::vector<const EncodedValueProto *> &index,
                                              std::unordered_map<std::string, std::string> &rename);
 
@@ -779,9 +784,7 @@ private:
   // inline (GRAPH / GRAPHS attribute) or through a builder ``*_ref`` reference.
   static bool NodeCarriesSubgraph(const NodeProto &node);
 
-  // Runs the whole-graph compute analyses and writes their result into
-  // ``graph`` (shapes, in-place / release-after / value-tag metadata and
-  // per-node peak memory).
+  // Writes the already inferred shapes, types, and metadata into ``graph``.
   template <typename Proto> void Finalize(Proto &graph);
 
   // Returns the nested builder named ``name`` in ``builders`` or nullptr.

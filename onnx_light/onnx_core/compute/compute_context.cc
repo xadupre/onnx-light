@@ -174,6 +174,23 @@ void ComputeContext::SeedValueTag(const std::string &name, const std::string &ta
   ::ONNX_LIGHT_NAMESPACE::core::compute::TrySetValueTag(value_tags_, name, tag);
 }
 
+void ComputeContext::SeedValueTag(const std::string &name, const std::string &tag,
+                                  const utils::RepeatedProtoField<NodeProto> &nodes) {
+  if (!::ONNX_LIGHT_NAMESPACE::core::compute::TrySetValueTag(value_tags_, name, tag)) {
+    return;
+  }
+  std::vector<int> seeds;
+  auto producer = tag_producer_node_.find(name);
+  if (producer != tag_producer_node_.end()) {
+    seeds.push_back(producer->second);
+  }
+  auto consumers = tag_consumers_.find(name);
+  if (consumers != tag_consumers_.end()) {
+    seeds.insert(seeds.end(), consumers->second.begin(), consumers->second.end());
+  }
+  PropagateNodeTags(nodes, seeds, {name});
+}
+
 void ComputeContext::SeedConstant(const std::string &name) {
   if (!name.empty()) {
     constant_values_.insert(name);
@@ -195,6 +212,12 @@ void ComputeContext::AppendNodeConstant(const NodeProto &node, std::size_t node_
       }
     }
   }
+}
+
+void ComputeContext::ComputeConstants(const GraphProto &graph) {
+  auto constants = InferConstants(graph);
+  constant_values_ = std::move(constants.first);
+  node_constant_ = std::move(constants.second);
 }
 
 void ComputeContext::AppendNodeTags(const utils::RepeatedProtoField<NodeProto> &nodes,
@@ -226,10 +249,30 @@ void ComputeContext::AppendNodeTags(const utils::RepeatedProtoField<NodeProto> &
   // consumes a value whose tag changed, until nothing changes. Tags only ever
   // escalate (weight → shape/axes → ambiguous), so this terminates at the same
   // least fixed point a whole-graph pass would reach.
+  PropagateNodeTags(nodes, {static_cast<int>(node_index)});
+}
+
+void ComputeContext::PropagateNodeTags(const utils::RepeatedProtoField<NodeProto> &nodes,
+                                       const std::vector<int> &seeds,
+                                       const std::vector<std::string> &initial_changes) {
   std::deque<int> queue;
   std::unordered_set<int> queued;
-  queue.push_back(static_cast<int>(node_index));
-  queued.insert(static_cast<int>(node_index));
+  std::unordered_set<std::size_t> changed_release_nodes;
+  const auto track_release = [&](const std::string &name) {
+    const auto use = incr_last_use_.find(name);
+    if (use != incr_last_use_.end() && use->second >= 0 &&
+        static_cast<std::size_t>(use->second) < release_after_shape_tagged_.size()) {
+      changed_release_nodes.insert(static_cast<std::size_t>(use->second));
+    }
+  };
+  for (const std::string &name : initial_changes) {
+    track_release(name);
+  }
+  for (int seed : seeds) {
+    if (queued.insert(seed).second) {
+      queue.push_back(seed);
+    }
+  }
   std::vector<std::string> changed;
   while (!queue.empty()) {
     const int n = queue.front();
@@ -239,6 +282,7 @@ void ComputeContext::AppendNodeTags(const utils::RepeatedProtoField<NodeProto> &
     ProcessNodeTags(nodes[static_cast<std::size_t>(n)], static_cast<std::size_t>(n), value_tags_,
                     node_tags_, node_tag_custom_override_, this, &changed);
     for (const std::string &value : changed) {
+      track_release(value);
       auto producer_it = tag_producer_node_.find(value);
       if (producer_it != tag_producer_node_.end() && producer_it->second != n &&
           queued.insert(producer_it->second).second) {
@@ -251,6 +295,16 @@ void ComputeContext::AppendNodeTags(const utils::RepeatedProtoField<NodeProto> &
             queue.push_back(consumer);
           }
         }
+      }
+    }
+  }
+  for (std::size_t index : changed_release_nodes) {
+    auto &shape_releases = release_after_shape_tagged_[index];
+    shape_releases.clear();
+    for (const std::string &name : release_after_[index]) {
+      const auto tag = value_tags_.find(name);
+      if (tag != value_tags_.end() && tag->second == "shape") {
+        shape_releases.push_back(name);
       }
     }
   }
@@ -285,7 +339,16 @@ void EraseValueFromList(std::vector<std::string> &list, const std::string &value
 
 } // namespace
 
-void ComputeContext::SeedReuseOutput(const std::string &name) {
+void ComputeContext::RefreshNodeReuse(const utils::RepeatedProtoField<NodeProto> &nodes,
+                                      std::size_t index, const ShapesContext &ctx) {
+  reuse_[index] = ComputeSingleNodeReuse(nodes[index], static_cast<int>(index), ctx, incr_keep_,
+                                         incr_producer_, incr_last_use_, incr_byte_size_expr_cache_,
+                                         incr_simplified_dim_cache_);
+}
+
+void ComputeContext::SeedReuseOutput(const std::string &name,
+                                     const utils::RepeatedProtoField<NodeProto> &nodes,
+                                     const ShapesContext &ctx) {
   if (name.empty()) {
     return;
   }
@@ -302,14 +365,17 @@ void ComputeContext::SeedReuseOutput(const std::string &name) {
     if (idx < release_after_shape_tagged_.size()) {
       EraseValueFromList(release_after_shape_tagged_[idx], name);
     }
+    if (idx < reuse_.size()) {
+      RefreshNodeReuse(nodes, idx, ctx);
+    }
   }
 }
 
-void ComputeContext::AppendNodeReuse(const NodeProto &node, std::size_t node_index,
-                                     const ShapesContext &ctx) {
+void ComputeContext::AppendNodeReuse(const utils::RepeatedProtoField<NodeProto> &nodes,
+                                     std::size_t node_index, const ShapesContext &ctx,
+                                     const std::vector<std::string> &referenced) {
+  const NodeProto &node = nodes[node_index];
   const int i = static_cast<int>(node_index);
-  const std::vector<std::string> referenced =
-      ::ONNX_LIGHT_NAMESPACE::core::graph::CollectNodeInputs(node);
 
   // Advance the last-use of every referenced value to this node, remembering
   // the previous last-use so the earlier node's release bookkeeping can be
@@ -336,6 +402,7 @@ void ComputeContext::AppendNodeReuse(const NodeProto &node, std::size_t node_ind
     if (p < release_after_shape_tagged_.size()) {
       EraseValueFromList(release_after_shape_tagged_[p], entry.first);
     }
+    RefreshNodeReuse(nodes, p, ctx);
   }
 
   // In-place reuse matches for this node, from the running lifetime maps. This
@@ -388,14 +455,31 @@ void ComputeContext::AppendNodeReuse(const NodeProto &node, std::size_t node_ind
   }
 
   // Append exactly one entry to every per-node vector so they stay aligned with
-  // reuse_ (Size()). The per-node memory profile is only meaningful once the
-  // whole graph is known, so it is left empty here and recomputed by the
-  // finalizers' whole-graph ComputeInPlaceReuseGraph pass.
+  // reuse_ (Size()). GraphBuilder refreshes complete memory profiles before the
+  // mutating method returns.
   reuse_.push_back(std::move(matches));
   release_after_.push_back(std::move(release_after));
   not_used_after_.push_back(std::move(not_used_after));
   release_after_shape_tagged_.push_back(std::move(release_after_shape_tagged));
   memory_.push_back(MakeEmptyNodeMemoryProfile());
+}
+
+void ComputeContext::AppendNodePeakMemory(const NodeProto &node, std::size_t node_index,
+                                          Device device) {
+  if (peak_memory_.size() <= node_index) {
+    peak_memory_.resize(node_index + 1, 0);
+  }
+  std::vector<SymShape> input_shapes;
+  input_shapes.reserve(node.input().size());
+  for (const auto &input_name : node.input()) {
+    if (!input_name.empty() && shapes_.Has(input_name)) {
+      input_shapes.push_back(shapes_.Get(input_name).Shape());
+    } else {
+      input_shapes.emplace_back();
+    }
+  }
+  peak_memory_[node_index] =
+      shapes::ComputePeakMemory(node.domain(), node.op_type(), device, input_shapes);
 }
 
 void ComputeContext::ComputeInPlaceReuseGraph(
@@ -767,6 +851,7 @@ ComputeContext::ComputePeakMemoryNodes(const utils::RepeatedProtoField<NodeProto
 void ComputeContext::Compute(const GraphProto &graph, Device device, bool allow_input_overwrite) {
   ComputeShapes(graph);
   const auto tags = ComputeValueAndNodeTags(graph);
+  ComputeConstants(graph);
   ComputeInPlaceReuseGraph(graph, shapes_, allow_input_overwrite, tags.first);
   ComputePeakMemory(graph, device);
 }
@@ -776,6 +861,7 @@ void ComputeContext::Compute(const ModelProto &model, Device device, bool allow_
   ComputeShapes(model, prefill_with_value_info_output);
   const GraphProto &graph = model.graph();
   const auto tags = ComputeValueAndNodeTags(graph);
+  ComputeConstants(graph);
   ComputeInPlaceReuseGraph(graph, shapes_, allow_input_overwrite, tags.first);
   ComputePeakMemory(graph, device);
 }

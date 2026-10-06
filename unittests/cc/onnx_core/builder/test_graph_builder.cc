@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/builder/graph_builder.h"
+#include "onnx_core/compute/value_tags.h"
 
 #include "onnx_helper.h"
 #include "onnx_lib/checker.h"
@@ -79,6 +80,24 @@ TEST(GraphBuilder, MakeNodeResolvesOpsetAndInfersShape) {
   EXPECT_EQ(z.Shape().Rank(), 2u);
 }
 
+TEST(GraphBuilder, SetOpsetVersionRebuildsMetadataImmediately) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.SetOpsetVersion("", 18);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeNode("Abs", {"x"}, {"result"});
+  builder.MakeOutput("result");
+
+  builder.SetOpsetVersion("", 17);
+
+  EXPECT_EQ(builder.OpsetVersion(""), 17);
+  const GraphProto graph = builder.BuildGraph();
+  core::compute::ComputeContext expected;
+  const auto tags = expected.ComputeValueAndNodeTags(graph);
+  expected.ComputeInPlaceReuseGraph(graph, builder.Shapes(), false, tags.first);
+  EXPECT_EQ(builder.Compute().Reuse(), expected.Reuse());
+  EXPECT_EQ(builder.Compute().Memory(), expected.Memory());
+}
+
 TEST(GraphBuilder, MakeNodeMaintainsTagsAndReuseIncrementally) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
@@ -99,6 +118,234 @@ TEST(GraphBuilder, MakeNodeMaintainsTagsAndReuseIncrementally) {
   const std::vector<std::string> abs_out = builder.MakeNode("Abs", {"x"});
   ASSERT_EQ(abs_out.size(), 1u);
   EXPECT_EQ(builder.Compute().Size(), builder.Nodes().size());
+}
+
+TEST(GraphBuilder, LaterConsumerRevokesEarlierIncrementalReuse) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeNode("Abs", {"x"}, {"intermediate"});
+  builder.MakeNode("Abs", {"intermediate"}, {"first"});
+  ASSERT_EQ(builder.Compute().NodeReuse(1).size(), 1u);
+
+  builder.MakeNode("Abs", {"intermediate"}, {"second"});
+  EXPECT_TRUE(builder.Compute().NodeReuse(1).empty());
+  builder.MakeOutput("first");
+  builder.MakeOutput("second");
+  core::compute::ComputeContext expected;
+  expected.ComputeInPlaceReuseGraph(builder.BuildGraph(), builder.Shapes());
+  EXPECT_EQ(builder.Compute().Reuse().size(), expected.Reuse().size());
+  EXPECT_EQ(builder.Compute().NodeReuse(1).size(), expected.NodeReuse(1).size());
+  const auto graph = builder.ToGraph();
+  EXPECT_EQ(builder.Compute().Reuse().size(), graph.node().size());
+  EXPECT_TRUE(builder.Compute().NodeReuse(1).empty());
+}
+
+TEST(GraphBuilder, RepeatedInputsHaveOneReleaseAnnotation) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeNode("Abs", {"x"}, {"intermediate"});
+  builder.MakeNode("Add", {"intermediate", "intermediate"}, {"result"});
+  builder.MakeOutput("result");
+  const GraphProto graph = builder.ToGraph();
+  const auto release = std::find_if(
+      graph.node(1).metadata_props().begin(), graph.node(1).metadata_props().end(),
+      [](const auto &entry) { return entry.key() == core::compute::kReleaseAfterMetadataKey; });
+  ASSERT_NE(release, graph.node(1).metadata_props().end());
+  EXPECT_EQ(release->value(), "intermediate");
+}
+
+TEST(GraphBuilder, OutputDeclaredAfterNodesRevokesIncrementalReuse) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeNode("Abs", {"x"}, {"intermediate"});
+  builder.MakeNode("Abs", {"intermediate"}, {"result"});
+  ASSERT_EQ(builder.Compute().NodeReuse(1).size(), 1u);
+
+  builder.MakeOutput("intermediate");
+  EXPECT_TRUE(builder.Compute().NodeReuse(1).empty());
+  builder.MakeOutput("result");
+  core::compute::ComputeContext expected;
+  expected.ComputeInPlaceReuseGraph(builder.BuildGraph(), builder.Shapes());
+  EXPECT_EQ(builder.Compute().NodeReuse(1).size(), expected.NodeReuse(1).size());
+}
+
+TEST(GraphBuilder, DeclaredOutputShapeUpdatesMetadataImmediately) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.SetOpsetVersion("custom", 1);
+  builder.MakeNode("Unknown", {}, {"intermediate"}, "custom");
+  builder.MakeNode("Abs", {"intermediate"}, {"result"});
+  EXPECT_FALSE(builder.HasShape("intermediate"));
+  EXPECT_FALSE(builder.HasShape("result"));
+
+  ValueInfoProto output;
+  output.set_name("intermediate");
+  auto *tensor = output.mutable_type()->mutable_tensor_type();
+  tensor->set_elem_type(TensorProto::DataType::FLOAT);
+  tensor->mutable_shape()->add_dim()->set_dim_value(2);
+  tensor->mutable_shape()->add_dim()->set_dim_value(3);
+  builder.MakeOutput(output);
+
+  ASSERT_TRUE(builder.HasShape("intermediate"));
+  EXPECT_EQ(builder.GetShape("intermediate").Shape(), MakeShape({2, 3}));
+  ASSERT_TRUE(builder.HasShape("result"));
+  EXPECT_EQ(builder.GetShape("result").Shape(), MakeShape({2, 3}));
+  ASSERT_EQ(builder.Compute().Memory().size(), 2u);
+}
+
+TEST(GraphBuilder, TypedOutputRebuildDefersPersistentBindingValidationDuringImport) {
+  ModelProto model;
+  model.set_ir_version(10);
+  model.add_opset("", 23);
+  model.add_opset("custom", 1);
+  GraphProto *graph = model.mutable_graph();
+  graph->set_name("g");
+
+  ValueInfoProto *past = graph->add_input();
+  past->set_name("past");
+  auto *past_tensor = past->mutable_type()->mutable_tensor_type();
+  past_tensor->set_elem_type(TensorProto::DataType::FLOAT);
+  past_tensor->mutable_shape()->add_dim()->set_dim_value(2);
+  past_tensor->mutable_shape()->add_dim()->set_dim_value(3);
+
+  graph->add_node(MakeNode("Unknown", {}, {"intermediate"}, "custom"));
+  graph->add_node(MakeNode("Identity", {"past"}, {"present"}));
+
+  ValueInfoProto *intermediate = graph->add_output();
+  intermediate->set_name("intermediate");
+  auto *intermediate_tensor = intermediate->mutable_type()->mutable_tensor_type();
+  intermediate_tensor->set_elem_type(TensorProto::DataType::FLOAT);
+  intermediate_tensor->mutable_shape()->add_dim()->set_dim_value(2);
+  intermediate_tensor->mutable_shape()->add_dim()->set_dim_value(3);
+  ValueInfoProto *present = graph->add_output();
+  present->set_name("present");
+  *present->mutable_type() = past->type();
+
+  auto *binding = graph->add_persistent_bindings();
+  binding->set_input_name("past");
+  binding->set_output_name("present");
+
+  core::builder::GraphBuilder builder(model, SchemaLookup());
+  EXPECT_EQ(builder.BuildGraph().output().size(), 2u);
+}
+
+TEST(GraphBuilder, DeclaredOutputTagPropagatesToEarlierNodes) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeNode("Abs", {"x"}, {"intermediate"});
+  builder.MakeNode("Abs", {"intermediate"}, {"result"});
+
+  ValueInfoProto output;
+  output.set_name("intermediate");
+  auto *tag = output.add_metadata_props();
+  tag->set_key(core::compute::kValueTagMetadataKey);
+  tag->set_value("shape");
+  builder.MakeOutput(output);
+  EXPECT_EQ(builder.Compute().ValueTags().at("intermediate"), "shape");
+  EXPECT_EQ(builder.Compute().NodeTag(1), "shape");
+  EXPECT_EQ(builder.Compute().ValueTags().at("result"), "shape");
+  core::compute::ComputeContext expected;
+  const auto whole_graph = expected.ComputeValueAndNodeTags(builder.BuildGraph());
+  EXPECT_EQ(builder.Compute().ValueTags(), whole_graph.first);
+  EXPECT_EQ(builder.Compute().NodeTags(), whole_graph.second);
+}
+
+TEST(GraphBuilder, LateTagRefreshesReleaseWithoutDownstreamConsumers) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeNode("Abs", {"x"}, {"intermediate"});
+  builder.MakeNode("Abs", {"intermediate"}, {"result"});
+  EXPECT_TRUE(builder.Compute().NodeReleaseAfterShapeTagged(1).empty());
+
+  core::compute::ComputeContext incremental = builder.Compute();
+  incremental.SeedValueTag("intermediate", "shape", builder.Nodes());
+  EXPECT_EQ(incremental.NodeReleaseAfterShapeTagged(1), std::vector<std::string>{"intermediate"});
+}
+
+TEST(GraphBuilder, RepeatedGraphExportPreservesMetadataAfterAppending) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeNode("Abs", {"x"}, {"intermediate"});
+  builder.MakeNode("Abs", {"intermediate"}, {"first"});
+  builder.MakeOutput("first");
+
+  const GraphProto initial = builder.ToGraph();
+  EXPECT_EQ(builder.ToGraph().SerializeAsString(), initial.SerializeAsString());
+
+  builder.MakeNode("Abs", {"intermediate"}, {"second"});
+  builder.MakeOutput("second");
+  core::compute::ComputeContext expected;
+  expected.ComputeInPlaceReuseGraph(builder.BuildGraph(), builder.Shapes());
+  ASSERT_EQ(builder.Compute().Reuse().size(), expected.Reuse().size());
+  EXPECT_EQ(builder.Compute().NodeReuse(1).size(), expected.NodeReuse(1).size());
+  const GraphProto extended = builder.ToGraph();
+  EXPECT_EQ(builder.ToGraph().SerializeAsString(), extended.SerializeAsString());
+}
+
+TEST(GraphBuilder, MaintainsMemoryProfilesIncrementally) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeNode("Abs", {"x"}, {"result"});
+  builder.MakeOutput("result");
+
+  const GraphProto graph = builder.BuildGraph();
+  core::compute::ComputeContext expected;
+  const auto tags = expected.ComputeValueAndNodeTags(graph);
+  expected.ComputeInPlaceReuseGraph(graph, builder.Shapes(), false, tags.first);
+  EXPECT_EQ(builder.Compute().Memory(), expected.Memory());
+}
+
+TEST(GraphBuilder, ChildMutationUpdatesParentLifetimeMetadataImmediately) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.SetOpsetVersion("custom", 1);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeNode("Abs", {"x"}, {"intermediate"});
+  builder.MakeNode("Abs", {"intermediate"}, {"result"});
+  auto &child = builder.MakeSubgraph("body");
+  child.MakeOutput("x");
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  auto &body = attributes.add();
+  body.set_name("body_ref");
+  body.set_type(AttributeProto::STRING);
+  body.set_s("body");
+  builder.MakeNode("Capture", {}, {"captured"}, "custom", "", attributes);
+  builder.MakeOutput("result");
+  builder.MakeOutput("captured");
+
+  const GraphProto before = builder.ToGraph();
+  child.MakeOutput("intermediate");
+  GraphProto after = builder.BuildGraph();
+  builder.Compute().WriteToGraph(after);
+  const auto released_before = std::find_if(
+      before.node()[1].metadata_props().begin(), before.node()[1].metadata_props().end(),
+      [](const auto &entry) { return entry.key() == core::compute::kReleaseAfterMetadataKey; });
+  ASSERT_NE(released_before, before.node()[1].metadata_props().end());
+  EXPECT_EQ(released_before->value(), "intermediate");
+  const auto released_after = std::find_if(
+      after.node()[1].metadata_props().begin(), after.node()[1].metadata_props().end(),
+      [](const auto &entry) { return entry.key() == core::compute::kReleaseAfterMetadataKey; });
+  EXPECT_EQ(released_after, after.node()[1].metadata_props().end());
+}
+
+TEST(GraphBuilder, ChildMutationUpdatesParentShapeMetadataImmediately) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.SetOpsetVersion("local", 1);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeNode("F", {"x"}, {"result"}, "local");
+  builder.MakeOutput("result");
+  EXPECT_FALSE(builder.HasShape("result"));
+
+  auto &function = builder.MakeLocalFunction("F", "local");
+  function.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  function.MakeNode("Identity", {"a"}, {"r"});
+  function.MakeOutput("r");
+
+  EXPECT_EQ(builder.GetShape("result").Shape(), MakeShape({2, 3}));
+  GraphProto graph = builder.BuildGraph();
+  builder.Compute().WriteToGraph(graph);
+  ASSERT_EQ(graph.output().size(), 1u);
+  ASSERT_TRUE(graph.output()[0].has_type());
+  ASSERT_TRUE(graph.output()[0].type().has_tensor_type());
+  EXPECT_EQ(graph.output()[0].type().tensor_type().shape().dim().size(), 2u);
 }
 
 TEST(GraphBuilder, MaintainsConstantInfoIncrementally) {
@@ -671,6 +918,15 @@ TEST(GraphBuilder, RemoveDuplicateInitializersCollapsesEqual) {
   EXPECT_EQ(builder.Nodes()[1].input(1), "w1");
   // A second pass has nothing left to collapse.
   EXPECT_EQ(builder.RemoveDuplicateInitializers(), 0u);
+  const GraphProto graph = builder.ToGraph();
+  EXPECT_EQ(builder.ToGraph().SerializeAsString(), graph.SerializeAsString());
+  core::compute::ComputeContext expected;
+  const auto tags = expected.ComputeValueAndNodeTags(graph);
+  expected.ComputeInPlaceReuseGraph(graph, builder.Shapes(), false, tags.first);
+  expected.ComputePeakMemory(graph, builder.device());
+  EXPECT_EQ(builder.Compute().Reuse(), expected.Reuse());
+  EXPECT_EQ(builder.Compute().Memory(), expected.Memory());
+  EXPECT_EQ(builder.Compute().PeakMemory(), expected.PeakMemory());
 }
 
 TEST(GraphBuilder, RemoveDuplicateInitializersKeepsDistinctContent) {
@@ -1236,20 +1492,23 @@ TEST(GraphBuilder, NativeLocalFunctionDefinitionsSurviveMovesAndEdits) {
   auto &function = original.MakeLocalFunction("F", "local");
   function.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   function.MakeNode("Identity", {"a"}, {"r"});
+  function.MakeNode("Shape", {"a"}, {"shape"});
   function.MakeOutput("r");
+  function.MakeOutput("shape");
   original.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
-  original.MakeNode("F", {"X"}, {"first"}, "local");
+  original.MakeNode("F", {"X"}, {"first", "first_shape"}, "local");
   core::shapes::ShapesContext retained = original.Shapes();
   core::builder::GraphBuilder moved(std::move(original));
-  moved.LocalFunction("F").MakeNode("Shape", {"a"}, {"shape"});
-  moved.LocalFunction("F").MakeOutput("shape");
+  moved.LocalFunction("F").MakeNode("Neg", {"a"}, {"dead"});
+  EXPECT_EQ(moved.LocalFunction("F").RemoveUnusedNodes(), 1u);
   const auto outputs = moved.MakeNode("F", {"X"}, {}, "local");
   ASSERT_EQ(outputs.size(), 2u);
   EXPECT_EQ(moved.GetShape(outputs[0]).Shape(), MakeShape({2, 3}));
   EXPECT_EQ(moved.GetShape(outputs[1]).Shape(), MakeShape({2}));
-  // The copied context still owns the original, one-output definition.
-  retained.ComputeShapeNode(MakeNode("F", {"X"}, {"old"}, "local"));
+  // The copied context still owns the definition captured before the move.
+  retained.ComputeShapeNode(MakeNode("F", {"X"}, {"old", "old_shape"}, "local"));
   EXPECT_EQ(retained.Get("old").Shape(), MakeShape({2, 3}));
+  EXPECT_EQ(retained.Get("old_shape").Shape(), MakeShape({2}));
 }
 
 TEST(GraphBuilder, NativeGenericFunctionImportsAndSpecializesNestedMatMul) {
@@ -1476,11 +1735,44 @@ TEST(GraphBuilder, NativeFunctionBindsRequiredAndDefaultAttributes) {
   builder.MakeNode("Convert", {"X"}, {"explicit"}, "local", "", attributes);
   EXPECT_EQ(builder.GetShape("explicit").Dtype(), core::symbolic::TensorType::kInt64);
   EXPECT_THROW(builder.MakeNode("Required", {"X"}, {"missing"}, "local"), std::invalid_argument);
+  EXPECT_EQ(builder.Compute().Size(), builder.Nodes().size());
   builder.MakeNode("Required", {"X"}, {"provided"}, "local", "", attributes);
   EXPECT_EQ(builder.GetShape("provided").Dtype(), core::symbolic::TensorType::kInt64);
   const ModelProto exported = builder.ToModel();
   ASSERT_EQ(exported.functions(0).attribute_proto().size(), 1u);
   EXPECT_EQ(exported.functions(0).node(0).attribute(0).ref_attr_name(), "dtype");
+}
+
+TEST(GraphBuilder, NativeFunctionSeedsLateIntermediateTags) {
+  core::builder::GraphBuilder seed("g", SchemaLookup());
+  seed.SetOpsetVersion("", 18);
+  ModelProto model = seed.ToModel();
+  FunctionProto function;
+  function.set_name("Tagged");
+  function.set_domain("local");
+  function.add_input("a");
+  function.add_output("r");
+  function.add_opset("", 18);
+  function.add_node(MakeNode("Abs", {"a"}, {"intermediate"}));
+  function.add_node(MakeNode("Abs", {"intermediate"}, {"r"}));
+  auto *declared = function.add_value_info();
+  declared->set_name("intermediate");
+  auto *tag = declared->add_metadata_props();
+  tag->set_key(core::compute::kValueTagMetadataKey);
+  tag->set_value("shape");
+  model.add_function(function);
+
+  core::builder::GraphBuilder builder(model, SchemaLookup());
+  auto &local = builder.LocalFunction("Tagged");
+  EXPECT_EQ(local.Compute().ValueTags().at("intermediate"), "shape");
+  const FunctionProto exported = local.ToFunction("local");
+  const auto release =
+      std::find_if(exported.node()[1].metadata_props().begin(),
+                   exported.node()[1].metadata_props().end(), [](const auto &entry) {
+                     return entry.key() == core::compute::kReleaseAfterShapeTagMetadataKey;
+                   });
+  ASSERT_NE(release, exported.node()[1].metadata_props().end());
+  EXPECT_EQ(release->value(), "intermediate");
 }
 
 TEST(GraphBuilder, NativeFunctionRejectsRecursionAndWrongArity) {
@@ -1595,7 +1887,7 @@ TEST(GraphBuilder, NativeCleanupRetainsInitializerCapturedByLiveBranch) {
   EXPECT_EQ(builder.ToGraph().value_info().size(), 0u);
 }
 
-TEST(GraphBuilder, NativeFunctionSnapshotsRefreshOnlyOnDemand) {
+TEST(GraphBuilder, NativeFunctionSnapshotsRefreshAfterMutations) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   auto &function = builder.MakeLocalFunction("F", "local");
   function.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
@@ -1617,10 +1909,11 @@ TEST(GraphBuilder, NativeFunctionSnapshotsRefreshOnlyOnDemand) {
     growing_function.MakeNode("Identity", {previous}, {output});
     previous = output;
     builder.MakeNode("Identity", {"X"}, {"ordinary_" + std::to_string(i)});
-    EXPECT_EQ(builder.Shapes().GetLocalFunction("local:F"), definition);
-    EXPECT_FALSE(builder.Shapes().HasLocalFunction("local:Identity"));
+    EXPECT_EQ(builder.Shapes().GetLocalFunction("local:F")->node().size(), 2u);
+    EXPECT_TRUE(builder.Shapes().HasLocalFunction("local:Identity"));
   }
   growing_function.MakeOutput(previous);
+  EXPECT_TRUE(builder.Shapes().HasLocalFunction("local:Identity"));
   builder.MakeNode("Identity", {"X"}, {"from_growing"}, "local");
   EXPECT_EQ(builder.GetShape("from_growing").Shape(), MakeShape({2, 3}));
   const core::shapes::ShapesContext updated = builder.Shapes();
@@ -1628,8 +1921,9 @@ TEST(GraphBuilder, NativeFunctionSnapshotsRefreshOnlyOnDemand) {
   EXPECT_EQ(updated.GetLocalFunction("local:Identity")->node().size(), 16u);
 
   EXPECT_EQ(function.RemoveUnusedNodes(), 1u);
+  EXPECT_EQ(builder.Shapes().GetLocalFunction("local:F")->node().size(), 1u);
   builder.MakeNode("Add", {"result", "X"}, {"ordinary_after_edit"});
-  EXPECT_EQ(builder.Shapes().GetLocalFunction("local:F"), updated.GetLocalFunction("local:F"));
+  EXPECT_EQ(builder.Shapes().GetLocalFunction("local:F")->node().size(), 1u);
   builder.MakeNode("F", {"X"}, {"after_edit"}, "local");
   ASSERT_NE(builder.Shapes().GetLocalFunction("local:F"), nullptr);
   EXPECT_EQ(builder.Shapes().GetLocalFunction("local:F")->node().size(), 1u);
@@ -1676,14 +1970,16 @@ TEST(GraphBuilder, NativeGraphReferencesRefreshLateFunctionDefinitions) {
   function.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   function.MakeNode("Identity", {"a"}, {"r"});
   function.MakeOutput("r");
-  EXPECT_FALSE(builder.Shapes().HasLocalFunction("local:F"));
+  EXPECT_TRUE(builder.Shapes().HasLocalFunction("local:F"));
+  EXPECT_EQ(builder.Subgraph("then_branch").GetShape("branch_result").Shape(), MakeShape({2, 3}));
   builder.MakeNode("If", {"condition"}, {"selected"}, "", "", attributes);
   EXPECT_EQ(builder.GetShape("selected").Shape(), MakeShape({2, 3}));
   EXPECT_EQ(builder.Subgraph("then_branch").GetShape("branch_result").Shape(), MakeShape({2, 3}));
   const core::shapes::ShapesContext snapshot = builder.Shapes();
   builder.MakeNode("CastLike", {"selected", "X"}, {"Y"});
   EXPECT_EQ(builder.GetShape("Y").Shape(), MakeShape({2, 3}));
-  EXPECT_EQ(builder.Shapes().GetLocalFunction("local:F"), snapshot.GetLocalFunction("local:F"));
+  EXPECT_EQ(builder.Shapes().GetLocalFunction("local:F")->SerializeAsString(),
+            snapshot.GetLocalFunction("local:F")->SerializeAsString());
 }
 
 TEST(GraphBuilder, NativeDefaultInitializerValidatesDeclaredTensor) {
@@ -1877,6 +2173,32 @@ TEST(GraphBuilderStructured, NativeRoundtripPreservesDeclarationsAndMetadata) {
   EXPECT_THROW(builder.ToFunction(), core::builder::BuilderError);
 }
 
+TEST(GraphBuilderStructured, NativeFunctionReplaysLateStructuredDeclarations) {
+  ModelProto model;
+  model.set_ir_version(10);
+  model.add_opset("", 23);
+  model.add_opset("custom", 1);
+  model.ref_struct_types().push_back(BuilderRecord());
+  model.mutable_graph()->set_name("g");
+  FunctionProto function;
+  function.set_name("Structured");
+  function.set_domain("local");
+  function.add_output("result");
+  function.add_opset("", 23);
+  function.add_opset("custom", 1);
+  function.add_node(MakeNode("Unknown", {}, {"intermediate"}, "custom"));
+  function.add_node(MakeNode("Identity", {"intermediate"}, {"result"}));
+  function.add_value_info(BuilderStructuredInfo("intermediate"));
+  model.add_function(function);
+
+  core::builder::GraphBuilder builder(model, SchemaLookup());
+  const auto &local = builder.LocalFunction("Structured");
+  ASSERT_TRUE(local.Shapes().HasType("intermediate"));
+  ASSERT_TRUE(local.Shapes().HasType("result"));
+  EXPECT_TRUE(local.Shapes().GetType("result").has_struct_type());
+  EXPECT_EQ(local.Shapes().GetType("result").struct_type().type_ref(), 1u);
+}
+
 TEST(GraphBuilderStructured, RetainsStructuredInputAndIdentityOutput) {
   core::builder::GraphBuilder builder("typed", SchemaLookup());
   builder.MakeStructType(BuilderRecord());
@@ -1888,6 +2210,36 @@ TEST(GraphBuilderStructured, RetainsStructuredInputAndIdentityOutput) {
   EXPECT_TRUE(model.graph().input()[0].type().has_struct_type());
   ASSERT_TRUE(model.graph().output()[0].type().has_struct_type());
   EXPECT_EQ(model.graph().output()[0].type().struct_type().type_ref(), 1u);
+}
+
+TEST(GraphBuilderStructured, InfersConstructionMetadataExactlyOnce) {
+  core::builder::GraphBuilder builder("typed", SchemaLookup());
+  builder.MakeStructType(BuilderRecord());
+  builder.MakeInput(BuilderStructuredInfo("x"));
+  auto &compute = const_cast<core::compute::ComputeContext &>(builder.Compute());
+  compute.Shapes().set_events_enabled(true);
+  compute.set_events_enabled(true);
+
+  builder.MakeNode("Identity", {"x"}, {"y"});
+  builder.MakeOutput("y");
+  const auto count_shape_inference = [&]() {
+    return std::count_if(compute.Shapes().Events().begin(), compute.Shapes().Events().end(),
+                         [](const auto &event) {
+                           return event.action == core::shapes::ShapeEventAction::kComputeNode;
+                         });
+  };
+  EXPECT_EQ(count_shape_inference(), 1);
+  EXPECT_TRUE(compute.Events().empty());
+
+  const auto first = builder.ToModel();
+  EXPECT_EQ(count_shape_inference(), 1);
+  EXPECT_TRUE(compute.Events().empty());
+  EXPECT_TRUE(first.graph().output()[0].type().has_struct_type());
+
+  const auto second = builder.ToModel();
+  EXPECT_EQ(count_shape_inference(), 1);
+  EXPECT_TRUE(compute.Events().empty());
+  EXPECT_EQ(second.SerializeAsString(), first.SerializeAsString());
 }
 
 TEST(GraphBuilderStructured, RejectsBadPayloadAndNamesWithoutMutation) {
@@ -2103,6 +2455,13 @@ TEST(GraphBuilderStructured, ReordersNodesAndRebuildsAfterIdentityRemoval) {
   graph = builder.ToGraph();
   ASSERT_EQ(graph.node().size(), 1u);
   EXPECT_EQ(graph.node()[0].input(0), "weight");
+  EXPECT_EQ(builder.Compute().ValueTags().at("weight"), "weight");
+  EXPECT_TRUE(builder.Compute().IsConstantValue("weight"));
+  const auto not_used = std::find_if(
+      graph.node()[0].metadata_props().begin(), graph.node()[0].metadata_props().end(),
+      [](const auto &entry) { return entry.key() == core::compute::kNotUsedAfterMetadataKey; });
+  ASSERT_NE(not_used, graph.node()[0].metadata_props().end());
+  EXPECT_EQ(not_used->value(), "weight");
 }
 
 TEST(GraphBuilderStructured, DoesNotDeduplicateDifferentInlineConstantsOrLogicalTypes) {

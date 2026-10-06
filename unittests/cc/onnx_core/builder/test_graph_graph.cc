@@ -307,6 +307,7 @@ TEST(GraphGraph, NativeExportOrdersDependenciesAndRecomputesCapturedLifetimes) {
   builder.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
   builder.MakeNode("Neg", {"X"}, {"p"}, "", "rewrite");
   builder.MakeNode("Abs", {"p"}, {"Y"});
+  ASSERT_EQ(builder.Compute().NodeReuse(1).size(), 1u);
   builder.MakeOutput("Y");
   utils::RepeatedProtoField<AttributeProto> attributes;
   for (const std::string name : {"then_branch", "else_branch"}) {
@@ -320,6 +321,7 @@ TEST(GraphGraph, NativeExportOrdersDependenciesAndRecomputesCapturedLifetimes) {
   }
 
   builder.MakeNode("If", {"condition"}, {"selected"}, "", "", attributes);
+  EXPECT_TRUE(builder.Compute().NodeReuse(1).empty());
   builder.MakeOutput("selected");
   std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
   patterns.push_back(std::make_unique<ReverseReplacementOrder>());
@@ -345,7 +347,7 @@ TEST(GraphGraph, NativeExportOrdersDependenciesAndRecomputesCapturedLifetimes) {
         metadata.key() == core::compute::kReleaseAfterMetadataKey && metadata.value() == "p";
   }
   EXPECT_TRUE(released_after_capture);
-  EXPECT_EQ(builder.ToGraph().node(0).op_type(), "Mul");
+  EXPECT_EQ(builder.ToGraph().SerializeAsString(), graph.SerializeAsString());
 }
 
 TEST(GraphGraph, NativeExportOrdersProducerBeforeLexicalCapture) {

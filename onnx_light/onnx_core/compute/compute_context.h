@@ -203,6 +203,11 @@ public:
   /// :cpp:func:`CollectGraphSeedTags`.
   void SeedValueTag(const std::string &name, const std::string &tag);
 
+  /// Seeds a declaration added after nodes and propagates changed tags through
+  /// the nodes that produce or consume its value.
+  void SeedValueTag(const std::string &name, const std::string &tag,
+                    const utils::RepeatedProtoField<NodeProto> &nodes);
+
   /// Incrementally updates the value/node tags after the node at ``node_index``
   /// (the last node of ``nodes``) has been appended. Only that node and the
   /// nodes whose values it changes are (re)processed through a monotone
@@ -251,6 +256,9 @@ public:
   bool IsConstantValue(const std::string &name) const noexcept {
     return constant_values_.count(name) != 0;
   }
+
+  /// Recomputes constant values and per-node classifications for ``graph``.
+  void ComputeConstants(const GraphProto &graph);
 
   /// Read-only access to the incremental per-node constant classifications. One
   /// entry per appended node, in graph order.
@@ -362,15 +370,23 @@ public:
   /// Seeds the incremental in-place-reuse lifetime state for a declared graph
   /// output: the value is kept alive and removed from the release / not-used
   /// lists of any earlier node that had treated it as releasable.
-  void SeedReuseOutput(const std::string &name);
+  void SeedReuseOutput(const std::string &name, const utils::RepeatedProtoField<NodeProto> &nodes,
+                       const ShapesContext &ctx);
 
   /// Incrementally updates the in-place reuse and release-after annotations
-  /// after the node ``node`` at ``node_index`` has been appended, using the
-  /// shapes already inferred into ``ctx``. Only this node and the previous
-  /// last-users of its inputs are touched — no whole-graph loop — via
+  /// after the node at ``node_index`` has been appended, using the
+  /// shapes already inferred into ``ctx``. ``references`` includes direct
+  /// inputs and lexical captures of nested graphs. Only this node and the
+  /// previous last-users of those values are touched — no whole-graph loop — via
   /// :cpp:func:`ComputeSingleNodeReuse`. Appends exactly one entry to each of
   /// the per-node result vectors so they stay aligned with :cpp:func:`Size`.
-  void AppendNodeReuse(const NodeProto &node, std::size_t node_index, const ShapesContext &ctx);
+  void AppendNodeReuse(const utils::RepeatedProtoField<NodeProto> &nodes, std::size_t node_index,
+                       const ShapesContext &ctx, const std::vector<std::string> &references);
+
+  /// Appends the peak-memory estimate for a newly appended node, using the
+  /// shapes already inferred into the owned :cpp:class:`ShapesContext`.
+  void AppendNodePeakMemory(const NodeProto &node, std::size_t node_index,
+                            Device device = Device::kUndefined);
 
   /// Number of nodes for which reuse has been computed (one entry per node of
   /// the analysed graph, in ``graph.node()`` order). Zero before
@@ -653,7 +669,40 @@ public:
     incr_simplified_dim_cache_ = expressions::SimplifiedExpressionCache{};
   }
 
+  /// Clears computed annotations and incremental bookkeeping while preserving
+  /// shapes, registered custom tag callbacks, event configuration, and events.
+  void ResetMetadata() noexcept {
+    value_tags_.clear();
+    node_tags_.clear();
+    constant_values_.clear();
+    node_constant_.clear();
+    reuse_.clear();
+    release_after_.clear();
+    not_used_after_.clear();
+    release_after_shape_tagged_.clear();
+    memory_.clear();
+    peak_memory_.clear();
+    custom_value_tags_changed_ = false;
+    node_tag_custom_override_.clear();
+    tag_producer_node_.clear();
+    tag_consumers_.clear();
+    incr_producer_.clear();
+    incr_last_use_.clear();
+    incr_keep_.clear();
+    incr_graph_inputs_.clear();
+    incr_graph_initializers_.clear();
+    incr_graph_outputs_.clear();
+    incr_byte_size_expr_cache_.clear();
+    incr_simplified_dim_cache_ = expressions::SimplifiedExpressionCache{};
+  }
+
 private:
+  void PropagateNodeTags(const utils::RepeatedProtoField<NodeProto> &nodes,
+                         const std::vector<int> &seeds,
+                         const std::vector<std::string> &initial_changes = {});
+  void RefreshNodeReuse(const utils::RepeatedProtoField<NodeProto> &nodes, std::size_t index,
+                        const ShapesContext &ctx);
+
   template <typename GraphOrFunction>
   void ComputeInPlaceReuseGraphImpl(const GraphOrFunction &graph, const ShapesContext &ctx,
                                     bool allow_input_overwrite,

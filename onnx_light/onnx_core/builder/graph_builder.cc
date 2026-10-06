@@ -38,6 +38,15 @@ using ::onnx_light::core::symbolic::TensorTypeToDataType;
 
 namespace {
 
+template <typename Proto> std::string DeclaredValueTag(const Proto &value) {
+  for (const auto &entry : value.metadata_props()) {
+    if (entry.key() == core::compute::kValueTagMetadataKey) {
+      return entry.value();
+    }
+  }
+  return {};
+}
+
 bool HasUnboundAttributes(const NodeProto &node) {
   for (const auto &attribute : node.attribute()) {
     if (!attribute.ref_attr_name().empty() ||
@@ -171,6 +180,20 @@ void SeedDeclaredOutputs(ShapesContext &shapes, const NodeProto &node,
     } else if (!shapes.Has(name) && !shapes.HasSequence(name)) {
       shapes.SetType(name, *declared->second);
     }
+  }
+}
+
+void SeedDeclaredValueInfo(ShapesContext &shapes, const ValueInfoProto &value) {
+  if (!value.has_type()) {
+    return;
+  }
+  const std::string name = value.name().value();
+  SymTensor descriptor;
+  if (value.type().has_tensor_type() && value.type().tensor_type().has_shape() &&
+      !shapes.Has(name) && SymTensorFromValueInfo(value, descriptor)) {
+    shapes.Set(name, std::move(descriptor));
+  } else if (!value.type().has_tensor_type() && !shapes.HasType(name) && !shapes.Has(name)) {
+    shapes.SetType(name, value.type());
   }
 }
 
@@ -336,9 +359,14 @@ GraphBuilder &GraphBuilder::operator=(GraphBuilder &&other) noexcept {
 
 void GraphBuilder::SetOpsetVersion(const std::string &domain, int version) {
   const std::string key = NormaliseDomain(domain);
+  const auto existing = opsets_.find(key);
+  const bool changed = existing == opsets_.end() || existing->second != version;
   opsets_[key] = version;
   user_opsets_.insert(key);
   compute_.Shapes().SetOpsetVersion(key, version);
+  if (changed && !nodes_.empty()) {
+    RebuildStructuredState();
+  }
 }
 
 int GraphBuilder::OpsetVersion(const std::string &domain) const {
@@ -384,6 +412,14 @@ void GraphBuilder::SeedShape(const std::string &name, SymTensor tensor) {
   compute_.Shapes().Set(name, std::move(tensor));
 }
 
+void GraphBuilder::set_device(Device device) {
+  if (device_ == device) {
+    return;
+  }
+  device_ = device;
+  compute_.ComputePeakMemory(BuildGraph(), device_);
+}
+
 void GraphBuilder::SetStructTypes(const utils::RepeatedProtoField<StructTypeProto> &types) {
   compute_.Shapes().SetStructTypes(types);
   for (const auto &child : subgraphs_) {
@@ -402,17 +438,97 @@ void GraphBuilder::MakeStructType(const StructTypeProto &type) {
   auto declarations = Shapes().StructTypes();
   declarations.push_back(type);
   SetStructTypes(declarations);
+  RebuildStructuredState();
 }
 
-void GraphBuilder::RebuildStructuredState() {
-  const bool structured =
-      !Shapes().StructTypes().empty() || !encoded_initializers_.empty() ||
-      !paged_cache_initializers_.empty() ||
-      std::any_of(Shapes().Types().begin(), Shapes().Types().end(),
-                  [](const auto &entry) { return HasStructuredType(entry.second); });
-  if (!structured) {
+void GraphBuilder::RefreshMemoryProfiles() {
+  GraphProto graph = BuildGraphImpl(/*validate_persistent_bindings=*/false);
+  compute_.ComputeInPlaceReuseGraph(graph, compute_.Shapes(), /*allow_input_overwrite=*/false,
+                                    compute_.ValueTags());
+}
+
+void GraphBuilder::RefreshAncestors() {
+  if (outputs_.empty()) {
     return;
   }
+  for (GraphBuilder *ancestor = parent_; ancestor != nullptr; ancestor = ancestor->parent_) {
+    ancestor->RebuildStructuredState(/*refresh_ancestors=*/false);
+  }
+}
+
+void GraphBuilder::RefreshAfterMutation() {
+  RefreshMemoryProfiles();
+  RefreshAncestors();
+}
+
+void GraphBuilder::RebuildMetadata() {
+  compute_.ResetMetadata();
+  for (const auto &value : value_infos_) {
+    compute_.SeedValueTag(value.name().value(), DeclaredValueTag(value));
+  }
+  std::unordered_set<std::string> input_names;
+  input_names.reserve(inputs_.size());
+  for (const auto &input : inputs_) {
+    const std::string name = input.name().value();
+    input_names.insert(name);
+    SeedInputAnnotations(name);
+    compute_.SeedValueTag(name, DeclaredValueTag(input));
+  }
+  for (const auto &initializer : initializers_) {
+    const std::string name = initializer.name().value();
+    const bool is_input = input_names.count(name) != 0;
+    compute_.SeedValueTag(name, DeclaredValueTag(initializer));
+    compute_.SeedValueTag(name, "weight");
+    compute_.SeedReuseInput(name, is_input, /*is_initializer=*/true,
+                            /*allow_input_overwrite=*/false);
+    if (!is_input) {
+      compute_.SeedConstant(name);
+    }
+  }
+  for (const auto &initializer : encoded_initializers_) {
+    const std::string name = initializer.name().value();
+    const bool is_input = input_names.count(name) != 0;
+    compute_.SeedValueTag(name, "weight");
+    compute_.SeedReuseInput(name, is_input, /*is_initializer=*/true,
+                            /*allow_input_overwrite=*/false);
+    if (!is_input) {
+      compute_.SeedConstant(name);
+    }
+  }
+  for (const auto &initializer : paged_cache_initializers_) {
+    const std::string name = initializer.name().value();
+    const bool is_input = input_names.count(name) != 0;
+    compute_.SeedValueTag(name, "weight");
+    compute_.SeedReuseInput(name, is_input, /*is_initializer=*/true,
+                            /*allow_input_overwrite=*/false);
+    if (!is_input) {
+      compute_.SeedConstant(name);
+    }
+  }
+  for (std::size_t node_index = 0; node_index < nodes_.size(); ++node_index) {
+    const NodeProto &node = nodes_[node_index];
+    compute_.AppendNodeTags(nodes_, node_index);
+    std::vector<std::string> references;
+    CollectNodeReferences(node, references);
+    compute_.AppendNodeReuse(nodes_, node_index, compute_.Shapes(), references);
+    compute_.AppendNodeConstant(node, node_index);
+    compute_.AppendNodePeakMemory(node, node_index, device_);
+  }
+  for (const auto &output : outputs_) {
+    const std::string name = output.name().value();
+    compute_.SeedValueTag(name, DeclaredValueTag(output), nodes_);
+    compute_.SeedReuseOutput(name, nodes_, compute_.Shapes());
+  }
+
+  GraphProto graph = BuildGraphImpl(/*validate_persistent_bindings=*/false);
+  const auto tags = compute_.ComputeValueAndNodeTags(graph);
+  compute_.ComputeConstants(graph);
+  compute_.ComputeInPlaceReuseGraph(graph, compute_.Shapes(), /*allow_input_overwrite=*/false,
+                                    tags.first);
+  compute_.ComputePeakMemory(graph, device_);
+}
+
+void GraphBuilder::RebuildStructuredState(bool refresh_ancestors) {
   const auto previous = Shapes();
   compute_.Shapes().Clear();
   auto &shapes = compute_.Shapes();
@@ -478,15 +594,22 @@ void GraphBuilder::RebuildStructuredState() {
       shapes.ComputeShapeNode(node);
     }
     SeedDeclaredOutputs(shapes, node, declarations);
-  }
-  for (const auto &output : outputs_) {
-    if (output.has_type() && !shapes.HasType(output.name().value()) &&
-        !shapes.Has(output.name().value())) {
-      shapes.SetType(output.name().value(), output.type());
+    for (const auto &output : outputs_) {
+      if (std::find(node.output().begin(), node.output().end(), output.name().value()) !=
+          node.output().end()) {
+        SeedDeclaredValueInfo(shapes, output);
+      }
     }
   }
+  for (const auto &output : outputs_) {
+    SeedDeclaredValueInfo(shapes, output);
+  }
   for (const auto &child : subgraphs_) {
-    child->RebuildStructuredState();
+    child->RebuildStructuredState(/*refresh_ancestors=*/false);
+  }
+  RebuildMetadata();
+  if (refresh_ancestors) {
+    RefreshAncestors();
   }
 }
 
@@ -536,6 +659,7 @@ const std::string &GraphBuilder::MakeEncodedInitializer(const EncodedValueProto 
   if (!is_input) {
     compute_.SeedConstant(reserved);
   }
+  RefreshAfterMutation();
   return reserved;
 }
 
@@ -570,6 +694,7 @@ const std::string &GraphBuilder::MakePagedCacheInitializer(const PagedCacheProto
   compute_.SeedReuseInput(reserved, is_input, true, false);
   if (!is_input)
     compute_.SeedConstant(reserved);
+  RefreshAfterMutation();
   return reserved;
 }
 
@@ -633,11 +758,13 @@ template <typename Tensor> const std::string &GraphBuilder::MakeInitializerImpl(
   const std::string &reserved =
       is_input && !has_initializer ? *names_.find(tensor_name) : ReserveName(tensor_name);
   initializers_.push_back(std::forward<Tensor>(tensor));
+  compute_.SeedValueTag(reserved, DeclaredValueTag(initializers_.back()), nodes_);
   if (is_input) {
     // Defaults remain overridable; neither their values nor their dimensions
     // specialize the public input declaration.
     compute_.SeedReuseInput(reserved, /*is_graph_input=*/true, /*is_initializer=*/true,
                             /*allow_input_overwrite=*/false);
+    RefreshAfterMutation();
     return reserved;
   }
   if (has_descriptor) {
@@ -649,6 +776,7 @@ template <typename Tensor> const std::string &GraphBuilder::MakeInitializerImpl(
   compute_.SeedReuseInput(reserved, /*is_graph_input=*/false, /*is_initializer=*/true,
                           /*allow_input_overwrite=*/false);
   compute_.SeedConstant(reserved);
+  RefreshAfterMutation();
   // ``reserved`` references the entry stored in ``names_`` and remains valid.
   return reserved;
 }
@@ -697,6 +825,8 @@ const std::string &GraphBuilder::MakeInput(const ValueInfoProto &value_info) {
     SeedShape(reserved, std::move(descriptor));
   }
   SeedInputAnnotations(reserved);
+  compute_.SeedValueTag(reserved, DeclaredValueTag(value_info), nodes_);
+  RefreshAfterMutation();
   return reserved;
 }
 
@@ -708,6 +838,7 @@ const std::string &GraphBuilder::MakeInput(const std::string &name, const SymTen
   inputs_.add() = std::move(vi);
   SeedShape(reserved, type);
   SeedInputAnnotations(reserved);
+  RefreshAfterMutation();
   return reserved;
 }
 
@@ -718,6 +849,7 @@ const std::string &GraphBuilder::MakeInput(const std::string &name, TensorType d
 
 void GraphBuilder::MakeOutput(const ValueInfoProto &value_info) {
   const std::string name = value_info.name().value();
+  bool declaration_added = false;
   if (value_info.has_type() &&
       (HasStructuredType(value_info.type()) || Shapes().HasEncodedValue(name))) {
     auto validated = Shapes();
@@ -731,9 +863,23 @@ void GraphBuilder::MakeOutput(const ValueInfoProto &value_info) {
   if (value_info.has_type() && !value_info.type().has_tensor_type() &&
       !Shapes().HasEncodedValue(value_info.name().value())) {
     compute_.Shapes().SetType(value_info.name().value(), value_info.type());
+    declaration_added = true;
+  }
+  SymTensor descriptor;
+  if (value_info.has_type() && value_info.type().has_tensor_type() &&
+      value_info.type().tensor_type().has_shape() && !Shapes().Has(name) &&
+      SymTensorFromValueInfo(value_info, descriptor)) {
+    SeedShape(name, std::move(descriptor));
+    declaration_added = true;
   }
   outputs_.push_back(value_info);
-  compute_.SeedReuseOutput(value_info.name().value());
+  compute_.SeedValueTag(name, DeclaredValueTag(value_info), nodes_);
+  compute_.SeedReuseOutput(value_info.name().value(), nodes_, compute_.Shapes());
+  if (declaration_added) {
+    RebuildStructuredState();
+  } else {
+    RefreshAfterMutation();
+  }
 }
 
 void GraphBuilder::MakeOutput(const std::string &name, const SymTensor &type) {
@@ -751,7 +897,8 @@ void GraphBuilder::MakeOutput(const std::string &name) {
   ValueInfoProto vi;
   vi.set_name(name);
   outputs_.add() = std::move(vi);
-  compute_.SeedReuseOutput(name);
+  compute_.SeedReuseOutput(name, nodes_, compute_.Shapes());
+  RefreshAfterMutation();
 }
 
 // Seeds the incremental annotations for a declared graph input: it is a
@@ -865,6 +1012,9 @@ void GraphBuilder::ImportGraph(const GraphProto &graph) {
   graph_template_.ref_node().clear();
   graph_template_.ref_value_info().clear();
   value_infos_ = graph.value_info();
+  for (const auto &value : value_infos_) {
+    compute_.SeedValueTag(value.name().value(), DeclaredValueTag(value), nodes_);
+  }
   for (const auto &input : graph.input()) {
     MakeInput(input);
   }
@@ -968,8 +1118,10 @@ void GraphBuilder::ImportFunction(const FunctionProto &function) {
                                      declared.name()) != function.output().end();
     if (!is_input && !is_output) {
       value_infos_.push_back(declared);
+      compute_.SeedValueTag(declared.name().value(), DeclaredValueTag(declared), nodes_);
     }
   }
+  RebuildStructuredState();
 }
 
 void GraphBuilder::MaterializeGraphReferences(NodeProto &node) const {
@@ -1026,8 +1178,12 @@ int GraphBuilder::ResolveNodeOpset(const std::string &domain,
     op_latest = std::max(op_latest, schema.since_version());
   }
   const int target = it != opsets_.end() ? std::max(it->second, op_latest) : op_latest;
+  const bool changed = it == opsets_.end() || it->second != target;
   opsets_[key] = target;
   compute_.Shapes().SetOpsetVersion(key, target);
+  if (changed && !nodes_.empty()) {
+    RebuildStructuredState();
+  }
   return target;
 }
 
@@ -1214,14 +1370,11 @@ GraphBuilder::MakeNode(const std::string &op_type, const std::vector<std::string
       throw BuilderError(error);
     }
   }
-  NodeProto &stored = nodes_.add();
-  stored = std::move(node);
-
   // Run incremental shape inference for the new node when a shape function is
   // registered for its operator; unregistered operators simply leave their
   // outputs without an inferred descriptor.
-  if (ShapeFunctionAvailable(stored)) {
-    NodeProto materialized = stored;
+  if (ShapeFunctionAvailable(node)) {
+    NodeProto materialized = node;
     MaterializeGraphReferences(materialized);
     bool known_inputs = true;
     for (const std::string &input : core::graph::CollectNodeInputs(materialized)) {
@@ -1233,19 +1386,24 @@ GraphBuilder::MakeNode(const std::string &op_type, const std::vector<std::string
       }
     }
     if (known_inputs && !HasUnboundAttributes(materialized)) {
-      const int64_t index = static_cast<int64_t>(nodes_.size() - 1);
-      compute_.Shapes().set_current_node_index(index);
-      compute_.Shapes().ComputeShapeNode(materialized);
-      for (const auto &attribute : stored.attribute()) {
-        if (HasGraphReferenceSuffix(attribute.name().value()) &&
-            attribute.type() == AttributeProto::AttributeType::STRING && attribute.has_s()) {
-          const std::string attribute_name =
-              attribute.name().value().substr(0, attribute.name().value().size() - 4);
-          if (compute_.Shapes().HasSubgraphContext(index, attribute_name)) {
-            NamedBuilderOrThrow(subgraphs_, attribute.s().value(), "subgraph").compute_.Shapes() =
-                compute_.Shapes().GetSubgraphContext(index, attribute_name);
-          }
-        }
+      ShapesContext inferred = compute_.Shapes();
+      inferred.set_current_node_index(static_cast<int64_t>(nodes_.size()));
+      inferred.ComputeShapeNode(materialized);
+      compute_.Shapes() = std::move(inferred);
+    }
+  }
+
+  NodeProto &stored = nodes_.add();
+  stored = std::move(node);
+  const int64_t index = static_cast<int64_t>(nodes_.size() - 1);
+  for (const auto &attribute : stored.attribute()) {
+    if (HasGraphReferenceSuffix(attribute.name().value()) &&
+        attribute.type() == AttributeProto::AttributeType::STRING && attribute.has_s()) {
+      const std::string attribute_name =
+          attribute.name().value().substr(0, attribute.name().value().size() - 4);
+      if (compute_.Shapes().HasSubgraphContext(index, attribute_name)) {
+        NamedBuilderOrThrow(subgraphs_, attribute.s().value(), "subgraph").compute_.Shapes() =
+            compute_.Shapes().GetSubgraphContext(index, attribute_name);
       }
     }
   }
@@ -1259,8 +1417,12 @@ GraphBuilder::MakeNode(const std::string &op_type, const std::vector<std::string
   // can extend it.
   const std::size_t node_index = nodes_.size() - 1;
   compute_.AppendNodeTags(nodes_, node_index);
-  compute_.AppendNodeReuse(stored, node_index, compute_.Shapes());
+  std::vector<std::string> references;
+  CollectNodeReferences(stored, references);
+  compute_.AppendNodeReuse(nodes_, node_index, compute_.Shapes(), references);
   compute_.AppendNodeConstant(stored, node_index);
+  compute_.AppendNodePeakMemory(stored, node_index, device_);
+  RefreshAfterMutation();
 
   return resolved_outputs;
 }
@@ -1333,19 +1495,9 @@ void GraphBuilder::CollectImplicitInputs(std::unordered_set<std::string> &out) c
 
 void GraphBuilder::CollectNodeReferences(const NodeProto &node,
                                          std::vector<std::string> &refs) const {
-  for (std::size_t i = 0; i < node.input().size(); ++i) {
-    std::string name(node.input(static_cast<std::size_t>(i)));
-    if (!name.empty()) {
-      refs.push_back(std::move(name));
-    }
-  }
-  for (const GraphBuilder *subgraph : ReferencedSubgraphs(node)) {
-    std::unordered_set<std::string> implicit_inputs;
-    subgraph->CollectImplicitInputs(implicit_inputs);
-    for (const std::string &name : implicit_inputs) {
-      refs.push_back(name);
-    }
-  }
+  NodeProto materialized = node;
+  MaterializeGraphReferences(materialized);
+  refs = core::graph::CollectNodeInputs(materialized);
 }
 
 std::size_t GraphBuilder::RemoveUnusedNodes() {
@@ -1810,6 +1962,7 @@ std::size_t GraphBuilder::MoveShapeAndSizeNodesImpl(bool recursive) {
     ordered.push_back(std::move(nodes_[index]));
   }
   nodes_ = std::move(ordered);
+  RebuildMetadata();
 
   return moved + local_moved;
 }
@@ -2082,11 +2235,16 @@ std::size_t GraphBuilder::InlineLocalFunctions(
       }
     }
   }
+  if (inlined != 0) {
+    RebuildStructuredState();
+  }
   return inlined;
 }
 
 std::size_t GraphBuilder::ConstantFold(const ConstantFoldingOptions &options) {
-  return ConstantFoldImpl(options, nullptr);
+  const auto removed = ConstantFoldImpl(options, nullptr);
+  RebuildStructuredState();
+  return removed;
 }
 
 std::size_t
@@ -2560,6 +2718,10 @@ void GraphBuilder::MakePersistentBinding(const PersistentBindingProto &binding) 
 }
 
 GraphProto GraphBuilder::BuildGraph() const {
+  return BuildGraphImpl(/*validate_persistent_bindings=*/true);
+}
+
+GraphProto GraphBuilder::BuildGraphImpl(bool validate_persistent_bindings) const {
   GraphProto graph = graph_template_;
   graph.set_name(name_);
   for (const ValueInfoProto &input : inputs_) {
@@ -2585,7 +2747,7 @@ GraphProto GraphBuilder::BuildGraph() const {
   for (const ValueInfoProto &value_info : value_infos_) {
     graph.add_value_info(value_info);
   }
-  if (!graph.persistent_bindings().empty()) {
+  if (validate_persistent_bindings && !graph.persistent_bindings().empty()) {
     // Supplies inferred IO types before validating the unfinalized graph view.
     for (auto &output : graph.ref_output()) {
       if (!output.has_type() && Shapes().HasType(output.name().value())) {
@@ -2768,6 +2930,13 @@ void GraphBuilder::SortNodesTopologically() {
   if (order.size() != count) {
     throw BuilderError("GraphBuilder: cyclic node dependencies prevent topological ordering.");
   }
+  bool reordered = false;
+  for (std::size_t i = 0; i < count; ++i) {
+    if (order[i] != i) {
+      reordered = true;
+      break;
+    }
+  }
   utils::RepeatedProtoField<NodeProto> sorted;
   sorted.reserve(count);
   for (std::size_t i : order) {
@@ -2782,6 +2951,9 @@ void GraphBuilder::SortNodesTopologically() {
     for (std::size_t i = 0; i < node.output().size(); ++i) {
       available.insert(node.output(i));
     }
+  }
+  if (reordered) {
+    RebuildMetadata();
   }
 }
 
@@ -2824,10 +2996,11 @@ template <typename Proto> void GraphBuilder::Finalize(Proto &graph) {
       }
     }
   }
-  const auto tags = compute_.ComputeValueAndNodeTags(graph);
-  compute_.ComputeInPlaceReuseGraph(graph, compute_.Shapes(), /*allow_input_overwrite=*/false,
-                                    tags.first);
-  compute_.ComputePeakMemory(graph, device_);
+  EXT_ENFORCE_INVALID(compute_.Size() == graph.node().size(),
+                      "GraphBuilder::Finalize: metadata is not aligned with the graph.");
+  EXT_ENFORCE_INVALID(
+      compute_.PeakMemory().size() == graph.node().size(),
+      "GraphBuilder::Finalize: peak-memory metadata is not aligned with the graph.");
   // Writes inferred shapes (value_info), in-place / release-after / shape-tag
   // metadata and per-node peak memory.
   if constexpr (std::is_same_v<Proto, GraphProto>) {
@@ -2904,7 +3077,6 @@ GraphProto GraphBuilder::ToGraph() {
   if (parent_ == nullptr) {
     RefreshLocalFunctions();
   }
-  RebuildStructuredState();
   GraphProto graph = BuildGraph();
   Finalize(graph);
   if (!graph.persistent_bindings().empty()) {
@@ -2968,7 +3140,6 @@ FunctionProto GraphBuilder::ExportFunction(const std::string &domain, bool model
   if (parent_ == nullptr) {
     RefreshLocalFunctions();
   }
-  RebuildStructuredState();
   FunctionProto function = BuildFunction(domain);
   for (std::size_t i = 0; i < inputs_.size(); ++i) {
     ValueInfoProto &input = function.ref_value_info()[i];

@@ -177,6 +177,12 @@ void CollectGraphSeedTags(const GraphProto &graph,
     }
     SetValueTag(value_tags, value.name(), tag);
   }
+  for (const auto &value : graph.encoded_initializer()) {
+    SetValueTag(value_tags, value.name(), "weight");
+  }
+  for (const auto &value : graph.paged_cache_initializer()) {
+    SetValueTag(value_tags, value.name(), "weight");
+  }
   for (std::size_t i = 0; i < graph.value_info().size(); ++i) {
     const auto &value = graph.value_info()[i];
     SetValueTag(value_tags, value.name(), ReadMetadataValue(value, kValueTagMetadataKey));

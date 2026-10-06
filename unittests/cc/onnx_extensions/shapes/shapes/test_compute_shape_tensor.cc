@@ -1885,8 +1885,9 @@ TEST(OnnxOptimShapesTensorSqueeze, EmptyAxesRemovesConcreteUnitDims) {
     if (value_known) {
       ctx.Set("A", MakeShapeInput({}));
     } else {
-      ctx.Set("A", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt64,
-                                             core::symbolic::SymShape{core::symbolic::SymDim(0)}));
+      ctx.Set("A", core::symbolic::SymTensor(
+                       nullptr, core::symbolic::TensorType::kInt64,
+                       core::symbolic::SymShape{core::symbolic::SymDim(int64_t{0})}));
     }
 
     onnx_shapes::shapes::tensor::ComputeShapeSqueeze(ctx, node);

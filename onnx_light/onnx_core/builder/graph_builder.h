@@ -697,8 +697,11 @@ private:
   // Inlines every call (in this builder's nodes and, recursively, in its nested
   // subgraphs) to one of ``functions``, expanding matches to a fixed point.
   // Returns the number of call nodes inlined.
+  using FunctionIdentifier = std::pair<std::string, std::string>;
+  static FunctionIdentifier MakeFunctionIdentifier(const std::string &domain,
+                                                   const std::string &name);
   std::size_t InlineFunctionCalls(const std::vector<GraphBuilder *> &functions,
-                                  std::unordered_set<std::string> &expanded_functions);
+                                  std::set<FunctionIdentifier> &expanded_functions);
 
   // Returns the function in ``functions`` called by ``node`` (its operator type
   // and domain match the function name and domain), or nullptr when none does.

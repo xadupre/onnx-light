@@ -1675,6 +1675,27 @@ TEST(GraphBuilder, InlineLocalFunctionsResolvesAttributeReferences) {
   EXPECT_FLOAT_EQ(resolved.f(), 0.25f);
 }
 
+TEST(GraphBuilder, InlineLocalFunctionsRejectsMissingAttributeReferences) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+
+  core::builder::GraphBuilder &fct = builder.MakeLocalFunction("Scaled", "custom");
+  fct.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  AttributeProto ref;
+  ref.set_name("alpha");
+  ref.set_ref_attr_name("alpha");
+  ref.set_type(AttributeProto::AttributeType::FLOAT);
+  utils::RepeatedProtoField<AttributeProto> body_attrs;
+  body_attrs.push_back(ref);
+  const std::vector<std::string> scaled = fct.MakeNode("LeakyRelu", {"a"}, {}, "", "", body_attrs);
+  fct.MakeOutput(scaled[0]);
+
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  const std::vector<std::string> call = builder.MakeNode("Scaled", {"x"}, {}, "custom");
+  builder.MakeOutput(call[0]);
+
+  EXPECT_THROW(builder.InlineLocalFunctions(), core::builder::BuilderError);
+}
+
 TEST(GraphBuilder, InlineLocalFunctionsIncludeSelectsFunctions) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
 

@@ -281,7 +281,8 @@ void ResolveFunctionAttributes(NodeProto &node, const AttributeBindings &binding
     if (!attribute.ref_attr_name().empty()) {
       const auto found = bindings.find(attribute.ref_attr_name().value());
       if (found == bindings.end()) {
-        continue;
+        throw BuilderError("GraphBuilder: cannot inline a function with an unresolved attribute '" +
+                           attribute.ref_attr_name().value() + "'.");
       }
       clone = *found->second;
       clone.set_name(attribute.name().value());
@@ -2088,6 +2089,11 @@ GraphBuilder *GraphBuilder::FindCalledFunction(const std::vector<GraphBuilder *>
   return nullptr;
 }
 
+GraphBuilder::FunctionIdentifier GraphBuilder::MakeFunctionIdentifier(const std::string &domain,
+                                                                      const std::string &name) {
+  return {NormaliseDomain(domain), name};
+}
+
 std::size_t GraphBuilder::CountFunctionCalls(const std::string &name,
                                              const std::string &domain) const {
   const std::string normalised = NormaliseDomain(domain);
@@ -2259,7 +2265,7 @@ void GraphBuilder::AppendInlinedBody(GraphBuilder &function, const NodeProto &ca
 }
 
 std::size_t GraphBuilder::InlineFunctionCalls(const std::vector<GraphBuilder *> &functions,
-                                              std::unordered_set<std::string> &expanded_functions) {
+                                              std::set<FunctionIdentifier> &expanded_functions) {
   std::size_t inlined = 0;
   if (functions.empty()) {
     return inlined;
@@ -2278,7 +2284,8 @@ std::size_t GraphBuilder::InlineFunctionCalls(const std::vector<GraphBuilder *> 
         GraphBuilder *function = FindCalledFunction(functions, node);
         if (function != nullptr) {
           AppendInlinedBody(*function, node, kept);
-          expanded_functions.insert(function->function_domain_ + ":" + function->name());
+          expanded_functions.insert(
+              MakeFunctionIdentifier(function->function_domain_, function->name()));
           ++inlined;
           changed = true;
           expanded_here = true;
@@ -2351,7 +2358,7 @@ std::size_t GraphBuilder::InlineLocalFunctions(
   // Cleanup is limited to definitions that were actually expanded. This keeps
   // uncalled exported functions while covering calls introduced from graph-valued
   // function defaults during expansion.
-  std::unordered_set<std::string> expanded_functions;
+  std::set<FunctionIdentifier> expanded_functions;
   const std::size_t inlined = InlineFunctionCalls(functions, expanded_functions);
 
   // Drop the definitions of functions that were called but no longer have any
@@ -2362,8 +2369,9 @@ std::size_t GraphBuilder::InlineLocalFunctions(
     changed = false;
     for (std::size_t i = 0; i < local_functions_.size(); ++i) {
       GraphBuilder *function = local_functions_[i].get();
-      const std::string key = function->function_domain_ + ":" + function->name();
-      if (expanded_functions.find(key) == expanded_functions.end()) {
+      const FunctionIdentifier identifier =
+          MakeFunctionIdentifier(function->function_domain_, function->name());
+      if (expanded_functions.find(identifier) == expanded_functions.end()) {
         continue;
       }
       std::size_t callers = CountFunctionCalls(function->name(), function->function_domain_);

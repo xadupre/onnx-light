@@ -255,6 +255,16 @@ void RewriteGraphCaptures(GraphProto &graph,
     rewrite(name);
     value.set_name(name);
   }
+  for (auto &annotation : graph.ref_quantization_annotation()) {
+    std::string name = annotation.tensor_name().value();
+    rewrite(name);
+    annotation.set_tensor_name(name);
+    for (auto &parameter : annotation.ref_quant_parameter_tensor_names()) {
+      name = parameter.value().value();
+      rewrite(name);
+      parameter.set_value(name);
+    }
+  }
 }
 
 void ResolveFunctionAttributes(GraphProto &graph, const AttributeBindings &bindings);

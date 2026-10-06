@@ -1427,6 +1427,11 @@ TEST(GraphBuilder, InlineLocalFunctionsPreservesSubgraphSparseInitializerNames) 
     branch.mutable_g()->set_name(name);
     branch.mutable_g()->add_sparse_initializer()->mutable_values()->set_name("value");
     branch.mutable_g()->add_output()->set_name("value");
+    auto *annotation = branch.mutable_g()->add_quantization_annotation();
+    annotation->set_tensor_name("condition");
+    auto *parameter = annotation->add_quant_parameter_tensor_names();
+    parameter->set_key("SCALE_TENSOR");
+    parameter->set_value("value");
     conditional.add_attribute(branch);
   }
   function.add_node(conditional);
@@ -1441,6 +1446,11 @@ TEST(GraphBuilder, InlineLocalFunctionsPreservesSubgraphSparseInitializerNames) 
     EXPECT_EQ(attribute.g().sparse_initializer()[0].values().name(), "value");
     ASSERT_EQ(attribute.g().output().size(), 1u);
     EXPECT_EQ(attribute.g().output()[0].name(), "value");
+    ASSERT_EQ(attribute.g().quantization_annotation().size(), 1u);
+    const auto &annotation = attribute.g().quantization_annotation()[0];
+    EXPECT_EQ(annotation.tensor_name(), "predicate");
+    ASSERT_EQ(annotation.quant_parameter_tensor_names().size(), 1u);
+    EXPECT_EQ(annotation.quant_parameter_tensor_names()[0].value(), "value");
   }
 }
 

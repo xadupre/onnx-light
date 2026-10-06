@@ -192,6 +192,42 @@ TEST(GraphBuilder, DeclaredOutputShapeUpdatesMetadataImmediately) {
   ASSERT_EQ(builder.Compute().Memory().size(), 2u);
 }
 
+TEST(GraphBuilder, TypedOutputRebuildDefersPersistentBindingValidationDuringImport) {
+  ModelProto model;
+  model.set_ir_version(10);
+  model.add_opset("", 23);
+  model.add_opset("custom", 1);
+  GraphProto *graph = model.mutable_graph();
+  graph->set_name("g");
+
+  ValueInfoProto *past = graph->add_input();
+  past->set_name("past");
+  auto *past_tensor = past->mutable_type()->mutable_tensor_type();
+  past_tensor->set_elem_type(TensorProto::DataType::FLOAT);
+  past_tensor->mutable_shape()->add_dim()->set_dim_value(2);
+  past_tensor->mutable_shape()->add_dim()->set_dim_value(3);
+
+  graph->add_node(MakeNode("Unknown", {}, {"intermediate"}, "custom"));
+  graph->add_node(MakeNode("Identity", {"past"}, {"present"}));
+
+  ValueInfoProto *intermediate = graph->add_output();
+  intermediate->set_name("intermediate");
+  auto *intermediate_tensor = intermediate->mutable_type()->mutable_tensor_type();
+  intermediate_tensor->set_elem_type(TensorProto::DataType::FLOAT);
+  intermediate_tensor->mutable_shape()->add_dim()->set_dim_value(2);
+  intermediate_tensor->mutable_shape()->add_dim()->set_dim_value(3);
+  ValueInfoProto *present = graph->add_output();
+  present->set_name("present");
+  *present->mutable_type() = past->type();
+
+  auto *binding = graph->add_persistent_bindings();
+  binding->set_input_name("past");
+  binding->set_output_name("present");
+
+  core::builder::GraphBuilder builder(model, SchemaLookup());
+  EXPECT_EQ(builder.BuildGraph().output().size(), 2u);
+}
+
 TEST(GraphBuilder, DeclaredOutputTagPropagatesToEarlierNodes) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));

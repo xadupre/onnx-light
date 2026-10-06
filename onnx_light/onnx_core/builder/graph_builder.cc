@@ -520,7 +520,7 @@ void GraphBuilder::RebuildMetadata() {
     compute_.SeedReuseOutput(name, nodes_, compute_.Shapes());
   }
 
-  GraphProto graph = BuildGraph();
+  GraphProto graph = BuildGraphImpl(/*validate_persistent_bindings=*/false);
   const auto tags = compute_.ComputeValueAndNodeTags(graph);
   compute_.ComputeConstants(graph);
   compute_.ComputeInPlaceReuseGraph(graph, compute_.Shapes(), /*allow_input_overwrite=*/false,

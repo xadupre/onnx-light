@@ -220,6 +220,58 @@ TEST(KernelClass, ConcatClassConcatenatesNegativeAxis) {
   }
 }
 
+TEST(KernelClass, ConcatClassConcatenatesStringDecisionPaths) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Concat concat_kernel{ctx};
+  const Tensor x0 = Tensor::FromStrings("", {2, 1}, {"010", "001"});
+  const Tensor x1 = Tensor::FromStrings("", {2, 1}, {"11", "10"});
+  const Tensor x2 = Tensor::FromStrings("", {2, 1}, {"é", ""});
+  const std::vector<std::string> expected{"010", "11", "é", "001", "10", ""};
+
+  Tensor result = concat_kernel({x0, x1, x2}, 1);
+  EXPECT_EQ(result.data_type, static_cast<int32_t>(core::runtime::DataType::STRING));
+  EXPECT_EQ(result.shape, (std::vector<int64_t>{2, 3}));
+  EXPECT_EQ(result.AsStrings(), expected);
+
+  Tensor preallocated = Tensor::FromStrings("", {2, 3}, {"", "", "", "", "", ""});
+  concat_kernel({x0, x1, x2}, 1, preallocated);
+  EXPECT_EQ(preallocated.AsStrings(), expected);
+}
+
+TEST(KernelClass, ConcatStringGraphOutputWithoutDeclaredElementType) {
+  onnx_kernels::RegisterKernelFunctions();
+  ModelProto model;
+  model.set_ir_version(10);
+  model.add_opset_import()->set_version(18);
+  auto *graph = model.mutable_graph();
+  for (const char *name : {"path0", "path1"}) {
+    auto *input = graph->add_input();
+    input->set_name(name);
+    input->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::STRING);
+  }
+  auto *node = graph->add_node();
+  node->set_op_type("Concat");
+  node->add_input("path0");
+  node->add_input("path1");
+  node->add_output("decision_path");
+  auto *axis = node->add_attribute();
+  axis->set_name("axis");
+  axis->set_type(AttributeProto::INT);
+  axis->set_i(1);
+  graph->add_output()->set_name("decision_path");
+
+  core::runtime::RuntimeSession session(model);
+  RuntimeContext context(KernelContext(DefaultOpset(18)));
+  context.Set("path0", Tensor::FromStrings("path0", {2, 1}, {"010", "001"}));
+  context.Set("path1", Tensor::FromStrings("path1", {2, 1}, {"11", "10"}));
+  session.Run(context);
+
+  const Tensor &result = context.Get("decision_path");
+  EXPECT_EQ(result.data_type, static_cast<int32_t>(core::runtime::DataType::STRING));
+  EXPECT_EQ(result.shape, (std::vector<int64_t>{2, 2}));
+  EXPECT_EQ(result.AsStrings(), (std::vector<std::string>{"010", "11", "001", "10"}));
+}
+
 TEST(KernelClass, ConcatClassRejectsMismatchedShape) {
   const KernelContext ctx{DefaultOpset(13)};
   Concat concat_kernel{ctx};

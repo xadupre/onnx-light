@@ -15,7 +15,7 @@ SOURCE = (
     Path(__file__).resolve().parents[2]
     / "docs"
     / "examples"
-    / "compute"
+    / "builder"
     / "plot_graph_builder_benchmark.py"
 )
 SPEC = importlib.util.spec_from_file_location("plot_graph_builder_benchmark", SOURCE)
@@ -39,6 +39,10 @@ def test_large_initializers_are_model_outputs(build, monkeypatch):
     monkeypatch.setattr(example, "LARGE_INITIALIZER_BYTES", 16)
     monkeypatch.setattr(example, "_LARGE_INITIALIZER", numpy.zeros(16, dtype=numpy.uint8))
     model = onnx.load_from_string(build(20, large_initializers=True).SerializeToString())
+    for opset in model.opset_import:
+        if opset.domain == "ai.onnx":
+            opset.domain = ""
+    onnx.checker.check_model(model)
     assert len(model.graph.initializer) == 5 + example.LARGE_INITIALIZER_COUNT
     assert len(model.graph.output) == 1 + example.LARGE_INITIALIZER_COUNT
     assert all(

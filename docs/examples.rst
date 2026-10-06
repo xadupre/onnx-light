@@ -11,5 +11,6 @@ How-To
     auto_examples_runtime/index
     auto_examples_tuning/index
     auto_examples_compute/index
+    auto_examples_builder/index
     auto_examples_expressions/index
     examples_cc/index

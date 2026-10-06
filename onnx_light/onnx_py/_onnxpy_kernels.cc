@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "_onnxpy_callback_cleanup.h"
 #include "_onnxpy_node_list.h"
 #include "_onnxpy_numpy_api.h"
 #include "onnx_core/backend_test/test_case.h"
@@ -2309,8 +2310,9 @@ void AddOnnxPyRuntime(nb::module_ &m) {
   // RuntimeContext — name-keyed tensor map + kernel context + function registry.
   nb::object callback_contexts = nb::module_::import_("weakref").attr("WeakSet")();
   nb::module_::import_("atexit").attr("register")(nb::cpp_function([callback_contexts]() {
-    for (nb::handle context : nb::borrow<nb::iterable>(callback_contexts))
+    ClearCallbackOwners(callback_contexts, [](nb::handle context) {
       nb::cast<RuntimeContext &>(context).ClearCustomKernels();
+    });
   }));
   nb::class_<RuntimeContext>(
       rt_mod, "RuntimeContext",

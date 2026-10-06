@@ -359,7 +359,7 @@ public:
     ClearValues();
     opsets_.clear();
     ClearLocalFunctions();
-    custom_shape_inference_.clear();
+    ClearCustomShapeInferenceFunctions();
     constraints_.clear();
     subgraph_contexts_.clear();
     topk_k_dims_.clear();
@@ -601,7 +601,10 @@ public:
   bool RemoveCustomShapeInferenceFunction(const std::string &domain, const std::string &op_type);
 
   /// Removes every custom shape-inference callback.
-  void ClearCustomShapeInferenceFunctions() { custom_shape_inference_.clear(); }
+  void ClearCustomShapeInferenceFunctions() {
+    CustomShapeInferenceMap callbacks;
+    callbacks.swap(custom_shape_inference_);
+  }
 
   /// Read-only access to all registered custom shape-inference callbacks.
   const CustomShapeInferenceMap &CustomShapeInferenceFunctions() const noexcept {

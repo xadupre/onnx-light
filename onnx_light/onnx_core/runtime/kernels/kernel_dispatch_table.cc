@@ -113,7 +113,13 @@ bool UnregisterGlobalCustomKernel(const std::string &domain, const std::string &
   return MutableGlobalCustomKernels().erase(CustomKernelKey(domain, op_type)) > 0;
 }
 
-void ClearGlobalCustomKernels() { MutableGlobalCustomKernels().clear(); }
+void ClearGlobalCustomKernels() {
+  auto &kernels = MutableGlobalCustomKernels();
+  while (!kernels.empty()) {
+    CustomKernelMap callbacks;
+    callbacks.swap(kernels);
+  }
+}
 
 const SequenceMapPackFn &GetSequenceMapPackFn() { return MutableSequenceMapPackFn(); }
 

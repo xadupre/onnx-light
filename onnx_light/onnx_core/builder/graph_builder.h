@@ -198,8 +198,16 @@ public:
   GraphBuilder(const GraphBuilder &) = delete;
   GraphBuilder &operator=(const GraphBuilder &) = delete;
 
-  /// Releases the optional schema provider and any Python callable it owns.
-  void ClearSchemaLookup() { schema_lookup_ = {}; }
+  /// Releases Python callbacks in this builder and its nested builders.
+  void ClearPythonCallbacks() {
+    schema_lookup_ = {};
+    compute_.ClearCustomValueTagFunctions();
+    compute_.Shapes().ClearCustomShapeInferenceFunctions();
+    for (std::size_t i = 0; i < local_functions_.size(); ++i)
+      local_functions_[i]->ClearPythonCallbacks();
+    for (std::size_t i = 0; i < subgraphs_.size(); ++i)
+      subgraphs_[i]->ClearPythonCallbacks();
+  }
 
   /// Name given to the produced graph / function.
   const std::string &name() const noexcept { return name_; }

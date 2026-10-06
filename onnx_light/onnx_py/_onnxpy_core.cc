@@ -1,3 +1,4 @@
+#include "_onnxpy_callback_cleanup.h"
 #include "onnx_core/builder/graph_builder.h"
 #include "onnx_core/compute/constant_info.h"
 #include "onnx_core/compute/inplace_reuse.h"
@@ -802,8 +803,9 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
   // -----------------------------------------------------------------------
   nb::object callback_contexts = nb::module_::import_("weakref").attr("WeakSet")();
   nb::module_::import_("atexit").attr("register")(nb::cpp_function([callback_contexts]() {
-    for (nb::handle context : nb::borrow<nb::iterable>(callback_contexts))
+    ClearCallbackOwners(callback_contexts, [](nb::handle context) {
       nb::cast<onnx_shapes::ShapesContext &>(context).ClearCustomShapeInferenceFunctions();
+    });
   }));
   nb::class_<EncodedValueLayout>(shape_mod, "EncodedValueLayout")
       .def_ro("storage_type", &EncodedValueLayout::storage_type)
@@ -1424,8 +1426,9 @@ void AddOnnxPyShapeInference(nb::module_ &m) {
 
   nb::object callback_compute_contexts = nb::module_::import_("weakref").attr("WeakSet")();
   nb::module_::import_("atexit").attr("register")(nb::cpp_function([callback_compute_contexts]() {
-    for (nb::handle context : nb::borrow<nb::iterable>(callback_compute_contexts))
+    ClearCallbackOwners(callback_compute_contexts, [](nb::handle context) {
       nb::cast<onnx_compute::ComputeContext &>(context).ClearCustomValueTagFunctions();
+    });
   }));
   nb::class_<onnx_compute::ComputeContext>(
       shape_mod, "ComputeContext",
@@ -2031,8 +2034,9 @@ void AddOnnxPyBuilder(nb::module_ &m) {
   // exposed by the ``_onnxpyprotoop`` extension).
   nb::object callback_builders = nb::module_::import_("weakref").attr("WeakSet")();
   nb::module_::import_("atexit").attr("register")(nb::cpp_function([callback_builders]() {
-    for (nb::handle builder : nb::borrow<nb::iterable>(callback_builders))
-      nb::cast<GraphBuilder &>(builder).ClearSchemaLookup();
+    ClearCallbackOwners(callback_builders, [](nb::handle builder) {
+      nb::cast<GraphBuilder &>(builder).ClearPythonCallbacks();
+    });
   }));
   nb::class_<GraphBuilder>(builder_mod, "GraphBuilder",
                            "Incrementally builds an ONNX graph, model or function.",
@@ -2043,6 +2047,7 @@ void AddOnnxPyBuilder(nb::module_ &m) {
                               nb::object schema_lookup) {
             if (schema_lookup.is_none()) {
               new (self) GraphBuilder(model, GraphBuilder::SchemaLookupFn{});
+              callback_builders.attr("add")(nb::find(*self));
               return;
             }
             auto fn = nb::cast<GraphBuilder::SchemaLookupFn>(schema_lookup);
@@ -2059,6 +2064,7 @@ void AddOnnxPyBuilder(nb::module_ &m) {
                               nb::object schema_lookup) {
             if (schema_lookup.is_none()) {
               new (self) GraphBuilder(name, GraphBuilder::SchemaLookupFn{});
+              callback_builders.attr("add")(nb::find(*self));
               return;
             }
             auto fn = nb::cast<GraphBuilder::SchemaLookupFn>(schema_lookup);

@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "_onnxpy_callback_cleanup.h"
 #include "onnx_core/builder/graph_graph.h"
 #include "onnx_core/builder/pattern_registry.h"
 
@@ -181,8 +182,8 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
 
   nb::object pattern_graphs = nb::module_::import_("weakref").attr("WeakSet")();
   nb::module_::import_("atexit").attr("register")(nb::cpp_function([pattern_graphs]() {
-    for (nb::handle graph : nb::borrow<nb::iterable>(pattern_graphs))
-      nb::cast<GraphGraph &>(graph).ClearPatterns();
+    ClearCallbackOwners(pattern_graphs,
+                        [](nb::handle graph) { nb::cast<GraphGraph &>(graph).ClearPatterns(); });
   }));
   nb::class_<GraphGraph>(builder_mod, "GraphGraph", nb::is_weak_referenceable())
       .def(

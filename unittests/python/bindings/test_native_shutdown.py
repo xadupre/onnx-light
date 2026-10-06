@@ -99,9 +99,72 @@ class TestNativeShutdown(unittest.TestCase):
                 def lookup(op_type):
                     return [owner]
                 owner = builder.GraphBuilder("g", lookup)
+                owner.make_subgraph("body")
+                owner.make_local_function("local", "test")
 
             register()
             gc.collect()
+            """
+        self.assert_clean_exit(script)
+
+    def test_callback_finalizer_registers_another_owner(self):
+        script = """
+            from onnx_light.onnx_py._onnxpyprotoop import ParseOptions
+
+            class AddAnother:
+                def __init__(self, owner):
+                    self.owner = owner
+
+                def __call__(self, node, graph):
+                    pass
+
+                def __del__(self):
+                    next_owner = ParseOptions()
+                    next_owner.node_callback = lambda node, graph: next_owner
+
+            def register():
+                owner = ParseOptions()
+                owner.node_callback = AddAnother(owner)
+
+            register()
+            """
+        self.assert_clean_exit(script)
+
+    def test_builder_embedded_shape_callback(self):
+        script = """
+            import gc
+            from onnx_light.onnx_py._onnxpycore import builder
+
+            def register():
+                owner = builder.GraphBuilder("g")
+                owner.shapes.set_custom_shape_inference_function(
+                    "test", "Op", lambda ctx, node: owner
+                )
+
+            register()
+            gc.collect()
+            """
+        self.assert_clean_exit(script)
+
+    def test_callback_finalizer_reregisters_same_owner(self):
+        script = """
+            from onnx_light.onnx_py._onnxpyprotoop import ParseOptions
+
+            class ReRegister:
+                def __init__(self, owner):
+                    self.owner = owner
+
+                def __call__(self, node, graph):
+                    pass
+
+                def __del__(self):
+                    self.owner.node_callback = lambda node, graph: self.owner
+
+            def register():
+                owner = ParseOptions()
+                owner.node_callback = ReRegister(owner)
+
+            register()
             """
         self.assert_clean_exit(script)
 
@@ -156,6 +219,23 @@ class TestNativeShutdown(unittest.TestCase):
                 schema.set_type_and_shape_inference_function(
                     lambda context, owner=schema: None
                 )
+
+            register()
+            gc.collect()
+            """
+        self.assert_clean_exit(script)
+
+    def test_registered_schema_callback_cycle(self):
+        script = """
+            import gc
+            from onnx_light.onnx_lib import defs
+
+            def register():
+                schema = defs.OpSchema("ShutdownCallback", "test.shutdown", 1)
+                schema.set_type_and_shape_inference_function(
+                    lambda context, owner=schema: None
+                )
+                defs.register_schema(schema)
 
             register()
             gc.collect()

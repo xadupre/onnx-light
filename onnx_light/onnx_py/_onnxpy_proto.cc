@@ -1,3 +1,4 @@
+#include "_onnxpy_callback_cleanup.h"
 #include "_onnxpy_dlpack.h"
 #include "_onnxpy_node_list.h"
 #include "_onnxpyprotoop.h"
@@ -1312,19 +1313,21 @@ void AddOnnxPyProto(nb::module_ &m) {
 
   nb::object callback_owners = nb::module_::import_("weakref").attr("WeakSet")();
   nb::module_::import_("atexit").attr("register")(nb::cpp_function([callback_owners]() {
-    for (nb::handle owner : nb::borrow<nb::iterable>(callback_owners)) {
+    ClearCallbackOwners(callback_owners, [](nb::handle owner) {
       if (nb::isinstance<RawDataCallback>(owner)) {
-        nb::cast<RawDataCallback &>(owner).on_tensor = nb::none();
+        auto &callback = nb::cast<RawDataCallback &>(owner);
+        auto previous = std::move(callback.on_tensor);
+        callback.on_tensor = nb::none();
       } else if (nb::isinstance<ParseOptions>(owner)) {
         auto &options = nb::cast<ParseOptions &>(owner);
-        options.raw_data_callback = {};
-        options.node_callback = {};
+        auto raw_callback = std::move(options.raw_data_callback);
+        auto node_callback = std::move(options.node_callback);
       } else {
         auto &options = nb::cast<SerializeOptions &>(owner);
-        options.raw_data_callback = {};
-        options.node_callback = {};
+        auto raw_callback = std::move(options.raw_data_callback);
+        auto node_callback = std::move(options.node_callback);
       }
-    }
+    });
   }));
   nb::class_<RawDataCallback>(
       m, "RawDataCallback",

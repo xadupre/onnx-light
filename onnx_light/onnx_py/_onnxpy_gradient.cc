@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "_onnxpy_callback_cleanup.h"
 #include "onnx_extensions/gradient/gradient.h"
 #include "onnx_extensions/gradient/gradient/grad_dispatcher.h"
 #include "onnx_proto/onnx.h"
@@ -26,8 +27,10 @@ void AddOnnxPyGradient(nb::module_ &m) {
   // functions.
   nb::object callback_registries = nb::module_::import_("weakref").attr("WeakSet")();
   nb::module_::import_("atexit").attr("register")(nb::cpp_function([callback_registries]() {
-    for (nb::handle registry : nb::borrow<nb::iterable>(callback_registries))
-      nb::cast<onnx_gradient::GradRegistry &>(registry).clear();
+    ClearCallbackOwners(callback_registries, [](nb::handle registry) {
+      onnx_gradient::GradRegistry callbacks;
+      callbacks.swap(nb::cast<onnx_gradient::GradRegistry &>(registry));
+    });
   }));
   nb::class_<onnx_gradient::GradRegistry>(
       m, "GradRegistry", "Maps (domain, op_type) pairs to backward gradient functions.",

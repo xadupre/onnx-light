@@ -1,3 +1,4 @@
+#include "_onnxpy_callback_cleanup.h"
 #include "onnx.h"
 #include "onnx_core/expressions/expressions.h"
 #include "onnx_lib/checker.h"
@@ -191,8 +192,9 @@ void AddOnnxPyLib(nb::module_ &m) {
 
   nb::object callback_schemas = nb::module_::import_("weakref").attr("WeakSet")();
   nb::module_::import_("atexit").attr("register")(nb::cpp_function([callback_schemas]() {
-    for (nb::handle schema : nb::borrow<nb::iterable>(callback_schemas))
+    ClearCallbackOwners(callback_schemas, [](nb::handle schema) {
       nb::cast<OpSchema &>(schema).TypeAndShapeInferenceFunction({});
+    });
   }));
   nb::class_<OpSchema> op_schema(defs, "OpSchema", "Schema of an operator.",
                                  nb::is_weak_referenceable());
@@ -488,6 +490,15 @@ void AddOnnxPyLib(nb::module_ &m) {
           nb::arg("ir_version") = static_cast<int>(IR_VERSION),
           "Runs type and shape inference for a single node and returns output TypeProto map.");
 
+  nb::set python_schemas;
+  nb::module_::import_("atexit").attr("register")(nb::cpp_function([python_schemas]() {
+    ClearCallbackOwners(python_schemas, [](nb::handle entry) {
+      auto [name, version, domain] = nb::cast<std::tuple<std::string, int, std::string>>(entry);
+      const OpSchema *schema = OpSchemaRegistry::Schema(name, version, domain);
+      if (schema != nullptr && schema->since_version() == version)
+        DeregisterSchema(name, version, domain);
+    });
+  }));
   defs.def("register_onnx_operator_set_schema", &RegisterAllOnnxOperatorSchemas,
            "Registers all built-in ONNX operator schemas with type-and-shape inference "
            "functions across all opset versions.  Duplicate registrations are silently "
@@ -561,10 +572,20 @@ void AddOnnxPyLib(nb::module_ &m) {
           nb::arg("last_release_version") = -1)
       .def(
           "register_schema",
-          [](OpSchema schema) { RegisterSchema(std::move(schema), 0, true, true); },
+          [python_schemas](OpSchema schema) {
+            nb::tuple key = nb::make_tuple(schema.Name(), schema.since_version(), schema.domain());
+            RegisterSchema(std::move(schema), 0, true, true);
+            python_schemas.attr("add")(key);
+          },
           nb::arg("schema"), "Registers a user-provided OpSchema.")
-      .def("deregister_schema", &DeregisterSchema, nb::arg("op_type"), nb::arg("version"),
-           nb::arg("domain"), "Deregisters the specified OpSchema.");
+      .def(
+          "deregister_schema",
+          [python_schemas](const std::string &op_type, int version, const std::string &domain) {
+            DeregisterSchema(op_type, version, domain);
+            python_schemas.attr("discard")(nb::make_tuple(op_type, version, domain));
+          },
+          nb::arg("op_type"), nb::arg("version"), nb::arg("domain"),
+          "Deregisters the specified OpSchema.");
 
   // -----------------------------------------------------------------------
   // Submodule `checker`

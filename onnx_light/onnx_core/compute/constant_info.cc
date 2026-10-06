@@ -107,6 +107,12 @@ GraphConstantSeed(const GraphProto &graph, const std::unordered_set<std::string>
   for (std::size_t i = 0; i < graph.initializer().size(); ++i) {
     constants.insert(graph.initializer()[i].name());
   }
+  for (const auto &initializer : graph.encoded_initializer()) {
+    constants.insert(initializer.name());
+  }
+  for (const auto &initializer : graph.paged_cache_initializer()) {
+    constants.insert(initializer.name());
+  }
   // Graph inputs are never constant (and this also avoids accidental name collisions).
   for (std::size_t i = 0; i < graph.input().size(); ++i) {
     constants.erase(graph.input()[i].name());

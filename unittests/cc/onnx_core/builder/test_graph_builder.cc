@@ -204,6 +204,21 @@ TEST(GraphBuilder, RepeatedGraphExportPreservesMetadataAfterAppending) {
   EXPECT_EQ(builder.ToGraph().SerializeAsString(), extended.SerializeAsString());
 }
 
+TEST(GraphBuilder, ExportCompletesAppendOnlyMemoryProfiles) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeNode("Abs", {"x"}, {"result"});
+  builder.MakeOutput("result");
+
+  const GraphProto graph = builder.BuildGraph();
+  core::compute::ComputeContext expected;
+  const auto tags = expected.ComputeValueAndNodeTags(graph);
+  expected.ComputeInPlaceReuseGraph(graph, builder.Shapes(), false, tags.first);
+  builder.ToGraph();
+  EXPECT_TRUE(builder.Compute().MemoryComplete());
+  EXPECT_EQ(builder.Compute().Memory(), expected.Memory());
+}
+
 TEST(GraphBuilder, MaintainsConstantInfoIncrementally) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   TensorProto initializer;
@@ -2246,6 +2261,13 @@ TEST(GraphBuilderStructured, ReordersNodesAndRebuildsAfterIdentityRemoval) {
   graph = builder.ToGraph();
   ASSERT_EQ(graph.node().size(), 1u);
   EXPECT_EQ(graph.node()[0].input(0), "weight");
+  EXPECT_EQ(builder.Compute().ValueTags().at("weight"), "weight");
+  EXPECT_TRUE(builder.Compute().IsConstantValue("weight"));
+  const auto not_used = std::find_if(
+      graph.node()[0].metadata_props().begin(), graph.node()[0].metadata_props().end(),
+      [](const auto &entry) { return entry.key() == core::compute::kNotUsedAfterMetadataKey; });
+  ASSERT_NE(not_used, graph.node()[0].metadata_props().end());
+  EXPECT_EQ(not_used->value(), "weight");
 }
 
 TEST(GraphBuilderStructured, DoesNotDeduplicateDifferentInlineConstantsOrLogicalTypes) {

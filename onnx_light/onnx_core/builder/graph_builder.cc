@@ -2927,6 +2927,10 @@ template <typename Proto> void GraphBuilder::Finalize(Proto &graph) {
       }
     }
   }
+  if (!compute_.MemoryComplete()) {
+    compute_.ComputeInPlaceReuseGraph(graph, compute_.Shapes(), /*allow_input_overwrite=*/false,
+                                      compute_.ValueTags());
+  }
   EXT_ENFORCE_INVALID(compute_.Size() == graph.node().size(),
                       "GraphBuilder::Finalize: metadata is not aligned with the graph.");
   EXT_ENFORCE_INVALID(

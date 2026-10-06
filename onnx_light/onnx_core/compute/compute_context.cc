@@ -150,6 +150,7 @@ bool ComputeContext::TrySetValueTag(const std::string &name, const std::string &
       ::ONNX_LIGHT_NAMESPACE::core::compute::TrySetValueTag(value_tags_, name, tag);
   if (changed) {
     custom_value_tags_changed_ = true;
+    memory_complete_ = false;
   }
   return changed;
 }
@@ -171,7 +172,9 @@ bool ComputeContext::SetNodeTag(std::size_t node_index, const std::string &tag) 
 }
 
 void ComputeContext::SeedValueTag(const std::string &name, const std::string &tag) {
-  ::ONNX_LIGHT_NAMESPACE::core::compute::TrySetValueTag(value_tags_, name, tag);
+  if (::ONNX_LIGHT_NAMESPACE::core::compute::TrySetValueTag(value_tags_, name, tag)) {
+    memory_complete_ = false;
+  }
 }
 
 void ComputeContext::SeedValueTag(const std::string &name, const std::string &tag,
@@ -179,6 +182,7 @@ void ComputeContext::SeedValueTag(const std::string &name, const std::string &ta
   if (!::ONNX_LIGHT_NAMESPACE::core::compute::TrySetValueTag(value_tags_, name, tag)) {
     return;
   }
+  memory_complete_ = false;
   std::vector<int> seeds;
   auto producer = tag_producer_node_.find(name);
   if (producer != tag_producer_node_.end()) {
@@ -315,6 +319,7 @@ void ComputeContext::SeedReuseInput(const std::string &name, bool is_graph_input
   if (name.empty()) {
     return;
   }
+  memory_complete_ = false;
   if (is_graph_input) {
     incr_graph_inputs_.insert(name);
     if (allow_input_overwrite) {
@@ -352,6 +357,7 @@ void ComputeContext::SeedReuseOutput(const std::string &name,
   if (name.empty()) {
     return;
   }
+  memory_complete_ = false;
   incr_keep_.insert(name);
   incr_graph_outputs_.insert(name);
   // A graph output must survive the run, so undo any earlier node's decision to
@@ -374,6 +380,7 @@ void ComputeContext::SeedReuseOutput(const std::string &name,
 void ComputeContext::AppendNodeReuse(const utils::RepeatedProtoField<NodeProto> &nodes,
                                      std::size_t node_index, const ShapesContext &ctx,
                                      const std::vector<std::string> &referenced) {
+  memory_complete_ = false;
   const NodeProto &node = nodes[node_index];
   const int i = static_cast<int>(node_index);
 
@@ -689,6 +696,7 @@ void ComputeContext::ComputeInPlaceReuseGraphImpl(
   release_after_ = lifetime.MoveReleaseAfter();
   not_used_after_ = lifetime.MoveNotUsedAfter();
   memory_ = std::move(memory);
+  memory_complete_ = true;
 
   // Populate the shape-tagged subset from value_tags (when provided).
   // Only allocate the per-node sub-vectors when value_tags is actually non-empty

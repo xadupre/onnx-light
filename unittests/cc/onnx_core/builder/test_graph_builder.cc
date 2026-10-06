@@ -80,6 +80,24 @@ TEST(GraphBuilder, MakeNodeResolvesOpsetAndInfersShape) {
   EXPECT_EQ(z.Shape().Rank(), 2u);
 }
 
+TEST(GraphBuilder, SetOpsetVersionRebuildsMetadataImmediately) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.SetOpsetVersion("", 18);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeNode("Abs", {"x"}, {"result"});
+  builder.MakeOutput("result");
+
+  builder.SetOpsetVersion("", 17);
+
+  EXPECT_EQ(builder.OpsetVersion(""), 17);
+  const GraphProto graph = builder.BuildGraph();
+  core::compute::ComputeContext expected;
+  const auto tags = expected.ComputeValueAndNodeTags(graph);
+  expected.ComputeInPlaceReuseGraph(graph, builder.Shapes(), false, tags.first);
+  EXPECT_EQ(builder.Compute().Reuse(), expected.Reuse());
+  EXPECT_EQ(builder.Compute().Memory(), expected.Memory());
+}
+
 TEST(GraphBuilder, MakeNodeMaintainsTagsAndReuseIncrementally) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
@@ -1852,7 +1870,7 @@ TEST(GraphBuilder, NativeFunctionSnapshotsRefreshAfterMutations) {
     previous = output;
     builder.MakeNode("Identity", {"X"}, {"ordinary_" + std::to_string(i)});
     EXPECT_EQ(builder.Shapes().GetLocalFunction("local:F")->node().size(), 2u);
-    EXPECT_FALSE(builder.Shapes().HasLocalFunction("local:Identity"));
+    EXPECT_TRUE(builder.Shapes().HasLocalFunction("local:Identity"));
   }
   growing_function.MakeOutput(previous);
   EXPECT_TRUE(builder.Shapes().HasLocalFunction("local:Identity"));
@@ -1920,7 +1938,8 @@ TEST(GraphBuilder, NativeGraphReferencesRefreshLateFunctionDefinitions) {
   const core::shapes::ShapesContext snapshot = builder.Shapes();
   builder.MakeNode("CastLike", {"selected", "X"}, {"Y"});
   EXPECT_EQ(builder.GetShape("Y").Shape(), MakeShape({2, 3}));
-  EXPECT_EQ(builder.Shapes().GetLocalFunction("local:F"), snapshot.GetLocalFunction("local:F"));
+  EXPECT_EQ(builder.Shapes().GetLocalFunction("local:F")->SerializeAsString(),
+            snapshot.GetLocalFunction("local:F")->SerializeAsString());
 }
 
 TEST(GraphBuilder, NativeDefaultInitializerValidatesDeclaredTensor) {

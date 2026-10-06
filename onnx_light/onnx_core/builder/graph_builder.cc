@@ -345,9 +345,14 @@ GraphBuilder &GraphBuilder::operator=(GraphBuilder &&other) noexcept {
 
 void GraphBuilder::SetOpsetVersion(const std::string &domain, int version) {
   const std::string key = NormaliseDomain(domain);
+  const auto existing = opsets_.find(key);
+  const bool changed = existing == opsets_.end() || existing->second != version;
   opsets_[key] = version;
   user_opsets_.insert(key);
   compute_.Shapes().SetOpsetVersion(key, version);
+  if (changed && !nodes_.empty()) {
+    RebuildStructuredState();
+  }
 }
 
 int GraphBuilder::OpsetVersion(const std::string &domain) const {
@@ -423,7 +428,7 @@ void GraphBuilder::MakeStructType(const StructTypeProto &type) {
 }
 
 void GraphBuilder::RefreshMemoryProfiles() {
-  GraphProto graph = BuildGraph();
+  GraphProto graph = BuildGraphImpl(/*validate_persistent_bindings=*/false);
   compute_.ComputeInPlaceReuseGraph(graph, compute_.Shapes(), /*allow_input_overwrite=*/false,
                                     compute_.ValueTags());
 }
@@ -1148,8 +1153,12 @@ int GraphBuilder::ResolveNodeOpset(const std::string &domain,
     op_latest = std::max(op_latest, schema.since_version());
   }
   const int target = it != opsets_.end() ? std::max(it->second, op_latest) : op_latest;
+  const bool changed = it == opsets_.end() || it->second != target;
   opsets_[key] = target;
   compute_.Shapes().SetOpsetVersion(key, target);
+  if (changed && !nodes_.empty()) {
+    RebuildStructuredState();
+  }
   return target;
 }
 
@@ -2684,6 +2693,10 @@ void GraphBuilder::MakePersistentBinding(const PersistentBindingProto &binding) 
 }
 
 GraphProto GraphBuilder::BuildGraph() const {
+  return BuildGraphImpl(/*validate_persistent_bindings=*/true);
+}
+
+GraphProto GraphBuilder::BuildGraphImpl(bool validate_persistent_bindings) const {
   GraphProto graph = graph_template_;
   graph.set_name(name_);
   for (const ValueInfoProto &input : inputs_) {
@@ -2709,7 +2722,7 @@ GraphProto GraphBuilder::BuildGraph() const {
   for (const ValueInfoProto &value_info : value_infos_) {
     graph.add_value_info(value_info);
   }
-  if (!graph.persistent_bindings().empty()) {
+  if (validate_persistent_bindings && !graph.persistent_bindings().empty()) {
     // Supplies inferred IO types before validating the unfinalized graph view.
     for (auto &output : graph.ref_output()) {
       if (!output.has_type() && Shapes().HasType(output.name().value())) {

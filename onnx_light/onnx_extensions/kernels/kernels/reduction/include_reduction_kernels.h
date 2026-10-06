@@ -303,6 +303,7 @@ public:
   void Run(RuntimeContext &rt) override;
   explicit ReduceMean(const KernelContext &ctx);
   static void RegisterTuningSchemas();
+  int32_t TuningInputIndex() const noexcept override { return 0; }
 
   Tensor operator()(const Tensor &data, bool keepdims = true, bool noop_with_empty_axes = false,
                     RuntimeContext *rt = nullptr) const;

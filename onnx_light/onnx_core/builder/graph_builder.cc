@@ -183,6 +183,20 @@ void SeedDeclaredOutputs(ShapesContext &shapes, const NodeProto &node,
   }
 }
 
+void SeedDeclaredValueInfo(ShapesContext &shapes, const ValueInfoProto &value) {
+  if (!value.has_type()) {
+    return;
+  }
+  const std::string name = value.name().value();
+  SymTensor descriptor;
+  if (value.type().has_tensor_type() && value.type().tensor_type().has_shape() &&
+      !shapes.Has(name) && SymTensorFromValueInfo(value, descriptor)) {
+    shapes.Set(name, std::move(descriptor));
+  } else if (!value.type().has_tensor_type() && !shapes.HasType(name) && !shapes.Has(name)) {
+    shapes.SetType(name, value.type());
+  }
+}
+
 void RequireStandardGraph(const GraphProto &graph);
 
 void RequireStandardAttribute(const AttributeProto &attribute) {
@@ -580,12 +594,15 @@ void GraphBuilder::RebuildStructuredState(bool refresh_ancestors) {
       shapes.ComputeShapeNode(node);
     }
     SeedDeclaredOutputs(shapes, node, declarations);
+    for (const auto &output : outputs_) {
+      if (std::find(node.output().begin(), node.output().end(), output.name().value()) !=
+          node.output().end()) {
+        SeedDeclaredValueInfo(shapes, output);
+      }
+    }
   }
   for (const auto &output : outputs_) {
-    if (output.has_type() && !shapes.HasType(output.name().value()) &&
-        !shapes.Has(output.name().value())) {
-      shapes.SetType(output.name().value(), output.type());
-    }
+    SeedDeclaredValueInfo(shapes, output);
   }
   for (const auto &child : subgraphs_) {
     child->RebuildStructuredState(/*refresh_ancestors=*/false);
@@ -832,6 +849,7 @@ const std::string &GraphBuilder::MakeInput(const std::string &name, TensorType d
 
 void GraphBuilder::MakeOutput(const ValueInfoProto &value_info) {
   const std::string name = value_info.name().value();
+  bool declaration_added = false;
   if (value_info.has_type() &&
       (HasStructuredType(value_info.type()) || Shapes().HasEncodedValue(name))) {
     auto validated = Shapes();
@@ -845,17 +863,23 @@ void GraphBuilder::MakeOutput(const ValueInfoProto &value_info) {
   if (value_info.has_type() && !value_info.type().has_tensor_type() &&
       !Shapes().HasEncodedValue(value_info.name().value())) {
     compute_.Shapes().SetType(value_info.name().value(), value_info.type());
+    declaration_added = true;
   }
   SymTensor descriptor;
   if (value_info.has_type() && value_info.type().has_tensor_type() &&
       value_info.type().tensor_type().has_shape() && !Shapes().Has(name) &&
       SymTensorFromValueInfo(value_info, descriptor)) {
     SeedShape(name, std::move(descriptor));
+    declaration_added = true;
   }
   outputs_.push_back(value_info);
   compute_.SeedValueTag(name, DeclaredValueTag(value_info), nodes_);
   compute_.SeedReuseOutput(value_info.name().value(), nodes_, compute_.Shapes());
-  RefreshAfterMutation();
+  if (declaration_added) {
+    RebuildStructuredState();
+  } else {
+    RefreshAfterMutation();
+  }
 }
 
 void GraphBuilder::MakeOutput(const std::string &name, const SymTensor &type) {
@@ -1097,6 +1121,7 @@ void GraphBuilder::ImportFunction(const FunctionProto &function) {
       compute_.SeedValueTag(declared.name().value(), DeclaredValueTag(declared), nodes_);
     }
   }
+  RebuildStructuredState();
 }
 
 void GraphBuilder::MaterializeGraphReferences(NodeProto &node) const {

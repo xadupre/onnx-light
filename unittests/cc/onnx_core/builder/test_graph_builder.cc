@@ -172,20 +172,24 @@ TEST(GraphBuilder, OutputDeclaredAfterNodesRevokesIncrementalReuse) {
 TEST(GraphBuilder, DeclaredOutputShapeUpdatesMetadataImmediately) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   builder.SetOpsetVersion("custom", 1);
-  builder.MakeNode("Unknown", {}, {"result"}, "custom");
+  builder.MakeNode("Unknown", {}, {"intermediate"}, "custom");
+  builder.MakeNode("Abs", {"intermediate"}, {"result"});
+  EXPECT_FALSE(builder.HasShape("intermediate"));
   EXPECT_FALSE(builder.HasShape("result"));
 
   ValueInfoProto output;
-  output.set_name("result");
+  output.set_name("intermediate");
   auto *tensor = output.mutable_type()->mutable_tensor_type();
   tensor->set_elem_type(TensorProto::DataType::FLOAT);
   tensor->mutable_shape()->add_dim()->set_dim_value(2);
   tensor->mutable_shape()->add_dim()->set_dim_value(3);
   builder.MakeOutput(output);
 
+  ASSERT_TRUE(builder.HasShape("intermediate"));
+  EXPECT_EQ(builder.GetShape("intermediate").Shape(), MakeShape({2, 3}));
   ASSERT_TRUE(builder.HasShape("result"));
   EXPECT_EQ(builder.GetShape("result").Shape(), MakeShape({2, 3}));
-  ASSERT_EQ(builder.Compute().Memory().size(), 1u);
+  ASSERT_EQ(builder.Compute().Memory().size(), 2u);
 }
 
 TEST(GraphBuilder, DeclaredOutputTagPropagatesToEarlierNodes) {
@@ -2131,6 +2135,32 @@ TEST(GraphBuilderStructured, NativeRoundtripPreservesDeclarationsAndMetadata) {
   EXPECT_THROW(SerializeModelToOrtFlatbuffers(exported, {}), std::invalid_argument);
   EXPECT_THROW(builder.ToStandardModel(), core::builder::BuilderError);
   EXPECT_THROW(builder.ToFunction(), core::builder::BuilderError);
+}
+
+TEST(GraphBuilderStructured, NativeFunctionReplaysLateStructuredDeclarations) {
+  ModelProto model;
+  model.set_ir_version(10);
+  model.add_opset("", 23);
+  model.add_opset("custom", 1);
+  model.ref_struct_types().push_back(BuilderRecord());
+  model.mutable_graph()->set_name("g");
+  FunctionProto function;
+  function.set_name("Structured");
+  function.set_domain("local");
+  function.add_output("result");
+  function.add_opset("", 23);
+  function.add_opset("custom", 1);
+  function.add_node(MakeNode("Unknown", {}, {"intermediate"}, "custom"));
+  function.add_node(MakeNode("Identity", {"intermediate"}, {"result"}));
+  function.add_value_info(BuilderStructuredInfo("intermediate"));
+  model.add_function(function);
+
+  core::builder::GraphBuilder builder(model, SchemaLookup());
+  const auto &local = builder.LocalFunction("Structured");
+  ASSERT_TRUE(local.Shapes().HasType("intermediate"));
+  ASSERT_TRUE(local.Shapes().HasType("result"));
+  EXPECT_TRUE(local.Shapes().GetType("result").has_struct_type());
+  EXPECT_EQ(local.Shapes().GetType("result").struct_type().type_ref(), 1u);
 }
 
 TEST(GraphBuilderStructured, RetainsStructuredInputAndIdentityOutput) {

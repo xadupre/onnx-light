@@ -1302,6 +1302,44 @@ TEST(GraphBuilder, InlineLocalFunctionsExpandsNestedCalls) {
   EXPECT_FALSE(builder.HasLocalFunction("Inner"));
 }
 
+TEST(GraphBuilder, InlineLocalFunctionsClonesControlFlowSubgraphs) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder &function = builder.MakeLocalFunction("Choose", "custom");
+  function.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+  function.MakeInput("value", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  for (const std::string name : {"then_branch", "else_branch"}) {
+    auto &branch = function.MakeSubgraph(name);
+    branch.MakeNode("Identity", {"value"}, {name + "_result"});
+    branch.MakeOutput(name + "_result");
+    AttributeProto reference;
+    reference.set_name(name + "_ref");
+    reference.set_type(AttributeProto::AttributeType::STRING);
+    reference.set_s(name);
+    attributes.push_back(reference);
+  }
+  function.MakeNode("If", {"condition"}, {"result"}, "", "", attributes);
+  function.MakeOutput("result");
+
+  builder.MakeInput("predicate", core::symbolic::TensorType::kBool, MakeShape({}));
+  builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeNode("Choose", {"predicate", "X"}, {"Y"}, "custom");
+  builder.MakeOutput("Y");
+
+  EXPECT_EQ(builder.InlineLocalFunctions(), 1u);
+  ASSERT_EQ(builder.Nodes().size(), 1u);
+  EXPECT_EQ(builder.Nodes()[0].op_type().value(), "If");
+  EXPECT_FALSE(builder.HasLocalFunction("Choose"));
+  ASSERT_EQ(builder.Subgraphs().size(), 2u);
+  const GraphProto graph = builder.BuildGraph();
+  ASSERT_EQ(graph.node()[0].attribute().size(), 2u);
+  for (const auto &attribute : graph.node()[0].attribute()) {
+    ASSERT_TRUE(attribute.has_g());
+    ASSERT_EQ(attribute.g().node().size(), 1u);
+    EXPECT_EQ(attribute.g().node()[0].input()[0], "X");
+  }
+}
+
 TEST(GraphBuilder, InlineLocalFunctionsKeepsUncalledFunction) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
 

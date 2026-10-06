@@ -197,6 +197,62 @@ void SeedDeclaredValueInfo(ShapesContext &shapes, const ValueInfoProto &value) {
   }
 }
 
+void RewriteGraphCaptures(GraphProto &graph,
+                          const std::unordered_map<std::string, std::string> &rename) {
+  std::unordered_set<std::string> defined;
+  for (const auto &input : graph.input()) {
+    defined.insert(input.name().value());
+  }
+  for (const auto &initializer : graph.initializer()) {
+    defined.insert(initializer.name().value());
+  }
+  for (const auto &initializer : graph.encoded_initializer()) {
+    defined.insert(initializer.name().value());
+  }
+  for (const auto &initializer : graph.paged_cache_initializer()) {
+    defined.insert(initializer.name().value());
+  }
+  for (const auto &node : graph.node()) {
+    for (const auto &output : node.output()) {
+      if (!output.empty()) {
+        defined.insert(output);
+      }
+    }
+  }
+
+  const auto rewrite = [&](std::string &name) {
+    if (defined.count(name) == 0) {
+      const auto found = rename.find(name);
+      if (found != rename.end()) {
+        name = found->second;
+      }
+    }
+  };
+  for (auto &node : graph.ref_node()) {
+    for (auto &input : node.ref_input()) {
+      rewrite(input);
+    }
+    for (auto &attribute : node.ref_attribute()) {
+      if (attribute.has_g()) {
+        RewriteGraphCaptures(*attribute.mutable_g(), rename);
+      }
+      for (auto &nested : attribute.ref_graphs()) {
+        RewriteGraphCaptures(nested, rename);
+      }
+    }
+  }
+  for (auto &output : graph.ref_output()) {
+    std::string name = output.name().value();
+    rewrite(name);
+    output.set_name(name);
+  }
+  for (auto &value : graph.ref_value_info()) {
+    std::string name = value.name().value();
+    rewrite(name);
+    value.set_name(name);
+  }
+}
+
 void RequireStandardGraph(const GraphProto &graph);
 
 void RequireStandardAttribute(const AttributeProto &attribute) {
@@ -2081,21 +2137,23 @@ void GraphBuilder::AppendInlinedBody(GraphBuilder &function, const NodeProto &ca
   };
 
   for (const NodeProto &body : function.nodes_) {
+    NodeProto materialized = body;
+    function.MaterializeGraphReferences(materialized);
     NodeProto node;
-    node.set_op_type(body.op_type().value());
-    if (!body.domain().empty()) {
-      node.set_domain(body.domain().value());
+    node.set_op_type(materialized.op_type().value());
+    if (!materialized.domain().empty()) {
+      node.set_domain(materialized.domain().value());
     }
-    if (!body.name().empty()) {
-      node.set_name(body.name().value());
+    if (!materialized.name().empty()) {
+      node.set_name(materialized.name().value());
     }
-    for (std::size_t i = 0; i < body.input().size(); ++i) {
-      node.add_input(remap(std::string(body.input(static_cast<std::size_t>(i)))));
+    for (std::size_t i = 0; i < materialized.input().size(); ++i) {
+      node.add_input(remap(std::string(materialized.input(static_cast<std::size_t>(i)))));
     }
-    for (std::size_t i = 0; i < body.output().size(); ++i) {
-      node.add_output(remap(std::string(body.output(static_cast<std::size_t>(i)))));
+    for (std::size_t i = 0; i < materialized.output().size(); ++i) {
+      node.add_output(remap(std::string(materialized.output(static_cast<std::size_t>(i)))));
     }
-    for (const AttributeProto &attribute : body.attribute()) {
+    for (const AttributeProto &attribute : materialized.attribute()) {
       if (!attribute.ref_attr_name().empty()) {
         // The body attribute references a function attribute; resolve it against
         // the value carried by the call node, or drop it (operator default).
@@ -2114,13 +2172,16 @@ void GraphBuilder::AppendInlinedBody(GraphBuilder &function, const NodeProto &ca
         }
         continue;
       }
-      if (HasGraphReferenceSuffix(attribute.name().value())) {
-        throw BuilderError("GraphBuilder: cannot inline local function '" + function.name() +
-                           "'; inlining a function whose body contains control-flow subgraphs is "
-                           "not supported.");
+      AttributeProto cloned = attribute;
+      if (cloned.has_g()) {
+        RewriteGraphCaptures(*cloned.mutable_g(), rename);
       }
-      node.add_attribute(attribute);
+      for (auto &graph : cloned.ref_graphs()) {
+        RewriteGraphCaptures(graph, rename);
+      }
+      node.add_attribute(std::move(cloned));
     }
+    node.ref_attribute() = ImportAttributes(node);
     out.push_back(std::move(node));
   }
 }

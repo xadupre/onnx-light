@@ -147,13 +147,15 @@ protected:
   ///
   /// When the node range carries explicit lock-lifetime metadata
   /// (:cpp:var:`compute::kNotUsedAfterMetadataKey`), that metadata is
-  /// used to unlock inputs and initializers, and schedule completeness is
-  /// enforced: an exception is thrown when an intermediate result is never
-  /// released, when an input / initializer reaching its last use is never
-  /// unlocked, or when a released shape was never created. When the node range
-  /// carries no lifetime metadata (e.g. a model executed without first running
-  /// the in-place reuse pass, or annotated only for memory profiling), the plan
-  /// is built best-effort and no completeness check is performed.
+  /// used to unlock inputs and initializers. An annotation preceding a later
+  /// topological use is considered stale and the unlock is deferred until the
+  /// actual last use. Schedule completeness is enforced: an exception is thrown
+  /// when an intermediate result is never released, when an input / initializer
+  /// reaching its last use is never unlocked, or when a released shape was never
+  /// created. When the node range carries no lifetime metadata (e.g. a model
+  /// executed without first running the in-place reuse pass, or annotated only
+  /// for memory profiling), the plan is built best-effort and no completeness
+  /// check is performed.
   ///
   /// Every constructor calls this once, after seeding, so derived plans can
   /// override the action schedule. Overrides run against the base-class

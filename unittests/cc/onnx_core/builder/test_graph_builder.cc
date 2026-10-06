@@ -1310,7 +1310,13 @@ TEST(GraphBuilder, InlineLocalFunctionsClonesControlFlowSubgraphs) {
   utils::RepeatedProtoField<AttributeProto> attributes;
   for (const std::string name : {"then_branch", "else_branch"}) {
     auto &branch = function.MakeSubgraph(name);
-    branch.MakeNode("Identity", {"value"}, {name + "_result"});
+    AttributeProto type_reference;
+    type_reference.set_name("to");
+    type_reference.set_ref_attr_name("dtype");
+    type_reference.set_type(AttributeProto::AttributeType::INT);
+    utils::RepeatedProtoField<AttributeProto> branch_attributes;
+    branch_attributes.push_back(type_reference);
+    branch.MakeNode("Cast", {"value"}, {name + "_result"}, "", "", branch_attributes);
     branch.MakeOutput(name + "_result");
     AttributeProto reference;
     reference.set_name(name + "_ref");
@@ -1323,7 +1329,13 @@ TEST(GraphBuilder, InlineLocalFunctionsClonesControlFlowSubgraphs) {
 
   builder.MakeInput("predicate", core::symbolic::TensorType::kBool, MakeShape({}));
   builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
-  builder.MakeNode("Choose", {"predicate", "X"}, {"Y"}, "custom");
+  AttributeProto dtype;
+  dtype.set_name("dtype");
+  dtype.set_type(AttributeProto::AttributeType::INT);
+  dtype.set_i(TensorProto::DataType::FLOAT);
+  utils::RepeatedProtoField<AttributeProto> call_attributes;
+  call_attributes.push_back(dtype);
+  builder.MakeNode("Choose", {"predicate", "X"}, {"Y"}, "custom", "", call_attributes);
   builder.MakeOutput("Y");
 
   EXPECT_EQ(builder.InlineLocalFunctions(), 1u);
@@ -1337,6 +1349,98 @@ TEST(GraphBuilder, InlineLocalFunctionsClonesControlFlowSubgraphs) {
     ASSERT_TRUE(attribute.has_g());
     ASSERT_EQ(attribute.g().node().size(), 1u);
     EXPECT_EQ(attribute.g().node()[0].input()[0], "X");
+    ASSERT_EQ(attribute.g().node()[0].attribute().size(), 1u);
+    EXPECT_TRUE(attribute.g().node()[0].attribute()[0].ref_attr_name().empty());
+    EXPECT_EQ(attribute.g().node()[0].attribute()[0].i(), TensorProto::DataType::FLOAT);
+  }
+}
+
+TEST(GraphBuilder, InlineLocalFunctionsExpandsCallsInClonedSubgraphs) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  auto &inner = builder.MakeLocalFunction("Inner", "custom");
+  inner.MakeInput("value", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  inner.MakeNode("Identity", {"value"}, {"result"});
+  inner.MakeOutput("result");
+
+  auto &outer = builder.MakeLocalFunction("Outer", "custom");
+  outer.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+  outer.MakeInput("value", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  for (const std::string name : {"then_branch", "else_branch"}) {
+    auto &branch = outer.MakeSubgraph(name);
+    branch.MakeNode("Inner", {"value"}, {name + "_result"}, "custom");
+    branch.MakeOutput(name + "_result");
+    AttributeProto reference;
+    reference.set_name(name + "_ref");
+    reference.set_type(AttributeProto::AttributeType::STRING);
+    reference.set_s(name);
+    attributes.push_back(reference);
+  }
+  outer.MakeNode("If", {"condition"}, {"result"}, "", "", attributes);
+  outer.MakeOutput("result");
+
+  builder.MakeInput("predicate", core::symbolic::TensorType::kBool, MakeShape({}));
+  builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeNode("Outer", {"predicate", "X"}, {"Y"}, "custom");
+  builder.MakeOutput("Y");
+
+  EXPECT_EQ(builder.InlineLocalFunctions(), 3u);
+  EXPECT_FALSE(builder.HasLocalFunction("Outer"));
+  EXPECT_FALSE(builder.HasLocalFunction("Inner"));
+  const GraphProto graph = builder.BuildGraph();
+  for (const auto &attribute : graph.node()[0].attribute()) {
+    ASSERT_TRUE(attribute.has_g());
+    ASSERT_EQ(attribute.g().node().size(), 1u);
+    EXPECT_EQ(attribute.g().node()[0].op_type(), "Identity");
+  }
+}
+
+TEST(GraphBuilder, InlineLocalFunctionsPreservesSubgraphSparseInitializerNames) {
+  ModelProto model;
+  model.set_ir_version(10);
+  model.add_opset("", 23);
+  model.add_opset("custom", 1);
+  GraphProto *graph = model.mutable_graph();
+  graph->set_name("g");
+  auto *predicate = graph->add_input();
+  predicate->set_name("predicate");
+  predicate->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::DataType::BOOL);
+  auto *value = graph->add_input();
+  value->set_name("X");
+  value->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::DataType::FLOAT);
+  graph->add_node(MakeNode("Choose", {"predicate", "X"}, {"Y"}, "custom"));
+  graph->add_output()->set_name("Y");
+
+  FunctionProto function;
+  function.set_name("Choose");
+  function.set_domain("custom");
+  function.add_input("condition");
+  function.add_input("value");
+  function.add_output("result");
+  function.add_opset("", 23);
+  function.add_opset("custom", 1);
+  NodeProto conditional = MakeNode("If", {"condition"}, {"result"});
+  for (const std::string name : {"then_branch", "else_branch"}) {
+    AttributeProto branch;
+    branch.set_name(name);
+    branch.set_type(AttributeProto::AttributeType::GRAPH);
+    branch.mutable_g()->set_name(name);
+    branch.mutable_g()->add_sparse_initializer()->mutable_values()->set_name("value");
+    branch.mutable_g()->add_output()->set_name("value");
+    conditional.add_attribute(branch);
+  }
+  function.add_node(conditional);
+  model.add_function(function);
+
+  core::builder::GraphBuilder builder(model, SchemaLookup());
+  EXPECT_EQ(builder.InlineLocalFunctions(), 1u);
+  const GraphProto inlined = builder.BuildGraph();
+  for (const auto &attribute : inlined.node()[0].attribute()) {
+    ASSERT_TRUE(attribute.has_g());
+    ASSERT_EQ(attribute.g().sparse_initializer().size(), 1u);
+    EXPECT_EQ(attribute.g().sparse_initializer()[0].values().name(), "value");
+    ASSERT_EQ(attribute.g().output().size(), 1u);
+    EXPECT_EQ(attribute.g().output()[0].name(), "value");
   }
 }
 

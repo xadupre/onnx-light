@@ -153,6 +153,7 @@ bool HasStructuredType(const TypeProto &type) {
 }
 
 using DeclaredTypes = std::unordered_map<std::string, const TypeProto *>;
+using AttributeBindings = std::unordered_map<std::string, const AttributeProto *>;
 
 DeclaredTypes StructuredDeclarations(const utils::RepeatedProtoField<ValueInfoProto> &values) {
   DeclaredTypes declarations;
@@ -206,6 +207,9 @@ void RewriteGraphCaptures(GraphProto &graph,
   for (const auto &initializer : graph.initializer()) {
     defined.insert(initializer.name().value());
   }
+  for (const auto &initializer : graph.sparse_initializer()) {
+    defined.insert(initializer.values().name().value());
+  }
   for (const auto &initializer : graph.encoded_initializer()) {
     defined.insert(initializer.name().value());
   }
@@ -250,6 +254,40 @@ void RewriteGraphCaptures(GraphProto &graph,
     std::string name = value.name().value();
     rewrite(name);
     value.set_name(name);
+  }
+}
+
+void ResolveFunctionAttributes(GraphProto &graph, const AttributeBindings &bindings);
+
+void ResolveFunctionAttributes(NodeProto &node, const AttributeBindings &bindings) {
+  utils::RepeatedProtoField<AttributeProto> resolved;
+  resolved.reserve(node.attribute().size());
+  for (const auto &attribute : node.attribute()) {
+    AttributeProto clone;
+    if (!attribute.ref_attr_name().empty()) {
+      const auto found = bindings.find(attribute.ref_attr_name().value());
+      if (found == bindings.end()) {
+        continue;
+      }
+      clone = *found->second;
+      clone.set_name(attribute.name().value());
+    } else {
+      clone = attribute;
+    }
+    if (clone.has_g()) {
+      ResolveFunctionAttributes(*clone.mutable_g(), bindings);
+    }
+    for (auto &graph : clone.ref_graphs()) {
+      ResolveFunctionAttributes(graph, bindings);
+    }
+    resolved.push_back(std::move(clone));
+  }
+  node.ref_attribute() = std::move(resolved);
+}
+
+void ResolveFunctionAttributes(GraphProto &graph, const AttributeBindings &bindings) {
+  for (auto &node : graph.ref_node()) {
+    ResolveFunctionAttributes(node, bindings);
   }
 }
 
@@ -2136,9 +2174,18 @@ void GraphBuilder::AppendInlinedBody(GraphBuilder &function, const NodeProto &ca
     return it != rename.end() ? it->second : value;
   };
 
+  AttributeBindings bindings;
+  for (const auto &attribute : function.function_attribute_protos_) {
+    bindings[attribute.name().value()] = &attribute;
+  }
+  for (const auto &attribute : call.attribute()) {
+    bindings[attribute.name().value()] = &attribute;
+  }
+
   for (const NodeProto &body : function.nodes_) {
     NodeProto materialized = body;
     function.MaterializeGraphReferences(materialized);
+    ResolveFunctionAttributes(materialized, bindings);
     NodeProto node;
     node.set_op_type(materialized.op_type().value());
     if (!materialized.domain().empty()) {
@@ -2154,24 +2201,6 @@ void GraphBuilder::AppendInlinedBody(GraphBuilder &function, const NodeProto &ca
       node.add_output(remap(std::string(materialized.output(static_cast<std::size_t>(i)))));
     }
     for (const AttributeProto &attribute : materialized.attribute()) {
-      if (!attribute.ref_attr_name().empty()) {
-        // The body attribute references a function attribute; resolve it against
-        // the value carried by the call node, or drop it (operator default).
-        const std::string reference = attribute.ref_attr_name().value();
-        const AttributeProto *actual = nullptr;
-        for (const AttributeProto &call_attribute : call.attribute()) {
-          if (call_attribute.name().value() == reference) {
-            actual = &call_attribute;
-            break;
-          }
-        }
-        if (actual != nullptr) {
-          AttributeProto resolved = *actual;
-          resolved.set_name(attribute.name().value());
-          node.add_attribute(std::move(resolved));
-        }
-        continue;
-      }
       AttributeProto cloned = attribute;
       if (cloned.has_g()) {
         RewriteGraphCaptures(*cloned.mutable_g(), rename);
@@ -2215,6 +2244,9 @@ std::size_t GraphBuilder::InlineFunctionCalls(const std::vector<GraphBuilder *> 
       }
     }
     nodes_ = std::move(kept);
+  }
+  for (const auto &subgraph : subgraphs_) {
+    inlined += subgraph->InlineFunctionCalls(functions);
   }
   return inlined;
 }

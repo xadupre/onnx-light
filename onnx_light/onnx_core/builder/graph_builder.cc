@@ -2231,7 +2231,8 @@ void GraphBuilder::AppendInlinedBody(GraphBuilder &function, const NodeProto &ca
   }
 }
 
-std::size_t GraphBuilder::InlineFunctionCalls(const std::vector<GraphBuilder *> &functions) {
+std::size_t GraphBuilder::InlineFunctionCalls(const std::vector<GraphBuilder *> &functions,
+                                              std::unordered_set<std::string> &expanded_functions) {
   std::size_t inlined = 0;
   if (functions.empty()) {
     return inlined;
@@ -2249,6 +2250,7 @@ std::size_t GraphBuilder::InlineFunctionCalls(const std::vector<GraphBuilder *> 
         GraphBuilder *function = FindCalledFunction(functions, node);
         if (function != nullptr) {
           AppendInlinedBody(*function, node, kept);
+          expanded_functions.insert(function->function_domain_ + ":" + function->name());
           ++inlined;
           changed = true;
         } else {
@@ -2261,7 +2263,7 @@ std::size_t GraphBuilder::InlineFunctionCalls(const std::vector<GraphBuilder *> 
   // Descend once after expanding this graph so the traversal sees both
   // pre-existing subgraphs and subgraphs cloned by the expansion above.
   for (const auto &subgraph : subgraphs_) {
-    inlined += subgraph->InlineFunctionCalls(functions);
+    inlined += subgraph->InlineFunctionCalls(functions, expanded_functions);
   }
   return inlined;
 }
@@ -2300,24 +2302,11 @@ std::size_t GraphBuilder::InlineLocalFunctions(
     }
   }
 
-  // Record which functions are called anywhere (the calling graph, its
-  // subgraphs and the other function bodies) before expanding: only these are
-  // eligible for removal once fully inlined, so a function that is never called
-  // (e.g. exported for external use) is left in place.
-  std::unordered_set<std::string> called_before;
-  for (GraphBuilder *function : functions) {
-    std::size_t callers = CountFunctionCalls(function->name(), function->function_domain_);
-    for (GraphBuilder *other : functions) {
-      if (other != function) {
-        callers += other->CountFunctionCalls(function->name(), function->function_domain_);
-      }
-    }
-    if (callers != 0) {
-      called_before.insert(function->name());
-    }
-  }
-
-  const std::size_t inlined = InlineFunctionCalls(functions);
+  // Cleanup is limited to definitions that were actually expanded. This keeps
+  // uncalled exported functions while covering calls introduced from graph-valued
+  // function defaults during expansion.
+  std::unordered_set<std::string> expanded_functions;
+  const std::size_t inlined = InlineFunctionCalls(functions, expanded_functions);
 
   // Drop the definitions of functions that were called but no longer have any
   // caller. Removing one can drop the last reference to another (a function
@@ -2327,7 +2316,8 @@ std::size_t GraphBuilder::InlineLocalFunctions(
     changed = false;
     for (std::size_t i = 0; i < local_functions_.size(); ++i) {
       GraphBuilder *function = local_functions_[i].get();
-      if (called_before.find(function->name()) == called_before.end()) {
+      const std::string key = function->function_domain_ + ":" + function->name();
+      if (expanded_functions.find(key) == expanded_functions.end()) {
         continue;
       }
       std::size_t callers = CountFunctionCalls(function->name(), function->function_domain_);

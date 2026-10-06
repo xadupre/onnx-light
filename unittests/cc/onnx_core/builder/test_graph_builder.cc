@@ -1503,6 +1503,59 @@ TEST(GraphBuilder, InlineLocalFunctionsPreservesSubgraphSparseInitializerNames) 
   }
 }
 
+TEST(GraphBuilder, InlineLocalFunctionsCleansCallsFromGraphDefaults) {
+  ModelProto model;
+  model.set_ir_version(10);
+  model.add_opset("", 23);
+  model.add_opset("custom", 1);
+  GraphProto *graph = model.mutable_graph();
+  graph->set_name("g");
+  auto *input = graph->add_input();
+  input->set_name("X");
+  input->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::DataType::FLOAT);
+  graph->add_node(MakeNode("Outer", {"X"}, {"Y"}, "custom"));
+  graph->add_output()->set_name("Y");
+
+  FunctionProto inner;
+  inner.set_name("Inner");
+  inner.set_domain("custom");
+  inner.add_input("value");
+  inner.add_output("result");
+  inner.add_opset("", 23);
+  inner.add_opset("custom", 1);
+  inner.add_node(MakeNode("Identity", {"value"}, {"result"}));
+  model.add_function(inner);
+
+  FunctionProto outer;
+  outer.set_name("Outer");
+  outer.set_domain("custom");
+  outer.add_input("value");
+  outer.add_output("result");
+  outer.add_opset("", 23);
+  outer.add_opset("custom", 1);
+  outer.add_attribute("body");
+  auto *default_body = outer.add_attribute_proto();
+  default_body->set_name("body");
+  default_body->set_type(AttributeProto::AttributeType::GRAPH);
+  default_body->mutable_g()->set_name("default_body");
+  default_body->mutable_g()->add_node(MakeNode("Inner", {"value"}, {"nested"}, "custom"));
+  default_body->mutable_g()->add_output()->set_name("nested");
+  NodeProto body = MakeNode("Identity", {"value"}, {"result"});
+  AttributeProto body_reference;
+  body_reference.set_name("body");
+  body_reference.set_ref_attr_name("body");
+  body_reference.set_type(AttributeProto::AttributeType::GRAPH);
+  body.add_attribute(body_reference);
+  outer.add_node(body);
+  model.add_function(outer);
+
+  core::builder::GraphBuilder builder(model, SchemaLookup());
+  EXPECT_EQ(builder.InlineLocalFunctions(), 2u);
+  EXPECT_FALSE(builder.HasLocalFunction("Outer"));
+  EXPECT_FALSE(builder.HasLocalFunction("Inner"));
+  EXPECT_TRUE(builder.ToModel().functions().empty());
+}
+
 TEST(GraphBuilder, InlineLocalFunctionsKeepsUncalledFunction) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
 

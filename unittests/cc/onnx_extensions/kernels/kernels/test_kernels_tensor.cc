@@ -445,6 +445,72 @@ TEST(KernelClass, CastClassFloatToDouble) {
   EXPECT_DOUBLE_EQ(py[2], 2.25);
 }
 
+TEST(KernelClass, CastComplexOutputsAndInputs) {
+  using core::runtime::DataType;
+  const KernelContext ctx{DefaultOpset(13)};
+  Cast cast_kernel{ctx};
+  const Tensor input = Tensor::FromFloat("", {3}, {-1.5f, 0.0f, 2.25f});
+  const Tensor complex64 = cast_kernel(input, DataType::COMPLEX64);
+  ASSERT_EQ(complex64.shape, input.shape);
+  ASSERT_EQ(complex64.size_bytes(), 6 * sizeof(float));
+  const float expected64[] = {-1.5f, 0.0f, 0.0f, 0.0f, 2.25f, 0.0f};
+  EXPECT_EQ(std::memcmp(complex64.bytes(), expected64, sizeof(expected64)), 0);
+
+  const Tensor complex128 = cast_kernel(complex64, DataType::COMPLEX128);
+  const double expected128[] = {-1.5, 0.0, 0.0, 0.0, 2.25, 0.0};
+  ASSERT_EQ(complex128.size_bytes(), sizeof(expected128));
+  EXPECT_EQ(std::memcmp(complex128.bytes(), expected128, sizeof(expected128)), 0);
+  const Tensor from_double =
+      cast_kernel(Tensor::FromDouble("", {1}, {1.234567890123}), DataType::COMPLEX128);
+  const double expected_from_double[] = {1.234567890123, 0.0};
+  EXPECT_EQ(std::memcmp(from_double.bytes(), expected_from_double, sizeof(expected_from_double)),
+            0);
+
+  const double with_imaginary[] = {1.5, -2.0, -3.0, 4.5};
+  std::vector<uint8_t> bytes(sizeof(with_imaginary));
+  std::memcpy(bytes.data(), with_imaginary, sizeof(with_imaginary));
+  const Tensor source("", DataType::COMPLEX128, {2}, std::move(bytes));
+  Tensor preallocated("", DataType::COMPLEX64, {2}, std::vector<uint8_t>(4 * sizeof(float)));
+  cast_kernel(source, DataType::COMPLEX64, preallocated);
+  const float expected_with_imaginary[] = {1.5f, -2.0f, -3.0f, 4.5f};
+  EXPECT_EQ(
+      std::memcmp(preallocated.bytes(), expected_with_imaginary, sizeof(expected_with_imaginary)),
+      0);
+  const Tensor real = cast_kernel(source, DataType::DOUBLE);
+  EXPECT_DOUBLE_EQ(real.AsDouble()[0], 1.5);
+  EXPECT_DOUBLE_EQ(real.AsDouble()[1], -3.0);
+  const Tensor identity = cast_kernel(source, DataType::COMPLEX128);
+  EXPECT_EQ(std::memcmp(identity.bytes(), source.bytes(), source.size_bytes()), 0);
+  EXPECT_THROW((void)cast_kernel(source, DataType::STRING), std::invalid_argument);
+  EXPECT_THROW((void)cast_kernel(source, DataType::FLOAT8E5M2), std::invalid_argument);
+}
+
+TEST(KernelClass, CastSessionProducesComplexOutput) {
+  using core::runtime::DataType;
+  const KernelContext ctx{DefaultOpset(13)};
+  onnx_kernels::RegisterKernelFunctions();
+  GraphProto graph;
+  graph.add_input()->set_name("x");
+  graph.add_output()->set_name("y");
+  NodeProto *node = graph.add_node();
+  node->set_op_type("Cast");
+  node->add_input("x");
+  node->add_output("y");
+  auto *attribute = node->add_attribute();
+  attribute->set_name("to");
+  attribute->set_type(AttributeProto::AttributeType::INT);
+  attribute->set_i(DataType::COMPLEX64);
+  RuntimeContext rt(ctx);
+  rt.Set("x", Tensor::FromFloat("x", {2}, {1.25f, -2.5f}));
+  core::runtime::RuntimeSession session(rt.GetExecutionPlan(graph));
+  session.Run(rt);
+  const Tensor &output = rt.Get("y");
+  ASSERT_EQ(output.data_type, DataType::COMPLEX64);
+  const float expected[] = {1.25f, 0.0f, -2.5f, 0.0f};
+  ASSERT_EQ(output.size_bytes(), sizeof(expected));
+  EXPECT_EQ(std::memcmp(output.bytes(), expected, sizeof(expected)), 0);
+}
+
 TEST(KernelClass, CastUsesTypedTuningAndParallelNumericConversion) {
   const KernelContext ctx{DefaultOpset(13)};
   Cast cast_kernel{ctx};

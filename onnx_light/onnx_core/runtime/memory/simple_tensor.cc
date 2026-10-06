@@ -184,6 +184,10 @@ size_t ElementSize(int32_t dtype) {
     return 4;
   case DataType::UINT64:
     return 8;
+  case DataType::COMPLEX64:
+    return 2 * sizeof(float);
+  case DataType::COMPLEX128:
+    return 2 * sizeof(double);
   default:
     EXT_THROW_INVALID("Tensor::ElementSize: unsupported data_type.");
   }

@@ -219,6 +219,40 @@ TEST(GraphBuilder, ExportCompletesAppendOnlyMemoryProfiles) {
   EXPECT_EQ(builder.Compute().Memory(), expected.Memory());
 }
 
+TEST(GraphBuilder, ChildMutationInvalidatesParentLifetimeMetadata) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.SetOpsetVersion("custom", 1);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeNode("Abs", {"x"}, {"intermediate"});
+  builder.MakeNode("Abs", {"intermediate"}, {"result"});
+  auto &child = builder.MakeSubgraph("body");
+  child.MakeOutput("x");
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  auto &body = attributes.add();
+  body.set_name("body_ref");
+  body.set_type(AttributeProto::STRING);
+  body.set_s("body");
+  builder.MakeNode("Capture", {}, {"captured"}, "custom", "", attributes);
+  builder.MakeOutput("result");
+  builder.MakeOutput("captured");
+
+  const GraphProto before = builder.ToGraph();
+  EXPECT_TRUE(builder.Compute().MemoryComplete());
+  child.MakeOutput("intermediate");
+  EXPECT_FALSE(builder.Compute().MemoryComplete());
+  const GraphProto after = builder.ToGraph();
+  EXPECT_TRUE(builder.Compute().MemoryComplete());
+  const auto released_before = std::find_if(
+      before.node()[1].metadata_props().begin(), before.node()[1].metadata_props().end(),
+      [](const auto &entry) { return entry.key() == core::compute::kReleaseAfterMetadataKey; });
+  ASSERT_NE(released_before, before.node()[1].metadata_props().end());
+  EXPECT_EQ(released_before->value(), "intermediate");
+  const auto released_after = std::find_if(
+      after.node()[1].metadata_props().begin(), after.node()[1].metadata_props().end(),
+      [](const auto &entry) { return entry.key() == core::compute::kReleaseAfterMetadataKey; });
+  EXPECT_EQ(released_after, after.node()[1].metadata_props().end());
+}
+
 TEST(GraphBuilder, MaintainsConstantInfoIncrementally) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   TensorProto initializer;
@@ -1609,6 +1643,38 @@ TEST(GraphBuilder, NativeFunctionBindsRequiredAndDefaultAttributes) {
   const ModelProto exported = builder.ToModel();
   ASSERT_EQ(exported.functions(0).attribute_proto().size(), 1u);
   EXPECT_EQ(exported.functions(0).node(0).attribute(0).ref_attr_name(), "dtype");
+}
+
+TEST(GraphBuilder, NativeFunctionSeedsLateIntermediateTags) {
+  core::builder::GraphBuilder seed("g", SchemaLookup());
+  seed.SetOpsetVersion("", 18);
+  ModelProto model = seed.ToModel();
+  FunctionProto function;
+  function.set_name("Tagged");
+  function.set_domain("local");
+  function.add_input("a");
+  function.add_output("r");
+  function.add_opset("", 18);
+  function.add_node(MakeNode("Abs", {"a"}, {"intermediate"}));
+  function.add_node(MakeNode("Abs", {"intermediate"}, {"r"}));
+  auto *declared = function.add_value_info();
+  declared->set_name("intermediate");
+  auto *tag = declared->add_metadata_props();
+  tag->set_key(core::compute::kValueTagMetadataKey);
+  tag->set_value("shape");
+  model.add_function(function);
+
+  core::builder::GraphBuilder builder(model, SchemaLookup());
+  auto &local = builder.LocalFunction("Tagged");
+  EXPECT_EQ(local.Compute().ValueTags().at("intermediate"), "shape");
+  const FunctionProto exported = local.ToFunction("local");
+  const auto release =
+      std::find_if(exported.node()[1].metadata_props().begin(),
+                   exported.node()[1].metadata_props().end(), [](const auto &entry) {
+                     return entry.key() == core::compute::kReleaseAfterShapeTagMetadataKey;
+                   });
+  ASSERT_NE(release, exported.node()[1].metadata_props().end());
+  EXPECT_EQ(release->value(), "intermediate");
 }
 
 TEST(GraphBuilder, NativeFunctionRejectsRecursionAndWrongArity) {

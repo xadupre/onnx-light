@@ -421,6 +421,12 @@ void GraphBuilder::MakeStructType(const StructTypeProto &type) {
   SetStructTypes(declarations);
 }
 
+void GraphBuilder::InvalidateAncestorMetadata() noexcept {
+  for (GraphBuilder *ancestor = parent_; ancestor != nullptr; ancestor = ancestor->parent_) {
+    ancestor->compute_.InvalidateMemory();
+  }
+}
+
 void GraphBuilder::RebuildMetadata() {
   compute_.ResetMetadata();
   for (const auto &value : value_infos_) {
@@ -486,6 +492,7 @@ void GraphBuilder::RebuildMetadata() {
   compute_.ComputeInPlaceReuseGraph(graph, compute_.Shapes(), /*allow_input_overwrite=*/false,
                                     tags.first);
   compute_.ComputePeakMemory(graph, device_);
+  InvalidateAncestorMetadata();
 }
 
 void GraphBuilder::RebuildStructuredState() {
@@ -622,6 +629,7 @@ const std::string &GraphBuilder::MakeEncodedInitializer(const EncodedValueProto 
   if (!is_input) {
     compute_.SeedConstant(reserved);
   }
+  InvalidateAncestorMetadata();
   return reserved;
 }
 
@@ -656,6 +664,7 @@ const std::string &GraphBuilder::MakePagedCacheInitializer(const PagedCacheProto
   compute_.SeedReuseInput(reserved, is_input, true, false);
   if (!is_input)
     compute_.SeedConstant(reserved);
+  InvalidateAncestorMetadata();
   return reserved;
 }
 
@@ -725,6 +734,7 @@ template <typename Tensor> const std::string &GraphBuilder::MakeInitializerImpl(
     // specialize the public input declaration.
     compute_.SeedReuseInput(reserved, /*is_graph_input=*/true, /*is_initializer=*/true,
                             /*allow_input_overwrite=*/false);
+    InvalidateAncestorMetadata();
     return reserved;
   }
   if (has_descriptor) {
@@ -736,6 +746,7 @@ template <typename Tensor> const std::string &GraphBuilder::MakeInitializerImpl(
   compute_.SeedReuseInput(reserved, /*is_graph_input=*/false, /*is_initializer=*/true,
                           /*allow_input_overwrite=*/false);
   compute_.SeedConstant(reserved);
+  InvalidateAncestorMetadata();
   // ``reserved`` references the entry stored in ``names_`` and remains valid.
   return reserved;
 }
@@ -785,6 +796,7 @@ const std::string &GraphBuilder::MakeInput(const ValueInfoProto &value_info) {
   }
   SeedInputAnnotations(reserved);
   compute_.SeedValueTag(reserved, DeclaredValueTag(value_info), nodes_);
+  InvalidateAncestorMetadata();
   return reserved;
 }
 
@@ -796,6 +808,7 @@ const std::string &GraphBuilder::MakeInput(const std::string &name, const SymTen
   inputs_.add() = std::move(vi);
   SeedShape(reserved, type);
   SeedInputAnnotations(reserved);
+  InvalidateAncestorMetadata();
   return reserved;
 }
 
@@ -823,6 +836,7 @@ void GraphBuilder::MakeOutput(const ValueInfoProto &value_info) {
   outputs_.push_back(value_info);
   compute_.SeedValueTag(name, DeclaredValueTag(value_info), nodes_);
   compute_.SeedReuseOutput(value_info.name().value(), nodes_, compute_.Shapes());
+  InvalidateAncestorMetadata();
 }
 
 void GraphBuilder::MakeOutput(const std::string &name, const SymTensor &type) {
@@ -841,6 +855,7 @@ void GraphBuilder::MakeOutput(const std::string &name) {
   vi.set_name(name);
   outputs_.add() = std::move(vi);
   compute_.SeedReuseOutput(name, nodes_, compute_.Shapes());
+  InvalidateAncestorMetadata();
 }
 
 // Seeds the incremental annotations for a declared graph input: it is a
@@ -1060,6 +1075,7 @@ void GraphBuilder::ImportFunction(const FunctionProto &function) {
                                      declared.name()) != function.output().end();
     if (!is_input && !is_output) {
       value_infos_.push_back(declared);
+      compute_.SeedValueTag(declared.name().value(), DeclaredValueTag(declared), nodes_);
     }
   }
 }
@@ -1358,6 +1374,7 @@ GraphBuilder::MakeNode(const std::string &op_type, const std::vector<std::string
   compute_.AppendNodeReuse(nodes_, node_index, compute_.Shapes(), references);
   compute_.AppendNodeConstant(stored, node_index);
   compute_.AppendNodePeakMemory(stored, node_index, device_);
+  InvalidateAncestorMetadata();
 
   return resolved_outputs;
 }

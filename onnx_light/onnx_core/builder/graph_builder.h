@@ -739,6 +739,7 @@ private:
   template <typename Tensor> const std::string &MakeInitializerImpl(Tensor &&tensor);
 
   void SetStructTypes(const utils::RepeatedProtoField<StructTypeProto> &types);
+  void InvalidateAncestorMetadata() noexcept;
   void RebuildMetadata();
   void RebuildStructuredState();
   std::size_t DeduplicateEncodedInitializers(std::vector<const EncodedValueProto *> &index,

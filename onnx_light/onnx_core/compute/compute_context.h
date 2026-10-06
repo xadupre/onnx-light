@@ -436,6 +436,9 @@ public:
   /// Whether the stored memory profiles reflect the complete current graph.
   bool MemoryComplete() const noexcept { return memory_complete_; }
 
+  /// Marks memory profiles stale after a related nested graph changes.
+  void InvalidateMemory() noexcept { memory_complete_ = false; }
+
   /// Memory snapshot for the node at ``node_index``.
   ///
   /// @throws std::out_of_range when ``node_index`` is out of bounds.

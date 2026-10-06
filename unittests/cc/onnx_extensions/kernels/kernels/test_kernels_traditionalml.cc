@@ -421,6 +421,17 @@ TEST(KernelClass, ArrayFeatureExtractorGathersAlongLastAxis) {
   }
 }
 
+TEST(KernelClass, ArrayFeatureExtractorRankOneInputProducesRow) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  ArrayFeatureExtractor afe{ctx};
+  Tensor x = Tensor::FromInt64("", {4}, {10, 20, 30, 40});
+  Tensor indices = Tensor::FromInt64("", {2}, {3, 1});
+  Tensor output = afe.operator()<int64_t>(x, indices);
+  EXPECT_EQ(output.shape, (std::vector<int64_t>{1, 2}));
+  EXPECT_EQ(output.AsInt64()[0], 40);
+  EXPECT_EQ(output.AsInt64()[1], 20);
+}
+
 TEST(KernelClass, ArrayFeatureExtractorInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
   ArrayFeatureExtractor afe{ctx};

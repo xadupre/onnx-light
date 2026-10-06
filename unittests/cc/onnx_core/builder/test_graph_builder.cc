@@ -1461,7 +1461,15 @@ TEST(GraphBuilder, InlineLocalFunctionsPreservesSubgraphSparseInitializerNames) 
     branch.set_name(name);
     branch.set_type(AttributeProto::AttributeType::GRAPH);
     branch.mutable_g()->set_name(name);
-    branch.mutable_g()->add_sparse_initializer()->mutable_values()->set_name("value");
+    auto *sparse = branch.mutable_g()->add_sparse_initializer();
+    sparse->add_dims(1);
+    sparse->mutable_values()->set_name("value");
+    sparse->mutable_values()->set_data_type(TensorProto::DataType::FLOAT);
+    sparse->mutable_values()->add_dims(1);
+    sparse->mutable_values()->add_float_data(1.0f);
+    sparse->mutable_indices()->set_data_type(TensorProto::DataType::INT64);
+    sparse->mutable_indices()->add_dims(1);
+    sparse->mutable_indices()->add_int64_data(0);
     branch.mutable_g()->add_output()->set_name("value");
     NodeProto nested = MakeNode("Identity", {"condition"}, {"ignored"});
     AttributeProto nested_body;
@@ -1554,6 +1562,57 @@ TEST(GraphBuilder, InlineLocalFunctionsCleansCallsFromGraphDefaults) {
   EXPECT_FALSE(builder.HasLocalFunction("Outer"));
   EXPECT_FALSE(builder.HasLocalFunction("Inner"));
   EXPECT_TRUE(builder.ToModel().functions().empty());
+}
+
+TEST(GraphBuilder, InlineLocalFunctionsRetainsDefinitionsCalledByExportedDefaults) {
+  ModelProto model;
+  model.set_ir_version(10);
+  model.add_opset("", 23);
+  model.add_opset("custom", 1);
+  GraphProto *graph = model.mutable_graph();
+  graph->set_name("g");
+  graph->add_input()->set_name("X");
+  graph->add_node(MakeNode("Inner", {"X"}, {"Y"}, "custom"));
+  graph->add_output()->set_name("Y");
+
+  FunctionProto inner;
+  inner.set_name("Inner");
+  inner.set_domain("custom");
+  inner.add_input("value");
+  inner.add_output("result");
+  inner.add_opset("", 23);
+  inner.add_opset("custom", 1);
+  inner.add_node(MakeNode("Identity", {"value"}, {"result"}));
+  model.add_function(inner);
+
+  FunctionProto exported;
+  exported.set_name("Exported");
+  exported.set_domain("custom");
+  exported.add_input("value");
+  exported.add_output("result");
+  exported.add_opset("", 23);
+  exported.add_opset("custom", 1);
+  exported.add_attribute("body");
+  auto *default_body = exported.add_attribute_proto();
+  default_body->set_name("body");
+  default_body->set_type(AttributeProto::AttributeType::GRAPH);
+  default_body->mutable_g()->set_name("default_body");
+  default_body->mutable_g()->add_node(MakeNode("Inner", {"value"}, {"nested"}, "custom"));
+  default_body->mutable_g()->add_output()->set_name("nested");
+  NodeProto body = MakeNode("Identity", {"value"}, {"result"});
+  AttributeProto body_reference;
+  body_reference.set_name("body");
+  body_reference.set_ref_attr_name("body");
+  body_reference.set_type(AttributeProto::AttributeType::GRAPH);
+  body.add_attribute(body_reference);
+  exported.add_node(body);
+  model.add_function(exported);
+
+  core::builder::GraphBuilder builder(model, SchemaLookup());
+  EXPECT_EQ(builder.InlineLocalFunctions(), 1u);
+  EXPECT_TRUE(builder.HasLocalFunction("Inner"));
+  EXPECT_TRUE(builder.HasLocalFunction("Exported"));
+  EXPECT_EQ(builder.ToModel().functions().size(), 2u);
 }
 
 TEST(GraphBuilder, InlineLocalFunctionsKeepsUncalledFunction) {

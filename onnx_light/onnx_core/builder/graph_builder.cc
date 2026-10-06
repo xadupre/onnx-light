@@ -2091,6 +2091,25 @@ GraphBuilder *GraphBuilder::FindCalledFunction(const std::vector<GraphBuilder *>
 std::size_t GraphBuilder::CountFunctionCalls(const std::string &name,
                                              const std::string &domain) const {
   const std::string normalised = NormaliseDomain(domain);
+  const std::function<std::size_t(const GraphProto &)> count_graph =
+      [&](const GraphProto &graph) -> std::size_t {
+    std::size_t count = 0;
+    for (const auto &node : graph.node()) {
+      const std::string node_domain = node.domain().empty() ? std::string() : node.domain().value();
+      if (node.op_type().value() == name && NormaliseDomain(node_domain) == normalised) {
+        ++count;
+      }
+      for (const auto &attribute : node.attribute()) {
+        if (attribute.has_g()) {
+          count += count_graph(attribute.g());
+        }
+        for (const auto &nested : attribute.graphs()) {
+          count += count_graph(nested);
+        }
+      }
+    }
+    return count;
+  };
   std::size_t count = 0;
   for (const NodeProto &node : nodes_) {
     const std::string node_domain = node.domain().empty() ? std::string() : node.domain().value();
@@ -2100,6 +2119,14 @@ std::size_t GraphBuilder::CountFunctionCalls(const std::string &name,
   }
   for (const auto &subgraph : subgraphs_) {
     count += subgraph->CountFunctionCalls(name, domain);
+  }
+  for (const auto &attribute : function_attribute_protos_) {
+    if (attribute.has_g()) {
+      count += count_graph(attribute.g());
+    }
+    for (const auto &graph : attribute.graphs()) {
+      count += count_graph(graph);
+    }
   }
   return count;
 }

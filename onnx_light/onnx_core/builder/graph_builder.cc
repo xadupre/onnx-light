@@ -2188,7 +2188,9 @@ void GraphBuilder::AppendInlinedBody(GraphBuilder &function, const NodeProto &ca
   for (const auto &attribute : function.function_attribute_protos_) {
     bindings[attribute.name().value()] = &attribute;
   }
-  for (const auto &attribute : call.attribute()) {
+  NodeProto materialized_call = call;
+  MaterializeGraphReferences(materialized_call);
+  for (const auto &attribute : materialized_call.attribute()) {
     bindings[attribute.name().value()] = &attribute;
   }
 
@@ -2227,34 +2229,33 @@ void GraphBuilder::AppendInlinedBody(GraphBuilder &function, const NodeProto &ca
 
 std::size_t GraphBuilder::InlineFunctionCalls(const std::vector<GraphBuilder *> &functions) {
   std::size_t inlined = 0;
-  // Subgraph bodies live in their own scope but may call the enclosing local
-  // functions, so inline them too using the same function table.
-  for (const auto &subgraph : subgraphs_) {
-    inlined += subgraph->InlineFunctionCalls(functions);
-  }
-  if (functions.empty() || nodes_.size() == 0) {
+  if (functions.empty()) {
     return inlined;
   }
 
-  // Rebuild the node list, expanding every call. Repeat to a fixed point: a
-  // pasted body may itself call another local function.
-  bool changed = true;
-  while (changed) {
-    changed = false;
-    utils::RepeatedProtoField<NodeProto> kept;
-    kept.reserve(nodes_.size());
-    for (NodeProto &node : nodes_) {
-      GraphBuilder *function = FindCalledFunction(functions, node);
-      if (function != nullptr) {
-        AppendInlinedBody(*function, node, kept);
-        ++inlined;
-        changed = true;
-      } else {
-        kept.push_back(std::move(node));
+  if (!nodes_.empty()) {
+    // Rebuild the node list, expanding every call. Repeat to a fixed point: a
+    // pasted body may itself call another local function.
+    bool changed = true;
+    while (changed) {
+      changed = false;
+      utils::RepeatedProtoField<NodeProto> kept;
+      kept.reserve(nodes_.size());
+      for (NodeProto &node : nodes_) {
+        GraphBuilder *function = FindCalledFunction(functions, node);
+        if (function != nullptr) {
+          AppendInlinedBody(*function, node, kept);
+          ++inlined;
+          changed = true;
+        } else {
+          kept.push_back(std::move(node));
+        }
       }
+      nodes_ = std::move(kept);
     }
-    nodes_ = std::move(kept);
   }
+  // Descend once after expanding this graph so the traversal sees both
+  // pre-existing subgraphs and subgraphs cloned by the expansion above.
   for (const auto &subgraph : subgraphs_) {
     inlined += subgraph->InlineFunctionCalls(functions);
   }

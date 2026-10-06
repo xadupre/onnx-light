@@ -1463,6 +1463,14 @@ TEST(GraphBuilder, InlineLocalFunctionsPreservesSubgraphSparseInitializerNames) 
     branch.mutable_g()->set_name(name);
     branch.mutable_g()->add_sparse_initializer()->mutable_values()->set_name("value");
     branch.mutable_g()->add_output()->set_name("value");
+    NodeProto nested = MakeNode("Identity", {"condition"}, {"ignored"});
+    AttributeProto nested_body;
+    nested_body.set_name("body");
+    nested_body.set_type(AttributeProto::AttributeType::GRAPH);
+    nested_body.mutable_g()->set_name("nested");
+    nested_body.mutable_g()->add_output()->set_name("value");
+    nested.add_attribute(nested_body);
+    branch.mutable_g()->add_node(nested);
     auto *annotation = branch.mutable_g()->add_quantization_annotation();
     annotation->set_tensor_name("condition");
     auto *parameter = annotation->add_quant_parameter_tensor_names();
@@ -1482,6 +1490,11 @@ TEST(GraphBuilder, InlineLocalFunctionsPreservesSubgraphSparseInitializerNames) 
     EXPECT_EQ(attribute.g().sparse_initializer()[0].values().name(), "value");
     ASSERT_EQ(attribute.g().output().size(), 1u);
     EXPECT_EQ(attribute.g().output()[0].name(), "value");
+    ASSERT_EQ(attribute.g().node().size(), 1u);
+    ASSERT_EQ(attribute.g().node()[0].attribute().size(), 1u);
+    ASSERT_TRUE(attribute.g().node()[0].attribute()[0].has_g());
+    ASSERT_EQ(attribute.g().node()[0].attribute()[0].g().output().size(), 1u);
+    EXPECT_EQ(attribute.g().node()[0].attribute()[0].g().output()[0].name(), "value");
     ASSERT_EQ(attribute.g().quantization_annotation().size(), 1u);
     const auto &annotation = attribute.g().quantization_annotation()[0];
     EXPECT_EQ(annotation.tensor_name(), "predicate");

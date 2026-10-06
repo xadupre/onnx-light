@@ -232,16 +232,20 @@ void RewriteGraphCaptures(GraphProto &graph,
       }
     }
   };
+  auto nested_rename = rename;
+  for (const auto &name : defined) {
+    nested_rename.erase(name);
+  }
   for (auto &node : graph.ref_node()) {
     for (auto &input : node.ref_input()) {
       rewrite(input);
     }
     for (auto &attribute : node.ref_attribute()) {
       if (attribute.has_g()) {
-        RewriteGraphCaptures(*attribute.mutable_g(), rename);
+        RewriteGraphCaptures(*attribute.mutable_g(), nested_rename);
       }
       for (auto &nested : attribute.ref_graphs()) {
-        RewriteGraphCaptures(nested, rename);
+        RewriteGraphCaptures(nested, nested_rename);
       }
     }
   }

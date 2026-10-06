@@ -1487,7 +1487,7 @@ TEST(GraphBuilder, InlineLocalFunctionsPreservesSubgraphSparseInitializerNames) 
     conditional.add_attribute(branch);
   }
   function.add_node(conditional);
-  model.add_function(function);
+  model.add_function(std::move(function));
 
   core::builder::GraphBuilder builder(model, SchemaLookup());
   EXPECT_EQ(builder.InlineLocalFunctions(), 1u);

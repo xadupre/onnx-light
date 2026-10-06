@@ -1397,6 +1397,11 @@ TEST(GraphBuilder, InlineLocalFunctionsExpandsCallsInClonedSubgraphs) {
 
 TEST(GraphBuilder, InlineLocalFunctionsMaterializesGraphCallAttributes) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
+  auto &inner = builder.MakeLocalFunction("Inner", "custom");
+  inner.MakeInput("value", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  inner.MakeNode("Identity", {"value"}, {"result"});
+  inner.MakeOutput("result");
+
   auto &function = builder.MakeLocalFunction("WithGraph", "custom");
   function.MakeInput("value", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   AttributeProto body_reference;
@@ -1413,14 +1418,15 @@ TEST(GraphBuilder, InlineLocalFunctionsMaterializesGraphCallAttributes) {
   body.set_name("body");
   body.set_type(AttributeProto::AttributeType::GRAPH);
   body.mutable_g()->set_name("call_body");
-  body.mutable_g()->add_node(MakeNode("Identity", {"X"}, {"branch_result"}));
+  body.mutable_g()->add_node(MakeNode("Inner", {"X"}, {"branch_result"}, "custom"));
   body.mutable_g()->add_output()->set_name("branch_result");
   utils::RepeatedProtoField<AttributeProto> call_attributes;
   call_attributes.push_back(body);
   builder.MakeNode("WithGraph", {"X"}, {"Y"}, "custom", "", call_attributes);
   builder.MakeOutput("Y");
 
-  EXPECT_EQ(builder.InlineLocalFunctions(), 1u);
+  EXPECT_EQ(builder.InlineLocalFunctions(), 2u);
+  ASSERT_EQ(builder.Subgraphs().size(), 1u);
   const GraphProto graph = builder.BuildGraph();
   ASSERT_EQ(graph.node().size(), 1u);
   ASSERT_EQ(graph.node()[0].attribute().size(), 1u);
@@ -1428,6 +1434,7 @@ TEST(GraphBuilder, InlineLocalFunctionsMaterializesGraphCallAttributes) {
   EXPECT_EQ(inlined_body.name(), "body");
   ASSERT_TRUE(inlined_body.has_g());
   ASSERT_EQ(inlined_body.g().node().size(), 1u);
+  EXPECT_EQ(inlined_body.g().node()[0].op_type(), "Identity");
   EXPECT_EQ(inlined_body.g().node()[0].input()[0], "X");
 }
 

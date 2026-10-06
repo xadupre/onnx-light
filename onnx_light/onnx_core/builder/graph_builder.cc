@@ -2265,6 +2265,7 @@ std::size_t GraphBuilder::InlineFunctionCalls(const std::vector<GraphBuilder *> 
     return inlined;
   }
 
+  bool expanded_here = false;
   if (!nodes_.empty()) {
     // Rebuild the node list, expanding every call. Repeat to a fixed point: a
     // pasted body may itself call another local function.
@@ -2280,6 +2281,7 @@ std::size_t GraphBuilder::InlineFunctionCalls(const std::vector<GraphBuilder *> 
           expanded_functions.insert(function->function_domain_ + ":" + function->name());
           ++inlined;
           changed = true;
+          expanded_here = true;
         } else {
           kept.push_back(std::move(node));
         }
@@ -2287,8 +2289,25 @@ std::size_t GraphBuilder::InlineFunctionCalls(const std::vector<GraphBuilder *> 
       nodes_ = std::move(kept);
     }
   }
+  if (expanded_here) {
+    std::unordered_set<const GraphBuilder *> referenced;
+    for (const auto &node : nodes_) {
+      for (const GraphBuilder *subgraph : ReferencedSubgraphs(node)) {
+        referenced.insert(subgraph);
+      }
+    }
+    subgraphs_.erase(std::remove_if(subgraphs_.begin(), subgraphs_.end(),
+                                    [&](const std::unique_ptr<GraphBuilder> &subgraph) {
+                                      if (referenced.count(subgraph.get()) != 0) {
+                                        return false;
+                                      }
+                                      names_.erase(subgraph->name());
+                                      return true;
+                                    }),
+                     subgraphs_.end());
+  }
   // Descend once after expanding this graph so the traversal sees both
-  // pre-existing subgraphs and subgraphs cloned by the expansion above.
+  // retained pre-existing subgraphs and subgraphs cloned by the expansion above.
   for (const auto &subgraph : subgraphs_) {
     inlined += subgraph->InlineFunctionCalls(functions, expanded_functions);
   }

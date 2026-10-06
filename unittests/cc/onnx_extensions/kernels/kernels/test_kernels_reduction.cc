@@ -3,14 +3,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
+#include "onnx_core/runtime/kernels/float16_promote.h"
 #include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_core/runtime/kernels/parallel_for.h"
+#include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/runtime_session.h"
 #include "onnx_core/runtime/tuning/cpu_executor.h"
+#include "onnx_core/runtime/tuning/kernel_tuning.h"
 #include "onnx_extensions/kernels/kernel_dispatch_table.h"
 #include "onnx_extensions/kernels/kernels/reduction/include_reduction_kernels.h"
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -19,6 +24,7 @@
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using core::backend_test::DefaultOpset;
+using core::runtime::RuntimeContext;
 using core::runtime::Tensor;
 using onnx_kernels::kernel::KernelContext;
 using onnx_kernels::kernel::ReduceL1;
@@ -658,6 +664,127 @@ TEST(KernelClass, ReduceProdRejectsNonFloatData) {
 }
 
 // ── ReduceMean ────────────────────────────────────────────────────────────
+
+TEST(KernelClass, ReduceMeanParallelLeadingSlicesMatchSerial) {
+  core::runtime::CpuExecutionPolicy policy;
+  policy.num_threads = 2;
+  policy.affinity_policy = core::runtime::CpuAffinityPolicy::kNone;
+  const auto executor = core::runtime::GlobalCpuExecutorRegistry().Acquire(policy);
+  const core::runtime::CpuExecutorScope executor_scope(executor.get());
+  onnx_kernels::RegisterKernelFunctions();
+  ReduceMean mean{KernelContext{DefaultOpset(18)}};
+  for (int32_t dtype : {core::runtime::DataType::FLOAT, core::runtime::DataType::DOUBLE,
+                        core::runtime::DataType::FLOAT16, core::runtime::DataType::BFLOAT16}) {
+    ASSERT_NE(core::runtime::GetKernelTuningRegistry().FindSchema(mean.TuningKey(dtype)), nullptr);
+  }
+
+  std::vector<float> values(2 * 4 * 257);
+  for (size_t i = 0; i < values.size(); ++i)
+    values[i] = static_cast<float>(static_cast<int>(i % 17) - 8) / 7;
+  const Tensor data = Tensor::FromFloat("", {2, 4, 257}, values);
+  const Tensor last_axis = Tensor::FromInt64("", {1}, {-1});
+  const Tensor middle_axis = Tensor::FromInt64("", {1}, {1});
+  const Tensor first_axis = Tensor::FromInt64("", {1}, {0});
+  const Tensor serial = mean(data, last_axis, false);
+  const Tensor serial_middle = mean(data, middle_axis, true);
+  const Tensor serial_first = mean(data, first_axis, false);
+  mean.Configure({mean.TuningKey(core::runtime::DataType::FLOAT),
+                  {{"parallel.minimum_elements", int64_t{1}}}});
+  core::runtime::ParallelRegionCollector collector(32);
+  const core::runtime::ParallelRegionCollectorScope collector_scope(&collector);
+  EXPECT_EQ(mean(data, last_axis, false).data, serial.data);
+  ASSERT_EQ(collector.events().size(), 1u);
+  EXPECT_EQ(collector.events()[0].admitted_threads, 2);
+  EXPECT_EQ(mean(data, middle_axis, true).data, serial_middle.data);
+  ASSERT_EQ(collector.events().size(), 2u);
+  EXPECT_EQ(collector.events()[1].admitted_threads, 2);
+  EXPECT_EQ(mean(data, first_axis, false).data, serial_first.data);
+  ASSERT_EQ(collector.events().size(), 3u);
+  EXPECT_EQ(collector.events()[2].admitted_threads, 1);
+
+  std::vector<double> doubles(values.begin(), values.end());
+  const Tensor double_data = Tensor::FromDouble("", {2, 4, 257}, doubles);
+  mean.Configure({mean.TuningKey(core::runtime::DataType::DOUBLE),
+                  {{"parallel.minimum_elements", std::numeric_limits<int64_t>::max()}}});
+  const Tensor double_serial = mean(double_data, last_axis, false);
+  mean.Configure({mean.TuningKey(core::runtime::DataType::DOUBLE),
+                  {{"parallel.minimum_elements", int64_t{1}}}});
+  EXPECT_EQ(mean(double_data, last_axis, false).data, double_serial.data);
+  for (int32_t dtype : {core::runtime::DataType::FLOAT16, core::runtime::DataType::BFLOAT16}) {
+    const Tensor half_data = core::runtime::DemoteFromFloat32(data, dtype);
+    mean.Configure({mean.TuningKey(dtype),
+                    {{"parallel.minimum_elements", std::numeric_limits<int64_t>::max()}}});
+    const Tensor half_serial = mean(half_data, last_axis, false);
+    mean.Configure({mean.TuningKey(dtype), {{"parallel.minimum_elements", int64_t{1}}}});
+    EXPECT_EQ(mean(half_data, last_axis, false).data, half_serial.data);
+    const auto parallel_event =
+        std::find_if(collector.events().rbegin(), collector.events().rend(),
+                     [](const auto &event) { return event.label == "ReduceMean"; });
+    ASSERT_NE(parallel_event, collector.events().rend());
+    EXPECT_EQ(parallel_event->admitted_threads, 2);
+  }
+  const Tensor empty = Tensor::FromFloat("", {2, 0, 257}, {});
+  EXPECT_EQ(mean(empty, last_axis, false).element_count(), 0);
+  const Tensor empty_reduced = Tensor::FromFloat("", {2, 257, 0}, {});
+  EXPECT_TRUE(std::isnan(mean(empty_reduced, last_axis, false).AsFloat()[0]));
+}
+
+TEST(KernelClass, ReduceMeanSessionTunesForIntermediateDataType) {
+  onnx_kernels::RegisterKernelFunctions();
+  const KernelContext ctx{DefaultOpset(18)};
+  ReduceMean mean{ctx};
+  const auto key = mean.TuningKey(static_cast<int32_t>(core::runtime::DataType::FLOAT));
+  const core::runtime::KernelTuningParameters profile{key,
+                                                      {{"parallel.minimum_elements", int64_t{1}}}};
+  core::runtime::GetKernelTuningRegistry().PublishProfiles(
+      std::span<const core::runtime::KernelTuningParameters>(&profile, 1));
+
+  GraphProto graph;
+  graph.add_input()->set_name("source");
+  graph.add_output()->set_name("output");
+  ValueInfoProto *data_info = graph.add_value_info();
+  data_info->set_name("data");
+  data_info->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+  TensorProto *axes = graph.add_initializer();
+  axes->set_name("axes");
+  axes->set_data_type(TensorProto::INT64);
+  axes->add_dims(1);
+  axes->add_int64_data(-1);
+  NodeProto *identity = graph.add_node();
+  identity->set_op_type("Identity");
+  identity->add_input("source");
+  identity->add_output("data");
+  NodeProto *reduce = graph.add_node();
+  reduce->set_op_type("ReduceMean");
+  reduce->add_input("data");
+  reduce->add_input("axes");
+  reduce->add_output("output");
+  AttributeProto *keepdims = reduce->add_attribute();
+  keepdims->set_name("keepdims");
+  keepdims->set_type(AttributeProto::INT);
+  keepdims->set_i(0);
+
+  constexpr int64_t count = 2 * 4 * 257;
+  RuntimeContext rt(ctx);
+  rt.Set("source", Tensor::FromFloat("source", {2, 4, 257}, std::vector<float>(count, 1.0f)));
+  rt.Set("axes", Tensor::FromInt64("axes", {1}, {-1}));
+  auto collector = std::make_shared<core::runtime::ParallelRegionCollector>(4);
+  core::runtime::RuntimeSession session(rt.GetExecutionPlan(graph),
+                                        core::runtime::RuntimeSessionOptions{
+                                            .parameters = core::runtime::RuntimeParameters(2),
+                                            .parallel_region_collector = collector,
+                                        });
+  session.SetDeclaredShapes(graph);
+  session.Run(rt);
+
+  core::runtime::GetKernelTuningRegistry().PublishProfiles(
+      {}, std::span<const core::runtime::KernelTuningKey>(&key, 1));
+  EXPECT_EQ(session.tuning_resolution_statistics().resolved_profiles, 1u);
+  ASSERT_EQ(collector->events().size(), 1u);
+  EXPECT_EQ(collector->events()[0].label, "ReduceMean");
+  EXPECT_GT(collector->events()[0].admitted_threads, 1);
+  EXPECT_FLOAT_EQ(rt.Get("output").AsFloat()[0], 1.0f);
+}
 
 TEST(KernelClass, ReduceMeanDefaultAxesReducesAll) {
   const KernelContext ctx{DefaultOpset(18)};

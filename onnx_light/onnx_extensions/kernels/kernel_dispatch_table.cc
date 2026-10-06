@@ -368,6 +368,7 @@ void RegisterKernelFunctions() {
     onnx_kernels::kernel::QLinearConv::RegisterTuningSchemas();
     onnx_kernels::kernel::Reciprocal::RegisterTuningSchemas();
     onnx_kernels::kernel::Relu::RegisterTuningSchemas();
+    onnx_kernels::kernel::ReduceMean::RegisterTuningSchemas();
     onnx_kernels::kernel::ReduceSum::RegisterTuningSchemas();
     onnx_kernels::kernel::Round::RegisterTuningSchemas();
     onnx_kernels::kernel::Sigmoid::RegisterTuningSchemas();

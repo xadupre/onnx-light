@@ -669,6 +669,7 @@ std::size_t GraphGraph::Cleanup(std::vector<LocalRewriting> &rewrites, std::size
     rewrites.push_back(std::move(rewriting));
     cleaned += removed_initializers;
   }
+  builder_.RebuildStructuredState();
   Rebuild();
   return cleaned;
 }
@@ -842,6 +843,7 @@ void GraphGraph::ApplyRewritingBatch(const std::vector<LocalRewriting> &rewrites
   }
   builder_.nodes_ = std::move(rebuilt);
   builder_.PruneValueInfos();
+  builder_.RebuildStructuredState();
   Rebuild();
 }
 

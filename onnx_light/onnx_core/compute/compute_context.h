@@ -669,6 +669,33 @@ public:
     incr_simplified_dim_cache_ = expressions::SimplifiedExpressionCache{};
   }
 
+  /// Clears computed annotations and incremental bookkeeping while preserving
+  /// shapes, registered custom tag callbacks, event configuration, and events.
+  void ResetMetadata() noexcept {
+    value_tags_.clear();
+    node_tags_.clear();
+    constant_values_.clear();
+    node_constant_.clear();
+    reuse_.clear();
+    release_after_.clear();
+    not_used_after_.clear();
+    release_after_shape_tagged_.clear();
+    memory_.clear();
+    peak_memory_.clear();
+    custom_value_tags_changed_ = false;
+    node_tag_custom_override_.clear();
+    tag_producer_node_.clear();
+    tag_consumers_.clear();
+    incr_producer_.clear();
+    incr_last_use_.clear();
+    incr_keep_.clear();
+    incr_graph_inputs_.clear();
+    incr_graph_initializers_.clear();
+    incr_graph_outputs_.clear();
+    incr_byte_size_expr_cache_.clear();
+    incr_simplified_dim_cache_ = expressions::SimplifiedExpressionCache{};
+  }
+
 private:
   void PropagateNodeTags(const utils::RepeatedProtoField<NodeProto> &nodes,
                          const std::vector<int> &seeds,

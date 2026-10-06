@@ -422,6 +422,64 @@ void GraphBuilder::MakeStructType(const StructTypeProto &type) {
 }
 
 void GraphBuilder::RebuildMetadata() {
+  compute_.ResetMetadata();
+  for (const auto &value : value_infos_) {
+    compute_.SeedValueTag(value.name().value(), DeclaredValueTag(value));
+  }
+  std::unordered_set<std::string> input_names;
+  input_names.reserve(inputs_.size());
+  for (const auto &input : inputs_) {
+    const std::string name = input.name().value();
+    input_names.insert(name);
+    SeedInputAnnotations(name);
+    compute_.SeedValueTag(name, DeclaredValueTag(input));
+  }
+  for (const auto &initializer : initializers_) {
+    const std::string name = initializer.name().value();
+    const bool is_input = input_names.count(name) != 0;
+    compute_.SeedValueTag(name, DeclaredValueTag(initializer));
+    compute_.SeedValueTag(name, "weight");
+    compute_.SeedReuseInput(name, is_input, /*is_initializer=*/true,
+                            /*allow_input_overwrite=*/false);
+    if (!is_input) {
+      compute_.SeedConstant(name);
+    }
+  }
+  for (const auto &initializer : encoded_initializers_) {
+    const std::string name = initializer.name().value();
+    const bool is_input = input_names.count(name) != 0;
+    compute_.SeedValueTag(name, "weight");
+    compute_.SeedReuseInput(name, is_input, /*is_initializer=*/true,
+                            /*allow_input_overwrite=*/false);
+    if (!is_input) {
+      compute_.SeedConstant(name);
+    }
+  }
+  for (const auto &initializer : paged_cache_initializers_) {
+    const std::string name = initializer.name().value();
+    const bool is_input = input_names.count(name) != 0;
+    compute_.SeedValueTag(name, "weight");
+    compute_.SeedReuseInput(name, is_input, /*is_initializer=*/true,
+                            /*allow_input_overwrite=*/false);
+    if (!is_input) {
+      compute_.SeedConstant(name);
+    }
+  }
+  for (std::size_t node_index = 0; node_index < nodes_.size(); ++node_index) {
+    const NodeProto &node = nodes_[node_index];
+    compute_.AppendNodeTags(nodes_, node_index);
+    std::vector<std::string> references;
+    CollectNodeReferences(node, references);
+    compute_.AppendNodeReuse(nodes_, node_index, compute_.Shapes(), references);
+    compute_.AppendNodeConstant(node, node_index);
+    compute_.AppendNodePeakMemory(node, node_index, device_);
+  }
+  for (const auto &output : outputs_) {
+    const std::string name = output.name().value();
+    compute_.SeedValueTag(name, DeclaredValueTag(output), nodes_);
+    compute_.SeedReuseOutput(name, nodes_, compute_.Shapes());
+  }
+
   GraphProto graph = BuildGraph();
   const auto tags = compute_.ComputeValueAndNodeTags(graph);
   compute_.ComputeConstants(graph);
@@ -1248,14 +1306,11 @@ GraphBuilder::MakeNode(const std::string &op_type, const std::vector<std::string
       throw BuilderError(error);
     }
   }
-  NodeProto &stored = nodes_.add();
-  stored = std::move(node);
-
   // Run incremental shape inference for the new node when a shape function is
   // registered for its operator; unregistered operators simply leave their
   // outputs without an inferred descriptor.
-  if (ShapeFunctionAvailable(stored)) {
-    NodeProto materialized = stored;
+  if (ShapeFunctionAvailable(node)) {
+    NodeProto materialized = node;
     MaterializeGraphReferences(materialized);
     bool known_inputs = true;
     for (const std::string &input : core::graph::CollectNodeInputs(materialized)) {
@@ -1267,19 +1322,24 @@ GraphBuilder::MakeNode(const std::string &op_type, const std::vector<std::string
       }
     }
     if (known_inputs && !HasUnboundAttributes(materialized)) {
-      const int64_t index = static_cast<int64_t>(nodes_.size() - 1);
-      compute_.Shapes().set_current_node_index(index);
-      compute_.Shapes().ComputeShapeNode(materialized);
-      for (const auto &attribute : stored.attribute()) {
-        if (HasGraphReferenceSuffix(attribute.name().value()) &&
-            attribute.type() == AttributeProto::AttributeType::STRING && attribute.has_s()) {
-          const std::string attribute_name =
-              attribute.name().value().substr(0, attribute.name().value().size() - 4);
-          if (compute_.Shapes().HasSubgraphContext(index, attribute_name)) {
-            NamedBuilderOrThrow(subgraphs_, attribute.s().value(), "subgraph").compute_.Shapes() =
-                compute_.Shapes().GetSubgraphContext(index, attribute_name);
-          }
-        }
+      ShapesContext inferred = compute_.Shapes();
+      inferred.set_current_node_index(static_cast<int64_t>(nodes_.size()));
+      inferred.ComputeShapeNode(materialized);
+      compute_.Shapes() = std::move(inferred);
+    }
+  }
+
+  NodeProto &stored = nodes_.add();
+  stored = std::move(node);
+  const int64_t index = static_cast<int64_t>(nodes_.size() - 1);
+  for (const auto &attribute : stored.attribute()) {
+    if (HasGraphReferenceSuffix(attribute.name().value()) &&
+        attribute.type() == AttributeProto::AttributeType::STRING && attribute.has_s()) {
+      const std::string attribute_name =
+          attribute.name().value().substr(0, attribute.name().value().size() - 4);
+      if (compute_.Shapes().HasSubgraphContext(index, attribute_name)) {
+        NamedBuilderOrThrow(subgraphs_, attribute.s().value(), "subgraph").compute_.Shapes() =
+            compute_.Shapes().GetSubgraphContext(index, attribute_name);
       }
     }
   }
@@ -1370,19 +1430,9 @@ void GraphBuilder::CollectImplicitInputs(std::unordered_set<std::string> &out) c
 
 void GraphBuilder::CollectNodeReferences(const NodeProto &node,
                                          std::vector<std::string> &refs) const {
-  for (std::size_t i = 0; i < node.input().size(); ++i) {
-    std::string name(node.input(static_cast<std::size_t>(i)));
-    if (!name.empty()) {
-      refs.push_back(std::move(name));
-    }
-  }
-  for (const GraphBuilder *subgraph : ReferencedSubgraphs(node)) {
-    std::unordered_set<std::string> implicit_inputs;
-    subgraph->CollectImplicitInputs(implicit_inputs);
-    for (const std::string &name : implicit_inputs) {
-      refs.push_back(name);
-    }
-  }
+  NodeProto materialized = node;
+  MaterializeGraphReferences(materialized);
+  refs = core::graph::CollectNodeInputs(materialized);
 }
 
 std::size_t GraphBuilder::RemoveUnusedNodes() {

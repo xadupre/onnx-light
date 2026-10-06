@@ -122,6 +122,20 @@ TEST(GraphBuilder, LaterConsumerRevokesEarlierIncrementalReuse) {
   EXPECT_TRUE(builder.Compute().NodeReuse(1).empty());
 }
 
+TEST(GraphBuilder, RepeatedInputsHaveOneReleaseAnnotation) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeNode("Abs", {"x"}, {"intermediate"});
+  builder.MakeNode("Add", {"intermediate", "intermediate"}, {"result"});
+  builder.MakeOutput("result");
+  const GraphProto graph = builder.ToGraph();
+  const auto release = std::find_if(
+      graph.node(1).metadata_props().begin(), graph.node(1).metadata_props().end(),
+      [](const auto &entry) { return entry.key() == core::compute::kReleaseAfterMetadataKey; });
+  ASSERT_NE(release, graph.node(1).metadata_props().end());
+  EXPECT_EQ(release->value(), "intermediate");
+}
+
 TEST(GraphBuilder, OutputDeclaredAfterNodesRevokesIncrementalReuse) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
@@ -1574,6 +1588,7 @@ TEST(GraphBuilder, NativeFunctionBindsRequiredAndDefaultAttributes) {
   builder.MakeNode("Convert", {"X"}, {"explicit"}, "local", "", attributes);
   EXPECT_EQ(builder.GetShape("explicit").Dtype(), core::symbolic::TensorType::kInt64);
   EXPECT_THROW(builder.MakeNode("Required", {"X"}, {"missing"}, "local"), std::invalid_argument);
+  EXPECT_EQ(builder.Compute().Size(), builder.Nodes().size());
   builder.MakeNode("Required", {"X"}, {"provided"}, "local", "", attributes);
   EXPECT_EQ(builder.GetShape("provided").Dtype(), core::symbolic::TensorType::kInt64);
   const ModelProto exported = builder.ToModel();

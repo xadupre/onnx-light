@@ -14,7 +14,6 @@
 
 #include <algorithm>
 #include <gtest/gtest.h>
-#include <iostream>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
@@ -1543,24 +1542,15 @@ TEST(GraphBuilder, InlineLocalFunctionsPreservesSubgraphSparseInitializerNames) 
     auto *parameter = annotation->add_quant_parameter_tensor_names();
     parameter->set_key("SCALE_TENSOR");
     parameter->set_value("value");
-    std::cerr << "[sparse-inlining] " << name << ": sparse=" << static_cast<const void *>(sparse)
-              << ", values=" << static_cast<const void *>(&sparse->values())
-              << ", indices=" << static_cast<const void *>(&sparse->indices())
-              << ", sparse_bytes=" << sparse->ByteSizeLong()
-              << ", values_bytes=" << sparse->values().ByteSizeLong() << std::endl;
     GraphProto branch_copy;
     ASSERT_NO_THROW(branch_copy.CopyFrom(branch.g()));
-    std::cerr << "[sparse-inlining] standalone branch copy succeeded" << std::endl;
     conditional.add_attribute(std::move(branch));
   }
   function.add_node(std::move(conditional));
   model.add_function(std::move(function));
 
-  std::cerr << "[sparse-inlining] importing model" << std::endl;
   core::builder::GraphBuilder builder(model, SchemaLookup());
-  std::cerr << "[sparse-inlining] expanding local functions" << std::endl;
   EXPECT_EQ(builder.InlineLocalFunctions(), 1u);
-  std::cerr << "[sparse-inlining] exporting graph" << std::endl;
   const GraphProto inlined = builder.BuildGraph();
   for (const auto &attribute : inlined.node()[0].attribute()) {
     ASSERT_TRUE(attribute.has_g());
@@ -1720,6 +1710,7 @@ TEST(GraphBuilder, InlineLocalFunctionsResolvesAttributeReferences) {
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   AttributeProto alpha;
   alpha.set_name("alpha");
+  alpha.set_ref_attr_name("dangling");
   alpha.set_type(AttributeProto::AttributeType::FLOAT);
   alpha.set_f(0.25f);
   utils::RepeatedProtoField<AttributeProto> call_attrs;
@@ -1989,6 +1980,7 @@ TEST(GraphBuilder, NativeTypedFunctionInfersOnImportAndPreservesDeclarationsAfte
   function.set_name("F");
   function.set_domain("local");
   function.set_doc_string("Function documentation");
+  function.set_overload("typed");
   function.add_metadata("purpose", "roundtrip");
   function.add_input("a");
   function.add_output("r");
@@ -2022,7 +2014,13 @@ TEST(GraphBuilder, NativeTypedFunctionInfersOnImportAndPreservesDeclarationsAfte
   const ModelProto exported = moved.ToModel();
   ASSERT_EQ(exported.functions().size(), 1u);
   const FunctionProto &actual = exported.functions(0);
+  EXPECT_EQ(actual.name(), function.name());
+  EXPECT_EQ(actual.domain(), function.domain());
   EXPECT_EQ(actual.doc_string(), function.doc_string());
+  EXPECT_EQ(actual.overload(), function.overload());
+  EXPECT_TRUE(std::any_of(
+      actual.opset_import().begin(), actual.opset_import().end(),
+      [&](const auto &opset) { return opset.version() == function.opset_import(0).version(); }));
   ASSERT_EQ(actual.attribute().size(), 1u);
   EXPECT_EQ(actual.attribute(0), "required");
   ASSERT_EQ(actual.attribute_proto().size(), 1u);

@@ -286,6 +286,7 @@ void ResolveFunctionAttributes(NodeProto &node, const AttributeBindings &binding
       }
       clone = *found->second;
       clone.set_name(attribute.name().value());
+      clone.clear_ref_attr_name();
     } else {
       clone = attribute;
     }
@@ -1162,9 +1163,12 @@ void GraphBuilder::ImportGraph(const GraphProto &graph) {
 }
 
 void GraphBuilder::ImportFunction(const FunctionProto &function) {
-  // Copy only metadata retained by BuildFunction. Copying the whole function
-  // serializes nested graph attributes before immediately discarding them.
+  // Copy scalar metadata directly. Copying the whole function serializes nested
+  // graph attributes before immediately discarding its repeated fields.
   function_template_ = FunctionProto{};
+  function_template_.name_ = function.name_;
+  function_template_.domain_ = function.domain_;
+  function_template_.doc_string_ = function.doc_string_;
   function_template_.overload_ = function.overload_;
   function_attributes_.assign(function.attribute().begin(), function.attribute().end());
   function_attribute_protos_ = function.attribute_proto();

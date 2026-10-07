@@ -155,6 +155,40 @@ TEST(GraphGraph, OptionalUnusedCleanupPreservesDeadEnds) {
   }
 }
 
+TEST(GraphGraph, OptionalUnusedCleanupRecursesIntoSubgraphs) {
+  for (bool remove_unused : {false, true}) {
+    SCOPED_TRACE(remove_unused);
+    core::builder::GraphBuilder builder("g", SchemaLookup());
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+    builder.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+
+    auto &then_branch = builder.MakeSubgraph("then_branch");
+    then_branch.MakeInitializer(MakeInitializer<float>("weight", {2}, {1.0f, 2.0f}));
+    then_branch.MakeNode("Add", {"x", "weight"}, {"dead"});
+    then_branch.MakeOutput("x");
+    auto &else_branch = builder.MakeSubgraph("else_branch");
+    else_branch.MakeOutput("x");
+
+    utils::RepeatedProtoField<AttributeProto> attributes;
+    for (const std::string name : {"then_branch", "else_branch"}) {
+      AttributeProto reference;
+      reference.set_name(name + "_ref");
+      reference.set_type(AttributeProto::AttributeType::STRING);
+      reference.set_s(name);
+      attributes.push_back(reference);
+    }
+    builder.MakeNode("If", {"condition"}, {"selected"}, "", "", attributes);
+    builder.MakeOutput("selected");
+
+    core::builder::GraphGraph graph(
+        builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{});
+    graph.Optimize(-1, nullptr, {}, remove_unused);
+
+    EXPECT_EQ(then_branch.ToGraph().node_size(), remove_unused ? 0 : 1);
+    EXPECT_EQ(then_branch.ToGraph().initializer_size(), remove_unused ? 0 : 1);
+  }
+}
+
 TEST(GraphGraph, NativeInputDefaultsAreNotOptimizationConstants) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   for (const std::string name : {"x", "z"}) {

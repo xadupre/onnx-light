@@ -86,7 +86,8 @@ public:
    * ``max_iter`` selects ``max(node_count, 10) * priority_count``.
    * Replacement nodes whose inputs are all materialized constants are folded
    * into initializers before cleanup, subject to ``folding_options``.
-   * ``remove_unused=false`` preserves dead-end nodes and their initializers.
+   * ``remove_unused=false`` disables only unused-node cleanup; other cleanup
+   * passes may still remove nodes or initializers.
    *
    * Returns:
    *   Self-contained records of the applied rewrites, in application order.

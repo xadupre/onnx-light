@@ -1316,8 +1316,8 @@ TEST(GraphBuilder, InlineLocalFunctionsClonesControlFlowSubgraphs) {
     type_reference.set_type(AttributeProto::AttributeType::INT);
     utils::RepeatedProtoField<AttributeProto> branch_attributes;
     branch_attributes.push_back(type_reference);
-    branch.MakeNode("Cast", {"value"}, {name + "_result"}, "", "", branch_attributes);
-    branch.MakeOutput(name + "_result");
+    branch.MakeNode("Cast", {"value"}, {"Y"}, "", "", branch_attributes);
+    branch.MakeOutput("Y");
     AttributeProto reference;
     reference.set_name(name + "_ref");
     reference.set_type(AttributeProto::AttributeType::STRING);
@@ -1349,6 +1349,7 @@ TEST(GraphBuilder, InlineLocalFunctionsClonesControlFlowSubgraphs) {
     ASSERT_TRUE(attribute.has_g());
     ASSERT_EQ(attribute.g().node().size(), 1u);
     EXPECT_EQ(attribute.g().node()[0].input()[0], "X");
+    EXPECT_EQ(attribute.g().node()[0].output()[0], "Y");
     ASSERT_EQ(attribute.g().node()[0].attribute().size(), 1u);
     EXPECT_TRUE(attribute.g().node()[0].attribute()[0].ref_attr_name().empty());
     EXPECT_EQ(attribute.g().node()[0].attribute()[0].i(), TensorProto::DataType::FLOAT);
@@ -1414,11 +1415,12 @@ TEST(GraphBuilder, InlineLocalFunctionsMaterializesGraphCallAttributes) {
   function.MakeOutput("result");
 
   builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeInput("value", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   AttributeProto body;
   body.set_name("body");
   body.set_type(AttributeProto::AttributeType::GRAPH);
   body.mutable_g()->set_name("call_body");
-  body.mutable_g()->add_node(MakeNode("Inner", {"X"}, {"branch_result"}, "custom"));
+  body.mutable_g()->add_node(MakeNode("Inner", {"value"}, {"branch_result"}, "custom"));
   body.mutable_g()->add_output()->set_name("branch_result");
   utils::RepeatedProtoField<AttributeProto> call_attributes;
   call_attributes.push_back(body);
@@ -1435,7 +1437,7 @@ TEST(GraphBuilder, InlineLocalFunctionsMaterializesGraphCallAttributes) {
   ASSERT_TRUE(inlined_body.has_g());
   ASSERT_EQ(inlined_body.g().node().size(), 1u);
   EXPECT_EQ(inlined_body.g().node()[0].op_type(), "Identity");
-  EXPECT_EQ(inlined_body.g().node()[0].input()[0], "X");
+  EXPECT_EQ(inlined_body.g().node()[0].input()[0], "value");
 }
 
 TEST(GraphBuilder, InlineLocalFunctionsPrunesOnlyUnreferencedReplacedCallSubgraphs) {
@@ -1565,7 +1567,7 @@ TEST(GraphBuilder, InlineLocalFunctionsPreservesSubgraphSparseInitializerNames) 
 
   core::builder::GraphBuilder builder(model, SchemaLookup());
   EXPECT_EQ(builder.InlineLocalFunctions(), 3u);
-  const GraphProto inlined = builder.BuildGraph();
+  const GraphProto inlined = builder.ToGraph();
   for (const auto &attribute : inlined.node()[0].attribute()) {
     ASSERT_TRUE(attribute.has_g());
     ASSERT_EQ(attribute.g().sparse_initializer().size(), 2u);

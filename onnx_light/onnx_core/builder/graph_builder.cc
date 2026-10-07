@@ -153,7 +153,13 @@ bool HasStructuredType(const TypeProto &type) {
 }
 
 using DeclaredTypes = std::unordered_map<std::string, const TypeProto *>;
-using AttributeBindings = std::unordered_map<std::string, const AttributeProto *>;
+
+struct AttributeBinding {
+  const AttributeProto *attribute;
+  bool caller_scoped;
+};
+
+using AttributeBindings = std::unordered_map<std::string, AttributeBinding>;
 
 DeclaredTypes StructuredDeclarations(const utils::RepeatedProtoField<ValueInfoProto> &values) {
   DeclaredTypes declarations;
@@ -273,18 +279,25 @@ void RewriteGraphCaptures(GraphProto &graph,
 
 void ResolveFunctionAttributes(GraphProto &graph, const AttributeBindings &bindings);
 
-void ResolveFunctionAttributes(NodeProto &node, const AttributeBindings &bindings) {
+void ResolveFunctionAttributes(NodeProto &node, const AttributeBindings &bindings,
+                               std::vector<bool> *rewrite_graph_captures = nullptr) {
   utils::RepeatedProtoField<AttributeProto> resolved;
   resolved.reserve(node.attribute().size());
+  if (rewrite_graph_captures != nullptr) {
+    rewrite_graph_captures->clear();
+    rewrite_graph_captures->reserve(node.attribute().size());
+  }
   for (const auto &attribute : node.attribute()) {
     AttributeProto clone;
+    bool rewrite_captures = true;
     if (!attribute.ref_attr_name().empty()) {
       const auto found = bindings.find(attribute.ref_attr_name().value());
       if (found == bindings.end()) {
         throw BuilderError("GraphBuilder: cannot inline a function with an unresolved attribute '" +
                            attribute.ref_attr_name().value() + "'.");
       }
-      clone = *found->second;
+      clone = *found->second.attribute;
+      rewrite_captures = !found->second.caller_scoped;
       clone.set_name(attribute.name().value());
       clone.clear_ref_attr_name();
     } else {
@@ -297,6 +310,9 @@ void ResolveFunctionAttributes(NodeProto &node, const AttributeBindings &binding
       ResolveFunctionAttributes(graph, bindings);
     }
     resolved.push_back(std::move(clone));
+    if (rewrite_graph_captures != nullptr) {
+      rewrite_graph_captures->push_back(rewrite_captures);
+    }
   }
   node.ref_attribute() = std::move(resolved);
 }
@@ -1068,6 +1084,7 @@ GraphBuilder::ImportAttributes(const NodeProto &node,
       GraphBuilder &subgraph = MakeSubgraph(subgraph_name);
       for (const std::string &name : excluded_inherited_names) {
         subgraph.inherited_names_.erase(name);
+        subgraph.compute_.Shapes().Erase(name);
       }
       subgraph.ImportGraph(graph);
       AttributeProto ref;
@@ -1097,6 +1114,7 @@ GraphBuilder::ImportAttributes(const NodeProto &node,
         GraphBuilder &subgraph = MakeSubgraph(subgraph_name);
         for (const std::string &name : excluded_inherited_names) {
           subgraph.inherited_names_.erase(name);
+          subgraph.compute_.Shapes().Erase(name);
         }
         subgraph.ImportGraph(graph);
         refs.add_strings(subgraph_name);
@@ -2161,20 +2179,25 @@ void GraphBuilder::AppendInlinedBody(GraphBuilder &function, const NodeProto &ca
                                      utils::RepeatedProtoField<NodeProto> &out) {
   AttributeBindings bindings;
   for (const auto &attribute : function.function_attribute_protos_) {
-    bindings[attribute.name().value()] = &attribute;
+    bindings[attribute.name().value()] = {&attribute, false};
   }
   NodeProto materialized_call = call;
   MaterializeGraphReferences(materialized_call);
   for (const auto &attribute : materialized_call.attribute()) {
-    bindings[attribute.name().value()] = &attribute;
+    bindings[attribute.name().value()] = {&attribute, true};
   }
   // Resolve the entire body before adding initializers, reserving names or importing subgraphs.
-  utils::RepeatedProtoField<NodeProto> materialized_body;
+  struct MaterializedNode {
+    NodeProto node;
+    std::vector<bool> rewrite_graph_captures;
+  };
+  std::vector<MaterializedNode> materialized_body;
   materialized_body.reserve(function.nodes_.size());
   for (const NodeProto &body : function.nodes_) {
-    NodeProto materialized = body;
-    function.MaterializeGraphReferences(materialized);
-    ResolveFunctionAttributes(materialized, bindings);
+    MaterializedNode materialized;
+    materialized.node = body;
+    function.MaterializeGraphReferences(materialized.node);
+    ResolveFunctionAttributes(materialized.node, bindings, &materialized.rewrite_graph_captures);
     materialized_body.push_back(std::move(materialized));
   }
 
@@ -2260,32 +2283,36 @@ void GraphBuilder::AppendInlinedBody(GraphBuilder &function, const NodeProto &ca
     return it != rename.end() ? it->second : value;
   };
 
-  for (const NodeProto &materialized : materialized_body) {
+  for (const MaterializedNode &materialized : materialized_body) {
     NodeProto node;
-    node.set_op_type(materialized.op_type().value());
-    if (!materialized.domain().empty()) {
-      node.set_domain(materialized.domain().value());
+    node.set_op_type(materialized.node.op_type().value());
+    if (!materialized.node.domain().empty()) {
+      node.set_domain(materialized.node.domain().value());
     }
-    if (!materialized.name().empty()) {
-      node.set_name(materialized.name().value());
+    if (!materialized.node.name().empty()) {
+      node.set_name(materialized.node.name().value());
     }
-    for (std::size_t i = 0; i < materialized.input().size(); ++i) {
-      node.add_input(remap(std::string(materialized.input(static_cast<std::size_t>(i)))));
+    for (std::size_t i = 0; i < materialized.node.input().size(); ++i) {
+      node.add_input(remap(std::string(materialized.node.input(static_cast<std::size_t>(i)))));
     }
-    for (std::size_t i = 0; i < materialized.output().size(); ++i) {
-      node.add_output(remap(std::string(materialized.output(static_cast<std::size_t>(i)))));
+    for (std::size_t i = 0; i < materialized.node.output().size(); ++i) {
+      node.add_output(remap(std::string(materialized.node.output(static_cast<std::size_t>(i)))));
     }
-    for (const AttributeProto &attribute : materialized.attribute()) {
-      AttributeProto cloned = attribute;
-      if (cloned.has_g()) {
-        RewriteGraphCaptures(*cloned.mutable_g(), rename);
-      }
-      for (auto &graph : cloned.ref_graphs()) {
-        RewriteGraphCaptures(graph, rename);
+    for (std::size_t i = 0; i < materialized.node.attribute().size(); ++i) {
+      AttributeProto cloned = materialized.node.attribute(i);
+      if (materialized.rewrite_graph_captures[i]) {
+        if (cloned.has_g()) {
+          RewriteGraphCaptures(*cloned.mutable_g(), rename);
+        }
+        for (auto &graph : cloned.ref_graphs()) {
+          RewriteGraphCaptures(graph, rename);
+        }
       }
       node.add_attribute(std::move(cloned));
     }
-    node.ref_attribute() = ImportAttributes(node);
+    const std::unordered_set<std::string> excluded_inherited_names(node.output().begin(),
+                                                                   node.output().end());
+    node.ref_attribute() = ImportAttributes(node, excluded_inherited_names);
     out.push_back(std::move(node));
   }
 }
@@ -3061,6 +3088,9 @@ void GraphBuilder::SortNodesTopologically() {
   }
   for (const auto &initializer : paged_cache_initializers_) {
     available.insert(initializer.name().value());
+  }
+  for (const auto &initializer : graph_template_.sparse_initializer()) {
+    available.insert(initializer.values().name().value());
   }
   for (std::size_t i = 0; i < count; ++i) {
     for (std::size_t j = 0; j < nodes_[i].output().size(); ++j) {

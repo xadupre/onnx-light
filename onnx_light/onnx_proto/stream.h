@@ -398,9 +398,8 @@ protected:
 
   struct SizeCacheKeyHash {
     std::size_t operator()(const SizeCacheKey &key) const {
-      const std::size_t ptr_hash = std::hash<const void *>{}(key.ptr);
-      const std::size_t id_hash = std::hash<uint16_t>{}(key.proto_id);
-      return ptr_hash ^ (id_hash + 0x9e3779b9U + (ptr_hash << 6U) + (ptr_hash >> 2U));
+      // Same-address type variants share a bucket; operator== keeps their entries distinct.
+      return std::hash<const void *>{}(key.ptr);
     }
   };
 

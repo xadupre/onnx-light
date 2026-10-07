@@ -30,6 +30,12 @@ class TestOnnxLightHelper(ExtTestCase):
         s = str(proto)
         self.assertIn("elem_type: 2", s)
 
+        proto = oh.make_tensor_type_proto(elem_type=2, shape=[2, None])
+        dynamic = proto.tensor_type.shape.dim[1]
+        self.assertFalse(dynamic.HasField("dim_value"))
+        self.assertTrue(dynamic.HasField("dim_param"))
+        self.assertEqual(dynamic.dim_param, "")
+
     def test_make_optional_value_info(self) -> None:
         tensor_type_proto = oh.make_tensor_type_proto(elem_type=2, shape=[5])
         tensor_val_into = oh.make_value_info(name="test", type_proto=tensor_type_proto)
@@ -650,9 +656,10 @@ class TestOnnxLightHelper(ExtTestCase):
         self.assertEqual(len(dims), 3)
         self.assertEqual(dims[0].dim_value, 2)
         self.assertEqual(dims[1].dim_param, "n")
-        # Empty dim has neither dim_value nor dim_param set.
+        # None denotes an anonymous dynamic dimension.
         self.assertFalse(dims[2].HasField("dim_value"))
-        self.assertFalse(dims[2].HasField("dim_param"))
+        self.assertTrue(dims[2].HasField("dim_param"))
+        self.assertEqual(dims[2].dim_param, "")
 
     def test_make_sparse_tensor_type_proto_no_shape(self) -> None:
         proto = oh.make_sparse_tensor_type_proto(elem_type=onnxl.TensorProto.INT64, shape=None)
@@ -1015,7 +1022,8 @@ class TestSaveModelWithSharedExternalData(ExtTestCase):
         self.assertEqual(sparse.shape.dim[0].dim_value, 3)
         self.assertEqual(sparse.shape.dim[1].dim_param, "N")
         self.assertFalse(sparse.shape.dim[2].HasField("dim_value"))
-        self.assertFalse(sparse.shape.dim[2].HasField("dim_param"))
+        self.assertTrue(sparse.shape.dim[2].HasField("dim_param"))
+        self.assertEqual(sparse.shape.dim[2].dim_param, "")
 
     def test_make_sparse_tensor_type_proto_no_shape(self) -> None:
         type_proto = oh.make_sparse_tensor_type_proto(

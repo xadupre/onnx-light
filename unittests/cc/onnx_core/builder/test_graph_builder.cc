@@ -715,7 +715,7 @@ TEST(GraphBuilder, ToFunctionPreservesFinalizedShapesAndMetadata) {
   input.set_doc_string("Input declaration");
   auto *input_type = input.mutable_type()->mutable_tensor_type();
   input_type->set_elem_type(TensorProto::DataType::FLOAT);
-  input_type->mutable_shape()->add_dim();
+  input_type->mutable_shape()->add_dim()->set_dim_param("");
   input_type->mutable_shape()->add_dim()->set_dim_value(3);
   builder.MakeInput(input);
   builder.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
@@ -2007,7 +2007,7 @@ TEST(GraphBuilder, NativeDefaultInitializerAllowsSymbolicAndUnknownDimensions) {
   auto *type = input.mutable_type()->mutable_tensor_type();
   type->set_elem_type(TensorProto::DataType::FLOAT);
   type->mutable_shape()->add_dim()->set_dim_param("batch");
-  type->mutable_shape()->add_dim();
+  type->mutable_shape()->add_dim()->set_dim_param("");
   type->mutable_shape()->add_dim()->set_dim_value(3);
   builder.MakeInput(input);
   const auto expected_shape = builder.GetShape("x").Shape();
@@ -2018,7 +2018,8 @@ TEST(GraphBuilder, NativeDefaultInitializerAllowsSymbolicAndUnknownDimensions) {
   const auto &declared = builder.Inputs()[0].type().tensor_type().shape();
   EXPECT_EQ(declared.dim(0).dim_param(), "batch");
   EXPECT_FALSE(declared.dim(1).has_dim_value());
-  EXPECT_FALSE(declared.dim(1).has_dim_param());
+  EXPECT_TRUE(declared.dim(1).has_dim_param());
+  EXPECT_TRUE(declared.dim(1).dim_param().empty());
   EXPECT_EQ(declared.dim(2).dim_value(), 3);
 }
 

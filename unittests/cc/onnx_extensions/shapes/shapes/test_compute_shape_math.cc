@@ -921,6 +921,26 @@ TEST(OnnxOptimShapesBroadcast, TwoDifferentSymbolicProducesSynthesisedExpr) {
   EXPECT_EQ(out[0].AsExpr(), "broadcast(N, M)");
 }
 
+TEST(OnnxOptimShapesBroadcast, AnonymousDynamicRoundTripPreservesBroadcastInformation) {
+  core::symbolic::SymTensor tensor(nullptr, core::symbolic::TensorType::kFloat,
+                                   core::symbolic::SymShape{core::symbolic::SymDim("")});
+  ValueInfoProto info;
+  ASSERT_TRUE(core::symbolic::SymTensorToValueInfo(tensor, info));
+  ValueInfoProto parsed;
+  ASSERT_TRUE(parsed.ParseFromString(info.SerializeAsString()));
+  ASSERT_TRUE(core::symbolic::SymTensorFromValueInfo(parsed, tensor));
+  const auto &anonymous = tensor.Shape();
+  for (const auto &dim : {core::symbolic::SymDim("N"), core::symbolic::SymDim(""),
+                          core::symbolic::SymDim(int64_t{0}), core::symbolic::SymDim(96)}) {
+    const core::symbolic::SymShape expected{dim};
+    EXPECT_EQ(core::shapes::BroadcastShapes(anonymous, expected), expected);
+    EXPECT_EQ(core::shapes::BroadcastShapes(expected, anonymous), expected);
+  }
+  const core::symbolic::SymShape unit{core::symbolic::SymDim(1)};
+  EXPECT_EQ(core::shapes::BroadcastShapes(anonymous, unit), anonymous);
+  EXPECT_EQ(core::shapes::BroadcastShapes(unit, anonymous), anonymous);
+}
+
 TEST(OnnxOptimShapesBroadcast, RepeatedNestedBroadcastStaysBounded) {
   core::symbolic::SymShape previous{core::symbolic::SymDim("Expand_dim0")};
   const core::symbolic::SymShape batch{core::symbolic::SymDim("batch")};

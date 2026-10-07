@@ -1746,11 +1746,40 @@ TEST(custom_values, SerializedSizeMismatchNamesTheField) {
   // the mismatch and name the enclosing field number (ModelProto.graph == 7).
   SerializeSizeResult poisoned;
   poisoned.proto_size = 1;
-  stream.CacheSize(reinterpret_cast<const void *>(&model.ref_graph()), poisoned);
+  stream.CacheSize(&model.ref_graph(), poisoned, ProtoSizeCacheType<GraphProto>());
   const std::string message =
       RuntimeErrorMessage([&]() { model.SerializeToStream(stream, options); });
   EXPECT_NE(message.find("Serialized size"), std::string::npos) << message;
   EXPECT_NE(message.find("field 7"), std::string::npos) << message;
+}
+
+TEST(custom_values, SerializedSizeCacheDistinguishesMessageTypesAtSameAddress) {
+  SparseTensorProto sparse;
+  sparse.add_dims(1);
+  sparse.mutable_values()->set_name("value");
+  sparse.mutable_values()->set_data_type(TensorProto::FLOAT);
+  sparse.mutable_values()->add_dims(1);
+  sparse.mutable_values()->add_float_data(1.0f);
+  sparse.mutable_indices()->set_data_type(TensorProto::INT64);
+  sparse.mutable_indices()->add_dims(1);
+  sparse.mutable_indices()->add_int64_data(0);
+  utils::StringWriteStream stream;
+  SerializeOptions options;
+  const auto sparse_size = sparse.SerializeSize(stream, options);
+  const auto tensor_size = sparse.values().SerializeSize(stream, options);
+  ASSERT_NE(sparse_size.proto_size, tensor_size.proto_size);
+  const void *address = &sparse.values();
+  stream.CacheSize(address, sparse_size, ProtoSizeCacheType<SparseTensorProto>());
+  SerializeSizeResult cached;
+  ASSERT_TRUE(stream.GetCachedSize(address, cached, ProtoSizeCacheType<TensorProto>()));
+  EXPECT_EQ(cached.proto_size, tensor_size.proto_size);
+  ASSERT_TRUE(stream.GetCachedSize(address, cached, ProtoSizeCacheType<SparseTensorProto>()));
+  EXPECT_EQ(cached.proto_size, sparse_size.proto_size);
+  sparse.SerializeToStream(stream, options);
+  EXPECT_EQ(stream.size(), sparse_size.proto_size);
+  SparseTensorProto parsed;
+  ASSERT_TRUE(parsed.ParseFromArray(stream.data(), static_cast<int>(stream.size())));
+  EXPECT_TRUE(parsed.Equals(sparse));
 }
 
 // ---------------------------------------------------------------------------

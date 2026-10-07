@@ -2135,6 +2135,25 @@ std::size_t GraphBuilder::CountFunctionCalls(const std::string &name,
 
 void GraphBuilder::AppendInlinedBody(GraphBuilder &function, const NodeProto &call,
                                      utils::RepeatedProtoField<NodeProto> &out) {
+  AttributeBindings bindings;
+  for (const auto &attribute : function.function_attribute_protos_) {
+    bindings[attribute.name().value()] = &attribute;
+  }
+  NodeProto materialized_call = call;
+  MaterializeGraphReferences(materialized_call);
+  for (const auto &attribute : materialized_call.attribute()) {
+    bindings[attribute.name().value()] = &attribute;
+  }
+  // Resolve the entire body before adding initializers, reserving names or importing subgraphs.
+  utils::RepeatedProtoField<NodeProto> materialized_body;
+  materialized_body.reserve(function.nodes_.size());
+  for (const NodeProto &body : function.nodes_) {
+    NodeProto materialized = body;
+    function.MaterializeGraphReferences(materialized);
+    ResolveFunctionAttributes(materialized, bindings);
+    materialized_body.push_back(std::move(materialized));
+  }
+
   // Build the value rename map: formal inputs/outputs are rewired to the call
   // inputs/outputs, everything else the body defines gets a fresh, unused name.
   std::unordered_map<std::string, std::string> rename;
@@ -2217,20 +2236,7 @@ void GraphBuilder::AppendInlinedBody(GraphBuilder &function, const NodeProto &ca
     return it != rename.end() ? it->second : value;
   };
 
-  AttributeBindings bindings;
-  for (const auto &attribute : function.function_attribute_protos_) {
-    bindings[attribute.name().value()] = &attribute;
-  }
-  NodeProto materialized_call = call;
-  MaterializeGraphReferences(materialized_call);
-  for (const auto &attribute : materialized_call.attribute()) {
-    bindings[attribute.name().value()] = &attribute;
-  }
-
-  for (const NodeProto &body : function.nodes_) {
-    NodeProto materialized = body;
-    function.MaterializeGraphReferences(materialized);
-    ResolveFunctionAttributes(materialized, bindings);
+  for (const NodeProto &materialized : materialized_body) {
     NodeProto node;
     node.set_op_type(materialized.op_type().value());
     if (!materialized.domain().empty()) {
@@ -2286,7 +2292,7 @@ std::size_t GraphBuilder::InlineFunctionCalls(const std::vector<GraphBuilder *> 
           changed = true;
           expanded_here = true;
         } else {
-          kept.push_back(std::move(node));
+          kept.push_back(node);
         }
       }
       nodes_ = std::move(kept);

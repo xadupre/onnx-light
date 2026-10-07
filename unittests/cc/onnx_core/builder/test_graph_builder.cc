@@ -1680,20 +1680,43 @@ TEST(GraphBuilder, InlineLocalFunctionsRejectsMissingAttributeReferences) {
 
   core::builder::GraphBuilder &fct = builder.MakeLocalFunction("Scaled", "custom");
   fct.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  fct.MakeInitializer(MakeInitializer<float>("weight", {1}, {1.0f}));
+  fct.MakeNode("Identity", {"a"}, {"weighted"});
+  auto &branch = fct.MakeSubgraph("body");
+  branch.MakeNode("Identity", {"a"}, {"branch_result"});
+  branch.MakeOutput("branch_result");
+  AttributeProto graph_ref;
+  graph_ref.set_name("body_ref");
+  graph_ref.set_type(AttributeProto::AttributeType::STRING);
+  graph_ref.set_s("body");
+  utils::RepeatedProtoField<AttributeProto> graph_attrs;
+  graph_attrs.push_back(std::move(graph_ref));
+  fct.MakeNode("Identity", {"weighted"}, {"intermediate"}, "", "", graph_attrs);
   AttributeProto ref;
   ref.set_name("alpha");
   ref.set_ref_attr_name("alpha");
   ref.set_type(AttributeProto::AttributeType::FLOAT);
   utils::RepeatedProtoField<AttributeProto> body_attrs;
   body_attrs.push_back(ref);
-  const std::vector<std::string> scaled = fct.MakeNode("LeakyRelu", {"a"}, {}, "", "", body_attrs);
+  const std::vector<std::string> scaled =
+      fct.MakeNode("LeakyRelu", {"intermediate"}, {}, "", "", body_attrs);
   fct.MakeOutput(scaled[0]);
 
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
-  const std::vector<std::string> call = builder.MakeNode("Scaled", {"x"}, {}, "custom");
+  builder.MakeNode("Neg", {"x"}, {"negated"});
+  const std::vector<std::string> call = builder.MakeNode("Scaled", {"negated"}, {}, "custom");
   builder.MakeOutput(call[0]);
 
-  EXPECT_THROW(builder.InlineLocalFunctions(), core::builder::BuilderError);
+  const std::string before = builder.BuildGraph().SerializeAsString();
+  for (int attempt = 0; attempt < 2; ++attempt) {
+    EXPECT_THROW(builder.InlineLocalFunctions(), core::builder::BuilderError);
+    EXPECT_EQ(builder.BuildGraph().SerializeAsString(), before);
+    EXPECT_TRUE(builder.Initializers().empty());
+    EXPECT_TRUE(builder.Subgraphs().empty());
+    EXPECT_FALSE(builder.HasName("Scaled_weight"));
+    EXPECT_FALSE(builder.HasName("Scaled_weighted"));
+    EXPECT_TRUE(builder.HasLocalFunction("Scaled"));
+  }
 }
 
 TEST(GraphBuilder, InlineLocalFunctionsIncludeSelectsFunctions) {

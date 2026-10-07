@@ -14,6 +14,7 @@
 #include <stdexcept>
 #include <stdint.h>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -345,11 +346,15 @@ public:
   virtual int64_t weights_size_for_location(const std::string &) const { return weights_size(); }
 
   // cache
-  /** Associates serialized size information with the object at *ptr* in the size cache. */
-  virtual void CacheSize(const void *ptr, SerializeSizeResult size);
-  /** Looks up the cached serialized size for the object at *ptr*.
+  /** Associates serialized size information with an object address and message type.
+   *  The type distinguishes a message from a first member sharing its address.
+   *  The message_type string must remain valid for the lifetime of the cache. */
+  virtual void CacheSize(const void *ptr, SerializeSizeResult size,
+                         std::string_view message_type = {});
+  /** Looks up the cached serialized size for an object address and message type.
    *  Returns true and writes the result into *size* if found. */
-  virtual bool GetCachedSize(const void *ptr, SerializeSizeResult &size);
+  virtual bool GetCachedSize(const void *ptr, SerializeSizeResult &size,
+                             std::string_view message_type = {});
   /** Swaps the size cache with *other*, transferring cached sizes between streams
    *  in O(1) so the write pass can reuse sizes computed by a separate size pass. */
   void swap_size_cache(BinaryWriteStream &other) { std::swap(size_cache_, other.size_cache_); }
@@ -388,7 +393,20 @@ public:
 
 protected:
   /** Per-object serialized-size cache used to avoid redundant recomputation. */
-  std::unordered_map<const void *, SerializeSizeResult> size_cache_;
+  struct SizeCacheKey {
+    const void *address;
+    std::string_view message_type;
+    bool operator==(const SizeCacheKey &other) const {
+      return address == other.address && message_type == other.message_type;
+    }
+  };
+  struct SizeCacheKeyHash {
+    size_t operator()(const SizeCacheKey &key) const {
+      return std::hash<const void *>{}(key.address) ^
+             (std::hash<std::string_view>{}(key.message_type) << 1);
+    }
+  };
+  std::unordered_map<SizeCacheKey, SerializeSizeResult, SizeCacheKeyHash> size_cache_;
 };
 
 ///////////

@@ -6,6 +6,7 @@
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include <algorithm>
 #include <cstring>
 #include <stdexcept>
 
@@ -52,7 +53,8 @@ ConcatLayout ValidateAndComputeLayout(const Tensors &inputs, int64_t axis) {
     out_shape[static_cast<size_t>(resolved_axis)] += t.shape[static_cast<size_t>(resolved_axis)];
   }
 
-  return {resolved_axis, std::move(out_shape), ElementSize(dtype)};
+  return {resolved_axis, std::move(out_shape),
+          static_cast<DataType>(dtype) == DataType::STRING ? 0 : ElementSize(dtype)};
 }
 
 } // namespace
@@ -64,8 +66,11 @@ Tensor Concat::operator()(const Tensors &inputs, int64_t axis, RuntimeContext *r
     total *= d;
   }
   const size_t out_n_bytes = static_cast<size_t>(total) * layout.elem_size;
+  const bool is_string = static_cast<DataType>(inputs[0].data_type) == DataType::STRING;
   Tensor out = (rt ? rt->MakeOutputTensor(0, inputs[0].data_type, layout.shape, out_n_bytes)
                    : MakeOutputTensor(inputs[0].data_type, layout.shape, out_n_bytes, nullptr));
+  if (is_string)
+    out.string_data.resize(static_cast<size_t>(total));
   (*this)(inputs, axis, out);
   return out;
 }
@@ -78,6 +83,33 @@ void Concat::operator()(const Tensors &inputs, int64_t axis, Tensor &output) con
   EXT_ENFORCE_INVALID(
       output.shape == layout.shape,
       "kernel::Concat preallocated output shape must match the concatenated shape.");
+
+  if (static_cast<DataType>(dtype) == DataType::STRING) {
+    EXT_ENFORCE_INVALID(output.AsStrings().size() == static_cast<size_t>(output.element_count()),
+                        "kernel::Concat preallocated string output has unexpected element count.");
+    int64_t outer = 1;
+    int64_t inner = 1;
+    for (int64_t d = 0; d < layout.axis; ++d)
+      outer *= inputs[0].shape[static_cast<size_t>(d)];
+    for (size_t d = static_cast<size_t>(layout.axis + 1); d < inputs[0].shape.size(); ++d)
+      inner *= inputs[0].shape[d];
+    const size_t row_size =
+        static_cast<size_t>(layout.shape[static_cast<size_t>(layout.axis)] * inner);
+    for (int64_t row = 0; row < outer; ++row) {
+      size_t offset = static_cast<size_t>(row) * row_size;
+      for (const Tensor &input : inputs) {
+        const size_t count =
+            static_cast<size_t>(input.shape[static_cast<size_t>(layout.axis)] * inner);
+        const auto &values = input.AsStrings();
+        EXT_ENFORCE_INVALID(values.size() == static_cast<size_t>(input.element_count()),
+                            "kernel::Concat string input has unexpected element count.");
+        std::copy_n(values.begin() + static_cast<size_t>(row) * count, count,
+                    output.AsStrings().begin() + offset);
+        offset += count;
+      }
+    }
+    return;
+  }
 
   // Outer is the product of dimensions before ``axis``; inner_bytes is the
   // product of dimensions after ``axis`` multiplied by the element size.

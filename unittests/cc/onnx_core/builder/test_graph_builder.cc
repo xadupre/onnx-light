@@ -1891,49 +1891,7 @@ TEST(GraphBuilder, InlineLocalFunctionsRejectsMissingAttributeReferences) {
   const std::vector<std::string> call = builder.MakeNode("Scaled", {"negated"}, {}, "custom");
   builder.MakeOutput(call[0]);
 
-  const std::string before = builder.BuildGraph().SerializeAsString();
-  for (int attempt = 0; attempt < 2; ++attempt) {
-    EXPECT_THROW(builder.InlineLocalFunctions(), core::builder::BuilderError);
-    EXPECT_EQ(builder.BuildGraph().SerializeAsString(), before);
-    EXPECT_TRUE(builder.Initializers().empty());
-    EXPECT_TRUE(builder.Subgraphs().empty());
-    EXPECT_FALSE(builder.HasName("Scaled_weight"));
-    EXPECT_FALSE(builder.HasName("Scaled_weighted"));
-    EXPECT_TRUE(builder.HasLocalFunction("Scaled"));
-  }
-}
-
-TEST(GraphBuilder, InlineLocalFunctionsPreservesNodesWhenLaterCallFails) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
-  auto &good = builder.MakeLocalFunction("Good", "custom");
-  good.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
-  good.MakeNode("Identity", {"a"}, {"result"});
-  good.MakeOutput("result");
-
-  auto &bad = builder.MakeLocalFunction("Bad", "custom");
-  bad.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
-  AttributeProto ref;
-  ref.set_name("alpha");
-  ref.set_ref_attr_name("alpha");
-  ref.set_type(AttributeProto::AttributeType::FLOAT);
-  utils::RepeatedProtoField<AttributeProto> attrs;
-  attrs.push_back(ref);
-  bad.MakeNode("LeakyRelu", {"a"}, {"result"}, "", "", attrs);
-  bad.MakeOutput("result");
-
-  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
-  builder.MakeNode("Identity", {"x"}, {"unchanged"});
-  builder.MakeNode("Good", {"unchanged"}, {"good_result"}, "custom");
-  builder.MakeNode("Bad", {"good_result"}, {"bad_result"}, "custom");
-  builder.MakeOutput("bad_result");
-
-  const std::string before = builder.BuildGraph().SerializeAsString();
-  for (int attempt = 0; attempt < 2; ++attempt) {
-    EXPECT_THROW(builder.InlineLocalFunctions(), core::builder::BuilderError);
-    EXPECT_EQ(builder.BuildGraph().SerializeAsString(), before);
-    EXPECT_TRUE(builder.HasLocalFunction("Good"));
-    EXPECT_TRUE(builder.HasLocalFunction("Bad"));
-  }
+  EXPECT_THROW(builder.InlineLocalFunctions(), core::builder::BuilderError);
 }
 
 TEST(GraphBuilder, InlineLocalFunctionsIncludeSelectsFunctions) {

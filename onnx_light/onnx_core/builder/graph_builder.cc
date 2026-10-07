@@ -2350,27 +2350,19 @@ std::size_t GraphBuilder::InlineFunctionCalls(const std::vector<GraphBuilder *> 
         break;
       }
 
-      // Finish expansions before moving any retained nodes, so a failed
-      // expansion leaves the original node list intact.
-      std::vector<utils::RepeatedProtoField<NodeProto>> bodies;
-      bodies.reserve(calls.size());
-      for (const auto &[index, function] : calls) {
-        bodies.emplace_back();
-        const auto original_subgraphs = ReferencedSubgraphs(nodes_[index]);
-        AppendInlinedBody(*function, nodes_[index], bodies.back());
-        replaced_subgraphs.insert(original_subgraphs.begin(), original_subgraphs.end());
-        expanded_functions.insert(
-            MakeFunctionIdentifier(function->function_domain_, function->name(),
-                                   function->function_template_.overload().value()));
-        ++inlined;
-      }
-
       utils::RepeatedProtoField<NodeProto> kept;
       kept.reserve(nodes_.size());
       std::size_t next_call = 0;
       for (std::size_t i = 0; i < nodes_.size(); ++i) {
         if (next_call < calls.size() && calls[next_call].first == i) {
-          kept.extend(std::move(bodies[next_call++]));
+          GraphBuilder *function = calls[next_call++].second;
+          const auto original_subgraphs = ReferencedSubgraphs(nodes_[i]);
+          AppendInlinedBody(*function, nodes_[i], kept);
+          replaced_subgraphs.insert(original_subgraphs.begin(), original_subgraphs.end());
+          expanded_functions.insert(
+              MakeFunctionIdentifier(function->function_domain_, function->name(),
+                                     function->function_template_.overload().value()));
+          ++inlined;
         } else {
           kept.push_back(std::move(nodes_[i]));
         }

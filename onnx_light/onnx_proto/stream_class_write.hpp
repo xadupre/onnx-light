@@ -22,10 +22,11 @@ template <typename T>
 void write_with_cache_size(utils::BinaryWriteStream &stream, int order, const T &field,
                            SerializeOptions &options) {
   SerializeSizeResult size;
-  bool is_cached = stream.GetCachedSize(reinterpret_cast<const void *>(&field), size);
+  const std::type_index type = utils::SerializationTypeTag<T>();
+  bool is_cached = stream.GetCachedSize(reinterpret_cast<const void *>(&field), type, size);
   if (!is_cached) {
     size = field.SerializeSize(stream, options);
-    stream.CacheSize(reinterpret_cast<const void *>(&field), size);
+    stream.CacheSize(reinterpret_cast<const void *>(&field), type, size);
   }
   stream.write_variant_uint64(static_cast<uint64_t>(size.proto_size));
   uint64_t pos = stream.size();

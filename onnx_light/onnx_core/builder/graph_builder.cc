@@ -1162,14 +1162,10 @@ void GraphBuilder::ImportGraph(const GraphProto &graph) {
 }
 
 void GraphBuilder::ImportFunction(const FunctionProto &function) {
-  function_template_ = function;
-  function_template_.ref_attribute().clear();
-  function_template_.ref_attribute_proto().clear();
-  function_template_.ref_input().clear();
-  function_template_.ref_output().clear();
-  function_template_.ref_value_info().clear();
-  function_template_.ref_opset_import().clear();
-  function_template_.ref_node().clear();
+  // Copy only metadata retained by BuildFunction. Copying the whole function
+  // serializes nested graph attributes before immediately discarding them.
+  function_template_ = FunctionProto{};
+  function_template_.overload_ = function.overload_;
   function_attributes_.assign(function.attribute().begin(), function.attribute().end());
   function_attribute_protos_ = function.attribute_proto();
   metadata_ = function.metadata_props();

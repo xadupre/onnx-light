@@ -1484,16 +1484,16 @@ TEST(GraphBuilder, InlineLocalFunctionsPreservesSubgraphSparseInitializerNames) 
     nested_body.set_type(AttributeProto::AttributeType::GRAPH);
     nested_body.mutable_g()->set_name("nested");
     nested_body.mutable_g()->add_output()->set_name("value");
-    nested.add_attribute(nested_body);
-    branch.mutable_g()->add_node(nested);
+    nested.add_attribute(std::move(nested_body));
+    branch.mutable_g()->add_node(std::move(nested));
     auto *annotation = branch.mutable_g()->add_quantization_annotation();
     annotation->set_tensor_name("condition");
     auto *parameter = annotation->add_quant_parameter_tensor_names();
     parameter->set_key("SCALE_TENSOR");
     parameter->set_value("value");
-    conditional.add_attribute(branch);
+    conditional.add_attribute(std::move(branch));
   }
-  function.add_node(conditional);
+  function.add_node(std::move(conditional));
   model.add_function(std::move(function));
 
   core::builder::GraphBuilder builder(model, SchemaLookup());

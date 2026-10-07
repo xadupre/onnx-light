@@ -34,6 +34,8 @@ std::array<Dimension, 4> TensorDimensions(const TypeProto &type, bool logical_ca
                         "PagedAttention: tensors must be FLOAT, FLOAT16, or BFLOAT16.");
   }
   std::array<Dimension, 4> dims;
+  for (Dimension &dim : dims)
+    dim.set_dim_param("");
   if (tensor.has_shape()) {
     EXT_ENFORCE_INVALID(tensor.shape().dim_size() == 4,
                         "PagedAttention: tensors must have rank 4.");

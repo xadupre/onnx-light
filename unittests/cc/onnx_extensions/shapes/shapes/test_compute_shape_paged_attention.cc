@@ -21,8 +21,11 @@ TypeProto PagedTensor(std::initializer_list<int64_t> dims, int32_t elem_type = T
   tensor->mutable_shape();
   for (int64_t dim : dims) {
     auto *dimension = tensor->mutable_shape()->add_dim();
-    if (dim >= 0)
+    if (dim >= 0) {
       dimension->set_dim_value(dim);
+    } else {
+      dimension->set_dim_param("");
+    }
   }
   return type;
 }
@@ -110,6 +113,9 @@ TEST(PagedAttentionShape, UnknownInputsStillInferRankFourAndFloat) {
   EXPECT_FALSE(output.shape().dim(1).has_dim_value());
   EXPECT_FALSE(output.shape().dim(2).has_dim_value());
   EXPECT_FALSE(output.shape().dim(3).has_dim_value());
+  EXPECT_TRUE(output.shape().dim(1).has_dim_param());
+  EXPECT_TRUE(output.shape().dim(2).has_dim_param());
+  EXPECT_TRUE(output.shape().dim(3).has_dim_param());
 }
 
 TEST(PagedAttentionShape, SupportsGroupedQueryAttentionAndReducedPrecision) {
@@ -164,16 +170,21 @@ TEST(PagedAttentionShape, RefinesUnknownValueWidthFromCache) {
                    ->mutable_elem_type()
                    ->mutable_struct_type()
                    ->mutable_structure();
-  page->mutable_field(3)
-      ->mutable_type()
-      ->mutable_tensor_type()
-      ->mutable_shape()
-      ->mutable_dim(3)
-      ->set_dim_value(6);
+  auto *value_width =
+      page->mutable_field(3)->mutable_type()->mutable_tensor_type()->mutable_shape()->mutable_dim(
+          3);
+  value_width->clear_dim_param();
+  value_width->set_dim_value(6);
   context.SetType("past", cache);
   context.SetType("V", PagedTensor({1, 1, 3, -1}));
   context.ComputeShapeNode(PagedNode());
-  EXPECT_TRUE(context.GetType("Y").Equals(PagedTensor({1, 1, 3, 6})));
+  const auto &output = context.GetType("Y").tensor_type().shape();
+  ASSERT_EQ(output.dim_size(), 4);
+  EXPECT_EQ(output.dim(0).dim_value(), 1);
+  EXPECT_EQ(output.dim(1).dim_value(), 1);
+  EXPECT_EQ(output.dim(2).dim_value(), 3);
+  EXPECT_EQ(output.dim(3).dim_value(), 6);
+  EXPECT_FALSE(output.dim(3).has_dim_param());
   EXPECT_TRUE(context.GetType("present").Equals(cache));
 }
 
@@ -182,6 +193,7 @@ TEST(PagedAttentionShape, RefinesUnknownBatchFromCache) {
   for (const char *name : {"Q", "K", "V"}) {
     auto type = context.GetType(name);
     type.mutable_tensor_type()->mutable_shape()->mutable_dim(0)->clear_dim_value();
+    type.mutable_tensor_type()->mutable_shape()->mutable_dim(0)->set_dim_param("");
     context.SetType(name, type);
   }
   auto cache = PagedCache();
@@ -193,13 +205,15 @@ TEST(PagedAttentionShape, RefinesUnknownBatchFromCache) {
                    ->mutable_elem_type()
                    ->mutable_struct_type()
                    ->mutable_structure();
-  for (int field : {2, 3})
-    page->mutable_field(field)
-        ->mutable_type()
-        ->mutable_tensor_type()
-        ->mutable_shape()
-        ->mutable_dim(0)
-        ->set_dim_value(2);
+  for (int field : {2, 3}) {
+    auto *batch = page->mutable_field(field)
+                      ->mutable_type()
+                      ->mutable_tensor_type()
+                      ->mutable_shape()
+                      ->mutable_dim(0);
+    batch->clear_dim_param();
+    batch->set_dim_value(2);
+  }
   context.SetType("past", cache);
   context.ComputeShapeNode(PagedNode());
   EXPECT_EQ(context.GetType("Y").tensor_type().shape().dim(0).dim_value(), 2);

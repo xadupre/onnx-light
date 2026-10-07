@@ -544,21 +544,20 @@ SymCmpResult SymTensor::Cmp(const SymTensor &other) const noexcept {
 namespace {
 
 // Builds an SymShape from a TensorShapeProto, preserving symbolic
-// dimensions: ``dim_value`` becomes a concrete int dim, ``dim_param``
-// becomes a symbolic dim with the same name, and an unset dim becomes
-// an empty-string placeholder. Mirrors the historical helper that
-// lived in shape_inference.cc.
+// dimensions: ``dim_value`` becomes a concrete int dim and ``dim_param``
+// becomes a symbolic dim with the same name. Mirrors the historical helper
+// that lived in shape_inference.cc.
 SymShape ShapeFromTensorShapeProto(const TensorShapeProto &sp) {
   SymShape shape;
   for (std::size_t i = 0; i < sp.dim().size(); ++i) {
     const TensorShapeProto::Dimension &d = sp.dim()[i];
     if (d.has_dim_value()) {
       shape.PushBack(SymDim(static_cast<int64_t>(d.dim_value())));
-    } else if (d.has_dim_param() && !d.dim_param().empty()) {
+    } else if (d.has_dim_param()) {
       shape.PushBack(SymDim(d.dim_param()));
     } else {
       EXT_ENFORCE_INVALID(false, "SymTensorFromValueInfo: dimension ", i,
-                          " must have a concrete value or a non-empty symbolic expression.");
+                          " must have a concrete value or a symbolic expression.");
     }
   }
   return shape;
@@ -732,12 +731,6 @@ bool SymTensorToValueInfo(const SymTensor &tensor, ValueInfoProto &vi) {
   const TensorProto::DataType dtype = TensorTypeToDataType(tensor.Dtype());
   if (dtype == TensorProto::DataType::UNDEFINED) {
     return false;
-  }
-  for (std::size_t i = 0; i < tensor.Shape().Rank(); ++i) {
-    const SymDim &dim = tensor.Shape()[i];
-    EXT_ENFORCE_INVALID(dim.IsInt() || (dim.IsExpr() && !dim.AsExpr().empty()),
-                        "SymTensorToValueInfo: dimension ", i,
-                        " must have a concrete value or a non-empty symbolic expression.");
   }
   // Reset any pre-existing type/shape information so it is replaced
   // wholesale by the inferred descriptor.

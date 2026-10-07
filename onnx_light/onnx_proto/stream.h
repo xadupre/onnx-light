@@ -14,7 +14,6 @@
 #include <stdexcept>
 #include <stdint.h>
 #include <string>
-#include <typeindex>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -67,11 +66,6 @@ inline constexpr SerializeSizeResult operator+(SerializeSizeResult left,
 }
 
 namespace utils {
-
-/** Returns the RTTI identity for one serialized C++ field type. */
-template <typename T> inline std::type_index SerializationTypeTag() {
-  return std::type_index(typeid(T));
-}
 
 /** Signed byte-offset type used by stream seek and length operations. */
 typedef int64_t offset_t;
@@ -352,10 +346,10 @@ public:
 
   // cache
   /** Associates serialized size information with the object and field type in the size cache. */
-  virtual void CacheSize(const void *ptr, std::type_index type, SerializeSizeResult size);
+  virtual void CacheSize(const void *ptr, uint16_t proto_id, SerializeSizeResult size);
   /** Looks up the cached serialized size for the object and field type.
    *  Returns true and writes the result into *size* if found. */
-  virtual bool GetCachedSize(const void *ptr, std::type_index type, SerializeSizeResult &size);
+  virtual bool GetCachedSize(const void *ptr, uint16_t proto_id, SerializeSizeResult &size);
   /** Swaps the size cache with *other*, transferring cached sizes between streams
    *  in O(1) so the write pass can reuse sizes computed by a separate size pass. */
   void swap_size_cache(BinaryWriteStream &other) { std::swap(size_cache_, other.size_cache_); }
@@ -395,18 +389,18 @@ public:
 protected:
   struct SizeCacheKey {
     const void *ptr;
-    std::type_index type;
+    uint16_t proto_id;
 
     bool operator==(const SizeCacheKey &other) const {
-      return ptr == other.ptr && type == other.type;
+      return ptr == other.ptr && proto_id == other.proto_id;
     }
   };
 
   struct SizeCacheKeyHash {
     std::size_t operator()(const SizeCacheKey &key) const {
       const std::size_t ptr_hash = std::hash<const void *>{}(key.ptr);
-      const std::size_t type_hash = key.type.hash_code();
-      return ptr_hash ^ (type_hash + 0x9e3779b9U + (ptr_hash << 6U) + (ptr_hash >> 2U));
+      const std::size_t id_hash = std::hash<uint16_t>{}(key.proto_id);
+      return ptr_hash ^ (id_hash + 0x9e3779b9U + (ptr_hash << 6U) + (ptr_hash >> 2U));
     }
   };
 

@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "_onnxpy_callback_cleanup.h"
 #include "onnx_core/builder/graph_graph.h"
 #include "onnx_core/builder/pattern_registry.h"
 
@@ -180,12 +179,7 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
       .def("__str__", &LocalRewriting::ToString)
       .def("__repr__", &LocalRewriting::ToString);
 
-  nb::object pattern_graphs = nb::module_::import_("weakref").attr("WeakSet")();
-  nb::module_::import_("atexit").attr("register")(nb::cpp_function([pattern_graphs]() {
-    ClearCallbackOwners(pattern_graphs,
-                        [](nb::handle graph) { nb::cast<GraphGraph &>(graph).ClearPatterns(); });
-  }));
-  nb::class_<GraphGraph>(builder_mod, "GraphGraph", nb::is_weak_referenceable())
+  nb::class_<GraphGraph>(builder_mod, "GraphGraph")
       .def(
           "__init__",
           [](GraphGraph *self, core::builder::GraphBuilder &builder) {
@@ -194,14 +188,12 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
           nb::arg("builder"), nb::keep_alive<1, 2>())
       .def(
           "__init__",
-          [pattern_graphs](GraphGraph *self, core::builder::GraphBuilder &builder,
-                           nb::iterable patterns) {
+          [](GraphGraph *self, core::builder::GraphBuilder &builder, nb::iterable patterns) {
             std::vector<std::shared_ptr<PatternOptimization>> owned;
             for (nb::handle pattern : patterns) {
               owned.push_back(nb::cast<std::shared_ptr<PatternOptimization>>(pattern));
             }
             new (self) GraphGraph(builder, std::move(owned));
-            pattern_graphs.attr("add")(nb::find(*self));
           },
           nb::arg("builder"), nb::arg("patterns"), nb::keep_alive<1, 2>())
       .def_prop_ro("builder", &GraphGraph::Builder, nb::rv_policy::reference_internal)

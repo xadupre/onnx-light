@@ -783,10 +783,7 @@ public:
   }
 
   /// Removes every registered custom kernel.
-  void ClearCustomKernels() {
-    CustomKernelMap callbacks;
-    callbacks.swap(custom_kernels_);
-  }
+  void ClearCustomKernels() { custom_kernels_.clear(); }
 
   /// Returns ``true`` if a tensor named ``name`` is currently held.
   bool Has(const std::string &name) const { return tensors_.find(name) != tensors_.end(); }

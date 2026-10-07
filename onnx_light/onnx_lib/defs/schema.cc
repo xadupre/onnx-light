@@ -444,7 +444,7 @@ OpSchema &OpSchema::NumOutputs(std::unordered_set<int> allowed_output_nums) {
 }
 
 OpSchema &OpSchema::TypeAndShapeInferenceFunction(InferenceFunction inferenceFunction) {
-  tensor_inference_function_.swap(inferenceFunction);
+  tensor_inference_function_ = std::move(inferenceFunction);
   return *this;
 }
 

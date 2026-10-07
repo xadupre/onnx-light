@@ -316,10 +316,7 @@ public:
   }
 
   /// Removes every custom value-tag callback.
-  void ClearCustomValueTagFunctions() {
-    CustomValueTagMap callbacks;
-    callbacks.swap(custom_value_tags_);
-  }
+  void ClearCustomValueTagFunctions() { custom_value_tags_.clear(); }
 
   /// Read-only access to all registered custom value-tag callbacks.
   const CustomValueTagMap &CustomValueTagFunctions() const noexcept { return custom_value_tags_; }

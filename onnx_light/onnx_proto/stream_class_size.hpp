@@ -39,9 +39,9 @@ template <typename T>
 inline SerializeSizeResult size_with_cache(utils::BinaryWriteStream &stream, const T &field,
                                            SerializeOptions &options) {
   SerializeSizeResult s;
-  if (!stream.GetCachedSize(&field, s, ProtoSizeCacheType<T>())) {
+  if (!stream.GetCachedTypedSize(&field, s, ProtoSizeCacheType<T>())) {
     s = field.SerializeSize(stream, options);
-    stream.CacheSize(&field, s, ProtoSizeCacheType<T>());
+    stream.CacheTypedSize(&field, s, ProtoSizeCacheType<T>());
   }
   return s;
 }

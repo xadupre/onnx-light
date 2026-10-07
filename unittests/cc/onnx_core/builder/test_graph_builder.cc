@@ -1438,6 +1438,57 @@ TEST(GraphBuilder, InlineLocalFunctionsMaterializesGraphCallAttributes) {
   EXPECT_EQ(inlined_body.g().node()[0].input()[0], "X");
 }
 
+TEST(GraphBuilder, InlineLocalFunctionsPrunesOnlyUnreferencedReplacedCallSubgraphs) {
+  for (bool retain_original : {false, true}) {
+    core::builder::GraphBuilder builder("g", SchemaLookup());
+    auto &function = builder.MakeLocalFunction("F", "custom");
+    function.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+    function.MakeNode("Identity", {"a"}, {"result"});
+    function.MakeOutput("result");
+    builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+
+    auto &original = builder.MakeSubgraph("original");
+    original.MakeNode("Identity", {"X"}, {"branch_result"});
+    original.MakeOutput("branch_result");
+    AttributeProto reference;
+    reference.set_name("body_ref");
+    reference.set_type(AttributeProto::AttributeType::STRING);
+    reference.set_s("original");
+    utils::RepeatedProtoField<AttributeProto> attributes;
+    attributes.push_back(std::move(reference));
+    builder.MakeNode("F", {"X"}, {"Y"}, "custom", "", attributes);
+    if (retain_original) {
+      builder.MakeNode("Identity", {"Y"}, {"Z"}, "", "", attributes);
+    }
+    builder.MakeOutput(retain_original ? "Z" : "Y");
+    auto &pending = builder.MakeSubgraph("pending");
+    pending.MakeSubgraph("nested_pending");
+
+    EXPECT_EQ(builder.InlineLocalFunctions(), 1u);
+    EXPECT_EQ(builder.HasSubgraph("original"), retain_original);
+    ASSERT_TRUE(builder.HasSubgraph("pending"));
+    EXPECT_EQ(&builder.Subgraph("pending"), &pending);
+    EXPECT_TRUE(pending.HasSubgraph("nested_pending"));
+    EXPECT_EQ(builder.Subgraphs().size(), retain_original ? 2u : 1u);
+    pending.MakeNode("Identity", {"X"}, {"pending_result"});
+    pending.MakeOutput("pending_result");
+    AttributeProto pending_reference;
+    pending_reference.set_name("body_ref");
+    pending_reference.set_type(AttributeProto::AttributeType::STRING);
+    pending_reference.set_s("pending");
+    utils::RepeatedProtoField<AttributeProto> pending_attributes;
+    pending_attributes.push_back(std::move(pending_reference));
+    builder.MakeNode("Identity", {"Y"}, {"attached"}, "", "", pending_attributes);
+    const GraphProto graph = builder.BuildGraph();
+    ASSERT_FALSE(graph.node().empty());
+    const auto &attached_attributes = graph.node()[graph.node().size() - 1].attribute();
+    ASSERT_EQ(attached_attributes.size(), 1u);
+    ASSERT_TRUE(attached_attributes[0].has_g());
+    ASSERT_EQ(attached_attributes[0].g().output().size(), 1u);
+    EXPECT_EQ(attached_attributes[0].g().output()[0].name(), "pending_result");
+  }
+}
+
 TEST(GraphBuilder, InlineLocalFunctionsPreservesSubgraphSparseInitializerNames) {
   ModelProto model;
   model.set_ir_version(10);

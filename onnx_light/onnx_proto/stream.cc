@@ -537,13 +537,21 @@ uint64_t BinaryWriteStream::size_string_stream(const BorrowedWriteStream &stream
   return VarintSize(stream.size()) + stream.size();
 }
 
-void BinaryWriteStream::CacheSize(const void *ptr, SerializeSizeResult size,
-                                  std::string_view message_type) {
+void BinaryWriteStream::CacheSize(const void *ptr, SerializeSizeResult size) {
+  CacheTypedSize(ptr, size, {});
+}
+
+bool BinaryWriteStream::GetCachedSize(const void *ptr, SerializeSizeResult &size) {
+  return GetCachedTypedSize(ptr, size, {});
+}
+
+void BinaryWriteStream::CacheTypedSize(const void *ptr, SerializeSizeResult size,
+                                       std::string_view message_type) {
   size_cache_[{ptr, message_type}] = size;
 }
 
-bool BinaryWriteStream::GetCachedSize(const void *ptr, SerializeSizeResult &size,
-                                      std::string_view message_type) {
+bool BinaryWriteStream::GetCachedTypedSize(const void *ptr, SerializeSizeResult &size,
+                                           std::string_view message_type) {
   auto it = size_cache_.find({ptr, message_type});
   if (it != size_cache_.end()) {
     size = it->second;

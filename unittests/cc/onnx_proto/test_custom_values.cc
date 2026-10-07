@@ -1746,7 +1746,7 @@ TEST(custom_values, SerializedSizeMismatchNamesTheField) {
   // the mismatch and name the enclosing field number (ModelProto.graph == 7).
   SerializeSizeResult poisoned;
   poisoned.proto_size = 1;
-  stream.CacheSize(&model.ref_graph(), poisoned, ProtoSizeCacheType<GraphProto>());
+  stream.CacheTypedSize(&model.ref_graph(), poisoned, ProtoSizeCacheType<GraphProto>());
   const std::string message =
       RuntimeErrorMessage([&]() { model.SerializeToStream(stream, options); });
   EXPECT_NE(message.find("Serialized size"), std::string::npos) << message;
@@ -1769,17 +1769,50 @@ TEST(custom_values, SerializedSizeCacheDistinguishesMessageTypesAtSameAddress) {
   const auto tensor_size = sparse.values().SerializeSize(stream, options);
   ASSERT_NE(sparse_size.proto_size, tensor_size.proto_size);
   const void *address = &sparse.values();
-  stream.CacheSize(address, sparse_size, ProtoSizeCacheType<SparseTensorProto>());
+  stream.CacheTypedSize(address, sparse_size, ProtoSizeCacheType<SparseTensorProto>());
   SerializeSizeResult cached;
-  ASSERT_TRUE(stream.GetCachedSize(address, cached, ProtoSizeCacheType<TensorProto>()));
+  ASSERT_TRUE(stream.GetCachedTypedSize(address, cached, ProtoSizeCacheType<TensorProto>()));
   EXPECT_EQ(cached.proto_size, tensor_size.proto_size);
-  ASSERT_TRUE(stream.GetCachedSize(address, cached, ProtoSizeCacheType<SparseTensorProto>()));
+  ASSERT_TRUE(stream.GetCachedTypedSize(address, cached, ProtoSizeCacheType<SparseTensorProto>()));
   EXPECT_EQ(cached.proto_size, sparse_size.proto_size);
   sparse.SerializeToStream(stream, options);
   EXPECT_EQ(stream.size(), sparse_size.proto_size);
   SparseTensorProto parsed;
   ASSERT_TRUE(parsed.ParseFromArray(stream.data(), static_cast<int>(stream.size())));
   EXPECT_TRUE(parsed.Equals(sparse));
+}
+
+TEST(custom_values, SerializedSizeCachePreservesLegacyVirtualOverrides) {
+  class LegacyStream : public utils::StringWriteStream {
+  public:
+    int stores = 0;
+    int lookups = 0;
+    void CacheSize(const void *ptr, SerializeSizeResult size) override {
+      ++stores;
+      BinaryWriteStream::CacheSize(ptr, size);
+    }
+    bool GetCachedSize(const void *ptr, SerializeSizeResult &size) override {
+      ++lookups;
+      return BinaryWriteStream::GetCachedSize(ptr, size);
+    }
+  };
+  LegacyStream stream;
+  utils::BinaryWriteStream &base = stream;
+  TensorProto tensor;
+  SerializeSizeResult legacy_size;
+  legacy_size.proto_size = 17;
+  SerializeSizeResult typed_size;
+  typed_size.proto_size = 30;
+  base.CacheSize(&tensor, legacy_size);
+  base.CacheTypedSize(&tensor, typed_size, ProtoSizeCacheType<TensorProto>());
+  SerializeSizeResult cached;
+  ASSERT_TRUE(base.GetCachedSize(&tensor, cached));
+  EXPECT_EQ(cached.proto_size, legacy_size.proto_size);
+  EXPECT_EQ(stream.stores, 1);
+  EXPECT_EQ(stream.lookups, 1);
+  ASSERT_TRUE(base.GetCachedTypedSize(&tensor, cached, ProtoSizeCacheType<TensorProto>()));
+  EXPECT_EQ(cached.proto_size, typed_size.proto_size);
+  EXPECT_FALSE(base.GetCachedTypedSize(&tensor, cached, ProtoSizeCacheType<SparseTensorProto>()));
 }
 
 // ---------------------------------------------------------------------------

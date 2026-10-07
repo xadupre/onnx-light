@@ -2273,7 +2273,7 @@ std::size_t GraphBuilder::InlineFunctionCalls(const std::vector<GraphBuilder *> 
     return inlined;
   }
 
-  bool expanded_here = false;
+  std::unordered_set<const GraphBuilder *> replaced_subgraphs;
   if (!nodes_.empty()) {
     // Rebuild the node list, expanding every call. Repeat to a fixed point: a
     // pasted body may itself call another local function.
@@ -2285,12 +2285,13 @@ std::size_t GraphBuilder::InlineFunctionCalls(const std::vector<GraphBuilder *> 
       for (NodeProto &node : nodes_) {
         GraphBuilder *function = FindCalledFunction(functions, node);
         if (function != nullptr) {
+          const auto original_subgraphs = ReferencedSubgraphs(node);
           AppendInlinedBody(*function, node, kept);
+          replaced_subgraphs.insert(original_subgraphs.begin(), original_subgraphs.end());
           expanded_functions.insert(
               MakeFunctionIdentifier(function->function_domain_, function->name()));
           ++inlined;
           changed = true;
-          expanded_here = true;
         } else {
           kept.push_back(node);
         }
@@ -2298,7 +2299,7 @@ std::size_t GraphBuilder::InlineFunctionCalls(const std::vector<GraphBuilder *> 
       nodes_ = std::move(kept);
     }
   }
-  if (expanded_here) {
+  if (!replaced_subgraphs.empty()) {
     std::unordered_set<const GraphBuilder *> referenced;
     for (const auto &node : nodes_) {
       for (const GraphBuilder *subgraph : ReferencedSubgraphs(node)) {
@@ -2307,7 +2308,8 @@ std::size_t GraphBuilder::InlineFunctionCalls(const std::vector<GraphBuilder *> 
     }
     subgraphs_.erase(std::remove_if(subgraphs_.begin(), subgraphs_.end(),
                                     [&](const std::unique_ptr<GraphBuilder> &subgraph) {
-                                      if (referenced.count(subgraph.get()) != 0) {
+                                      if (replaced_subgraphs.count(subgraph.get()) == 0 ||
+                                          referenced.count(subgraph.get()) != 0) {
                                         return false;
                                       }
                                       names_.erase(subgraph->name());

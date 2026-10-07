@@ -1132,14 +1132,16 @@ void GraphBuilder::ImportGraph(const GraphProto &graph) {
   if (parent_ != nullptr && !graph.persistent_bindings().empty()) {
     throw BuilderError("GraphBuilder: persistent bindings are supported only on the root graph.");
   }
-  graph_template_ = graph;
-  graph_template_.ref_input().clear();
-  graph_template_.ref_output().clear();
-  graph_template_.ref_initializer().clear();
-  graph_template_.ref_encoded_initializer().clear();
-  graph_template_.ref_paged_cache_initializer().clear();
-  graph_template_.ref_node().clear();
-  graph_template_.ref_value_info().clear();
+  // Preserve only fields emitted from the template. Copying the complete graph
+  // serializes nested graph attributes and their sparse payloads before the
+  // imported node list is immediately discarded.
+  graph_template_ = GraphProto{};
+  graph_template_.name_ = graph.name_;
+  graph_template_.sparse_initializer_ = graph.sparse_initializer_;
+  graph_template_.doc_string_ = graph.doc_string_;
+  graph_template_.quantization_annotation_ = graph.quantization_annotation_;
+  graph_template_.metadata_props_ = graph.metadata_props_;
+  graph_template_.persistent_bindings_ = graph.persistent_bindings_;
   value_infos_ = graph.value_info();
   for (const auto &value : value_infos_) {
     compute_.SeedValueTag(value.name().value(), DeclaredValueTag(value), nodes_);
@@ -1192,9 +1194,14 @@ void GraphBuilder::ImportGraph(const GraphProto &graph) {
     MakeNode(node.op_type().value(), inputs, outputs,
              node.domain().empty() ? std::string() : node.domain().value(),
              node.name().empty() ? std::string() : node.name().value(), ImportAttributes(node));
-    auto attributes = std::move(nodes_.back().ref_attribute());
-    nodes_.back() = node;
-    nodes_.back().ref_attribute() = std::move(attributes);
+    NodeProto &imported_node = nodes_.back();
+    imported_node.name_ = node.name_;
+    imported_node.op_type_ = node.op_type_;
+    imported_node.domain_ = node.domain_;
+    imported_node.overload_ = node.overload_;
+    imported_node.doc_string_ = node.doc_string_;
+    imported_node.metadata_props_ = node.metadata_props_;
+    imported_node.device_configurations_ = node.device_configurations_;
     SeedDeclaredOutputs(compute_.Shapes(), node, declarations);
   }
   for (const auto &output : graph.output()) {
@@ -1245,9 +1252,14 @@ void GraphBuilder::ImportFunction(const FunctionProto &function) {
     MakeNode(node.op_type().value(), inputs, outputs,
              node.domain().empty() ? std::string() : node.domain().value(),
              node.name().empty() ? std::string() : node.name().value(), ImportAttributes(node));
-    auto attributes = std::move(nodes_.back().ref_attribute());
-    nodes_.back() = node;
-    nodes_.back().ref_attribute() = std::move(attributes);
+    NodeProto &imported_node = nodes_.back();
+    imported_node.name_ = node.name_;
+    imported_node.op_type_ = node.op_type_;
+    imported_node.domain_ = node.domain_;
+    imported_node.overload_ = node.overload_;
+    imported_node.doc_string_ = node.doc_string_;
+    imported_node.metadata_props_ = node.metadata_props_;
+    imported_node.device_configurations_ = node.device_configurations_;
   }
   for (std::size_t i = 0; i < function.output().size(); ++i) {
     ValueInfoProto value_info;

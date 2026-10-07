@@ -86,12 +86,14 @@ public:
    * ``max_iter`` selects ``max(node_count, 10) * priority_count``.
    * Replacement nodes whose inputs are all materialized constants are folded
    * into initializers before cleanup, subject to ``folding_options``.
+   * ``remove_unused=false`` preserves dead-end nodes and their initializers.
    *
    * Returns:
    *   Self-contained records of the applied rewrites, in application order.
    */
   std::vector<LocalRewriting> Optimize(int max_iter = -1, OptimizationReport *report = nullptr,
-                                       const ConstantFoldingOptions &folding_options = {});
+                                       const ConstantFoldingOptions &folding_options = {},
+                                       bool remove_unused = true);
 
   /// Returns the patterns shared by this graph optimizer and its rewrites.
   const std::vector<std::shared_ptr<PatternOptimization>> &Patterns() const noexcept {
@@ -186,7 +188,8 @@ private:
 
   void Rebuild();
   void RebuildSuccessors();
-  std::size_t Cleanup(std::vector<LocalRewriting> &rewrites, std::size_t &rewrite_batch);
+  std::size_t Cleanup(std::vector<LocalRewriting> &rewrites, std::size_t &rewrite_batch,
+                      bool remove_unused);
   void ApplyRewritingBatch(const std::vector<LocalRewriting> &rewrites, std::size_t begin,
                            std::size_t end);
 
@@ -206,7 +209,8 @@ private:
 
   std::vector<LocalRewriting> OptimizeImpl(int max_iterations, OptimizationReport *report,
                                            const std::vector<std::string> &graph_path,
-                                           const ConstantFoldingOptions &folding_options);
+                                           const ConstantFoldingOptions &folding_options,
+                                           bool remove_unused);
 
   GraphBuilder &builder_;
   std::vector<std::shared_ptr<PatternOptimization>> patterns_;

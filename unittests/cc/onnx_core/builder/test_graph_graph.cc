@@ -135,6 +135,26 @@ TEST(GraphGraph, NativeCleanupReplaysOrphanInitializers) {
   }
 }
 
+TEST(GraphGraph, OptionalUnusedCleanupPreservesDeadEnds) {
+  for (bool remove_unused : {false, true}) {
+    SCOPED_TRACE(remove_unused);
+    core::builder::GraphBuilder builder("g", SchemaLookup());
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+    builder.MakeInitializer(MakeInitializer<float>("weight", {2}, {1.0f, 2.0f}));
+    builder.MakeNode("Add", {"x", "weight"}, {"dead"});
+    builder.MakeNode("Neg", {"x"}, {"out"});
+    builder.MakeOutput("out");
+    EXPECT_EQ(builder.ToGraph().node_size(), 2);
+
+    core::builder::GraphGraph graph(
+        builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{});
+    const auto rewrites = graph.Optimize(-1, nullptr, {}, remove_unused);
+    EXPECT_EQ(builder.ToGraph().node_size(), remove_unused ? 1 : 2);
+    EXPECT_EQ(builder.ToGraph().initializer_size(), remove_unused ? 0 : 1);
+    EXPECT_EQ(rewrites.size(), remove_unused ? 1u : 0u);
+  }
+}
+
 TEST(GraphGraph, NativeInputDefaultsAreNotOptimizationConstants) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   for (const std::string name : {"x", "z"}) {

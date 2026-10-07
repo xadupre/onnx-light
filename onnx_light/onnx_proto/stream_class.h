@@ -468,15 +468,6 @@ template <> inline bool _has_field_(const utils::ByteSpan &field) { return !fiel
 /** Copies all fields from src into dest. Generated for every proto class. */
 template <typename T> void CopyProtoFrom(T &dest, const T &src);
 
-/** Returns a message-type cache discriminator stable across shared-library boundaries. */
-template <typename T> inline constexpr std::string_view ProtoSizeCacheType() {
-#ifdef _MSC_VER
-  return __FUNCSIG__;
-#else
-  return __PRETTY_FUNCTION__;
-#endif
-}
-
 /** Base class for generated ONNX proto messages. */
 class ONNX_LIGHT_PROTO_API Message {
 public:

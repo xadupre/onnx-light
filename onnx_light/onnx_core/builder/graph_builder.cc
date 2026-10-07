@@ -2339,24 +2339,40 @@ std::size_t GraphBuilder::InlineFunctionCalls(const std::vector<GraphBuilder *> 
   if (!nodes_.empty()) {
     // Rebuild the node list, expanding every call. Repeat to a fixed point: a
     // pasted body may itself call another local function.
-    bool changed = true;
-    while (changed) {
-      changed = false;
+    while (true) {
+      std::vector<std::pair<std::size_t, GraphBuilder *>> calls;
+      for (std::size_t i = 0; i < nodes_.size(); ++i) {
+        if (GraphBuilder *function = FindCalledFunction(functions, nodes_[i])) {
+          calls.emplace_back(i, function);
+        }
+      }
+      if (calls.empty()) {
+        break;
+      }
+
+      // Finish expansions before moving any retained nodes, so a failed
+      // expansion leaves the original node list intact.
+      std::vector<utils::RepeatedProtoField<NodeProto>> bodies;
+      bodies.reserve(calls.size());
+      for (const auto &[index, function] : calls) {
+        bodies.emplace_back();
+        const auto original_subgraphs = ReferencedSubgraphs(nodes_[index]);
+        AppendInlinedBody(*function, nodes_[index], bodies.back());
+        replaced_subgraphs.insert(original_subgraphs.begin(), original_subgraphs.end());
+        expanded_functions.insert(
+            MakeFunctionIdentifier(function->function_domain_, function->name(),
+                                   function->function_template_.overload().value()));
+        ++inlined;
+      }
+
       utils::RepeatedProtoField<NodeProto> kept;
       kept.reserve(nodes_.size());
-      for (NodeProto &node : nodes_) {
-        GraphBuilder *function = FindCalledFunction(functions, node);
-        if (function != nullptr) {
-          const auto original_subgraphs = ReferencedSubgraphs(node);
-          AppendInlinedBody(*function, node, kept);
-          replaced_subgraphs.insert(original_subgraphs.begin(), original_subgraphs.end());
-          expanded_functions.insert(
-              MakeFunctionIdentifier(function->function_domain_, function->name(),
-                                     function->function_template_.overload().value()));
-          ++inlined;
-          changed = true;
+      std::size_t next_call = 0;
+      for (std::size_t i = 0; i < nodes_.size(); ++i) {
+        if (next_call < calls.size() && calls[next_call].first == i) {
+          kept.extend(std::move(bodies[next_call++]));
         } else {
-          kept.push_back(node);
+          kept.push_back(std::move(nodes_[i]));
         }
       }
       nodes_ = std::move(kept);

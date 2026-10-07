@@ -1249,6 +1249,39 @@ TEST(GraphBuilder, InlineLocalFunctionsExpandsCallSite) {
   EXPECT_EQ(builder.InlineLocalFunctions(), 0u);
 }
 
+TEST(GraphBuilder, InlineLocalFunctionsMovesUnchangedNodes) {
+  for (bool with_call : {false, true}) {
+    core::builder::GraphBuilder builder("g", SchemaLookup());
+    auto &function = builder.MakeLocalFunction("Local", "custom");
+    function.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+    function.MakeNode("Identity", {"a"}, {"result"});
+    function.MakeOutput("result");
+
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+    std::string previous = "x";
+    std::vector<const char *> unchanged_outputs;
+    for (int i = 0; i < 256; ++i) {
+      if (with_call && i == 128) {
+        previous = builder.MakeNode("Local", {previous}, {}, "custom")[0];
+      }
+      const std::string output =
+          "long_output_name_to_detect_node_copies_" + std::string(128, 'a') + std::to_string(i);
+      builder.MakeNode("Identity", {previous}, {output});
+      previous = output;
+      unchanged_outputs.push_back(builder.Nodes()[builder.Nodes().size() - 1].output(0).data());
+    }
+    builder.MakeOutput(previous);
+
+    EXPECT_EQ(builder.InlineLocalFunctions(), with_call ? 1u : 0u);
+    ASSERT_EQ(builder.Nodes().size(), 256u + (with_call ? 1u : 0u));
+    for (std::size_t i = 0; i < unchanged_outputs.size(); ++i) {
+      const std::size_t index = i + (with_call && i >= 128 ? 1u : 0u);
+      EXPECT_EQ(builder.Nodes()[index].output(0).data(), unchanged_outputs[i]) << i;
+    }
+    EXPECT_EQ(builder.BuildGraph().node().size(), builder.Nodes().size());
+  }
+}
+
 TEST(GraphBuilder, InlineLocalFunctionsRewiresIntermediates) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
 
@@ -1867,6 +1900,39 @@ TEST(GraphBuilder, InlineLocalFunctionsRejectsMissingAttributeReferences) {
     EXPECT_FALSE(builder.HasName("Scaled_weight"));
     EXPECT_FALSE(builder.HasName("Scaled_weighted"));
     EXPECT_TRUE(builder.HasLocalFunction("Scaled"));
+  }
+}
+
+TEST(GraphBuilder, InlineLocalFunctionsPreservesNodesWhenLaterCallFails) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  auto &good = builder.MakeLocalFunction("Good", "custom");
+  good.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  good.MakeNode("Identity", {"a"}, {"result"});
+  good.MakeOutput("result");
+
+  auto &bad = builder.MakeLocalFunction("Bad", "custom");
+  bad.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  AttributeProto ref;
+  ref.set_name("alpha");
+  ref.set_ref_attr_name("alpha");
+  ref.set_type(AttributeProto::AttributeType::FLOAT);
+  utils::RepeatedProtoField<AttributeProto> attrs;
+  attrs.push_back(ref);
+  bad.MakeNode("LeakyRelu", {"a"}, {"result"}, "", "", attrs);
+  bad.MakeOutput("result");
+
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeNode("Identity", {"x"}, {"unchanged"});
+  builder.MakeNode("Good", {"unchanged"}, {"good_result"}, "custom");
+  builder.MakeNode("Bad", {"good_result"}, {"bad_result"}, "custom");
+  builder.MakeOutput("bad_result");
+
+  const std::string before = builder.BuildGraph().SerializeAsString();
+  for (int attempt = 0; attempt < 2; ++attempt) {
+    EXPECT_THROW(builder.InlineLocalFunctions(), core::builder::BuilderError);
+    EXPECT_EQ(builder.BuildGraph().SerializeAsString(), before);
+    EXPECT_TRUE(builder.HasLocalFunction("Good"));
+    EXPECT_TRUE(builder.HasLocalFunction("Bad"));
   }
 }
 

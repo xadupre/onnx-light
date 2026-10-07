@@ -1505,6 +1505,16 @@ TEST(GraphBuilder, InlineLocalFunctionsPreservesSubgraphSparseInitializerNames) 
   graph->add_node(MakeNode("Choose", {"predicate", "X"}, {"Y"}, "custom"));
   graph->add_output()->set_name("Y");
 
+  FunctionProto inner;
+  inner.set_name("Inner");
+  inner.set_domain("custom");
+  inner.add_input("a");
+  inner.add_output("r");
+  inner.add_opset("", 23);
+  inner.add_node(MakeNode("Identity", {"a"}, {"tmp"}));
+  inner.add_node(MakeNode("Identity", {"tmp"}, {"r"}));
+  model.add_function(std::move(inner));
+
   FunctionProto function;
   function.set_name("Choose");
   function.set_domain("custom");
@@ -1528,6 +1538,10 @@ TEST(GraphBuilder, InlineLocalFunctionsPreservesSubgraphSparseInitializerNames) 
     sparse->mutable_indices()->set_data_type(TensorProto::DataType::INT64);
     sparse->mutable_indices()->add_dims(1);
     sparse->mutable_indices()->add_int64_data(0);
+    auto *collision = branch.mutable_g()->add_sparse_initializer();
+    collision->CopyFrom(*sparse);
+    collision->mutable_values()->set_name("Inner_tmp_0");
+    branch.mutable_g()->add_node(MakeNode("Inner", {"Inner_tmp_0"}, {"inner_result"}, "custom"));
     branch.mutable_g()->add_output()->set_name("value");
     NodeProto nested = MakeNode("Identity", {"condition"}, {"ignored"});
     AttributeProto nested_body;
@@ -1550,19 +1564,22 @@ TEST(GraphBuilder, InlineLocalFunctionsPreservesSubgraphSparseInitializerNames) 
   model.add_function(std::move(function));
 
   core::builder::GraphBuilder builder(model, SchemaLookup());
-  EXPECT_EQ(builder.InlineLocalFunctions(), 1u);
+  EXPECT_EQ(builder.InlineLocalFunctions(), 3u);
   const GraphProto inlined = builder.BuildGraph();
   for (const auto &attribute : inlined.node()[0].attribute()) {
     ASSERT_TRUE(attribute.has_g());
-    ASSERT_EQ(attribute.g().sparse_initializer().size(), 1u);
+    ASSERT_EQ(attribute.g().sparse_initializer().size(), 2u);
     EXPECT_EQ(attribute.g().sparse_initializer()[0].values().name(), "value");
+    EXPECT_EQ(attribute.g().sparse_initializer()[1].values().name(), "Inner_tmp_0");
     ASSERT_EQ(attribute.g().output().size(), 1u);
     EXPECT_EQ(attribute.g().output()[0].name(), "value");
-    ASSERT_EQ(attribute.g().node().size(), 1u);
-    ASSERT_EQ(attribute.g().node()[0].attribute().size(), 1u);
-    ASSERT_TRUE(attribute.g().node()[0].attribute()[0].has_g());
-    ASSERT_EQ(attribute.g().node()[0].attribute()[0].g().output().size(), 1u);
-    EXPECT_EQ(attribute.g().node()[0].attribute()[0].g().output()[0].name(), "value");
+    ASSERT_EQ(attribute.g().node().size(), 3u);
+    EXPECT_EQ(attribute.g().node()[0].output()[0], "Inner_tmp_1");
+    EXPECT_EQ(attribute.g().node()[1].output()[0], "inner_result");
+    ASSERT_EQ(attribute.g().node()[2].attribute().size(), 1u);
+    ASSERT_TRUE(attribute.g().node()[2].attribute()[0].has_g());
+    ASSERT_EQ(attribute.g().node()[2].attribute()[0].g().output().size(), 1u);
+    EXPECT_EQ(attribute.g().node()[2].attribute()[0].g().output()[0].name(), "value");
     ASSERT_EQ(attribute.g().quantization_annotation().size(), 1u);
     const auto &annotation = attribute.g().quantization_annotation()[0];
     EXPECT_EQ(annotation.tensor_name(), "predicate");

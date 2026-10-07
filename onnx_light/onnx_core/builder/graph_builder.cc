@@ -1137,6 +1137,26 @@ void GraphBuilder::ImportGraph(const GraphProto &graph) {
   for (const auto &initializer : graph.paged_cache_initializer()) {
     MakePagedCacheInitializer(initializer);
   }
+  std::unordered_set<std::string> sparse_names;
+  for (const auto &initializer : graph.sparse_initializer()) {
+    const std::string name = initializer.values().name().value();
+    const bool is_input = std::any_of(inputs_.begin(), inputs_.end(),
+                                      [&](const auto &input) { return input.name() == name; });
+    const auto named = [&](const auto &value) { return value.name().value() == name; };
+    const bool has_other_initializer =
+        std::any_of(initializers_.begin(), initializers_.end(), named) ||
+        std::any_of(encoded_initializers_.begin(), encoded_initializers_.end(), named) ||
+        std::any_of(paged_cache_initializers_.begin(), paged_cache_initializers_.end(), named);
+    if (name.empty() || !sparse_names.insert(name).second || has_other_initializer ||
+        (names_.find(name) != names_.end() && !is_input)) {
+      throw BuilderError("GraphBuilder: sparse initializer name is empty or already defined: '" +
+                         name + "'.");
+    }
+    if (!is_input) {
+      inherited_names_.erase(name);
+      ReserveName(name);
+    }
+  }
   const auto declarations = StructuredDeclarations(value_infos_);
   for (const auto &node : graph.node()) {
     std::vector<std::string> inputs;

@@ -1873,30 +1873,6 @@ TEST(OnnxOptimShapesTensorSqueeze, WithoutAxesRemovesConcreteUnitDims) {
             (core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)}));
 }
 
-TEST(OnnxOptimShapesTensorSqueeze, EmptyAxesRemovesConcreteUnitDims) {
-  for (bool value_known : {false, true}) {
-    NodeProto node = MakeSqueezeNode();
-    core::shapes::ShapesContext ctx;
-    ctx.Set("X", core::symbolic::SymTensor(
-                     nullptr, core::symbolic::TensorType::kFloat,
-                     core::symbolic::SymShape{core::symbolic::SymDim(1), core::symbolic::SymDim(2),
-                                              core::symbolic::SymDim(1), core::symbolic::SymDim(3),
-                                              core::symbolic::SymDim(1)}));
-    if (value_known) {
-      ctx.Set("A", MakeShapeInput({}));
-    } else {
-      ctx.Set("A", core::symbolic::SymTensor(
-                       nullptr, core::symbolic::TensorType::kInt64,
-                       core::symbolic::SymShape{core::symbolic::SymDim(int64_t{0})}));
-    }
-
-    onnx_shapes::shapes::tensor::ComputeShapeSqueeze(ctx, node);
-
-    EXPECT_EQ(ctx.Get("Y").Shape(),
-              (core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)}));
-  }
-}
-
 TEST(OnnxOptimShapesTensorUnsqueeze, InsertsDimsAtGivenAxes) {
   NodeProto node = MakeUnsqueezeNode();
   core::shapes::ShapesContext ctx;

@@ -381,7 +381,7 @@ TEST(BackendTestCaseShapeInference, ZipMapInfersSequenceOfStringKeyMapsOutputTyp
 TEST(BackendTestCaseShapeInference, NativeSqueezeEmptyAxesInfersOutputShape) {
   std::vector<TestCase> cases = CollectTestCases("Squeeze");
   for (TestCase &tc : cases) {
-    if (tc.name != "test_cc_squeeze_all_singleton") {
+    if (tc.name != "test_cc_squeeze_all_singleton_rank_five") {
       continue;
     }
     TestCaseUnloadGuard unload_guard(tc);
@@ -393,7 +393,7 @@ TEST(BackendTestCaseShapeInference, NativeSqueezeEmptyAxesInfersOutputShape) {
     EXPECT_EQ(DimsOf(model.graph().output(0).type().tensor_type()), (std::vector<int64_t>{2, 3}));
     return;
   }
-  FAIL() << "missing test_cc_squeeze_all_singleton";
+  FAIL() << "missing test_cc_squeeze_all_singleton_rank_five";
 }
 
 TEST(BackendTestCaseShapeInference, AllCollectedCasesInferOutputShapes) {

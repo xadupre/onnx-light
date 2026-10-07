@@ -868,7 +868,8 @@ TEST(BackendTestCase, SqueezeCasesRegistered) {
   };
   const std::vector<Expected> expected{
       {"test_cc_squeeze_axes", {2, 1, 3, 1}, {2, 3}},
-      {"test_cc_squeeze_all_singleton", {1, 2, 1, 3, 1}, {2, 3}},
+      {"test_cc_squeeze_all_singleton", {1, 2, 1, 3}, {2, 3}},
+      {"test_cc_squeeze_all_singleton_rank_five", {1, 2, 1, 3, 1}, {2, 3}},
   };
 
   for (const Expected &exp : expected) {

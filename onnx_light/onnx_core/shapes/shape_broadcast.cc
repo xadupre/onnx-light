@@ -91,6 +91,12 @@ SymDim BroadcastDim(const SymDim &a, const SymDim &b) {
   if (b.IsInt()) {
     return b;
   }
+  if (a.AsExpr().empty()) {
+    return b;
+  }
+  if (b.AsExpr().empty()) {
+    return a;
+  }
   // Flatten nested broadcasts and remove repeated operands before serializing.
   // Otherwise broadcast(x, broadcast(y, x)) duplicates x on every iteration.
   std::vector<std::string_view> pending{b.AsExpr(), a.AsExpr()};

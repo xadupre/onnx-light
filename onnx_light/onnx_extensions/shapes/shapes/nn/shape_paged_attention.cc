@@ -15,7 +15,8 @@ Dimension MergeDimension(const Dimension &left, const Dimension &right) {
   EXT_ENFORCE_INVALID(!left.has_dim_value() || !right.has_dim_value() ||
                           left.dim_value() == right.dim_value(),
                       "PagedAttention: incompatible dimensions.");
-  if (left.has_dim_value() || (!right.has_dim_value() && left.has_dim_param()))
+  if (left.has_dim_value() ||
+      (!right.has_dim_value() && left.has_dim_param() && !left.dim_param().empty()))
     return left;
   return right;
 }

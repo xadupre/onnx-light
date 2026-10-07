@@ -118,6 +118,44 @@ TEST(PagedAttentionShape, UnknownInputsStillInferRankFourAndFloat) {
   EXPECT_TRUE(output.shape().dim(3).has_dim_param());
 }
 
+TEST(PagedAttentionShape, NamedBatchWinsOverAnonymousDimensions) {
+  for (int named_source = 0; named_source < 5; ++named_source) {
+    auto context = PagedContext();
+    int source = 0;
+    for (const char *name : {"Q", "K", "V"}) {
+      auto type = context.GetType(name);
+      auto *batch = type.mutable_tensor_type()->mutable_shape()->mutable_dim(0);
+      batch->clear_dim_value();
+      batch->set_dim_param(source++ == named_source ? "batch" : "");
+      context.SetType(name, type);
+    }
+    auto cache = PagedCache();
+    auto *page = cache.mutable_struct_type()
+                     ->mutable_structure()
+                     ->mutable_field(0)
+                     ->mutable_type()
+                     ->mutable_sequence_type()
+                     ->mutable_elem_type()
+                     ->mutable_struct_type()
+                     ->mutable_structure();
+    for (int field : {2, 3}) {
+      auto *batch = page->mutable_field(field)
+                        ->mutable_type()
+                        ->mutable_tensor_type()
+                        ->mutable_shape()
+                        ->mutable_dim(0);
+      batch->clear_dim_value();
+      batch->set_dim_param(source++ == named_source ? "batch" : "");
+    }
+    context.SetType("past", cache);
+    context.ComputeShapeNode(PagedNode());
+    const auto &batch = context.GetType("Y").tensor_type().shape().dim(0);
+    EXPECT_FALSE(batch.has_dim_value());
+    EXPECT_TRUE(batch.has_dim_param());
+    EXPECT_EQ(batch.dim_param(), "batch") << "named source: " << named_source;
+  }
+}
+
 TEST(PagedAttentionShape, SupportsGroupedQueryAttentionAndReducedPrecision) {
   auto context = PagedContext();
   context.SetType("Q", PagedTensor({2, 16, 3, 4}, TensorProto::FLOAT16));

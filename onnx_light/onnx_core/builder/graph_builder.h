@@ -45,6 +45,7 @@
 #include <source_location>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -697,10 +698,15 @@ private:
   // Inlines every call (in this builder's nodes and, recursively, in its nested
   // subgraphs) to one of ``functions``, expanding matches to a fixed point.
   // Returns the number of call nodes inlined.
-  std::size_t InlineFunctionCalls(const std::vector<GraphBuilder *> &functions);
+  using FunctionIdentifier = std::tuple<std::string, std::string, std::string>;
+  static FunctionIdentifier MakeFunctionIdentifier(const std::string &domain,
+                                                   const std::string &name,
+                                                   const std::string &overload);
+  std::size_t InlineFunctionCalls(const std::vector<GraphBuilder *> &functions,
+                                  std::set<FunctionIdentifier> &expanded_functions);
 
   // Returns the function in ``functions`` called by ``node`` (its operator type
-  // and domain match the function name and domain), or nullptr when none does.
+  // domain and overload match the function identity), or nullptr when none does.
   static GraphBuilder *FindCalledFunction(const std::vector<GraphBuilder *> &functions,
                                           const NodeProto &node);
 
@@ -711,8 +717,9 @@ private:
                          utils::RepeatedProtoField<NodeProto> &out);
 
   // Counts, in this builder's nodes and recursively in its nested subgraphs,
-  // the nodes that call the function named ``name`` in domain ``domain``.
-  std::size_t CountFunctionCalls(const std::string &name, const std::string &domain) const;
+  // the nodes that call the function identified by ``domain``, ``name`` and ``overload``.
+  std::size_t CountFunctionCalls(const std::string &name, const std::string &domain,
+                                 const std::string &overload) const;
 
   // Maps a cheap content hash to initializers visible in scope (pointers into
   // the owning builder's ``initializers_``). Collisions are resolved by an

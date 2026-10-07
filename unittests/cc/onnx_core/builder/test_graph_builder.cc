@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <gtest/gtest.h>
+#include <iostream>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
@@ -1542,13 +1543,24 @@ TEST(GraphBuilder, InlineLocalFunctionsPreservesSubgraphSparseInitializerNames) 
     auto *parameter = annotation->add_quant_parameter_tensor_names();
     parameter->set_key("SCALE_TENSOR");
     parameter->set_value("value");
+    std::cerr << "[sparse-inlining] " << name << ": sparse=" << static_cast<const void *>(sparse)
+              << ", values=" << static_cast<const void *>(&sparse->values())
+              << ", indices=" << static_cast<const void *>(&sparse->indices())
+              << ", sparse_bytes=" << sparse->ByteSizeLong()
+              << ", values_bytes=" << sparse->values().ByteSizeLong() << std::endl;
+    GraphProto branch_copy;
+    ASSERT_NO_THROW(branch_copy.CopyFrom(branch.g()));
+    std::cerr << "[sparse-inlining] standalone branch copy succeeded" << std::endl;
     conditional.add_attribute(std::move(branch));
   }
   function.add_node(std::move(conditional));
   model.add_function(std::move(function));
 
+  std::cerr << "[sparse-inlining] importing model" << std::endl;
   core::builder::GraphBuilder builder(model, SchemaLookup());
+  std::cerr << "[sparse-inlining] expanding local functions" << std::endl;
   EXPECT_EQ(builder.InlineLocalFunctions(), 1u);
+  std::cerr << "[sparse-inlining] exporting graph" << std::endl;
   const GraphProto inlined = builder.BuildGraph();
   for (const auto &attribute : inlined.node()[0].attribute()) {
     ASSERT_TRUE(attribute.has_g());

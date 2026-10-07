@@ -1409,8 +1409,16 @@ TEST(GraphBuilder, InlineLocalFunctionsMaterializesGraphCallAttributes) {
   body_reference.set_name("body");
   body_reference.set_ref_attr_name("body");
   body_reference.set_type(AttributeProto::AttributeType::GRAPH);
+  NodeProto wrapper_node = MakeNode("Identity", {"value"}, {"wrapper_result"});
+  wrapper_node.add_attribute(std::move(body_reference));
+  AttributeProto wrapper;
+  wrapper.set_name("wrapper");
+  wrapper.set_type(AttributeProto::AttributeType::GRAPH);
+  wrapper.mutable_g()->set_name("wrapper");
+  wrapper.mutable_g()->add_node(std::move(wrapper_node));
+  wrapper.mutable_g()->add_output()->set_name("wrapper_result");
   utils::RepeatedProtoField<AttributeProto> function_attributes;
-  function_attributes.push_back(body_reference);
+  function_attributes.push_back(std::move(wrapper));
   function.MakeNode("Identity", {"value"}, {"result"}, "", "", function_attributes);
   function.MakeOutput("result");
 
@@ -1432,12 +1440,17 @@ TEST(GraphBuilder, InlineLocalFunctionsMaterializesGraphCallAttributes) {
   const GraphProto graph = builder.BuildGraph();
   ASSERT_EQ(graph.node().size(), 1u);
   ASSERT_EQ(graph.node()[0].attribute().size(), 1u);
-  const auto &inlined_body = graph.node()[0].attribute()[0];
-  EXPECT_EQ(inlined_body.name(), "body");
-  ASSERT_TRUE(inlined_body.has_g());
-  ASSERT_EQ(inlined_body.g().node().size(), 1u);
-  EXPECT_EQ(inlined_body.g().node()[0].op_type(), "Identity");
-  EXPECT_EQ(inlined_body.g().node()[0].input()[0], "value");
+  const auto &inlined_wrapper = graph.node()[0].attribute()[0];
+  EXPECT_EQ(inlined_wrapper.name(), "wrapper");
+  ASSERT_TRUE(inlined_wrapper.has_g());
+  ASSERT_EQ(inlined_wrapper.g().node().size(), 1u);
+  const auto &wrapper_body = inlined_wrapper.g().node()[0];
+  EXPECT_EQ(wrapper_body.input()[0], "X");
+  ASSERT_EQ(wrapper_body.attribute().size(), 1u);
+  ASSERT_TRUE(wrapper_body.attribute()[0].has_g());
+  ASSERT_EQ(wrapper_body.attribute()[0].g().node().size(), 1u);
+  EXPECT_EQ(wrapper_body.attribute()[0].g().node()[0].op_type(), "Identity");
+  EXPECT_EQ(wrapper_body.attribute()[0].g().node()[0].input()[0], "value");
 }
 
 TEST(GraphBuilder, InlineLocalFunctionsPrunesOnlyUnreferencedReplacedCallSubgraphs) {
@@ -1504,8 +1517,8 @@ TEST(GraphBuilder, InlineLocalFunctionsPreservesSubgraphSparseInitializerNames) 
   auto *value = graph->add_input();
   value->set_name("X");
   value->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::DataType::FLOAT);
-  graph->add_initializer(MakeInitializer<float>("replacement", {1}, {2.0f}));
-  graph->add_initializer(MakeInitializer<float>("Inner_tmp_0", {1}, {2.0f}));
+  graph->add_initializer(MakeInitializer<float>("replacement", {2}, {2.0f, 3.0f}));
+  graph->add_initializer(MakeInitializer<float>("Inner_tmp_0", {2}, {2.0f, 3.0f}));
   graph->add_node(MakeNode("Choose", {"predicate", "X"}, {"Y"}, "custom"));
   graph->add_output()->set_name("Y");
 
@@ -1543,7 +1556,13 @@ TEST(GraphBuilder, InlineLocalFunctionsPreservesSubgraphSparseInitializerNames) 
     sparse->mutable_indices()->add_dims(1);
     sparse->mutable_indices()->add_int64_data(0);
     auto *collision = branch.mutable_g()->add_sparse_initializer();
-    collision->CopyFrom(*sparse);
+    collision->add_dims(1);
+    collision->mutable_values()->set_data_type(TensorProto::DataType::FLOAT);
+    collision->mutable_values()->add_dims(1);
+    collision->mutable_values()->add_float_data(1.0f);
+    collision->mutable_indices()->set_data_type(TensorProto::DataType::INT64);
+    collision->mutable_indices()->add_dims(1);
+    collision->mutable_indices()->add_int64_data(0);
     collision->mutable_values()->set_name("Inner_tmp_0");
     branch.mutable_g()->add_node(MakeNode("Inner", {"Inner_tmp_0"}, {"inner_result"}, "custom"));
     branch.mutable_g()->add_output()->set_name("value");
@@ -1560,8 +1579,6 @@ TEST(GraphBuilder, InlineLocalFunctionsPreservesSubgraphSparseInitializerNames) 
     auto *parameter = annotation->add_quant_parameter_tensor_names();
     parameter->set_key("SCALE_TENSOR");
     parameter->set_value("value");
-    GraphProto branch_copy;
-    ASSERT_NO_THROW(branch_copy.CopyFrom(branch.g()));
     conditional.add_attribute(std::move(branch));
   }
   function.add_node(std::move(conditional));
@@ -1569,6 +1586,9 @@ TEST(GraphBuilder, InlineLocalFunctionsPreservesSubgraphSparseInitializerNames) 
 
   core::builder::GraphBuilder builder(model, SchemaLookup());
   EXPECT_EQ(builder.InlineLocalFunctions(), 3u);
+  for (const auto &subgraph : builder.Subgraphs()) {
+    EXPECT_FALSE(subgraph->HasShape("Inner_tmp_0"));
+  }
   EXPECT_EQ(builder.RemoveDuplicateInitializers(), 1u);
   const GraphProto inlined = builder.ToGraph();
   for (const auto &attribute : inlined.node()[0].attribute()) {

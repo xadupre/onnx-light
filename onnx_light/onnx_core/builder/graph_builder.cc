@@ -204,8 +204,7 @@ void SeedDeclaredValueInfo(ShapesContext &shapes, const ValueInfoProto &value) {
   }
 }
 
-void RewriteGraphCaptures(GraphProto &graph,
-                          const std::unordered_map<std::string, std::string> &rename) {
+std::unordered_set<std::string> GraphDefinedNames(const GraphProto &graph) {
   std::unordered_set<std::string> defined;
   for (const auto &input : graph.input()) {
     defined.insert(input.name().value());
@@ -229,7 +228,12 @@ void RewriteGraphCaptures(GraphProto &graph,
       }
     }
   }
+  return defined;
+}
 
+void RewriteGraphLocalCaptures(GraphProto &graph,
+                               const std::unordered_map<std::string, std::string> &rename) {
+  const auto defined = GraphDefinedNames(graph);
   const auto rewrite = [&](std::string &name) {
     if (defined.count(name) == 0) {
       const auto found = rename.find(name);
@@ -238,21 +242,9 @@ void RewriteGraphCaptures(GraphProto &graph,
       }
     }
   };
-  auto nested_rename = rename;
-  for (const auto &name : defined) {
-    nested_rename.erase(name);
-  }
   for (auto &node : graph.ref_node()) {
     for (auto &input : node.ref_input()) {
       rewrite(input);
-    }
-    for (auto &attribute : node.ref_attribute()) {
-      if (attribute.has_g()) {
-        RewriteGraphCaptures(*attribute.mutable_g(), nested_rename);
-      }
-      for (auto &nested : attribute.ref_graphs()) {
-        RewriteGraphCaptures(nested, nested_rename);
-      }
     }
   }
   for (auto &output : graph.ref_output()) {
@@ -277,19 +269,18 @@ void RewriteGraphCaptures(GraphProto &graph,
   }
 }
 
-void ResolveFunctionAttributes(GraphProto &graph, const AttributeBindings &bindings);
+using ValueRename = std::unordered_map<std::string, std::string>;
+
+void ResolveFunctionAttributes(GraphProto &graph, const AttributeBindings &bindings,
+                               const ValueRename *rename, bool function_owned);
 
 void ResolveFunctionAttributes(NodeProto &node, const AttributeBindings &bindings,
-                               std::vector<bool> *rewrite_graph_captures = nullptr) {
+                               const ValueRename *rename, bool enclosing_function_owned) {
   utils::RepeatedProtoField<AttributeProto> resolved;
   resolved.reserve(node.attribute().size());
-  if (rewrite_graph_captures != nullptr) {
-    rewrite_graph_captures->clear();
-    rewrite_graph_captures->reserve(node.attribute().size());
-  }
   for (const auto &attribute : node.attribute()) {
     AttributeProto clone;
-    bool rewrite_captures = true;
+    bool function_owned = enclosing_function_owned;
     if (!attribute.ref_attr_name().empty()) {
       const auto found = bindings.find(attribute.ref_attr_name().value());
       if (found == bindings.end()) {
@@ -297,29 +288,39 @@ void ResolveFunctionAttributes(NodeProto &node, const AttributeBindings &binding
                            attribute.ref_attr_name().value() + "'.");
       }
       clone = *found->second.attribute;
-      rewrite_captures = !found->second.caller_scoped;
+      function_owned = !found->second.caller_scoped;
       clone.set_name(attribute.name().value());
       clone.clear_ref_attr_name();
     } else {
       clone = attribute;
     }
     if (clone.has_g()) {
-      ResolveFunctionAttributes(*clone.mutable_g(), bindings);
+      ResolveFunctionAttributes(*clone.mutable_g(), bindings, rename, function_owned);
     }
     for (auto &graph : clone.ref_graphs()) {
-      ResolveFunctionAttributes(graph, bindings);
+      ResolveFunctionAttributes(graph, bindings, rename, function_owned);
     }
     resolved.push_back(std::move(clone));
-    if (rewrite_graph_captures != nullptr) {
-      rewrite_graph_captures->push_back(rewrite_captures);
-    }
   }
   node.ref_attribute() = std::move(resolved);
 }
 
-void ResolveFunctionAttributes(GraphProto &graph, const AttributeBindings &bindings) {
+void ResolveFunctionAttributes(GraphProto &graph, const AttributeBindings &bindings,
+                               const ValueRename *rename, bool function_owned) {
+  ValueRename nested_rename;
+  const ValueRename *nested = rename;
+  if (rename != nullptr) {
+    nested_rename = *rename;
+    for (const auto &name : GraphDefinedNames(graph)) {
+      nested_rename.erase(name);
+    }
+    nested = &nested_rename;
+    if (function_owned) {
+      RewriteGraphLocalCaptures(graph, *rename);
+    }
+  }
   for (auto &node : graph.ref_node()) {
-    ResolveFunctionAttributes(node, bindings);
+    ResolveFunctionAttributes(node, bindings, nested, function_owned);
   }
 }
 
@@ -1172,6 +1173,7 @@ void GraphBuilder::ImportGraph(const GraphProto &graph) {
     }
     if (!is_input) {
       inherited_names_.erase(name);
+      compute_.Shapes().Erase(name);
       ReserveName(name);
     }
   }
@@ -2197,7 +2199,6 @@ void GraphBuilder::AppendInlinedBody(GraphBuilder &function, const NodeProto &ca
   // Resolve the entire body before adding initializers, reserving names or importing subgraphs.
   struct MaterializedNode {
     NodeProto node;
-    std::vector<bool> rewrite_graph_captures;
   };
   std::vector<MaterializedNode> materialized_body;
   materialized_body.reserve(function.nodes_.size());
@@ -2205,7 +2206,8 @@ void GraphBuilder::AppendInlinedBody(GraphBuilder &function, const NodeProto &ca
     MaterializedNode materialized;
     materialized.node = body;
     function.MaterializeGraphReferences(materialized.node);
-    ResolveFunctionAttributes(materialized.node, bindings, &materialized.rewrite_graph_captures);
+    NodeProto validated = materialized.node;
+    ResolveFunctionAttributes(validated, bindings, nullptr, true);
     materialized_body.push_back(std::move(materialized));
   }
 
@@ -2292,27 +2294,20 @@ void GraphBuilder::AppendInlinedBody(GraphBuilder &function, const NodeProto &ca
   };
 
   for (const MaterializedNode &materialized : materialized_body) {
-    NodeProto node = materialized.node;
+    NodeProto resolved = materialized.node;
+    ResolveFunctionAttributes(resolved, bindings, &rename, true);
+    NodeProto node = resolved;
     node.ref_input().clear();
     node.ref_output().clear();
     node.ref_attribute().clear();
-    for (std::size_t i = 0; i < materialized.node.input().size(); ++i) {
-      node.add_input(remap(std::string(materialized.node.input(static_cast<std::size_t>(i)))));
+    for (std::size_t i = 0; i < resolved.input().size(); ++i) {
+      node.add_input(remap(std::string(resolved.input(static_cast<std::size_t>(i)))));
     }
-    for (std::size_t i = 0; i < materialized.node.output().size(); ++i) {
-      node.add_output(remap(std::string(materialized.node.output(static_cast<std::size_t>(i)))));
+    for (std::size_t i = 0; i < resolved.output().size(); ++i) {
+      node.add_output(remap(std::string(resolved.output(static_cast<std::size_t>(i)))));
     }
-    for (std::size_t i = 0; i < materialized.node.attribute().size(); ++i) {
-      AttributeProto cloned = materialized.node.attribute(i);
-      if (materialized.rewrite_graph_captures[i]) {
-        if (cloned.has_g()) {
-          RewriteGraphCaptures(*cloned.mutable_g(), rename);
-        }
-        for (auto &graph : cloned.ref_graphs()) {
-          RewriteGraphCaptures(graph, rename);
-        }
-      }
-      node.add_attribute(std::move(cloned));
+    for (const auto &attribute : resolved.attribute()) {
+      node.add_attribute(attribute);
     }
     const std::unordered_set<std::string> excluded_inherited_names(node.output().begin(),
                                                                    node.output().end());

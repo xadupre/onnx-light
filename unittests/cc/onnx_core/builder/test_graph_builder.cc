@@ -1504,6 +1504,8 @@ TEST(GraphBuilder, InlineLocalFunctionsPreservesSubgraphSparseInitializerNames) 
   auto *value = graph->add_input();
   value->set_name("X");
   value->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::DataType::FLOAT);
+  graph->add_initializer(MakeInitializer<float>("replacement", {1}, {2.0f}));
+  graph->add_initializer(MakeInitializer<float>("Inner_tmp_0", {1}, {2.0f}));
   graph->add_node(MakeNode("Choose", {"predicate", "X"}, {"Y"}, "custom"));
   graph->add_output()->set_name("Y");
 
@@ -1567,6 +1569,7 @@ TEST(GraphBuilder, InlineLocalFunctionsPreservesSubgraphSparseInitializerNames) 
 
   core::builder::GraphBuilder builder(model, SchemaLookup());
   EXPECT_EQ(builder.InlineLocalFunctions(), 3u);
+  EXPECT_EQ(builder.RemoveDuplicateInitializers(), 1u);
   const GraphProto inlined = builder.ToGraph();
   for (const auto &attribute : inlined.node()[0].attribute()) {
     ASSERT_TRUE(attribute.has_g());
@@ -1576,6 +1579,7 @@ TEST(GraphBuilder, InlineLocalFunctionsPreservesSubgraphSparseInitializerNames) 
     ASSERT_EQ(attribute.g().output().size(), 1u);
     EXPECT_EQ(attribute.g().output()[0].name(), "value");
     ASSERT_EQ(attribute.g().node().size(), 3u);
+    EXPECT_EQ(attribute.g().node()[0].input()[0], "Inner_tmp_0");
     EXPECT_EQ(attribute.g().node()[0].output()[0], "Inner_tmp_1");
     EXPECT_EQ(attribute.g().node()[1].output()[0], "inner_result");
     ASSERT_EQ(attribute.g().node()[2].attribute().size(), 1u);
@@ -1709,6 +1713,60 @@ TEST(GraphBuilder, InlineLocalFunctionsKeepsUncalledFunction) {
   // No call site, so nothing is inlined and the definition is left in place.
   EXPECT_EQ(builder.InlineLocalFunctions(), 0u);
   EXPECT_TRUE(builder.HasLocalFunction("MyFct"));
+}
+
+TEST(GraphBuilder, InlineLocalFunctionsPreservesAndMatchesOverloads) {
+  ModelProto model;
+  model.set_ir_version(10);
+  model.add_opset("", 23);
+  model.add_opset("custom", 1);
+  GraphProto *graph = model.mutable_graph();
+  graph->set_name("g");
+  graph->add_input()->set_name("X");
+  graph->add_node(MakeNode("Outer", {"X"}, {"Y"}, "custom"));
+  graph->add_node(MakeNode("Inner", {"X"}, {"Z"}, "custom"));
+  graph->add_output()->set_name("Y");
+  graph->add_output()->set_name("Z");
+
+  FunctionProto inner;
+  inner.set_name("Inner");
+  inner.set_domain("custom");
+  inner.set_overload("typed");
+  inner.add_input("a");
+  inner.add_output("r");
+  inner.add_opset("", 23);
+  inner.add_node(MakeNode("Identity", {"a"}, {"r"}));
+  model.add_function(std::move(inner));
+
+  FunctionProto outer;
+  outer.set_name("Outer");
+  outer.set_domain("custom");
+  outer.add_input("a");
+  outer.add_output("r");
+  outer.add_opset("", 23);
+  NodeProto inner_call = MakeNode("Inner", {"a"}, {"r"}, "custom");
+  inner_call.set_overload("typed");
+  inner_call.set_doc_string("preserved documentation");
+  inner_call.add_metadata("purpose", "preserve-node-fields");
+  outer.add_node(std::move(inner_call));
+  model.add_function(std::move(outer));
+
+  core::builder::GraphBuilder builder(model, SchemaLookup());
+  EXPECT_EQ(builder.InlineLocalFunctions({{"custom", "Outer"}}), 1u);
+  ASSERT_EQ(builder.Nodes().size(), 2u);
+  EXPECT_EQ(builder.Nodes()[0].op_type(), "Inner");
+  EXPECT_EQ(builder.Nodes()[0].overload(), "typed");
+  EXPECT_EQ(builder.Nodes()[0].doc_string(), "preserved documentation");
+  ASSERT_EQ(builder.Nodes()[0].metadata_props().size(), 1u);
+  EXPECT_EQ(builder.Nodes()[0].metadata_props()[0].value(), "preserve-node-fields");
+  EXPECT_TRUE(builder.Nodes()[1].overload().empty());
+
+  EXPECT_EQ(builder.InlineLocalFunctions({{"custom", "Inner"}}), 1u);
+  ASSERT_EQ(builder.Nodes().size(), 2u);
+  EXPECT_EQ(builder.Nodes()[0].op_type(), "Identity");
+  EXPECT_EQ(builder.Nodes()[1].op_type(), "Inner");
+  EXPECT_TRUE(builder.Nodes()[1].overload().empty());
+  EXPECT_FALSE(builder.HasLocalFunction("Inner"));
 }
 
 TEST(GraphBuilder, InlineLocalFunctionsResolvesAttributeReferences) {

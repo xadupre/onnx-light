@@ -1615,6 +1615,9 @@ void GraphBuilder::CollectImplicitInputs(std::unordered_set<std::string> &out) c
   for (const auto &initializer : paged_cache_initializers_) {
     defined.insert(initializer.name().value());
   }
+  for (const auto &initializer : graph_template_.sparse_initializer()) {
+    defined.insert(initializer.values().name().value());
+  }
   for (const NodeProto &node : nodes_) {
     for (std::size_t i = 0; i < node.output().size(); ++i) {
       std::string name(node.output(static_cast<std::size_t>(i)));
@@ -2118,9 +2121,11 @@ GraphBuilder *GraphBuilder::FindCalledFunction(const std::vector<GraphBuilder *>
                                                const NodeProto &node) {
   const std::string node_domain = node.domain().empty() ? std::string() : node.domain().value();
   const std::string normalised = NormaliseDomain(node_domain);
+  const std::string overload = node.overload().value();
   for (GraphBuilder *function : functions) {
     if (function->name() == node.op_type().value() &&
-        NormaliseDomain(function->function_domain_) == normalised) {
+        NormaliseDomain(function->function_domain_) == normalised &&
+        function->function_template_.overload().value() == overload) {
       return function;
     }
   }
@@ -2128,19 +2133,21 @@ GraphBuilder *GraphBuilder::FindCalledFunction(const std::vector<GraphBuilder *>
 }
 
 GraphBuilder::FunctionIdentifier GraphBuilder::MakeFunctionIdentifier(const std::string &domain,
-                                                                      const std::string &name) {
-  return {NormaliseDomain(domain), name};
+                                                                      const std::string &name,
+                                                                      const std::string &overload) {
+  return {NormaliseDomain(domain), name, overload};
 }
 
-std::size_t GraphBuilder::CountFunctionCalls(const std::string &name,
-                                             const std::string &domain) const {
+std::size_t GraphBuilder::CountFunctionCalls(const std::string &name, const std::string &domain,
+                                             const std::string &overload) const {
   const std::string normalised = NormaliseDomain(domain);
   const std::function<std::size_t(const GraphProto &)> count_graph =
       [&](const GraphProto &graph) -> std::size_t {
     std::size_t count = 0;
     for (const auto &node : graph.node()) {
       const std::string node_domain = node.domain().empty() ? std::string() : node.domain().value();
-      if (node.op_type().value() == name && NormaliseDomain(node_domain) == normalised) {
+      if (node.op_type().value() == name && NormaliseDomain(node_domain) == normalised &&
+          node.overload().value() == overload) {
         ++count;
       }
       for (const auto &attribute : node.attribute()) {
@@ -2157,12 +2164,13 @@ std::size_t GraphBuilder::CountFunctionCalls(const std::string &name,
   std::size_t count = 0;
   for (const NodeProto &node : nodes_) {
     const std::string node_domain = node.domain().empty() ? std::string() : node.domain().value();
-    if (node.op_type().value() == name && NormaliseDomain(node_domain) == normalised) {
+    if (node.op_type().value() == name && NormaliseDomain(node_domain) == normalised &&
+        node.overload().value() == overload) {
       ++count;
     }
   }
   for (const auto &subgraph : subgraphs_) {
-    count += subgraph->CountFunctionCalls(name, domain);
+    count += subgraph->CountFunctionCalls(name, domain, overload);
   }
   for (const auto &attribute : function_attribute_protos_) {
     if (attribute.has_g()) {
@@ -2284,14 +2292,10 @@ void GraphBuilder::AppendInlinedBody(GraphBuilder &function, const NodeProto &ca
   };
 
   for (const MaterializedNode &materialized : materialized_body) {
-    NodeProto node;
-    node.set_op_type(materialized.node.op_type().value());
-    if (!materialized.node.domain().empty()) {
-      node.set_domain(materialized.node.domain().value());
-    }
-    if (!materialized.node.name().empty()) {
-      node.set_name(materialized.node.name().value());
-    }
+    NodeProto node = materialized.node;
+    node.ref_input().clear();
+    node.ref_output().clear();
+    node.ref_attribute().clear();
     for (std::size_t i = 0; i < materialized.node.input().size(); ++i) {
       node.add_input(remap(std::string(materialized.node.input(static_cast<std::size_t>(i)))));
     }
@@ -2340,7 +2344,8 @@ std::size_t GraphBuilder::InlineFunctionCalls(const std::vector<GraphBuilder *> 
           AppendInlinedBody(*function, node, kept);
           replaced_subgraphs.insert(original_subgraphs.begin(), original_subgraphs.end());
           expanded_functions.insert(
-              MakeFunctionIdentifier(function->function_domain_, function->name()));
+              MakeFunctionIdentifier(function->function_domain_, function->name(),
+                                     function->function_template_.overload().value()));
           ++inlined;
           changed = true;
         } else {
@@ -2424,15 +2429,18 @@ std::size_t GraphBuilder::InlineLocalFunctions(
     changed = false;
     for (std::size_t i = 0; i < local_functions_.size(); ++i) {
       GraphBuilder *function = local_functions_[i].get();
+      const std::string overload = function->function_template_.overload().value();
       const FunctionIdentifier identifier =
-          MakeFunctionIdentifier(function->function_domain_, function->name());
+          MakeFunctionIdentifier(function->function_domain_, function->name(), overload);
       if (expanded_functions.find(identifier) == expanded_functions.end()) {
         continue;
       }
-      std::size_t callers = CountFunctionCalls(function->name(), function->function_domain_);
+      std::size_t callers =
+          CountFunctionCalls(function->name(), function->function_domain_, overload);
       for (const auto &other : local_functions_) {
         if (other.get() != function) {
-          callers += other->CountFunctionCalls(function->name(), function->function_domain_);
+          callers +=
+              other->CountFunctionCalls(function->name(), function->function_domain_, overload);
         }
       }
       if (callers == 0) {

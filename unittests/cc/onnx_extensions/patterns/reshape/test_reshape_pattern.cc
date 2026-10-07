@@ -8,6 +8,7 @@
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -102,6 +103,32 @@ TEST(ReshapePattern, ReplacesIdentityReshapeAndRejectsDifferentTarget) {
   rejected.MakeNode("Reshape", {"x", "shape"}, {"out"});
   core::builder::GraphGraph rejected_graph(rejected);
   EXPECT_EQ(pattern.Match(rejected_graph, rejected.Nodes()[0]).pattern, nullptr);
+}
+
+TEST(ReshapePattern, PreservesFlattenAfterArrayFeatureExtractor) {
+  core::builder::GraphBuilder builder("extract_labels", SchemaLookup());
+  builder.MakeInput("labels", core::symbolic::TensorType::kInt64, Shape({4}));
+  AddShape(builder, "indices", {3, 1});
+  AddShape(builder, "flat", {-1});
+  builder.MakeNode("ArrayFeatureExtractor", {"labels", "indices"}, {"selected"}, "ai.onnx.ml");
+  builder.MakeNode("Reshape", {"selected", "flat"}, {"flattened"});
+  NodeProto cast = MakeNode("Cast", {"flattened"}, {"out"});
+  AddAttribute<int64_t>(cast, "to", TensorProto::DataType::INT32);
+  builder.MakeNode("Cast", {"flattened"}, {"out"}, "", "", cast.attribute());
+  builder.MakeOutput("out");
+
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<onnx_patterns::ReshapePattern>());
+  patterns.push_back(std::make_unique<onnx_patterns::ShapedBasedReshapePattern>());
+  core::builder::GraphGraph graph(builder, std::move(patterns));
+  ASSERT_TRUE(graph.HasShape("selected"));
+  EXPECT_EQ(graph.GetShape("selected").Shape(), Shape({1, 2}));
+  graph.Optimize();
+  ASSERT_EQ(builder.Nodes().size(), 3u);
+  EXPECT_EQ(builder.Nodes()[0].op_type().value(), "ArrayFeatureExtractor");
+  EXPECT_EQ(builder.Nodes()[1].op_type().value(), "Reshape");
+  EXPECT_EQ(builder.Nodes()[1].input()[0].value(), "selected");
+  EXPECT_EQ(builder.Nodes()[2].input()[0].value(), "flattened");
 }
 
 TEST(ShapedBasedReshapePattern, RemovesZeroPrefixReshapeAndRejectsNonzeroPrefix) {

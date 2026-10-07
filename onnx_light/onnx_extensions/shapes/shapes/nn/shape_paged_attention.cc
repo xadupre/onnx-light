@@ -15,7 +15,8 @@ Dimension MergeDimension(const Dimension &left, const Dimension &right) {
   EXT_ENFORCE_INVALID(!left.has_dim_value() || !right.has_dim_value() ||
                           left.dim_value() == right.dim_value(),
                       "PagedAttention: incompatible dimensions.");
-  if (left.has_dim_value() || (!right.has_dim_value() && left.has_dim_param()))
+  if (left.has_dim_value() ||
+      (!right.has_dim_value() && left.has_dim_param() && !left.dim_param().empty()))
     return left;
   return right;
 }
@@ -34,6 +35,8 @@ std::array<Dimension, 4> TensorDimensions(const TypeProto &type, bool logical_ca
                         "PagedAttention: tensors must be FLOAT, FLOAT16, or BFLOAT16.");
   }
   std::array<Dimension, 4> dims;
+  for (Dimension &dim : dims)
+    dim.set_dim_param("");
   if (tensor.has_shape()) {
     EXT_ENFORCE_INVALID(tensor.shape().dim_size() == 4,
                         "PagedAttention: tensors must have rank 4.");

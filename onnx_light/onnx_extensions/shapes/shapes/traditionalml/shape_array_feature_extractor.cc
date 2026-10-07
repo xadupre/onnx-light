@@ -54,6 +54,9 @@ void ComputeShapeArrayFeatureExtractor(ShapesContext &ctx, const NodeProto &node
 
   SymShape output_shape;
   const SymShape &input_shape = input.Shape();
+  if (input_shape.Rank() == 1) {
+    output_shape.PushBack(SymDim(1));
+  }
   for (std::size_t i = 0; i + 1 < input_shape.Rank(); ++i) {
     output_shape.PushBack(input_shape[i]);
   }

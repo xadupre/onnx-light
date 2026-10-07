@@ -213,7 +213,7 @@ def make_tensor_type_proto(
         for i, d in enumerate(shape):
             dim = tensor_shape_proto.dim.add()
             if d is None:
-                pass
+                dim.dim_param = ""
             elif isinstance(d, int):
                 dim.dim_value = d
             elif isinstance(d, str):
@@ -279,7 +279,7 @@ def make_sparse_tensor_type_proto(
         for i, d in enumerate(shape):
             dim = sparse_tensor_shape_proto.dim.add()
             if d is None:
-                pass
+                dim.dim_param = ""
             elif isinstance(d, int):
                 dim.dim_value = d
             elif isinstance(d, str):

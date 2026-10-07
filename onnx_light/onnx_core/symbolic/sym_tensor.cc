@@ -544,10 +544,9 @@ SymCmpResult SymTensor::Cmp(const SymTensor &other) const noexcept {
 namespace {
 
 // Builds an SymShape from a TensorShapeProto, preserving symbolic
-// dimensions: ``dim_value`` becomes a concrete int dim, ``dim_param``
-// becomes a symbolic dim with the same name, and an unset dim becomes
-// an empty-string placeholder. Mirrors the historical helper that
-// lived in shape_inference.cc.
+// dimensions: ``dim_value`` becomes a concrete int dim and ``dim_param``
+// becomes a symbolic dim with the same name. Mirrors the historical helper
+// that lived in shape_inference.cc.
 SymShape ShapeFromTensorShapeProto(const TensorShapeProto &sp) {
   SymShape shape;
   for (std::size_t i = 0; i < sp.dim().size(); ++i) {
@@ -557,7 +556,8 @@ SymShape ShapeFromTensorShapeProto(const TensorShapeProto &sp) {
     } else if (d.has_dim_param()) {
       shape.PushBack(SymDim(d.dim_param()));
     } else {
-      shape.PushBack(SymDim(std::string()));
+      EXT_ENFORCE_INVALID(false, "SymTensorFromValueInfo: dimension ", i,
+                          " must have a concrete value or a symbolic expression.");
     }
   }
   return shape;

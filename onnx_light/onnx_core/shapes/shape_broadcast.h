@@ -40,6 +40,8 @@ namespace ONNX_LIGHT_NAMESPACE::core::shapes {
  *   - if one is a concrete integer (different from ``1``) and the
  *     other is symbolic: the concrete integer wins (it is the only
  *     value compatible with broadcasting against itself);
+ *   - if one symbolic expression is empty (an anonymous dynamic dimension):
+ *     the other symbolic expression wins;
  *   - if both are different symbolic expressions: a fresh symbolic
  *     dimension is produced, encoding the broadcast as
  *     ``"broadcast(<a>, <b>)"`` so that the symbolic information is

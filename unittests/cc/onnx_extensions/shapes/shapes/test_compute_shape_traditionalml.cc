@@ -198,6 +198,21 @@ TEST(OnnxOptimShapeArrayFeatureExtractor, ReplacesLastDimWithFlattenedIndicesCou
             (core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)}));
 }
 
+TEST(OnnxOptimShapeArrayFeatureExtractor, RankOneInputProducesRow) {
+  NodeProto node = MakeArrayFeatureExtractorNode();
+  core::shapes::ShapesContext ctx;
+  SeedInput(ctx, core::symbolic::TensorType::kInt64,
+            core::symbolic::SymShape{core::symbolic::SymDim(5)});
+  ctx.Set("Y", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kInt64,
+                                         core::symbolic::SymShape{core::symbolic::SymDim(3)}));
+
+  ctx.ComputeShapeNode(node);
+
+  ASSERT_TRUE(ctx.Has("Z"));
+  EXPECT_EQ(ctx.Get("Z").Shape(),
+            (core::symbolic::SymShape{core::symbolic::SymDim(1), core::symbolic::SymDim(3)}));
+}
+
 TEST(OnnxOptimShapeArrayFeatureExtractor, PreservesSingleSymbolicIndicesDim) {
   NodeProto node = MakeArrayFeatureExtractorNode();
 

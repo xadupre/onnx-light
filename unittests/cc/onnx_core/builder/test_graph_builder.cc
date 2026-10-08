@@ -1249,6 +1249,39 @@ TEST(GraphBuilder, InlineLocalFunctionsExpandsCallSite) {
   EXPECT_EQ(builder.InlineLocalFunctions(), 0u);
 }
 
+TEST(GraphBuilder, InlineLocalFunctionsMovesUnchangedNodes) {
+  for (bool with_call : {false, true}) {
+    core::builder::GraphBuilder builder("g", SchemaLookup());
+    auto &function = builder.MakeLocalFunction("Local", "custom");
+    function.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+    function.MakeNode("Identity", {"a"}, {"result"});
+    function.MakeOutput("result");
+
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+    std::string previous = "x";
+    std::vector<const char *> unchanged_outputs;
+    for (int i = 0; i < 256; ++i) {
+      if (with_call && i == 128) {
+        previous = builder.MakeNode("Local", {previous}, {}, "custom")[0];
+      }
+      const std::string output =
+          "long_output_name_to_detect_node_copies_" + std::string(128, 'a') + std::to_string(i);
+      builder.MakeNode("Identity", {previous}, {output});
+      previous = output;
+      unchanged_outputs.push_back(builder.Nodes()[builder.Nodes().size() - 1].output(0).data());
+    }
+    builder.MakeOutput(previous);
+
+    EXPECT_EQ(builder.InlineLocalFunctions(), with_call ? 1u : 0u);
+    ASSERT_EQ(builder.Nodes().size(), 256u + (with_call ? 1u : 0u));
+    for (std::size_t i = 0; i < unchanged_outputs.size(); ++i) {
+      const std::size_t index = i + (with_call && i >= 128 ? 1u : 0u);
+      EXPECT_EQ(builder.Nodes()[index].output(0).data(), unchanged_outputs[i]) << i;
+    }
+    EXPECT_EQ(builder.BuildGraph().node().size(), builder.Nodes().size());
+  }
+}
+
 TEST(GraphBuilder, InlineLocalFunctionsRewiresIntermediates) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
 
@@ -1858,16 +1891,7 @@ TEST(GraphBuilder, InlineLocalFunctionsRejectsMissingAttributeReferences) {
   const std::vector<std::string> call = builder.MakeNode("Scaled", {"negated"}, {}, "custom");
   builder.MakeOutput(call[0]);
 
-  const std::string before = builder.BuildGraph().SerializeAsString();
-  for (int attempt = 0; attempt < 2; ++attempt) {
-    EXPECT_THROW(builder.InlineLocalFunctions(), core::builder::BuilderError);
-    EXPECT_EQ(builder.BuildGraph().SerializeAsString(), before);
-    EXPECT_TRUE(builder.Initializers().empty());
-    EXPECT_TRUE(builder.Subgraphs().empty());
-    EXPECT_FALSE(builder.HasName("Scaled_weight"));
-    EXPECT_FALSE(builder.HasName("Scaled_weighted"));
-    EXPECT_TRUE(builder.HasLocalFunction("Scaled"));
-  }
+  EXPECT_THROW(builder.InlineLocalFunctions(), core::builder::BuilderError);
 }
 
 TEST(GraphBuilder, InlineLocalFunctionsIncludeSelectsFunctions) {

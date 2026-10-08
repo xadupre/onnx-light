@@ -755,6 +755,33 @@ class ReferenceEvaluator:
         return self._runner.used_kernels()
 
     @property
+    def kernel_usage_enabled(self) -> bool:
+        """Returns whether backend kernel usage recording is enabled."""
+        return bool(self._ctx.kernel_usage_enabled)
+
+    def set_kernel_usage_enabled(self, enabled: bool) -> None:
+        """Enables or disables backend kernel usage recording.
+
+        Existing entries are preserved when recording is disabled. The
+        setting and recorded entries are shared with nested subgraphs and
+        model-local functions, but not with independent evaluators.
+        """
+        self._ctx.set_kernel_usage_enabled(enabled)
+
+    def get_kernel_usage(self) -> list[str]:
+        """Returns a snapshot of recorded backend kernel names.
+
+        Recording is disabled by default and retains at most the first 1024
+        invocations after each :meth:`clear_kernel_usage` call. Backends may
+        include implementation-path diagnostics in addition to kernel names.
+        """
+        return list(self._ctx.get_kernel_usage())
+
+    def clear_kernel_usage(self) -> None:
+        """Clears recorded backend kernel names without disabling recording."""
+        self._ctx.clear_kernel_usage()
+
+    @property
     def cpu_execution_policy(self) -> Any:
         """Returns the requested CPU execution policy."""
         return self._runner.cpu_execution_policy

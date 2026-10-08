@@ -427,6 +427,21 @@ class TestReferenceEvaluator(ExtTestCase):
         np.testing.assert_array_equal(y, np.array([11.0, 22.0, 33.5], dtype=np.float32))
         self.assertEqual(sess.used_kernels(), ["ai.onnx:Abs", "ai.onnx:Add"])
 
+    def test_kernel_usage_recording_api(self):
+        model = parser.parse_model(_ABS_ADD_MODEL_SRC)
+        sess = ReferenceEvaluator(model)
+        self.assertFalse(sess.kernel_usage_enabled)
+        self.assertEqual(sess.get_kernel_usage(), [])
+
+        sess.set_kernel_usage_enabled(True)
+        self.assertTrue(sess.kernel_usage_enabled)
+        self.assertEqual(sess.get_kernel_usage(), [])
+
+        sess.clear_kernel_usage()
+        sess.set_kernel_usage_enabled(False)
+        self.assertFalse(sess.kernel_usage_enabled)
+        self.assertEqual(sess.get_kernel_usage(), [])
+
     def test_run_explicit_output_names(self):
         model = parser.parse_model(_ABS_ADD_MODEL_SRC)
         sess = ReferenceEvaluator(model)

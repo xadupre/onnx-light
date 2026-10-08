@@ -2367,6 +2367,16 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def_prop_ro(
           "kernel_ctx", [](RuntimeContext &rt) -> KernelContext & { return rt.kernel_ctx(); },
           nb::rv_policy::reference_internal, "Kernel construction context (opset).")
+      .def_prop_ro("kernel_usage_enabled", &RuntimeContext::kernel_usage_enabled,
+                   "Whether backend kernel usage recording is enabled.")
+      .def("set_kernel_usage_enabled", &RuntimeContext::set_kernel_usage_enabled,
+           nb::arg("enabled"),
+           "Enables or disables backend kernel usage recording without clearing "
+           "existing entries.")
+      .def("get_kernel_usage", &RuntimeContext::GetKernelUsage,
+           "Returns an independent snapshot of recorded backend kernel names.")
+      .def("clear_kernel_usage", &RuntimeContext::ClearKernelUsage,
+           "Clears recorded backend kernel names without disabling recording.")
       .def("has", &RuntimeContext::Has, nb::arg("name"),
            "Returns ``True`` if a tensor named ``name`` is currently held.")
       .def("remove", &RuntimeContext::Remove, nb::arg("name"),

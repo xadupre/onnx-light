@@ -8,6 +8,7 @@
 #include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/kernels/kernel_run_helpers.h"
+#include "onnx_extensions/kernels/kernels/nn/variance_accumulator.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -101,26 +102,19 @@ void GroupNormalization::operator()(const Tensor &x, const Tensor &scale, const 
         for (int64_t task = begin; task < end; ++task) {
           const int64_t g = task % num_groups;
           const int64_t base = task * group_block;
-          double sum = 0.0;
-          for (int64_t i = 0; i < group_block; ++i) {
-            sum += static_cast<double>(px[base + i]);
-          }
-          const double mean = group_block > 0 ? sum / static_cast<double>(group_block) : 0.0;
-          double sqsum = 0.0;
-          for (int64_t i = 0; i < group_block; ++i) {
-            const double d = static_cast<double>(px[base + i]) - mean;
-            sqsum += d * d;
-          }
-          const double var = group_block > 0 ? sqsum / static_cast<double>(group_block) : 0.0;
+          const auto stats = statistics::Accumulate<double>(
+              group_block, [&](int64_t i) { return px[base + i]; },
+              tuning().parallel_minimum_elements);
+          const double mean = stats.mean;
+          const double var = stats.Variance();
           const float inv_std = 1.0f / std::sqrt(static_cast<float>(var) + epsilon);
           const float fmean = static_cast<float>(mean);
           for (int64_t k = 0; k < group_size; ++k) {
             const int64_t c = g * group_size + k;
             const float s = p_scale[c] * inv_std;
-            const float o = p_bias[c] - fmean * s;
             const int64_t ch_base = base + k * spatial;
             for (int64_t i = 0; i < spatial; ++i) {
-              py[ch_base + i] = px[ch_base + i] * s + o;
+              py[ch_base + i] = (px[ch_base + i] - fmean) * s + p_bias[c];
             }
           }
         }

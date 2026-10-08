@@ -10,6 +10,7 @@
 #include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/kernels/kernel_run_helpers.h"
+#include "onnx_extensions/kernels/kernels/nn/variance_accumulator.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -228,17 +229,11 @@ void LayerNormalization::operator()(const Tensor &x, const Tensor &scale, const 
       [&](int64_t begin, int64_t end) {
         for (int64_t o = begin; o < end; ++o) {
           const int64_t base = o * norm_size;
-          double sum = 0.0;
-          for (int64_t i = 0; i < norm_size; ++i) {
-            sum += static_cast<double>(px[base + i]);
-          }
-          const double m = norm_size > 0 ? sum / static_cast<double>(norm_size) : 0.0;
-          double sqdiff = 0.0;
-          for (int64_t i = 0; i < norm_size; ++i) {
-            const double d = static_cast<double>(px[base + i]) - m;
-            sqdiff += d * d;
-          }
-          const double var = norm_size > 0 ? sqdiff / static_cast<double>(norm_size) : 0.0;
+          const auto stats = statistics::Accumulate<double>(
+              norm_size, [&](int64_t i) { return px[base + i]; },
+              tuning().parallel_minimum_elements);
+          const double m = stats.mean;
+          const double var = stats.Variance();
           const float inv = 1.0f / std::sqrt(static_cast<float>(var) + epsilon);
           pmean[o] = static_cast<float>(m);
           pinv[o] = inv;

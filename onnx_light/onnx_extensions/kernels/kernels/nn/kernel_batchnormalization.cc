@@ -9,6 +9,7 @@
 #include "onnx_core/runtime/memory/temporary_buffer.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/kernels/kernel_run_helpers.h"
+#include "onnx_extensions/kernels/kernels/nn/variance_accumulator.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -97,9 +98,8 @@ void BatchNormalization::operator()(const Tensor &x, const Tensor &scale, const 
   const float *px = x.AsFloat();
   float *py = output.AsFloat();
 
-  // Pre-compute the per-channel normalization scale and offset:
-  //   y = (x - mean) * inv_std * scale + B
-  //     = x * (scale * inv_std) + (B - mean * scale * inv_std)
+  // Pre-compute per-channel scales while retaining the centered subtraction:
+  // expanding it into an offset loses precision for large input means.
   // Scratch buffers are drawn from the runtime allocator backing ``output``
   // (when it is allocator-backed) and fall back to inline storage otherwise.
   RawBufferAllocator *allocator = rt ? rt->execution_allocator() : nullptr;
@@ -112,7 +112,7 @@ void BatchNormalization::operator()(const Tensor &x, const Tensor &scale, const 
   for (int64_t c = 0; c < C; ++c) {
     const float inv_std = 1.0f / std::sqrt(p_var[c] + epsilon);
     scale_inv_std[c] = p_scale[c] * inv_std;
-    offset[c] = p_bias[c] - p_mean[c] * scale_inv_std[c];
+    offset[c] = p_bias[c];
   }
 
   if (x.shape.size() == 1u) {
@@ -123,7 +123,7 @@ void BatchNormalization::operator()(const Tensor &x, const Tensor &scale, const 
         N, tuning().parallel_minimum_elements,
         [&](int64_t begin, int64_t end) {
           for (int64_t i = begin; i < end; ++i) {
-            py[i] = px[i] * s + o;
+            py[i] = (px[i] - p_mean[0]) * s + o;
           }
         },
         "BatchNormalization");
@@ -140,7 +140,7 @@ void BatchNormalization::operator()(const Tensor &x, const Tensor &scale, const 
           const float o = offset[c];
           const int64_t base = task * spatial;
           for (int64_t i = 0; i < spatial; ++i) {
-            py[base + i] = px[base + i] * s + o;
+            py[base + i] = (px[base + i] - p_mean[c]) * s + o;
           }
         }
       },
@@ -191,42 +191,21 @@ BatchNormalization::TrainingForward(const Tensor &x, const Tensor &scale, const 
   float *saved_mean = saved_mean_t.AsFloat();
   float *saved_var = saved_var_t.AsFloat();
   if (x.shape.size() == 1u) {
-    double sum = 0.0;
-    for (int64_t i = 0; i < N; ++i) {
-      sum += static_cast<double>(px[i]);
-    }
-    const double mean = sum / static_cast<double>(per_channel);
-    double sq = 0.0;
-    for (int64_t i = 0; i < N; ++i) {
-      const double d = static_cast<double>(px[i]) - mean;
-      sq += d * d;
-    }
-    saved_mean[0] = static_cast<float>(mean);
-    saved_var[0] = static_cast<float>(sq / static_cast<double>(per_channel));
+    const auto stats = statistics::Accumulate<double>(
+        N, [&](int64_t i) { return px[i]; }, tuning().parallel_minimum_elements);
+    saved_mean[0] = static_cast<float>(stats.mean);
+    saved_var[0] = static_cast<float>(stats.Variance());
   } else {
     ParallelFor(
         C, TaskGrain(tuning().parallel_minimum_elements, per_channel * 2),
         [&](int64_t begin, int64_t end) {
           for (int64_t c = begin; c < end; ++c) {
-            double sum = 0.0;
-            for (int64_t n = 0; n < N; ++n) {
-              const int64_t base = (n * C + c) * spatial;
-              for (int64_t i = 0; i < spatial; ++i) {
-                sum += static_cast<double>(px[base + i]);
-              }
-            }
-            const double mean = sum / static_cast<double>(per_channel);
-            double sq = 0.0;
-            for (int64_t n = 0; n < N; ++n) {
-              const int64_t base = (n * C + c) * spatial;
-              for (int64_t i = 0; i < spatial; ++i) {
-                const double d = static_cast<double>(px[base + i]) - mean;
-                sq += d * d;
-              }
-            }
-            saved_mean[static_cast<size_t>(c)] = static_cast<float>(mean);
-            saved_var[static_cast<size_t>(c)] =
-                static_cast<float>(sq / static_cast<double>(per_channel));
+            const auto stats = statistics::Accumulate<double>(
+                per_channel,
+                [&](int64_t i) { return px[((i / spatial) * C + c) * spatial + i % spatial]; },
+                tuning().parallel_minimum_elements);
+            saved_mean[static_cast<size_t>(c)] = static_cast<float>(stats.mean);
+            saved_var[static_cast<size_t>(c)] = static_cast<float>(stats.Variance());
           }
         },
         "BatchNormalizationTraining");

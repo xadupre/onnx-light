@@ -8,6 +8,7 @@
 #include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/kernels/kernel_run_helpers.h"
+#include "onnx_extensions/kernels/kernels/nn/variance_accumulator.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -96,22 +97,14 @@ void InstanceNormalization::operator()(const Tensor &x, const Tensor &scale, con
         for (int64_t task = begin; task < end; ++task) {
           const int64_t c = task % C;
           const int64_t base = task * spatial;
-          double sum = 0.0;
-          for (int64_t i = 0; i < spatial; ++i) {
-            sum += static_cast<double>(px[base + i]);
-          }
-          const double mean = spatial > 0 ? sum / static_cast<double>(spatial) : 0.0;
-          double sqsum = 0.0;
-          for (int64_t i = 0; i < spatial; ++i) {
-            const double d = static_cast<double>(px[base + i]) - mean;
-            sqsum += d * d;
-          }
-          const double var = spatial > 0 ? sqsum / static_cast<double>(spatial) : 0.0;
+          const auto stats = statistics::Accumulate<double>(
+              spatial, [&](int64_t i) { return px[base + i]; }, tuning().parallel_minimum_elements);
+          const double mean = stats.mean;
+          const double var = stats.Variance();
           const float inv_std = 1.0f / std::sqrt(static_cast<float>(var) + epsilon);
           const float s = p_scale[c] * inv_std;
-          const float o = p_bias[c] - static_cast<float>(mean) * s;
           for (int64_t i = 0; i < spatial; ++i) {
-            py[base + i] = px[base + i] * s + o;
+            py[base + i] = (px[base + i] - static_cast<float>(mean)) * s + p_bias[c];
           }
         }
       },

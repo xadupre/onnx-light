@@ -26,3 +26,4 @@ kernels
     recurrent_common
     kernel_svm_common
     kernel_tree_ensemble_common
+    variance_accumulator

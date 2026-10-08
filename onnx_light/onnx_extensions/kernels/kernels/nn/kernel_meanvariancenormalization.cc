@@ -6,7 +6,9 @@
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/kernels/parallel_for.h"
+#include "onnx_core/runtime/memory/temporary_buffer.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_extensions/kernels/kernels/nn/variance_accumulator.h"
 #include <array>
 #include <cmath>
 #include <cstdint>
@@ -84,39 +86,21 @@ void ComputeMvn(const Tensor &x, Tensor &output, const Shape &axes, RawBufferAll
   EXT_ENFORCE_INVALID(reduced_size > 0,
                       "kernel::MeanVarianceNormalization: reduced size must be > 0.");
 
-  // The per-lane scratch buffers are acquired from the runtime allocator (when
-  // one is provided) so no working memory is allocated outside it; they fall
-  // back to inline storage when ``allocator`` is null.
-  const size_t scratch_n_bytes = static_cast<size_t>(lane_count) * sizeof(double);
-  Tensor sum_buf = MakeOutputTensor(DataType::DOUBLE, {lane_count}, scratch_n_bytes, allocator);
-  Tensor sqsum_buf = MakeOutputTensor(DataType::DOUBLE, {lane_count}, scratch_n_bytes, allocator);
-  Tensor mean_buf = MakeOutputTensor(DataType::DOUBLE, {lane_count}, scratch_n_bytes, allocator);
-  double *sum = sum_buf.AsDouble();
-  double *sqsum = sqsum_buf.AsDouble();
-  double *mean = mean_buf.AsDouble();
-  for (int64_t lane = 0; lane < lane_count; ++lane) {
-    sum[static_cast<size_t>(lane)] = 0.0;
-    sqsum[static_cast<size_t>(lane)] = 0.0;
-    mean[static_cast<size_t>(lane)] = 0.0;
-  }
-
   const T *px = x.As<T>();
   T *py = output.As<T>();
-
-  for (int64_t idx = 0; idx < total; ++idx) {
-    const int64_t lane = ComputeLane(idx, dims, reduce_mask);
-    sum[static_cast<size_t>(lane)] += static_cast<double>(px[idx]);
-  }
-
-  const double reduced_size_d = static_cast<double>(reduced_size);
+  core::runtime::detail::TemporaryTypedBuffer<statistics::VarianceAccumulator<double>> stats_buf(
+      static_cast<size_t>(lane_count), allocator, "kernel::MeanVarianceNormalization statistics");
+  auto *stats = stats_buf.data();
   for (int64_t lane = 0; lane < lane_count; ++lane) {
-    mean[static_cast<size_t>(lane)] = sum[static_cast<size_t>(lane)] / reduced_size_d;
+    stats[lane] = {};
   }
-
-  for (int64_t idx = 0; idx < total; ++idx) {
-    const int64_t lane = ComputeLane(idx, dims, reduce_mask);
-    const double centered = static_cast<double>(px[idx]) - mean[static_cast<size_t>(lane)];
-    sqsum[static_cast<size_t>(lane)] += centered * centered;
+  if (lane_count == 1) {
+    stats[0] =
+        statistics::Accumulate<double>(total, [&](int64_t i) { return px[i]; }, minimum_elements);
+  } else {
+    for (int64_t idx = 0; idx < total; ++idx) {
+      stats[ComputeLane(idx, dims, reduce_mask)].Add(static_cast<double>(px[idx]));
+    }
   }
 
   ParallelFor(
@@ -124,10 +108,9 @@ void ComputeMvn(const Tensor &x, Tensor &output, const Shape &axes, RawBufferAll
       [&](int64_t begin, int64_t end) {
         for (int64_t idx = begin; idx < end; ++idx) {
           const int64_t lane = ComputeLane(idx, dims, reduce_mask);
-          const double variance = sqsum[static_cast<size_t>(lane)] / reduced_size_d;
-          const double denom = std::sqrt(variance + kMvnEpsilon);
-          py[idx] = static_cast<T>(
-              (static_cast<double>(px[idx]) - mean[static_cast<size_t>(lane)]) / denom);
+          const auto &stat = stats[lane];
+          const double denom = std::sqrt(stat.Variance() + kMvnEpsilon);
+          py[idx] = static_cast<T>((static_cast<double>(px[idx]) - stat.mean) / denom);
         }
       },
       "MeanVarianceNormalization");

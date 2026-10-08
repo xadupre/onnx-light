@@ -30,17 +30,16 @@ void ApplyInferredType(const TypeProto &type, ValueInfoProto &value) {
   value.ref_type() = std::move(inferred);
 }
 
-// Checks the node belongs to a supported domain: the default ONNX
-// domain (empty string or "ai.onnx") or the traditional ML domain
-// ("ai.onnx.ml"). Throws std::invalid_argument otherwise.
-// Domain-specific dispatch can be added here when other domains gain
-// support.
+// Recognizes domains supported by the built-in shape dispatcher.
+bool IsSupportedDomain(const NodeProto &node) {
+  return node.domain().empty() || node.domain() == kOnnxDomain || node.domain() == kOnnxMlDomain ||
+         node.domain() == kOnnxPreviewDomain || node.domain() == kAiRtDomain ||
+         node.domain() == kOnnxPreviewTrainingDomain;
+}
+
 void CheckOnnxDomain(const NodeProto &node) {
-  EXT_ENFORCE_INVALID(
-      node.domain().empty() || node.domain() == kOnnxDomain || node.domain() == kOnnxMlDomain ||
-          node.domain() == kOnnxPreviewDomain || node.domain() == kAiRtDomain ||
-          node.domain() == kOnnxPreviewTrainingDomain,
-      "ComputeShapeNode: unsupported domain '", node.domain(), "' for op '", node.op_type(), "'.");
+  EXT_ENFORCE_INVALID(IsSupportedDomain(node), "ComputeShapeNode: unsupported domain '",
+                      node.domain(), "' for op '", node.op_type(), "'.");
 }
 
 // Returns the ``"<domain>:<name>"`` identifier used as a key in
@@ -1022,7 +1021,47 @@ void ShapesContext::ComputeShapeGraph(const GraphProto &graph) {
     const ValueInfoProto &vi = graph.input()[i];
     SeedInputValueInfo(vi, *this);
   }
-  ComputeShapes(graph.node());
+  std::unordered_map<std::string, const ValueInfoProto *> declared_outputs;
+  for (const auto &vi : graph.value_info()) {
+    declared_outputs[vi.name()] = &vi;
+  }
+  for (const auto &vi : graph.output()) {
+    declared_outputs[vi.name()] = &vi;
+  }
+  for (std::size_t i = 0; i < graph.node().size(); ++i) {
+    const NodeProto &node = graph.node()[i];
+    current_node_index_ = static_cast<int64_t>(i);
+    const std::string key =
+        ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node) + ":" + node.op_type().value();
+    if (!IsSupportedDomain(node) &&
+        !HasLocalFunction(LocalFunctionKey(node.domain(), node.op_type())) &&
+        GetCustomShapeInferenceFunction(node.domain(), node.op_type()) == nullptr &&
+        DispatchTable().find(key) == DispatchTable().end() && node.output_size() != 0) {
+      bool annotated = true;
+      for (const auto &name : node.output()) {
+        if (name.empty()) {
+          annotated = false;
+          break;
+        }
+        auto it = declared_outputs.find(name);
+        if (it == declared_outputs.end() || !ValueInfoHasTensorShape(*it->second)) {
+          annotated = false;
+          break;
+        }
+      }
+      if (annotated) {
+        // Unknown custom operators may carry authoritative converter-provided output shapes.
+        CheckInputsAvailable(node);
+        CheckOutputsNotAvailable(node);
+        for (const auto &name : node.output()) {
+          SeedInputValueInfo(*declared_outputs.at(name), *this);
+        }
+        continue;
+      }
+    }
+    ComputeShapeNode(node);
+  }
+  current_node_index_ = -1;
   for (const auto &vi : graph.output()) {
     if (vi.has_type() && HasStructuredType(vi.type())) {
       EXT_ENFORCE_INVALID(HasType(vi.name()),

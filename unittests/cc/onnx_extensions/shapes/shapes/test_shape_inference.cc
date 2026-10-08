@@ -1235,6 +1235,43 @@ TEST(OnnxOptimShapeInference, ComputeShapeNodeRejectsUnknownNonLocalFunctionDoma
   EXPECT_THROW(ctx.ComputeShapeNode(node), std::invalid_argument);
 }
 
+TEST(OnnxOptimShapeInference, InferShapesModelPreservesAnnotatedCustomOperatorOutput) {
+  ModelProto model;
+  model.set_ir_version(8);
+  auto *opset = model.add_opset_import();
+  opset->set_domain("");
+  opset->set_version(18);
+  opset = model.add_opset_import();
+  opset->set_domain("intermediate");
+  opset->set_version(1);
+  auto *graph = model.add_graph();
+  graph->set_name("g");
+  auto *input = graph->add_input();
+  input->set_name("X");
+  SetValueInfoTensorType(*input, TensorProto::DataType::FLOAT, {2, 3});
+  auto *annotated = graph->add_value_info();
+  annotated->set_name("attention");
+  SetValueInfoTensorType(*annotated, TensorProto::DataType::FLOAT, {2, 3});
+  graph->add_output()->set_name("Y");
+  *graph->add_node() = MakeNode("LocalAttention_to10", {"X"}, {"attention"}, "intermediate");
+  *graph->add_node() = MakeNode("Abs", {"attention"}, {"Y"});
+
+  ModelProto unannotated = model;
+  unannotated.mutable_graph()->mutable_value_info()->clear();
+  EXPECT_THROW(core::shapes::InferShapesModel(unannotated), std::invalid_argument);
+
+  core::shapes::InferShapesModel(model);
+
+  ASSERT_TRUE(model.graph().value_info(0).type().tensor_type().has_shape());
+  EXPECT_EQ(model.graph().value_info(0).type().tensor_type().shape().dim(0).dim_value(), 2);
+  EXPECT_EQ(model.graph().value_info(0).type().tensor_type().shape().dim(1).dim_value(), 3);
+  const auto &output = model.graph().output(0).type().tensor_type();
+  EXPECT_EQ(output.elem_type(), TensorProto::DataType::FLOAT);
+  ASSERT_EQ(output.shape().dim_size(), 2);
+  EXPECT_EQ(output.shape().dim(0).dim_value(), 2);
+  EXPECT_EQ(output.shape().dim(1).dim_value(), 3);
+}
+
 TEST(OnnxOptimShapeInference, ComputeShapeNodeUsesRegisteredCustomDomainCallback) {
   NodeProto node = MakeNode("CustomIdentity", {"X"}, {"Y"}, "com.acme");
   core::shapes::ShapesContext ctx;

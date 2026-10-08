@@ -89,6 +89,24 @@ class TestPatternSelection(ExtTestCase):
                     [node.op_type for node in self.builder.build_graph().node], ["Neg", "Neg"]
                 )
 
+    def test_remove_unused_option_preserves_dead_end(self):
+        model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 18]>\n'
+            "agraph (float[2] x) => (float[2] y) {\n"
+            "  dead = Add(x, x)\n"
+            "  y = Neg(x)\n"
+            "}\n"
+        )
+        for remove_unused in (False, True):
+            with self.subTest(remove_unused=remove_unused):
+                builder = optim.GraphBuilder(model)
+                self.assertEqual(len(builder.to_model().graph.node), 2)
+                rewrites = optim.GraphGraph(builder, patterns=False).optimize(
+                    remove_unused=remove_unused
+                )
+                self.assertEqual(len(builder.to_model().graph.node), 1 if remove_unused else 2)
+                self.assertEqual(len(rewrites), 1 if remove_unused else 0)
+
     def test_device_includes_generic_and_matching_patterns_and_sets_target(self):
         for device, specific in ((Device.kCPU, self.cpu), (Device.kGPU0, self.gpu)):
             with self.subTest(device=device):

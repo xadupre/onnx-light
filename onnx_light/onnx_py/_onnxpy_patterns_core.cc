@@ -203,17 +203,19 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
       .def(
           "optimize",
           [](GraphGraph &graph, int max_iter, bool report,
-             const core::builder::ConstantFoldingOptions &folding_options) -> nb::object {
+             const core::builder::ConstantFoldingOptions &folding_options,
+             bool remove_unused) -> nb::object {
             if (!report) {
-              return nb::cast(graph.Optimize(max_iter, nullptr, folding_options));
+              return nb::cast(graph.Optimize(max_iter, nullptr, folding_options, remove_unused));
             }
             OptimizationReport statistics;
             std::vector<LocalRewriting> rewrites =
-                graph.Optimize(max_iter, &statistics, folding_options);
+                graph.Optimize(max_iter, &statistics, folding_options, remove_unused);
             return nb::make_tuple(std::move(rewrites), std::move(statistics));
           },
           nb::arg("max_iter") = -1, nb::kw_only(), nb::arg("report") = false,
-          nb::arg("folding_options") = core::builder::ConstantFoldingOptions{})
+          nb::arg("folding_options") = core::builder::ConstantFoldingOptions{},
+          nb::arg("remove_unused") = true)
       .def(
           "node_before",
           [](const GraphGraph &graph, nb::handle name) {

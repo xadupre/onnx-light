@@ -196,14 +196,15 @@ void GraphGraph::Rebuild() {
 }
 
 std::vector<LocalRewriting> GraphGraph::Optimize(int max_iter, OptimizationReport *report,
-                                                 const ConstantFoldingOptions &folding_options) {
-  return OptimizeImpl(max_iter, report, {}, folding_options);
+                                                 const ConstantFoldingOptions &folding_options,
+                                                 bool remove_unused) {
+  return OptimizeImpl(max_iter, report, {}, folding_options, remove_unused);
 }
 
-std::vector<LocalRewriting>
-GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report,
-                         const std::vector<std::string> &graph_path,
-                         const ConstantFoldingOptions &folding_options) {
+std::vector<LocalRewriting> GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report,
+                                                     const std::vector<std::string> &graph_path,
+                                                     const ConstantFoldingOptions &folding_options,
+                                                     bool remove_unused) {
   if (max_iter < -1) {
     throw BuilderError("GraphGraph::Optimize: max_iter must be at least -1.");
   }
@@ -233,8 +234,9 @@ GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report,
       subgraph_start = std::chrono::steady_clock::now();
     }
     GraphGraph child_graph(subgraph, patterns_, do_not_remove_, this, position_limit);
-    std::vector<LocalRewriting> child_rewrites = child_graph.OptimizeImpl(
-        max_iter, report == nullptr ? nullptr : &child_report, child_path, folding_options);
+    std::vector<LocalRewriting> child_rewrites =
+        child_graph.OptimizeImpl(max_iter, report == nullptr ? nullptr : &child_report, child_path,
+                                 folding_options, remove_unused);
 
     for (LocalRewriting &rewriting : child_rewrites) {
       rewriting.iteration += rewrite_batch;
@@ -571,7 +573,7 @@ GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report,
       cleanup_start = std::chrono::steady_clock::now();
     }
     const std::size_t rewrites_before_cleanup = applied.size();
-    const std::size_t cleaned = Cleanup(applied, rewrite_batch);
+    const std::size_t cleaned = Cleanup(applied, rewrite_batch, remove_unused);
     for (std::size_t i = rewrites_before_cleanup; i < applied.size(); ++i) {
       applied[i].graph_path = graph_path;
     }
@@ -591,7 +593,8 @@ GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report,
   return applied;
 }
 
-std::size_t GraphGraph::Cleanup(std::vector<LocalRewriting> &rewrites, std::size_t &rewrite_batch) {
+std::size_t GraphGraph::Cleanup(std::vector<LocalRewriting> &rewrites, std::size_t &rewrite_batch,
+                                bool remove_unused) {
   const auto record_nodes = [&](const std::string &name, const auto &cleanup) {
     const std::size_t node_count = builder_.nodes_.size();
     const std::size_t initializer_count = builder_.initializers_.size();
@@ -634,8 +637,10 @@ std::size_t GraphGraph::Cleanup(std::vector<LocalRewriting> &rewrites, std::size
   cleaned += record_nodes("RemoveIdentityNodes", [&](auto &renames) {
     return builder_.RemoveIdentityNodesImpl(false, &renames);
   });
-  cleaned += record_nodes("RemoveUnusedNodes",
-                          [&](auto &) { return builder_.RemoveUnusedNodesImpl(false); });
+  if (remove_unused) {
+    cleaned += record_nodes("RemoveUnusedNodes",
+                            [&](auto &) { return builder_.RemoveUnusedNodesImpl(false); });
+  }
 
   const std::size_t node_count = builder_.nodes_.size();
   const std::size_t initializer_count = builder_.initializers_.size();

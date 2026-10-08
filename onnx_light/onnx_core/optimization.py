@@ -247,6 +247,8 @@ class GraphGraph(_C.GraphGraph):
     the builder device. Builder registrations override global registrations
     before selection; repeated explicit names keep the last instance.
     Disabling patterns does not disable the optimizer's cleanup passes.
+    Pass ``remove_unused=False`` to :meth:`optimize` to disable only the unused-node
+    cleanup pass; other cleanup passes may still remove nodes or initializers.
     """
 
     def __init__(

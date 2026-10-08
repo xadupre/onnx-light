@@ -460,13 +460,6 @@ class ReferenceEvaluator:
         self._input_names: list[str] = inputs
         self._output_names: list[str] = list(outputs)
 
-        # Pre-compute the opset version and KernelContext once at construction
-        # time instead of rebuilding them on every run() call.
-        version: int = int(self._opsets.get("", self._opsets.get("ai.onnx", 0)) or 0)
-        if version == 0 and self._opsets:
-            version = int(max(self._opsets.values()))
-        self._kernel_ctx = _runtime.KernelContext(_runtime.default_opset(version))
-
         # Build the RuntimeContext once at construction time and reuse it for
         # every :meth:`run` call. Keeping a single context alive across runs
         # amortises the per-model ExecutionPlan analysis (cached inside the
@@ -498,13 +491,19 @@ class ReferenceEvaluator:
             if create_io_arena:
                 io_allocator = _runtime.IOArena(arena_capacity)
 
-        self._ctx = _runtime.RuntimeContext(
-            self._kernel_ctx,
+        context_options = dict(
             verbose=self._verbose,
             events_enabled=self._events_enabled,
             allocator=allocator,
             io_allocator=io_allocator,
         )
+        if self._model is None and self._function is None:
+            version = int(self._opsets.get("", self._opsets.get("ai.onnx", 0)) or 0)
+            self._ctx = _runtime.RuntimeContext(
+                _runtime.KernelContext(_runtime.default_opset(version)), **context_options
+            )
+        else:
+            self._ctx = _runtime.RuntimeContext(**context_options)
         if self._model is not None:
             _runtime.register_model_functions(self._model, self._ctx)
 
@@ -518,7 +517,7 @@ class ReferenceEvaluator:
         self._custom_kernels: dict[str, Any] = {}
 
         if self._model is not None:
-            execution_root = self._model.graph
+            execution_root = self._model
         elif self._function is not None:
             execution_root = self._function
         else:

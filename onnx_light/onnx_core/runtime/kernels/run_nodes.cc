@@ -885,6 +885,8 @@ public:
     // Resolve kernels once on first run, reuse on subsequent calls.
     if (!session_) {
       session_ = std::make_unique<RuntimeSession>(*plan_);
+      if (!func_.opset_import().empty())
+        session_->SetOpsetImports(func_.opset_import());
     }
     session_->Run(child);
 
@@ -1171,20 +1173,7 @@ Tensors RunModel(const ModelProto &model, Tensors inputs, int verbose) {
   EXT_ENFORCE_INVALID(model.has_graph(), "RunModel: the ModelProto does not contain a graph.");
   const GraphProto &graph = model.graph();
 
-  // Derive the default-domain (ai.onnx) opset version from the model's imports
-  // so kernels resolve against the operator versions the model targets.
-  int64_t opset_version = 0;
-  const auto &imports = model.opset_import();
-  for (size_t i = 0; i < imports.size(); ++i) {
-    const OperatorSetIdProto &osi = imports[i];
-    if (osi.domain().empty()) {
-      opset_version = osi.version();
-      break;
-    }
-  }
-
-  RuntimeContext rt(KernelContext(DefaultOpset(opset_version)),
-                    RuntimeContextOptions{.verbose = verbose});
+  RuntimeContext rt(RuntimeContextOptions{.verbose = verbose});
   RegisterModelFunctions(model, rt);
 
   // Seed the external inputs (keyed by tensor name), then the graph's

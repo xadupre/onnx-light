@@ -178,6 +178,10 @@ public:
   explicit RuntimeSession(const ExecutionPlan &plan, int verbose = 0);
   RuntimeSession(const ExecutionPlan &plan, RuntimeSessionOptions options);
 
+  /// Sets the opset imports for a plan-backed function session before its first run.
+  /// Model sessions automatically take their imports from the model instead.
+  void SetOpsetImports(const utils::RepeatedProtoField<OperatorSetIdProto> &imports);
+
   // A session caches one owning ``std::unique_ptr<KernelBase>`` per node (see
   // :cpp:member:`kernels_`), so it is move-only. It is always created in place
   // (by value inside :cpp:class:`SubgraphSession`, or via ``std::make_shared``)
@@ -437,6 +441,9 @@ private:
   /// plan is passed in through the plan-taking constructor.
   ExecutionPlan default_plan_;
   const ExecutionPlan &plan_;
+  /// Empty for legacy graph/plan sessions, which use the caller's context opset
+  /// unless they are nested under a model or function session.
+  std::optional<OpsetImports> opset_imports_;
   std::unique_ptr<PreparedExecutionState> prepared_execution_state_;
   std::vector<PreparedKernel> kernels_;
   const GraphProto *initializer_graph_ = nullptr;

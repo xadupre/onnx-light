@@ -42,7 +42,6 @@
 using namespace ONNX_LIGHT_NAMESPACE;
 using core::backend_test::CollectTestCases;
 using core::backend_test::DataSet;
-using core::backend_test::DefaultOpset;
 using core::backend_test::TestCase;
 using core::backend_test::TestCaseUnloadGuard;
 using core::runtime::ExecutionPlan;
@@ -52,25 +51,10 @@ using core::runtime::RuntimeContext;
 using core::runtime::RuntimeSession;
 using core::runtime::Tensor;
 using core::runtime::TensorFromProto;
-using onnx_kernels::kernel::KernelContext;
 
 namespace Test {
 
 namespace {
-
-constexpr int64_t kFallbackDefaultOpsetVersion = 18;
-
-// Returns the version of the default (empty-domain) ai.onnx opset imported by
-// ``model``, falling back to ``kFallbackDefaultOpsetVersion`` when none is
-// declared.
-int64_t GetDefaultOpsetVersion(const ModelProto &model) {
-  for (const auto &opset : model.ref_opset_import()) {
-    if (opset.ref_domain().empty()) {
-      return opset.version();
-    }
-  }
-  return kFallbackDefaultOpsetVersion;
-}
 
 // Cases whose expected outputs are not reproduced bit-for-bit by the runtime
 // because the reference data is codec-dependent:
@@ -395,7 +379,7 @@ std::pair<ModelProto, std::vector<DataSet>> BuildLinkedAttributeLocalFunctionCas
 }
 
 void ExpectModelOutputsMatchDataSet(const ModelProto &model, const DataSet &ds) {
-  RuntimeContext rt(KernelContext(DefaultOpset(GetDefaultOpsetVersion(model))));
+  RuntimeContext rt;
   const GraphProto &graph = model.ref_graph();
   RegisterModelFunctions(model, rt);
   for (const Tensor &t : ds.inputs) {
@@ -411,6 +395,7 @@ void ExpectModelOutputsMatchDataSet(const ModelProto &model, const DataSet &ds) 
   }
   const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
   RuntimeSession session(plan);
+  session.SetOpsetImports(model.opset_import());
   ASSERT_NO_THROW(session.Run(rt));
   ASSERT_EQ(ds.outputs.size(), graph.output().size());
   for (size_t i = 0; i < graph.output().size(); ++i) {
@@ -531,7 +516,6 @@ TEST(BackendRunModelAllCases, RunEveryModelTwiceWithStableMemoryPeak) {
       // of worker scheduling.
       core::runtime::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
       RuntimeContext rt(
-          KernelContext(DefaultOpset(GetDefaultOpsetVersion(model))),
           core::runtime::RuntimeContextOptions{.allocator = track_peak ? &alloc : nullptr});
       rt.set_release_intermediates(true);
       RegisterModelFunctions(model, rt);
@@ -540,6 +524,7 @@ TEST(BackendRunModelAllCases, RunEveryModelTwiceWithStableMemoryPeak) {
       RuntimeSession session(plan, core::runtime::RuntimeSessionOptions{
                                        .parameters = core::runtime::RuntimeParameters(1),
                                    });
+      session.SetOpsetImports(model.opset_import());
       session.SetInitializers(graph);
 
       // Seed inputs, maps and initializers once. These are the tensors that

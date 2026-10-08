@@ -14,6 +14,7 @@
 #include "onnx_core/graph/graph_manipulations.h"
 #include "onnx_core/runtime/kernels/run_nodes_internal.h"
 #include "onnx_core/shapes/shapes_context.h"
+#include "onnx_lib/defs/schema.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
@@ -80,6 +81,24 @@ private:
   CpuExecutorScope scope_;
 };
 
+class SessionOpsetScope {
+public:
+  SessionOpsetScope(RuntimeContext &rt, const OpsetImports *imports)
+      : rt_(rt), previous_imports_(rt.opset_imports()), previous_opset_(rt.kernel_ctx().opset) {
+    if (imports != nullptr)
+      rt_.set_opset_imports(imports);
+  }
+  ~SessionOpsetScope() {
+    rt_.kernel_ctx().opset = previous_opset_;
+    rt_.set_opset_imports(previous_imports_);
+  }
+
+private:
+  RuntimeContext &rt_;
+  const OpsetImports *previous_imports_;
+  OpsetId previous_opset_;
+};
+
 } // namespace
 
 RuntimeSession::RuntimeSession(const ModelProto &model, int verbose)
@@ -99,6 +118,7 @@ RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions op
       cpu_execution_counters_(options.cpu_execution_counters),
       parallel_region_collector_(std::move(options.parallel_region_collector)),
       verbose_(options.verbose) {
+  SetOpsetImports(model.opset_import());
   SetDeclaredShapes(model.graph());
   SetInitializers(model.graph());
   struct_type_catalogue_.emplace();
@@ -130,6 +150,24 @@ RuntimeSession::RuntimeSession(const ExecutionPlan &plan, RuntimeSessionOptions 
       cpu_execution_counters_(options.cpu_execution_counters),
       parallel_region_collector_(std::move(options.parallel_region_collector)),
       verbose_(options.verbose) {}
+
+void RuntimeSession::SetOpsetImports(const utils::RepeatedProtoField<OperatorSetIdProto> &imports) {
+  EXT_ENFORCE_INVALID(!kernels_initialized_,
+                      "RuntimeSession: opset imports cannot change after kernel initialization.");
+  OpsetImports versions;
+  const auto &supported = OpSchemaRegistry::DomainToVersionRange::Instance().Map();
+  for (const auto &import : imports) {
+    const std::string domain = import.domain().empty() ? "ai.onnx" : import.domain().value();
+    const auto range = supported.find(domain == "ai.onnx" ? "" : domain);
+    EXT_ENFORCE_INVALID(import.version() > 0 &&
+                            (range == supported.end() || import.version() <= range->second.second),
+                        "RuntimeSession: unsupported opset version ", import.version(),
+                        " for domain '", domain, "'.");
+    EXT_ENFORCE_INVALID(versions.emplace(domain, import.version()).second,
+                        "RuntimeSession: duplicate opset import for domain '", domain, "'.");
+  }
+  opset_imports_ = std::move(versions);
+}
 
 const std::shared_ptr<CpuExecutor> &RuntimeSession::cpu_executor() {
   if (!cpu_executor_) {
@@ -291,6 +329,12 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt,
     const NodeProto &node = *nodes[index];
     const std::string &domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
     const std::string op_type = node.op_type().value();
+    if (const OpsetImports *imports = rt.opset_imports()) {
+      const auto found = imports->find(domain);
+      EXT_ENFORCE_INVALID(found != imports->end(),
+                          "RuntimeSession: missing opset import for domain '", domain, "'.");
+      rt.kernel_ctx().opset = OpsetId(domain, found->second);
+    }
     PreparedKernel &prepared = kernels_[index];
     prepared.key = domain + ":" + op_type;
     prepared.instance = ResolveNodeKernel(node, rt, domain, op_type);
@@ -538,6 +582,16 @@ void RuntimeSession::VerifyDeclaredShape(const std::string &name, const RuntimeC
 }
 
 void RuntimeSession::Run(RuntimeContext &rt) {
+  if (opset_imports_ && rt.opset_imports() == nullptr && rt.kernel_ctx().opset.version != 0) {
+    const std::string domain =
+        rt.kernel_ctx().opset.domain.empty() ? "ai.onnx" : rt.kernel_ctx().opset.domain;
+    const auto found = opset_imports_->find(domain);
+    EXT_ENFORCE_INVALID(found == opset_imports_->end() ||
+                            found->second == rt.kernel_ctx().opset.version,
+                        "RuntimeSession: RuntimeContext opset for domain '", domain,
+                        "' does not match the model opset import.");
+  }
+  const SessionOpsetScope opset_scope(rt, opset_imports_ ? &*opset_imports_ : nullptr);
   // Lease the shared executor before any kernel is prepared or executed and
   // install it for the whole run: every parallel region a kernel launches then
   // uses this session's resolved policy instead of a hidden process-wide pool.
@@ -625,6 +679,8 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       const NodeProto &node = *nodes[index];
       const std::string &domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
       const std::string &op_type = node.op_type().value();
+      if (const OpsetImports *imports = rt.opset_imports())
+        rt.kernel_ctx().opset = OpsetId(domain, imports->at(domain));
       detail::PrintNodeProgress(rt, node, domain, op_type, effective_verbose);
 
       // Route this node's kernel invocation through the I/O allocator instead

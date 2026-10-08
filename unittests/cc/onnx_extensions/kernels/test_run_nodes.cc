@@ -227,14 +227,11 @@ void RunGraphViaSession(const GraphProto &graph, RuntimeContext &rt) {
   session.Run(rt);
 }
 
-// Registers `model`'s local functions in `rt` and then runs `model.graph()`
-// the same way `RunGraphViaSession` runs a bare graph. This mirrors the
-// production `RunModel` replacement: callers register model-local functions
-// via `RegisterModelFunctions` and then drive the model's graph through
-// their own ExecutionPlan/RuntimeSession.
+// Registers model-local functions and runs the graph with its model imports.
 void RunModelViaSession(const ModelProto &model, RuntimeContext &rt) {
   RegisterModelFunctions(model, rt);
-  RunGraphViaSession(model.ref_graph(), rt);
+  RuntimeSession session(model);
+  session.Run(rt);
 }
 
 // Builds a single-node ``NodeProto`` of type ``op_type`` with the
@@ -6559,6 +6556,163 @@ ModelProto MakeAddModelWithShapes(const std::vector<std::pair<int64_t, std::stri
 }
 
 } // namespace
+
+TEST(RuntimeSessionOpsets, ModelImportsDetermineKernelConstructionByDomain) {
+  const std::string domain = "test.onnxlight.opset";
+  std::vector<core::runtime::OpsetId> constructed;
+  auto observe = [&constructed](const NodeProto &node, RuntimeContext &rt) {
+    constructed.push_back(rt.kernel_ctx().opset);
+    return std::make_unique<TestLambdaKernel>(node, [](const NodeProto &node, RuntimeContext &rt) {
+      rt.Set(node.output(0), rt.Get(node.input(0)));
+    });
+  };
+  core::runtime::RegisterKernelFn("ai.onnx", "ObserveDefault", core::symbolic::Device::kCPU,
+                                  observe);
+  core::runtime::RegisterKernelFn(domain, "Observe", core::symbolic::Device::kCPU, observe);
+  ModelProto model = MakeAddModelWithShapes({{1, ""}}, {{1, ""}}, {{1, ""}});
+  model.ref_opset_import()[0].set_version(23);
+  NodeProto *default_node = model.ref_graph().add_node();
+  default_node->set_op_type("ObserveDefault");
+  default_node->add_input("z");
+  default_node->add_output("observed");
+  NodeProto *custom = model.ref_graph().add_node();
+  custom->set_domain(domain);
+  custom->set_op_type("Observe");
+  custom->add_input("observed");
+  custom->add_output("result");
+  model.add_opset_import()->set_domain(domain);
+  model.ref_opset_import()[1].set_version(2);
+
+  RuntimeContext rt;
+  rt.Set("x", Tensor::FromFloat("x", {1}, {1}));
+  rt.Set("y", Tensor::FromFloat("y", {1}, {2}));
+  RuntimeSession session(model);
+  session.Run(rt);
+  ASSERT_EQ(constructed.size(), 2);
+  EXPECT_EQ(constructed[0].domain, "ai.onnx");
+  EXPECT_EQ(constructed[0].version, 23);
+  EXPECT_EQ(constructed[1].domain, domain);
+  EXPECT_EQ(constructed[1].version, 2);
+  EXPECT_EQ(rt.Get("result").AsFloat()[0], 3);
+  EXPECT_EQ(rt.kernel_ctx().opset.version, 0);
+
+  RuntimeContext mismatch(KernelContext(DefaultOpset(18)));
+  EXPECT_THROW(session.Run(mismatch), std::invalid_argument);
+  model.ref_opset_import().pop_back();
+  RuntimeSession missing(model);
+  EXPECT_THROW(missing.Run(rt), std::invalid_argument);
+}
+
+TEST(RuntimeSessionOpsets, RejectsDuplicateAndInvalidImports) {
+  ModelProto model = MakeAddModelWithShapes({{1, ""}}, {{1, ""}}, {{1, ""}});
+  model.add_opset_import()->set_version(19);
+  EXPECT_THROW(RuntimeSession session(model), std::invalid_argument);
+  model.ref_opset_import().pop_back();
+  model.ref_opset_import()[0].set_version(0);
+  EXPECT_THROW(RuntimeSession session(model), std::invalid_argument);
+  model.ref_opset_import()[0].set_version(1000);
+  EXPECT_THROW(RuntimeSession session(model), std::invalid_argument);
+  model.ref_opset_import().clear();
+  RuntimeContext rt;
+  RuntimeSession missing(model);
+  EXPECT_THROW(missing.Run(rt), std::invalid_argument);
+}
+
+TEST(RuntimeSessionOpsets, LegacyPlanUsesExplicitContextVersion) {
+  ModelProto model = MakeAddModelWithShapes({{1, ""}}, {{1, ""}}, {{1, ""}});
+  ExecutionPlan plan(model.graph());
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {1}, {1}));
+  rt.Set("y", Tensor::FromFloat("y", {1}, {2}));
+  RuntimeSession session(plan);
+  session.Run(rt);
+  EXPECT_EQ(rt.Get("z").AsFloat()[0], 3);
+  EXPECT_EQ(rt.kernel_ctx().opset.version, 18);
+}
+
+TEST(RuntimeSessionOpsets, FunctionBodyUsesItsOwnImports) {
+  int64_t observed_version = 0;
+  core::runtime::RegisterKernelFn("ai.onnx", "ObserveInFunction", core::symbolic::Device::kCPU,
+                                  [&observed_version](const NodeProto &node, RuntimeContext &rt) {
+                                    observed_version = rt.kernel_ctx().opset.version;
+                                    return std::make_unique<TestLambdaKernel>(
+                                        node, [](const NodeProto &node, RuntimeContext &rt) {
+                                          rt.Set(node.output(0), rt.Get(node.input(0)));
+                                        });
+                                  });
+  ModelProto model;
+  model.add_opset_import()->set_version(23);
+  OperatorSetIdProto *local = model.add_opset_import();
+  local->set_domain("test.function.opset");
+  local->set_version(1);
+  FunctionProto *function = model.add_functions();
+  function->set_domain("test.function.opset");
+  function->set_name("Call");
+  function->add_input("a");
+  function->add_output("b");
+  function->add_opset_import()->set_version(18);
+  NodeProto *body = function->add_node();
+  body->set_op_type("ObserveInFunction");
+  body->add_input("a");
+  body->add_output("b");
+  GraphProto *graph = model.add_graph();
+  NodeProto *call = graph->add_node();
+  call->set_domain("test.function.opset");
+  call->set_op_type("Call");
+  call->add_input("x");
+  call->add_output("y");
+  graph->add_output()->set_name("y");
+  RuntimeContext rt;
+  rt.Set("x", Tensor::FromFloat("x", {1}, {5}));
+  RegisterModelFunctions(model, rt);
+  RuntimeSession session(model);
+  session.Run(rt);
+  EXPECT_EQ(observed_version, 18);
+  EXPECT_EQ(rt.Get("y").AsFloat()[0], 5);
+}
+
+TEST(RuntimeSessionOpsets, ControlFlowBodyInheritsModelImports) {
+  int64_t observed_version = 0;
+  const std::string domain = "test.subgraph.opset";
+  core::runtime::RegisterKernelFn(domain, "ObserveInBranch", core::symbolic::Device::kCPU,
+                                  [&observed_version](const NodeProto &node, RuntimeContext &rt) {
+                                    observed_version = rt.kernel_ctx().opset.version;
+                                    return std::make_unique<TestLambdaKernel>(
+                                        node, [](const NodeProto &node, RuntimeContext &rt) {
+                                          rt.Set(node.output(0), rt.Get(node.input(0)));
+                                        });
+                                  });
+  ModelProto model;
+  model.add_opset_import()->set_version(23);
+  OperatorSetIdProto *custom = model.add_opset_import();
+  custom->set_domain(domain);
+  custom->set_version(4);
+  GraphProto *graph = model.add_graph();
+  NodeProto *branch = graph->add_node();
+  branch->set_op_type("If");
+  branch->add_input("cond");
+  branch->add_output("y");
+  for (const char *name : {"then_branch", "else_branch"}) {
+    AttributeProto *attr = branch->add_attribute();
+    attr->set_name(name);
+    attr->set_type(AttributeProto::AttributeType::GRAPH);
+    GraphProto *body = attr->add_g();
+    NodeProto *probe = body->add_node();
+    probe->set_domain(domain);
+    probe->set_op_type("ObserveInBranch");
+    probe->add_input("x");
+    probe->add_output("out");
+    body->add_output()->set_name("out");
+  }
+  graph->add_output()->set_name("y");
+  RuntimeContext rt;
+  rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
+  rt.Set("x", Tensor::FromFloat("x", {1}, {5}));
+  RuntimeSession session(model);
+  session.Run(rt);
+  EXPECT_EQ(observed_version, 4);
+  EXPECT_EQ(rt.Get("y").AsFloat()[0], 5);
+}
 
 TEST(RuntimeSessionCheckShapes, DefaultsToDisabled) {
   ModelProto model = MakeAddModelWithShapes({{2, ""}}, {{2, ""}}, {{2, ""}});

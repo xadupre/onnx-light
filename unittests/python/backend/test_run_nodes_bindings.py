@@ -57,18 +57,9 @@ def _unpack_floats(tensor) -> tuple[float, ...]:
 
 
 def _run_model(model, ctx) -> None:
-    """Runs ``model``'s graph through ``ctx``, mirroring what the removed
-    ``run_model`` binding used to do: registers every model-local function,
-    seeds the graph's initializers (names ``ctx`` already carries are left
-    as-is), then builds the graph's :class:`ExecutionPlan` and drives it
-    through a fresh :class:`RuntimeSession`.
-    """
+    """Runs the model using its own opset imports and initializers."""
     rt.register_model_functions(model, ctx)
-    for init in model.graph.initializer:
-        if not ctx.has(init.name):
-            ctx.set(init.name, rt.tensor_from_proto(init), "initializer")
-    plan = rt.ExecutionPlan(model.graph)
-    rt.RuntimeSession(plan).run(ctx)
+    rt.RuntimeSession(model).run(ctx)
 
 
 # Parsed once at module load — every test that needs it copies the model
@@ -83,6 +74,16 @@ _MODEL_SRC = (
 
 
 class TestRunNodesBindings(ExtTestCase):
+    def test_model_session_uses_import_without_context_opset(self):
+        model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 23]>'
+            "agraph (float[1] x) => (float[1] y) { y = Abs(x) }"
+        )
+        ctx = rt.RuntimeContext()
+        ctx.set("x", _make_float_tensor("x", [-2.0]))
+        rt.RuntimeSession(model).run(ctx)
+        self.assertEqual(_unpack_floats(ctx.get("y")), (2.0,))
+
     def test_runtime_submodule_exposes_expected_names(self):
         for name in [
             "RawBufferAllocator",

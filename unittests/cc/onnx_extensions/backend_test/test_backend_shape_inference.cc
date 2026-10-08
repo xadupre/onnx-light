@@ -378,6 +378,48 @@ TEST(BackendTestCaseShapeInference, ZipMapInfersSequenceOfStringKeyMapsOutputTyp
   EXPECT_EQ(value_tensor.ref_shape().ref_dim().size(), 0u);
 }
 
+TEST(BackendTestCaseShapeInference, OnnxOptimInfersOperatorEdgeCases) {
+  std::vector<TestCase> cases = CollectTestCases("shape");
+  size_t checked = 0;
+  for (const TestCase &tc : cases) {
+    if (tc.name.find("test_cc_shape_inference_shape_start_end") != 0 &&
+        tc.name.find("test_cc_shape_inference_split_num_outputs_uneven") != 0 &&
+        tc.name.find("test_cc_shape_inference_slice_out_of_range_") != 0 &&
+        tc.name.find("test_cc_shape_inference_split_to_sequence_") != 0 &&
+        tc.name.find("test_cc_shape_inference_einsum_") != 0) {
+      continue;
+    }
+    SCOPED_TRACE(tc.name);
+
+    ModelProto model_copy;
+    std::string serialized;
+    ASSERT_TRUE(tc.model().SerializeToString(serialized));
+    ASSERT_TRUE(model_copy.ParseFromString(serialized));
+
+    std::vector<TensorShapeProto> expected_shapes;
+    for (ValueInfoProto &output : *model_copy.mutable_graph()->mutable_output()) {
+      TypeProto::Tensor *tensor_type = MutableTensorTypeOf(*output.mutable_type());
+      ASSERT_NE(tensor_type, nullptr);
+      ASSERT_TRUE(tensor_type->has_shape());
+      expected_shapes.push_back(tensor_type->shape());
+      tensor_type->clear_shape();
+    }
+
+    ASSERT_NO_THROW(core::shapes::InferShapesModel(model_copy));
+    const auto &outputs = model_copy.ref_graph().ref_output();
+    ASSERT_EQ(outputs.size(), expected_shapes.size());
+    for (size_t i = 0; i < outputs.size(); ++i) {
+      const TypeProto::Tensor *tensor_type = TensorTypeOf(outputs[i].ref_type());
+      ASSERT_NE(tensor_type, nullptr);
+      ASSERT_TRUE(tensor_type->has_shape());
+      EXPECT_TRUE(tensor_type->ref_shape().Equals(expected_shapes[i]))
+          << "output[" << i << "] shape mismatch";
+    }
+    ++checked;
+  }
+  EXPECT_EQ(checked, 22u);
+}
+
 TEST(BackendTestCaseShapeInference, NativeSqueezeEmptyAxesInfersOutputShape) {
   std::vector<TestCase> cases = CollectTestCases("Squeeze");
   for (TestCase &tc : cases) {

@@ -76,9 +76,10 @@ void SplitEquation(const std::string &equation, std::vector<std::string> &input_
 // Merges two ``SymDim`` instances representing the same label seen across
 // inputs. Two concrete values must agree, except that broadcasting allows a
 // dimension of 1 to be promoted to the other size. A concrete value wins
-// over a symbolic one. Two symbolic values are merged only when they share
-// the same expression; otherwise the existing entry is preserved.
-SymDim MergeLabelDim(const SymDim &out, const SymDim &in, char label) {
+// over a symbolic one. Distinct symbolic ellipsis dimensions produce a fresh
+// dimension because they may broadcast without being equal.
+SymDim MergeLabelDim(const SymDim &out, const SymDim &in, char label, bool is_ellipsis,
+                     const std::string &fresh_symbol) {
   if (out.IsInt() && in.IsInt()) {
     if (out.AsInt() == in.AsInt()) {
       return out;
@@ -94,6 +95,9 @@ SymDim MergeLabelDim(const SymDim &out, const SymDim &in, char label) {
   }
   if (in.IsInt()) {
     return in;
+  }
+  if (is_ellipsis && out != in) {
+    return SymDim(fresh_symbol);
   }
   return out;
 }
@@ -180,7 +184,12 @@ void ComputeShapeEinsum(ShapesContext &ctx, const NodeProto &node) {
       if (it == label_dim.end()) {
         label_dim.emplace(lbl, dim);
       } else {
-        it->second = MergeLabelDim(it->second, dim, lbl);
+        const bool is_ellipsis =
+            lbl >= kEllipsisLabelBase &&
+            lbl < static_cast<char>(kEllipsisLabelBase + static_cast<int>(ellipsis_rank));
+        it->second = MergeLabelDim(it->second, dim, lbl, is_ellipsis,
+                                   "Einsum_" + node.output(0) + "_ellipsis" +
+                                       std::to_string(static_cast<int>(lbl) - kEllipsisLabelBase));
       }
     }
   }

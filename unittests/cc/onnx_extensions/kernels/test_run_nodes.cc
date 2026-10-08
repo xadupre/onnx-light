@@ -5194,6 +5194,9 @@ TEST(RuntimeSession, IsReusableAcrossMultipleRuns) {
 
 TEST(RuntimeSession, BorrowsRawAndTypedInitializersAcrossContextClear) {
   ModelProto model;
+  OperatorSetIdProto *custom_import = model.add_opset_import();
+  custom_import->set_domain("test.initializers");
+  custom_import->set_version(1);
   GraphProto *graph = model.add_graph();
   TensorProto *raw = graph->add_initializer();
   raw->set_name("raw");
@@ -5245,6 +5248,9 @@ TEST(RuntimeSession, BorrowsRawAndTypedInitializersAcrossContextClear) {
 
 TEST(RuntimeSession, InputOverridesCachedInitializerForOneRun) {
   ModelProto model;
+  OperatorSetIdProto *custom_import = model.add_opset_import();
+  custom_import->set_domain("test.initializers");
+  custom_import->set_version(1);
   GraphProto *graph = model.add_graph();
   TensorProto *initializer = graph->add_initializer();
   initializer->set_name("value");
@@ -6623,7 +6629,9 @@ TEST(RuntimeSessionOpsets, ModelImportsDetermineKernelConstructionByDomain) {
 
 TEST(RuntimeSessionOpsets, RejectsDuplicateAndInvalidImports) {
   ModelProto model = MakeAddModelWithShapes({{1, ""}}, {{1, ""}}, {{1, ""}});
-  model.add_opset_import()->set_version(19);
+  OperatorSetIdProto *alias = model.add_opset_import();
+  alias->set_domain("ai.onnx");
+  alias->set_version(19);
   EXPECT_THROW(RuntimeSession session(model), std::invalid_argument);
   model.ref_opset_import().resize(1);
   model.ref_opset_import()[0].set_version(0);

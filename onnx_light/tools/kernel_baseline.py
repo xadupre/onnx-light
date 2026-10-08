@@ -198,9 +198,13 @@ def _make_model(case: dict[str, Any], size: int):
             parameter_names = ["scale", "bias"]
             if op_type == "BatchNormalization":
                 parameter_names.extend(["mean", "variance"])
-            attributes = {"num_groups": 4} if op_type == "GroupNormalization" else {}
+            node = (
+                oh.make_node(op_type, ["X", *parameter_names], ["Y"], num_groups=4)
+                if op_type == "GroupNormalization"
+                else oh.make_node(op_type, ["X", *parameter_names], ["Y"])
+            )
             graph = oh.make_graph(
-                [oh.make_node(op_type, ["X", *parameter_names], ["Y"], **attributes)],
+                [node],
                 f"{op_type}_baseline",
                 [
                     oh.make_tensor_value_info("X", elem_type, shape),
@@ -218,13 +222,13 @@ def _make_model(case: dict[str, Any], size: int):
                 if op_type == "LayerNormalization"
                 else (["scale"] if op_type == "RMSNormalization" else [])
             )
-            attributes: dict[str, Any] = {"axis": 1}
+            node = oh.make_node(op_type, ["X", *parameter_names], ["Y"], axis=1)
             if op_type == "MeanVarianceNormalization":
-                attributes = {"axes": [1]}
+                node = oh.make_node(op_type, ["X"], ["Y"], axes=[1])
             elif op_type == "LpNormalization":
-                attributes["p"] = 2
+                node = oh.make_node(op_type, ["X"], ["Y"], axis=1, p=2)
             graph = oh.make_graph(
-                [oh.make_node(op_type, ["X", *parameter_names], ["Y"], **attributes)],
+                [node],
                 f"{op_type}_baseline",
                 [
                     oh.make_tensor_value_info("X", elem_type, shape),

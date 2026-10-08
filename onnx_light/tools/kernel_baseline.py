@@ -304,10 +304,17 @@ def _run_policy_case(
     policy = runtime.CpuExecutionPolicy()
     policy.num_threads = num_threads
     resolved = runtime.resolve_cpu_execution_policy(policy)
+    default_opsets = [
+        opset.version for opset in model.opset_import if opset.domain in {"", "ai.onnx"}
+    ]
+    if len(default_opsets) != 1:
+        raise ValueError(f"Expected one default-domain opset import, got {default_opsets!r}.")
 
     def _make_context(opts):
         session = runtime.RuntimeSession(model, opts)
-        context = runtime.RuntimeContext(runtime.KernelContext(runtime.default_opset(18)))
+        context = runtime.RuntimeContext(
+            runtime.KernelContext(runtime.default_opset(default_opsets[0]))
+        )
         for name, array in inputs.items():
             raw = numpy.ascontiguousarray(array).view(numpy.uint8).ravel()
             tensor = runtime.tensor_from_numpy(

@@ -1796,34 +1796,78 @@ RotaryConcatPartPattern::Apply(core::builder::GraphGraph &graph,
   return ApplyRotaryTranspose(graph, nodes);
 }
 
-std::set<std::string> FunctionHalfRotaryEmbeddingPattern::FastOpType() const { return {"Split"}; }
+std::set<std::string> FunctionHalfRotaryEmbeddingPattern::FastOpType() const {
+  return {"Split", "Slice"};
+}
 
 core::builder::MatchResult
 FunctionHalfRotaryEmbeddingPattern::Match(core::builder::GraphGraph &graph,
                                           const NodeProto &candidate) const {
-  if (!MainOpsetAtLeast(graph, 18) || !IsNode(&candidate, "Split", -1, 2) ||
+  const bool split_form = IsNode(&candidate, "Split", -1, 2);
+  const bool slice_form = IsNode(&candidate, "Slice", -1, 1);
+  if (!MainOpsetAtLeast(graph, 18) || (!split_form && !slice_form) || candidate.input_size() == 0 ||
       !HasRank(graph, candidate.input()[0].value(), 4)) {
-    return NoMatch(candidate,
-                   "FunctionHalfRotaryEmbeddingPattern expects an opset-18 rank-four Split.");
+    return NoMatch(
+        candidate,
+        "FunctionHalfRotaryEmbeddingPattern expects an opset-18 rank-four Split or Slice.");
   }
-  int64_t axis = 0;
-  if (!NormalizedAxis(candidate, 4, axis) || axis != 3) {
-    return NoMatch(candidate, "Split must act on the last dimension.");
-  }
-  if (candidate.input_size() == 2) {
-    std::vector<int64_t> split;
-    if (!ReadInt64Constant(graph, candidate.input()[1].value(), split) || split.size() != 2 ||
-        split[0] != split[1]) {
-      return NoMatch(candidate, "Split sizes must be an equal INT64 pair.");
+  const NodeProto *second_slice = nullptr;
+  if (split_form) {
+    int64_t axis = 0;
+    if (!NormalizedAxis(candidate, 4, axis) || axis != 3) {
+      return NoMatch(candidate, "Split must act on the last dimension.");
     }
-  } else if (candidate.input_size() != 1 ||
-             GetAttributeOr<int64_t>(candidate, "num_outputs", 0) != 2) {
-    return NoMatch(candidate, "Split must use equal sizes or num_outputs=2.");
+    if (candidate.input_size() == 2) {
+      std::vector<int64_t> split;
+      if (!ReadInt64Constant(graph, candidate.input()[1].value(), split) || split.size() != 2 ||
+          split[0] != split[1]) {
+        return NoMatch(candidate, "Split sizes must be an equal INT64 pair.");
+      }
+    } else if (candidate.input_size() != 1 ||
+               GetAttributeOr<int64_t>(candidate, "num_outputs", 0) != 2) {
+      return NoMatch(candidate, "Split must use equal sizes or num_outputs=2.");
+    }
+  } else {
+    const auto &input_consumers = graph.NextNodes(candidate.input()[0].value());
+    if (input_consumers.size() != 3) {
+      return NoMatch(candidate, "The sliced rotary input must feed two Slices and one Mul.");
+    }
+    for (const NodeProto *consumer : input_consumers) {
+      if (consumer != &candidate && IsNode(consumer, "Slice", -1, 1)) {
+        second_slice = consumer;
+      }
+    }
+    std::vector<int64_t> start1, end1, axes1, start2, end2, axes2;
+    int64_t width = 0;
+    const auto read_slice = [&](const NodeProto &slice, std::vector<int64_t> &starts,
+                                std::vector<int64_t> &ends, std::vector<int64_t> &axes) {
+      if (slice.input_size() != 4 && slice.input_size() != 5) {
+        return false;
+      }
+      std::vector<int64_t> steps;
+      return ReadInt64Constant(graph, slice.input()[1].value(), starts) &&
+             ReadInt64Constant(graph, slice.input()[2].value(), ends) &&
+             ReadInt64Constant(graph, slice.input()[3].value(), axes) &&
+             (slice.input_size() == 4 ||
+              (ReadInt64Constant(graph, slice.input()[4].value(), steps) &&
+               steps == std::vector<int64_t>{1})) &&
+             starts.size() == 1 && ends.size() == 1 && axes.size() == 1;
+    };
+    if (second_slice == nullptr ||
+        second_slice->input()[0].value() != candidate.input()[0].value() ||
+        !StaticDimension(graph, candidate.input()[0].value(), 3, width) || width <= 0 ||
+        width % 2 != 0 || !read_slice(candidate, start1, end1, axes1) ||
+        !read_slice(*second_slice, start2, end2, axes2) || (axes1[0] != 3 && axes1[0] != -1) ||
+        (axes2[0] != 3 && axes2[0] != -1) || start1[0] != 0 || end1[0] != width / 2 ||
+        start2[0] != width / 2 || end2[0] < width) {
+      return NoMatch(candidate, "Slices must cover equal contiguous halves of the last axis.");
+    }
   }
 
-  const auto &neg_consumers = graph.NextNodes(candidate.output()[1].value());
+  const auto &neg_consumers = graph.NextNodes(split_form ? candidate.output()[1].value()
+                                                         : second_slice->output()[0].value());
   if (neg_consumers.size() != 1 || !IsNode(neg_consumers[0], "Neg", 1, 1)) {
-    return NoMatch(candidate, "The second Split output must feed one Neg.");
+    return NoMatch(candidate, "The second half must feed one Neg.");
   }
   const NodeProto *neg = neg_consumers[0];
   const auto &concat_consumers = graph.NextNodes(neg->output()[0].value());
@@ -1844,11 +1888,13 @@ FunctionHalfRotaryEmbeddingPattern::Match(core::builder::GraphGraph &graph,
   }
   const NodeProto *mul1 = mul1_consumers[0];
   const auto &input_consumers = graph.NextNodes(candidate.input()[0].value());
-  if (input_consumers.size() != 2) {
-    return NoMatch(candidate, "The rotary input must feed only Split and one Mul.");
+  if (input_consumers.size() != (split_form ? 2u : 3u)) {
+    return NoMatch(candidate, "The rotary input must feed only the halves and one Mul.");
   }
-  const NodeProto *mul2 =
-      input_consumers[0] == &candidate ? input_consumers[1] : input_consumers[0];
+  const auto mul2_it =
+      std::find_if(input_consumers.begin(), input_consumers.end(),
+                   [](const NodeProto *node) { return IsNode(node, "Mul", 2, 1); });
+  const NodeProto *mul2 = mul2_it == input_consumers.end() ? nullptr : *mul2_it;
   if (!IsNode(mul2, "Mul", 2, 1) || std::find(input_consumers.begin(), input_consumers.end(),
                                               &candidate) == input_consumers.end()) {
     return NoMatch(candidate, "The unsplit input branch must be a Mul.");
@@ -1871,7 +1917,10 @@ FunctionHalfRotaryEmbeddingPattern::Match(core::builder::GraphGraph &graph,
   if (caches.size() != 2 || !CanEnsureFunction(graph.Builder(), "HalfRotaryEmbedding")) {
     return NoMatch(candidate, "The cache inputs or local-function name are not usable.");
   }
-  const std::vector<const NodeProto *> matched = {&candidate, neg, concat, mul1, mul2, add};
+  const std::vector<const NodeProto *> matched =
+      split_form
+          ? std::vector<const NodeProto *>{&candidate, neg, concat, mul1, mul2, add}
+          : std::vector<const NodeProto *>{&candidate, second_slice, neg, concat, mul1, mul2, add};
   const std::unordered_set<const NodeProto *> matched_set(matched.begin(), matched.end());
   const std::unordered_set<std::string> replaced{add->output()[0].value()};
   for (const NodeProto *node : matched) {
@@ -1885,16 +1934,19 @@ FunctionHalfRotaryEmbeddingPattern::Match(core::builder::GraphGraph &graph,
 utils::RepeatedProtoField<NodeProto>
 FunctionHalfRotaryEmbeddingPattern::Apply(core::builder::GraphGraph &graph,
                                           const std::vector<const NodeProto *> &nodes) const {
-  if (nodes.size() != 6 || nodes[0] == nullptr || nodes[1] == nullptr || nodes[2] == nullptr ||
-      nodes[3] == nullptr || nodes[4] == nullptr || nodes[5] == nullptr) {
+  if ((nodes.size() != 6 && nodes.size() != 7) ||
+      std::any_of(nodes.begin(), nodes.end(),
+                  [](const NodeProto *node) { return node == nullptr; }) ||
+      Match(graph, *nodes[0]).nodes != nodes) {
     throw BuilderError(
-        "FunctionHalfRotaryEmbeddingPattern::Apply expects the six-node decomposition.");
+        "FunctionHalfRotaryEmbeddingPattern::Apply expects a valid half-rotary decomposition.");
   }
-  const NodeProto &split = *nodes[0];
-  const NodeProto &concat = *nodes[2];
-  const NodeProto &mul1 = *nodes[3];
-  const NodeProto &mul2 = *nodes[4];
-  const NodeProto &add = *nodes[5];
+  const std::size_t offset = nodes.size() == 7 ? 1 : 0;
+  const NodeProto &first = *nodes[0];
+  const NodeProto &concat = *nodes[2 + offset];
+  const NodeProto &mul1 = *nodes[3 + offset];
+  const NodeProto &mul2 = *nodes[4 + offset];
+  const NodeProto &add = *nodes[5 + offset];
   const auto other_input = [](const NodeProto &mul, const std::string &known) -> std::string {
     if (mul.input()[0].value() == known) {
       return mul.input()[1].value();
@@ -1905,15 +1957,15 @@ FunctionHalfRotaryEmbeddingPattern::Apply(core::builder::GraphGraph &graph,
     return {};
   };
   const std::string sin_cache = other_input(mul1, concat.output()[0].value());
-  const std::string cos_cache = other_input(mul2, split.input()[0].value());
+  const std::string cos_cache = other_input(mul2, first.input()[0].value());
   if (sin_cache.empty() || cos_cache.empty()) {
     throw BuilderError("FunctionHalfRotaryEmbeddingPattern::Apply could not identify both caches.");
   }
   utils::RepeatedProtoField<NodeProto> result;
   result.push_back(MakePatternNode("HalfRotaryEmbedding",
-                                   {split.input()[0].value(), cos_cache, sin_cache},
+                                   {first.input()[0].value(), cos_cache, sin_cache},
                                    {add.output()[0].value()}, kIntermediateDomain,
-                                   "FunctionHalfRotaryEmbeddingPattern--" + split.name().value()));
+                                   "FunctionHalfRotaryEmbeddingPattern--" + first.name().value()));
   EnsureFunction(graph.Builder(), MakeHalfRotaryFunction(graph.Builder()));
   return result;
 }

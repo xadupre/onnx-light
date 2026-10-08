@@ -839,7 +839,6 @@ public:
     for (size_t i = 0; i < bound_func_.node().size(); ++i) {
       BindRefAttributes(bound_func_.ref_node()[i], attr_map);
     }
-    plan_ = std::make_unique<ExecutionPlan>(bound_func_);
   }
 
   void Run(RuntimeContext &rt) override {
@@ -884,9 +883,7 @@ public:
 
     // Resolve kernels once on first run, reuse on subsequent calls.
     if (!session_) {
-      session_ = std::make_unique<RuntimeSession>(*plan_);
-      if (!func_.opset_import().empty())
-        session_->SetOpsetImports(func_.opset_import());
+      session_ = std::make_unique<RuntimeSession>(bound_func_);
     }
     session_->Run(child);
 
@@ -917,7 +914,6 @@ public:
 private:
   const FunctionProto &func_;
   FunctionProto bound_func_;
-  std::unique_ptr<ExecutionPlan> plan_;
   std::unique_ptr<RuntimeSession> session_;
 };
 

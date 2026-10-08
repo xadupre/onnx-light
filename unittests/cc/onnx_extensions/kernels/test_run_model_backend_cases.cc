@@ -44,7 +44,6 @@ using core::backend_test::CollectTestCases;
 using core::backend_test::DataSet;
 using core::backend_test::TestCase;
 using core::backend_test::TestCaseUnloadGuard;
-using core::runtime::ExecutionPlan;
 using core::runtime::Map;
 using core::runtime::RegisterModelFunctions;
 using core::runtime::RuntimeContext;
@@ -393,9 +392,7 @@ void ExpectModelOutputsMatchDataSet(const ModelProto &model, const DataSet &ds) 
       rt.Set(tp.name(), TensorFromProto(tp), core::runtime::RuntimeEventKind::kInitializer);
     }
   }
-  const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
-  RuntimeSession session(plan);
-  session.SetOpsetImports(model.opset_import());
+  RuntimeSession session(model);
   ASSERT_NO_THROW(session.Run(rt));
   ASSERT_EQ(ds.outputs.size(), graph.output().size());
   for (size_t i = 0; i < graph.output().size(); ++i) {
@@ -520,11 +517,9 @@ TEST(BackendRunModelAllCases, RunEveryModelTwiceWithStableMemoryPeak) {
       rt.set_release_intermediates(true);
       RegisterModelFunctions(model, rt);
 
-      const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
-      RuntimeSession session(plan, core::runtime::RuntimeSessionOptions{
-                                       .parameters = core::runtime::RuntimeParameters(1),
-                                   });
-      session.SetOpsetImports(model.opset_import());
+      RuntimeSession session(model, core::runtime::RuntimeSessionOptions{
+                                        .parameters = core::runtime::RuntimeParameters(1),
+                                    });
       session.SetInitializers(graph);
 
       // Seed inputs, maps and initializers once. These are the tensors that

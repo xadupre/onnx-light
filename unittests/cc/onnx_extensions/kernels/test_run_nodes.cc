@@ -6608,7 +6608,6 @@ TEST(RuntimeSessionOpsets, ModelImportsDetermineKernelConstructionByDomain) {
   rt.Set("x", Tensor::FromFloat("x", {1}, {1}));
   rt.Set("y", Tensor::FromFloat("y", {1}, {2}));
   RuntimeSession session(model);
-  EXPECT_THROW(session.SetOpsetImports(model.opset_import()), std::invalid_argument);
   session.Run(rt);
   ASSERT_EQ(constructed.size(), 2);
   EXPECT_EQ(constructed[0].domain, "ai.onnx");

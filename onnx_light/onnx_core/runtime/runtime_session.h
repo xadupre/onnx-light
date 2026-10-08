@@ -167,8 +167,7 @@ public:
   /**
    * Builds a session over ``plan``. Kernel resolution is deferred to the first
    * :cpp:func:`Run` (which supplies the :cpp:class:`RuntimeContext` the
-   * kernels are resolved against). Without :cpp:func:`SetOpsetImports`, a
-   * standalone plan (or bare graph) uses the caller's legacy
+   * kernels are resolved against). A standalone plan (or bare graph) uses the caller's legacy
    * :cpp:func:`RuntimeContext::kernel_ctx` opset. Nested sessions inherit the
    * active model/function imports instead.
    *
@@ -182,10 +181,9 @@ public:
    */
   explicit RuntimeSession(const ExecutionPlan &plan, int verbose = 0);
   RuntimeSession(const ExecutionPlan &plan, RuntimeSessionOptions options);
-
-  /// Sets the opset imports for a plan-backed function session before its first run.
-  /// Model sessions automatically take their imports from the model instead.
-  void SetOpsetImports(const utils::RepeatedProtoField<OperatorSetIdProto> &imports);
+  /// Builds a session over a function with its own opset imports. An empty
+  /// import list retains the enclosing context's legacy opset behavior.
+  explicit RuntimeSession(const FunctionProto &function, RuntimeSessionOptions options = {});
 
   // A session caches one owning ``std::unique_ptr<KernelBase>`` per node (see
   // :cpp:member:`kernels_`), so it is move-only. It is always created in place
@@ -441,9 +439,9 @@ private:
   void MaterializeBorrowedOutputs(RuntimeContext &rt) const;
 
   /// Plan owned by the session, referenced by :cpp:member:`plan_` when the
-  /// session is constructed from a :cpp:class:`ModelProto` (no external plan
-  /// supplied). Built from the model's graph. Left empty (and unused) when a
-  /// plan is passed in through the plan-taking constructor.
+  /// session is constructed from a :cpp:class:`ModelProto` or
+  /// :cpp:class:`FunctionProto` (no external plan supplied). Left empty
+  /// (and unused) when a plan is passed in through the plan-taking constructor.
   ExecutionPlan default_plan_;
   const ExecutionPlan &plan_;
   /// Empty for legacy graph/plan sessions, which use the caller's context opset

@@ -99,6 +99,27 @@ private:
   OpsetId previous_opset_;
 };
 
+OpsetImports ParseOpsetImports(const utils::RepeatedProtoField<OperatorSetIdProto> &imports) {
+  OpsetImports versions;
+  for (const auto &import : imports) {
+    const std::string domain = import.domain().empty() ? "ai.onnx" : import.domain().value();
+    // These standard-domain limits mirror the schema versions supported by
+    // this build; user-defined domains have no runtime-wide maximum.
+    const int64_t maximum = domain == "ai.onnx"      ? 29
+                            : domain == "ai.onnx.ml" ? 5
+                            : domain == "ai.onnx.training" || domain == "ai.onnx.preview" ||
+                                    domain == "ai.onnx.preview.training"
+                                ? 1
+                                : std::numeric_limits<int64_t>::max();
+    EXT_ENFORCE_INVALID(import.version() > 0 && import.version() <= maximum,
+                        "RuntimeSession: unsupported opset version ", import.version(),
+                        " for domain '", domain, "'.");
+    EXT_ENFORCE_INVALID(versions.emplace(domain, import.version()).second,
+                        "RuntimeSession: duplicate opset import for domain '", domain, "'.");
+  }
+  return versions;
+}
+
 } // namespace
 
 RuntimeSession::RuntimeSession(const ModelProto &model, int verbose)
@@ -118,7 +139,7 @@ RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions op
       cpu_execution_counters_(options.cpu_execution_counters),
       parallel_region_collector_(std::move(options.parallel_region_collector)),
       verbose_(options.verbose) {
-  SetOpsetImports(model.opset_import());
+  opset_imports_ = ParseOpsetImports(model.opset_import());
   SetDeclaredShapes(model.graph());
   SetInitializers(model.graph());
   struct_type_catalogue_.emplace();
@@ -151,29 +172,18 @@ RuntimeSession::RuntimeSession(const ExecutionPlan &plan, RuntimeSessionOptions 
       parallel_region_collector_(std::move(options.parallel_region_collector)),
       verbose_(options.verbose) {}
 
-void RuntimeSession::SetOpsetImports(const utils::RepeatedProtoField<OperatorSetIdProto> &imports) {
-  EXT_ENFORCE_INVALID(!opset_imports_.has_value(),
-                      "RuntimeSession: opset imports are already set.");
-  EXT_ENFORCE_INVALID(!kernels_initialized_,
-                      "RuntimeSession: opset imports cannot change after kernel initialization.");
-  OpsetImports versions;
-  for (const auto &import : imports) {
-    const std::string domain = import.domain().empty() ? "ai.onnx" : import.domain().value();
-    // These standard-domain limits mirror the schema versions supported by
-    // this build; user-defined domains have no runtime-wide maximum.
-    const int64_t maximum = domain == "ai.onnx"      ? 29
-                            : domain == "ai.onnx.ml" ? 5
-                            : domain == "ai.onnx.training" || domain == "ai.onnx.preview" ||
-                                    domain == "ai.onnx.preview.training"
-                                ? 1
-                                : std::numeric_limits<int64_t>::max();
-    EXT_ENFORCE_INVALID(import.version() > 0 && import.version() <= maximum,
-                        "RuntimeSession: unsupported opset version ", import.version(),
-                        " for domain '", domain, "'.");
-    EXT_ENFORCE_INVALID(versions.emplace(domain, import.version()).second,
-                        "RuntimeSession: duplicate opset import for domain '", domain, "'.");
-  }
-  opset_imports_ = std::move(versions);
+RuntimeSession::RuntimeSession(const FunctionProto &function, RuntimeSessionOptions options)
+    : default_plan_(function), plan_(default_plan_), check_shapes_(options.check_shapes),
+      allow_external_output_allocators_(options.allow_external_output_allocators),
+      parameters_(std::move(options.parameters)),
+      cpu_execution_(options.cpu_execution.has_value() ? *options.cpu_execution
+                                                       : DefaultCpuExecutionPolicy(parameters_)),
+      cpu_execution_explicit_(options.cpu_execution.has_value()),
+      cpu_execution_counters_(options.cpu_execution_counters),
+      parallel_region_collector_(std::move(options.parallel_region_collector)),
+      verbose_(options.verbose) {
+  if (!function.opset_import().empty())
+    opset_imports_ = ParseOpsetImports(function.opset_import());
 }
 
 const std::shared_ptr<CpuExecutor> &RuntimeSession::cpu_executor() {

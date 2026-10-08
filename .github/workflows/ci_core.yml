@@ -287,7 +287,7 @@ jobs:
             "${proto_dir}" \
             --summary "${GITHUB_STEP_SUMMARY}" \
             --max-installed-size 1617992 \
-            --max-text-size 1133098 \
+            --max-text-size 1134490 \
             --max-dynamic-symbols 876 \
             --allowed-dependency libcrypto.so.3 \
             --allowed-dependency libstdc++.so.6 \

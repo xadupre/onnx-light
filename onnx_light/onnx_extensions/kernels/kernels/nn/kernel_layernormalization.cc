@@ -7,8 +7,11 @@
 #include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/kernels/float16_promote.h"
 #include "onnx_core/runtime/kernels/node_helpers.h"
+#include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/kernels/kernel_run_helpers.h"
+#include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -18,6 +21,12 @@
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
+
+constexpr uint32_t kTuningAbi = 1;
+constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
+constexpr std::array<int32_t, 3> kSupportedElementTypes = {
+    static_cast<int32_t>(DataType::FLOAT), static_cast<int32_t>(DataType::FLOAT16),
+    static_cast<int32_t>(DataType::BFLOAT16)};
 
 // Returns ``axis`` normalized to the ``[0, rank]`` range. ``rank`` is a
 // legal value: it means "reduce nothing", which still requires a degenerate
@@ -86,6 +95,12 @@ Shape ReducedShape(const Shape &x_shape, int64_t axis) {
 }
 
 } // namespace
+
+LayerNormalization::LayerNormalization(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "LayerNormalization", kSupportedElementTypes,
+                            kPortableParallelMinimum, kTuningAbi) {}
+
+ONNX_LIGHT_REGISTER_PARALLEL_TUNING_SCHEMA(LayerNormalization)
 
 std::tuple<Tensor, Tensor, Tensor>
 LayerNormalization::operator()(const Tensor &x, const Tensor &scale, const Tensor &b, int64_t axis,
@@ -204,65 +219,71 @@ void LayerNormalization::operator()(const Tensor &x, const Tensor &scale, const 
   float *pmean = mean.AsFloat();
   float *pinv = inv_std_dev.AsFloat();
 
-  for (int64_t o = 0; o < outer; ++o) {
-    const int64_t base = o * norm_size;
-    double sum = 0.0;
-    for (int64_t i = 0; i < norm_size; ++i) {
-      sum += static_cast<double>(px[base + i]);
-    }
-    const double m = norm_size > 0 ? sum / static_cast<double>(norm_size) : 0.0;
-    double sqdiff = 0.0;
-    for (int64_t i = 0; i < norm_size; ++i) {
-      const double d = static_cast<double>(px[base + i]) - m;
-      sqdiff += d * d;
-    }
-    const double var = norm_size > 0 ? sqdiff / static_cast<double>(norm_size) : 0.0;
-    const float inv = 1.0f / std::sqrt(static_cast<float>(var) + epsilon);
-    pmean[o] = static_cast<float>(m);
-    pinv[o] = inv;
+  const int64_t work_per_row = std::max<int64_t>(1, norm_size * 3);
+  const int64_t grain =
+      std::max<int64_t>(1, tuning().parallel_minimum_elements / work_per_row +
+                               (tuning().parallel_minimum_elements % work_per_row != 0));
+  ParallelFor(
+      outer, grain,
+      [&](int64_t begin, int64_t end) {
+        for (int64_t o = begin; o < end; ++o) {
+          const int64_t base = o * norm_size;
+          double sum = 0.0;
+          for (int64_t i = 0; i < norm_size; ++i) {
+            sum += static_cast<double>(px[base + i]);
+          }
+          const double m = norm_size > 0 ? sum / static_cast<double>(norm_size) : 0.0;
+          double sqdiff = 0.0;
+          for (int64_t i = 0; i < norm_size; ++i) {
+            const double d = static_cast<double>(px[base + i]) - m;
+            sqdiff += d * d;
+          }
+          const double var = norm_size > 0 ? sqdiff / static_cast<double>(norm_size) : 0.0;
+          const float inv = 1.0f / std::sqrt(static_cast<float>(var) + epsilon);
+          pmean[o] = static_cast<float>(m);
+          pinv[o] = inv;
 
-    // Row-major "odometer" over ``x_shape[axis:]``, maintaining the flat index
-    // into the (broadcast) Scale and B tensors incrementally via their strides.
-    Shape coord;
-    coord.assign(static_cast<size_t>(normalized_rank), 0);
-    int64_t si = 0;
-    int64_t bi = 0;
-    for (int64_t i = 0; i < norm_size; ++i) {
-      float normalized = (px[base + i] - static_cast<float>(m)) * inv;
-      // The affine stage runs in the input dtype, not the stash dtype.
-      if (half) {
-        normalized = decode(encode(normalized));
-      }
-      float v = normalized * ps[si];
-      if (half) {
-        v = decode(encode(v));
-      }
-      if (has_bias) {
-        v += pb[bi];
-      }
-      if (half) {
-        py_half[base + i] = encode(v);
-      } else {
-        py[base + i] = v;
-      }
+          Shape coord;
+          coord.assign(static_cast<size_t>(normalized_rank), 0);
+          int64_t si = 0;
+          int64_t bi = 0;
+          for (int64_t i = 0; i < norm_size; ++i) {
+            float normalized = (px[base + i] - static_cast<float>(m)) * inv;
+            if (half) {
+              normalized = decode(encode(normalized));
+            }
+            float v = normalized * ps[si];
+            if (half) {
+              v = decode(encode(v));
+            }
+            if (has_bias) {
+              v += pb[bi];
+            }
+            if (half) {
+              py_half[base + i] = encode(v);
+            } else {
+              py[base + i] = v;
+            }
 
-      for (int64_t d = normalized_rank - 1; d >= 0; --d) {
-        ++coord[static_cast<size_t>(d)];
-        si += scale_strides[static_cast<size_t>(d)];
-        if (has_bias) {
-          bi += bias_strides[static_cast<size_t>(d)];
+            for (int64_t d = normalized_rank - 1; d >= 0; --d) {
+              ++coord[static_cast<size_t>(d)];
+              si += scale_strides[static_cast<size_t>(d)];
+              if (has_bias) {
+                bi += bias_strides[static_cast<size_t>(d)];
+              }
+              if (coord[static_cast<size_t>(d)] < norm_dims[static_cast<size_t>(d)]) {
+                break;
+              }
+              coord[static_cast<size_t>(d)] = 0;
+              si -= scale_strides[static_cast<size_t>(d)] * norm_dims[static_cast<size_t>(d)];
+              if (has_bias) {
+                bi -= bias_strides[static_cast<size_t>(d)] * norm_dims[static_cast<size_t>(d)];
+              }
+            }
+          }
         }
-        if (coord[static_cast<size_t>(d)] < norm_dims[static_cast<size_t>(d)]) {
-          break;
-        }
-        coord[static_cast<size_t>(d)] = 0;
-        si -= scale_strides[static_cast<size_t>(d)] * norm_dims[static_cast<size_t>(d)];
-        if (has_bias) {
-          bi -= bias_strides[static_cast<size_t>(d)] * norm_dims[static_cast<size_t>(d)];
-        }
-      }
-    }
-  }
+      },
+      "LayerNormalization");
 }
 
 void LayerNormalization::Run(RuntimeContext &rt) {
@@ -272,9 +293,8 @@ void LayerNormalization::Run(RuntimeContext &rt) {
   const Tensor &x = GetInput(node, 0, rt.tensors());
   const Tensor &scale = GetInput(node, 1, rt.tensors());
   const Tensor *b = GetOptionalInput(node, 2, rt.tensors());
-  onnx_kernels::kernel::LayerNormalization k(rt.kernel_ctx());
   auto [y, mean, inv_std_dev] =
-      k(x, scale, b != nullptr ? *b : Tensor{}, GetNormAxis(node), GetEpsilon(node), &rt);
+      (*this)(x, scale, b != nullptr ? *b : Tensor{}, GetNormAxis(node), GetEpsilon(node), &rt);
   SetOutput(node, 0, std::move(y), rt);
   if (node.output_size() >= 2) {
     SetOutput(node, 1, std::move(mean), rt);

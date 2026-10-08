@@ -5,11 +5,28 @@
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
+#include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
+
+namespace {
+
+constexpr uint32_t kTuningAbi = 1;
+constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
+constexpr std::array<int32_t, 1> kSupportedElementTypes = {static_cast<int32_t>(DataType::FLOAT)};
+
+} // namespace
+
+LpNormalization::LpNormalization(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "LpNormalization", kSupportedElementTypes,
+                            kPortableParallelMinimum, kTuningAbi) {}
+
+ONNX_LIGHT_REGISTER_PARALLEL_TUNING_SCHEMA(LpNormalization)
 
 Tensor LpNormalization::operator()(const Tensor &x, int64_t axis, int64_t p,
                                    RuntimeContext *rt) const {
@@ -46,25 +63,32 @@ Tensor LpNormalization::operator()(const Tensor &x, int64_t axis, int64_t p,
   const float *px = x.AsFloat();
   float *py = reinterpret_cast<float *>(out.mutable_bytes());
 
-  for (int64_t o = 0; o < outer; ++o) {
-    for (int64_t s = 0; s < inner; ++s) {
-      // Accumulate the Lp norm over the ``dim`` slice.
-      double norm = 0.0;
-      for (int64_t d = 0; d < dim; ++d) {
-        const double v = static_cast<double>(px[(o * dim + d) * inner + s]);
-        norm += (p == 1) ? std::abs(v) : v * v;
-      }
-      if (p == 2) {
-        norm = std::sqrt(norm);
-      }
-      // When the norm is zero the output is defined to be zero (per spec).
-      const double inv = norm == 0.0 ? 0.0 : 1.0 / norm;
-      for (int64_t d = 0; d < dim; ++d) {
-        const int64_t idx = (o * dim + d) * inner + s;
-        py[idx] = static_cast<float>(static_cast<double>(px[idx]) * inv);
-      }
-    }
-  }
+  const int64_t work_per_slice = std::max<int64_t>(1, dim * 2);
+  const int64_t grain =
+      std::max<int64_t>(1, tuning().parallel_minimum_elements / work_per_slice +
+                               (tuning().parallel_minimum_elements % work_per_slice != 0));
+  ParallelFor(
+      outer * inner, grain,
+      [&](int64_t begin, int64_t end) {
+        for (int64_t task = begin; task < end; ++task) {
+          const int64_t o = task / inner;
+          const int64_t s = task % inner;
+          double norm = 0.0;
+          for (int64_t d = 0; d < dim; ++d) {
+            const double v = static_cast<double>(px[(o * dim + d) * inner + s]);
+            norm += (p == 1) ? std::abs(v) : v * v;
+          }
+          if (p == 2) {
+            norm = std::sqrt(norm);
+          }
+          const double inv = norm == 0.0 ? 0.0 : 1.0 / norm;
+          for (int64_t d = 0; d < dim; ++d) {
+            const int64_t idx = (o * dim + d) * inner + s;
+            py[idx] = static_cast<float>(static_cast<double>(px[idx]) * inv);
+          }
+        }
+      },
+      "LpNormalization");
   return out;
 }
 
@@ -75,8 +99,7 @@ void LpNormalization::Run(RuntimeContext &rt) {
   const Tensor &x = GetInput(node, 0, rt.tensors());
   const int64_t axis = GetAttributeIntOrDefault(node, "axis", -1);
   const int64_t p = GetAttributeIntOrDefault(node, "p", 2);
-  onnx_kernels::kernel::LpNormalization k(rt.kernel_ctx());
-  SetOutput(node, 0, k(x, axis, p, &rt), rt);
+  SetOutput(node, 0, (*this)(x, axis, p, &rt), rt);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

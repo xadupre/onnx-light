@@ -5,8 +5,11 @@
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
+#include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/kernels/kernel_run_helpers.h"
+#include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <string>
@@ -14,6 +17,10 @@
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
+
+constexpr uint32_t kTuningAbi = 1;
+constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
+constexpr std::array<int32_t, 1> kSupportedElementTypes = {static_cast<int32_t>(DataType::FLOAT)};
 
 // Validates that ``t`` is a 1-D FLOAT tensor of length ``c`` and returns its
 // data pointer. ``role`` identifies the parameter in error messages.
@@ -28,6 +35,12 @@ const float *AsFloat1D(const Tensor &t, int64_t c, const char *role) {
 }
 
 } // namespace
+
+InstanceNormalization::InstanceNormalization(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "InstanceNormalization", kSupportedElementTypes,
+                            kPortableParallelMinimum, kTuningAbi) {}
+
+ONNX_LIGHT_REGISTER_PARALLEL_TUNING_SCHEMA(InstanceNormalization)
 
 Tensor InstanceNormalization::operator()(const Tensor &x, const Tensor &scale, const Tensor &bias,
                                          float epsilon, RuntimeContext *rt) const {
@@ -73,28 +86,36 @@ void InstanceNormalization::operator()(const Tensor &x, const Tensor &scale, con
   // For each (n, c) slice compute mean / var across the spatial dims and
   // then ``y = scale[c] * (x - mean) / sqrt(var + epsilon) + bias[c]``.
   // ``spatial`` may be zero in pathological cases; guard the divisions.
-  for (int64_t n = 0; n < N; ++n) {
-    for (int64_t c = 0; c < C; ++c) {
-      const int64_t base = (n * C + c) * spatial;
-      double sum = 0.0;
-      for (int64_t i = 0; i < spatial; ++i) {
-        sum += static_cast<double>(px[base + i]);
-      }
-      const double mean = spatial > 0 ? sum / static_cast<double>(spatial) : 0.0;
-      double sqsum = 0.0;
-      for (int64_t i = 0; i < spatial; ++i) {
-        const double d = static_cast<double>(px[base + i]) - mean;
-        sqsum += d * d;
-      }
-      const double var = spatial > 0 ? sqsum / static_cast<double>(spatial) : 0.0;
-      const float inv_std = 1.0f / std::sqrt(static_cast<float>(var) + epsilon);
-      const float s = p_scale[c] * inv_std;
-      const float o = p_bias[c] - static_cast<float>(mean) * s;
-      for (int64_t i = 0; i < spatial; ++i) {
-        py[base + i] = px[base + i] * s + o;
-      }
-    }
-  }
+  const int64_t work_per_slice = std::max<int64_t>(1, spatial * 3);
+  const int64_t grain =
+      std::max<int64_t>(1, tuning().parallel_minimum_elements / work_per_slice +
+                               (tuning().parallel_minimum_elements % work_per_slice != 0));
+  ParallelFor(
+      N * C, grain,
+      [&](int64_t begin, int64_t end) {
+        for (int64_t task = begin; task < end; ++task) {
+          const int64_t c = task % C;
+          const int64_t base = task * spatial;
+          double sum = 0.0;
+          for (int64_t i = 0; i < spatial; ++i) {
+            sum += static_cast<double>(px[base + i]);
+          }
+          const double mean = spatial > 0 ? sum / static_cast<double>(spatial) : 0.0;
+          double sqsum = 0.0;
+          for (int64_t i = 0; i < spatial; ++i) {
+            const double d = static_cast<double>(px[base + i]) - mean;
+            sqsum += d * d;
+          }
+          const double var = spatial > 0 ? sqsum / static_cast<double>(spatial) : 0.0;
+          const float inv_std = 1.0f / std::sqrt(static_cast<float>(var) + epsilon);
+          const float s = p_scale[c] * inv_std;
+          const float o = p_bias[c] - static_cast<float>(mean) * s;
+          for (int64_t i = 0; i < spatial; ++i) {
+            py[base + i] = px[base + i] * s + o;
+          }
+        }
+      },
+      "InstanceNormalization");
 }
 
 void InstanceNormalization::Run(RuntimeContext &rt) {
@@ -104,8 +125,7 @@ void InstanceNormalization::Run(RuntimeContext &rt) {
   const Tensor &x = GetInput(node, 0, rt.tensors());
   const Tensor &scale = GetInput(node, 1, rt.tensors());
   const Tensor &bias = GetInput(node, 2, rt.tensors());
-  onnx_kernels::kernel::InstanceNormalization k(rt.kernel_ctx());
-  SetOutput(node, 0, k(x, scale, bias, GetEpsilon(node), &rt), rt);
+  SetOutput(node, 0, (*this)(x, scale, bias, GetEpsilon(node), &rt), rt);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

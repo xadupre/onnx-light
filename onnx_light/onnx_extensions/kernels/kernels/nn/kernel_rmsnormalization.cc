@@ -8,9 +8,12 @@
 #include "onnx_core/runtime/kernels/float16_promote.h"
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
+#include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/memory/temporary_buffer.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/kernels/kernel_run_helpers.h"
+#include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -20,6 +23,12 @@
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
+
+constexpr uint32_t kTuningAbi = 1;
+constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
+constexpr std::array<int32_t, 3> kSupportedElementTypes = {
+    static_cast<int32_t>(DataType::FLOAT), static_cast<int32_t>(DataType::FLOAT16),
+    static_cast<int32_t>(DataType::BFLOAT16)};
 
 // Returns ``axis`` normalized to the ``[0, rank)`` range.
 int64_t NormalizeAxis(int64_t axis, int64_t rank) {
@@ -49,6 +58,12 @@ void CheckScaleBroadcast(const onnx_kernels::Shape &x_shape, int64_t axis,
 }
 
 } // namespace
+
+RMSNormalization::RMSNormalization(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "RMSNormalization", kSupportedElementTypes,
+                            kPortableParallelMinimum, kTuningAbi) {}
+
+ONNX_LIGHT_REGISTER_PARALLEL_TUNING_SCHEMA(RMSNormalization)
 
 Tensor RMSNormalization::operator()(const Tensor &x, const Tensor &scale, int64_t axis,
                                     float epsilon, RuntimeContext *rt) const {
@@ -167,26 +182,34 @@ void RMSNormalization::operator()(const Tensor &x, const Tensor &scale, Tensor &
   // For each outer position, compute the mean of squares over the normalized
   // axes, take the square root and divide ``X`` by it. Then multiply by the
   // broadcasted scale.
-  for (int64_t o = 0; o < outer; ++o) {
-    const int64_t base = o * norm_size;
-    double sqsum = 0.0;
-    for (int64_t i = 0; i < norm_size; ++i) {
-      const double v = static_cast<double>(px[base + i]);
-      sqsum += v * v;
-    }
-    const double mean = norm_size > 0 ? sqsum / static_cast<double>(norm_size) : 0.0;
-    const float rms = std::sqrt(static_cast<float>(mean) + epsilon);
-    for (int64_t i = 0; i < norm_size; ++i) {
-      const float normalized = px[base + i] / rms;
-      const float s = ps[scale_index[static_cast<size_t>(i)]];
-      if (half) {
-        // Cast to the input dtype before applying scale.
-        py_half[base + i] = encode(decode(encode(normalized)) * s);
-      } else {
-        py[base + i] = normalized * s;
-      }
-    }
-  }
+  const int64_t work_per_row = std::max<int64_t>(1, norm_size * 2);
+  const int64_t grain =
+      std::max<int64_t>(1, tuning().parallel_minimum_elements / work_per_row +
+                               (tuning().parallel_minimum_elements % work_per_row != 0));
+  ParallelFor(
+      outer, grain,
+      [&](int64_t begin, int64_t end) {
+        for (int64_t o = begin; o < end; ++o) {
+          const int64_t base = o * norm_size;
+          double sqsum = 0.0;
+          for (int64_t i = 0; i < norm_size; ++i) {
+            const double v = static_cast<double>(px[base + i]);
+            sqsum += v * v;
+          }
+          const double mean = norm_size > 0 ? sqsum / static_cast<double>(norm_size) : 0.0;
+          const float rms = std::sqrt(static_cast<float>(mean) + epsilon);
+          for (int64_t i = 0; i < norm_size; ++i) {
+            const float normalized = px[base + i] / rms;
+            const float s = ps[scale_index[static_cast<size_t>(i)]];
+            if (half) {
+              py_half[base + i] = encode(decode(encode(normalized)) * s);
+            } else {
+              py[base + i] = normalized * s;
+            }
+          }
+        }
+      },
+      "RMSNormalization");
 }
 
 void RMSNormalization::Run(RuntimeContext &rt) {
@@ -195,8 +218,7 @@ void RMSNormalization::Run(RuntimeContext &rt) {
   RequireOutputCount(node, 1);
   const Tensor &x = GetInput(node, 0, rt.tensors());
   const Tensor &scale = GetInput(node, 1, rt.tensors());
-  onnx_kernels::kernel::RMSNormalization k(rt.kernel_ctx());
-  SetOutput(node, 0, k(x, scale, GetNormAxis(node), GetEpsilon(node), &rt), rt);
+  SetOutput(node, 0, (*this)(x, scale, GetNormAxis(node), GetEpsilon(node), &rt), rt);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

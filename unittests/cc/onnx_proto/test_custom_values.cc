@@ -1746,11 +1746,29 @@ TEST(custom_values, SerializedSizeMismatchNamesTheField) {
   // the mismatch and name the enclosing field number (ModelProto.graph == 7).
   SerializeSizeResult poisoned;
   poisoned.proto_size = 1;
-  stream.CacheSize(reinterpret_cast<const void *>(&model.ref_graph()), poisoned);
+  stream.CacheSize(reinterpret_cast<const void *>(&model.ref_graph()), GraphProto::proto_id,
+                   poisoned);
   const std::string message =
       RuntimeErrorMessage([&]() { model.SerializeToStream(stream, options); });
   EXPECT_NE(message.find("Serialized size"), std::string::npos) << message;
   EXPECT_NE(message.find("field 7"), std::string::npos) << message;
+}
+
+TEST(custom_values, SerializedSizeCacheSeparatesTypesAtTheSameAddress) {
+  utils::StringWriteStream stream;
+  const int object = 0;
+  SerializeSizeResult graph_size;
+  graph_size.proto_size = 17;
+  SerializeSizeResult tensor_size;
+  tensor_size.proto_size = 30;
+  stream.CacheSize(&object, GraphProto::proto_id, graph_size);
+  stream.CacheSize(&object, TensorProto::proto_id, tensor_size);
+
+  SerializeSizeResult actual;
+  ASSERT_TRUE(stream.GetCachedSize(&object, GraphProto::proto_id, actual));
+  EXPECT_EQ(actual.proto_size, graph_size.proto_size);
+  ASSERT_TRUE(stream.GetCachedSize(&object, TensorProto::proto_id, actual));
+  EXPECT_EQ(actual.proto_size, tensor_size.proto_size);
 }
 
 // ---------------------------------------------------------------------------

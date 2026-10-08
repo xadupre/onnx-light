@@ -784,11 +784,30 @@ TEST(OnnxOptimShapeSequenceAt, CommonElemShapeProducesThatShape) {
   EXPECT_EQ(out.Shape(), shape);
 }
 
-TEST(OnnxOptimShapeSequenceAt, MismatchedElemShapesProducesEmptyShape) {
+TEST(OnnxOptimShapeSequenceAt, MismatchedElemDimsProduceMergedShape) {
   NodeProto node = MakeSequenceAtNode("s", "p", "out");
   core::shapes::ShapesContext ctx;
   core::symbolic::SymShape shape_a{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
   core::symbolic::SymShape shape_b{core::symbolic::SymDim(2), core::symbolic::SymDim(4)};
+  ctx.SetSequence(
+      "s", core::symbolic::SymSequence(core::symbolic::TensorType::kFloat,
+                                       std::vector<core::symbolic::SymShape>{shape_a, shape_b}));
+
+  onnx_shapes::shapes::sequence::ComputeShapeSequenceAt(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("out"));
+  const core::symbolic::SymTensor &out = ctx.Get("out");
+  EXPECT_EQ(out.Dtype(), core::symbolic::TensorType::kFloat);
+  ASSERT_EQ(out.Shape().Rank(), 2u);
+  EXPECT_EQ(out.Shape()[0], core::symbolic::SymDim(2));
+  EXPECT_EQ(out.Shape()[1], core::symbolic::SymDim("SequenceAt_out_dim1"));
+}
+
+TEST(OnnxOptimShapeSequenceAt, MismatchedElemRanksProduceEmptyShape) {
+  NodeProto node = MakeSequenceAtNode("s", "p", "out");
+  core::shapes::ShapesContext ctx;
+  core::symbolic::SymShape shape_a{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
+  core::symbolic::SymShape shape_b{core::symbolic::SymDim(2)};
   ctx.SetSequence(
       "s", core::symbolic::SymSequence(core::symbolic::TensorType::kFloat,
                                        std::vector<core::symbolic::SymShape>{shape_a, shape_b}));

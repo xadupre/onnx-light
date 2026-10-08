@@ -75,6 +75,7 @@ void ComputeShapeSplitToSequence(ShapesContext &ctx, const NodeProto &node) {
 
   // Resolve the per-output split sizes when possible.
   std::optional<std::vector<int64_t>> sizes;
+  std::optional<std::vector<SymDim>> symbolic_sizes;
   bool split_is_scalar = false;
   if (!has_split) {
     if (axis_dim_known) {
@@ -119,13 +120,21 @@ void ComputeShapeSplitToSequence(ShapesContext &ctx, const NodeProto &node) {
         }
         sizes = std::move(*v);
       }
+    } else if (!split_is_scalar && split_t.HasValueAsShape()) {
+      const SymShape &split_values = split_t.ValueAsShape();
+      std::vector<SymDim> resolved;
+      resolved.reserve(split_values.Rank());
+      for (std::size_t i = 0; i < split_values.Rank(); ++i) {
+        resolved.push_back(split_values[i]);
+      }
+      symbolic_sizes = std::move(resolved);
     }
   }
 
   // ``squeeze`` only applies when ``split`` is omitted and keepdims == 0.
   const bool squeeze = !has_split && keepdims == 0;
 
-  if (!sizes.has_value()) {
+  if (!sizes.has_value() && !symbolic_sizes.has_value()) {
     // Unknown number of chunks → only forward dtype and symbolic length.
     ctx.SetSequence(node.output(0),
                     SymSequence(elem_dtype, SymDim("SplitToSequence_" + node.output(0) + "_len")));
@@ -133,13 +142,14 @@ void ComputeShapeSplitToSequence(ShapesContext &ctx, const NodeProto &node) {
   }
 
   std::vector<SymShape> elem_shapes;
-  elem_shapes.reserve(sizes->size());
-  for (int64_t s : *sizes) {
+  const std::size_t count = sizes.has_value() ? sizes->size() : symbolic_sizes->size();
+  elem_shapes.reserve(count);
+  for (std::size_t i = 0; i < count; ++i) {
     SymShape out_shape;
     for (std::size_t d = 0; d < in_shape.Rank(); ++d) {
       if (d == axis) {
         if (!squeeze) {
-          out_shape.PushBack(SymDim(s));
+          out_shape.PushBack(sizes.has_value() ? SymDim((*sizes)[i]) : (*symbolic_sizes)[i]);
         }
       } else {
         out_shape.PushBack(in_shape[d]);

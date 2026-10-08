@@ -104,6 +104,12 @@ ONNX_LIGHT_BACKEND_TEST_LOCAL void
 RegisterSliceSymbolicEndShapeInferenceCases(std::vector<TestCase> &registry,
                                             TestMode mode = TestMode::TEST);
 
+/// Registers regression cases for Shape, Split, Slice, SplitToSequence, and
+/// Einsum symbolic shape inference.
+ONNX_LIGHT_BACKEND_TEST_LOCAL void
+RegisterOperatorEdgeShapeInferenceCases(std::vector<TestCase> &registry,
+                                        TestMode mode = TestMode::TEST);
+
 /// Registers a ``Loop`` case that computes the pairwise Euclidean distance
 /// matrix of an input ``X`` of shape ``[N, D]``. The Loop iterates ``N``
 /// times: each iteration gathers one row of the outer-scope ``X`` and emits

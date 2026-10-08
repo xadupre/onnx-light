@@ -72,7 +72,7 @@ void ComputeShapeSqueeze(ShapesContext &ctx, const NodeProto &node) {
   }
 
   SymShape out_shape;
-  if (axes_known) {
+  if (axes_known && !normalized_axes.empty()) {
     size_t axis_index = 0;
     for (int64_t i = 0; i < rank; ++i) {
       if (axis_index < normalized_axes.size() && normalized_axes[axis_index] == i) {
@@ -85,7 +85,7 @@ void ComputeShapeSqueeze(ShapesContext &ctx, const NodeProto &node) {
       }
       out_shape.PushBack(input_shape[static_cast<size_t>(i)]);
     }
-  } else if (!axes_specified) {
+  } else if (!axes_specified || (axes_count_known && axes_count == 0)) {
     for (size_t i = 0; i < input_shape.Rank(); ++i) {
       if (input_shape[i].IsInt() && input_shape[i].AsInt() == 1) {
         continue;

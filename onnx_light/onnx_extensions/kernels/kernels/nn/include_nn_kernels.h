@@ -298,11 +298,12 @@ public:
 /// (``training_mode = 1``, opset 14+) is also supported via
 /// ``TrainingForward``: it normalizes ``X`` with the per-channel batch
 /// statistics and returns the updated running mean / variance.
-class BatchNormalization : public KernelBase {
+class BatchNormalization : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:BatchNormalization";
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
+  explicit BatchNormalization(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
 
   /// Returns the inference-mode primary output ``Y``. ``epsilon`` defaults
   /// to 1e-5f, the upstream default.
@@ -342,11 +343,12 @@ public:
 /// where ``mean`` and ``var`` are computed over the spatial dimensions
 /// ``D1, ..., Dk`` for every ``(n, c)`` pair. ``scale`` and ``B`` are 1-D
 /// FLOAT tensors of length ``C``.
-class InstanceNormalization : public KernelBase {
+class InstanceNormalization : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:InstanceNormalization";
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
+  explicit InstanceNormalization(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
 
   /// Returns the output ``Y``. ``epsilon`` defaults to 1e-5f, the upstream
   /// default.
@@ -372,11 +374,12 @@ public:
 ///
 /// The kernel implements the opset-21 contract where ``scale`` and ``bias``
 /// are 1-D FLOAT tensors of length ``C``. ``num_groups`` must divide ``C``.
-class GroupNormalization : public KernelBase {
+class GroupNormalization : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:GroupNormalization";
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
+  explicit GroupNormalization(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
 
   /// Returns the output ``Y``. ``epsilon`` defaults to 1e-5f, the upstream
   /// default.
@@ -408,11 +411,12 @@ public:
 /// with the trailing ``r - axis`` dimensions collapsed to 1. Both statistics
 /// use FLOAT stash precision. Half inputs are promoted before normalization,
 /// then rounded back to the input dtype before the affine stage.
-class LayerNormalization : public KernelBase {
+class LayerNormalization : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:LayerNormalization";
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
+  explicit LayerNormalization(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
 
   /// Returns the tuple ``(Y, Mean, InvStdDev)``. ``axis`` defaults to ``-1``
   /// and ``epsilon`` to ``1e-5f`` to match the upstream defaults. ``b`` may
@@ -447,11 +451,12 @@ public:
 /// broadcastable to the normalized shape (i.e. ``X.shape[axis:]``).
 /// Half inputs are promoted to FLOAT before normalization, then rounded back
 /// to the input dtype before multiplying by ``scale``.
-class RMSNormalization : public KernelBase {
+class RMSNormalization : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:RMSNormalization";
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
+  explicit RMSNormalization(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
 
   /// Returns the output ``Y``. ``axis`` defaults to ``-1`` and ``epsilon``
   /// to ``1e-5f`` to match the upstream defaults.
@@ -471,11 +476,12 @@ public:
 /// Normalizes each element as
 /// ``Y = (X - mean(X, axes)) / sqrt(mean((X - mean(X, axes))^2, axes))``.
 /// The default axes are ``[0, 2, 3]``.
-class MeanVarianceNormalization : public KernelBase {
+class MeanVarianceNormalization : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:MeanVarianceNormalization";
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
+  explicit MeanVarianceNormalization(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
 
   Tensor operator()(const Tensor &x, const Shape &axes = {0, 2, 3},
                     RuntimeContext *rt = nullptr) const;
@@ -581,11 +587,12 @@ public:
 /// to ``-1`` (the last axis). ``p`` must be either ``1`` (L1 norm) or
 /// ``2`` (L2 norm) and defaults to ``2``. The output shape matches the
 /// input shape.
-class LpNormalization : public KernelBase {
+class LpNormalization : public tuning::ParallelTunableKernel {
 public:
   static constexpr const char *name = "onnx_kernels:CPU:ai.onnx:LpNormalization";
   void Run(RuntimeContext &rt) override;
-  using KernelBase::KernelBase;
+  explicit LpNormalization(const KernelContext &ctx);
+  static void RegisterTuningSchemas();
 
   /// Returns a FLOAT output tensor whose shape matches ``x``.
   Tensor operator()(const Tensor &x, int64_t axis = -1, int64_t p = 2,

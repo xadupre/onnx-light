@@ -5,8 +5,11 @@
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
+#include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_extensions/kernels/kernel_run_helpers.h"
+#include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <string>
@@ -14,6 +17,10 @@
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 namespace {
+
+constexpr uint32_t kTuningAbi = 1;
+constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
+constexpr std::array<int32_t, 1> kSupportedElementTypes = {static_cast<int32_t>(DataType::FLOAT)};
 
 // Validates that ``t`` is a 1-D FLOAT tensor of length ``c`` and returns its
 // data pointer. ``role`` identifies the parameter in error messages.
@@ -28,6 +35,12 @@ const float *AsFloat1D(const Tensor &t, int64_t c, const char *role) {
 }
 
 } // namespace
+
+GroupNormalization::GroupNormalization(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "GroupNormalization", kSupportedElementTypes,
+                            kPortableParallelMinimum, kTuningAbi) {}
+
+ONNX_LIGHT_REGISTER_PARALLEL_TUNING_SCHEMA(GroupNormalization)
 
 Tensor GroupNormalization::operator()(const Tensor &x, const Tensor &scale, const Tensor &bias,
                                       int64_t num_groups, float epsilon, RuntimeContext *rt) const {
@@ -78,33 +91,41 @@ void GroupNormalization::operator()(const Tensor &x, const Tensor &scale, const 
 
   // For each (n, group), compute mean / var over the ``group_size *
   // spatial`` block, then apply the per-channel affine.
-  for (int64_t n = 0; n < N; ++n) {
-    for (int64_t g = 0; g < num_groups; ++g) {
-      const int64_t base = (n * num_groups + g) * group_block;
-      double sum = 0.0;
-      for (int64_t i = 0; i < group_block; ++i) {
-        sum += static_cast<double>(px[base + i]);
-      }
-      const double mean = group_block > 0 ? sum / static_cast<double>(group_block) : 0.0;
-      double sqsum = 0.0;
-      for (int64_t i = 0; i < group_block; ++i) {
-        const double d = static_cast<double>(px[base + i]) - mean;
-        sqsum += d * d;
-      }
-      const double var = group_block > 0 ? sqsum / static_cast<double>(group_block) : 0.0;
-      const float inv_std = 1.0f / std::sqrt(static_cast<float>(var) + epsilon);
-      const float fmean = static_cast<float>(mean);
-      for (int64_t k = 0; k < group_size; ++k) {
-        const int64_t c = g * group_size + k;
-        const float s = p_scale[c] * inv_std;
-        const float o = p_bias[c] - fmean * s;
-        const int64_t ch_base = base + k * spatial;
-        for (int64_t i = 0; i < spatial; ++i) {
-          py[ch_base + i] = px[ch_base + i] * s + o;
+  const int64_t work_per_group = std::max<int64_t>(1, group_block * 3);
+  const int64_t grain =
+      std::max<int64_t>(1, tuning().parallel_minimum_elements / work_per_group +
+                               (tuning().parallel_minimum_elements % work_per_group != 0));
+  ParallelFor(
+      N * num_groups, grain,
+      [&](int64_t begin, int64_t end) {
+        for (int64_t task = begin; task < end; ++task) {
+          const int64_t g = task % num_groups;
+          const int64_t base = task * group_block;
+          double sum = 0.0;
+          for (int64_t i = 0; i < group_block; ++i) {
+            sum += static_cast<double>(px[base + i]);
+          }
+          const double mean = group_block > 0 ? sum / static_cast<double>(group_block) : 0.0;
+          double sqsum = 0.0;
+          for (int64_t i = 0; i < group_block; ++i) {
+            const double d = static_cast<double>(px[base + i]) - mean;
+            sqsum += d * d;
+          }
+          const double var = group_block > 0 ? sqsum / static_cast<double>(group_block) : 0.0;
+          const float inv_std = 1.0f / std::sqrt(static_cast<float>(var) + epsilon);
+          const float fmean = static_cast<float>(mean);
+          for (int64_t k = 0; k < group_size; ++k) {
+            const int64_t c = g * group_size + k;
+            const float s = p_scale[c] * inv_std;
+            const float o = p_bias[c] - fmean * s;
+            const int64_t ch_base = base + k * spatial;
+            for (int64_t i = 0; i < spatial; ++i) {
+              py[ch_base + i] = px[ch_base + i] * s + o;
+            }
+          }
         }
-      }
-    }
-  }
+      },
+      "GroupNormalization");
 }
 
 void GroupNormalization::Run(RuntimeContext &rt) {
@@ -115,8 +136,7 @@ void GroupNormalization::Run(RuntimeContext &rt) {
   const Tensor &scale = GetInput(node, 1, rt.tensors());
   const Tensor &bias = GetInput(node, 2, rt.tensors());
   const int64_t num_groups = GetAttributeIntOrDefault(node, "num_groups", 0);
-  onnx_kernels::kernel::GroupNormalization k(rt.kernel_ctx());
-  SetOutput(node, 0, k(x, scale, bias, num_groups, GetEpsilon(node), &rt), rt);
+  SetOutput(node, 0, (*this)(x, scale, bias, num_groups, GetEpsilon(node), &rt), rt);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

@@ -5,7 +5,9 @@
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
 
 #include "onnx_core/runtime/kernels/node_helpers.h"
+#include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include <array>
 #include <cmath>
 #include <cstdint>
 
@@ -14,6 +16,10 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 namespace {
 
 constexpr double kMvnEpsilon = 1e-9;
+constexpr uint32_t kTuningAbi = 1;
+constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
+constexpr std::array<int32_t, 2> kSupportedElementTypes = {static_cast<int32_t>(DataType::FLOAT),
+                                                           static_cast<int32_t>(DataType::DOUBLE)};
 
 Shape NormalizeAxes(const Shape &axes, int64_t rank) {
   Shape normalized;
@@ -50,7 +56,8 @@ int64_t ComputeLane(int64_t idx, const onnx_kernels::Shape &dims,
 }
 
 template <typename T>
-void ComputeMvn(const Tensor &x, Tensor &output, const Shape &axes, RawBufferAllocator *allocator) {
+void ComputeMvn(const Tensor &x, Tensor &output, const Shape &axes, RawBufferAllocator *allocator,
+                int64_t minimum_elements) {
   const onnx_kernels::Shape &dims = x.shape;
   const int64_t rank = static_cast<int64_t>(dims.size());
   const int64_t total = x.element_count();
@@ -112,17 +119,22 @@ void ComputeMvn(const Tensor &x, Tensor &output, const Shape &axes, RawBufferAll
     sqsum[static_cast<size_t>(lane)] += centered * centered;
   }
 
-  for (int64_t idx = 0; idx < total; ++idx) {
-    const int64_t lane = ComputeLane(idx, dims, reduce_mask);
-    const double variance = sqsum[static_cast<size_t>(lane)] / reduced_size_d;
-    const double denom = std::sqrt(variance + kMvnEpsilon);
-    py[idx] =
-        static_cast<T>((static_cast<double>(px[idx]) - mean[static_cast<size_t>(lane)]) / denom);
-  }
+  ParallelFor(
+      total, minimum_elements,
+      [&](int64_t begin, int64_t end) {
+        for (int64_t idx = begin; idx < end; ++idx) {
+          const int64_t lane = ComputeLane(idx, dims, reduce_mask);
+          const double variance = sqsum[static_cast<size_t>(lane)] / reduced_size_d;
+          const double denom = std::sqrt(variance + kMvnEpsilon);
+          py[idx] = static_cast<T>(
+              (static_cast<double>(px[idx]) - mean[static_cast<size_t>(lane)]) / denom);
+        }
+      },
+      "MeanVarianceNormalization");
 }
 
-void DispatchMvn(const Tensor &x, Tensor &output, const Shape &axes,
-                 RawBufferAllocator *allocator) {
+void DispatchMvn(const Tensor &x, Tensor &output, const Shape &axes, RawBufferAllocator *allocator,
+                 int64_t minimum_elements) {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT) ||
                           x.data_type == static_cast<int32_t>(DataType::DOUBLE),
                       "kernel::MeanVarianceNormalization: X must be FLOAT or DOUBLE.");
@@ -135,13 +147,19 @@ void DispatchMvn(const Tensor &x, Tensor &output, const Shape &axes,
       "kernel::MeanVarianceNormalization: output buffer must have the same byte size as X.");
 
   if (x.data_type == static_cast<int32_t>(DataType::FLOAT)) {
-    ComputeMvn<float>(x, output, axes, allocator);
+    ComputeMvn<float>(x, output, axes, allocator, minimum_elements);
     return;
   }
-  ComputeMvn<double>(x, output, axes, allocator);
+  ComputeMvn<double>(x, output, axes, allocator, minimum_elements);
 }
 
 } // namespace
+
+MeanVarianceNormalization::MeanVarianceNormalization(const KernelContext &ctx)
+    : ParallelTunableKernel(ctx, "MeanVarianceNormalization", kSupportedElementTypes,
+                            kPortableParallelMinimum, kTuningAbi) {}
+
+ONNX_LIGHT_REGISTER_PARALLEL_TUNING_SCHEMA(MeanVarianceNormalization)
 
 Tensor MeanVarianceNormalization::operator()(const Tensor &x, const Shape &axes,
                                              RuntimeContext *rt) const {
@@ -152,13 +170,13 @@ Tensor MeanVarianceNormalization::operator()(const Tensor &x, const Shape &axes,
   const size_t out_n_bytes = x.size_bytes();
   Tensor out = rt ? rt->MakeOutputTensor(0, x.data_type, x.shape, out_n_bytes)
                   : MakeOutputTensor(x.data_type, x.shape, out_n_bytes, nullptr);
-  DispatchMvn(x, out, axes, allocator);
+  DispatchMvn(x, out, axes, allocator, tuning().parallel_minimum_elements);
   return out;
 }
 
 void MeanVarianceNormalization::operator()(const Tensor &x, Tensor &output,
                                            const Shape &axes) const {
-  DispatchMvn(x, output, axes, nullptr);
+  DispatchMvn(x, output, axes, nullptr, tuning().parallel_minimum_elements);
 }
 
 void MeanVarianceNormalization::Run(RuntimeContext &rt) {
@@ -167,8 +185,7 @@ void MeanVarianceNormalization::Run(RuntimeContext &rt) {
   RequireOutputCount(node, 1);
   const Tensor &x = GetInput(node, 0, rt.tensors());
   const std::vector<int64_t> axes = GetAttributeIntsOrDefault(node, "axes", {0, 2, 3});
-  onnx_kernels::kernel::MeanVarianceNormalization k(rt.kernel_ctx());
-  SetOutput(node, 0, k(x, axes, &rt), rt);
+  SetOutput(node, 0, (*this)(x, axes, &rt), rt);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel

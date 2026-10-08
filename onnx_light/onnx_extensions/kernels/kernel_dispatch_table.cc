@@ -326,6 +326,7 @@ void RegisterKernelFunctions() {
     onnx_kernels::kernel::Asinh::RegisterTuningSchemas();
     onnx_kernels::kernel::Atan::RegisterTuningSchemas();
     onnx_kernels::kernel::Atanh::RegisterTuningSchemas();
+    onnx_kernels::kernel::BatchNormalization::RegisterTuningSchemas();
     onnx_kernels::kernel::BitShift::RegisterTuningSchemas();
     onnx_kernels::kernel::BitwiseAnd::RegisterTuningSchemas();
     onnx_kernels::kernel::BitwiseOr::RegisterTuningSchemas();
@@ -350,13 +351,18 @@ void RegisterKernelFunctions() {
     onnx_kernels::kernel::GlobalMaxPool::RegisterTuningSchemas();
     onnx_kernels::kernel::Greater::RegisterTuningSchemas();
     onnx_kernels::kernel::GreaterOrEqual::RegisterTuningSchemas();
+    onnx_kernels::kernel::GroupNormalization::RegisterTuningSchemas();
     onnx_kernels::kernel::HardSwish::RegisterTuningSchemas();
     onnx_kernels::kernel::Less::RegisterTuningSchemas();
     onnx_kernels::kernel::LessOrEqual::RegisterTuningSchemas();
+    onnx_kernels::kernel::InstanceNormalization::RegisterTuningSchemas();
+    onnx_kernels::kernel::LayerNormalization::RegisterTuningSchemas();
     onnx_kernels::kernel::LinearAttention::RegisterTuningSchemas();
     onnx_kernels::kernel::Log::RegisterTuningSchemas();
     onnx_kernels::kernel::LogSoftmax::RegisterTuningSchemas();
+    onnx_kernels::kernel::LpNormalization::RegisterTuningSchemas();
     onnx_kernels::kernel::MatMul::RegisterTuningSchemas();
+    onnx_kernels::kernel::MeanVarianceNormalization::RegisterTuningSchemas();
     onnx_kernels::kernel::Mish::RegisterTuningSchemas();
     onnx_kernels::kernel::Mod::RegisterTuningSchemas();
     onnx_kernels::kernel::Mul::RegisterTuningSchemas();
@@ -370,6 +376,7 @@ void RegisterKernelFunctions() {
     onnx_kernels::kernel::Relu::RegisterTuningSchemas();
     onnx_kernels::kernel::ReduceMean::RegisterTuningSchemas();
     onnx_kernels::kernel::ReduceSum::RegisterTuningSchemas();
+    onnx_kernels::kernel::RMSNormalization::RegisterTuningSchemas();
     onnx_kernels::kernel::Round::RegisterTuningSchemas();
     onnx_kernels::kernel::Sigmoid::RegisterTuningSchemas();
     onnx_kernels::kernel::Sign::RegisterTuningSchemas();

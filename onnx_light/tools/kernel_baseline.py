@@ -52,6 +52,7 @@ _GEMM_SHAPES = (("small", 32), ("medium", 256), ("large", 1024))
 # Global pooling sizes are channel counts; each channel reduces 256 spatial values.
 _GLOBAL_POOL_SHAPES = (("small", 8), ("medium", 128), ("large", 1024))
 _REDUCE_SUM_SHAPES = (("small", 8), ("medium", 128), ("large", 1024))
+_NORMALIZATION_SHAPES = (("small", 8), ("medium", 128), ("large", 1024))
 
 # Representative kernels: one memory-bound unary float kernel with an existing
 # tuning schema (Abs), one compute-bound tunable kernel (Gemm), and one
@@ -81,6 +82,23 @@ BENCHMARK_CORPUS: tuple[dict[str, Any], ...] = (
             "shapes": _GLOBAL_POOL_SHAPES,
         }
         for op in ("GlobalAveragePool", "GlobalMaxPool", "GlobalLpPool")
+    ),
+    *(
+        {
+            "op_type": op,
+            "arity": "normalization",
+            "element_type": "FLOAT",
+            "shapes": _NORMALIZATION_SHAPES,
+        }
+        for op in (
+            "BatchNormalization",
+            "InstanceNormalization",
+            "GroupNormalization",
+            "LayerNormalization",
+            "RMSNormalization",
+            "MeanVarianceNormalization",
+            "LpNormalization",
+        )
     ),
 )
 
@@ -173,9 +191,57 @@ def _make_model(case: dict[str, Any], size: int):
             ],
             [oh.make_tensor_value_info("Y", elem_type, [size])],
         )
+    elif case["arity"] == "normalization":
+        op_type = case["op_type"]
+        if op_type in {"BatchNormalization", "InstanceNormalization", "GroupNormalization"}:
+            shape = [size, 8, 32]
+            parameter_names = ["scale", "bias"]
+            if op_type == "BatchNormalization":
+                parameter_names.extend(["mean", "variance"])
+            node = (
+                oh.make_node(op_type, ["X", *parameter_names], ["Y"], num_groups=4)
+                if op_type == "GroupNormalization"
+                else oh.make_node(op_type, ["X", *parameter_names], ["Y"])
+            )
+            graph = oh.make_graph(
+                [node],
+                f"{op_type}_baseline",
+                [
+                    oh.make_tensor_value_info("X", elem_type, shape),
+                    *(
+                        oh.make_tensor_value_info(name, elem_type, [8])
+                        for name in parameter_names
+                    ),
+                ],
+                [oh.make_tensor_value_info("Y", elem_type, shape)],
+            )
+        else:
+            shape = [size, 256]
+            parameter_names = (
+                ["scale", "bias"]
+                if op_type == "LayerNormalization"
+                else (["scale"] if op_type == "RMSNormalization" else [])
+            )
+            node = oh.make_node(op_type, ["X", *parameter_names], ["Y"], axis=1)
+            if op_type == "MeanVarianceNormalization":
+                node = oh.make_node(op_type, ["X"], ["Y"], axes=[1])
+            elif op_type == "LpNormalization":
+                node = oh.make_node(op_type, ["X"], ["Y"], axis=1, p=2)
+            graph = oh.make_graph(
+                [node],
+                f"{op_type}_baseline",
+                [
+                    oh.make_tensor_value_info("X", elem_type, shape),
+                    *(
+                        oh.make_tensor_value_info(name, elem_type, [256])
+                        for name in parameter_names
+                    ),
+                ],
+                [oh.make_tensor_value_info("Y", elem_type, shape)],
+            )
     else:
         raise ValueError(f"Unsupported benchmark arity: {case['arity']!r}")
-    model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)])
+    model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 23)])
     return model
 
 
@@ -199,6 +265,24 @@ def _make_inputs(case: dict[str, Any], size: int, seed: int) -> dict[str, numpy.
         return {"X": make_array((1, size, 256))}
     if case["arity"] == "reduce_sum":
         return {"X": make_array((size, 256)), "axes": numpy.array([1], dtype=numpy.int64)}
+    if case["arity"] == "normalization":
+        op_type = case["op_type"]
+        if op_type in {"BatchNormalization", "InstanceNormalization", "GroupNormalization"}:
+            inputs = {
+                "X": make_array((size, 8, 32)),
+                "scale": numpy.ones((8,), dtype=numpy.float32),
+                "bias": numpy.zeros((8,), dtype=numpy.float32),
+            }
+            if op_type == "BatchNormalization":
+                inputs["mean"] = numpy.zeros((8,), dtype=numpy.float32)
+                inputs["variance"] = numpy.ones((8,), dtype=numpy.float32)
+            return inputs
+        inputs = {"X": make_array((size, 256))}
+        if op_type in {"LayerNormalization", "RMSNormalization"}:
+            inputs["scale"] = numpy.ones((256,), dtype=numpy.float32)
+        if op_type == "LayerNormalization":
+            inputs["bias"] = numpy.zeros((256,), dtype=numpy.float32)
+        return inputs
     raise ValueError(f"Unsupported benchmark arity: {case['arity']!r}")
 
 
@@ -220,10 +304,17 @@ def _run_policy_case(
     policy = runtime.CpuExecutionPolicy()
     policy.num_threads = num_threads
     resolved = runtime.resolve_cpu_execution_policy(policy)
+    default_opsets = [
+        opset.version for opset in model.opset_import if opset.domain in {"", "ai.onnx"}
+    ]
+    if len(default_opsets) != 1:
+        raise ValueError(f"Expected one default-domain opset import, got {default_opsets!r}.")
 
     def _make_context(opts):
         session = runtime.RuntimeSession(model, opts)
-        context = runtime.RuntimeContext(runtime.KernelContext(runtime.default_opset(18)))
+        context = runtime.RuntimeContext(
+            runtime.KernelContext(runtime.default_opset(default_opsets[0]))
+        )
         for name, array in inputs.items():
             raw = numpy.ascontiguousarray(array).view(numpy.uint8).ravel()
             tensor = runtime.tensor_from_numpy(

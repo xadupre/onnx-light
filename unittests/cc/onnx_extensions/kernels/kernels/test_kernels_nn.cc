@@ -127,6 +127,100 @@ TEST(KernelClass, GlobalPoolsParallelSlicesMatchSerial) {
   EXPECT_THROW(maximum(Tensor::FromFloat("", {1, 2, 0}, {})), std::invalid_argument);
 }
 
+TEST(KernelClass, NormalizationsParallelSlicesMatchSerial) {
+  core::runtime::CpuExecutionPolicy policy;
+  policy.num_threads = 2;
+  policy.affinity_policy = core::runtime::CpuAffinityPolicy::kNone;
+  const auto executor = core::runtime::GlobalCpuExecutorRegistry().Acquire(policy);
+  const core::runtime::CpuExecutorScope executor_scope(executor.get());
+  const KernelContext ctx{DefaultOpset(23)};
+
+  std::vector<float> values(4 * 4 * 257);
+  for (size_t i = 0; i < values.size(); ++i) {
+    values[i] = static_cast<float>(static_cast<int>(i % 29) - 14) / 9.0f;
+  }
+  const Tensor x = Tensor::FromFloat("", {4, 4, 257}, values);
+  const Tensor scale = Tensor::FromFloat("", {4}, {1.0f, 0.75f, 1.25f, 0.5f});
+  const Tensor bias = Tensor::FromFloat("", {4}, {0.1f, -0.2f, 0.3f, -0.4f});
+  const Tensor mean = Tensor::FromFloat("", {4}, {0.0f, 0.1f, -0.1f, 0.2f});
+  const Tensor variance = Tensor::FromFloat("", {4}, {1.0f, 1.5f, 0.75f, 2.0f});
+  std::vector<float> affine_values(257);
+  for (size_t i = 0; i < affine_values.size(); ++i) {
+    affine_values[i] = 0.5f + static_cast<float>(i % 11) / 10.0f;
+  }
+  const Tensor affine = Tensor::FromFloat("", {257}, affine_values);
+
+  BatchNormalization batch{ctx};
+  onnx_kernels::kernel::InstanceNormalization instance{ctx};
+  onnx_kernels::kernel::GroupNormalization group{ctx};
+  LayerNormalization layer{ctx};
+  RMSNormalization rms{ctx};
+  MeanVarianceNormalization mvn{ctx};
+  onnx_kernels::kernel::LpNormalization lp{ctx};
+  onnx_kernels::RegisterKernelFunctions();
+
+  const Tensor batch_serial = batch(x, scale, bias, mean, variance);
+  const auto [training_y_serial, training_mean_serial, training_var_serial] =
+      batch.TrainingForward(x, scale, bias, mean, variance);
+  const Tensor instance_serial = instance(x, scale, bias);
+  const Tensor group_serial = group(x, scale, bias, 2);
+  const auto [layer_serial, layer_mean_serial, layer_inv_serial] = layer(x, affine, affine, 2);
+  const Tensor rms_serial = rms(x, affine, 2);
+  const Tensor mvn_serial = mvn(x, {0, 2});
+  const Tensor lp_serial = lp(x, 2, 2);
+
+  for (auto *kernel : {static_cast<onnx_kernels::tuning::ParallelTunableKernel *>(&batch),
+                       static_cast<onnx_kernels::tuning::ParallelTunableKernel *>(&instance),
+                       static_cast<onnx_kernels::tuning::ParallelTunableKernel *>(&group),
+                       static_cast<onnx_kernels::tuning::ParallelTunableKernel *>(&layer),
+                       static_cast<onnx_kernels::tuning::ParallelTunableKernel *>(&rms),
+                       static_cast<onnx_kernels::tuning::ParallelTunableKernel *>(&mvn),
+                       static_cast<onnx_kernels::tuning::ParallelTunableKernel *>(&lp)}) {
+    const auto schema =
+        core::runtime::GetKernelTuningRegistry().FindSchema(kernel->TuningKey(DataType::FLOAT));
+    ASSERT_NE(schema, nullptr);
+    EXPECT_EQ(schema->portable_defaults().Get<int64_t>("parallel.minimum_elements"),
+              core::runtime::kParallelForGrainSize);
+    kernel->Configure(
+        {kernel->TuningKey(DataType::FLOAT), {{"parallel.minimum_elements", int64_t{1}}}});
+  }
+
+  core::runtime::ParallelRegionCollector collector(16);
+  const core::runtime::ParallelRegionCollectorScope collector_scope(&collector);
+  const Tensor batch_parallel = batch(x, scale, bias, mean, variance);
+  const auto [training_y_parallel, training_mean_parallel, training_var_parallel] =
+      batch.TrainingForward(x, scale, bias, mean, variance);
+  const Tensor instance_parallel = instance(x, scale, bias);
+  const Tensor group_parallel = group(x, scale, bias, 2);
+  const auto [layer_parallel, layer_mean_parallel, layer_inv_parallel] =
+      layer(x, affine, affine, 2);
+  const Tensor rms_parallel = rms(x, affine, 2);
+  const Tensor mvn_parallel = mvn(x, {0, 2});
+  const Tensor lp_parallel = lp(x, 2, 2);
+
+  const auto expect_equal = [](const Tensor &actual, const Tensor &expected) {
+    ASSERT_EQ(actual.size_bytes(), expected.size_bytes());
+    EXPECT_EQ(std::memcmp(actual.bytes(), expected.bytes(), actual.size_bytes()), 0);
+  };
+  expect_equal(batch_parallel, batch_serial);
+  expect_equal(training_y_parallel, training_y_serial);
+  expect_equal(training_mean_parallel, training_mean_serial);
+  expect_equal(training_var_parallel, training_var_serial);
+  expect_equal(instance_parallel, instance_serial);
+  expect_equal(group_parallel, group_serial);
+  expect_equal(layer_parallel, layer_serial);
+  expect_equal(layer_mean_parallel, layer_mean_serial);
+  expect_equal(layer_inv_parallel, layer_inv_serial);
+  expect_equal(rms_parallel, rms_serial);
+  expect_equal(mvn_parallel, mvn_serial);
+  expect_equal(lp_parallel, lp_serial);
+
+  ASSERT_EQ(collector.events().size(), 10u);
+  for (const auto &event : collector.events()) {
+    EXPECT_EQ(event.admitted_threads, 2);
+  }
+}
+
 TEST(KernelClass, GlobalLpPoolDtypes) {
   const KernelContext ctx{DefaultOpset(22)};
   const onnx_kernels::kernel::GlobalLpPool pool{ctx};

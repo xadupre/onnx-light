@@ -28,6 +28,54 @@ template <typename... Fields> inline void reset_fields(Fields &...fields) { (fie
 
 } // namespace onnx_light::proto_oneof_detail
 
+namespace onnx_light::proto_serialization_detail {
+
+enum class ProtoId : uint16_t {
+  StringStringEntryProto = 1,
+  IntIntListEntryProto,
+  TensorAnnotation,
+  DeviceConfigurationProto,
+  SimpleShardedDimProto,
+  ShardedDimProto,
+  ShardingSpecProto,
+  NodeDeviceConfigurationProto,
+  OperatorSetIdProto,
+  TensorShapeProto,
+  Dimension,
+  TensorProto,
+  Segment,
+  SparseTensorProto,
+  TypeProto,
+  Tensor,
+  SparseTensor,
+  Sequence,
+  Optional,
+  Map,
+  Opaque,
+  AffineLayoutProto,
+  StructTypeProto,
+  Structure,
+  Field,
+  BitPacking,
+  Component,
+  Array,
+  EncodedValueProto,
+  PagedCacheBlockProto,
+  PagedCacheProto,
+  ValueInfoProto,
+  AttributeProto,
+  NodeProto,
+  PersistentBindingProto,
+  GraphProto,
+  FunctionProto,
+  ModelProto,
+  SequenceProto,
+  MapProto,
+  OptionalProto,
+};
+
+} // namespace onnx_light::proto_serialization_detail
+
 #define FIELD_VARINT 0
 #define FIELD_FIXED64 1
 #define FIELD_FIXED_SIZE 2
@@ -58,6 +106,8 @@ template <typename... Fields> inline void reset_fields(Fields &...fields) { (fie
   class ONNX_LIGHT_PROTO_API cls : public ProtoMessageAdapter<cls> {                               \
   public:                                                                                          \
     using ProtoAdapterBase = ProtoMessageAdapter<cls>;                                             \
+    static inline constexpr uint16_t proto_id =                                                    \
+        static_cast<uint16_t>(onnx_light::proto_serialization_detail::ProtoId::cls);               \
     static inline constexpr const char *DOC = doc;                                                 \
     explicit inline cls() {}                                                                       \
     /** Resets this message to default state (protobuf compat). */                                 \
@@ -76,6 +126,8 @@ template <typename... Fields> inline void reset_fields(Fields &...fields) { (fie
   class ONNX_LIGHT_PROTO_API cls : public ProtoMessageAdapter<cls> {                               \
   public:                                                                                          \
     using ProtoAdapterBase = ProtoMessageAdapter<cls>;                                             \
+    static inline constexpr uint16_t proto_id =                                                    \
+        static_cast<uint16_t>(onnx_light::proto_serialization_detail::ProtoId::cls);               \
     static inline constexpr const char *DOC = doc;                                                 \
     void CopyFrom(const cls &proto);                                                               \
     /** Compares all fields, including presence and floating-point bits, without serialization. */ \

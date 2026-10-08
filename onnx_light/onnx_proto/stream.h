@@ -345,11 +345,11 @@ public:
   virtual int64_t weights_size_for_location(const std::string &) const { return weights_size(); }
 
   // cache
-  /** Associates serialized size information with the object at *ptr* in the size cache. */
-  virtual void CacheSize(const void *ptr, SerializeSizeResult size);
-  /** Looks up the cached serialized size for the object at *ptr*.
+  /** Associates serialized size information with the object and field type in the size cache. */
+  virtual void CacheSize(const void *ptr, uint16_t proto_id, SerializeSizeResult size);
+  /** Looks up the cached serialized size for the object and field type.
    *  Returns true and writes the result into *size* if found. */
-  virtual bool GetCachedSize(const void *ptr, SerializeSizeResult &size);
+  virtual bool GetCachedSize(const void *ptr, uint16_t proto_id, SerializeSizeResult &size);
   /** Swaps the size cache with *other*, transferring cached sizes between streams
    *  in O(1) so the write pass can reuse sizes computed by a separate size pass. */
   void swap_size_cache(BinaryWriteStream &other) { std::swap(size_cache_, other.size_cache_); }
@@ -387,8 +387,24 @@ public:
   virtual int64_t ByteCount() const { return size(); }
 
 protected:
-  /** Per-object serialized-size cache used to avoid redundant recomputation. */
-  std::unordered_map<const void *, SerializeSizeResult> size_cache_;
+  struct SizeCacheKey {
+    const void *ptr;
+    uint16_t proto_id;
+
+    bool operator==(const SizeCacheKey &other) const {
+      return ptr == other.ptr && proto_id == other.proto_id;
+    }
+  };
+
+  struct SizeCacheKeyHash {
+    std::size_t operator()(const SizeCacheKey &key) const {
+      // Same-address type variants share a bucket; operator== keeps their entries distinct.
+      return std::hash<const void *>{}(key.ptr);
+    }
+  };
+
+  /** Per-object-and-type serialized-size cache used to avoid redundant recomputation. */
+  std::unordered_map<SizeCacheKey, SerializeSizeResult, SizeCacheKeyHash> size_cache_;
 };
 
 ///////////

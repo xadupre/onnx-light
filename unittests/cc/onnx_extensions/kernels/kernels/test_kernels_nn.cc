@@ -292,6 +292,27 @@ TEST(KernelClass, VarianceHandlesScalarEmptyAndConstantDoubleInputs) {
   EXPECT_NEAR(normalized.AsDouble()[1], 1.0, 1e-7);
 }
 
+TEST(KernelClass, VarianceAgreesWithLongDoubleOnPoorlyConditionedInput) {
+  constexpr int64_t size = 32768;
+  const auto get = [](int64_t i) { return 1e12 + (i % 2 == 0 ? 0.25 : -0.25); };
+  long double reference_mean = 0;
+  for (int64_t i = 0; i < size; ++i) {
+    reference_mean += static_cast<long double>(get(i));
+  }
+  reference_mean /= size;
+  long double reference_variance = 0;
+  for (int64_t i = 0; i < size; ++i) {
+    const long double centered = static_cast<long double>(get(i)) - reference_mean;
+    reference_variance += centered * centered;
+  }
+  reference_variance /= size;
+
+  const auto stats = onnx_kernels::kernel::statistics::Accumulate<double>(size, get, 1);
+  EXPECT_EQ(stats.count, size);
+  EXPECT_NEAR(stats.mean, static_cast<double>(reference_mean), 1e-5);
+  EXPECT_NEAR(stats.Variance(), static_cast<double>(reference_variance), 1e-9);
+}
+
 TEST(KernelClass, GlobalLpPoolDtypes) {
   const KernelContext ctx{DefaultOpset(22)};
   const onnx_kernels::kernel::GlobalLpPool pool{ctx};

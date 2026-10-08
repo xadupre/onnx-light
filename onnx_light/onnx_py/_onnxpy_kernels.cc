@@ -962,7 +962,8 @@ private:
     } else {
       plan_ = std::make_unique<ExecutionPlan>(*function_);
       session_ = std::make_unique<RuntimeSession>(*plan_, options_);
-      session_->SetOpsetImports(function_->opset_import());
+      if (!function_->opset_import().empty())
+        session_->SetOpsetImports(function_->opset_import());
     }
   }
 

@@ -149,7 +149,9 @@ public:
    * this when no precomputed plan is available: the session builds and owns
    * the plan itself, so a caller can create a runnable session from a model
    * alone (without first building an :cpp:class:`ExecutionPlan`). Kernel
-   * resolution is still deferred to the first :cpp:func:`Run`.
+   * resolution is still deferred to the first :cpp:func:`Run`. Kernel opsets
+   * come from ``model.opset_import``; missing domains, duplicate imports,
+   * unsupported versions, and conflicting legacy context opsets are rejected.
    *
    * @param model Model whose graph drives execution. The model (and the graph
    *              it owns) must remain immutable and outlive the session and
@@ -165,7 +167,10 @@ public:
   /**
    * Builds a session over ``plan``. Kernel resolution is deferred to the first
    * :cpp:func:`Run` (which supplies the :cpp:class:`RuntimeContext` the
-   * kernels are resolved against).
+   * kernels are resolved against). Without :cpp:func:`SetOpsetImports`, a
+   * standalone plan (or bare graph) uses the caller's legacy
+   * :cpp:func:`RuntimeContext::kernel_ctx` opset. Nested sessions inherit the
+   * active model/function imports instead.
    *
    * @param plan Precomputed execution / release schedule. Its node list
    *             (:cpp:func:`ExecutionPlan::nodes`) drives execution. The plan

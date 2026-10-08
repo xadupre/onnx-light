@@ -438,9 +438,10 @@ struct RuntimeContextOptions {
  *  * a :cpp:type:`TensorMap` carrying the graph inputs / initializers
  *    and every intermediate value produced by previously executed
  *    nodes (accessed through :cpp:func:`tensors`);
- *  * the construction-time :cpp:class:`KernelContext` (opset
- *    and any future construction-time inputs) used to instantiate
- *    each per-operator kernel (accessed through :cpp:func:`kernel_ctx`).
+ *  * the :cpp:class:`KernelContext` used for standalone node and legacy
+ *    graph/plan execution; model and function sessions replace its opset
+ *    from their own imports for each node (accessed through
+ *    :cpp:func:`kernel_ctx`).
  *
  * Grouping them in a single object keeps the dispatcher signatures
  * stable as more per-invocation state (allocators, device descriptors,

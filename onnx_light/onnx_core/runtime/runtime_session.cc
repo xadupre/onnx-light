@@ -9,12 +9,12 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <string>
 
 #include "onnx_core/graph/graph_manipulations.h"
 #include "onnx_core/runtime/kernels/run_nodes_internal.h"
 #include "onnx_core/shapes/shapes_context.h"
-#include "onnx_lib/defs/schema.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
@@ -152,15 +152,22 @@ RuntimeSession::RuntimeSession(const ExecutionPlan &plan, RuntimeSessionOptions 
       verbose_(options.verbose) {}
 
 void RuntimeSession::SetOpsetImports(const utils::RepeatedProtoField<OperatorSetIdProto> &imports) {
+  EXT_ENFORCE_INVALID(!opset_imports_.has_value(),
+                      "RuntimeSession: opset imports are already set.");
   EXT_ENFORCE_INVALID(!kernels_initialized_,
                       "RuntimeSession: opset imports cannot change after kernel initialization.");
   OpsetImports versions;
-  const auto &supported = OpSchemaRegistry::DomainToVersionRange::Instance().Map();
   for (const auto &import : imports) {
     const std::string domain = import.domain().empty() ? "ai.onnx" : import.domain().value();
-    const auto range = supported.find(domain == "ai.onnx" ? "" : domain);
-    EXT_ENFORCE_INVALID(import.version() > 0 &&
-                            (range == supported.end() || import.version() <= range->second.second),
+    // These standard-domain limits mirror the schema versions supported by
+    // this build; user-defined domains have no runtime-wide maximum.
+    const int64_t maximum = domain == "ai.onnx"      ? 29
+                            : domain == "ai.onnx.ml" ? 5
+                            : domain == "ai.onnx.training" || domain == "ai.onnx.preview" ||
+                                    domain == "ai.onnx.preview.training"
+                                ? 1
+                                : std::numeric_limits<int64_t>::max();
+    EXT_ENFORCE_INVALID(import.version() > 0 && import.version() <= maximum,
                         "RuntimeSession: unsupported opset version ", import.version(),
                         " for domain '", domain, "'.");
     EXT_ENFORCE_INVALID(versions.emplace(domain, import.version()).second,

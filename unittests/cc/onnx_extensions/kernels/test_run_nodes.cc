@@ -2456,6 +2456,9 @@ TEST(RunModel, ModelLocalFunctionCanCallAnotherFunction) {
   model.set_ir_version(10);
   OperatorSetIdProto *os = model.add_opset_import();
   os->set_version(18);
+  OperatorSetIdProto *custom_import = model.add_opset_import();
+  custom_import->set_domain("custom");
+  custom_import->set_version(1);
 
   FunctionProto *twice = model.add_functions();
   twice->set_name("Twice");
@@ -2524,6 +2527,12 @@ TEST(RunModel, ModelLocalFunctionCallsAnotherFunctionAcrossDomains) {
   model.set_ir_version(10);
   OperatorSetIdProto *os = model.add_opset_import();
   os->set_version(18);
+  OperatorSetIdProto *outer_import = model.add_opset_import();
+  outer_import->set_domain("outer");
+  outer_import->set_version(1);
+  OperatorSetIdProto *inner_import = model.add_opset_import();
+  inner_import->set_domain("inner");
+  inner_import->set_version(1);
 
   FunctionProto *square = model.add_functions();
   square->set_name("Square");
@@ -2598,6 +2607,9 @@ TEST(RunModel, ModelLocalFunctionThreeLevelNestedCalls) {
   model.set_ir_version(10);
   OperatorSetIdProto *os = model.add_opset_import();
   os->set_version(18);
+  OperatorSetIdProto *custom_import = model.add_opset_import();
+  custom_import->set_domain("custom");
+  custom_import->set_version(1);
 
   FunctionProto *inner = model.add_functions();
   inner->set_name("Inner");
@@ -2680,6 +2692,9 @@ TEST(RunModel, ModelLocalFunctionOverloadDisambiguation) {
   model.set_ir_version(10);
   OperatorSetIdProto *os = model.add_opset_import();
   os->set_version(18);
+  OperatorSetIdProto *custom_import = model.add_opset_import();
+  custom_import->set_domain("custom");
+  custom_import->set_version(1);
 
   FunctionProto *f_sum = model.add_functions();
   f_sum->set_name("Combine");
@@ -6587,6 +6602,7 @@ TEST(RuntimeSessionOpsets, ModelImportsDetermineKernelConstructionByDomain) {
   rt.Set("x", Tensor::FromFloat("x", {1}, {1}));
   rt.Set("y", Tensor::FromFloat("y", {1}, {2}));
   RuntimeSession session(model);
+  EXPECT_THROW(session.SetOpsetImports(model.opset_import()), std::invalid_argument);
   session.Run(rt);
   ASSERT_EQ(constructed.size(), 2);
   EXPECT_EQ(constructed[0].domain, "ai.onnx");
@@ -6598,8 +6614,10 @@ TEST(RuntimeSessionOpsets, ModelImportsDetermineKernelConstructionByDomain) {
 
   RuntimeContext mismatch(KernelContext(DefaultOpset(18)));
   EXPECT_THROW(session.Run(mismatch), std::invalid_argument);
-  model.ref_opset_import().pop_back();
-  RuntimeSession missing(model);
+  ModelProto missing_model;
+  missing_model.CopyFrom(model);
+  missing_model.ref_opset_import().resize(1);
+  RuntimeSession missing(missing_model);
   EXPECT_THROW(missing.Run(rt), std::invalid_argument);
 }
 
@@ -6607,7 +6625,7 @@ TEST(RuntimeSessionOpsets, RejectsDuplicateAndInvalidImports) {
   ModelProto model = MakeAddModelWithShapes({{1, ""}}, {{1, ""}}, {{1, ""}});
   model.add_opset_import()->set_version(19);
   EXPECT_THROW(RuntimeSession session(model), std::invalid_argument);
-  model.ref_opset_import().pop_back();
+  model.ref_opset_import().resize(1);
   model.ref_opset_import()[0].set_version(0);
   EXPECT_THROW(RuntimeSession session(model), std::invalid_argument);
   model.ref_opset_import()[0].set_version(1000);

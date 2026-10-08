@@ -157,6 +157,31 @@ TEST(BackendTestCase, CastFloat6CasesRegistered) {
   CheckCastCasePresent(cases, "test_cc_cast_FLOAT6E3M2_to_FLOAT", core::runtime::DataType::FLOAT);
 }
 
+TEST(BackendTestCase, CastComplexCasesRegistered) {
+  using core::runtime::DataType;
+  const auto cases = CollectTestCases("Cast");
+  for (const auto &from : std::vector<DtypeNameEntry>{{DataType::FLOAT, "FLOAT"},
+                                                      {DataType::DOUBLE, "DOUBLE"},
+                                                      {DataType::COMPLEX64, "COMPLEX64"},
+                                                      {DataType::COMPLEX128, "COMPLEX128"}}) {
+    for (const auto &to : std::vector<DtypeNameEntry>{{DataType::COMPLEX64, "COMPLEX64"},
+                                                      {DataType::COMPLEX128, "COMPLEX128"}}) {
+      const std::string name = std::string("test_cc_cast_") + from.name + "_to_" + to.name;
+      SCOPED_TRACE(name);
+      CheckCastCasePresent(cases, name, to.dtype);
+      const TestCase *tc = FindCase(cases, name);
+      ASSERT_NE(tc, nullptr);
+      const auto &ds = tc->data_sets()[0];
+      EXPECT_EQ(ds.inputs[0].data_type, from.dtype);
+      EXPECT_EQ(ds.outputs[0].shape, std::vector<int64_t>{3});
+      EXPECT_EQ(ds.outputs[0].size_bytes(),
+                6 * (to.dtype == DataType::COMPLEX64 ? sizeof(float) : sizeof(double)));
+      ASSERT_EQ(tc->model().graph().node(0).attribute_size(), 1);
+      EXPECT_EQ(tc->model().graph().node(0).attribute(0).i(), to.dtype);
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // CastLike — backend test case registration tests.
 //

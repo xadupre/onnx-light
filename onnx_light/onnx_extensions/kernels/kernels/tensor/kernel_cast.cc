@@ -32,7 +32,7 @@ namespace {
 
 constexpr uint32_t kTuningAbi = 1;
 constexpr int64_t kPortableParallelMinimum = core::runtime::kParallelForGrainSize;
-constexpr std::array<int32_t, 24> kSupportedElementTypes = {
+constexpr std::array<int32_t, 26> kSupportedElementTypes = {
     static_cast<int32_t>(DataType::FLOAT),        static_cast<int32_t>(DataType::DOUBLE),
     static_cast<int32_t>(DataType::INT32),        static_cast<int32_t>(DataType::INT64),
     static_cast<int32_t>(DataType::INT8),         static_cast<int32_t>(DataType::UINT8),
@@ -45,6 +45,7 @@ constexpr std::array<int32_t, 24> kSupportedElementTypes = {
     static_cast<int32_t>(DataType::UINT4),        static_cast<int32_t>(DataType::INT2),
     static_cast<int32_t>(DataType::UINT2),        static_cast<int32_t>(DataType::FLOAT4E2M1),
     static_cast<int32_t>(DataType::FLOAT6E2M3),   static_cast<int32_t>(DataType::FLOAT6E3M2),
+    static_cast<int32_t>(DataType::COMPLEX64),    static_cast<int32_t>(DataType::COMPLEX128),
 };
 // Returns true when ``dtype`` is one of the numeric (non-STRING) element
 // types supported by ``Cast``. Element bytes for these types live in
@@ -63,6 +64,8 @@ bool IsSupportedNumericCastDtype(int32_t dtype) {
   case DataType::BOOL:
   case DataType::FLOAT16:
   case DataType::BFLOAT16:
+  case DataType::COMPLEX64:
+  case DataType::COMPLEX128:
     return true;
   default:
     return false;
@@ -254,6 +257,16 @@ double LoadAsDouble(const Tensor &x, int64_t i) {
     std::memcpy(&bits, x.bytes() + static_cast<size_t>(i) * sizeof(std::uint16_t), sizeof(bits));
     return static_cast<double>(Bfloat16BitsToFloat(bits));
   }
+  case DataType::COMPLEX64: {
+    float real;
+    std::memcpy(&real, x.bytes() + static_cast<size_t>(i) * 2 * sizeof(real), sizeof(real));
+    return static_cast<double>(real);
+  }
+  case DataType::COMPLEX128: {
+    double real;
+    std::memcpy(&real, x.bytes() + static_cast<size_t>(i) * 2 * sizeof(real), sizeof(real));
+    return real;
+  }
   default:
     EXT_THROW_INVALID("kernel::Cast: unsupported input dtype for numeric load.");
   }
@@ -310,6 +323,18 @@ void StoreFromDouble(Tensor &output, int64_t i, double v) {
     const std::uint16_t bits = FloatToBfloat16Bits(static_cast<float>(v));
     std::memcpy(output.mutable_bytes() + static_cast<size_t>(i) * sizeof(std::uint16_t), &bits,
                 sizeof(bits));
+    return;
+  }
+  case DataType::COMPLEX64: {
+    const float parts[2] = {static_cast<float>(v), 0.0f};
+    std::memcpy(output.mutable_bytes() + static_cast<size_t>(i) * sizeof(parts), parts,
+                sizeof(parts));
+    return;
+  }
+  case DataType::COMPLEX128: {
+    const double parts[2] = {v, 0.0};
+    std::memcpy(output.mutable_bytes() + static_cast<size_t>(i) * sizeof(parts), parts,
+                sizeof(parts));
     return;
   }
   default:
@@ -412,7 +437,7 @@ Tensor Cast::operator()(const Tensor &x, int32_t to, bool saturate, RuntimeConte
       " (supported: FLOAT, DOUBLE, INT32, INT64, INT8, UINT8, "
       "INT16, UINT16, BOOL, STRING, FLOAT16, BFLOAT16, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
       "FLOAT8E5M2, FLOAT8E5M2FNUZ, FLOAT8E8M0, FLOAT4E2M1, FLOAT6E2M3, FLOAT6E3M2, "
-      "INT4, UINT4, INT2, UINT2).");
+      "INT4, UINT4, INT2, UINT2, COMPLEX64, COMPLEX128).");
   if (static_cast<DataType>(to) == DataType::STRING) {
     // ``STRING`` elements live in ``string_data`` rather than the raw byte
     // buffer, so the allocator-backed buffer carries zero bytes; routing it
@@ -443,13 +468,13 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
       " (supported: FLOAT, DOUBLE, INT32, INT64, INT8, UINT8, "
       "INT16, UINT16, BOOL, STRING, FLOAT16, BFLOAT16, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
       "FLOAT8E5M2, FLOAT8E5M2FNUZ, FLOAT8E8M0, FLOAT4E2M1, FLOAT6E2M3, FLOAT6E3M2, "
-      "INT4, UINT4, INT2, UINT2).");
+      "INT4, UINT4, INT2, UINT2, COMPLEX64, COMPLEX128).");
   EXT_ENFORCE_INVALID(
       IsSupportedCastDtype(to), "kernel::Cast: unsupported 'to' dtype ", std::to_string(to),
       " (supported: FLOAT, DOUBLE, INT32, INT64, INT8, UINT8, "
       "INT16, UINT16, BOOL, STRING, FLOAT16, BFLOAT16, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
       "FLOAT8E5M2, FLOAT8E5M2FNUZ, FLOAT8E8M0, FLOAT4E2M1, FLOAT6E2M3, FLOAT6E3M2, "
-      "INT4, UINT4, INT2, UINT2).");
+      "INT4, UINT4, INT2, UINT2, COMPLEX64, COMPLEX128).");
   EXT_ENFORCE_INVALID(output.data_type == to,
                       "kernel::Cast preallocated output dtype must match 'to'.");
   EXT_ENFORCE_INVALID(output.shape == x.shape,
@@ -462,6 +487,13 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
   const bool from_float8 = IsFloat8CastDtype(x.data_type);
   const bool to_sub_byte = IsSubByteCastDtype(to);
   const bool from_sub_byte = IsSubByteCastDtype(x.data_type);
+  const bool to_complex = to == DataType::COMPLEX64 || to == DataType::COMPLEX128;
+  const bool from_complex =
+      x.data_type == DataType::COMPLEX64 || x.data_type == DataType::COMPLEX128;
+  EXT_ENFORCE_INVALID(!(from_complex || to_complex) ||
+                          (!from_string && !to_string && !from_float8 && !to_float8 &&
+                           !from_sub_byte && !to_sub_byte),
+                      "kernel::Cast: unsupported complex cast pair.");
 
   if (x.data_type == to && (to_sub_byte || to_float8)) {
     const size_t expected_bytes = PackedByteSize(to, n);
@@ -736,6 +768,43 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
     if (x.size_bytes() > 0) {
       std::memcpy(output.mutable_bytes(), x.bytes(), x.size_bytes());
     }
+    return;
+  }
+
+  if (from_complex && to_complex) {
+    const size_t input_part_size = ElementSize(x.data_type) / 2;
+    const size_t output_part_size = ElementSize(to) / 2;
+    ParallelFor(
+        n, tuning().parallel_minimum_elements,
+        [&](int64_t begin, int64_t end) {
+          for (int64_t i = begin; i < end; ++i) {
+            for (size_t part = 0; part < 2; ++part) {
+              double value;
+              if (x.data_type == DataType::COMPLEX64) {
+                float source;
+                std::memcpy(&source,
+                            x.bytes() + (static_cast<size_t>(i) * 2 + part) * input_part_size,
+                            input_part_size);
+                value = source;
+              } else {
+                std::memcpy(&value,
+                            x.bytes() + (static_cast<size_t>(i) * 2 + part) * input_part_size,
+                            input_part_size);
+              }
+              if (to == DataType::COMPLEX64) {
+                const float target = static_cast<float>(value);
+                std::memcpy(output.mutable_bytes() +
+                                (static_cast<size_t>(i) * 2 + part) * output_part_size,
+                            &target, output_part_size);
+              } else {
+                std::memcpy(output.mutable_bytes() +
+                                (static_cast<size_t>(i) * 2 + part) * output_part_size,
+                            &value, output_part_size);
+              }
+            }
+          }
+        },
+        "Cast");
     return;
   }
 

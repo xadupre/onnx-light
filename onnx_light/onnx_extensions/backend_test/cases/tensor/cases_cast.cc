@@ -10,6 +10,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <functional>
 #include <limits>
 #include <string>
@@ -102,6 +103,13 @@ std::vector<CastDtype> SupportedCastDtypes() {
   };
 }
 
+template <typename T>
+Tensor MakeComplexCastTensor(DataType dtype, const std::vector<T> &components) {
+  std::vector<uint8_t> bytes(components.size() * sizeof(T));
+  std::memcpy(bytes.data(), components.data(), bytes.size());
+  return Tensor("", dtype, {static_cast<int64_t>(components.size() / 2)}, std::move(bytes));
+}
+
 } // namespace
 
 void RegisterCastCases(std::vector<TestCase> &registry, TestMode mode) {
@@ -146,6 +154,44 @@ void RegisterCastCases(std::vector<TestCase> &registry, TestMode mode) {
 
                Tensor input = from.make_input();
                Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
+               return IoData{{std::move(input)}, {std::move(output)}};
+             });
+    }
+  }
+
+  // Native complex casts are runtime extensions, not upstream ONNX Cast cases.
+  // Expected components are fixed independently of the Cast kernel.
+  const std::vector<CastDtype> complex_sources = {
+      {DataType::FLOAT, "FLOAT", []() { return Tensor::FromFloat("", {3}, {-1.5f, 0.0f, 2.25f}); }},
+      {DataType::DOUBLE, "DOUBLE", []() { return Tensor::FromDouble("", {3}, {-1.5, 0.0, 2.25}); }},
+      {DataType::COMPLEX64, "COMPLEX64",
+       []() {
+         return MakeComplexCastTensor<float>(DataType::COMPLEX64,
+                                             {-1.5f, -2.0f, 0.0f, 4.5f, 2.25f, -0.75f});
+       }},
+      {DataType::COMPLEX128, "COMPLEX128",
+       []() {
+         return MakeComplexCastTensor<double>(DataType::COMPLEX128,
+                                              {-1.5, -2.0, 0.0, 4.5, 2.25, -0.75});
+       }},
+  };
+  for (const auto &from : complex_sources) {
+    for (const DataType to : {DataType::COMPLEX64, DataType::COMPLEX128}) {
+      const bool complex_input =
+          from.dtype == DataType::COMPLEX64 || from.dtype == DataType::COMPLEX128;
+      const char *to_name = to == DataType::COMPLEX64 ? "COMPLEX64" : "COMPLEX128";
+      Expect(registry, MakeCastNode(to),
+             std::string("test_cc_cast_") + from.name + "_to_" + to_name, {opset},
+             [from, to, complex_input]() -> IoData {
+               Tensor input = from.make_input();
+               Tensor output =
+                   to == DataType::COMPLEX64
+                       ? MakeComplexCastTensor<float>(to, {-1.5f, complex_input ? -2.0f : 0.0f,
+                                                           0.0f, complex_input ? 4.5f : 0.0f, 2.25f,
+                                                           complex_input ? -0.75f : 0.0f})
+                       : MakeComplexCastTensor<double>(to, {-1.5, complex_input ? -2.0 : 0.0, 0.0,
+                                                            complex_input ? 4.5 : 0.0, 2.25,
+                                                            complex_input ? -0.75 : 0.0});
                return IoData{{std::move(input)}, {std::move(output)}};
              });
     }

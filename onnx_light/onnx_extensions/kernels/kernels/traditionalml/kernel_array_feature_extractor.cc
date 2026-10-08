@@ -19,6 +19,9 @@ onnx_kernels::Shape ComputeOutputShape(const Tensor &x, const Tensor &indices) {
                       "kernel::ArrayFeatureExtractor expects input X to have rank >= 1.");
   onnx_kernels::Shape out_shape = x.shape;
   out_shape.back() = indices.element_count();
+  if (x.shape.size() == 1) {
+    out_shape.insert(out_shape.begin(), 1);
+  }
   return out_shape;
 }
 

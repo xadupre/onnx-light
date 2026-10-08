@@ -32,16 +32,16 @@ inline SerializeSizeResult make_proto_size(uint64_t proto_size) {
 }
 
 // Computes the SerializeSize of a sub-message and stores it in the stream's
-// size cache (keyed by the sub-message address). The subsequent write pass
-// uses write_with_cache_size with the same key and so reuses the cached
-// result without re-traversing the entire subtree.
+// size cache (keyed by the sub-message address and proto type ID). The type ID
+// prevents a message and its first field from colliding when an ABI assigns
+// both objects the same address.
 template <typename T>
 inline SerializeSizeResult size_with_cache(utils::BinaryWriteStream &stream, const T &field,
                                            SerializeOptions &options) {
   SerializeSizeResult s;
-  if (!stream.GetCachedSize(reinterpret_cast<const void *>(&field), s)) {
+  if (!stream.GetCachedSize(reinterpret_cast<const void *>(&field), T::proto_id, s)) {
     s = field.SerializeSize(stream, options);
-    stream.CacheSize(reinterpret_cast<const void *>(&field), s);
+    stream.CacheSize(reinterpret_cast<const void *>(&field), T::proto_id, s);
   }
   return s;
 }

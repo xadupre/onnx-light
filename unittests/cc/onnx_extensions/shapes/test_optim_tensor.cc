@@ -538,6 +538,25 @@ TEST(OnnxOptimValueInfo, ToValueInfoWritesTypeShape) {
   EXPECT_EQ(vi.name(), "y");
 }
 
+TEST(OnnxOptimValueInfo, MissingDimensionIsRejectedAndAnonymousDynamicRoundTrips) {
+  ValueInfoProto vi =
+      MakeTensorValueInfo("x", TensorProto::DataType::FLOAT, {core::symbolic::SymDim(1)});
+  vi.mutable_type()->mutable_tensor_type()->mutable_shape()->mutable_dim(0)->clear_dim_value();
+  core::symbolic::SymTensor tensor;
+  EXPECT_THROW(core::symbolic::SymTensorFromValueInfo(vi, tensor), std::invalid_argument);
+
+  tensor = core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                     core::symbolic::SymShape{core::symbolic::SymDim("")});
+  ASSERT_TRUE(core::symbolic::SymTensorToValueInfo(tensor, vi));
+  const auto &dim = vi.type().tensor_type().shape().dim()[0];
+  EXPECT_FALSE(dim.has_dim_value());
+  EXPECT_TRUE(dim.has_dim_param());
+  EXPECT_TRUE(dim.dim_param().empty());
+  ASSERT_TRUE(core::symbolic::SymTensorFromValueInfo(vi, tensor));
+  EXPECT_TRUE(tensor.Shape()[0].IsExpr());
+  EXPECT_TRUE(tensor.Shape()[0].AsExpr().empty());
+}
+
 TEST(OnnxOptimValueInfo, ToValueInfoUndefinedDtypeReturnsFalse) {
   core::symbolic::SymTensor t;
   ValueInfoProto vi;

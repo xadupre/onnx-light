@@ -154,6 +154,13 @@ bool HasStructuredType(const TypeProto &type) {
 
 using DeclaredTypes = std::unordered_map<std::string, const TypeProto *>;
 
+struct AttributeBinding {
+  const AttributeProto *attribute;
+  bool caller_scoped;
+};
+
+using AttributeBindings = std::unordered_map<std::string, AttributeBinding>;
+
 DeclaredTypes StructuredDeclarations(const utils::RepeatedProtoField<ValueInfoProto> &values) {
   DeclaredTypes declarations;
   for (const auto &value : values) {
@@ -194,6 +201,126 @@ void SeedDeclaredValueInfo(ShapesContext &shapes, const ValueInfoProto &value) {
     shapes.Set(name, std::move(descriptor));
   } else if (!value.type().has_tensor_type() && !shapes.HasType(name) && !shapes.Has(name)) {
     shapes.SetType(name, value.type());
+  }
+}
+
+std::unordered_set<std::string> GraphDefinedNames(const GraphProto &graph) {
+  std::unordered_set<std::string> defined;
+  for (const auto &input : graph.input()) {
+    defined.insert(input.name().value());
+  }
+  for (const auto &initializer : graph.initializer()) {
+    defined.insert(initializer.name().value());
+  }
+  for (const auto &initializer : graph.sparse_initializer()) {
+    defined.insert(initializer.values().name().value());
+  }
+  for (const auto &initializer : graph.encoded_initializer()) {
+    defined.insert(initializer.name().value());
+  }
+  for (const auto &initializer : graph.paged_cache_initializer()) {
+    defined.insert(initializer.name().value());
+  }
+  for (const auto &node : graph.node()) {
+    for (const auto &output : node.output()) {
+      if (!output.empty()) {
+        defined.insert(output);
+      }
+    }
+  }
+  return defined;
+}
+
+void RewriteGraphLocalCaptures(GraphProto &graph,
+                               const std::unordered_map<std::string, std::string> &rename) {
+  const auto defined = GraphDefinedNames(graph);
+  const auto rewrite = [&](std::string &name) {
+    if (defined.count(name) == 0) {
+      const auto found = rename.find(name);
+      if (found != rename.end()) {
+        name = found->second;
+      }
+    }
+  };
+  for (auto &node : graph.ref_node()) {
+    for (auto &input : node.ref_input()) {
+      rewrite(input);
+    }
+  }
+  for (auto &output : graph.ref_output()) {
+    std::string name = output.name().value();
+    rewrite(name);
+    output.set_name(name);
+  }
+  for (auto &value : graph.ref_value_info()) {
+    std::string name = value.name().value();
+    rewrite(name);
+    value.set_name(name);
+  }
+  for (auto &annotation : graph.ref_quantization_annotation()) {
+    std::string name = annotation.tensor_name().value();
+    rewrite(name);
+    annotation.set_tensor_name(name);
+    for (auto &parameter : annotation.ref_quant_parameter_tensor_names()) {
+      name = parameter.value().value();
+      rewrite(name);
+      parameter.set_value(name);
+    }
+  }
+}
+
+using ValueRename = std::unordered_map<std::string, std::string>;
+
+void ResolveFunctionAttributes(GraphProto &graph, const AttributeBindings &bindings,
+                               const ValueRename *rename, bool function_owned);
+
+void ResolveFunctionAttributes(NodeProto &node, const AttributeBindings &bindings,
+                               const ValueRename *rename, bool enclosing_function_owned) {
+  utils::RepeatedProtoField<AttributeProto> resolved;
+  resolved.reserve(node.attribute().size());
+  for (const auto &attribute : node.attribute()) {
+    AttributeProto clone;
+    bool function_owned = enclosing_function_owned;
+    if (!attribute.ref_attr_name().empty()) {
+      const auto found = bindings.find(attribute.ref_attr_name().value());
+      if (found == bindings.end()) {
+        throw BuilderError("GraphBuilder: cannot inline a function with an unresolved attribute '" +
+                           attribute.ref_attr_name().value() + "'.");
+      }
+      clone = *found->second.attribute;
+      function_owned = !found->second.caller_scoped;
+      clone.set_name(attribute.name().value());
+      clone.clear_ref_attr_name();
+    } else {
+      clone = attribute;
+    }
+    if (clone.has_g()) {
+      ResolveFunctionAttributes(*clone.mutable_g(), bindings, rename, function_owned);
+    }
+    for (auto &graph : clone.ref_graphs()) {
+      ResolveFunctionAttributes(graph, bindings, rename, function_owned);
+    }
+    resolved.push_back(std::move(clone));
+  }
+  node.ref_attribute() = std::move(resolved);
+}
+
+void ResolveFunctionAttributes(GraphProto &graph, const AttributeBindings &bindings,
+                               const ValueRename *rename, bool function_owned) {
+  ValueRename nested_rename;
+  const ValueRename *nested = rename;
+  if (rename != nullptr) {
+    nested_rename = *rename;
+    for (const auto &name : GraphDefinedNames(graph)) {
+      nested_rename.erase(name);
+    }
+    nested = &nested_rename;
+    if (function_owned) {
+      RewriteGraphLocalCaptures(graph, *rename);
+    }
+  }
+  for (auto &node : graph.ref_node()) {
+    ResolveFunctionAttributes(node, bindings, nested, function_owned);
   }
 }
 
@@ -958,6 +1085,7 @@ GraphBuilder::ImportAttributes(const NodeProto &node,
       GraphBuilder &subgraph = MakeSubgraph(subgraph_name);
       for (const std::string &name : excluded_inherited_names) {
         subgraph.inherited_names_.erase(name);
+        subgraph.compute_.Shapes().Erase(name);
       }
       subgraph.ImportGraph(graph);
       AttributeProto ref;
@@ -987,6 +1115,7 @@ GraphBuilder::ImportAttributes(const NodeProto &node,
         GraphBuilder &subgraph = MakeSubgraph(subgraph_name);
         for (const std::string &name : excluded_inherited_names) {
           subgraph.inherited_names_.erase(name);
+          subgraph.compute_.Shapes().Erase(name);
         }
         subgraph.ImportGraph(graph);
         refs.add_strings(subgraph_name);
@@ -1003,14 +1132,16 @@ void GraphBuilder::ImportGraph(const GraphProto &graph) {
   if (parent_ != nullptr && !graph.persistent_bindings().empty()) {
     throw BuilderError("GraphBuilder: persistent bindings are supported only on the root graph.");
   }
-  graph_template_ = graph;
-  graph_template_.ref_input().clear();
-  graph_template_.ref_output().clear();
-  graph_template_.ref_initializer().clear();
-  graph_template_.ref_encoded_initializer().clear();
-  graph_template_.ref_paged_cache_initializer().clear();
-  graph_template_.ref_node().clear();
-  graph_template_.ref_value_info().clear();
+  // Preserve only fields emitted from the template. Copying the complete graph
+  // serializes nested graph attributes and their sparse payloads before the
+  // imported node list is immediately discarded.
+  graph_template_ = GraphProto{};
+  graph_template_.name_ = graph.name_;
+  graph_template_.sparse_initializer_ = graph.sparse_initializer_;
+  graph_template_.doc_string_ = graph.doc_string_;
+  graph_template_.quantization_annotation_ = graph.quantization_annotation_;
+  graph_template_.metadata_props_ = graph.metadata_props_;
+  graph_template_.persistent_bindings_ = graph.persistent_bindings_;
   value_infos_ = graph.value_info();
   for (const auto &value : value_infos_) {
     compute_.SeedValueTag(value.name().value(), DeclaredValueTag(value), nodes_);
@@ -1027,6 +1158,27 @@ void GraphBuilder::ImportGraph(const GraphProto &graph) {
   for (const auto &initializer : graph.paged_cache_initializer()) {
     MakePagedCacheInitializer(initializer);
   }
+  std::unordered_set<std::string> sparse_names;
+  for (const auto &initializer : graph.sparse_initializer()) {
+    const std::string name = initializer.values().name().value();
+    const bool is_input = std::any_of(inputs_.begin(), inputs_.end(),
+                                      [&](const auto &input) { return input.name() == name; });
+    const auto named = [&](const auto &value) { return value.name().value() == name; };
+    const bool has_other_initializer =
+        std::any_of(initializers_.begin(), initializers_.end(), named) ||
+        std::any_of(encoded_initializers_.begin(), encoded_initializers_.end(), named) ||
+        std::any_of(paged_cache_initializers_.begin(), paged_cache_initializers_.end(), named);
+    if (name.empty() || !sparse_names.insert(name).second || has_other_initializer ||
+        (names_.find(name) != names_.end() && !is_input)) {
+      throw BuilderError("GraphBuilder: sparse initializer name is empty or already defined: '" +
+                         name + "'.");
+    }
+    if (!is_input) {
+      inherited_names_.erase(name);
+      compute_.Shapes().Erase(name);
+      ReserveName(name);
+    }
+  }
   const auto declarations = StructuredDeclarations(value_infos_);
   for (const auto &node : graph.node()) {
     std::vector<std::string> inputs;
@@ -1042,9 +1194,14 @@ void GraphBuilder::ImportGraph(const GraphProto &graph) {
     MakeNode(node.op_type().value(), inputs, outputs,
              node.domain().empty() ? std::string() : node.domain().value(),
              node.name().empty() ? std::string() : node.name().value(), ImportAttributes(node));
-    auto attributes = std::move(nodes_.back().ref_attribute());
-    nodes_.back() = node;
-    nodes_.back().ref_attribute() = std::move(attributes);
+    NodeProto &imported_node = nodes_.back();
+    imported_node.name_ = node.name_;
+    imported_node.op_type_ = node.op_type_;
+    imported_node.domain_ = node.domain_;
+    imported_node.overload_ = node.overload_;
+    imported_node.doc_string_ = node.doc_string_;
+    imported_node.metadata_props_ = node.metadata_props_;
+    imported_node.device_configurations_ = node.device_configurations_;
     SeedDeclaredOutputs(compute_.Shapes(), node, declarations);
   }
   for (const auto &output : graph.output()) {
@@ -1053,14 +1210,13 @@ void GraphBuilder::ImportGraph(const GraphProto &graph) {
 }
 
 void GraphBuilder::ImportFunction(const FunctionProto &function) {
-  function_template_ = function;
-  function_template_.ref_attribute().clear();
-  function_template_.ref_attribute_proto().clear();
-  function_template_.ref_input().clear();
-  function_template_.ref_output().clear();
-  function_template_.ref_value_info().clear();
-  function_template_.ref_opset_import().clear();
-  function_template_.ref_node().clear();
+  // Copy scalar metadata directly. Copying the whole function serializes nested
+  // graph attributes before immediately discarding its repeated fields.
+  function_template_ = FunctionProto{};
+  function_template_.name_ = function.name_;
+  function_template_.domain_ = function.domain_;
+  function_template_.doc_string_ = function.doc_string_;
+  function_template_.overload_ = function.overload_;
   function_attributes_.assign(function.attribute().begin(), function.attribute().end());
   function_attribute_protos_ = function.attribute_proto();
   metadata_ = function.metadata_props();
@@ -1096,9 +1252,14 @@ void GraphBuilder::ImportFunction(const FunctionProto &function) {
     MakeNode(node.op_type().value(), inputs, outputs,
              node.domain().empty() ? std::string() : node.domain().value(),
              node.name().empty() ? std::string() : node.name().value(), ImportAttributes(node));
-    auto attributes = std::move(nodes_.back().ref_attribute());
-    nodes_.back() = node;
-    nodes_.back().ref_attribute() = std::move(attributes);
+    NodeProto &imported_node = nodes_.back();
+    imported_node.name_ = node.name_;
+    imported_node.op_type_ = node.op_type_;
+    imported_node.domain_ = node.domain_;
+    imported_node.overload_ = node.overload_;
+    imported_node.doc_string_ = node.doc_string_;
+    imported_node.metadata_props_ = node.metadata_props_;
+    imported_node.device_configurations_ = node.device_configurations_;
   }
   for (std::size_t i = 0; i < function.output().size(); ++i) {
     ValueInfoProto value_info;
@@ -1467,6 +1628,9 @@ void GraphBuilder::CollectImplicitInputs(std::unordered_set<std::string> &out) c
   }
   for (const auto &initializer : paged_cache_initializers_) {
     defined.insert(initializer.name().value());
+  }
+  for (const auto &initializer : graph_template_.sparse_initializer()) {
+    defined.insert(initializer.values().name().value());
   }
   for (const NodeProto &node : nodes_) {
     for (std::size_t i = 0; i < node.output().size(); ++i) {
@@ -1971,33 +2135,94 @@ GraphBuilder *GraphBuilder::FindCalledFunction(const std::vector<GraphBuilder *>
                                                const NodeProto &node) {
   const std::string node_domain = node.domain().empty() ? std::string() : node.domain().value();
   const std::string normalised = NormaliseDomain(node_domain);
+  const std::string overload = node.overload().value();
   for (GraphBuilder *function : functions) {
     if (function->name() == node.op_type().value() &&
-        NormaliseDomain(function->function_domain_) == normalised) {
+        NormaliseDomain(function->function_domain_) == normalised &&
+        function->function_template_.overload().value() == overload) {
       return function;
     }
   }
   return nullptr;
 }
 
-std::size_t GraphBuilder::CountFunctionCalls(const std::string &name,
-                                             const std::string &domain) const {
+GraphBuilder::FunctionIdentifier GraphBuilder::MakeFunctionIdentifier(const std::string &domain,
+                                                                      const std::string &name,
+                                                                      const std::string &overload) {
+  return {NormaliseDomain(domain), name, overload};
+}
+
+std::size_t GraphBuilder::CountFunctionCalls(const std::string &name, const std::string &domain,
+                                             const std::string &overload) const {
   const std::string normalised = NormaliseDomain(domain);
+  const std::function<std::size_t(const GraphProto &)> count_graph =
+      [&](const GraphProto &graph) -> std::size_t {
+    std::size_t count = 0;
+    for (const auto &node : graph.node()) {
+      const std::string node_domain = node.domain().empty() ? std::string() : node.domain().value();
+      if (node.op_type().value() == name && NormaliseDomain(node_domain) == normalised &&
+          node.overload().value() == overload) {
+        ++count;
+      }
+      for (const auto &attribute : node.attribute()) {
+        if (attribute.has_g()) {
+          count += count_graph(attribute.g());
+        }
+        for (const auto &nested : attribute.graphs()) {
+          count += count_graph(nested);
+        }
+      }
+    }
+    return count;
+  };
   std::size_t count = 0;
   for (const NodeProto &node : nodes_) {
     const std::string node_domain = node.domain().empty() ? std::string() : node.domain().value();
-    if (node.op_type().value() == name && NormaliseDomain(node_domain) == normalised) {
+    if (node.op_type().value() == name && NormaliseDomain(node_domain) == normalised &&
+        node.overload().value() == overload) {
       ++count;
     }
   }
   for (const auto &subgraph : subgraphs_) {
-    count += subgraph->CountFunctionCalls(name, domain);
+    count += subgraph->CountFunctionCalls(name, domain, overload);
+  }
+  for (const auto &attribute : function_attribute_protos_) {
+    if (attribute.has_g()) {
+      count += count_graph(attribute.g());
+    }
+    for (const auto &graph : attribute.graphs()) {
+      count += count_graph(graph);
+    }
   }
   return count;
 }
 
 void GraphBuilder::AppendInlinedBody(GraphBuilder &function, const NodeProto &call,
                                      utils::RepeatedProtoField<NodeProto> &out) {
+  AttributeBindings bindings;
+  for (const auto &attribute : function.function_attribute_protos_) {
+    bindings[attribute.name().value()] = {&attribute, false};
+  }
+  NodeProto materialized_call = call;
+  MaterializeGraphReferences(materialized_call);
+  for (const auto &attribute : materialized_call.attribute()) {
+    bindings[attribute.name().value()] = {&attribute, true};
+  }
+  // Resolve the entire body before adding initializers, reserving names or importing subgraphs.
+  struct MaterializedNode {
+    NodeProto node;
+  };
+  std::vector<MaterializedNode> materialized_body;
+  materialized_body.reserve(function.nodes_.size());
+  for (const NodeProto &body : function.nodes_) {
+    MaterializedNode materialized;
+    materialized.node = body;
+    function.MaterializeGraphReferences(materialized.node);
+    NodeProto validated = materialized.node;
+    ResolveFunctionAttributes(validated, bindings, nullptr, true);
+    materialized_body.push_back(std::move(materialized));
+  }
+
   // Build the value rename map: formal inputs/outputs are rewired to the call
   // inputs/outputs, everything else the body defines gets a fresh, unused name.
   std::unordered_map<std::string, std::string> rename;
@@ -2080,80 +2305,85 @@ void GraphBuilder::AppendInlinedBody(GraphBuilder &function, const NodeProto &ca
     return it != rename.end() ? it->second : value;
   };
 
-  for (const NodeProto &body : function.nodes_) {
-    NodeProto node;
-    node.set_op_type(body.op_type().value());
-    if (!body.domain().empty()) {
-      node.set_domain(body.domain().value());
+  for (const MaterializedNode &materialized : materialized_body) {
+    NodeProto resolved = materialized.node;
+    ResolveFunctionAttributes(resolved, bindings, &rename, true);
+    NodeProto node = resolved;
+    node.ref_input().clear();
+    node.ref_output().clear();
+    node.ref_attribute().clear();
+    for (std::size_t i = 0; i < resolved.input().size(); ++i) {
+      node.add_input(remap(std::string(resolved.input(static_cast<std::size_t>(i)))));
     }
-    if (!body.name().empty()) {
-      node.set_name(body.name().value());
+    for (std::size_t i = 0; i < resolved.output().size(); ++i) {
+      node.add_output(remap(std::string(resolved.output(static_cast<std::size_t>(i)))));
     }
-    for (std::size_t i = 0; i < body.input().size(); ++i) {
-      node.add_input(remap(std::string(body.input(static_cast<std::size_t>(i)))));
-    }
-    for (std::size_t i = 0; i < body.output().size(); ++i) {
-      node.add_output(remap(std::string(body.output(static_cast<std::size_t>(i)))));
-    }
-    for (const AttributeProto &attribute : body.attribute()) {
-      if (!attribute.ref_attr_name().empty()) {
-        // The body attribute references a function attribute; resolve it against
-        // the value carried by the call node, or drop it (operator default).
-        const std::string reference = attribute.ref_attr_name().value();
-        const AttributeProto *actual = nullptr;
-        for (const AttributeProto &call_attribute : call.attribute()) {
-          if (call_attribute.name().value() == reference) {
-            actual = &call_attribute;
-            break;
-          }
-        }
-        if (actual != nullptr) {
-          AttributeProto resolved = *actual;
-          resolved.set_name(attribute.name().value());
-          node.add_attribute(std::move(resolved));
-        }
-        continue;
-      }
-      if (HasGraphReferenceSuffix(attribute.name().value())) {
-        throw BuilderError("GraphBuilder: cannot inline local function '" + function.name() +
-                           "'; inlining a function whose body contains control-flow subgraphs is "
-                           "not supported.");
-      }
+    for (const auto &attribute : resolved.attribute()) {
       node.add_attribute(attribute);
     }
+    const std::unordered_set<std::string> excluded_inherited_names(node.output().begin(),
+                                                                   node.output().end());
+    node.ref_attribute() = ImportAttributes(node, excluded_inherited_names);
     out.push_back(std::move(node));
   }
 }
 
-std::size_t GraphBuilder::InlineFunctionCalls(const std::vector<GraphBuilder *> &functions) {
+std::size_t GraphBuilder::InlineFunctionCalls(const std::vector<GraphBuilder *> &functions,
+                                              std::set<FunctionIdentifier> &expanded_functions) {
   std::size_t inlined = 0;
-  // Subgraph bodies live in their own scope but may call the enclosing local
-  // functions, so inline them too using the same function table.
-  for (const auto &subgraph : subgraphs_) {
-    inlined += subgraph->InlineFunctionCalls(functions);
-  }
-  if (functions.empty() || nodes_.size() == 0) {
+  if (functions.empty()) {
     return inlined;
   }
 
-  // Rebuild the node list, expanding every call. Repeat to a fixed point: a
-  // pasted body may itself call another local function.
-  bool changed = true;
-  while (changed) {
-    changed = false;
-    utils::RepeatedProtoField<NodeProto> kept;
-    kept.reserve(nodes_.size());
-    for (NodeProto &node : nodes_) {
-      GraphBuilder *function = FindCalledFunction(functions, node);
-      if (function != nullptr) {
-        AppendInlinedBody(*function, node, kept);
-        ++inlined;
-        changed = true;
-      } else {
-        kept.push_back(std::move(node));
+  std::unordered_set<const GraphBuilder *> replaced_subgraphs;
+  if (!nodes_.empty()) {
+    // Rebuild the node list, expanding every call. Repeat to a fixed point: a
+    // pasted body may itself call another local function.
+    bool changed = true;
+    while (changed) {
+      changed = false;
+      utils::RepeatedProtoField<NodeProto> kept;
+      kept.reserve(nodes_.size());
+      for (NodeProto &node : nodes_) {
+        GraphBuilder *function = FindCalledFunction(functions, node);
+        if (function != nullptr) {
+          const auto original_subgraphs = ReferencedSubgraphs(node);
+          AppendInlinedBody(*function, node, kept);
+          replaced_subgraphs.insert(original_subgraphs.begin(), original_subgraphs.end());
+          expanded_functions.insert(
+              MakeFunctionIdentifier(function->function_domain_, function->name(),
+                                     function->function_template_.overload().value()));
+          ++inlined;
+          changed = true;
+        } else {
+          kept.push_back(node);
+        }
+      }
+      nodes_ = std::move(kept);
+    }
+  }
+  if (!replaced_subgraphs.empty()) {
+    std::unordered_set<const GraphBuilder *> referenced;
+    for (const auto &node : nodes_) {
+      for (const GraphBuilder *subgraph : ReferencedSubgraphs(node)) {
+        referenced.insert(subgraph);
       }
     }
-    nodes_ = std::move(kept);
+    subgraphs_.erase(std::remove_if(subgraphs_.begin(), subgraphs_.end(),
+                                    [&](const std::unique_ptr<GraphBuilder> &subgraph) {
+                                      if (replaced_subgraphs.count(subgraph.get()) == 0 ||
+                                          referenced.count(subgraph.get()) != 0) {
+                                        return false;
+                                      }
+                                      names_.erase(subgraph->name());
+                                      return true;
+                                    }),
+                     subgraphs_.end());
+  }
+  // Descend once after expanding this graph so the traversal sees both
+  // retained pre-existing subgraphs and subgraphs cloned by the expansion above.
+  for (const auto &subgraph : subgraphs_) {
+    inlined += subgraph->InlineFunctionCalls(functions, expanded_functions);
   }
   return inlined;
 }
@@ -2192,24 +2422,11 @@ std::size_t GraphBuilder::InlineLocalFunctions(
     }
   }
 
-  // Record which functions are called anywhere (the calling graph, its
-  // subgraphs and the other function bodies) before expanding: only these are
-  // eligible for removal once fully inlined, so a function that is never called
-  // (e.g. exported for external use) is left in place.
-  std::unordered_set<std::string> called_before;
-  for (GraphBuilder *function : functions) {
-    std::size_t callers = CountFunctionCalls(function->name(), function->function_domain_);
-    for (GraphBuilder *other : functions) {
-      if (other != function) {
-        callers += other->CountFunctionCalls(function->name(), function->function_domain_);
-      }
-    }
-    if (callers != 0) {
-      called_before.insert(function->name());
-    }
-  }
-
-  const std::size_t inlined = InlineFunctionCalls(functions);
+  // Cleanup is limited to definitions that were actually expanded. This keeps
+  // uncalled exported functions while covering calls introduced from graph-valued
+  // function defaults during expansion.
+  std::set<FunctionIdentifier> expanded_functions;
+  const std::size_t inlined = InlineFunctionCalls(functions, expanded_functions);
 
   // Drop the definitions of functions that were called but no longer have any
   // caller. Removing one can drop the last reference to another (a function
@@ -2219,13 +2436,18 @@ std::size_t GraphBuilder::InlineLocalFunctions(
     changed = false;
     for (std::size_t i = 0; i < local_functions_.size(); ++i) {
       GraphBuilder *function = local_functions_[i].get();
-      if (called_before.find(function->name()) == called_before.end()) {
+      const std::string overload = function->function_template_.overload().value();
+      const FunctionIdentifier identifier =
+          MakeFunctionIdentifier(function->function_domain_, function->name(), overload);
+      if (expanded_functions.find(identifier) == expanded_functions.end()) {
         continue;
       }
-      std::size_t callers = CountFunctionCalls(function->name(), function->function_domain_);
+      std::size_t callers =
+          CountFunctionCalls(function->name(), function->function_domain_, overload);
       for (const auto &other : local_functions_) {
         if (other.get() != function) {
-          callers += other->CountFunctionCalls(function->name(), function->function_domain_);
+          callers +=
+              other->CountFunctionCalls(function->name(), function->function_domain_, overload);
         }
       }
       if (callers == 0) {
@@ -2881,6 +3103,9 @@ void GraphBuilder::SortNodesTopologically() {
   }
   for (const auto &initializer : paged_cache_initializers_) {
     available.insert(initializer.name().value());
+  }
+  for (const auto &initializer : graph_template_.sparse_initializer()) {
+    available.insert(initializer.values().name().value());
   }
   for (std::size_t i = 0; i < count; ++i) {
     for (std::size_t j = 0; j < nodes_[i].output().size(); ++j) {

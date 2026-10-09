@@ -187,8 +187,13 @@ class TestEncryptedIO(ExtTestCase):
         for length in (0, 8, 36, 51, 52):
             with self.subTest(length=length), self.assertRaises(RuntimeError):
                 onnxl.load_encrypted_string(blob[:length], "secret")
-        with self.assertRaisesRegex(RuntimeError, "non-empty payload"):
-            onnxl.save_encrypted_string(onnxl.ModelProto(), "secret", encryption="AES-256-GCM")
+        empty_blob = onnxl.save_encrypted_string(
+            onnxl.ModelProto(), "secret", encryption="AES-256-GCM"
+        )
+        self.assertEqual(len(empty_blob), 52)
+        self.assertEqual(
+            onnxl.load_encrypted_string(empty_blob, "secret").SerializeToString(), b""
+        )
 
     def test_string_and_file_blobs_are_compatible(self):
         model = _make_simple_model()

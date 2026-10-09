@@ -176,8 +176,8 @@ std::string encrypt_to_blob_chacha20(const std::string &plain, const std::string
 
 // Encrypts *plain* bytes using AES-256-GCM and authenticates the magic, salt, and nonce.
 std::string encrypt_to_blob_gcm(const std::string &plain, const std::string &key) {
-  if (plain.empty() || plain.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
-    throw std::runtime_error("ONNXCRY3 requires a non-empty payload of at most INT_MAX bytes.");
+  if (plain.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
+    throw std::runtime_error("ONNXCRY3 payload exceeds INT_MAX bytes.");
 
   uint8_t salt[SALT_LEN];
   uint8_t nonce[NONCE_LEN];
@@ -357,8 +357,8 @@ std::vector<uint8_t> decrypt_from_blob_gcm(const uint8_t *data, size_t data_len,
                                            const std::string &key) {
   const size_t aad_size = MAGIC_GCM.size() + SALT_LEN + NONCE_LEN;
   const size_t header_size = aad_size + TAG_LEN;
-  if (data_len <= header_size)
-    throw std::runtime_error("Buffer too small or empty for an ONNXCRY3 payload.");
+  if (data_len < header_size)
+    throw std::runtime_error("Buffer too small for an ONNXCRY3 payload.");
   const size_t cipher_len = data_len - header_size;
   if (cipher_len > static_cast<size_t>(std::numeric_limits<int>::max()))
     throw std::runtime_error("ONNXCRY3 ciphertext exceeds INT_MAX bytes.");

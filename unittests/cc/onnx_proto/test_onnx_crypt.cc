@@ -274,7 +274,9 @@ TEST(onnx_crypt, AES256GCM_RejectsTamperingAndTruncation) {
                  std::runtime_error);
   }
   ModelProto empty;
-  EXPECT_THROW(SaveEncryptedModelToString(empty, "secret", "AES-256-GCM"), std::runtime_error);
+  const std::string empty_blob = SaveEncryptedModelToString(empty, "secret", "AES-256-GCM");
+  EXPECT_EQ(empty_blob.size(), 52u);
+  LoadEncryptedModelFromString(loaded, empty_blob, "secret");
 }
 
 #else // ONNX_LIGHT_HAS_OPENSSL

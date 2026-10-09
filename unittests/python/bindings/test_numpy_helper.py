@@ -571,8 +571,7 @@ class TestHelperExtensions(ExtTestCase):
     def test_to_float8e8m0_special_values_and_saturation(self) -> None:
         values = np.array([0.0, -0.0, np.nan, np.inf, -np.inf, 2.0**127 * 1.5])
         np.testing.assert_array_equal(
-            to_float8e8m0(values, round_mode="up").view(np.uint8),
-            [0, 0, 0xFF, 0xFF, 0xFF, 0xFE],
+            to_float8e8m0(values, round_mode="up").view(np.uint8), [0, 0, 0xFF, 0xFF, 0xFF, 0xFE]
         )
         np.testing.assert_array_equal(
             to_float8e8m0(values, saturate=False, round_mode="up").view(np.uint8),

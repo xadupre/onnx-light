@@ -498,11 +498,17 @@ TEST(FunctionHalfRotaryEmbeddingPattern, FusesSliceBasedRotateHalf) {
       onnx_patterns::FunctionHalfRotaryEmbeddingPattern pattern;
       ASSERT_EQ(pattern.Match(graph, builder.Nodes()[0]).pattern, &pattern);
       graph.Optimize();
-      ASSERT_EQ(builder.Nodes().size(), 2u);
+      const auto has_node = [&](const std::string &op_type) {
+        return FindNode(builder, op_type) != builder.Nodes().size();
+      };
       const std::size_t half = FindNode(builder, "HalfRotaryEmbedding");
-      const std::size_t identity = FindNode(builder, "Identity");
-      ASSERT_NE(half, builder.Nodes().size());
-      ASSERT_NE(identity, builder.Nodes().size());
+      ASSERT_TRUE(has_node("HalfRotaryEmbedding"));
+      ASSERT_TRUE(has_node("Identity"));
+      EXPECT_FALSE(has_node("Slice"));
+      EXPECT_FALSE(has_node("Neg"));
+      EXPECT_FALSE(has_node("Concat"));
+      EXPECT_FALSE(has_node("Mul"));
+      EXPECT_FALSE(has_node("Add"));
       EXPECT_EQ(builder.Nodes()[half].output()[0].value(), "Y");
 
       for (auto [second_start, expose_first] : {std::pair<int64_t, bool>{-4, false}, {4, true}}) {

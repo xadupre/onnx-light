@@ -1977,10 +1977,10 @@ FunctionHalfRotaryEmbeddingPattern::Apply(core::builder::GraphGraph &graph,
     throw BuilderError("FunctionHalfRotaryEmbeddingPattern::Apply could not identify both caches.");
   }
   utils::RepeatedProtoField<NodeProto> result;
-  result.push_back(MakePatternNode("HalfRotaryEmbedding",
-                                   {first.input()[0].value(), cos_cache, sin_cache},
-                                   {add.output()[0].value()}, kIntermediateDomain,
-                                   "FunctionHalfRotaryEmbeddingPattern--" + first.name().value()));
+  result.push_back(
+      MakePatternNode("HalfRotaryEmbedding", {first.input()[0].value(), cos_cache, sin_cache},
+                      {add.output()[0].value()}, kIntermediateDomain,
+                      "FunctionHalfRotaryEmbeddingPattern--" + add.output()[0].value()));
   EnsureFunction(graph.Builder(), MakeHalfRotaryFunction(graph.Builder()));
   return result;
 }

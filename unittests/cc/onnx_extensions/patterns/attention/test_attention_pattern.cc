@@ -513,9 +513,11 @@ TEST(FunctionHalfRotaryEmbeddingPattern, FusesSliceBasedRotateHalf) {
       ASSERT_EQ(pattern.Match(graph, builder.Nodes()[0]).pattern, &pattern);
       graph.Optimize();
       ASSERT_EQ(builder.Nodes().size(), 2u);
-      EXPECT_EQ(builder.Nodes()[0].op_type().value(), "HalfRotaryEmbedding");
-      EXPECT_EQ(builder.Nodes()[0].output()[0].value(), "Y");
-      EXPECT_EQ(builder.Nodes()[1].op_type().value(), "Identity");
+      const std::size_t half = FindNode(builder, "HalfRotaryEmbedding");
+      const std::size_t identity = FindNode(builder, "Identity");
+      ASSERT_NE(half, builder.Nodes().size());
+      ASSERT_NE(identity, builder.Nodes().size());
+      EXPECT_EQ(builder.Nodes()[half].output()[0].value(), "Y");
 
       for (auto [second_start, expose_first] : {std::pair<int64_t, bool>{-4, false}, {4, true}}) {
         core::builder::GraphBuilder rejected = make_builder(second_start, expose_first, false);

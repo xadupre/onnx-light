@@ -537,6 +537,47 @@ class TestHelperExtensions(ExtTestCase):
             result.astype(np.float32), np.array([4.0], dtype=np.float32)
         )
 
+    def test_to_float8e8m0_float32_subnormals(self) -> None:
+        values = np.array([0x00400000, 0x00080000, 0x00400001], dtype=np.uint32)
+        inputs = values.view(np.float32)
+
+        np.testing.assert_array_equal(
+            to_float8e8m0(inputs[:2], round_mode="up").view(np.uint8), [0, 0]
+        )
+        np.testing.assert_array_equal(
+            to_float8e8m0(inputs[2:], round_mode="nearest").view(np.uint8), [0]
+        )
+
+    def test_to_float8e8m0_float64_without_double_rounding(self) -> None:
+        just_below_two_to_negative_126 = np.array([0x380FFFFFFFFFFFFF], dtype=np.uint64).view(
+            np.float64
+        )
+        for inputs in (
+            just_below_two_to_negative_126,
+            just_below_two_to_negative_126.astype(">f8"),
+        ):
+            with self.subTest(dtype=inputs.dtype):
+                np.testing.assert_array_equal(
+                    to_float8e8m0(inputs, round_mode="down").view(np.uint8), [0]
+                )
+
+        np.testing.assert_array_equal(
+            to_float8e8m0(
+                np.array([1e39], dtype=np.float64), saturate=True, round_mode="down"
+            ).view(np.uint8),
+            [0xFE],
+        )
+
+    def test_to_float8e8m0_special_values_and_saturation(self) -> None:
+        values = np.array([0.0, -0.0, np.nan, np.inf, -np.inf, 2.0**127 * 1.5])
+        np.testing.assert_array_equal(
+            to_float8e8m0(values, round_mode="up").view(np.uint8), [0, 0, 0xFF, 0xFF, 0xFF, 0xFE]
+        )
+        np.testing.assert_array_equal(
+            to_float8e8m0(values, saturate=False, round_mode="up").view(np.uint8),
+            [0, 0, 0xFF, 0xFF, 0xFF, 0xFF],
+        )
+
     def test_to_float8e8m0_invalid_round_mode_raises(self) -> None:
         with self.assertRaises(ValueError):
             to_float8e8m0(np.array([1.0], dtype=np.float32), round_mode="invalid")

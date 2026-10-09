@@ -510,18 +510,20 @@ TEST(PersistentValueState, AttentionCacheOrdinaryInvocationBorrowsAndCopiesNever
     RuntimeContext context(KernelContext(DefaultOpset(23)),
                            RuntimeContextOptions{.events_enabled = true});
     bool indirect = false;
-    context.RegisterCustomKernel("", "Attention", [&](const NodeProto &, RuntimeContext &rt) {
-      Tensor key = copy ? Tensor(rt.Get("past_key")) : rt.Get("past_key").BorrowView();
-      Tensor value = copy ? Tensor(rt.Get("past_value")) : rt.Get("past_value").BorrowView();
-      onnx_kernels::kernel::Attention attention(rt.kernel_ctx());
-      auto result = attention(rt.Get("Q"), rt.Get("K"), rt.Get("V"),
-                              onnx_kernels::kernel::Attention::Attributes{}, nullptr,
-                              indirect ? &key : &rt.Get("past_key"),
-                              indirect ? &value : &rt.Get("past_value"), nullptr, &rt);
-      rt.Put("Y", std::move(result.Y));
-      rt.Put("present_key", std::move(result.present_key));
-      rt.Put("present_value", std::move(result.present_value));
-    });
+    context.RegisterCustomKernel(
+        "", "Attention",
+        [&](const NodeProto &, RuntimeContext &rt, const KernelContext &kernel_context) {
+          Tensor key = copy ? Tensor(rt.Get("past_key")) : rt.Get("past_key").BorrowView();
+          Tensor value = copy ? Tensor(rt.Get("past_value")) : rt.Get("past_value").BorrowView();
+          onnx_kernels::kernel::Attention attention(kernel_context);
+          auto result = attention(rt.Get("Q"), rt.Get("K"), rt.Get("V"),
+                                  onnx_kernels::kernel::Attention::Attributes{}, nullptr,
+                                  indirect ? &key : &rt.Get("past_key"),
+                                  indirect ? &value : &rt.Get("past_value"), nullptr, &rt);
+          rt.Put("Y", std::move(result.Y));
+          rt.Put("present_key", std::move(result.present_key));
+          rt.Put("present_value", std::move(result.present_value));
+        });
     PersistentValueState state(model, EmptyAttentionCache());
     state.Run(context, AttentionFeeds(1));
     indirect = true;
@@ -559,28 +561,30 @@ TEST(PersistentValueState, AttentionCacheChildContextsAndCopiesCannotUseInvocati
     RuntimeContext context(KernelContext(DefaultOpset(23)),
                            RuntimeContextOptions{.events_enabled = true});
     bool use_child = false;
-    context.RegisterCustomKernel("", "Attention", [&](const NodeProto &, RuntimeContext &rt) {
-      const auto compute = [](RuntimeContext &active) {
-        onnx_kernels::kernel::Attention attention(active.kernel_ctx());
-        return attention(active.Get("Q"), active.Get("K"), active.Get("V"),
-                         onnx_kernels::kernel::Attention::Attributes{}, nullptr,
-                         &active.Get("past_key"), &active.Get("past_value"), nullptr, &active);
-      };
-      auto result = [&] {
-        if (!use_child)
-          return compute(rt);
-        RuntimeContext child = mode == 0   ? rt.MakeFunctionContext()
-                               : mode == 1 ? rt.MakeSubgraphContext("body")
-                                           : rt;
-        for (const auto &name : {"Q", "K", "V", "past_key", "past_value"})
-          child.Put(name, rt.Get(name).BorrowView(), RuntimeEventKind::kInput);
-        child.set_current_node_index(rt.current_node_index());
-        return compute(child);
-      }();
-      rt.Put("Y", std::move(result.Y));
-      rt.Put("present_key", std::move(result.present_key));
-      rt.Put("present_value", std::move(result.present_value));
-    });
+    context.RegisterCustomKernel(
+        "", "Attention",
+        [&](const NodeProto &, RuntimeContext &rt, const KernelContext &kernel_context) {
+          const auto compute = [&kernel_context](RuntimeContext &active) {
+            onnx_kernels::kernel::Attention attention(kernel_context);
+            return attention(active.Get("Q"), active.Get("K"), active.Get("V"),
+                             onnx_kernels::kernel::Attention::Attributes{}, nullptr,
+                             &active.Get("past_key"), &active.Get("past_value"), nullptr, &active);
+          };
+          auto result = [&] {
+            if (!use_child)
+              return compute(rt);
+            RuntimeContext child = mode == 0   ? rt.MakeFunctionContext()
+                                   : mode == 1 ? rt.MakeSubgraphContext("body")
+                                               : rt;
+            for (const auto &name : {"Q", "K", "V", "past_key", "past_value"})
+              child.Put(name, rt.Get(name).BorrowView(), RuntimeEventKind::kInput);
+            child.set_current_node_index(rt.current_node_index());
+            return compute(child);
+          }();
+          rt.Put("Y", std::move(result.Y));
+          rt.Put("present_key", std::move(result.present_key));
+          rt.Put("present_value", std::move(result.present_value));
+        });
     PersistentValueState state(model, EmptyAttentionCache());
     state.Run(context, AttentionFeeds(1));
     use_child = true;
@@ -600,20 +604,22 @@ TEST(PersistentValueState, AttentionCacheRejectsDuplicateConsumersEvenWithoutRes
     RuntimeContext context(KernelContext(DefaultOpset(23)),
                            RuntimeContextOptions{.events_enabled = true});
     bool duplicate = false;
-    context.RegisterCustomKernel("", "Attention", [&](const NodeProto &, RuntimeContext &rt) {
-      onnx_kernels::kernel::Attention attention(rt.kernel_ctx());
-      const auto compute = [&] {
-        return attention(rt.Get("Q"), rt.Get("K"), rt.Get("V"),
-                         onnx_kernels::kernel::Attention::Attributes{}, nullptr,
-                         &rt.Get("past_key"), &rt.Get("past_value"), nullptr, &rt);
-      };
-      auto result = compute();
-      if (duplicate)
-        result = compute();
-      rt.Put("Y", std::move(result.Y));
-      rt.Put("present_key", std::move(result.present_key));
-      rt.Put("present_value", std::move(result.present_value));
-    });
+    context.RegisterCustomKernel(
+        "", "Attention",
+        [&](const NodeProto &, RuntimeContext &rt, const KernelContext &kernel_context) {
+          onnx_kernels::kernel::Attention attention(kernel_context);
+          const auto compute = [&] {
+            return attention(rt.Get("Q"), rt.Get("K"), rt.Get("V"),
+                             onnx_kernels::kernel::Attention::Attributes{}, nullptr,
+                             &rt.Get("past_key"), &rt.Get("past_value"), nullptr, &rt);
+          };
+          auto result = compute();
+          if (duplicate)
+            result = compute();
+          rt.Put("Y", std::move(result.Y));
+          rt.Put("present_key", std::move(result.present_key));
+          rt.Put("present_value", std::move(result.present_value));
+        });
     RuntimeSessionOptions options;
     options.persistent_tensor_initial_capacity = capacity;
     PersistentValueState state(model, EmptyAttentionCache(), options);
@@ -656,16 +662,18 @@ TEST(PersistentValueState, AttentionCachePublishesCapacityOnlyForTheExactCandida
   ModelProto model = AttentionModel();
   RuntimeContext context(KernelContext(DefaultOpset(23)),
                          RuntimeContextOptions{.events_enabled = true});
-  context.RegisterCustomKernel("", "Attention", [](const NodeProto &, RuntimeContext &rt) {
-    onnx_kernels::kernel::Attention attention(rt.kernel_ctx());
-    auto result = attention(rt.Get("Q"), rt.Get("K"), rt.Get("V"),
-                            onnx_kernels::kernel::Attention::Attributes{}, nullptr,
-                            &rt.Get("past_key"), &rt.Get("past_value"), nullptr, &rt);
-    rt.Put("Y", std::move(result.Y));
-    // Replacing a candidate with an ordinary tensor must discard its capacity.
-    rt.Put("present_key", result.present_key.ToOwned());
-    rt.Put("present_value", result.present_value.ToOwned());
-  });
+  context.RegisterCustomKernel(
+      "", "Attention",
+      [](const NodeProto &, RuntimeContext &rt, const KernelContext &kernel_context) {
+        onnx_kernels::kernel::Attention attention(kernel_context);
+        auto result = attention(rt.Get("Q"), rt.Get("K"), rt.Get("V"),
+                                onnx_kernels::kernel::Attention::Attributes{}, nullptr,
+                                &rt.Get("past_key"), &rt.Get("past_value"), nullptr, &rt);
+        rt.Put("Y", std::move(result.Y));
+        // Replacing a candidate with an ordinary tensor must discard its capacity.
+        rt.Put("present_key", result.present_key.ToOwned());
+        rt.Put("present_value", result.present_value.ToOwned());
+      });
   PersistentValueState state(model, EmptyAttentionCache());
   for (int step = 1; step <= 3; ++step) {
     const auto output = state.Run(context, AttentionFeeds(step));

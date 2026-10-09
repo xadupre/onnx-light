@@ -38,6 +38,7 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 /// Adapts a callback to a factory without copying or serializing the node.
 /// Each resolution copies the callable into a fresh session-owned KernelBase.
 NodeKernelFn MakeCustomKernelFactory(CustomKernelFn fn);
+NodeKernelFn MakeCustomKernelFactory(ContextualCustomKernelFn fn);
 
 /**
  * Adapts a backend kernel to the lifetime of a :cpp:class:`RuntimeSession`.
@@ -184,6 +185,8 @@ const CustomKernelMap &GlobalCustomKernels();
  */
 void RegisterGlobalCustomKernel(const std::string &domain, const std::string &op_type,
                                 CustomKernelFn fn);
+void RegisterGlobalCustomKernel(const std::string &domain, const std::string &op_type,
+                                ContextualCustomKernelFn fn);
 
 /// Registers a factory in the global custom override registry. This registry
 /// retains the precedence of the callback convenience API, but stores only

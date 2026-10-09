@@ -138,6 +138,14 @@ using NodeKernelFn = std::function<std::unique_ptr<KernelBase>(
 using CustomKernelFn = std::function<void(const NodeProto &, class RuntimeContext &)>;
 
 /**
+ * Signature of a custom kernel callback that also receives the immutable
+ * per-node context resolved from the owning model or function. Use this form
+ * when the callback constructs another kernel or depends on the node's opset.
+ */
+using ContextualCustomKernelFn =
+    std::function<void(const NodeProto &, class RuntimeContext &, const KernelContext &)>;
+
+/**
  * Name-keyed map of user-provided kernel factories consulted by
  * :cpp:func:`RunNode` before the built-in
  * :cpp:func:`KernelDispatchTable`. Allows callers to extend the
@@ -772,6 +780,8 @@ public:
   /// preparation or mutable state should use :cpp:func:`RegisterKernelFn`.
   void RegisterCustomKernel(const std::string &domain, const std::string &op_type,
                             CustomKernelFn fn);
+  void RegisterCustomKernel(const std::string &domain, const std::string &op_type,
+                            ContextualCustomKernelFn fn);
 
   /// Removes the custom kernel registered for ``(domain, op_type)``.
   /// The empty domain is normalised to ``"ai.onnx"``; removes the entry for

@@ -508,6 +508,42 @@ private:
   std::string domain_;
 };
 
+TEST_P(KernelLifecycle, ContextualCallbackReceivesModelOpset) {
+  const std::string domain = Domain();
+  ModelProto model;
+  auto *opset = model.add_opset_import();
+  opset->set_domain(domain);
+  opset->set_version(7);
+  *model.mutable_graph() = MakeGraph(domain);
+
+  int64_t observed_version = 0;
+  const core::runtime::OpsetImports *observed_imports = nullptr;
+  auto callback = [&](const NodeProto &node, RuntimeContext &rt,
+                      const KernelContext &kernel_context) {
+    observed_version = kernel_context.opset.version;
+    observed_imports = kernel_context.opset_imports;
+    const Tensor &input = rt.Get(node.input(0));
+    rt.Set(node.output(0),
+           Tensor::FromFloat(node.output(0), input.shape,
+                             std::vector<float>(static_cast<size_t>(input.element_count()), 7)));
+  };
+
+  GlobalCallbackGuard cleanup(domain);
+  RuntimeContext rt(core::runtime::KernelContext(core::backend_test::DefaultOpset(18)));
+  if (GetParam())
+    rt.RegisterCustomKernel(domain, "Scale", callback);
+  else
+    core::runtime::RegisterGlobalCustomKernel(domain, "Scale", callback);
+  RuntimeSession session(model);
+  Feed(rt, 1);
+  session.Run(rt);
+
+  EXPECT_EQ(observed_version, 7);
+  ASSERT_NE(observed_imports, nullptr);
+  EXPECT_EQ(observed_imports->at(domain), 7);
+  ExpectOutput(rt.Get("y"), 1, 7);
+}
+
 TEST_P(KernelLifecycle, CallbackKeepsOriginalNodeAndIndependentMutableCapture) {
   GraphProto graph = MakeGraph(Domain(), true);
   for (auto &node : graph.ref_node()) {

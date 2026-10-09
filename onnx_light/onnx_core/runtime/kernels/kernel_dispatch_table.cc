@@ -17,14 +17,15 @@ namespace {
 // Stores only a callable and a non-owning node pointer, never a node cache.
 class CustomKernelAdapter : public KernelBase {
 public:
-  CustomKernelAdapter(const NodeProto &node, const KernelContext &kernel_context, CustomKernelFn fn)
+  CustomKernelAdapter(const NodeProto &node, const KernelContext &kernel_context,
+                      ContextualCustomKernelFn fn)
       : KernelBase(kernel_context), fn_(std::move(fn)) {
     set_node(node);
   }
-  void Run(RuntimeContext &rt) override { fn_(*node_, rt); }
+  void Run(RuntimeContext &rt) override { fn_(*node_, rt, ctx_); }
 
 private:
-  CustomKernelFn fn_;
+  ContextualCustomKernelFn fn_;
 };
 
 // Returns the ``"<domain>:<op_type>"`` dispatch key, normalising an empty
@@ -94,6 +95,11 @@ bool RegisterKernelFn(const std::string &domain, const std::string &op_type,
 const CustomKernelMap &GlobalCustomKernels() { return MutableGlobalCustomKernels(); }
 
 NodeKernelFn MakeCustomKernelFactory(CustomKernelFn fn) {
+  return MakeCustomKernelFactory([fn = std::move(fn)](const NodeProto &node, RuntimeContext &rt,
+                                                      const KernelContext &) { fn(node, rt); });
+}
+
+NodeKernelFn MakeCustomKernelFactory(ContextualCustomKernelFn fn) {
   return [fn = std::move(fn)](const NodeProto &node, RuntimeContext &,
                               const KernelContext &kernel_context) {
     return std::make_unique<CustomKernelAdapter>(node, kernel_context, fn);
@@ -102,6 +108,11 @@ NodeKernelFn MakeCustomKernelFactory(CustomKernelFn fn) {
 
 void RegisterGlobalCustomKernel(const std::string &domain, const std::string &op_type,
                                 CustomKernelFn fn) {
+  RegisterGlobalCustomKernelFactory(domain, op_type, MakeCustomKernelFactory(std::move(fn)));
+}
+
+void RegisterGlobalCustomKernel(const std::string &domain, const std::string &op_type,
+                                ContextualCustomKernelFn fn) {
   RegisterGlobalCustomKernelFactory(domain, op_type, MakeCustomKernelFactory(std::move(fn)));
 }
 

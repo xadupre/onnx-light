@@ -322,6 +322,12 @@ TEST(QuantizedValueKernels, SharedParametersStayIndependentOfTypeReferences) {
     const auto source = Tensor::FromFloat("X", {3}, {-2, 0, 2});
     auto type = MakeQuantizationType(MakeQuantizationPlan(QuantizationFormat::kInt4, 3));
     ModelProto model;
+    auto *opset = model.add_opset_import();
+    opset->set_domain("ai.rt");
+    opset->set_version(1);
+    opset = model.add_opset_import();
+    opset->set_domain("");
+    opset->set_version(21);
     type.set_type_id(7);
     *model.add_struct_types() = type;
     auto *graph = model.mutable_graph();

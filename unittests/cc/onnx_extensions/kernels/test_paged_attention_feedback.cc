@@ -26,6 +26,11 @@ ModelProto PagedModel(bool gate = false, int64_t max_tokens = 8) {
   auto *opset = model.add_opset_import();
   opset->set_domain("ai.rt");
   opset->set_version(1);
+  if (gate) {
+    opset = model.add_opset_import();
+    opset->set_domain("onnx_light");
+    opset->set_version(1);
+  }
   auto *graph = model.mutable_graph();
   graph->set_name("paged_feedback");
   for (const auto &name : {"Q", "K", "V", "past"}) {
@@ -382,6 +387,9 @@ TEST(PagedAttentionFeedback, IntermediateCachesKeepOwnersAcrossArenaRouting) {
     forward->set_op_type("Forward");
     forward->add_input("present");
     forward->add_output("cache_out");
+    auto *opset = model.add_opset_import();
+    opset->set_domain("onnx_light");
+    opset->set_version(1);
     VerifyModel(model);
     SimpleRawBufferAllocator execution(8);
     auto arena = IOArena::Create(32);

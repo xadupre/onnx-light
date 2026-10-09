@@ -457,7 +457,7 @@ void GridSample::Run(RuntimeContext &rt) {
       GetAttributeStringOrDefault(node, "mode", ctx_.opset.version < 20 ? "bilinear" : "linear");
   attrs.padding_mode = GetAttributeStringOrDefault(node, "padding_mode", attrs.padding_mode);
   attrs.align_corners = GetAttributeIntOrDefault(node, "align_corners", attrs.align_corners);
-  onnx_kernels::kernel::GridSample k(rt.kernel_ctx());
+  onnx_kernels::kernel::GridSample k(ctx_);
   SetOutput(node, 0, k(x, grid, attrs, &rt), rt);
 }
 

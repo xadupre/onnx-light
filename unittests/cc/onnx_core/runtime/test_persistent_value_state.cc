@@ -2080,6 +2080,9 @@ TEST(PersistentValueState, OrdinarySessionsBorrowInitializersWithoutArenaCopies)
         SCOPED_TRACE(separate_graph);
         SCOPED_TRACE(static_cast<int32_t>(device));
         ModelProto model;
+        OperatorSetIdProto *opset = model.add_opset_import();
+        opset->set_domain("test.feedback");
+        opset->set_version(1);
         GraphProto source;
         auto *graph = model.mutable_graph();
         auto *initializer = separate_graph ? source.add_initializer() : graph->add_initializer();

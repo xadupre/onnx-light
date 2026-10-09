@@ -242,7 +242,7 @@ void TopK::Run(RuntimeContext &rt) {
     k = k_attr->i();
   }
 
-  onnx_kernels::kernel::TopK kernel(rt.kernel_ctx());
+  onnx_kernels::kernel::TopK kernel(ctx_);
   auto out = kernel(x, k, axis, largest, sorted, &rt);
   SetOutput(node, 0, std::move(out.first), rt);
   SetOutput(node, 1, std::move(out.second), rt);

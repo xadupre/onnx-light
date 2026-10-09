@@ -255,7 +255,7 @@ void RoiAlign::Run(RuntimeContext &rt) {
   const std::string default_ctm = ctx_.opset.version < 16 ? "output_half_pixel" : "half_pixel";
   attrs.coordinate_transformation_mode =
       GetAttributeStringOrDefault(node, "coordinate_transformation_mode", default_ctm);
-  onnx_kernels::kernel::RoiAlign k(rt.kernel_ctx());
+  onnx_kernels::kernel::RoiAlign k(ctx_);
   SetOutput(node, 0, k(x, rois, batch_indices, attrs, &rt), rt);
 }
 

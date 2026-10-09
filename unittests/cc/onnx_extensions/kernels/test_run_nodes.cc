@@ -5719,7 +5719,7 @@ TEST(SubgraphSession, ReusesInheritedKernelInitializationAcrossMultipleRuns) {
   graph.add_output()->set_name("y");
 
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
-  core::runtime::SubgraphSession session(rt, graph);
+  core::runtime::SubgraphSession session(graph);
 
   core::runtime::Tensors outputs =
       session.Run({{"x", Tensor::FromFloat("x", {2}, {1.0f, 2.0f})}}, rt, "body");

@@ -112,9 +112,6 @@ using ShapeMap = std::unordered_map<std::string, Shape>;
  */
 using FunctionMap = std::unordered_map<std::string, const FunctionProto *>;
 
-/// Opset imports owned by the running model or function session.
-using OpsetImports = std::unordered_map<std::string, int64_t>;
-
 /**
  * Factory signature for global and context-local kernel registrations.
  * Called once per resolved node, it returns a fresh, session-owned kernel.
@@ -124,8 +121,8 @@ using OpsetImports = std::unordered_map<std::string, int64_t>;
  * The factory must not retain the supplied RuntimeContext by reference.
  * Factories must not share mutable kernel state between independent sessions.
  */
-using NodeKernelFn =
-    std::function<std::unique_ptr<KernelBase>(const NodeProto &node, RuntimeContext &rt)>;
+using NodeKernelFn = std::function<std::unique_ptr<KernelBase>(
+    const NodeProto &node, RuntimeContext &rt, const KernelContext &kernel_context)>;
 
 /**
  * Signature of a user-provided custom kernel callback. Registration adapts
@@ -599,10 +596,6 @@ public:
   /// Kernel construction context (opset + allocator).
   KernelContext &kernel_ctx() noexcept { return kernel_ctx_; }
   const KernelContext &kernel_ctx() const noexcept { return kernel_ctx_; }
-  /// Returns the imports of the active model/function session, if any.
-  const OpsetImports *opset_imports() const noexcept { return opset_imports_; }
-  void set_opset_imports(const OpsetImports *imports) noexcept { opset_imports_ = imports; }
-
   /// Returns the allocator kernels should currently use to acquire and
   /// release :cpp:struct:`RawBuffer` instances — the *active* allocator. It
   /// equals :cpp:func:`execution_allocator` (the construction-time
@@ -1100,7 +1093,6 @@ private:
   StructTypeCatalogue struct_type_catalogue_;
   std::shared_ptr<const QuantizationParameterCatalogue> quantization_parameters_;
   KernelContext kernel_ctx_;
-  const OpsetImports *opset_imports_ = nullptr;
   FunctionMap functions_;
   CustomKernelMap custom_kernels_;
   std::shared_ptr<KernelUsageState> kernel_usage_ = std::make_shared<KernelUsageState>();

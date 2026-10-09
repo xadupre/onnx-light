@@ -73,7 +73,7 @@ Tensors If::operator()(RuntimeContext &rt, const Tensor &cond, const GraphProto 
   // repeated iteration to amortize the session over, but the same
   // construct-then-run separation keeps the control-flow kernels
   // consistent with one another.
-  SubgraphSession session(rt, branch);
+  SubgraphSession session(branch, ctx_.opset_imports);
   return session.Run({}, rt, branch_name);
 }
 

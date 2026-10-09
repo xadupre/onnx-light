@@ -439,7 +439,6 @@ RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name)
   // context is destroyed, leaving any copies held by the caller with stale
   // allocation pointers.
   child.functions() = functions_;
-  child.set_opset_imports(opset_imports_);
   child.custom_kernels() = custom_kernels_;
   child.set_model_owner(model_owner_);
   child.set_struct_type_catalogue(struct_type_catalogue_);
@@ -508,7 +507,6 @@ RuntimeContext RuntimeContext::MakeFunctionContext() const {
                        },
                        kernel_usage_, events_);
   child.functions() = functions_;
-  child.set_opset_imports(opset_imports_);
   child.custom_kernels() = custom_kernels_;
   child.set_model_owner(model_owner_);
   child.set_struct_type_catalogue(struct_type_catalogue_);

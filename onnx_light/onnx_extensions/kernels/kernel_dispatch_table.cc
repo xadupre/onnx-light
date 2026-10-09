@@ -58,8 +58,9 @@ namespace {
 // node it runs for and hands ownership to the runtime, which calls
 // :cpp:func:`KernelBase::Run` once per node.
 template <class KernelT> NodeKernelFn MakeKernel() {
-  return [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<KernelBase> {
-    auto kernel = std::make_unique<KernelT>(rt.kernel_ctx());
+  return [](const NodeProto &node, RuntimeContext &,
+            const KernelContext &kernel_context) -> std::unique_ptr<KernelBase> {
+    auto kernel = std::make_unique<KernelT>(kernel_context);
     kernel->set_node(node);
     return kernel;
   };

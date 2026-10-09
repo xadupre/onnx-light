@@ -181,9 +181,12 @@ public:
    */
   explicit RuntimeSession(const ExecutionPlan &plan, int verbose = 0);
   RuntimeSession(const ExecutionPlan &plan, RuntimeSessionOptions options);
-  /// Builds a session over a function with its own opset imports. An empty
-  /// import list retains the enclosing context's legacy opset behavior.
+  /// Builds a session over a function with its own opset imports.
   explicit RuntimeSession(const FunctionProto &function, RuntimeSessionOptions options = {});
+  /// Builds a nested function session. An empty function import list inherits
+  /// ``inherited_opset_imports`` without copying it.
+  RuntimeSession(const FunctionProto &function, const OpsetImports *inherited_opset_imports,
+                 RuntimeSessionOptions options = {});
 
   // A session caches one owning ``std::unique_ptr<KernelBase>`` per node (see
   // :cpp:member:`kernels_`), so it is move-only. It is always created in place
@@ -365,7 +368,8 @@ protected:
   /// by :cpp:class:`SubgraphSession` so a control-flow subgraph can be a
   /// :cpp:class:`RuntimeSession` with the same default resolution behavior as a
   /// top-level graph session.
-  explicit RuntimeSession(const GraphProto &graph, int verbose = 0);
+  explicit RuntimeSession(const GraphProto &graph,
+                          const OpsetImports *inherited_opset_imports = nullptr, int verbose = 0);
 
   /// Default node-kernel resolution used during
   /// :cpp:func:`InitializeKernels`, so :cpp:class:`RuntimeSession` and
@@ -374,7 +378,8 @@ protected:
   /// kernel instance for ``node``.
   std::unique_ptr<KernelBase> ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt,
                                                 const std::string &domain,
-                                                const std::string &op_type) const;
+                                                const std::string &op_type,
+                                                const KernelContext &kernel_context) const;
 
 private:
   /// A node's kernel instance built once during
@@ -393,6 +398,7 @@ private:
   /// read in :cpp:member:`required_inputs_`.
   void InitializeKernels(RuntimeContext &rt,
                          const std::unordered_set<std::string> &preparable_inputs);
+  const OpsetImports *EffectiveOpsetImports() const noexcept;
 
   /// Seeds missing initializer names and returns the names installed by this session.
   std::unordered_set<std::string> SeedInitializers(RuntimeContext &rt) const;
@@ -444,9 +450,10 @@ private:
   /// (and unused) when a plan is passed in through the plan-taking constructor.
   ExecutionPlan default_plan_;
   const ExecutionPlan &plan_;
-  /// Empty for legacy graph/plan sessions, which use the caller's context opset
-  /// unless they are nested under a model or function session.
-  std::optional<OpsetImports> opset_imports_;
+  /// Imports declared directly by a model or function. Subgraphs and functions
+  /// without imports borrow their enclosing session's immutable map instead.
+  std::optional<OpsetImports> owned_opset_imports_;
+  const OpsetImports *inherited_opset_imports_ = nullptr;
   std::unique_ptr<PreparedExecutionState> prepared_execution_state_;
   std::vector<PreparedKernel> kernels_;
   const GraphProto *initializer_graph_ = nullptr;

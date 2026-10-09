@@ -57,7 +57,8 @@ template <typename Kernel, typename ExecutionScope> class SessionKernel final : 
                 "Execution scopes must be constructible from RuntimeContext.");
 
 public:
-  SessionKernel(const NodeProto &node, RuntimeContext &rt) : Kernel(rt.kernel_ctx()) {
+  SessionKernel(const NodeProto &node, const KernelContext &kernel_context)
+      : Kernel(kernel_context) {
     this->set_node(node);
   }
 
@@ -77,8 +78,9 @@ public:
  *   The ready-to-run kernel owned through :cpp:class:`KernelBase`.
  */
 template <typename Kernel, typename ExecutionScope>
-std::unique_ptr<KernelBase> MakeSessionKernel(const NodeProto &node, RuntimeContext &rt) {
-  return std::make_unique<SessionKernel<Kernel, ExecutionScope>>(node, rt);
+std::unique_ptr<KernelBase> MakeSessionKernel(const NodeProto &node,
+                                              const KernelContext &kernel_context) {
+  return std::make_unique<SessionKernel<Kernel, ExecutionScope>>(node, kernel_context);
 }
 
 /**

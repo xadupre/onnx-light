@@ -81,24 +81,6 @@ private:
   CpuExecutorScope scope_;
 };
 
-class SessionOpsetScope {
-public:
-  SessionOpsetScope(RuntimeContext &rt, const OpsetImports *imports)
-      : rt_(rt), previous_imports_(rt.opset_imports()), previous_opset_(rt.kernel_ctx().opset) {
-    if (imports != nullptr)
-      rt_.set_opset_imports(imports);
-  }
-  ~SessionOpsetScope() {
-    rt_.kernel_ctx().opset = previous_opset_;
-    rt_.set_opset_imports(previous_imports_);
-  }
-
-private:
-  RuntimeContext &rt_;
-  const OpsetImports *previous_imports_;
-  OpsetId previous_opset_;
-};
-
 OpsetImports ParseOpsetImports(const utils::RepeatedProtoField<OperatorSetIdProto> &imports) {
   OpsetImports versions;
   for (const auto &import : imports) {
@@ -139,7 +121,7 @@ RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions op
       cpu_execution_counters_(options.cpu_execution_counters),
       parallel_region_collector_(std::move(options.parallel_region_collector)),
       verbose_(options.verbose) {
-  opset_imports_ = ParseOpsetImports(model.opset_import());
+  owned_opset_imports_ = ParseOpsetImports(model.opset_import());
   SetDeclaredShapes(model.graph());
   SetInitializers(model.graph());
   struct_type_catalogue_.emplace();
@@ -147,8 +129,9 @@ RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions op
   quantization_parameters_ = QuantizationParameterCatalogue::Build(model);
 }
 
-RuntimeSession::RuntimeSession(const GraphProto &graph, int verbose)
-    : default_plan_(graph), plan_(default_plan_),
+RuntimeSession::RuntimeSession(const GraphProto &graph, const OpsetImports *inherited_opset_imports,
+                               int verbose)
+    : default_plan_(graph), plan_(default_plan_), inherited_opset_imports_(inherited_opset_imports),
       cpu_execution_(DefaultCpuExecutionPolicy(parameters_)), verbose_(verbose) {
   SetDeclaredShapes(graph);
   SetInitializers(graph);
@@ -173,7 +156,13 @@ RuntimeSession::RuntimeSession(const ExecutionPlan &plan, RuntimeSessionOptions 
       verbose_(options.verbose) {}
 
 RuntimeSession::RuntimeSession(const FunctionProto &function, RuntimeSessionOptions options)
-    : default_plan_(function), plan_(default_plan_), check_shapes_(options.check_shapes),
+    : RuntimeSession(function, nullptr, std::move(options)) {}
+
+RuntimeSession::RuntimeSession(const FunctionProto &function,
+                               const OpsetImports *inherited_opset_imports,
+                               RuntimeSessionOptions options)
+    : default_plan_(function), plan_(default_plan_),
+      inherited_opset_imports_(inherited_opset_imports), check_shapes_(options.check_shapes),
       allow_external_output_allocators_(options.allow_external_output_allocators),
       parameters_(std::move(options.parameters)),
       cpu_execution_(options.cpu_execution.has_value() ? *options.cpu_execution
@@ -183,7 +172,11 @@ RuntimeSession::RuntimeSession(const FunctionProto &function, RuntimeSessionOpti
       parallel_region_collector_(std::move(options.parallel_region_collector)),
       verbose_(options.verbose) {
   if (!function.opset_import().empty())
-    opset_imports_ = ParseOpsetImports(function.opset_import());
+    owned_opset_imports_ = ParseOpsetImports(function.opset_import());
+}
+
+const OpsetImports *RuntimeSession::EffectiveOpsetImports() const noexcept {
+  return owned_opset_imports_ ? &*owned_opset_imports_ : inherited_opset_imports_;
 }
 
 const std::shared_ptr<CpuExecutor> &RuntimeSession::cpu_executor() {
@@ -318,11 +311,12 @@ std::vector<std::string> RuntimeSession::CollectNodeInputs(const NodeProto &node
   return ::ONNX_LIGHT_NAMESPACE::core::graph::CollectNodeInputs(node);
 }
 
-std::unique_ptr<KernelBase> RuntimeSession::ResolveNodeKernel(const NodeProto &node,
-                                                              RuntimeContext &rt,
-                                                              const std::string &domain,
-                                                              const std::string &op_type) const {
-  return detail::ResolveNodeKernelDefault(node, rt, domain, op_type);
+std::unique_ptr<KernelBase>
+RuntimeSession::ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt,
+                                  const std::string &domain, const std::string &op_type,
+                                  const KernelContext &kernel_context) const {
+  return detail::ResolveNodeKernelDefault(node, rt, domain, op_type, kernel_context,
+                                          EffectiveOpsetImports());
 }
 
 void RuntimeSession::InitializeKernels(RuntimeContext &rt,
@@ -346,15 +340,18 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt,
     const NodeProto &node = *nodes[index];
     const std::string &domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
     const std::string op_type = node.op_type().value();
-    if (const OpsetImports *imports = rt.opset_imports()) {
+    PreparedKernel &prepared = kernels_[index];
+    prepared.key = domain + ":" + op_type;
+    if (const OpsetImports *imports = EffectiveOpsetImports()) {
       const auto found = imports->find(domain);
       EXT_ENFORCE_INVALID(found != imports->end(),
                           "RuntimeSession: missing opset import for domain '", domain, "'.");
-      rt.kernel_ctx().opset = OpsetId(domain, found->second);
+      const KernelContext kernel_context(OpsetId(domain, found->second), rt.kernel_ctx().allocator,
+                                         imports);
+      prepared.instance = ResolveNodeKernel(node, rt, domain, op_type, kernel_context);
+    } else {
+      prepared.instance = ResolveNodeKernel(node, rt, domain, op_type, rt.kernel_ctx());
     }
-    PreparedKernel &prepared = kernels_[index];
-    prepared.key = domain + ":" + op_type;
-    prepared.instance = ResolveNodeKernel(node, rt, domain, op_type);
   }
 
   // Capture exactly one immutable registry generation after all factories have
@@ -599,16 +596,16 @@ void RuntimeSession::VerifyDeclaredShape(const std::string &name, const RuntimeC
 }
 
 void RuntimeSession::Run(RuntimeContext &rt) {
-  if (opset_imports_ && rt.opset_imports() == nullptr && rt.kernel_ctx().opset.version != 0) {
+  if (owned_opset_imports_ && inherited_opset_imports_ == nullptr &&
+      rt.kernel_ctx().opset.version != 0) {
     const std::string domain =
         rt.kernel_ctx().opset.domain.empty() ? "ai.onnx" : rt.kernel_ctx().opset.domain;
-    const auto found = opset_imports_->find(domain);
-    EXT_ENFORCE_INVALID(found == opset_imports_->end() ||
+    const auto found = owned_opset_imports_->find(domain);
+    EXT_ENFORCE_INVALID(found == owned_opset_imports_->end() ||
                             found->second == rt.kernel_ctx().opset.version,
                         "RuntimeSession: RuntimeContext opset for domain '", domain,
                         "' does not match the model opset import.");
   }
-  const SessionOpsetScope opset_scope(rt, opset_imports_ ? &*opset_imports_ : nullptr);
   // Lease the shared executor before any kernel is prepared or executed and
   // install it for the whole run: every parallel region a kernel launches then
   // uses this session's resolved policy instead of a hidden process-wide pool.
@@ -696,8 +693,6 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       const NodeProto &node = *nodes[index];
       const std::string &domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
       const std::string &op_type = node.op_type().value();
-      if (const OpsetImports *imports = rt.opset_imports())
-        rt.kernel_ctx().opset = OpsetId(domain, imports->at(domain));
       detail::PrintNodeProgress(rt, node, domain, op_type, effective_verbose);
 
       // Route this node's kernel invocation through the I/O allocator instead

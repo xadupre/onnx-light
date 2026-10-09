@@ -15,6 +15,7 @@
 
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 
@@ -36,6 +37,9 @@ class RuntimeContext;
 class PreparedExecutionState;
 struct KernelTuningKey;
 struct KernelTuningParameters;
+
+/// Immutable opset imports owned by a model or function session.
+using OpsetImports = std::unordered_map<std::string, int64_t>;
 
 /**
  * Lightweight opset identifier used by the backend test library.
@@ -79,10 +83,13 @@ struct KernelContext {
   /// in which case results fall back to inline ``std::vector`` storage.
   /// Initialized from the allocator supplied to :cpp:class:`RuntimeContext`.
   RawBufferAllocator *allocator = nullptr;
+  /// Effective model/function imports. Borrowed from the owning session.
+  const OpsetImports *opset_imports = nullptr;
 
   KernelContext() = default;
-  explicit KernelContext(OpsetId opset_, RawBufferAllocator *allocator_ = nullptr)
-      : opset(std::move(opset_)), allocator(allocator_) {}
+  explicit KernelContext(OpsetId opset_, RawBufferAllocator *allocator_ = nullptr,
+                         const OpsetImports *opset_imports_ = nullptr)
+      : opset(std::move(opset_)), allocator(allocator_), opset_imports(opset_imports_) {}
 };
 
 /**

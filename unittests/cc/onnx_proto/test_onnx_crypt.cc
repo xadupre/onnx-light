@@ -232,6 +232,51 @@ TEST(onnx_crypt, StringRoundTrip_ChaCha20Poly1305WrongKey_Throws) {
   EXPECT_THROW(LoadEncryptedModelFromString(loaded, blob, "wrong_key"), std::runtime_error);
 }
 
+TEST(onnx_crypt, AES256GCM_FileAndStringRoundTrip) {
+  const std::string path =
+      (std::filesystem::temp_directory_path() / "test_onnx_crypt_gcm.onnxc").string();
+  ModelProto original = make_test_model();
+  SaveEncryptedModel(original, path, "secret", "AES-256-GCM");
+  ModelProto loaded;
+  LoadEncryptedModel(loaded, path, "secret");
+  std::filesystem::remove(path);
+  std::string expected, actual;
+  original.SerializeToString(expected);
+  loaded.SerializeToString(actual);
+  EXPECT_EQ(expected, actual);
+
+  const std::string blob = SaveEncryptedModelToString(original, "secret", "AES-256-GCM");
+  EXPECT_EQ(blob.substr(0, 8), "ONNXCRY3");
+  EXPECT_EQ(blob.size(), 52u + expected.size());
+  ModelProto loaded_from_string;
+  LoadEncryptedModelFromString(loaded_from_string, blob, "secret");
+  loaded_from_string.SerializeToString(actual);
+  EXPECT_EQ(expected, actual);
+}
+
+TEST(onnx_crypt, AES256GCM_RejectsTamperingAndTruncation) {
+  ModelProto model = make_test_model();
+  const std::string blob = SaveEncryptedModelToString(model, "secret", "AES-256-GCM");
+  ModelProto loaded;
+  EXPECT_THROW(LoadEncryptedModelFromString(loaded, blob, "wrong"), std::runtime_error);
+  for (size_t offset : {size_t{0}, size_t{8}, size_t{24}, size_t{36}, size_t{52}}) {
+    std::string tampered = blob;
+    tampered[offset] ^= 1;
+    try {
+      LoadEncryptedModelFromString(loaded, tampered, "secret");
+      FAIL() << "Tampering at offset " << offset << " was accepted";
+    } catch (const std::runtime_error &ex) {
+      EXPECT_EQ(std::string(ex.what()).find("Failed to parse"), std::string::npos);
+    }
+  }
+  for (size_t length : {size_t{0}, size_t{7}, size_t{8}, size_t{36}, size_t{51}, size_t{52}}) {
+    EXPECT_THROW(LoadEncryptedModelFromString(loaded, blob.substr(0, length), "secret"),
+                 std::runtime_error);
+  }
+  ModelProto empty;
+  EXPECT_THROW(SaveEncryptedModelToString(empty, "secret", "AES-256-GCM"), std::runtime_error);
+}
+
 #else // ONNX_LIGHT_HAS_OPENSSL
 
 // Placeholder so the test binary still compiles without OpenSSL.

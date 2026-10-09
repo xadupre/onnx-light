@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <limits>
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/rand.h>
@@ -29,6 +30,7 @@ namespace {
 // File format constants.
 static constexpr std::array<char, 8> MAGIC_AES{'O', 'N', 'N', 'X', 'C', 'R', 'Y', '1'};
 static constexpr std::array<char, 8> MAGIC_CHACHA20{'O', 'N', 'N', 'X', 'C', 'R', 'Y', '2'};
+static constexpr std::array<char, 8> MAGIC_GCM{'O', 'N', 'N', 'X', 'C', 'R', 'Y', '3'};
 static constexpr int SALT_LEN = 16;
 static constexpr int IV_LEN = 16; // AES-CBC IV size
 static constexpr int NONCE_LEN = 12;
@@ -172,14 +174,68 @@ std::string encrypt_to_blob_chacha20(const std::string &plain, const std::string
 #endif
 }
 
+// Encrypts *plain* bytes using AES-256-GCM and authenticates the magic, salt, and nonce.
+std::string encrypt_to_blob_gcm(const std::string &plain, const std::string &key) {
+  if (plain.empty() || plain.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
+    throw std::runtime_error("ONNXCRY3 requires a non-empty payload of at most INT_MAX bytes.");
+
+  uint8_t salt[SALT_LEN];
+  uint8_t nonce[NONCE_LEN];
+  if (RAND_bytes(salt, SALT_LEN) != 1 || RAND_bytes(nonce, NONCE_LEN) != 1)
+    throw std::runtime_error("RAND_bytes failed: " + openssl_last_error());
+  auto encryption_key = derive_key(key, salt);
+
+  std::string blob;
+  blob.reserve(MAGIC_GCM.size() + SALT_LEN + NONCE_LEN + TAG_LEN + plain.size());
+  blob.append(MAGIC_GCM.data(), MAGIC_GCM.size());
+  blob.append(reinterpret_cast<const char *>(salt), SALT_LEN);
+  blob.append(reinterpret_cast<const char *>(nonce), NONCE_LEN);
+
+  EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+  if (!ctx)
+    throw std::runtime_error("EVP_CIPHER_CTX_new failed: " + openssl_last_error());
+  if (EVP_EncryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, encryption_key.data(), nonce) != 1) {
+    EVP_CIPHER_CTX_free(ctx);
+    throw std::runtime_error("EVP_EncryptInit_ex(AES-256-GCM) failed: " + openssl_last_error());
+  }
+  int aad_len = 0;
+  if (EVP_EncryptUpdate(ctx, nullptr, &aad_len, reinterpret_cast<const uint8_t *>(blob.data()),
+                        static_cast<int>(blob.size())) != 1) {
+    EVP_CIPHER_CTX_free(ctx);
+    throw std::runtime_error("EVP_EncryptUpdate(AES-256-GCM AAD) failed: " + openssl_last_error());
+  }
+  std::vector<uint8_t> ciphertext(plain.size() + EVP_MAX_BLOCK_LENGTH);
+  int out_len = 0;
+  int final_len = 0;
+  if (EVP_EncryptUpdate(ctx, ciphertext.data(), &out_len,
+                        reinterpret_cast<const uint8_t *>(plain.data()),
+                        static_cast<int>(plain.size())) != 1 ||
+      EVP_EncryptFinal_ex(ctx, ciphertext.data() + out_len, &final_len) != 1) {
+    EVP_CIPHER_CTX_free(ctx);
+    throw std::runtime_error("EVP_Encrypt(AES-256-GCM) failed: " + openssl_last_error());
+  }
+  uint8_t tag[TAG_LEN];
+  if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, TAG_LEN, tag) != 1) {
+    EVP_CIPHER_CTX_free(ctx);
+    throw std::runtime_error("EVP_CTRL_GCM_GET_TAG failed: " + openssl_last_error());
+  }
+  EVP_CIPHER_CTX_free(ctx);
+  blob.append(reinterpret_cast<const char *>(tag), TAG_LEN);
+  blob.append(reinterpret_cast<const char *>(ciphertext.data()),
+              static_cast<size_t>(out_len + final_len));
+  return blob;
+}
+
 std::string encrypt_to_blob(const std::string &plain, const std::string &key,
                             const std::string &encryption) {
   if (encryption == "AES-256-CBC")
     return encrypt_to_blob_aes(plain, key);
   if (encryption == "ChaCha20-Poly1305")
     return encrypt_to_blob_chacha20(plain, key);
+  if (encryption == "AES-256-GCM")
+    return encrypt_to_blob_gcm(plain, key);
   throw std::runtime_error("Unsupported encryption algorithm '" + encryption +
-                           "'. Supported values: AES-256-CBC, ChaCha20-Poly1305.");
+                           "'. Supported values: AES-256-CBC, ChaCha20-Poly1305, AES-256-GCM.");
 }
 
 std::vector<uint8_t> decrypt_from_blob_aes(const uint8_t *data, size_t data_len,
@@ -297,7 +353,53 @@ std::vector<uint8_t> decrypt_from_blob_chacha20(const uint8_t *data, size_t data
 #endif
 }
 
-// Decrypts an ONNXCRY1 or ONNXCRY2 *blob* and returns the plaintext bytes.
+std::vector<uint8_t> decrypt_from_blob_gcm(const uint8_t *data, size_t data_len,
+                                           const std::string &key) {
+  const size_t aad_size = MAGIC_GCM.size() + SALT_LEN + NONCE_LEN;
+  const size_t header_size = aad_size + TAG_LEN;
+  if (data_len <= header_size)
+    throw std::runtime_error("Buffer too small or empty for an ONNXCRY3 payload.");
+  const size_t cipher_len = data_len - header_size;
+  if (cipher_len > static_cast<size_t>(std::numeric_limits<int>::max()))
+    throw std::runtime_error("ONNXCRY3 ciphertext exceeds INT_MAX bytes.");
+
+  uint8_t salt[SALT_LEN];
+  std::memcpy(salt, data + MAGIC_GCM.size(), SALT_LEN);
+  auto encryption_key = derive_key(key, salt);
+  const uint8_t *nonce = data + MAGIC_GCM.size() + SALT_LEN;
+  const uint8_t *tag = data + aad_size;
+  const uint8_t *ciphertext = data + header_size;
+  EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+  if (!ctx)
+    throw std::runtime_error("EVP_CIPHER_CTX_new failed: " + openssl_last_error());
+  if (EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, encryption_key.data(), nonce) != 1) {
+    EVP_CIPHER_CTX_free(ctx);
+    throw std::runtime_error("EVP_DecryptInit_ex(AES-256-GCM) failed: " + openssl_last_error());
+  }
+  int aad_len = 0;
+  if (EVP_DecryptUpdate(ctx, nullptr, &aad_len, data, static_cast<int>(aad_size)) != 1) {
+    EVP_CIPHER_CTX_free(ctx);
+    throw std::runtime_error("EVP_DecryptUpdate(AES-256-GCM AAD) failed: " + openssl_last_error());
+  }
+  std::vector<uint8_t> plaintext(cipher_len + EVP_MAX_BLOCK_LENGTH);
+  int out_len = 0;
+  if (EVP_DecryptUpdate(ctx, plaintext.data(), &out_len, ciphertext,
+                        static_cast<int>(cipher_len)) != 1 ||
+      EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, TAG_LEN, const_cast<uint8_t *>(tag)) != 1) {
+    EVP_CIPHER_CTX_free(ctx);
+    throw std::runtime_error("EVP_Decrypt(AES-256-GCM) failed: " + openssl_last_error());
+  }
+  int final_len = 0;
+  if (EVP_DecryptFinal_ex(ctx, plaintext.data() + out_len, &final_len) != 1) {
+    EVP_CIPHER_CTX_free(ctx);
+    throw std::runtime_error("ONNXCRY3 authentication failed (wrong key or corrupt data).");
+  }
+  EVP_CIPHER_CTX_free(ctx);
+  plaintext.resize(static_cast<size_t>(out_len + final_len));
+  return plaintext;
+}
+
+// Decrypts an ONNXCRY1, ONNXCRY2, or ONNXCRY3 *blob* and returns the plaintext bytes.
 std::vector<uint8_t> decrypt_from_blob(const uint8_t *data, size_t data_len,
                                        const std::string &key) {
   if (data_len < MAGIC_AES.size())
@@ -306,7 +408,10 @@ std::vector<uint8_t> decrypt_from_blob(const uint8_t *data, size_t data_len,
     return decrypt_from_blob_aes(data, data_len, key);
   if (std::memcmp(data, MAGIC_CHACHA20.data(), MAGIC_CHACHA20.size()) == 0)
     return decrypt_from_blob_chacha20(data, data_len, key);
-  throw std::runtime_error("Bad magic bytes – not an ONNXCRY1/ONNXCRY2 encrypted payload.");
+  if (std::memcmp(data, MAGIC_GCM.data(), MAGIC_GCM.size()) == 0)
+    return decrypt_from_blob_gcm(data, data_len, key);
+  throw std::runtime_error(
+      "Bad magic bytes – not an ONNXCRY1/ONNXCRY2/ONNXCRY3 encrypted payload.");
 }
 
 } // namespace

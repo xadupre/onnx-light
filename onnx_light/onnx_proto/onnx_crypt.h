@@ -16,6 +16,8 @@ namespace ONNX_LIGHT_NAMESPACE {
  * Supported formats:
  * - ONNXCRY1: AES-256-CBC (legacy, no MAC)
  * - ONNXCRY2: ChaCha20-Poly1305 (authenticated encryption)
+ * - ONNXCRY3: AES-256-GCM (authenticated encryption; header, salt and nonce are AAD)
+ * Use ONNXCRY3 or ONNXCRY2 for new files; ONNXCRY1 does not authenticate the payload.
  *
  * ### File format
  *
@@ -34,6 +36,14 @@ namespace ONNX_LIGHT_NAMESPACE {
  *     24    12  Random nonce
  *     36    16  Authentication tag
  *     52     N  ChaCha20 ciphertext (same length as plaintext)
+ *
+ *   ONNXCRY3 (AES-256-GCM):
+ *      0     8  Magic: "ONNXCRY3"
+ *      8    16  Random PBKDF2 salt
+ *     24    12  Random nonce
+ *     36    16  Authentication tag
+ *     52     N  AES-256-GCM ciphertext (same length as plaintext)
+ *   The first 36 bytes are authenticated as additional data.
  * ```
  *
  * ### Key derivation
@@ -55,8 +65,8 @@ namespace ONNX_LIGHT_NAMESPACE {
  * @param key     Passphrase / raw key used to derive the encryption key via
  *                PBKDF2-HMAC-SHA256 (100 000 iterations).
  * @param opts    Serialization options (e.g. raw_data_threshold).
- * @param encryption  Encryption algorithm: ``"AES-256-CBC"`` (ONNXCRY1) or
- *                ``"ChaCha20-Poly1305"`` (ONNXCRY2).
+ * @param encryption  Encryption algorithm: ``"AES-256-CBC"`` (ONNXCRY1),
+ *                ``"ChaCha20-Poly1305"`` (ONNXCRY2), or ``"AES-256-GCM"`` (ONNXCRY3).
  * @throws std::runtime_error on OpenSSL errors or I/O failures.
  */
 ONNX_LIGHT_PROTO_API void SaveEncryptedModel(ModelProto &model, const std::string &file_path,
@@ -93,9 +103,9 @@ ONNX_LIGHT_PROTO_API void LoadEncryptedModel(ModelProto &model, const std::strin
  * @param key    Passphrase / raw key used to derive the encryption key via
  *               PBKDF2-HMAC-SHA256 (100 000 iterations).
  * @param opts   Serialization options.
- * @param encryption  Encryption algorithm: ``"AES-256-CBC"`` (ONNXCRY1) or
- *               ``"ChaCha20-Poly1305"`` (ONNXCRY2).
- * @return       Raw encrypted bytes in ONNXCRY1 or ONNXCRY2 format.
+ * @param encryption  Encryption algorithm: ``"AES-256-CBC"`` (ONNXCRY1),
+ *               ``"ChaCha20-Poly1305"`` (ONNXCRY2), or ``"AES-256-GCM"`` (ONNXCRY3).
+ * @return       Raw encrypted bytes in ONNXCRY1, ONNXCRY2, or ONNXCRY3 format.
  * @throws std::runtime_error on OpenSSL errors.
  */
 ONNX_LIGHT_PROTO_API std::string
@@ -114,7 +124,7 @@ ONNX_LIGHT_PROTO_API std::string SaveEncryptedModelToString(ModelProto &model,
  * SaveEncryptedModel()) with the same passphrase.
  *
  * @param model          Output model populated from the decrypted payload.
- * @param encrypted_data Raw encrypted bytes in ONNXCRY1 or ONNXCRY2 format.
+ * @param encrypted_data Raw encrypted bytes in ONNXCRY1, ONNXCRY2, or ONNXCRY3 format.
  * @param key            Passphrase / raw key (must match the one used to save).
  * @param opts           Parsing options.
  * @throws std::runtime_error on decryption failure or bad magic.

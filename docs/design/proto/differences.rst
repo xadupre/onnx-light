@@ -346,7 +346,7 @@ Encrypted model save / load
 -----------------------------
 
 ``onnx_light`` optionally supports saving and loading models in an
-**AES-256-CBC encrypted** binary format (extension ``.onnxc``).  The
+**encrypted** binary formats (extension ``.onnxc``). The
 standard ``onnx`` package offers no equivalent functionality.
 The feature is available only when ``onnx_light`` is built with OpenSSL
 (``-DONNX_LIGHT_HAS_OPENSSL``); when OpenSSL is absent the helpers raise
@@ -355,7 +355,9 @@ The feature is available only when ``onnx_light`` is built with OpenSSL
 File format
 ~~~~~~~~~~~
 
-The encrypted file is a compact, self-contained binary:
+The encrypted file is a compact, self-contained binary. Legacy ``ONNXCRY1``
+uses AES-256-CBC without authentication; use AES-256-GCM or
+ChaCha20-Poly1305 for new files:
 
 .. code-block:: text
 
@@ -365,6 +367,24 @@ The encrypted file is a compact, self-contained binary:
          8    16  Random PBKDF2 salt
         24    16  Random AES-CBC initialisation vector
         40     N  AES-256-CBC ciphertext (PKCS#7-padded protobuf payload)
+
+    ONNXCRY2 (ChaCha20-Poly1305):
+         0     8  Magic: "ONNXCRY2"
+         8    16  Random PBKDF2 salt
+        24    12  Random nonce
+        36    16  Authentication tag
+        52     N  ChaCha20-Poly1305 ciphertext
+
+    ONNXCRY3 (AES-256-GCM):
+         0     8  Magic: "ONNXCRY3"
+         8    16  Random PBKDF2 salt
+        24    12  Random GCM nonce
+        36    16  Authentication tag
+        52     N  AES-256-GCM ciphertext
+
+For ``ONNXCRY3``, the magic, salt, and nonce (bytes 0–35) are authenticated
+as additional data. Wrong keys or modified metadata, tags, or ciphertext
+are rejected before parsing the protobuf.
 
 Key derivation uses **PBKDF2-HMAC-SHA256** with 100 000 iterations, which
 makes brute-force attacks on the passphrase computationally expensive.
@@ -377,7 +397,7 @@ Python API (file-based)
     import onnx_light.onnx as onnxl
 
     # Save an encrypted model to a file
-    onnxl.save_encrypted(model, "model.onnxc", key="my_passphrase")
+    onnxl.save_encrypted(model, "model.onnxc", key="my_passphrase", encryption="AES-256-GCM")
 
     # Load and decrypt from a file
     model = onnxl.load_encrypted("model.onnxc", key="my_passphrase")
@@ -396,14 +416,18 @@ object and decrypted back directly:
     import onnx_light.onnx as onnxl
 
     # Encrypt to bytes (no file written)
-    blob: bytes = onnxl.save_encrypted_string(model, key="my_passphrase")
+    blob: bytes = onnxl.save_encrypted_string(
+        model, key="my_passphrase", encryption="AES-256-GCM"
+    )
 
     # Decrypt from bytes
     model = onnxl.load_encrypted_string(blob, key="my_passphrase")
 
 The ``bytes`` object produced by :func:`onnx_light.onnx.save_encrypted_string` is in the
-same ``ONNXCRY1`` format as the file produced by :func:`onnx_light.onnx.save_encrypted`,
-so the two forms are interchangeable.
+same selected format as the file produced by :func:`onnx_light.onnx.save_encrypted`,
+so the two forms are interchangeable. The default remains legacy ``ONNXCRY1``
+for compatibility; specify ``encryption="AES-256-GCM"`` or
+``encryption="ChaCha20-Poly1305"`` for authenticated files.
 
 C++ API
 ~~~~~~~

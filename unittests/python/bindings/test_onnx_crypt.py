@@ -156,6 +156,40 @@ class TestEncryptedIO(ExtTestCase):
         with self.assertRaises(RuntimeError):
             onnxl.load_encrypted_string(blob, "wrong")
 
+    def test_aes256_gcm_file_and_string_round_trip(self):
+        model = _make_simple_model()
+        blob = onnxl.save_encrypted_string(model, "secret", encryption="AES-256-GCM")
+        self.assertEqual(blob[:8], b"ONNXCRY3")
+        self.assertEqual(
+            model.SerializeToString(),
+            onnxl.load_encrypted_string(blob, "secret").SerializeToString(),
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "gcm.onnxc")
+            onnxl.save_encrypted(model, path, "secret", encryption="AES-256-GCM")
+            self.assertEqual(
+                model.SerializeToString(),
+                onnxl.load_encrypted(path, "secret").SerializeToString(),
+            )
+
+    def test_aes256_gcm_rejects_wrong_key_and_tampering(self):
+        blob = onnxl.save_encrypted_string(
+            _make_simple_model(), "secret", encryption="AES-256-GCM"
+        )
+        with self.assertRaisesRegex(RuntimeError, "authentication failed"):
+            onnxl.load_encrypted_string(blob, "wrong")
+        for offset in (8, 24, 36, 52):
+            with self.subTest(offset=offset):
+                tampered = bytearray(blob)
+                tampered[offset] ^= 1
+                with self.assertRaisesRegex(RuntimeError, "authentication failed"):
+                    onnxl.load_encrypted_string(bytes(tampered), "secret")
+        for length in (0, 8, 36, 51, 52):
+            with self.subTest(length=length), self.assertRaises(RuntimeError):
+                onnxl.load_encrypted_string(blob[:length], "secret")
+        with self.assertRaisesRegex(RuntimeError, "non-empty payload"):
+            onnxl.save_encrypted_string(onnxl.ModelProto(), "secret", encryption="AES-256-GCM")
+
     def test_string_and_file_blobs_are_compatible(self):
         model = _make_simple_model()
         with tempfile.TemporaryDirectory() as tmpdir:

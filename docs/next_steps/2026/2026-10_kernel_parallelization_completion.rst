@@ -80,6 +80,26 @@ Rules shared by every migration
 * Records runtime-event participants, work, grain, allocations, copies, and
   scratch where the kernel already exposes those costs.
 
+Variance reduction review
++++++++++++++++++++++++++
+
+Training ``BatchNormalization``, ``InstanceNormalization``, ``GroupNormalization``,
+``LayerNormalization``, and ``MeanVarianceNormalization`` use the shared
+Welford accumulator with deterministic, index-ordered Chan merging for large
+single reduction groups. Small groups stay sequential; chunk boundaries do
+not change with worker admission or the portable tuning threshold. Benchmarks
+in ``bench_variance_accumulation`` cover 128, 32768, and 262144 elements under
+both policies on x86-64 and ARM64; portable thresholds are unchanged pending
+cross-platform measurements.
+
+Reviewed exclusions: inference ``BatchNormalization`` consumes supplied mean
+and variance instead of computing them. ``RMSNormalization`` and
+``ReduceSumSquare`` require the uncentered sum of squares, not the centered
+second moment; applying Welford's variance formula would change their
+mathematical result. ``GlobalLpPool`` and ``LpNormalization`` likewise compute
+Lp norms, not variance. Pure sums and ``ReduceMean`` do not require a centered
+second moment; compensated summation may be considered separately if needed.
+
 Ordered implementation batches
 +++++++++++++++++++++++++++++++
 

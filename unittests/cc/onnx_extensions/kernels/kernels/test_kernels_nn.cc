@@ -11,6 +11,7 @@
 #include "onnx_core/runtime/tuning/cpu_executor.h"
 #include "onnx_extensions/kernels/kernel_dispatch_table.h"
 #include "onnx_extensions/kernels/kernels/nn/include_nn_kernels.h"
+#include "onnx_extensions/kernels/kernels/nn/variance_accumulator.h"
 
 #include <gtest/gtest.h>
 
@@ -219,6 +220,97 @@ TEST(KernelClass, NormalizationsParallelSlicesMatchSerial) {
   for (const auto &event : collector.events()) {
     EXPECT_EQ(event.admitted_threads, 2);
   }
+}
+
+TEST(KernelClass, VarianceChanMergeIsIndependentOfParallelPolicy) {
+  core::runtime::CpuExecutionPolicy policy;
+  policy.num_threads = 2;
+  policy.affinity_policy = core::runtime::CpuAffinityPolicy::kNone;
+  const auto executor = core::runtime::GlobalCpuExecutorRegistry().Acquire(policy);
+  const core::runtime::CpuExecutorScope executor_scope(executor.get());
+
+  for (int64_t size :
+       {int64_t{0}, int64_t{1}, int64_t{32767}, int64_t{32768}, int64_t{32769}, int64_t{262144}}) {
+    auto get = [](int64_t i) { return 1e8 + (i % 2 == 0 ? 128.0 : -128.0); };
+    const auto serial = onnx_kernels::kernel::statistics::Accumulate<double>(
+        size, get, std::numeric_limits<int64_t>::max() / 2);
+    const auto parallel = onnx_kernels::kernel::statistics::Accumulate<double>(size, get, 1);
+    EXPECT_EQ(serial.count, size);
+    EXPECT_DOUBLE_EQ(serial.mean, parallel.mean);
+    EXPECT_DOUBLE_EQ(serial.Variance(), parallel.Variance());
+    EXPECT_NEAR(serial.mean, size == 0 ? 0.0 : 1e8 + (size % 2 == 0 ? 0.0 : 128.0 / size), 1e-5);
+    if (size % 2 == 0 && size > 0) {
+      EXPECT_NEAR(serial.Variance(), 16384.0, 1e-7);
+    }
+  }
+}
+
+TEST(KernelClass, LargeOffsetNormalizationsMatchCenteredReference) {
+  const KernelContext ctx{DefaultOpset(23)};
+  constexpr int64_t size = 65536;
+  std::vector<float> values(static_cast<size_t>(size));
+  for (int64_t i = 0; i < size; ++i) {
+    values[static_cast<size_t>(i)] = i % 2 == 0 ? 1e8f + 128.0f : 1e8f - 128.0f;
+  }
+  const Tensor x = Tensor::FromFloat("", {1, 1, size}, values);
+  const Tensor scale = Tensor::FromFloat("", {1}, {1.0f});
+  const Tensor bias = Tensor::FromFloat("", {1}, {0.0f});
+  const Tensor initial_mean = Tensor::FromFloat("", {1}, {0.0f});
+  const Tensor initial_var = Tensor::FromFloat("", {1}, {0.0f});
+  BatchNormalization batch{ctx};
+  const auto [batch_y, running_mean, running_var] =
+      batch.TrainingForward(x, scale, bias, initial_mean, initial_var, 1e-5f, 0.0f);
+  EXPECT_FLOAT_EQ(running_mean.AsFloat()[0], 1e8f);
+  EXPECT_FLOAT_EQ(running_var.AsFloat()[0], 16384.0f);
+  onnx_kernels::kernel::InstanceNormalization instance{ctx};
+  onnx_kernels::kernel::GroupNormalization group{ctx};
+  LayerNormalization layer{ctx};
+  MeanVarianceNormalization mvn{ctx};
+  for (const Tensor &y :
+       {instance(x, scale, bias), group(x, scale, bias, 1),
+        std::get<0>(layer(x, Tensor::FromFloat("", {1}, {1.0f}), bias, 2)), mvn(x, {2})}) {
+    EXPECT_NEAR(y.AsFloat()[0], 1.0f, 1e-5f);
+    EXPECT_NEAR(y.AsFloat()[1], -1.0f, 1e-5f);
+  }
+  EXPECT_NEAR(batch_y.AsFloat()[0], 1.0f, 1e-5f);
+}
+
+TEST(KernelClass, VarianceHandlesScalarEmptyAndConstantDoubleInputs) {
+  const KernelContext ctx{DefaultOpset(13)};
+  MeanVarianceNormalization mvn{ctx};
+  const Tensor scalar = Tensor::FromDouble("", {}, {1e12});
+  EXPECT_DOUBLE_EQ(mvn(scalar, {}).AsDouble()[0], 0.0);
+  const Tensor empty = Tensor::FromDouble("", {0, 2}, {});
+  EXPECT_EQ(mvn(empty, {0}).element_count(), 0);
+  const Tensor constant = Tensor::FromDouble("", {2}, {1e12, 1e12});
+  for (int64_t i = 0; i < 2; ++i) {
+    EXPECT_DOUBLE_EQ(mvn(constant, {0}).AsDouble()[i], 0.0);
+  }
+  const Tensor varying = Tensor::FromDouble("", {2}, {1e12 - 0.25, 1e12 + 0.25});
+  const Tensor normalized = mvn(varying, {0});
+  EXPECT_NEAR(normalized.AsDouble()[0], -1.0, 1e-7);
+  EXPECT_NEAR(normalized.AsDouble()[1], 1.0, 1e-7);
+}
+
+TEST(KernelClass, VarianceAgreesWithLongDoubleOnPoorlyConditionedInput) {
+  constexpr int64_t size = 32768;
+  const auto get = [](int64_t i) { return 1e12 + (i % 2 == 0 ? 0.25 : -0.25); };
+  long double reference_mean = 0;
+  for (int64_t i = 0; i < size; ++i) {
+    reference_mean += static_cast<long double>(get(i));
+  }
+  reference_mean /= size;
+  long double reference_variance = 0;
+  for (int64_t i = 0; i < size; ++i) {
+    const long double centered = static_cast<long double>(get(i)) - reference_mean;
+    reference_variance += centered * centered;
+  }
+  reference_variance /= size;
+
+  const auto stats = onnx_kernels::kernel::statistics::Accumulate<double>(size, get, 1);
+  EXPECT_EQ(stats.count, size);
+  EXPECT_NEAR(stats.mean, static_cast<double>(reference_mean), 1e-5);
+  EXPECT_NEAR(stats.Variance(), static_cast<double>(reference_variance), 1e-9);
 }
 
 TEST(KernelClass, GlobalLpPoolDtypes) {
@@ -716,7 +808,7 @@ TEST(KernelClass, MeanVarianceNormalizationRejectsAxisOutOfRange) {
 TEST(KernelClass, MeanVarianceNormalizationUsesAllocatorForScratchBuffers) {
   // A peak-tracking allocator wraps the pool so the test can observe the
   // maximum number of buffers alive at once during the call. The per-lane
-  // scratch buffers (sum/sqsum/mean) must be acquired from the allocator, so
+  // statistics buffer must be acquired from the allocator, so
   // the peak count exceeds the single allocator-backed output tensor.
   class PeakTrackingAllocator : public core::runtime::RawBufferAllocator {
   public:
@@ -744,8 +836,7 @@ TEST(KernelClass, MeanVarianceNormalizationUsesAllocatorForScratchBuffers) {
   MeanVarianceNormalization mvn{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2, 1, 1}, {1.0f, 2.0f, 3.0f, 4.0f});
 
-  // Capacity for the peak: 1 result tensor (Y) plus 3 scratch buffers
-  // (sum/sqsum/mean), with a little headroom.
+  // Capacity for the peak: 1 result tensor (Y) plus statistics scratch.
   constexpr size_t kAllocatorSlotCapacity = 8;
   PeakTrackingAllocator alloc(kAllocatorSlotCapacity);
   RuntimeContext rt(core::runtime::RuntimeContextOptions{.allocator = &alloc});
@@ -753,8 +844,8 @@ TEST(KernelClass, MeanVarianceNormalizationUsesAllocatorForScratchBuffers) {
   Tensor y = mvn(x, {0, 2, 3}, &rt);
 
   ASSERT_TRUE(y.has_allocation());
-  // Peak includes the allocator-backed result plus the 3 scratch buffers.
-  EXPECT_GE(alloc.peak(), 4u);
+  // Peak includes the allocator-backed result plus statistics scratch.
+  EXPECT_GE(alloc.peak(), 2u);
   // All scratch buffers are released; only the returned result remains alive.
   EXPECT_EQ(alloc.allocated_count(), 1u);
 

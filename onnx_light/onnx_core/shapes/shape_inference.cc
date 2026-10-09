@@ -52,6 +52,10 @@ std::string LocalFunctionKey(const std::string &domain, const std::string &name)
   return domain + ":" + name;
 }
 
+std::string ShapeDispatchKey(const NodeProto &node) {
+  return ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node) + ":" + node.op_type();
+}
+
 // Maps formal attribute names to concrete call-site attribute values.
 using AttributeMap = std::unordered_map<std::string, const AttributeProto *>;
 
@@ -267,6 +271,30 @@ bool SeedInputValueInfo(const ValueInfoProto &vi, ShapesContext &ctx) {
   // inspect the map value dtype when needed. The rank stays unknown because the
   // map cardinality is a runtime property, not a static tensor shape.
   ctx.Set(name, SymTensor(nullptr, dtype, SymShape{}));
+  return true;
+}
+
+bool TrySeedAnnotatedOutputsForUnknownCustomOp(
+    ShapesContext &ctx, const NodeProto &node,
+    const std::unordered_map<std::string, const ValueInfoProto *> &declared_outputs) {
+  if (IsSupportedDomain(node) ||
+      ctx.HasLocalFunction(LocalFunctionKey(node.domain(), node.op_type())) ||
+      ctx.GetCustomShapeInferenceFunction(node.domain(), node.op_type()) != nullptr ||
+      DispatchTable().find(ShapeDispatchKey(node)) != DispatchTable().end() ||
+      node.output_size() == 0) {
+    return false;
+  }
+  for (const auto &name : node.output()) {
+    auto it = declared_outputs.find(name);
+    if (name.empty() || it == declared_outputs.end() || !ValueInfoHasTensorShape(*it->second)) {
+      return false;
+    }
+  }
+  ctx.CheckInputsAvailable(node);
+  ctx.CheckOutputsNotAvailable(node);
+  for (const auto &name : node.output()) {
+    SeedInputValueInfo(*declared_outputs.at(name), ctx);
+  }
   return true;
 }
 
@@ -813,7 +841,7 @@ void DispatchComputeShapeNode(ShapesContext &ctx, const NodeProto &node) {
     (*custom_shape_fn)(ctx, node);
     return;
   }
-  const std::string key = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node) + ":" + op_type;
+  const std::string key = ShapeDispatchKey(node);
   const auto &table = DispatchTable();
   auto it = table.find(key);
   if (it == table.end()) {
@@ -1031,33 +1059,8 @@ void ShapesContext::ComputeShapeGraph(const GraphProto &graph) {
   for (std::size_t i = 0; i < graph.node().size(); ++i) {
     const NodeProto &node = graph.node()[i];
     current_node_index_ = static_cast<int64_t>(i);
-    const std::string key =
-        ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node) + ":" + node.op_type();
-    if (!IsSupportedDomain(node) &&
-        !HasLocalFunction(LocalFunctionKey(node.domain(), node.op_type())) &&
-        GetCustomShapeInferenceFunction(node.domain(), node.op_type()) == nullptr &&
-        DispatchTable().find(key) == DispatchTable().end() && node.output_size() != 0) {
-      bool annotated = true;
-      for (const auto &name : node.output()) {
-        if (name.empty()) {
-          annotated = false;
-          break;
-        }
-        auto it = declared_outputs.find(name);
-        if (it == declared_outputs.end() || !ValueInfoHasTensorShape(*it->second)) {
-          annotated = false;
-          break;
-        }
-      }
-      if (annotated) {
-        // Unknown custom operators may carry authoritative converter-provided output shapes.
-        CheckInputsAvailable(node);
-        CheckOutputsNotAvailable(node);
-        for (const auto &name : node.output()) {
-          SeedInputValueInfo(*declared_outputs.at(name), *this);
-        }
-        continue;
-      }
+    if (TrySeedAnnotatedOutputsForUnknownCustomOp(*this, node, declared_outputs)) {
+      continue;
     }
     ComputeShapeNode(node);
   }

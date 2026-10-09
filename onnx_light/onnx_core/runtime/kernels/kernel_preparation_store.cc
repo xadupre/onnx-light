@@ -4,29 +4,28 @@
 
 #include "kernel_preparation_store.h"
 
-#include <algorithm>
-
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
 
-void ValidateAllocatedValue(const RuntimeValue &value, RawBufferAllocator *allocator,
+void ValidateAllocatedValue(const RuntimeValue &value,
+                            const std::unordered_set<const void *> &allocators,
                             KernelPreparationSlot slot) {
   switch (value.kind) {
   case RuntimeValue::Kind::kTensor:
     EXT_ENFORCE(value.tensor.has_allocation(), "Kernel preparation slot ", slot,
                 " contains a tensor which is not allocator-backed.");
-    EXT_ENFORCE(value.tensor.allocation_owner() == allocator, "Kernel preparation slot ", slot,
-                " contains a tensor owned by another allocator.");
+    EXT_ENFORCE(allocators.contains(static_cast<const void *>(value.tensor.allocation_owner())),
+                "Kernel preparation slot ", slot, " contains a tensor owned by another allocator.");
     return;
   case RuntimeValue::Kind::kStruct:
     for (const auto &[name, field] : value.fields) {
       (void)name;
-      ValidateAllocatedValue(field, allocator, slot);
+      ValidateAllocatedValue(field, allocators, slot);
     }
     return;
   case RuntimeValue::Kind::kSequence:
     for (const RuntimeValue &element : value.elements) {
-      ValidateAllocatedValue(element, allocator, slot);
+      ValidateAllocatedValue(element, allocators, slot);
     }
     return;
   case RuntimeValue::Kind::kEncoded:
@@ -35,23 +34,6 @@ void ValidateAllocatedValue(const RuntimeValue &value, RawBufferAllocator *alloc
 }
 
 } // namespace
-
-RawBuffer *KernelPreparationStore::Allocator::Allocate(size_t n_bytes) {
-  auto buffer = std::make_unique<RawBuffer>(n_bytes);
-  RawBuffer *result = buffer.get();
-  buffers_.emplace(result, std::move(buffer));
-  total_allocated_size_ += n_bytes;
-  peak_allocated_size_ = std::max(peak_allocated_size_, total_allocated_size_);
-  return result;
-}
-
-void KernelPreparationStore::Allocator::Free(RawBuffer *buffer) {
-  auto found = buffers_.find(buffer);
-  EXT_ENFORCE_INVALID(found != buffers_.end(),
-                      "KernelPreparationStore allocator does not own the buffer.");
-  total_allocated_size_ -= found->second->size();
-  buffers_.erase(found);
-}
 
 KernelPreparationSlot KernelPreparationStore::Bind(std::string key) {
   EXT_ENFORCE(!key.empty(), "Kernel preparation keys must not be empty.");
@@ -71,11 +53,20 @@ bool KernelPreparationStore::IsReady(KernelPreparationSlot slot) const {
   return ValueAt(slot).has_value();
 }
 
+Tensor KernelPreparationStore::AllocateTensor(int32_t data_type, const Shape &shape,
+                                              size_t n_bytes) {
+  auto allocator = std::make_unique<ExecutionArena>(1);
+  Tensor tensor = MakeOutputTensor(data_type, shape, n_bytes, allocator.get());
+  allocator_index_.insert(allocator.get());
+  allocators_.push_back(std::move(allocator));
+  return tensor;
+}
+
 void KernelPreparationStore::Publish(KernelPreparationSlot slot, RuntimeValue value) {
   std::optional<RuntimeValue> &entry = ValueAt(slot);
   EXT_ENFORCE(!entry.has_value(), "Kernel preparation slot ", slot,
               " was published more than once.");
-  ValidateAllocatedValue(value, &allocator_, slot);
+  ValidateAllocatedValue(value, allocator_index_, slot);
   entry.emplace(std::move(value));
 }
 
@@ -94,6 +85,14 @@ const std::optional<RuntimeValue> &
 KernelPreparationStore::ValueAt(KernelPreparationSlot slot) const {
   EXT_ENFORCE(slot < slots_.size(), "Invalid kernel preparation slot ", slot, ".");
   return slots_[slot];
+}
+
+size_t KernelPreparationStore::prepared_bytes() const noexcept {
+  size_t bytes = 0;
+  for (const auto &allocator : allocators_) {
+    bytes += allocator->TotalAllocatedSize();
+  }
+  return bytes;
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

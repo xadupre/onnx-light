@@ -15,6 +15,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
@@ -36,32 +37,19 @@ class ONNX_LIGHT_CORE_API KernelPreparationStore {
 public:
   KernelPreparationSlot Bind(std::string key);
   bool IsReady(KernelPreparationSlot slot) const;
-  RawBufferAllocator &allocator() noexcept { return allocator_; }
+  Tensor AllocateTensor(int32_t data_type, const Shape &shape, size_t n_bytes);
   void Publish(KernelPreparationSlot slot, RuntimeValue value);
   const RuntimeValue &Get(KernelPreparationSlot slot) const;
 
-  size_t prepared_bytes() const noexcept { return allocator_.TotalAllocatedSize(); }
+  size_t prepared_bytes() const noexcept;
   size_t slot_count() const noexcept { return slots_.size(); }
 
 private:
-  class Allocator final : public RawBufferAllocator {
-  public:
-    RawBuffer *Allocate(size_t n_bytes) override;
-    void Free(RawBuffer *buffer) override;
-    size_t TotalAllocatedSize() const override { return total_allocated_size_; }
-    size_t PeakAllocatedSize() const override { return peak_allocated_size_; }
-    void ResetPeak() override { peak_allocated_size_ = total_allocated_size_; }
-
-  private:
-    std::unordered_map<RawBuffer *, std::unique_ptr<RawBuffer>> buffers_;
-    size_t total_allocated_size_ = 0;
-    size_t peak_allocated_size_ = 0;
-  };
-
   std::optional<RuntimeValue> &ValueAt(KernelPreparationSlot slot);
   const std::optional<RuntimeValue> &ValueAt(KernelPreparationSlot slot) const;
 
-  Allocator allocator_;
+  std::vector<std::unique_ptr<ExecutionArena>> allocators_;
+  std::unordered_set<const void *> allocator_index_;
   std::unordered_map<std::string, KernelPreparationSlot> slots_by_key_;
   std::vector<std::optional<RuntimeValue>> slots_;
 };

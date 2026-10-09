@@ -288,8 +288,7 @@ PreparedGemmB Gemm::PrepareConstantB(const Tensor &b, int64_t transB,
     const Tensor promoted = IsHalfPrecision(b.data_type) ? PromoteToFloat32(b) : Tensor{};
     const Tensor &source = IsHalfPrecision(b.data_type) ? promoted : b;
     const int32_t packed_data_type = IsHalfPrecision(b.data_type) ? DataType::FLOAT : b.data_type;
-    Tensor packed =
-        MakeOutputTensor(packed_data_type, b.shape, source.size_bytes(), &store.allocator());
+    Tensor packed = store.AllocateTensor(packed_data_type, b.shape, source.size_bytes());
     const int64_t k = transB ? b.shape[1] : b.shape[0];
     const int64_t n = transB ? b.shape[0] : b.shape[1];
     const size_t element_size = source.element_size();

@@ -414,9 +414,9 @@ std::uint8_t FloatToFloat8E8M0Bits(float v) noexcept {
     return 0xFEu;
   }
   // Finite positive values, including +0 and subnormals.
-  // Treat +0 / subnormals (exp == 0) as below 2^-127 -> bits=0.
+  // Subnormals above 2^-127 round up to 2^-126.
   if (exp == 0u) {
-    return 0x00u;
+    return mant > 0x00400000u ? 0x01u : 0x00u;
   }
   // Normal range. exp is the IEEE-754 biased exponent (1..254 -> unbiased
   // -126..127). Round mode is "up": exact powers of two keep their
@@ -430,6 +430,22 @@ std::uint8_t FloatToFloat8E8M0Bits(float v) noexcept {
     return 0xFEu;
   }
   return static_cast<std::uint8_t>(bits);
+}
+
+std::uint8_t FloatToFloat8E8M0Bits(double v) noexcept {
+  const std::uint64_t b = std::bit_cast<std::uint64_t>(v);
+  const std::uint64_t exp = (b >> 52) & 0x7FFu;
+  const std::uint64_t mant = b & 0x000FFFFFFFFFFFFFu;
+  if ((exp == 0x7FFu && mant != 0u) || (b >> 63) != 0u) {
+    return 0xFFu;
+  }
+  if (exp == 0x7FFu || exp >= 1150u) {
+    return 0xFEu;
+  }
+  if (exp < 896u) {
+    return 0x00u;
+  }
+  return static_cast<std::uint8_t>(exp - 896u + (mant != 0u));
 }
 
 float Float8E8M0BitsToFloat(std::uint8_t bits) noexcept {

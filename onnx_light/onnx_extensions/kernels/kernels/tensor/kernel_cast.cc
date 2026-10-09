@@ -638,12 +638,16 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
   // Float8 dtypes round-trip against ``FLOAT`` and the half-precision
   // floating-point dtypes (``FLOAT16`` / ``BFLOAT16``) in this reference
   // kernel (matching the upstream ONNX ``test_cast`` coverage that
-  // ``kernel::Cast`` mirrors). Cross-casting against any other dtype is
-  // rejected up front rather than silently routed through ``double``.
+  // ``kernel::Cast`` mirrors). FLOAT8E8M0 also accepts DOUBLE input to
+  // preserve exponent-boundary precision. Other pairs are rejected up front.
   if (from_float8 || to_float8) {
-    EXT_ENFORCE_INVALID((from_float8 && IsAnyFloat(to)) || (to_float8 && IsAnyFloat(x.data_type)),
-                        "kernel::Cast: FLOAT8* dtypes only round-trip against FLOAT, FLOAT16 "
-                        "or BFLOAT16.");
+    EXT_ENFORCE_INVALID(
+        (from_float8 && IsAnyFloat(to)) ||
+            (to_float8 &&
+             (IsAnyFloat(x.data_type) || (to == static_cast<int32_t>(DataType::FLOAT8E8M0) &&
+                                          x.data_type == static_cast<int32_t>(DataType::DOUBLE)))),
+        "kernel::Cast: FLOAT8* dtypes only round-trip against FLOAT, FLOAT16 "
+        "or BFLOAT16 (DOUBLE is supported for FLOAT8E8M0 output).");
     const size_t expected_bytes =
         static_cast<size_t>(n) * (to_float8 ? size_t{1} : ElementSize(to));
     EXT_ENFORCE_INVALID(output.size_bytes() == expected_bytes,
@@ -654,8 +658,13 @@ void Cast::operator()(const Tensor &x, int32_t to, bool saturate, Tensor &output
           n, tuning().parallel_minimum_elements,
           [&](int64_t begin, int64_t end) {
             for (int64_t i = begin; i < end; ++i) {
-              const float v = static_cast<float>(LoadAsDouble(x, i));
-              dst[i] = FloatToFloat8Bits(v, to, saturate);
+              if (to == static_cast<int32_t>(DataType::FLOAT8E8M0) &&
+                  x.data_type == static_cast<int32_t>(DataType::DOUBLE)) {
+                dst[i] = FloatToFloat8E8M0Bits(x.AsDouble()[i]);
+              } else {
+                const float v = static_cast<float>(LoadAsDouble(x, i));
+                dst[i] = FloatToFloat8Bits(v, to, saturate);
+              }
             }
           },
           "Cast");

@@ -45,8 +45,23 @@ template <typename T> struct VarianceAccumulator {
   T Variance() const { return count == 0 ? T{0} : m2 / static_cast<T>(count); }
 };
 
-// Chunk boundaries and the left-to-right Chan merge are independent of worker
-// scheduling and of the parallel crossover policy. Scratch is fixed-size.
+/**
+ * Accumulates population statistics with fixed Welford chunks and an
+ * index-ordered Chan merge.
+ *
+ * Chunk boundaries depend only on ``count`` and remain unchanged across CPU
+ * policies. ``minimum_elements`` is the source-element crossover for parallel
+ * dispatch; it is converted to a grain measured in chunks and does not alter
+ * their boundaries. Counts below :cpp:var:`core::runtime::kParallelForGrainSize`
+ * run as one serial chunk. Nested dispatch follows the active executor policy:
+ * it runs inline by default or uses only idle workers when bounded nested
+ * parallelism is explicitly enabled.
+ *
+ * @param count Number of source elements.
+ * @param get Callable returning source element ``i``.
+ * @param minimum_elements Minimum source elements per parallel participant.
+ * @return Deterministically merged population statistics.
+ */
 template <typename T, typename Get>
 VarianceAccumulator<T> Accumulate(int64_t count, Get get, int64_t minimum_elements) {
   constexpr int64_t kChunkCount = 8;
@@ -72,7 +87,7 @@ VarianceAccumulator<T> Accumulate(int64_t count, Get get, int64_t minimum_elemen
           }
         }
       },
-      "Variance");
+      "VarianceAccumulator");
   VarianceAccumulator<T> result;
   for (int64_t chunk = 0; chunk < chunks; ++chunk) {
     result.Merge(partials[static_cast<size_t>(chunk)]);

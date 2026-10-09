@@ -30,17 +30,16 @@ void ApplyInferredType(const TypeProto &type, ValueInfoProto &value) {
   value.ref_type() = std::move(inferred);
 }
 
-// Checks the node belongs to a supported domain: the default ONNX
-// domain (empty string or "ai.onnx") or the traditional ML domain
-// ("ai.onnx.ml"). Throws std::invalid_argument otherwise.
-// Domain-specific dispatch can be added here when other domains gain
-// support.
+// Recognizes domains supported by the built-in shape dispatcher.
+bool IsSupportedDomain(const NodeProto &node) {
+  return node.domain().empty() || node.domain() == kOnnxDomain || node.domain() == kOnnxMlDomain ||
+         node.domain() == kOnnxPreviewDomain || node.domain() == kAiRtDomain ||
+         node.domain() == kOnnxPreviewTrainingDomain;
+}
+
 void CheckOnnxDomain(const NodeProto &node) {
-  EXT_ENFORCE_INVALID(
-      node.domain().empty() || node.domain() == kOnnxDomain || node.domain() == kOnnxMlDomain ||
-          node.domain() == kOnnxPreviewDomain || node.domain() == kAiRtDomain ||
-          node.domain() == kOnnxPreviewTrainingDomain,
-      "ComputeShapeNode: unsupported domain '", node.domain(), "' for op '", node.op_type(), "'.");
+  EXT_ENFORCE_INVALID(IsSupportedDomain(node), "ComputeShapeNode: unsupported domain '",
+                      node.domain(), "' for op '", node.op_type(), "'.");
 }
 
 // Returns the ``"<domain>:<name>"`` identifier used as a key in
@@ -51,6 +50,10 @@ void CheckOnnxDomain(const NodeProto &node) {
 // FunctionProto's own ``domain`` field.
 std::string LocalFunctionKey(const std::string &domain, const std::string &name) {
   return domain + ":" + name;
+}
+
+std::string ShapeDispatchKey(const NodeProto &node) {
+  return ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node) + ":" + node.op_type();
 }
 
 // Maps formal attribute names to concrete call-site attribute values.
@@ -268,6 +271,30 @@ bool SeedInputValueInfo(const ValueInfoProto &vi, ShapesContext &ctx) {
   // inspect the map value dtype when needed. The rank stays unknown because the
   // map cardinality is a runtime property, not a static tensor shape.
   ctx.Set(name, SymTensor(nullptr, dtype, SymShape{}));
+  return true;
+}
+
+bool TrySeedAnnotatedOutputsForUnknownCustomOp(
+    ShapesContext &ctx, const NodeProto &node,
+    const std::unordered_map<std::string, const ValueInfoProto *> &declared_outputs) {
+  if (IsSupportedDomain(node) ||
+      ctx.HasLocalFunction(LocalFunctionKey(node.domain(), node.op_type())) ||
+      ctx.GetCustomShapeInferenceFunction(node.domain(), node.op_type()) != nullptr ||
+      DispatchTable().find(ShapeDispatchKey(node)) != DispatchTable().end() ||
+      node.output_size() == 0) {
+    return false;
+  }
+  for (const auto &name : node.output()) {
+    auto it = declared_outputs.find(name);
+    if (name.empty() || it == declared_outputs.end() || !ValueInfoHasTensorShape(*it->second)) {
+      return false;
+    }
+  }
+  ctx.CheckInputsAvailable(node);
+  ctx.CheckOutputsNotAvailable(node);
+  for (const auto &name : node.output()) {
+    SeedInputValueInfo(*declared_outputs.at(name), ctx);
+  }
   return true;
 }
 
@@ -814,7 +841,7 @@ void DispatchComputeShapeNode(ShapesContext &ctx, const NodeProto &node) {
     (*custom_shape_fn)(ctx, node);
     return;
   }
-  const std::string key = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node) + ":" + op_type;
+  const std::string key = ShapeDispatchKey(node);
   const auto &table = DispatchTable();
   auto it = table.find(key);
   if (it == table.end()) {
@@ -1022,7 +1049,22 @@ void ShapesContext::ComputeShapeGraph(const GraphProto &graph) {
     const ValueInfoProto &vi = graph.input()[i];
     SeedInputValueInfo(vi, *this);
   }
-  ComputeShapes(graph.node());
+  std::unordered_map<std::string, const ValueInfoProto *> declared_outputs;
+  for (const auto &vi : graph.value_info()) {
+    declared_outputs[vi.name()] = &vi;
+  }
+  for (const auto &vi : graph.output()) {
+    declared_outputs[vi.name()] = &vi;
+  }
+  for (std::size_t i = 0; i < graph.node().size(); ++i) {
+    const NodeProto &node = graph.node()[i];
+    current_node_index_ = static_cast<int64_t>(i);
+    if (TrySeedAnnotatedOutputsForUnknownCustomOp(*this, node, declared_outputs)) {
+      continue;
+    }
+    ComputeShapeNode(node);
+  }
+  current_node_index_ = -1;
   for (const auto &vi : graph.output()) {
     if (vi.has_type() && HasStructuredType(vi.type())) {
       EXT_ENFORCE_INVALID(HasType(vi.name()),

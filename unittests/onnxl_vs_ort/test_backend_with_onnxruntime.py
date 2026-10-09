@@ -247,6 +247,12 @@ TestOrtBackend = make_test_class(onnxruntime_backend, exclude_regex=ORT_EXCLUDE_
 # Keep these ORT 1.29 limitations executable: an unexpected success must fail
 # so the marker is removed when ORT catches up with the ONNX reference.
 for _case_name in (
+    # ORT 1.30 fails to normalize negative reduction axes when another input
+    # dimension is empty (microsoft/onnxruntime#33230).
+    "reducemean_empty_negative_axis_keepdims",
+    "reduceprod_empty_negative_axis_keepdims",
+    "reducesum_empty_negative_axis_keepdims",
+    "reducesum_empty_negative_axis_no_keepdims",
     # ORT omits ceil-tail padding from the dilated AveragePool divisor
     # (microsoft/onnxruntime#29629).
     "averagepool_3d_dilated_ceil_padding_divisor",

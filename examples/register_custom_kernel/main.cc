@@ -105,8 +105,9 @@ public:
 void RegisterExampleAbsKernel() {
   rt::RegisterKernelFn(
       /*domain=*/"", /*op_type=*/"Abs", sym::Device::kCPU,
-      [](const NodeProto &node, rt::RuntimeContext &ctx) -> std::unique_ptr<rt::KernelBase> {
-        auto kernel = std::make_unique<ExampleAbsKernel>(ctx.kernel_ctx());
+      [](const NodeProto &node, rt::RuntimeContext &,
+         const rt::KernelContext &kernel_context) -> std::unique_ptr<rt::KernelBase> {
+        auto kernel = std::make_unique<ExampleAbsKernel>(kernel_context);
         kernel->set_node(node);
         return kernel;
       });

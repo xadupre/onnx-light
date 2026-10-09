@@ -453,8 +453,8 @@ void GridSample::Run(RuntimeContext &rt) {
   const Tensor &x = GetInput(node, 0, rt.tensors());
   const Tensor &grid = GetInput(node, 1, rt.tensors());
   onnx_kernels::kernel::GridSample::Attributes attrs;
-  attrs.mode = GetAttributeStringOrDefault(
-      node, "mode", rt.kernel_ctx().opset.version < 20 ? "bilinear" : "linear");
+  attrs.mode =
+      GetAttributeStringOrDefault(node, "mode", ctx_.opset.version < 20 ? "bilinear" : "linear");
   attrs.padding_mode = GetAttributeStringOrDefault(node, "padding_mode", attrs.padding_mode);
   attrs.align_corners = GetAttributeIntOrDefault(node, "align_corners", attrs.align_corners);
   onnx_kernels::kernel::GridSample k(rt.kernel_ctx());

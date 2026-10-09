@@ -252,8 +252,7 @@ void RoiAlign::Run(RuntimeContext &rt) {
   // Opset 10 has no ``coordinate_transformation_mode`` attribute and
   // behaves like ``output_half_pixel``; opset 16+ defaults to
   // ``half_pixel``.
-  const std::string default_ctm =
-      rt.kernel_ctx().opset.version < 16 ? "output_half_pixel" : "half_pixel";
+  const std::string default_ctm = ctx_.opset.version < 16 ? "output_half_pixel" : "half_pixel";
   attrs.coordinate_transformation_mode =
       GetAttributeStringOrDefault(node, "coordinate_transformation_mode", default_ctm);
   onnx_kernels::kernel::RoiAlign k(rt.kernel_ctx());

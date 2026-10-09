@@ -239,7 +239,7 @@ void GlobalLpPool::Run(RuntimeContext &rt) {
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
   const Tensor &x = GetInput(node, 0, rt.tensors());
-  const double p = rt.kernel_ctx().opset.version == 1
+  const double p = ctx_.opset.version == 1
                        ? static_cast<double>(GetAttributeFloatOrDefault(node, "p", 2.0f))
                        : static_cast<double>(GetAttributeIntOrDefault(node, "p", 2));
   SetOutput(node, 0, (*this)(x, p, &rt), rt);

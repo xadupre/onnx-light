@@ -225,7 +225,7 @@ void TopK::Run(RuntimeContext &rt) {
   // ``k``: from input[1] (1-D INT64 tensor of size 1) for opset >= 10,
   // otherwise from the pre-opset-10 ``k`` INT attribute (required).
   int64_t k = 0;
-  const int64_t opset_version = rt.kernel_ctx().opset.version;
+  const int64_t opset_version = ctx_.opset.version;
   if (opset_version >= 10) {
     RequireInputCount(node, 2);
     const Tensor &k_tensor = GetInput(node, 1, rt.tensors());

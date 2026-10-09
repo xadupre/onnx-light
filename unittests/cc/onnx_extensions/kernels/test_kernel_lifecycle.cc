@@ -18,6 +18,7 @@
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using core::runtime::KernelBase;
+using core::runtime::KernelContext;
 using core::runtime::NodeKernelFn;
 using core::runtime::RuntimeContext;
 using core::runtime::RuntimeSession;
@@ -81,8 +82,8 @@ private:
 
 NodeKernelFn MakeFactory(const std::shared_ptr<LifecycleState> &state, float multiplier = 1) {
   // Global dispatch entries outlive tests; they must not retain test state.
-  return [weak = std::weak_ptr<LifecycleState>(state), multiplier](const NodeProto &node,
-                                                                   RuntimeContext &) {
+  return [weak = std::weak_ptr<LifecycleState>(state),
+          multiplier](const NodeProto &node, RuntimeContext &, const KernelContext &) {
     auto current = weak.lock();
     if (!current) {
       throw std::logic_error("Lifecycle test registration is no longer active");

@@ -66,6 +66,12 @@ using onnx_kernels::kernel::KernelContext;
 
 namespace {
 
+void AddOpsetImport(ModelProto &model, const std::string &domain, int64_t version) {
+  OperatorSetIdProto *opset = model.add_opset_import();
+  opset->set_domain(domain);
+  opset->set_version(version);
+}
+
 class EnvVarGuard {
 public:
   explicit EnvVarGuard(const char *name) : name_(name) {
@@ -578,8 +584,8 @@ TEST(RunNodes, RunNodeDispatchesDeviceQualifiedKernel) {
   bool cpu_invoked = false;
   bool gpu_invoked = false;
   RegisterKernelFn(domain, "DeviceOp", core::symbolic::Device::kCPU,
-                   [&cpu_invoked](const NodeProto &node,
-                                  RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
+                   [&cpu_invoked](const NodeProto &node, RuntimeContext &, const KernelContext &)
+                       -> std::unique_ptr<core::runtime::KernelBase> {
                      return std::make_unique<TestLambdaKernel>(
                          node, [&cpu_invoked](const NodeProto &node, RuntimeContext &rt) {
                            cpu_invoked = true;
@@ -587,8 +593,8 @@ TEST(RunNodes, RunNodeDispatchesDeviceQualifiedKernel) {
                          });
                    });
   RegisterKernelFn(domain, "DeviceOp", gpu,
-                   [&gpu_invoked](const NodeProto &node,
-                                  RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
+                   [&gpu_invoked](const NodeProto &node, RuntimeContext &, const KernelContext &)
+                       -> std::unique_ptr<core::runtime::KernelBase> {
                      return std::make_unique<TestLambdaKernel>(
                          node, [&gpu_invoked](const NodeProto &node, RuntimeContext &rt) {
                            gpu_invoked = true;
@@ -4568,6 +4574,7 @@ TEST(RunNodes, RuntimeSessionRoutesDeclaredOutputsToIOAllocator) {
 
   ModelProto model;
   model.set_ir_version(10);
+  AddOpsetImport(model, "my.domain", 1);
   GraphProto *g = model.add_graph();
   g->set_name("main");
   // "z" is an intermediate, not a declared graph output.
@@ -4631,6 +4638,7 @@ TEST(RunNodes, RuntimeSessionRoutesMixedOutputsPerSlotDeclaredFirst) {
 
   ModelProto model;
   model.set_ir_version(10);
+  AddOpsetImport(model, "my.domain", 1);
   GraphProto *g = model.add_graph();
   g->set_name("main");
   NodeProto *n = g->add_node();
@@ -4683,6 +4691,7 @@ TEST(RunNodes, RuntimeSessionRoutesMixedOutputsPerSlotIntermediateFirst) {
 
   ModelProto model;
   model.set_ir_version(10);
+  AddOpsetImport(model, "my.domain", 1);
   GraphProto *g = model.add_graph();
   g->set_name("main");
   NodeProto *n = g->add_node();
@@ -4731,6 +4740,7 @@ TEST(RunNodes, RuntimeSessionKeepsSingleAllocatorBehaviorWithoutIOAllocator) {
 
   ModelProto model;
   model.set_ir_version(10);
+  AddOpsetImport(model, "my.domain", 1);
   GraphProto *g = model.add_graph();
   g->set_name("main");
   NodeProto *n = g->add_node();
@@ -4791,6 +4801,7 @@ TEST(RunNodes, RuntimeSessionSlotAwareKernelAllocatesEachOutputInFinalArena) {
 
   ModelProto model;
   model.set_ir_version(10);
+  AddOpsetImport(model, "my.domain", 1);
   GraphProto *g = model.add_graph();
   g->set_name("main");
   NodeProto *n = g->add_node();
@@ -4872,6 +4883,7 @@ TEST(RunNodes, RuntimeSessionSlotAwareKernelWorkspaceStaysInExecutionArena) {
 
   ModelProto model;
   model.set_ir_version(10);
+  AddOpsetImport(model, "my.domain", 1);
   GraphProto *g = model.add_graph();
   g->set_name("main");
   NodeProto *n = g->add_node();
@@ -5292,8 +5304,9 @@ TEST(RuntimeSession, ConstructsExactlyOneKernelPerNodeAcrossMultipleRuns) {
 
   const std::string domain = "test.onnxlight.counting_kernel";
   RegisterKernelFn(domain, "CountingOp", core::symbolic::Device::kCPU,
-                   [&construct_count, &invoke_count](const NodeProto &node, RuntimeContext &)
-                       -> std::unique_ptr<core::runtime::KernelBase> {
+                   [&construct_count, &invoke_count](
+                       const NodeProto &node, RuntimeContext &,
+                       const KernelContext &) -> std::unique_ptr<core::runtime::KernelBase> {
                      ++construct_count;
                      return std::make_unique<TestLambdaKernel>(
                          node, [&invoke_count](const NodeProto &node, RuntimeContext &rt) {
@@ -5350,11 +5363,11 @@ TEST(RuntimeSession, KeepsResolvedKernelTuningImmutable) {
                       key.tuning_abi},
       {{"algorithm.threshold", int64_t{10}}}};
   core::runtime::RegisterKernelTuningSchema(KernelTuningSchema(defaults));
-  RegisterKernelFn(
-      domain, "TunableOp", core::symbolic::Device::kCPU,
-      [key](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
-        return std::make_unique<TestTunableKernel>(node, key);
-      });
+  RegisterKernelFn(domain, "TunableOp", core::symbolic::Device::kCPU,
+                   [key](const NodeProto &node, RuntimeContext &,
+                         const KernelContext &) -> std::unique_ptr<core::runtime::KernelBase> {
+                     return std::make_unique<TestTunableKernel>(node, key);
+                   });
 
   KernelTuningParameters first = defaults;
   first.values["algorithm.threshold"] = int64_t{20};
@@ -5426,16 +5439,16 @@ TEST(RuntimeSession, ConstructsIfBranchKernelOnceAcrossMultipleRuns) {
   invoke_count = 0;
 
   const std::string domain = "test.onnxlight.counting_kernel_if";
-  RegisterKernelFn(
-      domain, "CountingOp", core::symbolic::Device::kCPU,
-      [](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
-        ++construct_count;
-        return std::make_unique<TestLambdaKernel>(node,
-                                                  [](const NodeProto &node, RuntimeContext &rt) {
-                                                    ++invoke_count;
-                                                    rt.Set(node.output(0), rt.Get(node.input(0)));
-                                                  });
-      });
+  RegisterKernelFn(domain, "CountingOp", core::symbolic::Device::kCPU,
+                   [](const NodeProto &node, RuntimeContext &,
+                      const KernelContext &) -> std::unique_ptr<core::runtime::KernelBase> {
+                     ++construct_count;
+                     return std::make_unique<TestLambdaKernel>(
+                         node, [](const NodeProto &node, RuntimeContext &rt) {
+                           ++invoke_count;
+                           rt.Set(node.output(0), rt.Get(node.input(0)));
+                         });
+                   });
 
   GraphProto then_branch;
   ValueInfoProto then_y;
@@ -5501,16 +5514,16 @@ TEST(RuntimeSession, ConstructsLoopBodyKernelOnceAcrossMultipleRuns) {
   invoke_count = 0;
 
   const std::string domain = "test.onnxlight.counting_kernel_loop";
-  RegisterKernelFn(
-      domain, "CountingOp", core::symbolic::Device::kCPU,
-      [](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
-        ++construct_count;
-        return std::make_unique<TestLambdaKernel>(node,
-                                                  [](const NodeProto &node, RuntimeContext &rt) {
-                                                    ++invoke_count;
-                                                    rt.Set(node.output(0), rt.Get(node.input(0)));
-                                                  });
-      });
+  RegisterKernelFn(domain, "CountingOp", core::symbolic::Device::kCPU,
+                   [](const NodeProto &node, RuntimeContext &,
+                      const KernelContext &) -> std::unique_ptr<core::runtime::KernelBase> {
+                     ++construct_count;
+                     return std::make_unique<TestLambdaKernel>(
+                         node, [](const NodeProto &node, RuntimeContext &rt) {
+                           ++invoke_count;
+                           rt.Set(node.output(0), rt.Get(node.input(0)));
+                         });
+                   });
 
   GraphProto body;
   body.set_name("loop_body");
@@ -5574,16 +5587,16 @@ TEST(RuntimeSession, ConstructsScanBodyKernelOnceAcrossMultipleRuns) {
   invoke_count = 0;
 
   const std::string domain = "test.onnxlight.counting_kernel_scan";
-  RegisterKernelFn(
-      domain, "CountingOp", core::symbolic::Device::kCPU,
-      [](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
-        ++construct_count;
-        return std::make_unique<TestLambdaKernel>(node,
-                                                  [](const NodeProto &node, RuntimeContext &rt) {
-                                                    ++invoke_count;
-                                                    rt.Set(node.output(0), rt.Get(node.input(0)));
-                                                  });
-      });
+  RegisterKernelFn(domain, "CountingOp", core::symbolic::Device::kCPU,
+                   [](const NodeProto &node, RuntimeContext &,
+                      const KernelContext &) -> std::unique_ptr<core::runtime::KernelBase> {
+                     ++construct_count;
+                     return std::make_unique<TestLambdaKernel>(
+                         node, [](const NodeProto &node, RuntimeContext &rt) {
+                           ++invoke_count;
+                           rt.Set(node.output(0), rt.Get(node.input(0)));
+                         });
+                   });
 
   GraphProto body;
   body.set_name("scan_body");
@@ -5642,16 +5655,16 @@ TEST(RuntimeSession, ConstructsSequenceMapBodyKernelOnceAcrossMultipleRuns) {
   invoke_count = 0;
 
   const std::string domain = "test.onnxlight.counting_kernel_seqmap";
-  RegisterKernelFn(
-      domain, "CountingOp", core::symbolic::Device::kCPU,
-      [](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
-        ++construct_count;
-        return std::make_unique<TestLambdaKernel>(node,
-                                                  [](const NodeProto &node, RuntimeContext &rt) {
-                                                    ++invoke_count;
-                                                    rt.Set(node.output(0), rt.Get(node.input(0)));
-                                                  });
-      });
+  RegisterKernelFn(domain, "CountingOp", core::symbolic::Device::kCPU,
+                   [](const NodeProto &node, RuntimeContext &,
+                      const KernelContext &) -> std::unique_ptr<core::runtime::KernelBase> {
+                     ++construct_count;
+                     return std::make_unique<TestLambdaKernel>(
+                         node, [](const NodeProto &node, RuntimeContext &rt) {
+                           ++invoke_count;
+                           rt.Set(node.output(0), rt.Get(node.input(0)));
+                         });
+                   });
 
   GraphProto body;
   body.set_name("seq_map_body");
@@ -5701,16 +5714,16 @@ TEST(SubgraphSession, ReusesInheritedKernelInitializationAcrossMultipleRuns) {
   invoke_count = 0;
 
   const std::string domain = "test.onnxlight.counting_kernel_subgraph";
-  RegisterKernelFn(
-      domain, "CountingOp", core::symbolic::Device::kCPU,
-      [](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
-        ++construct_count;
-        return std::make_unique<TestLambdaKernel>(node,
-                                                  [](const NodeProto &node, RuntimeContext &rt) {
-                                                    ++invoke_count;
-                                                    rt.Set(node.output(0), rt.Get(node.input(0)));
-                                                  });
-      });
+  RegisterKernelFn(domain, "CountingOp", core::symbolic::Device::kCPU,
+                   [](const NodeProto &node, RuntimeContext &,
+                      const KernelContext &) -> std::unique_ptr<core::runtime::KernelBase> {
+                     ++construct_count;
+                     return std::make_unique<TestLambdaKernel>(
+                         node, [](const NodeProto &node, RuntimeContext &rt) {
+                           ++invoke_count;
+                           rt.Set(node.output(0), rt.Get(node.input(0)));
+                         });
+                   });
 
   GraphProto graph;
   graph.set_name("subgraph");
@@ -6581,8 +6594,9 @@ ModelProto MakeAddModelWithShapes(const std::vector<std::pair<int64_t, std::stri
 TEST(RuntimeSessionOpsets, ModelImportsDetermineKernelConstructionByDomain) {
   const std::string domain = "test.onnxlight.opset";
   std::vector<core::runtime::OpsetId> constructed;
-  auto observe = [&constructed](const NodeProto &node, RuntimeContext &rt) {
-    constructed.push_back(rt.kernel_ctx().opset);
+  auto observe = [&constructed](const NodeProto &node, RuntimeContext &,
+                                const KernelContext &kernel_context) {
+    constructed.push_back(kernel_context.opset);
     return std::make_unique<TestLambdaKernel>(node, [](const NodeProto &node, RuntimeContext &rt) {
       rt.Set(node.output(0), rt.Get(node.input(0)));
     });
@@ -6658,8 +6672,9 @@ TEST(RuntimeSessionOpsets, LegacyPlanUsesExplicitContextVersion) {
 TEST(RuntimeSessionOpsets, FunctionBodyUsesItsOwnImports) {
   int64_t observed_version = 0;
   core::runtime::RegisterKernelFn("ai.onnx", "ObserveInFunction", core::symbolic::Device::kCPU,
-                                  [&observed_version](const NodeProto &node, RuntimeContext &rt) {
-                                    observed_version = rt.kernel_ctx().opset.version;
+                                  [&observed_version](const NodeProto &node, RuntimeContext &,
+                                                      const KernelContext &kernel_context) {
+                                    observed_version = kernel_context.opset.version;
                                     return std::make_unique<TestLambdaKernel>(
                                         node, [](const NodeProto &node, RuntimeContext &rt) {
                                           rt.Set(node.output(0), rt.Get(node.input(0)));
@@ -6700,8 +6715,9 @@ TEST(RuntimeSessionOpsets, ControlFlowBodyInheritsModelImports) {
   int64_t observed_version = 0;
   const std::string domain = "test.subgraph.opset";
   core::runtime::RegisterKernelFn(domain, "ObserveInBranch", core::symbolic::Device::kCPU,
-                                  [&observed_version](const NodeProto &node, RuntimeContext &rt) {
-                                    observed_version = rt.kernel_ctx().opset.version;
+                                  [&observed_version](const NodeProto &node, RuntimeContext &,
+                                                      const KernelContext &kernel_context) {
+                                    observed_version = kernel_context.opset.version;
                                     return std::make_unique<TestLambdaKernel>(
                                         node, [](const NodeProto &node, RuntimeContext &rt) {
                                           rt.Set(node.output(0), rt.Get(node.input(0)));

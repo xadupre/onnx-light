@@ -20,8 +20,8 @@ void EmitReduceSumOnnxCase(std::vector<TestCase> &registry, const std::string &c
                            const std::vector<int64_t> &data_shape,
                            const std::vector<float> &data_values,
                            const std::vector<int64_t> &axes_values, bool keepdims,
-                           bool noop_with_empty_axes) {
-  const OpsetId opset = DefaultOpset(13);
+                           bool noop_with_empty_axes, int64_t opset_version = 13) {
+  const OpsetId opset = DefaultOpset(opset_version);
 
   NodeProto node;
   node.set_op_type("ReduceSum");
@@ -33,8 +33,9 @@ void EmitReduceSumOnnxCase(std::vector<TestCase> &registry, const std::string &c
     AddAttribute<int64_t>(node, "noop_with_empty_axes", 1);
   }
   Expect(registry, std::move(node), case_name, {opset},
-         [data_shape, data_values, axes_values, keepdims, noop_with_empty_axes]() -> IoData {
-           const OpsetId opset = DefaultOpset(13);
+         [data_shape, data_values, axes_values, keepdims, noop_with_empty_axes,
+          opset_version]() -> IoData {
+           const OpsetId opset = DefaultOpset(opset_version);
 
            const KernelContext ctx{opset};
            const onnx_kernels::kernel::ReduceSum kernel{ctx};
@@ -106,6 +107,18 @@ void RegisterReduceSumOnnxCases(std::vector<TestCase> &registry) {
   EmitReduceSumOnnxCase(registry, "test_reduce_sum_empty_set_non_reduced_axis_zero",
                         /*data_shape=*/{2, 0, 4}, /*data_values=*/{}, {2}, /*keepdims=*/true,
                         /*noop_with_empty_axes=*/false);
+
+  // microsoft/onnxruntime#33230: positive and negative last-axis spellings
+  // must remain equivalent when another input dimension is empty.
+  EmitReduceSumOnnxCase(registry, "test_cc_reducesum_empty_negative_axis_keepdims",
+                        /*data_shape=*/{1, 0, 3}, /*data_values=*/{}, {-1}, /*keepdims=*/true,
+                        /*noop_with_empty_axes=*/false, /*opset_version=*/18);
+  EmitReduceSumOnnxCase(registry, "test_cc_reducesum_empty_positive_axis_keepdims",
+                        /*data_shape=*/{1, 0, 3}, /*data_values=*/{}, {2}, /*keepdims=*/true,
+                        /*noop_with_empty_axes=*/false, /*opset_version=*/18);
+  EmitReduceSumOnnxCase(registry, "test_cc_reducesum_empty_negative_axis_no_keepdims",
+                        /*data_shape=*/{0, 3}, /*data_values=*/{}, {-1}, /*keepdims=*/false,
+                        /*noop_with_empty_axes=*/false, /*opset_version=*/18);
 }
 
 } // namespace

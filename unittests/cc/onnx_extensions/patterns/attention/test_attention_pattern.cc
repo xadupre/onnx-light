@@ -442,6 +442,7 @@ TEST(FunctionHalfRotaryEmbeddingPattern, CreatesFunctionAndRejectsWrongAxis) {
   builder.MakeInput("X", core::symbolic::TensorType::kFloat, Shape({2, 4, 6, 8}));
   builder.MakeInput("cos", core::symbolic::TensorType::kFloat, Shape({6, 8}));
   builder.MakeInput("sin", core::symbolic::TensorType::kFloat, Shape({6, 8}));
+  builder.MakeNode("Identity", {"X"}, {"shared_x"});
   builder.MakeNode("Split", {"X"}, {"x1", "x2"}, "", "split", SplitAttrs(-1));
   builder.MakeNode("Neg", {"x2"}, {"nx2"});
   builder.MakeNode("Concat", {"nx2", "x1"}, {"rotated"}, "", "", IntAttr("axis", -1));
@@ -451,9 +452,9 @@ TEST(FunctionHalfRotaryEmbeddingPattern, CreatesFunctionAndRejectsWrongAxis) {
   builder.MakeOutput("Y", core::symbolic::TensorType::kFloat, Shape({2, 4, 6, 8}));
   core::builder::GraphGraph graph(builder);
   onnx_patterns::FunctionHalfRotaryEmbeddingPattern pattern;
-  const auto match = pattern.Match(graph, builder.Nodes()[0]);
+  const auto match = pattern.Match(graph, builder.Nodes()[1]);
   ASSERT_EQ(match.pattern, &pattern) << match.ToString();
-  EXPECT_EQ(match.insert_at, &builder.Nodes()[5]);
+  EXPECT_EQ(match.insert_at, &builder.Nodes()[6]);
   const auto replacement = pattern.Apply(graph, match.nodes);
   ASSERT_EQ(replacement.size(), 1u);
   EXPECT_EQ(replacement[0].op_type().value(), "HalfRotaryEmbedding");
@@ -476,7 +477,7 @@ TEST(FunctionHalfRotaryEmbeddingPattern, CreatesFunctionAndRejectsWrongAxis) {
 TEST(FunctionHalfRotaryEmbeddingPattern, FusesSliceBasedRotateHalf) {
   for (int opset : {22, 24}) {
     for (auto type : {core::symbolic::TensorType::kFloat, core::symbolic::TensorType::kFloat16}) {
-      const auto make_builder = [&](int64_t second_start, bool expose_first) {
+      const auto make_builder = [&](int64_t second_start, bool expose_first, bool share_input) {
         core::builder::GraphBuilder builder("slice_rotary", SchemaLookup());
         builder.SetOpsetVersion("", opset);
         builder.MakeInput("X", type, Shape({2, 4, 6, 8}));
@@ -494,25 +495,30 @@ TEST(FunctionHalfRotaryEmbeddingPattern, FusesSliceBasedRotateHalf) {
         builder.MakeNode("Mul", {"rotated", "sin"}, {"scaled_rotated"});
         builder.MakeNode("Mul", {"X", "cos"}, {"scaled_x"});
         builder.MakeNode("Add", {"scaled_rotated", "scaled_x"}, {"Y"});
+        if (share_input) {
+          builder.MakeNode("Identity", {"X"}, {"shared_x"});
+          builder.MakeOutput("shared_x", type, Shape({2, 4, 6, 8}));
+        }
         builder.MakeOutput("Y", type, Shape({2, 4, 6, 8}));
         if (expose_first) {
           builder.MakeOutput("x1", type, Shape({2, 4, 6, 4}));
         }
         return builder;
       };
-      core::builder::GraphBuilder builder = make_builder(4, false);
+      core::builder::GraphBuilder builder = make_builder(4, false, true);
       std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
       patterns.push_back(std::make_unique<onnx_patterns::FunctionHalfRotaryEmbeddingPattern>());
       core::builder::GraphGraph graph(builder, std::move(patterns));
       onnx_patterns::FunctionHalfRotaryEmbeddingPattern pattern;
       ASSERT_EQ(pattern.Match(graph, builder.Nodes()[0]).pattern, &pattern);
       graph.Optimize();
-      ASSERT_EQ(builder.Nodes().size(), 1u);
+      ASSERT_EQ(builder.Nodes().size(), 2u);
       EXPECT_EQ(builder.Nodes()[0].op_type().value(), "HalfRotaryEmbedding");
       EXPECT_EQ(builder.Nodes()[0].output()[0].value(), "Y");
+      EXPECT_EQ(builder.Nodes()[1].op_type().value(), "Identity");
 
       for (auto [second_start, expose_first] : {std::pair<int64_t, bool>{-4, false}, {4, true}}) {
-        core::builder::GraphBuilder rejected = make_builder(second_start, expose_first);
+        core::builder::GraphBuilder rejected = make_builder(second_start, expose_first, false);
         core::builder::GraphGraph rejected_graph(rejected);
         EXPECT_EQ(pattern.Match(rejected_graph, rejected.Nodes()[0]).pattern, nullptr);
       }

@@ -1829,14 +1829,6 @@ FunctionHalfRotaryEmbeddingPattern::Match(core::builder::GraphGraph &graph,
     }
   } else {
     const auto &input_consumers = graph.NextNodes(candidate.input()[0].value());
-    if (input_consumers.size() != 3) {
-      return NoMatch(candidate, "The sliced rotary input must feed two Slices and one Mul.");
-    }
-    for (const NodeProto *consumer : input_consumers) {
-      if (consumer != &candidate && IsNode(consumer, "Slice", -1, 1)) {
-        second_slice = consumer;
-      }
-    }
     std::vector<int64_t> start1, end1, axes1, start2, end2, axes2;
     int64_t width = 0;
     const auto read_slice = [&](const NodeProto &slice, std::vector<int64_t> &starts,
@@ -1853,13 +1845,27 @@ FunctionHalfRotaryEmbeddingPattern::Match(core::builder::GraphGraph &graph,
                steps == std::vector<int64_t>{1})) &&
              starts.size() == 1 && ends.size() == 1 && axes.size() == 1;
     };
-    if (second_slice == nullptr ||
-        second_slice->input()[0].value() != candidate.input()[0].value() ||
-        !StaticDimension(graph, candidate.input()[0].value(), 3, width) || width <= 0 ||
+    if (!StaticDimension(graph, candidate.input()[0].value(), 3, width) || width <= 0 ||
         width % 2 != 0 || !read_slice(candidate, start1, end1, axes1) ||
-        !read_slice(*second_slice, start2, end2, axes2) || (axes1[0] != 3 && axes1[0] != -1) ||
-        (axes2[0] != 3 && axes2[0] != -1) || start1[0] != 0 || end1[0] != width / 2 ||
-        start2[0] != width / 2 || end2[0] < width) {
+        (axes1[0] != 3 && axes1[0] != -1) || start1[0] != 0 || end1[0] != width / 2) {
+      return NoMatch(candidate, "Slices must cover equal contiguous halves of the last axis.");
+    }
+    for (const NodeProto *consumer : input_consumers) {
+      if (consumer == &candidate || !IsNode(consumer, "Slice", -1, 1) ||
+          consumer->input()[0].value() != candidate.input()[0].value() ||
+          !read_slice(*consumer, start2, end2, axes2) || (axes2[0] != 3 && axes2[0] != -1) ||
+          start2[0] != width / 2 || end2[0] < width) {
+        continue;
+      }
+      const auto &consumers = graph.NextNodes(consumer->output()[0].value());
+      if (consumers.size() == 1 && IsNode(consumers[0], "Neg", 1, 1)) {
+        if (second_slice != nullptr) {
+          return NoMatch(candidate, "The second rotary half must be unambiguous.");
+        }
+        second_slice = consumer;
+      }
+    }
+    if (second_slice == nullptr) {
       return NoMatch(candidate, "Slices must cover equal contiguous halves of the last axis.");
     }
   }
@@ -1888,23 +1894,32 @@ FunctionHalfRotaryEmbeddingPattern::Match(core::builder::GraphGraph &graph,
   }
   const NodeProto *mul1 = mul1_consumers[0];
   const auto &input_consumers = graph.NextNodes(candidate.input()[0].value());
-  if (input_consumers.size() != (split_form ? 2u : 3u)) {
-    return NoMatch(candidate, "The rotary input must feed only the halves and one Mul.");
-  }
-  const auto mul2_it =
-      std::find_if(input_consumers.begin(), input_consumers.end(),
-                   [](const NodeProto *node) { return IsNode(node, "Mul", 2, 1); });
-  const NodeProto *mul2 = mul2_it == input_consumers.end() ? nullptr : *mul2_it;
-  if (!IsNode(mul2, "Mul", 2, 1) || std::find(input_consumers.begin(), input_consumers.end(),
-                                              &candidate) == input_consumers.end()) {
-    return NoMatch(candidate, "The unsplit input branch must be a Mul.");
-  }
   const auto &add1 = graph.NextNodes(mul1->output()[0].value());
-  const auto &add2 = graph.NextNodes(mul2->output()[0].value());
-  if (add1.size() != 1 || add2.size() != 1 || add1[0] != add2[0] || !IsNode(add1[0], "Add", 2, 1)) {
-    return NoMatch(candidate, "Both Mul branches must feed the same Add.");
+  if (add1.size() != 1 || !IsNode(add1[0], "Add", 2, 1)) {
+    return NoMatch(candidate, "The rotated Mul must feed one Add.");
   }
   const NodeProto *add = add1[0];
+  const NodeProto *mul2 = nullptr;
+  for (const NodeProto *consumer : input_consumers) {
+    if (!IsNode(consumer, "Mul", 2, 1)) {
+      continue;
+    }
+    const auto &next = graph.NextNodes(consumer->output()[0].value());
+    if (next.size() == 1 && next[0] == add) {
+      if (mul2 != nullptr) {
+        return NoMatch(candidate, "The unsplit rotary Mul must be unambiguous.");
+      }
+      mul2 = consumer;
+    }
+  }
+  if (mul2 == nullptr || std::find(input_consumers.begin(), input_consumers.end(), &candidate) ==
+                             input_consumers.end()) {
+    return NoMatch(candidate, "The unsplit input branch must be a Mul feeding the same Add.");
+  }
+  if (add->input()[0].value() != mul1->output()[0].value() &&
+      add->input()[1].value() != mul1->output()[0].value()) {
+    return NoMatch(candidate, "Both Mul branches must feed the same Add.");
+  }
   std::set<std::string> caches;
   for (const NodeProto *mul : {mul1, mul2}) {
     for (int index = 0; index < mul->input_size(); ++index) {

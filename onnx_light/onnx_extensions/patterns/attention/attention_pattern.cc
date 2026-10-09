@@ -1842,7 +1842,7 @@ FunctionHalfRotaryEmbeddingPattern::Match(core::builder::GraphGraph &graph,
              ReadInt64Constant(graph, slice.input()[3].value(), axes) &&
              (slice.input_size() == 4 ||
               (ReadInt64Constant(graph, slice.input()[4].value(), steps) &&
-               steps == std::vector<int64_t>{1})) &&
+               steps.size() == 1 && steps[0] == 1)) &&
              starts.size() == 1 && ends.size() == 1 && axes.size() == 1;
     };
     if (!StaticDimension(graph, candidate.input()[0].value(), 3, width) || width <= 0 ||

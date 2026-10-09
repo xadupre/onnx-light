@@ -1032,7 +1032,7 @@ void ShapesContext::ComputeShapeGraph(const GraphProto &graph) {
     const NodeProto &node = graph.node()[i];
     current_node_index_ = static_cast<int64_t>(i);
     const std::string key =
-        ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node) + ":" + node.op_type().value();
+        ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node) + ":" + node.op_type();
     if (!IsSupportedDomain(node) &&
         !HasLocalFunction(LocalFunctionKey(node.domain(), node.op_type())) &&
         GetCustomShapeInferenceFunction(node.domain(), node.op_type()) == nullptr &&

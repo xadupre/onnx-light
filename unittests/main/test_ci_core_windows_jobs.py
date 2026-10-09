@@ -1,11 +1,10 @@
 import re
 import unittest
 
-from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
-class TestCiCoreWindowsJobs(ExtTestCase):
+class TestCiCoreWindowsJobs(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.root = Path(__file__).resolve().parents[2]
@@ -78,7 +77,7 @@ class TestCiCoreWindowsJobs(ExtTestCase):
 
     def test_downstream_jobs_gate_on_both_preflights(self):
         """Verifies that every downstream build job waits on both preflights."""
-        for job_name in ("core_tests_ubuntu", "core_tests", "windows_x86_build"):
+        for job_name in ("free_threaded", "core_tests_ubuntu", "core_tests", "windows_x86_build"):
             needs = self._job_needs(job_name)
             self.assertIsNotNone(needs, job_name)
             self.assertIn("reduced_tests_ubuntu", needs, job_name)

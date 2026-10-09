@@ -56,7 +56,7 @@ jobs:
 
   free_threaded:
     name: free-threaded build (CMake ${{ matrix.cmake }}, Python 3.13t)
-    needs: changes
+    needs: [reduced_tests_ubuntu, no_onnx_tests_ubuntu, changes]
     if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30

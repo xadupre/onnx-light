@@ -125,6 +125,7 @@ Tensor MakeInput(int64_t rows, float value = 4, int64_t columns = 20) {
 
 ModelProto MakeGemmModel(bool overridable_weight) {
   ModelProto model;
+  model.add_opset_import()->set_version(13);
   GraphProto *graph = model.mutable_graph();
   graph->add_input()->set_name("A");
   if (overridable_weight) {
@@ -148,6 +149,7 @@ ModelProto MakeGemmModel(bool overridable_weight) {
 
 ModelProto MakeManyGemmModel(size_t count) {
   ModelProto model;
+  model.add_opset_import()->set_version(13);
   GraphProto *graph = model.mutable_graph();
   graph->add_input()->set_name("A");
   for (size_t i = 0; i < count; ++i) {

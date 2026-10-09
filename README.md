@@ -54,7 +54,7 @@ can link only what it needs:
 
 - `onnx_light::lib_onnx_proto` – protobuf-compatible message types,
   parser / serializer, external data, optional encrypted save / load
-  (AES-256-CBC or ChaCha20-Poly1305).
+  (AES-256-CBC, ChaCha20-Poly1305, or AES-256-GCM).
 - `onnx_light::lib_onnx_core` – implements *all* the generic
   functionalities (runtime value types and execution engine, the
   `LightOpSchema` data structures, the symbolic expression engine and the
@@ -100,8 +100,9 @@ independent from each other while sharing the same core engine.
   is recorded and can be replayed.
 - **Gradients** – gradients of an ONNX graph can be computed and used to train
   a model.
-- **Encrypted save / load** – models can be encrypted with AES-256-CBC
-  (`ONNXCRY1`) or ChaCha20-Poly1305 (`ONNXCRY2`), both using PBKDF2-HMAC-SHA256
+- **Encrypted save / load** – models can be encrypted with legacy, unauthenticated
+  AES-256-CBC (`ONNXCRY1`), ChaCha20-Poly1305 (`ONNXCRY2`), or AES-256-GCM
+  (`ONNXCRY3`). Prefer either authenticated format for new files. All use PBKDF2-HMAC-SHA256
   key derivation, and saved to a single self-contained `.onnxc` file or
   serialized to an in-memory `bytes` object.
 

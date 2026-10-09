@@ -171,8 +171,10 @@ Gradients of an ONNX graph can be computed and used to train a model. See
 Encrypted save / load
 +++++++++++++++++++++
 
-Models can be encrypted with AES-256-CBC (``ONNXCRY1``) or ChaCha20-Poly1305
-(``ONNXCRY2``), both using PBKDF2-HMAC-SHA256 key derivation, and saved to a
+Models can be encrypted with legacy, unauthenticated AES-256-CBC (``ONNXCRY1``),
+ChaCha20-Poly1305 (``ONNXCRY2``), or AES-256-GCM (``ONNXCRY3``). Prefer either
+authenticated format for new files. All use PBKDF2-HMAC-SHA256 key derivation
+and can be saved to a
 single self-contained ``.onnxc`` file or serialized to an in-memory ``bytes``
 object.
 

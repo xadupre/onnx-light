@@ -281,13 +281,15 @@ jobs:
         # (TensorProto::WriteExternalData), then normalizes and validates destination aliases.
         # Linux CI run 36351977979 measures the combined library at 1617992 installed bytes,
         # 1133098 text bytes and 876 symbols; the dependency allowlist is unchanged.
+        # AES-256-GCM adds 8192 installed bytes and 7104 text bytes. Linux CI run 37925597146
+        # measures 1626184 installed bytes, 1140202 text bytes and 875 symbols.
         run: |
           proto_dir="$(python -c 'import importlib.util, pathlib; print(pathlib.Path(importlib.util.find_spec("onnx_light.onnx_py._onnxpyprotoop").origin).parent)')"
           python .github/scripts/report_proto_binary_size.py \
             "${proto_dir}" \
             --summary "${GITHUB_STEP_SUMMARY}" \
-            --max-installed-size 1617992 \
-            --max-text-size 1134490 \
+            --max-installed-size 1626184 \
+            --max-text-size 1141594 \
             --max-dynamic-symbols 876 \
             --allowed-dependency libcrypto.so.3 \
             --allowed-dependency libstdc++.so.6 \

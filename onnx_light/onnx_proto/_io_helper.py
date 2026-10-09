@@ -408,7 +408,9 @@ def save_encrypted(
         When *key* is :class:`bytes` it is decoded as ``latin-1`` before
         PBKDF2 so that arbitrary byte values are preserved faithfully.
     :param encryption: Encryption algorithm. Supported values are
-        ``"AES-256-CBC"`` (ONNXCRY1) and ``"ChaCha20-Poly1305"`` (ONNXCRY2).
+        ``"AES-256-CBC"`` (legacy ONNXCRY1, unauthenticated),
+        ``"ChaCha20-Poly1305"`` (ONNXCRY2), and ``"AES-256-GCM"`` (ONNXCRY3).
+        Prefer either authenticated format for new files.
     :param num_threads: Number of threads to use for parallel serialization.
         ``1`` disables parallelization, ``> 1`` uses exactly that many
         worker threads, and any negative value (``-1`` is the default)
@@ -442,8 +444,8 @@ def load_encrypted(
     """Decrypts and parses an encrypted ONNX model.
 
     The file must have been produced by :func:`save_encrypted` with the
-    same key.  Decryption supports ONNXCRY1 (AES-256-CBC) and ONNXCRY2
-    (ChaCha20-Poly1305) formats using a key
+    same key. Decryption supports ONNXCRY1 (AES-256-CBC), ONNXCRY2
+    (ChaCha20-Poly1305), and ONNXCRY3 (AES-256-GCM) formats using a key
     derived from the passphrase via PBKDF2-HMAC-SHA256.
 
     .. note::
@@ -492,7 +494,8 @@ def save_encrypted_string(
 
     Equivalent to :func:`save_encrypted` but returns the ciphertext as
     :class:`bytes` instead of writing it to a file.  The returned bytes are
-    in ONNXCRY1 or ONNXCRY2 format and can be decrypted with :func:`load_encrypted_string`
+    in ONNXCRY1, ONNXCRY2, or ONNXCRY3 format and can be decrypted with
+    :func:`load_encrypted_string`
     (or :func:`load_encrypted` after writing the bytes to a file).
 
     .. note::
@@ -504,7 +507,9 @@ def save_encrypted_string(
         When *key* is :class:`bytes` it is decoded as ``latin-1`` before
         PBKDF2 so that arbitrary byte values are preserved faithfully.
     :param encryption: Encryption algorithm. Supported values are
-        ``"AES-256-CBC"`` (ONNXCRY1) and ``"ChaCha20-Poly1305"`` (ONNXCRY2).
+        ``"AES-256-CBC"`` (legacy ONNXCRY1, unauthenticated),
+        ``"ChaCha20-Poly1305"`` (ONNXCRY2), and ``"AES-256-GCM"`` (ONNXCRY3).
+        Prefer either authenticated format for new files.
     :param num_threads: Number of threads to use for parallel serialization.
         ``1`` disables parallelization, ``> 1`` uses exactly that many
         worker threads, and any negative value (``-1`` is the default)
@@ -513,7 +518,7 @@ def save_encrypted_string(
         considered "large" for the purposes of parallelisation.
     :param min_block_size: Minimum raw-data block size (bytes) parallelised
         when ``num_threads != 1``.
-    :return: Encrypted model bytes in ONNXCRY1 or ONNXCRY2 format.
+    :return: Encrypted model bytes in ONNXCRY1, ONNXCRY2, or ONNXCRY3 format.
     :raises RuntimeError: On OpenSSL errors.
     :raises NotImplementedError: When OpenSSL support is not compiled in.
     """
@@ -538,14 +543,14 @@ def load_encrypted_string(
     """Decrypts and parses an in-memory encrypted ONNX model.
 
     Equivalent to :func:`load_encrypted` but takes a :class:`bytes` object
-    instead of a file path.  The bytes must be in ONNXCRY1 or ONNXCRY2 format as
+    instead of a file path. The bytes must be in ONNXCRY1, ONNXCRY2, or ONNXCRY3 format as
     produced by :func:`save_encrypted_string` (or :func:`save_encrypted`).
 
     .. note::
         This function requires that onnx-light was built with OpenSSL support
         (``ONNX_LIGHT_HAS_OPENSSL`` compile-time flag).
 
-    :param data: Encrypted model bytes in ONNXCRY1 or ONNXCRY2 format.
+    :param data: Encrypted model bytes in ONNXCRY1, ONNXCRY2, or ONNXCRY3 format.
     :param key: Passphrase or raw bytes (must match the one used to encrypt).
         :class:`bytes` values are decoded as ``latin-1``.
     :param num_threads: Number of threads to use for parallel parsing.

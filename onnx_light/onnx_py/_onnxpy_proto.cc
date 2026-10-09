@@ -3306,7 +3306,8 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
           nb::arg("name"), nb::arg("key"), nb::arg("options") = nb::none(),
           nb::arg("encryption") = "AES-256-CBC",
           "Encrypts the model and writes it to a single binary file. Supported values are "
-          "\"AES-256-CBC\" (ONNXCRY1) and \"ChaCha20-Poly1305\" (ONNXCRY2).")
+          "\"AES-256-CBC\" (legacy ONNXCRY1), \"ChaCha20-Poly1305\" (ONNXCRY2), and "
+          "\"AES-256-GCM\" (ONNXCRY3). Prefer authenticated ONNXCRY2 or ONNXCRY3.")
       .def(
           "ParseFromEncryptedFile",
           [](ModelProto &self, const std::string &file_path, const std::string &key,
@@ -3318,7 +3319,8 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
             LoadEncryptedModel(self, file_path, key, opts);
           },
           nb::arg("name"), nb::arg("key"), nb::arg("options") = nb::none(),
-          "Decrypts an ONNXCRY1/ONNXCRY2 encrypted file (written by SerializeToEncryptedFile) and "
+          "Decrypts an ONNXCRY1/ONNXCRY2/ONNXCRY3 encrypted file (written by "
+          "SerializeToEncryptedFile) and "
           "parses the payload into this model instance.")
       .def(
           "SerializeToEncryptedString",
@@ -3332,8 +3334,8 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
             return nb::bytes(blob.data(), blob.size());
           },
           nb::arg("key"), nb::arg("options") = nb::none(), nb::arg("encryption") = "AES-256-CBC",
-          "Encrypts the model and returns ciphertext bytes in ONNXCRY1 (AES-256-CBC) or "
-          "ONNXCRY2 (ChaCha20-Poly1305) format.")
+          "Encrypts the model and returns ciphertext bytes in ONNXCRY1 (AES-256-CBC), "
+          "ONNXCRY2 (ChaCha20-Poly1305), or ONNXCRY3 (AES-256-GCM) format.")
       .def(
           "ParseFromEncryptedString",
           [](ModelProto &self, nb::bytes data, const std::string &key, nb::object options) {
@@ -3345,7 +3347,7 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
             LoadEncryptedModelFromString(self, blob, key, opts);
           },
           nb::arg("data"), nb::arg("key"), nb::arg("options") = nb::none(),
-          "Decrypts an ONNXCRY1/ONNXCRY2 encrypted bytes object (produced by "
+          "Decrypts an ONNXCRY1/ONNXCRY2/ONNXCRY3 encrypted bytes object (produced by "
           "SerializeToEncryptedString) "
           "and parses the payload into this model instance.");
 #endif // ONNX_LIGHT_HAS_OPENSSL

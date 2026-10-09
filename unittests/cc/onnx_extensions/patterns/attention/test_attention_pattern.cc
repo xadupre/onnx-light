@@ -3,14 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/builder/graph_graph.h"
-#include "onnx_core/builder/pattern_registry.h"
 #include "onnx_extensions/patterns/attention/attention_pattern.h"
-#include "onnx_extensions/patterns/dispatch_table.h"
 #include "onnx_op/operator_sets.h"
 #include "onnx_proto/onnx_helper.h"
 #include "onnx_proto/onnx_verify.h"
 
-#include <algorithm>
 #include <cstdint>
 #include <initializer_list>
 #include <limits>
@@ -147,20 +144,6 @@ template <typename Pattern> void OptimizeAndVerify(core::builder::GraphBuilder &
   core::builder::GraphGraph optimizer(builder, std::move(patterns));
   EXPECT_FALSE(optimizer.Optimize().empty());
   ExpectTopologicalGraph(builder);
-}
-
-void OptimizeWithDefaultPatterns(core::builder::GraphBuilder &builder) {
-  onnx_patterns::RegisterPatterns();
-  std::vector<std::string> names = core::builder::RegisteredPatternNames();
-  std::sort(names.begin(), names.end());
-  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
-  for (const std::string &name : names) {
-    if (name != "CastOpCast") {
-      patterns.push_back(core::builder::CreateRegisteredPattern(name));
-    }
-  }
-  core::builder::GraphGraph graph(builder, std::move(patterns));
-  graph.Optimize();
 }
 
 core::builder::GraphBuilder
@@ -455,6 +438,9 @@ TEST(FunctionHalfRotaryEmbeddingPattern, CreatesFunctionAndRejectsWrongAxis) {
   const auto match = pattern.Match(graph, builder.Nodes()[1]);
   ASSERT_EQ(match.pattern, &pattern) << match.ToString();
   EXPECT_EQ(match.insert_at, &builder.Nodes()[6]);
+  auto invalid_nodes = match.nodes;
+  invalid_nodes[2] = invalid_nodes[4];
+  EXPECT_THROW(pattern.Apply(graph, invalid_nodes), core::builder::BuilderError);
   const auto replacement = pattern.Apply(graph, match.nodes);
   ASSERT_EQ(replacement.size(), 1u);
   EXPECT_EQ(replacement[0].op_type().value(), "HalfRotaryEmbedding");
@@ -463,7 +449,7 @@ TEST(FunctionHalfRotaryEmbeddingPattern, CreatesFunctionAndRejectsWrongAxis) {
   EXPECT_EQ(replacement[0].input()[2].value(), "sin");
   ASSERT_TRUE(HasFunction(builder, "HalfRotaryEmbedding"));
   EXPECT_EQ(builder.LocalFunction("HalfRotaryEmbedding").Nodes().size(), 6u);
-  OptimizeWithDefaultPatterns(builder);
+  OptimizeAndVerify<onnx_patterns::FunctionHalfRotaryEmbeddingPattern>(builder);
   EXPECT_NE(FindNode(builder, "HalfRotaryEmbedding"), builder.Nodes().size());
 
   core::builder::GraphBuilder rejected("rejected", SchemaLookup());
@@ -779,7 +765,7 @@ TEST(FunctionAttentionPattern, CreatesLocalAttentionAndRejectsPositiveInfinity) 
   EXPECT_EQ(replacement[0].input()[1].value(), "keys");
   EXPECT_EQ(replacement[0].input()[2].value(), "values");
   EXPECT_TRUE(HasFunction(builder, "LocalAttention_to1"));
-  OptimizeWithDefaultPatterns(builder);
+  OptimizeAndVerify<onnx_patterns::FunctionAttentionPattern>(builder);
   EXPECT_NE(FindNode(builder, "LocalAttention_to1"), builder.Nodes().size());
 
   core::builder::GraphBuilder rejected = make_builder(std::numeric_limits<float>::infinity());

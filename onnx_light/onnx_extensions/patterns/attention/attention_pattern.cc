@@ -1951,17 +1951,39 @@ FunctionHalfRotaryEmbeddingPattern::Apply(core::builder::GraphGraph &graph,
                                           const std::vector<const NodeProto *> &nodes) const {
   if ((nodes.size() != 6 && nodes.size() != 7) ||
       std::any_of(nodes.begin(), nodes.end(),
-                  [](const NodeProto *node) { return node == nullptr; }) ||
-      Match(graph, *nodes[0]).nodes != nodes) {
+                  [](const NodeProto *node) { return node == nullptr; })) {
     throw BuilderError(
         "FunctionHalfRotaryEmbeddingPattern::Apply expects a valid half-rotary decomposition.");
   }
   const std::size_t offset = nodes.size() == 7 ? 1 : 0;
   const NodeProto &first = *nodes[0];
+  const NodeProto *second = offset == 0 ? nullptr : nodes[1];
+  const NodeProto &neg = *nodes[1 + offset];
   const NodeProto &concat = *nodes[2 + offset];
   const NodeProto &mul1 = *nodes[3 + offset];
   const NodeProto &mul2 = *nodes[4 + offset];
   const NodeProto &add = *nodes[5 + offset];
+  const bool split_form = offset == 0;
+  if ((split_form && (!IsNode(&first, "Split", -1, 2) || first.input_size() == 0)) ||
+      (!split_form && (!IsNode(&first, "Slice", -1, 1) || !IsNode(second, "Slice", -1, 1) ||
+                       first.input_size() == 0 || second->input_size() == 0 ||
+                       first.input()[0].value() != second->input()[0].value()))) {
+    throw BuilderError(
+        "FunctionHalfRotaryEmbeddingPattern::Apply expects a valid half-rotary decomposition.");
+  }
+  const std::string second_half =
+      split_form ? first.output()[1].value() : second->output()[0].value();
+  if (!IsNode(&neg, "Neg", 1, 1) || neg.input()[0].value() != second_half ||
+      !IsNode(&concat, "Concat", 2, 1) || concat.input()[0].value() != neg.output()[0].value() ||
+      concat.input()[1].value() != first.output()[0].value() || !IsNode(&mul1, "Mul", 2, 1) ||
+      !IsNode(&mul2, "Mul", 2, 1) || &mul1 == &mul2 || !IsNode(&add, "Add", 2, 1) ||
+      ((add.input()[0].value() != mul1.output()[0].value() ||
+        add.input()[1].value() != mul2.output()[0].value()) &&
+       (add.input()[0].value() != mul2.output()[0].value() ||
+        add.input()[1].value() != mul1.output()[0].value()))) {
+    throw BuilderError(
+        "FunctionHalfRotaryEmbeddingPattern::Apply expects a valid half-rotary decomposition.");
+  }
   const auto other_input = [](const NodeProto &mul, const std::string &known) -> std::string {
     if (mul.input()[0].value() == known) {
       return mul.input()[1].value();

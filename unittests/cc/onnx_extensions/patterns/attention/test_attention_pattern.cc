@@ -425,6 +425,7 @@ TEST(FunctionHalfRotaryEmbeddingPattern, CreatesFunctionAndRejectsWrongAxis) {
   builder.MakeInput("X", core::symbolic::TensorType::kFloat, Shape({2, 4, 6, 8}));
   builder.MakeInput("cos", core::symbolic::TensorType::kFloat, Shape({6, 8}));
   builder.MakeInput("sin", core::symbolic::TensorType::kFloat, Shape({6, 8}));
+  builder.MakeNode("Identity", {"X"}, {"shared_x"});
   builder.MakeNode("Split", {"X"}, {"x1", "x2"}, "", "split", SplitAttrs(-1));
   builder.MakeNode("Neg", {"x2"}, {"nx2"});
   builder.MakeNode("Concat", {"nx2", "x1"}, {"rotated"}, "", "", IntAttr("axis", -1));
@@ -434,9 +435,12 @@ TEST(FunctionHalfRotaryEmbeddingPattern, CreatesFunctionAndRejectsWrongAxis) {
   builder.MakeOutput("Y", core::symbolic::TensorType::kFloat, Shape({2, 4, 6, 8}));
   core::builder::GraphGraph graph(builder);
   onnx_patterns::FunctionHalfRotaryEmbeddingPattern pattern;
-  const auto match = pattern.Match(graph, builder.Nodes()[0]);
+  const auto match = pattern.Match(graph, builder.Nodes()[1]);
   ASSERT_EQ(match.pattern, &pattern) << match.ToString();
-  EXPECT_EQ(match.insert_at, &builder.Nodes()[5]);
+  EXPECT_EQ(match.insert_at, &builder.Nodes()[6]);
+  auto invalid_nodes = match.nodes;
+  invalid_nodes[2] = invalid_nodes[4];
+  EXPECT_THROW(pattern.Apply(graph, invalid_nodes), core::builder::BuilderError);
   const auto replacement = pattern.Apply(graph, match.nodes);
   ASSERT_EQ(replacement.size(), 1u);
   EXPECT_EQ(replacement[0].op_type().value(), "HalfRotaryEmbedding");
@@ -445,6 +449,8 @@ TEST(FunctionHalfRotaryEmbeddingPattern, CreatesFunctionAndRejectsWrongAxis) {
   EXPECT_EQ(replacement[0].input()[2].value(), "sin");
   ASSERT_TRUE(HasFunction(builder, "HalfRotaryEmbedding"));
   EXPECT_EQ(builder.LocalFunction("HalfRotaryEmbedding").Nodes().size(), 6u);
+  OptimizeAndVerify<onnx_patterns::FunctionHalfRotaryEmbeddingPattern>(builder);
+  EXPECT_NE(FindNode(builder, "HalfRotaryEmbedding"), builder.Nodes().size());
 
   core::builder::GraphBuilder rejected("rejected", SchemaLookup());
   rejected.SetOpsetVersion("", 18);
@@ -452,6 +458,66 @@ TEST(FunctionHalfRotaryEmbeddingPattern, CreatesFunctionAndRejectsWrongAxis) {
   rejected.MakeNode("Split", {"X"}, {"x1", "x2"}, "", "", SplitAttrs(2));
   core::builder::GraphGraph rejected_graph(rejected);
   EXPECT_EQ(pattern.Match(rejected_graph, rejected.Nodes()[0]).pattern, nullptr);
+}
+
+TEST(FunctionHalfRotaryEmbeddingPattern, FusesSliceBasedRotateHalf) {
+  for (int opset : {22, 24}) {
+    for (auto type : {core::symbolic::TensorType::kFloat, core::symbolic::TensorType::kFloat16}) {
+      const auto make_builder = [&](int64_t second_start, bool expose_first, bool share_input) {
+        core::builder::GraphBuilder builder("slice_rotary", SchemaLookup());
+        builder.SetOpsetVersion("", opset);
+        builder.MakeInput("X", type, Shape({2, 4, 6, 8}));
+        builder.MakeInput("cos", type, Shape({6, 8}));
+        builder.MakeInput("sin", type, Shape({6, 8}));
+        AddInt64(builder, "zero", {1}, {0});
+        AddInt64(builder, "half", {1}, {4});
+        AddInt64(builder, "second_start", {1}, {second_start});
+        AddInt64(builder, "width", {1}, {8});
+        AddInt64(builder, "axis", {1}, {-1});
+        builder.MakeNode("Slice", {"X", "zero", "half", "axis"}, {"x1"});
+        builder.MakeNode("Slice", {"X", "second_start", "width", "axis"}, {"x2"});
+        builder.MakeNode("Neg", {"x2"}, {"nx2"});
+        builder.MakeNode("Concat", {"nx2", "x1"}, {"rotated"}, "", "", IntAttr("axis", -1));
+        builder.MakeNode("Mul", {"rotated", "sin"}, {"scaled_rotated"});
+        builder.MakeNode("Mul", {"X", "cos"}, {"scaled_x"});
+        builder.MakeNode("Add", {"scaled_rotated", "scaled_x"}, {"Y"});
+        if (share_input) {
+          builder.MakeNode("Identity", {"X"}, {"shared_x"});
+          builder.MakeOutput("shared_x", type, Shape({2, 4, 6, 8}));
+        }
+        builder.MakeOutput("Y", type, Shape({2, 4, 6, 8}));
+        if (expose_first) {
+          builder.MakeOutput("x1", type, Shape({2, 4, 6, 4}));
+        }
+        return builder;
+      };
+      core::builder::GraphBuilder builder = make_builder(4, false, true);
+      std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+      patterns.push_back(std::make_unique<onnx_patterns::FunctionHalfRotaryEmbeddingPattern>());
+      core::builder::GraphGraph graph(builder, std::move(patterns));
+      onnx_patterns::FunctionHalfRotaryEmbeddingPattern pattern;
+      ASSERT_EQ(pattern.Match(graph, builder.Nodes()[0]).pattern, &pattern);
+      graph.Optimize();
+      const auto has_node = [&](const std::string &op_type) {
+        return FindNode(builder, op_type) != builder.Nodes().size();
+      };
+      const std::size_t half = FindNode(builder, "HalfRotaryEmbedding");
+      ASSERT_TRUE(has_node("HalfRotaryEmbedding"));
+      ASSERT_TRUE(has_node("Identity"));
+      EXPECT_FALSE(has_node("Slice"));
+      EXPECT_FALSE(has_node("Neg"));
+      EXPECT_FALSE(has_node("Concat"));
+      EXPECT_FALSE(has_node("Mul"));
+      EXPECT_FALSE(has_node("Add"));
+      EXPECT_EQ(builder.Nodes()[half].output()[0].value(), "Y");
+
+      for (auto [second_start, expose_first] : {std::pair<int64_t, bool>{-4, false}, {4, true}}) {
+        core::builder::GraphBuilder rejected = make_builder(second_start, expose_first, false);
+        core::builder::GraphGraph rejected_graph(rejected);
+        EXPECT_EQ(pattern.Match(rejected_graph, rejected.Nodes()[0]).pattern, nullptr);
+      }
+    }
+  }
 }
 
 TEST(RotaryEmbeddingPattern, EmitsOnnxRotaryEmbeddingAndRejectsOldOpset) {
@@ -705,6 +771,8 @@ TEST(FunctionAttentionPattern, CreatesLocalAttentionAndRejectsPositiveInfinity) 
   EXPECT_EQ(replacement[0].input()[1].value(), "keys");
   EXPECT_EQ(replacement[0].input()[2].value(), "values");
   EXPECT_TRUE(HasFunction(builder, "LocalAttention_to1"));
+  OptimizeAndVerify<onnx_patterns::FunctionAttentionPattern>(builder);
+  EXPECT_NE(FindNode(builder, "LocalAttention_to1"), builder.Nodes().size());
 
   core::builder::GraphBuilder rejected = make_builder(std::numeric_limits<float>::infinity());
   core::builder::GraphGraph rejected_graph(rejected);

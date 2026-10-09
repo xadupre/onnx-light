@@ -724,6 +724,8 @@ public:
  *       │                    ┌─────────────────────┐
  *       │                    │        Split        │
  *       │                    └─────────────────────┘
+ *       │                    or two contiguous equal-width
+ *       │                    last-axis Slice operators
  *       │                       │               │
  *       │                       │ first         │ second
  *       │                       │               ↓
@@ -772,9 +774,11 @@ public:
  *                    Y
  * @endcode
  *
- * ``X`` must be rank four, opset 18 or newer is required, and Split and Concat
- * both act on the last axis. The Split either receives equal INT64 sizes, as
- * drawn, or carries ``num_outputs=2`` with no second input. The Concat is
+ * ``X`` must be rank four, opset 18 or newer is required, and the halves and
+ * Concat both act on the last axis. Split either receives equal INT64 sizes,
+ * as drawn, or carries ``num_outputs=2`` with no second input. Alternatively,
+ * two Slice nodes must cover a known even width using nonnegative contiguous
+ * equal halves and unit steps. The Concat is
  * canonical only when it rebuilds ``Neg(second), first``. Either Mul may hold
  * its cache on either input, both Mul results reach the same Add, and every
  * removed intermediate must be unshared.

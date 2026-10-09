@@ -384,10 +384,15 @@ std::vector<uint8_t> decrypt_from_blob_gcm(const uint8_t *data, size_t data_len,
   std::vector<uint8_t> plaintext(cipher_len + EVP_MAX_BLOCK_LENGTH);
   int out_len = 0;
   if (EVP_DecryptUpdate(ctx, plaintext.data(), &out_len, ciphertext,
-                        static_cast<int>(cipher_len)) != 1 ||
-      EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, TAG_LEN, const_cast<uint8_t *>(tag)) != 1) {
+                        static_cast<int>(cipher_len)) != 1) {
     EVP_CIPHER_CTX_free(ctx);
-    throw std::runtime_error("EVP_Decrypt(AES-256-GCM) failed: " + openssl_last_error());
+    throw std::runtime_error("EVP_DecryptUpdate(AES-256-GCM ciphertext) failed: " +
+                             openssl_last_error());
+  }
+  if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, TAG_LEN, const_cast<uint8_t *>(tag)) != 1) {
+    EVP_CIPHER_CTX_free(ctx);
+    throw std::runtime_error("EVP_CIPHER_CTX_ctrl(EVP_CTRL_GCM_SET_TAG) failed: " +
+                             openssl_last_error());
   }
   int final_len = 0;
   if (EVP_DecryptFinal_ex(ctx, plaintext.data() + out_len, &final_len) != 1) {

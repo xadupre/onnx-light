@@ -121,8 +121,8 @@ using FunctionMap = std::unordered_map<std::string, const FunctionProto *>;
  * The factory must not retain the supplied RuntimeContext by reference.
  * Factories must not share mutable kernel state between independent sessions.
  */
-using NodeKernelFn =
-    std::function<std::unique_ptr<KernelBase>(const NodeProto &node, RuntimeContext &rt)>;
+using NodeKernelFn = std::function<std::unique_ptr<KernelBase>(
+    const NodeProto &node, RuntimeContext &rt, const KernelContext &kernel_context)>;
 
 /**
  * Signature of a user-provided custom kernel callback. Registration adapts
@@ -136,6 +136,14 @@ using NodeKernelFn =
  * ``NodeProto::domain()`` — is normalised to ``"ai.onnx"``).
  */
 using CustomKernelFn = std::function<void(const NodeProto &, class RuntimeContext &)>;
+
+/**
+ * Signature of a custom kernel callback that also receives the immutable
+ * per-node context resolved from the owning model or function. Use this form
+ * when the callback constructs another kernel or depends on the node's opset.
+ */
+using ContextualCustomKernelFn =
+    std::function<void(const NodeProto &, class RuntimeContext &, const KernelContext &)>;
 
 /**
  * Name-keyed map of user-provided kernel factories consulted by
@@ -435,9 +443,10 @@ struct RuntimeContextOptions {
  *  * a :cpp:type:`TensorMap` carrying the graph inputs / initializers
  *    and every intermediate value produced by previously executed
  *    nodes (accessed through :cpp:func:`tensors`);
- *  * the construction-time :cpp:class:`KernelContext` (opset
- *    and any future construction-time inputs) used to instantiate
- *    each per-operator kernel (accessed through :cpp:func:`kernel_ctx`).
+ *  * the :cpp:class:`KernelContext` used for standalone node and legacy
+ *    graph/plan execution; model and function sessions replace its opset
+ *    from their own imports for each node (accessed through
+ *    :cpp:func:`kernel_ctx`).
  *
  * Grouping them in a single object keeps the dispatcher signatures
  * stable as more per-invocation state (allocators, device descriptors,
@@ -595,7 +604,6 @@ public:
   /// Kernel construction context (opset + allocator).
   KernelContext &kernel_ctx() noexcept { return kernel_ctx_; }
   const KernelContext &kernel_ctx() const noexcept { return kernel_ctx_; }
-
   /// Returns the allocator kernels should currently use to acquire and
   /// release :cpp:struct:`RawBuffer` instances — the *active* allocator. It
   /// equals :cpp:func:`execution_allocator` (the construction-time
@@ -772,6 +780,8 @@ public:
   /// preparation or mutable state should use :cpp:func:`RegisterKernelFn`.
   void RegisterCustomKernel(const std::string &domain, const std::string &op_type,
                             CustomKernelFn fn);
+  void RegisterCustomKernel(const std::string &domain, const std::string &op_type,
+                            ContextualCustomKernelFn fn);
 
   /// Removes the custom kernel registered for ``(domain, op_type)``.
   /// The empty domain is normalised to ``"ai.onnx"``; removes the entry for

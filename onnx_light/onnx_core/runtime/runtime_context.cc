@@ -421,6 +421,11 @@ void RuntimeContext::RegisterCustomKernel(const std::string &domain, const std::
   RegisterKernelFn(domain, op_type, device_, MakeCustomKernelFactory(std::move(fn)));
 }
 
+void RuntimeContext::RegisterCustomKernel(const std::string &domain, const std::string &op_type,
+                                          ContextualCustomKernelFn fn) {
+  RegisterKernelFn(domain, op_type, device_, MakeCustomKernelFactory(std::move(fn)));
+}
+
 RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name) const {
   RuntimeContext child(kernel_ctx_,
                        RuntimeContextOptions{

@@ -83,9 +83,7 @@ void RunModelViaSession(const ModelProto &model, RuntimeContext &rt) {
       rt.Set(init_name, TensorFromProto(tp), core::runtime::RuntimeEventKind::kInitializer);
     }
   }
-  const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
-  RuntimeSession session(plan);
-  session.SetInitializers(graph);
+  RuntimeSession session(model);
   session.Run(rt);
 }
 
@@ -102,7 +100,7 @@ TEST(BackendRunModel, TopKRejectsNonPositiveK) {
     const auto &inputs = tc.data_sets()[0].inputs;
     for (const int64_t k : {0, -1}) {
       SCOPED_TRACE(k);
-      RuntimeContext rt(KernelContext{DefaultOpset(GetDefaultOpsetVersion(model))});
+      RuntimeContext rt;
       rt.tensors()[inputs[0].name] = inputs[0];
       rt.tensors()[inputs[1].name] = Tensor::FromInt64(inputs[1].name, {1}, {k});
       EXPECT_THROW(RunModelViaSession(model, rt), std::invalid_argument);
@@ -217,7 +215,7 @@ void RunBackendCasesFor(const std::string &op_type,
       if (!accept_data_set(ds)) {
         continue;
       }
-      RuntimeContext rt(KernelContext(DefaultOpset(GetDefaultOpsetVersion(tc.model()))));
+      RuntimeContext rt;
       for (const Tensor &t : ds.inputs) {
         rt.Set(t.name, t);
       }
@@ -436,7 +434,7 @@ TEST(BackendRunModel, AttentionCausalMaskExpanded) {
         ASSERT_NE(expanded_node.op_type().value(), "Attention");
       }
       for (const DataSet &ds : it->data_sets()) {
-        RuntimeContext rt(KernelContext(DefaultOpset(GetDefaultOpsetVersion(expanded))));
+        RuntimeContext rt;
         for (const Tensor &input : ds.inputs) {
           rt.tensors()[input.name] = input;
         }
@@ -746,7 +744,7 @@ TEST(BackendRunModel, SequenceMap) {
         DefaultOpset(GetDefaultOpsetVersion(tc.model())));
 
     for (const DataSet &ds : tc.data_sets()) {
-      RuntimeContext rt(kctx);
+      RuntimeContext rt;
       for (const Tensor &t : ds.inputs) {
         rt.Set(t.name, t);
       }
@@ -800,7 +798,7 @@ TEST(BackendRunModel, SplitToSequence) {
         DefaultOpset(GetDefaultOpsetVersion(tc.model())));
 
     for (const DataSet &ds : tc.data_sets()) {
-      RuntimeContext rt(kctx);
+      RuntimeContext rt;
       for (const Tensor &t : ds.inputs) {
         rt.Set(t.name, t);
       }

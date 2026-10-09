@@ -149,7 +149,9 @@ public:
    * this when no precomputed plan is available: the session builds and owns
    * the plan itself, so a caller can create a runnable session from a model
    * alone (without first building an :cpp:class:`ExecutionPlan`). Kernel
-   * resolution is still deferred to the first :cpp:func:`Run`.
+   * resolution is still deferred to the first :cpp:func:`Run`. Kernel opsets
+   * come from ``model.opset_import``; missing domains, duplicate imports,
+   * unsupported versions, and conflicting legacy context opsets are rejected.
    *
    * @param model Model whose graph drives execution. The model (and the graph
    *              it owns) must remain immutable and outlive the session and
@@ -165,7 +167,9 @@ public:
   /**
    * Builds a session over ``plan``. Kernel resolution is deferred to the first
    * :cpp:func:`Run` (which supplies the :cpp:class:`RuntimeContext` the
-   * kernels are resolved against).
+   * kernels are resolved against). A standalone plan (or bare graph) uses the caller's legacy
+   * :cpp:func:`RuntimeContext::kernel_ctx` opset. Nested sessions inherit the
+   * active model/function imports instead.
    *
    * @param plan Precomputed execution / release schedule. Its node list
    *             (:cpp:func:`ExecutionPlan::nodes`) drives execution. The plan
@@ -177,6 +181,12 @@ public:
    */
   explicit RuntimeSession(const ExecutionPlan &plan, int verbose = 0);
   RuntimeSession(const ExecutionPlan &plan, RuntimeSessionOptions options);
+  /// Builds a session over a function with its own opset imports.
+  explicit RuntimeSession(const FunctionProto &function, RuntimeSessionOptions options = {});
+  /// Builds a nested function session. An empty function import list inherits
+  /// ``inherited_opset_imports`` without copying it.
+  RuntimeSession(const FunctionProto &function, const OpsetImports *inherited_opset_imports,
+                 RuntimeSessionOptions options = {});
 
   // A session caches one owning ``std::unique_ptr<KernelBase>`` per node (see
   // :cpp:member:`kernels_`), so it is move-only. It is always created in place
@@ -358,7 +368,8 @@ protected:
   /// by :cpp:class:`SubgraphSession` so a control-flow subgraph can be a
   /// :cpp:class:`RuntimeSession` with the same default resolution behavior as a
   /// top-level graph session.
-  explicit RuntimeSession(const GraphProto &graph, int verbose = 0);
+  explicit RuntimeSession(const GraphProto &graph,
+                          const OpsetImports *inherited_opset_imports = nullptr, int verbose = 0);
 
   /// Default node-kernel resolution used during
   /// :cpp:func:`InitializeKernels`, so :cpp:class:`RuntimeSession` and
@@ -367,7 +378,8 @@ protected:
   /// kernel instance for ``node``.
   std::unique_ptr<KernelBase> ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt,
                                                 const std::string &domain,
-                                                const std::string &op_type) const;
+                                                const std::string &op_type,
+                                                const KernelContext &kernel_context) const;
 
 private:
   /// A node's kernel instance built once during
@@ -386,6 +398,7 @@ private:
   /// read in :cpp:member:`required_inputs_`.
   void InitializeKernels(RuntimeContext &rt,
                          const std::unordered_set<std::string> &preparable_inputs);
+  const OpsetImports *EffectiveOpsetImports() const noexcept;
 
   /// Seeds missing initializer names and returns the names installed by this session.
   std::unordered_set<std::string> SeedInitializers(RuntimeContext &rt) const;
@@ -432,11 +445,15 @@ private:
   void MaterializeBorrowedOutputs(RuntimeContext &rt) const;
 
   /// Plan owned by the session, referenced by :cpp:member:`plan_` when the
-  /// session is constructed from a :cpp:class:`ModelProto` (no external plan
-  /// supplied). Built from the model's graph. Left empty (and unused) when a
-  /// plan is passed in through the plan-taking constructor.
+  /// session is constructed from a :cpp:class:`ModelProto` or
+  /// :cpp:class:`FunctionProto` (no external plan supplied). Left empty
+  /// (and unused) when a plan is passed in through the plan-taking constructor.
   ExecutionPlan default_plan_;
   const ExecutionPlan &plan_;
+  /// Imports declared directly by a model or function. Subgraphs and functions
+  /// without imports borrow their enclosing session's immutable map instead.
+  std::optional<OpsetImports> owned_opset_imports_;
+  const OpsetImports *inherited_opset_imports_ = nullptr;
   std::unique_ptr<PreparedExecutionState> prepared_execution_state_;
   std::vector<PreparedKernel> kernels_;
   const GraphProto *initializer_graph_ = nullptr;

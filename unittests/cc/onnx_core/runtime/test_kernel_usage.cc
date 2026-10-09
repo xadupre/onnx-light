@@ -177,8 +177,9 @@ TEST(KernelUsage, NestedFunctionAndSubgraphDispatchBelongsToSession) {
   const std::string domain = "test.kernel_usage";
   core::runtime::RegisterKernelFn(
       domain, "Record", core::symbolic::Device::kCPU,
-      [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<KernelBase> {
-        auto kernel = std::make_unique<UsageRecordingKernel>(rt.kernel_ctx());
+      [](const NodeProto &node, RuntimeContext &,
+         const KernelContext &kernel_context) -> std::unique_ptr<KernelBase> {
+        auto kernel = std::make_unique<UsageRecordingKernel>(kernel_context);
         kernel->set_node(node);
         return kernel;
       });

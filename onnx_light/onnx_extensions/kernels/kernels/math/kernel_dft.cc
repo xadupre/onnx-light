@@ -252,7 +252,7 @@ void DFT::Run(RuntimeContext &rt) {
   const bool inverse = GetAttributeIntOrDefault(node, "inverse", 0) != 0;
   const bool onesided = GetAttributeIntOrDefault(node, "onesided", 0) != 0;
   int64_t axis = 1;
-  const int64_t opset_version = rt.kernel_ctx().opset.version;
+  const int64_t opset_version = ctx_.opset.version;
   if (opset_version >= 20) {
     const Tensor *axis_tensor = GetOptionalInput(node, 2, rt.tensors());
     if (axis_tensor != nullptr) {

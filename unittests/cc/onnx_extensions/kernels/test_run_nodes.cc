@@ -66,6 +66,12 @@ using onnx_kernels::kernel::KernelContext;
 
 namespace {
 
+void AddOpsetImport(ModelProto &model, const std::string &domain, int64_t version) {
+  OperatorSetIdProto *opset = model.add_opset_import();
+  opset->set_domain(domain);
+  opset->set_version(version);
+}
+
 class EnvVarGuard {
 public:
   explicit EnvVarGuard(const char *name) : name_(name) {
@@ -227,14 +233,11 @@ void RunGraphViaSession(const GraphProto &graph, RuntimeContext &rt) {
   session.Run(rt);
 }
 
-// Registers `model`'s local functions in `rt` and then runs `model.graph()`
-// the same way `RunGraphViaSession` runs a bare graph. This mirrors the
-// production `RunModel` replacement: callers register model-local functions
-// via `RegisterModelFunctions` and then drive the model's graph through
-// their own ExecutionPlan/RuntimeSession.
+// Registers model-local functions and runs the graph with its model imports.
 void RunModelViaSession(const ModelProto &model, RuntimeContext &rt) {
   RegisterModelFunctions(model, rt);
-  RunGraphViaSession(model.ref_graph(), rt);
+  RuntimeSession session(model);
+  session.Run(rt);
 }
 
 // Builds a single-node ``NodeProto`` of type ``op_type`` with the
@@ -581,8 +584,8 @@ TEST(RunNodes, RunNodeDispatchesDeviceQualifiedKernel) {
   bool cpu_invoked = false;
   bool gpu_invoked = false;
   RegisterKernelFn(domain, "DeviceOp", core::symbolic::Device::kCPU,
-                   [&cpu_invoked](const NodeProto &node,
-                                  RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
+                   [&cpu_invoked](const NodeProto &node, RuntimeContext &, const KernelContext &)
+                       -> std::unique_ptr<core::runtime::KernelBase> {
                      return std::make_unique<TestLambdaKernel>(
                          node, [&cpu_invoked](const NodeProto &node, RuntimeContext &rt) {
                            cpu_invoked = true;
@@ -590,8 +593,8 @@ TEST(RunNodes, RunNodeDispatchesDeviceQualifiedKernel) {
                          });
                    });
   RegisterKernelFn(domain, "DeviceOp", gpu,
-                   [&gpu_invoked](const NodeProto &node,
-                                  RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
+                   [&gpu_invoked](const NodeProto &node, RuntimeContext &, const KernelContext &)
+                       -> std::unique_ptr<core::runtime::KernelBase> {
                      return std::make_unique<TestLambdaKernel>(
                          node, [&gpu_invoked](const NodeProto &node, RuntimeContext &rt) {
                            gpu_invoked = true;
@@ -2459,6 +2462,9 @@ TEST(RunModel, ModelLocalFunctionCanCallAnotherFunction) {
   model.set_ir_version(10);
   OperatorSetIdProto *os = model.add_opset_import();
   os->set_version(18);
+  OperatorSetIdProto *custom_import = model.add_opset_import();
+  custom_import->set_domain("custom");
+  custom_import->set_version(1);
 
   FunctionProto *twice = model.add_functions();
   twice->set_name("Twice");
@@ -2527,6 +2533,12 @@ TEST(RunModel, ModelLocalFunctionCallsAnotherFunctionAcrossDomains) {
   model.set_ir_version(10);
   OperatorSetIdProto *os = model.add_opset_import();
   os->set_version(18);
+  OperatorSetIdProto *outer_import = model.add_opset_import();
+  outer_import->set_domain("outer");
+  outer_import->set_version(1);
+  OperatorSetIdProto *inner_import = model.add_opset_import();
+  inner_import->set_domain("inner");
+  inner_import->set_version(1);
 
   FunctionProto *square = model.add_functions();
   square->set_name("Square");
@@ -2601,6 +2613,9 @@ TEST(RunModel, ModelLocalFunctionThreeLevelNestedCalls) {
   model.set_ir_version(10);
   OperatorSetIdProto *os = model.add_opset_import();
   os->set_version(18);
+  OperatorSetIdProto *custom_import = model.add_opset_import();
+  custom_import->set_domain("custom");
+  custom_import->set_version(1);
 
   FunctionProto *inner = model.add_functions();
   inner->set_name("Inner");
@@ -2683,6 +2698,9 @@ TEST(RunModel, ModelLocalFunctionOverloadDisambiguation) {
   model.set_ir_version(10);
   OperatorSetIdProto *os = model.add_opset_import();
   os->set_version(18);
+  OperatorSetIdProto *custom_import = model.add_opset_import();
+  custom_import->set_domain("custom");
+  custom_import->set_version(1);
 
   FunctionProto *f_sum = model.add_functions();
   f_sum->set_name("Combine");
@@ -4556,6 +4574,7 @@ TEST(RunNodes, RuntimeSessionRoutesDeclaredOutputsToIOAllocator) {
 
   ModelProto model;
   model.set_ir_version(10);
+  AddOpsetImport(model, "my.domain", 1);
   GraphProto *g = model.add_graph();
   g->set_name("main");
   // "z" is an intermediate, not a declared graph output.
@@ -4619,6 +4638,7 @@ TEST(RunNodes, RuntimeSessionRoutesMixedOutputsPerSlotDeclaredFirst) {
 
   ModelProto model;
   model.set_ir_version(10);
+  AddOpsetImport(model, "my.domain", 1);
   GraphProto *g = model.add_graph();
   g->set_name("main");
   NodeProto *n = g->add_node();
@@ -4671,6 +4691,7 @@ TEST(RunNodes, RuntimeSessionRoutesMixedOutputsPerSlotIntermediateFirst) {
 
   ModelProto model;
   model.set_ir_version(10);
+  AddOpsetImport(model, "my.domain", 1);
   GraphProto *g = model.add_graph();
   g->set_name("main");
   NodeProto *n = g->add_node();
@@ -4719,6 +4740,7 @@ TEST(RunNodes, RuntimeSessionKeepsSingleAllocatorBehaviorWithoutIOAllocator) {
 
   ModelProto model;
   model.set_ir_version(10);
+  AddOpsetImport(model, "my.domain", 1);
   GraphProto *g = model.add_graph();
   g->set_name("main");
   NodeProto *n = g->add_node();
@@ -4779,6 +4801,7 @@ TEST(RunNodes, RuntimeSessionSlotAwareKernelAllocatesEachOutputInFinalArena) {
 
   ModelProto model;
   model.set_ir_version(10);
+  AddOpsetImport(model, "my.domain", 1);
   GraphProto *g = model.add_graph();
   g->set_name("main");
   NodeProto *n = g->add_node();
@@ -4860,6 +4883,7 @@ TEST(RunNodes, RuntimeSessionSlotAwareKernelWorkspaceStaysInExecutionArena) {
 
   ModelProto model;
   model.set_ir_version(10);
+  AddOpsetImport(model, "my.domain", 1);
   GraphProto *g = model.add_graph();
   g->set_name("main");
   NodeProto *n = g->add_node();
@@ -5182,6 +5206,9 @@ TEST(RuntimeSession, IsReusableAcrossMultipleRuns) {
 
 TEST(RuntimeSession, BorrowsRawAndTypedInitializersAcrossContextClear) {
   ModelProto model;
+  OperatorSetIdProto *custom_import = model.add_opset_import();
+  custom_import->set_domain("test.initializers");
+  custom_import->set_version(1);
   GraphProto *graph = model.add_graph();
   TensorProto *raw = graph->add_initializer();
   raw->set_name("raw");
@@ -5233,6 +5260,9 @@ TEST(RuntimeSession, BorrowsRawAndTypedInitializersAcrossContextClear) {
 
 TEST(RuntimeSession, InputOverridesCachedInitializerForOneRun) {
   ModelProto model;
+  OperatorSetIdProto *custom_import = model.add_opset_import();
+  custom_import->set_domain("test.initializers");
+  custom_import->set_version(1);
   GraphProto *graph = model.add_graph();
   TensorProto *initializer = graph->add_initializer();
   initializer->set_name("value");
@@ -5274,8 +5304,9 @@ TEST(RuntimeSession, ConstructsExactlyOneKernelPerNodeAcrossMultipleRuns) {
 
   const std::string domain = "test.onnxlight.counting_kernel";
   RegisterKernelFn(domain, "CountingOp", core::symbolic::Device::kCPU,
-                   [&construct_count, &invoke_count](const NodeProto &node, RuntimeContext &)
-                       -> std::unique_ptr<core::runtime::KernelBase> {
+                   [&construct_count, &invoke_count](
+                       const NodeProto &node, RuntimeContext &,
+                       const KernelContext &) -> std::unique_ptr<core::runtime::KernelBase> {
                      ++construct_count;
                      return std::make_unique<TestLambdaKernel>(
                          node, [&invoke_count](const NodeProto &node, RuntimeContext &rt) {
@@ -5332,11 +5363,11 @@ TEST(RuntimeSession, KeepsResolvedKernelTuningImmutable) {
                       key.tuning_abi},
       {{"algorithm.threshold", int64_t{10}}}};
   core::runtime::RegisterKernelTuningSchema(KernelTuningSchema(defaults));
-  RegisterKernelFn(
-      domain, "TunableOp", core::symbolic::Device::kCPU,
-      [key](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
-        return std::make_unique<TestTunableKernel>(node, key);
-      });
+  RegisterKernelFn(domain, "TunableOp", core::symbolic::Device::kCPU,
+                   [key](const NodeProto &node, RuntimeContext &,
+                         const KernelContext &) -> std::unique_ptr<core::runtime::KernelBase> {
+                     return std::make_unique<TestTunableKernel>(node, key);
+                   });
 
   KernelTuningParameters first = defaults;
   first.values["algorithm.threshold"] = int64_t{20};
@@ -5408,16 +5439,16 @@ TEST(RuntimeSession, ConstructsIfBranchKernelOnceAcrossMultipleRuns) {
   invoke_count = 0;
 
   const std::string domain = "test.onnxlight.counting_kernel_if";
-  RegisterKernelFn(
-      domain, "CountingOp", core::symbolic::Device::kCPU,
-      [](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
-        ++construct_count;
-        return std::make_unique<TestLambdaKernel>(node,
-                                                  [](const NodeProto &node, RuntimeContext &rt) {
-                                                    ++invoke_count;
-                                                    rt.Set(node.output(0), rt.Get(node.input(0)));
-                                                  });
-      });
+  RegisterKernelFn(domain, "CountingOp", core::symbolic::Device::kCPU,
+                   [](const NodeProto &node, RuntimeContext &,
+                      const KernelContext &) -> std::unique_ptr<core::runtime::KernelBase> {
+                     ++construct_count;
+                     return std::make_unique<TestLambdaKernel>(
+                         node, [](const NodeProto &node, RuntimeContext &rt) {
+                           ++invoke_count;
+                           rt.Set(node.output(0), rt.Get(node.input(0)));
+                         });
+                   });
 
   GraphProto then_branch;
   ValueInfoProto then_y;
@@ -5483,16 +5514,16 @@ TEST(RuntimeSession, ConstructsLoopBodyKernelOnceAcrossMultipleRuns) {
   invoke_count = 0;
 
   const std::string domain = "test.onnxlight.counting_kernel_loop";
-  RegisterKernelFn(
-      domain, "CountingOp", core::symbolic::Device::kCPU,
-      [](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
-        ++construct_count;
-        return std::make_unique<TestLambdaKernel>(node,
-                                                  [](const NodeProto &node, RuntimeContext &rt) {
-                                                    ++invoke_count;
-                                                    rt.Set(node.output(0), rt.Get(node.input(0)));
-                                                  });
-      });
+  RegisterKernelFn(domain, "CountingOp", core::symbolic::Device::kCPU,
+                   [](const NodeProto &node, RuntimeContext &,
+                      const KernelContext &) -> std::unique_ptr<core::runtime::KernelBase> {
+                     ++construct_count;
+                     return std::make_unique<TestLambdaKernel>(
+                         node, [](const NodeProto &node, RuntimeContext &rt) {
+                           ++invoke_count;
+                           rt.Set(node.output(0), rt.Get(node.input(0)));
+                         });
+                   });
 
   GraphProto body;
   body.set_name("loop_body");
@@ -5556,16 +5587,16 @@ TEST(RuntimeSession, ConstructsScanBodyKernelOnceAcrossMultipleRuns) {
   invoke_count = 0;
 
   const std::string domain = "test.onnxlight.counting_kernel_scan";
-  RegisterKernelFn(
-      domain, "CountingOp", core::symbolic::Device::kCPU,
-      [](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
-        ++construct_count;
-        return std::make_unique<TestLambdaKernel>(node,
-                                                  [](const NodeProto &node, RuntimeContext &rt) {
-                                                    ++invoke_count;
-                                                    rt.Set(node.output(0), rt.Get(node.input(0)));
-                                                  });
-      });
+  RegisterKernelFn(domain, "CountingOp", core::symbolic::Device::kCPU,
+                   [](const NodeProto &node, RuntimeContext &,
+                      const KernelContext &) -> std::unique_ptr<core::runtime::KernelBase> {
+                     ++construct_count;
+                     return std::make_unique<TestLambdaKernel>(
+                         node, [](const NodeProto &node, RuntimeContext &rt) {
+                           ++invoke_count;
+                           rt.Set(node.output(0), rt.Get(node.input(0)));
+                         });
+                   });
 
   GraphProto body;
   body.set_name("scan_body");
@@ -5624,16 +5655,16 @@ TEST(RuntimeSession, ConstructsSequenceMapBodyKernelOnceAcrossMultipleRuns) {
   invoke_count = 0;
 
   const std::string domain = "test.onnxlight.counting_kernel_seqmap";
-  RegisterKernelFn(
-      domain, "CountingOp", core::symbolic::Device::kCPU,
-      [](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
-        ++construct_count;
-        return std::make_unique<TestLambdaKernel>(node,
-                                                  [](const NodeProto &node, RuntimeContext &rt) {
-                                                    ++invoke_count;
-                                                    rt.Set(node.output(0), rt.Get(node.input(0)));
-                                                  });
-      });
+  RegisterKernelFn(domain, "CountingOp", core::symbolic::Device::kCPU,
+                   [](const NodeProto &node, RuntimeContext &,
+                      const KernelContext &) -> std::unique_ptr<core::runtime::KernelBase> {
+                     ++construct_count;
+                     return std::make_unique<TestLambdaKernel>(
+                         node, [](const NodeProto &node, RuntimeContext &rt) {
+                           ++invoke_count;
+                           rt.Set(node.output(0), rt.Get(node.input(0)));
+                         });
+                   });
 
   GraphProto body;
   body.set_name("seq_map_body");
@@ -5683,16 +5714,16 @@ TEST(SubgraphSession, ReusesInheritedKernelInitializationAcrossMultipleRuns) {
   invoke_count = 0;
 
   const std::string domain = "test.onnxlight.counting_kernel_subgraph";
-  RegisterKernelFn(
-      domain, "CountingOp", core::symbolic::Device::kCPU,
-      [](const NodeProto &node, RuntimeContext &) -> std::unique_ptr<core::runtime::KernelBase> {
-        ++construct_count;
-        return std::make_unique<TestLambdaKernel>(node,
-                                                  [](const NodeProto &node, RuntimeContext &rt) {
-                                                    ++invoke_count;
-                                                    rt.Set(node.output(0), rt.Get(node.input(0)));
-                                                  });
-      });
+  RegisterKernelFn(domain, "CountingOp", core::symbolic::Device::kCPU,
+                   [](const NodeProto &node, RuntimeContext &,
+                      const KernelContext &) -> std::unique_ptr<core::runtime::KernelBase> {
+                     ++construct_count;
+                     return std::make_unique<TestLambdaKernel>(
+                         node, [](const NodeProto &node, RuntimeContext &rt) {
+                           ++invoke_count;
+                           rt.Set(node.output(0), rt.Get(node.input(0)));
+                         });
+                   });
 
   GraphProto graph;
   graph.set_name("subgraph");
@@ -5701,7 +5732,7 @@ TEST(SubgraphSession, ReusesInheritedKernelInitializationAcrossMultipleRuns) {
   graph.add_output()->set_name("y");
 
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
-  core::runtime::SubgraphSession session(rt, graph);
+  core::runtime::SubgraphSession session(graph);
 
   core::runtime::Tensors outputs =
       session.Run({{"x", Tensor::FromFloat("x", {2}, {1.0f, 2.0f})}}, rt, "body");
@@ -6559,6 +6590,170 @@ ModelProto MakeAddModelWithShapes(const std::vector<std::pair<int64_t, std::stri
 }
 
 } // namespace
+
+TEST(RuntimeSessionOpsets, ModelImportsDetermineKernelConstructionByDomain) {
+  const std::string domain = "test.onnxlight.opset";
+  std::vector<core::runtime::OpsetId> constructed;
+  auto observe = [&constructed](const NodeProto &node, RuntimeContext &,
+                                const KernelContext &kernel_context) {
+    constructed.push_back(kernel_context.opset);
+    return std::make_unique<TestLambdaKernel>(node, [](const NodeProto &node, RuntimeContext &rt) {
+      rt.Set(node.output(0), rt.Get(node.input(0)));
+    });
+  };
+  core::runtime::RegisterKernelFn("ai.onnx", "ObserveDefault", core::symbolic::Device::kCPU,
+                                  observe);
+  core::runtime::RegisterKernelFn(domain, "Observe", core::symbolic::Device::kCPU, observe);
+  ModelProto model = MakeAddModelWithShapes({{1, ""}}, {{1, ""}}, {{1, ""}});
+  model.ref_opset_import()[0].set_version(23);
+  NodeProto *default_node = model.ref_graph().add_node();
+  default_node->set_op_type("ObserveDefault");
+  default_node->add_input("z");
+  default_node->add_output("observed");
+  NodeProto *custom = model.ref_graph().add_node();
+  custom->set_domain(domain);
+  custom->set_op_type("Observe");
+  custom->add_input("observed");
+  custom->add_output("result");
+  model.add_opset_import()->set_domain(domain);
+  model.ref_opset_import()[1].set_version(2);
+
+  RuntimeContext rt;
+  rt.Set("x", Tensor::FromFloat("x", {1}, {1}));
+  rt.Set("y", Tensor::FromFloat("y", {1}, {2}));
+  RuntimeSession session(model);
+  session.Run(rt);
+  ASSERT_EQ(constructed.size(), 2);
+  EXPECT_EQ(constructed[0].domain, "ai.onnx");
+  EXPECT_EQ(constructed[0].version, 23);
+  EXPECT_EQ(constructed[1].domain, domain);
+  EXPECT_EQ(constructed[1].version, 2);
+  EXPECT_EQ(rt.Get("result").AsFloat()[0], 3);
+  EXPECT_EQ(rt.kernel_ctx().opset.version, 0);
+
+  RuntimeContext mismatch(KernelContext(DefaultOpset(18)));
+  EXPECT_THROW(session.Run(mismatch), std::invalid_argument);
+  ModelProto missing_model;
+  missing_model.CopyFrom(model);
+  missing_model.ref_opset_import().resize(1);
+  RuntimeSession missing(missing_model);
+  EXPECT_THROW(missing.Run(rt), std::invalid_argument);
+}
+
+TEST(RuntimeSessionOpsets, RejectsDuplicateAndInvalidImports) {
+  ModelProto model = MakeAddModelWithShapes({{1, ""}}, {{1, ""}}, {{1, ""}});
+  OperatorSetIdProto *alias = model.add_opset_import();
+  alias->set_domain("ai.onnx");
+  alias->set_version(19);
+  EXPECT_THROW(RuntimeSession session(model), std::invalid_argument);
+  model.ref_opset_import().resize(1);
+  model.ref_opset_import()[0].set_version(0);
+  EXPECT_THROW(RuntimeSession session(model), std::invalid_argument);
+  model.ref_opset_import()[0].set_version(1000);
+  EXPECT_THROW(RuntimeSession session(model), std::invalid_argument);
+  model.ref_opset_import().clear();
+  RuntimeContext rt;
+  RuntimeSession missing(model);
+  EXPECT_THROW(missing.Run(rt), std::invalid_argument);
+}
+
+TEST(RuntimeSessionOpsets, LegacyPlanUsesExplicitContextVersion) {
+  ModelProto model = MakeAddModelWithShapes({{1, ""}}, {{1, ""}}, {{1, ""}});
+  ExecutionPlan plan(model.graph());
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {1}, {1}));
+  rt.Set("y", Tensor::FromFloat("y", {1}, {2}));
+  RuntimeSession session(plan);
+  session.Run(rt);
+  EXPECT_EQ(rt.Get("z").AsFloat()[0], 3);
+  EXPECT_EQ(rt.kernel_ctx().opset.version, 18);
+}
+
+TEST(RuntimeSessionOpsets, FunctionBodyUsesItsOwnImports) {
+  int64_t observed_version = 0;
+  core::runtime::RegisterKernelFn("ai.onnx", "ObserveInFunction", core::symbolic::Device::kCPU,
+                                  [&observed_version](const NodeProto &node, RuntimeContext &,
+                                                      const KernelContext &kernel_context) {
+                                    observed_version = kernel_context.opset.version;
+                                    return std::make_unique<TestLambdaKernel>(
+                                        node, [](const NodeProto &node, RuntimeContext &rt) {
+                                          rt.Set(node.output(0), rt.Get(node.input(0)));
+                                        });
+                                  });
+  ModelProto model;
+  model.add_opset_import()->set_version(23);
+  OperatorSetIdProto *local = model.add_opset_import();
+  local->set_domain("test.function.opset");
+  local->set_version(1);
+  FunctionProto *function = model.add_functions();
+  function->set_domain("test.function.opset");
+  function->set_name("Call");
+  function->add_input("a");
+  function->add_output("b");
+  function->add_opset_import()->set_version(18);
+  NodeProto *body = function->add_node();
+  body->set_op_type("ObserveInFunction");
+  body->add_input("a");
+  body->add_output("b");
+  GraphProto *graph = model.add_graph();
+  NodeProto *call = graph->add_node();
+  call->set_domain("test.function.opset");
+  call->set_op_type("Call");
+  call->add_input("x");
+  call->add_output("y");
+  graph->add_output()->set_name("y");
+  RuntimeContext rt;
+  rt.Set("x", Tensor::FromFloat("x", {1}, {5}));
+  RegisterModelFunctions(model, rt);
+  RuntimeSession session(model);
+  session.Run(rt);
+  EXPECT_EQ(observed_version, 18);
+  EXPECT_EQ(rt.Get("y").AsFloat()[0], 5);
+}
+
+TEST(RuntimeSessionOpsets, ControlFlowBodyInheritsModelImports) {
+  int64_t observed_version = 0;
+  const std::string domain = "test.subgraph.opset";
+  core::runtime::RegisterKernelFn(domain, "ObserveInBranch", core::symbolic::Device::kCPU,
+                                  [&observed_version](const NodeProto &node, RuntimeContext &,
+                                                      const KernelContext &kernel_context) {
+                                    observed_version = kernel_context.opset.version;
+                                    return std::make_unique<TestLambdaKernel>(
+                                        node, [](const NodeProto &node, RuntimeContext &rt) {
+                                          rt.Set(node.output(0), rt.Get(node.input(0)));
+                                        });
+                                  });
+  ModelProto model;
+  model.add_opset_import()->set_version(23);
+  OperatorSetIdProto *custom = model.add_opset_import();
+  custom->set_domain(domain);
+  custom->set_version(4);
+  GraphProto *graph = model.add_graph();
+  NodeProto *branch = graph->add_node();
+  branch->set_op_type("If");
+  branch->add_input("cond");
+  branch->add_output("y");
+  for (const char *name : {"then_branch", "else_branch"}) {
+    AttributeProto *attr = branch->add_attribute();
+    attr->set_name(name);
+    attr->set_type(AttributeProto::AttributeType::GRAPH);
+    GraphProto *body = attr->add_g();
+    NodeProto *probe = body->add_node();
+    probe->set_domain(domain);
+    probe->set_op_type("ObserveInBranch");
+    probe->add_input("x");
+    probe->add_output("out");
+    body->add_output()->set_name("out");
+  }
+  graph->add_output()->set_name("y");
+  RuntimeContext rt;
+  rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
+  rt.Set("x", Tensor::FromFloat("x", {1}, {5}));
+  RuntimeSession session(model);
+  session.Run(rt);
+  EXPECT_EQ(observed_version, 4);
+  EXPECT_EQ(rt.Get("y").AsFloat()[0], 5);
+}
 
 TEST(RuntimeSessionCheckShapes, DefaultsToDisabled) {
   ModelProto model = MakeAddModelWithShapes({{2, ""}}, {{2, ""}}, {{2, ""}});

@@ -126,11 +126,11 @@ int main(int argc, char **argv) {
   }
 
   RegisterKernelTuningSchema(KernelTuningSchema(MakeParameters()));
-  RegisterKernelFn(
-      kDomain, "TunedIncrement", Device::kCPU,
-      [](const NodeProto &node, RuntimeContext &runtime) -> std::unique_ptr<KernelBase> {
-        return std::make_unique<TunedIncrementKernel>(node, runtime.kernel_ctx(), MakeKey());
-      });
+  RegisterKernelFn(kDomain, "TunedIncrement", Device::kCPU,
+                   [](const NodeProto &node, RuntimeContext &,
+                      const KernelContext &kernel_context) -> std::unique_ptr<KernelBase> {
+                     return std::make_unique<TunedIncrementKernel>(node, kernel_context, MakeKey());
+                   });
 
   GraphProto graph;
   graph.add_input()->set_name("x");

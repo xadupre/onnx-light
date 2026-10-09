@@ -212,7 +212,7 @@ TEST(BackendTestCase, AbsExpectedOutputsIgnoreExternalKernelOverrides) {
   RestoreAbsKernelOverrides restore;
   core::runtime::RegisterKernelFn(
       "", "Abs", core::symbolic::Device::kCPU,
-      [](const NodeProto &, core::runtime::RuntimeContext &)
+      [](const NodeProto &, core::runtime::RuntimeContext &, const core::runtime::KernelContext &)
           -> std::unique_ptr<core::runtime::KernelBase> { return nullptr; });
   core::runtime::RegisterGlobalCustomKernel(
       "", "Abs", [](const NodeProto &node, core::runtime::RuntimeContext &ctx) {

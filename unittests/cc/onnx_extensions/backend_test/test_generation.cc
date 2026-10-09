@@ -42,8 +42,7 @@ TEST(Generation, BackendAttentionModels) {
     const bool persistent = !model.graph().persistent_bindings().empty();
     for (size_t capacity : {size_t{0}, size_t{32}}) {
       SCOPED_TRACE(capacity);
-      RuntimeContext context(KernelContext(DefaultOpset(23)),
-                             RuntimeContextOptions{.events_enabled = true});
+      RuntimeContext context(RuntimeContextOptions{.events_enabled = true});
       RuntimeSession session(model);
       for (const auto &[name, value] : feeds)
         context.PutValue(name, value.BorrowView());
@@ -99,7 +98,7 @@ TEST(Generation, TemperatureMatchesCachedAndFullPrefixDecoding) {
     RuntimeValueMap feeds;
     for (const auto &input : test.data_sets()[0].inputs)
       feeds.emplace(input.name, RuntimeValue(input.ToOwned()));
-    RuntimeContext context(KernelContext(DefaultOpset(23)));
+    RuntimeContext context;
     GenerationOptions options;
     options.max_new_tokens = 12;
     options.temperature = 2.;
@@ -141,7 +140,7 @@ TEST(Generation, RetainsOwnedInitialCounterWithoutChangingCaller) {
   for (const auto &tensor : cases[0].data_sets()[0].inputs)
     feeds.emplace(tensor.name, RuntimeValue(tensor.ToOwned()));
   feeds.emplace("counter", RuntimeValue(Tensor::FromInt64("counter", {}, {0})));
-  RuntimeContext context(KernelContext(DefaultOpset(23)));
+  RuntimeContext context;
   GenerationOptions options;
   options.max_new_tokens = 3;
   EXPECT_EQ(Tokens(Generate(model, context, feeds, options)),

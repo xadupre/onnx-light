@@ -44,7 +44,9 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime::detail {
  */
 std::unique_ptr<KernelBase> ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt,
                                                      const std::string &domain,
-                                                     const std::string &op_type);
+                                                     const std::string &op_type,
+                                                     const KernelContext &kernel_context,
+                                                     const OpsetImports *opset_imports = nullptr);
 
 /**
  * Emits the ReferenceEvaluator verbose progress line for one node dispatch. The

@@ -18,6 +18,7 @@
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using core::runtime::KernelBase;
+using core::runtime::KernelContext;
 using core::runtime::NodeKernelFn;
 using core::runtime::RuntimeContext;
 using core::runtime::RuntimeSession;
@@ -81,8 +82,8 @@ private:
 
 NodeKernelFn MakeFactory(const std::shared_ptr<LifecycleState> &state, float multiplier = 1) {
   // Global dispatch entries outlive tests; they must not retain test state.
-  return [weak = std::weak_ptr<LifecycleState>(state), multiplier](const NodeProto &node,
-                                                                   RuntimeContext &) {
+  return [weak = std::weak_ptr<LifecycleState>(state),
+          multiplier](const NodeProto &node, RuntimeContext &, const KernelContext &) {
     auto current = weak.lock();
     if (!current) {
       throw std::logic_error("Lifecycle test registration is no longer active");
@@ -125,6 +126,7 @@ Tensor MakeInput(int64_t rows, float value = 4, int64_t columns = 20) {
 
 ModelProto MakeGemmModel(bool overridable_weight) {
   ModelProto model;
+  model.add_opset_import()->set_version(13);
   GraphProto *graph = model.mutable_graph();
   graph->add_input()->set_name("A");
   if (overridable_weight) {
@@ -148,6 +150,7 @@ ModelProto MakeGemmModel(bool overridable_weight) {
 
 ModelProto MakeManyGemmModel(size_t count) {
   ModelProto model;
+  model.add_opset_import()->set_version(13);
   GraphProto *graph = model.mutable_graph();
   graph->add_input()->set_name("A");
   for (size_t i = 0; i < count; ++i) {
@@ -504,6 +507,42 @@ public:
 private:
   std::string domain_;
 };
+
+TEST_P(KernelLifecycle, ContextualCallbackReceivesModelOpset) {
+  const std::string domain = Domain();
+  ModelProto model;
+  auto *opset = model.add_opset_import();
+  opset->set_domain(domain);
+  opset->set_version(7);
+  *model.mutable_graph() = MakeGraph(domain);
+
+  int64_t observed_version = 0;
+  const core::runtime::OpsetImports *observed_imports = nullptr;
+  auto callback = [&](const NodeProto &node, RuntimeContext &rt,
+                      const KernelContext &kernel_context) {
+    observed_version = kernel_context.opset.version;
+    observed_imports = kernel_context.opset_imports;
+    const Tensor &input = rt.Get(node.input(0));
+    rt.Set(node.output(0),
+           Tensor::FromFloat(node.output(0), input.shape,
+                             std::vector<float>(static_cast<size_t>(input.element_count()), 7)));
+  };
+
+  GlobalCallbackGuard cleanup(domain);
+  RuntimeContext rt(core::runtime::KernelContext(core::backend_test::DefaultOpset(18)));
+  if (GetParam())
+    rt.RegisterCustomKernel(domain, "Scale", callback);
+  else
+    core::runtime::RegisterGlobalCustomKernel(domain, "Scale", callback);
+  RuntimeSession session(model);
+  Feed(rt, 1);
+  session.Run(rt);
+
+  EXPECT_EQ(observed_version, 7);
+  ASSERT_NE(observed_imports, nullptr);
+  EXPECT_EQ(observed_imports->at(domain), 7);
+  ExpectOutput(rt.Get("y"), 1, 7);
+}
 
 TEST_P(KernelLifecycle, CallbackKeepsOriginalNodeAndIndependentMutableCapture) {
   GraphProto graph = MakeGraph(Domain(), true);

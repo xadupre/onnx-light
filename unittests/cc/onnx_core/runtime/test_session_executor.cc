@@ -288,7 +288,8 @@ TEST(SessionExecutor, MakeSessionKernelInstallsBackendExecutionScope) {
   session_kernel_node = nullptr;
 
   std::unique_ptr<core::runtime::KernelBase> kernel =
-      core::runtime::MakeSessionKernel<TestSessionKernel, TestSessionExecutionScope>(node, rt);
+      core::runtime::MakeSessionKernel<TestSessionKernel, TestSessionExecutionScope>(
+          node, rt.kernel_ctx());
 
   EXPECT_FALSE(session_execution_scope_active);
   kernel->Run(rt);

@@ -198,7 +198,7 @@ Tensors Scan::operator()(RuntimeContext &rt, const GraphProto &body, const Tenso
   // Build a single session over the body once and reuse it for every
   // iteration (including the zero-trip-count template run below) instead of
   // re-resolving the body's kernels on every call.
-  SubgraphSession session(rt, body);
+  SubgraphSession session(body, ctx_.opset_imports);
   return (*this)(rt, body, session, initial_state, scan_inputs, scan_input_axes_in,
                  scan_input_directions_in, scan_output_axes, scan_output_directions);
 }

@@ -83,6 +83,7 @@ TEST(runtime_parameters, RuntimeSessionFromModelBuildsPlan) {
   // graph directly. Here a single-node Add graph is run against a context that
   // supplies its two external inputs.
   ModelProto model;
+  model.add_opset_import()->set_version(18);
   GraphProto &graph = model.ref_graph();
   NodeProto *node = graph.add_node();
   node->set_op_type("Add");
@@ -129,6 +130,7 @@ TEST(runtime_parameters, RuntimeSessionRunEnablesVerboseOnContext) {
   // A non-zero session verbosity given at construction is used while the graph
   // runs, but it does not mutate the RuntimeContext's own verbosity.
   ModelProto model;
+  model.add_opset_import()->set_version(18);
   GraphProto &graph = model.ref_graph();
   NodeProto *node = graph.add_node();
   node->set_op_type("Add");
@@ -150,6 +152,7 @@ TEST(runtime_parameters, RuntimeSessionRunLeavesContextVerboseWhenZero) {
   // A zero verbosity (the default) leaves the context's own verbosity untouched
   // so callers can drive verbosity through the RuntimeContext directly.
   ModelProto model;
+  model.add_opset_import()->set_version(18);
   GraphProto &graph = model.ref_graph();
   NodeProto *node = graph.add_node();
   node->set_op_type("Add");

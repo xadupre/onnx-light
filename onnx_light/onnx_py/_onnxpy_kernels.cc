@@ -814,6 +814,16 @@ nb::object TensorToNumpy(Tensor &tensor, RuntimeContext &rt) {
 
 class ReferenceEvaluatorRunner {
 public:
+  ReferenceEvaluatorRunner(const ModelProto &model, std::vector<std::string> input_names,
+                           std::unordered_set<std::string> map_inputs,
+                           std::unordered_set<std::string> sequence_inputs,
+                           std::vector<std::string> output_names, RuntimeSessionOptions options)
+      : ReferenceEvaluatorRunner(model.graph(), std::move(input_names), std::move(map_inputs),
+                                 std::move(sequence_inputs), std::move(output_names),
+                                 std::move(options)) {
+    model_ = &model;
+  }
+
   ReferenceEvaluatorRunner(const GraphProto &graph, std::vector<std::string> input_names,
                            std::unordered_set<std::string> map_inputs,
                            std::unordered_set<std::string> sequence_inputs,
@@ -942,17 +952,19 @@ private:
   void EnsureSession() {
     if (session_)
       return;
-    if (graph_ != nullptr) {
+    if (model_ != nullptr) {
+      session_ = std::make_unique<RuntimeSession>(*model_, options_);
+    } else if (graph_ != nullptr) {
       plan_ = std::make_unique<ExecutionPlan>(*graph_);
       session_ = std::make_unique<RuntimeSession>(*plan_, options_);
       session_->SetDeclaredShapes(*graph_);
       session_->SetInitializers(*graph_);
     } else {
-      plan_ = std::make_unique<ExecutionPlan>(*function_);
-      session_ = std::make_unique<RuntimeSession>(*plan_, options_);
+      session_ = std::make_unique<RuntimeSession>(*function_, options_);
     }
   }
 
+  const ModelProto *model_ = nullptr;
   const GraphProto *graph_ = nullptr;
   const FunctionProto *function_ = nullptr;
   std::vector<std::string> input_names_;
@@ -2150,6 +2162,19 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       "cached RuntimeSession, and expose its outputs in one Python-to-C++ call.")
       .def(
           "__init__",
+          [](ReferenceEvaluatorRunner *self, const ModelProto &model,
+             std::vector<std::string> input_names, std::unordered_set<std::string> map_inputs,
+             std::unordered_set<std::string> sequence_inputs, std::vector<std::string> output_names,
+             RuntimeSessionOptions options) {
+            new (self) ReferenceEvaluatorRunner(model, std::move(input_names),
+                                                std::move(map_inputs), std::move(sequence_inputs),
+                                                std::move(output_names), std::move(options));
+          },
+          nb::arg("model"), nb::arg("input_names"), nb::arg("map_inputs"),
+          nb::arg("sequence_inputs"), nb::arg("output_names"),
+          nb::arg("options") = RuntimeSessionOptions{}, nb::keep_alive<1, 2>())
+      .def(
+          "__init__",
           [](ReferenceEvaluatorRunner *self, const GraphProto &graph,
              std::vector<std::string> input_names, std::unordered_set<std::string> map_inputs,
              std::unordered_set<std::string> sequence_inputs, std::vector<std::string> output_names,
@@ -2328,7 +2353,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
                                           .release_intermediates = release_intermediates,
                                       });
           },
-          nb::arg("kernel_ctx"), nb::kw_only(), nb::arg("events_enabled") = false,
+          nb::arg("kernel_ctx") = KernelContext{}, nb::kw_only(), nb::arg("events_enabled") = false,
           nb::arg("verbose") = 0, nb::arg("release_intermediates") = false,
           nb::arg("allocator").none() = nullptr, nb::arg("io_allocator").none() = nullptr,
           nb::keep_alive<1, 6>(), nb::keep_alive<1, 7>())

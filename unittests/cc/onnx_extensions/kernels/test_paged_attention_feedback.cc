@@ -26,6 +26,11 @@ ModelProto PagedModel(bool gate = false, int64_t max_tokens = 8) {
   auto *opset = model.add_opset_import();
   opset->set_domain("ai.rt");
   opset->set_version(1);
+  if (gate) {
+    opset = model.add_opset_import();
+    opset->set_domain("onnx_light");
+    opset->set_version(1);
+  }
   auto *graph = model.mutable_graph();
   graph->set_name("paged_feedback");
   for (const auto &name : {"Q", "K", "V", "past"}) {
@@ -79,14 +84,15 @@ void RegisterPaged(RuntimeContext &context, PagedAttention::FormatSelector forma
     format_selector = [](const Tensor &, const Tensor &, int64_t) {
       return PagedAttention::Formats{{DataType::INT4, 0.25f, 0}, {DataType::INT8, 0.25f, 0}};
     };
-  context.RegisterKernelFn(
-      "ai.rt", "PagedAttention", core::symbolic::Device::kCPU,
-      [format_selector = std::move(format_selector)](
-          const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<KernelBase> {
-        auto kernel = std::make_unique<PagedAttention>(rt.kernel_ctx(), format_selector);
-        kernel->set_node(node);
-        return kernel;
-      });
+  context.RegisterKernelFn("ai.rt", "PagedAttention", core::symbolic::Device::kCPU,
+                           [format_selector = std::move(format_selector)](
+                               const NodeProto &node, RuntimeContext &,
+                               const KernelContext &kernel_context) -> std::unique_ptr<KernelBase> {
+                             auto kernel =
+                                 std::make_unique<PagedAttention>(kernel_context, format_selector);
+                             kernel->set_node(node);
+                             return kernel;
+                           });
 }
 
 RuntimeValueMap Feeds(float token) {
@@ -300,13 +306,14 @@ TEST(PagedAttentionFeedback, CapacityAndIncompatibleConsumerLeaveStateUnchanged)
   EXPECT_THROW(other.Run(context, Feeds(2)), std::invalid_argument);
   EXPECT_EQ(Key(other.Values().at("past")), Key(first.at("present")));
 
-  context.RegisterKernelFn(
-      "onnx_light", "UnregisteredConsumer", core::symbolic::Device::kCPU,
-      [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<KernelBase> {
-        auto kernel = std::make_unique<onnx_kernels::kernel::Attention>(rt.kernel_ctx());
-        kernel->set_node(node);
-        return kernel;
-      });
+  context.RegisterKernelFn("onnx_light", "UnregisteredConsumer", core::symbolic::Device::kCPU,
+                           [](const NodeProto &node, RuntimeContext &,
+                              const KernelContext &kernel_context) -> std::unique_ptr<KernelBase> {
+                             auto kernel =
+                                 std::make_unique<onnx_kernels::kernel::Attention>(kernel_context);
+                             kernel->set_node(node);
+                             return kernel;
+                           });
   PersistentValueState dense_consumer(unsupported, {{"past", first.at("present").BorrowView()}});
   EXPECT_THROW(dense_consumer.Run(context, Feeds(2)), std::invalid_argument);
   EXPECT_EQ(Key(dense_consumer.Values().at("past")), Key(first.at("present")));
@@ -380,6 +387,9 @@ TEST(PagedAttentionFeedback, IntermediateCachesKeepOwnersAcrossArenaRouting) {
     forward->set_op_type("Forward");
     forward->add_input("present");
     forward->add_output("cache_out");
+    auto *opset = model.add_opset_import();
+    opset->set_domain("onnx_light");
+    opset->set_version(1);
     VerifyModel(model);
     SimpleRawBufferAllocator execution(8);
     auto arena = IOArena::Create(32);

@@ -604,7 +604,7 @@ void RuntimeSession::Run(RuntimeContext &rt) {
     EXT_ENFORCE_INVALID(found == owned_opset_imports_->end() ||
                             found->second == rt.kernel_ctx().opset.version,
                         "RuntimeSession: RuntimeContext opset for domain '", domain,
-                        "' does not match the model opset import.");
+                        "' does not match the session opset import.");
   }
   // Lease the shared executor before any kernel is prepared or executed and
   // install it for the whole run: every parallel region a kernel launches then

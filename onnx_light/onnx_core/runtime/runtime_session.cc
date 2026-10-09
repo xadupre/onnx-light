@@ -113,7 +113,8 @@ RuntimeSession::RuntimeSession(const ModelProto &model, int verbose)
                             }) {}
 
 RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions options)
-    : default_plan_(model.graph()), plan_(default_plan_), check_shapes_(options.check_shapes),
+    : default_plan_(model.graph()), plan_(default_plan_),
+      preparation_store_(std::move(options.preparation_store)), check_shapes_(options.check_shapes),
       allow_external_output_allocators_(options.allow_external_output_allocators),
       parameters_(std::move(options.parameters)),
       cpu_execution_(options.cpu_execution.has_value() ? *options.cpu_execution
@@ -121,7 +122,7 @@ RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions op
       cpu_execution_explicit_(options.cpu_execution.has_value()),
       cpu_execution_counters_(options.cpu_execution_counters),
       parallel_region_collector_(std::move(options.parallel_region_collector)),
-      preparation_store_(std::move(options.preparation_store)), verbose_(options.verbose) {
+      verbose_(options.verbose) {
   owned_opset_imports_ = ParseOpsetImports(model.opset_import());
   SetDeclaredShapes(model.graph());
   SetInitializers(model.graph());
@@ -148,7 +149,8 @@ RuntimeSession::RuntimeSession(const ExecutionPlan &plan, int verbose)
                            }) {}
 
 RuntimeSession::RuntimeSession(const ExecutionPlan &plan, RuntimeSessionOptions options)
-    : plan_(plan), check_shapes_(options.check_shapes),
+    : plan_(plan), preparation_store_(std::move(options.preparation_store)),
+      check_shapes_(options.check_shapes),
       allow_external_output_allocators_(options.allow_external_output_allocators),
       parameters_(std::move(options.parameters)),
       cpu_execution_(options.cpu_execution.has_value() ? *options.cpu_execution
@@ -156,7 +158,7 @@ RuntimeSession::RuntimeSession(const ExecutionPlan &plan, RuntimeSessionOptions 
       cpu_execution_explicit_(options.cpu_execution.has_value()),
       cpu_execution_counters_(options.cpu_execution_counters),
       parallel_region_collector_(std::move(options.parallel_region_collector)),
-      preparation_store_(std::move(options.preparation_store)), verbose_(options.verbose) {}
+      verbose_(options.verbose) {}
 
 RuntimeSession::RuntimeSession(const FunctionProto &function, RuntimeSessionOptions options)
     : RuntimeSession(function, nullptr, std::move(options)) {}
@@ -165,7 +167,8 @@ RuntimeSession::RuntimeSession(const FunctionProto &function,
                                const OpsetImports *inherited_opset_imports,
                                RuntimeSessionOptions options)
     : default_plan_(function), plan_(default_plan_),
-      inherited_opset_imports_(inherited_opset_imports), check_shapes_(options.check_shapes),
+      inherited_opset_imports_(inherited_opset_imports),
+      preparation_store_(std::move(options.preparation_store)), check_shapes_(options.check_shapes),
       allow_external_output_allocators_(options.allow_external_output_allocators),
       parameters_(std::move(options.parameters)),
       cpu_execution_(options.cpu_execution.has_value() ? *options.cpu_execution
@@ -173,7 +176,7 @@ RuntimeSession::RuntimeSession(const FunctionProto &function,
       cpu_execution_explicit_(options.cpu_execution.has_value()),
       cpu_execution_counters_(options.cpu_execution_counters),
       parallel_region_collector_(std::move(options.parallel_region_collector)),
-      preparation_store_(std::move(options.preparation_store)), verbose_(options.verbose) {
+      verbose_(options.verbose) {
   if (!function.opset_import().empty())
     owned_opset_imports_ = ParseOpsetImports(function.opset_import());
 }

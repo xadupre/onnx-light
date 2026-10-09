@@ -5,70 +5,65 @@
 #pragma once
 
 #include "onnx_core/compute/raw_buffer_allocator.h"
+#include "onnx_core/runtime/runtime_value.h"
 #include "onnx_light_helpers.h"
 
 #include <cstddef>
+#include <cstdint>
+#include <limits>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
-enum class KernelPreparationState {
-  kEmpty,
-  kReady,
-};
+using KernelPreparationSlot = uint32_t;
+inline constexpr KernelPreparationSlot kInvalidKernelPreparationSlot =
+    std::numeric_limits<KernelPreparationSlot>::max();
 
 /**
- * Owns one immutable kernel preparation for a session hierarchy.
- *
- * Slots are registered and published only while a session is initialized or
- * while its serialized first invocation reaches a preparation whose inputs
- * have just become available. The runtime never runs the same session
- * concurrently, so slots need neither a mutex nor atomic state.
- */
-class ONNX_LIGHT_CORE_API KernelPreparationSlot {
-public:
-  const std::string &key() const noexcept { return key_; }
-  const std::string &source() const noexcept { return source_; }
-  KernelPreparationState state() const noexcept { return state_; }
-  bool ready() const noexcept { return state_ == KernelPreparationState::kReady; }
-  const RawBuffer &buffer() const {
-    EXT_ENFORCE(ready(), "Kernel preparation '", key_, "' is not ready.");
-    return buffer_;
-  }
-
-private:
-  KernelPreparationSlot(std::string key, std::string source)
-      : key_(std::move(key)), source_(std::move(source)) {}
-
-  std::string key_;
-  std::string source_;
-  KernelPreparationState state_ = KernelPreparationState::kEmpty;
-  RawBuffer buffer_;
-
-  friend class KernelPreparationStore;
-};
-
-/**
- * Stores immutable prepared kernel objects shared by one root session and all
+ * Stores immutable prepared runtime values shared by one root session and all
  * nested graph and model-local function sessions.
  *
  * The owning session hierarchy is serialized by contract. Registration,
- * publication, and reads therefore require no mutex. Kernels retain their
- * shared slot directly after binding, so execution performs no key lookup.
+ * publication, and indexed reads therefore require no mutex or atomic state.
+ * A kernel retains the integer returned by :cpp:func:`Bind`, so execution is a
+ * direct vector lookup.
  */
 class ONNX_LIGHT_CORE_API KernelPreparationStore {
 public:
-  std::shared_ptr<KernelPreparationSlot> Bind(std::string key, std::string source);
-  void Publish(const std::shared_ptr<KernelPreparationSlot> &slot, RawBuffer buffer);
+  KernelPreparationSlot Bind(std::string key);
+  bool IsReady(KernelPreparationSlot slot) const;
+  RawBufferAllocator &allocator() noexcept { return allocator_; }
+  void Publish(KernelPreparationSlot slot, RuntimeValue value);
+  const RuntimeValue &Get(KernelPreparationSlot slot) const;
 
-  size_t prepared_bytes() const noexcept { return prepared_bytes_; }
+  size_t prepared_bytes() const noexcept { return allocator_.TotalAllocatedSize(); }
   size_t slot_count() const noexcept { return slots_.size(); }
 
 private:
-  std::unordered_map<std::string, std::shared_ptr<KernelPreparationSlot>> slots_;
-  size_t prepared_bytes_ = 0;
+  class Allocator final : public RawBufferAllocator {
+  public:
+    RawBuffer *Allocate(size_t n_bytes) override;
+    void Free(RawBuffer *buffer) override;
+    size_t TotalAllocatedSize() const override { return total_allocated_size_; }
+    size_t PeakAllocatedSize() const override { return peak_allocated_size_; }
+    void ResetPeak() override { peak_allocated_size_ = total_allocated_size_; }
+
+  private:
+    std::unordered_map<RawBuffer *, std::unique_ptr<RawBuffer>> buffers_;
+    size_t total_allocated_size_ = 0;
+    size_t peak_allocated_size_ = 0;
+  };
+
+  std::optional<RuntimeValue> &ValueAt(KernelPreparationSlot slot);
+  const std::optional<RuntimeValue> &ValueAt(KernelPreparationSlot slot) const;
+
+  Allocator allocator_;
+  std::unordered_map<std::string, KernelPreparationSlot> slots_by_key_;
+  std::vector<std::optional<RuntimeValue>> slots_;
 };
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

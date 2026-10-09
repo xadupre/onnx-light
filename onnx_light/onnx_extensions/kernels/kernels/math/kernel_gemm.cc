@@ -235,14 +235,16 @@ KernelTuningParameters CalibrateGemm(const KernelTuningKey &key,
 } // namespace
 
 struct PreparedGemmB::State {
-  std::shared_ptr<KernelPreparationSlot> slot;
+  const KernelPreparationStore *store = nullptr;
+  KernelPreparationSlot slot = kInvalidKernelPreparationSlot;
   int32_t source_data_type = DataType::UNDEFINED;
-  int32_t packed_data_type = DataType::UNDEFINED;
   Shape shape;
   int64_t trans_b = 0;
 };
 
-bool PreparedGemmB::IsReady() const { return state_ != nullptr && state_->slot->ready(); }
+bool PreparedGemmB::IsReady() const {
+  return state_ != nullptr && state_->store != nullptr && state_->store->IsReady(state_->slot);
+}
 
 Gemm::Gemm(const KernelContext &ctx) : KernelBase(ctx) {}
 
@@ -277,14 +279,17 @@ PreparedGemmB Gemm::PrepareConstantB(const Tensor &b, int64_t transB,
     digest = (digest ^ byte) * 1099511628211ULL;
   }
   std::ostringstream key;
-  key << "Gemm:B:column-major-k-v1:" << b.data_type << ':' << b.shape[0] << 'x' << b.shape[1]
-      << ":transB=" << transB << ":digest=" << digest;
-  auto slot = store.Bind(key.str(), b.name.empty() ? std::string{"constant B"} : b.name);
+  key << "Gemm:B:column-major-k-v1:value=" << b.name << ":type=" << b.data_type
+      << ":shape=" << b.shape[0] << 'x' << b.shape[1] << ":transB=" << transB
+      << ":digest=" << digest;
+  const KernelPreparationSlot slot = store.Bind(key.str());
 
-  if (!slot->ready()) {
+  if (!store.IsReady(slot)) {
     const Tensor promoted = IsHalfPrecision(b.data_type) ? PromoteToFloat32(b) : Tensor{};
     const Tensor &source = IsHalfPrecision(b.data_type) ? promoted : b;
-    RawBuffer packed(source.size_bytes());
+    const int32_t packed_data_type = IsHalfPrecision(b.data_type) ? DataType::FLOAT : b.data_type;
+    Tensor packed =
+        MakeOutputTensor(packed_data_type, b.shape, source.size_bytes(), &store.allocator());
     const int64_t k = transB ? b.shape[1] : b.shape[0];
     const int64_t n = transB ? b.shape[0] : b.shape[1];
     const size_t element_size = source.element_size();
@@ -292,16 +297,16 @@ PreparedGemmB Gemm::PrepareConstantB(const Tensor &b, int64_t transB,
       for (int64_t l = 0; l < k; ++l) {
         const int64_t source_index = transB ? j * k + l : l * n + j;
         const int64_t target_index = j * k + l;
-        std::memcpy(packed.data() + target_index * element_size,
+        std::memcpy(packed.mutable_bytes() + target_index * element_size,
                     source.bytes() + source_index * element_size, element_size);
       }
     }
-    store.Publish(slot, std::move(packed));
+    store.Publish(slot, RuntimeValue(std::move(packed)));
   }
   auto prepared = std::make_shared<PreparedGemmB::State>();
-  prepared->slot = std::move(slot);
+  prepared->store = &store;
+  prepared->slot = slot;
   prepared->source_data_type = b.data_type;
-  prepared->packed_data_type = IsHalfPrecision(b.data_type) ? DataType::FLOAT : b.data_type;
   prepared->shape = b.shape;
   prepared->trans_b = transB;
   return PreparedGemmB(std::move(prepared));
@@ -378,9 +383,8 @@ Tensor Gemm::operator()(const Tensor &a, const PreparedGemmB &b, const Tensor *c
   EXT_ENFORCE_INVALID(b.state_ != nullptr, kGemmName, " prepared B is empty.");
   EXT_ENFORCE_INVALID(a.data_type == b.state_->source_data_type, kGemmName,
                       " inputs A and prepared B must share the same dtype.");
-  const RawBuffer &buffer = b.state_->slot->buffer();
-  const Tensor packed =
-      Tensor::Borrow("", b.state_->packed_data_type, b.state_->shape, buffer.data(), buffer.size());
+  const RuntimeValue &prepared_value = b.state_->store->Get(b.state_->slot);
+  const Tensor &packed = prepared_value.tensor;
   const int64_t m = transA ? a.shape[1] : a.shape[0];
   const int64_t a_k = transA ? a.shape[0] : a.shape[1];
   const int64_t b_k = b.state_->trans_b ? b.state_->shape[1] : b.state_->shape[0];
@@ -396,7 +400,7 @@ Tensor Gemm::operator()(const Tensor &a, const PreparedGemmB &b, const Tensor *c
                        : MakeOutputTensor(DataType::FLOAT, shape,
                                           static_cast<size_t>(m * n) * sizeof(float), nullptr);
     GemmCompute<float>(a, packed, c, alpha, beta, transA, b.state_->trans_b, tuning_,
-                       output.As<float>(), reinterpret_cast<const float *>(buffer.data()));
+                       output.As<float>(), packed.As<float>());
     return output;
   }
   case DataType::DOUBLE: {
@@ -405,7 +409,7 @@ Tensor Gemm::operator()(const Tensor &a, const PreparedGemmB &b, const Tensor *c
                        : MakeOutputTensor(DataType::DOUBLE, shape,
                                           static_cast<size_t>(m * n) * sizeof(double), nullptr);
     GemmCompute<double>(a, packed, c, alpha, beta, transA, b.state_->trans_b, tuning_,
-                        output.As<double>(), reinterpret_cast<const double *>(buffer.data()));
+                        output.As<double>(), packed.As<double>());
     return output;
   }
   case DataType::FLOAT16:

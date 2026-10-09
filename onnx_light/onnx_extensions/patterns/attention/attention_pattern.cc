@@ -1841,8 +1841,8 @@ FunctionHalfRotaryEmbeddingPattern::Match(core::builder::GraphGraph &graph,
              ReadInt64Constant(graph, slice.input()[2].value(), ends) &&
              ReadInt64Constant(graph, slice.input()[3].value(), axes) &&
              (slice.input_size() == 4 ||
-              (ReadInt64Constant(graph, slice.input()[4].value(), steps) &&
-               steps.size() == 1 && steps[0] == 1)) &&
+              (ReadInt64Constant(graph, slice.input()[4].value(), steps) && steps.size() == 1 &&
+               steps[0] == 1)) &&
              starts.size() == 1 && ends.size() == 1 && axes.size() == 1;
     };
     if (!StaticDimension(graph, candidate.input()[0].value(), 3, width) || width <= 0 ||
@@ -1949,11 +1949,12 @@ FunctionHalfRotaryEmbeddingPattern::Match(core::builder::GraphGraph &graph,
 utils::RepeatedProtoField<NodeProto>
 FunctionHalfRotaryEmbeddingPattern::Apply(core::builder::GraphGraph &graph,
                                           const std::vector<const NodeProto *> &nodes) const {
+  constexpr const char *kInvalidDecomposition =
+      "FunctionHalfRotaryEmbeddingPattern::Apply expects a valid half-rotary decomposition.";
   if ((nodes.size() != 6 && nodes.size() != 7) ||
       std::any_of(nodes.begin(), nodes.end(),
                   [](const NodeProto *node) { return node == nullptr; })) {
-    throw BuilderError(
-        "FunctionHalfRotaryEmbeddingPattern::Apply expects a valid half-rotary decomposition.");
+    throw BuilderError(kInvalidDecomposition);
   }
   const std::size_t offset = nodes.size() == 7 ? 1 : 0;
   const NodeProto &first = *nodes[0];
@@ -1968,8 +1969,7 @@ FunctionHalfRotaryEmbeddingPattern::Apply(core::builder::GraphGraph &graph,
       (!split_form && (!IsNode(&first, "Slice", -1, 1) || !IsNode(second, "Slice", -1, 1) ||
                        first.input_size() == 0 || second->input_size() == 0 ||
                        first.input()[0].value() != second->input()[0].value()))) {
-    throw BuilderError(
-        "FunctionHalfRotaryEmbeddingPattern::Apply expects a valid half-rotary decomposition.");
+    throw BuilderError(kInvalidDecomposition);
   }
   const std::string second_half =
       split_form ? first.output()[1].value() : second->output()[0].value();
@@ -1981,8 +1981,7 @@ FunctionHalfRotaryEmbeddingPattern::Apply(core::builder::GraphGraph &graph,
         add.input()[1].value() != mul2.output()[0].value()) &&
        (add.input()[0].value() != mul2.output()[0].value() ||
         add.input()[1].value() != mul1.output()[0].value()))) {
-    throw BuilderError(
-        "FunctionHalfRotaryEmbeddingPattern::Apply expects a valid half-rotary decomposition.");
+    throw BuilderError(kInvalidDecomposition);
   }
   const auto other_input = [](const NodeProto &mul, const std::string &known) -> std::string {
     if (mul.input()[0].value() == known) {

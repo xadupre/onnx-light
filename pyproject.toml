@@ -21,7 +21,7 @@ onnx-light = "onnx_light.__main__:main"
 
 [project.optional-dependencies]
 style = [
-    "black==26.5.1",
+    "black==26.10.0",
     "clang-format==23.1.2",
     "ruff==0.16.10",
 ]

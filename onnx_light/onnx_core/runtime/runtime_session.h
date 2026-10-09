@@ -48,6 +48,8 @@ class ShapesContext;
 } // namespace shapes
 namespace runtime {
 
+class KernelPreparationStore;
+
 /**
  * Construction-time settings for :cpp:class:`RuntimeSession`.
  *
@@ -79,6 +81,9 @@ struct RuntimeSessionOptions {
   /// Initial capacity along a kernel's append axis for contiguous persistent tensors.
   /// Zero disables append reservations; kernels use their ordinary allocation path.
   size_t persistent_tensor_initial_capacity = 32;
+  /// Preparation storage inherited by nested graph and model-local function sessions.
+  /// Root sessions leave this empty and create the hierarchy store on first use.
+  std::shared_ptr<KernelPreparationStore> preparation_store = nullptr;
 };
 
 /** Reports the one-time kernel tuning work performed by a runtime session. */
@@ -288,10 +293,11 @@ public:
   }
 
   /// Returns bytes occupied by session-owned prepared kernel objects.
-  size_t prepared_bytes() const noexcept {
-    return prepared_execution_state_ == nullptr
-               ? 0
-               : prepared_execution_state_->objects().resident_bytes();
+  size_t prepared_bytes() const noexcept;
+
+  /// Returns the preparation store shared by this session hierarchy.
+  const std::shared_ptr<KernelPreparationStore> &preparation_store() const noexcept {
+    return preparation_store_;
   }
 
   /// Enables or disables concrete-shape validation. When enabled, :cpp:func:`Run`
@@ -369,7 +375,8 @@ protected:
   /// :cpp:class:`RuntimeSession` with the same default resolution behavior as a
   /// top-level graph session.
   explicit RuntimeSession(const GraphProto &graph,
-                          const OpsetImports *inherited_opset_imports = nullptr, int verbose = 0);
+                          const OpsetImports *inherited_opset_imports = nullptr, int verbose = 0,
+                          std::shared_ptr<KernelPreparationStore> preparation_store = nullptr);
 
   /// Default node-kernel resolution used during
   /// :cpp:func:`InitializeKernels`, so :cpp:class:`RuntimeSession` and
@@ -454,7 +461,7 @@ private:
   /// without imports borrow their enclosing session's immutable map instead.
   std::optional<OpsetImports> owned_opset_imports_;
   const OpsetImports *inherited_opset_imports_ = nullptr;
-  std::unique_ptr<PreparedExecutionState> prepared_execution_state_;
+  std::shared_ptr<KernelPreparationStore> preparation_store_;
   std::vector<PreparedKernel> kernels_;
   const GraphProto *initializer_graph_ = nullptr;
   std::optional<StructTypeCatalogue> struct_type_catalogue_;

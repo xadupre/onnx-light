@@ -224,7 +224,8 @@ public:
    *              :cpp:class:`ExecutionPlan`); typically part of the parsed
    *              model, so this holds for the model's whole lifetime.
    */
-  SubgraphSession(const GraphProto &graph, const OpsetImports *opset_imports = nullptr);
+  SubgraphSession(const GraphProto &graph, const OpsetImports *opset_imports = nullptr,
+                  std::shared_ptr<KernelPreparationStore> preparation_store = nullptr);
 
   /**
    * Evaluates the subgraph once in a fresh child :cpp:class:`RuntimeContext`,

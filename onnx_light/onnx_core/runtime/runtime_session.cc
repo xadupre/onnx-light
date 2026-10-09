@@ -13,6 +13,7 @@
 #include <string>
 
 #include "onnx_core/graph/graph_manipulations.h"
+#include "onnx_core/runtime/kernels/kernel_preparation_store.h"
 #include "onnx_core/runtime/kernels/run_nodes_internal.h"
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_proto/onnx_helper.h"
@@ -120,7 +121,7 @@ RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions op
       cpu_execution_explicit_(options.cpu_execution.has_value()),
       cpu_execution_counters_(options.cpu_execution_counters),
       parallel_region_collector_(std::move(options.parallel_region_collector)),
-      verbose_(options.verbose) {
+      preparation_store_(std::move(options.preparation_store)), verbose_(options.verbose) {
   owned_opset_imports_ = ParseOpsetImports(model.opset_import());
   SetDeclaredShapes(model.graph());
   SetInitializers(model.graph());
@@ -130,8 +131,10 @@ RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions op
 }
 
 RuntimeSession::RuntimeSession(const GraphProto &graph, const OpsetImports *inherited_opset_imports,
-                               int verbose)
+                               int verbose,
+                               std::shared_ptr<KernelPreparationStore> preparation_store)
     : default_plan_(graph), plan_(default_plan_), inherited_opset_imports_(inherited_opset_imports),
+      preparation_store_(std::move(preparation_store)),
       cpu_execution_(DefaultCpuExecutionPolicy(parameters_)), verbose_(verbose) {
   SetDeclaredShapes(graph);
   SetInitializers(graph);
@@ -153,7 +156,7 @@ RuntimeSession::RuntimeSession(const ExecutionPlan &plan, RuntimeSessionOptions 
       cpu_execution_explicit_(options.cpu_execution.has_value()),
       cpu_execution_counters_(options.cpu_execution_counters),
       parallel_region_collector_(std::move(options.parallel_region_collector)),
-      verbose_(options.verbose) {}
+      preparation_store_(std::move(options.preparation_store)), verbose_(options.verbose) {}
 
 RuntimeSession::RuntimeSession(const FunctionProto &function, RuntimeSessionOptions options)
     : RuntimeSession(function, nullptr, std::move(options)) {}
@@ -170,7 +173,7 @@ RuntimeSession::RuntimeSession(const FunctionProto &function,
       cpu_execution_explicit_(options.cpu_execution.has_value()),
       cpu_execution_counters_(options.cpu_execution_counters),
       parallel_region_collector_(std::move(options.parallel_region_collector)),
-      verbose_(options.verbose) {
+      preparation_store_(std::move(options.preparation_store)), verbose_(options.verbose) {
   if (!function.opset_import().empty())
     owned_opset_imports_ = ParseOpsetImports(function.opset_import());
 }
@@ -316,11 +319,14 @@ RuntimeSession::ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt,
                                   const std::string &domain, const std::string &op_type,
                                   const KernelContext &kernel_context) const {
   return detail::ResolveNodeKernelDefault(node, rt, domain, op_type, kernel_context,
-                                          EffectiveOpsetImports());
+                                          EffectiveOpsetImports(), preparation_store_);
 }
 
 void RuntimeSession::InitializeKernels(RuntimeContext &rt,
                                        const std::unordered_set<std::string> &preparable_inputs) {
+  if (!preparation_store_) {
+    preparation_store_ = std::make_shared<KernelPreparationStore>();
+  }
   // Resolve and build the kernel instance for every node the plan will
   // execute, once and up front. Node indices come from the plan's
   // kExecuteNode actions so nodes the plan never runs (if any) are not
@@ -434,21 +440,11 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt,
       pending_tuning[i].kernel->instance->Configure(*parameters);
     }
   }
-  size_t preparation_count = 0;
   for (const ExecuteAction &action : plan_.actions()) {
     if (action.kind() == ExecuteActionKind::kExecuteNode) {
       KernelBase &kernel = *kernels_[action.node_index()].instance;
-      preparation_count += kernel.HasPreparations(preparable_inputs) ? 1 : 0;
-    }
-  }
-  if (preparation_count != 0) {
-    prepared_execution_state_ = std::make_unique<PreparedExecutionState>(1, preparation_count);
-    for (const ExecuteAction &action : plan_.actions()) {
-      if (action.kind() == ExecuteActionKind::kExecuteNode) {
-        KernelBase &kernel = *kernels_[action.node_index()].instance;
-        if (kernel.HasPreparations(preparable_inputs)) {
-          kernel.Prepare(rt, preparable_inputs, *prepared_execution_state_);
-        }
+      if (kernel.HasPreparations(preparable_inputs)) {
+        kernel.Prepare(rt, preparable_inputs, *preparation_store_);
       }
     }
   }
@@ -459,6 +455,10 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt,
   // starts executing kernels.
   required_inputs_ = ::ONNX_LIGHT_NAMESPACE::core::graph::CollectExternalInputs(nodes);
   kernels_initialized_ = true;
+}
+
+size_t RuntimeSession::prepared_bytes() const noexcept {
+  return preparation_store_ == nullptr ? 0 : preparation_store_->prepared_bytes();
 }
 
 std::vector<std::string> RuntimeSession::used_kernels() const {

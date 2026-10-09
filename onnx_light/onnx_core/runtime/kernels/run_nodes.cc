@@ -169,8 +169,9 @@ Tensor SliceTensorAlongAxis(const Tensor &t, int64_t axis, int64_t index,
   return out;
 }
 
-SubgraphSession::SubgraphSession(const GraphProto &graph, const OpsetImports *opset_imports)
-    : RuntimeSession(graph, opset_imports) {
+SubgraphSession::SubgraphSession(const GraphProto &graph, const OpsetImports *opset_imports,
+                                 std::shared_ptr<KernelPreparationStore> preparation_store)
+    : RuntimeSession(graph, opset_imports, 0, std::move(preparation_store)) {
   const auto &outs = graph.output();
   output_names_.reserve(outs.size());
   for (size_t i = 0; i < outs.size(); ++i) {
@@ -818,8 +819,10 @@ class ModelLocalFunctionKernel : public KernelBase {
 public:
   ModelLocalFunctionKernel(const NodeProto &node, const FunctionProto &func,
                            const KernelContext &kernel_context,
-                           const OpsetImports *inherited_opset_imports)
-      : KernelBase(kernel_context), func_(func), inherited_opset_imports_(inherited_opset_imports) {
+                           const OpsetImports *inherited_opset_imports,
+                           std::shared_ptr<KernelPreparationStore> preparation_store)
+      : KernelBase(kernel_context), func_(func), inherited_opset_imports_(inherited_opset_imports),
+        preparation_store_(std::move(preparation_store)) {
     set_node(node);
     // Pre-bind attribute references at construction time (the call-site
     // node and function body are both fixed for this kernel's lifetime).
@@ -880,7 +883,9 @@ public:
 
     // Resolve kernels once on first run, reuse on subsequent calls.
     if (!session_) {
-      session_ = std::make_unique<RuntimeSession>(bound_func_, inherited_opset_imports_);
+      session_ = std::make_unique<RuntimeSession>(
+          bound_func_, inherited_opset_imports_,
+          RuntimeSessionOptions{.preparation_store = preparation_store_});
     }
     session_->Run(child);
 
@@ -912,6 +917,7 @@ private:
   const FunctionProto &func_;
   FunctionProto bound_func_;
   const OpsetImports *inherited_opset_imports_;
+  std::shared_ptr<KernelPreparationStore> preparation_store_;
   std::unique_ptr<RuntimeSession> session_;
 };
 
@@ -990,11 +996,11 @@ private:
 // kernels, then the dispatch table.
 // An unsupported ``(domain, op_type)`` is rejected here (at resolution
 // time) with the same diagnostic previously emitted at run time.
-std::unique_ptr<KernelBase> ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt,
-                                                     const std::string &domain,
-                                                     const std::string &op_type,
-                                                     const KernelContext &kernel_context,
-                                                     const OpsetImports *opset_imports) {
+std::unique_ptr<KernelBase>
+ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt, const std::string &domain,
+                         const std::string &op_type, const KernelContext &kernel_context,
+                         const OpsetImports *opset_imports,
+                         std::shared_ptr<KernelPreparationStore> preparation_store) {
   // A node referring to a model-local FunctionProto (registered by
   // ``RegisterModelFunctions`` from ``ModelProto::functions()``) takes priority over
   // the built-in kernel dispatch table so that user-defined functions
@@ -1005,7 +1011,8 @@ std::unique_ptr<KernelBase> ResolveNodeKernelDefault(const NodeProto &node, Runt
     auto fit = rt.functions().find(fkey);
     if (fit != rt.functions().end()) {
       const FunctionProto *func = fit->second;
-      return std::make_unique<ModelLocalFunctionKernel>(node, *func, kernel_context, opset_imports);
+      return std::make_unique<ModelLocalFunctionKernel>(node, *func, kernel_context, opset_imports,
+                                                        std::move(preparation_store));
     }
   }
 
@@ -1017,8 +1024,10 @@ std::unique_ptr<KernelBase> ResolveNodeKernelDefault(const NodeProto &node, Runt
     // kernel initialization) and hand them to the kernel so every subsequent
     // invocation of this node reuses them instead of re-resolving the
     // selected branch's kernels from scratch.
-    auto then_session = std::make_shared<SubgraphSession>(then_branch, opset_imports);
-    auto else_session = std::make_shared<SubgraphSession>(else_branch, opset_imports);
+    auto then_session =
+        std::make_shared<SubgraphSession>(then_branch, opset_imports, preparation_store);
+    auto else_session =
+        std::make_shared<SubgraphSession>(else_branch, opset_imports, preparation_store);
     return std::make_unique<IfKernel>(node, std::move(then_session), std::move(else_session),
                                       kernel_context);
   }
@@ -1026,17 +1035,20 @@ std::unique_ptr<KernelBase> ResolveNodeKernelDefault(const NodeProto &node, Runt
     const GraphProto &body = GetRequiredGraphAttribute(node, "body");
     // Built once here so the body's kernels are resolved a single time and
     // reused across every iteration of every invocation of this node.
-    auto body_session = std::make_shared<SubgraphSession>(body, opset_imports);
+    auto body_session =
+        std::make_shared<SubgraphSession>(body, opset_imports, std::move(preparation_store));
     return std::make_unique<LoopKernel>(node, std::move(body_session), kernel_context);
   }
   if (domain == kDefaultOnnxDomain && op_type == "Scan") {
     const GraphProto &body = GetRequiredGraphAttribute(node, "body");
-    auto body_session = std::make_shared<SubgraphSession>(body, opset_imports);
+    auto body_session =
+        std::make_shared<SubgraphSession>(body, opset_imports, std::move(preparation_store));
     return std::make_unique<ScanKernel>(node, std::move(body_session), kernel_context);
   }
   if (domain == kDefaultOnnxDomain && op_type == "SequenceMap") {
     const GraphProto &body = GetRequiredGraphAttribute(node, "body");
-    auto body_session = std::make_shared<SubgraphSession>(body, opset_imports);
+    auto body_session =
+        std::make_shared<SubgraphSession>(body, opset_imports, std::move(preparation_store));
     return std::make_unique<SequenceMapKernel>(node, std::move(body_session), kernel_context);
   }
 

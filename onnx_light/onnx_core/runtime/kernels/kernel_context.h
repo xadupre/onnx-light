@@ -34,7 +34,7 @@ using ::onnx_light::core::runtime::RawBufferAllocator;
 // reference, so a forward declaration is sufficient and avoids a circular
 // include (``runtime_context.h`` includes this header).
 class RuntimeContext;
-class PreparedExecutionState;
+class KernelPreparationStore;
 struct KernelTuningKey;
 struct KernelTuningParameters;
 
@@ -178,13 +178,14 @@ public:
   virtual bool HasPreparations(const std::unordered_set<std::string> &immutable_inputs) const;
 
   /**
-   * Prepares immutable model inputs owned by the enclosing session.
+   * Prepares immutable inputs owned by the enclosing session hierarchy.
    *
    * The default does nothing. Kernels override this hook when they can transform
-   * constant initializers into a session-owned execution format.
+   * immutable values into a session-owned execution format. Nested graph and
+   * model-local function sessions share ``store`` with their root session.
    */
   virtual void Prepare(RuntimeContext &rt, const std::unordered_set<std::string> &immutable_inputs,
-                       PreparedExecutionState &state);
+                       KernelPreparationStore &store);
 
 protected:
   KernelContext ctx_;

@@ -132,6 +132,9 @@ void RegisterReduceProdCases(std::vector<TestCase> &registry, TestMode mode) {
   EmitReduceProdCase(registry, "test_cc_reduceprod_empty_set_non_reduced_axis_zero",
                      /*data_shape=*/{2, 0, 4}, /*data_values=*/{}, {2}, /*keepdims=*/true,
                      /*noop_with_empty_axes=*/false);
+  EmitReduceProdCase(registry, "test_cc_reduceprod_empty_negative_axis_keepdims",
+                     /*data_shape=*/{1, 0, 3}, /*data_values=*/{}, {-1}, /*keepdims=*/true,
+                     /*noop_with_empty_axes=*/false);
 
   // Upstream ``test_reduce_prod_*`` ONNX node tests.
   const std::vector<float> random_values = {

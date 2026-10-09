@@ -9,6 +9,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -54,6 +55,30 @@ void CheckReduceSumCasePresent(const std::vector<TestCase> &cases, const std::st
   ASSERT_EQ(ds.outputs.size(), 1u);
   EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
   EXPECT_EQ(ds.outputs[0].shape, expected_shape);
+}
+
+void CheckEmptyReductionCase(const std::vector<TestCase> &cases, const std::string &name,
+                             const std::string &op_type,
+                             const std::vector<int64_t> &expected_input_shape,
+                             int64_t expected_axis,
+                             const std::vector<int64_t> &expected_output_shape) {
+  const TestCase *tc = FindCase(cases, name);
+  ASSERT_NE(tc, nullptr) << "missing backend test case: " << name;
+  const GraphProto &graph = tc->model().ref_graph();
+  ASSERT_EQ(graph.ref_node().size(), 1u);
+  EXPECT_EQ(graph.ref_node()[0].op_type().value(), op_type);
+  ASSERT_EQ(tc->data_sets().size(), 1u);
+  const auto &data_set = tc->data_sets()[0];
+  ASSERT_EQ(data_set.inputs.size(), 2u);
+  ASSERT_EQ(data_set.outputs.size(), 1u);
+  EXPECT_EQ(data_set.inputs[0].shape, expected_input_shape);
+  ASSERT_EQ(data_set.inputs[0].data.size(), 0u);
+  ASSERT_EQ(data_set.inputs[1].data.size(), sizeof(int64_t));
+  int64_t axis = 0;
+  std::memcpy(&axis, data_set.inputs[1].data.data(), sizeof(axis));
+  EXPECT_EQ(axis, expected_axis);
+  EXPECT_EQ(data_set.outputs[0].shape, expected_output_shape);
+  EXPECT_EQ(data_set.outputs[0].data.size(), 0u);
 }
 
 } // namespace
@@ -126,6 +151,20 @@ TEST(BackendTestCase, ReduceSumEmptySetNonReducedAxisZeroHasNoElements) {
   ASSERT_NE(tc, nullptr);
   const auto &ds = tc->data_sets()[0];
   EXPECT_EQ(ds.outputs[0].data.size(), 0u);
+}
+
+TEST(BackendTestCase, EmptyReductionNegativeAxesMatchOrtIssue33230) {
+  const auto cases = CollectTestCases();
+  CheckEmptyReductionCase(cases, "test_cc_reducesum_empty_negative_axis_keepdims", "ReduceSum",
+                          {1, 0, 3}, -1, {1, 0, 1});
+  CheckEmptyReductionCase(cases, "test_cc_reducesum_empty_positive_axis_keepdims", "ReduceSum",
+                          {1, 0, 3}, 2, {1, 0, 1});
+  CheckEmptyReductionCase(cases, "test_cc_reducesum_empty_negative_axis_no_keepdims", "ReduceSum",
+                          {0, 3}, -1, {0});
+  CheckEmptyReductionCase(cases, "test_cc_reduceprod_empty_negative_axis_keepdims", "ReduceProd",
+                          {1, 0, 3}, -1, {1, 0, 1});
+  CheckEmptyReductionCase(cases, "test_cc_reducemean_empty_negative_axis_keepdims", "ReduceMean",
+                          {1, 0, 3}, -1, {1, 0, 1});
 }
 
 TEST(BackendTestCase, ReduceMaxCasesRegistered) {

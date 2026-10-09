@@ -123,6 +123,9 @@ void RegisterReduceMeanCases(std::vector<TestCase> &registry, TestMode mode) {
   EmitReduceMeanCase(registry, "test_cc_reducemean_empty_axes_input_noop", shape, values, {},
                      /*keepdims=*/true,
                      /*noop_with_empty_axes=*/true);
+  EmitReduceMeanCase(registry, "test_cc_reducemean_empty_negative_axis_keepdims",
+                     /*data_shape=*/{1, 0, 3}, /*data_values=*/{}, {-1}, /*keepdims=*/true,
+                     /*noop_with_empty_axes=*/false);
 
   // Upstream ``test_reduce_mean_*`` ONNX node tests.
   const std::vector<float> random_values = {

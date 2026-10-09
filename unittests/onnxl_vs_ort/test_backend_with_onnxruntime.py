@@ -200,6 +200,8 @@ ORT_EXCLUDE_REGEX = [
     r"e4m3.*",
     r"e5m2.*",
     r"float8.*",
+    # ORT does not implement Cast(21) to FLOAT8E8M0 for these boundary cases.
+    r"^test_cc_cast_e8m0_(?:FLOAT_subnormal|DOUBLE_boundary)$",
     r"quantizelinear_u?int2.*",
     r"quantizelinear_u?int4.*",
     # ...

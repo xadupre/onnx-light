@@ -168,8 +168,8 @@ void Compress::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 2);
   RequireOutputCount(node, 1);
-  const Tensor &input = GetInput(node, 0, rt.tensors());
-  const Tensor &condition = GetInput(node, 1, rt.tensors());
+  const Tensor &input = GetInput(node, 0, rt);
+  const Tensor &condition = GetInput(node, 1, rt);
   const AttributeProto *axis_attr = FindAttribute(node, "axis");
   std::optional<int64_t> axis;
   if (axis_attr != nullptr) {

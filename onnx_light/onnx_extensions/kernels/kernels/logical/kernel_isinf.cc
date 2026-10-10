@@ -77,7 +77,7 @@ void IsInf::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
   const int64_t detect_positive = GetAttributeIntOrDefault(node, "detect_positive", 1);
   const int64_t detect_negative = GetAttributeIntOrDefault(node, "detect_negative", 1);
   onnx_kernels::kernel::IsInf k(rt.kernel_ctx());

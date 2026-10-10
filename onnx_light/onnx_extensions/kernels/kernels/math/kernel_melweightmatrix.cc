@@ -176,11 +176,11 @@ void MelWeightMatrix::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 5);
   RequireOutputCount(node, 1);
-  const Tensor &num_mel_bins = GetInput(node, 0, rt.tensors());
-  const Tensor &dft_length = GetInput(node, 1, rt.tensors());
-  const Tensor &sample_rate = GetInput(node, 2, rt.tensors());
-  const Tensor &lower_edge_hertz = GetInput(node, 3, rt.tensors());
-  const Tensor &upper_edge_hertz = GetInput(node, 4, rt.tensors());
+  const Tensor &num_mel_bins = GetInput(node, 0, rt);
+  const Tensor &dft_length = GetInput(node, 1, rt);
+  const Tensor &sample_rate = GetInput(node, 2, rt);
+  const Tensor &lower_edge_hertz = GetInput(node, 3, rt);
+  const Tensor &upper_edge_hertz = GetInput(node, 4, rt);
   const DataType output_dtype = static_cast<DataType>(
       GetAttributeIntOrDefault(node, "output_datatype", static_cast<int64_t>(DataType::FLOAT)));
   onnx_kernels::kernel::MelWeightMatrix k(rt.kernel_ctx());

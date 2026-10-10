@@ -206,7 +206,7 @@ void RandomNormalLike::Run(RuntimeContext &rt) {
   const float b = GetAttributeFloatOrDefault(node, "scale", 1.0f);
   const int64_t seed = GetSeedAttr(node);
   const int32_t dtype = GetDtypeAttr(node);
-  const Tensor &input = GetInput(node, 0, rt.tensors());
+  const Tensor &input = GetInput(node, 0, rt);
   SetOutput(node, 0, (*this)(input, a, b, seed, dtype, &rt), rt);
 }
 
@@ -230,7 +230,7 @@ void RandomUniformLike::Run(RuntimeContext &rt) {
   const float b = GetAttributeFloatOrDefault(node, "high", 1.0f);
   const int64_t seed = GetSeedAttr(node);
   const int32_t dtype = GetDtypeAttr(node);
-  const Tensor &input = GetInput(node, 0, rt.tensors());
+  const Tensor &input = GetInput(node, 0, rt);
   SetOutput(node, 0, (*this)(input, a, b, seed, dtype, &rt), rt);
 }
 

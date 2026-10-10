@@ -37,8 +37,8 @@ void CastLike::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 2);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &target_type = GetInput(node, 1, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
+  const Tensor &target_type = GetInput(node, 1, rt);
   const bool saturate = GetAttributeIntOrDefault(node, "saturate", 1) != 0;
   onnx_kernels::kernel::CastLike k(rt.kernel_ctx());
   SetOutput(node, 0, k(x, target_type, saturate, &rt), rt);

@@ -121,8 +121,8 @@ void SwiGLU::Run(RuntimeContext &rt) {
   RequireInputCount(node, 2);
   RequireOutputCount(node, 1);
   const float alpha = GetAttributeFloatOrDefault(node, "alpha", 1.0f);
-  const Tensor &a = GetInput(node, 0, rt.tensors());
-  const Tensor &b = GetInput(node, 1, rt.tensors());
+  const Tensor &a = GetInput(node, 0, rt);
+  const Tensor &b = GetInput(node, 1, rt);
   SetOutput(node, 0, (*this)(a, b, alpha, &rt), rt);
 }
 

@@ -357,15 +357,15 @@ void QLinearConv::Run(RuntimeContext &rt) {
                       "RunNode: op 'QLinearConv' expects at most 9 inputs, got ", node.input_size(),
                       ".");
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &x_scale = GetInput(node, 1, rt.tensors());
-  const Tensor &x_zero_point = GetInput(node, 2, rt.tensors());
-  const Tensor &w = GetInput(node, 3, rt.tensors());
-  const Tensor &w_scale = GetInput(node, 4, rt.tensors());
-  const Tensor &w_zero_point = GetInput(node, 5, rt.tensors());
-  const Tensor &y_scale = GetInput(node, 6, rt.tensors());
-  const Tensor &y_zero_point = GetInput(node, 7, rt.tensors());
-  const Tensor *b = GetOptionalInput(node, 8, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
+  const Tensor &x_scale = GetInput(node, 1, rt);
+  const Tensor &x_zero_point = GetInput(node, 2, rt);
+  const Tensor &w = GetInput(node, 3, rt);
+  const Tensor &w_scale = GetInput(node, 4, rt);
+  const Tensor &w_zero_point = GetInput(node, 5, rt);
+  const Tensor &y_scale = GetInput(node, 6, rt);
+  const Tensor &y_zero_point = GetInput(node, 7, rt);
+  const Tensor *b = GetOptionalInput(node, 8, rt);
   onnx_kernels::kernel::QLinearConv::Attributes attrs;
   attrs.kernel_shape = GetAttributeIntsOrDefault(node, "kernel_shape", {});
   attrs.strides = GetAttributeIntsOrDefault(node, "strides", {});

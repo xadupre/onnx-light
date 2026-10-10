@@ -53,9 +53,9 @@
  * :cpp:func:`RuntimeContext::functions` for model-local functions
  * (``ModelProto::functions``). When a node's
  * ``(domain, op_type, overload)`` triple matches a registered
- * :cpp:type:`FunctionProto`, the call is dispatched to a fresh child
- * :cpp:class:`RuntimeContext` bound to the function's formal inputs and run
- * through a :cpp:class:`RuntimeSession`; the function's formal outputs are
+ * :cpp:type:`FunctionProto`, the call is dispatched through a
+ * :cpp:class:`RuntimeSession` against the caller's
+ * :cpp:class:`RuntimeContext`, with borrowed formal inputs; the function's formal outputs are
  * then propagated back to the caller under the names declared by
  * ``node.output``. :cpp:func:`RegisterModelFunctions` populates that
  * registry from a ``ModelProto``'s ``functions()`` field so nodes referring
@@ -171,12 +171,10 @@ Tensors RunModel(const ModelProto &model, Tensors inputs, int verbose = 0);
  * declared output names — so ``graph`` itself does not need to be kept
  * around, or passed again, once the session exists.
  *
- * **:cpp:func:`Run`** evaluates the subgraph in a fresh child
- * :cpp:class:`RuntimeContext` that inherits the caller's tensor map and
- * function registry, seeded with the cached initializers and with
- * ``bindings`` (typically the formal-input ↔ actual-input tensor pairs for
- * the subgraph), and returns the subgraph's outputs in the order declared by
- * the graph the session was built from. Safe to call repeatedly (once per
+ * **:cpp:func:`Run`** evaluates the subgraph in the caller's
+ * :cpp:class:`RuntimeContext`. It installs read-only borrowed views under the
+ * formal input names, runs the cached session, removes those bindings, and
+ * moves the declared outputs out in graph order. Safe to call repeatedly (once per
  * ``Loop`` / ``Scan`` / ``SequenceMap`` iteration, or once per
  * ``FlexAttention`` ``score_mod`` / ``prob_mod`` invocation): the subgraph's
  * kernels are resolved once, on the first call, and reused on every
@@ -209,10 +207,8 @@ public:
    * obtained from ``rt``'s per-context plan cache), so that a
    * :cpp:class:`SubgraphSession` cached once by a control-flow node's kernel
    * factory and reused across
-   * repeated executions of that node — including when that node itself is
-   * nested inside an outer ``Loop`` / ``Scan`` / ``SequenceMap`` body and
-   * ``rt`` is therefore a short-lived per-iteration child context — never
-   * outlives the plan it depends on.
+   * repeated executions of that node, including when that node itself is
+   * nested inside an outer ``Loop`` / ``Scan`` / ``SequenceMap`` body.
    *
    * @param rt    Runtime context; only used to propagate events during
    *              construction-time bookkeeping (kept for API symmetry with
@@ -224,13 +220,13 @@ public:
    *              :cpp:class:`ExecutionPlan`); typically part of the parsed
    *              model, so this holds for the model's whole lifetime.
    */
-  SubgraphSession(const GraphProto &graph, const OpsetImports *opset_imports = nullptr);
+  SubgraphSession(const GraphProto &graph, const OpsetImports *opset_imports = nullptr,
+                  std::shared_ptr<ValueStore> value_store = nullptr);
 
   /**
-   * Evaluates the subgraph once in a fresh child :cpp:class:`RuntimeContext`,
-   * seeded with the cached initializers and with ``bindings``. Returns the
-   * subgraph's outputs in the order declared by the graph the session was
-   * built from.
+   * Evaluates the subgraph once in ``rt``, seeded with the cached initializers
+   * and read-only views of ``bindings``. Returns the subgraph's outputs in the
+   * order declared by the graph the session was built from.
    *
    * ``bindings`` is taken by value so callers can move allocator-backed
    * tensors into the subgraph without retaining dangling ownership in the
@@ -253,19 +249,17 @@ public:
 
   /**
    * Lower-level counterpart of :cpp:func:`Run` for callers that need to
-   * inspect the evaluated child context directly instead of getting back
+   * inspect non-tensor outputs directly in ``rt`` instead of getting back
    * only the declared tensor outputs — e.g. ``If``, whose branches may
-   * produce sequence-typed outputs that :cpp:func:`Run` (which only reads
-   * ``child.tensors()``) cannot represent, or ``Loop``'s sequence-typed
+   * produce sequence-typed outputs that :cpp:func:`Run` cannot represent, or ``Loop``'s
+   * sequence-typed
    * loop-carried state, which needs ``sequence_bindings`` bound before the
    * subgraph runs.
    *
-   * Seeds the cached initializers and ``bindings`` / ``sequence_bindings``
-   * into a fresh child :cpp:class:`RuntimeContext` (as :cpp:func:`Run`
-   * does), evaluates the cached :cpp:class:`RuntimeSession` once, and
-   * returns the resulting child context so the caller can pull out
-   * whatever outputs (tensor- or sequence-typed) it needs. Shares
-   * ``rt``'s event log exactly like :cpp:func:`Run`.
+   * Installs read-only views of ``bindings`` / ``sequence_bindings`` in
+   * ``rt``, evaluates the cached :cpp:class:`RuntimeSession` once, and removes
+   * the formal bindings before returning. Declared outputs remain in ``rt``
+   * for the caller to move to their caller-visible names.
    *
    * @param bindings           Formal-input <-> actual-input tensor pairs.
    * @param sequence_bindings  Formal-input <-> actual-input sequence pairs.
@@ -274,13 +268,13 @@ public:
    * @param attr_name          Attribute name identifying the subgraph within
    *                           its owning control-flow node.
    */
-  RuntimeContext RunChild(std::vector<std::pair<std::string, Tensor>> bindings,
-                          std::vector<std::pair<std::string, Sequence>> sequence_bindings,
-                          RuntimeContext &rt, const std::string &attr_name = "");
+  void RunChild(std::vector<std::pair<std::string, Tensor>> bindings,
+                std::vector<std::pair<std::string, Sequence>> sequence_bindings, RuntimeContext &rt,
+                const std::string &attr_name = "");
 
   /// ``Tensor``-bindings-only overload of :cpp:func:`RunChild`.
-  RuntimeContext RunChild(std::vector<std::pair<std::string, Tensor>> bindings, RuntimeContext &rt,
-                          const std::string &attr_name = "");
+  void RunChild(std::vector<std::pair<std::string, Tensor>> bindings, RuntimeContext &rt,
+                const std::string &attr_name = "");
 
 private:
   std::vector<std::string> output_names_;

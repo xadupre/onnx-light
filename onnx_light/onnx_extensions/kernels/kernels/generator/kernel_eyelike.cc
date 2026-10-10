@@ -141,7 +141,7 @@ void EyeLike::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
   const int64_t k = GetAttributeIntOrDefault(node, "k", 0);
   const int64_t dtype = GetAttributeIntOrDefault(node, "dtype", 0);
   onnx_kernels::kernel::EyeLike kernel(rt.kernel_ctx());

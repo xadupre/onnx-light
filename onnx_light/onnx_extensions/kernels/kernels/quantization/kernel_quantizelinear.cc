@@ -921,9 +921,9 @@ void QuantizeLinear::Run(RuntimeContext &rt) {
                       "RunNode: op 'QuantizeLinear' expects 2 or 3 inputs, got ", node.input_size(),
                       ".");
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &y_scale = GetInput(node, 1, rt.tensors());
-  const Tensor *y_zero_point = GetOptionalInput(node, 2, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
+  const Tensor &y_scale = GetInput(node, 1, rt);
+  const Tensor *y_zero_point = GetOptionalInput(node, 2, rt);
   int64_t axis = GetAttributeIntOrDefault(node, "axis", 1);
   const int64_t rank = static_cast<int64_t>(x.shape.size());
   if (axis < 0) {

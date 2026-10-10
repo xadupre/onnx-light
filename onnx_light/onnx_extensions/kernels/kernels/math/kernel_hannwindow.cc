@@ -64,7 +64,7 @@ void HannWindow::Run(RuntimeContext &rt) {
   EXT_ENFORCE_INVALID(!(output_datatype != static_cast<int64_t>(DataType::FLOAT)),
                       "RunNode: op 'HannWindow' only supports output_datatype=FLOAT.");
   const bool periodic = GetAttributeIntOrDefault(node, "periodic", 1) != 0;
-  const Tensor &size = GetInput(node, 0, rt.tensors());
+  const Tensor &size = GetInput(node, 0, rt);
   SetOutput(node, 0, (*this)(size, periodic, &rt), rt);
 }
 

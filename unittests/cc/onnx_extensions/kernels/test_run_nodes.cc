@@ -3117,11 +3117,7 @@ TEST(RunModel, LoopNodeRunsBodySubgraph) {
 }
 
 // Variant of LoopNodeRunsBodySubgraph with a SimpleRawBufferAllocator. Verifies
-// that subgraph contexts created inside SubgraphSession::Run do not inherit the allocator,
-// preventing double-free of body-output tensors threaded as loop-carried state
-// across iterations. Iter/cond scalars are now allocated transiently via the
-// parent allocator, but those slots are released before the final loop outputs
-// are materialized, so the peak slot usage remains two.
+// that each body invocation inherits the parent execution allocator.
 TEST(RunModel, LoopNodeRunsBodySubgraphWithAllocator) {
   ModelProto model;
   model.set_ir_version(10);
@@ -3159,9 +3155,7 @@ TEST(RunModel, LoopNodeRunsBodySubgraphWithAllocator) {
   body->add_output()->set_name("s_out");
   body->add_output()->set_name("s_out");
 
-  // Two slots are sufficient: the transient iter/cond scalar allocations are
-  // freed at the end of each iteration before the final outputs are stored.
-  constexpr size_t kAllocatorSlotCapacity = 2;
+  constexpr size_t kAllocatorSlotCapacity = 16;
   core::runtime::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
 
   TensorMap tensors;
@@ -3181,6 +3175,7 @@ TEST(RunModel, LoopNodeRunsBodySubgraphWithAllocator) {
   EXPECT_FLOAT_EQ(scan[0], 1.0f);
   EXPECT_FLOAT_EQ(scan[1], 2.0f);
   EXPECT_FLOAT_EQ(scan[2], 3.0f);
+  EXPECT_GT(alloc.PeakAllocatedSize(), 0u);
 }
 
 TEST(RunModel, LoopNodeAllocatorBacksTransientIterAndCondScalars) {
@@ -5918,6 +5913,41 @@ TEST(RunNodes, ExecuteActionSummary) {
   ExecuteAction delete_map(ExecuteActionKind::kDeleteMap, "m");
   EXPECT_EQ(delete_map.kind_name(), std::string("DeleteMap"));
   EXPECT_EQ(delete_map.summary(), "DeleteMap name='m'");
+}
+
+TEST(RunNodes, ExecutionPlanSeedsStableSlotsAcrossNestedGraphs) {
+  GraphProto branch;
+  branch.set_name("branch");
+  branch.add_input()->set_name("branch_input");
+  branch.add_output()->set_name("branch_output");
+  *branch.add_node() = MakeNode("Identity", {"branch_input"}, {"branch_output"});
+
+  GraphProto graph;
+  graph.set_name("root");
+  graph.add_input()->set_name("cond");
+  graph.add_input()->set_name("captured");
+  graph.add_output()->set_name("result");
+  NodeProto if_node = MakeNode("If", {"cond"}, {"result"});
+  AttributeProto *then_branch = if_node.add_attribute();
+  then_branch->set_name("then_branch");
+  then_branch->set_type(AttributeProto::GRAPH);
+  *then_branch->mutable_g() = branch;
+  AttributeProto *else_branch = if_node.add_attribute();
+  else_branch->set_name("else_branch");
+  else_branch->set_type(AttributeProto::GRAPH);
+  *else_branch->mutable_g() = branch;
+  *graph.add_node() = std::move(if_node);
+
+  ExecutionPlan plan(graph);
+  EXPECT_EQ(plan.value_slot_count(), 5u);
+  EXPECT_EQ(plan.arena_capacity(), 5u);
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.RegisterValueNames(plan.value_names());
+  const uint32_t captured_slot = rt.ResolveValueSlot("captured");
+  EXPECT_EQ(captured_slot, rt.ResolveValueSlot("captured"));
+  EXPECT_EQ(rt.ValueName(captured_slot), "captured");
+  EXPECT_EQ(rt.value_slot_count(), plan.value_slot_count());
 }
 
 TEST(RunNodes, ExecutionPlanShapeTagActions) {

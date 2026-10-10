@@ -150,7 +150,7 @@ void Normalizer::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
   const std::string norm = GetAttributeStringOrDefault(node, "norm", "MAX");
   onnx_kernels::kernel::Normalizer normalizer(rt.kernel_ctx());
   Tensor y = DispatchSVMByDataType(x, "Normalizer", [&](auto *tag) {

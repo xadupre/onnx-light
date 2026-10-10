@@ -1,0 +1,63 @@
+// Copyright (c) ONNX Project Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+#include "onnx_core/runtime/kernels/value_store.h"
+
+#include <gtest/gtest.h>
+
+#include <cstdint>
+#include <string>
+#include <unordered_map>
+
+using namespace ONNX_LIGHT_NAMESPACE;
+
+namespace {
+
+using core::runtime::RuntimeValue;
+using core::runtime::Tensor;
+using core::runtime::ValueStore;
+
+TEST(ValueStore, UsesIntegerSlotsAndAllocatorBackedRuntimeValues) {
+  ValueStore store;
+  const uint32_t first = store.Bind("first");
+  const uint32_t shared = store.Bind("first");
+  const uint32_t second = store.Bind("second");
+
+  EXPECT_EQ(first, shared);
+  EXPECT_NE(first, second);
+  EXPECT_EQ(store.slot_count(), 2u);
+  EXPECT_FALSE(store.IsReady(first));
+
+  Tensor tensor = store.AllocateTensor(TensorProto::FLOAT, {2}, 2 * sizeof(float));
+  const auto *tensor_allocator = tensor.allocation_owner();
+  tensor.As<float>()[0] = 1.0f;
+  tensor.As<float>()[1] = 2.0f;
+  store.Publish(first, RuntimeValue(std::move(tensor)));
+
+  ASSERT_TRUE(store.IsReady(first));
+  const RuntimeValue &prepared = store.Get(first);
+  ASSERT_EQ(prepared.kind, RuntimeValue::Kind::kTensor);
+  EXPECT_EQ(prepared.tensor.allocation_owner(), tensor_allocator);
+  EXPECT_FLOAT_EQ(prepared.tensor.As<float>()[0], 1.0f);
+  EXPECT_FLOAT_EQ(prepared.tensor.As<float>()[1], 2.0f);
+  EXPECT_EQ(store.prepared_bytes(), 2 * sizeof(float));
+  EXPECT_THROW(store.Publish(first, RuntimeValue()), std::runtime_error);
+
+  Tensor left = store.AllocateTensor(TensorProto::FLOAT, {1}, sizeof(float));
+  Tensor right = store.AllocateTensor(TensorProto::FLOAT, {1}, sizeof(float));
+  left.As<float>()[0] = 3.0f;
+  right.As<float>()[0] = 4.0f;
+  std::unordered_map<std::string, RuntimeValue> fields;
+  fields.emplace("left", RuntimeValue(std::move(left)));
+  fields.emplace("right", RuntimeValue(std::move(right)));
+  store.Publish(second, RuntimeValue(std::move(fields)));
+
+  const RuntimeValue &prepared_struct = store.Get(second);
+  ASSERT_EQ(prepared_struct.kind, RuntimeValue::Kind::kStruct);
+  EXPECT_FLOAT_EQ(prepared_struct.fields.at("left").tensor.As<float>()[0], 3.0f);
+  EXPECT_FLOAT_EQ(prepared_struct.fields.at("right").tensor.As<float>()[0], 4.0f);
+  EXPECT_EQ(store.prepared_bytes(), 4 * sizeof(float));
+}
+
+} // namespace

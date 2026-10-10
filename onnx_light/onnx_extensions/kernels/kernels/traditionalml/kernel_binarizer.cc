@@ -68,7 +68,7 @@ void Binarizer::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
   const float threshold = GetAttributeFloatOrDefault(node, "threshold", 0.0f);
   onnx_kernels::kernel::Binarizer binarizer(rt.kernel_ctx());
   Tensor y = DispatchSVMByDataType(x, "Binarizer", [&](auto *tag) {

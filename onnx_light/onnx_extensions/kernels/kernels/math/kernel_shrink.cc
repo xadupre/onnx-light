@@ -74,7 +74,7 @@ void Shrink::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
   const float bias = GetAttributeFloatOrDefault(node, "bias", 0.0f);
   const float lambd = GetAttributeFloatOrDefault(node, "lambd", 0.5f);
   onnx_kernels::kernel::Shrink k(rt.kernel_ctx());

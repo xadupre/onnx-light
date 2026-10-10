@@ -139,7 +139,7 @@ void LogSoftmax::Run(RuntimeContext &rt) {
   RequireOutputCount(node, 1);
   const int64_t axis = GetAttributeIntOrDefault(
       node, "axis", ctx_.opset.version > 0 && ctx_.opset.version < 13 ? 1 : -1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
   SetOutput(node, 0, (*this)(x, axis, &rt), rt);
 }
 

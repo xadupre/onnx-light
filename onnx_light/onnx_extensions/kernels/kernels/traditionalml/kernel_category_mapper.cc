@@ -158,7 +158,7 @@ void CategoryMapper::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
 
   // ``cats_strings`` and ``cats_int64s`` are both required per the
   // ``ai.onnx.ml::CategoryMapper`` schema and must have the same length.

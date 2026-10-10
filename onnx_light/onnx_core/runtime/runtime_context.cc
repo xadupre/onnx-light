@@ -5,6 +5,7 @@
 #include "onnx_core/runtime/runtime_context.h"
 
 #include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
+#include "onnx_core/runtime/kernels/value_store.h"
 #include "onnx_core/runtime/tuning/cpu_executor.h"
 
 #include <algorithm>
@@ -286,9 +287,55 @@ RuntimeContext::RuntimeContext(KernelContext kernel_ctx, RuntimeContextOptions o
     : kernel_ctx_(std::move(kernel_ctx)), kernel_usage_(std::move(kernel_usage)),
       events_(std::move(events)), events_enabled_(options.events_enabled),
       verbose_(options.verbose), release_intermediates_(options.release_intermediates),
-      allocator_(options.allocator), io_allocator_(options.io_allocator),
-      active_allocator_(options.allocator), device_(options.device) {
+      io_allocator_(options.io_allocator), value_store_(std::make_shared<ValueStore>()),
+      device_(options.device) {
+  allocator_ = options.allocator;
+  active_allocator_ = allocator_;
   kernel_ctx_.allocator = active_allocator_;
+}
+
+RuntimeContext::RuntimeContext()
+    : RuntimeContext(KernelContext{}, RuntimeContextOptions{}, std::make_shared<KernelUsageState>(),
+                     std::make_shared<EventState>()) {}
+
+RuntimeContext::RuntimeContext(KernelContext kernel_ctx, RuntimeContextOptions options)
+    : RuntimeContext(std::move(kernel_ctx), options, std::make_shared<KernelUsageState>(),
+                     std::make_shared<EventState>()) {}
+
+RuntimeContext::RuntimeContext(KernelContext kernel_ctx, TensorMap tensors,
+                               RuntimeContextOptions options)
+    : RuntimeContext(std::move(kernel_ctx), options, std::make_shared<KernelUsageState>(),
+                     std::make_shared<EventState>()) {
+  tensors_ = std::move(tensors);
+}
+
+RuntimeContext::RuntimeContext(RuntimeContextOptions options)
+    : RuntimeContext(KernelContext{}, options, std::make_shared<KernelUsageState>(),
+                     std::make_shared<EventState>()) {}
+
+void RuntimeContext::SetValueStore(std::shared_ptr<ValueStore> value_store) {
+  EXT_ENFORCE(value_store != nullptr, "RuntimeContext: value store must not be null.");
+  value_store_ = std::move(value_store);
+}
+
+void RuntimeContext::BindExecutionPlan(const ExecutionPlan &plan) {
+  RegisterValueNames(plan.value_names());
+  if (allocator_ != nullptr && execution_arena_owner_ == nullptr) {
+    return;
+  }
+  const size_t capacity = plan.arena_capacity();
+  if (execution_arena_owner_ != nullptr) {
+    EXT_ENFORCE_INVALID(
+        capacity <= execution_arena_owner_->capacity(),
+        "RuntimeContext: the existing execution arena has ", execution_arena_owner_->capacity(),
+        " slots but this execution plan requires ", capacity,
+        "; supply an explicit allocator when reusing one context across unrelated plans.");
+    return;
+  }
+  execution_arena_owner_ = std::make_shared<ExecutionArena>(capacity);
+  allocator_ = execution_arena_owner_.get();
+  active_allocator_ = allocator_;
+  kernel_ctx_.allocator = allocator_;
 }
 
 void RuntimeContext::set_kernel_usage_enabled(bool enabled) {
@@ -319,16 +366,25 @@ void RuntimeContext::ClearKernelUsage() {
 
 void RuntimeContext::Set(const std::string &name, Tensor tensor, RuntimeEventKind kind) {
   EXT_ENFORCE(!HasValue(name), "RuntimeContext::Set: a value named '", name, "' already exists.");
+  if (!value_slot_names_.empty()) {
+    Put(ResolveValueSlot(name), std::move(tensor), kind);
+    return;
+  }
   if (!retains_output(name))
     EnsureAllocatorBacked(tensor, allocator_, kind, device_);
   if (events_enabled_) {
     RecordEvent(MakeAddOrReplaceEvent(RuntimeEventAction::kAdd, kind, name, tensor));
   }
   tensors_[name] = std::move(tensor);
+  tensor_map_may_be_modified_ = true;
 }
 
 void RuntimeContext::Put(const std::string &value_name, Tensor tensor, RuntimeEventKind kind) {
   const std::string name = value_name;
+  if (!value_slot_names_.empty()) {
+    Put(ResolveValueSlot(name), std::move(tensor), kind);
+    return;
+  }
   if (!retains_output(name))
     EnsureAllocatorBacked(tensor, allocator_, kind, device_);
   if (events_enabled_) {
@@ -341,6 +397,25 @@ void RuntimeContext::Put(const std::string &value_name, Tensor tensor, RuntimeEv
   maps_.erase(name);
   shapes_.erase(name);
   tensors_[name] = std::move(tensor);
+  tensor_map_may_be_modified_ = true;
+}
+
+void RuntimeContext::Put(uint32_t slot, Tensor tensor, RuntimeEventKind kind) {
+  const std::string &name = ValueName(slot);
+  if (!retains_output(name))
+    EnsureAllocatorBacked(tensor, allocator_, kind, device_);
+  if (events_enabled_) {
+    const RuntimeEventAction action =
+        HasValue(name) ? RuntimeEventAction::kReplace : RuntimeEventAction::kAdd;
+    RecordEvent(MakeAddOrReplaceEvent(action, kind, name, tensor));
+  }
+  values_.erase(name);
+  sequences_.erase(name);
+  maps_.erase(name);
+  shapes_.erase(name);
+  tensor.name = name;
+  tensor_slots_[slot] = std::move(tensor);
+  tensors_.insert_or_assign(name, tensor_slots_[slot]->BorrowView());
 }
 
 void RuntimeContext::PutValue(std::string name, RuntimeValue value, RuntimeEventKind kind) {
@@ -354,6 +429,10 @@ void RuntimeContext::PutValue(std::string name, RuntimeValue value, RuntimeEvent
 
 bool RuntimeContext::Remove(const std::string &value_name) {
   const std::string name = value_name;
+  const auto slot = value_slots_.find(name);
+  if (slot != value_slots_.end() && slot->second < tensor_slots_.size()) {
+    tensor_slots_[slot->second].reset();
+  }
   size_t removed = values_.erase(name);
   removed += sequences_.erase(name);
   removed += maps_.erase(name);
@@ -369,7 +448,102 @@ bool RuntimeContext::Remove(const std::string &value_name) {
   return true;
 }
 
+uint32_t RuntimeContext::ResolveValueSlot(const std::string &name) {
+  EXT_ENFORCE_INVALID(!name.empty(), "RuntimeContext: a value slot name must not be empty.");
+  const auto found = value_slots_.find(name);
+  if (found != value_slots_.end()) {
+    return found->second;
+  }
+  EXT_ENFORCE_INVALID(value_slot_names_.size() < std::numeric_limits<uint32_t>::max(),
+                      "RuntimeContext: value slot directory exceeds uint32_t capacity.");
+  const uint32_t slot = static_cast<uint32_t>(value_slot_names_.size());
+  value_slot_names_.push_back(name);
+  tensor_slots_.emplace_back();
+  value_slots_.emplace(value_slot_names_.back(), slot);
+  return slot;
+}
+
+void RuntimeContext::RegisterValueNames(const std::vector<std::string> &names) {
+  value_slots_.reserve(value_slots_.size() + names.size());
+  value_slot_names_.reserve(value_slot_names_.size() + names.size());
+  for (const std::string &name : names) {
+    ResolveValueSlot(name);
+  }
+  SynchronizeTensorMap();
+}
+
+void RuntimeContext::SynchronizeTensorMap() {
+  if (!tensor_map_may_be_modified_) {
+    return;
+  }
+  for (auto &named_tensor : tensors_) {
+    const uint32_t slot = ResolveValueSlot(named_tensor.first);
+    bool is_mirror = false;
+    if (tensor_slots_[slot].has_value()) {
+      const Tensor &stored = *tensor_slots_[slot];
+      const Tensor &candidate = named_tensor.second;
+      is_mirror = stored.data_type == candidate.data_type && stored.shape == candidate.shape &&
+                  stored.size_bytes() == candidate.size_bytes();
+      if (is_mirror && static_cast<DataType>(stored.data_type) == DataType::STRING) {
+        is_mirror = &stored.AsStrings() == &candidate.AsStrings();
+      } else if (is_mirror) {
+        is_mirror = stored.bytes() == candidate.bytes();
+      }
+    }
+    if (!is_mirror) {
+      tensor_slots_[slot] = std::move(named_tensor.second);
+    }
+    named_tensor.second = tensor_slots_[slot]->BorrowView();
+  }
+  tensor_map_may_be_modified_ = false;
+}
+
+const std::string &RuntimeContext::ValueName(uint32_t slot) const {
+  EXT_ENFORCE_INVALID(slot < value_slot_names_.size(), "RuntimeContext: value slot ", slot,
+                      " is outside the directory of ", value_slot_names_.size(), " names.");
+  return value_slot_names_[slot];
+}
+
+const Tensor &RuntimeContext::GetTensor(uint32_t slot) const {
+  if (tensor_map_may_be_modified_) {
+    const_cast<RuntimeContext *>(this)->SynchronizeTensorMap();
+  }
+  EXT_ENFORCE_INVALID(slot < tensor_slots_.size() && tensor_slots_[slot].has_value(),
+                      "RuntimeContext: tensor slot ", slot, " ('",
+                      slot < value_slot_names_.size() ? value_slot_names_[slot] : std::string("?"),
+                      "') is empty.");
+  return *tensor_slots_[slot];
+}
+
+Tensor &RuntimeContext::GetTensor(uint32_t slot) {
+  return const_cast<Tensor &>(std::as_const(*this).GetTensor(slot));
+}
+
+uint32_t RuntimeContext::CurrentInputSlot(int index) const {
+  EXT_ENFORCE_INVALID(current_input_slots_ != nullptr && index >= 0 &&
+                          static_cast<size_t>(index) < current_input_slots_->size(),
+                      "RuntimeContext: current node input slot ", index, " is unavailable.");
+  const uint32_t slot = (*current_input_slots_)[static_cast<size_t>(index)];
+  EXT_ENFORCE_INVALID(slot != std::numeric_limits<uint32_t>::max(),
+                      "RuntimeContext: current node input #", index, " is unset.");
+  return slot;
+}
+
+uint32_t RuntimeContext::CurrentOutputSlot(int index) const {
+  EXT_ENFORCE_INVALID(current_output_slots_ != nullptr && index >= 0 &&
+                          static_cast<size_t>(index) < current_output_slots_->size(),
+                      "RuntimeContext: current node output slot ", index, " is unavailable.");
+  const uint32_t slot = (*current_output_slots_)[static_cast<size_t>(index)];
+  EXT_ENFORCE_INVALID(slot != std::numeric_limits<uint32_t>::max(),
+                      "RuntimeContext: current node output #", index, " is unset.");
+  return slot;
+}
+
 const Tensor &RuntimeContext::Get(const std::string &name) const {
+  const auto slot = value_slots_.find(name);
+  if (slot != value_slots_.end() && tensor_slots_[slot->second].has_value()) {
+    return *tensor_slots_[slot->second];
+  }
   auto it = tensors_.find(name);
   if (it == tensors_.end()) {
     throw std::out_of_range("RuntimeContext::Get: no tensor named '" + name + "'.");
@@ -378,11 +552,7 @@ const Tensor &RuntimeContext::Get(const std::string &name) const {
 }
 
 Tensor &RuntimeContext::Get(const std::string &name) {
-  auto it = tensors_.find(name);
-  if (it == tensors_.end()) {
-    throw std::out_of_range("RuntimeContext::Get: no tensor named '" + name + "'.");
-  }
-  return it->second;
+  return const_cast<Tensor &>(std::as_const(*this).Get(name));
 }
 
 const ExecutionPlan &RuntimeContext::GetExecutionPlan(const GraphProto &graph) {
@@ -429,20 +599,16 @@ void RuntimeContext::RegisterCustomKernel(const std::string &domain, const std::
 RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name) const {
   RuntimeContext child(kernel_ctx_,
                        RuntimeContextOptions{
-                           .allocator = nullptr,
+                           .allocator = allocator_,
+                           .io_allocator = io_allocator_,
                            .events_enabled = events_enabled_,
                            .verbose = verbose_,
                            .release_intermediates = release_intermediates_,
                            .device = device_,
                        },
                        kernel_usage_, events_);
-  // Subgraph contexts do not inherit the parent allocator. Body kernels use
-  // inline tensor storage, and the parent's EnsureAllocatorBacked (called in
-  // Put/Set) migrates final outputs to the parent allocator when results are
-  // propagated back. This avoids double-free: if the child inherited the
-  // allocator, tensors produced by the body would be freed when the child
-  // context is destroyed, leaving any copies held by the caller with stale
-  // allocation pointers.
+  child.execution_arena_owner_ = execution_arena_owner_;
+  child.value_store_ = value_store_;
   child.functions() = functions_;
   child.custom_kernels() = custom_kernels_;
   child.set_model_owner(model_owner_);
@@ -511,6 +677,8 @@ RuntimeContext RuntimeContext::MakeFunctionContext() const {
                            .device = device_,
                        },
                        kernel_usage_, events_);
+  child.execution_arena_owner_ = execution_arena_owner_;
+  child.value_store_ = value_store_;
   child.functions() = functions_;
   child.custom_kernels() = custom_kernels_;
   child.set_model_owner(model_owner_);

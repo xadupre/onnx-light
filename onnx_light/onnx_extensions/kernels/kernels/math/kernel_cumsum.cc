@@ -251,8 +251,8 @@ void CumSum::Run(RuntimeContext &rt) {
   RequireOutputCount(node, 1);
   const bool exclusive = GetAttributeIntOrDefault(node, "exclusive", 0) != 0;
   const bool reverse = GetAttributeIntOrDefault(node, "reverse", 0) != 0;
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &axis = GetInput(node, 1, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
+  const Tensor &axis = GetInput(node, 1, rt);
   SetOutput(node, 0, (*this)(x, axis, exclusive, reverse, &rt), rt);
 }
 
@@ -262,8 +262,8 @@ void CumProd::Run(RuntimeContext &rt) {
   RequireOutputCount(node, 1);
   const bool exclusive = GetAttributeIntOrDefault(node, "exclusive", 0) != 0;
   const bool reverse = GetAttributeIntOrDefault(node, "reverse", 0) != 0;
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &axis = GetInput(node, 1, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
+  const Tensor &axis = GetInput(node, 1, rt);
   SetOutput(node, 0, (*this)(x, axis, exclusive, reverse, &rt), rt);
 }
 

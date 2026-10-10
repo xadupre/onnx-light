@@ -758,9 +758,26 @@ TEST(IOArenaExportHandle, ExportedTensorOutputOutlivesArenaOwner) {
 // RuntimeContext allocator accessor tests
 // ---------------------------------------------------------------------------
 
-TEST(RuntimeContextAllocator, DefaultAllocatorIsNull) {
+TEST(RuntimeContextAllocator, SessionBindsPlanSizedOwnedArena) {
   RuntimeContext ctx;
   EXPECT_EQ(ctx.allocator(), nullptr);
+
+  GraphProto graph;
+  graph.add_input()->set_name("x");
+  graph.add_output()->set_name("y");
+  NodeProto *node = graph.add_node();
+  node->set_op_type("Identity");
+  node->add_input("x");
+  node->add_output("y");
+  core::runtime::ExecutionPlan plan(graph);
+  ctx.BindExecutionPlan(plan);
+
+  ASSERT_NE(ctx.allocator(), nullptr);
+  EXPECT_EQ(ctx.allocator(), ctx.execution_allocator());
+  EXPECT_EQ(ctx.kernel_ctx().allocator, ctx.execution_allocator());
+  const auto *arena = dynamic_cast<const ExecutionArena *>(ctx.execution_allocator());
+  ASSERT_NE(arena, nullptr);
+  EXPECT_EQ(arena->capacity(), plan.arena_capacity());
 }
 
 TEST(RuntimeContextAllocator, SetAndGetAllocator) {
@@ -774,11 +791,6 @@ TEST(RuntimeContextAllocator, ConstContextExposesAllocator) {
   RuntimeContext ctx(RuntimeContextOptions{.allocator = &alloc});
   const RuntimeContext &cref = ctx;
   EXPECT_EQ(cref.allocator(), &alloc);
-}
-
-TEST(RuntimeContextAllocator, DefaultConstructorLeavesAllocatorUnset) {
-  RuntimeContext ctx;
-  EXPECT_EQ(ctx.allocator(), nullptr);
 }
 
 TEST(RuntimeContextAllocator, DefaultIOAllocatorIsNull) {
@@ -797,6 +809,22 @@ TEST(RuntimeContextAllocator, SetAndGetIOAllocator) {
   EXPECT_EQ(ctx.allocator(), &execution_alloc);
   EXPECT_EQ(ctx.execution_allocator(), &execution_alloc);
   EXPECT_EQ(ctx.io_allocator(), &io_alloc);
+}
+
+TEST(RuntimeContextAllocator, SubgraphInheritsExecutionAndIOAllocators) {
+  core::runtime::SimpleRawBufferAllocator execution_alloc(8);
+  core::runtime::SimpleRawBufferAllocator io_alloc(8);
+  RuntimeContext parent(KernelContext(DefaultOpset(18)),
+                        core::runtime::RuntimeContextOptions{.allocator = &execution_alloc,
+                                                             .io_allocator = &io_alloc});
+
+  RuntimeContext child = parent.MakeSubgraphContext("body");
+
+  EXPECT_EQ(child.execution_allocator(), &execution_alloc);
+  EXPECT_EQ(child.allocator(), &execution_alloc);
+  EXPECT_EQ(child.kernel_ctx().allocator, &execution_alloc);
+  EXPECT_EQ(child.io_allocator(), &io_alloc);
+  EXPECT_EQ(child.value_store_owner(), parent.value_store_owner());
 }
 
 TEST(RuntimeContextAllocator, SetActiveAllocatorSwitchesAllocatorAndKernelContext) {

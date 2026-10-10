@@ -137,7 +137,7 @@ void ArgMax::Run(RuntimeContext &rt) {
   const int64_t axis = GetAttributeIntOrDefault(node, "axis", 0);
   const bool keepdims = GetAttributeIntOrDefault(node, "keepdims", 1) != 0;
   const bool select_last_index = GetAttributeIntOrDefault(node, "select_last_index", 0) != 0;
-  const Tensor &data = GetInput(node, 0, rt.tensors());
+  const Tensor &data = GetInput(node, 0, rt);
   SetOutput(node, 0, (*this)(data, axis, keepdims, select_last_index, &rt), rt);
 }
 
@@ -148,7 +148,7 @@ void ArgMin::Run(RuntimeContext &rt) {
   const int64_t axis = GetAttributeIntOrDefault(node, "axis", 0);
   const bool keepdims = GetAttributeIntOrDefault(node, "keepdims", 1) != 0;
   const bool select_last_index = GetAttributeIntOrDefault(node, "select_last_index", 0) != 0;
-  const Tensor &data = GetInput(node, 0, rt.tensors());
+  const Tensor &data = GetInput(node, 0, rt);
   SetOutput(node, 0, (*this)(data, axis, keepdims, select_last_index, &rt), rt);
 }
 

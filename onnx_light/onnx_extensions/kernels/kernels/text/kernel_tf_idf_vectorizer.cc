@@ -404,7 +404,7 @@ void TfIdfVectorizer::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
   const std::string mode_attr = GetRequiredAttributeString(node, "mode");
   const int64_t min_gram_length = GetAttributeIntOrDefault(node, "min_gram_length", 1);
   const int64_t max_gram_length = GetAttributeIntOrDefault(node, "max_gram_length", 1);

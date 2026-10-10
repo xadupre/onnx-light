@@ -96,7 +96,7 @@ void LpNormalization::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
   const int64_t axis = GetAttributeIntOrDefault(node, "axis", -1);
   const int64_t p = GetAttributeIntOrDefault(node, "p", 2);
   SetOutput(node, 0, (*this)(x, axis, p, &rt), rt);

@@ -61,7 +61,6 @@ void KernelBase::Configure(const KernelTuningParameters &) {
 
 bool KernelBase::HasPreparations(const std::unordered_set<std::string> &) const { return false; }
 
-void KernelBase::Prepare(RuntimeContext &, const std::unordered_set<std::string> &,
-                         PreparedExecutionState &) {}
+void KernelBase::Prepare(RuntimeContext &, const std::unordered_set<std::string> &) {}
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

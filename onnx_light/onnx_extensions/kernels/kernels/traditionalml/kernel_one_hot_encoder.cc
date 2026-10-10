@@ -166,7 +166,7 @@ void OneHotEncoder::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
 
   const AttributeProto *cats_int64s = FindAttribute(node, "cats_int64s");
   const AttributeProto *cats_strings = FindAttribute(node, "cats_strings");

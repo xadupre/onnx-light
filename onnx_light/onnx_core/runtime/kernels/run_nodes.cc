@@ -11,6 +11,7 @@
 #include <cstring>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -41,33 +42,93 @@ bool ParseBoolScalar(const Tensor &t, const std::string &where) {
   return t.AsBool()[0] != 0;
 }
 
-Tensor CloneTensor(const Tensor &tensor, RawBufferAllocator *allocator = nullptr);
+class ScopedNestedSessionState {
+public:
+  ScopedNestedSessionState(RuntimeContext &rt, std::optional<std::string> attr_name)
+      : rt_(rt), node_index_(rt.current_node_index()),
+        subgraph_node_index_(rt.current_subgraph_node_index()),
+        subgraph_attr_name_(rt.current_subgraph_attr_name()),
+        release_intermediates_(rt.release_intermediates()) {
+    if (attr_name.has_value()) {
+      rt_.set_current_subgraph(node_index_, *attr_name);
+    }
+    rt_.set_release_intermediates(true);
+  }
 
-/**
- * Creates a deep copy of a tensor before it leaves a child RuntimeContext.
- *
- * @param tensor Tensor to clone.
- * @param allocator Optional allocator for the cloned raw buffer.
- *     Passing `nullptr` keeps the legacy inline `std::vector<uint8_t>`
- *     storage for numeric tensors.
- * @return A deep copy of `tensor` with owned storage.
- *
- * The copy avoids dangling pointers when the child held allocator-backed or
- * borrowed storage, and it preserves duplicate subgraph outputs that name the
- * same tensor more than once. When `allocator` is non-null, numeric
- * tensors are materialized in allocator-backed storage immediately instead of
- * waiting for a later `RuntimeContext::Put` migration.
- */
-Tensor CloneTensor(const Tensor &tensor, RawBufferAllocator *allocator) {
-  if (static_cast<DataType>(tensor.data_type) == DataType::STRING) {
-    return Tensor::MakeString(tensor.name, tensor.shape, tensor.AsStrings());
+  ~ScopedNestedSessionState() {
+    rt_.set_release_intermediates(release_intermediates_);
+    rt_.set_current_node_index(node_index_);
+    rt_.set_current_subgraph(subgraph_node_index_, subgraph_attr_name_);
   }
-  Tensor clone = MakeOutputTensor(tensor.data_type, tensor.shape, tensor.size_bytes(), allocator);
-  clone.name = tensor.name;
-  if (tensor.size_bytes() > 0) {
-    std::memcpy(clone.mutable_bytes(), tensor.bytes(), tensor.size_bytes());
+
+private:
+  RuntimeContext &rt_;
+  int64_t node_index_;
+  int64_t subgraph_node_index_;
+  std::string subgraph_attr_name_;
+  bool release_intermediates_;
+};
+
+class ScopedRuntimeBindings {
+public:
+  explicit ScopedRuntimeBindings(RuntimeContext &rt) : rt_(rt) {}
+  ~ScopedRuntimeBindings() {
+    for (const std::string &name : names_) {
+      rt_.Remove(name);
+    }
   }
-  return clone;
+
+  void Bind(const std::string &name, const Tensor &tensor) {
+    Tensor view = tensor.BorrowView();
+    view.name = name;
+    rt_.Put(name, std::move(view), RuntimeEventKind::kInput);
+    names_.push_back(name);
+  }
+
+  void Bind(const std::string &name, const Sequence &sequence) {
+    Tensors views;
+    views.reserve(sequence.values.size());
+    for (const Tensor &tensor : sequence.values) {
+      views.push_back(tensor.BorrowView());
+    }
+    rt_.PutSequence(name, Sequence(name, sequence.elem_type, std::move(views)));
+    names_.push_back(name);
+  }
+
+  void Bind(const std::string &name, const RuntimeValue &value) {
+    rt_.PutValue(name, value.BorrowView(), RuntimeEventKind::kInput);
+    names_.push_back(name);
+  }
+
+private:
+  RuntimeContext &rt_;
+  std::vector<std::string> names_;
+};
+
+Tensor TakeTensor(RuntimeContext &rt, const std::string &name, const std::string &where) {
+  auto it = rt.tensors().find(name);
+  EXT_ENFORCE_INVALID(it != rt.tensors().end(), where, " '", name, "' was not produced.");
+  Tensor result = std::move(it->second);
+  rt.tensors().erase(it);
+  return result;
+}
+
+Sequence TakeSequence(RuntimeContext &rt, const std::string &name) {
+  auto it = rt.sequences().find(name);
+  EXT_ENFORCE_INVALID(it != rt.sequences().end(), "RunNode: sequence output '", name,
+                      "' was not produced.");
+  Sequence result = std::move(it->second);
+  rt.sequences().erase(it);
+  return result;
+}
+
+RuntimeValue TakeRuntimeValue(RuntimeContext &rt, const std::string &name) {
+  auto it = rt.values().find(name);
+  EXT_ENFORCE_INVALID(it != rt.values().end(), "RunNode: runtime value output '", name,
+                      "' was not produced.");
+  RuntimeValue result = std::move(it->second);
+  rt.values().erase(it);
+  return result;
 }
 
 int64_t CheckedMulInt64(int64_t a, int64_t b, const std::string &where) {
@@ -169,8 +230,9 @@ Tensor SliceTensorAlongAxis(const Tensor &t, int64_t axis, int64_t index,
   return out;
 }
 
-SubgraphSession::SubgraphSession(const GraphProto &graph, const OpsetImports *opset_imports)
-    : RuntimeSession(graph, opset_imports) {
+SubgraphSession::SubgraphSession(const GraphProto &graph, const OpsetImports *opset_imports,
+                                 std::shared_ptr<ValueStore> value_store)
+    : RuntimeSession(graph, opset_imports, 0, std::move(value_store)) {
   const auto &outs = graph.output();
   output_names_.reserve(outs.size());
   for (size_t i = 0; i < outs.size(); ++i) {
@@ -180,37 +242,33 @@ SubgraphSession::SubgraphSession(const GraphProto &graph, const OpsetImports *op
   }
 }
 
-RuntimeContext
-SubgraphSession::RunChild(std::vector<std::pair<std::string, Tensor>> bindings,
-                          std::vector<std::pair<std::string, Sequence>> sequence_bindings,
-                          RuntimeContext &rt, const std::string &attr_name) {
-  RuntimeContext child = rt.MakeSubgraphContext(attr_name);
-  for (auto &kv : bindings) {
-    child.Put(kv.first, std::move(kv.second), RuntimeEventKind::kInput);
+void SubgraphSession::RunChild(std::vector<std::pair<std::string, Tensor>> bindings,
+                               std::vector<std::pair<std::string, Sequence>> sequence_bindings,
+                               RuntimeContext &rt, const std::string &attr_name) {
+  ScopedNestedSessionState nested_state(rt, attr_name);
+  ScopedRuntimeBindings scoped_bindings(rt);
+  for (const auto &kv : bindings) {
+    scoped_bindings.Bind(kv.first, kv.second);
   }
-  for (auto &kv : sequence_bindings) {
-    child.PutSequence(kv.first, std::move(kv.second));
+  for (const auto &kv : sequence_bindings) {
+    scoped_bindings.Bind(kv.first, kv.second);
   }
-  RuntimeSession::Run(child);
-  return child;
+  RuntimeSession::Run(rt);
 }
 
-RuntimeContext SubgraphSession::RunChild(std::vector<std::pair<std::string, Tensor>> bindings,
-                                         RuntimeContext &rt, const std::string &attr_name) {
-  return RunChild(std::move(bindings), {}, rt, attr_name);
+void SubgraphSession::RunChild(std::vector<std::pair<std::string, Tensor>> bindings,
+                               RuntimeContext &rt, const std::string &attr_name) {
+  RunChild(std::move(bindings), {}, rt, attr_name);
 }
 
 Tensors SubgraphSession::Run(std::vector<std::pair<std::string, Tensor>> bindings,
                              RuntimeContext &rt, const std::string &attr_name) {
-  RuntimeContext child = RunChild(std::move(bindings), rt, attr_name);
+  RunChild(std::move(bindings), rt, attr_name);
 
   Tensors outputs;
   outputs.reserve(output_names_.size());
   for (const auto &out_name : output_names_) {
-    auto it = child.tensors().find(out_name);
-    EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: subgraph output '", out_name,
-                        "' was not produced.");
-    outputs.push_back(CloneTensor(it->second));
+    outputs.push_back(TakeTensor(rt, out_name, "RunNode: subgraph output"));
   }
   return outputs;
 }
@@ -236,7 +294,7 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt, SubgraphSession &then_
                SubgraphSession &else_session) {
   RequireInputCount(node, 1);
 
-  const Tensor &cond = GetInput(node, 0, rt.tensors());
+  const Tensor &cond = GetInput(node, 0, rt);
   EXT_ENFORCE_INVALID(cond.data_type == DataType::BOOL, "RunNode: If input 'cond' must be BOOL.");
   EXT_ENFORCE_INVALID(cond.element_count() == 1,
                       "RunNode: If input 'cond' must contain a single element.");
@@ -252,38 +310,23 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt, SubgraphSession &then_
   const bool taken = cond.bytes()[0] != 0;
   const GraphProto &branch = taken ? then_branch : else_branch;
   const std::string branch_attr = taken ? "then_branch" : "else_branch";
-  // The selected branch's kernels were resolved once (in the NodeKernelFn
-  // factory) and are cached in ``then_session`` / ``else_session``; only the
-  // per-call child context (seeded with the caller's current tensors /
-  // sequences) is rebuilt here.
   SubgraphSession &session = taken ? then_session : else_session;
-  RuntimeContext child = rt.MakeSubgraphContext(branch_attr);
-  std::unordered_set<std::string> retained;
-  for (int i = 0; i < branch.output_size(); ++i)
-    if (rt.retains_output(node.output(i)))
-      retained.insert(branch.output(i).name());
-  child.set_retained_outputs(std::move(retained));
-  session.RuntimeSession::Run(child);
+  session.RunChild({}, rt, branch_attr);
 
   for (int i = 0; i < branch.output_size(); ++i) {
     const std::string out_name = branch.output()[i].name();
     EXT_ENFORCE_INVALID(!(out_name.empty()), "RunNode: If: a subgraph output has an empty name.");
     const std::string caller_name = node.output(i);
     if (caller_name.empty()) {
+      rt.Remove(out_name);
       continue;
     }
-    if (child.HasSequence(out_name)) {
-      rt.PutSequence(caller_name, child.GetSequence(out_name));
-    } else if (child.values().count(out_name) != 0) {
-      RuntimeValue &value = child.values().at(out_name);
-      rt.PutValue(caller_name,
-                  rt.retains_output(caller_name) ? std::move(value) : value.DeepCopy());
+    if (rt.HasSequence(out_name)) {
+      rt.PutSequence(caller_name, TakeSequence(rt, out_name));
+    } else if (rt.values().count(out_name) != 0) {
+      rt.PutValue(caller_name, TakeRuntimeValue(rt, out_name));
     } else {
-      auto it = child.tensors().find(out_name);
-      EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: If: subgraph output '", out_name,
-                          "' was not produced by the selected branch.");
-      Tensor t = rt.retains_output(caller_name) ? std::move(it->second)
-                                                : CloneTensor(it->second, rt.allocator());
+      Tensor t = TakeTensor(rt, out_name, "RunNode: If: subgraph output");
       t.name = caller_name;
       rt.Put(caller_name, std::move(t), RuntimeEventKind::kOutput);
     }
@@ -324,47 +367,31 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
     for (std::size_t i = 0; i < n; ++i) {
       const std::string &bname = body.input(static_cast<int>(2 + i)).name();
       if (is_seq_state[i]) {
-        sequence_bindings.emplace_back(bname, sequence_state[i]);
+        sequence_bindings.emplace_back(bname, std::move(sequence_state[i]));
       } else {
-        Tensor t = tensor_state[i];
+        Tensor t = std::move(tensor_state[i]);
         t.name = bname;
         tensor_bindings.emplace_back(bname, std::move(t));
       }
     }
-    // The body's kernels were resolved once (when this kernel was built during
-    // node resolution) and are cached in ``body_session``; only the
-    // per-iteration child context is rebuilt here.
-    RuntimeContext child =
-        body_session.RunChild(std::move(tensor_bindings), std::move(sequence_bindings), rt, "body");
+    body_session.RunChild(std::move(tensor_bindings), std::move(sequence_bindings), rt, "body");
 
     const std::string &cond_out_name = body.output(0).name();
-    auto cond_it = child.tensors().find(cond_out_name);
-    EXT_ENFORCE_INVALID(cond_it != child.tensors().end(),
-                        "RunNode: Loop body did not produce 'cond_out' output '", cond_out_name,
-                        "'.");
-    cond_value = ParseBoolScalar(cond_it->second, "Loop body output 'cond_out'");
+    Tensor cond_out = TakeTensor(rt, cond_out_name, "RunNode: Loop body output 'cond_out'");
+    cond_value = ParseBoolScalar(cond_out, "Loop body output 'cond_out'");
 
     for (std::size_t i = 0; i < n; ++i) {
       const std::string &oname = body.output(static_cast<int>(1 + i)).name();
       if (is_seq_state[i]) {
-        EXT_ENFORCE_INVALID(
-            child.HasSequence(oname),
-            "RunNode: Loop body did not produce sequence-typed loop-carried output '", oname, "'.");
-        sequence_state[i] = child.GetSequence(oname);
+        sequence_state[i] = TakeSequence(rt, oname);
       } else {
-        auto it = child.tensors().find(oname);
-        EXT_ENFORCE_INVALID(it != child.tensors().end(),
-                            "RunNode: Loop body did not produce tensor-typed loop-carried output '",
-                            oname, "'.");
-        tensor_state[i] = CloneTensor(it->second);
+        tensor_state[i] =
+            TakeTensor(rt, oname, "RunNode: Loop body tensor-typed loop-carried output");
       }
     }
     for (std::size_t j = 0; j < k; ++j) {
       const std::string &oname = body.output(static_cast<int>(1 + n + j)).name();
-      auto it = child.tensors().find(oname);
-      EXT_ENFORCE_INVALID(it != child.tensors().end(),
-                          "RunNode: Loop body did not produce scan output '", oname, "'.");
-      scan_values[j].push_back(CloneTensor(it->second));
+      scan_values[j].push_back(TakeTensor(rt, oname, "RunNode: Loop body scan output"));
     }
     ++trip_count;
   }
@@ -376,9 +403,9 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
       continue;
     }
     if (is_seq_state[i]) {
-      rt.PutSequence(caller_name, sequence_state[i]);
+      rt.PutSequence(caller_name, std::move(sequence_state[i]));
     } else {
-      Tensor t = tensor_state[i];
+      Tensor t = std::move(tensor_state[i]);
       t.name = caller_name;
       rt.Put(caller_name, std::move(t), RuntimeEventKind::kOutput);
     }
@@ -451,11 +478,11 @@ void RunLoopNode(const NodeProto &node, RuntimeContext &rt, SubgraphSession &bod
 
   Tensor m_tensor;
   if (!node.input(0).empty()) {
-    m_tensor = GetInput(node, 0, rt.tensors());
+    m_tensor = GetInput(node, 0, rt).BorrowView();
   }
   Tensor cond_tensor;
   if (!node.input(1).empty()) {
-    cond_tensor = GetInput(node, 1, rt.tensors());
+    cond_tensor = GetInput(node, 1, rt).BorrowView();
   }
 
   // Classify each loop-carried input as either sequence-typed (looked up
@@ -475,10 +502,15 @@ void RunLoopNode(const NodeProto &node, RuntimeContext &rt, SubgraphSession &bod
     const std::string name = node.input(idx);
     if (rt.HasSequence(name)) {
       is_seq_state[i] = true;
-      sequence_state[i] = rt.GetSequence(name);
+      Tensors views;
+      const Sequence &source = rt.GetSequence(name);
+      views.reserve(source.values.size());
+      for (const Tensor &tensor : source.values)
+        views.push_back(tensor.BorrowView());
+      sequence_state[i] = Sequence(name, source.elem_type, std::move(views));
       any_sequence_state = true;
     } else {
-      tensor_state[i] = GetInput(node, idx, rt.tensors());
+      tensor_state[i] = GetInput(node, idx, rt).BorrowView();
     }
   }
 
@@ -549,7 +581,7 @@ void RunScanNode(const NodeProto &node, RuntimeContext &rt, SubgraphSession &bod
     const int idx = static_cast<int>(scan8_offset + i);
     EXT_ENFORCE_INVALID(!(node.input(idx).empty()),
                         "RunNode: Scan does not support empty placeholders in state inputs.");
-    initial_state.push_back(GetInput(node, idx, rt.tensors()));
+    initial_state.push_back(GetInput(node, idx, rt).BorrowView());
   }
 
   Tensors scan_inputs;
@@ -558,7 +590,7 @@ void RunScanNode(const NodeProto &node, RuntimeContext &rt, SubgraphSession &bod
     const int idx = static_cast<int>(scan8_offset + n + i);
     EXT_ENFORCE_INVALID(!(node.input(idx).empty()),
                         "RunNode: Scan does not support empty placeholders in scan inputs.");
-    scan_inputs.push_back(GetInput(node, idx, rt.tensors()));
+    scan_inputs.push_back(GetInput(node, idx, rt).BorrowView());
   }
 
   // Scan-8 attribute ``directions`` was split into
@@ -685,7 +717,7 @@ void RunSequenceMapNode(const NodeProto &node, RuntimeContext &rt, SubgraphSessi
                           " (matching the first input sequence length).");
       additional_sequences[k] = &seq;
     } else {
-      additional_tensors[k] = &GetInput(node, idx, rt.tensors());
+      additional_tensors[k] = &GetInput(node, idx, rt);
     }
   }
 
@@ -714,7 +746,7 @@ void RunSequenceMapNode(const NodeProto &node, RuntimeContext &rt, SubgraphSessi
     std::vector<std::pair<std::string, Tensor>> bindings;
     bindings.reserve(1u + num_additional);
 
-    Tensor elem0 = input_sequence.values[i];
+    Tensor elem0 = input_sequence.values[i].BorrowView();
     elem0.name = body.input(0).name();
     bindings.emplace_back(elem0.name, std::move(elem0));
 
@@ -722,9 +754,9 @@ void RunSequenceMapNode(const NodeProto &node, RuntimeContext &rt, SubgraphSessi
       const std::string param_name = body.input(static_cast<int>(1 + k)).name();
       Tensor t;
       if (additional_sequences[k] != nullptr) {
-        t = additional_sequences[k]->values[i];
+        t = additional_sequences[k]->values[i].BorrowView();
       } else {
-        t = *additional_tensors[k];
+        t = additional_tensors[k]->BorrowView();
       }
       t.name = param_name;
       bindings.emplace_back(param_name, std::move(t));
@@ -818,8 +850,10 @@ class ModelLocalFunctionKernel : public KernelBase {
 public:
   ModelLocalFunctionKernel(const NodeProto &node, const FunctionProto &func,
                            const KernelContext &kernel_context,
-                           const OpsetImports *inherited_opset_imports)
-      : KernelBase(kernel_context), func_(func), inherited_opset_imports_(inherited_opset_imports) {
+                           const OpsetImports *inherited_opset_imports,
+                           std::shared_ptr<ValueStore> value_store)
+      : KernelBase(kernel_context), func_(func), inherited_opset_imports_(inherited_opset_imports),
+        value_store_(std::move(value_store)) {
     set_node(node);
     // Pre-bind attribute references at construction time (the call-site
     // node and function body are both fixed for this kernel's lifetime).
@@ -849,14 +883,9 @@ public:
         "RunNode: call to model-local function '", op_type, "' expects ", func_.output_size(),
         " output(s), got ", node_->output_size(), ".");
 
-    RuntimeContext child = rt.MakeFunctionContext();
-    std::unordered_set<std::string> retained;
-    for (int i = 0; i < func_.output_size(); ++i)
-      if (rt.retains_output(node_->output(i)))
-        retained.insert(func_.output(i));
-    child.set_retained_outputs(std::move(retained));
+    ScopedNestedSessionState nested_state(rt, std::nullopt);
+    ScopedRuntimeBindings bindings(rt);
 
-    // The parent context remains alive throughout the function invocation.
     for (size_t i = 0; i < static_cast<std::size_t>(func_.input_size()); ++i) {
       const std::string caller_name = node_->input(i);
       const std::string param_name = func_.input(i);
@@ -865,44 +894,38 @@ public:
       }
       auto value = rt.values().find(caller_name);
       if (value != rt.values().end()) {
-        child.PutValue(param_name, value->second.BorrowView(), RuntimeEventKind::kInput);
+        bindings.Bind(param_name, value->second);
         continue;
       }
       auto it = rt.tensors().find(caller_name);
       EXT_ENFORCE_INVALID(it != rt.tensors().end(), "RunNode: input '", caller_name,
                           "' of call to model-local function '", op_type,
                           "' is missing from the tensor map.");
-      const Tensor &src = it->second;
-      Tensor bound = src.BorrowView();
-      bound.name = param_name;
-      child.Put(param_name, std::move(bound), RuntimeEventKind::kInput);
+      bindings.Bind(param_name, it->second);
     }
 
     // Resolve kernels once on first run, reuse on subsequent calls.
     if (!session_) {
-      session_ = std::make_unique<RuntimeSession>(bound_func_, inherited_opset_imports_);
+      session_ =
+          std::make_unique<RuntimeSession>(bound_func_, inherited_opset_imports_,
+                                           RuntimeSessionOptions{.value_store = value_store_});
     }
-    session_->Run(child);
+    session_->Run(rt);
 
     // Propagate formal outputs back to the caller's value maps.
     for (size_t i = 0; i < static_cast<std::size_t>(func_.output_size()); ++i) {
       const std::string caller_name = node_->output(i);
       const std::string param_name = func_.output(i);
       if (caller_name.empty()) {
+        rt.Remove(param_name);
         continue;
       }
-      auto value = child.values().find(param_name);
-      if (value != child.values().end()) {
-        rt.PutValue(caller_name, rt.retains_output(caller_name) ? std::move(value->second)
-                                                                : value->second.DeepCopy());
+      auto value = rt.values().find(param_name);
+      if (value != rt.values().end()) {
+        rt.PutValue(caller_name, TakeRuntimeValue(rt, param_name));
         continue;
       }
-      auto it = child.tensors().find(param_name);
-      EXT_ENFORCE_INVALID(it != child.tensors().end(), "RunNode: output '", param_name,
-                          "' of model-local function '", op_type,
-                          "' was not produced by the function body.");
-      Tensor result = rt.retains_output(caller_name) ? std::move(it->second)
-                                                     : CloneTensor(it->second, rt.allocator());
+      Tensor result = TakeTensor(rt, param_name, "RunNode: model-local function output");
       result.name = caller_name;
       rt.Put(caller_name, std::move(result), RuntimeEventKind::kOutput);
     }
@@ -912,6 +935,7 @@ private:
   const FunctionProto &func_;
   FunctionProto bound_func_;
   const OpsetImports *inherited_opset_imports_;
+  std::shared_ptr<ValueStore> value_store_;
   std::unique_ptr<RuntimeSession> session_;
 };
 
@@ -994,7 +1018,8 @@ std::unique_ptr<KernelBase> ResolveNodeKernelDefault(const NodeProto &node, Runt
                                                      const std::string &domain,
                                                      const std::string &op_type,
                                                      const KernelContext &kernel_context,
-                                                     const OpsetImports *opset_imports) {
+                                                     const OpsetImports *opset_imports,
+                                                     std::shared_ptr<ValueStore> value_store) {
   // A node referring to a model-local FunctionProto (registered by
   // ``RegisterModelFunctions`` from ``ModelProto::functions()``) takes priority over
   // the built-in kernel dispatch table so that user-defined functions
@@ -1005,7 +1030,8 @@ std::unique_ptr<KernelBase> ResolveNodeKernelDefault(const NodeProto &node, Runt
     auto fit = rt.functions().find(fkey);
     if (fit != rt.functions().end()) {
       const FunctionProto *func = fit->second;
-      return std::make_unique<ModelLocalFunctionKernel>(node, *func, kernel_context, opset_imports);
+      return std::make_unique<ModelLocalFunctionKernel>(node, *func, kernel_context, opset_imports,
+                                                        std::move(value_store));
     }
   }
 
@@ -1017,8 +1043,8 @@ std::unique_ptr<KernelBase> ResolveNodeKernelDefault(const NodeProto &node, Runt
     // kernel initialization) and hand them to the kernel so every subsequent
     // invocation of this node reuses them instead of re-resolving the
     // selected branch's kernels from scratch.
-    auto then_session = std::make_shared<SubgraphSession>(then_branch, opset_imports);
-    auto else_session = std::make_shared<SubgraphSession>(else_branch, opset_imports);
+    auto then_session = std::make_shared<SubgraphSession>(then_branch, opset_imports, value_store);
+    auto else_session = std::make_shared<SubgraphSession>(else_branch, opset_imports, value_store);
     return std::make_unique<IfKernel>(node, std::move(then_session), std::move(else_session),
                                       kernel_context);
   }
@@ -1026,17 +1052,20 @@ std::unique_ptr<KernelBase> ResolveNodeKernelDefault(const NodeProto &node, Runt
     const GraphProto &body = GetRequiredGraphAttribute(node, "body");
     // Built once here so the body's kernels are resolved a single time and
     // reused across every iteration of every invocation of this node.
-    auto body_session = std::make_shared<SubgraphSession>(body, opset_imports);
+    auto body_session =
+        std::make_shared<SubgraphSession>(body, opset_imports, std::move(value_store));
     return std::make_unique<LoopKernel>(node, std::move(body_session), kernel_context);
   }
   if (domain == kDefaultOnnxDomain && op_type == "Scan") {
     const GraphProto &body = GetRequiredGraphAttribute(node, "body");
-    auto body_session = std::make_shared<SubgraphSession>(body, opset_imports);
+    auto body_session =
+        std::make_shared<SubgraphSession>(body, opset_imports, std::move(value_store));
     return std::make_unique<ScanKernel>(node, std::move(body_session), kernel_context);
   }
   if (domain == kDefaultOnnxDomain && op_type == "SequenceMap") {
     const GraphProto &body = GetRequiredGraphAttribute(node, "body");
-    auto body_session = std::make_shared<SubgraphSession>(body, opset_imports);
+    auto body_session =
+        std::make_shared<SubgraphSession>(body, opset_imports, std::move(value_store));
     return std::make_unique<SequenceMapKernel>(node, std::move(body_session), kernel_context);
   }
 
@@ -1124,6 +1153,32 @@ void PrintNodeProgress(const RuntimeContext &rt, const NodeProto &node, const st
 } // namespace detail
 
 void RunNode(const NodeProto &node, RuntimeContext &rt) {
+  std::vector<std::string> value_names;
+  value_names.reserve(node.input_size() + node.output_size());
+  for (const auto &name : node.input()) {
+    if (!name.empty()) {
+      value_names.push_back(name);
+    }
+  }
+  for (const auto &name : node.output()) {
+    if (!name.empty()) {
+      value_names.push_back(name);
+    }
+  }
+  rt.RegisterValueNames(value_names);
+  std::vector<uint32_t> input_slots;
+  input_slots.reserve(node.input_size());
+  for (const auto &name : node.input()) {
+    input_slots.push_back(name.empty() ? std::numeric_limits<uint32_t>::max()
+                                       : rt.ResolveValueSlot(name));
+  }
+  std::vector<uint32_t> output_slots;
+  output_slots.reserve(node.output_size());
+  for (const auto &name : node.output()) {
+    output_slots.push_back(name.empty() ? std::numeric_limits<uint32_t>::max()
+                                        : rt.ResolveValueSlot(name));
+  }
+  rt.SetCurrentNodeValueSlots(&input_slots, &output_slots);
   const std::string &domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
   const std::string &op_type = node.op_type().value();
   std::unique_ptr<KernelBase> resolved =
@@ -1143,6 +1198,7 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
   }
 
   resolved->Run(rt);
+  rt.SetCurrentNodeValueSlots(nullptr, nullptr);
 
   if (logging) {
     const int64_t duration_ns =

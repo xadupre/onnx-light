@@ -101,7 +101,7 @@ void Scaler::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
   const std::vector<float> offset = GetAttributeFloatsOrDefault(node, "offset", {});
   const std::vector<float> scale = GetAttributeFloatsOrDefault(node, "scale", {});
   onnx_kernels::kernel::Scaler scaler(rt.kernel_ctx());

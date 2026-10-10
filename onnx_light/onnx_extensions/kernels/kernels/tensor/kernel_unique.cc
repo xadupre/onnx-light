@@ -451,7 +451,7 @@ void Unique::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputRange(node, 1, 4);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
   onnx_kernels::kernel::Unique::Attributes attrs;
   attrs.sorted = GetAttributeIntOrDefault(node, "sorted", 1) != 0;
   const AttributeProto *axis_attr = FindAttribute(node, "axis");

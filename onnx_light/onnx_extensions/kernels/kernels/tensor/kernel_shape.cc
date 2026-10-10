@@ -91,7 +91,7 @@ void Shape::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
-  const Tensor &data = GetInput(node, 0, rt.tensors());
+  const Tensor &data = GetInput(node, 0, rt);
   onnx_kernels::kernel::Shape::Attributes shape_attrs;
   shape_attrs.start = GetAttributeIntOrDefault(node, "start", 0);
   const AttributeProto *end_attr = FindAttribute(node, "end");

@@ -14,6 +14,7 @@
 
 #include "onnx_core/graph/graph_manipulations.h"
 #include "onnx_core/runtime/kernels/run_nodes_internal.h"
+#include "onnx_core/runtime/kernels/value_store.h"
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -112,7 +113,8 @@ RuntimeSession::RuntimeSession(const ModelProto &model, int verbose)
                             }) {}
 
 RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions options)
-    : default_plan_(model.graph()), plan_(default_plan_), check_shapes_(options.check_shapes),
+    : default_plan_(model), plan_(default_plan_), value_store_(std::move(options.value_store)),
+      check_shapes_(options.check_shapes),
       allow_external_output_allocators_(options.allow_external_output_allocators),
       parameters_(std::move(options.parameters)),
       cpu_execution_(options.cpu_execution.has_value() ? *options.cpu_execution
@@ -130,9 +132,10 @@ RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions op
 }
 
 RuntimeSession::RuntimeSession(const GraphProto &graph, const OpsetImports *inherited_opset_imports,
-                               int verbose)
+                               int verbose, std::shared_ptr<ValueStore> value_store)
     : default_plan_(graph), plan_(default_plan_), inherited_opset_imports_(inherited_opset_imports),
-      cpu_execution_(DefaultCpuExecutionPolicy(parameters_)), verbose_(verbose) {
+      value_store_(std::move(value_store)), cpu_execution_(DefaultCpuExecutionPolicy(parameters_)),
+      verbose_(verbose) {
   SetDeclaredShapes(graph);
   SetInitializers(graph);
 }
@@ -145,7 +148,8 @@ RuntimeSession::RuntimeSession(const ExecutionPlan &plan, int verbose)
                            }) {}
 
 RuntimeSession::RuntimeSession(const ExecutionPlan &plan, RuntimeSessionOptions options)
-    : plan_(plan), check_shapes_(options.check_shapes),
+    : plan_(plan), value_store_(std::move(options.value_store)),
+      check_shapes_(options.check_shapes),
       allow_external_output_allocators_(options.allow_external_output_allocators),
       parameters_(std::move(options.parameters)),
       cpu_execution_(options.cpu_execution.has_value() ? *options.cpu_execution
@@ -162,7 +166,8 @@ RuntimeSession::RuntimeSession(const FunctionProto &function,
                                const OpsetImports *inherited_opset_imports,
                                RuntimeSessionOptions options)
     : default_plan_(function), plan_(default_plan_),
-      inherited_opset_imports_(inherited_opset_imports), check_shapes_(options.check_shapes),
+      inherited_opset_imports_(inherited_opset_imports),
+      value_store_(std::move(options.value_store)), check_shapes_(options.check_shapes),
       allow_external_output_allocators_(options.allow_external_output_allocators),
       parameters_(std::move(options.parameters)),
       cpu_execution_(options.cpu_execution.has_value() ? *options.cpu_execution
@@ -316,7 +321,7 @@ RuntimeSession::ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt,
                                   const std::string &domain, const std::string &op_type,
                                   const KernelContext &kernel_context) const {
   return detail::ResolveNodeKernelDefault(node, rt, domain, op_type, kernel_context,
-                                          EffectiveOpsetImports());
+                                          EffectiveOpsetImports(), value_store_);
 }
 
 void RuntimeSession::InitializeKernels(RuntimeContext &rt,
@@ -434,21 +439,11 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt,
       pending_tuning[i].kernel->instance->Configure(*parameters);
     }
   }
-  size_t preparation_count = 0;
   for (const ExecuteAction &action : plan_.actions()) {
     if (action.kind() == ExecuteActionKind::kExecuteNode) {
       KernelBase &kernel = *kernels_[action.node_index()].instance;
-      preparation_count += kernel.HasPreparations(preparable_inputs) ? 1 : 0;
-    }
-  }
-  if (preparation_count != 0) {
-    prepared_execution_state_ = std::make_unique<PreparedExecutionState>(1, preparation_count);
-    for (const ExecuteAction &action : plan_.actions()) {
-      if (action.kind() == ExecuteActionKind::kExecuteNode) {
-        KernelBase &kernel = *kernels_[action.node_index()].instance;
-        if (kernel.HasPreparations(preparable_inputs)) {
-          kernel.Prepare(rt, preparable_inputs, *prepared_execution_state_);
-        }
+      if (kernel.HasPreparations(preparable_inputs)) {
+        kernel.Prepare(rt, preparable_inputs);
       }
     }
   }
@@ -459,6 +454,30 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt,
   // starts executing kernels.
   required_inputs_ = ::ONNX_LIGHT_NAMESPACE::core::graph::CollectExternalInputs(nodes);
   kernels_initialized_ = true;
+}
+
+void RuntimeSession::ResolveKernelValueSlots(RuntimeContext &rt) {
+  const std::vector<const NodeProto *> &nodes = plan_.nodes();
+  for (size_t index = 0; index < kernels_.size(); ++index) {
+    PreparedKernel &prepared = kernels_[index];
+    const NodeProto &node = *nodes[index];
+    prepared.input_slots.clear();
+    prepared.input_slots.reserve(node.input_size());
+    for (const auto &name : node.input()) {
+      prepared.input_slots.push_back(name.empty() ? std::numeric_limits<uint32_t>::max()
+                                                  : rt.ResolveValueSlot(name));
+    }
+    prepared.output_slots.clear();
+    prepared.output_slots.reserve(node.output_size());
+    for (const auto &name : node.output()) {
+      prepared.output_slots.push_back(name.empty() ? std::numeric_limits<uint32_t>::max()
+                                                   : rt.ResolveValueSlot(name));
+    }
+  }
+}
+
+size_t RuntimeSession::prepared_bytes() const noexcept {
+  return value_store_ == nullptr ? 0 : value_store_->prepared_bytes();
 }
 
 std::vector<std::string> RuntimeSession::used_kernels() const {
@@ -596,6 +615,16 @@ void RuntimeSession::VerifyDeclaredShape(const std::string &name, const RuntimeC
 }
 
 void RuntimeSession::Run(RuntimeContext &rt) {
+  rt.BindExecutionPlan(plan_);
+  const bool resolve_value_slots = value_directory_identity_ != rt.value_directory_identity();
+  if (resolve_value_slots) {
+    action_value_slots_.clear();
+    action_value_slots_.reserve(plan_.actions().size());
+    for (const ExecuteAction &action : plan_.actions()) {
+      action_value_slots_.push_back(action.name().empty() ? std::numeric_limits<uint32_t>::max()
+                                                          : rt.ResolveValueSlot(action.name()));
+    }
+  }
   if (owned_opset_imports_ && inherited_opset_imports_ == nullptr &&
       rt.kernel_ctx().opset.version != 0) {
     const std::string domain =
@@ -618,6 +647,11 @@ void RuntimeSession::Run(RuntimeContext &rt) {
   const ParallelRegionCollectorScope collector_scope(parallel_region_collector_ != nullptr
                                                          ? parallel_region_collector_.get()
                                                          : CurrentParallelRegionCollector());
+  if (value_store_ == nullptr) {
+    value_store_ = rt.value_store_owner();
+  } else if (rt.value_store_owner() != value_store_) {
+    rt.SetValueStore(value_store_);
+  }
   const std::unordered_set<std::string> seeded_initializers = SeedInitializers(rt);
   // Kernels are resolved against ``rt`` on the first run and cached; later
   // runs reuse the same built instances without redoing the per-node
@@ -630,6 +664,10 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       }
     }
     InitializeKernels(rt, preparable_inputs);
+  }
+  if (resolve_value_slots) {
+    ResolveKernelValueSlots(rt);
+    value_directory_identity_ = rt.value_directory_identity();
   }
   // Use the session's construction-time verbosity when it is non-zero;
   // otherwise fall back to the RuntimeContext's own verbosity. The context
@@ -677,7 +715,8 @@ void RuntimeSession::Run(RuntimeContext &rt) {
   // bookkeeping) is informational for this session — the kernels manage their
   // own allocations — but is still matched by an explicit case so no scheduled
   // event is silently ignored.
-  for (const ExecuteAction &action : plan_.actions()) {
+  for (size_t action_index = 0; action_index < plan_.actions().size(); ++action_index) {
+    const ExecuteAction &action = plan_.actions()[action_index];
     switch (action.kind()) {
     case ExecuteActionKind::kExecuteNode: {
       const size_t index = action.node_index();
@@ -690,6 +729,7 @@ void RuntimeSession::Run(RuntimeContext &rt) {
                           "RuntimeSession: kernel for node index ", index,
                           " was not initialized before Run().");
       rt.set_current_node_index(static_cast<int64_t>(index));
+      rt.SetCurrentNodeValueSlots(&prepared.input_slots, &prepared.output_slots);
       const NodeProto &node = *nodes[index];
       const std::string &domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
       const std::string &op_type = node.op_type().value();
@@ -767,25 +807,25 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       if (!rt.release_intermediates()) {
         break;
       }
-      rt.Remove(action.name());
+      rt.Remove(action_value_slots_[action_index]);
       break;
     case ExecuteActionKind::kDeleteShape:
       if (!rt.release_intermediates()) {
         break;
       }
-      rt.RemoveShape(action.name());
+      rt.RemoveShape(rt.ValueName(action_value_slots_[action_index]));
       break;
     case ExecuteActionKind::kDeleteSequence:
       if (!rt.release_intermediates()) {
         break;
       }
-      rt.Remove(action.name());
+      rt.Remove(action_value_slots_[action_index]);
       break;
     case ExecuteActionKind::kDeleteMap:
       if (!rt.release_intermediates()) {
         break;
       }
-      rt.RemoveMap(action.name());
+      rt.RemoveMap(rt.ValueName(action_value_slots_[action_index]));
       break;
     // Actions this session performs no explicit work for: the kernels manage
     // their own buffers, so locks/unlocks, (temporary-)buffer allocations,
@@ -804,6 +844,7 @@ void RuntimeSession::Run(RuntimeContext &rt) {
     }
   }
   rt.set_current_node_index(-1);
+  rt.SetCurrentNodeValueSlots(nullptr, nullptr);
   // Detach any graph output that borrows into the model (e.g. a Constant's
   // raw_data value or a pass-through initializer) so the returned outputs own
   // their bytes and stay valid once the model is released.

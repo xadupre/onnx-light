@@ -141,7 +141,7 @@ void Gelu::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
   const std::string approximate = GetAttributeStringOrDefault(node, "approximate", "none");
   onnx_kernels::kernel::Gelu k(rt.kernel_ctx());
   SetOutput(node, 0, k(x, approximate, &rt), rt);

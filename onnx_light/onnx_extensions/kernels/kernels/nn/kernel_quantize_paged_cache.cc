@@ -176,9 +176,8 @@ void QuantizePagedCache::Run(RuntimeContext &rt) {
   const auto cache = rt.values().find(node.input(0));
   EXT_ENFORCE_INVALID(cache != rt.values().end(), "QuantizePagedCache: missing paged cache input.");
   RuntimeValue result =
-      (*this)(cache->second, GetInput(node, 1, rt.tensors()), GetInput(node, 2, rt.tensors()),
-              GetInput(node, 3, rt.tensors()), GetInput(node, 4, rt.tensors()),
-              GetInput(node, 5, rt.tensors()), rt.struct_type_catalogue(), &rt);
+      (*this)(cache->second, GetInput(node, 1, rt), GetInput(node, 2, rt), GetInput(node, 3, rt),
+              GetInput(node, 4, rt), GetInput(node, 5, rt), rt.struct_type_catalogue(), &rt);
   rt.PutValue(node.output(0), std::move(result));
 }
 

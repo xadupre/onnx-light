@@ -133,7 +133,7 @@ void DynamicQuantizeLinear::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 3);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
   onnx_kernels::kernel::DynamicQuantizeLinear k(rt.kernel_ctx());
   auto out = k(x, &rt);
   SetOutput(node, 0, std::move(std::get<0>(out)), rt);

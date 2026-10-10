@@ -9,6 +9,7 @@
 #include "onnx_proto/onnx.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -44,6 +45,11 @@ class RuntimeContext;
  *    in-place / lifetime / peak-memory metadata written to each node by
  *    :cpp:class:`compute::ComputeContext` and
  *    :cpp:func:`compute::WritePeakMemoryToMetadata`.
+ *  * ``value_names`` — the deterministic invocation-wide directory seed,
+ *    including names recursively referenced by nested graph attributes. A
+ *    model plan also includes every model-local function.
+ *  * ``arena_capacity`` — a conservative fixed physical-buffer slot count
+ *    derived from those unique names and planned temporary storage.
  *
  * :cpp:func:`BuildActions` uses the in-place reuse, release and last-use
  * annotations written by :cpp:class:`ComputeContext`, deriving releases
@@ -66,6 +72,11 @@ public:
   /// declared inputs, initializers and declared outputs. Rejects persistent
   /// inputs that do not have exactly one value-use in the graph.
   explicit ExecutionPlan(const GraphProto &graph);
+
+  /// Builds the root graph plan for ``model`` and extends its stable value
+  /// directory with every model-local function. This gives a root runtime
+  /// context one arena capacity covering the complete session hierarchy.
+  explicit ExecutionPlan(const ModelProto &model);
 
   /// Builds the plan for ``func``. ``keep`` is seeded with the
   /// function's declared inputs and outputs.
@@ -124,6 +135,21 @@ public:
   /// construction by :cpp:func:`BuildActions`.
   const std::vector<ExecuteAction> &actions() const noexcept { return actions_; }
 
+  /// Returns every non-empty value name referenced by this plan and by graph
+  /// attributes nested below it, in deterministic first-seen order. The list
+  /// is the directory seed used by :cpp:class:`RuntimeContext`: each name is
+  /// assigned one stable ``uint32_t`` slot for the whole invocation.
+  const std::vector<std::string> &value_names() const noexcept { return value_names_; }
+
+  /// Returns the number of stable runtime value slots required by this plan.
+  uint32_t value_slot_count() const noexcept { return static_cast<uint32_t>(value_names_.size()); }
+
+  /// Returns a conservative fixed arena capacity for this plan. Every named
+  /// value receives one directory slot and one additional slot is reserved
+  /// when any node declares a temporary peak-memory buffer. Physical buffers
+  /// remain recyclable independently of these stable value slots.
+  size_t arena_capacity() const noexcept { return value_names_.size() + temporary_slot_count_; }
+
 protected:
   /// Populates :cpp:func:`actions` from the seeded members (``inputs_``,
   /// ``initializers_``, ``outputs_``, ``nodes_``) and the in-place / lifetime
@@ -164,6 +190,8 @@ protected:
   virtual void BuildActions();
 
 private:
+  void BuildValueDirectory(const utils::RepeatedProtoField<NodeProto> &nodes);
+
   std::unordered_set<std::string> keep_;
   std::unordered_map<const NodeProto *, size_t> node_index_;
   /// Declared inputs (in order) used to schedule lock / unlock actions.
@@ -175,6 +203,8 @@ private:
   /// Nodes (in order) whose outputs drive allocation / shape actions.
   std::vector<const NodeProto *> nodes_;
   std::vector<ExecuteAction> actions_;
+  std::vector<std::string> value_names_;
+  size_t temporary_slot_count_ = 0;
 };
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

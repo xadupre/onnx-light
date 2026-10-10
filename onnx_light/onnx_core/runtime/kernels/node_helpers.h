@@ -61,6 +61,9 @@ public:
 
 const Tensor &GetInput(const NodeProto &node, int index, const TensorMap &tensors);
 
+/// Reads a tensor through the current node's pre-resolved uint32_t input slot.
+const Tensor &GetInput(const NodeProto &node, int index, const RuntimeContext &rt);
+
 // Same as :func:`GetInput` but returns ``nullptr`` when the input slot
 // is either absent (``index >= node.input_size()``) or declared with
 // an empty name (the ONNX convention for an unconnected optional
@@ -68,6 +71,9 @@ const Tensor &GetInput(const NodeProto &node, int index, const TensorMap &tensor
 // missing from ``tensors``, since that indicates a graph-wiring bug
 // rather than an "absent" optional input.
 const Tensor *GetOptionalInput(const NodeProto &node, int index, const TensorMap &tensors);
+
+/// Optional-input counterpart using the current node's pre-resolved slot.
+const Tensor *GetOptionalInput(const NodeProto &node, int index, const RuntimeContext &rt);
 
 // Routes the assignment through :cpp:func:`RuntimeContext::Put` so the tensor
 // map mutation is recorded in the context's event log.

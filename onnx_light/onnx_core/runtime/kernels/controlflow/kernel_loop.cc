@@ -150,14 +150,13 @@ Tensor StackScanOutput(const Tensors &per_iter, int64_t trip_count,
 //   * ``final_state`` supplies the final loop-carried tensors produced by the loop body.
 //   * ``scan_values_per_iter`` supplies the collected per-iteration scan-output tensors.
 //   * ``allocator`` specifies the optional allocator used for stacked scan outputs.
-Tensors AssembleLoopOutputs(int64_t trip_count, const Tensors &v_initial,
-                            const Tensors &final_state,
+Tensors AssembleLoopOutputs(int64_t trip_count, const Tensors &v_initial, Tensors final_state,
                             const std::vector<Tensors> &scan_values_per_iter,
                             RawBufferAllocator *allocator, RuntimeContext *rt = nullptr) {
   Tensors out;
   out.reserve(final_state.size() + scan_values_per_iter.size());
   for (std::size_t i = 0; i < final_state.size(); ++i) {
-    out.push_back(trip_count == 0 ? v_initial[i] : final_state[i]);
+    out.push_back(trip_count == 0 ? v_initial[i].BorrowView() : std::move(final_state[i]));
   }
   for (std::size_t i = 0; i < scan_values_per_iter.size(); ++i) {
     out.push_back(StackScanOutput(scan_values_per_iter[i], trip_count, allocator, rt,
@@ -184,7 +183,10 @@ Tensors RunLoopBody(const Tensor &M, const Tensor &cond, const Tensors &v_initia
   bool cond_value = ParseInitialCond(cond);
 
   const std::size_t n = v_initial.size();
-  Tensors state = v_initial;
+  Tensors state;
+  state.reserve(v_initial.size());
+  for (const Tensor &tensor : v_initial)
+    state.push_back(tensor.BorrowView());
   std::vector<Tensors> scan_values(num_scan_outputs);
 
   int64_t trip_count = 0;
@@ -214,7 +216,7 @@ Tensors RunLoopBody(const Tensor &M, const Tensor &cond, const Tensors &v_initia
     ++trip_count;
   }
 
-  return AssembleLoopOutputs(trip_count, v_initial, state, scan_values, allocator, rt);
+  return AssembleLoopOutputs(trip_count, v_initial, std::move(state), scan_values, allocator, rt);
 }
 
 } // namespace
@@ -324,7 +326,7 @@ Tensors Loop::operator()(RuntimeContext &rt, const GraphProto &body, SubgraphSes
     bindings.emplace_back(body.input(1).name(),
                           MakeBoolScalar(body.input(1).name(), cond_in, rt.execution_allocator()));
     for (std::size_t i = 0; i < n; ++i) {
-      Tensor t = state[i];
+      Tensor t = state[i].BorrowView();
       t.name = body.input(static_cast<int>(2 + i)).name();
       bindings.emplace_back(t.name, std::move(t));
     }

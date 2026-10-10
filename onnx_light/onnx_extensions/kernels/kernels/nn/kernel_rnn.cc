@@ -266,15 +266,15 @@ void RNN::Run(RuntimeContext &rt) {
   // ``sequence_lens`` (input #4) is not supported: it requires
   // per-batch sequence handling that the FLOAT kernel does not
   // implement.
-  const Tensor *sequence_lens = GetOptionalInput(node, 4, rt.tensors());
+  const Tensor *sequence_lens = GetOptionalInput(node, 4, rt);
   EXT_ENFORCE_INVALID(sequence_lens == nullptr,
                       "RunNode: op 'RNN' does not support the optional 'sequence_lens' input.");
 
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &w = GetInput(node, 1, rt.tensors());
-  const Tensor &r = GetInput(node, 2, rt.tensors());
-  const Tensor *b = GetOptionalInput(node, 3, rt.tensors());
-  const Tensor *initial_h = GetOptionalInput(node, 5, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
+  const Tensor &w = GetInput(node, 1, rt);
+  const Tensor &r = GetInput(node, 2, rt);
+  const Tensor *b = GetOptionalInput(node, 3, rt);
+  const Tensor *initial_h = GetOptionalInput(node, 5, rt);
 
   onnx_kernels::kernel::RNN kernel(rt.kernel_ctx());
   auto [y, y_h] = kernel(x, w, r, b != nullptr ? *b : Tensor{},

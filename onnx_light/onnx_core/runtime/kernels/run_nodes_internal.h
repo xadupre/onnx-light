@@ -46,7 +46,7 @@ std::unique_ptr<KernelBase>
 ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt, const std::string &domain,
                          const std::string &op_type, const KernelContext &kernel_context,
                          const OpsetImports *opset_imports = nullptr,
-                         std::shared_ptr<KernelPreparationStore> preparation_store = nullptr);
+                         std::shared_ptr<ValueStore> value_store = nullptr);
 
 /**
  * Emits the ReferenceEvaluator verbose progress line for one node dispatch. The

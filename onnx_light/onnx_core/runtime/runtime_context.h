@@ -39,6 +39,8 @@
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
+class ValueStore;
+
 // Forward declaration: a RuntimeContext only carries a non-owning view on the
 // CPU executor leased by the session (see onnx_core/runtime/tuning/cpu_executor.h).
 class CpuExecutor;
@@ -414,6 +416,8 @@ using RuntimeEventLog = std::vector<RuntimeEvent>;
  * between runs depending on which outputs they request.
  */
 struct RuntimeContextOptions {
+  /// Execution allocator. When omitted, the context owns an unbounded dynamic
+  /// allocator so kernels never observe a null allocator.
   RawBufferAllocator *allocator = nullptr;
   /// Optional allocator dedicated to values that cross the runtime boundary
   /// (declared graph outputs and owned input staging buffers), as opposed to
@@ -469,30 +473,11 @@ private:
                  std::shared_ptr<EventState> events);
 
 public:
-  RuntimeContext() = default;
+  RuntimeContext();
   ~RuntimeContext();
-  explicit RuntimeContext(KernelContext kernel_ctx, RuntimeContextOptions options = {})
-      : kernel_ctx_(std::move(kernel_ctx)), events_enabled_(options.events_enabled),
-        verbose_(options.verbose), release_intermediates_(options.release_intermediates),
-        allocator_(options.allocator), io_allocator_(options.io_allocator),
-        active_allocator_(options.allocator), device_(options.device) {
-    kernel_ctx_.allocator = active_allocator_;
-  }
-  RuntimeContext(KernelContext kernel_ctx, TensorMap tensors, RuntimeContextOptions options = {})
-      : tensors_(std::move(tensors)), kernel_ctx_(std::move(kernel_ctx)),
-        events_enabled_(options.events_enabled), verbose_(options.verbose),
-        release_intermediates_(options.release_intermediates), allocator_(options.allocator),
-        io_allocator_(options.io_allocator), active_allocator_(options.allocator),
-        device_(options.device) {
-    kernel_ctx_.allocator = active_allocator_;
-  }
-  explicit RuntimeContext(RuntimeContextOptions options)
-      : events_enabled_(options.events_enabled), verbose_(options.verbose),
-        release_intermediates_(options.release_intermediates), allocator_(options.allocator),
-        io_allocator_(options.io_allocator), active_allocator_(options.allocator),
-        device_(options.device) {
-    kernel_ctx_.allocator = active_allocator_;
-  }
+  explicit RuntimeContext(KernelContext kernel_ctx, RuntimeContextOptions options = {});
+  RuntimeContext(KernelContext kernel_ctx, TensorMap tensors, RuntimeContextOptions options = {});
+  explicit RuntimeContext(RuntimeContextOptions options);
 
   /// Returns whether event logging was enabled when the context was built.
   /// When disabled (the default), :cpp:func:`Set`, :cpp:func:`Put`,
@@ -610,9 +595,9 @@ public:
   /// :cpp:var:`RuntimeContextOptions::allocator`) except while
   /// :cpp:class:`RuntimeSession` temporarily routes a node's declared graph
   /// outputs to :cpp:func:`io_allocator` (see :cpp:func:`SetActiveAllocator`).
-  /// ``nullptr`` when no allocator was supplied at construction time (the
-  /// default). The caller retains ownership; the lifetime of the allocator
-  /// must exceed the lifetime of this context. Propagated into
+  /// When no allocator was supplied at construction time, returns the dynamic
+  /// allocator owned by this context. Otherwise the caller retains ownership,
+  /// and its allocator must outlive this context. Propagated into
   /// :cpp:var:`KernelContext::allocator` so kernels built via
   /// ``rt.kernel_ctx()`` route their result storage through it.
   RawBufferAllocator *allocator() noexcept { return active_allocator_; }
@@ -625,6 +610,16 @@ public:
   /// allocator (see :cpp:func:`StampAllocatorMemory`).
   RawBufferAllocator *execution_allocator() noexcept { return allocator_; }
   const RawBufferAllocator *execution_allocator() const noexcept { return allocator_; }
+
+  /// Returns the value store visible to kernels in this invocation.
+  ValueStore &value_store() noexcept { return *value_store_; }
+  const ValueStore &value_store() const noexcept { return *value_store_; }
+
+  /// Returns the shared value-store owner inherited by nested contexts.
+  const std::shared_ptr<ValueStore> &value_store_owner() const noexcept { return value_store_; }
+
+  /// Installs the session hierarchy's value store in this context.
+  void SetValueStore(std::shared_ptr<ValueStore> value_store);
 
   /// Optional allocator dedicated to values that cross the runtime boundary
   /// (declared graph outputs and owned input staging buffers). ``nullptr``
@@ -641,7 +636,8 @@ public:
   /// invocation, then restore the execution allocator afterwards.
   ///
   /// @returns The previously active allocator, so the caller can restore it.
-  RawBufferAllocator *SetActiveAllocator(RawBufferAllocator *allocator) noexcept {
+  RawBufferAllocator *SetActiveAllocator(RawBufferAllocator *allocator) {
+    EXT_ENFORCE(allocator != nullptr, "RuntimeContext: active allocator must not be null.");
     RawBufferAllocator *previous = active_allocator_;
     active_allocator_ = allocator;
     kernel_ctx_.allocator = allocator;
@@ -866,10 +862,9 @@ public:
   /// Creates a fresh child context for executing a subgraph (e.g. the
   /// ``then_branch`` or ``else_branch`` of ``If``, or the ``body`` of
   /// ``Loop`` / ``Scan``). The child context inherits the parent's
-  /// kernel context, function and local factory registries, tensor map,
-  /// sequence map, verbosity, runtime parameters and event-logging flag so
-  /// outer-scope values are visible inside the subgraph. The child does not
-  /// inherit the allocator; results are migrated when propagated to the parent.
+  /// kernel context, execution and I/O allocators, function and local factory
+  /// registries, tensor map, sequence map, verbosity, runtime parameters and
+  /// event-logging flag so outer-scope values are visible inside the subgraph.
   /// :cpp:func:`current_subgraph`
   /// is set to ``(current_node_index(), attr_name)`` on the child.
   /// The subgraph's tensor writes remain local and do not pollute this context.
@@ -1098,6 +1093,9 @@ private:
   /// ``0`` when no allocator is attached.
   void StampAllocatorMemory(RuntimeEvent &ev) const noexcept;
 
+  /// Owns the default allocator when the caller did not supply one. Declared
+  /// before value containers so it outlives every allocator-backed value.
+  std::shared_ptr<RawBufferAllocator> allocator_owner_;
   TensorMap tensors_;
   RuntimeValueMap values_;
   StructTypeCatalogue struct_type_catalogue_;
@@ -1133,9 +1131,9 @@ private:
   /// :cpp:func:`GetExecutionPlan` and reused across subsequent runs of
   /// the same model.
   std::unordered_map<const void *, ExecutionPlan> execution_plans_;
-  /// Optional allocator for :cpp:struct:`RawBuffer` instances. Non-owning;
-  /// ``nullptr`` when no allocator has been attached. Backs run-local
-  /// intermediates and kernel workspaces; see :cpp:func:`execution_allocator`.
+  /// Allocator for :cpp:struct:`RawBuffer` instances. Never null. Backs
+  /// run-local intermediates and kernel workspaces; see
+  /// :cpp:func:`execution_allocator`.
   RawBufferAllocator *allocator_ = nullptr;
   /// Optional dedicated allocator for values crossing the runtime boundary.
   /// Non-owning; ``nullptr`` when no I/O allocator has been attached. See
@@ -1144,6 +1142,8 @@ private:
   /// Allocator currently reported by :cpp:func:`allocator`, switched by
   /// :cpp:func:`SetActiveAllocator`. Defaults to :cpp:var:`allocator_`.
   RawBufferAllocator *active_allocator_ = nullptr;
+  /// Store shared by the root session and every nested invocation context.
+  std::shared_ptr<ValueStore> value_store_;
   /// Per-output-slot I/O roles for the node currently being dispatched, set by
   /// :cpp:class:`RuntimeSession` before each kernel runs. Empty when no roles
   /// are known. See :cpp:func:`set_output_slot_io_roles`.

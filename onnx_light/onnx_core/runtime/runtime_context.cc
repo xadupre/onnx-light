@@ -5,6 +5,7 @@
 #include "onnx_core/runtime/runtime_context.h"
 
 #include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
+#include "onnx_core/runtime/kernels/value_store.h"
 #include "onnx_core/runtime/tuning/cpu_executor.h"
 
 #include <algorithm>
@@ -286,9 +287,40 @@ RuntimeContext::RuntimeContext(KernelContext kernel_ctx, RuntimeContextOptions o
     : kernel_ctx_(std::move(kernel_ctx)), kernel_usage_(std::move(kernel_usage)),
       events_(std::move(events)), events_enabled_(options.events_enabled),
       verbose_(options.verbose), release_intermediates_(options.release_intermediates),
-      allocator_(options.allocator), io_allocator_(options.io_allocator),
-      active_allocator_(options.allocator), device_(options.device) {
+      io_allocator_(options.io_allocator), value_store_(std::make_shared<ValueStore>()),
+      device_(options.device) {
+  if (options.allocator == nullptr) {
+    allocator_owner_ = std::make_shared<DynamicRawBufferAllocator>();
+    allocator_ = allocator_owner_.get();
+  } else {
+    allocator_ = options.allocator;
+  }
+  active_allocator_ = allocator_;
   kernel_ctx_.allocator = active_allocator_;
+}
+
+RuntimeContext::RuntimeContext()
+    : RuntimeContext(KernelContext{}, RuntimeContextOptions{}, std::make_shared<KernelUsageState>(),
+                     std::make_shared<EventState>()) {}
+
+RuntimeContext::RuntimeContext(KernelContext kernel_ctx, RuntimeContextOptions options)
+    : RuntimeContext(std::move(kernel_ctx), options, std::make_shared<KernelUsageState>(),
+                     std::make_shared<EventState>()) {}
+
+RuntimeContext::RuntimeContext(KernelContext kernel_ctx, TensorMap tensors,
+                               RuntimeContextOptions options)
+    : RuntimeContext(std::move(kernel_ctx), options, std::make_shared<KernelUsageState>(),
+                     std::make_shared<EventState>()) {
+  tensors_ = std::move(tensors);
+}
+
+RuntimeContext::RuntimeContext(RuntimeContextOptions options)
+    : RuntimeContext(KernelContext{}, options, std::make_shared<KernelUsageState>(),
+                     std::make_shared<EventState>()) {}
+
+void RuntimeContext::SetValueStore(std::shared_ptr<ValueStore> value_store) {
+  EXT_ENFORCE(value_store != nullptr, "RuntimeContext: value store must not be null.");
+  value_store_ = std::move(value_store);
 }
 
 void RuntimeContext::set_kernel_usage_enabled(bool enabled) {
@@ -429,20 +461,16 @@ void RuntimeContext::RegisterCustomKernel(const std::string &domain, const std::
 RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name) const {
   RuntimeContext child(kernel_ctx_,
                        RuntimeContextOptions{
-                           .allocator = nullptr,
+                           .allocator = allocator_,
+                           .io_allocator = io_allocator_,
                            .events_enabled = events_enabled_,
                            .verbose = verbose_,
                            .release_intermediates = release_intermediates_,
                            .device = device_,
                        },
                        kernel_usage_, events_);
-  // Subgraph contexts do not inherit the parent allocator. Body kernels use
-  // inline tensor storage, and the parent's EnsureAllocatorBacked (called in
-  // Put/Set) migrates final outputs to the parent allocator when results are
-  // propagated back. This avoids double-free: if the child inherited the
-  // allocator, tensors produced by the body would be freed when the child
-  // context is destroyed, leaving any copies held by the caller with stale
-  // allocation pointers.
+  child.allocator_owner_ = allocator_owner_;
+  child.value_store_ = value_store_;
   child.functions() = functions_;
   child.custom_kernels() = custom_kernels_;
   child.set_model_owner(model_owner_);
@@ -511,6 +539,8 @@ RuntimeContext RuntimeContext::MakeFunctionContext() const {
                            .device = device_,
                        },
                        kernel_usage_, events_);
+  child.allocator_owner_ = allocator_owner_;
+  child.value_store_ = value_store_;
   child.functions() = functions_;
   child.custom_kernels() = custom_kernels_;
   child.set_model_owner(model_owner_);

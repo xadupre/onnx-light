@@ -34,7 +34,7 @@ using ::onnx_light::core::runtime::RawBufferAllocator;
 // reference, so a forward declaration is sufficient and avoids a circular
 // include (``runtime_context.h`` includes this header).
 class RuntimeContext;
-class KernelPreparationStore;
+class ValueStore;
 struct KernelTuningKey;
 struct KernelTuningParameters;
 
@@ -184,8 +184,7 @@ public:
    * immutable values into a session-owned execution format. Nested graph and
    * model-local function sessions share ``store`` with their root session.
    */
-  virtual void Prepare(RuntimeContext &rt, const std::unordered_set<std::string> &immutable_inputs,
-                       KernelPreparationStore &store);
+  virtual void Prepare(RuntimeContext &rt, const std::unordered_set<std::string> &immutable_inputs);
 
 protected:
   KernelContext ctx_;

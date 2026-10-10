@@ -13,6 +13,34 @@
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
+RawBuffer *DynamicRawBufferAllocator::Allocate(size_t n_bytes) {
+  auto buffer = std::make_unique<RawBuffer>();
+  buffer->resize(n_bytes);
+  RawBuffer *result = buffer.get();
+  buffers_.emplace(result, std::move(buffer));
+  total_allocated_size_ += n_bytes;
+  peak_allocated_size_ = std::max(peak_allocated_size_, total_allocated_size_);
+  return result;
+}
+
+void DynamicRawBufferAllocator::Free(RawBuffer *buffer) {
+  const auto found = buffers_.find(buffer);
+  if (found == buffers_.end()) {
+    throw std::invalid_argument(
+        "DynamicRawBufferAllocator::Free: buffer does not belong to this allocator.");
+  }
+  total_allocated_size_ -= found->second->size();
+  buffers_.erase(found);
+}
+
+size_t DynamicRawBufferAllocator::TotalAllocatedSize() const { return total_allocated_size_; }
+
+size_t DynamicRawBufferAllocator::PeakAllocatedSize() const { return peak_allocated_size_; }
+
+void DynamicRawBufferAllocator::ResetPeak() { peak_allocated_size_ = total_allocated_size_; }
+
+size_t DynamicRawBufferAllocator::allocated_count() const noexcept { return buffers_.size(); }
+
 SimpleRawBufferAllocator::SimpleRawBufferAllocator(size_t capacity) : buffers_(capacity) {
   free_slots_.reserve(capacity);
   index_map_.reserve(capacity);

@@ -758,9 +758,28 @@ TEST(IOArenaExportHandle, ExportedTensorOutputOutlivesArenaOwner) {
 // RuntimeContext allocator accessor tests
 // ---------------------------------------------------------------------------
 
-TEST(RuntimeContextAllocator, DefaultAllocatorIsNull) {
+TEST(DynamicRawBufferAllocator, GrowsWithoutFixedSlotCapacity) {
+  core::runtime::DynamicRawBufferAllocator allocator;
+  std::vector<core::runtime::RawBuffer *> buffers;
+  for (size_t i = 1; i <= 128; ++i) {
+    buffers.push_back(allocator.Allocate(i));
+  }
+  EXPECT_EQ(allocator.allocated_count(), 128u);
+  EXPECT_EQ(allocator.TotalAllocatedSize(), 128u * 129u / 2u);
+  EXPECT_EQ(allocator.PeakAllocatedSize(), allocator.TotalAllocatedSize());
+
+  for (core::runtime::RawBuffer *buffer : buffers) {
+    allocator.Free(buffer);
+  }
+  EXPECT_EQ(allocator.allocated_count(), 0u);
+  EXPECT_EQ(allocator.TotalAllocatedSize(), 0u);
+}
+
+TEST(RuntimeContextAllocator, DefaultAllocatorIsOwnedAndNonNull) {
   RuntimeContext ctx;
-  EXPECT_EQ(ctx.allocator(), nullptr);
+  EXPECT_NE(ctx.allocator(), nullptr);
+  EXPECT_EQ(ctx.allocator(), ctx.execution_allocator());
+  EXPECT_EQ(ctx.kernel_ctx().allocator, ctx.execution_allocator());
 }
 
 TEST(RuntimeContextAllocator, SetAndGetAllocator) {
@@ -776,15 +795,10 @@ TEST(RuntimeContextAllocator, ConstContextExposesAllocator) {
   EXPECT_EQ(cref.allocator(), &alloc);
 }
 
-TEST(RuntimeContextAllocator, DefaultConstructorLeavesAllocatorUnset) {
-  RuntimeContext ctx;
-  EXPECT_EQ(ctx.allocator(), nullptr);
-}
-
 TEST(RuntimeContextAllocator, DefaultIOAllocatorIsNull) {
   RuntimeContext ctx;
   EXPECT_EQ(ctx.io_allocator(), nullptr);
-  EXPECT_EQ(ctx.execution_allocator(), nullptr);
+  EXPECT_NE(ctx.execution_allocator(), nullptr);
 }
 
 TEST(RuntimeContextAllocator, SetAndGetIOAllocator) {
@@ -797,6 +811,22 @@ TEST(RuntimeContextAllocator, SetAndGetIOAllocator) {
   EXPECT_EQ(ctx.allocator(), &execution_alloc);
   EXPECT_EQ(ctx.execution_allocator(), &execution_alloc);
   EXPECT_EQ(ctx.io_allocator(), &io_alloc);
+}
+
+TEST(RuntimeContextAllocator, SubgraphInheritsExecutionAndIOAllocators) {
+  core::runtime::SimpleRawBufferAllocator execution_alloc(8);
+  core::runtime::SimpleRawBufferAllocator io_alloc(8);
+  RuntimeContext parent(KernelContext(DefaultOpset(18)),
+                        core::runtime::RuntimeContextOptions{.allocator = &execution_alloc,
+                                                             .io_allocator = &io_alloc});
+
+  RuntimeContext child = parent.MakeSubgraphContext("body");
+
+  EXPECT_EQ(child.execution_allocator(), &execution_alloc);
+  EXPECT_EQ(child.allocator(), &execution_alloc);
+  EXPECT_EQ(child.kernel_ctx().allocator, &execution_alloc);
+  EXPECT_EQ(child.io_allocator(), &io_alloc);
+  EXPECT_EQ(child.value_store_owner(), parent.value_store_owner());
 }
 
 TEST(RuntimeContextAllocator, SetActiveAllocatorSwitchesAllocatorAndKernelContext) {

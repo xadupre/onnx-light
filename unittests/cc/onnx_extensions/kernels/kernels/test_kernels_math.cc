@@ -7,7 +7,7 @@
 #include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/kernels/float16_promote.h"
 #include "onnx_core/runtime/kernels/kernel_context.h"
-#include "onnx_core/runtime/kernels/kernel_preparation_store.h"
+#include "onnx_core/runtime/kernels/value_store.h"
 #include "onnx_core/runtime/kernels/parallel_for.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/runtime_session.h"
@@ -3156,7 +3156,7 @@ TEST(KernelClass, GemmPreparedConstantBMatchesReferenceForBothTransposeModes) {
   const Tensor a = Tensor::FromFloat("A", {1, 3}, {1.0f, 2.0f, 3.0f});
 
   for (const int64_t trans_b : {int64_t{0}, int64_t{1}}) {
-    core::runtime::KernelPreparationStore store;
+    core::runtime::ValueStore store;
     const Tensor b = trans_b == 0
                          ? Tensor::FromFloat("B", {3, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f})
                          : Tensor::FromFloat("B", {2, 3}, {1.0f, 3.0f, 5.0f, 2.0f, 4.0f, 6.0f});
@@ -3179,7 +3179,7 @@ TEST(KernelClass, GemmPreparedConstantBMatchesReferenceForBothTransposeModes) {
 TEST(KernelClass, GemmPreparedHalfConstantBStoresPromotedPackedValues) {
   const KernelContext ctx{DefaultOpset(13)};
   Gemm gemm_kernel{ctx};
-  core::runtime::KernelPreparationStore store;
+  core::runtime::ValueStore store;
   const Tensor a = MakeHalfTensor(DataType::FLOAT16, {1, 3}, {1, 2, 3});
   const Tensor b = MakeHalfTensor(DataType::FLOAT16, {3, 2}, {1, 2, 3, 4, 5, 6});
 
@@ -3196,7 +3196,7 @@ TEST(KernelClass, PreparedPlanOverlapsDependentGemmsAndReusesWeights) {
   const KernelContext ctx{DefaultOpset(13)};
   Gemm gemm_kernel{ctx};
   core::runtime::PreparedExecutionState state(2, 2);
-  core::runtime::KernelPreparationStore preparation_store;
+  core::runtime::ValueStore value_store;
   const Tensor input = Tensor::FromFloat("A", {1, 2}, {1.0f, 2.0f});
   const Tensor first_weight = Tensor::FromFloat("B1", {2, 2}, {1.0f, 0.0f, 0.0f, 2.0f});
   const Tensor second_weight = Tensor::FromFloat("B2", {2, 1}, {3.0f, 4.0f});
@@ -3234,12 +3234,12 @@ TEST(KernelClass, PreparedPlanOverlapsDependentGemmsAndReusesWeights) {
           case 1:
             ++preparation_count;
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            first_prepared = gemm_kernel.PrepareConstantB(first_weight, 0, preparation_store);
+            first_prepared = gemm_kernel.PrepareConstantB(first_weight, 0, value_store);
             break;
           case 2:
             ++preparation_count;
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            second_prepared = gemm_kernel.PrepareConstantB(second_weight, 0, preparation_store);
+            second_prepared = gemm_kernel.PrepareConstantB(second_weight, 0, value_store);
             second_weight_finished = true;
             break;
           case 3:

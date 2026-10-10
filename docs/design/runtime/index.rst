@@ -32,7 +32,7 @@ Preparation and execution
 
 Direct ``ExecutionPlan`` replay prepares immutable kernel inputs synchronously
 during the first ``RuntimeSession::Run``. The root session and all nested
-graph/function sessions share one ``KernelPreparationStore``. Each kernel
+graph/function sessions share one ``ValueStore``. Each kernel
 retains a stable integer slot, so later executions read the prepared value by
 direct vector indexing without a mutex, map lookup, readiness wait, or
 scheduler dispatch. The store owns its prepared allocations for the complete
@@ -53,7 +53,7 @@ objects, and evicted entries retain enough information for a later reload.
 ``RuntimeSessionOptions`` selects the CPU execution policy.
 ``PreparedExecutionState`` owns the asynchronous plan's preparation arenas,
 residency, generations, and resource limits; it is separate from the
-``KernelPreparationStore`` used by direct replay. Sessions and prepared plans
+``ValueStore`` used by direct replay. Sessions and prepared plans
 lease executors rather than creating one thread pool per kernel, so independent
 sessions can share workers without nested oversubscription. See
 :ref:`l-next-steps-prepared-execution`,

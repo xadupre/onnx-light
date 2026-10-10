@@ -20,10 +20,10 @@ Kernel preparation
 ------------------
 
 The first ``Run`` resolves every planned kernel and invokes preparation hooks
-for immutable inputs. The root session creates one ``KernelPreparationStore``;
-``If``, ``Loop``, ``Scan``, ``SequenceMap``, and model-local function sessions
-inherit the same store. A kernel binds a stable integer slot and retains it for
-the session lifetime. Subsequent runs read the slot directly, so ordinary
+for immutable inputs. It retains the ``ValueStore`` exposed by the root
+``RuntimeContext``; ``If``, ``Loop``, ``Scan``, ``SequenceMap``, and model-local
+function contexts inherit the same store. A kernel binds a stable ``uint32_t``
+slot and retains it for the session lifetime. Subsequent runs read the slot directly, so ordinary
 ``ExecutionPlan`` replay does not wait on readiness, acquire a preparation
 mutex, or repeat a string-keyed lookup.
 

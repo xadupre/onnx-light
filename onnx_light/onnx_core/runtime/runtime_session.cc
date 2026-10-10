@@ -13,8 +13,8 @@
 #include <string>
 
 #include "onnx_core/graph/graph_manipulations.h"
-#include "onnx_core/runtime/kernels/kernel_preparation_store.h"
 #include "onnx_core/runtime/kernels/run_nodes_internal.h"
+#include "onnx_core/runtime/kernels/value_store.h"
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -114,7 +114,7 @@ RuntimeSession::RuntimeSession(const ModelProto &model, int verbose)
 
 RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions options)
     : default_plan_(model.graph()), plan_(default_plan_),
-      preparation_store_(std::move(options.preparation_store)), check_shapes_(options.check_shapes),
+      value_store_(std::move(options.value_store)), check_shapes_(options.check_shapes),
       allow_external_output_allocators_(options.allow_external_output_allocators),
       parameters_(std::move(options.parameters)),
       cpu_execution_(options.cpu_execution.has_value() ? *options.cpu_execution
@@ -132,11 +132,10 @@ RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions op
 }
 
 RuntimeSession::RuntimeSession(const GraphProto &graph, const OpsetImports *inherited_opset_imports,
-                               int verbose,
-                               std::shared_ptr<KernelPreparationStore> preparation_store)
+                               int verbose, std::shared_ptr<ValueStore> value_store)
     : default_plan_(graph), plan_(default_plan_), inherited_opset_imports_(inherited_opset_imports),
-      preparation_store_(std::move(preparation_store)),
-      cpu_execution_(DefaultCpuExecutionPolicy(parameters_)), verbose_(verbose) {
+      value_store_(std::move(value_store)), cpu_execution_(DefaultCpuExecutionPolicy(parameters_)),
+      verbose_(verbose) {
   SetDeclaredShapes(graph);
   SetInitializers(graph);
 }
@@ -149,7 +148,7 @@ RuntimeSession::RuntimeSession(const ExecutionPlan &plan, int verbose)
                            }) {}
 
 RuntimeSession::RuntimeSession(const ExecutionPlan &plan, RuntimeSessionOptions options)
-    : plan_(plan), preparation_store_(std::move(options.preparation_store)),
+    : plan_(plan), value_store_(std::move(options.value_store)),
       check_shapes_(options.check_shapes),
       allow_external_output_allocators_(options.allow_external_output_allocators),
       parameters_(std::move(options.parameters)),
@@ -168,7 +167,7 @@ RuntimeSession::RuntimeSession(const FunctionProto &function,
                                RuntimeSessionOptions options)
     : default_plan_(function), plan_(default_plan_),
       inherited_opset_imports_(inherited_opset_imports),
-      preparation_store_(std::move(options.preparation_store)), check_shapes_(options.check_shapes),
+      value_store_(std::move(options.value_store)), check_shapes_(options.check_shapes),
       allow_external_output_allocators_(options.allow_external_output_allocators),
       parameters_(std::move(options.parameters)),
       cpu_execution_(options.cpu_execution.has_value() ? *options.cpu_execution
@@ -322,14 +321,11 @@ RuntimeSession::ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt,
                                   const std::string &domain, const std::string &op_type,
                                   const KernelContext &kernel_context) const {
   return detail::ResolveNodeKernelDefault(node, rt, domain, op_type, kernel_context,
-                                          EffectiveOpsetImports(), preparation_store_);
+                                          EffectiveOpsetImports(), value_store_);
 }
 
 void RuntimeSession::InitializeKernels(RuntimeContext &rt,
                                        const std::unordered_set<std::string> &preparable_inputs) {
-  if (!preparation_store_) {
-    preparation_store_ = std::make_shared<KernelPreparationStore>();
-  }
   // Resolve and build the kernel instance for every node the plan will
   // execute, once and up front. Node indices come from the plan's
   // kExecuteNode actions so nodes the plan never runs (if any) are not
@@ -447,7 +443,7 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt,
     if (action.kind() == ExecuteActionKind::kExecuteNode) {
       KernelBase &kernel = *kernels_[action.node_index()].instance;
       if (kernel.HasPreparations(preparable_inputs)) {
-        kernel.Prepare(rt, preparable_inputs, *preparation_store_);
+        kernel.Prepare(rt, preparable_inputs);
       }
     }
   }
@@ -461,7 +457,7 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt,
 }
 
 size_t RuntimeSession::prepared_bytes() const noexcept {
-  return preparation_store_ == nullptr ? 0 : preparation_store_->prepared_bytes();
+  return value_store_ == nullptr ? 0 : value_store_->prepared_bytes();
 }
 
 std::vector<std::string> RuntimeSession::used_kernels() const {
@@ -621,6 +617,11 @@ void RuntimeSession::Run(RuntimeContext &rt) {
   const ParallelRegionCollectorScope collector_scope(parallel_region_collector_ != nullptr
                                                          ? parallel_region_collector_.get()
                                                          : CurrentParallelRegionCollector());
+  if (value_store_ == nullptr) {
+    value_store_ = rt.value_store_owner();
+  } else if (rt.value_store_owner() != value_store_) {
+    rt.SetValueStore(value_store_);
+  }
   const std::unordered_set<std::string> seeded_initializers = SeedInitializers(rt);
   // Kernels are resolved against ``rt`` on the first run and cached; later
   // runs reuse the same built instances without redoing the per-node

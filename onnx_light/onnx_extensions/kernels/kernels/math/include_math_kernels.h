@@ -26,8 +26,8 @@ namespace kernel {
 using ::onnx_light::core::runtime::DefaultOpset;
 using ::onnx_light::core::runtime::KernelBase;
 using ::onnx_light::core::runtime::KernelContext;
-using ::onnx_light::core::runtime::KernelPreparationStore;
 using ::onnx_light::core::runtime::OpsetId;
+using ::onnx_light::core::runtime::ValueStore;
 
 class PreparedGemmB {
 public:
@@ -1042,14 +1042,13 @@ public:
   KernelTuningKey TuningKey(int32_t element_type) const override;
   void Configure(const KernelTuningParameters &parameters) override;
   bool HasPreparations(const std::unordered_set<std::string> &immutable_inputs) const override;
-  void Prepare(RuntimeContext &rt, const std::unordered_set<std::string> &immutable_inputs,
-               KernelPreparationStore &store) override;
+  void Prepare(RuntimeContext &rt,
+               const std::unordered_set<std::string> &immutable_inputs) override;
   void Run(RuntimeContext &rt) override;
   /**
    * Prepares one immutable constant B in the session hierarchy's preparation store.
    */
-  PreparedGemmB PrepareConstantB(const Tensor &b, int64_t transB,
-                                 KernelPreparationStore &store) const;
+  PreparedGemmB PrepareConstantB(const Tensor &b, int64_t transB, ValueStore &store) const;
   Tensor operator()(const Tensor &a, const Tensor &b, const Tensor *c, float alpha, float beta,
                     int64_t transA, int64_t transB, RuntimeContext *rt = nullptr) const;
   Tensor operator()(const Tensor &a, const PreparedGemmB &b, const Tensor *c, float alpha,

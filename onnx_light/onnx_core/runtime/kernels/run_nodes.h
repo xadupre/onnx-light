@@ -225,7 +225,7 @@ public:
    *              model, so this holds for the model's whole lifetime.
    */
   SubgraphSession(const GraphProto &graph, const OpsetImports *opset_imports = nullptr,
-                  std::shared_ptr<KernelPreparationStore> preparation_store = nullptr);
+                  std::shared_ptr<ValueStore> value_store = nullptr);
 
   /**
    * Evaluates the subgraph once in a fresh child :cpp:class:`RuntimeContext`,

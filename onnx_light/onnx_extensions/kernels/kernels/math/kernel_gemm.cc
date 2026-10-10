@@ -5,9 +5,9 @@
 #include "onnx_extensions/kernels/kernels/math/include_math_kernels.h"
 
 #include "onnx_core/runtime/kernels/float16_promote.h"
-#include "onnx_core/runtime/kernels/kernel_preparation_store.h"
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/kernels/parallel_for.h"
+#include "onnx_core/runtime/kernels/value_store.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include <algorithm>
 #include <array>
@@ -235,8 +235,8 @@ KernelTuningParameters CalibrateGemm(const KernelTuningKey &key,
 } // namespace
 
 struct PreparedGemmB::State {
-  const KernelPreparationStore *store = nullptr;
-  KernelPreparationSlot slot = kInvalidKernelPreparationSlot;
+  const ValueStore *store = nullptr;
+  uint32_t slot = kInvalidValueStoreSlot;
   int32_t source_data_type = DataType::UNDEFINED;
   Shape shape;
   int64_t trans_b = 0;
@@ -266,8 +266,7 @@ void Gemm::Configure(const KernelTuningParameters &parameters) {
   tuning::ConfigureGemmTuning(parameters, tuning_, kTuningAbi);
 }
 
-PreparedGemmB Gemm::PrepareConstantB(const Tensor &b, int64_t transB,
-                                     KernelPreparationStore &store) const {
+PreparedGemmB Gemm::PrepareConstantB(const Tensor &b, int64_t transB, ValueStore &store) const {
   EXT_ENFORCE_INVALID(b.shape.size() == 2, kGemmName, " constant B must have rank 2.");
   EXT_ENFORCE_INVALID(transB == 0 || transB == 1, kGemmName, " transB must be 0 or 1.");
   EXT_ENFORCE_INVALID(tuning::IsSupportedElementType(b.data_type, kSupportedElementTypes),
@@ -282,7 +281,7 @@ PreparedGemmB Gemm::PrepareConstantB(const Tensor &b, int64_t transB,
   key << "Gemm:B:column-major-k-v1:value=" << b.name << ":type=" << b.data_type
       << ":shape=" << b.shape[0] << 'x' << b.shape[1] << ":transB=" << transB
       << ":digest=" << digest;
-  const KernelPreparationSlot slot = store.Bind(key.str());
+  const uint32_t slot = store.Bind(key.str());
 
   if (!store.IsReady(slot)) {
     const Tensor promoted = IsHalfPrecision(b.data_type) ? PromoteToFloat32(b) : Tensor{};
@@ -316,13 +315,12 @@ bool Gemm::HasPreparations(const std::unordered_set<std::string> &immutable_inpu
          immutable_inputs.find(node_->input(1)) != immutable_inputs.end();
 }
 
-void Gemm::Prepare(RuntimeContext &rt, const std::unordered_set<std::string> &immutable_inputs,
-                   KernelPreparationStore &store) {
+void Gemm::Prepare(RuntimeContext &rt, const std::unordered_set<std::string> &immutable_inputs) {
   if (!HasPreparations(immutable_inputs)) {
     return;
   }
   prepared_b_ = PrepareConstantB(rt.Get(node_->input(1)),
-                                 GetAttributeIntOrDefault(*node_, "transB", 0), store);
+                                 GetAttributeIntOrDefault(*node_, "transB", 0), rt.value_store());
 }
 
 Tensor Gemm::operator()(const Tensor &a, const Tensor &b, const Tensor *c, float alpha, float beta,

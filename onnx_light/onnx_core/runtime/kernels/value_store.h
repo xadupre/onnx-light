@@ -20,9 +20,7 @@
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
-using KernelPreparationSlot = uint32_t;
-inline constexpr KernelPreparationSlot kInvalidKernelPreparationSlot =
-    std::numeric_limits<KernelPreparationSlot>::max();
+inline constexpr uint32_t kInvalidValueStoreSlot = std::numeric_limits<uint32_t>::max();
 
 /**
  * Stores immutable prepared runtime values shared by one root session and all
@@ -35,24 +33,24 @@ inline constexpr KernelPreparationSlot kInvalidKernelPreparationSlot =
  * :cpp:class:`PreparedObjectStore`, which owns asynchronous generation,
  * scheduling, residency, persistence, and eviction state.
  */
-class ONNX_LIGHT_CORE_API KernelPreparationStore {
+class ONNX_LIGHT_CORE_API ValueStore {
 public:
-  KernelPreparationSlot Bind(std::string key);
-  bool IsReady(KernelPreparationSlot slot) const;
+  uint32_t Bind(std::string key);
+  bool IsReady(uint32_t slot) const;
   Tensor AllocateTensor(int32_t data_type, const Shape &shape, size_t n_bytes);
-  void Publish(KernelPreparationSlot slot, RuntimeValue value);
-  const RuntimeValue &Get(KernelPreparationSlot slot) const;
+  void Publish(uint32_t slot, RuntimeValue value);
+  const RuntimeValue &Get(uint32_t slot) const;
 
   size_t prepared_bytes() const noexcept;
   size_t slot_count() const noexcept { return slots_.size(); }
 
 private:
-  std::optional<RuntimeValue> &ValueAt(KernelPreparationSlot slot);
-  const std::optional<RuntimeValue> &ValueAt(KernelPreparationSlot slot) const;
+  std::optional<RuntimeValue> &ValueAt(uint32_t slot);
+  const std::optional<RuntimeValue> &ValueAt(uint32_t slot) const;
 
   std::vector<std::unique_ptr<ExecutionArena>> allocators_;
   std::unordered_set<const void *> allocator_index_;
-  std::unordered_map<std::string, KernelPreparationSlot> slots_by_key_;
+  std::unordered_map<std::string, uint32_t> slots_by_key_;
   std::vector<std::optional<RuntimeValue>> slots_;
 };
 

@@ -2,31 +2,27 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_core/runtime/kernels/kernel_preparation_store.h"
+#include "onnx_core/runtime/kernels/value_store.h"
 
 #include <gtest/gtest.h>
 
 #include <cstdint>
 #include <string>
-#include <type_traits>
 #include <unordered_map>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace {
 
-using core::runtime::KernelPreparationSlot;
-using core::runtime::KernelPreparationStore;
 using core::runtime::RuntimeValue;
 using core::runtime::Tensor;
+using core::runtime::ValueStore;
 
-static_assert(std::is_same_v<KernelPreparationSlot, uint32_t>);
-
-TEST(KernelPreparationStore, UsesIntegerSlotsAndAllocatorBackedRuntimeValues) {
-  KernelPreparationStore store;
-  const KernelPreparationSlot first = store.Bind("first");
-  const KernelPreparationSlot shared = store.Bind("first");
-  const KernelPreparationSlot second = store.Bind("second");
+TEST(ValueStore, UsesIntegerSlotsAndAllocatorBackedRuntimeValues) {
+  ValueStore store;
+  const uint32_t first = store.Bind("first");
+  const uint32_t shared = store.Bind("first");
+  const uint32_t second = store.Bind("second");
 
   EXPECT_EQ(first, shared);
   EXPECT_NE(first, second);

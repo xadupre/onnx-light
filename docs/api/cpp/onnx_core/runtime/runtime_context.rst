@@ -28,6 +28,18 @@ and payload; the context supplies node/subgraph metadata and allocator memory.
 A nonzero timestamp is preserved (for example, the start of a kernel dispatch);
 otherwise the recording time is used. Disabled recording leaves the log unchanged.
 
+Subgraph contexts inherit both the execution allocator and the optional I/O
+allocator from their parent. Kernels in ``If``, ``Loop``, ``Scan`` and
+``SequenceMap`` therefore use the same arena routing as the enclosing graph;
+subgraph creation never deliberately replaces an attached allocator with
+``nullptr``.
+
+Every context has a non-null execution allocator. If the caller does not
+provide one, the context owns a ``DynamicRawBufferAllocator``. Every context
+also exposes a non-null ``ValueStore``; subgraph and model-local function
+contexts share their parent's store so prepared values remain directly
+accessible throughout nested execution.
+
 .. code-block:: cpp
 
    if (rt.events_enabled())

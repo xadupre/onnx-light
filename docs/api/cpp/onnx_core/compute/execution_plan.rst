@@ -13,7 +13,7 @@ The ownership boundaries are:
 * ``RuntimeSession`` resolves and retains one kernel instance per planned node.
 * ``RuntimeContext`` owns invocation inputs, outputs, intermediates, and
   execution allocations.
-* ``KernelPreparationStore`` owns immutable, synchronously prepared kernel
+* ``ValueStore`` owns immutable, synchronously prepared kernel
   values for the root session and its nested sessions.
 * ``PreparedExecutionPlan`` is the separate scope-aware dependency graph used
   when loading, preparation, publication, and invocation work must overlap.

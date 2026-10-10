@@ -161,7 +161,7 @@ RuntimeSession integration
 ``RuntimeSession`` invokes each resolved kernel's preparation hook once, after
 applying its tuning profile and before the first node executes. The CPU
 ``Gemm`` implementation uses this hook to pack a constant ``B`` initializer
-into the root session hierarchy's ``KernelPreparationStore``. Control-flow
+into the root session hierarchy's ``ValueStore``. Control-flow
 subgraphs and model-local function sessions inherit the same store. The kernel
 binds a stable integer slot while it initializes; later runs consume that slot
 by direct vector indexing instead of repacking ``B`` or repeating a string-key

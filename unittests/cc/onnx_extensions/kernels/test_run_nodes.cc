@@ -3117,11 +3117,7 @@ TEST(RunModel, LoopNodeRunsBodySubgraph) {
 }
 
 // Variant of LoopNodeRunsBodySubgraph with a SimpleRawBufferAllocator. Verifies
-// that subgraph contexts created inside SubgraphSession::Run do not inherit the allocator,
-// preventing double-free of body-output tensors threaded as loop-carried state
-// across iterations. Iter/cond scalars are now allocated transiently via the
-// parent allocator, but those slots are released before the final loop outputs
-// are materialized, so the peak slot usage remains two.
+// that each body invocation inherits the parent execution allocator.
 TEST(RunModel, LoopNodeRunsBodySubgraphWithAllocator) {
   ModelProto model;
   model.set_ir_version(10);
@@ -3159,9 +3155,7 @@ TEST(RunModel, LoopNodeRunsBodySubgraphWithAllocator) {
   body->add_output()->set_name("s_out");
   body->add_output()->set_name("s_out");
 
-  // Two slots are sufficient: the transient iter/cond scalar allocations are
-  // freed at the end of each iteration before the final outputs are stored.
-  constexpr size_t kAllocatorSlotCapacity = 2;
+  constexpr size_t kAllocatorSlotCapacity = 16;
   core::runtime::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
 
   TensorMap tensors;
@@ -3181,6 +3175,7 @@ TEST(RunModel, LoopNodeRunsBodySubgraphWithAllocator) {
   EXPECT_FLOAT_EQ(scan[0], 1.0f);
   EXPECT_FLOAT_EQ(scan[1], 2.0f);
   EXPECT_FLOAT_EQ(scan[2], 3.0f);
+  EXPECT_GT(alloc.PeakAllocatedSize(), 0u);
 }
 
 TEST(RunModel, LoopNodeAllocatorBacksTransientIterAndCondScalars) {

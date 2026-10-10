@@ -134,8 +134,7 @@ Tensor StackScanOutput(const Tensors &per_iter, int64_t trip_count, int64_t axis
 //   * ``scan_output_axes`` supplies the output-axis positions for stacking each scan output.
 //   * ``scan_output_directions`` supplies the per-output append/prepend directions.
 //   * ``allocator`` specifies the optional allocator used for stacked scan outputs.
-Tensors AssembleScanOutputs(int64_t trip_count, const Tensors &initial_state,
-                            const Tensors &final_state,
+Tensors AssembleScanOutputs(int64_t trip_count, const Tensors &initial_state, Tensors final_state,
                             const std::vector<Tensors> &scan_values_per_iter,
                             const ParamInts &scan_output_axes,
                             const ParamInts &scan_output_directions, RawBufferAllocator *allocator,
@@ -158,7 +157,7 @@ Tensors AssembleScanOutputs(int64_t trip_count, const Tensors &initial_state,
   Tensors out;
   out.reserve(initial_state.size() + k);
   for (std::size_t i = 0; i < initial_state.size(); ++i) {
-    out.push_back(trip_count == 0 ? initial_state[i] : final_state[i]);
+    out.push_back(trip_count == 0 ? initial_state[i].BorrowView() : std::move(final_state[i]));
   }
   for (std::size_t ki = 0; ki < k; ++ki) {
     const int64_t axis = scan_output_axes.empty() ? 0 : scan_output_axes[ki];
@@ -264,13 +263,16 @@ Tensors Scan::operator()(RuntimeContext &rt, const GraphProto &body, SubgraphSes
 
   // Iterate the body once per scan step, threading the state forward and
   // collecting the per-iteration scan outputs.
-  Tensors state = initial_state;
+  Tensors state;
+  state.reserve(initial_state.size());
+  for (const Tensor &tensor : initial_state)
+    state.push_back(tensor.BorrowView());
   std::vector<Tensors> scan_values(k);
   for (int64_t iter = 0; iter < trip_count; ++iter) {
     std::vector<std::pair<std::string, Tensor>> bindings;
     bindings.reserve(n + m);
     for (std::size_t i = 0; i < n; ++i) {
-      Tensor t = state[i];
+      Tensor t = state[i].BorrowView();
       t.name = body.input(static_cast<int>(i)).name();
       bindings.emplace_back(t.name, std::move(t));
     }
@@ -282,12 +284,13 @@ Tensors Scan::operator()(RuntimeContext &rt, const GraphProto &body, SubgraphSes
       bindings.emplace_back(slice.name, std::move(slice));
     }
 
-    const Tensors body_outputs = session.Run(std::move(bindings), rt, "body");
+    Tensors body_outputs = session.Run(std::move(bindings), rt, "body");
     EXT_ENFORCE_INVALID(body_outputs.size() == n + k,
                         "kernel::Scan: body produced an unexpected number of outputs.");
-    state.assign(body_outputs.begin(), body_outputs.begin() + static_cast<std::ptrdiff_t>(n));
+    for (std::size_t i = 0; i < n; ++i)
+      state[i] = std::move(body_outputs[i]);
     for (std::size_t i = 0; i < k; ++i) {
-      scan_values[i].push_back(body_outputs[n + i]);
+      scan_values[i].push_back(std::move(body_outputs[n + i]));
     }
   }
 
@@ -302,7 +305,7 @@ Tensors Scan::operator()(RuntimeContext &rt, const GraphProto &body, SubgraphSes
     std::vector<std::pair<std::string, Tensor>> bindings;
     bindings.reserve(n + m);
     for (std::size_t i = 0; i < n; ++i) {
-      Tensor t = state[i];
+      Tensor t = state[i].BorrowView();
       t.name = body.input(static_cast<int>(i)).name();
       bindings.emplace_back(t.name, std::move(t));
     }
@@ -328,16 +331,17 @@ Tensors Scan::operator()(RuntimeContext &rt, const GraphProto &body, SubgraphSes
       bindings.emplace_back(slice.name, std::move(slice));
     }
 
-    const Tensors body_outputs = session.Run(std::move(bindings), rt, "body");
+    Tensors body_outputs = session.Run(std::move(bindings), rt, "body");
     EXT_ENFORCE_INVALID(body_outputs.size() == n + k,
                         "kernel::Scan: body produced an unexpected number of outputs.");
     for (std::size_t i = 0; i < k; ++i) {
-      scan_values[i].push_back(body_outputs[n + i]);
+      scan_values[i].push_back(std::move(body_outputs[n + i]));
     }
   }
 
-  return AssembleScanOutputs(trip_count, initial_state, state, scan_values, scan_output_axes,
-                             scan_output_directions, rt.execution_allocator(), &rt);
+  return AssembleScanOutputs(trip_count, initial_state, std::move(state), scan_values,
+                             scan_output_axes, scan_output_directions, rt.execution_allocator(),
+                             &rt);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

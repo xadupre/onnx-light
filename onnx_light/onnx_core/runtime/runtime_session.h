@@ -475,6 +475,9 @@ private:
   std::optional<KernelTuningRegistrySnapshot> tuning_snapshot_;
   KernelTuningResolutionStatistics tuning_resolution_statistics_;
   std::vector<std::string> required_inputs_;
+  /// Stable RuntimeContext slot for each action's primary name. Nameless
+  /// actions carry ``UINT32_MAX``.
+  std::vector<uint32_t> action_value_slots_;
   /// Declared (possibly symbolic) shapes keyed by tensor name, populated by
   /// :cpp:func:`SetDeclaredShapes` and consulted by :cpp:func:`Run` when
   /// :cpp:member:`check_shapes_` is enabled.

@@ -800,12 +800,29 @@ public:
            HasShape(name);
   }
 
+  /// Resolves ``name`` to its stable invocation-wide value slot, inserting it
+  /// into the directory on first use. Slots are never recycled or renumbered
+  /// while this context is alive, including during nested graph execution.
+  uint32_t ResolveValueSlot(const std::string &name);
+
+  /// Seeds the stable value directory from a reusable execution plan.
+  void RegisterValueNames(const std::vector<std::string> &names);
+
+  /// Returns the name assigned to ``slot``.
+  const std::string &ValueName(uint32_t slot) const;
+
+  /// Returns the number of stable names registered in this context.
+  size_t value_slot_count() const noexcept { return value_slot_names_.size(); }
+
   /// Removes any value stored under ``name``. Returns
   /// ``true`` if an entry was erased, ``false`` otherwise. When a tensor
   /// is erased a :cpp:class:`RuntimeEvent` with action
   /// :cpp:enumerator:`RuntimeEventAction::kRemove` is appended to the
   /// event log; nothing is logged when ``name`` is not present.
   bool Remove(const std::string &name);
+
+  /// Removes the value held by the stable directory slot ``slot``.
+  bool Remove(uint32_t slot) { return Remove(ValueName(slot)); }
 
   /// Inserts the tensor under ``name``. The name must not already
   /// be present in any value store; :cpp:func:`Put` supports overwriting.
@@ -1108,6 +1125,8 @@ private:
   SequenceMap sequences_;
   OnnxMapMap maps_;
   ShapeMap shapes_;
+  std::unordered_map<std::string, uint32_t> value_slots_;
+  std::vector<std::string> value_slot_names_;
   bool events_enabled_ = false;
   int verbose_ = 0;
   /// Non-owning view on the CPU executor leased by the running session.

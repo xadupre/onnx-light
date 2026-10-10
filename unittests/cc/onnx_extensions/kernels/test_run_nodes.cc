@@ -5915,6 +5915,41 @@ TEST(RunNodes, ExecuteActionSummary) {
   EXPECT_EQ(delete_map.summary(), "DeleteMap name='m'");
 }
 
+TEST(RunNodes, ExecutionPlanSeedsStableSlotsAcrossNestedGraphs) {
+  GraphProto branch;
+  branch.set_name("branch");
+  branch.add_input()->set_name("branch_input");
+  branch.add_output()->set_name("branch_output");
+  *branch.add_node() = MakeNode("Identity", {"branch_input"}, {"branch_output"});
+
+  GraphProto graph;
+  graph.set_name("root");
+  graph.add_input()->set_name("cond");
+  graph.add_input()->set_name("captured");
+  graph.add_output()->set_name("result");
+  NodeProto if_node = MakeNode("If", {"cond"}, {"result"});
+  AttributeProto *then_branch = if_node.add_attribute();
+  then_branch->set_name("then_branch");
+  then_branch->set_type(AttributeProto::GRAPH);
+  *then_branch->mutable_g() = branch;
+  AttributeProto *else_branch = if_node.add_attribute();
+  else_branch->set_name("else_branch");
+  else_branch->set_type(AttributeProto::GRAPH);
+  *else_branch->mutable_g() = branch;
+  *graph.add_node() = std::move(if_node);
+
+  ExecutionPlan plan(graph);
+  EXPECT_EQ(plan.value_slot_count(), 5u);
+  EXPECT_EQ(plan.arena_capacity(), 5u);
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.RegisterValueNames(plan.value_names());
+  const uint32_t captured_slot = rt.ResolveValueSlot("captured");
+  EXPECT_EQ(captured_slot, rt.ResolveValueSlot("captured"));
+  EXPECT_EQ(rt.ValueName(captured_slot), "captured");
+  EXPECT_EQ(rt.value_slot_count(), plan.value_slot_count());
+}
+
 TEST(RunNodes, ExecutionPlanShapeTagActions) {
   // A value tagged "shape" gets its shape created / destroyed (no data buffer),
   // while a regular result gets its buffer allocated / freed.

@@ -90,6 +90,62 @@ size_t ParsePeakMemory(const std::string &value) {
   return bytes > 0 ? static_cast<size_t>(bytes) : 0;
 }
 
+void AddValueName(const std::string &name, std::unordered_set<std::string> &seen,
+                  std::vector<std::string> &names) {
+  if (!name.empty() && seen.insert(name).second) {
+    names.push_back(name);
+  }
+}
+
+void CollectGraphValueNames(const GraphProto &graph, std::unordered_set<std::string> &seen,
+                            std::vector<std::string> &names);
+
+void CollectNodeValueNames(const utils::RepeatedProtoField<NodeProto> &nodes,
+                           std::unordered_set<std::string> &seen, std::vector<std::string> &names) {
+  for (const NodeProto &node : nodes) {
+    for (const auto &input : node.input()) {
+      AddValueName(input, seen, names);
+    }
+    for (const auto &output : node.output()) {
+      AddValueName(output, seen, names);
+    }
+    for (const AttributeProto &attribute : node.attribute()) {
+      if (attribute.has_g()) {
+        CollectGraphValueNames(attribute.g(), seen, names);
+      }
+      for (const GraphProto &nested : attribute.graphs()) {
+        CollectGraphValueNames(nested, seen, names);
+      }
+    }
+  }
+}
+
+void CollectGraphValueNames(const GraphProto &graph, std::unordered_set<std::string> &seen,
+                            std::vector<std::string> &names) {
+  for (const ValueInfoProto &input : graph.input()) {
+    AddValueName(input.name(), seen, names);
+  }
+  for (const TensorProto &initializer : graph.initializer()) {
+    AddValueName(initializer.name(), seen, names);
+  }
+  for (const SparseTensorProto &initializer : graph.sparse_initializer()) {
+    AddValueName(initializer.values().name(), seen, names);
+  }
+  for (const EncodedValueProto &initializer : graph.encoded_initializer()) {
+    AddValueName(initializer.name(), seen, names);
+  }
+  for (const PagedCacheProto &initializer : graph.paged_cache_initializer()) {
+    AddValueName(initializer.name(), seen, names);
+  }
+  CollectNodeValueNames(graph.node(), seen, names);
+  for (const ValueInfoProto &output : graph.output()) {
+    AddValueName(output.name(), seen, names);
+  }
+  for (const ValueInfoProto &value_info : graph.value_info()) {
+    AddValueName(value_info.name(), seen, names);
+  }
+}
+
 } // namespace
 
 ExecutionPlan::ExecutionPlan(const utils::RepeatedProtoField<NodeProto> &nodes,
@@ -100,6 +156,7 @@ ExecutionPlan::ExecutionPlan(const utils::RepeatedProtoField<NodeProto> &nodes,
     nodes_.push_back(&nodes[i]);
     node_index_.emplace(&nodes[i], i);
   }
+  BuildValueDirectory(nodes);
   BuildActions();
 }
 
@@ -134,6 +191,8 @@ ExecutionPlan::ExecutionPlan(const GraphProto &graph) {
     nodes_.push_back(&graph.node()[i]);
     node_index_.emplace(&graph.node()[i], i);
   }
+  std::unordered_set<std::string> seen;
+  CollectGraphValueNames(graph, seen, value_names_);
   BuildActions();
 }
 
@@ -159,11 +218,27 @@ ExecutionPlan::ExecutionPlan(const FunctionProto &func) {
     nodes_.push_back(&func.node()[i]);
     node_index_.emplace(&func.node()[i], i);
   }
+  for (const auto &input : func.input()) {
+    if (!input.empty()) {
+      value_names_.push_back(input);
+    }
+  }
+  BuildValueDirectory(func.node());
+  std::unordered_set<std::string> seen(value_names_.begin(), value_names_.end());
+  for (const auto &output : func.output()) {
+    AddValueName(output, seen, value_names_);
+  }
   BuildActions();
+}
+
+void ExecutionPlan::BuildValueDirectory(const utils::RepeatedProtoField<NodeProto> &nodes) {
+  std::unordered_set<std::string> seen(value_names_.begin(), value_names_.end());
+  CollectNodeValueNames(nodes, seen, value_names_);
 }
 
 void ExecutionPlan::BuildActions() {
   actions_.clear();
+  temporary_slot_count_ = 0;
   if (nodes_.empty()) {
     return;
   }
@@ -347,6 +422,7 @@ void ExecutionPlan::BuildActions() {
     const size_t peak_memory =
         ParsePeakMemory(ReadNodeMetadata(node, compute::kNodePeakMemoryMetadataKey));
     if (peak_memory != 0) {
+      temporary_slot_count_ = 1;
       actions_.emplace_back(ExecuteActionKind::kAllocateTemporaryBuffer, std::string(), i,
                             peak_memory);
     }

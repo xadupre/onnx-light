@@ -401,6 +401,34 @@ bool RuntimeContext::Remove(const std::string &value_name) {
   return true;
 }
 
+uint32_t RuntimeContext::ResolveValueSlot(const std::string &name) {
+  EXT_ENFORCE_INVALID(!name.empty(), "RuntimeContext: a value slot name must not be empty.");
+  const auto found = value_slots_.find(name);
+  if (found != value_slots_.end()) {
+    return found->second;
+  }
+  EXT_ENFORCE_INVALID(value_slot_names_.size() < std::numeric_limits<uint32_t>::max(),
+                      "RuntimeContext: value slot directory exceeds uint32_t capacity.");
+  const uint32_t slot = static_cast<uint32_t>(value_slot_names_.size());
+  value_slot_names_.push_back(name);
+  value_slots_.emplace(value_slot_names_.back(), slot);
+  return slot;
+}
+
+void RuntimeContext::RegisterValueNames(const std::vector<std::string> &names) {
+  value_slots_.reserve(value_slots_.size() + names.size());
+  value_slot_names_.reserve(value_slot_names_.size() + names.size());
+  for (const std::string &name : names) {
+    ResolveValueSlot(name);
+  }
+}
+
+const std::string &RuntimeContext::ValueName(uint32_t slot) const {
+  EXT_ENFORCE_INVALID(slot < value_slot_names_.size(), "RuntimeContext: value slot ", slot,
+                      " is outside the directory of ", value_slot_names_.size(), " names.");
+  return value_slot_names_[slot];
+}
+
 const Tensor &RuntimeContext::Get(const std::string &name) const {
   auto it = tensors_.find(name);
   if (it == tensors_.end()) {

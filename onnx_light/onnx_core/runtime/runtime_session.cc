@@ -595,6 +595,13 @@ void RuntimeSession::VerifyDeclaredShape(const std::string &name, const RuntimeC
 }
 
 void RuntimeSession::Run(RuntimeContext &rt) {
+  rt.RegisterValueNames(plan_.value_names());
+  action_value_slots_.clear();
+  action_value_slots_.reserve(plan_.actions().size());
+  for (const ExecuteAction &action : plan_.actions()) {
+    action_value_slots_.push_back(action.name().empty() ? std::numeric_limits<uint32_t>::max()
+                                                        : rt.ResolveValueSlot(action.name()));
+  }
   if (owned_opset_imports_ && inherited_opset_imports_ == nullptr &&
       rt.kernel_ctx().opset.version != 0) {
     const std::string domain =
@@ -681,7 +688,8 @@ void RuntimeSession::Run(RuntimeContext &rt) {
   // bookkeeping) is informational for this session — the kernels manage their
   // own allocations — but is still matched by an explicit case so no scheduled
   // event is silently ignored.
-  for (const ExecuteAction &action : plan_.actions()) {
+  for (size_t action_index = 0; action_index < plan_.actions().size(); ++action_index) {
+    const ExecuteAction &action = plan_.actions()[action_index];
     switch (action.kind()) {
     case ExecuteActionKind::kExecuteNode: {
       const size_t index = action.node_index();
@@ -771,25 +779,25 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       if (!rt.release_intermediates()) {
         break;
       }
-      rt.Remove(action.name());
+      rt.Remove(action_value_slots_[action_index]);
       break;
     case ExecuteActionKind::kDeleteShape:
       if (!rt.release_intermediates()) {
         break;
       }
-      rt.RemoveShape(action.name());
+      rt.RemoveShape(rt.ValueName(action_value_slots_[action_index]));
       break;
     case ExecuteActionKind::kDeleteSequence:
       if (!rt.release_intermediates()) {
         break;
       }
-      rt.Remove(action.name());
+      rt.Remove(action_value_slots_[action_index]);
       break;
     case ExecuteActionKind::kDeleteMap:
       if (!rt.release_intermediates()) {
         break;
       }
-      rt.RemoveMap(action.name());
+      rt.RemoveMap(rt.ValueName(action_value_slots_[action_index]));
       break;
     // Actions this session performs no explicit work for: the kernels manage
     // their own buffers, so locks/unlocks, (temporary-)buffer allocations,

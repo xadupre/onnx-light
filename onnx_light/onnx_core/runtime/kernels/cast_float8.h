@@ -57,6 +57,7 @@ float Float8E5M2FNUZBitsToFloat(std::uint8_t bits) noexcept;
 // FLOAT8E8M0 is ``"up"``: positive values that are not exact powers of two
 // are rounded up to the next representable power of two.
 std::uint8_t FloatToFloat8E8M0Bits(float v) noexcept;
+std::uint8_t FloatToFloat8E8M0Bits(double v) noexcept;
 float Float8E8M0BitsToFloat(std::uint8_t bits) noexcept;
 
 // -------------------------------------------------------------------------

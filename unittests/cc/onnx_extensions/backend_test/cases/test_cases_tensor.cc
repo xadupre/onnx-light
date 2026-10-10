@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -286,6 +287,23 @@ TEST(BackendTestCase, CastFloat8ToFloatInputMatchesSaturatedEncoding) {
     }
     EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
     EXPECT_EQ(ds.outputs[0].data.size(), f8.expected_bytes.size() * sizeof(float));
+  }
+}
+
+TEST(BackendTestCase, CastE8M0BoundariesHaveIndependentExpectedBytes) {
+  const auto cases = CollectTestCases("Cast");
+  for (const auto &entry : std::vector<std::pair<std::string, std::vector<uint8_t>>>{
+           {"test_cc_cast_e8m0_FLOAT_subnormal", {0x00, 0x00, 0x01, 0x01, 0xFE}},
+           {"test_cc_cast_e8m0_DOUBLE_boundary", {0x01, 0x02, 0xFE}},
+       }) {
+    const TestCase *tc = FindCase(cases, entry.first);
+    ASSERT_NE(tc, nullptr) << entry.first;
+    ASSERT_EQ(tc->data_sets().size(), 1u);
+    const auto &ds = tc->data_sets()[0];
+    ASSERT_EQ(ds.inputs.size(), 1u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT8E8M0));
+    EXPECT_EQ(ds.outputs[0].data, entry.second);
   }
 }
 

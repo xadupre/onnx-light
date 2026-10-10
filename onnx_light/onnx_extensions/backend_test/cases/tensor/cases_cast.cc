@@ -8,6 +8,7 @@
 #include "onnx_extensions/kernels/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_proto/onnx_helper.h"
 
+#include <bit>
 #include <cmath>
 #include <cstdint>
 #include <functional>
@@ -761,6 +762,31 @@ void RegisterCastCases(std::vector<TestCase> &registry, TestMode mode) {
 
              Tensor input = make_e8m0_packed_input();
              Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
+             return IoData{{std::move(input)}, {std::move(output)}};
+           });
+  }
+  {
+    const int64_t to_attr = static_cast<int64_t>(DataType::FLOAT8E8M0);
+    Expect(registry, MakeCastNode(to_attr), "test_cc_cast_e8m0_FLOAT_subnormal", {opset_v21},
+           []() -> IoData {
+             const auto from_bits = [](uint32_t bits) { return std::bit_cast<float>(bits); };
+             Tensor input = Tensor::FromFloat("", {5},
+                                              {from_bits(0x00400000u), from_bits(0x00080000u),
+                                               from_bits(0x00400001u), from_bits(0x00800000u),
+                                               std::ldexp(1.5f, 127)});
+             Tensor output("", static_cast<int32_t>(DataType::FLOAT8E8M0), {5},
+                           std::vector<uint8_t>{0x00, 0x00, 0x01, 0x01, 0xFE});
+             return IoData{{std::move(input)}, {std::move(output)}};
+           });
+    Expect(registry, MakeCastNode(to_attr), "test_cc_cast_e8m0_DOUBLE_boundary", {opset_v21},
+           []() -> IoData {
+             const double boundary = std::ldexp(1.0, -126);
+             Tensor input = Tensor::FromDouble(
+                 "", {3},
+                 {std::nextafter(boundary, 0.0),
+                  std::nextafter(boundary, std::numeric_limits<double>::infinity()), 1e39});
+             Tensor output("", static_cast<int32_t>(DataType::FLOAT8E8M0), {3},
+                           std::vector<uint8_t>{0x01, 0x02, 0xFE});
              return IoData{{std::move(input)}, {std::move(output)}};
            });
   }

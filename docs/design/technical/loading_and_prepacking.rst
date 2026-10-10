@@ -161,14 +161,24 @@ RuntimeSession integration
 ``RuntimeSession`` invokes each resolved kernel's preparation hook once, after
 applying its tuning profile and before the first node executes. The CPU
 ``Gemm`` implementation uses this hook to pack a constant ``B`` initializer
-into the session's ``PreparedExecutionState``. Later runs consume that packed
-object directly instead of repacking ``B``. FLOAT16 and BFLOAT16 weights are
-promoted and packed once as FLOAT because those kernels compute in FLOAT.
+into the root session hierarchy's ``KernelPreparationStore``. Control-flow
+subgraphs and model-local function sessions inherit the same store. The kernel
+binds a stable integer slot while it initializes; later runs consume that slot
+by direct vector indexing instead of repacking ``B`` or repeating a string-key
+lookup. FLOAT16 and BFLOAT16 weights are promoted and packed once as FLOAT
+because those kernels compute in FLOAT.
 
 An initializer that is also a graph input remains overridable and is therefore
 not prepared: every run continues to consume the caller's current value.
 ``RuntimeSession::prepared_bytes`` reports the resident prepared allocation for
 diagnostics and tests.
+
+This synchronous direct-replay path intentionally has no readiness wait,
+mutex, generation state, eviction, or persistence. The
+``PreparedExecutionState`` described below remains the general scheduler and
+residency store for asynchronous loading/prepacking and cache-aware execution.
+It is not consulted when an already initialized ``RuntimeSession`` replays its
+ordinary ``ExecutionPlan``.
 
 Pool ownership and dispatch
 +++++++++++++++++++++++++++

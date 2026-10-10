@@ -427,7 +427,7 @@ Tensor Gemm::operator()(const Tensor &a, const PreparedGemmB &b, const Tensor *c
                   : MakeOutputTensor(DataType::FLOAT, shape,
                                      static_cast<size_t>(m * n) * sizeof(float), nullptr);
     GemmCompute<float>(a_f, packed, c_ptr, alpha, beta, transA, b.state_->trans_b, tuning_,
-                       y.As<float>(), reinterpret_cast<const float *>(view->buffer->data()));
+                       y.As<float>(), packed.As<float>());
     return DemoteFromFloat32(y, a.data_type, rt, tuning_.conversion_parallel_minimum_elements);
   }
   default:

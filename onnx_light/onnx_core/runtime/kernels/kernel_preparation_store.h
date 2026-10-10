@@ -31,7 +31,9 @@ inline constexpr KernelPreparationSlot kInvalidKernelPreparationSlot =
  * The owning session hierarchy is serialized by contract. Registration,
  * publication, and indexed reads therefore require no mutex or atomic state.
  * A kernel retains the integer returned by :cpp:func:`Bind`, so execution is a
- * direct vector lookup.
+ * direct vector lookup. This synchronous store does not replace
+ * :cpp:class:`PreparedObjectStore`, which owns asynchronous generation,
+ * scheduling, residency, persistence, and eviction state.
  */
 class ONNX_LIGHT_CORE_API KernelPreparationStore {
 public:

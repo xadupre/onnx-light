@@ -292,10 +292,14 @@ public:
     return tuning_resolution_statistics_;
   }
 
-  /// Returns bytes occupied by session-owned prepared kernel objects.
+  /// Returns bytes occupied by prepared kernel objects in the shared root,
+  /// subgraph, and model-local function session hierarchy.
   size_t prepared_bytes() const noexcept;
 
-  /// Returns the preparation store shared by this session hierarchy.
+  /// Returns the synchronous preparation store shared by this session hierarchy.
+  /// This store supplies stable direct-lookup slots during ordinary
+  /// :cpp:class:`ExecutionPlan` replay; it is separate from the asynchronous
+  /// :cpp:class:`PreparedExecutionState`.
   const std::shared_ptr<KernelPreparationStore> &preparation_store() const noexcept {
     return preparation_store_;
   }

@@ -97,6 +97,17 @@ invocation-scoped task descriptors; it is not retained as a second plan.
 Its allocation, execution, and release actions remain reusable templates, but
 each inference receives its own task state and invocation-owned values.
 
+Until that migration is complete, direct ``ExecutionPlan`` replay remains the
+synchronous production path. Its kernel instances prepare immutable inputs
+once into a hierarchy-owned ``KernelPreparationStore`` and retain stable
+integer slots. Root, control-flow subgraph, and model-local function sessions
+share the store. A hot replay performs a direct slot read: it does not use the
+string-keyed binding map, a mutex, a readiness wait, or the general
+``PreparedExecutionState`` scheduler. This is an intentional bridge, not a
+second asynchronous plan: generations, external-data loading, persistence,
+eviction, and dependency scheduling remain solely in
+``PreparedExecutionPlan``.
+
 Publishing a session object is atomic: the producing task completes only after
 the immutable object and its allocation handle are visible. An inference task
 depends on that completion event directly, rather than looking up a value after
@@ -1476,7 +1487,11 @@ Implementation order
    publish, and dormant-fallback task descriptors.
 #. **Implemented:** add session-scoped preparation for one CPU ``Gemm`` with a
    constant ``B``, including both ``transB`` values while preserving the
-   ordinary reference fallback.
+   ordinary reference fallback. Direct ``ExecutionPlan`` replay now stores the
+   result in one hierarchy-owned ``KernelPreparationStore`` shared by root,
+   subgraph, and model-local function sessions. Each ``Gemm`` retains a stable
+   integer slot and reads it without a mutex, map lookup, readiness wait, or
+   per-run scheduler dispatch.
 #. **Implemented:** merge kernel preparation and node execution into one
    ``PreparedExecutionPlan`` and first execute its session-scoped tasks
    sequentially through completion events.

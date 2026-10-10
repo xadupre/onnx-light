@@ -134,7 +134,7 @@ Tensor StackScanOutput(const Tensors &per_iter, int64_t trip_count, int64_t axis
 //   * ``scan_output_axes`` supplies the output-axis positions for stacking each scan output.
 //   * ``scan_output_directions`` supplies the per-output append/prepend directions.
 //   * ``allocator`` specifies the optional allocator used for stacked scan outputs.
-Tensors AssembleScanOutputs(int64_t trip_count, const Tensors &initial_state, Tensors final_state,
+Tensors AssembleScanOutputs(int64_t trip_count, const Tensors &initial_state, Tensors &&final_state,
                             const std::vector<Tensors> &scan_values_per_iter,
                             const ParamInts &scan_output_axes,
                             const ParamInts &scan_output_directions, RawBufferAllocator *allocator,
@@ -175,8 +175,10 @@ Tensors Scan::operator()(int64_t trip_count, const Tensors &initial_state,
                          const std::vector<Tensors> &scan_values_per_iter,
                          const ParamInts &scan_output_axes,
                          const ParamInts &scan_output_directions) const {
-  return AssembleScanOutputs(trip_count, initial_state, final_state, scan_values_per_iter,
-                             scan_output_axes, scan_output_directions, nullptr);
+  Tensors owned_final_state = final_state;
+  return AssembleScanOutputs(trip_count, initial_state, std::move(owned_final_state),
+                             scan_values_per_iter, scan_output_axes, scan_output_directions,
+                             nullptr);
 }
 
 Tensors Scan::operator()(RuntimeContext &rt, int64_t trip_count, const Tensors &initial_state,
@@ -184,9 +186,10 @@ Tensors Scan::operator()(RuntimeContext &rt, int64_t trip_count, const Tensors &
                          const std::vector<Tensors> &scan_values_per_iter,
                          const ParamInts &scan_output_axes,
                          const ParamInts &scan_output_directions) const {
-  return AssembleScanOutputs(trip_count, initial_state, final_state, scan_values_per_iter,
-                             scan_output_axes, scan_output_directions, rt.execution_allocator(),
-                             &rt);
+  Tensors owned_final_state = final_state;
+  return AssembleScanOutputs(trip_count, initial_state, std::move(owned_final_state),
+                             scan_values_per_iter, scan_output_axes, scan_output_directions,
+                             rt.execution_allocator(), &rt);
 }
 
 Tensors Scan::operator()(RuntimeContext &rt, const GraphProto &body, const Tensors &initial_state,

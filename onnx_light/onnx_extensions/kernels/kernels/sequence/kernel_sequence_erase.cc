@@ -56,7 +56,7 @@ void SequenceErase::Run(RuntimeContext &rt) {
                       "' expects 1 or 2 inputs, got ", node.input_size(), ".");
   RequireOutputCount(node, 1);
   const Sequence &input_sequence = GetInputSequence(node, 0, rt);
-  const Tensor *position = GetOptionalInput(node, 1, rt.tensors());
+  const Tensor *position = GetOptionalInput(node, 1, rt);
   onnx_kernels::kernel::SequenceErase k(rt.kernel_ctx());
   SetOutputSequence(node, 0, k(input_sequence, position), rt);
 }

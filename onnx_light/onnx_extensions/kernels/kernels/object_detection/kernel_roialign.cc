@@ -240,9 +240,9 @@ void RoiAlign::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 3);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &rois = GetInput(node, 1, rt.tensors());
-  const Tensor &batch_indices = GetInput(node, 2, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
+  const Tensor &rois = GetInput(node, 1, rt);
+  const Tensor &batch_indices = GetInput(node, 2, rt);
   onnx_kernels::kernel::RoiAlign::Attributes attrs;
   attrs.mode = GetAttributeStringOrDefault(node, "mode", attrs.mode);
   attrs.output_height = GetAttributeIntOrDefault(node, "output_height", attrs.output_height);

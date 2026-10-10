@@ -366,16 +366,25 @@ void RuntimeContext::ClearKernelUsage() {
 
 void RuntimeContext::Set(const std::string &name, Tensor tensor, RuntimeEventKind kind) {
   EXT_ENFORCE(!HasValue(name), "RuntimeContext::Set: a value named '", name, "' already exists.");
+  if (!value_slot_names_.empty()) {
+    Put(ResolveValueSlot(name), std::move(tensor), kind);
+    return;
+  }
   if (!retains_output(name))
     EnsureAllocatorBacked(tensor, allocator_, kind, device_);
   if (events_enabled_) {
     RecordEvent(MakeAddOrReplaceEvent(RuntimeEventAction::kAdd, kind, name, tensor));
   }
   tensors_[name] = std::move(tensor);
+  tensor_map_may_be_modified_ = true;
 }
 
 void RuntimeContext::Put(const std::string &value_name, Tensor tensor, RuntimeEventKind kind) {
   const std::string name = value_name;
+  if (!value_slot_names_.empty()) {
+    Put(ResolveValueSlot(name), std::move(tensor), kind);
+    return;
+  }
   if (!retains_output(name))
     EnsureAllocatorBacked(tensor, allocator_, kind, device_);
   if (events_enabled_) {
@@ -388,6 +397,25 @@ void RuntimeContext::Put(const std::string &value_name, Tensor tensor, RuntimeEv
   maps_.erase(name);
   shapes_.erase(name);
   tensors_[name] = std::move(tensor);
+  tensor_map_may_be_modified_ = true;
+}
+
+void RuntimeContext::Put(uint32_t slot, Tensor tensor, RuntimeEventKind kind) {
+  const std::string &name = ValueName(slot);
+  if (!retains_output(name))
+    EnsureAllocatorBacked(tensor, allocator_, kind, device_);
+  if (events_enabled_) {
+    const RuntimeEventAction action =
+        HasValue(name) ? RuntimeEventAction::kReplace : RuntimeEventAction::kAdd;
+    RecordEvent(MakeAddOrReplaceEvent(action, kind, name, tensor));
+  }
+  values_.erase(name);
+  sequences_.erase(name);
+  maps_.erase(name);
+  shapes_.erase(name);
+  tensor.name = name;
+  tensor_slots_[slot] = std::move(tensor);
+  tensors_.insert_or_assign(name, tensor_slots_[slot]->BorrowView());
 }
 
 void RuntimeContext::PutValue(std::string name, RuntimeValue value, RuntimeEventKind kind) {
@@ -401,6 +429,10 @@ void RuntimeContext::PutValue(std::string name, RuntimeValue value, RuntimeEvent
 
 bool RuntimeContext::Remove(const std::string &value_name) {
   const std::string name = value_name;
+  const auto slot = value_slots_.find(name);
+  if (slot != value_slots_.end() && slot->second < tensor_slots_.size()) {
+    tensor_slots_[slot->second].reset();
+  }
   size_t removed = values_.erase(name);
   removed += sequences_.erase(name);
   removed += maps_.erase(name);
@@ -426,6 +458,7 @@ uint32_t RuntimeContext::ResolveValueSlot(const std::string &name) {
                       "RuntimeContext: value slot directory exceeds uint32_t capacity.");
   const uint32_t slot = static_cast<uint32_t>(value_slot_names_.size());
   value_slot_names_.push_back(name);
+  tensor_slots_.emplace_back();
   value_slots_.emplace(value_slot_names_.back(), slot);
   return slot;
 }
@@ -436,6 +469,33 @@ void RuntimeContext::RegisterValueNames(const std::vector<std::string> &names) {
   for (const std::string &name : names) {
     ResolveValueSlot(name);
   }
+  SynchronizeTensorMap();
+}
+
+void RuntimeContext::SynchronizeTensorMap() {
+  if (!tensor_map_may_be_modified_) {
+    return;
+  }
+  for (auto &named_tensor : tensors_) {
+    const uint32_t slot = ResolveValueSlot(named_tensor.first);
+    bool is_mirror = false;
+    if (tensor_slots_[slot].has_value()) {
+      const Tensor &stored = *tensor_slots_[slot];
+      const Tensor &candidate = named_tensor.second;
+      is_mirror = stored.data_type == candidate.data_type && stored.shape == candidate.shape &&
+                  stored.size_bytes() == candidate.size_bytes();
+      if (is_mirror && static_cast<DataType>(stored.data_type) == DataType::STRING) {
+        is_mirror = &stored.AsStrings() == &candidate.AsStrings();
+      } else if (is_mirror) {
+        is_mirror = stored.bytes() == candidate.bytes();
+      }
+    }
+    if (!is_mirror) {
+      tensor_slots_[slot] = std::move(named_tensor.second);
+    }
+    named_tensor.second = tensor_slots_[slot]->BorrowView();
+  }
+  tensor_map_may_be_modified_ = false;
 }
 
 const std::string &RuntimeContext::ValueName(uint32_t slot) const {
@@ -444,7 +504,46 @@ const std::string &RuntimeContext::ValueName(uint32_t slot) const {
   return value_slot_names_[slot];
 }
 
+const Tensor &RuntimeContext::GetTensor(uint32_t slot) const {
+  if (tensor_map_may_be_modified_) {
+    const_cast<RuntimeContext *>(this)->SynchronizeTensorMap();
+  }
+  EXT_ENFORCE_INVALID(slot < tensor_slots_.size() && tensor_slots_[slot].has_value(),
+                      "RuntimeContext: tensor slot ", slot, " ('",
+                      slot < value_slot_names_.size() ? value_slot_names_[slot] : std::string("?"),
+                      "') is empty.");
+  return *tensor_slots_[slot];
+}
+
+Tensor &RuntimeContext::GetTensor(uint32_t slot) {
+  return const_cast<Tensor &>(std::as_const(*this).GetTensor(slot));
+}
+
+uint32_t RuntimeContext::CurrentInputSlot(int index) const {
+  EXT_ENFORCE_INVALID(current_input_slots_ != nullptr && index >= 0 &&
+                          static_cast<size_t>(index) < current_input_slots_->size(),
+                      "RuntimeContext: current node input slot ", index, " is unavailable.");
+  const uint32_t slot = (*current_input_slots_)[static_cast<size_t>(index)];
+  EXT_ENFORCE_INVALID(slot != std::numeric_limits<uint32_t>::max(),
+                      "RuntimeContext: current node input #", index, " is unset.");
+  return slot;
+}
+
+uint32_t RuntimeContext::CurrentOutputSlot(int index) const {
+  EXT_ENFORCE_INVALID(current_output_slots_ != nullptr && index >= 0 &&
+                          static_cast<size_t>(index) < current_output_slots_->size(),
+                      "RuntimeContext: current node output slot ", index, " is unavailable.");
+  const uint32_t slot = (*current_output_slots_)[static_cast<size_t>(index)];
+  EXT_ENFORCE_INVALID(slot != std::numeric_limits<uint32_t>::max(),
+                      "RuntimeContext: current node output #", index, " is unset.");
+  return slot;
+}
+
 const Tensor &RuntimeContext::Get(const std::string &name) const {
+  const auto slot = value_slots_.find(name);
+  if (slot != value_slots_.end() && tensor_slots_[slot->second].has_value()) {
+    return *tensor_slots_[slot->second];
+  }
   auto it = tensors_.find(name);
   if (it == tensors_.end()) {
     throw std::out_of_range("RuntimeContext::Get: no tensor named '" + name + "'.");
@@ -453,11 +552,7 @@ const Tensor &RuntimeContext::Get(const std::string &name) const {
 }
 
 Tensor &RuntimeContext::Get(const std::string &name) {
-  auto it = tensors_.find(name);
-  if (it == tensors_.end()) {
-    throw std::out_of_range("RuntimeContext::Get: no tensor named '" + name + "'.");
-  }
-  return it->second;
+  return const_cast<Tensor &>(std::as_const(*this).Get(name));
 }
 
 const ExecutionPlan &RuntimeContext::GetExecutionPlan(const GraphProto &graph) {

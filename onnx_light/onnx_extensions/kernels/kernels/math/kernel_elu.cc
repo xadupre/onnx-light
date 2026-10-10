@@ -91,7 +91,7 @@ void Elu::Run(RuntimeContext &rt) {
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
   const float alpha = GetAttributeFloatOrDefault(node, "alpha", 1.0f);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
   SetOutput(node, 0, (*this)(x, alpha, &rt), rt);
 }
 

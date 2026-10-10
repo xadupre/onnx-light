@@ -202,9 +202,9 @@ void TensorScatter::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputRange(node, 2, 3);
   RequireOutputCount(node, 1);
-  const Tensor &past_cache = GetInput(node, 0, rt.tensors());
-  const Tensor &update = GetInput(node, 1, rt.tensors());
-  const Tensor *write_indices = GetOptionalInput(node, 2, rt.tensors());
+  const Tensor &past_cache = GetInput(node, 0, rt);
+  const Tensor &update = GetInput(node, 1, rt);
+  const Tensor *write_indices = GetOptionalInput(node, 2, rt);
   onnx_kernels::kernel::TensorScatter::Attributes attrs;
   attrs.axis = GetAttributeIntOrDefault(node, "axis", -2);
   attrs.mode = GetAttributeStringOrDefault(node, "mode", "linear");

@@ -456,6 +456,26 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt,
   kernels_initialized_ = true;
 }
 
+void RuntimeSession::ResolveKernelValueSlots(RuntimeContext &rt) {
+  const std::vector<const NodeProto *> &nodes = plan_.nodes();
+  for (size_t index = 0; index < kernels_.size(); ++index) {
+    PreparedKernel &prepared = kernels_[index];
+    const NodeProto &node = *nodes[index];
+    prepared.input_slots.clear();
+    prepared.input_slots.reserve(node.input_size());
+    for (const auto &name : node.input()) {
+      prepared.input_slots.push_back(name.empty() ? std::numeric_limits<uint32_t>::max()
+                                                  : rt.ResolveValueSlot(name));
+    }
+    prepared.output_slots.clear();
+    prepared.output_slots.reserve(node.output_size());
+    for (const auto &name : node.output()) {
+      prepared.output_slots.push_back(name.empty() ? std::numeric_limits<uint32_t>::max()
+                                                   : rt.ResolveValueSlot(name));
+    }
+  }
+}
+
 size_t RuntimeSession::prepared_bytes() const noexcept {
   return value_store_ == nullptr ? 0 : value_store_->prepared_bytes();
 }
@@ -596,11 +616,14 @@ void RuntimeSession::VerifyDeclaredShape(const std::string &name, const RuntimeC
 
 void RuntimeSession::Run(RuntimeContext &rt) {
   rt.BindExecutionPlan(plan_);
-  action_value_slots_.clear();
-  action_value_slots_.reserve(plan_.actions().size());
-  for (const ExecuteAction &action : plan_.actions()) {
-    action_value_slots_.push_back(action.name().empty() ? std::numeric_limits<uint32_t>::max()
-                                                        : rt.ResolveValueSlot(action.name()));
+  const bool resolve_value_slots = value_directory_identity_ != rt.value_directory_identity();
+  if (resolve_value_slots) {
+    action_value_slots_.clear();
+    action_value_slots_.reserve(plan_.actions().size());
+    for (const ExecuteAction &action : plan_.actions()) {
+      action_value_slots_.push_back(action.name().empty() ? std::numeric_limits<uint32_t>::max()
+                                                          : rt.ResolveValueSlot(action.name()));
+    }
   }
   if (owned_opset_imports_ && inherited_opset_imports_ == nullptr &&
       rt.kernel_ctx().opset.version != 0) {
@@ -641,6 +664,10 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       }
     }
     InitializeKernels(rt, preparable_inputs);
+  }
+  if (resolve_value_slots) {
+    ResolveKernelValueSlots(rt);
+    value_directory_identity_ = rt.value_directory_identity();
   }
   // Use the session's construction-time verbosity when it is non-zero;
   // otherwise fall back to the RuntimeContext's own verbosity. The context
@@ -702,6 +729,7 @@ void RuntimeSession::Run(RuntimeContext &rt) {
                           "RuntimeSession: kernel for node index ", index,
                           " was not initialized before Run().");
       rt.set_current_node_index(static_cast<int64_t>(index));
+      rt.SetCurrentNodeValueSlots(&prepared.input_slots, &prepared.output_slots);
       const NodeProto &node = *nodes[index];
       const std::string &domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
       const std::string &op_type = node.op_type().value();
@@ -816,6 +844,7 @@ void RuntimeSession::Run(RuntimeContext &rt) {
     }
   }
   rt.set_current_node_index(-1);
+  rt.SetCurrentNodeValueSlots(nullptr, nullptr);
   // Detach any graph output that borrows into the model (e.g. a Constant's
   // raw_data value or a pass-through initializer) so the returned outputs own
   // their bytes and stay valid once the model is released.

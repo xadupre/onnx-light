@@ -130,9 +130,9 @@ void NegativeLogLikelihoodLoss::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputRange(node, 2, 3);
   RequireOutputCount(node, 1);
-  const Tensor &input = GetInput(node, 0, rt.tensors());
-  const Tensor &target = GetInput(node, 1, rt.tensors());
-  const Tensor *weight = GetOptionalInput(node, 2, rt.tensors());
+  const Tensor &input = GetInput(node, 0, rt);
+  const Tensor &target = GetInput(node, 1, rt);
+  const Tensor *weight = GetOptionalInput(node, 2, rt);
   const std::string reduction = GetAttributeStringOrDefault(node, "reduction", "mean");
   const bool has_ignore_index = FindAttribute(node, "ignore_index") != nullptr;
   const int64_t ignore_index = GetAttributeIntOrDefault(node, "ignore_index", 0);

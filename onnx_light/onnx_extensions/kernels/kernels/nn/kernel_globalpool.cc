@@ -230,7 +230,7 @@ void GlobalAveragePool::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
   SetOutput(node, 0, (*this)(x, &rt), rt);
 }
 
@@ -238,7 +238,7 @@ void GlobalLpPool::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
   const double p = ctx_.opset.version == 1
                        ? static_cast<double>(GetAttributeFloatOrDefault(node, "p", 2.0f))
                        : static_cast<double>(GetAttributeIntOrDefault(node, "p", 2));
@@ -249,7 +249,7 @@ void GlobalMaxPool::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
   SetOutput(node, 0, (*this)(x, &rt), rt);
 }
 

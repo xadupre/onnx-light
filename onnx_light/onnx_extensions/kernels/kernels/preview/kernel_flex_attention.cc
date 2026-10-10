@@ -460,9 +460,9 @@ void FlexAttention::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 3);
   RequireOutputCount(node, 1);
-  const Tensor &Q = GetInput(node, 0, rt.tensors());
-  const Tensor &K = GetInput(node, 1, rt.tensors());
-  const Tensor &V = GetInput(node, 2, rt.tensors());
+  const Tensor &Q = GetInput(node, 0, rt);
+  const Tensor &K = GetInput(node, 1, rt);
+  const Tensor &V = GetInput(node, 2, rt);
 
   // Resolve the scale once: use the explicit attribute if present, otherwise
   // fall back to 1/sqrt(head_size) — matching the kernel's own default.

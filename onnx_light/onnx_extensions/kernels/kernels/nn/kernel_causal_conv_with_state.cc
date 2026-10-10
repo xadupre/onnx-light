@@ -188,10 +188,10 @@ void CausalConvWithState::Run(RuntimeContext &rt) {
                       node.op_type(), "' expects between 2 and 4 input(s), got ", node.input_size(),
                       ".");
   RequireOutputCount(node, 2);
-  const Tensor &input = GetInput(node, 0, rt.tensors());
-  const Tensor &weight = GetInput(node, 1, rt.tensors());
-  const Tensor *bias = GetOptionalInput(node, 2, rt.tensors());
-  const Tensor *past_state = GetOptionalInput(node, 3, rt.tensors());
+  const Tensor &input = GetInput(node, 0, rt);
+  const Tensor &weight = GetInput(node, 1, rt);
+  const Tensor *bias = GetOptionalInput(node, 2, rt);
+  const Tensor *past_state = GetOptionalInput(node, 3, rt);
 
   onnx_kernels::kernel::CausalConvWithState::Attributes attrs;
   attrs.activation = GetAttributeStringOrDefault(node, "activation", "none");

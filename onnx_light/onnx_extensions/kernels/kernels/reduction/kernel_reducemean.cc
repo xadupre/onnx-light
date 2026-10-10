@@ -306,8 +306,8 @@ void ReduceMean::Run(RuntimeContext &rt) {
       axes_attr.empty()
           ? Tensor()
           : Tensor::FromInt64("", {static_cast<int64_t>(axes_attr.size())}, axes_attr);
-  const Tensor &data = GetInput(node, 0, rt.tensors());
-  const Tensor *axes_input = GetOptionalInput(node, 1, rt.tensors());
+  const Tensor &data = GetInput(node, 0, rt);
+  const Tensor *axes_input = GetOptionalInput(node, 1, rt);
   if (axes_input != nullptr) {
     SetOutput(node, 0, (*this)(data, *axes_input, keepdims, noop_with_empty_axes, &rt), rt);
     return;

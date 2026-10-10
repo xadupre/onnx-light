@@ -419,13 +419,13 @@ void LSTM::Run(RuntimeContext &rt) {
                       "RunNode: op 'LSTM' only supports input_forget=0.");
   const int64_t layout = GetAttributeIntOrDefault(node, "layout", 0);
 
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &w = GetInput(node, 1, rt.tensors());
-  const Tensor &r = GetInput(node, 2, rt.tensors());
-  const Tensor *b = GetOptionalInput(node, 3, rt.tensors());
-  const Tensor *initial_h = GetOptionalInput(node, 5, rt.tensors());
-  const Tensor *initial_c = GetOptionalInput(node, 6, rt.tensors());
-  const Tensor *p = GetOptionalInput(node, 7, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
+  const Tensor &w = GetInput(node, 1, rt);
+  const Tensor &r = GetInput(node, 2, rt);
+  const Tensor *b = GetOptionalInput(node, 3, rt);
+  const Tensor *initial_h = GetOptionalInput(node, 5, rt);
+  const Tensor *initial_c = GetOptionalInput(node, 6, rt);
+  const Tensor *p = GetOptionalInput(node, 7, rt);
 
   // ``sequence_lens`` (input #4) requires per-batch sequence
   // handling that the FLOAT kernel does not implement; accept it
@@ -433,7 +433,7 @@ void LSTM::Run(RuntimeContext &rt) {
   // full ``seq_length`` so masking would not change the output).
   // ``seq_length`` is read from ``X`` at axis 0 for ``layout=0``
   // and axis 1 for ``layout=1``.
-  const Tensor *sequence_lens = GetOptionalInput(node, 4, rt.tensors());
+  const Tensor *sequence_lens = GetOptionalInput(node, 4, rt);
   if (sequence_lens != nullptr) {
     EXT_ENFORCE_INVALID(!(sequence_lens->data_type != static_cast<int32_t>(DataType::INT32)),
                         "RunNode: op 'LSTM' expects 'sequence_lens' to be INT32.");

@@ -228,7 +228,7 @@ void SVMClassifier::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 2);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
   const SVMCommonAttrs a = ParseSVMCommonAttrs(node, "SVMClassifier");
   const std::vector<int64_t> vectors_per_class =
       GetAttributeIntsOrDefault(node, "vectors_per_class", {});

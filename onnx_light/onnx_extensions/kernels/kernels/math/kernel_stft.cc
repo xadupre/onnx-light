@@ -197,10 +197,10 @@ void STFT::Run(RuntimeContext &rt) {
   EXT_ENFORCE_INVALID(!(node.input_size() > 4), "RunNode: op '", node.op_type(),
                       "' expects at most 4 inputs.");
   RequireOutputCount(node, 1);
-  const Tensor &signal = GetInput(node, 0, rt.tensors());
-  const Tensor &frame_step = GetInput(node, 1, rt.tensors());
-  const Tensor *window = GetOptionalInput(node, 2, rt.tensors());
-  const Tensor *frame_length = GetOptionalInput(node, 3, rt.tensors());
+  const Tensor &signal = GetInput(node, 0, rt);
+  const Tensor &frame_step = GetInput(node, 1, rt);
+  const Tensor *window = GetOptionalInput(node, 2, rt);
+  const Tensor *frame_length = GetOptionalInput(node, 3, rt);
   const bool onesided = GetAttributeIntOrDefault(node, "onesided", 1) != 0;
   SetOutput(node, 0, (*this)(signal, frame_step, window, frame_length, onesided, &rt), rt);
 }

@@ -400,6 +400,8 @@ private:
   struct PreparedKernel {
     std::string key;
     std::unique_ptr<KernelBase> instance;
+    std::vector<uint32_t> input_slots;
+    std::vector<uint32_t> output_slots;
   };
 
   /// Resolves and builds the kernel instance for every node the plan executes,
@@ -407,6 +409,7 @@ private:
   /// read in :cpp:member:`required_inputs_`.
   void InitializeKernels(RuntimeContext &rt,
                          const std::unordered_set<std::string> &preparable_inputs);
+  void ResolveKernelValueSlots(RuntimeContext &rt);
   const OpsetImports *EffectiveOpsetImports() const noexcept;
 
   /// Seeds missing initializer names and returns the names installed by this session.
@@ -478,6 +481,7 @@ private:
   /// Stable RuntimeContext slot for each action's primary name. Nameless
   /// actions carry ``UINT32_MAX``.
   std::vector<uint32_t> action_value_slots_;
+  const void *value_directory_identity_ = nullptr;
   /// Declared (possibly symbolic) shapes keyed by tensor name, populated by
   /// :cpp:func:`SetDeclaredShapes` and consulted by :cpp:func:`Run` when
   /// :cpp:member:`check_shapes_` is enabled.

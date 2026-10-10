@@ -49,7 +49,7 @@ void Optional::Run(RuntimeContext &rt) {
     // we copy the input sequence into the output slot directly.
     SetOutputSequence(node, 0, rt.GetSequence(input_name), rt);
   } else {
-    const Tensor &input = GetInput(node, 0, rt.tensors());
+    const Tensor &input = GetInput(node, 0, rt);
     onnx_kernels::kernel::Optional k(rt.kernel_ctx());
     SetOutput(node, 0, k(input, &rt), rt);
   }

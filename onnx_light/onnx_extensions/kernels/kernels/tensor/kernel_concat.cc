@@ -151,7 +151,7 @@ void Concat::Run(RuntimeContext &rt) {
   Tensors inputs;
   inputs.reserve(node.input_size());
   for (int i = 0; i < node.input_size(); ++i) {
-    inputs.push_back(GetInput(node, i, rt.tensors()));
+    inputs.push_back(GetInput(node, i, rt));
   }
   const AttributeProto *axis_attr = FindAttribute(node, "axis");
   EXT_ENFORCE_INVALID(axis_attr != nullptr,

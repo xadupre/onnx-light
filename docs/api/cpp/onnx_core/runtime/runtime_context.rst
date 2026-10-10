@@ -46,6 +46,13 @@ value destroys its allocation handle and returns the physical ``RawBuffer`` to
 the arena for reuse by another name. The context also exposes a non-null
 ``ValueStore`` for immutable prepared kernel values.
 
+Ordinary tensor payloads are stored in a slot-indexed vector.
+``RuntimeSession`` attaches pre-resolved input/output slot vectors before each
+kernel dispatch; ``GetInput`` and ``SetOutput`` therefore use direct indexing.
+``tensors()`` remains a compatibility view. A non-const access marks that view
+as potentially modified, and the context synchronizes it before the next
+slot-based read.
+
 .. code-block:: cpp
 
    if (rt.events_enabled())

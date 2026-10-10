@@ -126,8 +126,8 @@ void Tile::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 2);
   RequireOutputCount(node, 1);
-  const Tensor &input = GetInput(node, 0, rt.tensors());
-  const Tensor &repeats = GetInput(node, 1, rt.tensors());
+  const Tensor &input = GetInput(node, 0, rt);
+  const Tensor &repeats = GetInput(node, 1, rt);
   onnx_kernels::kernel::Tile k(rt.kernel_ctx());
   SetOutput(node, 0, k(input, repeats, &rt), rt);
 }

@@ -190,7 +190,7 @@ void LinearClassifier::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 2);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
   const ParamFloats coefficients = GetAttributeFloatsOrDefault(node, "coefficients", {});
   const ParamFloats intercepts = GetAttributeFloatsOrDefault(node, "intercepts", {});
   const std::string post_transform = GetAttributeStringOrDefault(node, "post_transform", "NONE");

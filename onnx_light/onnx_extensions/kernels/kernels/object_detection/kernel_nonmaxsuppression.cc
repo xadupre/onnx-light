@@ -244,11 +244,11 @@ void NonMaxSuppression::Run(RuntimeContext &rt) {
                       node.op_type(), "' expects between 2 and 5 inputs, got ", node.input_size(),
                       ".");
   RequireOutputCount(node, 1);
-  const Tensor &boxes = GetInput(node, 0, rt.tensors());
-  const Tensor &scores = GetInput(node, 1, rt.tensors());
-  const Tensor *max_output_boxes_per_class = GetOptionalInput(node, 2, rt.tensors());
-  const Tensor *iou_threshold = GetOptionalInput(node, 3, rt.tensors());
-  const Tensor *score_threshold = GetOptionalInput(node, 4, rt.tensors());
+  const Tensor &boxes = GetInput(node, 0, rt);
+  const Tensor &scores = GetInput(node, 1, rt);
+  const Tensor *max_output_boxes_per_class = GetOptionalInput(node, 2, rt);
+  const Tensor *iou_threshold = GetOptionalInput(node, 3, rt);
+  const Tensor *score_threshold = GetOptionalInput(node, 4, rt);
   // For ONNX NonMaxSuppression (opset 10+), this runtime path uses the
   // single schema attribute center_point_box (default 0).
   onnx_kernels::kernel::NonMaxSuppression::Attributes attrs;

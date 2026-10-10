@@ -122,7 +122,7 @@ void StringSplit::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 2);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
   const std::string delimiter = GetAttributeStringOrDefault(node, "delimiter", "");
   const int64_t maxsplit = GetAttributeIntOrDefault(node, "maxsplit", -1);
   onnx_kernels::kernel::StringSplit k(rt.kernel_ctx());

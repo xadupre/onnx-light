@@ -218,9 +218,9 @@ void Range::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 3);
   RequireOutputCount(node, 1);
-  const Tensor &start = GetInput(node, 0, rt.tensors());
-  const Tensor &limit = GetInput(node, 1, rt.tensors());
-  const Tensor &delta = GetInput(node, 2, rt.tensors());
+  const Tensor &start = GetInput(node, 0, rt);
+  const Tensor &limit = GetInput(node, 1, rt);
+  const Tensor &delta = GetInput(node, 2, rt);
   onnx_kernels::kernel::Range k(rt.kernel_ctx());
   SetOutput(node, 0, k(start, limit, delta, &rt), rt);
 }

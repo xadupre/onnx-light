@@ -93,9 +93,9 @@ void Squeeze::Run(RuntimeContext &rt) {
   EXT_ENFORCE_INVALID(!(node.input_size() > 2), "RunNode: op 'Squeeze' expects at most 2 inputs.");
   RequireOutputCount(node, 1);
   const onnx_kernels::Shape axes_attr = GetAttributeIntsOrDefault(node, "axes", {});
-  const Tensor &data = GetInput(node, 0, rt.tensors());
+  const Tensor &data = GetInput(node, 0, rt);
   onnx_kernels::Shape axes;
-  const Tensor *axes_input = GetOptionalInput(node, 1, rt.tensors());
+  const Tensor *axes_input = GetOptionalInput(node, 1, rt);
   if (axes_input != nullptr) {
     EXT_ENFORCE_INVALID(!(axes_input->data_type != static_cast<int32_t>(DataType::INT64) ||
                           axes_input->shape.size() > 1),

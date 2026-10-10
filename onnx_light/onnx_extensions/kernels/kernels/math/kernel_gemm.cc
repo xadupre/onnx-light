@@ -464,9 +464,9 @@ void Gemm::Run(RuntimeContext &rt) {
                       node.op_type(), "' expects between 2 and 3 input(s), got ", node.input_size(),
                       ".");
   RequireOutputCount(node, 1);
-  const Tensor &a = GetInput(node, 0, rt.tensors());
-  const Tensor &b = GetInput(node, 1, rt.tensors());
-  const Tensor *c = GetOptionalInput(node, 2, rt.tensors());
+  const Tensor &a = GetInput(node, 0, rt);
+  const Tensor &b = GetInput(node, 1, rt);
+  const Tensor *c = GetOptionalInput(node, 2, rt);
   const float alpha = GetAttributeFloatOrDefault(node, "alpha", 1.0f);
   const float beta = GetAttributeFloatOrDefault(node, "beta", 1.0f);
   const int64_t transA = GetAttributeIntOrDefault(node, "transA", 0);

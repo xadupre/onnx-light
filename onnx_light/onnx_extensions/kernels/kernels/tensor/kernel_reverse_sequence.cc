@@ -133,8 +133,8 @@ void ReverseSequence::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 2);
   RequireOutputCount(node, 1);
-  const Tensor &input = GetInput(node, 0, rt.tensors());
-  const Tensor &sequence_lens = GetInput(node, 1, rt.tensors());
+  const Tensor &input = GetInput(node, 0, rt);
+  const Tensor &sequence_lens = GetInput(node, 1, rt);
   onnx_kernels::kernel::ReverseSequence::Attributes attrs;
   attrs.time_axis = GetAttributeIntOrDefault(node, "time_axis", attrs.time_axis);
   attrs.batch_axis = GetAttributeIntOrDefault(node, "batch_axis", attrs.batch_axis);

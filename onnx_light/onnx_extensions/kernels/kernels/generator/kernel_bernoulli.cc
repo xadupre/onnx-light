@@ -170,7 +170,7 @@ void Bernoulli::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
-  const Tensor &input = GetInput(node, 0, rt.tensors());
+  const Tensor &input = GetInput(node, 0, rt);
   onnx_kernels::kernel::Bernoulli kernel(rt.kernel_ctx());
   SetOutput(node, 0, kernel(input, GetSeedAttr(node), GetDtypeAttr(node), &rt), rt);
 }

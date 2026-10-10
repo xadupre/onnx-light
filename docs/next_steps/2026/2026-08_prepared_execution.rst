@@ -110,10 +110,13 @@ buffer to the arena.
 
 A hot replay performs direct slot operations without creating a child context
 for control flow or copying values across context boundaries. It does not use
-a mutex, a readiness wait, or the general ``PreparedExecutionState``
-scheduler. This is an intentional bridge, not a second asynchronous plan:
-generations, external-data loading, persistence, eviction, and dependency
-scheduling remain solely in ``PreparedExecutionPlan``.
+a string lookup for built-in tensor inputs/outputs, a mutex, a readiness wait,
+or the general ``PreparedExecutionState`` scheduler. ``RuntimeSession`` resolves
+the kernel slot vectors once per context-directory identity; the name-keyed map
+is retained only as a synchronized compatibility surface. This is an
+intentional bridge, not a second asynchronous plan: generations, external-data
+loading, persistence, eviction, and dependency scheduling remain solely in
+``PreparedExecutionPlan``.
 
 Publishing a session object is atomic: the producing task completes only after
 the immutable object and its allocation handle are visible. An inference task

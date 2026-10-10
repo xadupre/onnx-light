@@ -22,6 +22,11 @@ events when requested, and releases last-use intermediates when enabled.
 Before kernel resolution, the execution plan registers every value name from
 the root graph, nested graph attributes, and model-local functions in one
 invocation-wide directory. Each unique name keeps one stable ``uint32_t`` slot.
+Tensor payloads live in a vector indexed by those slots. ``RuntimeSession``
+resolves each kernel's input and output slots once for a context, so built-in
+kernels do not hash ONNX names while replaying the plan. The name-keyed tensor
+map remains a synchronized compatibility view for external callers and custom
+kernels.
 The same ``RuntimeContext`` is reused by control-flow bodies and local
 functions, so nested execution neither copies the context nor deep-copies
 loop-carried values merely to cross a context boundary.

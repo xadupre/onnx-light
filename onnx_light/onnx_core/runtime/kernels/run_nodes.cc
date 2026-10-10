@@ -294,7 +294,7 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt, SubgraphSession &then_
                SubgraphSession &else_session) {
   RequireInputCount(node, 1);
 
-  const Tensor &cond = GetInput(node, 0, rt.tensors());
+  const Tensor &cond = GetInput(node, 0, rt);
   EXT_ENFORCE_INVALID(cond.data_type == DataType::BOOL, "RunNode: If input 'cond' must be BOOL.");
   EXT_ENFORCE_INVALID(cond.element_count() == 1,
                       "RunNode: If input 'cond' must contain a single element.");
@@ -478,11 +478,11 @@ void RunLoopNode(const NodeProto &node, RuntimeContext &rt, SubgraphSession &bod
 
   Tensor m_tensor;
   if (!node.input(0).empty()) {
-    m_tensor = GetInput(node, 0, rt.tensors()).BorrowView();
+    m_tensor = GetInput(node, 0, rt).BorrowView();
   }
   Tensor cond_tensor;
   if (!node.input(1).empty()) {
-    cond_tensor = GetInput(node, 1, rt.tensors()).BorrowView();
+    cond_tensor = GetInput(node, 1, rt).BorrowView();
   }
 
   // Classify each loop-carried input as either sequence-typed (looked up
@@ -510,7 +510,7 @@ void RunLoopNode(const NodeProto &node, RuntimeContext &rt, SubgraphSession &bod
       sequence_state[i] = Sequence(name, source.elem_type, std::move(views));
       any_sequence_state = true;
     } else {
-      tensor_state[i] = GetInput(node, idx, rt.tensors()).BorrowView();
+      tensor_state[i] = GetInput(node, idx, rt).BorrowView();
     }
   }
 
@@ -581,7 +581,7 @@ void RunScanNode(const NodeProto &node, RuntimeContext &rt, SubgraphSession &bod
     const int idx = static_cast<int>(scan8_offset + i);
     EXT_ENFORCE_INVALID(!(node.input(idx).empty()),
                         "RunNode: Scan does not support empty placeholders in state inputs.");
-    initial_state.push_back(GetInput(node, idx, rt.tensors()).BorrowView());
+    initial_state.push_back(GetInput(node, idx, rt).BorrowView());
   }
 
   Tensors scan_inputs;
@@ -590,7 +590,7 @@ void RunScanNode(const NodeProto &node, RuntimeContext &rt, SubgraphSession &bod
     const int idx = static_cast<int>(scan8_offset + n + i);
     EXT_ENFORCE_INVALID(!(node.input(idx).empty()),
                         "RunNode: Scan does not support empty placeholders in scan inputs.");
-    scan_inputs.push_back(GetInput(node, idx, rt.tensors()).BorrowView());
+    scan_inputs.push_back(GetInput(node, idx, rt).BorrowView());
   }
 
   // Scan-8 attribute ``directions`` was split into
@@ -717,7 +717,7 @@ void RunSequenceMapNode(const NodeProto &node, RuntimeContext &rt, SubgraphSessi
                           " (matching the first input sequence length).");
       additional_sequences[k] = &seq;
     } else {
-      additional_tensors[k] = &GetInput(node, idx, rt.tensors());
+      additional_tensors[k] = &GetInput(node, idx, rt);
     }
   }
 
@@ -1153,6 +1153,32 @@ void PrintNodeProgress(const RuntimeContext &rt, const NodeProto &node, const st
 } // namespace detail
 
 void RunNode(const NodeProto &node, RuntimeContext &rt) {
+  std::vector<std::string> value_names;
+  value_names.reserve(node.input_size() + node.output_size());
+  for (const auto &name : node.input()) {
+    if (!name.empty()) {
+      value_names.push_back(name);
+    }
+  }
+  for (const auto &name : node.output()) {
+    if (!name.empty()) {
+      value_names.push_back(name);
+    }
+  }
+  rt.RegisterValueNames(value_names);
+  std::vector<uint32_t> input_slots;
+  input_slots.reserve(node.input_size());
+  for (const auto &name : node.input()) {
+    input_slots.push_back(name.empty() ? std::numeric_limits<uint32_t>::max()
+                                       : rt.ResolveValueSlot(name));
+  }
+  std::vector<uint32_t> output_slots;
+  output_slots.reserve(node.output_size());
+  for (const auto &name : node.output()) {
+    output_slots.push_back(name.empty() ? std::numeric_limits<uint32_t>::max()
+                                        : rt.ResolveValueSlot(name));
+  }
+  rt.SetCurrentNodeValueSlots(&input_slots, &output_slots);
   const std::string &domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
   const std::string &op_type = node.op_type().value();
   std::unique_ptr<KernelBase> resolved =
@@ -1172,6 +1198,7 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
   }
 
   resolved->Run(rt);
+  rt.SetCurrentNodeValueSlots(nullptr, nullptr);
 
   if (logging) {
     const int64_t duration_ns =

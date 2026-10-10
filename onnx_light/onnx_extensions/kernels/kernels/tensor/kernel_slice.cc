@@ -223,11 +223,11 @@ void Slice::Run(RuntimeContext &rt) {
   EXT_ENFORCE_INVALID(!(node.input_size() > 5), "RunNode: op '", node.op_type(),
                       "' expects between 3 and 5 input(s), got ", node.input_size(), ".");
   RequireOutputCount(node, 1);
-  const Tensor &data = GetInput(node, 0, rt.tensors());
-  const Tensor &starts = GetInput(node, 1, rt.tensors());
-  const Tensor &ends = GetInput(node, 2, rt.tensors());
-  const Tensor *axes = GetOptionalInput(node, 3, rt.tensors());
-  const Tensor *steps = GetOptionalInput(node, 4, rt.tensors());
+  const Tensor &data = GetInput(node, 0, rt);
+  const Tensor &starts = GetInput(node, 1, rt);
+  const Tensor &ends = GetInput(node, 2, rt);
+  const Tensor *axes = GetOptionalInput(node, 3, rt);
+  const Tensor *steps = GetOptionalInput(node, 4, rt);
   onnx_kernels::kernel::Slice k(rt.kernel_ctx());
   SetOutput(node, 0, k(data, starts, ends, axes, steps, &rt), rt);
 }

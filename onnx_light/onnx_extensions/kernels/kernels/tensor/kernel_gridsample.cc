@@ -450,8 +450,8 @@ void GridSample::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 2);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &grid = GetInput(node, 1, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
+  const Tensor &grid = GetInput(node, 1, rt);
   onnx_kernels::kernel::GridSample::Attributes attrs;
   attrs.mode =
       GetAttributeStringOrDefault(node, "mode", ctx_.opset.version < 20 ? "bilinear" : "linear");

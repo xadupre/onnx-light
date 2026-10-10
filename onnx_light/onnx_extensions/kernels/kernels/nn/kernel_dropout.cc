@@ -96,12 +96,12 @@ void Dropout::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputRange(node, 1, 3);
   RequireOutputRange(node, 1, 2);
-  const Tensor &data = GetInput(node, 0, rt.tensors());
+  const Tensor &data = GetInput(node, 0, rt);
 
   // ``ratio``: from input[1] (scalar T1) when present, else from the
   // pre-opset-12 ``ratio`` attribute (FLOAT, default 0.5).
   float ratio = GetAttributeFloatOrDefault(node, "ratio", 0.5f);
-  const Tensor *ratio_input = GetOptionalInput(node, 1, rt.tensors());
+  const Tensor *ratio_input = GetOptionalInput(node, 1, rt);
   if (ratio_input != nullptr) {
     EXT_ENFORCE_INVALID(!(ratio_input->element_count() != 1),
                         "RunNode: op 'Dropout' input 'ratio' must be a scalar tensor.");
@@ -120,7 +120,7 @@ void Dropout::Run(RuntimeContext &rt) {
   // ``training_mode``: from input[2] (scalar BOOL) when present,
   // otherwise defaults to false (inference behaviour).
   bool training_mode = false;
-  const Tensor *training_input = GetOptionalInput(node, 2, rt.tensors());
+  const Tensor *training_input = GetOptionalInput(node, 2, rt);
   if (training_input != nullptr) {
     EXT_ENFORCE_INVALID(!(training_input->element_count() != 1),
                         "RunNode: op 'Dropout' input 'training_mode' must be a scalar tensor.");

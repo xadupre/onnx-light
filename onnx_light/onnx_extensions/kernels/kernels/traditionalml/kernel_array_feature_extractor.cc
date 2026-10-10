@@ -120,8 +120,8 @@ void ArrayFeatureExtractor::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 2);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &y = GetInput(node, 1, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
+  const Tensor &y = GetInput(node, 1, rt);
   onnx_kernels::kernel::ArrayFeatureExtractor afe(rt.kernel_ctx());
   Tensor z = DispatchSVMByDataType(x, "ArrayFeatureExtractor", [&](auto *tag) {
     using T = std::remove_pointer_t<decltype(tag)>;

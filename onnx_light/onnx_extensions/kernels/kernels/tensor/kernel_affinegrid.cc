@@ -260,8 +260,8 @@ void AffineGrid::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 2);
   RequireOutputCount(node, 1);
-  const Tensor &theta = GetInput(node, 0, rt.tensors());
-  const Tensor &size = GetInput(node, 1, rt.tensors());
+  const Tensor &theta = GetInput(node, 0, rt);
+  const Tensor &size = GetInput(node, 1, rt);
   onnx_kernels::kernel::AffineGrid::Attributes affine_grid_attrs;
   affine_grid_attrs.align_corners = GetAttributeIntOrDefault(node, "align_corners", 0);
   onnx_kernels::kernel::AffineGrid affine_grid_kernel(rt.kernel_ctx());

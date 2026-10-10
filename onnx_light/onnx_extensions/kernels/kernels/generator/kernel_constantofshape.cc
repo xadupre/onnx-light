@@ -115,7 +115,7 @@ void ConstantOfShape::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
-  const Tensor &shape = GetInput(node, 0, rt.tensors());
+  const Tensor &shape = GetInput(node, 0, rt);
   Tensor value;
   if (FindAttribute(node, "value") != nullptr) {
     value = GetRequiredAttributeTensor(node, "value");

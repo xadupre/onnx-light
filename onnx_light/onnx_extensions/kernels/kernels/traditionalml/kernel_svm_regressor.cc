@@ -71,7 +71,7 @@ void SVMRegressor::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
   const SVMCommonAttrs a = ParseSVMCommonAttrs(node, "SVMRegressor");
   onnx_kernels::kernel::SVMRegressor svm(rt.kernel_ctx());
   Tensor y = DispatchSVMByDataType(x, "SVMRegressor", [&](auto *tag) {

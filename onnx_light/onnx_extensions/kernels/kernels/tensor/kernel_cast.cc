@@ -753,7 +753,7 @@ void Cast::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
   const int32_t to = static_cast<int32_t>(GetAttributeIntOrDefault(node, "to", -1));
   EXT_ENFORCE_INVALID(!(to < 0), "RunNode: Cast requires INT attribute 'to'.");
   const bool saturate = GetAttributeIntOrDefault(node, "saturate", 1) != 0;

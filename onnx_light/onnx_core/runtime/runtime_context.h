@@ -554,8 +554,18 @@ public:
   /// Returns the tensor map shared across every node in a chain. Publication through
   /// Set/Put/PutValue/PutMap/PutShape keeps each name in exactly one store.
   /// PutSequence and direct store mutations require callers to preserve this invariant.
-  TensorMap &tensors() noexcept { return tensors_; }
+  TensorMap &tensors() noexcept {
+    tensor_map_may_be_modified_ = true;
+    return tensors_;
+  }
   const TensorMap &tensors() const noexcept { return tensors_; }
+
+  /// Returns a tensor directly from its stable value slot.
+  const Tensor &GetTensor(uint32_t slot) const;
+  Tensor &GetTensor(uint32_t slot);
+
+  /// Publishes a tensor directly to its stable value slot.
+  void Put(uint32_t slot, Tensor tensor, RuntimeEventKind kind = RuntimeEventKind::kIntermediate);
 
   /** Returns the structured and encoded graph edges used by custom kernels. */
   RuntimeValueMap &values() noexcept { return values_; }
@@ -822,6 +832,21 @@ public:
 
   /// Returns the number of stable names registered in this context.
   size_t value_slot_count() const noexcept { return value_slot_names_.size(); }
+
+  /// Returns a stable identity for this context's slot directory.
+  const void *value_directory_identity() const noexcept { return &value_slot_names_; }
+
+  /// Installs the pre-resolved slots of the node currently being dispatched.
+  /// The vectors are owned by RuntimeSession's prepared kernel entry.
+  void SetCurrentNodeValueSlots(const std::vector<uint32_t> *inputs,
+                                const std::vector<uint32_t> *outputs) noexcept {
+    current_input_slots_ = inputs;
+    current_output_slots_ = outputs;
+  }
+
+  /// Returns a pre-resolved current-node input/output slot.
+  uint32_t CurrentInputSlot(int index) const;
+  uint32_t CurrentOutputSlot(int index) const;
 
   /// Removes any value stored under ``name``. Returns
   /// ``true`` if an entry was erased, ``false`` otherwise. When a tensor
@@ -1118,12 +1143,15 @@ private:
   /// and :cpp:func:`RawBufferAllocator::PeakAllocatedSize`). Leaves both at
   /// ``0`` when no allocator is attached.
   void StampAllocatorMemory(RuntimeEvent &ev) const noexcept;
+  void SynchronizeTensorMap();
 
   /// Owns the fixed-capacity arena installed from an ExecutionPlan when the
   /// caller did not provide an allocator. Declared before value containers so
   /// it outlives every allocator-backed value.
   std::shared_ptr<ExecutionArena> execution_arena_owner_;
   TensorMap tensors_;
+  std::vector<std::optional<Tensor>> tensor_slots_;
+  bool tensor_map_may_be_modified_ = false;
   RuntimeValueMap values_;
   StructTypeCatalogue struct_type_catalogue_;
   std::shared_ptr<const QuantizationParameterCatalogue> quantization_parameters_;
@@ -1137,6 +1165,8 @@ private:
   ShapeMap shapes_;
   std::unordered_map<std::string, uint32_t> value_slots_;
   std::vector<std::string> value_slot_names_;
+  const std::vector<uint32_t> *current_input_slots_ = nullptr;
+  const std::vector<uint32_t> *current_output_slots_ = nullptr;
   bool events_enabled_ = false;
   int verbose_ = 0;
   /// Non-owning view on the CPU executor leased by the running session.

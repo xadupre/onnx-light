@@ -126,8 +126,8 @@ void Reshape::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 2);
   RequireOutputCount(node, 1);
-  const Tensor &data = GetInput(node, 0, rt.tensors());
-  const Tensor &shape = GetInput(node, 1, rt.tensors());
+  const Tensor &data = GetInput(node, 0, rt);
+  const Tensor &shape = GetInput(node, 1, rt);
   const int64_t allowzero = GetAttributeIntOrDefault(node, "allowzero", 0);
   onnx_kernels::kernel::Reshape k(rt.kernel_ctx());
   SetOutput(node, 0, k(data, shape, allowzero, &rt), rt);

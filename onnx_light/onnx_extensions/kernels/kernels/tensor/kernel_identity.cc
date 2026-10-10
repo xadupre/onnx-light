@@ -54,7 +54,7 @@ void Identity::Run(RuntimeContext &rt) {
     // Copies inline storage while sharing existing owners, so releasing the input is safe.
     rt.PutValue(node.output(0), value->second);
   } else {
-    const Tensor &x = GetInput(node, 0, rt.tensors());
+    const Tensor &x = GetInput(node, 0, rt);
     onnx_kernels::kernel::Identity k(rt.kernel_ctx());
     SetOutput(node, 0, k(x, &rt), rt);
   }

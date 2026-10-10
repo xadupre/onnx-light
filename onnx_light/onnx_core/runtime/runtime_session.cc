@@ -113,8 +113,8 @@ RuntimeSession::RuntimeSession(const ModelProto &model, int verbose)
                             }) {}
 
 RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions options)
-    : default_plan_(model.graph()), plan_(default_plan_),
-      value_store_(std::move(options.value_store)), check_shapes_(options.check_shapes),
+    : default_plan_(model), plan_(default_plan_), value_store_(std::move(options.value_store)),
+      check_shapes_(options.check_shapes),
       allow_external_output_allocators_(options.allow_external_output_allocators),
       parameters_(std::move(options.parameters)),
       cpu_execution_(options.cpu_execution.has_value() ? *options.cpu_execution
@@ -595,7 +595,7 @@ void RuntimeSession::VerifyDeclaredShape(const std::string &name, const RuntimeC
 }
 
 void RuntimeSession::Run(RuntimeContext &rt) {
-  rt.RegisterValueNames(plan_.value_names());
+  rt.BindExecutionPlan(plan_);
   action_value_slots_.clear();
   action_value_slots_.reserve(plan_.actions().size());
   for (const ExecuteAction &action : plan_.actions()) {

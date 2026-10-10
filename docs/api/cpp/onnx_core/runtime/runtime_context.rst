@@ -28,17 +28,23 @@ and payload; the context supplies node/subgraph metadata and allocator memory.
 A nonzero timestamp is preserved (for example, the start of a kernel dispatch);
 otherwise the recording time is used. Disabled recording leaves the log unchanged.
 
-Subgraph contexts inherit both the execution allocator and the optional I/O
-allocator from their parent. Kernels in ``If``, ``Loop``, ``Scan`` and
-``SequenceMap`` therefore use the same arena routing as the enclosing graph;
-subgraph creation never deliberately replaces an attached allocator with
-``nullptr``.
+``If``, ``Loop``, ``Scan``, ``SequenceMap`` and model-local functions execute
+against the caller's ``RuntimeContext``. They therefore use the same stable
+value directory, execution arena, optional I/O allocator, ``ValueStore`` and
+event log without constructing or copying a child context.
 
-Every context has a non-null execution allocator. If the caller does not
-provide one, the context owns a ``DynamicRawBufferAllocator``. Every context
-also exposes a non-null ``ValueStore``; subgraph and model-local function
-contexts share their parent's store so prepared values remain directly
-accessible throughout nested execution.
+Before any session kernel is resolved or run, ``RuntimeSession`` binds the
+context to the plan's global value directory. If the caller did not provide an
+allocator, the context creates one fixed-capacity ``ExecutionArena`` with
+``ExecutionPlan::arena_capacity()`` slots. Nested graphs and model-local
+functions reuse that context and arena; no subgraph kernel observes a null
+allocator. Planless kernel execution must provide an allocator explicitly.
+
+The stable value directory and the physical arena are independent. A value
+name keeps the same ``uint32_t`` slot for the invocation, while removing that
+value destroys its allocation handle and returns the physical ``RawBuffer`` to
+the arena for reuse by another name. The context also exposes a non-null
+``ValueStore`` for immutable prepared kernel values.
 
 .. code-block:: cpp
 

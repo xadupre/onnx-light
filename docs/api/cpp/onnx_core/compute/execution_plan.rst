@@ -12,7 +12,10 @@ The ownership boundaries are:
 * ``ExecutionPlan`` owns the reusable action and node sequence.
 * ``RuntimeSession`` resolves and retains one kernel instance per planned node.
 * ``RuntimeContext`` owns invocation inputs, outputs, intermediates, and
-  execution allocations.
+  the global name-to-``uint32_t`` directory.
+* ``ExecutionPlan::arena_capacity()`` bounds the fixed-capacity
+  ``ExecutionArena`` installed before kernel resolution. The directory keeps
+  stable value identity; the arena recycles physical buffers after last use.
 * ``ValueStore`` owns immutable, synchronously prepared kernel
   values for the root session and its nested sessions.
 * ``PreparedExecutionPlan`` is the separate scope-aware dependency graph used

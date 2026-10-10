@@ -196,6 +196,27 @@ ExecutionPlan::ExecutionPlan(const GraphProto &graph) {
   BuildActions();
 }
 
+ExecutionPlan::ExecutionPlan(const ModelProto &model) : ExecutionPlan(model.graph()) {
+  std::unordered_set<std::string> seen(value_names_.begin(), value_names_.end());
+  for (const FunctionProto &func : model.functions()) {
+    for (const auto &input : func.input()) {
+      AddValueName(input, seen, value_names_);
+    }
+    CollectNodeValueNames(func.node(), seen, value_names_);
+    for (const auto &output : func.output()) {
+      AddValueName(output, seen, value_names_);
+    }
+    if (temporary_slot_count_ == 0) {
+      for (const NodeProto &node : func.node()) {
+        if (ParsePeakMemory(ReadNodeMetadata(node, compute::kNodePeakMemoryMetadataKey)) != 0) {
+          temporary_slot_count_ = 1;
+          break;
+        }
+      }
+    }
+  }
+}
+
 ExecutionPlan::ExecutionPlan(const FunctionProto &func) {
   inputs_.reserve(func.input_size());
   for (size_t i = 0; i < static_cast<std::size_t>(func.input_size()); ++i) {

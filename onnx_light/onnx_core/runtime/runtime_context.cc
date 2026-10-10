@@ -289,12 +289,7 @@ RuntimeContext::RuntimeContext(KernelContext kernel_ctx, RuntimeContextOptions o
       verbose_(options.verbose), release_intermediates_(options.release_intermediates),
       io_allocator_(options.io_allocator), value_store_(std::make_shared<ValueStore>()),
       device_(options.device) {
-  if (options.allocator == nullptr) {
-    allocator_owner_ = std::make_shared<DynamicRawBufferAllocator>();
-    allocator_ = allocator_owner_.get();
-  } else {
-    allocator_ = options.allocator;
-  }
+  allocator_ = options.allocator;
   active_allocator_ = allocator_;
   kernel_ctx_.allocator = active_allocator_;
 }
@@ -321,6 +316,26 @@ RuntimeContext::RuntimeContext(RuntimeContextOptions options)
 void RuntimeContext::SetValueStore(std::shared_ptr<ValueStore> value_store) {
   EXT_ENFORCE(value_store != nullptr, "RuntimeContext: value store must not be null.");
   value_store_ = std::move(value_store);
+}
+
+void RuntimeContext::BindExecutionPlan(const ExecutionPlan &plan) {
+  RegisterValueNames(plan.value_names());
+  if (allocator_ != nullptr && execution_arena_owner_ == nullptr) {
+    return;
+  }
+  const size_t capacity = plan.arena_capacity();
+  if (execution_arena_owner_ != nullptr) {
+    EXT_ENFORCE_INVALID(
+        capacity <= execution_arena_owner_->capacity(),
+        "RuntimeContext: the existing execution arena has ", execution_arena_owner_->capacity(),
+        " slots but this execution plan requires ", capacity,
+        "; supply an explicit allocator when reusing one context across unrelated plans.");
+    return;
+  }
+  execution_arena_owner_ = std::make_shared<ExecutionArena>(capacity);
+  allocator_ = execution_arena_owner_.get();
+  active_allocator_ = allocator_;
+  kernel_ctx_.allocator = allocator_;
 }
 
 void RuntimeContext::set_kernel_usage_enabled(bool enabled) {
@@ -497,7 +512,7 @@ RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name)
                            .device = device_,
                        },
                        kernel_usage_, events_);
-  child.allocator_owner_ = allocator_owner_;
+  child.execution_arena_owner_ = execution_arena_owner_;
   child.value_store_ = value_store_;
   child.functions() = functions_;
   child.custom_kernels() = custom_kernels_;
@@ -567,7 +582,7 @@ RuntimeContext RuntimeContext::MakeFunctionContext() const {
                            .device = device_,
                        },
                        kernel_usage_, events_);
-  child.allocator_owner_ = allocator_owner_;
+  child.execution_arena_owner_ = execution_arena_owner_;
   child.value_store_ = value_store_;
   child.functions() = functions_;
   child.custom_kernels() = custom_kernels_;

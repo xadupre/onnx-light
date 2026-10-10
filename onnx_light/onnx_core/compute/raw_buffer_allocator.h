@@ -72,31 +72,6 @@ public:
 };
 
 /**
- * Unbounded allocator used when a runtime context receives no external arena.
- *
- * Every live allocation owns a stable :cpp:struct:`RawBuffer`. Freeing an
- * allocation releases it immediately. This allocator provides a safe default;
- * callers that need retention and reuse should supply an
- * :cpp:class:`ExecutionArena`.
- *
- * @note This class is not thread-safe.
- */
-class DynamicRawBufferAllocator : public RawBufferAllocator {
-public:
-  RawBuffer *Allocate(size_t n_bytes) override;
-  void Free(RawBuffer *buffer) override;
-  size_t TotalAllocatedSize() const override;
-  size_t PeakAllocatedSize() const override;
-  void ResetPeak() override;
-  size_t allocated_count() const noexcept;
-
-private:
-  std::unordered_map<RawBuffer *, std::unique_ptr<RawBuffer>> buffers_;
-  size_t total_allocated_size_ = 0;
-  size_t peak_allocated_size_ = 0;
-};
-
-/**
  * Fixed-capacity pool allocator for :cpp:struct:`RawBuffer` instances.
  *
  * Manages a pre-allocated array of ``capacity`` :cpp:struct:`RawBuffer`

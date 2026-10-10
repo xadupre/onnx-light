@@ -101,12 +101,19 @@ Until that migration is complete, direct ``ExecutionPlan`` replay remains the
 synchronous production path. Its kernel instances prepare immutable inputs
 once into a hierarchy-owned ``ValueStore`` and retain stable
 integer slots. Root, control-flow subgraph, and model-local function sessions
-share the store. A hot replay performs a direct slot read: it does not use the
-string-keyed binding map, a mutex, a readiness wait, or the general
-``PreparedExecutionState`` scheduler. This is an intentional bridge, not a
-second asynchronous plan: generations, external-data loading, persistence,
-eviction, and dependency scheduling remain solely in
-``PreparedExecutionPlan``.
+share the store. Invocation values use a separate global name-to-``uint32_t``
+directory held by one ``RuntimeContext`` across root and nested execution.
+``ExecutionPlan::arena_capacity()`` sizes its fixed ``ExecutionArena`` from all
+unique graph/function value names plus planned temporary storage. A stable
+value slot does not reserve a physical buffer: last-use removal returns that
+buffer to the arena.
+
+A hot replay performs direct slot operations without creating a child context
+for control flow or copying values across context boundaries. It does not use
+a mutex, a readiness wait, or the general ``PreparedExecutionState``
+scheduler. This is an intentional bridge, not a second asynchronous plan:
+generations, external-data loading, persistence, eviction, and dependency
+scheduling remain solely in ``PreparedExecutionPlan``.
 
 Publishing a session object is atomic: the producing task completes only after
 the immutable object and its allocation handle are visible. An inference task

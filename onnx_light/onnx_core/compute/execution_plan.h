@@ -45,6 +45,11 @@ class RuntimeContext;
  *    in-place / lifetime / peak-memory metadata written to each node by
  *    :cpp:class:`compute::ComputeContext` and
  *    :cpp:func:`compute::WritePeakMemoryToMetadata`.
+ *  * ``value_names`` — the deterministic invocation-wide directory seed,
+ *    including names recursively referenced by nested graph attributes. A
+ *    model plan also includes every model-local function.
+ *  * ``arena_capacity`` — a conservative fixed physical-buffer slot count
+ *    derived from those unique names and planned temporary storage.
  *
  * :cpp:func:`BuildActions` uses the in-place reuse, release and last-use
  * annotations written by :cpp:class:`ComputeContext`, deriving releases
@@ -67,6 +72,11 @@ public:
   /// declared inputs, initializers and declared outputs. Rejects persistent
   /// inputs that do not have exactly one value-use in the graph.
   explicit ExecutionPlan(const GraphProto &graph);
+
+  /// Builds the root graph plan for ``model`` and extends its stable value
+  /// directory with every model-local function. This gives a root runtime
+  /// context one arena capacity covering the complete session hierarchy.
+  explicit ExecutionPlan(const ModelProto &model);
 
   /// Builds the plan for ``func``. ``keep`` is seeded with the
   /// function's declared inputs and outputs.

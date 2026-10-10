@@ -758,28 +758,26 @@ TEST(IOArenaExportHandle, ExportedTensorOutputOutlivesArenaOwner) {
 // RuntimeContext allocator accessor tests
 // ---------------------------------------------------------------------------
 
-TEST(DynamicRawBufferAllocator, GrowsWithoutFixedSlotCapacity) {
-  core::runtime::DynamicRawBufferAllocator allocator;
-  std::vector<core::runtime::RawBuffer *> buffers;
-  for (size_t i = 1; i <= 128; ++i) {
-    buffers.push_back(allocator.Allocate(i));
-  }
-  EXPECT_EQ(allocator.allocated_count(), 128u);
-  EXPECT_EQ(allocator.TotalAllocatedSize(), 128u * 129u / 2u);
-  EXPECT_EQ(allocator.PeakAllocatedSize(), allocator.TotalAllocatedSize());
-
-  for (core::runtime::RawBuffer *buffer : buffers) {
-    allocator.Free(buffer);
-  }
-  EXPECT_EQ(allocator.allocated_count(), 0u);
-  EXPECT_EQ(allocator.TotalAllocatedSize(), 0u);
-}
-
-TEST(RuntimeContextAllocator, DefaultAllocatorIsOwnedAndNonNull) {
+TEST(RuntimeContextAllocator, SessionBindsPlanSizedOwnedArena) {
   RuntimeContext ctx;
-  EXPECT_NE(ctx.allocator(), nullptr);
+  EXPECT_EQ(ctx.allocator(), nullptr);
+
+  GraphProto graph;
+  graph.add_input()->set_name("x");
+  graph.add_output()->set_name("y");
+  NodeProto *node = graph.add_node();
+  node->set_op_type("Identity");
+  node->add_input("x");
+  node->add_output("y");
+  core::runtime::ExecutionPlan plan(graph);
+  ctx.BindExecutionPlan(plan);
+
+  ASSERT_NE(ctx.allocator(), nullptr);
   EXPECT_EQ(ctx.allocator(), ctx.execution_allocator());
   EXPECT_EQ(ctx.kernel_ctx().allocator, ctx.execution_allocator());
+  const auto *arena = dynamic_cast<const ExecutionArena *>(ctx.execution_allocator());
+  ASSERT_NE(arena, nullptr);
+  EXPECT_EQ(arena->capacity(), plan.arena_capacity());
 }
 
 TEST(RuntimeContextAllocator, SetAndGetAllocator) {
@@ -798,7 +796,7 @@ TEST(RuntimeContextAllocator, ConstContextExposesAllocator) {
 TEST(RuntimeContextAllocator, DefaultIOAllocatorIsNull) {
   RuntimeContext ctx;
   EXPECT_EQ(ctx.io_allocator(), nullptr);
-  EXPECT_NE(ctx.execution_allocator(), nullptr);
+  EXPECT_EQ(ctx.execution_allocator(), nullptr);
 }
 
 TEST(RuntimeContextAllocator, SetAndGetIOAllocator) {

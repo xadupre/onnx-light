@@ -414,8 +414,9 @@ void RuntimeContext::Put(uint32_t slot, Tensor tensor, RuntimeEventKind kind) {
   maps_.erase(name);
   shapes_.erase(name);
   tensor.name = name;
-  tensor_slots_[slot] = std::move(tensor);
-  tensors_.insert_or_assign(name, tensor_slots_[slot]->BorrowView());
+  auto [it, inserted] = tensors_.insert_or_assign(name, std::move(tensor));
+  (void)inserted;
+  tensor_slots_[slot] = &it->second;
 }
 
 void RuntimeContext::PutValue(std::string name, RuntimeValue value, RuntimeEventKind kind) {
@@ -431,7 +432,7 @@ bool RuntimeContext::Remove(const std::string &value_name) {
   const std::string name = value_name;
   const auto slot = value_slots_.find(name);
   if (slot != value_slots_.end() && slot->second < tensor_slots_.size()) {
-    tensor_slots_[slot->second].reset();
+    tensor_slots_[slot->second] = nullptr;
   }
   size_t removed = values_.erase(name);
   removed += sequences_.erase(name);
@@ -458,7 +459,7 @@ uint32_t RuntimeContext::ResolveValueSlot(const std::string &name) {
                       "RuntimeContext: value slot directory exceeds uint32_t capacity.");
   const uint32_t slot = static_cast<uint32_t>(value_slot_names_.size());
   value_slot_names_.push_back(name);
-  tensor_slots_.emplace_back();
+  tensor_slots_.push_back(nullptr);
   value_slots_.emplace(value_slot_names_.back(), slot);
   return slot;
 }
@@ -476,24 +477,10 @@ void RuntimeContext::SynchronizeTensorMap() {
   if (!tensor_map_may_be_modified_) {
     return;
   }
+  std::fill(tensor_slots_.begin(), tensor_slots_.end(), nullptr);
   for (auto &named_tensor : tensors_) {
     const uint32_t slot = ResolveValueSlot(named_tensor.first);
-    bool is_mirror = false;
-    if (tensor_slots_[slot].has_value()) {
-      const Tensor &stored = *tensor_slots_[slot];
-      const Tensor &candidate = named_tensor.second;
-      is_mirror = stored.data_type == candidate.data_type && stored.shape == candidate.shape &&
-                  stored.size_bytes() == candidate.size_bytes();
-      if (is_mirror && static_cast<DataType>(stored.data_type) == DataType::STRING) {
-        is_mirror = &stored.AsStrings() == &candidate.AsStrings();
-      } else if (is_mirror) {
-        is_mirror = stored.bytes() == candidate.bytes();
-      }
-    }
-    if (!is_mirror) {
-      tensor_slots_[slot] = std::move(named_tensor.second);
-    }
-    named_tensor.second = tensor_slots_[slot]->BorrowView();
+    tensor_slots_[slot] = &named_tensor.second;
   }
   tensor_map_may_be_modified_ = false;
 }
@@ -508,7 +495,7 @@ const Tensor &RuntimeContext::GetTensor(uint32_t slot) const {
   if (tensor_map_may_be_modified_) {
     const_cast<RuntimeContext *>(this)->SynchronizeTensorMap();
   }
-  EXT_ENFORCE_INVALID(slot < tensor_slots_.size() && tensor_slots_[slot].has_value(),
+  EXT_ENFORCE_INVALID(slot < tensor_slots_.size() && tensor_slots_[slot] != nullptr,
                       "RuntimeContext: tensor slot ", slot, " ('",
                       slot < value_slot_names_.size() ? value_slot_names_[slot] : std::string("?"),
                       "') is empty.");
@@ -540,8 +527,11 @@ uint32_t RuntimeContext::CurrentOutputSlot(int index) const {
 }
 
 const Tensor &RuntimeContext::Get(const std::string &name) const {
+  if (tensor_map_may_be_modified_) {
+    const_cast<RuntimeContext *>(this)->SynchronizeTensorMap();
+  }
   const auto slot = value_slots_.find(name);
-  if (slot != value_slots_.end() && tensor_slots_[slot->second].has_value()) {
+  if (slot != value_slots_.end() && tensor_slots_[slot->second] != nullptr) {
     return *tensor_slots_[slot->second];
   }
   auto it = tensors_.find(name);
@@ -569,6 +559,17 @@ const ExecutionPlan &RuntimeContext::GetExecutionPlan(const FunctionProto &func)
   auto it = execution_plans_.find(key);
   if (it == execution_plans_.end()) {
     it = execution_plans_.emplace(key, ExecutionPlan(func)).first;
+  }
+  return it->second;
+}
+
+const ExecutionPlan &RuntimeContext::GetExecutionPlan(const ModelProto &model) {
+  EXT_ENFORCE_INVALID(model.has_graph(),
+                      "RuntimeContext::GetExecutionPlan: model does not contain a graph.");
+  const void *key = static_cast<const void *>(&model.graph());
+  auto it = execution_plans_.find(key);
+  if (it == execution_plans_.end()) {
+    it = execution_plans_.emplace(key, ExecutionPlan(model)).first;
   }
   return it->second;
 }

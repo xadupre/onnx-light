@@ -2404,7 +2404,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
            "Clears recorded backend kernel names without disabling recording.")
       .def("has", &RuntimeContext::Has, nb::arg("name"),
            "Returns ``True`` if a tensor named ``name`` is currently held.")
-      .def("remove", &RuntimeContext::Remove, nb::arg("name"),
+      .def("remove", nb::overload_cast<const std::string &>(&RuntimeContext::Remove),
+           nb::arg("name"),
            "Removes any value stored under ``name``. Returns ``True`` if "
            "an entry was erased.")
       .def(

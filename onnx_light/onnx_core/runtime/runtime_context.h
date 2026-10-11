@@ -988,6 +988,12 @@ public:
   /// consists of the function's declared inputs and outputs.
   const ExecutionPlan &GetExecutionPlan(const FunctionProto &func);
 
+  /// Returns the root plan for ``model``, including nested graphs and local functions.
+  ///
+  /// The plan is cached under the root graph address so a later graph lookup
+  /// reuses the model-wide value directory and arena capacity.
+  const ExecutionPlan &GetExecutionPlan(const ModelProto &model);
+
   /// Clears every cached :cpp:class:`ExecutionPlan`. Useful when the
   /// owning model has been mutated in place (rare).
   void ClearExecutionPlans() noexcept;
@@ -1150,7 +1156,9 @@ private:
   /// it outlives every allocator-backed value.
   std::shared_ptr<ExecutionArena> execution_arena_owner_;
   TensorMap tensors_;
-  std::vector<std::optional<Tensor>> tensor_slots_;
+  /// Direct pointers into ``tensors_``. Unordered-map element addresses remain
+  /// stable across rehashes, while the map retains allocator ownership.
+  std::vector<Tensor *> tensor_slots_;
   bool tensor_map_may_be_modified_ = false;
   RuntimeValueMap values_;
   StructTypeCatalogue struct_type_catalogue_;

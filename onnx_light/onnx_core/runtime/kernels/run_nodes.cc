@@ -1215,6 +1215,7 @@ void RegisterModelFunctions(const ModelProto &model, RuntimeContext &rt) {
   catalogue.Build(model);
   rt.set_struct_type_catalogue(catalogue);
   rt.set_quantization_parameters(QuantizationParameterCatalogue::Build(model));
+  rt.GetExecutionPlan(model);
   // Register every model-local function so that nodes referring to
   // them by (domain, op_type, overload) are dispatched to
   // ``ModelLocalFunctionKernel`` rather than rejected as unsupported

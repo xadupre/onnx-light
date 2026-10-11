@@ -29,7 +29,11 @@ void RetainIOBackedStorage(RuntimeValue &value, size_t depth = 0) {
   EXT_ENFORCE_INVALID(depth <= RuntimeValue::kMaxDepth,
                       "PersistentValueState: maximum output nesting depth exceeded.");
   if (value.kind == RuntimeValue::Kind::kTensor) {
-    if (value.tensor.has_allocation() &&
+    if (value.tensor.data_type == DataType::STRING) {
+      value.tensor = value.tensor.ToOwned();
+      return;
+    }
+    if (value.tensor.data_type != DataType::STRING && value.tensor.has_allocation() &&
         dynamic_cast<IOArena *>(value.tensor.allocation_owner()) != nullptr)
       value.tensor = std::move(value.tensor).RetainStorage();
   } else if (value.kind == RuntimeValue::Kind::kSequence) {

@@ -586,6 +586,8 @@ void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContex
       rt.Put(name, std::move(migrated), migrated_kind);
     }
     const Tensor &verified_output = rt.Get(name);
+    if (static_cast<DataType>(verified_output.data_type) == DataType::STRING)
+      continue;
     if (!verified_output.has_allocation()) {
       continue;
     }
@@ -867,9 +869,9 @@ void RuntimeSession::MaterializeBorrowedOutputs(RuntimeContext &rt) const {
         EXT_ENFORCE_INVALID(depth <= RuntimeValue::kMaxDepth,
                             "RuntimeSession: maximum structured output depth exceeded.");
         if (item.kind == RuntimeValue::Kind::kTensor) {
-          if (item.tensor.is_borrowed())
+          if (item.tensor.data_type == DataType::STRING || item.tensor.is_borrowed())
             item.tensor = item.tensor.ToOwned();
-          if (rt.OwnsIOAllocation(item.tensor))
+          if (item.tensor.data_type != DataType::STRING && rt.OwnsIOAllocation(item.tensor))
             item.tensor = std::move(item.tensor).RetainStorage();
         } else if (item.kind == RuntimeValue::Kind::kEncoded)
           item = item.DeepCopy();
@@ -889,10 +891,10 @@ void RuntimeSession::MaterializeBorrowedOutputs(RuntimeContext &rt) const {
       continue;
     }
     Tensor &output = rt.Get(name);
-    if (output.is_borrowed()) {
+    if (output.data_type == DataType::STRING || output.is_borrowed()) {
       output = output.ToOwned();
     }
-    if (rt.OwnsIOAllocation(output)) {
+    if (output.data_type != DataType::STRING && rt.OwnsIOAllocation(output)) {
       output = std::move(output).RetainStorage();
     }
   }

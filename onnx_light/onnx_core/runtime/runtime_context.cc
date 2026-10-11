@@ -284,7 +284,8 @@ void RuntimeContext::RecordEvent(RuntimeEvent event) {
                          : ResolveNodeIndex(event.kind, current_node_index_);
   event.subgraph_node_index = current_subgraph_node_index_;
   event.subgraph_attr_name = current_subgraph_attr_name_;
-  StampAllocatorMemory(event);
+  if (event.action != RuntimeEventAction::kPersistentStorage)
+    StampAllocatorMemory(event);
   std::lock_guard<std::mutex> lock(events_->mutex);
   events_->log.push_back(std::move(event));
 }
@@ -338,12 +339,9 @@ void RuntimeContext::BindExecutionPlan(const ExecutionPlan &plan) {
     return;
   }
   if (execution_arena_owner_ != nullptr) {
-    EXT_ENFORCE_INVALID(
-        capacity <= execution_arena_owner_->capacity(),
-        "RuntimeContext: the existing execution arena has ", execution_arena_owner_->capacity(),
-        " slots but this execution plan requires ", capacity,
-        "; supply an explicit allocator when reusing one context across unrelated plans.");
-    return;
+    if (capacity <= execution_arena_owner_->capacity())
+      return;
+    retired_execution_arena_owners_.push_back(std::move(execution_arena_owner_));
   }
   execution_arena_owner_ = std::make_shared<ExecutionArena>(capacity);
   allocator_ = execution_arena_owner_.get();
@@ -622,7 +620,10 @@ RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name)
                        },
                        kernel_usage_, events_);
   child.execution_arena_owner_ = execution_arena_owner_;
+  child.retired_execution_arena_owners_ = retired_execution_arena_owners_;
   child.io_arena_owner_ = io_arena_owner_;
+  child.current_input_slots_ = current_input_slots_;
+  child.current_output_slots_ = current_output_slots_;
   child.value_store_ = value_store_;
   child.functions() = functions_;
   child.custom_kernels() = custom_kernels_;
@@ -693,7 +694,10 @@ RuntimeContext RuntimeContext::MakeFunctionContext() const {
                        },
                        kernel_usage_, events_);
   child.execution_arena_owner_ = execution_arena_owner_;
+  child.retired_execution_arena_owners_ = retired_execution_arena_owners_;
   child.io_arena_owner_ = io_arena_owner_;
+  child.current_input_slots_ = current_input_slots_;
+  child.current_output_slots_ = current_output_slots_;
   child.value_store_ = value_store_;
   child.functions() = functions_;
   child.custom_kernels() = custom_kernels_;

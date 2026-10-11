@@ -146,10 +146,13 @@ public:
 
   /// Returns a conservative fixed arena capacity for this plan. Every named
   /// value reserves one result slot and one overlapping workspace/structured
-  /// payload slot; one additional slot is reserved when node metadata declares
-  /// temporary peak memory. Physical buffers remain recyclable independently
-  /// of stable value slots.
-  size_t arena_capacity() const noexcept { return value_names_.size() * 2 + temporary_slot_count_; }
+  /// payload slot. The widest node reserves two additional slots per operand
+  /// for kernel-internal workspaces and recurrent state, and planned temporary
+  /// storage reserves one more slot. Physical buffers remain recyclable
+  /// independently of stable value slots.
+  size_t arena_capacity() const noexcept {
+    return value_names_.size() * 2 + kernel_workspace_slot_count_ * 2 + temporary_slot_count_;
+  }
 
 protected:
   /// Populates :cpp:func:`actions` from the seeded members (``inputs_``,
@@ -205,6 +208,7 @@ private:
   std::vector<const NodeProto *> nodes_;
   std::vector<ExecuteAction> actions_;
   std::vector<std::string> value_names_;
+  size_t kernel_workspace_slot_count_ = 0;
   size_t temporary_slot_count_ = 0;
 };
 

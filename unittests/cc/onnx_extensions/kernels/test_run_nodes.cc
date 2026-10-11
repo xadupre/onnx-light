@@ -5940,7 +5940,7 @@ TEST(RunNodes, ExecutionPlanSeedsStableSlotsAcrossNestedGraphs) {
 
   ExecutionPlan plan(graph);
   EXPECT_EQ(plan.value_slot_count(), 5u);
-  EXPECT_EQ(plan.arena_capacity(), 5u);
+  EXPECT_EQ(plan.arena_capacity(), 14u);
 
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   rt.RegisterValueNames(plan.value_names());

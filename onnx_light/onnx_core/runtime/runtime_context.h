@@ -626,8 +626,15 @@ public:
 
   /// Returns whether ``tensor`` is backed by this context's owned execution arena.
   bool OwnsExecutionAllocation(const Tensor &tensor) const noexcept {
-    return execution_arena_owner_ != nullptr && tensor.has_allocation() &&
-           tensor.allocation_owner() == execution_arena_owner_.get();
+    if (!tensor.has_allocation())
+      return false;
+    if (execution_arena_owner_ != nullptr &&
+        tensor.allocation_owner() == execution_arena_owner_.get())
+      return true;
+    for (const auto &arena : retired_execution_arena_owners_)
+      if (tensor.allocation_owner() == arena.get())
+        return true;
+    return false;
   }
 
   /// Returns whether ``tensor`` is backed by this context's owned I/O arena.
@@ -854,6 +861,11 @@ public:
                                 const std::vector<uint32_t> *outputs) noexcept {
     current_input_slots_ = inputs;
     current_output_slots_ = outputs;
+  }
+
+  const std::vector<uint32_t> *current_input_slots() const noexcept { return current_input_slots_; }
+  const std::vector<uint32_t> *current_output_slots() const noexcept {
+    return current_output_slots_;
   }
 
   /// Returns a pre-resolved current-node input/output slot.
@@ -1167,6 +1179,7 @@ private:
   /// caller did not provide an allocator. Declared before value containers so
   /// it outlives every allocator-backed value.
   std::shared_ptr<ExecutionArena> execution_arena_owner_;
+  std::vector<std::shared_ptr<ExecutionArena>> retired_execution_arena_owners_;
   /// Owns the growable I/O arena installed when the caller did not provide one.
   std::shared_ptr<IOArena> io_arena_owner_;
   TensorMap tensors_;

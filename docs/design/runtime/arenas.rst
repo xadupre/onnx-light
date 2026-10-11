@@ -46,10 +46,15 @@ so pages materialized during warm-up remain available to later runs. A
 short-lived invocation may instead own the arenas: exported I/O leases then keep
 its I/O arena alive after the invocation context is destroyed, while its
 execution arena disappears with the invocation.
-The execution arena has the fixed slot count computed by the execution plan:
-each stable value reserves a result slot and an overlapping
-workspace/structured-payload slot, plus any temporary slot declared by peak
-memory metadata.
+The execution arena has the fixed slot count computed by the execution plan.
+The bound covers two slots per stable value, two workspace/state slots per
+operand of the widest node in the root, nested graphs, or model-local
+functions, and any temporary slot declared by peak-memory metadata. This keeps
+the arena fixed during one plan's execution while covering kernels, such as
+Attention and recurrent operators, that hold several internal tensors at once.
+If one context is later reused with an unrelated plan requiring a larger fixed
+arena, the context installs another plan-sized arena and retains the previous
+arena until every tensor allocated from it has been released.
 The I/O arena starts from that plan-sized capacity but grows stable slots when
 all existing slots are live or leased: the number of externally retained
 outputs and nested sequence tensors is runtime-dependent and cannot be bounded
@@ -119,8 +124,10 @@ intermediates to the execution arena without migration.
                   `-- I/O role -------> IOArena
 
 Subgraphs and functions follow the same rule relative to their caller. Values
-that remain internal use the caller's shared execution arena; values crossing
-the runtime boundary use the shared I/O arena and can be leased without copying.
+that remain internal use the caller's shared execution arena. Only values
+crossing the root runtime boundary use the shared I/O arena and can be leased
+without copying. String outputs own their string payload directly instead of
+retaining an irrelevant raw-buffer allocation.
 
 Export to NumPy
 +++++++++++++++

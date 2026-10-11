@@ -104,9 +104,12 @@ integer slots. Root, control-flow subgraph, and model-local function sessions
 share the store. Invocation values use a separate global name-to-``uint32_t``
 directory held by one ``RuntimeContext`` across root and nested execution.
 ``ExecutionPlan::arena_capacity()`` sizes its fixed ``ExecutionArena`` from all
-unique graph/function value names plus planned temporary storage. A stable
-value slot does not reserve a physical buffer: last-use removal returns that
-buffer to the arena.
+unique graph/function value names, a workspace/recurrent-state allowance
+derived from the widest node in the complete session hierarchy, and planned
+temporary storage. A stable value slot does not reserve a physical buffer:
+last-use removal returns that buffer to the arena. Reusing one context with a
+larger unrelated plan installs a new fixed arena while retaining any older
+arena still referenced by live tensors.
 
 A hot replay performs direct slot operations without creating a child context
 for control flow or copying values across context boundaries. It does not use

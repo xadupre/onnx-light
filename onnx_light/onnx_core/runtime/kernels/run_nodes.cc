@@ -48,7 +48,9 @@ public:
       : rt_(rt), node_index_(rt.current_node_index()),
         subgraph_node_index_(rt.current_subgraph_node_index()),
         subgraph_attr_name_(rt.current_subgraph_attr_name()),
-        release_intermediates_(rt.release_intermediates()) {
+        release_intermediates_(rt.release_intermediates()), input_slots_(rt.current_input_slots()),
+        output_slots_(rt.current_output_slots()), output_slot_io_roles_(rt.output_slot_io_roles()),
+        allocator_(rt.allocator()) {
     if (attr_name.has_value()) {
       rt_.set_current_subgraph(node_index_, *attr_name);
     }
@@ -59,6 +61,10 @@ public:
     rt_.set_release_intermediates(release_intermediates_);
     rt_.set_current_node_index(node_index_);
     rt_.set_current_subgraph(subgraph_node_index_, subgraph_attr_name_);
+    rt_.SetCurrentNodeValueSlots(input_slots_, output_slots_);
+    rt_.set_output_slot_io_roles(std::move(output_slot_io_roles_));
+    if (allocator_ != nullptr)
+      rt_.SetActiveAllocator(allocator_);
   }
 
 private:
@@ -67,6 +73,10 @@ private:
   int64_t subgraph_node_index_;
   std::string subgraph_attr_name_;
   bool release_intermediates_;
+  const std::vector<uint32_t> *input_slots_;
+  const std::vector<uint32_t> *output_slots_;
+  std::vector<bool> output_slot_io_roles_;
+  RawBufferAllocator *allocator_;
 };
 
 class ScopedRuntimeBindings {
@@ -144,6 +154,12 @@ public:
       views.push_back(tensor.BorrowView());
     }
     rt_.PutSequence(name, Sequence(name, sequence.elem_type, std::move(views)));
+  }
+
+  void Bind(const std::string &name, Sequence &&sequence) {
+    Shadow(name);
+    sequence.name = name;
+    rt_.PutSequence(name, std::move(sequence));
   }
 
   void Bind(const std::string &name, const RuntimeValue &value) {
@@ -307,10 +323,12 @@ void SubgraphSession::RunChild(std::vector<std::pair<std::string, Tensor>> bindi
   for (const auto &kv : bindings) {
     scoped_bindings.Bind(kv.first, kv.second);
   }
-  for (const auto &kv : sequence_bindings) {
-    scoped_bindings.Bind(kv.first, kv.second);
+  for (auto &kv : sequence_bindings) {
+    scoped_bindings.Bind(kv.first, std::move(kv.second));
   }
   RuntimeSession::Run(rt);
+  for (const std::string &name : output_names_)
+    scoped_bindings.Keep(name);
 }
 
 void SubgraphSession::RunChild(std::vector<std::pair<std::string, Tensor>> bindings,
@@ -324,8 +342,15 @@ Tensors SubgraphSession::Run(std::vector<std::pair<std::string, Tensor>> binding
 
   Tensors outputs;
   outputs.reserve(output_names_.size());
+  std::unordered_map<std::string, size_t> remaining;
+  for (const std::string &name : output_names_)
+    ++remaining[name];
   for (const auto &out_name : output_names_) {
-    outputs.push_back(TakeTensor(rt, out_name, "RunNode: subgraph output"));
+    if (--remaining[out_name] != 0) {
+      outputs.push_back(rt.Get(out_name).ToOwned());
+    } else {
+      outputs.push_back(TakeTensor(rt, out_name, "RunNode: subgraph output"));
+    }
   }
   return outputs;
 }
@@ -448,7 +473,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
     }
     for (std::size_t j = 0; j < k; ++j) {
       const std::string &oname = body.output(static_cast<int>(1 + n + j)).name();
-      scan_values[j].push_back(TakeTensor(rt, oname, "RunNode: Loop body scan output"));
+      scan_values[j].push_back(TakeTensor(rt, oname, "RunNode: Loop body scan output").ToOwned());
     }
     ++trip_count;
   }
@@ -563,7 +588,7 @@ void RunLoopNode(const NodeProto &node, RuntimeContext &rt, SubgraphSession &bod
       const Sequence &source = rt.GetSequence(name);
       views.reserve(source.values.size());
       for (const Tensor &tensor : source.values)
-        views.push_back(tensor.BorrowView());
+        views.push_back(tensor.ToOwned());
       sequence_state[i] = Sequence(name, source.elem_type, std::move(views));
       any_sequence_state = true;
     } else {

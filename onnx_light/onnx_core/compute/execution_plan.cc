@@ -100,6 +100,20 @@ void AddValueName(const std::string &name, std::unordered_set<std::string> &seen
 void CollectGraphValueNames(const GraphProto &graph, std::unordered_set<std::string> &seen,
                             std::vector<std::string> &names);
 
+size_t MaxNodeArity(const utils::RepeatedProtoField<NodeProto> &nodes) {
+  size_t result = 0;
+  for (const NodeProto &node : nodes) {
+    result = std::max(result, node.input().size() + node.output().size());
+    for (const AttributeProto &attribute : node.attribute()) {
+      if (attribute.has_g())
+        result = std::max(result, MaxNodeArity(attribute.g().node()));
+      for (const GraphProto &nested : attribute.graphs())
+        result = std::max(result, MaxNodeArity(nested.node()));
+    }
+  }
+  return result;
+}
+
 void CollectNodeValueNames(const utils::RepeatedProtoField<NodeProto> &nodes,
                            std::unordered_set<std::string> &seen, std::vector<std::string> &names) {
   for (const NodeProto &node : nodes) {
@@ -157,6 +171,7 @@ ExecutionPlan::ExecutionPlan(const utils::RepeatedProtoField<NodeProto> &nodes,
     node_index_.emplace(&nodes[i], i);
   }
   BuildValueDirectory(nodes);
+  kernel_workspace_slot_count_ = MaxNodeArity(nodes);
   BuildActions();
 }
 
@@ -191,8 +206,12 @@ ExecutionPlan::ExecutionPlan(const GraphProto &graph) {
     nodes_.push_back(&graph.node()[i]);
     node_index_.emplace(&graph.node()[i], i);
   }
+  for (const std::string &name : core::graph::CollectExternalInputs(graph.node())) {
+    keep_.insert(name);
+  }
   std::unordered_set<std::string> seen;
   CollectGraphValueNames(graph, seen, value_names_);
+  kernel_workspace_slot_count_ = MaxNodeArity(graph.node());
   BuildActions();
 }
 
@@ -203,6 +222,8 @@ ExecutionPlan::ExecutionPlan(const ModelProto &model) : ExecutionPlan(model.grap
       AddValueName(input, seen, value_names_);
     }
     CollectNodeValueNames(func.node(), seen, value_names_);
+    kernel_workspace_slot_count_ =
+        std::max(kernel_workspace_slot_count_, MaxNodeArity(func.node()));
     for (const auto &output : func.output()) {
       AddValueName(output, seen, value_names_);
     }
@@ -239,11 +260,15 @@ ExecutionPlan::ExecutionPlan(const FunctionProto &func) {
     nodes_.push_back(&func.node()[i]);
     node_index_.emplace(&func.node()[i], i);
   }
+  for (const std::string &name : core::graph::CollectExternalInputs(func.node())) {
+    keep_.insert(name);
+  }
   for (const auto &input : func.input()) {
     if (!input.empty()) {
       value_names_.push_back(input);
     }
   }
+  kernel_workspace_slot_count_ = MaxNodeArity(func.node());
   BuildValueDirectory(func.node());
   std::unordered_set<std::string> seen(value_names_.begin(), value_names_.end());
   for (const auto &output : func.output()) {

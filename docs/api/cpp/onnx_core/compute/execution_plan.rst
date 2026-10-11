@@ -14,8 +14,12 @@ The ownership boundaries are:
 * ``RuntimeContext`` owns invocation inputs, outputs, intermediates, and
   the global name-to-``uint32_t`` directory.
 * ``ExecutionPlan::arena_capacity()`` bounds the fixed-capacity
-  ``ExecutionArena`` installed before kernel resolution. The directory keeps
-  stable value identity; the arena recycles physical buffers after last use.
+  ``ExecutionArena`` installed before kernel resolution. Its bound includes
+  stable values, the widest node's operands for kernel workspaces and recurrent
+  state, and metadata-declared temporary storage. The directory keeps stable
+  value identity; the arena recycles physical buffers after last use.
+  Reusing a context with a larger unrelated plan installs another fixed arena
+  without invalidating values that still own allocations from the previous one.
 * ``ValueStore`` owns immutable, synchronously prepared kernel
   values for the root session and its nested sessions.
 * ``PreparedExecutionPlan`` is the separate scope-aware dependency graph used

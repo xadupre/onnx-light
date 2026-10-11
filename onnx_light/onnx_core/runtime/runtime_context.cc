@@ -19,16 +19,24 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 namespace {
 
+uint64_t NextValueDirectoryIdentity() noexcept {
+  static std::atomic<uint64_t> next{1};
+  return next.fetch_add(1, std::memory_order_relaxed);
+}
+
 void EnsureAllocatorBacked(Tensor &tensor, RawBufferAllocator *allocator, RuntimeEventKind kind,
-                           symbolic::Device device) {
+                           symbolic::Device device, const std::shared_ptr<void> &model_owner) {
   // STRING tensors store their payload in string_data instead of raw bytes.
   if (allocator == nullptr || static_cast<DataType>(tensor.data_type) == DataType::STRING) {
     return;
   }
-  // External inputs may borrow caller-owned storage for the duration of a run.
-  // Copying them into the execution arena adds a full memory-bandwidth pass
-  // before inference and defeats the Python runner's zero-copy NumPy adapter.
-  if (kind == RuntimeEventKind::kInput && tensor.is_borrowed()) {
+  // Inputs borrow caller storage for the invocation. Views into immutable model
+  // storage keep that model owner when crossing nested graph boundaries.
+  const std::shared_ptr<void> &borrow_owner = tensor.borrowed_owner();
+  const bool borrows_model = borrow_owner.use_count() != 0 && model_owner.use_count() != 0 &&
+                             !borrow_owner.owner_before(model_owner) &&
+                             !model_owner.owner_before(borrow_owner);
+  if (tensor.is_borrowed() && (kind == RuntimeEventKind::kInput || borrows_model)) {
     return;
   }
   // Initializer storage is host-resident and read-only, not run-local workspace.
@@ -289,6 +297,7 @@ RuntimeContext::RuntimeContext(KernelContext kernel_ctx, RuntimeContextOptions o
       verbose_(options.verbose), release_intermediates_(options.release_intermediates),
       io_allocator_(options.io_allocator), value_store_(std::make_shared<ValueStore>()),
       device_(options.device) {
+  value_directory_identity_ = NextValueDirectoryIdentity();
   allocator_ = options.allocator;
   active_allocator_ = allocator_;
   kernel_ctx_.allocator = active_allocator_;
@@ -320,10 +329,14 @@ void RuntimeContext::SetValueStore(std::shared_ptr<ValueStore> value_store) {
 
 void RuntimeContext::BindExecutionPlan(const ExecutionPlan &plan) {
   RegisterValueNames(plan.value_names());
+  const size_t capacity = plan.arena_capacity();
+  if (io_allocator_ == nullptr) {
+    io_arena_owner_ = IOArena::Create(capacity);
+    io_allocator_ = io_arena_owner_.get();
+  }
   if (allocator_ != nullptr && execution_arena_owner_ == nullptr) {
     return;
   }
-  const size_t capacity = plan.arena_capacity();
   if (execution_arena_owner_ != nullptr) {
     EXT_ENFORCE_INVALID(
         capacity <= execution_arena_owner_->capacity(),
@@ -371,7 +384,7 @@ void RuntimeContext::Set(const std::string &name, Tensor tensor, RuntimeEventKin
     return;
   }
   if (!retains_output(name))
-    EnsureAllocatorBacked(tensor, allocator_, kind, device_);
+    EnsureAllocatorBacked(tensor, allocator_, kind, device_, model_owner_);
   if (events_enabled_) {
     RecordEvent(MakeAddOrReplaceEvent(RuntimeEventAction::kAdd, kind, name, tensor));
   }
@@ -386,7 +399,7 @@ void RuntimeContext::Put(const std::string &value_name, Tensor tensor, RuntimeEv
     return;
   }
   if (!retains_output(name))
-    EnsureAllocatorBacked(tensor, allocator_, kind, device_);
+    EnsureAllocatorBacked(tensor, allocator_, kind, device_, model_owner_);
   if (events_enabled_) {
     const RuntimeEventAction action =
         HasValue(name) ? RuntimeEventAction::kReplace : RuntimeEventAction::kAdd;
@@ -403,7 +416,7 @@ void RuntimeContext::Put(const std::string &value_name, Tensor tensor, RuntimeEv
 void RuntimeContext::Put(uint32_t slot, Tensor tensor, RuntimeEventKind kind) {
   const std::string &name = ValueName(slot);
   if (!retains_output(name))
-    EnsureAllocatorBacked(tensor, allocator_, kind, device_);
+    EnsureAllocatorBacked(tensor, allocator_, kind, device_, model_owner_);
   if (events_enabled_) {
     const RuntimeEventAction action =
         HasValue(name) ? RuntimeEventAction::kReplace : RuntimeEventAction::kAdd;
@@ -609,6 +622,7 @@ RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name)
                        },
                        kernel_usage_, events_);
   child.execution_arena_owner_ = execution_arena_owner_;
+  child.io_arena_owner_ = io_arena_owner_;
   child.value_store_ = value_store_;
   child.functions() = functions_;
   child.custom_kernels() = custom_kernels_;
@@ -679,6 +693,7 @@ RuntimeContext RuntimeContext::MakeFunctionContext() const {
                        },
                        kernel_usage_, events_);
   child.execution_arena_owner_ = execution_arena_owner_;
+  child.io_arena_owner_ = io_arena_owner_;
   child.value_store_ = value_store_;
   child.functions() = functions_;
   child.custom_kernels() = custom_kernels_;

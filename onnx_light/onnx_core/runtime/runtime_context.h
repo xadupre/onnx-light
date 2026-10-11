@@ -624,6 +624,12 @@ public:
   RawBufferAllocator *execution_allocator() noexcept { return allocator_; }
   const RawBufferAllocator *execution_allocator() const noexcept { return allocator_; }
 
+  /// Returns whether ``tensor`` is backed by this context's owned execution arena.
+  bool OwnsExecutionAllocation(const Tensor &tensor) const noexcept {
+    return execution_arena_owner_ != nullptr && tensor.has_allocation() &&
+           tensor.allocation_owner() == execution_arena_owner_.get();
+  }
+
   /// Returns the value store visible to kernels in this invocation.
   ValueStore &value_store() noexcept { return *value_store_; }
   const ValueStore &value_store() const noexcept { return *value_store_; }
@@ -834,7 +840,7 @@ public:
   size_t value_slot_count() const noexcept { return value_slot_names_.size(); }
 
   /// Returns a stable identity for this context's slot directory.
-  const void *value_directory_identity() const noexcept { return &value_slot_names_; }
+  uint64_t value_directory_identity() const noexcept { return value_directory_identity_; }
 
   /// Installs the pre-resolved slots of the node currently being dispatched.
   /// The vectors are owned by RuntimeSession's prepared kernel entry.
@@ -1155,6 +1161,8 @@ private:
   /// caller did not provide an allocator. Declared before value containers so
   /// it outlives every allocator-backed value.
   std::shared_ptr<ExecutionArena> execution_arena_owner_;
+  /// Owns the growable I/O arena installed when the caller did not provide one.
+  std::shared_ptr<IOArena> io_arena_owner_;
   TensorMap tensors_;
   /// Direct pointers into ``tensors_``. Unordered-map element addresses remain
   /// stable across rehashes, while the map retains allocator ownership.
@@ -1173,6 +1181,7 @@ private:
   ShapeMap shapes_;
   std::unordered_map<std::string, uint32_t> value_slots_;
   std::vector<std::string> value_slot_names_;
+  uint64_t value_directory_identity_;
   const std::vector<uint32_t> *current_input_slots_ = nullptr;
   const std::vector<uint32_t> *current_output_slots_ = nullptr;
   bool events_enabled_ = false;

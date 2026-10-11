@@ -79,6 +79,9 @@ public:
   }
 
   void Bind(const std::string &name, const Tensor &tensor) {
+    if (rt_.Has(name) && &rt_.Get(name) == &tensor) {
+      return;
+    }
     Tensor view = tensor.BorrowView();
     view.name = name;
     rt_.Put(name, std::move(view), RuntimeEventKind::kInput);
@@ -233,6 +236,7 @@ Tensor SliceTensorAlongAxis(const Tensor &t, int64_t axis, int64_t index,
 SubgraphSession::SubgraphSession(const GraphProto &graph, const OpsetImports *opset_imports,
                                  std::shared_ptr<ValueStore> value_store)
     : RuntimeSession(graph, opset_imports, 0, std::move(value_store)) {
+  SetNestedExecution();
   const auto &outs = graph.output();
   output_names_.reserve(outs.size());
   for (size_t i = 0; i < outs.size(); ++i) {
@@ -1254,7 +1258,7 @@ Tensors RunModel(const ModelProto &model, Tensors inputs, int verbose) {
     const std::string &name = declared_outputs[i].name();
     EXT_ENFORCE_INVALID(rt.Has(name), "RunModel: graph output '", name,
                         "' was not produced by the model.");
-    outputs.push_back(std::move(rt.Get(name)));
+    outputs.push_back(std::move(rt.Get(name)).RetainStorage());
   }
   return outputs;
 }

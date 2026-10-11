@@ -394,21 +394,28 @@ TEST(IOArena, ChoosesSmallestSufficientCapacity) {
   EXPECT_NE(selected->data(), large_payload);
 }
 
-TEST(IOArena, TracksLivePeakAndEnforcesSlotLimit) {
+TEST(IOArena, TracksLivePeakAndGrowsStableSlots) {
   auto arena = IOArena::Create(2);
   RawBuffer *first = arena->Allocate(10);
   RawBuffer *second = arena->Allocate(20);
   EXPECT_EQ(arena->TotalAllocatedSize(), 30u);
   EXPECT_EQ(arena->PeakAllocatedSize(), 30u);
   EXPECT_EQ(arena->allocated_count(), 2u);
-  EXPECT_THROW(arena->Allocate(1), std::bad_alloc);
+  RawBuffer *third = arena->Allocate(1);
+  EXPECT_EQ(arena->capacity(), 3u);
+  EXPECT_EQ(first->size(), 10u);
+  EXPECT_EQ(second->size(), 20u);
+  EXPECT_EQ(arena->TotalAllocatedSize(), 31u);
+  EXPECT_EQ(arena->PeakAllocatedSize(), 31u);
+  EXPECT_EQ(arena->allocated_count(), 3u);
 
   arena->Free(first);
-  EXPECT_EQ(arena->TotalAllocatedSize(), 20u);
-  EXPECT_EQ(arena->PeakAllocatedSize(), 30u);
+  EXPECT_EQ(arena->TotalAllocatedSize(), 21u);
+  EXPECT_EQ(arena->PeakAllocatedSize(), 31u);
   arena->ResetPeak();
-  EXPECT_EQ(arena->PeakAllocatedSize(), 20u);
+  EXPECT_EQ(arena->PeakAllocatedSize(), 21u);
   arena->Free(second);
+  arena->Free(third);
 }
 
 TEST(IOArena, RejectsUnknownAndAlreadyFreedBuffers) {
@@ -814,7 +821,7 @@ TEST(RuntimeContextAllocator, SetAndGetIOAllocator) {
 TEST(RuntimeContextAllocator, SubgraphInheritsExecutionAndIOAllocators) {
   core::runtime::SimpleRawBufferAllocator execution_alloc(8);
   core::runtime::SimpleRawBufferAllocator io_alloc(8);
-  RuntimeContext parent(KernelContext(DefaultOpset(18)),
+  RuntimeContext parent(core::runtime::KernelContext(core::runtime::DefaultOpset(18)),
                         core::runtime::RuntimeContextOptions{.allocator = &execution_alloc,
                                                              .io_allocator = &io_alloc});
 

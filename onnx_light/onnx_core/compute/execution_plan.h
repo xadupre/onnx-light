@@ -145,10 +145,11 @@ public:
   uint32_t value_slot_count() const noexcept { return static_cast<uint32_t>(value_names_.size()); }
 
   /// Returns a conservative fixed arena capacity for this plan. Every named
-  /// value receives one directory slot and one additional slot is reserved
-  /// when any node declares a temporary peak-memory buffer. Physical buffers
-  /// remain recyclable independently of these stable value slots.
-  size_t arena_capacity() const noexcept { return value_names_.size() + temporary_slot_count_; }
+  /// value reserves one result slot and one overlapping workspace/structured
+  /// payload slot; one additional slot is reserved when node metadata declares
+  /// temporary peak memory. Physical buffers remain recyclable independently
+  /// of stable value slots.
+  size_t arena_capacity() const noexcept { return value_names_.size() * 2 + temporary_slot_count_; }
 
 protected:
   /// Populates :cpp:func:`actions` from the seeded members (``inputs_``,

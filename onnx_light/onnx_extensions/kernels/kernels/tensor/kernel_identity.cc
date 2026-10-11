@@ -13,6 +13,9 @@
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 Tensor Identity::operator()(const Tensor &input, RuntimeContext *rt) const {
+  if (input.is_borrowed() && input.borrowed_owner().use_count() != 0) {
+    return input.BorrowView();
+  }
   Tensor output =
       (rt ? rt->MakeOutputTensor(0, input.data_type, input.shape, input.size_bytes())
           : MakeOutputTensor(input.data_type, input.shape, input.size_bytes(), nullptr));

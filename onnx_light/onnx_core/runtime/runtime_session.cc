@@ -176,6 +176,7 @@ RuntimeSession::RuntimeSession(const FunctionProto &function,
       cpu_execution_counters_(options.cpu_execution_counters),
       parallel_region_collector_(std::move(options.parallel_region_collector)),
       verbose_(options.verbose) {
+  SetNestedExecution();
   if (!function.opset_import().empty())
     owned_opset_imports_ = ParseOpsetImports(function.opset_import());
 }
@@ -495,7 +496,7 @@ std::vector<std::string> RuntimeSession::used_kernels() const {
 }
 
 bool RuntimeSession::ProducesDeclaredOutput(const NodeProto &node) const {
-  if (output_names_set_.empty()) {
+  if (!route_declared_outputs_to_io_ || output_names_set_.empty()) {
     return false;
   }
   for (int i = 0; i < node.output_size(); ++i) {
@@ -510,9 +511,10 @@ bool RuntimeSession::ProducesDeclaredOutput(const NodeProto &node) const {
 void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContext &rt) const {
   for (int i = 0; i < node.output_size(); ++i) {
     const std::string &name = node.output(i);
-    if (name.empty() || rt.retains_output(name)) {
+    if (name.empty()) {
       continue;
     }
+    const bool retained_output = rt.retains_output(name);
     // Resolve the allocation role of this individual output slot rather than of
     // the node as a whole. A declared graph output belongs to the I/O arena;
     // every other (intermediate) output belongs to the execution arena. This is
@@ -523,7 +525,8 @@ void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContex
     // the declared outputs are already in the I/O arena (no copy); only the
     // intermediates of such a mixed node are migrated back to the execution
     // arena here.
-    const bool declared_output = output_names_set_.find(name) != output_names_set_.end();
+    const bool declared_output =
+        route_declared_outputs_to_io_ && output_names_set_.find(name) != output_names_set_.end();
     const bool slot_to_io = session_io_allocator_ != nullptr && declared_output;
     RawBufferAllocator *expected = slot_to_io ? session_io_allocator_ : session_allocator_;
     auto value = rt.values().find(name);
@@ -533,8 +536,8 @@ void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContex
                             "RuntimeSession: maximum structured output depth exceeded.");
         if (item.kind == RuntimeValue::Kind::kTensor && expected != nullptr) {
           Tensor &tensor = item.tensor;
-          if (tensor.size_bytes() > 0 && tensor.data_type != DataType::STRING &&
-              tensor.borrowed_owner().use_count() == 0 &&
+          if ((!retained_output || rt.OwnsExecutionAllocation(tensor)) && tensor.size_bytes() > 0 &&
+              tensor.data_type != DataType::STRING && tensor.borrowed_owner().use_count() == 0 &&
               (!tensor.has_allocation() || tensor.allocation_owner() != expected)) {
             EXT_ENFORCE_INVALID(tensor.bytes() != nullptr,
                                 "RuntimeSession: structured output has a null data pointer.");
@@ -563,7 +566,9 @@ void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContex
     const char *expected_name =
         slot_to_io ? "the session's I/O allocator" : "the session's execution allocator";
     Tensor &output = rt.Get(name);
-    if (output.size_bytes() > 0 && static_cast<DataType>(output.data_type) != DataType::STRING &&
+    if ((!retained_output || rt.OwnsExecutionAllocation(output)) && output.size_bytes() > 0 &&
+        static_cast<DataType>(output.data_type) != DataType::STRING &&
+        output.borrowed_owner().use_count() == 0 &&
         (!output.has_allocation() || output.allocation_owner() != expected)) {
       const size_t output_size_bytes = output.size_bytes();
       const uint8_t *output_bytes = output.bytes();
@@ -673,16 +678,10 @@ void RuntimeSession::Run(RuntimeContext &rt) {
   // otherwise fall back to the RuntimeContext's own verbosity. The context
   // itself is left untouched.
   const int effective_verbose = verbose_ != 0 ? verbose_ : rt.verbose();
-  // Capture the allocator attached to ``rt`` once, on the first Run, as the
-  // session's unique allocator; every output tensor produced from here on is
-  // verified against this same allocator (see VerifyOutputAllocators). The
-  // I/O allocator (if any) is captured alongside it so declared graph
-  // outputs can be routed to it (see the kExecuteNode case below).
-  if (!session_allocator_captured_) {
-    session_allocator_ = rt.execution_allocator();
-    session_io_allocator_ = rt.io_allocator();
-    session_allocator_captured_ = true;
-  }
+  // Refresh the invocation's allocators on every run. A cached session may run
+  // against short-lived contexts whose owned arenas differ between invocations.
+  session_allocator_ = rt.execution_allocator();
+  session_io_allocator_ = rt.io_allocator();
   // Every external input the scheduled nodes read must already be available in
   // ``rt`` (as a tensor, sequence or map) — graph initializers are seeded
   // before Run and graph inputs are supplied by the caller. Surface a missing
@@ -749,7 +748,7 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       // avoiding the migration copy VerifyOutputAllocators would otherwise
       // perform for a mixed-output node. Kernels that do not use the slot-aware
       // MakeOutputTensor API are unaffected and keep node-scoped routing.
-      if (session_io_allocator_ != nullptr) {
+      if (session_io_allocator_ != nullptr && route_declared_outputs_to_io_) {
         std::vector<bool> io_roles(static_cast<size_t>(node.output_size()), false);
         for (int slot = 0; slot < node.output_size(); ++slot) {
           const std::string &output_name = node.output(slot);
@@ -848,7 +847,9 @@ void RuntimeSession::Run(RuntimeContext &rt) {
   // Detach any graph output that borrows into the model (e.g. a Constant's
   // raw_data value or a pass-through initializer) so the returned outputs own
   // their bytes and stay valid once the model is released.
-  MaterializeBorrowedOutputs(rt);
+  if (materialize_outputs_) {
+    MaterializeBorrowedOutputs(rt);
+  }
 }
 
 void RuntimeSession::MaterializeBorrowedOutputs(RuntimeContext &rt) const {
@@ -860,9 +861,13 @@ void RuntimeSession::MaterializeBorrowedOutputs(RuntimeContext &rt) const {
       const auto detach = [&](auto &&self, RuntimeValue &item, size_t depth) -> void {
         EXT_ENFORCE_INVALID(depth <= RuntimeValue::kMaxDepth,
                             "RuntimeSession: maximum structured output depth exceeded.");
-        if (item.kind == RuntimeValue::Kind::kTensor && item.tensor.is_borrowed())
-          item.tensor = item.tensor.ToOwned();
-        else if (item.kind == RuntimeValue::Kind::kEncoded)
+        if (item.kind == RuntimeValue::Kind::kTensor) {
+          if (item.tensor.is_borrowed())
+            item.tensor = item.tensor.ToOwned();
+          if (item.tensor.has_allocation() &&
+              dynamic_cast<IOArena *>(item.tensor.allocation_owner()) != nullptr)
+            item.tensor = std::move(item.tensor).RetainStorage();
+        } else if (item.kind == RuntimeValue::Kind::kEncoded)
           item = item.DeepCopy();
         else if (item.kind == RuntimeValue::Kind::kStruct)
           for (auto &[field, child] : item.fields)
@@ -882,6 +887,9 @@ void RuntimeSession::MaterializeBorrowedOutputs(RuntimeContext &rt) const {
     Tensor &output = rt.Get(name);
     if (output.is_borrowed()) {
       output = output.ToOwned();
+    }
+    if (output.has_allocation() && dynamic_cast<IOArena *>(output.allocation_owner()) != nullptr) {
+      output = std::move(output).RetainStorage();
     }
   }
 }

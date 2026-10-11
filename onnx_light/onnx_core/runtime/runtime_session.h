@@ -371,6 +371,12 @@ public:
   static std::vector<std::string> CollectNodeInputs(const NodeProto &node);
 
 protected:
+  /// Marks a function or control-flow body as nested in its caller's invocation.
+  void SetNestedExecution() noexcept {
+    route_declared_outputs_to_io_ = false;
+    materialize_outputs_ = false;
+  }
+
   /// Constructs a session over a bare :cpp:class:`GraphProto`, owning the
   /// resulting :cpp:class:`ExecutionPlan` in ``default_plan_``. Used
   /// by :cpp:class:`SubgraphSession` so a control-flow subgraph can be a
@@ -481,7 +487,7 @@ private:
   /// Stable RuntimeContext slot for each action's primary name. Nameless
   /// actions carry ``UINT32_MAX``.
   std::vector<uint32_t> action_value_slots_;
-  const void *value_directory_identity_ = nullptr;
+  uint64_t value_directory_identity_ = 0;
   /// Declared (possibly symbolic) shapes keyed by tensor name, populated by
   /// :cpp:func:`SetDeclaredShapes` and consulted by :cpp:func:`Run` when
   /// :cpp:member:`check_shapes_` is enabled.
@@ -508,6 +514,8 @@ private:
   /// (see :cpp:func:`VerifyOutputAllocators`), allowing outputs allocated
   /// outside the session's common allocator.
   bool allow_external_output_allocators_ = false;
+  bool route_declared_outputs_to_io_ = true;
+  bool materialize_outputs_ = true;
   RuntimeParameters parameters_;
   /// Requested CPU execution policy, derived from :cpp:member:`parameters_`
   /// when the caller did not supply one.
@@ -525,18 +533,14 @@ private:
   std::shared_ptr<CpuExecutor> cpu_executor_;
   /// Verbosity level used by :cpp:func:`Run` when non-zero.
   int verbose_ = 0;
-  /// Allocator observed on ``rt`` the first time :cpp:func:`Run` executes;
-  /// every output tensor produced by a scheduled node is verified to be
-  /// backed by this same allocator (see :cpp:func:`Run`).
+  /// Execution allocator of the current :cpp:func:`Run` invocation.
   RawBufferAllocator *session_allocator_ = nullptr;
-  /// I/O allocator observed on ``rt`` (:cpp:func:`RuntimeContext::io_allocator`)
-  /// the first time :cpp:func:`Run` executes, alongside
-  /// :cpp:member:`session_allocator_`. When non-null, :cpp:func:`Run` routes
+  /// I/O allocator of the current :cpp:func:`Run` invocation. When non-null,
+  /// :cpp:func:`Run` routes
   /// the kernel invocation of any node that produces a declared graph output
   /// (see :cpp:member:`output_names_set_`) through this allocator instead of
   /// :cpp:member:`session_allocator_`.
   RawBufferAllocator *session_io_allocator_ = nullptr;
-  bool session_allocator_captured_ = false;
 };
 
 } // namespace runtime

@@ -25,6 +25,24 @@ bool IsDenseTensorSequence(const RuntimeValue &value) {
          });
 }
 
+void RetainIOBackedStorage(RuntimeValue &value, size_t depth = 0) {
+  EXT_ENFORCE_INVALID(depth <= RuntimeValue::kMaxDepth,
+                      "PersistentValueState: maximum output nesting depth exceeded.");
+  if (value.kind == RuntimeValue::Kind::kTensor) {
+    if (value.tensor.has_allocation() &&
+        dynamic_cast<IOArena *>(value.tensor.allocation_owner()) != nullptr)
+      value.tensor = std::move(value.tensor).RetainStorage();
+  } else if (value.kind == RuntimeValue::Kind::kSequence) {
+    value.elements.TransformInPlace(
+        [&](RuntimeValue &element) { RetainIOBackedStorage(element, depth + 1); });
+  } else if (value.kind == RuntimeValue::Kind::kStruct) {
+    for (auto &[name, field] : value.fields) {
+      (void)name;
+      RetainIOBackedStorage(field, depth + 1);
+    }
+  }
+}
+
 Sequence ToTensorSequence(const std::string &name, const RuntimeValue &value,
                           const TypeProto::Sequence &type) {
   EXT_ENFORCE_INVALID(value.kind == RuntimeValue::Kind::kSequence,
@@ -405,6 +423,10 @@ RuntimeValueMap PersistentValueState::Run(RuntimeContext &context, const Runtime
     completion->Succeed();
   }
   values_.swap(next);
+  for (auto &[name, value] : outputs) {
+    (void)name;
+    RetainIOBackedStorage(value);
+  }
   return outputs;
 }
 

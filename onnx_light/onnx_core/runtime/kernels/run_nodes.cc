@@ -73,39 +73,92 @@ class ScopedRuntimeBindings {
 public:
   explicit ScopedRuntimeBindings(RuntimeContext &rt) : rt_(rt) {}
   ~ScopedRuntimeBindings() {
-    for (const std::string &name : names_) {
+    for (const std::string &name : names_)
       rt_.Remove(name);
+    for (auto &[name, tensor] : saved_tensors_)
+      rt_.tensors().emplace(std::move(name), std::move(tensor));
+    for (auto &[name, value] : saved_values_)
+      rt_.values().emplace(std::move(name), std::move(value));
+    for (auto &[name, sequence] : saved_sequences_)
+      rt_.PutSequence(name, std::move(sequence));
+    for (auto &[name, map] : saved_maps_)
+      rt_.maps().emplace(std::move(name), std::move(map));
+    for (auto &[name, shape] : saved_shapes_)
+      rt_.shapes().emplace(std::move(name), std::move(shape));
+  }
+
+  void Shadow(const std::string &name) {
+    if (name.empty() || !names_.insert(name).second)
+      return;
+    auto tensor = rt_.tensors().find(name);
+    if (tensor != rt_.tensors().end()) {
+      saved_tensors_.emplace(name, std::move(tensor->second));
+      rt_.tensors().erase(tensor);
     }
+    auto value = rt_.values().find(name);
+    if (value != rt_.values().end()) {
+      saved_values_.emplace(name, std::move(value->second));
+      rt_.values().erase(value);
+    }
+    auto sequence = rt_.sequences().find(name);
+    if (sequence != rt_.sequences().end()) {
+      saved_sequences_.emplace(name, std::move(sequence->second));
+      rt_.sequences().erase(sequence);
+    }
+    auto map = rt_.maps().find(name);
+    if (map != rt_.maps().end()) {
+      saved_maps_.emplace(name, std::move(map->second));
+      rt_.maps().erase(map);
+    }
+    auto shape = rt_.shapes().find(name);
+    if (shape != rt_.shapes().end()) {
+      saved_shapes_.emplace(name, std::move(shape->second));
+      rt_.shapes().erase(shape);
+    }
+  }
+
+  void Keep(const std::string &name) {
+    names_.erase(name);
+    saved_tensors_.erase(name);
+    saved_values_.erase(name);
+    saved_sequences_.erase(name);
+    saved_maps_.erase(name);
+    saved_shapes_.erase(name);
   }
 
   void Bind(const std::string &name, const Tensor &tensor) {
     if (rt_.Has(name) && &rt_.Get(name) == &tensor) {
       return;
     }
+    Shadow(name);
     Tensor view = tensor.BorrowView();
     view.name = name;
     rt_.Put(name, std::move(view), RuntimeEventKind::kInput);
-    names_.push_back(name);
   }
 
   void Bind(const std::string &name, const Sequence &sequence) {
+    Shadow(name);
     Tensors views;
     views.reserve(sequence.values.size());
     for (const Tensor &tensor : sequence.values) {
       views.push_back(tensor.BorrowView());
     }
     rt_.PutSequence(name, Sequence(name, sequence.elem_type, std::move(views)));
-    names_.push_back(name);
   }
 
   void Bind(const std::string &name, const RuntimeValue &value) {
+    Shadow(name);
     rt_.PutValue(name, value.BorrowView(), RuntimeEventKind::kInput);
-    names_.push_back(name);
   }
 
 private:
   RuntimeContext &rt_;
-  std::vector<std::string> names_;
+  std::unordered_set<std::string> names_;
+  TensorMap saved_tensors_;
+  RuntimeValueMap saved_values_;
+  SequenceMap saved_sequences_;
+  OnnxMapMap saved_maps_;
+  ShapeMap saved_shapes_;
 };
 
 Tensor TakeTensor(RuntimeContext &rt, const std::string &name, const std::string &where) {
@@ -890,6 +943,10 @@ public:
     ScopedNestedSessionState nested_state(rt, std::nullopt);
     ScopedRuntimeBindings bindings(rt);
 
+    for (const NodeProto &body_node : bound_func_.node())
+      for (const std::string &name : body_node.output())
+        bindings.Shadow(name);
+
     for (size_t i = 0; i < static_cast<std::size_t>(func_.input_size()); ++i) {
       const std::string caller_name = node_->input(i);
       const std::string param_name = func_.input(i);
@@ -927,11 +984,13 @@ public:
       auto value = rt.values().find(param_name);
       if (value != rt.values().end()) {
         rt.PutValue(caller_name, TakeRuntimeValue(rt, param_name));
+        bindings.Keep(caller_name);
         continue;
       }
       Tensor result = TakeTensor(rt, param_name, "RunNode: model-local function output");
       result.name = caller_name;
       rt.Put(caller_name, std::move(result), RuntimeEventKind::kOutput);
+      bindings.Keep(caller_name);
     }
   }
 
@@ -1258,7 +1317,10 @@ Tensors RunModel(const ModelProto &model, Tensors inputs, int verbose) {
     const std::string &name = declared_outputs[i].name();
     EXT_ENFORCE_INVALID(rt.Has(name), "RunModel: graph output '", name,
                         "' was not produced by the model.");
-    outputs.push_back(std::move(rt.Get(name)).RetainStorage());
+    Tensor output = std::move(rt.Get(name));
+    if (output.data_type != DataType::STRING)
+      output = std::move(output).RetainStorage();
+    outputs.push_back(std::move(output));
   }
   return outputs;
 }

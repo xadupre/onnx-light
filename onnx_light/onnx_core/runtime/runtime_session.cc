@@ -856,6 +856,11 @@ void RuntimeSession::MaterializeBorrowedOutputs(RuntimeContext &rt) const {
   for (const std::string &name : output_names_) {
     if (rt.retains_output(name))
       continue;
+    if (rt.HasShape(name)) {
+      const Shape shape = rt.GetShape(name);
+      rt.Put(name, Tensor::FromInt64(name, {static_cast<int64_t>(shape.size())}, shape),
+             RuntimeEventKind::kOutput);
+    }
     auto value = rt.values().find(name);
     if (value != rt.values().end()) {
       const auto detach = [&](auto &&self, RuntimeValue &item, size_t depth) -> void {
@@ -864,8 +869,7 @@ void RuntimeSession::MaterializeBorrowedOutputs(RuntimeContext &rt) const {
         if (item.kind == RuntimeValue::Kind::kTensor) {
           if (item.tensor.is_borrowed())
             item.tensor = item.tensor.ToOwned();
-          if (item.tensor.has_allocation() &&
-              dynamic_cast<IOArena *>(item.tensor.allocation_owner()) != nullptr)
+          if (rt.OwnsIOAllocation(item.tensor))
             item.tensor = std::move(item.tensor).RetainStorage();
         } else if (item.kind == RuntimeValue::Kind::kEncoded)
           item = item.DeepCopy();
@@ -888,7 +892,7 @@ void RuntimeSession::MaterializeBorrowedOutputs(RuntimeContext &rt) const {
     if (output.is_borrowed()) {
       output = output.ToOwned();
     }
-    if (output.has_allocation() && dynamic_cast<IOArena *>(output.allocation_owner()) != nullptr) {
+    if (rt.OwnsIOAllocation(output)) {
       output = std::move(output).RetainStorage();
     }
   }

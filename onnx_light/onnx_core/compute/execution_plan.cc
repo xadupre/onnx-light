@@ -465,6 +465,9 @@ void ExecutionPlan::BuildActions() {
     // back from :cpp:func:`actions`.
     for (const std::string &name :
          SplitNames(ReadNodeMetadata(node, compute::kReleaseAfterMetadataKey))) {
+      if (keep_.count(name) != 0) {
+        continue;
+      }
       if (shape_tagged.count(name) != 0) {
         // A shape is destroyed: it must have been created earlier.
         EXT_ENFORCE(!strict || created_shapes.count(name) != 0, "ExecutionPlan: shape '", name,

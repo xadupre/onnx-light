@@ -630,6 +630,12 @@ public:
            tensor.allocation_owner() == execution_arena_owner_.get();
   }
 
+  /// Returns whether ``tensor`` is backed by this context's owned I/O arena.
+  bool OwnsIOAllocation(const Tensor &tensor) const noexcept {
+    return io_arena_owner_ != nullptr && tensor.has_allocation() &&
+           tensor.allocation_owner() == io_arena_owner_.get();
+  }
+
   /// Returns the value store visible to kernels in this invocation.
   ValueStore &value_store() noexcept { return *value_store_; }
   const ValueStore &value_store() const noexcept { return *value_store_; }

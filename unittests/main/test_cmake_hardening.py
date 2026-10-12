@@ -22,6 +22,8 @@ class TestCMakeHardening(unittest.TestCase):
                 "  function(onnx_light_apply_hardening target)\n"
                 "  endfunction()\n"
                 "endif()\n"
+                'file(WRITE "${CMAKE_BINARY_DIR}/compiler_id.txt" '
+                '"${CMAKE_CXX_COMPILER_ID}\\n")\n'
                 "add_executable(test_target test.cc)\n"
                 "onnx_light_apply_hardening(test_target)\n",
                 encoding="utf-8",
@@ -60,13 +62,16 @@ class TestCMakeHardening(unittest.TestCase):
                         (build / "compile_commands.json").read_text(encoding="utf-8")
                     )
                     command = commands[0]["command"]
+                    is_msvc = (build / "compiler_id.txt").read_text(
+                        encoding="utf-8"
+                    ).strip() == "MSVC"
                     self.assertEqual(
                         "-D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_FAST" in command,
-                        hardening and not caller_mode,
+                        hardening and not caller_mode and not is_msvc,
                     )
                     if caller_mode:
                         self.assertEqual(command.count(flags), 1)
-                    if hardening:
+                    if hardening and not is_msvc:
                         self.assertIn("-D_GLIBCXX_ASSERTIONS", command)
                         cache = (build / "CMakeCache.txt").read_text(encoding="utf-8")
                         supported = re.search(

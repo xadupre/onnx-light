@@ -42,6 +42,25 @@ bool ParseBoolScalar(const Tensor &t, const std::string &where) {
   return t.AsBool()[0] != 0;
 }
 
+class ScopedNodeValueSlots {
+public:
+  ScopedNodeValueSlots(RuntimeContext &rt, const std::vector<uint32_t> *inputs,
+                       const std::vector<uint32_t> *outputs)
+      : rt_(rt), inputs_(rt.current_input_slots()), outputs_(rt.current_output_slots()) {
+    rt_.SetCurrentNodeValueSlots(inputs, outputs);
+  }
+
+  ~ScopedNodeValueSlots() { rt_.SetCurrentNodeValueSlots(inputs_, outputs_); }
+
+  ScopedNodeValueSlots(const ScopedNodeValueSlots &) = delete;
+  ScopedNodeValueSlots &operator=(const ScopedNodeValueSlots &) = delete;
+
+private:
+  RuntimeContext &rt_;
+  const std::vector<uint32_t> *inputs_;
+  const std::vector<uint32_t> *outputs_;
+};
+
 class ScopedNestedSessionState {
 public:
   ScopedNestedSessionState(RuntimeContext &rt, std::optional<std::string> attr_name)
@@ -1331,7 +1350,7 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
     output_slots.push_back(name.empty() ? std::numeric_limits<uint32_t>::max()
                                         : rt.ResolveValueSlot(name));
   }
-  rt.SetCurrentNodeValueSlots(&input_slots, &output_slots);
+  const ScopedNodeValueSlots slot_scope(rt, &input_slots, &output_slots);
   const std::string &domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
   const std::string &op_type = node.op_type().value();
   std::unique_ptr<KernelBase> resolved =
@@ -1349,9 +1368,7 @@ void RunNode(const NodeProto &node, RuntimeContext &rt) {
                         .count();
     t0 = std::chrono::steady_clock::now();
   }
-
   resolved->Run(rt);
-  rt.SetCurrentNodeValueSlots(nullptr, nullptr);
 
   if (logging) {
     const int64_t duration_ns =

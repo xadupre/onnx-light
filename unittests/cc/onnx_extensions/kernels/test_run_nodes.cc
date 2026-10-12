@@ -569,6 +569,33 @@ TEST(RunNodes, RunNodeNonCpuDeviceWithoutKernelThrows) {
     EXPECT_NE(msg.find("unsupported op_type 'Add'"), std::string::npos) << msg;
     EXPECT_NE(msg.find("on device 'GPU0'"), std::string::npos) << msg;
   }
+  EXPECT_EQ(rt.current_input_slots(), nullptr);
+  EXPECT_EQ(rt.current_output_slots(), nullptr);
+}
+
+TEST(RunNodes, RunNodeRestoresValueSlotsWhenKernelThrows) {
+  using core::runtime::RegisterKernelFn;
+
+  const std::string domain = "test.onnxlight.throwing_kernel";
+  RegisterKernelFn(domain, "Throw", core::symbolic::Device::kCPU,
+                   [](const NodeProto &node, RuntimeContext &,
+                      const KernelContext &) -> std::unique_ptr<core::runtime::KernelBase> {
+                     return std::make_unique<TestLambdaKernel>(
+                         node, [](const NodeProto &, RuntimeContext &) {
+                           throw std::invalid_argument("expected failure");
+                         });
+                   });
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {1}, {1}));
+  const std::vector<uint32_t> outer_inputs{7};
+  const std::vector<uint32_t> outer_outputs{11};
+  rt.SetCurrentNodeValueSlots(&outer_inputs, &outer_outputs);
+  const NodeProto node = MakeNode("Throw", {"x"}, {"y"}, domain);
+  EXPECT_THROW(RunNode(node, rt), std::invalid_argument);
+  EXPECT_EQ(rt.current_input_slots(), &outer_inputs);
+  EXPECT_EQ(rt.current_output_slots(), &outer_outputs);
+  rt.SetCurrentNodeValueSlots(nullptr, nullptr);
 }
 
 TEST(RunNodes, RunNodeDispatchesDeviceQualifiedKernel) {

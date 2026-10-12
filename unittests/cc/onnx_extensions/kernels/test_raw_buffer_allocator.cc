@@ -418,6 +418,18 @@ TEST(IOArena, TracksLivePeakAndGrowsStableSlots) {
   arena->Free(third);
 }
 
+TEST(IOArena, FailedGrowthLeavesArenaReusable) {
+  auto arena = IOArena::Create(0);
+  EXPECT_THROW(arena->Allocate(std::numeric_limits<size_t>::max()), std::length_error);
+  EXPECT_EQ(arena->capacity(), 0u);
+  EXPECT_EQ(arena->allocated_count(), 0u);
+
+  RawBuffer *buffer = arena->Allocate(8);
+  EXPECT_EQ(arena->capacity(), 1u);
+  EXPECT_EQ(buffer->size(), 8u);
+  arena->Free(buffer);
+}
+
 TEST(IOArena, RejectsUnknownAndAlreadyFreedBuffers) {
   auto arena = IOArena::Create(1);
   RawBuffer unknown;

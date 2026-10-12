@@ -301,11 +301,19 @@ RawBuffer *IOArena::Allocate(size_t n_bytes) {
     --retained_count_;
   } else {
     i = buffers_.size();
-    buffers_.emplace_back();
-    buffers_.back().resize(n_bytes);
+    RawBuffer buffer(n_bytes);
+    live_slots_.reserve(i + 1);
+    leased_slots_.reserve(i + 1);
+    slot_indices_.reserve(i + 1);
+    buffers_.push_back(std::move(buffer));
+    try {
+      slot_indices_.emplace(&buffers_.back(), i);
+    } catch (const std::bad_alloc &) {
+      buffers_.pop_back();
+      throw;
+    }
     live_slots_.push_back(false);
     leased_slots_.push_back(false);
-    slot_indices_.emplace(&buffers_.back(), i);
   }
 
   RawBuffer *buffer = &buffers_[i];

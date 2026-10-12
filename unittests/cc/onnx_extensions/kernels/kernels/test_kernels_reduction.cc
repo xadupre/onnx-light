@@ -57,6 +57,43 @@ TEST(KernelClass, ReduceLogSumExpNonFiniteInputs) {
   }
 }
 
+TEST(KernelClass, ReduceLogSumExpFloat16LargeReduction) {
+  const Tensor axes = Tensor::FromInt64("", {1}, {1});
+  for (int64_t opset : {13, 18, 28}) {
+    const ReduceLogSumExp kernel{KernelContext{DefaultOpset(opset)}};
+    for (bool keepdims : {false, true}) {
+      for (const std::vector<float> &values : {std::vector<float>{0.0f}, {8.0f}, {-1.0f, 0.0f}}) {
+        const int64_t repeats = 65536;
+        std::vector<float> input;
+        input.reserve(static_cast<size_t>(repeats) * values.size());
+        for (int64_t i = 0; i < repeats; ++i) {
+          input.insert(input.end(), values.begin(), values.end());
+        }
+        const Tensor data =
+            core::runtime::MakeFloat16Tensor("", {1, static_cast<int64_t>(input.size())}, input);
+        const Tensor result = opset == 13 ? kernel(data, keepdims) : kernel(data, axes, keepdims);
+        EXPECT_EQ(result.data_type, core::runtime::DataType::FLOAT16);
+        EXPECT_EQ(result.shape, (keepdims ? std::vector<int64_t>{1, 1} : std::vector<int64_t>{1}));
+        float sum = 0.0f;
+        for (float value : values) {
+          sum += std::exp(value);
+        }
+        const float expected = std::log(static_cast<float>(repeats)) + std::log(sum);
+        const Tensor expected_tensor =
+            core::runtime::MakeFloat16Tensor("", result.shape, {expected});
+        EXPECT_EQ(result.data, expected_tensor.data);
+        Tensor preallocated = core::runtime::MakeFloat16Tensor("", result.shape, {0.0f});
+        if (opset == 13) {
+          kernel(data, keepdims, /*noop_with_empty_axes=*/false, preallocated);
+        } else {
+          kernel(data, axes, keepdims, /*noop_with_empty_axes=*/false, preallocated);
+        }
+        EXPECT_EQ(preallocated.data, expected_tensor.data);
+      }
+    }
+  }
+}
+
 TEST(KernelClass, NativeReductionDoublePrecisionAndEmptyIdentities) {
   const KernelContext ctx{DefaultOpset(18)};
   const Tensor data = Tensor::FromDouble("", {2, 2}, {1, 1 + 1e-12, 2, 2 + 1e-12});

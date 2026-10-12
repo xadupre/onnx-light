@@ -169,6 +169,21 @@ class TestOnnxLightHelper(ExtTestCase):
         checker.check_attribute(attr)
         self.assertEqual(repr(attr.ints), "[1, 2]")
 
+    def test_attr_repeated_bool(self) -> None:
+        attr = oh.make_attribute("bools", [True, False, True])
+        self.assertEqual(attr.name, "bools")
+        self.assertEqual(attr.type, onnxl.AttributeProto.INTS)
+        self.assertEqual(list(attr.ints), [1, 0, 1])
+        checker.check_attribute(attr)
+
+    def test_attr_repeated_mixed_bools_and_ints(self) -> None:
+        for attr_type in (None, onnxl.AttributeProto.INTS):
+            with self.subTest(attr_type=attr_type):
+                attr = oh.make_attribute("mixed", [True, 2, False], attr_type=attr_type)
+                self.assertEqual(attr.type, onnxl.AttributeProto.INTS)
+                self.assertEqual(list(attr.ints), [1, 2, 0])
+                checker.check_attribute(attr)
+
     def test_attr_repeated_mixed_floats_and_ints(self) -> None:
         attr = oh.make_attribute("mixed", [1, 2, 3.0, 4.5])
         self.assertEqual(attr.name, "mixed")

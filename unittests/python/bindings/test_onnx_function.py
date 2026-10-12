@@ -132,3 +132,84 @@ class TestOnnxLightFunction(ExtTestCase):
             {"func_add", "func_identity", "func_nested_identity_add"},
             "local",
         )
+
+    def test_extract_model_with_local_function_in_subgraph(self):
+        opsets = [oh.make_opsetid("", 18), oh.make_opsetid("local", 1)]
+        double = oh.make_function(
+            "local", "Double", ["x"], ["y"], [oh.make_node("Add", ["x", "x"], ["y"])], opsets
+        )
+        unused = oh.make_function(
+            "local", "Unused", ["x"], ["y"], [oh.make_node("Identity", ["x"], ["y"])], opsets
+        )
+        output = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [2])
+        then_branch = oh.make_graph(
+            [oh.make_node("Double", ["X"], ["then_y"], domain="local")],
+            "then_branch",
+            [],
+            [oh.make_tensor_value_info("then_y", onnxl.TensorProto.FLOAT, [2])],
+        )
+        else_branch = oh.make_graph(
+            [oh.make_node("Double", ["X"], ["else_y"], domain="local")],
+            "else_branch",
+            [],
+            [oh.make_tensor_value_info("else_y", onnxl.TensorProto.FLOAT, [2])],
+        )
+        if_node = oh.make_node(
+            "If", ["cond"], ["Y"], then_branch=then_branch, else_branch=else_branch
+        )
+
+        for in_function in (False, True):
+            with self.subTest(in_function=in_function):
+                functions = [double, unused]
+                node = if_node
+                expected = {"Double"}
+                if in_function:
+                    functions.append(
+                        oh.make_function(
+                            "local", "Wrapper", ["X", "cond"], ["Y"], [if_node], opsets
+                        )
+                    )
+                    node = oh.make_node("Wrapper", ["X", "cond"], ["Y"], domain="local")
+                    expected.add("Wrapper")
+                graph = oh.make_graph(
+                    [node],
+                    "subgraph_local_function",
+                    [
+                        oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2]),
+                        oh.make_tensor_value_info("cond", onnxl.TensorProto.BOOL, []),
+                    ],
+                    [output],
+                )
+                model = oh.make_model(
+                    graph, functions=functions, opset_imports=opsets, ir_version=9
+                )
+                checker.check_model(model)
+                extracted = utils.Extractor(model).extract_model(["X", "cond"], ["Y"])
+                self._verify_function_set(extracted, expected, "local")
+
+    def test_collect_local_functions_in_graphs_attribute(self):
+        opsets = [oh.make_opsetid("", 18), oh.make_opsetid("local", 1)]
+        function = oh.make_function(
+            "local", "Double", ["x"], ["y"], [oh.make_node("Add", ["x", "x"], ["y"])], opsets
+        )
+        branch = oh.make_graph(
+            [oh.make_node("Double", ["X"], ["Y"], domain="local")],
+            "branch",
+            [],
+            [oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [2])],
+        )
+        node = oh.make_node("GraphContainer", ["X"], ["Y"], branches=[branch, branch])
+        model = oh.make_model(
+            oh.make_graph(
+                [node],
+                "graph",
+                [oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [2])],
+                [oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [2])],
+            ),
+            functions=[function],
+            opset_imports=opsets,
+        )
+        self.assertEqual(
+            [f.name for f in utils.Extractor(model)._collect_referred_local_functions([node])],
+            ["Double"],
+        )

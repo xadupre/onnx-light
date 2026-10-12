@@ -11,6 +11,7 @@
 
 #include <cstddef>
 #include <cstdlib>
+#include <limits>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -160,6 +161,77 @@ void CollectGraphValueNames(const GraphProto &graph, std::unordered_set<std::str
   }
 }
 
+using LocalFunctionIndex = std::unordered_map<std::string, const FunctionProto *>;
+
+std::string FunctionKey(const std::string &domain, const std::string &name,
+                        const std::string &overload) {
+  return (domain.empty() ? std::string() : domain) + ":" + name + ":" + overload;
+}
+
+size_t FunctionValueNameCount(const FunctionProto &function) {
+  std::unordered_set<std::string> seen;
+  std::vector<std::string> names;
+  for (const std::string &input : function.input())
+    AddValueName(input, seen, names);
+  CollectNodeValueNames(function.node(), seen, names);
+  for (const std::string &output : function.output())
+    AddValueName(output, seen, names);
+  return names.size();
+}
+
+void AddExpandedValueCount(size_t increment, size_t &total) {
+  EXT_ENFORCE_INVALID(increment <= std::numeric_limits<size_t>::max() - total,
+                      "ExecutionPlan: expanded local-function value count overflows size_t.");
+  total += increment;
+}
+
+size_t ExpandedFunctionValueCount(const FunctionProto &function,
+                                  const LocalFunctionIndex &functions,
+                                  std::unordered_map<const FunctionProto *, size_t> &cache,
+                                  std::unordered_set<const FunctionProto *> &active);
+
+size_t ExpandedCallValueCount(const utils::RepeatedProtoField<NodeProto> &nodes,
+                              const LocalFunctionIndex &functions,
+                              std::unordered_map<const FunctionProto *, size_t> &cache,
+                              std::unordered_set<const FunctionProto *> &active) {
+  size_t total = 0;
+  for (const NodeProto &node : nodes) {
+    const auto found = functions.find(FunctionKey(node.domain(), node.op_type(), node.overload()));
+    if (found != functions.end()) {
+      AddExpandedValueCount(ExpandedFunctionValueCount(*found->second, functions, cache, active),
+                            total);
+    }
+    for (const AttributeProto &attribute : node.attribute()) {
+      if (attribute.has_g()) {
+        AddExpandedValueCount(
+            ExpandedCallValueCount(attribute.g().node(), functions, cache, active), total);
+      }
+      for (const GraphProto &nested : attribute.graphs()) {
+        AddExpandedValueCount(ExpandedCallValueCount(nested.node(), functions, cache, active),
+                              total);
+      }
+    }
+  }
+  return total;
+}
+
+size_t ExpandedFunctionValueCount(const FunctionProto &function,
+                                  const LocalFunctionIndex &functions,
+                                  std::unordered_map<const FunctionProto *, size_t> &cache,
+                                  std::unordered_set<const FunctionProto *> &active) {
+  const auto cached = cache.find(&function);
+  if (cached != cache.end())
+    return cached->second;
+  EXT_ENFORCE_INVALID(active.insert(&function).second, "ExecutionPlan: model-local function '",
+                      function.domain(), "::", function.name(), "::", function.overload(),
+                      "' participates in a recursive call cycle.");
+  size_t total = FunctionValueNameCount(function);
+  AddExpandedValueCount(ExpandedCallValueCount(function.node(), functions, cache, active), total);
+  active.erase(&function);
+  cache.emplace(&function, total);
+  return total;
+}
+
 } // namespace
 
 ExecutionPlan::ExecutionPlan(const utils::RepeatedProtoField<NodeProto> &nodes,
@@ -216,8 +288,11 @@ ExecutionPlan::ExecutionPlan(const GraphProto &graph) {
 }
 
 ExecutionPlan::ExecutionPlan(const ModelProto &model) : ExecutionPlan(model.graph()) {
+  const size_t root_value_slot_count = value_names_.size();
   std::unordered_set<std::string> seen(value_names_.begin(), value_names_.end());
+  LocalFunctionIndex functions;
   for (const FunctionProto &func : model.functions()) {
+    functions[FunctionKey(func.domain(), func.name(), func.overload())] = &func;
     for (const auto &input : func.input()) {
       AddValueName(input, seen, value_names_);
     }
@@ -236,6 +311,11 @@ ExecutionPlan::ExecutionPlan(const ModelProto &model) : ExecutionPlan(model.grap
       }
     }
   }
+  expanded_value_slot_count_ = root_value_slot_count;
+  std::unordered_map<const FunctionProto *, size_t> cache;
+  std::unordered_set<const FunctionProto *> active;
+  AddExpandedValueCount(ExpandedCallValueCount(model.graph().node(), functions, cache, active),
+                        expanded_value_slot_count_);
 }
 
 ExecutionPlan::ExecutionPlan(const FunctionProto &func) {

@@ -2708,6 +2708,10 @@ TEST(RunModel, ModelLocalFunctionThreeLevelNestedCalls) {
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.5f, -3.0f}));
 
+  ExecutionPlan plan(model);
+  EXPECT_EQ(plan.value_slot_count(), 3u);
+  EXPECT_EQ(plan.arena_capacity(), 34u);
+
   RunModelViaSession(model, rt);
 
   ASSERT_TRUE(rt.Has("y"));

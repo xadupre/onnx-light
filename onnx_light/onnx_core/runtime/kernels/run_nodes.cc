@@ -338,6 +338,7 @@ SubgraphSession::SubgraphSession(const GraphProto &graph, const OpsetImports *op
 void SubgraphSession::RunChild(std::vector<std::pair<std::string, Tensor>> bindings,
                                std::vector<std::pair<std::string, Sequence>> sequence_bindings,
                                RuntimeContext &rt, const std::function<void()> &consume_outputs,
+                               const std::vector<std::string> &preserved_outputs,
                                const std::string &attr_name) {
   ScopedNestedSessionState nested_state(rt, attr_name);
   ScopedRuntimeBindings scoped_bindings(rt);
@@ -351,12 +352,15 @@ void SubgraphSession::RunChild(std::vector<std::pair<std::string, Tensor>> bindi
   }
   RuntimeSession::Run(rt);
   consume_outputs();
+  for (const std::string &name : preserved_outputs)
+    scoped_bindings.Keep(name);
 }
 
 void SubgraphSession::RunChild(std::vector<std::pair<std::string, Tensor>> bindings,
                                RuntimeContext &rt, const std::function<void()> &consume_outputs,
+                               const std::vector<std::string> &preserved_outputs,
                                const std::string &attr_name) {
-  RunChild(std::move(bindings), {}, rt, consume_outputs, attr_name);
+  RunChild(std::move(bindings), {}, rt, consume_outputs, preserved_outputs, attr_name);
 }
 
 Tensors SubgraphSession::Run(std::vector<std::pair<std::string, Tensor>> bindings,
@@ -380,7 +384,7 @@ Tensors SubgraphSession::Run(std::vector<std::pair<std::string, Tensor>> binding
           }
         }
       },
-      attr_name);
+      {}, attr_name);
   return outputs;
 }
 
@@ -422,6 +426,12 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt, SubgraphSession &then_
   const GraphProto &branch = taken ? then_branch : else_branch;
   const std::string branch_attr = taken ? "then_branch" : "else_branch";
   SubgraphSession &session = taken ? then_session : else_session;
+  std::vector<std::string> caller_outputs;
+  caller_outputs.reserve(static_cast<size_t>(node.output_size()));
+  for (const std::string &name : node.output()) {
+    if (!name.empty())
+      caller_outputs.push_back(name);
+  }
   session.RunChild(
       {}, rt,
       [&]() {
@@ -445,7 +455,7 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt, SubgraphSession &then_
           }
         }
       },
-      branch_attr);
+      caller_outputs, branch_attr);
 }
 
 // Runs ``body`` as a Loop iteration body where loop-carried state may
@@ -511,7 +521,7 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
                 TakeTensor(rt, oname, "RunNode: Loop body scan output").ToOwned());
           }
         },
-        "body");
+        {}, "body");
     ++trip_count;
   }
 

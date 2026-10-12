@@ -268,16 +268,22 @@ public:
    *                           events and to record the caller-visible allocator.
    * @param consume_outputs    Callback that transfers declared outputs from
    *                           ``rt`` before local bindings are restored.
+   * @param preserved_outputs  Caller-visible names produced by
+   *                           ``consume_outputs`` that must survive restoration.
    * @param attr_name          Attribute name identifying the subgraph within
    *                           its owning control-flow node.
    */
   void RunChild(std::vector<std::pair<std::string, Tensor>> bindings,
                 std::vector<std::pair<std::string, Sequence>> sequence_bindings, RuntimeContext &rt,
-                const std::function<void()> &consume_outputs, const std::string &attr_name = "");
+                const std::function<void()> &consume_outputs,
+                const std::vector<std::string> &preserved_outputs = {},
+                const std::string &attr_name = "");
 
   /// ``Tensor``-bindings-only overload of :cpp:func:`RunChild`.
   void RunChild(std::vector<std::pair<std::string, Tensor>> bindings, RuntimeContext &rt,
-                const std::function<void()> &consume_outputs, const std::string &attr_name = "");
+                const std::function<void()> &consume_outputs,
+                const std::vector<std::string> &preserved_outputs = {},
+                const std::string &attr_name = "");
 
 private:
   std::vector<std::string> output_names_;

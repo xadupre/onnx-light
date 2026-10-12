@@ -83,6 +83,8 @@ void DynamicQuantizeLinear::operator()(const Tensor &x, Tensor &y, Tensor &y_sca
   float x_max = 0.0f;
   for (int64_t i = 0; i < n; ++i) {
     const float v = px[i];
+    EXT_ENFORCE_INVALID(std::isfinite(v),
+                        "kernel::DynamicQuantizeLinear: x elements must be finite.");
     if (v < x_min) {
       x_min = v;
     }

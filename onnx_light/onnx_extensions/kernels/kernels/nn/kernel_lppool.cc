@@ -248,7 +248,7 @@ void LpPool::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
   const PoolCommonAttrs a = ParsePoolCommonAttrs(node);
   const int64_t p = GetAttributeIntOrDefault(node, "p", 2);
   onnx_kernels::kernel::LpPool k(rt.kernel_ctx());

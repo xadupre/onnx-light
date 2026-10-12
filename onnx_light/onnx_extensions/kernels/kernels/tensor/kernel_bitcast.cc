@@ -61,7 +61,7 @@ void BitCast::Run(RuntimeContext &rt) {
   RequireOutputCount(node, 1);
   const int32_t to = static_cast<int32_t>(GetAttributeIntOrDefault(node, "to", -1));
   EXT_ENFORCE_INVALID(!(to < 0), "RunNode: ", node.op_type(), " requires INT attribute 'to'.");
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
   SetOutput(node, 0, (*this)(x, to, &rt), rt);
 }
 

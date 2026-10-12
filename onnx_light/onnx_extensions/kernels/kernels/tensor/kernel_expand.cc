@@ -149,8 +149,8 @@ void Expand::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 2);
   RequireOutputCount(node, 1);
-  const Tensor &input = GetInput(node, 0, rt.tensors());
-  const Tensor &shape = GetInput(node, 1, rt.tensors());
+  const Tensor &input = GetInput(node, 0, rt);
+  const Tensor &shape = GetInput(node, 1, rt);
   onnx_kernels::kernel::Expand k(rt.kernel_ctx());
   SetOutput(node, 0, k(input, shape, &rt), rt);
 }

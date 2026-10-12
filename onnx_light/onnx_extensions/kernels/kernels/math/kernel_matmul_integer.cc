@@ -240,10 +240,10 @@ void MatMulInteger::Run(RuntimeContext &rt) {
                       "RunNode: op 'MatMulInteger' expects at most 4 inputs, got ",
                       node.input_size(), ".");
   RequireOutputCount(node, 1);
-  const Tensor &a = GetInput(node, 0, rt.tensors());
-  const Tensor &b = GetInput(node, 1, rt.tensors());
-  const Tensor *a_zp = GetOptionalInput(node, 2, rt.tensors());
-  const Tensor *b_zp = GetOptionalInput(node, 3, rt.tensors());
+  const Tensor &a = GetInput(node, 0, rt);
+  const Tensor &b = GetInput(node, 1, rt);
+  const Tensor *a_zp = GetOptionalInput(node, 2, rt);
+  const Tensor *b_zp = GetOptionalInput(node, 3, rt);
   onnx_kernels::kernel::MatMulInteger k(rt.kernel_ctx());
   SetOutput(node, 0,
             k(a, b, a_zp != nullptr ? *a_zp : Tensor{}, b_zp != nullptr ? *b_zp : Tensor{}), rt);

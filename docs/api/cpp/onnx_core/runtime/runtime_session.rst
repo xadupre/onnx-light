@@ -16,5 +16,28 @@ The context can supply a model lifetime token for selected retained results;
 ownerless externally borrowed buffers cannot be retained. Nonpersistent graph
 outputs still materialize borrowed storage normally so they can outlive the model.
 
+Kernel preparation
+------------------
+
+The first ``Run`` resolves every planned kernel and invokes preparation hooks
+for immutable inputs. It retains the ``ValueStore`` exposed by the root
+``RuntimeContext``; ``If``, ``Loop``, ``Scan``, ``SequenceMap``, and model-local
+function contexts inherit the same store. A kernel binds a stable ``uint32_t``
+slot and retains it for the session lifetime. Subsequent runs read the slot directly, so ordinary
+``ExecutionPlan`` replay does not wait on readiness, acquire a preparation
+mutex, or repeat a string-keyed lookup.
+
+``Gemm`` currently uses this path for a constant ``B`` initializer. An
+initializer that is also a graph input, or a value supplied by the caller
+before initialization, remains overridable and is not prepared.
+``RuntimeSession::prepared_bytes`` reports the allocations owned by the shared
+hierarchy store, so the root session's value includes preparations created by
+its nested sessions.
+
+This synchronous store is not ``PreparedObjectStore``: asynchronous external
+data loading, dependency scheduling, generations, cache persistence, and
+eviction remain responsibilities of ``PreparedExecutionPlan`` and
+``PreparedExecutionState``.
+
 .. doxygenfile:: onnx_core/runtime/runtime_session.h
    :project: onnx-light

@@ -13,12 +13,15 @@
 namespace ONNX_LIGHT_NAMESPACE::onnx_kernels::kernel {
 
 Tensor Identity::operator()(const Tensor &input, RuntimeContext *rt) const {
+  if (input.is_borrowed() && input.borrowed_owner().use_count() != 0) {
+    return input.BorrowView();
+  }
   Tensor output =
       (rt ? rt->MakeOutputTensor(0, input.data_type, input.shape, input.size_bytes())
           : MakeOutputTensor(input.data_type, input.shape, input.size_bytes(), nullptr));
   output.name = input.name;
   if (input.data_type == static_cast<int32_t>(DataType::STRING)) {
-    output.string_data = input.string_data;
+    output.string_data = input.AsStrings();
   } else if (input.size_bytes() != 0) {
     std::memcpy(output.mutable_bytes(), input.bytes(), input.size_bytes());
   }
@@ -31,9 +34,9 @@ void Identity::operator()(const Tensor &input, Tensor &output) const {
   EXT_ENFORCE_INVALID(output.shape == input.shape,
                       "kernel::Identity: preallocated output shape mismatch.");
   if (input.data_type == static_cast<int32_t>(DataType::STRING)) {
-    EXT_ENFORCE_INVALID(output.string_data.size() == input.string_data.size(),
+    EXT_ENFORCE_INVALID(output.string_data.size() == input.AsStrings().size(),
                         "kernel::Identity: preallocated string output size mismatch.");
-    output.string_data = input.string_data;
+    output.string_data = input.AsStrings();
   } else {
     EXT_ENFORCE_INVALID(output.size_bytes() == input.size_bytes(),
                         "kernel::Identity: preallocated output byte-size mismatch.");
@@ -54,7 +57,7 @@ void Identity::Run(RuntimeContext &rt) {
     // Copies inline storage while sharing existing owners, so releasing the input is safe.
     rt.PutValue(node.output(0), value->second);
   } else {
-    const Tensor &x = GetInput(node, 0, rt.tensors());
+    const Tensor &x = GetInput(node, 0, rt);
     onnx_kernels::kernel::Identity k(rt.kernel_ctx());
     SetOutput(node, 0, k(x, &rt), rt);
   }

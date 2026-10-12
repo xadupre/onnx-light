@@ -321,7 +321,8 @@ TEST(PersistentValueState, RuntimeRejectsSecondAppendAttemptEvenWhenCapacityIsDi
     RuntimeSessionOptions options;
     options.persistent_tensor_initial_capacity = capacity;
     PersistentValueState state(model, {{"past", Number(0)}}, options);
-    RuntimeContext context(KernelContext(DefaultOpset(18)));
+    RuntimeContext context(KernelContext(DefaultOpset(18)),
+                           RuntimeContextOptions{.events_enabled = true});
     bool first_attempt_finished = false;
     context.RegisterCustomKernel("test.feedback", "Step",
                                  [&](const NodeProto &node, RuntimeContext &rt) {
@@ -670,9 +671,10 @@ TEST(PersistentValueState, OnlySelectedOutputsBypassOrdinaryAllocationAndMateria
   auto output = state.Run(context, feeds);
   EXPECT_EQ(output.at("present").tensor.bytes(), selected);
   EXPECT_EQ(state.Values().at("past").tensor.bytes(), selected);
-  EXPECT_EQ(output.at("ordinary").tensor.allocation_owner(), &execution);
+  EXPECT_TRUE(output.at("ordinary").tensor.is_borrowed());
+  EXPECT_TRUE(output.at("ordinary").tensor.borrowed_owner());
   EXPECT_EQ(Number(output.at("ordinary")), 7);
-  EXPECT_EQ(execution.TotalAllocatedSize(), sizeof(float));
+  EXPECT_EQ(execution.TotalAllocatedSize(), 0u);
   output.clear();
   EXPECT_EQ(execution.TotalAllocatedSize(), 0u);
 }
@@ -696,7 +698,8 @@ TEST(PersistentValueState, OrdinaryOwnerlessOutputIsMaterializedButSelectedBorro
   });
   PersistentValueState state(model, {{"past", Number(1)}});
   auto output = state.Run(context, {{"tokens", Number(0)}});
-  EXPECT_FALSE(output.at("ordinary").tensor.is_borrowed());
+  EXPECT_TRUE(output.at("ordinary").tensor.is_borrowed());
+  EXPECT_TRUE(output.at("ordinary").tensor.borrowed_owner());
   EXPECT_NE(output.at("ordinary").tensor.bytes(), reinterpret_cast<const uint8_t *>(&external));
   invalid_selected = true;
   const auto previous = state.Values();
@@ -967,7 +970,11 @@ TEST(PersistentValueState, RetainsInitialOwnerAndRejectsUnleasedExecutionArena) 
   SimpleRawBufferAllocator allocator(10);
   RuntimeContext context(KernelContext(DefaultOpset(18)),
                          RuntimeContextOptions{.allocator = &allocator});
-  RegisterStep(context);
+  context.RegisterCustomKernel(
+      "test.feedback", "Step", [](const NodeProto &node, RuntimeContext &rt) {
+        const float next = rt.Get("past").AsFloat()[0] + rt.Get("tokens").AsFloat()[0];
+        rt.Put(node.output(0), Tensor::FromFloat("", {1}, {next}, rt.execution_allocator()));
+      });
   auto data = std::make_shared<std::vector<float>>(1, 5.0f);
   std::weak_ptr<std::vector<float>> owner = data;
   RuntimeValueMap initial{
@@ -1607,7 +1614,10 @@ TEST(PersistentValueState, OrdinarySequenceOutputsMigrateAndDetachNestedPayloads
     const auto &block = context.values().at("present").elements.at(0);
     const auto &key = block.fields.at("key").tensor;
     EXPECT_NE(key.bytes(), reinterpret_cast<const uint8_t *>(dense));
-    EXPECT_FALSE(key.is_borrowed());
+    EXPECT_EQ(key.is_borrowed(), !use_allocators);
+    if (!use_allocators) {
+      EXPECT_TRUE(key.borrowed_owner());
+    }
     const auto &value = block.fields.at("value").Encoded();
     EXPECT_NE(value.raw_data().data(), codes);
     EXPECT_FALSE(value.raw_data().is_borrowed());

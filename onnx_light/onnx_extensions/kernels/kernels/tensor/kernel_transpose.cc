@@ -161,7 +161,7 @@ void Transpose::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
-  const Tensor &data = GetInput(node, 0, rt.tensors());
+  const Tensor &data = GetInput(node, 0, rt);
   const onnx_kernels::Shape perm = GetAttributeIntsOrDefault(node, "perm", {});
   SetOutput(node, 0, (*this)(data, perm, &rt), rt);
 }

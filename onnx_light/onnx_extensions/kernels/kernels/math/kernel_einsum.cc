@@ -498,7 +498,7 @@ void Einsum::Run(RuntimeContext &rt) {
   Tensors inputs;
   inputs.reserve(node.input_size());
   for (int i = 0; i < node.input_size(); ++i) {
-    inputs.push_back(GetInput(node, i, rt.tensors()));
+    inputs.push_back(GetInput(node, i, rt));
   }
   const std::string equation = GetRequiredAttributeString(node, "equation");
   onnx_kernels::kernel::Einsum k(rt.kernel_ctx());

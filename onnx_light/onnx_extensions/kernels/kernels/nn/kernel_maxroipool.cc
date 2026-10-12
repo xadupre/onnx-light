@@ -137,8 +137,8 @@ void MaxRoiPool::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 2);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &rois = GetInput(node, 1, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
+  const Tensor &rois = GetInput(node, 1, rt);
   onnx_kernels::kernel::MaxRoiPool::Attributes attrs;
   attrs.pooled_shape = GetAttributeShapeOrDefault(node, "pooled_shape", onnx_kernels::Shape{});
   attrs.spatial_scale = GetAttributeFloatOrDefault(node, "spatial_scale", 1.0f);

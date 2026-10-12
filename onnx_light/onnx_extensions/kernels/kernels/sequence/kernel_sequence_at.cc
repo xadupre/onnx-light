@@ -51,7 +51,7 @@ void SequenceAt::Run(RuntimeContext &rt) {
   RequireInputCount(node, 2);
   RequireOutputCount(node, 1);
   const Sequence &input_sequence = GetInputSequence(node, 0, rt);
-  const Tensor &position = GetInput(node, 1, rt.tensors());
+  const Tensor &position = GetInput(node, 1, rt);
   onnx_kernels::kernel::SequenceAt k(rt.kernel_ctx());
   SetOutput(node, 0, k(input_sequence, position, &rt), rt);
 }

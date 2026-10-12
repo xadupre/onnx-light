@@ -158,9 +158,9 @@ void ScatterND::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 3);
   RequireOutputCount(node, 1);
-  const Tensor &data = GetInput(node, 0, rt.tensors());
-  const Tensor &indices = GetInput(node, 1, rt.tensors());
-  const Tensor &updates = GetInput(node, 2, rt.tensors());
+  const Tensor &data = GetInput(node, 0, rt);
+  const Tensor &indices = GetInput(node, 1, rt);
+  const Tensor &updates = GetInput(node, 2, rt);
   onnx_kernels::kernel::ScatterND::Attributes attrs;
   attrs.reduction = GetAttributeStringOrDefault(node, "reduction", "none");
   onnx_kernels::kernel::ScatterND k(rt.kernel_ctx());

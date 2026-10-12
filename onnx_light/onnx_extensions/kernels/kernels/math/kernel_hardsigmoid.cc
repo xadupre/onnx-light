@@ -44,7 +44,7 @@ void HardSigmoid::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
   const float alpha = GetAttributeFloatOrDefault(node, "alpha", 0.2f);
   const float beta = GetAttributeFloatOrDefault(node, "beta", 0.5f);
   onnx_kernels::kernel::HardSigmoid k(rt.kernel_ctx());

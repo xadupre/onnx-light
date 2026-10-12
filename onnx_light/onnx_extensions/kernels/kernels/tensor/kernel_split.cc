@@ -118,14 +118,14 @@ void Split::Run(RuntimeContext &rt) {
                       "' expects 1 or 2 inputs, got ", node.input_size(), ".");
   EXT_ENFORCE_INVALID(!(node.output_size() < 1), "RunNode: op '", node.op_type(),
                       "' expects at least 1 output, got 0.");
-  const Tensor &input = GetInput(node, 0, rt.tensors());
+  const Tensor &input = GetInput(node, 0, rt);
   const int64_t axis = GetAttributeIntOrDefault(node, "axis", 0);
 
   // Resolve ``split``: from the optional 2nd input (opset >= 13), from the
   // legacy ``split`` attribute (opset <= 12), or unspecified.
   // When the split sizes come from a tensor input, use a zero-copy span
   // view; otherwise fall back to an attribute-sourced vector.
-  const Tensor *split_input = GetOptionalInput(node, 1, rt.tensors());
+  const Tensor *split_input = GetOptionalInput(node, 1, rt);
   std::vector<int64_t> split_attr;
   std::span<const int64_t> split;
   if (split_input != nullptr) {

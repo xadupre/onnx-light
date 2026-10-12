@@ -194,9 +194,9 @@ void OneHot::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 3);
   RequireOutputCount(node, 1);
-  const Tensor &indices = GetInput(node, 0, rt.tensors());
-  const Tensor &depth = GetInput(node, 1, rt.tensors());
-  const Tensor &values = GetInput(node, 2, rt.tensors());
+  const Tensor &indices = GetInput(node, 0, rt);
+  const Tensor &depth = GetInput(node, 1, rt);
+  const Tensor &values = GetInput(node, 2, rt);
   onnx_kernels::kernel::OneHot::Attributes attrs;
   attrs.axis = GetAttributeIntOrDefault(node, "axis", -1);
   onnx_kernels::kernel::OneHot k(rt.kernel_ctx());

@@ -336,7 +336,7 @@ void AveragePool::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
   const PoolCommonAttrs a = ParsePoolCommonAttrs(node);
   const bool count_include_pad = GetAttributeIntOrDefault(node, "count_include_pad", 0) != 0;
   onnx_kernels::kernel::AveragePool k(rt.kernel_ctx());

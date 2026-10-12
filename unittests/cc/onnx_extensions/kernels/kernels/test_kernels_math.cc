@@ -8,6 +8,7 @@
 #include "onnx_core/runtime/kernels/float16_promote.h"
 #include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_core/runtime/kernels/parallel_for.h"
+#include "onnx_core/runtime/kernels/value_store.h"
 #include "onnx_core/runtime/runtime_context.h"
 #include "onnx_core/runtime/runtime_session.h"
 #include "onnx_core/runtime/tuning/cpu_executor.h"
@@ -3155,16 +3156,17 @@ TEST(KernelClass, GemmPreparedConstantBMatchesReferenceForBothTransposeModes) {
   const Tensor a = Tensor::FromFloat("A", {1, 3}, {1.0f, 2.0f, 3.0f});
 
   for (const int64_t trans_b : {int64_t{0}, int64_t{1}}) {
-    core::runtime::PreparedExecutionState state(1, 1);
+    core::runtime::ValueStore store;
     const Tensor b = trans_b == 0
                          ? Tensor::FromFloat("B", {3, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f})
                          : Tensor::FromFloat("B", {2, 3}, {1.0f, 3.0f, 5.0f, 2.0f, 4.0f, 6.0f});
-    const auto prepared = gemm_kernel.PrepareConstantB(b, trans_b, state);
-    const auto shared = gemm_kernel.PrepareConstantB(b, trans_b, state);
+    const auto prepared = gemm_kernel.PrepareConstantB(b, trans_b, store);
+    const auto shared = gemm_kernel.PrepareConstantB(b, trans_b, store);
 
     ASSERT_TRUE(prepared.IsReady());
     ASSERT_TRUE(shared.IsReady());
-    EXPECT_EQ(state.prepared_arena().allocated_count(), 1u);
+    EXPECT_EQ(store.slot_count(), 1u);
+    EXPECT_EQ(store.prepared_bytes(), b.size_bytes());
     const Tensor expected = gemm_kernel(a, b, nullptr, 1.0f, 0.0f, /*transA=*/0, trans_b);
     const Tensor got = gemm_kernel(a, prepared, nullptr, 1.0f, 0.0f, /*transA=*/0);
     ASSERT_EQ(got.shape, expected.shape);
@@ -3177,37 +3179,24 @@ TEST(KernelClass, GemmPreparedConstantBMatchesReferenceForBothTransposeModes) {
 TEST(KernelClass, GemmPreparedHalfConstantBStoresPromotedPackedValues) {
   const KernelContext ctx{DefaultOpset(13)};
   Gemm gemm_kernel{ctx};
-  core::runtime::PreparedExecutionState state(1, 1);
+  core::runtime::ValueStore store;
   const Tensor a = MakeHalfTensor(DataType::FLOAT16, {1, 3}, {1, 2, 3});
   const Tensor b = MakeHalfTensor(DataType::FLOAT16, {3, 2}, {1, 2, 3, 4, 5, 6});
 
-  const auto prepared = gemm_kernel.PrepareConstantB(b, /*transB=*/0, state);
+  const auto prepared = gemm_kernel.PrepareConstantB(b, /*transB=*/0, store);
 
   ASSERT_TRUE(prepared.IsReady());
-  EXPECT_EQ(state.prepared_arena().TotalAllocatedSize(), 6 * sizeof(float));
+  EXPECT_EQ(store.prepared_bytes(), 6 * sizeof(float));
   const Tensor expected = gemm_kernel(a, b, nullptr, 1.0f, 0.0f, 0, 0);
   const Tensor got = gemm_kernel(a, prepared, nullptr, 1.0f, 0.0f, 0);
   EXPECT_EQ(DecodeHalfTensor(got), DecodeHalfTensor(expected));
-}
-
-TEST(KernelClass, GemmPreparedConstantBAllocationFailureCanRetry) {
-  const KernelContext ctx{DefaultOpset(13)};
-  Gemm gemm_kernel{ctx};
-  core::runtime::PreparedExecutionState state(1, 1);
-  const Tensor b = Tensor::FromFloat("B", {1, 1}, {2.0f});
-  core::runtime::AllocationHandle occupied(&state.prepared_arena(),
-                                           state.prepared_arena().Allocate(sizeof(float)));
-
-  EXPECT_THROW(gemm_kernel.PrepareConstantB(b, /*transB=*/0, state), std::bad_alloc);
-  occupied.Reset();
-  const auto prepared = gemm_kernel.PrepareConstantB(b, /*transB=*/0, state);
-  EXPECT_TRUE(prepared.IsReady());
 }
 
 TEST(KernelClass, PreparedPlanOverlapsDependentGemmsAndReusesWeights) {
   const KernelContext ctx{DefaultOpset(13)};
   Gemm gemm_kernel{ctx};
   core::runtime::PreparedExecutionState state(2, 2);
+  core::runtime::ValueStore value_store;
   const Tensor input = Tensor::FromFloat("A", {1, 2}, {1.0f, 2.0f});
   const Tensor first_weight = Tensor::FromFloat("B1", {2, 2}, {1.0f, 0.0f, 0.0f, 2.0f});
   const Tensor second_weight = Tensor::FromFloat("B2", {2, 1}, {3.0f, 4.0f});
@@ -3245,12 +3234,12 @@ TEST(KernelClass, PreparedPlanOverlapsDependentGemmsAndReusesWeights) {
           case 1:
             ++preparation_count;
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            first_prepared = gemm_kernel.PrepareConstantB(first_weight, 0, state);
+            first_prepared = gemm_kernel.PrepareConstantB(first_weight, 0, value_store);
             break;
           case 2:
             ++preparation_count;
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            second_prepared = gemm_kernel.PrepareConstantB(second_weight, 0, state);
+            second_prepared = gemm_kernel.PrepareConstantB(second_weight, 0, value_store);
             second_weight_finished = true;
             break;
           case 3:

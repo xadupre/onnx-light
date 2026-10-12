@@ -27,6 +27,8 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test {
 //     negative values (max gets adjusted to 0).
 //   * ``test_dynamicquantizelinear_min_adjusted`` — 2-D input with all
 //     positive values (min gets adjusted to 0).
+//   * ``test_dynamicquantizelinear_zero_input`` — adjusted range is empty,
+//     producing scale 1 and zero point 0.
 //
 // Upstream cases with the ``_expanded`` suffix exercise the function-body
 // decomposition of the operator (Constant/ReduceMin/.../QuantizeLinear) and
@@ -112,6 +114,16 @@ void RegisterDynamicQuantizeLinearCases(std::vector<TestCase> &registry, TestMod
       Tensor x = Tensor::FromFloat(
           "", {3, 4}, {1.0f, 2.1f, 1.3f, 2.5f, 3.34f, 4.0f, 1.5f, 2.6f, 3.9f, 4.0f, 3.0f, 2.345f});
       auto [y, y_scale, y_zero_point] = dyn_quantize_kernel(x);
+      return IoData{{std::move(x)}, {std::move(y), std::move(y_scale), std::move(y_zero_point)}};
+    });
+  }
+
+  {
+    Expect(registry, node, "test_dynamicquantizelinear_zero_input", {opset}, []() -> IoData {
+      Tensor x = Tensor::FromFloat("", {2, 3}, std::vector<float>(6, 0.0f));
+      Tensor y = Tensor::FromUint8("", {2, 3}, std::vector<uint8_t>(6, 0));
+      Tensor y_scale = Tensor::FromFloat("", {}, {1.0f});
+      Tensor y_zero_point = Tensor::FromUint8("", {}, {0});
       return IoData{{std::move(x)}, {std::move(y), std::move(y_scale), std::move(y_zero_point)}};
     });
   }

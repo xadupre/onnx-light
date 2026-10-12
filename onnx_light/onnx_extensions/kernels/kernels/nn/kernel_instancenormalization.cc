@@ -115,9 +115,9 @@ void InstanceNormalization::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 3);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &scale = GetInput(node, 1, rt.tensors());
-  const Tensor &bias = GetInput(node, 2, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
+  const Tensor &scale = GetInput(node, 1, rt);
+  const Tensor &bias = GetInput(node, 2, rt);
   SetOutput(node, 0, (*this)(x, scale, bias, GetEpsilon(node), &rt), rt);
 }
 

@@ -39,9 +39,28 @@ The two arenas
   I/O binding holds it. It returns to the I/O arena only when the last external
   owner releases it.
 
-Both arenas are session-level objects, not per-run objects. Their retained
-storage survives :cpp:func:`RuntimeContext::Clear` and repeated calls to
-``Run``, so pages materialized during warm-up remain available to later runs.
+Both arenas belong to one root runtime-context hierarchy and are shared by its
+functions and subgraphs. Their retained storage survives
+:cpp:func:`RuntimeContext::Clear` and repeated calls to ``Run`` on that context,
+so pages materialized during warm-up remain available to later runs. A
+short-lived invocation may instead own the arenas: exported I/O leases then keep
+its I/O arena alive after the invocation context is destroyed, while its
+execution arena disappears with the invocation.
+The execution arena has the fixed slot count computed by the execution plan.
+The bound covers two slots per stable value, two workspace/state slots per
+operand of the widest node in the root, nested graphs, or model-local
+functions, and any temporary slot declared by peak-memory metadata. This keeps
+the arena fixed during one plan's execution while covering kernels, such as
+Attention and recurrent operators, that hold several internal tensors at once.
+If one context is later reused with an unrelated plan requiring a larger fixed
+arena, the context installs another plan-sized arena and retains the previous
+arena until the context is destroyed. This context-lifetime retention keeps
+allocation-owner pointers valid for tensors that may still reference an older
+arena.
+The I/O arena starts from that plan-sized capacity but grows stable slots when
+all existing slots are live or leased: the number of externally retained
+outputs and nested sequence tensors is runtime-dependent and cannot be bounded
+by the number of ONNX value names.
 
 Movable allocation handle
 +++++++++++++++++++++++++
@@ -107,9 +126,10 @@ intermediates to the execution arena without migration.
                   `-- I/O role -------> IOArena
 
 Subgraphs and functions follow the same rule relative to their caller. Values
-that remain internal use the child execution arena; a value crossing the child
-boundary is returned through an I/O-style handle or transferred into the
-parent's appropriate arena without copying.
+that remain internal use the caller's shared execution arena. Only values
+crossing the root runtime boundary use the shared I/O arena and can be leased
+without copying. String outputs own their string payload directly instead of
+retaining an irrelevant raw-buffer allocation.
 
 Export to NumPy
 +++++++++++++++

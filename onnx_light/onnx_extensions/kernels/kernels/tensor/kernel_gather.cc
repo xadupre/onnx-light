@@ -132,8 +132,8 @@ void Gather::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 2);
   RequireOutputCount(node, 1);
-  const Tensor &data = GetInput(node, 0, rt.tensors());
-  const Tensor &indices = GetInput(node, 1, rt.tensors());
+  const Tensor &data = GetInput(node, 0, rt);
+  const Tensor &indices = GetInput(node, 1, rt);
   const int64_t axis = GetAttributeIntOrDefault(node, "axis", 0);
   onnx_kernels::kernel::Gather k(rt.kernel_ctx());
   SetOutput(node, 0, k(data, indices, axis, &rt), rt);

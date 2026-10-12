@@ -223,10 +223,10 @@ void RotaryEmbedding::Run(RuntimeContext &rt) {
                       node.op_type(), "' expects between 3 and 4 input(s), got ", node.input_size(),
                       ".");
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &cos_cache = GetInput(node, 1, rt.tensors());
-  const Tensor &sin_cache = GetInput(node, 2, rt.tensors());
-  const Tensor *position_ids = GetOptionalInput(node, 3, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
+  const Tensor &cos_cache = GetInput(node, 1, rt);
+  const Tensor &sin_cache = GetInput(node, 2, rt);
+  const Tensor *position_ids = GetOptionalInput(node, 3, rt);
 
   onnx_kernels::kernel::RotaryEmbedding::Attributes attrs;
   attrs.interleaved = GetAttributeIntOrDefault(node, "interleaved", 0) != 0;

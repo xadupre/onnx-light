@@ -160,7 +160,7 @@ void StringNormalizer::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
   const std::string case_change_action_attr =
       GetAttributeStringOrDefault(node, "case_change_action", "NONE");
   const bool is_case_sensitive = GetAttributeIntOrDefault(node, "is_case_sensitive", 0) != 0;

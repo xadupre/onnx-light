@@ -11,6 +11,7 @@
 
 #include <cstddef>
 #include <cstdlib>
+#include <limits>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -90,6 +91,147 @@ size_t ParsePeakMemory(const std::string &value) {
   return bytes > 0 ? static_cast<size_t>(bytes) : 0;
 }
 
+void AddValueName(const std::string &name, std::unordered_set<std::string> &seen,
+                  std::vector<std::string> &names) {
+  if (!name.empty() && seen.insert(name).second) {
+    names.push_back(name);
+  }
+}
+
+void CollectGraphValueNames(const GraphProto &graph, std::unordered_set<std::string> &seen,
+                            std::vector<std::string> &names);
+
+size_t MaxNodeArity(const utils::RepeatedProtoField<NodeProto> &nodes) {
+  size_t result = 0;
+  for (const NodeProto &node : nodes) {
+    result = std::max(result, node.input().size() + node.output().size());
+    for (const AttributeProto &attribute : node.attribute()) {
+      if (attribute.has_g())
+        result = std::max(result, MaxNodeArity(attribute.g().node()));
+      for (const GraphProto &nested : attribute.graphs())
+        result = std::max(result, MaxNodeArity(nested.node()));
+    }
+  }
+  return result;
+}
+
+void CollectNodeValueNames(const utils::RepeatedProtoField<NodeProto> &nodes,
+                           std::unordered_set<std::string> &seen, std::vector<std::string> &names) {
+  for (const NodeProto &node : nodes) {
+    for (const auto &input : node.input()) {
+      AddValueName(input, seen, names);
+    }
+    for (const auto &output : node.output()) {
+      AddValueName(output, seen, names);
+    }
+    for (const AttributeProto &attribute : node.attribute()) {
+      if (attribute.has_g()) {
+        CollectGraphValueNames(attribute.g(), seen, names);
+      }
+      for (const GraphProto &nested : attribute.graphs()) {
+        CollectGraphValueNames(nested, seen, names);
+      }
+    }
+  }
+}
+
+void CollectGraphValueNames(const GraphProto &graph, std::unordered_set<std::string> &seen,
+                            std::vector<std::string> &names) {
+  for (const ValueInfoProto &input : graph.input()) {
+    AddValueName(input.name(), seen, names);
+  }
+  for (const TensorProto &initializer : graph.initializer()) {
+    AddValueName(initializer.name(), seen, names);
+  }
+  for (const SparseTensorProto &initializer : graph.sparse_initializer()) {
+    AddValueName(initializer.values().name(), seen, names);
+  }
+  for (const EncodedValueProto &initializer : graph.encoded_initializer()) {
+    AddValueName(initializer.name(), seen, names);
+  }
+  for (const PagedCacheProto &initializer : graph.paged_cache_initializer()) {
+    AddValueName(initializer.name(), seen, names);
+  }
+  CollectNodeValueNames(graph.node(), seen, names);
+  for (const ValueInfoProto &output : graph.output()) {
+    AddValueName(output.name(), seen, names);
+  }
+  for (const ValueInfoProto &value_info : graph.value_info()) {
+    AddValueName(value_info.name(), seen, names);
+  }
+}
+
+using LocalFunctionIndex = std::unordered_map<std::string, const FunctionProto *>;
+
+std::string FunctionKey(const std::string &domain, const std::string &name,
+                        const std::string &overload) {
+  return (domain.empty() ? std::string() : domain) + ":" + name + ":" + overload;
+}
+
+size_t FunctionValueNameCount(const FunctionProto &function) {
+  std::unordered_set<std::string> seen;
+  std::vector<std::string> names;
+  for (const std::string &input : function.input())
+    AddValueName(input, seen, names);
+  CollectNodeValueNames(function.node(), seen, names);
+  for (const std::string &output : function.output())
+    AddValueName(output, seen, names);
+  return names.size();
+}
+
+void AddExpandedValueCount(size_t increment, size_t &total) {
+  EXT_ENFORCE_INVALID(increment <= std::numeric_limits<size_t>::max() - total,
+                      "ExecutionPlan: expanded local-function value count overflows size_t.");
+  total += increment;
+}
+
+size_t ExpandedFunctionValueCount(const FunctionProto &function,
+                                  const LocalFunctionIndex &functions,
+                                  std::unordered_map<const FunctionProto *, size_t> &cache,
+                                  std::unordered_set<const FunctionProto *> &active);
+
+size_t ExpandedCallValueCount(const utils::RepeatedProtoField<NodeProto> &nodes,
+                              const LocalFunctionIndex &functions,
+                              std::unordered_map<const FunctionProto *, size_t> &cache,
+                              std::unordered_set<const FunctionProto *> &active) {
+  size_t total = 0;
+  for (const NodeProto &node : nodes) {
+    const auto found = functions.find(FunctionKey(node.domain(), node.op_type(), node.overload()));
+    if (found != functions.end()) {
+      AddExpandedValueCount(ExpandedFunctionValueCount(*found->second, functions, cache, active),
+                            total);
+    }
+    for (const AttributeProto &attribute : node.attribute()) {
+      if (attribute.has_g()) {
+        AddExpandedValueCount(
+            ExpandedCallValueCount(attribute.g().node(), functions, cache, active), total);
+      }
+      for (const GraphProto &nested : attribute.graphs()) {
+        AddExpandedValueCount(ExpandedCallValueCount(nested.node(), functions, cache, active),
+                              total);
+      }
+    }
+  }
+  return total;
+}
+
+size_t ExpandedFunctionValueCount(const FunctionProto &function,
+                                  const LocalFunctionIndex &functions,
+                                  std::unordered_map<const FunctionProto *, size_t> &cache,
+                                  std::unordered_set<const FunctionProto *> &active) {
+  const auto cached = cache.find(&function);
+  if (cached != cache.end())
+    return cached->second;
+  EXT_ENFORCE_INVALID(active.insert(&function).second, "ExecutionPlan: model-local function '",
+                      function.domain(), "::", function.name(), "::", function.overload(),
+                      "' participates in a recursive call cycle.");
+  size_t total = FunctionValueNameCount(function);
+  AddExpandedValueCount(ExpandedCallValueCount(function.node(), functions, cache, active), total);
+  active.erase(&function);
+  cache.emplace(&function, total);
+  return total;
+}
+
 } // namespace
 
 ExecutionPlan::ExecutionPlan(const utils::RepeatedProtoField<NodeProto> &nodes,
@@ -100,6 +242,8 @@ ExecutionPlan::ExecutionPlan(const utils::RepeatedProtoField<NodeProto> &nodes,
     nodes_.push_back(&nodes[i]);
     node_index_.emplace(&nodes[i], i);
   }
+  BuildValueDirectory(nodes);
+  kernel_workspace_slot_count_ = MaxNodeArity(nodes);
   BuildActions();
 }
 
@@ -134,7 +278,44 @@ ExecutionPlan::ExecutionPlan(const GraphProto &graph) {
     nodes_.push_back(&graph.node()[i]);
     node_index_.emplace(&graph.node()[i], i);
   }
+  for (const std::string &name : core::graph::CollectExternalInputs(graph.node())) {
+    keep_.insert(name);
+  }
+  std::unordered_set<std::string> seen;
+  CollectGraphValueNames(graph, seen, value_names_);
+  kernel_workspace_slot_count_ = MaxNodeArity(graph.node());
   BuildActions();
+}
+
+ExecutionPlan::ExecutionPlan(const ModelProto &model) : ExecutionPlan(model.graph()) {
+  const size_t root_value_slot_count = value_names_.size();
+  std::unordered_set<std::string> seen(value_names_.begin(), value_names_.end());
+  LocalFunctionIndex functions;
+  for (const FunctionProto &func : model.functions()) {
+    functions[FunctionKey(func.domain(), func.name(), func.overload())] = &func;
+    for (const auto &input : func.input()) {
+      AddValueName(input, seen, value_names_);
+    }
+    CollectNodeValueNames(func.node(), seen, value_names_);
+    kernel_workspace_slot_count_ =
+        std::max(kernel_workspace_slot_count_, MaxNodeArity(func.node()));
+    for (const auto &output : func.output()) {
+      AddValueName(output, seen, value_names_);
+    }
+    if (temporary_slot_count_ == 0) {
+      for (const NodeProto &node : func.node()) {
+        if (ParsePeakMemory(ReadNodeMetadata(node, compute::kNodePeakMemoryMetadataKey)) != 0) {
+          temporary_slot_count_ = 1;
+          break;
+        }
+      }
+    }
+  }
+  expanded_value_slot_count_ = root_value_slot_count;
+  std::unordered_map<const FunctionProto *, size_t> cache;
+  std::unordered_set<const FunctionProto *> active;
+  AddExpandedValueCount(ExpandedCallValueCount(model.graph().node(), functions, cache, active),
+                        expanded_value_slot_count_);
 }
 
 ExecutionPlan::ExecutionPlan(const FunctionProto &func) {
@@ -159,11 +340,31 @@ ExecutionPlan::ExecutionPlan(const FunctionProto &func) {
     nodes_.push_back(&func.node()[i]);
     node_index_.emplace(&func.node()[i], i);
   }
+  for (const std::string &name : core::graph::CollectExternalInputs(func.node())) {
+    keep_.insert(name);
+  }
+  for (const auto &input : func.input()) {
+    if (!input.empty()) {
+      value_names_.push_back(input);
+    }
+  }
+  kernel_workspace_slot_count_ = MaxNodeArity(func.node());
+  BuildValueDirectory(func.node());
+  std::unordered_set<std::string> seen(value_names_.begin(), value_names_.end());
+  for (const auto &output : func.output()) {
+    AddValueName(output, seen, value_names_);
+  }
   BuildActions();
+}
+
+void ExecutionPlan::BuildValueDirectory(const utils::RepeatedProtoField<NodeProto> &nodes) {
+  std::unordered_set<std::string> seen(value_names_.begin(), value_names_.end());
+  CollectNodeValueNames(nodes, seen, value_names_);
 }
 
 void ExecutionPlan::BuildActions() {
   actions_.clear();
+  temporary_slot_count_ = 0;
   if (nodes_.empty()) {
     return;
   }
@@ -347,6 +548,7 @@ void ExecutionPlan::BuildActions() {
     const size_t peak_memory =
         ParsePeakMemory(ReadNodeMetadata(node, compute::kNodePeakMemoryMetadataKey));
     if (peak_memory != 0) {
+      temporary_slot_count_ = 1;
       actions_.emplace_back(ExecuteActionKind::kAllocateTemporaryBuffer, std::string(), i,
                             peak_memory);
     }
@@ -368,6 +570,9 @@ void ExecutionPlan::BuildActions() {
     // back from :cpp:func:`actions`.
     for (const std::string &name :
          SplitNames(ReadNodeMetadata(node, compute::kReleaseAfterMetadataKey))) {
+      if (keep_.count(name) != 0) {
+        continue;
+      }
       if (shape_tagged.count(name) != 0) {
         // A shape is destroyed: it must have been created earlier.
         EXT_ENFORCE(!strict || created_shapes.count(name) != 0, "ExecutionPlan: shape '", name,

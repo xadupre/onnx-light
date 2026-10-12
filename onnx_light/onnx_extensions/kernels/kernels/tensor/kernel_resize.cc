@@ -874,10 +874,10 @@ void Resize::Run(RuntimeContext &rt) {
                       node.op_type(), "' expects between 1 and 4 input(s), got ", node.input_size(),
                       ".");
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor *roi = GetOptionalInput(node, 1, rt.tensors());
-  const Tensor *scales = GetOptionalInput(node, 2, rt.tensors());
-  const Tensor *sizes = GetOptionalInput(node, 3, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
+  const Tensor *roi = GetOptionalInput(node, 1, rt);
+  const Tensor *scales = GetOptionalInput(node, 2, rt);
+  const Tensor *sizes = GetOptionalInput(node, 3, rt);
   EXT_ENFORCE_INVALID(!((scales == nullptr) == (sizes == nullptr)),
                       "RunNode: op 'Resize' requires exactly one of 'scales' or 'sizes' to be "
                       "provided.");

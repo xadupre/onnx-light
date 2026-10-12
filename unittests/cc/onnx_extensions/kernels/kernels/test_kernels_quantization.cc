@@ -482,4 +482,15 @@ TEST(KernelClass, DynamicQuantizeLinearAllPositive) {
   EXPECT_EQ(y.shape[1], 4);
 }
 
+TEST(KernelClass, DynamicQuantizeLinearRejectsNonFiniteInput) {
+  const KernelContext ctx{DefaultOpset(11)};
+  DynamicQuantizeLinear d{ctx};
+  for (float value :
+       {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(),
+        -std::numeric_limits<float>::infinity()}) {
+    Tensor x = Tensor::FromFloat("x", {2}, {0.0f, value});
+    EXPECT_THROW(d(x), std::invalid_argument);
+  }
+}
+
 } // namespace Test

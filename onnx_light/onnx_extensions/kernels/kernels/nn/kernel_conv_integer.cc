@@ -310,10 +310,10 @@ void ConvInteger::Run(RuntimeContext &rt) {
                       "RunNode: op 'ConvInteger' expects at most 4 inputs, got ", node.input_size(),
                       ".");
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &w = GetInput(node, 1, rt.tensors());
-  const Tensor *x_zp = GetOptionalInput(node, 2, rt.tensors());
-  const Tensor *w_zp = GetOptionalInput(node, 3, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
+  const Tensor &w = GetInput(node, 1, rt);
+  const Tensor *x_zp = GetOptionalInput(node, 2, rt);
+  const Tensor *w_zp = GetOptionalInput(node, 3, rt);
   onnx_kernels::kernel::ConvInteger::Attributes attrs;
   attrs.kernel_shape = GetAttributeIntsOrDefault(node, "kernel_shape", {});
   attrs.strides = GetAttributeIntsOrDefault(node, "strides", {});

@@ -636,6 +636,42 @@ TEST(BackendRunModel, DequantizeLinear) {
 }
 TEST(BackendRunModel, DynamicQuantizeLinear) { RunBackendCasesFor("DynamicQuantizeLinear"); }
 
+TEST(BackendRunModel, DynamicQuantizeLinearZeroInputExpanded) {
+  auto cases = CollectTestCases("DynamicQuantizeLinear");
+  auto it = std::find_if(cases.begin(), cases.end(), [](const TestCase &test_case) {
+    return test_case.name == "test_dynamicquantizelinear_zero_input";
+  });
+  ASSERT_NE(it, cases.end());
+  TestCaseUnloadGuard unload_guard(*it);
+  const ModelProto &model = it->model();
+  const NodeProto &node = model.graph().node(0);
+  const auto *schema = OpSchemaRegistry::Schema("DynamicQuantizeLinear", 11, "");
+  ASSERT_NE(schema, nullptr);
+  const FunctionProto *function = schema->GetFunction(11);
+  ASSERT_NE(function, nullptr);
+
+  ModelProto expanded = model;
+  expanded.mutable_graph()->clear_node();
+  FunctionExpandHelper(node, *function, *expanded.mutable_graph());
+  expanded.clear_opset_import();
+  for (const auto &opset : function->opset_import()) {
+    *expanded.add_opset_import() = opset;
+  }
+  for (const auto &input : {0.0f, -0.0f}) {
+    SCOPED_TRACE(std::signbit(input));
+    const DataSet &ds = it->data_sets()[0];
+    RuntimeContext rt;
+    rt.tensors()[ds.inputs[0].name] =
+        Tensor::FromFloat(ds.inputs[0].name, {2, 3}, std::vector<float>(6, input));
+    RunModelViaSession(expanded, rt);
+    for (const Tensor &expected : ds.outputs) {
+      SCOPED_TRACE(expected.name);
+      ASSERT_TRUE(rt.Has(expected.name));
+      ExpectTensorBitEqual(rt.Get(expected.name), expected);
+    }
+  }
+}
+
 // The reference QLinearMatMul kernel supports per-tensor quantization
 // (scalar scales/zero-points) with FLOAT or FLOAT16 scales.
 TEST(BackendRunModel, QLinearMatMul) {

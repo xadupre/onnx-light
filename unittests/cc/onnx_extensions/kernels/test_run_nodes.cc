@@ -3156,7 +3156,7 @@ TEST(RunModel, LoopNodeRunsBodySubgraphWithAllocator) {
   body->add_output()->set_name("s_out");
 
   constexpr size_t kAllocatorSlotCapacity = 16;
-  core::runtime::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
+  CountingAllocator alloc(kAllocatorSlotCapacity);
 
   TensorMap tensors;
   tensors.emplace("M", Tensor::FromInt64("M", {}, {3}));
@@ -3175,11 +3175,15 @@ TEST(RunModel, LoopNodeRunsBodySubgraphWithAllocator) {
   EXPECT_FLOAT_EQ(scan[0], 1.0f);
   EXPECT_FLOAT_EQ(scan[1], 2.0f);
   EXPECT_FLOAT_EQ(scan[2], 3.0f);
-  EXPECT_GT(alloc.PeakAllocatedSize(), 0u);
+  // Each iteration allocates iter, cond_in, and the body-only Add result.
+  // The two final Loop outputs remain live in the parent context.
+  EXPECT_EQ(alloc.allocate_calls(), 11u);
+  EXPECT_EQ(alloc.free_calls(), 9u);
+  EXPECT_EQ(alloc.allocated_count(), 2u);
 }
 
 TEST(RunModel, LoopNodeAllocatorBacksTransientIterAndCondScalars) {
-  CountingAllocator alloc(/*capacity=*/2);
+  CountingAllocator alloc(/*capacity=*/16);
   {
     ModelProto model;
     model.set_ir_version(10);
@@ -3226,15 +3230,14 @@ TEST(RunModel, LoopNodeAllocatorBacksTransientIterAndCondScalars) {
 
     RunModelViaSession(model, rt);
 
-    // 3 iterations x 2 transient scalar inputs (iter, cond_in) + 2 final loop
-    // outputs (s_final, scan) = 8 allocations total. Only the 2 final outputs
-    // remain live inside the parent RuntimeContext at this point.
-    EXPECT_EQ(alloc.allocate_calls(), 8u);
-    EXPECT_EQ(alloc.free_calls(), 6u);
+    // 3 iterations x 3 body allocations (iter, cond_in, Add output) + 2 final
+    // loop outputs = 11 allocations. Only the final outputs remain live.
+    EXPECT_EQ(alloc.allocate_calls(), 11u);
+    EXPECT_EQ(alloc.free_calls(), 9u);
     EXPECT_EQ(alloc.allocated_count(), 2u);
   }
-  EXPECT_EQ(alloc.allocate_calls(), 8u);
-  EXPECT_EQ(alloc.free_calls(), 8u);
+  EXPECT_EQ(alloc.allocate_calls(), 11u);
+  EXPECT_EQ(alloc.free_calls(), 11u);
   EXPECT_EQ(alloc.allocated_count(), 0u);
 }
 
@@ -3257,7 +3260,7 @@ TEST(RunLoopWithSequenceState, SequenceOnlyStateGrowsPerIteration) {
 }
 
 TEST(RunLoopWithSequenceState, SequenceOnlyStateAllocatorBacksIterAndCondScalars) {
-  CountingAllocator alloc(/*capacity=*/2);
+  CountingAllocator alloc(/*capacity=*/16);
   {
     TensorMap tensors;
     tensors.emplace("M", Tensor::FromInt64("M", {}, {3}));
@@ -3268,15 +3271,15 @@ TEST(RunLoopWithSequenceState, SequenceOnlyStateAllocatorBacksIterAndCondScalars
 
     RunNode(MakeLoopNode({"M", "cond", "seq_init"}, {"seq_out"}, BuildSequenceLoopBody()), rt);
 
-    // 3 iterations x 2 transient scalar inputs (iter, cond_in) = 6
-    // allocations total, and the sequence-only loop carries no allocator-backed
-    // tensor outputs, so every slot has already been freed.
-    EXPECT_EQ(alloc.allocate_calls(), 6u);
-    EXPECT_EQ(alloc.free_calls(), 6u);
-    EXPECT_EQ(alloc.allocated_count(), 0u);
+    // Body operators and their sequence elements inherit the parent allocator,
+    // not only the transient iter and cond_in scalars. Three tensors remain in
+    // the returned sequence until the parent context is destroyed.
+    EXPECT_EQ(alloc.allocate_calls(), 24u);
+    EXPECT_EQ(alloc.free_calls(), 21u);
+    EXPECT_EQ(alloc.allocated_count(), 3u);
   }
-  EXPECT_EQ(alloc.allocate_calls(), 6u);
-  EXPECT_EQ(alloc.free_calls(), 6u);
+  EXPECT_EQ(alloc.allocate_calls(), 24u);
+  EXPECT_EQ(alloc.free_calls(), 24u);
   EXPECT_EQ(alloc.allocated_count(), 0u);
 }
 
@@ -3339,11 +3342,9 @@ TEST(RunLoopWithSequenceState, MixedTensorSequenceAndScanOutputs) {
 // the transient iter/cond scalar bindings and the final loop outputs are backed
 // by the parent allocator.
 TEST(RunLoopWithSequenceState, MixedTensorSequenceAndScanOutputsWithAllocator) {
-  // Two simultaneous slots are needed: the transient iter/cond allocations are
-  // released before the final outputs are stored. Input tensors are set before
-  // attaching the allocator so they stay inline and do not consume allocator
-  // slots.
-  constexpr size_t kAllocatorSlotCapacity = 2;
+  // Body operators now inherit the parent allocator alongside the transient
+  // iter/cond tensors and final outputs.
+  constexpr size_t kAllocatorSlotCapacity = 16;
   core::runtime::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
 
   TensorMap tensors;
@@ -4121,6 +4122,8 @@ TEST(RunModel, LocalSubgraphCopiesCallerTensorsButHidesIntermediates) {
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
   rt.Set("outer", Tensor::FromFloat("outer", {2}, {5.0f, 7.0f}));
+  rt.Set("branch_tmp", Tensor::FromFloat("branch_tmp", {1}, {-1.0f}));
+  rt.Set("z", Tensor::FromFloat("z", {1}, {-2.0f}));
 
   RunModelViaSession(model, rt);
 
@@ -4136,10 +4139,12 @@ TEST(RunModel, LocalSubgraphCopiesCallerTensorsButHidesIntermediates) {
   EXPECT_TRUE(rt.Has("outer"));
 
   // Subgraph intermediates do NOT leak into the caller's tensor map.
-  EXPECT_FALSE(rt.Has("branch_tmp"));
+  ASSERT_TRUE(rt.Has("branch_tmp"));
+  EXPECT_FLOAT_EQ(rt.Get("branch_tmp").AsFloat()[0], -1.0f);
   // The subgraph's formal output name ``z`` (distinct from the node's
-  // output name ``out``) likewise stays inside the child context.
-  EXPECT_FALSE(rt.Has("z"));
+  // output name ``out``) likewise restores the caller's colliding value.
+  ASSERT_TRUE(rt.Has("z"));
+  EXPECT_FLOAT_EQ(rt.Get("z").AsFloat()[0], -2.0f);
 }
 
 // ---------------------------------------------------------------------------

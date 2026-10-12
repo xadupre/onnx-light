@@ -19,8 +19,11 @@ const Tensor &GetInput(const NodeProto &node, int index, const TensorMap &tensor
 const Tensor &GetInput(const NodeProto &node, int index, const RuntimeContext &rt) {
   EXT_ENFORCE_INVALID(index >= 0 && index < node.input_size(), "RunNode: op '", node.op_type(),
                       "' input #", index, " is outside the declared input range.");
-  EXT_ENFORCE_INVALID(!node.input(index).empty(), "RunNode: op '", node.op_type(), "' input #",
-                      index, " is unset (empty name).");
+  const std::string &name = node.input(index);
+  EXT_ENFORCE_INVALID(!name.empty(), "RunNode: op '", node.op_type(), "' input #", index,
+                      " is unset (empty name).");
+  if (rt.current_input_slots() == nullptr)
+    return rt.Get(name);
   return rt.GetTensor(rt.CurrentInputSlot(index));
 }
 
@@ -42,6 +45,8 @@ const Tensor *GetOptionalInput(const NodeProto &node, int index, const RuntimeCo
   if (index >= node.input_size() || node.input(index).empty()) {
     return nullptr;
   }
+  if (rt.current_input_slots() == nullptr)
+    return &rt.Get(node.input(index));
   return &rt.GetTensor(rt.CurrentInputSlot(index));
 }
 
@@ -50,7 +55,10 @@ void SetOutput(const NodeProto &node, int index, Tensor result, RuntimeContext &
   EXT_ENFORCE_INVALID(!(name.empty()), "RunNode: op '", node.op_type(), "' output #", index,
                       " is unset (empty name).");
   result.name = name;
-  rt.Put(rt.CurrentOutputSlot(index), std::move(result), RuntimeEventKind::kIntermediate);
+  if (rt.current_output_slots() == nullptr)
+    rt.Put(name, std::move(result), RuntimeEventKind::kIntermediate);
+  else
+    rt.Put(rt.CurrentOutputSlot(index), std::move(result), RuntimeEventKind::kIntermediate);
 }
 
 const Sequence &GetInputSequence(const NodeProto &node, int index, const RuntimeContext &rt) {

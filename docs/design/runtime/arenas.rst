@@ -54,7 +54,9 @@ the arena fixed during one plan's execution while covering kernels, such as
 Attention and recurrent operators, that hold several internal tensors at once.
 If one context is later reused with an unrelated plan requiring a larger fixed
 arena, the context installs another plan-sized arena and retains the previous
-arena until every tensor allocated from it has been released.
+arena until the context is destroyed. This context-lifetime retention keeps
+allocation-owner pointers valid for tensors that may still reference an older
+arena.
 The I/O arena starts from that plan-sized capacity but grows stable slots when
 all existing slots are live or leased: the number of externally retained
 outputs and nested sequence tensors is runtime-dependent and cannot be bounded

@@ -284,8 +284,7 @@ void RuntimeContext::RecordEvent(RuntimeEvent event) {
                          : ResolveNodeIndex(event.kind, current_node_index_);
   event.subgraph_node_index = current_subgraph_node_index_;
   event.subgraph_attr_name = current_subgraph_attr_name_;
-  if (event.action != RuntimeEventAction::kPersistentStorage)
-    StampAllocatorMemory(event);
+  StampAllocatorMemory(event);
   std::lock_guard<std::mutex> lock(events_->mutex);
   events_->log.push_back(std::move(event));
 }
@@ -317,6 +316,7 @@ RuntimeContext::RuntimeContext(KernelContext kernel_ctx, TensorMap tensors,
     : RuntimeContext(std::move(kernel_ctx), options, std::make_shared<KernelUsageState>(),
                      std::make_shared<EventState>()) {
   tensors_ = std::move(tensors);
+  tensor_map_may_be_modified_ = true;
 }
 
 RuntimeContext::RuntimeContext(RuntimeContextOptions options)

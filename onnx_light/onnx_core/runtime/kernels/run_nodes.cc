@@ -50,7 +50,7 @@ public:
         subgraph_attr_name_(rt.current_subgraph_attr_name()),
         release_intermediates_(rt.release_intermediates()), input_slots_(rt.current_input_slots()),
         output_slots_(rt.current_output_slots()), output_slot_io_roles_(rt.output_slot_io_roles()),
-        allocator_(rt.allocator()) {
+        allocator_(rt.allocator()), execution_allocator_(rt.execution_allocator()) {
     if (attr_name.has_value()) {
       rt_.set_current_subgraph(node_index_, *attr_name);
     }
@@ -63,8 +63,10 @@ public:
     rt_.set_current_subgraph(subgraph_node_index_, subgraph_attr_name_);
     rt_.SetCurrentNodeValueSlots(input_slots_, output_slots_);
     rt_.set_output_slot_io_roles(std::move(output_slot_io_roles_));
-    if (allocator_ != nullptr)
-      rt_.SetActiveAllocator(allocator_);
+    RawBufferAllocator *allocator =
+        rt_.execution_allocator() == execution_allocator_ ? allocator_ : rt_.execution_allocator();
+    if (allocator != nullptr)
+      rt_.SetActiveAllocator(allocator);
   }
 
 private:
@@ -77,24 +79,36 @@ private:
   const std::vector<uint32_t> *output_slots_;
   std::vector<bool> output_slot_io_roles_;
   RawBufferAllocator *allocator_;
+  RawBufferAllocator *execution_allocator_;
 };
 
 class ScopedRuntimeBindings {
 public:
   explicit ScopedRuntimeBindings(RuntimeContext &rt) : rt_(rt) {}
-  ~ScopedRuntimeBindings() {
+  ~ScopedRuntimeBindings() { Restore(); }
+
+  ScopedRuntimeBindings(const ScopedRuntimeBindings &) = delete;
+  ScopedRuntimeBindings &operator=(const ScopedRuntimeBindings &) = delete;
+
+  void Restore() {
     for (const std::string &name : names_)
       rt_.Remove(name);
+    names_.clear();
     for (auto &[name, tensor] : saved_tensors_)
       rt_.tensors().emplace(std::move(name), std::move(tensor));
+    saved_tensors_.clear();
     for (auto &[name, value] : saved_values_)
       rt_.values().emplace(std::move(name), std::move(value));
+    saved_values_.clear();
     for (auto &[name, sequence] : saved_sequences_)
       rt_.PutSequence(name, std::move(sequence));
+    saved_sequences_.clear();
     for (auto &[name, map] : saved_maps_)
       rt_.maps().emplace(std::move(name), std::move(map));
+    saved_maps_.clear();
     for (auto &[name, shape] : saved_shapes_)
       rt_.shapes().emplace(std::move(name), std::move(shape));
+    saved_shapes_.clear();
   }
 
   void Shadow(const std::string &name) {
@@ -313,13 +327,22 @@ SubgraphSession::SubgraphSession(const GraphProto &graph, const OpsetImports *op
     EXT_ENFORCE_INVALID(!(out_name.empty()), "RunNode: a subgraph output has an empty name.");
     output_names_.push_back(out_name);
   }
+  for (const NodeProto &node : graph.node()) {
+    for (const std::string &name : node.output()) {
+      if (!name.empty())
+        local_names_.push_back(name);
+    }
+  }
 }
 
 void SubgraphSession::RunChild(std::vector<std::pair<std::string, Tensor>> bindings,
                                std::vector<std::pair<std::string, Sequence>> sequence_bindings,
-                               RuntimeContext &rt, const std::string &attr_name) {
+                               RuntimeContext &rt, const std::function<void()> &consume_outputs,
+                               const std::string &attr_name) {
   ScopedNestedSessionState nested_state(rt, attr_name);
   ScopedRuntimeBindings scoped_bindings(rt);
+  for (const std::string &name : local_names_)
+    scoped_bindings.Shadow(name);
   for (const auto &kv : bindings) {
     scoped_bindings.Bind(kv.first, kv.second);
   }
@@ -327,31 +350,37 @@ void SubgraphSession::RunChild(std::vector<std::pair<std::string, Tensor>> bindi
     scoped_bindings.Bind(kv.first, std::move(kv.second));
   }
   RuntimeSession::Run(rt);
-  for (const std::string &name : output_names_)
-    scoped_bindings.Keep(name);
+  consume_outputs();
 }
 
 void SubgraphSession::RunChild(std::vector<std::pair<std::string, Tensor>> bindings,
-                               RuntimeContext &rt, const std::string &attr_name) {
-  RunChild(std::move(bindings), {}, rt, attr_name);
+                               RuntimeContext &rt, const std::function<void()> &consume_outputs,
+                               const std::string &attr_name) {
+  RunChild(std::move(bindings), {}, rt, consume_outputs, attr_name);
 }
 
 Tensors SubgraphSession::Run(std::vector<std::pair<std::string, Tensor>> bindings,
                              RuntimeContext &rt, const std::string &attr_name) {
-  RunChild(std::move(bindings), rt, attr_name);
-
   Tensors outputs;
   outputs.reserve(output_names_.size());
   std::unordered_map<std::string, size_t> remaining;
   for (const std::string &name : output_names_)
     ++remaining[name];
-  for (const auto &out_name : output_names_) {
-    if (--remaining[out_name] != 0) {
-      outputs.push_back(rt.Get(out_name).ToOwned());
-    } else {
-      outputs.push_back(TakeTensor(rt, out_name, "RunNode: subgraph output"));
-    }
-  }
+  RunChild(
+      std::move(bindings), rt,
+      [&]() {
+        for (const auto &out_name : output_names_) {
+          if (--remaining[out_name] != 0) {
+            outputs.push_back(rt.Get(out_name).ToOwned());
+          } else {
+            Tensor output = TakeTensor(rt, out_name, "RunNode: subgraph output");
+            outputs.push_back(output.data_type == static_cast<int32_t>(DataType::STRING)
+                                  ? output.ToOwned()
+                                  : std::move(output));
+          }
+        }
+      },
+      attr_name);
   return outputs;
 }
 
@@ -393,26 +422,30 @@ void RunIfNode(const NodeProto &node, RuntimeContext &rt, SubgraphSession &then_
   const GraphProto &branch = taken ? then_branch : else_branch;
   const std::string branch_attr = taken ? "then_branch" : "else_branch";
   SubgraphSession &session = taken ? then_session : else_session;
-  session.RunChild({}, rt, branch_attr);
-
-  for (int i = 0; i < branch.output_size(); ++i) {
-    const std::string out_name = branch.output()[i].name();
-    EXT_ENFORCE_INVALID(!(out_name.empty()), "RunNode: If: a subgraph output has an empty name.");
-    const std::string caller_name = node.output(i);
-    if (caller_name.empty()) {
-      rt.Remove(out_name);
-      continue;
-    }
-    if (rt.HasSequence(out_name)) {
-      rt.PutSequence(caller_name, TakeSequence(rt, out_name));
-    } else if (rt.values().count(out_name) != 0) {
-      rt.PutValue(caller_name, TakeRuntimeValue(rt, out_name));
-    } else {
-      Tensor t = TakeTensor(rt, out_name, "RunNode: If: subgraph output");
-      t.name = caller_name;
-      rt.Put(caller_name, std::move(t), RuntimeEventKind::kOutput);
-    }
-  }
+  session.RunChild(
+      {}, rt,
+      [&]() {
+        for (int i = 0; i < branch.output_size(); ++i) {
+          const std::string out_name = branch.output()[i].name();
+          EXT_ENFORCE_INVALID(!(out_name.empty()),
+                              "RunNode: If: a subgraph output has an empty name.");
+          const std::string caller_name = node.output(i);
+          if (caller_name.empty()) {
+            rt.Remove(out_name);
+            continue;
+          }
+          if (rt.HasSequence(out_name)) {
+            rt.PutSequence(caller_name, TakeSequence(rt, out_name));
+          } else if (rt.values().count(out_name) != 0) {
+            rt.PutValue(caller_name, TakeRuntimeValue(rt, out_name));
+          } else {
+            Tensor t = TakeTensor(rt, out_name, "RunNode: If: subgraph output");
+            t.name = caller_name;
+            rt.Put(caller_name, std::move(t), RuntimeEventKind::kOutput);
+          }
+        }
+      },
+      branch_attr);
 }
 
 // Runs ``body`` as a Loop iteration body where loop-carried state may
@@ -456,25 +489,29 @@ void RunLoopWithSequenceState(const NodeProto &node, const GraphProto &body, con
         tensor_bindings.emplace_back(bname, std::move(t));
       }
     }
-    body_session.RunChild(std::move(tensor_bindings), std::move(sequence_bindings), rt, "body");
+    body_session.RunChild(
+        std::move(tensor_bindings), std::move(sequence_bindings), rt,
+        [&]() {
+          const std::string &cond_out_name = body.output(0).name();
+          Tensor cond_out = TakeTensor(rt, cond_out_name, "RunNode: Loop body output 'cond_out'");
+          cond_value = ParseBoolScalar(cond_out, "RunNode: Loop body output 'cond_out'");
 
-    const std::string &cond_out_name = body.output(0).name();
-    Tensor cond_out = TakeTensor(rt, cond_out_name, "RunNode: Loop body output 'cond_out'");
-    cond_value = ParseBoolScalar(cond_out, "Loop body output 'cond_out'");
-
-    for (std::size_t i = 0; i < n; ++i) {
-      const std::string &oname = body.output(static_cast<int>(1 + i)).name();
-      if (is_seq_state[i]) {
-        sequence_state[i] = TakeSequence(rt, oname);
-      } else {
-        tensor_state[i] =
-            TakeTensor(rt, oname, "RunNode: Loop body tensor-typed loop-carried output");
-      }
-    }
-    for (std::size_t j = 0; j < k; ++j) {
-      const std::string &oname = body.output(static_cast<int>(1 + n + j)).name();
-      scan_values[j].push_back(TakeTensor(rt, oname, "RunNode: Loop body scan output").ToOwned());
-    }
+          for (std::size_t i = 0; i < n; ++i) {
+            const std::string &oname = body.output(static_cast<int>(1 + i)).name();
+            if (is_seq_state[i]) {
+              sequence_state[i] = TakeSequence(rt, oname);
+            } else {
+              tensor_state[i] =
+                  TakeTensor(rt, oname, "RunNode: Loop body tensor-typed loop-carried output");
+            }
+          }
+          for (std::size_t j = 0; j < k; ++j) {
+            const std::string &oname = body.output(static_cast<int>(1 + n + j)).name();
+            scan_values[j].push_back(
+                TakeTensor(rt, oname, "RunNode: Loop body scan output").ToOwned());
+          }
+        },
+        "body");
     ++trip_count;
   }
 
@@ -968,10 +1005,8 @@ public:
     ScopedNestedSessionState nested_state(rt, std::nullopt);
     ScopedRuntimeBindings bindings(rt);
 
-    for (const NodeProto &body_node : bound_func_.node())
-      for (const std::string &name : body_node.output())
-        bindings.Shadow(name);
-
+    std::vector<std::pair<std::string, Tensor>> tensor_bindings;
+    std::vector<std::pair<std::string, RuntimeValue>> value_bindings;
     for (size_t i = 0; i < static_cast<std::size_t>(func_.input_size()); ++i) {
       const std::string caller_name = node_->input(i);
       const std::string param_name = func_.input(i);
@@ -980,15 +1015,35 @@ public:
       }
       auto value = rt.values().find(caller_name);
       if (value != rt.values().end()) {
-        bindings.Bind(param_name, value->second);
+        value_bindings.emplace_back(param_name, value->second.BorrowView());
         continue;
       }
       auto it = rt.tensors().find(caller_name);
       EXT_ENFORCE_INVALID(it != rt.tensors().end(), "RunNode: input '", caller_name,
                           "' of call to model-local function '", op_type,
                           "' is missing from the tensor map.");
-      bindings.Bind(param_name, it->second);
+      tensor_bindings.emplace_back(param_name, it->second.BorrowView());
     }
+
+    std::vector<std::string> caller_names;
+    caller_names.reserve(rt.tensors().size() + rt.values().size() + rt.sequences().size() +
+                         rt.maps().size() + rt.shapes().size());
+    for (const auto &[name, value] : rt.tensors())
+      caller_names.push_back(name);
+    for (const auto &[name, value] : rt.values())
+      caller_names.push_back(name);
+    for (const auto &[name, value] : rt.sequences())
+      caller_names.push_back(name);
+    for (const auto &[name, value] : rt.maps())
+      caller_names.push_back(name);
+    for (const auto &[name, value] : rt.shapes())
+      caller_names.push_back(name);
+    for (const std::string &name : caller_names)
+      bindings.Shadow(name);
+    for (const auto &[name, tensor] : tensor_bindings)
+      bindings.Bind(name, tensor);
+    for (const auto &[name, value] : value_bindings)
+      bindings.Bind(name, value);
 
     // Resolve kernels once on first run, reuse on subsequent calls.
     if (!session_) {
@@ -1343,9 +1398,7 @@ Tensors RunModel(const ModelProto &model, Tensors inputs, int verbose) {
     EXT_ENFORCE_INVALID(rt.Has(name), "RunModel: graph output '", name,
                         "' was not produced by the model.");
     Tensor output = std::move(rt.Get(name));
-    if (output.data_type != DataType::STRING)
-      output = std::move(output).RetainStorage();
-    outputs.push_back(std::move(output));
+    outputs.push_back(output.ToOwned());
   }
   return outputs;
 }

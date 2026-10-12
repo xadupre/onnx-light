@@ -82,6 +82,36 @@ private:
   CpuExecutorScope scope_;
 };
 
+class NodeDispatchScope {
+public:
+  explicit NodeDispatchScope(RuntimeContext &rt)
+      : rt_(rt), node_index_(rt.current_node_index()), input_slots_(rt.current_input_slots()),
+        output_slots_(rt.current_output_slots()), output_slot_io_roles_(rt.output_slot_io_roles()),
+        allocator_(rt.allocator()), execution_allocator_(rt.execution_allocator()) {}
+
+  NodeDispatchScope(const NodeDispatchScope &) = delete;
+  NodeDispatchScope &operator=(const NodeDispatchScope &) = delete;
+
+  ~NodeDispatchScope() {
+    rt_.set_current_node_index(node_index_);
+    rt_.SetCurrentNodeValueSlots(input_slots_, output_slots_);
+    rt_.set_output_slot_io_roles(std::move(output_slot_io_roles_));
+    RawBufferAllocator *allocator =
+        rt_.execution_allocator() == execution_allocator_ ? allocator_ : rt_.execution_allocator();
+    if (allocator != nullptr)
+      rt_.SetActiveAllocator(allocator);
+  }
+
+private:
+  RuntimeContext &rt_;
+  int64_t node_index_;
+  const std::vector<uint32_t> *input_slots_;
+  const std::vector<uint32_t> *output_slots_;
+  std::vector<bool> output_slot_io_roles_;
+  RawBufferAllocator *allocator_;
+  RawBufferAllocator *execution_allocator_;
+};
+
 OpsetImports ParseOpsetImports(const utils::RepeatedProtoField<OperatorSetIdProto> &imports) {
   OpsetImports versions;
   for (const auto &import : imports) {
@@ -722,6 +752,7 @@ void RuntimeSession::Run(RuntimeContext &rt) {
     case ExecuteActionKind::kExecuteNode: {
       const size_t index = action.node_index();
       const PreparedKernel &prepared = kernels_[index];
+      NodeDispatchScope dispatch_scope(rt);
       // Every kExecuteNode index is resolved by InitializeKernels (which
       // walks the same plan), so a missing kernel instance here means the
       // plan was mutated after initialization — surface it as a clear error
@@ -775,11 +806,6 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       }
 
       prepared.instance->Run(rt);
-
-      // The per-slot roles apply only to the node just dispatched; clear them so
-      // a later kernel that runs before the next node records its roles (for
-      // example a control-flow body) never observes stale routing.
-      rt.clear_output_slot_io_roles();
 
       if (logging) {
         const int64_t duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -844,8 +870,6 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       break;
     }
   }
-  rt.set_current_node_index(-1);
-  rt.SetCurrentNodeValueSlots(nullptr, nullptr);
   // Detach any graph output that borrows into the model (e.g. a Constant's
   // raw_data value or a pass-through initializer) so the returned outputs own
   // their bytes and stay valid once the model is released.

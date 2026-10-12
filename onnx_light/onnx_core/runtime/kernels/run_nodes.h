@@ -10,6 +10,7 @@
 #include "onnx_core/runtime/runtime_session.h"
 #include "onnx_proto/onnx.h"
 
+#include <functional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -257,27 +258,30 @@ public:
    * subgraph runs.
    *
    * Installs read-only views of ``bindings`` / ``sequence_bindings`` in
-   * ``rt``, evaluates the cached :cpp:class:`RuntimeSession` once, and removes
-   * the formal bindings before returning. Declared outputs remain in ``rt``
-   * for the caller to move to their caller-visible names.
+   * ``rt``, evaluates the cached :cpp:class:`RuntimeSession` once, calls
+   * ``consume_outputs`` while declared outputs remain available, and then
+   * restores every caller value shadowed by a subgraph-local produced name.
    *
    * @param bindings           Formal-input <-> actual-input tensor pairs.
    * @param sequence_bindings  Formal-input <-> actual-input sequence pairs.
    * @param rt                 The caller's runtime context; used to propagate
    *                           events and to record the caller-visible allocator.
+   * @param consume_outputs    Callback that transfers declared outputs from
+   *                           ``rt`` before local bindings are restored.
    * @param attr_name          Attribute name identifying the subgraph within
    *                           its owning control-flow node.
    */
   void RunChild(std::vector<std::pair<std::string, Tensor>> bindings,
                 std::vector<std::pair<std::string, Sequence>> sequence_bindings, RuntimeContext &rt,
-                const std::string &attr_name = "");
+                const std::function<void()> &consume_outputs, const std::string &attr_name = "");
 
   /// ``Tensor``-bindings-only overload of :cpp:func:`RunChild`.
   void RunChild(std::vector<std::pair<std::string, Tensor>> bindings, RuntimeContext &rt,
-                const std::string &attr_name = "");
+                const std::function<void()> &consume_outputs, const std::string &attr_name = "");
 
 private:
   std::vector<std::string> output_names_;
+  std::vector<std::string> local_names_;
 };
 
 /**

@@ -124,9 +124,9 @@ void Clip::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireMinInputCount(node, 1);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor *min = GetOptionalInput(node, 1, rt.tensors());
-  const Tensor *max = GetOptionalInput(node, 2, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
+  const Tensor *min = GetOptionalInput(node, 1, rt);
+  const Tensor *max = GetOptionalInput(node, 2, rt);
   onnx_kernels::kernel::Clip k(rt.kernel_ctx());
   SetOutput(node, 0, k(x, min, max, &rt), rt);
 }

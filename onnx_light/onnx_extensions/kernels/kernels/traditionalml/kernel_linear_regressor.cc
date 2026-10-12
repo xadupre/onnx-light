@@ -73,7 +73,7 @@ void LinearRegressor::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
   const ParamFloats coefficients = GetAttributeFloatsOrDefault(node, "coefficients", {});
   const ParamFloats intercepts = GetAttributeFloatsOrDefault(node, "intercepts", {});
   const int64_t targets = GetAttributeIntOrDefault(node, "targets", 1);

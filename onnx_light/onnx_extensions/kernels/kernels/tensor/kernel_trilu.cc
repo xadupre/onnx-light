@@ -111,8 +111,8 @@ void Trilu::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputRange(node, 1, 2);
   RequireOutputCount(node, 1);
-  const Tensor &input = GetInput(node, 0, rt.tensors());
-  const Tensor *k = GetOptionalInput(node, 1, rt.tensors());
+  const Tensor &input = GetInput(node, 0, rt);
+  const Tensor *k = GetOptionalInput(node, 1, rt);
   onnx_kernels::kernel::Trilu::Attributes attrs;
   attrs.upper = GetAttributeIntOrDefault(node, "upper", 1);
   onnx_kernels::kernel::Trilu kernel(rt.kernel_ctx());

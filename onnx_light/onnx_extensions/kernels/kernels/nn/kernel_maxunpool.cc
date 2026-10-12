@@ -144,13 +144,13 @@ void MaxUnpool::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputRange(node, 2, 3);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &indices = GetInput(node, 1, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
+  const Tensor &indices = GetInput(node, 1, rt);
   const onnx_kernels::Shape kernel_shape = GetAttributeIntsOrDefault(node, "kernel_shape", {});
   const onnx_kernels::Shape strides = GetAttributeIntsOrDefault(node, "strides", {});
   const onnx_kernels::Shape pads = GetAttributeIntsOrDefault(node, "pads", {});
   onnx_kernels::kernel::MaxUnpool k(rt.kernel_ctx());
-  const Tensor *output_shape = GetOptionalInput(node, 2, rt.tensors());
+  const Tensor *output_shape = GetOptionalInput(node, 2, rt);
   if (output_shape != nullptr) {
     SetOutput(node, 0, k(x, indices, *output_shape, kernel_shape, strides, pads, &rt), rt);
   } else {

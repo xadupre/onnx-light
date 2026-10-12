@@ -366,9 +366,9 @@ void Where::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 3);
   RequireOutputCount(node, 1);
-  const Tensor &a = GetInput(node, 0, rt.tensors());
-  const Tensor &b = GetInput(node, 1, rt.tensors());
-  const Tensor &c = GetInput(node, 2, rt.tensors());
+  const Tensor &a = GetInput(node, 0, rt);
+  const Tensor &b = GetInput(node, 1, rt);
+  const Tensor &c = GetInput(node, 2, rt);
   SetOutput(node, 0, (*this)(a, b, c, &rt), rt);
 }
 

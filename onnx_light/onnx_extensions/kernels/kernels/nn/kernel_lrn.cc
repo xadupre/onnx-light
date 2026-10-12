@@ -68,7 +68,7 @@ void LRN::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
   const int64_t size = GetRequiredAttributeInt(node, "size");
   const float alpha = GetAttributeFloatOrDefault(node, "alpha", 0.0001f);
   const float beta = GetAttributeFloatOrDefault(node, "beta", 0.75f);

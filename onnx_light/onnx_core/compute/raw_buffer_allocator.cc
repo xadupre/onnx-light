@@ -263,8 +263,8 @@ IOArena::IOArena(size_t capacity, size_t retention_cap)
   }
 }
 
-std::shared_ptr<IOArena> IOArena::Create(size_t capacity, size_t retention_cap) {
-  return std::shared_ptr<IOArena>(new IOArena(capacity, retention_cap));
+std::shared_ptr<IOArena> IOArena::Create(size_t initial_capacity, size_t retention_cap) {
+  return std::shared_ptr<IOArena>(new IOArena(initial_capacity, retention_cap));
 }
 
 RawBuffer *IOArena::Allocate(size_t n_bytes) {
@@ -300,7 +300,15 @@ RawBuffer *IOArena::Allocate(size_t n_bytes) {
     retained_size_ -= previous_capacity;
     --retained_count_;
   } else {
-    throw std::bad_alloc();
+    i = buffers_.size();
+    RawBuffer buffer(n_bytes);
+    live_slots_.reserve(i + 1);
+    leased_slots_.reserve(i + 1);
+    slot_indices_.reserve(i + 1);
+    buffers_.push_back(std::move(buffer));
+    slot_indices_.emplace(&buffers_.back(), i);
+    live_slots_.push_back(false);
+    leased_slots_.push_back(false);
   }
 
   RawBuffer *buffer = &buffers_[i];

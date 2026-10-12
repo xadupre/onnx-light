@@ -194,5 +194,58 @@ TEST(CHECKER, OpenExternalDataTest) {
 #endif
 }
 
+TEST(CHECKER, OpenExternalDataEmptyBaseDirTest) {
+#ifndef ONNX_NO_EXCEPTIONS
+  fs::path original_dir = fs::current_path();
+  fs::path dir = fs::temp_directory_path() / "onnx_light_empty_base_checker_test";
+  fs::remove_all(dir);
+  fs::create_directories(dir);
+  {
+    std::ofstream ofs(dir / "data.bin", std::ios::binary);
+    ofs << "data";
+  }
+  fs::current_path(dir);
+
+  EXPECT_NO_THROW({
+    EXPECT_EQ(ONNX_LIGHT_NAMESPACE::checker::resolve_external_data_location("", "data.bin", "t"),
+              fs::path("data.bin"));
+  });
+  EXPECT_NO_THROW({
+    ScopedFd fd(static_cast<int>(
+        ONNX_LIGHT_NAMESPACE::checker::open_external_data("", "data.bin", "t", true)));
+    EXPECT_GE(fd.get(), 0);
+  });
+  EXPECT_NO_THROW({
+    ScopedFd fd(static_cast<int>(
+        ONNX_LIGHT_NAMESPACE::checker::open_external_data("", "created.bin", "t", false)));
+    EXPECT_GE(fd.get(), 0);
+  });
+  EXPECT_TRUE(fs::exists(dir / "created.bin"));
+
+#ifndef _WIN32
+  fs::path outside = fs::temp_directory_path() / "onnx_light_empty_base_outside";
+  fs::remove_all(outside);
+  fs::create_directories(outside);
+  {
+    std::ofstream ofs(outside / "secret.bin", std::ios::binary);
+    ofs << "secret";
+  }
+  fs::create_symlink(outside / "secret.bin", dir / "link.bin");
+  EXPECT_THROW(ONNX_LIGHT_NAMESPACE::checker::open_external_data("", "link.bin", "t", true),
+               ONNX_LIGHT_NAMESPACE::checker::ValidationError);
+  fs::create_directory_symlink(outside, dir / "subdir");
+  EXPECT_THROW(
+      ONNX_LIGHT_NAMESPACE::checker::open_external_data("", "subdir/secret.bin", "t", true),
+      ONNX_LIGHT_NAMESPACE::checker::ValidationError);
+#endif
+
+  fs::current_path(original_dir);
+  fs::remove_all(dir);
+#ifndef _WIN32
+  fs::remove_all(outside);
+#endif
+#endif
+}
+
 } // namespace Test
 } // namespace ONNX_LIGHT_NAMESPACE

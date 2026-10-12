@@ -10,6 +10,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -29,7 +30,7 @@ inline constexpr uint32_t kInvalidValueStoreSlot = std::numeric_limits<uint32_t>
  * The owning session hierarchy is serialized by contract. Registration,
  * publication, and indexed reads therefore require no mutex or atomic state.
  * A kernel retains the integer returned by :cpp:func:`Bind`, so execution is a
- * direct vector lookup. This synchronous store does not replace
+ * direct indexed lookup. This synchronous store does not replace
  * :cpp:class:`PreparedObjectStore`, which owns asynchronous generation,
  * scheduling, residency, persistence, and eviction state.
  */
@@ -57,7 +58,7 @@ private:
   std::vector<std::unique_ptr<ExecutionArena>> allocators_;
   std::unordered_set<const void *> allocator_index_;
   std::unordered_map<std::string, uint32_t> slots_by_key_;
-  std::vector<std::optional<RuntimeValue>> slots_;
+  std::deque<std::optional<RuntimeValue>> slots_;
 };
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

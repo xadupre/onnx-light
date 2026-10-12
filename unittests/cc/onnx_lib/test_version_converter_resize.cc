@@ -103,7 +103,7 @@ ModelProto MakeResize12Model(int64_t opset, const std::vector<std::string> &inpu
   model.add_opset_import()->set_version(opset);
   GraphProto *graph = model.mutable_graph();
   graph->set_name("resize_conversion");
-  for (const std::string &name : {"X", "empty", "sizes", "scales", "roi"}) {
+  for (const std::string name : {"X", "empty", "sizes", "scales", "roi"}) {
     auto *input = graph->add_input();
     input->set_name(name);
     input->mutable_type()->mutable_tensor_type()->set_elem_type(
@@ -173,7 +173,7 @@ TEST(onnx_version_converter, Resize12To13OmitsScalesWhenSizesProvided) {
           attribute->set_type(AttributeProto::TENSOR);
           *attribute->mutable_t() = tensor;
           *graph->add_node() = constant;
-          std::iter_swap(graph->ref_node().begin(), graph->ref_node().begin() + 1);
+          graph->ref_node().SwapElements(0, 1);
         }
       }
       const ModelProto converted = version_conversion::ConvertVersion(model, 13);
@@ -192,7 +192,7 @@ TEST(onnx_version_converter, Resize12To13PreservesScalesAndSupportedModes) {
   for (int64_t opset : {11, 12}) {
     for (const std::string mode : {"", "half_pixel", "pytorch_half_pixel", "align_corners",
                                    "asymmetric", "tf_crop_and_resize"}) {
-      for (const std::vector<std::string> inputs :
+      for (const std::vector<std::string> &inputs :
            {std::vector<std::string>{"X", "roi", "scales"}, {"X", "roi", "scales", ""}}) {
         SCOPED_TRACE(mode);
         const ModelProto model = MakeResize12Model(opset, inputs, mode);

@@ -430,12 +430,12 @@ void LinearAttention::Run(RuntimeContext &rt) {
                       "RunNode: op 'LinearAttention' expects 1 or 2 output(s), "
                       "got ",
                       node.output_size(), ".");
-  const Tensor &query = GetInput(node, 0, rt.tensors());
-  const Tensor &key = GetInput(node, 1, rt.tensors());
-  const Tensor &value = GetInput(node, 2, rt.tensors());
-  const Tensor *past_state = GetOptionalInput(node, 3, rt.tensors());
-  const Tensor *decay = GetOptionalInput(node, 4, rt.tensors());
-  const Tensor *beta = GetOptionalInput(node, 5, rt.tensors());
+  const Tensor &query = GetInput(node, 0, rt);
+  const Tensor &key = GetInput(node, 1, rt);
+  const Tensor &value = GetInput(node, 2, rt);
+  const Tensor *past_state = GetOptionalInput(node, 3, rt);
+  const Tensor *decay = GetOptionalInput(node, 4, rt);
+  const Tensor *beta = GetOptionalInput(node, 5, rt);
 
   onnx_kernels::kernel::LinearAttention::Attributes attrs;
   attrs.update_rule = GetAttributeStringOrDefault(node, "update_rule", "gated_delta");

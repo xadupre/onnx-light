@@ -65,7 +65,7 @@ void OptionalHasElement::Run(RuntimeContext &rt) {
     const Sequence &input_seq = GetInputSequence(node, 0, rt);
     SetOutput(node, 0, k(input_seq, &rt), rt);
   } else {
-    const Tensor &input = GetInput(node, 0, rt.tensors());
+    const Tensor &input = GetInput(node, 0, rt);
     SetOutput(node, 0, k(input, &rt), rt);
   }
 }

@@ -162,8 +162,8 @@ void BitShift::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 2);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &y = GetInput(node, 1, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
+  const Tensor &y = GetInput(node, 1, rt);
   const std::string direction = GetRequiredAttributeString(node, "direction");
   onnx_kernels::kernel::BitShift::Direction dir;
   if (direction == "LEFT") {

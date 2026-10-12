@@ -256,11 +256,11 @@ void BatchNormalization::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 5);
   RequireOutputRange(node, 1, 3);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &scale = GetInput(node, 1, rt.tensors());
-  const Tensor &bias = GetInput(node, 2, rt.tensors());
-  const Tensor &input_mean = GetInput(node, 3, rt.tensors());
-  const Tensor &input_var = GetInput(node, 4, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
+  const Tensor &scale = GetInput(node, 1, rt);
+  const Tensor &bias = GetInput(node, 2, rt);
+  const Tensor &input_mean = GetInput(node, 3, rt);
+  const Tensor &input_var = GetInput(node, 4, rt);
   if (GetAttributeIntOrDefault(node, "training_mode", 0) != 0) {
     const float momentum = GetAttributeFloatOrDefault(node, "momentum", 0.9f);
     auto [y, running_mean, running_var] =

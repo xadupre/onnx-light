@@ -59,6 +59,15 @@ void ExpectPersistentBindingError(const GraphProto &graph, const std::string &me
   }
 }
 
+void ExpectModelVerificationError(const ModelProto &model, const std::string &message) {
+  try {
+    VerifyModel(model);
+    FAIL() << "Invalid model was accepted.";
+  } catch (const std::invalid_argument &error) {
+    EXPECT_NE(std::string(error.what()).find(message), std::string::npos) << error.what();
+  }
+}
+
 } // namespace
 
 TEST(onnx_verify, VerifyModel_Valid) {
@@ -433,6 +442,13 @@ TEST(onnx_verify, PersistentBindings_CountsNestedGraphAndGraphsCaptures) {
 }
 
 TEST(onnx_verify, PersistentBindings_CountsEveryBranchOutputCapture) {
+  const auto expose_capture = [](GraphProto *graph) {
+    auto *identity = graph->add_node();
+    identity->set_op_type("Identity");
+    identity->add_input("x");
+    identity->add_output("captured");
+    graph->add_output()->set_name("captured");
+  };
   for (bool repeated : {false, true}) {
     SCOPED_TRACE(repeated);
     ModelProto model = MakePersistentModel();
@@ -449,7 +465,7 @@ TEST(onnx_verify, PersistentBindings_CountsEveryBranchOutputCapture) {
     }
     auto *first = AddNestedGraph(*node, repeated);
     first->set_name("then");
-    first->add_output()->set_name("x");
+    expose_capture(first);
     EXPECT_NO_THROW(VerifyModel(model));
 
     GraphProto *second;
@@ -461,7 +477,7 @@ TEST(onnx_verify, PersistentBindings_CountsEveryBranchOutputCapture) {
       node->mutable_attribute(1)->set_name("else_branch");
     }
     second->set_name("else");
-    second->add_output()->set_name("x");
+    expose_capture(second);
     ExpectPersistentBindingError(
         model.graph(), "Persistent input 'x' must be used exactly once; found 2 value-uses");
     EXPECT_THROW(VerifyModel(model), std::invalid_argument);
@@ -657,6 +673,31 @@ TEST(onnx_verify, VerifyGraph_UnproducedOutput) {
   EXPECT_THROW(VerifyGraph(graph), std::invalid_argument);
 }
 
+TEST(onnx_verify, VerifyModel_RejectsSubgraphInitializerShadowing) {
+  for (int initializer_kind = 0; initializer_kind < 4; ++initializer_kind) {
+    SCOPED_TRACE(initializer_kind);
+    ModelProto model = MakeValidModel();
+    GraphProto *subgraph = AddNestedGraph(*model.mutable_graph()->mutable_node(0), false);
+    subgraph->set_name("nested");
+    switch (initializer_kind) {
+    case 0:
+      subgraph->add_initializer()->set_name("x");
+      break;
+    case 1:
+      subgraph->add_sparse_initializer()->mutable_values()->set_name("x");
+      break;
+    case 2:
+      subgraph->add_encoded_initializer()->set_name("x");
+      break;
+    case 3:
+      subgraph->add_paged_cache_initializer()->set_name("x");
+      break;
+    }
+    ExpectModelVerificationError(model,
+                                 "initializer 'x' shadows a value from an outer graph scope");
+  }
+}
+
 TEST(onnx_verify, VerifyNode_EmptyOpType) {
   NodeProto node;
   node.add_input("x");
@@ -841,4 +882,14 @@ TEST(onnx_verify, VerifyGraph_SubgraphClosureOverOuterScope) {
 
   EXPECT_NO_THROW(
       VerifyGraph(body, /*is_main_graph=*/false, /*in_function_body=*/false, &outer_scope));
+}
+
+TEST(onnx_verify, VerifyGraph_SubgraphOutputMustBeLocallyDefined) {
+  std::unordered_set<std::string> outer_scope{"x"};
+  GraphProto body;
+  body.set_name("body");
+  body.add_output()->set_name("x");
+
+  EXPECT_THROW(VerifyGraph(body, /*is_main_graph=*/false, /*in_function_body=*/false, &outer_scope),
+               std::invalid_argument);
 }

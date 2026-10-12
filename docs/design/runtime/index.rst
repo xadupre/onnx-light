@@ -19,6 +19,24 @@ initializers, intermediates, and outputs in a :cpp:class:`RuntimeContext`.
 That context also owns the execution and output allocator routes, records
 events when requested, and releases last-use intermediates when enabled.
 
+Before kernel resolution, the execution plan registers every value name from
+the root graph, nested graph attributes, and model-local functions in one
+invocation-wide directory. Each unique name keeps one stable ``uint32_t`` slot.
+Tensor payloads live in a vector indexed by those slots. ``RuntimeSession``
+resolves each kernel's input and output slots once for a context, so built-in
+kernels do not hash ONNX names while replaying the plan. The name-keyed tensor
+map remains a synchronized compatibility view for external callers and custom
+kernels.
+The same ``RuntimeContext`` is reused by control-flow bodies and local
+functions, so nested execution neither copies the context nor deep-copies
+loop-carried values merely to cross a context boundary.
+
+When the caller supplies no execution allocator, the context creates a
+fixed-capacity :cpp:class:`ExecutionArena` from
+``ExecutionPlan::arena_capacity()``. Stable value slots do not pin physical
+storage: deleting a last-use value releases its allocation handle and the arena
+may reuse that ``RawBuffer`` for any later value.
+
 Before dispatch, the session leases its resolved :cpp:class:`CpuExecutor` and
 installs it on the runtime context.  Kernels then use the same session CPU
 executor for serial or parallel work.  The backend-test catalog sits above
@@ -29,6 +47,19 @@ native callers.
 
 Preparation and execution
 -------------------------
+
+Direct ``ExecutionPlan`` replay prepares immutable kernel inputs synchronously
+during the first ``RuntimeSession::Run``. The root session and all nested
+graph/function sessions share one ``ValueStore``. Each kernel
+retains a stable integer slot, so later executions read the prepared value by
+direct vector indexing without a mutex, map lookup, readiness wait, or
+scheduler dispatch. The store owns its prepared allocations for the complete
+session-hierarchy lifetime.
+
+The preparation ``ValueStore`` is separate from the invocation value
+directory. The former owns immutable prepared kernel objects; the latter maps
+ONNX value names to stable runtime slots whose physical tensor buffers remain
+recyclable by the execution arena.
 
 ``PreparedExecutionPlan`` may prepare synchronously or submit work through a
 shared execution pool. Its tasks cover payload reads, kernel creation, weight
@@ -43,10 +74,12 @@ loading and prepacking. Residency is bounded, active consumers pin their
 objects, and evicted entries retain enough information for a later reload.
 
 ``RuntimeSessionOptions`` selects the CPU execution policy.
-``PreparedExecutionState`` owns preparation arenas, residency, and resource
-limits. Sessions and prepared plans lease executors rather than creating one
-thread pool per kernel, so independent sessions can share workers without
-nested oversubscription. See :ref:`l-next-steps-prepared-execution`,
+``PreparedExecutionState`` owns the asynchronous plan's preparation arenas,
+residency, generations, and resource limits; it is separate from the
+``ValueStore`` used by direct replay. Sessions and prepared plans
+lease executors rather than creating one thread pool per kernel, so independent
+sessions can share workers without nested oversubscription. See
+:ref:`l-next-steps-prepared-execution`,
 :ref:`l-next-steps-native-fast-loading-completion`, and
 :ref:`l-next-steps-session-execution-pools` for the implemented contracts.
 

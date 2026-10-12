@@ -216,8 +216,8 @@ void RMSNormalization::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 2);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &scale = GetInput(node, 1, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
+  const Tensor &scale = GetInput(node, 1, rt);
   SetOutput(node, 0, (*this)(x, scale, GetNormAxis(node), GetEpsilon(node), &rt), rt);
 }
 

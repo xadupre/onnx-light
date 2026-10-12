@@ -35,7 +35,7 @@ void Size::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
-  const Tensor &data = GetInput(node, 0, rt.tensors());
+  const Tensor &data = GetInput(node, 0, rt);
   onnx_kernels::kernel::Size k(rt.kernel_ctx());
   SetOutput(node, 0, k(data, &rt), rt);
 }

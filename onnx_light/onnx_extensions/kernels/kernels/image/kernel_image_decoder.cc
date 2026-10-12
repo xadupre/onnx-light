@@ -1528,7 +1528,7 @@ void ImageDecoder::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
-  const Tensor &encoded_stream = GetInput(node, 0, rt.tensors());
+  const Tensor &encoded_stream = GetInput(node, 0, rt);
   const std::string pixel_format = GetAttributeStringOrDefault(node, "pixel_format", "RGB");
   onnx_kernels::kernel::ImageDecoder image_decoder_kernel(rt.kernel_ctx());
   SetOutput(node, 0, image_decoder_kernel(encoded_stream, pixel_format, &rt), rt);

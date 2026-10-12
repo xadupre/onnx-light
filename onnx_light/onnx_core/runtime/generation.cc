@@ -242,7 +242,7 @@ Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeV
       }
       session->Run(invocation);
       EXT_ENFORCE_INVALID(invocation.Has(options.logits_name), "Generate: missing logits tensor.");
-      logits = std::move(invocation.Get(options.logits_name));
+      logits = std::move(invocation.Get(options.logits_name)).RetainStorage();
     }
     EXT_ENFORCE_INVALID(
         (logits.shape.size() == 2 || logits.shape.size() == 3) && logits.shape[0] == batch &&

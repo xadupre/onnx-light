@@ -34,6 +34,7 @@ a dependency from ``onnx_core`` back onto ``onnx_kernels``.
     simple_map
     runtime_context
     kernel_context
+    value_store
     runtime_parameters
     run_nodes
     runtime_session

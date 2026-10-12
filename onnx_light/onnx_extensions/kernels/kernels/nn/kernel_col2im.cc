@@ -228,9 +228,9 @@ void Col2Im::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 3);
   RequireOutputCount(node, 1);
-  const Tensor &input = GetInput(node, 0, rt.tensors());
-  const Tensor &image_shape = GetInput(node, 1, rt.tensors());
-  const Tensor &block_shape = GetInput(node, 2, rt.tensors());
+  const Tensor &input = GetInput(node, 0, rt);
+  const Tensor &image_shape = GetInput(node, 1, rt);
+  const Tensor &block_shape = GetInput(node, 2, rt);
   onnx_kernels::kernel::Col2Im::Attributes attrs;
   attrs.dilations = GetAttributeIntsOrDefault(node, "dilations", {});
   attrs.pads = GetAttributeIntsOrDefault(node, "pads", {});

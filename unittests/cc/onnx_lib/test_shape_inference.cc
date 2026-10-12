@@ -1,7 +1,10 @@
 #include "onnx.h"
+#include "onnx_lib/common/file_utils.h"
 #include "onnx_lib/defs/shape_inference.h"
 #include "onnx_lib/shape_inference/implementation.h"
 #include "onnx_manipulations/parser.h"
+#include <filesystem>
+#include <fstream>
 #include <gtest/gtest.h>
 #include <stdexcept>
 #include <tuple>
@@ -490,6 +493,42 @@ TEST(onnx_shape_inference, InferShapesImpl_ModelGraph) {
   ASSERT_EQ(dims.size(), kExpectedDims);
   EXPECT_EQ(dims[0].ref_dim_value(), kExpectedDim0);
   EXPECT_EQ(dims[1].ref_dim_value(), kExpectedDim1);
+}
+
+TEST(onnx_shape_inference, InferShapesFromPathSavesInferredModel) {
+  ModelProto model;
+  model.set_ir_version(IR_VERSION);
+  model.add_opset_import()->set_version(14);
+  GraphProto *graph = model.mutable_graph();
+  graph->set_name("infer_shapes_from_path");
+  ValueInfoProto *input = graph->add_input();
+  input->set_name("X");
+  input->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+  input->mutable_type()->mutable_tensor_type()->mutable_shape()->add_dim()->set_dim_value(2);
+  ValueInfoProto *output = graph->add_output();
+  output->set_name("Y");
+  output->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+  NodeProto *node = graph->add_node();
+  node->set_op_type("Identity");
+  *node->add_input() = "X";
+  *node->add_output() = "Y";
+
+  const auto input_path = std::filesystem::current_path() / "onnx_light_infer_shapes_input.onnx";
+  const auto output_path = std::filesystem::current_path() / "onnx_light_infer_shapes_output.onnx";
+  std::string serialized;
+  ASSERT_TRUE(model.SerializeToString(serialized));
+  {
+    std::ofstream file(input_path, std::ios::binary);
+    file.write(serialized.data(), static_cast<std::streamsize>(serialized.size()));
+  }
+
+  shape_inference::InferShapes(input_path.string(), output_path.string());
+  ModelProto inferred;
+  LoadProtoFromPath(output_path.string(), inferred);
+  ASSERT_EQ(inferred.graph().output_size(), 1);
+  EXPECT_EQ(inferred.graph().output(0).type().tensor_type().shape().dim(0).dim_value(), 2);
+  std::filesystem::remove(input_path);
+  std::filesystem::remove(output_path);
 }
 
 TEST(onnx_shape_inference, OptionalOpsInferIr14SequenceTypesAtOpset28) {

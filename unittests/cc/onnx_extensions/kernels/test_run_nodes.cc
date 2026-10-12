@@ -4719,10 +4719,9 @@ TEST(RunNodes, RuntimeSessionRoutesMixedOutputsPerSlotIntermediateFirst) {
   EXPECT_FLOAT_EQ(ap[2], 103.0f);
 }
 
-// Without a dedicated I/O allocator (the pre-existing single-allocator
-// configuration), every output — declared or intermediate — keeps allocating
-// from the execution allocator, preserving prior behaviour.
-TEST(RunNodes, RuntimeSessionKeepsSingleAllocatorBehaviorWithoutIOAllocator) {
+// Without a caller-provided I/O allocator, the context creates a growable
+// output arena and returns a retained view that survives the session.
+TEST(RunNodes, RuntimeSessionCreatesOutputArenaWhenNoneIsProvided) {
   core::runtime::SimpleRawBufferAllocator execution_alloc(8);
   RuntimeContext rt(KernelContext(DefaultOpset(18)),
                     core::runtime::RuntimeContextOptions{.allocator = &execution_alloc});
@@ -4754,7 +4753,9 @@ TEST(RunNodes, RuntimeSessionKeepsSingleAllocatorBehaviorWithoutIOAllocator) {
   session.Run(rt);
 
   ASSERT_TRUE(rt.Has("y"));
-  EXPECT_EQ(rt.Get("y").allocation_owner(), &execution_alloc);
+  EXPECT_TRUE(rt.Get("y").is_borrowed());
+  EXPECT_TRUE(rt.Get("y").borrowed_owner());
+  EXPECT_FLOAT_EQ(rt.Get("y").AsFloat()[0], 2.0f);
 }
 
 // A slot-aware kernel allocates each of its outputs directly in that slot's
@@ -6940,25 +6941,26 @@ TEST(RunNodes, RuntimeSessionMaterializesBorrowedConstantOutput) {
   std::memcpy(raw.data(), values, sizeof(values));
   t->set_raw_data(utils::ByteSpan(raw));
 
-  // Driving the model's own plan directly (no declared outputs) leaves the
-  // output borrowing into the proto: this is the state the session must fix.
+  // Driving the model's own plan directly (no declared outputs) may migrate
+  // the output into the context-owned execution arena.
   {
     RuntimeContext rt(KernelContext(DefaultOpset(18)));
     const ExecutionPlan &plan = rt.GetExecutionPlan(model.ref_graph());
     RuntimeSession session(plan);
     session.Run(rt);
     ASSERT_TRUE(rt.Has("Y"));
-    EXPECT_TRUE(rt.Get("Y").is_borrowed());
+    EXPECT_FLOAT_EQ(rt.Get("Y").AsFloat()[0], 1.0f);
   }
 
   // Building the session from the ModelProto records the graph outputs, so Run
-  // detaches the borrowed output into an owned tensor.
+  // retains the output independently of the model and context lifetimes.
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   RuntimeSession session(model);
   session.Run(rt);
   ASSERT_TRUE(rt.Has("Y"));
   const Tensor &y = rt.Get("Y");
-  EXPECT_FALSE(y.is_borrowed());
+  EXPECT_TRUE(y.is_borrowed());
+  EXPECT_TRUE(y.borrowed_owner());
   ASSERT_EQ(y.element_count(), 3);
   const float *got = y.AsFloat();
   EXPECT_FLOAT_EQ(got[0], 1.0f);

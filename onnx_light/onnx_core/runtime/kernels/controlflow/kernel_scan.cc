@@ -157,7 +157,7 @@ Tensors AssembleScanOutputs(int64_t trip_count, const Tensors &initial_state, Te
   Tensors out;
   out.reserve(initial_state.size() + k);
   for (std::size_t i = 0; i < initial_state.size(); ++i) {
-    out.push_back(trip_count == 0 ? initial_state[i].BorrowView() : std::move(final_state[i]));
+    out.push_back(trip_count == 0 ? initial_state[i].ToOwned() : std::move(final_state[i]));
   }
   for (std::size_t ki = 0; ki < k; ++ki) {
     const int64_t axis = scan_output_axes.empty() ? 0 : scan_output_axes[ki];

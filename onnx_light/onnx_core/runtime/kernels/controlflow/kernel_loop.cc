@@ -156,7 +156,7 @@ Tensors AssembleLoopOutputs(int64_t trip_count, const Tensors &v_initial, Tensor
   Tensors out;
   out.reserve(final_state.size() + scan_values_per_iter.size());
   for (std::size_t i = 0; i < final_state.size(); ++i) {
-    out.push_back(trip_count == 0 ? v_initial[i].BorrowView() : std::move(final_state[i]));
+    out.push_back(trip_count == 0 ? v_initial[i].ToOwned() : std::move(final_state[i]));
   }
   for (std::size_t i = 0; i < scan_values_per_iter.size(); ++i) {
     out.push_back(StackScanOutput(scan_values_per_iter[i], trip_count, allocator, rt,

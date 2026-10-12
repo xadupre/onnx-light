@@ -37,6 +37,8 @@ void RetainIOBackedStorage(RuntimeValue &value, size_t depth = 0) {
         dynamic_cast<IOArena *>(value.tensor.allocation_owner()) != nullptr)
       value.tensor = std::move(value.tensor).RetainStorage();
   } else if (value.kind == RuntimeValue::Kind::kSequence) {
+    if (value.elements.retained())
+      return;
     value.elements.TransformInPlace(
         [&](RuntimeValue &element) { RetainIOBackedStorage(element, depth + 1); });
   } else if (value.kind == RuntimeValue::Kind::kStruct) {

@@ -45,6 +45,8 @@ class TestCMakeHardening(unittest.TestCase):
                             str(source),
                             "-B",
                             str(build),
+                            "-G",
+                            "Ninja",
                             "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
                             f"-DENABLE_HARDENING={'ON' if hardening else 'OFF'}",
                             f"-DCMAKE_CXX_FLAGS={flags if caller_mode else ''}",

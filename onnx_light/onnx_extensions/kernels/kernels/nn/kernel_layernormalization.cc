@@ -285,9 +285,9 @@ void LayerNormalization::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputRange(node, 2, 3);
   RequireOutputRange(node, 1, 3);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &scale = GetInput(node, 1, rt.tensors());
-  const Tensor *b = GetOptionalInput(node, 2, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
+  const Tensor &scale = GetInput(node, 1, rt);
+  const Tensor *b = GetOptionalInput(node, 2, rt);
   auto [y, mean, inv_std_dev] =
       (*this)(x, scale, b != nullptr ? *b : Tensor{}, GetNormAxis(node), GetEpsilon(node), &rt);
   SetOutput(node, 0, std::move(y), rt);

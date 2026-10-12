@@ -423,13 +423,13 @@ TEST(PersistentValueState, AttentionCacheIOLeasesSurviveStateAndAllocatorOwner) 
       if (step == 1)
         pointer = output.at("present_key").tensor.bytes();
       EXPECT_EQ(output.at("present_key").tensor.bytes(), pointer);
-      EXPECT_EQ(arena->leased_count(), 2u);
-      EXPECT_EQ(arena->allocated_count(), 1u); // Only Y; cache views share the two leases.
+      EXPECT_EQ(arena->leased_count(), 3u); // Y and the two cache views are exported.
+      EXPECT_EQ(arena->allocated_count(), 0u);
       EXPECT_EQ(arena->TotalAllocatedSize(), (2u * 32 * 2 + 2) * sizeof(float));
       const auto snapshot = state.Values();
       EXPECT_EQ(snapshot.at("past_key").tensor.bytes(), pointer);
-      EXPECT_EQ(arena->leased_count(), 2u);
-      EXPECT_EQ(arena->allocated_count(), 1u);
+      EXPECT_EQ(arena->leased_count(), 3u);
+      EXPECT_EQ(arena->allocated_count(), 0u);
     }
     EXPECT_EQ(arena->allocated_count(), 0u);
     EXPECT_EQ(arena->TotalAllocatedSize(), 2u * 32 * 2 * sizeof(float));
@@ -445,15 +445,15 @@ TEST(PersistentValueState, AttentionCacheIOLeasesSurviveStateAndAllocatorOwner) 
   EXPECT_TRUE(weak.expired());
 }
 
-TEST(PersistentValueState, AttentionCacheRejectsUnretainableAllocationAndCapacityOverflow) {
+TEST(PersistentValueState, AttentionCacheUsesAutomaticIOArenaAndRejectsCapacityOverflow) {
   ModelProto model = AttentionModel();
   SimpleRawBufferAllocator allocator(8);
   RuntimeContext context(KernelContext(DefaultOpset(23)),
                          RuntimeContextOptions{.allocator = &allocator, .events_enabled = true});
   PersistentValueState state(model, EmptyAttentionCache());
-  EXPECT_THROW(state.Run(context, AttentionFeeds(1)), std::invalid_argument);
-  EXPECT_EQ(state.Values().at("past_key").tensor.shape[2], 0);
-  EXPECT_EQ(StorageTotal(context.events(), &RuntimeEvent::storage_allocations), 1u);
+  state.Run(context, AttentionFeeds(1));
+  EXPECT_EQ(state.Values().at("past_key").tensor.shape[2], 1);
+  EXPECT_EQ(StorageTotal(context.events(), &RuntimeEvent::storage_allocations), 2u);
   RuntimeSessionOptions options;
   options.persistent_tensor_initial_capacity = std::numeric_limits<size_t>::max();
   PersistentValueState overflow(model, EmptyAttentionCache(), options);

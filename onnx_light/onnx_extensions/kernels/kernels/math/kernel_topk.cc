@@ -217,7 +217,7 @@ void TopK::operator()(const Tensor &x, int64_t k, int64_t axis, bool largest, bo
 void TopK::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireOutputCount(node, 2);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
   const int64_t axis = GetAttributeIntOrDefault(node, "axis", -1);
   const bool largest = GetAttributeIntOrDefault(node, "largest", 1) != 0;
   const bool sorted = GetAttributeIntOrDefault(node, "sorted", 1) != 0;
@@ -228,7 +228,7 @@ void TopK::Run(RuntimeContext &rt) {
   const int64_t opset_version = ctx_.opset.version;
   if (opset_version >= 10) {
     RequireInputCount(node, 2);
-    const Tensor &k_tensor = GetInput(node, 1, rt.tensors());
+    const Tensor &k_tensor = GetInput(node, 1, rt);
     EXT_ENFORCE_INVALID(k_tensor.element_count() == 1,
                         "RunNode: op 'TopK' input 'K' must be a 1-D tensor with a single element.");
     EXT_ENFORCE_INVALID(!(k_tensor.data_type != static_cast<int32_t>(DataType::INT64)),

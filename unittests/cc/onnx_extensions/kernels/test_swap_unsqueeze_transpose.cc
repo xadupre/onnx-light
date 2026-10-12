@@ -35,7 +35,7 @@ core::runtime::Tensor RunLayoutModel(const ModelProto &model, const TensorProto 
   const auto &plan = context.GetExecutionPlan(model.ref_graph());
   core::runtime::RuntimeSession session(plan);
   session.Run(context);
-  return context.Get("out");
+  return context.Get("out").ToOwned();
 }
 
 TEST(SwapUnsqueezeTransposePattern, NumericallyPreservesEverySmallPermutation) {

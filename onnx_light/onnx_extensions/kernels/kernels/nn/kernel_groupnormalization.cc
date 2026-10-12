@@ -126,9 +126,9 @@ void GroupNormalization::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 3);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &scale = GetInput(node, 1, rt.tensors());
-  const Tensor &bias = GetInput(node, 2, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
+  const Tensor &scale = GetInput(node, 1, rt);
+  const Tensor &bias = GetInput(node, 2, rt);
   const int64_t num_groups = GetAttributeIntOrDefault(node, "num_groups", 0);
   SetOutput(node, 0, (*this)(x, scale, bias, num_groups, GetEpsilon(node), &rt), rt);
 }

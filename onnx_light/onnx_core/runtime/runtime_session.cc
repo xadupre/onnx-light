@@ -14,6 +14,7 @@
 
 #include "onnx_core/graph/graph_manipulations.h"
 #include "onnx_core/runtime/kernels/run_nodes_internal.h"
+#include "onnx_core/runtime/kernels/value_store.h"
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -81,6 +82,36 @@ private:
   CpuExecutorScope scope_;
 };
 
+class NodeDispatchScope {
+public:
+  explicit NodeDispatchScope(RuntimeContext &rt)
+      : rt_(rt), node_index_(rt.current_node_index()), input_slots_(rt.current_input_slots()),
+        output_slots_(rt.current_output_slots()), output_slot_io_roles_(rt.output_slot_io_roles()),
+        allocator_(rt.allocator()), execution_allocator_(rt.execution_allocator()) {}
+
+  NodeDispatchScope(const NodeDispatchScope &) = delete;
+  NodeDispatchScope &operator=(const NodeDispatchScope &) = delete;
+
+  ~NodeDispatchScope() {
+    rt_.set_current_node_index(node_index_);
+    rt_.SetCurrentNodeValueSlots(input_slots_, output_slots_);
+    rt_.set_output_slot_io_roles(std::move(output_slot_io_roles_));
+    RawBufferAllocator *allocator =
+        rt_.execution_allocator() == execution_allocator_ ? allocator_ : rt_.execution_allocator();
+    if (allocator != nullptr)
+      rt_.SetActiveAllocator(allocator);
+  }
+
+private:
+  RuntimeContext &rt_;
+  int64_t node_index_;
+  const std::vector<uint32_t> *input_slots_;
+  const std::vector<uint32_t> *output_slots_;
+  std::vector<bool> output_slot_io_roles_;
+  RawBufferAllocator *allocator_;
+  RawBufferAllocator *execution_allocator_;
+};
+
 OpsetImports ParseOpsetImports(const utils::RepeatedProtoField<OperatorSetIdProto> &imports) {
   OpsetImports versions;
   for (const auto &import : imports) {
@@ -112,7 +143,8 @@ RuntimeSession::RuntimeSession(const ModelProto &model, int verbose)
                             }) {}
 
 RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions options)
-    : default_plan_(model.graph()), plan_(default_plan_), check_shapes_(options.check_shapes),
+    : default_plan_(model), plan_(default_plan_), value_store_(std::move(options.value_store)),
+      check_shapes_(options.check_shapes),
       allow_external_output_allocators_(options.allow_external_output_allocators),
       parameters_(std::move(options.parameters)),
       cpu_execution_(options.cpu_execution.has_value() ? *options.cpu_execution
@@ -130,9 +162,10 @@ RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions op
 }
 
 RuntimeSession::RuntimeSession(const GraphProto &graph, const OpsetImports *inherited_opset_imports,
-                               int verbose)
+                               int verbose, std::shared_ptr<ValueStore> value_store)
     : default_plan_(graph), plan_(default_plan_), inherited_opset_imports_(inherited_opset_imports),
-      cpu_execution_(DefaultCpuExecutionPolicy(parameters_)), verbose_(verbose) {
+      value_store_(std::move(value_store)), cpu_execution_(DefaultCpuExecutionPolicy(parameters_)),
+      verbose_(verbose) {
   SetDeclaredShapes(graph);
   SetInitializers(graph);
 }
@@ -145,7 +178,8 @@ RuntimeSession::RuntimeSession(const ExecutionPlan &plan, int verbose)
                            }) {}
 
 RuntimeSession::RuntimeSession(const ExecutionPlan &plan, RuntimeSessionOptions options)
-    : plan_(plan), check_shapes_(options.check_shapes),
+    : plan_(plan), value_store_(std::move(options.value_store)),
+      check_shapes_(options.check_shapes),
       allow_external_output_allocators_(options.allow_external_output_allocators),
       parameters_(std::move(options.parameters)),
       cpu_execution_(options.cpu_execution.has_value() ? *options.cpu_execution
@@ -162,7 +196,8 @@ RuntimeSession::RuntimeSession(const FunctionProto &function,
                                const OpsetImports *inherited_opset_imports,
                                RuntimeSessionOptions options)
     : default_plan_(function), plan_(default_plan_),
-      inherited_opset_imports_(inherited_opset_imports), check_shapes_(options.check_shapes),
+      inherited_opset_imports_(inherited_opset_imports),
+      value_store_(std::move(options.value_store)), check_shapes_(options.check_shapes),
       allow_external_output_allocators_(options.allow_external_output_allocators),
       parameters_(std::move(options.parameters)),
       cpu_execution_(options.cpu_execution.has_value() ? *options.cpu_execution
@@ -171,6 +206,7 @@ RuntimeSession::RuntimeSession(const FunctionProto &function,
       cpu_execution_counters_(options.cpu_execution_counters),
       parallel_region_collector_(std::move(options.parallel_region_collector)),
       verbose_(options.verbose) {
+  SetNestedExecution();
   if (!function.opset_import().empty())
     owned_opset_imports_ = ParseOpsetImports(function.opset_import());
 }
@@ -316,7 +352,7 @@ RuntimeSession::ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt,
                                   const std::string &domain, const std::string &op_type,
                                   const KernelContext &kernel_context) const {
   return detail::ResolveNodeKernelDefault(node, rt, domain, op_type, kernel_context,
-                                          EffectiveOpsetImports());
+                                          EffectiveOpsetImports(), value_store_);
 }
 
 void RuntimeSession::InitializeKernels(RuntimeContext &rt,
@@ -434,21 +470,11 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt,
       pending_tuning[i].kernel->instance->Configure(*parameters);
     }
   }
-  size_t preparation_count = 0;
   for (const ExecuteAction &action : plan_.actions()) {
     if (action.kind() == ExecuteActionKind::kExecuteNode) {
       KernelBase &kernel = *kernels_[action.node_index()].instance;
-      preparation_count += kernel.HasPreparations(preparable_inputs) ? 1 : 0;
-    }
-  }
-  if (preparation_count != 0) {
-    prepared_execution_state_ = std::make_unique<PreparedExecutionState>(1, preparation_count);
-    for (const ExecuteAction &action : plan_.actions()) {
-      if (action.kind() == ExecuteActionKind::kExecuteNode) {
-        KernelBase &kernel = *kernels_[action.node_index()].instance;
-        if (kernel.HasPreparations(preparable_inputs)) {
-          kernel.Prepare(rt, preparable_inputs, *prepared_execution_state_);
-        }
+      if (kernel.HasPreparations(preparable_inputs)) {
+        kernel.Prepare(rt, preparable_inputs);
       }
     }
   }
@@ -459,6 +485,30 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt,
   // starts executing kernels.
   required_inputs_ = ::ONNX_LIGHT_NAMESPACE::core::graph::CollectExternalInputs(nodes);
   kernels_initialized_ = true;
+}
+
+void RuntimeSession::ResolveKernelValueSlots(RuntimeContext &rt) {
+  const std::vector<const NodeProto *> &nodes = plan_.nodes();
+  for (size_t index = 0; index < kernels_.size(); ++index) {
+    PreparedKernel &prepared = kernels_[index];
+    const NodeProto &node = *nodes[index];
+    prepared.input_slots.clear();
+    prepared.input_slots.reserve(node.input_size());
+    for (const auto &name : node.input()) {
+      prepared.input_slots.push_back(name.empty() ? std::numeric_limits<uint32_t>::max()
+                                                  : rt.ResolveValueSlot(name));
+    }
+    prepared.output_slots.clear();
+    prepared.output_slots.reserve(node.output_size());
+    for (const auto &name : node.output()) {
+      prepared.output_slots.push_back(name.empty() ? std::numeric_limits<uint32_t>::max()
+                                                   : rt.ResolveValueSlot(name));
+    }
+  }
+}
+
+size_t RuntimeSession::prepared_bytes() const noexcept {
+  return value_store_ == nullptr ? 0 : value_store_->prepared_bytes();
 }
 
 std::vector<std::string> RuntimeSession::used_kernels() const {
@@ -476,7 +526,7 @@ std::vector<std::string> RuntimeSession::used_kernels() const {
 }
 
 bool RuntimeSession::ProducesDeclaredOutput(const NodeProto &node) const {
-  if (output_names_set_.empty()) {
+  if (!route_declared_outputs_to_io_ || output_names_set_.empty()) {
     return false;
   }
   for (int i = 0; i < node.output_size(); ++i) {
@@ -491,9 +541,10 @@ bool RuntimeSession::ProducesDeclaredOutput(const NodeProto &node) const {
 void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContext &rt) const {
   for (int i = 0; i < node.output_size(); ++i) {
     const std::string &name = node.output(i);
-    if (name.empty() || rt.retains_output(name)) {
+    if (name.empty()) {
       continue;
     }
+    const bool retained_output = rt.retains_output(name);
     // Resolve the allocation role of this individual output slot rather than of
     // the node as a whole. A declared graph output belongs to the I/O arena;
     // every other (intermediate) output belongs to the execution arena. This is
@@ -504,7 +555,8 @@ void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContex
     // the declared outputs are already in the I/O arena (no copy); only the
     // intermediates of such a mixed node are migrated back to the execution
     // arena here.
-    const bool declared_output = output_names_set_.find(name) != output_names_set_.end();
+    const bool declared_output =
+        route_declared_outputs_to_io_ && output_names_set_.find(name) != output_names_set_.end();
     const bool slot_to_io = session_io_allocator_ != nullptr && declared_output;
     RawBufferAllocator *expected = slot_to_io ? session_io_allocator_ : session_allocator_;
     auto value = rt.values().find(name);
@@ -514,8 +566,8 @@ void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContex
                             "RuntimeSession: maximum structured output depth exceeded.");
         if (item.kind == RuntimeValue::Kind::kTensor && expected != nullptr) {
           Tensor &tensor = item.tensor;
-          if (tensor.size_bytes() > 0 && tensor.data_type != DataType::STRING &&
-              tensor.borrowed_owner().use_count() == 0 &&
+          if ((!retained_output || rt.OwnsExecutionAllocation(tensor)) && tensor.size_bytes() > 0 &&
+              tensor.data_type != DataType::STRING && tensor.borrowed_owner().use_count() == 0 &&
               (!tensor.has_allocation() || tensor.allocation_owner() != expected)) {
             EXT_ENFORCE_INVALID(tensor.bytes() != nullptr,
                                 "RuntimeSession: structured output has a null data pointer.");
@@ -544,7 +596,9 @@ void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContex
     const char *expected_name =
         slot_to_io ? "the session's I/O allocator" : "the session's execution allocator";
     Tensor &output = rt.Get(name);
-    if (output.size_bytes() > 0 && static_cast<DataType>(output.data_type) != DataType::STRING &&
+    if ((!retained_output || rt.OwnsExecutionAllocation(output)) && output.size_bytes() > 0 &&
+        static_cast<DataType>(output.data_type) != DataType::STRING &&
+        output.borrowed_owner().use_count() == 0 &&
         (!output.has_allocation() || output.allocation_owner() != expected)) {
       const size_t output_size_bytes = output.size_bytes();
       const uint8_t *output_bytes = output.bytes();
@@ -562,6 +616,8 @@ void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContex
       rt.Put(name, std::move(migrated), migrated_kind);
     }
     const Tensor &verified_output = rt.Get(name);
+    if (static_cast<DataType>(verified_output.data_type) == DataType::STRING)
+      continue;
     if (!verified_output.has_allocation()) {
       continue;
     }
@@ -596,6 +652,16 @@ void RuntimeSession::VerifyDeclaredShape(const std::string &name, const RuntimeC
 }
 
 void RuntimeSession::Run(RuntimeContext &rt) {
+  rt.BindExecutionPlan(plan_);
+  const bool resolve_value_slots = value_directory_identity_ != rt.value_directory_identity();
+  if (resolve_value_slots) {
+    action_value_slots_.clear();
+    action_value_slots_.reserve(plan_.actions().size());
+    for (const ExecuteAction &action : plan_.actions()) {
+      action_value_slots_.push_back(action.name().empty() ? std::numeric_limits<uint32_t>::max()
+                                                          : rt.ResolveValueSlot(action.name()));
+    }
+  }
   if (owned_opset_imports_ && inherited_opset_imports_ == nullptr &&
       rt.kernel_ctx().opset.version != 0) {
     const std::string domain =
@@ -618,6 +684,11 @@ void RuntimeSession::Run(RuntimeContext &rt) {
   const ParallelRegionCollectorScope collector_scope(parallel_region_collector_ != nullptr
                                                          ? parallel_region_collector_.get()
                                                          : CurrentParallelRegionCollector());
+  if (value_store_ == nullptr) {
+    value_store_ = rt.value_store_owner();
+  } else if (rt.value_store_owner() != value_store_) {
+    rt.SetValueStore(value_store_);
+  }
   const std::unordered_set<std::string> seeded_initializers = SeedInitializers(rt);
   // Kernels are resolved against ``rt`` on the first run and cached; later
   // runs reuse the same built instances without redoing the per-node
@@ -631,20 +702,18 @@ void RuntimeSession::Run(RuntimeContext &rt) {
     }
     InitializeKernels(rt, preparable_inputs);
   }
+  if (resolve_value_slots) {
+    ResolveKernelValueSlots(rt);
+    value_directory_identity_ = rt.value_directory_identity();
+  }
   // Use the session's construction-time verbosity when it is non-zero;
   // otherwise fall back to the RuntimeContext's own verbosity. The context
   // itself is left untouched.
   const int effective_verbose = verbose_ != 0 ? verbose_ : rt.verbose();
-  // Capture the allocator attached to ``rt`` once, on the first Run, as the
-  // session's unique allocator; every output tensor produced from here on is
-  // verified against this same allocator (see VerifyOutputAllocators). The
-  // I/O allocator (if any) is captured alongside it so declared graph
-  // outputs can be routed to it (see the kExecuteNode case below).
-  if (!session_allocator_captured_) {
-    session_allocator_ = rt.execution_allocator();
-    session_io_allocator_ = rt.io_allocator();
-    session_allocator_captured_ = true;
-  }
+  // Refresh the invocation's allocators on every run. A cached session may run
+  // against short-lived contexts whose owned arenas differ between invocations.
+  session_allocator_ = rt.execution_allocator();
+  session_io_allocator_ = rt.io_allocator();
   // Every external input the scheduled nodes read must already be available in
   // ``rt`` (as a tensor, sequence or map) — graph initializers are seeded
   // before Run and graph inputs are supplied by the caller. Surface a missing
@@ -677,11 +746,13 @@ void RuntimeSession::Run(RuntimeContext &rt) {
   // bookkeeping) is informational for this session — the kernels manage their
   // own allocations — but is still matched by an explicit case so no scheduled
   // event is silently ignored.
-  for (const ExecuteAction &action : plan_.actions()) {
+  for (size_t action_index = 0; action_index < plan_.actions().size(); ++action_index) {
+    const ExecuteAction &action = plan_.actions()[action_index];
     switch (action.kind()) {
     case ExecuteActionKind::kExecuteNode: {
       const size_t index = action.node_index();
       const PreparedKernel &prepared = kernels_[index];
+      NodeDispatchScope dispatch_scope(rt);
       // Every kExecuteNode index is resolved by InitializeKernels (which
       // walks the same plan), so a missing kernel instance here means the
       // plan was mutated after initialization — surface it as a clear error
@@ -690,6 +761,7 @@ void RuntimeSession::Run(RuntimeContext &rt) {
                           "RuntimeSession: kernel for node index ", index,
                           " was not initialized before Run().");
       rt.set_current_node_index(static_cast<int64_t>(index));
+      rt.SetCurrentNodeValueSlots(&prepared.input_slots, &prepared.output_slots);
       const NodeProto &node = *nodes[index];
       const std::string &domain = ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node);
       const std::string &op_type = node.op_type().value();
@@ -709,7 +781,7 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       // avoiding the migration copy VerifyOutputAllocators would otherwise
       // perform for a mixed-output node. Kernels that do not use the slot-aware
       // MakeOutputTensor API are unaffected and keep node-scoped routing.
-      if (session_io_allocator_ != nullptr) {
+      if (session_io_allocator_ != nullptr && route_declared_outputs_to_io_) {
         std::vector<bool> io_roles(static_cast<size_t>(node.output_size()), false);
         for (int slot = 0; slot < node.output_size(); ++slot) {
           const std::string &output_name = node.output(slot);
@@ -734,11 +806,6 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       }
 
       prepared.instance->Run(rt);
-
-      // The per-slot roles apply only to the node just dispatched; clear them so
-      // a later kernel that runs before the next node records its roles (for
-      // example a control-flow body) never observes stale routing.
-      rt.clear_output_slot_io_roles();
 
       if (logging) {
         const int64_t duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -767,25 +834,25 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       if (!rt.release_intermediates()) {
         break;
       }
-      rt.Remove(action.name());
+      rt.Remove(action_value_slots_[action_index]);
       break;
     case ExecuteActionKind::kDeleteShape:
       if (!rt.release_intermediates()) {
         break;
       }
-      rt.RemoveShape(action.name());
+      rt.RemoveShape(rt.ValueName(action_value_slots_[action_index]));
       break;
     case ExecuteActionKind::kDeleteSequence:
       if (!rt.release_intermediates()) {
         break;
       }
-      rt.Remove(action.name());
+      rt.Remove(action_value_slots_[action_index]);
       break;
     case ExecuteActionKind::kDeleteMap:
       if (!rt.release_intermediates()) {
         break;
       }
-      rt.RemoveMap(action.name());
+      rt.RemoveMap(rt.ValueName(action_value_slots_[action_index]));
       break;
     // Actions this session performs no explicit work for: the kernels manage
     // their own buffers, so locks/unlocks, (temporary-)buffer allocations,
@@ -803,25 +870,34 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       break;
     }
   }
-  rt.set_current_node_index(-1);
   // Detach any graph output that borrows into the model (e.g. a Constant's
   // raw_data value or a pass-through initializer) so the returned outputs own
   // their bytes and stay valid once the model is released.
-  MaterializeBorrowedOutputs(rt);
+  if (materialize_outputs_) {
+    MaterializeBorrowedOutputs(rt);
+  }
 }
 
 void RuntimeSession::MaterializeBorrowedOutputs(RuntimeContext &rt) const {
   for (const std::string &name : output_names_) {
     if (rt.retains_output(name))
       continue;
+    if (rt.HasShape(name)) {
+      const Shape shape = rt.GetShape(name);
+      rt.Put(name, Tensor::FromInt64(name, {static_cast<int64_t>(shape.size())}, shape),
+             RuntimeEventKind::kOutput);
+    }
     auto value = rt.values().find(name);
     if (value != rt.values().end()) {
       const auto detach = [&](auto &&self, RuntimeValue &item, size_t depth) -> void {
         EXT_ENFORCE_INVALID(depth <= RuntimeValue::kMaxDepth,
                             "RuntimeSession: maximum structured output depth exceeded.");
-        if (item.kind == RuntimeValue::Kind::kTensor && item.tensor.is_borrowed())
-          item.tensor = item.tensor.ToOwned();
-        else if (item.kind == RuntimeValue::Kind::kEncoded)
+        if (item.kind == RuntimeValue::Kind::kTensor) {
+          if (item.tensor.data_type == DataType::STRING || item.tensor.is_borrowed())
+            item.tensor = item.tensor.ToOwned();
+          if (item.tensor.data_type != DataType::STRING && rt.OwnsIOAllocation(item.tensor))
+            item.tensor = std::move(item.tensor).RetainStorage();
+        } else if (item.kind == RuntimeValue::Kind::kEncoded)
           item = item.DeepCopy();
         else if (item.kind == RuntimeValue::Kind::kStruct)
           for (auto &[field, child] : item.fields)
@@ -839,8 +915,11 @@ void RuntimeSession::MaterializeBorrowedOutputs(RuntimeContext &rt) const {
       continue;
     }
     Tensor &output = rt.Get(name);
-    if (output.is_borrowed()) {
+    if (output.data_type == DataType::STRING || output.is_borrowed()) {
       output = output.ToOwned();
+    }
+    if (output.data_type != DataType::STRING && rt.OwnsIOAllocation(output)) {
+      output = std::move(output).RetainStorage();
     }
   }
 }

@@ -188,6 +188,25 @@ TEST(ExecutionPlan, PreservesExplicitReleaseAndDerivesMissingRelease) {
             1);
 }
 
+TEST(ExecutionPlan, IgnoresStaleExplicitReleaseForGraphOutput) {
+  GraphProto graph;
+  graph.add_input()->set_name("X");
+  graph.add_output()->set_name("Y");
+  NodeProto *identity = graph.add_node();
+  identity->set_op_type("Identity");
+  identity->add_input("X");
+  identity->add_output("Y");
+  identity->add_metadata(core::compute::kReleaseAfterMetadataKey, "Y");
+
+  const ExecutionPlan plan(graph);
+  EXPECT_EQ(std::count_if(plan.actions().begin(), plan.actions().end(),
+                          [](const auto &action) {
+                            return action.kind() == ExecuteActionKind::kDeleteBuffer &&
+                                   action.name() == "Y";
+                          }),
+            0);
+}
+
 TEST(ExecutionPlan, DerivesMissingUnlockFromPartialMetadata) {
   GraphProto graph;
   graph.add_input()->set_name("X");

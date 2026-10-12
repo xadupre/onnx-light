@@ -42,11 +42,11 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime::detail {
  * An unsupported ``(domain, op_type)`` is rejected here (at resolution time)
  * with the same diagnostic previously emitted at run time.
  */
-std::unique_ptr<KernelBase> ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt,
-                                                     const std::string &domain,
-                                                     const std::string &op_type,
-                                                     const KernelContext &kernel_context,
-                                                     const OpsetImports *opset_imports = nullptr);
+std::unique_ptr<KernelBase>
+ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt, const std::string &domain,
+                         const std::string &op_type, const KernelContext &kernel_context,
+                         const OpsetImports *opset_imports = nullptr,
+                         std::shared_ptr<ValueStore> value_store = nullptr);
 
 /**
  * Emits the ReferenceEvaluator verbose progress line for one node dispatch. The

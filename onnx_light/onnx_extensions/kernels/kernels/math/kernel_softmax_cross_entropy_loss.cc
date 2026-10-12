@@ -171,9 +171,9 @@ void SoftmaxCrossEntropyLoss::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputRange(node, 2, 3);
   RequireOutputRange(node, 1, 2);
-  const Tensor &scores = GetInput(node, 0, rt.tensors());
-  const Tensor &labels = GetInput(node, 1, rt.tensors());
-  const Tensor *weights = GetOptionalInput(node, 2, rt.tensors());
+  const Tensor &scores = GetInput(node, 0, rt);
+  const Tensor &labels = GetInput(node, 1, rt);
+  const Tensor *weights = GetOptionalInput(node, 2, rt);
   const std::string reduction = GetAttributeStringOrDefault(node, "reduction", "mean");
   const bool has_ignore_index = FindAttribute(node, "ignore_index") != nullptr;
   const int64_t ignore_index = GetAttributeIntOrDefault(node, "ignore_index", 0);

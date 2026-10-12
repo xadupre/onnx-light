@@ -664,8 +664,8 @@ void PagedAttention::Run(RuntimeContext &rt) {
   }
   const auto past = rt.values().find(node.input(3));
   EXT_ENFORCE_INVALID(past != rt.values().end(), "PagedAttention: missing past cache.");
-  Result result = (*this)(GetInput(node, 0, rt.tensors()), GetInput(node, 1, rt.tensors()),
-                          GetInput(node, 2, rt.tensors()), past->second, options, &rt);
+  Result result = (*this)(GetInput(node, 0, rt), GetInput(node, 1, rt), GetInput(node, 2, rt),
+                          past->second, options, &rt);
   SetOutput(node, 0, std::move(result.Y), rt);
   rt.PutValue(node.output(1), std::move(result.present));
 }

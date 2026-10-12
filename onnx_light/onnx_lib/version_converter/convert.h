@@ -47,6 +47,7 @@
 #include "onnx_lib/version_converter/adapters/reshape_4_5.h"
 #include "onnx_lib/version_converter/adapters/reshape_5_4.h"
 #include "onnx_lib/version_converter/adapters/resize_10_11.h"
+#include "onnx_lib/version_converter/adapters/resize_12_13.h"
 #include "onnx_lib/version_converter/adapters/resize_18_17.h"
 #include "onnx_lib/version_converter/adapters/scan_8_9.h"
 #include "onnx_lib/version_converter/adapters/scan_9_8.h"
@@ -491,7 +492,7 @@ public:
         std::make_unique<CompatibleAdapter>("ReduceSumSquare", OpSetID(12), OpSetID(13)));
     registerAdapter(std::make_unique<CompatibleAdapter>("Relu", OpSetID(12), OpSetID(13)));
     registerAdapter(std::make_unique<CompatibleAdapter>("Reshape", OpSetID(12), OpSetID(13)));
-    registerAdapter(std::make_unique<CompatibleAdapter>("Resize", OpSetID(12), OpSetID(13)));
+    registerAdapter(std::make_unique<Resize_12_13>());
     registerAdapter(
         std::make_unique<CompatibleAdapter>("ScatterElements", OpSetID(12), OpSetID(13)));
     registerAdapter(std::make_unique<CompatibleAdapter>("ScatterND", OpSetID(12), OpSetID(13)));

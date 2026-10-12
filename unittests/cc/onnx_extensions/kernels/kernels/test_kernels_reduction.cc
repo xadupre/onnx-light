@@ -74,7 +74,10 @@ TEST(KernelClass, ReduceLogSumExpFloat16LargeReduction) {
             core::runtime::MakeFloat16Tensor("", {1, static_cast<int64_t>(input.size())}, input);
         const Tensor result = opset == 13 ? kernel(data, keepdims) : kernel(data, axes, keepdims);
         EXPECT_EQ(result.data_type, core::runtime::DataType::FLOAT16);
-        EXPECT_EQ(result.shape, (keepdims ? std::vector<int64_t>{1, 1} : std::vector<int64_t>{1}));
+        const std::vector<int64_t> expected_shape = keepdims      ? std::vector<int64_t>{1, 1}
+                                                    : opset == 13 ? std::vector<int64_t>{}
+                                                                  : std::vector<int64_t>{1};
+        EXPECT_EQ(result.shape, expected_shape);
         float sum = 0.0f;
         for (float value : values) {
           sum += std::exp(value);

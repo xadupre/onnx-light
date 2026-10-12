@@ -199,8 +199,8 @@ void SplitToSequence::Run(RuntimeContext &rt) {
   EXT_ENFORCE_INVALID(!(node.input_size() > 2), "RunNode: op '", node.op_type(),
                       "' expects 1 or 2 inputs, got ", node.input_size(), ".");
   RequireOutputCount(node, 1);
-  const Tensor &input = GetInput(node, 0, rt.tensors());
-  const Tensor *split = GetOptionalInput(node, 1, rt.tensors());
+  const Tensor &input = GetInput(node, 0, rt);
+  const Tensor *split = GetOptionalInput(node, 1, rt);
   const int64_t axis = GetAttributeIntOrDefault(node, "axis", 0);
   const int64_t keepdims = GetAttributeIntOrDefault(node, "keepdims", 1);
   onnx_kernels::kernel::SplitToSequence k(rt.kernel_ctx());

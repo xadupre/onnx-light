@@ -751,13 +751,13 @@ void Attention::Run(RuntimeContext &rt) {
   EXT_ENFORCE_INVALID(!(node.output_size() < 1 || node.output_size() > 4), "RunNode: op '",
                       node.op_type(), "' expects between 1 and 4 output(s), got ",
                       node.output_size(), ".");
-  const Tensor &q = GetInput(node, 0, rt.tensors());
-  const Tensor &k = GetInput(node, 1, rt.tensors());
-  const Tensor &v = GetInput(node, 2, rt.tensors());
-  const Tensor *attn_mask = GetOptionalInput(node, 3, rt.tensors());
-  const Tensor *past_key = GetOptionalInput(node, 4, rt.tensors());
-  const Tensor *past_value = GetOptionalInput(node, 5, rt.tensors());
-  const Tensor *nonpad_kv_seqlen = GetOptionalInput(node, 6, rt.tensors());
+  const Tensor &q = GetInput(node, 0, rt);
+  const Tensor &k = GetInput(node, 1, rt);
+  const Tensor &v = GetInput(node, 2, rt);
+  const Tensor *attn_mask = GetOptionalInput(node, 3, rt);
+  const Tensor *past_key = GetOptionalInput(node, 4, rt);
+  const Tensor *past_value = GetOptionalInput(node, 5, rt);
+  const Tensor *nonpad_kv_seqlen = GetOptionalInput(node, 6, rt);
 
   onnx_kernels::kernel::Attention::Attributes attrs;
   if (FindAttribute(node, "scale") != nullptr) {

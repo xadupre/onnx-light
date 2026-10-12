@@ -7,6 +7,7 @@
 #include "onnx_core/runtime/memory/simple_tensor.h"
 
 #include <cstddef>
+#include <deque>
 #include <limits>
 #include <list>
 #include <map>
@@ -302,7 +303,7 @@ private:
 };
 
 /**
- * Fixed-slot arena for I/O buffers with capacity-preserving reuse and leasing.
+ * Growable arena for I/O buffers with capacity-preserving reuse and leasing.
  *
  * :cpp:class:`IOArena` retains and reuses freed storage exactly like
  * :cpp:class:`ExecutionArena`, but it additionally supports exporting a live
@@ -323,13 +324,15 @@ private:
 class IOArena : public RawBufferAllocator, public std::enable_shared_from_this<IOArena> {
 public:
   /**
-   * Creates a shared arena with at most ``capacity`` simultaneously live buffers.
+   * Creates a shared arena with ``initial_capacity`` reusable buffer slots.
    *
-   * @param capacity       Number of stable :cpp:struct:`RawBuffer` slots.
+   * The arena adds stable slots when every existing slot is live or leased.
+   *
+   * @param initial_capacity Initial number of stable :cpp:struct:`RawBuffer` slots.
    * @param retention_cap  Maximum total capacity kept on the retained free
    *                       lists. Defaults to unbounded, disabling eviction.
    */
-  static std::shared_ptr<IOArena> Create(size_t capacity,
+  static std::shared_ptr<IOArena> Create(size_t initial_capacity,
                                          size_t retention_cap = std::numeric_limits<size_t>::max());
 
   /**
@@ -339,7 +342,7 @@ public:
    * all slots have acquired storage, the largest undersized free buffer grows to
    * satisfy the request.
    *
-   * @throws std::bad_alloc if all slots are currently live.
+   * Slot growth preserves every previously returned buffer address.
    */
   RawBuffer *Allocate(size_t n_bytes) override;
 
@@ -401,7 +404,7 @@ public:
   /// Resets the live-byte peak to the current live-byte count.
   void ResetPeak() override;
 
-  /// Returns the maximum number of simultaneously live buffers.
+  /// Returns the current number of stable buffer slots.
   size_t capacity() const noexcept;
 
   /// Returns the number of live buffers owned directly by the arena (not leased).
@@ -455,7 +458,7 @@ private:
   /// Evicts least-recently-freed buffers until the retention cap is satisfied.
   size_t EnforceRetentionCap() noexcept;
 
-  std::vector<RawBuffer> buffers_;
+  std::deque<RawBuffer> buffers_;
   std::vector<size_t> unused_slots_;
   std::map<size_t, std::vector<size_t>> free_buckets_;
   std::unordered_map<RawBuffer *, size_t> slot_indices_;

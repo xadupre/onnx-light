@@ -106,7 +106,7 @@ void DepthToSpace::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
-  const Tensor &input = GetInput(node, 0, rt.tensors());
+  const Tensor &input = GetInput(node, 0, rt);
   onnx_kernels::kernel::DepthToSpace::Attributes attrs;
   const AttributeProto *blocksize_attr = FindAttribute(node, "blocksize");
   EXT_ENFORCE_INVALID(blocksize_attr != nullptr,

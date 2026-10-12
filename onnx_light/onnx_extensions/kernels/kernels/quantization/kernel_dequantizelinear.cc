@@ -699,9 +699,9 @@ void DequantizeLinear::Run(RuntimeContext &rt) {
                       "RunNode: op 'DequantizeLinear' expects 2 or 3 inputs, got ",
                       node.input_size(), ".");
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &x_scale = GetInput(node, 1, rt.tensors());
-  const Tensor *x_zero_point = GetOptionalInput(node, 2, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
+  const Tensor &x_scale = GetInput(node, 1, rt);
+  const Tensor *x_zero_point = GetOptionalInput(node, 2, rt);
   const int64_t axis = GetAttributeIntOrDefault(node, "axis", 1);
   onnx_kernels::kernel::DequantizeLinear k(rt.kernel_ctx());
   if (x_zero_point != nullptr) {

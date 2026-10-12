@@ -270,19 +270,20 @@ void RegisterReduceLogSumExpCases(std::vector<TestCase> &registry, TestMode mode
   RegisterReduceLogSumExpOnnxCases<onnx_kernels::kernel::ReduceLogSumExp>(registry);
 
   {
+    const OpsetId opset = DefaultOpset(18);
     NodeProto node;
     node.set_op_type("ReduceLogSumExp");
     node.add_input("data");
     node.add_input("axes");
     node.add_output("reduced");
     AddAttribute<int64_t>(node, "keepdims", 1);
-    Expect(registry, std::move(node), "test_reduce_log_sum_exp_float16_large_sum",
-           {DefaultOpset(18)}, []() -> IoData {
-             Tensor data = core::runtime::MakeFloat16Tensor("", {256, 256},
-                                                            std::vector<float>(256 * 256, 0.0f));
+    Expect(registry, std::move(node), "test_reduce_log_sum_exp_float16_large_sum", {opset},
+           []() -> IoData {
+             Tensor data =
+                 core::runtime::MakeFloat16Tensor("", {256, 256}, std::vector<float>(65536, 0.0f));
              Tensor axes = Tensor::FromInt64("", {2}, {0, 1});
-             Tensor expected = core::runtime::MakeFloat16Tensor("", {1, 1}, {std::log(65536.0f)});
-             return IoData{{std::move(data), std::move(axes)}, {std::move(expected)}};
+             Tensor reduced = core::runtime::MakeFloat16Tensor("", {1, 1}, {std::log(65536.0f)});
+             return IoData{{std::move(data), std::move(axes)}, {std::move(reduced)}};
            });
   }
 

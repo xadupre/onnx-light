@@ -447,7 +447,7 @@ def make_attribute(
                 )
 
         if int(attr_type) == AttributeProto.INTS:
-            attr.ints.extend(value)
+            attr.ints.extend(int(v) if isinstance(v, bool) else v for v in value)
             attr.type = AttributeProto.INTS
         elif int(attr_type) == AttributeProto.FLOATS:
             attr.floats.extend(value)

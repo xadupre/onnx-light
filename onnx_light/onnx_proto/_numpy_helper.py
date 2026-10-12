@@ -662,21 +662,27 @@ def to_optional(optional: OptionalProto) -> Any | None:
         optional: an OptionalProto object.
 
     Returns:
-        The converted optional value, or None for UNDEFINED.
+        The converted optional value, or None when the value is absent.
     """
     elem_type = optional.elem_type
     if elem_type == OptionalProto.UNDEFINED:
         return None
     if elem_type == OptionalProto.TENSOR:
-        return to_array(optional.tensor_value)
+        return to_array(optional.tensor_value) if optional.HasField("tensor_value") else None
     if elem_type == OptionalProto.SPARSE_TENSOR:
-        return to_array(optional.sparse_tensor_value)  # type: ignore[arg-type]
+        return (
+            to_array(optional.sparse_tensor_value)  # type: ignore[arg-type]
+            if optional.HasField("sparse_tensor_value")
+            else None
+        )
     if elem_type == OptionalProto.SEQUENCE:
-        return to_list(optional.sequence_value)
+        return to_list(optional.sequence_value) if optional.HasField("sequence_value") else None
     if elem_type == OptionalProto.MAP:
-        return to_dict(optional.map_value)
+        return to_dict(optional.map_value) if optional.HasField("map_value") else None
     if elem_type == OptionalProto.OPTIONAL:
-        return to_optional(optional.optional_value)
+        return (
+            to_optional(optional.optional_value) if optional.HasField("optional_value") else None
+        )
     raise TypeError("The element type in the input optional is not supported.")
 
 

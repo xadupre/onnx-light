@@ -272,7 +272,7 @@ void TreeEnsemble::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
   const std::vector<int64_t> tree_roots = GetAttributeIntsOrDefault(node, "tree_roots", {});
   const std::vector<int64_t> nodes_featureids =
       GetAttributeIntsOrDefault(node, "nodes_featureids", {});

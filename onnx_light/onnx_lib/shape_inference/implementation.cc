@@ -859,10 +859,10 @@ void InferShapes(const std::string &model_path, const std::string &save_path,
   // Use SerializeToString instead of SerializeToOstream due to LITE_PROTO
   std::fstream output(save_path, std::ios::out | std::ios::trunc | std::ios::binary);
   std::string model_string;
-  ONNX_TRY {
-    model.SerializeToString(model_string);
-    output << model_string;
+  if (!model.SerializeToString(model_string)) {
+    fail_check("Unable to serialize the inferred model for the target path: ", save_path);
   }
+  ONNX_TRY { output << model_string; }
   ONNX_CATCH(...) { fail_check("Unable to save inferred model to the target path:", save_path); }
 }
 

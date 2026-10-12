@@ -48,6 +48,8 @@ class ShapesContext;
 } // namespace shapes
 namespace runtime {
 
+class ValueStore;
+
 /**
  * Construction-time settings for :cpp:class:`RuntimeSession`.
  *
@@ -79,6 +81,9 @@ struct RuntimeSessionOptions {
   /// Initial capacity along a kernel's append axis for contiguous persistent tensors.
   /// Zero disables append reservations; kernels use their ordinary allocation path.
   size_t persistent_tensor_initial_capacity = 32;
+  /// Value store inherited by nested graph and model-local function sessions.
+  /// A root session left empty adopts the store exposed by its first runtime context.
+  std::shared_ptr<ValueStore> value_store = nullptr;
 };
 
 /** Reports the one-time kernel tuning work performed by a runtime session. */
@@ -287,12 +292,15 @@ public:
     return tuning_resolution_statistics_;
   }
 
-  /// Returns bytes occupied by session-owned prepared kernel objects.
-  size_t prepared_bytes() const noexcept {
-    return prepared_execution_state_ == nullptr
-               ? 0
-               : prepared_execution_state_->objects().resident_bytes();
-  }
+  /// Returns bytes occupied by prepared kernel objects in the shared root,
+  /// subgraph, and model-local function session hierarchy.
+  size_t prepared_bytes() const noexcept;
+
+  /// Returns the synchronous preparation store shared by this session hierarchy.
+  /// This store supplies stable direct-lookup slots during ordinary
+  /// :cpp:class:`ExecutionPlan` replay; it is separate from the asynchronous
+  /// :cpp:class:`PreparedExecutionState`.
+  const std::shared_ptr<ValueStore> &value_store() const noexcept { return value_store_; }
 
   /// Enables or disables concrete-shape validation. When enabled, :cpp:func:`Run`
   /// checks that the concrete shape of every tensor carrying a declared
@@ -363,13 +371,20 @@ public:
   static std::vector<std::string> CollectNodeInputs(const NodeProto &node);
 
 protected:
+  /// Marks a function or control-flow body as nested in its caller's invocation.
+  void SetNestedExecution() noexcept {
+    route_declared_outputs_to_io_ = false;
+    materialize_outputs_ = false;
+  }
+
   /// Constructs a session over a bare :cpp:class:`GraphProto`, owning the
   /// resulting :cpp:class:`ExecutionPlan` in ``default_plan_``. Used
   /// by :cpp:class:`SubgraphSession` so a control-flow subgraph can be a
   /// :cpp:class:`RuntimeSession` with the same default resolution behavior as a
   /// top-level graph session.
   explicit RuntimeSession(const GraphProto &graph,
-                          const OpsetImports *inherited_opset_imports = nullptr, int verbose = 0);
+                          const OpsetImports *inherited_opset_imports = nullptr, int verbose = 0,
+                          std::shared_ptr<ValueStore> value_store = nullptr);
 
   /// Default node-kernel resolution used during
   /// :cpp:func:`InitializeKernels`, so :cpp:class:`RuntimeSession` and
@@ -391,6 +406,8 @@ private:
   struct PreparedKernel {
     std::string key;
     std::unique_ptr<KernelBase> instance;
+    std::vector<uint32_t> input_slots;
+    std::vector<uint32_t> output_slots;
   };
 
   /// Resolves and builds the kernel instance for every node the plan executes,
@@ -398,6 +415,7 @@ private:
   /// read in :cpp:member:`required_inputs_`.
   void InitializeKernels(RuntimeContext &rt,
                          const std::unordered_set<std::string> &preparable_inputs);
+  void ResolveKernelValueSlots(RuntimeContext &rt);
   const OpsetImports *EffectiveOpsetImports() const noexcept;
 
   /// Seeds missing initializer names and returns the names installed by this session.
@@ -454,7 +472,7 @@ private:
   /// without imports borrow their enclosing session's immutable map instead.
   std::optional<OpsetImports> owned_opset_imports_;
   const OpsetImports *inherited_opset_imports_ = nullptr;
-  std::unique_ptr<PreparedExecutionState> prepared_execution_state_;
+  std::shared_ptr<ValueStore> value_store_;
   std::vector<PreparedKernel> kernels_;
   const GraphProto *initializer_graph_ = nullptr;
   std::optional<StructTypeCatalogue> struct_type_catalogue_;
@@ -466,6 +484,10 @@ private:
   std::optional<KernelTuningRegistrySnapshot> tuning_snapshot_;
   KernelTuningResolutionStatistics tuning_resolution_statistics_;
   std::vector<std::string> required_inputs_;
+  /// Stable RuntimeContext slot for each action's primary name. Nameless
+  /// actions carry ``UINT32_MAX``.
+  std::vector<uint32_t> action_value_slots_;
+  uint64_t value_directory_identity_ = 0;
   /// Declared (possibly symbolic) shapes keyed by tensor name, populated by
   /// :cpp:func:`SetDeclaredShapes` and consulted by :cpp:func:`Run` when
   /// :cpp:member:`check_shapes_` is enabled.
@@ -492,6 +514,8 @@ private:
   /// (see :cpp:func:`VerifyOutputAllocators`), allowing outputs allocated
   /// outside the session's common allocator.
   bool allow_external_output_allocators_ = false;
+  bool route_declared_outputs_to_io_ = true;
+  bool materialize_outputs_ = true;
   RuntimeParameters parameters_;
   /// Requested CPU execution policy, derived from :cpp:member:`parameters_`
   /// when the caller did not supply one.
@@ -509,18 +533,14 @@ private:
   std::shared_ptr<CpuExecutor> cpu_executor_;
   /// Verbosity level used by :cpp:func:`Run` when non-zero.
   int verbose_ = 0;
-  /// Allocator observed on ``rt`` the first time :cpp:func:`Run` executes;
-  /// every output tensor produced by a scheduled node is verified to be
-  /// backed by this same allocator (see :cpp:func:`Run`).
+  /// Execution allocator of the current :cpp:func:`Run` invocation.
   RawBufferAllocator *session_allocator_ = nullptr;
-  /// I/O allocator observed on ``rt`` (:cpp:func:`RuntimeContext::io_allocator`)
-  /// the first time :cpp:func:`Run` executes, alongside
-  /// :cpp:member:`session_allocator_`. When non-null, :cpp:func:`Run` routes
+  /// I/O allocator of the current :cpp:func:`Run` invocation. When non-null,
+  /// :cpp:func:`Run` routes
   /// the kernel invocation of any node that produces a declared graph output
   /// (see :cpp:member:`output_names_set_`) through this allocator instead of
   /// :cpp:member:`session_allocator_`.
   RawBufferAllocator *session_io_allocator_ = nullptr;
-  bool session_allocator_captured_ = false;
 };
 
 } // namespace runtime

@@ -247,14 +247,14 @@ void DFT::Run(RuntimeContext &rt) {
   EXT_ENFORCE_INVALID(!(node.input_size() > 3), "RunNode: op '", node.op_type(),
                       "' expects at most 3 inputs.");
   RequireOutputCount(node, 1);
-  const Tensor &input = GetInput(node, 0, rt.tensors());
-  const Tensor *dft_length = GetOptionalInput(node, 1, rt.tensors());
+  const Tensor &input = GetInput(node, 0, rt);
+  const Tensor *dft_length = GetOptionalInput(node, 1, rt);
   const bool inverse = GetAttributeIntOrDefault(node, "inverse", 0) != 0;
   const bool onesided = GetAttributeIntOrDefault(node, "onesided", 0) != 0;
   int64_t axis = 1;
   const int64_t opset_version = ctx_.opset.version;
   if (opset_version >= 20) {
-    const Tensor *axis_tensor = GetOptionalInput(node, 2, rt.tensors());
+    const Tensor *axis_tensor = GetOptionalInput(node, 2, rt);
     if (axis_tensor != nullptr) {
       EXT_ENFORCE_INVALID(!(axis_tensor->element_count() != 1),
                           "RunNode: DFT 'axis' input must be a scalar tensor (or a 1-D "

@@ -359,7 +359,7 @@ TEST(PagedAttentionFeedback, ResetCloseAndRequestIsolationRetainLastLiveOwners) 
   EXPECT_THROW(first.Run(context, Feeds(1)), std::invalid_argument);
 }
 
-TEST(PagedAttentionFeedback, AllocatorExhaustionDoesNotPublishPartialCache) {
+TEST(PagedAttentionFeedback, GrowableOutputArenaPublishesCompleteCache) {
   ModelProto model = PagedModel();
   auto arena = IOArena::Create(2);
   SimpleRawBufferAllocator execution(8);
@@ -368,11 +368,13 @@ TEST(PagedAttentionFeedback, AllocatorExhaustionDoesNotPublishPartialCache) {
       RuntimeContextOptions{.allocator = &execution, .io_allocator = arena.get()});
   RegisterPaged(context);
   PersistentValueState state(model, {{"past", PagedAttention::EmptyCache()}});
-  // K and V fill the arena, so allocation of Y fails before publication.
-  EXPECT_THROW(state.Run(context, Feeds(1)), std::bad_alloc);
-  EXPECT_TRUE(Blocks(state.Values().at("past")).empty());
-  EXPECT_THROW(state.Run(context, Feeds(2)), std::bad_alloc);
-  EXPECT_TRUE(Blocks(state.Values().at("past")).empty());
+  auto first = state.Run(context, Feeds(1));
+  EXPECT_EQ(Blocks(first.at("present")).size(), 1u);
+  EXPECT_EQ(Blocks(state.Values().at("past")).size(), 1u);
+  auto second = state.Run(context, Feeds(2));
+  EXPECT_EQ(Blocks(second.at("present")).size(), 2u);
+  EXPECT_EQ(Blocks(state.Values().at("past")).size(), 2u);
+  EXPECT_GT(arena->capacity(), 2u);
 }
 
 TEST(PagedAttentionFeedback, IntermediateCachesKeepOwnersAcrossArenaRouting) {

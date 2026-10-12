@@ -111,7 +111,7 @@ void SequenceConstruct::Run(RuntimeContext &rt) {
   Tensors inputs;
   inputs.reserve(node.input_size());
   for (int i = 0; i < node.input_size(); ++i) {
-    inputs.push_back(GetInput(node, i, rt.tensors()));
+    inputs.push_back(GetInput(node, i, rt));
   }
   onnx_kernels::kernel::SequenceConstruct k(rt.kernel_ctx());
   SetOutputSequence(node, 0, k.AsSequence(inputs), rt);

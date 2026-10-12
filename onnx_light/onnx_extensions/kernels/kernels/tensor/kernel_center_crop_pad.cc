@@ -231,8 +231,8 @@ void CenterCropPad::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 2);
   RequireOutputCount(node, 1);
-  const Tensor &input_data = GetInput(node, 0, rt.tensors());
-  const Tensor &shape = GetInput(node, 1, rt.tensors());
+  const Tensor &input_data = GetInput(node, 0, rt);
+  const Tensor &shape = GetInput(node, 1, rt);
   onnx_kernels::kernel::CenterCropPad::Attributes attrs;
   const AttributeProto *axes_attr = FindAttribute(node, "axes");
   if (axes_attr != nullptr) {

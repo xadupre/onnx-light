@@ -602,8 +602,7 @@ public:
   const KernelContext &kernel_ctx() const noexcept { return kernel_ctx_; }
   /// Returns the allocator kernels should currently use to acquire and
   /// release :cpp:struct:`RawBuffer` instances — the *active* allocator. It
-  /// equals :cpp:func:`execution_allocator` (the construction-time
-  /// :cpp:var:`RuntimeContextOptions::allocator`) except while
+  /// equals :cpp:func:`execution_allocator` except while
   /// :cpp:class:`RuntimeSession` temporarily routes a node's declared graph
   /// outputs to :cpp:func:`io_allocator` (see :cpp:func:`SetActiveAllocator`).
   /// Before a session is bound this may be ``nullptr`` when no allocator was
@@ -616,11 +615,12 @@ public:
   RawBufferAllocator *allocator() noexcept { return active_allocator_; }
   const RawBufferAllocator *allocator() const noexcept { return active_allocator_; }
 
-  /// Returns the execution allocator supplied at construction time
-  /// (:cpp:var:`RuntimeContextOptions::allocator`), regardless of which
-  /// allocator :cpp:func:`allocator` currently reports as active. Run-local
-  /// intermediates and kernel workspaces are always accounted against this
-  /// allocator (see :cpp:func:`StampAllocatorMemory`).
+  /// Returns the execution allocator, regardless of which allocator
+  /// :cpp:func:`allocator` currently reports as active. This is either the
+  /// allocator supplied through :cpp:var:`RuntimeContextOptions::allocator`
+  /// or the context-owned arena installed by :cpp:func:`BindExecutionPlan`.
+  /// Run-local intermediates and kernel workspaces are always accounted
+  /// against this allocator (see :cpp:func:`StampAllocatorMemory`).
   RawBufferAllocator *execution_allocator() noexcept { return allocator_; }
   const RawBufferAllocator *execution_allocator() const noexcept { return allocator_; }
 
@@ -653,10 +653,12 @@ public:
   /// Installs the session hierarchy's value store in this context.
   void SetValueStore(std::shared_ptr<ValueStore> value_store);
 
-  /// Optional allocator dedicated to values that cross the runtime boundary
-  /// (declared graph outputs and owned input staging buffers). ``nullptr``
-  /// when no dedicated I/O allocator was supplied at construction time, in
-  /// which case every allocation is routed through :cpp:func:`execution_allocator`.
+  /// Returns the allocator dedicated to values that cross the runtime
+  /// boundary (declared graph outputs and owned input staging buffers).
+  /// Before plan binding this is ``nullptr`` when no allocator was supplied
+  /// through :cpp:var:`RuntimeContextOptions::io_allocator`.
+  /// :cpp:func:`BindExecutionPlan` then installs a context-owned growable
+  /// I/O arena, so this accessor is non-null while a session is running.
   RawBufferAllocator *io_allocator() noexcept { return io_allocator_; }
   const RawBufferAllocator *io_allocator() const noexcept { return io_allocator_; }
 
@@ -676,10 +678,11 @@ public:
     return previous;
   }
 
-  /// Installs a context-owned fixed-capacity execution arena when no external
-  /// allocator was supplied. RuntimeSession calls this before resolving or
-  /// running any kernel. Rebinding an already-live owned arena to a larger
-  /// plan is rejected because existing allocation handles must remain valid.
+  /// Installs context-owned I/O and execution arenas when the corresponding
+  /// external allocators were not supplied. RuntimeSession calls this before
+  /// resolving or running any kernel. If a later plan requires a larger
+  /// execution arena, the current arena is retained to keep existing
+  /// allocation handles valid and a larger arena becomes active.
   void BindExecutionPlan(const ExecutionPlan &plan);
 
   /// Records, for the node currently being dispatched, which of its output

@@ -59,6 +59,15 @@ void ExpectPersistentBindingError(const GraphProto &graph, const std::string &me
   }
 }
 
+void ExpectModelVerificationError(const ModelProto &model, const std::string &message) {
+  try {
+    VerifyModel(model);
+    FAIL() << "Invalid model was accepted.";
+  } catch (const std::invalid_argument &error) {
+    EXPECT_NE(std::string(error.what()).find(message), std::string::npos) << error.what();
+  }
+}
+
 } // namespace
 
 TEST(onnx_verify, VerifyModel_Valid) {
@@ -662,6 +671,31 @@ TEST(onnx_verify, VerifyGraph_UnproducedOutput) {
   extra_output->ref_type().ref_tensor_type().set_elem_type(TensorProto::FLOAT);
   extra_output->ref_type().ref_tensor_type().ref_shape().ref_dim();
   EXPECT_THROW(VerifyGraph(graph), std::invalid_argument);
+}
+
+TEST(onnx_verify, VerifyModel_RejectsSubgraphInitializerShadowing) {
+  for (int initializer_kind = 0; initializer_kind < 4; ++initializer_kind) {
+    SCOPED_TRACE(initializer_kind);
+    ModelProto model = MakeValidModel();
+    GraphProto *subgraph = AddNestedGraph(*model.mutable_graph()->mutable_node(0), false);
+    subgraph->set_name("nested");
+    switch (initializer_kind) {
+    case 0:
+      subgraph->add_initializer()->set_name("x");
+      break;
+    case 1:
+      subgraph->add_sparse_initializer()->mutable_values()->set_name("x");
+      break;
+    case 2:
+      subgraph->add_encoded_initializer()->set_name("x");
+      break;
+    case 3:
+      subgraph->add_paged_cache_initializer()->set_name("x");
+      break;
+    }
+    ExpectModelVerificationError(model,
+                                 "initializer 'x' shadows a value from an outer graph scope");
+  }
 }
 
 TEST(onnx_verify, VerifyNode_EmptyOpType) {

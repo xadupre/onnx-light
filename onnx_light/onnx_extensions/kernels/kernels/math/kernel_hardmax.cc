@@ -85,7 +85,7 @@ void Hardmax::Run(RuntimeContext &rt) {
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
   const int64_t axis = GetAttributeIntOrDefault(node, "axis", -1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
   SetOutput(node, 0, (*this)(x, axis, &rt), rt);
 }
 

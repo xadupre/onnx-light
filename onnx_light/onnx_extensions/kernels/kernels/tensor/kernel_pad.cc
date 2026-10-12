@@ -318,15 +318,15 @@ void Pad::Run(RuntimeContext &rt) {
   RequireMinInputCount(node, 1);
   EXT_ENFORCE_INVALID(!(node.input_size() > 4), "RunNode: op 'Pad' expects at most 4 inputs.");
   RequireOutputCount(node, 1);
-  const Tensor &data = GetInput(node, 0, rt.tensors());
+  const Tensor &data = GetInput(node, 0, rt);
   const std::string mode = GetAttributeStringOrDefault(node, "mode", "constant");
   onnx_kernels::kernel::Pad k(rt.kernel_ctx());
 
   // Opset 11+: ``pads`` is the second input.
   if (node.input_size() >= 2) {
-    const Tensor &pads = GetInput(node, 1, rt.tensors());
-    const Tensor *constant_value = GetOptionalInput(node, 2, rt.tensors());
-    const Tensor *axes = GetOptionalInput(node, 3, rt.tensors());
+    const Tensor &pads = GetInput(node, 1, rt);
+    const Tensor *constant_value = GetOptionalInput(node, 2, rt);
+    const Tensor *axes = GetOptionalInput(node, 3, rt);
     SetOutput(node, 0, k(data, pads, constant_value, axes, mode, &rt), rt);
     return;
   }

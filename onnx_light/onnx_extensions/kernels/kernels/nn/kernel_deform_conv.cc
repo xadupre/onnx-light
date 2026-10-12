@@ -270,11 +270,11 @@ void DeformConv::Run(RuntimeContext &rt) {
                       "RunNode: op 'DeformConv' expects at most 5 inputs, got ", node.input_size(),
                       ".");
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
-  const Tensor &w = GetInput(node, 1, rt.tensors());
-  const Tensor &offset = GetInput(node, 2, rt.tensors());
-  const Tensor *b = GetOptionalInput(node, 3, rt.tensors());
-  const Tensor *mask = GetOptionalInput(node, 4, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
+  const Tensor &w = GetInput(node, 1, rt);
+  const Tensor &offset = GetInput(node, 2, rt);
+  const Tensor *b = GetOptionalInput(node, 3, rt);
+  const Tensor *mask = GetOptionalInput(node, 4, rt);
   onnx_kernels::kernel::DeformConv::Attributes attrs;
   attrs.kernel_shape = GetAttributeIntsOrDefault(node, "kernel_shape", {});
   attrs.strides = GetAttributeIntsOrDefault(node, "strides", {});

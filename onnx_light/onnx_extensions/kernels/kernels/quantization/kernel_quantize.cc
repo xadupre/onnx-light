@@ -23,12 +23,11 @@ void Quantize::Run(RuntimeContext &rt) {
       attribute && attribute->type() == AttributeProto::TYPE_PROTO && attribute->has_tp() &&
           attribute->tp().has_struct_type(),
       "Quantize requires a 'type' TYPE_PROTO attribute containing StructTypeProto.");
-  QuantizationParameters parameters{
-      GetOptionalInput(node, 1, rt.tensors()), GetOptionalInput(node, 2, rt.tensors()),
-      GetOptionalInput(node, 3, rt.tensors()), GetOptionalInput(node, 4, rt.tensors()),
-      GetOptionalInput(node, 5, rt.tensors()), GetOptionalInput(node, 6, rt.tensors()),
-      GetOptionalInput(node, 7, rt.tensors()), GetOptionalInput(node, 8, rt.tensors())};
-  auto input = GetInput(node, 0, rt.tensors()).BorrowView();
+  QuantizationParameters parameters{GetOptionalInput(node, 1, rt), GetOptionalInput(node, 2, rt),
+                                    GetOptionalInput(node, 3, rt), GetOptionalInput(node, 4, rt),
+                                    GetOptionalInput(node, 5, rt), GetOptionalInput(node, 6, rt),
+                                    GetOptionalInput(node, 7, rt), GetOptionalInput(node, 8, rt)};
+  auto input = GetInput(node, 0, rt).BorrowView();
   input.name = node.output(0);
   if (const auto *reference = FindAttribute(node, "parameter_ref")) {
     EXT_ENFORCE_INVALID(reference->type() == AttributeProto::STRING && reference->has_s() &&

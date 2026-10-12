@@ -356,7 +356,7 @@ void MaxPool::Run(RuntimeContext &rt) {
   EXT_ENFORCE_INVALID(!(node.output_size() < 1 || node.output_size() > 2),
                       "RunNode: op 'MaxPool' expects 1 or 2 output(s), got ", node.output_size(),
                       ".");
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
   const PoolCommonAttrs a = ParsePoolCommonAttrs(node);
   const int64_t storage_order = GetAttributeIntOrDefault(node, "storage_order", 0);
   onnx_kernels::kernel::MaxPool k(rt.kernel_ctx());

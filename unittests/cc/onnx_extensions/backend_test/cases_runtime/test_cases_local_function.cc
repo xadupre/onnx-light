@@ -82,7 +82,9 @@ void ExpectModelMatchesDataSets(const TestCase &tc) {
       const Tensor &actual = rt.Get(expected.name);
       EXPECT_EQ(actual.data_type, expected.data_type);
       EXPECT_EQ(actual.shape, expected.shape);
-      EXPECT_EQ(actual.data, expected.data);
+      ASSERT_EQ(actual.size_bytes(), expected.size_bytes());
+      EXPECT_EQ(std::vector<uint8_t>(actual.bytes(), actual.bytes() + actual.size_bytes()),
+                std::vector<uint8_t>(expected.bytes(), expected.bytes() + expected.size_bytes()));
     }
   }
 }

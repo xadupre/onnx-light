@@ -143,16 +143,16 @@ void Momentum::Run(RuntimeContext &rt) {
   EXT_ENFORCE_INVALID(node.output_size() == 2 * n,
                       "RunNode: op 'Momentum' expects 2*N outputs (got ", node.output_size(),
                       " for N=", n, ").");
-  const Tensor &R = GetInput(node, 0, rt.tensors());
-  const Tensor &T = GetInput(node, 1, rt.tensors());
+  const Tensor &R = GetInput(node, 0, rt);
+  const Tensor &T = GetInput(node, 1, rt);
   Tensors Xs, Gs, Vs;
   Xs.reserve(n);
   Gs.reserve(n);
   Vs.reserve(n);
   for (int64_t i = 0; i < n; ++i) {
-    Xs.push_back(GetInput(node, static_cast<int>(2 + i), rt.tensors()));
-    Gs.push_back(GetInput(node, static_cast<int>(2 + n + i), rt.tensors()));
-    Vs.push_back(GetInput(node, static_cast<int>(2 + 2 * n + i), rt.tensors()));
+    Xs.push_back(GetInput(node, static_cast<int>(2 + i), rt));
+    Gs.push_back(GetInput(node, static_cast<int>(2 + n + i), rt));
+    Vs.push_back(GetInput(node, static_cast<int>(2 + 2 * n + i), rt));
   }
   const float alpha = GetAttributeFloatOrDefault(node, "alpha", 0.0f);
   const float beta = GetAttributeFloatOrDefault(node, "beta", 0.0f);

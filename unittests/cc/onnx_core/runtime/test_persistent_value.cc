@@ -318,7 +318,7 @@ TEST(PersistentTensor, DeclinesLayoutsRequiringRepacking) {
   EXPECT_EQ(StorageTotal(events.events(), &RuntimeEvent::storage_allocations), 0u);
 }
 
-TEST(PersistentTensor, AllocatorExhaustionPreservesTheCommittedPrefix) {
+TEST(PersistentTensor, GrowingIOArenaPreservesTheCommittedPrefix) {
   auto arena = IOArena::Create(1);
   RuntimeContext events(RuntimeContextOptions{.events_enabled = true});
   PersistentTensor empty(Tensor::FromFloat("", {0}, {}));
@@ -327,12 +327,14 @@ TEST(PersistentTensor, AllocatorExhaustionPreservesTheCommittedPrefix) {
   WriteTail(*reservation, {1, 2});
   auto cache = reservation->Commit(2 * sizeof(float));
   const auto *bytes = cache.value().bytes();
-  EXPECT_THROW(cache.PrepareAppend().Reserve({3}, 0, 2, arena.get(), &events), std::bad_alloc);
+  auto grown = cache.PrepareAppend().Reserve({3}, 0, 2, arena.get(), &events);
+  ASSERT_TRUE(grown);
   EXPECT_EQ(cache.value().bytes(), bytes);
   EXPECT_EQ(cache.value().shape, Shape{2});
   EXPECT_FLOAT_EQ(cache.value().AsFloat()[1], 2);
-  EXPECT_EQ(StorageTotal(events.events(), &RuntimeEvent::storage_allocations), 1u);
-  EXPECT_EQ(arena->leased_count(), 1u);
+  EXPECT_EQ(StorageTotal(events.events(), &RuntimeEvent::storage_allocations), 2u);
+  EXPECT_EQ(arena->leased_count(), 2u);
+  EXPECT_EQ(arena->allocated_count(), 0u);
 }
 
 TEST(PersistentValue, NestedTensorLeavesKeepOwnersAndLiteralFieldNames) {

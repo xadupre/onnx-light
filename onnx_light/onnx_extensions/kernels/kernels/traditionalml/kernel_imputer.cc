@@ -115,7 +115,7 @@ void Imputer::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
 
   // Per the ``ai.onnx.ml::Imputer`` schema, exactly one of
   // ``imputed_value_floats``/``replaced_value_float`` (for floating-point

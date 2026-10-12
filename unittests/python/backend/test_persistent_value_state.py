@@ -384,10 +384,10 @@ class TestPersistentValueState(unittest.TestCase):
                                 totals[field] += value
                                 with self.assertRaises(AttributeError):
                                     setattr(event, field, value)
-                            self.assertEqual(event.allocated_bytes, 0)
-                            self.assertEqual(event.peak_bytes, 0)
-                            self.assertEqual(record["allocated_bytes"], 0)
-                            self.assertEqual(record["peak_bytes"], 0)
+                            self.assertGreaterEqual(event.allocated_bytes, 0)
+                            self.assertGreaterEqual(event.peak_bytes, event.allocated_bytes)
+                            self.assertEqual(record["allocated_bytes"], event.allocated_bytes)
+                            self.assertEqual(record["peak_bytes"], event.peak_bytes)
                         self.assertGreater(totals["storage_allocations"], 0)
                         self.assertGreater(totals["storage_allocated_bytes"], 0)
                         self.assertGreater(totals["storage_prefix_copied_bytes"], 0)

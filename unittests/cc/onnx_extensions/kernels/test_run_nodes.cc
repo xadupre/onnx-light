@@ -569,6 +569,33 @@ TEST(RunNodes, RunNodeNonCpuDeviceWithoutKernelThrows) {
     EXPECT_NE(msg.find("unsupported op_type 'Add'"), std::string::npos) << msg;
     EXPECT_NE(msg.find("on device 'GPU0'"), std::string::npos) << msg;
   }
+  EXPECT_EQ(rt.current_input_slots(), nullptr);
+  EXPECT_EQ(rt.current_output_slots(), nullptr);
+}
+
+TEST(RunNodes, RunNodeRestoresValueSlotsWhenKernelThrows) {
+  using core::runtime::RegisterKernelFn;
+
+  const std::string domain = "test.onnxlight.throwing_kernel";
+  RegisterKernelFn(domain, "Throw", core::symbolic::Device::kCPU,
+                   [](const NodeProto &node, RuntimeContext &,
+                      const KernelContext &) -> std::unique_ptr<core::runtime::KernelBase> {
+                     return std::make_unique<TestLambdaKernel>(
+                         node, [](const NodeProto &, RuntimeContext &) {
+                           throw std::invalid_argument("expected failure");
+                         });
+                   });
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.Set("x", Tensor::FromFloat("x", {1}, {1}));
+  const std::vector<uint32_t> outer_inputs{7};
+  const std::vector<uint32_t> outer_outputs{11};
+  rt.SetCurrentNodeValueSlots(&outer_inputs, &outer_outputs);
+  const NodeProto node = MakeNode("Throw", {"x"}, {"y"}, domain);
+  EXPECT_THROW(RunNode(node, rt), std::invalid_argument);
+  EXPECT_EQ(rt.current_input_slots(), &outer_inputs);
+  EXPECT_EQ(rt.current_output_slots(), &outer_outputs);
+  rt.SetCurrentNodeValueSlots(nullptr, nullptr);
 }
 
 TEST(RunNodes, RunNodeDispatchesDeviceQualifiedKernel) {
@@ -2681,6 +2708,10 @@ TEST(RunModel, ModelLocalFunctionThreeLevelNestedCalls) {
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   rt.Set("x", Tensor::FromFloat("x", {3}, {1.0f, 2.5f, -3.0f}));
 
+  ExecutionPlan plan(model);
+  EXPECT_EQ(plan.value_slot_count(), 3u);
+  EXPECT_EQ(plan.arena_capacity(), 34u);
+
   RunModelViaSession(model, rt);
 
   ASSERT_TRUE(rt.Has("y"));
@@ -3117,11 +3148,7 @@ TEST(RunModel, LoopNodeRunsBodySubgraph) {
 }
 
 // Variant of LoopNodeRunsBodySubgraph with a SimpleRawBufferAllocator. Verifies
-// that subgraph contexts created inside SubgraphSession::Run do not inherit the allocator,
-// preventing double-free of body-output tensors threaded as loop-carried state
-// across iterations. Iter/cond scalars are now allocated transiently via the
-// parent allocator, but those slots are released before the final loop outputs
-// are materialized, so the peak slot usage remains two.
+// that each body invocation inherits the parent execution allocator.
 TEST(RunModel, LoopNodeRunsBodySubgraphWithAllocator) {
   ModelProto model;
   model.set_ir_version(10);
@@ -3159,10 +3186,8 @@ TEST(RunModel, LoopNodeRunsBodySubgraphWithAllocator) {
   body->add_output()->set_name("s_out");
   body->add_output()->set_name("s_out");
 
-  // Two slots are sufficient: the transient iter/cond scalar allocations are
-  // freed at the end of each iteration before the final outputs are stored.
-  constexpr size_t kAllocatorSlotCapacity = 2;
-  core::runtime::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
+  constexpr size_t kAllocatorSlotCapacity = 16;
+  CountingAllocator alloc(kAllocatorSlotCapacity);
 
   TensorMap tensors;
   tensors.emplace("M", Tensor::FromInt64("M", {}, {3}));
@@ -3181,10 +3206,15 @@ TEST(RunModel, LoopNodeRunsBodySubgraphWithAllocator) {
   EXPECT_FLOAT_EQ(scan[0], 1.0f);
   EXPECT_FLOAT_EQ(scan[1], 2.0f);
   EXPECT_FLOAT_EQ(scan[2], 3.0f);
+  // Each iteration allocates iter, cond_in, and the body-only Add result.
+  // The two final Loop outputs remain live in the parent context.
+  EXPECT_EQ(alloc.allocate_calls(), 11u);
+  EXPECT_EQ(alloc.free_calls(), 9u);
+  EXPECT_EQ(alloc.allocated_count(), 2u);
 }
 
 TEST(RunModel, LoopNodeAllocatorBacksTransientIterAndCondScalars) {
-  CountingAllocator alloc(/*capacity=*/2);
+  CountingAllocator alloc(/*capacity=*/16);
   {
     ModelProto model;
     model.set_ir_version(10);
@@ -3231,15 +3261,14 @@ TEST(RunModel, LoopNodeAllocatorBacksTransientIterAndCondScalars) {
 
     RunModelViaSession(model, rt);
 
-    // 3 iterations x 2 transient scalar inputs (iter, cond_in) + 2 final loop
-    // outputs (s_final, scan) = 8 allocations total. Only the 2 final outputs
-    // remain live inside the parent RuntimeContext at this point.
-    EXPECT_EQ(alloc.allocate_calls(), 8u);
-    EXPECT_EQ(alloc.free_calls(), 6u);
+    // 3 iterations x 3 body allocations (iter, cond_in, Add output) + 2 final
+    // loop outputs = 11 allocations. Only the final outputs remain live.
+    EXPECT_EQ(alloc.allocate_calls(), 11u);
+    EXPECT_EQ(alloc.free_calls(), 9u);
     EXPECT_EQ(alloc.allocated_count(), 2u);
   }
-  EXPECT_EQ(alloc.allocate_calls(), 8u);
-  EXPECT_EQ(alloc.free_calls(), 8u);
+  EXPECT_EQ(alloc.allocate_calls(), 11u);
+  EXPECT_EQ(alloc.free_calls(), 11u);
   EXPECT_EQ(alloc.allocated_count(), 0u);
 }
 
@@ -3262,7 +3291,7 @@ TEST(RunLoopWithSequenceState, SequenceOnlyStateGrowsPerIteration) {
 }
 
 TEST(RunLoopWithSequenceState, SequenceOnlyStateAllocatorBacksIterAndCondScalars) {
-  CountingAllocator alloc(/*capacity=*/2);
+  CountingAllocator alloc(/*capacity=*/16);
   {
     TensorMap tensors;
     tensors.emplace("M", Tensor::FromInt64("M", {}, {3}));
@@ -3273,15 +3302,15 @@ TEST(RunLoopWithSequenceState, SequenceOnlyStateAllocatorBacksIterAndCondScalars
 
     RunNode(MakeLoopNode({"M", "cond", "seq_init"}, {"seq_out"}, BuildSequenceLoopBody()), rt);
 
-    // 3 iterations x 2 transient scalar inputs (iter, cond_in) = 6
-    // allocations total, and the sequence-only loop carries no allocator-backed
-    // tensor outputs, so every slot has already been freed.
-    EXPECT_EQ(alloc.allocate_calls(), 6u);
-    EXPECT_EQ(alloc.free_calls(), 6u);
-    EXPECT_EQ(alloc.allocated_count(), 0u);
+    // Body operators and their sequence elements inherit the parent allocator,
+    // not only the transient iter and cond_in scalars. Three tensors remain in
+    // the returned sequence until the parent context is destroyed.
+    EXPECT_EQ(alloc.allocate_calls(), 24u);
+    EXPECT_EQ(alloc.free_calls(), 21u);
+    EXPECT_EQ(alloc.allocated_count(), 3u);
   }
-  EXPECT_EQ(alloc.allocate_calls(), 6u);
-  EXPECT_EQ(alloc.free_calls(), 6u);
+  EXPECT_EQ(alloc.allocate_calls(), 24u);
+  EXPECT_EQ(alloc.free_calls(), 24u);
   EXPECT_EQ(alloc.allocated_count(), 0u);
 }
 
@@ -3344,11 +3373,9 @@ TEST(RunLoopWithSequenceState, MixedTensorSequenceAndScanOutputs) {
 // the transient iter/cond scalar bindings and the final loop outputs are backed
 // by the parent allocator.
 TEST(RunLoopWithSequenceState, MixedTensorSequenceAndScanOutputsWithAllocator) {
-  // Two simultaneous slots are needed: the transient iter/cond allocations are
-  // released before the final outputs are stored. Input tensors are set before
-  // attaching the allocator so they stay inline and do not consume allocator
-  // slots.
-  constexpr size_t kAllocatorSlotCapacity = 2;
+  // Body operators now inherit the parent allocator alongside the transient
+  // iter/cond tensors and final outputs.
+  constexpr size_t kAllocatorSlotCapacity = 16;
   core::runtime::SimpleRawBufferAllocator alloc(kAllocatorSlotCapacity);
 
   TensorMap tensors;
@@ -4126,6 +4153,8 @@ TEST(RunModel, LocalSubgraphCopiesCallerTensorsButHidesIntermediates) {
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   rt.Set("cond", Tensor::FromBool("cond", {}, {1}));
   rt.Set("outer", Tensor::FromFloat("outer", {2}, {5.0f, 7.0f}));
+  rt.Set("branch_tmp", Tensor::FromFloat("branch_tmp", {1}, {-1.0f}));
+  rt.Set("z", Tensor::FromFloat("z", {1}, {-2.0f}));
 
   RunModelViaSession(model, rt);
 
@@ -4141,10 +4170,12 @@ TEST(RunModel, LocalSubgraphCopiesCallerTensorsButHidesIntermediates) {
   EXPECT_TRUE(rt.Has("outer"));
 
   // Subgraph intermediates do NOT leak into the caller's tensor map.
-  EXPECT_FALSE(rt.Has("branch_tmp"));
+  ASSERT_TRUE(rt.Has("branch_tmp"));
+  EXPECT_FLOAT_EQ(rt.Get("branch_tmp").AsFloat()[0], -1.0f);
   // The subgraph's formal output name ``z`` (distinct from the node's
-  // output name ``out``) likewise stays inside the child context.
-  EXPECT_FALSE(rt.Has("z"));
+  // output name ``out``) likewise restores the caller's colliding value.
+  ASSERT_TRUE(rt.Has("z"));
+  EXPECT_FLOAT_EQ(rt.Get("z").AsFloat()[0], -2.0f);
 }
 
 // ---------------------------------------------------------------------------
@@ -4719,10 +4750,9 @@ TEST(RunNodes, RuntimeSessionRoutesMixedOutputsPerSlotIntermediateFirst) {
   EXPECT_FLOAT_EQ(ap[2], 103.0f);
 }
 
-// Without a dedicated I/O allocator (the pre-existing single-allocator
-// configuration), every output — declared or intermediate — keeps allocating
-// from the execution allocator, preserving prior behaviour.
-TEST(RunNodes, RuntimeSessionKeepsSingleAllocatorBehaviorWithoutIOAllocator) {
+// Without a caller-provided I/O allocator, the context creates a growable
+// output arena and returns a retained view that survives the session.
+TEST(RunNodes, RuntimeSessionCreatesOutputArenaWhenNoneIsProvided) {
   core::runtime::SimpleRawBufferAllocator execution_alloc(8);
   RuntimeContext rt(KernelContext(DefaultOpset(18)),
                     core::runtime::RuntimeContextOptions{.allocator = &execution_alloc});
@@ -4754,7 +4784,9 @@ TEST(RunNodes, RuntimeSessionKeepsSingleAllocatorBehaviorWithoutIOAllocator) {
   session.Run(rt);
 
   ASSERT_TRUE(rt.Has("y"));
-  EXPECT_EQ(rt.Get("y").allocation_owner(), &execution_alloc);
+  EXPECT_TRUE(rt.Get("y").is_borrowed());
+  EXPECT_TRUE(rt.Get("y").borrowed_owner());
+  EXPECT_FLOAT_EQ(rt.Get("y").AsFloat()[0], 2.0f);
 }
 
 // A slot-aware kernel allocates each of its outputs directly in that slot's
@@ -5920,6 +5952,41 @@ TEST(RunNodes, ExecuteActionSummary) {
   EXPECT_EQ(delete_map.summary(), "DeleteMap name='m'");
 }
 
+TEST(RunNodes, ExecutionPlanSeedsStableSlotsAcrossNestedGraphs) {
+  GraphProto branch;
+  branch.set_name("branch");
+  branch.add_input()->set_name("branch_input");
+  branch.add_output()->set_name("branch_output");
+  *branch.add_node() = MakeNode("Identity", {"branch_input"}, {"branch_output"});
+
+  GraphProto graph;
+  graph.set_name("root");
+  graph.add_input()->set_name("cond");
+  graph.add_input()->set_name("captured");
+  graph.add_output()->set_name("result");
+  NodeProto if_node = MakeNode("If", {"cond"}, {"result"});
+  AttributeProto *then_branch = if_node.add_attribute();
+  then_branch->set_name("then_branch");
+  then_branch->set_type(AttributeProto::GRAPH);
+  *then_branch->mutable_g() = branch;
+  AttributeProto *else_branch = if_node.add_attribute();
+  else_branch->set_name("else_branch");
+  else_branch->set_type(AttributeProto::GRAPH);
+  *else_branch->mutable_g() = branch;
+  *graph.add_node() = std::move(if_node);
+
+  ExecutionPlan plan(graph);
+  EXPECT_EQ(plan.value_slot_count(), 5u);
+  EXPECT_EQ(plan.arena_capacity(), 14u);
+
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  rt.RegisterValueNames(plan.value_names());
+  const uint32_t captured_slot = rt.ResolveValueSlot("captured");
+  EXPECT_EQ(captured_slot, rt.ResolveValueSlot("captured"));
+  EXPECT_EQ(rt.ValueName(captured_slot), "captured");
+  EXPECT_EQ(rt.value_slot_count(), plan.value_slot_count());
+}
+
 TEST(RunNodes, ExecutionPlanShapeTagActions) {
   // A value tagged "shape" gets its shape created / destroyed (no data buffer),
   // while a regular result gets its buffer allocated / freed.
@@ -6905,25 +6972,26 @@ TEST(RunNodes, RuntimeSessionMaterializesBorrowedConstantOutput) {
   std::memcpy(raw.data(), values, sizeof(values));
   t->set_raw_data(utils::ByteSpan(raw));
 
-  // Driving the model's own plan directly (no declared outputs) leaves the
-  // output borrowing into the proto: this is the state the session must fix.
+  // Driving the model's own plan directly (no declared outputs) may migrate
+  // the output into the context-owned execution arena.
   {
     RuntimeContext rt(KernelContext(DefaultOpset(18)));
     const ExecutionPlan &plan = rt.GetExecutionPlan(model.ref_graph());
     RuntimeSession session(plan);
     session.Run(rt);
     ASSERT_TRUE(rt.Has("Y"));
-    EXPECT_TRUE(rt.Get("Y").is_borrowed());
+    EXPECT_FLOAT_EQ(rt.Get("Y").AsFloat()[0], 1.0f);
   }
 
   // Building the session from the ModelProto records the graph outputs, so Run
-  // detaches the borrowed output into an owned tensor.
+  // retains the output independently of the model and context lifetimes.
   RuntimeContext rt(KernelContext(DefaultOpset(18)));
   RuntimeSession session(model);
   session.Run(rt);
   ASSERT_TRUE(rt.Has("Y"));
   const Tensor &y = rt.Get("Y");
-  EXPECT_FALSE(y.is_borrowed());
+  EXPECT_TRUE(y.is_borrowed());
+  EXPECT_TRUE(y.borrowed_owner());
   ASSERT_EQ(y.element_count(), 3);
   const float *got = y.AsFloat();
   EXPECT_FLOAT_EQ(got[0], 1.0f);

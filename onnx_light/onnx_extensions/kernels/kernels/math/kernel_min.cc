@@ -194,7 +194,7 @@ void Min::Run(RuntimeContext &rt) {
   Tensors inputs;
   inputs.reserve(node.input_size());
   for (int i = 0; i < node.input_size(); ++i) {
-    inputs.push_back(GetInput(node, i, rt.tensors()));
+    inputs.push_back(GetInput(node, i, rt));
   }
   SetOutput(node, 0, (*this)(inputs, &rt), rt);
 }

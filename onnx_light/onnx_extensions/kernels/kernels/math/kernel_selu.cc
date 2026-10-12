@@ -90,7 +90,7 @@ void Selu::Run(RuntimeContext &rt) {
   const NodeProto &node = *node_;
   RequireInputCount(node, 1);
   RequireOutputCount(node, 1);
-  const Tensor &x = GetInput(node, 0, rt.tensors());
+  const Tensor &x = GetInput(node, 0, rt);
   const float alpha = GetAttributeFloatOrDefault(node, "alpha", 1.67326319217681884765625f);
   const float gamma = GetAttributeFloatOrDefault(node, "gamma", 1.05070102214813232421875f);
   onnx_kernels::kernel::Selu k(rt.kernel_ctx());

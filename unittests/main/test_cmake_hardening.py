@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+
 class TestCMakeHardening(unittest.TestCase):
     def test_hardening_flags_and_caller_mode(self):
         root = Path(__file__).resolve().parents[2]
@@ -26,10 +27,11 @@ class TestCMakeHardening(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            for name, hardening, caller_mode in (
-                ("off", False, False),
-                ("default", True, False),
-                ("caller_mode", True, True),
+            for name, hardening, caller_mode, unsupported in (
+                ("off", False, False, False),
+                ("default", True, False, False),
+                ("caller_mode", True, True, False),
+                ("unsupported", True, False, True),
             ):
                 with self.subTest(name=name):
                     build = Path(directory) / name
@@ -44,6 +46,11 @@ class TestCMakeHardening(unittest.TestCase):
                             "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
                             f"-DENABLE_HARDENING={'ON' if hardening else 'OFF'}",
                             f"-DCMAKE_CXX_FLAGS={flags if caller_mode else ''}",
+                            *(
+                                ["-DONNX_LIGHT_HARDENING_CXX__Wbidi_chars_any:INTERNAL=0"]
+                                if unsupported
+                                else []
+                            ),
                         ],
                         check=True,
                         capture_output=True,
@@ -57,6 +64,8 @@ class TestCMakeHardening(unittest.TestCase):
                         "-D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_FAST" in command,
                         hardening and not caller_mode,
                     )
+                    if caller_mode:
+                        self.assertEqual(command.count(flags), 1)
                     if hardening:
                         self.assertIn("-D_GLIBCXX_ASSERTIONS", command)
                         cache = (build / "CMakeCache.txt").read_text(encoding="utf-8")
@@ -69,6 +78,12 @@ class TestCMakeHardening(unittest.TestCase):
                     else:
                         self.assertNotIn("-Wbidi-chars=any", command)
                         self.assertNotIn("-D_GLIBCXX_ASSERTIONS", command)
+                    subprocess.run(
+                        ["cmake", "--build", str(build)],
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    )
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@
 #include "onnx_extensions/kernels/kernels/reduction/include_reduction_kernels.h"
 #include "onnx_proto/onnx_helper.h"
 
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <vector>

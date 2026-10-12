@@ -2977,6 +2977,15 @@ GraphProto GraphBuilder::BuildGraphImpl(bool validate_persistent_bindings) const
   for (const ValueInfoProto &value_info : value_infos_) {
     graph.add_value_info(value_info);
   }
+  if (parent_ != nullptr) {
+    const auto locally_defined = GraphDefinedNames(graph);
+    for (const ValueInfoProto &output : graph.output()) {
+      if (locally_defined.count(output.name().value()) == 0) {
+        throw BuilderError("GraphBuilder: subgraph '" + name_ + "' output '" +
+                           output.name().value() + "' is not defined in this graph.");
+      }
+    }
+  }
   if (validate_persistent_bindings && !graph.persistent_bindings().empty()) {
     // Supplies inferred IO types before validating the unfinalized graph view.
     for (auto &output : graph.ref_output()) {

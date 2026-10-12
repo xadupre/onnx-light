@@ -165,9 +165,11 @@ TEST(GraphGraph, OptionalUnusedCleanupRecursesIntoSubgraphs) {
     auto &then_branch = builder.MakeSubgraph("then_branch");
     then_branch.MakeInitializer(MakeInitializer<float>("weight", {2}, {1.0f, 2.0f}));
     then_branch.MakeNode("Add", {"x", "weight"}, {"dead"});
-    then_branch.MakeOutput("x");
+    then_branch.MakeNode("Identity", {"x"}, {"branch_result"});
+    then_branch.MakeOutput("branch_result");
     auto &else_branch = builder.MakeSubgraph("else_branch");
-    else_branch.MakeOutput("x");
+    else_branch.MakeNode("Identity", {"x"}, {"branch_result"});
+    else_branch.MakeOutput("branch_result");
 
     utils::RepeatedProtoField<AttributeProto> attributes;
     for (const std::string name : {"then_branch", "else_branch"}) {
@@ -184,7 +186,7 @@ TEST(GraphGraph, OptionalUnusedCleanupRecursesIntoSubgraphs) {
         builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{});
     graph.Optimize(-1, nullptr, {}, remove_unused);
 
-    EXPECT_EQ(then_branch.ToGraph().node_size(), remove_unused ? 0 : 1);
+    EXPECT_EQ(then_branch.ToGraph().node_size(), remove_unused ? 1 : 2);
     EXPECT_EQ(then_branch.ToGraph().initializer_size(), remove_unused ? 0 : 1);
   }
 }
@@ -366,7 +368,8 @@ TEST(GraphGraph, NativeExportOrdersDependenciesAndRecomputesCapturedLifetimes) {
   utils::RepeatedProtoField<AttributeProto> attributes;
   for (const std::string name : {"then_branch", "else_branch"}) {
     auto &branch = builder.MakeSubgraph(name);
-    branch.MakeOutput("p");
+    branch.MakeNode("Identity", {"p"}, {"branch_result"});
+    branch.MakeOutput("branch_result");
     AttributeProto reference;
     reference.set_name(name + "_ref");
     reference.set_type(AttributeProto::AttributeType::STRING);
@@ -412,7 +415,8 @@ TEST(GraphGraph, NativeExportOrdersProducerBeforeLexicalCapture) {
   utils::RepeatedProtoField<AttributeProto> attributes;
   for (const std::string name : {"then_branch", "else_branch"}) {
     auto &branch = builder.MakeSubgraph(name);
-    branch.MakeOutput("p");
+    branch.MakeNode("Identity", {"p"}, {"branch_result"});
+    branch.MakeOutput("branch_result");
     AttributeProto reference;
     reference.set_name(name + "_ref");
     reference.set_type(AttributeProto::AttributeType::STRING);

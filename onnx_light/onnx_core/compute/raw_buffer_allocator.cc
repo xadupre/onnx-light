@@ -306,12 +306,7 @@ RawBuffer *IOArena::Allocate(size_t n_bytes) {
     leased_slots_.reserve(i + 1);
     slot_indices_.reserve(i + 1);
     buffers_.push_back(std::move(buffer));
-    try {
-      slot_indices_.emplace(&buffers_.back(), i);
-    } catch (const std::bad_alloc &) {
-      buffers_.pop_back();
-      throw;
-    }
+    slot_indices_.emplace(&buffers_.back(), i);
     live_slots_.push_back(false);
     leased_slots_.push_back(false);
   }

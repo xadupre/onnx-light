@@ -35,6 +35,12 @@ inline constexpr uint32_t kInvalidValueStoreSlot = std::numeric_limits<uint32_t>
  */
 class ONNX_LIGHT_CORE_API ValueStore {
 public:
+  ValueStore() = default;
+  ValueStore(const ValueStore &) = delete;
+  ValueStore &operator=(const ValueStore &) = delete;
+  ValueStore(ValueStore &&) = delete;
+  ValueStore &operator=(ValueStore &&) = delete;
+
   uint32_t Bind(std::string key);
   bool IsReady(uint32_t slot) const;
   Tensor AllocateTensor(int32_t data_type, const Shape &shape, size_t n_bytes);

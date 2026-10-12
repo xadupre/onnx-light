@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/kernels/kernels/reduction/include_reduction_kernels.h"
 
+#include "onnx_core/runtime/kernels/float16_promote.h"
 #include "onnx_core/runtime/kernels/node_helpers.h"
 #include "onnx_core/runtime/memory/temporary_buffer.h"
 #include "onnx_core/runtime/runtime_context.h"
@@ -51,10 +52,11 @@ Shape RowMajorStrides(const Shape &shape) {
   return strides;
 }
 
-void ValidateFloatOrDouble(const Tensor &t, const char *name) {
+void ValidateFloatingPoint(const Tensor &t, const char *name) {
   EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::FLOAT) ||
-                          t.data_type == static_cast<int32_t>(DataType::DOUBLE),
-                      "kernel::ReduceLogSumOp: ", name, " must be a FLOAT or DOUBLE tensor.");
+                          t.data_type == static_cast<int32_t>(DataType::DOUBLE) ||
+                          core::runtime::IsHalfPrecision(t.data_type),
+                      "kernel::ReduceLogSumOp: ", name, " must be a floating-point tensor.");
 }
 
 // Templated reduction core for both FLOAT and DOUBLE.
@@ -177,7 +179,16 @@ void LogSumReduce(const Tensor &data, const Shape &is_reduced, const Shape &outp
   const int64_t out_count = output.element_count();
   const int64_t rank = static_cast<int64_t>(data.shape.size());
   const int64_t total = data.element_count();
-  if (data.data_type == static_cast<int32_t>(DataType::DOUBLE)) {
+  if (core::runtime::IsHalfPrecision(data.data_type)) {
+    Tensor promoted = core::runtime::PromoteToFloat32(data);
+    Tensor reduced = MakeOutputTensor(DataType::FLOAT, output.shape,
+                                      static_cast<size_t>(out_count) * sizeof(float), nullptr);
+    LogSumReduceT<float>(promoted.AsFloat(), reduced.AsFloat(), out_count, total, rank, data.shape,
+                         is_reduced, output_shape_noreduce, mode, allocator);
+    Tensor demoted = core::runtime::DemoteFromFloat32(reduced, data.data_type, nullptr);
+    if (output.size_bytes() > 0)
+      std::memcpy(output.mutable_bytes(), demoted.bytes(), output.size_bytes());
+  } else if (data.data_type == static_cast<int32_t>(DataType::DOUBLE)) {
     LogSumReduceT<double>(data.AsDouble(), output.AsDouble(), out_count, total, rank, data.shape,
                           is_reduced, output_shape_noreduce, mode, allocator);
   } else {
@@ -208,6 +219,14 @@ void LogSumNoopElementwise(const Tensor &data, ReduceLogSumOp::Mode mode, Tensor
   }
   if (data.data_type == static_cast<int32_t>(DataType::DOUBLE)) {
     LogSumNoopElementwiseT<double>(data.AsDouble(), output.AsDouble(), total, mode);
+  } else if (core::runtime::IsHalfPrecision(data.data_type)) {
+    Tensor promoted = core::runtime::PromoteToFloat32(data);
+    Tensor transformed =
+        MakeOutputTensor(DataType::FLOAT, output.shape, total * sizeof(float), nullptr);
+    LogSumNoopElementwiseT<float>(promoted.AsFloat(), transformed.AsFloat(), total, mode);
+    Tensor demoted = core::runtime::DemoteFromFloat32(transformed, data.data_type, nullptr);
+    if (output.size_bytes() > 0)
+      std::memcpy(output.mutable_bytes(), demoted.bytes(), output.size_bytes());
   } else {
     LogSumNoopElementwiseT<float>(data.AsFloat(), output.AsFloat(), total, mode);
   }
@@ -217,7 +236,7 @@ void LogSumNoopElementwise(const Tensor &data, ReduceLogSumOp::Mode mode, Tensor
 
 Tensor ReduceLogSumOp::operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes,
                                   RuntimeContext *rt) const {
-  ValidateFloatOrDouble(data, "data");
+  ValidateFloatingPoint(data, "data");
   const int64_t rank = static_cast<int64_t>(data.shape.size());
   Shape is_reduced;
   is_reduced.assign(static_cast<size_t>(rank), 0);
@@ -229,8 +248,7 @@ Tensor ReduceLogSumOp::operator()(const Tensor &data, bool keepdims, bool noop_w
   for (int64_t d : out_shape) {
     out_count *= d;
   }
-  const size_t elem_size =
-      (data.data_type == static_cast<int32_t>(DataType::DOUBLE)) ? sizeof(double) : sizeof(float);
+  const size_t elem_size = ElementSize(data.data_type);
   const size_t out_n_bytes = static_cast<size_t>(out_count) * elem_size;
   Tensor out = rt ? rt->MakeOutputTensor(0, data.data_type, out_shape, out_n_bytes)
                   : MakeOutputTensor(data.data_type, out_shape, out_n_bytes, nullptr);
@@ -240,7 +258,7 @@ Tensor ReduceLogSumOp::operator()(const Tensor &data, bool keepdims, bool noop_w
 
 void ReduceLogSumOp::operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes,
                                 Tensor &output, RawBufferAllocator *temporary_allocator) const {
-  ValidateFloatOrDouble(data, "data");
+  ValidateFloatingPoint(data, "data");
   EXT_ENFORCE_INVALID(output.data_type == data.data_type,
                       "kernel::ReduceLogSumOp: output dtype must match data dtype.");
   const int64_t rank = static_cast<int64_t>(data.shape.size());
@@ -254,8 +272,7 @@ void ReduceLogSumOp::operator()(const Tensor &data, bool keepdims, bool noop_wit
       output.shape == expected_out_shape,
       "kernel::ReduceLogSumOp preallocated output shape does not match expected shape.");
   const int64_t out_count = output.element_count();
-  const size_t elem_size =
-      (data.data_type == static_cast<int32_t>(DataType::DOUBLE)) ? sizeof(double) : sizeof(float);
+  const size_t elem_size = ElementSize(data.data_type);
   EXT_ENFORCE_INVALID(
       output.size_bytes() == static_cast<size_t>(out_count) * elem_size,
       "kernel::ReduceLogSumOp preallocated output buffer has unexpected size in bytes.");
@@ -270,7 +287,7 @@ void ReduceLogSumOp::operator()(const Tensor &data, bool keepdims, bool noop_wit
 
 Tensor ReduceLogSumOp::operator()(const Tensor &data, const Tensor &axes, bool keepdims,
                                   bool noop_with_empty_axes, RuntimeContext *rt) const {
-  ValidateFloatOrDouble(data, "data");
+  ValidateFloatingPoint(data, "data");
   EXT_ENFORCE_INVALID(axes.data_type == static_cast<int32_t>(DataType::INT64),
                       "kernel::ReduceLogSumOp: axes must be an INT64 tensor.");
   const int64_t rank = static_cast<int64_t>(data.shape.size());
@@ -293,8 +310,7 @@ Tensor ReduceLogSumOp::operator()(const Tensor &data, const Tensor &axes, bool k
   for (int64_t d : out_shape) {
     out_count *= d;
   }
-  const size_t elem_size =
-      (data.data_type == static_cast<int32_t>(DataType::DOUBLE)) ? sizeof(double) : sizeof(float);
+  const size_t elem_size = ElementSize(data.data_type);
   const size_t out_n_bytes = static_cast<size_t>(out_count) * elem_size;
   Tensor out = rt ? rt->MakeOutputTensor(0, data.data_type, out_shape, out_n_bytes)
                   : MakeOutputTensor(data.data_type, out_shape, out_n_bytes, nullptr);
@@ -306,7 +322,7 @@ Tensor ReduceLogSumOp::operator()(const Tensor &data, const Tensor &axes, bool k
 void ReduceLogSumOp::operator()(const Tensor &data, const Tensor &axes, bool keepdims,
                                 bool noop_with_empty_axes, Tensor &output,
                                 RawBufferAllocator *temporary_allocator) const {
-  ValidateFloatOrDouble(data, "data");
+  ValidateFloatingPoint(data, "data");
   EXT_ENFORCE_INVALID(output.data_type == data.data_type,
                       "kernel::ReduceLogSumOp: output dtype must match data dtype.");
   EXT_ENFORCE_INVALID(axes.data_type == static_cast<int32_t>(DataType::INT64),
@@ -332,8 +348,7 @@ void ReduceLogSumOp::operator()(const Tensor &data, const Tensor &axes, bool kee
       output.shape == expected_out_shape,
       "kernel::ReduceLogSumOp preallocated output shape does not match expected shape.");
   const int64_t out_count = output.element_count();
-  const size_t elem_size =
-      (data.data_type == static_cast<int32_t>(DataType::DOUBLE)) ? sizeof(double) : sizeof(float);
+  const size_t elem_size = ElementSize(data.data_type);
   EXT_ENFORCE_INVALID(
       output.size_bytes() == static_cast<size_t>(out_count) * elem_size,
       "kernel::ReduceLogSumOp preallocated output buffer has unexpected size in bytes.");

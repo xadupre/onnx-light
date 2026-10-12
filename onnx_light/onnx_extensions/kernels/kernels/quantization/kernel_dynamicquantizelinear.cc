@@ -92,21 +92,14 @@ void DynamicQuantizeLinear::operator()(const Tensor &x, Tensor &y, Tensor &y_sca
   }
 
   // qmin=0, qmax=255 for uint8; the spec divides by (qmax - qmin) = 255.
-  const float scale = (x_max - x_min) / 255.0f;
+  const float adjusted_range = x_max - x_min;
+  const float scale = adjusted_range == 0.0f ? 1.0f : adjusted_range / 255.0f;
 
   // intermediate_zero_point = qmin - x_min / scale = -x_min / scale (qmin = 0).
   // Both the Python reference (``round(...)``) and ``np.round(...)`` use
   // banker's rounding (round half to even), so we mirror that here for
   // ``y_zero_point`` as well as for ``y`` below.
-  float zp_f;
-  if (scale == 0.0f) {
-    // All values equal (and equal to 0 after the [0, max]/[min, 0] adjustment);
-    // the spec leaves this case undefined but onnxruntime / numpy reference
-    // both produce y_scale=0, y_zero_point=0, y=0.
-    zp_f = 0.0f;
-  } else {
-    zp_f = RoundHalfToEven(-x_min / scale);
-  }
+  float zp_f = RoundHalfToEven(-x_min / scale);
   zp_f = SaturateUint8(zp_f);
   const uint8_t zp = static_cast<uint8_t>(zp_f);
 
@@ -117,10 +110,6 @@ void DynamicQuantizeLinear::operator()(const Tensor &x, Tensor &y, Tensor &y_sca
 
   // Quantize x.
   uint8_t *py = y.mutable_bytes();
-  if (scale == 0.0f) {
-    std::fill(py, py + n, zp);
-    return;
-  }
   const float zp_float = static_cast<float>(zp);
   for (int64_t i = 0; i < n; ++i) {
     float v = RoundHalfToEven(px[i] / scale) + zp_float;

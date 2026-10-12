@@ -271,6 +271,35 @@ class TestNumpyHelper(ExtTestCase):
         opt_proto = onh.from_optional(None, dtype=onnxl.OptionalProto.UNDEFINED)
         self.assertEqual(int(opt_proto.elem_type), int(onnxl.OptionalProto.UNDEFINED))
 
+    def test_optional_typed_none_roundtrip(self) -> None:
+        for dtype in (
+            onnxl.OptionalProto.UNDEFINED,
+            onnxl.OptionalProto.TENSOR,
+            onnxl.OptionalProto.SPARSE_TENSOR,
+            onnxl.OptionalProto.SEQUENCE,
+            onnxl.OptionalProto.MAP,
+            onnxl.OptionalProto.OPTIONAL,
+        ):
+            with self.subTest(dtype=dtype):
+                optional = onh.from_optional(None, dtype=dtype)
+                self.assertEqual(optional.elem_type, dtype)
+                self.assertIsNone(optional.WhichOneof("value"))
+                self.assertIsNone(onh.to_optional(optional))
+                self.assertIsNone(optional.WhichOneof("value"))
+
+    def test_optional_present_empty_values(self) -> None:
+        empty_tensor = np.array([], dtype=np.float32)
+        np.testing.assert_array_equal(
+            onh.to_optional(onh.from_optional(empty_tensor)), empty_tensor
+        )
+        self.assertEqual(onh.to_optional(onh.from_optional([])), [])
+
+        optional = onnxl.OptionalProto()
+        optional.elem_type = onnxl.OptionalProto.MAP
+        optional.map_value.key_type = onnxl.TensorProto.INT64
+        optional.map_value.values.elem_type = onnxl.SequenceProto.TENSOR
+        self.assertEqual(onh.to_optional(optional), {})
+
     def test_from_optional_invalid_dtype_raises(self) -> None:
         with self.assertRaises(TypeError):
             onh.from_optional(None, dtype=999)

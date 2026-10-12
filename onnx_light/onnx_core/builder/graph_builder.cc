@@ -976,6 +976,7 @@ const std::string &GraphBuilder::MakeInput(const std::string &name, TensorType d
 
 void GraphBuilder::MakeOutput(const ValueInfoProto &value_info) {
   const std::string name = value_info.name().value();
+  ValidateSubgraphOutput(name);
   bool declaration_added = false;
   if (value_info.has_type() &&
       (HasStructuredType(value_info.type()) || Shapes().HasEncodedValue(name))) {
@@ -1021,6 +1022,7 @@ void GraphBuilder::MakeOutput(const std::string &name, TensorType dtype, const S
 }
 
 void GraphBuilder::MakeOutput(const std::string &name) {
+  ValidateSubgraphOutput(name);
   ValueInfoProto vi;
   vi.set_name(name);
   outputs_.add() = std::move(vi);
@@ -2949,6 +2951,13 @@ void GraphBuilder::MakePersistentBinding(const PersistentBindingProto &binding) 
 
 GraphProto GraphBuilder::BuildGraph() const {
   return BuildGraphImpl(/*validate_persistent_bindings=*/true);
+}
+
+void GraphBuilder::ValidateSubgraphOutput(const std::string &name) const {
+  if (parent_ != nullptr && GraphDefinedNames(BuildGraphImpl(false)).count(name) == 0) {
+    throw BuilderError("GraphBuilder: subgraph '" + name_ + "' output '" + name +
+                       "' is not defined in this graph.");
+  }
 }
 
 GraphProto GraphBuilder::BuildGraphImpl(bool validate_persistent_bindings) const {

@@ -113,6 +113,9 @@ TEST(GraphBuilderControlflow, IfRejectsCapturedOnlyBranchOutputButAllowsCaptured
   native.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
   auto &native_branch = native.MakeSubgraph("native_branch");
   EXPECT_THROW(native_branch.MakeOutput("x"), core::builder::BuilderError);
+  native_branch.MakeNode("Identity", {"x"}, {"local_x"});
+  native_branch.MakeOutput("local_x");
+  EXPECT_EQ(native_branch.BuildGraph().output(0).name(), "local_x");
 
   core::builder::GraphBuilder builder("if_capture", SchemaLookup());
   builder.SetOpsetVersion("", 22);

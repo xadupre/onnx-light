@@ -84,6 +84,8 @@ struct RuntimeSessionOptions {
   /// Value store inherited by nested graph and model-local function sessions.
   /// A root session left empty adopts the store exposed by its first runtime context.
   std::shared_ptr<ValueStore> value_store = nullptr;
+  /// Immutable names inherited from a caller after binding function inputs.
+  std::unordered_set<std::string> immutable_inputs = {};
 };
 
 /** Reports the one-time kernel tuning work performed by a runtime session. */
@@ -384,17 +386,18 @@ protected:
   /// top-level graph session.
   explicit RuntimeSession(const GraphProto &graph,
                           const OpsetImports *inherited_opset_imports = nullptr, int verbose = 0,
-                          std::shared_ptr<ValueStore> value_store = nullptr);
+                          std::shared_ptr<ValueStore> value_store = nullptr,
+                          std::unordered_set<std::string> immutable_inputs = {});
 
   /// Default node-kernel resolution used during
   /// :cpp:func:`InitializeKernels`, so :cpp:class:`RuntimeSession` and
   /// derived sessions that reuse the base initialization path share the same
   /// default resolution behavior. Builds and returns the ready-to-invoke
   /// kernel instance for ``node``.
-  std::unique_ptr<KernelBase> ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt,
-                                                const std::string &domain,
-                                                const std::string &op_type,
-                                                const KernelContext &kernel_context) const;
+  std::unique_ptr<KernelBase>
+  ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt, const std::string &domain,
+                    const std::string &op_type, const KernelContext &kernel_context,
+                    const std::unordered_set<std::string> &preparable_inputs) const;
 
 private:
   /// A node's kernel instance built once during
@@ -478,6 +481,8 @@ private:
   std::optional<StructTypeCatalogue> struct_type_catalogue_;
   std::shared_ptr<const QuantizationParameterCatalogue> quantization_parameters_;
   std::unordered_set<std::string> immutable_initializer_names_;
+  /// Captured or bound immutable names, excluding locally defined graph values.
+  std::unordered_set<std::string> inherited_immutable_inputs_;
   /// One immutable registry generation shared by every kernel in this session.
   /// Kernels copy resolved values during initialization; retaining the snapshot
   /// also makes the generation available for diagnostics.

@@ -222,7 +222,8 @@ public:
    *              model, so this holds for the model's whole lifetime.
    */
   SubgraphSession(const GraphProto &graph, const OpsetImports *opset_imports = nullptr,
-                  std::shared_ptr<ValueStore> value_store = nullptr);
+                  std::shared_ptr<ValueStore> value_store = nullptr,
+                  std::unordered_set<std::string> immutable_inputs = {});
 
   /**
    * Evaluates the subgraph once in ``rt``, seeded with the cached initializers

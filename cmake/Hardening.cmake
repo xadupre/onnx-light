@@ -166,6 +166,7 @@ else()
       -Wformat
       -Wformat=2
       -Wimplicit-fallthrough
+      -Wbidi-chars=any
       -Werror=format-security
       -fstack-protector-strong
       -fstack-clash-protection
@@ -216,6 +217,11 @@ else()
   endif()
   # libstdc++ runtime assertions (bounds checks on containers).
   list(APPEND _onnx_light_hardening_compile_definitions "_GLIBCXX_ASSERTIONS")
+  # libc++ runtime assertions; preserve a mode selected by the caller.
+  if(NOT CMAKE_CXX_FLAGS MATCHES "_LIBCPP_HARDENING_MODE")
+    list(APPEND _onnx_light_hardening_compile_definitions
+         "_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_FAST")
+  endif()
 
   set(_gcc_link_candidates
       "LINKER:-z,noexecstack"

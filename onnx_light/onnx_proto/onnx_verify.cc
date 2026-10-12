@@ -1877,6 +1877,7 @@ void VerifyGraph(const StructTypeCatalogue *struct_types, const GraphProto &grap
   if (outer_scope != nullptr) {
     defined = *outer_scope;
   }
+  std::unordered_set<std::string> locally_defined;
 
   const auto verify_value_type = [struct_types](const ValueInfoProto &value_info) {
     if (struct_types != nullptr && value_info.has_type()) {
@@ -1890,6 +1891,7 @@ void VerifyGraph(const StructTypeCatalogue *struct_types, const GraphProto &grap
     EXT_ENFORCE_INVALID(defined.insert(ToStdString(value_info.name())).second, "Graph '",
                         graph.name(), "' has input '", value_info.name(),
                         "' defined more than once (SSA violation).");
+    locally_defined.insert(ToStdString(value_info.name()));
   }
 
   std::unordered_set<std::string> initializer_names;
@@ -1900,6 +1902,7 @@ void VerifyGraph(const StructTypeCatalogue *struct_types, const GraphProto &grap
                         graph.name(), "' initializer '", init.name(), "' is not unique.");
     VerifyTensor(init);
     defined.insert(ToStdString(init.name()));
+    locally_defined.insert(ToStdString(init.name()));
   }
   for (const auto &sparse_init : graph.sparse_initializer()) {
     const auto &name = sparse_init.values().name();
@@ -1910,6 +1913,7 @@ void VerifyGraph(const StructTypeCatalogue *struct_types, const GraphProto &grap
                         "' is not unique across initializers and sparse_initializers.");
     VerifySparseTensor(sparse_init);
     defined.insert(ToStdString(name));
+    locally_defined.insert(ToStdString(name));
   }
   for (const auto &encoded : graph.encoded_initializer()) {
     EXT_ENFORCE_INVALID(!encoded.name().empty(), "Graph '", graph.name(),
@@ -1920,6 +1924,7 @@ void VerifyGraph(const StructTypeCatalogue *struct_types, const GraphProto &grap
                         "encoded_initializers.");
     catalogue.ValidateEncodedValue(encoded, /*require_resolved_reference=*/struct_types != nullptr);
     defined.insert(ToStdString(encoded.name()));
+    locally_defined.insert(ToStdString(encoded.name()));
   }
   for (const auto &cache : graph.paged_cache_initializer()) {
     EXT_ENFORCE_INVALID(
@@ -1932,6 +1937,7 @@ void VerifyGraph(const StructTypeCatalogue *struct_types, const GraphProto &grap
                                      ? &input->type()
                                      : nullptr);
     defined.insert(ToStdString(cache.name()));
+    locally_defined.insert(ToStdString(cache.name()));
   }
 
   for (const auto &node : graph.node()) {
@@ -1952,6 +1958,7 @@ void VerifyGraph(const StructTypeCatalogue *struct_types, const GraphProto &grap
       }
       EXT_ENFORCE_INVALID(defined.insert(ToStdString(output)).second, "Graph '", graph.name(),
                           "' output '", output, "' is produced more than once (SSA violation).");
+      locally_defined.insert(ToStdString(output));
     }
   }
 
@@ -1962,9 +1969,9 @@ void VerifyGraph(const StructTypeCatalogue *struct_types, const GraphProto &grap
   for (const auto &value_info : graph.output()) {
     VerifyValueInfo(value_info, is_main_graph);
     verify_value_type(value_info);
-    EXT_ENFORCE_INVALID(defined.count(ToStdString(value_info.name())) > 0, "Graph '", graph.name(),
-                        "' output '", value_info.name(),
-                        "' is not produced by any node, input, or initializer.");
+    EXT_ENFORCE_INVALID(locally_defined.count(ToStdString(value_info.name())) > 0, "Graph '",
+                        graph.name(), "' output '", value_info.name(),
+                        "' is not produced by any node, input, or initializer in this graph.");
   }
 }
 

@@ -433,6 +433,13 @@ TEST(onnx_verify, PersistentBindings_CountsNestedGraphAndGraphsCaptures) {
 }
 
 TEST(onnx_verify, PersistentBindings_CountsEveryBranchOutputCapture) {
+  const auto expose_capture = [](GraphProto *graph) {
+    auto *identity = graph->add_node();
+    identity->set_op_type("Identity");
+    identity->add_input("x");
+    identity->add_output("captured");
+    graph->add_output()->set_name("captured");
+  };
   for (bool repeated : {false, true}) {
     SCOPED_TRACE(repeated);
     ModelProto model = MakePersistentModel();
@@ -449,7 +456,7 @@ TEST(onnx_verify, PersistentBindings_CountsEveryBranchOutputCapture) {
     }
     auto *first = AddNestedGraph(*node, repeated);
     first->set_name("then");
-    first->add_output()->set_name("x");
+    expose_capture(first);
     EXPECT_NO_THROW(VerifyModel(model));
 
     GraphProto *second;
@@ -461,7 +468,7 @@ TEST(onnx_verify, PersistentBindings_CountsEveryBranchOutputCapture) {
       node->mutable_attribute(1)->set_name("else_branch");
     }
     second->set_name("else");
-    second->add_output()->set_name("x");
+    expose_capture(second);
     ExpectPersistentBindingError(
         model.graph(), "Persistent input 'x' must be used exactly once; found 2 value-uses");
     EXPECT_THROW(VerifyModel(model), std::invalid_argument);
@@ -841,4 +848,14 @@ TEST(onnx_verify, VerifyGraph_SubgraphClosureOverOuterScope) {
 
   EXPECT_NO_THROW(
       VerifyGraph(body, /*is_main_graph=*/false, /*in_function_body=*/false, &outer_scope));
+}
+
+TEST(onnx_verify, VerifyGraph_SubgraphOutputMustBeLocallyDefined) {
+  std::unordered_set<std::string> outer_scope{"x"};
+  GraphProto body;
+  body.set_name("body");
+  body.add_output()->set_name("x");
+
+  EXPECT_THROW(VerifyGraph(body, /*is_main_graph=*/false, /*in_function_body=*/false, &outer_scope),
+               std::invalid_argument);
 }

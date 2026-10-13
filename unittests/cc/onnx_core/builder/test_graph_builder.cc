@@ -415,6 +415,43 @@ TEST(GraphBuilder, ChildMutationRefreshesOnlyDependentParentNodes) {
   EXPECT_EQ(builder.GetShape("independent").Shape(), MakeShape({4, 5}));
 }
 
+TEST(GraphBuilder, LocalFunctionMutationRefreshesTransitiveCallers) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.SetOpsetVersion("local", 1);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+
+  auto &inner = builder.MakeLocalFunction("Inner", "local");
+  inner.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  inner.MakeNode("Identity", {"a"}, {"r"});
+  inner.MakeOutput("r");
+  auto &outer = builder.MakeLocalFunction("Outer", "local");
+  outer.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  outer.MakeNode("Inner", {"a"}, {"r"}, "local");
+  outer.MakeOutput("r");
+  builder.MakeNode("Outer", {"x"}, {"result"}, "local");
+
+  auto &root_shapes = const_cast<core::shapes::ShapesContext &>(builder.Shapes());
+  auto &outer_shapes = const_cast<core::shapes::ShapesContext &>(outer.Shapes());
+  root_shapes.set_events_enabled(true);
+  outer_shapes.set_events_enabled(true);
+  root_shapes.ClearEvents();
+  outer_shapes.ClearEvents();
+  inner.MakeNode("Neg", {"a"}, {"dead"});
+
+  EXPECT_TRUE(
+      std::any_of(root_shapes.Events().begin(), root_shapes.Events().end(), [](const auto &event) {
+        return event.action == core::shapes::ShapeEventAction::kComputeNode &&
+               event.op_type == "Outer";
+      }));
+  EXPECT_TRUE(std::any_of(outer_shapes.Events().begin(), outer_shapes.Events().end(),
+                          [](const auto &event) {
+                            return event.action == core::shapes::ShapeEventAction::kComputeNode &&
+                                   event.op_type == "Inner";
+                          }));
+  EXPECT_EQ(outer.GetShape("r").Shape(), MakeShape({2, 3}));
+  EXPECT_EQ(builder.GetShape("result").Shape(), MakeShape({2, 3}));
+}
+
 TEST(GraphBuilder, MaintainsConstantInfoIncrementally) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   TensorProto initializer;

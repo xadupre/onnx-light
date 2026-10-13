@@ -575,17 +575,17 @@ void GraphBuilder::RefreshAncestors() {
   parent_->RefreshNestedDependency(*this);
 }
 
-void GraphBuilder::RefreshNestedDependency(GraphBuilder &child, bool refresh_parent) {
+void GraphBuilder::RefreshNestedDependency(GraphBuilder &child) {
   RefreshLocalFunctions();
   if (!child.function_domain_.empty()) {
     for (const auto &subgraph : subgraphs_) {
       if (subgraph.get() != &child) {
-        subgraph->RefreshNestedDependency(child, /*refresh_parent=*/false);
+        subgraph->RefreshNestedDependency(child);
       }
     }
     for (const auto &function : local_functions_) {
       if (function.get() != &child) {
-        function->RefreshNestedDependency(child, /*refresh_parent=*/false);
+        function->RefreshNestedDependency(child);
       }
     }
   }
@@ -662,7 +662,7 @@ void GraphBuilder::RefreshNestedDependency(GraphBuilder &child, bool refresh_par
     compute_.RefreshNode(nodes_, index, compute_.Shapes(), references, device_);
     compute_.AppendNodeConstant(stored, index);
   }
-  if (refresh_parent && parent_ != nullptr && !affected_values.empty()) {
+  if (parent_ != nullptr && !affected_values.empty()) {
     parent_->RefreshNestedDependency(*this);
   }
 }

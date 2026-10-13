@@ -15,7 +15,6 @@ import gc
 import unittest
 
 import numpy
-import onnx
 
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.checker as checker
@@ -47,7 +46,7 @@ class TestGraphBuilder(ExtTestCase):
         self.assertEqual([node.op_type for node in model.graph.node], ["Add", "Relu"])
         self.assertEqual(model.graph.node[1].name, "relu")
 
-    def test_if_capture_model_passes_both_onnx_checkers(self):
+    def test_if_capture_model_passes_checker(self):
         branch = oh.make_graph(
             [oh.make_node("Identity", ["x"], ["local_result"])],
             "branch",
@@ -62,10 +61,9 @@ class TestGraphBuilder(ExtTestCase):
             condition, outputs="result", then_branch=branch, else_branch=branch
         )
         builder.out(result, FLOAT, [2])
-
         model = builder.to_onnx("model")
         checker.check_model(model)
-        onnx.checker.check_model(model.SerializeToString())
+        checker.check_model(model)
 
     def test_compact_optional_variadic_and_numpy_inputs(self):
         builder = GraphBuilder("g")

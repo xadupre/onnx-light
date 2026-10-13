@@ -7,6 +7,7 @@
 #include "onnx_core/builder/graph_builder.h"
 #include "onnx_helper.h"
 #include "onnx_op/operator_sets.h"
+#include "onnx_proto/onnx_verify.h"
 
 #include <gtest/gtest.h>
 
@@ -61,9 +62,9 @@ public:
   std::string producer_input;
 };
 
-class DropNamedIdentity : public core::builder::PatternOptimization {
+class CaptureOutputAndDropIdentity : public core::builder::PatternOptimization {
 public:
-  DropNamedIdentity() : PatternOptimization(1, "DropNamedIdentity") {}
+  CaptureOutputAndDropIdentity() : PatternOptimization(1, "CaptureOutputAndDropIdentity") {}
 
   core::builder::MatchResult Match(core::builder::GraphGraph &,
                                    const NodeProto &candidate) const override {
@@ -72,7 +73,10 @@ public:
   }
 
   utils::RepeatedProtoField<NodeProto>
-  Apply(core::builder::GraphGraph &, const std::vector<const NodeProto *> &) const override {
+  Apply(core::builder::GraphGraph &graph, const std::vector<const NodeProto *> &) const override {
+    auto &outputs =
+        const_cast<utils::RepeatedProtoField<ValueInfoProto> &>(graph.Builder().Outputs());
+    outputs[0].set_name("source");
     return utils::RepeatedProtoField<NodeProto>();
   }
 };
@@ -155,8 +159,8 @@ TEST(GraphGraph, BuildRejectsNestedOutputMadeCapturedOnlyByRewrite) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   builder.MakeInput("source", core::symbolic::TensorType::kFloat, MakeShape({2}));
   auto &branch = builder.MakeSubgraph("branch");
-  branch.MakeNode("Identity", {"source"}, {"captured"}, "", "drop");
-  branch.MakeOutput("captured");
+  branch.MakeNode("Identity", {"source"}, {"local_result"}, "", "drop");
+  branch.MakeOutput("local_result");
   builder.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
   auto &else_branch = builder.MakeSubgraph("else_branch");
   else_branch.MakeNode("Identity", {"source"}, {"else_result"});
@@ -172,11 +176,11 @@ TEST(GraphGraph, BuildRejectsNestedOutputMadeCapturedOnlyByRewrite) {
   }
   builder.MakeNode("If", {"condition"}, {"selected"}, "", "", attributes);
   builder.MakeOutput("selected");
-  builder.MakeInput("captured", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  EXPECT_NO_THROW(VerifyModel(builder.ToModel()));
 
   core::builder::GraphGraph graph(builder,
                                   std::vector<std::shared_ptr<core::builder::PatternOptimization>>{
-                                      std::make_shared<DropNamedIdentity>()});
+                                      std::make_shared<CaptureOutputAndDropIdentity>()});
 
   EXPECT_THROW(graph.Optimize(), core::builder::BuilderError);
   EXPECT_TRUE(branch.Nodes().empty());

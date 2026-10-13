@@ -447,6 +447,7 @@ GraphBuilder &GraphBuilder::operator=(GraphBuilder &&other) noexcept {
     return *this;
   }
   name_ = std::move(other.name_);
+  is_local_function_ = other.is_local_function_;
   function_domain_ = std::move(other.function_domain_);
   function_attributes_ = std::move(other.function_attributes_);
   function_attribute_protos_ = std::move(other.function_attribute_protos_);
@@ -572,25 +573,32 @@ void GraphBuilder::RefreshAncestors() {
   if (outputs_.empty() || parent_ == nullptr) {
     return;
   }
+  if (is_local_function_) {
+    parent_->RefreshLocalFunctionDefinition(*this);
+  }
   parent_->RefreshNestedDependency(*this);
 }
 
-void GraphBuilder::RefreshNestedDependency(GraphBuilder &child) {
-  RefreshLocalFunctions();
-  if (!child.function_domain_.empty()) {
-    for (const auto &subgraph : subgraphs_) {
-      if (subgraph.get() != &child) {
-        subgraph->RefreshNestedDependency(child);
-      }
-    }
-    for (const auto &function : local_functions_) {
-      if (function.get() != &child) {
-        function->RefreshNestedDependency(child);
-      }
-    }
+void GraphBuilder::RefreshLocalFunctionDefinition(GraphBuilder &function) {
+  GraphBuilder *root = this;
+  while (root->parent_ != nullptr) {
+    root = root->parent_;
   }
-  std::vector<bool> affected(nodes_.size(), false);
-  std::unordered_set<std::string> affected_values;
+  const auto definition =
+      std::make_shared<FunctionProto>(function.BuildFunction(function.function_domain_));
+  std::function<void(GraphBuilder &)> install = [&](GraphBuilder &builder) {
+    builder.compute_.Shapes().SetLocalFunction(definition);
+    for (const auto &subgraph : builder.subgraphs_) {
+      install(*subgraph);
+    }
+    for (const auto &local_function : builder.local_functions_) {
+      install(*local_function);
+    }
+  };
+  install(*root);
+}
+
+void GraphBuilder::RefreshNestedDependency(GraphBuilder &child) {
   std::function<bool(const GraphBuilder &)> depends_on_function = [&](const GraphBuilder &builder) {
     for (const NodeProto &node : builder.nodes_) {
       if (node.domain().value() == child.function_domain_ &&
@@ -605,15 +613,28 @@ void GraphBuilder::RefreshNestedDependency(GraphBuilder &child) {
     }
     return false;
   };
+  if (child.is_local_function_) {
+    for (const auto &subgraph : subgraphs_) {
+      if (subgraph.get() != &child && depends_on_function(*subgraph)) {
+        subgraph->RefreshNestedDependency(child);
+      }
+    }
+    for (const auto &function : local_functions_) {
+      if (function.get() != &child && depends_on_function(*function)) {
+        function->RefreshNestedDependency(child);
+      }
+    }
+  }
+  std::vector<bool> affected(nodes_.size(), false);
+  std::unordered_set<std::string> affected_values;
   for (std::size_t index = 0; index < nodes_.size(); ++index) {
     const NodeProto &stored = nodes_[index];
-    bool references_child = !child.function_domain_.empty() &&
+    bool references_child = child.is_local_function_ &&
                             stored.domain().value() == child.function_domain_ &&
                             stored.op_type().value() == child.name_;
     if (!references_child) {
       for (GraphBuilder *subgraph : ReferencedSubgraphs(stored)) {
-        if (subgraph == &child ||
-            (!child.function_domain_.empty() && depends_on_function(*subgraph))) {
+        if (subgraph == &child || (child.is_local_function_ && depends_on_function(*subgraph))) {
           references_child = true;
           break;
         }
@@ -663,6 +684,9 @@ void GraphBuilder::RefreshNestedDependency(GraphBuilder &child) {
     compute_.AppendNodeConstant(stored, index);
   }
   if (parent_ != nullptr && !affected_values.empty()) {
+    if (is_local_function_) {
+      parent_->RefreshLocalFunctionDefinition(*this);
+    }
     parent_->RefreshNestedDependency(*this);
   }
 }
@@ -1060,6 +1084,7 @@ const std::string &GraphBuilder::MakeInput(const std::string &name, TensorType d
 
 void GraphBuilder::MakeOutput(const ValueInfoProto &value_info) {
   const std::string name = value_info.name().value();
+  ValidateSubgraphOutput(name);
   bool declaration_added = false;
   if (value_info.has_type() &&
       (HasStructuredType(value_info.type()) || Shapes().HasEncodedValue(name))) {
@@ -1105,6 +1130,7 @@ void GraphBuilder::MakeOutput(const std::string &name, TensorType dtype, const S
 }
 
 void GraphBuilder::MakeOutput(const std::string &name) {
+  ValidateSubgraphOutput(name);
   ValueInfoProto vi;
   vi.set_name(name);
   outputs_.add() = std::move(vi);
@@ -2994,6 +3020,7 @@ GraphBuilder &GraphBuilder::MakeLocalFunction(const std::string &name, const std
   }
   ReserveName(name);
   auto child = std::make_unique<GraphBuilder>(name, schema_lookup_);
+  child->is_local_function_ = true;
   if (!domain.empty()) {
     // Register the function domain on both the parent (so nodes that call the
     // function resolve their opset and the model imports the domain) and the
@@ -3052,6 +3079,13 @@ GraphProto GraphBuilder::BuildGraph() const {
   return BuildGraphImpl(/*validate_persistent_bindings=*/true);
 }
 
+void GraphBuilder::ValidateSubgraphOutput(const std::string &name) const {
+  if (parent_ != nullptr && GraphDefinedNames(BuildGraphImpl(false)).count(name) == 0) {
+    throw BuilderError("GraphBuilder: subgraph '" + name_ + "' output '" + name +
+                       "' is not defined in this graph.");
+  }
+}
+
 GraphProto GraphBuilder::BuildGraphImpl(bool validate_persistent_bindings) const {
   GraphProto graph = graph_template_;
   graph.set_name(name_);
@@ -3077,6 +3111,15 @@ GraphProto GraphBuilder::BuildGraphImpl(bool validate_persistent_bindings) const
   }
   for (const ValueInfoProto &value_info : value_infos_) {
     graph.add_value_info(value_info);
+  }
+  if (parent_ != nullptr) {
+    const auto locally_defined = GraphDefinedNames(graph);
+    for (const ValueInfoProto &output : graph.output()) {
+      if (locally_defined.count(output.name().value()) == 0) {
+        throw BuilderError("GraphBuilder: subgraph '" + name_ + "' output '" +
+                           output.name().value() + "' is not defined in this graph.");
+      }
+    }
   }
   if (validate_persistent_bindings && !graph.persistent_bindings().empty()) {
     // Supplies inferred IO types before validating the unfinalized graph view.

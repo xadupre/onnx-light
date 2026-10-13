@@ -5,6 +5,7 @@
 #include "onnx_core/builder/graph_builder.h"
 #include "onnx_helper.h"
 #include "onnx_op/operator_sets.h"
+#include "onnx_proto/onnx_verify.h"
 
 #include <gtest/gtest.h>
 
@@ -105,6 +106,44 @@ TEST(GraphBuilderControlflow, IfBuildsAndImportsMultipleOutputs) {
     EXPECT_EQ(builder.GetShape("dimensions").Dtype(), core::symbolic::TensorType::kInt64);
     ExpectTensorRoundTrip(builder, {"value", "dimensions"});
   }
+}
+
+TEST(GraphBuilderControlflow, IfRejectsCapturedOnlyBranchOutputButAllowsCapturedInput) {
+  core::builder::GraphBuilder native("native_capture", SchemaLookup());
+  native.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  auto &native_branch = native.MakeSubgraph("native_branch");
+  EXPECT_THROW(native_branch.MakeOutput("x"), core::builder::BuilderError);
+  native_branch.MakeNode("Identity", {"x"}, {"local_x"});
+  native_branch.MakeOutput("local_x");
+  EXPECT_EQ(native_branch.BuildGraph().output(0).name(), "local_x");
+
+  core::builder::GraphBuilder builder("if_capture", SchemaLookup());
+  builder.SetOpsetVersion("", 22);
+  builder.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  GraphProto branch;
+  branch.set_name("branch");
+  branch.add_output()->set_name("x");
+  NodeProto node = MakeNode("If", {"condition"}, {"result"});
+  AddGraphAttribute(node, "then_branch", branch);
+  AddGraphAttribute(node, "else_branch", branch);
+  EXPECT_THROW(builder.MakeNode("If", {"condition"}, {"result"}, "", "", node.attribute()),
+               core::builder::BuilderError);
+
+  core::builder::GraphBuilder valid("valid_if_capture", SchemaLookup());
+  valid.SetOpsetVersion("", 22);
+  valid.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+  valid.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  AddNode(branch, "Identity", {"x"}, {"local_result"});
+  branch.ref_output()[0].set_name("local_result");
+  NodeProto valid_node = MakeNode("If", {"condition"}, {"result"});
+  AddGraphAttribute(valid_node, "then_branch", branch);
+  AddGraphAttribute(valid_node, "else_branch", branch);
+  valid.MakeNode("If", {"condition"}, {"result"}, "", "", valid_node.attribute());
+  valid.MakeOutput("result");
+  const ModelProto model = valid.ToModel();
+  EXPECT_NO_THROW(VerifyModel(model));
+  EXPECT_EQ(model.graph().node(0).attribute(0).g().node(0).input(0), "x");
 }
 
 TEST(GraphBuilderControlflow, LoopBuildsAndImportsCarriedAndScanOutputs) {

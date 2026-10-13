@@ -748,10 +748,12 @@ private:
   void SetStructTypes(const utils::RepeatedProtoField<StructTypeProto> &types);
   void RefreshAfterMutation();
   void RefreshAncestors();
+  void RefreshLocalFunctionDefinition(GraphBuilder &function);
   void RefreshNestedDependency(GraphBuilder &child);
   void RebuildMetadata();
   void RebuildStructuredState(bool refresh_ancestors = true);
   GraphProto BuildGraphImpl(bool validate_persistent_bindings) const;
+  void ValidateSubgraphOutput(const std::string &name) const;
   std::size_t DeduplicateEncodedInitializers(std::vector<const EncodedValueProto *> &index,
                                              std::unordered_map<std::string, std::string> &rename);
 
@@ -805,6 +807,7 @@ private:
                       const std::string &name, const char *kind);
 
   std::string name_;
+  bool is_local_function_ = false;
   std::string function_domain_;
   std::vector<std::string> function_attributes_;
   utils::RepeatedProtoField<AttributeProto> function_attribute_protos_;

@@ -46,6 +46,24 @@ class TestGraphBuilder(ExtTestCase):
         self.assertEqual([node.op_type for node in model.graph.node], ["Add", "Relu"])
         self.assertEqual(model.graph.node[1].name, "relu")
 
+    def test_if_capture_model_passes_checker(self):
+        branch = oh.make_graph(
+            [oh.make_node("Identity", ["x"], ["local_result"])],
+            "branch",
+            [],
+            [oh.make_tensor_value_info("local_result", FLOAT, [2])],
+        )
+        builder = GraphBuilder("valid_if_capture")
+        builder.set_opset_version("", 22)
+        condition = builder.inp("condition", onnxl.TensorProto.BOOL, [])
+        builder.inp("x", FLOAT, [2])
+        result = builder.op.If(
+            condition, outputs="result", then_branch=branch, else_branch=branch
+        )
+        builder.out(result, FLOAT, [2])
+        model = builder.to_onnx("model")
+        checker.check_model(model)
+
     def test_compact_optional_variadic_and_numpy_inputs(self):
         builder = GraphBuilder("g")
         x = builder.inp("x", FLOAT, [3])

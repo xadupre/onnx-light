@@ -96,11 +96,10 @@ ByteSizeExpr(const SymTensor &t, expressions::SimplifiedExpressionCache *cache =
       }
       symbolic_size += dim.AsExpr().size();
     }
-    num_elements = expressions::dim_mul(num_elements, ToDimType(dim));
+    num_elements = expressions::dim_mul(num_elements, ToDimType(dim), cache);
   }
   if (bits % 8 == 0) {
-    return expressions::simplify_dim_type(
-        expressions::dim_mul(num_elements, expressions::DimType{int64_t{bits / 8}}), cache);
+    return expressions::dim_mul(num_elements, expressions::DimType{int64_t{bits / 8}}, cache);
   }
   // Sub-byte element types pack multiple values per byte, so the buffer size is
   // ceil(num_elements * bits / 8). ``dim_div`` is floor division, hence the
@@ -108,9 +107,9 @@ ByteSizeExpr(const SymTensor &t, expressions::SimplifiedExpressionCache *cache =
   return expressions::simplify_dim_type(
       expressions::dim_div(
           expressions::dim_add(
-              expressions::dim_mul(num_elements, expressions::DimType{int64_t{bits}}),
-              expressions::DimType{int64_t{7}}),
-          expressions::DimType{int64_t{8}}),
+              expressions::dim_mul(num_elements, expressions::DimType{int64_t{bits}}, cache),
+              expressions::DimType{int64_t{7}}, cache),
+          expressions::DimType{int64_t{8}}, cache),
       cache);
 }
 
@@ -299,13 +298,13 @@ ComputeInPlaceReuseMatchesImpl(const utils::RepeatedProtoField<NodeProto> &nodes
                                const ShapesContext &ctx, const ResultLifetimeInfo &lifetime) {
   const int num_nodes = nodes.size();
   std::vector<std::vector<InPlaceReuse>> result(static_cast<std::size_t>(num_nodes));
-  expressions::SimplifiedExpressionCache simplified_dim_cache;
+  auto &expression_cache = ctx.ExpressionCache();
   std::unordered_map<std::string, std::optional<expressions::DimType>> byte_size_expr_cache;
 
   for (int i = 0; i < num_nodes; ++i) {
     result[static_cast<std::size_t>(i)] =
         ComputeSingleNodeReuse(nodes[i], i, ctx, lifetime.keep, lifetime.producer,
-                               lifetime.last_use, byte_size_expr_cache, simplified_dim_cache);
+                               lifetime.last_use, byte_size_expr_cache, expression_cache);
   }
   return result;
 }

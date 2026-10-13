@@ -6,6 +6,7 @@
 
 #include "onnx_core/expressions/dim_sum.h"
 #include "onnx_core/expressions/expressions.h"
+#include "onnx_core/shapes/shapes_context.h"
 
 #include <gtest/gtest.h>
 #include <map>
@@ -409,6 +410,54 @@ TEST(DimOperations, DimAdd_symbolic) {
   const std::string &s = std::get<std::string>(r);
   EXPECT_NE(s.find('n'), std::string::npos);
   EXPECT_NE(s.find('1'), std::string::npos);
+}
+
+TEST(DimOperations, DimAddUsesCache) {
+  SimplifiedExpressionCache cache;
+  const DimType a{std::string{"a"}};
+  const DimType b{std::string{"b"}};
+  const DimType expected = dim_add(a, b, &cache);
+  ASSERT_EQ(cache.size(), 1u);
+  EXPECT_EQ(dim_add(a, b, &cache), expected);
+  EXPECT_EQ(cache.size(), 1u);
+}
+
+TEST(DimOperations, ChildShapesContextDoesNotCopyExpressionCache) {
+  onnx_light::core::shapes::ShapesContext first;
+  first.set_current_node_index(7);
+  first.set_current_subgraph(3, "outer");
+  const DimType a{std::string{"a"}};
+  const DimType b{std::string{"b"}};
+  dim_mul(a, b, &first.ExpressionCache());
+  onnx_light::GraphProto graph;
+  onnx_light::core::shapes::ShapesContext second = first.MakeChildContext(graph);
+  EXPECT_NE(&first.ExpressionCache(), &second.ExpressionCache());
+  EXPECT_TRUE(second.ExpressionCache().empty());
+  EXPECT_EQ(second.current_node_index(), 7);
+  EXPECT_EQ(second.current_subgraph_node_index(), 3);
+  EXPECT_EQ(second.current_subgraph_attr_name(), "outer");
+}
+
+TEST(DimOperations, ChildShapesContextRetainsCaptureNamedLikeSparseIndices) {
+  onnx_light::core::shapes::ShapesContext parent;
+  parent.Set("captured", onnx_light::core::symbolic::SymTensor(
+                             nullptr, onnx_light::core::symbolic::TensorType::kFloat, {}));
+  parent.Set("sparse", onnx_light::core::symbolic::SymTensor(
+                           nullptr, onnx_light::core::symbolic::TensorType::kFloat, {}));
+
+  onnx_light::GraphProto graph;
+  auto *initializer = graph.add_sparse_initializer();
+  initializer->mutable_values()->set_name("sparse");
+  initializer->mutable_indices()->set_name("captured");
+  auto *node = graph.add_node();
+  node->set_op_type("Add");
+  node->add_input("captured");
+  node->add_input("sparse");
+  node->add_output("result");
+
+  auto child = parent.MakeChildContext(graph);
+  EXPECT_TRUE(child.Has("captured"));
+  EXPECT_FALSE(child.Has("sparse"));
 }
 
 TEST(DimOperations, DimSub_int_int) {

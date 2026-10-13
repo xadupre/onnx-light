@@ -256,7 +256,7 @@ TEST(GraphBuilder, LateTagRefreshesReleaseWithoutDownstreamConsumers) {
   builder.MakeNode("Abs", {"intermediate"}, {"result"});
   EXPECT_TRUE(builder.Compute().NodeReleaseAfterShapeTagged(1).empty());
 
-  core::compute::ComputeContext incremental = builder.Compute();
+  auto &incremental = const_cast<core::compute::ComputeContext &>(builder.Compute());
   incremental.SeedValueTag("intermediate", "shape", builder.Nodes());
   EXPECT_EQ(incremental.NodeReleaseAfterShapeTagged(1), std::vector<std::string>{"intermediate"});
 }
@@ -330,6 +330,37 @@ TEST(GraphBuilder, RefreshesOnlyAffectedIncrementalMemoryRange) {
   tag->set_value("shape");
   builder.MakeOutput(output);
   expect_whole_graph_metadata();
+}
+
+TEST(GraphBuilder, AdvancingKeptInitializerUpdatesOnlyItsLastUse) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeInitializer(
+      MakeInitializer<float>("weight", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f}));
+  builder.MakeNode("Add", {"x", "weight"}, {"first"});
+  builder.MakeNode("Abs", {"first"}, {"middle"});
+  builder.MakeNode("Add", {"middle", "weight"}, {"result"});
+  builder.MakeOutput("result");
+
+  const GraphProto graph = builder.BuildGraph();
+  core::compute::ComputeContext expected;
+  const auto tags = expected.ComputeValueAndNodeTags(graph);
+  expected.ComputeInPlaceReuseGraph(graph, builder.Shapes(), false, tags.first);
+  EXPECT_EQ(builder.Compute().Reuse(), expected.Reuse());
+  EXPECT_EQ(builder.Compute().Memory(), expected.Memory());
+
+  GraphProto annotated = graph;
+  builder.Compute().WriteToGraph(annotated);
+  const auto first_last_use = std::find_if(
+      annotated.node()[0].metadata_props().begin(), annotated.node()[0].metadata_props().end(),
+      [](const auto &entry) { return entry.key() == core::compute::kNotUsedAfterMetadataKey; });
+  ASSERT_NE(first_last_use, annotated.node()[0].metadata_props().end());
+  EXPECT_EQ(first_last_use->value(), "x");
+  const auto final_last_use = std::find_if(
+      annotated.node()[2].metadata_props().begin(), annotated.node()[2].metadata_props().end(),
+      [](const auto &entry) { return entry.key() == core::compute::kNotUsedAfterMetadataKey; });
+  ASSERT_NE(final_last_use, annotated.node()[2].metadata_props().end());
+  EXPECT_EQ(final_last_use->value(), "weight");
 }
 
 TEST(GraphBuilder, ChildMutationUpdatesParentLifetimeMetadataImmediately) {
@@ -452,6 +483,93 @@ TEST(GraphBuilder, LocalFunctionMutationRefreshesTransitiveCallers) {
                           }));
   EXPECT_EQ(outer.GetShape("r").Shape(), MakeShape({2, 3}));
   EXPECT_EQ(builder.GetShape("result").Shape(), MakeShape({2, 3}));
+}
+
+TEST(GraphBuilder, DefaultDomainFunctionMutationRefreshesTransitiveCallers) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.SetOpsetVersion("", 18);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+
+  auto &inner = builder.MakeLocalFunction("Inner");
+  inner.SetOpsetVersion("", 18);
+  inner.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  inner.MakeNode("Identity", {"a"}, {"r"});
+  inner.MakeOutput("r");
+  auto &outer = builder.MakeLocalFunction("Outer");
+  outer.SetOpsetVersion("", 18);
+  outer.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  outer.MakeNode("Inner", {"a"}, {"r"});
+  outer.MakeOutput("r");
+  builder.MakeNode("Outer", {"x"}, {"result"});
+
+  auto &root_shapes = const_cast<core::shapes::ShapesContext &>(builder.Shapes());
+  auto &outer_shapes = const_cast<core::shapes::ShapesContext &>(outer.Shapes());
+  root_shapes.set_events_enabled(true);
+  outer_shapes.set_events_enabled(true);
+  root_shapes.ClearEvents();
+  outer_shapes.ClearEvents();
+  inner.MakeNode("Neg", {"a"}, {"dead"});
+
+  EXPECT_TRUE(
+      std::any_of(root_shapes.Events().begin(), root_shapes.Events().end(), [](const auto &event) {
+        return event.action == core::shapes::ShapeEventAction::kComputeNode &&
+               event.op_type == "Outer";
+      }));
+  EXPECT_TRUE(std::any_of(outer_shapes.Events().begin(), outer_shapes.Events().end(),
+                          [](const auto &event) {
+                            return event.action == core::shapes::ShapeEventAction::kComputeNode &&
+                                   event.op_type == "Inner";
+                          }));
+  EXPECT_EQ(outer.GetShape("r").Shape(), MakeShape({2, 3}));
+  EXPECT_EQ(builder.GetShape("result").Shape(), MakeShape({2, 3}));
+}
+
+TEST(GraphBuilder, FunctionMutationRefreshesNestedSubgraphOwnerOnce) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.SetOpsetVersion("local", 1);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeInput("cond", core::symbolic::TensorType::kBool, MakeShape({}));
+
+  auto &function = builder.MakeLocalFunction("F", "local");
+  function.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  function.MakeNode("Identity", {"a"}, {"r"});
+  function.MakeOutput("r");
+
+  auto &body = builder.MakeSubgraph("body");
+  body.SetOpsetVersion("local", 1);
+  body.MakeNode("F", {"x"}, {"body_result"}, "local");
+  body.MakeOutput("body_result");
+  auto &else_body = builder.MakeSubgraph("else_body");
+  else_body.MakeNode("Identity", {"x"}, {"else_result"});
+  else_body.MakeOutput("else_result");
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  auto &then_ref = attributes.add();
+  then_ref.set_name("then_branch_ref");
+  then_ref.set_type(AttributeProto::STRING);
+  then_ref.set_s("body");
+  auto &else_ref = attributes.add();
+  else_ref.set_name("else_branch_ref");
+  else_ref.set_type(AttributeProto::STRING);
+  else_ref.set_s("else_body");
+  builder.MakeNode("If", {"cond"}, {"result"}, "", "", attributes);
+
+  auto &root_shapes = const_cast<core::shapes::ShapesContext &>(builder.Shapes());
+  auto &body_shapes = const_cast<core::shapes::ShapesContext &>(body.Shapes());
+  root_shapes.set_events_enabled(true);
+  body_shapes.set_events_enabled(true);
+  root_shapes.ClearEvents();
+  body_shapes.ClearEvents();
+  function.MakeNode("Neg", {"a"}, {"dead"});
+
+  const auto count_computations = [](const core::shapes::ShapesContext &shapes,
+                                     const std::string &op_type) {
+    return std::count_if(shapes.Events().begin(), shapes.Events().end(), [&](const auto &event) {
+      return event.action == core::shapes::ShapeEventAction::kComputeNode &&
+             event.op_type == op_type;
+    });
+  };
+  EXPECT_EQ(count_computations(body_shapes, "F"), 1);
+  EXPECT_EQ(count_computations(root_shapes, "If"), 1);
 }
 
 TEST(GraphBuilder, MaintainsConstantInfoIncrementally) {
@@ -2144,7 +2262,12 @@ TEST(GraphBuilder, NativeLocalFunctionDefinitionsSurviveMovesAndEdits) {
   function.MakeOutput("shape");
   original.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   original.MakeNode("F", {"X"}, {"first", "first_shape"}, "local");
-  core::shapes::ShapesContext retained = original.Shapes();
+  core::shapes::ShapesContext retained;
+  for (const auto &[domain, version] : original.Shapes().Opsets()) {
+    retained.SetOpsetVersion(domain, version);
+  }
+  retained.CopyLocalFunctions(original.Shapes());
+  retained.CopyValueFrom("X", original.Shapes(), "X");
   core::builder::GraphBuilder moved(std::move(original));
   moved.LocalFunction("F").MakeNode("Neg", {"a"}, {"dead"});
   EXPECT_EQ(moved.LocalFunction("F").RemoveUnusedNodes(), 1u);
@@ -2152,7 +2275,7 @@ TEST(GraphBuilder, NativeLocalFunctionDefinitionsSurviveMovesAndEdits) {
   ASSERT_EQ(outputs.size(), 2u);
   EXPECT_EQ(moved.GetShape(outputs[0]).Shape(), MakeShape({2, 3}));
   EXPECT_EQ(moved.GetShape(outputs[1]).Shape(), MakeShape({2}));
-  // The copied context still owns the definition captured before the move.
+  // The selectively retained context still owns the definition captured before the move.
   retained.ComputeShapeNode(MakeNode("F", {"X"}, {"old", "old_shape"}, "local"));
   EXPECT_EQ(retained.Get("old").Shape(), MakeShape({2, 3}));
   EXPECT_EQ(retained.Get("old_shape").Shape(), MakeShape({2}));
@@ -2551,10 +2674,8 @@ TEST(GraphBuilder, NativeFunctionSnapshotsRefreshAfterMutations) {
   function.MakeOutput("r");
   builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   builder.MakeNode("F", {"X"}, {"result"}, "local");
-  const core::shapes::ShapesContext snapshot = builder.Shapes();
-  const FunctionProto *definition = snapshot.GetLocalFunction("local:F");
-  ASSERT_NE(definition, nullptr);
-  ASSERT_EQ(definition->node().size(), 2u);
+  const FunctionProto definition = *builder.Shapes().GetLocalFunction("local:F");
+  ASSERT_EQ(definition.node().size(), 2u);
 
   auto &growing_function = builder.MakeLocalFunction("Identity", "local");
   growing_function.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
@@ -2571,9 +2692,8 @@ TEST(GraphBuilder, NativeFunctionSnapshotsRefreshAfterMutations) {
   EXPECT_TRUE(builder.Shapes().HasLocalFunction("local:Identity"));
   builder.MakeNode("Identity", {"X"}, {"from_growing"}, "local");
   EXPECT_EQ(builder.GetShape("from_growing").Shape(), MakeShape({2, 3}));
-  const core::shapes::ShapesContext updated = builder.Shapes();
-  ASSERT_NE(updated.GetLocalFunction("local:Identity"), nullptr);
-  EXPECT_EQ(updated.GetLocalFunction("local:Identity")->node().size(), 16u);
+  ASSERT_NE(builder.Shapes().GetLocalFunction("local:Identity"), nullptr);
+  EXPECT_EQ(builder.Shapes().GetLocalFunction("local:Identity")->node().size(), 16u);
 
   EXPECT_EQ(function.RemoveUnusedNodes(), 1u);
   EXPECT_EQ(builder.Shapes().GetLocalFunction("local:F")->node().size(), 1u);
@@ -2583,7 +2703,7 @@ TEST(GraphBuilder, NativeFunctionSnapshotsRefreshAfterMutations) {
   ASSERT_NE(builder.Shapes().GetLocalFunction("local:F"), nullptr);
   EXPECT_EQ(builder.Shapes().GetLocalFunction("local:F")->node().size(), 1u);
   EXPECT_EQ(builder.GetShape("after_edit").Shape(), MakeShape({2, 3}));
-  EXPECT_EQ(definition->node().size(), 2u);
+  EXPECT_EQ(definition.node().size(), 2u);
 }
 
 TEST(GraphBuilder, NativeDemandRefreshDiscardsRemovedFunctions) {
@@ -2595,13 +2715,13 @@ TEST(GraphBuilder, NativeDemandRefreshDiscardsRemovedFunctions) {
   builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   builder.MakeNode("F", {"X"}, {"result"}, "local");
   builder.MakeOutput("result");
-  const core::shapes::ShapesContext snapshot = builder.Shapes();
+  const FunctionProto snapshot = *builder.Shapes().GetLocalFunction("local:F");
   EXPECT_EQ(builder.InlineLocalFunctions(), 1u);
   EXPECT_FALSE(builder.HasLocalFunction("F"));
   builder.MakeNode("F", {"X"}, {"unregistered"}, "local");
   EXPECT_FALSE(builder.HasShape("unregistered"));
   EXPECT_FALSE(builder.Shapes().HasLocalFunction("local:F"));
-  EXPECT_TRUE(snapshot.HasLocalFunction("local:F"));
+  EXPECT_EQ(snapshot.name(), "F");
 }
 
 TEST(GraphBuilder, NativeGraphReferencesRefreshLateFunctionDefinitions) {
@@ -2630,11 +2750,10 @@ TEST(GraphBuilder, NativeGraphReferencesRefreshLateFunctionDefinitions) {
   builder.MakeNode("If", {"condition"}, {"selected"}, "", "", attributes);
   EXPECT_EQ(builder.GetShape("selected").Shape(), MakeShape({2, 3}));
   EXPECT_EQ(builder.Subgraph("then_branch").GetShape("branch_result").Shape(), MakeShape({2, 3}));
-  const core::shapes::ShapesContext snapshot = builder.Shapes();
+  const std::string snapshot = builder.Shapes().GetLocalFunction("local:F")->SerializeAsString();
   builder.MakeNode("CastLike", {"selected", "X"}, {"Y"});
   EXPECT_EQ(builder.GetShape("Y").Shape(), MakeShape({2, 3}));
-  EXPECT_EQ(builder.Shapes().GetLocalFunction("local:F")->SerializeAsString(),
-            snapshot.GetLocalFunction("local:F")->SerializeAsString());
+  EXPECT_EQ(builder.Shapes().GetLocalFunction("local:F")->SerializeAsString(), snapshot);
 }
 
 TEST(GraphBuilder, NativeDefaultInitializerValidatesDeclaredTensor) {
@@ -2988,7 +3107,9 @@ TEST(GraphBuilderStructured, NestedDedupRewritesCapturesAndOwnsCatalogue) {
   EXPECT_EQ(child.Nodes()[0].input(0), "outer");
   EXPECT_FALSE(child.Shapes().HasEncodedValue("inner"));
   EXPECT_EQ(child.Shapes().GetEncodedLayout("outer").element_bits, 64u);
-  const auto snapshot = child.Shapes();
+  core::shapes::ShapesContext snapshot;
+  snapshot.SetStructTypes(child.Shapes().StructTypes());
+  snapshot.CopyValueFrom("outer", child.Shapes(), "outer");
   builder.MakeStructType(BuilderRecord(2));
   EXPECT_EQ(snapshot.StructTypes().size(), 1u);
   EXPECT_EQ(child.Shapes().StructTypes().size(), 2u);

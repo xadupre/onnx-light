@@ -129,26 +129,23 @@ TEST(StructuredInference, NestedReferencesLogicalAndPhysicalIdentity) {
   EXPECT_EQ(model.graph().output(0).type().ref_struct_type().ref_type_ref(), 2u);
 }
 
-TEST(StructuredInference, CatalogueAndValuesOwnTheirCopies) {
-  core::shapes::ShapesContext copy;
+TEST(StructuredInference, CatalogueAndValuesSurviveMove) {
+  core::shapes::ShapesContext owned;
   {
     ModelProto model = StructuredModel();
     core::shapes::ShapesContext original;
     original.ComputeShapeModel(model);
-    copy = original;
+    owned = std::move(original);
     model.ref_struct_types().Clear();
     model.ref_graph().ref_encoded_initializer().Clear();
-    original.Clear();
-    EXPECT_EQ(original.StructTypes().size(), 2u);
-    EXPECT_FALSE(original.HasEncodedValue("output"));
   }
-  const auto layout = copy.GetEncodedLayout("output");
+  const auto layout = owned.GetEncodedLayout("output");
   EXPECT_EQ(layout.root->ref_type_id(), 2u);
   EXPECT_EQ(layout.payload_bytes, 4u);
-  EXPECT_EQ(copy.ResolveStructType(copy.GetType("output").ref_struct_type()).ref_type_id(), 2u);
-  copy.Clear();
-  EXPECT_TRUE(copy.Empty());
-  EXPECT_EQ(copy.StructTypes().size(), 2u);
+  EXPECT_EQ(owned.ResolveStructType(owned.GetType("output").ref_struct_type()).ref_type_id(), 2u);
+  owned.Clear();
+  EXPECT_TRUE(owned.Empty());
+  EXPECT_EQ(owned.StructTypes().size(), 2u);
 }
 
 TEST(StructuredInference, NewModelsDoNotInheritDeclarations) {

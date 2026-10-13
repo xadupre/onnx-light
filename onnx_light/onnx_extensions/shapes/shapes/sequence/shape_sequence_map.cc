@@ -63,7 +63,7 @@ void ComputeShapeSequenceMap(ShapesContext &ctx, const NodeProto &node) {
   // input represents one element of the input sequence; the remaining
   // body inputs mirror the outer-scope additional inputs of ``node``
   // (which can be either tensors or sequences).
-  ShapesContext local = ctx;
+  ShapesContext local = ctx.MakeChildContext(body);
 
   const std::string input_seq_name = node.input(0);
   const SymSequence &input_seq = ctx.GetSequence(input_seq_name);

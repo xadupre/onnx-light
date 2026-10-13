@@ -28,6 +28,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   affected values and consumers
   ([#5162](https://github.com/xadupre/onnx-light/pull/5162),
   [#5242](https://github.com/xadupre/onnx-light/pull/5242)).
+- Made the C++ `ShapesContext` API move-only to prevent accidental full context
+  and expression-cache copies ([#5245](https://github.com/xadupre/onnx-light/pull/5245)).
 - Inlined local functions containing control-flow subgraphs without copying
   unchanged nodes ([#5166](https://github.com/xadupre/onnx-light/pull/5166),
   [#5196](https://github.com/xadupre/onnx-light/pull/5196)).

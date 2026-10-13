@@ -77,6 +77,8 @@ TEST(OnnxOptimShapeIf, IdenticalBranchesSameDtypeAndShape) {
   core::symbolic::SymShape shape{core::symbolic::SymDim(2), core::symbolic::SymDim(3)};
   ctx.Set("cond", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kBool, {}));
   ctx.Set("x", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
+  ctx.Set("unrelated",
+          core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
 
   onnx_shapes::shapes::controlflow::ComputeShapeIf(ctx, node);
 
@@ -369,10 +371,14 @@ TEST(OnnxOptimShapeIf, RetainsBranchSubgraphContexts) {
 
   const core::shapes::ShapesContext &then_ctx = ctx.GetSubgraphContext(-1, "then_branch");
   ASSERT_TRUE(then_ctx.Has("y_then"));
+  EXPECT_TRUE(then_ctx.Has("x"));
+  EXPECT_FALSE(then_ctx.Has("unrelated"));
   EXPECT_EQ(then_ctx.Get("y_then").Shape(), shape);
 
   const core::shapes::ShapesContext &else_ctx = ctx.GetSubgraphContext(-1, "else_branch");
   ASSERT_TRUE(else_ctx.Has("y_else"));
+  EXPECT_TRUE(else_ctx.Has("x"));
+  EXPECT_FALSE(else_ctx.Has("unrelated"));
   EXPECT_EQ(else_ctx.Get("y_else").Shape(), shape);
 }
 

@@ -742,13 +742,16 @@ private:
 
   // Seeds the owned ShapesContext with the descriptor of ``name``.
   void SeedShape(const std::string &name, SymTensor tensor);
+  void SeedInheritedValue(const std::string &name);
+  void CopyInferredValuesFrom(const ShapesContext &source);
 
   template <typename Tensor> const std::string &MakeInitializerImpl(Tensor &&tensor);
 
   void SetStructTypes(const utils::RepeatedProtoField<StructTypeProto> &types);
   void RefreshAfterMutation();
   void RefreshAncestors();
-  void RefreshNestedDependency(GraphBuilder &child);
+  void RefreshLocalFunctionDefinition(GraphBuilder &function);
+  void RefreshNestedDependency(GraphBuilder &child, bool propagate_to_parent = true);
   void RebuildMetadata();
   void RebuildStructuredState(bool refresh_ancestors = true);
   GraphProto BuildGraphImpl(bool validate_persistent_bindings) const;
@@ -806,6 +809,7 @@ private:
                       const std::string &name, const char *kind);
 
   std::string name_;
+  bool is_local_function_ = false;
   std::string function_domain_;
   std::vector<std::string> function_attributes_;
   utils::RepeatedProtoField<AttributeProto> function_attribute_protos_;

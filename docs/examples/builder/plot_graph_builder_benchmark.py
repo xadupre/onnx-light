@@ -5,12 +5,13 @@ Benchmark GraphBuilder against onnxscript GraphBuilder
 This example builds the same attention-style graph with 100, 200, and
 500 nodes using :class:`onnx_light.onnx_core.graph_builder.GraphBuilder` and
 :class:`onnxscript.GraphBuilder`. It checks that both models produce the same
-outputs before measuring model construction with and without in-memory
-serialization. The timings include model finalization (``to_onnx`` or
-``onnx_ir.to_proto``), but exclude imports, input generation, and execution.
-The serialization column additionally calls ``SerializeToString``: it creates
-the complete protobuf wire representation in memory rather than writing it to
-a file.
+outputs before measuring graph construction and large-model serialization.
+The construction timings include model finalization (``to_onnx`` or
+``onnx_ir.to_proto``), but exclude imports, input generation, execution, and
+the large initializer payload described below. The serialization timings build
+the same graph with that payload and additionally call ``SerializeToString``:
+they create the complete protobuf wire representation in memory rather than
+writing it to a file.
 
 Run this example with the ``docs`` optional dependencies installed.
 
@@ -23,11 +24,12 @@ The same exported models are checked on several shapes, including a singleton
 sequence. Both builders receive identical operators and initializers; their
 default shape-inference behavior is included in the construction timings.
 
-To make the serialization cost visible, the timed models also expose four
-large ``UINT8`` initializers as outputs. They share one source array while the
+To make the serialization cost visible without hiding builder scaling in the
+construction column, only the serialization measurements expose four large
+``UINT8`` initializers as outputs. They share one source array while the
 builders are running, but each initializer is present in the final model, whose
-serialized size is approximately 1.5 GB. The functional checks omit this large
-payload.
+serialized size is approximately 1.5 GB. The functional checks and construction
+measurements omit this large payload.
 """
 
 from __future__ import annotations
@@ -232,11 +234,11 @@ def format_node_type_table(distributions: dict[int, Counter]) -> str:
 
 
 def plot_benchmark(results: list[dict]):
-    """Plots construction times with and without in-memory serialization."""
+    """Plots graph construction and large-model serialization times."""
     figure, axes = matplotlib.pyplot.subplots(1, 2, figsize=(11, 4), sharex=True)
     for axis, key, title in (
-        (axes[0], "model", "Model construction"),
-        (axes[1], "serialized", "Model construction and in-memory serialization"),
+        (axes[0], "model", "Graph construction without large initializers"),
+        (axes[1], "serialized", "1.5 GB model construction and serialization"),
     ):
         for builder_name in ("onnx-light", "onnxscript"):
             rows = [row for row in results if row["builder"] == builder_name]
@@ -256,7 +258,7 @@ def plot_benchmark(results: list[dict]):
 
 
 if __name__ == "__main__":
-    print("nodes  builder       model (ms)  model + in-memory serialization (ms)")
+    print("nodes  builder       graph (ms)  1.5 GB model + serialization (ms)")
     results = []
     distributions = {}
     for count in NODE_COUNTS:
@@ -264,12 +266,16 @@ if __name__ == "__main__":
         distribution_model = build_light(count)
         distributions[count] = node_type_distribution(distribution_model)
         del distribution_model
-        for name, build in (
-            ("onnx-light", lambda n: build_light(n, large_initializers=True)),
-            ("onnxscript", lambda n: build_onnxscript(n, large_initializers=True)),
+        for name, build, build_large in (
+            ("onnx-light", build_light, lambda n: build_light(n, large_initializers=True)),
+            (
+                "onnxscript",
+                build_onnxscript,
+                lambda n: build_onnxscript(n, large_initializers=True),
+            ),
         ):
             model_time = measure(build, count, False)
-            serialized_time = measure(build, count, True)
+            serialized_time = measure(build_large, count, True)
             results.append(
                 {
                     "nodes": count,

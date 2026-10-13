@@ -39,8 +39,9 @@ template <typename Proto> inline std::string ProtoDebugString(const Proto &proto
  * Constructs a @c StringStream over the supplied buffer and calls
  * @c ParseFromStream() on @p proto.  Returns @c false without modifying
  * @p proto when @p proto is null, when @p buffer is null but @p length is
- * positive, when parsing raises a @c std::runtime_error, or when bytes remain
- * unconsumed after parsing completes.
+ * positive, when @p length exceeds the 2 GB protobuf limit, when parsing
+ * raises a @c std::runtime_error, or when bytes remain unconsumed after parsing
+ * completes.
  *
  * @tparam Proto A protobuf-like message type that exposes a
  *               @c ParseFromStream(utils::StringStream&, ParseOptions&) method.
@@ -54,7 +55,8 @@ template <typename Proto> inline std::string ProtoDebugString(const Proto &proto
  */
 template <typename Proto>
 inline bool ParseProtoFromBytes(Proto *proto, const char *buffer, size_t length) {
-  if (proto == nullptr || (buffer == nullptr && length > 0)) {
+  constexpr size_t total_bytes_limit = (2048ULL << 20) - 1;
+  if (proto == nullptr || (buffer == nullptr && length > 0) || length > total_bytes_limit) {
     return false;
   }
   ParseOptions options;

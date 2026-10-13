@@ -5,6 +5,7 @@
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
 #include "onnx_core/runtime/kernels/run_nodes.h"
+#include "onnx_core/runtime/kernels/value_store.h"
 #include "onnx_core/runtime/runtime_session.h"
 
 #include <gtest/gtest.h>
@@ -349,6 +350,105 @@ TEST(KernelLifecycle, RuntimeSessionDoesNotPrepareOverridableGemmWeight) {
   EXPECT_EQ(session.prepared_bytes(), 0u);
   EXPECT_EQ(std::vector<float>(rt.Get("Y").AsFloat(), rt.Get("Y").AsFloat() + 2),
             (std::vector<float>{2, 4}));
+}
+
+TEST(KernelLifecycle, NestedFunctionPreparesBoundImmutableGemmWeight) {
+  for (const bool overridable : {false, true}) {
+    ModelProto model = MakeGemmModel(overridable);
+    model.mutable_graph()->ref_node().clear();
+    model.add_opset_import()->set_domain("test.nested");
+    model.mutable_opset_import(1)->set_version(1);
+    FunctionProto *inner = model.add_functions();
+    inner->set_domain("test.nested");
+    inner->set_name("Inner");
+    inner->add_input("data");
+    inner->add_input("inner_weight");
+    inner->add_output("result");
+    NodeProto *gemm = inner->add_node();
+    gemm->set_op_type("Gemm");
+    gemm->add_input("data");
+    gemm->add_input("inner_weight");
+    gemm->add_output("result");
+    FunctionProto *outer = model.add_functions();
+    outer->set_domain("test.nested");
+    outer->set_name("Outer");
+    outer->add_input("x");
+    outer->add_input("outer_weight");
+    outer->add_output("y");
+    NodeProto *inner_call = outer->add_node();
+    inner_call->set_domain("test.nested");
+    inner_call->set_op_type("Inner");
+    inner_call->add_input("x");
+    inner_call->add_input("outer_weight");
+    inner_call->add_output("y");
+    NodeProto *outer_call = model.mutable_graph()->add_node();
+    outer_call->set_domain("test.nested");
+    outer_call->set_op_type("Outer");
+    outer_call->add_input("A");
+    outer_call->add_input("B");
+    outer_call->add_output("Y");
+
+    RuntimeSession session(model);
+    RuntimeContext rt(core::runtime::KernelContext(core::backend_test::DefaultOpset(13)));
+    core::runtime::RegisterModelFunctions(model, rt);
+    rt.Put("A", Tensor::FromFloat("A", {1, 3}, {1, 2, 3}));
+    if (overridable)
+      rt.Put("B", Tensor::FromFloat("B", {3, 2}, {1, 2, 3, 4, 5, 6}));
+    session.Run(rt);
+    EXPECT_EQ(rt.value_store_owner(), session.value_store());
+    EXPECT_EQ(rt.value_store().slot_count(), overridable ? 0u : 1u);
+    EXPECT_EQ(rt.value_store().prepared_bytes(), overridable ? 0u : 6 * sizeof(float));
+    EXPECT_EQ(std::vector<float>(rt.Get("Y").AsFloat(), rt.Get("Y").AsFloat() + 2),
+              (std::vector<float>{22, 28}));
+
+    rt.Remove("Y");
+    rt.Put("A", Tensor::FromFloat("A", {1, 3}, {2, 1, 0}));
+    session.Run(rt);
+    EXPECT_EQ(rt.value_store().slot_count(), overridable ? 0u : 1u);
+    EXPECT_EQ(std::vector<float>(rt.Get("Y").AsFloat(), rt.Get("Y").AsFloat() + 2),
+              (std::vector<float>{5, 8}));
+  }
+}
+
+TEST(KernelLifecycle, NestedGraphPreparesCapturedImmutableGemmWeight) {
+  for (const bool overridable : {false, true}) {
+    ModelProto model = MakeGemmModel(overridable);
+    model.mutable_graph()->ref_node().clear();
+    model.mutable_graph()->add_input()->set_name("cond");
+    NodeProto *if_node = model.mutable_graph()->add_node();
+    if_node->set_op_type("If");
+    if_node->add_input("cond");
+    if_node->add_output("Y");
+    for (const std::string name : {"then_branch", "else_branch"}) {
+      AttributeProto *attr = if_node->add_attribute();
+      attr->set_name(name);
+      attr->set_type(AttributeProto::AttributeType::GRAPH);
+      GraphProto *branch = attr->add_g();
+      branch->add_output()->set_name("branch_result");
+      NodeProto *gemm = branch->add_node();
+      gemm->set_op_type("Gemm");
+      gemm->add_input("A");
+      gemm->add_input("B");
+      gemm->add_output("branch_result");
+    }
+
+    RuntimeSession session(model);
+    RuntimeContext rt(core::runtime::KernelContext(core::backend_test::DefaultOpset(13)));
+    rt.Put("A", Tensor::FromFloat("A", {1, 3}, {1, 2, 3}));
+    rt.Put("cond", Tensor::FromBool("cond", {}, {true}));
+    if (overridable)
+      rt.Put("B", Tensor::FromFloat("B", {3, 2}, {1, 2, 3, 4, 5, 6}));
+    session.Run(rt);
+    EXPECT_EQ(rt.value_store_owner(), session.value_store());
+    EXPECT_EQ(rt.value_store().slot_count(), overridable ? 0u : 1u);
+    EXPECT_EQ(rt.value_store().prepared_bytes(), overridable ? 0u : 6 * sizeof(float));
+    EXPECT_EQ(std::vector<float>(rt.Get("Y").AsFloat(), rt.Get("Y").AsFloat() + 2),
+              (std::vector<float>{22, 28}));
+    rt.Remove("Y");
+    rt.Put("cond", Tensor::FromBool("cond", {}, {false}));
+    session.Run(rt);
+    EXPECT_EQ(rt.value_store().slot_count(), overridable ? 0u : 1u);
+  }
 }
 
 TEST(KernelLifecycle, RuntimeSessionSizesPreparedStorageForAllGemmWeights) {

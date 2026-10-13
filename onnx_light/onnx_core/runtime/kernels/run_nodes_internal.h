@@ -9,6 +9,7 @@
 #include "onnx_proto/onnx.h"
 
 #include <string>
+#include <unordered_set>
 
 /**
  * @file run_nodes_internal.h
@@ -46,7 +47,8 @@ std::unique_ptr<KernelBase>
 ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt, const std::string &domain,
                          const std::string &op_type, const KernelContext &kernel_context,
                          const OpsetImports *opset_imports = nullptr,
-                         std::shared_ptr<ValueStore> value_store = nullptr);
+                         std::shared_ptr<ValueStore> value_store = nullptr,
+                         const std::unordered_set<std::string> &immutable_inputs = {});
 
 /**
  * Emits the ReferenceEvaluator verbose progress line for one node dispatch. The

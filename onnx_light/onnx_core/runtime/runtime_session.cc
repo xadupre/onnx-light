@@ -162,12 +162,21 @@ RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions op
 }
 
 RuntimeSession::RuntimeSession(const GraphProto &graph, const OpsetImports *inherited_opset_imports,
-                               int verbose, std::shared_ptr<ValueStore> value_store)
+                               int verbose, std::shared_ptr<ValueStore> value_store,
+                               std::unordered_set<std::string> immutable_inputs)
     : default_plan_(graph), plan_(default_plan_), inherited_opset_imports_(inherited_opset_imports),
       value_store_(std::move(value_store)), cpu_execution_(DefaultCpuExecutionPolicy(parameters_)),
       verbose_(verbose) {
   SetDeclaredShapes(graph);
   SetInitializers(graph);
+  inherited_immutable_inputs_ = std::move(immutable_inputs);
+  for (const ValueInfoProto &input : graph.input())
+    inherited_immutable_inputs_.erase(input.name());
+  for (const TensorProto &initializer : graph.initializer())
+    inherited_immutable_inputs_.erase(initializer.name());
+  for (const NodeProto &node : graph.node())
+    for (const std::string &output : node.output())
+      inherited_immutable_inputs_.erase(output);
 }
 
 RuntimeSession::RuntimeSession(const ExecutionPlan &plan, int verbose)
@@ -197,7 +206,9 @@ RuntimeSession::RuntimeSession(const FunctionProto &function,
                                RuntimeSessionOptions options)
     : default_plan_(function), plan_(default_plan_),
       inherited_opset_imports_(inherited_opset_imports),
-      value_store_(std::move(options.value_store)), check_shapes_(options.check_shapes),
+      value_store_(std::move(options.value_store)),
+      inherited_immutable_inputs_(std::move(options.immutable_inputs)),
+      check_shapes_(options.check_shapes),
       allow_external_output_allocators_(options.allow_external_output_allocators),
       parameters_(std::move(options.parameters)),
       cpu_execution_(options.cpu_execution.has_value() ? *options.cpu_execution
@@ -350,9 +361,10 @@ std::vector<std::string> RuntimeSession::CollectNodeInputs(const NodeProto &node
 std::unique_ptr<KernelBase>
 RuntimeSession::ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt,
                                   const std::string &domain, const std::string &op_type,
-                                  const KernelContext &kernel_context) const {
+                                  const KernelContext &kernel_context,
+                                  const std::unordered_set<std::string> &preparable_inputs) const {
   return detail::ResolveNodeKernelDefault(node, rt, domain, op_type, kernel_context,
-                                          EffectiveOpsetImports(), value_store_);
+                                          EffectiveOpsetImports(), value_store_, preparable_inputs);
 }
 
 void RuntimeSession::InitializeKernels(RuntimeContext &rt,
@@ -384,9 +396,11 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt,
                           "RuntimeSession: missing opset import for domain '", domain, "'.");
       const KernelContext kernel_context(OpsetId(domain, found->second), rt.kernel_ctx().allocator,
                                          imports);
-      prepared.instance = ResolveNodeKernel(node, rt, domain, op_type, kernel_context);
+      prepared.instance =
+          ResolveNodeKernel(node, rt, domain, op_type, kernel_context, preparable_inputs);
     } else {
-      prepared.instance = ResolveNodeKernel(node, rt, domain, op_type, rt.kernel_ctx());
+      prepared.instance =
+          ResolveNodeKernel(node, rt, domain, op_type, rt.kernel_ctx(), preparable_inputs);
     }
   }
 
@@ -700,6 +714,9 @@ void RuntimeSession::Run(RuntimeContext &rt) {
         preparable_inputs.insert(name);
       }
     }
+    for (const std::string &name : inherited_immutable_inputs_)
+      if (rt.HasValue(name))
+        preparable_inputs.insert(name);
     InitializeKernels(rt, preparable_inputs);
   }
   if (resolve_value_slots) {

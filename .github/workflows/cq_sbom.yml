@@ -1,6 +1,11 @@
 name: acq - SBOM
 
 on:
+  pull_request:
+    paths:
+      - ".vex/**"
+      - "sbom.cdx.json"
+      - ".github/workflows/cq_sbom.yml"
   schedule:
     # Run daily at 07:30 UTC. The check_recent_commit job below skips the
     # validation if no new commit landed on the default branch in the last
@@ -64,3 +69,8 @@ jobs:
           python -m check_jsonschema \
             --schemafile "https://cyclonedx.org/schema/bom-1.7.schema.json" \
             sbom.cdx.json
+      - name: Validate OpenVEX statements against OpenVEX 0.2.0 schema
+        run: |
+          python -m check_jsonschema \
+            --schemafile "https://raw.githubusercontent.com/openvex/spec/a68ccd19b15a9604d28ef66ebf33f27a772ba4ec/openvex_json_schema.json" \
+            .vex/*.openvex.json

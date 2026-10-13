@@ -115,6 +115,16 @@ bundled into the built artifacts (currently only `nanobind`, used to expose the
 C++ extension to Python). The file is validated against the CycloneDX 1.7
 schema by the [`SBOM`](.github/workflows/cq_sbom.yml) GitHub Actions workflow.
 
+## Vulnerability Exploitability eXchange (VEX)
+
+The [`.vex/`](.vex/) directory contains [OpenVEX](https://openvex.dev/)
+statements for dependency vulnerabilities assessed as not affecting onnx-light.
+The protobuf statement concerns the onnx-light package only: protobuf is not a
+runtime dependency, and onnx-light does not parse protobuf JSON. If your
+application uses protobuf directly (including through optional development
+dependencies), assess that usage separately. The SBOM workflow validates these
+statements against the OpenVEX schema.
+
 ## Getting started
 
 Install the package in editable mode:

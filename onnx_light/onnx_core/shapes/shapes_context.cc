@@ -25,6 +25,9 @@ ShapesContext ShapesContext::MakeChildContext(const GraphProto &graph) const {
   child.le_constraints_ = le_constraints_;
   child.event_callback_ = event_callback_;
   child.events_enabled_ = events_enabled_;
+  child.current_node_index_ = current_node_index_;
+  child.current_subgraph_node_index_ = current_subgraph_node_index_;
+  child.current_subgraph_attr_name_ = current_subgraph_attr_name_;
   child.topk_k_dims_ = topk_k_dims_;
 
   std::unordered_set<std::string> local_initializers;

@@ -598,7 +598,7 @@ void GraphBuilder::RefreshLocalFunctionDefinition(GraphBuilder &function) {
   install(*root);
 }
 
-void GraphBuilder::RefreshNestedDependency(GraphBuilder &child) {
+void GraphBuilder::RefreshNestedDependency(GraphBuilder &child, bool propagate_to_parent) {
   std::function<bool(const GraphBuilder &)> depends_on_function = [&](const GraphBuilder &builder) {
     for (const NodeProto &node : builder.nodes_) {
       if (node.domain().value() == child.function_domain_ &&
@@ -616,7 +616,7 @@ void GraphBuilder::RefreshNestedDependency(GraphBuilder &child) {
   if (child.is_local_function_) {
     for (const auto &subgraph : subgraphs_) {
       if (subgraph.get() != &child && depends_on_function(*subgraph)) {
-        subgraph->RefreshNestedDependency(child);
+        subgraph->RefreshNestedDependency(child, false);
       }
     }
     for (const auto &function : local_functions_) {
@@ -683,7 +683,7 @@ void GraphBuilder::RefreshNestedDependency(GraphBuilder &child) {
     compute_.RefreshNode(nodes_, index, compute_.Shapes(), references, device_);
     compute_.AppendNodeConstant(stored, index);
   }
-  if (parent_ != nullptr && !affected_values.empty()) {
+  if (propagate_to_parent && parent_ != nullptr && !affected_values.empty()) {
     if (is_local_function_) {
       parent_->RefreshLocalFunctionDefinition(*this);
     }

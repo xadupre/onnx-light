@@ -35,7 +35,7 @@ namespace {
 // set to ``branch_name``.
 ShapesContext InferSubgraph(ShapesContext &parent_ctx, const std::string &branch_name,
                             const GraphProto &subgraph) {
-  ShapesContext local = parent_ctx;
+  ShapesContext local = parent_ctx.MakeChildContext(subgraph);
   local.set_current_subgraph(local.current_node_index(), branch_name);
   for (const auto &input : subgraph.input()) {
     if (input.has_type() && input.type().value_case() != TypeProto::VALUE_NOT_SET) {
@@ -221,7 +221,7 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
   // condition (BOOL scalar); the remaining N are the loop-carried
   // dependency values, inherited from the matching ``v_initial`` outer
   // descriptor.
-  ShapesContext local = ctx;
+  ShapesContext local = ctx.MakeChildContext(body);
   local.set_current_subgraph(local.current_node_index(), "body");
   for (int i = 0; i < static_cast<int>(body.initializer().size()); ++i) {
     const TensorProto &init = body.initializer()[i];
@@ -240,7 +240,7 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
     const std::string v_initial_name = node.input(2 + i);
     EXT_ENFORCE_INVALID(!v_initial_name.empty(), "ComputeShapeLoop: 'v_initial' input #",
                         std::to_string(i), " has an empty name.");
-    EXT_ENFORCE_INVALID(local.Has(v_initial_name) || local.HasType(v_initial_name),
+    EXT_ENFORCE_INVALID(ctx.Has(v_initial_name) || ctx.HasType(v_initial_name),
                         "ComputeShapeLoop: 'v_initial' input '", v_initial_name,
                         "' is missing from the inferred context.");
     local.CopyValueFrom(body.input()[2 + i].name(), ctx, v_initial_name);
@@ -439,7 +439,7 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
   // dimension B. The body inputs are batch-stripped (rank reduced by one):
   //   state input [B, D...] → body input [D...]
   //   scan input  [B, T, D...] → body input [D...]  (B and T stripped)
-  ShapesContext local = ctx;
+  ShapesContext local = ctx.MakeChildContext(body);
   local.set_current_subgraph(local.current_node_index(), "body");
   for (int i = 0; i < static_cast<int>(body.initializer().size()); ++i) {
     const TensorProto &init = body.initializer()[i];
@@ -464,9 +464,9 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
 
   for (int i = 0; i < n_state; ++i) {
     const std::string state_in_name = node.input(scan8_offset + i);
-    EXT_ENFORCE_INVALID(local.Has(state_in_name), "ComputeShapeScan: state input '", state_in_name,
+    EXT_ENFORCE_INVALID(ctx.Has(state_in_name), "ComputeShapeScan: state input '", state_in_name,
                         "' is missing from the inferred context.");
-    const SymTensor &state_in = local.Get(state_in_name);
+    const SymTensor &state_in = ctx.Get(state_in_name);
     if (is_scan8) {
       // Strip leading batch dimension; body sees [D...].
       EXT_ENFORCE_INVALID(state_in.Shape().Rank() >= 1,
@@ -492,9 +492,9 @@ void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
 
   for (int m = 0; m < num_scan_inputs; ++m) {
     const std::string scan_in_name = node.input(scan8_offset + n_state + m);
-    EXT_ENFORCE_INVALID(local.Has(scan_in_name), "ComputeShapeScan: scan input '", scan_in_name,
+    EXT_ENFORCE_INVALID(ctx.Has(scan_in_name), "ComputeShapeScan: scan input '", scan_in_name,
                         "' is missing from the inferred context.");
-    const SymTensor &scan_in = local.Get(scan_in_name);
+    const SymTensor &scan_in = ctx.Get(scan_in_name);
     EXT_ENFORCE_INVALID(scan_in.Shape().Rank() >= 1, "ComputeShapeScan: scan input '", scan_in_name,
                         "' must have rank >= 1.");
 

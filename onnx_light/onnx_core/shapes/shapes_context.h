@@ -280,15 +280,19 @@ public:
 
   ShapesContext() = default;
 
-  /// Returns the shared cache used by shape and memory expression simplification.
+  /// Returns this context's cache used by shape and memory expression simplification.
   expressions::SimplifiedExpressionCache &ExpressionCache() const noexcept {
-    return *expression_cache_;
+    return expression_cache_;
   }
 
-  /// Reuses ``other``'s expression cache in a separately constructed child context.
-  void ShareExpressionCache(const ShapesContext &other) noexcept {
+  /// Copies ``other``'s expression cache into a separately constructed child context.
+  void CopyExpressionCache(const ShapesContext &other) {
     expression_cache_ = other.expression_cache_;
   }
+
+  /// Creates an inference context containing configuration, the expression cache,
+  /// and only the parent values visible as formal or captured inputs of ``graph``.
+  ShapesContext MakeChildContext(const GraphProto &graph) const;
 
   /// Copies and validates model-local structured declarations.
   void SetStructTypes(const utils::RepeatedProtoField<StructTypeProto> &types);
@@ -865,8 +869,7 @@ private:
   }
 
   std::unordered_map<std::string, SymTensor> tensors_;
-  std::shared_ptr<expressions::SimplifiedExpressionCache> expression_cache_ =
-      std::make_shared<expressions::SimplifiedExpressionCache>();
+  mutable expressions::SimplifiedExpressionCache expression_cache_;
   std::shared_ptr<const ModelProto> struct_types_model_;
   std::unordered_map<std::string, TypeProto> types_;
   std::unordered_map<std::string, EncodedValueProto> encoded_values_;

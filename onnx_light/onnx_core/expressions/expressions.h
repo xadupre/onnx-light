@@ -632,9 +632,7 @@ std::unordered_map<std::string, std::string> rename_dynamic_dimensions(
  */
 using DimType = std::variant<int64_t, std::string>;
 
-/// Memoization cache mapping a symbolic expression string to its simplified
-/// form, shared across simplifications to avoid re-running the symbolic
-/// simplifier on the same expression.
+/// Memoization cache mapping a symbolic expression string to its simplified form.
 using SimplifiedExpressionCache = std::unordered_map<std::string, DimType>;
 
 /**

@@ -524,6 +524,47 @@ TEST(GraphBuilder, DefaultDomainFunctionMutationRefreshesTransitiveCallers) {
   EXPECT_EQ(builder.GetShape("result").Shape(), MakeShape({2, 3}));
 }
 
+TEST(GraphBuilder, FunctionMutationRefreshesNestedSubgraphOwnerOnce) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.SetOpsetVersion("custom", 1);
+  builder.SetOpsetVersion("local", 1);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+
+  auto &function = builder.MakeLocalFunction("F", "local");
+  function.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  function.MakeNode("Identity", {"a"}, {"r"});
+  function.MakeOutput("r");
+
+  auto &body = builder.MakeSubgraph("body");
+  body.SetOpsetVersion("local", 1);
+  body.MakeNode("F", {"x"}, {"body_result"}, "local");
+  body.MakeOutput("body_result");
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  auto &body_ref = attributes.add();
+  body_ref.set_name("body_ref");
+  body_ref.set_type(AttributeProto::STRING);
+  body_ref.set_s("body");
+  builder.MakeNode("Capture", {}, {"result"}, "custom", "", attributes);
+
+  auto &root_shapes = const_cast<core::shapes::ShapesContext &>(builder.Shapes());
+  auto &body_shapes = const_cast<core::shapes::ShapesContext &>(body.Shapes());
+  root_shapes.set_events_enabled(true);
+  body_shapes.set_events_enabled(true);
+  root_shapes.ClearEvents();
+  body_shapes.ClearEvents();
+  function.MakeNode("Neg", {"a"}, {"dead"});
+
+  const auto count_computations = [](const core::shapes::ShapesContext &shapes,
+                                     const std::string &op_type) {
+    return std::count_if(shapes.Events().begin(), shapes.Events().end(), [&](const auto &event) {
+      return event.action == core::shapes::ShapeEventAction::kComputeNode &&
+             event.op_type == op_type;
+    });
+  };
+  EXPECT_EQ(count_computations(body_shapes, "F"), 1);
+  EXPECT_EQ(count_computations(root_shapes, "Capture"), 1);
+}
+
 TEST(GraphBuilder, MaintainsConstantInfoIncrementally) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   TensorProto initializer;

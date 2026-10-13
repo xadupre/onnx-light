@@ -15,7 +15,7 @@ DimType simplify_dim_type(const DimType &value, SimplifiedExpressionCache *cache
   }
   const std::string &expr = std::get<std::string>(value);
   if (cache != nullptr) {
-    auto it = cache->find(expr);
+    const auto it = cache->find(expr);
     if (it != cache->end()) {
       return it->second;
     }

@@ -749,7 +749,7 @@ private:
   void RefreshAfterMutation();
   void RefreshAncestors();
   void RefreshLocalFunctionDefinition(GraphBuilder &function);
-  void RefreshNestedDependency(GraphBuilder &child);
+  void RefreshNestedDependency(GraphBuilder &child, bool propagate_to_parent = true);
   void RebuildMetadata();
   void RebuildStructuredState(bool refresh_ancestors = true);
   GraphProto BuildGraphImpl(bool validate_persistent_bindings) const;

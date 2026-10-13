@@ -422,14 +422,13 @@ TEST(DimOperations, DimAddUsesCache) {
   EXPECT_EQ(cache.size(), 1u);
 }
 
-TEST(DimOperations, ShapesContextCopiesShareExpressionCache) {
+TEST(DimOperations, ShapesContextCopiesExpressionCache) {
   onnx_light::core::shapes::ShapesContext first;
-  onnx_light::core::shapes::ShapesContext second = first;
-  EXPECT_EQ(&first.ExpressionCache(), &second.ExpressionCache());
-
   const DimType a{std::string{"a"}};
   const DimType b{std::string{"b"}};
   dim_mul(a, b, &first.ExpressionCache());
+  onnx_light::core::shapes::ShapesContext second = first;
+  EXPECT_NE(&first.ExpressionCache(), &second.ExpressionCache());
   EXPECT_EQ(second.ExpressionCache().size(), 1u);
 }
 

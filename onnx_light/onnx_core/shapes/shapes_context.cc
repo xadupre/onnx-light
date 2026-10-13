@@ -7,9 +7,52 @@
 #include <string>
 #include <utility>
 
+#include "onnx_core/graph/graph_manipulations.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE::core::shapes {
+
+ShapesContext ShapesContext::MakeChildContext(const GraphProto &graph) const {
+  ShapesContext child;
+  child.expression_cache_ = expression_cache_;
+  child.struct_types_model_ = struct_types_model_;
+  child.opsets_ = opsets_;
+  child.dim_values_ = dim_values_;
+  child.local_functions_ = local_functions_;
+  child.owned_local_functions_ = owned_local_functions_;
+  child.custom_shape_inference_ = custom_shape_inference_;
+  child.constraints_ = constraints_;
+  child.le_constraints_ = le_constraints_;
+  child.event_callback_ = event_callback_;
+  child.events_enabled_ = events_enabled_;
+  child.topk_k_dims_ = topk_k_dims_;
+
+  std::unordered_set<std::string> local_initializers;
+  for (const auto &initializer : graph.initializer()) {
+    local_initializers.insert(initializer.name());
+  }
+  for (const auto &initializer : graph.sparse_initializer()) {
+    local_initializers.insert(initializer.values().name());
+    local_initializers.insert(initializer.indices().name());
+  }
+
+  std::unordered_set<std::string> copied;
+  const auto copy_if_present = [&](const std::string &name) {
+    if (!name.empty() && copied.insert(name).second &&
+        (Has(name) || HasSequence(name) || HasType(name) || HasEncodedValue(name))) {
+      child.CopyValueFrom(name, *this, name);
+    }
+  };
+  for (const auto &input : graph.input()) {
+    copy_if_present(input.name());
+  }
+  for (const auto &name : core::graph::CollectExternalInputs(graph.node())) {
+    if (!local_initializers.count(name)) {
+      copy_if_present(name);
+    }
+  }
+  return child;
+}
 
 bool HasStructuredType(const TypeProto &type) {
   if (type.has_struct_type()) {

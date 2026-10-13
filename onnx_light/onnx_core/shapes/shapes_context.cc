@@ -12,24 +12,23 @@
 
 namespace ONNX_LIGHT_NAMESPACE::core::shapes {
 
-ShapesContext ShapesContext::MakeChildContext(const GraphProto &graph) const {
+ShapesContext ShapesContext::MakeChildContext() const {
   ShapesContext child;
-  child.expression_cache_ = expression_cache_;
   child.struct_types_model_ = struct_types_model_;
   child.opsets_ = opsets_;
-  child.dim_values_ = dim_values_;
   child.local_functions_ = local_functions_;
   child.owned_local_functions_ = owned_local_functions_;
   child.custom_shape_inference_ = custom_shape_inference_;
-  child.constraints_ = constraints_;
-  child.le_constraints_ = le_constraints_;
   child.event_callback_ = event_callback_;
   child.events_enabled_ = events_enabled_;
   child.current_node_index_ = current_node_index_;
   child.current_subgraph_node_index_ = current_subgraph_node_index_;
   child.current_subgraph_attr_name_ = current_subgraph_attr_name_;
-  child.topk_k_dims_ = topk_k_dims_;
+  return child;
+}
 
+ShapesContext ShapesContext::MakeChildContext(const GraphProto &graph) const {
+  ShapesContext child = MakeChildContext();
   std::unordered_set<std::string> local_initializers;
   for (const auto &initializer : graph.initializer()) {
     local_initializers.insert(initializer.name());

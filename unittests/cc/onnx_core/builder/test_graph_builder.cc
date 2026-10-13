@@ -256,7 +256,7 @@ TEST(GraphBuilder, LateTagRefreshesReleaseWithoutDownstreamConsumers) {
   builder.MakeNode("Abs", {"intermediate"}, {"result"});
   EXPECT_TRUE(builder.Compute().NodeReleaseAfterShapeTagged(1).empty());
 
-  core::compute::ComputeContext incremental = builder.Compute();
+  auto &incremental = const_cast<core::compute::ComputeContext &>(builder.Compute());
   incremental.SeedValueTag("intermediate", "shape", builder.Nodes());
   EXPECT_EQ(incremental.NodeReleaseAfterShapeTagged(1), std::vector<std::string>{"intermediate"});
 }
@@ -2262,7 +2262,12 @@ TEST(GraphBuilder, NativeLocalFunctionDefinitionsSurviveMovesAndEdits) {
   function.MakeOutput("shape");
   original.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   original.MakeNode("F", {"X"}, {"first", "first_shape"}, "local");
-  core::shapes::ShapesContext retained = original.Shapes();
+  core::shapes::ShapesContext retained;
+  for (const auto &[domain, version] : original.Shapes().Opsets()) {
+    retained.SetOpsetVersion(domain, version);
+  }
+  retained.CopyLocalFunctions(original.Shapes());
+  retained.CopyValueFrom("X", original.Shapes(), "X");
   core::builder::GraphBuilder moved(std::move(original));
   moved.LocalFunction("F").MakeNode("Neg", {"a"}, {"dead"});
   EXPECT_EQ(moved.LocalFunction("F").RemoveUnusedNodes(), 1u);
@@ -2270,7 +2275,7 @@ TEST(GraphBuilder, NativeLocalFunctionDefinitionsSurviveMovesAndEdits) {
   ASSERT_EQ(outputs.size(), 2u);
   EXPECT_EQ(moved.GetShape(outputs[0]).Shape(), MakeShape({2, 3}));
   EXPECT_EQ(moved.GetShape(outputs[1]).Shape(), MakeShape({2}));
-  // The copied context still owns the definition captured before the move.
+  // The selectively retained context still owns the definition captured before the move.
   retained.ComputeShapeNode(MakeNode("F", {"X"}, {"old", "old_shape"}, "local"));
   EXPECT_EQ(retained.Get("old").Shape(), MakeShape({2, 3}));
   EXPECT_EQ(retained.Get("old_shape").Shape(), MakeShape({2}));
@@ -2669,10 +2674,8 @@ TEST(GraphBuilder, NativeFunctionSnapshotsRefreshAfterMutations) {
   function.MakeOutput("r");
   builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   builder.MakeNode("F", {"X"}, {"result"}, "local");
-  const core::shapes::ShapesContext snapshot = builder.Shapes();
-  const FunctionProto *definition = snapshot.GetLocalFunction("local:F");
-  ASSERT_NE(definition, nullptr);
-  ASSERT_EQ(definition->node().size(), 2u);
+  const FunctionProto definition = *builder.Shapes().GetLocalFunction("local:F");
+  ASSERT_EQ(definition.node().size(), 2u);
 
   auto &growing_function = builder.MakeLocalFunction("Identity", "local");
   growing_function.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
@@ -2689,9 +2692,8 @@ TEST(GraphBuilder, NativeFunctionSnapshotsRefreshAfterMutations) {
   EXPECT_TRUE(builder.Shapes().HasLocalFunction("local:Identity"));
   builder.MakeNode("Identity", {"X"}, {"from_growing"}, "local");
   EXPECT_EQ(builder.GetShape("from_growing").Shape(), MakeShape({2, 3}));
-  const core::shapes::ShapesContext updated = builder.Shapes();
-  ASSERT_NE(updated.GetLocalFunction("local:Identity"), nullptr);
-  EXPECT_EQ(updated.GetLocalFunction("local:Identity")->node().size(), 16u);
+  ASSERT_NE(builder.Shapes().GetLocalFunction("local:Identity"), nullptr);
+  EXPECT_EQ(builder.Shapes().GetLocalFunction("local:Identity")->node().size(), 16u);
 
   EXPECT_EQ(function.RemoveUnusedNodes(), 1u);
   EXPECT_EQ(builder.Shapes().GetLocalFunction("local:F")->node().size(), 1u);
@@ -2701,7 +2703,7 @@ TEST(GraphBuilder, NativeFunctionSnapshotsRefreshAfterMutations) {
   ASSERT_NE(builder.Shapes().GetLocalFunction("local:F"), nullptr);
   EXPECT_EQ(builder.Shapes().GetLocalFunction("local:F")->node().size(), 1u);
   EXPECT_EQ(builder.GetShape("after_edit").Shape(), MakeShape({2, 3}));
-  EXPECT_EQ(definition->node().size(), 2u);
+  EXPECT_EQ(definition.node().size(), 2u);
 }
 
 TEST(GraphBuilder, NativeDemandRefreshDiscardsRemovedFunctions) {
@@ -2713,13 +2715,13 @@ TEST(GraphBuilder, NativeDemandRefreshDiscardsRemovedFunctions) {
   builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   builder.MakeNode("F", {"X"}, {"result"}, "local");
   builder.MakeOutput("result");
-  const core::shapes::ShapesContext snapshot = builder.Shapes();
+  const FunctionProto snapshot = *builder.Shapes().GetLocalFunction("local:F");
   EXPECT_EQ(builder.InlineLocalFunctions(), 1u);
   EXPECT_FALSE(builder.HasLocalFunction("F"));
   builder.MakeNode("F", {"X"}, {"unregistered"}, "local");
   EXPECT_FALSE(builder.HasShape("unregistered"));
   EXPECT_FALSE(builder.Shapes().HasLocalFunction("local:F"));
-  EXPECT_TRUE(snapshot.HasLocalFunction("local:F"));
+  EXPECT_EQ(snapshot.name(), "F");
 }
 
 TEST(GraphBuilder, NativeGraphReferencesRefreshLateFunctionDefinitions) {
@@ -2748,11 +2750,10 @@ TEST(GraphBuilder, NativeGraphReferencesRefreshLateFunctionDefinitions) {
   builder.MakeNode("If", {"condition"}, {"selected"}, "", "", attributes);
   EXPECT_EQ(builder.GetShape("selected").Shape(), MakeShape({2, 3}));
   EXPECT_EQ(builder.Subgraph("then_branch").GetShape("branch_result").Shape(), MakeShape({2, 3}));
-  const core::shapes::ShapesContext snapshot = builder.Shapes();
+  const std::string snapshot = builder.Shapes().GetLocalFunction("local:F")->SerializeAsString();
   builder.MakeNode("CastLike", {"selected", "X"}, {"Y"});
   EXPECT_EQ(builder.GetShape("Y").Shape(), MakeShape({2, 3}));
-  EXPECT_EQ(builder.Shapes().GetLocalFunction("local:F")->SerializeAsString(),
-            snapshot.GetLocalFunction("local:F")->SerializeAsString());
+  EXPECT_EQ(builder.Shapes().GetLocalFunction("local:F")->SerializeAsString(), snapshot);
 }
 
 TEST(GraphBuilder, NativeDefaultInitializerValidatesDeclaredTensor) {
@@ -3106,7 +3107,9 @@ TEST(GraphBuilderStructured, NestedDedupRewritesCapturesAndOwnsCatalogue) {
   EXPECT_EQ(child.Nodes()[0].input(0), "outer");
   EXPECT_FALSE(child.Shapes().HasEncodedValue("inner"));
   EXPECT_EQ(child.Shapes().GetEncodedLayout("outer").element_bits, 64u);
-  const auto snapshot = child.Shapes();
+  core::shapes::ShapesContext snapshot;
+  snapshot.SetStructTypes(child.Shapes().StructTypes());
+  snapshot.CopyValueFrom("outer", child.Shapes(), "outer");
   builder.MakeStructType(BuilderRecord(2));
   EXPECT_EQ(snapshot.StructTypes().size(), 1u);
   EXPECT_EQ(child.Shapes().StructTypes().size(), 2u);

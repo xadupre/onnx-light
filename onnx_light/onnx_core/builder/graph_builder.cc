@@ -540,6 +540,48 @@ void GraphBuilder::SeedShape(const std::string &name, SymTensor tensor) {
   compute_.Shapes().Set(name, std::move(tensor));
 }
 
+void GraphBuilder::SeedInheritedValue(const std::string &name) {
+  auto &shapes = compute_.Shapes();
+  if (name.empty() || shapes.Has(name) || shapes.HasSequence(name) || shapes.HasType(name) ||
+      parent_ == nullptr || inherited_names_.count(name) == 0) {
+    return;
+  }
+  parent_->SeedInheritedValue(name);
+  const auto &outer = parent_->Shapes();
+  if (outer.Has(name) || outer.HasSequence(name) || outer.HasType(name) ||
+      outer.HasEncodedValue(name)) {
+    shapes.CopyValueFrom(name, outer, name);
+  }
+}
+
+void GraphBuilder::CopyInferredValuesFrom(const ShapesContext &source) {
+  std::unordered_set<std::string> names;
+  for (const auto &input : inputs_) {
+    names.insert(input.name().value());
+  }
+  for (const auto &initializer : initializers_) {
+    names.insert(initializer.name().value());
+  }
+  for (const auto &initializer : encoded_initializers_) {
+    names.insert(initializer.name().value());
+  }
+  for (const auto &initializer : paged_cache_initializers_) {
+    names.insert(initializer.name().value());
+  }
+  for (const auto &node : nodes_) {
+    names.insert(node.output().begin(), node.output().end());
+  }
+  for (const auto &output : outputs_) {
+    names.insert(output.name().value());
+  }
+  for (const auto &name : names) {
+    if (!name.empty() && (source.Has(name) || source.HasSequence(name) || source.HasType(name) ||
+                          source.HasEncodedValue(name))) {
+      compute_.Shapes().CopyValueFrom(name, source, name);
+    }
+  }
+}
+
 void GraphBuilder::set_device(Device device) {
   if (device_ == device) {
     return;
@@ -764,17 +806,10 @@ void GraphBuilder::RebuildMetadata() {
 }
 
 void GraphBuilder::RebuildStructuredState(bool refresh_ancestors) {
-  const auto previous = Shapes();
-  compute_.Shapes().Clear();
   auto &shapes = compute_.Shapes();
-  shapes.CopyLocalFunctions(previous);
+  shapes.ClearInferredState();
   for (const auto &[domain, version] : opsets_) {
     shapes.SetOpsetVersion(domain, version);
-  }
-  for (const auto &[key, function] : previous.CustomShapeInferenceFunctions()) {
-    const auto separator = key.rfind(':');
-    shapes.SetCustomShapeInferenceFunction(key.substr(0, separator), key.substr(separator + 1),
-                                           function);
   }
   if (parent_ != nullptr) {
     for (const auto &name : inherited_names_) {
@@ -865,9 +900,10 @@ const std::string &GraphBuilder::MakeEncodedInitializer(const EncodedValueProto 
     throw BuilderError("GraphBuilder: encoded initializer name is empty or already defined: '" +
                        name + "'.");
   }
-  // Validation happens on a snapshot so failure cannot reserve a name or
-  // partially replace an input's descriptor.
-  ShapesContext validated = Shapes();
+  // Validation happens in an isolated context so failure cannot reserve a name
+  // or partially replace an input's descriptor.
+  ShapesContext validated;
+  validated.SetStructTypes(Shapes().StructTypes());
   validated.SetEncodedValue(name, value);
   if (is_input && input->has_type()) {
     const TypeProto &actual = value.has_logical_type() && input->type().has_tensor_type()
@@ -878,16 +914,13 @@ const std::string &GraphBuilder::MakeEncodedInitializer(const EncodedValueProto 
                          "' has a different type from its declared input.");
     }
   }
-  if (is_input) {
-    // An overridable default must not supply constant bytes or specialize its
-    // public declaration during inference.
-    validated = Shapes();
-  }
   const std::string &reserved = is_input ? *names_.find(name) : ReserveName(name);
   // The rvalue overload avoids CopyFrom's wire round-trip and retains borrowed
   // payload owners as well as the bytes.
   encoded_initializers_.push_back(EncodedValueProto(value));
-  compute_.Shapes() = std::move(validated);
+  if (!is_input) {
+    compute_.Shapes().SetEncodedValue(name, value);
+  }
   compute_.SeedValueTag(reserved, "weight");
   compute_.SeedReuseInput(reserved, is_input, /*is_initializer=*/true,
                           /*allow_input_overwrite=*/false);
@@ -916,15 +949,13 @@ const std::string &GraphBuilder::MakePagedCacheInitializer(const PagedCacheProto
   catalogue.Build(declarations);
   catalogue.ValidatePagedCache(value, true,
                                is_input && input->has_type() ? &input->type() : nullptr);
-  ShapesContext validated = Shapes();
+  const std::string &reserved = is_input ? *names_.find(name) : ReserveName(name);
+  paged_cache_initializers_.push_back(PagedCacheProto(value));
   if (!is_input) {
     TypeProto type;
     type.mutable_struct_type();
-    validated.SetType(name, type);
+    compute_.Shapes().SetType(name, type);
   }
-  const std::string &reserved = is_input ? *names_.find(name) : ReserveName(name);
-  paged_cache_initializers_.push_back(PagedCacheProto(value));
-  compute_.Shapes() = std::move(validated);
   compute_.SeedValueTag(reserved, "weight");
   compute_.SeedReuseInput(reserved, is_input, true, false);
   if (!is_input)
@@ -1043,7 +1074,8 @@ const std::string &GraphBuilder::MakeExternalInitializer(const std::string &name
 
 const std::string &GraphBuilder::MakeInput(const ValueInfoProto &value_info) {
   if (value_info.has_type() && HasStructuredType(value_info.type())) {
-    auto validated = Shapes();
+    ShapesContext validated;
+    validated.SetStructTypes(Shapes().StructTypes());
     validated.SetType(value_info.name().value(), value_info.type());
   }
   // Reserve the name first so a duplicate is rejected before ``inputs_`` is
@@ -1088,7 +1120,8 @@ void GraphBuilder::MakeOutput(const ValueInfoProto &value_info) {
   bool declaration_added = false;
   if (value_info.has_type() &&
       (HasStructuredType(value_info.type()) || Shapes().HasEncodedValue(name))) {
-    auto validated = Shapes();
+    ShapesContext validated;
+    validated.SetStructTypes(Shapes().StructTypes());
     validated.SetType(name, value_info.type());
     if (Shapes().HasType(name) &&
         !CompatibleEncodedDefault(value_info.type(), Shapes().GetType(name))) {
@@ -1634,6 +1667,11 @@ GraphBuilder::MakeNode(const std::string &op_type, const std::vector<std::string
   for (const AttributeProto &attribute : normalized_attributes) {
     node.add_attribute(attribute);
   }
+  NodeProto materialized = node;
+  MaterializeGraphReferences(materialized);
+  for (const std::string &input : core::graph::CollectNodeInputs(materialized)) {
+    SeedInheritedValue(input);
+  }
   if (domain == "ai.onnx.ml" && op_type == "TreeEnsemble") {
     const auto error = ValidateTreeEnsembleAttributes(
         [&node](const char *attribute_name) { return FindAttribute(node, attribute_name); });
@@ -1664,8 +1702,6 @@ GraphBuilder::MakeNode(const std::string &op_type, const std::vector<std::string
   // registered for its operator; unregistered operators simply leave their
   // outputs without an inferred descriptor.
   if (ShapeFunctionAvailable(node)) {
-    NodeProto materialized = node;
-    MaterializeGraphReferences(materialized);
     bool known_inputs = true;
     for (const std::string &input : core::graph::CollectNodeInputs(materialized)) {
       if (!input.empty() && !compute_.Shapes().Has(input) &&
@@ -1690,8 +1726,8 @@ GraphBuilder::MakeNode(const std::string &op_type, const std::vector<std::string
       const std::string attribute_name =
           attribute.name().value().substr(0, attribute.name().value().size() - 4);
       if (compute_.Shapes().HasSubgraphContext(index, attribute_name)) {
-        NamedBuilderOrThrow(subgraphs_, attribute.s().value(), "subgraph").compute_.Shapes() =
-            compute_.Shapes().GetSubgraphContext(index, attribute_name);
+        NamedBuilderOrThrow(subgraphs_, attribute.s().value(), "subgraph")
+            .CopyInferredValuesFrom(compute_.Shapes().GetSubgraphContext(index, attribute_name));
       }
     }
   }
@@ -3045,16 +3081,13 @@ GraphBuilder &GraphBuilder::MakeSubgraph(const std::string &name) {
   ReserveName(name);
   auto child = std::make_unique<GraphBuilder>(name, schema_lookup_);
   child->parent_ = this;
-  child->compute_.Shapes() = Shapes();
+  child->compute_.Shapes() = Shapes().MakeChildContext();
   for (const auto &entry : opsets_) {
     child->SetOpsetVersion(entry.first, entry.second);
   }
   child->inherited_names_ = inherited_names_;
   child->inherited_names_.insert(names_.begin(), names_.end());
   child->inherited_names_.erase(name);
-  for (const auto &[value_name, tensor] : Shapes().Tensors()) {
-    child->SeedShape(value_name, tensor);
-  }
   GraphBuilder &ref = *child;
   subgraphs_.push_back(std::move(child));
   return ref;

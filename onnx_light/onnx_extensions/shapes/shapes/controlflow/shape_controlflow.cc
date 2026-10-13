@@ -33,8 +33,8 @@ namespace {
 // produced during the subgraph inference are propagated back to
 // ``parent_ctx`` with ``subgraph_node_index`` and ``subgraph_attr_name``
 // set to ``branch_name``.
-ShapesContext InferSubgraph(ShapesContext &parent_ctx, const std::string &branch_name,
-                            const GraphProto &subgraph) {
+const ShapesContext &InferSubgraph(ShapesContext &parent_ctx, const char *branch_name,
+                                   const GraphProto &subgraph) {
   ShapesContext local = parent_ctx.MakeChildContext(subgraph);
   local.set_current_subgraph(local.current_node_index(), branch_name);
   for (const auto &input : subgraph.input()) {
@@ -63,8 +63,9 @@ ShapesContext InferSubgraph(ShapesContext &parent_ctx, const std::string &branch
   }
   // Retain the child context on the parent so the subgraph internals stay
   // inspectable once the parent inference has completed.
-  parent_ctx.RegisterSubgraphContext(parent_ctx.current_node_index(), branch_name, local);
-  return local;
+  const int64_t node_index = parent_ctx.current_node_index();
+  parent_ctx.RegisterSubgraphContext(node_index, branch_name, std::move(local));
+  return parent_ctx.GetSubgraphContext(node_index, branch_name);
 }
 
 // Retrieves the SymTensor describing the i-th output of ``subgraph``
@@ -147,8 +148,8 @@ void ComputeShapeIf(ShapesContext &ctx, const NodeProto &node) {
                       std::to_string(else_branch.output().size()), " output(s), expected ",
                       std::to_string(n_outputs), ".");
 
-  const ShapesContext then_ctx = InferSubgraph(ctx, "then_branch", then_branch);
-  const ShapesContext else_ctx = InferSubgraph(ctx, "else_branch", else_branch);
+  const ShapesContext &then_ctx = InferSubgraph(ctx, "then_branch", then_branch);
+  const ShapesContext &else_ctx = InferSubgraph(ctx, "else_branch", else_branch);
 
   for (int i = 0; i < n_outputs; ++i) {
     const std::string out_name = node.output(i);

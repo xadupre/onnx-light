@@ -127,7 +127,6 @@ void ExpandLocalFunctionCall(ShapesContext &ctx, const NodeProto &node, const Fu
     ~PopActive() { stack.pop_back(); }
   } pop_active{active};
   ShapesContext sub_ctx;
-  sub_ctx.CopyExpressionCache(ctx);
   sub_ctx.SetStructTypes(ctx.StructTypes());
   // Inherit caller opsets first, then let the function's own opset
   // imports override them.

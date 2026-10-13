@@ -742,6 +742,8 @@ private:
 
   // Seeds the owned ShapesContext with the descriptor of ``name``.
   void SeedShape(const std::string &name, SymTensor tensor);
+  void SeedInheritedValue(const std::string &name);
+  void CopyInferredValuesFrom(const ShapesContext &source);
 
   template <typename Tensor> const std::string &MakeInitializerImpl(Tensor &&tensor);
 

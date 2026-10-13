@@ -279,20 +279,23 @@ public:
   using CustomShapeInferenceMap = std::unordered_map<std::string, CustomComputeShapeFn>;
 
   ShapesContext() = default;
+  ShapesContext(const ShapesContext &) = delete;
+  ShapesContext &operator=(const ShapesContext &) = delete;
+  ShapesContext(ShapesContext &&) noexcept = default;
+  ShapesContext &operator=(ShapesContext &&) noexcept = default;
 
   /// Returns this context's cache used by shape and memory expression simplification.
   expressions::SimplifiedExpressionCache &ExpressionCache() const noexcept {
     return expression_cache_;
   }
 
-  /// Copies ``other``'s expression cache into a separately constructed child context.
-  void CopyExpressionCache(const ShapesContext &other) {
-    expression_cache_ = other.expression_cache_;
-  }
-
-  /// Creates an inference context containing configuration, the expression cache,
-  /// and only the parent values visible as formal or captured inputs of ``graph``.
+  /// Creates an inference context containing configuration and only the parent
+  /// values visible as formal or captured inputs of ``graph``.
   ShapesContext MakeChildContext(const GraphProto &graph) const;
+
+  /// Creates an inference context containing configuration but no inferred values
+  /// or expression-cache entries.
+  ShapesContext MakeChildContext() const;
 
   /// Copies and validates model-local structured declarations.
   void SetStructTypes(const utils::RepeatedProtoField<StructTypeProto> &types);
@@ -318,6 +321,20 @@ public:
     sequences_.clear();
     types_.clear();
     encoded_values_.clear();
+  }
+
+  /// Clears inferred graph state while preserving configuration and memoized expressions.
+  void ClearInferredState() noexcept {
+    ClearValues();
+    constraints_.clear();
+    le_constraints_.clear();
+    subgraph_contexts_.clear();
+    events_.clear();
+    current_node_index_ = -1;
+    current_subgraph_node_index_ = -1;
+    current_subgraph_attr_name_.clear();
+    topk_k_dims_.clear();
+    dim_values_.clear();
   }
   /// Stores an owned encoded value without interpreting its codes as decoded data.
   void SetEncodedValue(const std::string &name, const EncodedValueProto &value);

@@ -422,14 +422,20 @@ TEST(DimOperations, DimAddUsesCache) {
   EXPECT_EQ(cache.size(), 1u);
 }
 
-TEST(DimOperations, ShapesContextCopiesExpressionCache) {
+TEST(DimOperations, ChildShapesContextDoesNotCopyExpressionCache) {
   onnx_light::core::shapes::ShapesContext first;
+  first.set_current_node_index(7);
+  first.set_current_subgraph(3, "outer");
   const DimType a{std::string{"a"}};
   const DimType b{std::string{"b"}};
   dim_mul(a, b, &first.ExpressionCache());
-  onnx_light::core::shapes::ShapesContext second = first;
+  onnx_light::GraphProto graph;
+  onnx_light::core::shapes::ShapesContext second = first.MakeChildContext(graph);
   EXPECT_NE(&first.ExpressionCache(), &second.ExpressionCache());
-  EXPECT_EQ(second.ExpressionCache().size(), 1u);
+  EXPECT_TRUE(second.ExpressionCache().empty());
+  EXPECT_EQ(second.current_node_index(), 7);
+  EXPECT_EQ(second.current_subgraph_node_index(), 3);
+  EXPECT_EQ(second.current_subgraph_attr_name(), "outer");
 }
 
 TEST(DimOperations, DimSub_int_int) {

@@ -569,11 +569,101 @@ void GraphBuilder::MakeStructType(const StructTypeProto &type) {
 }
 
 void GraphBuilder::RefreshAncestors() {
-  if (outputs_.empty()) {
+  if (outputs_.empty() || parent_ == nullptr) {
     return;
   }
-  for (GraphBuilder *ancestor = parent_; ancestor != nullptr; ancestor = ancestor->parent_) {
-    ancestor->RebuildStructuredState(/*refresh_ancestors=*/false);
+  parent_->RefreshNestedDependency(*this);
+}
+
+void GraphBuilder::RefreshNestedDependency(GraphBuilder &child, bool refresh_parent) {
+  RefreshLocalFunctions();
+  if (!child.function_domain_.empty()) {
+    for (const auto &subgraph : subgraphs_) {
+      if (subgraph.get() != &child) {
+        subgraph->RefreshNestedDependency(child, /*refresh_parent=*/false);
+      }
+    }
+    for (const auto &function : local_functions_) {
+      if (function.get() != &child) {
+        function->RefreshNestedDependency(child, /*refresh_parent=*/false);
+      }
+    }
+  }
+  std::vector<bool> affected(nodes_.size(), false);
+  std::unordered_set<std::string> affected_values;
+  std::function<bool(const GraphBuilder &)> depends_on_function = [&](const GraphBuilder &builder) {
+    for (const NodeProto &node : builder.nodes_) {
+      if (node.domain().value() == child.function_domain_ &&
+          node.op_type().value() == child.name_) {
+        return true;
+      }
+      for (const GraphBuilder *subgraph : builder.ReferencedSubgraphs(node)) {
+        if (depends_on_function(*subgraph)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+  for (std::size_t index = 0; index < nodes_.size(); ++index) {
+    const NodeProto &stored = nodes_[index];
+    bool references_child = !child.function_domain_.empty() &&
+                            stored.domain().value() == child.function_domain_ &&
+                            stored.op_type().value() == child.name_;
+    if (!references_child) {
+      for (GraphBuilder *subgraph : ReferencedSubgraphs(stored)) {
+        if (subgraph == &child ||
+            (!child.function_domain_.empty() && depends_on_function(*subgraph))) {
+          references_child = true;
+          break;
+        }
+      }
+    }
+
+    NodeProto materialized = stored;
+    MaterializeGraphReferences(materialized);
+    std::vector<std::string> references;
+    CollectNodeReferences(materialized, references);
+    const bool consumes_affected =
+        std::any_of(references.begin(), references.end(),
+                    [&](const std::string &name) { return affected_values.count(name) != 0; });
+    if (!references_child && !consumes_affected) {
+      continue;
+    }
+    affected[index] = true;
+    for (const std::string &output : stored.output()) {
+      if (!output.empty()) {
+        affected_values.insert(output);
+        compute_.Shapes().Erase(output);
+      }
+    }
+
+    bool ready = ShapeFunctionAvailable(materialized) && !HasUnboundAttributes(materialized);
+    for (const std::string &input : core::graph::CollectNodeInputs(materialized)) {
+      if (!input.empty() && !compute_.Shapes().Has(input) &&
+          !compute_.Shapes().HasSequence(input) &&
+          !(compute_.Shapes().HasType(input) &&
+            !compute_.Shapes().GetType(input).has_tensor_type())) {
+        ready = false;
+        break;
+      }
+    }
+    if (ready) {
+      compute_.Shapes().set_current_node_index(static_cast<int64_t>(index));
+      compute_.Shapes().ComputeShapeNode(materialized);
+    }
+    const auto declarations = StructuredDeclarations(value_infos_);
+    SeedDeclaredOutputs(compute_.Shapes(), stored, declarations);
+    for (const auto &output : outputs_) {
+      if (affected_values.count(output.name().value()) != 0) {
+        SeedDeclaredValueInfo(compute_.Shapes(), output);
+      }
+    }
+    compute_.RefreshNode(nodes_, index, compute_.Shapes(), references, device_);
+    compute_.AppendNodeConstant(stored, index);
+  }
+  if (refresh_parent && parent_ != nullptr && !affected_values.empty()) {
+    parent_->RefreshNestedDependency(*this);
   }
 }
 

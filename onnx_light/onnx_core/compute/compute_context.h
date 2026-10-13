@@ -358,12 +358,9 @@ public:
                            const std::unordered_map<std::string, std::string> &value_tags = {});
 
   /// Seeds the incremental in-place-reuse lifetime state for a declared graph
-  /// input (``is_graph_input``) or initializer (``is_initializer``). When
-  /// ``allow_input_overwrite`` is ``false`` the value is protected (kept) from
-  /// reuse; when ``true`` a graph input is instead made available before the
-  /// first node (producer index ``-1``) so it can be reused at its last use.
-  /// Mirrors the seeding performed whole-graph by
-  /// :cpp:func:`ComputeResultLifetimeInfo`.
+  /// input (``is_graph_input``) or initializer (``is_initializer``). Graph
+  /// inputs are always protected from reuse; ``allow_input_overwrite=true`` is
+  /// rejected because incremental builders do not permit input shadowing.
   void SeedReuseInput(const std::string &name, bool is_graph_input, bool is_initializer,
                       bool allow_input_overwrite);
 
@@ -382,6 +379,12 @@ public:
   /// the per-node result vectors so they stay aligned with :cpp:func:`Size`.
   void AppendNodeReuse(const utils::RepeatedProtoField<NodeProto> &nodes, std::size_t node_index,
                        const ShapesContext &ctx, const std::vector<std::string> &references);
+
+  /// Refreshes one existing node after its nested references or inferred
+  /// shapes changed, updating only lifetimes and profiles affected by it.
+  void RefreshNode(const utils::RepeatedProtoField<NodeProto> &nodes, std::size_t node_index,
+                   const ShapesContext &ctx, const std::vector<std::string> &references,
+                   Device device);
 
   /// Refreshes memory profiles from the earliest node affected by incremental
   /// tag, lifetime, reuse, input, initializer, or output changes.
@@ -670,6 +673,7 @@ public:
     incr_graph_inputs_.clear();
     incr_graph_initializers_.clear();
     incr_graph_outputs_.clear();
+    incr_node_references_.clear();
     incr_byte_size_expr_cache_.clear();
     incr_simplified_dim_cache_ = expressions::SimplifiedExpressionCache{};
     incr_allocation_bytes_.clear();
@@ -702,6 +706,7 @@ public:
     incr_graph_inputs_.clear();
     incr_graph_initializers_.clear();
     incr_graph_outputs_.clear();
+    incr_node_references_.clear();
     incr_byte_size_expr_cache_.clear();
     incr_simplified_dim_cache_ = expressions::SimplifiedExpressionCache{};
     incr_allocation_bytes_.clear();
@@ -774,6 +779,7 @@ private:
   std::unordered_set<std::string> incr_graph_inputs_;
   std::unordered_set<std::string> incr_graph_initializers_;
   std::unordered_set<std::string> incr_graph_outputs_;
+  std::vector<std::vector<std::string>> incr_node_references_;
   std::unordered_map<std::string, std::optional<expressions::DimType>> incr_byte_size_expr_cache_;
   expressions::SimplifiedExpressionCache incr_simplified_dim_cache_;
   std::unordered_map<std::string, expressions::DimType> incr_allocation_bytes_;

@@ -28,3 +28,6 @@
 - Keep `GraphBuilder` fully coherent after every mutation; callers must immediately observe correct shapes, tags, lifetimes, reuse decisions, and memory metadata.
 - Update only the nodes and values affected by a mutation. Do not copy the complete `ShapesContext`, rebuild the whole graph, or defer consistency until export or query time.
 - `RefreshAfterMutation` must propagate targeted incremental updates and must not call `BuildGraphImpl` or whole-graph analysis.
+- Treat a shape-inference failure during mutation as a programming error; do not copy or roll back `ShapesContext` merely to make the builder reusable after that failure.
+- Graph inputs are never overwritable or shadowable. Incremental `ComputeContext` updates must keep them alive rather than offering their storage for in-place reuse.
+- Propagate nested-builder mutations from the referencing node through only its affected consumers; never rebuild every node in an ancestor.

@@ -327,17 +327,14 @@ void ComputeContext::PropagateNodeTags(const utils::RepeatedProtoField<NodeProto
 
 void ComputeContext::SeedReuseInput(const std::string &name, bool is_graph_input,
                                     bool is_initializer, bool allow_input_overwrite) {
+  EXT_ENFORCE_INVALID(!allow_input_overwrite,
+                      "SeedReuseInput: graph inputs cannot be overwritten or shadowed.");
   if (name.empty()) {
     return;
   }
   if (is_graph_input) {
     incr_graph_inputs_.insert(name);
-    if (allow_input_overwrite) {
-      // Available before the first node so it can be reused at its last use.
-      incr_producer_[name] = -1;
-    } else {
-      incr_keep_.insert(name);
-    }
+    incr_keep_.insert(name);
   }
   if (is_initializer) {
     incr_graph_initializers_.insert(name);
@@ -498,6 +495,80 @@ void ComputeContext::AppendNodeReuse(const utils::RepeatedProtoField<NodeProto> 
   not_used_after_.push_back(std::move(not_used_after));
   release_after_shape_tagged_.push_back(std::move(release_after_shape_tagged));
   memory_.push_back(MakeEmptyNodeMemoryProfile());
+  incr_node_references_.push_back(referenced);
+}
+
+void ComputeContext::RefreshNode(const utils::RepeatedProtoField<NodeProto> &nodes,
+                                 std::size_t node_index, const ShapesContext &ctx,
+                                 const std::vector<std::string> &references, Device device) {
+  EXT_ENFORCE_INVALID(node_index < nodes.size() && node_index < incr_node_references_.size(),
+                      "RefreshNode: node index is out of bounds.");
+  const std::vector<std::string> previous = incr_node_references_[node_index];
+  std::unordered_set<std::string> changed(previous.begin(), previous.end());
+  changed.insert(references.begin(), references.end());
+
+  std::size_t refresh_from = node_index;
+  std::unordered_map<std::string, int> updated_last_use;
+  for (const std::string &name : changed) {
+    if (name.empty()) {
+      continue;
+    }
+    const auto old = incr_last_use_.find(name);
+    if (old != incr_last_use_.end() && old->second >= 0) {
+      refresh_from = std::min(refresh_from, static_cast<std::size_t>(old->second));
+    }
+    int last = -1;
+    for (std::size_t index = 0; index < incr_node_references_.size(); ++index) {
+      const auto &node_references = index == node_index ? references : incr_node_references_[index];
+      if (std::find(node_references.begin(), node_references.end(), name) !=
+          node_references.end()) {
+        last = static_cast<int>(index);
+      }
+    }
+    updated_last_use.emplace(name, last);
+    if (last >= 0) {
+      refresh_from = std::min(refresh_from, static_cast<std::size_t>(last));
+    }
+    const auto producer = incr_producer_.find(name);
+    if (producer != incr_producer_.end() && producer->second >= 0) {
+      refresh_from = std::min(refresh_from, static_cast<std::size_t>(producer->second));
+    }
+  }
+  MarkMemoryRefresh(refresh_from);
+  PrepareMemoryRefresh(nodes, nodes.size());
+  incr_node_references_[node_index] = references;
+
+  for (const auto &[name, last] : updated_last_use) {
+    for (std::size_t index = 0; index < release_after_.size(); ++index) {
+      EraseValueFromList(release_after_[index], name);
+      EraseValueFromList(not_used_after_[index], name);
+      EraseValueFromList(release_after_shape_tagged_[index], name);
+    }
+    if (last < 0) {
+      incr_last_use_.erase(name);
+      continue;
+    }
+    incr_last_use_[name] = last;
+    const std::size_t index = static_cast<std::size_t>(last);
+    if (incr_graph_inputs_.count(name) != 0 || incr_graph_initializers_.count(name) != 0) {
+      not_used_after_[index].push_back(name);
+    }
+    const auto producer = incr_producer_.find(name);
+    if (incr_keep_.count(name) == 0 && producer != incr_producer_.end() && producer->second >= 0 &&
+        producer->second < last) {
+      release_after_[index].push_back(name);
+      const auto tag = value_tags_.find(name);
+      if (tag != value_tags_.end() && tag->second == "shape") {
+        release_after_shape_tagged_[index].push_back(name);
+      }
+    }
+  }
+
+  for (std::size_t index = refresh_from; index < nodes.size(); ++index) {
+    RefreshNodeReuse(nodes, index, ctx);
+    AppendNodePeakMemory(nodes[index], index, device);
+  }
+  RefreshIncrementalMemory(nodes, ctx);
 }
 
 void ComputeContext::MarkMemoryRefresh(std::size_t node_index) {
@@ -719,6 +790,11 @@ void ComputeContext::ComputeInPlaceReuseGraphImpl(
   const std::unordered_set<std::string> &graph_inputs = lifetime.graph_inputs;
   const std::unordered_set<std::string> &graph_outputs = lifetime.graph_outputs;
   const std::unordered_map<std::string, int> &last_use = lifetime.last_use;
+  incr_node_references_.clear();
+  incr_node_references_.reserve(graph.node().size());
+  for (const NodeProto &node : graph.node()) {
+    incr_node_references_.push_back(core::graph::CollectNodeInputs(node));
+  }
   if (events_enabled_) {
     for (std::size_t i = 0; i < lifetime.size(); ++i) {
       for (const std::string &name : lifetime[i].release_after) {

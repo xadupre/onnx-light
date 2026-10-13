@@ -748,6 +748,7 @@ private:
   void SetStructTypes(const utils::RepeatedProtoField<StructTypeProto> &types);
   void RefreshAfterMutation();
   void RefreshAncestors();
+  void RefreshNestedDependency(GraphBuilder &child, bool refresh_parent = true);
   void RebuildMetadata();
   void RebuildStructuredState(bool refresh_ancestors = true);
   GraphProto BuildGraphImpl(bool validate_persistent_bindings) const;

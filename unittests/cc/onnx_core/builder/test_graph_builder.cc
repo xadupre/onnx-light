@@ -294,6 +294,11 @@ TEST(GraphBuilder, MaintainsMemoryProfilesIncrementally) {
   EXPECT_EQ(builder.Compute().Memory(), expected.Memory());
 }
 
+TEST(GraphBuilder, IncrementalMetadataRejectsGraphInputOverwrite) {
+  core::compute::ComputeContext compute;
+  EXPECT_THROW(compute.SeedReuseInput("x", true, false, true), std::invalid_argument);
+}
+
 TEST(GraphBuilder, RefreshesOnlyAffectedIncrementalMemoryRange) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   const auto expect_whole_graph_metadata = [&]() {
@@ -379,6 +384,35 @@ TEST(GraphBuilder, ChildMutationUpdatesParentShapeMetadataImmediately) {
   ASSERT_TRUE(graph.output()[0].has_type());
   ASSERT_TRUE(graph.output()[0].type().has_tensor_type());
   EXPECT_EQ(graph.output()[0].type().tensor_type().shape().dim().size(), 2u);
+}
+
+TEST(GraphBuilder, ChildMutationRefreshesOnlyDependentParentNodes) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.SetOpsetVersion("local", 1);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeInput("unrelated", core::symbolic::TensorType::kFloat, MakeShape({4, 5}));
+  auto &function = builder.MakeLocalFunction("F", "local");
+  function.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  function.MakeNode("Identity", {"a"}, {"r"});
+  function.MakeOutput("r");
+  builder.MakeNode("F", {"x"}, {"call"}, "local");
+  builder.MakeNode("Identity", {"call"}, {"dependent"});
+  builder.MakeNode("Abs", {"unrelated"}, {"independent"});
+
+  auto &shapes = const_cast<core::shapes::ShapesContext &>(builder.Shapes());
+  shapes.set_events_enabled(true);
+  shapes.ClearEvents();
+  function.MakeNode("Neg", {"a"}, {"dead"});
+
+  std::vector<std::string> refreshed;
+  for (const auto &event : shapes.Events()) {
+    if (event.action == core::shapes::ShapeEventAction::kComputeNode) {
+      refreshed.push_back(event.op_type);
+    }
+  }
+  EXPECT_EQ(refreshed, (std::vector<std::string>{"F", "Identity"}));
+  EXPECT_EQ(builder.GetShape("dependent").Shape(), MakeShape({2, 3}));
+  EXPECT_EQ(builder.GetShape("independent").Shape(), MakeShape({4, 5}));
 }
 
 TEST(GraphBuilder, MaintainsConstantInfoIncrementally) {

@@ -63,7 +63,6 @@ class TestGraphBuilder(ExtTestCase):
         builder.out(result, FLOAT, [2])
         model = builder.to_onnx("model")
         checker.check_model(model)
-        checker.check_model(model)
 
     def test_compact_optional_variadic_and_numpy_inputs(self):
         builder = GraphBuilder("g")

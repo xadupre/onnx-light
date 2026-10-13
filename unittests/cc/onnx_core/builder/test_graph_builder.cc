@@ -332,6 +332,37 @@ TEST(GraphBuilder, RefreshesOnlyAffectedIncrementalMemoryRange) {
   expect_whole_graph_metadata();
 }
 
+TEST(GraphBuilder, AdvancingKeptInitializerUpdatesOnlyItsLastUse) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeInitializer(
+      MakeInitializer<float>("weight", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f}));
+  builder.MakeNode("Add", {"x", "weight"}, {"first"});
+  builder.MakeNode("Abs", {"first"}, {"middle"});
+  builder.MakeNode("Add", {"middle", "weight"}, {"result"});
+  builder.MakeOutput("result");
+
+  const GraphProto graph = builder.BuildGraph();
+  core::compute::ComputeContext expected;
+  const auto tags = expected.ComputeValueAndNodeTags(graph);
+  expected.ComputeInPlaceReuseGraph(graph, builder.Shapes(), false, tags.first);
+  EXPECT_EQ(builder.Compute().Reuse(), expected.Reuse());
+  EXPECT_EQ(builder.Compute().Memory(), expected.Memory());
+
+  GraphProto annotated = graph;
+  builder.Compute().WriteToGraph(annotated);
+  const auto first_last_use = std::find_if(
+      annotated.node()[0].metadata_props().begin(), annotated.node()[0].metadata_props().end(),
+      [](const auto &entry) { return entry.key() == core::compute::kNotUsedAfterMetadataKey; });
+  ASSERT_NE(first_last_use, annotated.node()[0].metadata_props().end());
+  EXPECT_EQ(first_last_use->value(), "x");
+  const auto final_last_use = std::find_if(
+      annotated.node()[2].metadata_props().begin(), annotated.node()[2].metadata_props().end(),
+      [](const auto &entry) { return entry.key() == core::compute::kNotUsedAfterMetadataKey; });
+  ASSERT_NE(final_last_use, annotated.node()[2].metadata_props().end());
+  EXPECT_EQ(final_last_use->value(), "weight");
+}
+
 TEST(GraphBuilder, ChildMutationUpdatesParentLifetimeMetadataImmediately) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   builder.SetOpsetVersion("custom", 1);

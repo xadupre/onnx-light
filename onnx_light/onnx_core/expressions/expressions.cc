@@ -2131,32 +2131,41 @@ bool is_zero_dim(const DimType &d) {
   return std::holds_alternative<int64_t>(d) && std::get<int64_t>(d) == 0;
 }
 
-static DimType simplify_dim(const std::string &expr) {
+static DimType simplify_dim(const std::string &expr, SimplifiedExpressionCache *cache = nullptr) {
+  if (cache != nullptr) {
+    const auto it = cache->find(expr);
+    if (it != cache->end()) {
+      return it->second;
+    }
+  }
   auto r = simplify_expression(expr);
-  if (std::holds_alternative<int64_t>(r))
-    return std::get<int64_t>(r);
-  return std::get<std::string>(r);
+  DimType simplified = std::holds_alternative<int64_t>(r) ? DimType{std::get<int64_t>(r)}
+                                                          : DimType{std::get<std::string>(r)};
+  if (cache != nullptr) {
+    cache->emplace(expr, simplified);
+  }
+  return simplified;
 }
 
-DimType dim_add(const DimType &a, const DimType &b) {
+DimType dim_add(const DimType &a, const DimType &b, SimplifiedExpressionCache *cache) {
   if (std::holds_alternative<int64_t>(a) && std::holds_alternative<int64_t>(b))
     return std::get<int64_t>(a) + std::get<int64_t>(b);
-  return simplify_dim("(" + dim_to_string(a) + ")+(" + dim_to_string(b) + ")");
+  return simplify_dim("(" + dim_to_string(a) + ")+(" + dim_to_string(b) + ")", cache);
 }
 
-DimType dim_sub(const DimType &a, const DimType &b) {
+DimType dim_sub(const DimType &a, const DimType &b, SimplifiedExpressionCache *cache) {
   if (std::holds_alternative<int64_t>(a) && std::holds_alternative<int64_t>(b))
     return std::get<int64_t>(a) - std::get<int64_t>(b);
-  return simplify_dim("(" + dim_to_string(a) + ")-(" + dim_to_string(b) + ")");
+  return simplify_dim("(" + dim_to_string(a) + ")-(" + dim_to_string(b) + ")", cache);
 }
 
-DimType dim_mul(const DimType &a, const DimType &b) {
+DimType dim_mul(const DimType &a, const DimType &b, SimplifiedExpressionCache *cache) {
   if (std::holds_alternative<int64_t>(a) && std::holds_alternative<int64_t>(b))
     return std::get<int64_t>(a) * std::get<int64_t>(b);
-  return simplify_dim("(" + dim_to_string(a) + ")*(" + dim_to_string(b) + ")");
+  return simplify_dim("(" + dim_to_string(a) + ")*(" + dim_to_string(b) + ")", cache);
 }
 
-DimType dim_multi_mul(const std::vector<DimType> &args) {
+DimType dim_multi_mul(const std::vector<DimType> &args, SimplifiedExpressionCache *cache) {
   bool all_int = true;
   for (const auto &a : args)
     if (!std::holds_alternative<int64_t>(a)) {
@@ -2177,16 +2186,16 @@ DimType dim_multi_mul(const std::vector<DimType> &args) {
       expr += "*";
     expr += "(" + dim_to_string(args[i]) + ")";
   }
-  return simplify_dim(expr);
+  return simplify_dim(expr, cache);
 }
 
-DimType dim_div(const DimType &a, const DimType &b) {
+DimType dim_div(const DimType &a, const DimType &b, SimplifiedExpressionCache *cache) {
   if (std::holds_alternative<int64_t>(a) && std::holds_alternative<int64_t>(b))
     return std::get<int64_t>(a) / std::get<int64_t>(b);
-  return simplify_dim("(" + dim_to_string(a) + ")//(" + dim_to_string(b) + ")");
+  return simplify_dim("(" + dim_to_string(a) + ")//(" + dim_to_string(b) + ")", cache);
 }
 
-DimType dim_exact_div(const DimType &a, const DimType &b) {
+DimType dim_exact_div(const DimType &a, const DimType &b, SimplifiedExpressionCache *cache) {
   if (std::holds_alternative<int64_t>(a) && std::holds_alternative<int64_t>(b)) {
     int64_t av = std::get<int64_t>(a);
     int64_t bv = std::get<int64_t>(b);
@@ -2197,25 +2206,25 @@ DimType dim_exact_div(const DimType &a, const DimType &b) {
                                " % " + std::to_string(bv) + " != 0)");
     return av / bv;
   }
-  return simplify_dim("(" + dim_to_string(a) + ")/:(" + dim_to_string(b) + ")");
+  return simplify_dim("(" + dim_to_string(a) + ")/:(" + dim_to_string(b) + ")", cache);
 }
 
-DimType dim_mod(const DimType &a, const DimType &b) {
+DimType dim_mod(const DimType &a, const DimType &b, SimplifiedExpressionCache *cache) {
   if (std::holds_alternative<int64_t>(a) && std::holds_alternative<int64_t>(b))
     return std::get<int64_t>(a) % std::get<int64_t>(b);
-  return simplify_dim("(" + dim_to_string(a) + ")%(" + dim_to_string(b) + ")");
+  return simplify_dim("(" + dim_to_string(a) + ")%(" + dim_to_string(b) + ")", cache);
 }
 
-DimType dim_max(const DimType &a, const DimType &b) {
+DimType dim_max(const DimType &a, const DimType &b, SimplifiedExpressionCache *cache) {
   if (std::holds_alternative<int64_t>(a) && std::holds_alternative<int64_t>(b))
     return std::max(std::get<int64_t>(a), std::get<int64_t>(b));
-  return simplify_dim("(" + dim_to_string(a) + ")^(" + dim_to_string(b) + ")");
+  return simplify_dim("(" + dim_to_string(a) + ")^(" + dim_to_string(b) + ")", cache);
 }
 
-DimType dim_min(const DimType &a, const DimType &b) {
+DimType dim_min(const DimType &a, const DimType &b, SimplifiedExpressionCache *cache) {
   if (std::holds_alternative<int64_t>(a) && std::holds_alternative<int64_t>(b))
     return std::min(std::get<int64_t>(a), std::get<int64_t>(b));
-  return simplify_dim("(" + dim_to_string(a) + ")&(" + dim_to_string(b) + ")");
+  return simplify_dim("(" + dim_to_string(a) + ")&(" + dim_to_string(b) + ")", cache);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

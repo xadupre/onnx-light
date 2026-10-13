@@ -632,6 +632,11 @@ std::unordered_map<std::string, std::string> rename_dynamic_dimensions(
  */
 using DimType = std::variant<int64_t, std::string>;
 
+/// Memoization cache mapping a symbolic expression string to its simplified
+/// form, shared across simplifications to avoid re-running the symbolic
+/// simplifier on the same expression.
+using SimplifiedExpressionCache = std::unordered_map<std::string, DimType>;
+
 /**
  * @brief Sentinel `DimType` value representing a positive-infinity upper bound.
  *
@@ -683,7 +688,7 @@ bool is_zero_dim(const DimType &d);
  * // dim_mul("n", 2) returns a string containing "n" and "2"
  * @endcode
  */
-DimType dim_mul(const DimType &a, const DimType &b);
+DimType dim_mul(const DimType &a, const DimType &b, SimplifiedExpressionCache *cache = nullptr);
 
 /**
  * @brief Multiplies a sequence of dimensions.
@@ -702,7 +707,7 @@ DimType dim_mul(const DimType &a, const DimType &b);
  *     == DimType{int64_t{24}};
  * @endcode
  */
-DimType dim_multi_mul(const std::vector<DimType> &args);
+DimType dim_multi_mul(const std::vector<DimType> &args, SimplifiedExpressionCache *cache = nullptr);
 
 /**
  * @brief Adds two dimensions.
@@ -712,13 +717,14 @@ DimType dim_multi_mul(const std::vector<DimType> &args);
  *
  * @param a The first dimension.
  * @param b The second dimension.
+ * @param cache Optional memoization cache for symbolic expressions.
  * @returns The sum.
  *
  * @code{.cpp}
  * dim_add(DimType{int64_t{3}}, DimType{int64_t{4}}) == DimType{int64_t{7}};
  * @endcode
  */
-DimType dim_add(const DimType &a, const DimType &b);
+DimType dim_add(const DimType &a, const DimType &b, SimplifiedExpressionCache *cache = nullptr);
 
 /**
  * @brief Subtracts @p b from @p a.
@@ -734,7 +740,7 @@ DimType dim_add(const DimType &a, const DimType &b);
  * dim_sub(DimType{int64_t{10}}, DimType{int64_t{3}}) == DimType{int64_t{7}};
  * @endcode
  */
-DimType dim_sub(const DimType &a, const DimType &b);
+DimType dim_sub(const DimType &a, const DimType &b, SimplifiedExpressionCache *cache = nullptr);
 
 /**
  * @brief Floor-divides @p a by @p b.
@@ -752,7 +758,7 @@ DimType dim_sub(const DimType &a, const DimType &b);
  * dim_div(DimType{std::string{"2*n"}}, DimType{int64_t{2}}) == DimType{std::string{"n"}};
  * @endcode
  */
-DimType dim_div(const DimType &a, const DimType &b);
+DimType dim_div(const DimType &a, const DimType &b, SimplifiedExpressionCache *cache = nullptr);
 
 /**
  * @brief Exactly divides @p a by @p b, asserting the division is exact (no remainder).
@@ -785,7 +791,8 @@ DimType dim_div(const DimType &a, const DimType &b);
  * DimType{std::string{"2*batch"}};
  * @endcode
  */
-DimType dim_exact_div(const DimType &a, const DimType &b);
+DimType dim_exact_div(const DimType &a, const DimType &b,
+                      SimplifiedExpressionCache *cache = nullptr);
 
 /**
  * @brief Computes @p a modulo @p b.
@@ -801,7 +808,7 @@ DimType dim_exact_div(const DimType &a, const DimType &b);
  * dim_mod(DimType{int64_t{10}}, DimType{int64_t{3}}) == DimType{int64_t{1}};
  * @endcode
  */
-DimType dim_mod(const DimType &a, const DimType &b);
+DimType dim_mod(const DimType &a, const DimType &b, SimplifiedExpressionCache *cache = nullptr);
 
 /**
  * @brief Returns the maximum of @p a and @p b.
@@ -818,7 +825,7 @@ DimType dim_mod(const DimType &a, const DimType &b);
  * // dim_max("n", "n") simplifies to DimType{std::string{"n"}} (x^x → x)
  * @endcode
  */
-DimType dim_max(const DimType &a, const DimType &b);
+DimType dim_max(const DimType &a, const DimType &b, SimplifiedExpressionCache *cache = nullptr);
 
 /**
  * @brief Returns the minimum of @p a and @p b.
@@ -834,7 +841,7 @@ DimType dim_max(const DimType &a, const DimType &b);
  * dim_min(DimType{int64_t{2}}, DimType{int64_t{9}}) == DimType{int64_t{2}};
  * @endcode
  */
-DimType dim_min(const DimType &a, const DimType &b);
+DimType dim_min(const DimType &a, const DimType &b, SimplifiedExpressionCache *cache = nullptr);
 
 // ─────────────────── dimension range inference ─────────────────────────────
 

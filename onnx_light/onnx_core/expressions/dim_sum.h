@@ -26,11 +26,6 @@
 
 namespace onnx_light::core::expressions {
 
-/// Memoization cache mapping a symbolic expression string to its simplified
-/// form, shared across simplifications to avoid re-running the symbolic
-/// simplifier on the same expression.
-using SimplifiedExpressionCache = std::unordered_map<std::string, DimType>;
-
 /// Returns ``value`` unchanged when it is already a concrete integer,
 /// otherwise the canonical simplified form of the symbolic expression it
 /// holds (memoized in ``cache`` when provided).

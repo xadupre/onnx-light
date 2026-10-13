@@ -723,7 +723,6 @@ private:
   std::unordered_set<std::string> incr_graph_outputs_;
   std::vector<std::vector<std::string>> incr_node_references_;
   std::unordered_map<std::string, std::optional<expressions::DimType>> incr_byte_size_expr_cache_;
-  expressions::SimplifiedExpressionCache incr_simplified_dim_cache_;
   std::unordered_map<std::string, expressions::DimType> incr_allocation_bytes_;
   std::unordered_set<std::string> incr_memory_alive_;
   std::unordered_set<std::string> incr_memory_alive_before_refresh_;

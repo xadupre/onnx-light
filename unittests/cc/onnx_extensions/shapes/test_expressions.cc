@@ -6,6 +6,7 @@
 
 #include "onnx_core/expressions/dim_sum.h"
 #include "onnx_core/expressions/expressions.h"
+#include "onnx_core/shapes/shapes_context.h"
 
 #include <gtest/gtest.h>
 #include <map>
@@ -409,6 +410,27 @@ TEST(DimOperations, DimAdd_symbolic) {
   const std::string &s = std::get<std::string>(r);
   EXPECT_NE(s.find('n'), std::string::npos);
   EXPECT_NE(s.find('1'), std::string::npos);
+}
+
+TEST(DimOperations, DimAddUsesCache) {
+  SimplifiedExpressionCache cache;
+  const DimType a{std::string{"a"}};
+  const DimType b{std::string{"b"}};
+  const DimType expected = dim_add(a, b, &cache);
+  ASSERT_EQ(cache.size(), 1u);
+  EXPECT_EQ(dim_add(a, b, &cache), expected);
+  EXPECT_EQ(cache.size(), 1u);
+}
+
+TEST(DimOperations, ShapesContextCopiesShareExpressionCache) {
+  onnx_light::core::shapes::ShapesContext first;
+  onnx_light::core::shapes::ShapesContext second = first;
+  EXPECT_EQ(&first.ExpressionCache(), &second.ExpressionCache());
+
+  const DimType a{std::string{"a"}};
+  const DimType b{std::string{"b"}};
+  dim_mul(a, b, &first.ExpressionCache());
+  EXPECT_EQ(second.ExpressionCache().size(), 1u);
 }
 
 TEST(DimOperations, DimSub_int_int) {

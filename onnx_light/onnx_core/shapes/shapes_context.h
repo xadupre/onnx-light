@@ -14,6 +14,7 @@
 #include <utility>
 #include <vector>
 
+#include "onnx_core/expressions/expressions.h"
 #include "onnx_core/symbolic/sym_map.h"
 #include "onnx_core/symbolic/sym_sequence.h"
 #include "onnx_core/symbolic/sym_tensor.h"
@@ -278,6 +279,16 @@ public:
   using CustomShapeInferenceMap = std::unordered_map<std::string, CustomComputeShapeFn>;
 
   ShapesContext() = default;
+
+  /// Returns the shared cache used by shape and memory expression simplification.
+  expressions::SimplifiedExpressionCache &ExpressionCache() const noexcept {
+    return *expression_cache_;
+  }
+
+  /// Reuses ``other``'s expression cache in a separately constructed child context.
+  void ShareExpressionCache(const ShapesContext &other) noexcept {
+    expression_cache_ = other.expression_cache_;
+  }
 
   /// Copies and validates model-local structured declarations.
   void SetStructTypes(const utils::RepeatedProtoField<StructTypeProto> &types);
@@ -854,6 +865,8 @@ private:
   }
 
   std::unordered_map<std::string, SymTensor> tensors_;
+  std::shared_ptr<expressions::SimplifiedExpressionCache> expression_cache_ =
+      std::make_shared<expressions::SimplifiedExpressionCache>();
   std::shared_ptr<const ModelProto> struct_types_model_;
   std::unordered_map<std::string, TypeProto> types_;
   std::unordered_map<std::string, EncodedValueProto> encoded_values_;

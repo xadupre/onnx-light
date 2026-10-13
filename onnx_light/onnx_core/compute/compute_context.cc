@@ -127,7 +127,6 @@ void ComputeContext::Clear() noexcept {
   incr_graph_outputs_.clear();
   incr_node_references_.clear();
   incr_byte_size_expr_cache_.clear();
-  incr_simplified_dim_cache_ = expressions::SimplifiedExpressionCache{};
   incr_allocation_bytes_.clear();
   incr_memory_alive_.clear();
   incr_memory_alive_before_refresh_.clear();
@@ -158,7 +157,6 @@ void ComputeContext::ResetMetadata() noexcept {
   incr_graph_outputs_.clear();
   incr_node_references_.clear();
   incr_byte_size_expr_cache_.clear();
-  incr_simplified_dim_cache_ = expressions::SimplifiedExpressionCache{};
   incr_allocation_bytes_.clear();
   incr_memory_alive_.clear();
   incr_memory_alive_before_refresh_.clear();
@@ -416,9 +414,10 @@ void EraseValueFromList(std::vector<std::string> &list, const std::string &value
 
 void ComputeContext::RefreshNodeReuse(const utils::RepeatedProtoField<NodeProto> &nodes,
                                       std::size_t index, const ShapesContext &ctx) {
-  reuse_[index] = ComputeSingleNodeReuse(nodes[index], static_cast<int>(index), ctx, incr_keep_,
-                                         incr_producer_, incr_last_use_, incr_byte_size_expr_cache_,
-                                         incr_simplified_dim_cache_);
+  auto &expression_cache = ctx.ExpressionCache();
+  reuse_[index] =
+      ComputeSingleNodeReuse(nodes[index], static_cast<int>(index), ctx, incr_keep_, incr_producer_,
+                             incr_last_use_, incr_byte_size_expr_cache_, expression_cache);
 }
 
 void ComputeContext::SeedReuseOutput(const std::string &name,
@@ -467,12 +466,14 @@ void ComputeContext::AppendNodeReuse(const utils::RepeatedProtoField<NodeProto> 
     }
     auto it = incr_last_use_.find(name);
     previous_last_use.emplace(name, it != incr_last_use_.end() ? it->second : -1);
-    if (it != incr_last_use_.end() && it->second >= 0) {
-      MarkMemoryRefresh(static_cast<std::size_t>(it->second));
-    } else {
-      const auto producer = incr_producer_.find(name);
-      if (producer != incr_producer_.end()) {
-        MarkMemoryRefresh(producer->second < 0 ? 0 : static_cast<std::size_t>(producer->second));
+    if (incr_keep_.count(name) == 0) {
+      if (it != incr_last_use_.end() && it->second >= 0) {
+        MarkMemoryRefresh(static_cast<std::size_t>(it->second));
+      } else {
+        const auto producer = incr_producer_.find(name);
+        if (producer != incr_producer_.end()) {
+          MarkMemoryRefresh(producer->second < 0 ? 0 : static_cast<std::size_t>(producer->second));
+        }
       }
     }
   }
@@ -497,14 +498,17 @@ void ComputeContext::AppendNodeReuse(const utils::RepeatedProtoField<NodeProto> 
     if (p < release_after_shape_tagged_.size()) {
       EraseValueFromList(release_after_shape_tagged_[p], entry.first);
     }
-    RefreshNodeReuse(nodes, p, ctx);
+    if (incr_keep_.count(entry.first) == 0) {
+      RefreshNodeReuse(nodes, p, ctx);
+    }
   }
 
   // In-place reuse matches for this node, from the running lifetime maps. This
   // is the very same per-node core the whole-graph analysis runs.
+  auto &expression_cache = ctx.ExpressionCache();
   std::vector<InPlaceReuse> matches =
       ComputeSingleNodeReuse(node, i, ctx, incr_keep_, incr_producer_, incr_last_use_,
-                             incr_byte_size_expr_cache_, incr_simplified_dim_cache_);
+                             incr_byte_size_expr_cache_, expression_cache);
 
   // Register this node's outputs as producers (first producer wins), matching
   // ComputeResultLifetimeInfo.
@@ -677,22 +681,21 @@ void ComputeContext::RefreshIncrementalMemory(const utils::RepeatedProtoField<No
   PrepareMemoryRefresh(nodes, nodes.size());
   const std::size_t start = std::min(incr_memory_refresh_from_, nodes.size());
   std::unordered_set<std::string> alive = incr_memory_alive_before_refresh_;
+  auto &expression_cache = ctx.ExpressionCache();
   static const std::optional<expressions::DimType> missing_allocation;
   const auto allocation_bytes =
       [&](const std::string &name) -> const std::optional<expressions::DimType> & {
     if (!ctx.Has(name)) {
       return missing_allocation;
     }
-    return GetCachedByteSizeExpr(ctx, name, incr_byte_size_expr_cache_,
-                                 &incr_simplified_dim_cache_);
+    return GetCachedByteSizeExpr(ctx, name, incr_byte_size_expr_cache_, &expression_cache);
   };
   if (start == 0) {
     alive.clear();
     for (const std::string &name : incr_graph_initializers_) {
       const auto &bytes = allocation_bytes(name);
       if (bytes.has_value()) {
-        incr_allocation_bytes_[name] =
-            expressions::simplify_dim_type(*bytes, &incr_simplified_dim_cache_);
+        incr_allocation_bytes_[name] = expressions::simplify_dim_type(*bytes, &expression_cache);
         alive.insert(name);
       }
     }
@@ -702,8 +705,7 @@ void ComputeContext::RefreshIncrementalMemory(const utils::RepeatedProtoField<No
       }
       const auto &bytes = allocation_bytes(name);
       if (bytes.has_value()) {
-        incr_allocation_bytes_[name] =
-            expressions::simplify_dim_type(*bytes, &incr_simplified_dim_cache_);
+        incr_allocation_bytes_[name] = expressions::simplify_dim_type(*bytes, &expression_cache);
         alive.insert(name);
       }
     }
@@ -760,7 +762,7 @@ void ComputeContext::RefreshIncrementalMemory(const utils::RepeatedProtoField<No
         const auto &bytes = allocation_bytes(output);
         if (bytes.has_value()) {
           const expressions::DimType simplified =
-              expressions::simplify_dim_type(*bytes, &incr_simplified_dim_cache_);
+              expressions::simplify_dim_type(*bytes, &expression_cache);
           incr_allocation_bytes_[output] = simplified;
           output_sum.Add(simplified);
           if (!expressions::is_zero_dim(simplified)) {
@@ -775,20 +777,20 @@ void ComputeContext::RefreshIncrementalMemory(const utils::RepeatedProtoField<No
       }
     }
 
-    const expressions::DimType already_allocated = already_sum.Build(&incr_simplified_dim_cache_);
-    const expressions::DimType output_allocation = output_sum.Build(&incr_simplified_dim_cache_);
+    const expressions::DimType already_allocated = already_sum.Build(&expression_cache);
+    const expressions::DimType output_allocation = output_sum.Build(&expression_cache);
     NodeMemoryProfileScalar(profile, kNodeMemoryAlreadyAllocatedBytesKey) = already_allocated;
     NodeMemoryProfileScalar(profile, kNodeMemoryOutputAllocationBytesKey) = output_allocation;
-    NodeMemoryProfileScalar(profile, kNodeMemoryTotalBytesKey) = expressions::simplify_dim_type(
-        expressions::dim_add(already_allocated, output_allocation), &incr_simplified_dim_cache_);
+    NodeMemoryProfileScalar(profile, kNodeMemoryTotalBytesKey) =
+        expressions::dim_add(already_allocated, output_allocation, &expression_cache);
     FillTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryInputsKey), inputs_bucket,
-                     &incr_simplified_dim_cache_);
+                     &expression_cache);
     FillTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryInitializersKey),
-                     initializers_bucket, &incr_simplified_dim_cache_);
+                     initializers_bucket, &expression_cache);
     FillTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryIntermediatesKey),
-                     intermediates_bucket, &incr_simplified_dim_cache_);
+                     intermediates_bucket, &expression_cache);
     FillTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryOutputsKey), outputs_bucket,
-                     &incr_simplified_dim_cache_);
+                     &expression_cache);
     memory_[index] = std::move(profile);
 
     if (index < release_after_.size()) {
@@ -844,7 +846,7 @@ void ComputeContext::ComputeInPlaceReuseGraphImpl(
   const int num_nodes = graph.node().size();
   std::vector<NodeMemoryProfile> memory(static_cast<std::size_t>(num_nodes),
                                         MakeEmptyNodeMemoryProfile());
-  expressions::SimplifiedExpressionCache simplified_dim_cache;
+  auto &expression_cache = ctx.ExpressionCache();
   std::unordered_map<std::string, std::optional<expressions::DimType>> byte_size_expr_cache;
   incr_allocation_bytes_.clear();
 
@@ -890,11 +892,11 @@ void ComputeContext::ComputeInPlaceReuseGraphImpl(
       continue;
     }
     const std::optional<expressions::DimType> &bytes =
-        GetCachedByteSizeExpr(ctx, name, byte_size_expr_cache, &simplified_dim_cache);
+        GetCachedByteSizeExpr(ctx, name, byte_size_expr_cache, &expression_cache);
     if (!bytes.has_value()) {
       continue;
     }
-    alive[name] = LiveAllocation{expressions::simplify_dim_type(*bytes, &simplified_dim_cache),
+    alive[name] = LiveAllocation{expressions::simplify_dim_type(*bytes, &expression_cache),
                                  MemoryValueSource::kInitializer, ValueTag(value_tags, name)};
   }
   for (const std::string &name : graph_inputs) {
@@ -902,11 +904,11 @@ void ComputeContext::ComputeInPlaceReuseGraphImpl(
       continue;
     }
     const std::optional<expressions::DimType> &bytes =
-        GetCachedByteSizeExpr(ctx, name, byte_size_expr_cache, &simplified_dim_cache);
+        GetCachedByteSizeExpr(ctx, name, byte_size_expr_cache, &expression_cache);
     if (!bytes.has_value()) {
       continue;
     }
-    alive[name] = LiveAllocation{expressions::simplify_dim_type(*bytes, &simplified_dim_cache),
+    alive[name] = LiveAllocation{expressions::simplify_dim_type(*bytes, &expression_cache),
                                  MemoryValueSource::kInput, ValueTag(value_tags, name)};
   }
 
@@ -957,32 +959,32 @@ void ComputeContext::ComputeInPlaceReuseGraphImpl(
         continue;
       }
       const std::optional<expressions::DimType> &out_bytes =
-          GetCachedByteSizeExpr(ctx, out_name, byte_size_expr_cache, &simplified_dim_cache);
+          GetCachedByteSizeExpr(ctx, out_name, byte_size_expr_cache, &expression_cache);
       if (!out_bytes.has_value()) {
         continue;
       }
       const expressions::DimType out_simplified =
-          expressions::simplify_dim_type(*out_bytes, &simplified_dim_cache);
+          expressions::simplify_dim_type(*out_bytes, &expression_cache);
       output_sum.Add(out_simplified);
       if (!expressions::is_zero_dim(out_simplified)) {
         outputs_bucket[ValueTag(value_tags, out_name)].Add(out_simplified);
       }
     }
 
-    const expressions::DimType already_allocated = already_sum.Build(&simplified_dim_cache);
-    const expressions::DimType output_allocation = output_sum.Build(&simplified_dim_cache);
+    const expressions::DimType already_allocated = already_sum.Build(&expression_cache);
+    const expressions::DimType output_allocation = output_sum.Build(&expression_cache);
     NodeMemoryProfileScalar(profile, kNodeMemoryAlreadyAllocatedBytesKey) = already_allocated;
     NodeMemoryProfileScalar(profile, kNodeMemoryOutputAllocationBytesKey) = output_allocation;
-    NodeMemoryProfileScalar(profile, kNodeMemoryTotalBytesKey) = expressions::simplify_dim_type(
-        expressions::dim_add(already_allocated, output_allocation), &simplified_dim_cache);
+    NodeMemoryProfileScalar(profile, kNodeMemoryTotalBytesKey) =
+        expressions::dim_add(already_allocated, output_allocation, &expression_cache);
     FillTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryInputsKey), inputs_bucket,
-                     &simplified_dim_cache);
+                     &expression_cache);
     FillTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryInitializersKey),
-                     initializers_bucket, &simplified_dim_cache);
+                     initializers_bucket, &expression_cache);
     FillTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryIntermediatesKey),
-                     intermediates_bucket, &simplified_dim_cache);
+                     intermediates_bucket, &expression_cache);
     FillTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryOutputsKey), outputs_bucket,
-                     &simplified_dim_cache);
+                     &expression_cache);
 
     std::unordered_map<std::string, LiveAllocation> outputs_to_add;
     std::unordered_set<std::string> inputs_reused_from_graph_input;
@@ -1005,11 +1007,11 @@ void ComputeContext::ComputeInPlaceReuseGraphImpl(
         }
       } else {
         const std::optional<expressions::DimType> &out_bytes =
-            GetCachedByteSizeExpr(ctx, out_name, byte_size_expr_cache, &simplified_dim_cache);
+            GetCachedByteSizeExpr(ctx, out_name, byte_size_expr_cache, &expression_cache);
         if (!out_bytes.has_value()) {
           continue;
         }
-        alloc_bytes = expressions::simplify_dim_type(*out_bytes, &simplified_dim_cache);
+        alloc_bytes = expressions::simplify_dim_type(*out_bytes, &expression_cache);
       }
       incr_allocation_bytes_[out_name] = alloc_bytes;
       const auto use_it = last_use.find(out_name);
@@ -1020,7 +1022,7 @@ void ComputeContext::ComputeInPlaceReuseGraphImpl(
       }
       outputs_to_add.emplace(
           out_name,
-          LiveAllocation{expressions::simplify_dim_type(alloc_bytes, &simplified_dim_cache),
+          LiveAllocation{expressions::simplify_dim_type(alloc_bytes, &expression_cache),
                          MemoryValueSource::kIntermediate, ValueTag(value_tags, out_name)});
     }
 

@@ -752,6 +752,7 @@ private:
   void RebuildMetadata();
   void RebuildStructuredState(bool refresh_ancestors = true);
   GraphProto BuildGraphImpl(bool validate_persistent_bindings) const;
+  void ValidateSubgraphOutput(const std::string &name) const;
   std::size_t DeduplicateEncodedInitializers(std::vector<const EncodedValueProto *> &index,
                                              std::unordered_map<std::string, std::string> &rename);
 

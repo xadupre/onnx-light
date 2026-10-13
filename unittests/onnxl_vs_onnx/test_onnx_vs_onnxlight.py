@@ -4,13 +4,35 @@ import onnx
 import onnx.helper as oh
 import onnx_light.onnx.defs
 import onnx_light.onnx.helper as oh2
+import onnx_light.onnx.checker as checker
 import onnx.numpy_helper as onh
 from packaging.version import Version
 from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.onnx as onnxl
+from onnx_light.onnx_core.graph_builder import GraphBuilder
 
 
 class TestOnnx(ExtTestCase):
+    def test_graph_builder_if_capture_passes_both_checkers(self):
+        branch = oh2.make_graph(
+            [oh2.make_node("Identity", ["x"], ["local_result"])],
+            "branch",
+            [],
+            [oh2.make_tensor_value_info("local_result", onnxl.TensorProto.FLOAT, [2])],
+        )
+        builder = GraphBuilder("valid_if_capture")
+        builder.set_opset_version("", 22)
+        condition = builder.inp("condition", onnxl.TensorProto.BOOL, [])
+        builder.inp("x", onnxl.TensorProto.FLOAT, [2])
+        result = builder.op.If(
+            condition, outputs="result", then_branch=branch, else_branch=branch
+        )
+        builder.out(result, onnxl.TensorProto.FLOAT, [2])
+
+        model = builder.to_onnx("model")
+        checker.check_model(model)
+        onnx.checker.check_model(model.SerializeToString())
+
     def test_onnx_version_compatibility(self):
         """Checks that onnx_light.onnx is not older than the installed onnx.
 

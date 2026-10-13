@@ -301,7 +301,8 @@ TEST(GraphBuilder, ChildMutationUpdatesParentLifetimeMetadataImmediately) {
   builder.MakeNode("Abs", {"x"}, {"intermediate"});
   builder.MakeNode("Abs", {"intermediate"}, {"result"});
   auto &child = builder.MakeSubgraph("body");
-  child.MakeOutput("x");
+  child.MakeNode("Identity", {"x"}, {"child_x"});
+  child.MakeOutput("child_x");
   utils::RepeatedProtoField<AttributeProto> attributes;
   auto &body = attributes.add();
   body.set_name("body_ref");
@@ -312,7 +313,8 @@ TEST(GraphBuilder, ChildMutationUpdatesParentLifetimeMetadataImmediately) {
   builder.MakeOutput("captured");
 
   const GraphProto before = builder.ToGraph();
-  child.MakeOutput("intermediate");
+  child.MakeNode("Identity", {"intermediate"}, {"child_intermediate"});
+  child.MakeOutput("child_intermediate");
   GraphProto after = builder.BuildGraph();
   builder.Compute().WriteToGraph(after);
   const auto released_before = std::find_if(
@@ -1604,7 +1606,8 @@ TEST(GraphBuilder, InlineLocalFunctionsPreservesSubgraphSparseInitializerNames) 
     nested_body.set_name("body");
     nested_body.set_type(AttributeProto::AttributeType::GRAPH);
     nested_body.mutable_g()->set_name("nested");
-    nested_body.mutable_g()->add_output()->set_name("value");
+    nested_body.mutable_g()->add_node(MakeNode("Identity", {"value"}, {"nested_value"}));
+    nested_body.mutable_g()->add_output()->set_name("nested_value");
     nested.add_attribute(std::move(nested_body));
     branch.mutable_g()->add_node(std::move(nested));
     auto *annotation = branch.mutable_g()->add_quantization_annotation();
@@ -1638,7 +1641,8 @@ TEST(GraphBuilder, InlineLocalFunctionsPreservesSubgraphSparseInitializerNames) 
     ASSERT_EQ(attribute.g().node()[2].attribute().size(), 1u);
     ASSERT_TRUE(attribute.g().node()[2].attribute()[0].has_g());
     ASSERT_EQ(attribute.g().node()[2].attribute()[0].g().output().size(), 1u);
-    EXPECT_EQ(attribute.g().node()[2].attribute()[0].g().output()[0].name(), "value");
+    EXPECT_EQ(attribute.g().node()[2].attribute()[0].g().node()[0].input()[0], "value");
+    EXPECT_EQ(attribute.g().node()[2].attribute()[0].g().output()[0].name(), "nested_value");
     ASSERT_EQ(attribute.g().quantization_annotation().size(), 1u);
     const auto &annotation = attribute.g().quantization_annotation()[0];
     EXPECT_EQ(annotation.tensor_name(), "predicate");
@@ -2418,7 +2422,8 @@ TEST(GraphBuilder, NativeCleanupRetainsInitializerCapturedByLiveBranch) {
   utils::RepeatedProtoField<AttributeProto> attributes;
   for (const std::string name : {"then_branch", "else_branch"}) {
     auto &branch = builder.MakeSubgraph(name);
-    branch.MakeOutput("captured");
+    branch.MakeNode("Identity", {"captured"}, {"branch_result"});
+    branch.MakeOutput("branch_result");
     AttributeProto reference;
     reference.set_name(name + "_ref");
     reference.set_type(AttributeProto::AttributeType::STRING);
@@ -2848,7 +2853,8 @@ TEST(GraphBuilderStructured, PrunesEncodedInitializersAndKeepsCapturedValues) {
   builder.MakeEncodedInitializer(BuilderEncoded("live"));
   builder.MakeEncodedInitializer(BuilderEncoded("dead"));
   auto &child = builder.MakeSubgraph("body");
-  child.MakeOutput(BuilderStructuredInfo("live"));
+  child.MakeNode("Identity", {"live"}, {"local_live"});
+  child.MakeOutput(BuilderStructuredInfo("local_live"));
   AttributeProto attr;
   attr.set_name("body_ref");
   attr.set_type(AttributeProto::STRING);
@@ -2862,7 +2868,7 @@ TEST(GraphBuilderStructured, PrunesEncodedInitializersAndKeepsCapturedValues) {
   EXPECT_EQ(builder.EncodedInitializers()[0].name(), "live");
   EXPECT_FALSE(builder.Shapes().HasEncodedValue("dead"));
   const auto model = builder.ToModel();
-  EXPECT_EQ(model.graph().node()[0].attribute()[0].g().output()[0].name(), "live");
+  EXPECT_EQ(model.graph().node()[0].attribute()[0].g().output()[0].name(), "local_live");
 }
 
 TEST(GraphBuilderStructured, NestedDedupRewritesCapturesAndOwnsCatalogue) {

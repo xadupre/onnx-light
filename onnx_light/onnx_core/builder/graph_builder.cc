@@ -976,6 +976,7 @@ const std::string &GraphBuilder::MakeInput(const std::string &name, TensorType d
 
 void GraphBuilder::MakeOutput(const ValueInfoProto &value_info) {
   const std::string name = value_info.name().value();
+  ValidateSubgraphOutput(name);
   bool declaration_added = false;
   if (value_info.has_type() &&
       (HasStructuredType(value_info.type()) || Shapes().HasEncodedValue(name))) {
@@ -1021,6 +1022,7 @@ void GraphBuilder::MakeOutput(const std::string &name, TensorType dtype, const S
 }
 
 void GraphBuilder::MakeOutput(const std::string &name) {
+  ValidateSubgraphOutput(name);
   ValueInfoProto vi;
   vi.set_name(name);
   outputs_.add() = std::move(vi);
@@ -2951,6 +2953,13 @@ GraphProto GraphBuilder::BuildGraph() const {
   return BuildGraphImpl(/*validate_persistent_bindings=*/true);
 }
 
+void GraphBuilder::ValidateSubgraphOutput(const std::string &name) const {
+  if (parent_ != nullptr && GraphDefinedNames(BuildGraphImpl(false)).count(name) == 0) {
+    throw BuilderError("GraphBuilder: subgraph '" + name_ + "' output '" + name +
+                       "' is not defined in this graph.");
+  }
+}
+
 GraphProto GraphBuilder::BuildGraphImpl(bool validate_persistent_bindings) const {
   GraphProto graph = graph_template_;
   graph.set_name(name_);
@@ -2976,6 +2985,15 @@ GraphProto GraphBuilder::BuildGraphImpl(bool validate_persistent_bindings) const
   }
   for (const ValueInfoProto &value_info : value_infos_) {
     graph.add_value_info(value_info);
+  }
+  if (parent_ != nullptr) {
+    const auto locally_defined = GraphDefinedNames(graph);
+    for (const ValueInfoProto &output : graph.output()) {
+      if (locally_defined.count(output.name().value()) == 0) {
+        throw BuilderError("GraphBuilder: subgraph '" + name_ + "' output '" +
+                           output.name().value() + "' is not defined in this graph.");
+      }
+    }
   }
   if (validate_persistent_bindings && !graph.persistent_bindings().empty()) {
     // Supplies inferred IO types before validating the unfinalized graph view.

@@ -7,6 +7,7 @@
 #include "onnx_core/builder/graph_builder.h"
 #include "onnx_helper.h"
 #include "onnx_op/operator_sets.h"
+#include "onnx_proto/onnx_verify.h"
 
 #include <gtest/gtest.h>
 
@@ -59,6 +60,25 @@ public:
   }
 
   std::string producer_input;
+};
+
+class CaptureOutputAndDropIdentity : public core::builder::PatternOptimization {
+public:
+  CaptureOutputAndDropIdentity() : PatternOptimization(1, "CaptureOutputAndDropIdentity") {}
+
+  core::builder::MatchResult Match(core::builder::GraphGraph &,
+                                   const NodeProto &candidate) const override {
+    return candidate.name() == "drop" ? core::builder::MatchResult{this, {&candidate}, &candidate}
+                                      : core::builder::MatchResult{};
+  }
+
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &graph, const std::vector<const NodeProto *> &) const override {
+    auto &outputs =
+        const_cast<utils::RepeatedProtoField<ValueInfoProto> &>(graph.Builder().Outputs());
+    outputs[0].set_name("source");
+    return utils::RepeatedProtoField<NodeProto>();
+  }
 };
 
 } // namespace
@@ -135,6 +155,39 @@ TEST(GraphGraph, NativeCleanupReplaysOrphanInitializers) {
   }
 }
 
+TEST(GraphGraph, BuildRejectsNestedOutputMadeCapturedOnlyByRewrite) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("source", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  auto &branch = builder.MakeSubgraph("branch");
+  branch.MakeNode("Identity", {"source"}, {"local_result"}, "", "drop");
+  branch.MakeOutput("local_result");
+  builder.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+  auto &else_branch = builder.MakeSubgraph("else_branch");
+  else_branch.MakeNode("Identity", {"source"}, {"else_result"});
+  else_branch.MakeOutput("else_result");
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  for (const auto &[attribute_name, graph_name] :
+       {std::pair{"then_branch", "branch"}, std::pair{"else_branch", "else_branch"}}) {
+    AttributeProto reference;
+    reference.set_name(std::string(attribute_name) + "_ref");
+    reference.set_type(AttributeProto::AttributeType::STRING);
+    reference.set_s(graph_name);
+    attributes.push_back(reference);
+  }
+  builder.MakeNode("If", {"condition"}, {"selected"}, "", "", attributes);
+  builder.MakeOutput("selected");
+  EXPECT_NO_THROW(VerifyModel(builder.ToModel()));
+
+  core::builder::GraphGraph graph(builder,
+                                  std::vector<std::shared_ptr<core::builder::PatternOptimization>>{
+                                      std::make_shared<CaptureOutputAndDropIdentity>()});
+
+  EXPECT_THROW(graph.Optimize(), core::builder::BuilderError);
+  EXPECT_TRUE(branch.Nodes().empty());
+  EXPECT_THROW(branch.BuildGraph(), core::builder::BuilderError);
+  EXPECT_THROW(builder.ToModel(), core::builder::BuilderError);
+}
+
 TEST(GraphGraph, OptionalUnusedCleanupPreservesDeadEnds) {
   for (bool remove_unused : {false, true}) {
     SCOPED_TRACE(remove_unused);
@@ -165,9 +218,11 @@ TEST(GraphGraph, OptionalUnusedCleanupRecursesIntoSubgraphs) {
     auto &then_branch = builder.MakeSubgraph("then_branch");
     then_branch.MakeInitializer(MakeInitializer<float>("weight", {2}, {1.0f, 2.0f}));
     then_branch.MakeNode("Add", {"x", "weight"}, {"dead"});
-    then_branch.MakeOutput("x");
+    then_branch.MakeNode("Identity", {"x"}, {"branch_result"});
+    then_branch.MakeOutput("branch_result");
     auto &else_branch = builder.MakeSubgraph("else_branch");
-    else_branch.MakeOutput("x");
+    else_branch.MakeNode("Identity", {"x"}, {"branch_result"});
+    else_branch.MakeOutput("branch_result");
 
     utils::RepeatedProtoField<AttributeProto> attributes;
     for (const std::string name : {"then_branch", "else_branch"}) {
@@ -184,7 +239,7 @@ TEST(GraphGraph, OptionalUnusedCleanupRecursesIntoSubgraphs) {
         builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{});
     graph.Optimize(-1, nullptr, {}, remove_unused);
 
-    EXPECT_EQ(then_branch.ToGraph().node_size(), remove_unused ? 0 : 1);
+    EXPECT_EQ(then_branch.ToGraph().node_size(), remove_unused ? 1 : 2);
     EXPECT_EQ(then_branch.ToGraph().initializer_size(), remove_unused ? 0 : 1);
   }
 }
@@ -366,7 +421,8 @@ TEST(GraphGraph, NativeExportOrdersDependenciesAndRecomputesCapturedLifetimes) {
   utils::RepeatedProtoField<AttributeProto> attributes;
   for (const std::string name : {"then_branch", "else_branch"}) {
     auto &branch = builder.MakeSubgraph(name);
-    branch.MakeOutput("p");
+    branch.MakeNode("Identity", {"p"}, {"branch_result"});
+    branch.MakeOutput("branch_result");
     AttributeProto reference;
     reference.set_name(name + "_ref");
     reference.set_type(AttributeProto::AttributeType::STRING);
@@ -412,7 +468,8 @@ TEST(GraphGraph, NativeExportOrdersProducerBeforeLexicalCapture) {
   utils::RepeatedProtoField<AttributeProto> attributes;
   for (const std::string name : {"then_branch", "else_branch"}) {
     auto &branch = builder.MakeSubgraph(name);
-    branch.MakeOutput("p");
+    branch.MakeNode("Identity", {"p"}, {"branch_result"});
+    branch.MakeOutput("branch_result");
     AttributeProto reference;
     reference.set_name(name + "_ref");
     reference.set_type(AttributeProto::AttributeType::STRING);

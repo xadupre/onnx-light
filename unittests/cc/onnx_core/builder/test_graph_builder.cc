@@ -526,9 +526,9 @@ TEST(GraphBuilder, DefaultDomainFunctionMutationRefreshesTransitiveCallers) {
 
 TEST(GraphBuilder, FunctionMutationRefreshesNestedSubgraphOwnerOnce) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
-  builder.SetOpsetVersion("custom", 1);
   builder.SetOpsetVersion("local", 1);
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeInput("cond", core::symbolic::TensorType::kBool, MakeShape({}));
 
   auto &function = builder.MakeLocalFunction("F", "local");
   function.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
@@ -539,12 +539,19 @@ TEST(GraphBuilder, FunctionMutationRefreshesNestedSubgraphOwnerOnce) {
   body.SetOpsetVersion("local", 1);
   body.MakeNode("F", {"x"}, {"body_result"}, "local");
   body.MakeOutput("body_result");
+  auto &else_body = builder.MakeSubgraph("else_body");
+  else_body.MakeNode("Identity", {"x"}, {"else_result"});
+  else_body.MakeOutput("else_result");
   utils::RepeatedProtoField<AttributeProto> attributes;
-  auto &body_ref = attributes.add();
-  body_ref.set_name("body_ref");
-  body_ref.set_type(AttributeProto::STRING);
-  body_ref.set_s("body");
-  builder.MakeNode("Capture", {}, {"result"}, "custom", "", attributes);
+  auto &then_ref = attributes.add();
+  then_ref.set_name("then_branch_ref");
+  then_ref.set_type(AttributeProto::STRING);
+  then_ref.set_s("body");
+  auto &else_ref = attributes.add();
+  else_ref.set_name("else_branch_ref");
+  else_ref.set_type(AttributeProto::STRING);
+  else_ref.set_s("else_body");
+  builder.MakeNode("If", {"cond"}, {"result"}, "", "", attributes);
 
   auto &root_shapes = const_cast<core::shapes::ShapesContext &>(builder.Shapes());
   auto &body_shapes = const_cast<core::shapes::ShapesContext &>(body.Shapes());
@@ -562,7 +569,7 @@ TEST(GraphBuilder, FunctionMutationRefreshesNestedSubgraphOwnerOnce) {
     });
   };
   EXPECT_EQ(count_computations(body_shapes, "F"), 1);
-  EXPECT_EQ(count_computations(root_shapes, "Capture"), 1);
+  EXPECT_EQ(count_computations(root_shapes, "If"), 1);
 }
 
 TEST(GraphBuilder, MaintainsConstantInfoIncrementally) {

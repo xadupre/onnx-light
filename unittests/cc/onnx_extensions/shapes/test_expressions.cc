@@ -438,6 +438,28 @@ TEST(DimOperations, ChildShapesContextDoesNotCopyExpressionCache) {
   EXPECT_EQ(second.current_subgraph_attr_name(), "outer");
 }
 
+TEST(DimOperations, ChildShapesContextRetainsCaptureNamedLikeSparseIndices) {
+  onnx_light::core::shapes::ShapesContext parent;
+  parent.Set("captured", onnx_light::core::symbolic::SymTensor(
+                             nullptr, onnx_light::core::symbolic::TensorType::kFloat, {}));
+  parent.Set("sparse", onnx_light::core::symbolic::SymTensor(
+                           nullptr, onnx_light::core::symbolic::TensorType::kFloat, {}));
+
+  onnx_light::GraphProto graph;
+  auto *initializer = graph.add_sparse_initializer();
+  initializer->mutable_values()->set_name("sparse");
+  initializer->mutable_indices()->set_name("captured");
+  auto *node = graph.add_node();
+  node->set_op_type("Add");
+  node->add_input("captured");
+  node->add_input("sparse");
+  node->add_output("result");
+
+  auto child = parent.MakeChildContext(graph);
+  EXPECT_TRUE(child.Has("captured"));
+  EXPECT_FALSE(child.Has("sparse"));
+}
+
 TEST(DimOperations, DimSub_int_int) {
   EXPECT_EQ(std::get<int64_t>(dim_sub(DimType{int64_t{10}}, DimType{int64_t{3}})), 7);
 }

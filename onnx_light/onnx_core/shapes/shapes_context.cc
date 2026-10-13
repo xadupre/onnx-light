@@ -35,7 +35,6 @@ ShapesContext ShapesContext::MakeChildContext(const GraphProto &graph) const {
   }
   for (const auto &initializer : graph.sparse_initializer()) {
     local_initializers.insert(initializer.values().name());
-    local_initializers.insert(initializer.indices().name());
   }
 
   std::unordered_set<std::string> copied;

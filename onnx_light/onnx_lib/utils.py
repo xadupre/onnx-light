@@ -115,7 +115,7 @@ class Extractor:
             function_map[(str(function.name), str(function.domain))] = function
         referred_local_functions: list[FunctionProto] = []
         queue = deque(nodes)
-        while queue:
+        while queue and function_map:
             node = queue.popleft()
             # check if the node is a function op
             key = (str(node.op_type), str(node.domain))
@@ -123,6 +123,11 @@ class Extractor:
                 function = function_map.pop(key)
                 referred_local_functions.append(function)
                 queue.extend(function.node)
+            for attribute in node.attribute:
+                if attribute.has_g():
+                    queue.extend(attribute.g.node)
+                for graph in attribute.graphs:
+                    queue.extend(graph.node)
         # needs to be topologically sorted
         return referred_local_functions
 

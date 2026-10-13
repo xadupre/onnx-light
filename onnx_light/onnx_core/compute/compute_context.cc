@@ -104,6 +104,68 @@ NodeMemoryProfile MakeEmptyNodeMemoryProfile() {
 
 // ── ComputeContext method implementations ────────────────────────────────────
 
+void ComputeContext::Clear() noexcept {
+  value_tags_.clear();
+  node_tags_.clear();
+  constant_values_.clear();
+  node_constant_.clear();
+  reuse_.clear();
+  release_after_.clear();
+  not_used_after_.clear();
+  release_after_shape_tagged_.clear();
+  memory_.clear();
+  peak_memory_.clear();
+  shapes_.Clear();
+  node_tag_custom_override_.clear();
+  tag_producer_node_.clear();
+  tag_consumers_.clear();
+  incr_producer_.clear();
+  incr_last_use_.clear();
+  incr_keep_.clear();
+  incr_graph_inputs_.clear();
+  incr_graph_initializers_.clear();
+  incr_graph_outputs_.clear();
+  incr_node_references_.clear();
+  incr_byte_size_expr_cache_.clear();
+  incr_simplified_dim_cache_ = expressions::SimplifiedExpressionCache{};
+  incr_allocation_bytes_.clear();
+  incr_memory_alive_.clear();
+  incr_memory_alive_before_refresh_.clear();
+  incr_memory_refresh_from_ = static_cast<std::size_t>(-1);
+  incr_memory_refresh_prepared_ = false;
+}
+
+void ComputeContext::ResetMetadata() noexcept {
+  value_tags_.clear();
+  node_tags_.clear();
+  constant_values_.clear();
+  node_constant_.clear();
+  reuse_.clear();
+  release_after_.clear();
+  not_used_after_.clear();
+  release_after_shape_tagged_.clear();
+  memory_.clear();
+  peak_memory_.clear();
+  custom_value_tags_changed_ = false;
+  node_tag_custom_override_.clear();
+  tag_producer_node_.clear();
+  tag_consumers_.clear();
+  incr_producer_.clear();
+  incr_last_use_.clear();
+  incr_keep_.clear();
+  incr_graph_inputs_.clear();
+  incr_graph_initializers_.clear();
+  incr_graph_outputs_.clear();
+  incr_node_references_.clear();
+  incr_byte_size_expr_cache_.clear();
+  incr_simplified_dim_cache_ = expressions::SimplifiedExpressionCache{};
+  incr_allocation_bytes_.clear();
+  incr_memory_alive_.clear();
+  incr_memory_alive_before_refresh_.clear();
+  incr_memory_refresh_from_ = static_cast<std::size_t>(-1);
+  incr_memory_refresh_prepared_ = false;
+}
+
 std::pair<std::unordered_map<std::string, std::string>, std::vector<std::string>>
 ComputeContext::ComputeValueAndNodeTags(const GraphProto &graph) {
   value_tags_.clear();
@@ -265,8 +327,22 @@ void ComputeContext::PropagateNodeTags(const utils::RepeatedProtoField<NodeProto
       changed_release_nodes.insert(static_cast<std::size_t>(use->second));
     }
   };
+  const auto mark_tag_memory_refresh = [&](const std::string &name) {
+    const auto allocation_producer = incr_producer_.find(name);
+    if (allocation_producer != incr_producer_.end()) {
+      MarkMemoryRefresh(allocation_producer->second < 0
+                            ? 0
+                            : static_cast<std::size_t>(allocation_producer->second));
+      return;
+    }
+    const auto tag_producer = tag_producer_node_.find(name);
+    MarkMemoryRefresh(tag_producer == tag_producer_node_.end() || tag_producer->second < 0
+                          ? 0
+                          : static_cast<std::size_t>(tag_producer->second));
+  };
   for (const std::string &name : initial_changes) {
     track_release(name);
+    mark_tag_memory_refresh(name);
   }
   for (int seed : seeds) {
     if (queued.insert(seed).second) {
@@ -283,6 +359,7 @@ void ComputeContext::PropagateNodeTags(const utils::RepeatedProtoField<NodeProto
                     node_tags_, node_tag_custom_override_, this, &changed);
     for (const std::string &value : changed) {
       track_release(value);
+      mark_tag_memory_refresh(value);
       auto producer_it = tag_producer_node_.find(value);
       if (producer_it != tag_producer_node_.end() && producer_it->second != n &&
           queued.insert(producer_it->second).second) {
@@ -312,22 +389,20 @@ void ComputeContext::PropagateNodeTags(const utils::RepeatedProtoField<NodeProto
 
 void ComputeContext::SeedReuseInput(const std::string &name, bool is_graph_input,
                                     bool is_initializer, bool allow_input_overwrite) {
+  EXT_ENFORCE_INVALID(!allow_input_overwrite,
+                      "SeedReuseInput: graph inputs cannot be overwritten or shadowed.");
   if (name.empty()) {
     return;
   }
   if (is_graph_input) {
     incr_graph_inputs_.insert(name);
-    if (allow_input_overwrite) {
-      // Available before the first node so it can be reused at its last use.
-      incr_producer_[name] = -1;
-    } else {
-      incr_keep_.insert(name);
-    }
+    incr_keep_.insert(name);
   }
   if (is_initializer) {
     incr_graph_initializers_.insert(name);
     incr_keep_.insert(name);
   }
+  MarkMemoryRefresh(0);
 }
 
 namespace {
@@ -352,6 +427,11 @@ void ComputeContext::SeedReuseOutput(const std::string &name,
   if (name.empty()) {
     return;
   }
+  const auto producer = incr_producer_.find(name);
+  MarkMemoryRefresh(producer == incr_producer_.end() || producer->second < 0
+                        ? 0
+                        : static_cast<std::size_t>(producer->second));
+  PrepareMemoryRefresh(nodes, nodes.size());
   incr_keep_.insert(name);
   incr_graph_outputs_.insert(name);
   // A graph output must survive the run, so undo any earlier node's decision to
@@ -387,6 +467,21 @@ void ComputeContext::AppendNodeReuse(const utils::RepeatedProtoField<NodeProto> 
     }
     auto it = incr_last_use_.find(name);
     previous_last_use.emplace(name, it != incr_last_use_.end() ? it->second : -1);
+    if (it != incr_last_use_.end() && it->second >= 0) {
+      MarkMemoryRefresh(static_cast<std::size_t>(it->second));
+    } else {
+      const auto producer = incr_producer_.find(name);
+      if (producer != incr_producer_.end()) {
+        MarkMemoryRefresh(producer->second < 0 ? 0 : static_cast<std::size_t>(producer->second));
+      }
+    }
+  }
+  MarkMemoryRefresh(node_index);
+  PrepareMemoryRefresh(nodes, node_index);
+  for (const std::string &name : referenced) {
+    if (name.empty()) {
+      continue;
+    }
     incr_last_use_[name] = i;
   }
   for (const auto &entry : previous_last_use) {
@@ -462,6 +557,254 @@ void ComputeContext::AppendNodeReuse(const utils::RepeatedProtoField<NodeProto> 
   not_used_after_.push_back(std::move(not_used_after));
   release_after_shape_tagged_.push_back(std::move(release_after_shape_tagged));
   memory_.push_back(MakeEmptyNodeMemoryProfile());
+  incr_node_references_.push_back(referenced);
+}
+
+void ComputeContext::RefreshNode(const utils::RepeatedProtoField<NodeProto> &nodes,
+                                 std::size_t node_index, const ShapesContext &ctx,
+                                 const std::vector<std::string> &references, Device device) {
+  EXT_ENFORCE_INVALID(node_index < nodes.size() && node_index < incr_node_references_.size(),
+                      "RefreshNode: node index is out of bounds.");
+  const std::vector<std::string> previous = incr_node_references_[node_index];
+  std::unordered_set<std::string> changed(previous.begin(), previous.end());
+  changed.insert(references.begin(), references.end());
+
+  std::size_t refresh_from = node_index;
+  std::unordered_map<std::string, int> updated_last_use;
+  for (const std::string &name : changed) {
+    if (name.empty()) {
+      continue;
+    }
+    const auto old = incr_last_use_.find(name);
+    if (old != incr_last_use_.end() && old->second >= 0) {
+      refresh_from = std::min(refresh_from, static_cast<std::size_t>(old->second));
+    }
+    int last = -1;
+    for (std::size_t index = 0; index < incr_node_references_.size(); ++index) {
+      const auto &node_references = index == node_index ? references : incr_node_references_[index];
+      if (std::find(node_references.begin(), node_references.end(), name) !=
+          node_references.end()) {
+        last = static_cast<int>(index);
+      }
+    }
+    updated_last_use.emplace(name, last);
+    if (last >= 0) {
+      refresh_from = std::min(refresh_from, static_cast<std::size_t>(last));
+    }
+    const auto producer = incr_producer_.find(name);
+    if (producer != incr_producer_.end() && producer->second >= 0) {
+      refresh_from = std::min(refresh_from, static_cast<std::size_t>(producer->second));
+    }
+  }
+  MarkMemoryRefresh(refresh_from);
+  PrepareMemoryRefresh(nodes, nodes.size());
+  incr_node_references_[node_index] = references;
+
+  for (const auto &[name, last] : updated_last_use) {
+    for (std::size_t index = 0; index < release_after_.size(); ++index) {
+      EraseValueFromList(release_after_[index], name);
+      EraseValueFromList(not_used_after_[index], name);
+      EraseValueFromList(release_after_shape_tagged_[index], name);
+    }
+    if (last < 0) {
+      incr_last_use_.erase(name);
+      continue;
+    }
+    incr_last_use_[name] = last;
+    const std::size_t index = static_cast<std::size_t>(last);
+    if (incr_graph_inputs_.count(name) != 0 || incr_graph_initializers_.count(name) != 0) {
+      not_used_after_[index].push_back(name);
+    }
+    const auto producer = incr_producer_.find(name);
+    if (incr_keep_.count(name) == 0 && producer != incr_producer_.end() && producer->second >= 0 &&
+        producer->second < last) {
+      release_after_[index].push_back(name);
+      const auto tag = value_tags_.find(name);
+      if (tag != value_tags_.end() && tag->second == "shape") {
+        release_after_shape_tagged_[index].push_back(name);
+      }
+    }
+  }
+
+  for (std::size_t index = refresh_from; index < nodes.size(); ++index) {
+    RefreshNodeReuse(nodes, index, ctx);
+    AppendNodePeakMemory(nodes[index], index, device);
+  }
+  RefreshIncrementalMemory(nodes, ctx);
+}
+
+void ComputeContext::MarkMemoryRefresh(std::size_t node_index) {
+  if (node_index < incr_memory_refresh_from_) {
+    incr_memory_refresh_from_ = node_index;
+    incr_memory_refresh_prepared_ = false;
+  }
+}
+
+void ComputeContext::PrepareMemoryRefresh(const utils::RepeatedProtoField<NodeProto> &nodes,
+                                          std::size_t end_exclusive) {
+  if (incr_memory_refresh_from_ == static_cast<std::size_t>(-1) || incr_memory_refresh_prepared_) {
+    return;
+  }
+  incr_memory_alive_before_refresh_ = incr_memory_alive_;
+  if (incr_memory_refresh_from_ == 0) {
+    incr_memory_alive_before_refresh_.clear();
+    incr_memory_refresh_prepared_ = true;
+    return;
+  }
+  for (std::size_t position = end_exclusive; position-- > incr_memory_refresh_from_;) {
+    const NodeProto &node = nodes[position];
+    for (const std::string &output : node.output()) {
+      if (!output.empty()) {
+        incr_memory_alive_before_refresh_.erase(output);
+      }
+    }
+    if (position < release_after_.size()) {
+      for (const std::string &name : release_after_[position]) {
+        if (incr_allocation_bytes_.count(name) != 0) {
+          incr_memory_alive_before_refresh_.insert(name);
+        }
+      }
+    }
+  }
+  incr_memory_refresh_prepared_ = true;
+}
+
+void ComputeContext::RefreshIncrementalMemory(const utils::RepeatedProtoField<NodeProto> &nodes,
+                                              const ShapesContext &ctx) {
+  if (incr_memory_refresh_from_ == static_cast<std::size_t>(-1)) {
+    return;
+  }
+  PrepareMemoryRefresh(nodes, nodes.size());
+  const std::size_t start = std::min(incr_memory_refresh_from_, nodes.size());
+  std::unordered_set<std::string> alive = incr_memory_alive_before_refresh_;
+  static const std::optional<expressions::DimType> missing_allocation;
+  const auto allocation_bytes =
+      [&](const std::string &name) -> const std::optional<expressions::DimType> & {
+    if (!ctx.Has(name)) {
+      return missing_allocation;
+    }
+    return GetCachedByteSizeExpr(ctx, name, incr_byte_size_expr_cache_,
+                                 &incr_simplified_dim_cache_);
+  };
+  if (start == 0) {
+    alive.clear();
+    for (const std::string &name : incr_graph_initializers_) {
+      const auto &bytes = allocation_bytes(name);
+      if (bytes.has_value()) {
+        incr_allocation_bytes_[name] =
+            expressions::simplify_dim_type(*bytes, &incr_simplified_dim_cache_);
+        alive.insert(name);
+      }
+    }
+    for (const std::string &name : incr_graph_inputs_) {
+      if (alive.count(name) != 0) {
+        continue;
+      }
+      const auto &bytes = allocation_bytes(name);
+      if (bytes.has_value()) {
+        incr_allocation_bytes_[name] =
+            expressions::simplify_dim_type(*bytes, &incr_simplified_dim_cache_);
+        alive.insert(name);
+      }
+    }
+  }
+
+  if (memory_.size() < nodes.size()) {
+    memory_.resize(nodes.size(), MakeEmptyNodeMemoryProfile());
+  }
+  for (std::size_t index = start; index < nodes.size(); ++index) {
+    NodeMemoryProfile profile = MakeEmptyNodeMemoryProfile();
+    expressions::DimSum already_sum;
+    std::map<ShapeTag, expressions::DimSum> inputs_bucket;
+    std::map<ShapeTag, expressions::DimSum> initializers_bucket;
+    std::map<ShapeTag, expressions::DimSum> intermediates_bucket;
+    for (const std::string &name : alive) {
+      const auto allocation = incr_allocation_bytes_.find(name);
+      if (allocation == incr_allocation_bytes_.end()) {
+        continue;
+      }
+      const expressions::DimType &bytes = allocation->second;
+      already_sum.Add(bytes);
+      if (expressions::is_zero_dim(bytes)) {
+        continue;
+      }
+      auto &bucket = incr_graph_initializers_.count(name) != 0 ? initializers_bucket
+                     : incr_graph_inputs_.count(name) != 0     ? inputs_bucket
+                                                               : intermediates_bucket;
+      bucket[ValueTag(value_tags_, name)].Add(bytes);
+    }
+
+    const NodeProto &node = nodes[index];
+    std::unordered_map<int, int> reuse_by_output;
+    if (index < reuse_.size()) {
+      for (const InPlaceReuse &reuse : reuse_[index]) {
+        reuse_by_output[static_cast<int>(reuse.output_index)] = static_cast<int>(reuse.input_index);
+      }
+    }
+    expressions::DimSum output_sum;
+    std::map<ShapeTag, expressions::DimSum> outputs_bucket;
+    std::unordered_set<std::string> outputs_to_add;
+    for (int output_index = 0; output_index < node.output_size(); ++output_index) {
+      const std::string output = node.output(output_index);
+      if (output.empty()) {
+        continue;
+      }
+      auto reused = reuse_by_output.find(output_index);
+      if (reused != reuse_by_output.end()) {
+        const std::string input = node.input(reused->second);
+        auto allocation = incr_allocation_bytes_.find(input);
+        if (allocation != incr_allocation_bytes_.end()) {
+          incr_allocation_bytes_[output] = allocation->second;
+        }
+      } else {
+        const auto &bytes = allocation_bytes(output);
+        if (bytes.has_value()) {
+          const expressions::DimType simplified =
+              expressions::simplify_dim_type(*bytes, &incr_simplified_dim_cache_);
+          incr_allocation_bytes_[output] = simplified;
+          output_sum.Add(simplified);
+          if (!expressions::is_zero_dim(simplified)) {
+            outputs_bucket[ValueTag(value_tags_, output)].Add(simplified);
+          }
+        }
+      }
+      const auto last_use = incr_last_use_.find(output);
+      if (incr_graph_outputs_.count(output) != 0 ||
+          (last_use != incr_last_use_.end() && last_use->second > static_cast<int>(index))) {
+        outputs_to_add.insert(output);
+      }
+    }
+
+    const expressions::DimType already_allocated = already_sum.Build(&incr_simplified_dim_cache_);
+    const expressions::DimType output_allocation = output_sum.Build(&incr_simplified_dim_cache_);
+    NodeMemoryProfileScalar(profile, kNodeMemoryAlreadyAllocatedBytesKey) = already_allocated;
+    NodeMemoryProfileScalar(profile, kNodeMemoryOutputAllocationBytesKey) = output_allocation;
+    NodeMemoryProfileScalar(profile, kNodeMemoryTotalBytesKey) = expressions::simplify_dim_type(
+        expressions::dim_add(already_allocated, output_allocation), &incr_simplified_dim_cache_);
+    FillTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryInputsKey), inputs_bucket,
+                     &incr_simplified_dim_cache_);
+    FillTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryInitializersKey),
+                     initializers_bucket, &incr_simplified_dim_cache_);
+    FillTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryIntermediatesKey),
+                     intermediates_bucket, &incr_simplified_dim_cache_);
+    FillTaggedMemory(NodeMemoryProfileBucket(profile, kNodeMemoryOutputsKey), outputs_bucket,
+                     &incr_simplified_dim_cache_);
+    memory_[index] = std::move(profile);
+
+    if (index < release_after_.size()) {
+      for (const std::string &name : release_after_[index]) {
+        alive.erase(name);
+      }
+    }
+    for (const std::string &output : node.output()) {
+      alive.erase(output);
+    }
+    alive.insert(outputs_to_add.begin(), outputs_to_add.end());
+  }
+  incr_memory_alive_ = std::move(alive);
+  incr_memory_alive_before_refresh_.clear();
+  incr_memory_refresh_from_ = static_cast<std::size_t>(-1);
+  incr_memory_refresh_prepared_ = false;
 }
 
 void ComputeContext::AppendNodePeakMemory(const NodeProto &node, std::size_t node_index,
@@ -503,11 +846,17 @@ void ComputeContext::ComputeInPlaceReuseGraphImpl(
                                         MakeEmptyNodeMemoryProfile());
   expressions::SimplifiedExpressionCache simplified_dim_cache;
   std::unordered_map<std::string, std::optional<expressions::DimType>> byte_size_expr_cache;
+  incr_allocation_bytes_.clear();
 
   ResultLifetimeInfo lifetime = ComputeResultLifetimeInfo(graph, allow_input_overwrite);
   const std::unordered_set<std::string> &graph_inputs = lifetime.graph_inputs;
   const std::unordered_set<std::string> &graph_outputs = lifetime.graph_outputs;
   const std::unordered_map<std::string, int> &last_use = lifetime.last_use;
+  incr_node_references_.clear();
+  incr_node_references_.reserve(graph.node().size());
+  for (const NodeProto &node : graph.node()) {
+    incr_node_references_.push_back(core::graph::CollectNodeInputs(node));
+  }
   if (events_enabled_) {
     for (std::size_t i = 0; i < lifetime.size(); ++i) {
       for (const std::string &name : lifetime[i].release_after) {
@@ -662,6 +1011,7 @@ void ComputeContext::ComputeInPlaceReuseGraphImpl(
         }
         alloc_bytes = expressions::simplify_dim_type(*out_bytes, &simplified_dim_cache);
       }
+      incr_allocation_bytes_[out_name] = alloc_bytes;
       const auto use_it = last_use.find(out_name);
       const bool survives_after_node = graph_outputs.find(out_name) != graph_outputs.end() ||
                                        (use_it != last_use.end() && use_it->second > i);
@@ -689,6 +1039,14 @@ void ComputeContext::ComputeInPlaceReuseGraphImpl(
   release_after_ = lifetime.MoveReleaseAfter();
   not_used_after_ = lifetime.MoveNotUsedAfter();
   memory_ = std::move(memory);
+  incr_memory_alive_.clear();
+  for (const auto &entry : alive) {
+    incr_memory_alive_.insert(entry.first);
+    incr_allocation_bytes_[entry.first] = entry.second.bytes;
+  }
+  incr_memory_alive_before_refresh_.clear();
+  incr_memory_refresh_from_ = static_cast<std::size_t>(-1);
+  incr_memory_refresh_prepared_ = false;
 
   // Populate the shape-tagged subset from value_tags (when provided).
   // Only allocate the per-node sub-vectors when value_tags is actually non-empty

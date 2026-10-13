@@ -746,9 +746,9 @@ private:
   template <typename Tensor> const std::string &MakeInitializerImpl(Tensor &&tensor);
 
   void SetStructTypes(const utils::RepeatedProtoField<StructTypeProto> &types);
-  void RefreshMemoryProfiles();
   void RefreshAfterMutation();
   void RefreshAncestors();
+  void RefreshNestedDependency(GraphBuilder &child);
   void RebuildMetadata();
   void RebuildStructuredState(bool refresh_ancestors = true);
   GraphProto BuildGraphImpl(bool validate_persistent_bindings) const;

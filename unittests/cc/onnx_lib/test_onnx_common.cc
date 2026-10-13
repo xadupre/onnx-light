@@ -157,6 +157,13 @@ TEST(onnx_common, ProtoUtilAndFileUtils) {
   EXPECT_EQ(loaded.ref_graph().ref_name(), "loaded");
   EXPECT_EQ(loaded.ref_doc_string(), model.ref_doc_string());
 
+  {
+    std::ofstream out(file_path, std::ios::binary | std::ios::app);
+    out.write("\0\0\0", 3);
+  }
+  EXPECT_THROW(ONNX_LIGHT_NAMESPACE::LoadProtoFromPath(file_path.string(), loaded),
+               std::runtime_error);
+
   fs::remove(file_path);
 }
 

@@ -53,6 +53,19 @@ TEST(onnx_compatibility, ProtoUtilsParseAndRetrieve) {
   ASSERT_TRUE(unchanged.has_graph());
   EXPECT_EQ(unchanged.ref_graph().ref_name(), "keep");
 
+  for (const std::string &trailer : {std::string("\0\xff", 2), std::string("\x0c\xff", 2)}) {
+    const std::string invalid = serialized + trailer;
+    SCOPED_TRACE(static_cast<int>(static_cast<unsigned char>(trailer[0])));
+    EXPECT_FALSE(
+        ONNX_LIGHT_NAMESPACE::ParseProtoFromBytes(&unchanged, invalid.data(), invalid.size()));
+    EXPECT_EQ(unchanged.ref_graph().ref_name(), "keep");
+    ModelProto array_parsed;
+    EXPECT_FALSE(array_parsed.ParseFromArray(invalid.data(), static_cast<int>(invalid.size())));
+  }
+  EXPECT_FALSE(
+      ONNX_LIGHT_NAMESPACE::ParseProtoFromBytes(&unchanged, serialized.data(), (2048ULL << 20)));
+  EXPECT_EQ(unchanged.ref_graph().ref_name(), "keep");
+
   AttributeProto attr;
   attr.set_name("attr");
   attr.ref_ints().push_back(3);

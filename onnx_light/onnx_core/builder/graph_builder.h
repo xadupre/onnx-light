@@ -746,7 +746,6 @@ private:
   template <typename Tensor> const std::string &MakeInitializerImpl(Tensor &&tensor);
 
   void SetStructTypes(const utils::RepeatedProtoField<StructTypeProto> &types);
-  void RefreshMemoryProfiles();
   void RefreshAfterMutation();
   void RefreshAncestors();
   void RebuildMetadata();

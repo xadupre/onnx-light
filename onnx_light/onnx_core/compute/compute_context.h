@@ -383,6 +383,11 @@ public:
   void AppendNodeReuse(const utils::RepeatedProtoField<NodeProto> &nodes, std::size_t node_index,
                        const ShapesContext &ctx, const std::vector<std::string> &references);
 
+  /// Refreshes memory profiles from the earliest node affected by incremental
+  /// tag, lifetime, reuse, input, initializer, or output changes.
+  void RefreshIncrementalMemory(const utils::RepeatedProtoField<NodeProto> &nodes,
+                                const ShapesContext &ctx);
+
   /// Appends the peak-memory estimate for a newly appended node, using the
   /// shapes already inferred into the owned :cpp:class:`ShapesContext`.
   void AppendNodePeakMemory(const NodeProto &node, std::size_t node_index,
@@ -667,6 +672,11 @@ public:
     incr_graph_outputs_.clear();
     incr_byte_size_expr_cache_.clear();
     incr_simplified_dim_cache_ = expressions::SimplifiedExpressionCache{};
+    incr_allocation_bytes_.clear();
+    incr_memory_alive_.clear();
+    incr_memory_alive_before_refresh_.clear();
+    incr_memory_refresh_from_ = static_cast<std::size_t>(-1);
+    incr_memory_refresh_prepared_ = false;
   }
 
   /// Clears computed annotations and incremental bookkeeping while preserving
@@ -694,6 +704,11 @@ public:
     incr_graph_outputs_.clear();
     incr_byte_size_expr_cache_.clear();
     incr_simplified_dim_cache_ = expressions::SimplifiedExpressionCache{};
+    incr_allocation_bytes_.clear();
+    incr_memory_alive_.clear();
+    incr_memory_alive_before_refresh_.clear();
+    incr_memory_refresh_from_ = static_cast<std::size_t>(-1);
+    incr_memory_refresh_prepared_ = false;
   }
 
 private:
@@ -702,6 +717,9 @@ private:
                          const std::vector<std::string> &initial_changes = {});
   void RefreshNodeReuse(const utils::RepeatedProtoField<NodeProto> &nodes, std::size_t index,
                         const ShapesContext &ctx);
+  void MarkMemoryRefresh(std::size_t node_index);
+  void PrepareMemoryRefresh(const utils::RepeatedProtoField<NodeProto> &nodes,
+                            std::size_t end_exclusive);
 
   template <typename GraphOrFunction>
   void ComputeInPlaceReuseGraphImpl(const GraphOrFunction &graph, const ShapesContext &ctx,
@@ -758,6 +776,11 @@ private:
   std::unordered_set<std::string> incr_graph_outputs_;
   std::unordered_map<std::string, std::optional<expressions::DimType>> incr_byte_size_expr_cache_;
   expressions::SimplifiedExpressionCache incr_simplified_dim_cache_;
+  std::unordered_map<std::string, expressions::DimType> incr_allocation_bytes_;
+  std::unordered_set<std::string> incr_memory_alive_;
+  std::unordered_set<std::string> incr_memory_alive_before_refresh_;
+  std::size_t incr_memory_refresh_from_ = static_cast<std::size_t>(-1);
+  bool incr_memory_refresh_prepared_ = false;
 };
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::compute

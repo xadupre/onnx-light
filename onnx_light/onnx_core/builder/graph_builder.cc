@@ -568,12 +568,6 @@ void GraphBuilder::MakeStructType(const StructTypeProto &type) {
   RebuildStructuredState();
 }
 
-void GraphBuilder::RefreshMemoryProfiles() {
-  GraphProto graph = BuildGraphImpl(/*validate_persistent_bindings=*/false);
-  compute_.ComputeInPlaceReuseGraph(graph, compute_.Shapes(), /*allow_input_overwrite=*/false,
-                                    compute_.ValueTags());
-}
-
 void GraphBuilder::RefreshAncestors() {
   if (outputs_.empty()) {
     return;
@@ -584,7 +578,7 @@ void GraphBuilder::RefreshAncestors() {
 }
 
 void GraphBuilder::RefreshAfterMutation() {
-  RefreshMemoryProfiles();
+  compute_.RefreshIncrementalMemory(nodes_, compute_.Shapes());
   RefreshAncestors();
 }
 
@@ -1531,6 +1525,25 @@ GraphBuilder::MakeNode(const std::string &op_type, const std::vector<std::string
       throw BuilderError(error);
     }
   }
+
+  // Nodes() is read-only, but legacy callers may still have mutated its
+  // storage through a const_cast. Bring only those appended nodes into the
+  // incremental metadata before processing this node.
+  for (std::size_t missing_index = compute_.Size(); missing_index < nodes_.size();
+       ++missing_index) {
+    const NodeProto &missing = nodes_[missing_index];
+    compute_.AppendNodeTags(nodes_, missing_index);
+    std::vector<std::string> missing_references;
+    CollectNodeReferences(missing, missing_references);
+    compute_.AppendNodeReuse(nodes_, missing_index, compute_.Shapes(), missing_references);
+    compute_.AppendNodeConstant(missing, missing_index);
+    compute_.AppendNodePeakMemory(missing, missing_index, device_);
+  }
+  if (compute_.Size() != nodes_.size()) {
+    throw BuilderError("GraphBuilder: incremental metadata is not aligned with the node list.");
+  }
+  compute_.RefreshIncrementalMemory(nodes_, compute_.Shapes());
+
   // Run incremental shape inference for the new node when a shape function is
   // registered for its operator; unregistered operators simply leave their
   // outputs without an inferred descriptor.
@@ -1547,10 +1560,8 @@ GraphBuilder::MakeNode(const std::string &op_type, const std::vector<std::string
       }
     }
     if (known_inputs && !HasUnboundAttributes(materialized)) {
-      ShapesContext inferred = compute_.Shapes();
-      inferred.set_current_node_index(static_cast<int64_t>(nodes_.size()));
-      inferred.ComputeShapeNode(materialized);
-      compute_.Shapes() = std::move(inferred);
+      compute_.Shapes().set_current_node_index(static_cast<int64_t>(nodes_.size()));
+      compute_.Shapes().ComputeShapeNode(materialized);
     }
   }
 

@@ -294,6 +294,39 @@ TEST(GraphBuilder, MaintainsMemoryProfilesIncrementally) {
   EXPECT_EQ(builder.Compute().Memory(), expected.Memory());
 }
 
+TEST(GraphBuilder, RefreshesOnlyAffectedIncrementalMemoryRange) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  const auto expect_whole_graph_metadata = [&]() {
+    const GraphProto graph = builder.BuildGraph();
+    core::compute::ComputeContext expected;
+    const auto tags = expected.ComputeValueAndNodeTags(graph);
+    expected.ComputeInPlaceReuseGraph(graph, builder.Shapes(), false, tags.first);
+    EXPECT_EQ(builder.Compute().Reuse(), expected.Reuse());
+    EXPECT_EQ(builder.Compute().Memory(), expected.Memory());
+  };
+
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeNode("Abs", {"x"}, {"intermediate"});
+  expect_whole_graph_metadata();
+  builder.MakeNode("Abs", {"intermediate"}, {"first"});
+  expect_whole_graph_metadata();
+  builder.MakeNode("Abs", {"intermediate"}, {"second"});
+  expect_whole_graph_metadata();
+  builder.MakeOutput("intermediate");
+  expect_whole_graph_metadata();
+  builder.MakeInitializer(
+      MakeInitializer<float>("late_weight", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f}));
+  expect_whole_graph_metadata();
+
+  ValueInfoProto output;
+  output.set_name("second");
+  auto *tag = output.add_metadata_props();
+  tag->set_key(core::compute::kValueTagMetadataKey);
+  tag->set_value("shape");
+  builder.MakeOutput(output);
+  expect_whole_graph_metadata();
+}
+
 TEST(GraphBuilder, ChildMutationUpdatesParentLifetimeMetadataImmediately) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   builder.SetOpsetVersion("custom", 1);

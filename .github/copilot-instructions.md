@@ -23,3 +23,8 @@
 - Do not use `try/except` for normal control flow.
 - Prefer precondition checks when feasible, but use `try/except` for genuinely exceptional conditions and around external I/O boundaries where failures can still occur.
 - Catch specific exceptions rather than using broad exception handlers, and add tests that cover expected failure paths.
+
+### GraphBuilder consistency and performance
+- Keep `GraphBuilder` fully coherent after every mutation; callers must immediately observe correct shapes, tags, lifetimes, reuse decisions, and memory metadata.
+- Update only the nodes and values affected by a mutation. Do not copy the complete `ShapesContext`, rebuild the whole graph, or defer consistency until export or query time.
+- `RefreshAfterMutation` must propagate targeted incremental updates and must not call `BuildGraphImpl` or whole-graph analysis.

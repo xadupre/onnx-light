@@ -1,0 +1,23 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "https://github.com/xadupre/onnx-light/blob/main/.vex/onnx-light.openvex.json",
+  "author": "onnx-light Project Contributors",
+  "timestamp": "2026-10-13T00:00:00Z",
+  "version": 1,
+  "statements": [
+    {
+      "vulnerability": {
+        "name": "CVE-2026-0994",
+        "aliases": ["GHSA-7gcm-g887-7qv7"]
+      },
+      "products": [
+        {
+          "@id": "pkg:pypi/onnx-light"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "impact_statement": "onnx-light does not depend on or bundle google.protobuf. Its model loader supports binary ONNX protobuf wire format and textproto, not protobuf JSON; the vulnerable google.protobuf.json_format.Any parsing path is absent. This assessment does not cover optional development dependencies or applications that use protobuf directly."
+    }
+  ]
+}

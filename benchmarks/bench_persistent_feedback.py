@@ -67,8 +67,8 @@ def main():
     initial = {name: numpy.empty((1, 1, 0, 2), dtype=numpy.float32) for name in bindings}
     options = runtime.RuntimeSessionOptions(persistent_tensor_initial_capacity=args.tokens)
     started = time.perf_counter_ns()
-    state = runtime.PersistentValueState(model, initial, options)
-    stateful = runtime.RuntimeSession(model, options)
+    stateful = runtime.RuntimeSession(model, initial, options)
+    state = stateful.persistent_state
     state_setup_ns = time.perf_counter_ns() - started
     started = time.perf_counter_ns()
     stateless = runtime.RuntimeSession(model)
@@ -89,7 +89,7 @@ def main():
         stateless_ns = time.perf_counter_ns() - started
         context.clear_events()
         started = time.perf_counter_ns()
-        outputs = stateful.run(state, context, feeds)
+        outputs = stateful.run(context, feeds)
         stateful_ns = time.perf_counter_ns() - started
         storage = [
             event

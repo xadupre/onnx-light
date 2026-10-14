@@ -310,20 +310,47 @@ std::vector<PersistentValue> PersistentValueState::ValidateInitial(RuntimeValueM
   return result;
 }
 
-RuntimeValueMap RuntimeSession::Run(PersistentValueState &state, RuntimeContext &context,
-                                    const RuntimeValueMap &feeds,
+RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeValueMap initial,
+                               RuntimeSessionOptions options, std::shared_ptr<void> model_owner)
+    : RuntimeSession(model, options) {
+  model_owner_ = std::move(model_owner);
+  if (!model.graph().persistent_bindings().empty())
+    persistent_state_ =
+        std::make_unique<PersistentValueState>(model, std::move(initial), options, model_owner_);
+  else
+    EXT_ENFORCE_INVALID(initial.empty(),
+                        "RuntimeSession: initial persistent values require persistent bindings.");
+}
+
+RuntimeSession::RuntimeSession(std::shared_ptr<const ModelProto> model, RuntimeValueMap initial,
+                               RuntimeSessionOptions options)
+    : RuntimeSession(RequireModel(model), std::move(initial), std::move(options),
+                     std::shared_ptr<void>(model, const_cast<ModelProto *>(model.get()))) {}
+
+PersistentValueState &RuntimeSession::persistent_state() {
+  EXT_ENFORCE_INVALID(persistent_state_ != nullptr,
+                      "RuntimeSession: no persistent state was initialized.");
+  return *persistent_state_;
+}
+
+const PersistentValueState &RuntimeSession::persistent_state() const {
+  EXT_ENFORCE_INVALID(persistent_state_ != nullptr,
+                      "RuntimeSession: no persistent state was initialized.");
+  return *persistent_state_;
+}
+
+void RuntimeSession::Reset(RuntimeValueMap initial) {
+  persistent_state().Reset(std::move(initial));
+}
+
+RuntimeValueMap RuntimeSession::Run(RuntimeContext &context, const RuntimeValueMap &feeds,
                                     const TaskCompletion *completion) {
+  PersistentValueState &state = persistent_state();
   const Operation operation(state.busy_);
   EXT_ENFORCE_INVALID(!state.closed_, "PersistentValueState: state is closed.");
   EXT_ENFORCE_INVALID(
       completion == nullptr || completion->status() == TaskStatus::kPending,
       "PersistentValueState: invocation was cancelled or completion is not pending.");
-  const auto &nodes = state.model_.graph().node();
-  EXT_ENFORCE_INVALID(plan_.nodes().size() == nodes.size(),
-                      "RuntimeSession: persistent state belongs to a different model.");
-  for (size_t i = 0; i < nodes.size(); ++i)
-    EXT_ENFORCE_INVALID(plan_.nodes()[i] == &nodes[i],
-                        "RuntimeSession: persistent state belongs to a different model.");
   if (state.allocators_captured_)
     EXT_ENFORCE_INVALID(state.execution_allocator_ == context.execution_allocator() &&
                             state.io_allocator_ == context.io_allocator(),

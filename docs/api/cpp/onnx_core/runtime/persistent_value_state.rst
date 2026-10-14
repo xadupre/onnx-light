@@ -1,8 +1,9 @@
 persistent_value_state
 ======================
 
-``PersistentValueState`` owns retained values, not execution. A call to
-``RuntimeSession::Run(state, context, feeds)`` follows four steps:
+``RuntimeSession`` owns its passive ``PersistentValueState`` and reuses it between
+calls. Construct a session with initial retained values, then call
+``RuntimeSession::Run(context, feeds)`` without passing a separate state:
 
 1. Binds retained values to the declared persistent inputs and adds current feeds.
 2. Runs the session, reusing eligible append buffers or allocating new ones.
@@ -52,7 +53,8 @@ Execution and lifecycle
   Only declared persistent outputs bypass normal output materialization.
 * ``If`` and local functions transport selected outputs without payload copies.
   Other operators retain their ordinary computation and transport costs.
-* ``Reset(initial)`` replaces retained values without changing the session.
+* ``RuntimeSession::Reset(initial)`` replaces retained values without rebuilding
+  the session or its cached kernels.
 * ``Close()`` releases retained values and permanently closes the state.
   The session retains its kernels until it is destroyed.
 * Events use ``context.events()`` when ``events_enabled`` is true, including

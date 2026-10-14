@@ -78,17 +78,16 @@ int main() {
                            RuntimeContextOptions{.allocator = &execution,
                                                  .io_allocator = io.get(),
                                                  .events_enabled = true});
-    PersistentValueState state(
-        model, {{"past_key", Filled(heads, 0, 0)}, {"past_value", Filled(heads, 0, 0)}},
-        RuntimeSessionOptions{.persistent_tensor_initial_capacity = 4});
-    RuntimeSession session(model);
+    RuntimeSession session(model,
+                           {{"past_key", Filled(heads, 0, 0)}, {"past_value", Filled(heads, 0, 0)}},
+                           RuntimeSessionOptions{.persistent_tensor_initial_capacity = 4});
     for (int step = 0; step < 20; ++step) {
       context.ClearEvents();
       RuntimeValueMap feeds{{"q", Filled(heads, 1, 0)},
                             {"k", Filled(heads, 1, 0)},
                             {"v", Filled(heads, 1, static_cast<float>(step + 1))}};
       const auto start = std::chrono::steady_clock::now();
-      const auto output = session.Run(state, context, feeds);
+      const auto output = session.Run(context, feeds);
       const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
           std::chrono::steady_clock::now() - start);
       const Tensor &y = output.at("y").tensor;
@@ -98,7 +97,7 @@ int main() {
           return 1;
         }
       }
-      const auto retained = state.Values();
+      const auto retained = session.persistent_state().Values();
       if (retained.at("past_key").tensor.bytes() != output.at("present_key").tensor.bytes() ||
           retained.at("past_value").tensor.bytes() != output.at("present_value").tensor.bytes()) {
         std::cerr << "State forwarding unexpectedly copied a KV payload.\n";

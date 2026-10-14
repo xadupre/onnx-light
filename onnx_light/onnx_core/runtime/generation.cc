@@ -5,7 +5,6 @@
 #include "onnx_core/runtime/generation.h"
 #include "onnx_core/runtime/kernels/float16_promote.h"
 #include "onnx_core/runtime/kernels/run_nodes.h"
-#include "onnx_core/runtime/persistent_value_state.h"
 #include <cmath>
 #include <limits>
 #include <random>
@@ -302,10 +301,9 @@ Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeV
   if (embedded) {
     embedding_session = std::make_unique<RuntimeSession>(*pipeline.embedding, session_options);
   }
-  std::unique_ptr<PersistentValueState> state;
-  RuntimeSession session(model, session_options);
-  if (!model.graph().persistent_bindings().empty()) {
-    RuntimeValueMap initial;
+  const bool persistent = !model.graph().persistent_bindings().empty();
+  RuntimeValueMap initial;
+  if (persistent) {
     for (const auto &binding : model.graph().persistent_bindings()) {
       const std::string &name = binding.input_name();
       EXT_ENFORCE_INVALID(name != options.input_ids_name &&
@@ -317,8 +315,8 @@ Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeV
         initial.emplace(name, value->second);
       current.erase(name);
     }
-    state = std::make_unique<PersistentValueState>(model, std::move(initial), session_options);
   }
+  RuntimeSession session(model, std::move(initial), session_options);
   RuntimeContext *decoder_context = execution_context;
   std::mt19937_64 random(options.seed ? *options.seed : std::random_device{}());
   std::vector<bool> finished(static_cast<size_t>(batch), false);
@@ -327,7 +325,7 @@ Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeV
   std::vector<int64_t> next_mask(static_cast<size_t>(batch));
   int64_t length = prompt_length;
   for (int64_t step = 0; step < options.max_new_tokens; ++step) {
-    const bool decode = state && step > 0;
+    const bool decode = persistent && step > 0;
     const Shape shape{batch, decode ? 1 : length};
     if (has_mask)
       current.insert_or_assign(
@@ -346,14 +344,14 @@ Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeV
       current.insert_or_assign(options.input_ids_name, RuntimeValue(std::move(ids)));
     }
     Tensor logits;
-    if (state) {
+    if (persistent) {
       RuntimeValueMap decoder_feeds;
       for (const auto &input : model.graph().input()) {
         const auto found = current.find(input.name());
         if (found != current.end())
           decoder_feeds.emplace(input.name(), found->second.BorrowView());
       }
-      auto outputs = session.Run(*state, *decoder_context, decoder_feeds);
+      auto outputs = session.Run(*decoder_context, decoder_feeds);
       auto it = outputs.find(options.logits_name);
       EXT_ENFORCE_INVALID(it != outputs.end() && it->second.kind == RuntimeValue::Kind::kTensor,
                           "Generate: logits output must be a tensor.");

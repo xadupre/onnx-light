@@ -65,10 +65,10 @@ class TestPagedCacheProto(unittest.TestCase):
             "key": payload,
             "value": -payload,
         }
-        state = runtime.PersistentValueState(make_model(), {"past": {"blocks": [block]}})
-        state_session = runtime.RuntimeSession(state.model)
+        state_session = runtime.RuntimeSession(make_model(), {"past": {"blocks": [block]}})
+        state = state_session.persistent_state
         context = runtime.RuntimeContext(runtime.KernelContext(runtime.default_opset(18)))
-        output = state_session.run(state, context, {})["present"]
+        output = state_session.run(context, {})["present"]
         self.assertIsInstance(output, onnx.PagedCacheProto)
         numpy.testing.assert_array_equal(onh.to_array(output.blocks[0].key), payload)
         for invalid_block in (
@@ -81,19 +81,19 @@ class TestPagedCacheProto(unittest.TestCase):
                 state.reset({"past": {"blocks": [invalid_block]}})
         self.assertEqual(state.values["past"].blocks[0].length, 1)
         state.reset({"past": {"blocks": []}})
-        self.assertEqual(len(state_session.run(state, context, {})["present"].blocks), 0)
+        self.assertEqual(len(state_session.run(context, {})["present"].blocks), 0)
         state.close()
 
     def test_closed_state_rejects_model_aware_conversion(self):
-        state = runtime.PersistentValueState(make_model(), {})
-        state_session = runtime.RuntimeSession(state.model)
+        state_session = runtime.RuntimeSession(make_model(), {})
+        state = state_session.persistent_state
         state.close()
         gc.collect()
         context = runtime.RuntimeContext(runtime.KernelContext(runtime.default_opset(18)))
         with self.assertRaisesRegex(ValueError, "state is closed"):
             state.reset({"past": make_cache()})
         with self.assertRaisesRegex(ValueError, "state is closed"):
-            state_session.run(state, context, {"cache": make_cache()})
+            state_session.run(context, {"cache": make_cache()})
         with self.assertRaisesRegex(ValueError, "state is closed"):
             _ = state.values
 
@@ -114,10 +114,10 @@ class TestPagedCacheProto(unittest.TestCase):
         model = onnx.ModelProto()
         model.ParseFromString(make_model().SerializeToString())
         verify.verify_model(model)
-        state = runtime.PersistentValueState(model, {})
-        state_session = runtime.RuntimeSession(state.model)
+        state_session = runtime.RuntimeSession(model, {})
+        state = state_session.persistent_state
         context = runtime.RuntimeContext(runtime.KernelContext(runtime.default_opset(18)))
-        outputs = state_session.run(state, context, {})
+        outputs = state_session.run(context, {})
         cache = outputs["present"]
         self.assertIsInstance(cache, onnx.PagedCacheProto)
         self.assertEqual(len(cache.blocks), 1)
@@ -157,21 +157,16 @@ class TestPagedCacheProto(unittest.TestCase):
         binding.input_name = "counter"
         binding.output_name = "next_counter"
         verify.verify_model(model)
-        state = runtime.PersistentValueState(
+        state_session = runtime.RuntimeSession(
             model, {"counter": numpy.ones(1, dtype=numpy.float32)}
         )
-        state_session = runtime.RuntimeSession(state.model)
+        state = state_session.persistent_state
         context = runtime.RuntimeContext(runtime.KernelContext(runtime.default_opset(18)))
-        self.assertEqual(len(state_session.run(state, context, {})["present"].blocks), 1)
+        self.assertEqual(len(state_session.run(context, {})["present"].blocks), 1)
         self.assertEqual(
-            len(
-                state_session.run(state, context, {"past": onnx.PagedCacheProto()})[
-                    "present"
-                ].blocks
-            ),
-            0,
+            len(state_session.run(context, {"past": onnx.PagedCacheProto()})["present"].blocks), 0
         )
-        self.assertEqual(len(state_session.run(state, context, {})["present"].blocks), 1)
+        self.assertEqual(len(state_session.run(context, {})["present"].blocks), 1)
         state.close()
 
     def test_text_export_rejects_cache_instead_of_dropping_it(self):

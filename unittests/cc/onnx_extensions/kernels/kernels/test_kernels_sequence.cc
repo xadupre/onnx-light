@@ -65,16 +65,15 @@ TEST(KernelClass, PersistentTensorSequenceUsesStandardSequenceStore) {
 
   RuntimeValue initial(
       std::vector<RuntimeValue>{RuntimeValue(Tensor::FromFloat("", {1}, {1.0f})).Retain()});
-  PersistentValueState state(model, {{"past", std::move(initial)}});
-  RuntimeSession state_session(state.model());
+  RuntimeSession state_session(model, {{"past", std::move(initial)}});
   RuntimeContext context;
   auto first = state_session.Run(
-      state, context, {{"item", RuntimeValue(Tensor::FromFloat("", {1}, {2.0f})).Retain()}});
+      context, {{"item", RuntimeValue(Tensor::FromFloat("", {1}, {2.0f})).Retain()}});
   ASSERT_EQ(first.at("present").elements.size(), 2u);
   EXPECT_FLOAT_EQ(first.at("present").elements[0].tensor.AsFloat()[0], 1.0f);
   EXPECT_FLOAT_EQ(first.at("present").elements[1].tensor.AsFloat()[0], 2.0f);
   auto second = state_session.Run(
-      state, context, {{"item", RuntimeValue(Tensor::FromFloat("", {1}, {3.0f})).Retain()}});
+      context, {{"item", RuntimeValue(Tensor::FromFloat("", {1}, {3.0f})).Retain()}});
   ASSERT_EQ(second.at("present").elements.size(), 3u);
   EXPECT_FLOAT_EQ(second.at("present").elements[2].tensor.AsFloat()[0], 3.0f);
 }

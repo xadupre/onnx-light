@@ -199,21 +199,20 @@ The Python binding is available from the native runtime module:
         runtime.KernelContext(runtime.default_opset(18))
     )
     initial = numpy.zeros(2, dtype=numpy.float32)
-    state = runtime.PersistentValueState(model, initial={"past": initial})
-    session = runtime.RuntimeSession(model)
+    session = runtime.RuntimeSession(model, initial={"past": initial})
     delta = numpy.ones(2, dtype=numpy.float32)
-    first = session.run(state, context, {"delta": delta})
-    second = session.run(state, context, {"delta": delta})
+    first = session.run(context, {"delta": delta})
+    second = session.run(context, {"delta": delta})
     numpy.testing.assert_array_equal(
         numpy.from_dlpack(second["present"]),
         [2, 2],
     )
-    state.reset({"past": initial})
-    state.close()
+    session.reset({"past": initial})
+    retained = session.persistent_state.values
 
 The mapping is **whole input destination to whole output source**. An input
 is entirely persistent or entirely supplied by current feeds, never partly
-both. Binding names and initial/current-feed/``state.values`` dictionary keys
+both. Binding names and initial/current-feed/``session.persistent_state.values`` dictionary keys
 are exact, literal graph names, with no path syntax or escaping.
 ``"request.cache"`` names the graph input literally named ``request.cache``;
 it cannot select a field of ``request``. Unknown names are rejected.
@@ -230,8 +229,9 @@ They remain valid after callers drop their input references, after another
 run, or after reset/close. Unsupported ownerless output storage is rejected
 rather than silently copied for a selected output; an allocator cannot recycle a live retained
 allocation.
-The binding keeps the model alive. ``PersistentValueState`` only owns retained
-values; the caller-owned ``RuntimeSession`` owns execution and cached kernels.
+The binding keeps the model alive. ``RuntimeSession`` owns both its passive
+``PersistentValueState`` and execution kernels. The state is initialized with
+the session and reused automatically across calls; it is not passed to ``run``.
 Each call uses the supplied context directly, preserving its allocators, custom
 kernels and existing event log without creating a child context. Bound graph
 inputs and exported outputs are removed from the context at the end of the
@@ -263,17 +263,16 @@ The corresponding C++ entry points are:
     auto *binding = model.mutable_graph()->add_persistent_bindings();
     binding->set_input_name("past");
     binding->set_output_name("present");
-    PersistentValueState state(
+    RuntimeSession session(
         model,
         {{"past", RuntimeValue(Tensor::FromFloat("past", {2}, {0.f, 0.f}))}});
     RuntimeContext context(KernelContext(18));
-    RuntimeSession session(model);
     auto outputs = session.Run(
-        state, context,
+        context,
         {{"delta", RuntimeValue(Tensor::FromFloat("delta", {2}, {1.f, 1.f}))}});
-    state.Reset(
+    session.Reset(
         {{"past", RuntimeValue(Tensor::FromFloat("past", {2}, {0.f, 0.f}))}});
-    state.Close();
+    auto retained = session.persistent_state().Values();
 
 The C++ constructor and ``Reset`` accept initial maps by value. Build an owned
 ``RuntimeValueMap`` and pass ``std::move(initial)`` for zero-copy transfer.
@@ -318,7 +317,7 @@ Cancellation uses the existing task-completion primitive:
 
     completion = runtime.TaskCompletion()
     completion.cancel("request no longer needed")
-    # session.run(state, context, feeds, completion) rejects the cancelled call.
+    # session.run(context, feeds, completion) rejects the cancelled call.
 
 A completion is single-use. A pending completion can also be cancelled from
 another thread while a call runs. Already executing kernels finish normally,
@@ -351,9 +350,8 @@ structured ``cache`` and ``next_cache`` values and a separate ``tokens`` input:
     binding = model.graph.persistent_bindings.add()
     binding.input_name = "cache"
     binding.output_name = "next_cache"
-    state = runtime.PersistentValueState(model, {"cache": initial_cache})
-    session = runtime.RuntimeSession(model)
-    output = session.run(state, context, {"tokens": tokens})
+    session = runtime.RuntimeSession(model, {"cache": initial_cache})
+    output = session.run(context, {"tokens": tokens})
 
 Custom kernels use ``context.get_value(name)`` and
 ``context.put_value(name, value)`` to exchange structured values; ordinary
@@ -482,19 +480,19 @@ execution, not ordinary stateless ``RuntimeSession`` calls.
 Python exposes the same option as a keyword-only constructor argument and a
 read/write property on ``runtime.RuntimeSessionOptions``. It accepts a
 nonnegative integer representable as C++ ``size_t``. Pass the options to
-``PersistentValueState`` when constructing the state:
+``RuntimeSession`` together with the initial retained values:
 
 .. code-block:: python
 
     options = runtime.RuntimeSessionOptions(persistent_tensor_initial_capacity=64)
-    state = runtime.PersistentValueState(model, initial, options=options)
+    session = runtime.RuntimeSession(model, initial, options=options)
 
     # Disables reservations for a separate state, without changing the first state.
     options.persistent_tensor_initial_capacity = 0
-    ordinary_state = runtime.PersistentValueState(model, initial, options=options)
+    ordinary_session = runtime.RuntimeSession(model, initial, options=options)
 
 Options are copied at construction; changing the bundle later does not change
-an existing state.
+an existing session or its state.
 
 Reuse is deliberately conservative:
 

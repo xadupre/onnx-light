@@ -1996,25 +1996,43 @@ void AddOnnxPyRuntime(nb::module_ &m) {
            "Executes the plan once against ``rt``, resolving, building, and caching "
            "kernel instances on the first call. Safe to call repeatedly on the same session.")
       .def(
+          "__init__",
+          [](RuntimeSession *self, const ModelProto &model, nb::dict initial,
+             RuntimeSessionOptions options) {
+            new (self)
+                RuntimeSession(model, FeedbackValuesFromPython(initial, &model), options,
+                               RetainFeedbackOwner(nb::cast(&model, nb::rv_policy::reference)));
+          },
+          nb::arg("model"), nb::arg("initial"), nb::arg("options") = RuntimeSessionOptions{},
+          nb::keep_alive<1, 2>(),
+          "Builds a session owning persistent values initialized from whole graph inputs.")
+      .def_prop_ro("persistent_state", nb::overload_cast<>(&RuntimeSession::persistent_state),
+                   nb::rv_policy::reference_internal, "Returns the session-owned persistent state.")
+      .def(
+          "reset",
+          [](RuntimeSession &self, nb::dict initial) {
+            self.Reset(FeedbackValuesFromPython(initial, &self.persistent_state().model()));
+          },
+          nb::arg("initial"),
+          "Replaces persistent values to start a new sequence while retaining cached kernels.")
+      .def(
           "_retain_context", [](RuntimeSession &, RuntimeContext &) {}, nb::keep_alive<1, 2>())
       .def(
           "run",
-          [](RuntimeSession &self, PersistentValueState &state, RuntimeContext &context,
-             nb::dict feeds, const core::runtime::TaskCompletion *completion) {
+          [](RuntimeSession &self, RuntimeContext &context, nb::dict feeds,
+             const core::runtime::TaskCompletion *completion) {
+            const auto &state = self.persistent_state();
             RuntimeValueMap inputs = FeedbackValuesFromPython(feeds, &state.model());
             nb::cast(&self, nb::rv_policy::reference)
-                .attr("_retain_context")(nb::cast(&context, nb::rv_policy::reference));
-            nb::cast(&state, nb::rv_policy::reference)
                 .attr("_retain_context")(nb::cast(&context, nb::rv_policy::reference));
             RuntimeValueMap outputs;
             {
               nb::gil_scoped_release release;
-              outputs = self.Run(state, context, inputs, completion);
+              outputs = self.Run(context, inputs, completion);
             }
             return FeedbackValuesToPython(std::move(outputs), state.struct_type_catalogue());
           },
-          nb::arg("state"), nb::arg("context"), nb::arg("feeds"),
-          nb::arg("completion").none() = nb::none(),
+          nb::arg("context"), nb::arg("feeds"), nb::arg("completion").none() = nb::none(),
           "Runs in context and commits persistent feedback only after successful validation.")
       .def_prop_ro("parameters", &RuntimeSession::parameters,
                    "Model-independent execution parameters applied to the nodes this "
@@ -2170,10 +2188,6 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "Dictionary keys are literal graph input names, never field paths. "
           "The model must remain immutable. Inputs and retained/returned buffers can alias; "
           "callers must not mutate them while shared or retained.")
-      .def(
-          "_retain_context", [](PersistentValueState &, RuntimeContext &) {},
-          nb::keep_alive<1, 2>(),
-          "Retains a context before native kernel initialization, including failing calls.")
       .def(
           "reset",
           [](PersistentValueState &self, nb::dict initial) {

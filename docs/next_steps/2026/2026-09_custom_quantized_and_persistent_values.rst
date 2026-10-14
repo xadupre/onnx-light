@@ -682,14 +682,13 @@ not during state construction or execution.
         past_key <- present_key
         past_value <- present_value
 
-    state = make_state(
+    session = RuntimeSession(
         model,
         initial={"past_key": empty_key, "past_value": empty_value}
     )
 
-    session = RuntimeSession(model)
-    out = session.run(state, context, {"tokens": first_tokens})
-    out = session.run(state, context, {"tokens": next_tokens})
+    out = session.run(context, {"tokens": first_tokens})
+    out = session.run(context, {"tokens": next_tokens})
 
 This helper is equivalent to the ordinary stateless loop:
 
@@ -706,7 +705,7 @@ These examples are conceptual API sketches. Assignment retains or moves
 buffer owners rather than copying payloads. The retained values
 constitute the request-local state; ``PersistentBindingProto`` declares
 only the graph relationship, not a second value/type system or hidden
-kernel state. ``make_state`` resolves the model's bindings and types once,
+kernel state. The session resolves the model's bindings and types once,
 after graph rewrites. Initial contents must still be supplied.
 
 .. important::
@@ -741,13 +740,12 @@ to separate graph inputs. These are ordinary structs described by ``StructTypePr
     model.graph.persistent_bindings:
         cache <- next_cache
 
-    state = make_state(
+    session = RuntimeSession(
         model,
         initial={"cache": initial_cache}
     )
-    session = RuntimeSession(model)
-    out = session.run(state, context, {"tokens": first_tokens})
-    out = session.run(state, context, {"tokens": next_tokens})
+    out = session.run(context, {"tokens": first_tokens})
+    out = session.run(context, {"tokens": next_tokens})
 
 The whole ``cache`` input persists: tokens are supplied anew and logits are
 separate outputs, not retained. The graph binding selects a whole value,

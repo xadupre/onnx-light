@@ -99,7 +99,7 @@ preserving the dictionary schema of other event actions:
        runtime.KernelContext(runtime.default_opset(23)), events_enabled=True
    )
    # Runs the session with its persistent state and ordinary non-retained feeds.
-   outputs = session.run(state, context, feeds)
+   outputs = session.run(context, feeds)
    copied = sum(
        event.storage_prefix_copied_bytes
        for event in context.events()

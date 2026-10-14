@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/runtime/runtime_session.h"
+#include "onnx_core/runtime/persistent_value_state.h"
 #include "onnx_core/runtime/quantization.h"
 
 #include <chrono>
@@ -134,6 +135,8 @@ OpsetImports ParseOpsetImports(const utils::RepeatedProtoField<OperatorSetIdProt
 }
 
 } // namespace
+
+RuntimeSession::~RuntimeSession() = default;
 
 RuntimeSession::RuntimeSession(const ModelProto &model, int verbose)
     : RuntimeSession(model, RuntimeSessionOptions{

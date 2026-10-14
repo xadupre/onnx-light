@@ -6,6 +6,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <string>
 
 #ifdef _WIN32
@@ -41,6 +42,111 @@ TEST(CHECKER, ValidDataLocationTest) {
   EXPECT_THROW(ONNX_LIGHT_NAMESPACE::checker::resolve_external_data_location(
                    "localfolder", "sub/example", "tensor_name"),
                ONNX_LIGHT_NAMESPACE::checker::ValidationError);
+#endif
+}
+
+TEST(CHECKER, ExternalTensorDataBounds) {
+#ifndef ONNX_NO_EXCEPTIONS
+  const fs::path dir = fs::temp_directory_path() / "onnx_light_external_bounds_checker_test";
+  fs::create_directories(dir);
+  {
+    std::ofstream out(dir / "weights.bin", std::ios::binary);
+    out << "0123456789";
+  }
+  checker::CheckerContext ctx;
+  ctx.set_model_dir(ONNX_LIGHT_NAMESPACE::path_to_utf8(dir));
+  TensorProto tensor;
+  tensor.set_name("weights");
+  tensor.set_data_type(TensorProto::FLOAT);
+  tensor.add_dims(2);
+  tensor.set_data_location(TensorProto::EXTERNAL);
+  auto *location = tensor.add_external_data();
+  location->set_key("location");
+  location->set_value("weights.bin");
+  auto *offset = tensor.add_external_data();
+  offset->set_key("offset");
+  offset->set_value("2");
+  auto *length = tensor.add_external_data();
+  length->set_key("length");
+  length->set_value("8");
+  EXPECT_NO_THROW(checker::check_tensor(tensor, ctx));
+  length->set_value("9");
+  EXPECT_THROW(checker::check_tensor(tensor, ctx), checker::ValidationError);
+  length->set_value("7");
+  EXPECT_THROW(checker::check_tensor(tensor, ctx), checker::ValidationError);
+  length->set_value("8");
+  offset->set_value("3");
+  EXPECT_THROW(checker::check_tensor(tensor, ctx), checker::ValidationError);
+  offset->set_value("11");
+  EXPECT_THROW(checker::check_tensor(tensor, ctx), checker::ValidationError);
+  offset->set_value("2");
+
+  for (const auto &invalid : {"", "-1", "+2", " 2", "abc", "18446744073709551616"}) {
+    offset->set_value(invalid);
+    EXPECT_THROW(checker::check_tensor(tensor, ctx), checker::ValidationError) << invalid;
+    offset->set_value("2");
+    length->set_value(invalid);
+    EXPECT_THROW(checker::check_tensor(tensor, ctx), checker::ValidationError) << invalid;
+    length->set_value("8");
+  }
+  length->set_value("1");
+  auto *last_length = tensor.add_external_data();
+  last_length->set_key("length");
+  last_length->set_value("8");
+  EXPECT_NO_THROW(checker::check_tensor(tensor, ctx));
+  auto *last_offset = tensor.add_external_data();
+  last_offset->set_key("offset");
+  last_offset->set_value("2");
+  offset->set_value("invalid");
+  EXPECT_NO_THROW(checker::check_tensor(tensor, ctx));
+  offset->set_value("2");
+  last_length->set_value("7");
+  EXPECT_THROW(checker::check_tensor(tensor, ctx), checker::ValidationError);
+  last_length->set_value("8");
+
+  last_length->set_value("8");
+  tensor.set_data_type(TensorProto::INT4);
+  tensor.ref_dims().clear();
+  tensor.add_dims(16);
+  EXPECT_NO_THROW(checker::check_tensor(tensor, ctx));
+  tensor.ref_dims().clear();
+  tensor.add_dims(17);
+  EXPECT_THROW(checker::check_tensor(tensor, ctx), checker::ValidationError);
+  tensor.set_data_type(TensorProto::FLOAT);
+  tensor.ref_dims().clear();
+  tensor.add_dims(2);
+  TensorProto whole_file = tensor;
+  whole_file.ref_external_data().clear();
+  auto *whole_location = whole_file.add_external_data();
+  whole_location->set_key("location");
+  whole_location->set_value("weights.bin");
+  EXPECT_NO_THROW(checker::check_tensor(whole_file, ctx));
+  auto *end_offset = whole_file.add_external_data();
+  end_offset->set_key("offset");
+  end_offset->set_value("2");
+  EXPECT_NO_THROW(checker::check_tensor(whole_file, ctx));
+  end_offset->set_value("3");
+  EXPECT_THROW(checker::check_tensor(whole_file, ctx), checker::ValidationError);
+  end_offset->clear_value();
+  EXPECT_THROW(checker::check_tensor(whole_file, ctx), checker::ValidationError);
+  end_offset->set_value("2");
+  whole_location->set_value("#in-memory");
+  EXPECT_NO_THROW(checker::check_tensor(whole_file, ctx));
+  whole_location->set_value("weights.bin");
+  whole_file.set_data_type(TensorProto::INT2);
+  whole_file.ref_dims().clear();
+  whole_file.add_dims(std::numeric_limits<int64_t>::max());
+  EXPECT_THROW(checker::check_tensor(whole_file, ctx), checker::ValidationError);
+  tensor.add_dims(-1);
+  EXPECT_THROW(checker::check_tensor(tensor, ctx), checker::ValidationError);
+  TensorProto raw;
+  raw.set_name("raw");
+  raw.set_data_type(TensorProto::FLOAT);
+  raw.add_dims(2);
+  raw.set_raw_data("1234567");
+  EXPECT_THROW(checker::check_tensor(raw, ctx), checker::ValidationError);
+  fs::remove(dir / "weights.bin");
+  fs::remove(dir);
 #endif
 }
 

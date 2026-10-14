@@ -146,9 +146,9 @@ public:
    * Enables or disables validation of external tensor data locations.
    *
    * When enabled, the checker no longer resolves or validates the "location"
-   * entry of externally stored tensors, bypassing errors such as an empty or
-   * unsafe location. This is not recommended and must never be the default:
-   * it disables safety checks that guard against unsafe external data paths.
+   * entry of externally stored tensors or checks the size of its backing file.
+   * This is not recommended and must never be the default: it disables safety
+   * checks that guard against unsafe external data paths and truncated data.
    */
   void set_skip_external_data_location_check(bool value) {
     skip_external_data_location_check_ = value;

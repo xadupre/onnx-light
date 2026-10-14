@@ -964,6 +964,10 @@ public:
   ///   A new :cpp:class:`RuntimeContext` initialised for function execution.
   RuntimeContext MakeFunctionContext() const;
 
+  /// Creates an independent invocation with fresh allocators while sharing
+  /// thread-safe events and kernel usage diagnostics with this context.
+  RuntimeContext MakeIsolatedContext() const;
+
   /// Resets the per-invocation state so the context can be reused for a
   /// fresh run: clears all value stores and the shared event
   /// log, and resets :cpp:func:`current_node_index` to ``-1``. The kernel

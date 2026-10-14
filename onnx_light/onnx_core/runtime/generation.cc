@@ -114,14 +114,33 @@ void RunComponent(const GenerationComponent &component, const std::string &token
     const auto value = values.find(mapping->second);
     EXT_ENFORCE_INVALID(value != values.end(), "Generate: missing component feed '",
                         mapping->second, "'.");
-    invocation.PutValue(name, value->second.BorrowView(), RuntimeEventKind::kInput);
+    if (input.type().has_sequence_type() && value->second.kind == RuntimeValue::Kind::kSequence) {
+      Tensors tensors;
+      for (const auto &element : value->second.elements) {
+        EXT_ENFORCE_INVALID(element.kind == RuntimeValue::Kind::kTensor,
+                            "Generate: component sequences must contain tensors.");
+        tensors.push_back(element.tensor.BorrowView());
+      }
+      invocation.PutSequence(
+          name, Sequence(name, input.type().sequence_type().elem_type().tensor_type().elem_type(),
+                         std::move(tensors)));
+    } else {
+      invocation.PutValue(name, value->second.BorrowView(), RuntimeEventKind::kInput);
+    }
   }
   session.Run(invocation);
   for (const auto &[output, destination] : component.outputs) {
-    EXT_ENFORCE_INVALID(invocation.Has(output), "Generate: missing component output '", output,
-                        "'.");
-    values.insert_or_assign(destination,
-                            RuntimeValue(std::move(invocation.Get(output)).RetainStorage()));
+    if (invocation.Has(output)) {
+      values.insert_or_assign(destination,
+                              RuntimeValue(std::move(invocation.Get(output)).RetainStorage()));
+    } else if (invocation.HasSequence(output)) {
+      std::vector<RuntimeValue> elements;
+      for (auto &tensor : invocation.GetSequence(output).values)
+        elements.emplace_back(tensor.ToOwned());
+      values.insert_or_assign(destination, RuntimeValue(std::move(elements)));
+    } else {
+      EXT_THROW_INVALID("Generate: missing component output '", output, "'.");
+    }
   }
 }
 
@@ -135,10 +154,13 @@ void ValidateComponent(const GenerationComponent &component, const std::string &
                         "Generate: invalid component input mapping.");
   }
   for (const auto &[output, destination] : component.outputs) {
-    EXT_ENFORCE_INVALID(!destination.empty() &&
-                            std::any_of(component.model->graph().output().begin(),
-                                        component.model->graph().output().end(),
-                                        [&](const auto &item) { return item.name() == output; }),
+    const auto &outputs = component.model->graph().output();
+    const auto found = std::find_if(outputs.begin(), outputs.end(),
+                                    [&](const auto &item) { return item.name() == output; });
+    EXT_ENFORCE_INVALID(!destination.empty() && found != outputs.end() &&
+                            (found->type().has_tensor_type() ||
+                             (found->type().has_sequence_type() &&
+                              found->type().sequence_type().elem_type().has_tensor_type())),
                         "Generate: invalid component output mapping.");
   }
   EXT_ENFORCE_INVALID(!component.outputs.empty(), "Generate: component outputs must be mapped.");
@@ -277,14 +299,7 @@ Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeV
     if (session_options.cpu_execution_counters)
       pipeline_executor->EnableCounters();
     session_options.cpu_execution.reset();
-    local_context = std::make_unique<RuntimeContext>(
-        context.kernel_ctx(),
-        RuntimeContextOptions{.events_enabled = context.events_enabled(),
-                              .verbose = context.verbose(),
-                              .release_intermediates = context.release_intermediates(),
-                              .device = context.device()});
-    local_context->functions() = context.functions();
-    local_context->custom_kernels() = context.custom_kernels();
+    local_context = std::make_unique<RuntimeContext>(context.MakeIsolatedContext());
     local_context->set_cpu_executor(pipeline_executor.get());
     execution_context = local_context.get();
   }

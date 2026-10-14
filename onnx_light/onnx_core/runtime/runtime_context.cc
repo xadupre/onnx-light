@@ -710,4 +710,21 @@ RuntimeContext RuntimeContext::MakeFunctionContext() const {
   return child;
 }
 
+RuntimeContext RuntimeContext::MakeIsolatedContext() const {
+  RuntimeContext child(kernel_ctx_,
+                       RuntimeContextOptions{
+                           .events_enabled = events_enabled_,
+                           .verbose = verbose_,
+                           .release_intermediates = release_intermediates_,
+                           .device = device_,
+                       },
+                       kernel_usage_, events_);
+  child.functions() = functions_;
+  child.custom_kernels() = custom_kernels_;
+  child.set_model_owner(model_owner_);
+  child.set_struct_type_catalogue(struct_type_catalogue_);
+  child.set_quantization_parameters(quantization_parameters_);
+  return child;
+}
+
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

@@ -37,18 +37,24 @@ class TestGeneration(unittest.TestCase):
         embedding_model.graph.initializer.append(transition_model().graph.initializer[0])
         decoder_model = parser.parse_model(
             '<ir_version: 10, opset_import: ["" : 23]>'
-            "decoder (float[B, S, 3] inputs_embeds, float[1, 1, 3] vision)"
+            "decoder (float[B, S, 3] inputs_embeds, seq(float[1, 1, 3]) vision)"
             " => (float[B, S, 3] logits)"
-            "{ logits = Add(inputs_embeds, vision) }"
+            "<int64 index = {0}>"
+            "{ bias = SequenceAt(vision, index) logits = Add(inputs_embeds, bias) }"
         )
         vision_model = parser.parse_model(
             '<ir_version: 10, opset_import: ["" : 23]>'
-            "vision (float[1, 1, 3] pixels) => (float[1, 1, 3] features)"
-            "{ features = Abs(pixels) }"
+            "vision (float[1, 1, 3] pixels) => (seq(float[1, 1, 3]) features)"
+            "{ image = Abs(pixels) features = SequenceConstruct(image) }"
         )
-        policy = {"num_threads": 2, "affinity_policy": "none", "spin_policy": "park_immediately"}
+        policy = {
+            "num_threads": 2,
+            "affinity_policy": "none",
+            "spin_policy": "park_immediately",
+            "allow_nested_parallelism": True,
+        }
         decoder = ReferenceEvaluator(
-            decoder_model, cpu_execution=policy, cpu_execution_counters=True
+            decoder_model, cpu_execution=policy, cpu_execution_counters=True, events_enabled=True
         )
         embedding = ReferenceEvaluator(embedding_model, cpu_execution=policy)
         vision = ReferenceEvaluator(vision_model, cpu_execution=policy)
@@ -81,6 +87,7 @@ class TestGeneration(unittest.TestCase):
         self.assertGreaterEqual(
             decoder.cpu_execution_counters.dispatches - before, 4 * (3 * 2 + 1)
         )
+        self.assertTrue({"Gather", "Abs", "Add"} <= {event.op_type for event in decoder.events()})
         numpy.testing.assert_array_equal(feeds["input_ids"], [[0, 1]])
         with self.assertRaisesRegex(ValueError, "compatible CPU"):
             decoder.generate(

@@ -730,14 +730,14 @@ class ReferenceEvaluator:
     # -- evaluation ---------------------------------------------------------
 
     def events(self) -> list[Any]:
-        """Returns the event log from the most recent :meth:`run` call.
+        """Returns the event log from :meth:`run` or :meth:`generate` calls.
 
         Each entry is a ``RuntimeEvent`` object with an :meth:`as_dict` method
         that returns a dictionary with the keys ``"action"``, ``"kind"``,
         ``"name"``, ``"data_type"``, ``"shape"``, ``"value_count"``,
         ``"values"`` and ``"string_values"``.
 
-        Returns an empty list if :meth:`run` has not been called yet.
+        Returns an empty list if no execution has been recorded yet.
         """
         if self._last_ctx is None:
             return []

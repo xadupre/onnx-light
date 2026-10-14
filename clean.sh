@@ -1,21 +1,24 @@
-rm dump_test* -rf
-rm eval*.onnx
-rm plot*.onnx
-rm plot*.png
-rm temp*.onnx
-rm test*.data
-rm test*.onnx
-rm dummy*.onnx
-rm onnx*.md
-rm onnx_light/onnx_py/*.so
+#!/usr/bin/env bash
+
+rm -rf dump_test*
+rm -f eval*.onnx
+rm -f plot*.onnx
+rm -f plot*.png
+rm -f temp*.onnx
+rm -f test*.data
+rm -f test*.onnx
+rm -f dummy*.onnx
+rm -f onnx*.md
+rm -f onnx_light/onnx_py/*.so
 find . -type d -name "__pycache__" -exec rm -rf {} +
 
 if [ "$1" == "--all" ]; then
-    find . -type d -name "__pycache__" -exec rm -rf {} 
     rm -rf dist/
     rm -rf lib/
     rm -rf include/
     rm -rf build/
+    rm -rf build-*/ build_*/ build2/ build_tests/ _skbuild/
+    rm -rf htmlcov/ cover/ .coverage .coverage.*
     rm -rf .ruff_cache/
     rm -rf .pytest_cache/
     rm -rf docs/_build/ -rf

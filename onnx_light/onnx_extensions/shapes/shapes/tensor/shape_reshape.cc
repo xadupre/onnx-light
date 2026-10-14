@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_extensions/shapes/shapes/tensor/shape_tensor.h"
+#include <cstdio>
 
 #include <cstdint>
 #include <optional>
@@ -75,6 +76,10 @@ std::optional<SymDim> InferNegOneFromFactors(const SymShape &data_shape, const S
   const std::string expr =
       "(" + BuildProductExpr(input_factors) + ")/:(" + BuildProductExpr(output_factors) + ")";
   expressions::SimplifyResult result = expressions::simplify_expression(expr);
+  if (expr.find("past_sequence_length") != std::string::npos)
+    std::fprintf(stderr, "RESHAPE %s => %s\n", expr.c_str(),
+                 std::holds_alternative<std::string>(result) ? std::get<std::string>(result).c_str()
+                                                              : "integer");
   if (std::holds_alternative<int64_t>(result)) {
     return SymDim(std::get<int64_t>(result));
   }
@@ -224,6 +229,8 @@ void ComputeShapeReshape(ShapesContext &ctx, const NodeProto &node) {
   }
 
   ctx.Set(node.output(0), std::move(out_tensor));
+  if (node.output(0) == "_onx_add_unsqueeze_12::RSh-1")
+    std::fprintf(stderr, "RESHAPE SET %s\n", ctx.Get(node.output(0)).Shape()[0].AsExpr().c_str());
 }
 
 } // namespace shapes::tensor

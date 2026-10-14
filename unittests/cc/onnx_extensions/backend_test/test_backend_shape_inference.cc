@@ -2579,6 +2579,25 @@ TEST(BackendTestCaseShapeInference, BigModelsOptimShapeInference) {
   EXPECT_TRUE(found) << "no big-model backend cases were collected";
 }
 
+TEST(BackendTestCaseShapeInference, Qwen3FusedCasesInferWithOnnxSchemas) {
+  std::vector<TestCase> cases = CollectTestCases("", /*include_big=*/true);
+  size_t checked = 0;
+  for (TestCase &tc : cases) {
+    TestCaseUnloadGuard unload_guard(tc);
+    if (tc.name != "test_cc_shape_inference_big_qwen3_4_layers_like_fused" &&
+        tc.name != "test_cc_shape_inference_big_qwen3_4_layers_like_persistent" &&
+        tc.name != "test_cc_shape_inference_big_qwen3_4_layers_like_persistent_paged")
+      continue;
+    SCOPED_TRACE(tc.name);
+    ModelProto model = DeepCopyModel(tc.model(), tc.name);
+    model.mutable_graph()->clear_value_info();
+    ASSERT_NO_THROW(shape_inference::InferShapes(model));
+    ASSERT_TRUE(model.graph().output(0).has_type());
+    ++checked;
+  }
+  EXPECT_EQ(checked, 3u);
+}
+
 TEST(BackendTestCaseShapeInference, BigModelsReleaseInfo) {
   std::vector<TestCase> cases = CollectTestCases("", /*include_big=*/true);
   bool found = false;

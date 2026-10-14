@@ -47,6 +47,7 @@ namespace shapes {
 class ShapesContext;
 } // namespace shapes
 namespace runtime {
+class PersistentValueState;
 
 class ValueStore;
 
@@ -194,6 +195,10 @@ public:
   /// ``inherited_opset_imports`` without copying it.
   RuntimeSession(const FunctionProto &function, const OpsetImports *inherited_opset_imports,
                  RuntimeSessionOptions options = {});
+  /// Builds a session owning graph-declared persistent values initialized from ``initial``.
+  RuntimeSession(const ModelProto &model, RuntimeValueMap initial,
+                 RuntimeSessionOptions options = {});
+  ~RuntimeSession();
 
   // A session caches one owning ``std::unique_ptr<KernelBase>`` per node (see
   // :cpp:member:`kernels_`), so it is move-only. It is always created in place
@@ -235,6 +240,26 @@ public:
    *         the session's.
    */
   void Run(RuntimeContext &rt);
+
+  /**
+   * Runs in the supplied context and commits persistent feedback only on success.
+   *
+   * The session owns its persistent state. Current feeds name
+   * whole graph inputs and cannot override retained inputs. Repeated calls reuse
+   * this session's kernels and the supplied context's allocators directly.
+   * Bound inputs and exported outputs are removed from the context on return,
+   * including on failure; unrelated values and recorded events are preserved.
+   *
+   * An optional pending completion is a single-use cancellation/publication gate.
+   * Cancellation before publication leaves the retained values unchanged.
+   */
+  RuntimeValueMap Run(RuntimeContext &rt, const RuntimeValueMap &feeds,
+                      const TaskCompletion *completion = nullptr);
+  /// Replaces persistent values to start a new sequence, retaining cached kernels.
+  void Reset(RuntimeValueMap initial);
+  /// Returns the session-owned persistent state; rejects stateless sessions.
+  PersistentValueState &persistent_state();
+  const PersistentValueState &persistent_state() const;
 
   /// Model-independent execution parameters (e.g. the requested degree of
   /// parallelism, :cpp:var:`RuntimeParameters::num_threads`) applied to the
@@ -476,6 +501,7 @@ private:
   std::optional<OpsetImports> owned_opset_imports_;
   const OpsetImports *inherited_opset_imports_ = nullptr;
   std::shared_ptr<ValueStore> value_store_;
+  std::unique_ptr<PersistentValueState> persistent_state_;
   std::vector<PreparedKernel> kernels_;
   const GraphProto *initializer_graph_ = nullptr;
   std::optional<StructTypeCatalogue> struct_type_catalogue_;

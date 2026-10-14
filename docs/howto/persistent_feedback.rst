@@ -151,6 +151,18 @@ iteration within the same generation call consumes one new token. Eligible kerne
 reuse persistent buffers; other kernels retain their ordinary allocation behavior.
 Each generation call owns fresh state and leaves the model and caller feeds unchanged.
 
+.. warning::
+
+    A ``RuntimeContext`` is **not thread-safe for concurrent execution**.
+    Calls to ``Generate``, ``RuntimeSession::Run`` or ``RunNode`` using the same
+    context must be serialized by the caller, even with different models or
+    sessions. A ``ReferenceEvaluator`` instance likewise requires serialized
+    ``run`` and ``generate`` calls, including overlapping calls to different
+    methods. Use independent evaluators, sessions and contexts for concurrent
+    requests. Fresh generation state, a shared CPU executor, parallel kernels
+    and release of the Python GIL do not make a context safe to share between
+    concurrent invocations. There is no context-level check for overlapping use.
+
 The model accepts INT64 ``input_ids`` and returns floating-point ``logits``
 of shape ``[batch, sequence, vocabulary]`` or ``[batch, vocabulary]``.
 FLOAT, DOUBLE, FLOAT16 and BFLOAT16 logits are supported. Declared INT64
@@ -164,6 +176,33 @@ session_options)`` returns a runtime tensor. ``runtime.GenerationOptions``
 also allows configuring the token, logits, mask and position input/output names.
 C++ callers use :cpp:func:`onnx_light::core::runtime::Generate` with the same
 options and an existing ``RuntimeContext``.
+
+For split models, ``language_model.generate(feeds, embedding=embedding)``
+runs the embedding model before the language model for both the prompt and
+subsequent tokens. Prefill names the prompt-processing phase; it is not a separate
+graph used only once.
+Graphs connect through their declared input and output names: for example,
+the embedding graph consumes ``input_ids`` and produces the language model's
+``inputs_embeds`` input. No additional name mappings are supplied.
+All graphs execute in one call-local ``RuntimeContext`` configured from the
+language-model evaluator, using its custom kernels and sharing its CPU executor
+and event log. Pipeline stages share call-local allocators, not the evaluator's
+allocators.
+The embedding evaluator supplies its model only; its local registrations and
+CPU execution policy are not used. Register pipeline-wide custom kernels on
+the language-model evaluator. Image/audio encoders can run before generation;
+their features are supplied as ordinary feeds.
+Each stage resolves its own model-local functions; definitions from another stage
+cannot override its custom operators. The caller's function registry is restored
+when generation returns or fails. Embedding inputs backed by tensor, encoded or
+paged-cache initializers may be omitted from feeds. Structured sequence inputs
+retain their runtime representation rather than being converted to dense tensor
+sequences.
+
+C++ callers can alternatively pass ``GenerationPipeline{.prefill = &language_model,
+.embedding = &embedding_model}`` instead of a ``ModelProto`` to ``Generate``.
+The pipeline contains only these model pointers. The single ``RuntimeContext``
+is passed as a separate argument to either overload.
 
 A basic feedback loop
 ---------------------
@@ -188,20 +227,20 @@ The Python binding is available from the native runtime module:
         runtime.KernelContext(runtime.default_opset(18))
     )
     initial = numpy.zeros(2, dtype=numpy.float32)
-    state = runtime.PersistentValueState(model, initial={"past": initial})
+    session = runtime.RuntimeSession(model, initial={"past": initial})
     delta = numpy.ones(2, dtype=numpy.float32)
-    first = state.run(context, {"delta": delta})
-    second = state.run(context, {"delta": delta})
+    first = session.run(context, {"delta": delta})
+    second = session.run(context, {"delta": delta})
     numpy.testing.assert_array_equal(
         numpy.from_dlpack(second["present"]),
         [2, 2],
     )
-    state.reset({"past": initial})
-    state.close()
+    session.reset({"past": initial})
+    retained = session.persistent_state.values
 
 The mapping is **whole input destination to whole output source**. An input
 is entirely persistent or entirely supplied by current feeds, never partly
-both. Binding names and initial/current-feed/``state.values`` dictionary keys
+both. Binding names and initial/current-feed/``session.persistent_state.values`` dictionary keys
 are exact, literal graph names, with no path syntax or escaping.
 ``"request.cache"`` names the graph input literally named ``request.cache``;
 it cannot select a field of ``request``. Unknown names are rejected.
@@ -215,14 +254,20 @@ caller before DLPack export; ``detach()`` shares storage.
 
 Selected outputs and ``state.values`` contain tensors with retained storage owners.
 They remain valid after callers drop their input references, after another
-run, or after reset/close. Unsupported ownerless output storage is rejected
+run, or after reset/session destruction. Unsupported ownerless output storage is rejected
 rather than silently copied for a selected output; an allocator cannot recycle a live retained
 allocation.
-The binding keeps the model alive. The supplied context configures allocators
-and custom kernels; each call executes in a fresh child context, rather than
-leaving old feeds or intermediate values in the caller's context.
-The binding also retains supplied contexts so cached kernel allocator
-references remain valid. Reuse the same context for a state's calls.
+The binding keeps the model alive. ``RuntimeSession`` owns both its passive
+``PersistentValueState`` and execution kernels. The state is initialized with
+the session and reused automatically across calls; it is not passed to ``run``.
+Each call uses the supplied context directly, preserving its allocators, custom
+kernels and existing event log without creating a child context. Bound graph
+inputs and exported outputs are removed from the context at the end of the
+call, including on failure; unrelated values are preserved. Intermediate values
+follow the context's ``release_intermediates`` setting.
+The binding also retains supplied contexts so cached kernel allocator references
+remain valid. Reuse the same context for a session's calls. Resetting persistent
+values does not destroy the session or its cached kernels.
 Initializers use model-backed views when their representation is directly
 readable; other numeric representations and strings use normal conversion.
 String tensors cannot be persistent, including nested tensor fields and string
@@ -246,16 +291,16 @@ The corresponding C++ entry points are:
     auto *binding = model.mutable_graph()->add_persistent_bindings();
     binding->set_input_name("past");
     binding->set_output_name("present");
-    PersistentValueState state(
+    RuntimeSession session(
         model,
         {{"past", RuntimeValue(Tensor::FromFloat("past", {2}, {0.f, 0.f}))}});
     RuntimeContext context(KernelContext(18));
-    auto outputs = state.Run(
+    auto outputs = session.Run(
         context,
         {{"delta", RuntimeValue(Tensor::FromFloat("delta", {2}, {1.f, 1.f}))}});
-    state.Reset(
+    session.Reset(
         {{"past", RuntimeValue(Tensor::FromFloat("past", {2}, {0.f, 0.f}))}});
-    state.Close();
+    auto retained = session.persistent_state().Values();
 
 The C++ constructor and ``Reset`` accept initial maps by value. Build an owned
 ``RuntimeValueMap`` and pass ``std::move(initial)`` for zero-copy transfer.
@@ -268,9 +313,8 @@ C++ callers register the operator kernels as usual before executing the model
 (see :doc:`register_builtin_operators`). The model and configured allocators
 must outlive the state/session using them. With the reference-based C++
 constructor, the model must also outlive any returned views of its initializer
-storage. Use the ``shared_ptr<const ModelProto>`` constructor to retain the
-model automatically in such views; the Python binding retains its model
-automatically.
+storage. Native sessions do not own the model. The Python binding retains the
+model for the session and any exported initializer views.
 
 Lifecycle and validation
 ------------------------
@@ -283,8 +327,8 @@ Lifecycle and validation
   retained inputs. Duplicate binding input names or output names are rejected.
 * State advances only after successful execution and validation of the next
   values. A failed or cancelled call must not publish a partial update.
-* Reset explicitly supplies new initial contents. Closing releases retained
-  values. Calls, resets and closes on the same state must not overlap.
+* Reset explicitly supplies new initial contents. Session destruction releases
+  retained values. Calls and resets on the same session must not overlap.
 * Independent states have separate state containers. They can explicitly share
   read-only input storage; neither may mutate a shared buffer.
 
@@ -300,7 +344,7 @@ Cancellation uses the existing task-completion primitive:
 
     completion = runtime.TaskCompletion()
     completion.cancel("request no longer needed")
-    # state.run(context, feeds, completion) now rejects the cancelled call.
+    # session.run(context, feeds, completion) rejects the cancelled call.
 
 A completion is single-use. A pending completion can also be cancelled from
 another thread while a call runs. Already executing kernels finish normally,
@@ -333,8 +377,8 @@ structured ``cache`` and ``next_cache`` values and a separate ``tokens`` input:
     binding = model.graph.persistent_bindings.add()
     binding.input_name = "cache"
     binding.output_name = "next_cache"
-    state = runtime.PersistentValueState(model, {"cache": initial_cache})
-    output = state.run(context, {"tokens": tokens})
+    session = runtime.RuntimeSession(model, {"cache": initial_cache})
+    output = session.run(context, {"tokens": tokens})
 
 Custom kernels use ``context.get_value(name)`` and
 ``context.put_value(name, value)`` to exchange structured values; ordinary
@@ -463,19 +507,19 @@ execution, not ordinary stateless ``RuntimeSession`` calls.
 Python exposes the same option as a keyword-only constructor argument and a
 read/write property on ``runtime.RuntimeSessionOptions``. It accepts a
 nonnegative integer representable as C++ ``size_t``. Pass the options to
-``PersistentValueState`` when constructing the state:
+``RuntimeSession`` together with the initial retained values:
 
 .. code-block:: python
 
     options = runtime.RuntimeSessionOptions(persistent_tensor_initial_capacity=64)
-    state = runtime.PersistentValueState(model, initial, options=options)
+    session = runtime.RuntimeSession(model, initial, options=options)
 
     # Disables reservations for a separate state, without changing the first state.
     options.persistent_tensor_initial_capacity = 0
-    ordinary_state = runtime.PersistentValueState(model, initial, options=options)
+    ordinary_session = runtime.RuntimeSession(model, initial, options=options)
 
 Options are copied at construction; changing the bundle later does not change
-an existing state.
+an existing session or its state.
 
 Reuse is deliberately conservative:
 
@@ -555,7 +599,7 @@ half-precision conversion.
 Sum fields from the event list when totals are needed. Call
 ``context.ClearEvents()`` before a run to obtain per-token reports; otherwise
 events accumulate in that context, including runs of different feedback states.
-Resetting or closing a state does not clear the caller's log.
+Resetting or destroying a session does not clear the caller's log.
 
 ``event.storage_allocated_bytes`` counts requested storage capacity,
 not physical heap allocations: an I/O arena may satisfy a request from its free
@@ -776,6 +820,9 @@ consistent across blocks.
 ``RuntimeValue::FromPagedCache`` restores the recursive runtime value with
 retained storage owners; ``ToPagedCache`` exports it without decoding pages.
 Already retained dense buffers and managed encoded payloads remain shared.
+Ownerless dense or encoded initializer views are copied on export so the cache's
+payloads remain valid after their source model is destroyed. Encoded layouts and
+affine parameter payloads are preserved without decoding the pages.
 Binary protobuf serialization writes their contents; parsing reconstructs
 owned data. Referenced types and shared quantization parameters still belong to
 the containing model, not to the standalone cache. Pass its catalogues to the
@@ -840,8 +887,8 @@ Persistent values also retain the shared parameter catalogue introduced by
 declaration is checked against an encoded value's logical tensor type; a
 structured declaration is checked against its storage type. Retaining or
 validating a compact shared value checks its reference, types and byte extent
-without materializing it. Borrowed views survive reset and close with both
-their payload and their shared parameters.
+without materializing it. Borrowed views survive reset and session destruction
+with both their payload and their shared parameters.
 Native C++ current feeds undergo this reference validation before execution,
 including when an encoded value is only forwarded to a nonpersistent output.
 They must carry their shared parameter catalogue in ``RuntimeValue``.
@@ -849,8 +896,8 @@ They must carry their shared parameter catalogue in ``RuntimeValue``.
 Python construction, ``reset`` and ``run`` resolve ``EncodedValueProto.parameter_ref``
 against the state's model, including encoded values nested in dictionaries.
 Conversions reject missing references and reuse one shared parameter catalogue
-per input dictionary. After ``close``, state operations and the native model
-and type-catalogue accessors reject access; already exported values remain valid.
+per input dictionary. The session owns the state's lifetime; already exported
+values remain valid after session destruction.
 
 This general runtime support does not broaden the native ``PagedAttention``
 decoder: its supported page formats remain the dense and affine formats below.
@@ -938,6 +985,6 @@ accuracy fixtures or the table above.
 Validation rejects malformed ranges, invalid layouts, unsupported consumers
 and capacity violations. A failing or cancelled invocation cannot publish part
 of a block collection. Cancellation remains a publication gate, not preemption.
-Reset/close drop the state's owners; exported views and other requests retain
-their blocks until their last owner is released. The bound model is never
-serialized or cloned by this path.
+Reset and session destruction drop retained values; exported views and other
+requests retain their blocks until their last owner is released. The bound model
+is never serialized or cloned by this path.

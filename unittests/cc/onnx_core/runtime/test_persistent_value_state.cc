@@ -159,6 +159,60 @@ void RegisterStructuredStep(RuntimeContext &context, const uint8_t **expected = 
 
 } // namespace
 
+TEST(PersistentValueState, SessionRejectsPersistentOperationsWithoutInitializedState) {
+  ModelProto model = Model();
+  RuntimeSession session(model);
+  RuntimeContext context;
+  EXPECT_THROW(session.persistent_state(), std::invalid_argument);
+  EXPECT_THROW(session.Reset({{"past", Number(0)}}), std::invalid_argument);
+  EXPECT_THROW(session.Run(context, {}), std::invalid_argument);
+  ModelProto stateless = Model();
+  stateless.mutable_graph()->clear_persistent_bindings();
+  EXPECT_THROW(
+      { RuntimeSession invalid(stateless, RuntimeValueMap{{"past", Number(0)}}); },
+      std::invalid_argument);
+}
+
+TEST(PersistentValueState, SessionUsesSuppliedContextAndClearsPersistentPermissions) {
+  ModelProto model = Model();
+  RuntimeContext context;
+  context.Put("sentinel", Tensor::FromFloat("", {1}, {42}));
+  RuntimeSession session(model, RuntimeValueMap{{"past", Number(2)}});
+  const auto &state = session.persistent_state();
+  bool persistent = true;
+  bool fail = false;
+  context.RegisterCustomKernel(
+      "test.feedback", "Step", [&](const NodeProto &node, RuntimeContext &rt) {
+        EXPECT_EQ(&rt, &context);
+        EXPECT_EQ(rt.retains_output("present"), persistent);
+        if (!persistent) {
+          EXPECT_FALSE(
+              rt.ReservePersistentAppend(rt.Get("past"), {2}, 0, sizeof(float), sizeof(float)));
+        }
+        if (fail)
+          throw std::invalid_argument("failed persistent execution");
+        rt.Put(node.output(0), Tensor::FromFloat("", {1}, {rt.Get("past").AsFloat()[0] + 1}));
+      });
+  EXPECT_EQ(Number(session.Run(context, {{"tokens", Number(0)}}).at("present")), 3);
+  EXPECT_TRUE(context.Has("sentinel"));
+  EXPECT_FALSE(context.Has("past"));
+  EXPECT_FALSE(context.retains_output("present"));
+  fail = true;
+  EXPECT_THROW(session.Run(context, {{"tokens", Number(0)}}), std::invalid_argument);
+  EXPECT_FALSE(context.Has("past"));
+  EXPECT_FALSE(context.retains_output("present"));
+  EXPECT_EQ(Number(state.Values().at("past")), 3);
+  fail = false;
+  session.Reset({{"past", Number(20)}});
+  EXPECT_EQ(Number(session.Run(context, {{"tokens", Number(0)}}).at("present")), 21);
+  persistent = false;
+  context.Put("past", Number(10).tensor);
+  context.Put("tokens", Number(0).tensor);
+  session.Run(context);
+  EXPECT_FLOAT_EQ(context.Get("present").AsFloat()[0], 11);
+  EXPECT_EQ(Number(state.Values().at("past")), 21);
+}
+
 TEST(PersistentValueState, PersistentStorageAccountingDoesNotDependOnAttention) {
   ModelProto model = Model();
   RuntimeContext context(KernelContext(DefaultOpset(18)),
@@ -182,30 +236,31 @@ TEST(PersistentValueState, PersistentStorageAccountingDoesNotDependOnAttention) 
         if (fail)
           throw std::invalid_argument("failure after reporting persistent storage work");
       });
-  PersistentValueState state(model, {{"past", Number(2)}});
-  EXPECT_EQ(Number(state.Run(context, {{"tokens", Number(1)}}).at("present")), 3);
+  RuntimeSession state_session(model, {{"past", Number(2)}});
+  PersistentValueState &state = state_session.persistent_state();
+  EXPECT_EQ(Number(state_session.Run(context, {{"tokens", Number(1)}}).at("present")), 3);
   fail = true;
-  EXPECT_THROW(state.Run(context, {{"tokens", Number(1)}}), std::invalid_argument);
+  EXPECT_THROW(state_session.Run(context, {{"tokens", Number(1)}}), std::invalid_argument);
   EXPECT_EQ(Number(state.Values().at("past")), 3);
   EXPECT_EQ(StorageTotal(context.events(), &RuntimeEvent::storage_allocations), 2u);
   state.Reset({{"past", Number(7)}});
   EXPECT_EQ(StorageTotal(context.events(), &RuntimeEvent::storage_allocations), 2u);
   fail = false;
-  EXPECT_EQ(Number(state.Run(context, {{"tokens", Number(1)}}).at("present")), 8);
+  EXPECT_EQ(Number(state_session.Run(context, {{"tokens", Number(1)}}).at("present")), 8);
   const auto statistics = context.events();
   EXPECT_EQ(StorageTotal(statistics, &RuntimeEvent::storage_allocations), 3u);
   EXPECT_EQ(StorageTotal(statistics, &RuntimeEvent::storage_allocated_bytes), 3 * sizeof(float));
   EXPECT_EQ(StorageTotal(statistics, &RuntimeEvent::storage_prefix_copied_bytes), 0u);
   EXPECT_EQ(StorageTotal(statistics, &RuntimeEvent::storage_append_copied_bytes), 0u);
   EXPECT_EQ(StorageTotal(statistics, &RuntimeEvent::storage_reuse_count), 0u);
-  PersistentValueState other(model, {{"past", Number(0)}});
-  other.Run(context, {{"tokens", Number(1)}});
+  RuntimeSession other_session(model, {{"past", Number(0)}});
+  other_session.Run(context, {{"tokens", Number(1)}});
   EXPECT_EQ(StorageTotal(context.events(), &RuntimeEvent::storage_allocations), 4u);
   context.ClearEvents();
   EXPECT_TRUE(context.events().empty());
   EXPECT_EQ(StorageTotal(context.events(), &RuntimeEvent::storage_allocations), 0u);
   EXPECT_EQ(Number(state.Values().at("past")), 8);
-  other.Run(context, {{"tokens", Number(1)}});
+  other_session.Run(context, {{"tokens", Number(1)}});
   EXPECT_EQ(StorageTotal(context.events(), &RuntimeEvent::storage_allocations), 1u);
 }
 
@@ -243,18 +298,20 @@ TEST(PersistentValueState, GenericProducerComputesDirectlyIntoPersistentTail) {
     RuntimeSessionOptions options;
     options.persistent_tensor_initial_capacity = 4;
     options.check_shapes = true;
-    PersistentValueState state(model, {{"past", RuntimeValue(Tensor::FromFloat("", {0}, {}))}},
-                               options);
+    auto state_session = std::make_unique<RuntimeSession>(
+        model, RuntimeValueMap{{"past", RuntimeValue(Tensor::FromFloat("", {0}, {}))}}, options);
+    PersistentValueState &state = state_session->persistent_state();
     const uint8_t *previous = nullptr;
     for (int64_t step = 1; step <= 5; ++step) {
       if (step == 3) {
         fail = true;
-        EXPECT_THROW(state.Run(context, {{"tokens", Number(9)}}), std::invalid_argument);
+        EXPECT_THROW(state_session->Run(context, {{"tokens", Number(9)}}), std::invalid_argument);
         EXPECT_EQ(state.Values().at("past").tensor.shape, Shape{2});
         EXPECT_FLOAT_EQ(state.Values().at("past").tensor.AsFloat()[1], 4);
         fail = false;
       }
-      const auto output = state.Run(context, {{"tokens", Number(static_cast<float>(step))}});
+      const auto output =
+          state_session->Run(context, {{"tokens", Number(static_cast<float>(step))}});
       const Tensor &present = output.at("present").tensor;
       EXPECT_EQ(present.shape, Shape{step});
       for (int64_t i = 0; i < step; ++i)
@@ -280,7 +337,7 @@ TEST(PersistentValueState, GenericProducerComputesDirectlyIntoPersistentTail) {
     EXPECT_EQ(context.events().empty(), !events_enabled);
     EXPECT_EQ(execution.TotalAllocatedSize(), 0u);
     EXPECT_EQ(arena->leased_count(), 1u);
-    state.Close();
+    state_session.reset();
     EXPECT_EQ(arena->leased_count(), 0u);
   }
 }
@@ -305,7 +362,7 @@ TEST(PersistentValueState, RuntimeRejectsPersistentInputsWithoutExactlyOneUse) {
     EXPECT_THROW({ ExecutionPlan plan(graph); }, std::invalid_argument);
     EXPECT_THROW({ RuntimeSession session(model); }, std::invalid_argument);
     EXPECT_THROW(
-        { PersistentValueState state(model, {{"past", Number(0)}}); }, std::invalid_argument);
+        { RuntimeSession state_session(model, {{"past", Number(0)}}); }, std::invalid_argument);
     graph.clear_persistent_bindings();
     EXPECT_NO_THROW({ RuntimeSession session(model); });
   }
@@ -320,7 +377,7 @@ TEST(PersistentValueState, RuntimeRejectsSecondAppendAttemptEvenWhenCapacityIsDi
     *model.mutable_graph()->mutable_output(0)->mutable_type() = *input_type;
     RuntimeSessionOptions options;
     options.persistent_tensor_initial_capacity = capacity;
-    PersistentValueState state(model, {{"past", Number(0)}}, options);
+    RuntimeSession state_session(model, {{"past", Number(0)}}, options);
     RuntimeContext context(KernelContext(DefaultOpset(18)),
                            RuntimeContextOptions{.events_enabled = true});
     bool first_attempt_finished = false;
@@ -333,7 +390,7 @@ TEST(PersistentValueState, RuntimeRejectsSecondAppendAttemptEvenWhenCapacityIsDi
                                    rt.ReservePersistentAppend(past, {2}, 0, 0, 0);
                                    rt.Put(node.output(0), past.BorrowView());
                                  });
-    EXPECT_THROW(state.Run(context, {{"tokens", Number(1)}}), std::invalid_argument);
+    EXPECT_THROW(state_session.Run(context, {{"tokens", Number(1)}}), std::invalid_argument);
     EXPECT_TRUE(first_attempt_finished);
   }
 }
@@ -446,10 +503,11 @@ TEST(PersistentValueState, FunctionAndSubgraphStorageEventsRespectActivationAndS
             throw std::invalid_argument("failure in nested audited kernel");
           rt.Put(node.output(0), std::move(result));
         });
-    PersistentValueState state(model, {{"past", Number(2)}});
-    EXPECT_EQ(Number(state.Run(context, {{"tokens", Number(1)}}).at("present")), 3);
+    RuntimeSession state_session(model, {{"past", Number(2)}});
+    PersistentValueState &state = state_session.persistent_state();
+    EXPECT_EQ(Number(state_session.Run(context, {{"tokens", Number(1)}}).at("present")), 3);
     fail = true;
-    EXPECT_THROW(state.Run(context, {{"tokens", Number(1)}}), std::invalid_argument);
+    EXPECT_THROW(state_session.Run(context, {{"tokens", Number(1)}}), std::invalid_argument);
     EXPECT_EQ(Number(state.Values().at("past")), 3);
     EXPECT_EQ(StorageTotal(context.events(), &RuntimeEvent::storage_allocations),
               enabled ? 2u : 0u);
@@ -483,7 +541,8 @@ TEST(PersistentValueState, WholeTensorMatchesManualLoopAndSharesReadOnlyViews) {
   RegisterStep(context);
   RuntimeValueMap initial{{"past", Number(2)}};
   const uint8_t *initial_data = initial.at("past").tensor.bytes();
-  PersistentValueState state(model, initial);
+  RuntimeSession state_session(model, initial);
+  PersistentValueState &state = state_session.persistent_state();
   EXPECT_EQ(state.Values().at("past").tensor.bytes(), initial_data);
   RuntimeSession manual(model);
   float previous = 2;
@@ -492,8 +551,8 @@ TEST(PersistentValueState, WholeTensorMatchesManualLoopAndSharesReadOnlyViews) {
     context.Put("past", Number(previous).tensor);
     context.Put("tokens", Number(token).tensor);
     manual.Run(context);
-    const auto output = state.Run(context, {{"tokens", Number(token)}});
     previous = context.Get("present").AsFloat()[0];
+    const auto output = state_session.Run(context, {{"tokens", Number(token)}});
     EXPECT_EQ(Number(output.at("present")), previous);
     EXPECT_EQ(Number(state.Values().at("past")), previous);
     EXPECT_EQ(state.Values().at("past").tensor.bytes(), output.at("present").tensor.bytes());
@@ -505,28 +564,55 @@ TEST(PersistentValueState, WholeTensorMatchesManualLoopAndSharesReadOnlyViews) {
   EXPECT_EQ(snapshot.at("past").tensor.bytes(), state.Values().at("past").tensor.bytes());
   EXPECT_EQ(Number(state.Values().at("past")), 9);
   state.Reset({{"past", Number(5)}});
-  EXPECT_EQ(Number(state.Run(context, {{"tokens", Number(2)}}).at("present")), 7);
-  state.Close();
-  EXPECT_THROW(state.Values(), std::invalid_argument);
-  EXPECT_THROW(state.model(), std::invalid_argument);
-  EXPECT_THROW(state.struct_type_catalogue(), std::invalid_argument);
-  EXPECT_THROW(state.Run(context, {}), std::invalid_argument);
-  EXPECT_THROW(state.Reset({{"past", Number(1)}}), std::invalid_argument);
-  EXPECT_NO_THROW(state.Close());
+  EXPECT_EQ(Number(state_session.Run(context, {{"tokens", Number(2)}}).at("present")), 7);
+  state_session.Reset({{"past", Number(1)}});
+  EXPECT_EQ(Number(state_session.Run(context, {{"tokens", Number(2)}}).at("present")), 3);
 }
 
-TEST(PersistentValueState, ClosedAccessorsRejectReleasedModelStorage) {
+TEST(PersistentValueState, SessionBorrowsModelWithoutTakingOwnership) {
   auto model = std::make_shared<ModelProto>(Model());
   std::weak_ptr<ModelProto> weak = model;
-  PersistentValueState state(model, {{"past", Number(2)}});
+  auto session = std::make_unique<RuntimeSession>(*model, RuntimeValueMap{{"past", Number(2)}});
+  auto &state = session->persistent_state();
   EXPECT_EQ(&state.model(), model.get());
   EXPECT_NO_THROW(state.struct_type_catalogue());
-  model.reset();
+  EXPECT_EQ(model.use_count(), 1);
   EXPECT_FALSE(weak.expired());
-  state.Close();
+  session.reset();
+  EXPECT_FALSE(weak.expired());
+  model.reset();
   EXPECT_TRUE(weak.expired());
-  EXPECT_THROW(state.model(), std::invalid_argument);
-  EXPECT_THROW(state.struct_type_catalogue(), std::invalid_argument);
+}
+
+TEST(PersistentValueState, EncodedInitializerViewsBorrowProtoWithoutTakingOwnership) {
+  EncodedValueProto proto;
+  proto.set_raw_data(std::string(1, '\x05'));
+  auto view = RuntimeValue::FromEncodedView(proto);
+  EXPECT_EQ(&view.Encoded(), &proto);
+  EXPECT_EQ(view.encoded.use_count(), 0);
+  auto snapshot = view.BorrowView();
+  EXPECT_EQ(&snapshot.Encoded(), &proto);
+  EXPECT_EQ(snapshot.encoded.use_count(), 0);
+}
+
+TEST(PersistentValueState, AppendingInitializerViewsAllocatesWithoutOverwritingTheProto) {
+  TensorProto proto;
+  proto.set_data_type(DataType::FLOAT);
+  proto.add_dims(1);
+  proto.add_float_data(3);
+  PersistentTensor prefix(Tensor::BorrowInitializer(proto));
+  EXPECT_EQ(prefix.capacity_bytes(), 0);
+  auto lease = prefix.PrepareAppend();
+  auto reservation = lease.Reserve({2}, 0, 2, nullptr);
+  ASSERT_TRUE(reservation.has_value());
+  const auto tail = reservation->writable_bytes();
+  ASSERT_EQ(tail.size(), sizeof(float));
+  *reinterpret_cast<float *>(tail.data()) = 5;
+  auto appended = reservation->Commit(tail.size());
+  EXPECT_NE(appended.value().bytes(), prefix.value().bytes());
+  EXPECT_FLOAT_EQ(appended.value().AsFloat()[0], 3);
+  EXPECT_FLOAT_EQ(appended.value().AsFloat()[1], 5);
+  EXPECT_FLOAT_EQ(proto.float_data()[0], 3);
 }
 
 TEST(PersistentValueState, LayoutlessOrdinaryStructuresCannotHideUnsupportedLeaves) {
@@ -567,8 +653,10 @@ TEST(PersistentValueState, RetainsWholeStructureAndRequiresSeparateFreshTokens) 
                                                sizeof(float), logits))}});
     rt.values()["response"] = std::move(response);
   });
-  PersistentValueState state(model, {{"request", Request(0, 10)}});
-  auto first = state.Run(context, {{"tokens", Number(2)}});
+  auto state_session =
+      std::make_unique<RuntimeSession>(model, RuntimeValueMap{{"request", Request(0, 10)}});
+  PersistentValueState &state = state_session->persistent_state();
+  auto first = state_session->Run(context, {{"tokens", Number(2)}});
   EXPECT_FALSE(retained_logits.expired());
   auto first_logits = retained_logits;
   EXPECT_EQ(allocator.TotalAllocatedSize(), 0u);
@@ -577,10 +665,11 @@ TEST(PersistentValueState, RetainsWholeStructureAndRequiresSeparateFreshTokens) 
   EXPECT_EQ(Number(snapshot.at("request").fields.at("cache").fields.at("keys")), 2);
   EXPECT_EQ(snapshot.at("request").fields.at("logits").tensor.bytes(),
             first.at("response").fields.at("logits").tensor.bytes());
-  EXPECT_THROW(state.Run(context, {}), std::invalid_argument);
-  EXPECT_THROW(state.Run(context, {{"request.cache.keys", Number(1)}, {"tokens", Number(3)}}),
-               std::invalid_argument);
-  auto second = state.Run(context, {{"tokens", Number(3)}});
+  EXPECT_THROW(state_session->Run(context, {}), std::invalid_argument);
+  EXPECT_THROW(
+      state_session->Run(context, {{"request.cache.keys", Number(1)}, {"tokens", Number(3)}}),
+      std::invalid_argument);
+  auto second = state_session->Run(context, {{"tokens", Number(3)}});
   EXPECT_EQ(Number(second.at("response").fields.at("cache").fields.at("keys")), 5);
   EXPECT_EQ(Number(first.at("response").fields.at("cache").fields.at("keys")), 2);
   EXPECT_EQ(Number(first.at("response").fields.at("logits")), 2);
@@ -590,7 +679,7 @@ TEST(PersistentValueState, RetainsWholeStructureAndRequiresSeparateFreshTokens) 
   EXPECT_TRUE(first_logits.expired());
   second.clear();
   EXPECT_FALSE(retained_logits.expired());
-  state.Close();
+  state_session.reset();
   EXPECT_TRUE(retained_logits.expired());
 }
 
@@ -607,14 +696,15 @@ TEST(PersistentValueState, TransfersOwnedTensorOutputsWithoutCopying) {
     expected_input = produced;
     rt.Put("present", std::move(output));
   });
-  PersistentValueState state(model, initial);
-  auto first = state.Run(context, {{"tokens", Number(0)}});
+  auto state_session = std::make_unique<RuntimeSession>(model, initial);
+  PersistentValueState &state = state_session->persistent_state();
+  auto first = state_session->Run(context, {{"tokens", Number(0)}});
   EXPECT_EQ(first.at("present").tensor.bytes(), produced);
   EXPECT_EQ(state.Values().at("past").tensor.bytes(), produced);
-  auto second = state.Run(context, {{"tokens", Number(0)}});
+  auto second = state_session->Run(context, {{"tokens", Number(0)}});
   EXPECT_EQ(second.at("present").tensor.bytes(), produced);
   EXPECT_EQ(Number(second.at("present")), 3);
-  state.Close();
+  state_session.reset();
   EXPECT_EQ(Number(first.at("present")), 2);
   EXPECT_EQ(Number(second.at("present")), 3);
 }
@@ -629,7 +719,8 @@ TEST(PersistentValueState, MovesOwnedInitialMapsWithoutMutatingConstViews) {
   EXPECT_FALSE(source.is_borrowed());
   EXPECT_EQ(source.data.data(), payload);
   EXPECT_FALSE(view.borrowed_owner());
-  PersistentValueState state(model, std::move(initial));
+  RuntimeSession state_session(model, std::move(initial));
+  PersistentValueState &state = state_session.persistent_state();
   EXPECT_EQ(state.Values().at("past").tensor.bytes(), payload);
   EXPECT_TRUE(state.Values().at("past").tensor.borrowed_owner());
   RuntimeValueMap reset;
@@ -662,13 +753,14 @@ TEST(PersistentValueState, OnlySelectedOutputsBypassOrdinaryAllocationAndMateria
     EXPECT_EQ(rt.Get("ordinary").allocation_owner(), &execution);
     EXPECT_NE(rt.Get("ordinary").bytes(), ordinary_source);
   });
-  PersistentValueState state(model, {{"past", Number(1)}});
+  RuntimeSession state_session(model, {{"past", Number(1)}});
+  PersistentValueState &state = state_session.persistent_state();
   float token = 7;
   RuntimeValueMap feeds;
   feeds.emplace("tokens", RuntimeValue(Tensor::Borrow("", DataType::FLOAT, {1},
                                                       reinterpret_cast<const uint8_t *>(&token),
                                                       sizeof(float))));
-  auto output = state.Run(context, feeds);
+  auto output = state_session.Run(context, feeds);
   EXPECT_EQ(output.at("present").tensor.bytes(), selected);
   EXPECT_EQ(state.Values().at("past").tensor.bytes(), selected);
   EXPECT_TRUE(output.at("ordinary").tensor.is_borrowed());
@@ -696,14 +788,15 @@ TEST(PersistentValueState, OrdinaryOwnerlessOutputIsMaterializedButSelectedBorro
     rt.Put("ordinary", borrow());
     rt.Put("present", invalid_selected ? borrow() : Tensor::FromFloat("", {1}, {2}));
   });
-  PersistentValueState state(model, {{"past", Number(1)}});
-  auto output = state.Run(context, {{"tokens", Number(0)}});
+  RuntimeSession state_session(model, {{"past", Number(1)}});
+  PersistentValueState &state = state_session.persistent_state();
+  auto output = state_session.Run(context, {{"tokens", Number(0)}});
   EXPECT_TRUE(output.at("ordinary").tensor.is_borrowed());
   EXPECT_TRUE(output.at("ordinary").tensor.borrowed_owner());
   EXPECT_NE(output.at("ordinary").tensor.bytes(), reinterpret_cast<const uint8_t *>(&external));
   invalid_selected = true;
   const auto previous = state.Values();
-  EXPECT_THROW(state.Run(context, {{"tokens", Number(0)}}), std::invalid_argument);
+  EXPECT_THROW(state_session.Run(context, {{"tokens", Number(0)}}), std::invalid_argument);
   EXPECT_EQ(state.Values().at("past").tensor.bytes(), previous.at("past").tensor.bytes());
 }
 
@@ -744,11 +837,12 @@ TEST(PersistentValueState, FunctionAttributesUseOrdinaryBinding) {
         const float result = rt.Get(node.input(0)).AsFloat()[0] * node.attribute(0).f();
         rt.Put(node.output(0), Tensor::FromFloat("", {1}, {result}));
       });
-  PersistentValueState state(model, {{"past", Number(-4)}});
-  auto output = state.Run(context, {{"tokens", Number(0)}});
+  RuntimeSession state_session(model, {{"past", Number(-4)}});
+  PersistentValueState &state = state_session.persistent_state();
+  auto output = state_session.Run(context, {{"tokens", Number(0)}});
   EXPECT_EQ(Number(output.at("present")), -1);
   EXPECT_EQ(state.Values().at("past").tensor.bytes(), output.at("present").tensor.bytes());
-  EXPECT_EQ(Number(state.Run(context, {{"tokens", Number(0)}}).at("present")), -0.25f);
+  EXPECT_EQ(Number(state_session.Run(context, {{"tokens", Number(0)}}).at("present")), -0.25f);
 }
 
 TEST(PersistentValueState, TransfersOwnedStructuredOutputsWithoutCopying) {
@@ -767,17 +861,19 @@ TEST(PersistentValueState, TransfersOwnedStructuredOutputsWithoutCopying) {
     logits = response.fields.at("logits").tensor.bytes();
     rt.values()["response"] = std::move(response);
   });
-  PersistentValueState state(model, {{"request", Request(0, 0)}});
-  auto first = state.Run(context, {{"tokens", Number(0)}});
+  auto state_session =
+      std::make_unique<RuntimeSession>(model, RuntimeValueMap{{"request", Request(0, 0)}});
+  PersistentValueState &state = state_session->persistent_state();
+  auto first = state_session->Run(context, {{"tokens", Number(0)}});
   auto &response = first.at("response");
   EXPECT_EQ(response.fields.at("cache").fields.at("keys").tensor.bytes(), keys);
   EXPECT_EQ(response.fields.at("cache").fields.at("values").tensor.bytes(), values);
   EXPECT_EQ(response.fields.at("logits").tensor.bytes(), logits);
   EXPECT_EQ(state.Values().at("request").fields.at("cache").fields.at("keys").tensor.bytes(), keys);
   EXPECT_EQ(state.Values().at("request").fields.at("logits").tensor.bytes(), logits);
-  auto second = state.Run(context, {{"tokens", Number(0)}});
+  auto second = state_session->Run(context, {{"tokens", Number(0)}});
   EXPECT_EQ(Number(second.at("response").fields.at("cache").fields.at("keys")), 2);
-  state.Close();
+  state_session.reset();
   EXPECT_EQ(Number(response.fields.at("logits")), 10);
 }
 
@@ -792,11 +888,12 @@ TEST(PersistentValueState, ValidatesDestinationBeforeRetainingOutput) {
     else
       rt.Put("present", Tensor::FromFloat("", {1}, {rt.Get("past").AsFloat()[0] + 1}));
   });
-  PersistentValueState state(model, {{"past", Number(1)}});
-  EXPECT_THROW(state.Run(context, {{"tokens", Number(0)}}), std::invalid_argument);
+  RuntimeSession state_session(model, {{"past", Number(1)}});
+  PersistentValueState &state = state_session.persistent_state();
+  EXPECT_THROW(state_session.Run(context, {{"tokens", Number(0)}}), std::invalid_argument);
   EXPECT_EQ(Number(state.Values().at("past")), 1);
   invalid = false;
-  EXPECT_EQ(Number(state.Run(context, {{"tokens", Number(0)}}).at("present")), 2);
+  EXPECT_EQ(Number(state_session.Run(context, {{"tokens", Number(0)}}).at("present")), 2);
 }
 
 TEST(PersistentValueState, RejectsInvalidDeclarationsAndInitialValues) {
@@ -867,12 +964,14 @@ TEST(PersistentValueState, FailsTransactionallyAndKeepsRequestsIndependent) {
     else if (mode != 4)
       rt.Set("present", Tensor::FromFloat("", {1}, {next}));
   });
-  PersistentValueState a(model, {{"past", Number(0)}});
-  PersistentValueState b(model, {{"past", Number(10)}});
+  RuntimeSession a_session(model, {{"past", Number(0)}});
+  PersistentValueState &a = a_session.persistent_state();
+  RuntimeSession b_session(model, {{"past", Number(10)}});
+  PersistentValueState &b = b_session.persistent_state();
   const uint8_t *retained = a.Values().at("past").tensor.bytes();
   for (int failure : {1, 2, 3, 4}) {
     mode = failure;
-    EXPECT_ANY_THROW(a.Run(context, {{"tokens", Number(0)}}));
+    EXPECT_ANY_THROW(a_session.Run(context, {{"tokens", Number(0)}}));
     EXPECT_EQ(Number(a.Values().at("past")), 0);
     EXPECT_EQ(a.Values().at("past").tensor.bytes(), retained);
     EXPECT_EQ(Number(b.Values().at("past")), 10);
@@ -880,8 +979,8 @@ TEST(PersistentValueState, FailsTransactionallyAndKeepsRequestsIndependent) {
   EXPECT_THROW(a.Reset({}), std::invalid_argument);
   EXPECT_EQ(Number(a.Values().at("past")), 0);
   mode = 0;
-  EXPECT_EQ(Number(a.Run(context, {{"tokens", Number(0)}}).at("present")), 1);
-  EXPECT_EQ(Number(b.Run(context, {{"tokens", Number(0)}}).at("present")), 11);
+  EXPECT_EQ(Number(a_session.Run(context, {{"tokens", Number(0)}}).at("present")), 1);
+  EXPECT_EQ(Number(b_session.Run(context, {{"tokens", Number(0)}}).at("present")), 11);
 }
 
 TEST(PersistentValueState, CancellationAndConcurrentOperationsDoNotPublish) {
@@ -895,47 +994,50 @@ TEST(PersistentValueState, CancellationAndConcurrentOperationsDoNotPublish) {
     released.wait();
     rt.Set("present", Number(100).tensor);
   });
-  PersistentValueState state(model, {{"past", Number(1)}});
+  RuntimeSession state_session(model, {{"past", Number(1)}});
+  PersistentValueState &state = state_session.persistent_state();
   TaskCompletion completion(TaskId{1});
   const uint8_t *retained = state.Values().at("past").tensor.bytes();
-  auto running = std::async(
-      std::launch::async, [&] { return state.Run(context, {{"tokens", Number(0)}}, &completion); });
+  auto running = std::async(std::launch::async, [&] {
+    return state_session.Run(context, {{"tokens", Number(0)}}, &completion);
+  });
   entered.get_future().wait();
-  EXPECT_THROW(state.Run(context, {}), std::invalid_argument);
+  EXPECT_THROW(state_session.Run(context, {}), std::invalid_argument);
   EXPECT_THROW(state.Reset({{"past", Number(3)}}), std::invalid_argument);
-  EXPECT_THROW(state.Close(), std::invalid_argument);
   EXPECT_THROW(state.Values(), std::invalid_argument);
   completion.Cancel();
   resume.set_value();
   EXPECT_THROW(running.get(), std::invalid_argument);
   EXPECT_EQ(Number(state.Values().at("past")), 1);
   EXPECT_EQ(state.Values().at("past").tensor.bytes(), retained);
-  EXPECT_THROW(state.Run(context, {{"tokens", Number(0)}}, &completion), std::invalid_argument);
+  EXPECT_THROW(state_session.Run(context, {{"tokens", Number(0)}}, &completion),
+               std::invalid_argument);
 }
 
 TEST(PersistentValueState, PublishesThroughTaskCompletion) {
   ModelProto model = Model();
   RuntimeContext context(KernelContext(DefaultOpset(18)));
   RegisterStep(context);
-  PersistentValueState state(model, {{"past", Number(1)}});
+  RuntimeSession state_session(model, {{"past", Number(1)}});
+  PersistentValueState &state = state_session.persistent_state();
   TaskCompletion completion(TaskId{1});
-  state.Run(context, {{"tokens", Number(2)}}, &completion);
+  state_session.Run(context, {{"tokens", Number(2)}}, &completion);
   EXPECT_EQ(completion.status(), TaskStatus::kSucceeded);
   EXPECT_EQ(Number(state.Values().at("past")), 3);
 }
 
 TEST(PersistentValueState, RejectsReentrantOperationsFromTheActiveKernel) {
   ModelProto model = Model();
-  PersistentValueState state(model, {{"past", Number(1)}});
+  RuntimeSession state_session(model, {{"past", Number(1)}});
+  PersistentValueState &state = state_session.persistent_state();
   RuntimeContext context(KernelContext(DefaultOpset(18)));
   context.RegisterCustomKernel("test.feedback", "Step", [&](const NodeProto &, RuntimeContext &rt) {
-    EXPECT_THROW(state.Run(context, {}), std::invalid_argument);
+    EXPECT_THROW(state_session.Run(context, {}), std::invalid_argument);
     EXPECT_THROW(state.Reset({{"past", Number(3)}}), std::invalid_argument);
-    EXPECT_THROW(state.Close(), std::invalid_argument);
     EXPECT_THROW(state.Values(), std::invalid_argument);
     rt.Put("present", Number(2).tensor);
   });
-  state.Run(context, {{"tokens", Number(0)}});
+  state_session.Run(context, {{"tokens", Number(0)}});
   EXPECT_EQ(Number(state.Values().at("past")), 2);
 }
 
@@ -955,12 +1057,13 @@ TEST(PersistentValueState, MultipleWholeInputsCommitTogether) {
     else
       rt.Put("next_tokens", Number(40).tensor);
   });
-  PersistentValueState state(model, {{"past", Number(3)}, {"tokens", Number(4)}});
-  EXPECT_THROW(state.Run(context, {}), std::invalid_argument);
+  RuntimeSession state_session(model, {{"past", Number(3)}, {"tokens", Number(4)}});
+  PersistentValueState &state = state_session.persistent_state();
+  EXPECT_THROW(state_session.Run(context, {}), std::invalid_argument);
   EXPECT_EQ(Number(state.Values().at("past")), 3);
   EXPECT_EQ(Number(state.Values().at("tokens")), 4);
   invalid = false;
-  state.Run(context, {});
+  state_session.Run(context, {});
   EXPECT_EQ(Number(state.Values().at("past")), 30);
   EXPECT_EQ(Number(state.Values().at("tokens")), 40);
 }
@@ -982,18 +1085,19 @@ TEST(PersistentValueState, RetainsInitialOwnerAndRejectsUnleasedExecutionArena) 
                                            reinterpret_cast<const uint8_t *>(data->data()),
                                            sizeof(float), data))}};
   const uint8_t *original = initial.at("past").tensor.bytes();
-  PersistentValueState state(model, initial);
+  auto state_session = std::make_unique<RuntimeSession>(model, initial);
+  PersistentValueState &state = state_session->persistent_state();
   initial.clear();
   data.reset();
   EXPECT_FALSE(owner.expired());
   EXPECT_EQ(state.Values().at("past").tensor.bytes(), original);
-  EXPECT_THROW(state.Run(context, {{"tokens", Number(2)}}), std::invalid_argument);
+  EXPECT_THROW(state_session->Run(context, {{"tokens", Number(2)}}), std::invalid_argument);
   EXPECT_EQ(allocator.TotalAllocatedSize(), 0u);
   EXPECT_EQ(state.Values().at("past").tensor.bytes(), original);
   RuntimeContext different(KernelContext(DefaultOpset(18)));
   RegisterStep(different);
-  EXPECT_THROW(state.Run(different, {{"tokens", Number(1)}}), std::invalid_argument);
-  state.Close();
+  EXPECT_THROW(state_session->Run(different, {{"tokens", Number(1)}}), std::invalid_argument);
+  state_session.reset();
   EXPECT_TRUE(owner.expired());
   EXPECT_EQ(allocator.TotalAllocatedSize(), 0u);
 }
@@ -1015,15 +1119,17 @@ TEST(PersistentValueState, ValidatesSharedSymbolsAndMalformedTensorStorage) {
   output_dim->set_dim_param("batch");
   RuntimeContext context(KernelContext(DefaultOpset(18)));
   RegisterStep(context);
-  PersistentValueState state(model, {{"past", Number(1)}});
-  EXPECT_THROW(state.Run(context, {{"tokens", RuntimeValue(Tensor::FromFloat("", {2}, {1, 2}))}}),
-               std::invalid_argument);
+  RuntimeSession state_session(model, {{"past", Number(1)}});
+  PersistentValueState &state = state_session.persistent_state();
+  EXPECT_THROW(
+      state_session.Run(context, {{"tokens", RuntimeValue(Tensor::FromFloat("", {2}, {1, 2}))}}),
+      std::invalid_argument);
   RuntimeValue malformed = Number(1);
   malformed.tensor.shape = {2};
-  EXPECT_THROW(state.Run(context, {{"tokens", malformed}}), std::invalid_argument);
+  EXPECT_THROW(state_session.Run(context, {{"tokens", malformed}}), std::invalid_argument);
   malformed.tensor.shape = {-1};
-  EXPECT_THROW(state.Run(context, {{"tokens", malformed}}), std::invalid_argument);
-  EXPECT_THROW(state.Run(context, {{"unexpected", Number(1)}}), std::invalid_argument);
+  EXPECT_THROW(state_session.Run(context, {{"tokens", malformed}}), std::invalid_argument);
+  EXPECT_THROW(state_session.Run(context, {{"unexpected", Number(1)}}), std::invalid_argument);
   EXPECT_EQ(Number(state.Values().at("past")), 1);
 }
 
@@ -1045,14 +1151,14 @@ TEST(PersistentValueState, ExactDottedGraphNamesAreNotOverlappingFields) {
     rt.Put("present", Number(past + token).tensor);
     rt.Put("present.tokens", Number(token + 1).tensor);
   });
-  PersistentValueState one(model, {{"past", Number(1)}});
-  EXPECT_THROW(one.Run(context, {{R"(past\.tokens)", Number(2)}}), std::invalid_argument);
-  EXPECT_EQ(Number(one.Run(context, {{"past.tokens", Number(2)}}).at("present")), 3);
-  one.Close();
+  RuntimeSession one_session(model, {{"past", Number(1)}});
+  EXPECT_THROW(one_session.Run(context, {{R"(past\.tokens)", Number(2)}}), std::invalid_argument);
+  EXPECT_EQ(Number(one_session.Run(context, {{"past.tokens", Number(2)}}).at("present")), 3);
   ModelProto both_model = model;
   Bind(both_model, "past.tokens", "present.tokens");
-  PersistentValueState both(both_model, {{"past", Number(1)}, {"past.tokens", Number(2)}});
-  both.Run(context, {});
+  RuntimeSession both_session(both_model, {{"past", Number(1)}, {"past.tokens", Number(2)}});
+  PersistentValueState &both = both_session.persistent_state();
+  both_session.Run(context, {});
   EXPECT_EQ(Number(both.Values().at("past")), 3);
   EXPECT_EQ(Number(both.Values().at("past.tokens")), 3);
 }
@@ -1080,9 +1186,10 @@ TEST(PersistentValueState, StructuredValuesCrossModelLocalFunctions) {
   const uint8_t *expected =
       initial.at("request").fields.at("cache").fields.at("keys").tensor.bytes();
   RegisterStructuredStep(context, &expected);
-  PersistentValueState state(model, initial);
-  state.Run(context, {{"tokens", Number(3)}});
-  state.Run(context, {{"tokens", Number(4)}});
+  RuntimeSession state_session(model, initial);
+  PersistentValueState &state = state_session.persistent_state();
+  state_session.Run(context, {{"tokens", Number(3)}});
+  state_session.Run(context, {{"tokens", Number(4)}});
   EXPECT_EQ(Number(state.Values().at("request").fields.at("cache").fields.at("keys")), 8);
   EXPECT_EQ(Number(state.Values().at("request").fields.at("cache").fields.at("values")), 9);
   EXPECT_EQ(state.Values().at("request").fields.at("cache").fields.at("keys").tensor.bytes(),
@@ -1129,10 +1236,11 @@ TEST(PersistentValueState, StructuredValuesCrossIfBranches) {
       initial.at("request").fields.at("cache").fields.at("keys").tensor.bytes();
   RegisterStructuredStep(context, &expected);
   RegisterIdentity(context);
-  PersistentValueState state(model, initial);
+  RuntimeSession state_session(model, initial);
+  PersistentValueState &state = state_session.persistent_state();
   for (uint8_t condition : {1, 0})
-    state.Run(context, {{"tokens", Number(3)},
-                        {"cond", RuntimeValue(Tensor::FromBool("", {}, {condition}))}});
+    state_session.Run(context, {{"tokens", Number(3)},
+                                {"cond", RuntimeValue(Tensor::FromBool("", {}, {condition}))}});
   EXPECT_EQ(Number(state.Values().at("request").fields.at("cache").fields.at("keys")), 7);
   EXPECT_EQ(Number(state.Values().at("request").fields.at("cache").fields.at("values")), 8);
   EXPECT_EQ(state.Values().at("request").fields.at("cache").fields.at("keys").tensor.bytes(),
@@ -1172,13 +1280,14 @@ TEST(PersistentValueState, SelectedIfInitializerRetainsItsModelStorage) {
   }
   RuntimeContext context(KernelContext(DefaultOpset(18)));
   RegisterIdentity(context);
-  PersistentValueState state(model, {{"past", Number(0)}});
+  auto state_session =
+      std::make_unique<RuntimeSession>(model, RuntimeValueMap{{"past", Number(0)}});
   RuntimeValueMap feeds{{"tokens", Number(0)},
                         {"condition", RuntimeValue(Tensor::FromBool("", {}, {1}))}};
-  auto first = state.Run(context, feeds);
-  auto second = state.Run(context, feeds);
+  auto first = state_session->Run(context, feeds);
+  auto second = state_session->Run(context, feeds);
   EXPECT_EQ(first.at("present").tensor.bytes(), second.at("present").tensor.bytes());
-  state.Close();
+  state_session.reset();
   EXPECT_EQ(Number(first.at("present")), 7);
   EXPECT_EQ(Number(second.at("present")), 7);
 }
@@ -1340,19 +1449,19 @@ TEST(PersistentValueState, TypedBlockSequencesMixDenseAndAffineWithoutMaterializ
   blocks = std::move(blocks).Retain();
   const auto *dense = blocks.elements[0].fields.at("key").tensor.bytes();
   const auto *encoded = blocks.elements[1].fields.at("key").Encoded().raw_data().data();
-  PersistentValueState state(model, {{"past", blocks}});
+  RuntimeSession state_session(model, {{"past", blocks}});
+  PersistentValueState &state = state_session.persistent_state();
   RuntimeContext context;
   context.RegisterCustomKernel(
       "test.feedback", "Step", [](const NodeProto &node, RuntimeContext &rt) {
         rt.values()[node.output(0)] = rt.values().at(node.input(0)).BorrowView();
       });
-  const auto output = state.Run(context, {{"tokens", Number(0)}});
+  const auto output = state_session.Run(context, {{"tokens", Number(0)}});
   EXPECT_EQ(output.at("present").elements[0].fields.at("key").tensor.bytes(), dense);
   EXPECT_EQ(output.at("present").elements[1].fields.at("key").Encoded().raw_data().data(), encoded);
   state.Reset({{"past", RuntimeValue(std::vector<RuntimeValue>{})}});
   EXPECT_TRUE(state.Values().at("past").elements.empty());
-  EXPECT_TRUE(state.Run(context, {{"tokens", Number(0)}}).at("present").elements.empty());
-  state.Close();
+  EXPECT_TRUE(state_session.Run(context, {{"tokens", Number(0)}}).at("present").elements.empty());
   EXPECT_EQ(output.at("present").elements[1].fields.at("key").Encoded().raw_data()[0], 2);
 
   auto changed = blocks.elements[1].BorrowView();
@@ -1376,14 +1485,14 @@ TEST(PersistentValueState, EncodedTensorSequencesRemainInStructuredValueStore) {
   *model.mutable_graph()->mutable_output(0)->mutable_type() = type;
   RuntimeValue sequence(
       std::vector<RuntimeValue>{RuntimeValue(AffineBlock()), RuntimeValue(AffineBlock(3))});
-  PersistentValueState state(model, {{"past", std::move(sequence)}});
+  RuntimeSession state_session(model, {{"past", std::move(sequence)}});
   RuntimeContext context;
   context.RegisterCustomKernel(
       "test.feedback", "Step", [](const NodeProto &node, RuntimeContext &rt) {
         EXPECT_EQ(rt.sequences().count(node.input(0)), 0u);
         rt.PutValue(node.output(0), rt.values().at(node.input(0)).BorrowView());
       });
-  const auto output = state.Run(context, {{"tokens", Number(0)}});
+  const auto output = state_session.Run(context, {{"tokens", Number(0)}});
   ASSERT_EQ(output.at("present").elements.size(), 2u);
   EXPECT_EQ(output.at("present").elements[0].Encoded().raw_data()[0], 2);
   EXPECT_EQ(output.at("present").elements[1].Encoded().raw_data().size(), 3u);
@@ -1414,13 +1523,14 @@ TEST(PersistentValueState, TypedSequencesRetainPortableAndSharedQuantizationOwne
     block.fields.at("value") = shared;
     RuntimeValue sequence(std::vector<RuntimeValue>{std::move(block)});
     const auto *payload = shared.Encoded().raw_data().data();
-    PersistentValueState state(model, {{"past", sequence}});
+    RuntimeSession state_session(model, {{"past", sequence}});
+    PersistentValueState &state = state_session.persistent_state();
     RuntimeContext context;
     context.RegisterCustomKernel(
         "test.feedback", "Step", [](const NodeProto &node, RuntimeContext &rt) {
           rt.PutValue(node.output(0), rt.values().at(node.input(0)).BorrowView());
         });
-    auto output = state.Run(context, {{"tokens", Number(0)}});
+    auto output = state_session.Run(context, {{"tokens", Number(0)}});
     const auto &published = output.at("present").elements[0].fields.at("value");
     EXPECT_EQ(published.Encoded().raw_data().data(), payload);
     EXPECT_EQ(published.quantization_parameters, parameters);
@@ -1428,7 +1538,6 @@ TEST(PersistentValueState, TypedSequencesRetainPortableAndSharedQuantizationOwne
               parameters);
     retained = published.BorrowView();
     state.Reset({{"past", RuntimeValue(std::vector<RuntimeValue>{})}});
-    state.Close();
   }
   ASSERT_FALSE(weak.expired());
   const auto decoded = DequantizeTensor(retained);
@@ -1464,7 +1573,8 @@ TEST(PersistentValueState, ValidatesSharedCurrentFeedsBeforeExecutionWithoutRete
       node->add_input("current");
       node->add_output("echo");
       VerifyModel(model);
-      PersistentValueState state(model, {{"past", Number(0)}});
+      RuntimeSession state_session(model, {{"past", Number(0)}});
+      PersistentValueState &state = state_session.persistent_state();
       RuntimeContext context;
       RegisterIdentity(context);
       int executions = 0;
@@ -1487,14 +1597,14 @@ TEST(PersistentValueState, ValidatesSharedCurrentFeedsBeforeExecutionWithoutRete
         RuntimeValue invalid(std::move(message));
         if (failure != 0)
           invalid.quantization_parameters = shared.quantization_parameters;
-        EXPECT_THROW(
-            state.Run(context, {{"tokens", Number(0)}, {"current", wrap(std::move(invalid))}}),
-            std::invalid_argument);
+        EXPECT_THROW(state_session.Run(
+                         context, {{"tokens", Number(0)}, {"current", wrap(std::move(invalid))}}),
+                     std::invalid_argument);
         EXPECT_EQ(executions, 0);
         EXPECT_EQ(Number(state.Values().at("past")), 0);
       }
-      const auto outputs =
-          state.Run(context, {{"tokens", Number(0)}, {"current", wrap(shared.BorrowView())}});
+      const auto outputs = state_session.Run(
+          context, {{"tokens", Number(0)}, {"current", wrap(shared.BorrowView())}});
       EXPECT_EQ(executions, 1);
       const auto &echo = nested ? outputs.at("echo").fields.at("value") : outputs.at("echo");
       EXPECT_EQ(echo.quantization_parameters, shared.quantization_parameters);
@@ -1550,9 +1660,9 @@ TEST(PersistentValueState, AffineTensorValidationChecksLogicalTypeShapeSymbolsAn
       EXPECT_THROW((PersistentValueState(model, {{"past", RuntimeValue(encoded)}})),
                    std::invalid_argument);
     } else {
-      PersistentValueState state(model, {{"past", RuntimeValue(encoded)}});
+      RuntimeSession state_session(model, {{"past", RuntimeValue(encoded)}});
       RuntimeContext context;
-      EXPECT_THROW(state.Run(context, {{"tokens", Number(0)}}), std::invalid_argument);
+      EXPECT_THROW(state_session.Run(context, {{"tokens", Number(0)}}), std::invalid_argument);
     }
   }
 }
@@ -1758,12 +1868,13 @@ TEST(PersistentValueState, EncodedFieldsUseNativeCatalogueAndOwnedPayloads) {
     rt.values()["response"] = RuntimeValue(
         RuntimeValueMap{{"logits", Number(0)}, {"cache", RuntimeValue(std::move(value))}});
   });
-  PersistentValueState state(
+  RuntimeSession state_session(
       model, {{"request", RuntimeValue(RuntimeValueMap{{"logits", Number(0)},
                                                        {"cache", RuntimeValue(initial)}})}});
+  PersistentValueState &state = state_session.persistent_state();
   initial.set_raw_data(std::string(1, '\x40'));
-  auto first = state.Run(context, {{"tokens", Number(1)}});
-  state.Run(context, {{"tokens", Number(2)}});
+  auto first = state_session.Run(context, {{"tokens", Number(1)}});
+  state_session.Run(context, {{"tokens", Number(2)}});
   EXPECT_EQ(state.Values().at("request").fields.at("cache").Encoded().raw_data()[0], 5);
   EXPECT_EQ(first.at("response").fields.at("cache").Encoded().raw_data()[0], 4);
   EncodedValueProto wrong = initial;
@@ -1774,7 +1885,7 @@ TEST(PersistentValueState, EncodedFieldsUseNativeCatalogueAndOwnedPayloads) {
       std::invalid_argument);
 }
 
-TEST(PersistentValueState, EncodedTransportRetainsTheSamePayloadAcrossResetAndClose) {
+TEST(PersistentValueState, EncodedTransportRetainsTheSamePayloadAcrossResetAndSessionDestruction) {
   ModelProto model = Model();
   auto *format = model.add_struct_types();
   format->set_type_id(7);
@@ -1793,7 +1904,8 @@ TEST(PersistentValueState, EncodedTransportRetainsTheSamePayloadAcrossResetAndCl
   RuntimeValueMap initial;
   initial.emplace("past", RuntimeValue(std::move(encoded)));
   const uint8_t *payload = initial.at("past").Encoded().raw_data().data();
-  PersistentValueState state(model, initial);
+  auto state_session = std::make_unique<RuntimeSession>(model, initial);
+  PersistentValueState &state = state_session->persistent_state();
   EXPECT_EQ(initial.at("past").Encoded().raw_data().data(), payload);
   EXPECT_EQ(state.Values().at("past").Encoded().raw_data().data(), payload);
   RuntimeContext context(KernelContext(DefaultOpset(18)));
@@ -1801,11 +1913,11 @@ TEST(PersistentValueState, EncodedTransportRetainsTheSamePayloadAcrossResetAndCl
     EXPECT_EQ(rt.values().at("past").Encoded().raw_data().data(), payload);
     rt.values()["present"] = rt.values().at("past").BorrowView();
   });
-  auto output = state.Run(context, {{"tokens", Number(1)}});
+  auto output = state_session->Run(context, {{"tokens", Number(1)}});
   EXPECT_EQ(output.at("present").Encoded().raw_data().data(), payload);
   EXPECT_EQ(state.Values().at("past").Encoded().raw_data().data(), payload);
   state.Reset(initial);
-  state.Close();
+  state_session.reset();
   initial.clear();
   EXPECT_EQ(output.at("present").Encoded().raw_data().data(), payload);
   EXPECT_EQ(output.at("present").Encoded().raw_data()[0], 5);
@@ -1868,16 +1980,16 @@ TEST(PersistentValueState, EmptyNumericTensorsShareRatherThanCopy) {
   initial.emplace("past", RuntimeValue(Tensor::FromFloat("", {0}, {})));
   const Tensor &source = initial.at("past").tensor;
   const void *payload = source.bytes();
-  PersistentValueState state(model, std::move(initial));
+  auto state_session = std::make_unique<RuntimeSession>(model, std::move(initial));
   RuntimeContext context;
   context.RegisterCustomKernel("test.feedback", "Step",
                                [](const NodeProto &node, RuntimeContext &rt) {
                                  rt.Put(node.output(0), rt.Get(node.input(0)).BorrowView());
                                });
-  const auto output = state.Run(context, {{"tokens", Number(0)}});
+  const auto output = state_session->Run(context, {{"tokens", Number(0)}});
   const Tensor &result = output.at("present").tensor;
   EXPECT_EQ(result.bytes(), payload);
-  state.Close();
+  state_session.reset();
   initial.clear();
   EXPECT_EQ(result.size_bytes(), 0u);
 }
@@ -1890,7 +2002,7 @@ TEST(PersistentValueState, RejectsStringDeclarationsBeforeReadingInitialState) {
     *model.mutable_graph()->mutable_input(0)->mutable_type() = type;
     *model.mutable_graph()->mutable_output(0)->mutable_type() = type;
     try {
-      PersistentValueState state(model, {});
+      RuntimeSession state_session(model, RuntimeValueMap{});
       FAIL() << "String declaration was accepted.";
     } catch (const std::invalid_argument &error) {
       EXPECT_NE(std::string(error.what()).find("String tensors cannot be persistent"),
@@ -1954,7 +2066,8 @@ TEST(PersistentValueState, OrdinaryStringFeedsAndOutputsAreNotRetained) {
   *output->mutable_type() = input->type();
   model.mutable_graph()->mutable_node(0)->add_input("text");
   model.mutable_graph()->mutable_node(0)->add_output("text_out");
-  PersistentValueState state(model, {{"past", Number(0)}});
+  RuntimeSession state_session(model, {{"past", Number(0)}});
+  PersistentValueState &state = state_session.persistent_state();
   RuntimeContext context;
   context.RegisterCustomKernel("test.feedback", "Step", [](const NodeProto &, RuntimeContext &rt) {
     EXPECT_TRUE(rt.retains_output("present"));
@@ -1965,7 +2078,7 @@ TEST(PersistentValueState, OrdinaryStringFeedsAndOutputsAreNotRetained) {
   for (float expected : {1.0f, 2.0f}) {
     RuntimeValueMap feeds{{"tokens", Number(0)},
                           {"text", RuntimeValue(Tensor::MakeString("", {1}, {"hello"}))}};
-    auto outputs = state.Run(context, feeds);
+    auto outputs = state_session.Run(context, feeds);
     feeds.clear();
     EXPECT_EQ(outputs.at("text_out").tensor.AsStrings()[0], "hello");
     EXPECT_EQ(outputs.at("text_out").tensor.borrowed_owner().use_count(), 0);
@@ -1977,13 +2090,14 @@ TEST(PersistentValueState, OrdinaryStringFeedsAndOutputsAreNotRetained) {
 
 TEST(PersistentValueState, CustomStringOutputCannotReplaceNumericState) {
   ModelProto model = Model();
-  PersistentValueState state(model, {{"past", Number(3)}});
+  RuntimeSession state_session(model, {{"past", Number(3)}});
+  PersistentValueState &state = state_session.persistent_state();
   RuntimeContext context;
   context.RegisterCustomKernel("test.feedback", "Step",
                                [](const NodeProto &node, RuntimeContext &rt) {
                                  rt.Put(node.output(0), Tensor::MakeString("", {1}, {"invalid"}));
                                });
-  EXPECT_THROW(state.Run(context, {{"tokens", Number(1)}}), std::invalid_argument);
+  EXPECT_THROW(state_session.Run(context, {{"tokens", Number(1)}}), std::invalid_argument);
   EXPECT_EQ(Number(state.Values().at("past")), 3.0f);
 }
 
@@ -1999,9 +2113,10 @@ TEST(PersistentValueState, RejectsOwnerlessInitialAndOutputBorrowsTransactionall
   context.RegisterCustomKernel("test.feedback", "Step", [&](const NodeProto &, RuntimeContext &rt) {
     rt.Put("present", borrow().tensor);
   });
-  PersistentValueState state(model, {{"past", Number(1)}});
+  RuntimeSession state_session(model, {{"past", Number(1)}});
+  PersistentValueState &state = state_session.persistent_state();
   const auto snapshot = state.Values();
-  EXPECT_THROW(state.Run(context, {{"tokens", Number(0)}}), std::invalid_argument);
+  EXPECT_THROW(state_session.Run(context, {{"tokens", Number(0)}}), std::invalid_argument);
   EXPECT_EQ(state.Values().at("past").tensor.bytes(), snapshot.at("past").tensor.bytes());
 }
 
@@ -2015,11 +2130,11 @@ TEST(PersistentValueState, IOArenaOutputsRemainLeasedUntilAllViewsAreReleased) {
     RuntimeContext context(KernelContext(DefaultOpset(18)),
                            RuntimeContextOptions{.io_allocator = arena.get()});
     RegisterStep(context);
-    PersistentValueState state(model, {{"past", Number(1)}});
-    output = state.Run(context, {{"tokens", Number(2)}});
+    RuntimeSession state_session(model, {{"past", Number(1)}});
+    PersistentValueState &state = state_session.persistent_state();
+    output = state_session.Run(context, {{"tokens", Number(2)}});
     EXPECT_EQ(state.Values().at("past").tensor.bytes(), output.at("present").tensor.bytes());
     EXPECT_EQ(arena->TotalAllocatedSize(), sizeof(float));
-    state.Close();
   }
   EXPECT_FALSE(weak.expired());
   EXPECT_EQ(Number(output.at("present")), 3);
@@ -2027,15 +2142,14 @@ TEST(PersistentValueState, IOArenaOutputsRemainLeasedUntilAllViewsAreReleased) {
   EXPECT_TRUE(weak.expired());
 }
 
-TEST(PersistentValueState, InitializerViewsRetainImmutableModelAndPayload) {
+TEST(PersistentValueState, InitializerViewsBorrowImmutableModelAndPayload) {
   for (bool raw : {false, true}) {
     SCOPED_TRACE(raw);
     RuntimeValueMap output;
-    std::weak_ptr<ModelProto> weak;
+    auto model = std::make_shared<ModelProto>(Model());
+    std::weak_ptr<ModelProto> weak = model;
     const uint8_t *payload = nullptr;
     {
-      auto model = std::make_shared<ModelProto>(Model());
-      weak = model;
       model->add_opset_import()->set_version(18);
       auto *initializer = model->mutable_graph()->add_initializer();
       initializer->set_name("constant");
@@ -2059,25 +2173,20 @@ TEST(PersistentValueState, InitializerViewsRetainImmutableModelAndPayload) {
       model->mutable_graph()->mutable_persistent_bindings(0)->set_output_name("constant");
       RuntimeContext context(KernelContext(DefaultOpset(18)));
       RegisterIdentity(context);
-      context.set_model_owner(std::make_shared<int>(0));
-      std::unique_ptr<PersistentValueState> state;
       const RuntimeValueMap initial{{"past", Number(1)}};
-      if (raw)
-        state =
-            std::make_unique<PersistentValueState>(*model, initial, RuntimeSessionOptions{}, model);
-      else
-        state = std::make_unique<PersistentValueState>(std::shared_ptr<const ModelProto>(model),
-                                                       initial);
-      output = state->Run(context, {{"tokens", Number(0)}});
+      auto session = std::make_unique<RuntimeSession>(*model, initial);
+      output = session->Run(context, {{"tokens", Number(0)}});
       EXPECT_EQ(output.at("constant").tensor.bytes(), payload);
-      EXPECT_EQ(state->Values().at("past").tensor.bytes(), payload);
-      state->Close();
-      model.reset();
+      EXPECT_EQ(session->persistent_state().Values().at("past").tensor.bytes(), payload);
+      EXPECT_EQ(model.use_count(), 1);
+      EXPECT_TRUE(output.at("constant").tensor.is_initializer_view());
+      EXPECT_EQ(output.at("constant").tensor.borrowed_owner().use_count(), 0);
     }
     ASSERT_FALSE(weak.expired());
     EXPECT_EQ(output.at("constant").tensor.bytes(), payload);
     EXPECT_EQ(Number(output.at("constant")), 4);
     output.clear();
+    model.reset();
     EXPECT_TRUE(weak.expired());
   }
 }
@@ -2162,7 +2271,7 @@ TEST(PersistentValueState, InitializerArenaExemptionIsLimitedToHostExecution) {
   }
 }
 
-TEST(PersistentValueState, ModelOwnerDoesNotReplaceBorrowedInitializerBackingOwner) {
+TEST(PersistentValueState, BorrowedInitializersStillRequireTheirBackingOwner) {
   for (bool retained_backing : {false, true}) {
     auto data = std::make_shared<std::vector<float>>(1, 4.0f);
     std::weak_ptr<std::vector<float>> backing_lifetime = data;
@@ -2183,19 +2292,22 @@ TEST(PersistentValueState, ModelOwnerDoesNotReplaceBorrowedInitializerBackingOwn
     consume->add_output("previous");
     model->mutable_graph()->mutable_output(0)->set_name("constant");
     model->mutable_graph()->mutable_persistent_bindings(0)->set_output_name("constant");
-    PersistentValueState state(std::shared_ptr<const ModelProto>(model), {{"past", Number(1)}});
-    RuntimeContext context(KernelContext(DefaultOpset(18)));
-    RegisterIdentity(context);
     RuntimeValueMap output;
-    if (retained_backing) {
-      output = state.Run(context, {{"tokens", Number(0)}});
-      EXPECT_EQ(output.at("constant").tensor.bytes(), payload);
-    } else {
-      const auto before = state.Values();
-      EXPECT_THROW(state.Run(context, {{"tokens", Number(0)}}), std::invalid_argument);
-      EXPECT_EQ(state.Values().at("past").tensor.bytes(), before.at("past").tensor.bytes());
+    {
+      RuntimeSession session(*model, {{"past", Number(1)}});
+      auto &state = session.persistent_state();
+      RuntimeContext context(KernelContext(DefaultOpset(18)));
+      RegisterIdentity(context);
+      if (retained_backing) {
+        output = session.Run(context, {{"tokens", Number(0)}});
+        EXPECT_EQ(output.at("constant").tensor.bytes(), payload);
+      } else {
+        const auto before = state.Values();
+        EXPECT_THROW(session.Run(context, {{"tokens", Number(0)}}), std::invalid_argument);
+        EXPECT_EQ(state.Values().at("past").tensor.bytes(), before.at("past").tensor.bytes());
+      }
+      EXPECT_FALSE(model_lifetime.expired());
     }
-    state.Close();
     model.reset();
     data.reset();
     EXPECT_TRUE(model_lifetime.expired());
@@ -2223,11 +2335,12 @@ TEST(PersistentValueState, WholeStructureFieldsTreatDotsLiterally) {
         {"cache.part", rt.values().at("request").fields.at("cache.part").BorrowView()},
         {"logits", Number(0)}});
   });
-  PersistentValueState state(
+  RuntimeSession state_session(
       model, {{"request",
                RuntimeValue(RuntimeValueMap{{"cache.part", Number(1)}, {"logits", Number(0)}})}});
+  PersistentValueState &state = state_session.persistent_state();
   const auto before = state.Values();
-  const auto output = state.Run(context, {{"tokens", Number(0)}});
+  const auto output = state_session.Run(context, {{"tokens", Number(0)}});
   EXPECT_EQ(output.at("response").fields.at("cache.part").tensor.bytes(),
             before.at("request").fields.at("cache.part").tensor.bytes());
 }
@@ -2237,22 +2350,23 @@ TEST(PersistentValueState, WholeStructuredInitialValuesRejectPartialFeedsAndOver
   RuntimeContext context(KernelContext(DefaultOpset(18)));
   RegisterStructuredStep(context);
   RuntimeValueMap initial{{"request", Request(1, 2)}};
-  PersistentValueState state(model, initial);
+  RuntimeSession state_session(model, initial);
+  PersistentValueState &state = state_session.persistent_state();
   EXPECT_EQ(state.Values().at("request").fields.at("cache").fields.at("keys").tensor.bytes(),
             initial.at("request").fields.at("cache").fields.at("keys").tensor.bytes());
-  const auto output = state.Run(context, {{"tokens", Number(3)}});
+  const auto output = state_session.Run(context, {{"tokens", Number(3)}});
   EXPECT_EQ(Number(output.at("response").fields.at("cache").fields.at("keys")), 4);
   EXPECT_THROW(
-      state.Run(context, {{"request", RuntimeValue(RuntimeValueMap{{"tokens", Number(3)}})},
-                          {"tokens", Number(3)}}),
+      state_session.Run(context, {{"request", RuntimeValue(RuntimeValueMap{{"tokens", Number(3)}})},
+                                  {"tokens", Number(3)}}),
       std::invalid_argument);
-  EXPECT_THROW(state.Run(context, {{"request", Request(9, 9)}, {"tokens", Number(3)}}),
+  EXPECT_THROW(state_session.Run(context, {{"request", Request(9, 9)}, {"tokens", Number(3)}}),
                std::invalid_argument);
   EXPECT_THROW(state.Reset({{"request", Request(1, 2)}, {"request.cache", Cache(1, 2)}}),
                std::invalid_argument);
   EXPECT_THROW(state.Reset({{"request", RuntimeValue(RuntimeValueMap{{"cache", Cache(1, 2)}})}}),
                std::invalid_argument);
-  EXPECT_THROW(state.Run(context, {{"request.cache", Cache(1, 2)}, {"tokens", Number(3)}}),
+  EXPECT_THROW(state_session.Run(context, {{"request.cache", Cache(1, 2)}, {"tokens", Number(3)}}),
                std::invalid_argument);
   EXPECT_EQ(Number(state.Values().at("request").fields.at("cache").fields.at("keys")), 4);
 }
@@ -2273,7 +2387,8 @@ TEST(PersistentValueState, LiteralDottedRootAndWholeStructureHaveDistinctStateSl
   RuntimeValueMap initial{{"request", Request(1, 2)}, {"request.cache", Cache(10, 20)}};
   const uint8_t *nested = initial.at("request").fields.at("cache").fields.at("keys").tensor.bytes();
   const uint8_t *literal = initial.at("request.cache").fields.at("keys").tensor.bytes();
-  PersistentValueState state(model, initial);
+  RuntimeSession state_session(model, initial);
+  PersistentValueState &state = state_session.persistent_state();
   const auto before = state.Values();
   ASSERT_EQ(before.size(), 2u);
   EXPECT_EQ(before.at("request").fields.at("cache").fields.at("keys").tensor.bytes(), nested);
@@ -2286,7 +2401,7 @@ TEST(PersistentValueState, LiteralDottedRootAndWholeStructureHaveDistinctStateSl
                                      {"logits", RuntimeValue(rt.Get("tokens").BorrowView())}});
     rt.values()["response.cache"] = rt.values().at("request.cache").BorrowView();
   });
-  const auto output = state.Run(context, {{"tokens", Number(3)}});
+  const auto output = state_session.Run(context, {{"tokens", Number(3)}});
   EXPECT_EQ(output.at("response").fields.at("cache").fields.at("keys").tensor.bytes(), nested);
   EXPECT_EQ(output.at("response.cache").fields.at("keys").tensor.bytes(), literal);
   state.Reset(before);
@@ -2306,7 +2421,8 @@ TEST(PersistentValueState, WholeStructureKeepsDottedFieldsAndNestedFieldsDistinc
       {"request", RuntimeValue(RuntimeValueMap{
                       {"cache.part", Number(1)},
                       {"cache", RuntimeValue(RuntimeValueMap{{"part", Number(2)}})}})}};
-  PersistentValueState state(model, initial);
+  RuntimeSession state_session(model, initial);
+  PersistentValueState &state = state_session.persistent_state();
   const auto before = state.Values();
   EXPECT_EQ(Number(before.at("request").fields.at("cache.part")), 1);
   EXPECT_EQ(Number(before.at("request").fields.at("cache").fields.at("part")), 2);
@@ -2314,7 +2430,7 @@ TEST(PersistentValueState, WholeStructureKeepsDottedFieldsAndNestedFieldsDistinc
   context.RegisterCustomKernel("test.feedback", "Step", [](const NodeProto &, RuntimeContext &rt) {
     rt.values()["response"] = rt.values().at("request").BorrowView();
   });
-  const auto output = state.Run(context, {{"tokens", Number(3)}});
+  const auto output = state_session.Run(context, {{"tokens", Number(3)}});
   EXPECT_EQ(output.at("response").fields.at("cache.part").tensor.bytes(),
             before.at("request").fields.at("cache.part").tensor.bytes());
   EXPECT_EQ(output.at("response").fields.at("cache").fields.at("part").tensor.bytes(),
@@ -2334,14 +2450,16 @@ TEST(PersistentValueState, CurrentFeedsRequireWholeStructuredInputs) {
         RuntimeValueMap{{"cache", request.fields.at("cache").BorrowView()},
                         {"logits", rt.values().at("tokens").fields.at("token.part").BorrowView()}});
   });
-  PersistentValueState state(model, {{"request", Request(1, 2)}});
+  RuntimeSession state_session(model, {{"request", Request(1, 2)}});
   RuntimeValueMap feeds{{"tokens", RuntimeValue(RuntimeValueMap{{"token.part", Number(3)}})}};
   const uint8_t *token = feeds.at("tokens").fields.at("token.part").tensor.bytes();
-  const auto output = state.Run(context, feeds);
+  const auto output = state_session.Run(context, feeds);
   EXPECT_EQ(output.at("response").fields.at("logits").tensor.bytes(), token);
   EXPECT_EQ(Number(output.at("response").fields.at("logits")), 3);
-  EXPECT_THROW(state.Run(context, {{R"(tokens.token\.part)", Number(4)}}), std::invalid_argument);
-  EXPECT_THROW(state.Run(context, {{"tokens.token.part", Number(4)}}), std::invalid_argument);
+  EXPECT_THROW(state_session.Run(context, {{R"(tokens.token\.part)", Number(4)}}),
+               std::invalid_argument);
+  EXPECT_THROW(state_session.Run(context, {{"tokens.token.part", Number(4)}}),
+               std::invalid_argument);
 }
 
 TEST(PersistentValueState, GraphAndFieldNamesTreatBackslashesAndDotsLiterally) {
@@ -2365,35 +2483,37 @@ TEST(PersistentValueState, GraphAndFieldNamesTreatBackslashesAndDotsLiterally) {
   RuntimeValueMap initial{{input_name, RuntimeValue(RuntimeValueMap{{state_field, Number(1)},
                                                                     {token_field, Number(2)}})}};
   const uint8_t *payload = initial.at(input_name).fields.at(state_field).tensor.bytes();
-  PersistentValueState state(model, initial);
+  RuntimeSession state_session(model, initial);
+  PersistentValueState &state = state_session.persistent_state();
   EXPECT_EQ(state.Values().at(input_name).fields.at(state_field).tensor.bytes(), payload);
   RuntimeContext context(KernelContext(DefaultOpset(18)));
   context.RegisterCustomKernel(
       "test.feedback", "Step", [](const NodeProto &node, RuntimeContext &rt) {
         rt.values()[node.output(0)] = rt.values().at(node.input(0)).BorrowView();
       });
-  const auto flat_output = state.Run(context, {{"tokens", Number(0)}});
+  const auto flat_output = state_session.Run(context, {{"tokens", Number(0)}});
   EXPECT_EQ(flat_output.at(output_name).fields.at(state_field).tensor.bytes(), payload);
   EXPECT_EQ(Number(flat_output.at(output_name).fields.at(token_field)), 2);
   state.Reset(state.Values());
   EXPECT_EQ(state.Values().at(input_name).fields.at(state_field).tensor.bytes(), payload);
   for (const std::string &invalid :
        {std::string(R"(request\\part\.cache)"), input_name + "." + state_field}) {
-    EXPECT_THROW(state.Run(context, {{invalid, Number(4)}}), std::invalid_argument);
+    EXPECT_THROW(state_session.Run(context, {{invalid, Number(4)}}), std::invalid_argument);
   }
 }
 
 TEST(PersistentValueState, StatesShareExplicitInitialStorageButPublishIndependently) {
   ModelProto model = Model();
   RuntimeValueMap initial{{"past", Number(1)}};
-  PersistentValueState first(model, initial);
+  RuntimeSession first_session(model, initial);
+  PersistentValueState &first = first_session.persistent_state();
   PersistentValueState second(model, initial);
   const uint8_t *payload = initial.at("past").tensor.bytes();
   EXPECT_EQ(first.Values().at("past").tensor.bytes(), payload);
   EXPECT_EQ(second.Values().at("past").tensor.bytes(), payload);
   RuntimeContext context(KernelContext(DefaultOpset(18)));
   RegisterStep(context);
-  const auto output = first.Run(context, {{"tokens", Number(1)}});
+  const auto output = first_session.Run(context, {{"tokens", Number(1)}});
   EXPECT_EQ(first.Values().at("past").tensor.bytes(), output.at("present").tensor.bytes());
   EXPECT_EQ(second.Values().at("past").tensor.bytes(), payload);
   EXPECT_EQ(Number(second.Values().at("past")), 1);
@@ -2411,32 +2531,31 @@ TEST(PersistentValueState, RejectsPersistentDeclarationsInsideSubgraphs) {
   EXPECT_THROW((PersistentValueState(model, {{"past", Number(1)}})), std::invalid_argument);
 }
 
-TEST(PersistentValueState, RetainsExternalOwnersAcrossFailedInitializationUntilClose) {
+TEST(PersistentValueState, BorrowsModelAndContextAcrossFailedExecution) {
   auto model = std::make_shared<ModelProto>(Model());
   std::weak_ptr<ModelProto> model_lifetime = model;
-  PersistentValueState state(*model, {{"past", Number(1)}});
-  state.RetainOwner(model);
-  state.RetainOwner(model);
-  EXPECT_EQ(model.use_count(), 2);
+  auto state_session =
+      std::make_unique<RuntimeSession>(*model, RuntimeValueMap{{"past", Number(1)}});
+  PersistentValueState &state = state_session->persistent_state();
+  EXPECT_EQ(model.use_count(), 1);
   auto context = std::make_shared<RuntimeContext>(KernelContext(DefaultOpset(18)));
   std::weak_ptr<RuntimeContext> context_lifetime = context;
-  state.RetainOwner(context);
-  model.reset();
-  EXPECT_THROW(state.Run(*context, {{"tokens", Number(1)}}), std::invalid_argument);
-  context.reset();
+  EXPECT_EQ(context.use_count(), 1);
+  EXPECT_THROW(state_session->Run(*context, {{"tokens", Number(1)}}), std::invalid_argument);
   EXPECT_FALSE(model_lifetime.expired());
   EXPECT_FALSE(context_lifetime.expired());
-  EXPECT_THROW(state.RetainOwner({}), std::invalid_argument);
-  state.Close();
+  EXPECT_EQ(Number(state.Values().at("past")), 1);
+  state_session.reset();
+  model.reset();
+  context.reset();
   EXPECT_TRUE(model_lifetime.expired());
   EXPECT_TRUE(context_lifetime.expired());
-  auto owner = std::make_shared<int>(1);
-  EXPECT_THROW(state.RetainOwner(owner), std::invalid_argument);
 }
 
 TEST(PersistentValueState, RejectsNullAffinePayloadsBeforeContentValidation) {
   ModelProto model = Model();
-  PersistentValueState state(model, {{"past", Number(1)}});
+  RuntimeSession state_session(model, {{"past", Number(1)}});
+  PersistentValueState &state = state_session.persistent_state();
   auto owner = std::make_shared<int>(0);
   for (TensorProto::DataType storage : {TensorProto::INT4, TensorProto::INT8})
     for (int part = 0; part < 5; ++part) {

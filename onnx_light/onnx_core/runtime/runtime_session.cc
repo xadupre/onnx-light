@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/runtime/runtime_session.h"
+#include "onnx_core/runtime/persistent_value_state.h"
 #include "onnx_core/runtime/quantization.h"
 
 #include <chrono>
@@ -20,36 +21,6 @@
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
-
-Tensor InitializerView(const TensorProto &proto, const std::shared_ptr<void> &model_owner) {
-  Shape shape;
-  for (const auto dimension : proto.dims())
-    shape.push_back(static_cast<int64_t>(dimension));
-  if (proto.is_raw_data()) {
-    const auto &raw = proto.raw_data();
-    return Tensor::Borrow(proto.name(), proto.data_type(), shape, raw.data(), raw.size(),
-                          raw.is_borrowed() ? raw.owner() : model_owner);
-  }
-  const auto borrow = [&](const auto &values) {
-    return Tensor::Borrow(
-        proto.name(), proto.data_type(), shape, reinterpret_cast<const uint8_t *>(values.data()),
-        values.size() * sizeof(typename std::decay_t<decltype(values)>::value_type), model_owner);
-  };
-  switch (proto.data_type()) {
-  case DataType::FLOAT:
-    return borrow(proto.float_data().values());
-  case DataType::DOUBLE:
-    return borrow(proto.double_data().values());
-  case DataType::INT64:
-    return borrow(proto.int64_data().values());
-  case DataType::UINT64:
-    return borrow(proto.uint64_data().values());
-  case DataType::INT32:
-    return borrow(proto.int32_data().values());
-  default:
-    return TensorFromProto(proto);
-  }
-}
 
 /// Derives the CPU policy a session requests when the caller supplied none.
 /// The requested participant count comes from
@@ -134,6 +105,8 @@ OpsetImports ParseOpsetImports(const utils::RepeatedProtoField<OperatorSetIdProt
 }
 
 } // namespace
+
+RuntimeSession::~RuntimeSession() = default;
 
 RuntimeSession::RuntimeSession(const ModelProto &model, int verbose)
     : RuntimeSession(model, RuntimeSessionOptions{
@@ -312,7 +285,7 @@ std::unordered_set<std::string> RuntimeSession::SeedInitializers(RuntimeContext 
   if (initializer_graph_ != nullptr) {
     for (const TensorProto &initializer : initializer_graph_->initializer())
       if (!rt.HasValue(initializer.name())) {
-        rt.Set(initializer.name(), InitializerView(initializer, rt.model_owner()),
+        rt.Set(initializer.name(), Tensor::BorrowInitializer(initializer),
                RuntimeEventKind::kInitializer);
         seeded.insert(initializer.name());
       }
@@ -331,8 +304,7 @@ std::unordered_set<std::string> RuntimeSession::SeedInitializers(RuntimeContext 
           value = RuntimeValue(std::move(owned));
           value.quantization_parameters = rt.quantization_parameters();
         } else {
-          value = rt.model_owner() ? RuntimeValue::FromEncodedView(initializer, rt.model_owner())
-                                   : RuntimeValue(initializer);
+          value = RuntimeValue::FromEncodedView(initializer);
         }
         rt.PutValue(initializer.name(), std::move(value), RuntimeEventKind::kInitializer);
         seeded.insert(initializer.name());

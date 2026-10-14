@@ -36,6 +36,7 @@
 #include <nanobind/stl/shared_ptr.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/string_view.h>
+#include <nanobind/stl/unordered_map.h>
 #include <nanobind/stl/unordered_set.h>
 #include <nanobind/stl/vector.h>
 #include <sstream>
@@ -46,6 +47,7 @@ namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
 using core::runtime::CpuAffinityPolicy;
 using core::runtime::CpuExecutionPolicy;
+using core::runtime::CpuExecutor;
 using core::runtime::CpuExecutorCounters;
 using core::runtime::CpuExecutorKey;
 using core::runtime::CpuLogicalProcessor;
@@ -498,9 +500,10 @@ RuntimeValue FeedbackValueFromPython(
       tensor.name = name;
       return RuntimeValue(std::move(tensor));
     }
-    auto owner = source.has_allocation() ? std::shared_ptr<void>{}
-                 : source.is_borrowed()  ? source.borrowed_owner()
-                                         : RetainFeedbackOwner(value);
+    auto owner = source.is_initializer_view() ? RetainFeedbackOwner(value)
+                 : source.has_allocation()    ? std::shared_ptr<void>{}
+                 : source.is_borrowed()       ? source.borrowed_owner()
+                                              : RetainFeedbackOwner(value);
     Tensor tensor = Tensor::Borrow(name, source.data_type, source.shape, source.bytes(),
                                    source.size_bytes(), std::move(owner));
     return RuntimeValue(std::move(tensor));
@@ -518,32 +521,50 @@ RuntimeValueMap FeedbackValuesFromPython(nb::dict values, const ModelProto *mode
   return result;
 }
 
-nb::object FeedbackValueToPython(RuntimeValue value, const StructTypeCatalogue &catalogue = {}) {
+nb::object FeedbackValueToPython(RuntimeValue value, const StructTypeCatalogue &catalogue = {},
+                                 nb::handle model = {}) {
   if (value.HasPagedCacheStructure())
     return nb::cast(value.ToPagedCache("", catalogue));
   if (value.kind == RuntimeValue::Kind::kSequence) {
     nb::list elements;
     for (const auto &element : value.elements)
-      elements.append(FeedbackValueToPython(element.BorrowView(), catalogue));
+      elements.append(FeedbackValueToPython(element.BorrowView(), catalogue, model));
     return elements;
   }
-  if (value.kind == RuntimeValue::Kind::kTensor)
+  if (value.kind == RuntimeValue::Kind::kTensor) {
+    if (value.tensor.is_initializer_view()) {
+      if (model.is_valid())
+        value.tensor = Tensor::Borrow(value.tensor.name, value.tensor.data_type, value.tensor.shape,
+                                      value.tensor.bytes(), value.tensor.size_bytes(),
+                                      RetainFeedbackOwner(model));
+      else
+        value.tensor = value.tensor.ToOwned();
+    }
     return nb::cast(std::move(value.tensor));
+  }
   if (value.kind == RuntimeValue::Kind::kEncoded) {
+    if (value.encoded.use_count() == 0) {
+      if (model.is_valid())
+        value.encoded = std::shared_ptr<const EncodedValueProto>(RetainFeedbackOwner(model),
+                                                                 value.encoded.get());
+      else
+        value = value.DeepCopy();
+    }
     if (value.quantization_parameters && value.Encoded().has_parameter_ref())
       return nb::cast(std::move(value));
     return nb::cast(std::move(value.encoded));
   }
   nb::dict fields;
   for (auto &[name, field] : value.fields)
-    fields[nb::str(name.c_str())] = FeedbackValueToPython(std::move(field), catalogue);
+    fields[nb::str(name.c_str())] = FeedbackValueToPython(std::move(field), catalogue, model);
   return fields;
 }
 
-nb::dict FeedbackValuesToPython(RuntimeValueMap values, const StructTypeCatalogue &catalogue = {}) {
+nb::dict FeedbackValuesToPython(RuntimeValueMap values, const StructTypeCatalogue &catalogue = {},
+                                nb::handle model = {}) {
   nb::dict result;
   for (auto &[name, value] : values)
-    result[nb::str(name.c_str())] = FeedbackValueToPython(std::move(value), catalogue);
+    result[nb::str(name.c_str())] = FeedbackValueToPython(std::move(value), catalogue, model);
   return result;
 }
 
@@ -737,7 +758,7 @@ struct AllocatedNumpyOwner {
   core::runtime::AllocationHandle allocation;
 };
 
-nb::object TensorToNumpy(Tensor &tensor, RuntimeContext &rt) {
+nb::object TensorToNumpy(Tensor &tensor, RuntimeContext &rt, nb::handle source = {}) {
   if (static_cast<TensorProto::DataType>(tensor.data_type) == TensorProto::STRING) {
     OnnxLightNumpyDtype *object_dtype = OnnxLightNumpyDtypeFromType(OnnxLightNumpyType::kObject);
     if (object_dtype == nullptr)
@@ -799,6 +820,8 @@ nb::object TensorToNumpy(Tensor &tensor, RuntimeContext &rt) {
         delete static_cast<AllocatedNumpyOwner *>(pointer);
       });
     }
+  } else if (tensor.is_initializer_view() && source.is_valid()) {
+    owner = nb::borrow<nb::object>(source);
   } else if (data == tensor.data.data()) {
     auto *owned = new core::runtime::RawByteBuffer(tensor.data.release());
     data = owned->data();
@@ -877,6 +900,11 @@ public:
     return session_->cpu_executor()->instance_id();
   }
 
+  const std::shared_ptr<CpuExecutor> &CpuExecutorLease() {
+    EnsureSession();
+    return session_->cpu_executor();
+  }
+
   nb::list Run(RuntimeContext &rt, nb::object requested_outputs, nb::dict feeds,
                bool release_intermediates) {
     std::vector<std::string> outputs = requested_outputs.is_none()
@@ -933,11 +961,11 @@ public:
       }
       nb::object result;
       if (rt.Has(name)) {
-        result = TensorToNumpy(rt.Get(name), rt);
+        result = TensorToNumpy(rt.Get(name), rt, nb::cast(this, nb::rv_policy::reference));
       } else if (rt.HasSequence(name)) {
         nb::list sequence;
         for (Tensor &tensor : rt.GetSequence(name).values)
-          sequence.append(TensorToNumpy(tensor, rt));
+          sequence.append(TensorToNumpy(tensor, rt, nb::cast(this, nb::rv_policy::reference)));
         result = std::move(sequence);
       } else {
         throw std::runtime_error("Output '" + name + "' was not produced by the graph.");
@@ -1985,9 +2013,47 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           nb::arg("plan"), nb::arg("options"), nb::keep_alive<1, 2>(),
           "Builds a session over ``plan`` using a :class:`RuntimeSessionOptions` "
           "bundle. ``plan`` must outlive the session; this binding keeps it alive.")
-      .def("run", &RuntimeSession::Run, nb::arg("rt"),
+      .def("run", nb::overload_cast<RuntimeContext &>(&RuntimeSession::Run), nb::arg("rt"),
            "Executes the plan once against ``rt``, resolving, building, and caching "
            "kernel instances on the first call. Safe to call repeatedly on the same session.")
+      .def(
+          "__init__",
+          [](RuntimeSession *self, const ModelProto &model, nb::dict initial,
+             RuntimeSessionOptions options) {
+            new (self) RuntimeSession(model, FeedbackValuesFromPython(initial, &model), options);
+          },
+          nb::arg("model"), nb::arg("initial"), nb::arg("options") = RuntimeSessionOptions{},
+          nb::keep_alive<1, 2>(),
+          "Builds a session owning persistent values initialized from whole graph inputs.")
+      .def_prop_ro("persistent_state", nb::overload_cast<>(&RuntimeSession::persistent_state),
+                   nb::rv_policy::reference_internal, "Returns the session-owned persistent state.")
+      .def(
+          "reset",
+          [](RuntimeSession &self, nb::dict initial) {
+            self.Reset(FeedbackValuesFromPython(initial, &self.persistent_state().model()));
+          },
+          nb::arg("initial"),
+          "Replaces persistent values to start a new sequence while retaining cached kernels.")
+      .def(
+          "_retain_context", [](RuntimeSession &, RuntimeContext &) {}, nb::keep_alive<1, 2>())
+      .def(
+          "run",
+          [](RuntimeSession &self, RuntimeContext &context, nb::dict feeds,
+             const core::runtime::TaskCompletion *completion) {
+            const auto &state = self.persistent_state();
+            RuntimeValueMap inputs = FeedbackValuesFromPython(feeds, &state.model());
+            nb::cast(&self, nb::rv_policy::reference)
+                .attr("_retain_context")(nb::cast(&context, nb::rv_policy::reference));
+            RuntimeValueMap outputs;
+            {
+              nb::gil_scoped_release release;
+              outputs = self.Run(context, inputs, completion);
+            }
+            return FeedbackValuesToPython(std::move(outputs), state.struct_type_catalogue(),
+                                          nb::cast(&state.model(), nb::rv_policy::reference));
+          },
+          nb::arg("context"), nb::arg("feeds"), nb::arg("completion").none() = nb::none(),
+          "Runs in context and commits persistent feedback only after successful validation.")
       .def_prop_ro("parameters", &RuntimeSession::parameters,
                    "Model-independent execution parameters applied to the nodes this "
                    "session runs.")
@@ -2077,6 +2143,32 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       "positive temperature samples softmax-scaled logits. Graph persistent bindings enable cached "
       "decoding; other models evaluate the full prefix. State is local to this call.");
 
+  rt_mod.def(
+      "generate_pipeline",
+      [](const ModelProto &model, RuntimeContext &context, ReferenceEvaluatorRunner &runner,
+         nb::dict feeds, const core::runtime::GenerationOptions &options,
+         RuntimeSessionOptions session_options, nb::object embedding) {
+        RuntimeContext execution_context(
+            context, core::runtime::RuntimeContextOptions{
+                         .events_enabled = context.events_enabled(),
+                         .verbose = context.verbose(),
+                         .release_intermediates = context.release_intermediates(),
+                         .device = context.device(),
+                         .cpu_executor = runner.CpuExecutorLease().get(),
+                     });
+        core::runtime::GenerationPipeline pipeline;
+        pipeline.prefill = &model;
+        if (!embedding.is_none())
+          pipeline.embedding = &nb::cast<const ModelProto &>(embedding);
+        auto inputs = FeedbackValuesFromPython(feeds, &model);
+        nb::gil_scoped_release release;
+        return core::runtime::Generate(pipeline, execution_context, inputs, options,
+                                       std::move(session_options));
+      },
+      nb::arg("model"), nb::arg("context"), nb::arg("runner"), nb::arg("feeds"), nb::arg("options"),
+      nb::arg("session_options"), nb::arg("embedding"),
+      "Generates tokens with graphs connected by name and a single shared runtime context.");
+
   nb::class_<core::runtime::TaskCompletion>(
       rt_mod, "TaskCompletion", "Shares a single-use task completion and cancellation gate.")
       .def(
@@ -2104,9 +2196,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "__init__",
           [](PersistentValueState *self, const ModelProto &model, nb::dict initial,
              RuntimeSessionOptions options) {
-            new (self) PersistentValueState(
-                model, FeedbackValuesFromPython(initial, &model), options,
-                RetainFeedbackOwner(nb::cast(&model, nb::rv_policy::reference)));
+            new (self)
+                PersistentValueState(model, FeedbackValuesFromPython(initial, &model), options);
           },
           nb::arg("model"), nb::arg("initial"), nb::arg("options") = RuntimeSessionOptions{},
           nb::keep_alive<1, 2>(),
@@ -2115,44 +2206,17 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "The model must remain immutable. Inputs and retained/returned buffers can alias; "
           "callers must not mutate them while shared or retained.")
       .def(
-          "_retain_context", [](PersistentValueState &, RuntimeContext &) {},
-          nb::keep_alive<1, 2>(),
-          "Retains a context before native kernel initialization, including failing calls.")
-      .def(
-          "run",
-          [](PersistentValueState &self, RuntimeContext &context, nb::dict feeds,
-             const core::runtime::TaskCompletion *completion) {
-            RuntimeValueMap inputs = FeedbackValuesFromPython(feeds, &self.model());
-            // Kernel initialization can retain allocator pointers even when execution fails.
-            nb::cast(&self, nb::rv_policy::reference)
-                .attr("_retain_context")(nb::cast(&context, nb::rv_policy::reference));
-            RuntimeValueMap outputs;
-            {
-              nb::gil_scoped_release release;
-              outputs = self.Run(context, inputs, completion);
-            }
-            return FeedbackValuesToPython(std::move(outputs), self.struct_type_catalogue());
-          },
-          nb::arg("context"), nb::arg("feeds"), nb::arg("completion").none() = nb::none(),
-          "Runs the model and commits feedback only after successful validation. "
-          "Feeds name whole non-retained graph inputs; retained inputs cannot be overridden. "
-          "Returns lifetime-safe shared tensors, nested dictionaries or encoded values. "
-          "Uses an optional single-use TaskCompletion to cancel before publication. "
-          "When context.events_enabled is true, appends invocation events to context.events(), "
-          "including events recorded before failure; existing entries are preserved. "
-          "The caller clears the log with context.clear_events().")
-      .def(
           "reset",
           [](PersistentValueState &self, nb::dict initial) {
             self.Reset(FeedbackValuesFromPython(initial, &self.model()));
           },
           nb::arg("initial"), "Replaces retained state with explicitly supplied initial values.")
-      .def("close", &PersistentValueState::Close,
-           "Releases retained values and permanently closes the state.")
+      .def_prop_ro("model", &PersistentValueState::model, nb::rv_policy::reference_internal)
       .def_prop_ro(
           "values",
           [](const PersistentValueState &self) {
-            return FeedbackValuesToPython(self.Values(), self.struct_type_catalogue());
+            return FeedbackValuesToPython(self.Values(), self.struct_type_catalogue(),
+                                          nb::cast(&self.model(), nb::rv_policy::reference));
           },
           "Returns shared read-only payload views keyed by exact retained graph input names.");
 

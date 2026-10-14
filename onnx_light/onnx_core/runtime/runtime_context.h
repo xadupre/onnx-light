@@ -438,6 +438,9 @@ struct RuntimeContextOptions {
   /// kernel (see :cpp:func:`RegisterKernelFn`) and, when none is registered,
   /// makes :cpp:func:`RunNode` fail with a diagnostic naming the device.
   symbolic::Device device = symbolic::Device::kUndefined;
+  /// Non-owning CPU executor installed when the context is constructed.
+  /// The caller must keep its lease alive for the context lifetime.
+  CpuExecutor *cpu_executor = nullptr;
 };
 
 /**
@@ -461,6 +464,12 @@ struct RuntimeContextOptions {
  * Convenience accessors (:cpp:func:`Set`, :cpp:func:`Get`,
  * :cpp:func:`Has`, :cpp:func:`Remove`) wrap the underlying map so
  * callers do not have to reach for ``rt.tensors()[name]`` directly.
+ *
+ * A context is not thread-safe for concurrent execution. The caller must
+ * serialize RunNode, RuntimeSession::Run and Generate calls using the same
+ * context, even when they use different sessions or models. Concurrent requests
+ * require independent contexts. Parallel kernel execution does not permit
+ * concurrent invocations on one context; no context-level overlap check is provided.
  */
 class RuntimeContext {
 private:
@@ -479,6 +488,8 @@ public:
   explicit RuntimeContext(KernelContext kernel_ctx, RuntimeContextOptions options = {});
   RuntimeContext(KernelContext kernel_ctx, TensorMap tensors, RuntimeContextOptions options = {});
   explicit RuntimeContext(RuntimeContextOptions options);
+  /// Copies execution configuration with independent values and a shared event log.
+  RuntimeContext(const RuntimeContext &source, RuntimeContextOptions options);
 
   /// Returns whether event logging was enabled when the context was built.
   /// When disabled (the default), :cpp:func:`Set`, :cpp:func:`Put`,
@@ -592,10 +603,6 @@ public:
   bool retains_output(const std::string &name) const noexcept {
     return retained_outputs_.count(name) != 0;
   }
-
-  /** Retains the immutable source model backing ownership-preserving initializer views. */
-  void set_model_owner(std::shared_ptr<void> owner) { model_owner_ = std::move(owner); }
-  const std::shared_ptr<void> &model_owner() const noexcept { return model_owner_; }
 
   /// Kernel construction context (opset + allocator).
   KernelContext &kernel_ctx() noexcept { return kernel_ctx_; }
@@ -932,10 +939,11 @@ public:
   RuntimeEventLog &events() noexcept { return events_->log; }
 
   /// Empties the shared event log without changing any context's tensor map.
-  void ClearEvents() noexcept {
-    std::lock_guard<std::mutex> lock(events_->mutex);
-    events_->log.clear();
-  }
+  void ClearEvents() noexcept;
+  /// Moves every recorded event out of this context's shared event log.
+  RuntimeEventLog TakeEvents();
+  /// Appends events to this context's shared event log.
+  void AppendEvents(RuntimeEventLog events);
 
   /// Creates a fresh child context for executing a subgraph (e.g. the
   /// ``then_branch`` or ``else_branch`` of ``If``, or the ``body`` of
@@ -964,6 +972,12 @@ public:
   ///   A new :cpp:class:`RuntimeContext` initialised for function execution.
   RuntimeContext MakeFunctionContext() const;
 
+  /// Creates an independent invocation with fresh allocators and diagnostics.
+  RuntimeContext MakeIsolatedContext() const;
+
+  /// Clears invocation values while preserving allocators, plans and diagnostics.
+  void ResetInvocation() noexcept;
+
   /// Resets the per-invocation state so the context can be reused for a
   /// fresh run: clears all value stores and the shared event
   /// log, and resets :cpp:func:`current_node_index` to ``-1``. The kernel
@@ -974,15 +988,7 @@ public:
   /// is amortised across repeated runs of the same model.
   /// Kernel usage recording is preserved; :cpp:func:`ClearKernelUsage` clears it
   /// separately.
-  void Clear() noexcept {
-    tensors_.clear();
-    values_.clear();
-    sequences_.clear();
-    maps_.clear();
-    shapes_.clear();
-    ClearEvents();
-    current_node_index_ = -1;
-  }
+  void Clear() noexcept;
 
   /// Records a :cpp:enumerator:`RuntimeEventAction::kRunNode` event for
   /// ``node`` in the event log when :cpp:func:`events_enabled` is set.
@@ -1152,7 +1158,7 @@ public:
   }
 
 private:
-  friend class PersistentValueState;
+  friend class RuntimeSession;
   size_t persistent_tensor_initial_capacity_ = 0;
   const GraphProto *persistent_graph_ = nullptr;
   struct PersistentTensorBinding {
@@ -1212,7 +1218,6 @@ private:
   CpuExecutor *cpu_executor_ = nullptr;
   bool release_intermediates_ = false;
   std::unordered_set<std::string> retained_outputs_;
-  std::shared_ptr<void> model_owner_;
   int64_t current_node_index_ = -1;
   /// Index of the control-flow node in the parent graph currently being
   /// executed (see :cpp:func:`set_current_subgraph`). ``-1`` for the

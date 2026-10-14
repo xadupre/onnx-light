@@ -36,15 +36,15 @@ template <typename Proto> inline std::string ProtoDebugString(const Proto &proto
 /**
  * @brief Parses a protobuf message from a raw byte buffer.
  *
- * Constructs a @c StringStream over the supplied buffer and calls
- * @c ParseFromStream() on @p proto.  Returns @c false without modifying
+ * Calls @c ParseFromArray() on a temporary message so that the whole buffer
+ * must parse successfully. Returns @c false without modifying
  * @p proto when @p proto is null, when @p buffer is null but @p length is
  * positive, when @p length exceeds the 2 GB protobuf limit, when parsing
  * raises a @c std::runtime_error, or when bytes remain unconsumed after parsing
  * completes.
  *
  * @tparam Proto A protobuf-like message type that exposes a
- *               @c ParseFromStream(utils::StringStream&, ParseOptions&) method.
+ *               @c ParseFromArray(const void*, int) method.
  * @param proto  Destination message that receives the parsed content.  Must not
  *               be @c nullptr.
  * @param buffer Pointer to the serialized byte data.  May be @c nullptr only
@@ -59,12 +59,9 @@ inline bool ParseProtoFromBytes(Proto *proto, const char *buffer, size_t length)
   if (proto == nullptr || (buffer == nullptr && length > 0) || length > total_bytes_limit) {
     return false;
   }
-  ParseOptions options;
-  utils::StringStream stream(reinterpret_cast<const uint8_t *>(buffer),
-                             static_cast<int64_t>(length));
   Proto parsed;
   try {
-    if (!parsed.ParseFromStream(stream, options) || stream.NotEnd()) {
+    if (!parsed.ParseFromArray(buffer, static_cast<int>(length))) {
       return false;
     }
   } catch (const std::runtime_error &) {

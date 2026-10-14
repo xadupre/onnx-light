@@ -10,6 +10,7 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <cstring>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -565,6 +566,34 @@ TEST(SimpleTensorFromProto, DoubleTypedField) {
   Tensor t = TensorFromProto(tp);
   EXPECT_DOUBLE_EQ(t.AsDouble()[0], 1.5);
   EXPECT_DOUBLE_EQ(t.AsDouble()[1], 2.5);
+}
+
+TEST(SimpleTensorFromProto, Complex64TypedField) {
+  TensorProto tp;
+  tp.set_name("c64");
+  tp.ref_dims().push_back(2);
+  tp.set_data_type(TensorProto::DataType::COMPLEX64);
+  const float values[] = {1.0f, -2.0f, 3.5f, 4.5f};
+  for (const float value : values) {
+    tp.add_float_data(value);
+  }
+  Tensor t = TensorFromProto(tp);
+  ASSERT_EQ(t.size_bytes(), sizeof(values));
+  EXPECT_EQ(std::memcmp(t.bytes(), values, sizeof(values)), 0);
+}
+
+TEST(SimpleTensorFromProto, Complex128TypedField) {
+  TensorProto tp;
+  tp.set_name("c128");
+  tp.ref_dims().push_back(2);
+  tp.set_data_type(TensorProto::DataType::COMPLEX128);
+  const double values[] = {1.0, -2.0, 3.5, 4.5};
+  for (const double value : values) {
+    tp.add_double_data(value);
+  }
+  Tensor t = TensorFromProto(tp);
+  ASSERT_EQ(t.size_bytes(), sizeof(values));
+  EXPECT_EQ(std::memcmp(t.bytes(), values, sizeof(values)), 0);
 }
 
 TEST(SimpleTensorFromProto, Uint64TypedField) {

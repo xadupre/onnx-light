@@ -1,0 +1,37 @@
+name: Report shape inference coverage failures
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+concurrency:
+  group: shape-inference-failure-issue
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open an issue for each recent failed run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          runs="$(gh api -X GET \
+            repos/xadupre/xadupre.github.io/actions/workflows/record_onnx_shape_inference_coverage.yml/runs \
+            -f status=failure -f created=">=$(date -u -d '7 days ago' +%Y-%m-%d)" \
+            -f per_page=100 --jq '.workflow_runs[] | [.id, .html_url] | @tsv')"
+          while IFS=$'\t' read -r run_id url; do
+            [ -n "$run_id" ] || continue
+            if [ "$(gh issue list --repo "$GITHUB_REPOSITORY" --state all \
+              --search "${run_id} in:title" --json number --jq 'length')" -eq 0 ]; then
+              gh issue create --repo "$GITHUB_REPOSITORY" \
+                --title "Shape inference coverage workflow failed (run ${run_id})" \
+                --body "The [shape inference coverage workflow run](${url}) failed in xadupre/xadupre.github.io."
+            fi
+          done <<< "$runs"

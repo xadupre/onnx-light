@@ -28,8 +28,9 @@ jobs:
             -f per_page=100 --jq '.workflow_runs[] | [.id, .html_url] | @tsv')"
           while IFS=$'\t' read -r run_id url; do
             [ -n "$run_id" ] || continue
-            if [ "$(gh issue list --repo "$GITHUB_REPOSITORY" --state all \
-              --search "${run_id} in:title" --json number --jq 'length')" -eq 0 ]; then
+            issue_count="$(gh issue list --repo "$GITHUB_REPOSITORY" --state all \
+              --search "${run_id} in:title" --json number --jq 'length')"
+            if [ "$issue_count" -eq 0 ]; then
               gh issue create --repo "$GITHUB_REPOSITORY" \
                 --title "Shape inference coverage workflow failed (run ${run_id})" \
                 --body "The [shape inference coverage workflow run](${url}) failed in xadupre/xadupre.github.io."

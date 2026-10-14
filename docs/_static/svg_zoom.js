@@ -18,8 +18,17 @@
         image.className = "svg-zoom-image";
 
         var scale = 1;
+        var maxScale = 20;
         var translateX = 0;
         var translateY = 0;
+
+        image.addEventListener("load", function () {
+            if (image.clientWidth) {
+                scale = Math.max(1, image.naturalWidth / image.clientWidth);
+                maxScale = Math.max(20, scale * 2);
+                applyTransform();
+            }
+        });
 
         function applyTransform() {
             image.style.transform =
@@ -29,7 +38,7 @@
         stage.addEventListener("wheel", function (event) {
             event.preventDefault();
             var factor = event.deltaY < 0 ? 1.1 : 1 / 1.1;
-            scale = Math.min(20, Math.max(0.2, scale * factor));
+            scale = Math.min(maxScale, Math.max(0.2, scale * factor));
             applyTransform();
         });
 

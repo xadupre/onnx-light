@@ -825,7 +825,6 @@ class ReferenceEvaluator:
         seed: int | None = None,
         *,
         embedding: ReferenceEvaluator | None = None,
-        prefill: list[ReferenceEvaluator] | None = None,
     ) -> np.ndarray:
         """Generates token IDs with the native runtime.
 
@@ -842,12 +841,12 @@ class ReferenceEvaluator:
         fresh state and does not modify the supplied feeds.
 
         With ``embedding``, token IDs are sent to its ``input_ids`` input on
-        every step. ``prefill`` contains evaluators run once in order before
-        decoding. Graphs connect through their declared input and output names,
-        without additional mappings. All graphs use one call-local context
+        every step, including the prompt. This evaluator's model handles both
+        prompt prefill and subsequent tokens. Graphs connect through their declared
+        input/output names, without additional mappings. Both graphs use one call-local context
         configured from this evaluator: its custom kernels, CPU executor and
-        execution settings apply to the whole pipeline. Auxiliary evaluators
-        supply only their models, not their contexts or CPU policies.
+        execution settings apply to both models. The embedding evaluator
+        supplies only its model, not its context or CPU policy.
 
         Returns:
             numpy.ndarray: INT64 token IDs containing the prompt and generated tokens.
@@ -860,18 +859,13 @@ class ReferenceEvaluator:
         options.eos_token_id = eos_token_id
         options.pad_token_id = pad_token_id
         options.seed = seed
-        if embedding is None and prefill is None:
+        if embedding is None:
             result = _runtime.generate(
                 self._model, self._ctx, feed_inputs, options, self._session_options
             )
         else:
-            components = [embedding] if embedding is not None else []
-            components.extend(prefill or [])
-            if any(
-                not isinstance(stage, ReferenceEvaluator) or stage._model is None
-                for stage in components
-            ):
-                raise TypeError("Generation components must be ModelProto ReferenceEvaluators.")
+            if not isinstance(embedding, ReferenceEvaluator) or embedding._model is None:
+                raise TypeError("Embedding must be a ModelProto ReferenceEvaluator.")
             result = _runtime.generate_pipeline(
                 self._model,
                 self._ctx,
@@ -879,8 +873,7 @@ class ReferenceEvaluator:
                 feed_inputs,
                 options,
                 self._session_options,
-                embedding._model if embedding is not None else None,
-                [stage._model for stage in prefill or []],
+                embedding._model,
             )
         return _cpp_tensor_to_numpy(result)
 

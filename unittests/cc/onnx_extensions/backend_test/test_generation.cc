@@ -84,7 +84,9 @@ TEST(Generation, BackendAttentionModels) {
         EXPECT_EQ(context.Get("input_ids").shape, (Shape{1, 5}));
       }
       EXPECT_EQ(model.SerializeAsString(), original);
-      EXPECT_EQ(Tokens(Generate(model, context, feeds, options, session_options)), Tokens(output));
+      EXPECT_EQ(Tokens(Generate(GenerationPipeline{.prefill = &model}, context, feeds, options,
+                                session_options)),
+                Tokens(output));
       options.eos_token_id = 1;
       EXPECT_EQ(Tokens(Generate(model, context, feeds, options, session_options)),
                 (std::vector<int64_t>{0, 1, 1}));
@@ -117,12 +119,18 @@ TEST(Generation, PipelineUsesOneContextAndDeclaredGraphNames) {
     node->add_output(output);
     return model;
   };
-  const auto vision = make_model("Encode", {{"pixels", TensorProto::FLOAT}}, "vision");
-  const auto embedding = make_model("Embed", {{"input_ids", TensorProto::INT64}}, "inputs_embeds");
-  const auto decoder = make_model(
-      "Decode", {{"inputs_embeds", TensorProto::FLOAT}, {"vision", TensorProto::FLOAT}}, "logits");
-  RuntimeSession decoder_session(decoder);
-  auto executor = decoder_session.cpu_executor();
+  const auto embedding = make_model("Embed",
+                                    {{"input_ids", TensorProto::INT64},
+                                     {"attention_mask", TensorProto::INT64},
+                                     {"position_ids", TensorProto::INT64}},
+                                    "inputs_embeds");
+  const auto prefill = make_model("Prefill",
+                                  {{"input_ids", TensorProto::INT64},
+                                   {"inputs_embeds", TensorProto::FLOAT},
+                                   {"vision", TensorProto::FLOAT}},
+                                  "logits");
+  RuntimeSession prefill_session(prefill);
+  auto executor = prefill_session.cpu_executor();
   RuntimeContext context(RuntimeContextOptions{.cpu_executor = executor.get()});
   RawBufferAllocator *allocator = nullptr;
   std::vector<std::string> calls;
@@ -134,38 +142,44 @@ TEST(Generation, PipelineUsesOneContextAndDeclaredGraphNames) {
     EXPECT_EQ(rt.execution_allocator(), allocator);
     calls.push_back(node.op_type());
   };
-  context.RegisterCustomKernel("test.pipeline", "Encode",
-                               [&](const NodeProto &node, RuntimeContext &rt) {
-                                 check_context(node, rt);
-                                 rt.Put(node.output(0), rt.Get("pixels").BorrowView());
-                               });
   context.RegisterCustomKernel(
       "test.pipeline", "Embed", [&](const NodeProto &node, RuntimeContext &rt) {
         check_context(node, rt);
         const Tensor &ids = rt.Get("input_ids");
+        EXPECT_EQ(rt.Get("attention_mask").shape, ids.shape);
+        EXPECT_EQ(rt.Get("position_ids").shape, ids.shape);
+        EXPECT_EQ(rt.Get("position_ids").AsInt64()[ids.element_count() - 1], ids.shape[1] - 1);
         std::vector<float> logits(static_cast<size_t>(ids.element_count()) * 3, 0);
         for (int64_t i = 0; i < ids.element_count(); ++i)
           logits[static_cast<size_t>(i) * 3 + (ids.AsInt64()[i] + 1) % 3] = 4;
         rt.Put(node.output(0), Tensor::FromFloat("", {1, ids.shape[1], 3}, logits));
       });
-  context.RegisterCustomKernel("test.pipeline", "Decode",
-                               [&](const NodeProto &node, RuntimeContext &rt) {
-                                 check_context(node, rt);
-                                 EXPECT_FLOAT_EQ(rt.Get("vision").AsFloat()[0], 0);
-                                 rt.Put(node.output(0), rt.Get("inputs_embeds").BorrowView());
-                               });
-  GenerationPipeline pipeline{.context = &context, .prefill = {&vision}, .embedding = &embedding};
+  context.RegisterCustomKernel(
+      "test.pipeline", "Prefill", [&](const NodeProto &node, RuntimeContext &rt) {
+        check_context(node, rt);
+        const Tensor &ids = rt.Get("input_ids");
+        EXPECT_EQ(ids.shape[1], rt.Get("inputs_embeds").shape[1]);
+        EXPECT_EQ(ids.AsInt64()[ids.element_count() - 1], (ids.shape[1] - 1) % 3);
+        EXPECT_FLOAT_EQ(rt.Get("vision").AsFloat()[0], 0);
+        rt.Put(node.output(0), rt.Get("inputs_embeds").BorrowView());
+      });
+  GenerationPipeline pipeline{.prefill = &prefill, .embedding = &embedding};
   RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))},
-                        {"pixels", RuntimeValue(Tensor::FromFloat("", {1, 1, 3}, {0, 0, 0}))}};
+                        {"vision", RuntimeValue(Tensor::FromFloat("", {1, 1, 3}, {0, 0, 0}))}};
   GenerationOptions options;
   options.max_new_tokens = 3;
   for (int repeat = 0; repeat < 2; ++repeat) {
     calls.clear();
-    EXPECT_EQ(Tokens(Generate(decoder, context, feeds, options, {}, pipeline)),
+    EXPECT_EQ(Tokens(Generate(pipeline, context, feeds, options)),
               (std::vector<int64_t>{0, 1, 2, 0}));
-    EXPECT_EQ(calls, (std::vector<std::string>{"Encode", "Embed", "Decode", "Embed", "Decode",
-                                               "Embed", "Decode"}));
+    EXPECT_EQ(calls, (std::vector<std::string>{"Embed", "Prefill", "Embed", "Prefill", "Embed",
+                                               "Prefill"}));
   }
+}
+
+TEST(Generation, PipelineRequiresItsPrefillModel) {
+  RuntimeContext context;
+  EXPECT_THROW(Generate(GenerationPipeline{}, context, {}), std::invalid_argument);
 }
 
 TEST(Generation, TemperatureMatchesCachedAndFullPrefixDecoding) {

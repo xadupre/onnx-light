@@ -165,16 +165,24 @@ also allows configuring the token, logits, mask and position input/output names.
 C++ callers use :cpp:func:`onnx_light::core::runtime::Generate` with the same
 options and an existing ``RuntimeContext``.
 
-For split models, ``decoder.generate(feeds, embedding=embedding, prefill=[vision])``
-runs the prefill graphs once, then the embedding graph at each decoding step.
+For split models, ``language_model.generate(feeds, embedding=embedding)``
+runs the embedding model before the language model for both the prompt and
+subsequent tokens. Prefill names the prompt-processing phase; it is not a separate
+graph used only once.
 Graphs connect through their declared input and output names: for example,
-the embedding graph consumes ``input_ids`` and produces the decoder's
+the embedding graph consumes ``input_ids`` and produces the language model's
 ``inputs_embeds`` input. No additional name mappings are supplied.
 All graphs execute in one call-local ``RuntimeContext`` configured from the
-decoder evaluator, sharing its custom kernels, allocators and CPU executor.
-Auxiliary evaluators supply their models only; their local registrations and
-CPU execution policies are not used. Register pipeline-wide custom kernels on
-the decoder evaluator.
+language-model evaluator, sharing its custom kernels, allocators and CPU executor.
+The embedding evaluator supplies its model only; its local registrations and
+CPU execution policy are not used. Register pipeline-wide custom kernels on
+the language-model evaluator. Image/audio encoders can run before generation;
+their features are supplied as ordinary feeds.
+
+C++ callers can alternatively pass ``GenerationPipeline{.prefill = &language_model,
+.embedding = &embedding_model}`` instead of a ``ModelProto`` to ``Generate``.
+The pipeline contains only these model pointers. The single ``RuntimeContext``
+is passed as a separate argument to either overload.
 
 A basic feedback loop
 ---------------------

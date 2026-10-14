@@ -2147,7 +2147,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       "generate_pipeline",
       [](const ModelProto &model, RuntimeContext &context, ReferenceEvaluatorRunner &runner,
          nb::dict feeds, const core::runtime::GenerationOptions &options,
-         RuntimeSessionOptions session_options, nb::object embedding, nb::list prefill) {
+         RuntimeSessionOptions session_options, nb::object embedding) {
         RuntimeContext execution_context(
             context, core::runtime::RuntimeContextOptions{
                          .events_enabled = context.events_enabled(),
@@ -2157,18 +2157,16 @@ void AddOnnxPyRuntime(nb::module_ &m) {
                          .cpu_executor = runner.CpuExecutorLease().get(),
                      });
         core::runtime::GenerationPipeline pipeline;
-        pipeline.context = &execution_context;
+        pipeline.prefill = &model;
         if (!embedding.is_none())
           pipeline.embedding = &nb::cast<const ModelProto &>(embedding);
-        for (nb::handle item : prefill)
-          pipeline.prefill.push_back(&nb::cast<const ModelProto &>(item));
         auto inputs = FeedbackValuesFromPython(feeds, &model);
         nb::gil_scoped_release release;
-        return core::runtime::Generate(model, context, inputs, options, std::move(session_options),
-                                       pipeline);
+        return core::runtime::Generate(pipeline, execution_context, inputs, options,
+                                       std::move(session_options));
       },
       nb::arg("model"), nb::arg("context"), nb::arg("runner"), nb::arg("feeds"), nb::arg("options"),
-      nb::arg("session_options"), nb::arg("embedding"), nb::arg("prefill"),
+      nb::arg("session_options"), nb::arg("embedding"),
       "Generates tokens with graphs connected by name and a single shared runtime context.");
 
   nb::class_<core::runtime::TaskCompletion>(

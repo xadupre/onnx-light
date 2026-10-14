@@ -24,11 +24,11 @@ struct GenerationOptions {
   std::string position_ids_name = "position_ids";
 };
 
-/** Configures ordered prefill-only graphs and an embedding graph run at every decoding step. */
+/** Configures a language model and optional token embedding model. */
 struct GenerationPipeline {
-  /// Single context supplying kernels, allocators and the shared executor to every graph.
-  RuntimeContext *context = nullptr;
-  std::vector<const ModelProto *> prefill;
+  /// Language model used for the prompt and subsequent token generation.
+  const ModelProto *prefill = nullptr;
+  /// Optional embedding model used for the prompt and subsequent token generation.
   const ModelProto *embedding = nullptr;
 };
 
@@ -50,16 +50,26 @@ struct GenerationPipeline {
  * execution context is reused and its invocation values may change.
  *
  * Finished batch rows receive pad_token_id until every row has emitted EOS.
- * Pipeline graphs connect through their declared input/output names, without
- * additional mappings. Prefill graphs execute in order, and the embedding graph
- * consumes input_ids on every step. All graphs use pipeline.context directly,
- * sharing its custom kernels, allocators and installed CPU executor.
  * All context/model/allocator owners must outlive this synchronous call.
  */
 ONNX_LIGHT_CORE_API Tensor Generate(const ModelProto &model, RuntimeContext &context,
                                     const RuntimeValueMap &feeds,
                                     const GenerationOptions &options = {},
-                                    RuntimeSessionOptions session_options = {},
-                                    const GenerationPipeline &pipeline = {});
+                                    RuntimeSessionOptions session_options = {});
+
+/**
+ * Generates tokens using the pipeline's language model and optional embedding model.
+ *
+ * Prefill is a prompt-processing phase, not a separate model: pipeline.prefill
+ * also runs for subsequent tokens. The embedding model consumes input_ids before
+ * each language-model invocation. Graphs connect through declared input/output
+ * names, without additional mappings. Both models use the supplied context,
+ * sharing its custom kernels, allocators and installed CPU executor.
+ * The same generation options and lifetime requirements apply as for a single model.
+ */
+ONNX_LIGHT_CORE_API Tensor Generate(const GenerationPipeline &pipeline, RuntimeContext &context,
+                                    const RuntimeValueMap &feeds,
+                                    const GenerationOptions &options = {},
+                                    RuntimeSessionOptions session_options = {});
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

@@ -42,11 +42,6 @@ class TestGeneration(unittest.TestCase):
             "<int64 index = {0}>"
             "{ bias = SequenceAt(vision, index) logits = Add(inputs_embeds, bias) }"
         )
-        vision_model = parser.parse_model(
-            '<ir_version: 10, opset_import: ["" : 23]>'
-            "vision (float[1, 1, 3] pixels) => (seq(float[1, 1, 3]) vision)"
-            "{ image = Abs(pixels) vision = SequenceConstruct(image) }"
-        )
         policy = {
             "num_threads": 2,
             "affinity_policy": "none",
@@ -57,7 +52,6 @@ class TestGeneration(unittest.TestCase):
             decoder_model, cpu_execution=policy, cpu_execution_counters=True, events_enabled=True
         )
         embedding = ReferenceEvaluator(embedding_model, cpu_execution=policy)
-        vision = ReferenceEvaluator(vision_model, cpu_execution=policy)
         embedding_calls = []
 
         def embedding_abs(node, value):
@@ -66,13 +60,11 @@ class TestGeneration(unittest.TestCase):
 
         feeds = {
             "input_ids": numpy.array([[0, 1]], dtype=numpy.int64),
-            "pixels": numpy.zeros((1, 1, 3), dtype=numpy.float32),
+            "vision": [numpy.zeros((1, 1, 3), dtype=numpy.float32)],
         }
 
         def generate():
-            return decoder.generate(
-                feeds, max_new_tokens=3, embedding=embedding, prefill=[vision]
-            )
+            return decoder.generate(feeds, max_new_tokens=3, embedding=embedding)
 
         before = decoder.cpu_execution_counters.dispatches
         expected = ReferenceEvaluator(transition_model()).generate(
@@ -84,14 +76,11 @@ class TestGeneration(unittest.TestCase):
             for result in pool.map(lambda _: generate(), range(2)):
                 numpy.testing.assert_array_equal(result, expected)
         self.assertEqual(decoder.cpu_executor_instance_id, embedding.cpu_executor_instance_id)
-        self.assertEqual(decoder.cpu_executor_instance_id, vision.cpu_executor_instance_id)
-        self.assertGreaterEqual(
-            decoder.cpu_execution_counters.dispatches - before, 4 * (3 * 2 + 1)
-        )
+        self.assertGreaterEqual(decoder.cpu_execution_counters.dispatches - before, 4 * 3 * 2)
         self.assertTrue({"Gather", "Abs", "Add"} <= {event.op_type for event in decoder.events()})
         decoder.register_custom_kernel("", "Abs", embedding_abs)
         numpy.testing.assert_array_equal(generate(), expected)
-        self.assertEqual(len(embedding_calls), 4)
+        self.assertEqual(len(embedding_calls), 3)
         numpy.testing.assert_array_equal(feeds["input_ids"], [[0, 1]])
         numpy.testing.assert_array_equal(
             decoder.generate(
@@ -100,23 +89,20 @@ class TestGeneration(unittest.TestCase):
                 embedding=ReferenceEvaluator(
                     embedding_model, cpu_execution={"num_threads": 1, "affinity_policy": "none"}
                 ),
-                prefill=[vision],
             ),
             expected,
         )
-        with self.assertRaisesRegex(ValueError, "missing graph feed"):
-            decoder.generate(
-                {"input_ids": feeds["input_ids"]}, embedding=embedding, prefill=[vision]
-            )
+        with self.assertRaisesRegex((ValueError, RuntimeError), "vision"):
+            decoder.generate({"input_ids": feeds["input_ids"]}, embedding=embedding)
         overwriting_model = parser.parse_model(
             '<ir_version: 10, opset_import: ["" : 23]>'
-            "overwriting (float[1, 1, 3] pixels)"
-            " => (float[1, 1, 3] input_ids)"
-            "{ input_ids = Abs(pixels) }"
+            "overwriting (int64[B, S] input_ids)"
+            " => (int64[B, S] input_ids)"
+            "{ }"
         )
         overwriting = ReferenceEvaluator(overwriting_model, cpu_execution=policy)
         with self.assertRaisesRegex(ValueError, "graph output cannot replace generated inputs"):
-            decoder.generate(feeds, embedding=embedding, prefill=[overwriting])
+            decoder.generate(feeds, embedding=overwriting)
 
     def test_split_embedding_persistent_state(self):
         embedding_model = parser.parse_model(

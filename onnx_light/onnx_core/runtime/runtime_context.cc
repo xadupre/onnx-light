@@ -725,22 +725,33 @@ RuntimeContext RuntimeContext::MakeFunctionContext() const {
   return child;
 }
 
-RuntimeContext RuntimeContext::MakeIsolatedContext(CpuExecutor *cpu_executor) const {
+RuntimeContext RuntimeContext::MakeIsolatedContext(CpuExecutor *cpu_executor,
+                                                   const RuntimeContext *diagnostics) const {
+  const RuntimeContext &diagnostic_source = diagnostics == nullptr ? *this : *diagnostics;
   RuntimeContext child(kernel_ctx_,
                        RuntimeContextOptions{
-                           .events_enabled = events_enabled_,
+                           .events_enabled = diagnostic_source.events_enabled_,
                            .verbose = verbose_,
                            .release_intermediates = release_intermediates_,
                            .device = device_,
                            .cpu_executor = cpu_executor,
                        },
-                       kernel_usage_, events_);
+                       diagnostic_source.kernel_usage_, diagnostic_source.events_);
   child.functions() = functions_;
   child.custom_kernels() = custom_kernels_;
   child.set_model_owner(model_owner_);
   child.set_struct_type_catalogue(struct_type_catalogue_);
   child.set_quantization_parameters(quantization_parameters_);
   return child;
+}
+
+void RuntimeContext::ResetInvocation() noexcept {
+  tensors_.clear();
+  values_.clear();
+  sequences_.clear();
+  maps_.clear();
+  shapes_.clear();
+  current_node_index_ = -1;
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

@@ -59,6 +59,13 @@ public:
   RuntimeValueMap Run(RuntimeContext &context, const RuntimeValueMap &feeds,
                       const TaskCompletion *completion = nullptr);
   /**
+   * Runs in a call-owned invocation context whose allocators are reused across calls.
+   *
+   * The context values are reset before each run while diagnostics and arenas are preserved.
+   */
+  RuntimeValueMap RunInvocation(RuntimeContext &invocation, const RuntimeValueMap &feeds,
+                                const TaskCompletion *completion = nullptr);
+  /**
    * Retains an external model/context owner until kernels and state are released.
    *
    * The caller registers owners before Run, including attempts that may fail during initialization.
@@ -90,6 +97,10 @@ private:
     const TypeProto *input_type;
   };
   std::vector<PersistentValue> ValidateInitial(RuntimeValueMap initial) const;
+  RuntimeValueMap RunImpl(RuntimeContext &invocation, const RuntimeValueMap &feeds,
+                          const TaskCompletion *completion,
+                          RawBufferAllocator *caller_execution_allocator,
+                          RawBufferAllocator *caller_io_allocator, bool invocation_owns_allocators);
 
   const ModelProto &model_;
   std::shared_ptr<void> model_owner_;

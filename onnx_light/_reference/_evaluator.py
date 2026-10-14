@@ -890,10 +890,14 @@ class ReferenceEvaluator:
                 options,
                 self._session_options,
                 embedding._model if embedding is not None else None,
+                embedding._ctx if embedding is not None else None,
                 embedding_token_input,
                 embedding_inputs or {},
                 embedding_outputs or {},
-                [(stage._model, inputs, outputs) for stage, inputs, outputs in prefill or []],
+                [
+                    (stage._model, stage._ctx, inputs, outputs)
+                    for stage, inputs, outputs in prefill or []
+                ],
             )
         return _cpp_tensor_to_numpy(result)
 

@@ -29,6 +29,7 @@ struct GenerationOptions {
 /** Maps graph inputs to pipeline feed names and graph outputs to downstream names. */
 struct GenerationComponent {
   const ModelProto *model = nullptr;
+  const RuntimeContext *context = nullptr;
   std::unordered_map<std::string, std::string> inputs;
   std::unordered_map<std::string, std::string> outputs;
 };

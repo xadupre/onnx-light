@@ -2088,7 +2088,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       "generate_pipeline",
       [](const ModelProto &model, RuntimeContext &context, ReferenceEvaluatorRunner &runner,
          nb::dict feeds, const core::runtime::GenerationOptions &options,
-         RuntimeSessionOptions session_options, nb::object embedding,
+         RuntimeSessionOptions session_options, nb::object embedding, nb::object embedding_context,
          const std::string &embedding_token_input, nb::dict embedding_inputs,
          nb::dict embedding_outputs, nb::list prefill) {
         core::runtime::GenerationPipeline pipeline;
@@ -2096,17 +2096,18 @@ void AddOnnxPyRuntime(nb::module_ &m) {
         if (!embedding.is_none()) {
           pipeline.embedding = {
               &nb::cast<const ModelProto &>(embedding),
+              &nb::cast<const RuntimeContext &>(embedding_context),
               nb::cast<std::unordered_map<std::string, std::string>>(embedding_inputs),
               nb::cast<std::unordered_map<std::string, std::string>>(embedding_outputs)};
           pipeline.embedding_token_input = embedding_token_input;
         }
         for (nb::handle item : prefill) {
           auto stage = nb::cast<nb::tuple>(item);
-          EXT_ENFORCE_INVALID(stage.size() == 3, "generate_pipeline: expected stage triples.");
+          EXT_ENFORCE_INVALID(stage.size() == 4, "generate_pipeline: expected stage quadruples.");
           pipeline.prefill.push_back(
-              {&nb::cast<const ModelProto &>(stage[0]),
-               nb::cast<std::unordered_map<std::string, std::string>>(stage[1]),
-               nb::cast<std::unordered_map<std::string, std::string>>(stage[2])});
+              {&nb::cast<const ModelProto &>(stage[0]), &nb::cast<const RuntimeContext &>(stage[1]),
+               nb::cast<std::unordered_map<std::string, std::string>>(stage[2]),
+               nb::cast<std::unordered_map<std::string, std::string>>(stage[3])});
         }
         auto inputs = FeedbackValuesFromPython(feeds, &model);
         nb::gil_scoped_release release;
@@ -2114,8 +2115,9 @@ void AddOnnxPyRuntime(nb::module_ &m) {
                                        pipeline);
       },
       nb::arg("model"), nb::arg("context"), nb::arg("runner"), nb::arg("feeds"), nb::arg("options"),
-      nb::arg("session_options"), nb::arg("embedding"), nb::arg("embedding_token_input"),
-      nb::arg("embedding_inputs"), nb::arg("embedding_outputs"), nb::arg("prefill"),
+      nb::arg("session_options"), nb::arg("embedding"), nb::arg("embedding_context"),
+      nb::arg("embedding_token_input"), nb::arg("embedding_inputs"), nb::arg("embedding_outputs"),
+      nb::arg("prefill"),
       "Generates tokens with mapped prefill graphs and an optional per-step embedding graph.");
 
   nb::class_<core::runtime::TaskCompletion>(

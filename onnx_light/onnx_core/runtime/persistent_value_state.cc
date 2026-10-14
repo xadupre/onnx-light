@@ -314,11 +314,29 @@ std::vector<PersistentValue> PersistentValueState::ValidateInitial(RuntimeValueM
 RuntimeValueMap PersistentValueState::Run(RuntimeContext &context, const RuntimeValueMap &feeds,
                                           const TaskCompletion *completion) {
   const Operation operation(busy_);
+  RuntimeContext invocation = context.MakeFunctionContext();
+  return RunImpl(invocation, feeds, completion, context.execution_allocator(),
+                 context.io_allocator(), false);
+}
+
+RuntimeValueMap PersistentValueState::RunInvocation(RuntimeContext &invocation,
+                                                    const RuntimeValueMap &feeds,
+                                                    const TaskCompletion *completion) {
+  const Operation operation(busy_);
+  return RunImpl(invocation, feeds, completion, nullptr, nullptr, true);
+}
+
+RuntimeValueMap PersistentValueState::RunImpl(RuntimeContext &invocation,
+                                              const RuntimeValueMap &feeds,
+                                              const TaskCompletion *completion,
+                                              RawBufferAllocator *caller_execution_allocator,
+                                              RawBufferAllocator *caller_io_allocator,
+                                              bool invocation_owns_allocators) {
   EXT_ENFORCE_INVALID(session_ != nullptr, "PersistentValueState: state is closed.");
   EXT_ENFORCE_INVALID(
       completion == nullptr || completion->status() == TaskStatus::kPending,
       "PersistentValueState: invocation was cancelled or completion is not pending.");
-  RuntimeContext invocation = context.MakeFunctionContext();
+  invocation.ResetInvocation();
   invocation.persistent_tensor_initial_capacity_ = persistent_tensor_initial_capacity_;
   invocation.persistent_graph_ = &model_.graph();
   invocation.persistent_tensors_ =
@@ -368,16 +386,20 @@ RuntimeValueMap PersistentValueState::Run(RuntimeContext &context, const Runtime
   }
   for (auto &binding : *invocation.persistent_tensors_)
     binding.input_view = &invocation.Get(binding.input);
+  session_->Run(invocation);
+  RawBufferAllocator *execution_allocator =
+      invocation_owns_allocators ? invocation.execution_allocator() : caller_execution_allocator;
+  RawBufferAllocator *io_allocator =
+      invocation_owns_allocators ? invocation.io_allocator() : caller_io_allocator;
   if (allocators_captured_) {
-    EXT_ENFORCE_INVALID(execution_allocator_ == context.execution_allocator() &&
-                            io_allocator_ == context.io_allocator(),
+    EXT_ENFORCE_INVALID(execution_allocator_ == execution_allocator &&
+                            io_allocator_ == io_allocator,
                         "PersistentValueState: context allocators changed between calls.");
   } else {
-    execution_allocator_ = context.execution_allocator();
-    io_allocator_ = context.io_allocator();
+    execution_allocator_ = execution_allocator;
+    io_allocator_ = io_allocator;
     allocators_captured_ = true;
   }
-  session_->Run(invocation);
   RuntimeValueMap outputs;
   for (const auto &output : model_.graph().output()) {
     RuntimeValue value;

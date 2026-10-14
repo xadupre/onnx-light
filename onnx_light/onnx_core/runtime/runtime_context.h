@@ -966,7 +966,11 @@ public:
 
   /// Creates an independent invocation with fresh allocators while sharing
   /// thread-safe events and kernel usage diagnostics with this context.
-  RuntimeContext MakeIsolatedContext(CpuExecutor *cpu_executor) const;
+  RuntimeContext MakeIsolatedContext(CpuExecutor *cpu_executor,
+                                     const RuntimeContext *diagnostics = nullptr) const;
+
+  /// Clears invocation values while preserving allocators, plans and diagnostics.
+  void ResetInvocation() noexcept;
 
   /// Resets the per-invocation state so the context can be reused for a
   /// fresh run: clears all value stores and the shared event

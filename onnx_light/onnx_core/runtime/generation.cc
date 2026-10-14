@@ -9,6 +9,7 @@
 #include <cmath>
 #include <limits>
 #include <random>
+#include <unordered_set>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
@@ -91,9 +92,9 @@ int64_t Sample(const Tensor &logits, int64_t offset, int64_t vocabulary, double 
 }
 
 void RunComponent(const GenerationComponent &component, const std::string &token_input,
-                  const Tensor *token_ids, RuntimeContext &context, RuntimeValueMap &values,
+                  const Tensor *token_ids, RuntimeContext &invocation, RuntimeValueMap &values,
                   RuntimeSession &session) {
-  auto invocation = context.MakeFunctionContext();
+  invocation.ResetInvocation();
   RegisterModelFunctions(*component.model, invocation);
   for (const auto &input : component.model->graph().input()) {
     const std::string &name = input.name();
@@ -144,6 +145,7 @@ void RunComponent(const GenerationComponent &component, const std::string &token
 
 void ValidateComponent(const GenerationComponent &component, const std::string &token_input) {
   EXT_ENFORCE_INVALID(component.model != nullptr, "Generate: component model is null.");
+  EXT_ENFORCE_INVALID(component.context != nullptr, "Generate: component context is null.");
   EXT_ENFORCE_INVALID(token_input.empty() || HasInput(*component.model, token_input),
                       "Generate: embedding token input must name a graph input.");
   for (const auto &[input, source] : component.inputs) {
@@ -151,6 +153,7 @@ void ValidateComponent(const GenerationComponent &component, const std::string &
                             !source.empty(),
                         "Generate: invalid component input mapping.");
   }
+  std::unordered_set<std::string> destinations;
   for (const auto &[output, destination] : component.outputs) {
     const auto &outputs = component.model->graph().output();
     const auto found = std::find_if(outputs.begin(), outputs.end(),
@@ -160,6 +163,8 @@ void ValidateComponent(const GenerationComponent &component, const std::string &
                              (found->type().has_sequence_type() &&
                               found->type().sequence_type().elem_type().has_tensor_type())),
                         "Generate: invalid component output mapping.");
+    EXT_ENFORCE_INVALID(destinations.insert(destination).second,
+                        "Generate: duplicate component output destination '", destination, "'.");
   }
   EXT_ENFORCE_INVALID(!component.outputs.empty(), "Generate: component outputs must be mapped.");
 }
@@ -301,14 +306,23 @@ Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeV
   RuntimeValueMap current;
   for (const auto &[name, value] : feeds)
     current.emplace(name, value.BorrowView());
+  std::vector<std::unique_ptr<RuntimeContext>> prefill_contexts;
+  prefill_contexts.reserve(pipeline.prefill.size());
   for (const auto &stage : pipeline.prefill) {
+    prefill_contexts.emplace_back(std::make_unique<RuntimeContext>(
+        stage.context->MakeIsolatedContext(pipeline.cpu_executor.get(), execution_context)));
     RuntimeSession stage_session(*stage.model, session_options);
-    RunComponent(stage, "", nullptr, *execution_context, current, stage_session);
+    RunComponent(stage, "", nullptr, *prefill_contexts.back(), current, stage_session);
   }
   std::unique_ptr<RuntimeSession> embedding_session;
-  if (embedded)
+  std::unique_ptr<RuntimeContext> embedding_context;
+  if (embedded) {
     embedding_session =
         std::make_unique<RuntimeSession>(*pipeline.embedding.model, session_options);
+    embedding_context =
+        std::make_unique<RuntimeContext>(pipeline.embedding.context->MakeIsolatedContext(
+            pipeline.cpu_executor.get(), execution_context));
+  }
   std::unique_ptr<PersistentValueState> state;
   std::unique_ptr<RuntimeSession> session;
   if (!model.graph().persistent_bindings().empty()) {
@@ -328,6 +342,7 @@ Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeV
   } else {
     session = std::make_unique<RuntimeSession>(model, session_options);
   }
+  auto decoder_context = std::make_unique<RuntimeContext>(execution_context->MakeFunctionContext());
   std::mt19937_64 random(options.seed ? *options.seed : std::random_device{}());
   std::vector<bool> finished(static_cast<size_t>(batch), false);
   std::vector<int64_t> next(static_cast<size_t>(batch));
@@ -348,7 +363,7 @@ Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeV
                                              decode ? next_positions : positions)));
     auto ids = Tensor::From<int64_t>(options.input_ids_name, shape, decode ? next : tokens);
     if (embedded) {
-      RunComponent(pipeline.embedding, pipeline.embedding_token_input, &ids, *execution_context,
+      RunComponent(pipeline.embedding, pipeline.embedding_token_input, &ids, *embedding_context,
                    current, *embedding_session);
     } else {
       current.insert_or_assign(options.input_ids_name, RuntimeValue(std::move(ids)));
@@ -361,14 +376,14 @@ Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeV
         if (found != current.end())
           decoder_feeds.emplace(input.name(), found->second.BorrowView());
       }
-      auto outputs = state->Run(*execution_context, decoder_feeds);
+      auto outputs = state->RunInvocation(*decoder_context, decoder_feeds);
       auto it = outputs.find(options.logits_name);
       EXT_ENFORCE_INVALID(it != outputs.end() && it->second.kind == RuntimeValue::Kind::kTensor,
                           "Generate: logits output must be a tensor.");
       logits = std::move(it->second.tensor);
     } else {
-      auto invocation = execution_context->MakeFunctionContext();
-      RegisterModelFunctions(model, invocation);
+      decoder_context->ResetInvocation();
+      RegisterModelFunctions(model, *decoder_context);
       for (const auto &input : model.graph().input()) {
         const auto found = current.find(input.name());
         if (found == current.end())
@@ -383,18 +398,19 @@ Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeV
           Tensors tensors;
           for (const auto &element : value.elements)
             tensors.push_back(element.tensor.BorrowView());
-          invocation.PutSequence(
+          decoder_context->PutSequence(
               input.name(),
               Sequence(input.name(),
                        input.type().sequence_type().elem_type().tensor_type().elem_type(),
                        std::move(tensors)));
         } else {
-          invocation.PutValue(input.name(), value.BorrowView(), RuntimeEventKind::kInput);
+          decoder_context->PutValue(input.name(), value.BorrowView(), RuntimeEventKind::kInput);
         }
       }
-      session->Run(invocation);
-      EXT_ENFORCE_INVALID(invocation.Has(options.logits_name), "Generate: missing logits tensor.");
-      logits = std::move(invocation.Get(options.logits_name)).RetainStorage();
+      session->Run(*decoder_context);
+      EXT_ENFORCE_INVALID(decoder_context->Has(options.logits_name),
+                          "Generate: missing logits tensor.");
+      logits = std::move(decoder_context->Get(options.logits_name)).RetainStorage();
     }
     EXT_ENFORCE_INVALID(
         (logits.shape.size() == 2 || logits.shape.size() == 3) && logits.shape[0] == batch &&

@@ -38,6 +38,8 @@ struct GenerationPipeline {
   std::vector<GenerationComponent> prefill;
   GenerationComponent embedding;
   std::string embedding_token_input;
+  /// Executor lease shared by every component for the duration of generation.
+  std::shared_ptr<CpuExecutor> cpu_executor;
 };
 
 /**

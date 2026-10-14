@@ -294,9 +294,9 @@ RuntimeContext::RuntimeContext(KernelContext kernel_ctx, RuntimeContextOptions o
                                std::shared_ptr<EventState> events)
     : kernel_ctx_(std::move(kernel_ctx)), kernel_usage_(std::move(kernel_usage)),
       events_(std::move(events)), events_enabled_(options.events_enabled),
-      verbose_(options.verbose), release_intermediates_(options.release_intermediates),
-      io_allocator_(options.io_allocator), value_store_(std::make_shared<ValueStore>()),
-      device_(options.device) {
+      verbose_(options.verbose), cpu_executor_(options.cpu_executor),
+      release_intermediates_(options.release_intermediates), io_allocator_(options.io_allocator),
+      value_store_(std::make_shared<ValueStore>()), device_(options.device) {
   value_directory_identity_ = NextValueDirectoryIdentity();
   allocator_ = options.allocator;
   active_allocator_ = allocator_;
@@ -617,6 +617,7 @@ RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name)
                            .verbose = verbose_,
                            .release_intermediates = release_intermediates_,
                            .device = device_,
+                           .cpu_executor = cpu_executor_,
                        },
                        kernel_usage_, events_);
   child.execution_arena_owner_ = execution_arena_owner_;
@@ -633,7 +634,6 @@ RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name)
   child.tensors() = tensors_;
   child.values() = values_;
   child.sequences() = sequences_;
-  child.set_cpu_executor(cpu_executor_);
   child.set_current_subgraph(current_node_index_, attr_name);
   return child;
 }
@@ -691,6 +691,7 @@ RuntimeContext RuntimeContext::MakeFunctionContext() const {
                            .verbose = verbose_,
                            .release_intermediates = release_intermediates_,
                            .device = device_,
+                           .cpu_executor = cpu_executor_,
                        },
                        kernel_usage_, events_);
   child.execution_arena_owner_ = execution_arena_owner_;
@@ -704,19 +705,19 @@ RuntimeContext RuntimeContext::MakeFunctionContext() const {
   child.set_model_owner(model_owner_);
   child.set_struct_type_catalogue(struct_type_catalogue_);
   child.set_quantization_parameters(quantization_parameters_);
-  child.set_cpu_executor(cpu_executor_);
   if (events_enabled_)
     child.set_current_subgraph(current_subgraph_node_index_, current_subgraph_attr_name_);
   return child;
 }
 
-RuntimeContext RuntimeContext::MakeIsolatedContext() const {
+RuntimeContext RuntimeContext::MakeIsolatedContext(CpuExecutor *cpu_executor) const {
   RuntimeContext child(kernel_ctx_,
                        RuntimeContextOptions{
                            .events_enabled = events_enabled_,
                            .verbose = verbose_,
                            .release_intermediates = release_intermediates_,
                            .device = device_,
+                           .cpu_executor = cpu_executor,
                        },
                        kernel_usage_, events_);
   child.functions() = functions_;

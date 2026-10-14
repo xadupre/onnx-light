@@ -6,8 +6,6 @@
 #include "onnx_core/runtime/kernels/float16_promote.h"
 #include "onnx_core/runtime/kernels/run_nodes.h"
 #include "onnx_core/runtime/persistent_value_state.h"
-#include "onnx_core/runtime/tuning/cpu_executor.h"
-
 #include <cmath>
 #include <limits>
 #include <random>
@@ -289,18 +287,15 @@ Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeV
     return Tensor::From<int64_t>(options.input_ids_name, prompt.shape, tokens);
 
   std::unique_ptr<RuntimeContext> local_context;
-  std::shared_ptr<CpuExecutor> pipeline_executor;
   RuntimeContext *execution_context = &context;
   if (embedded || !pipeline.prefill.empty()) {
-    CpuExecutionPolicy policy;
-    policy.num_threads = std::max(0, session_options.parameters.num_threads);
-    pipeline_executor =
-        GlobalCpuExecutorRegistry().Acquire(session_options.cpu_execution.value_or(policy));
+    EXT_ENFORCE_INVALID(pipeline.cpu_executor != nullptr,
+                        "Generate: a pipeline CPU executor lease is required.");
     if (session_options.cpu_execution_counters)
-      pipeline_executor->EnableCounters();
+      pipeline.cpu_executor->EnableCounters();
     session_options.cpu_execution.reset();
-    local_context = std::make_unique<RuntimeContext>(context.MakeIsolatedContext());
-    local_context->set_cpu_executor(pipeline_executor.get());
+    local_context =
+        std::make_unique<RuntimeContext>(context.MakeIsolatedContext(pipeline.cpu_executor.get()));
     execution_context = local_context.get();
   }
   RuntimeValueMap current;

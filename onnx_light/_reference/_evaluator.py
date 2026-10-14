@@ -885,6 +885,7 @@ class ReferenceEvaluator:
             result = _runtime.generate_pipeline(
                 self._model,
                 self._ctx,
+                self._runner,
                 feed_inputs,
                 options,
                 self._session_options,

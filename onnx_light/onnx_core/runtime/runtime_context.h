@@ -438,6 +438,9 @@ struct RuntimeContextOptions {
   /// kernel (see :cpp:func:`RegisterKernelFn`) and, when none is registered,
   /// makes :cpp:func:`RunNode` fail with a diagnostic naming the device.
   symbolic::Device device = symbolic::Device::kUndefined;
+  /// Non-owning CPU executor installed when the context is constructed.
+  /// The caller must keep its lease alive for the context lifetime.
+  CpuExecutor *cpu_executor = nullptr;
 };
 
 /**
@@ -966,7 +969,7 @@ public:
 
   /// Creates an independent invocation with fresh allocators while sharing
   /// thread-safe events and kernel usage diagnostics with this context.
-  RuntimeContext MakeIsolatedContext() const;
+  RuntimeContext MakeIsolatedContext(CpuExecutor *cpu_executor) const;
 
   /// Resets the per-invocation state so the context can be reused for a
   /// fresh run: clears all value stores and the shared event

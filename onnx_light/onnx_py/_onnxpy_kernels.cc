@@ -47,6 +47,7 @@ namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
 using core::runtime::CpuAffinityPolicy;
 using core::runtime::CpuExecutionPolicy;
+using core::runtime::CpuExecutor;
 using core::runtime::CpuExecutorCounters;
 using core::runtime::CpuExecutorKey;
 using core::runtime::CpuLogicalProcessor;
@@ -876,6 +877,11 @@ public:
   uint64_t CpuExecutorInstanceId() {
     EnsureSession();
     return session_->cpu_executor()->instance_id();
+  }
+
+  const std::shared_ptr<CpuExecutor> &CpuExecutorLease() {
+    EnsureSession();
+    return session_->cpu_executor();
   }
 
   nb::list Run(RuntimeContext &rt, nb::object requested_outputs, nb::dict feeds,
@@ -2080,11 +2086,13 @@ void AddOnnxPyRuntime(nb::module_ &m) {
 
   rt_mod.def(
       "generate_pipeline",
-      [](const ModelProto &model, RuntimeContext &context, nb::dict feeds,
-         const core::runtime::GenerationOptions &options, RuntimeSessionOptions session_options,
-         nb::object embedding, const std::string &embedding_token_input, nb::dict embedding_inputs,
+      [](const ModelProto &model, RuntimeContext &context, ReferenceEvaluatorRunner &runner,
+         nb::dict feeds, const core::runtime::GenerationOptions &options,
+         RuntimeSessionOptions session_options, nb::object embedding,
+         const std::string &embedding_token_input, nb::dict embedding_inputs,
          nb::dict embedding_outputs, nb::list prefill) {
         core::runtime::GenerationPipeline pipeline;
+        pipeline.cpu_executor = runner.CpuExecutorLease();
         if (!embedding.is_none()) {
           pipeline.embedding = {
               &nb::cast<const ModelProto &>(embedding),
@@ -2105,7 +2113,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
         return core::runtime::Generate(model, context, inputs, options, std::move(session_options),
                                        pipeline);
       },
-      nb::arg("model"), nb::arg("context"), nb::arg("feeds"), nb::arg("options"),
+      nb::arg("model"), nb::arg("context"), nb::arg("runner"), nb::arg("feeds"), nb::arg("options"),
       nb::arg("session_options"), nb::arg("embedding"), nb::arg("embedding_token_input"),
       nb::arg("embedding_inputs"), nb::arg("embedding_outputs"), nb::arg("prefill"),
       "Generates tokens with mapped prefill graphs and an optional per-step embedding graph.");

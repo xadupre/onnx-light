@@ -343,6 +343,11 @@ TEST(RenameExpressions, RenameDynamicExpression_CompoundSubexpression) {
             "total_seq");
 }
 
+TEST(RenameExpressions, RenameDynamicExpression_IdentityCompoundPreservesPrecedence) {
+  EXPECT_EQ(rename_dynamic_expression("batch*(past_seq+seq)", {{"past_seq+seq", "past_seq+seq"}}),
+            "batch*(past_seq+seq)");
+}
+
 TEST(RenameExpressions, RenameDynamicExpression_BroadcastIdenticalCollapses) {
   // ``broadcast(x, x)`` is a no-op and collapses to ``x``.
   EXPECT_EQ(

@@ -210,6 +210,33 @@ void ConvertQwenToPagedCache(ModelProto &model) {
     node.add_input("total_sequence_length");
   }
   RemoveUnusedQwenNodes(graph);
+  auto &nodes = graph.ref_node();
+  for (size_t i = 0; i < nodes.size(); ++i) {
+    if (nodes[i].output_size() != 1 || nodes[i].output(0) != "_onx_range_dim1::Sq__1")
+      continue;
+    EXT_ENFORCE_INVALID(i > 0 && nodes[i].op_type() == "Range" && nodes[i - 1].output_size() == 1 &&
+                            nodes[i - 1].output(0) == "dim2::Sq__1",
+                        "Qwen paged case: missing RoPE range.");
+    *nodes[i].mutable_input(0) = "init7_s_0__2";
+    *nodes[i - 1].mutable_input(0) = "input_ids::Shape1:2";
+    *nodes[i].mutable_output(0) = "rope_position_offsets";
+    NodeProto shifted;
+    shifted.set_op_type("Add");
+    shifted.add_input("rope_position_offsets");
+    shifted.add_input("dim1::Sq__1");
+    shifted.add_output("_onx_range_dim1::Sq__1");
+    std::vector<NodeProto> reordered;
+    reordered.reserve(nodes.size() + 1);
+    for (size_t j = 0; j < nodes.size(); ++j) {
+      reordered.push_back(std::move(nodes[j]));
+      if (j == i)
+        reordered.push_back(std::move(shifted));
+    }
+    graph.clear_node();
+    for (auto &node : reordered)
+      *graph.add_node() = std::move(node);
+    break;
+  }
 }
 
 void ReplaceQwenInplaceExpectations(GraphProto &graph, std::span<const int> indices,
@@ -270,7 +297,12 @@ void AddQwenPersistentCases(std::vector<TestCase> &registry, const ModelProto &s
       90,  92,  95,  96,  97,  99,  100, 101, 102, 103, 104, 106, 108, 109, 110, 112, 114, 115,
       116, 117, 118, 119, 121, 125, 127, 129, 132, 133, 134, 136, 137, 138, 139, 140, 141, 143,
       145, 146, 147, 149, 151, 152, 153, 154, 155, 156, 158, 162, 164, 166, 167};
-  ReplaceQwenInplaceExpectations(*paged_model.mutable_graph(), paged_inplace_nodes, 2);
+  std::vector<int> shifted_inplace_nodes;
+  shifted_inplace_nodes.reserve(std::size(paged_inplace_nodes) + 1);
+  shifted_inplace_nodes.push_back(6);
+  for (int index : paged_inplace_nodes)
+    shifted_inplace_nodes.push_back(index >= 6 ? index + 1 : index);
+  ReplaceQwenInplaceExpectations(*paged_model.mutable_graph(), shifted_inplace_nodes, -1);
   registry.emplace_back(std::move(paged));
 }
 

@@ -289,8 +289,10 @@ LightOpSchema MakeGridSampleSchema(int since_version, const std::vector<TensorTy
 }
 
 LightOpSchema MakeCastSchema(int since_version, std::vector<TensorType> types) {
-  types.push_back(TensorType::kComplex64);
-  types.push_back(TensorType::kComplex128);
+  if (since_version != 1) {
+    types.push_back(TensorType::kComplex64);
+    types.push_back(TensorType::kComplex128);
+  }
   // Cast v1 uses a STRING attribute for "to" (the type name); v6+ uses INT
   // (the DataType enum value). v19+ also add "saturate"; v24+ add "round_mode".
   const std::string to_doc = "The data type to which the elements of the input tensor are cast. "

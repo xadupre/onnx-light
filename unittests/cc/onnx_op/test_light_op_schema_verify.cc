@@ -57,7 +57,7 @@ TEST(LightOpSchemaVerify, ValidNodePasses) {
   EXPECT_NO_THROW(schema.Verify(node));
 }
 
-TEST(LightOpSchemaVerify, CastAcceptsComplexAcrossVersions) {
+TEST(LightOpSchemaVerify, CastAcceptsComplexFromOpset6) {
   using core::schema::TensorType;
   const auto schemas = onnx_op::GetAllOnnxOpSchemasWithHistory("Cast", true);
   ASSERT_EQ(schemas.size(), 10u);
@@ -66,9 +66,13 @@ TEST(LightOpSchemaVerify, CastAcceptsComplexAcrossVersions) {
     ASSERT_EQ(schema.type_constraints().size(), 2u);
     for (const auto &constraint : schema.type_constraints()) {
       for (const auto type : {TensorType::kComplex64, TensorType::kComplex128}) {
-        EXPECT_NE(std::find(constraint.allowed_type_strs.begin(),
-                            constraint.allowed_type_strs.end(), type),
-                  constraint.allowed_type_strs.end());
+        const auto found = std::find(constraint.allowed_type_strs.begin(),
+                                     constraint.allowed_type_strs.end(), type);
+        if (schema.since_version() == 1) {
+          EXPECT_EQ(found, constraint.allowed_type_strs.end());
+        } else {
+          EXPECT_NE(found, constraint.allowed_type_strs.end());
+        }
       }
     }
     for (const auto dtype : {TensorProto::COMPLEX64, TensorProto::COMPLEX128}) {
@@ -90,7 +94,11 @@ TEST(LightOpSchemaVerify, CastAcceptsComplexAcrossVersions) {
       input.set_name("x");
       input.mutable_type()->mutable_tensor_type()->set_elem_type(dtype);
       std::vector<std::optional<SchemaInputValue>> inputs{SchemaInputValue(input)};
-      EXPECT_NO_THROW(schema.Verify(node, &inputs));
+      if (schema.since_version() == 1) {
+        EXPECT_THROW(schema.Verify(node, &inputs), std::invalid_argument);
+      } else {
+        EXPECT_NO_THROW(schema.Verify(node, &inputs));
+      }
     }
   }
 }

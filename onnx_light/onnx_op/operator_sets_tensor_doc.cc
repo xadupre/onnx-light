@@ -7,7 +7,16 @@
 namespace ONNX_LIGHT_NAMESPACE::onnx_op::tensor {
 
 std::string MakeCastDoc(int since_version) {
-  if (since_version == 1 || since_version == 6) {
+  if (since_version == 1) {
+    return R"DOC(
+The operator casts the elements of a given input tensor to a data type
+specified by the 'to' argument and returns an output tensor of the same size in
+the converted type. The 'to' argument must be one of the data types specified
+in the 'DataType' enum field in the TensorProto message.
+NOTE: Casting to and from strings or complex types is not supported.
+)DOC";
+  }
+  if (since_version == 6) {
     return R"DOC(
 The operator casts the elements of a given input tensor to a data type
 specified by the 'to' argument and returns an output tensor of the same size in
@@ -35,7 +44,10 @@ The standard ONNX schemas and full checker do not accept this extension.
 }
 
 std::string MakeCastInputTypeConstraintDescription(int since_version) {
-  if (since_version == 1 || since_version == 6) {
+  if (since_version == 1) {
+    return "Constrain input types. Casting from strings or complex types is not supported.";
+  }
+  if (since_version == 6) {
     return "Constrain input types. Casting from strings is not supported. "
            "Complex types are an onnx-light runtime extension.";
   }
@@ -43,7 +55,10 @@ std::string MakeCastInputTypeConstraintDescription(int since_version) {
 }
 
 std::string MakeCastOutputTypeConstraintDescription(int since_version) {
-  if (since_version == 1 || since_version == 6) {
+  if (since_version == 1) {
+    return "Constrain output types. Casting to strings or complex types is not supported.";
+  }
+  if (since_version == 6) {
     return "Constrain output types. Casting to strings is not supported. "
            "Complex types are an onnx-light runtime extension.";
   }

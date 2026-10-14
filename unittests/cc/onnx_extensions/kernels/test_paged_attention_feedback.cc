@@ -125,7 +125,8 @@ TEST(PagedAttentionFeedback, SerializedCacheInitializerResumesAttention) {
   RuntimeContext original_context;
   RegisterPaged(original_context);
   PersistentValueState original(model, {{"past", PagedAttention::EmptyCache()}});
-  original.Run(original_context, Feeds(1));
+  RuntimeSession original_session(original.model());
+  original_session.Run(original, original_context, Feeds(1));
   auto initial = original.Values().at("past").ToPagedCache("past");
   ASSERT_EQ(initial.blocks_size(), 1);
   EXPECT_TRUE(initial.blocks(0).has_encoded_key());
@@ -138,8 +139,9 @@ TEST(PagedAttentionFeedback, SerializedCacheInitializerResumesAttention) {
   RuntimeContext restored_context;
   RegisterPaged(restored_context);
   PersistentValueState restored(parsed, {});
-  auto expected = original.Run(original_context, Feeds(2));
-  auto actual = restored.Run(restored_context, Feeds(2));
+  RuntimeSession restored_session(restored.model());
+  auto expected = original_session.Run(original, original_context, Feeds(2));
+  auto actual = restored_session.Run(restored, restored_context, Feeds(2));
   ASSERT_EQ(actual.at("Y").tensor.size_bytes(), expected.at("Y").tensor.size_bytes());
   for (size_t i = 0; i < actual.at("Y").tensor.size_bytes() / sizeof(float); ++i)
     EXPECT_FLOAT_EQ(actual.at("Y").tensor.AsFloat()[i], expected.at("Y").tensor.AsFloat()[i]);
@@ -160,7 +162,8 @@ TEST(PagedAttentionFeedback, PublishesOwnersWithoutChangingModelOrPriorPartialBl
                          RuntimeContextOptions{.events_enabled = true});
   RegisterPaged(context);
   PersistentValueState state(model, {{"past", PagedAttention::EmptyCache()}});
-  auto first = state.Run(context, Feeds(1));
+  RuntimeSession state_session(state.model());
+  auto first = state_session.Run(state, context, Feeds(1));
   ASSERT_EQ(Blocks(first.at("present")).size(), 1u);
   const auto *key = Key(first.at("present"));
   const auto payload = Payload(*key);
@@ -168,7 +171,7 @@ TEST(PagedAttentionFeedback, PublishesOwnersWithoutChangingModelOrPriorPartialBl
   EXPECT_EQ(StorageType(Blocks(first.at("present"))[0].fields.at("value").Encoded()),
             DataType::INT8);
   EXPECT_EQ(Key(state.Values().at("past")), key);
-  auto second = state.Run(context, Feeds(2));
+  auto second = state_session.Run(state, context, Feeds(2));
   EXPECT_EQ(Blocks(second.at("present")).size(), 2u);
   EXPECT_EQ(Key(second.at("present")), key);
   EXPECT_EQ(Payload(*Key(first.at("present"))), payload);
@@ -204,12 +207,13 @@ TEST(PagedAttentionFeedback, KernelSelectsFormatsForEachExecution) {
     return PagedAttention::Formats{{DataType::INT8, 0.25f, 0}, {DataType::UINT4, 0.25f, 8}};
   });
   PersistentValueState state(model, {{"past", PagedAttention::EmptyCache()}});
-  const auto first = state.Run(context, Feeds(1));
+  RuntimeSession state_session(state.model());
+  const auto first = state_session.Run(state, context, Feeds(1));
   ASSERT_EQ(Blocks(first.at("present")).size(), 1u);
   EXPECT_EQ(StorageType(Blocks(first.at("present"))[0].fields.at("key").Encoded()), DataType::INT4);
   EXPECT_EQ(StorageType(Blocks(first.at("present"))[0].fields.at("value").Encoded()),
             DataType::INT8);
-  const auto second = state.Run(context, Feeds(2));
+  const auto second = state_session.Run(state, context, Feeds(2));
   ASSERT_EQ(Blocks(second.at("present")).size(), 2u);
   EXPECT_EQ(StorageType(Blocks(second.at("present"))[0].fields.at("key").Encoded()),
             DataType::INT4);
@@ -232,6 +236,7 @@ TEST(PagedAttentionFeedback, QuantizedFormatsMatchUnquantizedReferenceWithinFixt
                                      {storage, scale, static_cast<int32_t>(zero)}};
     });
     PersistentValueState state(model, {{"past", PagedAttention::EmptyCache()}});
+    RuntimeSession state_session(state.model());
     onnx_kernels::kernel::Attention reference(context.kernel_ctx());
     onnx_kernels::kernel::Attention::Attributes attributes;
     attributes.is_causal = true;
@@ -241,7 +246,7 @@ TEST(PagedAttentionFeedback, QuantizedFormatsMatchUnquantizedReferenceWithinFixt
       auto feeds = Feeds(0.173f * step);
       auto expected = reference(feeds.at("Q").tensor, feeds.at("K").tensor, feeds.at("V").tensor,
                                 attributes, nullptr, &key, &value);
-      const auto actual = state.Run(context, feeds);
+      const auto actual = state_session.Run(state, context, feeds);
       for (size_t i = 0; i < 2; ++i)
         EXPECT_NEAR(actual.at("Y").tensor.AsFloat()[i], expected.Y.AsFloat()[i],
                     four_bit ? 0.15f : 0.01f);
@@ -272,17 +277,18 @@ TEST(PagedAttentionFeedback, CancellationAndFailureNeverPublishAppendedBlocks) {
           rt.Put(node.output(0), Tensor::FromFloat("", {1, 1, 1, 2}, {0, 0}));
         });
     PersistentValueState state(model, {{"past", PagedAttention::EmptyCache()}});
-    const auto first = state.Run(context, Feeds(1));
+    RuntimeSession state_session(state.model());
+    const auto first = state_session.Run(state, context, Feeds(1));
     const auto *key = Key(first.at("present"));
     fail = true;
-    EXPECT_THROW(state.Run(context, Feeds(2), cancel ? &completion : nullptr),
+    EXPECT_THROW(state_session.Run(state, context, Feeds(2), cancel ? &completion : nullptr),
                  std::invalid_argument);
     EXPECT_EQ(Blocks(state.Values().at("past")).size(), 1u);
     EXPECT_EQ(Key(state.Values().at("past")), key);
     ASSERT_EQ(Blocks(leaked).size(), 2u);
     const auto *abandoned = Key(leaked, 1);
     fail = false;
-    const auto retry = state.Run(context, Feeds(3));
+    const auto retry = state_session.Run(state, context, Feeds(3));
     EXPECT_EQ(Key(retry.at("present")), key);
     EXPECT_NE(Key(retry.at("present"), 1), abandoned);
     EXPECT_EQ(Key(leaked, 1), abandoned);
@@ -295,15 +301,17 @@ TEST(PagedAttentionFeedback, CapacityAndIncompatibleConsumerLeaveStateUnchanged)
   RuntimeContext context(KernelContext(DefaultOpset(23)));
   RegisterPaged(context);
   PersistentValueState state(model, {{"past", PagedAttention::EmptyCache()}});
-  const auto first = state.Run(context, Feeds(1));
-  EXPECT_THROW(state.Run(context, Feeds(2)), std::invalid_argument);
+  RuntimeSession state_session(state.model());
+  const auto first = state_session.Run(state, context, Feeds(1));
+  EXPECT_THROW(state_session.Run(state, context, Feeds(2)), std::invalid_argument);
   EXPECT_EQ(Key(state.Values().at("past")), Key(first.at("present")));
   EXPECT_EQ(Blocks(state.Values().at("past")).size(), 1u);
 
   ModelProto unsupported = PagedModel();
   unsupported.mutable_graph()->mutable_node(0)->set_op_type("UnregisteredConsumer");
   PersistentValueState other(unsupported, {{"past", first.at("present").BorrowView()}});
-  EXPECT_THROW(other.Run(context, Feeds(2)), std::invalid_argument);
+  RuntimeSession other_session(other.model());
+  EXPECT_THROW(other_session.Run(other, context, Feeds(2)), std::invalid_argument);
   EXPECT_EQ(Key(other.Values().at("past")), Key(first.at("present")));
 
   context.RegisterKernelFn("onnx_light", "UnregisteredConsumer", core::symbolic::Device::kCPU,
@@ -315,7 +323,9 @@ TEST(PagedAttentionFeedback, CapacityAndIncompatibleConsumerLeaveStateUnchanged)
                              return kernel;
                            });
   PersistentValueState dense_consumer(unsupported, {{"past", first.at("present").BorrowView()}});
-  EXPECT_THROW(dense_consumer.Run(context, Feeds(2)), std::invalid_argument);
+  RuntimeSession dense_consumer_session(dense_consumer.model());
+  EXPECT_THROW(dense_consumer_session.Run(dense_consumer, context, Feeds(2)),
+               std::invalid_argument);
   EXPECT_EQ(Key(dense_consumer.Values().at("past")), Key(first.at("present")));
 }
 
@@ -328,18 +338,20 @@ TEST(PagedAttentionFeedback, ResetCloseAndRequestIsolationRetainLastLiveOwners) 
       RuntimeContextOptions{.allocator = &execution, .io_allocator = arena.get()});
   RegisterPaged(context);
   PersistentValueState first(model, {{"past", PagedAttention::EmptyCache()}});
-  auto output = first.Run(context, Feeds(1));
+  RuntimeSession first_session(first.model());
+  auto output = first_session.Run(first, context, Feeds(1));
   auto shared = first.Values();
   std::weak_ptr<const EncodedValueProto> lifetime =
       Blocks(shared.at("past"))[0].fields.at("key").encoded;
   const auto *original = Key(shared.at("past"));
   PersistentValueState second(model, shared);
+  RuntimeSession second_session(second.model());
   output.clear();
   shared.clear();
-  auto branch = first.Run(context, Feeds(2));
+  auto branch = first_session.Run(first, context, Feeds(2));
   EXPECT_EQ(Blocks(second.Values().at("past")).size(), 1u);
   EXPECT_EQ(Key(second.Values().at("past")), original);
-  auto other = second.Run(context, Feeds(3));
+  auto other = second_session.Run(second, context, Feeds(3));
   EXPECT_EQ(Key(branch.at("present")), Key(other.at("present")));
   EXPECT_NE(Key(branch.at("present"), 1), Key(other.at("present"), 1));
   first.Reset({{"past", PagedAttention::EmptyCache()}});
@@ -348,7 +360,7 @@ TEST(PagedAttentionFeedback, ResetCloseAndRequestIsolationRetainLastLiveOwners) 
   const auto bytes = Payload(*original);
   for (int i = 0; i < 8; ++i) {
     first.Reset({{"past", PagedAttention::EmptyCache()}});
-    first.Run(context, Feeds(static_cast<float>(i)));
+    first_session.Run(first, context, Feeds(static_cast<float>(i)));
   }
   EXPECT_EQ(Payload(*original), bytes);
   first.Close();
@@ -356,7 +368,7 @@ TEST(PagedAttentionFeedback, ResetCloseAndRequestIsolationRetainLastLiveOwners) 
   EXPECT_FALSE(lifetime.expired());
   other.clear();
   EXPECT_TRUE(lifetime.expired());
-  EXPECT_THROW(first.Run(context, Feeds(1)), std::invalid_argument);
+  EXPECT_THROW(first_session.Run(first, context, Feeds(1)), std::invalid_argument);
 }
 
 TEST(PagedAttentionFeedback, GrowableOutputArenaPublishesCompleteCache) {
@@ -368,10 +380,11 @@ TEST(PagedAttentionFeedback, GrowableOutputArenaPublishesCompleteCache) {
       RuntimeContextOptions{.allocator = &execution, .io_allocator = arena.get()});
   RegisterPaged(context);
   PersistentValueState state(model, {{"past", PagedAttention::EmptyCache()}});
-  auto first = state.Run(context, Feeds(1));
+  RuntimeSession state_session(state.model());
+  auto first = state_session.Run(state, context, Feeds(1));
   EXPECT_EQ(Blocks(first.at("present")).size(), 1u);
   EXPECT_EQ(Blocks(state.Values().at("past")).size(), 1u);
-  auto second = state.Run(context, Feeds(2));
+  auto second = state_session.Run(state, context, Feeds(2));
   EXPECT_EQ(Blocks(second.at("present")).size(), 2u);
   EXPECT_EQ(Blocks(state.Values().at("past")).size(), 2u);
   EXPECT_GT(arena->capacity(), 2u);
@@ -410,8 +423,9 @@ TEST(PagedAttentionFeedback, IntermediateCachesKeepOwnersAcrossArenaRouting) {
           rt.PutValue(node.output(0), rt.values().at(node.input(0)).BorrowView());
         });
     PersistentValueState state(model, {{"past", PagedAttention::EmptyCache()}});
-    auto first = state.Run(context, Feeds(1));
-    auto second = state.Run(context, Feeds(2));
+    RuntimeSession state_session(state.model());
+    auto first = state_session.Run(state, context, Feeds(1));
+    auto second = state_session.Run(state, context, Feeds(2));
     EXPECT_EQ(Blocks(first.at("cache_out")).size(), 1u);
     EXPECT_EQ(Blocks(second.at("cache_out")).size(), 2u);
     EXPECT_EQ(&Blocks(first.at("cache_out"))[0], &Blocks(second.at("cache_out"))[0]);

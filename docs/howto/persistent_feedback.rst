@@ -189,9 +189,10 @@ The Python binding is available from the native runtime module:
     )
     initial = numpy.zeros(2, dtype=numpy.float32)
     state = runtime.PersistentValueState(model, initial={"past": initial})
+    session = runtime.RuntimeSession(model)
     delta = numpy.ones(2, dtype=numpy.float32)
-    first = state.run(context, {"delta": delta})
-    second = state.run(context, {"delta": delta})
+    first = session.run(state, context, {"delta": delta})
+    second = session.run(state, context, {"delta": delta})
     numpy.testing.assert_array_equal(
         numpy.from_dlpack(second["present"]),
         [2, 2],
@@ -218,11 +219,16 @@ They remain valid after callers drop their input references, after another
 run, or after reset/close. Unsupported ownerless output storage is rejected
 rather than silently copied for a selected output; an allocator cannot recycle a live retained
 allocation.
-The binding keeps the model alive. The supplied context configures allocators
-and custom kernels; each call executes in a fresh child context, rather than
-leaving old feeds or intermediate values in the caller's context.
-The binding also retains supplied contexts so cached kernel allocator
-references remain valid. Reuse the same context for a state's calls.
+The binding keeps the model alive. ``PersistentValueState`` only owns retained
+values; the caller-owned ``RuntimeSession`` owns execution and cached kernels.
+Each call uses the supplied context directly, preserving its allocators, custom
+kernels and existing event log without creating a child context. Bound graph
+inputs and exported outputs are removed from the context at the end of the
+call, including on failure; unrelated values are preserved. Intermediate values
+follow the context's ``release_intermediates`` setting.
+The binding also retains supplied contexts so cached kernel allocator references
+remain valid. Reuse the same context for a state's calls. Closing a state does
+not destroy the session or its kernels.
 Initializers use model-backed views when their representation is directly
 readable; other numeric representations and strings use normal conversion.
 String tensors cannot be persistent, including nested tensor fields and string
@@ -250,8 +256,9 @@ The corresponding C++ entry points are:
         model,
         {{"past", RuntimeValue(Tensor::FromFloat("past", {2}, {0.f, 0.f}))}});
     RuntimeContext context(KernelContext(18));
-    auto outputs = state.Run(
-        context,
+    RuntimeSession session(model);
+    auto outputs = session.Run(
+        state, context,
         {{"delta", RuntimeValue(Tensor::FromFloat("delta", {2}, {1.f, 1.f}))}});
     state.Reset(
         {{"past", RuntimeValue(Tensor::FromFloat("past", {2}, {0.f, 0.f}))}});
@@ -300,7 +307,7 @@ Cancellation uses the existing task-completion primitive:
 
     completion = runtime.TaskCompletion()
     completion.cancel("request no longer needed")
-    # state.run(context, feeds, completion) now rejects the cancelled call.
+    # session.run(state, context, feeds, completion) rejects the cancelled call.
 
 A completion is single-use. A pending completion can also be cancelled from
 another thread while a call runs. Already executing kernels finish normally,
@@ -334,7 +341,8 @@ structured ``cache`` and ``next_cache`` values and a separate ``tokens`` input:
     binding.input_name = "cache"
     binding.output_name = "next_cache"
     state = runtime.PersistentValueState(model, {"cache": initial_cache})
-    output = state.run(context, {"tokens": tokens})
+    session = runtime.RuntimeSession(model)
+    output = session.run(state, context, {"tokens": tokens})
 
 Custom kernels use ``context.get_value(name)`` and
 ``context.put_value(name, value)`` to exchange structured values; ordinary

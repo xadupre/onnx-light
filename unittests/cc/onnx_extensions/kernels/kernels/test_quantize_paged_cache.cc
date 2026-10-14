@@ -184,6 +184,7 @@ TEST(QuantizePagedCache, PartialPageCommitsThroughFixedCapacityPersistentCache) 
   partial.fields.at("length") = RuntimeValue(Tensor::FromInt64("", {}, {1}));
   cache.fields.at("blocks").elements.Set(0, std::move(partial));
   PersistentValueState state(model, {{"past", cache}});
+  RuntimeSession state_session(state.model());
   RuntimeContext context;
   const RuntimeValueMap feeds{{"indices", RuntimeValue(Tensor::FromInt64("", {1}, {0}))},
                               {"key_scale", RuntimeValue(Tensor::FromFloat("", {}, {1}))},
@@ -191,7 +192,7 @@ TEST(QuantizePagedCache, PartialPageCommitsThroughFixedCapacityPersistentCache) 
                               {"key_zero", RuntimeValue(TypeMarker(DataType::FLOAT16))},
                               {"value_zero", RuntimeValue(TypeMarker(DataType::BFLOAT16))}};
   for (int iteration = 0; iteration < 2; ++iteration) {
-    auto output = state.Run(context, feeds);
+    auto output = state_session.Run(state, context, feeds);
     const auto &converted = Blocks(output.at("present"))[0];
     EXPECT_EQ(converted.fields.at("key").tensor.data_type, DataType::FLOAT16);
     EXPECT_EQ(converted.fields.at("value").tensor.data_type, DataType::BFLOAT16);
@@ -209,7 +210,7 @@ TEST(QuantizePagedCache, PartialPageCommitsThroughFixedCapacityPersistentCache) 
   auto malformed = state.Values().at("past");
   malformed.fields.at("blocks").elements.Set(0, RuntimeValue{});
   EXPECT_THROW(state.Reset({{"past", malformed}}), std::invalid_argument);
-  EXPECT_NO_THROW(state.Run(context, feeds));
+  EXPECT_NO_THROW(state_session.Run(state, context, feeds));
 }
 
 TEST(QuantizePagedCache, PreservesPartialCapacityAcrossAllConversionsWithoutReadingUnusedRows) {

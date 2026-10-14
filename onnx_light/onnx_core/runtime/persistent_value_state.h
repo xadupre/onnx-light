@@ -14,7 +14,7 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 /**
  * Carries graph-declared persistent values between model calls.
  *
- * Each Run:
+ * During a RuntimeSession run:
  * 1. Binds retained values to persistent inputs and adds the current feeds.
  * 2. Executes the session, reusing eligible append buffers or allocating new ones.
  * 3. Validates the outputs and checks cancellation.
@@ -48,64 +48,52 @@ public:
                        RuntimeSessionOptions options = {});
 
   /**
-   * Runs with current feeds and atomically replaces the selected retained values.
+   * Retains an external model/context owner until the state is released.
    *
-   * An optional pending completion acts as a cancellation/commit gate. Cancelling
-   * it before publication aborts feedback; success makes publication irrevocable.
-   * The token is single-use and must not be marked running by the caller.
-   * When context.events_enabled() is true, invocation events are appended to
-   * context.events(), including work preceding a failure or cancellation.
-   */
-  RuntimeValueMap Run(RuntimeContext &context, const RuntimeValueMap &feeds,
-                      const TaskCompletion *completion = nullptr);
-  /**
-   * Retains an external model/context owner until kernels and state are released.
-   *
-   * The caller registers owners before Run, including attempts that may fail during initialization.
+   * The caller registers owners before execution, including attempts that may fail.
    * Repeated calls with the same shared owner are deduplicated. The token must
    * not own this PersistentValueState, which would create a lifetime cycle.
    */
   void RetainOwner(std::shared_ptr<void> owner);
   /** Replaces retained values with explicitly transferred initial contents. */
   void Reset(RuntimeValueMap initial);
-  /** Releases retained values and kernels and permanently closes this state. */
+  /** Releases retained values and permanently closes this state. */
   void Close();
   /** Returns read-only aliases keyed by exact retained graph input names. */
   RuntimeValueMap Values() const;
   /** Returns the immutable model; rejects access after Close(). */
   const ModelProto &model() const {
-    EXT_ENFORCE_INVALID(session_ != nullptr, "PersistentValueState: state is closed.");
+    EXT_ENFORCE_INVALID(!closed_, "PersistentValueState: state is closed.");
     return model_;
   }
   /** Returns the validated catalogue; rejects access after Close(). */
   const StructTypeCatalogue &struct_type_catalogue() const {
-    EXT_ENFORCE_INVALID(session_ != nullptr, "PersistentValueState: state is closed.");
+    EXT_ENFORCE_INVALID(!closed_, "PersistentValueState: state is closed.");
     return catalogue_;
   }
 
 private:
+  friend class RuntimeSession;
+  using ShapeSymbols = std::unordered_map<std::string, int64_t>;
   struct Binding {
     std::string input;
     std::string output;
     const TypeProto *input_type;
   };
   std::vector<PersistentValue> ValidateInitial(RuntimeValueMap initial) const;
-  RuntimeValueMap RunImpl(RuntimeContext &invocation, const RuntimeValueMap &feeds,
-                          const TaskCompletion *completion,
-                          RawBufferAllocator *caller_execution_allocator,
-                          RawBufferAllocator *caller_io_allocator);
+  ShapeSymbols Bind(RuntimeContext &context, const RuntimeValueMap &feeds);
+  void Unbind(RuntimeContext &context) noexcept;
+  RuntimeValueMap Commit(RuntimeContext &context, const TaskCompletion *completion,
+                         ShapeSymbols symbols);
 
   const ModelProto &model_;
   std::shared_ptr<void> model_owner_;
   std::vector<std::shared_ptr<void>> retained_owners_;
   StructTypeCatalogue catalogue_;
-  using ShapeSymbols = std::unordered_map<std::string, int64_t>;
   mutable std::unordered_map<const TypeProto *, RuntimeSequence::Memo<ShapeSymbols>>
       sequence_validation_;
   std::vector<Binding> bindings_;
-  std::unique_ptr<RuntimeSession> session_;
-  std::unique_ptr<RuntimeContext> invocation_;
-  const RuntimeContext *invocation_source_ = nullptr;
+  bool closed_ = false;
   std::vector<PersistentValue> values_;
   size_t persistent_tensor_initial_capacity_ = 0;
   bool allocators_captured_ = false;

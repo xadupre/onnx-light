@@ -110,9 +110,10 @@ class TestSharedQuantizationParameters(unittest.TestCase):
                 binding.output_name = "present"
                 initial = {"payload": encoded} if nested else encoded
                 state = runtime.PersistentValueState(model, {"past": initial})
+                state_session = runtime.RuntimeSession(state.model)
                 context = runtime.RuntimeContext()
                 state.reset({"past": initial})
-                output = state.run(context, {"current": initial})
+                output = state_session.run(state, context, {"current": initial})
                 invalid = onnx.EncodedValueProto()
                 invalid.CopyFrom(encoded)
                 invalid.parameter_ref = "missing"
@@ -120,7 +121,7 @@ class TestSharedQuantizationParameters(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "parameter_ref"):
                     state.reset({"past": bad})
                 with self.assertRaisesRegex(ValueError, "parameter_ref"):
-                    state.run(context, {"current": bad})
+                    state_session.run(state, context, {"current": bad})
                 with self.assertRaisesRegex(ValueError, "parameter_ref"):
                     runtime.PersistentValueState(model, {"past": bad})
                 state.close()

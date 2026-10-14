@@ -687,8 +687,9 @@ not during state construction or execution.
         initial={"past_key": empty_key, "past_value": empty_value}
     )
 
-    out = state.run({"tokens": first_tokens})
-    out = state.run({"tokens": next_tokens})
+    session = RuntimeSession(model)
+    out = session.run(state, context, {"tokens": first_tokens})
+    out = session.run(state, context, {"tokens": next_tokens})
 
 This helper is equivalent to the ordinary stateless loop:
 
@@ -744,8 +745,9 @@ to separate graph inputs. These are ordinary structs described by ``StructTypePr
         model,
         initial={"cache": initial_cache}
     )
-    out = state.run({"tokens": first_tokens})
-    out = state.run({"tokens": next_tokens})
+    session = RuntimeSession(model)
+    out = session.run(state, context, {"tokens": first_tokens})
+    out = session.run(state, context, {"tokens": next_tokens})
 
 The whole ``cache`` input persists: tokens are supplied anew and logits are
 separate outputs, not retained. The graph binding selects a whole value,

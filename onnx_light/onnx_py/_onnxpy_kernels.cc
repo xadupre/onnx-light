@@ -1992,9 +1992,30 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           nb::arg("plan"), nb::arg("options"), nb::keep_alive<1, 2>(),
           "Builds a session over ``plan`` using a :class:`RuntimeSessionOptions` "
           "bundle. ``plan`` must outlive the session; this binding keeps it alive.")
-      .def("run", &RuntimeSession::Run, nb::arg("rt"),
+      .def("run", nb::overload_cast<RuntimeContext &>(&RuntimeSession::Run), nb::arg("rt"),
            "Executes the plan once against ``rt``, resolving, building, and caching "
            "kernel instances on the first call. Safe to call repeatedly on the same session.")
+      .def(
+          "_retain_context", [](RuntimeSession &, RuntimeContext &) {}, nb::keep_alive<1, 2>())
+      .def(
+          "run",
+          [](RuntimeSession &self, PersistentValueState &state, RuntimeContext &context,
+             nb::dict feeds, const core::runtime::TaskCompletion *completion) {
+            RuntimeValueMap inputs = FeedbackValuesFromPython(feeds, &state.model());
+            nb::cast(&self, nb::rv_policy::reference)
+                .attr("_retain_context")(nb::cast(&context, nb::rv_policy::reference));
+            nb::cast(&state, nb::rv_policy::reference)
+                .attr("_retain_context")(nb::cast(&context, nb::rv_policy::reference));
+            RuntimeValueMap outputs;
+            {
+              nb::gil_scoped_release release;
+              outputs = self.Run(state, context, inputs, completion);
+            }
+            return FeedbackValuesToPython(std::move(outputs), state.struct_type_catalogue());
+          },
+          nb::arg("state"), nb::arg("context"), nb::arg("feeds"),
+          nb::arg("completion").none() = nb::none(),
+          "Runs in context and commits persistent feedback only after successful validation.")
       .def_prop_ro("parameters", &RuntimeSession::parameters,
                    "Model-independent execution parameters applied to the nodes this "
                    "session runs.")
@@ -2162,29 +2183,6 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           nb::keep_alive<1, 2>(),
           "Retains a context before native kernel initialization, including failing calls.")
       .def(
-          "run",
-          [](PersistentValueState &self, RuntimeContext &context, nb::dict feeds,
-             const core::runtime::TaskCompletion *completion) {
-            RuntimeValueMap inputs = FeedbackValuesFromPython(feeds, &self.model());
-            // Kernel initialization can retain allocator pointers even when execution fails.
-            nb::cast(&self, nb::rv_policy::reference)
-                .attr("_retain_context")(nb::cast(&context, nb::rv_policy::reference));
-            RuntimeValueMap outputs;
-            {
-              nb::gil_scoped_release release;
-              outputs = self.Run(context, inputs, completion);
-            }
-            return FeedbackValuesToPython(std::move(outputs), self.struct_type_catalogue());
-          },
-          nb::arg("context"), nb::arg("feeds"), nb::arg("completion").none() = nb::none(),
-          "Runs the model and commits feedback only after successful validation. "
-          "Feeds name whole non-retained graph inputs; retained inputs cannot be overridden. "
-          "Returns lifetime-safe shared tensors, nested dictionaries or encoded values. "
-          "Uses an optional single-use TaskCompletion to cancel before publication. "
-          "When context.events_enabled is true, appends invocation events to context.events(), "
-          "including events recorded before failure; existing entries are preserved. "
-          "The caller clears the log with context.clear_events().")
-      .def(
           "reset",
           [](PersistentValueState &self, nb::dict initial) {
             self.Reset(FeedbackValuesFromPython(initial, &self.model()));
@@ -2192,6 +2190,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           nb::arg("initial"), "Replaces retained state with explicitly supplied initial values.")
       .def("close", &PersistentValueState::Close,
            "Releases retained values and permanently closes the state.")
+      .def_prop_ro("model", &PersistentValueState::model, nb::rv_policy::reference_internal)
       .def_prop_ro(
           "values",
           [](const PersistentValueState &self) {

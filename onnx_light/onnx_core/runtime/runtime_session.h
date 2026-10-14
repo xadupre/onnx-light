@@ -47,6 +47,7 @@ namespace shapes {
 class ShapesContext;
 } // namespace shapes
 namespace runtime {
+class PersistentValueState;
 
 class ValueStore;
 
@@ -235,6 +236,21 @@ public:
    *         the session's.
    */
   void Run(RuntimeContext &rt);
+
+  /**
+   * Runs in the supplied context and commits persistent feedback only on success.
+   *
+   * The state and session reference the same immutable model. Current feeds name
+   * whole graph inputs and cannot override retained inputs. Repeated calls reuse
+   * this session's kernels and the supplied context's allocators directly.
+   * Bound inputs and exported outputs are removed from the context on return,
+   * including on failure; unrelated values and recorded events are preserved.
+   *
+   * An optional pending completion is a single-use cancellation/publication gate.
+   * Cancellation before publication leaves the retained values unchanged.
+   */
+  RuntimeValueMap Run(PersistentValueState &state, RuntimeContext &rt, const RuntimeValueMap &feeds,
+                      const TaskCompletion *completion = nullptr);
 
   /// Model-independent execution parameters (e.g. the requested degree of
   /// parallelism, :cpp:var:`RuntimeParameters::num_threads`) applied to the

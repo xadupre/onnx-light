@@ -142,8 +142,9 @@ class TestPersistentValueState(unittest.TestCase):
                 )
                 add_binding(model, "past", "present")
                 state = runtime.PersistentValueState(model, {"past": {"blocks": blocks}})
+                state_session = runtime.RuntimeSession(state.model)
                 context = make_context()
-                output = state.run(context, {})["present"]
+                output = state_session.run(state, context, {})["present"]
                 if cache_structure:
                     self.assertIsInstance(output, onnx.PagedCacheProto)
                     self.assertEqual(len(output.blocks), len(blocks))
@@ -180,10 +181,11 @@ class TestPersistentValueState(unittest.TestCase):
         )
         add_binding(model, "past", "present")
         state = runtime.PersistentValueState(model, {"past": []})
+        state_session = runtime.RuntimeSession(state.model)
         context = make_context()
         item = numpy.ones(2, dtype=numpy.float32)
-        first = state.run(context, {"item": item})["present"]
-        second = state.run(context, {"item": item * 2})["present"]
+        first = state_session.run(state, context, {"item": item})["present"]
+        second = state_session.run(state, context, {"item": item * 2})["present"]
         self.assertIsInstance(second, list)
         self.assertEqual(len(second), 2)
         numpy.testing.assert_array_equal(array(second[0]), item)
@@ -205,6 +207,7 @@ class TestPersistentValueState(unittest.TestCase):
             state = runtime.PersistentValueState(
                 model, {"past_key": initial_key, "past_value": -initial_key}, options
             )
+            state_session = runtime.RuntimeSession(state.model, options=options)
             context = runtime.RuntimeContext(
                 runtime.KernelContext(runtime.default_opset(23)), events_enabled=True
             )
@@ -216,7 +219,9 @@ class TestPersistentValueState(unittest.TestCase):
                         [step * 0.125, step * 0.125 + 0.25], dtype=numpy.float32
                     ).reshape(1, 1, 1, 2)
                     context.clear_events()
-                    outputs = state.run(context, {"Q": token, "K": token, "V": -token})
+                    outputs = state_session.run(
+                        state, context, {"Q": token, "K": token, "V": -token}
+                    )
                     snapshot = {name: array(value).copy() for name, value in outputs.items()}
                     # Returned views must be released before the next call can reuse capacity.
                     del outputs
@@ -263,6 +268,10 @@ class TestPersistentValueState(unittest.TestCase):
         state = runtime.PersistentValueState(
             model, initial, runtime.RuntimeSessionOptions(persistent_tensor_initial_capacity=4)
         )
+        state_session = runtime.RuntimeSession(
+            state.model,
+            options=runtime.RuntimeSessionOptions(persistent_tensor_initial_capacity=4),
+        )
         stateless = runtime.RuntimeSession(model)
         state_context = runtime.RuntimeContext(runtime.KernelContext(runtime.default_opset(23)))
         manual = initial.copy()
@@ -274,7 +283,7 @@ class TestPersistentValueState(unittest.TestCase):
             for name, value in {**manual, **feeds}.items():
                 context.put_value(name, value)
             stateless.run(context)
-            actual = state.run(state_context, feeds)
+            actual = state_session.run(state, state_context, feeds)
             for name, source in bindings.items():
                 expected = context.get_value(source)
                 numpy.testing.assert_array_equal(array(actual[source]), array(expected))
@@ -314,6 +323,7 @@ class TestPersistentValueState(unittest.TestCase):
                             ),
                         },
                     )
+                    state_session = runtime.RuntimeSession(state.model)
                     context = runtime.RuntimeContext(
                         runtime.KernelContext(runtime.default_opset(23)), events_enabled=enabled
                     )
@@ -328,7 +338,8 @@ class TestPersistentValueState(unittest.TestCase):
                     results[enabled] = []
                     for step in range(1, 4):
                         token = numpy.array([step * 0.125, step * 0.125 + 0.25], dtype=dtype)
-                        outputs = state.run(
+                        outputs = state_session.run(
+                            state,
                             context,
                             {
                                 "Q": token.reshape(1, 1, 1, 2),
@@ -432,6 +443,7 @@ class TestPersistentValueState(unittest.TestCase):
                         for name in ("past_key", "past_value")
                     },
                 )
+                state_session = runtime.RuntimeSession(state.model)
                 context = runtime.RuntimeContext(
                     runtime.KernelContext(runtime.default_opset(23)), events_enabled=enabled
                 )
@@ -446,7 +458,7 @@ class TestPersistentValueState(unittest.TestCase):
                 }
                 feeds["target_shape"] = numpy.array([3], dtype=numpy.int64)
                 with self.assertRaisesRegex((ValueError, RuntimeError), "Reshape|reshape"):
-                    state.run(context, feeds)
+                    state_session.run(state, context, feeds)
                 events = context.events()
                 if enabled:
                     self.assertEqual(
@@ -496,9 +508,10 @@ class TestPersistentValueState(unittest.TestCase):
         )
         add_binding(model, "past", "present")
         state = runtime.PersistentValueState(model, {"past": numpy.zeros(2, dtype=numpy.float32)})
+        state_session = runtime.RuntimeSession(state.model)
         context = make_context()
         for expected in (2, 4):
-            output = state.run(context, {})
+            output = state_session.run(state, context, {})
             numpy.testing.assert_array_equal(array(output["present"]), [expected, expected])
             self.assertEqual(
                 array(output["present"]).ctypes.data, array(state.values["past"]).ctypes.data
@@ -545,10 +558,13 @@ class TestPersistentValueState(unittest.TestCase):
         )
         add_binding(model, "past", "present")
         state = runtime.PersistentValueState(model, {"past": numpy.zeros(2, dtype=numpy.float32)})
+        state_session = runtime.RuntimeSession(state.model)
         context = make_context()
         outputs = []
         for expected in (3, 6):
-            output = state.run(context, {"items": numpy.ones((3, 2), dtype=numpy.float32)})
+            output = state_session.run(
+                state, context, {"items": numpy.ones((3, 2), dtype=numpy.float32)}
+            )
             numpy.testing.assert_array_equal(array(output["present"]), [expected, expected])
             outputs.append(output)
         state.close()
@@ -588,9 +604,11 @@ class TestPersistentValueState(unittest.TestCase):
         add_binding(model, "past", "present")
         text = runtime.tensor_from_proto(onh.from_array(numpy.array(["a", "b"], dtype=object)))
         state = runtime.PersistentValueState(model, {"past": numpy.zeros(2, dtype=numpy.float32)})
+        state_session = runtime.RuntimeSession(state.model)
         context = make_context()
         for expected, condition in enumerate((True, False), 1):
-            output = state.run(
+            output = state_session.run(
+                state,
                 context,
                 {
                     "condition": numpy.array(condition),
@@ -608,12 +626,13 @@ class TestPersistentValueState(unittest.TestCase):
         state = runtime.PersistentValueState(
             make_model(), {"past": numpy.zeros(2, dtype=numpy.float32)}
         )
+        state_session = runtime.RuntimeSession(state.model)
         context = make_context()
         feeds = {"delta": numpy.ones(2, dtype=numpy.float32)}
-        state.run(context, feeds)
+        state_session.run(state, context, feeds)
         references = sys.getrefcount(context)
         for _ in range(100):
-            state.run(context, feeds)
+            state_session.run(state, context, feeds)
         self.assertEqual(sys.getrefcount(context), references)
 
     def test_persistent_strings_rejected(self):
@@ -636,6 +655,7 @@ class TestPersistentValueState(unittest.TestCase):
         )
         add_binding(model, "past", "present")
         state = runtime.PersistentValueState(model, {"past": numpy.zeros(2, dtype=numpy.float32)})
+        state_session = runtime.RuntimeSession(state.model)
         context = runtime.RuntimeContext(runtime.KernelContext(runtime.default_opset(20)))
         for expected in (1, 2):
             feeds = {
@@ -647,7 +667,7 @@ class TestPersistentValueState(unittest.TestCase):
                 ),
                 "delta": numpy.ones(2, dtype=numpy.float32),
             }
-            result = state.run(context, feeds)
+            result = state_session.run(state, context, feeds)
             del feeds
             numpy.testing.assert_array_equal(
                 onh.to_array(runtime.tensor_to_proto(result["text_out"])), ["a!", "b?"]
@@ -677,6 +697,7 @@ class TestPersistentValueState(unittest.TestCase):
         model = make_model()
         initial = numpy.zeros(2, dtype=numpy.float32)
         state = runtime.PersistentValueState(model, {"past": initial})
+        state_session = runtime.RuntimeSession(state.model)
         context = make_context()
         manual = runtime.tensor_from_proto(onh.from_array(initial, name="past"))
         for index in range(4):
@@ -684,7 +705,7 @@ class TestPersistentValueState(unittest.TestCase):
             expected = runtime.run_model(
                 model, [runtime.tensor_from_proto(onh.from_array(delta, name="delta")), manual]
             )[0]
-            actual = state.run(context, {"delta": delta})["present"]
+            actual = state_session.run(state, context, {"delta": delta})["present"]
             numpy.testing.assert_array_equal(array(expected), array(actual))
             manual = expected
             manual.name = "past"
@@ -692,18 +713,21 @@ class TestPersistentValueState(unittest.TestCase):
         numpy.testing.assert_array_equal(array(state.values["past"]), initial)
         state.close()
         with self.assertRaises((ValueError, RuntimeError)):
-            state.run(context, {"delta": initial})
+            state_session.run(state, context, {"delta": initial})
 
     def test_ownership_and_request_isolation(self):
         model = make_model()
         initial = numpy.ones(2, dtype=numpy.float32)
         first = runtime.PersistentValueState(model, {"past": initial})
+        first_session = runtime.RuntimeSession(first.model)
         second = runtime.PersistentValueState(model, {"past": initial})
         self.assertEqual(array(first.values["past"]).ctypes.data, initial.ctypes.data)
         self.assertEqual(array(second.values["past"]).ctypes.data, initial.ctypes.data)
         del model
         gc.collect()
-        output = first.run(make_context(), {"delta": numpy.ones(2, dtype=numpy.float32)})
+        output = first_session.run(
+            first, make_context(), {"delta": numpy.ones(2, dtype=numpy.float32)}
+        )
         self.assertEqual(
             array(output["present"]).ctypes.data, array(first.values["past"]).ctypes.data
         )
@@ -727,10 +751,11 @@ class TestPersistentValueState(unittest.TestCase):
         with self.assertRaises(ValueError):
             runtime.PersistentValueState(model, {"past": numpy.zeros(3, dtype=numpy.float32)})
         state = runtime.PersistentValueState(model, {"past": initial})
+        state_session = runtime.RuntimeSession(state.model)
         with self.assertRaises(ValueError):
-            state.run(make_context(), {})
+            state_session.run(state, make_context(), {})
         with self.assertRaises(ValueError):
-            state.run(make_context(), {"past": initial, "delta": initial})
+            state_session.run(state, make_context(), {"past": initial, "delta": initial})
         rewritten = make_model()
         rewritten.graph.output[0].name = "rewritten"
         with self.assertRaises(ValueError):
@@ -740,10 +765,13 @@ class TestPersistentValueState(unittest.TestCase):
         state = runtime.PersistentValueState(
             make_model(), {"past": numpy.zeros(2, dtype=numpy.float32)}
         )
+        state_session = runtime.RuntimeSession(state.model)
         completion = runtime.TaskCompletion()
         completion.cancel("request cancelled")
         with self.assertRaises((ValueError, RuntimeError)):
-            state.run(make_context(), {"delta": numpy.ones(2, dtype=numpy.float32)}, completion)
+            state_session.run(
+                state, make_context(), {"delta": numpy.ones(2, dtype=numpy.float32)}, completion
+            )
         numpy.testing.assert_array_equal(array(state.values["past"]), [0, 0])
         self.assertTrue(completion.is_ready())
 
@@ -758,6 +786,7 @@ class TestPersistentValueState(unittest.TestCase):
             with self.subTest(global_registration=global_registration):
                 initial = numpy.zeros(2, dtype=numpy.float32)
                 state = runtime.PersistentValueState(model, {"past": initial})
+                state_session = runtime.RuntimeSession(state.model)
                 context = make_context()
                 entered = threading.Event()
                 resume = threading.Event()
@@ -774,11 +803,13 @@ class TestPersistentValueState(unittest.TestCase):
                 registry.register_custom_kernel("feedback.test", "Block", block)
                 try:
                     with ThreadPoolExecutor(max_workers=1) as executor:
-                        pending = executor.submit(state.run, context, {}, completion)
+                        pending = executor.submit(
+                            state_session.run, state, context, {}, completion
+                        )
                         try:
                             self.assertTrue(entered.wait(10))
                             for operation in (
-                                lambda: state.run(context, {}),
+                                lambda: state_session.run(state, context, {}),
                                 lambda: state.reset({"past": initial}),
                                 state.close,
                             ):
@@ -834,6 +865,7 @@ class TestPersistentValueState(unittest.TestCase):
         state = runtime.PersistentValueState(
             model, {"request": {"cache": initial_cache, "logits": initial_logits}}
         )
+        state_session = runtime.RuntimeSession(state.model)
         snapshot = state.values
         self.assertEqual(
             array(snapshot["request"]["cache"]).ctypes.data, initial_cache.ctypes.data
@@ -867,7 +899,7 @@ class TestPersistentValueState(unittest.TestCase):
             manual_context.put_value("tokens", tokens)
             stateless.run(manual_context)
             manual = manual_context.get_value(model.graph.persistent_bindings[0].output_name)
-            output = state.run(context, {"tokens": tokens})
+            output = state_session.run(state, context, {"tokens": tokens})
             numpy.testing.assert_array_equal(array(output["response"]["cache"]), [expected] * 2)
             for field in ("cache", "logits"):
                 numpy.testing.assert_array_equal(
@@ -884,21 +916,24 @@ class TestPersistentValueState(unittest.TestCase):
             state.values["request"],
         ):
             with self.assertRaisesRegex(ValueError, "override retained input"):
-                state.run(
+                state_session.run(
+                    state,
                     context,
                     {"request": replacement, "tokens": numpy.ones(2, dtype=numpy.float32)},
                 )
         with self.assertRaisesRegex(ValueError, "unknown graph input"):
-            state.run(context, {"request.cache": numpy.ones(2, dtype=numpy.float32)})
+            state_session.run(
+                state, context, {"request.cache": numpy.ones(2, dtype=numpy.float32)}
+            )
         with self.assertRaisesRegex(ValueError, "missing field"):
             state.reset({"request": {"cache": numpy.zeros(2, dtype=numpy.float32)}})
         fail = True
         with self.assertRaisesRegex(RuntimeError, "failed after producing outputs"):
-            state.run(context, {"tokens": numpy.ones(2, dtype=numpy.float32)})
+            state_session.run(state, context, {"tokens": numpy.ones(2, dtype=numpy.float32)})
         numpy.testing.assert_array_equal(array(state.values["request"]["cache"]), [2, 2])
         numpy.testing.assert_array_equal(array(state.values["request"]["logits"]), [4, 4])
         fail = False
-        output = state.run(context, {"tokens": numpy.ones(2, dtype=numpy.float32)})
+        output = state_session.run(state, context, {"tokens": numpy.ones(2, dtype=numpy.float32)})
         numpy.testing.assert_array_equal(array(output["response"]["cache"]), [3, 3])
         state.close()
         numpy.testing.assert_array_equal(array(snapshot["request"]["cache"]), [0, 0])
@@ -912,16 +947,19 @@ class TestPersistentValueState(unittest.TestCase):
         source_ref = weakref.ref(initial)
         address = initial.ctypes.data
         state = runtime.PersistentValueState(make_model(), {"past": initial})
+        state_session = runtime.RuntimeSession(state.model)
         retained = state.values["past"]
         self.assertEqual(array(retained).ctypes.data, address)
         del initial
         gc.collect()
         self.assertIsNotNone(source_ref())
-        output = state.run(make_context(), {"delta": numpy.ones(2, dtype=numpy.float32)})
+        output = state_session.run(
+            state, make_context(), {"delta": numpy.ones(2, dtype=numpy.float32)}
+        )
         saved = array(output["present"])
         state.reset({"past": numpy.zeros(2, dtype=numpy.float32)})
         state.close()
-        del state, output
+        del state, state_session, output
         gc.collect()
         numpy.testing.assert_array_equal(saved, [1, 1])
         numpy.testing.assert_array_equal(array(retained), [0, 0])
@@ -938,6 +976,7 @@ class TestPersistentValueState(unittest.TestCase):
         add_binding(model, "past", "present")
         initial = numpy.zeros(2, dtype=numpy.float32)
         state = runtime.PersistentValueState(model, {"past": initial})
+        state_session = runtime.RuntimeSession(state.model)
         context = make_context()
         addresses = []
 
@@ -949,7 +988,7 @@ class TestPersistentValueState(unittest.TestCase):
 
         context.register_custom_kernel("feedback.test", "Observe", observe)
         for _ in range(3):
-            output = state.run(context, {})
+            output = state_session.run(state, context, {})
             self.assertEqual(array(output["present"]).ctypes.data, initial.ctypes.data)
             self.assertEqual(array(state.values["past"]).ctypes.data, initial.ctypes.data)
         self.assertEqual(addresses, [initial.ctypes.data] * 3)
@@ -989,8 +1028,9 @@ class TestPersistentValueState(unittest.TestCase):
         add_binding(model, "past", "present")
         initial = numpy.array(3.0, dtype=numpy.float32)
         state = runtime.PersistentValueState(model, {"past": initial})
+        state_session = runtime.RuntimeSession(state.model)
         self.assertEqual(array(state.values["past"]).ctypes.data, initial.ctypes.data)
-        output = state.run(make_context(), {})
+        output = state_session.run(state, make_context(), {})
         self.assertEqual(
             array(output["present"]).ctypes.data, array(state.values["past"]).ctypes.data
         )
@@ -1003,11 +1043,12 @@ class TestPersistentValueState(unittest.TestCase):
         source = torch.zeros(2, dtype=torch.float32)
         address = source.data_ptr()
         state = runtime.PersistentValueState(make_model(), {"past": source})
+        state_session = runtime.RuntimeSession(state.model)
         self.assertEqual(array(state.values["past"]).ctypes.data, address)
         del source
         gc.collect()
         delta = torch.ones(2, dtype=torch.float32)
-        output = state.run(make_context(), {"delta": delta})
+        output = state_session.run(state, make_context(), {"delta": delta})
         numpy.testing.assert_array_equal(array(output["present"]), [1, 1])
         with self.assertRaises(TypeError):
             state.reset({"past": torch.zeros(4, dtype=torch.float32)[::2]})
@@ -1053,6 +1094,7 @@ class TestPersistentValueState(unittest.TestCase):
         first = numpy.ones(2, dtype=numpy.float32)
         second = numpy.full(2, 2, dtype=numpy.float32)
         state = runtime.PersistentValueState(model, {"x": {"a.b": first, "a": {"b": second}}})
+        state_session = runtime.RuntimeSession(state.model)
         context = make_context()
 
         def echo(node, context):
@@ -1060,7 +1102,7 @@ class TestPersistentValueState(unittest.TestCase):
             context.put_value(str(node.output[0]), context.get_value(str(node.input[0])))
 
         context.register_custom_kernel("feedback.test", "Echo", echo)
-        output = state.run(context, {})
+        output = state_session.run(state, context, {})
         self.assertEqual(set(state.values), {"x"})
         self.assertEqual(array(output["y"]["a.b"]).ctypes.data, first.ctypes.data)
         self.assertEqual(array(output["y"]["a"]["b"]).ctypes.data, second.ctypes.data)
@@ -1089,14 +1131,16 @@ class TestPersistentValueState(unittest.TestCase):
         verify.verify_model(model)
         initial = numpy.ones(2, dtype=numpy.float32)
         state = runtime.PersistentValueState(model, {"past.part": initial})
-        output = state.run(make_context(), {})
+        state_session = runtime.RuntimeSession(state.model)
+        context = make_context()
+        output = state_session.run(state, context, {})
         self.assertEqual(set(state.values), {"past.part"})
         self.assertEqual(
             array(output["present.part"]).ctypes.data,
             array(state.values["past.part"]).ctypes.data,
         )
         with self.assertRaisesRegex(ValueError, "override retained input"):
-            state.run(make_context(), {"past.part": initial})
+            state_session.run(state, context, {"past.part": initial})
         with self.assertRaisesRegex(ValueError, "missing initial whole input"):
             state.reset({r"past\.part": initial})
 
@@ -1124,17 +1168,20 @@ class TestPersistentValueState(unittest.TestCase):
         first = numpy.ones(2, dtype=numpy.float32)
         second = numpy.full(2, 2, dtype=numpy.float32)
         state = runtime.PersistentValueState(model, {"past": first})
-        output = state.run(make_context(), {"past.part": second})
+        state_session = runtime.RuntimeSession(state.model)
+        context = make_context()
+        output = state_session.run(state, context, {"past.part": second})
         self.assertNotEqual(array(output["present.part"]).ctypes.data, second.ctypes.data)
         numpy.testing.assert_array_equal(array(output["present.part"]), second)
         self.assertEqual(set(state.values), {"past"})
         with self.assertRaisesRegex(ValueError, "unknown graph input"):
-            state.run(make_context(), {r"past\.part": second})
+            state_session.run(state, context, {r"past\.part": second})
         state.close()
         add_binding(model, "past.part", "present.part")
         verify.verify_model(model)
         state = runtime.PersistentValueState(model, {"past": first, "past.part": second})
-        output = state.run(make_context(), {})
+        state_session = runtime.RuntimeSession(state.model)
+        output = state_session.run(state, make_context(), {})
         self.assertEqual(set(state.values), {"past", "past.part"})
         self.assertEqual(
             array(output["present"]).ctypes.data, array(state.values["past"]).ctypes.data
@@ -1164,7 +1211,8 @@ class TestPersistentValueState(unittest.TestCase):
         )
         add_binding(model, "past", "present")
         state = runtime.PersistentValueState(model, {"past": numpy.zeros(2, dtype=numpy.float32)})
-        output = state.run(make_context(), {})
+        state_session = runtime.RuntimeSession(state.model)
+        output = state_session.run(state, make_context(), {})
         numpy.testing.assert_array_equal(array(output["past_shape"]), [2])
         self.assertEqual(
             array(output["present"]).ctypes.data, array(state.values["past"]).ctypes.data

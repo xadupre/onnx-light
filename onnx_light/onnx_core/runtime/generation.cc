@@ -344,7 +344,7 @@ Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeV
         });
   }
   std::unique_ptr<PersistentValueState> state;
-  std::unique_ptr<RuntimeSession> session;
+  RuntimeSession session(model, session_options);
   if (!model.graph().persistent_bindings().empty()) {
     RuntimeValueMap initial;
     for (const auto &binding : model.graph().persistent_bindings()) {
@@ -359,10 +359,8 @@ Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeV
       current.erase(name);
     }
     state = std::make_unique<PersistentValueState>(model, std::move(initial), session_options);
-  } else {
-    session = std::make_unique<RuntimeSession>(model, session_options);
   }
-  auto decoder_context = std::make_unique<RuntimeContext>(execution_context->MakeFunctionContext());
+  RuntimeContext *decoder_context = execution_context;
   std::mt19937_64 random(options.seed ? *options.seed : std::random_device{}());
   std::vector<bool> finished(static_cast<size_t>(batch), false);
   std::vector<int64_t> next(static_cast<size_t>(batch));
@@ -396,7 +394,7 @@ Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeV
         if (found != current.end())
           decoder_feeds.emplace(input.name(), found->second.BorrowView());
       }
-      auto outputs = state->Run(*decoder_context, decoder_feeds);
+      auto outputs = session.Run(*state, *decoder_context, decoder_feeds);
       auto it = outputs.find(options.logits_name);
       EXT_ENFORCE_INVALID(it != outputs.end() && it->second.kind == RuntimeValue::Kind::kTensor,
                           "Generate: logits output must be a tensor.");
@@ -427,7 +425,7 @@ Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeV
           decoder_context->PutValue(input.name(), value.BorrowView(), RuntimeEventKind::kInput);
         }
       }
-      session->Run(*decoder_context);
+      session.Run(*decoder_context);
       EXT_ENFORCE_INVALID(decoder_context->Has(options.logits_name),
                           "Generate: missing logits tensor.");
       logits = std::move(decoder_context->Get(options.logits_name)).RetainStorage();

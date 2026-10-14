@@ -64,7 +64,6 @@ class TestGeneration(unittest.TestCase):
             embedding_calls.append(node.op_type)
             return numpy.abs(value)
 
-        embedding.register_custom_kernel("", "Abs", embedding_abs)
         feeds = {
             "input_ids": numpy.array([[0, 1]], dtype=numpy.int64),
             "image": numpy.zeros((1, 1, 3), dtype=numpy.float32),
@@ -95,7 +94,9 @@ class TestGeneration(unittest.TestCase):
             decoder.cpu_execution_counters.dispatches - before, 4 * (3 * 2 + 1)
         )
         self.assertTrue({"Gather", "Abs", "Add"} <= {event.op_type for event in decoder.events()})
-        self.assertGreaterEqual(len(embedding_calls), 4 * 3)
+        embedding.register_custom_kernel("", "Abs", embedding_abs)
+        numpy.testing.assert_array_equal(generate(), expected)
+        self.assertEqual(len(embedding_calls), 3)
         numpy.testing.assert_array_equal(feeds["input_ids"], [[0, 1]])
         with self.assertRaisesRegex(ValueError, "compatible CPU"):
             decoder.generate(

@@ -276,7 +276,6 @@ PersistentValueState::PersistentValueState(const ModelProto &model, RuntimeValue
                          &InputType(declared.input_name(), model.graph().input())});
   }
   persistent_tensor_initial_capacity_ = options.persistent_tensor_initial_capacity;
-  session_ = std::make_unique<RuntimeSession>(model, std::move(options));
   values_ = ValidateInitial(std::move(initial));
 }
 
@@ -311,28 +310,72 @@ std::vector<PersistentValue> PersistentValueState::ValidateInitial(RuntimeValueM
   return result;
 }
 
-RuntimeValueMap PersistentValueState::Run(RuntimeContext &context, const RuntimeValueMap &feeds,
-                                          const TaskCompletion *completion) {
-  const Operation operation(busy_);
-  EXT_ENFORCE_INVALID(session_ != nullptr, "PersistentValueState: state is closed.");
-  if (invocation_source_ != &context) {
-    invocation_ = std::make_unique<RuntimeContext>(context.MakeFunctionContext());
-    invocation_source_ = &context;
-  }
-  return RunImpl(*invocation_, feeds, completion, context.execution_allocator(),
-                 context.io_allocator());
-}
-
-RuntimeValueMap PersistentValueState::RunImpl(RuntimeContext &invocation,
-                                              const RuntimeValueMap &feeds,
-                                              const TaskCompletion *completion,
-                                              RawBufferAllocator *caller_execution_allocator,
-                                              RawBufferAllocator *caller_io_allocator) {
-  EXT_ENFORCE_INVALID(session_ != nullptr, "PersistentValueState: state is closed.");
+RuntimeValueMap RuntimeSession::Run(PersistentValueState &state, RuntimeContext &context,
+                                    const RuntimeValueMap &feeds,
+                                    const TaskCompletion *completion) {
+  const Operation operation(state.busy_);
+  EXT_ENFORCE_INVALID(!state.closed_, "PersistentValueState: state is closed.");
   EXT_ENFORCE_INVALID(
       completion == nullptr || completion->status() == TaskStatus::kPending,
       "PersistentValueState: invocation was cancelled or completion is not pending.");
-  invocation.ResetInvocation();
+  const auto &nodes = state.model_.graph().node();
+  EXT_ENFORCE_INVALID(plan_.nodes().size() == nodes.size(),
+                      "RuntimeSession: persistent state belongs to a different model.");
+  for (size_t i = 0; i < nodes.size(); ++i)
+    EXT_ENFORCE_INVALID(plan_.nodes()[i] == &nodes[i],
+                        "RuntimeSession: persistent state belongs to a different model.");
+  if (state.allocators_captured_)
+    EXT_ENFORCE_INVALID(state.execution_allocator_ == context.execution_allocator() &&
+                            state.io_allocator_ == context.io_allocator(),
+                        "PersistentValueState: context allocators changed between calls.");
+  struct BindingScope {
+    PersistentValueState &state;
+    RuntimeContext &context;
+    bool started = false;
+    ~BindingScope() {
+      if (started) {
+        state.execution_allocator_ = context.execution_allocator();
+        state.io_allocator_ = context.io_allocator();
+        state.allocators_captured_ = true;
+      }
+      state.Unbind(context);
+    }
+  } binding_scope{state, context};
+  auto symbols = state.Bind(context, feeds);
+  binding_scope.started = true;
+  Run(context);
+  return state.Commit(context, completion, std::move(symbols));
+}
+
+void PersistentValueState::Unbind(RuntimeContext &context) noexcept {
+  context.persistent_graph_ = nullptr;
+  context.persistent_tensors_.reset();
+  context.retained_outputs_.clear();
+  // Removes invocation borrows without allocating or recording events during unwinding.
+  const auto release = [&](const std::string &name) {
+    const auto slot = context.value_slots_.find(name);
+    if (slot != context.value_slots_.end() && slot->second < context.tensor_slots_.size())
+      context.tensor_slots_[slot->second] = nullptr;
+    context.tensors_.erase(name);
+    context.values_.erase(name);
+    context.sequences_.erase(name);
+    context.maps_.erase(name);
+    context.shapes_.erase(name);
+  };
+  for (const auto &input : model_.graph().input())
+    release(input.name());
+  for (const auto &output : model_.graph().output())
+    release(output.name());
+}
+
+PersistentValueState::ShapeSymbols PersistentValueState::Bind(RuntimeContext &invocation,
+                                                              const RuntimeValueMap &feeds) {
+  for (const auto &input : model_.graph().input())
+    invocation.Remove(input.name());
+  for (const auto &node : model_.graph().node())
+    for (const auto &output : node.output())
+      if (!output.empty())
+        invocation.Remove(output);
   invocation.persistent_tensor_initial_capacity_ = persistent_tensor_initial_capacity_;
   invocation.persistent_graph_ = &model_.graph();
   invocation.persistent_tensors_ =
@@ -382,16 +425,12 @@ RuntimeValueMap PersistentValueState::RunImpl(RuntimeContext &invocation,
   }
   for (auto &binding : *invocation.persistent_tensors_)
     binding.input_view = &invocation.Get(binding.input);
-  session_->Run(invocation);
-  if (allocators_captured_) {
-    EXT_ENFORCE_INVALID(execution_allocator_ == caller_execution_allocator &&
-                            io_allocator_ == caller_io_allocator,
-                        "PersistentValueState: context allocators changed between calls.");
-  } else {
-    execution_allocator_ = caller_execution_allocator;
-    io_allocator_ = caller_io_allocator;
-    allocators_captured_ = true;
-  }
+  return symbols;
+}
+
+RuntimeValueMap PersistentValueState::Commit(RuntimeContext &invocation,
+                                             const TaskCompletion *completion,
+                                             ShapeSymbols symbols) {
   RuntimeValueMap outputs;
   for (const auto &output : model_.graph().output()) {
     RuntimeValue value;
@@ -452,14 +491,14 @@ RuntimeValueMap PersistentValueState::RunImpl(RuntimeContext &invocation,
 
 void PersistentValueState::Reset(RuntimeValueMap initial) {
   const Operation operation(busy_);
-  EXT_ENFORCE_INVALID(session_ != nullptr, "PersistentValueState: state is closed.");
+  EXT_ENFORCE_INVALID(!closed_, "PersistentValueState: state is closed.");
   auto next = ValidateInitial(std::move(initial));
   values_.swap(next);
 }
 
 void PersistentValueState::RetainOwner(std::shared_ptr<void> owner) {
   const Operation operation(busy_);
-  EXT_ENFORCE_INVALID(session_ != nullptr, "PersistentValueState: state is closed.");
+  EXT_ENFORCE_INVALID(!closed_, "PersistentValueState: state is closed.");
   EXT_ENFORCE_INVALID(owner.use_count() != 0,
                       "PersistentValueState: owner token must retain a lifetime.");
   for (const auto &retained : retained_owners_)
@@ -471,16 +510,14 @@ void PersistentValueState::RetainOwner(std::shared_ptr<void> owner) {
 void PersistentValueState::Close() {
   const Operation operation(busy_);
   values_.clear();
-  invocation_.reset();
-  invocation_source_ = nullptr;
-  session_.reset();
+  closed_ = true;
   retained_owners_.clear();
   model_owner_.reset();
 }
 
 RuntimeValueMap PersistentValueState::Values() const {
   const Operation operation(busy_);
-  EXT_ENFORCE_INVALID(session_ != nullptr, "PersistentValueState: state is closed.");
+  EXT_ENFORCE_INVALID(!closed_, "PersistentValueState: state is closed.");
   RuntimeValueMap snapshot;
   for (size_t i = 0; i < bindings_.size(); ++i)
     snapshot.emplace(bindings_[i].input, values_[i].BorrowView());

@@ -761,6 +761,7 @@ RuntimeContext RuntimeContext::MakeIsolatedContext() const {
 
 void RuntimeContext::ResetInvocation() noexcept {
   tensors_.clear();
+  std::fill(tensor_slots_.begin(), tensor_slots_.end(), nullptr);
   values_.clear();
   sequences_.clear();
   maps_.clear();

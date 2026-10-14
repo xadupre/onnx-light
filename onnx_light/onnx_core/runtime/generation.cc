@@ -92,8 +92,8 @@ int64_t Sample(const Tensor &logits, int64_t offset, int64_t vocabulary, double 
 }
 
 void RunComponent(const GenerationComponent &component, const std::string &token_input,
-                  const Tensor *token_ids, RuntimeContext &invocation, RuntimeValueMap &values,
-                  RuntimeSession &session) {
+                  const Tensor *token_ids, RuntimeContext &invocation, RuntimeContext &event_sink,
+                  RuntimeValueMap &values, RuntimeSession &session) {
   invocation.ResetInvocation();
   RegisterModelFunctions(*component.model, invocation);
   for (const auto &input : component.model->graph().input()) {
@@ -128,6 +128,7 @@ void RunComponent(const GenerationComponent &component, const std::string &token
     }
   }
   session.Run(invocation);
+  event_sink.AppendEvents(invocation.TakeEvents());
   for (const auto &[output, destination] : component.outputs) {
     if (invocation.Has(output)) {
       values.insert_or_assign(destination,
@@ -299,8 +300,8 @@ Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeV
     if (session_options.cpu_execution_counters)
       pipeline.cpu_executor->EnableCounters();
     session_options.cpu_execution.reset();
-    local_context =
-        std::make_unique<RuntimeContext>(context.MakeIsolatedContext(pipeline.cpu_executor.get()));
+    local_context = std::make_unique<RuntimeContext>(context.MakeIsolatedContext(
+        {.cpu_executor = pipeline.cpu_executor.get(), .events_enabled = context.events_enabled()}));
     execution_context = local_context.get();
   }
   RuntimeValueMap current;
@@ -309,10 +310,13 @@ Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeV
   std::vector<std::unique_ptr<RuntimeContext>> prefill_contexts;
   prefill_contexts.reserve(pipeline.prefill.size());
   for (const auto &stage : pipeline.prefill) {
-    prefill_contexts.emplace_back(std::make_unique<RuntimeContext>(
-        stage.context->MakeIsolatedContext(pipeline.cpu_executor.get(), execution_context)));
+    prefill_contexts.emplace_back(
+        std::make_unique<RuntimeContext>(stage.context->MakeIsolatedContext(
+            {.cpu_executor = pipeline.cpu_executor.get(),
+             .events_enabled = execution_context->events_enabled()})));
     RuntimeSession stage_session(*stage.model, session_options);
-    RunComponent(stage, "", nullptr, *prefill_contexts.back(), current, stage_session);
+    RunComponent(stage, "", nullptr, *prefill_contexts.back(), *execution_context, current,
+                 stage_session);
   }
   std::unique_ptr<RuntimeSession> embedding_session;
   std::unique_ptr<RuntimeContext> embedding_context;
@@ -321,7 +325,8 @@ Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeV
         std::make_unique<RuntimeSession>(*pipeline.embedding.model, session_options);
     embedding_context =
         std::make_unique<RuntimeContext>(pipeline.embedding.context->MakeIsolatedContext(
-            pipeline.cpu_executor.get(), execution_context));
+            {.cpu_executor = pipeline.cpu_executor.get(),
+             .events_enabled = execution_context->events_enabled()}));
   }
   std::unique_ptr<PersistentValueState> state;
   std::unique_ptr<RuntimeSession> session;
@@ -364,7 +369,7 @@ Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeV
     auto ids = Tensor::From<int64_t>(options.input_ids_name, shape, decode ? next : tokens);
     if (embedded) {
       RunComponent(pipeline.embedding, pipeline.embedding_token_input, &ids, *embedding_context,
-                   current, *embedding_session);
+                   *execution_context, current, *embedding_session);
     } else {
       current.insert_or_assign(options.input_ids_name, RuntimeValue(std::move(ids)));
     }
@@ -446,6 +451,8 @@ Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeV
     AppendColumn(mask, next_mask);
     AppendColumn(positions, next_positions);
   }
+  if (local_context)
+    context.AppendEvents(local_context->TakeEvents());
   return Tensor::From<int64_t>(options.input_ids_name, {batch, length}, tokens);
 }
 

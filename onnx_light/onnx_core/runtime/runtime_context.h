@@ -443,6 +443,12 @@ struct RuntimeContextOptions {
   CpuExecutor *cpu_executor = nullptr;
 };
 
+/** Overrides inherited settings when creating a child runtime context. */
+struct RuntimeContextChildOptions {
+  CpuExecutor *cpu_executor = nullptr;
+  std::optional<bool> events_enabled;
+};
+
 /**
  * Per-invocation runtime state passed to :cpp:func:`RunNode` /
  * :cpp:class:`RuntimeSession`.
@@ -936,6 +942,10 @@ public:
 
   /// Empties the shared event log without changing any context's tensor map.
   void ClearEvents() noexcept;
+  /// Moves every recorded event out of this context's shared event log.
+  RuntimeEventLog TakeEvents();
+  /// Appends events to this context's shared event log.
+  void AppendEvents(RuntimeEventLog events);
 
   /// Creates a fresh child context for executing a subgraph (e.g. the
   /// ``then_branch`` or ``else_branch`` of ``If``, or the ``body`` of
@@ -950,7 +960,8 @@ public:
   ///
   /// Returns:
   ///   A new :cpp:class:`RuntimeContext` initialised for subgraph execution.
-  RuntimeContext MakeSubgraphContext(const std::string &attr_name) const;
+  RuntimeContext MakeSubgraphContext(const std::string &attr_name,
+                                     RuntimeContextChildOptions options = {}) const;
 
   /// Creates a fresh child context for executing a model-local function.
   /// The child inherits the parent's kernel context, allocator, function
@@ -962,12 +973,10 @@ public:
   ///
   /// Returns:
   ///   A new :cpp:class:`RuntimeContext` initialised for function execution.
-  RuntimeContext MakeFunctionContext() const;
+  RuntimeContext MakeFunctionContext(RuntimeContextChildOptions options = {}) const;
 
-  /// Creates an independent invocation with fresh allocators while sharing
-  /// thread-safe events and kernel usage diagnostics with this context.
-  RuntimeContext MakeIsolatedContext(CpuExecutor *cpu_executor,
-                                     const RuntimeContext *diagnostics = nullptr) const;
+  /// Creates an independent invocation with fresh allocators and diagnostics.
+  RuntimeContext MakeIsolatedContext(RuntimeContextChildOptions options = {}) const;
 
   /// Clears invocation values while preserving allocators, plans and diagnostics.
   void ResetInvocation() noexcept;

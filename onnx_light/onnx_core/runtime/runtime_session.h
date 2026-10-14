@@ -197,9 +197,6 @@ public:
                  RuntimeSessionOptions options = {});
   /// Builds a session owning graph-declared persistent values initialized from ``initial``.
   RuntimeSession(const ModelProto &model, RuntimeValueMap initial,
-                 RuntimeSessionOptions options = {}, std::shared_ptr<void> model_owner = {});
-  /// Builds a persistent session and retains its model.
-  RuntimeSession(std::shared_ptr<const ModelProto> model, RuntimeValueMap initial,
                  RuntimeSessionOptions options = {});
   ~RuntimeSession();
 
@@ -504,7 +501,6 @@ private:
   std::optional<OpsetImports> owned_opset_imports_;
   const OpsetImports *inherited_opset_imports_ = nullptr;
   std::shared_ptr<ValueStore> value_store_;
-  std::shared_ptr<void> model_owner_;
   std::unique_ptr<PersistentValueState> persistent_state_;
   std::vector<PreparedKernel> kernels_;
   const GraphProto *initializer_graph_ = nullptr;

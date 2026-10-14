@@ -30,21 +30,21 @@ Ownership
 ---------
 
 * The model stays immutable; declarations are resolved once, without cloning it.
-  A shared-model constructor or ``model_owner`` retains its lifetime.
-  Otherwise, the caller keeps it alive through all exported model-backed views.
+  C++ constructors borrow ``const ModelProto&``. The caller keeps it alive
+  through the session and all exported model-backed views.
+  Python bindings retain the model for sessions and exported initializer views.
 * ``initial`` and ``Reset`` take maps by value in C++. Use ``std::move(initial)``
   to avoid copying owned payloads.
 * Returned views share owners and remain valid after later calls, reset or session
   destruction. Callers must not modify shared payloads; publication does not undo
   such writes.
-* Retained borrows need owners, and arena allocations need self-owning I/O leases.
-  Unsafe storage is rejected, not copied as a fallback.
+* Retained borrows need owners, except views of immutable initializer-owned
+  storage whose lifetime is guaranteed by the C++ caller. Arena allocations
+  need self-owning I/O leases. Unsafe storage is rejected, not copied as a fallback.
 * All calls use the same allocators, kept alive until the session is destroyed.
-  ``RetainOwner`` can retain model/context owners before execution, including
-  failed attempts. Owners must not own the state itself.
-* Model-backed initializer views retain the constructor's model owner.
-  Borrowed raw data additionally needs its own storage owner; ordinary kernel
-  results cannot use the model owner to extend their lifetime.
+* Initializers borrowing external raw data still need their own storage owner.
+  Model lifetime alone cannot extend the lifetime of external storage or
+  ordinary kernel results.
 
 Execution and lifecycle
 -----------------------

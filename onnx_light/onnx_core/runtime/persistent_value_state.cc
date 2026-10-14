@@ -72,11 +72,6 @@ RuntimeValue FromTensorSequence(Sequence sequence) {
   return RuntimeValue(std::move(elements));
 }
 
-const ModelProto &RequireModel(const std::shared_ptr<const ModelProto> &model) {
-  EXT_ENFORCE_INVALID(model != nullptr, "PersistentValueState: model owner must not be null.");
-  return *model;
-}
-
 void CheckNestedBindings(const utils::RepeatedProtoField<NodeProto> &nodes, size_t depth = 0) {
   EXT_ENFORCE_INVALID(depth <= RuntimeValue::kMaxDepth,
                       "PersistentValueState: maximum subgraph depth exceeded.");
@@ -255,12 +250,8 @@ private:
 } // namespace
 
 PersistentValueState::PersistentValueState(const ModelProto &model, RuntimeValueMap initial,
-                                           RuntimeSessionOptions options,
-                                           std::shared_ptr<void> model_owner)
-    : model_(model),
-      model_owner_(model_owner.use_count() != 0
-                       ? std::move(model_owner)
-                       : std::shared_ptr<void>(const_cast<ModelProto *>(&model), [](void *) {})) {
+                                           RuntimeSessionOptions options)
+    : model_(model) {
   catalogue_.Build(model);
   CheckNestedBindings(model.graph().node());
   for (const auto &function : model.functions())
@@ -279,11 +270,6 @@ PersistentValueState::PersistentValueState(const ModelProto &model, RuntimeValue
   persistent_tensor_initial_capacity_ = options.persistent_tensor_initial_capacity;
   values_ = ValidateInitial(std::move(initial));
 }
-
-PersistentValueState::PersistentValueState(std::shared_ptr<const ModelProto> model,
-                                           RuntimeValueMap initial, RuntimeSessionOptions options)
-    : PersistentValueState(RequireModel(model), std::move(initial), std::move(options),
-                           std::shared_ptr<void>(model, const_cast<ModelProto *>(model.get()))) {}
 
 std::vector<PersistentValue> PersistentValueState::ValidateInitial(RuntimeValueMap initial) const {
   std::shared_ptr<const QuantizationParameterCatalogue> parameters;
@@ -312,21 +298,14 @@ std::vector<PersistentValue> PersistentValueState::ValidateInitial(RuntimeValueM
 }
 
 RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeValueMap initial,
-                               RuntimeSessionOptions options, std::shared_ptr<void> model_owner)
+                               RuntimeSessionOptions options)
     : RuntimeSession(model, options) {
-  model_owner_ = std::move(model_owner);
   if (!model.graph().persistent_bindings().empty())
-    persistent_state_ =
-        std::make_unique<PersistentValueState>(model, std::move(initial), options, model_owner_);
+    persistent_state_ = std::make_unique<PersistentValueState>(model, std::move(initial), options);
   else
     EXT_ENFORCE_INVALID(initial.empty(),
                         "RuntimeSession: initial persistent values require persistent bindings.");
 }
-
-RuntimeSession::RuntimeSession(std::shared_ptr<const ModelProto> model, RuntimeValueMap initial,
-                               RuntimeSessionOptions options)
-    : RuntimeSession(RequireModel(model), std::move(initial), std::move(options),
-                     std::shared_ptr<void>(model, const_cast<ModelProto *>(model.get()))) {}
 
 PersistentValueState &RuntimeSession::persistent_state() {
   EXT_ENFORCE_INVALID(persistent_state_ != nullptr,
@@ -410,7 +389,6 @@ RuntimeValueMap RuntimeSession::Run(RuntimeContext &context, const RuntimeValueM
   for (const auto &binding : state.bindings_)
     retained_outputs.insert(binding.output);
   context.set_retained_outputs(std::move(retained_outputs));
-  context.set_model_owner(state.model_owner_);
   RegisterModelFunctions(state.model_, context);
   for (const auto &input : state.model_.graph().input()) {
     const auto binding = std::find_if(state.bindings_.begin(), state.bindings_.end(),
@@ -506,16 +484,6 @@ void PersistentValueState::Reset(RuntimeValueMap initial) {
   const Operation operation(busy_);
   auto next = ValidateInitial(std::move(initial));
   values_.swap(next);
-}
-
-void PersistentValueState::RetainOwner(std::shared_ptr<void> owner) {
-  const Operation operation(busy_);
-  EXT_ENFORCE_INVALID(owner.use_count() != 0,
-                      "PersistentValueState: owner token must retain a lifetime.");
-  for (const auto &retained : retained_owners_)
-    if (!owner.owner_before(retained) && !retained.owner_before(owner))
-      return;
-  retained_owners_.push_back(std::move(owner));
 }
 
 RuntimeValueMap PersistentValueState::Values() const {

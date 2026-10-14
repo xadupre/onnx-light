@@ -12,9 +12,10 @@ double, int32, int64 and uint64 fields can be borrowed; representations requirin
 decoding, including strings, still use normal tensor conversion. This host
 borrowing rule does not implement transfers to another device.
 
-The context can supply a model lifetime token for selected retained results;
-ownerless externally borrowed buffers cannot be retained. Nonpersistent graph
-outputs still materialize borrowed storage normally so they can outlive the model.
+Initializer views do not own the source model. C++ callers keep it alive through
+all such views, including returned or retained results. Ownerless externally
+borrowed buffers cannot be retained. Python bindings retain the source model
+when exporting initializer views.
 
 Kernel preparation
 ------------------

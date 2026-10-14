@@ -236,6 +236,14 @@ EncodedValueProto BorrowEncodedValue(const RuntimeValue &source) {
 RuntimeValue::RuntimeValue(EncodedValueProto value)
     : kind(Kind::kEncoded), encoded(std::make_shared<EncodedValueProto>(std::move(value))) {}
 
+RuntimeValue RuntimeValue::FromEncodedView(const EncodedValueProto &value) {
+  RuntimeValue result;
+  result.kind = Kind::kEncoded;
+  result.encoded =
+      std::shared_ptr<const EncodedValueProto>(std::shared_ptr<const EncodedValueProto>{}, &value);
+  return result;
+}
+
 RuntimeValue RuntimeValue::FromEncodedView(const EncodedValueProto &value,
                                            std::shared_ptr<void> owner) {
   EXT_ENFORCE_INVALID(owner.use_count() != 0,

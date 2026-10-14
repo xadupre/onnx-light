@@ -26,18 +26,15 @@ uint64_t NextValueDirectoryIdentity() noexcept {
 }
 
 void EnsureAllocatorBacked(Tensor &tensor, RawBufferAllocator *allocator, RuntimeEventKind kind,
-                           symbolic::Device device, const std::shared_ptr<void> &model_owner) {
+                           symbolic::Device device) {
   // STRING tensors store their payload in string_data instead of raw bytes.
   if (allocator == nullptr || static_cast<DataType>(tensor.data_type) == DataType::STRING) {
     return;
   }
-  // Inputs borrow caller storage for the invocation. Views into immutable model
-  // storage keep that model owner when crossing nested graph boundaries.
-  const std::shared_ptr<void> &borrow_owner = tensor.borrowed_owner();
-  const bool borrows_model = borrow_owner.use_count() != 0 && model_owner.use_count() != 0 &&
-                             !borrow_owner.owner_before(model_owner) &&
-                             !model_owner.owner_before(borrow_owner);
-  if (tensor.is_borrowed() && (kind == RuntimeEventKind::kInput || borrows_model)) {
+  if (tensor.is_borrowed() &&
+      (kind == RuntimeEventKind::kInput ||
+       (tensor.is_initializer_view() &&
+        (device == symbolic::Device::kUndefined || device == symbolic::Device::kCPU)))) {
     return;
   }
   // Initializer storage is host-resident and read-only, not run-local workspace.
@@ -329,7 +326,6 @@ RuntimeContext::RuntimeContext(const RuntimeContext &source, RuntimeContextOptio
                      std::make_shared<EventState>()) {
   functions_ = source.functions_;
   custom_kernels_ = source.custom_kernels_;
-  model_owner_ = source.model_owner_;
   struct_type_catalogue_ = source.struct_type_catalogue_;
   quantization_parameters_ = source.quantization_parameters_;
 }
@@ -421,7 +417,7 @@ void RuntimeContext::Set(const std::string &name, Tensor tensor, RuntimeEventKin
     return;
   }
   if (!retains_output(name))
-    EnsureAllocatorBacked(tensor, allocator_, kind, device_, model_owner_);
+    EnsureAllocatorBacked(tensor, allocator_, kind, device_);
   if (events_enabled_) {
     RecordEvent(MakeAddOrReplaceEvent(RuntimeEventAction::kAdd, kind, name, tensor));
   }
@@ -436,7 +432,7 @@ void RuntimeContext::Put(const std::string &value_name, Tensor tensor, RuntimeEv
     return;
   }
   if (!retains_output(name))
-    EnsureAllocatorBacked(tensor, allocator_, kind, device_, model_owner_);
+    EnsureAllocatorBacked(tensor, allocator_, kind, device_);
   if (events_enabled_) {
     const RuntimeEventAction action =
         HasValue(name) ? RuntimeEventAction::kReplace : RuntimeEventAction::kAdd;
@@ -453,7 +449,7 @@ void RuntimeContext::Put(const std::string &value_name, Tensor tensor, RuntimeEv
 void RuntimeContext::Put(uint32_t slot, Tensor tensor, RuntimeEventKind kind) {
   const std::string &name = ValueName(slot);
   if (!retains_output(name))
-    EnsureAllocatorBacked(tensor, allocator_, kind, device_, model_owner_);
+    EnsureAllocatorBacked(tensor, allocator_, kind, device_);
   if (events_enabled_) {
     const RuntimeEventAction action =
         HasValue(name) ? RuntimeEventAction::kReplace : RuntimeEventAction::kAdd;
@@ -667,7 +663,6 @@ RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name)
   child.value_store_ = value_store_;
   child.functions() = functions_;
   child.custom_kernels() = custom_kernels_;
-  child.set_model_owner(model_owner_);
   child.set_struct_type_catalogue(struct_type_catalogue_);
   child.set_quantization_parameters(quantization_parameters_);
   child.tensors() = tensors_;
@@ -741,7 +736,6 @@ RuntimeContext RuntimeContext::MakeFunctionContext() const {
   child.value_store_ = value_store_;
   child.functions() = functions_;
   child.custom_kernels() = custom_kernels_;
-  child.set_model_owner(model_owner_);
   child.set_struct_type_catalogue(struct_type_catalogue_);
   child.set_quantization_parameters(quantization_parameters_);
   if (events_enabled_)

@@ -285,9 +285,8 @@ C++ callers register the operator kernels as usual before executing the model
 (see :doc:`register_builtin_operators`). The model and configured allocators
 must outlive the state/session using them. With the reference-based C++
 constructor, the model must also outlive any returned views of its initializer
-storage. Use the ``shared_ptr<const ModelProto>`` constructor to retain the
-model automatically in such views; the Python binding retains its model
-automatically.
+storage. Native sessions do not own the model. The Python binding retains the
+model for the session and any exported initializer views.
 
 Lifecycle and validation
 ------------------------

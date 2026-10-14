@@ -569,18 +569,50 @@ TEST(PersistentValueState, WholeTensorMatchesManualLoopAndSharesReadOnlyViews) {
   EXPECT_EQ(Number(state_session.Run(context, {{"tokens", Number(2)}}).at("present")), 3);
 }
 
-TEST(PersistentValueState, SessionRetainsModelUntilDestruction) {
+TEST(PersistentValueState, SessionBorrowsModelWithoutTakingOwnership) {
   auto model = std::make_shared<ModelProto>(Model());
   std::weak_ptr<ModelProto> weak = model;
-  auto session = std::make_unique<RuntimeSession>(std::shared_ptr<const ModelProto>(model),
-                                                  RuntimeValueMap{{"past", Number(2)}});
+  auto session = std::make_unique<RuntimeSession>(*model, RuntimeValueMap{{"past", Number(2)}});
   auto &state = session->persistent_state();
   EXPECT_EQ(&state.model(), model.get());
   EXPECT_NO_THROW(state.struct_type_catalogue());
-  model.reset();
+  EXPECT_EQ(model.use_count(), 1);
   EXPECT_FALSE(weak.expired());
   session.reset();
+  EXPECT_FALSE(weak.expired());
+  model.reset();
   EXPECT_TRUE(weak.expired());
+}
+
+TEST(PersistentValueState, EncodedInitializerViewsBorrowProtoWithoutTakingOwnership) {
+  EncodedValueProto proto;
+  proto.set_raw_data(std::string(1, '\x05'));
+  auto view = RuntimeValue::FromEncodedView(proto);
+  EXPECT_EQ(&view.Encoded(), &proto);
+  EXPECT_EQ(view.encoded.use_count(), 0);
+  auto snapshot = view.BorrowView();
+  EXPECT_EQ(&snapshot.Encoded(), &proto);
+  EXPECT_EQ(snapshot.encoded.use_count(), 0);
+}
+
+TEST(PersistentValueState, AppendingInitializerViewsAllocatesWithoutOverwritingTheProto) {
+  TensorProto proto;
+  proto.set_data_type(DataType::FLOAT);
+  proto.add_dims(1);
+  proto.add_float_data(3);
+  PersistentTensor prefix(Tensor::BorrowInitializer(proto));
+  EXPECT_EQ(prefix.capacity_bytes(), 0);
+  auto lease = prefix.PrepareAppend();
+  auto reservation = lease.Reserve({2}, 0, 2, nullptr);
+  ASSERT_TRUE(reservation.has_value());
+  const auto tail = reservation->writable_bytes();
+  ASSERT_EQ(tail.size(), sizeof(float));
+  *reinterpret_cast<float *>(tail.data()) = 5;
+  auto appended = reservation->Commit(tail.size());
+  EXPECT_NE(appended.value().bytes(), prefix.value().bytes());
+  EXPECT_FLOAT_EQ(appended.value().AsFloat()[0], 3);
+  EXPECT_FLOAT_EQ(appended.value().AsFloat()[1], 5);
+  EXPECT_FLOAT_EQ(proto.float_data()[0], 3);
 }
 
 TEST(PersistentValueState, LayoutlessOrdinaryStructuresCannotHideUnsupportedLeaves) {
@@ -2110,15 +2142,14 @@ TEST(PersistentValueState, IOArenaOutputsRemainLeasedUntilAllViewsAreReleased) {
   EXPECT_TRUE(weak.expired());
 }
 
-TEST(PersistentValueState, InitializerViewsRetainImmutableModelAndPayload) {
+TEST(PersistentValueState, InitializerViewsBorrowImmutableModelAndPayload) {
   for (bool raw : {false, true}) {
     SCOPED_TRACE(raw);
     RuntimeValueMap output;
-    std::weak_ptr<ModelProto> weak;
+    auto model = std::make_shared<ModelProto>(Model());
+    std::weak_ptr<ModelProto> weak = model;
     const uint8_t *payload = nullptr;
     {
-      auto model = std::make_shared<ModelProto>(Model());
-      weak = model;
       model->add_opset_import()->set_version(18);
       auto *initializer = model->mutable_graph()->add_initializer();
       initializer->set_name("constant");
@@ -2142,23 +2173,20 @@ TEST(PersistentValueState, InitializerViewsRetainImmutableModelAndPayload) {
       model->mutable_graph()->mutable_persistent_bindings(0)->set_output_name("constant");
       RuntimeContext context(KernelContext(DefaultOpset(18)));
       RegisterIdentity(context);
-      context.set_model_owner(std::make_shared<int>(0));
-      std::unique_ptr<RuntimeSession> session;
       const RuntimeValueMap initial{{"past", Number(1)}};
-      if (raw)
-        session = std::make_unique<RuntimeSession>(*model, initial, RuntimeSessionOptions{}, model);
-      else
-        session =
-            std::make_unique<RuntimeSession>(std::shared_ptr<const ModelProto>(model), initial);
+      auto session = std::make_unique<RuntimeSession>(*model, initial);
       output = session->Run(context, {{"tokens", Number(0)}});
       EXPECT_EQ(output.at("constant").tensor.bytes(), payload);
       EXPECT_EQ(session->persistent_state().Values().at("past").tensor.bytes(), payload);
-      model.reset();
+      EXPECT_EQ(model.use_count(), 1);
+      EXPECT_TRUE(output.at("constant").tensor.is_initializer_view());
+      EXPECT_EQ(output.at("constant").tensor.borrowed_owner().use_count(), 0);
     }
     ASSERT_FALSE(weak.expired());
     EXPECT_EQ(output.at("constant").tensor.bytes(), payload);
     EXPECT_EQ(Number(output.at("constant")), 4);
     output.clear();
+    model.reset();
     EXPECT_TRUE(weak.expired());
   }
 }
@@ -2243,7 +2271,7 @@ TEST(PersistentValueState, InitializerArenaExemptionIsLimitedToHostExecution) {
   }
 }
 
-TEST(PersistentValueState, ModelOwnerDoesNotReplaceBorrowedInitializerBackingOwner) {
+TEST(PersistentValueState, BorrowedInitializersStillRequireTheirBackingOwner) {
   for (bool retained_backing : {false, true}) {
     auto data = std::make_shared<std::vector<float>>(1, 4.0f);
     std::weak_ptr<std::vector<float>> backing_lifetime = data;
@@ -2266,7 +2294,7 @@ TEST(PersistentValueState, ModelOwnerDoesNotReplaceBorrowedInitializerBackingOwn
     model->mutable_graph()->mutable_persistent_bindings(0)->set_output_name("constant");
     RuntimeValueMap output;
     {
-      RuntimeSession session(std::shared_ptr<const ModelProto>(model), {{"past", Number(1)}});
+      RuntimeSession session(*model, {{"past", Number(1)}});
       auto &state = session.persistent_state();
       RuntimeContext context(KernelContext(DefaultOpset(18)));
       RegisterIdentity(context);
@@ -2503,25 +2531,23 @@ TEST(PersistentValueState, RejectsPersistentDeclarationsInsideSubgraphs) {
   EXPECT_THROW((PersistentValueState(model, {{"past", Number(1)}})), std::invalid_argument);
 }
 
-TEST(PersistentValueState, RetainsExternalOwnersAcrossFailedInitializationUntilDestruction) {
+TEST(PersistentValueState, BorrowsModelAndContextAcrossFailedExecution) {
   auto model = std::make_shared<ModelProto>(Model());
   std::weak_ptr<ModelProto> model_lifetime = model;
   auto state_session =
       std::make_unique<RuntimeSession>(*model, RuntimeValueMap{{"past", Number(1)}});
   PersistentValueState &state = state_session->persistent_state();
-  state.RetainOwner(model);
-  state.RetainOwner(model);
-  EXPECT_EQ(model.use_count(), 2);
+  EXPECT_EQ(model.use_count(), 1);
   auto context = std::make_shared<RuntimeContext>(KernelContext(DefaultOpset(18)));
   std::weak_ptr<RuntimeContext> context_lifetime = context;
-  state.RetainOwner(context);
-  model.reset();
+  EXPECT_EQ(context.use_count(), 1);
   EXPECT_THROW(state_session->Run(*context, {{"tokens", Number(1)}}), std::invalid_argument);
-  context.reset();
   EXPECT_FALSE(model_lifetime.expired());
   EXPECT_FALSE(context_lifetime.expired());
-  EXPECT_THROW(state.RetainOwner({}), std::invalid_argument);
+  EXPECT_EQ(Number(state.Values().at("past")), 1);
   state_session.reset();
+  model.reset();
+  context.reset();
   EXPECT_TRUE(model_lifetime.expired());
   EXPECT_TRUE(context_lifetime.expired());
 }

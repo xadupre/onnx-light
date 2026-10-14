@@ -500,9 +500,10 @@ RuntimeValue FeedbackValueFromPython(
       tensor.name = name;
       return RuntimeValue(std::move(tensor));
     }
-    auto owner = source.has_allocation() ? std::shared_ptr<void>{}
-                 : source.is_borrowed()  ? source.borrowed_owner()
-                                         : RetainFeedbackOwner(value);
+    auto owner = source.is_initializer_view() ? RetainFeedbackOwner(value)
+                 : source.has_allocation()    ? std::shared_ptr<void>{}
+                 : source.is_borrowed()       ? source.borrowed_owner()
+                                              : RetainFeedbackOwner(value);
     Tensor tensor = Tensor::Borrow(name, source.data_type, source.shape, source.bytes(),
                                    source.size_bytes(), std::move(owner));
     return RuntimeValue(std::move(tensor));
@@ -520,32 +521,50 @@ RuntimeValueMap FeedbackValuesFromPython(nb::dict values, const ModelProto *mode
   return result;
 }
 
-nb::object FeedbackValueToPython(RuntimeValue value, const StructTypeCatalogue &catalogue = {}) {
+nb::object FeedbackValueToPython(RuntimeValue value, const StructTypeCatalogue &catalogue = {},
+                                 nb::handle model = {}) {
   if (value.HasPagedCacheStructure())
     return nb::cast(value.ToPagedCache("", catalogue));
   if (value.kind == RuntimeValue::Kind::kSequence) {
     nb::list elements;
     for (const auto &element : value.elements)
-      elements.append(FeedbackValueToPython(element.BorrowView(), catalogue));
+      elements.append(FeedbackValueToPython(element.BorrowView(), catalogue, model));
     return elements;
   }
-  if (value.kind == RuntimeValue::Kind::kTensor)
+  if (value.kind == RuntimeValue::Kind::kTensor) {
+    if (value.tensor.is_initializer_view()) {
+      if (model.is_valid())
+        value.tensor = Tensor::Borrow(value.tensor.name, value.tensor.data_type, value.tensor.shape,
+                                      value.tensor.bytes(), value.tensor.size_bytes(),
+                                      RetainFeedbackOwner(model));
+      else
+        value.tensor = value.tensor.ToOwned();
+    }
     return nb::cast(std::move(value.tensor));
+  }
   if (value.kind == RuntimeValue::Kind::kEncoded) {
+    if (value.encoded.use_count() == 0) {
+      if (model.is_valid())
+        value.encoded = std::shared_ptr<const EncodedValueProto>(RetainFeedbackOwner(model),
+                                                                 value.encoded.get());
+      else
+        value = value.DeepCopy();
+    }
     if (value.quantization_parameters && value.Encoded().has_parameter_ref())
       return nb::cast(std::move(value));
     return nb::cast(std::move(value.encoded));
   }
   nb::dict fields;
   for (auto &[name, field] : value.fields)
-    fields[nb::str(name.c_str())] = FeedbackValueToPython(std::move(field), catalogue);
+    fields[nb::str(name.c_str())] = FeedbackValueToPython(std::move(field), catalogue, model);
   return fields;
 }
 
-nb::dict FeedbackValuesToPython(RuntimeValueMap values, const StructTypeCatalogue &catalogue = {}) {
+nb::dict FeedbackValuesToPython(RuntimeValueMap values, const StructTypeCatalogue &catalogue = {},
+                                nb::handle model = {}) {
   nb::dict result;
   for (auto &[name, value] : values)
-    result[nb::str(name.c_str())] = FeedbackValueToPython(std::move(value), catalogue);
+    result[nb::str(name.c_str())] = FeedbackValueToPython(std::move(value), catalogue, model);
   return result;
 }
 
@@ -739,7 +758,7 @@ struct AllocatedNumpyOwner {
   core::runtime::AllocationHandle allocation;
 };
 
-nb::object TensorToNumpy(Tensor &tensor, RuntimeContext &rt) {
+nb::object TensorToNumpy(Tensor &tensor, RuntimeContext &rt, nb::handle source = {}) {
   if (static_cast<TensorProto::DataType>(tensor.data_type) == TensorProto::STRING) {
     OnnxLightNumpyDtype *object_dtype = OnnxLightNumpyDtypeFromType(OnnxLightNumpyType::kObject);
     if (object_dtype == nullptr)
@@ -801,6 +820,8 @@ nb::object TensorToNumpy(Tensor &tensor, RuntimeContext &rt) {
         delete static_cast<AllocatedNumpyOwner *>(pointer);
       });
     }
+  } else if (tensor.is_initializer_view() && source.is_valid()) {
+    owner = nb::borrow<nb::object>(source);
   } else if (data == tensor.data.data()) {
     auto *owned = new core::runtime::RawByteBuffer(tensor.data.release());
     data = owned->data();
@@ -940,11 +961,11 @@ public:
       }
       nb::object result;
       if (rt.Has(name)) {
-        result = TensorToNumpy(rt.Get(name), rt);
+        result = TensorToNumpy(rt.Get(name), rt, nb::cast(this, nb::rv_policy::reference));
       } else if (rt.HasSequence(name)) {
         nb::list sequence;
         for (Tensor &tensor : rt.GetSequence(name).values)
-          sequence.append(TensorToNumpy(tensor, rt));
+          sequence.append(TensorToNumpy(tensor, rt, nb::cast(this, nb::rv_policy::reference)));
         result = std::move(sequence);
       } else {
         throw std::runtime_error("Output '" + name + "' was not produced by the graph.");
@@ -1999,9 +2020,7 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "__init__",
           [](RuntimeSession *self, const ModelProto &model, nb::dict initial,
              RuntimeSessionOptions options) {
-            new (self)
-                RuntimeSession(model, FeedbackValuesFromPython(initial, &model), options,
-                               RetainFeedbackOwner(nb::cast(&model, nb::rv_policy::reference)));
+            new (self) RuntimeSession(model, FeedbackValuesFromPython(initial, &model), options);
           },
           nb::arg("model"), nb::arg("initial"), nb::arg("options") = RuntimeSessionOptions{},
           nb::keep_alive<1, 2>(),
@@ -2030,7 +2049,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
               nb::gil_scoped_release release;
               outputs = self.Run(context, inputs, completion);
             }
-            return FeedbackValuesToPython(std::move(outputs), state.struct_type_catalogue());
+            return FeedbackValuesToPython(std::move(outputs), state.struct_type_catalogue(),
+                                          nb::cast(&state.model(), nb::rv_policy::reference));
           },
           nb::arg("context"), nb::arg("feeds"), nb::arg("completion").none() = nb::none(),
           "Runs in context and commits persistent feedback only after successful validation.")
@@ -2178,9 +2198,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
           "__init__",
           [](PersistentValueState *self, const ModelProto &model, nb::dict initial,
              RuntimeSessionOptions options) {
-            new (self) PersistentValueState(
-                model, FeedbackValuesFromPython(initial, &model), options,
-                RetainFeedbackOwner(nb::cast(&model, nb::rv_policy::reference)));
+            new (self)
+                PersistentValueState(model, FeedbackValuesFromPython(initial, &model), options);
           },
           nb::arg("model"), nb::arg("initial"), nb::arg("options") = RuntimeSessionOptions{},
           nb::keep_alive<1, 2>(),
@@ -2198,7 +2217,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def_prop_ro(
           "values",
           [](const PersistentValueState &self) {
-            return FeedbackValuesToPython(self.Values(), self.struct_type_catalogue());
+            return FeedbackValuesToPython(self.Values(), self.struct_type_catalogue(),
+                                          nb::cast(&self.model(), nb::rv_policy::reference));
           },
           "Returns shared read-only payload views keyed by exact retained graph input names.");
 

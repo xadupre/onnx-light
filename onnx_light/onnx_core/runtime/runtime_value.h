@@ -162,6 +162,8 @@ struct RuntimeValue {
 
   /** Returns an immutable message view with an explicit lifetime owner. */
   static RuntimeValue FromEncodedView(const EncodedValueProto &value, std::shared_ptr<void> owner);
+  /** Borrows immutable proto storage; the proto must outlive all returned views. */
+  static RuntimeValue FromEncodedView(const EncodedValueProto &value);
 
   /** Restores a validated cache, retaining proto storage and any shared parameter catalogue. */
   static RuntimeValue

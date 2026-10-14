@@ -87,7 +87,7 @@ Tensor::Tensor(const Tensor &other)
     : name(other.name), data_type(other.data_type), shape(other.shape), data(other.data),
       string_data(other.string_data), borrow_ptr_(other.borrow_ptr_),
       borrow_size_(other.borrow_size_), borrow_string_data_(other.borrow_string_data_),
-      borrow_owner_(other.borrow_owner_) {
+      borrow_owner_(other.borrow_owner_), initializer_view_(other.initializer_view_) {
   if (other.allocation_) {
     RawBuffer *allocated = other.allocation_.owner()->Allocate(other.allocation_.logical_size());
     EXT_ENFORCE(allocated != nullptr,
@@ -112,6 +112,7 @@ Tensor &Tensor::operator=(const Tensor &other) {
   borrow_size_ = other.borrow_size_;
   borrow_string_data_ = other.borrow_string_data_;
   borrow_owner_ = other.borrow_owner_;
+  initializer_view_ = other.initializer_view_;
   if (other.allocation_) {
     RawBuffer *allocated = other.allocation_.owner()->Allocate(other.allocation_.logical_size());
     EXT_ENFORCE(allocated != nullptr,
@@ -128,11 +129,12 @@ Tensor::Tensor(Tensor &&other) noexcept
       data(std::move(other.data)), string_data(std::move(other.string_data)),
       allocation_(std::move(other.allocation_)), borrow_ptr_(other.borrow_ptr_),
       borrow_size_(other.borrow_size_), borrow_string_data_(other.borrow_string_data_),
-      borrow_owner_(std::move(other.borrow_owner_)) {
+      borrow_owner_(std::move(other.borrow_owner_)), initializer_view_(other.initializer_view_) {
   other.borrow_ptr_ = nullptr;
   other.borrow_size_ = 0;
   other.borrow_string_data_ = nullptr;
   other.borrow_owner_.reset();
+  other.initializer_view_ = false;
 }
 
 Tensor &Tensor::operator=(Tensor &&other) noexcept {
@@ -149,10 +151,12 @@ Tensor &Tensor::operator=(Tensor &&other) noexcept {
   borrow_size_ = other.borrow_size_;
   borrow_string_data_ = other.borrow_string_data_;
   borrow_owner_ = std::move(other.borrow_owner_);
+  initializer_view_ = other.initializer_view_;
   other.borrow_ptr_ = nullptr;
   other.borrow_size_ = 0;
   other.borrow_string_data_ = nullptr;
   other.borrow_owner_.reset();
+  other.initializer_view_ = false;
   return *this;
 }
 
@@ -379,10 +383,44 @@ Tensor Tensor::BorrowStrings(std::string name, Shape shape,
   return t;
 }
 
+Tensor Tensor::BorrowInitializer(const TensorProto &proto) {
+  Shape shape;
+  for (const auto dimension : proto.dims())
+    shape.push_back(static_cast<int64_t>(dimension));
+  if (proto.is_raw_data()) {
+    const auto &raw = proto.raw_data();
+    auto tensor = Borrow(proto.name(), proto.data_type(), std::move(shape), raw.data(), raw.size(),
+                         raw.owner());
+    tensor.initializer_view_ = !raw.is_borrowed();
+    return tensor;
+  }
+  const auto borrow = [&](const auto &values) {
+    auto tensor = Borrow(
+        proto.name(), proto.data_type(), shape, reinterpret_cast<const uint8_t *>(values.data()),
+        values.size() * sizeof(typename std::decay_t<decltype(values)>::value_type));
+    tensor.initializer_view_ = true;
+    return tensor;
+  };
+  switch (proto.data_type()) {
+  case DataType::FLOAT:
+    return borrow(proto.float_data().values());
+  case DataType::DOUBLE:
+    return borrow(proto.double_data().values());
+  case DataType::INT64:
+    return borrow(proto.int64_data().values());
+  case DataType::UINT64:
+    return borrow(proto.uint64_data().values());
+  case DataType::INT32:
+    return borrow(proto.int32_data().values());
+  default:
+    return TensorFromProto(proto);
+  }
+}
+
 Tensor Tensor::RetainStorage() && {
   EXT_ENFORCE_INVALID(data_type != DataType::STRING,
                       "Tensor::RetainStorage: string tensors cannot be persistent.");
-  if (borrow_owner_.use_count() != 0)
+  if (borrow_owner_.use_count() != 0 || initializer_view_)
     return std::move(*this);
   EXT_ENFORCE_INVALID(!is_borrowed(),
                       "Tensor::RetainStorage: cannot retain an ownerless borrowed tensor.");
@@ -402,7 +440,9 @@ Tensor Tensor::BorrowView() const {
   if (static_cast<DataType>(data_type) == DataType::STRING) {
     return Tensor::BorrowStrings(name, shape, AsStrings());
   }
-  return Tensor::Borrow(name, data_type, shape, bytes(), size_bytes(), borrow_owner_);
+  auto view = Tensor::Borrow(name, data_type, shape, bytes(), size_bytes(), borrow_owner_);
+  view.initializer_view_ = initializer_view_;
+  return view;
 }
 
 Tensor Tensor::ToOwned() const {

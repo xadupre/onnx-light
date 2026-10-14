@@ -30,7 +30,7 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
  * - Current feeds cannot replace persistent inputs.
  * - Supports tensors, typed sequences, named structures and inline encoded values.
  * - Tensor leaves may use dense storage or inline affine encoding of the declared logical type.
- * - Shared payloads are read-only to callers; ownerless borrows are rejected.
+ * - Shared payloads are read-only; only immutable initializer views may borrow ownerless storage.
  * - The model stays immutable. All calls use the same allocators, kept alive by the caller.
  */
 class ONNX_LIGHT_CORE_API PersistentValueState {
@@ -39,22 +39,10 @@ public:
    * Initializes retained values from the graph's persistent bindings.
    *
    * Accepts std::move(initial) to avoid copying owned payloads.
-   * Without model_owner, the caller keeps the model alive through the state and exported views.
+   * The caller keeps the model alive through the state and exported initializer views.
    */
   PersistentValueState(const ModelProto &model, RuntimeValueMap initial,
-                       RuntimeSessionOptions options = {}, std::shared_ptr<void> model_owner = {});
-  /** Initializes retained values and keeps the shared model alive. */
-  PersistentValueState(std::shared_ptr<const ModelProto> model, RuntimeValueMap initial,
                        RuntimeSessionOptions options = {});
-
-  /**
-   * Retains an external model/context owner until the state is released.
-   *
-   * The caller registers owners before execution, including attempts that may fail.
-   * Repeated calls with the same shared owner are deduplicated. The token must
-   * not own this PersistentValueState, which would create a lifetime cycle.
-   */
-  void RetainOwner(std::shared_ptr<void> owner);
   /** Replaces retained values with explicitly transferred initial contents. */
   void Reset(RuntimeValueMap initial);
   /** Returns read-only aliases keyed by exact retained graph input names. */
@@ -75,8 +63,6 @@ private:
   std::vector<PersistentValue> ValidateInitial(RuntimeValueMap initial) const;
 
   const ModelProto &model_;
-  std::shared_ptr<void> model_owner_;
-  std::vector<std::shared_ptr<void>> retained_owners_;
   StructTypeCatalogue catalogue_;
   mutable std::unordered_map<const TypeProto *, RuntimeSequence::Memo<ShapeSymbols>>
       sequence_validation_;

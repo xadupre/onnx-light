@@ -179,7 +179,7 @@ TEST(Generation, PipelineUsesOneContextAndDeclaredGraphNames) {
   }
 }
 
-TEST(Generation, PipelineScopesModelFunctionsAndRestoresTheCallerRegistry) {
+TEST(Generation, PipelineScopesModelFunctionsWithoutChangingTheCallerRegistry) {
   auto embedding = PipelineModel("Stage", {{"input_ids", TensorProto::INT64}}, "inputs_embeds");
   auto *function = embedding.add_functions();
   function->set_domain("test.pipeline");
@@ -214,7 +214,7 @@ TEST(Generation, PipelineScopesModelFunctionsAndRestoresTheCallerRegistry) {
     }
     RuntimeSession source(prefill);
     RuntimeContext context(RuntimeContextOptions{.cpu_executor = source.cpu_executor().get()});
-    RegisterModelFunctions(embedding, context);
+    context.functions().emplace("test.pipeline:Other:", &embedding.functions()[0]);
     const FunctionMap original_functions = context.functions();
     int prefill_calls = 0;
     bool fail = false;

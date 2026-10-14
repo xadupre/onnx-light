@@ -98,19 +98,17 @@ using ShapeMap = std::unordered_map<std::string, Shape>;
 
 /**
  * Name-keyed map of model-local :cpp:type:`FunctionProto` definitions
- * known to the runtime. Populated by :cpp:func:`RegisterModelFunctions` from
- * ``ModelProto::functions()`` so the dispatcher in :cpp:func:`RunNode`
- * can transparently invoke the model-local function call helper
- * (which runs the function body through a :cpp:class:`RuntimeSession`)
- * whenever a node references a model-local function instead of a
- * built-in kernel.
+ * explicitly registered on a context. Model-based sessions instead keep
+ * their model's borrowed definitions in a session-owned lookup; they do not
+ * install them here. Standalone nodes and plans can use this registry.
  *
  * Keys are the canonical ``"<domain>:<op_type>:<overload>"`` triple
  * (the default ONNX domain — the empty ``NodeProto::domain()`` — is
  * normalised to ``"ai.onnx"`` and the overload defaults to the empty
  * string). Values are non-owning pointers into the caller-owned
  * ``ModelProto``; the entries are valid only as long as the model
- * outlives the runtime context.
+ * outlives every context or session that resolves them. Explicit registrations
+ * must be removed before their source model is destroyed.
  */
 using FunctionMap = std::unordered_map<std::string, const FunctionProto *>;
 
@@ -793,8 +791,8 @@ public:
   /// diagnostic naming the device when no kernel is registered for it.
   symbolic::Device device() const noexcept { return device_; }
 
-  /// Model-local function registry consulted by :cpp:func:`RunNode`
-  /// before falling back to the built-in kernel dispatch table.
+  /// Explicit context-local functions consulted after the active model's
+  /// session-local functions, before custom kernels and built-in dispatch.
   FunctionMap &functions() noexcept { return functions_; }
   const FunctionMap &functions() const noexcept { return functions_; }
 

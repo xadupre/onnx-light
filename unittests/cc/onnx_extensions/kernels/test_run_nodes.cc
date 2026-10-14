@@ -2792,6 +2792,69 @@ TEST(RunModel, ModelLocalFunctionOverloadDisambiguation) {
   EXPECT_FLOAT_EQ(rt.Get("d").AsFloat()[0], 7.0f);
 }
 
+TEST(RunModel, ModelSessionsScopeConflictingFunctionsThroughCallsAndSubgraphs) {
+  const auto make_model = [](const std::string &leaf_op) {
+    ModelProto model;
+    model.set_ir_version(10);
+    AddOpsetImport(model, "", 18);
+    AddOpsetImport(model, "custom", 1);
+    auto *leaf = model.add_functions();
+    leaf->set_domain("custom");
+    leaf->set_name("Leaf");
+    leaf->set_overload("shared");
+    leaf->add_input("a");
+    leaf->add_output("b");
+    *leaf->add_node() = MakeNode(leaf_op, {"a"}, {"b"});
+    auto *outer = model.add_functions();
+    outer->set_domain("custom");
+    outer->set_name("Outer");
+    outer->add_input("a");
+    outer->add_output("b");
+    *outer->add_node() = MakeNode("Leaf", {"a"}, {"b"}, "custom");
+    outer->mutable_node(0)->set_overload("shared");
+    auto *graph = model.mutable_graph();
+    graph->set_name("root");
+    auto *if_node = graph->add_node();
+    *if_node = MakeNode("If", {"condition"}, {"y"});
+    for (const char *branch_name : {"then_branch", "else_branch"}) {
+      auto *attribute = if_node->add_attribute();
+      attribute->set_name(branch_name);
+      attribute->set_type(AttributeProto::GRAPH);
+      auto *branch = attribute->mutable_g();
+      *branch->add_node() = MakeNode("Outer", {"x"}, {"z"}, "custom");
+      branch->add_output()->set_name("z");
+    }
+    graph->add_output()->set_name("y");
+    return model;
+  };
+
+  ModelProto negated = make_model("Neg");
+  ModelProto unchanged = make_model("Identity");
+  RuntimeContext context(KernelContext(DefaultOpset(18)));
+  context.functions().emplace("custom:Leaf:shared", &unchanged.functions()[0]);
+  const auto original = context.functions();
+  const auto run = [&](const ModelProto &model) {
+    context.Set("condition", Tensor::FromBool("condition", {}, {1}));
+    context.Set("x", Tensor::FromFloat("x", {1}, {2}));
+    RuntimeSession session(model);
+    session.Run(context);
+    EXPECT_EQ(context.functions(), original);
+    return context.Get("y").AsFloat()[0];
+  };
+  EXPECT_FLOAT_EQ(run(negated), -2);
+  EXPECT_FLOAT_EQ(run(unchanged), 2);
+  EXPECT_FLOAT_EQ(run(negated), -2);
+  bool fallback_called = false;
+  context.RegisterCustomKernel("custom", "Leaf", [&](const NodeProto &, RuntimeContext &) {
+    fallback_called = true;
+  });
+  negated.mutable_functions(0)->add_input("missing");
+  EXPECT_THROW(run(negated), std::invalid_argument);
+  EXPECT_FALSE(fallback_called);
+  EXPECT_EQ(context.functions(), original);
+  context.functions().clear();
+}
+
 TEST(RunModel, ModelLocalFunctionWrongInputCountThrows) {
   ModelProto model;
   model.set_ir_version(10);
@@ -7518,8 +7581,8 @@ TEST(RunModel, DefaultDomainModelLocalFunctionLookupKey) {
   RegisterModelFunctions(model, rt);
 
   // FunctionLookupKey formats an empty domain as a leading ':' separator.
-  ASSERT_EQ(rt.functions().count(":MyDefaultDomainFn:"), 1u);
-  EXPECT_EQ(rt.functions().at(":MyDefaultDomainFn:"), func);
+  ASSERT_EQ(rt.functions().count("ai.onnx:MyDefaultDomainFn:"), 1u);
+  EXPECT_EQ(rt.functions().at("ai.onnx:MyDefaultDomainFn:"), func);
 }
 
 // A model-local function body node carrying a repeated GRAPHS attribute whose

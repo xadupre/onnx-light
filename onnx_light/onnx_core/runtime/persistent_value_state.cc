@@ -389,7 +389,6 @@ RuntimeValueMap RuntimeSession::Run(RuntimeContext &context, const RuntimeValueM
   for (const auto &binding : state.bindings_)
     retained_outputs.insert(binding.output);
   context.set_retained_outputs(std::move(retained_outputs));
-  RegisterModelFunctions(state.model_, context);
   for (const auto &input : state.model_.graph().input()) {
     const auto binding = std::find_if(state.bindings_.begin(), state.bindings_.end(),
                                       [&](const auto &item) { return item.input == input.name(); });

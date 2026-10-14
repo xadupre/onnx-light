@@ -118,9 +118,10 @@ struct KernelTuningResolutionStatistics {
  *     session no longer needs the nodes (nor a :cpp:class:`RuntimeContext`)
  *     passed separately.
  *  2. **Kernel initialization** — the first :cpp:func:`Run` resolves the
- *     kernel for every node the plan executes once (against the model-local
- *     function registry, the control-flow handlers, the user custom kernels
- *     and the static :cpp:func:`KernelDispatchTable` of the supplied
+ *     kernel for every node the plan executes once (against the session's
+ *     model-local functions, explicit context-local functions, control-flow
+ *     handlers, context-local and global custom kernels, then the static
+ *     :cpp:func:`KernelDispatchTable` of the supplied
  *     :cpp:class:`RuntimeContext`), builds the resulting per-node kernel
  *     instance, and caches it. Any unsupported operator is rejected here
  *     rather than mid-run. It also records the external inputs the scheduled
@@ -137,8 +138,8 @@ struct KernelTuningResolutionStatistics {
  * future resolutions, including child sessions not yet initialized. A new
  * input shape does not change kernel identity: the existing kernel adapts
  * its internal plan/workspace or explicitly rejects an unsupported change.
- * The original graph/model and its nodes must remain alive and unchanged
- * until the session and its kernels are destroyed; adapters do not copy or
+ * The original graph/model and its nodes and functions must remain alive and
+ * unchanged until the session and its kernels are destroyed; adapters do not copy or
  * serialize nodes. Factories must return independent mutable kernel state
  * for each resolution. Independent sessions and contexts may run concurrently
  * with thread-safe user callbacks and immutable shared parameters, but runs
@@ -192,9 +193,11 @@ public:
   /// Builds a session over a function with its own opset imports.
   explicit RuntimeSession(const FunctionProto &function, RuntimeSessionOptions options = {});
   /// Builds a nested function session. An empty function import list inherits
-  /// ``inherited_opset_imports`` without copying it.
+  /// ``inherited_opset_imports`` without copying it. ``model_functions`` borrows
+  /// the enclosing model session's lookup for nested calls.
   RuntimeSession(const FunctionProto &function, const OpsetImports *inherited_opset_imports,
-                 RuntimeSessionOptions options = {});
+                 RuntimeSessionOptions options = {},
+                 const FunctionMap *model_functions = nullptr);
   /// Builds a session owning graph-declared persistent values initialized from ``initial``.
   RuntimeSession(const ModelProto &model, RuntimeValueMap initial,
                  RuntimeSessionOptions options = {});
@@ -412,7 +415,8 @@ protected:
   explicit RuntimeSession(const GraphProto &graph,
                           const OpsetImports *inherited_opset_imports = nullptr, int verbose = 0,
                           std::shared_ptr<ValueStore> value_store = nullptr,
-                          std::unordered_set<std::string> immutable_inputs = {});
+                          std::unordered_set<std::string> immutable_inputs = {},
+                          const FunctionMap *model_functions = nullptr);
 
   /// Default node-kernel resolution used during
   /// :cpp:func:`InitializeKernels`, so :cpp:class:`RuntimeSession` and
@@ -445,6 +449,7 @@ private:
                          const std::unordered_set<std::string> &preparable_inputs);
   void ResolveKernelValueSlots(RuntimeContext &rt);
   const OpsetImports *EffectiveOpsetImports() const noexcept;
+  const FunctionMap *EffectiveModelFunctions() const noexcept;
 
   /// Seeds missing initializer names and returns the names installed by this session.
   std::unordered_set<std::string> SeedInitializers(RuntimeContext &rt) const;
@@ -500,6 +505,9 @@ private:
   /// without imports borrow their enclosing session's immutable map instead.
   std::optional<OpsetImports> owned_opset_imports_;
   const OpsetImports *inherited_opset_imports_ = nullptr;
+  /// Borrowed definitions from the model; nested sessions borrow this map from their parent.
+  FunctionMap model_functions_;
+  const FunctionMap *inherited_model_functions_ = nullptr;
   std::shared_ptr<ValueStore> value_store_;
   std::unique_ptr<PersistentValueState> persistent_state_;
   std::vector<PreparedKernel> kernels_;

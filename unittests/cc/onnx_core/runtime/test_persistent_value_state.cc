@@ -1188,8 +1188,10 @@ TEST(PersistentValueState, StructuredValuesCrossModelLocalFunctions) {
   RegisterStructuredStep(context, &expected);
   RuntimeSession state_session(model, initial);
   PersistentValueState &state = state_session.persistent_state();
+  EXPECT_TRUE(context.functions().empty());
   state_session.Run(context, {{"tokens", Number(3)}});
   state_session.Run(context, {{"tokens", Number(4)}});
+  EXPECT_TRUE(context.functions().empty());
   EXPECT_EQ(Number(state.Values().at("request").fields.at("cache").fields.at("keys")), 8);
   EXPECT_EQ(Number(state.Values().at("request").fields.at("cache").fields.at("values")), 9);
   EXPECT_EQ(state.Values().at("request").fields.at("cache").fields.at("keys").tensor.bytes(),
@@ -2542,6 +2544,7 @@ TEST(PersistentValueState, BorrowsModelAndContextAcrossFailedExecution) {
   std::weak_ptr<RuntimeContext> context_lifetime = context;
   EXPECT_EQ(context.use_count(), 1);
   EXPECT_THROW(state_session->Run(*context, {{"tokens", Number(1)}}), std::invalid_argument);
+  EXPECT_TRUE(context->functions().empty());
   EXPECT_FALSE(model_lifetime.expired());
   EXPECT_FALSE(context_lifetime.expired());
   EXPECT_EQ(Number(state.Values().at("past")), 1);

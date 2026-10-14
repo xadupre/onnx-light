@@ -324,6 +324,16 @@ RuntimeContext::RuntimeContext(RuntimeContextOptions options)
     : RuntimeContext(KernelContext{}, options, std::make_shared<KernelUsageState>(),
                      std::make_shared<EventState>()) {}
 
+RuntimeContext::RuntimeContext(const RuntimeContext &source, RuntimeContextOptions options)
+    : RuntimeContext(source.kernel_ctx_, options, std::make_shared<KernelUsageState>(),
+                     std::make_shared<EventState>()) {
+  functions_ = source.functions_;
+  custom_kernels_ = source.custom_kernels_;
+  model_owner_ = source.model_owner_;
+  struct_type_catalogue_ = source.struct_type_catalogue_;
+  quantization_parameters_ = source.quantization_parameters_;
+}
+
 void RuntimeContext::SetValueStore(std::shared_ptr<ValueStore> value_store) {
   EXT_ENFORCE(value_store != nullptr, "RuntimeContext: value store must not be null.");
   value_store_ = std::move(value_store);
@@ -637,20 +647,18 @@ void RuntimeContext::RegisterCustomKernel(const std::string &domain, const std::
   RegisterKernelFn(domain, op_type, device_, MakeCustomKernelFactory(std::move(fn)));
 }
 
-RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name,
-                                                   RuntimeContextChildOptions options) const {
-  RuntimeContext child(
-      kernel_ctx_,
-      RuntimeContextOptions{
-          .allocator = allocator_,
-          .io_allocator = io_allocator_,
-          .events_enabled = options.events_enabled.value_or(events_enabled_),
-          .verbose = verbose_,
-          .release_intermediates = release_intermediates_,
-          .device = device_,
-          .cpu_executor = options.cpu_executor == nullptr ? cpu_executor_ : options.cpu_executor,
-      },
-      kernel_usage_, events_);
+RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name) const {
+  RuntimeContext child(kernel_ctx_,
+                       RuntimeContextOptions{
+                           .allocator = allocator_,
+                           .io_allocator = io_allocator_,
+                           .events_enabled = events_enabled_,
+                           .verbose = verbose_,
+                           .release_intermediates = release_intermediates_,
+                           .device = device_,
+                           .cpu_executor = cpu_executor_,
+                       },
+                       kernel_usage_, events_);
   child.execution_arena_owner_ = execution_arena_owner_;
   child.retired_execution_arena_owners_ = retired_execution_arena_owners_;
   child.io_arena_owner_ = io_arena_owner_;
@@ -713,19 +721,18 @@ Tensor RuntimeContext::CommitPersistentAppend(int output_slot,
   return binding->candidate->BorrowView();
 }
 
-RuntimeContext RuntimeContext::MakeFunctionContext(RuntimeContextChildOptions options) const {
-  RuntimeContext child(
-      kernel_ctx_,
-      RuntimeContextOptions{
-          .allocator = allocator_,
-          .io_allocator = io_allocator_,
-          .events_enabled = options.events_enabled.value_or(events_enabled_),
-          .verbose = verbose_,
-          .release_intermediates = release_intermediates_,
-          .device = device_,
-          .cpu_executor = options.cpu_executor == nullptr ? cpu_executor_ : options.cpu_executor,
-      },
-      kernel_usage_, events_);
+RuntimeContext RuntimeContext::MakeFunctionContext() const {
+  RuntimeContext child(kernel_ctx_,
+                       RuntimeContextOptions{
+                           .allocator = allocator_,
+                           .io_allocator = io_allocator_,
+                           .events_enabled = events_enabled_,
+                           .verbose = verbose_,
+                           .release_intermediates = release_intermediates_,
+                           .device = device_,
+                           .cpu_executor = cpu_executor_,
+                       },
+                       kernel_usage_, events_);
   child.execution_arena_owner_ = execution_arena_owner_;
   child.retired_execution_arena_owners_ = retired_execution_arena_owners_;
   child.io_arena_owner_ = io_arena_owner_;
@@ -742,23 +749,14 @@ RuntimeContext RuntimeContext::MakeFunctionContext(RuntimeContextChildOptions op
   return child;
 }
 
-RuntimeContext RuntimeContext::MakeIsolatedContext(RuntimeContextChildOptions options) const {
-  RuntimeContext child(
-      kernel_ctx_,
-      RuntimeContextOptions{
-          .events_enabled = options.events_enabled.value_or(events_enabled_),
-          .verbose = verbose_,
-          .release_intermediates = release_intermediates_,
-          .device = device_,
-          .cpu_executor = options.cpu_executor == nullptr ? cpu_executor_ : options.cpu_executor,
-      },
-      std::make_shared<KernelUsageState>(), std::make_shared<EventState>());
-  child.functions() = functions_;
-  child.custom_kernels() = custom_kernels_;
-  child.set_model_owner(model_owner_);
-  child.set_struct_type_catalogue(struct_type_catalogue_);
-  child.set_quantization_parameters(quantization_parameters_);
-  return child;
+RuntimeContext RuntimeContext::MakeIsolatedContext() const {
+  return RuntimeContext(*this, RuntimeContextOptions{
+                                   .events_enabled = events_enabled_,
+                                   .verbose = verbose_,
+                                   .release_intermediates = release_intermediates_,
+                                   .device = device_,
+                                   .cpu_executor = cpu_executor_,
+                               });
 }
 
 void RuntimeContext::ResetInvocation() noexcept {

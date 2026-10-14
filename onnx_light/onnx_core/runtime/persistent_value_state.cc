@@ -314,24 +314,20 @@ std::vector<PersistentValue> PersistentValueState::ValidateInitial(RuntimeValueM
 RuntimeValueMap PersistentValueState::Run(RuntimeContext &context, const RuntimeValueMap &feeds,
                                           const TaskCompletion *completion) {
   const Operation operation(busy_);
-  RuntimeContext invocation = context.MakeFunctionContext();
-  return RunImpl(invocation, feeds, completion, context.execution_allocator(),
-                 context.io_allocator(), false);
-}
-
-RuntimeValueMap PersistentValueState::RunInvocation(RuntimeContext &invocation,
-                                                    const RuntimeValueMap &feeds,
-                                                    const TaskCompletion *completion) {
-  const Operation operation(busy_);
-  return RunImpl(invocation, feeds, completion, nullptr, nullptr, true);
+  EXT_ENFORCE_INVALID(session_ != nullptr, "PersistentValueState: state is closed.");
+  if (invocation_source_ != &context) {
+    invocation_ = std::make_unique<RuntimeContext>(context.MakeFunctionContext());
+    invocation_source_ = &context;
+  }
+  return RunImpl(*invocation_, feeds, completion, context.execution_allocator(),
+                 context.io_allocator());
 }
 
 RuntimeValueMap PersistentValueState::RunImpl(RuntimeContext &invocation,
                                               const RuntimeValueMap &feeds,
                                               const TaskCompletion *completion,
                                               RawBufferAllocator *caller_execution_allocator,
-                                              RawBufferAllocator *caller_io_allocator,
-                                              bool invocation_owns_allocators) {
+                                              RawBufferAllocator *caller_io_allocator) {
   EXT_ENFORCE_INVALID(session_ != nullptr, "PersistentValueState: state is closed.");
   EXT_ENFORCE_INVALID(
       completion == nullptr || completion->status() == TaskStatus::kPending,
@@ -387,17 +383,13 @@ RuntimeValueMap PersistentValueState::RunImpl(RuntimeContext &invocation,
   for (auto &binding : *invocation.persistent_tensors_)
     binding.input_view = &invocation.Get(binding.input);
   session_->Run(invocation);
-  RawBufferAllocator *execution_allocator =
-      invocation_owns_allocators ? invocation.execution_allocator() : caller_execution_allocator;
-  RawBufferAllocator *io_allocator =
-      invocation_owns_allocators ? invocation.io_allocator() : caller_io_allocator;
   if (allocators_captured_) {
-    EXT_ENFORCE_INVALID(execution_allocator_ == execution_allocator &&
-                            io_allocator_ == io_allocator,
+    EXT_ENFORCE_INVALID(execution_allocator_ == caller_execution_allocator &&
+                            io_allocator_ == caller_io_allocator,
                         "PersistentValueState: context allocators changed between calls.");
   } else {
-    execution_allocator_ = execution_allocator;
-    io_allocator_ = io_allocator;
+    execution_allocator_ = caller_execution_allocator;
+    io_allocator_ = caller_io_allocator;
     allocators_captured_ = true;
   }
   RuntimeValueMap outputs;
@@ -479,6 +471,8 @@ void PersistentValueState::RetainOwner(std::shared_ptr<void> owner) {
 void PersistentValueState::Close() {
   const Operation operation(busy_);
   values_.clear();
+  invocation_.reset();
+  invocation_source_ = nullptr;
   session_.reset();
   retained_owners_.clear();
   model_owner_.reset();

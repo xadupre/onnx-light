@@ -443,12 +443,6 @@ struct RuntimeContextOptions {
   CpuExecutor *cpu_executor = nullptr;
 };
 
-/** Overrides inherited settings when creating a child runtime context. */
-struct RuntimeContextChildOptions {
-  CpuExecutor *cpu_executor = nullptr;
-  std::optional<bool> events_enabled;
-};
-
 /**
  * Per-invocation runtime state passed to :cpp:func:`RunNode` /
  * :cpp:class:`RuntimeSession`.
@@ -488,6 +482,7 @@ public:
   explicit RuntimeContext(KernelContext kernel_ctx, RuntimeContextOptions options = {});
   RuntimeContext(KernelContext kernel_ctx, TensorMap tensors, RuntimeContextOptions options = {});
   explicit RuntimeContext(RuntimeContextOptions options);
+  RuntimeContext(const RuntimeContext &source, RuntimeContextOptions options);
 
   /// Returns whether event logging was enabled when the context was built.
   /// When disabled (the default), :cpp:func:`Set`, :cpp:func:`Put`,
@@ -960,8 +955,7 @@ public:
   ///
   /// Returns:
   ///   A new :cpp:class:`RuntimeContext` initialised for subgraph execution.
-  RuntimeContext MakeSubgraphContext(const std::string &attr_name,
-                                     RuntimeContextChildOptions options = {}) const;
+  RuntimeContext MakeSubgraphContext(const std::string &attr_name) const;
 
   /// Creates a fresh child context for executing a model-local function.
   /// The child inherits the parent's kernel context, allocator, function
@@ -973,10 +967,10 @@ public:
   ///
   /// Returns:
   ///   A new :cpp:class:`RuntimeContext` initialised for function execution.
-  RuntimeContext MakeFunctionContext(RuntimeContextChildOptions options = {}) const;
+  RuntimeContext MakeFunctionContext() const;
 
   /// Creates an independent invocation with fresh allocators and diagnostics.
-  RuntimeContext MakeIsolatedContext(RuntimeContextChildOptions options = {}) const;
+  RuntimeContext MakeIsolatedContext() const;
 
   /// Clears invocation values while preserving allocators, plans and diagnostics.
   void ResetInvocation() noexcept;

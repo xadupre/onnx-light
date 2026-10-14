@@ -300,8 +300,14 @@ Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeV
     if (session_options.cpu_execution_counters)
       pipeline.cpu_executor->EnableCounters();
     session_options.cpu_execution.reset();
-    local_context = std::make_unique<RuntimeContext>(context.MakeIsolatedContext(
-        {.cpu_executor = pipeline.cpu_executor.get(), .events_enabled = context.events_enabled()}));
+    local_context = std::make_unique<RuntimeContext>(
+        context, RuntimeContextOptions{
+                     .events_enabled = context.events_enabled(),
+                     .verbose = context.verbose(),
+                     .release_intermediates = context.release_intermediates(),
+                     .device = context.device(),
+                     .cpu_executor = pipeline.cpu_executor.get(),
+                 });
     execution_context = local_context.get();
   }
   RuntimeValueMap current;
@@ -310,10 +316,14 @@ Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeV
   std::vector<std::unique_ptr<RuntimeContext>> prefill_contexts;
   prefill_contexts.reserve(pipeline.prefill.size());
   for (const auto &stage : pipeline.prefill) {
-    prefill_contexts.emplace_back(
-        std::make_unique<RuntimeContext>(stage.context->MakeIsolatedContext(
-            {.cpu_executor = pipeline.cpu_executor.get(),
-             .events_enabled = execution_context->events_enabled()})));
+    prefill_contexts.emplace_back(std::make_unique<RuntimeContext>(
+        *stage.context, RuntimeContextOptions{
+                            .events_enabled = execution_context->events_enabled(),
+                            .verbose = stage.context->verbose(),
+                            .release_intermediates = stage.context->release_intermediates(),
+                            .device = stage.context->device(),
+                            .cpu_executor = pipeline.cpu_executor.get(),
+                        }));
     RuntimeSession stage_session(*stage.model, session_options);
     RunComponent(stage, "", nullptr, *prefill_contexts.back(), *execution_context, current,
                  stage_session);
@@ -323,10 +333,15 @@ Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeV
   if (embedded) {
     embedding_session =
         std::make_unique<RuntimeSession>(*pipeline.embedding.model, session_options);
-    embedding_context =
-        std::make_unique<RuntimeContext>(pipeline.embedding.context->MakeIsolatedContext(
-            {.cpu_executor = pipeline.cpu_executor.get(),
-             .events_enabled = execution_context->events_enabled()}));
+    embedding_context = std::make_unique<RuntimeContext>(
+        *pipeline.embedding.context,
+        RuntimeContextOptions{
+            .events_enabled = execution_context->events_enabled(),
+            .verbose = pipeline.embedding.context->verbose(),
+            .release_intermediates = pipeline.embedding.context->release_intermediates(),
+            .device = pipeline.embedding.context->device(),
+            .cpu_executor = pipeline.cpu_executor.get(),
+        });
   }
   std::unique_ptr<PersistentValueState> state;
   std::unique_ptr<RuntimeSession> session;
@@ -381,7 +396,7 @@ Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeV
         if (found != current.end())
           decoder_feeds.emplace(input.name(), found->second.BorrowView());
       }
-      auto outputs = state->RunInvocation(*decoder_context, decoder_feeds);
+      auto outputs = state->Run(*decoder_context, decoder_feeds);
       auto it = outputs.find(options.logits_name);
       EXT_ENFORCE_INVALID(it != outputs.end() && it->second.kind == RuntimeValue::Kind::kTensor,
                           "Generate: logits output must be a tensor.");

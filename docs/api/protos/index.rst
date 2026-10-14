@@ -17,8 +17,8 @@ The SVG below is generated from
 ``onnx_light/onnx_proto/onnx.h`` and checks the generated SVG and text trees
 against the DOT.
 
-Click the diagram to open it in a full-screen view where the mouse wheel zooms
-and dragging pans, which makes the smaller labels easier to read.
+Click the diagram to open it at its native resolution in a full-screen view.
+Use the mouse wheel to zoom out for an overview or drag to pan across the labels.
 
 .. image:: _static/protos_relations.svg
    :alt: Containment relations between ONNX protos

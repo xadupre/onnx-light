@@ -1729,7 +1729,7 @@ public:
       // A compound (non-leaf) subexpression whose textual form matches a
       // mapping key collapses to the mapped name without descending further.
       auto it = mapping_.find(unparse(*node));
-      if (it != mapping_.end()) {
+      if (it != mapping_.end() && it->second != it->first) {
         return std::make_unique<Name>(it->second);
       }
     }

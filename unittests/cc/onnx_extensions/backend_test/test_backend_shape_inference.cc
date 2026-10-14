@@ -2579,7 +2579,7 @@ TEST(BackendTestCaseShapeInference, BigModelsOptimShapeInference) {
   EXPECT_TRUE(found) << "no big-model backend cases were collected";
 }
 
-TEST(BackendTestCaseShapeInference, Qwen3FusedCasesInferWithOnnxSchemas) {
+TEST(BackendTestCaseShapeInference, Qwen3FusedCasesInferSymbolicShapes) {
   std::vector<TestCase> cases = CollectTestCases("", /*include_big=*/true);
   size_t checked = 0;
   for (TestCase &tc : cases) {
@@ -2591,8 +2591,30 @@ TEST(BackendTestCaseShapeInference, Qwen3FusedCasesInferWithOnnxSchemas) {
     SCOPED_TRACE(tc.name);
     ModelProto model = DeepCopyModel(tc.model(), tc.name);
     model.mutable_graph()->clear_value_info();
-    ASSERT_NO_THROW(shape_inference::InferShapes(model));
-    ASSERT_TRUE(model.graph().output(0).has_type());
+    model.mutable_graph()->mutable_output(0)->mutable_type()->mutable_tensor_type()->clear_shape();
+    ASSERT_NO_THROW(core::shapes::InferShapesModel(model));
+    const auto &output = model.graph().output(0).type().tensor_type().shape();
+    ASSERT_EQ(output.dim_size(), 3);
+    EXPECT_EQ(output.dim(0).dim_param(), "batch_size");
+    EXPECT_EQ(output.dim(1).dim_param(), "sequence_length");
+    EXPECT_EQ(output.dim(2).dim_value(), 32000);
+    const bool paged =
+        tc.name == "test_cc_shape_inference_big_qwen3_4_layers_like_persistent_paged";
+    const std::string expected =
+        paged ? "sequence_length"
+        : tc.name == "test_cc_shape_inference_big_qwen3_4_layers_like_fused"
+            ? "batch_size*(past_sequence_length+sequence_length)"
+            : "batch_size*total_sequence_length";
+    const std::string name = paged ? "_onx_range_dim1::Sq__1" : "_onx_add_unsqueeze_12::RSh-1";
+    bool found = false;
+    for (const auto &vi : model.graph().value_info()) {
+      if (vi.name() != name)
+        continue;
+      ASSERT_EQ(vi.type().tensor_type().shape().dim_size(), 1);
+      EXPECT_EQ(vi.type().tensor_type().shape().dim(0).dim_param(), expected);
+      found = true;
+    }
+    EXPECT_TRUE(found);
     ++checked;
   }
   EXPECT_EQ(checked, 3u);

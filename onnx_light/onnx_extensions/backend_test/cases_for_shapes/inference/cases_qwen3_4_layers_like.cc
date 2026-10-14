@@ -10,7 +10,6 @@
 #include "onnx_core/compute/value_tags.h"
 #include "onnx_proto/onnx_helper.h"
 
-#include <cstddef>
 #include <cstdint>
 #include <span>
 #include <string>
@@ -55,16 +54,6 @@ void MakeQwenCacheInputsExclusive(GraphProto &graph) {
         input = total_shape;
       else if (input == total_shape)
         input = past_shape;
-    }
-  }
-  for (auto &vi : graph.ref_value_info()) {
-    if (!vi.has_type() || !vi.type().has_tensor_type())
-      continue;
-    for (auto &dim : vi.mutable_type()->mutable_tensor_type()->mutable_shape()->ref_dim()) {
-      if (dim.dim_param() == "past_sequence_length+sequence_length")
-        dim.set_dim_param("total_sequence_length");
-      else if (dim.dim_param() == "batch_size*(past_sequence_length+sequence_length)")
-        dim.set_dim_param("batch_size*total_sequence_length");
     }
   }
   for (int layer = 0; layer < 4; ++layer) {
@@ -230,13 +219,22 @@ void ConvertQwenToPagedCache(ModelProto &model) {
                         "Qwen paged case: missing RoPE range.");
     *nodes[i].mutable_input(0) = "init7_s_0__2";
     *nodes[i - 1].mutable_input(0) = "input_ids::Shape1:2";
-    nodes[i].set_output(0, "rope_position_offsets");
+    *nodes[i].mutable_output(0) = "rope_position_offsets";
     NodeProto shifted;
     shifted.set_op_type("Add");
     shifted.add_input("rope_position_offsets");
     shifted.add_input("dim1::Sq__1");
     shifted.add_output("_onx_range_dim1::Sq__1");
-    nodes.insert(nodes.begin() + static_cast<std::ptrdiff_t>(i + 1), std::move(shifted));
+    std::vector<NodeProto> reordered;
+    reordered.reserve(nodes.size() + 1);
+    for (size_t j = 0; j < nodes.size(); ++j) {
+      reordered.push_back(std::move(nodes[j]));
+      if (j == i)
+        reordered.push_back(std::move(shifted));
+    }
+    graph.clear_node();
+    for (auto &node : reordered)
+      *graph.add_node() = std::move(node);
     break;
   }
 }
@@ -300,10 +298,11 @@ void AddQwenPersistentCases(std::vector<TestCase> &registry, const ModelProto &s
       116, 117, 118, 119, 121, 125, 127, 129, 132, 133, 134, 136, 137, 138, 139, 140, 141, 143,
       145, 146, 147, 149, 151, 152, 153, 154, 155, 156, 158, 162, 164, 166, 167};
   std::vector<int> shifted_inplace_nodes;
-  shifted_inplace_nodes.reserve(std::size(paged_inplace_nodes));
+  shifted_inplace_nodes.reserve(std::size(paged_inplace_nodes) + 1);
+  shifted_inplace_nodes.push_back(6);
   for (int index : paged_inplace_nodes)
     shifted_inplace_nodes.push_back(index >= 6 ? index + 1 : index);
-  ReplaceQwenInplaceExpectations(*paged_model.mutable_graph(), shifted_inplace_nodes, 2);
+  ReplaceQwenInplaceExpectations(*paged_model.mutable_graph(), shifted_inplace_nodes, -1);
   registry.emplace_back(std::move(paged));
 }
 

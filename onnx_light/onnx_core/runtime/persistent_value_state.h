@@ -15,7 +15,7 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
  * Carries graph-declared persistent values between model calls.
  *
  * During a RuntimeSession run:
- * 1. Binds retained values to persistent inputs and adds the current feeds.
+ * 1. Uses retained values for persistent inputs alongside the current feeds.
  * 2. Executes the session, reusing eligible append buffers or allocating new ones.
  * 3. Validates the outputs and checks cancellation.
  * 4. Publishes selected outputs as the next state only on success.
@@ -81,10 +81,6 @@ private:
     const TypeProto *input_type;
   };
   std::vector<PersistentValue> ValidateInitial(RuntimeValueMap initial) const;
-  ShapeSymbols Bind(RuntimeContext &context, const RuntimeValueMap &feeds);
-  void Unbind(RuntimeContext &context) noexcept;
-  RuntimeValueMap Commit(RuntimeContext &context, const TaskCompletion *completion,
-                         ShapeSymbols symbols);
 
   const ModelProto &model_;
   std::shared_ptr<void> model_owner_;

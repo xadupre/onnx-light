@@ -5,7 +5,7 @@ persistent_value_state
 calls. Construct a session with initial retained values, then call
 ``RuntimeSession::Run(context, feeds)`` without passing a separate state:
 
-1. Binds retained values to the declared persistent inputs and adds current feeds.
+1. Uses retained values for persistent inputs alongside current feeds.
 2. Runs the session, reusing eligible append buffers or allocating new ones.
 3. Validates outputs and checks cancellation.
 4. Publishes the selected outputs as the next state only on success.
@@ -50,6 +50,8 @@ Execution and lifecycle
 
 * Execution uses the supplied ``RuntimeContext`` directly and the caller-owned
   ``RuntimeSession`` and its cached kernels. No child context is created.
+  The state exposes no context-binding or execution methods; the session handles
+  inputs, validation and publication as part of ``Run``.
   Only declared persistent outputs bypass normal output materialization.
 * ``If`` and local functions transport selected outputs without payload copies.
   Other operators retain their ordinary computation and transport costs.

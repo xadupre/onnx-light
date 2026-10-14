@@ -1155,7 +1155,7 @@ public:
   }
 
 private:
-  friend class PersistentValueState;
+  friend class RuntimeSession;
   size_t persistent_tensor_initial_capacity_ = 0;
   const GraphProto *persistent_graph_ = nullptr;
   struct PersistentTensorBinding {

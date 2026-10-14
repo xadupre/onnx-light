@@ -2194,8 +2194,6 @@ void AddOnnxPyRuntime(nb::module_ &m) {
             self.Reset(FeedbackValuesFromPython(initial, &self.model()));
           },
           nb::arg("initial"), "Replaces retained state with explicitly supplied initial values.")
-      .def("close", &PersistentValueState::Close,
-           "Releases retained values and permanently closes the state.")
       .def_prop_ro("model", &PersistentValueState::model, nb::rv_policy::reference_internal)
       .def_prop_ro(
           "values",

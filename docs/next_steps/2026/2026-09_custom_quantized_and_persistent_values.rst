@@ -714,7 +714,8 @@ after graph rewrites. Initial contents must still be supplied.
    Native callers keep it alive; Python bindings retain its owner.
    State construction and subsequent calls must not serialize, clone,
    hash or repeatedly compare the model to detect mutation. To change
-   the graph, close the state and create a new session after rewriting.
+   the graph, destroy the session before rewriting and create a new session
+   afterwards.
 
 .. _l-next-steps-persistent-composite-state:
 .. _l-next-steps-persistent-struct-state:
@@ -788,7 +789,7 @@ Ordinary nonpersistent string feeds and outputs remain supported with their
 normal materialized representation; they are not part of retained state.
 
 Returned outputs and retained state may share storage. Releasing caller
-references, resetting/closing a state or advancing another invocation must
+references, resetting/destroying a session or advancing another invocation must
 not invalidate an outstanding view. Functions, ``If`` and structured
 field transport must preserve these owners rather than call deep-copy
 or serialization-based detachment helpers. Per-request state containers

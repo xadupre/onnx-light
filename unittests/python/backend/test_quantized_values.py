@@ -124,8 +124,8 @@ class TestSharedQuantizationParameters(unittest.TestCase):
                     state_session.run(context, {"current": bad})
                 with self.assertRaisesRegex(ValueError, "parameter_ref"):
                     runtime.PersistentValueState(model, {"past": bad})
-                state.close()
-                del state, context, model, source_context, source_session, initial, encoded
+                del state, state_session, context, model
+                del source_context, source_session, initial, encoded
                 gc.collect()
                 for name in ("present", "forwarded"):
                     value = output[name]["payload"] if nested else output[name]

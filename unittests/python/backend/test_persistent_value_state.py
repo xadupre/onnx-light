@@ -172,7 +172,7 @@ class TestPersistentValueState(unittest.TestCase):
                     self.assertEqual(len(output["blocks"]), len(blocks))
                 state.reset({"past": output})
                 snapshot = state.values["past"]
-                state.close()
+                del state, state_session
                 if blocks:
                     value = (
                         onh.to_array(snapshot.blocks[0].key)
@@ -212,7 +212,7 @@ class TestPersistentValueState(unittest.TestCase):
             state.reset({"past": [numpy.ones(2, dtype=numpy.float64)]})
         state.reset({"past": first})
         self.assertEqual(len(state.values["past"]), 1)
-        state.close()
+        del state, state_session
         numpy.testing.assert_array_equal(array(second[1]), item * 2)
 
     def test_attention_persistent_tensor_initial_capacity(self):
@@ -268,7 +268,7 @@ class TestPersistentValueState(unittest.TestCase):
                         },
                         expected,
                     )
-            state.close()
+            del state, state_session
 
         for disabled, enabled in zip(results[0], results[4]):
             self.assertEqual(set(disabled), set(enabled))
@@ -306,7 +306,7 @@ class TestPersistentValueState(unittest.TestCase):
                 manual[name] = expected
             numpy.testing.assert_array_equal(array(actual["Y"]), array(context.get_value("Y")))
             held.append(actual["present_key"])
-        state.close()
+        del state, state_session
         for index, value in enumerate(held, 1):
             self.assertEqual(array(value).shape[2], index)
             numpy.testing.assert_array_equal(array(value)[0, 0, -1], [index / 8, index / 4])
@@ -429,7 +429,7 @@ class TestPersistentValueState(unittest.TestCase):
                     self.assertTrue(context.has("sentinel"))
                     for name, value in state.values.items():
                         numpy.testing.assert_array_equal(array(value), before_clear[name])
-                    state.close()
+                    del state, state_session
             for disabled, enabled in zip(results[False], results[True]):
                 self.assertEqual(set(disabled), set(enabled))
                 for name in disabled:
@@ -488,7 +488,7 @@ class TestPersistentValueState(unittest.TestCase):
                     self.assertEqual(array(value).shape, (1, 1, 0, 2))
                 context.clear_events()
                 self.assertEqual(context.events(), [])
-                state.close()
+                del state, state_session
 
     def test_loop_uses_normal_runtime_with_selected_result(self):
         body = oh.make_graph(
@@ -583,7 +583,7 @@ class TestPersistentValueState(unittest.TestCase):
             )
             numpy.testing.assert_array_equal(array(output["present"]), [expected, expected])
             outputs.append(output)
-        state.close()
+        del state, state_session
         numpy.testing.assert_array_equal(array(outputs[0]["traces"]), [[1, 1], [2, 2], [3, 3]])
 
     def test_ordinary_strings_cross_sequence_and_if(self):
@@ -729,9 +729,8 @@ class TestPersistentValueState(unittest.TestCase):
             manual.name = "past"
         state.reset({"past": initial})
         numpy.testing.assert_array_equal(array(state.values["past"]), initial)
-        state.close()
-        with self.assertRaises((ValueError, RuntimeError)):
-            state_session.run(context, {"delta": initial})
+        output = state_session.run(context, {"delta": initial})
+        numpy.testing.assert_array_equal(array(output["present"]), initial * 2)
 
     def test_ownership_and_request_isolation(self):
         model = make_model()
@@ -752,7 +751,7 @@ class TestPersistentValueState(unittest.TestCase):
         snapshot["past"].data_type = int(onnx.TensorProto.INT32)
         numpy.testing.assert_array_equal(array(first.values["past"]), [2, 2])
         numpy.testing.assert_array_equal(array(second.values["past"]), [1, 1])
-        first.close()
+        del first, first_session
         numpy.testing.assert_array_equal(array(output["present"]), [[2, 2]])
 
     def test_validation_and_rewrites(self):
@@ -824,7 +823,7 @@ class TestPersistentValueState(unittest.TestCase):
                             for operation in (
                                 lambda: state_session.run(context, {}),
                                 lambda: state.reset({"past": initial}),
-                                state.close,
+                                lambda: state.values,
                             ):
                                 with self.assertRaises(ValueError):
                                     operation()
@@ -834,7 +833,6 @@ class TestPersistentValueState(unittest.TestCase):
                         with self.assertRaises((ValueError, RuntimeError)):
                             pending.result(timeout=10)
                     numpy.testing.assert_array_equal(array(state.values["past"]), initial)
-                    state.close()
                 finally:
                     registry.unregister_custom_kernel("feedback.test", "Block")
 
@@ -945,7 +943,7 @@ class TestPersistentValueState(unittest.TestCase):
         fail = False
         output = state_session.run(context, {"tokens": numpy.ones(2, dtype=numpy.float32)})
         numpy.testing.assert_array_equal(array(output["response"]["cache"]), [3, 3])
-        state.close()
+        del state, state_session
         numpy.testing.assert_array_equal(array(snapshot["request"]["cache"]), [0, 0])
         del snapshot
         gc.collect()
@@ -966,7 +964,6 @@ class TestPersistentValueState(unittest.TestCase):
         output = state_session.run(make_context(), {"delta": numpy.ones(2, dtype=numpy.float32)})
         saved = array(output["present"])
         state.reset({"past": numpy.zeros(2, dtype=numpy.float32)})
-        state.close()
         del state, state_session, output
         gc.collect()
         numpy.testing.assert_array_equal(saved, [1, 1])
@@ -1026,7 +1023,7 @@ class TestPersistentValueState(unittest.TestCase):
         )
         with self.assertRaises(TypeError):
             state.reset({"past": numpy.zeros(4, dtype=ml_dtypes.bfloat16)[::2]})
-        state.close()
+        del state
 
     def test_scalar_numpy_input_without_copy(self):
         model = parser.parse_model(
@@ -1114,7 +1111,7 @@ class TestPersistentValueState(unittest.TestCase):
         self.assertEqual(set(state.values), {"x"})
         self.assertEqual(array(output["y"]["a.b"]).ctypes.data, first.ctypes.data)
         self.assertEqual(array(output["y"]["a"]["b"]).ctypes.data, second.ctypes.data)
-        state.close()
+        del state, state_session
         for field, name in (("input_name", "x.a.b"), ("output_name", "y.a.b")):
             setattr(model.graph.persistent_bindings[0], field, name)
             with self.assertRaisesRegex(ValueError, "exact.*input/output"):
@@ -1184,7 +1181,7 @@ class TestPersistentValueState(unittest.TestCase):
         self.assertEqual(set(state.values), {"past"})
         with self.assertRaisesRegex(ValueError, "unknown graph input"):
             state_session.run(context, {r"past\.part": second})
-        state.close()
+        del state, state_session
         add_binding(model, "past.part", "present.part")
         verify.verify_model(model)
         state_session = runtime.RuntimeSession(model, {"past": first, "past.part": second})
@@ -1227,8 +1224,7 @@ class TestPersistentValueState(unittest.TestCase):
         self.assertEqual(
             array(output["present"]).ctypes.data, array(state.values["past"]).ctypes.data
         )
-        state.close()
-        del model, state
+        del model, state, state_session
         gc.collect()
         numpy.testing.assert_array_equal(array(output["present"]), weights)
 

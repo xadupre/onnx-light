@@ -34,11 +34,12 @@ Ownership
   Otherwise, the caller keeps it alive through all exported model-backed views.
 * ``initial`` and ``Reset`` take maps by value in C++. Use ``std::move(initial)``
   to avoid copying owned payloads.
-* Returned views share owners and remain valid after later calls, reset or close.
-  Callers must not modify shared payloads; publication does not undo such writes.
+* Returned views share owners and remain valid after later calls, reset or session
+  destruction. Callers must not modify shared payloads; publication does not undo
+  such writes.
 * Retained borrows need owners, and arena allocations need self-owning I/O leases.
   Unsafe storage is rejected, not copied as a fallback.
-* All calls use the same allocators, kept alive until the state closes.
+* All calls use the same allocators, kept alive until the session is destroyed.
   ``RetainOwner`` can retain model/context owners before execution, including
   failed attempts. Owners must not own the state itself.
 * Model-backed initializer views retain the constructor's model owner.
@@ -57,8 +58,7 @@ Execution and lifecycle
   Other operators retain their ordinary computation and transport costs.
 * ``RuntimeSession::Reset(initial)`` replaces retained values without rebuilding
   the session or its cached kernels.
-* ``Close()`` releases retained values and permanently closes the state.
-  The session retains its kernels until it is destroyed.
+* Session destruction releases its retained values and cached kernels.
 * Events use ``context.events()`` when ``events_enabled`` is true, including
   work before failure. ``ClearEvents()`` clears this log, not the persistent values.
 

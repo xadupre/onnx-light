@@ -211,13 +211,14 @@ TEST(PersistentValueState, AttentionCacheDefaultCapacityMatchesFunctionalGQAWith
   }
 }
 
-TEST(PersistentValueState, AttentionCacheSnapshotsAndOutputsBlockWritesAndSurviveResetClose) {
+TEST(PersistentValueState,
+     AttentionCacheSnapshotsAndOutputsBlockWritesAndSurviveSessionDestruction) {
   ModelProto model = AttentionModel();
-  RuntimeSession state_session(model, EmptyAttentionCache());
-  PersistentValueState &state = state_session.persistent_state();
+  auto state_session = std::make_unique<RuntimeSession>(model, EmptyAttentionCache());
+  PersistentValueState &state = state_session->persistent_state();
   RuntimeContext context(KernelContext(DefaultOpset(23)),
                          RuntimeContextOptions{.events_enabled = true});
-  auto first = state_session.Run(context, AttentionFeeds(1));
+  auto first = state_session->Run(context, AttentionFeeds(1));
   auto snapshot = state.Values();
   const Tensor frozen = first.at("present_key").tensor.ToOwned();
   const uint8_t *first_pointer = frozen.bytes();
@@ -226,14 +227,14 @@ TEST(PersistentValueState, AttentionCacheSnapshotsAndOutputsBlockWritesAndSurviv
   first.clear(); // Values() alone must prevent reuse.
   const uint8_t *second_pointer;
   {
-    auto second = state_session.Run(context, AttentionFeeds(2));
+    auto second = state_session->Run(context, AttentionFeeds(2));
     second_pointer = second.at("present_key").tensor.bytes();
     EXPECT_NE(second_pointer, first_pointer);
   }
-  auto third = state_session.Run(context, AttentionFeeds(3));
+  auto third = state_session->Run(context, AttentionFeeds(3));
   EXPECT_EQ(third.at("present_key").tensor.bytes(), second_pointer);
-  auto fourth = state_session.Run(context,
-                                  AttentionFeeds(4)); // An outstanding output also blocks reuse.
+  auto fourth = state_session->Run(context,
+                                   AttentionFeeds(4)); // An outstanding output also blocks reuse.
   EXPECT_NE(fourth.at("present_key").tensor.bytes(), second_pointer);
   EqualAttentionTensor(snapshot.at("past_key").tensor, frozen);
   EXPECT_EQ(third.at("present_key").tensor.shape[2], 3);
@@ -242,10 +243,10 @@ TEST(PersistentValueState, AttentionCacheSnapshotsAndOutputsBlockWritesAndSurviv
   state.Reset(EmptyAttentionCache());
   EXPECT_EQ(StorageTotal(context.events(), &RuntimeEvent::storage_allocations),
             StorageTotal(before_reset, &RuntimeEvent::storage_allocations));
-  state_session.Run(context, AttentionFeeds(7));
+  state_session->Run(context, AttentionFeeds(7));
   EXPECT_EQ(StorageTotal(context.events(), &RuntimeEvent::storage_allocations),
             StorageTotal(before_reset, &RuntimeEvent::storage_allocations) + 2);
-  state.Close();
+  state_session.reset();
   EqualAttentionTensor(snapshot.at("past_key").tensor, frozen);
   EXPECT_FLOAT_EQ(third.at("present_key").tensor.AsFloat()[4], 3);
 }
@@ -443,7 +444,6 @@ TEST(PersistentValueState, AttentionCacheIOLeasesSurviveStateAndAllocatorOwner) 
     retained = state.Values();
     state.Reset(EmptyAttentionCache());
     EXPECT_EQ(arena->leased_count(), 2u);
-    state.Close();
     EXPECT_EQ(retained.at("past_key").tensor.bytes(), pointer);
   }
   EXPECT_FALSE(weak.expired());
@@ -648,18 +648,18 @@ TEST(PersistentValueState, AttentionCacheReimportedViewsDoNotCertifyAppendCapaci
     ModelProto model = AttentionModel();
     RuntimeContext context(KernelContext(DefaultOpset(23)),
                            RuntimeContextOptions{.events_enabled = true});
-    RuntimeSession original_session(model, EmptyAttentionCache());
-    PersistentValueState &original = original_session.persistent_state();
-    original_session.Run(context, AttentionFeeds(1));
+    auto original_session = std::make_unique<RuntimeSession>(model, EmptyAttentionCache());
+    PersistentValueState &original = original_session->persistent_state();
+    original_session->Run(context, AttentionFeeds(1));
     auto values = original.Values();
     const uint8_t *old_key = values.at("past_key").tensor.bytes();
     if (reset) {
       original.Reset(std::move(values));
-      const auto output = original_session.Run(context, AttentionFeeds(2));
+      const auto output = original_session->Run(context, AttentionFeeds(2));
       EXPECT_NE(output.at("present_key").tensor.bytes(), old_key);
       EXPECT_EQ(StorageTotal(context.events(), &RuntimeEvent::storage_reuse_count), 0u);
     } else {
-      original.Close();
+      original_session.reset();
       RuntimeSession imported_session(model, std::move(values));
       const auto output = imported_session.Run(context, AttentionFeeds(2));
       EXPECT_NE(output.at("present_key").tensor.bytes(), old_key);

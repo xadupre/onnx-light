@@ -226,7 +226,7 @@ caller before DLPack export; ``detach()`` shares storage.
 
 Selected outputs and ``state.values`` contain tensors with retained storage owners.
 They remain valid after callers drop their input references, after another
-run, or after reset/close. Unsupported ownerless output storage is rejected
+run, or after reset/session destruction. Unsupported ownerless output storage is rejected
 rather than silently copied for a selected output; an allocator cannot recycle a live retained
 allocation.
 The binding keeps the model alive. ``RuntimeSession`` owns both its passive
@@ -300,8 +300,8 @@ Lifecycle and validation
   retained inputs. Duplicate binding input names or output names are rejected.
 * State advances only after successful execution and validation of the next
   values. A failed or cancelled call must not publish a partial update.
-* Reset explicitly supplies new initial contents. Closing releases retained
-  values. Calls, resets and closes on the same state must not overlap.
+* Reset explicitly supplies new initial contents. Session destruction releases
+  retained values. Calls and resets on the same session must not overlap.
 * Independent states have separate state containers. They can explicitly share
   read-only input storage; neither may mutate a shared buffer.
 
@@ -572,7 +572,7 @@ half-precision conversion.
 Sum fields from the event list when totals are needed. Call
 ``context.ClearEvents()`` before a run to obtain per-token reports; otherwise
 events accumulate in that context, including runs of different feedback states.
-Resetting or closing a state does not clear the caller's log.
+Resetting or destroying a session does not clear the caller's log.
 
 ``event.storage_allocated_bytes`` counts requested storage capacity,
 not physical heap allocations: an I/O arena may satisfy a request from its free
@@ -857,8 +857,8 @@ Persistent values also retain the shared parameter catalogue introduced by
 declaration is checked against an encoded value's logical tensor type; a
 structured declaration is checked against its storage type. Retaining or
 validating a compact shared value checks its reference, types and byte extent
-without materializing it. Borrowed views survive reset and close with both
-their payload and their shared parameters.
+without materializing it. Borrowed views survive reset and session destruction
+with both their payload and their shared parameters.
 Native C++ current feeds undergo this reference validation before execution,
 including when an encoded value is only forwarded to a nonpersistent output.
 They must carry their shared parameter catalogue in ``RuntimeValue``.
@@ -866,8 +866,8 @@ They must carry their shared parameter catalogue in ``RuntimeValue``.
 Python construction, ``reset`` and ``run`` resolve ``EncodedValueProto.parameter_ref``
 against the state's model, including encoded values nested in dictionaries.
 Conversions reject missing references and reuse one shared parameter catalogue
-per input dictionary. After ``close``, state operations and the native model
-and type-catalogue accessors reject access; already exported values remain valid.
+per input dictionary. The session owns the state's lifetime; already exported
+values remain valid after session destruction.
 
 This general runtime support does not broaden the native ``PagedAttention``
 decoder: its supported page formats remain the dense and affine formats below.
@@ -955,6 +955,6 @@ accuracy fixtures or the table above.
 Validation rejects malformed ranges, invalid layouts, unsupported consumers
 and capacity violations. A failing or cancelled invocation cannot publish part
 of a block collection. Cancellation remains a publication gate, not preemption.
-Reset/close drop the state's owners; exported views and other requests retain
-their blocks until their last owner is released. The bound model is never
-serialized or cloned by this path.
+Reset and session destruction drop retained values; exported views and other
+requests retain their blocks until their last owner is released. The bound model
+is never serialized or cloned by this path.

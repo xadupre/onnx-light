@@ -348,7 +348,6 @@ RuntimeValueMap RuntimeSession::Run(RuntimeContext &context, const RuntimeValueM
                                     const TaskCompletion *completion) {
   PersistentValueState &state = persistent_state();
   const Operation operation(state.busy_);
-  EXT_ENFORCE_INVALID(!state.closed_, "PersistentValueState: state is closed.");
   EXT_ENFORCE_INVALID(
       completion == nullptr || completion->status() == TaskStatus::kPending,
       "PersistentValueState: invocation was cancelled or completion is not pending.");
@@ -505,14 +504,12 @@ RuntimeValueMap RuntimeSession::Run(RuntimeContext &context, const RuntimeValueM
 
 void PersistentValueState::Reset(RuntimeValueMap initial) {
   const Operation operation(busy_);
-  EXT_ENFORCE_INVALID(!closed_, "PersistentValueState: state is closed.");
   auto next = ValidateInitial(std::move(initial));
   values_.swap(next);
 }
 
 void PersistentValueState::RetainOwner(std::shared_ptr<void> owner) {
   const Operation operation(busy_);
-  EXT_ENFORCE_INVALID(!closed_, "PersistentValueState: state is closed.");
   EXT_ENFORCE_INVALID(owner.use_count() != 0,
                       "PersistentValueState: owner token must retain a lifetime.");
   for (const auto &retained : retained_owners_)
@@ -521,17 +518,8 @@ void PersistentValueState::RetainOwner(std::shared_ptr<void> owner) {
   retained_owners_.push_back(std::move(owner));
 }
 
-void PersistentValueState::Close() {
-  const Operation operation(busy_);
-  values_.clear();
-  closed_ = true;
-  retained_owners_.clear();
-  model_owner_.reset();
-}
-
 RuntimeValueMap PersistentValueState::Values() const {
   const Operation operation(busy_);
-  EXT_ENFORCE_INVALID(!closed_, "PersistentValueState: state is closed.");
   RuntimeValueMap snapshot;
   for (size_t i = 0; i < bindings_.size(); ++i)
     snapshot.emplace(bindings_[i].input, values_[i].BorrowView());

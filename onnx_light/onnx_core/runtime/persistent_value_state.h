@@ -57,20 +57,12 @@ public:
   void RetainOwner(std::shared_ptr<void> owner);
   /** Replaces retained values with explicitly transferred initial contents. */
   void Reset(RuntimeValueMap initial);
-  /** Releases retained values and permanently closes this state. */
-  void Close();
   /** Returns read-only aliases keyed by exact retained graph input names. */
   RuntimeValueMap Values() const;
-  /** Returns the immutable model; rejects access after Close(). */
-  const ModelProto &model() const {
-    EXT_ENFORCE_INVALID(!closed_, "PersistentValueState: state is closed.");
-    return model_;
-  }
-  /** Returns the validated catalogue; rejects access after Close(). */
-  const StructTypeCatalogue &struct_type_catalogue() const {
-    EXT_ENFORCE_INVALID(!closed_, "PersistentValueState: state is closed.");
-    return catalogue_;
-  }
+  /** Returns the immutable model. */
+  const ModelProto &model() const { return model_; }
+  /** Returns the validated catalogue. */
+  const StructTypeCatalogue &struct_type_catalogue() const { return catalogue_; }
 
 private:
   friend class RuntimeSession;
@@ -89,7 +81,6 @@ private:
   mutable std::unordered_map<const TypeProto *, RuntimeSequence::Memo<ShapeSymbols>>
       sequence_validation_;
   std::vector<Binding> bindings_;
-  bool closed_ = false;
   std::vector<PersistentValue> values_;
   size_t persistent_tensor_initial_capacity_ = 0;
   bool allocators_captured_ = false;

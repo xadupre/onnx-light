@@ -133,7 +133,6 @@ def main():
             }
         )
         del actual, expected, outputs
-    state.close()
     print(
         json.dumps(
             {

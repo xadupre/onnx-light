@@ -138,10 +138,10 @@ TEST(PagedAttentionFeedback, SerializedCacheInitializerResumesAttention) {
   EXPECT_NO_THROW(VerifyModel(parsed));
   RuntimeContext restored_context;
   RegisterPaged(restored_context);
-  RuntimeSession restored_session(parsed, RuntimeValueMap{});
-  PersistentValueState &restored = restored_session.persistent_state();
+  auto restored_session = std::make_unique<RuntimeSession>(parsed, RuntimeValueMap{});
+  PersistentValueState &restored = restored_session->persistent_state();
   auto expected = original_session.Run(original_context, Feeds(2));
-  auto actual = restored_session.Run(restored_context, Feeds(2));
+  auto actual = restored_session->Run(restored_context, Feeds(2));
   ASSERT_EQ(actual.at("Y").tensor.size_bytes(), expected.at("Y").tensor.size_bytes());
   for (size_t i = 0; i < actual.at("Y").tensor.size_bytes() / sizeof(float); ++i)
     EXPECT_FLOAT_EQ(actual.at("Y").tensor.AsFloat()[i], expected.at("Y").tensor.AsFloat()[i]);
@@ -149,7 +149,7 @@ TEST(PagedAttentionFeedback, SerializedCacheInitializerResumesAttention) {
   restored.Reset({});
   EXPECT_EQ(restored.Values().at("past").ToPagedCache().blocks_size(), 1);
   auto snapshot = actual.at("present").ToPagedCache();
-  restored.Close();
+  restored_session.reset();
   auto value = RuntimeValue::FromPagedCache(std::move(snapshot));
   EXPECT_EQ(Blocks(value).size(), 2u);
 }
@@ -326,7 +326,7 @@ TEST(PagedAttentionFeedback, CapacityAndIncompatibleConsumerLeaveStateUnchanged)
   EXPECT_EQ(Key(dense_consumer.Values().at("past")), Key(first.at("present")));
 }
 
-TEST(PagedAttentionFeedback, ResetCloseAndRequestIsolationRetainLastLiveOwners) {
+TEST(PagedAttentionFeedback, ResetDestructionAndRequestIsolationRetainLastLiveOwners) {
   ModelProto model = PagedModel();
   auto arena = IOArena::Create(32);
   SimpleRawBufferAllocator execution(8);
@@ -334,38 +334,38 @@ TEST(PagedAttentionFeedback, ResetCloseAndRequestIsolationRetainLastLiveOwners) 
       KernelContext(DefaultOpset(23)),
       RuntimeContextOptions{.allocator = &execution, .io_allocator = arena.get()});
   RegisterPaged(context);
-  RuntimeSession first_session(model, {{"past", PagedAttention::EmptyCache()}});
-  PersistentValueState &first = first_session.persistent_state();
-  auto output = first_session.Run(context, Feeds(1));
+  auto first_session = std::make_unique<RuntimeSession>(
+      model, RuntimeValueMap{{"past", PagedAttention::EmptyCache()}});
+  PersistentValueState &first = first_session->persistent_state();
+  auto output = first_session->Run(context, Feeds(1));
   auto shared = first.Values();
   std::weak_ptr<const EncodedValueProto> lifetime =
       Blocks(shared.at("past"))[0].fields.at("key").encoded;
   const auto *original = Key(shared.at("past"));
-  RuntimeSession second_session(model, shared);
-  PersistentValueState &second = second_session.persistent_state();
+  auto second_session = std::make_unique<RuntimeSession>(model, shared);
+  PersistentValueState &second = second_session->persistent_state();
   output.clear();
   shared.clear();
-  auto branch = first_session.Run(context, Feeds(2));
+  auto branch = first_session->Run(context, Feeds(2));
   EXPECT_EQ(Blocks(second.Values().at("past")).size(), 1u);
   EXPECT_EQ(Key(second.Values().at("past")), original);
-  auto other = second_session.Run(context, Feeds(3));
+  auto other = second_session->Run(context, Feeds(3));
   EXPECT_EQ(Key(branch.at("present")), Key(other.at("present")));
   EXPECT_NE(Key(branch.at("present"), 1), Key(other.at("present"), 1));
   first.Reset({{"past", PagedAttention::EmptyCache()}});
-  second.Close();
+  second_session.reset();
   EXPECT_FALSE(lifetime.expired());
   const auto bytes = Payload(*original);
   for (int i = 0; i < 8; ++i) {
     first.Reset({{"past", PagedAttention::EmptyCache()}});
-    first_session.Run(context, Feeds(static_cast<float>(i)));
+    first_session->Run(context, Feeds(static_cast<float>(i)));
   }
   EXPECT_EQ(Payload(*original), bytes);
-  first.Close();
+  first_session.reset();
   branch.clear();
   EXPECT_FALSE(lifetime.expired());
   other.clear();
   EXPECT_TRUE(lifetime.expired());
-  EXPECT_THROW(first_session.Run(context, Feeds(1)), std::invalid_argument);
 }
 
 TEST(PagedAttentionFeedback, GrowableOutputArenaPublishesCompleteCache) {
@@ -419,15 +419,15 @@ TEST(PagedAttentionFeedback, IntermediateCachesKeepOwnersAcrossArenaRouting) {
         "onnx_light", "Forward", [](const NodeProto &node, RuntimeContext &rt) {
           rt.PutValue(node.output(0), rt.values().at(node.input(0)).BorrowView());
         });
-    RuntimeSession state_session(model, {{"past", PagedAttention::EmptyCache()}});
-    PersistentValueState &state = state_session.persistent_state();
-    auto first = state_session.Run(context, Feeds(1));
-    auto second = state_session.Run(context, Feeds(2));
+    auto state_session = std::make_unique<RuntimeSession>(
+        model, RuntimeValueMap{{"past", PagedAttention::EmptyCache()}});
+    auto first = state_session->Run(context, Feeds(1));
+    auto second = state_session->Run(context, Feeds(2));
     EXPECT_EQ(Blocks(first.at("cache_out")).size(), 1u);
     EXPECT_EQ(Blocks(second.at("cache_out")).size(), 2u);
     EXPECT_EQ(&Blocks(first.at("cache_out"))[0], &Blocks(second.at("cache_out"))[0]);
     auto saved = first.at("cache_out").ToPagedCache().SerializeAsString();
-    state.Close();
+    state_session.reset();
     EXPECT_EQ(first.at("cache_out").ToPagedCache().SerializeAsString(), saved);
   }
 }

@@ -151,6 +151,18 @@ iteration within the same generation call consumes one new token. Eligible kerne
 reuse persistent buffers; other kernels retain their ordinary allocation behavior.
 Each generation call owns fresh state and leaves the model and caller feeds unchanged.
 
+.. warning::
+
+    A ``RuntimeContext`` is **not thread-safe for concurrent execution**.
+    Calls to ``Generate``, ``RuntimeSession::Run`` or ``RunNode`` using the same
+    context must be serialized by the caller, even with different models or
+    sessions. A ``ReferenceEvaluator`` instance likewise requires serialized
+    ``run`` and ``generate`` calls, including overlapping calls to different
+    methods. Use independent evaluators, sessions and contexts for concurrent
+    requests. Fresh generation state, a shared CPU executor, parallel kernels
+    and release of the Python GIL do not make a context safe to share between
+    concurrent invocations. There is no context-level check for overlapping use.
+
 The model accepts INT64 ``input_ids`` and returns floating-point ``logits``
 of shape ``[batch, sequence, vocabulary]`` or ``[batch, vocabulary]``.
 FLOAT, DOUBLE, FLOAT16 and BFLOAT16 logits are supported. Declared INT64

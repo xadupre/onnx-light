@@ -464,6 +464,12 @@ struct RuntimeContextOptions {
  * Convenience accessors (:cpp:func:`Set`, :cpp:func:`Get`,
  * :cpp:func:`Has`, :cpp:func:`Remove`) wrap the underlying map so
  * callers do not have to reach for ``rt.tensors()[name]`` directly.
+ *
+ * A context is not thread-safe for concurrent execution. The caller must
+ * serialize RunNode, RuntimeSession::Run and Generate calls using the same
+ * context, even when they use different sessions or models. Concurrent requests
+ * require independent contexts. Parallel kernel execution does not permit
+ * concurrent invocations on one context; no context-level overlap check is provided.
  */
 class RuntimeContext {
 private:

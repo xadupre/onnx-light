@@ -315,6 +315,13 @@ class ReferenceEvaluator:
     convention of :class:`onnx.reference.ReferenceEvaluator` (and
     :class:`onnxruntime.InferenceSession`).
 
+    An evaluator instance is not thread-safe for concurrent execution. The caller
+    must serialize :meth:`run` and :meth:`generate` calls on the same instance,
+    including overlapping calls to different methods. Independent evaluators with
+    independent runtime contexts are required for concurrent requests. Releasing
+    the Python GIL and parallel kernel execution do not make an evaluator or its
+    context safe to use concurrently.
+
     Parameters
     ----------
     verbose:
@@ -839,6 +846,10 @@ class ReferenceEvaluator:
         stops at ``max_new_tokens`` or when every row emits ``eos_token_id``.
         Finished rows receive ``pad_token_id`` (EOS by default). Each call starts
         fresh state and does not modify the supplied feeds.
+
+        This method is not thread-safe on a shared evaluator. The caller must
+        serialize it with other ``generate`` and ``run`` calls on this instance;
+        fresh generation state does not make the shared context thread-safe.
 
         With ``embedding``, token IDs are sent to its ``input_ids`` input on
         every step, including the prompt. This evaluator's model handles both

@@ -48,6 +48,10 @@ struct GenerationPipeline {
  * behavior. Initial caches must represent an empty prefix. State is local to
  * this Generate call; neither the model nor the feeds are modified. The supplied
  * execution context is reused and its invocation values may change.
+ * This function is not thread-safe when calls share a RuntimeContext. The caller
+ * must serialize generation and other execution using that context; concurrent
+ * requests require independent contexts. Parallel kernels do not change this
+ * requirement, and overlapping context use is not checked.
  *
  * Finished batch rows receive pad_token_id until every row has emitted EOS.
  * All context/model/allocator owners must outlive this synchronous call.
@@ -66,6 +70,8 @@ ONNX_LIGHT_CORE_API Tensor Generate(const ModelProto &model, RuntimeContext &con
  * names, without additional mappings. Both models use the supplied context,
  * sharing its custom kernels, allocators and installed CPU executor.
  * The same generation options and lifetime requirements apply as for a single model.
+ * Calls sharing a context must be serialized, including calls to the single-model
+ * overload or other runtime execution on that context.
  */
 ONNX_LIGHT_CORE_API Tensor Generate(const GenerationPipeline &pipeline, RuntimeContext &context,
                                     const RuntimeValueMap &feeds,

@@ -144,7 +144,15 @@ TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
     ExpectSameFormalParameters(schema.inputs(), onnx_lib_schema->inputs());
     ExpectSameFormalParameters(schema.outputs(), onnx_lib_schema->outputs());
     auto expected_constraints = onnx_lib_schema->typeConstraintParams();
-    if (schema.name() == "Cast") {
+    if (schema.name() == "Cast" && schema.since_version() == 1) {
+      for (auto &constraint : expected_constraints) {
+        const bool input = constraint.type_param_str == "T1";
+        constraint.description =
+            input ? "Constrain input types. Casting from strings or complex types is not supported."
+                  : "Constrain output types. Casting to strings or complex types is not "
+                    "supported.";
+      }
+    } else if (schema.name() == "Cast") {
       // Only the light Cast schema extends ONNX with the two complex types.
       for (auto &constraint : expected_constraints) {
         constraint.allowed_type_strs.push_back("tensor(complex64)");

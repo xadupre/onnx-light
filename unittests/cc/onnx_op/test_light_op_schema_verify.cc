@@ -95,7 +95,7 @@ TEST(LightOpSchemaVerify, CastAcceptsComplexFromOpset6) {
       input.mutable_type()->mutable_tensor_type()->set_elem_type(dtype);
       std::vector<std::optional<SchemaInputValue>> inputs{SchemaInputValue(input)};
       if (schema.since_version() == 1) {
-        EXPECT_THROW(schema.Verify(node, &inputs), std::invalid_argument);
+        EXPECT_THROW(schema.Verify(node, &inputs), SchemaError);
       } else {
         EXPECT_NO_THROW(schema.Verify(node, &inputs));
       }

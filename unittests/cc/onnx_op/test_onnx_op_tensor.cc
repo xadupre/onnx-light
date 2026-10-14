@@ -178,8 +178,7 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
     types.push_back(core::schema::TensorType::kComplex128);
     return types;
   };
-  EXPECT_EQ(cast_v1->type_constraints()[0].allowed_type_strs,
-            with_complex(core::schema::CastTypesVer1And6()));
+  EXPECT_EQ(cast_v1->type_constraints()[0].allowed_type_strs, core::schema::CastTypesVer1And6());
   EXPECT_EQ(cast_v6->type_constraints()[0].allowed_type_strs,
             with_complex(core::schema::CastTypesVer1And6()));
   EXPECT_EQ(cast_v9->type_constraints()[0].allowed_type_strs,

@@ -173,16 +173,31 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   EXPECT_EQ(cast_v25->inputs().size(), 1u);
   EXPECT_EQ(cast_v25->outputs().size(), 1u);
   EXPECT_EQ(cast_v25->type_constraints().size(), 2u);
-  EXPECT_EQ(cast_v1->type_constraints()[0].allowed_type_strs, core::schema::CastTypesVer1And6());
-  EXPECT_EQ(cast_v6->type_constraints()[0].allowed_type_strs, core::schema::CastTypesVer1And6());
-  EXPECT_EQ(cast_v9->type_constraints()[0].allowed_type_strs, core::schema::CastTypesVer9());
-  EXPECT_EQ(cast_v13->type_constraints()[0].allowed_type_strs, core::schema::CastTypesVer13());
-  EXPECT_EQ(cast_v19->type_constraints()[0].allowed_type_strs, core::schema::CastTypesVer19());
-  EXPECT_EQ(cast_v21->type_constraints()[0].allowed_type_strs, core::schema::CastTypesVer21());
-  EXPECT_EQ(cast_v23->type_constraints()[0].allowed_type_strs, core::schema::CastTypesVer23());
-  EXPECT_EQ(cast_v24->type_constraints()[0].allowed_type_strs, core::schema::CastTypesVer24());
-  EXPECT_EQ(cast_v25->type_constraints()[0].allowed_type_strs, core::schema::CastTypesVer25());
-  EXPECT_EQ(cast_v28->type_constraints()[0].allowed_type_strs, core::schema::CastTypesVer28());
+  const auto with_complex = [](std::vector<core::schema::TensorType> types) {
+    types.push_back(core::schema::TensorType::kComplex64);
+    types.push_back(core::schema::TensorType::kComplex128);
+    return types;
+  };
+  EXPECT_EQ(cast_v1->type_constraints()[0].allowed_type_strs,
+            with_complex(core::schema::CastTypesVer1And6()));
+  EXPECT_EQ(cast_v6->type_constraints()[0].allowed_type_strs,
+            with_complex(core::schema::CastTypesVer1And6()));
+  EXPECT_EQ(cast_v9->type_constraints()[0].allowed_type_strs,
+            with_complex(core::schema::CastTypesVer9()));
+  EXPECT_EQ(cast_v13->type_constraints()[0].allowed_type_strs,
+            with_complex(core::schema::CastTypesVer13()));
+  EXPECT_EQ(cast_v19->type_constraints()[0].allowed_type_strs,
+            with_complex(core::schema::CastTypesVer19()));
+  EXPECT_EQ(cast_v21->type_constraints()[0].allowed_type_strs,
+            with_complex(core::schema::CastTypesVer21()));
+  EXPECT_EQ(cast_v23->type_constraints()[0].allowed_type_strs,
+            with_complex(core::schema::CastTypesVer23()));
+  EXPECT_EQ(cast_v24->type_constraints()[0].allowed_type_strs,
+            with_complex(core::schema::CastTypesVer24()));
+  EXPECT_EQ(cast_v25->type_constraints()[0].allowed_type_strs,
+            with_complex(core::schema::CastTypesVer25()));
+  EXPECT_EQ(cast_v28->type_constraints()[0].allowed_type_strs,
+            with_complex(core::schema::CastTypesVer28()));
   EXPECT_NE(cast_v1->type_constraints()[0].allowed_type_strs,
             cast_v9->type_constraints()[0].allowed_type_strs);
   EXPECT_NE(cast_v19->type_constraints()[0].allowed_type_strs,

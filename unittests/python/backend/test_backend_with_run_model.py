@@ -78,6 +78,8 @@ def run_model_backend(model: onnxl.ModelProto, *inputs: np.ndarray) -> list[np.n
         dtype_map = {
             int(onnxl.TensorProto.FLOAT): np.float32,
             int(onnxl.TensorProto.DOUBLE): np.float64,
+            int(onnxl.TensorProto.COMPLEX64): np.complex64,
+            int(onnxl.TensorProto.COMPLEX128): np.complex128,
             int(onnxl.TensorProto.INT32): np.int32,
             int(onnxl.TensorProto.INT64): np.int64,
             int(onnxl.TensorProto.UINT8): np.uint8,

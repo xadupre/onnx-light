@@ -328,12 +328,14 @@ Tensor Generate(const GenerationPipeline &pipeline, RuntimeContext &context,
     if (has_mask)
       current.insert_or_assign(
           options.attention_mask_name,
-          RuntimeValue(Tensor::From<int64_t>(options.attention_mask_name, {batch, length}, mask)));
+          RuntimeValue(Tensor::From<int64_t>(options.attention_mask_name, {batch, length}, mask)
+                           .RetainStorage()));
     if (has_positions)
       current.insert_or_assign(
           options.position_ids_name,
           RuntimeValue(Tensor::From<int64_t>(options.position_ids_name, shape,
-                                             decode ? next_positions : positions)));
+                                             decode ? next_positions : positions)
+                           .RetainStorage()));
     auto ids = Tensor::From<int64_t>(options.input_ids_name, shape, decode ? next : tokens);
     current.insert_or_assign(options.input_ids_name, RuntimeValue(std::move(ids).RetainStorage()));
     if (embedded) {

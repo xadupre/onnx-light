@@ -270,6 +270,45 @@ TEST(PagedCacheProto, RecognizesCacheFromStructureWithoutImportMetadata) {
   EXPECT_FALSE(empty.HasPagedCacheStructure());
 }
 
+TEST(PagedCacheProto, ExportRetainsOwnedEncodedPagesAndCopiesOwnerlessInitializerViews) {
+  for (bool owned : {false, true}) {
+    SCOPED_TRACE(owned);
+    PagedCacheProto exported;
+    std::weak_ptr<EncodedValueProto> weak;
+    std::string expected;
+    {
+      auto proto = std::make_shared<EncodedValueProto>(EncodedCache().blocks(0).encoded_key());
+      weak = proto;
+      expected = proto->SerializeAsString();
+      RuntimeValue page;
+      page.fields.emplace("start", RuntimeValue(Tensor::FromInt64("", {}, {0})));
+      page.fields.emplace("length", RuntimeValue(Tensor::FromInt64("", {}, {1})));
+      for (const char *name : {"key", "value"})
+        page.fields.emplace(name, owned ? RuntimeValue::FromEncodedView(*proto, proto)
+                                        : RuntimeValue::FromEncodedView(*proto));
+      RuntimeValue cache;
+      cache.fields.emplace("blocks", RuntimeValue(std::vector<RuntimeValue>{std::move(page)}));
+      exported = cache.ToPagedCache();
+      for (const auto *value :
+           {&exported.blocks(0).encoded_key(), &exported.blocks(0).encoded_value()}) {
+        EXPECT_GT(value->raw_data().owner().use_count(), 0);
+        EXPECT_GT(value->affine().scale().raw_data().owner().use_count(), 0);
+        EXPECT_GT(value->affine().zero_point().raw_data().owner().use_count(), 0);
+        if (owned)
+          EXPECT_EQ(value->raw_data().data(), proto->raw_data().data());
+        else
+          EXPECT_NE(value->raw_data().data(), proto->raw_data().data());
+      }
+    }
+    EXPECT_EQ(weak.expired(), !owned);
+    EXPECT_EQ(exported.blocks(0).encoded_key().SerializeAsString(), expected);
+    EXPECT_EQ(exported.blocks(0).encoded_value().SerializeAsString(), expected);
+    EXPECT_NO_THROW(RuntimeValue::FromPagedCache(exported));
+    exported = PagedCacheProto{};
+    EXPECT_TRUE(weak.expired());
+  }
+}
+
 TEST(PagedCacheProto, SessionSeedsAndReseedsWithoutOverridingCallerValues) {
   auto model = CacheModel();
   RuntimeSession session(model);

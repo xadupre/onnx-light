@@ -366,8 +366,10 @@ PagedCacheProto RuntimeValue::ToPagedCache(const std::string &name,
                               "ToPagedCache: missing shared parameter catalogue.");
           source.quantization_parameters->Validate(source.Encoded(), catalogue);
         }
+        const auto retained =
+            source.encoded.use_count() != 0 ? source.BorrowView() : source.DeepCopy();
         *(is_key ? block->mutable_encoded_key() : block->mutable_encoded_value()) =
-            BorrowEncodedValue(source);
+            BorrowEncodedValue(retained);
       } else {
         EXT_ENFORCE_INVALID(
             source.kind == Kind::kTensor && (source.tensor.data_type == DataType::FLOAT ||

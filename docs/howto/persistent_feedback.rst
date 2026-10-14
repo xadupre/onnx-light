@@ -820,6 +820,9 @@ consistent across blocks.
 ``RuntimeValue::FromPagedCache`` restores the recursive runtime value with
 retained storage owners; ``ToPagedCache`` exports it without decoding pages.
 Already retained dense buffers and managed encoded payloads remain shared.
+Ownerless dense or encoded initializer views are copied on export so the cache's
+payloads remain valid after their source model is destroyed. Encoded layouts and
+affine parameter payloads are preserved without decoding the pages.
 Binary protobuf serialization writes their contents; parsing reconstructs
 owned data. Referenced types and shared quantization parameters still belong to
 the containing model, not to the standalone cache. Pass its catalogues to the

@@ -173,7 +173,10 @@ struct RuntimeValue {
   /** Recognizes the cache's named structure; payloads and ranges require separate validation. */
   bool HasPagedCacheStructure() const;
 
-  /** Exports a cache without decoding pages; referenced types remain model-scoped. */
+  /**
+   * Exports a cache without decoding pages, sharing retained storage and copying ownerless
+   * payloads. Referenced types remain model-scoped.
+   */
   PagedCacheProto ToPagedCache(const std::string &name = "",
                                const StructTypeCatalogue &catalogue = {}) const;
 

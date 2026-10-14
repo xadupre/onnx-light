@@ -380,6 +380,41 @@ TEST(Generation, PipelineRequiresItsPrefillModel) {
   EXPECT_THROW(Generate(GenerationPipeline{}, context, {}), std::invalid_argument);
 }
 
+TEST(Generation, GeneratedMasksAndPositionsOutliveGenerationAndContextValues) {
+  const auto model = PipelineModel("Step",
+                                   {{"input_ids", TensorProto::INT64},
+                                    {"attention_mask", TensorProto::INT64},
+                                    {"position_ids", TensorProto::INT64}},
+                                   "logits");
+  RuntimeSession source(model);
+  for (bool use_pipeline : {false, true}) {
+    SCOPED_TRACE(use_pipeline);
+    RuntimeContext context(RuntimeContextOptions{.cpu_executor = source.cpu_executor().get()});
+    context.RegisterCustomKernel(
+        "test.pipeline", "Step", [](const NodeProto &node, RuntimeContext &rt) {
+          rt.Put(node.output(0), Tensor::FromFloat("", {1, 1, 3}, {0, 4, 0}));
+        });
+    RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 2}, {0, 1}))},
+                          {"attention_mask", RuntimeValue(Tensor::FromInt64("", {1, 2}, {0, 1}))},
+                          {"position_ids", RuntimeValue(Tensor::FromInt64("", {1, 2}, {0, 7}))}};
+    GenerationOptions options;
+    options.max_new_tokens = 2;
+    const auto tokens =
+        use_pipeline ? Generate(GenerationPipeline{.prefill = &model}, context, feeds, options)
+                     : Generate(model, context, feeds, options);
+    EXPECT_EQ(Tokens(tokens), (std::vector<int64_t>{0, 1, 1, 1}));
+    Tensor mask = context.Get("attention_mask").BorrowView();
+    Tensor positions = context.Get("position_ids").BorrowView();
+    EXPECT_GT(mask.borrowed_owner().use_count(), 0);
+    EXPECT_GT(positions.borrowed_owner().use_count(), 0);
+    EXPECT_EQ(mask.shape, (Shape{1, 3}));
+    EXPECT_EQ(positions.shape, (Shape{1, 3}));
+    context.Clear();
+    EXPECT_EQ(Tokens(mask), (std::vector<int64_t>{0, 1, 1}));
+    EXPECT_EQ(Tokens(positions), (std::vector<int64_t>{0, 7, 8}));
+  }
+}
+
 TEST(Generation, TemperatureMatchesCachedAndFullPrefixDecoding) {
   onnx_kernels::RegisterKernelFunctions();
   auto cases = core::backend_test::CollectTestCasesByName("^test_cc_generation_attention_");

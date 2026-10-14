@@ -50,6 +50,9 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_stft_complex_batched$",
     r"^test_cc_stft_default_frame_length$",
     r"^test_cc_image_decoder_",
+    # ORT does not register complex Cast inputs or outputs.
+    r"^test_cc_cast_(?:COMPLEX64|COMPLEX128)_to_",
+    r"^test_cc_cast_.*_to_(?:COMPLEX64|COMPLEX128)$",
     # Preview ops/functions are not registered in ORT.
     r"^test_cc_flexattention_",
     # Light-only ai.rt ops are not registered in ORT.

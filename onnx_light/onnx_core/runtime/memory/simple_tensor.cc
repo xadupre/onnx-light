@@ -184,6 +184,10 @@ size_t ElementSize(int32_t dtype) {
     return 4;
   case DataType::UINT64:
     return 8;
+  case DataType::COMPLEX64:
+    return 2 * sizeof(float);
+  case DataType::COMPLEX128:
+    return 2 * sizeof(double);
   default:
     EXT_THROW_INVALID("Tensor::ElementSize: unsupported data_type.");
   }
@@ -461,7 +465,8 @@ Tensor TensorFromProto(const TensorProto &tp, RawBufferAllocator *allocator) {
   };
 
   switch (tp.data_type()) {
-  case TensorProto::DataType::FLOAT: {
+  case TensorProto::DataType::FLOAT:
+  case TensorProto::DataType::COMPLEX64: {
     const auto &fd = tp.float_data().values();
     uint8_t *dst = make(fd.size() * sizeof(float));
     if (!fd.empty()) {
@@ -469,7 +474,8 @@ Tensor TensorFromProto(const TensorProto &tp, RawBufferAllocator *allocator) {
     }
     break;
   }
-  case TensorProto::DataType::DOUBLE: {
+  case TensorProto::DataType::DOUBLE:
+  case TensorProto::DataType::COMPLEX128: {
     const auto &dd = tp.double_data().values();
     uint8_t *dst = make(dd.size() * sizeof(double));
     if (!dd.empty()) {

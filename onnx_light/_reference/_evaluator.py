@@ -825,10 +825,7 @@ class ReferenceEvaluator:
         seed: int | None = None,
         *,
         embedding: ReferenceEvaluator | None = None,
-        embedding_token_input: str = "input_ids",
-        embedding_inputs: dict[str, str] | None = None,
-        embedding_outputs: dict[str, str] | None = None,
-        prefill: list[tuple[ReferenceEvaluator, dict[str, str], dict[str, str]]] | None = None,
+        prefill: list[ReferenceEvaluator] | None = None,
     ) -> np.ndarray:
         """Generates token IDs with the native runtime.
 
@@ -844,13 +841,13 @@ class ReferenceEvaluator:
         Finished rows receive ``pad_token_id`` (EOS by default). Each call starts
         fresh state and does not modify the supplied feeds.
 
-        With ``embedding``, token IDs are sent to ``embedding_token_input`` on
-        every step. ``embedding_inputs`` maps its other input names to feed
-        names, and ``embedding_outputs`` maps output names to decoder input
-        names. ``prefill`` contains ``(evaluator, inputs, outputs)`` triples:
-        input names map to feed names and output names map to downstream input
-        names. These graphs run once before decoding; all components must use
-        compatible CPU execution policies to lease the same executor.
+        With ``embedding``, token IDs are sent to its ``input_ids`` input on
+        every step. ``prefill`` contains evaluators run once in order before
+        decoding. Graphs connect through their declared input and output names,
+        without additional mappings. All graphs use one call-local context
+        configured from this evaluator: its custom kernels, CPU executor and
+        execution settings apply to the whole pipeline. Auxiliary evaluators
+        supply only their models, not their contexts or CPU policies.
 
         Returns:
             numpy.ndarray: INT64 token IDs containing the prompt and generated tokens.
@@ -869,19 +866,12 @@ class ReferenceEvaluator:
             )
         else:
             components = [embedding] if embedding is not None else []
-            components.extend(stage[0] for stage in prefill or [])
+            components.extend(prefill or [])
             if any(
                 not isinstance(stage, ReferenceEvaluator) or stage._model is None
                 for stage in components
             ):
                 raise TypeError("Generation components must be ModelProto ReferenceEvaluators.")
-            if any(
-                stage.cpu_executor_instance_id != self.cpu_executor_instance_id
-                for stage in components
-            ):
-                raise ValueError(
-                    "Generation components must have compatible CPU execution policies."
-                )
             result = _runtime.generate_pipeline(
                 self._model,
                 self._ctx,
@@ -890,14 +880,7 @@ class ReferenceEvaluator:
                 options,
                 self._session_options,
                 embedding._model if embedding is not None else None,
-                embedding._ctx if embedding is not None else None,
-                embedding_token_input,
-                embedding_inputs or {},
-                embedding_outputs or {},
-                [
-                    (stage._model, stage._ctx, inputs, outputs)
-                    for stage, inputs, outputs in prefill or []
-                ],
+                [stage._model for stage in prefill or []],
             )
         return _cpp_tensor_to_numpy(result)
 

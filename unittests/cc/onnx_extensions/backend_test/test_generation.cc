@@ -76,10 +76,12 @@ TEST(Generation, BackendAttentionModels) {
       if (!persistent) {
         EXPECT_EQ(StorageTotal(events, &RuntimeEvent::storage_allocations), 0u);
       }
-      // Existing caller context values and the initial caches remain unchanged.
-      EXPECT_EQ(context.Get("input_ids").shape, (Shape{1, 2}));
+      EXPECT_EQ(feeds.at("input_ids").tensor.shape, (Shape{1, 2}));
       if (persistent) {
+        EXPECT_FALSE(context.Has("input_ids"));
         EXPECT_EQ(feeds.at("past_key").tensor.shape, (Shape{1, 1, 0, 2}));
+      } else {
+        EXPECT_EQ(context.Get("input_ids").shape, (Shape{1, 5}));
       }
       EXPECT_EQ(model.SerializeAsString(), original);
       EXPECT_EQ(Tokens(Generate(model, context, feeds, options, session_options)), Tokens(output));
@@ -87,6 +89,82 @@ TEST(Generation, BackendAttentionModels) {
       EXPECT_EQ(Tokens(Generate(model, context, feeds, options, session_options)),
                 (std::vector<int64_t>{0, 1, 1}));
     }
+  }
+}
+
+TEST(Generation, PipelineUsesOneContextAndDeclaredGraphNames) {
+  const auto make_model = [](const std::string &operation,
+                             const std::vector<std::pair<std::string, int32_t>> &inputs,
+                             const std::string &output) {
+    ModelProto model;
+    model.set_ir_version(10);
+    auto *opset = model.add_opset_import();
+    opset->set_domain("test.pipeline");
+    opset->set_version(1);
+    auto *graph = model.mutable_graph();
+    auto *node = graph->add_node();
+    node->set_domain("test.pipeline");
+    node->set_op_type(operation);
+    for (const auto &[name, type] : inputs) {
+      auto *input = graph->add_input();
+      input->set_name(name);
+      input->mutable_type()->mutable_tensor_type()->set_elem_type(type);
+      node->add_input(name);
+    }
+    auto *result = graph->add_output();
+    result->set_name(output);
+    result->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+    node->add_output(output);
+    return model;
+  };
+  const auto vision = make_model("Encode", {{"pixels", TensorProto::FLOAT}}, "vision");
+  const auto embedding = make_model("Embed", {{"input_ids", TensorProto::INT64}}, "inputs_embeds");
+  const auto decoder = make_model(
+      "Decode", {{"inputs_embeds", TensorProto::FLOAT}, {"vision", TensorProto::FLOAT}}, "logits");
+  RuntimeSession decoder_session(decoder);
+  auto executor = decoder_session.cpu_executor();
+  RuntimeContext context(RuntimeContextOptions{.cpu_executor = executor.get()});
+  RawBufferAllocator *allocator = nullptr;
+  std::vector<std::string> calls;
+  const auto check_context = [&](const NodeProto &node, RuntimeContext &rt) {
+    EXPECT_EQ(&rt, &context);
+    EXPECT_EQ(rt.cpu_executor(), executor.get());
+    if (allocator == nullptr)
+      allocator = rt.execution_allocator();
+    EXPECT_EQ(rt.execution_allocator(), allocator);
+    calls.push_back(node.op_type());
+  };
+  context.RegisterCustomKernel("test.pipeline", "Encode",
+                               [&](const NodeProto &node, RuntimeContext &rt) {
+                                 check_context(node, rt);
+                                 rt.Put(node.output(0), rt.Get("pixels").BorrowView());
+                               });
+  context.RegisterCustomKernel(
+      "test.pipeline", "Embed", [&](const NodeProto &node, RuntimeContext &rt) {
+        check_context(node, rt);
+        const Tensor &ids = rt.Get("input_ids");
+        std::vector<float> logits(static_cast<size_t>(ids.element_count()) * 3, 0);
+        for (int64_t i = 0; i < ids.element_count(); ++i)
+          logits[static_cast<size_t>(i) * 3 + (ids.AsInt64()[i] + 1) % 3] = 4;
+        rt.Put(node.output(0), Tensor::FromFloat("", {1, ids.shape[1], 3}, logits));
+      });
+  context.RegisterCustomKernel("test.pipeline", "Decode",
+                               [&](const NodeProto &node, RuntimeContext &rt) {
+                                 check_context(node, rt);
+                                 EXPECT_FLOAT_EQ(rt.Get("vision").AsFloat()[0], 0);
+                                 rt.Put(node.output(0), rt.Get("inputs_embeds").BorrowView());
+                               });
+  GenerationPipeline pipeline{.context = &context, .prefill = {&vision}, .embedding = &embedding};
+  RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))},
+                        {"pixels", RuntimeValue(Tensor::FromFloat("", {1, 1, 3}, {0, 0, 0}))}};
+  GenerationOptions options;
+  options.max_new_tokens = 3;
+  for (int repeat = 0; repeat < 2; ++repeat) {
+    calls.clear();
+    EXPECT_EQ(Tokens(Generate(decoder, context, feeds, options, {}, pipeline)),
+              (std::vector<int64_t>{0, 1, 2, 0}));
+    EXPECT_EQ(calls, (std::vector<std::string>{"Encode", "Embed", "Decode", "Embed", "Decode",
+                                               "Embed", "Decode"}));
   }
 }
 

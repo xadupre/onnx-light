@@ -165,6 +165,17 @@ also allows configuring the token, logits, mask and position input/output names.
 C++ callers use :cpp:func:`onnx_light::core::runtime::Generate` with the same
 options and an existing ``RuntimeContext``.
 
+For split models, ``decoder.generate(feeds, embedding=embedding, prefill=[vision])``
+runs the prefill graphs once, then the embedding graph at each decoding step.
+Graphs connect through their declared input and output names: for example,
+the embedding graph consumes ``input_ids`` and produces the decoder's
+``inputs_embeds`` input. No additional name mappings are supplied.
+All graphs execute in one call-local ``RuntimeContext`` configured from the
+decoder evaluator, sharing its custom kernels, allocators and CPU executor.
+Auxiliary evaluators supply their models only; their local registrations and
+CPU execution policies are not used. Register pipeline-wide custom kernels on
+the decoder evaluator.
+
 A basic feedback loop
 ---------------------
 

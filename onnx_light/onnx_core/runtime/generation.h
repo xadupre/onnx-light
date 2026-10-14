@@ -6,8 +6,6 @@
 
 #include "onnx_core/runtime/runtime_session.h"
 
-#include <unordered_map>
-
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 /** Configures autoregressive token generation. */
@@ -26,21 +24,12 @@ struct GenerationOptions {
   std::string position_ids_name = "position_ids";
 };
 
-/** Maps graph inputs to pipeline feed names and graph outputs to downstream names. */
-struct GenerationComponent {
-  const ModelProto *model = nullptr;
-  const RuntimeContext *context = nullptr;
-  std::unordered_map<std::string, std::string> inputs;
-  std::unordered_map<std::string, std::string> outputs;
-};
-
 /** Configures ordered prefill-only graphs and an embedding graph run at every decoding step. */
 struct GenerationPipeline {
-  std::vector<GenerationComponent> prefill;
-  GenerationComponent embedding;
-  std::string embedding_token_input;
-  /// Executor lease shared by every component for the duration of generation.
-  std::shared_ptr<CpuExecutor> cpu_executor;
+  /// Single context supplying kernels, allocators and the shared executor to every graph.
+  RuntimeContext *context = nullptr;
+  std::vector<const ModelProto *> prefill;
+  const ModelProto *embedding = nullptr;
 };
 
 /**
@@ -57,13 +46,14 @@ struct GenerationPipeline {
  * them across decoding iterations: the prompt is evaluated once, then one token
  * per iteration. Kernels without append support keep their ordinary allocation
  * behavior. Initial caches must represent an empty prefix. State is local to
- * this Generate call; neither the model, feeds nor the caller's context values
- * are modified.
+ * this Generate call; neither the model nor the feeds are modified. The supplied
+ * execution context is reused and its invocation values may change.
  *
  * Finished batch rows receive pad_token_id until every row has emitted EOS.
- * Pipeline stages execute in order during prefill; the embedding stage maps
- * token IDs to decoder inputs on each step. A pipeline uses a call-local
- * runtime context and one resolved CPU executor for all its sessions.
+ * Pipeline graphs connect through their declared input/output names, without
+ * additional mappings. Prefill graphs execute in order, and the embedding graph
+ * consumes input_ids on every step. All graphs use pipeline.context directly,
+ * sharing its custom kernels, allocators and installed CPU executor.
  * All context/model/allocator owners must outlive this synchronous call.
  */
 ONNX_LIGHT_CORE_API Tensor Generate(const ModelProto &model, RuntimeContext &context,

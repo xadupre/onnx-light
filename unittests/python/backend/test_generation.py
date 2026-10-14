@@ -31,8 +31,8 @@ class TestGeneration(unittest.TestCase):
     def test_split_embedding_pipeline(self):
         embedding_model = parser.parse_model(
             '<ir_version: 10, opset_import: ["" : 23]>'
-            "embedding (int64[B, S] tokens) => (float[B, S, 3] vectors)"
-            "{ raw = Gather(table, tokens) vectors = Abs(raw) }"
+            "embedding (int64[B, S] input_ids) => (float[B, S, 3] inputs_embeds)"
+            "{ raw = Gather(table, input_ids) inputs_embeds = Abs(raw) }"
         )
         embedding_model.graph.initializer.append(transition_model().graph.initializer[0])
         decoder_model = parser.parse_model(
@@ -44,8 +44,8 @@ class TestGeneration(unittest.TestCase):
         )
         vision_model = parser.parse_model(
             '<ir_version: 10, opset_import: ["" : 23]>'
-            "vision (float[1, 1, 3] pixels) => (seq(float[1, 1, 3]) features)"
-            "{ image = Abs(pixels) features = SequenceConstruct(image) }"
+            "vision (float[1, 1, 3] pixels) => (seq(float[1, 1, 3]) vision)"
+            "{ image = Abs(pixels) vision = SequenceConstruct(image) }"
         )
         policy = {
             "num_threads": 2,
@@ -66,17 +66,12 @@ class TestGeneration(unittest.TestCase):
 
         feeds = {
             "input_ids": numpy.array([[0, 1]], dtype=numpy.int64),
-            "image": numpy.zeros((1, 1, 3), dtype=numpy.float32),
+            "pixels": numpy.zeros((1, 1, 3), dtype=numpy.float32),
         }
 
         def generate():
             return decoder.generate(
-                feeds,
-                max_new_tokens=3,
-                embedding=embedding,
-                embedding_token_input="tokens",
-                embedding_outputs={"vectors": "inputs_embeds"},
-                prefill=[(vision, {"pixels": "image"}, {"features": "vision"})],
+                feeds, max_new_tokens=3, embedding=embedding, prefill=[vision]
             )
 
         before = decoder.cpu_execution_counters.dispatches
@@ -94,50 +89,40 @@ class TestGeneration(unittest.TestCase):
             decoder.cpu_execution_counters.dispatches - before, 4 * (3 * 2 + 1)
         )
         self.assertTrue({"Gather", "Abs", "Add"} <= {event.op_type for event in decoder.events()})
-        embedding.register_custom_kernel("", "Abs", embedding_abs)
+        decoder.register_custom_kernel("", "Abs", embedding_abs)
         numpy.testing.assert_array_equal(generate(), expected)
-        self.assertEqual(len(embedding_calls), 3)
+        self.assertEqual(len(embedding_calls), 4)
         numpy.testing.assert_array_equal(feeds["input_ids"], [[0, 1]])
-        with self.assertRaisesRegex(ValueError, "compatible CPU"):
+        numpy.testing.assert_array_equal(
             decoder.generate(
                 feeds,
+                max_new_tokens=3,
                 embedding=ReferenceEvaluator(
                     embedding_model, cpu_execution={"num_threads": 1, "affinity_policy": "none"}
                 ),
-                embedding_token_input="tokens",
-                embedding_outputs={"vectors": "inputs_embeds"},
-            )
-        with self.assertRaisesRegex(ValueError, "missing component feed"):
-            decoder.generate(
-                {"input_ids": feeds["input_ids"]},
-                embedding=embedding,
-                embedding_token_input="tokens",
-                embedding_outputs={"vectors": "inputs_embeds"},
-                prefill=[(vision, {"pixels": "image"}, {"features": "vision"})],
-            )
-        duplicate_model = parser.parse_model(
-            '<ir_version: 10, opset_import: ["" : 23]>'
-            "duplicate (float[1, 1, 3] pixels)"
-            " => (float[1, 1, 3] first, float[1, 1, 3] second)"
-            "{ first = Abs(pixels) second = Identity(pixels) }"
+                prefill=[vision],
+            ),
+            expected,
         )
-        duplicate = ReferenceEvaluator(duplicate_model, cpu_execution=policy)
-        with self.assertRaisesRegex(ValueError, "duplicate component output destination"):
+        with self.assertRaisesRegex(ValueError, "missing graph feed"):
             decoder.generate(
-                feeds,
-                embedding=embedding,
-                embedding_token_input="tokens",
-                embedding_outputs={"vectors": "inputs_embeds"},
-                prefill=[
-                    (duplicate, {"pixels": "image"}, {"first": "vision", "second": "vision"})
-                ],
+                {"input_ids": feeds["input_ids"]}, embedding=embedding, prefill=[vision]
             )
+        overwriting_model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 23]>'
+            "overwriting (float[1, 1, 3] pixels)"
+            " => (float[1, 1, 3] input_ids)"
+            "{ input_ids = Abs(pixels) }"
+        )
+        overwriting = ReferenceEvaluator(overwriting_model, cpu_execution=policy)
+        with self.assertRaisesRegex(ValueError, "graph output cannot replace generated inputs"):
+            decoder.generate(feeds, embedding=embedding, prefill=[overwriting])
 
     def test_split_embedding_persistent_state(self):
         embedding_model = parser.parse_model(
             '<ir_version: 10, opset_import: ["" : 23]>'
-            "embedding (int64[B, S] tokens) => (float[B, S, 3] vectors)"
-            "{ vectors = Gather(table, tokens) }"
+            "embedding (int64[B, S] input_ids) => (float[B, S, 3] inputs_embeds)"
+            "{ inputs_embeds = Gather(table, input_ids) }"
         )
         embedding_model.graph.initializer.append(transition_model().graph.initializer[0])
         decoder_model = parser.parse_model(
@@ -158,13 +143,7 @@ class TestGeneration(unittest.TestCase):
         }
 
         def generate():
-            return decoder.generate(
-                feeds,
-                max_new_tokens=4,
-                embedding=embedding,
-                embedding_token_input="tokens",
-                embedding_outputs={"vectors": "inputs_embeds"},
-            )
+            return decoder.generate(feeds, max_new_tokens=4, embedding=embedding)
 
         expected = ReferenceEvaluator(transition_model()).generate(
             {"input_ids": feeds["input_ids"]}, max_new_tokens=4

@@ -36,6 +36,7 @@
 #include <nanobind/stl/shared_ptr.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/string_view.h>
+#include <nanobind/stl/unordered_map.h>
 #include <nanobind/stl/unordered_set.h>
 #include <nanobind/stl/vector.h>
 #include <sstream>
@@ -2076,6 +2077,38 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       "Generates INT64 token IDs including the prompt. Zero temperature selects greedy decoding; "
       "positive temperature samples softmax-scaled logits. Graph persistent bindings enable cached "
       "decoding; other models evaluate the full prefix. State is local to this call.");
+
+  rt_mod.def(
+      "generate_pipeline",
+      [](const ModelProto &model, RuntimeContext &context, nb::dict feeds,
+         const core::runtime::GenerationOptions &options, RuntimeSessionOptions session_options,
+         nb::object embedding, const std::string &embedding_token_input, nb::dict embedding_inputs,
+         nb::dict embedding_outputs, nb::list prefill) {
+        core::runtime::GenerationPipeline pipeline;
+        if (!embedding.is_none()) {
+          pipeline.embedding = {
+              &nb::cast<const ModelProto &>(embedding),
+              nb::cast<std::unordered_map<std::string, std::string>>(embedding_inputs),
+              nb::cast<std::unordered_map<std::string, std::string>>(embedding_outputs)};
+          pipeline.embedding_token_input = embedding_token_input;
+        }
+        for (nb::handle item : prefill) {
+          auto stage = nb::cast<nb::tuple>(item);
+          EXT_ENFORCE_INVALID(stage.size() == 3, "generate_pipeline: expected stage triples.");
+          pipeline.prefill.push_back(
+              {&nb::cast<const ModelProto &>(stage[0]),
+               nb::cast<std::unordered_map<std::string, std::string>>(stage[1]),
+               nb::cast<std::unordered_map<std::string, std::string>>(stage[2])});
+        }
+        auto inputs = FeedbackValuesFromPython(feeds, &model);
+        nb::gil_scoped_release release;
+        return core::runtime::Generate(model, context, inputs, options, std::move(session_options),
+                                       pipeline);
+      },
+      nb::arg("model"), nb::arg("context"), nb::arg("feeds"), nb::arg("options"),
+      nb::arg("session_options"), nb::arg("embedding"), nb::arg("embedding_token_input"),
+      nb::arg("embedding_inputs"), nb::arg("embedding_outputs"), nb::arg("prefill"),
+      "Generates tokens with mapped prefill graphs and an optional per-step embedding graph.");
 
   nb::class_<core::runtime::TaskCompletion>(
       rt_mod, "TaskCompletion", "Shares a single-use task completion and cancellation gate.")

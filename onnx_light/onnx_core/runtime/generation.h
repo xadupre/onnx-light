@@ -6,6 +6,8 @@
 
 #include "onnx_core/runtime/runtime_session.h"
 
+#include <unordered_map>
+
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 
 /** Configures autoregressive token generation. */
@@ -22,6 +24,20 @@ struct GenerationOptions {
   /// These inputs are maintained only when declared by the graph.
   std::string attention_mask_name = "attention_mask";
   std::string position_ids_name = "position_ids";
+};
+
+/** Maps graph inputs to pipeline feed names and graph outputs to downstream names. */
+struct GenerationComponent {
+  const ModelProto *model = nullptr;
+  std::unordered_map<std::string, std::string> inputs;
+  std::unordered_map<std::string, std::string> outputs;
+};
+
+/** Configures ordered prefill-only graphs and an embedding graph run at every decoding step. */
+struct GenerationPipeline {
+  std::vector<GenerationComponent> prefill;
+  GenerationComponent embedding;
+  std::string embedding_token_input;
 };
 
 /**
@@ -42,11 +58,15 @@ struct GenerationOptions {
  * are modified.
  *
  * Finished batch rows receive pad_token_id until every row has emitted EOS.
+ * Pipeline stages execute in order during prefill; the embedding stage maps
+ * token IDs to decoder inputs on each step. A pipeline uses a call-local
+ * runtime context and one resolved CPU executor for all its sessions.
  * All context/model/allocator owners must outlive this synchronous call.
  */
 ONNX_LIGHT_CORE_API Tensor Generate(const ModelProto &model, RuntimeContext &context,
                                     const RuntimeValueMap &feeds,
                                     const GenerationOptions &options = {},
-                                    RuntimeSessionOptions session_options = {});
+                                    RuntimeSessionOptions session_options = {},
+                                    const GenerationPipeline &pipeline = {});
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

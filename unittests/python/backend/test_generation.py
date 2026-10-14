@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy
 
@@ -27,6 +28,121 @@ def transition_model(dtype=numpy.float32):
 
 
 class TestGeneration(unittest.TestCase):
+    def test_split_embedding_pipeline(self):
+        embedding_model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 23]>'
+            "embedding (int64[B, S] tokens) => (float[B, S, 3] vectors)"
+            "{ raw = Gather(table, tokens) vectors = Abs(raw) }"
+        )
+        embedding_model.graph.initializer.append(transition_model().graph.initializer[0])
+        decoder_model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 23]>'
+            "decoder (float[B, S, 3] inputs_embeds, float[1, 1, 3] vision)"
+            " => (float[B, S, 3] logits)"
+            "{ logits = Add(inputs_embeds, vision) }"
+        )
+        vision_model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 23]>'
+            "vision (float[1, 1, 3] pixels) => (float[1, 1, 3] features)"
+            "{ features = Abs(pixels) }"
+        )
+        policy = {"num_threads": 2, "affinity_policy": "none", "spin_policy": "park_immediately"}
+        decoder = ReferenceEvaluator(
+            decoder_model, cpu_execution=policy, cpu_execution_counters=True
+        )
+        embedding = ReferenceEvaluator(embedding_model, cpu_execution=policy)
+        vision = ReferenceEvaluator(vision_model, cpu_execution=policy)
+        feeds = {
+            "input_ids": numpy.array([[0, 1]], dtype=numpy.int64),
+            "image": numpy.zeros((1, 1, 3), dtype=numpy.float32),
+        }
+
+        def generate():
+            return decoder.generate(
+                feeds,
+                max_new_tokens=3,
+                embedding=embedding,
+                embedding_token_input="tokens",
+                embedding_outputs={"vectors": "inputs_embeds"},
+                prefill=[(vision, {"pixels": "image"}, {"features": "vision"})],
+            )
+
+        before = decoder.cpu_execution_counters.dispatches
+        expected = ReferenceEvaluator(transition_model()).generate(
+            {"input_ids": feeds["input_ids"]}, max_new_tokens=3
+        )
+        for result in [generate(), generate()]:
+            numpy.testing.assert_array_equal(result, expected)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            for result in pool.map(lambda _: generate(), range(2)):
+                numpy.testing.assert_array_equal(result, expected)
+        self.assertEqual(decoder.cpu_executor_instance_id, embedding.cpu_executor_instance_id)
+        self.assertEqual(decoder.cpu_executor_instance_id, vision.cpu_executor_instance_id)
+        self.assertGreaterEqual(
+            decoder.cpu_execution_counters.dispatches - before, 4 * (3 * 2 + 1)
+        )
+        numpy.testing.assert_array_equal(feeds["input_ids"], [[0, 1]])
+        with self.assertRaisesRegex(ValueError, "compatible CPU"):
+            decoder.generate(
+                feeds,
+                embedding=ReferenceEvaluator(
+                    embedding_model, cpu_execution={"num_threads": 1, "affinity_policy": "none"}
+                ),
+                embedding_token_input="tokens",
+                embedding_outputs={"vectors": "inputs_embeds"},
+            )
+        with self.assertRaisesRegex(ValueError, "missing component feed"):
+            decoder.generate(
+                {"input_ids": feeds["input_ids"]},
+                embedding=embedding,
+                embedding_token_input="tokens",
+                embedding_outputs={"vectors": "inputs_embeds"},
+                prefill=[(vision, {"pixels": "image"}, {"features": "vision"})],
+            )
+
+    def test_split_embedding_persistent_state(self):
+        embedding_model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 23]>'
+            "embedding (int64[B, S] tokens) => (float[B, S, 3] vectors)"
+            "{ vectors = Gather(table, tokens) }"
+        )
+        embedding_model.graph.initializer.append(transition_model().graph.initializer[0])
+        decoder_model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 23]>'
+            "decoder (float[B, S, 3] inputs_embeds, float[B, P, 3] past)"
+            " => (float[B, T, 3] logits, float[B, T, 3] present)"
+            "{ present = Concat <axis: int = 1> (past, inputs_embeds)"
+            " logits = Identity(present) }"
+        )
+        binding = decoder_model.graph.persistent_bindings.add()
+        binding.input_name = "past"
+        binding.output_name = "present"
+        decoder = ReferenceEvaluator(decoder_model)
+        embedding = ReferenceEvaluator(embedding_model)
+        feeds = {
+            "input_ids": numpy.array([[0]], dtype=numpy.int64),
+            "past": numpy.empty((1, 0, 3), dtype=numpy.float32),
+        }
+
+        def generate():
+            return decoder.generate(
+                feeds,
+                max_new_tokens=4,
+                embedding=embedding,
+                embedding_token_input="tokens",
+                embedding_outputs={"vectors": "inputs_embeds"},
+            )
+
+        expected = ReferenceEvaluator(transition_model()).generate(
+            {"input_ids": feeds["input_ids"]}, max_new_tokens=4
+        )
+        numpy.testing.assert_array_equal(generate(), expected)
+        numpy.testing.assert_array_equal(generate(), expected)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            for result in pool.map(lambda _: generate(), range(2)):
+                numpy.testing.assert_array_equal(result, expected)
+        self.assertEqual(feeds["past"].shape, (1, 0, 3))
+
     def test_greedy_batch_and_eos(self):
         evaluator = ReferenceEvaluator(transition_model())
         feeds = {"input_ids": numpy.array([[0], [1]], dtype=numpy.int64)}

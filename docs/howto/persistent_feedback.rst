@@ -173,7 +173,9 @@ Graphs connect through their declared input and output names: for example,
 the embedding graph consumes ``input_ids`` and produces the language model's
 ``inputs_embeds`` input. No additional name mappings are supplied.
 All graphs execute in one call-local ``RuntimeContext`` configured from the
-language-model evaluator, sharing its custom kernels, allocators and CPU executor.
+language-model evaluator, using its custom kernels and sharing its CPU executor
+and event log. Pipeline stages share call-local allocators, not the evaluator's
+allocators.
 The embedding evaluator supplies its model only; its local registrations and
 CPU execution policy are not used. Register pipeline-wide custom kernels on
 the language-model evaluator. Image/audio encoders can run before generation;
@@ -246,8 +248,8 @@ inputs and exported outputs are removed from the context at the end of the
 call, including on failure; unrelated values are preserved. Intermediate values
 follow the context's ``release_intermediates`` setting.
 The binding also retains supplied contexts so cached kernel allocator references
-remain valid. Reuse the same context for a state's calls. Closing a state does
-not destroy the session or its kernels.
+remain valid. Reuse the same context for a session's calls. Resetting persistent
+values does not destroy the session or its cached kernels.
 Initializers use model-backed views when their representation is directly
 readable; other numeric representations and strings use normal conversion.
 String tensors cannot be persistent, including nested tensor fields and string

@@ -104,6 +104,16 @@ class TestGeneration(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "graph output cannot replace generated inputs"):
             decoder.generate(feeds, embedding=overwriting)
 
+        def failing_add(node, left, right):
+            raise ValueError("generation kernel failed")
+
+        decoder.register_custom_kernel("", "Add", failing_add)
+        before_failure = len(decoder.events())
+        with self.assertRaisesRegex((ValueError, RuntimeError), "generation kernel failed"):
+            generate()
+        failure_events = decoder.events()[before_failure:]
+        self.assertTrue({"Gather", "Abs"} <= {event.op_type for event in failure_events})
+
     def test_split_embedding_persistent_state(self):
         embedding_model = parser.parse_model(
             '<ir_version: 10, opset_import: ["" : 23]>'

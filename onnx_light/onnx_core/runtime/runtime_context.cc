@@ -323,7 +323,7 @@ RuntimeContext::RuntimeContext(RuntimeContextOptions options)
 
 RuntimeContext::RuntimeContext(const RuntimeContext &source, RuntimeContextOptions options)
     : RuntimeContext(source.kernel_ctx_, options, std::make_shared<KernelUsageState>(),
-                     std::make_shared<EventState>()) {
+                     source.events_) {
   functions_ = source.functions_;
   custom_kernels_ = source.custom_kernels_;
   struct_type_catalogue_ = source.struct_type_catalogue_;

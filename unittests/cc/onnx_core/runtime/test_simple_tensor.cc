@@ -81,6 +81,7 @@ TEST(SimpleTensorSharing, BorrowedOwnersRemainAliveAndOwnerlessBorrowsReject) {
 
 TEST(SimpleTensorSharing, InitializerViewsBorrowStorageAndPreserveProvenance) {
   for (bool raw : {false, true}) {
+    SimpleRawBufferAllocator allocator(1);
     TensorProto proto;
     proto.set_data_type(DataType::FLOAT);
     proto.add_dims(1);
@@ -111,7 +112,6 @@ TEST(SimpleTensorSharing, InitializerViewsBorrowStorageAndPreserveProvenance) {
     EXPECT_TRUE(retained.is_initializer_view());
     EXPECT_EQ(retained.bytes(), payload);
     EXPECT_FALSE(retained.ToOwned().is_initializer_view());
-    SimpleRawBufferAllocator allocator(1);
     retained.SetAllocation(&allocator, allocator.Allocate(sizeof(float)));
     EXPECT_FALSE(retained.is_initializer_view());
   }

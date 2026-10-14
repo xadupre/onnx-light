@@ -482,6 +482,7 @@ public:
   explicit RuntimeContext(KernelContext kernel_ctx, RuntimeContextOptions options = {});
   RuntimeContext(KernelContext kernel_ctx, TensorMap tensors, RuntimeContextOptions options = {});
   explicit RuntimeContext(RuntimeContextOptions options);
+  /// Copies execution configuration with independent values and a shared event log.
   RuntimeContext(const RuntimeContext &source, RuntimeContextOptions options);
 
   /// Returns whether event logging was enabled when the context was built.

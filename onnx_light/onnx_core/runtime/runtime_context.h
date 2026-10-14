@@ -935,10 +935,7 @@ public:
   RuntimeEventLog &events() noexcept { return events_->log; }
 
   /// Empties the shared event log without changing any context's tensor map.
-  void ClearEvents() noexcept {
-    std::lock_guard<std::mutex> lock(events_->mutex);
-    events_->log.clear();
-  }
+  void ClearEvents() noexcept;
 
   /// Creates a fresh child context for executing a subgraph (e.g. the
   /// ``then_branch`` or ``else_branch`` of ``If``, or the ``body`` of
@@ -981,15 +978,7 @@ public:
   /// is amortised across repeated runs of the same model.
   /// Kernel usage recording is preserved; :cpp:func:`ClearKernelUsage` clears it
   /// separately.
-  void Clear() noexcept {
-    tensors_.clear();
-    values_.clear();
-    sequences_.clear();
-    maps_.clear();
-    shapes_.clear();
-    ClearEvents();
-    current_node_index_ = -1;
-  }
+  void Clear() noexcept;
 
   /// Records a :cpp:enumerator:`RuntimeEventAction::kRunNode` event for
   /// ``node`` in the event log when :cpp:func:`events_enabled` is set.

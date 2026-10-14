@@ -375,6 +375,21 @@ void RuntimeContext::ClearKernelUsage() {
   kernel_usage_->names.clear();
 }
 
+void RuntimeContext::ClearEvents() noexcept {
+  std::lock_guard<std::mutex> lock(events_->mutex);
+  events_->log.clear();
+}
+
+void RuntimeContext::Clear() noexcept {
+  tensors_.clear();
+  values_.clear();
+  sequences_.clear();
+  maps_.clear();
+  shapes_.clear();
+  ClearEvents();
+  current_node_index_ = -1;
+}
+
 void RuntimeContext::Set(const std::string &name, Tensor tensor, RuntimeEventKind kind) {
   EXT_ENFORCE(!HasValue(name), "RuntimeContext::Set: a value named '", name, "' already exists.");
   if (!value_slot_names_.empty()) {

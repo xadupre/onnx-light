@@ -26,7 +26,7 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
  * - Failure leaves the previous logical state unchanged.
  *
  * Requirements:
- * - Each binding names a whole input/output pair; the input has exactly one value-use.
+ * - Each binding names a whole input/output pair; the input has at least one value-use.
  * - Current feeds cannot replace persistent inputs.
  * - Supports tensors, typed sequences, named structures and inline encoded values.
  * - Tensor leaves may use dense storage or inline affine encoding of the declared logical type.

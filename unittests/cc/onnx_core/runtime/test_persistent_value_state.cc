@@ -285,7 +285,7 @@ TEST(PersistentValueState, GenericProducerComputesDirectlyIntoPersistentTail) {
   }
 }
 
-TEST(PersistentValueState, RuntimeRejectsPersistentInputsWithoutExactlyOneUse) {
+TEST(PersistentValueState, RuntimeRequiresPersistentInputsToBeUsed) {
   for (int mode = 0; mode < 4; ++mode) {
     SCOPED_TRACE(mode);
     ModelProto model = Model();
@@ -302,10 +302,16 @@ TEST(PersistentValueState, RuntimeRejectsPersistentInputsWithoutExactlyOneUse) {
     } else {
       *graph.add_output() = graph.input(0);
     }
-    EXPECT_THROW({ ExecutionPlan plan(graph); }, std::invalid_argument);
-    EXPECT_THROW({ RuntimeSession session(model); }, std::invalid_argument);
-    EXPECT_THROW(
-        { PersistentValueState state(model, {{"past", Number(0)}}); }, std::invalid_argument);
+    if (mode == 0) {
+      EXPECT_THROW({ ExecutionPlan plan(graph); }, std::invalid_argument);
+      EXPECT_THROW({ RuntimeSession session(model); }, std::invalid_argument);
+      EXPECT_THROW(
+          { PersistentValueState state(model, {{"past", Number(0)}}); }, std::invalid_argument);
+    } else {
+      EXPECT_NO_THROW({ ExecutionPlan plan(graph); });
+      EXPECT_NO_THROW({ RuntimeSession session(model); });
+      EXPECT_NO_THROW({ PersistentValueState state(model, {{"past", Number(0)}}); });
+    }
     graph.clear_persistent_bindings();
     EXPECT_NO_THROW({ RuntimeSession session(model); });
   }

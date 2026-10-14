@@ -85,6 +85,32 @@ class TestGeneration(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "dtype mismatch"):
             evaluator.generate({**feeds, "past_ids": numpy.empty((1, 0), dtype=numpy.float32)})
 
+    def test_persistent_state_with_multiple_consumers(self):
+        model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 23]>'
+            "cached (int64[B, S] input_ids, int64[B, 1] past_state)"
+            " => (float[B, 1, 3] logits, int64[B, 1] present_state)"
+            "{ present_state = Add(past_state, one)"
+            " logits = Gather(table, past_state) }"
+        )
+        model.graph.initializer.append(
+            numpy_helper.from_array(numpy.ones((1, 1), dtype=numpy.int64), name="one")
+        )
+        model.graph.initializer.append(transition_model().graph.initializer[0])
+        binding = model.graph.persistent_bindings.add()
+        binding.input_name = "past_state"
+        binding.output_name = "present_state"
+        evaluator = ReferenceEvaluator(model)
+        feeds = {
+            "input_ids": numpy.array([[0]], dtype=numpy.int64),
+            "past_state": numpy.array([[0]], dtype=numpy.int64),
+        }
+        for _ in range(2):
+            numpy.testing.assert_array_equal(
+                evaluator.generate(feeds, max_new_tokens=3), [[0, 1, 2, 0]]
+            )
+        numpy.testing.assert_array_equal(feeds["past_state"], [[0]])
+
     def test_floating_logits(self):
         import ml_dtypes
 

@@ -4,6 +4,7 @@
 
 #include "onnx_core/backend_test/test_case.h"
 #include "onnx_core/runtime/generation.h"
+#include "onnx_core/runtime/kernels/run_nodes.h"
 #include "onnx_extensions/kernels/kernel_dispatch_table.h"
 
 #include <cstring>
@@ -24,6 +25,31 @@ uint64_t StorageTotal(const RuntimeEventLog &events, uint64_t RuntimeEvent::*fie
     if (event.action == RuntimeEventAction::kPersistentStorage)
       total += event.*field;
   return total;
+}
+
+ModelProto PipelineModel(const std::string &operation,
+                         const std::vector<std::pair<std::string, int32_t>> &inputs,
+                         const std::string &output) {
+  ModelProto model;
+  model.set_ir_version(10);
+  auto *opset = model.add_opset_import();
+  opset->set_domain("test.pipeline");
+  opset->set_version(1);
+  auto *graph = model.mutable_graph();
+  auto *node = graph->add_node();
+  node->set_domain("test.pipeline");
+  node->set_op_type(operation);
+  for (const auto &[name, type] : inputs) {
+    auto *input = graph->add_input();
+    input->set_name(name);
+    input->mutable_type()->mutable_tensor_type()->set_elem_type(type);
+    node->add_input(name);
+  }
+  auto *result = graph->add_output();
+  result->set_name(output);
+  result->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+  node->add_output(output);
+  return model;
 }
 
 } // namespace
@@ -95,40 +121,16 @@ TEST(Generation, BackendAttentionModels) {
 }
 
 TEST(Generation, PipelineUsesOneContextAndDeclaredGraphNames) {
-  const auto make_model = [](const std::string &operation,
-                             const std::vector<std::pair<std::string, int32_t>> &inputs,
-                             const std::string &output) {
-    ModelProto model;
-    model.set_ir_version(10);
-    auto *opset = model.add_opset_import();
-    opset->set_domain("test.pipeline");
-    opset->set_version(1);
-    auto *graph = model.mutable_graph();
-    auto *node = graph->add_node();
-    node->set_domain("test.pipeline");
-    node->set_op_type(operation);
-    for (const auto &[name, type] : inputs) {
-      auto *input = graph->add_input();
-      input->set_name(name);
-      input->mutable_type()->mutable_tensor_type()->set_elem_type(type);
-      node->add_input(name);
-    }
-    auto *result = graph->add_output();
-    result->set_name(output);
-    result->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
-    node->add_output(output);
-    return model;
-  };
-  const auto embedding = make_model("Embed",
-                                    {{"input_ids", TensorProto::INT64},
-                                     {"attention_mask", TensorProto::INT64},
-                                     {"position_ids", TensorProto::INT64}},
-                                    "inputs_embeds");
-  const auto prefill = make_model("Prefill",
-                                  {{"input_ids", TensorProto::INT64},
-                                   {"inputs_embeds", TensorProto::FLOAT},
-                                   {"vision", TensorProto::FLOAT}},
-                                  "logits");
+  const auto embedding = PipelineModel("Embed",
+                                       {{"input_ids", TensorProto::INT64},
+                                        {"attention_mask", TensorProto::INT64},
+                                        {"position_ids", TensorProto::INT64}},
+                                       "inputs_embeds");
+  const auto prefill = PipelineModel("Prefill",
+                                     {{"input_ids", TensorProto::INT64},
+                                      {"inputs_embeds", TensorProto::FLOAT},
+                                      {"vision", TensorProto::FLOAT}},
+                                     "logits");
   RuntimeSession prefill_session(prefill);
   auto executor = prefill_session.cpu_executor();
   RuntimeContext context(RuntimeContextOptions{.cpu_executor = executor.get()});
@@ -175,6 +177,202 @@ TEST(Generation, PipelineUsesOneContextAndDeclaredGraphNames) {
     EXPECT_EQ(calls, (std::vector<std::string>{"Embed", "Prefill", "Embed", "Prefill", "Embed",
                                                "Prefill"}));
   }
+}
+
+TEST(Generation, PipelineScopesModelFunctionsAndRestoresTheCallerRegistry) {
+  auto embedding = PipelineModel("Stage", {{"input_ids", TensorProto::INT64}}, "inputs_embeds");
+  auto *function = embedding.add_functions();
+  function->set_domain("test.pipeline");
+  function->set_name("Stage");
+  function->add_input("X");
+  function->add_output("Y");
+  auto *opset = function->add_opset_import();
+  opset->set_domain("test.pipeline");
+  opset->set_version(1);
+  auto *node = function->add_node();
+  node->set_domain("test.pipeline");
+  node->set_op_type("Embed");
+  node->add_input("X");
+  node->add_output("Y");
+  for (bool persistent : {false, true}) {
+    SCOPED_TRACE(persistent);
+    auto prefill = PipelineModel("Stage", {{"inputs_embeds", TensorProto::FLOAT}}, "logits");
+    if (persistent) {
+      auto *graph = prefill.mutable_graph();
+      auto *input = graph->add_input();
+      input->set_name("counter");
+      input->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::INT64);
+      input->mutable_type()->mutable_tensor_type()->mutable_shape();
+      auto *output = graph->add_output();
+      output->CopyFrom(*input);
+      output->set_name("next_counter");
+      graph->mutable_node(0)->add_input("counter");
+      graph->mutable_node(0)->add_output("next_counter");
+      auto *binding = graph->add_persistent_bindings();
+      binding->set_input_name("counter");
+      binding->set_output_name("next_counter");
+    }
+    RuntimeSession source(prefill);
+    RuntimeContext context(RuntimeContextOptions{.cpu_executor = source.cpu_executor().get()});
+    RegisterModelFunctions(embedding, context);
+    const FunctionMap original_functions = context.functions();
+    int prefill_calls = 0;
+    bool fail = false;
+    context.RegisterCustomKernel(
+        "test.pipeline", "Embed", [](const NodeProto &node, RuntimeContext &rt) {
+          const Tensor &ids = rt.Get(node.input(0));
+          std::vector<float> logits(static_cast<size_t>(ids.element_count()) * 3, 0);
+          for (int64_t i = 0; i < ids.element_count(); ++i)
+            logits[static_cast<size_t>(i) * 3 + (ids.AsInt64()[i] + 1) % 3] = 4;
+          rt.Put(node.output(0), Tensor::FromFloat("", {1, ids.shape[1], 3}, logits));
+        });
+    context.RegisterCustomKernel(
+        "test.pipeline", "Stage", [&](const NodeProto &node, RuntimeContext &rt) {
+          ++prefill_calls;
+          EXT_ENFORCE_INVALID(!fail, "prefill failed");
+          rt.Put(node.output(0), rt.Get(node.input(0)).BorrowView());
+          if (persistent)
+            rt.Put(node.output(1), Tensor::FromInt64("", {}, {rt.Get("counter").AsInt64()[0] + 1}));
+        });
+    RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))}};
+    if (persistent)
+      feeds.emplace("counter", RuntimeValue(Tensor::FromInt64("", {}, {0})));
+    GenerationPipeline pipeline{.prefill = &prefill, .embedding = &embedding};
+    GenerationOptions options;
+    options.max_new_tokens = 3;
+    for (int repeat = 0; repeat < 2; ++repeat) {
+      EXPECT_EQ(Tokens(Generate(pipeline, context, feeds, options)),
+                (std::vector<int64_t>{0, 1, 2, 0}));
+      EXPECT_EQ(context.functions(), original_functions);
+    }
+    EXPECT_EQ(prefill_calls, 6);
+    fail = true;
+    EXPECT_THROW(Generate(pipeline, context, feeds, options), std::invalid_argument);
+    EXPECT_EQ(prefill_calls, 7);
+    EXPECT_EQ(context.functions(), original_functions);
+  }
+}
+
+TEST(Generation, PipelineSeedsExtensionInitializersAndHonorsFeedOverrides) {
+  auto embedding = PipelineModel("Embed",
+                                 {{"input_ids", TensorProto::INT64},
+                                  {"weights", TensorProto::FLOAT},
+                                  {"cache", TensorProto::FLOAT}},
+                                 "inputs_embeds");
+  auto *graph = embedding.mutable_graph();
+  auto *weights = graph->add_encoded_initializer();
+  weights->set_name("weights");
+  auto *logical = weights->mutable_logical_type()->mutable_tensor_type();
+  logical->set_elem_type(TensorProto::FLOAT);
+  logical->mutable_shape()->add_dim()->set_dim_value(1);
+  auto *affine = weights->mutable_affine();
+  affine->set_storage_type(TensorProto::INT8);
+  affine->mutable_scale()->set_data_type(TensorProto::FLOAT);
+  affine->mutable_scale()->add_float_data(0.5f);
+  affine->mutable_zero_point()->set_data_type(TensorProto::INT8);
+  affine->mutable_zero_point()->add_int32_data(0);
+  weights->set_raw_data(std::string(1, '\2'));
+  *graph->mutable_input(1)->mutable_type() = weights->logical_type();
+  auto *cache = graph->add_paged_cache_initializer();
+  cache->set_name("cache");
+  auto *block = cache->add_blocks();
+  block->set_start(0);
+  block->set_length(1);
+  for (auto *tensor : {block->mutable_key(), block->mutable_value()}) {
+    tensor->set_data_type(TensorProto::FLOAT);
+    for (int64_t dim : {1, 1, 1, 1})
+      tensor->add_dims(dim);
+    tensor->add_float_data(5);
+  }
+  *graph->mutable_input(2)->mutable_type() = TypeProto{};
+  graph->mutable_input(2)->mutable_type()->mutable_struct_type();
+  const auto prefill = PipelineModel("Prefill", {{"inputs_embeds", TensorProto::FLOAT}}, "logits");
+  RuntimeSession source(prefill);
+  RuntimeContext context(RuntimeContextOptions{.cpu_executor = source.cpu_executor().get()});
+  bool override_weights = false;
+  int calls = 0;
+  context.RegisterCustomKernel(
+      "test.pipeline", "Embed", [&](const NodeProto &node, RuntimeContext &rt) {
+        ++calls;
+        if (override_weights) {
+          EXPECT_FLOAT_EQ(rt.Get("weights").AsFloat()[0], 7);
+        } else {
+          const auto &value = rt.values().at("weights");
+          EXPECT_EQ(value.kind, RuntimeValue::Kind::kEncoded);
+          EXPECT_EQ(value.Encoded().raw_data().size(), 1u);
+        }
+        const auto &value = rt.values().at("cache");
+        EXPECT_TRUE(value.HasPagedCacheStructure());
+        EXPECT_FLOAT_EQ(value.fields.at("blocks").elements[0].fields.at("key").tensor.AsFloat()[0],
+                        5);
+        rt.Put(node.output(0), Tensor::FromFloat("", {1, 1, 3}, {0, 4, 0}));
+      });
+  context.RegisterCustomKernel("test.pipeline", "Prefill",
+                               [](const NodeProto &node, RuntimeContext &rt) {
+                                 rt.Put(node.output(0), rt.Get(node.input(0)).BorrowView());
+                               });
+  GenerationPipeline pipeline{.prefill = &prefill, .embedding = &embedding};
+  RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))}};
+  GenerationOptions options;
+  options.max_new_tokens = 2;
+  EXPECT_EQ(Tokens(Generate(pipeline, context, feeds, options)), (std::vector<int64_t>{0, 1, 1}));
+  override_weights = true;
+  feeds.emplace("weights", RuntimeValue(Tensor::FromFloat("", {1}, {7})));
+  EXPECT_EQ(Tokens(Generate(pipeline, context, feeds, options)), (std::vector<int64_t>{0, 1, 1}));
+  EXPECT_EQ(calls, 4);
+}
+
+TEST(Generation, PipelinePreservesStructuredSequenceFeeds) {
+  auto embedding =
+      PipelineModel("Embed", {{"input_ids", TensorProto::INT64}, {"features", TensorProto::FLOAT}},
+                    "inputs_embeds");
+  auto *type = embedding.mutable_graph()->mutable_input(1)->mutable_type();
+  *type = TypeProto{};
+  auto *field = type->mutable_sequence_type()
+                    ->mutable_elem_type()
+                    ->mutable_struct_type()
+                    ->mutable_structure()
+                    ->add_field();
+  field->set_name("value");
+  auto *tensor_type = field->mutable_type()->mutable_tensor_type();
+  tensor_type->set_elem_type(TensorProto::FLOAT);
+  tensor_type->mutable_shape()->add_dim()->set_dim_value(1);
+  const auto prefill = PipelineModel("Prefill", {{"inputs_embeds", TensorProto::FLOAT}}, "logits");
+  RuntimeSession source(prefill);
+  RuntimeContext context(RuntimeContextOptions{.cpu_executor = source.cpu_executor().get()});
+  RuntimeValueMap feeds{
+      {"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))},
+      {"features", RuntimeValue(std::vector<RuntimeValue>{RuntimeValue(RuntimeValueMap{
+                       {"value", RuntimeValue(Tensor::FromFloat("", {1}, {3}))}})})}};
+  const auto *payload = feeds.at("features").elements[0].fields.at("value").tensor.bytes();
+  size_t count = 1;
+  int calls = 0;
+  context.RegisterCustomKernel(
+      "test.pipeline", "Embed", [&](const NodeProto &node, RuntimeContext &rt) {
+        ++calls;
+        EXPECT_FALSE(rt.HasSequence("features"));
+        const auto &value = rt.values().at("features");
+        EXPECT_EQ(value.kind, RuntimeValue::Kind::kSequence);
+        EXPECT_EQ(value.elements.size(), count);
+        if (count) {
+          EXPECT_EQ(value.elements[0].kind, RuntimeValue::Kind::kStruct);
+          EXPECT_EQ(value.elements[0].fields.at("value").tensor.bytes(), payload);
+          EXPECT_FLOAT_EQ(value.elements[0].fields.at("value").tensor.AsFloat()[0], 3);
+        }
+        rt.Put(node.output(0), Tensor::FromFloat("", {1, 1, 3}, {0, 4, 0}));
+      });
+  context.RegisterCustomKernel("test.pipeline", "Prefill",
+                               [](const NodeProto &node, RuntimeContext &rt) {
+                                 rt.Put(node.output(0), rt.Get(node.input(0)).BorrowView());
+                               });
+  GenerationPipeline pipeline{.prefill = &prefill, .embedding = &embedding};
+  GenerationOptions options;
+  options.max_new_tokens = 2;
+  EXPECT_EQ(Tokens(Generate(pipeline, context, feeds, options)), (std::vector<int64_t>{0, 1, 1}));
+  count = 0;
+  feeds.insert_or_assign("features", RuntimeValue(std::vector<RuntimeValue>{}));
+  EXPECT_EQ(Tokens(Generate(pipeline, context, feeds, options)), (std::vector<int64_t>{0, 1, 1}));
+  EXPECT_EQ(calls, 4);
 }
 
 TEST(Generation, PipelineRequiresItsPrefillModel) {

@@ -5,6 +5,7 @@
 #include "onnx_core/runtime/generation.h"
 #include "onnx_core/runtime/kernels/float16_promote.h"
 #include "onnx_core/runtime/kernels/run_nodes.h"
+#include "onnx_lib/common/scoped_resource.h"
 #include <cmath>
 #include <limits>
 #include <random>
@@ -93,20 +94,28 @@ int64_t Sample(const Tensor &logits, int64_t offset, int64_t vocabulary, double 
 void RunGraph(const ModelProto &model, RuntimeContext &invocation, RuntimeValueMap &values,
               RuntimeSession &session) {
   invocation.ResetInvocation();
+  invocation.functions().clear();
   RegisterModelFunctions(model, invocation);
   for (const auto &input : model.graph().input()) {
     const std::string &name = input.name();
     const auto value = values.find(name);
-    if (value == values.end() &&
-        std::any_of(model.graph().initializer().begin(), model.graph().initializer().end(),
-                    [&](const auto &initializer) { return initializer.name() == name; }))
+    const auto has_initializer = [&](const auto &initializers) {
+      return std::any_of(initializers.begin(), initializers.end(),
+                         [&](const auto &initializer) { return initializer.name() == name; });
+    };
+    if (value == values.end() && (has_initializer(model.graph().initializer()) ||
+                                  has_initializer(model.graph().encoded_initializer()) ||
+                                  has_initializer(model.graph().paged_cache_initializer())))
       continue;
     EXT_ENFORCE_INVALID(value != values.end(), "Generate: missing graph feed '", name, "'.");
-    if (input.type().has_sequence_type() && value->second.kind == RuntimeValue::Kind::kSequence) {
+    if (input.type().has_sequence_type() &&
+        input.type().sequence_type().elem_type().has_tensor_type() &&
+        value->second.kind == RuntimeValue::Kind::kSequence &&
+        std::all_of(
+            value->second.elements.begin(), value->second.elements.end(),
+            [](const auto &element) { return element.kind == RuntimeValue::Kind::kTensor; })) {
       Tensors tensors;
       for (const auto &element : value->second.elements) {
-        EXT_ENFORCE_INVALID(element.kind == RuntimeValue::Kind::kTensor,
-                            "Generate: component sequences must contain tensors.");
         tensors.push_back(element.tensor.BorrowView());
       }
       invocation.PutSequence(
@@ -277,6 +286,13 @@ Tensor Generate(const GenerationPipeline &pipeline, RuntimeContext &context,
     include_plan(*pipeline.embedding);
     context.BindExecutionPlan(*largest);
   }
+  FunctionMap original_functions;
+  if (embedded)
+    original_functions.swap(context.functions());
+  ScopeExit restore_functions([&]() noexcept {
+    if (embedded)
+      context.functions().swap(original_functions);
+  });
   RuntimeValueMap current;
   for (const auto &[name, value] : feeds)
     current.emplace(name, value.BorrowView());
@@ -322,6 +338,7 @@ Tensor Generate(const GenerationPipeline &pipeline, RuntimeContext &context,
     current.insert_or_assign(options.input_ids_name, RuntimeValue(std::move(ids).RetainStorage()));
     if (embedded) {
       RunGraph(*pipeline.embedding, context, current, *embedding_session);
+      context.functions().clear();
     }
     Tensor logits;
     if (persistent) {

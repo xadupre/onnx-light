@@ -1632,6 +1632,23 @@ const GraphProto &FindGraphAttribute(const NodeProto &node, const char *attr_nam
                     node.op_type(), "'.");
 }
 
+PipelineProto MakePipeline(const ModelProto &prefill, const ModelProto *decode,
+                           const ModelProto *embedding,
+                           const GenerationConfigurationProto *generation) {
+  PipelineProto pipeline;
+  *pipeline.mutable_prefill() = prefill;
+  if (decode != nullptr) {
+    *pipeline.mutable_decode() = *decode;
+  }
+  if (embedding != nullptr) {
+    *pipeline.mutable_embedding() = *embedding;
+  }
+  if (generation != nullptr) {
+    *pipeline.mutable_generation() = *generation;
+  }
+  return pipeline;
+}
+
 NodeProto MakeNode(const char *op_type, const std::vector<std::string> &inputs,
                    const std::vector<std::string> &outputs, const char *domain, const char *name) {
   NodeProto node;

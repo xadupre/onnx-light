@@ -654,6 +654,28 @@ inline void AddOutputs(ProtoT &proto, std::initializer_list<T> names) {
 }
 
 ////////////////////
+// Pipeline factory
+////////////////////
+
+/**
+ * Builds a :class:`PipelineProto` by copying existing model protos.
+ *
+ * The prefill model is required. Decode, embedding, and generation protos are
+ * copied when their pointers are non-null. The returned pipeline owns its
+ * copies and is therefore independent of the source protos.
+ *
+ * @param prefill Required prompt-processing model.
+ * @param decode Optional token-decoding model.
+ * @param embedding Optional token-embedding model.
+ * @param generation Optional token-generation configuration.
+ * @return A pipeline containing copies of the supplied protos.
+ */
+ONNX_LIGHT_PROTO_API PipelineProto
+MakePipeline(const ModelProto &prefill, const ModelProto *decode = nullptr,
+             const ModelProto *embedding = nullptr,
+             const GenerationConfigurationProto *generation = nullptr);
+
+////////////////////
 // Node factory
 ////////////////////
 

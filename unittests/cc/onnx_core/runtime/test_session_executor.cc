@@ -188,7 +188,7 @@ TEST(ExecutionPlan, PreservesExplicitReleaseAndDerivesMissingRelease) {
             1);
 }
 
-TEST(ExecutionPlan, DefersStaleReleaseUntilLastMaskUse) {
+TEST(ExecutionPlan, RejectsReleaseBeforeLastMaskUse) {
   GraphProto graph;
   graph.add_input()->set_name("lengths");
   graph.add_input()->set_name("index");
@@ -211,17 +211,12 @@ TEST(ExecutionPlan, DefersStaleReleaseUntilLastMaskUse) {
   greater->add_input("threshold");
   greater->add_output("mask");
 
-  const ExecutionPlan plan(graph);
-  const auto &actions = plan.actions();
-  const auto releases = [&](size_t index) {
-    return std::count_if(actions.begin(), actions.end(), [&](const auto &action) {
-      return action.kind() == ExecuteActionKind::kDeleteBuffer &&
-             action.name() == "/model/attn_mask_reformat/attn_mask_subgraph/Gather/output_0" &&
-             action.node_index() == index;
-    });
-  };
-  EXPECT_EQ(releases(1), 0);
-  EXPECT_EQ(releases(2), 1);
+  EXPECT_THROW(
+      {
+        const ExecutionPlan plan(graph);
+        (void)plan;
+      },
+      std::invalid_argument);
 }
 
 TEST(ExecutionPlan, IgnoresStaleExplicitReleaseForGraphOutput) {

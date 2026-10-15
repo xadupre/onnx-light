@@ -395,8 +395,13 @@ void ExecutionPlan::BuildActions() {
   //     Node ranges without lifetime metadata (e.g. a model run without the
   //     in-place reuse pass, or annotated only for memory profiling) are built
   //     best-effort and the completeness checks are skipped.
+  std::unordered_set<std::string> explicit_releases;
   bool strict = false;
   for (const NodeProto *node_ptr : nodes_) {
+    for (const std::string &name :
+         SplitNames(ReadNodeMetadata(*node_ptr, compute::kReleaseAfterMetadataKey))) {
+      explicit_releases.insert(name);
+    }
     const std::vector<std::string> not_used_after =
         SplitNames(ReadNodeMetadata(*node_ptr, compute::kNotUsedAfterMetadataKey));
     if (!not_used_after.empty()) {
@@ -404,11 +409,11 @@ void ExecutionPlan::BuildActions() {
     }
   }
 
-  // Derive releases for intermediates without a valid explicit annotation,
+  // Derive releases for intermediates not named by any explicit annotation,
   // and unlocks for inputs / initializers missing a valid explicit annotation,
   // after their last topological use. Graph rewrites can leave an unlock
-  // or release annotation before a newly added use; such stale annotations
-  // are ignored and replaced by a derived action at the actual last use.
+  // annotation before a newly added use; such stale annotations are ignored
+  // and replaced by a derived unlock at the actual last use.
   std::vector<std::vector<std::string>> topology_releases;
   std::vector<std::vector<std::string>> topology_unlocks;
   std::vector<std::vector<std::string>> per_node_inputs;
@@ -424,16 +429,8 @@ void ExecutionPlan::BuildActions() {
       }
       per_node_inputs.push_back(std::move(node_inputs));
     }
-    std::unordered_set<std::string> valid_explicit_releases;
     std::unordered_set<std::string> valid_explicit_unlocks;
     for (size_t i = 0; i < n; ++i) {
-      for (const std::string &name :
-           SplitNames(ReadNodeMetadata(*nodes_[i], compute::kReleaseAfterMetadataKey))) {
-        const auto it = last_use.find(name);
-        if (it == last_use.end() || i >= it->second) {
-          valid_explicit_releases.insert(name);
-        }
-      }
       for (const std::string &name :
            SplitNames(ReadNodeMetadata(*nodes_[i], compute::kNotUsedAfterMetadataKey))) {
         const auto it = last_use.find(name);
@@ -450,7 +447,7 @@ void ExecutionPlan::BuildActions() {
         if (it == last_use.end() || it->second != i) {
           continue;
         }
-        if (keep_.count(name) == 0 && valid_explicit_releases.count(name) == 0) {
+        if (keep_.count(name) == 0 && explicit_releases.count(name) == 0) {
           topology_releases[i].push_back(name);
         }
         if ((input_set.count(name) != 0 || initializer_set.count(name) != 0) &&
@@ -575,7 +572,10 @@ void ExecutionPlan::BuildActions() {
     for (const std::string &name :
          SplitNames(ReadNodeMetadata(node, compute::kReleaseAfterMetadataKey))) {
       const auto last_use_it = last_use.find(name);
-      if (keep_.count(name) != 0 || (last_use_it != last_use.end() && i < last_use_it->second)) {
+      EXT_ENFORCE_INVALID(last_use_it == last_use.end() || i >= last_use_it->second,
+                          "ExecutionPlan: release_after for '", name,
+                          "' precedes its last topological use.");
+      if (keep_.count(name) != 0) {
         continue;
       }
       if (shape_tagged.count(name) != 0) {

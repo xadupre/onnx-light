@@ -28,7 +28,7 @@ def transition_model(dtype=numpy.float32):
 
 
 class TestGeneration(unittest.TestCase):
-    def test_attention_mask_gather_survives_prefill_and_cached_decode(self):
+    def test_attention_mask_gather_releases_after_last_use(self):
         model = parser.parse_model(
             '<ir_version: 10, opset_import: ["" : 23]>'
             "decoder (int64[B, S] input_ids, int64[B, P] past_ids)"
@@ -42,10 +42,13 @@ class TestGeneration(unittest.TestCase):
             " logits = Where(mask, raw_logits, raw_logits) }"
         )
         length_name = "/model/attn_mask_reformat/attn_mask_subgraph/Gather/output_0"
-        model.graph.node[2].output[0] = length_name
-        model.graph.node[3].input[0] = length_name
-        model.graph.node[4].input[0] = length_name
-        model.graph.node[3].metadata_props.add(key="onnx_light.release_after", value=length_name)
+        model.graph.node[2].output.clear()
+        model.graph.node[2].output.append(length_name)
+        model.graph.node[3].input.clear()
+        model.graph.node[3].input.append(length_name)
+        model.graph.node[4].input.clear()
+        model.graph.node[4].input.extend([length_name, "zero"])
+        model.graph.node[4].metadata_props.add(key="onnx_light.release_after", value=length_name)
         model.graph.initializer.extend(
             [
                 numpy_helper.from_array(numpy.array(1, dtype=numpy.int64), name="index"),

@@ -796,6 +796,31 @@ TEST(RMSNormalizationPattern, RejectsSharedEpsilonResult) {
   EXPECT_EQ(match.no_match->reason, "the Add is not followed by one default-domain Sqrt");
 }
 
+TEST(RMSNormalizationPattern, RejectsUnknownStashType) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.SetOpsetVersion("", 23);
+  builder.MakeInput("x", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kUndefined,
+                                                   Shape({2, 3})));
+  AddFloatInitializer(builder, "two", {1}, {2.0F});
+  AddAxes(builder, "axes", {-1});
+  AddFloatInitializer(builder, "epsilon", {1}, {1e-5F});
+  AddFloatInitializer(builder, "one", {1}, {1.0F});
+  builder.MakeNode("Pow", {"x", "two"}, {"squared"});
+  builder.MakeNode("ReduceMean", {"squared", "axes"}, {"mean"});
+  builder.MakeNode("Add", {"mean", "epsilon"}, {"mean_epsilon"});
+  builder.MakeNode("Sqrt", {"mean_epsilon"}, {"root"});
+  builder.MakeNode("Div", {"one", "root"}, {"reciprocal"});
+  builder.MakeNode("Mul", {"x", "reciprocal"}, {"y"});
+  builder.MakeOutput("y");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::RMSNormalizationPattern pattern;
+  const auto match = pattern.Match(graph, builder.Nodes()[1]);
+  EXPECT_EQ(match.pattern, nullptr);
+  ASSERT_TRUE(match.no_match.has_value());
+  EXPECT_EQ(match.no_match->reason, "the ReduceMean input type is unknown");
+}
+
 TEST(RMSNormalizationPattern, AcceptsEpsilonAsFirstAddInput) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   builder.SetOpsetVersion("", 23);

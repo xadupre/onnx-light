@@ -72,6 +72,117 @@ def _make_raw_data_constant_model():
 
 
 class TestReferenceEvaluator(ExtTestCase):
+    def test_if_accepts_empty_tensor_output(self):
+        branches = []
+        for name in ("then", "else"):
+            branches.append(
+                helper.make_graph(
+                    [helper.make_node("Identity", ["x"], [f"{name}_output"])],
+                    name,
+                    [],
+                    [helper.make_tensor_value_info(f"{name}_output", TensorProto.FLOAT, [2, 0])],
+                )
+            )
+        model = helper.make_model(
+            helper.make_graph(
+                [
+                    helper.make_node(
+                        "If",
+                        ["condition"],
+                        ["output"],
+                        then_branch=branches[0],
+                        else_branch=branches[1],
+                    )
+                ],
+                "empty_if_output",
+                [
+                    helper.make_tensor_value_info("condition", TensorProto.BOOL, []),
+                    helper.make_tensor_value_info("x", TensorProto.FLOAT, [2, 0]),
+                ],
+                [helper.make_tensor_value_info("output", TensorProto.FLOAT, [2, 0])],
+            ),
+            opset_imports=[helper.make_operatorsetid("", 18)],
+        )
+
+        (output,) = ReferenceEvaluator(model).run(
+            None, {"condition": np.array(True), "x": np.empty((2, 0), dtype=np.float32)}
+        )
+
+        self.assertEqual(output.shape, (2, 0))
+
+    def test_loop_accepts_empty_tensor_output(self):
+        body = helper.make_graph(
+            [
+                helper.make_node("Identity", ["keep_going"], ["condition_out"]),
+                helper.make_node("Identity", ["carried"], ["carried_out"]),
+            ],
+            "body",
+            [
+                helper.make_tensor_value_info("iteration", TensorProto.INT64, []),
+                helper.make_tensor_value_info("keep_going", TensorProto.BOOL, []),
+                helper.make_tensor_value_info("carried", TensorProto.FLOAT, [2, 0]),
+            ],
+            [
+                helper.make_tensor_value_info("condition_out", TensorProto.BOOL, []),
+                helper.make_tensor_value_info("carried_out", TensorProto.FLOAT, [2, 0]),
+            ],
+        )
+        model = helper.make_model(
+            helper.make_graph(
+                [
+                    helper.make_node(
+                        "Loop", ["trip_count", "condition", "x"], ["output"], body=body
+                    )
+                ],
+                "empty_loop_output",
+                [
+                    helper.make_tensor_value_info("trip_count", TensorProto.INT64, []),
+                    helper.make_tensor_value_info("condition", TensorProto.BOOL, []),
+                    helper.make_tensor_value_info("x", TensorProto.FLOAT, [2, 0]),
+                ],
+                [helper.make_tensor_value_info("output", TensorProto.FLOAT, [2, 0])],
+            ),
+            opset_imports=[helper.make_operatorsetid("", 18)],
+        )
+
+        (output,) = ReferenceEvaluator(model).run(
+            None,
+            {
+                "trip_count": np.array(1, dtype=np.int64),
+                "condition": np.array(True),
+                "x": np.empty((2, 0), dtype=np.float32),
+            },
+        )
+
+        self.assertEqual(output.shape, (2, 0))
+
+    def test_scan_accepts_empty_tensor_output(self):
+        body = helper.make_graph(
+            [helper.make_node("Identity", ["current"], ["current_out"])],
+            "body",
+            [helper.make_tensor_value_info("current", TensorProto.FLOAT, [2, 0])],
+            [helper.make_tensor_value_info("current_out", TensorProto.FLOAT, [2, 0])],
+        )
+        model = helper.make_model(
+            helper.make_graph(
+                [
+                    helper.make_node(
+                        "Scan", ["scan_input"], ["output"], body=body, num_scan_inputs=1
+                    )
+                ],
+                "empty_scan_output",
+                [helper.make_tensor_value_info("scan_input", TensorProto.FLOAT, [3, 2, 0])],
+                [helper.make_tensor_value_info("output", TensorProto.FLOAT, [3, 2, 0])],
+            ),
+            opset_imports=[helper.make_operatorsetid("", 18)],
+        )
+
+        (output,) = ReferenceEvaluator(model).run(
+            None, {"scan_input": np.empty((3, 2, 0), dtype=np.float32)}
+        )
+
+        self.assertEqual(output.shape, (3, 2, 0))
+
     def test_cpu_execution_policy_and_resolution(self):
         model = parser.parse_model(_ABS_MODEL_SRC)
         evaluator = ReferenceEvaluator(

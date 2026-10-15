@@ -617,6 +617,9 @@ void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContex
     if (!verified_output.has_allocation()) {
       continue;
     }
+    if (verified_output.size_bytes() == 0) {
+      continue;
+    }
     EXT_ENFORCE_INVALID(verified_output.allocation_owner() == expected, "RuntimeSession: op '",
                         node.op_type(), "' produced output '", name,
                         "' backed by an allocator other than ", expected_name, ".");

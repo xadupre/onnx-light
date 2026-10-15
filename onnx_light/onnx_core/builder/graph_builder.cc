@@ -612,7 +612,7 @@ void GraphBuilder::MakeStructType(const StructTypeProto &type) {
 }
 
 void GraphBuilder::RefreshAncestors() {
-  if (outputs_.empty() || parent_ == nullptr) {
+  if (ancestor_refresh_suppressed_ || outputs_.empty() || parent_ == nullptr) {
     return;
   }
   if (is_local_function_) {
@@ -725,7 +725,8 @@ void GraphBuilder::RefreshNestedDependency(GraphBuilder &child, bool propagate_t
     compute_.RefreshNode(nodes_, index, compute_.Shapes(), references, device_);
     compute_.AppendNodeConstant(stored, index);
   }
-  if (propagate_to_parent && parent_ != nullptr && !affected_values.empty()) {
+  if (propagate_to_parent && !ancestor_refresh_suppressed_ && parent_ != nullptr &&
+      !affected_values.empty()) {
     if (is_local_function_) {
       parent_->RefreshLocalFunctionDefinition(*this);
     }

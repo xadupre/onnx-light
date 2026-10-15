@@ -220,7 +220,10 @@ class TestIOPipeline(ExtTestCase):
                     self.assertEqual(restored.prefill.graph.node[0].doc_string, replacement)
 
                     fd_path = pathlib.Path(temp_dir, "pipeline-fd.onnx")
-                    fd = os.open(fd_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o666)
+                    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+                    if hasattr(os, "O_BINARY"):
+                        flags |= os.O_BINARY
+                    fd = os.open(fd_path, flags, 0o666)
                     try:
                         pipeline.SerializeToFileDescriptor(fd, options)
                     finally:
@@ -277,7 +280,10 @@ class TestIOPipeline(ExtTestCase):
                     self.assertEqual(restored.prefill.graph.initializer[0].raw_data, replacement)
 
                     fd_path = pathlib.Path(temp_dir, "pipeline-fd.onnx")
-                    fd = os.open(fd_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o666)
+                    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+                    if hasattr(os, "O_BINARY"):
+                        flags |= os.O_BINARY
+                    fd = os.open(fd_path, flags, 0o666)
                     try:
                         pipeline.SerializeToFileDescriptor(fd, options)
                     finally:

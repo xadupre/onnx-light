@@ -42,6 +42,15 @@ the symbolic-dimension constraints discovered along the way. Each
 symbolic expression string), an optional ``value_as_shape`` annotation
 and optional integer min/max bounds.
 
+The per-operator built-in shape and peak-memory functions live in
+process-wide dispatch tables populated explicitly by
+``RegisterShapeFunctions`` and ``RegisterPeakMemoryFunctions``. A
+``ShapesContext`` never mutates those tables while analyzing a model:
+model-local functions, custom callbacks, inferred values, nested contexts, and
+peak-memory results remain local to that analysis. Writing inferred
+``value_info`` or ``onnx_light.peak_memory`` metadata is a separate explicit
+mutation of the caller-provided model, not registry mutation.
+
 The algorithm
 -------------
 

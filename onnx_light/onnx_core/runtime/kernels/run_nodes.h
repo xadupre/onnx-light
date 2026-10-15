@@ -51,18 +51,16 @@
  *
  * In addition to the static :cpp:func:`KernelDispatchTable`,
  * :cpp:func:`RunNode` also consults
- * :cpp:func:`RuntimeContext::functions` for model-local functions
- * (``ModelProto::functions``). When a node's
+ * :cpp:func:`RuntimeContext::functions` for explicitly registered functions;
+ * a model-based :cpp:class:`RuntimeSession` consults its own model-local
+ * functions first without modifying that registry. When a node's
  * ``(domain, op_type, overload)`` triple matches a registered
  * :cpp:type:`FunctionProto`, the call is dispatched through a
  * :cpp:class:`RuntimeSession` against the caller's
  * :cpp:class:`RuntimeContext`, with borrowed formal inputs; the function's formal outputs are
  * then propagated back to the caller under the names declared by
- * ``node.output``. :cpp:func:`RegisterModelFunctions` populates that
- * registry from a ``ModelProto``'s ``functions()`` field so nodes referring
- * to local functions are resolved transparently once the caller runs the
- * model's graph through its own :cpp:class:`ExecutionPlan` /
- * :cpp:class:`RuntimeSession`.
+ * ``node.output``. :cpp:func:`RegisterModelFunctions` explicitly populates
+ * the context registry for standalone nodes or plans.
  */
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
@@ -116,11 +114,10 @@ void RunNode(const NodeProto &node, RuntimeContext &rt);
  * model-local function by ``(domain, op_type, overload)`` are dispatched
  * to it rather than the static :cpp:func:`KernelDispatchTable`.
  *
- * Callers running a ``ModelProto``'s graph must call this once (before
- * building the graph's :cpp:class:`ExecutionPlan` and driving it through a
- * :cpp:class:`RuntimeSession`) so that any node referring to a model-local
- * function resolves correctly; this function itself does not run any
- * nodes.
+ * Model-based sessions resolve their functions within their own scope
+ * instead. This explicit setup is only needed for standalone nodes or plans.
+ * The context borrows function pointers: callers must remove registrations
+ * before destroying their source model. This function itself does not run nodes.
  *
  * @param model The model whose ``functions()`` are registered.
  * @param rt    In/out runtime context whose function registry is updated.
@@ -136,8 +133,7 @@ void RegisterModelFunctions(const ModelProto &model, RuntimeContext &rt);
  * Convenience wrapper that performs, in one call, the full sequence a caller
  * would otherwise assemble by hand to run a whole model: it derives the
  * default-domain opset version from ``model.opset_import()``, builds a
- * :cpp:class:`RuntimeContext`, registers every model-local function
- * (:cpp:func:`RegisterModelFunctions`), seeds the supplied ``inputs`` and the
+ * :cpp:class:`RuntimeContext`, seeds the supplied ``inputs`` and the
  * graph's initializers, builds a :cpp:class:`RuntimeSession` over
  * ``model.graph()`` and runs it once. The returned tensors own their bytes, so
  * they remain valid after ``model`` is released.
@@ -223,7 +219,8 @@ public:
    */
   SubgraphSession(const GraphProto &graph, const OpsetImports *opset_imports = nullptr,
                   std::shared_ptr<ValueStore> value_store = nullptr,
-                  std::unordered_set<std::string> immutable_inputs = {});
+                  std::unordered_set<std::string> immutable_inputs = {},
+                  const FunctionMap *model_functions = nullptr);
 
   /**
    * Evaluates the subgraph once in ``rt``, seeded with the cached initializers

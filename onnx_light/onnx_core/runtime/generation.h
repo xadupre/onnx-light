@@ -47,7 +47,9 @@ struct GenerationPipeline {
  * per iteration. Kernels without append support keep their ordinary allocation
  * behavior. Initial caches must represent an empty prefix. State is local to
  * this Generate call; neither the model nor the feeds are modified. The supplied
- * execution context is reused and its invocation values may change.
+ * execution context is reused and its invocation values may change. Model
+ * functions remain scoped to each model session; caller function and custom
+ * kernel registrations are not changed, including on failure.
  * This function is not thread-safe when calls share a RuntimeContext. The caller
  * must serialize generation and other execution using that context; concurrent
  * requests require independent contexts. Parallel kernels do not change this

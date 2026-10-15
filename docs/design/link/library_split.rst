@@ -78,6 +78,15 @@ This keeps linking predictable: an application that does not evaluate models,
 infer shapes, estimate peak memory, or optimize graphs does not pull in those
 implementations.
 
+Registration is application setup, not session state. Shape, peak-memory, and
+built-in kernel registration populate process-wide dispatch tables explicitly;
+runtime sessions and analysis contexts only read those tables. Model-local
+functions remain owned by their model/session scope, and context-local custom
+functions or kernels do not modify process-wide tables. Gradient rules use a
+different contract: ``DefaultGradRegistry`` is immutable, while custom rules
+are added to a caller-owned ``GradRegistry`` passed explicitly to the gradient
+transformation.
+
 What to link
 ------------
 

@@ -127,6 +127,7 @@ RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions op
       parallel_region_collector_(std::move(options.parallel_region_collector)),
       verbose_(options.verbose) {
   owned_opset_imports_ = ParseOpsetImports(model.opset_import());
+  model_functions_ = detail::ModelFunctions(model);
   SetDeclaredShapes(model.graph());
   SetInitializers(model.graph());
   struct_type_catalogue_.emplace();
@@ -136,10 +137,11 @@ RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions op
 
 RuntimeSession::RuntimeSession(const GraphProto &graph, const OpsetImports *inherited_opset_imports,
                                int verbose, std::shared_ptr<ValueStore> value_store,
-                               std::unordered_set<std::string> immutable_inputs)
+                               std::unordered_set<std::string> immutable_inputs,
+                               const FunctionMap *model_functions)
     : default_plan_(graph), plan_(default_plan_), inherited_opset_imports_(inherited_opset_imports),
-      value_store_(std::move(value_store)), cpu_execution_(DefaultCpuExecutionPolicy(parameters_)),
-      verbose_(verbose) {
+      inherited_model_functions_(model_functions), value_store_(std::move(value_store)),
+      cpu_execution_(DefaultCpuExecutionPolicy(parameters_)), verbose_(verbose) {
   SetDeclaredShapes(graph);
   SetInitializers(graph);
   inherited_immutable_inputs_ = std::move(immutable_inputs);
@@ -176,10 +178,10 @@ RuntimeSession::RuntimeSession(const FunctionProto &function, RuntimeSessionOpti
 
 RuntimeSession::RuntimeSession(const FunctionProto &function,
                                const OpsetImports *inherited_opset_imports,
-                               RuntimeSessionOptions options)
+                               RuntimeSessionOptions options, const FunctionMap *model_functions)
     : default_plan_(function), plan_(default_plan_),
       inherited_opset_imports_(inherited_opset_imports),
-      value_store_(std::move(options.value_store)),
+      inherited_model_functions_(model_functions), value_store_(std::move(options.value_store)),
       inherited_immutable_inputs_(std::move(options.immutable_inputs)),
       check_shapes_(options.check_shapes),
       allow_external_output_allocators_(options.allow_external_output_allocators),
@@ -197,6 +199,11 @@ RuntimeSession::RuntimeSession(const FunctionProto &function,
 
 const OpsetImports *RuntimeSession::EffectiveOpsetImports() const noexcept {
   return owned_opset_imports_ ? &*owned_opset_imports_ : inherited_opset_imports_;
+}
+
+const FunctionMap *RuntimeSession::EffectiveModelFunctions() const noexcept {
+  return inherited_model_functions_ ? inherited_model_functions_
+                                    : (model_functions_.empty() ? nullptr : &model_functions_);
 }
 
 const std::shared_ptr<CpuExecutor> &RuntimeSession::cpu_executor() {
@@ -336,7 +343,8 @@ RuntimeSession::ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt,
                                   const KernelContext &kernel_context,
                                   const std::unordered_set<std::string> &preparable_inputs) const {
   return detail::ResolveNodeKernelDefault(node, rt, domain, op_type, kernel_context,
-                                          EffectiveOpsetImports(), value_store_, preparable_inputs);
+                                          EffectiveOpsetImports(), value_store_, preparable_inputs,
+                                          EffectiveModelFunctions());
 }
 
 void RuntimeSession::InitializeKernels(RuntimeContext &rt,
@@ -367,12 +375,14 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt,
       EXT_ENFORCE_INVALID(found != imports->end(),
                           "RuntimeSession: missing opset import for domain '", domain, "'.");
       const KernelContext kernel_context(OpsetId(domain, found->second), rt.kernel_ctx().allocator,
-                                         imports);
+                                         imports, EffectiveModelFunctions());
       prepared.instance =
           ResolveNodeKernel(node, rt, domain, op_type, kernel_context, preparable_inputs);
     } else {
+      KernelContext kernel_context = rt.kernel_ctx();
+      kernel_context.model_functions = EffectiveModelFunctions();
       prepared.instance =
-          ResolveNodeKernel(node, rt, domain, op_type, rt.kernel_ctx(), preparable_inputs);
+          ResolveNodeKernel(node, rt, domain, op_type, kernel_context, preparable_inputs);
     }
   }
 

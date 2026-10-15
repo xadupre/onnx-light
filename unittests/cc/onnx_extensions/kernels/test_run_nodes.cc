@@ -8,6 +8,7 @@
 #include "onnx_core/compute/inplace_reuse.h"
 #include "onnx_core/compute/peak_memory.h"
 #include "onnx_core/compute/raw_buffer_allocator.h"
+#include "onnx_core/runtime/kernels/controlflow/include_controlflow_kernels.h"
 #include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
 #include "onnx_core/runtime/kernels/node_helpers.h"
@@ -26,6 +27,9 @@
 
 #include <gtest/gtest.h>
 
+#include <array>
+#include <atomic>
+#include <barrier>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -408,6 +412,23 @@ NodeProto MakeLoopNode(const std::vector<std::string> &inputs,
   *body_attr->add_g() = std::move(body);
   return loop;
 }
+
+class DelegatedIfKernel final : public core::runtime::KernelBase {
+public:
+  explicit DelegatedIfKernel(const KernelContext &ctx) : KernelBase(ctx) {}
+
+  void Run(RuntimeContext &rt) override {
+    const NodeProto &node = *node_;
+    core::runtime::If delegated(ctx_);
+    Tensors outputs = delegated(rt, core::runtime::GetInput(node, 0, rt),
+                                core::runtime::GetRequiredGraphAttribute(node, "then_branch"),
+                                core::runtime::GetRequiredGraphAttribute(node, "else_branch"));
+    if (outputs.size() != static_cast<size_t>(node.output_size()))
+      throw std::invalid_argument("DelegatedIfKernel: output count mismatch.");
+    for (size_t i = 0; i < outputs.size(); ++i)
+      core::runtime::SetOutput(node, static_cast<int>(i), std::move(outputs[i]), rt);
+  }
+};
 
 } // namespace
 
@@ -2722,6 +2743,22 @@ TEST(RunModel, ModelLocalFunctionThreeLevelNestedCalls) {
   EXPECT_FLOAT_EQ(res[2], -24.0f);
 }
 
+TEST(ExecutionPlan, RejectsRecursiveFunctionWithEquivalentDefaultDomains) {
+  ModelProto model;
+  model.set_ir_version(10);
+  GraphProto *graph = model.mutable_graph();
+  graph->set_name("root");
+  *graph->add_node() = MakeNode("Recursive", {"x"}, {"y"});
+  FunctionProto *function = model.add_functions();
+  function->set_domain("");
+  function->set_name("Recursive");
+  function->add_input("x");
+  function->add_output("y");
+  *function->add_node() = MakeNode("Recursive", {"x"}, {"y"}, "ai.onnx");
+
+  EXPECT_THROW((void)ExecutionPlan(model), std::invalid_argument);
+}
+
 TEST(RunModel, ModelLocalFunctionOverloadDisambiguation) {
   // Two functions share the same (domain, name) but differ by overload.
   // The dispatcher must pick the one matching node.overload.
@@ -2790,6 +2827,170 @@ TEST(RunModel, ModelLocalFunctionOverloadDisambiguation) {
   ASSERT_TRUE(rt.Has("d"));
   EXPECT_FLOAT_EQ(rt.Get("s").AsFloat()[0], 13.0f);
   EXPECT_FLOAT_EQ(rt.Get("d").AsFloat()[0], 7.0f);
+}
+
+TEST(RunModel, ModelSessionsScopeConflictingFunctionsThroughCallsAndSubgraphs) {
+  const auto make_model = [](const std::string &leaf_op) {
+    ModelProto model;
+    model.set_ir_version(10);
+    AddOpsetImport(model, "", 18);
+    AddOpsetImport(model, "custom", 1);
+    auto *leaf = model.add_functions();
+    leaf->set_domain("custom");
+    leaf->set_name("Leaf");
+    leaf->set_overload("shared");
+    leaf->add_input("a");
+    leaf->add_output("b");
+    *leaf->add_node() = MakeNode(leaf_op, {"a"}, {"b"});
+    auto *outer = model.add_functions();
+    outer->set_domain("custom");
+    outer->set_name("Outer");
+    outer->add_input("a");
+    outer->add_output("b");
+    *outer->add_node() = MakeNode("Leaf", {"a"}, {"b"}, "custom");
+    outer->mutable_node(0)->set_overload("shared");
+    auto *graph = model.mutable_graph();
+    graph->set_name("root");
+    auto *if_node = graph->add_node();
+    *if_node = MakeNode("If", {"condition"}, {"y"});
+    for (const char *branch_name : {"then_branch", "else_branch"}) {
+      auto *attribute = if_node->add_attribute();
+      attribute->set_name(branch_name);
+      attribute->set_type(AttributeProto::GRAPH);
+      auto *branch = attribute->mutable_g();
+      *branch->add_node() = MakeNode("Outer", {"x"}, {"z"}, "custom");
+      branch->add_output()->set_name("z");
+    }
+    graph->add_output()->set_name("y");
+    return model;
+  };
+
+  ModelProto negated = make_model("Neg");
+  ModelProto unchanged = make_model("Identity");
+  RuntimeContext context(KernelContext(DefaultOpset(18)));
+  context.functions().emplace("custom:Leaf:shared", &unchanged.functions()[0]);
+  const auto original = context.functions();
+  const auto run = [&](const ModelProto &model) {
+    context.ResetInvocation();
+    context.Set("condition", Tensor::FromBool("condition", {}, {1}));
+    context.Set("x", Tensor::FromFloat("x", {1}, {2}));
+    RuntimeSession session(model);
+    session.Run(context);
+    EXPECT_EQ(context.functions(), original);
+    return context.Get("y").AsFloat()[0];
+  };
+  EXPECT_FLOAT_EQ(run(negated), -2);
+  EXPECT_FLOAT_EQ(run(unchanged), 2);
+  EXPECT_FLOAT_EQ(run(negated), -2);
+  bool fallback_called = false;
+  context.RegisterCustomKernel(
+      "custom", "Leaf", [&](const NodeProto &, RuntimeContext &) { fallback_called = true; });
+  negated.mutable_functions(0)->add_input("missing");
+  EXPECT_THROW(run(negated), std::invalid_argument);
+  EXPECT_FALSE(fallback_called);
+  EXPECT_EQ(context.functions(), original);
+  context.functions().clear();
+}
+
+TEST(RunModel, ConcurrentSessionsIsolateConflictingFunctionsAndGlobalFallback) {
+  const std::string domain = "test.concurrent.function";
+  ASSERT_EQ(core::runtime::GlobalCustomKernels().count(domain + ":Leaf"), 0u);
+  std::atomic<int> fallback_calls{0};
+  core::runtime::RegisterGlobalCustomKernel(
+      domain, "Leaf", [&](const NodeProto &node, RuntimeContext &rt) {
+        ++fallback_calls;
+        rt.Put(node.output(0), Tensor::FromFloat("", {1}, {99}, rt.allocator()));
+      });
+  struct GlobalKernelCleanup {
+    const std::string &domain;
+    ~GlobalKernelCleanup() { core::runtime::UnregisterGlobalCustomKernel(domain, "Leaf"); }
+  } cleanup{domain};
+
+  const auto make_model = [&](const std::string &leaf_op, bool fail) {
+    ModelProto model;
+    model.set_ir_version(10);
+    AddOpsetImport(model, "", 18);
+    AddOpsetImport(model, domain, 1);
+    FunctionProto *leaf = model.add_functions();
+    leaf->set_domain(domain);
+    leaf->set_name("Leaf");
+    leaf->add_input("a");
+    leaf->add_output("b");
+    *leaf->add_node() = MakeNode("Block", {"a"}, {"ready"}, domain);
+    *leaf->add_node() = MakeNode(leaf_op, {"ready"}, {"b"}, fail ? domain : std::string());
+    GraphProto *graph = model.mutable_graph();
+    graph->set_name("root");
+    *graph->add_node() = MakeNode("Leaf", {"x"}, {"y"}, domain);
+    graph->add_output()->set_name("y");
+    return model;
+  };
+
+  std::array<ModelProto, 3> models = {
+      make_model("Neg", false),
+      make_model("Identity", false),
+      make_model("Fail", true),
+  };
+  std::array<std::unique_ptr<RuntimeSession>, 3> sessions;
+  std::array<std::unique_ptr<RuntimeContext>, 3> contexts;
+  std::barrier workers_ready(3);
+  FunctionProto sentinel;
+  sentinel.set_domain(domain);
+  sentinel.set_name("Sentinel");
+  for (size_t i = 0; i < contexts.size(); ++i) {
+    sessions[i] = std::make_unique<RuntimeSession>(models[i]);
+    contexts[i] = std::make_unique<RuntimeContext>();
+    contexts[i]->functions().emplace(domain + ":Sentinel:", &sentinel);
+    contexts[i]->RegisterCustomKernel(domain, "Block",
+                                      [&](const NodeProto &node, RuntimeContext &rt) {
+                                        workers_ready.arrive_and_wait();
+                                        rt.Put(node.output(0), rt.Get(node.input(0)).BorrowView());
+                                      });
+  }
+  contexts[2]->RegisterCustomKernel(domain, "Fail", [](const NodeProto &, RuntimeContext &) {
+    throw std::runtime_error("local failure");
+  });
+  std::array<size_t, 3> custom_kernel_counts = {
+      contexts[0]->custom_kernels().size(),
+      contexts[1]->custom_kernels().size(),
+      contexts[2]->custom_kernels().size(),
+  };
+
+  std::array<float, 3> results{};
+  std::array<std::exception_ptr, 3> errors;
+  std::array<std::thread, 3> workers;
+  for (size_t i = 0; i < workers.size(); ++i) {
+    workers[i] = std::thread([&, i] {
+      try {
+        contexts[i]->Set("x", Tensor::FromFloat("x", {1}, {2}));
+        sessions[i]->Run(*contexts[i]);
+        results[i] = contexts[i]->Get("y").AsFloat()[0];
+      } catch (...) {
+        errors[i] = std::current_exception();
+      }
+    });
+  }
+  for (std::thread &worker : workers)
+    worker.join();
+
+  EXPECT_EQ(errors[0], nullptr);
+  EXPECT_EQ(errors[1], nullptr);
+  ASSERT_NE(errors[2], nullptr);
+  EXPECT_THROW(std::rethrow_exception(errors[2]), std::runtime_error);
+  EXPECT_FLOAT_EQ(results[0], -2);
+  EXPECT_FLOAT_EQ(results[1], 2);
+  EXPECT_EQ(fallback_calls.load(), 0);
+  for (size_t i = 0; i < contexts.size(); ++i) {
+    EXPECT_EQ(contexts[i]->functions().size(), 1u);
+    EXPECT_EQ(contexts[i]->functions().at(domain + ":Sentinel:"), &sentinel);
+    EXPECT_EQ(contexts[i]->custom_kernels().size(), custom_kernel_counts[i]);
+  }
+  EXPECT_EQ(core::runtime::GlobalCustomKernels().count(domain + ":Leaf"), 1u);
+
+  RuntimeContext fallback_context;
+  fallback_context.Set("x", Tensor::FromFloat("x", {1}, {2}));
+  RunNode(MakeNode("Leaf", {"x"}, {"y"}, domain), fallback_context);
+  EXPECT_EQ(fallback_calls.load(), 1);
+  EXPECT_FLOAT_EQ(fallback_context.Get("y").AsFloat()[0], 99);
 }
 
 TEST(RunModel, ModelLocalFunctionWrongInputCountThrows) {
@@ -3613,6 +3814,93 @@ TEST(RunNodes, RunNodeFlexAttentionFromDispatchTable) {
   const Tensor &Y = rt.tensors().at("Y");
   EXPECT_EQ(Y.shape, (std::vector<int64_t>{1, 1, 2, 2}));
   EXPECT_EQ(Y.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
+}
+
+TEST(RunModel, FlexAttentionModifierResolvesModelLocalFunction) {
+  ModelProto model;
+  model.set_ir_version(10);
+  AddOpsetImport(model, "", 18);
+  AddOpsetImport(model, "ai.onnx.preview", 1);
+  AddOpsetImport(model, "custom", 1);
+
+  FunctionProto *modifier = model.add_functions();
+  modifier->set_domain("custom");
+  modifier->set_name("Modifier");
+  modifier->add_input("score");
+  modifier->add_output("modified");
+  *modifier->add_node() = MakeNode("Identity", {"score"}, {"modified"});
+
+  GraphProto *graph = model.mutable_graph();
+  graph->set_name("root");
+  NodeProto *flex = graph->add_node();
+  *flex = MakeNode("FlexAttention", {"Q", "K", "V"}, {"Y"}, "ai.onnx.preview");
+  AttributeProto *score_mod = flex->add_attribute();
+  score_mod->set_name("score_mod");
+  score_mod->set_type(AttributeProto::AttributeType::GRAPH);
+  GraphProto &score_graph = score_mod->ref_g();
+  score_graph.set_name("score_mod");
+  score_graph.add_input()->set_name("score");
+  *score_graph.add_node() = MakeNode("Modifier", {"score"}, {"modified"}, "custom");
+  score_graph.add_output()->set_name("modified");
+  graph->add_output()->set_name("Y");
+
+  RuntimeContext context;
+  context.Set("Q", Tensor::FromFloat("Q", {1, 1, 1, 1}, {1}));
+  context.Set("K", Tensor::FromFloat("K", {1, 1, 1, 1}, {1}));
+  context.Set("V", Tensor::FromFloat("V", {1, 1, 1, 1}, {3}));
+  RuntimeSession session(model);
+  session.Run(context);
+
+  const Tensor &output = context.Get("Y");
+  ASSERT_EQ(output.element_count(), 1);
+  EXPECT_FLOAT_EQ(output.AsFloat()[0], 3);
+}
+
+TEST(RunModel, DelegatedControlFlowResolvesModelLocalFunction) {
+  const std::string delegate_domain = "test.delegated.controlflow";
+  ModelProto model;
+  model.set_ir_version(10);
+  AddOpsetImport(model, "", 18);
+  AddOpsetImport(model, "custom", 1);
+  AddOpsetImport(model, delegate_domain, 1);
+
+  FunctionProto *function = model.add_functions();
+  function->set_domain("custom");
+  function->set_name("LocalNeg");
+  function->add_input("x");
+  function->add_output("y");
+  *function->add_node() = MakeNode("Neg", {"x"}, {"y"});
+
+  GraphProto *graph = model.mutable_graph();
+  graph->set_name("root");
+  NodeProto *node = graph->add_node();
+  *node = MakeNode("DelegatedIf", {"condition"}, {"y"}, delegate_domain);
+  for (const char *branch_name : {"then_branch", "else_branch"}) {
+    const bool is_then = branch_name == std::string_view("then_branch");
+    AttributeProto *attribute = node->add_attribute();
+    attribute->set_name(branch_name);
+    attribute->set_type(AttributeProto::GRAPH);
+    GraphProto *branch = attribute->mutable_g();
+    *branch->add_node() =
+        MakeNode(is_then ? "LocalNeg" : "Identity", {"x"}, {"z"}, is_then ? "custom" : "");
+    branch->add_output()->set_name("z");
+  }
+  graph->add_output()->set_name("y");
+
+  RuntimeContext context;
+  context.RegisterKernelFn(
+      delegate_domain, "DelegatedIf", context.device(),
+      [](const NodeProto &resolved_node, RuntimeContext &, const KernelContext &kernel_context) {
+        auto kernel = std::make_unique<DelegatedIfKernel>(kernel_context);
+        kernel->set_node(resolved_node);
+        return kernel;
+      });
+  context.Set("condition", Tensor::FromBool("condition", {}, {1}));
+  context.Set("x", Tensor::FromFloat("x", {1}, {2}));
+  RuntimeSession session(model);
+  session.Run(context);
+
+  EXPECT_FLOAT_EQ(context.Get("y").AsFloat()[0], -2);
 }
 
 TEST(RunNodes, RunNodeGRUFromDispatchTable) {
@@ -7518,8 +7806,8 @@ TEST(RunModel, DefaultDomainModelLocalFunctionLookupKey) {
   RegisterModelFunctions(model, rt);
 
   // FunctionLookupKey formats an empty domain as a leading ':' separator.
-  ASSERT_EQ(rt.functions().count(":MyDefaultDomainFn:"), 1u);
-  EXPECT_EQ(rt.functions().at(":MyDefaultDomainFn:"), func);
+  ASSERT_EQ(rt.functions().count("ai.onnx:MyDefaultDomainFn:"), 1u);
+  EXPECT_EQ(rt.functions().at("ai.onnx:MyDefaultDomainFn:"), func);
 }
 
 // A model-local function body node carrying a repeated GRAPHS attribute whose

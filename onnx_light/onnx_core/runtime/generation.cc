@@ -5,7 +5,6 @@
 #include "onnx_core/runtime/generation.h"
 #include "onnx_core/runtime/kernels/float16_promote.h"
 #include "onnx_core/runtime/kernels/run_nodes.h"
-#include "onnx_lib/common/scoped_resource.h"
 #include <cmath>
 #include <limits>
 #include <random>
@@ -94,8 +93,6 @@ int64_t Sample(const Tensor &logits, int64_t offset, int64_t vocabulary, double 
 void RunGraph(const ModelProto &model, RuntimeContext &invocation, RuntimeValueMap &values,
               RuntimeSession &session) {
   invocation.ResetInvocation();
-  invocation.functions().clear();
-  RegisterModelFunctions(model, invocation);
   for (const auto &input : model.graph().input()) {
     const std::string &name = input.name();
     const auto value = values.find(name);
@@ -286,13 +283,6 @@ Tensor Generate(const GenerationPipeline &pipeline, RuntimeContext &context,
     include_plan(*pipeline.embedding);
     context.BindExecutionPlan(*largest);
   }
-  FunctionMap original_functions;
-  if (embedded)
-    original_functions.swap(context.functions());
-  ScopeExit restore_functions([&]() noexcept {
-    if (embedded)
-      context.functions().swap(original_functions);
-  });
   RuntimeValueMap current;
   for (const auto &[name, value] : feeds)
     current.emplace(name, value.BorrowView());
@@ -340,7 +330,6 @@ Tensor Generate(const GenerationPipeline &pipeline, RuntimeContext &context,
     current.insert_or_assign(options.input_ids_name, RuntimeValue(std::move(ids).RetainStorage()));
     if (embedded) {
       RunGraph(*pipeline.embedding, context, current, *embedding_session);
-      context.functions().clear();
     }
     Tensor logits;
     if (persistent) {
@@ -357,7 +346,6 @@ Tensor Generate(const GenerationPipeline &pipeline, RuntimeContext &context,
       logits = std::move(it->second.tensor);
     } else {
       context.ResetInvocation();
-      RegisterModelFunctions(model, context);
       for (const auto &input : model.graph().input()) {
         const auto found = current.find(input.name());
         if (found == current.end())

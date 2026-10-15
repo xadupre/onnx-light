@@ -6,6 +6,7 @@
 #include "onnx_core/runtime/kernels/float16_promote.h"
 #include "onnx_core/runtime/kernels/run_nodes.h"
 #include "onnx_core/runtime/kernels/run_nodes_internal.h"
+#include "onnx_core/runtime/quantization.h"
 #include <cmath>
 #include <limits>
 #include <random>
@@ -304,52 +305,122 @@ void ValidatePipelineValueNames(const ModelProto &embedding, const ModelProto &l
       "' is shared by the embedding and language models; private value names must be unique.");
 }
 
-bool HasParameterReference(const RuntimeValue &value, size_t depth = 0) {
+struct GenerationPipelineView {
+  const ModelProto *prefill = nullptr;
+  const ModelProto *embedding = nullptr;
+};
+
+void BindParameterReferences(RuntimeValue &value, const ModelProto &model,
+                             const StructTypeCatalogue &types,
+                             std::shared_ptr<const QuantizationParameterCatalogue> &parameters,
+                             size_t depth = 0) {
   EXT_ENFORCE_INVALID(depth <= RuntimeValue::kMaxDepth,
                       "Generate: feed value exceeds the maximum nesting depth.");
-  if (value.kind == RuntimeValue::Kind::kEncoded && value.Encoded().has_parameter_ref())
-    return true;
-  for (const auto &[name, field] : value.fields) {
-    (void)name;
-    if (HasParameterReference(field, depth + 1))
-      return true;
+  if (value.kind == RuntimeValue::Kind::kEncoded && value.Encoded().has_parameter_ref()) {
+    if (!parameters)
+      parameters = QuantizationParameterCatalogue::Build(model);
+    parameters->Validate(value.Encoded(), types);
+    value.quantization_parameters = parameters;
   }
-  for (const RuntimeValue &element : value.elements)
-    if (HasParameterReference(element, depth + 1))
-      return true;
-  return false;
+  for (auto &[name, field] : value.fields) {
+    (void)name;
+    BindParameterReferences(field, model, types, parameters, depth + 1);
+  }
+  value.elements.TransformInPlace([&](RuntimeValue &element) {
+    BindParameterReferences(element, model, types, parameters, depth + 1);
+  });
+}
+
+RuntimeValueMap ScopeFeeds(const ModelProto &model, const RuntimeValueMap &feeds) {
+  StructTypeCatalogue types;
+  types.Build(model);
+  std::shared_ptr<const QuantizationParameterCatalogue> parameters;
+  RuntimeValueMap result;
+  for (const auto &[name, value] : feeds) {
+    if (!HasInput(model, name))
+      continue;
+    RuntimeValue scoped = value.BorrowView();
+    BindParameterReferences(scoped, model, types, parameters);
+    result.emplace(name, std::move(scoped));
+  }
+  return result;
+}
+
+GenerationOptions PipelineOptions(const PipelineProto &pipeline) {
+  GenerationOptions options;
+  if (pipeline.has_max_new_tokens())
+    options.max_new_tokens = pipeline.max_new_tokens();
+  if (pipeline.has_temperature())
+    options.temperature = pipeline.temperature();
+  if (pipeline.has_seed()) {
+    EXT_ENFORCE_INVALID(pipeline.seed() >= 0, "Generate: seed must be nonnegative.");
+    options.seed = static_cast<uint64_t>(pipeline.seed());
+  }
+  if (pipeline.has_eos_token_id())
+    options.eos_token_id = pipeline.eos_token_id();
+  if (pipeline.has_pad_token_id())
+    options.pad_token_id = pipeline.pad_token_id();
+  EXT_ENFORCE_INVALID(!pipeline.has_top_k() || pipeline.top_k() == 0,
+                      "Generate: top-k sampling is not supported.");
+  EXT_ENFORCE_INVALID(!pipeline.has_top_p(), "Generate: top-p sampling is not supported.");
+  if (pipeline.has_input_ids_name())
+    options.input_ids_name = pipeline.input_ids_name();
+  if (pipeline.has_logits_name())
+    options.logits_name = pipeline.logits_name();
+  if (pipeline.has_attention_mask_name())
+    options.attention_mask_name = pipeline.attention_mask_name();
+  if (pipeline.has_position_ids_name())
+    options.position_ids_name = pipeline.position_ids_name();
+  return options;
 }
 
 } // namespace
 
-static Tensor GenerateImpl(const GenerationPipeline &pipeline, RuntimeContext &context,
+static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContext &context,
                            const RuntimeValueMap &prefill_feeds,
-                           const RuntimeValueMap &embedding_feeds, bool model_scoped,
-                           const GenerationOptions &options, RuntimeSessionOptions session_options);
+                           const RuntimeValueMap &embedding_feeds, const GenerationOptions &options,
+                           RuntimeSessionOptions session_options);
 
 Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeValueMap &feeds,
                 const GenerationOptions &options, RuntimeSessionOptions session_options) {
-  return Generate(GenerationPipeline{.prefill = &model}, context, feeds, options,
-                  std::move(session_options));
+  for (const auto &[name, value] : feeds) {
+    (void)value;
+    EXT_ENFORCE_INVALID(HasInput(model, name), "Generate: unknown feed '", name, "'.");
+  }
+  const auto scoped = ScopeFeeds(model, feeds);
+  return GenerateImpl(GenerationPipelineView{.prefill = &model}, context, scoped, {}, options,
+                      std::move(session_options));
 }
 
-Tensor Generate(const GenerationPipeline &pipeline, RuntimeContext &context,
+Tensor Generate(const PipelineProto &pipeline, RuntimeContext &context,
+                const RuntimeValueMap &feeds, RuntimeSessionOptions session_options) {
+  return Generate(pipeline, context, feeds, PipelineOptions(pipeline), std::move(session_options));
+}
+
+Tensor Generate(const PipelineProto &pipeline, RuntimeContext &context,
                 const RuntimeValueMap &feeds, const GenerationOptions &options,
                 RuntimeSessionOptions session_options) {
-  if (pipeline.prefill != nullptr && pipeline.embedding != nullptr)
-    for (const auto &[name, value] : feeds)
-      EXT_ENFORCE_INVALID(
-          !HasInput(*pipeline.prefill, name) || !HasInput(*pipeline.embedding, name) ||
-              !HasParameterReference(value),
-          "Generate: shared feed '", name,
-          "' contains a model-scoped parameter_ref; use GenerationFeeds and GenerateScoped.");
-  return GenerateImpl(pipeline, context, feeds, feeds, false, options, std::move(session_options));
+  EXT_ENFORCE_INVALID(pipeline.has_prefill(), "Generate: prefill model is required.");
+  EXT_ENFORCE_INVALID(!pipeline.has_decode(),
+                      "Generate: a separate decode model is not supported.");
+  const GenerationPipelineView view{.prefill = &pipeline.prefill(),
+                                    .embedding =
+                                        pipeline.has_embedding() ? &pipeline.embedding() : nullptr};
+  RuntimeValueMap prefill_feeds = ScopeFeeds(*view.prefill, feeds);
+  RuntimeValueMap embedding_feeds =
+      view.embedding == nullptr ? RuntimeValueMap{} : ScopeFeeds(*view.embedding, feeds);
+  for (const auto &[name, value] : feeds) {
+    (void)value;
+    EXT_ENFORCE_INVALID(prefill_feeds.contains(name) || embedding_feeds.contains(name),
+                        "Generate: unknown feed '", name, "'.");
+  }
+  return GenerateImpl(view, context, prefill_feeds, embedding_feeds, options,
+                      std::move(session_options));
 }
 
-static Tensor GenerateImpl(const GenerationPipeline &pipeline, RuntimeContext &context,
+static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContext &context,
                            const RuntimeValueMap &prefill_feeds,
-                           const RuntimeValueMap &embedding_feeds, bool model_scoped,
-                           const GenerationOptions &options,
+                           const RuntimeValueMap &embedding_feeds, const GenerationOptions &options,
                            RuntimeSessionOptions session_options) {
   EXT_ENFORCE_INVALID(pipeline.prefill != nullptr, "Generate: prefill model is required.");
   const ModelProto &model = *pipeline.prefill;
@@ -396,16 +467,14 @@ static Tensor GenerateImpl(const GenerationPipeline &pipeline, RuntimeContext &c
   }
   for (const auto &[name, value] : prefill_feeds) {
     (void)value;
-    EXT_ENFORCE_INVALID(HasInput(model, name) ||
-                            (!model_scoped && embedded && HasInput(*pipeline.embedding, name)),
-                        "Generate: unknown feed '", name, "' for the language model.");
+    EXT_ENFORCE_INVALID(HasInput(model, name), "Generate: unknown feed '", name,
+                        "' for the language model.");
   }
-  if (model_scoped)
-    for (const auto &[name, value] : embedding_feeds) {
-      (void)value;
-      EXT_ENFORCE_INVALID(embedded && HasInput(*pipeline.embedding, name),
-                          "Generate: unknown feed '", name, "' for the embedding model.");
-    }
+  for (const auto &[name, value] : embedding_feeds) {
+    (void)value;
+    EXT_ENFORCE_INVALID(embedded && HasInput(*pipeline.embedding, name), "Generate: unknown feed '",
+                        name, "' for the embedding model.");
+  }
   const RuntimeValueMap &prompt_feeds = embedded ? embedding_feeds : prefill_feeds;
   const Tensor &prompt = IntMatrix(prompt_feeds, options.input_ids_name);
   const int64_t batch = prompt.shape[0], prompt_length = prompt.shape[1];
@@ -623,13 +692,6 @@ static Tensor GenerateImpl(const GenerationPipeline &pipeline, RuntimeContext &c
     AppendColumn(positions, next_positions);
   }
   return Tensor::From<int64_t>(options.input_ids_name, {batch, length}, tokens);
-}
-
-Tensor GenerateScoped(const GenerationPipeline &pipeline, RuntimeContext &context,
-                      const GenerationFeeds &feeds, const GenerationOptions &options,
-                      RuntimeSessionOptions session_options) {
-  return GenerateImpl(pipeline, context, feeds.prefill, feeds.embedding, true, options,
-                      std::move(session_options));
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

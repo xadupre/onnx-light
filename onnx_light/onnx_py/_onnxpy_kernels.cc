@@ -524,7 +524,8 @@ RuntimeValue FeedbackValueFromPython(
 
 RuntimeValueMap FeedbackValuesFromPython(nb::dict values, const ModelProto *model = nullptr) {
   RuntimeValueMap result;
-  std::shared_ptr<const core::runtime::QuantizationParameterCatalogue> parameters;
+  std::shared_ptr<const core::runtime::QuantizationParameterCatalogue> prefill_parameters;
+  std::shared_ptr<const core::runtime::QuantizationParameterCatalogue> embedding_parameters;
   for (auto [key, value] : values) {
     std::string name = nb::cast<std::string>(key);
     result.emplace(name, FeedbackValueFromPython(name, value, 0, model, &parameters));
@@ -532,31 +533,22 @@ RuntimeValueMap FeedbackValuesFromPython(nb::dict values, const ModelProto *mode
   return result;
 }
 
-core::runtime::GenerationFeeds GenerationFeedsFromPython(nb::dict values, const ModelProto &prefill,
-                                                         const ModelProto *embedding) {
-  core::runtime::GenerationFeeds result;
-  std::shared_ptr<const core::runtime::QuantizationParameterCatalogue> prefill_parameters;
-  std::shared_ptr<const core::runtime::QuantizationParameterCatalogue> embedding_parameters;
+RuntimeValueMap GenerationValuesFromPython(nb::dict values, const ModelProto &prefill,
+                                           const ModelProto *embedding) {
+  RuntimeValueMap result;
+  std::shared_ptr<const core::runtime::QuantizationParameterCatalogue> parameters;
   const auto has_input = [](const ModelProto &model, const std::string &name) {
     return std::any_of(model.graph().input().begin(), model.graph().input().end(),
                        [&](const ValueInfoProto &input) { return input.name() == name; });
   };
   for (auto [key, value] : values) {
     std::string name = nb::cast<std::string>(key);
-    bool matched = false;
-    if (has_input(prefill, name)) {
-      result.prefill.emplace(
-          name, FeedbackValueFromPython(name, value, 0, &prefill, &prefill_parameters));
-      matched = true;
-    }
-    if (embedding != nullptr && has_input(*embedding, name)) {
-      result.embedding.emplace(
-          name, FeedbackValueFromPython(name, value, 0, embedding, &embedding_parameters));
-      matched = true;
-    }
-    if (!matched)
-      result.prefill.emplace(
-          name, FeedbackValueFromPython(name, value, 0, &prefill, &prefill_parameters));
+    const ModelProto *model =
+        has_input(prefill, name) || embedding == nullptr || !has_input(*embedding, name)
+            ? &prefill
+            : embedding;
+    auto *parameters = model == &prefill ? &prefill_parameters : &embedding_parameters;
+    result.emplace(name, FeedbackValueFromPython(name, value, 0, model, parameters));
   }
   return result;
 }
@@ -2196,14 +2188,16 @@ void AddOnnxPyRuntime(nb::module_ &m) {
                          .device = context.device(),
                          .cpu_executor = runner.CpuExecutorLease().get(),
                      });
-        core::runtime::GenerationPipeline pipeline;
-        pipeline.prefill = &model;
-        if (!embedding.is_none())
-          pipeline.embedding = &nb::cast<const ModelProto &>(embedding);
-        auto inputs = GenerationFeedsFromPython(feeds, model, pipeline.embedding);
+        const ModelProto *embedding_model =
+            embedding.is_none() ? nullptr : &nb::cast<const ModelProto &>(embedding);
+        auto inputs = GenerationValuesFromPython(feeds, model, embedding_model);
+        PipelineProto pipeline;
+        *pipeline.mutable_prefill() = model;
+        if (embedding_model != nullptr)
+          *pipeline.mutable_embedding() = *embedding_model;
         nb::gil_scoped_release release;
-        return core::runtime::GenerateScoped(pipeline, execution_context, inputs, options,
-                                             std::move(session_options));
+        return core::runtime::Generate(pipeline, execution_context, inputs, options,
+                                       std::move(session_options));
       },
       nb::arg("model"), nb::arg("context"), nb::arg("runner"), nb::arg("feeds"), nb::arg("options"),
       nb::arg("session_options"), nb::arg("embedding"),

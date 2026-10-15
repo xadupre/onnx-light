@@ -53,6 +53,15 @@ ModelProto PipelineModel(const std::string &operation,
   return model;
 }
 
+PipelineProto MakeGenerationPipeline(const ModelProto &prefill,
+                                     const ModelProto *embedding = nullptr) {
+  PipelineProto pipeline;
+  *pipeline.mutable_prefill() = prefill;
+  if (embedding != nullptr)
+    *pipeline.mutable_embedding() = *embedding;
+  return pipeline;
+}
+
 void AddPersistentState(ModelProto &model) {
   GraphProto *graph = model.mutable_graph();
   auto *input = graph->add_input();
@@ -265,9 +274,9 @@ TEST(Generation, BackendAttentionModels) {
         EXPECT_EQ(context.Get("input_ids").shape, (Shape{1, 5}));
       }
       EXPECT_EQ(model.SerializeAsString(), original);
-      EXPECT_EQ(Tokens(Generate(GenerationPipeline{.prefill = &model}, context, feeds, options,
-                                session_options)),
-                Tokens(output));
+      EXPECT_EQ(
+          Tokens(Generate(MakeGenerationPipeline(model), context, feeds, options, session_options)),
+          Tokens(output));
       options.eos_token_id = 1;
       EXPECT_EQ(Tokens(Generate(model, context, feeds, options, session_options)),
                 (std::vector<int64_t>{0, 1, 1}));
@@ -320,7 +329,7 @@ TEST(Generation, PipelineUsesOneContextAndDeclaredGraphNames) {
         EXPECT_FLOAT_EQ(rt.Get("vision").AsFloat()[0], 0);
         rt.Put(node.output(0), rt.Get("inputs_embeds").BorrowView());
       });
-  GenerationPipeline pipeline{.prefill = &prefill, .embedding = &embedding};
+  PipelineProto pipeline = MakeGenerationPipeline(prefill, &embedding);
   RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))},
                         {"vision", RuntimeValue(Tensor::FromFloat("", {1, 1, 3}, {0, 0, 0}))}};
   GenerationOptions options;
@@ -358,7 +367,7 @@ TEST(Generation, PipelineRejectsPrivateValueNameCollisionsBeforeExecution) {
       RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))}};
       if (persistent)
         feeds.emplace("state", RuntimeValue(Tensor::FromInt64("", {}, {0})));
-      GenerationPipeline pipeline{.prefill = &language, .embedding = &embedding};
+      PipelineProto pipeline = MakeGenerationPipeline(language, &embedding);
       GenerationOptions options;
       options.max_new_tokens = 1;
       for (int repeat = 0; repeat < 2; ++repeat) {
@@ -404,9 +413,9 @@ TEST(Generation, PipelineAllowsInitializerBackedEmbeddingConnection) {
       feeds.emplace("state", RuntimeValue(Tensor::FromInt64("", {}, {0})));
     GenerationOptions options;
     options.max_new_tokens = 2;
-    EXPECT_EQ(Tokens(Generate(GenerationPipeline{.prefill = &language, .embedding = &embedding},
-                              context, feeds, options)),
-              (std::vector<int64_t>{0, 1, 1}));
+    EXPECT_EQ(
+        Tokens(Generate(MakeGenerationPipeline(language, &embedding), context, feeds, options)),
+        (std::vector<int64_t>{0, 1, 1}));
     EXPECT_EQ(calls, 2);
   }
 }
@@ -459,10 +468,8 @@ TEST(Generation, PipelineRejectsReachableFunctionDefaultGraphInitializerCollisio
   GenerationOptions options;
   options.max_new_tokens = 1;
 
-  const std::string message = InvalidArgumentMessage([&]() {
-    Generate(GenerationPipeline{.prefill = &language, .embedding = &embedding}, context, feeds,
-             options);
-  });
+  const std::string message = InvalidArgumentMessage(
+      [&]() { Generate(MakeGenerationPipeline(language, &embedding), context, feeds, options); });
   EXPECT_NE(message.find("private value name 'weight' is shared"), std::string::npos) << message;
   EXPECT_EQ(calls, 0);
 }
@@ -510,10 +517,8 @@ TEST(Generation, PipelineRejectsReachableFunctionIntermediateCollision) {
   GenerationOptions options;
   options.max_new_tokens = 1;
 
-  const std::string message = InvalidArgumentMessage([&]() {
-    Generate(GenerationPipeline{.prefill = &language, .embedding = &embedding}, context, feeds,
-             options);
-  });
+  const std::string message = InvalidArgumentMessage(
+      [&]() { Generate(MakeGenerationPipeline(language, &embedding), context, feeds, options); });
   EXPECT_NE(message.find("private value name 'weight' is shared"), std::string::npos) << message;
   EXPECT_EQ(calls, 0);
 }
@@ -541,10 +546,8 @@ TEST(Generation, PipelineRejectsContextFunctionGraphInitializerCollision) {
   GenerationOptions options;
   options.max_new_tokens = 1;
 
-  const std::string message = InvalidArgumentMessage([&]() {
-    Generate(GenerationPipeline{.prefill = &language, .embedding = &embedding}, context, feeds,
-             options);
-  });
+  const std::string message = InvalidArgumentMessage(
+      [&]() { Generate(MakeGenerationPipeline(language, &embedding), context, feeds, options); });
   EXPECT_NE(message.find("private value name 'weight' is shared"), std::string::npos) << message;
   EXPECT_EQ(calls, 0);
 }
@@ -560,8 +563,8 @@ TEST(Generation, PipelineCachesSharedFunctionBodyScans) {
   options.max_new_tokens = 0;
 
   const auto start = std::chrono::steady_clock::now();
-  const Tensor result = Generate(GenerationPipeline{.prefill = &language, .embedding = &embedding},
-                                 context, feeds, options);
+  const Tensor result =
+      Generate(MakeGenerationPipeline(language, &embedding), context, feeds, options);
   const auto duration = std::chrono::steady_clock::now() - start;
 
   EXPECT_EQ(Tokens(result), (std::vector<int64_t>{0}));
@@ -630,10 +633,8 @@ TEST(Generation, PipelineFunctionScanCacheIncludesGraphAttributeBindings) {
   GenerationOptions options;
   options.max_new_tokens = 1;
 
-  const std::string message = InvalidArgumentMessage([&]() {
-    Generate(GenerationPipeline{.prefill = &language, .embedding = &embedding}, context, feeds,
-             options);
-  });
+  const std::string message = InvalidArgumentMessage(
+      [&]() { Generate(MakeGenerationPipeline(language, &embedding), context, feeds, options); });
   EXPECT_NE(message.find("private value name 'weight' is shared"), std::string::npos) << message;
 }
 
@@ -720,7 +721,7 @@ TEST(Generation, PipelineScopesModelFunctionsWithoutChangingTheCallerRegistry) {
     RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))}};
     if (persistent)
       feeds.emplace("counter", RuntimeValue(Tensor::FromInt64("", {}, {0})));
-    GenerationPipeline pipeline{.prefill = &prefill, .embedding = &embedding};
+    PipelineProto pipeline = MakeGenerationPipeline(prefill, &embedding);
     GenerationOptions options;
     options.max_new_tokens = 3;
     for (int repeat = 0; repeat < 2; ++repeat) {
@@ -794,7 +795,7 @@ TEST(Generation, PipelineSeedsExtensionInitializersAndHonorsFeedOverrides) {
                                [](const NodeProto &node, RuntimeContext &rt) {
                                  rt.Put(node.output(0), rt.Get(node.input(0)).BorrowView());
                                });
-  GenerationPipeline pipeline{.prefill = &prefill, .embedding = &embedding};
+  PipelineProto pipeline = MakeGenerationPipeline(prefill, &embedding);
   RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))}};
   GenerationOptions options;
   options.max_new_tokens = 2;
@@ -848,7 +849,7 @@ TEST(Generation, PipelinePreservesStructuredSequenceFeeds) {
                                [](const NodeProto &node, RuntimeContext &rt) {
                                  rt.Put(node.output(0), rt.Get(node.input(0)).BorrowView());
                                });
-  GenerationPipeline pipeline{.prefill = &prefill, .embedding = &embedding};
+  PipelineProto pipeline = MakeGenerationPipeline(prefill, &embedding);
   GenerationOptions options;
   options.max_new_tokens = 2;
   EXPECT_EQ(Tokens(Generate(pipeline, context, feeds, options)), (std::vector<int64_t>{0, 1, 1}));
@@ -860,7 +861,7 @@ TEST(Generation, PipelinePreservesStructuredSequenceFeeds) {
 
 TEST(Generation, PipelineRequiresItsPrefillModel) {
   RuntimeContext context;
-  EXPECT_THROW(Generate(GenerationPipeline{}, context, {}), std::invalid_argument);
+  EXPECT_THROW(Generate(PipelineProto{}, context, {}), std::invalid_argument);
 }
 
 TEST(Generation, GeneratedMasksAndPositionsOutliveGenerationAndContextValues) {
@@ -882,9 +883,9 @@ TEST(Generation, GeneratedMasksAndPositionsOutliveGenerationAndContextValues) {
                           {"position_ids", RuntimeValue(Tensor::FromInt64("", {1, 2}, {0, 7}))}};
     GenerationOptions options;
     options.max_new_tokens = 2;
-    const auto tokens =
-        use_pipeline ? Generate(GenerationPipeline{.prefill = &model}, context, feeds, options)
-                     : Generate(model, context, feeds, options);
+    const auto tokens = use_pipeline
+                            ? Generate(MakeGenerationPipeline(model), context, feeds, options)
+                            : Generate(model, context, feeds, options);
     EXPECT_EQ(Tokens(tokens), (std::vector<int64_t>{0, 1, 1, 1}));
     Tensor mask = context.Get("attention_mask").BorrowView();
     Tensor positions = context.Get("position_ids").BorrowView();

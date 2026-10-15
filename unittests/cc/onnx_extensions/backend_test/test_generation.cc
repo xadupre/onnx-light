@@ -897,9 +897,10 @@ TEST(Generation, PipelineRetainsPersistentSequenceFeedsAfterRebinding) {
         ASSERT_TRUE(rt.HasSequence("state"));
         const Sequence &state = rt.GetSequence("state");
         ASSERT_EQ(state.size(), 1u);
-        EXPECT_FLOAT_EQ(state[0].AsFloat()[0], 3);
+        EXPECT_FLOAT_EQ(state.at(0).AsFloat()[0], 3);
         rt.Put(node.output(0), Tensor::FromFloat("", {1, 1, 3}, {0, 4, 0}));
-        rt.PutSequence(node.output(1), {state[0].BorrowView()});
+        rt.PutSequence(node.output(1), Sequence(node.output(1), state.elem_type,
+                                                Tensors{state.at(0).BorrowView()}));
       });
   RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))},
                         {"state", RuntimeValue(std::vector<RuntimeValue>{

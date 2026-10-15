@@ -11,10 +11,12 @@ from onnx_light import onnx
 from onnx_light.ext_test_case import import_or_skip
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.numpy_helper as onh
-from onnx_light.onnx_core.quantization import add_quantization_parameters
 from onnx_light.onnx_lib import TensorProto, parser
 
 runtime = import_or_skip("onnx_light.onnx_py._onnxpykernels", "runtime")
+add_quantization_parameters = import_or_skip(
+    "onnx_light.onnx_core.quantization", "add_quantization_parameters"
+)
 ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
 
 

@@ -140,9 +140,8 @@ RuntimeSession::RuntimeSession(const GraphProto &graph, const OpsetImports *inhe
                                std::unordered_set<std::string> immutable_inputs,
                                const FunctionMap *model_functions)
     : default_plan_(graph), plan_(default_plan_), inherited_opset_imports_(inherited_opset_imports),
-      inherited_model_functions_(model_functions),
-      value_store_(std::move(value_store)), cpu_execution_(DefaultCpuExecutionPolicy(parameters_)),
-      verbose_(verbose) {
+      inherited_model_functions_(model_functions), value_store_(std::move(value_store)),
+      cpu_execution_(DefaultCpuExecutionPolicy(parameters_)), verbose_(verbose) {
   SetDeclaredShapes(graph);
   SetInitializers(graph);
   inherited_immutable_inputs_ = std::move(immutable_inputs);
@@ -182,8 +181,7 @@ RuntimeSession::RuntimeSession(const FunctionProto &function,
                                RuntimeSessionOptions options, const FunctionMap *model_functions)
     : default_plan_(function), plan_(default_plan_),
       inherited_opset_imports_(inherited_opset_imports),
-      inherited_model_functions_(model_functions),
-      value_store_(std::move(options.value_store)),
+      inherited_model_functions_(model_functions), value_store_(std::move(options.value_store)),
       inherited_immutable_inputs_(std::move(options.immutable_inputs)),
       check_shapes_(options.check_shapes),
       allow_external_output_allocators_(options.allow_external_output_allocators),

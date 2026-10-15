@@ -196,8 +196,7 @@ public:
   /// ``inherited_opset_imports`` without copying it. ``model_functions`` borrows
   /// the enclosing model session's lookup for nested calls.
   RuntimeSession(const FunctionProto &function, const OpsetImports *inherited_opset_imports,
-                 RuntimeSessionOptions options = {},
-                 const FunctionMap *model_functions = nullptr);
+                 RuntimeSessionOptions options = {}, const FunctionMap *model_functions = nullptr);
   /// Builds a session owning graph-declared persistent values initialized from ``initial``.
   RuntimeSession(const ModelProto &model, RuntimeValueMap initial,
                  RuntimeSessionOptions options = {});

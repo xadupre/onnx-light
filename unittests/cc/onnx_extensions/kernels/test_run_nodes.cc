@@ -2834,6 +2834,7 @@ TEST(RunModel, ModelSessionsScopeConflictingFunctionsThroughCallsAndSubgraphs) {
   context.functions().emplace("custom:Leaf:shared", &unchanged.functions()[0]);
   const auto original = context.functions();
   const auto run = [&](const ModelProto &model) {
+    context.ResetInvocation();
     context.Set("condition", Tensor::FromBool("condition", {}, {1}));
     context.Set("x", Tensor::FromFloat("x", {1}, {2}));
     RuntimeSession session(model);
@@ -2845,9 +2846,8 @@ TEST(RunModel, ModelSessionsScopeConflictingFunctionsThroughCallsAndSubgraphs) {
   EXPECT_FLOAT_EQ(run(unchanged), 2);
   EXPECT_FLOAT_EQ(run(negated), -2);
   bool fallback_called = false;
-  context.RegisterCustomKernel("custom", "Leaf", [&](const NodeProto &, RuntimeContext &) {
-    fallback_called = true;
-  });
+  context.RegisterCustomKernel(
+      "custom", "Leaf", [&](const NodeProto &, RuntimeContext &) { fallback_called = true; });
   negated.mutable_functions(0)->add_input("missing");
   EXPECT_THROW(run(negated), std::invalid_argument);
   EXPECT_FALSE(fallback_called);

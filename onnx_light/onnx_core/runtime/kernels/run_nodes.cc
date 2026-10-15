@@ -1097,8 +1097,7 @@ public:
     if (!session_) {
       session_ = std::make_unique<RuntimeSession>(
           bound_func_, inherited_opset_imports_,
-          RuntimeSessionOptions{.value_store = value_store_,
-                                .immutable_inputs = immutable_inputs_},
+          RuntimeSessionOptions{.value_store = value_store_, .immutable_inputs = immutable_inputs_},
           model_functions_);
     }
     session_->Run(rt);
@@ -1221,7 +1220,8 @@ ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt, const std::s
   // override same-named built-ins, matching the ONNX runtime semantics
   // for model-local functions.
   const std::string fkey = FunctionLookupKey(domain, op_type, node.overload());
-  for (const FunctionMap *scope : {model_functions, &rt.functions()}) {
+  const FunctionMap *scopes[] = {model_functions, &rt.functions()};
+  for (const FunctionMap *scope : scopes) {
     if (scope != nullptr) {
       auto fit = scope->find(fkey);
       if (fit == scope->end())
@@ -1252,23 +1252,20 @@ ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt, const std::s
     const GraphProto &body = GetRequiredGraphAttribute(node, "body");
     // Built once here so the body's kernels are resolved a single time and
     // reused across every iteration of every invocation of this node.
-    auto body_session = std::make_shared<SubgraphSession>(body, opset_imports,
-                                                          std::move(value_store), immutable_inputs,
-                                                          model_functions);
+    auto body_session = std::make_shared<SubgraphSession>(
+        body, opset_imports, std::move(value_store), immutable_inputs, model_functions);
     return std::make_unique<LoopKernel>(node, std::move(body_session), kernel_context);
   }
   if (domain == kDefaultOnnxDomain && op_type == "Scan") {
     const GraphProto &body = GetRequiredGraphAttribute(node, "body");
-    auto body_session = std::make_shared<SubgraphSession>(body, opset_imports,
-                                                          std::move(value_store), immutable_inputs,
-                                                          model_functions);
+    auto body_session = std::make_shared<SubgraphSession>(
+        body, opset_imports, std::move(value_store), immutable_inputs, model_functions);
     return std::make_unique<ScanKernel>(node, std::move(body_session), kernel_context);
   }
   if (domain == kDefaultOnnxDomain && op_type == "SequenceMap") {
     const GraphProto &body = GetRequiredGraphAttribute(node, "body");
-    auto body_session = std::make_shared<SubgraphSession>(body, opset_imports,
-                                                          std::move(value_store), immutable_inputs,
-                                                          model_functions);
+    auto body_session = std::make_shared<SubgraphSession>(
+        body, opset_imports, std::move(value_store), immutable_inputs, model_functions);
     return std::make_unique<SequenceMapKernel>(node, std::move(body_session), kernel_context);
   }
 
@@ -1421,7 +1418,7 @@ void RegisterModelFunctions(const ModelProto &model, RuntimeContext &rt) {
   // them by (domain, op_type, overload) are dispatched to
   // ``ModelLocalFunctionKernel`` rather than rejected as unsupported
   // ops.
-  for (const auto &[key, function] : ModelFunctions(model))
+  for (const auto &[key, function] : detail::ModelFunctions(model))
     rt.functions()[key] = function;
 }
 

@@ -199,11 +199,13 @@ CPU execution policy are not used. Register pipeline-wide custom kernels on
 the language-model evaluator. Image/audio encoders can run before generation;
 their features are supplied as ordinary feeds.
 Each stage resolves its own model-local functions; definitions from another stage
-cannot override its custom operators. The caller's function registry is restored
-when generation returns or fails. Embedding inputs backed by tensor, encoded or
-paged-cache initializers may be omitted from feeds. Structured sequence inputs
-retain their runtime representation rather than being converted to dense tensor
-sequences.
+cannot override its custom operators. Model-local definitions take precedence
+over functions registered on the shared context. Reachable context functions
+follow the same private-name collision checks, and the caller's function
+registry is unchanged when generation returns or fails. Embedding inputs backed
+by tensor, encoded or paged-cache initializers may be omitted from feeds.
+Structured sequence inputs retain their runtime representation rather than
+being converted to dense tensor sequences.
 
 C++ callers can alternatively pass ``GenerationPipeline{.prefill = &language_model,
 .embedding = &embedding_model}`` instead of a ``ModelProto`` to ``Generate``.

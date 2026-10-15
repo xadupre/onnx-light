@@ -48,8 +48,10 @@ struct GenerationPipeline {
  * behavior. Initial caches must represent an empty prefix. State is local to
  * this Generate call; neither the model nor the feeds are modified. The supplied
  * execution context is reused and its invocation values may change. Model
- * functions remain scoped to each model session; caller function and custom
- * kernel registrations are not changed, including on failure.
+ * functions remain scoped to each model session and override caller-registered
+ * functions with the same identity. Reachable caller functions follow the same
+ * private-name collision policy. Function and custom-kernel registrations are
+ * not changed, including on failure.
  * This function is not thread-safe when calls share a RuntimeContext. The caller
  * must serialize generation and other execution using that context; concurrent
  * requests require independent contexts. Parallel kernels do not change this

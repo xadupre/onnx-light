@@ -257,23 +257,28 @@ void CollectReachableFunctionGraphNames(const utils::RepeatedProtoField<NodeProt
 
 PipelineValueNames
 CollectPipelineValueNames(const ModelProto &model,
-                          const std::unordered_set<std::string> &public_initializer_outputs = {}) {
+                          const std::unordered_set<std::string> &public_initializer_outputs,
+                          const FunctionMap &context_functions) {
   PipelineValueNames names;
   CollectGraphValueNames(model.graph(), true, public_initializer_outputs, names);
-  const FunctionMap functions = detail::ModelFunctions(model);
+  FunctionMap functions = context_functions;
+  for (const auto &[key, function] : detail::ModelFunctions(model))
+    functions.insert_or_assign(key, function);
   std::unordered_set<std::string> active;
   CollectReachableFunctionGraphNames(model.graph().node(), functions, names, active);
   return names;
 }
 
-void ValidatePipelineValueNames(const ModelProto &embedding, const ModelProto &language) {
+void ValidatePipelineValueNames(const ModelProto &embedding, const ModelProto &language,
+                                const FunctionMap &context_functions) {
   std::unordered_set<std::string> public_connections;
   for (const ValueInfoProto &output : embedding.graph().output())
     if (HasInput(language, output.name()))
       public_connections.insert(output.name());
   const PipelineValueNames embedding_names =
-      CollectPipelineValueNames(embedding, public_connections);
-  const PipelineValueNames language_names = CollectPipelineValueNames(language);
+      CollectPipelineValueNames(embedding, public_connections, context_functions);
+  const PipelineValueNames language_names =
+      CollectPipelineValueNames(language, {}, context_functions);
   std::vector<std::string> collisions;
   for (const std::string &name : embedding_names.private_values)
     if (language_names.all.contains(name))
@@ -333,7 +338,7 @@ Tensor Generate(const GenerationPipeline &pipeline, RuntimeContext &context,
       EXT_ENFORCE_INVALID(HasInput(model, output.name()),
                           "Generate: embedding output must name a decoder input.");
     }
-    ValidatePipelineValueNames(*pipeline.embedding, model);
+    ValidatePipelineValueNames(*pipeline.embedding, model, context.functions());
   }
   for (const auto &binding : model.graph().persistent_bindings()) {
     if (embedded)

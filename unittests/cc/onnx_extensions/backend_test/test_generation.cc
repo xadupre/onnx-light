@@ -78,6 +78,36 @@ template <class Callable> std::string InvalidArgumentMessage(Callable &&callable
   return {};
 }
 
+FunctionProto FunctionWithPrivateGraphInitializer(const std::string &name) {
+  FunctionProto function;
+  function.set_domain("test.pipeline");
+  function.set_name(name);
+  function.add_input("X");
+  function.add_output("Y");
+  auto *opset = function.add_opset_import();
+  opset->set_domain("test.pipeline");
+  opset->set_version(1);
+  NodeProto *nested = function.add_node();
+  nested->set_domain("test.pipeline");
+  nested->set_op_type("UseBody");
+  nested->add_input("X");
+  nested->add_output("unused");
+  AttributeProto *body_attribute = nested->add_attribute();
+  body_attribute->set_name("body");
+  body_attribute->set_type(AttributeProto::GRAPH);
+  TensorProto *weight = body_attribute->mutable_g()->add_initializer();
+  weight->set_name("weight");
+  weight->set_data_type(TensorProto::FLOAT);
+  weight->add_dims(1);
+  weight->add_float_data(1);
+  NodeProto *output = function.add_node();
+  output->set_domain("test.pipeline");
+  output->set_op_type("Embed");
+  output->add_input("X");
+  output->add_output("Y");
+  return function;
+}
+
 enum class PrivateValueKind {
   kInitializer,
   kEncodedInitializer,
@@ -460,6 +490,37 @@ TEST(Generation, PipelineRejectsReachableFunctionIntermediateCollision) {
   EXPECT_EQ(calls, 0);
 }
 
+TEST(Generation, PipelineRejectsContextFunctionGraphInitializerCollision) {
+  const auto embedding =
+      PipelineModel("ContextStage", {{"input_ids", TensorProto::INT64}}, "inputs_embeds");
+  const FunctionProto context_function = FunctionWithPrivateGraphInitializer("ContextStage");
+  auto language = PipelineModel("Prefill", {{"inputs_embeds", TensorProto::FLOAT}}, "logits");
+  TensorProto *language_weight = language.mutable_graph()->add_initializer();
+  language_weight->set_name("weight");
+  language_weight->set_data_type(TensorProto::FLOAT);
+  language_weight->add_dims(2);
+  language_weight->add_float_data(2);
+  language_weight->add_float_data(3);
+  AddPersistentState(language);
+  RuntimeSession source(language);
+  RuntimeContext context(RuntimeContextOptions{.cpu_executor = source.cpu_executor().get()});
+  context.functions().emplace("test.pipeline:ContextStage:", &context_function);
+  int calls = 0;
+  context.RegisterCustomKernel("test.pipeline", "Prefill",
+                               [&](const NodeProto &, RuntimeContext &) { ++calls; });
+  RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))},
+                        {"state", RuntimeValue(Tensor::FromInt64("", {}, {0}))}};
+  GenerationOptions options;
+  options.max_new_tokens = 1;
+
+  const std::string message = InvalidArgumentMessage([&]() {
+    Generate(GenerationPipeline{.prefill = &language, .embedding = &embedding}, context, feeds,
+             options);
+  });
+  EXPECT_NE(message.find("private value name 'weight' is shared"), std::string::npos) << message;
+  EXPECT_EQ(calls, 0);
+}
+
 TEST(Generation, PipelineScopesModelFunctionsWithoutChangingTheCallerRegistry) {
   auto embedding = PipelineModel("Stage", {{"input_ids", TensorProto::INT64}}, "inputs_embeds");
   auto *function = embedding.add_functions();
@@ -496,6 +557,11 @@ TEST(Generation, PipelineScopesModelFunctionsWithoutChangingTheCallerRegistry) {
     function_formal_name->set_data_type(TensorProto::FLOAT);
     function_formal_name->add_dims(1);
     function_formal_name->add_float_data(7);
+    TensorProto *shadowed_context_name = prefill.mutable_graph()->add_initializer();
+    shadowed_context_name->set_name("weight");
+    shadowed_context_name->set_data_type(TensorProto::FLOAT);
+    shadowed_context_name->add_dims(1);
+    shadowed_context_name->add_float_data(9);
     if (persistent) {
       auto *graph = prefill.mutable_graph();
       auto *input = graph->add_input();
@@ -513,6 +579,8 @@ TEST(Generation, PipelineScopesModelFunctionsWithoutChangingTheCallerRegistry) {
     }
     RuntimeSession source(prefill);
     RuntimeContext context(RuntimeContextOptions{.cpu_executor = source.cpu_executor().get()});
+    const FunctionProto shadowed_context_function = FunctionWithPrivateGraphInitializer("Inner");
+    context.functions().emplace("test.pipeline:Inner:", &shadowed_context_function);
     context.functions().emplace("test.pipeline:Other:", &embedding.functions()[0]);
     const FunctionMap original_functions = context.functions();
     int prefill_calls = 0;

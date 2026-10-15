@@ -304,7 +304,28 @@ void ValidatePipelineValueNames(const ModelProto &embedding, const ModelProto &l
       "' is shared by the embedding and language models; private value names must be unique.");
 }
 
+bool HasParameterReference(const RuntimeValue &value, size_t depth = 0) {
+  EXT_ENFORCE_INVALID(depth <= RuntimeValue::kMaxDepth,
+                      "Generate: feed value exceeds the maximum nesting depth.");
+  if (value.kind == RuntimeValue::Kind::kEncoded && value.Encoded().has_parameter_ref())
+    return true;
+  for (const auto &[name, field] : value.fields) {
+    (void)name;
+    if (HasParameterReference(field, depth + 1))
+      return true;
+  }
+  for (const RuntimeValue &element : value.elements)
+    if (HasParameterReference(element, depth + 1))
+      return true;
+  return false;
+}
+
 } // namespace
+
+static Tensor GenerateImpl(const GenerationPipeline &pipeline, RuntimeContext &context,
+                           const RuntimeValueMap &prefill_feeds,
+                           const RuntimeValueMap &embedding_feeds, bool model_scoped,
+                           const GenerationOptions &options, RuntimeSessionOptions session_options);
 
 Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeValueMap &feeds,
                 const GenerationOptions &options, RuntimeSessionOptions session_options) {
@@ -315,6 +336,21 @@ Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeV
 Tensor Generate(const GenerationPipeline &pipeline, RuntimeContext &context,
                 const RuntimeValueMap &feeds, const GenerationOptions &options,
                 RuntimeSessionOptions session_options) {
+  if (pipeline.prefill != nullptr && pipeline.embedding != nullptr)
+    for (const auto &[name, value] : feeds)
+      EXT_ENFORCE_INVALID(
+          !HasInput(*pipeline.prefill, name) || !HasInput(*pipeline.embedding, name) ||
+              !HasParameterReference(value),
+          "Generate: shared feed '", name,
+          "' contains a model-scoped parameter_ref; use GenerationFeeds and GenerateScoped.");
+  return GenerateImpl(pipeline, context, feeds, feeds, false, options, std::move(session_options));
+}
+
+static Tensor GenerateImpl(const GenerationPipeline &pipeline, RuntimeContext &context,
+                           const RuntimeValueMap &prefill_feeds,
+                           const RuntimeValueMap &embedding_feeds, bool model_scoped,
+                           const GenerationOptions &options,
+                           RuntimeSessionOptions session_options) {
   EXT_ENFORCE_INVALID(pipeline.prefill != nullptr, "Generate: prefill model is required.");
   const ModelProto &model = *pipeline.prefill;
   EXT_ENFORCE_INVALID(options.max_new_tokens >= 0, "Generate: max_new_tokens must be nonnegative.");
@@ -358,14 +394,20 @@ Tensor Generate(const GenerationPipeline &pipeline, RuntimeContext &context,
                             "Generate: embedding output cannot replace a persistent input.");
       }
   }
-  for (const auto &[name, value] : feeds) {
+  for (const auto &[name, value] : prefill_feeds) {
     (void)value;
-    bool known = HasInput(model, name) || name == options.input_ids_name;
-    if (embedded)
-      known = known || HasInput(*pipeline.embedding, name);
-    EXT_ENFORCE_INVALID(known, "Generate: unknown feed '", name, "'.");
+    EXT_ENFORCE_INVALID(HasInput(model, name) ||
+                            (!model_scoped && embedded && HasInput(*pipeline.embedding, name)),
+                        "Generate: unknown feed '", name, "' for the language model.");
   }
-  const Tensor &prompt = IntMatrix(feeds, options.input_ids_name);
+  if (model_scoped)
+    for (const auto &[name, value] : embedding_feeds) {
+      (void)value;
+      EXT_ENFORCE_INVALID(embedded && HasInput(*pipeline.embedding, name),
+                          "Generate: unknown feed '", name, "' for the embedding model.");
+    }
+  const RuntimeValueMap &prompt_feeds = embedded ? embedding_feeds : prefill_feeds;
+  const Tensor &prompt = IntMatrix(prompt_feeds, options.input_ids_name);
   const int64_t batch = prompt.shape[0], prompt_length = prompt.shape[1];
   EXT_ENFORCE_INVALID(options.max_new_tokens <= std::numeric_limits<int64_t>::max() - prompt_length,
                       "Generate: requested sequence length overflows.");
@@ -387,8 +429,13 @@ Tensor Generate(const GenerationPipeline &pipeline, RuntimeContext &context,
                                                                 options.attention_mask_name))),
                       "Generate: token, mask and position input names must be distinct.");
   std::vector<int64_t> mask(tokens.size(), 1);
-  if (has_mask && feeds.contains(options.attention_mask_name)) {
-    const auto &tensor = IntMatrix(feeds, options.attention_mask_name);
+  const auto control_feeds = [&](const std::string &name) -> const RuntimeValueMap & {
+    return embedded && HasInput(*pipeline.embedding, name) ? embedding_feeds : prefill_feeds;
+  };
+  if (has_mask &&
+      control_feeds(options.attention_mask_name).contains(options.attention_mask_name)) {
+    const auto &tensor =
+        IntMatrix(control_feeds(options.attention_mask_name), options.attention_mask_name);
     EXT_ENFORCE_INVALID(tensor.shape == prompt.shape, "Generate: attention mask shape mismatch.");
     mask = IntValues(tensor);
   }
@@ -407,8 +454,10 @@ Tensor Generate(const GenerationPipeline &pipeline, RuntimeContext &context,
     }
     EXT_ENFORCE_INVALID(started, "Generate: each prompt must contain an unmasked token.");
   }
-  if (has_positions && feeds.contains(options.position_ids_name)) {
-    const auto &tensor = IntMatrix(feeds, options.position_ids_name);
+  if (has_positions &&
+      control_feeds(options.position_ids_name).contains(options.position_ids_name)) {
+    const auto &tensor =
+        IntMatrix(control_feeds(options.position_ids_name), options.position_ids_name);
     EXT_ENFORCE_INVALID(tensor.shape == prompt.shape, "Generate: position IDs shape mismatch.");
     positions = IntValues(tensor);
   }
@@ -436,8 +485,11 @@ Tensor Generate(const GenerationPipeline &pipeline, RuntimeContext &context,
     context.BindExecutionPlan(*largest);
   }
   RuntimeValueMap current;
-  for (const auto &[name, value] : feeds)
+  for (const auto &[name, value] : prefill_feeds)
     current.emplace(name, value.BorrowView());
+  RuntimeValueMap embedding_current;
+  for (const auto &[name, value] : embedding_feeds)
+    embedding_current.emplace(name, value.BorrowView());
   std::unique_ptr<RuntimeSession> embedding_session;
   if (embedded) {
     embedding_session = std::make_unique<RuntimeSession>(*pipeline.embedding, session_options);
@@ -451,8 +503,8 @@ Tensor Generate(const GenerationPipeline &pipeline, RuntimeContext &context,
                               (!has_mask || name != options.attention_mask_name) &&
                               (!has_positions || name != options.position_ids_name),
                           "Generate: token, mask and position inputs cannot be persistent.");
-      const auto value = feeds.find(name);
-      if (value != feeds.end())
+      const auto value = prefill_feeds.find(name);
+      if (value != prefill_feeds.end())
         initial.emplace(name, value->second);
       current.erase(name);
     }
@@ -467,21 +519,30 @@ Tensor Generate(const GenerationPipeline &pipeline, RuntimeContext &context,
   for (int64_t step = 0; step < options.max_new_tokens; ++step) {
     const bool decode = persistent && step > 0;
     const Shape shape{batch, decode ? 1 : length};
+    const auto put_control = [&](const std::string &name, RuntimeValue value) {
+      if (HasInput(model, name))
+        current.insert_or_assign(name, value.BorrowView());
+      if (embedded && HasInput(*pipeline.embedding, name))
+        embedding_current.insert_or_assign(name, value.BorrowView());
+    };
     if (has_mask)
-      current.insert_or_assign(
+      put_control(
           options.attention_mask_name,
           RuntimeValue(Tensor::From<int64_t>(options.attention_mask_name, {batch, length}, mask)
                            .RetainStorage()));
     if (has_positions)
-      current.insert_or_assign(
-          options.position_ids_name,
-          RuntimeValue(Tensor::From<int64_t>(options.position_ids_name, shape,
-                                             decode ? next_positions : positions)
-                           .RetainStorage()));
-    auto ids = Tensor::From<int64_t>(options.input_ids_name, shape, decode ? next : tokens);
-    current.insert_or_assign(options.input_ids_name, RuntimeValue(std::move(ids).RetainStorage()));
+      put_control(options.position_ids_name,
+                  RuntimeValue(Tensor::From<int64_t>(options.position_ids_name, shape,
+                                                     decode ? next_positions : positions)
+                                   .RetainStorage()));
+    put_control(
+        options.input_ids_name,
+        RuntimeValue(Tensor::From<int64_t>(options.input_ids_name, shape, decode ? next : tokens)
+                         .RetainStorage()));
     if (embedded) {
-      RunGraph(*pipeline.embedding, context, current, *embedding_session);
+      RunGraph(*pipeline.embedding, context, embedding_current, *embedding_session);
+      for (const ValueInfoProto &output : pipeline.embedding->graph().output())
+        current.insert_or_assign(output.name(), embedding_current.at(output.name()).BorrowView());
     }
     Tensor logits;
     if (persistent) {
@@ -560,6 +621,13 @@ Tensor Generate(const GenerationPipeline &pipeline, RuntimeContext &context,
     AppendColumn(positions, next_positions);
   }
   return Tensor::From<int64_t>(options.input_ids_name, {batch, length}, tokens);
+}
+
+Tensor GenerateScoped(const GenerationPipeline &pipeline, RuntimeContext &context,
+                      const GenerationFeeds &feeds, const GenerationOptions &options,
+                      RuntimeSessionOptions session_options) {
+  return GenerateImpl(pipeline, context, feeds.prefill, feeds.embedding, true, options,
+                      std::move(session_options));
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

@@ -198,6 +198,12 @@ The embedding evaluator supplies its model only; its local registrations and
 CPU execution policy are not used. Register pipeline-wide custom kernels on
 the language-model evaluator. Image/audio encoders can run before generation;
 their features are supplied as ordinary feeds.
+Each feed is converted independently for every model that declares its name.
+Encoded values, including values nested in structures, sequences and paged-cache
+pages, therefore resolve ``parameter_ref`` against that model's catalogue.
+An embedding-only feed never consults the language model. A shared input name
+may resolve to distinct compatible catalogue entries in both models; an entry
+that is missing or incompatible in either scope is rejected before execution.
 Each stage resolves its own model-local functions; definitions from another stage
 cannot override its custom operators. Model-local definitions take precedence
 over functions registered on the shared context. Reachable context functions
@@ -210,7 +216,11 @@ being converted to dense tensor sequences.
 C++ callers can alternatively pass ``GenerationPipeline{.prefill = &language_model,
 .embedding = &embedding_model}`` instead of a ``ModelProto`` to ``Generate``.
 The pipeline contains only these model pointers. The single ``RuntimeContext``
-is passed as a separate argument to either overload.
+is passed as a separate argument to either overload. Call
+``GenerateScoped`` with ``GenerationFeeds`` when the two feed maps already
+carry independently scoped values. The ordinary pipeline overload accepts one
+common map of already-bound values and rejects a shared-name ``parameter_ref``
+feed because one catalogue cannot represent both model scopes.
 
 A basic feedback loop
 ---------------------

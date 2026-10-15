@@ -32,6 +32,14 @@ struct GenerationPipeline {
   const ModelProto *embedding = nullptr;
 };
 
+/** Holds model-scoped feeds for a split generation pipeline. */
+struct GenerationFeeds {
+  /// Feeds resolved against the language model's declarations and parameter catalogue.
+  RuntimeValueMap prefill;
+  /// Feeds resolved against the embedding model's declarations and parameter catalogue.
+  RuntimeValueMap embedding;
+};
+
 /**
  * Generates tokens and returns the prompt followed by at most max_new_tokens tokens.
  *
@@ -85,5 +93,17 @@ ONNX_LIGHT_CORE_API Tensor Generate(const GenerationPipeline &pipeline, RuntimeC
                                     const RuntimeValueMap &feeds,
                                     const GenerationOptions &options = {},
                                     RuntimeSessionOptions session_options = {});
+
+/**
+ * Generates tokens from feeds resolved independently for each pipeline model.
+ *
+ * A name declared by both models may appear in both maps with values bound to
+ * different model-local parameter catalogues. Embedding outputs still replace
+ * same-named language-model inputs before each language-model invocation.
+ */
+ONNX_LIGHT_CORE_API Tensor GenerateScoped(const GenerationPipeline &pipeline,
+                                          RuntimeContext &context, const GenerationFeeds &feeds,
+                                          const GenerationOptions &options = {},
+                                          RuntimeSessionOptions session_options = {});
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

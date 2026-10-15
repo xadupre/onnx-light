@@ -375,12 +375,14 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt,
       EXT_ENFORCE_INVALID(found != imports->end(),
                           "RuntimeSession: missing opset import for domain '", domain, "'.");
       const KernelContext kernel_context(OpsetId(domain, found->second), rt.kernel_ctx().allocator,
-                                         imports);
+                                         imports, EffectiveModelFunctions());
       prepared.instance =
           ResolveNodeKernel(node, rt, domain, op_type, kernel_context, preparable_inputs);
     } else {
+      KernelContext kernel_context = rt.kernel_ctx();
+      kernel_context.model_functions = EffectiveModelFunctions();
       prepared.instance =
-          ResolveNodeKernel(node, rt, domain, op_type, rt.kernel_ctx(), preparable_inputs);
+          ResolveNodeKernel(node, rt, domain, op_type, kernel_context, preparable_inputs);
     }
   }
 

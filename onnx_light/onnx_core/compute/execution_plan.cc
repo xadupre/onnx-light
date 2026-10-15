@@ -7,6 +7,7 @@
 #include "onnx_core/compute/peak_memory.h"
 #include "onnx_core/graph/graph_manipulations.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_proto/onnx_helper.h"
 #include "onnx_proto/onnx_verify.h"
 
 #include <cstddef>
@@ -165,7 +166,7 @@ using LocalFunctionIndex = std::unordered_map<std::string, const FunctionProto *
 
 std::string FunctionKey(const std::string &domain, const std::string &name,
                         const std::string &overload) {
-  return (domain.empty() ? std::string() : domain) + ":" + name + ":" + overload;
+  return ONNX_LIGHT_NAMESPACE::NormaliseDomain(domain) + ":" + name + ":" + overload;
 }
 
 size_t FunctionValueNameCount(const FunctionProto &function) {

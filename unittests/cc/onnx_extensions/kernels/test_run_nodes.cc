@@ -2722,6 +2722,22 @@ TEST(RunModel, ModelLocalFunctionThreeLevelNestedCalls) {
   EXPECT_FLOAT_EQ(res[2], -24.0f);
 }
 
+TEST(ExecutionPlan, RejectsRecursiveFunctionWithEquivalentDefaultDomains) {
+  ModelProto model;
+  model.set_ir_version(10);
+  GraphProto *graph = model.mutable_graph();
+  graph->set_name("root");
+  *graph->add_node() = MakeNode("Recursive", {"x"}, {"y"});
+  FunctionProto *function = model.add_functions();
+  function->set_domain("");
+  function->set_name("Recursive");
+  function->add_input("x");
+  function->add_output("y");
+  *function->add_node() = MakeNode("Recursive", {"x"}, {"y"}, "ai.onnx");
+
+  EXPECT_THROW((void)ExecutionPlan(model), std::invalid_argument);
+}
+
 TEST(RunModel, ModelLocalFunctionOverloadDisambiguation) {
   // Two functions share the same (domain, name) but differ by overload.
   // The dispatcher must pick the one matching node.overload.
@@ -3676,6 +3692,46 @@ TEST(RunNodes, RunNodeFlexAttentionFromDispatchTable) {
   const Tensor &Y = rt.tensors().at("Y");
   EXPECT_EQ(Y.shape, (std::vector<int64_t>{1, 1, 2, 2}));
   EXPECT_EQ(Y.data_type, static_cast<int32_t>(core::runtime::DataType::FLOAT));
+}
+
+TEST(RunModel, FlexAttentionModifierResolvesModelLocalFunction) {
+  ModelProto model;
+  model.set_ir_version(10);
+  AddOpsetImport(model, "", 18);
+  AddOpsetImport(model, "ai.onnx.preview", 1);
+  AddOpsetImport(model, "custom", 1);
+
+  FunctionProto *modifier = model.add_functions();
+  modifier->set_domain("custom");
+  modifier->set_name("Modifier");
+  modifier->add_input("score");
+  modifier->add_output("modified");
+  *modifier->add_node() = MakeNode("Identity", {"score"}, {"modified"});
+
+  GraphProto *graph = model.mutable_graph();
+  graph->set_name("root");
+  NodeProto *flex = graph->add_node();
+  *flex = MakeNode("FlexAttention", {"Q", "K", "V"}, {"Y"}, "ai.onnx.preview");
+  AttributeProto *score_mod = flex->add_attribute();
+  score_mod->set_name("score_mod");
+  score_mod->set_type(AttributeProto::AttributeType::GRAPH);
+  GraphProto &score_graph = score_mod->ref_g();
+  score_graph.set_name("score_mod");
+  score_graph.add_input()->set_name("score");
+  *score_graph.add_node() = MakeNode("Modifier", {"score"}, {"modified"}, "custom");
+  score_graph.add_output()->set_name("modified");
+  graph->add_output()->set_name("Y");
+
+  RuntimeContext context;
+  context.Set("Q", Tensor::FromFloat("Q", {1, 1, 1, 1}, {1}));
+  context.Set("K", Tensor::FromFloat("K", {1, 1, 1, 1}, {1}));
+  context.Set("V", Tensor::FromFloat("V", {1, 1, 1, 1}, {3}));
+  RuntimeSession session(model);
+  session.Run(context);
+
+  const Tensor &output = context.Get("Y");
+  ASSERT_EQ(output.element_count(), 1);
+  EXPECT_FLOAT_EQ(output.AsFloat()[0], 3);
 }
 
 TEST(RunNodes, RunNodeGRUFromDispatchTable) {

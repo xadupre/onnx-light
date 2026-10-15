@@ -97,22 +97,6 @@ using OnnxMapMap = std::unordered_map<std::string, Map>;
 using ShapeMap = std::unordered_map<std::string, Shape>;
 
 /**
- * Name-keyed map of model-local :cpp:type:`FunctionProto` definitions
- * explicitly registered on a context. Model-based sessions instead keep
- * their model's borrowed definitions in a session-owned lookup; they do not
- * install them here. Standalone nodes and plans can use this registry.
- *
- * Keys are the canonical ``"<domain>:<op_type>:<overload>"`` triple
- * (the default ONNX domain — the empty ``NodeProto::domain()`` — is
- * normalised to ``"ai.onnx"`` and the overload defaults to the empty
- * string). Values are non-owning pointers into the caller-owned
- * ``ModelProto``; the entries are valid only as long as the model
- * outlives every context or session that resolves them. Explicit registrations
- * must be removed before their source model is destroyed.
- */
-using FunctionMap = std::unordered_map<std::string, const FunctionProto *>;
-
-/**
  * Factory signature for global and context-local kernel registrations.
  * Called once per resolved node, it returns a fresh, session-owned kernel.
  * Preparation belongs in the factory; repeated computation belongs in

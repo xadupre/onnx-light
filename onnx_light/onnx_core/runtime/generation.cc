@@ -5,6 +5,7 @@
 #include "onnx_core/runtime/generation.h"
 #include "onnx_core/runtime/kernels/float16_promote.h"
 #include "onnx_core/runtime/kernels/run_nodes.h"
+#include "onnx_core/runtime/kernels/run_nodes_internal.h"
 #include <cmath>
 #include <limits>
 #include <random>
@@ -164,7 +165,9 @@ void InsertName(std::unordered_set<std::string> &names, std::string_view name) {
     names.emplace(name);
 }
 
-void CollectGraphValueNames(const GraphProto &graph, bool top_level, PipelineValueNames &names) {
+void CollectGraphValueNames(const GraphProto &graph, bool top_level,
+                            const std::unordered_set<std::string> &public_initializer_outputs,
+                            PipelineValueNames &names) {
   std::unordered_set<std::string> inputs;
   std::unordered_set<std::string> outputs;
   for (const ValueInfoProto &input : graph.input()) {
@@ -181,7 +184,7 @@ void CollectGraphValueNames(const GraphProto &graph, bool top_level, PipelineVal
   }
   const auto add_initializer = [&](const std::string &name) {
     InsertName(names.all, name);
-    if (!top_level || !inputs.contains(name))
+    if (!top_level || (!inputs.contains(name) && !public_initializer_outputs.contains(name)))
       InsertName(names.private_values, name);
   };
   for (const TensorProto &initializer : graph.initializer())
@@ -200,22 +203,61 @@ void CollectGraphValueNames(const GraphProto &graph, bool top_level, PipelineVal
     }
     for (const AttributeProto &attribute : node.attribute()) {
       if (attribute.has_g()) {
-        CollectGraphValueNames(attribute.g(), false, names);
+        CollectGraphValueNames(attribute.g(), false, {}, names);
       }
       for (const GraphProto &nested : attribute.graphs())
-        CollectGraphValueNames(nested, false, names);
+        CollectGraphValueNames(nested, false, {}, names);
     }
   }
 }
 
-PipelineValueNames CollectPipelineValueNames(const ModelProto &model) {
+std::string ModelFunctionKey(const NodeProto &node) {
+  return ONNX_LIGHT_NAMESPACE::NormaliseDomain(node.domain()) + ":" + node.op_type() + ":" +
+         node.overload();
+}
+
+void CollectReachableFunctionGraphNames(const utils::RepeatedProtoField<NodeProto> &nodes,
+                                        const FunctionMap &functions, PipelineValueNames &names,
+                                        std::unordered_set<std::string> &active) {
+  for (const NodeProto &node : nodes) {
+    for (const AttributeProto &attribute : node.attribute()) {
+      if (attribute.has_g()) {
+        CollectGraphValueNames(attribute.g(), false, {}, names);
+        CollectReachableFunctionGraphNames(attribute.g().node(), functions, names, active);
+      }
+      for (const GraphProto &nested : attribute.graphs()) {
+        CollectGraphValueNames(nested, false, {}, names);
+        CollectReachableFunctionGraphNames(nested.node(), functions, names, active);
+      }
+    }
+    const std::string key = ModelFunctionKey(node);
+    const auto found = functions.find(key);
+    if (found == functions.end() || !active.insert(key).second)
+      continue;
+    const FunctionProto bound = detail::BindFunctionAttributes(*found->second, node);
+    CollectReachableFunctionGraphNames(bound.node(), functions, names, active);
+    active.erase(key);
+  }
+}
+
+PipelineValueNames
+CollectPipelineValueNames(const ModelProto &model,
+                          const std::unordered_set<std::string> &public_initializer_outputs = {}) {
   PipelineValueNames names;
-  CollectGraphValueNames(model.graph(), true, names);
+  CollectGraphValueNames(model.graph(), true, public_initializer_outputs, names);
+  const FunctionMap functions = detail::ModelFunctions(model);
+  std::unordered_set<std::string> active;
+  CollectReachableFunctionGraphNames(model.graph().node(), functions, names, active);
   return names;
 }
 
 void ValidatePipelineValueNames(const ModelProto &embedding, const ModelProto &language) {
-  const PipelineValueNames embedding_names = CollectPipelineValueNames(embedding);
+  std::unordered_set<std::string> public_connections;
+  for (const ValueInfoProto &output : embedding.graph().output())
+    if (HasInput(language, output.name()))
+      public_connections.insert(output.name());
+  const PipelineValueNames embedding_names =
+      CollectPipelineValueNames(embedding, public_connections);
   const PipelineValueNames language_names = CollectPipelineValueNames(language);
   std::vector<std::string> collisions;
   for (const std::string &name : embedding_names.private_values)

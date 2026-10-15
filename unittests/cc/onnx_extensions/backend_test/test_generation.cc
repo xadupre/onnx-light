@@ -52,6 +52,32 @@ ModelProto PipelineModel(const std::string &operation,
   return model;
 }
 
+void AddPersistentState(ModelProto &model) {
+  GraphProto *graph = model.mutable_graph();
+  auto *input = graph->add_input();
+  input->set_name("state");
+  input->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::INT64);
+  input->mutable_type()->mutable_tensor_type()->mutable_shape();
+  auto *output = graph->add_output();
+  output->CopyFrom(*input);
+  output->set_name("next_state");
+  graph->mutable_node(0)->add_input("state");
+  graph->mutable_node(0)->add_output("next_state");
+  auto *binding = graph->add_persistent_bindings();
+  binding->set_input_name("state");
+  binding->set_output_name("next_state");
+}
+
+template <class Callable> std::string InvalidArgumentMessage(Callable &&callable) {
+  try {
+    callable();
+  } catch (const std::invalid_argument &error) {
+    return error.what();
+  }
+  ADD_FAILURE() << "Expected std::invalid_argument.";
+  return {};
+}
+
 enum class PrivateValueKind {
   kInitializer,
   kEncodedInitializer,
@@ -78,6 +104,12 @@ void AddPrivateValue(GraphProto &graph, PrivateValueKind kind, int variant) {
     auto *tensor = initializer->mutable_logical_type()->mutable_tensor_type();
     tensor->set_elem_type(TensorProto::FLOAT);
     tensor->mutable_shape()->add_dim()->set_dim_value(variant + 1);
+    auto *affine = initializer->mutable_affine();
+    affine->set_storage_type(TensorProto::INT8);
+    affine->mutable_scale()->set_data_type(TensorProto::FLOAT);
+    affine->mutable_scale()->add_float_data(0.5f);
+    affine->mutable_zero_point()->set_data_type(TensorProto::INT8);
+    affine->mutable_zero_point()->add_int32_data(0);
     initializer->set_raw_data(std::string(static_cast<size_t>(variant + 1), char(variant + 1)));
     break;
   }
@@ -87,6 +119,13 @@ void AddPrivateValue(GraphProto &graph, PrivateValueKind kind, int variant) {
     auto *block = initializer->add_blocks();
     block->set_start(0);
     block->set_length(variant + 1);
+    for (TensorProto *tensor : {block->mutable_key(), block->mutable_value()}) {
+      tensor->set_data_type(TensorProto::FLOAT);
+      for (int64_t dimension : {1, 1, variant + 1, 1})
+        tensor->add_dims(dimension);
+      for (int index = 0; index <= variant; ++index)
+        tensor->add_float_data(static_cast<float>(variant + index));
+    }
     break;
   }
   case PrivateValueKind::kIntermediate: {
@@ -249,20 +288,8 @@ TEST(Generation, PipelineRejectsPrivateValueNameCollisionsBeforeExecution) {
       auto language = PipelineModel("Prefill", {{"inputs_embeds", TensorProto::FLOAT}}, "logits");
       AddPrivateValue(*embedding.mutable_graph(), kind, 0);
       AddPrivateValue(*language.mutable_graph(), kind, 1);
-      if (persistent) {
-        auto *input = language.mutable_graph()->add_input();
-        input->set_name("state");
-        input->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::INT64);
-        input->mutable_type()->mutable_tensor_type()->mutable_shape();
-        auto *output = language.mutable_graph()->add_output();
-        output->CopyFrom(*input);
-        output->set_name("next_state");
-        language.mutable_graph()->mutable_node(0)->add_input("state");
-        language.mutable_graph()->mutable_node(0)->add_output("next_state");
-        auto *binding = language.mutable_graph()->add_persistent_bindings();
-        binding->set_input_name("state");
-        binding->set_output_name("next_state");
-      }
+      if (persistent)
+        AddPersistentState(language);
       RuntimeSession source(language);
       RuntimeContext context(RuntimeContextOptions{.cpu_executor = source.cpu_executor().get()});
       int calls = 0;
@@ -276,11 +303,110 @@ TEST(Generation, PipelineRejectsPrivateValueNameCollisionsBeforeExecution) {
       GenerationPipeline pipeline{.prefill = &language, .embedding = &embedding};
       GenerationOptions options;
       options.max_new_tokens = 1;
-      for (int repeat = 0; repeat < 2; ++repeat)
-        EXPECT_THROW(Generate(pipeline, context, feeds, options), std::invalid_argument);
+      for (int repeat = 0; repeat < 2; ++repeat) {
+        const std::string message =
+            InvalidArgumentMessage([&]() { Generate(pipeline, context, feeds, options); });
+        EXPECT_NE(message.find("private value name 'private_collision' is shared"),
+                  std::string::npos)
+            << message;
+      }
       EXPECT_EQ(calls, 0);
     }
   }
+}
+
+TEST(Generation, PipelineAllowsInitializerBackedEmbeddingConnection) {
+  for (bool persistent : {false, true}) {
+    SCOPED_TRACE(persistent);
+    auto embedding = PipelineModel("Unused", {{"input_ids", TensorProto::INT64}}, "inputs_embeds");
+    embedding.mutable_graph()->clear_node();
+    TensorProto *initializer = embedding.mutable_graph()->add_initializer();
+    initializer->set_name("inputs_embeds");
+    initializer->set_data_type(TensorProto::FLOAT);
+    for (int64_t dimension : {1, 1, 3})
+      initializer->add_dims(dimension);
+    for (float value : {0.0f, 4.0f, 0.0f})
+      initializer->add_float_data(value);
+    auto language = PipelineModel("Prefill", {{"inputs_embeds", TensorProto::FLOAT}}, "logits");
+    if (persistent)
+      AddPersistentState(language);
+    RuntimeSession source(language);
+    RuntimeContext context(RuntimeContextOptions{.cpu_executor = source.cpu_executor().get()});
+    int calls = 0;
+    context.RegisterCustomKernel(
+        "test.pipeline", "Prefill", [&](const NodeProto &node, RuntimeContext &runtime) {
+          ++calls;
+          runtime.Put(node.output(0), runtime.Get("inputs_embeds").BorrowView());
+          if (persistent)
+            runtime.Put(node.output(1),
+                        Tensor::FromInt64("", {}, {runtime.Get("state").AsInt64()[0] + 1}));
+        });
+    RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))}};
+    if (persistent)
+      feeds.emplace("state", RuntimeValue(Tensor::FromInt64("", {}, {0})));
+    GenerationOptions options;
+    options.max_new_tokens = 2;
+    EXPECT_EQ(Tokens(Generate(GenerationPipeline{.prefill = &language, .embedding = &embedding},
+                              context, feeds, options)),
+              (std::vector<int64_t>{0, 1, 1}));
+    EXPECT_EQ(calls, 2);
+  }
+}
+
+TEST(Generation, PipelineRejectsReachableFunctionDefaultGraphInitializerCollision) {
+  auto embedding =
+      PipelineModel("EmbedFunction", {{"input_ids", TensorProto::INT64}}, "inputs_embeds");
+  FunctionProto *function = embedding.add_functions();
+  function->set_domain("test.pipeline");
+  function->set_name("EmbedFunction");
+  function->add_input("X");
+  function->add_output("Y");
+  auto *opset = function->add_opset_import();
+  opset->set_domain("test.pipeline");
+  opset->set_version(1);
+  AttributeProto *body_default = function->add_attribute_proto();
+  body_default->set_name("body");
+  body_default->set_type(AttributeProto::GRAPH);
+  GraphProto *body = body_default->mutable_g();
+  TensorProto *embedding_weight = body->add_initializer();
+  embedding_weight->set_name("weight");
+  embedding_weight->set_data_type(TensorProto::FLOAT);
+  embedding_weight->add_dims(1);
+  embedding_weight->add_float_data(1);
+  NodeProto *function_node = function->add_node();
+  function_node->set_domain("test.pipeline");
+  function_node->set_op_type("UseBody");
+  function_node->add_input("X");
+  function_node->add_output("Y");
+  AttributeProto *body_reference = function_node->add_attribute();
+  body_reference->set_name("body");
+  body_reference->set_ref_attr_name("body");
+  body_reference->set_type(AttributeProto::GRAPH);
+
+  auto language = PipelineModel("Prefill", {{"inputs_embeds", TensorProto::FLOAT}}, "logits");
+  TensorProto *language_weight = language.mutable_graph()->add_initializer();
+  language_weight->set_name("weight");
+  language_weight->set_data_type(TensorProto::FLOAT);
+  language_weight->add_dims(2);
+  language_weight->add_float_data(2);
+  language_weight->add_float_data(3);
+  AddPersistentState(language);
+  RuntimeSession source(language);
+  RuntimeContext context(RuntimeContextOptions{.cpu_executor = source.cpu_executor().get()});
+  int calls = 0;
+  context.RegisterCustomKernel("test.pipeline", "Prefill",
+                               [&](const NodeProto &, RuntimeContext &) { ++calls; });
+  RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))},
+                        {"state", RuntimeValue(Tensor::FromInt64("", {}, {0}))}};
+  GenerationOptions options;
+  options.max_new_tokens = 1;
+
+  const std::string message = InvalidArgumentMessage([&]() {
+    Generate(GenerationPipeline{.prefill = &language, .embedding = &embedding}, context, feeds,
+             options);
+  });
+  EXPECT_NE(message.find("private value name 'weight' is shared"), std::string::npos) << message;
+  EXPECT_EQ(calls, 0);
 }
 
 TEST(Generation, PipelineScopesModelFunctionsWithoutChangingTheCallerRegistry) {

@@ -71,10 +71,10 @@ ONNX_LIGHT_CORE_API Tensor Generate(const ModelProto &model, RuntimeContext &con
  * each language-model invocation. Graphs connect through declared input/output
  * names, without additional mappings. Both models use the supplied context,
  * sharing its custom kernels, allocators and installed CPU executor.
- * Top-level graph inputs and outputs may share names, including an embedding
- * output connected to a language-model input. Private initializer and
- * intermediate names must be unique across the two models; conflicts are
- * rejected before either model executes.
+ * Top-level graph inputs and outputs may share names, including an
+ * initializer-backed embedding output connected to a language-model input.
+ * Private initializer and intermediate names must be unique across the two
+ * models; conflicts are rejected before either model executes.
  * The same generation options and lifetime requirements apply as for a single model.
  * Calls sharing a context must be serialized, including calls to the single-model
  * overload or other runtime execution on that context.

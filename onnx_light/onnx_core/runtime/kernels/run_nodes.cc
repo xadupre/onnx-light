@@ -1000,6 +1000,19 @@ FunctionMap ModelFunctions(const ModelProto &model) {
   return result;
 }
 
+FunctionProto BindFunctionAttributes(const FunctionProto &function, const NodeProto &call) {
+  std::unordered_map<std::string, const AttributeProto *> attributes;
+  for (const AttributeProto &attribute : function.attribute_proto())
+    attributes[attribute.name()] = &attribute;
+  for (const AttributeProto &attribute : call.attribute())
+    attributes[attribute.name()] = &attribute;
+  FunctionProto bound;
+  bound.CopyFrom(function);
+  for (NodeProto &node : bound.ref_node())
+    BindRefAttributes(node, attributes);
+  return bound;
+}
+
 namespace {
 
 // Kernel that dispatches a node to a model-local ``FunctionProto`` body.
@@ -1024,19 +1037,7 @@ public:
         immutable_inputs_.insert(func.input(i));
     // Pre-bind attribute references at construction time (the call-site
     // node and function body are both fixed for this kernel's lifetime).
-    std::unordered_map<std::string, const AttributeProto *> attr_map;
-    for (size_t i = 0; i < func_.attribute_proto().size(); ++i) {
-      const AttributeProto &a = func_.attribute_proto()[i];
-      attr_map[a.name()] = &a;
-    }
-    for (size_t i = 0; i < node.attribute().size(); ++i) {
-      const AttributeProto &a = node.attribute()[i];
-      attr_map[a.name()] = &a;
-    }
-    bound_func_.CopyFrom(func_);
-    for (size_t i = 0; i < bound_func_.node().size(); ++i) {
-      BindRefAttributes(bound_func_.ref_node()[i], attr_map);
-    }
+    bound_func_ = BindFunctionAttributes(func_, node);
   }
 
   void Run(RuntimeContext &rt) override {

@@ -491,8 +491,19 @@ RuntimeValue FeedbackValueFromPython(
     return RuntimeValue::FromPagedCache(nb::cast<const PagedCacheProto &>(value), catalogue,
                                         parameters ? *parameters : nullptr);
   }
-  if (nb::isinstance<RuntimeValue>(value))
-    return nb::cast<const RuntimeValue &>(value).BorrowView();
+  if (nb::isinstance<RuntimeValue>(value)) {
+    RuntimeValue result = nb::cast<const RuntimeValue &>(value).BorrowView();
+    if (model && parameters && result.kind == RuntimeValue::Kind::kEncoded &&
+        result.Encoded().has_parameter_ref()) {
+      if (!*parameters)
+        *parameters = core::runtime::QuantizationParameterCatalogue::Build(*model);
+      StructTypeCatalogue catalogue;
+      catalogue.Build(*model);
+      (*parameters)->Validate(result.Encoded(), catalogue);
+      result.quantization_parameters = *parameters;
+    }
+    return result;
+  }
   if (nb::isinstance<Tensor>(value)) {
     const Tensor &source = nb::cast<const Tensor &>(value);
     if (source.data_type == TensorProto::STRING) {

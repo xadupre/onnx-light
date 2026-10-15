@@ -56,8 +56,8 @@ def _add_shared_parameters(model, name, shape, scales, prefix):
     return compact
 
 
-def _shared_encoded(model, name, values):
-    """Quantizes values through one model-local shared parameter set."""
+def _shared_value(model, name, values):
+    """Quantizes values into a retained model-local shared runtime value."""
     array = numpy.asarray(values, dtype=numpy.float32)
     tensor = runtime.tensor_from_numpy(
         name,
@@ -65,7 +65,12 @@ def _shared_encoded(model, name, values):
         list(array.shape),
         numpy.frombuffer(array.tobytes(), dtype=numpy.uint8),
     )
-    return runtime.quantize_tensor_shared(tensor, model, name).encoded
+    return runtime.quantize_tensor_shared(tensor, model, name)
+
+
+def _shared_encoded(model, name, values):
+    """Quantizes values through one model-local shared parameter set."""
+    return _shared_value(model, name, values).encoded
 
 
 class TestGeneration(unittest.TestCase):
@@ -195,7 +200,7 @@ class TestGeneration(unittest.TestCase):
         cache_info.type.struct_type = onnx.StructTypeProto()
         embedding_model.graph.input.append(cache_info)
 
-        direct = _shared_encoded(embedding_model, "embedding", [1, 2, 3])
+        direct = _shared_value(embedding_model, "embedding", [1, 2, 3])
         cache_value = _shared_encoded(
             embedding_model, "cache", numpy.arange(4, dtype=numpy.float32).reshape(1, 1, 2, 2)
         )
@@ -223,8 +228,8 @@ class TestGeneration(unittest.TestCase):
             "cache": cache,
         }
         originals = {
-            name: value.SerializeToString()
-            for name, value in (("direct", direct), ("cache", cache))
+            "direct": direct.encoded.SerializeToString(),
+            "cache": cache.SerializeToString(),
         }
         numpy.testing.assert_array_equal(
             ReferenceEvaluator(decoder_model).generate(
@@ -232,11 +237,11 @@ class TestGeneration(unittest.TestCase):
             ),
             [[0, 0, 0]],
         )
-        self.assertEqual(direct.SerializeToString(), originals["direct"])
+        self.assertEqual(direct.encoded.SerializeToString(), originals["direct"])
         self.assertEqual(cache.SerializeToString(), originals["cache"])
 
         missing = onnx.EncodedValueProto()
-        missing.CopyFrom(direct)
+        missing.CopyFrom(direct.encoded)
         missing.parameter_ref = "missing"
         with self.assertRaisesRegex(ValueError, "parameter_ref"):
             ReferenceEvaluator(decoder_model).generate(
@@ -303,7 +308,7 @@ class TestGeneration(unittest.TestCase):
 
         embedding_model = make_model(True, [3], [5, 1, 1])
         decoder_model = make_model(False, [3], [1, 5, 1])
-        shared = _shared_encoded(embedding_model, "common", [5, 1, 0])
+        shared = _shared_value(embedding_model, "common", [5, 1, 0])
         feeds = {"input_ids": numpy.array([[0]], dtype=numpy.int64), "shared": shared}
         numpy.testing.assert_array_equal(
             ReferenceEvaluator(decoder_model).generate(

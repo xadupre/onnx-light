@@ -5,6 +5,9 @@ digraph protos {
     node [shape=box, style="rounded,filled", fillcolor="#EAF2F8", fontname="Helvetica", fontsize=12, color="#1F618D"];
     edge [fontname="Helvetica", fontsize=10, color="#566573"];
 
+    PipelineProto -> ModelProto [label="embedding, prefill, decode"];
+    PipelineProto -> StringStringEntryProto [label="metadata_props"];
+
     ModelProto -> GraphProto [label="graph"];
     ModelProto -> OperatorSetIdProto [label="opset_import"];
     ModelProto -> FunctionProto [label="functions"];

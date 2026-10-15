@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <charconv>
+#include <cmath>
 #include <cstring>
 #include <limits>
 #include <string>
@@ -2055,6 +2056,43 @@ void VerifyModel(const ModelProto &model) {
                                                           "::", function.overload());
     EXT_ENFORCE_INVALID(function_ids.insert(id).second, "ModelProto declares function '", id,
                         "' more than once.");
+  }
+}
+
+void VerifyPipeline(const PipelineProto &pipeline) {
+  EXT_ENFORCE_INVALID(pipeline.has_prefill(),
+                      "PipelineProto is missing its required 'prefill' model.");
+
+  VerifyModel(pipeline.prefill());
+  if (pipeline.has_embedding())
+    VerifyModel(pipeline.embedding());
+  if (pipeline.has_decode())
+    VerifyModel(pipeline.decode());
+
+  EXT_ENFORCE_INVALID(!pipeline.has_max_new_tokens() || pipeline.ref_max_new_tokens() >= 0,
+                      "PipelineProto max_new_tokens must be nonnegative.");
+  EXT_ENFORCE_INVALID(!pipeline.has_temperature() || (std::isfinite(pipeline.ref_temperature()) &&
+                                                      pipeline.ref_temperature() >= 0),
+                      "PipelineProto temperature must be finite and nonnegative.");
+  EXT_ENFORCE_INVALID(!pipeline.has_seed() || pipeline.ref_seed() >= 0,
+                      "PipelineProto seed must be nonnegative.");
+  EXT_ENFORCE_INVALID(!pipeline.has_eos_token_id() || pipeline.ref_eos_token_id() >= 0,
+                      "PipelineProto eos_token_id must be nonnegative.");
+  EXT_ENFORCE_INVALID(!pipeline.has_pad_token_id() || pipeline.ref_pad_token_id() >= 0,
+                      "PipelineProto pad_token_id must be nonnegative.");
+  EXT_ENFORCE_INVALID(!pipeline.has_top_k() || pipeline.ref_top_k() >= 0,
+                      "PipelineProto top_k must be nonnegative.");
+  EXT_ENFORCE_INVALID(!pipeline.has_top_p() ||
+                          (std::isfinite(pipeline.ref_top_p()) && pipeline.ref_top_p() > 0 &&
+                           pipeline.ref_top_p() <= 1),
+                      "PipelineProto top_p must be finite and in the interval (0, 1].");
+
+  std::unordered_set<std::string> metadata_keys;
+  for (const StringStringEntryProto &entry : pipeline.metadata_props()) {
+    const std::string key = ToStdString(entry.key());
+    EXT_ENFORCE_INVALID(!key.empty(), "PipelineProto metadata keys must not be empty.");
+    EXT_ENFORCE_INVALID(metadata_keys.insert(key).second, "PipelineProto metadata key '", key,
+                        "' is declared more than once.");
   }
 }
 

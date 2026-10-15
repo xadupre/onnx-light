@@ -17,6 +17,7 @@ from ..onnx_py._onnxpyprotoop import (  # type: ignore
     OperatorStatus,
     OptionalProto,
     ParseOptions,
+    PipelineProto,
     PersistentBindingProto,
     PrintOptions,
     SequenceProto,

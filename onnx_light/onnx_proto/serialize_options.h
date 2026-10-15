@@ -15,6 +15,7 @@ class TensorProto;
 class NodeProto;
 class GraphProto;
 class ModelProto;
+class PipelineProto;
 struct SerializeOptions;
 
 /**
@@ -51,6 +52,8 @@ private:
 
 ONNX_LIGHT_PROTO_API SerializeCallbackRestorer
 ApplySerializeRawDataCallback(ModelProto &model, const SerializeOptions &options);
+ONNX_LIGHT_PROTO_API SerializeCallbackRestorer
+ApplySerializeRawDataCallback(PipelineProto &pipeline, const SerializeOptions &options);
 
 /**
  * Common options shared by tensor buffer operations: in-place consolidation

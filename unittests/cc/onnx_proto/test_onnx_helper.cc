@@ -18,6 +18,31 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using namespace ONNX_LIGHT_NAMESPACE::utils;
 using namespace ONNX_LIGHT_NAMESPACE::core::graph;
 
+TEST(onnx_helper, MakePipelineCopiesExistingProtos) {
+  ModelProto prefill;
+  prefill.set_producer_name("prefill");
+  ModelProto decode;
+  decode.set_producer_name("decode");
+  ModelProto embedding;
+  embedding.set_producer_name("embedding");
+  PipelineProto pipeline = MakePipeline(prefill, &decode, &embedding);
+
+  ASSERT_TRUE(pipeline.has_prefill());
+  ASSERT_TRUE(pipeline.has_decode());
+  ASSERT_TRUE(pipeline.has_embedding());
+  EXPECT_EQ(pipeline.ref_prefill().ref_producer_name(), "prefill");
+  EXPECT_EQ(pipeline.ref_decode().ref_producer_name(), "decode");
+  EXPECT_EQ(pipeline.ref_embedding().ref_producer_name(), "embedding");
+
+  prefill.set_producer_name("changed");
+  EXPECT_EQ(pipeline.ref_prefill().ref_producer_name(), "prefill");
+
+  PipelineProto prefill_only = MakePipeline(prefill);
+  EXPECT_TRUE(prefill_only.has_prefill());
+  EXPECT_FALSE(prefill_only.has_decode());
+  EXPECT_FALSE(prefill_only.has_embedding());
+}
+
 TEST(onnx_helper, IteratorTensorProto) {
   ModelProto model;
 

@@ -92,7 +92,7 @@ class TestProtoRelationsSync(unittest.TestCase):
         tree = set()
         stack = []
         for line in index.splitlines():
-            if line.strip() in {"ModelProto", "SequenceProto"}:
+            if line.strip() in {"PipelineProto", "ModelProto", "SequenceProto"}:
                 stack = [line.strip()]
                 continue
             edge = re.match(r"([ \u2502]*)[\u251c\u2514]\u2500\u2500 (.+) \u2192 (\S+)(.*)", line)

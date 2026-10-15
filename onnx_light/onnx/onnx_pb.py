@@ -18,6 +18,7 @@ from . import (  # noqa: F401
     OptionalProto,
     PagedCacheBlockProto,
     PagedCacheProto,
+    PipelineProto,
     PersistentBindingProto,
     SequenceProto,
     SparseTensorProto,

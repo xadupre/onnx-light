@@ -35,6 +35,11 @@ references are explicitly marked rather than expanded as nested messages.
 
 .. code-block:: text
 
+   PipelineProto
+   ├── embedding, prefill, decode → ModelProto
+   ├── generation → GenerationConfigurationProto
+   └── metadata_props → StringStringEntryProto
+
    ModelProto
    ├── graph → GraphProto
    │   ├── node → NodeProto
@@ -143,6 +148,7 @@ Containment attributes
 
 Quick attribute list used in the graph:
 
+* :doc:`pipeline_proto`: ``embedding``, ``prefill``, ``decode``, ``generation``, ``metadata_props``
 * :doc:`model_proto`: ``graph``, ``opset_import``, ``functions``, ``configuration``, ``metadata_props``, ``struct_types``
 * :doc:`graph_proto`: ``node``, ``initializer``, ``sparse_initializer``, ``input``, ``output``, ``value_info``, ``quantization_annotation``, ``metadata_props``, ``encoded_initializer``, ``persistent_bindings``, ``paged_cache_initializer``
 * :doc:`function_proto`: ``attribute_proto``, ``node``, ``opset_import``, ``value_info``, ``metadata_props``
@@ -178,6 +184,7 @@ Quick attribute list used in the graph:
     device_configuration_proto
     encoded_value_proto
     function_proto
+    generation_configuration_proto
     graph_proto
     int_int_list_entry_proto
     map_proto
@@ -189,6 +196,7 @@ Quick attribute list used in the graph:
     operator_status
     optional_proto
     paged_cache_proto
+    pipeline_proto
     sequence_proto
     sharded_dim_proto
     sharding_spec_proto

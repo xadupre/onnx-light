@@ -3674,6 +3674,42 @@ TEST(onnx_proto, ModelProto_CopyFrom) {
   EXPECT_EQ(target.ref_metadata_props()[0].ref_value(), "source_value");
 }
 
+TEST(onnx_proto, PipelineProto_Serialization) {
+  PipelineProto pipeline;
+  pipeline.set_name("text-generation");
+  pipeline.set_producer_name("onnx-light");
+  pipeline.set_pipeline_version(3);
+  pipeline.mutable_prefill()->set_producer_name("prefill");
+  pipeline.mutable_decode()->set_producer_name("decode");
+  auto *generation = pipeline.mutable_generation();
+  generation->set_max_new_tokens(64);
+  generation->set_temperature(0.75f);
+  generation->set_top_k(20);
+  generation->set_top_p(0.9f);
+  generation->set_input_ids_name("input_ids");
+  generation->set_logits_name("logits");
+  auto *metadata = pipeline.add_metadata_props();
+  metadata->set_key("family");
+  metadata->set_value("decoder-only");
+
+  std::string serialized;
+  ASSERT_TRUE(pipeline.SerializeToString(serialized));
+  EXPECT_FALSE(serialized.empty());
+  EXPECT_EQ(serialized.size(), pipeline.SerializeSize().size());
+
+  PipelineProto restored;
+  ASSERT_TRUE(restored.ParseFromString(serialized));
+  EXPECT_TRUE(pipeline.Equals(restored));
+  EXPECT_EQ(restored.ref_name(), "text-generation");
+  EXPECT_EQ(restored.ref_prefill().ref_producer_name(), "prefill");
+  EXPECT_EQ(restored.ref_decode().ref_producer_name(), "decode");
+  EXPECT_EQ(restored.ref_generation().ref_max_new_tokens(), 64);
+  EXPECT_FLOAT_EQ(restored.ref_generation().ref_temperature(), 0.75f);
+  EXPECT_EQ(restored.ref_generation().ref_input_ids_name(), "input_ids");
+  ASSERT_EQ(restored.ref_metadata_props().size(), 1);
+  EXPECT_EQ(restored.ref_metadata_props()[0].ref_value(), "decoder-only");
+}
+
 TEST(onnx_proto, ModelProto_ComplexModel) {
   ModelProto model;
   model.set_ir_version(3);

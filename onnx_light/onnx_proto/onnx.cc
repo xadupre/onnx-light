@@ -2247,6 +2247,124 @@ bool ModelProto::SerializeToString(std::string &out,
   return true;
 }
 
+// GenerationConfigurationProto
+
+IMPLEMENT_PROTO(GenerationConfigurationProto)
+SerializeSizeResult GenerationConfigurationProto::SerializeSize(utils::BinaryWriteStream &stream,
+                                                                SerializeOptions &options) const {
+  SerializeSizeResult size;
+  SIZE_FIELD(size, options, stream, max_new_tokens)
+  SIZE_FIELD(size, options, stream, temperature)
+  SIZE_FIELD(size, options, stream, seed)
+  SIZE_FIELD(size, options, stream, eos_token_id)
+  SIZE_FIELD(size, options, stream, pad_token_id)
+  SIZE_FIELD(size, options, stream, top_k)
+  SIZE_FIELD(size, options, stream, top_p)
+  SIZE_FIELD(size, options, stream, input_ids_name)
+  SIZE_FIELD(size, options, stream, logits_name)
+  SIZE_FIELD(size, options, stream, attention_mask_name)
+  SIZE_FIELD(size, options, stream, position_ids_name)
+  return size;
+}
+void GenerationConfigurationProto::SerializeToStream(utils::BinaryWriteStream &stream,
+                                                     SerializeOptions &options) const {
+  WRITE_FIELD(options, stream, max_new_tokens)
+  WRITE_FIELD(options, stream, temperature)
+  WRITE_FIELD(options, stream, seed)
+  WRITE_FIELD(options, stream, eos_token_id)
+  WRITE_FIELD(options, stream, pad_token_id)
+  WRITE_FIELD(options, stream, top_k)
+  WRITE_FIELD(options, stream, top_p)
+  WRITE_FIELD(options, stream, input_ids_name)
+  WRITE_FIELD(options, stream, logits_name)
+  WRITE_FIELD(options, stream, attention_mask_name)
+  WRITE_FIELD(options, stream, position_ids_name)
+}
+bool GenerationConfigurationProto::ParseFromStream(utils::BinaryStream &stream,
+                                                   ParseOptions &options) {
+  READ_BEGIN(options, stream, GenerationConfigurationProto) //
+  READ_FIELD(options, stream, max_new_tokens)               //
+  READ_FIELD(options, stream, temperature)                  //
+  READ_FIELD(options, stream, seed)                         //
+  READ_FIELD(options, stream, eos_token_id)                 //
+  READ_FIELD(options, stream, pad_token_id)                 //
+  READ_FIELD(options, stream, top_k)                        //
+  READ_FIELD(options, stream, top_p)                        //
+  READ_FIELD(options, stream, input_ids_name)               //
+  READ_FIELD(options, stream, logits_name)                  //
+  READ_FIELD(options, stream, attention_mask_name)          //
+  READ_FIELD(options, stream, position_ids_name)            //
+  READ_END(options, stream, GenerationConfigurationProto)   //
+  return true;
+}
+void GenerationConfigurationProto::PrintToStringStream(std::stringstream &ss,
+                                                       utils::PrintOptions &options) const {
+  write_proto_into_vector_string(
+      ss, options, NAME_EXIST_VALUE(max_new_tokens), NAME_EXIST_VALUE(temperature),
+      NAME_EXIST_VALUE(seed), NAME_EXIST_VALUE(eos_token_id), NAME_EXIST_VALUE(pad_token_id),
+      NAME_EXIST_VALUE(top_k), NAME_EXIST_VALUE(top_p), NAME_EXIST_VALUE(input_ids_name),
+      NAME_EXIST_VALUE(logits_name), NAME_EXIST_VALUE(attention_mask_name),
+      NAME_EXIST_VALUE(position_ids_name));
+}
+
+// PipelineProto
+
+IMPLEMENT_PROTO(PipelineProto)
+SerializeSizeResult PipelineProto::SerializeSize(utils::BinaryWriteStream &stream,
+                                                 SerializeOptions &options) const {
+  SerializeSizeResult size;
+  SIZE_FIELD(size, options, stream, name)
+  SIZE_FIELD(size, options, stream, producer_name)
+  SIZE_FIELD(size, options, stream, producer_version)
+  SIZE_FIELD(size, options, stream, domain)
+  SIZE_FIELD(size, options, stream, pipeline_version)
+  SIZE_FIELD(size, options, stream, doc_string)
+  SIZE_OPTIONAL_PROTO_FIELD(size, options, stream, embedding)
+  SIZE_OPTIONAL_PROTO_FIELD(size, options, stream, prefill)
+  SIZE_OPTIONAL_PROTO_FIELD(size, options, stream, decode)
+  SIZE_OPTIONAL_PROTO_FIELD(size, options, stream, generation)
+  SIZE_REPEATED_FIELD(size, options, stream, metadata_props)
+  return size;
+}
+void PipelineProto::SerializeToStream(utils::BinaryWriteStream &stream,
+                                      SerializeOptions &options) const {
+  WRITE_FIELD(options, stream, name)
+  WRITE_FIELD(options, stream, producer_name)
+  WRITE_FIELD(options, stream, producer_version)
+  WRITE_FIELD(options, stream, domain)
+  WRITE_FIELD(options, stream, pipeline_version)
+  WRITE_FIELD(options, stream, doc_string)
+  WRITE_OPTIONAL_PROTO_FIELD(options, stream, embedding)
+  WRITE_OPTIONAL_PROTO_FIELD(options, stream, prefill)
+  WRITE_OPTIONAL_PROTO_FIELD(options, stream, decode)
+  WRITE_OPTIONAL_PROTO_FIELD(options, stream, generation)
+  WRITE_REPEATED_FIELD(options, stream, metadata_props)
+}
+bool PipelineProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, PipelineProto)             //
+  READ_FIELD(options, stream, name)                      //
+  READ_FIELD(options, stream, producer_name)             //
+  READ_FIELD(options, stream, producer_version)          //
+  READ_FIELD(options, stream, domain)                    //
+  READ_FIELD(options, stream, pipeline_version)          //
+  READ_FIELD(options, stream, doc_string)                //
+  READ_OPTIONAL_PROTO_FIELD(options, stream, embedding)  //
+  READ_OPTIONAL_PROTO_FIELD(options, stream, prefill)    //
+  READ_OPTIONAL_PROTO_FIELD(options, stream, decode)     //
+  READ_OPTIONAL_PROTO_FIELD(options, stream, generation) //
+  READ_REPEATED_FIELD(options, stream, metadata_props)   //
+  READ_END(options, stream, PipelineProto)               //
+  return true;
+}
+void PipelineProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptions &options) const {
+  write_proto_into_vector_string(
+      ss, options, NAME_EXIST_VALUE(name), NAME_EXIST_VALUE(producer_name),
+      NAME_EXIST_VALUE(producer_version), NAME_EXIST_VALUE(domain),
+      NAME_EXIST_VALUE(pipeline_version), NAME_EXIST_VALUE(doc_string), NAME_EXIST_VALUE(embedding),
+      NAME_EXIST_VALUE(prefill), NAME_EXIST_VALUE(decode), NAME_EXIST_VALUE(generation),
+      NAME_EXIST_VALUE(metadata_props));
+}
+
 // SequenceProto
 
 IMPLEMENT_PROTO(SequenceProto)
@@ -2997,6 +3115,41 @@ bool ModelProto::Equals(const ModelProto &right, std::string *difference) const 
   COMPARE_FIELD(functions)
   COMPARE_FIELD(configuration)
   COMPARE_FIELD(struct_types)
+  return true;
+}
+
+bool GenerationConfigurationProto::Equals(const GenerationConfigurationProto &right,
+                                          std::string *difference) const {
+  const auto &left = *this;
+  ProtoComparison comparison(difference);
+  COMPARE_FIELD(max_new_tokens)
+  COMPARE_FIELD(temperature)
+  COMPARE_FIELD(seed)
+  COMPARE_FIELD(eos_token_id)
+  COMPARE_FIELD(pad_token_id)
+  COMPARE_FIELD(top_k)
+  COMPARE_FIELD(top_p)
+  COMPARE_FIELD(input_ids_name)
+  COMPARE_FIELD(logits_name)
+  COMPARE_FIELD(attention_mask_name)
+  COMPARE_FIELD(position_ids_name)
+  return true;
+}
+
+bool PipelineProto::Equals(const PipelineProto &right, std::string *difference) const {
+  const auto &left = *this;
+  ProtoComparison comparison(difference);
+  COMPARE_FIELD(name)
+  COMPARE_FIELD(producer_name)
+  COMPARE_FIELD(producer_version)
+  COMPARE_FIELD(domain)
+  COMPARE_FIELD(pipeline_version)
+  COMPARE_FIELD(doc_string)
+  COMPARE_FIELD(embedding)
+  COMPARE_FIELD(prefill)
+  COMPARE_FIELD(decode)
+  COMPARE_FIELD(generation)
+  COMPARE_FIELD(metadata_props)
   return true;
 }
 

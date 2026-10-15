@@ -23,6 +23,7 @@ verify_node = _verify.verify_node
 verify_graph = _verify.verify_graph
 verify_function = _verify.verify_function
 verify_model = _verify.verify_model
+verify_pipeline = _verify.verify_pipeline
 
 __all__ = [
     "verify_attribute",
@@ -30,6 +31,7 @@ __all__ = [
     "verify_graph",
     "verify_model",
     "verify_node",
+    "verify_pipeline",
     "verify_sparse_tensor",
     "verify_tensor",
     "verify_value_info",

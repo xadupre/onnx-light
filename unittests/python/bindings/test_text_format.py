@@ -63,6 +63,31 @@ class TestTextFormat(ExtTestCase):
         parsed = parse_from_textproto(text, onnxl.ModelProto())
         self.assertEqual(model.SerializeToString(), parsed.SerializeToString())
 
+    def test_round_trip_pipeline(self):
+        """Tests models and generation settings in a pipeline textproto."""
+        pipeline = onnxl.PipelineProto(
+            name="text-generation",
+            prefill=_rich_model(),
+            generation=onnxl.GenerationConfigurationProto(
+                max_new_tokens=64,
+                temperature=0.75,
+                top_k=20,
+                top_p=0.9,
+                input_ids_name="input_ids",
+                logits_name="logits",
+            ),
+        )
+        metadata = pipeline.metadata_props.add()
+        metadata.key = "family"
+        metadata.value = "decoder-only"
+
+        text = serialize_to_textproto(pipeline)
+        self.assertIn('name: "text-generation"', text)
+        self.assertIn("prefill {", text)
+        self.assertIn("generation {", text)
+        parsed = parse_from_textproto(text, onnxl.PipelineProto())
+        self.assertEqual(pipeline.SerializeToString(), parsed.SerializeToString())
+
     def test_round_trip_non_utf8_bytes(self):
         """Tests that non-UTF-8 attribute bytes survive a round-trip."""
         model = _rich_model()

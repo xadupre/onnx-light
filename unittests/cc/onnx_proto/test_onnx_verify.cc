@@ -643,6 +643,40 @@ TEST(onnx_verify, VerifyModel_MissingOpset) {
   EXPECT_THROW(VerifyModel(model), std::invalid_argument);
 }
 
+TEST(onnx_verify, VerifyPipeline_ModelsConfigurationAndMetadata) {
+  PipelineProto pipeline;
+  *pipeline.mutable_prefill() = MakeValidModel();
+  *pipeline.mutable_embedding() = MakeValidModel();
+  *pipeline.mutable_decode() = MakeValidModel();
+  auto *generation = pipeline.mutable_generation();
+  generation->set_max_new_tokens(32);
+  generation->set_temperature(0);
+  generation->set_seed(42);
+  generation->set_top_k(0);
+  generation->set_top_p(1);
+  auto *metadata = pipeline.add_metadata_props();
+  metadata->set_key("family");
+  metadata->set_value("decoder-only");
+  EXPECT_NO_THROW(VerifyPipeline(pipeline));
+
+  generation->set_top_p(0);
+  EXPECT_THROW(VerifyPipeline(pipeline), std::invalid_argument);
+  generation->set_top_p(1);
+  pipeline.add_metadata_props(*metadata);
+  EXPECT_THROW(VerifyPipeline(pipeline), std::invalid_argument);
+}
+
+TEST(onnx_verify, VerifyPipeline_RequiresValidPrefill) {
+  PipelineProto pipeline;
+  EXPECT_THROW(VerifyPipeline(pipeline), std::invalid_argument);
+  pipeline.mutable_prefill();
+  EXPECT_THROW(VerifyPipeline(pipeline), std::invalid_argument);
+  *pipeline.mutable_prefill() = MakeValidModel();
+  EXPECT_NO_THROW(VerifyPipeline(pipeline));
+  pipeline.mutable_decode();
+  EXPECT_THROW(VerifyPipeline(pipeline), std::invalid_argument);
+}
+
 TEST(onnx_verify, VerifyGraph_NotTopologicallySorted) {
   ModelProto model = MakeValidModel();
   GraphProto &graph = model.ref_graph();

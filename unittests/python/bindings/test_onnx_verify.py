@@ -6,9 +6,11 @@ from onnx_light.ext_test_case import ExtTestCase
 from onnx_light.onnx_lib import (
     AttributeProto,
     FunctionProto,
+    GenerationConfigurationProto,
     GraphProto,
     ModelProto,
     NodeProto,
+    PipelineProto,
     TensorProto,
 )
 from onnx_light.onnx_proto import verify
@@ -42,6 +44,35 @@ class TestVerify(ExtTestCase):
         del model.opset_import[:]
         with self.assertRaises(ValueError):
             verify.verify_model(model)
+
+    def test_verify_pipeline(self):
+        """Checks the required model and generation ranges."""
+        pipeline = PipelineProto(prefill=_make_valid_model())
+        pipeline.generation = GenerationConfigurationProto(
+            max_new_tokens=32,
+            temperature=0.0,
+            seed=42,
+            top_k=0,
+            top_p=1.0,
+            input_ids_name="input_ids",
+            logits_name="logits",
+        )
+        verify.verify_pipeline(pipeline)
+
+        pipeline.generation.top_p = 0.0
+        with self.assertRaises(ValueError):
+            verify.verify_pipeline(pipeline)
+        pipeline.generation.top_p = 1.0
+        pipeline.decode.CopyFrom(ModelProto())
+        with self.assertRaises(ValueError):
+            verify.verify_pipeline(pipeline)
+
+    def test_verify_pipeline_requires_prefill(self):
+        """Checks that every pipeline contains a structurally valid prefill model."""
+        with self.assertRaises(ValueError):
+            verify.verify_pipeline(PipelineProto())
+        with self.assertRaises(ValueError):
+            verify.verify_pipeline(PipelineProto(prefill=ModelProto()))
 
     def test_verify_graph_not_topologically_sorted(self):
         """Checks that a node consuming an undefined name is rejected."""

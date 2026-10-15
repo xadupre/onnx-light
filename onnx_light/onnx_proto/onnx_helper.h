@@ -451,6 +451,30 @@ inline bool SerializeProtoToStream(ModelProto &model, utils::BinaryWriteStream &
   return SerializeModelProtoToStream(model, stream, options, clear_external_data);
 }
 
+/**
+ * Specializes SerializeProtoToStream for a self-contained PipelineProto.
+ *
+ * External-weight output is intentionally unsupported because a pipeline owns
+ * multiple independent models and therefore has no single external-data namespace.
+ */
+template <>
+inline bool SerializeProtoToStream(PipelineProto &pipeline, utils::BinaryWriteStream &stream,
+                                   SerializeOptions &options, bool) {
+  EXT_ENFORCE(options.format == SerializeFormat::kOnnx,
+              "PipelineProto serialization only supports SerializeFormat::kOnnx.");
+  EXT_ENFORCE(!stream.ExternalWeights(),
+              "PipelineProto serialization does not support external-weight output.");
+  if (options.is_parallel())
+    stream.StartThreadPool(options.num_threads);
+  SerializeSizeResult total_size = pipeline.SerializeSize(stream, options);
+  if (!EnforceMaxSerializedSize(total_size, options, "SerializePipelineProtoToStream"))
+    return false;
+  pipeline.SerializeToStream(stream, options);
+  if (options.is_parallel())
+    stream.WaitForDelayedBlock();
+  return true;
+}
+
 //////////
 // Parsing
 //////////
@@ -557,6 +581,17 @@ template <>
 inline void ParseProtoFromStream(ModelProto &model, utils::BinaryStream &stream,
                                  ParseOptions &options, bool clear_external_data) {
   ParseModelProtoFromStream(model, stream, options, clear_external_data);
+}
+
+/** Specializes ParseProtoFromStream for a self-contained PipelineProto. */
+template <>
+inline void ParseProtoFromStream(PipelineProto &pipeline, utils::BinaryStream &stream,
+                                 ParseOptions &options, bool) {
+  EXT_ENFORCE(options.format == SerializeFormat::kOnnx,
+              "PipelineProto parsing only supports SerializeFormat::kOnnx.");
+  EXT_ENFORCE(!stream.ExternalWeights(),
+              "PipelineProto parsing does not support external-weight input.");
+  pipeline.ParseFromStream(stream, options);
 }
 
 ////////////////////

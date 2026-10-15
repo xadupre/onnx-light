@@ -2021,6 +2021,48 @@ TEST(BackendTestCaseShapeInference, ReleaseEventEmittedForBackendCase) {
   ASSERT_TRUE(found) << "test_cc_release_shape_reshape case not registered";
 }
 
+TEST(BackendTestCaseShapeInference, GatherReleaseFollowsItsLastConsumer) {
+  const std::vector<TestCase> cases = CollectTestCases("release");
+  bool found = false;
+  for (const TestCase &tc : cases) {
+    if (tc.name != "test_cc_release_gather_after_last_consumer") {
+      continue;
+    }
+    found = true;
+    ModelProto model = tc.model();
+    const std::string length = "/model/attn_mask_reformat/attn_mask_subgraph/Gather/output_0";
+
+    core::shapes::ShapesContext ctx;
+    ASSERT_NO_THROW(ctx.ComputeShapeModel(model)) << "case: " << tc.name;
+
+    core::compute::ComputeContext inplace;
+    inplace.set_events_enabled(true);
+    ASSERT_NO_THROW(inplace.ComputeInPlaceReuseGraph(model.ref_graph(), ctx, false, {}))
+        << "case: " << tc.name;
+    ASSERT_NO_THROW(inplace.WriteToMetadata(*model.mutable_graph())) << "case: " << tc.name;
+
+    using core::compute::ComputeEventAction;
+    const auto releases =
+        std::count_if(inplace.Events().begin(), inplace.Events().end(), [&](const auto &event) {
+          return event.action == ComputeEventAction::kRelease && event.name == length &&
+                 event.node_index == 2;
+        });
+    EXPECT_EQ(releases, 1);
+
+    const auto &nodes = model.ref_graph().ref_node();
+    ASSERT_EQ(nodes.size(), 3u);
+    EXPECT_EQ(
+        MetadataOf(nodes[0]),
+        (MetadataMap{{std::string(core::compute::kNotUsedAfterMetadataKey), "lengths;index"}}));
+    EXPECT_TRUE(MetadataOf(nodes[1]).empty());
+    EXPECT_EQ(MetadataOf(nodes[2]),
+              (MetadataMap{{std::string(core::compute::kInPlaceReuseMetadataKey), "0:0:greater"},
+                           {std::string(core::compute::kReleaseAfterMetadataKey), length},
+                           {std::string(core::compute::kNotUsedAfterMetadataKey), "threshold"}}));
+  }
+  ASSERT_TRUE(found) << "test_cc_release_gather_after_last_consumer case not registered";
+}
+
 // Verifies that ``ComputeInPlaceReuseGraph`` correctly reports both a declared
 // graph input and a graph initializer under ``kNotUsedAfterMetadataKey`` at
 // the node where they reach their last use.

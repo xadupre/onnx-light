@@ -571,6 +571,10 @@ void ExecutionPlan::BuildActions() {
     // back from :cpp:func:`actions`.
     for (const std::string &name :
          SplitNames(ReadNodeMetadata(node, compute::kReleaseAfterMetadataKey))) {
+      const auto last_use_it = last_use.find(name);
+      EXT_ENFORCE_INVALID(last_use_it == last_use.end() || i >= last_use_it->second,
+                          "ExecutionPlan: release_after for '", name,
+                          "' precedes its last topological use.");
       if (keep_.count(name) != 0) {
         continue;
       }

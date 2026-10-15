@@ -28,6 +28,50 @@ def transition_model(dtype=numpy.float32):
 
 
 class TestGeneration(unittest.TestCase):
+    def test_attention_mask_gather_releases_after_last_use(self):
+        model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 23]>'
+            "decoder (int64[B, S] input_ids, int64[B, P] past_ids)"
+            " => (float[B, S, 3] logits, int64[B, T] present_ids)"
+            "{ present_ids = Concat <axis: int = 1> (past_ids, input_ids)"
+            " dimensions = Shape(present_ids)"
+            " length = Gather(dimensions, index)"
+            " unused = Identity(length)"
+            " mask = Greater(length, zero)"
+            " raw_logits = Gather(table, input_ids)"
+            " logits = Where(mask, raw_logits, raw_logits) }"
+        )
+        length_name = "/model/attn_mask_reformat/attn_mask_subgraph/Gather/output_0"
+        model.graph.node[2].output.clear()
+        model.graph.node[2].output.append(length_name)
+        model.graph.node[3].input.clear()
+        model.graph.node[3].input.append(length_name)
+        model.graph.node[4].input.clear()
+        model.graph.node[4].input.extend([length_name, "zero"])
+        model.graph.node[4].metadata_props.add(key="onnx_light.release_after", value=length_name)
+        model.graph.initializer.extend(
+            [
+                numpy_helper.from_array(numpy.array(1, dtype=numpy.int64), name="index"),
+                numpy_helper.from_array(numpy.array(0, dtype=numpy.int64), name="zero"),
+                transition_model().graph.initializer[0],
+            ]
+        )
+        binding = model.graph.persistent_bindings.add()
+        binding.input_name = "past_ids"
+        binding.output_name = "present_ids"
+        evaluator = ReferenceEvaluator(model)
+        feeds = {
+            "input_ids": numpy.array([[0, 1]], dtype=numpy.int64),
+            "past_ids": numpy.empty((1, 0), dtype=numpy.int64),
+        }
+        logits, present = evaluator.run(None, feeds)
+        numpy.testing.assert_array_equal(logits.argmax(axis=-1), [[1, 2]])
+        numpy.testing.assert_array_equal(present, [[0, 1]])
+        for _ in range(2):
+            numpy.testing.assert_array_equal(
+                evaluator.generate(feeds, max_new_tokens=3), [[0, 1, 2, 0, 1]]
+            )
+
     def test_split_embedding_pipeline(self):
         embedding_model = parser.parse_model(
             '<ir_version: 10, opset_import: ["" : 23]>'

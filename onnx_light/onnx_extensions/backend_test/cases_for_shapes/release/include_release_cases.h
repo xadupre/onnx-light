@@ -31,6 +31,9 @@ using namespace ::onnx_light::core::backend_test; // NOLINT(google-build-using-n
 ///  - ``test_cc_release_partial_metadata``: partially annotated
 ///    ``Add → Relu → Identity`` release schedule that reproduces issue #5102
 ///    and verifies that the execution plan derives the missing release.
+///  - ``test_cc_release_gather_after_last_consumer``: ``Gather → Identity`` and
+///    ``Gather → Greater`` branches that release the gathered value only after
+///    its second and final consumer.
 ///
 /// The expected ``onnx_light.release_after`` and
 /// ``onnx_light.not_used_after`` node metadata are pre-embedded in the first

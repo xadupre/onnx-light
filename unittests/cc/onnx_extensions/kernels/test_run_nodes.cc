@@ -8,6 +8,7 @@
 #include "onnx_core/compute/inplace_reuse.h"
 #include "onnx_core/compute/peak_memory.h"
 #include "onnx_core/compute/raw_buffer_allocator.h"
+#include "onnx_core/runtime/kernels/controlflow/include_controlflow_kernels.h"
 #include "onnx_core/runtime/kernels/kernel_context.h"
 #include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
 #include "onnx_core/runtime/kernels/node_helpers.h"
@@ -411,6 +412,23 @@ NodeProto MakeLoopNode(const std::vector<std::string> &inputs,
   *body_attr->add_g() = std::move(body);
   return loop;
 }
+
+class DelegatedIfKernel final : public core::runtime::KernelBase {
+public:
+  explicit DelegatedIfKernel(const KernelContext &ctx) : KernelBase(ctx) {}
+
+  void Run(RuntimeContext &rt) override {
+    const NodeProto &node = *node_;
+    core::runtime::If delegated(ctx_);
+    Tensors outputs = delegated(rt, core::runtime::GetInput(node, 0, rt),
+                                core::runtime::GetRequiredGraphAttribute(node, "then_branch"),
+                                core::runtime::GetRequiredGraphAttribute(node, "else_branch"));
+    if (outputs.size() != static_cast<size_t>(node.output_size()))
+      throw std::invalid_argument("DelegatedIfKernel: output count mismatch.");
+    for (size_t i = 0; i < outputs.size(); ++i)
+      core::runtime::SetOutput(node, static_cast<int>(i), std::move(outputs[i]), rt);
+  }
+};
 
 } // namespace
 
@@ -3836,6 +3854,53 @@ TEST(RunModel, FlexAttentionModifierResolvesModelLocalFunction) {
   const Tensor &output = context.Get("Y");
   ASSERT_EQ(output.element_count(), 1);
   EXPECT_FLOAT_EQ(output.AsFloat()[0], 3);
+}
+
+TEST(RunModel, DelegatedControlFlowResolvesModelLocalFunction) {
+  const std::string delegate_domain = "test.delegated.controlflow";
+  ModelProto model;
+  model.set_ir_version(10);
+  AddOpsetImport(model, "", 18);
+  AddOpsetImport(model, "custom", 1);
+  AddOpsetImport(model, delegate_domain, 1);
+
+  FunctionProto *function = model.add_functions();
+  function->set_domain("custom");
+  function->set_name("LocalNeg");
+  function->add_input("x");
+  function->add_output("y");
+  *function->add_node() = MakeNode("Neg", {"x"}, {"y"});
+
+  GraphProto *graph = model.mutable_graph();
+  graph->set_name("root");
+  NodeProto *node = graph->add_node();
+  *node = MakeNode("DelegatedIf", {"condition"}, {"y"}, delegate_domain);
+  for (const char *branch_name : {"then_branch", "else_branch"}) {
+    const bool is_then = branch_name == std::string_view("then_branch");
+    AttributeProto *attribute = node->add_attribute();
+    attribute->set_name(branch_name);
+    attribute->set_type(AttributeProto::GRAPH);
+    GraphProto *branch = attribute->mutable_g();
+    *branch->add_node() =
+        MakeNode(is_then ? "LocalNeg" : "Identity", {"x"}, {"z"}, is_then ? "custom" : "");
+    branch->add_output()->set_name("z");
+  }
+  graph->add_output()->set_name("y");
+
+  RuntimeContext context;
+  context.RegisterKernelFn(
+      delegate_domain, "DelegatedIf", context.device(),
+      [](const NodeProto &resolved_node, RuntimeContext &, const KernelContext &kernel_context) {
+        auto kernel = std::make_unique<DelegatedIfKernel>(kernel_context);
+        kernel->set_node(resolved_node);
+        return kernel;
+      });
+  context.Set("condition", Tensor::FromBool("condition", {}, {1}));
+  context.Set("x", Tensor::FromFloat("x", {1}, {2}));
+  RuntimeSession session(model);
+  session.Run(context);
+
+  EXPECT_FLOAT_EQ(context.Get("y").AsFloat()[0], -2);
 }
 
 TEST(RunNodes, RunNodeGRUFromDispatchTable) {

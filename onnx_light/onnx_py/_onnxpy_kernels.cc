@@ -2191,12 +2191,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
         const ModelProto *embedding_model =
             embedding.is_none() ? nullptr : &nb::cast<const ModelProto &>(embedding);
         auto inputs = GenerationValuesFromPython(feeds, model, embedding_model);
-        PipelineProto pipeline;
-        *pipeline.mutable_prefill() = model;
-        if (embedding_model != nullptr)
-          *pipeline.mutable_embedding() = *embedding_model;
         nb::gil_scoped_release release;
-        return core::runtime::Generate(pipeline, execution_context, inputs, options,
+        return core::runtime::Generate(model, embedding_model, execution_context, inputs, options,
                                        std::move(session_options));
       },
       nb::arg("model"), nb::arg("context"), nb::arg("runner"), nb::arg("feeds"), nb::arg("options"),

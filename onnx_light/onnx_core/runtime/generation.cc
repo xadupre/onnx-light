@@ -326,8 +326,10 @@ void BindParameterReferences(RuntimeValue &value, const ModelProto &model,
     (void)name;
     BindParameterReferences(field, model, types, parameters, depth + 1);
   }
-  value.elements.TransformInPlace([&](RuntimeValue &element) {
-    BindParameterReferences(element, model, types, parameters, depth + 1);
+  value.elements = value.elements.Transform([&](const RuntimeValue &element) {
+    RuntimeValue scoped = element.BorrowView();
+    BindParameterReferences(scoped, model, types, parameters, depth + 1);
+    return scoped;
   });
 }
 
@@ -379,17 +381,29 @@ GenerationOptions PipelineOptions(const PipelineProto &pipeline) {
 static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContext &context,
                            const RuntimeValueMap &prefill_feeds,
                            const RuntimeValueMap &embedding_feeds, const GenerationOptions &options,
-                           RuntimeSessionOptions session_options);
+                           RuntimeSessionOptions session_options,
+                           const RuntimeValueMap &unscoped_feeds);
+
+static Tensor GeneratePipeline(const GenerationPipelineView &pipeline, RuntimeContext &context,
+                               const RuntimeValueMap &feeds, const GenerationOptions &options,
+                               RuntimeSessionOptions session_options) {
+  EXT_ENFORCE_INVALID(pipeline.prefill != nullptr, "Generate: prefill model is required.");
+  RuntimeValueMap prefill_feeds = ScopeFeeds(*pipeline.prefill, feeds);
+  RuntimeValueMap embedding_feeds =
+      pipeline.embedding == nullptr ? RuntimeValueMap{} : ScopeFeeds(*pipeline.embedding, feeds);
+  for (const auto &[name, value] : feeds) {
+    (void)value;
+    EXT_ENFORCE_INVALID(prefill_feeds.contains(name) || embedding_feeds.contains(name),
+                        "Generate: unknown feed '", name, "'.");
+  }
+  return GenerateImpl(pipeline, context, prefill_feeds, embedding_feeds, options,
+                      std::move(session_options), feeds);
+}
 
 Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeValueMap &feeds,
                 const GenerationOptions &options, RuntimeSessionOptions session_options) {
-  for (const auto &[name, value] : feeds) {
-    (void)value;
-    EXT_ENFORCE_INVALID(HasInput(model, name), "Generate: unknown feed '", name, "'.");
-  }
-  const auto scoped = ScopeFeeds(model, feeds);
-  return GenerateImpl(GenerationPipelineView{.prefill = &model}, context, scoped, {}, options,
-                      std::move(session_options));
+  return GeneratePipeline(GenerationPipelineView{.prefill = &model}, context, feeds, options,
+                          std::move(session_options));
 }
 
 Tensor Generate(const PipelineProto &pipeline, RuntimeContext &context,
@@ -406,22 +420,21 @@ Tensor Generate(const PipelineProto &pipeline, RuntimeContext &context,
   const GenerationPipelineView view{.prefill = &pipeline.prefill(),
                                     .embedding =
                                         pipeline.has_embedding() ? &pipeline.embedding() : nullptr};
-  RuntimeValueMap prefill_feeds = ScopeFeeds(*view.prefill, feeds);
-  RuntimeValueMap embedding_feeds =
-      view.embedding == nullptr ? RuntimeValueMap{} : ScopeFeeds(*view.embedding, feeds);
-  for (const auto &[name, value] : feeds) {
-    (void)value;
-    EXT_ENFORCE_INVALID(prefill_feeds.contains(name) || embedding_feeds.contains(name),
-                        "Generate: unknown feed '", name, "'.");
-  }
-  return GenerateImpl(view, context, prefill_feeds, embedding_feeds, options,
-                      std::move(session_options));
+  return GeneratePipeline(view, context, feeds, options, std::move(session_options));
+}
+
+Tensor Generate(const ModelProto &prefill, const ModelProto *embedding, RuntimeContext &context,
+                const RuntimeValueMap &feeds, const GenerationOptions &options,
+                RuntimeSessionOptions session_options) {
+  return GeneratePipeline(GenerationPipelineView{.prefill = &prefill, .embedding = embedding},
+                          context, feeds, options, std::move(session_options));
 }
 
 static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContext &context,
                            const RuntimeValueMap &prefill_feeds,
                            const RuntimeValueMap &embedding_feeds, const GenerationOptions &options,
-                           RuntimeSessionOptions session_options) {
+                           RuntimeSessionOptions session_options,
+                           const RuntimeValueMap &unscoped_feeds) {
   EXT_ENFORCE_INVALID(pipeline.prefill != nullptr, "Generate: prefill model is required.");
   const ModelProto &model = *pipeline.prefill;
   EXT_ENFORCE_INVALID(options.max_new_tokens >= 0, "Generate: max_new_tokens must be nonnegative.");
@@ -568,15 +581,21 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
   const bool persistent = !model.graph().persistent_bindings().empty();
   RuntimeValueMap initial;
   if (persistent) {
+    StructTypeCatalogue initial_types;
+    initial_types.Build(model);
+    std::shared_ptr<const QuantizationParameterCatalogue> initial_parameters;
     for (const auto &binding : model.graph().persistent_bindings()) {
       const std::string &name = binding.input_name();
       EXT_ENFORCE_INVALID(name != options.input_ids_name &&
                               (!has_mask || name != options.attention_mask_name) &&
                               (!has_positions || name != options.position_ids_name),
                           "Generate: token, mask and position inputs cannot be persistent.");
-      const auto value = prefill_feeds.find(name);
-      if (value != prefill_feeds.end())
-        initial.emplace(name, value->second);
+      const auto value = unscoped_feeds.find(name);
+      if (value != unscoped_feeds.end()) {
+        RuntimeValue scoped = value->second.DeepCopy();
+        BindParameterReferences(scoped, model, initial_types, initial_parameters);
+        initial.emplace(name, std::move(scoped));
+      }
       current.erase(name);
     }
   }

@@ -308,13 +308,13 @@ class TestGeneration(unittest.TestCase):
 
         embedding_model = make_model(True, [3], [5, 1, 1])
         decoder_model = make_model(False, [3], [1, 5, 1])
-        shared = _shared_value(embedding_model, "common", [5, 1, 0])
+        shared = _shared_value(embedding_model, "common", [5, 1, 4])
         feeds = {"input_ids": numpy.array([[0]], dtype=numpy.int64), "shared": shared}
         numpy.testing.assert_array_equal(
             ReferenceEvaluator(decoder_model).generate(
                 feeds, max_new_tokens=1, embedding=ReferenceEvaluator(embedding_model)
             ),
-            [[0, 0]],
+            [[0, 2]],
         )
 
         incompatible_decoder = make_model(False, [4], [1, 1, 1, 1])

@@ -677,6 +677,8 @@ TEST(Generation, PipelineScopesModelFunctionsWithoutChangingTheCallerRegistry) {
   inner_node->set_op_type("Embed");
   inner_node->add_input("A");
   inner_node->add_output("B");
+  PipelineProto pipeline;
+  *pipeline.mutable_embedding() = std::move(embedding);
   for (bool persistent : {false, true}) {
     SCOPED_TRACE(persistent);
     auto prefill = PipelineModel("Stage", {{"inputs_embeds", TensorProto::FLOAT}}, "logits");
@@ -709,7 +711,7 @@ TEST(Generation, PipelineScopesModelFunctionsWithoutChangingTheCallerRegistry) {
     RuntimeContext context(RuntimeContextOptions{.cpu_executor = source.cpu_executor().get()});
     const FunctionProto shadowed_context_function = FunctionWithPrivateGraphInitializer("Inner");
     context.functions().emplace("test.pipeline:Inner:", &shadowed_context_function);
-    context.functions().emplace("test.pipeline:Other:", &embedding.functions()[0]);
+    context.functions().emplace("test.pipeline:Other:", &pipeline.embedding().functions()[0]);
     const FunctionMap original_functions = context.functions();
     int prefill_calls = 0;
     bool fail = false;
@@ -732,7 +734,7 @@ TEST(Generation, PipelineScopesModelFunctionsWithoutChangingTheCallerRegistry) {
     RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))}};
     if (persistent)
       feeds.emplace("counter", RuntimeValue(Tensor::FromInt64("", {}, {0})));
-    PipelineProto pipeline = MakeGenerationPipeline(std::move(prefill), std::move(embedding));
+    *pipeline.mutable_prefill() = std::move(prefill);
     GenerationOptions options;
     options.max_new_tokens = 3;
     for (int repeat = 0; repeat < 2; ++repeat) {

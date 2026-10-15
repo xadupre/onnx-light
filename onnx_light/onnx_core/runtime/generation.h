@@ -86,4 +86,15 @@ ONNX_LIGHT_CORE_API Tensor Generate(const PipelineProto &pipeline, RuntimeContex
                                     const RuntimeValueMap &feeds, const GenerationOptions &options,
                                     RuntimeSessionOptions session_options = {});
 
+/**
+ * Generates tokens from borrowed prefill and optional embedding models.
+ *
+ * This overload avoids copying model-owned weights when callers already retain
+ * the individual models. Both models must outlive the synchronous call.
+ */
+ONNX_LIGHT_CORE_API Tensor Generate(const ModelProto &prefill, const ModelProto *embedding,
+                                    RuntimeContext &context, const RuntimeValueMap &feeds,
+                                    const GenerationOptions &options = {},
+                                    RuntimeSessionOptions session_options = {});
+
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

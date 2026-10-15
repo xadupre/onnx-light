@@ -363,8 +363,7 @@ TEST(PersistentValueState, RuntimeRequiresPersistentInputsToBeUsed) {
       EXPECT_THROW({ ExecutionPlan plan(graph); }, std::invalid_argument);
       EXPECT_THROW({ RuntimeSession session(model); }, std::invalid_argument);
       EXPECT_THROW(
-          { RuntimeSession state_session(model, {{"past", Number(0)}}); },
-          std::invalid_argument);
+          { RuntimeSession state_session(model, {{"past", Number(0)}}); }, std::invalid_argument);
     } else {
       EXPECT_NO_THROW({ ExecutionPlan plan(graph); });
       EXPECT_NO_THROW({ RuntimeSession session(model); });

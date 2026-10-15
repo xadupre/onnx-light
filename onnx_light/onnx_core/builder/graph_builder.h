@@ -648,18 +648,20 @@ private:
   class AncestorRefreshGuard {
   public:
     explicit AncestorRefreshGuard(GraphBuilder &builder)
-        : builder_(builder), parent_(builder.parent_) {
-      builder_.parent_ = nullptr;
+        : builder_(builder), ancestor_refresh_suppressed_(builder.ancestor_refresh_suppressed_) {
+      builder_.ancestor_refresh_suppressed_ = true;
     }
 
-    ~AncestorRefreshGuard() { builder_.parent_ = parent_; }
+    ~AncestorRefreshGuard() {
+      builder_.ancestor_refresh_suppressed_ = ancestor_refresh_suppressed_;
+    }
 
     AncestorRefreshGuard(const AncestorRefreshGuard &) = delete;
     AncestorRefreshGuard &operator=(const AncestorRefreshGuard &) = delete;
 
   private:
     GraphBuilder &builder_;
-    GraphBuilder *parent_;
+    bool ancestor_refresh_suppressed_;
   };
 
   std::size_t RemoveUnusedNodesImpl(bool recursive);
@@ -860,6 +862,7 @@ private:
   std::unordered_set<std::string> user_opsets_;
   Device device_ = Device::kUndefined;
   std::uint64_t auto_counter_ = 0;
+  bool ancestor_refresh_suppressed_ = false;
 };
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::builder

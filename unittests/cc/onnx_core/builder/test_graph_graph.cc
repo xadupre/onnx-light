@@ -81,6 +81,69 @@ public:
   }
 };
 
+StructTypeProto RewriteRecord() {
+  StructTypeProto type;
+  type.set_type_id(101);
+  type.set_name("rewrite_record");
+  auto *field = type.mutable_structure()->add_field();
+  field->set_name("value");
+  auto *tensor = field->mutable_type()->mutable_tensor_type();
+  tensor->set_elem_type(TensorProto::FLOAT);
+  tensor->mutable_shape();
+  return type;
+}
+
+class RegisterStructType : public core::builder::PatternOptimization {
+public:
+  RegisterStructType() : PatternOptimization(1, "RegisterStructType") {}
+
+  core::builder::MatchResult Match(core::builder::GraphGraph &,
+                                   const NodeProto &candidate) const override {
+    return candidate.name() == "register_type"
+               ? core::builder::MatchResult{this, {&candidate}, &candidate}
+               : core::builder::MatchResult{};
+  }
+
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &graph,
+        const std::vector<const NodeProto *> &nodes) const override {
+    graph.Builder().MakeStructType(RewriteRecord());
+    utils::RepeatedProtoField<NodeProto> replacements;
+    replacements.push_back(
+        MakeNode("Neg", {nodes[0]->input()[0].value()}, {nodes[0]->output()[0].value()}));
+    return replacements;
+  }
+};
+
+class RegisterLocalFunction : public core::builder::PatternOptimization {
+public:
+  RegisterLocalFunction() : PatternOptimization(1, "RegisterLocalFunction") {}
+
+  core::builder::MatchResult Match(core::builder::GraphGraph &graph,
+                                   const NodeProto &candidate) const override {
+    if (candidate.op_type() != "Identity" || !candidate.name().value().starts_with("rewrite_") ||
+        !graph.HasShape(candidate.input()[0].value())) {
+      return {};
+    }
+    return {this, {&candidate}, &candidate};
+  }
+
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &graph,
+        const std::vector<const NodeProto *> &nodes) const override {
+    if (nodes[0]->name() == "rewrite_first") {
+      auto &function = graph.Builder().MakeLocalFunction("Generated", "local.test");
+      function.MakeInput("arg", core::symbolic::TensorType::kFloat, MakeShape({2}));
+      function.MakeNode("Identity", {"arg"}, {"result"});
+      function.MakeOutput("result");
+    }
+    utils::RepeatedProtoField<NodeProto> replacements;
+    replacements.push_back(
+        MakeNode("Neg", {nodes[0]->input()[0].value()}, {nodes[0]->output()[0].value()}));
+    return replacements;
+  }
+};
+
 } // namespace
 
 TEST(GraphGraph, IndexesPredecessorsAndSuccessors) {
@@ -186,6 +249,44 @@ TEST(GraphGraph, BuildRejectsNestedOutputMadeCapturedOnlyByRewrite) {
   EXPECT_TRUE(branch.Nodes().empty());
   EXPECT_THROW(branch.BuildGraph(), core::builder::BuilderError);
   EXPECT_THROW(builder.ToModel(), core::builder::BuilderError);
+}
+
+TEST(GraphGraph, NestedRewriteRegistersStructTypeInModelScope) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("captured", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  auto &branch = builder.MakeSubgraph("branch");
+  branch.MakeNode("Identity", {"captured"}, {"result"}, "", "register_type");
+  branch.MakeOutput("result");
+
+  core::builder::GraphGraph graph(branch,
+                                  std::vector<std::shared_ptr<core::builder::PatternOptimization>>{
+                                      std::make_shared<RegisterStructType>()});
+  ASSERT_EQ(graph.Optimize().size(), 1u);
+
+  const ModelProto model = builder.ToModel();
+  ASSERT_EQ(model.struct_types().size(), 1u);
+  EXPECT_EQ(model.struct_types()[0].SerializeAsString(), RewriteRecord().SerializeAsString());
+}
+
+TEST(GraphGraph, NestedDisjointRewritesPreserveCapturedShapeAfterLocalFunctionRegistration) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("captured", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  auto &branch = builder.MakeSubgraph("branch");
+  branch.MakeNode("Identity", {"captured"}, {"first"}, "", "rewrite_first");
+  branch.MakeNode("Identity", {"captured"}, {"second"}, "", "rewrite_second");
+  branch.MakeOutput("first");
+  branch.MakeOutput("second");
+
+  core::builder::GraphGraph graph(branch,
+                                  std::vector<std::shared_ptr<core::builder::PatternOptimization>>{
+                                      std::make_shared<RegisterLocalFunction>()});
+  const auto rewrites = graph.Optimize();
+
+  EXPECT_EQ(rewrites.size(), 2u);
+  EXPECT_TRUE(branch.HasShape("captured"));
+  ASSERT_EQ(branch.Nodes().size(), 2u);
+  EXPECT_EQ(branch.Nodes()[0].op_type(), "Neg");
+  EXPECT_EQ(branch.Nodes()[1].op_type(), "Neg");
 }
 
 TEST(GraphGraph, OptionalUnusedCleanupPreservesDeadEnds) {

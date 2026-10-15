@@ -26,6 +26,9 @@
 
 #include <gtest/gtest.h>
 
+#include <array>
+#include <atomic>
+#include <barrier>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -2869,6 +2872,107 @@ TEST(RunModel, ModelSessionsScopeConflictingFunctionsThroughCallsAndSubgraphs) {
   EXPECT_FALSE(fallback_called);
   EXPECT_EQ(context.functions(), original);
   context.functions().clear();
+}
+
+TEST(RunModel, ConcurrentSessionsIsolateConflictingFunctionsAndGlobalFallback) {
+  const std::string domain = "test.concurrent.function";
+  ASSERT_EQ(core::runtime::GlobalCustomKernels().count(domain + ":Leaf"), 0u);
+  std::atomic<int> fallback_calls{0};
+  core::runtime::RegisterGlobalCustomKernel(
+      domain, "Leaf", [&](const NodeProto &node, RuntimeContext &rt) {
+        ++fallback_calls;
+        rt.Put(node.output(0), Tensor::FromFloat("", {1}, {99}, rt.allocator()));
+      });
+  struct GlobalKernelCleanup {
+    const std::string &domain;
+    ~GlobalKernelCleanup() { core::runtime::UnregisterGlobalCustomKernel(domain, "Leaf"); }
+  } cleanup{domain};
+
+  const auto make_model = [&](const std::string &leaf_op, bool fail) {
+    ModelProto model;
+    model.set_ir_version(10);
+    AddOpsetImport(model, "", 18);
+    AddOpsetImport(model, domain, 1);
+    FunctionProto *leaf = model.add_functions();
+    leaf->set_domain(domain);
+    leaf->set_name("Leaf");
+    leaf->add_input("a");
+    leaf->add_output("b");
+    *leaf->add_node() = MakeNode("Block", {"a"}, {"ready"}, domain);
+    *leaf->add_node() = MakeNode(leaf_op, {"ready"}, {"b"}, fail ? domain : std::string());
+    GraphProto *graph = model.mutable_graph();
+    graph->set_name("root");
+    *graph->add_node() = MakeNode("Leaf", {"x"}, {"y"}, domain);
+    graph->add_output()->set_name("y");
+    return model;
+  };
+
+  std::array<ModelProto, 3> models = {
+      make_model("Neg", false),
+      make_model("Identity", false),
+      make_model("Fail", true),
+  };
+  std::array<std::unique_ptr<RuntimeSession>, 3> sessions;
+  std::array<std::unique_ptr<RuntimeContext>, 3> contexts;
+  std::barrier workers_ready(3);
+  FunctionProto sentinel;
+  sentinel.set_domain(domain);
+  sentinel.set_name("Sentinel");
+  for (size_t i = 0; i < contexts.size(); ++i) {
+    sessions[i] = std::make_unique<RuntimeSession>(models[i]);
+    contexts[i] = std::make_unique<RuntimeContext>();
+    contexts[i]->functions().emplace(domain + ":Sentinel:", &sentinel);
+    contexts[i]->RegisterCustomKernel(domain, "Block",
+                                      [&](const NodeProto &node, RuntimeContext &rt) {
+                                        workers_ready.arrive_and_wait();
+                                        rt.Put(node.output(0), rt.Get(node.input(0)).BorrowView());
+                                      });
+  }
+  contexts[2]->RegisterCustomKernel(domain, "Fail", [](const NodeProto &, RuntimeContext &) {
+    throw std::runtime_error("local failure");
+  });
+  std::array<size_t, 3> custom_kernel_counts = {
+      contexts[0]->custom_kernels().size(),
+      contexts[1]->custom_kernels().size(),
+      contexts[2]->custom_kernels().size(),
+  };
+
+  std::array<float, 3> results{};
+  std::array<std::exception_ptr, 3> errors;
+  std::array<std::thread, 3> workers;
+  for (size_t i = 0; i < workers.size(); ++i) {
+    workers[i] = std::thread([&, i] {
+      try {
+        contexts[i]->Set("x", Tensor::FromFloat("x", {1}, {2}));
+        sessions[i]->Run(*contexts[i]);
+        results[i] = contexts[i]->Get("y").AsFloat()[0];
+      } catch (...) {
+        errors[i] = std::current_exception();
+      }
+    });
+  }
+  for (std::thread &worker : workers)
+    worker.join();
+
+  EXPECT_EQ(errors[0], nullptr);
+  EXPECT_EQ(errors[1], nullptr);
+  ASSERT_NE(errors[2], nullptr);
+  EXPECT_THROW(std::rethrow_exception(errors[2]), std::runtime_error);
+  EXPECT_FLOAT_EQ(results[0], -2);
+  EXPECT_FLOAT_EQ(results[1], 2);
+  EXPECT_EQ(fallback_calls.load(), 0);
+  for (size_t i = 0; i < contexts.size(); ++i) {
+    EXPECT_EQ(contexts[i]->functions().size(), 1u);
+    EXPECT_EQ(contexts[i]->functions().at(domain + ":Sentinel:"), &sentinel);
+    EXPECT_EQ(contexts[i]->custom_kernels().size(), custom_kernel_counts[i]);
+  }
+  EXPECT_EQ(core::runtime::GlobalCustomKernels().count(domain + ":Leaf"), 1u);
+
+  RuntimeContext fallback_context;
+  fallback_context.Set("x", Tensor::FromFloat("x", {1}, {2}));
+  RunNode(MakeNode("Leaf", {"x"}, {"y"}, domain), fallback_context);
+  EXPECT_EQ(fallback_calls.load(), 1);
+  EXPECT_FLOAT_EQ(fallback_context.Get("y").AsFloat()[0], 99);
 }
 
 TEST(RunModel, ModelLocalFunctionWrongInputCountThrows) {

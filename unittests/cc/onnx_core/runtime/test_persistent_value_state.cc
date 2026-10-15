@@ -2535,6 +2535,19 @@ TEST(PersistentValueState, RejectsPersistentDeclarationsInsideSubgraphs) {
 
 TEST(PersistentValueState, BorrowsModelAndContextAcrossFailedExecution) {
   auto model = std::make_shared<ModelProto>(Model());
+  FunctionProto *function = model->add_functions();
+  function->set_domain("test.feedback");
+  function->set_name("WrappedStep");
+  function->add_input("past");
+  function->add_input("tokens");
+  function->add_output("present");
+  NodeProto *step = function->add_node();
+  step->set_domain("test.feedback");
+  step->set_op_type("Step");
+  step->add_input("past");
+  step->add_input("tokens");
+  step->add_output("present");
+  model->mutable_graph()->mutable_node(0)->set_op_type("WrappedStep");
   std::weak_ptr<ModelProto> model_lifetime = model;
   auto state_session =
       std::make_unique<RuntimeSession>(*model, RuntimeValueMap{{"past", Number(1)}});

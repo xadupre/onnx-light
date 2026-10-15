@@ -1856,9 +1856,8 @@ void VerifyPersistentInputUses(const GraphProto &graph) {
   for (const auto &binding : bindings) {
     const auto name = ToStdString(binding.input_name());
     const auto count = uses.at(name);
-    if (count != 1) {
-      Invalid("Persistent input '" + name + "' must be used exactly once; found " +
-              std::to_string(count) + " value-uses.");
+    if (count == 0) {
+      Invalid("Persistent input '" + name + "' must be used at least once; found 0 value-uses.");
     }
   }
 }

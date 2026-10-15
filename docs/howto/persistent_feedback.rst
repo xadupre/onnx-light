@@ -9,14 +9,10 @@ types come from its final input/output declarations. The caller supplies
 initial values, not a separate feedback mapping. Execution uses the existing
 session and allocator infrastructure, not a separate executor.
 
-Each bound input must have **exactly one value-use** in the graph. Every node
-input position counts, including read-only operations such as ``Shape`` and
-two positions of the same node. A graph output that directly returns that input
-also counts, as do captures in nested graph attributes. The check counts
-references statically, including references in mutually exclusive branches.
-Input declarations, bindings and ``value_info`` metadata do not count as uses.
-Both ONNX validation and runtime graph-plan construction enforce this rule;
-graphs without persistent bindings retain their ordinary sharing semantics.
+Each bound input must have **at least one value-use** in the graph and may be
+consumed by multiple nodes. After each run, the configured persistent output
+replaces its bound input for the next run. Both ONNX validation and runtime
+graph-plan construction reject unused bound inputs.
 
 The native :cpp:class:`onnx_light::core::runtime::PersistentValueState` uses the
 existing runtime execution and value ownership contracts. Create one state

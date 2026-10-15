@@ -319,7 +319,7 @@ TEST(onnx_verify, PersistentBindings_RejectsUnusedInput) {
   graph.mutable_node(0)->ref_input()[0] = "ordinary";
   *graph.add_value_info() = graph.input(0);
   ExpectPersistentBindingError(
-      graph, "Persistent input 'x' must be used exactly once; found 0 value-uses");
+      graph, "Persistent input 'x' must be used at least once; found 0 value-uses");
   EXPECT_THROW(VerifyModel(model), std::invalid_argument);
   graph.clear_persistent_bindings();
   EXPECT_NO_THROW(VerifyModel(model));
@@ -334,35 +334,31 @@ TEST(onnx_verify, PersistentBindings_IgnoresMetadataAndEmptyOptionalInputs) {
   EXPECT_NO_THROW(VerifyModel(model));
 }
 
-TEST(onnx_verify, PersistentBindings_RejectsMultipleConsumersIncludingReadOnly) {
+TEST(onnx_verify, PersistentBindings_AllowsMultipleConsumersIncludingReadOnly) {
   for (const char *consumer : {"Identity", "Shape"}) {
     SCOPED_TRACE(consumer);
     ModelProto model = MakePersistentModel();
     auto &graph = *model.mutable_graph();
-    graph.mutable_node(0)->set_op_type("Attention");
     auto *second = graph.add_node();
     second->set_op_type(consumer);
     second->add_input("x");
     second->add_output("observed");
-    ExpectPersistentBindingError(
-        graph, "Persistent input 'x' must be used exactly once; found 2 value-uses");
-    EXPECT_THROW(VerifyModel(model), std::invalid_argument);
+    EXPECT_NO_THROW(VerifyPersistentBindings(nullptr, graph));
+    EXPECT_NO_THROW(VerifyModel(model));
     graph.clear_persistent_bindings();
     EXPECT_NO_THROW(VerifyModel(model));
   }
 }
 
-TEST(onnx_verify, PersistentBindings_CountsEveryInputPosition) {
+TEST(onnx_verify, PersistentBindings_AllowsRepeatedInputPositions) {
   ModelProto model = MakePersistentModel();
   auto *node = model.mutable_graph()->mutable_node(0);
   node->set_op_type("Add");
   node->add_input("x");
-  ExpectPersistentBindingError(
-      model.graph(), "Persistent input 'x' must be used exactly once; found 2 value-uses");
-  EXPECT_THROW(VerifyModel(model), std::invalid_argument);
+  EXPECT_NO_THROW(VerifyPersistentInputUses(model.graph()));
+  EXPECT_NO_THROW(VerifyModel(model));
   node->add_input("x");
-  ExpectPersistentBindingError(
-      model.graph(), "Persistent input 'x' must be used exactly once; found 3 value-uses");
+  EXPECT_NO_THROW(VerifyPersistentInputUses(model.graph()));
 }
 
 TEST(onnx_verify, PersistentBindings_ChecksEveryBoundInput) {
@@ -384,11 +380,10 @@ TEST(onnx_verify, PersistentBindings_ChecksEveryBoundInput) {
   EXPECT_NO_THROW(VerifyModel(model));
 
   node->add_input("other");
-  ExpectPersistentBindingError(
-      graph, "Persistent input 'other' must be used exactly once; found 2 value-uses");
+  EXPECT_NO_THROW(VerifyPersistentInputUses(graph));
   node->clear_input();
   ExpectPersistentBindingError(
-      graph, "Persistent input 'other' must be used exactly once; found 0 value-uses");
+      graph, "Persistent input 'other' must be used at least once; found 0 value-uses");
 }
 
 TEST(onnx_verify, PersistentBindings_CountsDirectGraphOutput) {
@@ -403,9 +398,8 @@ TEST(onnx_verify, PersistentBindings_CountsDirectGraphOutput) {
   node->set_op_type("Identity");
   node->add_input("x");
   node->add_output("y");
-  ExpectPersistentBindingError(
-      graph, "Persistent input 'x' must be used exactly once; found 2 value-uses");
-  EXPECT_THROW(VerifyModel(model), std::invalid_argument);
+  EXPECT_NO_THROW(VerifyPersistentInputUses(graph));
+  EXPECT_NO_THROW(VerifyModel(model));
   graph.clear_persistent_bindings();
   EXPECT_NO_THROW(VerifyModel(model));
 }
@@ -431,12 +425,9 @@ TEST(onnx_verify, PersistentBindings_CountsNestedGraphAndGraphsCaptures) {
       EXPECT_NO_THROW(VerifyModel(model));
 
       node->add_input("x");
-      ExpectPersistentBindingError(
-          model.graph(), "Persistent input 'x' must be used exactly once; found 2 value-uses");
-      EXPECT_THROW(VerifyModel(model), std::invalid_argument);
+      EXPECT_NO_THROW(VerifyPersistentInputUses(model.graph()));
       inner->mutable_node(0)->add_input("x");
-      ExpectPersistentBindingError(
-          model.graph(), "Persistent input 'x' must be used exactly once; found 3 value-uses");
+      EXPECT_NO_THROW(VerifyPersistentInputUses(model.graph()));
     }
   }
 }
@@ -478,9 +469,7 @@ TEST(onnx_verify, PersistentBindings_CountsEveryBranchOutputCapture) {
     }
     second->set_name("else");
     expose_capture(second);
-    ExpectPersistentBindingError(
-        model.graph(), "Persistent input 'x' must be used exactly once; found 2 value-uses");
-    EXPECT_THROW(VerifyModel(model), std::invalid_argument);
+    EXPECT_NO_THROW(VerifyPersistentInputUses(model.graph()));
     model.mutable_graph()->clear_persistent_bindings();
     EXPECT_NO_THROW(VerifyModel(model));
   }
@@ -524,8 +513,7 @@ TEST(onnx_verify, PersistentBindings_RespectsLocalDefinitionsAndRestoresSiblingS
     EXPECT_NO_THROW(VerifyPersistentBindings(nullptr, model.graph()));
     auto *sibling = AddNestedGraph(*node, true);
     *sibling = MakeCapturingGraph();
-    ExpectPersistentBindingError(
-        model.graph(), "Persistent input 'x' must be used exactly once; found 2 value-uses");
+    EXPECT_NO_THROW(VerifyPersistentInputUses(model.graph()));
   }
 }
 
@@ -549,9 +537,7 @@ TEST(onnx_verify, PersistentBindings_CountsFunctionCallArgumentsWithoutExpanding
 
   function->add_input("other");
   call->add_input("x");
-  ExpectPersistentBindingError(
-      model.graph(), "Persistent input 'x' must be used exactly once; found 2 value-uses");
-  EXPECT_THROW(VerifyModel(model), std::invalid_argument);
+  EXPECT_NO_THROW(VerifyPersistentInputUses(model.graph()));
 }
 
 TEST(onnx_verify, PersistentBindings_TypeErrorsPrecedeUseCountErrors) {
@@ -576,14 +562,7 @@ TEST(onnx_verify, PersistentInputUses_DoesNotRequireTypeCatalogue) {
   EXPECT_THROW(VerifyPersistentBindings(nullptr, graph), std::invalid_argument);
 
   graph.mutable_node(0)->add_input("x");
-  try {
-    VerifyPersistentInputUses(graph);
-    FAIL() << "Repeated persistent input was accepted.";
-  } catch (const std::invalid_argument &error) {
-    EXPECT_NE(std::string(error.what())
-                  .find("Persistent input 'x' must be used exactly once; found 2 value-uses"),
-              std::string::npos);
-  }
+  EXPECT_NO_THROW(VerifyPersistentInputUses(graph));
   graph.mutable_node(0)->clear_input();
   EXPECT_THROW(VerifyPersistentInputUses(graph), std::invalid_argument);
 }

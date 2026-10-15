@@ -202,6 +202,49 @@ void RegisterReleaseCases(std::vector<TestCase> &registry, TestMode /*mode*/) {
     };
     registry.emplace_back(std::move(lazy_case));
   }
+
+  // ---- case 4: one intermediate with multiple consumers ----------------------
+  {
+    const std::string name = "test_cc_release_gather_after_last_consumer";
+    TestCase lazy_case(name, name, TestCaseKind::MODEL, TestCaseTag::RELEASE);
+    lazy_case.build = [name](bool) -> BuiltCase {
+      TestCase tc(name, name, TestCaseKind::MODEL, TestCaseTag::RELEASE);
+
+      ModelProto &model = tc.emplace_model();
+      InitModel(model, kDefaultIrVersion, {DefaultOpset(18)});
+
+      GraphProto *graph = model.add_graph();
+      graph->set_name(name);
+
+      const std::string length = "/model/attn_mask_reformat/attn_mask_subgraph/Gather/output_0";
+      AddNode(*graph, "Gather", {"lengths", "index"}, {length});
+      AddNode(*graph, "Identity", {length}, {"copy"});
+      AddNode(*graph, "Greater", {length, "threshold"}, {"mask"});
+
+      AppendValueInfo(*graph->add_input(), "lengths", DataType::INT64, {DimSpec(2)});
+      AppendValueInfo(*graph->add_value_info(), length, DataType::INT64, {});
+      AppendValueInfo(*graph->add_output(), "copy", DataType::INT64, {});
+      AppendValueInfo(*graph->add_output(), "mask", DataType::BOOL, {});
+      AddInitializer<int64_t>(*graph, "index", {}, {0});
+      AddInitializer<int64_t>(*graph, "threshold", {}, {0});
+
+      (*graph->mutable_node())[0].add_metadata(core::compute::kNotUsedAfterMetadataKey,
+                                               "lengths;index");
+      (*graph->mutable_node())[2].add_metadata(core::compute::kInPlaceReuseMetadataKey,
+                                               "0:0:greater");
+      (*graph->mutable_node())[2].add_metadata(core::compute::kReleaseAfterMetadataKey, length);
+      (*graph->mutable_node())[2].add_metadata(core::compute::kNotUsedAfterMetadataKey,
+                                               "threshold");
+
+      const Tensor lengths = Tensor::FromInt64("lengths", {2}, {2, 0});
+      const Tensor copy = Tensor::FromInt64("copy", {}, {2});
+      const Tensor mask = Tensor::FromBool("mask", {}, {1});
+      AppendDataSet(tc, {lengths}, {copy, mask});
+
+      return tc.take_materialized();
+    };
+    registry.emplace_back(std::move(lazy_case));
+  }
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

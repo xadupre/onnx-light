@@ -29,6 +29,9 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime::detail {
 /// Builds a borrowed model-local lookup for the lifetime of its owning session.
 FunctionMap ModelFunctions(const ModelProto &model);
 
+/// Returns a function body with referenced attributes resolved for one call site.
+FunctionProto BindFunctionAttributes(const FunctionProto &function, const NodeProto &call);
+
 /**
  * Resolves how ``node`` must be dispatched, building and returning the
  * ready-to-invoke kernel instance (without any progress printing or event

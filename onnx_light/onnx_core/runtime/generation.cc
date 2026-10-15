@@ -5,9 +5,12 @@
 #include "onnx_core/runtime/generation.h"
 #include "onnx_core/runtime/kernels/float16_promote.h"
 #include "onnx_core/runtime/kernels/run_nodes.h"
+#include "onnx_core/runtime/kernels/run_nodes_internal.h"
 #include <cmath>
 #include <limits>
 #include <random>
+#include <string_view>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
@@ -153,6 +156,154 @@ void ValidateGraph(const ModelProto &model) {
   EXT_ENFORCE_INVALID(!model.graph().output().empty(), "Generate: graph outputs are required.");
 }
 
+struct PipelineValueNames {
+  std::unordered_set<std::string> all;
+  std::unordered_set<std::string> private_values;
+};
+
+void InsertName(std::unordered_set<std::string> &names, std::string_view name) {
+  if (!name.empty())
+    names.emplace(name);
+}
+
+void CollectGraphValueNames(const GraphProto &graph, bool top_level,
+                            const std::unordered_set<std::string> &public_initializer_outputs,
+                            PipelineValueNames &names) {
+  std::unordered_set<std::string> inputs;
+  std::unordered_set<std::string> outputs;
+  for (const ValueInfoProto &input : graph.input()) {
+    InsertName(names.all, input.name());
+    inputs.insert(input.name());
+    if (!top_level)
+      InsertName(names.private_values, input.name());
+  }
+  for (const ValueInfoProto &output : graph.output()) {
+    InsertName(names.all, output.name());
+    outputs.insert(output.name());
+    if (!top_level)
+      InsertName(names.private_values, output.name());
+  }
+  const auto add_initializer = [&](const std::string &name) {
+    InsertName(names.all, name);
+    if (!top_level || (!inputs.contains(name) && !public_initializer_outputs.contains(name)))
+      InsertName(names.private_values, name);
+  };
+  for (const TensorProto &initializer : graph.initializer())
+    add_initializer(initializer.name());
+  for (const SparseTensorProto &initializer : graph.sparse_initializer())
+    add_initializer(initializer.values().name());
+  for (const EncodedValueProto &initializer : graph.encoded_initializer())
+    add_initializer(initializer.name());
+  for (const PagedCacheProto &initializer : graph.paged_cache_initializer())
+    add_initializer(initializer.name());
+  for (const NodeProto &node : graph.node()) {
+    for (const std::string &output : node.output()) {
+      InsertName(names.all, output);
+      if (!top_level || !outputs.contains(output))
+        InsertName(names.private_values, output);
+    }
+    for (const AttributeProto &attribute : node.attribute()) {
+      if (attribute.has_g()) {
+        CollectGraphValueNames(attribute.g(), false, {}, names);
+      }
+      for (const GraphProto &nested : attribute.graphs())
+        CollectGraphValueNames(nested, false, {}, names);
+    }
+  }
+}
+
+std::string ModelFunctionKey(const NodeProto &node) {
+  return ONNX_LIGHT_NAMESPACE::NormaliseDomain(node.domain()) + ":" + node.op_type() + ":" +
+         node.overload();
+}
+
+void CollectFunctionValueNames(const FunctionProto &function, PipelineValueNames &names) {
+  std::unordered_set<std::string> formal_outputs(function.output().begin(),
+                                                 function.output().end());
+  for (const NodeProto &node : function.node()) {
+    for (const std::string &output : node.output()) {
+      if (!formal_outputs.contains(output)) {
+        InsertName(names.all, output);
+        InsertName(names.private_values, output);
+      }
+    }
+  }
+}
+
+void CollectReachableFunctionGraphNames(const utils::RepeatedProtoField<NodeProto> &nodes,
+                                        const FunctionMap &functions, PipelineValueNames &names,
+                                        std::unordered_set<std::string> &active,
+                                        std::unordered_set<std::string> &completed) {
+  for (const NodeProto &node : nodes) {
+    for (const AttributeProto &attribute : node.attribute()) {
+      if (attribute.has_g()) {
+        CollectGraphValueNames(attribute.g(), false, {}, names);
+        CollectReachableFunctionGraphNames(attribute.g().node(), functions, names, active,
+                                           completed);
+      }
+      for (const GraphProto &nested : attribute.graphs()) {
+        CollectGraphValueNames(nested, false, {}, names);
+        CollectReachableFunctionGraphNames(nested.node(), functions, names, active, completed);
+      }
+    }
+    const std::string key = ModelFunctionKey(node);
+    const auto found = functions.find(key);
+    if (found == functions.end() || active.contains(key))
+      continue;
+    const FunctionProto bound = detail::BindFunctionAttributes(*found->second, node);
+    // Calls to one function may bind different graph-valued attributes.
+    std::string completed_key = key;
+    completed_key.push_back('\0');
+    completed_key.append(bound.SerializeAsString());
+    if (completed.contains(completed_key))
+      continue;
+    active.insert(key);
+    CollectFunctionValueNames(bound, names);
+    CollectReachableFunctionGraphNames(bound.node(), functions, names, active, completed);
+    active.erase(key);
+    completed.insert(std::move(completed_key));
+  }
+}
+
+PipelineValueNames
+CollectPipelineValueNames(const ModelProto &model,
+                          const std::unordered_set<std::string> &public_initializer_outputs,
+                          const FunctionMap &context_functions) {
+  PipelineValueNames names;
+  CollectGraphValueNames(model.graph(), true, public_initializer_outputs, names);
+  FunctionMap functions = context_functions;
+  for (const auto &[key, function] : detail::ModelFunctions(model))
+    functions.insert_or_assign(key, function);
+  std::unordered_set<std::string> active;
+  std::unordered_set<std::string> completed;
+  CollectReachableFunctionGraphNames(model.graph().node(), functions, names, active, completed);
+  return names;
+}
+
+void ValidatePipelineValueNames(const ModelProto &embedding, const ModelProto &language,
+                                const FunctionMap &context_functions) {
+  std::unordered_set<std::string> public_connections;
+  for (const ValueInfoProto &output : embedding.graph().output())
+    if (HasInput(language, output.name()))
+      public_connections.insert(output.name());
+  const PipelineValueNames embedding_names =
+      CollectPipelineValueNames(embedding, public_connections, context_functions);
+  const PipelineValueNames language_names =
+      CollectPipelineValueNames(language, {}, context_functions);
+  std::vector<std::string> collisions;
+  for (const std::string &name : embedding_names.private_values)
+    if (language_names.all.contains(name))
+      collisions.push_back(name);
+  for (const std::string &name : language_names.private_values)
+    if (embedding_names.all.contains(name))
+      collisions.push_back(name);
+  std::sort(collisions.begin(), collisions.end());
+  collisions.erase(std::unique(collisions.begin(), collisions.end()), collisions.end());
+  EXT_ENFORCE_INVALID(
+      collisions.empty(), "Generate: private value name '", collisions.front(),
+      "' is shared by the embedding and language models; private value names must be unique.");
+}
+
 } // namespace
 
 Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeValueMap &feeds,
@@ -198,6 +349,7 @@ Tensor Generate(const GenerationPipeline &pipeline, RuntimeContext &context,
       EXT_ENFORCE_INVALID(HasInput(model, output.name()),
                           "Generate: embedding output must name a decoder input.");
     }
+    ValidatePipelineValueNames(*pipeline.embedding, model, context.functions());
   }
   for (const auto &binding : model.graph().persistent_bindings()) {
     if (embedded)

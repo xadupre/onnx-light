@@ -184,6 +184,12 @@ graph used only once.
 Graphs connect through their declared input and output names: for example,
 the embedding graph consumes ``input_ids`` and produces the language model's
 ``inputs_embeds`` input. No additional name mappings are supplied.
+Top-level inputs and outputs may share names across stages, including these
+declared embedding-to-language-model connections and embedding outputs backed
+directly by initializers. Private initializer and intermediate names must be
+unique across the models; generation rejects a collision before either stage
+executes. This rule also covers encoded and paged-cache initializers and values
+defined in nested subgraphs, including reachable model-local function bodies.
 All graphs execute in one call-local ``RuntimeContext`` configured from the
 language-model evaluator, using its custom kernels and sharing its CPU executor
 and event log. Pipeline stages share call-local allocators, not the evaluator's
@@ -193,11 +199,13 @@ CPU execution policy are not used. Register pipeline-wide custom kernels on
 the language-model evaluator. Image/audio encoders can run before generation;
 their features are supplied as ordinary feeds.
 Each stage resolves its own model-local functions; definitions from another stage
-cannot override its custom operators. The caller's function registry is restored
-when generation returns or fails. Embedding inputs backed by tensor, encoded or
-paged-cache initializers may be omitted from feeds. Structured sequence inputs
-retain their runtime representation rather than being converted to dense tensor
-sequences.
+cannot override its custom operators. Model-local definitions take precedence
+over functions registered on the shared context. Reachable context functions
+follow the same private-name collision checks, and the caller's function
+registry is unchanged when generation returns or fails. Embedding inputs backed
+by tensor, encoded or paged-cache initializers may be omitted from feeds.
+Structured sequence inputs retain their runtime representation rather than
+being converted to dense tensor sequences.
 
 C++ callers can alternatively pass ``GenerationPipeline{.prefill = &language_model,
 .embedding = &embedding_model}`` instead of a ``ModelProto`` to ``Generate``.

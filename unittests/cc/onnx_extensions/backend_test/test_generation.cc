@@ -52,6 +52,64 @@ ModelProto PipelineModel(const std::string &operation,
   return model;
 }
 
+enum class PrivateValueKind {
+  kInitializer,
+  kEncodedInitializer,
+  kPagedCacheInitializer,
+  kIntermediate,
+  kNestedIntermediate,
+};
+
+void AddPrivateValue(GraphProto &graph, PrivateValueKind kind, int variant) {
+  constexpr const char *name = "private_collision";
+  switch (kind) {
+  case PrivateValueKind::kInitializer: {
+    TensorProto *initializer = graph.add_initializer();
+    initializer->set_name(name);
+    initializer->set_data_type(TensorProto::FLOAT);
+    initializer->add_dims(variant + 1);
+    for (int index = 0; index <= variant; ++index)
+      initializer->add_float_data(static_cast<float>(variant + index));
+    break;
+  }
+  case PrivateValueKind::kEncodedInitializer: {
+    EncodedValueProto *initializer = graph.add_encoded_initializer();
+    initializer->set_name(name);
+    auto *tensor = initializer->mutable_logical_type()->mutable_tensor_type();
+    tensor->set_elem_type(TensorProto::FLOAT);
+    tensor->mutable_shape()->add_dim()->set_dim_value(variant + 1);
+    initializer->set_raw_data(std::string(static_cast<size_t>(variant + 1), char(variant + 1)));
+    break;
+  }
+  case PrivateValueKind::kPagedCacheInitializer: {
+    PagedCacheProto *initializer = graph.add_paged_cache_initializer();
+    initializer->set_name(name);
+    auto *block = initializer->add_blocks();
+    block->set_start(0);
+    block->set_length(variant + 1);
+    break;
+  }
+  case PrivateValueKind::kIntermediate: {
+    NodeProto *node = graph.add_node();
+    node->set_domain("test.pipeline");
+    node->set_op_type("Private");
+    node->add_input(graph.input()[0].name());
+    node->add_output(name);
+    break;
+  }
+  case PrivateValueKind::kNestedIntermediate: {
+    AttributeProto *attribute = graph.mutable_node(0)->add_attribute();
+    attribute->set_name("body");
+    attribute->set_type(AttributeProto::GRAPH);
+    NodeProto *node = attribute->mutable_g()->add_node();
+    node->set_op_type("Identity");
+    node->add_input(graph.input()[0].name());
+    node->add_output(name);
+    break;
+  }
+  }
+}
+
 } // namespace
 
 TEST(Generation, BackendAttentionModels) {
@@ -176,6 +234,52 @@ TEST(Generation, PipelineUsesOneContextAndDeclaredGraphNames) {
               (std::vector<int64_t>{0, 1, 2, 0}));
     EXPECT_EQ(calls, (std::vector<std::string>{"Embed", "Prefill", "Embed", "Prefill", "Embed",
                                                "Prefill"}));
+  }
+}
+
+TEST(Generation, PipelineRejectsPrivateValueNameCollisionsBeforeExecution) {
+  for (bool persistent : {false, true}) {
+    for (PrivateValueKind kind :
+         {PrivateValueKind::kInitializer, PrivateValueKind::kEncodedInitializer,
+          PrivateValueKind::kPagedCacheInitializer, PrivateValueKind::kIntermediate,
+          PrivateValueKind::kNestedIntermediate}) {
+      SCOPED_TRACE(persistent);
+      SCOPED_TRACE(static_cast<int>(kind));
+      auto embedding = PipelineModel("Embed", {{"input_ids", TensorProto::INT64}}, "inputs_embeds");
+      auto language = PipelineModel("Prefill", {{"inputs_embeds", TensorProto::FLOAT}}, "logits");
+      AddPrivateValue(*embedding.mutable_graph(), kind, 0);
+      AddPrivateValue(*language.mutable_graph(), kind, 1);
+      if (persistent) {
+        auto *input = language.mutable_graph()->add_input();
+        input->set_name("state");
+        input->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::INT64);
+        input->mutable_type()->mutable_tensor_type()->mutable_shape();
+        auto *output = language.mutable_graph()->add_output();
+        output->CopyFrom(*input);
+        output->set_name("next_state");
+        language.mutable_graph()->mutable_node(0)->add_input("state");
+        language.mutable_graph()->mutable_node(0)->add_output("next_state");
+        auto *binding = language.mutable_graph()->add_persistent_bindings();
+        binding->set_input_name("state");
+        binding->set_output_name("next_state");
+      }
+      RuntimeSession source(language);
+      RuntimeContext context(RuntimeContextOptions{.cpu_executor = source.cpu_executor().get()});
+      int calls = 0;
+      context.RegisterCustomKernel("test.pipeline", "Embed",
+                                   [&](const NodeProto &, RuntimeContext &) { ++calls; });
+      context.RegisterCustomKernel("test.pipeline", "Prefill",
+                                   [&](const NodeProto &, RuntimeContext &) { ++calls; });
+      RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))}};
+      if (persistent)
+        feeds.emplace("state", RuntimeValue(Tensor::FromInt64("", {}, {0})));
+      GenerationPipeline pipeline{.prefill = &language, .embedding = &embedding};
+      GenerationOptions options;
+      options.max_new_tokens = 1;
+      for (int repeat = 0; repeat < 2; ++repeat)
+        EXPECT_THROW(Generate(pipeline, context, feeds, options), std::invalid_argument);
+      EXPECT_EQ(calls, 0);
+    }
   }
 }
 

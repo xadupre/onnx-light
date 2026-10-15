@@ -8,6 +8,7 @@
 #include <cmath>
 #include <limits>
 #include <random>
+#include <string_view>
 #include <unordered_set>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
@@ -153,6 +154,83 @@ void ValidateGraph(const ModelProto &model) {
   EXT_ENFORCE_INVALID(!model.graph().output().empty(), "Generate: graph outputs are required.");
 }
 
+struct PipelineValueNames {
+  std::unordered_set<std::string> all;
+  std::unordered_set<std::string> private_values;
+};
+
+void InsertName(std::unordered_set<std::string> &names, std::string_view name) {
+  if (!name.empty())
+    names.emplace(name);
+}
+
+void CollectGraphValueNames(const GraphProto &graph, bool top_level, PipelineValueNames &names) {
+  std::unordered_set<std::string> inputs;
+  std::unordered_set<std::string> outputs;
+  for (const ValueInfoProto &input : graph.input()) {
+    InsertName(names.all, input.name());
+    inputs.insert(input.name());
+    if (!top_level)
+      InsertName(names.private_values, input.name());
+  }
+  for (const ValueInfoProto &output : graph.output()) {
+    InsertName(names.all, output.name());
+    outputs.insert(output.name());
+    if (!top_level)
+      InsertName(names.private_values, output.name());
+  }
+  const auto add_initializer = [&](const std::string &name) {
+    InsertName(names.all, name);
+    if (!top_level || !inputs.contains(name))
+      InsertName(names.private_values, name);
+  };
+  for (const TensorProto &initializer : graph.initializer())
+    add_initializer(initializer.name());
+  for (const SparseTensorProto &initializer : graph.sparse_initializer())
+    add_initializer(initializer.values().name());
+  for (const EncodedValueProto &initializer : graph.encoded_initializer())
+    add_initializer(initializer.name());
+  for (const PagedCacheProto &initializer : graph.paged_cache_initializer())
+    add_initializer(initializer.name());
+  for (const NodeProto &node : graph.node()) {
+    for (const std::string &output : node.output()) {
+      InsertName(names.all, output);
+      if (!top_level || !outputs.contains(output))
+        InsertName(names.private_values, output);
+    }
+    for (const AttributeProto &attribute : node.attribute()) {
+      if (attribute.has_g()) {
+        CollectGraphValueNames(attribute.g(), false, names);
+      }
+      for (const GraphProto &nested : attribute.graphs())
+        CollectGraphValueNames(nested, false, names);
+    }
+  }
+}
+
+PipelineValueNames CollectPipelineValueNames(const ModelProto &model) {
+  PipelineValueNames names;
+  CollectGraphValueNames(model.graph(), true, names);
+  return names;
+}
+
+void ValidatePipelineValueNames(const ModelProto &embedding, const ModelProto &language) {
+  const PipelineValueNames embedding_names = CollectPipelineValueNames(embedding);
+  const PipelineValueNames language_names = CollectPipelineValueNames(language);
+  std::vector<std::string> collisions;
+  for (const std::string &name : embedding_names.private_values)
+    if (language_names.all.contains(name))
+      collisions.push_back(name);
+  for (const std::string &name : language_names.private_values)
+    if (embedding_names.all.contains(name))
+      collisions.push_back(name);
+  std::sort(collisions.begin(), collisions.end());
+  collisions.erase(std::unique(collisions.begin(), collisions.end()), collisions.end());
+  EXT_ENFORCE_INVALID(
+      collisions.empty(), "Generate: private value name '", collisions.front(),
+      "' is shared by the embedding and language models; private value names must be unique.");
+}
+
 } // namespace
 
 Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeValueMap &feeds,
@@ -198,6 +276,7 @@ Tensor Generate(const GenerationPipeline &pipeline, RuntimeContext &context,
       EXT_ENFORCE_INVALID(HasInput(model, output.name()),
                           "Generate: embedding output must name a decoder input.");
     }
+    ValidatePipelineValueNames(*pipeline.embedding, model);
   }
   for (const auto &binding : model.graph().persistent_bindings()) {
     if (embedded)

@@ -184,6 +184,11 @@ graph used only once.
 Graphs connect through their declared input and output names: for example,
 the embedding graph consumes ``input_ids`` and produces the language model's
 ``inputs_embeds`` input. No additional name mappings are supplied.
+Top-level inputs and outputs may share names across stages, including these
+declared embedding-to-language-model connections. Private initializer and
+intermediate names must be unique across the models; generation rejects a
+collision before either stage executes. This rule also covers encoded and
+paged-cache initializers and values defined in nested subgraphs.
 All graphs execute in one call-local ``RuntimeContext`` configured from the
 language-model evaluator, using its custom kernels and sharing its CPU executor
 and event log. Pipeline stages share call-local allocators, not the evaluator's

@@ -227,7 +227,8 @@ TEST(Generation, BackendAttentionModels) {
   ASSERT_EQ(cases.size(), 2u);
   for (auto &test : cases) {
     SCOPED_TRACE(test.name);
-    const auto &model = test.model();
+    PipelineProto pipeline = MakeGenerationPipeline(std::move(test.model()));
+    const ModelProto &model = pipeline.prefill();
     const auto original = model.SerializeAsString();
     RuntimeValueMap feeds;
     for (const auto &input : test.data_sets()[0].inputs)
@@ -280,8 +281,7 @@ TEST(Generation, BackendAttentionModels) {
       options.eos_token_id = 1;
       EXPECT_EQ(Tokens(Generate(model, context, feeds, options, session_options)),
                 (std::vector<int64_t>{0, 1, 1}));
-      EXPECT_EQ(Tokens(Generate(MakeGenerationPipeline(std::move(model)), context, feeds, options,
-                                session_options)),
+      EXPECT_EQ(Tokens(Generate(pipeline, context, feeds, options, session_options)),
                 (std::vector<int64_t>{0, 1, 1}));
     }
   }
@@ -531,7 +531,7 @@ TEST(Generation, PipelineRejectsReachableFunctionIntermediateCollision) {
 }
 
 TEST(Generation, PipelineRejectsContextFunctionGraphInitializerCollision) {
-  const auto embedding =
+  auto embedding =
       PipelineModel("ContextStage", {{"input_ids", TensorProto::INT64}}, "inputs_embeds");
   const FunctionProto context_function = FunctionWithPrivateGraphInitializer("ContextStage");
   auto language = PipelineModel("Prefill", {{"inputs_embeds", TensorProto::FLOAT}}, "logits");
@@ -876,11 +876,13 @@ TEST(Generation, PipelineRequiresItsPrefillModel) {
 }
 
 TEST(Generation, GeneratedMasksAndPositionsOutliveGenerationAndContextValues) {
-  const auto model = PipelineModel("Step",
-                                   {{"input_ids", TensorProto::INT64},
-                                    {"attention_mask", TensorProto::INT64},
-                                    {"position_ids", TensorProto::INT64}},
-                                   "logits");
+  PipelineProto pipeline =
+      MakeGenerationPipeline(PipelineModel("Step",
+                                           {{"input_ids", TensorProto::INT64},
+                                            {"attention_mask", TensorProto::INT64},
+                                            {"position_ids", TensorProto::INT64}},
+                                           "logits"));
+  const ModelProto &model = pipeline.prefill();
   RuntimeSession source(model);
   for (bool use_pipeline : {false, true}) {
     SCOPED_TRACE(use_pipeline);
@@ -894,9 +896,8 @@ TEST(Generation, GeneratedMasksAndPositionsOutliveGenerationAndContextValues) {
                           {"position_ids", RuntimeValue(Tensor::FromInt64("", {1, 2}, {0, 7}))}};
     GenerationOptions options;
     options.max_new_tokens = 2;
-    const auto tokens =
-        use_pipeline ? Generate(MakeGenerationPipeline(std::move(model)), context, feeds, options)
-                     : Generate(model, context, feeds, options);
+    const auto tokens = use_pipeline ? Generate(pipeline, context, feeds, options)
+                                     : Generate(model, context, feeds, options);
     EXPECT_EQ(Tokens(tokens), (std::vector<int64_t>{0, 1, 1, 1}));
     Tensor mask = context.Get("attention_mask").BorrowView();
     Tensor positions = context.Get("position_ids").BorrowView();

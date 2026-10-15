@@ -832,6 +832,7 @@ class ReferenceEvaluator:
         seed: int | None = None,
         *,
         embedding: ReferenceEvaluator | None = None,
+        position_axes: int = 0,
     ) -> np.ndarray:
         """Generates token IDs with the native runtime.
 
@@ -840,6 +841,11 @@ class ReferenceEvaluator:
         ``attention_mask`` and ``position_ids`` inputs are maintained automatically;
         prompts may be unpadded or left-padded. Graph persistent bindings enable
         cached decoding; models without bindings evaluate the full prefix.
+        Rank-3 ``position_ids`` use ``[axes, batch, sequence]`` coordinates.
+        ``position_axes`` defaults to the axis count declared by the model;
+        specify it when that dimension is dynamic. Text-only prompts replicate
+        sequential coordinates on every axis. Generated tokens use the maximum
+        unmasked prefill coordinate plus one on all axes.
 
         Zero temperature selects greedy decoding. Positive temperature samples
         softmax-scaled logits, reproducibly when ``seed`` is supplied. Generation
@@ -870,6 +876,7 @@ class ReferenceEvaluator:
         options.eos_token_id = eos_token_id
         options.pad_token_id = pad_token_id
         options.seed = seed
+        options.position_axes = position_axes
         if embedding is None:
             result = _runtime.generate(
                 self._model, self._ctx, feed_inputs, options, self._session_options

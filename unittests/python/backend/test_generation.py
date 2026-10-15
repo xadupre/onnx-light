@@ -580,6 +580,29 @@ class TestGeneration(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unmasked"):
             runtime.generate(model, context, feeds, options)
 
+    def test_multi_axis_positions(self):
+        model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 23]>'
+            "mrope (int64[B, S] input_ids, int64[3, B, S] position_ids)"
+            " => (float[B, S, 3] logits, int64[3, B, S] observed)"
+            "{ logits = Gather(table, input_ids) observed = Identity(position_ids) }"
+        )
+        model.graph.initializer.append(transition_model().graph.initializer[0])
+        evaluator = ReferenceEvaluator(model)
+        feeds = {"input_ids": numpy.array([[0, 1], [1, 2]], dtype=numpy.int64)}
+        expected = [[0, 1, 2, 0], [1, 2, 0, 1]]
+        numpy.testing.assert_array_equal(evaluator.generate(feeds, max_new_tokens=2), expected)
+        coordinates = numpy.array(
+            [[[1, 3], [2, 4]], [[1, 9], [2, 5]], [[1, 6], [2, 8]]], dtype=numpy.int64
+        )
+        feeds["position_ids"] = coordinates
+        numpy.testing.assert_array_equal(evaluator.generate(feeds, max_new_tokens=2), expected)
+        numpy.testing.assert_array_equal(feeds["position_ids"], coordinates)
+        with self.assertRaisesRegex(ValueError, "axis count mismatch"):
+            evaluator.generate(feeds, max_new_tokens=2, position_axes=2)
+        with self.assertRaisesRegex(ValueError, "shape or type mismatch"):
+            evaluator.generate({**feeds, "position_ids": coordinates[0]}, max_new_tokens=2)
+
     def test_invalid_options_and_inputs(self):
         evaluator = ReferenceEvaluator(transition_model())
         feeds = {"input_ids": numpy.array([[0]], dtype=numpy.int64)}

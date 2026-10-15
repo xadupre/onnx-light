@@ -22,6 +22,9 @@ struct GenerationOptions {
   /// These inputs are maintained only when declared by the graph.
   std::string attention_mask_name = "attention_mask";
   std::string position_ids_name = "position_ids";
+  /// Zero infers the layout from the declared position input. Positive values select
+  /// [axes, batch, sequence] positions (also for a graph with unspecified dimensions).
+  int64_t position_axes = 0;
 };
 
 /**
@@ -29,6 +32,9 @@ struct GenerationOptions {
  *
  * Inputs are INT64 [batch, sequence] token IDs, optional INT64 attention masks
  * (left padding only) and position IDs, plus any other fixed model feeds.
+ * Position IDs may be [batch, sequence] or [axes, batch, sequence]. For
+ * multi-axis positions, generated text uses one coordinate per axis, equal
+ * to the maximum unmasked prefill coordinate plus the decode step.
  * Logits are FLOAT, DOUBLE, FLOAT16 or BFLOAT16 [batch, sequence, vocabulary]
  * or [batch, vocabulary]. The final position predicts the next token.
  *

@@ -2158,7 +2158,8 @@ void AddOnnxPyRuntime(nb::module_ &m) {
       .def_rw("input_ids_name", &core::runtime::GenerationOptions::input_ids_name)
       .def_rw("logits_name", &core::runtime::GenerationOptions::logits_name)
       .def_rw("attention_mask_name", &core::runtime::GenerationOptions::attention_mask_name)
-      .def_rw("position_ids_name", &core::runtime::GenerationOptions::position_ids_name);
+      .def_rw("position_ids_name", &core::runtime::GenerationOptions::position_ids_name)
+      .def_rw("position_axes", &core::runtime::GenerationOptions::position_axes);
 
   rt_mod.def(
       "generate",

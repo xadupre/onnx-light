@@ -18,7 +18,7 @@ Bindings
 --------
 
 * ``model.graph.persistent_bindings`` maps whole outputs to next-call inputs.
-  Each persistent input must have exactly one value-use.
+  Each persistent input must have at least one value-use.
 * Names are literal: ``request.cache`` is a graph name, not a field path.
   Duplicate bindings and partial structured inputs are rejected.
 * Current feeds cannot override retained inputs, even with an empty field map.

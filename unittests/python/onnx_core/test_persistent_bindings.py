@@ -46,17 +46,21 @@ def model_with_binding(input_type=None, output_type=None):
 
 
 class TestPersistentBindings(unittest.TestCase):
-    def test_requires_exactly_one_persistent_input_use(self):
-        for mode in ("unused", "two_nodes", "two_slots", "returned_input"):
+    def test_requires_persistent_input_use(self):
+        model = model_with_binding()
+        model.graph.input.append(onnx.ValueInfoProto(name="other", type=tensor_type()))
+        model.graph.node[0].input.clear()
+        model.graph.node[0].input.append("other")
+        with self.assertRaisesRegex(ValueError, "state.in.*at least once"):
+            verify.verify_model(model)
+        model.graph.persistent_bindings.clear()
+        verify.verify_model(model)
+
+    def test_allows_multiple_persistent_input_uses(self):
+        for mode in ("two_nodes", "two_slots", "returned_input"):
             with self.subTest(mode=mode):
                 model = model_with_binding()
-                if mode == "unused":
-                    model.graph.input.append(
-                        onnx.ValueInfoProto(name="other", type=tensor_type())
-                    )
-                    model.graph.node[0].input.clear()
-                    model.graph.node[0].input.append("other")
-                elif mode == "two_nodes":
+                if mode == "two_nodes":
                     model.graph.node.append(oh.make_node("Shape", ["state.in"], ["state.shape"]))
                 elif mode == "two_slots":
                     model.graph.node[0].op_type = "Add"
@@ -65,9 +69,6 @@ class TestPersistentBindings(unittest.TestCase):
                     model.graph.output.append(
                         onnx.ValueInfoProto(name="state.in", type=tensor_type())
                     )
-                with self.assertRaisesRegex(ValueError, "state.in.*exactly once"):
-                    verify.verify_model(model)
-                model.graph.persistent_bindings.clear()
                 verify.verify_model(model)
 
     def test_rejects_direct_and_nested_string_tensors(self):

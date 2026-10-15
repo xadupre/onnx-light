@@ -72,7 +72,7 @@ public:
 
   /// Builds the plan for ``graph``. ``keep`` is seeded with the graph's
   /// declared inputs, initializers and declared outputs. Rejects persistent
-  /// inputs that do not have exactly one value-use in the graph.
+  /// inputs that have no value-uses in the graph.
   explicit ExecutionPlan(const GraphProto &graph);
 
   /// Builds the root graph plan for ``model`` and extends its stable value

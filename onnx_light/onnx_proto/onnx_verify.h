@@ -240,20 +240,18 @@ ONNX_LIGHT_PROTO_API bool CompatiblePersistentStructTypes(const StructTypeCatalo
 /**
  * Validates only the value-use counts of the persistent input names bound by @p graph.
  *
- * Each bound root input must have exactly one value-use: every node input position
- * (including read-only consumers and function-call arguments) and every graph output
- * naming that value counts separately. Counts include captures recursively through
- * GRAPH/GRAPHS attributes, even across mutually exclusive branches, but exclude locally
- * defined names that shadow the root input. Bindings, graph-input declarations and
- * ``graph.value_info`` metadata are not uses.
+ * Each bound root input must have at least one value-use. Node input positions,
+ * graph outputs and captures in GRAPH/GRAPHS attributes count as uses; locally
+ * defined names that shadow the root input do not. Bindings, graph-input
+ * declarations and ``graph.value_info`` metadata are not uses.
  * Function bodies are not expanded and aliases are not inferred.
  *
  * Does not validate declarations, duplicate bindings, root-only placement or types,
  * and does not require a struct-type catalogue. Returns immediately when @p graph
  * has no persistent bindings.
  *
- * @throws std::invalid_argument Thrown when a bound name has a use count other than one;
- * the error names the input and its actual count.
+ * @throws std::invalid_argument Thrown when a bound name has no uses; the error
+ * names the input.
  */
 ONNX_LIGHT_PROTO_API void VerifyPersistentInputUses(const GraphProto &graph);
 

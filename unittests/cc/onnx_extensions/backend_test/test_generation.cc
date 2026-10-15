@@ -10,6 +10,7 @@
 #include <chrono>
 #include <cstring>
 #include <gtest/gtest.h>
+#include <limits>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using namespace ONNX_LIGHT_NAMESPACE::core::runtime;
@@ -271,6 +272,152 @@ TEST(Generation, BackendAttentionModels) {
       options.eos_token_id = 1;
       EXPECT_EQ(Tokens(Generate(model, context, feeds, options, session_options)),
                 (std::vector<int64_t>{0, 1, 1}));
+    }
+  }
+}
+
+TEST(Generation, MultiAxisPositions) {
+  for (int64_t axes : {2, 3}) {
+    for (bool persistent : {false, true}) {
+      auto model = PipelineModel("Mrope",
+                                 {{"input_ids", TensorProto::INT64},
+                                  {"attention_mask", TensorProto::INT64},
+                                  {"position_ids", TensorProto::INT64}},
+                                 "logits");
+      auto *shape = model.mutable_graph()
+                        ->mutable_input(2)
+                        ->mutable_type()
+                        ->mutable_tensor_type()
+                        ->mutable_shape();
+      shape->add_dim()->set_dim_value(axes);
+      shape->add_dim()->set_dim_param("B");
+      shape->add_dim()->set_dim_param("S");
+      if (persistent)
+        AddPersistentState(model);
+      RuntimeContext context;
+      std::vector<Shape> seen_shapes;
+      std::vector<std::vector<int64_t>> seen_positions;
+      context.RegisterCustomKernel(
+          "test.pipeline", "Mrope", [&](const NodeProto &node, RuntimeContext &rt) {
+            const Tensor &ids = rt.Get("input_ids");
+            const Tensor &positions = rt.Get("position_ids");
+            seen_shapes.push_back(positions.shape);
+            seen_positions.push_back(Tokens(positions));
+            std::vector<float> logits(ids.element_count() * 3, 0);
+            for (int64_t i = 0; i < ids.element_count(); ++i)
+              logits[i * 3 + (ids.AsInt64()[i] + 1) % 3] = 4;
+            rt.Put(node.output(0), Tensor::FromFloat("", {2, ids.shape[1], 3}, logits));
+            if (persistent)
+              rt.Put(node.output(1), rt.Get("state").BorrowView());
+          });
+      RuntimeValueMap feeds{
+          {"input_ids", RuntimeValue(Tensor::FromInt64("", {2, 3}, {0, 0, 1, 0, 0, 2}))},
+          {"attention_mask", RuntimeValue(Tensor::FromInt64("", {2, 3}, {0, 1, 1, 0, 0, 1}))}};
+      if (persistent)
+        feeds.emplace("state", RuntimeValue(Tensor::FromInt64("", {}, {0})));
+      GenerationOptions options;
+      options.max_new_tokens = 3;
+      for (bool supplied : {false, true}) {
+        seen_shapes.clear();
+        seen_positions.clear();
+        std::vector<int64_t> prefill;
+        for (int64_t axis = 0; axis < axes; ++axis) {
+          const std::vector<int64_t> row0 = supplied ? (axis == 0   ? std::vector<int64_t>{50, 3, 5}
+                                                        : axis == 1 ? std::vector<int64_t>{0, 9, 2}
+                                                                    : std::vector<int64_t>{0, 4, 6})
+                                                     : std::vector<int64_t>{0, 0, 1};
+          prefill.insert(prefill.end(), row0.begin(), row0.end());
+          const std::vector<int64_t> row1 = supplied ? (axis == 0 ? std::vector<int64_t>{99, 99, 7}
+                                                        : axis == 1 ? std::vector<int64_t>{0, 0, 4}
+                                                                    : std::vector<int64_t>{0, 0, 8})
+                                                     : std::vector<int64_t>{0, 0, 0};
+          prefill.insert(prefill.end(), row1.begin(), row1.end());
+        }
+        if (supplied)
+          feeds.insert_or_assign("position_ids",
+                                 RuntimeValue(Tensor::FromInt64("", {axes, 2, 3}, prefill)));
+        const auto output = Generate(model, context, feeds, options);
+        EXPECT_EQ(output.shape, (Shape{2, 6}));
+        EXPECT_EQ(Tokens(output), (std::vector<int64_t>{0, 0, 1, 2, 0, 1, 0, 0, 2, 0, 1, 2}));
+        ASSERT_EQ(seen_shapes.size(), 3u);
+        for (int64_t step = 0; step < 3; ++step) {
+          EXPECT_EQ(seen_shapes[step], (Shape{axes, 2, persistent && step > 0 ? 1 : 3 + step}));
+          std::vector<int64_t> expected;
+          for (int64_t axis = 0; axis < axes; ++axis)
+            for (int64_t row = 0; row < 2; ++row) {
+              if (!persistent || step == 0)
+                expected.insert(expected.end(), prefill.begin() + (axis * 2 + row) * 3,
+                                prefill.begin() + (axis * 2 + row + 1) * 3);
+              const int64_t base = supplied ? (row == 0    ? 9
+                                               : axes == 2 ? 7
+                                                           : 8)
+                                            : (row == 0 ? 1 : 0);
+              for (int64_t generated = persistent && step > 0 ? step : 1; generated <= step;
+                   ++generated)
+                expected.push_back(base + generated);
+            }
+          EXPECT_EQ(seen_positions[step], expected);
+        }
+        feeds.erase("position_ids");
+      }
+      options.position_axes = axes + 1;
+      EXPECT_NE(InvalidArgumentMessage([&]() {
+                  Generate(model, context, feeds, options);
+                }).find("axis count mismatch"),
+                std::string::npos);
+      options.position_axes = 0;
+      for (const auto &values :
+           {std::vector<int64_t>{-1}, std::vector<int64_t>{std::numeric_limits<int64_t>::max()}}) {
+        std::vector<int64_t> bad(axes * 2 * 3, 0);
+        bad[0] = values[0];
+        feeds.emplace("position_ids", RuntimeValue(Tensor::FromInt64("", {axes, 2, 3}, bad)));
+        EXPECT_NE(InvalidArgumentMessage([&]() {
+                    Generate(model, context, feeds, options);
+                  }).find("invalid or overflowing position"),
+                  std::string::npos);
+        feeds.erase("position_ids");
+      }
+      feeds.emplace("position_ids",
+                    RuntimeValue(Tensor::FromInt64("", {2, 3}, {0, 0, 1, 0, 0, 0})));
+      EXPECT_NE(InvalidArgumentMessage([&]() {
+                  Generate(model, context, feeds, options);
+                }).find("shape or type mismatch"),
+                std::string::npos);
+      feeds.erase("position_ids");
+      feeds.emplace("position_ids", RuntimeValue(Tensor::FromFloat(
+                                        "", {axes, 2, 3}, std::vector<float>(axes * 2 * 3, 0))));
+      EXPECT_NE(InvalidArgumentMessage([&]() {
+                  Generate(model, context, feeds, options);
+                }).find("shape or type mismatch"),
+                std::string::npos);
+      feeds.erase("position_ids");
+      shape->mutable_dim(0)->clear_dim_value();
+      EXPECT_NE(InvalidArgumentMessage([&]() {
+                  Generate(model, context, feeds, options);
+                }).find("requires position_axes"),
+                std::string::npos);
+      options.position_axes = axes;
+      EXPECT_EQ(Generate(model, context, feeds, options).shape, (Shape{2, 6}));
+      options.position_axes = 0;
+      shape->clear_dim();
+      shape->add_dim()->set_dim_param("B");
+      shape->add_dim()->set_dim_param("S");
+      options.position_axes = axes;
+      EXPECT_NE(InvalidArgumentMessage([&]() {
+                  Generate(model, context, feeds, options);
+                }).find("require rank-3"),
+                std::string::npos);
+      options.position_axes = 0;
+      shape->add_dim()->set_dim_param("invalid");
+      EXPECT_NE(InvalidArgumentMessage([&]() {
+                  Generate(model, context, feeds, options);
+                }).find("requires position_axes"),
+                std::string::npos);
+      shape->add_dim()->set_dim_param("invalid");
+      EXPECT_NE(InvalidArgumentMessage([&]() {
+                  Generate(model, context, feeds, options);
+                }).find("rank 2 or 3"),
+                std::string::npos);
     }
   }
 }

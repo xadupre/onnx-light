@@ -40,6 +40,36 @@ const Tensor &IntMatrix(const RuntimeValueMap &feeds, const std::string &name) {
   return tensor;
 }
 
+int64_t PositionAxes(const ModelProto &model, const std::string &name, int64_t configured,
+                     bool &rank2, bool &rank3) {
+  for (const auto &input : model.graph().input()) {
+    if (input.name() != name)
+      continue;
+    EXT_ENFORCE_INVALID(input.type().has_tensor_type(), "Generate: position IDs must be a tensor.");
+    const auto &type = input.type().tensor_type();
+    EXT_ENFORCE_INVALID(type.elem_type() == TensorProto::INT64,
+                        "Generate: position IDs must be INT64.");
+    if (!type.has_shape())
+      return configured;
+    const auto &shape = type.shape();
+    EXT_ENFORCE_INVALID(shape.dim_size() == 2 || shape.dim_size() == 3,
+                        "Generate: position IDs must have rank 2 or 3.");
+    if (shape.dim_size() == 2) {
+      rank2 = true;
+      EXT_ENFORCE_INVALID(configured == 0, "Generate: position axes require rank-3 input.");
+      return 0;
+    }
+    rank3 = true;
+    const auto &axis = shape.dim(0);
+    EXT_ENFORCE_INVALID(!axis.has_dim_value() || axis.dim_value() > 0,
+                        "Generate: invalid position axis count.");
+    EXT_ENFORCE_INVALID(!axis.has_dim_value() || configured == 0 || configured == axis.dim_value(),
+                        "Generate: position axis count mismatch.");
+    return configured ? configured : (axis.has_dim_value() ? axis.dim_value() : 0);
+  }
+  return configured;
+}
+
 std::vector<int64_t> IntValues(const Tensor &tensor) {
   return {tensor.AsInt64(), tensor.AsInt64() + tensor.shape.product()};
 }
@@ -381,6 +411,24 @@ Tensor Generate(const GenerationPipeline &pipeline, RuntimeContext &context,
                         (embedded && HasInput(*pipeline.embedding, options.attention_mask_name));
   const bool has_positions = HasInput(model, options.position_ids_name) ||
                              (embedded && HasInput(*pipeline.embedding, options.position_ids_name));
+  EXT_ENFORCE_INVALID(options.position_axes >= 0,
+                      "Generate: position axis count must be nonnegative.");
+  int64_t axes = options.position_axes;
+  if (has_positions) {
+    bool rank2 = false, rank3 = false;
+    axes = PositionAxes(model, options.position_ids_name, axes, rank2, rank3);
+    if (embedded)
+      axes = PositionAxes(*pipeline.embedding, options.position_ids_name, axes, rank2, rank3);
+    EXT_ENFORCE_INVALID(!rank2 || !rank3, "Generate: conflicting position input ranks.");
+    EXT_ENFORCE_INVALID(!rank3 || axes > 0,
+                        "Generate: dynamic position axis count requires position_axes.");
+  }
+  const bool multi_axis = axes > 0;
+  EXT_ENFORCE_INVALID(!multi_axis ||
+                          (axes <= std::numeric_limits<int64_t>::max() / batch / max_length &&
+                           static_cast<uint64_t>(axes) <= std::numeric_limits<size_t>::max() /
+                                                              sizeof(int64_t) / batch / max_length),
+                      "Generate: requested position size overflows.");
   EXT_ENFORCE_INVALID((!has_mask || options.attention_mask_name != options.input_ids_name) &&
                           (!has_positions || (options.position_ids_name != options.input_ids_name &&
                                               (!has_mask || options.position_ids_name !=
@@ -407,9 +455,22 @@ Tensor Generate(const GenerationPipeline &pipeline, RuntimeContext &context,
     }
     EXT_ENFORCE_INVALID(started, "Generate: each prompt must contain an unmasked token.");
   }
+  if (multi_axis) {
+    const auto text_positions = positions;
+    positions.reserve(text_positions.size() * static_cast<size_t>(axes));
+    for (int64_t axis = 1; axis < axes; ++axis)
+      positions.insert(positions.end(), text_positions.begin(), text_positions.end());
+  }
   if (has_positions && feeds.contains(options.position_ids_name)) {
-    const auto &tensor = IntMatrix(feeds, options.position_ids_name);
-    EXT_ENFORCE_INVALID(tensor.shape == prompt.shape, "Generate: position IDs shape mismatch.");
+    const auto &value = feeds.at(options.position_ids_name);
+    EXT_ENFORCE_INVALID(value.kind == RuntimeValue::Kind::kTensor,
+                        "Generate: position IDs must be a tensor.");
+    const Tensor &tensor = value.tensor;
+    EXT_ENFORCE_INVALID(tensor.data_type == DataType::INT64 &&
+                            tensor.shape ==
+                                (multi_axis ? Shape{axes, batch, prompt_length} : prompt.shape),
+                        "Generate: position IDs shape or type mismatch.");
+    ValidateStorage(tensor);
     positions = IntValues(tensor);
   }
   for (const auto position : positions)
@@ -461,12 +522,24 @@ Tensor Generate(const GenerationPipeline &pipeline, RuntimeContext &context,
   std::mt19937_64 random(options.seed ? *options.seed : std::random_device{}());
   std::vector<bool> finished(static_cast<size_t>(batch), false);
   std::vector<int64_t> next(static_cast<size_t>(batch));
-  std::vector<int64_t> next_positions(static_cast<size_t>(batch));
+  std::vector<int64_t> next_positions(static_cast<size_t>(batch * (multi_axis ? axes : 1)));
+  if (multi_axis) {
+    for (int64_t row = 0; row < batch; ++row) {
+      int64_t maximum = 0;
+      for (int64_t axis = 0; axis < axes; ++axis)
+        for (int64_t col = 0; col < prompt_length; ++col)
+          if (mask[row * prompt_length + col])
+            maximum = std::max(maximum, positions[(axis * batch + row) * prompt_length + col]);
+      for (int64_t axis = 0; axis < axes; ++axis)
+        next_positions[axis * batch + row] = maximum;
+    }
+  }
   std::vector<int64_t> next_mask(static_cast<size_t>(batch));
   int64_t length = prompt_length;
   for (int64_t step = 0; step < options.max_new_tokens; ++step) {
     const bool decode = persistent && step > 0;
     const Shape shape{batch, decode ? 1 : length};
+    const Shape position_shape = multi_axis ? Shape{axes, batch, decode ? 1 : length} : shape;
     if (has_mask)
       current.insert_or_assign(
           options.attention_mask_name,
@@ -475,7 +548,7 @@ Tensor Generate(const GenerationPipeline &pipeline, RuntimeContext &context,
     if (has_positions)
       current.insert_or_assign(
           options.position_ids_name,
-          RuntimeValue(Tensor::From<int64_t>(options.position_ids_name, shape,
+          RuntimeValue(Tensor::From<int64_t>(options.position_ids_name, position_shape,
                                              decode ? next_positions : positions)
                            .RetainStorage()));
     auto ids = Tensor::From<int64_t>(options.input_ids_name, shape, decode ? next : tokens);
@@ -547,7 +620,12 @@ Tensor Generate(const GenerationPipeline &pipeline, RuntimeContext &context,
       next[row] = finished[row] ? options.pad_token_id.value_or(*options.eos_token_id)
                                 : Sample(logits, (row + 1) * stride - vocabulary, vocabulary,
                                          options.temperature, random);
-      next_positions[row] = positions[row * length + length - 1] + 1;
+      if (multi_axis) {
+        for (int64_t axis = 0; axis < axes; ++axis)
+          ++next_positions[axis * batch + row];
+      } else {
+        next_positions[row] = positions[row * length + length - 1] + 1;
+      }
       if (options.eos_token_id && next[row] == *options.eos_token_id)
         finished[row] = true;
     }

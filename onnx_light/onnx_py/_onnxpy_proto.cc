@@ -730,6 +730,10 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
           "SerializeToFile",
           [](cls &self, const std::string &file_path, nb::object options,
              std::string &external_data_file) {
+            if constexpr (std::is_same_v<cls, PipelineProto>) {
+              EXT_ENFORCE(external_data_file.empty(),
+                          "PipelineProto serialization does not support external-weight output.");
+            }
             if (nb::isinstance<SerializeOptions &>(options) &&
                 nb::cast<SerializeOptions &>(options).format == SerializeFormat::kOrtFlatbuffers) {
               EXT_ENFORCE((std::is_same_v<cls, ModelProto>),
@@ -3352,6 +3356,81 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
           "and parses the payload into this model instance.");
 #endif // ONNX_LIGHT_HAS_OPENSSL
 
+  PYDEFINE_PROTO(m, PipelineProto)
+      .PYFIELD_STR(PipelineProto, name)
+      .PYFIELD_STR(PipelineProto, producer_name)
+      .PYFIELD_STR(PipelineProto, producer_version)
+      .PYFIELD_STR(PipelineProto, domain)
+      .PYFIELD_OPTIONAL_INT(PipelineProto, pipeline_version)
+      .PYFIELD_STR(PipelineProto, doc_string)
+      .PYFIELD_OPTIONAL_PROTO(PipelineProto, embedding)
+      .PYFIELD_OPTIONAL_PROTO(PipelineProto, prefill)
+      .PYFIELD_OPTIONAL_PROTO(PipelineProto, decode)
+      .PYFIELD_OPTIONAL_INT(PipelineProto, max_new_tokens)
+      .PYFIELD_OPTIONAL_FLOAT(PipelineProto, temperature)
+      .PYFIELD_OPTIONAL_INT(PipelineProto, seed)
+      .PYFIELD_OPTIONAL_INT(PipelineProto, eos_token_id)
+      .PYFIELD_OPTIONAL_INT(PipelineProto, pad_token_id)
+      .PYFIELD_OPTIONAL_INT(PipelineProto, top_k)
+      .PYFIELD_OPTIONAL_FLOAT(PipelineProto, top_p)
+      .PYFIELD_STR(PipelineProto, input_ids_name)
+      .PYFIELD_STR(PipelineProto, logits_name)
+      .PYFIELD_STR(PipelineProto, attention_mask_name)
+      .PYFIELD_STR(PipelineProto, position_ids_name)
+      .PYFIELD(PipelineProto, metadata_props);
+  PYADD_PROTO_SERIALIZATION(PipelineProto);
+  nb_PipelineProto
+      .def(
+          "HasField",
+          [](const PipelineProto &self, const std::string &field_name) -> bool {
+            if (field_name == "name")
+              return self.has_name();
+            if (field_name == "producer_name")
+              return self.has_producer_name();
+            if (field_name == "producer_version")
+              return self.has_producer_version();
+            if (field_name == "domain")
+              return self.has_domain();
+            if (field_name == "pipeline_version")
+              return self.has_pipeline_version();
+            if (field_name == "doc_string")
+              return self.has_doc_string();
+            if (field_name == "embedding")
+              return self.has_embedding();
+            if (field_name == "prefill")
+              return self.has_prefill();
+            if (field_name == "decode")
+              return self.has_decode();
+            if (field_name == "max_new_tokens")
+              return self.has_max_new_tokens();
+            if (field_name == "temperature")
+              return self.has_temperature();
+            if (field_name == "seed")
+              return self.has_seed();
+            if (field_name == "eos_token_id")
+              return self.has_eos_token_id();
+            if (field_name == "pad_token_id")
+              return self.has_pad_token_id();
+            if (field_name == "top_k")
+              return self.has_top_k();
+            if (field_name == "top_p")
+              return self.has_top_p();
+            if (field_name == "input_ids_name")
+              return self.has_input_ids_name();
+            if (field_name == "logits_name")
+              return self.has_logits_name();
+            if (field_name == "attention_mask_name")
+              return self.has_attention_mask_name();
+            if (field_name == "position_ids_name")
+              return self.has_position_ids_name();
+            if (field_name == "metadata_props")
+              return self.has_metadata_props();
+            throw nb::attribute_error(
+                ("Protocol message has no field named '" + field_name + "'").c_str());
+          },
+          nb::arg("field_name"), "Checks if a field is set, following the protobuf HasField API.")
+      .def("__repr__", [](PipelineProto &self) { return proto_repr_with_short_line(self); });
+
   PYDEFINE_PROTO_WITH_SUBTYPES(m, SequenceProto);
   nb::enum_<SequenceProto::DataType>(nb_SequenceProto, "DataType", nb::is_arithmetic())
       .value("UNDEFINED", SequenceProto::DataType::UNDEFINED)
@@ -3603,6 +3682,13 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
       "identified by (domain, name, overload). This only checks IR-level structure; it "
       "does not check operator input/output arity or run shape inference (use "
       "onnx_light.checker.check_model for that). Raises ValueError on failure.");
+
+  verify_mod.def(
+      "verify_pipeline", [](const PipelineProto &pipeline) { VerifyPipeline(pipeline); },
+      nb::arg("pipeline"),
+      "Validates an LLM PipelineProto: the prefill model is present, every contained model is "
+      "structurally valid, generation settings are in range, and metadata keys are unique. "
+      "Raises ValueError on failure.");
 
   // Registers every repeated field container as a virtual subclass of
   // collections.abc.Sequence so that ``isinstance(repeated_field, Sequence)``

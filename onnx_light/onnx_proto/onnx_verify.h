@@ -453,4 +453,17 @@ ONNX_LIGHT_PROTO_API void VerifyFunction(const StructTypeCatalogue *struct_types
  */
 ONNX_LIGHT_PROTO_API void VerifyModel(const ModelProto &model);
 
+/**
+ * Validates an LLM PipelineProto and every contained ModelProto.
+ *
+ * The prefill model is required. Optional embedding and decode models are
+ * validated when present. Generation limits and sampling parameters must be
+ * in range, and metadata keys must be unique.
+ *
+ * @param pipeline Pipeline to validate.
+ *
+ * @throws std::invalid_argument Thrown when a structural inconsistency is found.
+ */
+ONNX_LIGHT_PROTO_API void VerifyPipeline(const PipelineProto &pipeline);
+
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -181,17 +181,19 @@ bool ProtoMessageAdapter<Derived>::SerializeToString(std::string *out) const {
 template <typename Derived>
 bool ProtoMessageAdapter<Derived>::SerializeToString(std::string &out,
                                                      SerializeOptions &opts) const {
-  if constexpr (std::is_same_v<Derived, ModelProto>) {
+  if constexpr (std::is_same_v<Derived, ModelProto> || std::is_same_v<Derived, PipelineProto>) {
     if (opts.raw_data_callback || opts.node_callback) {
-      ModelProto &mutable_model = const_cast<ModelProto &>(derived());
-      SerializeCallbackRestorer restorer = ApplySerializeRawDataCallback(mutable_model, opts);
+      Derived &mutable_proto = const_cast<Derived &>(derived());
+      SerializeCallbackRestorer restorer = ApplySerializeRawDataCallback(mutable_proto, opts);
       SerializeOptions local_opts = opts;
       local_opts.raw_data_callback = {};
       local_opts.node_callback = {};
       return SerializeToString(out, local_opts);
     }
-    if (opts.format == SerializeFormat::kOrtFlatbuffers)
-      return SerializeModelToOrtFlatbuffers(derived(), out, opts);
+    if constexpr (std::is_same_v<Derived, ModelProto>) {
+      if (opts.format == SerializeFormat::kOrtFlatbuffers)
+        return SerializeModelToOrtFlatbuffers(derived(), out, opts);
+    }
   }
   EXT_ENFORCE(opts.format == SerializeFormat::kOnnx,
               "SerializeToString: ORT FlatBuffers serialization requires ModelProto; "
@@ -222,23 +224,25 @@ bool ProtoMessageAdapter<Derived>::SerializeToFileDescriptor(int fd) const {
 
 template <typename Derived>
 bool ProtoMessageAdapter<Derived>::SerializeToFileDescriptor(int fd, SerializeOptions &opts) const {
-  if constexpr (std::is_same_v<Derived, ModelProto>) {
+  if constexpr (std::is_same_v<Derived, ModelProto> || std::is_same_v<Derived, PipelineProto>) {
     if (opts.raw_data_callback || opts.node_callback) {
-      ModelProto &mutable_model = const_cast<ModelProto &>(derived());
-      SerializeCallbackRestorer restorer = ApplySerializeRawDataCallback(mutable_model, opts);
+      Derived &mutable_proto = const_cast<Derived &>(derived());
+      SerializeCallbackRestorer restorer = ApplySerializeRawDataCallback(mutable_proto, opts);
       SerializeOptions local_opts = opts;
       local_opts.raw_data_callback = {};
       local_opts.node_callback = {};
       return SerializeToFileDescriptor(fd, local_opts);
     }
-    if (opts.format == SerializeFormat::kOrtFlatbuffers) {
-      std::string buffer;
-      if (!SerializeModelToOrtFlatbuffers(derived(), buffer, opts))
-        return false;
-      utils::FdWriteStream stream(fd);
-      stream.write_raw_bytes(reinterpret_cast<const uint8_t *>(buffer.data()),
-                             static_cast<utils::offset_t>(buffer.size()));
-      return stream.Flush();
+    if constexpr (std::is_same_v<Derived, ModelProto>) {
+      if (opts.format == SerializeFormat::kOrtFlatbuffers) {
+        std::string buffer;
+        if (!SerializeModelToOrtFlatbuffers(derived(), buffer, opts))
+          return false;
+        utils::FdWriteStream stream(fd);
+        stream.write_raw_bytes(reinterpret_cast<const uint8_t *>(buffer.data()),
+                               static_cast<utils::offset_t>(buffer.size()));
+        return stream.Flush();
+      }
     }
   }
   EXT_ENFORCE(opts.format == SerializeFormat::kOnnx,

@@ -427,6 +427,22 @@ SerializeCallbackRestorer ApplySerializeRawDataCallback(ModelProto &model,
   return restorer;
 }
 
+SerializeCallbackRestorer ApplySerializeRawDataCallback(PipelineProto &pipeline,
+                                                        const SerializeOptions &options) {
+  SerializeCallbackRestorer restorer;
+  const auto apply = [&](ModelProto &model) {
+    if (model.has_graph())
+      ApplySerializeCallbacksToGraph(model.ref_graph(), options, restorer);
+  };
+  if (pipeline.has_embedding())
+    apply(pipeline.ref_embedding());
+  if (pipeline.has_prefill())
+    apply(pipeline.ref_prefill());
+  if (pipeline.has_decode())
+    apply(pipeline.ref_decode());
+  return restorer;
+}
+
 void ConvertModelToExternalData(ModelProto &model, bool all_tensors_to_one_file,
                                 const std::string &location, size_t size_threshold,
                                 bool convert_attribute) {
@@ -1630,6 +1646,19 @@ const GraphProto &FindGraphAttribute(const NodeProto &node, const char *attr_nam
   }
   EXT_THROW_INVALID(prefix, "attribute '", attr_name, "' is missing on node of op_type '",
                     node.op_type(), "'.");
+}
+
+PipelineProto MakePipeline(const ModelProto &prefill, const ModelProto *decode,
+                           const ModelProto *embedding) {
+  PipelineProto pipeline;
+  *pipeline.mutable_prefill() = prefill;
+  if (decode != nullptr) {
+    *pipeline.mutable_decode() = *decode;
+  }
+  if (embedding != nullptr) {
+    *pipeline.mutable_embedding() = *embedding;
+  }
+  return pipeline;
 }
 
 NodeProto MakeNode(const char *op_type, const std::vector<std::string> &inputs,

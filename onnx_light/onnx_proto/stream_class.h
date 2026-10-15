@@ -69,6 +69,7 @@ enum class ProtoId : uint16_t {
   GraphProto,
   FunctionProto,
   ModelProto,
+  PipelineProto,
   SequenceProto,
   MapProto,
   OptionalProto,

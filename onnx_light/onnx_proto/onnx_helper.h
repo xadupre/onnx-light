@@ -451,6 +451,37 @@ inline bool SerializeProtoToStream(ModelProto &model, utils::BinaryWriteStream &
   return SerializeModelProtoToStream(model, stream, options, clear_external_data);
 }
 
+/**
+ * Specializes SerializeProtoToStream for a self-contained PipelineProto.
+ *
+ * External-weight output is intentionally unsupported because a pipeline owns
+ * multiple independent models and therefore has no single external-data namespace.
+ */
+template <>
+inline bool SerializeProtoToStream(PipelineProto &pipeline, utils::BinaryWriteStream &stream,
+                                   SerializeOptions &options, bool) {
+  EXT_ENFORCE(options.format == SerializeFormat::kOnnx,
+              "PipelineProto serialization only supports SerializeFormat::kOnnx.");
+  EXT_ENFORCE(!stream.ExternalWeights(),
+              "PipelineProto serialization does not support external-weight output.");
+  if (options.raw_data_callback || options.node_callback) {
+    SerializeCallbackRestorer restorer = ApplySerializeRawDataCallback(pipeline, options);
+    SerializeOptions local_options = options;
+    local_options.raw_data_callback = {};
+    local_options.node_callback = {};
+    return SerializeProtoToStream(pipeline, stream, local_options, false);
+  }
+  if (options.is_parallel())
+    stream.StartThreadPool(options.num_threads);
+  SerializeSizeResult total_size = pipeline.SerializeSize(stream, options);
+  if (!EnforceMaxSerializedSize(total_size, options, "SerializePipelineProtoToStream"))
+    return false;
+  pipeline.SerializeToStream(stream, options);
+  if (options.is_parallel())
+    stream.WaitForDelayedBlock();
+  return true;
+}
+
 //////////
 // Parsing
 //////////
@@ -559,6 +590,17 @@ inline void ParseProtoFromStream(ModelProto &model, utils::BinaryStream &stream,
   ParseModelProtoFromStream(model, stream, options, clear_external_data);
 }
 
+/** Specializes ParseProtoFromStream for a self-contained PipelineProto. */
+template <>
+inline void ParseProtoFromStream(PipelineProto &pipeline, utils::BinaryStream &stream,
+                                 ParseOptions &options, bool) {
+  EXT_ENFORCE(options.format == SerializeFormat::kOnnx,
+              "PipelineProto parsing only supports SerializeFormat::kOnnx.");
+  EXT_ENFORCE(!stream.ExternalWeights(),
+              "PipelineProto parsing does not support external-weight input.");
+  pipeline.ParseFromStream(stream, options);
+}
+
 ////////////////////
 // Input/output helpers
 ////////////////////
@@ -617,6 +659,26 @@ inline void AddOutputs(ProtoT &proto, std::initializer_list<T> names) {
     proto.add_output(name);
   }
 }
+
+////////////////////
+// Pipeline factory
+////////////////////
+
+/**
+ * Builds a :class:`PipelineProto` by copying existing model protos.
+ *
+ * The prefill model is required. Decode and embedding models are copied when
+ * their pointers are non-null. The returned pipeline owns its
+ * copies and is therefore independent of the source protos.
+ *
+ * @param prefill Required prompt-processing model.
+ * @param decode Optional token-decoding model.
+ * @param embedding Optional token-embedding model.
+ * @return A pipeline containing copies of the supplied protos.
+ */
+ONNX_LIGHT_PROTO_API PipelineProto MakePipeline(const ModelProto &prefill,
+                                                const ModelProto *decode = nullptr,
+                                                const ModelProto *embedding = nullptr);
 
 ////////////////////
 // Node factory

@@ -31,6 +31,7 @@ from ..onnx_py._onnxpyprotoop import (  # type: ignore # noqa: F401
     PagedCacheBlockProto,
     PagedCacheProto,
     ParseOptions,
+    PipelineProto,
     PersistentBindingProto,
     PrintOptions,
     RawDataCallback,

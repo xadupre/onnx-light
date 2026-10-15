@@ -10,7 +10,6 @@ from . import (  # noqa: F401
     DeviceConfigurationProto,
     EncodedValueProto,
     FunctionProto,
-    GenerationConfigurationProto,
     GraphProto,
     MapProto,
     ModelProto,

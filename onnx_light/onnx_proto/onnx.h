@@ -1714,38 +1714,6 @@ bool SerializeToString(std::string &out,
                        const SerializeOptions &opts) const;
 END_PROTO()
 
-// GenerationConfigurationProto
-
-// message GenerationConfigurationProto {
-//   optional int64 max_new_tokens = 1;
-//   optional float temperature = 2;
-//   optional int64 seed = 3;
-//   optional int64 eos_token_id = 4;
-//   optional int64 pad_token_id = 5;
-//   optional int64 top_k = 6;
-//   optional float top_p = 7;
-//   optional string input_ids_name = 8;
-//   optional string logits_name = 9;
-//   optional string attention_mask_name = 10;
-//   optional string position_ids_name = 11;
-// }
-BEGIN_PROTO(GenerationConfigurationProto,
-            "Defines token-generation settings and conventional LLM tensor names.")
-FIELD_OPTIONAL(int64_t, max_new_tokens, 1, "Maximum number of tokens generated after the prompt.")
-FIELD_OPTIONAL(float, temperature, 2, "Sampling temperature. Zero selects greedy decoding.")
-FIELD_OPTIONAL(int64_t, seed, 3, "Optional nonnegative random seed.")
-FIELD_OPTIONAL(int64_t, eos_token_id, 4, "Token that terminates generation.")
-FIELD_OPTIONAL(int64_t, pad_token_id, 5, "Token emitted for already-finished batch rows.")
-FIELD_OPTIONAL(int64_t, top_k, 6,
-               "Number of highest-scoring tokens retained before sampling. Zero disables top-k.")
-FIELD_OPTIONAL(float, top_p, 7,
-               "Cumulative probability retained for nucleus sampling, in the interval (0, 1].")
-FIELD_STR(input_ids_name, 8, "Name of the token ID input.")
-FIELD_STR(logits_name, 9, "Name of the logits output.")
-FIELD_STR(attention_mask_name, 10, "Name of the optional attention-mask input.")
-FIELD_STR(position_ids_name, 11, "Name of the optional position-ID input.")
-END_PROTO()
-
 // PipelineProto
 
 // message PipelineProto {
@@ -1758,8 +1726,18 @@ END_PROTO()
 //   optional ModelProto embedding = 7;
 //   optional ModelProto prefill = 8;
 //   optional ModelProto decode = 9;
-//   optional GenerationConfigurationProto generation = 10;
-//   repeated StringStringEntryProto metadata_props = 11;
+//   optional int64 max_new_tokens = 10;
+//   optional float temperature = 11;
+//   optional int64 seed = 12;
+//   optional int64 eos_token_id = 13;
+//   optional int64 pad_token_id = 14;
+//   optional int64 top_k = 15;
+//   optional float top_p = 16;
+//   optional string input_ids_name = 17;
+//   optional string logits_name = 18;
+//   optional string attention_mask_name = 19;
+//   optional string position_ids_name = 20;
+//   repeated StringStringEntryProto metadata_props = 21;
 // }
 BEGIN_PROTO(PipelineProto,
             "Bundles LLM models whose transferred values use identical output and input names.")
@@ -1774,9 +1752,20 @@ FIELD_OPTIONAL(ModelProto, prefill, 8,
                "Required model processing the prompt and producing logits or decode state.")
 FIELD_OPTIONAL(ModelProto, decode, 9,
                "Optional model processing one generated token and updated decode state.")
-FIELD_OPTIONAL(GenerationConfigurationProto, generation, 10,
-               "Optional token-generation configuration.")
-FIELD_REPEATED_PROTO(StringStringEntryProto, metadata_props, 11,
+FIELD_OPTIONAL(int64_t, max_new_tokens, 10, "Maximum number of tokens generated after the prompt.")
+FIELD_OPTIONAL(float, temperature, 11, "Sampling temperature. Zero selects greedy decoding.")
+FIELD_OPTIONAL(int64_t, seed, 12, "Optional nonnegative random seed.")
+FIELD_OPTIONAL(int64_t, eos_token_id, 13, "Token that terminates generation.")
+FIELD_OPTIONAL(int64_t, pad_token_id, 14, "Token emitted for already-finished batch rows.")
+FIELD_OPTIONAL(int64_t, top_k, 15,
+               "Number of highest-scoring tokens retained before sampling. Zero disables top-k.")
+FIELD_OPTIONAL(float, top_p, 16,
+               "Cumulative probability retained for nucleus sampling, in the interval (0, 1].")
+FIELD_STR(input_ids_name, 17, "Name of the token ID input.")
+FIELD_STR(logits_name, 18, "Name of the logits output.")
+FIELD_STR(attention_mask_name, 19, "Name of the optional attention-mask input.")
+FIELD_STR(position_ids_name, 20, "Name of the optional position-ID input.")
+FIELD_REPEATED_PROTO(StringStringEntryProto, metadata_props, 21,
                      "Named metadata values; keys must be distinct.")
 END_PROTO()
 

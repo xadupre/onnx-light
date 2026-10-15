@@ -6,7 +6,6 @@ digraph protos {
     edge [fontname="Helvetica", fontsize=10, color="#566573"];
 
     PipelineProto -> ModelProto [label="embedding, prefill, decode"];
-    PipelineProto -> GenerationConfigurationProto [label="generation"];
     PipelineProto -> StringStringEntryProto [label="metadata_props"];
 
     ModelProto -> GraphProto [label="graph"];

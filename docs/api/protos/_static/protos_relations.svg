@@ -28,19 +28,6 @@
 <polygon fill="#566573" stroke="#566573" points="2769.82,-1040.26 2759.54,-1042.83 2769.18,-1047.23 2769.82,-1040.26"/>
 <text text-anchor="middle" x="3330" y="-1084" font-family="Helvetica,sans-Serif" font-size="10.00">embedding, prefill, decode</text>
 </g>
-<!-- GenerationConfigurationProto -->
-<g id="node3" class="node">
-<title>GenerationConfigurationProto</title>
-<path fill="#eaf2f8" stroke="#1f618d" d="M3834.5,-1056C3834.5,-1056 3663.5,-1056 3663.5,-1056 3657.5,-1056 3651.5,-1050 3651.5,-1044 3651.5,-1044 3651.5,-1032 3651.5,-1032 3651.5,-1026 3657.5,-1020 3663.5,-1020 3663.5,-1020 3834.5,-1020 3834.5,-1020 3840.5,-1020 3846.5,-1026 3846.5,-1032 3846.5,-1032 3846.5,-1044 3846.5,-1044 3846.5,-1050 3840.5,-1056 3834.5,-1056"/>
-<text text-anchor="middle" x="3749" y="-1034.9" font-family="Helvetica,sans-Serif" font-size="12.00">GenerationConfigurationProto</text>
-</g>
-<!-- PipelineProto&#45;&gt;GenerationConfigurationProto -->
-<g id="edge2" class="edge">
-<title>PipelineProto&#45;&gt;GenerationConfigurationProto</title>
-<path fill="none" stroke="#566573" d="M3749,-1116.58C3749,-1102.65 3749,-1082.86 3749,-1066.76"/>
-<polygon fill="#566573" stroke="#566573" points="3752.5,-1066.31 3749,-1056.31 3745.5,-1066.31 3752.5,-1066.31"/>
-<text text-anchor="middle" x="3775.5" y="-1084" font-family="Helvetica,sans-Serif" font-size="10.00">generation</text>
-</g>
 <!-- StringStringEntryProto -->
 <g id="node4" class="node">
 <title>StringStringEntryProto</title>

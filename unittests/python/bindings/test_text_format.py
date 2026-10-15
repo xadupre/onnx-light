@@ -68,14 +68,12 @@ class TestTextFormat(ExtTestCase):
         pipeline = onnxl.PipelineProto(
             name="text-generation",
             prefill=_rich_model(),
-            generation=onnxl.GenerationConfigurationProto(
-                max_new_tokens=64,
-                temperature=0.75,
-                top_k=20,
-                top_p=0.9,
-                input_ids_name="input_ids",
-                logits_name="logits",
-            ),
+            max_new_tokens=64,
+            temperature=0.75,
+            top_k=20,
+            top_p=0.9,
+            input_ids_name="input_ids",
+            logits_name="logits",
         )
         metadata = pipeline.metadata_props.add()
         metadata.key = "family"
@@ -84,7 +82,7 @@ class TestTextFormat(ExtTestCase):
         text = serialize_to_textproto(pipeline)
         self.assertIn('name: "text-generation"', text)
         self.assertIn("prefill {", text)
-        self.assertIn("generation {", text)
+        self.assertIn("max_new_tokens: 64", text)
         parsed = parse_from_textproto(text, onnxl.PipelineProto())
         self.assertEqual(pipeline.SerializeToString(), parsed.SerializeToString())
 

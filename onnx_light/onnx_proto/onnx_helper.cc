@@ -427,6 +427,22 @@ SerializeCallbackRestorer ApplySerializeRawDataCallback(ModelProto &model,
   return restorer;
 }
 
+SerializeCallbackRestorer ApplySerializeRawDataCallback(PipelineProto &pipeline,
+                                                        const SerializeOptions &options) {
+  SerializeCallbackRestorer restorer;
+  const auto apply = [&](ModelProto &model) {
+    if (model.has_graph())
+      ApplySerializeCallbacksToGraph(model.ref_graph(), options, restorer);
+  };
+  if (pipeline.has_embedding())
+    apply(pipeline.ref_embedding());
+  if (pipeline.has_prefill())
+    apply(pipeline.ref_prefill());
+  if (pipeline.has_decode())
+    apply(pipeline.ref_decode());
+  return restorer;
+}
+
 void ConvertModelToExternalData(ModelProto &model, bool all_tensors_to_one_file,
                                 const std::string &location, size_t size_threshold,
                                 bool convert_attribute) {
@@ -1633,8 +1649,7 @@ const GraphProto &FindGraphAttribute(const NodeProto &node, const char *attr_nam
 }
 
 PipelineProto MakePipeline(const ModelProto &prefill, const ModelProto *decode,
-                           const ModelProto *embedding,
-                           const GenerationConfigurationProto *generation) {
+                           const ModelProto *embedding) {
   PipelineProto pipeline;
   *pipeline.mutable_prefill() = prefill;
   if (decode != nullptr) {
@@ -1642,9 +1657,6 @@ PipelineProto MakePipeline(const ModelProto &prefill, const ModelProto *decode,
   }
   if (embedding != nullptr) {
     *pipeline.mutable_embedding() = *embedding;
-  }
-  if (generation != nullptr) {
-    *pipeline.mutable_generation() = *generation;
   }
   return pipeline;
 }

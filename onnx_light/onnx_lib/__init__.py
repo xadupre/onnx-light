@@ -6,7 +6,6 @@ from ..onnx_py._onnxpyprotoop import (  # type: ignore
     DeviceConfigurationProto,
     FileLoadMode,
     FunctionProto,
-    GenerationConfigurationProto,
     GraphProto,
     IntIntListEntryProto,
     MapProto,

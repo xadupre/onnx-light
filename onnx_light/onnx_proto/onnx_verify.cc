@@ -2069,27 +2069,23 @@ void VerifyPipeline(const PipelineProto &pipeline) {
   if (pipeline.has_decode())
     VerifyModel(pipeline.decode());
 
-  if (pipeline.has_generation()) {
-    const GenerationConfigurationProto &generation = pipeline.generation();
-    EXT_ENFORCE_INVALID(!generation.has_max_new_tokens() || generation.ref_max_new_tokens() >= 0,
-                        "PipelineProto generation.max_new_tokens must be nonnegative.");
-    EXT_ENFORCE_INVALID(
-        !generation.has_temperature() ||
-            (std::isfinite(generation.ref_temperature()) && generation.ref_temperature() >= 0),
-        "PipelineProto generation.temperature must be finite and nonnegative.");
-    EXT_ENFORCE_INVALID(!generation.has_seed() || generation.ref_seed() >= 0,
-                        "PipelineProto generation.seed must be nonnegative.");
-    EXT_ENFORCE_INVALID(!generation.has_eos_token_id() || generation.ref_eos_token_id() >= 0,
-                        "PipelineProto generation.eos_token_id must be nonnegative.");
-    EXT_ENFORCE_INVALID(!generation.has_pad_token_id() || generation.ref_pad_token_id() >= 0,
-                        "PipelineProto generation.pad_token_id must be nonnegative.");
-    EXT_ENFORCE_INVALID(!generation.has_top_k() || generation.ref_top_k() >= 0,
-                        "PipelineProto generation.top_k must be nonnegative.");
-    EXT_ENFORCE_INVALID(
-        !generation.has_top_p() || (std::isfinite(generation.ref_top_p()) &&
-                                    generation.ref_top_p() > 0 && generation.ref_top_p() <= 1),
-        "PipelineProto generation.top_p must be finite and in the interval (0, 1].");
-  }
+  EXT_ENFORCE_INVALID(!pipeline.has_max_new_tokens() || pipeline.ref_max_new_tokens() >= 0,
+                      "PipelineProto max_new_tokens must be nonnegative.");
+  EXT_ENFORCE_INVALID(!pipeline.has_temperature() || (std::isfinite(pipeline.ref_temperature()) &&
+                                                      pipeline.ref_temperature() >= 0),
+                      "PipelineProto temperature must be finite and nonnegative.");
+  EXT_ENFORCE_INVALID(!pipeline.has_seed() || pipeline.ref_seed() >= 0,
+                      "PipelineProto seed must be nonnegative.");
+  EXT_ENFORCE_INVALID(!pipeline.has_eos_token_id() || pipeline.ref_eos_token_id() >= 0,
+                      "PipelineProto eos_token_id must be nonnegative.");
+  EXT_ENFORCE_INVALID(!pipeline.has_pad_token_id() || pipeline.ref_pad_token_id() >= 0,
+                      "PipelineProto pad_token_id must be nonnegative.");
+  EXT_ENFORCE_INVALID(!pipeline.has_top_k() || pipeline.ref_top_k() >= 0,
+                      "PipelineProto top_k must be nonnegative.");
+  EXT_ENFORCE_INVALID(!pipeline.has_top_p() ||
+                          (std::isfinite(pipeline.ref_top_p()) && pipeline.ref_top_p() > 0 &&
+                           pipeline.ref_top_p() <= 1),
+                      "PipelineProto top_p must be finite and in the interval (0, 1].");
 
   std::unordered_set<std::string> metadata_keys;
   for (const StringStringEntryProto &entry : pipeline.metadata_props()) {

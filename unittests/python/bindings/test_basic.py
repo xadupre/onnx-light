@@ -32,6 +32,14 @@ def _simple_tensor() -> onnxl.TensorProto:
     )
 
 
+def _pipeline_with_node(doc_string: str) -> onnxl.PipelineProto:
+    """Creates a pipeline whose prefill model contains one node."""
+    model = _simple_model()
+    node = model.graph.add_node("Identity", ["x"], ["y"])
+    node.doc_string = doc_string
+    return onnxl.PipelineProto(prefill=model)
+
+
 class TestIOModel(ExtTestCase):
     """Tests for saving and loading ModelProto (protobuf format only)."""
 
@@ -181,6 +189,103 @@ class TestIOTensor(ExtTestCase):
         loaded_proto = onnxl.TensorProto()
         loaded_proto.ParseFromString(buffer.getvalue())
         self.assertEqual(proto.SerializeToString(), loaded_proto.SerializeToString())
+
+
+class TestIOPipeline(ExtTestCase):
+    """Tests pipeline serialization behavior."""
+
+    @staticmethod
+    def _parse(serialized: bytes) -> onnxl.PipelineProto:
+        pipeline = onnxl.PipelineProto()
+        pipeline.ParseFromString(serialized)
+        return pipeline
+
+    def test_serialize_callbacks_apply_to_string_file_and_descriptor(self) -> None:
+        """Checks callback edits of equal and different sizes on every output path."""
+        for original, replacement in [("old", "new"), ("", "expanded")]:
+            with self.subTest(original=original, replacement=replacement):
+                pipeline = _pipeline_with_node(original)
+                options = onnxl.SerializeOptions()
+                options.node_callback = lambda node, graph: setattr(
+                    node, "doc_string", replacement
+                )
+
+                restored = self._parse(pipeline.SerializeToString(options))
+                self.assertEqual(restored.prefill.graph.node[0].doc_string, replacement)
+
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    file_path = pathlib.Path(temp_dir, "pipeline.onnx")
+                    pipeline.SerializeToFile(str(file_path), options)
+                    restored = self._parse(file_path.read_bytes())
+                    self.assertEqual(restored.prefill.graph.node[0].doc_string, replacement)
+
+                    fd_path = pathlib.Path(temp_dir, "pipeline-fd.onnx")
+                    fd = os.open(fd_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o666)
+                    try:
+                        pipeline.SerializeToFileDescriptor(fd, options)
+                    finally:
+                        os.close(fd)
+                    restored = self._parse(fd_path.read_bytes())
+                    self.assertEqual(restored.prefill.graph.node[0].doc_string, replacement)
+
+                self.assertEqual(pipeline.prefill.graph.node[0].doc_string, original)
+
+    def test_external_data_rejection_preserves_existing_files(self) -> None:
+        """Checks unsupported external output is rejected before files are opened."""
+        pipeline = _pipeline_with_node("")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            file_path = pathlib.Path(temp_dir, "pipeline.onnx")
+            weights_path = pathlib.Path(temp_dir, "pipeline.data")
+            file_path.write_bytes(b"existing pipeline")
+            weights_path.write_bytes(b"existing weights")
+
+            with self.assertRaises(RuntimeError):
+                pipeline.SerializeToFile(str(file_path), external_data_file=str(weights_path))
+
+            self.assertEqual(file_path.read_bytes(), b"existing pipeline")
+            self.assertEqual(weights_path.read_bytes(), b"existing weights")
+
+    def test_raw_data_callback_applies_to_string_file_and_descriptor(self) -> None:
+        """Checks raw-data callback edits are retained on every output path."""
+        for replacement in [b"WXYZ", b"expanded"]:
+            with self.subTest(replacement=replacement):
+                pipeline = _pipeline_with_node("")
+                tensor = pipeline.prefill.graph.initializer.add()
+                tensor.name = "weight"
+                tensor.data_type = onnxl.TensorProto.UINT8
+                tensor.dims.extend([4])
+                tensor.raw_data = b"abcd"
+
+                def callback(serialized_tensor, graph, buffer, size_only):
+                    if size_only:
+                        return len(replacement)
+                    serialized_tensor.ClearField("dims")
+                    serialized_tensor.dims.extend([len(replacement)])
+                    np.copyto(np.asarray(buffer), np.frombuffer(replacement, dtype=np.uint8))
+                    return len(replacement)
+
+                options = onnxl.SerializeOptions()
+                options.raw_data_callback = callback
+
+                restored = self._parse(pipeline.SerializeToString(options))
+                self.assertEqual(restored.prefill.graph.initializer[0].raw_data, replacement)
+
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    file_path = pathlib.Path(temp_dir, "pipeline.onnx")
+                    pipeline.SerializeToFile(str(file_path), options)
+                    restored = self._parse(file_path.read_bytes())
+                    self.assertEqual(restored.prefill.graph.initializer[0].raw_data, replacement)
+
+                    fd_path = pathlib.Path(temp_dir, "pipeline-fd.onnx")
+                    fd = os.open(fd_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o666)
+                    try:
+                        pipeline.SerializeToFileDescriptor(fd, options)
+                    finally:
+                        os.close(fd)
+                    restored = self._parse(fd_path.read_bytes())
+                    self.assertEqual(restored.prefill.graph.initializer[0].raw_data, replacement)
+
+                self.assertEqual(pipeline.prefill.graph.initializer[0].raw_data, b"abcd")
 
 
 class TestBasicFunctions(ExtTestCase):

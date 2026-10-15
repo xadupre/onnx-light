@@ -37,7 +37,6 @@ references are explicitly marked rather than expanded as nested messages.
 
    PipelineProto
    ├── embedding, prefill, decode → ModelProto
-   ├── generation → GenerationConfigurationProto
    └── metadata_props → StringStringEntryProto
 
    ModelProto
@@ -184,7 +183,6 @@ Quick attribute list used in the graph:
     device_configuration_proto
     encoded_value_proto
     function_proto
-    generation_configuration_proto
     graph_proto
     int_int_list_entry_proto
     map_proto

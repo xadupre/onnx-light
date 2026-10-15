@@ -6,7 +6,6 @@ from onnx_light.ext_test_case import ExtTestCase
 from onnx_light.onnx_lib import (
     AttributeProto,
     FunctionProto,
-    GenerationConfigurationProto,
     GraphProto,
     ModelProto,
     NodeProto,
@@ -47,8 +46,8 @@ class TestVerify(ExtTestCase):
 
     def test_verify_pipeline(self):
         """Checks the required model and generation ranges."""
-        pipeline = PipelineProto(prefill=_make_valid_model())
-        pipeline.generation = GenerationConfigurationProto(
+        pipeline = PipelineProto(
+            prefill=_make_valid_model(),
             max_new_tokens=32,
             temperature=0.0,
             seed=42,
@@ -59,10 +58,10 @@ class TestVerify(ExtTestCase):
         )
         verify.verify_pipeline(pipeline)
 
-        pipeline.generation.top_p = 0.0
+        pipeline.top_p = 0.0
         with self.assertRaises(ValueError):
             verify.verify_pipeline(pipeline)
-        pipeline.generation.top_p = 1.0
+        pipeline.top_p = 1.0
         pipeline.decode.CopyFrom(ModelProto())
         with self.assertRaises(ValueError):
             verify.verify_pipeline(pipeline)

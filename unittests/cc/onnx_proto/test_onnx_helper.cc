@@ -25,19 +25,14 @@ TEST(onnx_helper, MakePipelineCopiesExistingProtos) {
   decode.set_producer_name("decode");
   ModelProto embedding;
   embedding.set_producer_name("embedding");
-  GenerationConfigurationProto generation;
-  generation.set_max_new_tokens(32);
-
-  PipelineProto pipeline = MakePipeline(prefill, &decode, &embedding, &generation);
+  PipelineProto pipeline = MakePipeline(prefill, &decode, &embedding);
 
   ASSERT_TRUE(pipeline.has_prefill());
   ASSERT_TRUE(pipeline.has_decode());
   ASSERT_TRUE(pipeline.has_embedding());
-  ASSERT_TRUE(pipeline.has_generation());
   EXPECT_EQ(pipeline.ref_prefill().ref_producer_name(), "prefill");
   EXPECT_EQ(pipeline.ref_decode().ref_producer_name(), "decode");
   EXPECT_EQ(pipeline.ref_embedding().ref_producer_name(), "embedding");
-  EXPECT_EQ(pipeline.ref_generation().ref_max_new_tokens(), 32);
 
   prefill.set_producer_name("changed");
   EXPECT_EQ(pipeline.ref_prefill().ref_producer_name(), "prefill");
@@ -46,7 +41,6 @@ TEST(onnx_helper, MakePipelineCopiesExistingProtos) {
   EXPECT_TRUE(prefill_only.has_prefill());
   EXPECT_FALSE(prefill_only.has_decode());
   EXPECT_FALSE(prefill_only.has_embedding());
-  EXPECT_FALSE(prefill_only.has_generation());
 }
 
 TEST(onnx_helper, IteratorTensorProto) {

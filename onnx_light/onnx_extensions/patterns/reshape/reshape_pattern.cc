@@ -1111,7 +1111,9 @@ ShapeBasedEditDistanceReshapePattern::Apply(core::builder::GraphGraph &graph,
   const core::builder::MatchResult verified = Match(graph, *nodes[0]);
   if (verified.pattern == nullptr || verified.nodes != nodes) {
     throw BuilderError(
-        "ShapeBasedEditDistanceReshapePattern::Apply received an unsafe or inconsistent match.");
+        "ShapeBasedEditDistanceReshapePattern::Apply received an unsafe or "
+        "inconsistent match: " +
+        (verified.no_match.has_value() ? verified.no_match->reason : "node mismatch"));
   }
   const NodeProto &reshape = *nodes[0];
   const std::optional<std::vector<int64_t>> aligned =

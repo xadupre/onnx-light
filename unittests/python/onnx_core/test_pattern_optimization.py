@@ -220,6 +220,41 @@ class TestPatternSelection(ExtTestCase):
 
 
 class TestPatternOptimization(ExtTestCase):
+    def test_stale_batched_match_is_revalidated_before_apply(self):
+        class OneShotNegNegPattern(NegNegPattern):
+            def __init__(self):
+                super().__init__()
+                self.active = True
+
+            def match(self, graph, node):
+                if not self.active:
+                    return self.no_match(node, "the pattern has already been applied")
+                return super().match(graph, node)
+
+            def apply(self, graph, nodes):
+                assert self.active
+                self.active = False
+                return super().apply(graph, nodes)
+
+        model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 18]>\n'
+            "agraph (float[2] x) => (float[2] y1, float[2] y2) {\n"
+            "  middle1 = Neg(x)\n"
+            "  y1 = Neg(middle1)\n"
+            "  middle2 = Neg(x)\n"
+            "  y2 = Neg(middle2)\n"
+            "}\n"
+        )
+        builder = optim.GraphBuilder(model)
+
+        rewrites = optim.GraphGraph(builder, [OneShotNegNegPattern()]).optimize()
+
+        self.assertEqual([rewrite.pattern_name for rewrite in rewrites], ["NegNeg"])
+        self.assertEqual(
+            [node.op_type for node in builder.to_onnx("model").graph.node],
+            ["Identity", "Neg", "Neg"],
+        )
+
     def test_python_pattern_rewrites_and_reports_rejections(self):
         model = _double_neg_model()
         builder = optim.GraphBuilder(model)

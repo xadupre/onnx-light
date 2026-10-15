@@ -645,6 +645,23 @@ public:
   FunctionProto ToFunction(const std::string &domain = "");
 
 private:
+  class AncestorRefreshGuard {
+  public:
+    explicit AncestorRefreshGuard(GraphBuilder &builder)
+        : builder_(builder), parent_(builder.parent_) {
+      builder_.parent_ = nullptr;
+    }
+
+    ~AncestorRefreshGuard() { builder_.parent_ = parent_; }
+
+    AncestorRefreshGuard(const AncestorRefreshGuard &) = delete;
+    AncestorRefreshGuard &operator=(const AncestorRefreshGuard &) = delete;
+
+  private:
+    GraphBuilder &builder_;
+    GraphBuilder *parent_;
+  };
+
   std::size_t RemoveUnusedNodesImpl(bool recursive);
   void PruneValueInfos();
   std::size_t

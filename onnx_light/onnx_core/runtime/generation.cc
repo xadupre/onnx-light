@@ -430,7 +430,9 @@ static Tensor GenerateImpl(const GenerationPipeline &pipeline, RuntimeContext &c
                       "Generate: token, mask and position input names must be distinct.");
   std::vector<int64_t> mask(tokens.size(), 1);
   const auto control_feeds = [&](const std::string &name) -> const RuntimeValueMap & {
-    return embedded && HasInput(*pipeline.embedding, name) ? embedding_feeds : prefill_feeds;
+    return embedded && HasInput(*pipeline.embedding, name) && embedding_feeds.contains(name)
+               ? embedding_feeds
+               : prefill_feeds;
   };
   if (has_mask &&
       control_feeds(options.attention_mask_name).contains(options.attention_mask_name)) {

@@ -5,6 +5,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.1.32] – Unreleased
 
+### New Features
+
+- Supported rank-3 multi-axis M-RoPE position IDs during native generation,
+  including models with a dynamic axis count
+  ([#5289](https://github.com/xadupre/onnx-light/pull/5289)).
+
+### Fixes
+
+- Resolved split-generation feeds against each receiving model's quantization
+  parameter catalogue while preserving shared model and tensor storage
+  ([#5287](https://github.com/xadupre/onnx-light/pull/5287)).
+
 ### Documentation & CI
 
 - Bumped the release version to `0.1.32`.

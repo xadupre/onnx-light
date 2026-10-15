@@ -25,6 +25,7 @@ namespace ONNX_LIGHT_NAMESPACE {
 // dereference the proto's definition here, so the full ``onnx_proto`` header is
 // intentionally not pulled into this low-level runtime header.
 class NodeProto;
+class FunctionProto;
 
 namespace core::runtime {
 
@@ -40,6 +41,15 @@ struct KernelTuningParameters;
 
 /// Immutable opset imports owned by a model or function session.
 using OpsetImports = std::unordered_map<std::string, int64_t>;
+
+/**
+ * Name-keyed map of model-local :cpp:type:`FunctionProto` definitions.
+ *
+ * Keys are the canonical ``"<domain>:<op_type>:<overload>"`` triple with the
+ * default ONNX domain normalized to ``"ai.onnx"``. Values are non-owning
+ * pointers into a caller-owned model.
+ */
+using FunctionMap = std::unordered_map<std::string, const FunctionProto *>;
 
 /**
  * Lightweight opset identifier used by the backend test library.
@@ -85,11 +95,15 @@ struct KernelContext {
   RawBufferAllocator *allocator = nullptr;
   /// Effective model/function imports. Borrowed from the owning session.
   const OpsetImports *opset_imports = nullptr;
+  /// Effective model-local functions. Borrowed from the owning model session.
+  const FunctionMap *model_functions = nullptr;
 
   KernelContext() = default;
   explicit KernelContext(OpsetId opset_, RawBufferAllocator *allocator_ = nullptr,
-                         const OpsetImports *opset_imports_ = nullptr)
-      : opset(std::move(opset_)), allocator(allocator_), opset_imports(opset_imports_) {}
+                         const OpsetImports *opset_imports_ = nullptr,
+                         const FunctionMap *model_functions_ = nullptr)
+      : opset(std::move(opset_)), allocator(allocator_), opset_imports(opset_imports_),
+        model_functions(model_functions_) {}
 };
 
 /**

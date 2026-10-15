@@ -17,7 +17,9 @@ are materialized instead, as required by normal string execution.
 ``DeepCopy()`` copies all payloads explicitly.
 ``std::move(value).Retain()`` consumes a selected whole result, recursively moving
 owned tensor buffers or exporting existing I/O allocations as ``IOLease`` handles.
-An ownerless borrow or unleased execution-arena allocation cannot be retained.
+An ownerless borrow or unleased execution-arena allocation cannot be retained,
+except an explicit immutable initializer view whose proto lifetime is guaranteed
+by the C++ caller.
 String tensors cannot be retained, including nested fields and constants in an
 encoded layout. ``Retain(catalogue)`` resolves encoded layout references through
 the model catalogue; unresolved references and recursive types are rejected.

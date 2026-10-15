@@ -11,6 +11,7 @@ from onnx_light.ext_test_case import import_or_skip
 import onnx_light.onnx.numpy_helper as onh
 import onnx_light.onnx.helper as oh
 from onnx_light.onnx import TensorProto
+from onnx_light.onnx_core.graph_builder import GraphBuilder
 
 ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
 
@@ -28,6 +29,56 @@ class TestNativeDtypeRegressions(unittest.TestCase):
             opset_imports=[oh.make_opsetid("", opset)],
         )
         return ReferenceEvaluator(function).run(None, feeds)[0]
+
+    def test_cast_complex_shapes_and_precision(self):
+        for dtype in (numpy.float32, numpy.float64, numpy.complex64, numpy.complex128):
+            for shape in ((), (3,), (0,), (2, 0, 3)):
+                data = numpy.full(shape, 1.25, dtype=dtype)
+                if numpy.issubdtype(dtype, numpy.complexfloating):
+                    data += 2.5j
+                for to, output_dtype in (
+                    (TensorProto.COMPLEX64, numpy.complex64),
+                    (TensorProto.COMPLEX128, numpy.complex128),
+                    (TensorProto.FLOAT, numpy.float32),
+                    (TensorProto.DOUBLE, numpy.float64),
+                ):
+                    with self.subTest(dtype=dtype, shape=shape, to=to):
+                        actual = self.run_node("Cast", {"X": data}, opset=13, to=to)
+                        expected = (
+                            data.real.astype(output_dtype)
+                            if numpy.issubdtype(output_dtype, numpy.floating)
+                            else data.astype(output_dtype)
+                        )
+                        self.assertEqual(actual.dtype, numpy.dtype(output_dtype))
+                        self.assertEqual(actual.shape, shape)
+                        numpy.testing.assert_array_equal(actual, expected)
+
+    def test_cast_complex_graph_builder(self):
+        data = numpy.array([-1.5, 0, 2.25], dtype=numpy.float32)
+        for opset in (6, 9, 13, 19, 21, 23, 24, 25, 28):
+            with self.subTest(opset=opset):
+                builder = GraphBuilder("complex_cast")
+                builder.set_opset_version("", opset)
+                x = builder.inp("x", TensorProto.FLOAT, [3])
+                y = builder.op.Cast(x, to=TensorProto.COMPLEX64)
+                z = builder.op.Cast(y, to=TensorProto.COMPLEX128)
+                builder.out(z)
+                model = builder.to_onnx()
+                self.assertEqual(
+                    model.graph.output[0].type.tensor_type.elem_type, TensorProto.COMPLEX128
+                )
+                actual = ReferenceEvaluator(model).run(None, {"x": data})[0]
+                self.assertEqual(actual.dtype, numpy.dtype(numpy.complex128))
+                numpy.testing.assert_array_equal(actual, data.astype(numpy.complex128))
+
+    def test_cast_complex_rejects_unsupported_pairs(self):
+        for to in (TensorProto.STRING, TensorProto.FLOAT8E5M2, TensorProto.INT4):
+            with self.subTest(to=to), self.assertRaises(ValueError):
+                self.run_node("Cast", {"X": numpy.array([1 + 2j], dtype=numpy.complex64)}, to=to)
+        with self.assertRaises(ValueError):
+            self.run_node(
+                "Cast", {"X": numpy.array(["1"], dtype=object)}, to=TensorProto.COMPLEX64
+            )
 
     def test_string_initializer_cache_and_callback(self):
         values = numpy.array(["\u00e9t\u00e9", "", "\u6771\u4eac"], dtype=object)

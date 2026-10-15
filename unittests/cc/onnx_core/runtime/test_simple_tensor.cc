@@ -10,6 +10,7 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <cstring>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -77,6 +78,56 @@ TEST(SimpleTensorSharing, BorrowedOwnersRemainAliveAndOwnerlessBorrowsReject) {
   Tensor unsafe = Tensor::Borrow("", DataType::FLOAT, {1},
                                  reinterpret_cast<const uint8_t *>(&ownerless), sizeof(float));
   EXPECT_THROW(std::move(unsafe).RetainStorage(), std::invalid_argument);
+}
+
+TEST(SimpleTensorSharing, InitializerViewsBorrowStorageAndPreserveProvenance) {
+  for (bool raw : {false, true}) {
+    SimpleRawBufferAllocator allocator(1);
+    TensorProto proto;
+    proto.set_data_type(DataType::FLOAT);
+    proto.add_dims(1);
+    const float initial = 3;
+    if (raw)
+      proto.set_raw_data(std::string(reinterpret_cast<const char *>(&initial), sizeof(initial)));
+    else
+      proto.add_float_data(initial);
+    Tensor value = Tensor::BorrowInitializer(proto);
+    const auto *payload = value.bytes();
+    EXPECT_TRUE(value.is_initializer_view());
+    EXPECT_EQ(value.borrowed_owner().use_count(), 0);
+    Tensor copy(value);
+    Tensor assigned;
+    assigned = value;
+    Tensor moved(std::move(copy));
+    EXPECT_FALSE(copy.is_initializer_view());
+    Tensor move_assigned;
+    move_assigned = std::move(assigned);
+    EXPECT_FALSE(assigned.is_initializer_view());
+    Tensor view = moved.BorrowView();
+    for (const Tensor *tensor : {&value, &moved, &move_assigned, &view}) {
+      EXPECT_TRUE(tensor->is_initializer_view());
+      EXPECT_EQ(tensor->bytes(), payload);
+      EXPECT_FLOAT_EQ(tensor->AsFloat()[0], initial);
+    }
+    Tensor retained = std::move(view).RetainStorage();
+    EXPECT_TRUE(retained.is_initializer_view());
+    EXPECT_EQ(retained.bytes(), payload);
+    EXPECT_FALSE(retained.ToOwned().is_initializer_view());
+    retained.SetAllocation(&allocator, allocator.Allocate(sizeof(float)));
+    EXPECT_FALSE(retained.is_initializer_view());
+  }
+}
+
+TEST(SimpleTensorSharing, InitializerViewsDoNotCertifyOwnerlessExternalStorage) {
+  const float external = 3;
+  TensorProto proto;
+  proto.set_data_type(DataType::FLOAT);
+  proto.add_dims(1);
+  proto.mutable_raw_data()->assign_borrowed(reinterpret_cast<const uint8_t *>(&external),
+                                            sizeof(external));
+  Tensor view = Tensor::BorrowInitializer(proto);
+  EXPECT_FALSE(view.is_initializer_view());
+  EXPECT_THROW(std::move(view).RetainStorage(), std::invalid_argument);
 }
 
 TEST(SimpleTensorSharing, IOLeaseSurvivesArenaAndRejectsUnleasedExecutionStorage) {
@@ -565,6 +616,34 @@ TEST(SimpleTensorFromProto, DoubleTypedField) {
   Tensor t = TensorFromProto(tp);
   EXPECT_DOUBLE_EQ(t.AsDouble()[0], 1.5);
   EXPECT_DOUBLE_EQ(t.AsDouble()[1], 2.5);
+}
+
+TEST(SimpleTensorFromProto, Complex64TypedField) {
+  TensorProto tp;
+  tp.set_name("c64");
+  tp.ref_dims().push_back(2);
+  tp.set_data_type(TensorProto::DataType::COMPLEX64);
+  const float values[] = {1.0f, -2.0f, 3.5f, 4.5f};
+  for (const float value : values) {
+    tp.add_float_data(value);
+  }
+  Tensor t = TensorFromProto(tp);
+  ASSERT_EQ(t.size_bytes(), sizeof(values));
+  EXPECT_EQ(std::memcmp(t.bytes(), values, sizeof(values)), 0);
+}
+
+TEST(SimpleTensorFromProto, Complex128TypedField) {
+  TensorProto tp;
+  tp.set_name("c128");
+  tp.ref_dims().push_back(2);
+  tp.set_data_type(TensorProto::DataType::COMPLEX128);
+  const double values[] = {1.0, -2.0, 3.5, 4.5};
+  for (const double value : values) {
+    tp.add_double_data(value);
+  }
+  Tensor t = TensorFromProto(tp);
+  ASSERT_EQ(t.size_bytes(), sizeof(values));
+  EXPECT_EQ(std::memcmp(t.bytes(), values, sizeof(values)), 0);
 }
 
 TEST(SimpleTensorFromProto, Uint64TypedField) {

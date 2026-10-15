@@ -254,9 +254,7 @@ namespace {
 // ``NodeProto::domain``) is normalised to ``ai.onnx``.
 std::string FunctionLookupKey(const std::string &domain, const std::string &op_type,
                               const std::string &overload) {
-  if (domain.empty())
-    return std::string(":") + op_type + ":" + overload;
-  return domain + ":" + op_type + ":" + overload;
+  return ONNX_LIGHT_NAMESPACE::NormaliseDomain(domain) + ":" + op_type + ":" + overload;
 }
 
 template <class NameCollection> std::string FormatNameList(const NameCollection &names) {
@@ -337,8 +335,10 @@ Tensor SliceTensorAlongAxis(const Tensor &t, int64_t axis, int64_t index,
 
 SubgraphSession::SubgraphSession(const GraphProto &graph, const OpsetImports *opset_imports,
                                  std::shared_ptr<ValueStore> value_store,
-                                 std::unordered_set<std::string> immutable_inputs)
-    : RuntimeSession(graph, opset_imports, 0, std::move(value_store), std::move(immutable_inputs)) {
+                                 std::unordered_set<std::string> immutable_inputs,
+                                 const FunctionMap *model_functions)
+    : RuntimeSession(graph, opset_imports, 0, std::move(value_store), std::move(immutable_inputs),
+                     model_functions) {
   SetNestedExecution();
   const auto &outs = graph.output();
   output_names_.reserve(outs.size());
@@ -989,6 +989,30 @@ void BindRefAttributes(NodeProto &node,
 
 namespace detail {
 
+FunctionMap ModelFunctions(const ModelProto &model) {
+  FunctionMap result;
+  for (const FunctionProto &function : model.functions()) {
+    const std::string key =
+        FunctionLookupKey(function.domain(), function.name(), function.overload());
+    EXT_ENFORCE_INVALID(result.emplace(key, &function).second,
+                        "RuntimeSession: duplicate model-local function '", key, "'.");
+  }
+  return result;
+}
+
+FunctionProto BindFunctionAttributes(const FunctionProto &function, const NodeProto &call) {
+  std::unordered_map<std::string, const AttributeProto *> attributes;
+  for (const AttributeProto &attribute : function.attribute_proto())
+    attributes[attribute.name()] = &attribute;
+  for (const AttributeProto &attribute : call.attribute())
+    attributes[attribute.name()] = &attribute;
+  FunctionProto bound;
+  bound.CopyFrom(function);
+  for (NodeProto &node : bound.ref_node())
+    BindRefAttributes(node, attributes);
+  return bound;
+}
+
 namespace {
 
 // Kernel that dispatches a node to a model-local ``FunctionProto`` body.
@@ -1001,9 +1025,10 @@ public:
                            const KernelContext &kernel_context,
                            const OpsetImports *inherited_opset_imports,
                            std::shared_ptr<ValueStore> value_store,
-                           const std::unordered_set<std::string> &immutable_inputs)
+                           const std::unordered_set<std::string> &immutable_inputs,
+                           const FunctionMap *model_functions)
       : KernelBase(kernel_context), func_(func), inherited_opset_imports_(inherited_opset_imports),
-        value_store_(std::move(value_store)) {
+        value_store_(std::move(value_store)), model_functions_(model_functions) {
     set_node(node);
     for (size_t i = 0;
          i < static_cast<size_t>(func.input_size()) && i < static_cast<size_t>(node.input_size());
@@ -1012,19 +1037,7 @@ public:
         immutable_inputs_.insert(func.input(i));
     // Pre-bind attribute references at construction time (the call-site
     // node and function body are both fixed for this kernel's lifetime).
-    std::unordered_map<std::string, const AttributeProto *> attr_map;
-    for (size_t i = 0; i < func_.attribute_proto().size(); ++i) {
-      const AttributeProto &a = func_.attribute_proto()[i];
-      attr_map[a.name()] = &a;
-    }
-    for (size_t i = 0; i < node.attribute().size(); ++i) {
-      const AttributeProto &a = node.attribute()[i];
-      attr_map[a.name()] = &a;
-    }
-    bound_func_.CopyFrom(func_);
-    for (size_t i = 0; i < bound_func_.node().size(); ++i) {
-      BindRefAttributes(bound_func_.ref_node()[i], attr_map);
-    }
+    bound_func_ = BindFunctionAttributes(func_, node);
   }
 
   void Run(RuntimeContext &rt) override {
@@ -1085,8 +1098,8 @@ public:
     if (!session_) {
       session_ = std::make_unique<RuntimeSession>(
           bound_func_, inherited_opset_imports_,
-          RuntimeSessionOptions{.value_store = value_store_,
-                                .immutable_inputs = immutable_inputs_});
+          RuntimeSessionOptions{.value_store = value_store_, .immutable_inputs = immutable_inputs_},
+          model_functions_);
     }
     session_->Run(rt);
 
@@ -1116,6 +1129,7 @@ private:
   FunctionProto bound_func_;
   const OpsetImports *inherited_opset_imports_;
   std::shared_ptr<ValueStore> value_store_;
+  const FunctionMap *model_functions_;
   std::unordered_set<std::string> immutable_inputs_;
   std::unique_ptr<RuntimeSession> session_;
 };
@@ -1199,19 +1213,24 @@ std::unique_ptr<KernelBase>
 ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt, const std::string &domain,
                          const std::string &op_type, const KernelContext &kernel_context,
                          const OpsetImports *opset_imports, std::shared_ptr<ValueStore> value_store,
-                         const std::unordered_set<std::string> &immutable_inputs) {
+                         const std::unordered_set<std::string> &immutable_inputs,
+                         const FunctionMap *model_functions) {
   // A node referring to a model-local FunctionProto (registered by
   // ``RegisterModelFunctions`` from ``ModelProto::functions()``) takes priority over
   // the built-in kernel dispatch table so that user-defined functions
   // override same-named built-ins, matching the ONNX runtime semantics
   // for model-local functions.
-  if (!rt.functions().empty()) {
-    const std::string fkey = FunctionLookupKey(domain, op_type, node.overload());
-    auto fit = rt.functions().find(fkey);
-    if (fit != rt.functions().end()) {
+  const std::string fkey = FunctionLookupKey(domain, op_type, node.overload());
+  const FunctionMap *scopes[] = {model_functions, &rt.functions()};
+  for (const FunctionMap *scope : scopes) {
+    if (scope != nullptr) {
+      auto fit = scope->find(fkey);
+      if (fit == scope->end())
+        continue;
       const FunctionProto *func = fit->second;
       return std::make_unique<ModelLocalFunctionKernel>(node, *func, kernel_context, opset_imports,
-                                                        std::move(value_store), immutable_inputs);
+                                                        std::move(value_store), immutable_inputs,
+                                                        model_functions);
     }
   }
 
@@ -1224,9 +1243,9 @@ ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt, const std::s
     // invocation of this node reuses them instead of re-resolving the
     // selected branch's kernels from scratch.
     auto then_session = std::make_shared<SubgraphSession>(then_branch, opset_imports, value_store,
-                                                          immutable_inputs);
+                                                          immutable_inputs, model_functions);
     auto else_session = std::make_shared<SubgraphSession>(else_branch, opset_imports, value_store,
-                                                          immutable_inputs);
+                                                          immutable_inputs, model_functions);
     return std::make_unique<IfKernel>(node, std::move(then_session), std::move(else_session),
                                       kernel_context);
   }
@@ -1234,20 +1253,20 @@ ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt, const std::s
     const GraphProto &body = GetRequiredGraphAttribute(node, "body");
     // Built once here so the body's kernels are resolved a single time and
     // reused across every iteration of every invocation of this node.
-    auto body_session = std::make_shared<SubgraphSession>(body, opset_imports,
-                                                          std::move(value_store), immutable_inputs);
+    auto body_session = std::make_shared<SubgraphSession>(
+        body, opset_imports, std::move(value_store), immutable_inputs, model_functions);
     return std::make_unique<LoopKernel>(node, std::move(body_session), kernel_context);
   }
   if (domain == kDefaultOnnxDomain && op_type == "Scan") {
     const GraphProto &body = GetRequiredGraphAttribute(node, "body");
-    auto body_session = std::make_shared<SubgraphSession>(body, opset_imports,
-                                                          std::move(value_store), immutable_inputs);
+    auto body_session = std::make_shared<SubgraphSession>(
+        body, opset_imports, std::move(value_store), immutable_inputs, model_functions);
     return std::make_unique<ScanKernel>(node, std::move(body_session), kernel_context);
   }
   if (domain == kDefaultOnnxDomain && op_type == "SequenceMap") {
     const GraphProto &body = GetRequiredGraphAttribute(node, "body");
-    auto body_session = std::make_shared<SubgraphSession>(body, opset_imports,
-                                                          std::move(value_store), immutable_inputs);
+    auto body_session = std::make_shared<SubgraphSession>(
+        body, opset_imports, std::move(value_store), immutable_inputs, model_functions);
     return std::make_unique<SequenceMapKernel>(node, std::move(body_session), kernel_context);
   }
 
@@ -1400,12 +1419,8 @@ void RegisterModelFunctions(const ModelProto &model, RuntimeContext &rt) {
   // them by (domain, op_type, overload) are dispatched to
   // ``ModelLocalFunctionKernel`` rather than rejected as unsupported
   // ops.
-  const auto &fns = model.functions();
-  for (size_t i = 0; i < fns.size(); ++i) {
-    const FunctionProto &f = fns[i];
-    const std::string key = FunctionLookupKey(f.domain(), f.name(), f.overload());
-    rt.functions()[key] = &f;
-  }
+  for (const auto &[key, function] : detail::ModelFunctions(model))
+    rt.functions()[key] = function;
 }
 
 Tensors RunModel(const ModelProto &model, Tensors inputs, int verbose) {
@@ -1413,8 +1428,6 @@ Tensors RunModel(const ModelProto &model, Tensors inputs, int verbose) {
   const GraphProto &graph = model.graph();
 
   RuntimeContext rt(RuntimeContextOptions{.verbose = verbose});
-  RegisterModelFunctions(model, rt);
-
   // Seed the external inputs (keyed by tensor name), then the graph's
   // initializers for any name an input did not already supply.
   for (Tensor &input : inputs) {

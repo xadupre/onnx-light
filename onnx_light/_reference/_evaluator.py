@@ -315,6 +315,13 @@ class ReferenceEvaluator:
     convention of :class:`onnx.reference.ReferenceEvaluator` (and
     :class:`onnxruntime.InferenceSession`).
 
+    An evaluator instance is not thread-safe for concurrent execution. The caller
+    must serialize :meth:`run` and :meth:`generate` calls on the same instance,
+    including overlapping calls to different methods. Independent evaluators with
+    independent runtime contexts are required for concurrent requests. Releasing
+    the Python GIL and parallel kernel execution do not make an evaluator or its
+    context safe to use concurrently.
+
     Parameters
     ----------
     verbose:
@@ -730,14 +737,14 @@ class ReferenceEvaluator:
     # -- evaluation ---------------------------------------------------------
 
     def events(self) -> list[Any]:
-        """Returns the event log from the most recent :meth:`run` call.
+        """Returns the event log from :meth:`run` or :meth:`generate` calls.
 
         Each entry is a ``RuntimeEvent`` object with an :meth:`as_dict` method
         that returns a dictionary with the keys ``"action"``, ``"kind"``,
         ``"name"``, ``"data_type"``, ``"shape"``, ``"value_count"``,
         ``"values"`` and ``"string_values"``.
 
-        Returns an empty list if :meth:`run` has not been called yet.
+        Returns an empty list if no execution has been recorded yet.
         """
         if self._last_ctx is None:
             return []
@@ -823,6 +830,8 @@ class ReferenceEvaluator:
         eos_token_id: int | None = None,
         pad_token_id: int | None = None,
         seed: int | None = None,
+        *,
+        embedding: ReferenceEvaluator | None = None,
     ) -> np.ndarray:
         """Generates token IDs with the native runtime.
 
@@ -838,6 +847,18 @@ class ReferenceEvaluator:
         Finished rows receive ``pad_token_id`` (EOS by default). Each call starts
         fresh state and does not modify the supplied feeds.
 
+        This method is not thread-safe on a shared evaluator. The caller must
+        serialize it with other ``generate`` and ``run`` calls on this instance;
+        fresh generation state does not make the shared context thread-safe.
+
+        With ``embedding``, token IDs are sent to its ``input_ids`` input on
+        every step, including the prompt. This evaluator's model handles both
+        prompt prefill and subsequent tokens. Graphs connect through their declared
+        input/output names, without additional mappings. Both graphs use one call-local context
+        configured from this evaluator: its custom kernels, CPU executor and
+        execution settings apply to both models. The embedding evaluator
+        supplies only its model, not its context or CPU policy.
+
         Returns:
             numpy.ndarray: INT64 token IDs containing the prompt and generated tokens.
         """
@@ -849,9 +870,22 @@ class ReferenceEvaluator:
         options.eos_token_id = eos_token_id
         options.pad_token_id = pad_token_id
         options.seed = seed
-        result = _runtime.generate(
-            self._model, self._ctx, feed_inputs, options, self._session_options
-        )
+        if embedding is None:
+            result = _runtime.generate(
+                self._model, self._ctx, feed_inputs, options, self._session_options
+            )
+        else:
+            if not isinstance(embedding, ReferenceEvaluator) or embedding._model is None:
+                raise TypeError("Embedding must be a ModelProto ReferenceEvaluator.")
+            result = _runtime.generate_pipeline(
+                self._model,
+                self._ctx,
+                self._runner,
+                feed_inputs,
+                options,
+                self._session_options,
+                embedding._model,
+            )
         return _cpp_tensor_to_numpy(result)
 
     def run(

@@ -8,6 +8,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <optional>
 #include <vector>
 
@@ -54,6 +55,66 @@ TEST(LightOpSchemaVerify, ValidNodePasses) {
   const LightOpSchema schema = MakeScaleSchema();
   const NodeProto node = MakeValidScaleNode();
   EXPECT_NO_THROW(schema.Verify(node));
+}
+
+TEST(LightOpSchemaVerify, CastAcceptsComplexFromOpset6) {
+  using core::schema::TensorType;
+  const auto schemas = onnx_op::GetAllOnnxOpSchemasWithHistory("Cast", true);
+  ASSERT_EQ(schemas.size(), 10u);
+  for (const auto &schema : schemas) {
+    SCOPED_TRACE(schema.since_version());
+    ASSERT_EQ(schema.type_constraints().size(), 2u);
+    for (const auto &constraint : schema.type_constraints()) {
+      for (const auto type : {TensorType::kComplex64, TensorType::kComplex128}) {
+        const auto found = std::find(constraint.allowed_type_strs.begin(),
+                                     constraint.allowed_type_strs.end(), type);
+        if (schema.since_version() == 1) {
+          EXPECT_EQ(found, constraint.allowed_type_strs.end());
+        } else {
+          EXPECT_NE(found, constraint.allowed_type_strs.end());
+        }
+      }
+    }
+    for (const auto dtype : {TensorProto::COMPLEX64, TensorProto::COMPLEX128}) {
+      SCOPED_TRACE(dtype);
+      NodeProto node;
+      node.set_op_type("Cast");
+      node.add_input("x");
+      node.add_output("y");
+      auto *attr = node.add_attribute();
+      attr->set_name("to");
+      if (schema.since_version() == 1) {
+        attr->set_type(AttributeProto::STRING);
+        attr->set_s(dtype == TensorProto::COMPLEX64 ? "COMPLEX64" : "COMPLEX128");
+      } else {
+        attr->set_type(AttributeProto::INT);
+        attr->set_i(dtype);
+      }
+      ValueInfoProto input;
+      input.set_name("x");
+      input.mutable_type()->mutable_tensor_type()->set_elem_type(dtype);
+      std::vector<std::optional<SchemaInputValue>> inputs{SchemaInputValue(input)};
+      if (schema.since_version() == 1) {
+        EXPECT_THROW(schema.Verify(node, &inputs), SchemaError);
+      } else {
+        EXPECT_NO_THROW(schema.Verify(node, &inputs));
+      }
+    }
+  }
+}
+
+TEST(LightOpSchemaVerify, CastLikeStillExcludesComplex) {
+  using core::schema::TensorType;
+  for (const auto &schema : onnx_op::GetAllOnnxOpSchemasWithHistory("CastLike", false)) {
+    SCOPED_TRACE(schema.since_version());
+    for (const auto &constraint : schema.type_constraints()) {
+      for (const auto type : {TensorType::kComplex64, TensorType::kComplex128}) {
+        EXPECT_EQ(std::find(constraint.allowed_type_strs.begin(),
+                            constraint.allowed_type_strs.end(), type),
+                  constraint.allowed_type_strs.end());
+      }
+    }
+  }
 }
 
 TEST(LightOpSchemaVerify, DeprecatedSchemaRejectsNode) {

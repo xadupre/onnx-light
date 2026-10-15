@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy
 
@@ -27,6 +28,129 @@ def transition_model(dtype=numpy.float32):
 
 
 class TestGeneration(unittest.TestCase):
+    def test_split_embedding_pipeline(self):
+        embedding_model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 23]>'
+            "embedding (int64[B, S] input_ids) => (float[B, S, 3] inputs_embeds)"
+            "{ raw = Gather(table, input_ids) inputs_embeds = Abs(raw) }"
+        )
+        embedding_model.graph.initializer.append(transition_model().graph.initializer[0])
+        decoder_model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 23]>'
+            "decoder (float[B, S, 3] inputs_embeds, seq(float[1, 1, 3]) vision)"
+            " => (float[B, S, 3] logits)"
+            "<int64 index = {0}>"
+            "{ bias = SequenceAt(vision, index) logits = Add(inputs_embeds, bias) }"
+        )
+        policy = {
+            "num_threads": 2,
+            "affinity_policy": "none",
+            "spin_policy": "park_immediately",
+            "allow_nested_parallelism": True,
+        }
+        decoder = ReferenceEvaluator(
+            decoder_model, cpu_execution=policy, cpu_execution_counters=True, events_enabled=True
+        )
+        embedding = ReferenceEvaluator(embedding_model, cpu_execution=policy)
+        embedding_calls = []
+
+        def embedding_abs(node, value):
+            embedding_calls.append(node.op_type)
+            return numpy.abs(value)
+
+        feeds = {
+            "input_ids": numpy.array([[0, 1]], dtype=numpy.int64),
+            "vision": [numpy.zeros((1, 1, 3), dtype=numpy.float32)],
+        }
+
+        def generate():
+            return decoder.generate(feeds, max_new_tokens=3, embedding=embedding)
+
+        before = decoder.cpu_execution_counters.dispatches
+        expected = ReferenceEvaluator(transition_model()).generate(
+            {"input_ids": feeds["input_ids"]}, max_new_tokens=3
+        )
+        for result in [generate(), generate()]:
+            numpy.testing.assert_array_equal(result, expected)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            for result in pool.map(lambda _: generate(), range(2)):
+                numpy.testing.assert_array_equal(result, expected)
+        self.assertEqual(decoder.cpu_executor_instance_id, embedding.cpu_executor_instance_id)
+        self.assertGreaterEqual(decoder.cpu_execution_counters.dispatches - before, 4 * 3 * 2)
+        self.assertTrue({"Gather", "Abs", "Add"} <= {event.op_type for event in decoder.events()})
+        decoder.register_custom_kernel("", "Abs", embedding_abs)
+        numpy.testing.assert_array_equal(generate(), expected)
+        self.assertEqual(len(embedding_calls), 3)
+        numpy.testing.assert_array_equal(feeds["input_ids"], [[0, 1]])
+        numpy.testing.assert_array_equal(
+            decoder.generate(
+                feeds,
+                max_new_tokens=3,
+                embedding=ReferenceEvaluator(
+                    embedding_model, cpu_execution={"num_threads": 1, "affinity_policy": "none"}
+                ),
+            ),
+            expected,
+        )
+        with self.assertRaisesRegex((ValueError, RuntimeError), "vision"):
+            decoder.generate({"input_ids": feeds["input_ids"]}, embedding=embedding)
+        overwriting_model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 23]>'
+            "overwriting (int64[B, S] input_ids)"
+            " => (int64[B, S] input_ids)"
+            "{ }"
+        )
+        overwriting = ReferenceEvaluator(overwriting_model, cpu_execution=policy)
+        with self.assertRaisesRegex(ValueError, "graph output cannot replace generated inputs"):
+            decoder.generate(feeds, embedding=overwriting)
+
+        def failing_add(node, left, right):
+            raise ValueError("generation kernel failed")
+
+        decoder.register_custom_kernel("", "Add", failing_add)
+        before_failure = len(decoder.events())
+        with self.assertRaisesRegex((ValueError, RuntimeError), "generation kernel failed"):
+            generate()
+        failure_events = decoder.events()[before_failure:]
+        self.assertTrue({"Gather", "Abs"} <= {event.op_type for event in failure_events})
+
+    def test_split_embedding_persistent_state(self):
+        embedding_model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 23]>'
+            "embedding (int64[B, S] input_ids) => (float[B, S, 3] inputs_embeds)"
+            "{ inputs_embeds = Gather(table, input_ids) }"
+        )
+        embedding_model.graph.initializer.append(transition_model().graph.initializer[0])
+        decoder_model = parser.parse_model(
+            '<ir_version: 10, opset_import: ["" : 23]>'
+            "decoder (float[B, S, 3] inputs_embeds, float[B, P, 3] past)"
+            " => (float[B, T, 3] logits, float[B, T, 3] present)"
+            "{ present = Concat <axis: int = 1> (past, inputs_embeds)"
+            " logits = Identity(present) }"
+        )
+        binding = decoder_model.graph.persistent_bindings.add()
+        binding.input_name = "past"
+        binding.output_name = "present"
+        decoder = ReferenceEvaluator(decoder_model)
+        embedding = ReferenceEvaluator(embedding_model)
+        feeds = {
+            "input_ids": numpy.array([[0]], dtype=numpy.int64),
+            "past": numpy.empty((1, 0, 3), dtype=numpy.float32),
+        }
+
+        def generate():
+            return decoder.generate(feeds, max_new_tokens=4, embedding=embedding)
+
+        expected = ReferenceEvaluator(transition_model()).generate(
+            {"input_ids": feeds["input_ids"]}, max_new_tokens=4
+        )
+        numpy.testing.assert_array_equal(generate(), expected)
+        numpy.testing.assert_array_equal(generate(), expected)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            for result in pool.map(lambda _: generate(), range(2)):
+                numpy.testing.assert_array_equal(result, expected)
+        self.assertEqual(feeds["past"].shape, (1, 0, 3))
+
     def test_greedy_batch_and_eos(self):
         evaluator = ReferenceEvaluator(transition_model())
         feeds = {"input_ids": numpy.array([[0], [1]], dtype=numpy.int64)}

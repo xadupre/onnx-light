@@ -1065,6 +1065,9 @@ core::builder::MatchResult RMSNormalizationPattern::Match(core::builder::GraphGr
   if (!ResolveSuffixAxis(graph, power->input()[0].value(), axes, axis)) {
     return NoMatch(candidate, "the ReduceMean axes are not a suffix of the normalized input");
   }
+  if (!graph.HasType(candidate.input()[0].value())) {
+    return NoMatch(candidate, "the ReduceMean input type is unknown");
+  }
   if (!graph.IsConstantScalar(power->input()[1].value(), 2.0, false)) {
     return NoMatch(candidate, "the Pow exponent is not the scalar two");
   }

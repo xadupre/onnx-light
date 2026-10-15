@@ -34,7 +34,7 @@ public:
 
   /** Returns the committed logical value, excluding spare capacity. */
   const Tensor &value() const noexcept { return value_; }
-  /** Returns a lifetime-retaining ordinary view without append permissions. */
+  /** Returns an ordinary read-only view without append permissions. */
   Tensor BorrowView() const { return value_.BorrowView(); }
   /** Returns certified capacity in bytes, or zero for imported storage. */
   size_t capacity_bytes() const noexcept { return capacity_bytes_; }

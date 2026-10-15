@@ -72,6 +72,37 @@ TEST(RuntimeEvents, GenericRecordingDoesNothingWhenDisabled) {
   EXPECT_EQ(context.events().front().name, "existing");
 }
 
+TEST(RuntimeEvents, ConfiguredContextsShareEventsButKeepValuesAndAllocatorsIndependent) {
+  SimpleRawBufferAllocator parent_allocator(2);
+  SimpleRawBufferAllocator call_allocator(2);
+  RuntimeContext parent(
+      RuntimeContextOptions{.allocator = &parent_allocator, .events_enabled = true});
+  PutNumber(parent, "parent");
+  {
+    RuntimeContext call(
+        parent, RuntimeContextOptions{.allocator = &call_allocator, .events_enabled = true});
+    EXPECT_EQ(&parent.events(), &call.events());
+    EXPECT_EQ(parent.execution_allocator(), &parent_allocator);
+    EXPECT_EQ(call.execution_allocator(), &call_allocator);
+    EXPECT_FALSE(call.Has("parent"));
+    PutNumber(call, "call");
+    EXPECT_FALSE(parent.Has("call"));
+  }
+  ASSERT_EQ(parent.events().size(), 2u);
+  EXPECT_EQ(parent.events()[0].name, "parent");
+  EXPECT_EQ(parent.events()[1].name, "call");
+
+  EXPECT_THROW(
+      {
+        RuntimeContext call(parent, RuntimeContextOptions{.events_enabled = true});
+        PutNumber(call, "before failure");
+        throw std::runtime_error("kernel failure");
+      },
+      std::runtime_error);
+  ASSERT_EQ(parent.events().size(), 3u);
+  EXPECT_EQ(parent.events()[2].name, "before failure");
+}
+
 TEST(RuntimeEvents, SharesOneLogAcrossNestedContextsAndCopies) {
   auto parent = EventContext();
   parent.set_current_node_index(7);

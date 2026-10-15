@@ -1,9 +1,11 @@
 persistent_value_state
 ======================
 
-Each call follows four steps:
+``RuntimeSession`` owns its passive ``PersistentValueState`` and reuses it between
+calls. Construct a session with initial retained values, then call
+``RuntimeSession::Run(context, feeds)`` without passing a separate state:
 
-1. Binds retained values to the declared persistent inputs and adds current feeds.
+1. Uses retained values for persistent inputs alongside current feeds.
 2. Runs the session, reusing eligible append buffers or allocating new ones.
 3. Validates outputs and checks cancellation.
 4. Publishes the selected outputs as the next state only on success.
@@ -28,30 +30,35 @@ Ownership
 ---------
 
 * The model stays immutable; declarations are resolved once, without cloning it.
-  A shared-model constructor or ``model_owner`` retains its lifetime.
-  Otherwise, the caller keeps it alive through all exported model-backed views.
+  C++ constructors borrow ``const ModelProto&``. The caller keeps it alive
+  through the session and all exported model-backed views.
+  Python bindings retain the model for sessions and exported initializer views.
 * ``initial`` and ``Reset`` take maps by value in C++. Use ``std::move(initial)``
   to avoid copying owned payloads.
-* Returned views share owners and remain valid after later calls, reset or close.
-  Callers must not modify shared payloads; publication does not undo such writes.
-* Retained borrows need owners, and arena allocations need self-owning I/O leases.
-  Unsafe storage is rejected, not copied as a fallback.
-* All calls use the same allocators, kept alive until the state closes.
-  ``RetainOwner`` can retain model/context owners before execution, including
-  failed attempts. Owners must not own the state itself.
-* Model-backed initializer views retain the constructor's model owner.
-  Borrowed raw data additionally needs its own storage owner; ordinary kernel
-  results cannot use the model owner to extend their lifetime.
+* Returned views share owners and remain valid after later calls, reset or session
+  destruction. Callers must not modify shared payloads; publication does not undo
+  such writes.
+* Retained borrows need owners, except views of immutable initializer-owned
+  storage whose lifetime is guaranteed by the C++ caller. Arena allocations
+  need self-owning I/O leases. Unsafe storage is rejected, not copied as a fallback.
+* All calls use the same allocators, kept alive until the session is destroyed.
+* Initializers borrowing external raw data still need their own storage owner.
+  Model lifetime alone cannot extend the lifetime of external storage or
+  ordinary kernel results.
 
 Execution and lifecycle
 -----------------------
 
-* Execution uses the ordinary ``RuntimeSession`` and cached kernels.
+* Execution uses the supplied ``RuntimeContext`` directly and the caller-owned
+  ``RuntimeSession`` and its cached kernels. No child context is created.
+  The state exposes no context-binding or execution methods; the session handles
+  inputs, validation and publication as part of ``Run``.
   Only declared persistent outputs bypass normal output materialization.
 * ``If`` and local functions transport selected outputs without payload copies.
   Other operators retain their ordinary computation and transport costs.
-* ``Reset(initial)`` replaces retained values but keeps the prepared session.
-* ``Close()`` releases retained values and kernels and permanently closes the state.
+* ``RuntimeSession::Reset(initial)`` replaces retained values without rebuilding
+  the session or its cached kernels.
+* Session destruction releases its retained values and cached kernels.
 * Events use ``context.events()`` when ``events_enabled`` is true, including
   work before failure. ``ClearEvents()`` clears this log, not the persistent values.
 

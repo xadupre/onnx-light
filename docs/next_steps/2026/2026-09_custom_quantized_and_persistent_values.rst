@@ -682,13 +682,13 @@ not during state construction or execution.
         past_key <- present_key
         past_value <- present_value
 
-    state = make_state(
+    session = RuntimeSession(
         model,
         initial={"past_key": empty_key, "past_value": empty_value}
     )
 
-    out = state.run({"tokens": first_tokens})
-    out = state.run({"tokens": next_tokens})
+    out = session.run(context, {"tokens": first_tokens})
+    out = session.run(context, {"tokens": next_tokens})
 
 This helper is equivalent to the ordinary stateless loop:
 
@@ -705,7 +705,7 @@ These examples are conceptual API sketches. Assignment retains or moves
 buffer owners rather than copying payloads. The retained values
 constitute the request-local state; ``PersistentBindingProto`` declares
 only the graph relationship, not a second value/type system or hidden
-kernel state. ``make_state`` resolves the model's bindings and types once,
+kernel state. The session resolves the model's bindings and types once,
 after graph rewrites. Initial contents must still be supplied.
 
 .. important::
@@ -714,7 +714,8 @@ after graph rewrites. Initial contents must still be supplied.
    Native callers keep it alive; Python bindings retain its owner.
    State construction and subsequent calls must not serialize, clone,
    hash or repeatedly compare the model to detect mutation. To change
-   the graph, close the state and create a new session after rewriting.
+   the graph, destroy the session before rewriting and create a new session
+   afterwards.
 
 .. _l-next-steps-persistent-composite-state:
 .. _l-next-steps-persistent-struct-state:
@@ -740,12 +741,12 @@ to separate graph inputs. These are ordinary structs described by ``StructTypePr
     model.graph.persistent_bindings:
         cache <- next_cache
 
-    state = make_state(
+    session = RuntimeSession(
         model,
         initial={"cache": initial_cache}
     )
-    out = state.run({"tokens": first_tokens})
-    out = state.run({"tokens": next_tokens})
+    out = session.run(context, {"tokens": first_tokens})
+    out = session.run(context, {"tokens": next_tokens})
 
 The whole ``cache`` input persists: tokens are supplied anew and logits are
 separate outputs, not retained. The graph binding selects a whole value,
@@ -788,7 +789,7 @@ Ordinary nonpersistent string feeds and outputs remain supported with their
 normal materialized representation; they are not part of retained state.
 
 Returned outputs and retained state may share storage. Releasing caller
-references, resetting/closing a state or advancing another invocation must
+references, resetting/destroying a session or advancing another invocation must
 not invalidate an outstanding view. Functions, ``If`` and structured
 field transport must preserve these owners rather than call deep-copy
 or serialization-based detachment helpers. Per-request state containers

@@ -7,13 +7,27 @@
 namespace ONNX_LIGHT_NAMESPACE::onnx_op::tensor {
 
 std::string MakeCastDoc(int since_version) {
-  if (since_version == 1 || since_version == 6) {
+  if (since_version == 1) {
+    return R"DOC(
+The operator casts the elements of a given input tensor to a data type
+specified by the 'to' argument and returns an output tensor of the same size in
+the converted type. The 'to' argument must be one of the data types specified
+in the 'DataType' enum field in the TensorProto message.
+NOTE: Casting to and from strings or complex types is not supported.
+)DOC";
+  }
+  if (since_version == 6) {
     return R"DOC(
 The operator casts the elements of a given input tensor to a data type
 specified by the 'to' argument and returns an output tensor of the same size in
 the converted type. The 'to' argument must be one of the data types specified
 in the 'DataType' enum field in the TensorProto message.
 NOTE: Casting to and from strings is not supported yet.
+The onnx-light native runtime additionally supports complex64 and complex128
+as an extension to ONNX Cast. Real-to-complex casts set the imaginary component
+to zero. Complex-to-real casts discard it; complex precision casts preserve both
+components. Complex casts involving strings, float8 or packed types are unsupported.
+The standard ONNX schemas and full checker do not accept this extension.
 )DOC";
   }
   return R"DOC(
@@ -21,21 +35,34 @@ The operator casts the elements of a given input tensor to a data type
 specified by the 'to' argument and returns an output tensor of the same size in
 the converted type. The 'to' argument must be one of the data types specified
 in the 'DataType' enum field in the TensorProto message.
+The onnx-light native runtime additionally supports complex64 and complex128
+as an extension to ONNX Cast. Real-to-complex casts set the imaginary component
+to zero. Complex-to-real casts discard it; complex precision casts preserve both
+components. Complex casts involving strings, float8 or packed types are unsupported.
+The standard ONNX schemas and full checker do not accept this extension.
 )DOC";
 }
 
 std::string MakeCastInputTypeConstraintDescription(int since_version) {
-  if (since_version == 1 || since_version == 6) {
-    return "Constrain input types. Casting from strings and complex are not supported.";
+  if (since_version == 1) {
+    return "Constrain input types. Casting from strings or complex types is not supported.";
   }
-  return "Constrain input types. Casting from complex is not supported.";
+  if (since_version == 6) {
+    return "Constrain input types. Casting from strings is not supported. "
+           "Complex types are an onnx-light runtime extension.";
+  }
+  return "Constrain input types. Complex types are an onnx-light runtime extension.";
 }
 
 std::string MakeCastOutputTypeConstraintDescription(int since_version) {
-  if (since_version == 1 || since_version == 6) {
-    return "Constrain output types. Casting to strings and complex are not supported.";
+  if (since_version == 1) {
+    return "Constrain output types. Casting to strings or complex types is not supported.";
   }
-  return "Constrain output types. Casting to complex is not supported.";
+  if (since_version == 6) {
+    return "Constrain output types. Casting to strings is not supported. "
+           "Complex types are an onnx-light runtime extension.";
+  }
+  return "Constrain output types. Complex types are an onnx-light runtime extension.";
 }
 
 std::string MakeCastLikeDoc(int since_version) {

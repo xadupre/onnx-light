@@ -47,7 +47,7 @@ PersistentTensor::AppendLease::Reserve(const Shape &shape, size_t axis, size_t i
   EXT_ENFORCE_INVALID(state != State::kConsumed,
                       "PersistentTensor: append lease has already been consumed.");
   const Tensor &prefix = prefix_.value_;
-  EXT_ENFORCE_INVALID(prefix.borrowed_owner().use_count() != 0,
+  EXT_ENFORCE_INVALID(prefix.borrowed_owner().use_count() != 0 || prefix.is_initializer_view(),
                       "PersistentTensor: append lease has been moved.");
   EXT_ENFORCE_INVALID(axis < shape.size() && shape.size() == prefix.shape.size(),
                       "PersistentTensor: invalid append axis or rank.");

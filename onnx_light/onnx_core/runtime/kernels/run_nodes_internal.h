@@ -26,6 +26,12 @@
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime::detail {
 
+/// Builds a borrowed model-local lookup for the lifetime of its owning session.
+FunctionMap ModelFunctions(const ModelProto &model);
+
+/// Returns a function body with referenced attributes resolved for one call site.
+FunctionProto BindFunctionAttributes(const FunctionProto &function, const NodeProto &call);
+
 /**
  * Resolves how ``node`` must be dispatched, building and returning the
  * ready-to-invoke kernel instance (without any progress printing or event
@@ -36,10 +42,9 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime::detail {
  * :cpp:class:`RuntimeSession`) can prepare every node's kernel instance up
  * front and then invoke it repeatedly without redoing the lookup.
  *
- * Resolution precedence mirrors the historical inline logic of
- * :cpp:func:`RunNode`: model-local functions override built-ins, then the
- * control-flow operators, then per-context custom kernels, then global custom
- * kernels, then the dispatch table.
+ * Resolution checks the explicit model-local functions first, then explicitly
+ * registered context functions, control-flow operators, context custom kernels,
+ * global custom kernels, and finally the built-in dispatch table.
  * An unsupported ``(domain, op_type)`` is rejected here (at resolution time)
  * with the same diagnostic previously emitted at run time.
  */
@@ -48,7 +53,8 @@ ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt, const std::s
                          const std::string &op_type, const KernelContext &kernel_context,
                          const OpsetImports *opset_imports = nullptr,
                          std::shared_ptr<ValueStore> value_store = nullptr,
-                         const std::unordered_set<std::string> &immutable_inputs = {});
+                         const std::unordered_set<std::string> &immutable_inputs = {},
+                         const FunctionMap *model_functions = nullptr);
 
 /**
  * Emits the ReferenceEvaluator verbose progress line for one node dispatch. The

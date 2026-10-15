@@ -104,8 +104,9 @@ What worked
   independent of any execution backend; the same runtime that runs the forward
   graph runs the backward graph.
 * The ``(domain, op_type)`` registry made new operators additive: a caller can
-  ``RegisterGradientFunction`` before invoking the pass without touching the
-  algorithm.
+  copy or create a ``GradRegistry``, call ``RegisterGradientFunction`` on that
+  explicit registry, and pass it to the transformation without touching the
+  algorithm or mutating process-wide state.
 * Expressing every rule with standard ONNX operators meant the backward graph
   needed no new kernels — it reused the operator kernels already validated by
   the backend tests.

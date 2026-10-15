@@ -14,8 +14,8 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 /**
  * Carries graph-declared persistent values between model calls.
  *
- * Each Run:
- * 1. Binds retained values to persistent inputs and adds the current feeds.
+ * During a RuntimeSession run:
+ * 1. Uses retained values for persistent inputs alongside the current feeds.
  * 2. Executes the session, reusing eligible append buffers or allocating new ones.
  * 3. Validates the outputs and checks cancellation.
  * 4. Publishes selected outputs as the next state only on success.
@@ -30,7 +30,7 @@ namespace ONNX_LIGHT_NAMESPACE::core::runtime {
  * - Current feeds cannot replace persistent inputs.
  * - Supports tensors, typed sequences, named structures and inline encoded values.
  * - Tensor leaves may use dense storage or inline affine encoding of the declared logical type.
- * - Shared payloads are read-only to callers; ownerless borrows are rejected.
+ * - Shared payloads are read-only; only immutable initializer views may borrow ownerless storage.
  * - The model stays immutable. All calls use the same allocators, kept alive by the caller.
  */
 class ONNX_LIGHT_CORE_API PersistentValueState {
@@ -39,51 +39,22 @@ public:
    * Initializes retained values from the graph's persistent bindings.
    *
    * Accepts std::move(initial) to avoid copying owned payloads.
-   * Without model_owner, the caller keeps the model alive through the state and exported views.
+   * The caller keeps the model alive through the state and exported initializer views.
    */
   PersistentValueState(const ModelProto &model, RuntimeValueMap initial,
-                       RuntimeSessionOptions options = {}, std::shared_ptr<void> model_owner = {});
-  /** Initializes retained values and keeps the shared model alive. */
-  PersistentValueState(std::shared_ptr<const ModelProto> model, RuntimeValueMap initial,
                        RuntimeSessionOptions options = {});
-
-  /**
-   * Runs with current feeds and atomically replaces the selected retained values.
-   *
-   * An optional pending completion acts as a cancellation/commit gate. Cancelling
-   * it before publication aborts feedback; success makes publication irrevocable.
-   * The token is single-use and must not be marked running by the caller.
-   * When context.events_enabled() is true, invocation events are appended to
-   * context.events(), including work preceding a failure or cancellation.
-   */
-  RuntimeValueMap Run(RuntimeContext &context, const RuntimeValueMap &feeds,
-                      const TaskCompletion *completion = nullptr);
-  /**
-   * Retains an external model/context owner until kernels and state are released.
-   *
-   * The caller registers owners before Run, including attempts that may fail during initialization.
-   * Repeated calls with the same shared owner are deduplicated. The token must
-   * not own this PersistentValueState, which would create a lifetime cycle.
-   */
-  void RetainOwner(std::shared_ptr<void> owner);
   /** Replaces retained values with explicitly transferred initial contents. */
   void Reset(RuntimeValueMap initial);
-  /** Releases retained values and kernels and permanently closes this state. */
-  void Close();
   /** Returns read-only aliases keyed by exact retained graph input names. */
   RuntimeValueMap Values() const;
-  /** Returns the immutable model; rejects access after Close(). */
-  const ModelProto &model() const {
-    EXT_ENFORCE_INVALID(session_ != nullptr, "PersistentValueState: state is closed.");
-    return model_;
-  }
-  /** Returns the validated catalogue; rejects access after Close(). */
-  const StructTypeCatalogue &struct_type_catalogue() const {
-    EXT_ENFORCE_INVALID(session_ != nullptr, "PersistentValueState: state is closed.");
-    return catalogue_;
-  }
+  /** Returns the immutable model. */
+  const ModelProto &model() const { return model_; }
+  /** Returns the validated catalogue. */
+  const StructTypeCatalogue &struct_type_catalogue() const { return catalogue_; }
 
 private:
+  friend class RuntimeSession;
+  using ShapeSymbols = std::unordered_map<std::string, int64_t>;
   struct Binding {
     std::string input;
     std::string output;
@@ -92,14 +63,10 @@ private:
   std::vector<PersistentValue> ValidateInitial(RuntimeValueMap initial) const;
 
   const ModelProto &model_;
-  std::shared_ptr<void> model_owner_;
-  std::vector<std::shared_ptr<void>> retained_owners_;
   StructTypeCatalogue catalogue_;
-  using ShapeSymbols = std::unordered_map<std::string, int64_t>;
   mutable std::unordered_map<const TypeProto *, RuntimeSequence::Memo<ShapeSymbols>>
       sequence_validation_;
   std::vector<Binding> bindings_;
-  std::unique_ptr<RuntimeSession> session_;
   std::vector<PersistentValue> values_;
   size_t persistent_tensor_initial_capacity_ = 0;
   bool allocators_captured_ = false;

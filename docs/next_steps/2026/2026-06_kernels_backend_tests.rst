@@ -44,6 +44,13 @@ table with a factory for every built-in operator, keyed by ``"<domain>:<op>"``
 (for example ``"ai.onnx:Add"``).  Registration is idempotent, so linking the
 kernels does not force them to be registered until the caller asks for it.
 
+The built-in table is only the final fallback. Current runtime resolution
+checks model-local functions, explicit context-local functions, control-flow
+operators, context-local custom kernels, global custom kernels, and then this
+table. A ``RuntimeSession`` reads these registries while preparing its own
+kernel instances; no session lifecycle operation registers, replaces, removes,
+or temporarily swaps a process-wide entry.
+
 Each kernel derives from ``KernelBase`` and follows the same shape:
 
 .. code-block:: cpp

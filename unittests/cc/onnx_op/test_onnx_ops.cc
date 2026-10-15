@@ -143,7 +143,30 @@ TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
     ASSERT_EQ(onnx_lib_schema->deprecated(), schema.deprecated());
     ExpectSameFormalParameters(schema.inputs(), onnx_lib_schema->inputs());
     ExpectSameFormalParameters(schema.outputs(), onnx_lib_schema->outputs());
-    ExpectSameTypeConstraints(schema.type_constraints(), onnx_lib_schema->typeConstraintParams());
+    auto expected_constraints = onnx_lib_schema->typeConstraintParams();
+    if (schema.name() == "Cast" && schema.since_version() == 1) {
+      for (auto &constraint : expected_constraints) {
+        const bool input = constraint.type_param_str == "T1";
+        constraint.description =
+            input ? "Constrain input types. Casting from strings or complex types is not supported."
+                  : "Constrain output types. Casting to strings or complex types is not "
+                    "supported.";
+      }
+    } else if (schema.name() == "Cast") {
+      // Only the light Cast schema extends ONNX with the two complex types.
+      for (auto &constraint : expected_constraints) {
+        constraint.allowed_type_strs.push_back("tensor(complex64)");
+        constraint.allowed_type_strs.push_back("tensor(complex128)");
+        const bool input = constraint.type_param_str == "T1";
+        constraint.description = input ? "Constrain input types." : "Constrain output types.";
+        if (schema.since_version() <= 6) {
+          constraint.description += input ? " Casting from strings is not supported."
+                                          : " Casting to strings is not supported.";
+        }
+        constraint.description += " Complex types are an onnx-light runtime extension.";
+      }
+    }
+    ExpectSameTypeConstraints(schema.type_constraints(), expected_constraints);
   }
 }
 

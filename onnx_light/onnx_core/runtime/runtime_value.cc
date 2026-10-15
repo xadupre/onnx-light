@@ -236,6 +236,14 @@ EncodedValueProto BorrowEncodedValue(const RuntimeValue &source) {
 RuntimeValue::RuntimeValue(EncodedValueProto value)
     : kind(Kind::kEncoded), encoded(std::make_shared<EncodedValueProto>(std::move(value))) {}
 
+RuntimeValue RuntimeValue::FromEncodedView(const EncodedValueProto &value) {
+  RuntimeValue result;
+  result.kind = Kind::kEncoded;
+  result.encoded =
+      std::shared_ptr<const EncodedValueProto>(std::shared_ptr<const EncodedValueProto>{}, &value);
+  return result;
+}
+
 RuntimeValue RuntimeValue::FromEncodedView(const EncodedValueProto &value,
                                            std::shared_ptr<void> owner) {
   EXT_ENFORCE_INVALID(owner.use_count() != 0,
@@ -358,8 +366,10 @@ PagedCacheProto RuntimeValue::ToPagedCache(const std::string &name,
                               "ToPagedCache: missing shared parameter catalogue.");
           source.quantization_parameters->Validate(source.Encoded(), catalogue);
         }
+        const auto retained =
+            source.encoded.use_count() != 0 ? source.BorrowView() : source.DeepCopy();
         *(is_key ? block->mutable_encoded_key() : block->mutable_encoded_value()) =
-            BorrowEncodedValue(source);
+            BorrowEncodedValue(retained);
       } else {
         EXT_ENFORCE_INVALID(
             source.kind == Kind::kTensor && (source.tensor.data_type == DataType::FLOAT ||

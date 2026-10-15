@@ -597,6 +597,9 @@ struct Tensor {
   static Tensor Borrow(std::string name, int32_t dtype, Shape shape, const uint8_t *ptr, size_t sz,
                        std::shared_ptr<void> owner = {});
 
+  /** Borrows immutable initializer storage; the proto must outlive all returned views. */
+  static Tensor BorrowInitializer(const TensorProto &proto);
+
   /// Creates a non-owning (borrowed) ``STRING`` tensor that references an
   /// external string vector without copying.
   ///
@@ -650,6 +653,7 @@ struct Tensor {
     borrow_size_ = 0;
     borrow_string_data_ = nullptr;
     borrow_owner_.reset();
+    initializer_view_ = false;
   }
 
   bool has_allocation() const noexcept { return static_cast<bool>(allocation_); }
@@ -666,6 +670,9 @@ struct Tensor {
   /// the caller is responsible for its lifetime.
   const std::shared_ptr<void> &borrowed_owner() const noexcept { return borrow_owner_; }
 
+  /** Returns whether the tensor borrows storage owned by an immutable initializer proto. */
+  bool is_initializer_view() const noexcept { return initializer_view_; }
+
   /// Creates an immutable-storage view whose metadata is independent while its
   /// payload aliases this tensor. This tensor must outlive the returned view.
   Tensor BorrowView() const;
@@ -674,7 +681,8 @@ struct Tensor {
    * Transfers storage into a read-only owner-retaining view without copying it.
    *
    * Consumes this tensor explicitly. Inline buffers move into an owner; existing
-   * borrowed owners are reused. Ownerless borrows and allocator storage
+   * borrowed owners are reused. Initializer views remain non-owning and require
+   * the proto to outlive them. Other ownerless borrows and allocator storage
    * without a self-owning lease are rejected rather than silently copied.
    * String tensors cannot be persistent and are always rejected.
    */
@@ -826,6 +834,7 @@ private:
   size_t borrow_size_ = 0;
   const std::vector<std::string> *borrow_string_data_ = nullptr;
   std::shared_ptr<void> borrow_owner_;
+  bool initializer_view_ = false;
 };
 
 /// ``Tensors`` — the runtime value produced by kernels that emit more than one

@@ -382,6 +382,8 @@ def _init_dtype_maps():
     dtype_to_np = {
         int(onnx.TensorProto.FLOAT): np.float32,
         int(onnx.TensorProto.DOUBLE): np.float64,
+        int(onnx.TensorProto.COMPLEX64): np.complex64,
+        int(onnx.TensorProto.COMPLEX128): np.complex128,
         int(onnx.TensorProto.INT32): np.int32,
         int(onnx.TensorProto.INT64): np.int64,
         int(onnx.TensorProto.UINT8): np.uint8,

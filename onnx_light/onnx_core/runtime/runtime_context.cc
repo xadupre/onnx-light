@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstring>
+#include <iterator>
 #include <sstream>
 #include <stdexcept>
 #include <unordered_set>
@@ -25,18 +26,15 @@ uint64_t NextValueDirectoryIdentity() noexcept {
 }
 
 void EnsureAllocatorBacked(Tensor &tensor, RawBufferAllocator *allocator, RuntimeEventKind kind,
-                           symbolic::Device device, const std::shared_ptr<void> &model_owner) {
+                           symbolic::Device device) {
   // STRING tensors store their payload in string_data instead of raw bytes.
   if (allocator == nullptr || static_cast<DataType>(tensor.data_type) == DataType::STRING) {
     return;
   }
-  // Inputs borrow caller storage for the invocation. Views into immutable model
-  // storage keep that model owner when crossing nested graph boundaries.
-  const std::shared_ptr<void> &borrow_owner = tensor.borrowed_owner();
-  const bool borrows_model = borrow_owner.use_count() != 0 && model_owner.use_count() != 0 &&
-                             !borrow_owner.owner_before(model_owner) &&
-                             !model_owner.owner_before(borrow_owner);
-  if (tensor.is_borrowed() && (kind == RuntimeEventKind::kInput || borrows_model)) {
+  if (tensor.is_borrowed() &&
+      (kind == RuntimeEventKind::kInput ||
+       (tensor.is_initializer_view() &&
+        (device == symbolic::Device::kUndefined || device == symbolic::Device::kCPU)))) {
     return;
   }
   // Initializer storage is host-resident and read-only, not run-local workspace.
@@ -294,9 +292,9 @@ RuntimeContext::RuntimeContext(KernelContext kernel_ctx, RuntimeContextOptions o
                                std::shared_ptr<EventState> events)
     : kernel_ctx_(std::move(kernel_ctx)), kernel_usage_(std::move(kernel_usage)),
       events_(std::move(events)), events_enabled_(options.events_enabled),
-      verbose_(options.verbose), release_intermediates_(options.release_intermediates),
-      io_allocator_(options.io_allocator), value_store_(std::make_shared<ValueStore>()),
-      device_(options.device) {
+      verbose_(options.verbose), cpu_executor_(options.cpu_executor),
+      release_intermediates_(options.release_intermediates), io_allocator_(options.io_allocator),
+      value_store_(std::make_shared<ValueStore>()), device_(options.device) {
   value_directory_identity_ = NextValueDirectoryIdentity();
   allocator_ = options.allocator;
   active_allocator_ = allocator_;
@@ -322,6 +320,15 @@ RuntimeContext::RuntimeContext(KernelContext kernel_ctx, TensorMap tensors,
 RuntimeContext::RuntimeContext(RuntimeContextOptions options)
     : RuntimeContext(KernelContext{}, options, std::make_shared<KernelUsageState>(),
                      std::make_shared<EventState>()) {}
+
+RuntimeContext::RuntimeContext(const RuntimeContext &source, RuntimeContextOptions options)
+    : RuntimeContext(source.kernel_ctx_, options, std::make_shared<KernelUsageState>(),
+                     source.events_) {
+  functions_ = source.functions_;
+  custom_kernels_ = source.custom_kernels_;
+  struct_type_catalogue_ = source.struct_type_catalogue_;
+  quantization_parameters_ = source.quantization_parameters_;
+}
 
 void RuntimeContext::SetValueStore(std::shared_ptr<ValueStore> value_store) {
   EXT_ENFORCE(value_store != nullptr, "RuntimeContext: value store must not be null.");
@@ -375,6 +382,34 @@ void RuntimeContext::ClearKernelUsage() {
   kernel_usage_->names.clear();
 }
 
+void RuntimeContext::ClearEvents() noexcept {
+  std::lock_guard<std::mutex> lock(events_->mutex);
+  events_->log.clear();
+}
+
+RuntimeEventLog RuntimeContext::TakeEvents() {
+  std::lock_guard<std::mutex> lock(events_->mutex);
+  RuntimeEventLog events;
+  events.swap(events_->log);
+  return events;
+}
+
+void RuntimeContext::AppendEvents(RuntimeEventLog events) {
+  std::lock_guard<std::mutex> lock(events_->mutex);
+  events_->log.insert(events_->log.end(), std::make_move_iterator(events.begin()),
+                      std::make_move_iterator(events.end()));
+}
+
+void RuntimeContext::Clear() noexcept {
+  tensors_.clear();
+  values_.clear();
+  sequences_.clear();
+  maps_.clear();
+  shapes_.clear();
+  ClearEvents();
+  current_node_index_ = -1;
+}
+
 void RuntimeContext::Set(const std::string &name, Tensor tensor, RuntimeEventKind kind) {
   EXT_ENFORCE(!HasValue(name), "RuntimeContext::Set: a value named '", name, "' already exists.");
   if (!value_slot_names_.empty()) {
@@ -382,7 +417,7 @@ void RuntimeContext::Set(const std::string &name, Tensor tensor, RuntimeEventKin
     return;
   }
   if (!retains_output(name))
-    EnsureAllocatorBacked(tensor, allocator_, kind, device_, model_owner_);
+    EnsureAllocatorBacked(tensor, allocator_, kind, device_);
   if (events_enabled_) {
     RecordEvent(MakeAddOrReplaceEvent(RuntimeEventAction::kAdd, kind, name, tensor));
   }
@@ -397,7 +432,7 @@ void RuntimeContext::Put(const std::string &value_name, Tensor tensor, RuntimeEv
     return;
   }
   if (!retains_output(name))
-    EnsureAllocatorBacked(tensor, allocator_, kind, device_, model_owner_);
+    EnsureAllocatorBacked(tensor, allocator_, kind, device_);
   if (events_enabled_) {
     const RuntimeEventAction action =
         HasValue(name) ? RuntimeEventAction::kReplace : RuntimeEventAction::kAdd;
@@ -414,7 +449,7 @@ void RuntimeContext::Put(const std::string &value_name, Tensor tensor, RuntimeEv
 void RuntimeContext::Put(uint32_t slot, Tensor tensor, RuntimeEventKind kind) {
   const std::string &name = ValueName(slot);
   if (!retains_output(name))
-    EnsureAllocatorBacked(tensor, allocator_, kind, device_, model_owner_);
+    EnsureAllocatorBacked(tensor, allocator_, kind, device_);
   if (events_enabled_) {
     const RuntimeEventAction action =
         HasValue(name) ? RuntimeEventAction::kReplace : RuntimeEventAction::kAdd;
@@ -617,6 +652,7 @@ RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name)
                            .verbose = verbose_,
                            .release_intermediates = release_intermediates_,
                            .device = device_,
+                           .cpu_executor = cpu_executor_,
                        },
                        kernel_usage_, events_);
   child.execution_arena_owner_ = execution_arena_owner_;
@@ -627,13 +663,11 @@ RuntimeContext RuntimeContext::MakeSubgraphContext(const std::string &attr_name)
   child.value_store_ = value_store_;
   child.functions() = functions_;
   child.custom_kernels() = custom_kernels_;
-  child.set_model_owner(model_owner_);
   child.set_struct_type_catalogue(struct_type_catalogue_);
   child.set_quantization_parameters(quantization_parameters_);
   child.tensors() = tensors_;
   child.values() = values_;
   child.sequences() = sequences_;
-  child.set_cpu_executor(cpu_executor_);
   child.set_current_subgraph(current_node_index_, attr_name);
   return child;
 }
@@ -691,6 +725,7 @@ RuntimeContext RuntimeContext::MakeFunctionContext() const {
                            .verbose = verbose_,
                            .release_intermediates = release_intermediates_,
                            .device = device_,
+                           .cpu_executor = cpu_executor_,
                        },
                        kernel_usage_, events_);
   child.execution_arena_owner_ = execution_arena_owner_;
@@ -701,13 +736,31 @@ RuntimeContext RuntimeContext::MakeFunctionContext() const {
   child.value_store_ = value_store_;
   child.functions() = functions_;
   child.custom_kernels() = custom_kernels_;
-  child.set_model_owner(model_owner_);
   child.set_struct_type_catalogue(struct_type_catalogue_);
   child.set_quantization_parameters(quantization_parameters_);
-  child.set_cpu_executor(cpu_executor_);
   if (events_enabled_)
     child.set_current_subgraph(current_subgraph_node_index_, current_subgraph_attr_name_);
   return child;
+}
+
+RuntimeContext RuntimeContext::MakeIsolatedContext() const {
+  return RuntimeContext(*this, RuntimeContextOptions{
+                                   .events_enabled = events_enabled_,
+                                   .verbose = verbose_,
+                                   .release_intermediates = release_intermediates_,
+                                   .device = device_,
+                                   .cpu_executor = cpu_executor_,
+                               });
+}
+
+void RuntimeContext::ResetInvocation() noexcept {
+  tensors_.clear();
+  std::fill(tensor_slots_.begin(), tensor_slots_.end(), nullptr);
+  values_.clear();
+  sequences_.clear();
+  maps_.clear();
+  shapes_.clear();
+  current_node_index_ = -1;
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/runtime/runtime_session.h"
+#include "onnx_core/runtime/persistent_value_state.h"
 #include "onnx_core/runtime/quantization.h"
 
 #include <chrono>
@@ -20,36 +21,6 @@
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
-
-Tensor InitializerView(const TensorProto &proto, const std::shared_ptr<void> &model_owner) {
-  Shape shape;
-  for (const auto dimension : proto.dims())
-    shape.push_back(static_cast<int64_t>(dimension));
-  if (proto.is_raw_data()) {
-    const auto &raw = proto.raw_data();
-    return Tensor::Borrow(proto.name(), proto.data_type(), shape, raw.data(), raw.size(),
-                          raw.is_borrowed() ? raw.owner() : model_owner);
-  }
-  const auto borrow = [&](const auto &values) {
-    return Tensor::Borrow(
-        proto.name(), proto.data_type(), shape, reinterpret_cast<const uint8_t *>(values.data()),
-        values.size() * sizeof(typename std::decay_t<decltype(values)>::value_type), model_owner);
-  };
-  switch (proto.data_type()) {
-  case DataType::FLOAT:
-    return borrow(proto.float_data().values());
-  case DataType::DOUBLE:
-    return borrow(proto.double_data().values());
-  case DataType::INT64:
-    return borrow(proto.int64_data().values());
-  case DataType::UINT64:
-    return borrow(proto.uint64_data().values());
-  case DataType::INT32:
-    return borrow(proto.int32_data().values());
-  default:
-    return TensorFromProto(proto);
-  }
-}
 
 /// Derives the CPU policy a session requests when the caller supplied none.
 /// The requested participant count comes from
@@ -135,6 +106,8 @@ OpsetImports ParseOpsetImports(const utils::RepeatedProtoField<OperatorSetIdProt
 
 } // namespace
 
+RuntimeSession::~RuntimeSession() = default;
+
 RuntimeSession::RuntimeSession(const ModelProto &model, int verbose)
     : RuntimeSession(model, RuntimeSessionOptions{
                                 .parameters = RuntimeParameters(),
@@ -154,6 +127,7 @@ RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions op
       parallel_region_collector_(std::move(options.parallel_region_collector)),
       verbose_(options.verbose) {
   owned_opset_imports_ = ParseOpsetImports(model.opset_import());
+  model_functions_ = detail::ModelFunctions(model);
   SetDeclaredShapes(model.graph());
   SetInitializers(model.graph());
   struct_type_catalogue_.emplace();
@@ -163,10 +137,11 @@ RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions op
 
 RuntimeSession::RuntimeSession(const GraphProto &graph, const OpsetImports *inherited_opset_imports,
                                int verbose, std::shared_ptr<ValueStore> value_store,
-                               std::unordered_set<std::string> immutable_inputs)
+                               std::unordered_set<std::string> immutable_inputs,
+                               const FunctionMap *model_functions)
     : default_plan_(graph), plan_(default_plan_), inherited_opset_imports_(inherited_opset_imports),
-      value_store_(std::move(value_store)), cpu_execution_(DefaultCpuExecutionPolicy(parameters_)),
-      verbose_(verbose) {
+      inherited_model_functions_(model_functions), value_store_(std::move(value_store)),
+      cpu_execution_(DefaultCpuExecutionPolicy(parameters_)), verbose_(verbose) {
   SetDeclaredShapes(graph);
   SetInitializers(graph);
   inherited_immutable_inputs_ = std::move(immutable_inputs);
@@ -203,10 +178,10 @@ RuntimeSession::RuntimeSession(const FunctionProto &function, RuntimeSessionOpti
 
 RuntimeSession::RuntimeSession(const FunctionProto &function,
                                const OpsetImports *inherited_opset_imports,
-                               RuntimeSessionOptions options)
+                               RuntimeSessionOptions options, const FunctionMap *model_functions)
     : default_plan_(function), plan_(default_plan_),
       inherited_opset_imports_(inherited_opset_imports),
-      value_store_(std::move(options.value_store)),
+      inherited_model_functions_(model_functions), value_store_(std::move(options.value_store)),
       inherited_immutable_inputs_(std::move(options.immutable_inputs)),
       check_shapes_(options.check_shapes),
       allow_external_output_allocators_(options.allow_external_output_allocators),
@@ -224,6 +199,11 @@ RuntimeSession::RuntimeSession(const FunctionProto &function,
 
 const OpsetImports *RuntimeSession::EffectiveOpsetImports() const noexcept {
   return owned_opset_imports_ ? &*owned_opset_imports_ : inherited_opset_imports_;
+}
+
+const FunctionMap *RuntimeSession::EffectiveModelFunctions() const noexcept {
+  return inherited_model_functions_ ? inherited_model_functions_
+                                    : (model_functions_.empty() ? nullptr : &model_functions_);
 }
 
 const std::shared_ptr<CpuExecutor> &RuntimeSession::cpu_executor() {
@@ -312,7 +292,7 @@ std::unordered_set<std::string> RuntimeSession::SeedInitializers(RuntimeContext 
   if (initializer_graph_ != nullptr) {
     for (const TensorProto &initializer : initializer_graph_->initializer())
       if (!rt.HasValue(initializer.name())) {
-        rt.Set(initializer.name(), InitializerView(initializer, rt.model_owner()),
+        rt.Set(initializer.name(), Tensor::BorrowInitializer(initializer),
                RuntimeEventKind::kInitializer);
         seeded.insert(initializer.name());
       }
@@ -331,8 +311,7 @@ std::unordered_set<std::string> RuntimeSession::SeedInitializers(RuntimeContext 
           value = RuntimeValue(std::move(owned));
           value.quantization_parameters = rt.quantization_parameters();
         } else {
-          value = rt.model_owner() ? RuntimeValue::FromEncodedView(initializer, rt.model_owner())
-                                   : RuntimeValue(initializer);
+          value = RuntimeValue::FromEncodedView(initializer);
         }
         rt.PutValue(initializer.name(), std::move(value), RuntimeEventKind::kInitializer);
         seeded.insert(initializer.name());
@@ -364,7 +343,8 @@ RuntimeSession::ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt,
                                   const KernelContext &kernel_context,
                                   const std::unordered_set<std::string> &preparable_inputs) const {
   return detail::ResolveNodeKernelDefault(node, rt, domain, op_type, kernel_context,
-                                          EffectiveOpsetImports(), value_store_, preparable_inputs);
+                                          EffectiveOpsetImports(), value_store_, preparable_inputs,
+                                          EffectiveModelFunctions());
 }
 
 void RuntimeSession::InitializeKernels(RuntimeContext &rt,
@@ -395,12 +375,14 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt,
       EXT_ENFORCE_INVALID(found != imports->end(),
                           "RuntimeSession: missing opset import for domain '", domain, "'.");
       const KernelContext kernel_context(OpsetId(domain, found->second), rt.kernel_ctx().allocator,
-                                         imports);
+                                         imports, EffectiveModelFunctions());
       prepared.instance =
           ResolveNodeKernel(node, rt, domain, op_type, kernel_context, preparable_inputs);
     } else {
+      KernelContext kernel_context = rt.kernel_ctx();
+      kernel_context.model_functions = EffectiveModelFunctions();
       prepared.instance =
-          ResolveNodeKernel(node, rt, domain, op_type, rt.kernel_ctx(), preparable_inputs);
+          ResolveNodeKernel(node, rt, domain, op_type, kernel_context, preparable_inputs);
     }
   }
 
@@ -633,6 +615,9 @@ void RuntimeSession::VerifyOutputAllocators(const NodeProto &node, RuntimeContex
     if (static_cast<DataType>(verified_output.data_type) == DataType::STRING)
       continue;
     if (!verified_output.has_allocation()) {
+      continue;
+    }
+    if (verified_output.size_bytes() == 0) {
       continue;
     }
     EXT_ENFORCE_INVALID(verified_output.allocation_owner() == expected, "RuntimeSession: op '",

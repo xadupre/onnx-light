@@ -5,11 +5,13 @@
 #include "onnx_core/runtime/generation.h"
 #include "onnx_core/runtime/kernels/float16_promote.h"
 #include "onnx_core/runtime/kernels/run_nodes.h"
-#include "onnx_core/runtime/persistent_value_state.h"
-
+#include "onnx_core/runtime/kernels/run_nodes_internal.h"
 #include <cmath>
 #include <limits>
 #include <random>
+#include <string_view>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
@@ -91,10 +93,230 @@ int64_t Sample(const Tensor &logits, int64_t offset, int64_t vocabulary, double 
   return distribution(random);
 }
 
+void RunGraph(const ModelProto &model, RuntimeContext &invocation, RuntimeValueMap &values,
+              RuntimeSession &session) {
+  invocation.ResetInvocation();
+  for (const auto &input : model.graph().input()) {
+    const std::string &name = input.name();
+    const auto value = values.find(name);
+    const auto has_initializer = [&](const auto &initializers) {
+      return std::any_of(initializers.begin(), initializers.end(),
+                         [&](const auto &initializer) { return initializer.name() == name; });
+    };
+    if (value == values.end() && (has_initializer(model.graph().initializer()) ||
+                                  has_initializer(model.graph().encoded_initializer()) ||
+                                  has_initializer(model.graph().paged_cache_initializer())))
+      continue;
+    EXT_ENFORCE_INVALID(value != values.end(), "Generate: missing graph feed '", name, "'.");
+    if (input.type().has_sequence_type() &&
+        input.type().sequence_type().elem_type().has_tensor_type() &&
+        value->second.kind == RuntimeValue::Kind::kSequence &&
+        std::all_of(
+            value->second.elements.begin(), value->second.elements.end(),
+            [](const auto &element) { return element.kind == RuntimeValue::Kind::kTensor; })) {
+      Tensors tensors;
+      for (const auto &element : value->second.elements) {
+        tensors.push_back(element.tensor.BorrowView());
+      }
+      invocation.PutSequence(
+          name, Sequence(name, input.type().sequence_type().elem_type().tensor_type().elem_type(),
+                         std::move(tensors)));
+    } else {
+      invocation.PutValue(name, value->second.BorrowView(), RuntimeEventKind::kInput);
+    }
+  }
+  session.Run(invocation);
+  for (const auto &declared : model.graph().output()) {
+    const std::string &output = declared.name();
+    if (invocation.Has(output)) {
+      values.insert_or_assign(output,
+                              RuntimeValue(std::move(invocation.Get(output)).RetainStorage()));
+    } else if (invocation.HasSequence(output)) {
+      std::vector<RuntimeValue> elements;
+      for (auto &tensor : invocation.GetSequence(output).values)
+        elements.emplace_back(tensor.ToOwned());
+      values.insert_or_assign(output, RuntimeValue(std::move(elements)));
+    } else {
+      EXT_THROW_INVALID("Generate: missing graph output '", output, "'.");
+    }
+  }
+}
+
+void ValidateGraph(const ModelProto &model) {
+  std::unordered_set<std::string> destinations;
+  for (const auto &output : model.graph().output()) {
+    EXT_ENFORCE_INVALID(!output.name().empty() &&
+                            (output.type().has_tensor_type() ||
+                             (output.type().has_sequence_type() &&
+                              output.type().sequence_type().elem_type().has_tensor_type())),
+                        "Generate: unsupported graph output '", output.name(), "'.");
+    EXT_ENFORCE_INVALID(destinations.insert(output.name()).second,
+                        "Generate: duplicate graph output '", output.name(), "'.");
+  }
+  EXT_ENFORCE_INVALID(!model.graph().output().empty(), "Generate: graph outputs are required.");
+}
+
+struct PipelineValueNames {
+  std::unordered_set<std::string> all;
+  std::unordered_set<std::string> private_values;
+};
+
+void InsertName(std::unordered_set<std::string> &names, std::string_view name) {
+  if (!name.empty())
+    names.emplace(name);
+}
+
+void CollectGraphValueNames(const GraphProto &graph, bool top_level,
+                            const std::unordered_set<std::string> &public_initializer_outputs,
+                            PipelineValueNames &names) {
+  std::unordered_set<std::string> inputs;
+  std::unordered_set<std::string> outputs;
+  for (const ValueInfoProto &input : graph.input()) {
+    InsertName(names.all, input.name());
+    inputs.insert(input.name());
+    if (!top_level)
+      InsertName(names.private_values, input.name());
+  }
+  for (const ValueInfoProto &output : graph.output()) {
+    InsertName(names.all, output.name());
+    outputs.insert(output.name());
+    if (!top_level)
+      InsertName(names.private_values, output.name());
+  }
+  const auto add_initializer = [&](const std::string &name) {
+    InsertName(names.all, name);
+    if (!top_level || (!inputs.contains(name) && !public_initializer_outputs.contains(name)))
+      InsertName(names.private_values, name);
+  };
+  for (const TensorProto &initializer : graph.initializer())
+    add_initializer(initializer.name());
+  for (const SparseTensorProto &initializer : graph.sparse_initializer())
+    add_initializer(initializer.values().name());
+  for (const EncodedValueProto &initializer : graph.encoded_initializer())
+    add_initializer(initializer.name());
+  for (const PagedCacheProto &initializer : graph.paged_cache_initializer())
+    add_initializer(initializer.name());
+  for (const NodeProto &node : graph.node()) {
+    for (const std::string &output : node.output()) {
+      InsertName(names.all, output);
+      if (!top_level || !outputs.contains(output))
+        InsertName(names.private_values, output);
+    }
+    for (const AttributeProto &attribute : node.attribute()) {
+      if (attribute.has_g()) {
+        CollectGraphValueNames(attribute.g(), false, {}, names);
+      }
+      for (const GraphProto &nested : attribute.graphs())
+        CollectGraphValueNames(nested, false, {}, names);
+    }
+  }
+}
+
+std::string ModelFunctionKey(const NodeProto &node) {
+  return ONNX_LIGHT_NAMESPACE::NormaliseDomain(node.domain()) + ":" + node.op_type() + ":" +
+         node.overload();
+}
+
+void CollectFunctionValueNames(const FunctionProto &function, PipelineValueNames &names) {
+  std::unordered_set<std::string> formal_outputs(function.output().begin(),
+                                                 function.output().end());
+  for (const NodeProto &node : function.node()) {
+    for (const std::string &output : node.output()) {
+      if (!formal_outputs.contains(output)) {
+        InsertName(names.all, output);
+        InsertName(names.private_values, output);
+      }
+    }
+  }
+}
+
+void CollectReachableFunctionGraphNames(const utils::RepeatedProtoField<NodeProto> &nodes,
+                                        const FunctionMap &functions, PipelineValueNames &names,
+                                        std::unordered_set<std::string> &active,
+                                        std::unordered_set<std::string> &completed) {
+  for (const NodeProto &node : nodes) {
+    for (const AttributeProto &attribute : node.attribute()) {
+      if (attribute.has_g()) {
+        CollectGraphValueNames(attribute.g(), false, {}, names);
+        CollectReachableFunctionGraphNames(attribute.g().node(), functions, names, active,
+                                           completed);
+      }
+      for (const GraphProto &nested : attribute.graphs()) {
+        CollectGraphValueNames(nested, false, {}, names);
+        CollectReachableFunctionGraphNames(nested.node(), functions, names, active, completed);
+      }
+    }
+    const std::string key = ModelFunctionKey(node);
+    const auto found = functions.find(key);
+    if (found == functions.end() || active.contains(key))
+      continue;
+    const FunctionProto bound = detail::BindFunctionAttributes(*found->second, node);
+    // Calls to one function may bind different graph-valued attributes.
+    std::string completed_key = key;
+    completed_key.push_back('\0');
+    completed_key.append(bound.SerializeAsString());
+    if (completed.contains(completed_key))
+      continue;
+    active.insert(key);
+    CollectFunctionValueNames(bound, names);
+    CollectReachableFunctionGraphNames(bound.node(), functions, names, active, completed);
+    active.erase(key);
+    completed.insert(std::move(completed_key));
+  }
+}
+
+PipelineValueNames
+CollectPipelineValueNames(const ModelProto &model,
+                          const std::unordered_set<std::string> &public_initializer_outputs,
+                          const FunctionMap &context_functions) {
+  PipelineValueNames names;
+  CollectGraphValueNames(model.graph(), true, public_initializer_outputs, names);
+  FunctionMap functions = context_functions;
+  for (const auto &[key, function] : detail::ModelFunctions(model))
+    functions.insert_or_assign(key, function);
+  std::unordered_set<std::string> active;
+  std::unordered_set<std::string> completed;
+  CollectReachableFunctionGraphNames(model.graph().node(), functions, names, active, completed);
+  return names;
+}
+
+void ValidatePipelineValueNames(const ModelProto &embedding, const ModelProto &language,
+                                const FunctionMap &context_functions) {
+  std::unordered_set<std::string> public_connections;
+  for (const ValueInfoProto &output : embedding.graph().output())
+    if (HasInput(language, output.name()))
+      public_connections.insert(output.name());
+  const PipelineValueNames embedding_names =
+      CollectPipelineValueNames(embedding, public_connections, context_functions);
+  const PipelineValueNames language_names =
+      CollectPipelineValueNames(language, {}, context_functions);
+  std::vector<std::string> collisions;
+  for (const std::string &name : embedding_names.private_values)
+    if (language_names.all.contains(name))
+      collisions.push_back(name);
+  for (const std::string &name : language_names.private_values)
+    if (embedding_names.all.contains(name))
+      collisions.push_back(name);
+  std::sort(collisions.begin(), collisions.end());
+  collisions.erase(std::unique(collisions.begin(), collisions.end()), collisions.end());
+  EXT_ENFORCE_INVALID(
+      collisions.empty(), "Generate: private value name '", collisions.front(),
+      "' is shared by the embedding and language models; private value names must be unique.");
+}
+
 } // namespace
 
 Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeValueMap &feeds,
                 const GenerationOptions &options, RuntimeSessionOptions session_options) {
+  return Generate(GenerationPipeline{.prefill = &model}, context, feeds, options,
+                  std::move(session_options));
+}
+
+Tensor Generate(const GenerationPipeline &pipeline, RuntimeContext &context,
+                const RuntimeValueMap &feeds, const GenerationOptions &options,
+                RuntimeSessionOptions session_options) {
+  EXT_ENFORCE_INVALID(pipeline.prefill != nullptr, "Generate: prefill model is required.");
+  const ModelProto &model = *pipeline.prefill;
   EXT_ENFORCE_INVALID(options.max_new_tokens >= 0, "Generate: max_new_tokens must be nonnegative.");
   EXT_ENFORCE_INVALID(std::isfinite(options.temperature) && options.temperature >= 0.,
                       "Generate: temperature must be finite and nonnegative.");
@@ -102,15 +324,46 @@ Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeV
                       "Generate: eos_token_id must be nonnegative.");
   EXT_ENFORCE_INVALID(!options.pad_token_id || *options.pad_token_id >= 0,
                       "Generate: pad_token_id must be nonnegative.");
-  EXT_ENFORCE_INVALID(HasInput(model, options.input_ids_name),
+  const bool embedded = pipeline.embedding != nullptr;
+  EXT_ENFORCE_INVALID(embedded ? HasInput(*pipeline.embedding, options.input_ids_name)
+                               : HasInput(model, options.input_ids_name),
                       "Generate: input_ids must name a graph input.");
   EXT_ENFORCE_INVALID(
       std::any_of(model.graph().output().begin(), model.graph().output().end(),
                   [&](const auto &output) { return output.name() == options.logits_name; }),
       "Generate: logits must name a graph output.");
+  if (embedded)
+    ValidateGraph(*pipeline.embedding);
+  const auto check_destinations = [&](const ModelProto &stage) {
+    for (const auto &output : stage.graph().output()) {
+      const std::string &destination = output.name();
+      EXT_ENFORCE_INVALID(destination != options.input_ids_name &&
+                              destination != options.attention_mask_name &&
+                              destination != options.position_ids_name,
+                          "Generate: graph output cannot replace generated inputs.");
+    }
+  };
+  if (embedded) {
+    check_destinations(*pipeline.embedding);
+    for (const auto &output : pipeline.embedding->graph().output()) {
+      EXT_ENFORCE_INVALID(HasInput(model, output.name()),
+                          "Generate: embedding output must name a decoder input.");
+    }
+    ValidatePipelineValueNames(*pipeline.embedding, model, context.functions());
+  }
+  for (const auto &binding : model.graph().persistent_bindings()) {
+    if (embedded)
+      for (const auto &output : pipeline.embedding->graph().output()) {
+        EXT_ENFORCE_INVALID(output.name() != binding.input_name(),
+                            "Generate: embedding output cannot replace a persistent input.");
+      }
+  }
   for (const auto &[name, value] : feeds) {
     (void)value;
-    EXT_ENFORCE_INVALID(HasInput(model, name), "Generate: unknown feed '", name, "'.");
+    bool known = HasInput(model, name) || name == options.input_ids_name;
+    if (embedded)
+      known = known || HasInput(*pipeline.embedding, name);
+    EXT_ENFORCE_INVALID(known, "Generate: unknown feed '", name, "'.");
   }
   const Tensor &prompt = IntMatrix(feeds, options.input_ids_name);
   const int64_t batch = prompt.shape[0], prompt_length = prompt.shape[1];
@@ -124,8 +377,10 @@ Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeV
   std::vector<int64_t> tokens = IntValues(prompt);
   EXT_ENFORCE_INVALID(std::all_of(tokens.begin(), tokens.end(), [](auto id) { return id >= 0; }),
                       "Generate: token IDs must be nonnegative.");
-  const bool has_mask = HasInput(model, options.attention_mask_name);
-  const bool has_positions = HasInput(model, options.position_ids_name);
+  const bool has_mask = HasInput(model, options.attention_mask_name) ||
+                        (embedded && HasInput(*pipeline.embedding, options.attention_mask_name));
+  const bool has_positions = HasInput(model, options.position_ids_name) ||
+                             (embedded && HasInput(*pipeline.embedding, options.position_ids_name));
   EXT_ENFORCE_INVALID((!has_mask || options.attention_mask_name != options.input_ids_name) &&
                           (!has_positions || (options.position_ids_name != options.input_ids_name &&
                                               (!has_mask || options.position_ids_name !=
@@ -164,13 +419,32 @@ Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeV
   if (options.max_new_tokens == 0)
     return Tensor::From<int64_t>(options.input_ids_name, prompt.shape, tokens);
 
+  if (embedded) {
+    EXT_ENFORCE_INVALID(context.cpu_executor() != nullptr,
+                        "Generate: a context with a CPU executor is required for split models.");
+    if (session_options.cpu_execution_counters)
+      context.cpu_executor()->EnableCounters();
+    session_options.cpu_execution.reset();
+    // Sizes the shared arena before any session captures its allocator.
+    const ExecutionPlan *largest = &context.GetExecutionPlan(model);
+    const auto include_plan = [&](const ModelProto &graph_model) {
+      const auto &plan = context.GetExecutionPlan(graph_model);
+      if (plan.arena_capacity() > largest->arena_capacity())
+        largest = &plan;
+    };
+    include_plan(*pipeline.embedding);
+    context.BindExecutionPlan(*largest);
+  }
   RuntimeValueMap current;
   for (const auto &[name, value] : feeds)
     current.emplace(name, value.BorrowView());
-  std::unique_ptr<PersistentValueState> state;
-  std::unique_ptr<RuntimeSession> session;
-  if (!model.graph().persistent_bindings().empty()) {
-    RuntimeValueMap initial;
+  std::unique_ptr<RuntimeSession> embedding_session;
+  if (embedded) {
+    embedding_session = std::make_unique<RuntimeSession>(*pipeline.embedding, session_options);
+  }
+  const bool persistent = !model.graph().persistent_bindings().empty();
+  RuntimeValueMap initial;
+  if (persistent) {
     for (const auto &binding : model.graph().persistent_bindings()) {
       const std::string &name = binding.input_name();
       EXT_ENFORCE_INVALID(name != options.input_ids_name &&
@@ -182,10 +456,8 @@ Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeV
         initial.emplace(name, value->second);
       current.erase(name);
     }
-    state = std::make_unique<PersistentValueState>(model, std::move(initial), session_options);
-  } else {
-    session = std::make_unique<RuntimeSession>(model, session_options);
   }
+  RuntimeSession session(model, std::move(initial), session_options);
   std::mt19937_64 random(options.seed ? *options.seed : std::random_device{}());
   std::vector<bool> finished(static_cast<size_t>(batch), false);
   std::vector<int64_t> next(static_cast<size_t>(batch));
@@ -193,30 +465,39 @@ Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeV
   std::vector<int64_t> next_mask(static_cast<size_t>(batch));
   int64_t length = prompt_length;
   for (int64_t step = 0; step < options.max_new_tokens; ++step) {
-    const bool decode = state && step > 0;
+    const bool decode = persistent && step > 0;
     const Shape shape{batch, decode ? 1 : length};
-    current.insert_or_assign(
-        options.input_ids_name,
-        RuntimeValue(Tensor::From<int64_t>(options.input_ids_name, shape, decode ? next : tokens)));
     if (has_mask)
       current.insert_or_assign(
           options.attention_mask_name,
-          RuntimeValue(Tensor::From<int64_t>(options.attention_mask_name, {batch, length}, mask)));
+          RuntimeValue(Tensor::From<int64_t>(options.attention_mask_name, {batch, length}, mask)
+                           .RetainStorage()));
     if (has_positions)
       current.insert_or_assign(
           options.position_ids_name,
           RuntimeValue(Tensor::From<int64_t>(options.position_ids_name, shape,
-                                             decode ? next_positions : positions)));
+                                             decode ? next_positions : positions)
+                           .RetainStorage()));
+    auto ids = Tensor::From<int64_t>(options.input_ids_name, shape, decode ? next : tokens);
+    current.insert_or_assign(options.input_ids_name, RuntimeValue(std::move(ids).RetainStorage()));
+    if (embedded) {
+      RunGraph(*pipeline.embedding, context, current, *embedding_session);
+    }
     Tensor logits;
-    if (state) {
-      auto outputs = state->Run(context, current);
+    if (persistent) {
+      RuntimeValueMap model_feeds;
+      for (const auto &input : model.graph().input()) {
+        const auto found = current.find(input.name());
+        if (found != current.end())
+          model_feeds.emplace(input.name(), found->second.BorrowView());
+      }
+      auto outputs = session.Run(context, model_feeds);
       auto it = outputs.find(options.logits_name);
       EXT_ENFORCE_INVALID(it != outputs.end() && it->second.kind == RuntimeValue::Kind::kTensor,
                           "Generate: logits output must be a tensor.");
       logits = std::move(it->second.tensor);
     } else {
-      auto invocation = context.MakeFunctionContext();
-      RegisterModelFunctions(model, invocation);
+      context.ResetInvocation();
       for (const auto &input : model.graph().input()) {
         const auto found = current.find(input.name());
         if (found == current.end())
@@ -231,18 +512,18 @@ Tensor Generate(const ModelProto &model, RuntimeContext &context, const RuntimeV
           Tensors tensors;
           for (const auto &element : value.elements)
             tensors.push_back(element.tensor.BorrowView());
-          invocation.PutSequence(
+          context.PutSequence(
               input.name(),
               Sequence(input.name(),
                        input.type().sequence_type().elem_type().tensor_type().elem_type(),
                        std::move(tensors)));
         } else {
-          invocation.PutValue(input.name(), value.BorrowView(), RuntimeEventKind::kInput);
+          context.PutValue(input.name(), value.BorrowView(), RuntimeEventKind::kInput);
         }
       }
-      session->Run(invocation);
-      EXT_ENFORCE_INVALID(invocation.Has(options.logits_name), "Generate: missing logits tensor.");
-      logits = std::move(invocation.Get(options.logits_name)).RetainStorage();
+      session.Run(context);
+      EXT_ENFORCE_INVALID(context.Has(options.logits_name), "Generate: missing logits tensor.");
+      logits = std::move(context.Get(options.logits_name)).RetainStorage();
     }
     EXT_ENFORCE_INVALID(
         (logits.shape.size() == 2 || logits.shape.size() == 3) && logits.shape[0] == batch &&

@@ -27,6 +27,7 @@ struct PendingReplacement {
 
 struct TimedMatch {
   MatchResult match;
+  const NodeProto *candidate;
   std::size_t pattern_index;
   int64_t match_time_ns;
 };
@@ -375,7 +376,7 @@ std::vector<LocalRewriting> GraphGraph::OptimizeImpl(int max_iter, OptimizationR
         if (report != nullptr) {
           ++report->patterns[pattern_index].matches;
         }
-        matches.push_back(TimedMatch{std::move(match), pattern_index, match_time_ns});
+        matches.push_back(TimedMatch{std::move(match), &candidate, pattern_index, match_time_ns});
       }
     }
     if (report != nullptr) {
@@ -391,7 +392,17 @@ std::vector<LocalRewriting> GraphGraph::OptimizeImpl(int max_iter, OptimizationR
     int64_t constant_folding_time_ns = 0;
     replacements.reserve(matches.size());
     for (const TimedMatch &timed_match : matches) {
+      GraphBuilder::AncestorRefreshGuard ancestor_refresh_guard(builder_);
       const MatchResult &match = timed_match.match;
+      const MatchResult verified = match.pattern->Match(*this, *timed_match.candidate);
+      if (verified.pattern != match.pattern || verified.nodes != match.nodes ||
+          verified.insert_at != match.insert_at) {
+        if (report != nullptr && verified.no_match.has_value()) {
+          RecordNoMatch(report->patterns[timed_match.pattern_index], verified.no_match->source_file,
+                        verified.no_match->source_line, verified.no_match->reason);
+        }
+        continue;
+      }
       std::size_t position = builder_.nodes_.size();
       if (match.insert_at != nullptr) {
         position = Position(*match.insert_at);

@@ -217,19 +217,14 @@ std::string ModelFunctionKey(const NodeProto &node) {
          node.overload();
 }
 
-void CollectFunctionValueNames(const FunctionProto &function, const NodeProto &call,
-                               PipelineValueNames &names) {
-  std::unordered_map<std::string, std::size_t> formal_outputs;
-  for (std::size_t index = 0; index < function.output().size(); ++index)
-    formal_outputs.emplace(function.output()[index], index);
+void CollectFunctionValueNames(const FunctionProto &function, PipelineValueNames &names) {
+  std::unordered_set<std::string> formal_outputs(function.output().begin(),
+                                                 function.output().end());
   for (const NodeProto &node : function.node()) {
     for (const std::string &output : node.output()) {
-      const auto formal = formal_outputs.find(output);
-      if (formal == formal_outputs.end()) {
+      if (!formal_outputs.contains(output)) {
         InsertName(names.all, output);
         InsertName(names.private_values, output);
-      } else if (formal->second < call.output().size()) {
-        InsertName(names.all, call.output()[formal->second]);
       }
     }
   }
@@ -254,7 +249,7 @@ void CollectReachableFunctionGraphNames(const utils::RepeatedProtoField<NodeProt
     if (found == functions.end() || !active.insert(key).second)
       continue;
     const FunctionProto bound = detail::BindFunctionAttributes(*found->second, node);
-    CollectFunctionValueNames(bound, node, names);
+    CollectFunctionValueNames(bound, names);
     CollectReachableFunctionGraphNames(bound.node(), functions, names, active);
     active.erase(key);
   }

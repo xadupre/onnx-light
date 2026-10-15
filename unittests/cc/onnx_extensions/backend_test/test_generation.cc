@@ -472,9 +472,22 @@ TEST(Generation, PipelineScopesModelFunctionsWithoutChangingTheCallerRegistry) {
   opset->set_version(1);
   auto *node = function->add_node();
   node->set_domain("test.pipeline");
-  node->set_op_type("Embed");
+  node->set_op_type("Inner");
   node->add_input("X");
   node->add_output("Y");
+  auto *inner = embedding.add_functions();
+  inner->set_domain("test.pipeline");
+  inner->set_name("Inner");
+  inner->add_input("A");
+  inner->add_output("B");
+  auto *inner_opset = inner->add_opset_import();
+  inner_opset->set_domain("test.pipeline");
+  inner_opset->set_version(1);
+  auto *inner_node = inner->add_node();
+  inner_node->set_domain("test.pipeline");
+  inner_node->set_op_type("Embed");
+  inner_node->add_input("A");
+  inner_node->add_output("B");
   for (bool persistent : {false, true}) {
     SCOPED_TRACE(persistent);
     auto prefill = PipelineModel("Stage", {{"inputs_embeds", TensorProto::FLOAT}}, "logits");

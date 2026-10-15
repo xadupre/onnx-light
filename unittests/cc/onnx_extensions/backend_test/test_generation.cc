@@ -7,6 +7,7 @@
 #include "onnx_core/runtime/kernels/run_nodes.h"
 #include "onnx_extensions/kernels/kernel_dispatch_table.h"
 
+#include <chrono>
 #include <cstring>
 #include <gtest/gtest.h>
 
@@ -106,6 +107,33 @@ FunctionProto FunctionWithPrivateGraphInitializer(const std::string &name) {
   output->add_input("X");
   output->add_output("Y");
   return function;
+}
+
+void AddSharedFunctionChain(ModelProto &model, int depth) {
+  for (int index = 0; index < depth; ++index) {
+    FunctionProto *function = model.add_functions();
+    function->set_domain("test.pipeline");
+    function->set_name("Shared" + std::to_string(index));
+    function->add_input("X");
+    function->add_output("Y");
+    auto *opset = function->add_opset_import();
+    opset->set_domain(index == 0 ? "" : "test.pipeline");
+    opset->set_version(index == 0 ? 18 : 1);
+    if (index == 0) {
+      NodeProto *identity = function->add_node();
+      identity->set_op_type("Identity");
+      identity->add_input("X");
+      identity->add_output("Y");
+      continue;
+    }
+    for (int call = 0; call < 2; ++call) {
+      NodeProto *nested = function->add_node();
+      nested->set_domain("test.pipeline");
+      nested->set_op_type("Shared" + std::to_string(index - 1));
+      nested->add_input("X");
+      nested->add_output(call == 0 ? "temporary" : "Y");
+    }
+  }
 }
 
 enum class PrivateValueKind {
@@ -519,6 +547,94 @@ TEST(Generation, PipelineRejectsContextFunctionGraphInitializerCollision) {
   });
   EXPECT_NE(message.find("private value name 'weight' is shared"), std::string::npos) << message;
   EXPECT_EQ(calls, 0);
+}
+
+TEST(Generation, PipelineCachesSharedFunctionBodyScans) {
+  constexpr int depth = 19;
+  auto embedding = PipelineModel("Shared18", {{"input_ids", TensorProto::INT64}}, "inputs_embeds");
+  AddSharedFunctionChain(embedding, depth);
+  const auto language = PipelineModel("Prefill", {{"inputs_embeds", TensorProto::FLOAT}}, "logits");
+  RuntimeContext context;
+  RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))}};
+  GenerationOptions options;
+  options.max_new_tokens = 0;
+
+  const auto start = std::chrono::steady_clock::now();
+  const Tensor result = Generate(GenerationPipeline{.prefill = &language, .embedding = &embedding},
+                                 context, feeds, options);
+  const auto duration = std::chrono::steady_clock::now() - start;
+
+  EXPECT_EQ(Tokens(result), (std::vector<int64_t>{0}));
+  EXPECT_LT(duration, std::chrono::seconds(1));
+}
+
+TEST(Generation, PipelineFunctionScanCacheIncludesGraphAttributeBindings) {
+  auto embedding = PipelineModel("Wrapper", {{"input_ids", TensorProto::INT64}}, "inputs_embeds");
+  FunctionProto *shared = embedding.add_functions();
+  shared->set_domain("test.pipeline");
+  shared->set_name("Shared");
+  shared->add_input("X");
+  shared->add_output("Y");
+  shared->add_attribute("body");
+  auto *shared_opset = shared->add_opset_import();
+  shared_opset->set_domain("test.pipeline");
+  shared_opset->set_version(1);
+  NodeProto *use_body = shared->add_node();
+  use_body->set_domain("test.pipeline");
+  use_body->set_op_type("UseBody");
+  use_body->add_input("X");
+  use_body->add_output("Y");
+  AttributeProto *body_reference = use_body->add_attribute();
+  body_reference->set_name("body");
+  body_reference->set_ref_attr_name("body");
+  body_reference->set_type(AttributeProto::GRAPH);
+
+  FunctionProto *wrapper = embedding.add_functions();
+  wrapper->set_domain("test.pipeline");
+  wrapper->set_name("Wrapper");
+  wrapper->add_input("X");
+  wrapper->add_output("Y");
+  auto *wrapper_opset = wrapper->add_opset_import();
+  wrapper_opset->set_domain("test.pipeline");
+  wrapper_opset->set_version(1);
+  for (int call = 0; call < 2; ++call) {
+    NodeProto *nested = wrapper->add_node();
+    nested->set_domain("test.pipeline");
+    nested->set_op_type("Shared");
+    nested->add_input("X");
+    nested->add_output(call == 0 ? "unused" : "Y");
+    AttributeProto *body = nested->add_attribute();
+    body->set_name("body");
+    body->set_type(AttributeProto::GRAPH);
+    if (call != 0) {
+      TensorProto *weight = body->mutable_g()->add_initializer();
+      weight->set_name("weight");
+      weight->set_data_type(TensorProto::FLOAT);
+      weight->add_dims(1);
+      weight->add_float_data(1);
+    }
+  }
+
+  auto language = PipelineModel("Prefill", {{"inputs_embeds", TensorProto::FLOAT}}, "logits");
+  TensorProto *language_weight = language.mutable_graph()->add_initializer();
+  language_weight->set_name("weight");
+  language_weight->set_data_type(TensorProto::FLOAT);
+  language_weight->add_dims(2);
+  language_weight->add_float_data(2);
+  language_weight->add_float_data(3);
+  AddPersistentState(language);
+  RuntimeSession source(language);
+  RuntimeContext context(RuntimeContextOptions{.cpu_executor = source.cpu_executor().get()});
+  RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))},
+                        {"state", RuntimeValue(Tensor::FromInt64("", {}, {0}))}};
+  GenerationOptions options;
+  options.max_new_tokens = 1;
+
+  const std::string message = InvalidArgumentMessage([&]() {
+    Generate(GenerationPipeline{.prefill = &language, .embedding = &embedding}, context, feeds,
+             options);
+  });
+  EXPECT_NE(message.find("private value name 'weight' is shared"), std::string::npos) << message;
 }
 
 TEST(Generation, PipelineScopesModelFunctionsWithoutChangingTheCallerRegistry) {

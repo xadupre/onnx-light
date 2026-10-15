@@ -232,26 +232,36 @@ void CollectFunctionValueNames(const FunctionProto &function, PipelineValueNames
 
 void CollectReachableFunctionGraphNames(const utils::RepeatedProtoField<NodeProto> &nodes,
                                         const FunctionMap &functions, PipelineValueNames &names,
-                                        std::unordered_set<std::string> &active) {
+                                        std::unordered_set<std::string> &active,
+                                        std::unordered_set<std::string> &completed) {
   for (const NodeProto &node : nodes) {
     for (const AttributeProto &attribute : node.attribute()) {
       if (attribute.has_g()) {
         CollectGraphValueNames(attribute.g(), false, {}, names);
-        CollectReachableFunctionGraphNames(attribute.g().node(), functions, names, active);
+        CollectReachableFunctionGraphNames(attribute.g().node(), functions, names, active,
+                                           completed);
       }
       for (const GraphProto &nested : attribute.graphs()) {
         CollectGraphValueNames(nested, false, {}, names);
-        CollectReachableFunctionGraphNames(nested.node(), functions, names, active);
+        CollectReachableFunctionGraphNames(nested.node(), functions, names, active, completed);
       }
     }
     const std::string key = ModelFunctionKey(node);
     const auto found = functions.find(key);
-    if (found == functions.end() || !active.insert(key).second)
+    if (found == functions.end() || active.contains(key))
       continue;
     const FunctionProto bound = detail::BindFunctionAttributes(*found->second, node);
+    // Calls to one function may bind different graph-valued attributes.
+    std::string completed_key = key;
+    completed_key.push_back('\0');
+    completed_key.append(bound.SerializeAsString());
+    if (completed.contains(completed_key))
+      continue;
+    active.insert(key);
     CollectFunctionValueNames(bound, names);
-    CollectReachableFunctionGraphNames(bound.node(), functions, names, active);
+    CollectReachableFunctionGraphNames(bound.node(), functions, names, active, completed);
     active.erase(key);
+    completed.insert(std::move(completed_key));
   }
 }
 
@@ -265,7 +275,8 @@ CollectPipelineValueNames(const ModelProto &model,
   for (const auto &[key, function] : detail::ModelFunctions(model))
     functions.insert_or_assign(key, function);
   std::unordered_set<std::string> active;
-  CollectReachableFunctionGraphNames(model.graph().node(), functions, names, active);
+  std::unordered_set<std::string> completed;
+  CollectReachableFunctionGraphNames(model.graph().node(), functions, names, active, completed);
   return names;
 }
 

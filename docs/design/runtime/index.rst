@@ -13,11 +13,17 @@ C++ :cpp:class:`RuntimeSession`. The session builds an execution plan, captures
 an immutable tuning-registry generation, resolves kernels, and retains prepared
 kernel instances for repeated runs.
 
-Kernel resolution first checks model- and context-local registrations, then
-the built-in :cpp:func:`KernelDispatchTable`.  Each run stores inputs,
-initializers, intermediates, and outputs in a :cpp:class:`RuntimeContext`.
-That context also owns the execution and output allocator routes, records
-events when requested, and releases last-use intermediates when enabled.
+Kernel resolution first checks the session's model-local functions, then
+explicit context-local functions, built-in control-flow operators,
+context-local custom kernels, process-wide custom kernels, and finally the
+built-in :cpp:func:`KernelDispatchTable`. The selected factory creates a
+session-owned kernel instance that is cached for repeated runs. Constructing,
+preparing, running, resetting, or destroying a session never modifies any
+process-wide function or kernel registry; global registration remains an
+explicit application setup operation. Each run stores inputs, initializers,
+intermediates, and outputs in a :cpp:class:`RuntimeContext`. That context also
+owns the execution and output allocator routes, records events when requested,
+and releases last-use intermediates when enabled.
 
 Before kernel resolution, the execution plan registers every value name from
 the root graph, nested graph attributes, and model-local functions in one
@@ -30,6 +36,10 @@ kernels.
 The same ``RuntimeContext`` is reused by control-flow bodies and local
 functions, so nested execution neither copies the context nor deep-copies
 loop-carried values merely to cross a context boundary.
+Operator-owned nested sessions, such as the ``score_mod`` and ``prob_mod``
+graphs of ``FlexAttention``, follow the same rule: they reuse the active
+context, allocator, value store, and executor while explicitly borrowing the
+enclosing model-function scope.
 
 When the caller supplies no execution allocator, the context creates a
 fixed-capacity :cpp:class:`ExecutionArena` from

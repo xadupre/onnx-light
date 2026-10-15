@@ -97,8 +97,8 @@ class TestGeneration(unittest.TestCase):
         model.graph.node[4].metadata_props.add(key="onnx_light.release_after", value=length_name)
         model.graph.initializer.extend(
             [
-                numpy_helper.from_array(numpy.array(1, dtype=numpy.int64), name="index"),
-                numpy_helper.from_array(numpy.array(0, dtype=numpy.int64), name="zero"),
+                onh.from_array(numpy.array(1, dtype=numpy.int64), name="index"),
+                onh.from_array(numpy.array(0, dtype=numpy.int64), name="zero"),
                 transition_model().graph.initializer[0],
             ]
         )
@@ -471,7 +471,7 @@ class TestGeneration(unittest.TestCase):
             " logits = Gather(table, past_state) }"
         )
         model.graph.initializer.append(
-            numpy_helper.from_array(numpy.ones((1, 1), dtype=numpy.int64), name="one")
+            onh.from_array(numpy.ones((1, 1), dtype=numpy.int64), name="one")
         )
         model.graph.initializer.append(transition_model().graph.initializer[0])
         binding = model.graph.persistent_bindings.add()

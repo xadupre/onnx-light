@@ -188,6 +188,42 @@ TEST(ExecutionPlan, PreservesExplicitReleaseAndDerivesMissingRelease) {
             1);
 }
 
+TEST(ExecutionPlan, DefersStaleReleaseUntilLastMaskUse) {
+  GraphProto graph;
+  graph.add_input()->set_name("lengths");
+  graph.add_input()->set_name("index");
+  graph.add_input()->set_name("threshold");
+  graph.add_output()->set_name("mask");
+  NodeProto *gather = graph.add_node();
+  gather->set_op_type("Gather");
+  gather->add_input("lengths");
+  gather->add_input("index");
+  gather->add_output("/model/attn_mask_reformat/attn_mask_subgraph/Gather/output_0");
+  NodeProto *copy = graph.add_node();
+  copy->set_op_type("Identity");
+  copy->add_input("/model/attn_mask_reformat/attn_mask_subgraph/Gather/output_0");
+  copy->add_output("unused");
+  copy->add_metadata(core::compute::kReleaseAfterMetadataKey,
+                     "/model/attn_mask_reformat/attn_mask_subgraph/Gather/output_0");
+  NodeProto *greater = graph.add_node();
+  greater->set_op_type("Greater");
+  greater->add_input("/model/attn_mask_reformat/attn_mask_subgraph/Gather/output_0");
+  greater->add_input("threshold");
+  greater->add_output("mask");
+
+  const ExecutionPlan plan(graph);
+  const auto &actions = plan.actions();
+  const auto releases = [&](size_t index) {
+    return std::count_if(actions.begin(), actions.end(), [&](const auto &action) {
+      return action.kind() == ExecuteActionKind::kDeleteBuffer &&
+             action.name() == "/model/attn_mask_reformat/attn_mask_subgraph/Gather/output_0" &&
+             action.node_index() == index;
+    });
+  };
+  EXPECT_EQ(releases(1), 0);
+  EXPECT_EQ(releases(2), 1);
+}
+
 TEST(ExecutionPlan, IgnoresStaleExplicitReleaseForGraphOutput) {
   GraphProto graph;
   graph.add_input()->set_name("X");

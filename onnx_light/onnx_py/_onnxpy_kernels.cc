@@ -524,8 +524,7 @@ RuntimeValue FeedbackValueFromPython(
 
 RuntimeValueMap FeedbackValuesFromPython(nb::dict values, const ModelProto *model = nullptr) {
   RuntimeValueMap result;
-  std::shared_ptr<const core::runtime::QuantizationParameterCatalogue> prefill_parameters;
-  std::shared_ptr<const core::runtime::QuantizationParameterCatalogue> embedding_parameters;
+  std::shared_ptr<const core::runtime::QuantizationParameterCatalogue> parameters;
   for (auto [key, value] : values) {
     std::string name = nb::cast<std::string>(key);
     result.emplace(name, FeedbackValueFromPython(name, value, 0, model, &parameters));
@@ -536,7 +535,8 @@ RuntimeValueMap FeedbackValuesFromPython(nb::dict values, const ModelProto *mode
 RuntimeValueMap GenerationValuesFromPython(nb::dict values, const ModelProto &prefill,
                                            const ModelProto *embedding) {
   RuntimeValueMap result;
-  std::shared_ptr<const core::runtime::QuantizationParameterCatalogue> parameters;
+  std::shared_ptr<const core::runtime::QuantizationParameterCatalogue> prefill_parameters;
+  std::shared_ptr<const core::runtime::QuantizationParameterCatalogue> embedding_parameters;
   const auto has_input = [](const ModelProto &model, const std::string &name) {
     return std::any_of(model.graph().input().begin(), model.graph().input().end(),
                        [&](const ValueInfoProto &input) { return input.name() == name; });

@@ -592,9 +592,9 @@ static Tensor GenerateImpl(const GenerationPipelineView &pipeline, RuntimeContex
                           "Generate: token, mask and position inputs cannot be persistent.");
       const auto value = unscoped_feeds.find(name);
       if (value != unscoped_feeds.end()) {
-        RuntimeValue scoped = value->second.DeepCopy();
+        RuntimeValue scoped = value->second.BorrowView();
         BindParameterReferences(scoped, model, initial_types, initial_parameters);
-        initial.emplace(name, std::move(scoped));
+        initial.emplace(name, scoped.DeepCopy());
       }
       current.erase(name);
     }

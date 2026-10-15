@@ -872,9 +872,97 @@ TEST(Generation, PipelinePreservesStructuredSequenceFeeds) {
   EXPECT_EQ(calls, 4);
 }
 
+TEST(Generation, PipelineRetainsPersistentSequenceFeedsAfterRebinding) {
+  auto model = PipelineModel(
+      "Step", {{"input_ids", TensorProto::INT64}, {"state", TensorProto::FLOAT}}, "logits");
+  GraphProto *graph = model.mutable_graph();
+  TypeProto *state_type = graph->mutable_input(1)->mutable_type();
+  *state_type = TypeProto{};
+  auto *element_type = state_type->mutable_sequence_type()->mutable_elem_type();
+  element_type->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+  element_type->mutable_tensor_type()->mutable_shape()->add_dim()->set_dim_value(1);
+  ValueInfoProto *next_state = graph->add_output();
+  next_state->set_name("next_state");
+  *next_state->mutable_type() = *state_type;
+  graph->mutable_node(0)->add_output("next_state");
+  auto *binding = graph->add_persistent_bindings();
+  binding->set_input_name("state");
+  binding->set_output_name("next_state");
+  RuntimeSession source(model);
+  RuntimeContext context(RuntimeContextOptions{.cpu_executor = source.cpu_executor().get()});
+  int calls = 0;
+  context.RegisterCustomKernel(
+      "test.pipeline", "Step", [&](const NodeProto &node, RuntimeContext &rt) {
+        ++calls;
+        ASSERT_TRUE(rt.HasSequence("state"));
+        const Sequence &state = rt.GetSequence("state");
+        ASSERT_EQ(state.size(), 1u);
+        EXPECT_FLOAT_EQ(state[0].AsFloat()[0], 3);
+        rt.Put(node.output(0), Tensor::FromFloat("", {1, 1, 3}, {0, 4, 0}));
+        rt.PutSequence(node.output(1), {state[0].BorrowView()});
+      });
+  RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))},
+                        {"state", RuntimeValue(std::vector<RuntimeValue>{
+                                      RuntimeValue(Tensor::FromFloat("", {1}, {3}))})}};
+  GenerationOptions options;
+  options.max_new_tokens = 2;
+  EXPECT_EQ(Tokens(Generate(model, context, feeds, options)), (std::vector<int64_t>{0, 1, 1}));
+  EXPECT_EQ(calls, 2);
+  EXPECT_FLOAT_EQ(feeds.at("state").elements[0].tensor.AsFloat()[0], 3);
+}
+
 TEST(Generation, PipelineRequiresItsPrefillModel) {
   RuntimeContext context;
   EXPECT_THROW(Generate(PipelineProto{}, context, {}), std::invalid_argument);
+}
+
+TEST(Generation, PipelineUsesStoredOptionsAndRejectsUnsupportedSettings) {
+  PipelineProto pipeline = MakeGenerationPipeline(PipelineModel("Step",
+                                                                {{"tokens", TensorProto::INT64},
+                                                                 {"mask", TensorProto::INT64},
+                                                                 {"positions", TensorProto::INT64}},
+                                                                "scores"));
+  pipeline.set_max_new_tokens(8);
+  pipeline.set_temperature(2);
+  pipeline.set_seed(7);
+  pipeline.set_input_ids_name("tokens");
+  pipeline.set_logits_name("scores");
+  pipeline.set_attention_mask_name("mask");
+  pipeline.set_position_ids_name("positions");
+  RuntimeSession source(pipeline.prefill());
+  RuntimeContext context(RuntimeContextOptions{.cpu_executor = source.cpu_executor().get()});
+  context.RegisterCustomKernel(
+      "test.pipeline", "Step", [](const NodeProto &node, RuntimeContext &rt) {
+        EXPECT_EQ(rt.Get("tokens").shape[0], 1);
+        EXPECT_EQ(rt.Get("mask").shape[0], 1);
+        EXPECT_EQ(rt.Get("positions").shape[0], 1);
+        rt.Put(node.output(0), Tensor::FromFloat("", {1, 1, 3}, {0, 0, 0}));
+      });
+  RuntimeValueMap feeds{{"tokens", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))},
+                        {"mask", RuntimeValue(Tensor::FromInt64("", {1, 1}, {1}))},
+                        {"positions", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))}};
+  const auto first = Tokens(Generate(pipeline, context, feeds));
+  const auto second = Tokens(Generate(pipeline, context, feeds));
+  EXPECT_EQ(first.size(), 9u);
+  EXPECT_EQ(first, second);
+
+  GenerationOptions options;
+  options.max_new_tokens = 1;
+  options.temperature = 0;
+  options.input_ids_name = "tokens";
+  options.logits_name = "scores";
+  options.attention_mask_name = "mask";
+  options.position_ids_name = "positions";
+  EXPECT_EQ(Tokens(Generate(pipeline, context, feeds, options)).size(), 2u);
+
+  pipeline.set_top_k(1);
+  EXPECT_THROW(Generate(pipeline, context, feeds), std::invalid_argument);
+  pipeline.clear_top_k();
+  pipeline.set_top_p(0.9f);
+  EXPECT_THROW(Generate(pipeline, context, feeds), std::invalid_argument);
+  pipeline.clear_top_p();
+  *pipeline.mutable_decode() = PipelineModel("Decode", {{"tokens", TensorProto::INT64}}, "scores");
+  EXPECT_THROW(Generate(pipeline, context, feeds), std::invalid_argument);
 }
 
 TEST(Generation, GeneratedMasksAndPositionsOutliveGenerationAndContextValues) {

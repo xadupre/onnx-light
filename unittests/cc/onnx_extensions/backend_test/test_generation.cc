@@ -409,6 +409,57 @@ TEST(Generation, PipelineRejectsReachableFunctionDefaultGraphInitializerCollisio
   EXPECT_EQ(calls, 0);
 }
 
+TEST(Generation, PipelineRejectsReachableFunctionIntermediateCollision) {
+  auto embedding =
+      PipelineModel("EmbedFunction", {{"input_ids", TensorProto::INT64}}, "inputs_embeds");
+  FunctionProto *function = embedding.add_functions();
+  function->set_domain("test.pipeline");
+  function->set_name("EmbedFunction");
+  function->add_input("X");
+  function->add_output("Y");
+  auto *opset = function->add_opset_import();
+  opset->set_domain("");
+  opset->set_version(18);
+  NodeProto *constant = function->add_node();
+  constant->set_op_type("Constant");
+  constant->add_output("weight");
+  AttributeProto *value = constant->add_attribute();
+  value->set_name("value");
+  value->set_type(AttributeProto::TENSOR);
+  value->mutable_t()->set_data_type(TensorProto::FLOAT);
+  value->mutable_t()->add_dims(1);
+  value->mutable_t()->add_float_data(1);
+  NodeProto *identity = function->add_node();
+  identity->set_op_type("Identity");
+  identity->add_input("X");
+  identity->add_output("Y");
+
+  auto language = PipelineModel("Prefill", {{"inputs_embeds", TensorProto::FLOAT}}, "logits");
+  TensorProto *language_weight = language.mutable_graph()->add_initializer();
+  language_weight->set_name("weight");
+  language_weight->set_data_type(TensorProto::FLOAT);
+  language_weight->add_dims(2);
+  language_weight->add_float_data(2);
+  language_weight->add_float_data(3);
+  AddPersistentState(language);
+  RuntimeSession source(language);
+  RuntimeContext context(RuntimeContextOptions{.cpu_executor = source.cpu_executor().get()});
+  int calls = 0;
+  context.RegisterCustomKernel("test.pipeline", "Prefill",
+                               [&](const NodeProto &, RuntimeContext &) { ++calls; });
+  RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))},
+                        {"state", RuntimeValue(Tensor::FromInt64("", {}, {0}))}};
+  GenerationOptions options;
+  options.max_new_tokens = 1;
+
+  const std::string message = InvalidArgumentMessage([&]() {
+    Generate(GenerationPipeline{.prefill = &language, .embedding = &embedding}, context, feeds,
+             options);
+  });
+  EXPECT_NE(message.find("private value name 'weight' is shared"), std::string::npos) << message;
+  EXPECT_EQ(calls, 0);
+}
+
 TEST(Generation, PipelineScopesModelFunctionsWithoutChangingTheCallerRegistry) {
   auto embedding = PipelineModel("Stage", {{"input_ids", TensorProto::INT64}}, "inputs_embeds");
   auto *function = embedding.add_functions();
@@ -427,6 +478,11 @@ TEST(Generation, PipelineScopesModelFunctionsWithoutChangingTheCallerRegistry) {
   for (bool persistent : {false, true}) {
     SCOPED_TRACE(persistent);
     auto prefill = PipelineModel("Stage", {{"inputs_embeds", TensorProto::FLOAT}}, "logits");
+    TensorProto *function_formal_name = prefill.mutable_graph()->add_initializer();
+    function_formal_name->set_name("Y");
+    function_formal_name->set_data_type(TensorProto::FLOAT);
+    function_formal_name->add_dims(1);
+    function_formal_name->add_float_data(7);
     if (persistent) {
       auto *graph = prefill.mutable_graph();
       auto *input = graph->add_input();

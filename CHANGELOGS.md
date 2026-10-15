@@ -7,18 +7,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### New Features
 
+- Added `PipelineProto` support for serializing generation models and options
+  ([#5286](https://github.com/xadupre/onnx-light/pull/5286)).
+- Supported multi-graph generation with a shared CPU executor and persistent
+  recurrent state consumed by multiple nodes
+  ([#5270](https://github.com/xadupre/onnx-light/pull/5270),
+  [#5271](https://github.com/xadupre/onnx-light/pull/5271)).
 - Supported rank-3 multi-axis M-RoPE position IDs during native generation,
   including models with a dynamic axis count
   ([#5289](https://github.com/xadupre/onnx-light/pull/5289)).
+- Added native `Cast` runtime support for complex outputs
+  ([#5183](https://github.com/xadupre/onnx-light/pull/5183)).
 
 ### Fixes
 
 - Resolved split-generation feeds against each receiving model's quantization
   parameter catalogue while preserving shared model and tensor storage
   ([#5287](https://github.com/xadupre/onnx-light/pull/5287)).
+- Preserved Phi-3 attention-mask values until their final consumer and rejected
+  premature release annotations
+  ([#5288](https://github.com/xadupre/onnx-light/pull/5288)).
+- Rejected private value-name collisions between generation pipeline models
+  ([#5285](https://github.com/xadupre/onnx-light/pull/5285)).
+- Corrected symbolic shape inference for fused Qwen3 graphs, optimizer
+  revalidation, and empty control-flow outputs
+  ([#5273](https://github.com/xadupre/onnx-light/pull/5273),
+  [#5284](https://github.com/xadupre/onnx-light/pull/5284)).
+- Kept global runtime registries read-only while resolving explicit local
+  registrations before global fallbacks
+  ([#5281](https://github.com/xadupre/onnx-light/pull/5281)).
 
 ### Documentation & CI
 
+- Created GitHub issues automatically when the shape-inference coverage
+  workflow finds missing operators
+  ([#5277](https://github.com/xadupre/onnx-light/pull/5277)).
 - Bumped the release version to `0.1.32`.
 
 ## [0.1.31] – 2026-10-14

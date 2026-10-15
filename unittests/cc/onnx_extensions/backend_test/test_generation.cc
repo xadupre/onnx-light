@@ -54,6 +54,18 @@ ModelProto PipelineModel(const std::string &operation,
   return model;
 }
 
+PipelineProto MakeGenerationPipeline(ModelProto &&prefill) {
+  PipelineProto pipeline;
+  *pipeline.mutable_prefill() = std::move(prefill);
+  return pipeline;
+}
+
+PipelineProto MakeGenerationPipeline(ModelProto &&prefill, ModelProto &&embedding) {
+  PipelineProto pipeline = MakeGenerationPipeline(std::move(prefill));
+  *pipeline.mutable_embedding() = std::move(embedding);
+  return pipeline;
+}
+
 void AddPersistentState(ModelProto &model) {
   GraphProto *graph = model.mutable_graph();
   auto *input = graph->add_input();
@@ -216,7 +228,8 @@ TEST(Generation, BackendAttentionModels) {
   ASSERT_EQ(cases.size(), 2u);
   for (auto &test : cases) {
     SCOPED_TRACE(test.name);
-    const auto &model = test.model();
+    PipelineProto pipeline = MakeGenerationPipeline(std::move(test.model()));
+    const ModelProto &model = pipeline.prefill();
     const auto original = model.SerializeAsString();
     RuntimeValueMap feeds;
     for (const auto &input : test.data_sets()[0].inputs)
@@ -266,11 +279,10 @@ TEST(Generation, BackendAttentionModels) {
         EXPECT_EQ(context.Get("input_ids").shape, (Shape{1, 5}));
       }
       EXPECT_EQ(model.SerializeAsString(), original);
-      EXPECT_EQ(Tokens(Generate(GenerationPipeline{.prefill = &model}, context, feeds, options,
-                                session_options)),
-                Tokens(output));
       options.eos_token_id = 1;
       EXPECT_EQ(Tokens(Generate(model, context, feeds, options, session_options)),
+                (std::vector<int64_t>{0, 1, 1}));
+      EXPECT_EQ(Tokens(Generate(pipeline, context, feeds, options, session_options)),
                 (std::vector<int64_t>{0, 1, 1}));
     }
   }
@@ -423,16 +435,16 @@ TEST(Generation, MultiAxisPositions) {
 }
 
 TEST(Generation, PipelineUsesOneContextAndDeclaredGraphNames) {
-  const auto embedding = PipelineModel("Embed",
-                                       {{"input_ids", TensorProto::INT64},
-                                        {"attention_mask", TensorProto::INT64},
-                                        {"position_ids", TensorProto::INT64}},
-                                       "inputs_embeds");
-  const auto prefill = PipelineModel("Prefill",
-                                     {{"input_ids", TensorProto::INT64},
-                                      {"inputs_embeds", TensorProto::FLOAT},
-                                      {"vision", TensorProto::FLOAT}},
-                                     "logits");
+  auto embedding = PipelineModel("Embed",
+                                 {{"input_ids", TensorProto::INT64},
+                                  {"attention_mask", TensorProto::INT64},
+                                  {"position_ids", TensorProto::INT64}},
+                                 "inputs_embeds");
+  auto prefill = PipelineModel("Prefill",
+                               {{"input_ids", TensorProto::INT64},
+                                {"inputs_embeds", TensorProto::FLOAT},
+                                {"vision", TensorProto::FLOAT}},
+                               "logits");
   RuntimeSession prefill_session(prefill);
   auto executor = prefill_session.cpu_executor();
   RuntimeContext context(RuntimeContextOptions{.cpu_executor = executor.get()});
@@ -467,7 +479,7 @@ TEST(Generation, PipelineUsesOneContextAndDeclaredGraphNames) {
         EXPECT_FLOAT_EQ(rt.Get("vision").AsFloat()[0], 0);
         rt.Put(node.output(0), rt.Get("inputs_embeds").BorrowView());
       });
-  GenerationPipeline pipeline{.prefill = &prefill, .embedding = &embedding};
+  PipelineProto pipeline = MakeGenerationPipeline(std::move(prefill), std::move(embedding));
   RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))},
                         {"vision", RuntimeValue(Tensor::FromFloat("", {1, 1, 3}, {0, 0, 0}))}};
   GenerationOptions options;
@@ -505,7 +517,7 @@ TEST(Generation, PipelineRejectsPrivateValueNameCollisionsBeforeExecution) {
       RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))}};
       if (persistent)
         feeds.emplace("state", RuntimeValue(Tensor::FromInt64("", {}, {0})));
-      GenerationPipeline pipeline{.prefill = &language, .embedding = &embedding};
+      PipelineProto pipeline = MakeGenerationPipeline(std::move(language), std::move(embedding));
       GenerationOptions options;
       options.max_new_tokens = 1;
       for (int repeat = 0; repeat < 2; ++repeat) {
@@ -551,7 +563,7 @@ TEST(Generation, PipelineAllowsInitializerBackedEmbeddingConnection) {
       feeds.emplace("state", RuntimeValue(Tensor::FromInt64("", {}, {0})));
     GenerationOptions options;
     options.max_new_tokens = 2;
-    EXPECT_EQ(Tokens(Generate(GenerationPipeline{.prefill = &language, .embedding = &embedding},
+    EXPECT_EQ(Tokens(Generate(MakeGenerationPipeline(std::move(language), std::move(embedding)),
                               context, feeds, options)),
               (std::vector<int64_t>{0, 1, 1}));
     EXPECT_EQ(calls, 2);
@@ -607,7 +619,7 @@ TEST(Generation, PipelineRejectsReachableFunctionDefaultGraphInitializerCollisio
   options.max_new_tokens = 1;
 
   const std::string message = InvalidArgumentMessage([&]() {
-    Generate(GenerationPipeline{.prefill = &language, .embedding = &embedding}, context, feeds,
+    Generate(MakeGenerationPipeline(std::move(language), std::move(embedding)), context, feeds,
              options);
   });
   EXPECT_NE(message.find("private value name 'weight' is shared"), std::string::npos) << message;
@@ -658,7 +670,7 @@ TEST(Generation, PipelineRejectsReachableFunctionIntermediateCollision) {
   options.max_new_tokens = 1;
 
   const std::string message = InvalidArgumentMessage([&]() {
-    Generate(GenerationPipeline{.prefill = &language, .embedding = &embedding}, context, feeds,
+    Generate(MakeGenerationPipeline(std::move(language), std::move(embedding)), context, feeds,
              options);
   });
   EXPECT_NE(message.find("private value name 'weight' is shared"), std::string::npos) << message;
@@ -666,7 +678,7 @@ TEST(Generation, PipelineRejectsReachableFunctionIntermediateCollision) {
 }
 
 TEST(Generation, PipelineRejectsContextFunctionGraphInitializerCollision) {
-  const auto embedding =
+  auto embedding =
       PipelineModel("ContextStage", {{"input_ids", TensorProto::INT64}}, "inputs_embeds");
   const FunctionProto context_function = FunctionWithPrivateGraphInitializer("ContextStage");
   auto language = PipelineModel("Prefill", {{"inputs_embeds", TensorProto::FLOAT}}, "logits");
@@ -689,7 +701,7 @@ TEST(Generation, PipelineRejectsContextFunctionGraphInitializerCollision) {
   options.max_new_tokens = 1;
 
   const std::string message = InvalidArgumentMessage([&]() {
-    Generate(GenerationPipeline{.prefill = &language, .embedding = &embedding}, context, feeds,
+    Generate(MakeGenerationPipeline(std::move(language), std::move(embedding)), context, feeds,
              options);
   });
   EXPECT_NE(message.find("private value name 'weight' is shared"), std::string::npos) << message;
@@ -700,14 +712,14 @@ TEST(Generation, PipelineCachesSharedFunctionBodyScans) {
   constexpr int depth = 19;
   auto embedding = PipelineModel("Shared18", {{"input_ids", TensorProto::INT64}}, "inputs_embeds");
   AddSharedFunctionChain(embedding, depth);
-  const auto language = PipelineModel("Prefill", {{"inputs_embeds", TensorProto::FLOAT}}, "logits");
+  auto language = PipelineModel("Prefill", {{"inputs_embeds", TensorProto::FLOAT}}, "logits");
   RuntimeContext context;
   RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))}};
   GenerationOptions options;
   options.max_new_tokens = 0;
 
   const auto start = std::chrono::steady_clock::now();
-  const Tensor result = Generate(GenerationPipeline{.prefill = &language, .embedding = &embedding},
+  const Tensor result = Generate(MakeGenerationPipeline(std::move(language), std::move(embedding)),
                                  context, feeds, options);
   const auto duration = std::chrono::steady_clock::now() - start;
 
@@ -778,7 +790,7 @@ TEST(Generation, PipelineFunctionScanCacheIncludesGraphAttributeBindings) {
   options.max_new_tokens = 1;
 
   const std::string message = InvalidArgumentMessage([&]() {
-    Generate(GenerationPipeline{.prefill = &language, .embedding = &embedding}, context, feeds,
+    Generate(MakeGenerationPipeline(std::move(language), std::move(embedding)), context, feeds,
              options);
   });
   EXPECT_NE(message.find("private value name 'weight' is shared"), std::string::npos) << message;
@@ -812,6 +824,8 @@ TEST(Generation, PipelineScopesModelFunctionsWithoutChangingTheCallerRegistry) {
   inner_node->set_op_type("Embed");
   inner_node->add_input("A");
   inner_node->add_output("B");
+  PipelineProto pipeline;
+  *pipeline.mutable_embedding() = std::move(embedding);
   for (bool persistent : {false, true}) {
     SCOPED_TRACE(persistent);
     auto prefill = PipelineModel("Stage", {{"inputs_embeds", TensorProto::FLOAT}}, "logits");
@@ -844,7 +858,7 @@ TEST(Generation, PipelineScopesModelFunctionsWithoutChangingTheCallerRegistry) {
     RuntimeContext context(RuntimeContextOptions{.cpu_executor = source.cpu_executor().get()});
     const FunctionProto shadowed_context_function = FunctionWithPrivateGraphInitializer("Inner");
     context.functions().emplace("test.pipeline:Inner:", &shadowed_context_function);
-    context.functions().emplace("test.pipeline:Other:", &embedding.functions()[0]);
+    context.functions().emplace("test.pipeline:Other:", &pipeline.embedding().functions()[0]);
     const FunctionMap original_functions = context.functions();
     int prefill_calls = 0;
     bool fail = false;
@@ -867,7 +881,7 @@ TEST(Generation, PipelineScopesModelFunctionsWithoutChangingTheCallerRegistry) {
     RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))}};
     if (persistent)
       feeds.emplace("counter", RuntimeValue(Tensor::FromInt64("", {}, {0})));
-    GenerationPipeline pipeline{.prefill = &prefill, .embedding = &embedding};
+    *pipeline.mutable_prefill() = std::move(prefill);
     GenerationOptions options;
     options.max_new_tokens = 3;
     for (int repeat = 0; repeat < 2; ++repeat) {
@@ -916,7 +930,7 @@ TEST(Generation, PipelineSeedsExtensionInitializersAndHonorsFeedOverrides) {
   }
   *graph->mutable_input(2)->mutable_type() = TypeProto{};
   graph->mutable_input(2)->mutable_type()->mutable_struct_type();
-  const auto prefill = PipelineModel("Prefill", {{"inputs_embeds", TensorProto::FLOAT}}, "logits");
+  auto prefill = PipelineModel("Prefill", {{"inputs_embeds", TensorProto::FLOAT}}, "logits");
   RuntimeSession source(prefill);
   RuntimeContext context(RuntimeContextOptions{.cpu_executor = source.cpu_executor().get()});
   bool override_weights = false;
@@ -941,7 +955,7 @@ TEST(Generation, PipelineSeedsExtensionInitializersAndHonorsFeedOverrides) {
                                [](const NodeProto &node, RuntimeContext &rt) {
                                  rt.Put(node.output(0), rt.Get(node.input(0)).BorrowView());
                                });
-  GenerationPipeline pipeline{.prefill = &prefill, .embedding = &embedding};
+  PipelineProto pipeline = MakeGenerationPipeline(std::move(prefill), std::move(embedding));
   RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))}};
   GenerationOptions options;
   options.max_new_tokens = 2;
@@ -967,7 +981,7 @@ TEST(Generation, PipelinePreservesStructuredSequenceFeeds) {
   auto *tensor_type = field->mutable_type()->mutable_tensor_type();
   tensor_type->set_elem_type(TensorProto::FLOAT);
   tensor_type->mutable_shape()->add_dim()->set_dim_value(1);
-  const auto prefill = PipelineModel("Prefill", {{"inputs_embeds", TensorProto::FLOAT}}, "logits");
+  auto prefill = PipelineModel("Prefill", {{"inputs_embeds", TensorProto::FLOAT}}, "logits");
   RuntimeSession source(prefill);
   RuntimeContext context(RuntimeContextOptions{.cpu_executor = source.cpu_executor().get()});
   RuntimeValueMap feeds{
@@ -995,7 +1009,7 @@ TEST(Generation, PipelinePreservesStructuredSequenceFeeds) {
                                [](const NodeProto &node, RuntimeContext &rt) {
                                  rt.Put(node.output(0), rt.Get(node.input(0)).BorrowView());
                                });
-  GenerationPipeline pipeline{.prefill = &prefill, .embedding = &embedding};
+  PipelineProto pipeline = MakeGenerationPipeline(std::move(prefill), std::move(embedding));
   GenerationOptions options;
   options.max_new_tokens = 2;
   EXPECT_EQ(Tokens(Generate(pipeline, context, feeds, options)), (std::vector<int64_t>{0, 1, 1}));
@@ -1005,17 +1019,108 @@ TEST(Generation, PipelinePreservesStructuredSequenceFeeds) {
   EXPECT_EQ(calls, 4);
 }
 
+TEST(Generation, PipelineRetainsPersistentSequenceFeedsAfterRebinding) {
+  auto model = PipelineModel(
+      "Step", {{"input_ids", TensorProto::INT64}, {"state", TensorProto::FLOAT}}, "logits");
+  GraphProto *graph = model.mutable_graph();
+  TypeProto *state_type = graph->mutable_input(1)->mutable_type();
+  *state_type = TypeProto{};
+  auto *element_type = state_type->mutable_sequence_type()->mutable_elem_type();
+  element_type->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+  element_type->mutable_tensor_type()->mutable_shape()->add_dim()->set_dim_value(1);
+  ValueInfoProto *next_state = graph->add_output();
+  next_state->set_name("next_state");
+  *next_state->mutable_type() = *state_type;
+  graph->mutable_node(0)->add_output("next_state");
+  auto *binding = graph->add_persistent_bindings();
+  binding->set_input_name("state");
+  binding->set_output_name("next_state");
+  RuntimeSession source(model);
+  RuntimeContext context(RuntimeContextOptions{.cpu_executor = source.cpu_executor().get()});
+  int calls = 0;
+  context.RegisterCustomKernel(
+      "test.pipeline", "Step", [&](const NodeProto &node, RuntimeContext &rt) {
+        ++calls;
+        ASSERT_TRUE(rt.HasSequence("state"));
+        const Sequence &state = rt.GetSequence("state");
+        ASSERT_EQ(state.size(), 1u);
+        EXPECT_FLOAT_EQ(state.at(0).AsFloat()[0], 3);
+        rt.Put(node.output(0), Tensor::FromFloat("", {1, 1, 3}, {0, 4, 0}));
+        rt.PutSequence(node.output(1), Sequence(node.output(1), state.elem_type,
+                                                Tensors{state.at(0).BorrowView()}));
+      });
+  RuntimeValueMap feeds{{"input_ids", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))},
+                        {"state", RuntimeValue(std::vector<RuntimeValue>{
+                                      RuntimeValue(Tensor::FromFloat("", {1}, {3}))})}};
+  GenerationOptions options;
+  options.max_new_tokens = 2;
+  EXPECT_EQ(Tokens(Generate(model, context, feeds, options)), (std::vector<int64_t>{0, 1, 1}));
+  EXPECT_EQ(calls, 2);
+  EXPECT_FLOAT_EQ(feeds.at("state").elements[0].tensor.AsFloat()[0], 3);
+}
+
 TEST(Generation, PipelineRequiresItsPrefillModel) {
   RuntimeContext context;
-  EXPECT_THROW(Generate(GenerationPipeline{}, context, {}), std::invalid_argument);
+  EXPECT_THROW(Generate(PipelineProto{}, context, {}), std::invalid_argument);
+}
+
+TEST(Generation, PipelineUsesStoredOptionsAndRejectsUnsupportedSettings) {
+  PipelineProto pipeline = MakeGenerationPipeline(PipelineModel("Step",
+                                                                {{"tokens", TensorProto::INT64},
+                                                                 {"mask", TensorProto::INT64},
+                                                                 {"positions", TensorProto::INT64}},
+                                                                "scores"));
+  pipeline.set_max_new_tokens(8);
+  pipeline.set_temperature(2);
+  pipeline.set_seed(7);
+  pipeline.set_input_ids_name("tokens");
+  pipeline.set_logits_name("scores");
+  pipeline.set_attention_mask_name("mask");
+  pipeline.set_position_ids_name("positions");
+  RuntimeSession source(pipeline.prefill());
+  RuntimeContext context(RuntimeContextOptions{.cpu_executor = source.cpu_executor().get()});
+  context.RegisterCustomKernel(
+      "test.pipeline", "Step", [](const NodeProto &node, RuntimeContext &rt) {
+        EXPECT_EQ(rt.Get("tokens").shape[0], 1);
+        EXPECT_EQ(rt.Get("mask").shape[0], 1);
+        EXPECT_EQ(rt.Get("positions").shape[0], 1);
+        rt.Put(node.output(0), Tensor::FromFloat("", {1, 1, 3}, {0, 0, 0}));
+      });
+  RuntimeValueMap feeds{{"tokens", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))},
+                        {"mask", RuntimeValue(Tensor::FromInt64("", {1, 1}, {1}))},
+                        {"positions", RuntimeValue(Tensor::FromInt64("", {1, 1}, {0}))}};
+  const auto first = Tokens(Generate(pipeline, context, feeds));
+  const auto second = Tokens(Generate(pipeline, context, feeds));
+  EXPECT_EQ(first.size(), 9u);
+  EXPECT_EQ(first, second);
+
+  GenerationOptions options;
+  options.max_new_tokens = 1;
+  options.temperature = 0;
+  options.input_ids_name = "tokens";
+  options.logits_name = "scores";
+  options.attention_mask_name = "mask";
+  options.position_ids_name = "positions";
+  EXPECT_EQ(Tokens(Generate(pipeline, context, feeds, options)).size(), 2u);
+
+  pipeline.set_top_k(1);
+  EXPECT_THROW(Generate(pipeline, context, feeds), std::invalid_argument);
+  pipeline.clear_top_k();
+  pipeline.set_top_p(0.9f);
+  EXPECT_THROW(Generate(pipeline, context, feeds), std::invalid_argument);
+  pipeline.clear_top_p();
+  *pipeline.mutable_decode() = PipelineModel("Decode", {{"tokens", TensorProto::INT64}}, "scores");
+  EXPECT_THROW(Generate(pipeline, context, feeds), std::invalid_argument);
 }
 
 TEST(Generation, GeneratedMasksAndPositionsOutliveGenerationAndContextValues) {
-  const auto model = PipelineModel("Step",
-                                   {{"input_ids", TensorProto::INT64},
-                                    {"attention_mask", TensorProto::INT64},
-                                    {"position_ids", TensorProto::INT64}},
-                                   "logits");
+  PipelineProto pipeline =
+      MakeGenerationPipeline(PipelineModel("Step",
+                                           {{"input_ids", TensorProto::INT64},
+                                            {"attention_mask", TensorProto::INT64},
+                                            {"position_ids", TensorProto::INT64}},
+                                           "logits"));
+  const ModelProto &model = pipeline.prefill();
   RuntimeSession source(model);
   for (bool use_pipeline : {false, true}) {
     SCOPED_TRACE(use_pipeline);
@@ -1029,9 +1134,8 @@ TEST(Generation, GeneratedMasksAndPositionsOutliveGenerationAndContextValues) {
                           {"position_ids", RuntimeValue(Tensor::FromInt64("", {1, 2}, {0, 7}))}};
     GenerationOptions options;
     options.max_new_tokens = 2;
-    const auto tokens =
-        use_pipeline ? Generate(GenerationPipeline{.prefill = &model}, context, feeds, options)
-                     : Generate(model, context, feeds, options);
+    const auto tokens = use_pipeline ? Generate(pipeline, context, feeds, options)
+                                     : Generate(model, context, feeds, options);
     EXPECT_EQ(Tokens(tokens), (std::vector<int64_t>{0, 1, 1, 1}));
     Tensor mask = context.Get("attention_mask").BorrowView();
     Tensor positions = context.Get("position_ids").BorrowView();

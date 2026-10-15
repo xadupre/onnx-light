@@ -491,8 +491,19 @@ RuntimeValue FeedbackValueFromPython(
     return RuntimeValue::FromPagedCache(nb::cast<const PagedCacheProto &>(value), catalogue,
                                         parameters ? *parameters : nullptr);
   }
-  if (nb::isinstance<RuntimeValue>(value))
-    return nb::cast<const RuntimeValue &>(value).BorrowView();
+  if (nb::isinstance<RuntimeValue>(value)) {
+    RuntimeValue result = nb::cast<const RuntimeValue &>(value).BorrowView();
+    if (model && parameters && result.kind == RuntimeValue::Kind::kEncoded &&
+        result.Encoded().has_parameter_ref()) {
+      if (!*parameters)
+        *parameters = core::runtime::QuantizationParameterCatalogue::Build(*model);
+      StructTypeCatalogue catalogue;
+      catalogue.Build(*model);
+      (*parameters)->Validate(result.Encoded(), catalogue);
+      result.quantization_parameters = *parameters;
+    }
+    return result;
+  }
   if (nb::isinstance<Tensor>(value)) {
     const Tensor &source = nb::cast<const Tensor &>(value);
     if (source.data_type == TensorProto::STRING) {
@@ -517,6 +528,27 @@ RuntimeValueMap FeedbackValuesFromPython(nb::dict values, const ModelProto *mode
   for (auto [key, value] : values) {
     std::string name = nb::cast<std::string>(key);
     result.emplace(name, FeedbackValueFromPython(name, value, 0, model, &parameters));
+  }
+  return result;
+}
+
+RuntimeValueMap GenerationValuesFromPython(nb::dict values, const ModelProto &prefill,
+                                           const ModelProto *embedding) {
+  RuntimeValueMap result;
+  std::shared_ptr<const core::runtime::QuantizationParameterCatalogue> prefill_parameters;
+  std::shared_ptr<const core::runtime::QuantizationParameterCatalogue> embedding_parameters;
+  const auto has_input = [](const ModelProto &model, const std::string &name) {
+    return std::any_of(model.graph().input().begin(), model.graph().input().end(),
+                       [&](const ValueInfoProto &input) { return input.name() == name; });
+  };
+  for (auto [key, value] : values) {
+    std::string name = nb::cast<std::string>(key);
+    const ModelProto *model =
+        has_input(prefill, name) || embedding == nullptr || !has_input(*embedding, name)
+            ? &prefill
+            : embedding;
+    auto *parameters = model == &prefill ? &prefill_parameters : &embedding_parameters;
+    result.emplace(name, FeedbackValueFromPython(name, value, 0, model, parameters));
   }
   return result;
 }
@@ -2157,13 +2189,11 @@ void AddOnnxPyRuntime(nb::module_ &m) {
                          .device = context.device(),
                          .cpu_executor = runner.CpuExecutorLease().get(),
                      });
-        core::runtime::GenerationPipeline pipeline;
-        pipeline.prefill = &model;
-        if (!embedding.is_none())
-          pipeline.embedding = &nb::cast<const ModelProto &>(embedding);
-        auto inputs = FeedbackValuesFromPython(feeds, &model);
+        const ModelProto *embedding_model =
+            embedding.is_none() ? nullptr : &nb::cast<const ModelProto &>(embedding);
+        auto inputs = GenerationValuesFromPython(feeds, model, embedding_model);
         nb::gil_scoped_release release;
-        return core::runtime::Generate(pipeline, execution_context, inputs, options,
+        return core::runtime::Generate(model, embedding_model, execution_context, inputs, options,
                                        std::move(session_options));
       },
       nb::arg("model"), nb::arg("context"), nb::arg("runner"), nb::arg("feeds"), nb::arg("options"),

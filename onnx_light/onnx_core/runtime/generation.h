@@ -27,14 +27,6 @@ struct GenerationOptions {
   int64_t position_axes = 0;
 };
 
-/** Configures a language model and optional token embedding model. */
-struct GenerationPipeline {
-  /// Language model used for the prompt and subsequent token generation.
-  const ModelProto *prefill = nullptr;
-  /// Optional embedding model used for the prompt and subsequent token generation.
-  const ModelProto *embedding = nullptr;
-};
-
 /**
  * Generates tokens and returns the prompt followed by at most max_new_tokens tokens.
  *
@@ -72,7 +64,7 @@ ONNX_LIGHT_CORE_API Tensor Generate(const ModelProto &model, RuntimeContext &con
                                     RuntimeSessionOptions session_options = {});
 
 /**
- * Generates tokens using the pipeline's language model and optional embedding model.
+ * Generates tokens using the models and generation settings stored in a pipeline.
  *
  * Prefill is a prompt-processing phase, not a separate model: pipeline.prefill
  * also runs for subsequent tokens. The embedding model consumes input_ids before
@@ -83,12 +75,31 @@ ONNX_LIGHT_CORE_API Tensor Generate(const ModelProto &model, RuntimeContext &con
  * initializer-backed embedding output connected to a language-model input.
  * Private initializer and intermediate names must be unique across the two
  * models; conflicts are rejected before either model executes.
- * The same generation options and lifetime requirements apply as for a single model.
+ * Each feed is supplied once. It is routed to every model that declares the
+ * corresponding graph input and model-local parameter references are resolved
+ * against that model's catalogue.
+ * A separate decode model and top-k/top-p sampling are not yet supported.
+ * The same lifetime requirements apply as for a single model.
  * Calls sharing a context must be serialized, including calls to the single-model
  * overload or other runtime execution on that context.
  */
-ONNX_LIGHT_CORE_API Tensor Generate(const GenerationPipeline &pipeline, RuntimeContext &context,
+ONNX_LIGHT_CORE_API Tensor Generate(const PipelineProto &pipeline, RuntimeContext &context,
                                     const RuntimeValueMap &feeds,
+                                    RuntimeSessionOptions session_options = {});
+
+/** Generates tokens using explicit options instead of the settings stored in the pipeline. */
+ONNX_LIGHT_CORE_API Tensor Generate(const PipelineProto &pipeline, RuntimeContext &context,
+                                    const RuntimeValueMap &feeds, const GenerationOptions &options,
+                                    RuntimeSessionOptions session_options = {});
+
+/**
+ * Generates tokens from borrowed prefill and optional embedding models.
+ *
+ * This overload avoids copying model-owned weights when callers already retain
+ * the individual models. Both models must outlive the synchronous call.
+ */
+ONNX_LIGHT_CORE_API Tensor Generate(const ModelProto &prefill, const ModelProto *embedding,
+                                    RuntimeContext &context, const RuntimeValueMap &feeds,
                                     const GenerationOptions &options = {},
                                     RuntimeSessionOptions session_options = {});
 

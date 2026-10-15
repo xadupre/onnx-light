@@ -7,10 +7,16 @@ from concurrent.futures import ThreadPoolExecutor
 
 import numpy
 
+from onnx_light import onnx
 from onnx_light.ext_test_case import import_or_skip
-from onnx_light.onnx_lib import TensorProto, helper, numpy_helper, parser
+import onnx_light.onnx.helper as oh
+import onnx_light.onnx.numpy_helper as onh
+from onnx_light.onnx_lib import TensorProto, parser
 
 runtime = import_or_skip("onnx_light.onnx_py._onnxpykernels", "runtime")
+add_quantization_parameters = import_or_skip(
+    "onnx_light.onnx_core.quantization", "add_quantization_parameters"
+)
 ReferenceEvaluator = import_or_skip("onnx_light.onnx.reference", "ReferenceEvaluator")
 
 
@@ -22,9 +28,49 @@ def transition_model(dtype=numpy.float32):
         "{ logits = Gather(table, input_ids) }"
     )
     table = numpy.array([[0, 4, 0], [0, 0, 4], [4, 0, 0]], dtype=dtype)
-    model.graph.initializer.append(numpy_helper.from_array(table, name="table"))
-    model.graph.output[0].type.tensor_type.elem_type = numpy_helper.from_array(table).data_type
+    model.graph.initializer.append(onh.from_array(table, name="table"))
+    model.graph.output[0].type.tensor_type.elem_type = onh.from_array(table).data_type
     return model
+
+
+def _add_shared_parameters(model, name, shape, scales, prefix):
+    """Adds one shared parameter set with model-unique initializer names."""
+    plan = runtime.make_quantization_plan(
+        runtime.QuantizationFormat.INT8, int(numpy.prod(shape)), 1
+    )
+    storage = runtime.make_quantization_type(plan)
+    logical = oh.make_tensor_type_proto(TensorProto.FLOAT, shape)
+    compact = add_quantization_parameters(
+        model, name, storage, logical, scales=numpy.asarray(scales, dtype=numpy.float64)
+    )
+    annotation = model.graph.quantization_annotation[-1]
+    renamed = {
+        entry.value: f"{prefix}_{entry.value}"
+        for entry in annotation.quant_parameter_tensor_names
+    }
+    for initializer in model.graph.initializer:
+        if initializer.name in renamed:
+            initializer.name = renamed[initializer.name]
+    for entry in annotation.quant_parameter_tensor_names:
+        entry.value = renamed[entry.value]
+    return compact
+
+
+def _shared_value(model, name, values):
+    """Quantizes values into a retained model-local shared runtime value."""
+    array = numpy.asarray(values, dtype=numpy.float32)
+    tensor = runtime.tensor_from_numpy(
+        name,
+        TensorProto.FLOAT,
+        list(array.shape),
+        numpy.frombuffer(array.tobytes(), dtype=numpy.uint8),
+    )
+    return runtime.quantize_tensor_shared(tensor, model, name)
+
+
+def _shared_encoded(model, name, values):
+    """Quantizes values through one model-local shared parameter set."""
+    return _shared_value(model, name, values).encoded
 
 
 class TestGeneration(unittest.TestCase):
@@ -51,8 +97,8 @@ class TestGeneration(unittest.TestCase):
         model.graph.node[4].metadata_props.add(key="onnx_light.release_after", value=length_name)
         model.graph.initializer.extend(
             [
-                numpy_helper.from_array(numpy.array(1, dtype=numpy.int64), name="index"),
-                numpy_helper.from_array(numpy.array(0, dtype=numpy.int64), name="zero"),
+                onh.from_array(numpy.array(1, dtype=numpy.int64), name="index"),
+                onh.from_array(numpy.array(0, dtype=numpy.int64), name="zero"),
                 transition_model().graph.initializer[0],
             ]
         )
@@ -158,6 +204,169 @@ class TestGeneration(unittest.TestCase):
         failure_events = decoder.events()[before_failure:]
         self.assertTrue({"Gather", "Abs"} <= {event.op_type for event in failure_events})
 
+    def test_split_embedding_model_scoped_nested_parameter_references(self):
+        """Resolves embedding-only nested values against the embedding catalogue."""
+        embedding_model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Gather", ["table", "input_ids"], ["inputs_embeds"])],
+                "embedding",
+                [oh.make_tensor_value_info("input_ids", TensorProto.INT64, [None, None])],
+                [oh.make_tensor_value_info("inputs_embeds", TensorProto.FLOAT, [None, None, 3])],
+                [onh.from_array(numpy.eye(3, dtype=numpy.float32) * 4, name="table")],
+            ),
+            opset_imports=[oh.make_opsetid("", 23), oh.make_opsetid("ai.rt", 1)],
+            ir_version=10,
+        )
+        compact = _add_shared_parameters(
+            embedding_model, "embedding", [3], [1, 1, 1], "embedding"
+        )
+        direct_type = onnx.TypeProto(struct_type=compact)
+        nested_type = onnx.TypeProto(
+            struct_type=onnx.StructTypeProto(
+                structure=onnx.StructTypeProto.Structure(
+                    field=[onnx.StructTypeProto.Structure.Field(name="payload", type=direct_type)]
+                )
+            )
+        )
+        sequence_type = onnx.TypeProto(
+            sequence_type=onnx.TypeProto.Sequence(elem_type=direct_type)
+        )
+        for name, value_type in (
+            ("direct", direct_type),
+            ("nested", nested_type),
+            ("sequence", sequence_type),
+        ):
+            embedding_model.graph.input.append(oh.make_value_info(name, value_type))
+
+        _add_shared_parameters(embedding_model, "cache", [1, 1, 2, 2], [1, 1, 1, 1], "cache")
+        cache_info = onnx.ValueInfoProto()
+        cache_info.name = "cache"
+        cache_info.type.struct_type = onnx.StructTypeProto()
+        embedding_model.graph.input.append(cache_info)
+
+        direct = _shared_value(embedding_model, "embedding", [1, 2, 3])
+        cache_value = _shared_encoded(
+            embedding_model, "cache", numpy.arange(4, dtype=numpy.float32).reshape(1, 1, 2, 2)
+        )
+        cache = onnx.PagedCacheProto(name="cache")
+        block = cache.blocks.add()
+        block.start = 0
+        block.length = 2
+        block.encoded_key = cache_value
+        block.encoded_value = cache_value
+        decoder_model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Identity", ["inputs_embeds"], ["logits"])],
+                "decoder",
+                [oh.make_tensor_value_info("inputs_embeds", TensorProto.FLOAT, [None, None, 3])],
+                [oh.make_tensor_value_info("logits", TensorProto.FLOAT, [None, None, 3])],
+            ),
+            opset_imports=[oh.make_opsetid("", 23)],
+            ir_version=10,
+        )
+        feeds = {
+            "input_ids": numpy.array([[0]], dtype=numpy.int64),
+            "direct": direct,
+            "nested": {"payload": direct},
+            "sequence": [direct],
+            "cache": cache,
+        }
+        originals = {
+            "direct": direct.encoded.SerializeToString(),
+            "cache": cache.SerializeToString(),
+        }
+        numpy.testing.assert_array_equal(
+            ReferenceEvaluator(decoder_model).generate(
+                feeds, max_new_tokens=2, embedding=ReferenceEvaluator(embedding_model)
+            ),
+            [[0, 0, 0]],
+        )
+        self.assertEqual(direct.encoded.SerializeToString(), originals["direct"])
+        self.assertEqual(cache.SerializeToString(), originals["cache"])
+
+        missing = onnx.EncodedValueProto()
+        missing.CopyFrom(direct.encoded)
+        missing.parameter_ref = "missing"
+        with self.assertRaisesRegex(ValueError, "parameter_ref"):
+            ReferenceEvaluator(decoder_model).generate(
+                {**feeds, "direct": missing},
+                max_new_tokens=1,
+                embedding=ReferenceEvaluator(embedding_model),
+            )
+
+    def test_split_embedding_shared_feed_uses_each_model_catalogue(self):
+        """Binds one shared input name independently in both model scopes."""
+
+        def make_model(embedding, shape, scales):
+            prefix = "embedding" if embedding else "decoder"
+            inputs = (
+                [oh.make_tensor_value_info("input_ids", TensorProto.INT64, [None, None])]
+                if embedding
+                else []
+            )
+            nodes = [
+                oh.make_node(
+                    "Dequantize",
+                    ["shared"],
+                    [f"{prefix}_bias"],
+                    domain="ai.rt",
+                    dtype=TensorProto.FLOAT,
+                ),
+                oh.make_node(
+                    "Unsqueeze", [f"{prefix}_bias", f"{prefix}_axes"], [f"{prefix}_expanded"]
+                ),
+            ]
+            if embedding:
+                outputs = [
+                    oh.make_tensor_value_info("inputs_embeds", TensorProto.FLOAT, [1, 1, 3])
+                ]
+                nodes.append(oh.make_node("Identity", [f"{prefix}_expanded"], ["inputs_embeds"]))
+            else:
+                inputs.append(
+                    oh.make_tensor_value_info("inputs_embeds", TensorProto.FLOAT, [1, 1, 3])
+                )
+                outputs = [oh.make_tensor_value_info("logits", TensorProto.FLOAT, [1, 1, 3])]
+                nodes.append(
+                    oh.make_node("Add", ["inputs_embeds", f"{prefix}_expanded"], ["logits"])
+                )
+            model = oh.make_model(
+                oh.make_graph(
+                    nodes,
+                    prefix,
+                    inputs,
+                    outputs,
+                    [
+                        onh.from_array(
+                            numpy.array([0, 1], dtype=numpy.int64), name=f"{prefix}_axes"
+                        )
+                    ],
+                ),
+                opset_imports=[oh.make_opsetid("", 23), oh.make_opsetid("ai.rt", 1)],
+                ir_version=10,
+            )
+            compact = _add_shared_parameters(model, "common", shape, scales, prefix)
+            model.graph.input.append(
+                oh.make_value_info("shared", onnx.TypeProto(struct_type=compact))
+            )
+            return model
+
+        embedding_model = make_model(True, [3], [5, 1, 1])
+        decoder_model = make_model(False, [3], [1, 5, 1])
+        shared = _shared_value(embedding_model, "common", [5, 1, 4])
+        feeds = {"input_ids": numpy.array([[0]], dtype=numpy.int64), "shared": shared}
+        numpy.testing.assert_array_equal(
+            ReferenceEvaluator(decoder_model).generate(
+                feeds, max_new_tokens=1, embedding=ReferenceEvaluator(embedding_model)
+            ),
+            [[0, 2]],
+        )
+
+        incompatible_decoder = make_model(False, [4], [1, 1, 1, 1])
+        with self.assertRaisesRegex(ValueError, "incompatible type"):
+            ReferenceEvaluator(incompatible_decoder).generate(
+                feeds, max_new_tokens=1, embedding=ReferenceEvaluator(embedding_model)
+            )
+
     def test_split_embedding_persistent_state(self):
         embedding_model = parser.parse_model(
             '<ir_version: 10, opset_import: ["" : 23]>'
@@ -262,7 +471,7 @@ class TestGeneration(unittest.TestCase):
             " logits = Gather(table, past_state) }"
         )
         model.graph.initializer.append(
-            numpy_helper.from_array(numpy.ones((1, 1), dtype=numpy.int64), name="one")
+            onh.from_array(numpy.ones((1, 1), dtype=numpy.int64), name="one")
         )
         model.graph.initializer.append(transition_model().graph.initializer[0])
         binding = model.graph.persistent_bindings.add()
@@ -297,21 +506,19 @@ class TestGeneration(unittest.TestCase):
             past = f"past_key_values.0.{suffix}"
             present = f"present.0.{suffix}"
             model.graph.input.append(
-                helper.make_tensor_value_info(past, TensorProto.BFLOAT16, [1, 4, None, 64])
+                oh.make_tensor_value_info(past, TensorProto.BFLOAT16, [1, 4, None, 64])
             )
             model.graph.output.append(
-                helper.make_tensor_value_info(present, TensorProto.BFLOAT16, [1, 4, None, 64])
+                oh.make_tensor_value_info(present, TensorProto.BFLOAT16, [1, 4, None, 64])
             )
             model.graph.node.append(
-                helper.make_node("Concat", [past, "new_cache"], [present], axis=2)
+                oh.make_node("Concat", [past, "new_cache"], [present], axis=2)
             )
             binding = model.graph.persistent_bindings.add()
             binding.input_name = past
             binding.output_name = present
         model.graph.initializer.append(
-            numpy_helper.from_array(
-                numpy.ones((1, 4, 1, 64), dtype=ml_dtypes.bfloat16), name="new_cache"
-            )
+            onh.from_array(numpy.ones((1, 4, 1, 64), dtype=ml_dtypes.bfloat16), name="new_cache")
         )
         feeds = {
             "input_ids": numpy.array([[0]], dtype=numpy.int64),
@@ -346,7 +553,7 @@ class TestGeneration(unittest.TestCase):
             "{ index = Mul(positions, mask) scores = Gather(table, index) }"
         )
         model.graph.initializer.append(
-            numpy_helper.from_array(
+            onh.from_array(
                 numpy.array([[0, 4, 0], [0, 0, 4], [4, 0, 0], [0, 4, 0]], dtype=numpy.float32),
                 name="table",
             )
@@ -440,19 +647,15 @@ class TestGeneration(unittest.TestCase):
             (numpy.empty((1, 0), dtype=numpy.float32), "shape"),
         ):
             with self.subTest(message=message):
-                model = helper.make_model(
-                    helper.make_graph(
+                model = oh.make_model(
+                    oh.make_graph(
                         [],
                         "constant_logits",
-                        [
-                            helper.make_tensor_value_info(
-                                "input_ids", TensorProto.INT64, [1, None]
-                            )
-                        ],
-                        [helper.make_tensor_value_info("logits", TensorProto.FLOAT, None)],
-                        [numpy_helper.from_array(logits, name="logits")],
+                        [oh.make_tensor_value_info("input_ids", TensorProto.INT64, [1, None])],
+                        [oh.make_tensor_value_info("logits", TensorProto.FLOAT, None)],
+                        [onh.from_array(logits, name="logits")],
                     ),
-                    opset_imports=[helper.make_opsetid("", 23)],
+                    opset_imports=[oh.make_opsetid("", 23)],
                 )
                 with self.assertRaisesRegex(ValueError, message):
                     ReferenceEvaluator(model).generate(
@@ -460,7 +663,7 @@ class TestGeneration(unittest.TestCase):
                     )
         model = transition_model()
         model.graph.initializer[0].CopyFrom(
-            numpy_helper.from_array(
+            onh.from_array(
                 numpy.array([[-numpy.inf, 0, -numpy.inf]] * 3, dtype=numpy.float32), name="table"
             )
         )

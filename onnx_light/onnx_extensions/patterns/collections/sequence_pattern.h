@@ -103,8 +103,10 @@ public:
  *          └───────┘
  * @endcode
  *
- * With ``keepdims=1``, the ``Split`` writes the ``SequenceAt`` outputs
- * directly; an explicit ``split`` input is forwarded unchanged.
+ * With an explicit ``split`` input, ``keepdims`` is ignored and the ``Split``
+ * writes the ``SequenceAt`` outputs directly. A constant scalar split is
+ * expanded into chunk lengths, including the final remainder; a vector split
+ * is forwarded unchanged.
  */
 class SplitToSequenceSequenceAtPattern final : public core::builder::PatternOptimization {
 public:

@@ -97,9 +97,8 @@ RegisterDimensionExpressionShapeInferenceCase(std::vector<TestCase> &registry);
 ONNX_LIGHT_BACKEND_TEST_LOCAL void
 RegisterFloorDivOffsetShapeInferenceCase(std::vector<TestCase> &registry);
 
-/// Registers a ``Slice(axis=2, starts=0, ends=-1) → Abs`` case on symbolic
-/// input ``X[a,b,c]`` to exercise symbolic Slice-length inference
-/// (``c-1``) without creating fresh dimension names.
+/// Registers symbolic Slice cases, including a negative end and open-ended
+/// slices inside local functions with named or anonymous dynamic dimensions.
 ONNX_LIGHT_BACKEND_TEST_LOCAL void
 RegisterSliceSymbolicEndShapeInferenceCases(std::vector<TestCase> &registry,
                                             TestMode mode = TestMode::TEST);

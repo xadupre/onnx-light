@@ -1061,6 +1061,31 @@ TEST(onnx_external_ressource, NestedWritesStayOnOpenedFile) {
   fs::remove_all(root);
   fs::remove_all(outside);
 }
+
+TEST(onnx_external_ressource, NestedWritesStayBesideOpenedModel) {
+  namespace fs = std::filesystem;
+  const fs::path root = fs::temp_directory_path() / "onnx_light_anchored_model_directory";
+  const fs::path moved = fs::temp_directory_path() / "onnx_light_anchored_model_moved";
+  const fs::path outside = fs::temp_directory_path() / "onnx_light_anchored_model_outside";
+  fs::remove_all(root);
+  fs::remove_all(moved);
+  fs::remove_all(outside);
+  fs::create_directories(root);
+  fs::create_directories(outside);
+  {
+    utils::TwoFilesWriteStream stream((root / "model.onnx").string(),
+                                      (root / "default.data").string());
+    fs::rename(root, moved);
+    fs::create_directory_symlink(outside, root);
+    const uint8_t data[] = {1, 2};
+    stream.write_raw_bytes_in_second_stream(data, 2, ".weights/shard.data");
+  }
+  EXPECT_FALSE(fs::exists(outside / ".weights/shard.data"));
+  EXPECT_EQ(fs::file_size(moved / ".weights/shard.data"), 2U);
+  fs::remove_all(root);
+  fs::remove_all(moved);
+  fs::remove_all(outside);
+}
 #endif
 
 TEST(onnx_external_ressource, LoadSharedExternalDataInSubdirectory) {

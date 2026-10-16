@@ -1069,10 +1069,10 @@ struct ScopedExternalFd {
 } // namespace
 
 SecureExternalWriteStream::SecureExternalWriteStream(const std::string &model_path,
-                                                     const std::string &location)
+                                                     const std::string &location,
+                                                     int model_directory_fd)
     : file_path_(validate_external_location_is_next_to_model(model_path, location).string()) {
-  ScopedExternalFd dir{
-      ::open(normalized_model_parent(model_path).c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
+  ScopedExternalFd dir{::openat(model_directory_fd, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
   EXT_ENFORCE(dir.fd >= 0, "Cannot open model directory for external data: ", model_path);
   const std::filesystem::path relative = std::filesystem::path(location).lexically_normal();
   for (const auto &component : relative.parent_path()) {
@@ -1105,7 +1105,10 @@ SecureExternalWriteStream::~SecureExternalWriteStream() { ::close(fd_); }
 
 void SecureExternalWriteStream::write_raw_bytes_at_offset(const uint8_t *data, offset_t n_bytes,
                                                           int64_t offset) {
-  EXT_ENFORCE(n_bytes >= 0 && offset >= 0, "Invalid external data write size or offset.");
+  EXT_ENFORCE(n_bytes >= 0 && offset >= 0 && offset <= INT64_MAX - n_bytes,
+              "Invalid external data write size or offset.");
+  if (n_bytes == 0)
+    return;
   for (offset_t written = 0; written < n_bytes;) {
     const ssize_t count = ::pwrite(fd_, data + written, static_cast<size_t>(n_bytes - written),
                                    static_cast<off_t>(offset + written));
@@ -1114,11 +1117,14 @@ void SecureExternalWriteStream::write_raw_bytes_at_offset(const uint8_t *data, o
     EXT_ENFORCE(count > 0, "Failed to write external data file: ", file_path_);
     written += count;
   }
+  const int64_t end = offset + n_bytes;
+  int64_t current = size_.load();
+  while (current < end && !size_.compare_exchange_weak(current, end)) {
+  }
 }
 
 void SecureExternalWriteStream::write_raw_bytes(const uint8_t *data, offset_t n_bytes) {
-  write_raw_bytes_at_offset(data, n_bytes, size_);
-  size_ += n_bytes;
+  write_raw_bytes_at_offset(data, n_bytes, size_.load());
 }
 
 void SecureExternalWriteStream::pre_allocate(int64_t total_bytes) {
@@ -1367,6 +1373,16 @@ TwoFilesWriteStream::TwoFilesWriteStream(const std::string &file_path,
   if (!rel.empty() && rel.string() != ".") {
     default_weights_location_ = rel.string();
   }
+#if !defined(_WIN32)
+  model_directory_fd_ = ::open(parent.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+  EXT_ENFORCE(model_directory_fd_ >= 0, "Cannot open model directory: ", parent.string());
+#endif
+}
+
+TwoFilesWriteStream::~TwoFilesWriteStream() {
+#if !defined(_WIN32)
+  ::close(model_directory_fd_);
+#endif
 }
 
 void TwoFilesWriteStream::reject_case_aliased_weights_location(const std::string &location) const {
@@ -1408,7 +1424,8 @@ void TwoFilesWriteStream::set_active_weights_location(const std::string &locatio
 #if defined(_WIN32)
     auto stream = std::make_unique<FileWriteStream>(path.string());
 #else
-    auto stream = std::make_unique<SecureExternalWriteStream>(file_path_, normalized_location);
+    auto stream = std::make_unique<SecureExternalWriteStream>(file_path_, normalized_location,
+                                                              model_directory_fd_);
 #endif
     extra_weights_streams_.emplace(normalized_location, std::move(stream));
   }
@@ -1501,7 +1518,8 @@ void TwoFilesWriteStream::pre_allocate_weights(const std::string &location, int6
 #if defined(_WIN32)
     auto stream = std::make_unique<FileWriteStream>(path.string());
 #else
-    auto stream = std::make_unique<SecureExternalWriteStream>(file_path_, normalized_location);
+    auto stream = std::make_unique<SecureExternalWriteStream>(file_path_, normalized_location,
+                                                              model_directory_fd_);
 #endif
     it = extra_weights_streams_.emplace(normalized_location, std::move(stream)).first;
   }

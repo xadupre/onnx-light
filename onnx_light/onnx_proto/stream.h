@@ -3,6 +3,7 @@
 #include "onnx_light_helpers.h"
 #include "simple_string.h"
 #include "thread_pool.h"
+#include <atomic>
 #include <cstddef>
 #include <cstring>
 #include <filesystem>
@@ -648,7 +649,8 @@ protected:
 /** Writes a model-relative external-data file through an anchored POSIX descriptor. */
 class ONNX_LIGHT_PROTO_API SecureExternalWriteStream {
 public:
-  SecureExternalWriteStream(const std::string &model_path, const std::string &location);
+  SecureExternalWriteStream(const std::string &model_path, const std::string &location,
+                            int model_directory_fd);
   ~SecureExternalWriteStream();
   SecureExternalWriteStream(const SecureExternalWriteStream &) = delete;
   SecureExternalWriteStream &operator=(const SecureExternalWriteStream &) = delete;
@@ -656,13 +658,13 @@ public:
   void write_raw_bytes(const uint8_t *data, offset_t n_bytes);
   void write_raw_bytes_at_offset(const uint8_t *data, offset_t n_bytes, int64_t offset);
   void pre_allocate(int64_t total_bytes);
-  int64_t size() const { return size_; }
+  int64_t size() const { return size_.load(); }
   const std::string &file_path() const { return file_path_; }
 
 private:
   std::string file_path_;
   int fd_ = -1;
-  int64_t size_ = 0;
+  std::atomic<int64_t> size_{0};
 };
 #endif
 
@@ -769,6 +771,7 @@ class ONNX_LIGHT_PROTO_API TwoFilesWriteStream : public FileWriteStream {
 public:
   /** Opens *file_path* for protobuf data and *weights_file* for weight data. */
   explicit TwoFilesWriteStream(const std::string &file_path, const std::string &weights_file);
+  ~TwoFilesWriteStream() override;
   /** Returns the path of the separate weights file. */
   inline const std::string &weights_file_path() const { return weights_stream_.file_path(); }
   /** Selects the active external weights location for subsequent tensor raw-data writes. */
@@ -794,7 +797,7 @@ public:
   /** Pre-allocates the weights file associated with *location* to *total_bytes*.
    *  If *location* refers to the default weights file, behaves like
    *  ``pre_allocate_weights(total_bytes)``.  Otherwise creates the matching extra
-   *  ``FileWriteStream`` (if not already created) and pre-allocates it.
+   *  writer (if not already created) and pre-allocates it.
    *  Must be called before StartWriteThreadPool. */
   void pre_allocate_weights(const std::string &location, int64_t total_bytes);
 
@@ -848,6 +851,8 @@ protected:
 #else
   std::unordered_map<std::string, std::unique_ptr<SecureExternalWriteStream>>
       extra_weights_streams_;
+  /** Retains the original model directory while opening child weights files. */
+  int model_directory_fd_ = -1;
 #endif
   /** Rejects differently cased names that may refer to an already-open weights file. */
   void reject_case_aliased_weights_location(const std::string &location) const;

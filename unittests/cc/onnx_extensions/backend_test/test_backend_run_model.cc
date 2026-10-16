@@ -11,6 +11,7 @@
 #include "onnx_core/runtime/runtime_session.h"
 #include "onnx_extensions/kernels/kernels/sequence/include_sequence_kernels.h"
 #include "onnx_extensions/patterns/algebra/common_pattern.h"
+#include "onnx_extensions/patterns/collections/sequence_pattern.h"
 #include "onnx_lib/defs/function.h"
 #include "onnx_op/operator_sets.h"
 #include "onnx_proto/onnx_helper.h"
@@ -857,6 +858,53 @@ TEST(BackendRunModel, SplitToSequence) {
     }
   }
   EXPECT_GT(executed, 0u) << "No SplitToSequence test cases exercised.";
+}
+
+TEST(BackendRunModel, SplitToSequenceScalarRemainderSequenceAt) {
+  std::vector<TestCase> cases = CollectTestCases("SplitToSequence");
+  std::size_t checked = 0;
+  for (TestCase &tc : cases) {
+    if (tc.name != "test_cc_split_to_sequence_at_scalar_remainder" &&
+        tc.name != "test_cc_split_to_sequence_at_scalar_remainder_keepdims0") {
+      continue;
+    }
+    SCOPED_TRACE(tc.name);
+    TestCaseUnloadGuard unload_guard(tc);
+    const ModelProto &original = tc.model();
+    const auto &original_nodes = original.ref_graph().ref_node();
+    ASSERT_EQ(original_nodes.size(), 3u);
+    EXPECT_EQ(original_nodes[0].ref_op_type(), "SplitToSequence");
+    EXPECT_EQ(original_nodes[1].ref_op_type(), "SequenceAt");
+    EXPECT_EQ(original_nodes[2].ref_op_type(), "SequenceAt");
+
+    core::builder::GraphBuilder builder(original, [](const std::string &op_type) {
+      return onnx_op::GetAllOnnxOpSchemasWithHistory(op_type, false);
+    });
+    std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+    patterns.push_back(std::make_unique<onnx_patterns::SplitToSequenceSequenceAtPattern>());
+    core::builder::GraphGraph graph(builder, std::move(patterns));
+    ASSERT_FALSE(graph.Optimize().empty());
+    const ModelProto optimized = builder.ToModel();
+    ASSERT_EQ(optimized.ref_graph().ref_node().size(), 1u);
+    EXPECT_EQ(optimized.ref_graph().ref_node()[0].ref_op_type(), "Split");
+
+    for (const ModelProto *model : {&original, &optimized}) {
+      for (const DataSet &ds : tc.data_sets()) {
+        RuntimeContext rt;
+        for (const Tensor &input : ds.inputs) {
+          rt.Set(input.name, input);
+        }
+        RunModelViaSession(*model, rt);
+        ASSERT_EQ(ds.outputs.size(), 2u);
+        for (const Tensor &expected : ds.outputs) {
+          ASSERT_TRUE(rt.Has(expected.name));
+          ExpectTensorBitEqual(rt.Get(expected.name), expected);
+        }
+      }
+    }
+    ++checked;
+  }
+  EXPECT_EQ(checked, 2u);
 }
 
 } // namespace Test

@@ -257,6 +257,34 @@ class TestCollectionPatterns(ExtTestCase):
         self.assertEqual(list(optimized.graph.node[0].output), ["Y1", "Y2", "Y3"])
         self.assert_equivalent(model, optimized, feeds)
 
+    def test_split_to_sequence_scalar_remainder(self):
+        model = make_model(
+            [
+                oh.make_node("SplitToSequence", ["X", "split"], ["seq"], axis=-2, keepdims=0),
+                oh.make_node("SequenceAt", ["seq", "i1"], ["Y1"]),
+                oh.make_node("SequenceAt", ["seq", "i0"], ["Y0"]),
+            ],
+            [make_value_info("X", TensorProto.FLOAT, [1, 8, 3])],
+            [
+                make_value_info("Y1", TensorProto.FLOAT, [1, 3, 3]),
+                make_value_info("Y0", TensorProto.FLOAT, [1, 5, 3]),
+            ],
+            [make_initializer("split", 5), make_initializer("i0", 0), make_initializer("i1", 1)],
+        )
+        feeds = {"X": make_range(1, 8, 3)}
+
+        optimized, rewrites = self.optimize(model, "SplitToSequenceSequenceAt")
+
+        self.assertEqual(len(rewrites), 1)
+        self.assertEqual(node_types(optimized), ["Split"])
+        split = optimized.graph.node[0]
+        self.assertEqual(list(split.output), ["Y0", "Y1"])
+        numpy.testing.assert_array_equal(initializer_values(optimized)[split.input[1]], [5, 3])
+        self.assert_equivalent(model, optimized, feeds)
+        numpy.testing.assert_array_equal(
+            ReferenceEvaluator(optimized).run(None, feeds)[0], feeds["X"][:, 5:]
+        )
+
     def test_split_concat(self):
         model = make_model(
             [

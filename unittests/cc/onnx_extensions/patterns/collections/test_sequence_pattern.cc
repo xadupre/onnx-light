@@ -8,6 +8,7 @@
 #include "onnx_proto/onnx_helper.h"
 
 #include <memory>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -126,6 +127,84 @@ TEST(SplitToSequenceSequenceAtPattern, ReplacesWithSplitWhenSplitProvided) {
   EXPECT_EQ(replacements[0].output()[0].value(), "y0");
   EXPECT_EQ(replacements[0].output()[1].value(), "y1");
   EXPECT_EQ(replacements[0].output()[2].value(), "y2");
+}
+
+TEST(SplitToSequenceSequenceAtPattern, ExpandsScalarSplitWithRemainder) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2D(2, 8));
+  builder.MakeInitializer(MakeInitializer<int64_t>("split", {}, {5}));
+  builder.MakeInitializer(MakeInitializer<int64_t>("i0", {}, {0}));
+  builder.MakeInitializer(MakeInitializer<int64_t>("i1", {}, {1}));
+  builder.MakeNode("SplitToSequence", {"x", "split"}, {"seq"}, "", "", AxisKeepdims(-1, 0));
+  builder.MakeNode("SequenceAt", {"seq", "i1"}, {"y1"});
+  builder.MakeNode("SequenceAt", {"seq", "i0"}, {"y0"});
+  builder.MakeOutput("y1");
+  builder.MakeOutput("y0");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::SplitToSequenceSequenceAtPattern pattern;
+  const core::builder::MatchResult match = pattern.Match(graph, builder.Nodes()[0]);
+  ASSERT_EQ(match.pattern, &pattern);
+  const auto replacements = pattern.Apply(graph, match.nodes);
+  ASSERT_EQ(replacements.size(), 1u);
+  EXPECT_EQ(replacements[0].op_type().value(), "Split");
+  ASSERT_EQ(replacements[0].input_size(), 2);
+  EXPECT_EQ(replacements[0].output()[0].value(), "y0");
+  EXPECT_EQ(replacements[0].output()[1].value(), "y1");
+  const std::string &sizes_name = replacements[0].input()[1].value();
+  EXPECT_NE(sizes_name, "split");
+  bool found = false;
+  for (const TensorProto &initializer : builder.Initializers()) {
+    if (initializer.name().value() == sizes_name) {
+      std::vector<int64_t> sizes;
+      ASSERT_TRUE(ReadIntegerValues(initializer, sizes));
+      EXPECT_EQ(sizes, (std::vector<int64_t>{5, 3}));
+      found = true;
+    }
+  }
+  EXPECT_TRUE(found);
+}
+
+TEST(SplitToSequenceSequenceAtPattern, OptimizesScalarSplitWithRemainder) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2D(2, 8));
+  builder.MakeInitializer(MakeInitializer<int64_t>("split", {}, {5}));
+  builder.MakeInitializer(MakeInitializer<int64_t>("i0", {}, {0}));
+  builder.MakeInitializer(MakeInitializer<int64_t>("i1", {}, {1}));
+  builder.MakeNode("SplitToSequence", {"x", "split"}, {"seq"}, "", "", IntAttrs("axis", -1));
+  builder.MakeNode("SequenceAt", {"seq", "i0"}, {"y0"});
+  builder.MakeNode("SequenceAt", {"seq", "i1"}, {"y1"});
+  builder.MakeOutput("y0");
+  builder.MakeOutput("y1");
+
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<onnx_patterns::SplitToSequenceSequenceAtPattern>());
+  core::builder::GraphGraph graph(builder, std::move(patterns));
+  ASSERT_FALSE(graph.Optimize().empty());
+  ASSERT_EQ(builder.Nodes().size(), 1u);
+  EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Split");
+  EXPECT_EQ(builder.GetShape("y0").Shape()[1].AsInt(), 5);
+  EXPECT_EQ(builder.GetShape("y1").Shape()[1].AsInt(), 3);
+}
+
+TEST(SplitToSequenceSequenceAtPattern, RejectsScalarSplitWithUnknownAxisDimension) {
+  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::symbolic::SymShape shape;
+  shape.PushBack(core::symbolic::SymDim(2));
+  shape.PushBack(core::symbolic::SymDim("unknown"));
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, shape);
+  builder.MakeInitializer(MakeInitializer<int64_t>("split", {}, {5}));
+  builder.MakeInitializer(MakeInitializer<int64_t>("i0", {}, {0}));
+  builder.MakeInitializer(MakeInitializer<int64_t>("i1", {}, {1}));
+  builder.MakeNode("SplitToSequence", {"x", "split"}, {"seq"}, "", "", IntAttrs("axis", 1));
+  builder.MakeNode("SequenceAt", {"seq", "i0"}, {"y0"});
+  builder.MakeNode("SequenceAt", {"seq", "i1"}, {"y1"});
+  builder.MakeOutput("y0");
+  builder.MakeOutput("y1");
+
+  core::builder::GraphGraph graph(builder);
+  onnx_patterns::SplitToSequenceSequenceAtPattern pattern;
+  EXPECT_EQ(pattern.Match(graph, builder.Nodes()[0]).pattern, nullptr);
 }
 
 TEST(SplitToSequenceSequenceAtPattern, InsertsSqueezeWhenKeepdimsZero) {

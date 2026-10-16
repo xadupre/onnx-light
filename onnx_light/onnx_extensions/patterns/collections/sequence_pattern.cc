@@ -128,6 +128,33 @@ SplitToSequenceSequenceAtPattern::Match(core::builder::GraphGraph &graph,
   if (!CollectSequenceAt(graph, candidate.output()[0].value(), consumers, indices)) {
     return NoMatch(candidate, "the sequence is not fully consumed by constant SequenceAt nodes");
   }
+  if (candidate.input_size() > 1 && !candidate.input()[1].value().empty()) {
+    const std::string &split_name = candidate.input()[1].value();
+    if (!graph.HasShape(split_name)) {
+      return NoMatch(candidate, "the split input shape is unknown");
+    }
+    if (graph.GetShape(split_name).Shape().Rank() == 0) {
+      const TensorProto *split = graph.GetComputedConstant(split_name);
+      int64_t chunk = 0;
+      const std::string &data = candidate.input()[0].value();
+      if (split == nullptr || split->dims_size() != 0 || !ReadScalarInt(*split, chunk) ||
+          chunk <= 0 || !graph.HasShape(data)) {
+        return NoMatch(candidate, "scalar split requires a positive constant and a known shape");
+      }
+      const core::symbolic::SymShape &shape = graph.GetShape(data).Shape();
+      const int64_t rank = static_cast<int64_t>(shape.Rank());
+      int64_t axis = GetAxis(candidate, 0);
+      axis = axis < 0 ? axis + rank : axis;
+      if (axis < 0 || axis >= rank || !shape[static_cast<std::size_t>(axis)].IsInt()) {
+        return NoMatch(candidate, "scalar split requires a known axis dimension");
+      }
+      const int64_t dim = shape[static_cast<std::size_t>(axis)].AsInt();
+      const int64_t expected = dim == 0 ? 1 : dim / chunk + (dim % chunk != 0);
+      if (expected != static_cast<int64_t>(consumers.size())) {
+        return NoMatch(candidate, "SequenceAt count does not match scalar split chunks");
+      }
+    }
+  }
   std::vector<const NodeProto *> nodes;
   nodes.reserve(consumers.size() + 1);
   nodes.push_back(&candidate);
@@ -167,17 +194,40 @@ SplitToSequenceSequenceAtPattern::Apply(core::builder::GraphGraph &graph,
   core::builder::GraphBuilder &builder = graph.Builder();
   const std::string name = "SplitToSequenceSequenceAtPattern--" + sequence.name().value();
 
+  const bool has_split_input = sequence.input_size() > 1 && !sequence.input()[1].value().empty();
+  const bool squeeze = !has_split_input && keepdims == 0;
   // The Split output names: the final outputs when keepdims keeps every axis,
   // fresh intermediate names when a Squeeze must reduce the split axis.
   std::vector<std::string> split_outputs(count);
   for (std::size_t i = 0; i < count; ++i) {
-    split_outputs[i] = keepdims != 0 ? final_outputs[i] : builder.UniqueName(name + "_split");
+    split_outputs[i] = !squeeze ? final_outputs[i] : builder.UniqueName(name + "_split");
   }
 
   std::vector<std::string> split_inputs{sequence.input()[0].value()};
-  const bool has_split_input = sequence.input_size() > 1;
   if (has_split_input) {
-    split_inputs.push_back(sequence.input()[1].value());
+    const std::string &split_name = sequence.input()[1].value();
+    if (graph.GetShape(split_name).Shape().Rank() == 0) {
+      int64_t chunk = 0;
+      ReadScalarInt(*graph.GetComputedConstant(split_name), chunk);
+      const core::symbolic::SymShape &shape = graph.GetShape(sequence.input()[0].value()).Shape();
+      const int64_t rank = static_cast<int64_t>(shape.Rank());
+      const int64_t resolved_axis = axis < 0 ? axis + rank : axis;
+      int64_t remaining = shape[static_cast<std::size_t>(resolved_axis)].AsInt();
+      std::vector<int64_t> sizes;
+      while (remaining > 0) {
+        const int64_t take = std::min(remaining, chunk);
+        sizes.push_back(take);
+        remaining -= take;
+      }
+      if (sizes.empty()) {
+        sizes.push_back(0);
+      }
+      const std::string sizes_name = collections::FreeInitializerName(builder, name + "_sizes");
+      builder.MakeInitializer(MakeInitializerShape(sizes_name.c_str(), sizes));
+      split_inputs.push_back(sizes_name);
+    } else {
+      split_inputs.push_back(split_name);
+    }
   }
 
   utils::RepeatedProtoField<NodeProto> replacements;
@@ -188,7 +238,7 @@ SplitToSequenceSequenceAtPattern::Apply(core::builder::GraphGraph &graph,
   }
   replacements.push_back(split);
 
-  if (keepdims == 0) {
+  if (squeeze) {
     const std::string axes_name = collections::FreeInitializerName(builder, name + "_axes");
     builder.MakeInitializer(MakeInitializerShape(axes_name.c_str(), {axis}));
     for (std::size_t i = 0; i < count; ++i) {

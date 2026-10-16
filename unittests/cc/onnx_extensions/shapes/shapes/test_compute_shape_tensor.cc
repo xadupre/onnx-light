@@ -2,12 +2,15 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_core/shapes/shape_broadcast.h"
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_extensions/shapes/shapes/tensor/shape_tensor.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <gtest/gtest.h>
 
+#include <limits>
+#include <memory>
 #include <optional>
 #include <stdexcept>
 
@@ -620,6 +623,71 @@ TEST(OnnxOptimShapesTensorSlice, KeepsAnchorDimsAndBuildsSliceExpression) {
   EXPECT_EQ(ctx.Get("Y").Shape(),
             (core::symbolic::SymShape{core::symbolic::SymDim("a"), core::symbolic::SymDim("b"),
                                       core::symbolic::SymDim("c-1")}));
+}
+
+TEST(OnnxOptimShapesTensorSlice, OpenEndPreservesUnknownDimensionForBroadcast) {
+  for (const auto &dim : {core::symbolic::SymDim(""), core::symbolic::SymDim("heads")}) {
+    for (int64_t step : {1, 2}) {
+      core::shapes::ShapesContext ctx;
+      ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                             {core::symbolic::SymDim(2), dim}));
+      ctx.Set("Starts", MakeShapeInput({0}));
+      ctx.Set("Ends", MakeShapeInput({std::numeric_limits<int64_t>::max()}));
+      ctx.Set("Axes", MakeShapeInput({1}));
+      ctx.Set("Steps", MakeShapeInput({step}));
+
+      onnx_shapes::shapes::tensor::ComputeShapeSlice(
+          ctx, MakeSliceNode("X", "Starts", "Ends", "Axes", "Steps"));
+
+      if (step == 1) {
+        EXPECT_EQ(ctx.Get("Y").Shape()[1], dim);
+      } else {
+        EXPECT_TRUE(ctx.Get("Y").Shape()[1].IsExpr());
+      }
+      const core::symbolic::SymShape known{core::symbolic::SymDim(2), core::symbolic::SymDim(96)};
+      EXPECT_EQ(core::shapes::BroadcastShapes(ctx.Get("Y").Shape(), known), known);
+    }
+  }
+}
+
+TEST(OnnxOptimShapesTensorSlice, LocalFunctionOpenEndBroadcastsAgainstKnownHead) {
+  auto function = std::make_shared<FunctionProto>();
+  function->set_name("SliceAndAdd");
+  function->set_domain("local");
+  for (const char *input : {"data", "starts", "ends", "axes", "heads"}) {
+    function->add_input(input);
+  }
+  function->add_output("sum");
+  function->add_node(MakeSliceNode("data", "starts", "ends", "axes", "", "sliced"));
+  NodeProto add;
+  add.set_op_type("Add");
+  add.add_input("sliced");
+  add.add_input("heads");
+  add.add_output("sum");
+  function->add_node(add);
+
+  core::shapes::ShapesContext ctx;
+  ctx.SetLocalFunction(function);
+  ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                         {core::symbolic::SymDim(2), core::symbolic::SymDim("")}));
+  ctx.Set("Starts", MakeShapeInput({0}));
+  ctx.Set("Ends", MakeShapeInput({std::numeric_limits<int64_t>::max()}));
+  ctx.Set("Axes", MakeShapeInput({1}));
+  ctx.Set("Heads",
+          core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                    {core::symbolic::SymDim(1), core::symbolic::SymDim(96)}));
+  NodeProto call;
+  call.set_domain("local");
+  call.set_op_type("SliceAndAdd");
+  for (const char *input : {"X", "Starts", "Ends", "Axes", "Heads"}) {
+    call.add_input(input);
+  }
+  call.add_output("Y");
+
+  ctx.ComputeShapeNode(call);
+
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (core::symbolic::SymShape{core::symbolic::SymDim(2), core::symbolic::SymDim(96)}));
 }
 
 TEST(OnnxOptimShapesTensorSlice, ProvesOnlyFullSlicesWithSymbolicEnds) {

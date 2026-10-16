@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <string>
 #include <variant>
@@ -91,9 +92,17 @@ expressions::DimType ResolveSliceIndex(const expressions::DimType &dim, int64_t 
 }
 
 SymDim SymbolicSliceLength(const SymDim &dim, int64_t start, int64_t end, int64_t step) {
+  if (start == 0 && end == std::numeric_limits<int64_t>::max() && step == 1) {
+    return dim;
+  }
+  if (end == std::numeric_limits<int64_t>::max() && step > 0 && dim.IsExpr() &&
+      dim.AsExpr().empty()) {
+    return dim;
+  }
   const expressions::DimType d = ToDimType(dim);
   const expressions::DimType start_expr = ResolveSliceIndex(d, start);
-  const expressions::DimType end_expr = ResolveSliceIndex(d, end);
+  const expressions::DimType end_expr =
+      end == std::numeric_limits<int64_t>::max() && step > 0 ? d : ResolveSliceIndex(d, end);
 
   const bool reverse = step < 0;
   const int64_t abs_step = reverse ? -step : step;

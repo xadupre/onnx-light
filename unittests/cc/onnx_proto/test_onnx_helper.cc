@@ -1065,12 +1065,12 @@ TEST(onnx_external_ressource, NestedWritesRejectFifoWithoutBlocking) {
   fs::remove_all(root);
   fs::create_directories(root / ".weights");
   ASSERT_EQ(::mkfifo((root / ".weights/data.bin").c_str(), 0600), 0);
+  const uint8_t data[] = {1, 2};
   EXPECT_EXIT(
       {
         ::alarm(3);
         utils::TwoFilesWriteStream stream((root / "model.onnx").string(),
                                           (root / "default.data").string());
-        const uint8_t data[] = {1, 2};
         EXPECT_THROW(stream.write_raw_bytes_in_second_stream(data, 2, ".weights/data.bin"),
                      std::exception);
         std::exit(::testing::Test::HasFailure() ? 1 : 0);

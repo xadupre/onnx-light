@@ -54,17 +54,21 @@ class TestIsRelativeAndContained(ExtTestCase):
     def test_nested_traversal(self):
         # safe/../../outside resolves to ../outside
         self.assertFalse(_is_relative_and_contained("safe/../../outside"))
+        self.assertFalse(_is_relative_and_contained("safe/../weights.bin"))
 
     def test_absolute_posix(self):
         self.assertFalse(_is_relative_and_contained("/etc/passwd"))
+
+    def test_windows_drive_relative(self):
+        self.assertFalse(_is_relative_and_contained("C:weights.bin"))
 
     @unittest.skipUnless(sys.platform == "win32", "Windows-specific test")
     def test_absolute_windows(self):
         self.assertFalse(_is_relative_and_contained("C:\\Windows\\System32\\config"))
 
     def test_dot_only(self):
-        # "." is valid (refers to base_dir itself)
         self.assertTrue(_is_relative_and_contained("./weights.bin"))
+        self.assertFalse(_is_relative_and_contained("."))
 
 
 class TestValidateExternalDataPath(ExtTestCase):
@@ -95,6 +99,10 @@ class TestValidateExternalDataPath(ExtTestCase):
     def test_valid_subdirectory_location(self):
         result = validate_external_data_path("data/model.data", self.tmpdir)
         self.assertEqual(result, os.path.realpath(self.sub_weights))
+
+    def test_rejects_internal_parent_component(self):
+        with self.assertRaises(ValueError):
+            validate_external_data_path("data/../weights.bin", self.tmpdir)
 
     def test_rejects_parent_traversal(self):
         with self.assertRaises(ValueError) as ctx:

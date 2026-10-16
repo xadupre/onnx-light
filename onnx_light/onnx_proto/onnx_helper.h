@@ -74,15 +74,17 @@ inline bool IsSafeExternalDataLocation(std::string_view location) {
   if (location.empty()) {
     return false;
   }
-  const std::filesystem::path normalized =
-      std::filesystem::path(std::string(location)).lexically_normal();
+  const std::filesystem::path path{std::string(location)};
+  for (const auto &part : path) {
+    if (part == std::filesystem::path("..")) {
+      return false;
+    }
+  }
+  const std::filesystem::path normalized = path.lexically_normal();
   if (normalized.empty() || normalized.has_root_path()) {
     return false;
   }
-  if (*normalized.begin() == std::filesystem::path("..")) {
-    return false;
-  }
-  return !normalized.filename().empty();
+  return !normalized.filename().empty() && normalized != std::filesystem::path(".");
 }
 
 // Canonical name of the default ONNX domain. The empty string used by

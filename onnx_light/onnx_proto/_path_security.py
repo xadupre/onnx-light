@@ -13,26 +13,24 @@ from pathlib import PurePosixPath, PureWindowsPath
 def _is_relative_and_contained(location: str) -> bool:
     """Checks whether *location* is a relative path that does not escape its parent.
 
-    Mirrors the C++ validation in TensorProto::LoadExternalData (onnx.cc):
-    the lexically-normalised path must have no root component and its first
-    segment must not be ``..``.
+    Mirrors the C++ external-data location validation: the path must be
+    relative and must not contain ``..`` components.
     """
     if not location:
         return False
     # Normalise using both POSIX and Windows semantics to cover cross-platform models.
     for PathCls in (PurePosixPath, PureWindowsPath):
         p = PathCls(location)
-        if p.is_absolute():
+        if p.anchor or not p.name:
             return False
         parts = list(p.parts)
-        # Reject leading ".."
-        if parts and parts[0] == "..":
+        if ".." in parts:
             return False
     # Also use os.path for the current platform
     normed_os = os.path.normpath(location)
     if os.path.isabs(normed_os):
         return False
-    if normed_os.startswith(".."):
+    if normed_os == ".." or normed_os.startswith(".." + os.sep):
         return False
     return True
 

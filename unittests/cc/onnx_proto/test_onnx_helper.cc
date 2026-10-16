@@ -963,7 +963,7 @@ TEST(onnx_external_ressource, SaveWithExternalDataWeightsFileMustBeNextToModel) 
   fs::remove_all(root);
 }
 
-TEST(onnx_external_ressource, SaveWithExternalDataLocationMustBeNextToModel) {
+TEST(onnx_external_ressource, SaveWithExternalDataLocationInSubdirectory) {
   namespace fs = std::filesystem;
 
   ModelProto model;
@@ -978,7 +978,7 @@ TEST(onnx_external_ressource, SaveWithExternalDataLocationMustBeNextToModel) {
   w1->ref_data_location() = TensorProto::DataLocation::EXTERNAL;
   auto *w1_loc = w1->add_external_data();
   w1_loc->set_key("location");
-  w1_loc->set_value("nested/weights_1.data");
+  w1_loc->set_value(".weights/nested/weights_1.data");
   auto *w1_off = w1->add_external_data();
   w1_off->set_key("offset");
   w1_off->set_value("0");
@@ -996,9 +996,118 @@ TEST(onnx_external_ressource, SaveWithExternalDataLocationMustBeNextToModel) {
     utils::TwoFilesWriteStream stream(model_path.string(), weights_path.string());
     SerializeOptions wopts;
     wopts.raw_data_threshold = 0;
-    EXPECT_THROW(SerializeProtoToStream(model, stream, wopts), std::exception);
+    EXPECT_NO_THROW(SerializeProtoToStream(model, stream, wopts));
   }
 
+  EXPECT_TRUE(fs::exists(root / ".weights/nested/weights_1.data"));
+  {
+    const fs::path default_weights = root / "unused.data";
+    std::ofstream unused(default_weights, std::ios::binary);
+    unused.close();
+    utils::TwoFilesStream stream(model_path.string(), default_weights.string());
+    ParseOptions opts;
+    ModelProto parsed;
+    ParseModelProtoFromStream(parsed, stream, opts, false);
+    const auto &tensor = parsed.ref_graph().ref_initializer()[0];
+    EXPECT_EQ(tensor.ref_external_data()[0].ref_value(), ".weights/nested/weights_1.data");
+    EXPECT_EQ(tensor.ref_raw_data(), w1->ref_raw_data());
+  }
+#ifndef _WIN32
+  const fs::path outside = fs::temp_directory_path() / "onnx_light_write_subdir_escape";
+  fs::remove_all(outside);
+  fs::create_directories(outside);
+  fs::create_directory_symlink(outside, root / "escape");
+  {
+    utils::TwoFilesWriteStream stream((root / "blocked.onnx").string(), weights_path.string());
+    EXPECT_THROW(
+        stream.write_raw_bytes_in_second_stream(w1->ref_raw_data().data(), 4, "escape/blocked.bin"),
+        std::exception);
+    EXPECT_THROW(
+        stream.write_raw_bytes_in_second_stream(w1->ref_raw_data().data(), 4, "../blocked.bin"),
+        std::exception);
+  }
+  EXPECT_FALSE(fs::exists(outside / "blocked.bin"));
+  fs::remove_all(outside);
+#endif
+  fs::remove_all(root);
+}
+
+TEST(onnx_external_ressource, LoadSharedExternalDataInSubdirectory) {
+  namespace fs = std::filesystem;
+  const fs::path root = fs::temp_directory_path() / "onnx_light_shared_subdir_weights";
+  fs::remove_all(root);
+  fs::create_directories(root / ".weights" / "nested");
+  const fs::path model_path = root / "model.onnx";
+  const fs::path weights_path = root / ".weights" / "nested" / "model.safetensors";
+  {
+    std::ofstream weights(weights_path, std::ios::binary);
+    weights << "0123456789abcdef" << "abcd" << "efgh";
+  }
+
+  ModelProto model;
+  auto *graph = model.add_graph();
+  graph->set_name("g");
+  for (int i = 0; i < 2; ++i) {
+    TensorProto *tensor = graph->add_initializer();
+    tensor->set_name("w" + std::to_string(i));
+    tensor->set_data_type(TensorProto::DataType::FLOAT);
+    tensor->ref_dims().push_back(1);
+    tensor->ref_data_location() = TensorProto::DataLocation::EXTERNAL;
+    auto add_entry = [tensor](const char *key, const std::string &value) {
+      auto *entry = tensor->add_external_data();
+      entry->set_key(key);
+      entry->set_value(value);
+    };
+    if (i == 0) {
+      add_entry("location", ".weights/nested/model.safetensors");
+      add_entry("offset", "16");
+      add_entry("length", "4");
+    } else {
+      add_entry("length", "4");
+      add_entry("offset", "20");
+      add_entry("location", ".weights/nested/model.safetensors");
+    }
+  }
+  {
+    utils::FileWriteStream stream(model_path.string());
+    SerializeOptions opts;
+    SerializeProtoToStream(model, stream, opts);
+  }
+  {
+    const fs::path default_weights = root / "unused.data";
+    std::ofstream unused(default_weights, std::ios::binary);
+    unused.close();
+    utils::TwoFilesStream stream(model_path.string(), default_weights.string());
+    ParseOptions opts;
+    ModelProto parsed;
+    ParseModelProtoFromStream(parsed, stream, opts, false);
+    ASSERT_EQ(parsed.ref_graph().ref_initializer().size(), 2U);
+    EXPECT_EQ(parsed.ref_graph().ref_initializer()[0].ref_raw_data().size(), 4U);
+    EXPECT_EQ(std::string(parsed.ref_graph().ref_initializer()[0].ref_raw_data().begin(),
+                          parsed.ref_graph().ref_initializer()[0].ref_raw_data().end()),
+              "abcd");
+    EXPECT_EQ(std::string(parsed.ref_graph().ref_initializer()[1].ref_raw_data().begin(),
+                          parsed.ref_graph().ref_initializer()[1].ref_raw_data().end()),
+              "efgh");
+  }
+  const fs::path reused_model_path = root / "reused.onnx";
+  SerializeOptions save_opts;
+  EXPECT_EQ(SaveModelWithSharedExternalData(model, reused_model_path.string(), save_opts), 0);
+  EXPECT_FALSE(fs::exists(reused_model_path.string() + ".data"));
+  {
+    utils::FileStream stream(reused_model_path.string());
+    ParseOptions opts;
+    ModelProto reused;
+    ParseModelProtoFromStream(reused, stream, opts, false);
+    for (const auto &tensor : reused.ref_graph().ref_initializer()) {
+      const size_t location_index = tensor.ref_external_data()[0].ref_key() == "location" ? 0 : 2;
+      EXPECT_EQ(tensor.ref_external_data()[location_index].ref_value(),
+                ".weights/nested/model.safetensors");
+      TensorProto loaded = tensor;
+      loaded.LoadExternalData(root.string());
+      EXPECT_EQ(loaded.ref_raw_data().size(), 4U);
+    }
+  }
   fs::remove_all(root);
 }
 

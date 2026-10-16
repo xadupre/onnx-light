@@ -1585,20 +1585,11 @@ std::filesystem::path resolve_external_data_location(const std::string &base_dir
     fail_check("Location of external TensorProto ( tensor name: ", tensor_name,
                ") should be a relative path, but it is an absolute path: ", location);
   }
-  auto relative_path = file_path.lexically_normal().make_preferred();
-  if (relative_path.native().find(std::filesystem::path("..").native()) !=
-      std::filesystem::path::string_type::npos) {
+  if (!IsSafeExternalDataLocation(location)) {
     fail_check("Data of TensorProto ( tensor name: ", tensor_name, ") should be file inside '",
                base_dir, "', but '", location, "' points outside the directory.");
   }
-  {
-    // External data location must be a plain filename with no directory component.
-    auto parent = relative_path.parent_path();
-    if (!parent.empty() && parent != std::filesystem::path(".")) {
-      fail_check("Location of external TensorProto ( tensor name: ", tensor_name,
-                 ") must be a filename with no folder, but got: ", location);
-    }
-  }
+  auto relative_path = file_path.lexically_normal().make_preferred();
   auto data_path = base_dir_path / relative_path;
   auto data_path_str = path_to_utf8(data_path);
   // Do not allow symlinks or directories.
@@ -1627,25 +1618,13 @@ static std::filesystem::path validate_write_location(const std::string &base_dir
                                                      const std::string &location,
                                                      const std::string &tensor_name) {
   auto file_path = utf8_to_path(location);
-  if (file_path.empty() || file_path.is_absolute()) {
+  if (!IsSafeExternalDataLocation(location)) {
     fail_check("External data location for tensor ", tensor_name,
                " is empty or absolute: ", location);
   }
   auto rel = file_path.lexically_normal().make_preferred();
-  if (rel == std::filesystem::path(".")) {
+  if (rel.filename().empty()) {
     fail_check("External data location for tensor ", tensor_name, " is invalid: ", location);
-  }
-  if (rel.native().find(std::filesystem::path("..").native()) !=
-      std::filesystem::path::string_type::npos) { // NOSONAR — C++17, no contains
-    fail_check("External data location for tensor ", tensor_name, " contains '..': ", location);
-  }
-  {
-    // External data location must be a plain filename with no directory component.
-    auto parent = rel.parent_path();
-    if (!parent.empty() && parent != std::filesystem::path(".")) {
-      fail_check("External data location for tensor ", tensor_name,
-                 " must be a filename with no folder, but got: ", location);
-    }
   }
   return utf8_to_path(base_dir.empty() ? std::string(".") : base_dir) / rel;
 }

@@ -37,10 +37,7 @@ TEST(CHECKER, ValidDataLocationTest) {
                    "localfolder", "/usr/any", "tensor_name"),
                ONNX_LIGHT_NAMESPACE::checker::ValidationError);
   EXPECT_THROW(ONNX_LIGHT_NAMESPACE::checker::resolve_external_data_location(
-                   "localfolder", "./sub/example", "tensor_name"),
-               ONNX_LIGHT_NAMESPACE::checker::ValidationError);
-  EXPECT_THROW(ONNX_LIGHT_NAMESPACE::checker::resolve_external_data_location(
-                   "localfolder", "sub/example", "tensor_name"),
+                   "localfolder", "sub/../example", "tensor_name"),
                ONNX_LIGHT_NAMESPACE::checker::ValidationError);
 #endif
 }
@@ -254,6 +251,13 @@ TEST(CHECKER, OpenExternalDataTest) {
     ASSERT_GE(fd.get(), 0);
   } // fd closed by ScopedFd
   EXPECT_TRUE(fs::exists(dir / "new.bin"));
+  {
+    std::ofstream weights(dir / "weights..bin", std::ios::binary);
+    weights << "data";
+  }
+  EXPECT_EQ(
+      ONNX_LIGHT_NAMESPACE::checker::resolve_external_data_location(dir_utf8, "weights..bin", "t"),
+      fs::canonical(dir / "weights..bin"));
 
   // Reject invalid locations
   EXPECT_THROW(
@@ -266,16 +270,22 @@ TEST(CHECKER, OpenExternalDataTest) {
                ONNX_LIGHT_NAMESPACE::checker::ValidationError);
   EXPECT_THROW(ONNX_LIGHT_NAMESPACE::checker::open_external_data(dir_utf8, ".", "t", false),
                ONNX_LIGHT_NAMESPACE::checker::ValidationError);
-  // Subdirectory in location must be rejected for both read and write.
-  EXPECT_THROW(
-      ONNX_LIGHT_NAMESPACE::checker::open_external_data(dir_utf8, "sub/weights.bin", "t", true),
-      ONNX_LIGHT_NAMESPACE::checker::ValidationError);
-  EXPECT_THROW(
-      ONNX_LIGHT_NAMESPACE::checker::open_external_data(dir_utf8, "sub/weights.bin", "t", false),
-      ONNX_LIGHT_NAMESPACE::checker::ValidationError);
-  EXPECT_THROW(
-      ONNX_LIGHT_NAMESPACE::checker::open_external_data(dir_utf8, "./sub/weights.bin", "t", false),
-      ONNX_LIGHT_NAMESPACE::checker::ValidationError);
+  fs::create_directories(dir / ".weights" / "nested");
+  raw = ONNX_LIGHT_NAMESPACE::checker::open_external_data(dir_utf8, ".weights/nested/weights.bin",
+                                                          "t", false);
+  {
+    ScopedFd fd(static_cast<int>(raw));
+  }
+  raw = ONNX_LIGHT_NAMESPACE::checker::open_external_data(dir_utf8, "./.weights/nested/weights.bin",
+                                                          "t", true);
+  {
+    ScopedFd fd(static_cast<int>(raw));
+  }
+  EXPECT_THROW(ONNX_LIGHT_NAMESPACE::checker::open_external_data(
+                   dir_utf8, ".weights/../weights.bin", "t", false),
+               ONNX_LIGHT_NAMESPACE::checker::ValidationError);
+  EXPECT_THROW(ONNX_LIGHT_NAMESPACE::checker::open_external_data(dir_utf8, "", "t", false),
+               ONNX_LIGHT_NAMESPACE::checker::ValidationError);
   // UTF-8 traversal
   EXPECT_THROW(ONNX_LIGHT_NAMESPACE::checker::open_external_data(
                    dir_utf8, "../\xe3\x83\x86\xe3\x83\xb3\xe3\x82\xbd\xe3\x83\xab.bin", "t", true),
@@ -293,6 +303,13 @@ TEST(CHECKER, OpenExternalDataTest) {
   fs::create_symlink(outside / "secret.data", dir / "link.data");
   EXPECT_THROW(ONNX_LIGHT_NAMESPACE::checker::open_external_data(dir_utf8, "link.data", "t", true),
                ONNX_LIGHT_NAMESPACE::checker::ValidationError);
+  fs::create_directory_symlink(outside, dir / "escape");
+  EXPECT_THROW(
+      ONNX_LIGHT_NAMESPACE::checker::open_external_data(dir_utf8, "escape/secret.data", "t", true),
+      ONNX_LIGHT_NAMESPACE::checker::ValidationError);
+  EXPECT_THROW(
+      ONNX_LIGHT_NAMESPACE::checker::open_external_data(dir_utf8, "escape/new.data", "t", false),
+      ONNX_LIGHT_NAMESPACE::checker::ValidationError);
   fs::remove_all(outside);
 #endif
 

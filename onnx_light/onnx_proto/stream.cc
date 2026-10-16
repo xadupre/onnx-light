@@ -1,4 +1,5 @@
 #include "stream.h"
+#include "onnx_helper.h"
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
@@ -94,24 +95,24 @@ std::string validate_weights_file_is_next_to_model(const std::string &model_path
 std::filesystem::path validate_external_location_is_next_to_model(const std::string &model_path,
                                                                   const std::string &location) {
   std::filesystem::path location_path(location);
-  EXT_ENFORCE(!location_path.empty(), "External data location cannot be empty.");
-  EXT_ENFORCE(
-      !location_path.is_absolute(),
-      "External data location must be a file name next to the model file. location=", location);
-
+  EXT_ENFORCE(IsSafeExternalDataLocation(location),
+              "External data location must be a safe relative file path. location=", location);
   std::filesystem::path normalized_location = location_path.lexically_normal();
-  const bool same_dir = normalized_location.parent_path().empty() ||
-                        normalized_location.parent_path() == std::filesystem::path(".");
-  EXT_ENFORCE(
-      same_dir,
-      "External data location must be a file name next to the model file. location=", location);
   const std::filesystem::path location_filename = normalized_location.filename();
   EXT_ENFORCE(is_windows_compatible_filename(location_filename),
               "External data location must include a filename that does not end with a dot or "
               "space. location=",
               location);
 
-  std::filesystem::path final_path = normalized_model_parent(model_path) / location_filename;
+  const std::filesystem::path base =
+      std::filesystem::weakly_canonical(normalized_model_parent(model_path));
+  std::filesystem::path final_path = base / normalized_location;
+  const std::filesystem::path parent = std::filesystem::weakly_canonical(final_path.parent_path());
+  auto relative_parent = parent.lexically_relative(base);
+  EXT_ENFORCE(!relative_parent.empty() && (relative_parent == std::filesystem::path(".") ||
+                                           *relative_parent.begin() != std::filesystem::path("..")),
+              "External data location resolves outside model directory. location=", location);
+  std::filesystem::create_directories(parent);
   // Reject symlinks as write targets to prevent TOCTOU-based arbitrary file overwrites
   // (GHSA-8qff-7g33-75mx). Defense-in-depth: FileWriteStream also checks at open time.
   if (std::filesystem::is_symlink(final_path)) {
@@ -1311,6 +1312,9 @@ void TwoFilesWriteStream::reject_case_aliased_weights_location(const std::string
 }
 
 void TwoFilesWriteStream::set_active_weights_location(const std::string &location) {
+  if (!location.empty() && location != weights_stream_.file_path()) {
+    EXT_ENFORCE(IsSafeExternalDataLocation(location), "Unsafe external data location: ", location);
+  }
   const std::string normalized_location = normalize_external_location(location);
   if (normalized_location.empty()) {
     active_weights_location_ = weights_stream_.file_path();
@@ -1400,6 +1404,9 @@ void TwoFilesWriteStream::pre_allocate_weights(int64_t total_bytes) {
 
 void TwoFilesWriteStream::pre_allocate_weights(const std::string &location, int64_t total_bytes) {
   EXT_ENFORCE(total_bytes >= 0, "total_bytes must be non-negative, got ", total_bytes);
+  if (!location.empty() && location != weights_stream_.file_path()) {
+    EXT_ENFORCE(IsSafeExternalDataLocation(location), "Unsafe external data location: ", location);
+  }
   if (total_bytes == 0)
     return;
   const std::string normalized_location = normalize_external_location(location);
@@ -1509,6 +1516,9 @@ TwoFilesStream::TwoFilesStream(const std::string &file_path, const std::string &
 }
 
 void TwoFilesStream::set_active_weights_location(const std::string &location) {
+  if (!location.empty() && location != weights_stream_.file_path()) {
+    EXT_ENFORCE(IsSafeExternalDataLocation(location), "Unsafe external data location: ", location);
+  }
   const std::string normalized_location = normalize_external_location(location);
   std::filesystem::path model_parent = std::filesystem::path(file_path_).parent_path();
   if (model_parent.empty()) {

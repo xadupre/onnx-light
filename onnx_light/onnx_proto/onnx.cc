@@ -627,15 +627,9 @@ void TensorProto::WriteExternalData(utils::BinaryWriteStream &stream,
     for (size_t i = 0; i < ref_external_data().size(); ++i) {
       const StringStringEntryProto &entry = ref_external_data()[i];
       if (entry.ref_key() == "location") {
-        EXT_ENFORCE(!entry.ref_value().empty(), "External data location must not be empty.");
-        {
-          std::filesystem::path loc_path(std::string(entry.ref_value()));
-          auto normalized = loc_path.lexically_normal();
-          auto parent = normalized.parent_path();
-          EXT_ENFORCE(parent.empty() || parent == std::filesystem::path("."),
-                      "External data location must be a filename with no folder, name='",
-                      ref_name(), "', location='", entry.ref_value(), "'");
-        }
+        EXT_ENFORCE(IsSafeExternalDataLocation(entry.ref_value().sv()),
+                    "Unsafe external data location, name='", ref_name(), "', location='",
+                    entry.ref_value(), "'");
         external_location = &entry.ref_value();
         has_location = true;
       } else if (entry.ref_key() == "size" || entry.ref_key() == "length") {
@@ -766,16 +760,9 @@ bool TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
     auto &external_data = ref_external_data();
 
     if (external_data.size() >= 3 && external_data[0].ref_key() == "location") {
-      EXT_ENFORCE(!external_data[0].ref_value().empty(),
-                  "External data location must not be empty.");
-      {
-        std::filesystem::path loc_path(std::string(external_data[0].ref_value()));
-        auto normalized = loc_path.lexically_normal();
-        auto parent = normalized.parent_path();
-        EXT_ENFORCE(parent.empty() || parent == std::filesystem::path("."),
-                    "External data location must be a filename with no folder, name='", ref_name(),
-                    "', location='", std::string(external_data[0].ref_value()), "'");
-      }
+      EXT_ENFORCE(IsSafeExternalDataLocation(external_data[0].ref_value().sv()),
+                  "Unsafe external data location, name='", ref_name(), "', location='",
+                  external_data[0].ref_value(), "'");
       location = std::string(external_data[0].ref_value());
       const StringStringEntryProto &entry1 = external_data[1];
       const StringStringEntryProto &entry2 = external_data[2];
@@ -794,15 +781,9 @@ bool TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
       for (size_t i = 0; i < external_data.size(); ++i) {
         const StringStringEntryProto &entry = external_data[i];
         if (entry.ref_key() == "location") {
-          EXT_ENFORCE(!entry.ref_value().empty(), "External data location must not be empty.");
-          {
-            std::filesystem::path loc_path(std::string(entry.ref_value()));
-            auto normalized = loc_path.lexically_normal();
-            auto parent = normalized.parent_path();
-            EXT_ENFORCE(parent.empty() || parent == std::filesystem::path("."),
-                        "External data location must be a filename with no folder, name='",
-                        ref_name(), "', location='", entry.ref_value(), "'");
-          }
+          EXT_ENFORCE(IsSafeExternalDataLocation(entry.ref_value().sv()),
+                      "Unsafe external data location, name='", ref_name(), "', location='",
+                      entry.ref_value(), "'");
           location = entry.ref_value();
           // Should check the value with the location of the second stream?
         } else if (entry.ref_key() == "length" || entry.ref_key() == "size") {

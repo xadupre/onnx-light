@@ -6,6 +6,7 @@
 #include "onnx_core/runtime/kernels/random.h"
 #include "onnx_extensions/backend_test/cases/sequence/include_sequence_cases.h"
 #include "onnx_extensions/kernels/kernels/sequence/include_sequence_kernels.h"
+#include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
 #include <string>
@@ -110,6 +111,68 @@ void RegisterSplitToSequenceCase(const std::string &name, const Tensor &input, c
   registry.emplace_back(std::move(lazy_case));
 }
 
+void RegisterScalarRemainderSequenceAtCase(const std::string &name, int64_t keepdims,
+                                           std::vector<TestCase> &registry) {
+  TestCase lazy_case(name, name);
+  lazy_case.build = [name, keepdims](bool) -> BuiltCase {
+    std::vector<float> values(24);
+    for (std::size_t i = 0; i < values.size(); ++i) {
+      values[i] = static_cast<float>(i);
+    }
+    const Tensor input = Tensor::FromFloat("X", {1, 8, 3}, values);
+    const Tensor first =
+        Tensor::FromFloat("Y0", {1, 5, 3}, std::vector<float>(values.begin(), values.begin() + 15));
+    const Tensor second =
+        Tensor::FromFloat("Y1", {1, 3, 3}, std::vector<float>(values.begin() + 15, values.end()));
+
+    TestCase tc(name, name);
+    ModelProto &model = tc.emplace_model();
+    model.set_ir_version(kDefaultIrVersion);
+    model.set_producer_name("backend-test");
+    OperatorSetIdProto opset;
+    opset.set_domain("");
+    opset.set_version(24);
+    model.add_opset_import(opset);
+
+    GraphProto *graph = model.add_graph();
+    graph->set_name(name);
+    *graph->add_initializer() = MakeInitializer<int64_t>("step", {}, {5});
+    *graph->add_initializer() = MakeInitializer<int64_t>("zero", {}, {0});
+    *graph->add_initializer() = MakeInitializer<int64_t>("one", {}, {1});
+    NodeProto *split = graph->add_node();
+    split->set_op_type("SplitToSequence");
+    split->add_input("X");
+    split->add_input("step");
+    split->add_output("seq");
+    AttributeProto *axis = split->add_attribute();
+    axis->set_name("axis");
+    axis->set_type(AttributeProto::INT);
+    axis->set_i(-2);
+    AttributeProto *keep = split->add_attribute();
+    keep->set_name("keepdims");
+    keep->set_type(AttributeProto::INT);
+    keep->set_i(keepdims);
+    for (int i = 0; i < 2; ++i) {
+      NodeProto *at = graph->add_node();
+      at->set_op_type("SequenceAt");
+      at->add_input("seq");
+      at->add_input(i == 0 ? "zero" : "one");
+      at->add_output(i == 0 ? "Y0" : "Y1");
+    }
+    FillValueInfo(input, *graph->add_input());
+    FillValueInfo(first, *graph->add_output());
+    FillValueInfo(second, *graph->add_output());
+
+    DataSet ds;
+    ds.inputs.push_back(input);
+    ds.outputs.push_back(first);
+    ds.outputs.push_back(second);
+    tc.data_sets().emplace_back(std::move(ds));
+    return tc.take_materialized();
+  };
+  registry.emplace_back(std::move(lazy_case));
+}
+
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -167,6 +230,11 @@ void RegisterSplitToSequenceCases(std::vector<TestCase> &registry, TestMode mode
   // Case 3: no split input, keepdims=0 (axis is squeezed).
   RegisterSplitToSequenceCase("test_cc_split_to_sequence_nokeepdims", data36, /*split=*/nullptr,
                               /*axis=*/1, /*keepdims=*/0, /*elem_shape=*/{3}, opset, registry);
+
+  RegisterScalarRemainderSequenceAtCase("test_cc_split_to_sequence_at_scalar_remainder",
+                                        /*keepdims=*/1, registry);
+  RegisterScalarRemainderSequenceAtCase("test_cc_split_to_sequence_at_scalar_remainder_keepdims0",
+                                        /*keepdims=*/0, registry);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE::onnx_backend_test

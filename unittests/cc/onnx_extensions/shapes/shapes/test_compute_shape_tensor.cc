@@ -9,6 +9,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -646,6 +647,43 @@ TEST(OnnxOptimShapesTensorSlice, OpenEndPreservesUnknownDimensionForBroadcast) {
       }
       const core::symbolic::SymShape known{core::symbolic::SymDim(2), core::symbolic::SymDim(96)};
       EXPECT_EQ(core::shapes::BroadcastShapes(ctx.Get("Y").Shape(), known), known);
+    }
+  }
+}
+
+TEST(OnnxOptimShapesTensorSlice, OpenEndClampsNonzeroStarts) {
+  for (const auto &dim : {core::symbolic::SymDim(""), core::symbolic::SymDim("heads"),
+                          core::symbolic::SymDim(16), core::symbolic::SymDim(128)}) {
+    for (int64_t start : {-96, 96}) {
+      for (int64_t step : {1, 2}) {
+        SCOPED_TRACE(dim.ToString());
+        SCOPED_TRACE(start);
+        SCOPED_TRACE(step);
+        core::shapes::ShapesContext ctx;
+        ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                               {core::symbolic::SymDim(2), dim}));
+        ctx.Set("Starts", MakeShapeInput({start}));
+        ctx.Set("Ends", MakeShapeInput({std::numeric_limits<int64_t>::max()}));
+        ctx.Set("Axes", MakeShapeInput({1}));
+        ctx.Set("Steps", MakeShapeInput({step}));
+
+        onnx_shapes::shapes::tensor::ComputeShapeSlice(
+            ctx, MakeSliceNode("X", "Starts", "Ends", "Axes", "Steps"));
+
+        const auto &length = ctx.Get("Y").Shape()[1];
+        if (dim.IsInt()) {
+          const int64_t extent = dim.AsInt();
+          const int64_t clipped_start =
+              start < 0 ? std::max(int64_t{0}, extent + start) : std::min(start, extent);
+          EXPECT_EQ(length, core::symbolic::SymDim((extent - clipped_start + step - 1) / step));
+        } else {
+          ASSERT_TRUE(length.IsExpr());
+          EXPECT_TRUE(length.AsExpr().empty());
+          const core::symbolic::SymShape known{core::symbolic::SymDim(2),
+                                               core::symbolic::SymDim(16)};
+          EXPECT_EQ(core::shapes::BroadcastShapes(ctx.Get("Y").Shape(), known), known);
+        }
+      }
     }
   }
 }

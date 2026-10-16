@@ -75,40 +75,55 @@ void RegisterSliceSymbolicEndShapeInferenceCases(std::vector<TestCase> &registry
   registry.emplace_back(std::move(lazy_case));
 
   for (const std::string &head_dim : {std::string("heads"), std::string("")}) {
-    const std::string case_name = "test_cc_shape_inference_slice_open_end_local_function_" +
-                                  (head_dim.empty() ? std::string("anonymous") : "named");
-    TestCase tc(case_name, case_name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
-    ModelProto &model = tc.emplace_model();
-    InitModel(model, kDefaultIrVersion, {opset, OpsetId("local", 1)});
+    for (int64_t start : {0, -96, 96}) {
+      const std::string case_name = "test_cc_shape_inference_slice_open_end_local_function_" +
+                                    (head_dim.empty() ? std::string("anonymous") : "named") +
+                                    (start == 0  ? ""
+                                     : start < 0 ? "_negative_start"
+                                                 : "_positive_start");
+      const int64_t width = start == 0 ? 96 : 16;
+      const int64_t input_width = start > 0 ? start + width : width;
+      TestCase tc(case_name, case_name, TestCaseKind::MODEL, TestCaseTag::INFERENCE);
+      ModelProto &model = tc.emplace_model();
+      InitModel(model, kDefaultIrVersion, {opset, OpsetId("local", 1)});
 
-    FunctionProto *function = model.add_functions();
-    function->set_name("slice_and_add");
-    function->set_domain("local");
-    for (const char *input : {"data", "starts", "ends", "axes", "heads"}) {
-      function->add_input(input);
-    }
-    function->add_output("sum");
-    OperatorSetIdProto *func_opset = function->add_opset_import();
-    func_opset->set_domain("");
-    func_opset->set_version(opset.version);
-    function->add_node(MakeNode("Slice", {"data", "starts", "ends", "axes"}, {"sliced"}));
-    function->add_node(MakeNode("Add", {"sliced", "heads"}, {"sum"}));
+      FunctionProto *function = model.add_functions();
+      function->set_name("slice_and_add");
+      function->set_domain("local");
+      for (const char *input : {"data", "starts", "ends", "axes", "heads"}) {
+        function->add_input(input);
+      }
+      function->add_output("sum");
+      OperatorSetIdProto *func_opset = function->add_opset_import();
+      func_opset->set_domain("");
+      func_opset->set_version(opset.version);
+      function->add_node(MakeNode("Slice", {"data", "starts", "ends", "axes"}, {"sliced"}));
+      function->add_node(MakeNode("Add", {"sliced", "heads"}, {"sum"}));
 
-    GraphProto *graph = model.add_graph();
-    graph->set_name(case_name);
-    AddInitializer<int64_t>(*graph, "starts", {1}, {0});
-    AddInitializer<int64_t>(*graph, "ends", {1}, {std::numeric_limits<int64_t>::max()});
-    AddInitializer<int64_t>(*graph, "axes", {1}, {1});
-    AddNode(*graph, "slice_and_add", {"X", "starts", "ends", "axes", "H"}, {"Y"}, "local");
-    ValueInfoProto *input = graph->add_input();
-    AppendValueInfo(*input, "X", DataType::FLOAT, {"batch", head_dim});
-    if (head_dim.empty()) {
-      input->mutable_type()->mutable_tensor_type()->mutable_shape()->mutable_dim(1)->set_dim_param(
-          "");
+      GraphProto *graph = model.add_graph();
+      graph->set_name(case_name);
+      AddInitializer<int64_t>(*graph, "starts", {1}, {start});
+      AddInitializer<int64_t>(*graph, "ends", {1}, {std::numeric_limits<int64_t>::max()});
+      AddInitializer<int64_t>(*graph, "axes", {1}, {1});
+      AddNode(*graph, "slice_and_add", {"X", "starts", "ends", "axes", "H"}, {"Y"}, "local");
+      ValueInfoProto *input = graph->add_input();
+      AppendValueInfo(*input, "X", DataType::FLOAT, {"batch", head_dim});
+      if (head_dim.empty()) {
+        input->mutable_type()
+            ->mutable_tensor_type()
+            ->mutable_shape()
+            ->mutable_dim(1)
+            ->set_dim_param("");
+      }
+      AppendValueInfo(*graph->add_input(), "H", DataType::FLOAT, {1, width});
+      AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {"batch", width});
+      AppendDataSet(
+          tc,
+          {Tensor::FromFloat("X", {2, input_width}, std::vector<float>(2 * input_width, 1.0f)),
+           Tensor::FromFloat("H", {1, width}, std::vector<float>(width, 2.0f))},
+          {Tensor::FromFloat("Y", {2, width}, std::vector<float>(2 * width, 3.0f))});
+      registry.emplace_back(std::move(tc));
     }
-    AppendValueInfo(*graph->add_input(), "H", DataType::FLOAT, {1, 96});
-    AppendValueInfo(*graph->add_output(), "Y", DataType::FLOAT, {"batch", 96});
-    registry.emplace_back(std::move(tc));
   }
 }
 

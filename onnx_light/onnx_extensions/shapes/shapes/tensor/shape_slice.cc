@@ -92,12 +92,14 @@ expressions::DimType ResolveSliceIndex(const expressions::DimType &dim, int64_t 
 }
 
 SymDim SymbolicSliceLength(const SymDim &dim, int64_t start, int64_t end, int64_t step) {
-  if (start == 0 && end == std::numeric_limits<int64_t>::max() && step == 1) {
-    return dim;
-  }
-  if (end == std::numeric_limits<int64_t>::max() && step > 0 && dim.IsExpr() &&
-      dim.AsExpr().empty()) {
-    return dim;
+  if (end == std::numeric_limits<int64_t>::max() && step > 0) {
+    // Nonzero starts require clamping to the unknown input extent.
+    if (start != 0) {
+      return SymDim("");
+    }
+    if (step == 1 || (dim.IsExpr() && dim.AsExpr().empty())) {
+      return dim;
+    }
   }
   const expressions::DimType d = ToDimType(dim);
   const expressions::DimType start_expr = ResolveSliceIndex(d, start);

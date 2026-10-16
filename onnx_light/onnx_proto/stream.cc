@@ -11,6 +11,7 @@
 #if !defined(_WIN32)
 #include <fcntl.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #else
 #include <io.h>
@@ -112,7 +113,9 @@ std::filesystem::path validate_external_location_is_next_to_model(const std::str
   EXT_ENFORCE(!relative_parent.empty() && (relative_parent == std::filesystem::path(".") ||
                                            *relative_parent.begin() != std::filesystem::path("..")),
               "External data location resolves outside model directory. location=", location);
+#if defined(_WIN32)
   std::filesystem::create_directories(parent);
+#endif
   // Reject symlinks as write targets to prevent TOCTOU-based arbitrary file overwrites
   // (GHSA-8qff-7g33-75mx). Defense-in-depth: FileWriteStream also checks at open time.
   if (std::filesystem::is_symlink(final_path)) {
@@ -1054,6 +1057,77 @@ void FileWriteStream::write_raw_bytes_at_offset(const uint8_t *data, offset_t n_
               " n_bytes=", n_bytes);
 }
 
+#if !defined(_WIN32)
+namespace {
+struct ScopedExternalFd {
+  int fd;
+  ~ScopedExternalFd() {
+    if (fd >= 0)
+      ::close(fd);
+  }
+};
+} // namespace
+
+SecureExternalWriteStream::SecureExternalWriteStream(const std::string &model_path,
+                                                     const std::string &location)
+    : file_path_(validate_external_location_is_next_to_model(model_path, location).string()) {
+  ScopedExternalFd dir{
+      ::open(normalized_model_parent(model_path).c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
+  EXT_ENFORCE(dir.fd >= 0, "Cannot open model directory for external data: ", model_path);
+  const std::filesystem::path relative = std::filesystem::path(location).lexically_normal();
+  for (const auto &component : relative.parent_path()) {
+    if (component == std::filesystem::path("."))
+      continue;
+    const std::string name = component.string();
+    int next = ::openat(dir.fd, name.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+    if (next < 0 && errno == ENOENT) {
+      EXT_ENFORCE(::mkdirat(dir.fd, name.c_str(), 0700) == 0 || errno == EEXIST,
+                  "Cannot create external data directory: ", file_path_);
+      next = ::openat(dir.fd, name.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+    }
+    EXT_ENFORCE(next >= 0, "Unsafe external data directory: ", file_path_);
+    ::close(dir.fd);
+    dir.fd = next;
+  }
+  const std::string filename = relative.filename().string();
+  ScopedExternalFd file{
+      ::openat(dir.fd, filename.c_str(), O_WRONLY | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0600)};
+  EXT_ENFORCE(file.fd >= 0, "Cannot securely open external data file: ", file_path_);
+  struct stat info{};
+  EXT_ENFORCE(::fstat(file.fd, &info) == 0 && S_ISREG(info.st_mode) && info.st_nlink <= 1,
+              "Unsafe external data file: ", file_path_);
+  EXT_ENFORCE(::ftruncate(file.fd, 0) == 0, "Cannot truncate external data file: ", file_path_);
+  fd_ = file.fd;
+  file.fd = -1;
+}
+
+SecureExternalWriteStream::~SecureExternalWriteStream() { ::close(fd_); }
+
+void SecureExternalWriteStream::write_raw_bytes_at_offset(const uint8_t *data, offset_t n_bytes,
+                                                          int64_t offset) {
+  EXT_ENFORCE(n_bytes >= 0 && offset >= 0, "Invalid external data write size or offset.");
+  for (offset_t written = 0; written < n_bytes;) {
+    const ssize_t count = ::pwrite(fd_, data + written, static_cast<size_t>(n_bytes - written),
+                                   static_cast<off_t>(offset + written));
+    if (count < 0 && errno == EINTR)
+      continue;
+    EXT_ENFORCE(count > 0, "Failed to write external data file: ", file_path_);
+    written += count;
+  }
+}
+
+void SecureExternalWriteStream::write_raw_bytes(const uint8_t *data, offset_t n_bytes) {
+  write_raw_bytes_at_offset(data, n_bytes, size_);
+  size_ += n_bytes;
+}
+
+void SecureExternalWriteStream::pre_allocate(int64_t total_bytes) {
+  EXT_ENFORCE(total_bytes > 0 && ::ftruncate(fd_, static_cast<off_t>(total_bytes)) == 0,
+              "Cannot pre-allocate external data file: ", file_path_);
+  size_ = total_bytes;
+}
+#endif
+
 /////////////
 // FileStream
 /////////////
@@ -1296,13 +1370,11 @@ TwoFilesWriteStream::TwoFilesWriteStream(const std::string &file_path,
 }
 
 void TwoFilesWriteStream::reject_case_aliased_weights_location(const std::string &location) const {
-  const std::string filename = std::filesystem::path(location).filename().string();
-  const auto is_case_alias = [&filename](const std::string &existing) {
-    const std::string existing_filename = std::filesystem::path(existing).filename().string();
-    return filename != existing_filename &&
-           std::equal(
-               filename.begin(), filename.end(), existing_filename.begin(), existing_filename.end(),
-               [](unsigned char a, unsigned char b) { return std::tolower(a) == std::tolower(b); });
+  const auto is_case_alias = [&location](const std::string &existing) {
+    return location != existing && std::equal(location.begin(), location.end(), existing.begin(),
+                                              existing.end(), [](unsigned char a, unsigned char b) {
+                                                return std::tolower(a) == std::tolower(b);
+                                              });
   };
   EXT_ENFORCE(!is_case_alias(default_weights_location_),
               "Case-aliased external weights location: ", location);
@@ -1333,7 +1405,11 @@ void TwoFilesWriteStream::set_active_weights_location(const std::string &locatio
   if (it == extra_weights_streams_.end()) {
     std::filesystem::path path =
         validate_external_location_is_next_to_model(file_path_, normalized_location);
+#if defined(_WIN32)
     auto stream = std::make_unique<FileWriteStream>(path.string());
+#else
+    auto stream = std::make_unique<SecureExternalWriteStream>(file_path_, normalized_location);
+#endif
     extra_weights_streams_.emplace(normalized_location, std::move(stream));
   }
   active_weights_location_ = normalized_location;
@@ -1422,7 +1498,11 @@ void TwoFilesWriteStream::pre_allocate_weights(const std::string &location, int6
   if (it == extra_weights_streams_.end()) {
     std::filesystem::path path =
         validate_external_location_is_next_to_model(file_path_, normalized_location);
+#if defined(_WIN32)
     auto stream = std::make_unique<FileWriteStream>(path.string());
+#else
+    auto stream = std::make_unique<SecureExternalWriteStream>(file_path_, normalized_location);
+#endif
     it = extra_weights_streams_.emplace(normalized_location, std::move(stream)).first;
   }
   it->second->pre_allocate(total_bytes);
@@ -1484,9 +1564,16 @@ void TwoFilesWriteStream::write_raw_bytes_in_second_stream(const uint8_t *ptr, o
     int64_t offset = pos;
     pos += n_bytes;
     if (n_bytes >= min_parallel_block_size_) {
+#if defined(_WIN32)
       const std::string wpath = it->second->file_path();
       write_thread_pool_.SubmitTask(
           [wpath, ptr, n_bytes, offset]() { WriteBytesAtOffset(wpath, ptr, n_bytes, offset); });
+#else
+      auto *stream = it->second.get();
+      write_thread_pool_.SubmitTask([stream, ptr, n_bytes, offset]() {
+        stream->write_raw_bytes_at_offset(ptr, n_bytes, offset);
+      });
+#endif
     } else {
       // Same reasoning as above: below-threshold writes run synchronously on the calling
       // thread, so they can safely reuse the already-open per-location file handle.

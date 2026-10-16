@@ -644,6 +644,28 @@ protected:
   ThreadPool thread_pool_;
 };
 
+#if !defined(_WIN32)
+/** Writes a model-relative external-data file through an anchored POSIX descriptor. */
+class ONNX_LIGHT_PROTO_API SecureExternalWriteStream {
+public:
+  SecureExternalWriteStream(const std::string &model_path, const std::string &location);
+  ~SecureExternalWriteStream();
+  SecureExternalWriteStream(const SecureExternalWriteStream &) = delete;
+  SecureExternalWriteStream &operator=(const SecureExternalWriteStream &) = delete;
+
+  void write_raw_bytes(const uint8_t *data, offset_t n_bytes);
+  void write_raw_bytes_at_offset(const uint8_t *data, offset_t n_bytes, int64_t offset);
+  void pre_allocate(int64_t total_bytes);
+  int64_t size() const { return size_; }
+  const std::string &file_path() const { return file_path_; }
+
+private:
+  std::string file_path_;
+  int fd_ = -1;
+  int64_t size_ = 0;
+};
+#endif
+
 class TwoFilesStream;
 
 /** Binary reader that streams bytes from a file.
@@ -821,7 +843,12 @@ protected:
   /** Writer for the separate weights file. */
   FileWriteStream weights_stream_;
   /** Additional writers when external_data.location points to multiple files. */
+#if defined(_WIN32)
   std::unordered_map<std::string, std::unique_ptr<FileWriteStream>> extra_weights_streams_;
+#else
+  std::unordered_map<std::string, std::unique_ptr<SecureExternalWriteStream>>
+      extra_weights_streams_;
+#endif
   /** Rejects differently cased names that may refer to an already-open weights file. */
   void reject_case_aliased_weights_location(const std::string &location) const;
   /** Active external location used by the current tensor raw-data write. */

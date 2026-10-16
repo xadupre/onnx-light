@@ -1032,6 +1032,37 @@ TEST(onnx_external_ressource, SaveWithExternalDataLocationInSubdirectory) {
   fs::remove_all(root);
 }
 
+#ifndef _WIN32
+TEST(onnx_external_ressource, NestedWritesStayOnOpenedFile) {
+  namespace fs = std::filesystem;
+  const fs::path root = fs::temp_directory_path() / "onnx_light_anchored_external_weights";
+  const fs::path outside = fs::temp_directory_path() / "onnx_light_anchored_outside";
+  fs::remove_all(root);
+  fs::remove_all(outside);
+  fs::create_directories(root);
+  fs::create_directories(outside);
+  {
+    utils::TwoFilesWriteStream stream((root / "model.onnx").string(),
+                                      (root / "default.data").string());
+    const uint8_t first[] = {1, 2};
+    const uint8_t second[] = {3, 4};
+    stream.StartWriteThreadPool(2);
+    stream.write_raw_bytes_in_second_stream(first, 2, ".weights/a/data.bin");
+    stream.write_raw_bytes_in_second_stream(first, 2, ".weights/b/DATA.bin");
+    fs::rename(root / ".weights/a", root / ".weights/detached");
+    fs::create_directory_symlink(outside, root / ".weights/a");
+    stream.write_raw_bytes_in_second_stream(second, 2, ".weights/a/data.bin");
+    EXPECT_EQ(stream.weights_size_for_location(".weights/a/data.bin"), 4);
+    stream.WaitForWriteCompletion();
+  }
+  EXPECT_FALSE(fs::exists(outside / "data.bin"));
+  EXPECT_EQ(fs::file_size(root / ".weights/detached/data.bin"), 4U);
+  EXPECT_TRUE(fs::exists(root / ".weights/b/DATA.bin"));
+  fs::remove_all(root);
+  fs::remove_all(outside);
+}
+#endif
+
 TEST(onnx_external_ressource, LoadSharedExternalDataInSubdirectory) {
   namespace fs = std::filesystem;
   const fs::path root = fs::temp_directory_path() / "onnx_light_shared_subdir_weights";
@@ -1043,11 +1074,15 @@ TEST(onnx_external_ressource, LoadSharedExternalDataInSubdirectory) {
     std::ofstream weights(weights_path, std::ios::binary);
     weights << "0123456789abcdef" << "abcd" << "efgh";
   }
+  {
+    std::ofstream weights(root / ".weights" / "model.safetensors", std::ios::binary);
+    weights << "ijkl";
+  }
 
   ModelProto model;
   auto *graph = model.add_graph();
   graph->set_name("g");
-  for (int i = 0; i < 2; ++i) {
+  for (int i = 0; i < 3; ++i) {
     TensorProto *tensor = graph->add_initializer();
     tensor->set_name("w" + std::to_string(i));
     tensor->set_data_type(TensorProto::DataType::FLOAT);
@@ -1062,10 +1097,14 @@ TEST(onnx_external_ressource, LoadSharedExternalDataInSubdirectory) {
       add_entry("location", ".weights/nested/model.safetensors");
       add_entry("offset", "16");
       add_entry("length", "4");
-    } else {
+    } else if (i == 1) {
       add_entry("length", "4");
       add_entry("offset", "20");
       add_entry("location", ".weights/nested/model.safetensors");
+    } else {
+      add_entry("location", ".weights/model.safetensors");
+      add_entry("offset", "0");
+      add_entry("length", "4");
     }
   }
   {
@@ -1081,7 +1120,7 @@ TEST(onnx_external_ressource, LoadSharedExternalDataInSubdirectory) {
     ParseOptions opts;
     ModelProto parsed;
     ParseModelProtoFromStream(parsed, stream, opts, false);
-    ASSERT_EQ(parsed.ref_graph().ref_initializer().size(), 2U);
+    ASSERT_EQ(parsed.ref_graph().ref_initializer().size(), 3U);
     EXPECT_EQ(parsed.ref_graph().ref_initializer()[0].ref_raw_data().size(), 4U);
     EXPECT_EQ(std::string(parsed.ref_graph().ref_initializer()[0].ref_raw_data().begin(),
                           parsed.ref_graph().ref_initializer()[0].ref_raw_data().end()),
@@ -1089,6 +1128,9 @@ TEST(onnx_external_ressource, LoadSharedExternalDataInSubdirectory) {
     EXPECT_EQ(std::string(parsed.ref_graph().ref_initializer()[1].ref_raw_data().begin(),
                           parsed.ref_graph().ref_initializer()[1].ref_raw_data().end()),
               "efgh");
+    EXPECT_EQ(std::string(parsed.ref_graph().ref_initializer()[2].ref_raw_data().begin(),
+                          parsed.ref_graph().ref_initializer()[2].ref_raw_data().end()),
+              "ijkl");
   }
   const fs::path reused_model_path = root / "reused.onnx";
   SerializeOptions save_opts;
@@ -1102,7 +1144,8 @@ TEST(onnx_external_ressource, LoadSharedExternalDataInSubdirectory) {
     for (const auto &tensor : reused.ref_graph().ref_initializer()) {
       const size_t location_index = tensor.ref_external_data()[0].ref_key() == "location" ? 0 : 2;
       EXPECT_EQ(tensor.ref_external_data()[location_index].ref_value(),
-                ".weights/nested/model.safetensors");
+                tensor.ref_name() == "w2" ? ".weights/model.safetensors"
+                                          : ".weights/nested/model.safetensors");
       TensorProto loaded = tensor;
       loaded.LoadExternalData(root.string());
       EXPECT_EQ(loaded.ref_raw_data().size(), 4U);

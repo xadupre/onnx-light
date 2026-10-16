@@ -93,8 +93,8 @@ std::string validate_weights_file_is_next_to_model(const std::string &model_path
   return final_path.string();
 }
 
-std::filesystem::path validate_external_location_is_next_to_model(const std::string &model_path,
-                                                                  const std::string &location) {
+std::filesystem::path validate_external_location_within_model(const std::string &model_path,
+                                                              const std::string &location) {
   std::filesystem::path location_path(location);
   EXT_ENFORCE(IsSafeExternalDataLocation(location),
               "External data location must be a safe relative file path. location=", location);
@@ -117,7 +117,7 @@ std::filesystem::path validate_external_location_is_next_to_model(const std::str
   std::filesystem::create_directories(parent);
 #endif
   // Reject symlinks as write targets to prevent TOCTOU-based arbitrary file overwrites
-  // (GHSA-8qff-7g33-75mx). Defense-in-depth: FileWriteStream also checks at open time.
+  // (GHSA-8qff-7g33-75mx). The file writer also checks at open time.
   if (std::filesystem::is_symlink(final_path)) {
     EXT_THROW("External data location '", final_path.string(),
               "' is a symbolic link, which is not allowed for security reasons "
@@ -1071,7 +1071,7 @@ struct ScopedExternalFd {
 SecureExternalWriteStream::SecureExternalWriteStream(const std::string &model_path,
                                                      const std::string &location,
                                                      int model_directory_fd)
-    : file_path_(validate_external_location_is_next_to_model(model_path, location).string()) {
+    : file_path_(validate_external_location_within_model(model_path, location).string()) {
   ScopedExternalFd dir{::openat(model_directory_fd, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
   EXT_ENFORCE(dir.fd >= 0, "Cannot open model directory for external data: ", model_path);
   const std::filesystem::path relative = std::filesystem::path(location).lexically_normal();
@@ -1420,7 +1420,7 @@ void TwoFilesWriteStream::set_active_weights_location(const std::string &locatio
   auto it = extra_weights_streams_.find(normalized_location);
   if (it == extra_weights_streams_.end()) {
     std::filesystem::path path =
-        validate_external_location_is_next_to_model(file_path_, normalized_location);
+        validate_external_location_within_model(file_path_, normalized_location);
 #if defined(_WIN32)
     auto stream = std::make_unique<FileWriteStream>(path.string());
 #else
@@ -1514,7 +1514,7 @@ void TwoFilesWriteStream::pre_allocate_weights(const std::string &location, int6
   auto it = extra_weights_streams_.find(normalized_location);
   if (it == extra_weights_streams_.end()) {
     std::filesystem::path path =
-        validate_external_location_is_next_to_model(file_path_, normalized_location);
+        validate_external_location_within_model(file_path_, normalized_location);
 #if defined(_WIN32)
     auto stream = std::make_unique<FileWriteStream>(path.string());
 #else

@@ -1146,7 +1146,9 @@ TEST(onnx_external_ressource, LoadSharedExternalDataInSubdirectory) {
     ModelProto parsed;
     ParseModelProtoFromStream(parsed, stream, opts, false);
     ASSERT_EQ(parsed.ref_graph().ref_initializer().size(), 3U);
-    EXPECT_EQ(parsed.ref_graph().ref_initializer()[0].ref_raw_data().size(), 4U);
+    for (const auto &tensor : parsed.ref_graph().ref_initializer()) {
+      ASSERT_EQ(tensor.ref_raw_data().size(), 4U);
+    }
     auto raw_bytes = [](const TensorProto &tensor) {
       return std::string(reinterpret_cast<const char *>(tensor.ref_raw_data().data()),
                          tensor.ref_raw_data().size());

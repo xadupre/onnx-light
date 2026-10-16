@@ -61,7 +61,7 @@ inline constexpr uint32_t FixedBitWidth(TensorProto::DataType data_type) {
  * cannot escape the directory it is resolved against.
  *
  * The lexically-normalised path must be non-empty, must have no root component,
- * must not start with ``..`` and must end on a file name. This is the single
+ * must not contain ``..`` components and must end on a file name. This is the single
  * definition of the rule; ``TensorProto::LoadExternalData`` and the
  * ``EncodedValueProto`` metadata validator both use it so an untrusted model
  * cannot reach outside its own directory.

@@ -28,6 +28,16 @@ namespace ONNX_LIGHT_NAMESPACE::utils {
 
 namespace {
 
+#if !defined(_WIN32)
+struct ScopedExternalFd {
+  int fd;
+  ~ScopedExternalFd() {
+    if (fd >= 0)
+      ::close(fd);
+  }
+};
+#endif
+
 #if defined(_WIN32) && defined(_MSC_VER)
 void IgnoreInvalidParameter(const wchar_t *, const wchar_t *, const wchar_t *, unsigned int,
                             uintptr_t) {}
@@ -99,11 +109,13 @@ std::filesystem::path validate_external_location_within_model(const std::string 
   EXT_ENFORCE(IsSafeExternalDataLocation(location),
               "External data location must be a safe relative file path. location=", location);
   std::filesystem::path normalized_location = location_path.lexically_normal();
-  const std::filesystem::path location_filename = normalized_location.filename();
-  EXT_ENFORCE(is_windows_compatible_filename(location_filename),
-              "External data location must include a filename that does not end with a dot or "
-              "space. location=",
-              location);
+  for (const auto &component : normalized_location) {
+    if (component == std::filesystem::path("."))
+      continue;
+    EXT_ENFORCE(
+        is_windows_compatible_filename(component),
+        "External data location components must not end with a dot or space. location=", location);
+  }
 
   const std::filesystem::path base =
       std::filesystem::weakly_canonical(normalized_model_parent(model_path));
@@ -1058,16 +1070,6 @@ void FileWriteStream::write_raw_bytes_at_offset(const uint8_t *data, offset_t n_
 }
 
 #if !defined(_WIN32)
-namespace {
-struct ScopedExternalFd {
-  int fd;
-  ~ScopedExternalFd() {
-    if (fd >= 0)
-      ::close(fd);
-  }
-};
-} // namespace
-
 SecureExternalWriteStream::SecureExternalWriteStream(const std::string &model_path,
                                                      const std::string &location,
                                                      int model_directory_fd)
@@ -1090,8 +1092,8 @@ SecureExternalWriteStream::SecureExternalWriteStream(const std::string &model_pa
     dir.fd = next;
   }
   const std::string filename = relative.filename().string();
-  ScopedExternalFd file{
-      ::openat(dir.fd, filename.c_str(), O_WRONLY | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0600)};
+  ScopedExternalFd file{::openat(dir.fd, filename.c_str(),
+                                 O_WRONLY | O_CREAT | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK, 0600)};
   EXT_ENFORCE(file.fd >= 0, "Cannot securely open external data file: ", file_path_);
   struct stat info{};
   EXT_ENFORCE(::fstat(file.fd, &info) == 0 && S_ISREG(info.st_mode) && info.st_nlink <= 1,
@@ -1139,28 +1141,103 @@ void SecureExternalWriteStream::pre_allocate(int64_t total_bytes) {
 /////////////
 
 FileStream::FileStream(const std::string &file_path)
-    : lock_(false), file_path_(file_path), file_stream_(file_path, std::ios::binary) {
+    : lock_(false), file_path_(file_path), file_stream_(file_path, std::ios::binary),
+      read_buf_(READ_BUF_SIZE) {
   if (!file_stream_.is_open()) {
     EXT_THROW("Unable to open file: ", file_path);
   }
-#if !defined(_WIN32)
-  file_descriptor_ = open(file_path.c_str(), O_RDONLY);
-  if (file_descriptor_ < 0) {
-    const int err = errno;
-    EXT_THROW("Unable to open file descriptor for: ", file_path, ", errno=", err, " (",
-              strerror(err), ")");
-  }
-#endif
   file_stream_.seekg(0, std::ios::end);
   std::streampos end = file_stream_.tellg();
   EXT_ENFORCE(end != std::streampos(-1) && static_cast<std::streamoff>(end) >= 0,
               "Unable to determine size of file (tellg failed): ", file_path);
   file_stream_.seekg(0);
   size_ = static_cast<offset_t>(end);
-  read_buf_.resize(READ_BUF_SIZE);
+#if !defined(_WIN32)
+  file_descriptor_ = ::open(file_path.c_str(), O_RDONLY | O_CLOEXEC);
+  EXT_ENFORCE(file_descriptor_ >= 0, "Unable to open file descriptor: ", file_path);
+#endif
 }
 
-bool FileStream::is_open() const { return file_stream_.is_open(); }
+#if !defined(_WIN32)
+FileStream::FileStream(const std::string &file_path, const std::string &model_path,
+                       int model_directory_fd)
+    : lock_(false), file_path_(file_path), read_buf_(READ_BUF_SIZE) {
+  const auto parent = normalized_model_parent(model_path);
+  const auto relative = std::filesystem::absolute(file_path).lexically_normal().lexically_relative(
+      std::filesystem::absolute(parent).lexically_normal());
+  EXT_ENFORCE(IsSafeExternalDataLocation(relative.string()),
+              "Unsafe external data location: ", file_path);
+  validate_external_weights_read_path(file_path, parent);
+  ScopedExternalFd anchor{
+      model_directory_fd >= 0
+          ? ::openat(model_directory_fd, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC)
+          : ::open(parent.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
+  EXT_ENFORCE(anchor.fd >= 0, "Cannot open model directory for external data: ", model_path);
+  ScopedExternalFd dir{::openat(anchor.fd, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
+  EXT_ENFORCE(dir.fd >= 0, "Cannot duplicate external data directory: ", model_path);
+  for (const auto &component : relative.parent_path()) {
+    if (component == std::filesystem::path("."))
+      continue;
+    const int next =
+        ::openat(dir.fd, component.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+    EXT_ENFORCE(next >= 0, "Unsafe external data directory: ", file_path);
+    ::close(dir.fd);
+    dir.fd = next;
+  }
+  ScopedExternalFd file{::openat(dir.fd, relative.filename().c_str(),
+                                 O_RDONLY | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK)};
+  EXT_ENFORCE(file.fd >= 0, "Cannot securely open external data file: ", file_path);
+  struct stat info{};
+  EXT_ENFORCE(::fstat(file.fd, &info) == 0 && S_ISREG(info.st_mode) && info.st_nlink <= 1 &&
+                  info.st_size >= 0,
+              "Unsafe external data file: ", file_path);
+  size_ = static_cast<offset_t>(info.st_size);
+  file_descriptor_ = file.fd;
+  file.fd = -1;
+  external_directory_fd_ = anchor.fd;
+  anchor.fd = -1;
+}
+#endif
+
+bool FileStream::is_open() const {
+#if !defined(_WIN32)
+  return file_descriptor_ >= 0;
+#else
+  return file_stream_.is_open();
+#endif
+}
+
+offset_t FileStream::read_file_bytes(uint8_t *data, offset_t count) {
+#if !defined(_WIN32)
+  if (!file_stream_.is_open()) {
+    offset_t total = 0;
+    while (total < count) {
+      const ssize_t read =
+          ::read(file_descriptor_, data + total, static_cast<size_t>(count - total));
+      if (read < 0 && errno == EINTR)
+        continue;
+      EXT_ENFORCE(read >= 0, "Unable to read file: ", file_path_);
+      if (read == 0)
+        break;
+      total += read;
+    }
+    return total;
+  }
+#endif
+  file_stream_.read(reinterpret_cast<char *>(data), count);
+  return static_cast<offset_t>(file_stream_.gcount());
+}
+
+void FileStream::seek_file(offset_t offset, bool relative) {
+#if !defined(_WIN32)
+  if (!file_stream_.is_open()) {
+    EXT_ENFORCE(::lseek(file_descriptor_, offset, relative ? SEEK_CUR : SEEK_SET) >= 0,
+                "Unable to seek file: ", file_path_);
+    return;
+  }
+#endif
+  file_stream_.seekg(offset, relative ? std::ios::cur : std::ios::beg);
+}
 
 void FileStream::LimitTo(uint64_t len) {
   EXT_ENFORCE(limits_.size() > 0, "No limit was stored.");
@@ -1181,15 +1258,14 @@ void FileStream::_fill_read_buffer() {
   if (avail <= 0)
     return;
   int64_t to_read = std::min(static_cast<int64_t>(READ_BUF_SIZE), avail);
-  file_stream_.read(reinterpret_cast<char *>(read_buf_.data()), to_read);
-  read_buf_end_ = static_cast<size_t>(file_stream_.gcount());
+  read_buf_end_ = static_cast<size_t>(read_file_bytes(read_buf_.data(), to_read));
   read_buf_pos_ = 0;
 }
 
 void FileStream::_invalidate_read_buffer() {
   if (read_buf_pos_ < read_buf_end_) {
     auto unread = static_cast<std::streamoff>(read_buf_end_ - read_buf_pos_);
-    file_stream_.seekg(-unread, std::ios::cur);
+    seek_file(-unread, true);
     read_buf_pos_ = read_buf_end_ = 0;
   }
 }
@@ -1236,10 +1312,10 @@ const uint8_t *FileStream::read_bytes(offset_t n_bytes, uint8_t *pre_allocated_b
     }
     auto remaining = static_cast<offset_t>(n_bytes - from_buf);
     if (remaining > 0) {
-      file_stream_.read(reinterpret_cast<char *>(pre_allocated_buffer + from_buf), remaining);
-      EXT_ENFORCE(file_stream_.gcount() == static_cast<std::streamsize>(remaining),
+      const offset_t count = read_file_bytes(pre_allocated_buffer + from_buf, remaining);
+      EXT_ENFORCE(count == remaining,
                   "[FileStream::read_bytes] short read from file: expected=", remaining,
-                  ", got=", file_stream_.gcount());
+                  ", got=", count);
     }
     return pre_allocated_buffer;
   }
@@ -1248,10 +1324,9 @@ const uint8_t *FileStream::read_bytes(offset_t n_bytes, uint8_t *pre_allocated_b
   _invalidate_read_buffer();
   if (n_bytes > static_cast<offset_t>(buffer_.size()))
     buffer_.resize(n_bytes);
-  file_stream_.read(reinterpret_cast<char *>(buffer_.data()), n_bytes);
-  EXT_ENFORCE(file_stream_.gcount() == static_cast<std::streamsize>(n_bytes),
-              "[FileStream::read_bytes] short read from file: expected=", n_bytes,
-              ", got=", file_stream_.gcount());
+  const offset_t count = read_file_bytes(buffer_.data(), n_bytes);
+  EXT_ENFORCE(count == n_bytes, "[FileStream::read_bytes] short read from file: expected=", n_bytes,
+              ", got=", count);
   return buffer_.data();
 }
 
@@ -1265,13 +1340,18 @@ void FileStream::skip_bytes(offset_t n_bytes) {
   } else {
     auto remaining = static_cast<std::streamoff>(n_bytes - buffered);
     read_buf_pos_ = read_buf_end_ = 0;
-    file_stream_.seekg(remaining, std::ios::cur);
+    seek_file(remaining, true);
   }
 }
 
 bool FileStream::NotEnd() const { return static_cast<int64_t>(tell()) < size_; }
 
 offset_t FileStream::tell() const {
+#if !defined(_WIN32)
+  if (!file_stream_.is_open())
+    return static_cast<offset_t>(::lseek(file_descriptor_, 0, SEEK_CUR)) -
+           static_cast<offset_t>(read_buf_end_ - read_buf_pos_);
+#endif
   return static_cast<offset_t>(const_cast<std::ifstream &>(file_stream_).tellg()) -
          static_cast<offset_t>(read_buf_end_ - read_buf_pos_);
 }
@@ -1287,6 +1367,8 @@ FileStream::~FileStream() {
   if (file_descriptor_ >= 0) {
     close(file_descriptor_);
   }
+  if (external_directory_fd_ >= 0)
+    ::close(external_directory_fd_);
 #endif
 }
 
@@ -1610,8 +1692,14 @@ void TwoFilesWriteStream::write_raw_bytes_in_second_stream(const uint8_t *ptr, o
 
 TwoFilesStream::TwoFilesStream(const std::string &file_path, const std::string &weights_file,
                                bool use_mmap_weights)
-    : FileStream(file_path), weights_stream_(weights_file), active_weights_location_(weights_file),
-      default_weights_location_(weights_file), use_mmap_weights_(use_mmap_weights) {
+    : FileStream(file_path),
+#if !defined(_WIN32)
+      weights_stream_(weights_file, file_path),
+#else
+      weights_stream_(weights_file),
+#endif
+      active_weights_location_(weights_file), default_weights_location_(weights_file),
+      use_mmap_weights_(use_mmap_weights) {
   std::filesystem::path parent = std::filesystem::path(file_path).parent_path();
   std::filesystem::path weights = std::filesystem::path(weights_file);
   std::filesystem::path rel = std::filesystem::relative(weights, parent);
@@ -1648,7 +1736,12 @@ void TwoFilesStream::set_active_weights_location(const std::string &location) {
       path = model_parent / path;
     }
     validate_external_weights_read_path(path, model_parent);
+#if !defined(_WIN32)
+    auto stream = std::make_unique<FileStream>(path.string(), file_path_,
+                                               weights_stream_.external_directory_fd_);
+#else
     auto stream = std::make_unique<FileStream>(path.string());
+#endif
     extra_weights_streams_.emplace(normalized_location, std::move(stream));
   }
   active_weights_location_ = normalized_location;
@@ -1717,7 +1810,17 @@ TwoFilesStream::ensure_shared_weights_buffer(const std::string &location, size_t
   // buffer is compatible with any requested alignment so the compatibility check above
   // always passes on a cache hit.
   loaded.alignment = 0;
+#if !defined(_WIN32)
+  if (loaded.size > 0) {
+    const size_t size = static_cast<size_t>(loaded.size);
+    void *mapped = ::mmap(nullptr, size, PROT_READ, MAP_PRIVATE, wstream.file_descriptor_, 0);
+    EXT_ENFORCE(mapped != MAP_FAILED, "Cannot map external data file: ", canonical_path);
+    loaded.data = std::shared_ptr<uint8_t>(static_cast<uint8_t *>(mapped),
+                                           [size](uint8_t *ptr) { ::munmap(ptr, size); });
+  }
+#else
   loaded.data = mmap_file_as_shared_ptr(canonical_path, loaded.size);
+#endif
   auto inserted = shared_weights_buffers_.emplace(canonical_path, std::move(loaded));
   return inserted.first->second;
 }
@@ -1729,7 +1832,7 @@ void TwoFilesStream::read_bytes_from_weights_stream(offset_t n_bytes, uint8_t *p
     // Discard any pre-fetched bytes before seeking so that the read-ahead buffer
     // stays consistent with the file position.
     wstream._invalidate_read_buffer();
-    wstream.file_stream_.seekg(offset);
+    wstream.seek_file(offset);
   }
   wstream.read_bytes(n_bytes, pre_allocated_buffer);
 }
@@ -1802,7 +1905,7 @@ void TwoFilesStream::ReadDelayedBlock(DelayedBlock &block) {
     });
     // Advance the active weights stream past the block; the weights stream's
     // read buffer is not used for structure parsing, so a direct seek is fine.
-    target_stream.file_stream_.seekg(block.size, std::ios::cur);
+    target_stream.seek_file(block.size, true);
   }
 }
 

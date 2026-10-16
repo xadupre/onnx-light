@@ -257,7 +257,7 @@ TEST(CHECKER, OpenExternalDataTest) {
   }
   EXPECT_EQ(
       ONNX_LIGHT_NAMESPACE::checker::resolve_external_data_location(dir_utf8, "weights..bin", "t"),
-      fs::canonical(dir / "weights..bin"));
+      dir / "weights..bin");
 
   // Reject invalid locations
   EXPECT_THROW(

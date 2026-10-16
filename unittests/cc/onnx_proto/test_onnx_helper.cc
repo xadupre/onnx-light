@@ -3,6 +3,7 @@
 #include "onnx_light_helpers.h"
 #include <atomic>
 #include <chrono>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -13,6 +14,10 @@
 #include <thread>
 #include <unordered_map>
 #include <vector>
+#ifndef _WIN32
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using namespace ONNX_LIGHT_NAMESPACE::utils;
@@ -1032,7 +1037,112 @@ TEST(onnx_external_ressource, SaveWithExternalDataLocationInSubdirectory) {
   fs::remove_all(root);
 }
 
+TEST(onnx_external_ressource, NestedWritesRejectWindowsDirectoryAliases) {
+  namespace fs = std::filesystem;
+  const fs::path root = fs::temp_directory_path() / "onnx_light_external_directory_aliases";
+  fs::remove_all(root);
+  fs::create_directories(root);
+  {
+    utils::TwoFilesWriteStream stream((root / "model.onnx").string(),
+                                      (root / "default.data").string());
+    const uint8_t data[] = {1, 2, 3, 4};
+    stream.write_raw_bytes_in_second_stream(data, 4, "dir/weights.bin");
+    for (const char *location : {"dir./weights.bin", "dir /weights.bin", "dir/child./weights.bin",
+                                 "dir/child /weights.bin"}) {
+      SCOPED_TRACE(location);
+      EXPECT_THROW(stream.write_raw_bytes_in_second_stream(data, 4, location), std::exception);
+      EXPECT_THROW(stream.pre_allocate_weights(location, 4), std::exception);
+    }
+  }
+  EXPECT_EQ(fs::file_size(root / "dir/weights.bin"), 4U);
+  fs::remove_all(root);
+}
+
 #ifndef _WIN32
+TEST(onnx_external_ressource, NestedWritesRejectFifoWithoutBlocking) {
+  namespace fs = std::filesystem;
+  const fs::path root = fs::temp_directory_path() / "onnx_light_external_fifo";
+  fs::remove_all(root);
+  fs::create_directories(root / ".weights");
+  ASSERT_EQ(::mkfifo((root / ".weights/data.bin").c_str(), 0600), 0);
+  EXPECT_EXIT(
+      {
+        ::alarm(3);
+        utils::TwoFilesWriteStream stream((root / "model.onnx").string(),
+                                          (root / "default.data").string());
+        const uint8_t data[] = {1, 2};
+        EXPECT_THROW(stream.write_raw_bytes_in_second_stream(data, 2, ".weights/data.bin"),
+                     std::exception);
+        std::exit(::testing::Test::HasFailure() ? 1 : 0);
+      },
+      ::testing::ExitedWithCode(0), "");
+  fs::remove_all(root);
+}
+
+TEST(onnx_external_ressource, NestedReadsStayOnOpenedFile) {
+  namespace fs = std::filesystem;
+  const fs::path root = fs::temp_directory_path() / "onnx_light_anchored_external_reads";
+  const fs::path outside = fs::temp_directory_path() / "onnx_light_anchored_read_outside";
+  fs::remove_all(root);
+  fs::remove_all(outside);
+  fs::create_directories(root / ".weights");
+  fs::create_directories(outside);
+  {
+    std::ofstream(root / "model.onnx");
+    std::ofstream(root / "default.data");
+    std::ofstream(root / ".weights/data.bin", std::ios::binary) << "safe";
+    std::ofstream(outside / "data.bin", std::ios::binary) << "evil";
+  }
+  std::shared_ptr<void> owner;
+  const uint8_t *borrowed = nullptr;
+  {
+    utils::TwoFilesStream stream((root / "model.onnx").string(), (root / "default.data").string(),
+                                 true);
+    stream.set_active_weights_location(".weights/data.bin");
+    fs::rename(root / ".weights", root / "detached");
+    fs::create_directory_symlink(outside, root / ".weights");
+    uint8_t data[4]{};
+    stream.read_bytes_from_weights_stream(4, data, 0);
+    EXPECT_EQ(std::string(reinterpret_cast<const char *>(data), 4), "safe");
+    borrowed = stream.borrow_weights_bytes(".weights/data.bin", 0, 4, 1, owner);
+    ASSERT_NE(borrowed, nullptr);
+    EXPECT_EQ(std::string(reinterpret_cast<const char *>(borrowed), 4), "safe");
+    stream.StartThreadPool(2);
+    utils::DelayedBlock block{4, data, 0, 1};
+    stream.ReadDelayedBlock(block);
+    stream.WaitForDelayedBlock();
+    EXPECT_EQ(std::string(reinterpret_cast<const char *>(data), 4), "safe");
+    EXPECT_THROW(stream.set_active_weights_location(".weights/data2.bin"), std::exception);
+  }
+  ASSERT_NE(owner, nullptr);
+  EXPECT_EQ(std::string(reinterpret_cast<const char *>(borrowed), 4), "safe");
+  fs::remove_all(root);
+  fs::remove_all(outside);
+}
+
+TEST(onnx_external_ressource, NestedReadsRejectSymlinkDirectoriesAndFifos) {
+  namespace fs = std::filesystem;
+  const fs::path root = fs::temp_directory_path() / "onnx_light_external_read_symlinks";
+  fs::remove_all(root);
+  fs::create_directories(root / "real");
+  {
+    std::ofstream(root / "model.onnx");
+    std::ofstream(root / "default.data");
+    std::ofstream(root / "real/data.bin", std::ios::binary) << "safe";
+  }
+  fs::create_directory_symlink(root / "real", root / ".weights");
+  ASSERT_EQ(::mkfifo((root / "real/pipe.bin").c_str(), 0600), 0);
+  {
+    utils::TwoFilesStream stream((root / "model.onnx").string(), (root / "default.data").string());
+    EXPECT_THROW(stream.set_active_weights_location(".weights/data.bin"), std::exception);
+    EXPECT_THROW(stream.set_active_weights_location("real/pipe.bin"), std::exception);
+  }
+  EXPECT_THROW(
+      utils::TwoFilesStream((root / "model.onnx").string(), (root / ".weights/data.bin").string()),
+      std::exception);
+  fs::remove_all(root);
+}
+
 TEST(onnx_external_ressource, NestedWritesStayOnOpenedFile) {
   namespace fs = std::filesystem;
   const fs::path root = fs::temp_directory_path() / "onnx_light_anchored_external_weights";

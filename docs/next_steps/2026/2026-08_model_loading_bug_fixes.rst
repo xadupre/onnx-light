@@ -67,6 +67,13 @@ multiple files and nested graphs. Hydrate selected descriptors on that same
 model, or let a path-aware stream resolve a descriptor when its
 ``TensorProto`` completes. Locations remain confined to the model directory
 and are checked for traversal, symlink escape, offset overflow, and truncation.
+On POSIX, external-data streams open each child path component relative to
+the retained model-directory descriptor without following symbolic links.
+Sequential reads, parallel reads, and no-copy mappings reuse the verified
+file descriptor, so swapping a directory after opening cannot redirect a
+later read or mapping. External writers reject trailing dots and spaces in
+every path component and open their targets nonblocking before checking that
+they are regular files, preventing a named pipe from hanging serialization.
 
 Acceptance:
 

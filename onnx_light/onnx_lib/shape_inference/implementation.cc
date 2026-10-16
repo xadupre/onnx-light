@@ -276,8 +276,9 @@ void MaterializeSymbolicShape(TypeProto *inferred_type, SymbolTable &symbol_tabl
   } else if (inferred_val_case == TypeProto::kSparseTensorType) {
     GenerateSymbolicShape(inferred_type->mutable_sparse_tensor_type(), symbol_table);
   } else if (inferred_val_case == TypeProto::kSequenceType) {
-    MaterializeSymbolicShape(inferred_type->mutable_sequence_type()->mutable_elem_type(),
-                             symbol_table);
+    // Unknown element dimensions may differ between sequence items.
+    // Materialize them only when an individual tensor is extracted.
+    return;
   } else if (inferred_val_case == TypeProto::kOptionalType) {
     MaterializeSymbolicShape(inferred_type->mutable_optional_type()->mutable_elem_type(),
                              symbol_table);

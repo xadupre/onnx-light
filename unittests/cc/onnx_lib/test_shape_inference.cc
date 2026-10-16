@@ -3,6 +3,7 @@
 #include "onnx_lib/defs/shape_inference.h"
 #include "onnx_lib/shape_inference/implementation.h"
 #include "onnx_manipulations/parser.h"
+#include "onnx_proto/onnx_helper.h"
 #include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>
@@ -921,6 +922,48 @@ TEST(onnx_shape_inference, InferShapesImpl_SplitToSequenceOmittedSplit) {
           EXPECT_EQ(tensor.shape().dim(0).dim_value(), 1);
         }
       }
+    }
+  }
+}
+
+TEST(onnx_shape_inference, InferShapesImpl_SequenceAtKeepsUnknownElementDimensionsIndependent) {
+  RegisterAllOnnxOperatorSchemas();
+  for (int64_t version : {11, 24}) {
+    for (int64_t keepdims : {0, 1}) {
+      SCOPED_TRACE(version);
+      SCOPED_TRACE(keepdims);
+      ModelProto model;
+      OnnxParser parser(R"ONNX(
+        <ir_version: 10, opset_import: ["" : 24]>
+        graph (float[B,N,C] X) => (float[] Y0, float[] Y1) {
+          seq = SplitToSequence <axis = 1, keepdims = 1> (X, step)
+          Y0 = SequenceAt (seq, zero)
+          Y1 = SequenceAt (seq, one)
+        }
+      )ONNX");
+      const auto status = parser.Parse(model);
+      ASSERT_TRUE(status.IsOK()) << status.ErrorMessage();
+      model.mutable_opset_import(0)->set_version(version);
+      auto *graph = model.mutable_graph();
+      graph->mutable_node(0)->mutable_attribute(1)->set_i(keepdims);
+      *graph->add_initializer() = MakeInitializer<int64_t>("step", {}, {5});
+      *graph->add_initializer() = MakeInitializer<int64_t>("zero", {}, {0});
+      *graph->add_initializer() = MakeInitializer<int64_t>("one", {}, {1});
+
+      shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                   ShapeInferenceOptions(false, 1, false));
+
+      for (const auto &output : model.graph().output()) {
+        const auto &tensor = output.type().tensor_type();
+        EXPECT_EQ(tensor.elem_type(), TensorProto::FLOAT);
+        ASSERT_EQ(tensor.shape().dim_size(), 3);
+        EXPECT_EQ(tensor.shape().dim(0).dim_param(), "B");
+        EXPECT_EQ(tensor.shape().dim(2).dim_param(), "C");
+        EXPECT_TRUE(tensor.shape().dim(1).has_dim_param());
+        EXPECT_FALSE(tensor.shape().dim(1).dim_param().empty());
+      }
+      EXPECT_NE(model.graph().output(0).type().tensor_type().shape().dim(1).dim_param(),
+                model.graph().output(1).type().tensor_type().shape().dim(1).dim_param());
     }
   }
 }

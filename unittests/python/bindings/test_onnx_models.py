@@ -1472,7 +1472,10 @@ class TestOnnxLightHelper(ExtTestCase):
         onnxl.save(rewrite, bad)
         with self.assertRaises(RuntimeError) as cm:
             onnxl.load(bad, load_external_data=True)
-        self.assertIn("filename with no folder", str(cm.exception))
+        message = str(cm.exception)
+        self.assertIn("Unsafe external data location", message)
+        self.assertIn("name='Y1'", message)
+        self.assertIn("location='../escape.data'", message)
 
     @unittest.skipIf(
         not hasattr(os, "symlink") or os.name == "nt",

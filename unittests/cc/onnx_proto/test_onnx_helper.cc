@@ -1147,15 +1147,13 @@ TEST(onnx_external_ressource, LoadSharedExternalDataInSubdirectory) {
     ParseModelProtoFromStream(parsed, stream, opts, false);
     ASSERT_EQ(parsed.ref_graph().ref_initializer().size(), 3U);
     EXPECT_EQ(parsed.ref_graph().ref_initializer()[0].ref_raw_data().size(), 4U);
-    EXPECT_EQ(std::string(parsed.ref_graph().ref_initializer()[0].ref_raw_data().begin(),
-                          parsed.ref_graph().ref_initializer()[0].ref_raw_data().end()),
-              "abcd");
-    EXPECT_EQ(std::string(parsed.ref_graph().ref_initializer()[1].ref_raw_data().begin(),
-                          parsed.ref_graph().ref_initializer()[1].ref_raw_data().end()),
-              "efgh");
-    EXPECT_EQ(std::string(parsed.ref_graph().ref_initializer()[2].ref_raw_data().begin(),
-                          parsed.ref_graph().ref_initializer()[2].ref_raw_data().end()),
-              "ijkl");
+    auto raw_bytes = [](const TensorProto &tensor) {
+      return std::string(reinterpret_cast<const char *>(tensor.ref_raw_data().data()),
+                         tensor.ref_raw_data().size());
+    };
+    EXPECT_EQ(raw_bytes(parsed.ref_graph().ref_initializer()[0]), "abcd");
+    EXPECT_EQ(raw_bytes(parsed.ref_graph().ref_initializer()[1]), "efgh");
+    EXPECT_EQ(raw_bytes(parsed.ref_graph().ref_initializer()[2]), "ijkl");
   }
   const fs::path reused_model_path = root / "reused.onnx";
   SerializeOptions save_opts;

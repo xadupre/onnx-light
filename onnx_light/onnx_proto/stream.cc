@@ -21,6 +21,7 @@
 #include <malloc.h>
 #define NOMINMAX
 #include <windows.h>
+#include <winternl.h>
 #endif
 #include <memory>
 #include <stdexcept>
@@ -88,10 +89,7 @@ std::string validate_weights_file_is_next_to_model(const std::string &model_path
 
   std::filesystem::path normalized_parent = normalized_model_parent(model_path);
   std::filesystem::path normalized_weights = weights_path.lexically_normal();
-  auto relative =
-      std::filesystem::absolute(normalized_weights)
-          .lexically_normal()
-          .lexically_relative(std::filesystem::absolute(normalized_parent).lexically_normal());
+  auto relative = relative_external_data_path(normalized_weights, normalized_parent);
   if (!IsSafeExternalDataLocation(relative.string()) && weights_path.is_relative())
     relative = normalized_weights;
   return validate_external_location_is_next_to_model(model_path, relative.string()).string();
@@ -144,8 +142,7 @@ std::shared_ptr<ExternalDataFile> open_weights_file(const std::string &model_pat
           : std::filesystem::path(weights_file);
   if (!write)
     validate_external_weights_read_path(path, base);
-  const auto relative = std::filesystem::absolute(path).lexically_normal().lexically_relative(
-      std::filesystem::absolute(base).lexically_normal());
+  const auto relative = relative_external_data_path(path, base);
   return ExternalDataFile::Open(external_path_to_utf8(base), external_path_to_utf8(relative),
                                 write);
 }
@@ -155,7 +152,6 @@ std::shared_ptr<ExternalDataFile> open_weights_file(const std::string &model_pat
 struct ExternalDataFile::State {
   int fd = -1;
 #ifdef _WIN32
-  std::vector<HANDLE> directories;
   mutable std::mutex mutex;
 #endif
   ~State() {
@@ -166,10 +162,6 @@ struct ExternalDataFile::State {
       ::close(fd);
 #endif
     }
-#ifdef _WIN32
-    for (HANDLE directory : directories)
-      ::CloseHandle(directory);
-#endif
   }
 };
 
@@ -221,48 +213,78 @@ ExternalDataFile::Open(const std::string &base_dir, const std::string &relative_
   EXT_ENFORCE(S_ISREG(metadata.st_mode), "External data is not regular file: ", relative_path);
   EXT_ENFORCE(metadata.st_nlink == 1, "External data has multiple hard links: ", relative_path);
 #else
-  // Pin every ancestor used by CreateFileW, including ancestors of the model directory.
-  // Denying delete and write sharing prevents replacement and reparse-point edits.
-  auto base = std::filesystem::absolute(external_path_from_utf8(base_dir.empty() ? "." : base_dir))
-                  .lexically_normal();
-  auto current = base.root_path();
-  auto pin_directory = [&](const std::filesystem::path &path) {
-    if (before_leaf_open)
-      before_leaf_open();
-    HANDLE handle = ::CreateFileW(
-        path.c_str(), FILE_READ_ATTRIBUTES, FILE_SHARE_READ, nullptr,
-        OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS, nullptr);
-    EXT_ENFORCE(handle != INVALID_HANDLE_VALUE, "Cannot pin external data directory.");
-    state->directories.push_back(handle);
+  const auto nt_create_file = [] {
+    const HMODULE module = ::GetModuleHandleW(L"ntdll.dll");
+    EXT_ENFORCE(module != nullptr, "Cannot find ntdll for external data opening.");
+    const auto function =
+        reinterpret_cast<decltype(&::NtCreateFile)>(::GetProcAddress(module, "NtCreateFile"));
+    EXT_ENFORCE(function != nullptr, "Cannot find NtCreateFile for external data opening.");
+    return function;
+  }();
+  const auto base = external_path_from_utf8(base_dir.empty() ? "." : base_dir);
+  HANDLE base_handle = ::CreateFileW(base.c_str(), FILE_TRAVERSE | FILE_READ_ATTRIBUTES,
+                                     FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
+                                     FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+  EXT_ENFORCE(base_handle != INVALID_HANDLE_VALUE, "Cannot open external data base directory.");
+  std::unique_ptr<void, decltype(&::CloseHandle)> directory(base_handle, ::CloseHandle);
+  const auto verify_directory = [&]() {
     BY_HANDLE_FILE_INFORMATION metadata{};
-    EXT_ENFORCE(::GetFileInformationByHandle(handle, &metadata) &&
+    EXT_ENFORCE(::GetFileInformationByHandle(directory.get(), &metadata) &&
                     (metadata.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) &&
                     !(metadata.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT),
                 "External data directory is a reparse point or not a directory.");
   };
-  pin_directory(current);
-  for (const auto &component : base.relative_path()) {
-    current /= component;
-    pin_directory(current);
-  }
+  verify_directory();
+  std::unique_ptr<void, decltype(&::CloseHandle)> file(nullptr, ::CloseHandle);
   for (auto it = relative.begin(); it != relative.end(); ++it) {
     if (*it == ".")
       continue;
-    current /= *it;
-    if (std::next(it) != relative.end())
-      pin_directory(current);
+    const bool leaf = std::next(it) == relative.end();
+    const auto &name = it->native();
+    EXT_ENFORCE(name.size() <= USHRT_MAX / sizeof(wchar_t), "External data component is too long.");
+    EXT_ENFORCE(name.find(L':') == std::wstring::npos,
+                "External data components must not contain alternate data streams.");
+    UNICODE_STRING unicode{};
+    unicode.Buffer = const_cast<wchar_t *>(name.data());
+    unicode.Length = static_cast<USHORT>(name.size() * sizeof(wchar_t));
+    unicode.MaximumLength = unicode.Length;
+    OBJECT_ATTRIBUTES attributes{};
+    attributes.Length = sizeof(attributes);
+    attributes.RootDirectory = directory.get();
+    attributes.ObjectName = &unicode;
+    attributes.Attributes = OBJ_CASE_INSENSITIVE | OBJ_DONT_REPARSE;
+    IO_STATUS_BLOCK status_block{};
+    HANDLE handle = nullptr;
+    if (leaf && before_leaf_open)
+      before_leaf_open();
+    verify_directory();
+    // Resolve one component against the acquired object, never its mutable pathname.
+    const NTSTATUS status =
+        nt_create_file(&handle,
+                       leaf ? (write ? GENERIC_READ | GENERIC_WRITE : GENERIC_READ)
+                            : FILE_TRAVERSE | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+                       &attributes, &status_block, nullptr, FILE_ATTRIBUTE_NORMAL,
+                       leaf ? FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE
+                            : FILE_SHARE_READ | FILE_SHARE_WRITE,
+                       leaf && write ? FILE_OPEN_IF : FILE_OPEN,
+                       FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT |
+                           (leaf ? FILE_NON_DIRECTORY_FILE : FILE_DIRECTORY_FILE),
+                       nullptr, 0);
+    EXT_ENFORCE(status >= 0, "Cannot open external data: ", relative_path,
+                " (NtCreateFile status=", static_cast<int64_t>(status), ")");
+    if (leaf)
+      file.reset(handle);
+    else {
+      directory.reset(handle);
+      verify_directory();
+    }
   }
-  HANDLE handle =
-      ::CreateFileW(current.c_str(), write ? GENERIC_READ | GENERIC_WRITE : GENERIC_READ,
-                    FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
-                    write ? OPEN_ALWAYS : OPEN_EXISTING,
-                    FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS, nullptr);
-  EXT_ENFORCE(handle != INVALID_HANDLE_VALUE, "Cannot open external data: ", relative_path);
-  state->fd = ::_open_osfhandle(reinterpret_cast<intptr_t>(handle),
+  EXT_ENFORCE(file != nullptr, "External data file was not acquired.");
+  HANDLE handle = file.get();
+  state->fd = ::_open_osfhandle(reinterpret_cast<intptr_t>(file.get()),
                                 _O_BINARY | (write ? _O_RDWR : _O_RDONLY));
-  if (state->fd < 0)
-    ::CloseHandle(handle);
   EXT_ENFORCE(state->fd >= 0, "Cannot convert external data handle to descriptor.");
+  file.release();
   BY_HANDLE_FILE_INFORMATION metadata{};
   EXT_ENFORCE(::GetFileInformationByHandle(handle, &metadata),
               "Cannot query external data file information.");
@@ -271,11 +293,26 @@ ExternalDataFile::Open(const std::string &base_dir, const std::string &relative_
           ::GetFileType(handle) == FILE_TYPE_DISK,
       "External data is a reparse point or not regular file.");
   EXT_ENFORCE(metadata.nNumberOfLinks == 1, "External data has multiple hard links.");
-  for (HANDLE directory : state->directories)
-    ::CloseHandle(directory);
-  state->directories.clear();
 #endif
   return std::shared_ptr<ExternalDataFile>(new ExternalDataFile(std::move(state)));
+}
+
+std::filesystem::path relative_external_data_path(const std::filesystem::path &candidate_path,
+                                                  const std::filesystem::path &base_dir) {
+  const auto candidate = std::filesystem::absolute(candidate_path).lexically_normal();
+  const auto base = std::filesystem::absolute(base_dir).lexically_normal();
+  const auto relative = candidate.lexically_relative(base);
+  if (!relative.empty() && *relative.begin() != "..")
+    return relative;
+
+  const auto canonical_base = std::filesystem::weakly_canonical(base);
+  std::filesystem::path prefix;
+  for (const auto &component : candidate.parent_path()) {
+    prefix /= component;
+    if (std::filesystem::weakly_canonical(prefix) == canonical_base)
+      return candidate.lexically_relative(prefix);
+  }
+  return relative;
 }
 
 int64_t ExternalDataFile::Size() const {
@@ -1808,14 +1845,20 @@ void TwoFilesWriteStream::write_raw_bytes_in_second_stream(const uint8_t *ptr, o
 TwoFilesStream::TwoFilesStream(const std::string &file_path, const std::string &weights_file,
                                bool use_mmap_weights)
     : FileStream(file_path),
-      weights_stream_(weights_file, open_weights_file(file_path, weights_file, false)),
+      weights_stream_(
+          std::filesystem::absolute(file_path).lexically_normal() ==
+                  std::filesystem::absolute(weights_file).lexically_normal()
+              ? FileStream(weights_file)
+              : FileStream(weights_file, open_weights_file(file_path, weights_file, false))),
       active_weights_location_(weights_file), default_weights_location_(weights_file),
       use_mmap_weights_(use_mmap_weights) {
-  std::filesystem::path parent = normalized_model_parent(file_path);
-  std::filesystem::path weights = std::filesystem::path(weights_file);
-  std::filesystem::path rel =
-      std::filesystem::absolute(weights).lexically_normal().lexically_relative(
-          std::filesystem::absolute(parent).lexically_normal());
+  // Automatic discovery uses the model itself as a placeholder, not yet a weights source.
+  if (!weights_stream_.external_file()) {
+    default_weights_location_ = std::filesystem::path(weights_file).filename().string();
+    return;
+  }
+  default_weights_validated_ = true;
+  const auto rel = relative_external_data_path(weights_file, normalized_model_parent(file_path));
   if (!rel.empty() && rel.string() != ".") {
     default_weights_location_ = rel.string();
   }
@@ -1846,8 +1889,7 @@ void TwoFilesStream::set_active_weights_location(const std::string &location) {
       path = model_parent / path;
     }
     validate_external_weights_read_path(path, model_parent);
-    auto relative = std::filesystem::absolute(path).lexically_normal().lexically_relative(
-        std::filesystem::absolute(model_parent).lexically_normal());
+    const auto relative = relative_external_data_path(path, model_parent);
     auto stream = std::make_unique<FileStream>(
         path.string(), ExternalDataFile::Open(external_path_to_utf8(model_parent),
                                               external_path_to_utf8(relative)));
@@ -1865,6 +1907,19 @@ bool TwoFilesStream::using_default_weights_location() const {
 
 FileStream &TwoFilesStream::active_weights_stream() {
   if (using_default_weights_location()) {
+    if (!default_weights_validated_) {
+      auto file = open_weights_file(file_path_, weights_stream_.file_path(), false);
+      weights_stream_.file_stream_.close();
+#ifndef _WIN32
+      ::close(weights_stream_.file_descriptor_);
+      weights_stream_.file_descriptor_ = -1;
+#endif
+      weights_stream_.size_ = file->Size();
+      weights_stream_.external_position_ = 0;
+      weights_stream_.external_file_ = std::move(file);
+      weights_stream_._invalidate_read_buffer();
+      default_weights_validated_ = true;
+    }
     return weights_stream_;
   }
   auto it = extra_weights_streams_.find(active_weights_location_);

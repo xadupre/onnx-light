@@ -8,6 +8,14 @@
   To check formatting the same way CI does (fails on any diff, matching `.github/workflows/clang_format.yml`):
   `find . \( -name "*.cc" -o -name "*.h" -o -name "*.hpp" \) | grep -v ".git" | xargs clang-format --dry-run --Werror`
 
+### Lightweight Review Before Submission
+- Before committing or pushing code changes in this repository, perform a lightweight review of the final diff in addition to the required tests and formatters.
+- Keep the review focused on the requested behavior, changed code, direct callers, and directly related tests. Check for regressions, boundary cases, and producer/consumer contract mismatches.
+- Include a targeted security check of the changed behavior: untrusted inputs, trust boundaries, path containment and links, bounds and integer overflows, resource limits, and validation bypasses. Check that fast paths and default or placeholder values do not skip required validation. This is not a full security audit.
+- Fix confirmed issues caused by the changes and validate the affected behavior before submission. Review any resulting semantic changes; do not repeat an unchanged review before pushing an already-reviewed commit.
+- Do not automatically invoke `review-team`, a multi-agent workflow, or a whole-repository audit. The full review team remains available only when explicitly requested.
+- Keep unrelated findings out of the change and follow the PR scope rules.
+
 ### Docstring Style
 - Write docstrings using **third-person singular** verbs (e.g., "Returns the value.", "Computes the output shape.", not "Return the value." or "Compute the output shape.")
 - Use **`Returns:`** as the section header for return value documentation, never `Return:`

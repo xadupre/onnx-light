@@ -9,6 +9,7 @@
 // concurrent views, and path confinement.
 #include "onnx_mapped_payload.h"
 #include "stream.h"
+#include "windows_junction.h"
 
 #include <atomic>
 #include <cstdint>
@@ -122,6 +123,43 @@ TEST_F(MappedPayloadTest, BorrowReturnsExpectedBytesAndAlignment) {
   // the page size worth of alignment (>= 4096, i.e. much more than 8 bytes).
   EXPECT_GE(payload.alignment, size_t{8});
   EXPECT_EQ(std::memcmp(payload.data, content.data(), content.size()), 0);
+}
+
+TEST_F(MappedPayloadTest, TrustedBaseAliasesPreserveMappedAndDirectReadsWithoutFollowingChildren) {
+  const auto base = base_dir_ / "model";
+  const auto alias = base_dir_ / "alias";
+  std::filesystem::create_directory(base);
+  const auto content = MakeBytes(32, 3);
+  WriteFile("model/weights.bin", content);
+#ifdef _WIN32
+  const auto error = onnx_light_test::CreateWindowsJunction(alias, base);
+  ASSERT_FALSE(error) << error.message();
+#else
+  std::filesystem::create_directory_symlink(base, alias);
+#endif
+  for (const auto &source_base : {base, alias}) {
+    MappedPayloadSource source(source_base.string());
+    const auto relative = source.Borrow("weights.bin", 0, content.size());
+    for (const auto &file_base : {base, alias}) {
+      const auto path = (file_base / "weights.bin").string();
+      const auto mapped = source.Borrow(path, 0, content.size());
+      EXPECT_EQ(mapped.owner, relative.owner);
+      EXPECT_EQ(mapped.identity.source_path, relative.identity.source_path);
+      EXPECT_EQ(std::memcmp(mapped.data, content.data(), content.size()), 0);
+      std::vector<uint8_t> bytes(content.size());
+      source.DescribeFinalDestinationRead(path, 0, content.size()).ReadInto(bytes.data());
+      EXPECT_EQ(std::memcmp(bytes.data(), content.data(), content.size()), 0);
+    }
+  }
+#ifdef _WIN32
+  const auto child_error = onnx_light_test::CreateWindowsJunction(base / "linked", base);
+  ASSERT_FALSE(child_error) << child_error.message();
+#else
+  std::filesystem::create_directory_symlink(base, base / "linked");
+#endif
+  MappedPayloadSource source(alias.string());
+  EXPECT_ANY_THROW(source.Borrow((base / "linked" / "weights.bin").string(), 0, 4));
+  EXPECT_ANY_THROW(source.DescribeFinalDestinationRead("linked/weights.bin", 0, 4));
 }
 
 TEST_F(MappedPayloadTest, BorrowNonZeroOffsetReportsReducedAlignment) {

@@ -113,7 +113,7 @@ MappedPayloadSource::ResolveAndValidate(const std::string &relative_or_absolute_
   const std::filesystem::path canonical_base = std::filesystem::weakly_canonical(base, ec);
   EXT_ENFORCE(!ec, "MappedPayloadSource: could not canonicalize base '", base.string(),
               "': ", ec.message());
-  return (canonical_base / candidate.lexically_normal().lexically_relative(base)).string();
+  return (canonical_base / utils::relative_external_data_path(candidate, base)).string();
 }
 
 std::shared_ptr<utils::ExternalDataFile>

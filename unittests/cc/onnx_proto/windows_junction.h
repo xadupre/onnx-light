@@ -21,7 +21,8 @@ namespace onnx_light_test {
 /** Creates a directory junction without requiring symbolic-link privileges. */
 inline std::error_code CreateWindowsJunction(const std::filesystem::path &junction,
                                              const std::filesystem::path &target,
-                                             bool create_directory = true) {
+                                             bool create_directory = true,
+                                             DWORD access = GENERIC_WRITE) {
   std::error_code error;
   const auto absolute_target = std::filesystem::absolute(target, error);
   if (error)
@@ -61,10 +62,9 @@ inline std::error_code CreateWindowsJunction(const std::filesystem::path &juncti
   std::memcpy(buffer.data() + sizeof(header) + print_offset, print_name.data(), print_bytes);
   if (create_directory && !std::filesystem::create_directory(junction, error))
     return error ? error : std::make_error_code(std::errc::file_exists);
-  HANDLE handle = ::CreateFileW(junction.c_str(), GENERIC_WRITE,
-                                 FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
-                                 OPEN_EXISTING,
-                                FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+  HANDLE handle = ::CreateFileW(
+      junction.c_str(), access, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+      OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS, nullptr);
   if (handle == INVALID_HANDLE_VALUE) {
     error = std::error_code(static_cast<int>(::GetLastError()), std::system_category());
   } else {

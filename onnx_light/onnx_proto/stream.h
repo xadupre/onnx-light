@@ -71,14 +71,14 @@ namespace utils {
 /** Signed byte-offset type used by stream seek and length operations. */
 typedef int64_t offset_t;
 
-/** Owns an external-data file opened beneath a pinned model directory. */
+/** Owns a verified file acquired relative to directory descriptors or Windows handles. */
 class ONNX_LIGHT_PROTO_API ExternalDataFile {
 public:
   /** Opens and verifies a regular, singly linked file without following relative symlinks.
    *  Accepts confined nested paths; callers enforce any stricter filename/depth policy. */
   static std::shared_ptr<ExternalDataFile>
   Open(const std::string &base_dir, const std::string &relative_path, bool write = false);
-  /** Invokes *before_leaf_open* after pinning directories, for deterministic race tests. */
+  /** Invokes *before_leaf_open* once after acquiring the parent, for deterministic race tests. */
   static std::shared_ptr<ExternalDataFile> Open(const std::string &base_dir,
                                                 const std::string &relative_path, bool write,
                                                 const std::function<void()> &before_leaf_open);
@@ -131,6 +131,10 @@ std::shared_ptr<uint8_t> mmap_file_as_shared_ptr(const std::string &file_path, i
  *  canonicalizes outside *base_dir*, or a file with additional hard links. */
 void validate_external_weights_read_path(const std::filesystem::path &candidate_path,
                                          const std::filesystem::path &base_dir);
+
+/** Relativizes trusted-base aliases without resolving child links; callers check containment. */
+std::filesystem::path relative_external_data_path(const std::filesystem::path &candidate_path,
+                                                  const std::filesystem::path &base_dir);
 
 class StringStream;
 
@@ -899,6 +903,8 @@ public:
   };
 
   /** Opens *file_path* for protobuf data and *weights_file* for weight data.
+   *  When both paths name the model itself, weights-source validation is deferred until
+   *  external bytes are read, allowing linked models to serve as discovery placeholders.
    *  When *use_mmap_weights* is true, ``file_load_mode=MMAP`` keeps a single model-owned
    *  memory map of each weights file and every ``TensorProto`` borrows a zero-copy view into
    *  it (as if ``no_copy`` were set for the weights), instead of copying the bytes through a
@@ -947,6 +953,8 @@ protected:
   std::string active_weights_location_;
   /** Relative location key associated with the default weights stream. */
   std::string default_weights_location_;
+  /** Caches validation of the default source, including a discovery placeholder used as weights. */
+  bool default_weights_validated_ = false;
   /** Maps object pointers to their byte offsets in the weights file. */
   std::unordered_map<const void *, uint64_t> position_cache_;
   /** When true, ``file_load_mode=MMAP`` makes each weights-file tensor borrow a zero-copy

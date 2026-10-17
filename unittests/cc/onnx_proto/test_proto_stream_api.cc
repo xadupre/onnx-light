@@ -162,6 +162,40 @@ TEST_F(ExternalDataFileTest, ReaderPreservesSupportForConfinedNestedPaths) {
   EXPECT_EQ(std::string(reinterpret_cast<char *>(bytes), 6), "second");
 }
 
+TEST_F(ExternalDataFileTest, TrustedBaseAliasesPreservePrimaryAndAdditionalWeightsLocations) {
+  const auto base = std::filesystem::absolute(root / "model");
+  const auto alias = std::filesystem::absolute(root / "alias");
+#ifdef _WIN32
+  const auto error = onnx_light_test::CreateWindowsJunction(alias, base);
+  ASSERT_FALSE(error) << error.message();
+#else
+  std::filesystem::create_directory_symlink(base, alias);
+#endif
+  for (const auto &model_base : {base, alias}) {
+    for (const auto &weights_base : {base, alias}) {
+      utils::TwoFilesStream stream((model_base / "model.onnx").string(),
+                                   (weights_base / "sub" / "weights.bin").string(), true);
+      uint8_t bytes[8]{};
+      stream.read_bytes_from_weights_stream(8, bytes, 0);
+      EXPECT_EQ(std::string(reinterpret_cast<char *>(bytes), 8), "original");
+      stream.set_active_weights_location((weights_base / "sub" / "extra.bin").string());
+      stream.read_bytes_from_weights_stream(8, bytes, 0);
+      EXPECT_EQ(std::string(reinterpret_cast<char *>(bytes), 8), "extra!!!");
+      std::shared_ptr<void> owner;
+      const auto *borrowed = stream.borrow_weights_bytes("sub/weights.bin", 0, 8, 1, owner);
+      EXPECT_EQ(std::string(reinterpret_cast<const char *>(borrowed), 8), "original");
+    }
+  }
+#ifdef _WIN32
+  const auto child_error = onnx_light_test::CreateWindowsJunction(base / "linked", base / "sub");
+  ASSERT_FALSE(child_error) << child_error.message();
+#else
+  std::filesystem::create_directory_symlink(base / "sub", base / "linked");
+#endif
+  EXPECT_ANY_THROW(utils::TwoFilesStream((alias / "model.onnx").string(),
+                                         (base / "linked" / "weights.bin").string()));
+}
+
 #ifndef _WIN32
 TEST_F(ExternalDataFileTest, MidAcquisitionParentSwapReadsPinnedFile) {
   const auto base = root / "model";
@@ -320,27 +354,31 @@ TEST_F(ExternalDataFileTest, MidAcquisitionJunctionLeafIsRejectedBeforeCreation)
 
 TEST_F(ExternalDataFileTest, PinnedParentCannotBeRenamedDuringCreation) {
   const auto base = root / "model";
+  int calls = 0;
   auto file = utils::ExternalDataFile::Open(base.string(), "sub/new.bin", true, [&]() {
+    ++calls;
     std::error_code error;
     std::filesystem::rename(base / "sub", base / "moved", error);
     EXPECT_TRUE(error);
     EXPECT_TRUE(std::filesystem::is_directory(base / "sub"));
   });
+  EXPECT_EQ(calls, 1);
   file->WriteAt("created", 7, 0);
   EXPECT_EQ(ReadWholeFile((base / "sub" / "new.bin").string()), "created");
 }
 
-TEST_F(ExternalDataFileTest, PinnedParentCannotBecomeJunctionDuringCreation) {
+TEST_F(ExternalDataFileTest, ParentMetadataJunctionChangeCannotEscapeDuringCreation) {
   const auto base = root / "model";
   std::filesystem::remove(base / "sub" / "weights.bin");
   std::filesystem::remove(base / "sub" / "extra.bin");
-  auto file = utils::ExternalDataFile::Open(base.string(), "sub/new.bin", true, [&]() {
-    const auto error =
-        onnx_light_test::CreateWindowsJunction(base / "sub", root / "outside", false);
-    EXPECT_TRUE(error);
-  });
-  file->WriteAt("created", 7, 0);
-  EXPECT_EQ(ReadWholeFile((base / "sub" / "new.bin").string()), "created");
+  int calls = 0;
+  EXPECT_ANY_THROW(utils::ExternalDataFile::Open(base.string(), "sub/new.bin", true, [&]() {
+    ++calls;
+    const auto error = onnx_light_test::CreateWindowsJunction(base / "sub", root / "outside", false,
+                                                              FILE_WRITE_ATTRIBUTES);
+    EXPECT_FALSE(error) << error.message();
+  }));
+  EXPECT_EQ(calls, 1);
   EXPECT_FALSE(std::filesystem::exists(root / "outside" / "new.bin"));
 }
 

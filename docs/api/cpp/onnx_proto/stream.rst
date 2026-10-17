@@ -9,6 +9,8 @@ External-data opening follows the ONNX descriptor-based approach: Linux
 and file-identity verification otherwise. Open descriptors are retained for
 subsequent reads, writes and mappings; their ownership uses standard
 ``std::shared_ptr<int>`` rather than a separate file class.
+These helpers are implementation details: their header is neither installed
+nor included in the public API reference.
 
 Windows and the POSIX fallback do not prevent every directory-replacement race
 during acquisition: creation can have an external effect before the post-open

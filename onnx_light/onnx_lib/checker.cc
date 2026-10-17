@@ -24,6 +24,7 @@
 #include "onnx_lib/shape_inference/attribute_binder.h"
 #include "onnx_lib/shape_inference/implementation.h"
 #include "onnx_manipulations/tensor_proto_util.h"
+#include "onnx_proto/external_data_internal.h"
 #include "onnx_proto/onnx_helper.h"
 #include "onnx_proto/onnx_tree_ensemble.h"
 #include "onnx_proto/onnx_verify.h"
@@ -1609,7 +1610,7 @@ int64_t open_external_data(const std::string &base_dir, const std::string &locat
     verify_path_containment(data_path.parent_path(), base_dir, tensor_name);
   }
   ONNX_TRY {
-    const auto descriptor = utils::OpenExternalDataFile(base_dir, location, !read_only);
+    const auto descriptor = utils::detail::OpenExternalDataFile(base_dir, location, !read_only);
     return std::exchange(*descriptor, -1);
   }
   ONNX_CATCH(const std::runtime_error &ex) {

@@ -372,16 +372,19 @@ TEST_F(MappedPayloadTest, MappingUsesOpenedFileAfterDirectoryReplacement) {
   std::filesystem::create_directories(base_dir_ / "model" / "child");
   std::filesystem::create_directory(base_dir_ / "outside");
   const std::string original = MakeBytes(32, 3);
+  WriteFile("model/model.onnx", "model");
   WriteFile("model/child/weights.bin", original);
   WriteFile("outside/weights.bin", MakeBytes(32, 99));
-  const auto file =
-      utils::OpenExternalDataFile((base_dir_ / "model").string(), "child/weights.bin");
+  utils::TwoFilesStream stream((base_dir_ / "model" / "model.onnx").string(),
+                               (base_dir_ / "model" / "child" / "weights.bin").string(), true);
 
   ASSERT_NO_FATAL_FAILURE(
       ReplaceDirectoryWithLink(base_dir_ / "model" / "child", base_dir_ / "outside"));
-  const auto mapping = utils::MapExternalDataFile(*file);
+  std::shared_ptr<void> owner;
+  const auto *mapping =
+      stream.borrow_weights_bytes("child/weights.bin", 0, original.size(), 1, owner);
   ASSERT_NE(mapping, nullptr);
-  EXPECT_EQ(std::memcmp(mapping.get(), original.data(), original.size()), 0);
+  EXPECT_EQ(std::memcmp(mapping, original.data(), original.size()), 0);
 }
 
 TEST_F(MappedPayloadTest, ParallelStreamReadsRetainFilesAcrossDirectoryReplacement) {

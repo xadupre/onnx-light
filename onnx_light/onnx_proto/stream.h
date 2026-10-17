@@ -70,25 +70,6 @@ namespace utils {
 /** Signed byte-offset type used by stream seek and length operations. */
 typedef int64_t offset_t;
 
-/** Opens external data using ONNX-style containment and descriptor identity checks.
- *  Uses kernel-enforced containment where supported. Windows and the POSIX fallback
- *  verify after opening; they do not prevent all directory-replacement creation races.
- *  The standard shared owner closes the descriptor after its last user releases it. */
-ONNX_LIGHT_PROTO_API std::shared_ptr<int> OpenExternalDataFile(const std::string &base_dir,
-                                                               const std::string &relative_path,
-                                                               bool write = false);
-/** Returns the size of an open file descriptor. */
-ONNX_LIGHT_PROTO_API int64_t ExternalDataFileSize(int descriptor);
-/** Reads a complete range from an open descriptor, rejecting failed or short reads. */
-ONNX_LIGHT_PROTO_API void ReadExternalDataFile(int descriptor, void *destination, int64_t size,
-                                               int64_t offset);
-/** Writes a complete range to an open descriptor. */
-ONNX_LIGHT_PROTO_API void WriteExternalDataFile(int descriptor, const void *source, int64_t size,
-                                                int64_t offset);
-/** Truncates an open descriptor, preserving live Windows mappings when resizing is denied. */
-ONNX_LIGHT_PROTO_API void TruncateExternalDataFile(int descriptor);
-/** Maps an open descriptor, returning an empty pointer for an empty file. */
-ONNX_LIGHT_PROTO_API std::shared_ptr<uint8_t> MapExternalDataFile(int descriptor);
 /** Decodes a 64-bit integer from its ZigZag-encoded unsigned representation.
  *  ZigZag maps signed integers to unsigned values so that small negative numbers
  *  have a short varint encoding: 0 -> 0, -1 -> 1, 1 -> 2, -2 -> 3, ... */
@@ -118,10 +99,6 @@ std::shared_ptr<uint8_t> mmap_file_as_shared_ptr(const std::string &file_path, i
  *  canonicalizes outside *base_dir*, or a file with additional hard links. */
 void validate_external_weights_read_path(const std::filesystem::path &candidate_path,
                                          const std::filesystem::path &base_dir);
-
-/** Relativizes trusted-base aliases without resolving child links; callers check containment. */
-std::filesystem::path relative_external_data_path(const std::filesystem::path &candidate_path,
-                                                  const std::filesystem::path &base_dir);
 
 class StringStream;
 

@@ -2,6 +2,7 @@
 // exposes on generated proto classes: ParseFromString / SerializeToString now
 // return bool (true on success) and ByteSizeLong() reports the serialized size
 // without performing a real serialization (it delegates to SerializeSize()).
+#include "external_data_internal.h"
 #include "onnx.h"
 #include "windows_junction.h"
 #include <filesystem>
@@ -127,7 +128,7 @@ protected:
 };
 
 TEST_F(ExternalDataDescriptorTest, RejectsUnsafeObjectsBeforeTruncation) {
-  using utils::OpenExternalDataFile;
+  using utils::detail::OpenExternalDataFile;
   const auto base = (root / "model").string();
   EXPECT_ANY_THROW(OpenExternalDataFile(base, "../outside/weights.bin", true));
   EXPECT_ANY_THROW(OpenExternalDataFile(base, "sub", true));
@@ -137,17 +138,18 @@ TEST_F(ExternalDataDescriptorTest, RejectsUnsafeObjectsBeforeTruncation) {
   EXPECT_ANY_THROW(OpenExternalDataFile(base, "linked.bin", true));
   EXPECT_EQ(ReadWholeFile((root / "outside" / "weights.bin").string()), "sentinel");
   auto created = OpenExternalDataFile(base, "sub/new.bin", true);
-  EXPECT_EQ(utils::ExternalDataFileSize(*created), 0);
-  EXPECT_FALSE(utils::MapExternalDataFile(*created));
-  utils::WriteExternalDataFile(*created, "data", 4, 3);
-  EXPECT_EQ(utils::ExternalDataFileSize(*created), 7);
-  EXPECT_ANY_THROW(utils::ReadExternalDataFile(*created, nullptr, 1, 7));
+  utils::FileWriteStream output("unused", created);
+  EXPECT_EQ(utils::FileStream("unused", created).size(), 0);
+  output.write_raw_bytes_at_offset(reinterpret_cast<const uint8_t *>("data"), 4, 3);
+  utils::FileStream input("unused", created);
+  EXPECT_EQ(input.size(), 7);
+  input.skip_bytes(7);
   char byte = 'x';
-  EXPECT_ANY_THROW(utils::ReadExternalDataFile(*created, &byte, 1, 7));
+  EXPECT_ANY_THROW(input.read_bytes(1, reinterpret_cast<uint8_t *>(&byte)));
   EXPECT_EQ(byte, 'x');
-  EXPECT_ANY_THROW(utils::WriteExternalDataFile(*created, "x", 1, -1));
-  utils::TruncateExternalDataFile(*created);
-  EXPECT_EQ(utils::ExternalDataFileSize(*created), 0);
+  EXPECT_ANY_THROW(output.write_raw_bytes_at_offset(reinterpret_cast<const uint8_t *>("x"), 1, -1));
+  utils::FileWriteStream truncated("unused", created);
+  EXPECT_EQ(utils::FileStream("unused", created).size(), 0);
 }
 
 TEST_F(ExternalDataDescriptorTest, ReaderPreservesSupportForConfinedNestedPaths) {
@@ -207,10 +209,10 @@ TEST_F(ExternalDataDescriptorTest, RejectsSymlinkLeavesAndNonregularFilesWithout
   std::filesystem::create_symlink(std::filesystem::absolute(root / "outside" / "weights.bin"),
                                   base / "linked.bin");
   for (bool write : {false, true})
-    EXPECT_ANY_THROW(utils::OpenExternalDataFile(base.string(), "linked.bin", write));
+    EXPECT_ANY_THROW(utils::detail::OpenExternalDataFile(base.string(), "linked.bin", write));
   ASSERT_EQ(::mkfifo((base / "pipe").c_str(), 0600), 0);
   for (bool write : {false, true})
-    EXPECT_ANY_THROW(utils::OpenExternalDataFile(base.string(), "pipe", write));
+    EXPECT_ANY_THROW(utils::detail::OpenExternalDataFile(base.string(), "pipe", write));
   EXPECT_EQ(ReadWholeFile((root / "outside" / "weights.bin").string()), "sentinel");
 }
 
@@ -244,7 +246,7 @@ TEST_F(ExternalDataDescriptorTest, RetainedReadsWorkersAndMappingIgnoreDirectory
   EXPECT_EQ(std::string(reinterpret_cast<char *>(bytes), 8), "extra!!!");
   borrowed = stream.borrow_weights_bytes("sub/extra.bin", 0, 8, 1, owner);
   EXPECT_EQ(std::string(reinterpret_cast<const char *>(borrowed), 8), "extra!!!");
-  EXPECT_ANY_THROW(utils::OpenExternalDataFile(base.string(), "sub/new.bin", true));
+  EXPECT_ANY_THROW(utils::detail::OpenExternalDataFile(base.string(), "sub/new.bin", true));
   EXPECT_FALSE(std::filesystem::exists(root / "outside" / "new.bin"));
 }
 
@@ -278,8 +280,8 @@ TEST_F(ExternalDataDescriptorTest, ParallelAndInlineWritesIgnoreDirectorySwap) {
 
 TEST_F(ExternalDataDescriptorTest, RetainedFileStreamsKeepDelayedOperationsAnchored) {
   const auto base = root / "model";
-  auto reader = utils::OpenExternalDataFile(base.string(), "sub/weights.bin");
-  auto writer = utils::OpenExternalDataFile(base.string(), "sub/new.bin", true);
+  auto reader = utils::detail::OpenExternalDataFile(base.string(), "sub/weights.bin");
+  auto writer = utils::detail::OpenExternalDataFile(base.string(), "sub/new.bin", true);
   {
     utils::FileStream input("unused", reader);
     utils::FileWriteStream output("unused", writer);
@@ -306,8 +308,9 @@ TEST_F(ExternalDataDescriptorTest, RejectsActualJunctionParentsForReadingAndCrea
   const auto error = onnx_light_test::CreateWindowsJunction(base / "junction", root / "outside");
   ASSERT_FALSE(error) << error.message();
   for (bool write : {false, true})
-    EXPECT_ANY_THROW(utils::OpenExternalDataFile(base.string(), "junction/weights.bin", write));
-  EXPECT_ANY_THROW(utils::OpenExternalDataFile(base.string(), "junction/new.bin", true));
+    EXPECT_ANY_THROW(
+        utils::detail::OpenExternalDataFile(base.string(), "junction/weights.bin", write));
+  EXPECT_ANY_THROW(utils::detail::OpenExternalDataFile(base.string(), "junction/new.bin", true));
   EXPECT_FALSE(std::filesystem::exists(root / "outside" / "new.bin"));
   EXPECT_EQ(ReadWholeFile((root / "outside" / "weights.bin").string()), "sentinel");
 }
@@ -316,7 +319,7 @@ TEST_F(ExternalDataDescriptorTest, RetainedStreamsIgnoreJunctionReplacement) {
   const auto base = root / "model";
   utils::TwoFilesStream input((base / "model.onnx").string(),
                               (base / "sub" / "weights.bin").string(), true);
-  auto output_file = utils::OpenExternalDataFile(base.string(), "sub/new.bin", true);
+  auto output_file = utils::detail::OpenExternalDataFile(base.string(), "sub/new.bin", true);
   utils::FileWriteStream output("unused", output_file);
   std::error_code error;
   std::filesystem::rename(base / "sub", base / "pinned", error);

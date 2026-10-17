@@ -1,4 +1,5 @@
 #include "stream.h"
+#include "external_data_internal.h"
 #include "onnx_helper.h"
 #include <algorithm>
 #include <cctype>
@@ -36,6 +37,12 @@
 namespace ONNX_LIGHT_NAMESPACE::utils {
 
 namespace {
+
+using detail::ExternalDataFileSize;
+using detail::MapExternalDataFile;
+using detail::OpenExternalDataFile;
+using detail::ReadExternalDataFile;
+using detail::relative_external_data_path;
 
 std::filesystem::path external_path_from_utf8(const std::string &value) {
 #ifdef __cpp_char8_t
@@ -175,6 +182,8 @@ std::filesystem::path VerifyExternalContainment(const std::filesystem::path &pat
 }
 
 } // namespace
+
+namespace detail {
 
 std::shared_ptr<int> OpenExternalDataFile(const std::string &base_dir,
                                           const std::string &relative_path, bool write) {
@@ -345,6 +354,8 @@ void ReadExternalDataFile(int descriptor, void *destination, int64_t size, int64
   }
 }
 
+namespace {
+
 void WriteExternalDataFile(int descriptor, const void *source, int64_t size, int64_t offset) {
   EXT_ENFORCE(size >= 0 && offset >= 0 && size <= INT64_MAX - offset,
               "External data write is out of bounds.");
@@ -385,6 +396,8 @@ void TruncateExternalDataFile(int descriptor) {
 #endif
 }
 
+} // namespace
+
 std::shared_ptr<uint8_t> MapExternalDataFile(int descriptor) {
   const int64_t size = ExternalDataFileSize(descriptor);
   if (!size)
@@ -407,6 +420,13 @@ std::shared_ptr<uint8_t> MapExternalDataFile(int descriptor) {
                                   [](uint8_t *p) { ::UnmapViewOfFile(p); });
 #endif
 }
+
+} // namespace detail
+
+namespace {
+using detail::TruncateExternalDataFile;
+using detail::WriteExternalDataFile;
+} // namespace
 
 // Validates that *candidate_path* is not a symlink, resolves inside *base_dir*, and
 // has no more than one hard link. Shared by external-data reads (TwoFilesStream) and

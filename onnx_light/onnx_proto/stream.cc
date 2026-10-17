@@ -104,7 +104,6 @@ std::string external_location_for_file(const std::string &model_path,
                           : std::filesystem::absolute(file).lexically_normal();
   auto relative = target.lexically_relative(parent);
   if (!IsSafeExternalDataLocation(relative.string())) {
-    // Only the trusted root may use an alias; child components still pass through no-follow opens.
     std::error_code ec;
     if (std::filesystem::equivalent(target.parent_path(), parent, ec) && !ec)
       relative = target.filename();
@@ -146,7 +145,7 @@ std::filesystem::path validate_external_location_within_model(const std::string 
   std::filesystem::create_directories(parent);
 #endif
   // Reject symlinks as write targets to prevent TOCTOU-based arbitrary file overwrites
-  // (GHSA-8qff-7g33-75mx). The file writer also checks at open time.
+  // (GHSA-8qff-7g33-75mx). Defense-in-depth: FileWriteStream also checks at open time.
   if (std::filesystem::is_symlink(final_path)) {
     EXT_THROW("External data location '", final_path.string(),
               "' is a symbolic link, which is not allowed for security reasons "
@@ -1102,7 +1101,8 @@ void FileWriteStream::WaitForDelayedBlock() { thread_pool_.Wait(); }
 
 FileWriteStream::FileWriteStream(const std::string &model_path, const std::string &location,
                                  int model_directory_fd)
-    : file_path_(validate_external_location_within_model(model_path, location).string()) {
+    : file_path_(validate_external_location_within_model(model_path, location).string()),
+      written_bytes_(0) {
 #if defined(_WIN32)
   (void)model_directory_fd;
   ScopedExternalHandle directory{
@@ -1127,7 +1127,6 @@ FileWriteStream::FileWriteStream(const std::string &model_path, const std::strin
                                   resolved_parent.data(), static_cast<int>(base.size()),
                                   TRUE) == CSTR_EQUAL),
       "External data directory resolves outside model directory: ", file_path_);
-  // Resolve a junction once, pin its target against rename, and never reopen the alias.
   const auto target_path =
       std::filesystem::path(resolved_parent) / std::filesystem::path(file_path_).filename();
   ScopedExternalHandle file{::CreateFileW(
@@ -1149,7 +1148,6 @@ FileWriteStream::FileWriteStream(const std::string &model_path, const std::strin
   LARGE_INTEGER zero{};
   EXT_ENFORCE(::SetFilePointerEx(file.handle, zero, nullptr, FILE_BEGIN),
               "Cannot seek external data file: ", file_path_);
-  // Like FileWriteStream, permit re-saving data still held by a no-copy mapping.
   EXT_ENFORCE(::SetEndOfFile(file.handle) || ::GetLastError() == ERROR_USER_MAPPED_FILE,
               "Cannot truncate external data file: ", file_path_);
   const HANDLE handle = file.handle;
@@ -1241,7 +1239,6 @@ void FileWriteStream::write_raw_bytes_at_offset(const uint8_t *data, offset_t n_
 void FileWriteStream::pre_allocate(int64_t total_bytes) {
   EXT_ENFORCE(total_bytes > 0, "pre_allocate requires total_bytes > 0, got ", total_bytes);
   if (!external_file_) {
-    // Flush the size sentinel before parallel tasks can overwrite its position.
     file_stream_.seekp(total_bytes - 1);
     const uint8_t zero = 0;
     file_stream_.write(reinterpret_cast<const char *>(&zero), 1);

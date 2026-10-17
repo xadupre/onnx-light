@@ -610,8 +610,6 @@ class ONNX_LIGHT_PROTO_API FileWriteStream : public BinaryWriteStream {
 public:
   /** Opens the file at *file_path* for writing (creates or truncates). */
   explicit FileWriteStream(const std::string &file_path);
-  /** Opens an external-data location beneath the model directory, retaining the verified
-   *  file for subsequent sequential and parallel writes. */
   FileWriteStream(const std::string &model_path, const std::string &location,
                   int model_directory_fd = -1);
   virtual void write_raw_bytes(const uint8_t *data, offset_t n_bytes) override;
@@ -634,9 +632,7 @@ public:
    *  already-open ``file_stream_`` first instead of opening a new file handle. Only safe to call
    *  from the single thread that owns this stream (no internal locking): used for below-threshold
    *  writes that skip the thread pool and therefore never run concurrently with another writer
-   *  of this same stream. External-data streams instead use positional writes through their
-   *  retained native file and permit concurrent disjoint ranges. This method does not update
-   *  the logical size; the calling thread reserves bytes or pre-allocates the file beforehand. */
+   *  of this same stream. */
   void write_raw_bytes_at_offset(const uint8_t *data, offset_t n_bytes, int64_t offset);
 
 protected:
@@ -644,14 +640,13 @@ protected:
   std::string file_path_;
   /** Underlying output stream used for sequential writes. */
   std::ofstream file_stream_;
-  /** Retained external-data file; declared before the pool so queued writes finish before close. */
 #if defined(_WIN32)
   std::shared_ptr<void> external_file_;
 #else
   std::shared_ptr<int> external_file_;
 #endif
-  /** Logical size maintained by the calling thread, never by positional-write workers. */
-  uint64_t written_bytes_{0};
+  /** Running count of bytes written to the file. */
+  uint64_t written_bytes_;
   /** Thread pool used for parallel block writes. */
   ThreadPool thread_pool_;
 };
@@ -668,7 +663,6 @@ class ONNX_LIGHT_PROTO_API FileStream : public BinaryStream {
 public:
   /** Opens the file at *file_path* for reading. */
   explicit FileStream(const std::string &file_path);
-  /** Opens external data beneath the model directory and retains the verified file. */
   FileStream(const std::string &file_path, const std::string &model_path,
              int model_directory_fd = -1);
   virtual ~FileStream();
@@ -721,12 +715,10 @@ protected:
   /** Underlying input stream used for file I/O. */
   std::ifstream file_stream_;
 #if !defined(_WIN32)
-  /** POSIX descriptor used for parallel reads and all secured external-data I/O. */
+  /** POSIX file descriptor used for pread-based parallel reads on non-Windows platforms. */
   int file_descriptor_ = -1;
-  /** Retains the model directory for subsequent external-data opens. */
   int external_directory_fd_ = -1;
 #else
-  /** Declared before the thread pool so queued reads finish before the handle closes. */
   std::shared_ptr<void> external_file_;
   offset_t external_read_pos_ = 0;
 #endif
@@ -796,7 +788,7 @@ public:
   /** Pre-allocates the weights file associated with *location* to *total_bytes*.
    *  If *location* refers to the default weights file, behaves like
    *  ``pre_allocate_weights(total_bytes)``.  Otherwise creates the matching extra
-   *  writer (if not already created) and pre-allocates it.
+   *  ``FileWriteStream`` (if not already created) and pre-allocates it.
    *  Must be called before StartWriteThreadPool. */
   void pre_allocate_weights(const std::string &location, int64_t total_bytes);
 
@@ -847,7 +839,6 @@ protected:
   /** Additional writers when external_data.location points to multiple files. */
   std::unordered_map<std::string, std::unique_ptr<FileWriteStream>> extra_weights_streams_;
 #if !defined(_WIN32)
-  /** Retains the original model directory while opening child weights files. */
   int model_directory_fd_ = -1;
 #endif
   /** Rejects differently cased names that may refer to an already-open weights file. */
@@ -874,8 +865,7 @@ protected:
 
 /** Two-file reader for ONNX models with external tensor data.
  *  Reads the model protobuf from a primary file (inherited from FileStream)
- *  and tensor weight data from a separate weights file on demand.
- *  POSIX external-data reads and mappings reuse no-follow, directory-anchored descriptors. */
+ *  and tensor weight data from a separate weights file on demand. */
 class ONNX_LIGHT_PROTO_API TwoFilesStream : public FileStream {
 public:
   struct SharedWeightsBuffer {
@@ -931,7 +921,7 @@ protected:
   std::unordered_map<std::string, SharedWeightsBuffer> shared_weights_buffers_;
   /** Active external location used by the current tensor read. */
   std::string active_weights_location_;
-  /** Relative default location; empty when the model is an auto-discovery placeholder. */
+  /** Relative location key associated with the default weights stream. */
   std::string default_weights_location_;
   /** Maps object pointers to their byte offsets in the weights file. */
   std::unordered_map<const void *, uint64_t> position_cache_;

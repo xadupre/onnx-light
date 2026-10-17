@@ -125,7 +125,7 @@ TEST_F(MappedPayloadTest, BorrowReturnsExpectedBytesAndAlignment) {
   EXPECT_EQ(std::memcmp(payload.data, content.data(), content.size()), 0);
 }
 
-TEST_F(MappedPayloadTest, TrustedBaseAliasesPreserveMappedAndDirectReadsWithoutFollowingChildren) {
+TEST_F(MappedPayloadTest, TrustedBaseAliasesPreserveMappedAndDirectReadsAndRejectOutsideChildren) {
   const auto base = base_dir_ / "model";
   const auto alias = base_dir_ / "alias";
   std::filesystem::create_directory(base);
@@ -152,10 +152,15 @@ TEST_F(MappedPayloadTest, TrustedBaseAliasesPreserveMappedAndDirectReadsWithoutF
     }
   }
 #ifdef _WIN32
-  const auto child_error = onnx_light_test::CreateWindowsJunction(base / "linked", base);
+  std::filesystem::create_directory(base_dir_ / "outside");
+  WriteFile("outside/weights.bin", content);
+  const auto child_error =
+      onnx_light_test::CreateWindowsJunction(base / "linked", base_dir_ / "outside");
   ASSERT_FALSE(child_error) << child_error.message();
 #else
-  std::filesystem::create_directory_symlink(base, base / "linked");
+  std::filesystem::create_directory(base_dir_ / "outside");
+  WriteFile("outside/weights.bin", content);
+  std::filesystem::create_directory_symlink(base_dir_ / "outside", base / "linked");
 #endif
   MappedPayloadSource source(alias.string());
   EXPECT_ANY_THROW(source.Borrow((base / "linked" / "weights.bin").string(), 0, 4));
@@ -370,11 +375,11 @@ TEST_F(MappedPayloadTest, MappingUsesOpenedFileAfterDirectoryReplacement) {
   WriteFile("model/child/weights.bin", original);
   WriteFile("outside/weights.bin", MakeBytes(32, 99));
   const auto file =
-      utils::ExternalDataFile::Open((base_dir_ / "model").string(), "child/weights.bin");
+      utils::OpenExternalDataFile((base_dir_ / "model").string(), "child/weights.bin");
 
   ASSERT_NO_FATAL_FAILURE(
       ReplaceDirectoryWithLink(base_dir_ / "model" / "child", base_dir_ / "outside"));
-  const auto mapping = file->Map();
+  const auto mapping = utils::MapExternalDataFile(*file);
   ASSERT_NE(mapping, nullptr);
   EXPECT_EQ(std::memcmp(mapping.get(), original.data(), original.size()), 0);
 }

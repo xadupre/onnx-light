@@ -962,10 +962,10 @@ void TensorProto::LoadExternalData(const std::string &base_dir) {
                 "' has multiple hard links (", static_cast<int64_t>(hc),
                 "), which is not allowed for tensor '", ref_name(), "'.");
   }
-  const auto file = utils::ExternalDataFile::Open(base_dir, loc_normal.string());
+  const auto file = utils::OpenExternalDataFile(base_dir, loc_normal.string());
   const int64_t effective_offset = offset > 0 ? offset : 0;
   if (length < 0) {
-    const int64_t file_end = file->Size();
+    const int64_t file_end = utils::ExternalDataFileSize(*file);
     EXT_ENFORCE(file_end >= effective_offset, "TensorProto::LoadExternalData offset ",
                 effective_offset, " is past end of file '", data_path.string(),
                 "' (size=", file_end, ").");
@@ -975,7 +975,7 @@ void TensorProto::LoadExternalData(const std::string &base_dir) {
               data_path.string(), "'.");
   ref_raw_data().resize(static_cast<size_t>(length));
   if (length > 0) {
-    file->ReadAt(ref_raw_data().data(), length, effective_offset);
+    utils::ReadExternalDataFile(*file, ref_raw_data().data(), length, effective_offset);
   }
 }
 int64_t TensorProto::ContentHash(bool include_content) const {

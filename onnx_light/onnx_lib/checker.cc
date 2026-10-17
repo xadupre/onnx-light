@@ -1609,7 +1609,8 @@ int64_t open_external_data(const std::string &base_dir, const std::string &locat
     verify_path_containment(data_path.parent_path(), base_dir, tensor_name);
   }
   ONNX_TRY {
-    return utils::ExternalDataFile::Open(base_dir, location, !read_only)->DuplicateDescriptor();
+    const auto descriptor = utils::OpenExternalDataFile(base_dir, location, !read_only);
+    return std::exchange(*descriptor, -1);
   }
   ONNX_CATCH(const std::runtime_error &ex) {
     ONNX_HANDLE_EXCEPTION([&]() { fail_check("Tensor ", tensor_name, ": ", ex.what()); });

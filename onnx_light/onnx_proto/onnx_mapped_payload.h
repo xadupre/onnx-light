@@ -13,10 +13,6 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 
-namespace utils {
-class ExternalDataFile;
-}
-
 /** Stable identity of one payload view backed by a source-file byte range.
  *
  *  Two identities compare equal only when they name the same canonical source
@@ -101,14 +97,13 @@ public:
 private:
   friend class MappedPayloadSource;
   FinalDestinationReadDescriptor(std::string source_path, int64_t offset, int64_t size,
-                                 PayloadIdentity identity,
-                                 std::shared_ptr<utils::ExternalDataFile> file);
+                                 PayloadIdentity identity, std::shared_ptr<int> file);
 
   std::string source_path_;
   int64_t offset_ = 0;
   int64_t size_ = 0;
   PayloadIdentity identity_;
-  std::shared_ptr<utils::ExternalDataFile> file_;
+  std::shared_ptr<int> file_;
 };
 
 /** Confines external-payload requests to one base directory, shares one
@@ -157,14 +152,14 @@ public:
 
 private:
   struct CachedMapping {
-    std::shared_ptr<utils::ExternalDataFile> file;
+    std::shared_ptr<int> file;
     std::shared_ptr<uint8_t> data;
     int64_t size = 0;
     uint64_t generation = 0;
   };
 
   std::string ResolveAndValidate(const std::string &relative_or_absolute_path) const;
-  std::shared_ptr<utils::ExternalDataFile> OpenFile(const std::string &source_path) const;
+  std::shared_ptr<int> OpenFile(const std::string &source_path) const;
   CachedMapping EnsureMapping(const std::string &canonical_path);
 
   std::string base_dir_;

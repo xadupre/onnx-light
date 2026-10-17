@@ -67,17 +67,18 @@ FinalDestinationReadDescriptor::FinalDestinationReadDescriptor(std::string sourc
                                                                PayloadIdentity identity)
     : FinalDestinationReadDescriptor(
           source_path, offset, size, std::move(identity),
-          utils::ExternalDataFile::Open(std::filesystem::path(source_path).parent_path().string(),
-                                        std::filesystem::path(source_path).filename().string())) {}
+          utils::OpenExternalDataFile(std::filesystem::path(source_path).parent_path().string(),
+                                      std::filesystem::path(source_path).filename().string())) {}
 
-FinalDestinationReadDescriptor::FinalDestinationReadDescriptor(
-    std::string source_path, int64_t offset, int64_t size, PayloadIdentity identity,
-    std::shared_ptr<utils::ExternalDataFile> file)
+FinalDestinationReadDescriptor::FinalDestinationReadDescriptor(std::string source_path,
+                                                               int64_t offset, int64_t size,
+                                                               PayloadIdentity identity,
+                                                               std::shared_ptr<int> file)
     : source_path_(std::move(source_path)), offset_(offset), size_(size),
       identity_(std::move(identity)), file_(std::move(file)) {
   EXT_ENFORCE(offset_ >= 0 && size_ >= 0, "FinalDestinationReadDescriptor: invalid range.");
   EXT_ENFORCE(file_ != nullptr, "FinalDestinationReadDescriptor: source is not open.");
-  const int64_t current_size = file_->Size();
+  const int64_t current_size = utils::ExternalDataFileSize(*file_);
   EXT_ENFORCE(offset_ <= current_size && size_ <= current_size - offset_,
               "FinalDestinationReadDescriptor: range is out of bounds.");
 }
@@ -89,11 +90,11 @@ void FinalDestinationReadDescriptor::ReadInto(void *destination) const {
     return;
   }
   EXT_ENFORCE(file_ != nullptr, "FinalDestinationReadDescriptor::ReadInto: source is not open.");
-  const int64_t current_size = file_->Size();
+  const int64_t current_size = utils::ExternalDataFileSize(*file_);
   EXT_ENFORCE(offset_ <= current_size && size_ <= current_size - offset_,
               "FinalDestinationReadDescriptor::ReadInto: source file '", source_path_,
               "' was truncated: required end=", offset_ + size_, ", current size=", current_size);
-  file_->ReadAt(destination, size_, offset_);
+  utils::ReadExternalDataFile(*file_, destination, size_, offset_);
 }
 
 MappedPayloadSource::MappedPayloadSource(std::string base_dir) : base_dir_(std::move(base_dir)) {
@@ -116,10 +117,9 @@ MappedPayloadSource::ResolveAndValidate(const std::string &relative_or_absolute_
   return (canonical_base / utils::relative_external_data_path(candidate, base)).string();
 }
 
-std::shared_ptr<utils::ExternalDataFile>
-MappedPayloadSource::OpenFile(const std::string &source_path) const {
+std::shared_ptr<int> MappedPayloadSource::OpenFile(const std::string &source_path) const {
   const auto base = std::filesystem::weakly_canonical(std::filesystem::absolute(base_dir_));
-  return utils::ExternalDataFile::Open(
+  return utils::OpenExternalDataFile(
       base.string(), std::filesystem::path(source_path).lexically_relative(base).string());
 }
 
@@ -131,7 +131,7 @@ MappedPayloadSource::EnsureMapping(const std::string &canonical_path) {
   // same file content).
   std::lock_guard<std::mutex> lock(mutex_);
   const auto file = OpenFile(canonical_path);
-  const int64_t current_size = file->Size();
+  const int64_t current_size = utils::ExternalDataFileSize(*file);
 
   auto it = mappings_.find(canonical_path);
   if (it != mappings_.end() && it->second.size == current_size) {
@@ -145,7 +145,7 @@ MappedPayloadSource::EnsureMapping(const std::string &canonical_path) {
   mapping.file = file;
   mapping.size = current_size;
   mapping.generation = next_generation_++;
-  mapping.data = file->Map();
+  mapping.data = utils::MapExternalDataFile(*file);
   mappings_[canonical_path] = mapping;
   return mapping;
 }
@@ -187,7 +187,7 @@ MappedPayloadSource::DescribeFinalDestinationRead(const std::string &relative_or
               "MappedPayloadSource::DescribeFinalDestinationRead: size must be >= 0, got ", size);
   const std::string canonical_path = ResolveAndValidate(relative_or_absolute_path);
   const auto file = OpenFile(canonical_path);
-  const int64_t current_size = file->Size();
+  const int64_t current_size = utils::ExternalDataFileSize(*file);
   EXT_ENFORCE(
       offset <= current_size && size <= current_size - offset,
       "MappedPayloadSource::DescribeFinalDestinationRead: range is out of bounds for file '",

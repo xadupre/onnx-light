@@ -7,7 +7,6 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
-#include <functional>
 #include <istream>
 #include <iterator>
 #include <memory>
@@ -71,37 +70,25 @@ namespace utils {
 /** Signed byte-offset type used by stream seek and length operations. */
 typedef int64_t offset_t;
 
-/** Owns a verified file acquired relative to directory descriptors or Windows handles. */
-class ONNX_LIGHT_PROTO_API ExternalDataFile {
-public:
-  /** Opens and verifies a regular, singly linked file without following relative symlinks.
-   *  Accepts confined nested paths; callers enforce any stricter filename/depth policy. */
-  static std::shared_ptr<ExternalDataFile>
-  Open(const std::string &base_dir, const std::string &relative_path, bool write = false);
-  /** Invokes *before_leaf_open* once after acquiring the parent, for deterministic race tests. */
-  static std::shared_ptr<ExternalDataFile> Open(const std::string &base_dir,
-                                                const std::string &relative_path, bool write,
-                                                const std::function<void()> &before_leaf_open);
-  ~ExternalDataFile();
-  /** Returns the size of the acquired file, without looking up its pathname. */
-  int64_t Size() const;
-  /** Reads the complete range from the acquired file. */
-  void ReadAt(void *destination, int64_t size, int64_t offset) const;
-  /** Writes the complete range to the acquired file. */
-  void WriteAt(const void *source, int64_t size, int64_t offset) const;
-  /** Truncates the acquired file, preserving live Windows mappings when resizing is denied. */
-  void Truncate() const;
-  /** Maps the whole acquired file, returning an empty pointer for an empty file. */
-  std::shared_ptr<uint8_t> Map() const;
-  /** Returns a duplicate descriptor whose ownership passes to the caller. */
-  int DuplicateDescriptor() const;
-
-private:
-  struct State;
-  explicit ExternalDataFile(std::unique_ptr<State> state);
-  std::unique_ptr<State> state_;
-};
-
+/** Opens external data using ONNX-style containment and descriptor identity checks.
+ *  Uses kernel-enforced containment where supported. Windows and the POSIX fallback
+ *  verify after opening; they do not prevent all directory-replacement creation races.
+ *  The standard shared owner closes the descriptor after its last user releases it. */
+ONNX_LIGHT_PROTO_API std::shared_ptr<int> OpenExternalDataFile(const std::string &base_dir,
+                                                               const std::string &relative_path,
+                                                               bool write = false);
+/** Returns the size of an open file descriptor. */
+ONNX_LIGHT_PROTO_API int64_t ExternalDataFileSize(int descriptor);
+/** Reads a complete range from an open descriptor, rejecting failed or short reads. */
+ONNX_LIGHT_PROTO_API void ReadExternalDataFile(int descriptor, void *destination, int64_t size,
+                                               int64_t offset);
+/** Writes a complete range to an open descriptor. */
+ONNX_LIGHT_PROTO_API void WriteExternalDataFile(int descriptor, const void *source, int64_t size,
+                                                int64_t offset);
+/** Truncates an open descriptor, preserving live Windows mappings when resizing is denied. */
+ONNX_LIGHT_PROTO_API void TruncateExternalDataFile(int descriptor);
+/** Maps an open descriptor, returning an empty pointer for an empty file. */
+ONNX_LIGHT_PROTO_API std::shared_ptr<uint8_t> MapExternalDataFile(int descriptor);
 /** Decodes a 64-bit integer from its ZigZag-encoded unsigned representation.
  *  ZigZag maps signed integers to unsigned values so that small negative numbers
  *  have a short varint encoding: 0 -> 0, -1 -> 1, 1 -> 2, -2 -> 3, ... */
@@ -647,9 +634,9 @@ public:
   /** Opens the file at *file_path* for writing (creates or truncates). */
   explicit FileWriteStream(const std::string &file_path);
   /** Truncates and writes through an already verified external-data file. */
-  FileWriteStream(const std::string &file_path, std::shared_ptr<ExternalDataFile> file);
+  FileWriteStream(const std::string &file_path, std::shared_ptr<int> file);
   /** Returns the retained external-data file, or an empty pointer for normal model files. */
-  const std::shared_ptr<ExternalDataFile> &external_file() const { return external_file_; }
+  const std::shared_ptr<int> &external_file() const { return external_file_; }
   virtual void write_raw_bytes(const uint8_t *data, offset_t n_bytes) override;
   /** Returns the number of bytes written so far. */
   virtual int64_t size() const override;
@@ -678,7 +665,7 @@ protected:
   std::string file_path_;
   /** Underlying output stream used for sequential writes. */
   std::ofstream file_stream_;
-  std::shared_ptr<ExternalDataFile> external_file_;
+  std::shared_ptr<int> external_file_;
   /** Running count of bytes written to the file. */
   uint64_t written_bytes_;
   /** Thread pool used for parallel block writes. */
@@ -698,9 +685,9 @@ public:
   /** Opens the file at *file_path* for reading. */
   explicit FileStream(const std::string &file_path);
   /** Reads through an already verified external-data file. */
-  FileStream(const std::string &file_path, std::shared_ptr<ExternalDataFile> file);
+  FileStream(const std::string &file_path, std::shared_ptr<int> file);
   /** Returns the retained external-data file, or an empty pointer for normal model files. */
-  const std::shared_ptr<ExternalDataFile> &external_file() const { return external_file_; }
+  const std::shared_ptr<int> &external_file() const { return external_file_; }
   virtual ~FileStream();
   /** Returns the path of the file this stream reads from. */
   inline const std::string &file_path() const { return file_path_; }
@@ -750,7 +737,7 @@ protected:
   std::string file_path_;
   /** Underlying input stream used for file I/O. */
   std::ifstream file_stream_;
-  std::shared_ptr<ExternalDataFile> external_file_;
+  std::shared_ptr<int> external_file_;
   offset_t external_position_ = 0;
 #if !defined(_WIN32)
   /** POSIX file descriptor used for pread-based parallel reads on non-Windows platforms. */

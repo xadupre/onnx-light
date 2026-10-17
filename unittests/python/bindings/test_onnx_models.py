@@ -990,7 +990,9 @@ class TestOnnxLightHelper(ExtTestCase):
         # places the weights file next to the model file with a ".data" suffix,
         # instead of creating a file literally named "None" in the cwd.
         onnx_path = self.get_dump_file("test_save_ext_default_src.onnx")
-        name = self.get_dump_file("test_save_external_data_default_location.onnx")
+        name = os.path.abspath(
+            self.get_dump_file("test_save_external_data_default_location.onnx")
+        )
         expected_data = name + ".data"
         if os.path.exists(expected_data):
             os.remove(expected_data)
@@ -1010,6 +1012,28 @@ class TestOnnxLightHelper(ExtTestCase):
         # The saved model must be loadable by onnx
         reload = onnxl.load(name)
         self.assertEqual(len(reload.graph.initializer), len(model.graph.initializer))
+        locations = {
+            entry.value
+            for tensor in reload.graph.initializer
+            for entry in tensor.external_data
+            if entry.key == "location"
+        }
+        self.assertEqual(locations, {os.path.basename(expected_data)})
+
+    def test_save_rejects_absolute_external_location(self):
+        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+        with tempfile.TemporaryDirectory() as directory:
+            name = os.path.join(directory, "model.onnx")
+            weights = os.path.join(directory, "weights.bin")
+            with open(weights, "wb") as handle:
+                handle.write(b"unchanged")
+            for location in (weights, r"C:\weights.bin", "//server/share/weights.bin"):
+                with self.subTest(location=location):
+                    with self.assertRaisesRegex(ValueError, "relative path"):
+                        onnxl.save(model, name, save_as_external_data=True, location=location)
+                    self.assertFalse(os.path.exists(name))
+            with open(weights, "rb") as handle:
+                self.assertEqual(handle.read(), b"unchanged")
 
     def test_save_external_data_after_metadata_only_load_raises_clear_error(self):
         onnx_path = self.get_dump_file("test_save_ext_metadata_only_src.onnx")

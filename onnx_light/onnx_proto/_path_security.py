@@ -35,9 +35,7 @@ def _is_relative_and_contained(location: str) -> bool:
     return True
 
 
-def validate_external_data_path(
-    location: str, base_dir: str, *, allow_absolute: bool = False
-) -> str:
+def validate_external_data_path(location: str, base_dir: str) -> str:
     """Validates and resolves an external data path safely.
 
     Ensures that the *location* (typically read from model metadata) does not
@@ -47,9 +45,6 @@ def validate_external_data_path(
     Args:
         location: The external data location string from model metadata.
         base_dir: The trusted base directory (e.g. model directory).
-        allow_absolute: If ``True``, allow *location* to be an absolute path
-            (for explicitly user-supplied locations).  If ``False`` (default),
-            reject absolute locations.
 
     Returns:
         The resolved canonical path to the external data file.
@@ -61,7 +56,7 @@ def validate_external_data_path(
         raise ValueError("External data location must not be empty.")
 
     # Step 1: Lexical validation (cheap, no filesystem access)
-    if not allow_absolute and not _is_relative_and_contained(location):
+    if not _is_relative_and_contained(location):
         raise ValueError(
             f"External data location {location!r} must be a relative path that "
             f"does not escape the base directory and contains at most one subdirectory."
@@ -69,15 +64,7 @@ def validate_external_data_path(
 
     # Step 2: Join with base_dir and resolve to canonical path.
     # raw_joined is the unresolved joined path; candidate is fully resolved.
-    if os.path.isabs(location):
-        if not allow_absolute:
-            raise ValueError(
-                f"External data location {location!r} is an absolute path. "
-                f"Set allow_absolute=True to permit this."
-            )
-        raw_joined = location
-    else:
-        raw_joined = os.path.join(base_dir, location)
+    raw_joined = os.path.join(base_dir, location)
     candidate = os.path.realpath(raw_joined)
 
     # Step 3: Canonical containment check (catches symlink escapes in any

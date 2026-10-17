@@ -128,10 +128,9 @@ class TestValidateExternalDataPath(ExtTestCase):
         with self.assertRaises(ValueError):
             validate_external_data_path("", self.tmpdir)
 
-    def test_allows_absolute_with_flag(self):
-        # Allow absolute but still check containment
-        result = validate_external_data_path(self.weights_file, self.tmpdir, allow_absolute=True)
-        self.assertEqual(result, os.path.realpath(self.weights_file))
+    def test_rejects_absolute_inside_base(self):
+        with self.assertRaisesRegex(ValueError, "relative path"):
+            validate_external_data_path(self.weights_file, self.tmpdir)
 
     def test_rejects_absolute_outside_base(self):
         with tempfile.NamedTemporaryFile(suffix=".bin", delete=False) as tmp:
@@ -139,8 +138,8 @@ class TestValidateExternalDataPath(ExtTestCase):
             tmp.write(b"\x00")
         try:
             with self.assertRaises(ValueError) as ctx:
-                validate_external_data_path(outside, self.tmpdir, allow_absolute=True)
-            self.assertIn("outside", str(ctx.exception))
+                validate_external_data_path(outside, self.tmpdir)
+            self.assertIn("relative path", str(ctx.exception))
         finally:
             if os.path.exists(outside):
                 os.unlink(outside)

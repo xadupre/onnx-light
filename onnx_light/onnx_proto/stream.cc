@@ -1594,7 +1594,7 @@ void TwoFilesWriteStream::reject_case_aliased_weights_location(const std::string
 }
 
 void TwoFilesWriteStream::set_active_weights_location(const std::string &location) {
-  if (!location.empty() && location != weights_stream_.file_path()) {
+  if (!location.empty()) {
     EXT_ENFORCE(IsSafeExternalDataLocation(location), "Unsafe external data location: ", location);
   }
   const std::string normalized_location = normalize_external_location(location);
@@ -1689,7 +1689,7 @@ void TwoFilesWriteStream::pre_allocate_weights(int64_t total_bytes) {
 
 void TwoFilesWriteStream::pre_allocate_weights(const std::string &location, int64_t total_bytes) {
   EXT_ENFORCE(total_bytes >= 0, "total_bytes must be non-negative, got ", total_bytes);
-  if (!location.empty() && location != weights_stream_.file_path()) {
+  if (!location.empty()) {
     EXT_ENFORCE(IsSafeExternalDataLocation(location), "Unsafe external data location: ", location);
   }
   if (total_bytes == 0)
@@ -1815,7 +1815,7 @@ TwoFilesStream::TwoFilesStream(const std::string &file_path, const std::string &
 
 void TwoFilesStream::set_active_weights_location(const std::string &location) {
   const bool placeholder = default_weights_location_.empty();
-  if (!location.empty() && (placeholder || location != weights_stream_.file_path())) {
+  if (!location.empty()) {
     EXT_ENFORCE(IsSafeExternalDataLocation(location), "Unsafe external data location: ", location);
   }
   const std::string normalized_location = normalize_external_location(location);

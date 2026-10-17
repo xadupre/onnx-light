@@ -145,7 +145,7 @@ def save(
     ), f"all_tensors_to_one_file={all_tensors_to_one_file} is not implemented"
     if save_as_external_data or location:
         if location is None:
-            location = str(f) + ".data"
+            location = os.path.basename(str(f)) + ".data"
         # Validate that the external data location does not escape the model
         # directory via path traversal (CVE-2025-51480) and does not point at
         # a symlink or hardlink (GHSA-8qff-7g33-75mx, TOCTOU symlink attack on
@@ -154,7 +154,7 @@ def save(
         from ._path_security import validate_external_data_path
 
         model_dir = os.path.dirname(os.path.abspath(str(f)))
-        validate_external_data_path(location, model_dir, allow_absolute=os.path.isabs(location))
+        validate_external_data_path(location, model_dir)
         opts = SerializeOptions()
         opts.raw_data_threshold = size_threshold
         opts.num_threads = num_threads

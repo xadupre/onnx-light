@@ -984,6 +984,32 @@ TEST(onnx_external_ressource, LocationsAllowAtMostOneSubdirectory) {
   }
 }
 
+TEST(onnx_external_ressource, AbsoluteLocationsCannotSelectDefaultWeights) {
+  namespace fs = std::filesystem;
+  const fs::path root = fs::temp_directory_path() / "onnx_light_absolute_default_location";
+  fs::remove_all(root);
+  fs::create_directories(root);
+  const std::string model_path = (root / "model.onnx").string();
+  const std::string weights_path = (root / "weights.bin").string();
+  {
+    utils::TwoFilesWriteStream stream(model_path, weights_path);
+    EXPECT_THROW(stream.set_active_weights_location(weights_path), std::exception);
+    EXPECT_THROW(stream.pre_allocate_weights(weights_path, 0), std::exception);
+    EXPECT_THROW(stream.pre_allocate_weights(weights_path, 4), std::exception);
+    EXPECT_NO_THROW(stream.set_active_weights_location(""));
+    EXPECT_NO_THROW(stream.set_active_weights_location("weights.bin"));
+    const uint8_t data[] = {1, 2, 3, 4};
+    EXPECT_NO_THROW(stream.write_raw_bytes_in_second_stream(data, 4, "weights.bin"));
+  }
+  {
+    utils::TwoFilesStream stream(model_path, weights_path);
+    EXPECT_THROW(stream.set_active_weights_location(weights_path), std::exception);
+    EXPECT_NO_THROW(stream.set_active_weights_location(""));
+    EXPECT_NO_THROW(stream.set_active_weights_location("weights.bin"));
+  }
+  fs::remove_all(root);
+}
+
 TEST(onnx_external_ressource, SaveWithExternalDataLocationInSubdirectory) {
   namespace fs = std::filesystem;
 

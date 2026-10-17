@@ -71,6 +71,10 @@ External-data locations permit a filename alone or one subdirectory followed
 by a filename, such as ``weights.bin`` or ``data/weights.bin``.
 Deeper locations such as ``data/shards/weights.bin`` are rejected, even
 though ONNX permits them.
+Absolute external-data locations are rejected, including explicitly supplied
+``save(location=...)`` values and locations matching the default weights file.
+An absolute model filename remains supported; its default external-data
+location uses only the model basename followed by ``.data``.
 On POSIX, external-data streams open each child path component relative to
 the retained model-directory descriptor without following symbolic links.
 Sequential reads, parallel reads, and no-copy mappings reuse the verified

@@ -960,10 +960,44 @@ TEST(onnx_external_ressource, SaveWithExternalDataWeightsFileMustBeNextToModel) 
       { utils::TwoFilesWriteStream stream(model_path.string(), weights_path.string()); },
       std::exception);
   fs::create_directories(model_dir / ".weights");
+  const uint8_t bytes[] = {1, 2, 3, 4};
   EXPECT_NO_THROW({
     utils::TwoFilesWriteStream stream(model_path.string(),
                                       (model_dir / ".weights/weights.data").string());
+    EXPECT_EQ(stream.weights_size(), 0);
+    stream.write_raw_bytes_in_second_stream(bytes, sizeof(bytes));
+    EXPECT_EQ(stream.weights_size(), sizeof(bytes));
   });
+  EXPECT_EQ(fs::file_size(model_dir / ".weights/weights.data"), 4U);
+
+  fs::remove_all(root);
+}
+
+TEST(onnx_external_ressource, WriteLocationsCompareCaseAliasesAcrossFullPaths) {
+  namespace fs = std::filesystem;
+  const fs::path root = fs::temp_directory_path() / "onnx_light_write_location_case_aliases";
+  fs::remove_all(root);
+  fs::create_directories(root / "data");
+  fs::create_directories(root / "Data");
+  fs::create_directories(root / "other");
+  fs::create_directories(root / "Other");
+  const uint8_t bytes[] = {1, 2, 3, 4};
+
+  for (const std::string location : {"weights.bin", "data/weights.bin"}) {
+    utils::TwoFilesWriteStream stream((root / "model.onnx").string(), (root / location).string());
+    EXPECT_NO_THROW(stream.set_active_weights_location((root / location).string()));
+    EXPECT_NO_THROW(stream.pre_allocate_weights((root / location).string(), sizeof(bytes)));
+    EXPECT_NO_THROW(stream.set_active_weights_location("./other/./Weights.bin"));
+    stream.write_raw_bytes_in_second_stream(bytes, sizeof(bytes));
+    EXPECT_EQ(stream.weights_size(), sizeof(bytes));
+    EXPECT_NO_THROW(stream.pre_allocate_weights("other/Weights.bin", sizeof(bytes)));
+    EXPECT_THROW(stream.set_active_weights_location("Other/Weights.bin"), std::runtime_error);
+    EXPECT_THROW(stream.pre_allocate_weights("Other/Weights.bin", sizeof(bytes)),
+                 std::runtime_error);
+    const std::string alias = location == "weights.bin" ? "Weights.bin" : "Data/weights.bin";
+    EXPECT_THROW(stream.set_active_weights_location(alias), std::runtime_error);
+    EXPECT_THROW(stream.pre_allocate_weights(alias, sizeof(bytes)), std::runtime_error);
+  }
 
   fs::remove_all(root);
 }

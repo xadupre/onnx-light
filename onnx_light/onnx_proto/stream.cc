@@ -1284,15 +1284,24 @@ TwoFilesWriteStream::TwoFilesWriteStream(const std::string &file_path,
   if (!rel.empty() && rel.string() != ".") {
     default_weights_location_ = rel.string();
   }
+  active_weights_location_ = default_weights_location_;
 }
 
 void TwoFilesWriteStream::reject_case_aliased_weights_location(const std::string &location) const {
-  const std::string filename = std::filesystem::path(location).filename().string();
-  const auto is_case_alias = [&filename](const std::string &existing) {
-    const std::string existing_filename = std::filesystem::path(existing).filename().string();
-    return filename != existing_filename &&
+  std::filesystem::path path = std::filesystem::path(location).lexically_normal();
+  if (path == std::filesystem::path(weights_stream_.file_path()).lexically_normal()) {
+    path = default_weights_location_;
+  } else if (path.is_absolute()) {
+    path = path.lexically_relative(
+        std::filesystem::absolute(normalized_model_parent(file_path_)).lexically_normal());
+  }
+  const std::string normalized_location = path.string();
+  const auto is_case_alias = [&normalized_location](const std::string &existing) {
+    const std::string normalized_existing = normalize_external_location(existing);
+    return normalized_location != normalized_existing &&
            std::equal(
-               filename.begin(), filename.end(), existing_filename.begin(), existing_filename.end(),
+               normalized_location.begin(), normalized_location.end(), normalized_existing.begin(),
+               normalized_existing.end(),
                [](unsigned char a, unsigned char b) { return std::tolower(a) == std::tolower(b); });
   };
   EXT_ENFORCE(!is_case_alias(default_weights_location_),

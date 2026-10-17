@@ -14,19 +14,18 @@ def _is_relative_and_contained(location: str) -> bool:
     """Checks whether *location* is a relative path that does not escape its parent.
 
     Mirrors the C++ validation in TensorProto::LoadExternalData (onnx.cc):
-    the lexically-normalised path must have no root component and its first
-    segment must not be ``..``.
+    the path must have no root component or ``..`` segment, and may contain
+    at most one subdirectory.
     """
     if not location:
         return False
     # Normalise using both POSIX and Windows semantics to cover cross-platform models.
     for PathCls in (PurePosixPath, PureWindowsPath):
         p = PathCls(location)
-        if p.is_absolute():
+        if p.anchor:
             return False
         parts = list(p.parts)
-        # Reject leading ".."
-        if parts and parts[0] == "..":
+        if ".." in parts or not parts or len(parts) > 2:
             return False
     # Also use os.path for the current platform
     normed_os = os.path.normpath(location)

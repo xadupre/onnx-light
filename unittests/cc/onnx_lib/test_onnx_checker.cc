@@ -266,16 +266,21 @@ TEST(CHECKER, OpenExternalDataTest) {
                ONNX_LIGHT_NAMESPACE::checker::ValidationError);
   EXPECT_THROW(ONNX_LIGHT_NAMESPACE::checker::open_external_data(dir_utf8, ".", "t", false),
                ONNX_LIGHT_NAMESPACE::checker::ValidationError);
-  // Subdirectory in location must be rejected for both read and write.
-  EXPECT_THROW(
-      ONNX_LIGHT_NAMESPACE::checker::open_external_data(dir_utf8, "sub/weights.bin", "t", true),
-      ONNX_LIGHT_NAMESPACE::checker::ValidationError);
-  EXPECT_THROW(
-      ONNX_LIGHT_NAMESPACE::checker::open_external_data(dir_utf8, "sub/weights.bin", "t", false),
-      ONNX_LIGHT_NAMESPACE::checker::ValidationError);
-  EXPECT_THROW(
-      ONNX_LIGHT_NAMESPACE::checker::open_external_data(dir_utf8, "./sub/weights.bin", "t", false),
-      ONNX_LIGHT_NAMESPACE::checker::ValidationError);
+  fs::create_directories(dir / "sub");
+  for (const bool read_only : {false, true}) {
+    ScopedFd child(static_cast<int>(ONNX_LIGHT_NAMESPACE::checker::open_external_data(
+        dir_utf8, "sub/weights.bin", "t", read_only)));
+    EXPECT_GE(child.get(), 0);
+    EXPECT_THROW(ONNX_LIGHT_NAMESPACE::checker::open_external_data(
+                     dir_utf8, "sub/nested/weights.bin", "t", read_only),
+                 ONNX_LIGHT_NAMESPACE::checker::ValidationError);
+    EXPECT_THROW(ONNX_LIGHT_NAMESPACE::checker::open_external_data(dir_utf8, "sub/../weights.bin",
+                                                                   "t", read_only),
+                 ONNX_LIGHT_NAMESPACE::checker::ValidationError);
+  }
+  EXPECT_EQ(ONNX_LIGHT_NAMESPACE::checker::resolve_external_data_location(dir_utf8,
+                                                                          "./sub/weights.bin", "t"),
+            dir / "sub/weights.bin");
   // UTF-8 traversal
   EXPECT_THROW(ONNX_LIGHT_NAMESPACE::checker::open_external_data(
                    dir_utf8, "../\xe3\x83\x86\xe3\x83\xb3\xe3\x82\xbd\xe3\x83\xab.bin", "t", true),

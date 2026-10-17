@@ -41,6 +41,19 @@ class TestIsRelativeAndContained(ExtTestCase):
 
     def test_relative_subdirectory(self):
         self.assertTrue(_is_relative_and_contained("subdir/weights.bin"))
+        self.assertTrue(_is_relative_and_contained("./subdir/./weights.bin"))
+
+    def test_rejects_deeper_or_rooted_locations(self):
+        for location in (
+            ".",
+            "a/b/weights.bin",
+            "data/../weights.bin",
+            r"a\b\weights.bin",
+            r"C:\weights.bin",
+            "C:weights.bin",
+        ):
+            with self.subTest(location=location):
+                self.assertFalse(_is_relative_and_contained(location))
 
     def test_empty_string(self):
         self.assertFalse(_is_relative_and_contained(""))
@@ -95,6 +108,10 @@ class TestValidateExternalDataPath(ExtTestCase):
     def test_valid_subdirectory_location(self):
         result = validate_external_data_path("data/model.data", self.tmpdir)
         self.assertEqual(result, os.path.realpath(self.sub_weights))
+
+    def test_rejects_deeper_location(self):
+        with self.assertRaises(ValueError):
+            validate_external_data_path("data/shards/weights.bin", self.tmpdir)
 
     def test_rejects_parent_traversal(self):
         with self.assertRaises(ValueError) as ctx:

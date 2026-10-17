@@ -1,4 +1,5 @@
 import os
+import tempfile
 import gc
 import unittest
 from unittest.mock import patch
@@ -1010,6 +1011,33 @@ class TestOnnxLightHelper(ExtTestCase):
         reload = onnxl.load(name)
         self.assertEqual(len(reload.graph.initializer), len(model.graph.initializer))
 
+    def test_save_external_data_default_location_nested_relative_model(self):
+        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+        with tempfile.TemporaryDirectory(dir=".") as directory:
+            model_dir = os.path.join(directory, "exports", "run")
+            os.makedirs(model_dir)
+            name = os.path.relpath(os.path.join(model_dir, "model.onnx"))
+            onnxl.save(model, name, save_as_external_data=True, size_threshold=0)
+            self.assertTrue(os.path.isfile(name + ".data"))
+            metadata = onnxl.load(name, load_external_data=False)
+            for tensor in metadata.graph.initializer:
+                entries = {entry.key: entry.value for entry in tensor.external_data}
+                self.assertEqual(entries["location"], "model.onnx.data")
+            loaded = onnxl.load(name, load_external_data=True)
+            for expected, got in zip(model.graph.initializer, loaded.graph.initializer):
+                self.assertEqualArray(onh.to_array(expected), onh.to_array(got))
+
+    def test_external_data_subdirectory_roundtrip(self):
+        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+        with tempfile.TemporaryDirectory() as directory:
+            os.mkdir(os.path.join(directory, ".weights"))
+            name = os.path.join(directory, "model.onnx")
+            onnxl.save(model, name, location=".weights/model.data", size_threshold=0)
+            loaded = onnxl.load(name, load_external_data=True)
+            self.assertEqual(len(loaded.graph.initializer), len(model.graph.initializer))
+            for expected, got in zip(model.graph.initializer, loaded.graph.initializer):
+                self.assertEqualArray(onh.to_array(expected), onh.to_array(got))
+
     def test_save_external_data_after_metadata_only_load_raises_clear_error(self):
         onnx_path = self.get_dump_file("test_save_ext_metadata_only_src.onnx")
         name = self.get_dump_file("test_save_ext_metadata_only_dst.onnx")
@@ -1472,7 +1500,7 @@ class TestOnnxLightHelper(ExtTestCase):
         onnxl.save(rewrite, bad)
         with self.assertRaises(RuntimeError) as cm:
             onnxl.load(bad, load_external_data=True)
-        self.assertIn("filename with no folder", str(cm.exception))
+        self.assertIn("Unsafe external data location", str(cm.exception))
 
     @unittest.skipIf(
         not hasattr(os, "symlink") or os.name == "nt",

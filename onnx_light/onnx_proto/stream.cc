@@ -1,4 +1,5 @@
 #include "stream.h"
+#include "onnx_helper.h"
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
@@ -60,6 +61,9 @@ bool is_windows_compatible_filename(const std::filesystem::path &filename) {
   return !value.empty() && value.back() != '.' && value.back() != ' ';
 }
 
+std::filesystem::path validate_external_location_is_next_to_model(const std::string &model_path,
+                                                                  const std::string &location);
+
 std::string validate_weights_file_is_next_to_model(const std::string &model_path,
                                                    const std::string &weights_file) {
   std::filesystem::path weights_path(weights_file);
@@ -67,51 +71,39 @@ std::string validate_weights_file_is_next_to_model(const std::string &model_path
 
   std::filesystem::path normalized_parent = normalized_model_parent(model_path);
   std::filesystem::path normalized_weights = weights_path.lexically_normal();
-  std::filesystem::path weights_parent = normalized_weights.parent_path();
-  if (weights_parent.empty() || weights_parent == std::filesystem::path(".")) {
-    weights_parent = normalized_parent;
-  }
-  const bool same_dir = (weights_parent == normalized_parent);
-  EXT_ENFORCE(same_dir, "External weights file must be next to model file. model=", model_path,
-              ", weights=", weights_file);
-  const std::filesystem::path weights_filename = normalized_weights.filename();
-  EXT_ENFORCE(is_windows_compatible_filename(weights_filename),
-              "External weights file must include a filename that does not end with a dot or "
-              "space. model=",
-              model_path, ", weights=", weights_file);
-
-  std::filesystem::path final_path = weights_parent / weights_filename;
-  // Reject symlinks as write targets to prevent TOCTOU-based arbitrary file overwrites
-  // (GHSA-8qff-7g33-75mx). Defense-in-depth: FileWriteStream also checks at open time.
-  if (std::filesystem::is_symlink(final_path)) {
-    EXT_THROW("External weights file '", final_path.string(),
-              "' is a symbolic link, which is not allowed for security reasons "
-              "(see GHSA-8qff-7g33-75mx).");
-  }
-  return final_path.string();
+  auto relative =
+      std::filesystem::absolute(normalized_weights)
+          .lexically_normal()
+          .lexically_relative(std::filesystem::absolute(normalized_parent).lexically_normal());
+  if (!IsSafeExternalDataLocation(relative.string()) && weights_path.is_relative())
+    relative = normalized_weights;
+  return validate_external_location_is_next_to_model(model_path, relative.string()).string();
 }
 
 std::filesystem::path validate_external_location_is_next_to_model(const std::string &model_path,
                                                                   const std::string &location) {
   std::filesystem::path location_path(location);
-  EXT_ENFORCE(!location_path.empty(), "External data location cannot be empty.");
   EXT_ENFORCE(
-      !location_path.is_absolute(),
-      "External data location must be a file name next to the model file. location=", location);
+      IsSafeExternalDataLocation(location),
+      "External data location must be a relative filename with at most one subdirectory. location=",
+      location);
 
   std::filesystem::path normalized_location = location_path.lexically_normal();
-  const bool same_dir = normalized_location.parent_path().empty() ||
-                        normalized_location.parent_path() == std::filesystem::path(".");
-  EXT_ENFORCE(
-      same_dir,
-      "External data location must be a file name next to the model file. location=", location);
-  const std::filesystem::path location_filename = normalized_location.filename();
-  EXT_ENFORCE(is_windows_compatible_filename(location_filename),
-              "External data location must include a filename that does not end with a dot or "
-              "space. location=",
-              location);
+  for (const auto &component : normalized_location) {
+    if (component == std::filesystem::path("."))
+      continue;
+    EXT_ENFORCE(is_windows_compatible_filename(component),
+                "External data location must include a filename that does not end with a dot or "
+                "space. location=",
+                location);
+  }
 
-  std::filesystem::path final_path = normalized_model_parent(model_path) / location_filename;
+  std::filesystem::path final_path = normalized_model_parent(model_path) / normalized_location;
+  const auto base = std::filesystem::weakly_canonical(normalized_model_parent(model_path));
+  const auto parent =
+      std::filesystem::weakly_canonical(final_path.parent_path()).lexically_relative(base);
+  EXT_ENFORCE(!parent.empty() && *parent.begin() != std::filesystem::path(".."),
+              "External data location resolves outside model directory. location=", location);
   // Reject symlinks as write targets to prevent TOCTOU-based arbitrary file overwrites
   // (GHSA-8qff-7g33-75mx). Defense-in-depth: FileWriteStream also checks at open time.
   if (std::filesystem::is_symlink(final_path)) {
@@ -1292,15 +1284,24 @@ TwoFilesWriteStream::TwoFilesWriteStream(const std::string &file_path,
   if (!rel.empty() && rel.string() != ".") {
     default_weights_location_ = rel.string();
   }
+  active_weights_location_ = default_weights_location_;
 }
 
 void TwoFilesWriteStream::reject_case_aliased_weights_location(const std::string &location) const {
-  const std::string filename = std::filesystem::path(location).filename().string();
-  const auto is_case_alias = [&filename](const std::string &existing) {
-    const std::string existing_filename = std::filesystem::path(existing).filename().string();
-    return filename != existing_filename &&
+  std::filesystem::path path = std::filesystem::path(location).lexically_normal();
+  if (path == std::filesystem::path(weights_stream_.file_path()).lexically_normal()) {
+    path = default_weights_location_;
+  } else if (path.is_absolute()) {
+    path = path.lexically_relative(
+        std::filesystem::absolute(normalized_model_parent(file_path_)).lexically_normal());
+  }
+  const std::string normalized_location = path.string();
+  const auto is_case_alias = [&normalized_location](const std::string &existing) {
+    const std::string normalized_existing = normalize_external_location(existing);
+    return normalized_location != normalized_existing &&
            std::equal(
-               filename.begin(), filename.end(), existing_filename.begin(), existing_filename.end(),
+               normalized_location.begin(), normalized_location.end(), normalized_existing.begin(),
+               normalized_existing.end(),
                [](unsigned char a, unsigned char b) { return std::tolower(a) == std::tolower(b); });
   };
   EXT_ENFORCE(!is_case_alias(default_weights_location_),
@@ -1500,6 +1501,7 @@ TwoFilesStream::TwoFilesStream(const std::string &file_path, const std::string &
                                bool use_mmap_weights)
     : FileStream(file_path), weights_stream_(weights_file), active_weights_location_(weights_file),
       default_weights_location_(weights_file), use_mmap_weights_(use_mmap_weights) {
+  validate_external_weights_read_path(weights_file, normalized_model_parent(file_path));
   std::filesystem::path parent = std::filesystem::path(file_path).parent_path();
   std::filesystem::path weights = std::filesystem::path(weights_file);
   std::filesystem::path rel = std::filesystem::relative(weights, parent);

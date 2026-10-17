@@ -668,11 +668,9 @@ class ONNX_LIGHT_PROTO_API FileStream : public BinaryStream {
 public:
   /** Opens the file at *file_path* for reading. */
   explicit FileStream(const std::string &file_path);
-#if !defined(_WIN32)
-  /** Opens external data beneath the model directory without following symbolic links. */
+  /** Opens external data beneath the model directory and retains the verified file. */
   FileStream(const std::string &file_path, const std::string &model_path,
              int model_directory_fd = -1);
-#endif
   virtual ~FileStream();
   /** Returns the path of the file this stream reads from. */
   inline const std::string &file_path() const { return file_path_; }
@@ -727,6 +725,10 @@ protected:
   int file_descriptor_ = -1;
   /** Retains the model directory for subsequent external-data opens. */
   int external_directory_fd_ = -1;
+#else
+  /** Declared before the thread pool so queued reads finish before the handle closes. */
+  std::shared_ptr<void> external_file_;
+  offset_t external_read_pos_ = 0;
 #endif
   offset_t read_file_bytes(uint8_t *data, offset_t count);
   void seek_file(offset_t offset, bool relative = false);

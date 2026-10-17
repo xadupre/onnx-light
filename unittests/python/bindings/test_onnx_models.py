@@ -1035,6 +1035,65 @@ class TestOnnxLightHelper(ExtTestCase):
             with open(weights, "rb") as handle:
                 self.assertEqual(handle.read(), b"unchanged")
 
+    def test_save_external_data_subdirectory_roundtrip(self):
+        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+        expected = [onh.to_array(tensor) for tensor in model.graph.initializer]
+        with tempfile.TemporaryDirectory() as directory:
+            for threads in (1, 2):
+                with self.subTest(threads=threads):
+                    name = os.path.join(directory, f"model{threads}.onnx")
+                    location = f"data{threads}/weights.bin"
+                    onnxl.save(
+                        model,
+                        name,
+                        save_as_external_data=True,
+                        location=location,
+                        size_threshold=0,
+                        num_threads=threads,
+                        min_block_size=0,
+                    )
+                    self.assertTrue(os.path.isfile(os.path.join(directory, location)))
+                    metadata = onnxl.load(name, load_external_data=False)
+                    locations = {
+                        entry.value.replace("\\", "/")
+                        for tensor in metadata.graph.initializer
+                        for entry in tensor.external_data
+                        if entry.key == "location"
+                    }
+                    self.assertEqual(locations, {location})
+                    loaded = onnxl.load(
+                        name, load_external_data=True, num_threads=threads, no_copy=threads == 2
+                    )
+                    self.assertEqual(len(loaded.graph.initializer), len(expected))
+                    for tensor, array in zip(loaded.graph.initializer, expected):
+                        self.assertEqualArray(onh.to_array(tensor), array)
+                    del tensor, loaded
+                    gc.collect()
+
+    @unittest.skipIf(os.name == "nt", "Uses a POSIX directory symlink")
+    def test_load_external_data_with_mixed_directory_alias(self):
+        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+        expected = [onh.to_array(tensor) for tensor in model.graph.initializer]
+        with tempfile.TemporaryDirectory() as directory:
+            real = os.path.join(directory, "real")
+            alias = os.path.join(directory, "alias")
+            os.mkdir(real)
+            os.symlink(real, alias, target_is_directory=True)
+            for location in ("weights.bin", "data/weights.bin"):
+                with self.subTest(location=location):
+                    name = os.path.join(real, "model.onnx")
+                    onnxl.save(model, name, location=location, size_threshold=0)
+                    loaded = onnxl.load(
+                        os.path.join(alias, "model.onnx"),
+                        location=os.path.join(real, location),
+                        no_copy=True,
+                    )
+                    self.assertEqual(len(loaded.graph.initializer), len(expected))
+                    for tensor, array in zip(loaded.graph.initializer, expected):
+                        self.assertEqualArray(onh.to_array(tensor), array)
+                    del tensor, loaded
+                    gc.collect()
+
     def test_save_external_data_after_metadata_only_load_raises_clear_error(self):
         onnx_path = self.get_dump_file("test_save_ext_metadata_only_src.onnx")
         name = self.get_dump_file("test_save_ext_metadata_only_dst.onnx")

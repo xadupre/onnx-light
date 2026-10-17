@@ -84,7 +84,13 @@ every path component and open their targets nonblocking before checking that
 they are regular files, preventing a named pipe from hanging serialization.
 ``FileWriteStream`` retains the verified external-data file for sequential
 and queued positional writes; no separate external-writer class is needed.
-On Windows, these writes use the retained native file handle.
+On Windows, external-data reads, mappings, parallel reads, and writes use
+the retained native file handle, including after a contained junction is
+replaced. The primary weights target of ``save()`` uses the same secured
+writer as additional weights files, so one-level locations work through
+the public API as well. Explicit backing-file paths may use a canonical
+alias of the trusted model directory; this does not relax validation of
+relative locations or no-follow checks for child directories.
 Automatic discovery treats the model path only as a parser placeholder:
 symlinked or hardlinked models remain loadable, while actual external-data
 sources retain their independent link and containment checks.

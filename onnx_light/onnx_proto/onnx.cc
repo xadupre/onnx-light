@@ -1,5 +1,6 @@
 #include "onnx.h"
 #include "blake3/blake3_hash.h"
+#include "external_data_internal.h"
 #include "onnx_helper.h"
 #include "stream_class.hpp"
 #include <algorithm>
@@ -962,36 +963,20 @@ void TensorProto::LoadExternalData(const std::string &base_dir) {
                 "' has multiple hard links (", static_cast<int64_t>(hc),
                 "), which is not allowed for tensor '", ref_name(), "'.");
   }
-  std::ifstream file(data_path, std::ios::binary);
-  EXT_ENFORCE(file.is_open(), "TensorProto::LoadExternalData unable to open external data file '",
-              data_path.string(), "' for tensor '", ref_name(), "'.");
-  if (offset > 0) {
-    file.seekg(offset, std::ios::beg);
-    EXT_ENFORCE(file.good(), "TensorProto::LoadExternalData unable to seek to offset ", offset,
-                " in '", data_path.string(), "'.");
-  }
+  const auto file = utils::detail::OpenExternalDataFile(base_dir, loc_normal.string());
+  const int64_t effective_offset = offset > 0 ? offset : 0;
   if (length < 0) {
-    file.seekg(0, std::ios::end);
-    std::streampos file_end = file.tellg();
-    EXT_ENFORCE(file_end != std::streampos(-1) && static_cast<std::streamoff>(file_end) >= 0,
-                "TensorProto::LoadExternalData unable to determine size of '", data_path.string(),
-                "' (tellg failed).");
-    const int64_t effective_offset = offset > 0 ? offset : 0;
-    EXT_ENFORCE(static_cast<int64_t>(file_end) >= effective_offset,
-                "TensorProto::LoadExternalData offset ", effective_offset, " is past end of file '",
-                data_path.string(), "' (size=", static_cast<int64_t>(file_end), ").");
-    file.seekg(effective_offset, std::ios::beg);
-    length = static_cast<int64_t>(file_end) - effective_offset;
+    const int64_t file_end = utils::detail::ExternalDataFileSize(*file);
+    EXT_ENFORCE(file_end >= effective_offset, "TensorProto::LoadExternalData offset ",
+                effective_offset, " is past end of file '", data_path.string(),
+                "' (size=", file_end, ").");
+    length = file_end - effective_offset;
   }
   EXT_ENFORCE(length >= 0, "TensorProto::LoadExternalData negative length=", length, " for '",
               data_path.string(), "'.");
   ref_raw_data().resize(static_cast<size_t>(length));
   if (length > 0) {
-    file.read(reinterpret_cast<char *>(ref_raw_data().data()),
-              static_cast<std::streamsize>(length));
-    EXT_ENFORCE(file.gcount() == static_cast<std::streamsize>(length),
-                "TensorProto::LoadExternalData short read from '", data_path.string(),
-                "': expected ", length, " bytes, got ", static_cast<int64_t>(file.gcount()), ".");
+    utils::detail::ReadExternalDataFile(*file, ref_raw_data().data(), length, effective_offset);
   }
 }
 int64_t TensorProto::ContentHash(bool include_content) const {

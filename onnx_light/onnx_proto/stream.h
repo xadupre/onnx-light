@@ -610,6 +610,10 @@ class ONNX_LIGHT_PROTO_API FileWriteStream : public BinaryWriteStream {
 public:
   /** Opens the file at *file_path* for writing (creates or truncates). */
   explicit FileWriteStream(const std::string &file_path);
+  /** Truncates and writes through an already verified external-data file. */
+  FileWriteStream(const std::string &file_path, std::shared_ptr<int> file);
+  /** Returns the retained external-data file, or an empty pointer for normal model files. */
+  const std::shared_ptr<int> &external_file() const { return external_file_; }
   virtual void write_raw_bytes(const uint8_t *data, offset_t n_bytes) override;
   /** Returns the number of bytes written so far. */
   virtual int64_t size() const override;
@@ -638,6 +642,7 @@ protected:
   std::string file_path_;
   /** Underlying output stream used for sequential writes. */
   std::ofstream file_stream_;
+  std::shared_ptr<int> external_file_;
   /** Running count of bytes written to the file. */
   uint64_t written_bytes_;
   /** Thread pool used for parallel block writes. */
@@ -656,6 +661,10 @@ class ONNX_LIGHT_PROTO_API FileStream : public BinaryStream {
 public:
   /** Opens the file at *file_path* for reading. */
   explicit FileStream(const std::string &file_path);
+  /** Reads through an already verified external-data file. */
+  FileStream(const std::string &file_path, std::shared_ptr<int> file);
+  /** Returns the retained external-data file, or an empty pointer for normal model files. */
+  const std::shared_ptr<int> &external_file() const { return external_file_; }
   virtual ~FileStream();
   /** Returns the path of the file this stream reads from. */
   inline const std::string &file_path() const { return file_path_; }
@@ -705,6 +714,8 @@ protected:
   std::string file_path_;
   /** Underlying input stream used for file I/O. */
   std::ifstream file_stream_;
+  std::shared_ptr<int> external_file_;
+  offset_t external_position_ = 0;
 #if !defined(_WIN32)
   /** POSIX file descriptor used for pread-based parallel reads on non-Windows platforms. */
   int file_descriptor_ = -1;

@@ -1444,6 +1444,8 @@ class TestOnnxLightHelper(ExtTestCase):
                                 onnxl.numpy_helper.to_array(expected),
                                 onnxl.numpy_helper.to_array(actual),
                             )
+                        del actual, loaded
+                        gc.collect()
 
     @unittest.skipIf(os.name == "nt", "Symbolic links require Windows privileges.")
     def test_loading_external_weights_auto_symlinked_model(self):

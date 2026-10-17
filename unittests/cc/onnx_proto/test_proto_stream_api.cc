@@ -3,6 +3,7 @@
 // return bool (true on success) and ByteSizeLong() reports the serialized size
 // without performing a real serialization (it delegates to SerializeSize()).
 #include "onnx.h"
+#include "windows_junction.h"
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -12,6 +13,7 @@
 #include <sys/stat.h>
 #else
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #endif
 #include <gtest/gtest.h>
@@ -107,6 +109,271 @@ std::string ReadWholeFile(const std::string &path) {
 }
 
 } // namespace
+
+class ExternalDataFileTest : public ::testing::Test {
+protected:
+  std::filesystem::path root = "test_external_data_anchored_streams";
+  void SetUp() override {
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root / "model" / "sub");
+    std::filesystem::create_directories(root / "outside");
+    WriteWholeFile((root / "model" / "model.onnx").string(), "model");
+    WriteWholeFile((root / "model" / "sub" / "weights.bin").string(), "original");
+    WriteWholeFile((root / "model" / "sub" / "extra.bin").string(), "extra!!!");
+    WriteWholeFile((root / "outside" / "weights.bin").string(), "sentinel");
+    WriteWholeFile((root / "outside" / "extra.bin").string(), "sentinel");
+  }
+  void TearDown() override { std::filesystem::remove_all(root); }
+};
+
+TEST_F(ExternalDataFileTest, RejectsUnsafeObjectsBeforeTruncation) {
+  using utils::ExternalDataFile;
+  const auto base = (root / "model").string();
+  EXPECT_ANY_THROW(ExternalDataFile::Open(base, "../outside/weights.bin", true));
+  EXPECT_ANY_THROW(ExternalDataFile::Open(base, "sub", true));
+  EXPECT_ANY_THROW(ExternalDataFile::Open(base, "sub"));
+  std::filesystem::create_hard_link(root / "outside" / "weights.bin",
+                                    root / "model" / "linked.bin");
+  EXPECT_ANY_THROW(ExternalDataFile::Open(base, "linked.bin", true));
+  EXPECT_EQ(ReadWholeFile((root / "outside" / "weights.bin").string()), "sentinel");
+  auto created = ExternalDataFile::Open(base, "sub/new.bin", true);
+  EXPECT_EQ(created->Size(), 0);
+  EXPECT_FALSE(created->Map());
+  created->WriteAt("data", 4, 3);
+  EXPECT_EQ(created->Size(), 7);
+  EXPECT_ANY_THROW(created->ReadAt(nullptr, 1, 7));
+  EXPECT_ANY_THROW(created->WriteAt("x", 1, -1));
+  created->Truncate();
+  EXPECT_EQ(created->Size(), 0);
+}
+
+TEST_F(ExternalDataFileTest, ReaderPreservesSupportForConfinedNestedPaths) {
+  const auto base = root / "model";
+  std::filesystem::create_directories(base / "sub" / "nested");
+  WriteWholeFile((base / "sub" / "nested" / "weights.bin").string(), "nested");
+  WriteWholeFile((base / "sub" / "nested" / "extra.bin").string(), "second");
+  utils::TwoFilesStream stream((base / "model.onnx").string(),
+                               (base / "sub" / "nested" / "weights.bin").string());
+  uint8_t bytes[6]{};
+  stream.read_bytes_from_weights_stream(6, bytes, 0);
+  EXPECT_EQ(std::string(reinterpret_cast<char *>(bytes), 6), "nested");
+  stream.set_active_weights_location("sub/nested/extra.bin");
+  stream.read_bytes_from_weights_stream(6, bytes, 0);
+  EXPECT_EQ(std::string(reinterpret_cast<char *>(bytes), 6), "second");
+}
+
+#ifndef _WIN32
+TEST_F(ExternalDataFileTest, MidAcquisitionParentSwapReadsPinnedFile) {
+  const auto base = root / "model";
+  auto file = utils::ExternalDataFile::Open(base.string(), "sub/weights.bin", false, [&]() {
+    std::filesystem::rename(base / "sub", base / "pinned");
+    std::filesystem::create_directory_symlink(std::filesystem::absolute(root / "outside"),
+                                              base / "sub");
+  });
+  uint8_t bytes[8]{};
+  file->ReadAt(bytes, 8, 0);
+  EXPECT_EQ(std::string(reinterpret_cast<char *>(bytes), 8), "original");
+}
+
+TEST_F(ExternalDataFileTest, MidAcquisitionParentSwapCreatesOnlyInsidePinnedDirectory) {
+  const auto base = root / "model";
+  auto file = utils::ExternalDataFile::Open(base.string(), "sub/new.bin", true, [&]() {
+    std::filesystem::rename(base / "sub", base / "pinned");
+    std::filesystem::create_directory_symlink(std::filesystem::absolute(root / "outside"),
+                                              base / "sub");
+  });
+  file->WriteAt("created", 7, 0);
+  EXPECT_EQ(ReadWholeFile((base / "pinned" / "new.bin").string()), "created");
+  EXPECT_FALSE(std::filesystem::exists(root / "outside" / "new.bin"));
+}
+
+TEST_F(ExternalDataFileTest, MidAcquisitionLeafSymlinkSwapFailsWithoutTruncatingTarget) {
+  const auto base = root / "model";
+  EXPECT_ANY_THROW(utils::ExternalDataFile::Open(base.string(), "sub/weights.bin", true, [&]() {
+    std::filesystem::remove(base / "sub" / "weights.bin");
+    std::filesystem::create_symlink(std::filesystem::absolute(root / "outside" / "weights.bin"),
+                                    base / "sub" / "weights.bin");
+  }));
+  EXPECT_EQ(ReadWholeFile((root / "outside" / "weights.bin").string()), "sentinel");
+}
+
+TEST_F(ExternalDataFileTest, RejectsSymlinkLeavesAndNonregularFilesWithoutDamage) {
+  const auto base = root / "model";
+  std::filesystem::create_symlink(std::filesystem::absolute(root / "outside" / "weights.bin"),
+                                  base / "linked.bin");
+  for (bool write : {false, true})
+    EXPECT_ANY_THROW(utils::ExternalDataFile::Open(base.string(), "linked.bin", write));
+  ASSERT_EQ(::mkfifo((base / "pipe").c_str(), 0600), 0);
+  for (bool write : {false, true})
+    EXPECT_ANY_THROW(utils::ExternalDataFile::Open(base.string(), "pipe", write));
+  EXPECT_EQ(ReadWholeFile((root / "outside" / "weights.bin").string()), "sentinel");
+}
+
+TEST_F(ExternalDataFileTest, RetainedReadsWorkersAndMappingIgnoreDirectorySwap) {
+  const auto base = root / "model";
+  utils::TwoFilesStream stream((base / "model.onnx").string(),
+                               (base / "sub" / "weights.bin").string(), true);
+  stream.set_active_weights_location("sub/extra.bin");
+  stream.set_active_weights_location("sub/weights.bin");
+  std::filesystem::rename(base / "sub", base / "pinned");
+  std::filesystem::create_directory_symlink(std::filesystem::absolute(root / "outside"),
+                                            base / "sub");
+  uint8_t bytes[8]{};
+  stream.read_bytes_from_weights_stream(8, bytes, 0);
+  EXPECT_EQ(std::string(reinterpret_cast<char *>(bytes), 8), "original");
+  std::shared_ptr<void> owner;
+  const auto *borrowed = stream.borrow_weights_bytes("sub/weights.bin", 0, 8, 1, owner);
+  EXPECT_EQ(std::string(reinterpret_cast<const char *>(borrowed), 8), "original");
+  stream.StartThreadPool(2);
+  utils::DelayedBlock block{8, bytes, 0, 1};
+  stream.ReadDelayedBlock(block);
+  EXPECT_EQ(stream.TotalDelayedBlockBytes(), 8);
+  stream.WaitForDelayedBlock();
+  EXPECT_EQ(std::string(reinterpret_cast<char *>(bytes), 8), "original");
+  stream.set_active_weights_location("sub/extra.bin");
+  stream.read_bytes_from_weights_stream(0, bytes, 0);
+  stream.StartThreadPool(1);
+  utils::DelayedBlock extra{8, bytes, 0, 1};
+  stream.ReadDelayedBlock(extra);
+  stream.WaitForDelayedBlock();
+  EXPECT_EQ(std::string(reinterpret_cast<char *>(bytes), 8), "extra!!!");
+  borrowed = stream.borrow_weights_bytes("sub/extra.bin", 0, 8, 1, owner);
+  EXPECT_EQ(std::string(reinterpret_cast<const char *>(borrowed), 8), "extra!!!");
+  EXPECT_ANY_THROW(utils::ExternalDataFile::Open(base.string(), "sub/new.bin", true));
+  EXPECT_FALSE(std::filesystem::exists(root / "outside" / "new.bin"));
+}
+
+TEST_F(ExternalDataFileTest, ParallelAndInlineWritesIgnoreDirectorySwap) {
+  const auto base = root / "model";
+  {
+    utils::TwoFilesWriteStream stream((base / "model.onnx").string(),
+                                      (base / "sub" / "weights.bin").string());
+    stream.pre_allocate_weights(8);
+    stream.pre_allocate_weights("sub/extra.bin", 8);
+    std::filesystem::rename(base / "sub", base / "pinned");
+    std::filesystem::create_directory_symlink(std::filesystem::absolute(root / "outside"),
+                                              base / "sub");
+    stream.StartWriteThreadPool(2);
+    stream.SetMinParallelBlockSize(1024);
+    const std::string payload(2 * 1024 * 1024, 'x');
+    stream.write_raw_bytes_in_second_stream(reinterpret_cast<const uint8_t *>(payload.data()),
+                                            payload.size());
+    stream.write_raw_bytes_in_second_stream(reinterpret_cast<const uint8_t *>("tail"), 4);
+    stream.write_raw_bytes_in_second_stream(reinterpret_cast<const uint8_t *>(payload.data()),
+                                            payload.size(), "sub/extra.bin");
+    stream.write_raw_bytes_in_second_stream(reinterpret_cast<const uint8_t *>("more"), 4,
+                                            "sub/extra.bin");
+    stream.WaitForWriteCompletion();
+    EXPECT_EQ(ReadWholeFile((base / "pinned" / "weights.bin").string()), payload + "tail");
+    EXPECT_EQ(ReadWholeFile((base / "pinned" / "extra.bin").string()), payload + "more");
+  }
+  EXPECT_EQ(ReadWholeFile((root / "outside" / "weights.bin").string()), "sentinel");
+  EXPECT_EQ(ReadWholeFile((root / "outside" / "extra.bin").string()), "sentinel");
+}
+
+TEST_F(ExternalDataFileTest, RetainedFileStreamsKeepDelayedOperationsAnchored) {
+  const auto base = root / "model";
+  auto reader = utils::ExternalDataFile::Open(base.string(), "sub/weights.bin");
+  auto writer = utils::ExternalDataFile::Open(base.string(), "sub/new.bin", true);
+  {
+    utils::FileStream input("unused", reader);
+    utils::FileWriteStream output("unused", writer);
+    std::filesystem::rename(base / "sub", base / "pinned");
+    std::filesystem::create_directory_symlink(std::filesystem::absolute(root / "outside"),
+                                              base / "sub");
+    uint8_t bytes[8]{};
+    input.StartThreadPool(1);
+    utils::DelayedBlock read{8, bytes, 0};
+    input.ReadDelayedBlock(read);
+    input.WaitForDelayedBlock();
+    EXPECT_EQ(std::string(reinterpret_cast<char *>(bytes), 8), "original");
+    output.StartThreadPool(1);
+    utils::DelayedWriteBlock write{8, bytes};
+    output.WriteDelayedBlock(write);
+    output.WaitForDelayedBlock();
+  }
+  EXPECT_EQ(ReadWholeFile((base / "pinned" / "new.bin").string()), "original");
+  EXPECT_FALSE(std::filesystem::exists(root / "outside" / "new.bin"));
+}
+#else
+TEST_F(ExternalDataFileTest, RejectsActualJunctionParentsForReadingAndCreation) {
+  const auto base = root / "model";
+  const auto error = onnx_light_test::CreateWindowsJunction(base / "junction", root / "outside");
+  ASSERT_FALSE(error) << error.message();
+  for (bool write : {false, true})
+    EXPECT_ANY_THROW(utils::ExternalDataFile::Open(base.string(), "junction/weights.bin", write));
+  EXPECT_ANY_THROW(utils::ExternalDataFile::Open(base.string(), "junction/new.bin", true));
+  EXPECT_FALSE(std::filesystem::exists(root / "outside" / "new.bin"));
+  EXPECT_EQ(ReadWholeFile((root / "outside" / "weights.bin").string()), "sentinel");
+}
+
+TEST_F(ExternalDataFileTest, MidAcquisitionJunctionLeafIsRejectedBeforeCreation) {
+  const auto base = root / "model";
+  EXPECT_ANY_THROW(utils::ExternalDataFile::Open(base.string(), "sub/new.bin", true, [&]() {
+    const auto error =
+        onnx_light_test::CreateWindowsJunction(base / "sub" / "new.bin", root / "outside");
+    EXPECT_FALSE(error) << error.message();
+  }));
+  EXPECT_FALSE(std::filesystem::exists(root / "outside" / "new.bin"));
+  EXPECT_EQ(ReadWholeFile((root / "outside" / "weights.bin").string()), "sentinel");
+}
+
+TEST_F(ExternalDataFileTest, PinnedParentCannotBeRenamedDuringCreation) {
+  const auto base = root / "model";
+  auto file = utils::ExternalDataFile::Open(base.string(), "sub/new.bin", true, [&]() {
+    std::error_code error;
+    std::filesystem::rename(base / "sub", base / "moved", error);
+    EXPECT_TRUE(error);
+    EXPECT_TRUE(std::filesystem::is_directory(base / "sub"));
+  });
+  file->WriteAt("created", 7, 0);
+  EXPECT_EQ(ReadWholeFile((base / "sub" / "new.bin").string()), "created");
+}
+
+TEST_F(ExternalDataFileTest, PinnedParentCannotBecomeJunctionDuringCreation) {
+  const auto base = root / "model";
+  std::filesystem::remove(base / "sub" / "weights.bin");
+  std::filesystem::remove(base / "sub" / "extra.bin");
+  auto file = utils::ExternalDataFile::Open(base.string(), "sub/new.bin", true, [&]() {
+    const auto error =
+        onnx_light_test::CreateWindowsJunction(base / "sub", root / "outside", false);
+    EXPECT_TRUE(error);
+  });
+  file->WriteAt("created", 7, 0);
+  EXPECT_EQ(ReadWholeFile((base / "sub" / "new.bin").string()), "created");
+  EXPECT_FALSE(std::filesystem::exists(root / "outside" / "new.bin"));
+}
+
+TEST_F(ExternalDataFileTest, RetainedStreamsIgnoreJunctionReplacement) {
+  const auto base = root / "model";
+  utils::TwoFilesStream input((base / "model.onnx").string(),
+                              (base / "sub" / "weights.bin").string(), true);
+  auto output_file = utils::ExternalDataFile::Open(base.string(), "sub/new.bin", true);
+  utils::FileWriteStream output("unused", output_file);
+  std::error_code error;
+  std::filesystem::rename(base / "sub", base / "pinned", error);
+  ASSERT_FALSE(error) << error.message();
+  error = onnx_light_test::CreateWindowsJunction(base / "sub", root / "outside");
+  ASSERT_FALSE(error) << error.message();
+  uint8_t bytes[8]{};
+  input.read_bytes_from_weights_stream(8, bytes, 0);
+  EXPECT_EQ(std::string(reinterpret_cast<char *>(bytes), 8), "original");
+  std::shared_ptr<void> owner;
+  const auto *borrowed = input.borrow_weights_bytes("sub/weights.bin", 0, 8, 1, owner);
+  EXPECT_EQ(std::string(reinterpret_cast<const char *>(borrowed), 8), "original");
+  input.StartThreadPool(1);
+  utils::DelayedBlock read{8, bytes, 0, 1};
+  input.ReadDelayedBlock(read);
+  input.WaitForDelayedBlock();
+  EXPECT_EQ(std::string(reinterpret_cast<char *>(bytes), 8), "original");
+  output.StartThreadPool(1);
+  utils::DelayedWriteBlock write{8, bytes};
+  output.WriteDelayedBlock(write);
+  output.WaitForDelayedBlock();
+  EXPECT_EQ(ReadWholeFile((base / "pinned" / "new.bin").string()), "original");
+  EXPECT_FALSE(std::filesystem::exists(root / "outside" / "new.bin"));
+}
+#endif
 
 TEST(proto_stream_api, SerializeToStringReturnsTrue) {
   AttributeProto attr = MakeIntAttr();

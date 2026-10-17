@@ -856,6 +856,8 @@ public:
   };
 
   /** Opens *file_path* for protobuf data and *weights_file* for weight data.
+   *  When both paths name the model itself, weights-source validation is deferred until
+   *  external bytes are read, allowing linked models to serve as discovery placeholders.
    *  When *use_mmap_weights* is true, ``file_load_mode=MMAP`` keeps a single model-owned
    *  memory map of each weights file and every ``TensorProto`` borrows a zero-copy view into
    *  it (as if ``no_copy`` were set for the weights), instead of copying the bytes through a
@@ -904,6 +906,8 @@ protected:
   std::string active_weights_location_;
   /** Relative location key associated with the default weights stream. */
   std::string default_weights_location_;
+  /** Caches validation of the default source, including a discovery placeholder used as weights. */
+  bool default_weights_validated_ = false;
   /** Maps object pointers to their byte offsets in the weights file. */
   std::unordered_map<const void *, uint64_t> position_cache_;
   /** When true, ``file_load_mode=MMAP`` makes each weights-file tensor borrow a zero-copy

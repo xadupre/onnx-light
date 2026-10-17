@@ -1606,15 +1606,15 @@ std::filesystem::path resolve_external_data_location(const std::string &base_dir
                data_path_str, ", but it is a symbolic link.");
   }
   // Verify canonical containment (catches parent-dir symlinks).
-  if (data_path_str[0] != '#') {
+  if (location[0] != '#') {
     verify_path_containment(data_path, base_dir, tensor_name);
   }
-  if (data_path_str[0] != '#' && !std::filesystem::is_regular_file(data_path)) {
+  if (location[0] != '#' && !std::filesystem::is_regular_file(data_path)) {
     fail_check("Data of TensorProto ( tensor name: ", tensor_name, ") should be stored in ",
                data_path_str, ", but it is not regular file.");
   }
   // Do not allow hardlinks, as they can be used to read arbitrary files.
-  if (data_path_str[0] != '#' && std::filesystem::hard_link_count(data_path) > 1) {
+  if (location[0] != '#' && std::filesystem::hard_link_count(data_path) > 1) {
     fail_check("Data of TensorProto ( tensor name: ", tensor_name, ") should be stored in ",
                data_path_str,
                ", but it has multiple hard links, indicating a potential hardlink attack.");

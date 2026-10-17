@@ -217,6 +217,61 @@ TEST(CHECKER, ValidDataLocationParentDirSymLinkTest) {
 #endif
 }
 
+TEST(CHECKER, HashPrefixedRelativeModelDirTest) {
+#ifndef ONNX_NO_EXCEPTIONS
+  const fs::path modelDir = "#onnx_light_external_checker_test";
+  fs::remove_all(modelDir);
+  fs::create_directories(modelDir / "sub");
+  const std::string base_dir = ONNX_LIGHT_NAMESPACE::path_to_utf8(modelDir);
+  {
+    std::ofstream ofs(modelDir / "sub" / "weights.bin", std::ios::binary);
+    ofs << "data";
+  }
+  EXPECT_EQ(checker::resolve_external_data_location(base_dir, "sub/weights.bin", "t"),
+            modelDir / "sub" / "weights.bin");
+  EXPECT_NO_THROW({
+    ScopedFd fd(
+        static_cast<int>(checker::open_external_data(base_dir, "sub/weights.bin", "t", true)));
+    ASSERT_GE(fd.get(), 0);
+    char buf[4];
+#ifdef _WIN32
+    EXPECT_EQ(_read(fd.get(), buf, 4), 4);
+#else
+    EXPECT_EQ(read(fd.get(), buf, 4), 4);
+#endif
+    EXPECT_EQ(std::string(buf, 4), "data");
+  });
+  EXPECT_THROW(checker::resolve_external_data_location(base_dir, "sub/missing.bin", "t"),
+               checker::ValidationError);
+  EXPECT_THROW(checker::resolve_external_data_location(base_dir, "sub", "t"),
+               checker::ValidationError);
+  for (const auto &dir : {base_dir, std::string("onnx_light_in_memory_checker_test")}) {
+    EXPECT_NO_THROW({
+      EXPECT_EQ(checker::resolve_external_data_location(dir, "#in-memory", "t"),
+                ONNX_LIGHT_NAMESPACE::utf8_to_path(dir) / "#in-memory");
+    });
+  }
+
+#ifndef _WIN32
+  const fs::path outsideDir = fs::temp_directory_path() / "onnx_light_hash_checker_outside";
+  fs::remove_all(outsideDir);
+  fs::create_directories(outsideDir);
+  {
+    std::ofstream ofs(outsideDir / "secret.data");
+    ofs << "secret";
+  }
+  fs::create_directory_symlink(outsideDir, modelDir / "link");
+  EXPECT_THROW(checker::resolve_external_data_location(base_dir, "link/secret.data", "t"),
+               checker::ValidationError);
+  fs::create_hard_link(outsideDir / "secret.data", modelDir / "sub" / "hardlink.data");
+  EXPECT_THROW(checker::resolve_external_data_location(base_dir, "sub/hardlink.data", "t"),
+               checker::ValidationError);
+  fs::remove_all(outsideDir);
+#endif
+  fs::remove_all(modelDir);
+#endif
+}
+
 TEST(CHECKER, OpenExternalDataTest) {
 #ifndef ONNX_NO_EXCEPTIONS
   // Use a UTF-8 directory name (raw bytes for C++20 char8_t compat).

@@ -67,6 +67,11 @@ multiple files and nested graphs. Hydrate selected descriptors on that same
 model, or let a path-aware stream resolve a descriptor when its
 ``TensorProto`` completes. Locations remain confined to the model directory
 and are checked for traversal, symlink escape, offset overflow, and truncation.
+Locations may name a file directly or use one existing subdirectory, such as
+``.weights/model.safetensors``. Absolute locations, ``..`` components, and
+deeper paths are rejected. Stream APIs and I/O behavior are unchanged;
+directory-swap hardening is tracked separately in
+`issue 5304 <https://github.com/xadupre/onnx-light/issues/5304>`_.
 
 Acceptance:
 

@@ -1592,11 +1592,10 @@ std::filesystem::path resolve_external_data_location(const std::string &base_dir
                base_dir, "', but '", location, "' points outside the directory.");
   }
   {
-    // External data location must be a plain filename with no directory component.
-    auto parent = relative_path.parent_path();
-    if (!parent.empty() && parent != std::filesystem::path(".")) {
-      fail_check("Location of external TensorProto ( tensor name: ", tensor_name,
-                 ") must be a filename with no folder, but got: ", location);
+    if (!IsSafeExternalDataLocation(location)) {
+      fail_check(
+          "Location of external TensorProto ( tensor name: ", tensor_name,
+          ") must be a relative filename with at most one subdirectory, but got: ", location);
     }
   }
   auto data_path = base_dir_path / relative_path;
@@ -1640,11 +1639,9 @@ static std::filesystem::path validate_write_location(const std::string &base_dir
     fail_check("External data location for tensor ", tensor_name, " contains '..': ", location);
   }
   {
-    // External data location must be a plain filename with no directory component.
-    auto parent = rel.parent_path();
-    if (!parent.empty() && parent != std::filesystem::path(".")) {
+    if (!IsSafeExternalDataLocation(location)) {
       fail_check("External data location for tensor ", tensor_name,
-                 " must be a filename with no folder, but got: ", location);
+                 " must be a relative filename with at most one subdirectory, but got: ", location);
     }
   }
   return utf8_to_path(base_dir.empty() ? std::string(".") : base_dir) / rel;

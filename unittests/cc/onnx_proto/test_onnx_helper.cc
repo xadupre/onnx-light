@@ -959,11 +959,24 @@ TEST(onnx_external_ressource, SaveWithExternalDataWeightsFileMustBeNextToModel) 
   EXPECT_THROW(
       { utils::TwoFilesWriteStream stream(model_path.string(), weights_path.string()); },
       std::exception);
+  fs::create_directories(model_dir / ".weights");
+  EXPECT_NO_THROW({
+    utils::TwoFilesWriteStream stream(model_path.string(),
+                                      (model_dir / ".weights/weights.data").string());
+  });
 
   fs::remove_all(root);
 }
 
-TEST(onnx_external_ressource, SaveWithExternalDataLocationMustBeNextToModel) {
+TEST(onnx_external_ressource, LocationsAllowAtMostOneSubdirectory) {
+  for (const char *location : {"weights.bin", ".weights/weights.bin", "./data/./weights.bin"})
+    EXPECT_TRUE(IsSafeExternalDataLocation(location)) << location;
+  for (const char *location :
+       {"", ".", "/weights.bin", "../weights.bin", "data/../weights.bin", "a/b/weights.bin"})
+    EXPECT_FALSE(IsSafeExternalDataLocation(location)) << location;
+}
+
+TEST(onnx_external_ressource, SaveWithExternalDataLocationInSubdirectory) {
   namespace fs = std::filesystem;
 
   ModelProto model;
@@ -988,7 +1001,7 @@ TEST(onnx_external_ressource, SaveWithExternalDataLocationMustBeNextToModel) {
 
   fs::path root = fs::temp_directory_path() / "onnx_light_save_location_validation";
   fs::remove_all(root);
-  fs::create_directories(root);
+  fs::create_directories(root / "nested");
   fs::path model_path = root / "model.onnx";
   fs::path weights_path = root / "weights.data";
 
@@ -996,9 +1009,66 @@ TEST(onnx_external_ressource, SaveWithExternalDataLocationMustBeNextToModel) {
     utils::TwoFilesWriteStream stream(model_path.string(), weights_path.string());
     SerializeOptions wopts;
     wopts.raw_data_threshold = 0;
-    EXPECT_THROW(SerializeProtoToStream(model, stream, wopts), std::exception);
+    EXPECT_NO_THROW(SerializeProtoToStream(model, stream, wopts));
   }
+  EXPECT_TRUE(fs::exists(root / "nested/weights_1.data"));
 
+  fs::remove_all(root);
+}
+
+TEST(onnx_external_ressource, LoadSharedExternalDataInSubdirectory) {
+  namespace fs = std::filesystem;
+  const fs::path root = fs::temp_directory_path() / "onnx_light_shared_subdir_weights";
+  fs::remove_all(root);
+  fs::create_directories(root / ".weights");
+  const fs::path model_path = root / "model.onnx";
+  const fs::path weights_path = root / ".weights/model.safetensors";
+  {
+    std::ofstream weights(weights_path, std::ios::binary);
+    weights << "0123456789abcdefabcdefgh";
+  }
+  ModelProto model;
+  auto *graph = model.add_graph();
+  graph->set_name("g");
+  for (int i = 0; i < 2; ++i) {
+    auto *tensor = graph->add_initializer();
+    tensor->set_name("w" + std::to_string(i));
+    tensor->set_data_type(TensorProto::FLOAT);
+    tensor->add_dims(1);
+    tensor->set_data_location(TensorProto::EXTERNAL);
+    auto add = [tensor](const char *key, const std::string &value) {
+      auto *entry = tensor->add_external_data();
+      entry->set_key(key);
+      entry->set_value(value);
+    };
+    if (i == 0) {
+      add("location", ".weights/model.safetensors");
+      add("offset", "16");
+      add("length", "4");
+    } else {
+      add("length", "4");
+      add("offset", "20");
+      add("location", ".weights/model.safetensors");
+    }
+  }
+  {
+    utils::FileWriteStream stream(model_path.string());
+    SerializeOptions options;
+    ASSERT_TRUE(SerializeProtoToStream(model, stream, options));
+  }
+  for (bool no_copy : {false, true}) {
+    utils::TwoFilesStream stream(model_path.string(), weights_path.string());
+    ParseOptions options;
+    options.no_copy = no_copy;
+    ModelProto parsed;
+    ParseModelProtoFromStream(parsed, stream, options, false);
+    ASSERT_EQ(parsed.graph().initializer().size(), 2U);
+    for (size_t i = 0; i < 2; ++i) {
+      const auto &bytes = parsed.graph().initializer()[i].raw_data();
+      EXPECT_EQ(std::string(reinterpret_cast<const char *>(bytes.data()), bytes.size()),
+                i == 0 ? "abcd" : "efgh");
+    }
+  }
   fs::remove_all(root);
 }
 

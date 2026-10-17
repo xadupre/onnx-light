@@ -1,4 +1,5 @@
 import os
+import tempfile
 import gc
 import unittest
 from unittest.mock import patch
@@ -1009,6 +1010,17 @@ class TestOnnxLightHelper(ExtTestCase):
         # The saved model must be loadable by onnx
         reload = onnxl.load(name)
         self.assertEqual(len(reload.graph.initializer), len(model.graph.initializer))
+
+    def test_external_data_subdirectory_roundtrip(self):
+        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+        with tempfile.TemporaryDirectory() as directory:
+            os.mkdir(os.path.join(directory, ".weights"))
+            name = os.path.join(directory, "model.onnx")
+            onnxl.save(model, name, location=".weights/model.data", size_threshold=0)
+            loaded = onnxl.load(name, load_external_data=True)
+            self.assertEqual(len(loaded.graph.initializer), len(model.graph.initializer))
+            for expected, got in zip(model.graph.initializer, loaded.graph.initializer):
+                self.assertEqualArray(onh.to_array(expected), onh.to_array(got))
 
     def test_save_external_data_after_metadata_only_load_raises_clear_error(self):
         onnx_path = self.get_dump_file("test_save_ext_metadata_only_src.onnx")

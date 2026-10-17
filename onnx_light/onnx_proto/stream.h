@@ -611,6 +611,10 @@ class ONNX_LIGHT_PROTO_API FileWriteStream : public BinaryWriteStream {
 public:
   /** Opens the file at *file_path* for writing (creates or truncates). */
   explicit FileWriteStream(const std::string &file_path);
+  /** Opens an external-data location beneath the model directory, retaining the verified
+   *  file for subsequent sequential and parallel writes. */
+  FileWriteStream(const std::string &model_path, const std::string &location,
+                  int model_directory_fd = -1);
   virtual void write_raw_bytes(const uint8_t *data, offset_t n_bytes) override;
   /** Returns the number of bytes written so far. */
   virtual int64_t size() const override;
@@ -631,7 +635,8 @@ public:
    *  already-open ``file_stream_`` first instead of opening a new file handle. Only safe to call
    *  from the single thread that owns this stream (no internal locking): used for below-threshold
    *  writes that skip the thread pool and therefore never run concurrently with another writer
-   *  of this same stream. */
+   *  of this same stream. External-data streams instead use positional writes through their
+   *  retained native file and permit concurrent disjoint ranges. */
   void write_raw_bytes_at_offset(const uint8_t *data, offset_t n_bytes, int64_t offset);
 
 protected:
@@ -639,13 +644,17 @@ protected:
   std::string file_path_;
   /** Underlying output stream used for sequential writes. */
   std::ofstream file_stream_;
+  /** Retained external-data file; declared before the pool so queued writes finish before close. */
+#if defined(_WIN32)
+  std::shared_ptr<void> external_file_;
+#else
+  std::shared_ptr<int> external_file_;
+#endif
   /** Running count of bytes written to the file. */
-  uint64_t written_bytes_;
+  std::atomic<uint64_t> written_bytes_{0};
   /** Thread pool used for parallel block writes. */
   ThreadPool thread_pool_;
 };
-
-class SecureExternalWriteStream;
 
 class TwoFilesStream;
 
@@ -834,8 +843,7 @@ protected:
   /** Writer for the separate weights file. */
   FileWriteStream weights_stream_;
   /** Additional writers when external_data.location points to multiple files. */
-  std::unordered_map<std::string, std::unique_ptr<SecureExternalWriteStream>>
-      extra_weights_streams_;
+  std::unordered_map<std::string, std::unique_ptr<FileWriteStream>> extra_weights_streams_;
 #if !defined(_WIN32)
   /** Retains the original model directory while opening child weights files. */
   int model_directory_fd_ = -1;

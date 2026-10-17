@@ -270,20 +270,25 @@ TEST(CHECKER, OpenExternalDataTest) {
                ONNX_LIGHT_NAMESPACE::checker::ValidationError);
   EXPECT_THROW(ONNX_LIGHT_NAMESPACE::checker::open_external_data(dir_utf8, ".", "t", false),
                ONNX_LIGHT_NAMESPACE::checker::ValidationError);
-  fs::create_directories(dir / ".weights" / "nested");
-  raw = ONNX_LIGHT_NAMESPACE::checker::open_external_data(dir_utf8, ".weights/nested/weights.bin",
-                                                          "t", false);
+  fs::create_directories(dir / ".weights");
+  raw = ONNX_LIGHT_NAMESPACE::checker::open_external_data(dir_utf8, ".weights/weights.bin", "t",
+                                                          false);
   {
     ScopedFd fd(static_cast<int>(raw));
   }
-  raw = ONNX_LIGHT_NAMESPACE::checker::open_external_data(dir_utf8, "./.weights/nested/weights.bin",
-                                                          "t", true);
+  raw = ONNX_LIGHT_NAMESPACE::checker::open_external_data(dir_utf8, "./.weights/weights.bin", "t",
+                                                          true);
   {
     ScopedFd fd(static_cast<int>(raw));
   }
   EXPECT_THROW(ONNX_LIGHT_NAMESPACE::checker::open_external_data(
                    dir_utf8, ".weights/../weights.bin", "t", false),
                ONNX_LIGHT_NAMESPACE::checker::ValidationError);
+  for (const bool read_only : {false, true}) {
+    EXPECT_THROW(ONNX_LIGHT_NAMESPACE::checker::open_external_data(
+                     dir_utf8, ".weights/nested/weights.bin", "t", read_only),
+                 ONNX_LIGHT_NAMESPACE::checker::ValidationError);
+  }
   EXPECT_THROW(ONNX_LIGHT_NAMESPACE::checker::open_external_data(dir_utf8, "", "t", false),
                ONNX_LIGHT_NAMESPACE::checker::ValidationError);
   // UTF-8 traversal

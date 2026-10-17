@@ -61,7 +61,8 @@ inline constexpr uint32_t FixedBitWidth(TensorProto::DataType data_type) {
  * cannot escape the directory it is resolved against.
  *
  * The lexically-normalised path must be non-empty, must have no root component,
- * must not contain ``..`` components and must end on a file name. This is the single
+ * must not contain ``..`` components, must end on a file name, and may contain at most
+ * one subdirectory. This is the single
  * definition of the rule; ``TensorProto::LoadExternalData`` and the
  * ``EncodedValueProto`` metadata validator both use it so an untrusted model
  * cannot reach outside its own directory.
@@ -83,6 +84,12 @@ inline bool IsSafeExternalDataLocation(std::string_view location) {
   const std::filesystem::path normalized = path.lexically_normal();
   if (normalized.empty() || normalized.has_root_path()) {
     return false;
+  }
+  size_t components = 0;
+  for (const auto &part : normalized) {
+    if (part != std::filesystem::path(".") && ++components > 2) {
+      return false;
+    }
   }
   return !normalized.filename().empty() && normalized != std::filesystem::path(".");
 }

@@ -67,6 +67,10 @@ multiple files and nested graphs. Hydrate selected descriptors on that same
 model, or let a path-aware stream resolve a descriptor when its
 ``TensorProto`` completes. Locations remain confined to the model directory
 and are checked for traversal, symlink escape, offset overflow, and truncation.
+External-data locations permit a filename alone or one subdirectory followed
+by a filename, such as ``weights.bin`` or ``data/weights.bin``.
+Deeper locations such as ``data/shards/weights.bin`` are rejected, even
+though ONNX permits them.
 On POSIX, external-data streams open each child path component relative to
 the retained model-directory descriptor without following symbolic links.
 Sequential reads, parallel reads, and no-copy mappings reuse the verified
@@ -74,8 +78,9 @@ file descriptor, so swapping a directory after opening cannot redirect a
 later read or mapping. External writers reject trailing dots and spaces in
 every path component and open their targets nonblocking before checking that
 they are regular files, preventing a named pipe from hanging serialization.
-Windows nested external-data writers likewise retain a verified native file
-handle and issue offset writes through that handle, including queued writes.
+``FileWriteStream`` retains the verified external-data file for sequential
+and queued positional writes; no separate external-writer class is needed.
+On Windows, these writes use the retained native file handle.
 Automatic discovery treats the model path only as a parser placeholder:
 symlinked or hardlinked models remain loadable, while actual external-data
 sources retain their independent link and containment checks.

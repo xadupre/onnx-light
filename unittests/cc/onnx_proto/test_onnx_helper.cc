@@ -974,6 +974,16 @@ TEST(onnx_external_ressource, SaveWithExternalDataWeightsFileMustBeNextToModel) 
   fs::remove_all(root);
 }
 
+TEST(onnx_external_ressource, LocationsAllowAtMostOneSubdirectory) {
+  for (const char *location : {"weights.bin", ".weights/weights.bin", "./.weights/./weights.bin"}) {
+    EXPECT_TRUE(IsSafeExternalDataLocation(location)) << location;
+  }
+  for (const char *location :
+       {".weights/nested/weights.bin", "./a/b/weights.bin", "a/../weights.bin"}) {
+    EXPECT_FALSE(IsSafeExternalDataLocation(location)) << location;
+  }
+}
+
 TEST(onnx_external_ressource, SaveWithExternalDataLocationInSubdirectory) {
   namespace fs = std::filesystem;
 
@@ -989,7 +999,7 @@ TEST(onnx_external_ressource, SaveWithExternalDataLocationInSubdirectory) {
   w1->ref_data_location() = TensorProto::DataLocation::EXTERNAL;
   auto *w1_loc = w1->add_external_data();
   w1_loc->set_key("location");
-  w1_loc->set_value(".weights/nested/weights_1.data");
+  w1_loc->set_value(".weights/weights_1.data");
   auto *w1_off = w1->add_external_data();
   w1_off->set_key("offset");
   w1_off->set_value("0");
@@ -1010,7 +1020,7 @@ TEST(onnx_external_ressource, SaveWithExternalDataLocationInSubdirectory) {
     EXPECT_NO_THROW(SerializeProtoToStream(model, stream, wopts));
   }
 
-  EXPECT_TRUE(fs::exists(root / ".weights/nested/weights_1.data"));
+  EXPECT_TRUE(fs::exists(root / ".weights/weights_1.data"));
   {
     const fs::path default_weights = root / "unused.data";
     std::ofstream unused(default_weights, std::ios::binary);
@@ -1020,7 +1030,7 @@ TEST(onnx_external_ressource, SaveWithExternalDataLocationInSubdirectory) {
     ModelProto parsed;
     ParseModelProtoFromStream(parsed, stream, opts, false);
     const auto &tensor = parsed.ref_graph().ref_initializer()[0];
-    EXPECT_EQ(tensor.ref_external_data()[0].ref_value(), ".weights/nested/weights_1.data");
+    EXPECT_EQ(tensor.ref_external_data()[0].ref_value(), ".weights/weights_1.data");
     EXPECT_EQ(tensor.ref_raw_data(), w1->ref_raw_data());
   }
 #ifndef _WIN32
@@ -1053,6 +1063,10 @@ TEST(onnx_external_ressource, NestedWritesRejectWindowsDirectoryAliases) {
                                       (root / "default.data").string());
     const uint8_t data[] = {1, 2, 3, 4};
     stream.write_raw_bytes_in_second_stream(data, 4, "dir/weights.bin");
+    EXPECT_THROW(stream.write_raw_bytes_in_second_stream(data, 4, "dir/nested/weights.bin"),
+                 std::exception);
+    EXPECT_THROW(stream.pre_allocate_weights("dir/nested/weights.bin", 4), std::exception);
+    EXPECT_FALSE(fs::exists(root / "dir/nested"));
     for (const char *location : {"dir./weights.bin", "dir /weights.bin", "dir/child./weights.bin",
                                  "dir/child /weights.bin"}) {
       SCOPED_TRACE(location);
@@ -1137,6 +1151,33 @@ TEST(onnx_external_ressource, NestedParallelWritesStayOnOpenedHandleAfterJunctio
   fs::remove_all(outside);
 }
 #else
+TEST(onnx_external_ressource, FileWriterRetainsExternalFileThroughQueuedWritesAndDestruction) {
+  namespace fs = std::filesystem;
+  const fs::path root = fs::temp_directory_path() / "onnx_light_existing_file_writer";
+  const fs::path outside = fs::temp_directory_path() / "onnx_light_existing_file_writer_outside";
+  fs::remove_all(root);
+  fs::remove_all(outside);
+  fs::create_directories(root);
+  fs::create_directories(outside);
+  const uint8_t first[] = {1, 2}, second[] = {3, 4};
+  {
+    utils::FileWriteStream stream((root / "model.onnx").string(), "data/weights.bin");
+    stream.write_raw_bytes(first, 2);
+    fs::rename(root / "data", root / "original");
+    fs::create_directory_symlink(outside, root / "data");
+    stream.StartThreadPool(2);
+    utils::DelayedWriteBlock block{2, second};
+    stream.WriteDelayedBlock(block);
+    EXPECT_EQ(stream.size(), 4);
+  }
+  std::ifstream original(root / "original/weights.bin", std::ios::binary);
+  EXPECT_EQ(std::string(std::istreambuf_iterator<char>(original), {}), std::string("\1\2\3\4", 4));
+  EXPECT_FALSE(fs::exists(outside / "weights.bin"));
+  original.close();
+  fs::remove_all(root);
+  fs::remove_all(outside);
+}
+
 TEST(onnx_external_ressource, NestedWritesRejectFifoWithoutBlocking) {
   namespace fs = std::filesystem;
   const fs::path root = fs::temp_directory_path() / "onnx_light_external_fifo";
@@ -1235,17 +1276,17 @@ TEST(onnx_external_ressource, NestedWritesStayOnOpenedFile) {
     const uint8_t first[] = {1, 2};
     const uint8_t second[] = {3, 4};
     stream.StartWriteThreadPool(2);
-    stream.write_raw_bytes_in_second_stream(first, 2, ".weights/a/data.bin");
-    stream.write_raw_bytes_in_second_stream(first, 2, ".weights/b/DATA.bin");
-    fs::rename(root / ".weights/a", root / ".weights/detached");
-    fs::create_directory_symlink(outside, root / ".weights/a");
-    stream.write_raw_bytes_in_second_stream(second, 2, ".weights/a/data.bin");
-    EXPECT_EQ(stream.weights_size_for_location(".weights/a/data.bin"), 4);
+    stream.write_raw_bytes_in_second_stream(first, 2, ".weights_a/data.bin");
+    stream.write_raw_bytes_in_second_stream(first, 2, ".weights_b/DATA.bin");
+    fs::rename(root / ".weights_a", root / "detached");
+    fs::create_directory_symlink(outside, root / ".weights_a");
+    stream.write_raw_bytes_in_second_stream(second, 2, ".weights_a/data.bin");
+    EXPECT_EQ(stream.weights_size_for_location(".weights_a/data.bin"), 4);
     stream.WaitForWriteCompletion();
   }
   EXPECT_FALSE(fs::exists(outside / "data.bin"));
-  EXPECT_EQ(fs::file_size(root / ".weights/detached/data.bin"), 4U);
-  EXPECT_TRUE(fs::exists(root / ".weights/b/DATA.bin"));
+  EXPECT_EQ(fs::file_size(root / "detached/data.bin"), 4U);
+  EXPECT_TRUE(fs::exists(root / ".weights_b/DATA.bin"));
   fs::remove_all(root);
   fs::remove_all(outside);
 }
@@ -1280,15 +1321,16 @@ TEST(onnx_external_ressource, LoadSharedExternalDataInSubdirectory) {
   namespace fs = std::filesystem;
   const fs::path root = fs::temp_directory_path() / "onnx_light_shared_subdir_weights";
   fs::remove_all(root);
-  fs::create_directories(root / ".weights" / "nested");
+  fs::create_directories(root / ".weights");
+  fs::create_directories(root / ".other");
   const fs::path model_path = root / "model.onnx";
-  const fs::path weights_path = root / ".weights" / "nested" / "model.safetensors";
+  const fs::path weights_path = root / ".weights" / "model.safetensors";
   {
     std::ofstream weights(weights_path, std::ios::binary);
     weights << "0123456789abcdef" << "abcd" << "efgh";
   }
   {
-    std::ofstream weights(root / ".weights" / "model.safetensors", std::ios::binary);
+    std::ofstream weights(root / ".other" / "model.safetensors", std::ios::binary);
     weights << "ijkl";
   }
 
@@ -1307,15 +1349,15 @@ TEST(onnx_external_ressource, LoadSharedExternalDataInSubdirectory) {
       entry->set_value(value);
     };
     if (i == 0) {
-      add_entry("location", ".weights/nested/model.safetensors");
+      add_entry("location", ".weights/model.safetensors");
       add_entry("offset", "16");
       add_entry("length", "4");
     } else if (i == 1) {
       add_entry("length", "4");
       add_entry("offset", "20");
-      add_entry("location", ".weights/nested/model.safetensors");
-    } else {
       add_entry("location", ".weights/model.safetensors");
+    } else {
+      add_entry("location", ".other/model.safetensors");
       add_entry("offset", "0");
       add_entry("length", "4");
     }
@@ -1357,8 +1399,8 @@ TEST(onnx_external_ressource, LoadSharedExternalDataInSubdirectory) {
     for (const auto &tensor : reused.ref_graph().ref_initializer()) {
       const size_t location_index = tensor.ref_external_data()[0].ref_key() == "location" ? 0 : 2;
       EXPECT_EQ(tensor.ref_external_data()[location_index].ref_value(),
-                tensor.ref_name() == "w2" ? ".weights/model.safetensors"
-                                          : ".weights/nested/model.safetensors");
+                tensor.ref_name() == "w2" ? ".other/model.safetensors"
+                                          : ".weights/model.safetensors");
       TensorProto loaded = tensor;
       loaded.LoadExternalData(root.string());
       EXPECT_EQ(loaded.ref_raw_data().size(), 4U);

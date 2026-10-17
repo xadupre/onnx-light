@@ -14,7 +14,7 @@ def _is_relative_and_contained(location: str) -> bool:
     """Checks whether *location* is a relative path that does not escape its parent.
 
     Mirrors the C++ external-data location validation: the path must be
-    relative and must not contain ``..`` components.
+    relative, contain at most one subdirectory, and have no ``..`` components.
     """
     if not location:
         return False
@@ -24,7 +24,7 @@ def _is_relative_and_contained(location: str) -> bool:
         if p.anchor or not p.name:
             return False
         parts = list(p.parts)
-        if ".." in parts:
+        if ".." in parts or len(parts) > 2:
             return False
     # Also use os.path for the current platform
     normed_os = os.path.normpath(location)
@@ -64,7 +64,7 @@ def validate_external_data_path(
     if not allow_absolute and not _is_relative_and_contained(location):
         raise ValueError(
             f"External data location {location!r} must be a relative path that "
-            f"does not escape the base directory."
+            f"does not escape the base directory and contains at most one subdirectory."
         )
 
     # Step 2: Join with base_dir and resolve to canonical path.

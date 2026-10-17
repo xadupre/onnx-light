@@ -145,7 +145,7 @@ def save(
     ), f"all_tensors_to_one_file={all_tensors_to_one_file} is not implemented"
     if save_as_external_data or location:
         if location is None:
-            location = str(f) + ".data"
+            location = os.path.abspath(str(f) + ".data")
         # Validate that the external data location does not escape the model
         # directory via path traversal (CVE-2025-51480) and does not point at
         # a symlink or hardlink (GHSA-8qff-7g33-75mx, TOCTOU symlink attack on

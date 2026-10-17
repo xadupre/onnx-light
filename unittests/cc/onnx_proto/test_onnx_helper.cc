@@ -1106,6 +1106,67 @@ TEST(onnx_external_ressource, LoadSharedExternalDataInSubdirectory) {
   fs::remove_all(root);
 }
 
+TEST(onnx_external_ressource, LoadDefaultExternalDataRejectsParentSymlink) {
+#if !defined(_WIN32)
+  namespace fs = std::filesystem;
+  const fs::path root = fs::temp_directory_path() / "onnx_light_default_weights_parent_symlink";
+  fs::remove_all(root);
+  fs::create_directories(root / "model");
+  fs::create_directories(root / "outside");
+  {
+    std::ofstream weights(root / "outside/weights.bin", std::ios::binary);
+    weights << "abcd";
+  }
+  fs::create_directory_symlink(root / "outside", root / "model/sub");
+  const fs::path original_dir = fs::current_path();
+  for (bool ordered : {false, true}) {
+    ModelProto model;
+    auto *tensor = model.add_graph()->add_initializer();
+    tensor->set_name("w");
+    tensor->set_data_type(TensorProto::FLOAT);
+    tensor->add_dims(1);
+    tensor->set_data_location(TensorProto::EXTERNAL);
+    auto add = [tensor](const char *key, const char *value) {
+      auto *entry = tensor->add_external_data();
+      entry->set_key(key);
+      entry->set_value(value);
+    };
+    if (ordered) {
+      add("location", "sub/weights.bin");
+      add("offset", "0");
+      add("length", "4");
+    } else {
+      add("length", "4");
+      add("offset", "0");
+      add("location", "sub/weights.bin");
+    }
+    {
+      utils::FileWriteStream stream((root / "model/model.onnx").string());
+      SerializeOptions options;
+      ASSERT_TRUE(SerializeProtoToStream(model, stream, options));
+    }
+    fs::current_path(root / "model");
+    for (bool no_copy : {false, true}) {
+      for (bool use_mmap : {false, true}) {
+        SCOPED_TRACE(::testing::Message() << "ordered=" << ordered << ", no_copy=" << no_copy
+                                          << ", use_mmap=" << use_mmap);
+        EXPECT_THROW(
+            {
+              utils::TwoFilesStream stream("model.onnx", "sub/weights.bin", use_mmap);
+              ParseOptions options;
+              options.no_copy = no_copy;
+              ModelProto parsed;
+              ParseModelProtoFromStream(parsed, stream, options, false);
+            },
+            std::runtime_error);
+      }
+    }
+    fs::current_path(original_dir);
+  }
+  fs::remove_all(root);
+#endif
+}
+
 TEST(onnx_external_ressource, SaveWithExternalDataLocationNextToModelSucceeds) {
   namespace fs = std::filesystem;
 

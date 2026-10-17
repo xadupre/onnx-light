@@ -1011,6 +1011,22 @@ class TestOnnxLightHelper(ExtTestCase):
         reload = onnxl.load(name)
         self.assertEqual(len(reload.graph.initializer), len(model.graph.initializer))
 
+    def test_save_external_data_default_location_nested_relative_model(self):
+        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+        with tempfile.TemporaryDirectory(dir=".") as directory:
+            model_dir = os.path.join(directory, "exports", "run")
+            os.makedirs(model_dir)
+            name = os.path.relpath(os.path.join(model_dir, "model.onnx"))
+            onnxl.save(model, name, save_as_external_data=True, size_threshold=0)
+            self.assertTrue(os.path.isfile(name + ".data"))
+            metadata = onnxl.load(name, load_external_data=False)
+            for tensor in metadata.graph.initializer:
+                entries = {entry.key: entry.value for entry in tensor.external_data}
+                self.assertEqual(entries["location"], "model.onnx.data")
+            loaded = onnxl.load(name, load_external_data=True)
+            for expected, got in zip(model.graph.initializer, loaded.graph.initializer):
+                self.assertEqualArray(onh.to_array(expected), onh.to_array(got))
+
     def test_external_data_subdirectory_roundtrip(self):
         model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
         with tempfile.TemporaryDirectory() as directory:

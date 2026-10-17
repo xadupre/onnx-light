@@ -12,6 +12,7 @@ Next Steps
 
     2026/2026-08_kernel_parallelization
     2026/2026-10_kernel_parallelization_completion
+    2026/2026-10_guarded_kernel_replay
     2026/2026-08_onnxruntime_fast_model_loading
     2026/2026-08_proto_inheritance
     2026/2026-08_quantization
@@ -64,6 +65,9 @@ Discussion
 
     * - Plan
       - Contribution
+    * - :ref:`l-next-steps-guarded-kernel-replay`
+      - Lowers ExecutionPlan into a CapturedExecutionPlan of functions,
+        with kernel capture APIs, dynamic dimensions and onnx-light-cpu.
     * - :ref:`l-next-steps-proto-inheritance`
       - Reuses common schema fields without changing the flat wire format;
         independent of the prepared-value and persistent-state plan.

@@ -1766,8 +1766,22 @@ int64_t open_external_data(const std::string &base_dir, const std::string &locat
   int fd = try_kernel_contained_open(base_dir, location, tensor_name, read_only);
   bool kernel_verified = (fd >= 0);
 
-  // Fallback: open() + O_NOFOLLOW + post-open inode verification.
+  // Locations have at most one child directory; pin it before creating the file.
   if (fd < 0) {
+    const auto relative = std::filesystem::path(location).lexically_normal();
+    const auto parent = relative.parent_path();
+    ScopedFd base(
+        open((base_dir.empty() ? "." : base_dir.c_str()), O_RDONLY | O_DIRECTORY | O_CLOEXEC));
+    if (base.get() < 0) {
+      fail_check("Cannot open model directory for tensor ", tensor_name);
+    }
+    const bool has_parent = !parent.empty() && parent != std::filesystem::path(".");
+    ScopedFd directory(has_parent ? openat(base.get(), parent.c_str(),
+                                           O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+                                  : -1);
+    if (has_parent && directory.get() < 0) {
+      fail_check("Cannot securely open external data directory for tensor ", tensor_name);
+    }
     int flags = read_only ? O_RDONLY : (O_CREAT | O_RDWR);
 #ifdef O_CLOEXEC
     flags |= O_CLOEXEC;
@@ -1775,7 +1789,8 @@ int64_t open_external_data(const std::string &base_dir, const std::string &locat
 #ifdef O_NOFOLLOW
     flags |= O_NOFOLLOW;
 #endif
-    fd = read_only ? open(data_path.c_str(), flags) : open(data_path.c_str(), flags, 0600);
+    fd =
+        openat(has_parent ? directory.get() : base.get(), relative.filename().c_str(), flags, 0600);
     if (fd == -1) {
       fail_check("Cannot open external data for tensor ", tensor_name);
     }

@@ -4,10 +4,23 @@
 
 // Translated from https://github.com/onnx/onnx/tree/main/onnx/test/cpp/checker_test.cc
 
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <limits>
 #include <string>
+
+#if defined(__linux__) && defined(__x86_64__)
+#include <cerrno>
+#include <csignal>
+#include <cstddef>
+#include <linux/filter.h>
+#include <linux/seccomp.h>
+#include <sys/prctl.h>
+#include <sys/syscall.h>
+#include <thread>
+#include <ucontext.h>
+#endif
 
 #ifdef _WIN32
 #include <io.h>
@@ -321,6 +334,86 @@ TEST(CHECKER, OpenExternalDataTest) {
   fs::remove_all(dir);
 #endif
 }
+
+#if defined(__linux__) && defined(__x86_64__) && defined(SYS_openat2)
+namespace {
+const char *swap_directory = nullptr;
+const char *saved_directory = nullptr;
+const char *outside_directory = nullptr;
+volatile sig_atomic_t swap_count = 0;
+
+void SwapDirectoryBeforeFallback(int, siginfo_t *info, void *context) {
+  if (info->si_syscall != SYS_openat2 || swap_count != 0)
+    ::_exit(90);
+  if (::rename(swap_directory, saved_directory) != 0 ||
+      ::symlink(outside_directory, swap_directory) != 0)
+    ::_exit(91);
+  swap_count = 1;
+  static_cast<ucontext_t *>(context)->uc_mcontext.gregs[REG_RAX] = -ENOSYS;
+}
+} // namespace
+
+TEST(CHECKER, ExternalWriteFallbackRejectsSwappedDirectoryBeforeCreation) {
+#ifndef ONNX_NO_EXCEPTIONS
+  const fs::path root = fs::temp_directory_path() / "onnx_light_checker_fallback_swap";
+  const fs::path outside = fs::temp_directory_path() / "onnx_light_checker_fallback_outside";
+  fs::remove_all(root);
+  fs::remove_all(outside);
+  fs::create_directories(root / ".weights");
+  fs::create_directories(outside);
+  const std::string base = root.string();
+  const std::string original = (root / ".weights").string();
+  const std::string saved = (root / "saved").string();
+  const std::string escaped = outside.string();
+  EXPECT_EXIT(([&]() {
+                // A fresh thread resets the production thread-local openat2 availability cache.
+                std::thread worker([&]() {
+                  swap_directory = original.c_str();
+                  saved_directory = saved.c_str();
+                  outside_directory = escaped.c_str();
+                  struct sigaction action{};
+                  action.sa_sigaction = SwapDirectoryBeforeFallback;
+                  action.sa_flags = SA_SIGINFO;
+                  ::sigemptyset(&action.sa_mask);
+                  ASSERT_EQ(::sigaction(SIGSYS, &action, nullptr), 0);
+                  struct sock_filter filter[] = {
+                      BPF_STMT(BPF_LD | BPF_W | BPF_ABS, offsetof(struct seccomp_data, nr)),
+                      BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_openat2, 0, 1),
+                      BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_TRAP),
+                      BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ALLOW)};
+                  struct sock_fprog program{};
+                  program.len = static_cast<unsigned short>(sizeof(filter) / sizeof(filter[0]));
+                  program.filter = filter;
+                  ASSERT_EQ(::prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0), 0);
+                  ASSERT_EQ(::prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, &program), 0);
+                  EXPECT_THROW(
+                      checker::open_external_data(base, ".weights/escaped.bin", "t", false),
+                      checker::ValidationError);
+                  EXPECT_EQ(swap_count, 1);
+                  EXPECT_FALSE(fs::exists(outside / "escaped.bin"));
+                  fs::remove(root / ".weights");
+                  fs::rename(root / "saved", root / ".weights");
+                  for (const char *location : {"flat.bin", ".weights/safe.bin"}) {
+                    ScopedFd output(
+                        static_cast<int>(checker::open_external_data(base, location, "t", false)));
+                    ASSERT_EQ(::write(output.get(), "safe", 4), 4);
+                    ScopedFd input(
+                        static_cast<int>(checker::open_external_data(base, location, "t", true)));
+                    char bytes[4]{};
+                    ASSERT_EQ(::read(input.get(), bytes, 4), 4);
+                    EXPECT_EQ(std::string(bytes, 4), "safe");
+                  }
+                });
+                worker.join();
+                std::exit(::testing::Test::HasFailure() ? 1 : 0);
+              }()),
+              ::testing::ExitedWithCode(0), "");
+  EXPECT_FALSE(fs::exists(outside / "escaped.bin"));
+  fs::remove_all(root);
+  fs::remove_all(outside);
+#endif
+}
+#endif
 
 TEST(CHECKER, OpenExternalDataEmptyBaseDirTest) {
 #ifndef ONNX_NO_EXCEPTIONS

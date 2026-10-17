@@ -79,7 +79,10 @@ On POSIX, external-data streams open each child path component relative to
 the retained model-directory descriptor without following symbolic links.
 Sequential reads, parallel reads, and no-copy mappings reuse the verified
 file descriptor, so swapping a directory after opening cannot redirect a
-later read or mapping. External writers reject trailing dots and spaces in
+later read or mapping. The checker also pins the child directory before
+creating files in its POSIX fallback when kernel-level containment is
+unavailable; a directory swap cannot create a file outside the model tree.
+External writers reject trailing dots and spaces in
 every path component and open their targets nonblocking before checking that
 they are regular files, preventing a named pipe from hanging serialization.
 ``FileWriteStream`` retains the verified external-data file for sequential

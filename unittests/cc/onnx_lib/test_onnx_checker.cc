@@ -263,7 +263,7 @@ TEST(CHECKER, HashPrefixedRelativeModelDirTest) {
   fs::create_directory_symlink(outsideDir, modelDir / "link");
   EXPECT_THROW(checker::resolve_external_data_location(base_dir, "link/secret.data", "t"),
                checker::ValidationError);
-  fs::create_hard_link(outsideDir / "secret.data", modelDir / "sub" / "hardlink.data");
+  fs::create_hard_link(modelDir / "sub" / "weights.bin", modelDir / "sub" / "hardlink.data");
   EXPECT_THROW(checker::resolve_external_data_location(base_dir, "sub/hardlink.data", "t"),
                checker::ValidationError);
   fs::remove_all(outsideDir);

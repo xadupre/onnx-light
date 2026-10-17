@@ -1132,6 +1132,8 @@ bool SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &st
     utils::TwoFilesWriteStream &two_stream = dynamic_cast<utils::TwoFilesWriteStream &>(stream);
     std::filesystem::path parent_path = two_stream.file_path();
     parent_path = parent_path.parent_path();
+    if (parent_path.empty())
+      parent_path = ".";
     std::filesystem::path weight_path = two_stream.weights_file_path();
     weight_path = std::filesystem::relative(weight_path, parent_path);
     if (weight_path.empty()) {

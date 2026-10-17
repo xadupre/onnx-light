@@ -271,13 +271,65 @@ preparations. Preserve tuning, ISA policy, NAIVE/OPTIMIZED selection and factory
 precedence. Do not route specialized calls through the legacy
 ``detail::AsSessionKernel`` signature-key/cache adapter.
 
-1. Add the named-call plan, frame and negotiated capture descriptor, disabled
-   by default, preserving ordinary execution.
-2. Migrate portable ``Add``, ``Mul`` and ``MatMul``, then CPU binary kernels,
-   ``Gemm`` and ``MatMul`` using existing numerical bodies.
-3. Extend remaining families with explicit named ordinary calls where needed.
-   Compare results with changing buffers, signatures, controls and invalid
-   inputs; measure preparation, binding, replay and end-to-end execution.
+Pull request breakdown
++++++++++++++++++++++
+
+Each PR preserves ordinary execution and keeps captured replay opt-in. The
+numbers below identify proposed increments, not existing GitHub PRs. Merge the
+onnx-light API before its onnx-light-cpu consumers; no PR requires simultaneous
+unreleased changes in both repositories.
+
+1. **onnx-light: plan infrastructure and ordinary calls.** Add the named-call
+   list, frame, versioned capture descriptor and boundary binding. Initially
+   wrap every kernel's ordinary ``Run``; reuse existing scheduling, allocations
+   and lifetimes. Test execution parity, inspection without execution, changed
+   feed addresses and retained outputs. Incompatible signatures use ordinary
+   execution before any replay effects, not a partial replay retry.
+2. **onnx-light: portable Add and Mul.** Depends on PR 1. Introduce the first
+   specialized calls and capture-time output/broadcast descriptors, with named
+   allocation, publication and release calls. Test scalar and broadcast inputs,
+   empty tensors, changing buffers, intermediate reuse and invalid inputs.
+   Keep graph inputs immutable and reject invalid sizes before memory access.
+3. **onnx-light: portable MatMul.** Depends on PR 2's allocation/frame path.
+   Capture rank/batch handling, numerical dispatch and workspace requirements
+   using existing numerical bodies. Test supported rank combinations, zero
+   extents, workspace reuse and cleanup on failure, including worker completion.
+   Compare a mixed Add/MatMul graph with ordinary execution.
+4. **onnx-light-cpu: capture integration and binary kernels.** Depends on the
+   released API from PR 2. Negotiate the descriptor at the resolved factory and
+   capture existing binary broadcast/SIMD plans without the legacy adapter.
+   Test unsupported descriptor versions, ordinary wrappers, factory precedence,
+   tuning and ISA selection with both NAIVE and OPTIMIZED policies.
+5. **onnx-light-cpu: Gemm and MatMul.** Depends on PR 4 and the released
+   workspace contract from PR 3. Reuse ``GemmPlan``, ``GemmHalfPlan`` and
+   ``MatMulPlan``. Test transpose/batch variants, supported dtypes, immutable
+   prepared weights, changing input buffers and scratch lifetimes.
+6. **onnx-light: normalization and Attention.** Depends on PR 3. Capture axes,
+   extents and the selected scratch-lane policy. Exercise the complete
+   normalization/Attention/Add/normalization example above, including numerical
+   parity, workspace reuse and input/output ownership. Keep unsupported masks,
+   caches and data-dependent cases on explicit ordinary calls.
+7. **onnx-light: signature changes and targeted repreparation.** Depends on
+   PRs 2 and 3; PR 6 supplies an additional integration case when available.
+   Replace the initial signature-mismatch path with preparation of affected
+   descriptors and consumers before replay. Test alternating dimensions,
+   unchanged shapes with changing control-tensor contents, and mixed regions
+   after data-dependent outputs. Never retry partially executed stateful calls
+   or rebuild the whole graph/``ShapesContext``.
+8. **Both repositories: measurement and rollout decision.** Depends on PRs
+   3--7. Add reproducible comparisons for preparation, binding, replay and
+   end-to-end latency, using identical numerical bodies and representative
+   small/large kernels. Measure split versus grouped allocation/publication
+   calls. Any default-enablement change is a separate, evidence-backed PR in
+   each repository, not an automatic consequence of completing this list.
+
+After the first kernels, migrate remaining families in separate bounded PRs:
+unary/reduction, convolution/pooling, indexing, and CPU quantized kernels such
+as ``MatMulNBits``. Each depends only on the merged infrastructure it uses and
+includes parity, invalid-input and lifetime cases for that family. Stateful,
+control-flow, structured and training kernels retain named ordinary calls
+until a dedicated PR establishes their capture contract; completing all
+families is not a prerequisite for measuring the initial implementation.
 
 No latency gain or validation-overhead percentage has been measured for this
 proposal. Separate simple checks from repeated planning and metadata allocation

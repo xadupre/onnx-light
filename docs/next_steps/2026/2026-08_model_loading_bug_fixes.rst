@@ -74,6 +74,11 @@ file descriptor, so swapping a directory after opening cannot redirect a
 later read or mapping. External writers reject trailing dots and spaces in
 every path component and open their targets nonblocking before checking that
 they are regular files, preventing a named pipe from hanging serialization.
+Windows nested external-data writers likewise retain a verified native file
+handle and issue offset writes through that handle, including queued writes.
+Automatic discovery treats the model path only as a parser placeholder:
+symlinked or hardlinked models remain loadable, while actual external-data
+sources retain their independent link and containment checks.
 
 Acceptance:
 

@@ -1,6 +1,7 @@
 import os
 import gc
 import unittest
+import tempfile
 from unittest.mock import patch
 import numpy as np
 import onnx_light.onnx.helper as oh
@@ -1419,6 +1420,37 @@ class TestOnnxLightHelper(ExtTestCase):
             attr = if_node.attribute[j]
             init = attr.g.initializer[0]
             self.assertEqual(len(init.raw_data), 3 * 5 * 128 * 64 * 4)
+
+    def _check_auto_discovery_linked_model(self, make_link):
+        with tempfile.TemporaryDirectory() as directory:
+            source = os.path.join(directory, "model.onnx")
+            linked = os.path.join(directory, "linked.onnx")
+            model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+            onnxl.save(model, source, location="weights.data", save_as_external_data=True)
+            make_link(source, linked)
+            for no_copy in (False, True):
+                for mode in ("AUTO", "MMAP"):
+                    with self.subTest(no_copy=no_copy, mode=mode):
+                        loaded = onnxl.load(
+                            linked, load_external_data=True, no_copy=no_copy, file_load_mode=mode
+                        )
+                        self.assertEqual(
+                            len(loaded.graph.initializer), len(model.graph.initializer)
+                        )
+                        for expected, actual in zip(
+                            model.graph.initializer, loaded.graph.initializer
+                        ):
+                            self.assertEqualArray(
+                                onnxl.numpy_helper.to_array(expected),
+                                onnxl.numpy_helper.to_array(actual),
+                            )
+
+    @unittest.skipIf(os.name == "nt", "Symbolic links require Windows privileges.")
+    def test_loading_external_weights_auto_symlinked_model(self):
+        self._check_auto_discovery_linked_model(os.symlink)
+
+    def test_loading_external_weights_auto_hardlinked_model(self):
+        self._check_auto_discovery_linked_model(os.link)
 
     def test_loading_external_weights_auto_rejects_malformed_range_with_diagnostics(self):
         src = self.get_dump_file("test_loading_auto_malformed_range_src.onnx")

@@ -14,7 +14,13 @@
 #include <thread>
 #include <unordered_map>
 #include <vector>
-#ifndef _WIN32
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <winioctl.h>
+#else
 #include <sys/stat.h>
 #include <unistd.h>
 #endif
@@ -1058,7 +1064,79 @@ TEST(onnx_external_ressource, NestedWritesRejectWindowsDirectoryAliases) {
   fs::remove_all(root);
 }
 
-#ifndef _WIN32
+#ifdef _WIN32
+namespace {
+bool CreateTestJunction(const std::filesystem::path &link, const std::filesystem::path &target) {
+  const std::wstring print = std::filesystem::absolute(target).native();
+  const std::wstring substitute = L"\\??\\" + print;
+  struct JunctionData {
+    DWORD tag;
+    WORD data_length;
+    WORD reserved;
+    WORD substitute_offset;
+    WORD substitute_length;
+    WORD print_offset;
+    WORD print_length;
+    WCHAR paths[2 * MAX_PATH + 16];
+  } data{};
+  if (substitute.size() + print.size() + 2 > std::size(data.paths)) {
+    ::SetLastError(ERROR_BUFFER_OVERFLOW);
+    return false;
+  }
+  data.tag = IO_REPARSE_TAG_MOUNT_POINT;
+  data.substitute_length = static_cast<WORD>(substitute.size() * sizeof(WCHAR));
+  data.print_offset = static_cast<WORD>(data.substitute_length + sizeof(WCHAR));
+  data.print_length = static_cast<WORD>(print.size() * sizeof(WCHAR));
+  data.data_length = static_cast<WORD>(8 + data.print_offset + data.print_length + sizeof(WCHAR));
+  std::copy(substitute.begin(), substitute.end(), data.paths);
+  std::copy(print.begin(), print.end(), data.paths + substitute.size() + 1);
+  std::filesystem::create_directory(link);
+  HANDLE handle = ::CreateFileW(link.c_str(), GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
+                                FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+  if (handle == INVALID_HANDLE_VALUE)
+    return false;
+  DWORD returned = 0;
+  const BOOL result = ::DeviceIoControl(handle, FSCTL_SET_REPARSE_POINT, &data,
+                                        data.data_length + 8, nullptr, 0, &returned, nullptr);
+  ::CloseHandle(handle);
+  return result != FALSE;
+}
+} // namespace
+
+TEST(onnx_external_ressource, NestedParallelWritesStayOnOpenedHandleAfterJunctionSwap) {
+  namespace fs = std::filesystem;
+  const fs::path root = fs::temp_directory_path() / "onnx_light_junction_writes";
+  const fs::path outside = fs::temp_directory_path() / "onnx_light_junction_outside";
+  fs::remove_all(root);
+  fs::remove_all(outside);
+  fs::create_directories(root / "real");
+  fs::create_directories(outside);
+  std::ofstream(outside / "data.bin", std::ios::binary) << "outside";
+  ASSERT_TRUE(CreateTestJunction(root / ".weights", root / "real")) << ::GetLastError();
+  {
+    utils::TwoFilesWriteStream stream((root / "model.onnx").string(),
+                                      (root / "default.data").string());
+    stream.pre_allocate_weights(".weights/data.bin", 8);
+    stream.StartWriteThreadPool(2);
+    stream.SetMinParallelBlockSize(0);
+    ASSERT_TRUE(fs::remove(root / ".weights"));
+    ASSERT_TRUE(CreateTestJunction(root / ".weights", outside)) << ::GetLastError();
+    const uint8_t data[] = {1, 2, 3, 4};
+    stream.write_raw_bytes_in_second_stream(data, 4, ".weights/data.bin");
+    stream.write_raw_bytes_in_second_stream(data, 4, ".weights/data.bin");
+    stream.WaitForWriteCompletion();
+  }
+  std::ifstream original(root / "real/data.bin", std::ios::binary);
+  const std::string bytes{std::istreambuf_iterator<char>(original), {}};
+  EXPECT_EQ(bytes, std::string("\1\2\3\4\1\2\3\4", 8));
+  std::ifstream untouched(outside / "data.bin", std::ios::binary);
+  EXPECT_EQ(std::string(std::istreambuf_iterator<char>(untouched), {}), "outside");
+  original.close();
+  untouched.close();
+  fs::remove_all(root);
+  fs::remove_all(outside);
+}
+#else
 TEST(onnx_external_ressource, NestedWritesRejectFifoWithoutBlocking) {
   namespace fs = std::filesystem;
   const fs::path root = fs::temp_directory_path() / "onnx_light_external_fifo";

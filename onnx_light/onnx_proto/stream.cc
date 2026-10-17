@@ -26,6 +26,29 @@
 
 namespace ONNX_LIGHT_NAMESPACE::utils {
 
+class SecureExternalWriteStream {
+public:
+  SecureExternalWriteStream(const std::string &model_path, const std::string &location,
+                            int model_directory_fd = -1);
+  ~SecureExternalWriteStream();
+  SecureExternalWriteStream(const SecureExternalWriteStream &) = delete;
+  SecureExternalWriteStream &operator=(const SecureExternalWriteStream &) = delete;
+  void write_raw_bytes(const uint8_t *data, offset_t n_bytes);
+  void write_raw_bytes_at_offset(const uint8_t *data, offset_t n_bytes, int64_t offset);
+  void pre_allocate(int64_t total_bytes);
+  int64_t size() const { return size_.load(); }
+  const std::string &file_path() const { return file_path_; }
+
+private:
+  std::string file_path_;
+#if defined(_WIN32)
+  HANDLE handle_ = INVALID_HANDLE_VALUE;
+#else
+  int fd_ = -1;
+#endif
+  std::atomic<int64_t> size_{0};
+};
+
 namespace {
 
 #if !defined(_WIN32)
@@ -36,6 +59,27 @@ struct ScopedExternalFd {
       ::close(fd);
   }
 };
+#endif
+
+#if defined(_WIN32)
+struct ScopedExternalHandle {
+  HANDLE handle;
+  ~ScopedExternalHandle() {
+    if (handle != INVALID_HANDLE_VALUE && handle != nullptr)
+      ::CloseHandle(handle);
+  }
+};
+
+std::wstring final_handle_path(HANDLE handle) {
+  const DWORD size = ::GetFinalPathNameByHandleW(handle, nullptr, 0, FILE_NAME_NORMALIZED);
+  EXT_ENFORCE(size > 0, "Cannot resolve external data handle.");
+  std::wstring path(size, L'\0');
+  const DWORD written =
+      ::GetFinalPathNameByHandleW(handle, path.data(), size, FILE_NAME_NORMALIZED);
+  EXT_ENFORCE(written > 0 && written < size, "Cannot resolve external data handle.");
+  path.resize(written);
+  return path;
+}
 #endif
 
 #if defined(_WIN32) && defined(_MSC_VER)
@@ -1069,11 +1113,62 @@ void FileWriteStream::write_raw_bytes_at_offset(const uint8_t *data, offset_t n_
               " n_bytes=", n_bytes);
 }
 
-#if !defined(_WIN32)
 SecureExternalWriteStream::SecureExternalWriteStream(const std::string &model_path,
                                                      const std::string &location,
                                                      int model_directory_fd)
     : file_path_(validate_external_location_within_model(model_path, location).string()) {
+#if defined(_WIN32)
+  (void)model_directory_fd;
+  ScopedExternalHandle directory{
+      ::CreateFileW(normalized_model_parent(model_path).c_str(), 0,
+                    FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+                    FILE_FLAG_BACKUP_SEMANTICS, nullptr)};
+  EXT_ENFORCE(directory.handle != INVALID_HANDLE_VALUE,
+              "Cannot open model directory: ", model_path);
+  const std::wstring root = final_handle_path(directory.handle);
+  const std::wstring base = root.back() == L'\\' ? root : root + L"\\";
+  ScopedExternalHandle parent{::CreateFileW(std::filesystem::path(file_path_).parent_path().c_str(),
+                                            0, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                                            FILE_FLAG_BACKUP_SEMANTICS, nullptr)};
+  EXT_ENFORCE(parent.handle != INVALID_HANDLE_VALUE,
+              "Cannot pin external data directory: ", file_path_);
+  const std::wstring resolved_parent = final_handle_path(parent.handle);
+  EXT_ENFORCE(
+      ::CompareStringOrdinal(root.data(), static_cast<int>(root.size()), resolved_parent.data(),
+                             static_cast<int>(resolved_parent.size()), TRUE) == CSTR_EQUAL ||
+          (resolved_parent.size() >= base.size() &&
+           ::CompareStringOrdinal(base.data(), static_cast<int>(base.size()),
+                                  resolved_parent.data(), static_cast<int>(base.size()),
+                                  TRUE) == CSTR_EQUAL),
+      "External data directory resolves outside model directory: ", file_path_);
+  // Resolve a junction once, pin its target against rename, and never reopen the alias.
+  const auto target_path =
+      std::filesystem::path(resolved_parent) / std::filesystem::path(file_path_).filename();
+  ScopedExternalHandle file{::CreateFileW(
+      target_path.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+      nullptr, OPEN_ALWAYS, FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_OVERLAPPED, nullptr)};
+  EXT_ENFORCE(file.handle != INVALID_HANDLE_VALUE, "Cannot open external data file: ", file_path_);
+  BY_HANDLE_FILE_INFORMATION info{};
+  EXT_ENFORCE(
+      ::GetFileType(file.handle) == FILE_TYPE_DISK &&
+          ::GetFileInformationByHandle(file.handle, &info) &&
+          !(info.dwFileAttributes & (FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DIRECTORY)) &&
+          info.nNumberOfLinks <= 1,
+      "Unsafe external data file: ", file_path_);
+  const std::wstring target = final_handle_path(file.handle);
+  EXT_ENFORCE(target.size() > base.size() &&
+                  ::CompareStringOrdinal(base.data(), static_cast<int>(base.size()), target.data(),
+                                         static_cast<int>(base.size()), TRUE) == CSTR_EQUAL,
+              "External data handle resolves outside model directory: ", file_path_);
+  LARGE_INTEGER zero{};
+  EXT_ENFORCE(::SetFilePointerEx(file.handle, zero, nullptr, FILE_BEGIN),
+              "Cannot seek external data file: ", file_path_);
+  // Like FileWriteStream, permit re-saving data still held by a no-copy mapping.
+  EXT_ENFORCE(::SetEndOfFile(file.handle) || ::GetLastError() == ERROR_USER_MAPPED_FILE,
+              "Cannot truncate external data file: ", file_path_);
+  handle_ = file.handle;
+  file.handle = INVALID_HANDLE_VALUE;
+#else
   ScopedExternalFd dir{::openat(model_directory_fd, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
   EXT_ENFORCE(dir.fd >= 0, "Cannot open model directory for external data: ", model_path);
   const std::filesystem::path relative = std::filesystem::path(location).lexically_normal();
@@ -1101,9 +1196,16 @@ SecureExternalWriteStream::SecureExternalWriteStream(const std::string &model_pa
   EXT_ENFORCE(::ftruncate(file.fd, 0) == 0, "Cannot truncate external data file: ", file_path_);
   fd_ = file.fd;
   file.fd = -1;
+#endif
 }
 
-SecureExternalWriteStream::~SecureExternalWriteStream() { ::close(fd_); }
+SecureExternalWriteStream::~SecureExternalWriteStream() {
+#if defined(_WIN32)
+  ::CloseHandle(handle_);
+#else
+  ::close(fd_);
+#endif
+}
 
 void SecureExternalWriteStream::write_raw_bytes_at_offset(const uint8_t *data, offset_t n_bytes,
                                                           int64_t offset) {
@@ -1111,11 +1213,31 @@ void SecureExternalWriteStream::write_raw_bytes_at_offset(const uint8_t *data, o
               "Invalid external data write size or offset.");
   if (n_bytes == 0)
     return;
+#if defined(_WIN32)
+  ScopedExternalHandle event{::CreateEventW(nullptr, TRUE, FALSE, nullptr)};
+  EXT_ENFORCE(event.handle != nullptr, "Cannot create external data write event: ", file_path_);
+#endif
   for (offset_t written = 0; written < n_bytes;) {
+#if defined(_WIN32)
+    const uint64_t position = static_cast<uint64_t>(offset + written);
+    OVERLAPPED operation{};
+    operation.Offset = static_cast<DWORD>(position);
+    operation.OffsetHigh = static_cast<DWORD>(position >> 32);
+    operation.hEvent = event.handle;
+    DWORD count = 0;
+    const DWORD length = static_cast<DWORD>(std::min<int64_t>(n_bytes - written, MAXDWORD));
+    const BOOL complete = ::WriteFile(handle_, data + written, length, &count, &operation);
+    EXT_ENFORCE(complete || ::GetLastError() == ERROR_IO_PENDING,
+                "Failed to write external data file: ", file_path_);
+    if (!complete)
+      EXT_ENFORCE(::GetOverlappedResult(handle_, &operation, &count, TRUE),
+                  "Failed to complete external data write: ", file_path_);
+#else
     const ssize_t count = ::pwrite(fd_, data + written, static_cast<size_t>(n_bytes - written),
                                    static_cast<off_t>(offset + written));
     if (count < 0 && errno == EINTR)
       continue;
+#endif
     EXT_ENFORCE(count > 0, "Failed to write external data file: ", file_path_);
     written += count;
   }
@@ -1130,11 +1252,16 @@ void SecureExternalWriteStream::write_raw_bytes(const uint8_t *data, offset_t n_
 }
 
 void SecureExternalWriteStream::pre_allocate(int64_t total_bytes) {
-  EXT_ENFORCE(total_bytes > 0 && ::ftruncate(fd_, static_cast<off_t>(total_bytes)) == 0,
-              "Cannot pre-allocate external data file: ", file_path_);
+  EXT_ENFORCE(total_bytes > 0, "External data allocation size must be positive.");
+#if defined(_WIN32)
+  const uint8_t zero = 0;
+  write_raw_bytes_at_offset(&zero, 1, total_bytes - 1);
+#else
+  EXT_ENFORCE(::ftruncate(fd_, static_cast<off_t>(total_bytes)) == 0,
+              "Cannot resize external data file: ", file_path_);
+#endif
   size_ = total_bytes;
 }
-#endif
 
 /////////////
 // FileStream
@@ -1165,9 +1292,12 @@ FileStream::FileStream(const std::string &file_path, const std::string &model_pa
   const auto parent = normalized_model_parent(model_path);
   const auto relative = std::filesystem::absolute(file_path).lexically_normal().lexically_relative(
       std::filesystem::absolute(parent).lexically_normal());
+  const bool placeholder =
+      model_directory_fd < 0 && relative == std::filesystem::path(model_path).filename();
   EXT_ENFORCE(IsSafeExternalDataLocation(relative.string()),
               "Unsafe external data location: ", file_path);
-  validate_external_weights_read_path(file_path, parent);
+  if (!placeholder)
+    validate_external_weights_read_path(file_path, parent);
   ScopedExternalFd anchor{
       model_directory_fd >= 0
           ? ::openat(model_directory_fd, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC)
@@ -1184,12 +1314,12 @@ FileStream::FileStream(const std::string &file_path, const std::string &model_pa
     ::close(dir.fd);
     dir.fd = next;
   }
-  ScopedExternalFd file{::openat(dir.fd, relative.filename().c_str(),
-                                 O_RDONLY | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK)};
+  const int flags = O_RDONLY | O_CLOEXEC | O_NONBLOCK | (placeholder ? 0 : O_NOFOLLOW);
+  ScopedExternalFd file{::openat(dir.fd, relative.filename().c_str(), flags)};
   EXT_ENFORCE(file.fd >= 0, "Cannot securely open external data file: ", file_path);
   struct stat info{};
-  EXT_ENFORCE(::fstat(file.fd, &info) == 0 && S_ISREG(info.st_mode) && info.st_nlink <= 1 &&
-                  info.st_size >= 0,
+  EXT_ENFORCE(::fstat(file.fd, &info) == 0 && S_ISREG(info.st_mode) &&
+                  (placeholder || info.st_nlink <= 1) && info.st_size >= 0,
               "Unsafe external data file: ", file_path);
   size_ = static_cast<offset_t>(info.st_size);
   file_descriptor_ = file.fd;
@@ -1501,10 +1631,8 @@ void TwoFilesWriteStream::set_active_weights_location(const std::string &locatio
   }
   auto it = extra_weights_streams_.find(normalized_location);
   if (it == extra_weights_streams_.end()) {
-    std::filesystem::path path =
-        validate_external_location_within_model(file_path_, normalized_location);
 #if defined(_WIN32)
-    auto stream = std::make_unique<FileWriteStream>(path.string());
+    auto stream = std::make_unique<SecureExternalWriteStream>(file_path_, normalized_location);
 #else
     auto stream = std::make_unique<SecureExternalWriteStream>(file_path_, normalized_location,
                                                               model_directory_fd_);
@@ -1595,10 +1723,8 @@ void TwoFilesWriteStream::pre_allocate_weights(const std::string &location, int6
   }
   auto it = extra_weights_streams_.find(normalized_location);
   if (it == extra_weights_streams_.end()) {
-    std::filesystem::path path =
-        validate_external_location_within_model(file_path_, normalized_location);
 #if defined(_WIN32)
-    auto stream = std::make_unique<FileWriteStream>(path.string());
+    auto stream = std::make_unique<SecureExternalWriteStream>(file_path_, normalized_location);
 #else
     auto stream = std::make_unique<SecureExternalWriteStream>(file_path_, normalized_location,
                                                               model_directory_fd_);
@@ -1664,16 +1790,10 @@ void TwoFilesWriteStream::write_raw_bytes_in_second_stream(const uint8_t *ptr, o
     int64_t offset = pos;
     pos += n_bytes;
     if (n_bytes >= min_parallel_block_size_) {
-#if defined(_WIN32)
-      const std::string wpath = it->second->file_path();
-      write_thread_pool_.SubmitTask(
-          [wpath, ptr, n_bytes, offset]() { WriteBytesAtOffset(wpath, ptr, n_bytes, offset); });
-#else
       auto *stream = it->second.get();
       write_thread_pool_.SubmitTask([stream, ptr, n_bytes, offset]() {
         stream->write_raw_bytes_at_offset(ptr, n_bytes, offset);
       });
-#endif
     } else {
       // Same reasoning as above: below-threshold writes run synchronously on the calling
       // thread, so they can safely reuse the already-open per-location file handle.
@@ -1706,10 +1826,14 @@ TwoFilesStream::TwoFilesStream(const std::string &file_path, const std::string &
   if (!rel.empty() && rel.string() != ".") {
     default_weights_location_ = rel.string();
   }
+  if (std::filesystem::absolute(file_path).lexically_normal() ==
+      std::filesystem::absolute(weights_file).lexically_normal())
+    default_weights_location_.clear();
 }
 
 void TwoFilesStream::set_active_weights_location(const std::string &location) {
-  if (!location.empty() && location != weights_stream_.file_path()) {
+  const bool placeholder = default_weights_location_.empty();
+  if (!location.empty() && (placeholder || location != weights_stream_.file_path())) {
     EXT_ENFORCE(IsSafeExternalDataLocation(location), "Unsafe external data location: ", location);
   }
   const std::string normalized_location = normalize_external_location(location);
@@ -1721,11 +1845,12 @@ void TwoFilesStream::set_active_weights_location(const std::string &location) {
     active_weights_location_ = weights_stream_.file_path();
     return;
   }
-  if (normalized_location == active_weights_location_) {
+  if (!placeholder && normalized_location == active_weights_location_) {
     return;
   }
-  if (normalized_location == normalize_external_location(weights_stream_.file_path()) ||
-      normalized_location == normalize_external_location(default_weights_location_)) {
+  if (!placeholder &&
+      (normalized_location == normalize_external_location(weights_stream_.file_path()) ||
+       normalized_location == normalize_external_location(default_weights_location_))) {
     active_weights_location_ = normalized_location;
     return;
   }
@@ -1750,8 +1875,9 @@ void TwoFilesStream::set_active_weights_location(const std::string &location) {
 bool TwoFilesStream::using_default_weights_location() const {
   const std::string normalized_active_location =
       normalize_external_location(active_weights_location_);
-  return normalized_active_location == normalize_external_location(weights_stream_.file_path()) ||
-         normalized_active_location == normalize_external_location(default_weights_location_);
+  return !default_weights_location_.empty() &&
+         (normalized_active_location == normalize_external_location(weights_stream_.file_path()) ||
+          normalized_active_location == normalize_external_location(default_weights_location_));
 }
 
 FileStream &TwoFilesStream::active_weights_stream() {
@@ -1776,9 +1902,10 @@ const FileStream &TwoFilesStream::active_weights_stream() const {
 
 int64_t TwoFilesStream::weights_size(const std::string &location) const {
   const std::string normalized_location = normalize_external_location(location);
-  if (normalized_location.empty() ||
-      normalized_location == normalize_external_location(weights_stream_.file_path()) ||
-      normalized_location == normalize_external_location(default_weights_location_)) {
+  if (!default_weights_location_.empty() &&
+      (normalized_location.empty() ||
+       normalized_location == normalize_external_location(weights_stream_.file_path()) ||
+       normalized_location == normalize_external_location(default_weights_location_))) {
     return weights_stream_.size();
   }
   auto it = extra_weights_streams_.find(normalized_location);

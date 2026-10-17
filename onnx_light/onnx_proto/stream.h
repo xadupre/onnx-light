@@ -645,28 +645,7 @@ protected:
   ThreadPool thread_pool_;
 };
 
-#if !defined(_WIN32)
-/** Writes a model-relative external-data file through an anchored POSIX descriptor. */
-class ONNX_LIGHT_PROTO_API SecureExternalWriteStream {
-public:
-  SecureExternalWriteStream(const std::string &model_path, const std::string &location,
-                            int model_directory_fd);
-  ~SecureExternalWriteStream();
-  SecureExternalWriteStream(const SecureExternalWriteStream &) = delete;
-  SecureExternalWriteStream &operator=(const SecureExternalWriteStream &) = delete;
-
-  void write_raw_bytes(const uint8_t *data, offset_t n_bytes);
-  void write_raw_bytes_at_offset(const uint8_t *data, offset_t n_bytes, int64_t offset);
-  void pre_allocate(int64_t total_bytes);
-  int64_t size() const { return size_.load(); }
-  const std::string &file_path() const { return file_path_; }
-
-private:
-  std::string file_path_;
-  int fd_ = -1;
-  std::atomic<int64_t> size_{0};
-};
-#endif
+class SecureExternalWriteStream;
 
 class TwoFilesStream;
 
@@ -855,11 +834,9 @@ protected:
   /** Writer for the separate weights file. */
   FileWriteStream weights_stream_;
   /** Additional writers when external_data.location points to multiple files. */
-#if defined(_WIN32)
-  std::unordered_map<std::string, std::unique_ptr<FileWriteStream>> extra_weights_streams_;
-#else
   std::unordered_map<std::string, std::unique_ptr<SecureExternalWriteStream>>
       extra_weights_streams_;
+#if !defined(_WIN32)
   /** Retains the original model directory while opening child weights files. */
   int model_directory_fd_ = -1;
 #endif
@@ -944,7 +921,7 @@ protected:
   std::unordered_map<std::string, SharedWeightsBuffer> shared_weights_buffers_;
   /** Active external location used by the current tensor read. */
   std::string active_weights_location_;
-  /** Relative location key associated with the default weights stream. */
+  /** Relative default location; empty when the model is an auto-discovery placeholder. */
   std::string default_weights_location_;
   /** Maps object pointers to their byte offsets in the weights file. */
   std::unordered_map<const void *, uint64_t> position_cache_;

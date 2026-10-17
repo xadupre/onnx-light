@@ -229,7 +229,7 @@ TEST(CHECKER, HashPrefixedRelativeModelDirTest) {
   }
   EXPECT_EQ(checker::resolve_external_data_location(base_dir, "sub/weights.bin", "t"),
             modelDir / "sub" / "weights.bin");
-  EXPECT_NO_THROW({
+  {
     ScopedFd fd(
         static_cast<int>(checker::open_external_data(base_dir, "sub/weights.bin", "t", true)));
     ASSERT_GE(fd.get(), 0);
@@ -240,7 +240,7 @@ TEST(CHECKER, HashPrefixedRelativeModelDirTest) {
     EXPECT_EQ(read(fd.get(), buf, 4), 4);
 #endif
     EXPECT_EQ(std::string(buf, 4), "data");
-  });
+  }
   EXPECT_THROW(checker::resolve_external_data_location(base_dir, "sub/missing.bin", "t"),
                checker::ValidationError);
   EXPECT_THROW(checker::resolve_external_data_location(base_dir, "sub", "t"),

@@ -984,6 +984,31 @@ TEST(onnx_external_ressource, LocationsAllowAtMostOneSubdirectory) {
   }
 }
 
+TEST(onnx_external_ressource, ExternalPositionalWritesDoNotAdvanceLogicalSize) {
+  namespace fs = std::filesystem;
+  const fs::path root = fs::temp_directory_path() / "onnx_light_external_logical_size";
+  fs::remove_all(root);
+  fs::create_directories(root);
+  const uint8_t bytes[] = {1, 2, 3, 4};
+  {
+    utils::FileWriteStream stream((root / "model.onnx").string(), "data/weights.bin");
+    stream.write_raw_bytes(bytes, 4);
+    EXPECT_EQ(stream.size(), 4);
+    stream.write_raw_bytes_at_offset(bytes, 4, 4);
+    EXPECT_EQ(stream.size(), 4);
+    stream.StartThreadPool(2);
+    utils::DelayedWriteBlock block{4, bytes};
+    stream.WriteDelayedBlock(block);
+    EXPECT_EQ(stream.size(), 8);
+    stream.write_raw_bytes(bytes, 4);
+    EXPECT_EQ(stream.size(), 12);
+    stream.WaitForDelayedBlock();
+    EXPECT_EQ(stream.size(), 12);
+  }
+  EXPECT_EQ(fs::file_size(root / "data/weights.bin"), 12U);
+  fs::remove_all(root);
+}
+
 TEST(onnx_external_ressource, AbsoluteLocationsCannotSelectDefaultWeights) {
   namespace fs = std::filesystem;
   const fs::path root = fs::temp_directory_path() / "onnx_light_absolute_default_location";

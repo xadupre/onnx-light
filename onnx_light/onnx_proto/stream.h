@@ -3,7 +3,6 @@
 #include "onnx_light_helpers.h"
 #include "simple_string.h"
 #include "thread_pool.h"
-#include <atomic>
 #include <cstddef>
 #include <cstring>
 #include <filesystem>
@@ -636,7 +635,8 @@ public:
    *  from the single thread that owns this stream (no internal locking): used for below-threshold
    *  writes that skip the thread pool and therefore never run concurrently with another writer
    *  of this same stream. External-data streams instead use positional writes through their
-   *  retained native file and permit concurrent disjoint ranges. */
+   *  retained native file and permit concurrent disjoint ranges. This method does not update
+   *  the logical size; the calling thread reserves bytes or pre-allocates the file beforehand. */
   void write_raw_bytes_at_offset(const uint8_t *data, offset_t n_bytes, int64_t offset);
 
 protected:
@@ -650,8 +650,8 @@ protected:
 #else
   std::shared_ptr<int> external_file_;
 #endif
-  /** Running count of bytes written to the file. */
-  std::atomic<uint64_t> written_bytes_{0};
+  /** Logical size maintained by the calling thread, never by positional-write workers. */
+  uint64_t written_bytes_{0};
   /** Thread pool used for parallel block writes. */
   ThreadPool thread_pool_;
 };

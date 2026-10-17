@@ -1054,13 +1054,13 @@ FileWriteStream::FileWriteStream(const std::string &file_path)
 void FileWriteStream::write_raw_bytes(const uint8_t *data, offset_t n_bytes) {
   if (external_file_) {
     write_raw_bytes_at_offset(data, n_bytes, size());
-    return;
+  } else {
+    file_stream_.write(reinterpret_cast<const char *>(data), n_bytes);
   }
-  file_stream_.write(reinterpret_cast<const char *>(data), n_bytes);
   written_bytes_ += static_cast<uint64_t>(n_bytes);
 }
 
-int64_t FileWriteStream::size() const { return static_cast<int64_t>(written_bytes_.load()); }
+int64_t FileWriteStream::size() const { return static_cast<int64_t>(written_bytes_); }
 
 const uint8_t *FileWriteStream::data() const {
   EXT_THROW("This method cannot be called on this class (FileWriteStream).");
@@ -1235,10 +1235,6 @@ void FileWriteStream::write_raw_bytes_at_offset(const uint8_t *data, offset_t n_
 #endif
     EXT_ENFORCE(count > 0, "Failed to write external data file: ", file_path_);
     written += count;
-  }
-  const uint64_t end = static_cast<uint64_t>(offset + n_bytes);
-  uint64_t current = written_bytes_.load();
-  while (current < end && !written_bytes_.compare_exchange_weak(current, end)) {
   }
 }
 

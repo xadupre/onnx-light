@@ -1501,7 +1501,14 @@ TwoFilesStream::TwoFilesStream(const std::string &file_path, const std::string &
                                bool use_mmap_weights)
     : FileStream(file_path), weights_stream_(weights_file), active_weights_location_(weights_file),
       default_weights_location_(weights_file), use_mmap_weights_(use_mmap_weights) {
+  // Automatic discovery uses the model itself as a placeholder, not yet a weights source.
+  if (std::filesystem::absolute(file_path).lexically_normal() ==
+      std::filesystem::absolute(weights_file).lexically_normal()) {
+    default_weights_location_ = std::filesystem::path(weights_file).filename().string();
+    return;
+  }
   validate_external_weights_read_path(weights_file, normalized_model_parent(file_path));
+  default_weights_validated_ = true;
   std::filesystem::path parent = std::filesystem::path(file_path).parent_path();
   std::filesystem::path weights = std::filesystem::path(weights_file);
   std::filesystem::path rel = std::filesystem::relative(weights, parent);
@@ -1550,6 +1557,11 @@ bool TwoFilesStream::using_default_weights_location() const {
 
 FileStream &TwoFilesStream::active_weights_stream() {
   if (using_default_weights_location()) {
+    if (!default_weights_validated_) {
+      validate_external_weights_read_path(weights_stream_.file_path(),
+                                          normalized_model_parent(file_path_));
+      default_weights_validated_ = true;
+    }
     return weights_stream_;
   }
   auto it = extra_weights_streams_.find(active_weights_location_);

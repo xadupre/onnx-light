@@ -30,6 +30,136 @@ def _make_model(values: np.ndarray) -> onnxl.ModelProto:
 
 
 class TestExternalDataHelper(ExtTestCase):
+    @unittest.skipIf(os.name == "nt", "Symlinks require elevated privileges on Windows")
+    def test_auto_load_linked_models(self):
+        values = np.arange(64, dtype=np.float32)
+        for link_kind in ("symlink", "link"):
+            for external in (False, True):
+                with (
+                    self.subTest(link_kind=link_kind, external=external),
+                    tempfile.TemporaryDirectory() as tmp,
+                ):
+                    model_dir = os.path.join(tmp, "model")
+                    os.mkdir(model_dir)
+                    model_path = os.path.join(model_dir, "linked.onnx")
+                    onnxl.save_model(
+                        _make_model(values),
+                        model_path,
+                        save_as_external_data=external,
+                        location="weights.bin" if external else None,
+                        size_threshold=0,
+                    )
+                    original = os.path.join(tmp, "original.onnx")
+                    os.rename(model_path, original)
+                    getattr(os, link_kind)(original, model_path)
+                    for options in (
+                        {},
+                        {"num_threads": 1},
+                        {"no_copy": True},
+                        {"file_load_mode": "MMAP"},
+                        {"num_threads": 2, "min_block_size": 0},
+                    ):
+                        for path in (model_path, os.path.relpath(model_path)):
+                            with self.subTest(options=options, path=path):
+                                loaded = onnxl.load(path, load_external_data=True, **options)
+                                np.testing.assert_array_equal(
+                                    to_array(loaded.graph.initializer[0]), values
+                                )
+
+    @unittest.skipIf(os.name == "nt", "Symlinks require elevated privileges on Windows")
+    def test_auto_load_validates_model_selected_as_weights_source(self):
+        for link_kind, message in (
+            ("symlink", "symbolic link"),
+            ("link", "multiple hard links"),
+            ("rename", None),
+        ):
+            with self.subTest(link_kind=link_kind), tempfile.TemporaryDirectory() as tmp:
+                model = _make_model(np.arange(4, dtype=np.float32))
+                tensor = model.graph.initializer[0]
+                tensor.raw_data = b""
+                tensor.data_location = onnxl.TensorProto.EXTERNAL
+                for key, value in (
+                    ("location", "linked.onnx"),
+                    ("offset", "0"),
+                    ("length", "16"),
+                ):
+                    entry = tensor.external_data.add()
+                    entry.key = key
+                    entry.value = value
+                original = os.path.join(tmp, "original.onnx")
+                serialized = model.SerializeToString()
+                with open(original, "wb") as f:
+                    f.write(serialized)
+                model_path = os.path.join(tmp, "linked.onnx")
+                getattr(os, link_kind)(original, model_path)
+                for options in (
+                    {},
+                    {"num_threads": 1},
+                    {"no_copy": True},
+                    {"file_load_mode": "MMAP"},
+                    {"num_threads": 2, "min_block_size": 0},
+                ):
+                    with self.subTest(options=options):
+                        if message:
+                            with self.assertRaisesRegex(RuntimeError, message):
+                                onnxl.load(model_path, load_external_data=True, **options)
+                        else:
+                            loaded = onnxl.load(model_path, load_external_data=True, **options)
+                            self.assertEqual(
+                                bytes(loaded.graph.initializer[0].raw_data), serialized[:16]
+                            )
+
+    @unittest.skipIf(os.name == "nt", "Symlinks require elevated privileges on Windows")
+    def test_auto_load_rejects_unsafe_weights_sources(self):
+        values = np.arange(64, dtype=np.float32)
+        for source_kind, message in (
+            ("symlink", "symbolic link"),
+            ("link", "multiple hard links"),
+            ("parent_symlink", "outside the model directory"),
+        ):
+            with self.subTest(source_kind=source_kind), tempfile.TemporaryDirectory() as tmp:
+                model_dir = os.path.join(tmp, "model")
+                outside_dir = os.path.join(tmp, "outside")
+                os.mkdir(model_dir)
+                os.mkdir(outside_dir)
+                location = "sub/weights.bin" if source_kind == "parent_symlink" else "weights.bin"
+                if source_kind == "parent_symlink":
+                    os.mkdir(os.path.join(model_dir, "sub"))
+                model_path = os.path.join(model_dir, "model.onnx")
+                onnxl.save_model(
+                    _make_model(values),
+                    model_path,
+                    save_as_external_data=True,
+                    location=location,
+                    size_threshold=0,
+                )
+                source = os.path.join(model_dir, location)
+                outside = os.path.join(outside_dir, "weights.bin")
+                os.rename(source, outside)
+                if source_kind == "parent_symlink":
+                    os.rmdir(os.path.dirname(source))
+                    os.symlink(outside_dir, os.path.dirname(source))
+                else:
+                    getattr(os, source_kind)(outside, source)
+                for explicit in (False, True):
+                    for options in (
+                        {},
+                        {"num_threads": 1},
+                        {"no_copy": True},
+                        {"file_load_mode": "MMAP"},
+                        {"num_threads": 2, "min_block_size": 0},
+                    ):
+                        with (
+                            self.subTest(explicit=explicit, options=options),
+                            self.assertRaisesRegex(RuntimeError, message),
+                        ):
+                            onnxl.load(
+                                model_path,
+                                load_external_data=True,
+                                location=source if explicit else None,
+                                **options,
+                            )
+
     def test_to_array_does_not_mutate_external_tensor(self):
         values = np.arange(64, dtype=np.float32)
         with tempfile.TemporaryDirectory() as tmp:

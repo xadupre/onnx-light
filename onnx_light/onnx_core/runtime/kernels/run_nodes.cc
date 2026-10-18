@@ -398,7 +398,9 @@ Tensors SubgraphSession::Run(std::vector<std::pair<std::string, Tensor>> binding
             outputs.push_back(rt.Get(out_name).ToOwned());
           } else {
             Tensor output = TakeTensor(rt, out_name, "RunNode: subgraph output");
-            outputs.push_back(output.data_type == static_cast<int32_t>(DataType::STRING)
+            // Borrowed outputs may alias bindings that RunChild destroys before returning.
+            outputs.push_back(output.is_borrowed() ||
+                                      output.data_type == static_cast<int32_t>(DataType::STRING)
                                   ? output.ToOwned()
                                   : std::move(output));
           }

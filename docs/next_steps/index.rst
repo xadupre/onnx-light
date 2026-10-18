@@ -67,9 +67,8 @@ Discussion
     * - Plan
       - Contribution
     * - :ref:`l-next-steps-offline-semantic-documentation-search`
-      - Proposes an independent offline browser search engine with ONNX Runtime
-        Web, technical-documentation lexical/vector ranking and a four-PR
-        implementation sequence gated by model and tokenizer feasibility.
+      - Separates the reusable offline search engine and tools from onnx-light's
+        documentation integration, with a five-PR implementation sequence.
     * - :ref:`l-next-steps-guarded-kernel-replay`
       - Lowers ExecutionPlan into a CapturedExecutionPlan of functions,
         with kernel capture APIs, dynamic dimensions and onnx-light-cpu.

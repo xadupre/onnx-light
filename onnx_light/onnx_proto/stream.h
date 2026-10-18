@@ -661,7 +661,8 @@ class ONNX_LIGHT_PROTO_API FileStream : public BinaryStream {
 public:
   /** Opens the file at *file_path* for reading. */
   explicit FileStream(const std::string &file_path);
-  /** Reads through an already verified external-data file. */
+  /** Reads through an already verified external-data file.
+   *  Uses ordinary model-file I/O when *file* is empty. */
   FileStream(const std::string &file_path, std::shared_ptr<int> file);
   /** Returns the retained external-data file, or an empty pointer for normal model files. */
   const std::shared_ptr<int> &external_file() const { return external_file_; }

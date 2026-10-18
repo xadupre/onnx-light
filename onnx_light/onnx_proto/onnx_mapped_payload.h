@@ -96,9 +96,6 @@ public:
 
 private:
   friend class MappedPayloadSource;
-  FinalDestinationReadDescriptor(std::string source_path, int64_t offset, int64_t size,
-                                 PayloadIdentity identity, std::shared_ptr<int> file);
-
   std::string source_path_;
   int64_t offset_ = 0;
   int64_t size_ = 0;
@@ -159,7 +156,6 @@ private:
   };
 
   std::string ResolveAndValidate(const std::string &relative_or_absolute_path) const;
-  std::shared_ptr<int> OpenFile(const std::string &source_path) const;
   CachedMapping EnsureMapping(const std::string &canonical_path);
 
   std::string base_dir_;

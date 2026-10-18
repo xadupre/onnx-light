@@ -54,6 +54,13 @@ size_t AlignmentForOffset(size_t base_alignment, int64_t offset) {
   return static_cast<size_t>(std::min<uint64_t>(base_alignment, low_bit));
 }
 
+std::shared_ptr<int> OpenMappedPayloadFile(const std::string &base_dir,
+                                           const std::string &source_path) {
+  const auto base = std::filesystem::weakly_canonical(std::filesystem::absolute(base_dir));
+  return utils::detail::OpenExternalDataFile(
+      base.string(), std::filesystem::path(source_path).lexically_relative(base).string());
+}
+
 } // namespace
 
 std::string PayloadIdentity::string() const {
@@ -66,17 +73,11 @@ std::string PayloadIdentity::string() const {
 FinalDestinationReadDescriptor::FinalDestinationReadDescriptor(std::string source_path,
                                                                int64_t offset, int64_t size,
                                                                PayloadIdentity identity)
-    : FinalDestinationReadDescriptor(source_path, offset, size, std::move(identity),
-                                     utils::detail::OpenExternalDataFile(
-                                         std::filesystem::path(source_path).parent_path().string(),
-                                         std::filesystem::path(source_path).filename().string())) {}
-
-FinalDestinationReadDescriptor::FinalDestinationReadDescriptor(std::string source_path,
-                                                               int64_t offset, int64_t size,
-                                                               PayloadIdentity identity,
-                                                               std::shared_ptr<int> file)
     : source_path_(std::move(source_path)), offset_(offset), size_(size),
-      identity_(std::move(identity)), file_(std::move(file)) {
+      identity_(std::move(identity)),
+      file_(utils::detail::OpenExternalDataFile(
+          std::filesystem::path(source_path_).parent_path().string(),
+          std::filesystem::path(source_path_).filename().string())) {
   EXT_ENFORCE(offset_ >= 0 && size_ >= 0, "FinalDestinationReadDescriptor: invalid range.");
   EXT_ENFORCE(file_ != nullptr, "FinalDestinationReadDescriptor: source is not open.");
   const int64_t current_size = utils::detail::ExternalDataFileSize(*file_);
@@ -118,12 +119,6 @@ MappedPayloadSource::ResolveAndValidate(const std::string &relative_or_absolute_
   return (canonical_base / utils::detail::relative_external_data_path(candidate, base)).string();
 }
 
-std::shared_ptr<int> MappedPayloadSource::OpenFile(const std::string &source_path) const {
-  const auto base = std::filesystem::weakly_canonical(std::filesystem::absolute(base_dir_));
-  return utils::detail::OpenExternalDataFile(
-      base.string(), std::filesystem::path(source_path).lexically_relative(base).string());
-}
-
 MappedPayloadSource::CachedMapping
 MappedPayloadSource::EnsureMapping(const std::string &canonical_path) {
   // The stat + cache-lookup + mmap sequence runs entirely under the lock so two
@@ -131,7 +126,7 @@ MappedPayloadSource::EnsureMapping(const std::string &canonical_path) {
   // mapping (which would hand out two different owners/generations for the
   // same file content).
   std::lock_guard<std::mutex> lock(mutex_);
-  const auto file = OpenFile(canonical_path);
+  const auto file = OpenMappedPayloadFile(base_dir_, canonical_path);
   const int64_t current_size = utils::detail::ExternalDataFileSize(*file);
 
   auto it = mappings_.find(canonical_path);
@@ -187,7 +182,7 @@ MappedPayloadSource::DescribeFinalDestinationRead(const std::string &relative_or
   EXT_ENFORCE(size >= 0,
               "MappedPayloadSource::DescribeFinalDestinationRead: size must be >= 0, got ", size);
   const std::string canonical_path = ResolveAndValidate(relative_or_absolute_path);
-  const auto file = OpenFile(canonical_path);
+  const auto file = OpenMappedPayloadFile(base_dir_, canonical_path);
   const int64_t current_size = utils::detail::ExternalDataFileSize(*file);
   EXT_ENFORCE(
       offset <= current_size && size <= current_size - offset,
@@ -203,7 +198,13 @@ MappedPayloadSource::DescribeFinalDestinationRead(const std::string &relative_or
     auto it = mappings_.find(canonical_path);
     identity.generation = it != mappings_.end() ? it->second.generation : 0;
   }
-  return FinalDestinationReadDescriptor(canonical_path, offset, size, identity, file);
+  FinalDestinationReadDescriptor descriptor;
+  descriptor.source_path_ = canonical_path;
+  descriptor.offset_ = offset;
+  descriptor.size_ = size;
+  descriptor.identity_ = std::move(identity);
+  descriptor.file_ = file;
+  return descriptor;
 }
 
 void MappedPayloadSource::ReleaseCachedMappings() {

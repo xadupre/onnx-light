@@ -167,6 +167,23 @@ TEST_F(ExternalDataDescriptorTest, ReaderPreservesSupportForConfinedNestedPaths)
   EXPECT_EQ(std::string(reinterpret_cast<char *>(bytes), 6), "second");
 }
 
+TEST_F(ExternalDataDescriptorTest, DiscoveryPlaceholderValidatesBeforeReadingModelAsWeights) {
+  const auto base = root / "model";
+  std::filesystem::create_hard_link(base / "model.onnx", base / "model-link.onnx");
+  utils::TwoFilesStream stream((base / "model.onnx").string(),
+                               (base / "sub" / ".." / "model.onnx").string());
+  const auto *model_bytes = stream.read_bytes(5);
+  EXPECT_EQ(std::string(reinterpret_cast<const char *>(model_bytes), 5), "model");
+
+  stream.set_active_weights_location("sub/weights.bin");
+  uint8_t bytes[8]{};
+  stream.read_bytes_from_weights_stream(8, bytes, 0);
+  EXPECT_EQ(std::string(reinterpret_cast<char *>(bytes), 8), "original");
+
+  stream.set_active_weights_location("model.onnx");
+  EXPECT_ANY_THROW(stream.read_bytes_from_weights_stream(5, bytes, 0));
+}
+
 TEST_F(ExternalDataDescriptorTest, TrustedBaseAliasesPreservePrimaryAndAdditionalWeightsLocations) {
   const auto base = std::filesystem::absolute(root / "model");
   const auto alias = std::filesystem::absolute(root / "alias");

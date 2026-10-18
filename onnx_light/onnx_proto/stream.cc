@@ -1373,31 +1373,32 @@ void FileWriteStream::write_raw_bytes_at_offset(const uint8_t *data, offset_t n_
 // FileStream
 /////////////
 
-FileStream::FileStream(const std::string &file_path)
-    : lock_(false), file_path_(file_path), file_stream_(file_path, std::ios::binary) {
-  if (!file_stream_.is_open()) {
-    EXT_THROW("Unable to open file: ", file_path);
-  }
-#if !defined(_WIN32)
-  file_descriptor_ = open(file_path.c_str(), O_RDONLY);
-  if (file_descriptor_ < 0) {
-    const int err = errno;
-    EXT_THROW("Unable to open file descriptor for: ", file_path, ", errno=", err, " (",
-              strerror(err), ")");
-  }
-#endif
-  file_stream_.seekg(0, std::ios::end);
-  std::streampos end = file_stream_.tellg();
-  EXT_ENFORCE(end != std::streampos(-1) && static_cast<std::streamoff>(end) >= 0,
-              "Unable to determine size of file (tellg failed): ", file_path);
-  file_stream_.seekg(0);
-  size_ = static_cast<offset_t>(end);
-  read_buf_.resize(READ_BUF_SIZE);
-}
+FileStream::FileStream(const std::string &file_path) : FileStream(file_path, {}) {}
 
 FileStream::FileStream(const std::string &file_path, std::shared_ptr<int> file)
-    : lock_(false), file_path_(file_path), external_file_(std::move(file)),
-      size_(ExternalDataFileSize(*external_file_)) {
+    : lock_(false), file_path_(file_path), external_file_(std::move(file)) {
+  if (external_file_) {
+    size_ = ExternalDataFileSize(*external_file_);
+  } else {
+    file_stream_.open(file_path, std::ios::binary);
+    if (!file_stream_.is_open()) {
+      EXT_THROW("Unable to open file: ", file_path);
+    }
+#if !defined(_WIN32)
+    file_descriptor_ = open(file_path.c_str(), O_RDONLY);
+    if (file_descriptor_ < 0) {
+      const int err = errno;
+      EXT_THROW("Unable to open file descriptor for: ", file_path, ", errno=", err, " (",
+                strerror(err), ")");
+    }
+#endif
+    file_stream_.seekg(0, std::ios::end);
+    std::streampos end = file_stream_.tellg();
+    EXT_ENFORCE(end != std::streampos(-1) && static_cast<std::streamoff>(end) >= 0,
+                "Unable to determine size of file (tellg failed): ", file_path);
+    file_stream_.seekg(0);
+    size_ = static_cast<offset_t>(end);
+  }
   read_buf_.resize(READ_BUF_SIZE);
 }
 
@@ -1852,11 +1853,11 @@ void TwoFilesWriteStream::write_raw_bytes_in_second_stream(const uint8_t *ptr, o
 TwoFilesStream::TwoFilesStream(const std::string &file_path, const std::string &weights_file,
                                bool use_mmap_weights)
     : FileStream(file_path),
-      weights_stream_(
-          std::filesystem::absolute(file_path).lexically_normal() ==
-                  std::filesystem::absolute(weights_file).lexically_normal()
-              ? FileStream(weights_file)
-              : FileStream(weights_file, open_weights_file(file_path, weights_file, false))),
+      weights_stream_(weights_file,
+                      std::filesystem::absolute(file_path).lexically_normal() ==
+                              std::filesystem::absolute(weights_file).lexically_normal()
+                          ? std::shared_ptr<int>{}
+                          : open_weights_file(file_path, weights_file, false)),
       active_weights_location_(weights_file), default_weights_location_(weights_file),
       use_mmap_weights_(use_mmap_weights) {
   // Automatic discovery uses the model itself as a placeholder, not yet a weights source.

@@ -32,7 +32,7 @@ Build against an installed native onnx-light tree:
 Release each returned output before the next call to allow exclusive reuse.
 Holding an output or state view is supported, but forces a fresh allocation
 when that buffer would otherwise be reused. See
-:ref:`l-howto-persistent-feedback` for the ownership, valid-length and
+:ref:`l-howto-persistent-feedback-cpp` for the ownership, valid-length and
 cancellation contracts.
 
 .. literalinclude:: ../../examples/contiguous_kv_decode/main.cc

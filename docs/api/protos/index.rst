@@ -118,7 +118,7 @@ references are explicitly marked rather than expanded as nested messages.
 declared by a root-graph ``TensorAnnotation`` whose ``tensor_name`` is
 ``onnx_light.quantization.parameters:<name>``. Its tensor-name mappings point
 to graph initializers; those tensors are not embedded in the encoded value.
-See :doc:`../../howto/quantized_values` for this catalogue.
+See :doc:`../../howto/python/quantized_values` for this catalogue.
 
 The ``key``/``encoded_key`` and ``value``/``encoded_value`` edges are independent
 oneof alternatives, not four simultaneously required payloads. The cache

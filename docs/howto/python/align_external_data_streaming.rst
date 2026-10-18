@@ -1,3 +1,4 @@
+.. _l-howto-align-external-data-streaming:
 .. _l-howto-align-external-data-streaming-python:
 
 How to re-align external weights without loading them in memory

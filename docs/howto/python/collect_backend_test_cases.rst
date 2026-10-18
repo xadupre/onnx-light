@@ -1,3 +1,4 @@
+.. _l-howto-collect-backend-test-cases:
 .. _l-howto-collect-backend-test-cases-python:
 
 :html_theme.sidebar_secondary.remove:

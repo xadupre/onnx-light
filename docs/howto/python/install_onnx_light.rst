@@ -1,3 +1,4 @@
+.. _l-howto-install-onnx-light:
 .. _l-howto-install-onnx-light-python:
 
 How to install *onnx-light*

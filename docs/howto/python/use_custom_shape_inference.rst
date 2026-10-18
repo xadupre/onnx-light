@@ -1,3 +1,4 @@
+.. _l-howto-use-custom-shape-inference:
 .. _l-howto-use-custom-shape-inference-python:
 
 :html_theme.sidebar_secondary.remove:

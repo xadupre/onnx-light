@@ -1,3 +1,4 @@
+.. _l-howto-load-save-onnx-files:
 .. _l-howto-load-save-onnx-files-python:
 
 :html_theme.sidebar_secondary.remove:

@@ -1,3 +1,4 @@
+.. _l-howto-onnx-graph-manipulations:
 .. _l-howto-onnx-graph-manipulations-python:
 
 :html_theme.sidebar_secondary.remove:

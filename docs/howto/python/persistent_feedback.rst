@@ -1,3 +1,4 @@
+.. _l-howto-persistent-feedback:
 .. _l-howto-persistent-feedback-python:
 
 Persistent input/output feedback

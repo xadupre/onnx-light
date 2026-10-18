@@ -1,3 +1,4 @@
+.. _l-howto-save-model-with-shared-external-data:
 .. _l-howto-save-model-with-shared-external-data-python:
 
 How to save a model that shares weights with another on-disk model

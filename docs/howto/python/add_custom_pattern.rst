@@ -1,5 +1,6 @@
 :html_theme.sidebar_secondary.remove:
 
+.. _l-howto-add-custom-pattern:
 .. _l-howto-add-custom-pattern-python:
 
 How to add a custom graph-rewriting pattern and set its priority

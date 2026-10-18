@@ -1,3 +1,4 @@
+.. _l-howto-register-builtins:
 .. _l-howto-register-builtins-python:
 
 :html_theme.sidebar_secondary.remove:

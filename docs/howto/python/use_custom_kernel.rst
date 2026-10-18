@@ -1,3 +1,4 @@
+.. _l-howto-use-custom-kernel:
 .. _l-howto-use-custom-kernel-python:
 
 :html_theme.sidebar_secondary.remove:

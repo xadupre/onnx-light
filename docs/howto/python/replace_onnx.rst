@@ -1,3 +1,4 @@
+.. _l-howto-replace-onnx:
 .. _l-howto-replace-onnx-python:
 
 How to replace *onnx* by *onnx-light*

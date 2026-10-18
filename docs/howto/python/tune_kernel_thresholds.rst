@@ -1,3 +1,4 @@
+.. _l-how-to-tune-kernel-thresholds:
 .. _l-how-to-tune-kernel-thresholds-python:
 
 Tune kernel thresholds

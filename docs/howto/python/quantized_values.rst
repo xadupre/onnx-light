@@ -1,3 +1,4 @@
+.. _l-quantized-values:
 .. _l-quantized-values-python:
 
 Quantizes tensors into encoded values
@@ -117,6 +118,7 @@ the ONNX-compatible ``onnx.shape_inference.infer_shapes`` does not register thes
 The model checker validates encoded initializer names, layouts and model-scoped
 type references, including inside nested graphs.
 
+.. _l-shared-quantization-parameters:
 .. _l-shared-quantization-parameters-python:
 
 Model-level shared parameters
@@ -976,6 +978,7 @@ Only this native consumer is implemented: the descriptor is not an automatically
 executable ONNX ``FunctionProto`` decoder, and tensor-only operators cannot consume
 it without explicit dequantization or a matching custom kernel.
 
+.. _l-ort-matmulnbits-inputs:
 .. _l-ort-matmulnbits-inputs-python:
 
 ONNX Runtime MatMulNBits inputs

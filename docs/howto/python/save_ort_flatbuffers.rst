@@ -1,3 +1,4 @@
+.. _l-howto-save-ort-flatbuffers:
 .. _l-howto-save-ort-flatbuffers-python:
 
 :html_theme.sidebar_secondary.remove:

@@ -1671,11 +1671,11 @@ def generate_operators_doc(
         ("domains.rst", _domains_page_rst(list(by_domain.keys()))),
         ("patterns.rst", _patterns_page_rst()),
     ):
-        path = pathlib.Path(output_dir, filename)
-        if path.exists() and path.read_text(encoding="utf-8") == content:
+        catalogue_path = pathlib.Path(output_dir, filename)
+        if catalogue_path.exists() and catalogue_path.read_text(encoding="utf-8") == content:
             skipped += 1
         else:
-            path.write_text(content, encoding="utf-8")
+            catalogue_path.write_text(content, encoding="utf-8")
             written += 1
     _report(
         f"Finished generating operator pages "

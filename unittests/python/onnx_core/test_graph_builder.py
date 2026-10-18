@@ -24,6 +24,7 @@ from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 # The builder extension ships in the core build; skip the module when it (or the
 # schema library it relies on) is unavailable.
 GraphBuilder = import_or_skip("onnx_light.onnx_core.graph_builder", "GraphBuilder")
+ProtoKind = import_or_skip("onnx_light.onnx_core.graph_builder", "ProtoKind")
 
 FLOAT = onnxl.TensorProto.FLOAT
 
@@ -38,7 +39,7 @@ class TestGraphBuilder(ExtTestCase):
         output = builder.op.Relu(added, outputs="y", name="relu")
         self.assertEqual(builder.out(output, FLOAT, [None, 3]), "y")
 
-        model = builder.to_onnx("model")
+        model = builder.to_onnx()
         checker.check_model(model)
         roundtrip = onnxl.ModelProto()
         roundtrip.ParseFromString(model.SerializeToString())
@@ -61,7 +62,7 @@ class TestGraphBuilder(ExtTestCase):
             condition, outputs="result", then_branch=branch, else_branch=branch
         )
         builder.out(result, FLOAT, [2])
-        model = builder.to_onnx("model")
+        model = builder.to_onnx()
         checker.check_model(model)
 
     def test_compact_optional_variadic_and_numpy_inputs(self):
@@ -70,7 +71,7 @@ class TestGraphBuilder(ExtTestCase):
         clipped = builder.op.Clip(x, None, numpy.array([1], dtype=numpy.float32))
         summed = builder.op.Sum(clipped, x, x)
         builder.out(summed)
-        graph = builder.to_onnx("graph")
+        graph = builder.to_onnx(ProtoKind.kGraph)
         self.assertEqual(list(graph.node[0].input)[:2], ["x", ""])
         self.assertEqual(len(graph.initializer), 1)
         self.assertEqual(list(graph.node[1].input), [clipped, "x", "x"])
@@ -107,7 +108,7 @@ class TestGraphBuilder(ExtTestCase):
                     ),
                     opset_imports=[oh.make_opsetid("", 17)],
                 )
-                rebuilt = GraphBuilder(model).to_onnx("model")
+                rebuilt = GraphBuilder(model).to_onnx()
                 checker.check_model(rebuilt)
                 self.assertEqual(list(rebuilt.graph.node[0].output), outputs)
                 self.assertEqual([value.name for value in rebuilt.graph.output], outputs)
@@ -120,7 +121,7 @@ class TestGraphBuilder(ExtTestCase):
             x, domain="com.example", outputs=["left", "right"], name="custom", alpha=1.5
         )
         self.assertEqual(outputs, ("left", "right"))
-        model = builder.to_onnx("model")
+        model = builder.to_onnx()
         node = model.graph.node[0]
         self.assertEqual(
             (node.op_type, node.domain, node.name), ("CustomOp", "com.example", "custom")
@@ -139,7 +140,7 @@ class TestGraphBuilder(ExtTestCase):
         x = source.inp("X", FLOAT, [4])
         y = source.op.Cast(x, outputs="Y", to=FLOAT)
         source.out(y, FLOAT, [4])
-        original = source.to_onnx("model")
+        original = source.to_onnx()
 
         builder = GraphBuilder(original)
         graph = optimization.GraphGraph(builder, optimization.standard_patterns(["Cast"]))
@@ -151,7 +152,7 @@ class TestGraphBuilder(ExtTestCase):
         self.assertEqual(report.rewrites, 1)
         self.assertEqual(rewrites[0].pattern_name, "Cast")
         self.assertEqual(replayed_graph.SerializeToString(), optimized_graph.SerializeToString())
-        checker.check_model(builder.to_onnx("model"))
+        checker.check_model(builder.to_onnx())
 
     def test_compact_imported_opset_attribute_validation(self):
         graph = oh.make_graph([], "g", [oh.make_tensor_value_info("x", FLOAT, [2])], [])
@@ -348,10 +349,16 @@ class TestGraphBuilder(ExtTestCase):
         builder.make_input("y", FLOAT, [2, 3])
         (z,) = builder.make_node("Add", ["x", "y"])
         builder.make_output(z)
-        model = builder.to_onnx("model")
+        model = builder.to_onnx()
+        self.assertIsInstance(model, onnxl.ModelProto)
         self.assertGreater(model.ir_version, 0)
         self.assertEqual(len(model.graph.node), 1)
         self.assertGreater(len(model.opset_import), 0)
+        self.assertEqual(
+            model.SerializeToString(), builder.to_onnx(kind=ProtoKind.kModel).SerializeToString()
+        )
+        self.assertEqual(builder.to_onnx(ir_version=8).ir_version, 8)
+        self.assertEqual(builder.to_onnx(ProtoKind.kModel, ir_version=8).ir_version, 8)
 
     def test_to_graph_and_to_function(self):
         builder = GraphBuilder("g")
@@ -359,19 +366,40 @@ class TestGraphBuilder(ExtTestCase):
         builder.make_input("y", FLOAT, [2, 3])
         (z,) = builder.make_node("Add", ["x", "y"])
         builder.make_output(z)
-        graph = builder.to_onnx("graph")
+        graph = builder.to_onnx(ProtoKind.kGraph)
+        self.assertIsInstance(graph, onnxl.GraphProto)
         self.assertEqual(len(graph.node), 1)
-        function = builder.to_onnx("function", domain="custom")
+        self.assertEqual(graph.SerializeToString(), builder.to_graph().SerializeToString())
+        function = builder.to_onnx(kind=ProtoKind.kFunction, domain="custom")
+        self.assertIsInstance(function, onnxl.FunctionProto)
         self.assertEqual(len(function.node), 1)
+        self.assertEqual(function.domain, "custom")
+        self.assertEqual(
+            function.SerializeToString(), builder.to_function(domain="custom").SerializeToString()
+        )
+
+    def test_subgraph_to_onnx_uses_proto_kind(self):
+        builder = GraphBuilder("g")
+        body = builder.make_subgraph("body")
+        body.make_input("x", FLOAT, [2])
+        (output,) = body.make_node("Identity", ["x"])
+        body.make_output(output)
+        self.assertIsInstance(body.to_onnx(), onnxl.ModelProto)
+        self.assertIsInstance(body.to_onnx(ProtoKind.kGraph), onnxl.GraphProto)
+        self.assertIsInstance(body.to_onnx(ProtoKind.kFunction), onnxl.FunctionProto)
 
     def test_to_function_rejects_initializers(self):
         builder = GraphBuilder("g")
         builder.make_external_initializer("w", FLOAT, [2, 2], "w.bin", 0, 16)
-        self.assertRaise(lambda: builder.to_onnx("function", domain="custom"), ValueError)
+        self.assertRaise(
+            lambda: builder.to_onnx(ProtoKind.kFunction, domain="custom"), ValueError
+        )
 
-    def test_to_onnx_rejects_unknown_kind(self):
+    def test_to_onnx_rejects_non_enum_kind(self):
         builder = GraphBuilder("g")
-        self.assertRaise(lambda: builder.to_onnx("unknown"), ValueError)
+        for kind in ("model", "graph", "function", "unknown", "", 0, 1, -1, True, None):
+            with self.subTest(kind=kind), self.assertRaises(TypeError):
+                builder.to_onnx(kind)
 
     def test_explicit_opset_is_preserved(self):
         builder = GraphBuilder("g")
@@ -415,7 +443,7 @@ class TestGraphBuilder(ExtTestCase):
         builder.make_input("z", FLOAT, [2, 3])
         (top,) = builder.make_node("MyFct", ["x", "z"], domain="custom")
         builder.make_output(top)
-        model = builder.to_onnx("model")
+        model = builder.to_onnx()
         self.assertEqual(len(model.functions), 1)
         self.assertEqual(model.functions[0].name, "MyFct")
 
@@ -663,7 +691,7 @@ class TestGraphBuilder(ExtTestCase):
         builder.make_output(sh)
 
         # to_onnx hoists Shape next to its producer before exporting.
-        model = builder.to_onnx("model")
+        model = builder.to_onnx()
         self.assertEqual([n.op_type for n in model.graph.node], ["Neg", "Shape", "Add"])
 
     def test_move_shape_and_size_nodes_recurses_into_subgraphs(self):
@@ -708,7 +736,7 @@ class TestGraphBuilder(ExtTestCase):
         self.assertEqual(graph.node[1].output[0], out)
         # The fully inlined function definition is dropped from the model.
         self.assertFalse(builder.has_local_function("MyFct"))
-        model = builder.to_onnx("model")
+        model = builder.to_onnx()
         self.assertEqual(len(model.functions), 0)
         # A second pass has nothing left to inline.
         self.assertEqual(builder.inline_local_functions(), 0)

@@ -58,7 +58,7 @@ The example includes:
     )
     g.out(normalized, TensorProto.FLOAT, [2])
 
-    model = g.to_onnx("model")
+    model = g.to_onnx()
     checker.check_model(model)
 
     with tempfile.TemporaryDirectory() as temporary_directory:
@@ -212,7 +212,7 @@ therefore share one type.
     output.type.CopyFrom(output_type)
     builder.make_output(output)
 
-    native_model = builder.to_onnx("model")
+    native_model = builder.to_onnx()
     restored = GraphBuilder(native_model)
     layout = restored.shapes.get_encoded_layout("records")
     assert layout.payload_bytes == 4
@@ -250,7 +250,7 @@ the file's contents. Native C++ callers can also use
 ``EncodedValueProto::set_raw_data_with_deleter`` to retain shared buffer
 ownership across builder and context copies.
 
-``build_graph`` and ``to_onnx("model")`` preserve the native extensions.
+``build_graph`` and ``to_onnx()`` preserve the native extensions.
 Use a model, rather than a standalone graph, to retain shared declarations.
 ``to_standard_model`` explicitly rejects structured constructs: lowering
 to standard tensors and operators is not implemented. ORT serialization
@@ -280,7 +280,7 @@ one :class:`~onnx_light.onnx_core.optimization.LocalRewriting` replaces it with
     x = source.inp("X", TensorProto.FLOAT, [4])
     y = source.op.Cast(x, outputs="Y", to=TensorProto.FLOAT)
     source.out(y, TensorProto.FLOAT, [4])
-    original = source.to_onnx("model")
+    original = source.to_onnx()
 
     builder = GraphBuilder(original)
     graph = GraphGraph(
@@ -302,7 +302,7 @@ one :class:`~onnx_light.onnx_core.optimization.LocalRewriting` replaces it with
     replayed_graph = replay(original, rewrites)
     assert replayed_graph.SerializeToString() == optimized_graph.SerializeToString()
 
-    optimized_model = builder.to_onnx("model")
+    optimized_model = builder.to_onnx()
     checker.check_model(optimized_model)
     print("replay reproduced the optimized graph")
 

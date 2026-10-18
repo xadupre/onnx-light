@@ -29,7 +29,7 @@ class TestOnnx(ExtTestCase):
         )
         builder.out(result, onnxl.TensorProto.FLOAT, [2])
 
-        model = builder.to_onnx("model")
+        model = builder.to_onnx()
         checker.check_model(model)
         onnx.checker.check_model(model.SerializeToString())
 

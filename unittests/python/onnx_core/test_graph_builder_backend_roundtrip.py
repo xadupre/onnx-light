@@ -126,8 +126,8 @@ class TestGraphBuilderBackendRoundTrip(ExtTestCase):
             if _should_skip(model):
                 continue
             with self.subTest(name=tc.name):
-                rebuilt = GraphBuilder(model).to_onnx("model")
-                rebuilt_again = GraphBuilder(rebuilt).to_onnx("model")
+                rebuilt = GraphBuilder(model).to_onnx()
+                rebuilt_again = GraphBuilder(rebuilt).to_onnx()
                 self.assertEqual(_normalize(rebuilt), _normalize(rebuilt_again))
             tested += 1
         # Guards against the collector silently returning nothing testable.

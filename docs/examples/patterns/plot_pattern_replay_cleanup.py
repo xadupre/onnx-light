@@ -57,7 +57,7 @@ assert {"RemoveIdentityNodes", "RemoveUnusedNodes", "RemoveDuplicateInitializers
 print("Original graph:")
 print(pretty_onnx(model))
 print("Optimized graph:")
-print(pretty_onnx(builder.to_onnx("model")))
+print(pretty_onnx(builder.to_onnx()))
 
 #####################################
 # Inspect and replay the cleanup modifications

@@ -14,6 +14,7 @@ Next Steps
     2026/2026-10_kernel_parallelization_completion
     2026/2026-10_guarded_kernel_replay
     2026/2026-10_offline_semantic_documentation_search
+    2026/2026-10_native_lora_reinforcement_learning
     2026/2026-08_onnxruntime_fast_model_loading
     2026/2026-08_proto_inheritance
     2026/2026-08_quantization
@@ -66,6 +67,10 @@ Discussion
 
     * - Plan
       - Contribution
+    * - :ref:`l-next-steps-native-lora-reinforcement-learning`
+      - Extends symbolic gradients to native Transformer training, LoRA
+        adapters and a bounded REINFORCE agent loop, with numerical and
+        checkpoint acceptance gates.
     * - :ref:`l-next-steps-offline-semantic-documentation-search`
       - Separates the reusable offline search engine and tools from onnx-light's
         documentation integration, with a five-PR implementation sequence.

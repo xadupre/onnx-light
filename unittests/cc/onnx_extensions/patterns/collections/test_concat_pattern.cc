@@ -53,7 +53,7 @@ utils::RepeatedProtoField<AttributeProto> AxisAttrs(int64_t axis) {
 }
 
 TEST(ConcatEmptyPattern, DropsEmptyInputToIdentity) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("a", core::symbolic::TensorType::kFloat, Shape2D(2, 0));
   builder.MakeInput("b", core::symbolic::TensorType::kFloat, Shape2D(2, 3));
   builder.MakeNode("Concat", {"a", "b"}, {"y"}, "", "", AxisAttrs(1));
@@ -72,7 +72,7 @@ TEST(ConcatEmptyPattern, DropsEmptyInputToIdentity) {
 }
 
 TEST(ConcatEmptyPattern, DropsEmptyInputKeepsConcat) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("a", core::symbolic::TensorType::kFloat, Shape2D(2, 0));
   builder.MakeInput("b", core::symbolic::TensorType::kFloat, Shape2D(2, 3));
   builder.MakeInput("c", core::symbolic::TensorType::kFloat, Shape2D(2, 4));
@@ -94,7 +94,7 @@ TEST(ConcatEmptyPattern, DropsEmptyInputKeepsConcat) {
 }
 
 TEST(ConcatEmptyPattern, RejectsWhenNoEmptyInput) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("a", core::symbolic::TensorType::kFloat, Shape2D(2, 2));
   builder.MakeInput("b", core::symbolic::TensorType::kFloat, Shape2D(2, 3));
   builder.MakeNode("Concat", {"a", "b"}, {"y"}, "", "", AxisAttrs(1));
@@ -107,7 +107,7 @@ TEST(ConcatEmptyPattern, RejectsWhenNoEmptyInput) {
 }
 
 TEST(ConcatSliceEliminationPattern, RecoversConcatInputs) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("a", core::symbolic::TensorType::kFloat, Shape2D(2, 2));
   builder.MakeInput("b", core::symbolic::TensorType::kFloat, Shape2D(2, 3));
   builder.MakeInitializer(MakeInitializerShape("s0", {0}));
@@ -134,7 +134,7 @@ TEST(ConcatSliceEliminationPattern, RecoversConcatInputs) {
 }
 
 TEST(ConcatSliceEliminationPattern, RejectsInexactPartition) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("a", core::symbolic::TensorType::kFloat, Shape2D(2, 2));
   builder.MakeInput("b", core::symbolic::TensorType::kFloat, Shape2D(2, 3));
   builder.MakeInitializer(MakeInitializerShape("s0", {0}));
@@ -153,7 +153,7 @@ TEST(ConcatSliceEliminationPattern, RejectsInexactPartition) {
 }
 
 TEST(ConcatSliceEliminationPattern, RejectsEscapingConcatOutput) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("a", core::symbolic::TensorType::kFloat, Shape2D(2, 2));
   builder.MakeInput("b", core::symbolic::TensorType::kFloat, Shape2D(2, 3));
   builder.MakeInitializer(MakeInitializerShape("s0", {0}));
@@ -173,7 +173,7 @@ TEST(ConcatSliceEliminationPattern, RejectsEscapingConcatOutput) {
 }
 
 TEST(SliceConcatToSpaceToDepthPattern, FusesCanonicalFocus) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape4D(1, 3, 8, 10));
   builder.MakeInitializer(MakeInitializer<int64_t>("ends", {2}, {8, 10}));
   builder.MakeInitializer(MakeInitializer<int64_t>("axes", {2}, {2, 3}));
@@ -199,7 +199,7 @@ TEST(SliceConcatToSpaceToDepthPattern, FusesCanonicalFocus) {
 }
 
 TEST(SliceConcatToSpaceToDepthPattern, RejectsPermutedPhases) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape4D(1, 3, 8, 10));
   builder.MakeInitializer(MakeInitializer<int64_t>("ends", {2}, {8, 10}));
   builder.MakeInitializer(MakeInitializer<int64_t>("axes", {2}, {2, 3}));
@@ -219,7 +219,7 @@ TEST(SliceConcatToSpaceToDepthPattern, RejectsPermutedPhases) {
 }
 
 TEST(SliceConcatToSpaceToDepthPattern, RejectsSpatialCrop) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape4D(1, 3, 8, 10));
   builder.MakeInitializer(MakeInitializer<int64_t>("ends", {2}, {6, 10}));
   builder.MakeInitializer(MakeInitializer<int64_t>("axes", {2}, {2, 3}));
@@ -239,7 +239,7 @@ TEST(SliceConcatToSpaceToDepthPattern, RejectsSpatialCrop) {
 }
 
 TEST(ConcatGatherPattern, RewritesToNarrowerGather) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("a", core::symbolic::TensorType::kInt64, Shape1D(2));
   builder.MakeInput("b", core::symbolic::TensorType::kInt64, Shape1D(3));
   builder.MakeInitializer(MakeInitializer<int64_t>("idx", {1}, {3}));
@@ -260,7 +260,7 @@ TEST(ConcatGatherPattern, RewritesToNarrowerGather) {
 }
 
 TEST(ConcatGatherPattern, RewritesToIdentityForSingletonInput) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("a", core::symbolic::TensorType::kInt64, Shape1D(1));
   builder.MakeInput("b", core::symbolic::TensorType::kInt64, Shape1D(3));
   builder.MakeInitializer(MakeInitializer<int64_t>("idx", {1}, {0}));

@@ -59,7 +59,7 @@ template <typename Pattern> void OptimizeWith(core::builder::GraphBuilder &build
 }
 
 TEST(ConvBiasNullPattern, RemovesZeroBias) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape4D(1, 1, 4, 4));
   builder.MakeInitializer(MakeInitializer<float>("w", {1, 1, 2, 2}, {1.0f, 1.0f, 1.0f, 1.0f}));
   builder.MakeInitializer(MakeInitializer<float>("b", {1}, {0.0f}));
@@ -80,7 +80,7 @@ TEST(ConvBiasNullPattern, RemovesZeroBias) {
 }
 
 TEST(ConvBiasNullPattern, RejectsNonZeroBias) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape4D(1, 1, 4, 4));
   builder.MakeInitializer(MakeInitializer<float>("w", {1, 1, 2, 2}, {1.0f, 1.0f, 1.0f, 1.0f}));
   builder.MakeInitializer(MakeInitializer<float>("b", {1}, {0.5f}));
@@ -96,7 +96,7 @@ TEST(ConvBiasNullPattern, RejectsNonZeroBias) {
 }
 
 TEST(ConvBiasNullPattern, RemovesShapeExpandedZeroBias) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape4D(1, 1, 4, 4));
   builder.MakeInput("w", core::symbolic::TensorType::kFloat, Shape4D(2, 1, 2, 2));
   builder.MakeInitializer(MakeInitializer<float>("b", {2}, {0.0f, 0.0f}));
@@ -128,7 +128,7 @@ TEST(ConvBiasNullPattern, RemovesShapeExpandedZeroBias) {
 }
 
 TEST(ConvBiasNullPattern, RejectsExpandedZeroWithDynamicShape) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape4D(1, 1, 4, 4));
   builder.MakeInput("w", core::symbolic::TensorType::kFloat, Shape4D(2, 1, 2, 2));
   core::symbolic::SymShape shape;
@@ -148,7 +148,7 @@ TEST(ConvBiasNullPattern, RejectsExpandedZeroWithDynamicShape) {
 }
 
 TEST(PadConvPattern, FoldsSpatialPadding) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape4D(1, 1, 4, 4));
   builder.MakeInitializer(MakeInitializer<int64_t>("pads", {8}, {0, 0, 1, 1, 0, 0, 1, 1}));
   builder.MakeInitializer(MakeInitializer<float>("w", {1, 1, 2, 2}, {1.0f, 1.0f, 1.0f, 1.0f}));
@@ -176,7 +176,7 @@ TEST(PadConvPattern, FoldsSpatialPadding) {
 }
 
 TEST(PadConvPattern, RejectsChannelPadding) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape4D(1, 1, 4, 4));
   builder.MakeInitializer(MakeInitializer<int64_t>("pads", {8}, {0, 1, 1, 1, 0, 1, 1, 1}));
   builder.MakeInitializer(MakeInitializer<float>("w", {1, 1, 2, 2}, {1.0f, 1.0f, 1.0f, 1.0f}));
@@ -193,7 +193,7 @@ TEST(PadConvPattern, RejectsChannelPadding) {
 }
 
 TEST(ConvAddFusionPattern, FoldsBiasAndLeavesActivation) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape4D(1, 1, 2, 2));
   builder.MakeInitializer(MakeInitializer<float>("w", {2, 1, 1, 1}, {2.0f, 3.0f}));
   builder.MakeInitializer(MakeInitializer<float>("b", {2}, {0.5f, -0.5f}));
@@ -217,7 +217,7 @@ TEST(ConvAddFusionPattern, FoldsBiasAndLeavesActivation) {
 }
 
 TEST(ConvAddFusionPattern, RejectsSharedConvOutput) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape4D(1, 1, 2, 2));
   builder.MakeInitializer(MakeInitializer<float>("w", {2, 1, 1, 1}, {2.0f, 3.0f}));
   builder.MakeInitializer(MakeInitializer<float>("add", {2, 1, 1}, {1.0f, 2.0f}));
@@ -233,7 +233,7 @@ TEST(ConvAddFusionPattern, RejectsSharedConvOutput) {
 }
 
 TEST(ConvAddFusionPattern, RejectsNonChannelBroadcast) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape4D(1, 1, 2, 2));
   builder.MakeInitializer(MakeInitializer<float>("w", {2, 1, 1, 1}, {2.0f, 3.0f}));
   builder.MakeInitializer(MakeInitializer<float>("add", {2}, {1.0f, 2.0f}));
@@ -247,7 +247,7 @@ TEST(ConvAddFusionPattern, RejectsNonChannelBroadcast) {
 }
 
 TEST(ConvMulFusionPattern, FoldsScalarIntoDoubleWeightsAndBias) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kDouble, Shape4D(1, 1, 2, 2));
   builder.MakeInitializer(MakeInitializer<double>("w", {2, 1, 1, 1}, {2.0, 3.0}));
   builder.MakeInitializer(MakeInitializer<double>("b", {2}, {0.5, -0.5}));
@@ -272,7 +272,7 @@ TEST(ConvMulFusionPattern, FoldsScalarIntoDoubleWeightsAndBias) {
 }
 
 TEST(ConvMulFusionPattern, RejectsMismatchedDtype) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape4D(1, 1, 2, 2));
   builder.MakeInitializer(MakeInitializer<float>("w", {2, 1, 1, 1}, {2.0f, 3.0f}));
   builder.MakeInitializer(MakeInitializer<double>("scale", {}, {4.0}));

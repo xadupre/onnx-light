@@ -50,7 +50,7 @@ std::vector<int64_t> InitializerInts(const core::builder::GraphBuilder &builder,
 }
 
 TEST(UnsqueezeUnsqueezePattern, MergesTwoSingleAxisUnsqueeze) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   AddAxesInitializer(builder, "a0", {2});
   AddAxesInitializer(builder, "a1", {3});
@@ -73,7 +73,7 @@ TEST(UnsqueezeUnsqueezePattern, MergesTwoSingleAxisUnsqueeze) {
 }
 
 TEST(UnsqueezeUnsqueezePattern, MergesMultiAxisWithKnownRank) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   AddAxesInitializer(builder, "a0", {0, 1});
   AddAxesInitializer(builder, "a1", {4});
@@ -95,7 +95,7 @@ TEST(UnsqueezeUnsqueezePattern, MergesMultiAxisWithKnownRank) {
 }
 
 TEST(UnsqueezeUnsqueezePattern, KeepsFirstWhenShared) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   AddAxesInitializer(builder, "a0", {2});
   AddAxesInitializer(builder, "a1", {3});
@@ -119,7 +119,7 @@ TEST(UnsqueezeUnsqueezePattern, KeepsFirstWhenShared) {
 }
 
 TEST(UnsqueezeUnsqueezePattern, RejectsNonConstantAxes) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   builder.MakeInput("a0", core::symbolic::TensorType::kInt64, Shape({1}));
   AddAxesInitializer(builder, "a1", {3});
@@ -134,7 +134,7 @@ TEST(UnsqueezeUnsqueezePattern, RejectsNonConstantAxes) {
 }
 
 TEST(UnsqueezeUnsqueezePattern, RejectsMissingSecondUnsqueeze) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   AddAxesInitializer(builder, "a0", {2});
   builder.MakeNode("Unsqueeze", {"x", "a0"}, {"out"});
@@ -147,7 +147,7 @@ TEST(UnsqueezeUnsqueezePattern, RejectsMissingSecondUnsqueeze) {
 }
 
 TEST(SqueezeUnsqueezePattern, CollapsesMatchingAxesToIdentity) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   AddAxesInitializer(builder, "axes", {2});
   builder.MakeNode("Unsqueeze", {"x", "axes"}, {"u0"});
@@ -167,7 +167,7 @@ TEST(SqueezeUnsqueezePattern, CollapsesMatchingAxesToIdentity) {
 }
 
 TEST(SqueezeUnsqueezePattern, CollapsesSubsetToSqueeze) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 1}));
   AddAxesInitializer(builder, "unsqueeze_axes", {0});
   AddAxesInitializer(builder, "squeeze_axes", {0, 2});
@@ -191,7 +191,7 @@ TEST(SqueezeUnsqueezePattern, CollapsesSubsetToSqueeze) {
 }
 
 TEST(SqueezeUnsqueezePattern, KeepsFirstWhenShared) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   AddAxesInitializer(builder, "axes", {2});
   builder.MakeNode("Unsqueeze", {"x", "axes"}, {"u0"});
@@ -214,7 +214,7 @@ TEST(SqueezeUnsqueezePattern, KeepsFirstWhenShared) {
 }
 
 TEST(SqueezeUnsqueezePattern, RejectsSameOperatorTwice) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   AddAxesInitializer(builder, "a0", {2});
   AddAxesInitializer(builder, "a1", {3});
@@ -229,7 +229,7 @@ TEST(SqueezeUnsqueezePattern, RejectsSameOperatorTwice) {
 }
 
 TEST(SqueezeUnsqueezePattern, RejectsDisjointAxes) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 1}));
   AddAxesInitializer(builder, "unsqueeze_axes", {2});
   AddAxesInitializer(builder, "squeeze_axes", {1});

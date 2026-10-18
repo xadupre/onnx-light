@@ -6,8 +6,8 @@ GraphBuilder
 ``onnx-light`` builds ONNX graphs, models and functions incrementally
 through ``core::builder::GraphBuilder`` (C++) and its Python wrapper
 :class:`onnx_light.onnx_core.graph_builder.GraphBuilder`. The builder is
-the entry point of the *core* pipeline: it accumulates nodes, resolves
-their opsets, validates them against the built-in operator schemas, runs
+the entry point of the *core* pipeline: it accumulates nodes, requires
+explicit opsets, validates nodes against the built-in operator schemas, runs
 incremental shape inference and finalises everything into a proto.
 
 Overview
@@ -20,7 +20,8 @@ patterns rewrite it (see :ref:`l-design-optimization`). Nodes are added
 with :meth:`~onnx_light.onnx_core.graph_builder.GraphBuilder.make_node`,
 which:
 
-* resolves the operator opset for the requested domain;
+* requires an explicitly selected positive opset for the requested domain,
+  raising an exception before adding the node when no version was selected;
 * validates the node against the built-in ONNX operator schemas;
 * assigns output names when the caller leaves them empty;
 * runs incremental shape inference so every value has an inferred type

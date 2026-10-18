@@ -53,7 +53,7 @@ void AddFloatScalarInitializer(core::builder::GraphBuilder &builder, const std::
 }
 
 TEST(NotWherePattern, SwapsWhereBranches) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("cond", core::symbolic::TensorType::kBool, Shape2());
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2());
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape2());
@@ -75,7 +75,7 @@ TEST(NotWherePattern, SwapsWhereBranches) {
 }
 
 TEST(NotWherePattern, KeepsSharedNotNode) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("cond", core::symbolic::TensorType::kBool, Shape2());
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2());
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape2());
@@ -97,7 +97,7 @@ TEST(NotWherePattern, KeepsSharedNotNode) {
 }
 
 TEST(UnsqueezeEqualPattern, PreservesRankForMatchingUnsqueezePair) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2());
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape2());
   AddInt64Initializer(builder, "axes", {0});
@@ -123,7 +123,7 @@ TEST(UnsqueezeEqualPattern, PreservesRankForMatchingUnsqueezePair) {
 }
 
 TEST(UnsqueezeEqualPattern, MovesEqualAfterCompatibleUnsqueeze) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2());
   AddInt64Initializer(builder, "axes", {0});
   AddFloatInitializer(builder, "minus_one", -1.0F);
@@ -149,7 +149,7 @@ TEST(UnsqueezeEqualPattern, MovesEqualAfterCompatibleUnsqueeze) {
 }
 
 TEST(UnsqueezeEqualPattern, MovesScalarEqualWithRankZeroConstant) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, ScalarShape());
   AddInt64Initializer(builder, "axes", {0});
   AddFloatScalarInitializer(builder, "minus_one", -1.0F);
@@ -179,7 +179,7 @@ TEST(UnsqueezeEqualPattern, MovesScalarEqualWithRankZeroConstant) {
 }
 
 TEST(UnsqueezeEqualPattern, RejectsScalarEqualWithRankOneConstant) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, ScalarShape());
   AddInt64Initializer(builder, "axes", {0});
   AddFloatInitializer(builder, "minus_one", -1.0F);
@@ -208,7 +208,7 @@ TEST(UnsqueezeEqualPattern, RejectsScalarEqualWithRankOneConstant) {
 }
 
 TEST(UnsqueezeEqualPattern, RejectsDifferentAxes) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2());
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape2());
   AddInt64Initializer(builder, "axes0", {0});
@@ -227,7 +227,7 @@ TEST(UnsqueezeEqualPattern, RejectsDifferentAxes) {
 }
 
 TEST(UnsqueezeEqualPattern, RejectsDifferentUpstreamAxes) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2());
   AddInt64Initializer(builder, "axes0", {0});
   AddInt64Initializer(builder, "axes1", {1});
@@ -248,7 +248,7 @@ TEST(UnsqueezeEqualPattern, RejectsDifferentUpstreamAxes) {
 
 TEST(WhereAddPattern, ReplacesUpstreamAdditiveMaskInBothAddOrders) {
   for (bool where_first : {true, false}) {
-    core::builder::GraphBuilder builder(where_first ? "left" : "right", SchemaLookup());
+    core::builder::GraphBuilder builder(where_first ? "left" : "right", SchemaLookup(), {{"", 28}});
     builder.MakeInput("mask", core::symbolic::TensorType::kBool, Shape2());
     AddFloatInitializer(builder, "x", 0.25F);
     AddFloatInitializer(builder, "zero", 0.0F);
@@ -276,7 +276,7 @@ TEST(WhereAddPattern, ReplacesUpstreamAdditiveMaskInBothAddOrders) {
 }
 
 TEST(WhereAddPattern, RejectsPositiveInfinityAddend) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("mask", core::symbolic::TensorType::kBool, Shape2());
   AddFloatInitializer(builder, "x", std::numeric_limits<float>::infinity());
   AddFloatInitializer(builder, "zero", 0.0F);
@@ -293,7 +293,7 @@ TEST(WhereAddPattern, RejectsPositiveInfinityAddend) {
 TEST(WhereAddPattern, RejectsWrongUpstreamWhereConstants) {
   for (bool positive_infinity : {false, true}) {
     core::builder::GraphBuilder builder(positive_infinity ? "positive_inf" : "nonzero",
-                                        SchemaLookup());
+                                        SchemaLookup(), {{"", 28}});
     builder.MakeInput("mask", core::symbolic::TensorType::kBool, Shape2());
     builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2());
     AddFloatInitializer(builder, "then", positive_infinity ? 0.0F : 1.0F);
@@ -311,7 +311,7 @@ TEST(WhereAddPattern, RejectsWrongUpstreamWhereConstants) {
 }
 
 TEST(WhereAddPattern, RejectsExternallyUsedUpstreamWhereOutput) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("mask", core::symbolic::TensorType::kBool, Shape2());
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2());
   AddFloatInitializer(builder, "zero", 0.0F);
@@ -327,7 +327,7 @@ TEST(WhereAddPattern, RejectsExternallyUsedUpstreamWhereOutput) {
 }
 
 TEST(WhereAddPattern, FactorsSharedAddInput) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("cond", core::symbolic::TensorType::kBool, Shape2());
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2());
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape2());
@@ -354,7 +354,7 @@ TEST(WhereAddPattern, FactorsSharedAddInput) {
 }
 
 TEST(WhereAddPattern, RejectsBranchesWithoutCommonAddInput) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("cond", core::symbolic::TensorType::kBool, Shape2());
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2());
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape2());
@@ -374,7 +374,7 @@ TEST(WhereAddPattern, RejectsBranchesWithoutCommonAddInput) {
 }
 
 TEST(WhereAddPattern, OptimizeProducesTwoNodeGraph) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("cond", core::symbolic::TensorType::kBool, Shape2());
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2());
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape2());

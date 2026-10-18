@@ -35,7 +35,7 @@ core::symbolic::SymShape ScalarShape() {
 }
 
 TEST(ClipClipPattern, MergesComplementaryBounds) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
   builder.MakeInput("mn", core::symbolic::TensorType::kFloat, ScalarShape());
   builder.MakeInput("mx", core::symbolic::TensorType::kFloat, ScalarShape());
@@ -62,7 +62,7 @@ TEST(ClipClipPattern, MergesComplementaryBounds) {
 }
 
 TEST(ClipClipPattern, ProducesExpectedMergedGraph) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
   builder.MakeInput("mn", core::symbolic::TensorType::kFloat, ScalarShape());
   builder.MakeInput("mx", core::symbolic::TensorType::kFloat, ScalarShape());
@@ -86,7 +86,7 @@ TEST(ClipClipPattern, ProducesExpectedMergedGraph) {
 }
 
 TEST(ClipClipPattern, RejectsSameBound) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
   builder.MakeInput("mn1", core::symbolic::TensorType::kFloat, ScalarShape());
   builder.MakeInput("mn2", core::symbolic::TensorType::kFloat, ScalarShape());
@@ -103,7 +103,7 @@ TEST(ClipClipPattern, RejectsSameBound) {
 }
 
 TEST(ClipClipPattern, RejectsSharedIntermediate) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
   builder.MakeInput("mn", core::symbolic::TensorType::kFloat, ScalarShape());
   builder.MakeInput("mx", core::symbolic::TensorType::kFloat, ScalarShape());
@@ -122,7 +122,7 @@ TEST(ClipClipPattern, RejectsSharedIntermediate) {
 }
 
 TEST(ClipClipPattern, RejectsNonClipPredecessor) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
   builder.MakeInput("mx", core::symbolic::TensorType::kFloat, ScalarShape());
   builder.MakeNode("Relu", {"x"}, {"x1"});

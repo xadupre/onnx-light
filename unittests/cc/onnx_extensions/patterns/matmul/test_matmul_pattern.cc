@@ -116,7 +116,7 @@ void AddSubgraphReference(core::builder::GraphBuilder &builder, const std::strin
 }
 
 TEST(MatMulAddPattern, FusesMatMulAddAndRejectsSharedMatMulOutput) {
-  core::builder::GraphBuilder builder("positive", SchemaLookup());
+  core::builder::GraphBuilder builder("positive", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   builder.MakeInput("w", core::symbolic::TensorType::kFloat, Shape({3, 4}));
   builder.MakeInput("bias", core::symbolic::TensorType::kFloat, Shape({4}));
@@ -136,7 +136,7 @@ TEST(MatMulAddPattern, FusesMatMulAddAndRejectsSharedMatMulOutput) {
   EXPECT_EQ(replacements[0].input()[2].value(), "bias");
   EXPECT_EQ(replacements[0].output()[0].value(), "out");
 
-  core::builder::GraphBuilder rejected("rejected", SchemaLookup());
+  core::builder::GraphBuilder rejected("rejected", SchemaLookup(), {{"", 28}});
   rejected.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   rejected.MakeInput("w", core::symbolic::TensorType::kFloat, Shape({3, 4}));
   rejected.MakeInput("bias", core::symbolic::TensorType::kFloat, Shape({4}));
@@ -148,7 +148,7 @@ TEST(MatMulAddPattern, FusesMatMulAddAndRejectsSharedMatMulOutput) {
 }
 
 TEST(GemmSumFusionPattern, UsesStandardBiasAndRejectsExistingBias) {
-  core::builder::GraphBuilder builder("positive", SchemaLookup());
+  core::builder::GraphBuilder builder("positive", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   builder.MakeInput("w", core::symbolic::TensorType::kFloat, Shape({3, 4}));
   builder.MakeInput("sum", core::symbolic::TensorType::kFloat, Shape({4}));
@@ -165,7 +165,7 @@ TEST(GemmSumFusionPattern, UsesStandardBiasAndRejectsExistingBias) {
   EXPECT_EQ(replacements[0].input()[2].value(), "sum");
   EXPECT_EQ(GetAttributeOr<float>(replacements[0], "beta", 1.0F), 1.0F);
 
-  core::builder::GraphBuilder rejected("rejected", SchemaLookup());
+  core::builder::GraphBuilder rejected("rejected", SchemaLookup(), {{"", 28}});
   rejected.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   rejected.MakeInput("w", core::symbolic::TensorType::kFloat, Shape({3, 4}));
   rejected.MakeInput("bias", core::symbolic::TensorType::kFloat, Shape({4}));
@@ -178,7 +178,7 @@ TEST(GemmSumFusionPattern, UsesStandardBiasAndRejectsExistingBias) {
 }
 
 TEST(GemmTransposePattern, InsertsWeightTransposeAndRejectsExistingTranspose) {
-  core::builder::GraphBuilder builder("positive", SchemaLookup());
+  core::builder::GraphBuilder builder("positive", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   AddFloat(builder, "w", {3, 4}, std::vector<float>(12, 1.0F));
   builder.MakeNode("Gemm", {"x", "w"}, {"out"}, "", "gemm", FloatAttr("alpha", 2.0F));
@@ -197,7 +197,7 @@ TEST(GemmTransposePattern, InsertsWeightTransposeAndRejectsExistingTranspose) {
   EXPECT_EQ(GetAttributeOr<int64_t>(replacements[1], "transB", 0), 1);
   EXPECT_FLOAT_EQ(GetAttributeOr<float>(replacements[1], "alpha", 1.0F), 2.0F);
 
-  core::builder::GraphBuilder rejected("rejected", SchemaLookup());
+  core::builder::GraphBuilder rejected("rejected", SchemaLookup(), {{"", 28}});
   rejected.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   AddFloat(rejected, "w", {3, 4}, std::vector<float>(12, 1.0F));
   rejected.MakeNode("Gemm", {"x", "w"}, {"out"}, "", "", IntAttr("transB", 1));
@@ -206,7 +206,7 @@ TEST(GemmTransposePattern, InsertsWeightTransposeAndRejectsExistingTranspose) {
 }
 
 TEST(MatMulReshape2Of3Pattern, MovesBatchReshapeAndRejectsOnlyOneReshape) {
-  core::builder::GraphBuilder seed("positive", SchemaLookup());
+  core::builder::GraphBuilder seed("positive", SchemaLookup(), {{"", 28}});
   seed.MakeInput("left", core::symbolic::TensorType::kFloat, Shape({13, 4, 7, 7}));
   seed.MakeInput("right", core::symbolic::TensorType::kFloat, Shape({52, 7, 8}));
   AddShape(seed, "left_shape", {52, 7, 7});
@@ -233,7 +233,7 @@ TEST(MatMulReshape2Of3Pattern, MovesBatchReshapeAndRejectsOnlyOneReshape) {
   EXPECT_EQ(replacements[1].input()[1].value(), replacements[0].output()[0].value());
   EXPECT_EQ(replacements[1].output()[0].value(), "out");
 
-  core::builder::GraphBuilder rejected_seed("rejected", SchemaLookup());
+  core::builder::GraphBuilder rejected_seed("rejected", SchemaLookup(), {{"", 28}});
   rejected_seed.MakeInput("left", core::symbolic::TensorType::kFloat, Shape({13, 4, 7, 7}));
   rejected_seed.MakeInput("right", core::symbolic::TensorType::kFloat, Shape({52, 7, 8}));
   AddShape(rejected_seed, "left_shape", {52, 7, 7});
@@ -248,7 +248,7 @@ TEST(MatMulReshape2Of3Pattern, MovesBatchReshapeAndRejectsOnlyOneReshape) {
 }
 
 TEST(MulMulMatMulPattern, MovesScalarProductAfterMatMulAndRejectsBroadcastScalar) {
-  core::builder::GraphBuilder builder("positive", SchemaLookup());
+  core::builder::GraphBuilder builder("positive", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({32, 16}));
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({16, 64}));
   AddFloat(builder, "c1", {}, {0.4F});
@@ -275,7 +275,7 @@ TEST(MulMulMatMulPattern, MovesScalarProductAfterMatMulAndRejectsBroadcastScalar
   ASSERT_EQ(product_values.size(), 1u);
   EXPECT_FLOAT_EQ(static_cast<float>(product_values[0]), 0.24F);
 
-  core::builder::GraphBuilder rejected("rejected", SchemaLookup());
+  core::builder::GraphBuilder rejected("rejected", SchemaLookup(), {{"", 28}});
   rejected.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({32, 16}));
   rejected.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({16, 64}));
   AddFloat(rejected, "c1", {}, {0.4F});
@@ -288,7 +288,7 @@ TEST(MulMulMatMulPattern, MovesScalarProductAfterMatMulAndRejectsBroadcastScalar
 }
 
 TEST(MatMulBatchNormalizationFusionPattern, FoldsConstantsAndRejectsDynamicWeight) {
-  core::builder::GraphBuilder builder("positive", SchemaLookup());
+  core::builder::GraphBuilder builder("positive", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   AddFloat(builder, "w", {3, 2}, {1.0F, 2.0F, 3.0F, 4.0F, 5.0F, 6.0F});
   AddFloat(builder, "scale", {2}, {2.0F, 3.0F});
@@ -309,7 +309,7 @@ TEST(MatMulBatchNormalizationFusionPattern, FoldsConstantsAndRejectsDynamicWeigh
   EXPECT_NE(FindInitializer(builder, replacements[0].input()[1].value()), nullptr);
   EXPECT_NE(FindInitializer(builder, replacements[0].input()[2].value()), nullptr);
 
-  core::builder::GraphBuilder rejected("rejected", SchemaLookup());
+  core::builder::GraphBuilder rejected("rejected", SchemaLookup(), {{"", 28}});
   rejected.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   rejected.MakeInput("w", core::symbolic::TensorType::kFloat, Shape({3, 2}));
   AddFloat(rejected, "scale", {2}, {1.0F, 1.0F});
@@ -342,7 +342,7 @@ TEST(MatMulBatchNormalizationFusionPattern, RejectsTrainingOutputsBeforeOpset14)
 }
 
 TEST(MatMulScaleFusionPattern, FoldsWeightAndRejectsUnsafeDivision) {
-  core::builder::GraphBuilder builder("positive", SchemaLookup());
+  core::builder::GraphBuilder builder("positive", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   AddFloat(builder, "w", {3, 2}, {1.0F, 2.0F, 3.0F, 4.0F, 5.0F, 6.0F});
   AddFloat(builder, "scale", {}, {0.5F});
@@ -358,7 +358,7 @@ TEST(MatMulScaleFusionPattern, FoldsWeightAndRejectsUnsafeDivision) {
   EXPECT_NE(replacements[0].input()[1].value(), "w");
   EXPECT_NE(FindInitializer(builder, replacements[0].input()[1].value()), nullptr);
 
-  core::builder::GraphBuilder rejected("rejected", SchemaLookup());
+  core::builder::GraphBuilder rejected("rejected", SchemaLookup(), {{"", 28}});
   rejected.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   rejected.MakeInput("w", core::symbolic::TensorType::kFloat, Shape({3, 2}));
   AddFloat(rejected, "scale", {}, {2.0F});
@@ -369,7 +369,7 @@ TEST(MatMulScaleFusionPattern, FoldsWeightAndRejectsUnsafeDivision) {
 }
 
 TEST(ReshapeMatMulReshapePattern, RemovesThreeReshapesAndRejectsSharedMatMulOutput) {
-  core::builder::GraphBuilder builder("positive", SchemaLookup());
+  core::builder::GraphBuilder builder("positive", SchemaLookup(), {{"", 28}});
   builder.MakeInput("left", core::symbolic::TensorType::kFloat, Shape({1, 1, 32, 128}));
   builder.MakeInput("right", core::symbolic::TensorType::kFloat, Shape({3, 5, 128, 64}));
   AddShape(builder, "left_shape", {1, 32, 128});
@@ -395,7 +395,7 @@ TEST(ReshapeMatMulReshapePattern, RemovesThreeReshapesAndRejectsSharedMatMulOutp
   EXPECT_EQ(replacements[0].output()[0].value(), "out");
   EXPECT_EQ(replacements[0].name().value(), "ReshapeMatMulReshapePattern--mm");
 
-  core::builder::GraphBuilder rejected("rejected", SchemaLookup());
+  core::builder::GraphBuilder rejected("rejected", SchemaLookup(), {{"", 28}});
   rejected.MakeInput("left", core::symbolic::TensorType::kFloat, Shape({1, 1, 32, 128}));
   rejected.MakeInput("right", core::symbolic::TensorType::kFloat, Shape({3, 5, 128, 64}));
   AddShape(rejected, "left_shape", {1, 32, 128});
@@ -415,7 +415,7 @@ TEST(ReshapeMatMulReshapePattern, RemovesThreeReshapesAndRejectsSharedMatMulOutp
 }
 
 TEST(TransposeMatMulPattern, ConvertsSharedTransposeMatMulAndRejectsUnexpectedPerm) {
-  core::builder::GraphBuilder seed("positive", SchemaLookup());
+  core::builder::GraphBuilder seed("positive", SchemaLookup(), {{"", 28}});
   seed.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({128, 32}));
   seed.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({128, 64}));
   seed.MakeNode("Transpose", {"x"}, {"xt"}, "", "transpose", PermAttr({1, 0}));
@@ -439,7 +439,7 @@ TEST(TransposeMatMulPattern, ConvertsSharedTransposeMatMulAndRejectsUnexpectedPe
   EXPECT_EQ(replacements[1].op_type().value(), "Transpose");
   EXPECT_EQ(replacements[1].output()[0].value(), "xt");
 
-  core::builder::GraphBuilder rejected_seed("rejected", SchemaLookup());
+  core::builder::GraphBuilder rejected_seed("rejected", SchemaLookup(), {{"", 28}});
   rejected_seed.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({32, 128}));
   rejected_seed.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({128, 64}));
   rejected_seed.MakeNode("Transpose", {"x"}, {"xt"}, "", "", PermAttr({0, 1}));
@@ -452,7 +452,7 @@ TEST(TransposeMatMulPattern, ConvertsSharedTransposeMatMulAndRejectsUnexpectedPe
 }
 
 TEST(TransposeReshapeMatMulPattern, MovesRightTransposeAfterReshapeAndRejectsSharedInput) {
-  core::builder::GraphBuilder seed("positive", SchemaLookup());
+  core::builder::GraphBuilder seed("positive", SchemaLookup(), {{"", 28}});
   seed.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 2, 5, 7}));
   seed.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({4, 3, 7}));
   AddShape(seed, "shape", {2, 2, 7, 3});
@@ -483,7 +483,7 @@ TEST(TransposeReshapeMatMulPattern, MovesRightTransposeAfterReshapeAndRejectsSha
   EXPECT_EQ(replacements[2].op_type().value(), "MatMul");
   EXPECT_EQ(replacements[2].input()[1].value(), "right");
 
-  core::builder::GraphBuilder rejected_seed("rejected", SchemaLookup());
+  core::builder::GraphBuilder rejected_seed("rejected", SchemaLookup(), {{"", 28}});
   rejected_seed.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 2, 5, 7}));
   rejected_seed.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({4, 3, 7}));
   AddShape(rejected_seed, "shape", {2, 2, 7, 3});
@@ -501,7 +501,7 @@ TEST(TransposeReshapeMatMulPattern, MovesRightTransposeAfterReshapeAndRejectsSha
 }
 
 TEST(SwitchReshapeActivationPattern, MovesReluBeforeTransposeAndRejectsSharedMatMulOutput) {
-  core::builder::GraphBuilder builder("positive", SchemaLookup());
+  core::builder::GraphBuilder builder("positive", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({3, 2, 6, 5}));
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({3, 2, 5, 6}));
   builder.MakeNode("MatMul", {"x", "y"}, {"mm"}, "", "mm");
@@ -523,7 +523,7 @@ TEST(SwitchReshapeActivationPattern, MovesReluBeforeTransposeAndRejectsSharedMat
   EXPECT_EQ(replacements[2].output()[0].value(), "out");
   EXPECT_EQ(AttributeInts(replacements[2], "perm"), (std::vector<int64_t>{0, 2, 1, 3}));
 
-  core::builder::GraphBuilder rejected("rejected", SchemaLookup());
+  core::builder::GraphBuilder rejected("rejected", SchemaLookup(), {{"", 28}});
   rejected.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({3, 2, 6, 5}));
   rejected.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({3, 2, 5, 6}));
   rejected.MakeNode("MatMul", {"x", "y"}, {"mm"});
@@ -535,7 +535,7 @@ TEST(SwitchReshapeActivationPattern, MovesReluBeforeTransposeAndRejectsSharedMat
 }
 
 TEST(ShapeBasedMatMulToMulPattern, ReplacesSymbolicOuterProductAndRejectsNonUnitReduction) {
-  core::builder::GraphBuilder builder("positive", SchemaLookup());
+  core::builder::GraphBuilder builder("positive", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat,
                     SymbolicShape({core::symbolic::SymDim("a"), core::symbolic::SymDim("b"),
                                    core::symbolic::SymDim(1)}));
@@ -566,7 +566,7 @@ TEST(ShapeBasedMatMulToMulPattern, ReplacesSymbolicOuterProductAndRejectsNonUnit
   EXPECT_EQ(left_values, (std::vector<int64_t>{0, 1, -1}));
   EXPECT_EQ(right_values, (std::vector<int64_t>{0, -1, 1}));
 
-  core::builder::GraphBuilder rejected("rejected", SchemaLookup());
+  core::builder::GraphBuilder rejected("rejected", SchemaLookup(), {{"", 28}});
   rejected.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3, 2}));
   rejected.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({2, 2, 4}));
   rejected.MakeNode("MatMul", {"x", "y"}, {"out"});
@@ -577,7 +577,7 @@ TEST(ShapeBasedMatMulToMulPattern, ReplacesSymbolicOuterProductAndRejectsNonUnit
 TEST(MatMulAddPattern, RejectsNonUnitGemmBetaAndSubgraphCapture) {
   onnx_patterns::MatMulAddPattern pattern;
 
-  core::builder::GraphBuilder beta("beta", SchemaLookup());
+  core::builder::GraphBuilder beta("beta", SchemaLookup(), {{"", 28}});
   beta.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   beta.MakeInput("w", core::symbolic::TensorType::kFloat, Shape({3, 4}));
   beta.MakeInput("bias", core::symbolic::TensorType::kFloat, Shape({4}));
@@ -586,7 +586,7 @@ TEST(MatMulAddPattern, RejectsNonUnitGemmBetaAndSubgraphCapture) {
   core::builder::GraphGraph beta_graph(beta);
   EXPECT_EQ(pattern.Match(beta_graph, beta.Nodes()[0]).pattern, nullptr);
 
-  core::builder::GraphBuilder captured("captured", SchemaLookup());
+  core::builder::GraphBuilder captured("captured", SchemaLookup(), {{"", 28}});
   captured.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   captured.MakeInput("w", core::symbolic::TensorType::kFloat, Shape({3, 4}));
   captured.MakeInput("bias", core::symbolic::TensorType::kFloat, Shape({4}));
@@ -604,7 +604,7 @@ TEST(MatMulAddPattern, RejectsNonUnitGemmBetaAndSubgraphCapture) {
 TEST(MatMulReshape2Of3Pattern, RejectsMatrixResultAndBatchShapeChanges) {
   onnx_patterns::MatMulReshape2Of3Pattern pattern;
 
-  core::builder::GraphBuilder matrix("matrix", SchemaLookup());
+  core::builder::GraphBuilder matrix("matrix", SchemaLookup(), {{"", 28}});
   matrix.MakeInput("left", core::symbolic::TensorType::kFloat, Shape({13, 4, 1, 49}));
   matrix.MakeInput("right", core::symbolic::TensorType::kFloat, Shape({52, 7, 8}));
   AddShape(matrix, "left_shape", {52, 7, 7});
@@ -618,7 +618,7 @@ TEST(MatMulReshape2Of3Pattern, RejectsMatrixResultAndBatchShapeChanges) {
   core::builder::GraphGraph matrix_graph(matrix);
   EXPECT_EQ(pattern.Match(matrix_graph, matrix.Nodes()[1]).pattern, nullptr);
 
-  core::builder::GraphBuilder result("result", SchemaLookup());
+  core::builder::GraphBuilder result("result", SchemaLookup(), {{"", 28}});
   result.MakeInput("left", core::symbolic::TensorType::kFloat, Shape({13, 4, 7, 7}));
   result.MakeInput("right", core::symbolic::TensorType::kFloat, Shape({52, 7, 8}));
   AddShape(result, "left_shape", {52, 7, 7});
@@ -632,7 +632,7 @@ TEST(MatMulReshape2Of3Pattern, RejectsMatrixResultAndBatchShapeChanges) {
   core::builder::GraphGraph result_graph(result);
   EXPECT_EQ(pattern.Match(result_graph, result.Nodes()[1]).pattern, nullptr);
 
-  core::builder::GraphBuilder batch("batch", SchemaLookup());
+  core::builder::GraphBuilder batch("batch", SchemaLookup(), {{"", 28}});
   batch.MakeInput("left", core::symbolic::TensorType::kFloat, Shape({1, 1, 7, 7}));
   batch.MakeInput("right", core::symbolic::TensorType::kFloat, Shape({3, 4, 7, 8}));
   AddShape(batch, "left_shape", {1, 7, 7});
@@ -649,7 +649,7 @@ TEST(MatMulReshape2Of3Pattern, RejectsMatrixResultAndBatchShapeChanges) {
 }
 
 TEST(ReshapeMatMulReshapePattern, RejectsIncompatibleOriginalBatchBroadcast) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("left", core::symbolic::TensorType::kFloat, Shape({2, 6, 32, 128}));
   builder.MakeInput("right", core::symbolic::TensorType::kFloat, Shape({3, 4, 128, 64}));
   AddShape(builder, "left_shape", {12, 32, 128});
@@ -669,7 +669,7 @@ TEST(ReshapeMatMulReshapePattern, RejectsIncompatibleOriginalBatchBroadcast) {
 }
 
 TEST(MulMulMatMulPattern, RejectsGraphOutputIntermediate) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({32, 16}));
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({16, 64}));
   AddFloat(builder, "c1", {}, {0.4F});
@@ -687,7 +687,7 @@ TEST(MulMulMatMulPattern, RejectsGraphOutputIntermediate) {
 TEST(SwitchReshapeActivationPattern, RejectsPReluAndSoftmax) {
   onnx_patterns::SwitchReshapeActivationPattern pattern;
 
-  core::builder::GraphBuilder prelu("prelu", SchemaLookup());
+  core::builder::GraphBuilder prelu("prelu", SchemaLookup(), {{"", 28}});
   prelu.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   prelu.MakeInput("w", core::symbolic::TensorType::kFloat, Shape({3, 4}));
   prelu.MakeInput("slope", core::symbolic::TensorType::kFloat, Shape({2}));
@@ -697,7 +697,7 @@ TEST(SwitchReshapeActivationPattern, RejectsPReluAndSoftmax) {
   core::builder::GraphGraph prelu_graph(prelu);
   EXPECT_EQ(pattern.Match(prelu_graph, prelu.Nodes()[2]).pattern, nullptr);
 
-  core::builder::GraphBuilder softmax("softmax", SchemaLookup());
+  core::builder::GraphBuilder softmax("softmax", SchemaLookup(), {{"", 28}});
   softmax.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   softmax.MakeInput("w", core::symbolic::TensorType::kFloat, Shape({3, 4}));
   softmax.MakeNode("MatMul", {"x", "w"}, {"mm"});
@@ -708,7 +708,7 @@ TEST(SwitchReshapeActivationPattern, RejectsPReluAndSoftmax) {
 }
 
 TEST(ShapeBasedMatMulToMulPattern, RejectsRankTwoTransposeRewrite) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({3, 1}));
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({1, 4}));
   builder.MakeNode("MatMul", {"x", "y"}, {"mm"});
@@ -732,7 +732,7 @@ TEST(TransposeMatMulPattern, RejectsTwoInputGemmBeforeOpset11) {
 }
 
 TEST(MatMulPatterns, RejectsForeignDomainAdjacentNodes) {
-  core::builder::GraphBuilder add("add", SchemaLookup());
+  core::builder::GraphBuilder add("add", SchemaLookup(), {{"", 28}});
   add.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   add.MakeInput("w", core::symbolic::TensorType::kFloat, Shape({3, 4}));
   add.MakeInput("bias", core::symbolic::TensorType::kFloat, Shape({4}));
@@ -743,7 +743,7 @@ TEST(MatMulPatterns, RejectsForeignDomainAdjacentNodes) {
   onnx_patterns::MatMulAddPattern add_pattern;
   EXPECT_EQ(add_pattern.Match(add_graph, add.Nodes()[0]).pattern, nullptr);
 
-  core::builder::GraphBuilder mul("mul", SchemaLookup());
+  core::builder::GraphBuilder mul("mul", SchemaLookup(), {{"", 28}});
   mul.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   mul.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({3, 4}));
   AddFloat(mul, "c1", {}, {2.0F});
@@ -756,7 +756,7 @@ TEST(MatMulPatterns, RejectsForeignDomainAdjacentNodes) {
   onnx_patterns::MulMulMatMulPattern mul_pattern;
   EXPECT_EQ(mul_pattern.Match(mul_graph, mul.Nodes()[2]).pattern, nullptr);
 
-  core::builder::GraphBuilder layout("layout", SchemaLookup());
+  core::builder::GraphBuilder layout("layout", SchemaLookup(), {{"", 28}});
   layout.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   layout.MakeInput("w", core::symbolic::TensorType::kFloat, Shape({3, 4}));
   layout.MakeNode("MatMul", {"x", "w"}, {"mm"});
@@ -767,7 +767,7 @@ TEST(MatMulPatterns, RejectsForeignDomainAdjacentNodes) {
   onnx_patterns::SwitchReshapeActivationPattern layout_pattern;
   EXPECT_EQ(layout_pattern.Match(layout_graph, layout.Nodes()[2]).pattern, nullptr);
 
-  core::builder::GraphBuilder shape("shape", SchemaLookup());
+  core::builder::GraphBuilder shape("shape", SchemaLookup(), {{"", 28}});
   shape.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3, 1}));
   shape.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({2, 1, 4}));
   shape.MakeNode("MatMul", {"x", "y"}, {"mm"});

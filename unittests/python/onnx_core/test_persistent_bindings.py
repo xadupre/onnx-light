@@ -330,7 +330,7 @@ class TestPersistentBindings(unittest.TestCase):
         )
 
     def test_builder_authoring_and_rejected_exports(self):
-        builder = GraphBuilder("persistent")
+        builder = GraphBuilder("persistent", opsets=28)
         builder.make_input("x", onnx.TensorProto.FLOAT, [2])
         builder.make_node("Identity", ["x"], ["y"])
         builder.make_output("y")

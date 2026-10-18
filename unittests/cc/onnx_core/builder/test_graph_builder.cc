@@ -45,6 +45,93 @@ TEST(GraphBuilder, StartsEmpty) {
   EXPECT_FALSE(builder.HasName("x"));
 }
 
+TEST(GraphBuilder, ConstructorOpsets) {
+  for (const std::string domain : {"", "ai.onnx"}) {
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{domain, 10}, {"com.example", 7}});
+    EXPECT_EQ(builder.OpsetVersion(""), 10);
+    EXPECT_EQ(builder.OpsetVersion("ai.onnx"), 10);
+    EXPECT_EQ(builder.OpsetVersion("com.example"), 7);
+    EXPECT_EQ(builder.Shapes().OpsetVersion(""), 10);
+    EXPECT_EQ(builder.Shapes().OpsetVersion("com.example"), 7);
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+    AttributeProto min;
+    min.set_name("min");
+    min.set_type(AttributeProto_AttributeType_FLOAT);
+    min.set_f(0.0f);
+    builder.MakeNode("Clip", {"x"}, {"y"}, "", "", std::vector<AttributeProto>{min});
+    builder.MakeOutput("y");
+    const ModelProto model = builder.ToModel();
+    bool found_default = false;
+    bool found_custom = false;
+    for (const auto &opset : model.opset_import()) {
+      if (opset.domain().empty() || opset.domain() == "ai.onnx") {
+        EXPECT_EQ(opset.version(), 10);
+        found_default = true;
+      } else if (opset.domain() == "com.example") {
+        EXPECT_EQ(opset.version(), 7);
+        found_custom = true;
+      }
+    }
+    EXPECT_TRUE(found_default);
+    EXPECT_TRUE(found_custom);
+  }
+}
+
+TEST(GraphBuilder, ConstructorDefaultOpset) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 17}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  builder.MakeNode("Relu", {"x"}, {"y"});
+  EXPECT_EQ(builder.OpsetVersion(""), 17);
+  builder.SetOpsetVersion("", 18);
+  EXPECT_EQ(builder.OpsetVersion(""), 18);
+
+  core::builder::GraphBuilder without_schema("g", {}, {{"", 18}});
+  EXPECT_EQ(without_schema.OpsetVersion(""), 18);
+}
+
+TEST(GraphBuilder, MissingOpsetRejectsNodeBeforeMutation) {
+  for (bool with_schema : {false, true}) {
+    core::builder::GraphBuilder builder(
+        "g", with_schema ? SchemaLookup() : core::builder::GraphBuilder::SchemaLookupFn{}, {});
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+    EXPECT_THROW(builder.MakeNode("Relu", {"x"}, {"y"}), core::builder::BuilderError);
+    EXPECT_TRUE(builder.Nodes().empty());
+    EXPECT_TRUE(builder.OpsetVersions().empty());
+    EXPECT_FALSE(builder.HasName("y"));
+    builder.SetOpsetVersion("", 18);
+    builder.MakeNode("Relu", {"x"}, {"y"});
+    EXPECT_THROW(builder.MakeNode("Custom", {"y"}, {"z"}, "custom"), core::builder::BuilderError);
+    EXPECT_FALSE(builder.HasName("z"));
+    builder.SetOpsetVersion("custom", 1);
+    builder.MakeNode("Custom", {"y"}, {"z"}, "custom");
+    EXPECT_EQ(builder.Nodes().size(), 2u);
+  }
+}
+
+TEST(GraphBuilder, RejectsNonpositiveOpsetsBeforeChangingImports) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+  for (int version : {0, -1}) {
+    EXPECT_THROW(builder.SetOpsetVersion("", version), core::builder::BuilderError);
+    EXPECT_EQ(builder.OpsetVersion(""), 18);
+    EXPECT_EQ(builder.Shapes().OpsetVersion(""), 18);
+  }
+}
+
+TEST(GraphBuilder, LocalFunctionsInheritExplicitOpsetsWithoutInventingImports) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+  auto &function = builder.MakeLocalFunction("F", "local");
+  EXPECT_EQ(function.OpsetVersion(""), 18);
+  EXPECT_EQ(builder.OpsetVersion("local"), core::shapes::kUnknownOpsetVersion);
+  function.MakeInput("arg", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  function.MakeNode("Relu", {"arg"}, {"result"});
+  function.MakeOutput("result");
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  EXPECT_THROW(builder.MakeNode("F", {"x"}, {"y"}, "local"), core::builder::BuilderError);
+  EXPECT_FALSE(builder.HasName("y"));
+  builder.SetOpsetVersion("local", 7);
+  builder.MakeNode("F", {"x"}, {"y"}, "local");
+}
+
 TEST(GraphBuilder, NamesAreNeverReused) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
@@ -62,8 +149,8 @@ TEST(GraphBuilder, UniqueNameNeverCollides) {
   EXPECT_TRUE(builder.HasName(b));
 }
 
-TEST(GraphBuilder, MakeNodeResolvesOpsetAndInfersShape) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+TEST(GraphBuilder, MakeNodeUsesExplicitOpsetAndInfersShape) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
 
@@ -71,8 +158,7 @@ TEST(GraphBuilder, MakeNodeResolvesOpsetAndInfersShape) {
   ASSERT_EQ(outputs.size(), 1u);
   EXPECT_TRUE(builder.HasName(outputs[0]));
 
-  // The default ONNX opset was resolved from the operator schemas.
-  EXPECT_GT(builder.OpsetVersion(""), 0);
+  EXPECT_EQ(builder.OpsetVersion(""), 28);
 
   // The output shape was inferred incrementally.
   ASSERT_TRUE(builder.HasShape(outputs[0]));
@@ -99,7 +185,7 @@ TEST(GraphBuilder, SetOpsetVersionRebuildsMetadataImmediately) {
 }
 
 TEST(GraphBuilder, MakeNodeMaintainsTagsAndReuseIncrementally) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
 
   const std::vector<std::string> shape_out = builder.MakeNode("Shape", {"x"});
@@ -121,7 +207,7 @@ TEST(GraphBuilder, MakeNodeMaintainsTagsAndReuseIncrementally) {
 }
 
 TEST(GraphBuilder, LaterConsumerRevokesEarlierIncrementalReuse) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   builder.MakeNode("Abs", {"x"}, {"intermediate"});
   builder.MakeNode("Abs", {"intermediate"}, {"first"});
@@ -141,7 +227,7 @@ TEST(GraphBuilder, LaterConsumerRevokesEarlierIncrementalReuse) {
 }
 
 TEST(GraphBuilder, RepeatedInputsHaveOneReleaseAnnotation) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   builder.MakeNode("Abs", {"x"}, {"intermediate"});
   builder.MakeNode("Add", {"intermediate", "intermediate"}, {"result"});
@@ -155,7 +241,7 @@ TEST(GraphBuilder, RepeatedInputsHaveOneReleaseAnnotation) {
 }
 
 TEST(GraphBuilder, OutputDeclaredAfterNodesRevokesIncrementalReuse) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   builder.MakeNode("Abs", {"x"}, {"intermediate"});
   builder.MakeNode("Abs", {"intermediate"}, {"result"});
@@ -170,7 +256,7 @@ TEST(GraphBuilder, OutputDeclaredAfterNodesRevokesIncrementalReuse) {
 }
 
 TEST(GraphBuilder, DeclaredOutputShapeUpdatesMetadataImmediately) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.SetOpsetVersion("custom", 1);
   builder.MakeNode("Unknown", {}, {"intermediate"}, "custom");
   builder.MakeNode("Abs", {"intermediate"}, {"result"});
@@ -229,7 +315,7 @@ TEST(GraphBuilder, TypedOutputRebuildDefersPersistentBindingValidationDuringImpo
 }
 
 TEST(GraphBuilder, DeclaredOutputTagPropagatesToEarlierNodes) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   builder.MakeNode("Abs", {"x"}, {"intermediate"});
   builder.MakeNode("Abs", {"intermediate"}, {"result"});
@@ -250,7 +336,7 @@ TEST(GraphBuilder, DeclaredOutputTagPropagatesToEarlierNodes) {
 }
 
 TEST(GraphBuilder, LateTagRefreshesReleaseWithoutDownstreamConsumers) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   builder.MakeNode("Abs", {"x"}, {"intermediate"});
   builder.MakeNode("Abs", {"intermediate"}, {"result"});
@@ -262,7 +348,7 @@ TEST(GraphBuilder, LateTagRefreshesReleaseWithoutDownstreamConsumers) {
 }
 
 TEST(GraphBuilder, RepeatedGraphExportPreservesMetadataAfterAppending) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   builder.MakeNode("Abs", {"x"}, {"intermediate"});
   builder.MakeNode("Abs", {"intermediate"}, {"first"});
@@ -282,7 +368,7 @@ TEST(GraphBuilder, RepeatedGraphExportPreservesMetadataAfterAppending) {
 }
 
 TEST(GraphBuilder, MaintainsMemoryProfilesIncrementally) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   builder.MakeNode("Abs", {"x"}, {"result"});
   builder.MakeOutput("result");
@@ -300,7 +386,7 @@ TEST(GraphBuilder, IncrementalMetadataRejectsGraphInputOverwrite) {
 }
 
 TEST(GraphBuilder, RefreshesOnlyAffectedIncrementalMemoryRange) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   const auto expect_whole_graph_metadata = [&]() {
     const GraphProto graph = builder.BuildGraph();
     core::compute::ComputeContext expected;
@@ -333,7 +419,7 @@ TEST(GraphBuilder, RefreshesOnlyAffectedIncrementalMemoryRange) {
 }
 
 TEST(GraphBuilder, AdvancingKeptInitializerUpdatesOnlyItsLastUse) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   builder.MakeInitializer(
       MakeInitializer<float>("weight", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f}));
@@ -364,7 +450,7 @@ TEST(GraphBuilder, AdvancingKeptInitializerUpdatesOnlyItsLastUse) {
 }
 
 TEST(GraphBuilder, ChildMutationUpdatesParentLifetimeMetadataImmediately) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.SetOpsetVersion("custom", 1);
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   builder.MakeNode("Abs", {"x"}, {"intermediate"});
@@ -398,7 +484,7 @@ TEST(GraphBuilder, ChildMutationUpdatesParentLifetimeMetadataImmediately) {
 }
 
 TEST(GraphBuilder, ChildMutationUpdatesParentShapeMetadataImmediately) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.SetOpsetVersion("local", 1);
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   builder.MakeNode("F", {"x"}, {"result"}, "local");
@@ -420,7 +506,7 @@ TEST(GraphBuilder, ChildMutationUpdatesParentShapeMetadataImmediately) {
 }
 
 TEST(GraphBuilder, ChildMutationRefreshesOnlyDependentParentNodes) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.SetOpsetVersion("local", 1);
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   builder.MakeInput("unrelated", core::symbolic::TensorType::kFloat, MakeShape({4, 5}));
@@ -449,7 +535,7 @@ TEST(GraphBuilder, ChildMutationRefreshesOnlyDependentParentNodes) {
 }
 
 TEST(GraphBuilder, LocalFunctionMutationRefreshesTransitiveCallers) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.SetOpsetVersion("local", 1);
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
 
@@ -525,7 +611,7 @@ TEST(GraphBuilder, DefaultDomainFunctionMutationRefreshesTransitiveCallers) {
 }
 
 TEST(GraphBuilder, FunctionMutationRefreshesNestedSubgraphOwnerOnce) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.SetOpsetVersion("local", 1);
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   builder.MakeInput("cond", core::symbolic::TensorType::kBool, MakeShape({}));
@@ -573,7 +659,7 @@ TEST(GraphBuilder, FunctionMutationRefreshesNestedSubgraphOwnerOnce) {
 }
 
 TEST(GraphBuilder, MaintainsConstantInfoIncrementally) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   TensorProto initializer;
   initializer.set_name("weight");
   initializer.set_data_type(TensorProto::DataType::FLOAT);
@@ -749,7 +835,7 @@ TEST(GraphBuilder, MakeInitializerMoveValidationDoesNotConsumeSource) {
 }
 
 TEST(GraphBuilder, MakeNodeUsesProvidedOutputName) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   const std::vector<std::string> outputs = builder.MakeNode("Add", {"x", "y"}, {"z"});
@@ -843,12 +929,12 @@ loss (float[2,3] scores, int64[2] labels) => (float Y) {
 }
 
 TEST(GraphBuilder, MakeNodeRejectsUnknownInput) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   EXPECT_THROW(builder.MakeNode("Add", {"missing", "y"}), core::builder::BuilderError);
 }
 
 TEST(GraphBuilder, MakeNodeAcceptsRepeatedProtoFieldAttributes) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
 
   utils::RepeatedProtoField<AttributeProto> attributes;
@@ -879,7 +965,7 @@ TEST(GraphBuilder, ExternalInitializerIsRecorded) {
 }
 
 TEST(GraphBuilder, ToModelProducesGraphWithOpset) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   const std::vector<std::string> outputs = builder.MakeNode("Add", {"x", "y"});
@@ -933,7 +1019,7 @@ TEST(GraphBuilder, ToFunctionRejectsInitializers) {
 }
 
 TEST(GraphBuilder, ToFunctionPreservesFinalizedShapesAndMetadata) {
-  core::builder::GraphBuilder builder("F", SchemaLookup());
+  core::builder::GraphBuilder builder("F", SchemaLookup(), {{"", 28}});
   ValueInfoProto input;
   input.set_name("X");
   input.set_doc_string("Input declaration");
@@ -1022,7 +1108,7 @@ TEST(GraphBuilder, InputOutputFromProto) {
 }
 
 TEST(GraphBuilder, ToStringDescribesContent) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   const std::vector<std::string> outputs = builder.MakeNode("Add", {"x", "y"});
@@ -1036,7 +1122,8 @@ TEST(GraphBuilder, ToStringDescribesContent) {
 }
 
 TEST(GraphBuilder, LocalFunctionIsANestedBuilder) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+  builder.SetOpsetVersion("custom", 1);
   core::builder::GraphBuilder &fct = builder.MakeLocalFunction("MyFct", "custom");
   fct.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   fct.MakeInput("b", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
@@ -1067,7 +1154,7 @@ TEST(GraphBuilder, SubgraphIsANestedBuilder) {
 }
 
 TEST(GraphBuilder, RemoveUnusedNodesDropsDeadEnds) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
 
@@ -1086,7 +1173,7 @@ TEST(GraphBuilder, RemoveUnusedNodesDropsDeadEnds) {
 }
 
 TEST(GraphBuilder, RemoveUnusedNodesKeepsSharedProducer) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
 
   // A shared producer feeding one used and one unused consumer must be kept.
@@ -1102,7 +1189,7 @@ TEST(GraphBuilder, RemoveUnusedNodesKeepsSharedProducer) {
 }
 
 TEST(GraphBuilder, RemoveUnusedNodesRecursesIntoSubgraphs) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
 
   // A nested subgraph with one live and one dead-end node.
@@ -1123,7 +1210,7 @@ TEST(GraphBuilder, RemoveUnusedNodesRecursesIntoSubgraphs) {
 }
 
 TEST(GraphBuilder, RemoveDuplicateInitializersCollapsesEqual) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 2}));
 
   // Two initializers with byte-for-byte identical content.
@@ -1154,7 +1241,7 @@ TEST(GraphBuilder, RemoveDuplicateInitializersCollapsesEqual) {
 }
 
 TEST(GraphBuilder, RemoveDuplicateInitializersKeepsDistinctContent) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 2}));
 
   // Same shape and type but different data: not duplicates.
@@ -1171,7 +1258,7 @@ TEST(GraphBuilder, RemoveDuplicateInitializersKeepsDistinctContent) {
 }
 
 TEST(GraphBuilder, RemoveDuplicateInitializersRecursesIntoSubgraphs) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 2}));
 
   core::builder::GraphBuilder &body = builder.MakeSubgraph("body");
@@ -1189,7 +1276,7 @@ TEST(GraphBuilder, RemoveDuplicateInitializersRecursesIntoSubgraphs) {
 }
 
 TEST(GraphBuilder, RemoveDuplicateInitializersCollapsesAcrossScopes) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 2}));
 
   // An initializer in the enclosing graph.
@@ -1214,7 +1301,7 @@ TEST(GraphBuilder, RemoveDuplicateInitializersCollapsesAcrossScopes) {
 }
 
 TEST(GraphBuilder, RemoveIdentityNodesRewiresConsumers) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
 
   // Identity forwards x; a downstream node consumes the forwarded value.
@@ -1232,7 +1319,7 @@ TEST(GraphBuilder, RemoveIdentityNodesRewiresConsumers) {
 }
 
 TEST(GraphBuilder, RemoveIdentityNodesCollapsesChains) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
 
   // A chain of two identities feeding a live consumer must collapse onto x.
@@ -1248,7 +1335,7 @@ TEST(GraphBuilder, RemoveIdentityNodesCollapsesChains) {
 }
 
 TEST(GraphBuilder, RemoveIdentityNodesKeepsGraphOutputIdentity) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
 
   // The identity output is a declared graph output, so the node is kept.
@@ -1261,7 +1348,7 @@ TEST(GraphBuilder, RemoveIdentityNodesKeepsGraphOutputIdentity) {
 }
 
 TEST(GraphBuilder, RemoveIdentityNodesRecursesIntoSubgraphs) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
 
   // A nested subgraph with an interior identity to collapse.
@@ -1281,7 +1368,7 @@ TEST(GraphBuilder, RemoveIdentityNodesRecursesIntoSubgraphs) {
 }
 
 TEST(GraphBuilder, RemoveDuplicateNodesCollapsesEqual) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
 
   // Two Neg nodes computing the same value feed a shared consumer.
@@ -1302,7 +1389,7 @@ TEST(GraphBuilder, RemoveDuplicateNodesCollapsesEqual) {
 }
 
 TEST(GraphBuilder, RemoveDuplicateNodesCollapsesBranches) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
 
   // Two identical branches: once the first level collapses, the second level
@@ -1324,7 +1411,7 @@ TEST(GraphBuilder, RemoveDuplicateNodesCollapsesBranches) {
 }
 
 TEST(GraphBuilder, RemoveDuplicateNodesKeepsDistinctAttributes) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
 
   const auto leaky = [&](float alpha) {
@@ -1346,7 +1433,7 @@ TEST(GraphBuilder, RemoveDuplicateNodesKeepsDistinctAttributes) {
 }
 
 TEST(GraphBuilder, RemoveDuplicateNodesKeepsGraphOutputs) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
 
   // Both duplicates are declared graph outputs, so neither can be dropped.
@@ -1360,7 +1447,7 @@ TEST(GraphBuilder, RemoveDuplicateNodesKeepsGraphOutputs) {
 }
 
 TEST(GraphBuilder, RemoveDuplicateNodesRecursesIntoSubgraphs) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
 
   core::builder::GraphBuilder &body = builder.MakeSubgraph("body");
@@ -1381,7 +1468,7 @@ TEST(GraphBuilder, RemoveDuplicateNodesRecursesIntoSubgraphs) {
 }
 
 TEST(GraphBuilder, MoveShapeAndSizeNodesHoistsToProducer) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
 
   const std::vector<std::string> p = builder.MakeNode("Neg", {"x"});
@@ -1404,7 +1491,7 @@ TEST(GraphBuilder, MoveShapeAndSizeNodesHoistsToProducer) {
 }
 
 TEST(GraphBuilder, MoveShapeAndSizeNodesKeepsGraphInputReader) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
 
   // Shape reads a graph input (no producing node), so it stays in place.
@@ -1420,7 +1507,7 @@ TEST(GraphBuilder, MoveShapeAndSizeNodesKeepsGraphInputReader) {
 }
 
 TEST(GraphBuilder, MoveShapeAndSizeNodesRecursesIntoSubgraphs) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
 
   core::builder::GraphBuilder &body = builder.MakeSubgraph("body");
@@ -1442,9 +1529,10 @@ TEST(GraphBuilder, MoveShapeAndSizeNodesRecursesIntoSubgraphs) {
 }
 
 TEST(GraphBuilder, InlineLocalFunctionsExpandsCallSite) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
 
   // A local function computing Neg(Add(a, b)).
+  builder.SetOpsetVersion("custom", 1);
   core::builder::GraphBuilder &fct = builder.MakeLocalFunction("MyFct", "custom");
   fct.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   fct.MakeInput("b", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
@@ -1475,7 +1563,8 @@ TEST(GraphBuilder, InlineLocalFunctionsExpandsCallSite) {
 
 TEST(GraphBuilder, InlineLocalFunctionsMovesUnchangedNodes) {
   for (bool with_call : {false, true}) {
-    core::builder::GraphBuilder builder("g", SchemaLookup());
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+    builder.SetOpsetVersion("custom", 1);
     auto &function = builder.MakeLocalFunction("Local", "custom");
     function.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
     function.MakeNode("Identity", {"a"}, {"result"});
@@ -1507,8 +1596,9 @@ TEST(GraphBuilder, InlineLocalFunctionsMovesUnchangedNodes) {
 }
 
 TEST(GraphBuilder, InlineLocalFunctionsRewiresIntermediates) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
 
+  builder.SetOpsetVersion("custom", 1);
   core::builder::GraphBuilder &fct = builder.MakeLocalFunction("MyFct", "custom");
   fct.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   const std::vector<std::string> inner = fct.MakeNode("Neg", {"a"});
@@ -1531,9 +1621,10 @@ TEST(GraphBuilder, InlineLocalFunctionsRewiresIntermediates) {
 }
 
 TEST(GraphBuilder, InlineLocalFunctionsExpandsNestedCalls) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
 
   // Inner function Neg(a).
+  builder.SetOpsetVersion("custom", 1);
   core::builder::GraphBuilder &inner = builder.MakeLocalFunction("Inner", "custom");
   inner.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   const std::vector<std::string> inner_out = inner.MakeNode("Neg", {"a"});
@@ -1560,7 +1651,8 @@ TEST(GraphBuilder, InlineLocalFunctionsExpandsNestedCalls) {
 }
 
 TEST(GraphBuilder, InlineLocalFunctionsClonesControlFlowSubgraphs) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+  builder.SetOpsetVersion("custom", 1);
   core::builder::GraphBuilder &function = builder.MakeLocalFunction("Choose", "custom");
   function.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
   function.MakeInput("value", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
@@ -1614,7 +1706,8 @@ TEST(GraphBuilder, InlineLocalFunctionsClonesControlFlowSubgraphs) {
 }
 
 TEST(GraphBuilder, InlineLocalFunctionsExpandsCallsInClonedSubgraphs) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+  builder.SetOpsetVersion("custom", 1);
   auto &inner = builder.MakeLocalFunction("Inner", "custom");
   inner.MakeInput("value", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   inner.MakeNode("Identity", {"value"}, {"result"});
@@ -1654,7 +1747,8 @@ TEST(GraphBuilder, InlineLocalFunctionsExpandsCallsInClonedSubgraphs) {
 }
 
 TEST(GraphBuilder, InlineLocalFunctionsMaterializesGraphCallAttributes) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+  builder.SetOpsetVersion("custom", 1);
   auto &inner = builder.MakeLocalFunction("Inner", "custom");
   inner.MakeInput("value", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   inner.MakeNode("Identity", {"value"}, {"result"});
@@ -1712,7 +1806,8 @@ TEST(GraphBuilder, InlineLocalFunctionsMaterializesGraphCallAttributes) {
 
 TEST(GraphBuilder, InlineLocalFunctionsPrunesOnlyUnreferencedReplacedCallSubgraphs) {
   for (bool retain_original : {false, true}) {
-    core::builder::GraphBuilder builder("g", SchemaLookup());
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+    builder.SetOpsetVersion("custom", 1);
     auto &function = builder.MakeLocalFunction("F", "custom");
     function.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
     function.MakeNode("Identity", {"a"}, {"result"});
@@ -1978,8 +2073,9 @@ TEST(GraphBuilder, InlineLocalFunctionsRetainsDefinitionsCalledByExportedDefault
 }
 
 TEST(GraphBuilder, InlineLocalFunctionsKeepsUncalledFunction) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
 
+  builder.SetOpsetVersion("custom", 1);
   core::builder::GraphBuilder &fct = builder.MakeLocalFunction("MyFct", "custom");
   fct.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   const std::vector<std::string> out = fct.MakeNode("Neg", {"a"});
@@ -2049,9 +2145,10 @@ TEST(GraphBuilder, InlineLocalFunctionsPreservesAndMatchesOverloads) {
 }
 
 TEST(GraphBuilder, InlineLocalFunctionsResolvesAttributeReferences) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
 
   // A local function whose body forwards a function attribute to a body node.
+  builder.SetOpsetVersion("custom", 1);
   core::builder::GraphBuilder &fct = builder.MakeLocalFunction("Scaled", "custom");
   fct.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   AttributeProto ref;
@@ -2086,8 +2183,9 @@ TEST(GraphBuilder, InlineLocalFunctionsResolvesAttributeReferences) {
 }
 
 TEST(GraphBuilder, InlineLocalFunctionsRejectsMissingAttributeReferences) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
 
+  builder.SetOpsetVersion("custom", 1);
   core::builder::GraphBuilder &fct = builder.MakeLocalFunction("Scaled", "custom");
   fct.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   fct.MakeInitializer(MakeInitializer<float>("weight", {1}, {1.0f}));
@@ -2121,8 +2219,9 @@ TEST(GraphBuilder, InlineLocalFunctionsRejectsMissingAttributeReferences) {
 }
 
 TEST(GraphBuilder, InlineLocalFunctionsIncludeSelectsFunctions) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
 
+  builder.SetOpsetVersion("custom", 1);
   core::builder::GraphBuilder &keep = builder.MakeLocalFunction("Keep", "custom");
   keep.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   const std::vector<std::string> keep_out = keep.MakeNode("Neg", {"a"});
@@ -2152,8 +2251,9 @@ TEST(GraphBuilder, InlineLocalFunctionsIncludeSelectsFunctions) {
 }
 
 TEST(GraphBuilder, InlineLocalFunctionsExcludeSkipsFunctions) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
 
+  builder.SetOpsetVersion("custom", 1);
   core::builder::GraphBuilder &keep = builder.MakeLocalFunction("Keep", "custom");
   keep.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   const std::vector<std::string> keep_out = keep.MakeNode("Neg", {"a"});
@@ -2176,8 +2276,9 @@ TEST(GraphBuilder, InlineLocalFunctionsExcludeSkipsFunctions) {
 }
 
 TEST(GraphBuilder, InlineLocalFunctionsIncludeWildcardsDomainByName) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
 
+  builder.SetOpsetVersion("custom", 1);
   core::builder::GraphBuilder &keep = builder.MakeLocalFunction("Keep", "custom");
   keep.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   const std::vector<std::string> keep_out = keep.MakeNode("Neg", {"a"});
@@ -2200,13 +2301,15 @@ TEST(GraphBuilder, InlineLocalFunctionsIncludeWildcardsDomainByName) {
 }
 
 TEST(GraphBuilder, InlineLocalFunctionsIncludeWildcardsNameByDomain) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
 
+  builder.SetOpsetVersion("custom", 1);
   core::builder::GraphBuilder &fa = builder.MakeLocalFunction("First", "custom");
   fa.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   const std::vector<std::string> fa_out = fa.MakeNode("Neg", {"a"});
   fa.MakeOutput(fa_out[0]);
 
+  builder.SetOpsetVersion("other", 1);
   core::builder::GraphBuilder &fb = builder.MakeLocalFunction("Second", "other");
   fb.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   const std::vector<std::string> fb_out = fb.MakeNode("Neg", {"a"});
@@ -2231,6 +2334,7 @@ TEST(GraphBuilder, InlineLocalFunctionsRejectsIncludeAndExclude) {
 TEST(GraphBuilder, NativeLocalFunctionInfersBeforeFollowingNode) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   builder.SetOpsetVersion("", 18);
+  builder.SetOpsetVersion("local", 1);
   auto &function = builder.MakeLocalFunction("F", "local");
   function.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   function.MakeNode("Identity", {"a"}, {"r"});
@@ -2253,7 +2357,8 @@ TEST(GraphBuilder, NativeLocalFunctionInfersBeforeFollowingNode) {
 }
 
 TEST(GraphBuilder, NativeLocalFunctionDefinitionsSurviveMovesAndEdits) {
-  core::builder::GraphBuilder original("g", SchemaLookup());
+  core::builder::GraphBuilder original("g", SchemaLookup(), {{"", 28}});
+  original.SetOpsetVersion("local", 1);
   auto &function = original.MakeLocalFunction("F", "local");
   function.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   function.MakeNode("Identity", {"a"}, {"r"});
@@ -2573,7 +2678,7 @@ TEST(GraphBuilder, NativeFunctionRejectsRecursionAndWrongArity) {
 }
 
 TEST(GraphBuilder, NativeUnknownRankIsNotScalar) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   ValueInfoProto unknown;
   unknown.set_name("unknown");
   unknown.mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::DataType::FLOAT);
@@ -2614,7 +2719,7 @@ TEST(GraphBuilder, NativeIfInfersCapturedOutputsBeforeCastLike) {
 }
 
 TEST(GraphBuilder, NativeSubgraphRejectsAncestorShadowing) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   auto &branch = builder.MakeSubgraph("branch");
   EXPECT_THROW(branch.MakeNode("Identity", {"X"}, {"X"}), core::builder::BuilderError);
@@ -2641,7 +2746,7 @@ TEST(GraphBuilder, NativeCleanupPrunesInitializersWithoutNodes) {
 }
 
 TEST(GraphBuilder, NativeCleanupRetainsInitializerCapturedByLiveBranch) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
   builder.MakeInitializer(MakeInitializer<float>("captured", {1}, {1.0f}));
   builder.MakeInitializer(MakeInitializer<float>("orphan", {1}, {2.0f}));
@@ -2666,7 +2771,8 @@ TEST(GraphBuilder, NativeCleanupRetainsInitializerCapturedByLiveBranch) {
 }
 
 TEST(GraphBuilder, NativeFunctionSnapshotsRefreshAfterMutations) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+  builder.SetOpsetVersion("local", 1);
   auto &function = builder.MakeLocalFunction("F", "local");
   function.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   function.MakeNode("Identity", {"a"}, {"r"});
@@ -2707,7 +2813,8 @@ TEST(GraphBuilder, NativeFunctionSnapshotsRefreshAfterMutations) {
 }
 
 TEST(GraphBuilder, NativeDemandRefreshDiscardsRemovedFunctions) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+  builder.SetOpsetVersion("local", 1);
   auto &function = builder.MakeLocalFunction("F", "local");
   function.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   function.MakeNode("Identity", {"a"}, {"r"});
@@ -2725,7 +2832,7 @@ TEST(GraphBuilder, NativeDemandRefreshDiscardsRemovedFunctions) {
 }
 
 TEST(GraphBuilder, NativeGraphReferencesRefreshLateFunctionDefinitions) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.SetOpsetVersion("local", 1);
   builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   builder.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
@@ -2975,7 +3082,7 @@ TEST(GraphBuilderStructured, NativeFunctionReplaysLateStructuredDeclarations) {
 }
 
 TEST(GraphBuilderStructured, RetainsStructuredInputAndIdentityOutput) {
-  core::builder::GraphBuilder builder("typed", SchemaLookup());
+  core::builder::GraphBuilder builder("typed", SchemaLookup(), {{"", 28}});
   builder.MakeStructType(BuilderRecord());
   builder.MakeInput(BuilderStructuredInfo("x"));
   builder.MakeNode("Identity", {"x"}, {"y"});
@@ -2988,7 +3095,7 @@ TEST(GraphBuilderStructured, RetainsStructuredInputAndIdentityOutput) {
 }
 
 TEST(GraphBuilderStructured, InfersConstructionMetadataExactlyOnce) {
-  core::builder::GraphBuilder builder("typed", SchemaLookup());
+  core::builder::GraphBuilder builder("typed", SchemaLookup(), {{"", 28}});
   builder.MakeStructType(BuilderRecord());
   builder.MakeInput(BuilderStructuredInfo("x"));
   auto &compute = const_cast<core::compute::ComputeContext &>(builder.Compute());
@@ -3018,7 +3125,7 @@ TEST(GraphBuilderStructured, InfersConstructionMetadataExactlyOnce) {
 }
 
 TEST(GraphBuilderStructured, RejectsBadPayloadAndNamesWithoutMutation) {
-  core::builder::GraphBuilder builder("invalid", SchemaLookup());
+  core::builder::GraphBuilder builder("invalid", SchemaLookup(), {{"", 28}});
   builder.MakeStructType(BuilderRecord());
   EXPECT_THROW(builder.MakeEncodedInitializer(BuilderEncoded("bad", 1, 7)), std::invalid_argument);
   EXPECT_FALSE(builder.HasName("bad"));
@@ -3044,7 +3151,7 @@ TEST(GraphBuilderStructured, RejectsBadPayloadAndNamesWithoutMutation) {
 }
 
 TEST(GraphBuilderStructured, DeduplicatesOnlyCompleteSemanticIdentity) {
-  core::builder::GraphBuilder builder("dedup", SchemaLookup());
+  core::builder::GraphBuilder builder("dedup", SchemaLookup(), {{"", 28}});
   builder.SetOpsetVersion("custom", 1);
   builder.MakeStructType(BuilderRecord(1));
   auto distinct = BuilderRecord(2);
@@ -3070,7 +3177,7 @@ TEST(GraphBuilderStructured, DeduplicatesOnlyCompleteSemanticIdentity) {
 }
 
 TEST(GraphBuilderStructured, PrunesEncodedInitializersAndKeepsCapturedValues) {
-  core::builder::GraphBuilder builder("captures", SchemaLookup());
+  core::builder::GraphBuilder builder("captures", SchemaLookup(), {{"", 28}});
   builder.SetOpsetVersion("custom", 1);
   builder.MakeStructType(BuilderRecord());
   builder.MakeEncodedInitializer(BuilderEncoded("live"));
@@ -3095,7 +3202,7 @@ TEST(GraphBuilderStructured, PrunesEncodedInitializersAndKeepsCapturedValues) {
 }
 
 TEST(GraphBuilderStructured, NestedDedupRewritesCapturesAndOwnsCatalogue) {
-  core::builder::GraphBuilder builder("nested", SchemaLookup());
+  core::builder::GraphBuilder builder("nested", SchemaLookup(), {{"", 28}});
   builder.MakeStructType(BuilderRecord());
   builder.MakeEncodedInitializer(BuilderEncoded("outer"));
   auto &child = builder.MakeSubgraph("body");
@@ -3172,7 +3279,7 @@ TEST(GraphBuilderStructured, NestedGraphExportRetainsPayloadOwner) {
   bool released = false;
   GraphProto exported;
   {
-    core::builder::GraphBuilder builder("nested_owner", SchemaLookup());
+    core::builder::GraphBuilder builder("nested_owner", SchemaLookup(), {{"", 28}});
     builder.SetOpsetVersion("custom", 1);
     builder.MakeStructType(BuilderRecord());
     auto &child = builder.MakeSubgraph("body");
@@ -3214,7 +3321,7 @@ TEST(GraphBuilderStructured, StandardExportRejectsInlineAndNestedTypes) {
 }
 
 TEST(GraphBuilderStructured, ReordersNodesAndRebuildsAfterIdentityRemoval) {
-  core::builder::GraphBuilder builder("sort", SchemaLookup());
+  core::builder::GraphBuilder builder("sort", SchemaLookup(), {{"", 28}});
   builder.MakeStructType(BuilderRecord());
   builder.MakeEncodedInitializer(BuilderEncoded("weight"));
   builder.MakeNode("Identity", {"weight"}, {"middle"});
@@ -3267,7 +3374,7 @@ TEST(GraphBuilderStructured, DoesNotDeduplicateDifferentInlineConstantsOrLogical
 }
 
 TEST(GraphBuilderStructured, DefaultsRemainOverridableAndProtectedFromDeduplication) {
-  core::builder::GraphBuilder builder("defaults", SchemaLookup());
+  core::builder::GraphBuilder builder("defaults", SchemaLookup(), {{"", 28}});
   builder.MakeStructType(BuilderRecord());
   builder.MakeStructType(BuilderRecord(2));
   builder.MakeInput(BuilderStructuredInfo("input"));
@@ -3292,8 +3399,9 @@ TEST(GraphBuilderStructured, DefaultsRemainOverridableAndProtectedFromDeduplicat
 }
 
 TEST(GraphBuilderStructured, LocalFunctionUsesModelCatalogueButCannotExportItAlone) {
-  core::builder::GraphBuilder builder("functions", SchemaLookup());
+  core::builder::GraphBuilder builder("functions", SchemaLookup(), {{"", 28}});
   builder.MakeStructType(BuilderRecord());
+  builder.SetOpsetVersion("custom", 1);
   auto &function = builder.MakeLocalFunction("Forward", "custom");
   function.SetOpsetVersion("", 23);
   function.MakeInput(BuilderStructuredInfo("arg"));
@@ -3326,7 +3434,7 @@ TEST(GraphBuilderStructured, RejectsNonByteAlignedRootAndUnresolvedInput) {
 }
 
 TEST(GraphBuilderStructured, DoesNotConstantFoldEncodedBytesAsLogicalTensor) {
-  core::builder::GraphBuilder builder("no_dense_fold", SchemaLookup());
+  core::builder::GraphBuilder builder("no_dense_fold", SchemaLookup(), {{"", 28}});
   builder.MakeStructType(BuilderRecord());
   auto value = BuilderEncoded("weight");
   auto *logical = value.mutable_logical_type()->mutable_tensor_type();

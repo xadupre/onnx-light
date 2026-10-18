@@ -53,7 +53,7 @@ utils::RepeatedProtoField<AttributeProto> AxisKeepdims(int64_t axis, int64_t kee
 }
 
 TEST(SequenceConstructAtPattern, ReplacesWithIdentities) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x0", core::symbolic::TensorType::kFloat, Shape2D(2, 3));
   builder.MakeInput("x1", core::symbolic::TensorType::kFloat, Shape2D(2, 3));
   builder.MakeInitializer(MakeInitializer<int64_t>("i0", {}, {0}));
@@ -80,7 +80,7 @@ TEST(SequenceConstructAtPattern, ReplacesWithIdentities) {
 }
 
 TEST(SequenceConstructAtPattern, RejectsNonSequenceAtConsumer) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x0", core::symbolic::TensorType::kFloat, Shape2D(2, 3));
   builder.MakeInput("x1", core::symbolic::TensorType::kFloat, Shape2D(2, 3));
   builder.MakeInitializer(MakeInitializer<int64_t>("i0", {}, {0}));
@@ -98,7 +98,7 @@ TEST(SequenceConstructAtPattern, RejectsNonSequenceAtConsumer) {
 }
 
 TEST(SplitToSequenceSequenceAtPattern, ReplacesWithSplitWhenSplitProvided) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2D(2, 6));
   builder.MakeInitializer(MakeInitializer<int64_t>("split", {3}, {2, 2, 2}));
   builder.MakeInitializer(MakeInitializer<int64_t>("i0", {}, {0}));
@@ -130,7 +130,7 @@ TEST(SplitToSequenceSequenceAtPattern, ReplacesWithSplitWhenSplitProvided) {
 }
 
 TEST(SplitToSequenceSequenceAtPattern, ExpandsScalarSplitWithRemainder) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2D(2, 8));
   builder.MakeInitializer(MakeInitializer<int64_t>("split", {}, {5}));
   builder.MakeInitializer(MakeInitializer<int64_t>("i0", {}, {0}));
@@ -166,7 +166,7 @@ TEST(SplitToSequenceSequenceAtPattern, ExpandsScalarSplitWithRemainder) {
 }
 
 TEST(SplitToSequenceSequenceAtPattern, OptimizesScalarSplitWithRemainder) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2D(2, 8));
   builder.MakeInitializer(MakeInitializer<int64_t>("split", {}, {5}));
   builder.MakeInitializer(MakeInitializer<int64_t>("i0", {}, {0}));
@@ -188,7 +188,7 @@ TEST(SplitToSequenceSequenceAtPattern, OptimizesScalarSplitWithRemainder) {
 }
 
 TEST(SplitToSequenceSequenceAtPattern, RejectsScalarSplitWithUnknownAxisDimension) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   core::symbolic::SymShape shape;
   shape.PushBack(core::symbolic::SymDim(2));
   shape.PushBack(core::symbolic::SymDim("unknown"));
@@ -208,7 +208,7 @@ TEST(SplitToSequenceSequenceAtPattern, RejectsScalarSplitWithUnknownAxisDimensio
 }
 
 TEST(SplitToSequenceSequenceAtPattern, InsertsSqueezeWhenKeepdimsZero) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2D(2, 2));
   builder.MakeInitializer(MakeInitializer<int64_t>("i0", {}, {0}));
   builder.MakeInitializer(MakeInitializer<int64_t>("i1", {}, {1}));

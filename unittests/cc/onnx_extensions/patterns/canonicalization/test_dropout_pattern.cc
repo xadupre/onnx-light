@@ -29,7 +29,7 @@ core::symbolic::SymShape Shape() {
 }
 
 TEST(DropoutPattern, ReplacesInferenceDropout) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
   builder.MakeNode("Dropout", {"x"}, {"y", "mask"});
   builder.MakeOutput("y");
@@ -48,7 +48,7 @@ TEST(DropoutPattern, ReplacesInferenceDropout) {
 }
 
 TEST(DropoutPattern, ProducesIdentityGraph) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
   builder.MakeNode("Dropout", {"x"}, {"y", "mask"});
   builder.MakeOutput("y");
@@ -65,7 +65,7 @@ TEST(DropoutPattern, ProducesIdentityGraph) {
 }
 
 TEST(DropoutPattern, RejectsUsedMaskOutput) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
   builder.MakeNode("Dropout", {"x"}, {"y", "mask"});
   builder.MakeNode("Identity", {"mask"}, {"mask_used"});
@@ -81,7 +81,7 @@ TEST(DropoutPattern, RejectsUsedMaskOutput) {
 }
 
 TEST(DropoutPattern, RejectsEnabledTrainingMode) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
   builder.MakeInitializer(MakeInitializer<float>("ratio", {}, {0.5f}));
   TensorProto training_mode;

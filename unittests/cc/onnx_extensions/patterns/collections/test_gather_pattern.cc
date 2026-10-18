@@ -85,7 +85,7 @@ const TensorProto *FindInitializer(const core::builder::GraphBuilder &builder,
 }
 
 TEST(GatherConcatPattern, ShiftsIndexOntoNonConstantInput) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kInt64, Shape1D(3));
   builder.MakeInitializer(MakeInitializer<int64_t>("pre", {2}, {10, 11}));
   builder.MakeInitializer(MakeInitializer<int64_t>("idx", {2}, {2, 3}));
@@ -112,7 +112,7 @@ TEST(GatherConcatPattern, ShiftsIndexOntoNonConstantInput) {
 }
 
 TEST(GatherConcatPattern, RejectsIndexBeforeNonConstant) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kInt64, Shape1D(3));
   builder.MakeInitializer(MakeInitializer<int64_t>("pre", {2}, {10, 11}));
   builder.MakeInitializer(MakeInitializer<int64_t>("idx", {1}, {0}));
@@ -127,7 +127,7 @@ TEST(GatherConcatPattern, RejectsIndexBeforeNonConstant) {
 }
 
 TEST(GatherGatherPattern, ComposesConstantIndices) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kInt64, Shape1D(5));
   builder.MakeInitializer(MakeInitializer<int64_t>("i1", {3}, {4, 2, 0}));
   builder.MakeInitializer(MakeInitializer<int64_t>("i2", {2}, {2, 1}));
@@ -154,7 +154,7 @@ TEST(GatherGatherPattern, ComposesConstantIndices) {
 }
 
 TEST(GatherToSlicePattern, ScalarIndexEmitsSliceAndSqueeze) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape1D(5));
   builder.MakeInitializer(MakeInitializer<int64_t>("idx", {}, {2}));
   builder.MakeNode("Gather", {"x", "idx"}, {"y"});
@@ -197,7 +197,7 @@ TEST(GatherToSlicePattern, ScalarIndexEmitsSliceAndSqueeze) {
 }
 
 TEST(GatherToSlicePattern, VectorSingletonMapsDirectlyToSlice) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape1D(5));
   builder.MakeInitializer(MakeInitializer<int64_t>("idx", {1}, {3}));
   builder.MakeNode("Gather", {"x", "idx"}, {"y"});
@@ -250,7 +250,7 @@ TEST(GatherToSlicePattern, ArithmeticRangeWithStepMapsToStridedSlice) {
 }
 
 TEST(GatherToSlicePattern, NormalizesNegativeAxisAndIndex) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2D(4, 5));
   builder.MakeInitializer(MakeInitializer<int64_t>("idx", {}, {-1}));
   builder.MakeNode("Gather", {"x", "idx"}, {"y"}, "", "", AxisAttrs(-1));
@@ -310,7 +310,7 @@ TEST(GatherToSlicePattern, AttributeFormBeforeOpset10) {
 }
 
 TEST(GatherToSlicePattern, RejectsNonConstantIndex) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape1D(5));
   builder.MakeInput("idx", core::symbolic::TensorType::kInt64, core::symbolic::SymShape());
   builder.MakeNode("Gather", {"x", "idx"}, {"y"});
@@ -325,7 +325,7 @@ TEST(GatherToSlicePattern, RejectsNonConstantIndex) {
 }
 
 TEST(GatherToSlicePattern, RejectsNegativeIndexWithoutKnownDimension) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   core::symbolic::SymShape shape;
   shape.PushBack(core::symbolic::SymDim("N"));
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, shape);
@@ -342,7 +342,7 @@ TEST(GatherToSlicePattern, RejectsNegativeIndexWithoutKnownDimension) {
 }
 
 TEST(GatherToSlicePattern, RejectsNonArithmeticIndices) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape1D(5));
   builder.MakeInitializer(MakeInitializer<int64_t>("idx", {3}, {0, 2, 5}));
   builder.MakeNode("Gather", {"x", "idx"}, {"y"});
@@ -358,7 +358,7 @@ TEST(GatherToSlicePattern, RejectsNonArithmeticIndices) {
 }
 
 TEST(GatherToSlicePattern, RejectsDescendingIndices) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape1D(5));
   builder.MakeInitializer(MakeInitializer<int64_t>("idx", {2}, {3, 1}));
   builder.MakeNode("Gather", {"x", "idx"}, {"y"});
@@ -389,7 +389,7 @@ TEST(GatherToSlicePattern, RejectsNonUnitStepBeforeOpset10) {
 }
 
 TEST(GatherToSlicePattern, RejectsMultiDimensionalIndex) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape1D(5));
   builder.MakeInitializer(MakeInitializer<int64_t>("idx", {1, 1}, {2}));
   builder.MakeNode("Gather", {"x", "idx"}, {"y"});
@@ -429,7 +429,7 @@ TEST(GatherToSlicePattern, OptimizerConvergesFullRangeGatherToIdentity) {
 // --- GatherUpstreamPropagationPattern -------------------------------------
 
 TEST(GatherUpstreamPropagationPattern, PropagatesThroughAddSkippingLowerRankBias) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, ShapeND({2, 3, 4}));
   builder.MakeInput("b", core::symbolic::TensorType::kFloat, ShapeND({4}));
   builder.MakeInitializer(MakeInitializer<int64_t>("idx", {2}, {0, 2}));
@@ -455,7 +455,7 @@ TEST(GatherUpstreamPropagationPattern, PropagatesThroughAddSkippingLowerRankBias
 }
 
 TEST(GatherUpstreamPropagationPattern, PropagatesThroughAddSkippingBroadcastDim) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, ShapeND({2, 3, 4}));
   builder.MakeInput("b", core::symbolic::TensorType::kFloat, ShapeND({1, 3, 4}));
   builder.MakeInitializer(MakeInitializer<int64_t>("idx", {2}, {0, 1}));
@@ -476,7 +476,7 @@ TEST(GatherUpstreamPropagationPattern, PropagatesThroughAddSkippingBroadcastDim)
 }
 
 TEST(GatherUpstreamPropagationPattern, RejectsScalarIndexWithBroadcastDim) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, ShapeND({2, 3, 4}));
   builder.MakeInput("b", core::symbolic::TensorType::kFloat, ShapeND({1, 3, 4}));
   builder.MakeInitializer(MakeInitializer<int64_t>("idx", {}, {0}));
@@ -491,7 +491,7 @@ TEST(GatherUpstreamPropagationPattern, RejectsScalarIndexWithBroadcastDim) {
 }
 
 TEST(GatherUpstreamPropagationPattern, RejectsSharedProducerOutput) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, ShapeND({2, 3, 4}));
   builder.MakeInput("b", core::symbolic::TensorType::kFloat, ShapeND({4}));
   builder.MakeInitializer(MakeInitializer<int64_t>("idx", {2}, {0, 2}));
@@ -508,7 +508,7 @@ TEST(GatherUpstreamPropagationPattern, RejectsSharedProducerOutput) {
 }
 
 TEST(GatherUpstreamPropagationPattern, PropagatesThroughTransposeVectorIndex) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, ShapeND({2, 3, 4}));
   builder.MakeInitializer(MakeInitializer<int64_t>("idx", {2}, {0, 3}));
   builder.MakeNode("Transpose", {"x"}, {"t"}, "", "", PermAttrs({2, 0, 1}));
@@ -532,7 +532,7 @@ TEST(GatherUpstreamPropagationPattern, PropagatesThroughTransposeVectorIndex) {
 }
 
 TEST(GatherUpstreamPropagationPattern, RejectsScalarIndexAfterTranspose) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, ShapeND({2, 3, 4}));
   builder.MakeInitializer(MakeInitializer<int64_t>("idx", {}, {0}));
   builder.MakeNode("Transpose", {"x"}, {"t"}, "", "", PermAttrs({2, 0, 1}));
@@ -546,7 +546,7 @@ TEST(GatherUpstreamPropagationPattern, RejectsScalarIndexAfterTranspose) {
 }
 
 TEST(GatherUpstreamPropagationPattern, PropagatesThroughReshapeKeepingZeroMarker) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, ShapeND({2, 3, 4}));
   builder.MakeInitializer(MakeInitializer<int64_t>("idx", {2}, {0, 2}));
   builder.MakeInitializer(MakeInitializerShape("shape", {0, 0, 4}));
@@ -571,7 +571,7 @@ TEST(GatherUpstreamPropagationPattern, PropagatesThroughReshapeKeepingZeroMarker
 }
 
 TEST(GatherUpstreamPropagationPattern, PropagatesThroughReshapeUpdatingConcreteEntry) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, ShapeND({2, 3, 4}));
   builder.MakeInitializer(MakeInitializer<int64_t>("idx", {2}, {0, 1}));
   builder.MakeInitializer(MakeInitializerShape("shape", {2, 3, 4}));
@@ -597,7 +597,7 @@ TEST(GatherUpstreamPropagationPattern, PropagatesThroughReshapeUpdatingConcreteE
 }
 
 TEST(GatherUpstreamPropagationPattern, RejectsScalarIndexOnConcreteReshapeEntry) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, ShapeND({2, 3, 4}));
   builder.MakeInitializer(MakeInitializer<int64_t>("idx", {}, {0}));
   builder.MakeInitializer(MakeInitializerShape("shape", {2, 3, 4}));
@@ -612,7 +612,7 @@ TEST(GatherUpstreamPropagationPattern, RejectsScalarIndexOnConcreteReshapeEntry)
 }
 
 TEST(GatherUpstreamPropagationPattern, RejectsCoincidentalMiddleReshapeDimension) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, ShapeND({4, 3, 5}));
   builder.MakeInitializer(MakeInitializer<int64_t>("idx", {2}, {0, 1}));
   builder.MakeInitializer(MakeInitializerShape("shape", {2, 3, 10}));
@@ -626,7 +626,7 @@ TEST(GatherUpstreamPropagationPattern, RejectsCoincidentalMiddleReshapeDimension
 }
 
 TEST(GatherUpstreamPropagationPattern, RejectsReshapeAxisMovedByRankChange) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, ShapeND({2, 3, 3, 7}));
   builder.MakeInitializer(MakeInitializer<int64_t>("idx", {1}, {0}));
   builder.MakeInitializer(MakeInitializerShape("shape", {6, 0, 7}));
@@ -640,7 +640,7 @@ TEST(GatherUpstreamPropagationPattern, RejectsReshapeAxisMovedByRankChange) {
 }
 
 TEST(GatherUpstreamPropagationPattern, RejectsReshapeWithZeroSizedBlock) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, ShapeND({0, 3}));
   builder.MakeInitializer(MakeInitializer<int64_t>("idx", {1}, {0}));
   builder.MakeInitializer(MakeInitializerShape("shape", {0, 0, 3}));
@@ -654,7 +654,7 @@ TEST(GatherUpstreamPropagationPattern, RejectsReshapeWithZeroSizedBlock) {
 }
 
 TEST(GatherUpstreamPropagationPattern, PropagatesThroughMatMulBatchDimension) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("a", core::symbolic::TensorType::kFloat, ShapeND({8, 2, 3}));
   builder.MakeInput("b", core::symbolic::TensorType::kFloat, ShapeND({8, 3, 4}));
   builder.MakeInitializer(MakeInitializer<int64_t>("idx", {2}, {0, 2}));
@@ -680,7 +680,7 @@ TEST(GatherUpstreamPropagationPattern, PropagatesThroughMatMulBatchDimension) {
 }
 
 TEST(GatherUpstreamPropagationPattern, RejectsMatMulContractedAdjacentAxis) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("a", core::symbolic::TensorType::kFloat, ShapeND({8, 2, 3}));
   builder.MakeInput("b", core::symbolic::TensorType::kFloat, ShapeND({8, 3, 4}));
   builder.MakeInitializer(MakeInitializer<int64_t>("idx", {1}, {0}));
@@ -695,7 +695,7 @@ TEST(GatherUpstreamPropagationPattern, RejectsMatMulContractedAdjacentAxis) {
 }
 
 TEST(GatherUpstreamPropagationPattern, PropagatesThroughSoftmaxBeforeReductionAxis) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, ShapeND({2, 3, 4}));
   builder.MakeInitializer(MakeInitializer<int64_t>("idx", {1}, {0}));
   builder.MakeNode("Softmax", {"x"}, {"t"}, "", "", AxisAttrs(2));
@@ -717,7 +717,7 @@ TEST(GatherUpstreamPropagationPattern, PropagatesThroughSoftmaxBeforeReductionAx
 }
 
 TEST(GatherUpstreamPropagationPattern, RejectsSoftmaxOnReductionAxis) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, ShapeND({2, 3, 4}));
   builder.MakeInitializer(MakeInitializer<int64_t>("idx", {1}, {0}));
   builder.MakeNode("Softmax", {"x"}, {"t"}, "", "", AxisAttrs(2));
@@ -731,7 +731,7 @@ TEST(GatherUpstreamPropagationPattern, RejectsSoftmaxOnReductionAxis) {
 }
 
 TEST(GatherUpstreamPropagationPattern, PropagatesThroughLayerNormalizationDataInput) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, ShapeND({2, 3, 4}));
   builder.MakeInput("scale", core::symbolic::TensorType::kFloat, ShapeND({4}));
   builder.MakeInput("bias", core::symbolic::TensorType::kFloat, ShapeND({4}));
@@ -757,7 +757,7 @@ TEST(GatherUpstreamPropagationPattern, PropagatesThroughLayerNormalizationDataIn
 }
 
 TEST(GatherUpstreamPropagationPattern, OptimizesChainOfAddsToConvergence) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, ShapeND({2, 3, 4}));
   builder.MakeInput("b1", core::symbolic::TensorType::kFloat, ShapeND({4}));
   builder.MakeInput("b2", core::symbolic::TensorType::kFloat, ShapeND({4}));

@@ -19,6 +19,7 @@ import numpy
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.checker as checker
 import onnx_light.onnx.helper as oh
+from onnx_light.onnx.defs import onnx_opset_version
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 
 # The builder extension ships in the core build; skip the module when it (or the
@@ -30,8 +31,103 @@ FLOAT = onnxl.TensorProto.FLOAT
 
 
 class TestGraphBuilder(ExtTestCase):
+    def test_missing_opset_rejects_node_before_mutation(self):
+        for with_schema in (False, True):
+            builder = (
+                GraphBuilder("g", opsets={})
+                if with_schema
+                else GraphBuilder("g", None, opsets={})
+            )
+            x = builder.inp("x", FLOAT, [2])
+            with self.assertRaisesRegex(ValueError, "opset"):
+                builder.make_node("Relu", [x], ["y"])
+            with self.assertRaisesRegex(ValueError, "opset"):
+                builder.op.Add(x, numpy.array([1, 2], dtype=numpy.float32), outputs="y")
+            self.assertEqual(len(builder.build_graph().node), 0)
+            self.assertEqual(len(builder.build_graph().initializer), 0)
+            self.assertFalse(builder.has_name("y"))
+            builder.set_opset_version("", 18)
+            builder.make_node("Relu", [x], ["y"])
+            with self.assertRaisesRegex(ValueError, "opset"):
+                builder.make_node("Custom", ["y"], ["z"], domain="custom")
+            self.assertFalse(builder.has_name("z"))
+            builder.set_opset_version("custom", 1)
+            builder.make_node("Custom", ["y"], ["z"], domain="custom")
+            self.assertEqual(len(builder.build_graph().node), 2)
+
+    def test_rejects_nonpositive_opsets(self):
+        builder = GraphBuilder(opsets=18)
+        for version in (0, -1):
+            with self.assertRaises(ValueError):
+                builder.set_opset_version("", version)
+            self.assertEqual(builder.opset_version(""), 18)
+
+    def test_constructor_opsets(self):
+        for opsets in (10, {"": 10, "com.example": 7}, {"ai.onnx": 10}):
+            with self.subTest(opsets=opsets):
+                builder = GraphBuilder("g", opsets=opsets)
+                self.assertEqual(builder.opset_version(""), 10)
+                self.assertEqual(builder.opset_version("ai.onnx"), 10)
+                self.assertEqual(builder.shapes.opset_version(""), 10)
+                x = builder.inp("x", FLOAT, [2])
+                y = builder.op.Clip(x, outputs="y", min=0.0, max=1.0)
+                builder.out(y)
+                model = builder.to_onnx(ProtoKind.kModel)
+                checker.check_model(model)
+                imports = {
+                    opset.domain or "ai.onnx": opset.version for opset in model.opset_import
+                }
+                self.assertEqual(imports["ai.onnx"], 10)
+                if isinstance(opsets, dict) and "com.example" in opsets:
+                    self.assertEqual(imports["com.example"], 7)
+                builder.set_opset_version("", 11)
+                self.assertEqual(builder.opset_version(""), 11)
+                self.assertRaise(lambda: builder.op.Clip(x, min=0.0), ValueError)
+
+    def test_constructor_default_opsets(self):
+        latest = onnx_opset_version()
+        for with_schema in (False, True):
+            for kwargs in ({}, {"opsets": None}):
+                with self.subTest(with_schema=with_schema, kwargs=kwargs):
+                    builder = (
+                        GraphBuilder("g", **kwargs)
+                        if with_schema
+                        else GraphBuilder("g", None, **kwargs)
+                    )
+                    self.assertEqual(builder.opset_version(""), latest)
+                    self.assertEqual(builder.opset_version("ai.onnx"), latest)
+                    self.assertEqual(builder.shapes.opset_version(""), latest)
+                    x = builder.inp("x", FLOAT, [2])
+                    builder.make_node("Relu", [x], ["y"])
+                    builder.out(builder.op.Identity("y", outputs="z"))
+                    model = builder.to_onnx()
+                    checker.check_model(model)
+                    self.assertEqual(
+                        [
+                            (opset.domain or "ai.onnx", opset.version)
+                            for opset in model.opset_import
+                        ],
+                        [("ai.onnx", latest)],
+                    )
+                    with self.assertRaisesRegex(ValueError, "opset"):
+                        builder.make_node("Custom", ["z"], ["custom"], domain="custom")
+                    self.assertFalse(builder.has_name("custom"))
+
+    def test_constructor_opsets_without_schema(self):
+        builder = GraphBuilder("g", None, opsets={"": 18, "com.example": 7})
+        x = builder.inp("x", FLOAT, [2])
+        y = builder.op.CustomOp(x, domain="com.example")
+        builder.out(y)
+        self.assertEqual(builder.opset_version("com.example"), 7)
+        self.assertEqual(builder.to_onnx(ProtoKind.kModel).graph.node[0].domain, "com.example")
+
+    def test_constructor_rejects_invalid_opsets(self):
+        for opsets in ("18", {"": "18"}, {"": 1 << 64}):
+            with self.subTest(opsets=opsets):
+                self.assertRaise(lambda: GraphBuilder(opsets=opsets), TypeError)
+
     def test_compact_standard_roundtrip(self):
-        builder = GraphBuilder("g")
+        builder = GraphBuilder("g", opsets=28)
         self.assertIs(builder.op, builder.op)
         x = builder.inp("x", FLOAT, [None, 3])
         bias = builder.init(numpy.array([1, 2, 3], dtype=numpy.float32), name="bias")
@@ -66,7 +162,7 @@ class TestGraphBuilder(ExtTestCase):
         checker.check_model(model)
 
     def test_compact_optional_variadic_and_numpy_inputs(self):
-        builder = GraphBuilder("g")
+        builder = GraphBuilder("g", opsets=28)
         x = builder.inp("x", FLOAT, [3])
         clipped = builder.op.Clip(x, None, numpy.array([1], dtype=numpy.float32))
         summed = builder.op.Sum(clipped, x, x)
@@ -77,7 +173,7 @@ class TestGraphBuilder(ExtTestCase):
         self.assertEqual(list(graph.node[1].input), [clipped, "x", "x"])
 
     def test_compact_multi_output(self):
-        builder = GraphBuilder("g")
+        builder = GraphBuilder("g", opsets=28)
         x = builder.inp("x", FLOAT, [4])
         k = builder.init(numpy.array([2], dtype=numpy.int64))
         values, indices = builder.op.TopK(x, k, outputs=["values", "indices"], axis=0)
@@ -114,7 +210,7 @@ class TestGraphBuilder(ExtTestCase):
                 self.assertEqual([value.name for value in rebuilt.graph.output], outputs)
 
     def test_compact_custom_operator_without_schema(self):
-        builder = GraphBuilder("g")
+        builder = GraphBuilder("g", opsets=28)
         builder.set_opset_version("com.example", 7)
         x = builder.inp("x", FLOAT, [2])
         outputs = builder.op.CustomOp(
@@ -158,11 +254,12 @@ class TestGraphBuilder(ExtTestCase):
         graph = oh.make_graph([], "g", [oh.make_tensor_value_info("x", FLOAT, [2])], [])
         model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 10)])
         builder = GraphBuilder(model)
+        self.assertEqual(builder.opset_version(""), 10)
         output = builder.op.Clip("x", outputs="y", min=0.0, max=1.0)
         self.assertEqual(output, "y")
 
     def test_compact_rejects_invalid_calls(self):
-        builder = GraphBuilder("g")
+        builder = GraphBuilder("g", opsets=28)
         x = builder.inp("x", FLOAT, [2])
         self.assertRaise(lambda: builder.op.UnknownOperator(x), ValueError)
         self.assertRaise(lambda: builder.op.Relu(x, unknown_attribute=1), ValueError)
@@ -194,32 +291,31 @@ class TestGraphBuilder(ExtTestCase):
         self.assertTrue(builder.has_name(a))
         self.assertTrue(builder.has_name(b))
 
-    def test_make_node_resolves_opset_and_infers_shape(self):
-        builder = GraphBuilder("g")
+    def test_make_node_uses_explicit_opset_and_infers_shape(self):
+        builder = GraphBuilder("g", opsets=28)
         builder.make_input("x", FLOAT, [2, 3])
         builder.make_input("y", FLOAT, [2, 3])
         outputs = builder.make_node("Add", ["x", "y"])
         self.assertEqual(len(outputs), 1)
         self.assertTrue(builder.has_name(outputs[0]))
-        # The default ONNX opset was resolved from the operator schemas.
-        self.assertGreater(builder.opset_version(""), 0)
+        self.assertEqual(builder.opset_version(""), 28)
         # The output shape was inferred incrementally.
         self.assertTrue(builder.has_shape(outputs[0]))
         self.assertEqual(builder.get_shape(outputs[0]).shape.rank(), 2)
 
     def test_make_node_uses_provided_output_name(self):
-        builder = GraphBuilder("g")
+        builder = GraphBuilder("g", opsets=28)
         builder.make_input("x", FLOAT, [2, 3])
         builder.make_input("y", FLOAT, [2, 3])
         outputs = builder.make_node("Add", ["x", "y"], ["z"])
         self.assertEqual(outputs, ["z"])
 
     def test_make_node_rejects_unknown_input(self):
-        builder = GraphBuilder("g")
+        builder = GraphBuilder("g", opsets=28)
         self.assertRaise(lambda: builder.make_node("Add", ["missing", "y"]), ValueError)
 
     def test_make_node_with_attributes(self):
-        builder = GraphBuilder("g")
+        builder = GraphBuilder("g", opsets=28)
         builder.make_input("x", FLOAT, [2, 3])
         outputs = builder.make_node("Softmax", ["x"], attributes={"axis": 1})
         self.assertEqual(len(outputs), 1)
@@ -344,7 +440,7 @@ class TestGraphBuilder(ExtTestCase):
             self.assertEqual(tensor.SerializeToString(), serialized)
 
     def test_to_model_produces_graph_with_opset(self):
-        builder = GraphBuilder("g")
+        builder = GraphBuilder("g", opsets=28)
         builder.make_input("x", FLOAT, [2, 3])
         builder.make_input("y", FLOAT, [2, 3])
         (z,) = builder.make_node("Add", ["x", "y"])
@@ -361,7 +457,7 @@ class TestGraphBuilder(ExtTestCase):
         self.assertEqual(builder.to_onnx(ProtoKind.kModel, ir_version=8).ir_version, 8)
 
     def test_to_graph_and_to_function(self):
-        builder = GraphBuilder("g")
+        builder = GraphBuilder("g", opsets=28)
         builder.make_input("x", FLOAT, [2, 3])
         builder.make_input("y", FLOAT, [2, 3])
         (z,) = builder.make_node("Add", ["x", "y"])
@@ -379,7 +475,7 @@ class TestGraphBuilder(ExtTestCase):
         )
 
     def test_subgraph_to_onnx_uses_proto_kind(self):
-        builder = GraphBuilder("g")
+        builder = GraphBuilder("g", opsets=18)
         body = builder.make_subgraph("body")
         body.make_input("x", FLOAT, [2])
         (output,) = body.make_node("Identity", ["x"])
@@ -418,7 +514,7 @@ class TestGraphBuilder(ExtTestCase):
         builder.make_output("x")
 
     def test_to_string_describes_content(self):
-        builder = GraphBuilder("g")
+        builder = GraphBuilder("g", opsets=28)
         builder.make_input("x", FLOAT, [2, 3])
         builder.make_input("y", FLOAT, [2, 3])
         (z,) = builder.make_node("Add", ["x", "y"])
@@ -431,7 +527,8 @@ class TestGraphBuilder(ExtTestCase):
         self.assertEqual(text, str(builder))
 
     def test_local_function_is_a_nested_builder(self):
-        builder = GraphBuilder("g")
+        builder = GraphBuilder("g", opsets=28)
+        builder.set_opset_version("custom", 1)
         fct = builder.make_local_function("MyFct", "custom")
         fct.make_input("a", FLOAT, [2, 3])
         fct.make_input("b", FLOAT, [2, 3])
@@ -454,7 +551,7 @@ class TestGraphBuilder(ExtTestCase):
         self.assertRaise(lambda: builder.make_subgraph("body"), ValueError)
 
     def test_remove_unused_nodes(self):
-        builder = GraphBuilder("g")
+        builder = GraphBuilder("g", opsets=28)
         builder.make_input("x", FLOAT, [2, 3])
         builder.make_input("y", FLOAT, [2, 3])
         (used,) = builder.make_node("Add", ["x", "y"])
@@ -472,7 +569,7 @@ class TestGraphBuilder(ExtTestCase):
         self.assertEqual(builder.remove_unused_nodes(), 0)
 
     def test_remove_duplicate_initializers(self):
-        builder = GraphBuilder("g")
+        builder = GraphBuilder("g", opsets=28)
         builder.make_input("x", FLOAT, [2, 2])
         w1 = oh.make_tensor("w1", FLOAT, [2, 2], [1.0, 2.0, 3.0, 4.0])
         w2 = oh.make_tensor("w2", FLOAT, [2, 2], [1.0, 2.0, 3.0, 4.0])
@@ -493,7 +590,7 @@ class TestGraphBuilder(ExtTestCase):
         self.assertEqual(builder.remove_duplicate_initializers(), 0)
 
     def test_remove_duplicate_initializers_across_scopes(self):
-        builder = GraphBuilder("g")
+        builder = GraphBuilder("g", opsets=28)
         builder.make_input("x", FLOAT, [2, 2])
         w = oh.make_tensor("w", FLOAT, [2, 2], [1.0, 1.0, 1.0, 1.0])
         builder.make_initializer(w)
@@ -519,7 +616,7 @@ class TestGraphBuilder(ExtTestCase):
         self.assertEqual(body_graph.node[0].input[1], "w")
 
     def test_remove_identity_nodes(self):
-        builder = GraphBuilder("g")
+        builder = GraphBuilder("g", opsets=28)
         builder.make_input("x", FLOAT, [2, 3])
         # A chain of two identities feeding a live consumer.
         (i1,) = builder.make_node("Identity", ["x"])
@@ -538,7 +635,7 @@ class TestGraphBuilder(ExtTestCase):
         self.assertEqual(builder.remove_identity_nodes(), 0)
 
     def test_remove_identity_nodes_keeps_graph_output(self):
-        builder = GraphBuilder("g")
+        builder = GraphBuilder("g", opsets=28)
         builder.make_input("x", FLOAT, [2, 3])
         # The identity output is a declared graph output, so it is kept.
         (out,) = builder.make_node("Identity", ["x"])
@@ -550,7 +647,7 @@ class TestGraphBuilder(ExtTestCase):
         self.assertEqual(graph.node[0].op_type, "Identity")
 
     def test_remove_identity_nodes_recurses_into_subgraphs(self):
-        builder = GraphBuilder("g")
+        builder = GraphBuilder("g", opsets=28)
         builder.make_input("x", FLOAT, [2, 3])
         (top,) = builder.make_node("Neg", ["x"])
         builder.make_output(top)
@@ -568,7 +665,7 @@ class TestGraphBuilder(ExtTestCase):
         self.assertEqual(body_graph.node[0].input[0], "a")
 
     def test_remove_duplicate_nodes(self):
-        builder = GraphBuilder("g")
+        builder = GraphBuilder("g", opsets=28)
         builder.make_input("x", FLOAT, [2, 3])
         # Two Neg nodes computing the same value feed a shared consumer.
         (a,) = builder.make_node("Neg", ["x"])
@@ -588,7 +685,7 @@ class TestGraphBuilder(ExtTestCase):
         self.assertEqual(builder.remove_duplicate_nodes(), 0)
 
     def test_remove_duplicate_nodes_collapses_branches(self):
-        builder = GraphBuilder("g")
+        builder = GraphBuilder("g", opsets=28)
         builder.make_input("x", FLOAT, [2, 3])
         # Two identical branches collapse level by level in a single pass.
         (a1,) = builder.make_node("Mul", ["x", "x"])
@@ -605,7 +702,7 @@ class TestGraphBuilder(ExtTestCase):
         self.assertEqual(graph.node[2].input[1], a2)
 
     def test_remove_duplicate_nodes_keeps_distinct_attributes(self):
-        builder = GraphBuilder("g")
+        builder = GraphBuilder("g", opsets=28)
         builder.make_input("x", FLOAT, [2, 3])
         (a,) = builder.make_node("LeakyRelu", ["x"], attributes={"alpha": 0.1})
         (b,) = builder.make_node("LeakyRelu", ["x"], attributes={"alpha": 0.2})
@@ -616,7 +713,7 @@ class TestGraphBuilder(ExtTestCase):
         self.assertEqual(len(builder.build_graph().node), 3)
 
     def test_remove_duplicate_nodes_keeps_graph_outputs(self):
-        builder = GraphBuilder("g")
+        builder = GraphBuilder("g", opsets=28)
         builder.make_input("x", FLOAT, [2, 3])
         # Both duplicates are declared graph outputs, so neither can be dropped.
         (a,) = builder.make_node("Neg", ["x"])
@@ -628,7 +725,7 @@ class TestGraphBuilder(ExtTestCase):
         self.assertEqual(len(builder.build_graph().node), 2)
 
     def test_remove_duplicate_nodes_recurses_into_subgraphs(self):
-        builder = GraphBuilder("g")
+        builder = GraphBuilder("g", opsets=28)
         builder.make_input("x", FLOAT, [2, 3])
         (top,) = builder.make_node("Neg", ["x"])
         builder.make_output(top)
@@ -648,7 +745,7 @@ class TestGraphBuilder(ExtTestCase):
         self.assertEqual(body_graph.node[1].input[1], n1)
 
     def test_move_shape_and_size_nodes(self):
-        builder = GraphBuilder("g")
+        builder = GraphBuilder("g", opsets=28)
         builder.make_input("x", FLOAT, [2, 3])
         (p,) = builder.make_node("Neg", ["x"])
         (a,) = builder.make_node("Add", [p, p])
@@ -670,7 +767,7 @@ class TestGraphBuilder(ExtTestCase):
         self.assertEqual(builder.move_shape_and_size_nodes(), 0)
 
     def test_move_shape_and_size_nodes_keeps_graph_input_reader(self):
-        builder = GraphBuilder("g")
+        builder = GraphBuilder("g", opsets=28)
         builder.make_input("x", FLOAT, [2, 3])
         # Shape reads a graph input (no producing node), so it stays in place.
         (n,) = builder.make_node("Neg", ["x"])
@@ -682,7 +779,7 @@ class TestGraphBuilder(ExtTestCase):
         self.assertEqual([n.op_type for n in builder.build_graph().node], ["Neg", "Shape"])
 
     def test_move_shape_and_size_nodes_runs_on_export(self):
-        builder = GraphBuilder("g")
+        builder = GraphBuilder("g", opsets=28)
         builder.make_input("x", FLOAT, [2, 3])
         (p,) = builder.make_node("Neg", ["x"])
         (a,) = builder.make_node("Add", [p, p])
@@ -695,7 +792,7 @@ class TestGraphBuilder(ExtTestCase):
         self.assertEqual([n.op_type for n in model.graph.node], ["Neg", "Shape", "Add"])
 
     def test_move_shape_and_size_nodes_recurses_into_subgraphs(self):
-        builder = GraphBuilder("g")
+        builder = GraphBuilder("g", opsets=28)
         builder.make_input("x", FLOAT, [2, 3])
         (top,) = builder.make_node("Neg", ["x"])
         builder.make_output(top)
@@ -712,8 +809,9 @@ class TestGraphBuilder(ExtTestCase):
         self.assertEqual([n.op_type for n in body.build_graph().node], ["Neg", "Shape", "Add"])
 
     def test_inline_local_functions(self):
-        builder = GraphBuilder("g")
+        builder = GraphBuilder("g", opsets=28)
         # A local function computing Neg(Add(a, b)).
+        builder.set_opset_version("custom", 1)
         fct = builder.make_local_function("MyFct", domain="custom")
         fct.make_input("a", FLOAT, [2, 3])
         fct.make_input("b", FLOAT, [2, 3])
@@ -742,7 +840,8 @@ class TestGraphBuilder(ExtTestCase):
         self.assertEqual(builder.inline_local_functions(), 0)
 
     def test_inline_local_functions_keeps_uncalled_function(self):
-        builder = GraphBuilder("g")
+        builder = GraphBuilder("g", opsets=28)
+        builder.set_opset_version("custom", 1)
         fct = builder.make_local_function("MyFct", domain="custom")
         fct.make_input("a", FLOAT, [2, 3])
         (n,) = fct.make_node("Neg", ["a"])
@@ -758,7 +857,8 @@ class TestGraphBuilder(ExtTestCase):
 
     def test_inline_local_functions_include_exclude(self):
         def build():
-            builder = GraphBuilder("g")
+            builder = GraphBuilder("g", opsets=28)
+            builder.set_opset_version("custom", 1)
             keep = builder.make_local_function("Keep", domain="custom")
             keep.make_input("a", FLOAT, [2, 3])
             (kn,) = keep.make_node("Neg", ["a"])
@@ -832,7 +932,7 @@ class TestGraphBuilder(ExtTestCase):
     def test_constant_fold_is_callable(self):
         from onnx_light.onnx_core.graph_builder import ConstantFoldingOptions
 
-        builder = GraphBuilder("g")
+        builder = GraphBuilder("g", opsets=28)
         builder.make_input("x", FLOAT, [2, 3])
         builder.make_input("y", FLOAT, [2, 3])
         (z,) = builder.make_node("Add", ["x", "y"])

@@ -31,7 +31,7 @@ core::symbolic::SymShape Shape2D(int64_t a, int64_t b) {
 }
 
 TEST(SliceSlicePattern, MergesDisjointAxes) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2D(4, 5));
   builder.MakeInitializer(MakeInitializerShape("s0", {0}));
   builder.MakeInitializer(MakeInitializerShape("e0", {2}));
@@ -61,7 +61,7 @@ TEST(SliceSlicePattern, MergesDisjointAxes) {
 }
 
 TEST(SliceSlicePattern, MaterialisesOnesStepWhenOnlyOneHasSteps) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2D(4, 5));
   builder.MakeInitializer(MakeInitializerShape("s0", {0}));
   builder.MakeInitializer(MakeInitializerShape("e0", {2}));
@@ -87,7 +87,7 @@ TEST(SliceSlicePattern, MaterialisesOnesStepWhenOnlyOneHasSteps) {
 }
 
 TEST(SliceSlicePattern, RejectsOverlappingAxes) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2D(4, 5));
   builder.MakeInitializer(MakeInitializerShape("s0", {0}));
   builder.MakeInitializer(MakeInitializerShape("e0", {2}));

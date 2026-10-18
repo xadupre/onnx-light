@@ -73,7 +73,7 @@ NodeProto NodeWithIntAttribute(const char *op_type, const std::vector<std::strin
 }
 
 TEST(DivMulPattern, FusesReciprocalTimesValue) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   AddFloatInitializer(builder, "one", {}, {1.0F});
   builder.MakeInput("denominator", core::symbolic::TensorType::kFloat, Shape({2}));
   builder.MakeInput("value", core::symbolic::TensorType::kFloat, Shape({2}));
@@ -96,7 +96,7 @@ TEST(DivMulPattern, FusesReciprocalTimesValue) {
 TEST(DivMulPattern, RejectsNonUnitAndNonScalarNumerators) {
   for (const std::vector<float> &values :
        {std::vector<float>{2.0F}, std::vector<float>{1.0F, 1.0F}}) {
-    core::builder::GraphBuilder builder("g", SchemaLookup());
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
     AddFloatInitializer(builder, "numerator", {static_cast<int64_t>(values.size())}, values);
     builder.MakeInput("denominator", core::symbolic::TensorType::kFloat, Shape({2}));
     builder.MakeInput("value", core::symbolic::TensorType::kFloat, Shape({2}));
@@ -111,7 +111,7 @@ TEST(DivMulPattern, RejectsNonUnitAndNonScalarNumerators) {
 }
 
 TEST(DivMulPattern, RejectsSharedDivOutput) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   AddFloatInitializer(builder, "one", {}, {1.0F});
   builder.MakeInput("denominator", core::symbolic::TensorType::kFloat, Shape({2}));
   builder.MakeInput("value", core::symbolic::TensorType::kFloat, Shape({2}));
@@ -127,7 +127,7 @@ TEST(DivMulPattern, RejectsSharedDivOutput) {
 }
 
 TEST(DivMulPattern, RejectsDivGraphOutput) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   AddFloatInitializer(builder, "one", {}, {1.0F});
   builder.MakeInput("denominator", core::symbolic::TensorType::kFloat, Shape({2}));
   builder.MakeInput("value", core::symbolic::TensorType::kFloat, Shape({2}));
@@ -142,7 +142,7 @@ TEST(DivMulPattern, RejectsDivGraphOutput) {
 }
 
 TEST(MulMulMulScalarPattern, CombinesTwoDivisions) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2}));
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({2}));
   AddFloatInitializer(builder, "two", {}, {2.0F});
@@ -166,7 +166,7 @@ TEST(MulMulMulScalarPattern, CombinesTwoDivisions) {
 }
 
 TEST(MulMulMulScalarPattern, RejectsSharedInnerResult) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2}));
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({2}));
   AddFloatInitializer(builder, "two", {}, {2.0F});
@@ -184,7 +184,7 @@ TEST(MulMulMulScalarPattern, RejectsSharedInnerResult) {
 }
 
 TEST(MulMulMulScalarPattern, CombinesFloat16DivisionConstants) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat16, Shape({2}));
   builder.MakeInput("y", core::symbolic::TensorType::kFloat16, Shape({2}));
   AddFloat16Initializer(builder, "two", {}, {0x4000});
@@ -205,7 +205,7 @@ TEST(MulMulMulScalarPattern, CombinesFloat16DivisionConstants) {
 }
 
 TEST(SwitchOrderBinaryPattern, MovesTheSmallBroadcastBeforeTheLargeOne) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("b", core::symbolic::TensorType::kFloat, Shape({2, 2, 3, 4}));
   builder.MakeInput("c", core::symbolic::TensorType::kFloat, Shape({2, 1, 3, 4}));
   builder.MakeInput("a", core::symbolic::TensorType::kFloat, Shape({2, 1, 3, 4}));
@@ -225,7 +225,7 @@ TEST(SwitchOrderBinaryPattern, MovesTheSmallBroadcastBeforeTheLargeOne) {
 }
 
 TEST(SwitchOrderBinaryPattern, RejectsEqualBroadcastCosts) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("b", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   builder.MakeInput("c", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   builder.MakeInput("a", core::symbolic::TensorType::kFloat, Shape({2, 3}));
@@ -239,7 +239,7 @@ TEST(SwitchOrderBinaryPattern, RejectsEqualBroadcastCosts) {
 }
 
 TEST(SwapRangeAddScalarPattern, MovesTheScalarIntoRangeBounds) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   AddIntInitializer(builder, "start", {}, {0});
   AddIntInitializer(builder, "end", {}, {5});
   AddIntInitializer(builder, "delta", {}, {1});
@@ -261,7 +261,7 @@ TEST(SwapRangeAddScalarPattern, MovesTheScalarIntoRangeBounds) {
 }
 
 TEST(SwapRangeAddScalarPattern, RejectsScalarInsteadOfOneElementVector) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   AddIntInitializer(builder, "start", {}, {0});
   AddIntInitializer(builder, "end", {}, {5});
   AddIntInitializer(builder, "delta", {}, {1});
@@ -276,7 +276,7 @@ TEST(SwapRangeAddScalarPattern, RejectsScalarInsteadOfOneElementVector) {
 }
 
 TEST(Sub1MulPattern, ReassociatesOneMinusProduct) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2}));
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({2}));
   AddFloatInitializer(builder, "one", {1}, {1.0F});
@@ -297,7 +297,7 @@ TEST(Sub1MulPattern, ReassociatesOneMinusProduct) {
 }
 
 TEST(Sub1MulPattern, RejectsAConstantOtherThanOne) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2}));
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({2}));
   AddFloatInitializer(builder, "two", {1}, {2.0F});
@@ -312,7 +312,7 @@ TEST(Sub1MulPattern, RejectsAConstantOtherThanOne) {
 
 TEST(Sub1MulPattern, ReassociatesConstantOfShapeOnBothSides) {
   for (bool sub_on_left : {true, false}) {
-    core::builder::GraphBuilder builder(sub_on_left ? "left" : "right", SchemaLookup());
+    core::builder::GraphBuilder builder(sub_on_left ? "left" : "right", SchemaLookup(), {{"", 28}});
     builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
     builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({2, 3}));
     AddIntInitializer(builder, "shape", {2}, {1, 3});
@@ -337,7 +337,7 @@ TEST(Sub1MulPattern, ReassociatesConstantOfShapeOnBothSides) {
 }
 
 TEST(Sub1MulPattern, RejectsNonOneConstantOfShape) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   AddIntInitializer(builder, "shape", {2}, {1, 3});
@@ -352,7 +352,7 @@ TEST(Sub1MulPattern, RejectsNonOneConstantOfShape) {
 }
 
 TEST(Sub1MulPattern, RejectsConstantOfShapeChangingBroadcastRank) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({3}));
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({3}));
   AddIntInitializer(builder, "shape", {3}, {2, 1, 3});
@@ -371,7 +371,7 @@ TEST(Sub1MulPattern, RejectsConstantOfShapeChangingBroadcastRank) {
 }
 
 TEST(Sub1MulPattern, PreservesExternalConstantOfShapeOutput) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   AddIntInitializer(builder, "shape", {2}, {1, 3});
@@ -480,7 +480,7 @@ TEST(ReduceSumNormalizePattern, RejectsDifferentInputAndOutputTypes) {
 }
 
 TEST(SameChildrenPattern, ReplacesOneDuplicateChildWithIdentity) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2}));
   builder.MakeNode("Identity", {"x"}, {"shared"});
   builder.MakeNode("Neg", {"shared"}, {"left"});
@@ -501,7 +501,7 @@ TEST(SameChildrenPattern, ReplacesOneDuplicateChildWithIdentity) {
 }
 
 TEST(SameChildrenPattern, RejectsDifferentChildren) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2}));
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({2}));
   builder.MakeNode("Identity", {"x"}, {"shared"});
@@ -516,7 +516,7 @@ TEST(SameChildrenPattern, RejectsDifferentChildren) {
 }
 
 TEST(SameChildrenFromInputPattern, ReplacesDuplicateInputConsumers) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2}));
   NodeProto first = NodeWithIntAttribute("Cast", {"x"}, {"left"}, "to",
                                          static_cast<int64_t>(TensorProto::DataType::DOUBLE));
@@ -537,7 +537,7 @@ TEST(SameChildrenFromInputPattern, ReplacesDuplicateInputConsumers) {
 }
 
 TEST(SameChildrenFromInputPattern, RejectsIntermediateInputs) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2}));
   builder.MakeNode("Identity", {"x"}, {"shared"});
   builder.MakeNode("Neg", {"shared"}, {"left"});
@@ -551,7 +551,7 @@ TEST(SameChildrenFromInputPattern, RejectsIntermediateInputs) {
 }
 
 TEST(ShapeBasedSameChildrenPattern, UsesTheFirstEquivalentExpand) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({1, 3}));
   AddIntInitializer(builder, "shape1", {2}, {2, 3});
   AddIntInitializer(builder, "shape2", {2}, {2, 3});
@@ -571,7 +571,7 @@ TEST(ShapeBasedSameChildrenPattern, UsesTheFirstEquivalentExpand) {
 }
 
 TEST(ShapeBasedSameChildrenPattern, RejectsDifferentOutputShapes) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({1, 3}));
   AddIntInitializer(builder, "shape1", {2}, {2, 3});
   AddIntInitializer(builder, "shape2", {2}, {3, 3});
@@ -586,7 +586,7 @@ TEST(ShapeBasedSameChildrenPattern, RejectsDifferentOutputShapes) {
 }
 
 TEST(ShapeBasedIdentityPattern, ReplacesFullSliceWithIdentity) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   AddIntInitializer(builder, "starts", {1}, {0});
   AddIntInitializer(builder, "ends", {1}, {2});
@@ -606,7 +606,7 @@ TEST(ShapeBasedIdentityPattern, ReplacesFullSliceWithIdentity) {
 }
 
 TEST(ShapeBasedIdentityPattern, RejectsNonUnitSteps) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   AddIntInitializer(builder, "starts", {1}, {0});
   AddIntInitializer(builder, "ends", {1}, {2});
@@ -621,7 +621,7 @@ TEST(ShapeBasedIdentityPattern, RejectsNonUnitSteps) {
 }
 
 TEST(SwapUnaryPattern, MovesExpBeforeTranspose) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   NodeProto transpose = MakeNode("Transpose", {"x"}, {"xt"});
   AddAttribute<std::vector<int64_t>>(transpose, "perm", {1, 0});
@@ -642,7 +642,7 @@ TEST(SwapUnaryPattern, MovesExpBeforeTranspose) {
 }
 
 TEST(SwapUnaryPattern, RejectsScalarBinaryConstant) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   AddFloatInitializer(builder, "scalar", {}, {2.0F});
   NodeProto transpose = MakeNode("Transpose", {"x"}, {"xt"});
@@ -657,7 +657,7 @@ TEST(SwapUnaryPattern, RejectsScalarBinaryConstant) {
 }
 
 TEST(ShapeBasedShapeShapeAddPattern, PreservesTheUpstreamNoMatch) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   builder.MakeNode("Shape", {"x"}, {"sx"});
@@ -674,7 +674,7 @@ TEST(ShapeBasedShapeShapeAddPattern, PreservesTheUpstreamNoMatch) {
 }
 
 TEST(ShapeBasedShapeShapeAddPattern, RejectsNonShapeInputs) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kInt64, Shape({2}));
   builder.MakeInput("y", core::symbolic::TensorType::kInt64, Shape({2}));
   builder.MakeNode("Add", {"x", "y"}, {"out"});

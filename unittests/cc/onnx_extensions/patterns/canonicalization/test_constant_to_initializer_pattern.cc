@@ -32,7 +32,7 @@ void AddConstant(core::builder::GraphBuilder &builder, const std::string &output
 }
 
 TEST(ConstantToInitializerPattern, MatchesMaterialisableConstant) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   AddConstant(builder, "cst");
   builder.MakeNode("Identity", {"cst"}, {"y"});
   builder.MakeOutput("y");
@@ -50,7 +50,7 @@ TEST(ConstantToInitializerPattern, MatchesMaterialisableConstant) {
 }
 
 TEST(ConstantToInitializerPattern, ProducesInitializerAndIdentity) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   AddConstant(builder, "cst");
   builder.MakeNode("Identity", {"cst"}, {"y"});
   builder.MakeOutput("y");
@@ -73,7 +73,7 @@ TEST(ConstantToInitializerPattern, ProducesInitializerAndIdentity) {
 }
 
 TEST(ConstantToInitializerPattern, RejectsNonConstantNode) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, []() {
     core::symbolic::SymShape shape;
     shape.PushBack(core::symbolic::SymDim(2));

@@ -105,7 +105,7 @@ const TensorProto *FindInitializer(const core::builder::GraphBuilder &builder,
 
 TEST(GraphBuilderConstantFold, FoldsConstantWeightNodeIntoInitializer) {
   ScopedFoldingKernels kernels;
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInitializer(MakeInitializer<float>("a", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f}));
   builder.MakeInitializer(MakeInitializer<float>("b", {2, 2}, {10.0f, 20.0f, 30.0f, 40.0f}));
   const std::vector<std::string> sum = builder.MakeNode("Add", {"a", "b"}, {"s"});
@@ -126,7 +126,7 @@ TEST(GraphBuilderConstantFold, FoldsConstantWeightNodeIntoInitializer) {
 
 TEST(GraphBuilderConstantFold, FoldsChainOfConstantNodesInOnePass) {
   ScopedFoldingKernels kernels;
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInitializer(MakeInitializer<float>("a", {2}, {1.0f, 2.0f}));
   builder.MakeInitializer(MakeInitializer<float>("b", {2}, {3.0f, 4.0f}));
   const std::vector<std::string> sum = builder.MakeNode("Add", {"a", "b"}, {"s"});
@@ -146,7 +146,7 @@ TEST(GraphBuilderConstantFold, FoldsChainOfConstantNodesInOnePass) {
 
 TEST(GraphBuilderConstantFold, DoesNotFoldNodeDependingOnGraphInput) {
   ScopedFoldingKernels kernels;
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
   builder.MakeInitializer(MakeInitializer<float>("b", {2}, {3.0f, 4.0f}));
   const std::vector<std::string> sum = builder.MakeNode("Add", {"x", "b"}, {"s"});
@@ -162,7 +162,7 @@ TEST(GraphBuilderConstantFold, FoldsNodeWhoseOutputIsGraphOutput) {
   // other consumer) is folded into an initializer carrying that name; the value
   // remains a valid graph output.
   ScopedFoldingKernels kernels;
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInitializer(MakeInitializer<float>("a", {2}, {1.0f, 2.0f}));
   builder.MakeInitializer(MakeInitializer<float>("b", {2}, {3.0f, 4.0f}));
   const std::vector<std::string> sum = builder.MakeNode("Add", {"a", "b"}, {"s"});
@@ -181,7 +181,7 @@ TEST(GraphBuilderConstantFold, FoldsNodeWhoseOutputIsGraphOutput) {
 
 TEST(GraphBuilderConstantFold, DisabledOptionIsNoOp) {
   ScopedFoldingKernels kernels;
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInitializer(MakeInitializer<float>("a", {2}, {1.0f, 2.0f}));
   builder.MakeInitializer(MakeInitializer<float>("b", {2}, {3.0f, 4.0f}));
   const std::vector<std::string> sum = builder.MakeNode("Add", {"a", "b"}, {"s"});
@@ -195,7 +195,7 @@ TEST(GraphBuilderConstantFold, DisabledOptionIsNoOp) {
 
 TEST(GraphBuilderConstantFold, SkipsResultsOverElementThreshold) {
   ScopedFoldingKernels kernels;
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInitializer(MakeInitializer<float>("a", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f}));
   builder.MakeInitializer(MakeInitializer<float>("b", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f}));
   const std::vector<std::string> sum = builder.MakeNode("Add", {"a", "b"}, {"s"});
@@ -209,7 +209,7 @@ TEST(GraphBuilderConstantFold, SkipsResultsOverElementThreshold) {
 
 TEST(GraphBuilderConstantFold, ExcludedOperatorIsNotFolded) {
   ScopedFoldingKernels kernels;
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInitializer(MakeInitializer<float>("a", {2}, {1.0f, 2.0f}));
   builder.MakeInitializer(MakeInitializer<float>("b", {2}, {3.0f, 4.0f}));
   const std::vector<std::string> sum = builder.MakeNode("Add", {"a", "b"}, {"s"});
@@ -223,7 +223,7 @@ TEST(GraphBuilderConstantFold, ExcludedOperatorIsNotFolded) {
 
 TEST(GraphBuilderConstantFold, WeightResultIsNotFoldedWhenFoldWeightsDisabled) {
   ScopedFoldingKernels kernels;
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInitializer(MakeInitializer<float>("a", {2}, {1.0f, 2.0f}));
   builder.MakeInitializer(MakeInitializer<float>("b", {2}, {3.0f, 4.0f}));
   const std::vector<std::string> sum = builder.MakeNode("Add", {"a", "b"}, {"s"});
@@ -237,7 +237,7 @@ TEST(GraphBuilderConstantFold, WeightResultIsNotFoldedWhenFoldWeightsDisabled) {
 
 TEST(GraphBuilderConstantFold, ShapeResultIsFoldedWhenFoldWeightsDisabled) {
   ScopedFoldingKernels kernels;
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInitializer(
       MakeInitializer<float>("a", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f}));
   const std::vector<std::string> shape = builder.MakeNode("Shape", {"a"}, {"sh"});
@@ -251,7 +251,7 @@ TEST(GraphBuilderConstantFold, ShapeResultIsFoldedWhenFoldWeightsDisabled) {
 }
 
 TEST(GraphBuilderConstantFold, MissingWeightKernelIsSkippedByDefault) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.set_device(core::symbolic::Device::kGPU8191);
   builder.MakeInitializer(MakeInitializer<float>("a", {2}, {1.0f, 2.0f}));
   builder.MakeInitializer(MakeInitializer<float>("b", {2}, {3.0f, 4.0f}));
@@ -263,7 +263,7 @@ TEST(GraphBuilderConstantFold, MissingWeightKernelIsSkippedByDefault) {
 }
 
 TEST(GraphBuilderConstantFold, MissingWeightKernelRaisesWhenRequested) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.set_device(core::symbolic::Device::kGPU8191);
   builder.MakeInitializer(MakeInitializer<float>("a", {2}, {1.0f, 2.0f}));
   builder.MakeInitializer(MakeInitializer<float>("b", {2}, {3.0f, 4.0f}));
@@ -276,7 +276,7 @@ TEST(GraphBuilderConstantFold, MissingWeightKernelRaisesWhenRequested) {
 }
 
 TEST(GraphBuilderConstantFold, MissingShapeKernelAlwaysRaises) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.set_device(core::symbolic::Device::kGPU8191);
   builder.MakeInitializer(
       MakeInitializer<float>("a", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f}));
@@ -288,7 +288,7 @@ TEST(GraphBuilderConstantFold, MissingShapeKernelAlwaysRaises) {
 
 TEST(GraphBuilderConstantFold, FoldsShapeTaggedNodeWhenKernelAvailable) {
   ScopedFoldingKernels kernels;
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInitializer(
       MakeInitializer<float>("a", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f}));
   const std::vector<std::string> shape = builder.MakeNode("Shape", {"a"}, {"sh"});
@@ -307,7 +307,7 @@ TEST(GraphBuilderConstantFold, FoldsShapeTaggedNodeWhenKernelAvailable) {
 
 TEST(GraphBuilderConstantFold, RecursesIntoSubgraphs) {
   ScopedFoldingKernels kernels;
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
 
   core::builder::GraphBuilder &body = builder.MakeSubgraph("body");

@@ -39,7 +39,7 @@ utils::RepeatedProtoField<AttributeProto> AxisAttrs(int64_t axis) {
 }
 
 TEST(SplitConcatPattern, FoldsSplitConcatIntoIdentity) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2D(2, 4));
   builder.MakeNode("Split", {"x"}, {"s0", "s1"}, "", "", AxisAttrs(1));
   builder.MakeNode("Concat", {"s0", "s1"}, {"y"}, "", "", AxisAttrs(1));
@@ -62,7 +62,7 @@ TEST(SplitConcatPattern, FoldsSplitConcatIntoIdentity) {
 }
 
 TEST(SplitConcatPattern, OptimizesToIdentityGraph) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2D(2, 4));
   builder.MakeNode("Split", {"x"}, {"s0", "s1"}, "", "", AxisAttrs(1));
   builder.MakeNode("Concat", {"s0", "s1"}, {"y"}, "", "", AxisAttrs(1));
@@ -80,7 +80,7 @@ TEST(SplitConcatPattern, OptimizesToIdentityGraph) {
 }
 
 TEST(SplitConcatPattern, RejectsMismatchedAxis) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2D(4, 4));
   builder.MakeNode("Split", {"x"}, {"s0", "s1"}, "", "", AxisAttrs(1));
   builder.MakeNode("Concat", {"s0", "s1"}, {"y"}, "", "", AxisAttrs(0));
@@ -95,7 +95,7 @@ TEST(SplitConcatPattern, RejectsMismatchedAxis) {
 }
 
 TEST(SplitConcatPattern, RejectsReorderedConcat) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2D(2, 4));
   builder.MakeNode("Split", {"x"}, {"s0", "s1"}, "", "", AxisAttrs(1));
   builder.MakeNode("Concat", {"s1", "s0"}, {"y"}, "", "", AxisAttrs(1));
@@ -110,7 +110,7 @@ TEST(SplitConcatPattern, RejectsReorderedConcat) {
 }
 
 TEST(SplitConcatPattern, RejectsExtraConsumer) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2D(2, 4));
   builder.MakeNode("Split", {"x"}, {"s0", "s1"}, "", "", AxisAttrs(1));
   builder.MakeNode("Concat", {"s0", "s1"}, {"y"}, "", "", AxisAttrs(1));
@@ -127,7 +127,7 @@ TEST(SplitConcatPattern, RejectsExtraConsumer) {
 }
 
 TEST(GathersSplitPattern, MergesScalarGathersIntoSplitAndSqueeze) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2D(4, 2));
   builder.MakeInitializer(MakeInitializer<int64_t>("i0", {}, {0}));
   builder.MakeInitializer(MakeInitializer<int64_t>("i1", {}, {1}));
@@ -152,7 +152,7 @@ TEST(GathersSplitPattern, MergesScalarGathersIntoSplitAndSqueeze) {
 }
 
 TEST(GathersSplitPattern, RejectsWhenIndicesDoNotCoverAxis) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2D(4, 3));
   builder.MakeInitializer(MakeInitializer<int64_t>("i0", {}, {0}));
   builder.MakeInitializer(MakeInitializer<int64_t>("i1", {}, {1}));
@@ -237,7 +237,7 @@ TEST(GatherSliceToSplitPattern, RejectsNonUnitSliceStep) {
 }
 
 TEST(SlicesSplitPattern, MergesContiguousSlicesIntoSplit) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2D(2, 8));
   builder.MakeInitializer(MakeInitializerShape("zero", {0}));
   builder.MakeInitializer(MakeInitializerShape("four", {4}));
@@ -264,7 +264,7 @@ TEST(SlicesSplitPattern, MergesContiguousSlicesIntoSplit) {
 }
 
 TEST(SlicesSplitPattern, RejectsNonContiguousSlices) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2D(2, 8));
   builder.MakeInitializer(MakeInitializerShape("zero", {0}));
   builder.MakeInitializer(MakeInitializerShape("three", {3}));

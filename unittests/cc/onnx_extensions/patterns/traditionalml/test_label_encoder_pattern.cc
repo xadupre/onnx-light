@@ -63,7 +63,7 @@ void AddString(utils::RepeatedProtoField<AttributeProto> &attributes, const char
 }
 
 TEST(LabelEncoderFusionPattern, ComposesMappingsAndDefaults) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.SetOpsetVersion("ai.onnx.ml", 4);
   builder.MakeInput("x", core::symbolic::TensorType::kString, Shape1D(3));
   utils::RepeatedProtoField<AttributeProto> first;
@@ -93,7 +93,7 @@ TEST(LabelEncoderFusionPattern, ComposesMappingsAndDefaults) {
 }
 
 TEST(LabelEncoderFusionPattern, RejectsSharedIntermediate) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.SetOpsetVersion("ai.onnx.ml", 4);
   builder.MakeInput("x", core::symbolic::TensorType::kInt64, Shape1D(3));
   utils::RepeatedProtoField<AttributeProto> attributes;
@@ -112,7 +112,7 @@ TEST(LabelEncoderFusionPattern, RejectsSharedIntermediate) {
 }
 
 TEST(LabelEncoderFusionPattern, UsesSchemaDefaultsWhenOmitted) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.SetOpsetVersion("ai.onnx.ml", 4);
   builder.MakeInput("x", core::symbolic::TensorType::kInt64, Shape1D(3));
   utils::RepeatedProtoField<AttributeProto> first;
@@ -137,7 +137,7 @@ TEST(LabelEncoderFusionPattern, UsesSchemaDefaultsWhenOmitted) {
 }
 
 TEST(LabelEncoderFusionPattern, RejectsIncompatibleMiddleType) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.SetOpsetVersion("ai.onnx.ml", 4);
   builder.MakeInput("x", core::symbolic::TensorType::kInt64, Shape1D(3));
   utils::RepeatedProtoField<AttributeProto> first;

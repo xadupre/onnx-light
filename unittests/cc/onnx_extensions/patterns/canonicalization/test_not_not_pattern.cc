@@ -29,7 +29,7 @@ core::symbolic::SymShape Shape() {
 }
 
 TEST(NotNotPattern, FusesConsecutiveNots) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kBool, Shape());
   builder.MakeNode("Not", {"x"}, {"x1"});
   builder.MakeNode("Not", {"x1"}, {"y"});
@@ -52,7 +52,7 @@ TEST(NotNotPattern, FusesConsecutiveNots) {
 }
 
 TEST(NotNotPattern, ProducesIdentityGraph) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kBool, Shape());
   builder.MakeNode("Not", {"x"}, {"x1"});
   builder.MakeNode("Not", {"x1"}, {"y"});
@@ -70,7 +70,7 @@ TEST(NotNotPattern, ProducesIdentityGraph) {
 }
 
 TEST(NotNotPattern, KeepsFirstNotWhenReused) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kBool, Shape());
   builder.MakeNode("Not", {"x"}, {"x1"});
   builder.MakeNode("Not", {"x1"}, {"y"});
@@ -92,7 +92,7 @@ TEST(NotNotPattern, KeepsFirstNotWhenReused) {
 }
 
 TEST(NotNotPattern, RejectsNonNotPredecessor) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kBool, Shape());
   builder.MakeNode("Identity", {"x"}, {"x1"});
   builder.MakeNode("Not", {"x1"}, {"y"});

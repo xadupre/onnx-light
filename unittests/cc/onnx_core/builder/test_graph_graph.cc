@@ -147,7 +147,7 @@ public:
 } // namespace
 
 TEST(GraphGraph, IndexesPredecessorsAndSuccessors) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   const std::vector<std::string> z = builder.MakeNode("Add", {"x", "y"}, {"z"});
@@ -197,7 +197,7 @@ TEST(GraphGraph, IndexesPredecessorsAndSuccessors) {
 TEST(GraphGraph, NativeCleanupReplaysOrphanInitializers) {
   for (bool add_dead_node : {false, true}) {
     SCOPED_TRACE(add_dead_node);
-    core::builder::GraphBuilder builder("g", SchemaLookup());
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
     builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
     builder.MakeInitializer(MakeInitializer<float>("unused", {2}, {1.0f, 2.0f}));
     if (add_dead_node) {
@@ -219,7 +219,7 @@ TEST(GraphGraph, NativeCleanupReplaysOrphanInitializers) {
 }
 
 TEST(GraphGraph, BuildRejectsNestedOutputMadeCapturedOnlyByRewrite) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("source", core::symbolic::TensorType::kFloat, MakeShape({2}));
   auto &branch = builder.MakeSubgraph("branch");
   branch.MakeNode("Identity", {"source"}, {"local_result"}, "", "drop");
@@ -252,7 +252,7 @@ TEST(GraphGraph, BuildRejectsNestedOutputMadeCapturedOnlyByRewrite) {
 }
 
 TEST(GraphGraph, NestedRewriteRegistersStructTypeInModelScope) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("captured", core::symbolic::TensorType::kFloat, MakeShape({2}));
   auto &branch = builder.MakeSubgraph("branch");
   branch.MakeNode("Identity", {"captured"}, {"result"}, "", "register_type");
@@ -269,7 +269,7 @@ TEST(GraphGraph, NestedRewriteRegistersStructTypeInModelScope) {
 }
 
 TEST(GraphGraph, NestedDisjointRewritesPreserveCapturedShapeAfterLocalFunctionRegistration) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("captured", core::symbolic::TensorType::kFloat, MakeShape({2}));
   auto &branch = builder.MakeSubgraph("branch");
   branch.MakeNode("Identity", {"captured"}, {"first"}, "", "rewrite_first");
@@ -292,7 +292,7 @@ TEST(GraphGraph, NestedDisjointRewritesPreserveCapturedShapeAfterLocalFunctionRe
 TEST(GraphGraph, OptionalUnusedCleanupPreservesDeadEnds) {
   for (bool remove_unused : {false, true}) {
     SCOPED_TRACE(remove_unused);
-    core::builder::GraphBuilder builder("g", SchemaLookup());
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
     builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
     builder.MakeInitializer(MakeInitializer<float>("weight", {2}, {1.0f, 2.0f}));
     builder.MakeNode("Add", {"x", "weight"}, {"dead"});
@@ -312,7 +312,7 @@ TEST(GraphGraph, OptionalUnusedCleanupPreservesDeadEnds) {
 TEST(GraphGraph, OptionalUnusedCleanupRecursesIntoSubgraphs) {
   for (bool remove_unused : {false, true}) {
     SCOPED_TRACE(remove_unused);
-    core::builder::GraphBuilder builder("g", SchemaLookup());
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
     builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
     builder.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
 
@@ -346,7 +346,7 @@ TEST(GraphGraph, OptionalUnusedCleanupRecursesIntoSubgraphs) {
 }
 
 TEST(GraphGraph, NativeInputDefaultsAreNotOptimizationConstants) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   for (const std::string name : {"x", "z"}) {
     builder.MakeInput(name, core::symbolic::TensorType::kFloat, MakeShape({1}));
     builder.MakeInitializer(MakeInitializer<float>(name.c_str(), {1}, {1.0f}));
@@ -367,7 +367,7 @@ TEST(GraphGraph, NativeInputDefaultsAreNotOptimizationConstants) {
 }
 
 TEST(GraphGraph, UsageQueries) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   builder.MakeNode("Add", {"x", "y"}, {"z"});
@@ -402,7 +402,7 @@ TEST(GraphGraph, UsageQueries) {
 }
 
 TEST(GraphGraph, ShapeAndTypeQueries) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   builder.MakeNode("Relu", {"x"}, {"y"});
 
@@ -457,7 +457,7 @@ TEST(GraphGraph, ConstantScalarBroadcast) {
 }
 
 TEST(GraphGraph, ConstantNodeValueFloat) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   utils::RepeatedProtoField<AttributeProto> attributes;
   AttributeProto &value = attributes.add();
   value.set_name("value_float");
@@ -478,7 +478,7 @@ TEST(GraphGraph, ConstantNodeValueFloat) {
 }
 
 TEST(GraphGraph, ConstantNodeValueTensor) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   utils::RepeatedProtoField<AttributeProto> attributes;
   AttributeProto &value = attributes.add();
   value.set_name("value");
@@ -498,7 +498,7 @@ TEST(GraphGraph, ConstantNodeValueTensor) {
 }
 
 TEST(GraphGraph, SetComputedConstantIsCached) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 2}));
   const std::vector<std::string> y = builder.MakeNode("Neg", {"x"}, {"y"});
 
@@ -512,7 +512,7 @@ TEST(GraphGraph, SetComputedConstantIsCached) {
 }
 
 TEST(GraphGraph, NativeExportOrdersDependenciesAndRecomputesCapturedLifetimes) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   builder.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
   builder.MakeNode("Neg", {"X"}, {"p"}, "", "rewrite");
@@ -562,7 +562,7 @@ TEST(GraphGraph, NativeExportOrdersDependenciesAndRecomputesCapturedLifetimes) {
 }
 
 TEST(GraphGraph, NativeExportOrdersProducerBeforeLexicalCapture) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   builder.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
   builder.MakeNode("Neg", {"X"}, {"p"}, "", "rewrite");
@@ -594,7 +594,7 @@ TEST(GraphGraph, NativeExportOrdersProducerBeforeLexicalCapture) {
 
 TEST(GraphGraph, NativeExportRejectsCyclesAndUndefinedDependencies) {
   for (const std::string input : {"Y", "undefined"}) {
-    core::builder::GraphBuilder builder("g", SchemaLookup());
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
     builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
     builder.MakeNode("Neg", {"X"}, {"p"}, "", "rewrite");
     builder.MakeNode("Abs", {"p"}, {"Y"});

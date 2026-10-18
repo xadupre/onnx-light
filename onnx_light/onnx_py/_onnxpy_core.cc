@@ -2018,7 +2018,7 @@ void AddOnnxPyBuilder(nb::module_ &m) {
 
   // The built-in ONNX operator schemas live in the ``onnx_op`` library, which
   // this extension deliberately does not link against. When the caller wants
-  // schema-driven opset resolution and node validation, it injects a schema
+  // schema-based node validation, it injects a schema
   // provider (see ``onnx_core/graph_builder.py``, which wires the schemas
   // exposed by the ``_onnxpyprotoop`` extension).
   nb::class_<GraphBuilder>(builder_mod, "GraphBuilder",
@@ -2039,18 +2039,21 @@ void AddOnnxPyBuilder(nb::module_ &m) {
           "builders, and are materialized back on export.")
       .def(
           "__init__",
-          [](GraphBuilder *self, const std::string &name, nb::object schema_lookup) {
+          [](GraphBuilder *self, const std::string &name, nb::object schema_lookup,
+             const std::unordered_map<std::string, int> &opsets) {
             if (schema_lookup.is_none()) {
-              new (self) GraphBuilder(name, GraphBuilder::SchemaLookupFn{});
+              new (self) GraphBuilder(name, GraphBuilder::SchemaLookupFn{}, opsets);
               return;
             }
             auto fn = nb::cast<GraphBuilder::SchemaLookupFn>(schema_lookup);
-            new (self) GraphBuilder(name, std::move(fn));
+            new (self) GraphBuilder(name, std::move(fn), opsets);
           },
           nb::arg("name") = "graph", nb::arg("schema_lookup") = nb::none(),
+          nb::arg("opsets") = std::unordered_map<std::string, int>{},
           "Constructs an empty builder. ``schema_lookup`` is an optional callable "
-          "``op_type -> list[LightOpSchema]`` used to resolve opsets and validate nodes; "
-          "when omitted no schema-based validation is performed.")
+          "``op_type -> list[LightOpSchema]`` used to validate nodes at explicit opsets; "
+          "when omitted no schema-based validation is performed. ``opsets`` maps domains "
+          "to explicit versions.")
       .def("set_opset_version", &GraphBuilder::SetOpsetVersion, nb::arg("domain"),
            nb::arg("version"),
            "Records the opset version to use for ``domain`` (empty string for the default "

@@ -471,7 +471,14 @@ void MakeLocalInput(core::builder::GraphBuilder &local, const std::string &funct
 
 void EnsureFunction(core::builder::GraphBuilder &builder, const FunctionProto &function) {
   const std::string name = function.name().value();
-  builder.SetOpsetVersion(function.domain().value(), 1);
+  const std::string domain = function.domain().value();
+  const int opset = builder.OpsetVersion(domain);
+  if (opset == core::shapes::kUnknownOpsetVersion) {
+    builder.SetOpsetVersion(domain, 1);
+  } else if (opset != 1) {
+    throw BuilderError("Attention function '" + name + "' requires opset 1 for domain '" + domain +
+                       "', but the calling builder imports version " + std::to_string(opset) + ".");
+  }
   if (builder.HasLocalFunction(name)) {
     return;
   }

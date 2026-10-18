@@ -67,7 +67,7 @@ class TestGraphBuilder(ExtTestCase):
                 x = builder.inp("x", FLOAT, [2])
                 y = builder.op.Clip(x, outputs="y", min=0.0, max=1.0)
                 builder.out(y)
-                model = builder.to_onnx("model")
+                model = builder.to_onnx(ProtoKind.kModel)
                 checker.check_model(model)
                 imports = {
                     opset.domain or "ai.onnx": opset.version for opset in model.opset_import
@@ -85,7 +85,7 @@ class TestGraphBuilder(ExtTestCase):
         y = builder.op.CustomOp(x, domain="com.example")
         builder.out(y)
         self.assertEqual(builder.opset_version("com.example"), 7)
-        self.assertEqual(builder.to_onnx("model").graph.node[0].domain, "com.example")
+        self.assertEqual(builder.to_onnx(ProtoKind.kModel).graph.node[0].domain, "com.example")
 
     def test_constructor_rejects_invalid_opsets(self):
         for opsets in ("18", {"": "18"}, {"": 1 << 64}):
@@ -440,7 +440,7 @@ class TestGraphBuilder(ExtTestCase):
         )
 
     def test_subgraph_to_onnx_uses_proto_kind(self):
-        builder = GraphBuilder("g")
+        builder = GraphBuilder("g", opsets=18)
         body = builder.make_subgraph("body")
         body.make_input("x", FLOAT, [2])
         (output,) = body.make_node("Identity", ["x"])

@@ -472,6 +472,47 @@ TEST(FunctionHalfRotaryEmbeddingPattern, CreatesFunctionAndRejectsWrongAxis) {
   EXPECT_EQ(pattern.Match(rejected_graph, rejected.Nodes()[0]).pattern, nullptr);
 }
 
+TEST(FunctionHalfRotaryEmbeddingPattern, RejectsConflictingFunctionOpsetBeforeMutation) {
+  for (bool existing_function : {false, true}) {
+    for (int opset : {1, 7}) {
+      SCOPED_TRACE(existing_function);
+      SCOPED_TRACE(opset);
+      core::builder::GraphBuilder builder("opset_conflict", SchemaLookup(), {{"", 18}});
+      builder.MakeInput("X", core::symbolic::TensorType::kFloat, Shape({2, 4, 6, 8}));
+      builder.MakeInput("cos", core::symbolic::TensorType::kFloat, Shape({6, 8}));
+      builder.MakeInput("sin", core::symbolic::TensorType::kFloat, Shape({6, 8}));
+      builder.MakeNode("Split", {"X"}, {"x1", "x2"}, "", "split", SplitAttrs(-1));
+      builder.MakeNode("Neg", {"x2"}, {"nx2"});
+      builder.MakeNode("Concat", {"nx2", "x1"}, {"rotated"}, "", "", IntAttr("axis", -1));
+      builder.MakeNode("Mul", {"rotated", "sin"}, {"scaled_rotated"});
+      builder.MakeNode("Mul", {"X", "cos"}, {"scaled_x"});
+      builder.MakeNode("Add", {"scaled_rotated", "scaled_x"}, {"Y"});
+      builder.MakeOutput("Y", core::symbolic::TensorType::kFloat, Shape({2, 4, 6, 8}));
+      onnx_patterns::FunctionHalfRotaryEmbeddingPattern pattern;
+      if (existing_function) {
+        core::builder::GraphGraph graph(builder);
+        const auto match = pattern.Match(graph, builder.Nodes()[0]);
+        ASSERT_EQ(match.pattern, &pattern) << match.ToString();
+        pattern.Apply(graph, match.nodes);
+      }
+      builder.SetOpsetVersion("intermediate", opset);
+      core::builder::GraphGraph graph(builder);
+      const auto match = pattern.Match(graph, builder.Nodes()[0]);
+      ASSERT_EQ(match.pattern, &pattern) << match.ToString();
+      const auto node_count = builder.Nodes().size();
+      if (opset == 1) {
+        EXPECT_NO_THROW(pattern.Apply(graph, match.nodes));
+        EXPECT_TRUE(HasFunction(builder, "HalfRotaryEmbedding"));
+      } else {
+        EXPECT_THROW(pattern.Apply(graph, match.nodes), core::builder::BuilderError);
+        EXPECT_EQ(HasFunction(builder, "HalfRotaryEmbedding"), existing_function);
+      }
+      EXPECT_EQ(builder.OpsetVersion("intermediate"), opset);
+      EXPECT_EQ(builder.Nodes().size(), node_count);
+    }
+  }
+}
+
 TEST(FunctionHalfRotaryEmbeddingPattern, FusesSliceBasedRotateHalf) {
   for (int opset : {22, 24}) {
     for (auto type : {core::symbolic::TensorType::kFloat, core::symbolic::TensorType::kFloat16}) {

@@ -293,7 +293,7 @@ TEST(WhereAddPattern, RejectsPositiveInfinityAddend) {
 TEST(WhereAddPattern, RejectsWrongUpstreamWhereConstants) {
   for (bool positive_infinity : {false, true}) {
     core::builder::GraphBuilder builder(positive_infinity ? "positive_inf" : "nonzero",
-                                        SchemaLookup());
+                                        SchemaLookup(), {{"", 28}});
     builder.MakeInput("mask", core::symbolic::TensorType::kBool, Shape2());
     builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape2());
     AddFloatInitializer(builder, "then", positive_infinity ? 0.0F : 1.0F);

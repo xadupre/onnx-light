@@ -781,7 +781,9 @@ public:
  * equal halves and unit steps. The Concat is
  * canonical only when it rebuilds ``Neg(second), first``. Either Mul may hold
  * its cache on either input, both Mul results reach the same Add, and every
- * removed intermediate must be unshared.
+ * removed intermediate must be unshared. Function registration requires
+ * ``intermediate`` opset 1 and throws ``BuilderError`` if the calling builder
+ * already imports a different version.
  */
 class FunctionHalfRotaryEmbeddingPattern final : public core::builder::PatternOptimization {
 public:

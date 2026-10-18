@@ -19,4 +19,3 @@ examples and links to its Python and C++ APIs.
     gradient/index
     runtime/index
     tuning/index
-    technical/index

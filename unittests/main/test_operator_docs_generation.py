@@ -27,12 +27,15 @@ class TestGenOperators(ExtTestCase):
         self._init()
         files = os.listdir(self.tmp_dir)
         self.assertIn("index.rst", files, "index.rst must be generated")
+        self.assertIn("domains.rst", files, "domains.rst must be generated")
+        self.assertIn("patterns.rst", files, "patterns.rst must be generated")
         self.assertIn("ai_onnx.rst", files, "ai_onnx.rst must be generated")
         self.assertIn("ai_onnx_ml.rst", files, "ai_onnx_ml.rst must be generated")
 
-    def test_index_lists_all_domains(self):
+    def test_domains_page_lists_all_domains(self):
         self._init()
-        index = Path(self.tmp_dir, "index.rst").read_text(encoding="utf-8")
+        index = Path(self.tmp_dir, "domains.rst").read_text(encoding="utf-8")
+        self.assertIn("Domains\n=======\n", index)
         self.assertIn("ai_onnx", index)
         self.assertIn("ai_onnx_ml", index)
         self.assertIn("ai_onnx_preview", index)
@@ -42,10 +45,20 @@ class TestGenOperators(ExtTestCase):
         self._init()
         index = Path(self.tmp_dir, "index.rst").read_text(encoding="utf-8")
         self.assertIn("ByOp\n====\n", index)
-        self.assertIn("Ops\n---\n", index)
-        self.assertIn("Patterns\n--------\n", index)
+        self.assertIn("   domains\n", index)
+        self.assertIn("   patterns\n", index)
         self.assertIn("MemoryPeak\n----------\n", index)
         self.assertIn("**Attention**", index)
+        self.assertNotIn(".. _l-api-pattern-catalog:", index)
+        self.assertNotIn("   ai_onnx\n", index)
+
+    def test_patterns_page_contains_catalogue(self):
+        self._init()
+        content = Path(self.tmp_dir, "patterns.rst").read_text(encoding="utf-8")
+        self.assertIn("Patterns\n========\n", content)
+        self.assertIn(".. _l-api-pattern-catalog:", content)
+        self.assertIn(doc_module.render_rst_pattern_catalog().rstrip(), content)
+        self.assertNotIn("MemoryPeak", content)
 
     def test_ml_domain_page_contains_operators(self):
         self._init()
@@ -220,11 +233,11 @@ class TestGenOperators(ExtTestCase):
             doc_module._domain_file_stem("ai.onnx.preview.training"), "ai_onnx_preview_training"
         )
 
-    def test_main_docs_index_references_operators(self):
-        self._init()
-        index_path = Path(__file__).resolve().parents[2] / "docs" / "index.rst"
-        content = index_path.read_text(encoding="utf-8")
-        self.assertIn("operators/index", content)
+    def test_api_docs_index_references_operators(self):
+        docs = Path(__file__).resolve().parents[2] / "docs"
+        self.assertNotIn("operators/index", (docs / "index.rst").read_text(encoding="utf-8"))
+        content = (docs / "api" / "index.rst").read_text(encoding="utf-8")
+        self.assertIn("    /operators/index\n", content)
 
     def test_generate_reports_progress(self):
         folder = self.get_dump_folder("test_gen_operators_progress", clean=True)
@@ -255,16 +268,24 @@ class TestGenOperators(ExtTestCase):
 
     def test_generate_refreshes_existing_index(self):
         folder = self.get_dump_folder("test_gen_operators_refresh_index", clean=True)
-        index_path = Path(folder, "index.rst")
-        index_path.parent.mkdir(parents=True, exist_ok=True)
-        index_path.write_text("Ops\n===\n", encoding="utf-8")
+        for filename in ("index.rst", "domains.rst", "patterns.rst"):
+            path = Path(folder, filename)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("Ops\n===\n", encoding="utf-8")
 
         doc_module.generate_operators_doc(folder)
 
-        content = index_path.read_text(encoding="utf-8")
+        content = Path(folder, "index.rst").read_text(encoding="utf-8")
         self.assertIn("ByOp\n====\n", content)
-        self.assertIn("Patterns\n--------\n", content)
+        self.assertIn("   domains\n", content)
+        self.assertIn("   patterns\n", content)
         self.assertIn("MemoryPeak\n----------\n", content)
+        domains = Path(folder, "domains.rst").read_text(encoding="utf-8")
+        self.assertIn("Domains\n=======\n", domains)
+        self.assertIn("   ai_onnx\n", domains)
+        patterns = Path(folder, "patterns.rst").read_text(encoding="utf-8")
+        self.assertIn("Patterns\n========\n", patterns)
+        self.assertIn(".. _l-api-pattern-catalog:", patterns)
 
     def test_latest_page_contains_diff_with_previous_version(self):
         self._init()

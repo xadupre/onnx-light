@@ -7,6 +7,7 @@ API
     protos/index
     python/index
     cpp/index
+    /operators/index
 
 
 .. automodule:: onnx_light

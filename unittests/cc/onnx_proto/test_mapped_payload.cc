@@ -125,6 +125,25 @@ TEST_F(MappedPayloadTest, BorrowReturnsExpectedBytesAndAlignment) {
   EXPECT_EQ(std::memcmp(payload.data, content.data(), content.size()), 0);
 }
 
+TEST_F(MappedPayloadTest, NonAsciiNativePathsOpenMappedAndDirectReads) {
+  const auto path = base_dir_ / std::filesystem::path(u8"caf\u00e9.bin");
+  const std::string content = "mapped payload";
+  std::ofstream out(path, std::ios::binary | std::ios::trunc);
+  out.write(content.data(), static_cast<std::streamsize>(content.size()));
+  out.close();
+
+  MappedPayloadSource source(base_dir_.string());
+  const std::string native_path = path.string();
+  const auto mapped = source.Borrow(native_path, 0, content.size());
+  ASSERT_NE(mapped.data, nullptr);
+  EXPECT_EQ(std::memcmp(mapped.data, content.data(), content.size()), 0);
+
+  std::vector<uint8_t> bytes(content.size());
+  FinalDestinationReadDescriptor(native_path, 0, content.size(), PayloadIdentity{})
+      .ReadInto(bytes.data());
+  EXPECT_EQ(std::memcmp(bytes.data(), content.data(), content.size()), 0);
+}
+
 TEST_F(MappedPayloadTest, TrustedBaseAliasesPreserveMappedAndDirectReadsAndRejectOutsideChildren) {
   const auto base = base_dir_ / "model";
   const auto alias = base_dir_ / "alias";

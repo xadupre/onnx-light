@@ -38,6 +38,7 @@ namespace ONNX_LIGHT_NAMESPACE::utils {
 
 namespace {
 
+using detail::external_path_to_utf8;
 using detail::ExternalDataFileSize;
 using detail::MapExternalDataFile;
 using detail::OpenExternalDataFile;
@@ -50,11 +51,6 @@ std::filesystem::path external_path_from_utf8(const std::string &value) {
 #else
   return std::filesystem::u8path(value);
 #endif
-}
-
-std::string external_path_to_utf8(const std::filesystem::path &value) {
-  const auto utf8 = value.u8string();
-  return std::string(reinterpret_cast<const char *>(utf8.data()), utf8.size());
 }
 
 #if defined(_WIN32) && defined(_MSC_VER)
@@ -1680,7 +1676,8 @@ void TwoFilesWriteStream::set_active_weights_location(const std::string &locatio
     auto stream = std::make_unique<FileWriteStream>(
         path.string(),
         OpenExternalDataFile(external_path_to_utf8(normalized_model_parent(file_path_)),
-                             normalized_location, true));
+                             external_path_to_utf8(std::filesystem::path(normalized_location)),
+                             true));
     extra_weights_streams_.emplace(normalized_location, std::move(stream));
   }
   active_weights_location_ = normalized_location;
@@ -1769,7 +1766,8 @@ void TwoFilesWriteStream::pre_allocate_weights(const std::string &location, int6
     auto stream = std::make_unique<FileWriteStream>(
         path.string(),
         OpenExternalDataFile(external_path_to_utf8(normalized_model_parent(file_path_)),
-                             normalized_location, true));
+                             external_path_to_utf8(std::filesystem::path(normalized_location)),
+                             true));
     it = extra_weights_streams_.emplace(normalized_location, std::move(stream)).first;
   }
   it->second->pre_allocate(total_bytes);

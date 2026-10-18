@@ -113,8 +113,9 @@ std::string ReadWholeFile(const std::string &path) {
 
 class ExternalDataDescriptorTest : public ::testing::Test {
 protected:
-  std::filesystem::path root = "test_external_data_anchored_streams";
   void SetUp() override {
+    root = std::string("test_external_data_anchored_streams_") +
+           ::testing::UnitTest::GetInstance()->current_test_info()->name();
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "model" / "sub");
     std::filesystem::create_directories(root / "outside");
@@ -125,6 +126,7 @@ protected:
     WriteWholeFile((root / "outside" / "extra.bin").string(), "sentinel");
   }
   void TearDown() override { std::filesystem::remove_all(root); }
+  std::filesystem::path root;
 };
 
 TEST_F(ExternalDataDescriptorTest, RejectsUnsafeObjectsBeforeTruncation) {
@@ -165,6 +167,32 @@ TEST_F(ExternalDataDescriptorTest, ReaderPreservesSupportForConfinedNestedPaths)
   stream.set_active_weights_location("sub/nested/extra.bin");
   stream.read_bytes_from_weights_stream(6, bytes, 0);
   EXPECT_EQ(std::string(reinterpret_cast<char *>(bytes), 6), "second");
+}
+
+TEST_F(ExternalDataDescriptorTest, NonAsciiNativePathsWorkForExternalReadsAndWrites) {
+  const auto base = root / "model";
+  const auto filename = std::filesystem::path(u8"caf\u00e9.bin");
+  WriteWholeFile(base / filename, "payload");
+
+  TensorProto tensor;
+  tensor.set_name("unicode");
+  tensor.set_data_location(TensorProto::DataLocation::EXTERNAL);
+  StringStringEntryProto *location = tensor.add_external_data();
+  location->set_key("location");
+  location->set_value(filename.string());
+  tensor.LoadExternalData(base.string());
+  EXPECT_EQ(std::string(reinterpret_cast<const char *>(tensor.ref_raw_data().data()),
+                        tensor.ref_raw_data().size()),
+            "payload");
+
+  const auto extra_filename = std::filesystem::path(u8"caf\u00e9-extra.bin");
+  utils::TwoFilesWriteStream stream((base / "model.onnx").string(),
+                                    (base / "sub" / "weights.bin").string());
+  stream.set_active_weights_location(extra_filename.string());
+  stream.pre_allocate_weights(extra_filename.string(), 7);
+  stream.write_raw_bytes_in_second_stream(reinterpret_cast<const uint8_t *>("written"), 7,
+                                          extra_filename.string());
+  EXPECT_EQ(ReadWholeFile((base / extra_filename).string()), std::string(7, '\0') + "written");
 }
 
 TEST_F(ExternalDataDescriptorTest, DiscoveryPlaceholderValidatesBeforeReadingModelAsWeights) {

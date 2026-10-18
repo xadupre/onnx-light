@@ -963,7 +963,9 @@ void TensorProto::LoadExternalData(const std::string &base_dir) {
                 "' has multiple hard links (", static_cast<int64_t>(hc),
                 "), which is not allowed for tensor '", ref_name(), "'.");
   }
-  const auto file = utils::detail::OpenExternalDataFile(base_dir, loc_normal.string());
+  const auto file = utils::detail::OpenExternalDataFile(
+      utils::detail::external_path_to_utf8(std::filesystem::path(base_dir)),
+      utils::detail::external_path_to_utf8(loc_normal));
   const int64_t effective_offset = offset > 0 ? offset : 0;
   if (length < 0) {
     const int64_t file_end = utils::detail::ExternalDataFileSize(*file);

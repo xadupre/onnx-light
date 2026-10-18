@@ -58,7 +58,9 @@ std::shared_ptr<int> OpenMappedPayloadFile(const std::string &base_dir,
                                            const std::string &source_path) {
   const auto base = std::filesystem::weakly_canonical(std::filesystem::absolute(base_dir));
   return utils::detail::OpenExternalDataFile(
-      base.string(), std::filesystem::path(source_path).lexically_relative(base).string());
+      utils::detail::external_path_to_utf8(base),
+      utils::detail::external_path_to_utf8(
+          std::filesystem::path(source_path).lexically_relative(base)));
 }
 
 } // namespace
@@ -76,8 +78,8 @@ FinalDestinationReadDescriptor::FinalDestinationReadDescriptor(std::string sourc
     : source_path_(std::move(source_path)), offset_(offset), size_(size),
       identity_(std::move(identity)),
       file_(utils::detail::OpenExternalDataFile(
-          std::filesystem::path(source_path_).parent_path().string(),
-          std::filesystem::path(source_path_).filename().string())) {
+          utils::detail::external_path_to_utf8(std::filesystem::path(source_path_).parent_path()),
+          utils::detail::external_path_to_utf8(std::filesystem::path(source_path_).filename()))) {
   EXT_ENFORCE(offset_ >= 0 && size_ >= 0, "FinalDestinationReadDescriptor: invalid range.");
   EXT_ENFORCE(file_ != nullptr, "FinalDestinationReadDescriptor: source is not open.");
   const int64_t current_size = utils::detail::ExternalDataFileSize(*file_);

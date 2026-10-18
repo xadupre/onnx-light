@@ -1,7 +1,11 @@
 .. _l-howto-save-model-with-shared-external-data:
+.. _l-howto-save-model-with-shared-external-data-python:
 
 How to save a model that shares weights with another on-disk model
 ==================================================================
+
+This guide covers the Python interface. For the other language, see
+:doc:`../cpp/save_model_with_shared_external_data`.
 
 This page documents the recipe for saving a new model that **reuses
 already-external weights** of a previously saved model, without copying
@@ -38,97 +42,45 @@ weights file they already pointed at.  No byte is copied from that file.
 New initializers carrying inline ``raw_data`` are written to a single
 secondary weights file at ``<dst_onnx_path>.data``, at aligned offsets.
 
-.. tab-set::
 
-   .. tab-item:: Python
-      :sync: python
+.. code-block:: python
 
-      .. code-block:: python
+    import numpy as np
+    import onnx_light.onnx as onnxl
+    import onnx_light.onnx.helper as oh
+    from onnx_light.onnx_lib import SerializeOptions
 
-          import numpy as np
-          import onnx_light.onnx as onnxl
-          import onnx_light.onnx.helper as oh
-          from onnx_light.onnx_lib import SerializeOptions
+    # 1) Load the first model WITHOUT external data so its initializers keep
+    #    their external_data metadata pointing at first.onnx.data.
+    first = onnxl.load("first.onnx", load_external_data=False)
 
-          # 1) Load the first model WITHOUT external data so its initializers keep
-          #    their external_data metadata pointing at first.onnx.data.
-          first = onnxl.load("first.onnx", load_external_data=False)
+    # 2) Build a second model that reuses every initializer of the first
+    #    one and adds a brand-new inline initializer.
+    new_arr = np.full((5,), 7.0, dtype=np.float32)
+    new_init = oh.make_tensor(
+        name="new_weight",
+        data_type=onnxl.TensorProto.FLOAT,
+        dims=new_arr.shape,
+        vals=new_arr.tobytes(),
+        raw=True,
+    )
+    graph = oh.make_graph(
+        [], "g", [], [],
+        initializer=[*first.graph.initializer, new_init],
+    )
+    second = oh.make_model(graph, producer_name="second")
 
-          # 2) Build a second model that reuses every initializer of the first
-          #    one and adds a brand-new inline initializer.
-          new_arr = np.full((5,), 7.0, dtype=np.float32)
-          new_init = oh.make_tensor(
-              name="new_weight",
-              data_type=onnxl.TensorProto.FLOAT,
-              dims=new_arr.shape,
-              vals=new_arr.tobytes(),
-              raw=True,
-          )
-          graph = oh.make_graph(
-              [], "g", [], [],
-              initializer=[*first.graph.initializer, new_init],
-          )
-          second = oh.make_model(graph, producer_name="second")
-
-          # 3) Save the second model next to the first one.  Reused initializers
-          #    keep pointing at first.onnx.data; new initializers land in
-          #    second.onnx.data at 4096-aligned offsets.
-          opts = SerializeOptions()
-          opts.alignment = 4096
-          bytes_written = onnxl.save_model_with_shared_external_data(
-              model=second,
-              dst_onnx_path="second.onnx",
-              options=opts,
-          )
-          print(f"Wrote {bytes_written} bytes to second.onnx.data")
-
-   .. tab-item:: C++
-      :sync: cpp
-
-      .. code-block:: cpp
-
-          #include "onnx.h"
-          #include "onnx_helper.h"
-          #include "stream.h"
-
-          #include <cstring>
-          #include <iostream>
-          #include <vector>
-
-          // 1) Load the first model WITHOUT external data so its initializers keep
-          //    their external_data metadata pointing at first.onnx.data.
-          onnx::ModelProto first;
-          onnx::utils::FileStream rstream("first.onnx");
-          onnx::ParseOptions ropts;
-          ropts.skip_raw_data = true;
-          onnx::ParseModelProtoFromStream(first, rstream, ropts,
-                                          /*clear_external_data=*/false);
-
-          // 2) Build a second model that reuses every initializer of the first
-          //    one and adds a brand-new inline initializer.
-          onnx::ModelProto second;
-          onnx::GraphProto *graph = second.add_graph();
-          graph->set_name("g");
-          for (const auto &reused_init : first.ref_graph().ref_initializer()) {
-            *graph->add_initializer() = reused_init;
-          }
-          std::vector<float> new_arr(5, 7.0f);
-          onnx::TensorProto *new_init = graph->add_initializer();
-          new_init->set_name("new_weight");
-          new_init->set_data_type(onnx::TensorProto::DataType::FLOAT);
-          new_init->ref_dims().push_back(static_cast<int64_t>(new_arr.size()));
-          new_init->ref_raw_data().resize(new_arr.size() * sizeof(float));
-          std::memcpy(new_init->ref_raw_data().data(), new_arr.data(),
-                      new_arr.size() * sizeof(float));
-
-          // 3) Save the second model next to the first one.  Reused initializers
-          //    keep pointing at first.onnx.data; new initializers land in
-          //    second.onnx.data at 4096-aligned offsets.
-          onnx::SerializeOptions opts;
-          opts.alignment = 4096;
-          onnx::offset_t bytes_written =
-              onnx::SaveModelWithSharedExternalData(second, "second.onnx", opts);
-          std::cout << "Wrote " << bytes_written << " bytes to second.onnx.data\n";
+    # 3) Save the second model next to the first one.  Reused initializers
+    #    keep pointing at first.onnx.data; new initializers land in
+    #    second.onnx.data at 4096-aligned offsets.
+    opts = SerializeOptions()
+    opts.alignment = 4096
+    bytes_written = onnxl.save_model_with_shared_external_data(
+        model=second,
+        dst_onnx_path="second.onnx",
+        options=opts,
+    )
+    print(f"Wrote {bytes_written} bytes to second.onnx.data")
 
 After the call:
 
@@ -183,6 +135,6 @@ See also
   :cpp:func:`onnx_light::SaveModelWithSharedExternalData` – API reference.
 * :ref:`l-design-loading-saving-scenarios` – design notes on complex
   load/save scenarios this function was designed for.
-* :ref:`l-howto-align-external-data-streaming` – companion how-to for
+* :ref:`l-howto-align-external-data-streaming-python` – companion how-to for
   re-aligning an existing model without loading its weights.
-* :ref:`l-howto-load-save-onnx-files` – common load/save patterns.
+* :ref:`l-howto-load-save-onnx-files-python` – common load/save patterns.

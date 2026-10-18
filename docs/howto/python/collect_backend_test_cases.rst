@@ -1,9 +1,13 @@
 .. _l-howto-collect-backend-test-cases:
+.. _l-howto-collect-backend-test-cases-python:
 
 :html_theme.sidebar_secondary.remove:
 
 How to collect backend test cases (by op type or by name)
 =========================================================
+
+This guide covers the Python interface. For the other language, see
+:doc:`../cpp/collect_backend_test_cases`.
 
 *onnx-light* ships a catalog of C++-implemented ONNX backend test cases.
 This page shows how to enumerate them, how to filter them by operator
@@ -13,31 +17,15 @@ regular expression).  The same data is exposed in Python and in C++.
 List every test case
 --------------------
 
-.. tab-set::
 
-   .. tab-item:: Python
-      :sync: python
+.. code-block:: python
 
-      .. code-block:: python
+    import onnx_light.onnx.backend as bt
 
-          import onnx_light.onnx.backend as bt
-
-          cases = bt.collect_test_cases()
-          print(len(cases), "cases")
-          for tc in cases[:5]:
-              print(tc.name, tc.kind, tc.tag)
-
-   .. tab-item:: C++
-      :sync: cpp
-
-      .. code-block:: cpp
-
-          #include "onnx_core/backend_test/test_case.h"
-
-          auto cases = core::backend_test::CollectTestCases();
-          for (const auto &tc : cases) {
-              std::cout << tc.name << " " << tc.kind << " " << tc.tag << "\n";
-          }
+    cases = bt.collect_test_cases()
+    print(len(cases), "cases")
+    for tc in cases[:5]:
+        print(tc.name, tc.kind, tc.tag)
 
 Filter by operator type or category
 -----------------------------------
@@ -46,27 +34,13 @@ Filter by operator type or category
 (for example ``"Add"``) or one of the special category strings ``"shape"``,
 ``"inference"``, or ``"nan_inf"`` to narrow down the result.
 
-.. tab-set::
 
-   .. tab-item:: Python
-      :sync: python
+.. code-block:: python
 
-      .. code-block:: python
+    import onnx_light.onnx.backend as bt
 
-          import onnx_light.onnx.backend as bt
-
-          add_cases = bt.collect_test_cases("Add")
-          shape_cases = bt.collect_test_cases("shape")
-
-   .. tab-item:: C++
-      :sync: cpp
-
-      .. code-block:: cpp
-
-          #include "onnx_core/backend_test/test_case.h"
-
-          auto add_cases = core::backend_test::CollectTestCases("Add");
-          auto shape_cases = core::backend_test::CollectTestCases("shape");
+    add_cases = bt.collect_test_cases("Add")
+    shape_cases = bt.collect_test_cases("shape")
 
 Collect a test case by name
 ---------------------------
@@ -77,45 +51,23 @@ look up one or more cases by their ``name``.  The pattern is matched with
 ``std::regex_search`` ECMAScript semantics, so a plain string acts as a
 substring match; anchor it with ``^...$`` for a full match.
 
-.. tab-set::
 
-   .. tab-item:: Python
-      :sync: python
+.. code-block:: python
 
-      .. code-block:: python
+    import re
+    import onnx_light.onnx.backend as bt
 
-          import re
-          import onnx_light.onnx.backend as bt
+    # Substring match: every case whose name contains "abs".
+    cases = bt.collect_test_cases_by_name("abs")
 
-          # Substring match: every case whose name contains "abs".
-          cases = bt.collect_test_cases_by_name("abs")
+    # Full regex: only the C++ "test_cc_add" cases.
+    cases = bt.collect_test_cases_by_name(r"^test_cc_add(_|$)")
 
-          # Full regex: only the C++ "test_cc_add" cases.
-          cases = bt.collect_test_cases_by_name(r"^test_cc_add(_|$)")
+    # A pre-compiled re.Pattern is also accepted.
+    cases = bt.collect_test_cases_by_name(re.compile(r"abs"))
 
-          # A pre-compiled re.Pattern is also accepted.
-          cases = bt.collect_test_cases_by_name(re.compile(r"abs"))
-
-          for tc in cases:
-              print(tc.name)
-
-   .. tab-item:: C++
-      :sync: cpp
-
-      .. code-block:: cpp
-
-          #include "onnx_core/backend_test/test_case.h"
-
-          // Substring match
-          auto cases = core::backend_test::CollectTestCasesByName("abs");
-
-          // Full regex
-          auto cc_add = core::backend_test::CollectTestCasesByName(
-              "^test_cc_add(_|$)");
-
-          for (const auto &tc : cases) {
-              std::cout << tc.name << "\n";
-          }
+    for tc in cases:
+        print(tc.name)
 
 Release materialized cases
 --------------------------
@@ -127,42 +79,23 @@ Use ``materialized`` to inspect that state without triggering the build and
 ``unload()`` to release the cached payload and build-time resources, including
 kernel instances captured by the initial generator:
 
-.. tab-set::
 
-   .. tab-item:: Python
-      :sync: python
+.. code-block:: python
 
-      .. code-block:: python
+    import onnx_light.onnx.backend as bt
 
-          import onnx_light.onnx.backend as bt
+    case = bt.collect_test_cases_by_name(r"^test_cc_if_seq$")[0]
+    assert not case.materialized
 
-          case = bt.collect_test_cases_by_name(r"^test_cc_if_seq$")[0]
-          assert not case.materialized
+    model = case.model
+    assert case.materialized
 
-          model = case.model
-          assert case.materialized
+    case.unload()
+    assert not case.materialized
 
-          case.unload()
-          assert not case.materialized
-
-          # Existing handles remain valid. A new access rebuilds the cache.
-          assert model.graph.node[0].op_type == "If"
-          assert case.model.graph.node[0].op_type == "If"
-
-   .. tab-item:: C++
-      :sync: cpp
-
-      .. code-block:: cpp
-
-          #include "onnx_core/backend_test/test_case.h"
-
-          auto cases = core::backend_test::CollectTestCasesByName(
-              "^test_cc_if_seq$");
-          auto &test_case = cases.front();
-          auto model = test_case.model_handle();
-          test_case.unload();
-          assert(!test_case.materialized());
-          assert(model->ref_graph().ref_node()[0].ref_op_type() == "If");
+    # Existing handles remain valid. A new access rebuilds the cache.
+    assert model.graph.node[0].op_type == "If"
+    assert case.model.graph.node[0].op_type == "If"
 
 Python collection and report APIs use ``unload=True`` by default. Native-backed
 Python cases retain only their lightweight C++ reconstruction recipe until

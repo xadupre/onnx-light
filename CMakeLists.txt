@@ -1380,12 +1380,14 @@ if(ONNX_LIGHT_INSTALL)
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light"
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
     PATTERN "_onnxpy.cc" EXCLUDE
+    PATTERN "external_data_internal.h" EXCLUDE
   )
   # Also install under onnx_proto/ for headers that include "onnx_proto/...".
   install(DIRECTORY "${ONNX_PROTO_PATH}/"
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_proto"
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
     PATTERN "_onnxpy.cc" EXCLUDE
+    PATTERN "external_data_internal.h" EXCLUDE
   )
   install(FILES "${ONNX_PROTO_PATH}/dlpack/LICENSE"
     DESTINATION "${CMAKE_INSTALL_DATADIR}/licenses/onnx_light/dlpack")

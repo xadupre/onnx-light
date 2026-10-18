@@ -10,7 +10,7 @@ Other pages remain unchanged. The cache is a ``PagedCacheProto``, not one
 uniformly quantized tensor: K and V can use different formats on each page.
 
 The example uses supported affine INT4/UINT4 storage, not the generic
-``Q4_K``/``Q5_K`` profiles. See :doc:`/howto/persistent_feedback` for the
+``Q4_K``/``Q5_K`` profiles. See :doc:`/howto/python/persistent_feedback` for the
 paged-cache and persistence contracts.
 """
 

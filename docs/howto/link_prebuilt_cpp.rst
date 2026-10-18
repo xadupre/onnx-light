@@ -12,7 +12,7 @@ from a CMake project without building *onnx-light* from source.
 .. note::
 
    If you prefer to build *onnx-light* from source and install it locally,
-   see :ref:`l-howto-install-onnx-light` and :ref:`l-design-cpp-linking` instead.
+   see :ref:`l-howto-install-onnx-light-cpp` and :ref:`l-design-cpp-linking` instead.
 
 Pre-built artifacts
 -------------------
@@ -268,10 +268,10 @@ Notes
 See also
 --------
 
-* :ref:`l-howto-install-onnx-light` – build and install *onnx-light* from
+* :ref:`l-howto-install-onnx-light-cpp` – build and install *onnx-light* from
   source.
 * :ref:`l-design-cpp-linking` – full description of every exported CMake
   target and the ``add_subdirectory`` alternative.
 * :ref:`l-cpp-load-onnx-light-time-example` – a complete runnable example.
-* :ref:`l-howto-onnx-graph-manipulations` – how to use the graph-analysis
+* :ref:`l-howto-onnx-graph-manipulations-cpp` – how to use the graph-analysis
   helpers from ``onnx_light::lib_onnx_manipulations``.

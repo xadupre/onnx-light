@@ -71,11 +71,12 @@ struct ONNX_LIGHT_PROTO_API MappedPayload {
  *  MappedPayloadSource::DescribeFinalDestinationRead) validates that the
  *  source path is confined to the source's base directory, is not a
  *  symlink, has at most one hard link, and that the requested range fits
- *  inside the file's size at validation time. ReadInto() re-validates the
- *  file has not shrunk since and throws rather than silently truncating the
- *  read. onnx-light never allocates an intermediate whole-tensor buffer to
- *  service this path: ReadInto() reads directly from the source file into
- *  `destination`. */
+ *  inside the opened file's size. The descriptor retains that verified
+ *  file, so replacing its pathname or a parent directory cannot redirect
+ *  ReadInto(). ReadInto() checks that the retained file has not shrunk and
+ *  throws rather than silently truncating the read. onnx-light never
+ *  allocates an intermediate whole-tensor buffer to service this path:
+ *  ReadInto() reads directly from the source file into `destination`. */
 class ONNX_LIGHT_PROTO_API FinalDestinationReadDescriptor {
 public:
   FinalDestinationReadDescriptor() = default;
@@ -89,15 +90,17 @@ public:
 
   /** Reads size() bytes at offset() from source_path() directly into
    *  *destination*, which must have room for at least size() bytes. Throws
-   *  if the file cannot be opened, is shorter than required (e.g. a
+   *  if the retained file is shorter than required (e.g. a
    *  truncation raced with validation), or a short/failed read occurs. */
   void ReadInto(void *destination) const;
 
 private:
+  friend class MappedPayloadSource;
   std::string source_path_;
   int64_t offset_ = 0;
   int64_t size_ = 0;
   PayloadIdentity identity_;
+  std::shared_ptr<int> file_;
 };
 
 /** Confines external-payload requests to one base directory, shares one
@@ -146,6 +149,7 @@ public:
 
 private:
   struct CachedMapping {
+    std::shared_ptr<int> file;
     std::shared_ptr<uint8_t> data;
     int64_t size = 0;
     uint64_t generation = 0;

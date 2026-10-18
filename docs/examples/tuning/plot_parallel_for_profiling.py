@@ -14,14 +14,23 @@ multiplexed groups, so derived metrics exist only when ``time_running`` equals
 thread-bound perf group cannot represent their aggregate work. Unsupported
 platforms and denied counters retain portable timing; ``None`` is distinct from
 a valid zero.
+
+The second part compares ``Abs`` parallel crossover thresholds, displays the
+measured times and selected value, and plots the tuning results. Profiling
+is diagnostic; tuning selects a threshold using separate, unprofiled benchmark
+measurements.
 """
 
 # sphinx_gallery_thumbnail_path = "_static/gallery_thumbnails/parallel_for_profiling.png"
 
 from __future__ import annotations
 
+from pprint import pprint
+
+import matplotlib.pyplot as plt
 import numpy
 
+from onnx_light import kernel_tuning
 from onnx_light.onnx import TensorProto
 from onnx_light.onnx_lib import parser
 from onnx_light.onnx_py import _onnxpykernels
@@ -72,3 +81,73 @@ for event in report.events:
         f"counters={event.counter_status}, time_running/enabled={counter_time}, "
         f"ipc={ipc}, llc_miss_rate={llc}"
     )
+
+#####################################
+# Compare tuning results
+# ++++++++++++++++++++++
+#
+# Use a two-thread executor so the crossover can affect parallel execution.
+# Compare the portable threshold with smaller and larger values, keeping the
+# first value as the timing baseline. The duration and memory budgets keep this
+# demonstration bounded. ``save=False`` leaves the user's cache unchanged.
+
+policy = runtime.CpuExecutionPolicy()
+policy.num_threads = 2
+element_type = int(TensorProto.FLOAT)
+(parameters,) = kernel_tuning.kernel_tuning_parameters(
+    kernel="Abs", element_type=element_type, num_threads=2
+)["kernels"]
+parameter_name = "parallel.minimum_elements"
+baseline = parameters["defaults"][parameter_name]
+calibration = kernel_tuning.calibrate_kernel_tuning(
+    "Abs",
+    element_types=[element_type],
+    parameter_name=parameter_name,
+    parameter_values=[baseline, max(1, baseline // 4), baseline * 4],
+    maximum_duration_ms=100,
+    maximum_memory_bytes=16 << 20,
+    cpu_execution=policy,
+    save=False,
+)
+(comparison,) = calibration["comparisons"]
+print(
+    f"{comparison['parameter_name']}: baseline={comparison['baseline_value']}, "
+    f"selected={comparison['selected_value']}"
+)
+print("threshold | measured time (ms) | speedup vs baseline | selected")
+for measurement in comparison["values"]:
+    speedup = (
+        "unavailable" if measurement["speedup"] is None else f"{measurement['speedup']:.3f}x"
+    )
+    selected = measurement["value"] == comparison["selected_value"]
+    print(
+        f"{measurement['value']:9d} | {measurement['duration_seconds'] * 1e3:18.3f} | "
+        f"{speedup:19s} | {selected}"
+    )
+print("calibrated profile:")
+pprint(calibration["calibrated"])
+print("calibration diagnostics:")
+pprint(calibration["diagnostics"])
+
+#####################################
+# Visualize the measured comparison
+# +++++++++++++++++++++++++++++++++
+#
+# Times aggregate the same benchmark cases for each threshold, not the single
+# inference profiled above. A short run may retain the baseline; no speedup is
+# guaranteed, and hardware counters may remain unavailable.
+
+fig, ax = plt.subplots(figsize=(8, 4))
+ax.bar(
+    [str(measurement["value"]) for measurement in comparison["values"]],
+    [measurement["duration_seconds"] * 1e3 for measurement in comparison["values"]],
+    color=[
+        "tab:orange" if measurement["value"] == comparison["selected_value"] else "tab:blue"
+        for measurement in comparison["values"]
+    ],
+)
+ax.set_xlabel(parameter_name)
+ax.set_ylabel("Aggregate measured time (ms), lower is better")
+ax.set_title(f"Abs tuning: selected threshold = {comparison['selected_value']} (orange)")
+fig.tight_layout()
+plt.show()

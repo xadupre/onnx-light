@@ -121,5 +121,5 @@ On Windows:
 See also
 --------
 
-* :ref:`l-howto-use-custom-kernel` — context-local factories and Python/C++
+* :ref:`l-howto-use-custom-kernel-cpp` — context-local factories and Python/C++
   callback convenience APIs using the same session-owned kernel lifecycle.

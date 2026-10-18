@@ -253,5 +253,5 @@ only built on demand and therefore not covered by the default build:
 See also
 --------
 
-* :ref:`l-howto-replace-onnx` — the general onnx → onnx-light migration guide.
+* :ref:`l-howto-replace-onnx-cpp` — the general onnx → onnx-light migration guide.
 * :ref:`l-design-cpp-linking` — the exported CMake targets.

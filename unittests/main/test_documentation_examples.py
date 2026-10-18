@@ -44,6 +44,27 @@ def import_source(module_file_path, module_name):
 
 
 class TestDocumentationExamples(ExtTestCase):
+    def test_parallel_for_profiling_tuning_results(self):
+        example = os.path.join(
+            ROOT, "docs", "examples", "tuning", "plot_parallel_for_profiling.py"
+        )
+        result = subprocess.run(
+            [sys.executable, example],
+            env={**os.environ, "PYTHONPATH": ROOT, "MPLBACKEND": "Agg"},
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=60,
+        )
+        self.assertIn("events=", result.stdout)
+        self.assertRegex(result.stdout, r"parallel.minimum_elements: baseline=\d+, selected=\d+")
+        self.assertIn("speedup vs baseline", result.stdout)
+        self.assertRegex(result.stdout, r"\d+\s+\|\s+[\d.]+\s+\|\s+1.000x")
+        self.assertRegex(result.stdout, r"\|\s+True")
+        self.assertIn("calibrated profile:", result.stdout)
+        self.assertIn("'parallel.minimum_elements':", result.stdout)
+        self.assertIn("calibration diagnostics:", result.stdout)
+
     def run_test(self, fold: str, name: str, verbose=0) -> int:
         ppath = os.environ.get("PYTHONPATH", "")
         if not ppath:

@@ -185,7 +185,7 @@ payload groups, contiguous positive-length blocks and valid page dimensions.
 
 These are onnx-light extensions, not upstream ONNX messages. Shared type and
 quantization references remain model-scoped. See
-:doc:`../../howto/persistent_feedback` for initialization and runtime conversion.
+:doc:`../../howto/cpp/persistent_feedback` for initialization and runtime conversion.
 
 How ONNX uses the wire format
 -----------------------------

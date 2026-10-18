@@ -3047,6 +3047,7 @@ GraphBuilder &GraphBuilder::MakeLocalFunction(const std::string &name, const std
   child->parent_ = this;
   GraphBuilder &ref = *child;
   local_functions_.push_back(std::move(child));
+  RefreshLocalFunctionDefinition(ref);
   return ref;
 }
 

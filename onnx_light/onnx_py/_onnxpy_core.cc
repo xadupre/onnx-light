@@ -2012,7 +2012,7 @@ void AddOnnxPyBuilder(nb::module_ &m) {
 
   // The built-in ONNX operator schemas live in the ``onnx_op`` library, which
   // this extension deliberately does not link against. When the caller wants
-  // schema-driven opset resolution and node validation, it injects a schema
+  // schema-based node validation, it injects a schema
   // provider (see ``onnx_core/graph_builder.py``, which wires the schemas
   // exposed by the ``_onnxpyprotoop`` extension).
   nb::class_<GraphBuilder>(builder_mod, "GraphBuilder",
@@ -2045,7 +2045,7 @@ void AddOnnxPyBuilder(nb::module_ &m) {
           nb::arg("name") = "graph", nb::arg("schema_lookup") = nb::none(),
           nb::arg("opsets") = std::unordered_map<std::string, int>{},
           "Constructs an empty builder. ``schema_lookup`` is an optional callable "
-          "``op_type -> list[LightOpSchema]`` used to resolve opsets and validate nodes; "
+          "``op_type -> list[LightOpSchema]`` used to validate nodes at explicit opsets; "
           "when omitted no schema-based validation is performed. ``opsets`` maps domains "
           "to explicit versions.")
       .def("set_opset_version", &GraphBuilder::SetOpsetVersion, nb::arg("domain"),

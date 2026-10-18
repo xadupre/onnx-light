@@ -121,7 +121,7 @@ private:
 
 TEST(TransposeToInitializerPattern, FoldsFloatInitializer) {
   ScopedTransposeKernel kernel;
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInitializer(
       MakeInitializer<float>("weight", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f}));
   builder.MakeNode("Transpose", {"weight"}, {"weight_t"}, "", "transpose_weight", PermAttr({1, 0}));
@@ -149,7 +149,7 @@ TEST(TransposeToInitializerPattern, FoldsFloatInitializer) {
 
 TEST(TransposeToInitializerPattern, UsesDefaultReversePermutation) {
   ScopedTransposeKernel kernel;
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInitializer(MakeInitializer<int64_t>("weight", {2, 1, 3}, {1, 2, 3, 4, 5, 6}));
   builder.MakeNode("Transpose", {"weight"}, {"weight_t"});
   builder.MakeOutput("weight_t");
@@ -172,7 +172,7 @@ TEST(TransposeToInitializerPattern, UsesDefaultReversePermutation) {
 TEST(TransposeToInitializerPattern, RespectsFoldingOptions) {
   ScopedTransposeKernel kernel;
   for (int setting = 0; setting < 4; ++setting) {
-    core::builder::GraphBuilder builder("g", SchemaLookup());
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
     builder.MakeInitializer(MakeInitializer<float>("weight", {2, 3}, {1, 2, 3, 4, 5, 6}));
     builder.MakeNode("Transpose", {"weight"}, {"weight_t"}, "", "", PermAttr({1, 0}));
     builder.MakeOutput("weight_t");
@@ -199,7 +199,7 @@ TEST(TransposeToInitializerPattern, RespectsFoldingOptions) {
 }
 
 TEST(TransposeToInitializerPattern, RejectsRuntimeInput) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   builder.MakeNode("Transpose", {"x"}, {"y"}, "", "", PermAttr({1, 0}));
   builder.MakeOutput("y");
@@ -211,7 +211,7 @@ TEST(TransposeToInitializerPattern, RejectsRuntimeInput) {
 }
 
 TEST(TransposeToInitializerPattern, RejectsConstantNodeOutput) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   utils::RepeatedProtoField<AttributeProto> attributes;
   AttributeProto &value = attributes.add();
   value.set_name("value");
@@ -228,7 +228,7 @@ TEST(TransposeToInitializerPattern, RejectsConstantNodeOutput) {
 }
 
 TEST(TransposeTransposePattern, CancelsOppositeTransposes) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   builder.MakeNode("Transpose", {"x"}, {"t0"}, "", "", PermAttr({1, 0}));
   builder.MakeNode("Transpose", {"t0"}, {"out"}, "", "", PermAttr({1, 0}));
@@ -247,7 +247,7 @@ TEST(TransposeTransposePattern, CancelsOppositeTransposes) {
 }
 
 TEST(TransposeTransposePattern, MergesIntoSingleTranspose) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3, 4}));
   builder.MakeNode("Transpose", {"x"}, {"t0"}, "", "", PermAttr({1, 0, 2}));
   builder.MakeNode("Transpose", {"t0"}, {"out"}, "", "", PermAttr({0, 2, 1}));
@@ -267,7 +267,7 @@ TEST(TransposeTransposePattern, MergesIntoSingleTranspose) {
 }
 
 TEST(TransposeTransposePattern, KeepsSharedTransposeWhenCancelling) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   builder.MakeNode("Transpose", {"x"}, {"t0"}, "", "", PermAttr({1, 0}));
   builder.MakeNode("Transpose", {"t0"}, {"out"}, "", "", PermAttr({1, 0}));
@@ -289,7 +289,7 @@ TEST(TransposeTransposePattern, KeepsSharedTransposeWhenCancelling) {
 }
 
 TEST(TransposeTransposePattern, RejectsSharedTransposeWhenMerging) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3, 4}));
   builder.MakeNode("Transpose", {"x"}, {"t0"}, "", "", PermAttr({1, 0, 2}));
   builder.MakeNode("Transpose", {"t0"}, {"out"}, "", "", PermAttr({0, 2, 1}));
@@ -304,7 +304,7 @@ TEST(TransposeTransposePattern, RejectsSharedTransposeWhenMerging) {
 }
 
 TEST(TransposeGatherPattern, DropsTransposeWhenOrderKept) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({3, 4, 5, 6}));
   builder.MakeInput("ind", core::symbolic::TensorType::kInt64, Shape({}));
   builder.MakeNode("Transpose", {"x"}, {"t"}, "", "", PermAttr({1, 0, 2, 3}));
@@ -326,7 +326,7 @@ TEST(TransposeGatherPattern, DropsTransposeWhenOrderKept) {
 }
 
 TEST(TransposeGatherPattern, SwapsTransposePastGather) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({3, 4, 5}));
   builder.MakeInput("ind", core::symbolic::TensorType::kInt64, Shape({}));
   builder.MakeNode("Transpose", {"x"}, {"t"}, "", "", PermAttr({2, 1, 0}));
@@ -350,7 +350,7 @@ TEST(TransposeGatherPattern, SwapsTransposePastGather) {
 }
 
 TEST(TransposeGatherPattern, RejectsNonScalarIndex) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({3, 4, 5, 6}));
   builder.MakeInput("ind", core::symbolic::TensorType::kInt64, Shape({2}));
   builder.MakeNode("Transpose", {"x"}, {"t"}, "", "", PermAttr({1, 0, 2, 3}));

@@ -31,7 +31,7 @@ core::symbolic::SymShape Shape() {
 }
 
 TEST(IdentityPattern, MatchesAddZeroScalar) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
   builder.MakeInitializer(MakeInitializer<float>("zero", {1}, {0.0f}));
   builder.MakeNode("Add", {"x", "zero"}, {"y"});
@@ -50,7 +50,7 @@ TEST(IdentityPattern, MatchesAddZeroScalar) {
 }
 
 TEST(IdentityPattern, MatchesMulOneScalarOnLeft) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
   builder.MakeInitializer(MakeInitializer<float>("one", {1}, {1.0f}));
   builder.MakeNode("Mul", {"one", "x"}, {"y"});
@@ -68,7 +68,7 @@ TEST(IdentityPattern, MatchesMulOneScalarOnLeft) {
 }
 
 TEST(IdentityPattern, MatchesIdentityTranspose) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   core::symbolic::SymShape shape;
   shape.PushBack(core::symbolic::SymDim(2));
   shape.PushBack(core::symbolic::SymDim(3));
@@ -89,7 +89,7 @@ TEST(IdentityPattern, MatchesIdentityTranspose) {
 }
 
 TEST(IdentityPattern, OptimizeReplacesNoOpAdd) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
   builder.MakeInitializer(MakeInitializer<float>("zero", {1}, {0.0f}));
   builder.MakeNode("Add", {"x", "zero"}, {"y"});
@@ -114,7 +114,7 @@ template <typename T> void CheckConstantOperands(T value) {
       SCOPED_TRACE(dims.size());
       for (bool neutral_on_left : {false, true}) {
         SCOPED_TRACE(neutral_on_left);
-        core::builder::GraphBuilder builder("g", SchemaLookup());
+        core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
         TensorProto data = MakeInitializer<T>("data", dims, {value});
         const TensorProto identity = MakeInitializer<T>("neutral", dims, {neutral});
         builder.MakeInitializer(data);
@@ -217,7 +217,7 @@ TEST(IdentityPattern, PreservesInt64ConstantOperands) {
 }
 
 TEST(IdentityPattern, RejectsNonNeutralScalar) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
   builder.MakeInitializer(MakeInitializer<float>("five", {1}, {5.0f}));
   builder.MakeNode("Add", {"x", "five"}, {"y"});

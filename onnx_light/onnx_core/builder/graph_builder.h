@@ -21,9 +21,8 @@
  *
  * A builder starts empty. Every value name it hands out (graph inputs,
  * initializers and node outputs) is recorded so a name can never be reused.
- * Each :cpp:func:`GraphBuilder::MakeNode` call resolves the operator opset
- * (falling back to the latest known one when the domain has no explicit
- * opset), validates the node against the matching
+ * Each :cpp:func:`GraphBuilder::MakeNode` call requires an explicit opset
+ * for the node's domain and validates the node against the matching
  * :cpp:class:`core::schema::LightOpSchema` when one is available, assigns
  * output names when the caller left them empty and runs incremental shape
  * inference for the new node.
@@ -175,14 +174,10 @@ public:
   /// Constructs an empty builder.
   ///
   /// @param name          Name given to the produced graph / function.
-  /// @param schema_lookup Optional schema provider used to validate nodes and
-  ///                      to resolve the "latest opset" of a domain.
+  /// @param schema_lookup Optional schema provider used to validate nodes at the selected opset.
   /// @param opsets        Explicit domain-to-version imports, applied before adding nodes.
   explicit GraphBuilder(std::string name = "graph", SchemaLookupFn schema_lookup = {},
                         const std::unordered_map<std::string, int> &opsets = {});
-
-  /// Constructs an empty builder with an explicit default ONNX opset.
-  GraphBuilder(std::string name, SchemaLookupFn schema_lookup, int opset);
 
   /// Constructs a builder from an existing model by replaying every graph and
   /// function node through :cpp:func:`MakeNode`.
@@ -210,8 +205,8 @@ public:
   // ── Opset management ─────────────────────────────────────────────────
 
   /// Records the opset version to use for ``domain`` (an empty string denotes
-  /// the default ONNX domain). Explicitly setting an opset prevents the
-  /// builder from deriving it from operator schemas.
+  /// the default ONNX domain). A positive version must be selected before
+  /// adding a node in that domain; schemas never select a version implicitly.
   void SetOpsetVersion(const std::string &domain, int version);
 
   /// Returns the opset version recorded for ``domain`` or
@@ -332,8 +327,8 @@ public:
 
   /// Appends a node to the graph.
   ///
-  /// The opset version of ``domain`` is resolved (defaulting to the latest
-  /// known one when unset), the node is validated against the matching
+  /// The opset version of ``domain`` must be selected explicitly before adding
+  /// the node. The node is validated against the matching
   /// :cpp:class:`core::schema::LightOpSchema` when a schema provider is
   /// available, missing output names are generated, the node is appended and
   /// incremental shape inference is run for it.
@@ -685,10 +680,6 @@ private:
   std::size_t ConstantFoldImpl(const ConstantFoldingOptions &options,
                                const std::unordered_set<std::string> *included_outputs);
 
-  // Resolves and records the opset version to use for a node of ``domain``,
-  // given the domain-filtered schema history ``schemas``.
-  int ResolveNodeOpset(const std::string &domain, const std::vector<LightOpSchema> &schemas);
-
   // Returns the schema history registered for ``op_type`` in ``normalised_domain``
   // (empty when none), populating the lookup table on first use. ``schema_lookup_``
   // is queried at most once per operator; results are grouped by domain so node
@@ -859,12 +850,8 @@ private:
   std::vector<std::unique_ptr<GraphBuilder>> subgraphs_;
   std::unordered_set<std::string> names_;
   std::unordered_set<std::string> inherited_names_;
-  // Effective domain-to-version map emitted in the resulting proto. Versions
-  // inferred from operator schemas may increase as nodes are added.
+  // Explicit imports selected by the caller or read from an existing proto.
   std::unordered_map<std::string, int> opsets_;
-  // Domains explicitly set by the user or imported from an existing proto.
-  // Their versions are fixed and must not be advanced by schema inference.
-  std::unordered_set<std::string> user_opsets_;
   Device device_ = Device::kUndefined;
   std::uint64_t auto_counter_ = 0;
   bool ancestor_refresh_suppressed_ = false;

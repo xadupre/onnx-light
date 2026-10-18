@@ -18,7 +18,9 @@ ONNX domain; a custom operator requires an explicit non-empty domain and an
 imported version. It does not require a schema registered on the local machine.
 Pass ``opsets=18`` for just the standard ONNX domain, or a domain-to-version
 dictionary for multiple imports. ``set_opset_version`` remains available.
-In C++, use ``GraphBuilder("authoring", schema_lookup, 18)`` or
+Adding a node without an explicit opset for its domain raises an exception,
+even when a schema provider is available. No version is selected automatically.
+In C++, use
 ``GraphBuilder("authoring", schema_lookup, {{"", 18}, {"com.example", 7}})``.
 
 The example includes:

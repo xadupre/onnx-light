@@ -411,9 +411,6 @@ GraphBuilder::GraphBuilder(std::string name, SchemaLookupFn schema_lookup,
   }
 }
 
-GraphBuilder::GraphBuilder(std::string name, SchemaLookupFn schema_lookup, int opset)
-    : GraphBuilder(std::move(name), std::move(schema_lookup), {{"", opset}}) {}
-
 GraphBuilder::GraphBuilder(const ModelProto &model, SchemaLookupFn schema_lookup)
     : name_(model.graph().name().empty() ? std::string("graph") : model.graph().name().value()),
       schema_lookup_(std::move(schema_lookup)) {
@@ -479,7 +476,6 @@ GraphBuilder &GraphBuilder::operator=(GraphBuilder &&other) noexcept {
   names_ = std::move(other.names_);
   inherited_names_ = std::move(other.inherited_names_);
   opsets_ = std::move(other.opsets_);
-  user_opsets_ = std::move(other.user_opsets_);
   device_ = other.device_;
   auto_counter_ = other.auto_counter_;
   for (const auto &child : local_functions_) {
@@ -494,11 +490,13 @@ GraphBuilder &GraphBuilder::operator=(GraphBuilder &&other) noexcept {
 // ── Opset management ───────────────────────────────────────────────────
 
 void GraphBuilder::SetOpsetVersion(const std::string &domain, int version) {
+  if (version <= 0) {
+    throw BuilderError("GraphBuilder: opset versions must be positive.");
+  }
   const std::string key = NormaliseDomain(domain);
   const auto existing = opsets_.find(key);
   const bool changed = existing == opsets_.end() || existing->second != version;
   opsets_[key] = version;
-  user_opsets_.insert(key);
   compute_.Shapes().SetOpsetVersion(key, version);
   if (changed && !nodes_.empty()) {
     RebuildStructuredState();
@@ -1472,34 +1470,6 @@ void GraphBuilder::MaterializeGraphReferences(NodeProto &node) const {
 
 // ── Nodes ──────────────────────────────────────────────────────────────
 
-int GraphBuilder::ResolveNodeOpset(const std::string &domain,
-                                   const std::vector<LightOpSchema> &schemas) {
-  const std::string key = NormaliseDomain(domain);
-  auto it = opsets_.find(key);
-  if (user_opsets_.find(key) != user_opsets_.end()) {
-    return it->second;
-  }
-  if (schemas.empty()) {
-    if (it != opsets_.end()) {
-      return it->second;
-    }
-    throw BuilderError("GraphBuilder: cannot resolve the opset version for domain '" + key +
-                       "'; no operator schema is available, call set_opset_version() first.");
-  }
-  int op_latest = std::numeric_limits<int>::min();
-  for (const LightOpSchema &schema : schemas) {
-    op_latest = std::max(op_latest, schema.since_version());
-  }
-  const int target = it != opsets_.end() ? std::max(it->second, op_latest) : op_latest;
-  const bool changed = it == opsets_.end() || it->second != target;
-  opsets_[key] = target;
-  compute_.Shapes().SetOpsetVersion(key, target);
-  if (changed && !nodes_.empty()) {
-    RebuildStructuredState();
-  }
-  return target;
-}
-
 const std::vector<LightOpSchema> &
 GraphBuilder::DomainSchemas(const std::string &op_type, const std::string &normalised_domain) {
   static const std::vector<LightOpSchema> kEmpty;
@@ -1563,6 +1533,13 @@ GraphBuilder::MakeNode(const std::string &op_type, const std::vector<std::string
                        const std::vector<std::string> &outputs, const std::string &domain,
                        const std::string &name,
                        const utils::RepeatedProtoField<AttributeProto> &attributes) {
+  const int opset = OpsetVersion(domain);
+  if (opset <= 0) {
+    throw BuilderError("GraphBuilder: node '" + op_type + "' has no explicit opset for domain '" +
+                       NormaliseDomain(domain) +
+                       "'; call SetOpsetVersion() first or supply "
+                       "opsets to the constructor.");
+  }
   {
     GraphBuilder *root = this;
     while (root->parent_ != nullptr) {
@@ -1605,11 +1582,10 @@ GraphBuilder::MakeNode(const std::string &op_type, const std::vector<std::string
     }
   }
 
-  // Resolve the opset version and the matching schema (if any) via the cached
+  // Select the matching schema (if any) via the cached
   // per-operator, per-domain lookup table.
   const std::string normalised_domain = NormaliseDomain(domain);
   const std::vector<LightOpSchema> &domain_schemas = DomainSchemas(op_type, normalised_domain);
-  const int opset = ResolveNodeOpset(domain, domain_schemas);
   const LightOpSchema *schema = nullptr;
   for (const LightOpSchema &candidate : domain_schemas) {
     if (candidate.since_version() <= opset &&
@@ -3064,17 +3040,8 @@ GraphBuilder &GraphBuilder::MakeLocalFunction(const std::string &name, const std
     throw BuilderError("GraphBuilder: a local function named '" + name + "' already exists.");
   }
   ReserveName(name);
-  auto child = std::make_unique<GraphBuilder>(name, schema_lookup_);
+  auto child = std::make_unique<GraphBuilder>(name, schema_lookup_, opsets_);
   child->is_local_function_ = true;
-  if (!domain.empty()) {
-    // Register the function domain on both the parent (so nodes that call the
-    // function resolve their opset and the model imports the domain) and the
-    // nested builder (so its emitted FunctionProto imports it too).
-    if (OpsetVersion(domain) == kUnknownOpsetVersion) {
-      SetOpsetVersion(domain, 1);
-    }
-    child->SetOpsetVersion(domain, 1);
-  }
   child->function_domain_ = domain;
   child->compute_.Shapes().SetStructTypes(Shapes().StructTypes());
   child->parent_ = this;

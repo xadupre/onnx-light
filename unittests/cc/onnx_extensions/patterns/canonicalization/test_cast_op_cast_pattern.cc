@@ -39,7 +39,7 @@ void AddCast(core::builder::GraphBuilder &builder, const std::string &input,
 }
 
 TEST(CastOpCastPattern, RecastsUnconvertedBinaryInput) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
   builder.MakeInput("y", core::symbolic::TensorType::kFloat16, Shape());
   AddCast(builder, "y", "cast_y", TensorProto::DataType::FLOAT);
@@ -70,7 +70,7 @@ TEST(CastOpCastPattern, RecastsUnconvertedBinaryInput) {
 }
 
 TEST(CastOpCastPattern, ProducesExpectedUnaryGraphAndPreservesAttributes) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat16, Shape());
   AddCast(builder, "x", "cast_x", TensorProto::DataType::FLOAT);
   utils::RepeatedProtoField<AttributeProto> attributes;
@@ -96,7 +96,7 @@ TEST(CastOpCastPattern, ProducesExpectedUnaryGraphAndPreservesAttributes) {
 }
 
 TEST(CastOpCastPattern, PreservesSharedComputationOutput) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat16, Shape());
   AddCast(builder, "x", "cast_x", TensorProto::DataType::FLOAT);
   builder.MakeNode("Neg", {"cast_x"}, {"negative"});
@@ -122,7 +122,7 @@ TEST(CastOpCastPattern, PreservesSharedComputationOutput) {
 }
 
 TEST(CastOpCastPattern, RejectsOperationWithoutInputCast) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape());
   builder.MakeNode("Mul", {"x", "y"}, {"product"});
@@ -138,7 +138,7 @@ TEST(CastOpCastPattern, RejectsOperationWithoutInputCast) {
 }
 
 TEST(CastOpCastPattern, RejectsMismatchedRoundTripTypes) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kBfloat16, Shape());
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape());
   AddCast(builder, "x", "cast_x", TensorProto::DataType::FLOAT);
@@ -156,7 +156,7 @@ TEST(CastOpCastPattern, RejectsMismatchedRoundTripTypes) {
 }
 
 TEST(CastOpCastPattern, RejectsSharedInputCast) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat16, Shape());
   AddCast(builder, "x", "cast_x", TensorProto::DataType::FLOAT);
   builder.MakeNode("Neg", {"cast_x"}, {"negative"});

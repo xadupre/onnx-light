@@ -51,7 +51,7 @@ std::vector<int64_t> InitializerValues(const core::builder::GraphBuilder &builde
 }
 
 TEST(ExpandPattern, RemovesRedundantExpand) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   AddInt64Initializer(builder, "shape", {2, 3});
   builder.MakeNode("Expand", {"x", "shape"}, {"out"});
@@ -70,7 +70,7 @@ TEST(ExpandPattern, RemovesRedundantExpand) {
 }
 
 TEST(ExpandPattern, RejectsShapeChangingExpand) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({1, 3}));
   AddInt64Initializer(builder, "shape", {2, 3});
   builder.MakeNode("Expand", {"x", "shape"}, {"out"});
@@ -83,7 +83,7 @@ TEST(ExpandPattern, RejectsShapeChangingExpand) {
 }
 
 TEST(ExpandBroadcastPattern, DropsExpandBeforeBinary) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 1024, 1}));
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({2, 1024, 1024}));
   AddInt64Initializer(builder, "shape", {2, 1024, 1024});
@@ -105,7 +105,7 @@ TEST(ExpandBroadcastPattern, DropsExpandBeforeBinary) {
 }
 
 TEST(ExpandBroadcastPattern, KeepsExpandWhenOperandsDoNotBroadcast) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({1, 3}));
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({2, 1}));
   AddInt64Initializer(builder, "shape", {2, 3});
@@ -120,7 +120,7 @@ TEST(ExpandBroadcastPattern, KeepsExpandWhenOperandsDoNotBroadcast) {
 }
 
 TEST(ShapeBasedConcatExpandPattern, ReplacesUnchangedTargetDimensionsWithOnes) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat,
                     core::symbolic::SymShape({core::symbolic::SymDim("a"), 1}));
   AddInt64Initializer(builder, "two", {2});
@@ -153,7 +153,7 @@ TEST(ShapeBasedConcatExpandPattern, ReplacesUnchangedTargetDimensionsWithOnes) {
 }
 
 TEST(ShapeBasedConcatExpandPattern, RejectsTwoChangedDimensions) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({1, 1}));
   AddInt64Initializer(builder, "two", {2});
   AddInt64Initializer(builder, "three", {3});
@@ -170,7 +170,7 @@ TEST(ShapeBasedConcatExpandPattern, RejectsTwoChangedDimensions) {
 }
 
 TEST(ShapeBasedConcatExpandPattern, RejectsSharedTargetShape) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat,
                     core::symbolic::SymShape({core::symbolic::SymDim("a"), 1}));
   AddInt64Initializer(builder, "two", {2});
@@ -193,7 +193,7 @@ TEST(ShapeBasedConcatExpandPattern, RejectsSharedTargetShape) {
 }
 
 TEST(ShapeBasedExpandBroadcastPattern, RemovesDynamicExpandBeforeBinary) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput(
       "x", core::symbolic::TensorType::kFloat,
       core::symbolic::SymShape({1, core::symbolic::SymDim("b"), core::symbolic::SymDim("c")}));
@@ -224,7 +224,7 @@ TEST(ShapeBasedExpandBroadcastPattern, RemovesDynamicExpandBeforeBinary) {
 }
 
 TEST(ShapeBasedExpandBroadcastPattern, PreservesSharedExpandForOtherConsumers) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat,
                     core::symbolic::SymShape({1, core::symbolic::SymDim("b")}));
   builder.MakeInput(
@@ -264,7 +264,7 @@ TEST(ShapeBasedExpandBroadcastPattern, PreservesSharedExpandForOtherConsumers) {
 }
 
 TEST(ShapeBasedExpandBroadcastPattern, RejectsIncompatibleSymbolicDimensions) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput(
       "x", core::symbolic::TensorType::kFloat,
       core::symbolic::SymShape({core::symbolic::SymDim("m"), core::symbolic::SymDim("b")}));
@@ -283,7 +283,7 @@ TEST(ShapeBasedExpandBroadcastPattern, RejectsIncompatibleSymbolicDimensions) {
 }
 
 TEST(ShapeBasedExpandBroadcastMatMulPattern, RemovesDynamicBatchExpand) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput(
       "x", core::symbolic::TensorType::kFloat,
       core::symbolic::SymShape(
@@ -319,7 +319,7 @@ TEST(ShapeBasedExpandBroadcastMatMulPattern, RemovesDynamicBatchExpand) {
 }
 
 TEST(ShapeBasedExpandBroadcastMatMulPattern, RejectsIncompatibleBatchDimensions) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat,
                     core::symbolic::SymShape({core::symbolic::SymDim("a"), 2, 3}));
   builder.MakeInput("y", core::symbolic::TensorType::kFloat,
@@ -337,7 +337,7 @@ TEST(ShapeBasedExpandBroadcastMatMulPattern, RejectsIncompatibleBatchDimensions)
 }
 
 TEST(ShapeBasedStaticExpandPattern, ReplacesDynamicTargetWithConstantShape) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat,
                     core::symbolic::SymShape({2, 3, core::symbolic::SymDim("d"), 1}));
   AddInt64Initializer(builder, "four", {4});
@@ -365,7 +365,7 @@ TEST(ShapeBasedStaticExpandPattern, ReplacesDynamicTargetWithConstantShape) {
 }
 
 TEST(ShapeBasedStaticExpandPattern, RejectsSymbolicChangedDimension) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat,
                     core::symbolic::SymShape({core::symbolic::SymDim("a"), 1}));
   builder.MakeInput("target", core::symbolic::TensorType::kInt64, Shape({2}));
@@ -379,7 +379,7 @@ TEST(ShapeBasedStaticExpandPattern, RejectsSymbolicChangedDimension) {
 }
 
 TEST(ShapeBasedExpandSwapPattern, MovesBinaryBeforeExpand) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({4, 1}));
   AddInt64Initializer(builder, "target", {4, 4});
   builder.MakeInitializer(MakeInitializer<float>("one", {1}, {1.0f}));
@@ -405,7 +405,7 @@ TEST(ShapeBasedExpandSwapPattern, MovesBinaryBeforeExpand) {
 }
 
 TEST(ShapeBasedExpandSwapPattern, RejectsRedundantInputExpand) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({4, 4}));
   AddInt64Initializer(builder, "target", {4, 4});
   builder.MakeInitializer(MakeInitializer<float>("one", {1}, {1.0f}));
@@ -419,7 +419,7 @@ TEST(ShapeBasedExpandSwapPattern, RejectsRedundantInputExpand) {
 }
 
 TEST(ShapeBasedExpandCastWhereSwapPattern, MovesWhereBeforeExpand) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 1}));
   AddInt64Initializer(builder, "target", {2, 3});
   builder.MakeInitializer(MakeInitializer<float>("zero", {1}, {0.0f}));
@@ -447,7 +447,7 @@ TEST(ShapeBasedExpandCastWhereSwapPattern, MovesWhereBeforeExpand) {
 }
 
 TEST(ShapeBasedExpandCastWhereSwapPattern, RejectsAdditionalExpandConsumer) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 1}));
   AddInt64Initializer(builder, "target", {2, 3});
   builder.MakeInitializer(MakeInitializer<float>("zero", {1}, {0.0f}));
@@ -466,7 +466,7 @@ TEST(ShapeBasedExpandCastWhereSwapPattern, RejectsAdditionalExpandConsumer) {
 }
 
 TEST(ExpandSwapPattern, MovesExpandPastUnary) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({1, 5, 7}));
   AddInt64Initializer(builder, "shape", {3, 1, 1});
   builder.MakeNode("Expand", {"x", "shape"}, {"xe"});
@@ -489,7 +489,7 @@ TEST(ExpandSwapPattern, MovesExpandPastUnary) {
 }
 
 TEST(ExpandSwapPattern, RejectsNonUnaryConsumer) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({1, 5, 7}));
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({3, 5, 7}));
   AddInt64Initializer(builder, "shape", {3, 1, 1});
@@ -504,7 +504,7 @@ TEST(ExpandSwapPattern, RejectsNonUnaryConsumer) {
 }
 
 TEST(SwapExpandUnsqueezePattern, MovesUnsqueezeBeforeExpand) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({1, 5, 7}));
   AddInt64Initializer(builder, "shape", {3, 1, 1});
   AddInt64Initializer(builder, "axes", {1});
@@ -530,7 +530,7 @@ TEST(SwapExpandUnsqueezePattern, MovesUnsqueezeBeforeExpand) {
 }
 
 TEST(SwapExpandUnsqueezePattern, RejectsNonUnsqueezeConsumer) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({1, 5, 7}));
   AddInt64Initializer(builder, "shape", {3, 1, 1});
   builder.MakeNode("Expand", {"x", "shape"}, {"xe"});
@@ -544,7 +544,7 @@ TEST(SwapExpandUnsqueezePattern, RejectsNonUnsqueezeConsumer) {
 }
 
 TEST(SwapExpandUnsqueezePattern, RejectsNonConstantAxes) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({1, 5, 7}));
   builder.MakeInput("axes", core::symbolic::TensorType::kInt64, Shape({1}));
   AddInt64Initializer(builder, "shape", {3, 1, 1});
@@ -575,7 +575,7 @@ TEST(SwapExpandUnsqueezePattern, RejectsOpsetBelow13) {
 }
 
 TEST(ExpandUnsqueezeExpandPattern, FusesExpandUnsqueezeExpand) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({1, 3, 4}));
   AddInt64Initializer(builder, "shape1", {5, 3, 4});
   AddInt64Initializer(builder, "axes", {1});
@@ -603,7 +603,7 @@ TEST(ExpandUnsqueezeExpandPattern, FusesExpandUnsqueezeExpand) {
 }
 
 TEST(ExpandUnsqueezeExpandPattern, RejectsMissingSecondExpand) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({1, 3, 4}));
   AddInt64Initializer(builder, "shape1", {5, 3, 4});
   AddInt64Initializer(builder, "axes", {1});
@@ -618,7 +618,7 @@ TEST(ExpandUnsqueezeExpandPattern, RejectsMissingSecondExpand) {
 }
 
 TEST(ExpandUnsqueezeExpandPattern, RejectsRankMismatch) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({1, 3, 4}));
   AddInt64Initializer(builder, "shape1", {5, 3, 4});
   AddInt64Initializer(builder, "axes", {1, 2});
@@ -635,7 +635,7 @@ TEST(ExpandUnsqueezeExpandPattern, RejectsRankMismatch) {
 }
 
 TEST(SwapExpandReshapePattern, MovesReshapeBeforeExpand) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({1, 4, 1}));
   AddInt64Initializer(builder, "expand_shape", {3, 1, 1});
   AddInt64Initializer(builder, "reshape_shape", {0, 1, -1});
@@ -658,7 +658,7 @@ TEST(SwapExpandReshapePattern, MovesReshapeBeforeExpand) {
 }
 
 TEST(SwapExpandReshapePattern, RejectsExpandTargetWithoutTrailingOnes) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({1, 1, 1}));
   AddInt64Initializer(builder, "expand_shape", {3, 2, 1});
   AddInt64Initializer(builder, "reshape_shape", {0, 1, -1});

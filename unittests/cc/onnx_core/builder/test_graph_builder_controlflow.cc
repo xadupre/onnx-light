@@ -109,7 +109,7 @@ TEST(GraphBuilderControlflow, IfBuildsAndImportsMultipleOutputs) {
 }
 
 TEST(GraphBuilderControlflow, IfRejectsCapturedOnlyBranchOutputButAllowsCapturedInput) {
-  core::builder::GraphBuilder native("native_capture", SchemaLookup());
+  core::builder::GraphBuilder native("native_capture", SchemaLookup(), {{"", 28}});
   native.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
   auto &native_branch = native.MakeSubgraph("native_branch");
   EXPECT_THROW(native_branch.MakeOutput("x"), core::builder::BuilderError);

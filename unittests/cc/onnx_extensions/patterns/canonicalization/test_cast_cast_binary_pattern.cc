@@ -39,7 +39,7 @@ void AddCast(core::builder::GraphBuilder &builder, const std::string &input,
 }
 
 TEST(CastCastBinaryPattern, MovesCastsAfterBinaryOperation) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape());
   AddCast(builder, "x", "cast_x", TensorProto::DataType::FLOAT16);
@@ -71,7 +71,7 @@ TEST(CastCastBinaryPattern, MovesCastsAfterBinaryOperation) {
 }
 
 TEST(CastCastBinaryPattern, ProducesExpectedOptimizedGraph) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape());
   AddCast(builder, "x", "cast_x", TensorProto::DataType::FLOAT16);
@@ -94,7 +94,7 @@ TEST(CastCastBinaryPattern, ProducesExpectedOptimizedGraph) {
 }
 
 TEST(CastCastBinaryPattern, RejectsSharedCastOutput) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape());
   AddCast(builder, "x", "cast_x", TensorProto::DataType::FLOAT16);
@@ -113,7 +113,7 @@ TEST(CastCastBinaryPattern, RejectsSharedCastOutput) {
 }
 
 TEST(CastCastBinaryPattern, RejectsOneCastFeedingBothInputs) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
   AddCast(builder, "x", "cast_x", TensorProto::DataType::FLOAT16);
   builder.MakeNode("Add", {"cast_x", "cast_x"}, {"z"});
@@ -128,7 +128,7 @@ TEST(CastCastBinaryPattern, RejectsOneCastFeedingBothInputs) {
 }
 
 TEST(CastCastBinaryPattern, RejectsLowerPrecisionComputation) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat16, Shape());
   builder.MakeInput("y", core::symbolic::TensorType::kFloat16, Shape());
   AddCast(builder, "x", "cast_x", TensorProto::DataType::FLOAT);

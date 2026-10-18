@@ -54,7 +54,7 @@ void MakeAxisZeroConcat(core::builder::GraphBuilder &builder,
 }
 
 TEST(ConcatReshapePattern, ReplacesOneDynamicShapeElementAndRejectsForeignInput) {
-  core::builder::GraphBuilder builder("positive", SchemaLookup());
+  core::builder::GraphBuilder builder("positive", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   AddShape(builder, "prefix", {2});
   const NodeProto slice = ShapeSlice("x", "tail", 1, 2);
@@ -72,7 +72,7 @@ TEST(ConcatReshapePattern, ReplacesOneDynamicShapeElementAndRejectsForeignInput)
   EXPECT_EQ(replacements[1].op_type().value(), "Reshape");
   EXPECT_EQ(replacements[1].output()[0].value(), "out");
 
-  core::builder::GraphBuilder rejected("rejected", SchemaLookup());
+  core::builder::GraphBuilder rejected("rejected", SchemaLookup(), {{"", 28}});
   rejected.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   rejected.MakeInput("unknown", core::symbolic::TensorType::kInt64, Shape({1}));
   AddShape(rejected, "prefix", {2});
@@ -83,7 +83,7 @@ TEST(ConcatReshapePattern, ReplacesOneDynamicShapeElementAndRejectsForeignInput)
 }
 
 TEST(ReshapePattern, ReplacesIdentityReshapeAndRejectsDifferentTarget) {
-  core::builder::GraphBuilder builder("positive", SchemaLookup());
+  core::builder::GraphBuilder builder("positive", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   AddShape(builder, "shape", {2, 3});
   builder.MakeNode("Reshape", {"x", "shape"}, {"out"});
@@ -97,7 +97,7 @@ TEST(ReshapePattern, ReplacesIdentityReshapeAndRejectsDifferentTarget) {
   EXPECT_EQ(replacements[0].input()[0].value(), "x");
   EXPECT_EQ(replacements[0].output()[0].value(), "out");
 
-  core::builder::GraphBuilder rejected("rejected", SchemaLookup());
+  core::builder::GraphBuilder rejected("rejected", SchemaLookup(), {{"", 28}});
   rejected.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   AddShape(rejected, "shape", {3, 2});
   rejected.MakeNode("Reshape", {"x", "shape"}, {"out"});
@@ -106,7 +106,7 @@ TEST(ReshapePattern, ReplacesIdentityReshapeAndRejectsDifferentTarget) {
 }
 
 TEST(ReshapePattern, PreservesFlattenAfterArrayFeatureExtractor) {
-  core::builder::GraphBuilder builder("extract_labels", SchemaLookup());
+  core::builder::GraphBuilder builder("extract_labels", SchemaLookup(), {{"", 28}});
   builder.MakeInput("labels", core::symbolic::TensorType::kInt64, Shape({4}));
   AddShape(builder, "indices", {3, 1});
   AddShape(builder, "flat", {-1});
@@ -132,7 +132,7 @@ TEST(ReshapePattern, PreservesFlattenAfterArrayFeatureExtractor) {
 }
 
 TEST(ShapedBasedReshapePattern, RemovesZeroPrefixReshapeAndRejectsNonzeroPrefix) {
-  core::builder::GraphBuilder builder("positive", SchemaLookup());
+  core::builder::GraphBuilder builder("positive", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   AddShape(builder, "shape", {0, -1});
   builder.MakeNode("Reshape", {"x", "shape"}, {"out"});
@@ -145,7 +145,7 @@ TEST(ShapedBasedReshapePattern, RemovesZeroPrefixReshapeAndRejectsNonzeroPrefix)
   EXPECT_EQ(replacements[0].op_type().value(), "Identity");
   EXPECT_EQ(replacements[0].output()[0].value(), "out");
 
-  core::builder::GraphBuilder rejected("rejected", SchemaLookup());
+  core::builder::GraphBuilder rejected("rejected", SchemaLookup(), {{"", 28}});
   rejected.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   AddShape(rejected, "shape", {1, -1});
   rejected.MakeNode("Reshape", {"x", "shape"}, {"out"});
@@ -154,7 +154,7 @@ TEST(ShapedBasedReshapePattern, RemovesZeroPrefixReshapeAndRejectsNonzeroPrefix)
 }
 
 TEST(ReduceReshapePattern, RemovesKeepdimsReshapeAndRejectsKeepdimsZero) {
-  core::builder::GraphBuilder builder("positive", SchemaLookup());
+  core::builder::GraphBuilder builder("positive", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   AddShape(builder, "axes", {1});
   AddShape(builder, "shape", {2});
@@ -170,7 +170,7 @@ TEST(ReduceReshapePattern, RemovesKeepdimsReshapeAndRejectsKeepdimsZero) {
   EXPECT_EQ(replacements[0].output()[0].value(), "out");
   EXPECT_EQ(GetAttributeOr<int64_t>(replacements[0], "keepdims", 1), 0);
 
-  core::builder::GraphBuilder rejected("rejected", SchemaLookup());
+  core::builder::GraphBuilder rejected("rejected", SchemaLookup(), {{"", 28}});
   rejected.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   AddShape(rejected, "axes", {1});
   AddShape(rejected, "shape", {2});
@@ -183,7 +183,7 @@ TEST(ReduceReshapePattern, RemovesKeepdimsReshapeAndRejectsKeepdimsZero) {
 }
 
 TEST(ReshapeReshapePattern, KeepsSecondTargetAndRejectsSharedIntermediate) {
-  core::builder::GraphBuilder builder("positive", SchemaLookup());
+  core::builder::GraphBuilder builder("positive", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3, 4}));
   AddShape(builder, "first", {6, 4});
   AddShape(builder, "second", {2, 3, 4});
@@ -199,7 +199,7 @@ TEST(ReshapeReshapePattern, KeepsSecondTargetAndRejectsSharedIntermediate) {
   EXPECT_EQ(replacements[0].input()[1].value(), "second");
   EXPECT_EQ(replacements[0].output()[0].value(), "out");
 
-  core::builder::GraphBuilder rejected("rejected", SchemaLookup());
+  core::builder::GraphBuilder rejected("rejected", SchemaLookup(), {{"", 28}});
   rejected.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3, 4}));
   AddShape(rejected, "first", {6, 4});
   AddShape(rejected, "second", {2, 3, 4});
@@ -211,7 +211,7 @@ TEST(ReshapeReshapePattern, KeepsSecondTargetAndRejectsSharedIntermediate) {
 }
 
 TEST(ReshapeReshapeBinaryPattern, MovesEqualReshapesAfterBinaryAndRejectsDifferentTargets) {
-  core::builder::GraphBuilder builder("positive", SchemaLookup());
+  core::builder::GraphBuilder builder("positive", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   AddShape(builder, "shape", {6});
@@ -229,7 +229,7 @@ TEST(ReshapeReshapeBinaryPattern, MovesEqualReshapesAfterBinaryAndRejectsDiffere
   EXPECT_EQ(replacements[1].op_type().value(), "Reshape");
   EXPECT_EQ(replacements[1].output()[0].value(), "out");
 
-  core::builder::GraphBuilder rejected("rejected", SchemaLookup());
+  core::builder::GraphBuilder rejected("rejected", SchemaLookup(), {{"", 28}});
   rejected.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   rejected.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   AddShape(rejected, "left_shape", {6});
@@ -242,7 +242,7 @@ TEST(ReshapeReshapeBinaryPattern, MovesEqualReshapesAfterBinaryAndRejectsDiffere
 }
 
 TEST(Reshape2Of3Pattern, MovesTwoInputReshapesAndRejectsOnlyOneReshape) {
-  core::builder::GraphBuilder builder("positive", SchemaLookup());
+  core::builder::GraphBuilder builder("positive", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   AddShape(builder, "shape", {6});
@@ -260,7 +260,7 @@ TEST(Reshape2Of3Pattern, MovesTwoInputReshapesAndRejectsOnlyOneReshape) {
   EXPECT_EQ(replacements[1].op_type().value(), "Reshape");
   EXPECT_EQ(replacements[1].output()[0].value(), "out");
 
-  core::builder::GraphBuilder rejected("rejected", SchemaLookup());
+  core::builder::GraphBuilder rejected("rejected", SchemaLookup(), {{"", 28}});
   rejected.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({6}));
   rejected.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({6}));
   AddShape(rejected, "shape", {6});
@@ -272,7 +272,7 @@ TEST(Reshape2Of3Pattern, MovesTwoInputReshapesAndRejectsOnlyOneReshape) {
 }
 
 TEST(StaticConcatReshapePattern, ReplacesOnlyDynamicElementAndRejectsTwoDynamicElements) {
-  core::builder::GraphBuilder builder("positive", SchemaLookup());
+  core::builder::GraphBuilder builder("positive", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   builder.MakeInput("dynamic", core::symbolic::TensorType::kInt64, Shape({1}));
   AddShape(builder, "prefix", {2});
@@ -288,7 +288,7 @@ TEST(StaticConcatReshapePattern, ReplacesOnlyDynamicElementAndRejectsTwoDynamicE
   EXPECT_EQ(replacements[1].op_type().value(), "Reshape");
   EXPECT_EQ(replacements[1].output()[0].value(), "out");
 
-  core::builder::GraphBuilder rejected("rejected", SchemaLookup());
+  core::builder::GraphBuilder rejected("rejected", SchemaLookup(), {{"", 28}});
   rejected.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   rejected.MakeInput("first", core::symbolic::TensorType::kInt64, Shape({1}));
   rejected.MakeInput("second", core::symbolic::TensorType::kInt64, Shape({1}));
@@ -299,7 +299,7 @@ TEST(StaticConcatReshapePattern, ReplacesOnlyDynamicElementAndRejectsTwoDynamicE
 }
 
 TEST(ShapeBasedEditDistanceReshapePattern, AlignsStaticShapeAndRejectsNonConcatTarget) {
-  core::builder::GraphBuilder builder("positive", SchemaLookup());
+  core::builder::GraphBuilder builder("positive", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3, 4}));
   AddShape(builder, "six", {6});
   AddShape(builder, "four", {4});
@@ -315,7 +315,7 @@ TEST(ShapeBasedEditDistanceReshapePattern, AlignsStaticShapeAndRejectsNonConcatT
   EXPECT_EQ(replacements[0].input()[0].value(), "x");
   EXPECT_EQ(replacements[0].output()[0].value(), "out");
 
-  core::builder::GraphBuilder rejected("rejected", SchemaLookup());
+  core::builder::GraphBuilder rejected("rejected", SchemaLookup(), {{"", 28}});
   rejected.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3, 4}));
   AddShape(rejected, "target", {6, 4});
   rejected.MakeNode("Identity", {"target"}, {"not_concat"});
@@ -325,7 +325,7 @@ TEST(ShapeBasedEditDistanceReshapePattern, AlignsStaticShapeAndRejectsNonConcatT
 }
 
 TEST(ShapeBasedReshapeIsSqueezePattern, ReplacesWithUnsqueezeAndRejectsUnchangedShape) {
-  core::builder::GraphBuilder builder("positive", SchemaLookup());
+  core::builder::GraphBuilder builder("positive", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   AddShape(builder, "shape", {1, 2, 3});
   builder.MakeNode("Reshape", {"x", "shape"}, {"out"});
@@ -339,7 +339,7 @@ TEST(ShapeBasedReshapeIsSqueezePattern, ReplacesWithUnsqueezeAndRejectsUnchanged
   EXPECT_EQ(replacements[0].input()[0].value(), "x");
   EXPECT_EQ(replacements[0].output()[0].value(), "out");
 
-  core::builder::GraphBuilder rejected("rejected", SchemaLookup());
+  core::builder::GraphBuilder rejected("rejected", SchemaLookup(), {{"", 28}});
   rejected.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   AddShape(rejected, "shape", {2, 3});
   rejected.MakeNode("Reshape", {"x", "shape"}, {"out"});
@@ -348,7 +348,7 @@ TEST(ShapeBasedReshapeIsSqueezePattern, ReplacesWithUnsqueezeAndRejectsUnchanged
 }
 
 TEST(UnsqueezeReshapePattern, MovesSpecialUnsqueezeAxisAndRejectsOtherAxes) {
-  core::builder::GraphBuilder builder("positive", SchemaLookup());
+  core::builder::GraphBuilder builder("positive", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3, 4}));
   AddShape(builder, "axes", {2});
   AddShape(builder, "shape", {0, 1, -1, 0});
@@ -364,7 +364,7 @@ TEST(UnsqueezeReshapePattern, MovesSpecialUnsqueezeAxisAndRejectsOtherAxes) {
   EXPECT_EQ(replacements[0].input()[0].value(), "x");
   EXPECT_EQ(replacements[0].output()[0].value(), "out");
 
-  core::builder::GraphBuilder rejected("rejected", SchemaLookup());
+  core::builder::GraphBuilder rejected("rejected", SchemaLookup(), {{"", 28}});
   rejected.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3, 4}));
   AddShape(rejected, "axes", {1});
   AddShape(rejected, "shape", {0, 1, -1, 0});
@@ -375,7 +375,7 @@ TEST(UnsqueezeReshapePattern, MovesSpecialUnsqueezeAxisAndRejectsOtherAxes) {
 }
 
 TEST(UnsqueezeOrSqueezeReshapePattern, RemovesUnaryShapeEditAndRejectsUnsafeZeroCopy) {
-  core::builder::GraphBuilder builder("positive", SchemaLookup());
+  core::builder::GraphBuilder builder("positive", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   AddShape(builder, "axes", {0});
   AddShape(builder, "shape", {6});
@@ -391,7 +391,7 @@ TEST(UnsqueezeOrSqueezeReshapePattern, RemovesUnaryShapeEditAndRejectsUnsafeZero
   EXPECT_EQ(replacements[0].input()[0].value(), "x");
   EXPECT_EQ(replacements[0].output()[0].value(), "out");
 
-  core::builder::GraphBuilder rejected("rejected", SchemaLookup());
+  core::builder::GraphBuilder rejected("rejected", SchemaLookup(), {{"", 28}});
   rejected.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
   AddShape(rejected, "axes", {0});
   AddShape(rejected, "shape", {0, 6});
@@ -402,7 +402,7 @@ TEST(UnsqueezeOrSqueezeReshapePattern, RemovesUnaryShapeEditAndRejectsUnsafeZero
 }
 
 TEST(ReshapeSqueezePattern, RemovesInsertedUnitDimensionAndRejectsNonUnitAxis) {
-  core::builder::GraphBuilder builder("positive", SchemaLookup());
+  core::builder::GraphBuilder builder("positive", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3, 4, 8}));
   AddShape(builder, "shape", {0, 0, 0, 1, 8});
   AddShape(builder, "axes", {3});
@@ -418,7 +418,7 @@ TEST(ReshapeSqueezePattern, RemovesInsertedUnitDimensionAndRejectsNonUnitAxis) {
   EXPECT_EQ(replacements[0].input()[0].value(), "x");
   EXPECT_EQ(replacements[0].output()[0].value(), "out");
 
-  core::builder::GraphBuilder rejected("rejected", SchemaLookup());
+  core::builder::GraphBuilder rejected("rejected", SchemaLookup(), {{"", 28}});
   rejected.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3, 4, 8}));
   AddShape(rejected, "shape", {0, 1, 0, 1, 8});
   AddShape(rejected, "axes", {1});

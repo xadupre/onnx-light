@@ -261,7 +261,7 @@ class TestStructuredValues(unittest.TestCase):
         )
 
     def test_builder_roundtrip(self):
-        builder = GraphBuilder("encoded")
+        builder = GraphBuilder("encoded", opsets=28)
         builder.make_struct_type(declaration())
         name = builder.make_encoded_initializer(encoded())
         self.assertEqual(name, "weights")
@@ -290,7 +290,7 @@ class TestStructuredValues(unittest.TestCase):
         )
 
     def test_structured_identity_without_logical_tensor(self):
-        builder = GraphBuilder("structured")
+        builder = GraphBuilder("structured", opsets=28)
         builder.make_struct_type(declaration())
         name = builder.make_encoded_initializer(encoded(logical=False))
         output = builder.op.Identity(name)
@@ -326,7 +326,7 @@ class TestStructuredValues(unittest.TestCase):
             structured.to_standard_model()
 
     def test_standard_tensor_regression(self):
-        builder = GraphBuilder("ordinary")
+        builder = GraphBuilder("ordinary", opsets=28)
         value = builder.inp("x", onnx.TensorProto.FLOAT, [2])
         output = builder.op.Identity(value)
         builder.out(output)
@@ -383,7 +383,7 @@ class TestStructuredValues(unittest.TestCase):
         )
 
     def test_encoded_default_preserves_public_input(self):
-        builder = GraphBuilder("default")
+        builder = GraphBuilder("default", opsets=28)
         builder.make_struct_type(declaration())
         builder.inp("weights", onnx.TensorProto.FLOAT, ["batch"])
         builder.make_encoded_initializer(encoded())

@@ -210,7 +210,7 @@ TEST(PatternOptimization, ScopedCustomKernelRestoresFactory) {
 }
 
 TEST(PatternOptimization, IgnoresNullPositionalPlaceholders) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
   builder.MakeNode("Identity", {"x"}, {"y"});
   builder.MakeOutput("y");
@@ -227,7 +227,7 @@ TEST(PatternOptimization, IgnoresNullPositionalPlaceholders) {
 }
 
 TEST(PatternOptimization, FastOpTypeIsCachedAcrossOptimizationIterations) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
   builder.MakeNode("Add", {"x", "x"}, {"y"});
   builder.MakeOutput("y");
@@ -349,7 +349,7 @@ TEST(PatternOptimization, ApplyContractErrorIncludesSourceLocation) {
 }
 
 TEST(PatternOptimization, OptimizeCastProducesExpectedGraph) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
   AddCast(builder, "x", "middle", TensorProto::DataType::FLOAT);
   builder.MakeNode("Neg", {"middle"}, {"y"});
@@ -390,7 +390,7 @@ TEST(PatternOptimization, CastCastUsesIdentityForSafeRoundTrip) {
 }
 
 TEST(PatternOptimization, CastCastKeepsSharedInnerCast) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat16, Shape());
   AddCast(builder, "x", "middle", TensorProto::DataType::FLOAT);
   AddCast(builder, "middle", "y", TensorProto::DataType::FLOAT);
@@ -425,7 +425,7 @@ TEST(PatternOptimization, CastCastRejectsLossyRoundTrip) {
 }
 
 TEST(PatternOptimization, OptimizeAppliesPatternAndCleanupPasses) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat16, Shape());
   AddCast(builder, "x", "middle", TensorProto::DataType::FLOAT);
   AddCast(builder, "middle", "y", TensorProto::DataType::FLOAT);
@@ -471,7 +471,7 @@ TEST(PatternOptimization, OptimizeAppliesPatternAndCleanupPasses) {
 }
 
 TEST(PatternOptimization, CleanupPassesProduceReplayableRewritingSequence) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
   builder.MakeInitializer(MakeInitializer<float>("c1", {1}, {1.0f}));
   builder.MakeInitializer(MakeInitializer<float>("c2", {1}, {1.0f}));
@@ -551,7 +551,7 @@ TEST(PatternOptimization, OptimizeReportsPhaseAndPatternTimings) {
 }
 
 TEST(PatternOptimization, OptimizesNestedSubgraphsAndReplaysByGraphPath) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat16, Shape());
   builder.MakeNode("Neg", {"x"}, {"captured"});
 
@@ -618,7 +618,7 @@ TEST(PatternOptimization, OptimizesNestedSubgraphsAndReplaysByGraphPath) {
 }
 
 TEST(PatternOptimization, SubgraphPatternsSeeCapturedParentInitializers) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.SetOpsetVersion(kDefaultOnnxDomain, 21);
   builder.MakeInitializer(MakeInitializer<float>("a", {1}, {1.0f}));
   builder.MakeInitializer(MakeInitializer<float>("b", {1}, {2.0f}));
@@ -654,7 +654,7 @@ TEST(PatternOptimization, SubgraphPatternsSeeCapturedParentInitializers) {
 
 TEST(PatternOptimization, OptimizeFoldsConstantReplacementAndReplaysInitializer) {
   ScopedAddKernel kernel;
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInitializer(MakeInitializer<float>("a", {1}, {1.0f}));
   builder.MakeInitializer(MakeInitializer<float>("b", {1}, {2.0f}));
   builder.MakeNode("Add", {"a", "b"}, {"untouched"});
@@ -728,7 +728,7 @@ TEST(PatternOptimization, OptimizeAppliesDisjointMatchesInOneIteration) {
 }
 
 TEST(PatternOptimization, RecordsFinalPositionsForMultipleAddedNodes) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
   builder.MakeNode("Identity", {"x"}, {"y"});
   builder.MakeOutput("y");
@@ -755,7 +755,7 @@ TEST(PatternOptimization, RecordsFinalPositionsForMultipleAddedNodes) {
 }
 
 TEST(PatternOptimization, ReplayRestoresAddedInitializers) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
   builder.MakeNode("Identity", {"x"}, {"y"});
   builder.MakeOutput("y");
@@ -805,7 +805,7 @@ TEST(PatternOptimization, LocalRewritingKeepsPatternAlive) {
 }
 
 TEST(PatternOptimization, OptimizeKeepsSharedInnerCastInTopologicalOrder) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat16, Shape());
   AddCast(builder, "x", "middle", TensorProto::DataType::FLOAT);
   builder.MakeNode("Neg", {"middle"}, {"other"});

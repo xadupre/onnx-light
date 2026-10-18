@@ -110,7 +110,7 @@ void AddSubgraphReference(core::builder::GraphBuilder &builder, const std::strin
 }
 
 TEST(GatherShapePattern, FusesContiguousRangeIntoBoundedShape) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape4D(2, 3, 4, 5));
   builder.MakeInitializer(MakeInitializer<int64_t>("idx", {2}, {1, 2}));
   builder.MakeNode("Shape", {"x"}, {"s"});
@@ -132,7 +132,7 @@ TEST(GatherShapePattern, FusesContiguousRangeIntoBoundedShape) {
 }
 
 TEST(GatherShapePattern, ScalarIndexInsertsSqueeze) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape4D(2, 3, 4, 5));
   builder.MakeInitializer(MakeInitializer<int64_t>("idx", {}, {2}));
   builder.MakeNode("Shape", {"x"}, {"s"});
@@ -154,7 +154,7 @@ TEST(GatherShapePattern, ScalarIndexInsertsSqueeze) {
 }
 
 TEST(GatherShapePattern, RejectsNonContiguousRange) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape4D(2, 3, 4, 5));
   builder.MakeInitializer(MakeInitializer<int64_t>("idx", {2}, {0, 2}));
   builder.MakeNode("Shape", {"x"}, {"s"});
@@ -168,7 +168,7 @@ TEST(GatherShapePattern, RejectsNonContiguousRange) {
 }
 
 TEST(ShapeTransposePattern, RewritesShapeOfTransposeIntoGather) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape3D(2, 3, 4));
   builder.MakeNode("Transpose", {"x"}, {"xt"}, "", "", PermAttr({2, 0, 1}));
   builder.MakeNode("Shape", {"xt"}, {"y"});
@@ -196,7 +196,7 @@ TEST(ShapeTransposePattern, RewritesShapeOfTransposeIntoGather) {
 }
 
 TEST(ShapeTransposePattern, HonoursShapeStartEndRange) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape3D(2, 3, 4));
   builder.MakeNode("Transpose", {"x"}, {"xt"}, "", "", PermAttr({2, 0, 1}));
   utils::RepeatedProtoField<AttributeProto> shape_attrs;
@@ -222,7 +222,7 @@ TEST(ShapeTransposePattern, HonoursShapeStartEndRange) {
 }
 
 TEST(ShapeTransposePattern, RejectsShapeWithoutTransposeParent) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape3D(2, 3, 4));
   builder.MakeNode("Shape", {"x"}, {"y"});
   builder.MakeOutput("y");
@@ -234,7 +234,7 @@ TEST(ShapeTransposePattern, RejectsShapeWithoutTransposeParent) {
 }
 
 TEST(UnsqueezeShapePattern, RewritesShapeOfUnsqueezeIntoConcat) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape3D(2, 3, 4));
   builder.MakeInitializer(MakeInitializer<int64_t>("axes", {1}, {1}));
   builder.MakeNode("Unsqueeze", {"x", "axes"}, {"xu"});
@@ -269,7 +269,7 @@ TEST(UnsqueezeShapePattern, RewritesShapeOfUnsqueezeIntoConcat) {
 }
 
 TEST(UnsqueezeShapePattern, RejectsWhenNoShapeConsumer) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape3D(2, 3, 4));
   builder.MakeInitializer(MakeInitializer<int64_t>("axes", {1}, {1}));
   builder.MakeNode("Unsqueeze", {"x", "axes"}, {"xu"});
@@ -283,7 +283,7 @@ TEST(UnsqueezeShapePattern, RejectsWhenNoShapeConsumer) {
 }
 
 TEST(UnsqueezeShapePattern, RejectsNonConstantAxes) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   core::symbolic::SymShape axes_shape;
   axes_shape.PushBack(core::symbolic::SymDim(1));
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape3D(2, 3, 4));
@@ -299,7 +299,7 @@ TEST(UnsqueezeShapePattern, RejectsNonConstantAxes) {
 }
 
 TEST(PreShapeNodeEliminationPattern, EliminatesCastBeforeSingleShapeConsumer) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape3D(2, 3, 4));
   builder.MakeNode("Cast", {"x"}, {"c"}, "", "", CastToAttr(TensorProto::DataType::INT64));
   builder.MakeNode("Shape", {"c"}, {"y"});
@@ -318,7 +318,7 @@ TEST(PreShapeNodeEliminationPattern, EliminatesCastBeforeSingleShapeConsumer) {
 }
 
 TEST(PreShapeNodeEliminationPattern, PreservesShapeStartEndAttributesAndName) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape3D(2, 3, 4));
   builder.MakeNode("Cast", {"x"}, {"c"}, "", "", CastToAttr(TensorProto::DataType::FLOAT16));
   builder.MakeNode("Shape", {"c"}, {"y"}, "", "shape_node", ShapeStartEndAttrs(1, 3));
@@ -340,7 +340,7 @@ TEST(PreShapeNodeEliminationPattern, PreservesShapeStartEndAttributesAndName) {
 }
 
 TEST(PreShapeNodeEliminationPattern, KeepsCastAliveForAdditionalNonShapeConsumer) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape3D(2, 3, 4));
   builder.MakeNode("Cast", {"x"}, {"c"}, "", "", CastToAttr(TensorProto::DataType::INT64));
   builder.MakeNode("Shape", {"c"}, {"y1"});
@@ -363,7 +363,7 @@ TEST(PreShapeNodeEliminationPattern, KeepsCastAliveForAdditionalNonShapeConsumer
 }
 
 TEST(PreShapeNodeEliminationPattern, KeepsCastAliveWhenOutputIsGraphOutput) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape3D(2, 3, 4));
   builder.MakeNode("Cast", {"x"}, {"c"}, "", "", CastToAttr(TensorProto::DataType::INT64));
   builder.MakeNode("Shape", {"c"}, {"y"});
@@ -383,7 +383,7 @@ TEST(PreShapeNodeEliminationPattern, KeepsCastAliveWhenOutputIsGraphOutput) {
 }
 
 TEST(PreShapeNodeEliminationPattern, KeepsCastAliveWhenCapturedBySubgraph) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape3D(2, 3, 4));
   builder.MakeNode("Cast", {"x"}, {"c"}, "", "", CastToAttr(TensorProto::DataType::INT64));
   builder.MakeNode("Shape", {"c"}, {"y"});
@@ -407,7 +407,7 @@ TEST(PreShapeNodeEliminationPattern, KeepsCastAliveWhenCapturedBySubgraph) {
 }
 
 TEST(PreShapeNodeEliminationPattern, RejectsWhenConsumerIsNotShape) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape3D(2, 3, 4));
   builder.MakeNode("Cast", {"x"}, {"c"}, "", "", CastToAttr(TensorProto::DataType::INT64));
   builder.MakeNode("Identity", {"c"}, {"y"});
@@ -422,7 +422,7 @@ TEST(PreShapeNodeEliminationPattern, RejectsWhenConsumerIsNotShape) {
 }
 
 TEST(PreShapeNodeEliminationPattern, RejectsNonDefaultDomainCast) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape3D(2, 3, 4));
   builder.MakeNode("Cast", {"x"}, {"c"}, "", "", CastToAttr(TensorProto::DataType::INT64));
   builder.MakeNode("Shape", {"c"}, {"y"});
@@ -438,7 +438,7 @@ TEST(PreShapeNodeEliminationPattern, RejectsNonDefaultDomainCast) {
 }
 
 TEST(PreShapeNodeEliminationPattern, RejectsCustomDomainShapeConsumer) {
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape3D(2, 3, 4));
   builder.MakeNode("Cast", {"x"}, {"c"}, "", "", CastToAttr(TensorProto::DataType::INT64));
   builder.MakeNode("Shape", {"c"}, {"y"});
@@ -459,7 +459,7 @@ TEST(PreShapeNodeEliminationPattern, OptimizesMultipleShapeConsumersToFixedPoint
   // and "shape3" carry different start/end ranges so the unrelated
   // node-deduplication cleanup pass cannot merge them, keeping the assertions
   // focused on PreShapeNodeElimination's own rewrite.
-  core::builder::GraphBuilder builder("g", SchemaLookup());
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape3D(2, 3, 4));
   builder.MakeNode("Cast", {"x"}, {"c1"}, "", "", CastToAttr(TensorProto::DataType::FLOAT16));
   builder.MakeNode("Shape", {"c1"}, {"shape1"});

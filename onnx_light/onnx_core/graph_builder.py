@@ -3,7 +3,7 @@
 This module exposes :class:`GraphBuilder`, an incremental builder for ONNX
 graphs, models and functions. A builder starts empty, holds a compute context
 and records every value name it hands out so a name can never be reused. Nodes
-are added with :meth:`GraphBuilder.make_node`, which resolves the operator
+are added with :meth:`GraphBuilder.make_node`, which requires an explicit
 opset, validates the node against the built-in ONNX operator schemas, assigns
 output names when the caller leaves them empty and runs incremental shape
 inference. :meth:`GraphBuilder.to_onnx` finalises the accumulated graph into a
@@ -16,7 +16,7 @@ Typical usage::
     from onnx_light.onnx_core.graph_builder import GraphBuilder
     from onnx_light.onnx_proto import TensorProto
 
-    builder = GraphBuilder("g")
+    builder = GraphBuilder("g", opsets=18)
     builder.make_input("x", TensorProto.FLOAT, [2, 3])
     builder.make_input("y", TensorProto.FLOAT, [2, 3])
     (z,) = builder.make_node("Add", ["x", "y"])
@@ -57,7 +57,7 @@ def _default_schema_lookup(op_type: str) -> list[LightOpSchema]:
 
     The schemas live in the ``onnx_op`` extension, which the ``_onnxpycore``
     extension does not link against; this callable bridges the two so the
-    builder can resolve opsets and validate nodes without that link.
+    builder can validate nodes at the selected opset without that link.
     """
     return GetAllOnnxOpSchemasWithHistory(op_type, False)
 
@@ -82,6 +82,12 @@ class _OperatorProxy:
                 raise TypeError("The node name must be a string.")
 
             normalized_domain = "ai.onnx" if domain in ("", "ai.onnx") else domain
+            version = self._builder.opset_version(domain)
+            if version <= 0:
+                raise ValueError(
+                    f"Domain {domain!r} has no explicit opset; "
+                    "supply opsets to the constructor or call set_opset_version() first."
+                )
             schemas = [
                 schema
                 for schema in _default_schema_lookup(op_type)
@@ -89,12 +95,7 @@ class _OperatorProxy:
                 == normalized_domain
             ]
             if schemas:
-                version = self._builder.opset_version(domain)
-                matching = (
-                    [schema for schema in schemas if schema.since_version <= version]
-                    if normalized_domain in self._builder._explicit_opsets
-                    else schemas
-                )
+                matching = [schema for schema in schemas if schema.since_version <= version]
                 if not matching:
                     raise ValueError(
                         f"Standard ONNX operator {op_type!r} is unavailable at opset {version}."
@@ -109,11 +110,6 @@ class _OperatorProxy:
                     )
             elif normalized_domain == "ai.onnx":
                 raise ValueError(f"Unknown standard ONNX operator {op_type!r}.")
-            elif self._builder.opset_version(domain) <= 0:
-                raise ValueError(
-                    f"Custom domain {domain!r} has no imported opset; "
-                    "call set_opset_version() first."
-                )
 
             resolved_inputs = []
             for input_value in inputs:
@@ -155,7 +151,7 @@ class GraphBuilder(_C.GraphBuilder):
     """Incrementally builds an ONNX graph, model or function.
 
     See :mod:`onnx_light.onnx_core.graph_builder` for details. By default the
-    builder validates nodes and resolves opsets using the built-in ONNX
+    builder validates nodes at explicitly selected opsets using the built-in ONNX
     operator schemas; pass ``schema_lookup=None`` to disable this, or a custom
     ``op_type -> list[LightOpSchema]`` callable to use different schemas.
     For an empty builder, ``opsets`` selects the default ONNX version (an integer)
@@ -178,12 +174,6 @@ class GraphBuilder(_C.GraphBuilder):
         self._registered_patterns: dict[str, PatternOptimization] = {}
         self._op = _OperatorProxy(self)
         self._initializer_counter = 0
-        self._explicit_opsets: set[str] = set(self.opset_versions())
-
-    def set_opset_version(self, domain: str, version: int) -> None:
-        """Records an explicit opset version."""
-        super().set_opset_version(domain, version)
-        self._explicit_opsets.add("ai.onnx" if domain in ("", "ai.onnx") else domain)
 
     @property
     def op(self) -> _OperatorProxy:

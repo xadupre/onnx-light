@@ -22,12 +22,6 @@
 #include <thread>
 #include <vector>
 
-#if defined(_WIN32)
-#define NOMINMAX
-#include <windows.h>
-#include <winioctl.h>
-#endif
-
 using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace {
@@ -63,47 +57,25 @@ std::string MakeBytes(size_t n, char fill_start = 0) {
   return result;
 }
 
+void PrepareDirectoryReplacement(const std::filesystem::path &directory) {
+#if defined(_WIN32)
+  // Windows cannot rename a directory containing open files; retarget a junction instead.
+  const std::filesystem::path original = directory.string() + ".original";
+  std::filesystem::create_directories(original);
+  const auto error = onnx_light_test::CreateWindowsJunction(directory, original);
+  ASSERT_FALSE(error) << error.message();
+#else
+  std::filesystem::create_directories(directory);
+#endif
+}
+
 void ReplaceDirectoryWithLink(const std::filesystem::path &directory,
                               const std::filesystem::path &target) {
-  std::filesystem::rename(directory, directory.string() + ".original");
 #if defined(_WIN32)
-  // Junctions do not require the symlink privilege on Windows.
-  std::filesystem::create_directory(directory);
-  HANDLE handle = CreateFileW(directory.c_str(), GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
-                              FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS, nullptr);
-  ASSERT_NE(handle, INVALID_HANDLE_VALUE);
-  struct JunctionData {
-    DWORD tag;
-    WORD data_length;
-    WORD reserved;
-    WORD substitute_offset;
-    WORD substitute_length;
-    WORD print_offset;
-    WORD print_length;
-    WCHAR path[2048];
-  } data{};
-  const std::wstring destination = std::filesystem::absolute(target).wstring();
-  const std::wstring substitute = L"\\??\\" + destination;
-  const size_t total_chars = substitute.size() + 1 + destination.size() + 1;
-  if (total_chars > std::size(data.path)) {
-    CloseHandle(handle);
-    FAIL() << "Junction target exceeds the test buffer.";
-  }
-  data.tag = IO_REPARSE_TAG_MOUNT_POINT;
-  data.substitute_length = static_cast<WORD>(substitute.size() * sizeof(WCHAR));
-  data.print_offset = static_cast<WORD>((substitute.size() + 1) * sizeof(WCHAR));
-  data.print_length = static_cast<WORD>(destination.size() * sizeof(WCHAR));
-  std::memcpy(data.path, substitute.c_str(), (substitute.size() + 1) * sizeof(WCHAR));
-  std::memcpy(reinterpret_cast<char *>(data.path) + data.print_offset, destination.c_str(),
-              (destination.size() + 1) * sizeof(WCHAR));
-  data.data_length = static_cast<WORD>(8 + total_chars * sizeof(WCHAR));
-  DWORD returned = 0;
-  const BOOL success = DeviceIoControl(handle, FSCTL_SET_REPARSE_POINT, &data, data.data_length + 8,
-                                       nullptr, 0, &returned, nullptr);
-  const DWORD error = GetLastError();
-  CloseHandle(handle);
-  ASSERT_TRUE(success) << "Cannot create test junction: " << error;
+  const auto error = onnx_light_test::CreateWindowsJunction(directory, target, false);
+  ASSERT_FALSE(error) << error.message();
 #else
+  std::filesystem::rename(directory, directory.string() + ".original");
   std::filesystem::create_directory_symlink(target, directory);
 #endif
 }
@@ -243,6 +215,10 @@ TEST_F(MappedPayloadTest, FileReplacementProducesNewGenerationAndBytes) {
   // the old mapping must keep observing the old inode's bytes.
   const std::string replacement = MakeBytes(32, 100);
   const std::string replacement_path = WriteFile("weights.bin.new", replacement);
+#if defined(_WIN32)
+  // Windows cannot replace a mapped destination, but can rename it out of the way.
+  std::filesystem::rename(base_dir_ / "weights.bin", base_dir_ / "weights.original");
+#endif
   std::filesystem::rename(replacement_path, base_dir_ / "weights.bin");
   source.ReleaseCachedMappings();
 
@@ -370,7 +346,7 @@ TEST_F(MappedPayloadTest, FinalDestinationReadDescriptorRejectsTruncationAtReadT
 }
 
 TEST_F(MappedPayloadTest, FinalDestinationReadRetainsFileAcrossDirectoryReplacement) {
-  std::filesystem::create_directories(base_dir_ / "model" / "child");
+  ASSERT_NO_FATAL_FAILURE(PrepareDirectoryReplacement(base_dir_ / "model" / "child"));
   std::filesystem::create_directory(base_dir_ / "outside");
   const std::string original = MakeBytes(32, 3);
   WriteFile("model/child/weights.bin", original);
@@ -388,7 +364,7 @@ TEST_F(MappedPayloadTest, FinalDestinationReadRetainsFileAcrossDirectoryReplacem
 }
 
 TEST_F(MappedPayloadTest, MappingUsesOpenedFileAfterDirectoryReplacement) {
-  std::filesystem::create_directories(base_dir_ / "model" / "child");
+  ASSERT_NO_FATAL_FAILURE(PrepareDirectoryReplacement(base_dir_ / "model" / "child"));
   std::filesystem::create_directory(base_dir_ / "outside");
   const std::string original = MakeBytes(32, 3);
   WriteFile("model/model.onnx", "model");
@@ -408,7 +384,7 @@ TEST_F(MappedPayloadTest, MappingUsesOpenedFileAfterDirectoryReplacement) {
 
 TEST_F(MappedPayloadTest, ParallelStreamReadsRetainFilesAcrossDirectoryReplacement) {
   const auto model = base_dir_ / "model";
-  std::filesystem::create_directories(model / "child");
+  ASSERT_NO_FATAL_FAILURE(PrepareDirectoryReplacement(model / "child"));
   std::filesystem::create_directory(base_dir_ / "outside");
   WriteFile("model/model.onnx", "model");
   WriteFile("model/child/weights.bin", "original");
@@ -443,7 +419,7 @@ TEST_F(MappedPayloadTest, ParallelStreamReadsRetainFilesAcrossDirectoryReplaceme
 
 TEST_F(MappedPayloadTest, ParallelStreamWritesRetainFilesAcrossDirectoryReplacement) {
   const auto model = base_dir_ / "model";
-  std::filesystem::create_directories(model / "child");
+  ASSERT_NO_FATAL_FAILURE(PrepareDirectoryReplacement(model / "child"));
   std::filesystem::create_directory(base_dir_ / "outside");
   WriteFile("outside/weights.bin", "sentinel");
   WriteFile("outside/extra.bin", "sentinel");

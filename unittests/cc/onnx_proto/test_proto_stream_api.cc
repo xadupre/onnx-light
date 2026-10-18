@@ -362,14 +362,14 @@ TEST_F(ExternalDataDescriptorTest, RejectsActualJunctionParentsForReadingAndCrea
 
 TEST_F(ExternalDataDescriptorTest, RetainedStreamsIgnoreJunctionReplacement) {
   const auto base = root / "model";
+  std::filesystem::rename(base / "sub", base / "pinned");
+  auto error = onnx_light_test::CreateWindowsJunction(base / "sub", base / "pinned");
+  ASSERT_FALSE(error) << error.message();
   utils::TwoFilesStream input((base / "model.onnx").string(),
                               (base / "sub" / "weights.bin").string(), true);
   auto output_file = utils::detail::OpenExternalDataFile(base.string(), "sub/new.bin", true);
   utils::FileWriteStream output("unused", output_file);
-  std::error_code error;
-  std::filesystem::rename(base / "sub", base / "pinned", error);
-  ASSERT_FALSE(error) << error.message();
-  error = onnx_light_test::CreateWindowsJunction(base / "sub", root / "outside");
+  error = onnx_light_test::CreateWindowsJunction(base / "sub", root / "outside", false);
   ASSERT_FALSE(error) << error.message();
   uint8_t bytes[8]{};
   input.read_bytes_from_weights_stream(8, bytes, 0);

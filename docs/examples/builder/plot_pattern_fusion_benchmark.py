@@ -65,7 +65,7 @@ def build_light(block_count: int):
     weight = builder.init(numpy.eye(16, dtype=numpy.float32), name="weight")
     value = fusion_blocks(builder.op, value, bias, scale, weight, block_count)
     builder.out(value, TensorProto.FLOAT, ["N", 16])
-    return builder.to_onnx("model")
+    return builder.to_onnx()
 
 
 def build_onnxscript(block_count: int):

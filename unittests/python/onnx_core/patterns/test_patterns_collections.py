@@ -62,7 +62,7 @@ class TestCollectionPatterns(ExtTestCase):
         all_rewrites, report = graph.optimize(report=True)
         self.assertEqual(report.rewrites, len(all_rewrites))
         rewrites = [rewrite for rewrite in all_rewrites if rewrite.pattern_name == pattern_name]
-        return builder.to_onnx("model"), rewrites
+        return builder.to_onnx(), rewrites
 
     def assert_equivalent(self, original, optimized, feeds):
         """Checks numerical equivalence with the onnx-light evaluator."""

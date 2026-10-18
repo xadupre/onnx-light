@@ -1978,6 +1978,12 @@ void AddOnnxPyBuilder(nb::module_ &m) {
       "outputs while keeping shapes, in-place reuse, value tags and peak memory up to "
       "date, then finalises into a model, graph or function.";
 
+  nb::enum_<core::builder::ProtoKind>(builder_mod, "ProtoKind",
+                                      "Selects the proto returned by to_onnx.")
+      .value("kModel", core::builder::ProtoKind::kModel)
+      .value("kGraph", core::builder::ProtoKind::kGraph)
+      .value("kFunction", core::builder::ProtoKind::kFunction);
+
   nb::register_exception_translator([](const std::exception_ptr &p, void *) {
     try {
       std::rethrow_exception(p);
@@ -2263,20 +2269,20 @@ void AddOnnxPyBuilder(nb::module_ &m) {
            "Returns the finalised nodes wrapped in a FunctionProto.")
       .def(
           "to_onnx",
-          [](GraphBuilder &self, const std::string &kind, int64_t ir_version,
+          [](GraphBuilder &self, core::builder::ProtoKind kind, int64_t ir_version,
              const std::string &domain) -> nb::object {
-            if (kind == "model") {
+            switch (kind) {
+            case core::builder::ProtoKind::kModel:
               return nb::cast(self.ToModel(ir_version));
-            }
-            if (kind == "graph") {
+            case core::builder::ProtoKind::kGraph:
               return nb::cast(self.ToGraph());
-            }
-            if (kind == "function") {
+            case core::builder::ProtoKind::kFunction:
               return nb::cast(self.ToFunction(domain));
             }
-            throw BuilderError("GraphBuilder: unknown kind '" + kind +
-                               "'; expected 'model', 'graph' or 'function'.");
+            throw BuilderError("GraphBuilder: unknown export kind.");
           },
-          nb::arg("kind") = "model", nb::arg("ir_version") = 0, nb::arg("domain") = "",
-          "Finalises the builder into a ``model`` (default), ``graph`` or ``function``.");
+          nb::arg("kind").noconvert() = core::builder::ProtoKind::kModel, nb::arg("ir_version") = 0,
+          nb::arg("domain") = "",
+          "Returns a ModelProto by default; accepts ProtoKind.kGraph or ProtoKind.kFunction "
+          "for other proto types.");
 }

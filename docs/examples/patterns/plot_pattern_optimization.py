@@ -70,7 +70,7 @@ builder = GraphBuilder(model)
 graph = GraphGraph(builder, standard_patterns(["Cast"]))
 rewrites, report = graph.optimize(report=True)
 
-print(pretty_onnx(builder.to_onnx("model")))
+print(pretty_onnx(builder.to_onnx()))
 print(report)
 
 for pattern_stats in report.patterns:
@@ -156,7 +156,7 @@ assert "the input is not produced by Neg" in failed_no_match_reasons
 builder = GraphBuilder(model)
 graph = GraphGraph(builder, [*standard_patterns(["Cast"]), NegNegPattern()])
 rewrites = graph.optimize()
-fully_optimized = builder.to_onnx("model")
+fully_optimized = builder.to_onnx()
 
 print(pretty_onnx(fully_optimized))
 print([rewrite.pattern_name for rewrite in rewrites])

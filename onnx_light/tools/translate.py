@@ -367,9 +367,9 @@ def _translate_builder(model: Any, graph: Any) -> str:
             lines.append(f"g.out({_s(getattr(out, 'name', ''))!r})")
 
     if ir_version:
-        lines.append(f"model = g.to_onnx('model', ir_version={ir_version})")
+        lines.append(f"model = g.to_onnx(ir_version={ir_version})")
     else:
-        lines.append("model = g.to_onnx('model')")
+        lines.append("model = g.to_onnx()")
     return "\n".join(lines) + "\n"
 
 

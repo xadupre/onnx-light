@@ -185,7 +185,7 @@ class TestCanonicalizationPatterns(ExtTestCase):
             builder.build_graph().SerializeToString(),
         )
         rewrites = [rewrite for rewrite in all_rewrites if rewrite.pattern_name == pattern]
-        return builder.to_onnx("model"), rewrites, report
+        return builder.to_onnx(), rewrites, report
 
     def _assert_equivalent(self, model, optimized, feeds, atol=0):
         expected = ReferenceEvaluator(model).run(None, feeds)

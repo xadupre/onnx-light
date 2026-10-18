@@ -60,7 +60,7 @@ def _optimize(model, pattern_name: str, *, report: bool = False):
     pattern = getattr(optimization, f"{pattern_name}Pattern")()
     graph = optimization.GraphGraph(builder, [pattern])
     result = graph.optimize(report=report)
-    return builder.to_onnx("model"), result
+    return builder.to_onnx(), result
 
 
 class TestPatternsAlgebra(ExtTestCase):

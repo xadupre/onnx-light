@@ -35,7 +35,7 @@ def _optimize(model, pattern_names):
     builder = optimization.GraphBuilder(model)
     graph = optimization.GraphGraph(builder, optimization.standard_patterns(pattern_names))
     rewrites = graph.optimize()
-    return builder.to_onnx("model"), [rewrite.pattern_name for rewrite in rewrites]
+    return builder.to_onnx(), [rewrite.pattern_name for rewrite in rewrites]
 
 
 def _node_types(model):

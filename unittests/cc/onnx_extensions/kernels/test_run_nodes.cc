@@ -6025,6 +6025,43 @@ TEST(RuntimeSession, ConstructsSequenceMapBodyKernelOnceAcrossMultipleRuns) {
   EXPECT_EQ(invoke_count, 6);
 }
 
+TEST(SubgraphSession, OwnsOutputsThatAliasTemporaryBindings) {
+  for (bool use_allocator : {false, true}) {
+    for (bool duplicate_output : {false, true}) {
+      SCOPED_TRACE(::testing::Message() << "use_allocator=" << use_allocator
+                                        << ", duplicate_output=" << duplicate_output);
+      CountingAllocator alloc(/*capacity=*/4);
+      RuntimeContext rt(KernelContext(DefaultOpset(18)));
+      rt.Set("cond", Tensor::FromBool("cond", {}, {0}));
+
+      GraphProto graph;
+      graph.set_name("passthrough");
+      graph.add_input()->set_name("cond");
+      graph.add_output()->set_name("cond");
+      if (duplicate_output)
+        graph.add_output()->set_name("cond");
+      core::runtime::SubgraphSession session(graph);
+
+      std::vector<std::pair<std::string, Tensor>> bindings;
+      bindings.emplace_back("cond",
+                            Tensor::FromBool("cond", {}, {1}, use_allocator ? &alloc : nullptr));
+      Tensors outputs = session.Run(std::move(bindings), rt, "body");
+      ASSERT_EQ(outputs.size(), duplicate_output ? 2u : 1u);
+      for (const Tensor &output : outputs) {
+        // Checks ownership before reading: the old borrowed output already dangles here.
+        ASSERT_FALSE(output.is_borrowed());
+        EXPECT_EQ(output.data_type, DataType::BOOL);
+        EXPECT_TRUE(output.shape.empty());
+        ASSERT_EQ(output.size_bytes(), 1u);
+        EXPECT_EQ(output.AsBool()[0], 1);
+      }
+      EXPECT_EQ(alloc.allocated_count(), 0u);
+      ASSERT_TRUE(rt.Has("cond"));
+      EXPECT_EQ(rt.Get("cond").AsBool()[0], 0);
+    }
+  }
+}
+
 TEST(SubgraphSession, ReusesInheritedKernelInitializationAcrossMultipleRuns) {
   using core::runtime::RegisterKernelFn;
 

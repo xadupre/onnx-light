@@ -1411,7 +1411,7 @@ def _domain_page_rst(domain: str, schemas: list[Any], all_schemas_with_history: 
     return "\n".join(lines)
 
 
-def _index_page_rst(domains: list[str]) -> str:
+def _index_page_rst() -> str:
     """Returns RST content for the operators/index.rst page."""
     lines: list[str] = []
     lines.append(".. _l-onnx-operators:")
@@ -1419,8 +1419,33 @@ def _index_page_rst(domains: list[str]) -> str:
     lines.append("ByOp")
     lines.append("====")
     lines.append("")
-    lines.append("Ops")
-    lines.append("---")
+    lines.append(".. toctree::")
+    lines.append("   :maxdepth: 1")
+    lines.append("")
+    lines.append("   domains")
+    lines.append("   patterns")
+    lines.append("")
+    lines.append(".. _l-api-memory-peak-catalog:")
+    lines.append("")
+    lines.append("MemoryPeak")
+    lines.append("----------")
+    lines.append("")
+    lines.append(
+        "This table lists the peak-memory functions registered by the installed "
+        "``onnx_light`` package."
+    )
+    lines.append("")
+    lines.append(render_rst_peak_memory_catalog().rstrip())
+    lines.append("")
+
+    return "\n".join(lines)
+
+
+def _domains_page_rst(domains: list[str]) -> str:
+    """Returns RST content for the operator domain catalogue."""
+    lines: list[str] = []
+    lines.append("Domains")
+    lines.append("=======")
     lines.append("")
     lines.append(
         "This section lists all ONNX operators grouped by domain.  "
@@ -1435,10 +1460,17 @@ def _index_page_rst(domains: list[str]) -> str:
         stem = _domain_file_stem(domain)
         lines.append(f"   {stem}")
     lines.append("")
+
+    return "\n".join(lines)
+
+
+def _patterns_page_rst() -> str:
+    """Returns RST content for the pattern catalogue."""
+    lines: list[str] = []
     lines.append(".. _l-api-pattern-catalog:")
     lines.append("")
     lines.append("Patterns")
-    lines.append("--------")
+    lines.append("========")
     lines.append("")
     lines.append(
         "This table is generated from the patterns registered by the installed "
@@ -1447,18 +1479,6 @@ def _index_page_rst(domains: list[str]) -> str:
     )
     lines.append("")
     lines.append(render_rst_pattern_catalog().rstrip())
-    lines.append("")
-    lines.append(".. _l-api-memory-peak-catalog:")
-    lines.append("")
-    lines.append("MemoryPeak")
-    lines.append("----------")
-    lines.append("")
-    lines.append(
-        "This table lists the peak-memory functions registered by the installed "
-        "``onnx_light`` package."
-    )
-    lines.append("")
-    lines.append(render_rst_peak_memory_catalog().rstrip())
     lines.append("")
 
     return "\n".join(lines)
@@ -1558,7 +1578,7 @@ def generate_operators_doc(
 
     Reads all ONNX operator schemas from the lightweight ``onnx_op`` C
     extension (``LightOpSchema``) and writes one RST file per domain plus a
-    top-level ``index.rst`` toctree.
+    top-level ``index.rst`` toctree with separate domain and pattern catalogues.
 
     Args:
         output_dir: Directory where the generated ``.rst`` files are written.
@@ -1644,18 +1664,19 @@ def generate_operators_doc(
 
                 _write_if_missing(ver_path, _make_version_page)
 
-    # Write the top-level index
+    # Refresh the index and catalogues while preserving existing operator pages.
     _report("Writing operators index page.")
-    index_path = os.path.join(output_dir, "index.rst")
-    index_content = _index_page_rst(list(by_domain.keys()))
-    if (
-        os.path.exists(index_path)
-        and pathlib.Path(index_path).read_text(encoding="utf-8") == index_content
+    for filename, content in (
+        ("index.rst", _index_page_rst()),
+        ("domains.rst", _domains_page_rst(list(by_domain.keys()))),
+        ("patterns.rst", _patterns_page_rst()),
     ):
-        skipped += 1
-    else:
-        pathlib.Path(index_path).write_text(index_content, encoding="utf-8")
-        written += 1
+        path = pathlib.Path(output_dir, filename)
+        if path.exists() and path.read_text(encoding="utf-8") == content:
+            skipped += 1
+        else:
+            path.write_text(content, encoding="utf-8")
+            written += 1
     _report(
         f"Finished generating operator pages "
         f"({written} written, {skipped} skipped because already present)."

@@ -3,7 +3,7 @@
 This module exposes :class:`GraphBuilder`, an incremental builder for ONNX
 graphs, models and functions. A builder starts empty, holds a compute context
 and records every value name it hands out so a name can never be reused. Nodes
-are added with :meth:`GraphBuilder.make_node`, which requires an explicit
+are added with :meth:`GraphBuilder.make_node`, which requires a selected
 opset, validates the node against the built-in ONNX operator schemas, assigns
 output names when the caller leaves them empty and runs incremental shape
 inference. :meth:`GraphBuilder.to_onnx` finalises the accumulated graph into a
@@ -38,6 +38,7 @@ import numpy
 
 import onnx_light.onnx.helper as oh
 from ..onnx import TensorProto
+from ..onnx.defs import onnx_opset_version
 import onnx_light.onnx.numpy_helper as onh
 from ..onnx_op import GetAllOnnxOpSchemasWithHistory, LightOpSchema
 from ..onnx_py._onnxpycore import builder as _C  # type: ignore[attr-defined]
@@ -153,11 +154,13 @@ class GraphBuilder(_C.GraphBuilder):
     """Incrementally builds an ONNX graph, model or function.
 
     See :mod:`onnx_light.onnx_core.graph_builder` for details. By default the
-    builder validates nodes at explicitly selected opsets using the built-in ONNX
+    builder validates nodes at selected opsets using the built-in ONNX
     operator schemas; pass ``schema_lookup=None`` to disable this, or a custom
     ``op_type -> list[LightOpSchema]`` callable to use different schemas.
     For an empty builder, ``opsets`` selects the default ONNX version (an integer)
-    or explicit domain-to-version imports (a dictionary).
+    or explicit domain-to-version imports (a dictionary). The default ``None``
+    selects ``{"": onnx_opset_version()}``; an empty dictionary selects no imports.
+    When importing a model, ``None`` preserves its declared imports.
     """
 
     def __init__(
@@ -167,6 +170,8 @@ class GraphBuilder(_C.GraphBuilder):
         *,
         opsets: int | dict[str, int] | None = None,
     ) -> None:
+        if opsets is None and isinstance(name, str):
+            opsets = {"": onnx_opset_version()}
         if opsets is None:
             super().__init__(name, schema_lookup)
         else:

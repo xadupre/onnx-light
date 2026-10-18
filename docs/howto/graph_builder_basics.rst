@@ -13,14 +13,18 @@ optimizes a second graph with the standard pattern library.
 Create and export a model
 -------------------------
 
-Select every opset before adding its nodes. The empty domain is the standard
-ONNX domain; a custom operator requires an explicit non-empty domain and an
-imported version. It does not require a schema registered on the local machine.
+Each domain needs a selected opset before adding its nodes. In Python, the default
+``opsets=None`` selects ``{"": onnx_light.onnx.defs.onnx_opset_version()}`` for a
+new graph, using the latest supported standard ONNX opset. When importing a model,
+its declared imports are preserved. Pass ``opsets={}`` to start without imports.
+The empty domain is the standard ONNX domain; a custom operator requires an
+explicit non-empty domain and an imported version. It does not require a schema
+registered on the local machine.
 Pass ``opsets=18`` for just the standard ONNX domain, or a domain-to-version
 dictionary for multiple imports. ``set_opset_version`` remains available.
 Adding a node without an explicit opset for its domain raises an exception,
-even when a schema provider is available. No version is selected automatically.
-In C++, use
+even when a schema provider is available. Node insertion never selects or advances
+a version automatically. C++ has no default imports; use
 ``GraphBuilder("authoring", schema_lookup, {{"", 18}, {"com.example", 7}})``.
 
 The example includes:

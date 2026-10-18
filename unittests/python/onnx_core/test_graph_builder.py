@@ -19,6 +19,7 @@ import numpy
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.checker as checker
 import onnx_light.onnx.helper as oh
+from onnx_light.onnx.defs import onnx_opset_version
 from onnx_light.ext_test_case import ExtTestCase, import_or_skip
 
 # The builder extension ships in the core build; skip the module when it (or the
@@ -32,7 +33,11 @@ FLOAT = onnxl.TensorProto.FLOAT
 class TestGraphBuilder(ExtTestCase):
     def test_missing_opset_rejects_node_before_mutation(self):
         for with_schema in (False, True):
-            builder = GraphBuilder("g") if with_schema else GraphBuilder("g", None)
+            builder = (
+                GraphBuilder("g", opsets={})
+                if with_schema
+                else GraphBuilder("g", None, opsets={})
+            )
             x = builder.inp("x", FLOAT, [2])
             with self.assertRaisesRegex(ValueError, "opset"):
                 builder.make_node("Relu", [x], ["y"])
@@ -78,6 +83,35 @@ class TestGraphBuilder(ExtTestCase):
                 builder.set_opset_version("", 11)
                 self.assertEqual(builder.opset_version(""), 11)
                 self.assertRaise(lambda: builder.op.Clip(x, min=0.0), ValueError)
+
+    def test_constructor_default_opsets(self):
+        latest = onnx_opset_version()
+        for with_schema in (False, True):
+            for kwargs in ({}, {"opsets": None}):
+                with self.subTest(with_schema=with_schema, kwargs=kwargs):
+                    builder = (
+                        GraphBuilder("g", **kwargs)
+                        if with_schema
+                        else GraphBuilder("g", None, **kwargs)
+                    )
+                    self.assertEqual(builder.opset_version(""), latest)
+                    self.assertEqual(builder.opset_version("ai.onnx"), latest)
+                    self.assertEqual(builder.shapes.opset_version(""), latest)
+                    x = builder.inp("x", FLOAT, [2])
+                    builder.make_node("Relu", [x], ["y"])
+                    builder.out(builder.op.Identity("y", outputs="z"))
+                    model = builder.to_onnx()
+                    checker.check_model(model)
+                    self.assertEqual(
+                        [
+                            (opset.domain or "ai.onnx", opset.version)
+                            for opset in model.opset_import
+                        ],
+                        [("ai.onnx", latest)],
+                    )
+                    with self.assertRaisesRegex(ValueError, "opset"):
+                        builder.make_node("Custom", ["z"], ["custom"], domain="custom")
+                    self.assertFalse(builder.has_name("custom"))
 
     def test_constructor_opsets_without_schema(self):
         builder = GraphBuilder("g", None, opsets={"": 18, "com.example": 7})
@@ -220,6 +254,7 @@ class TestGraphBuilder(ExtTestCase):
         graph = oh.make_graph([], "g", [oh.make_tensor_value_info("x", FLOAT, [2])], [])
         model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 10)])
         builder = GraphBuilder(model)
+        self.assertEqual(builder.opset_version(""), 10)
         output = builder.op.Clip("x", outputs="y", min=0.0, max=1.0)
         self.assertEqual(output, "y")
 

@@ -6,6 +6,9 @@ Next Steps
 :Date: 2026-08
 :Updated: 2026-10
 
+2026
+----
+
 .. toctree::
     :maxdepth: 1
     :hidden:
@@ -24,7 +27,6 @@ Next Steps
     2026/2026-08_native_fast_loading_completion
     2026/2026-08_parallel_for_profiling
     2026/2026-08_graph_builder_authoring
-    2025/2025-07_onnx_proto
     2026/2026-06_lib_onnx
     2026/2026-06_kernels_backend_tests
     2026/2026-06_gradient
@@ -37,7 +39,7 @@ Next Steps
     2026/2026-09_custom_quantized_and_persistent_values
 
 Started
--------
+^^^^^^^
 
 .. list-table::
     :header-rows: 1
@@ -55,8 +57,9 @@ Started
         owners in ``SessionState``, use direct reads for ineligible tensors,
         run the four-configuration benchmark, and submit the upstream PR. All
         native dependencies through #4623 are complete.
+
 Discussion
-----------
+^^^^^^^^^^
 
 .. list-table::
     :header-rows: 1
@@ -76,24 +79,7 @@ Discussion
         ONNX Runtime handoff.
 
 Completed
----------
-
-2025
-^^^^
-
-.. list-table::
-    :header-rows: 1
-    :widths: 35 65
-    :class: sphinx-datatable
-
-    * - Plan
-      - Contribution
-    * - :ref:`l-next-steps-onnx-proto`
-      - Supplies the protobuf-free model representation used by startup and
-        ONNX Runtime.
-
-2026
-^^^^
+^^^^^^^^^
 
 .. list-table::
     :header-rows: 1
@@ -150,7 +136,7 @@ Completed
         decode validation with allocation and copy measurements.
 
 Consolidated design references
-----------------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The following proposals are retained as historical detail and format examples.
 Their implementation sequences are superseded by
@@ -158,3 +144,26 @@ Their implementation sequences are superseded by
 
 * :ref:`l-next-steps-quantization`
 * :ref:`l-next-steps-graph-builder-quantized-tensor`
+
+2025
+----
+
+.. toctree::
+    :maxdepth: 1
+    :hidden:
+
+    2025/2025-07_onnx_proto
+
+Completed
+^^^^^^^^^
+
+.. list-table::
+    :header-rows: 1
+    :widths: 35 65
+    :class: sphinx-datatable
+
+    * - Plan
+      - Contribution
+    * - :ref:`l-next-steps-onnx-proto`
+      - Supplies the protobuf-free model representation used by startup and
+        ONNX Runtime.

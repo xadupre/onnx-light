@@ -68,7 +68,7 @@ def _optimize(model, pattern, run_shape_inference=True):
     builder = optimization.GraphBuilder(work)
     graph = optimization.GraphGraph(builder, [pattern])
     rewrites = graph.optimize()
-    return builder.to_onnx("model"), rewrites
+    return builder.to_onnx(), rewrites
 
 
 def _ops(model):

@@ -193,7 +193,7 @@ class TestPatternsMatmulNormalization(ExtTestCase):
         )
         graph = optimization.GraphGraph(builder, patterns)
         rewrites, report = graph.optimize(report=True)
-        optimized = builder.to_onnx("model")
+        optimized = builder.to_onnx()
         if check_model:
             checker.check_model(optimized)
         return optimized, rewrites, report

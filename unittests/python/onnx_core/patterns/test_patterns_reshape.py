@@ -57,7 +57,7 @@ class TestPatternsReshape(ExtTestCase):
         builder = optimization.GraphBuilder(model)
         graph = optimization.GraphGraph(builder, patterns)
         rewrites = graph.optimize()
-        optimized = builder.to_onnx("model")
+        optimized = builder.to_onnx()
         checker.check_model(optimized)
 
         self.assertEqual(expected_ops, [node.op_type for node in optimized.graph.node])

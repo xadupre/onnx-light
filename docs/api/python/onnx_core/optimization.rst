@@ -17,7 +17,7 @@ Optimization always operates on a
     builder = GraphBuilder(model)
     graph = GraphGraph(builder)
     rewrites, report = graph.optimize(report=True)
-    optimized_model = builder.to_onnx("model")
+    optimized_model = builder.to_onnx()
 
 Pattern registration
 ++++++++++++++++++++

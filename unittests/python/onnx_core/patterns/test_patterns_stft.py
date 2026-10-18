@@ -61,7 +61,7 @@ def _optimize(model):
     builder = optimization.GraphBuilder(model)
     graph = optimization.GraphGraph(builder, [optimization.STFTFusionPattern()])
     rewrites = graph.optimize()
-    return builder.to_onnx("model"), rewrites
+    return builder.to_onnx(), rewrites
 
 
 class TestSTFTFusionPattern(ExtTestCase):

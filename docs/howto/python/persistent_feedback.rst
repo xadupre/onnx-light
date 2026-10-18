@@ -1,7 +1,11 @@
 .. _l-howto-persistent-feedback:
+.. _l-howto-persistent-feedback-python:
 
 Persistent input/output feedback
-===============================
+================================
+
+This guide covers the Python interface. For the other language, see
+:doc:`../cpp/persistent_feedback`.
 
 Feedback state retains selected model outputs as inputs for the next call.
 The graph declares the relationship in ``GraphProto.persistent_bindings``;
@@ -296,23 +300,8 @@ computes an ordinary output rather than promising to alias its input.
 
 The corresponding C++ entry points are:
 
-.. code-block:: cpp
-
-    using namespace onnx_light::core::runtime;
-
-    auto *binding = model.mutable_graph()->add_persistent_bindings();
-    binding->set_input_name("past");
-    binding->set_output_name("present");
-    RuntimeSession session(
-        model,
-        {{"past", RuntimeValue(Tensor::FromFloat("past", {2}, {0.f, 0.f}))}});
-    RuntimeContext context(KernelContext(18));
-    auto outputs = session.Run(
-        context,
-        {{"delta", RuntimeValue(Tensor::FromFloat("delta", {2}, {1.f, 1.f}))}});
-    session.Reset(
-        {{"past", RuntimeValue(Tensor::FromFloat("past", {2}, {0.f, 0.f}))}});
-    auto retained = session.persistent_state().Values();
+See the :doc:`C++ recipe </howto/cpp/persistent_feedback>`
+for this example.
 
 The C++ constructor and ``Reset`` accept initial maps by value. Build an owned
 ``RuntimeValueMap`` and pass ``std::move(initial)`` for zero-copy transfer.
@@ -322,7 +311,7 @@ tensor explicitly, use ``std::move(tensor).RetainStorage()`` once, then
 promote storage.
 
 C++ callers register the operator kernels as usual before executing the model
-(see :doc:`register_builtin_operators`). The model and configured allocators
+(see :doc:`/howto/python/register_builtin_operators`). The model and configured allocators
 must outlive the state/session using them. With the reference-based C++
 constructor, the model must also outlive any returned views of its initializer
 storage. Native sessions do not own the model. The Python binding retains the
@@ -456,7 +445,7 @@ the bindings. Explicit model saving serializes the declarations, not the
 current request's retained state; execution itself does not serialize them.
 
 Contiguous CPU Attention feedback
---------------------------------
+---------------------------------
 
 Declare ``past_key <- present_key`` and ``past_value <- present_value`` using
 the ordinary graph bindings. The native CPU ``Attention`` consumer can then
@@ -631,7 +620,7 @@ copies is a state-management copy.
 
 A runnable native example, including per-token allocation/copy measurements
 and a multi-head fallback, is provided in
-:doc:`../examples_cc/contiguous_kv_decode_example`.
+:doc:`/examples_cc/contiguous_kv_decode_example`.
 
 Optional heterogeneous paged KV
 -------------------------------
@@ -690,19 +679,8 @@ unspecified because appended pages can have different lengths.
 
 Register the native kernel on the context used by the state:
 
-.. code-block:: cpp
-
-    using namespace onnx_light;
-    using namespace onnx_light::core::runtime;
-
-    context.RegisterKernelFn(
-        "ai.rt", "PagedAttention", core::symbolic::Device::kCPU,
-        [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<KernelBase> {
-          auto kernel =
-              std::make_unique<onnx_kernels::kernel::PagedAttention>(rt.kernel_ctx());
-          kernel->set_node(node);
-          return kernel;
-        });
+See the :doc:`C++ recipe </howto/cpp/persistent_feedback>`
+for this example.
 
 To select storage dynamically, construct the kernel with a ``FormatSelector``.
 The selector receives the current K/V tensors and retained token count. It
@@ -710,18 +688,8 @@ returns the formats for the pages appended by that execution. Without a
 selector the native kernel stores new pages as dense FLOAT. For example, a
 policy can switch formats as the cache grows:
 
-.. code-block:: cpp
-
-    auto select_formats =
-        [](const Tensor &, const Tensor &, int64_t past_length) {
-          if (past_length < 1024)
-            return onnx_kernels::kernel::PagedAttention::Formats{};
-          return onnx_kernels::kernel::PagedAttention::Formats{
-              {TensorProto::INT8, 0.01f, 0},
-              {TensorProto::UINT4, 0.25f, 8}};
-        };
-    auto kernel = std::make_unique<onnx_kernels::kernel::PagedAttention>(
-        context.kernel_ctx(), select_formats);
+See the :doc:`C++ recipe </howto/cpp/persistent_feedback>`
+for this example.
 
 The node takes ``Q, K, V, past`` and returns ``Y, present``. It accepts finite
 FLOAT, FLOAT16, or BFLOAT16 tensors, supports multiple batches and grouped-query
@@ -895,7 +863,7 @@ Nested sequences, including the ``blocks`` field above, remain part of their
 enclosing structured ``RuntimeValue``.
 
 Persistent values also retain the shared parameter catalogue introduced by
-:doc:`quantized_values`, recursively through structures and sequences. A tensor
+:doc:`/howto/python/quantized_values`, recursively through structures and sequences. A tensor
 declaration is checked against an encoded value's logical tensor type; a
 structured declaration is checked against its storage type. Retaining or
 validating a compact shared value checks its reference, types and byte extent

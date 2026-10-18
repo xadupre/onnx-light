@@ -10,3 +10,4 @@
     command_line/run
     command_line/backend
     command_line/kernel
+    command_line/tune_kernel_thresholds

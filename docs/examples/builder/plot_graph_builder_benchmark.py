@@ -122,7 +122,7 @@ def build_light(node_count: int, large_initializers: bool = False):
         for index in range(LARGE_INITIALIZER_COUNT):
             name = builder.init(payload, name=f"large{index}", copy=False)
             builder.out(name, TensorProto.UINT8, [LARGE_INITIALIZER_BYTES])
-    return builder.to_onnx("model")
+    return builder.to_onnx()
 
 
 def build_onnxscript(node_count: int, large_initializers: bool = False):

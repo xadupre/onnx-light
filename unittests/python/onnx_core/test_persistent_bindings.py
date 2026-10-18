@@ -5,7 +5,7 @@ import unittest
 from onnx_light import onnx
 import onnx_light.onnx.helper as oh
 from onnx_light.onnx.onnx_pb import PersistentBindingProto
-from onnx_light.onnx_core.graph_builder import GraphBuilder
+from onnx_light.onnx_core.graph_builder import GraphBuilder, ProtoKind
 from onnx_light.onnx_lib import PersistentBindingProto as LibraryPersistentBindingProto
 from onnx_light.onnx_proto import verify
 
@@ -339,7 +339,7 @@ class TestPersistentBindings(unittest.TestCase):
         with self.assertRaisesRegex(Exception, "standard ONNX"):
             builder.to_standard_model()
         with self.assertRaisesRegex(Exception, "FunctionProto"):
-            builder.to_onnx("function")
+            builder.to_onnx(ProtoKind.kFunction)
         builder.make_persistent_binding(PersistentBindingProto(input_name="x", output_name="y"))
         with self.assertRaisesRegex(ValueError, "duplicate input"):
             builder.to_onnx()

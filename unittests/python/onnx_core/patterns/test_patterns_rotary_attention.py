@@ -51,7 +51,7 @@ def _optimize(model, pattern_names, *, schema_lookup="default"):
     )
     graph = optimization.GraphGraph(builder, optimization.standard_patterns(pattern_names))
     rewrites = graph.optimize()
-    optimized = builder.to_onnx("model")
+    optimized = builder.to_onnx()
     _assert_topological(optimized.graph)
     selected = set(pattern_names)
     return optimized, [rewrite for rewrite in rewrites if rewrite.pattern_name in selected]

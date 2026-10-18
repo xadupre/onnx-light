@@ -251,8 +251,7 @@ class TestPatternOptimization(ExtTestCase):
 
         self.assertEqual([rewrite.pattern_name for rewrite in rewrites], ["NegNeg"])
         self.assertEqual(
-            [node.op_type for node in builder.to_onnx("model").graph.node],
-            ["Identity", "Neg", "Neg"],
+            [node.op_type for node in builder.to_onnx().graph.node], ["Identity", "Neg", "Neg"]
         )
 
     def test_python_pattern_rewrites_and_reports_rejections(self):
@@ -260,7 +259,7 @@ class TestPatternOptimization(ExtTestCase):
         builder = optim.GraphBuilder(model)
         graph = optim.GraphGraph(builder, [NegNegPattern()])
         rewrites, report = graph.optimize(report=True)
-        optimized = builder.to_onnx("model")
+        optimized = builder.to_onnx()
 
         self.assertEqual([node.op_type for node in optimized.graph.node], ["Identity"])
         self.assertEqual(len(rewrites), 1)
@@ -400,7 +399,7 @@ class TestPatternOptimization(ExtTestCase):
         builder = optim.GraphBuilder(model)
         graph = optim.GraphGraph(builder, optim.standard_patterns(["Cast"]))
         rewrites = graph.optimize()
-        optimized = builder.to_onnx("model")
+        optimized = builder.to_onnx()
 
         self.assertEqual(optim.registered_pattern_names()[0], "Cast")
         self.assertIsInstance(optim.CastPattern(), optim.PatternOptimization)
@@ -426,7 +425,7 @@ class TestPatternOptimization(ExtTestCase):
         builder = optim.GraphBuilder(model)
         graph = optim.GraphGraph(builder, optim.standard_patterns(["ClipClip"]))
         rewrites = graph.optimize()
-        optimized = builder.to_onnx("model")
+        optimized = builder.to_onnx()
 
         self.assertIn("ClipClip", optim.registered_pattern_names())
         self.assertIsInstance(optim.ClipClipPattern(), optim.PatternOptimization)
@@ -447,7 +446,7 @@ class TestPatternOptimization(ExtTestCase):
         builder = optim.GraphBuilder(model)
         graph = optim.GraphGraph(builder, optim.standard_patterns(["GatherToSlice"]))
         rewrites = graph.optimize()
-        optimized = builder.to_onnx("model")
+        optimized = builder.to_onnx()
 
         self.assertIn("GatherToSlice", optim.registered_pattern_names())
         self.assertIsInstance(optim.GatherToSlicePattern(), optim.PatternOptimization)
@@ -469,7 +468,7 @@ class TestPatternOptimization(ExtTestCase):
         builder = optim.GraphBuilder(model)
         graph = optim.GraphGraph(builder, optim.standard_patterns(["GatherToSlice"]))
         graph.optimize()
-        optimized = builder.to_onnx("model")
+        optimized = builder.to_onnx()
 
         op_types = [node.op_type for node in optimized.graph.node]
         self.assertEqual(op_types, ["Slice", "Squeeze"])

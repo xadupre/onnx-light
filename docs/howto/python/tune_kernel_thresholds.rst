@@ -1,7 +1,11 @@
 .. _l-how-to-tune-kernel-thresholds:
+.. _l-how-to-tune-kernel-thresholds-python:
 
 Tune kernel thresholds
 ======================
+
+This guide covers the Python interface. For the other language, see
+:doc:`../cpp/tune_kernel_thresholds`.
 
 ``onnx-light`` separates two kinds of tuning values:
 
@@ -80,87 +84,6 @@ See :ref:`l-example-plot-kernel-tuning` for an executable gallery example that
 combines discovery, a temporary validated update, cache inspection, inference,
 and bounded calibration.
 
-Calibrate one kernel from the command line
-+++++++++++++++++++++++++++++++++++++++++++
-
-Select one exact native kernel and add ``--tune`` to calibrate and persist its
-parameters:
-
-.. code-block:: bash
-
-    python -m onnx_light kernel \
-        --kernel Abs --dtype FLOAT --impl portable \
-        --tune
-
-Use ``--cache`` to select another cache, ``--json`` for machine-readable output,
-and ``--maximum-duration-ms`` or ``--maximum-memory-mb`` to bound calibration.
-The Python functions ``propose_kernel_tuning_updates`` and
-``apply_kernel_tuning_updates`` remain available for bulk workflows.
-
-To compare explicit values for one integer parameter, list ``default`` first
-so the current active value becomes the speedup baseline:
-
-.. code-block:: bash
-
-    python -m onnx_light kernel \
-        --kernel Abs --dtype FLOAT --impl portable --tune \
-        --parameter parallel.minimum_elements=default,16384,32768,65536
-
-The existing calibration cases measure every value side by side. The fastest
-validated value is persisted, while text and JSON output report elapsed times,
-speedups, the baseline, and the selected value.
-
-``parallel.minimum_elements`` is the serial/parallel crossover: a loop with
-exactly that many elements is eligible for parallel execution. Once the loop is
-dispatched, the executor derives the block grain from the number of admitted
-participants, independently from the crossover value.
-
-Optimize over backend cases
-+++++++++++++++++++++++++++
-
-Use ``onnx-light backend`` when the objective is latency over a list of
-backend cases rather than a kernel's synthetic calibration workload. A regular
-expression is required so the corpus is explicit:
-
-.. code-block:: bash
-
-    python -m onnx_light backend \
-        --regex "^test_cc_not.*benchmark" --mode benchmark \
-        --kernel Not --dtype BOOL --impl portable \
-        --parameter parallel.minimum_elements=default,16384,32768,65536 \
-        --criterion median-speedup --json
-
-Repeat ``--parameter`` when a schema exposes interacting parameters. The command
-evaluates their Cartesian product, with a limit of 256 sets. Each specification
-starts with ``default``; the resulting all-default set is the baseline.
-Parameter names must be unique, integer values must be positive, and
-``--kernel``, ``--dtype``, and ``--impl`` must identify exactly one schema.
-
-``--criterion`` is required and accepts:
-
-* ``average``, ``sum``, ``median``, or ``max-latency``, which minimize the
-  corresponding latency across selected cases;
-* ``average-speedup``, ``median-speedup``, or ``max-speedup``, which maximize
-  per-case speedup relative to the all-default baseline.
-
-Every parameter set reports all seven metrics, its timeout count, and whether
-it was selected. A timed-out set has unavailable metrics. When the baseline
-times out, latency criteria can still select a complete candidate, but speedup
-metrics and speedup-based selection are unavailable. Progress is written to
-standard error, so ``--json`` on standard output remains machine-readable:
-
-.. code-block:: text
-
-    [backend tune] [##########----------] 2/4
-    [backend tune] [####################] 4/4
-
-The comparison uses temporary cache files and does not modify the machine
-tuning cache. Its result is printed to standard output, returned as JSON with
-``--json``, or written as CSV/XLSX with ``--output``. The selected set is
-advisory: kernels do not use it after the command ends. Use
-``set_kernel_tuning_parameters`` separately to persist and publish a selected
-set.
-
 Analyze measurements from Python
 ++++++++++++++++++++++++++++++++
 
@@ -225,56 +148,6 @@ The selected profile is published in the current process immediately.
 With the default ``save=True``, it is also validated, locked, merged, and
 atomically persisted for later processes. Use ``save=False`` for an in-memory
 calibration or ``only_missing=True`` to skip an already active local profile.
-
-Add calibration to another kernel
-+++++++++++++++++++++++++++++++++
-
-A registered tuning schema does not imply that a calibration callback exists.
-``CalibrateRegisteredKernels`` reports schema-only keys in
-``CalibrationBatchReport::unsupported``. To make another kernel calibratable:
-
-1. Define a ``KernelCalibrationFunction`` near the kernel implementation.
-2. Construct a ``KernelCalibrationBenchmark`` with its portable parameters,
-   deterministic cases, reference runner, candidate runner, and output
-   validation. Set ``same_execution_path`` when different parameter values can
-   resolve to the same path; any such case excludes its entire crossover group.
-3. Call ``CalibrateKernelBenchmark`` from that function.
-4. Register it for every supported exact key with
-   ``RegisterKernelCalibrationFunction`` in the kernel's
-   ``RegisterTuningSchemas`` function.
-
-``onnx_light/onnx_extensions/kernels/kernels/math/kernel_abs.cc`` is the
-unary example. ``kernel_add.cc`` demonstrates equal-shape and broadcasting
-binary cases. A kernel with several interacting parameters, such as ``Gemm``,
-needs a kernel-specific search rather than treating every value as an
-independent scalar crossover.
-
-Promote a threshold to a compiled default
-+++++++++++++++++++++++++++++++++++++++++
-
-A cache result is processor-specific. Measure several representative machines
-and thread counts before making it the portable value used by every machine.
-Keep the conservative value when crossover measurements overlap.
-
-For kernels using ``ParallelTuning``:
-
-* change the ``portable_minimum_elements`` passed to
-  ``RegisterParallelTuningSchemas``;
-* change the kernel object's initial fallback to the same value;
-* change ``benchmark.portable_parameters`` in its calibration callback;
-* add or update tests that exercise serial and parallel boundaries.
-
-These values are in the corresponding implementation under
-``onnx_light/onnx_extensions/kernels/kernels/``. For example, all three ``Abs``
-fallback occurrences are in ``kernels/math/kernel_abs.cc``.
-
-For ``Gemm``, the compiled values are the fields of ``GemmTuning`` in
-``onnx_light/onnx_extensions/kernels/tuning/portable_gemm_tuning.h``.
-``MakeGemmDefaults`` registers those fields as the schema defaults.
-
-Increment ``tuning_abi`` when persisted profiles become structurally
-incompatible, such as after renaming a parameter or changing its meaning or
-type. A value-only default adjustment does not require an ABI change.
 
 Locate and inspect the cache
 ++++++++++++++++++++++++++++
@@ -342,17 +215,8 @@ initializes its kernels:
 
 The C++ API remains explicit for every path:
 
-.. code-block:: cpp
-
-    onnx_light::onnx_kernels::RegisterKernelFunctions();
-
-    rt::KernelCalibrationSelection selection;
-    selection.library = "onnx_light";
-    const rt::KernelTuningCacheLoadReport load =
-        rt::LoadKernelTuningCache(selection);
-
-    // Construct RuntimeSession only after loading the cache.
-    rt::RuntimeSession session(plan);
+See the :doc:`C++ recipe </howto/cpp/tune_kernel_thresholds>`
+for this example.
 
 Check ``load.status``, ``loaded``, ``incompatible``, ``stale``, ``invalid``,
 ``missing``, and ``diagnostics`` rather than assuming that a present file

@@ -9,10 +9,9 @@ This example shows how to use :mod:`onnx_light.onnx_core.gradient` to:
 1. Build a simple linear-regression forward model as a list of ONNX nodes.
 2. Compute its gradient with respect to the trainable parameters (weights
    and bias) using :func:`~onnx_light.onnx_core.gradient.gradient_of_nodes`.
-3. Run a plain gradient-descent training loop entirely in NumPy — the
-   gradient FunctionProto tells *which* ONNX operations to execute
-   backward, but the numerical evaluation is done by hand here to keep
-   the example self-contained.
+3. Run a gradient-descent training loop using
+   :class:`~onnx_light.onnx.reference.ReferenceEvaluator` to execute the generated
+   gradient FunctionProto at each step.
 
 The model is ``y = X @ W + b`` where ``X`` is the feature matrix (shape
 ``[N, F]``), ``W`` is the weight vector (shape ``[F, 1]``), and ``b`` is a
@@ -28,8 +27,10 @@ For the MSE loss ``L`` and prediction ``y_pred = X @ W + b``:
 * ``dL/db = (2/N) * sum(y_pred - y_true)``
 
 The gradient FunctionProto produced by
-:func:`~onnx_light.onnx_core.gradient.gradient_of_nodes` captures exactly this
-backward computation as a reusable ONNX function.
+:func:`~onnx_light.onnx_core.gradient.gradient_of_nodes` propagates the supplied
+loss gradient back to the parameters. Its ``grad_b`` output contains one
+contribution per prediction; summing these contributions accounts for the
+broadcast of the scalar bias.
 """
 
 from __future__ import annotations
@@ -84,13 +85,16 @@ print(f"  outputs = {list(grad_fn.output)}")
 print(f"  nodes   = {[str(n.op_type) for n in grad_fn.node]}")
 
 ######################################
-# Training loop with NumPy
-# -------------------------
+# Training loop with the generated gradient
+# ------------------------------------------
 #
-# The gradient FunctionProto describes the backward pass symbolically.
-# To actually train, we evaluate the analytical gradients in NumPy.  A
-# real training framework would execute the FunctionProto directly; here
-# we use the NumPy equivalents to keep the example dependency-free.
+# The evaluator executes the gradient FunctionProto on every iteration.
+# NumPy computes the forward pass, the MSE loss gradient, and the parameter
+# updates. The backward pass through the model uses the generated ONNX nodes.
+
+from onnx_light.onnx.reference import ReferenceEvaluator  # noqa: E402
+
+grad_evaluator = ReferenceEvaluator(grad_fn)
 
 # Reproducible random seed
 rng = np.random.default_rng(42)
@@ -120,11 +124,10 @@ for _epoch in range(n_epochs):
     # Backward pass (MSE loss: dL/dy_pred = 2 * residual / N)
     dy = (2.0 / N) * residual  # shape [N, 1]
 
-    # Gradient of y_pred = X @ W + b
-    #   dL/dW = X.T @ dy          (shape [F, 1])
-    #   dL/db = sum(dy)            (scalar)
-    grad_W = X_data.T @ dy
-    grad_b = float(np.sum(dy))
+    # Execute the generated backward pass with the current parameters.
+    grad_W, grad_b_samples = grad_evaluator.run(None, {"W": W, "b": b, "X": X_data, "dy": dy})
+    # Add's gradient is elementwise; reduce over the scalar bias's broadcast.
+    grad_b = np.sum(grad_b_samples)
 
     # Gradient-descent update
     W -= learning_rate * grad_W

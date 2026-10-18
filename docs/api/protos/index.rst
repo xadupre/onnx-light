@@ -10,6 +10,9 @@ onnx-light extensions, including structured types, encoded values, persistent
 bindings and paged caches. Solid edges represent nested messages; dashed edges
 show selected model-scoped references, not containment or storage ownership.
 Each edge label is the attribute name (or names) that carries the nested proto.
+The diagram groups messages into **Data**, **Container**, and **Struct and Types**.
+Data includes tensors and leaf messages, with a **Quantization** subgroup for
+``TensorAnnotation``, ``EncodedValueProto``, and ``AffineLayoutProto``.
 The SVG below is generated from
 :download:`protos_relations.dot <_static/protos_relations.dot>` with
 ``dot -Tsvg`` (Graphviz); regenerate it after editing the ``.dot`` source.
@@ -118,7 +121,7 @@ references are explicitly marked rather than expanded as nested messages.
 declared by a root-graph ``TensorAnnotation`` whose ``tensor_name`` is
 ``onnx_light.quantization.parameters:<name>``. Its tensor-name mappings point
 to graph initializers; those tensors are not embedded in the encoded value.
-See :doc:`../../howto/quantized_values` for this catalogue.
+See :doc:`../../howto/python/quantized_values` for this catalogue.
 
 The ``key``/``encoded_key`` and ``value``/``encoded_value`` edges are independent
 oneof alternatives, not four simultaneously required payloads. The cache

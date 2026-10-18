@@ -48,7 +48,7 @@ Typical usage
     bias = g.init(np.ones((2, 3), dtype=np.float32), name="bias")
     y = g.op.Add(x, bias, outputs="Y")
     g.out(y, TensorProto.FLOAT, [2, 3])
-    model = g.to_onnx("model")
+    model = g.to_onnx()
 
 ``g.inp`` declares an input, ``g.init`` adds an initializer,
 ``g.op.<Operator>`` adds an ONNX node, and ``g.out`` declares a graph output.

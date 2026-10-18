@@ -5,6 +5,75 @@ digraph protos {
     node [shape=box, style="rounded,filled", fillcolor="#EAF2F8", fontname="Helvetica", fontsize=12, color="#1F618D"];
     edge [fontname="Helvetica", fontsize=10, color="#566573"];
 
+    subgraph cluster_container {
+        label="Container";
+        color="#1F618D";
+        style=rounded;
+        PipelineProto;
+        ModelProto;
+        GraphProto;
+        FunctionProto;
+        NodeProto;
+        AttributeProto;
+        NodeDeviceConfigurationProto;
+        ShardingSpecProto;
+        ShardedDimProto;
+        PagedCacheProto;
+        PagedCacheBlockProto;
+        SequenceProto;
+        MapProto;
+        OptionalProto;
+    }
+
+    subgraph cluster_data {
+        label="Data";
+        color="#239B56";
+        style=rounded;
+        node [fillcolor="#E9F7EF", color="#239B56"];
+        TensorProto;
+        SparseTensorProto;
+        StringStringEntryProto;
+        Segment;
+        OperatorSetIdProto;
+        DeviceConfigurationProto;
+        IntIntListEntryProto;
+        SimpleShardedDimProto;
+        PersistentBindingProto;
+
+        subgraph cluster_quantization {
+            label="Quantization";
+            color="#CA6F1E";
+            style=rounded;
+            node [fillcolor="#FEF5E7", color="#CA6F1E"];
+            TensorAnnotation;
+            EncodedValueProto;
+            AffineLayoutProto;
+        }
+    }
+
+    subgraph cluster_types {
+        label="Struct and Types";
+        color="#7D3C98";
+        style=rounded;
+        node [fillcolor="#F4ECF7", color="#7D3C98"];
+        ValueInfoProto;
+        TypeProto;
+        "TypeProto.Tensor";
+        "TypeProto.SparseTensor";
+        "TypeProto.Sequence";
+        "TypeProto.Map";
+        "TypeProto.Optional";
+        "TypeProto.Opaque";
+        TensorShapeProto;
+        Dimension;
+        StructTypeProto;
+        "StructTypeProto.Array";
+        "StructTypeProto.Structure";
+        "StructTypeProto.Structure.Field";
+        "StructTypeProto.BitPacking";
+        "StructTypeProto.BitPacking.Component";
+    }
+
     PipelineProto -> ModelProto [label="embedding, prefill, decode"];
     PipelineProto -> StringStringEntryProto [label="metadata_props"];
 

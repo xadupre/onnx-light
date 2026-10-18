@@ -7,7 +7,8 @@ are added with :meth:`GraphBuilder.make_node`, which requires an explicit
 opset, validates the node against the built-in ONNX operator schemas, assigns
 output names when the caller leaves them empty and runs incremental shape
 inference. :meth:`GraphBuilder.to_onnx` finalises the accumulated graph into a
-model (default), a graph or a function, writing the inferred shapes, the
+``ModelProto`` by default, or a ``GraphProto`` or ``FunctionProto`` selected with
+:class:`ProtoKind`, writing the inferred shapes, the
 in-place / release-after metadata, the value tags and the peak-memory
 estimates.
 
@@ -21,7 +22,7 @@ Typical usage::
     builder.make_input("y", TensorProto.FLOAT, [2, 3])
     (z,) = builder.make_node("Add", ["x", "y"])
     builder.make_output(z)
-    model = builder.to_onnx("model")
+    model = builder.to_onnx()
 
 The module is exposed as ``onnx_light.onnx_core.graph_builder``.
 """
@@ -47,6 +48,7 @@ if importlib.util.find_spec("onnx_light.onnx_py._onnxpykernels") is not None:
     importlib.import_module("onnx_light.onnx_py._onnxpykernels")
 
 ConstantFoldingOptions: TypeAlias = _C.ConstantFoldingOptions
+ProtoKind: TypeAlias = _C.ProtoKind
 PatternOptimization: TypeAlias = _C.PatternOptimization
 
 SchemaLookup: TypeAlias = Callable[[str], "list[LightOpSchema]"]
@@ -282,4 +284,10 @@ class GraphBuilder(_C.GraphBuilder):
         return tuple(self._registered_patterns)
 
 
-__all__ = ["ConstantFoldingOptions", "GraphBuilder", "PatternOptimization", "SchemaLookup"]
+__all__ = [
+    "ConstantFoldingOptions",
+    "GraphBuilder",
+    "PatternOptimization",
+    "ProtoKind",
+    "SchemaLookup",
+]

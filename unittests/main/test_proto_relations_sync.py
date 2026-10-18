@@ -70,6 +70,71 @@ class TestProtoRelationsSync(unittest.TestCase):
         }
         self.assertSetEqual(self._declared_edges(), diagram)
 
+    def test_diagram_groups(self):
+        dot = (self.STATIC / "protos_relations.dot").read_text(encoding="utf-8")
+        svg = xml.etree.ElementTree.parse(self.STATIC / "protos_relations.svg")
+        namespace = {"svg": "http://www.w3.org/2000/svg"}
+        rendered = {
+            group.find("svg:title", namespace).text: group.find("svg:text", namespace).text
+            for group in svg.findall(".//svg:g[@class='cluster']", namespace)
+        }
+        self.assertEqual(
+            rendered,
+            {
+                "cluster_container": "Container",
+                "cluster_data": "Data",
+                "cluster_quantization": "Quantization",
+                "cluster_types": "Struct and Types",
+            },
+        )
+        groups = {}
+        parents = {}
+        stack = []
+        for line in dot.splitlines():
+            cluster = re.fullmatch(r"\s*subgraph (cluster_\w+) \{", line)
+            if cluster:
+                name = cluster[1]
+                parents[name] = stack[-1] if stack else None
+                groups[name] = set()
+                stack.append(name)
+            elif line.strip() == "}" and stack:
+                stack.pop()
+            elif stack:
+                node = re.fullmatch(r'\s*"?([\w.]+)"?;', line)
+                if node:
+                    for name in stack:
+                        self.assertNotIn(node[1], groups[name])
+                        groups[name].add(node[1])
+        self.assertEqual(parents["cluster_quantization"], "cluster_data")
+        self.assertTrue(
+            {
+                "TensorProto",
+                "SparseTensorProto",
+                "StringStringEntryProto",
+                "TensorAnnotation",
+                "EncodedValueProto",
+            }
+            <= groups["cluster_data"]
+        )
+        self.assertTrue(
+            {"ModelProto", "GraphProto", "FunctionProto"} <= groups["cluster_container"]
+        )
+        self.assertSetEqual(
+            groups["cluster_quantization"],
+            {"TensorAnnotation", "EncodedValueProto", "AffineLayoutProto"},
+        )
+        nodes = {
+            node for source, target, _, _ in self._diagram_edges() for node in (source, target)
+        }
+        self.assertSetEqual(nodes, set.union(*groups.values()))
+        typed = {
+            node
+            for node in nodes
+            if node.startswith(("TypeProto", "StructTypeProto"))
+            or node in {"ValueInfoProto", "TensorShapeProto", "Dimension"}
+        }
+        self.assertSetEqual(typed, groups["cluster_types"])
+
     def test_svg_matches_dot(self):
         svg = xml.etree.ElementTree.parse(self.STATIC / "protos_relations.svg")
         namespace = {"svg": "http://www.w3.org/2000/svg"}

@@ -36,7 +36,7 @@ type and constant queries) and drives a match/apply loop:
         standard_patterns(["Cast"]),
     )
     rewrites, report = graph.optimize(report=True)
-    optimized_model = builder.to_onnx("model")
+    optimized_model = builder.to_onnx()
 
     assert len(rewrites) == 1
     assert report.rewrites == 1

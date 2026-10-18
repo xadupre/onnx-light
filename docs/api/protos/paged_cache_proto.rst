@@ -5,7 +5,7 @@ PagedCacheProto
 Contains ordered KV pages. ``GraphProto.paged_cache_initializer`` embeds a
 named cache as an initializer. Each page selects a dense or encoded payload
 independently for K and V. Referenced type and quantization catalogues remain
-model-scoped. See :doc:`../../howto/persistent_feedback`.
+model-scoped. See :doc:`../../howto/python/persistent_feedback`.
 
 ``PagedAttention`` declares ``past`` and ``present`` as structured values.
 ``PagedCacheProto`` is their serialized page-value representation and carries

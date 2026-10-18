@@ -176,7 +176,13 @@ class TestTranslateText(ExtTestCase):
         self.assertIn("g.op.Reshape('X', 'shape', outputs=['reshaped'])", code)
         self.assertIn("perm=[1, 0]", code)
         self.assertIn("g.out('Y', onnx.TensorProto.FLOAT, (None, None))", code)
-        self.assertIn("model = g.to_onnx('model', ir_version=8)", code)
+        self.assertIn("model = g.to_onnx(ir_version=8)", code)
+
+    def test_builder_default_ir_version(self) -> None:
+        model = self._simple_model()
+        model.ir_version = 0
+        code = translate(model, api="builder")
+        self.assertIn("model = g.to_onnx()", code)
 
     def test_cpp_structure(self) -> None:
         code = translate(self._simple_model(), api="cpp")

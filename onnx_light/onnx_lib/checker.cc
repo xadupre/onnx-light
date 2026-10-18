@@ -21,48 +21,14 @@
 #include "onnx_lib/common/file_utils.h"
 #include "onnx_lib/common/path.h"
 #include "onnx_lib/common/proto_util.h"
-#include "onnx_lib/common/scoped_resource.h"
 #include "onnx_lib/shape_inference/attribute_binder.h"
 #include "onnx_lib/shape_inference/implementation.h"
 #include "onnx_manipulations/tensor_proto_util.h"
+#include "onnx_proto/external_data_internal.h"
 #include "onnx_proto/onnx_helper.h"
 #include "onnx_proto/onnx_tree_ensemble.h"
 #include "onnx_proto/onnx_verify.h"
-
-#ifdef _WIN32
-#include <Windows.h>
-#include <fcntl.h>
-#include <io.h>
-#else
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <unistd.h>
-
-// Kernel-level path containment: prefer openat2 (Linux 5.6+) or
-// O_RESOLVE_BENEATH (FreeBSD 13+, macOS 15+) when available.
-#ifdef __linux__
-#include <sys/syscall.h>
-#ifdef SYS_openat2
-#define ONNX_HAS_OPENAT2
-#if __has_include(<linux/openat2.h>)
-#include <linux/openat2.h>
-#else
-struct open_how {
-  uint64_t flags;
-  uint64_t mode;
-  uint64_t resolve;
-};
-#define RESOLVE_NO_SYMLINKS 0x04
-#define RESOLVE_BENEATH 0x08
-#endif
-#endif // SYS_openat2
-#endif // __linux__
-
-#ifdef O_RESOLVE_BENEATH
-#define ONNX_HAS_RESOLVE_BENEATH
-#endif
-
-#endif // _WIN32
+#include "onnx_proto/stream.h"
 
 namespace ONNX_LIGHT_NAMESPACE::checker {
 
@@ -1530,19 +1496,7 @@ void check_model(const ModelProto &model, bool full_check, bool skip_opset_compa
   }
 }
 
-using ONNX_LIGHT_NAMESPACE::ScopedFd;
 using ONNX_LIGHT_NAMESPACE::utf8_to_path;
-#ifdef _WIN32
-using ONNX_LIGHT_NAMESPACE::ScopedHandle;
-#endif
-
-#ifdef _WIN32
-// Compare two BY_HANDLE_FILE_INFORMATION structs by volume + file index (inode equivalent).
-static bool same_file(const BY_HANDLE_FILE_INFORMATION &a, const BY_HANDLE_FILE_INFORMATION &b) {
-  return a.dwVolumeSerialNumber == b.dwVolumeSerialNumber && a.nFileIndexHigh == b.nFileIndexHigh &&
-         a.nFileIndexLow == b.nFileIndexLow;
-}
-#endif
 
 // Canonicalize data_path, verify containment within base_dir.
 static std::filesystem::path verify_path_containment(const std::filesystem::path &data_path,
@@ -1647,185 +1601,23 @@ static std::filesystem::path validate_write_location(const std::string &base_dir
   return utf8_to_path(base_dir.empty() ? std::string(".") : base_dir) / rel;
 }
 
-#ifdef _WIN32
-
 int64_t open_external_data(const std::string &base_dir, const std::string &location,
                            const std::string &tensor_name, bool read_only) {
-  std::filesystem::path data_path;
   if (read_only) {
-    data_path = resolve_external_data_location(base_dir, location, tensor_name);
+    resolve_external_data_location(base_dir, location, tensor_name);
   } else {
-    data_path = validate_write_location(base_dir, location, tensor_name);
-    // Pre-open parent-dir check (final-component-only flags don't protect parents).
+    auto data_path = validate_write_location(base_dir, location, tensor_name);
     verify_path_containment(data_path.parent_path(), base_dir, tensor_name);
   }
-
-  // CreateFileW with FILE_FLAG_OPEN_REPARSE_POINT: opens reparse point itself
-  // (symlink/junction) without following, and returns CRT-independent HANDLE.
-  DWORD access = read_only ? GENERIC_READ : (GENERIC_READ | GENERIC_WRITE);
-  DWORD creation = read_only ? OPEN_EXISTING : OPEN_ALWAYS;
-  HANDLE h = CreateFileW(data_path.native().c_str(), access, FILE_SHARE_READ, nullptr, creation,
-                         FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
-  if (h == INVALID_HANDLE_VALUE) {
-    fail_check("Cannot open external data for tensor ", tensor_name);
+  ONNX_TRY {
+    const auto descriptor = utils::detail::OpenExternalDataFile(base_dir, location, !read_only);
+    return std::exchange(*descriptor, -1);
   }
-  ScopedHandle guard(h);
-
-  // Reject symlinks/junctions.
-  BY_HANDLE_FILE_INFORMATION file_info;
-  if (!GetFileInformationByHandle(h, &file_info)) {
-    fail_check("Tensor ", tensor_name, " external data: cannot query file information.");
+  ONNX_CATCH(const std::runtime_error &ex) {
+    ONNX_HANDLE_EXCEPTION([&]() { fail_check("Tensor ", tensor_name, ": ", ex.what()); });
   }
-  if (file_info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) {
-    fail_check("Tensor ", tensor_name, " external data is a reparse point (symlink/junction).");
-  }
-
-  // Inode comparison: open canonical path, compare volume + file index.
-  auto canonical_data = verify_path_containment(data_path, base_dir, tensor_name);
-  HANDLE h2 = CreateFileW(canonical_data.native().c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE,
-                          nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
-  if (h2 == INVALID_HANDLE_VALUE) {
-    fail_check("Tensor ", tensor_name,
-               " external data: cannot open canonical path for verification.");
-  }
-  ScopedHandle guard2(h2);
-  BY_HANDLE_FILE_INFORMATION canon_info;
-  if (!GetFileInformationByHandle(h2, &canon_info)) {
-    fail_check("Tensor ", tensor_name,
-               " external data: cannot query canonical path file information.");
-  }
-  if (!same_file(file_info, canon_info)) {
-    fail_check("Tensor ", tensor_name,
-               " external data: fd/path mismatch (possible TOCTOU attack).");
-  }
-
-  // Hardlink check (fail closed).
-  if (file_info.nNumberOfLinks > 1) {
-    fail_check("Tensor ", tensor_name,
-               " external data has multiple hard links (possible hardlink attack).");
-  }
-
-  // Convert HANDLE → CRT fd so callers get a uniform fd on all platforms.
-  HANDLE h_released = guard.release();
-  int flags = read_only ? (_O_RDONLY | _O_BINARY) : (_O_RDWR | _O_BINARY);
-  int fd = _open_osfhandle(reinterpret_cast<intptr_t>(h_released), flags);
-  if (fd < 0) {
-    CloseHandle(h_released);
-    fail_check("Cannot convert handle to fd for tensor ", tensor_name);
-  }
-  return static_cast<int64_t>(fd);
+  return -1;
 }
-
-#else // POSIX
-
-// Try kernel-level contained open.
-// Returns fd >= 0 on success, -1 if feature unavailable (fall through to legacy).
-// Calls fail_check on kernel rejection (symlink, escape) — does NOT fall through.
-static int try_kernel_contained_open(const std::string &base_dir, const std::string &location,
-                                     [[maybe_unused]] const std::string &tensor_name,
-                                     [[maybe_unused]] bool read_only) {
-  const auto normalized_base_dir = base_dir.empty() ? std::string(".") : base_dir;
-  int raw_dirfd = open(normalized_base_dir.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
-  if (raw_dirfd < 0) {
-    return -1;
-  }
-  ScopedFd dirfd_guard(raw_dirfd);
-  auto rel = std::filesystem::path(location).lexically_normal().string();
-  int fd = -1;
-
-#ifdef ONNX_HAS_OPENAT2
-  static thread_local bool openat2_supported = true;
-  if (openat2_supported) {
-    struct open_how how = {};
-    how.flags = read_only ? static_cast<uint64_t>(O_RDONLY | O_CLOEXEC)
-                          : static_cast<uint64_t>(O_CREAT | O_RDWR | O_CLOEXEC);
-    how.mode = read_only ? 0 : 0600;
-    how.resolve = RESOLVE_BENEATH | RESOLVE_NO_SYMLINKS;
-    fd = static_cast<int>(syscall(SYS_openat2, raw_dirfd, rel.c_str(), &how, sizeof(how)));
-    if (fd < 0) {
-      if (errno == ENOSYS) {
-        openat2_supported = false; // kernel too old, fall through
-      } else {
-        fail_check("Cannot open external data for tensor ", tensor_name, " (kernel rejected path)");
-      }
-    }
-  }
-#elif defined(ONNX_HAS_RESOLVE_BENEATH)
-  int flags = O_RESOLVE_BENEATH | O_CLOEXEC;
-#ifdef O_NOFOLLOW
-  flags |= O_NOFOLLOW;
-#endif
-  if (read_only) {
-    fd = openat(raw_dirfd, rel.c_str(), flags | O_RDONLY);
-  } else {
-    fd = openat(raw_dirfd, rel.c_str(), flags | O_CREAT | O_RDWR, 0600);
-  }
-  if (fd < 0) {
-    fail_check("Cannot open external data for tensor ", tensor_name);
-  }
-#endif
-
-  return fd;
-}
-
-int64_t open_external_data(const std::string &base_dir, const std::string &location,
-                           const std::string &tensor_name, bool read_only) {
-  // Pre-open validation (defense-in-depth).
-  std::filesystem::path data_path;
-  if (read_only) {
-    data_path = resolve_external_data_location(base_dir, location, tensor_name);
-  } else {
-    data_path = validate_write_location(base_dir, location, tensor_name);
-    // Pre-open parent-dir check (final-component-only flags don't protect parents).
-    verify_path_containment(data_path.parent_path(), base_dir, tensor_name);
-  }
-
-  // Try kernel-level contained open (openat2 or O_RESOLVE_BENEATH).
-  int fd = try_kernel_contained_open(base_dir, location, tensor_name, read_only);
-  bool kernel_verified = (fd >= 0);
-
-  // Fallback: open() + O_NOFOLLOW + post-open inode verification.
-  if (fd < 0) {
-    int flags = read_only ? O_RDONLY : (O_CREAT | O_RDWR);
-#ifdef O_CLOEXEC
-    flags |= O_CLOEXEC;
-#endif
-#ifdef O_NOFOLLOW
-    flags |= O_NOFOLLOW;
-#endif
-    fd = read_only ? open(data_path.c_str(), flags) : open(data_path.c_str(), flags, 0600);
-    if (fd == -1) {
-      fail_check("Cannot open external data for tensor ", tensor_name);
-    }
-  }
-  ScopedFd guard(fd);
-
-  // Post-open checks (fail closed).
-  struct stat fd_stat{};
-  if (fstat(fd, &fd_stat) != 0) {
-    fail_check("Tensor ", tensor_name, " external data: fstat failed.");
-  }
-  if (!kernel_verified) {
-    // Verify containment via canonical path + inode comparison.
-    auto canonical_data = verify_path_containment(data_path, base_dir, tensor_name);
-    struct stat path_stat{};
-    if (stat(canonical_data.c_str(), &path_stat) != 0) {
-      fail_check("Tensor ", tensor_name, " external data: cannot stat canonical path.");
-    }
-    if (path_stat.st_dev != fd_stat.st_dev || path_stat.st_ino != fd_stat.st_ino) {
-      fail_check("Tensor ", tensor_name,
-                 " external data: fd/path mismatch (possible TOCTOU attack).");
-    }
-  }
-  if (fd_stat.st_nlink > 1) {
-    fail_check("Tensor ", tensor_name,
-               " external data has multiple hard links (possible hardlink attack).");
-  }
-
-  return guard.release();
-}
-
-#endif
 
 static const std::unordered_set<std::string> experimental_ops = {"ATen",
                                                                  "Affine",

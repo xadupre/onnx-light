@@ -126,7 +126,7 @@ TEST_F(MappedPayloadTest, BorrowReturnsExpectedBytesAndAlignment) {
 }
 
 TEST_F(MappedPayloadTest, NonAsciiNativePathsOpenMappedAndDirectReads) {
-  const auto path = base_dir_ / std::filesystem::path(u8"caf\u00e9.bin");
+  const auto path = base_dir_ / std::filesystem::path(u8"weights-\u00e9.bin");
   const std::string content = "mapped payload";
   std::ofstream out(path, std::ios::binary | std::ios::trunc);
   out.write(content.data(), static_cast<std::streamsize>(content.size()));

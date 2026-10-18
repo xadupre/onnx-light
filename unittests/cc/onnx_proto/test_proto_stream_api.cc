@@ -171,8 +171,8 @@ TEST_F(ExternalDataDescriptorTest, ReaderPreservesSupportForConfinedNestedPaths)
 
 TEST_F(ExternalDataDescriptorTest, NonAsciiNativePathsWorkForExternalReadsAndWrites) {
   const auto base = root / "model";
-  const auto filename = std::filesystem::path(u8"caf\u00e9.bin");
-  WriteWholeFile(base / filename, "payload");
+  const auto filename = std::filesystem::path(u8"weights-\u00e9.bin");
+  WriteWholeFile((base / filename).string(), "payload");
 
   TensorProto tensor;
   tensor.set_name("unicode");
@@ -185,7 +185,7 @@ TEST_F(ExternalDataDescriptorTest, NonAsciiNativePathsWorkForExternalReadsAndWri
                         tensor.ref_raw_data().size()),
             "payload");
 
-  const auto extra_filename = std::filesystem::path(u8"caf\u00e9-extra.bin");
+  const auto extra_filename = std::filesystem::path(u8"weights-\u00e9-extra.bin");
   utils::TwoFilesWriteStream stream((base / "model.onnx").string(),
                                     (base / "sub" / "weights.bin").string());
   stream.set_active_weights_location(extra_filename.string());

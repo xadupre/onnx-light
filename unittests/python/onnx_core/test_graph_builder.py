@@ -29,6 +29,41 @@ FLOAT = onnxl.TensorProto.FLOAT
 
 
 class TestGraphBuilder(ExtTestCase):
+    def test_constructor_opsets(self):
+        for opsets in (10, {"": 10, "com.example": 7}, {"ai.onnx": 10}):
+            with self.subTest(opsets=opsets):
+                builder = GraphBuilder("g", opsets=opsets)
+                self.assertEqual(builder.opset_version(""), 10)
+                self.assertEqual(builder.opset_version("ai.onnx"), 10)
+                self.assertEqual(builder.shapes.opset_version(""), 10)
+                x = builder.inp("x", FLOAT, [2])
+                y = builder.op.Clip(x, outputs="y", min=0.0, max=1.0)
+                builder.out(y)
+                model = builder.to_onnx("model")
+                checker.check_model(model)
+                imports = {
+                    opset.domain or "ai.onnx": opset.version for opset in model.opset_import
+                }
+                self.assertEqual(imports["ai.onnx"], 10)
+                if isinstance(opsets, dict) and "com.example" in opsets:
+                    self.assertEqual(imports["com.example"], 7)
+                builder.set_opset_version("", 11)
+                self.assertEqual(builder.opset_version(""), 11)
+                self.assertRaise(lambda: builder.op.Clip(x, min=0.0), ValueError)
+
+    def test_constructor_opsets_without_schema(self):
+        builder = GraphBuilder("g", None, opsets={"": 18, "com.example": 7})
+        x = builder.inp("x", FLOAT, [2])
+        y = builder.op.CustomOp(x, domain="com.example")
+        builder.out(y)
+        self.assertEqual(builder.opset_version("com.example"), 7)
+        self.assertEqual(builder.to_onnx("model").graph.node[0].domain, "com.example")
+
+    def test_constructor_rejects_invalid_opsets(self):
+        for opsets in ("18", {"": "18"}, {"": 1 << 64}):
+            with self.subTest(opsets=opsets):
+                self.assertRaise(lambda: GraphBuilder(opsets=opsets), TypeError)
+
     def test_compact_standard_roundtrip(self):
         builder = GraphBuilder("g")
         self.assertIs(builder.op, builder.op)

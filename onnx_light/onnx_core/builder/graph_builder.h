@@ -177,7 +177,12 @@ public:
   /// @param name          Name given to the produced graph / function.
   /// @param schema_lookup Optional schema provider used to validate nodes and
   ///                      to resolve the "latest opset" of a domain.
-  explicit GraphBuilder(std::string name = "graph", SchemaLookupFn schema_lookup = {});
+  /// @param opsets        Explicit domain-to-version imports, applied before adding nodes.
+  explicit GraphBuilder(std::string name = "graph", SchemaLookupFn schema_lookup = {},
+                        const std::unordered_map<std::string, int> &opsets = {});
+
+  /// Constructs an empty builder with an explicit default ONNX opset.
+  GraphBuilder(std::string name, SchemaLookupFn schema_lookup, int opset);
 
   /// Constructs a builder from an existing model by replaying every graph and
   /// function node through :cpp:func:`MakeNode`.

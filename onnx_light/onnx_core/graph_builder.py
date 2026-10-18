@@ -158,18 +158,27 @@ class GraphBuilder(_C.GraphBuilder):
     builder validates nodes and resolves opsets using the built-in ONNX
     operator schemas; pass ``schema_lookup=None`` to disable this, or a custom
     ``op_type -> list[LightOpSchema]`` callable to use different schemas.
+    For an empty builder, ``opsets`` selects the default ONNX version (an integer)
+    or explicit domain-to-version imports (a dictionary).
     """
 
     def __init__(
-        self, name: str = "graph", schema_lookup: SchemaLookup | None = _default_schema_lookup
+        self,
+        name: str = "graph",
+        schema_lookup: SchemaLookup | None = _default_schema_lookup,
+        *,
+        opsets: int | dict[str, int] | None = None,
     ) -> None:
-        super().__init__(name, schema_lookup)
+        if opsets is None:
+            super().__init__(name, schema_lookup)
+        else:
+            super().__init__(
+                name, schema_lookup, {"": opsets} if isinstance(opsets, int) else opsets
+            )
         self._registered_patterns: dict[str, PatternOptimization] = {}
         self._op = _OperatorProxy(self)
         self._initializer_counter = 0
-        self._explicit_opsets: set[str] = (
-            set(self.opset_versions()) if not isinstance(name, str) else set()
-        )
+        self._explicit_opsets: set[str] = set(self.opset_versions())
 
     def set_opset_version(self, domain: str, version: int) -> None:
         """Records an explicit opset version."""

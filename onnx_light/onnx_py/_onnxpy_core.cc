@@ -2033,18 +2033,21 @@ void AddOnnxPyBuilder(nb::module_ &m) {
           "builders, and are materialized back on export.")
       .def(
           "__init__",
-          [](GraphBuilder *self, const std::string &name, nb::object schema_lookup) {
+          [](GraphBuilder *self, const std::string &name, nb::object schema_lookup,
+             const std::unordered_map<std::string, int> &opsets) {
             if (schema_lookup.is_none()) {
-              new (self) GraphBuilder(name, GraphBuilder::SchemaLookupFn{});
+              new (self) GraphBuilder(name, GraphBuilder::SchemaLookupFn{}, opsets);
               return;
             }
             auto fn = nb::cast<GraphBuilder::SchemaLookupFn>(schema_lookup);
-            new (self) GraphBuilder(name, std::move(fn));
+            new (self) GraphBuilder(name, std::move(fn), opsets);
           },
           nb::arg("name") = "graph", nb::arg("schema_lookup") = nb::none(),
+          nb::arg("opsets") = std::unordered_map<std::string, int>{},
           "Constructs an empty builder. ``schema_lookup`` is an optional callable "
           "``op_type -> list[LightOpSchema]`` used to resolve opsets and validate nodes; "
-          "when omitted no schema-based validation is performed.")
+          "when omitted no schema-based validation is performed. ``opsets`` maps domains "
+          "to explicit versions.")
       .def("set_opset_version", &GraphBuilder::SetOpsetVersion, nb::arg("domain"),
            nb::arg("version"),
            "Records the opset version to use for ``domain`` (empty string for the default "

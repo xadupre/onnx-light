@@ -403,8 +403,16 @@ TensorProto ProtoFromRuntimeTensor(const core::runtime::Tensor &tensor, const st
 
 } // namespace
 
-GraphBuilder::GraphBuilder(std::string name, SchemaLookupFn schema_lookup)
-    : name_(std::move(name)), schema_lookup_(std::move(schema_lookup)) {}
+GraphBuilder::GraphBuilder(std::string name, SchemaLookupFn schema_lookup,
+                           const std::unordered_map<std::string, int> &opsets)
+    : name_(std::move(name)), schema_lookup_(std::move(schema_lookup)) {
+  for (const auto &[domain, version] : opsets) {
+    SetOpsetVersion(domain, version);
+  }
+}
+
+GraphBuilder::GraphBuilder(std::string name, SchemaLookupFn schema_lookup, int opset)
+    : GraphBuilder(std::move(name), std::move(schema_lookup), {{"", opset}}) {}
 
 GraphBuilder::GraphBuilder(const ModelProto &model, SchemaLookupFn schema_lookup)
     : name_(model.graph().name().empty() ? std::string("graph") : model.graph().name().value()),

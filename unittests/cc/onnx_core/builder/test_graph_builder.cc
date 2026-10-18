@@ -45,6 +45,50 @@ TEST(GraphBuilder, StartsEmpty) {
   EXPECT_FALSE(builder.HasName("x"));
 }
 
+TEST(GraphBuilder, ConstructorOpsets) {
+  for (const std::string domain : {"", "ai.onnx"}) {
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{domain, 10}, {"com.example", 7}});
+    EXPECT_EQ(builder.OpsetVersion(""), 10);
+    EXPECT_EQ(builder.OpsetVersion("ai.onnx"), 10);
+    EXPECT_EQ(builder.OpsetVersion("com.example"), 7);
+    EXPECT_EQ(builder.Shapes().OpsetVersion(""), 10);
+    EXPECT_EQ(builder.Shapes().OpsetVersion("com.example"), 7);
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+    AttributeProto min;
+    min.set_name("min");
+    min.set_type(AttributeProto_AttributeType_FLOAT);
+    min.set_f(0.0f);
+    builder.MakeNode("Clip", {"x"}, {"y"}, "", "", std::vector<AttributeProto>{min});
+    builder.MakeOutput("y");
+    const ModelProto model = builder.ToModel();
+    bool found_default = false;
+    bool found_custom = false;
+    for (const auto &opset : model.opset_import()) {
+      if (opset.domain().empty() || opset.domain() == "ai.onnx") {
+        EXPECT_EQ(opset.version(), 10);
+        found_default = true;
+      } else if (opset.domain() == "com.example") {
+        EXPECT_EQ(opset.version(), 7);
+        found_custom = true;
+      }
+    }
+    EXPECT_TRUE(found_default);
+    EXPECT_TRUE(found_custom);
+  }
+}
+
+TEST(GraphBuilder, ConstructorDefaultOpset) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), 17);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2}));
+  builder.MakeNode("Relu", {"x"}, {"y"});
+  EXPECT_EQ(builder.OpsetVersion(""), 17);
+  builder.SetOpsetVersion("", 18);
+  EXPECT_EQ(builder.OpsetVersion(""), 18);
+
+  core::builder::GraphBuilder without_schema("g", {}, 18);
+  EXPECT_EQ(without_schema.OpsetVersion(""), 18);
+}
+
 TEST(GraphBuilder, NamesAreNeverReused) {
   core::builder::GraphBuilder builder("g", SchemaLookup());
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));

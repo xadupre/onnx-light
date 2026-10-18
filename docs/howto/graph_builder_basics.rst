@@ -16,6 +16,10 @@ Create and export a model
 Select every opset before adding its nodes. The empty domain is the standard
 ONNX domain; a custom operator requires an explicit non-empty domain and an
 imported version. It does not require a schema registered on the local machine.
+Pass ``opsets=18`` for just the standard ONNX domain, or a domain-to-version
+dictionary for multiple imports. ``set_opset_version`` remains available.
+In C++, use ``GraphBuilder("authoring", schema_lookup, 18)`` or
+``GraphBuilder("authoring", schema_lookup, {{"", 18}, {"com.example", 7}})``.
 
 The example includes:
 
@@ -37,9 +41,7 @@ The example includes:
     from onnx_light.onnx import TensorProto
     from onnx_light.onnx_core.graph_builder import GraphBuilder
 
-    g = GraphBuilder("authoring")
-    g.set_opset_version("", 18)
-    g.set_opset_version("com.example", 7)
+    g = GraphBuilder("authoring", opsets={"": 18, "com.example": 7})
 
     x = g.inp("X", TensorProto.FLOAT, [4])
     bias = g.init(np.array([1, 2, 3, 4], dtype=np.float32), name="bias")

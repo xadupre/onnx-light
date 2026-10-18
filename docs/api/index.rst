@@ -6,6 +6,7 @@ API
 
     protos/index
     python/index
+    command_lines/index
     cpp/index
 
 

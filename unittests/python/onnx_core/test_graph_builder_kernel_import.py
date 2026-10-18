@@ -35,7 +35,7 @@ class TestGraphBuilderKernelImport(unittest.TestCase):
             import onnx_light.onnx.numpy_helper as onh
             from onnx_light.onnx import TensorProto
 
-            builder = GraphBuilder("fresh_process")
+            builder = GraphBuilder("fresh_process", opsets=18)
             builder.make_input("x", TensorProto.FLOAT, [6])
             builder.make_initializer(onh.from_array(numpy.array([2]), "a"))
             builder.make_initializer(onh.from_array(numpy.array([3]), "b"))
@@ -68,7 +68,7 @@ class TestGraphBuilderKernelImport(unittest.TestCase):
             import onnx_light.onnx.numpy_helper as onh
             from onnx_light.onnx import TensorProto
 
-            builder = GraphBuilder("reduced")
+            builder = GraphBuilder("reduced", opsets=18)
             builder.make_input("x", TensorProto.FLOAT, [6])
             builder.make_initializer(onh.from_array(numpy.array([2]), "a"))
             builder.make_initializer(onh.from_array(numpy.array([3]), "b"))

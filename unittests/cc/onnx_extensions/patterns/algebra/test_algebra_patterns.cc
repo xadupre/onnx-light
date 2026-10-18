@@ -312,7 +312,7 @@ TEST(Sub1MulPattern, RejectsAConstantOtherThanOne) {
 
 TEST(Sub1MulPattern, ReassociatesConstantOfShapeOnBothSides) {
   for (bool sub_on_left : {true, false}) {
-    core::builder::GraphBuilder builder(sub_on_left ? "left" : "right", SchemaLookup());
+    core::builder::GraphBuilder builder(sub_on_left ? "left" : "right", SchemaLookup(), {{"", 28}});
     builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape({2, 3}));
     builder.MakeInput("y", core::symbolic::TensorType::kFloat, Shape({2, 3}));
     AddIntInitializer(builder, "shape", {2}, {1, 3});

@@ -471,6 +471,7 @@ void MakeLocalInput(core::builder::GraphBuilder &local, const std::string &funct
 
 void EnsureFunction(core::builder::GraphBuilder &builder, const FunctionProto &function) {
   const std::string name = function.name().value();
+  builder.SetOpsetVersion(function.domain().value(), 1);
   if (builder.HasLocalFunction(name)) {
     return;
   }

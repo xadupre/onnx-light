@@ -248,7 +248,7 @@ TEST(UnsqueezeEqualPattern, RejectsDifferentUpstreamAxes) {
 
 TEST(WhereAddPattern, ReplacesUpstreamAdditiveMaskInBothAddOrders) {
   for (bool where_first : {true, false}) {
-    core::builder::GraphBuilder builder(where_first ? "left" : "right", SchemaLookup());
+    core::builder::GraphBuilder builder(where_first ? "left" : "right", SchemaLookup(), {{"", 28}});
     builder.MakeInput("mask", core::symbolic::TensorType::kBool, Shape2());
     AddFloatInitializer(builder, "x", 0.25F);
     AddFloatInitializer(builder, "zero", 0.0F);

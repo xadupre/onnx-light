@@ -106,7 +106,8 @@ TEST(ReshapePattern, ReplacesIdentityReshapeAndRejectsDifferentTarget) {
 }
 
 TEST(ReshapePattern, PreservesFlattenAfterArrayFeatureExtractor) {
-  core::builder::GraphBuilder builder("extract_labels", SchemaLookup(), {{"", 28}});
+  core::builder::GraphBuilder builder("extract_labels", SchemaLookup(),
+                                      {{"", 28}, {"ai.onnx.ml", 1}});
   builder.MakeInput("labels", core::symbolic::TensorType::kInt64, Shape({4}));
   AddShape(builder, "indices", {3, 1});
   AddShape(builder, "flat", {-1});

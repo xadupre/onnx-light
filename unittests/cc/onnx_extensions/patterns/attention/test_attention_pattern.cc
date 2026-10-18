@@ -452,6 +452,18 @@ TEST(FunctionHalfRotaryEmbeddingPattern, CreatesFunctionAndRejectsWrongAxis) {
   OptimizeAndVerify<onnx_patterns::FunctionHalfRotaryEmbeddingPattern>(builder);
   EXPECT_NE(FindNode(builder, "HalfRotaryEmbedding"), builder.Nodes().size());
 
+  const ModelProto model = builder.ToModel();
+  bool has_intermediate_import = false;
+  for (const OperatorSetIdProto &opset : model.opset_import()) {
+    if (opset.domain().value() == "intermediate" && opset.version() == 1) {
+      has_intermediate_import = true;
+    }
+  }
+  EXPECT_TRUE(has_intermediate_import);
+  EXPECT_NO_THROW(VerifyModel(model));
+  core::builder::GraphBuilder reimported(model, SchemaLookup());
+  EXPECT_EQ(reimported.OpsetVersion("intermediate"), 1);
+
   core::builder::GraphBuilder rejected("rejected", SchemaLookup());
   rejected.SetOpsetVersion("", 18);
   rejected.MakeInput("X", core::symbolic::TensorType::kFloat, Shape({2, 4, 6, 8}));

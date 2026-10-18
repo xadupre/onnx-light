@@ -8,8 +8,8 @@ Next Steps
 
 .. toctree::
     :maxdepth: 1
-    :hidden:
 
+<<<<<<< HEAD
     2026/2026-08_kernel_parallelization
     2026/2026-10_kernel_parallelization_completion
     2026/2026-10_guarded_kernel_replay
@@ -167,3 +167,7 @@ Their implementation sequences are superseded by
 
 * :ref:`l-next-steps-quantization`
 * :ref:`l-next-steps-graph-builder-quantized-tensor`
+=======
+    2026/index
+    2025/index
+>>>>>>> origin/main

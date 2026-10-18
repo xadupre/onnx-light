@@ -10,10 +10,10 @@ namespace onnx_light {
 /**
  * Returns the package version string.
  *
- * @return Version string "0.1.33".
+ * @return Version string "0.1.34".
  */
 const std::string &version() {
-  static const std::string kVersion = "0.1.33";
+  static const std::string kVersion = "0.1.34";
   return kVersion;
 }
 

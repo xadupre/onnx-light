@@ -4,6 +4,6 @@ Miscellaneous
 .. toctree::
     :maxdepth: 1
 
-    ../design/technical/index
+    technical/index
     changelogs
     references

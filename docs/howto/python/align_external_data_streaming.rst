@@ -1,7 +1,11 @@
 .. _l-howto-align-external-data-streaming:
+.. _l-howto-align-external-data-streaming-python:
 
 How to re-align external weights without loading them in memory
 ===============================================================
+
+This guide covers the Python interface. For the other language, see
+:doc:`../cpp/align_external_data_streaming`.
 
 This page documents the recommended recipe for re-aligning the tensor
 offsets of an existing two-file (or multi-file) ONNX model **without ever
@@ -32,42 +36,19 @@ from the source weights file to the destination weights file in chunks of
 tensors.  Peak heap usage is therefore bounded by *(metadata size +
 chunk_size)*, independent of the total weights size.
 
-.. tab-set::
 
-   .. tab-item:: Python
-      :sync: python
+.. code-block:: python
 
-      .. code-block:: python
+    import onnx_light.onnx as onnxl
 
-          import onnx_light.onnx as onnxl
-
-          total_bytes = onnxl.align_external_data_streaming(
-              src_onnx_path="src.onnx",
-              dst_onnx_path="dst.onnx",
-              dst_weights_path="dst.data",
-              alignment=4096,
-              chunk_size=4 * 1024 * 1024,
-          )
-          print(f"Wrote {total_bytes} bytes (including alignment padding) to dst.data")
-
-   .. tab-item:: C++
-      :sync: cpp
-
-      .. code-block:: cpp
-
-          #include "onnx_helper.h"
-          #include "stream.h"
-
-          #include <iostream>
-
-          onnx::offset_t total_bytes = onnx::AlignExternalDataStreaming(
-              /*src_onnx_path=*/"src.onnx",
-              /*dst_onnx_path=*/"dst.onnx",
-              /*dst_weights_path=*/"dst.data",
-              /*alignment=*/4096,
-              /*chunk_size=*/4 * 1024 * 1024);
-          std::cout << "Wrote " << total_bytes
-                    << " bytes (including alignment padding) to dst.data\n";
+    total_bytes = onnxl.align_external_data_streaming(
+        src_onnx_path="src.onnx",
+        dst_onnx_path="dst.onnx",
+        dst_weights_path="dst.data",
+        alignment=4096,
+        chunk_size=4 * 1024 * 1024,
+    )
+    print(f"Wrote {total_bytes} bytes (including alignment padding) to dst.data")
 
 After the call:
 
@@ -117,6 +98,6 @@ See also
   :cpp:func:`onnx_light::AlignExternalDataStreaming` – API reference.
 * :ref:`l-design-loading-saving-scenarios` – design notes on complex
   load/save scenarios this function was designed for.
-* :ref:`l-howto-save-model-with-shared-external-data` – companion how-to
+* :ref:`l-howto-save-model-with-shared-external-data-python` – companion how-to
   for sharing weights across multiple models.
-* :ref:`l-howto-load-save-onnx-files` – common load/save patterns.
+* :ref:`l-howto-load-save-onnx-files-python` – common load/save patterns.

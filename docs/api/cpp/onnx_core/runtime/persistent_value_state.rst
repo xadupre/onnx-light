@@ -62,7 +62,7 @@ Execution and lifecycle
 * Events use ``context.events()`` when ``events_enabled`` is true, including
   work before failure. ``ClearEvents()`` clears this log, not the persistent values.
 
-See :doc:`../../../../howto/persistent_feedback` for usage and storage details,
+See :doc:`../../../../howto/cpp/persistent_feedback` for usage and storage details,
 and :doc:`runtime_context` for event fields.
 
 .. doxygenfile:: onnx_core/runtime/persistent_value_state.h

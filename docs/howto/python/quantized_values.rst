@@ -1,11 +1,15 @@
 .. _l-quantized-values:
+.. _l-quantized-values-python:
 
 Quantizes tensors into encoded values
-====================================
+=====================================
+
+This guide covers the Python interface. For the other language, see
+:doc:`../cpp/quantized_values`.
 
 The converters implement **portable onnx-light representations** of the
 :ref:`quantization catalogue <l-next-steps-quantization>`, plus three explicit
-:ref:`ORT MatMulNBits input layouts <l-ort-matmulnbits-inputs>`.
+:ref:`ORT MatMulNBits input layouts <l-ort-matmulnbits-inputs-python>`.
 The portable profiles do not emit GGUF, Marlin or bitsandbytes buffers. Their profile
 names identify numerical families, not those libraries' packing ABIs, published
 bits-per-weight figures, training algorithms or accuracy guarantees.
@@ -115,6 +119,7 @@ The model checker validates encoded initializer names, layouts and model-scoped
 type references, including inside nested graphs.
 
 .. _l-shared-quantization-parameters:
+.. _l-shared-quantization-parameters-python:
 
 Model-level shared parameters
 -----------------------------
@@ -133,7 +138,7 @@ nearest-code rules. The actual codes and any saved outlier **values** remain
 local to each encoded value.
 
 Declaring and selecting a set
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ``add_quantization_parameters(model, name, storage_type, logical_type, *,
 scales, ...)`` declares one named set. The optional numerical arguments have
@@ -233,7 +238,7 @@ The second input saturates at the range selected by the shared scale. It is
 not independently recalibrated to accommodate its larger values.
 
 Representation, scope and lifetime
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Declarations reuse the root graph's ``quantization_annotation`` catalogue.
 An annotation named ``onnx_light.quantization.parameters:<name>`` maps roles
@@ -466,7 +471,7 @@ Do not write ``plan.runs[0].blocks[0].scale = 0.25`` and expect the plan to chan
 the assignment only modifies a temporary copy.
 
 Output, serialization and errors
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ``quantize_tensor_proto(source, plan)`` returns an owned ``EncodedValueProto``.
 ``dequantize_tensor_proto(encoded, model=None)`` returns a ``TensorProto``
@@ -501,64 +506,11 @@ An encoded message is not a drop-in tensor initializer for an ordinary
 ``MatMul`` or ``Attention``. Dequantize it first or supply an operator whose
 schema and kernel explicitly support that representation.
 
-C++
----
-
-.. code-block:: cpp
-
-    #include "onnx_core/runtime/quantization.h"
-
-    using namespace onnx_light::core::runtime;
-    Tensor input = Tensor::FromFloat("weight", {3}, {-4, 0, 3.5f});
-    auto plan = MakeQuantizationPlan(QuantizationFormat::kInt4, 3);
-    plan.runs[0].blocks[0].scale = 0.5;
-    RuntimeValue encoded = QuantizeTensor(input, plan);
-    Tensor restored = DequantizeTensor(encoded);
-
-``MakeQuantizationType(plan)`` extracts the storage descriptor.
-``QuantizeTensor(input, type, parameters, catalogue)`` applies the same
-calibration as the graph operator; the overload taking a plan uses its
-parameters unchanged.
-
-``QuantizeTensorProto`` and ``DequantizeTensorProto`` provide the corresponding
-message conversions. C++ dequantizers accept a ``StructTypeCatalogue`` for
-model-scoped references; Python dequantizers accept an optional ``model``.
-The C++ tensor dequantizer also accepts an allocator.
-Its ``EncodedValueProto`` overload reads the message by const reference, without
-first copying it into a ``RuntimeValue``. The Python tensor dequantizer uses
-this overload too.
-
-For shared encoding, build an owned ``QuantizationParameterCatalogue`` from the
-model and pass it to ``QuantizeTensorShared``. The returned ``RuntimeValue``
-retains that catalogue. ``DequantizeTensor(value)`` resolves it automatically;
-``MaterializeQuantizedValue(value)`` exports an independent message. A bare
-compact ``EncodedValueProto`` instead needs the catalogue supplied to
-``MaterializeQuantizedValue`` before calling the ordinary C++ proto decoder.
-
-The self-contained converters allocate the final ``raw_data`` buffer at its
-exact size and write into it directly. Proto encoding does not copy a completed
-encoded message out of a runtime wrapper; proto decoding does not materialize an
-intermediate output ``Tensor``. Numerical workspace (decoded values, transforms
-and codebook search) is still allocated: these are reference codecs, not
-zero-allocation conversions. Outputs own their storage independently of inputs.
-
-``QuantizationFormats()`` is defined in the header as a ``constexpr`` function
-returning ``std::array<QuantizationFormat, 43>`` without dynamic allocation:
-
-.. code-block:: cpp
-
-    constexpr auto formats = QuantizationFormats();
-    static_assert(formats.front() == QuantizationFormat::kInt8);
-
-The Python ``quantization_formats()`` function returns a list of
-``QuantizationFormat`` values. C++ provides ``QuantizationFormatName`` and
-``ParseQuantizationFormat`` for explicit conversions to and from stable wire names.
-
 Numerical contract
 ------------------
 
 This section describes the portable profiles. The ORT profiles have the
-:ref:`matrix-specific contract below <l-ort-matmulnbits-inputs>`.
+:ref:`matrix-specific contract below <l-ort-matmulnbits-inputs-python>`.
 
 Inputs and logical outputs support FLOAT, DOUBLE, FLOAT16 and BFLOAT16.
 Input shapes are concrete, including scalars and empty tensors. Inputs must
@@ -992,7 +944,7 @@ Wire layout and validation
 
 This section describes the self-contained portable wire layout. The ORT profiles
 use the B/scales/zero_points layout described below instead. Shared values use
-the compact layout described in :ref:`l-shared-quantization-parameters`.
+the compact layout described in :ref:`l-shared-quantization-parameters-python`.
 
 The structured root name is ``onnx_light.quantization.v1/<profile>``. Its fields
 are, in order: one zero reserved byte, an INT64 permutation, DOUBLE forward and
@@ -1027,6 +979,7 @@ executable ONNX ``FunctionProto`` decoder, and tensor-only operators cannot cons
 it without explicit dequantization or a matching custom kernel.
 
 .. _l-ort-matmulnbits-inputs:
+.. _l-ort-matmulnbits-inputs-python:
 
 ONNX Runtime MatMulNBits inputs
 -------------------------------

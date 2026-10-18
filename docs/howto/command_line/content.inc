@@ -2,8 +2,8 @@
 
 :html_theme.sidebar_secondary.remove:
 
-Command lines
-=============
+How-tos Command Line
+====================
 
 Installing the Python package exposes the ``onnx-light`` executable::
 

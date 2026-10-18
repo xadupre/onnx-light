@@ -1,0 +1,956 @@
+.. _l-howto-persistent-feedback-cpp:
+
+Persistent input/output feedback
+================================
+
+This guide covers the C++ interface. For the other language, see
+:doc:`../python/persistent_feedback`.
+
+Feedback state retains selected model outputs as inputs for the next call.
+The graph declares the relationship in ``GraphProto.persistent_bindings``;
+types come from its final input/output declarations. The caller supplies
+initial values, not a separate feedback mapping. Execution uses the existing
+session and allocator infrastructure, not a separate executor.
+
+Each bound input must have **at least one value-use** in the graph and may be
+consumed by multiple nodes. After each run, the configured persistent output
+replaces its bound input for the next run. Both ONNX validation and runtime
+graph-plan construction reject unused bound inputs.
+
+The native :cpp:class:`onnx_light::core::runtime::PersistentValueState` uses the
+existing runtime execution and value ownership contracts. Create one state
+per independent request. Python initialization/reset, C++ ownership transfer,
+state forwarding and state-value access retain buffer owners without copying payloads.
+Shapes, metadata and owner handles may be copied. Kernels can allocate new
+computed results; the state layer does not duplicate those results merely
+to retain or return them. The CPU Attention append optimization described
+below reduces kernel allocations and prefix copies independently of this
+zero-copy state forwarding.
+
+To reproduce a tensor-cache decode comparison, refresh the target revision
+and run the native benchmark from the repository root:
+
+.. code-block:: console
+
+    git fetch origin main
+    PYTHONPATH=. python benchmarks/bench_persistent_feedback.py --tokens 16
+
+The JSON records both source revisions, model identity, execution policy,
+separate setup times and raw per-token latency for a persistent state and an
+explicit stateless session. The latter feeds selected outputs back using
+``model.graph.persistent_bindings``, without guessing names or providing a
+second mapping. Numerical output and retained pointer identity are checked
+at each step. ``retained_logical_bytes`` measures visible tensor lengths,
+not reserved cache capacity; ``event_workspace_peak_bytes`` is the peak
+reported by runtime events, not whole-process RSS. The storage allocation,
+prefix-copy and append-copy counters describe the **Attention kernel**,
+not state forwarding. The zero-copy state layer has no payload-copy counter:
+its forwarding is checked by pointer identity, while wall times include
+kernel work, Python conversion and state management. The stateless session
+does not use contiguous persistent capacity, so this is not a matched-kernel
+isolation of state-management time. Results vary by CPU and build flags.
+This small synthetic fixture avoids external model assets; it does not measure
+Qwen weights, multi-layer decode or whole-process peak memory. Use a
+materialized Qwen model with its required operators and assets for those
+workloads rather than extrapolating these timings.
+
+One raw four-token run on an AMD EPYC 9V74 (Linux, Python 3.13.15,
+Release build), with source revision
+``f6efe8829202eb654024d9809f62143cd4110bf1`` and freshly fetched target
+``72c65c505fcd6f08c84a1b8a05295733bb0bec9b``, produced stateful setup
+145690 ns and stateless session setup 10245 ns. Times are single observations,
+not comparative performance claims:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Token
+     - Stateful ns
+     - Stateless ns
+     - Retained logical bytes
+     - Event workspace peak bytes
+     - Kernel allocations / allocated bytes
+     - Kernel prefix / append copied bytes
+     - Kernel reuse count
+   * - 1
+     - 236216
+     - 358640
+     - 16
+     - 0
+     - 2 / 64
+     - 0 / 16
+     - 0
+   * - 2
+     - 34542
+     - 18268
+     - 32
+     - 0
+     - 0 / 0
+     - 0 / 16
+     - 2
+   * - 3
+     - 22253
+     - 6079
+     - 48
+     - 0
+     - 0 / 0
+     - 0 / 16
+     - 2
+   * - 4
+     - 20891
+     - 5308
+     - 64
+     - 0
+     - 0 / 0
+     - 0 / 16
+     - 2
+
+.. warning::
+
+   Inputs, retained state and returned views can share the same payload.
+   Callers and kernels must not modify that payload while shared or retained.
+   ``state.values`` is a shared view, not an independently mutable snapshot.
+   Metadata such as a returned tensor's name and shape is independent.
+
+The model is immutable for the entire bound session lifetime. State creation
+and execution do not serialize, clone or hash the model to check for changes.
+To rewrite the graph, create a new state/session after rewriting instead.
+
+Autoregressive generation
+-------------------------
+
+``ReferenceEvaluator.generate`` runs the token loop in the native runtime:
+
+See the :doc:`Python recipe </howto/python/persistent_feedback>`
+for this example.
+
+The result is an INT64 ``[batch, prompt_length + generated_length]`` array,
+including the prompt. ``temperature=0`` (the default) uses greedy decoding;
+positive temperatures sample ``softmax(logits / temperature)``. A seed makes
+sampling repeatable within the same runtime implementation. Generation stops
+at the token limit or when every row emits EOS; finished rows are padded with
+``pad_token_id`` (EOS by default).
+
+Models without ``persistent_bindings`` use an ordinary ``RuntimeSession`` and
+evaluate the full growing prefix. No persistent state is created, and no cache
+bindings are guessed from operator or tensor names. Models with bindings use
+``PersistentValueState``: supply initial empty caches in the feeds, or declare
+paged-cache initializers. The prompt is evaluated once; each subsequent decoding
+iteration within the same generation call consumes one new token. Eligible kernels
+reuse persistent buffers; other kernels retain their ordinary allocation behavior.
+Each generation call owns fresh state and leaves the model and caller feeds unchanged.
+
+.. warning::
+
+    A ``RuntimeContext`` is **not thread-safe for concurrent execution**.
+    Calls to ``Generate``, ``RuntimeSession::Run`` or ``RunNode`` using the same
+    context must be serialized by the caller, even with different models or
+    sessions. A ``ReferenceEvaluator`` instance likewise requires serialized
+    ``run`` and ``generate`` calls, including overlapping calls to different
+    methods. Use independent evaluators, sessions and contexts for concurrent
+    requests. Fresh generation state, a shared CPU executor, parallel kernels
+    and release of the Python GIL do not make a context safe to share between
+    concurrent invocations. There is no context-level check for overlapping use.
+
+The model accepts INT64 ``input_ids`` and returns floating-point ``logits``
+of shape ``[batch, sequence, vocabulary]`` or ``[batch, vocabulary]``.
+FLOAT, DOUBLE, FLOAT16 and BFLOAT16 logits are supported. Declared INT64
+``attention_mask`` and ``position_ids`` inputs are created if absent and updated
+at each step. Prompts must be unpadded or left-padded; the final logit position
+predicts the next token. Other supplied inputs remain fixed across iterations.
+Initial caches must represent an empty prefix.
+
+The lower-level ``runtime.generate(model, context, feeds, options,
+session_options)`` returns a runtime tensor. ``runtime.GenerationOptions``
+also allows configuring the token, logits, mask and position input/output names.
+C++ callers use :cpp:func:`onnx_light::core::runtime::Generate` with the same
+options and an existing ``RuntimeContext``.
+
+For split models, ``language_model.generate(feeds, embedding=embedding)``
+runs the embedding model before the language model for both the prompt and
+subsequent tokens. Prefill names the prompt-processing phase; it is not a separate
+graph used only once.
+Graphs connect through their declared input and output names: for example,
+the embedding graph consumes ``input_ids`` and produces the language model's
+``inputs_embeds`` input. No additional name mappings are supplied.
+Top-level inputs and outputs may share names across stages, including these
+declared embedding-to-language-model connections and embedding outputs backed
+directly by initializers. Private initializer and intermediate names must be
+unique across the models; generation rejects a collision before either stage
+executes. This rule also covers encoded and paged-cache initializers and values
+defined in nested subgraphs, including reachable model-local function bodies.
+All graphs execute in one call-local ``RuntimeContext`` configured from the
+language-model evaluator, using its custom kernels and sharing its CPU executor
+and event log. Pipeline stages share call-local allocators, not the evaluator's
+allocators.
+The embedding evaluator supplies its model only; its local registrations and
+CPU execution policy are not used. Register pipeline-wide custom kernels on
+the language-model evaluator. Image/audio encoders can run before generation;
+their features are supplied as ordinary feeds.
+Each feed is supplied once and routed to every pipeline model that declares its
+name. Encoded values, including values nested in structures, sequences and
+paged-cache pages, resolve ``parameter_ref`` independently against each receiving
+model's catalogue.
+An embedding-only feed never consults the language model. A shared input name
+may resolve to distinct compatible catalogue entries in both models; an entry
+that is missing or incompatible in either scope is rejected before execution.
+Each stage resolves its own model-local functions; definitions from another stage
+cannot override its custom operators. Model-local definitions take precedence
+over functions registered on the shared context. Reachable context functions
+follow the same private-name collision checks, and the caller's function
+registry is unchanged when generation returns or fails. Embedding inputs backed
+by tensor, encoded or paged-cache initializers may be omitted from feeds.
+Structured sequence inputs retain their runtime representation rather than
+being converted to dense tensor sequences.
+
+C++ callers pass a ``PipelineProto`` containing the prefill model and optional
+embedding model to ``Generate``. Generation settings may be stored directly in
+the pipeline or supplied explicitly with ``GenerationOptions``. The single feed
+map and ``RuntimeContext`` are passed as separate arguments; callers never need
+to duplicate or manually separate feeds by model.
+
+A basic feedback loop
+---------------------
+
+The Python binding is available from the native runtime module:
+
+See the :doc:`Python recipe </howto/python/persistent_feedback>`
+for this example.
+
+The mapping is **whole input destination to whole output source**. An input
+is entirely persistent or entirely supplied by current feeds, never partly
+both. Binding names and initial/current-feed/``session.persistent_state.values`` dictionary keys
+are exact, literal graph names, with no path syntax or escaping.
+``"request.cache"`` names the graph input literally named ``request.cache``;
+it cannot select a field of ``request``. Unknown names are rejected.
+Nested dictionaries represent complete structured values, not partial feeds.
+
+Inputs accept runtime ``Tensor`` objects, contiguous CPU NumPy arrays and
+compatible DLPack producers such as CPU PyTorch tensors. Noncontiguous,
+byte-swapped or unsupported representations raise an error rather than
+being copied. PyTorch tensors requiring gradients must be detached by the
+caller before DLPack export; ``detach()`` shares storage.
+
+Selected outputs and ``state.values`` contain tensors with retained storage owners.
+They remain valid after callers drop their input references, after another
+run, or after reset/session destruction. Unsupported ownerless output storage is rejected
+rather than silently copied for a selected output; an allocator cannot recycle a live retained
+allocation.
+The Python binding keeps the model alive; native callers must retain it themselves.
+``RuntimeSession`` owns both its passive
+``PersistentValueState`` and execution kernels. The state is initialized with
+the session and reused automatically across calls; it is not passed to ``run``.
+Each call uses the supplied context directly, preserving its allocators, custom
+kernels and existing event log without creating a child context. Bound graph
+inputs and exported outputs are removed from the context at the end of the
+call, including on failure; unrelated values are preserved. Intermediate values
+follow the context's ``release_intermediates`` setting.
+The Python binding also retains supplied contexts so cached kernel allocator references
+remain valid. Reuse the same context for a session's calls. Resetting persistent
+values does not destroy the session or its cached kernels.
+Initializers use model-backed views when their representation is directly
+readable; other numeric representations and strings use normal conversion.
+String tensors cannot be persistent, including nested tensor fields and string
+constants in a selected whole structure or encoded layout. Catalogue references
+are checked recursively. Declarations fail before state initialization, and
+runtime retention rejects string payloads rather than copying them.
+Ordinary nonpersistent string feeds and outputs remain supported and use normal
+materialized string storage.
+
+Persistence applies only to the declared whole outputs, not the entire context.
+Nonpersistent outputs keep normal allocator and materialization behavior.
+There is no alternate kernel dispatcher: for example, tensor ``Identity`` still
+computes an ordinary output rather than promising to alias its input.
+
+The corresponding C++ entry points are:
+
+.. code-block:: cpp
+
+    using namespace onnx_light::core::runtime;
+
+    auto *binding = model.mutable_graph()->add_persistent_bindings();
+    binding->set_input_name("past");
+    binding->set_output_name("present");
+    RuntimeSession session(
+        model,
+        {{"past", RuntimeValue(Tensor::FromFloat("past", {2}, {0.f, 0.f}))}});
+    RuntimeContext context(KernelContext(18));
+    auto outputs = session.Run(
+        context,
+        {{"delta", RuntimeValue(Tensor::FromFloat("delta", {2}, {1.f, 1.f}))}});
+    session.Reset(
+        {{"past", RuntimeValue(Tensor::FromFloat("past", {2}, {0.f, 0.f}))}});
+    auto retained = session.persistent_state().Values();
+
+The C++ constructor and ``Reset`` accept initial maps by value. Build an owned
+``RuntimeValueMap`` and pass ``std::move(initial)`` for zero-copy transfer.
+Passing an lvalue uses ordinary C++ copy semantics. To share an existing owned
+tensor explicitly, use ``std::move(tensor).RetainStorage()`` once, then
+``BorrowView()`` on the returned owner-backed view. Const reads never move or
+promote storage.
+
+C++ callers register the operator kernels as usual before executing the model
+(see :doc:`/howto/cpp/register_builtin_operators`). The model and configured allocators
+must outlive the state/session using them. With the reference-based C++
+constructor, the model must also outlive any returned views of its initializer
+storage. Native sessions do not own the model. The Python binding retains the
+model for the session and any exported initializer views.
+
+Lifecycle and validation
+------------------------
+
+* Construct the state **after** graph rewrites. Every graph-declared input and output
+  must exist in the final model, with compatible types and shape constraints.
+  A removed or changed input/output needs an updated graph binding and a new state.
+* Supply initial contents for every feedback destination. Each subsequent
+  call supplies the remaining whole inputs; current feeds must not override
+  retained inputs. Duplicate binding input names or output names are rejected.
+* State advances only after successful execution and validation of the next
+  values. A failed or cancelled call must not publish a partial update.
+* Reset explicitly supplies new initial contents. Session destruction releases
+  retained values. Calls and resets on the same session must not overlap.
+* Independent states have separate state containers. They can explicitly share
+  read-only input storage; neither may mutate a shared buffer.
+
+Publication replaces owner handles atomically after validation. Failure or
+cancellation leaves the old state available; it does not require backup
+copies. This guarantee does not roll back external writes that violate the
+read-only contract. Persistent declarations currently belong to the root
+graph; declarations inside control-flow subgraphs are rejected.
+
+Cancellation uses the existing task-completion primitive:
+
+See the :doc:`Python recipe </howto/python/persistent_feedback>`
+for this example.
+
+A completion is single-use. A pending completion can also be cancelled from
+another thread while a call runs. Already executing kernels finish normally,
+but cancellation winning the publication race prevents the state update.
+Successful publication completes the token, so cancelling it afterwards is
+an error. A failed call leaves the previous valid state available for retry.
+Execution releases the Python GIL; use independent contexts for concurrent
+requests, and do not mutate model/context configuration during a call.
+
+Structured feedback
+-------------------
+
+A binding retains a whole input, including every dynamic field of a structured
+value. To retain a cache while supplying fresh tokens, declare ``cache`` and
+``tokens`` as separate graph inputs and bind ``cache`` to a whole ``next_cache``
+output. The struct declaration comes from
+``StructTypeProto`` in the model; persistence is a property of the feedback
+declaration in ``GraphProto``, not a flag on the type or encoded payload.
+
+This is equivalent to manually taking the selected outputs from each
+stateless invocation and passing them to the next invocation. Separate unselected
+outputs, such as logits, are not part of retained state. Fields inside a selected
+output are all retained.
+
+Python represents named structs as nested dictionaries. For a model declaring
+structured ``cache`` and ``next_cache`` values and a separate ``tokens`` input:
+
+See the :doc:`Python recipe </howto/python/persistent_feedback>`
+for this example.
+
+Custom kernels use ``context.get_value(name)`` and
+``context.put_value(name, value)`` to exchange structured values; ordinary
+tensor kernels continue to use the existing tensor API. In C++, structured
+and encoded edges live in ``RuntimeContext::values()`` as ``RuntimeValue``
+objects containing existing tensors or ``EncodedValueProto`` payloads.
+Inline structured encoded payloads can be retained as whole values; external
+payloads must first be loaded. The native API supports tensors, named
+structs, typed sequences and inline structured or affine encodings. Affine
+values are checked against their declared logical tensor type without decoding.
+Persistent values always have concrete dimensions. For an encoded tensor,
+``logical_type`` describes its decoded shape, not an unresolved symbolic shape:
+missing ranks or non-concrete dimensions are rejected. Symbolic dimensions remain
+valid in the model's input/output declarations.
+Map, optional, sparse and opaque state remain unsupported and are rejected
+explicitly, including when nested in a sequence or structure.
+For the supported types, the native correspondence is:
+
+* ``tensor_type``: a runtime tensor, or an encoded value with a matching logical
+  tensor type.
+* ``struct_type``: named runtime fields, or an encoded value with a compatible
+  storage type.
+* ``sequence_type``: runtime elements recursively checked against ``elem_type``.
+
+``RuntimeValue.elements`` is a ``RuntimeSequence`` with immutable element
+metadata and structural sharing. Copying a sequence shares its tree; appending
+or replacing an element copies only a logarithmic path. Read access uses
+``elements[i]`` or ``elements.at(i)``. To edit an element, obtain its
+``BorrowView()``, change that independent descriptor and call
+``elements.Set(i, std::move(value))``. Existing snapshots remain unchanged.
+Payload owners are shared and payloads remain read-only. Deep copies still
+produce independent payloads.
+
+Validation reuses results for unchanged sequence subtrees and merges their
+concrete symbolic bindings, rather than walking historical elements on every
+invocation. Memo tables hold weak references, so they do not prolong page or
+allocator lifetimes. Catalogue-dependent encoded retention still rechecks the
+supplied catalogue.
+Structurally recognized paged-cache snapshots additionally validate their complete
+page structure and ranges before state publication, without decoding payloads.
+
+These are ``TypeProto`` contracts, not a claim that every ``SequenceProto``,
+``MapProto`` or ``OptionalProto`` has a native persistent representation.
+Python feedback supports tensors, named structs as dictionaries, typed sequences
+as lists, inline encoded values and dedicated ``PagedCacheProto`` values.
+Lists are converted recursively without converting their tensor payloads;
+their elements must match the declared ``sequence_type.elem_type``. Empty
+lists are supported. Tuples and arbitrary iterables are not sequence inputs.
+Ordinary dictionaries require named field declarations. Layout-less
+``struct_type`` declarations are reserved for structurally recognized paged caches,
+whose page ranges, fields and payloads are validated independently.
+``If`` and model-local functions forward selected whole output names and move
+those results without persistence-related copies. Function attributes,
+``Loop`` and ``Scan`` use their ordinary runtime implementations: their normal
+computation/transport costs remain, but unrelated operators are not prohibited.
+
+``GraphBuilder`` preserves and validates persistence declarations during
+import/export and supported rewrites. Direct edits to graph input/output
+names require corresponding binding edits; dangling names are rejected.
+An export to standard ONNX
+that cannot preserve this contract must be rejected, not silently strip
+the bindings. Explicit model saving serializes the declarations, not the
+current request's retained state; execution itself does not serialize them.
+
+Contiguous CPU Attention feedback
+---------------------------------
+
+Declare ``past_key <- present_key`` and ``past_value <- present_value`` using
+the ordinary graph bindings. The native CPU ``Attention`` consumer can then
+retain extra allocation capacity for subsequent appends. There is no separate
+cache identifier, state mapping or executor.
+
+Internally, ``PersistentValueState`` retains ``PersistentValue`` objects, with a
+``PersistentTensor`` at each tensor leaf. ``PersistentTensor`` composes an ordinary
+``Tensor`` with certified allocation capacity; it does not inherit from ``Tensor``.
+The runtime receives ordinary tensor views and separate, move-only ``AppendLease``
+objects for eligible root bindings. Neither tensor copies nor borrowed views carry
+capacity metadata or write permissions. Child function and subgraph contexts do
+not inherit these permissions.
+
+The reservation API is operator-independent:
+
+1. A kernel calls ``RuntimeContext::ReservePersistentAppend`` with the desired
+   result shape, append axis and input/output slots. The context resolves the
+   exact declared binding and selects the output allocator.
+2. ``PersistentTensor::AppendLease::Reserve`` handles layout eligibility,
+   geometric growth and prefix relocation. It either reuses spare capacity or
+   allocates a new contiguous buffer and copies only the committed prefix.
+   Unsupported layouts return no reservation so the kernel can use its
+   ordinary implementation. Each lease accepts only one attempt, including
+   attempts declined for disabled capacity or unsupported layouts. A second
+   attempt raises an error instead of allocating another buffer.
+3. The kernel initializes the entire ``AppendReservation::writable_bytes()``
+   span directly. There is no temporary tail tensor required by this API.
+4. ``RuntimeContext::CommitPersistentAppend`` checks the declared initialized
+   byte count, seals the candidate and returns an ordinary tensor view. This
+   does not publish the state: ``PersistentValueState`` still validates all outputs
+   and publishes them together only after successful completion.
+
+A producer can compute new elements directly into that span. Attention instead
+copies the current K/V inputs, which already exist as model inputs, straight into
+the reserved region. Those copies remain necessary; the reservation API does not
+add an intermediate tensor or a second copy.
+
+This storage implementation is contiguous. A future ``PersistentPagedTensor``
+would own a different allocation policy and expose page-aware writable regions;
+paged storage and paged Attention kernels are not implemented here.
+
+The reusable layout is dense rank-four ``FLOAT`` with shape
+``[1, 1, valid_length, head_size]`` for each K/V tensor. Query tensors can
+have multiple heads (multi-query attention). The tensor's sequence dimension
+and logical byte extent describe only valid tokens, never spare capacity.
+K and V may have different head sizes.
+The Attention node must directly consume and produce the bound root-graph
+K/V inputs and outputs. Intermediate tensors, function/control-flow transport
+and unmatched input/output pairs keep ordinary kernel concatenation; they do
+not acquire append permissions merely because another graph output is retained.
+
+``RuntimeSessionOptions::persistent_tensor_initial_capacity`` selects the initial
+capacity along the kernel's append axis (32 by default; tokens for Attention);
+zero disables reservations. ``PersistentTensor`` grows capacity geometrically
+when necessary, using the selected allocator without an alternate allocator or
+automatic retry after allocation failure. This option affects ``PersistentValueState``
+execution, not ordinary stateless ``RuntimeSession`` calls.
+
+Python exposes the same option as a keyword-only constructor argument and a
+read/write property on ``runtime.RuntimeSessionOptions``. It accepts a
+nonnegative integer representable as C++ ``size_t``. Pass the options to
+``RuntimeSession`` together with the initial retained values:
+
+See the :doc:`Python recipe </howto/python/persistent_feedback>`
+for this example.
+
+Options are copied at construction; changing the bundle later does not change
+an existing session or its state.
+
+Reuse is deliberately conservative:
+
+* Only internally created append buffers are eligible. An arbitrary borrowed
+  NumPy/DLPack buffer, even one with an owner token, does not grant write access.
+  Importing returned tensors or ``Values()`` views into a new state, or through
+  ``Reset``, retains their bytes without copying but does not import append
+  capacity. Their first append allocates a new certified buffer.
+* Ownership is checked before creating invocation-local aliases. Keeping a
+  previous output or ``Values()`` view alive prevents reuse of that allocation.
+  The next result instead receives a fresh allocation; the old view's bytes,
+  shape and lifetime do not change.
+* An eligible append writes only the new token range. It does not move or
+  rewrite the valid prefix. The previous state's logical extent remains
+  unchanged until successful publication. Capacity is published only when the
+  returned tensor still matches the kernel's candidate owner, pointer, type,
+  shape and logical byte extent.
+* Capacity exhaustion makes ``PersistentTensor`` allocate a larger buffer and
+  copy the valid prefix once. State publication still only transfers owner
+  handles.
+* Multiple batches or KV heads use ordinary dense concatenation: increasing
+  the sequence dimension changes the stride between heads, so prefix-preserving
+  tail append is not possible in that layout. Half-precision promotion and
+  other unsupported reuse paths keep their ordinary computation semantics.
+* Empty prefixes and empty appended chunks contribute no copied bytes.
+  Zero-width value caches use the dense fallback and keep their declared
+  shapes, including the empty final dimension of the Attention output.
+
+Cancellation is a publication gate, not kernel preemption. A failed or
+cancelled invocation can have written unused tail bytes, but cannot change the
+previous state's valid prefix or length. A retry must fully write its new
+token range. Reset replaces the retained owners; close releases them. Existing
+returned views remain readable after either operation. Use independent states
+and contexts for concurrent requests; sharing retained owners disables unsafe
+reuse rather than making either request mutate the other's state.
+
+Opt-in storage auditing through runtime events
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Storage auditing uses the existing runtime event API. Set
+``RuntimeContextOptions::events_enabled = true`` and read ``context.events()``.
+Every context has a shared event log. With events disabled (the default),
+persistence works identically but creates no storage audit events or counters
+and takes no event-recording locks.
+Diagnostic metadata is not copied into function or half-precision
+scratch contexts on this path.
+
+``RuntimeEventAction::kPersistentStorage`` identifies storage reports. Each
+``RuntimeEvent`` directly records the work in ``storage_allocations``,
+``storage_allocated_bytes``, ``storage_prefix_copied_bytes``,
+``storage_append_copied_bytes`` and ``storage_reuse_count``.
+Kernels and contiguous reservations use
+``RuntimeContext::RecordEvent`` with action ``kPersistentStorage`` to record
+this work in the existing shared log. Producing new elements directly into the
+writable region does not count as copying them.
+
+These are explicit reports, not automatic counters for every runtime
+allocation or tensor copy. Attention currently reports K/V construction on
+both reusable and ordinary dense paths. Other consumers can use the same
+event API without adding operator-specific state to ``RuntimeContext``.
+
+State forwarding and kernel storage construction have different costs.
+Pointer identity at retention, invocation and publication boundaries verifies
+that the state layer does not copy tensor payloads. Feedback invocations,
+subgraphs, functions and half-precision scratch contexts share the caller's
+event log. Events are visible as soon as they are recorded, including work
+preceding a failure or cancellation; no forwarding or end-of-scope merge occurs.
+Runtime recording serializes appends from concurrent children. Read or modify
+``events()`` only when no other context is recording or clearing the log.
+``ClearEvents()`` clears the shared log for all these contexts. Independently
+constructed contexts keep independent logs. Allocation failures while recording
+propagate to the caller, just like other runtime allocation failures.
+Attention's storage reports exclude its
+score/output allocations, arithmetic workspace, feed construction, or
+half-precision conversion.
+
+Sum fields from the event list when totals are needed. Call
+``context.ClearEvents()`` before a run to obtain per-token reports; otherwise
+events accumulate in that context, including runs of different feedback states.
+Resetting or destroying a session does not clear the caller's log.
+
+``event.storage_allocated_bytes`` counts requested storage capacity,
+not physical heap allocations: an I/O arena may satisfy a request from its free
+lists. The existing ``event.allocated_bytes`` and ``event.peak_bytes`` fields
+still describe allocator live and peak memory and have not changed meaning.
+The decode example enables events explicitly, so its timing includes auditing.
+
+For one new token with ``FLOAT`` K/V head sizes ``Dk`` and ``Dv``, appending
+copies ``4 * (Dk + Dv)`` bytes. Reuse within capacity allocates no new KV
+buffers and copies zero prefix bytes. Growth or an outstanding external alias
+requires a new buffer for each affected K/V tensor and copies its valid prefix.
+For ``B`` batches, ``H`` KV heads and a prefix of ``L`` tokens, the dense
+fallback allocates two result buffers and copies
+``4 * B * H * L * (Dk + Dv)`` prefix bytes, plus
+``4 * B * H * (Dk + Dv)`` append bytes per token. None of these kernel-level
+copies is a state-management copy.
+
+A runnable native example, including per-token allocation/copy measurements
+and a multi-head fallback, is provided in
+:doc:`/examples_cc/contiguous_kv_decode_example`.
+
+Optional heterogeneous paged KV
+-------------------------------
+
+Cache value declaration
+~~~~~~~~~~~~~~~~~~~~~~~
+
+``PagedAttention`` declares ``past`` and ``present`` as structured values.
+Their concrete serialized representation is ``PagedCacheProto``, whose
+``blocks`` sequence contains pages with scalar INT64 ``start`` and ``length``
+fields and floating-point ``key`` and ``value`` tensors. The proto and runtime
+validation define the cache layout directly; there is no separate cache-type
+factory or physical encoding in the graph declaration.
+The declaration may leave ``struct_type`` unset internally or specify the named
+cache fields, directly or through a model-catalogue reference. Array and bit-packing
+layouts are not cache declarations. Declared ``key`` and ``value`` tensors have
+logical dtype FLOAT; FLOAT16 and BFLOAT16 are physical dense page formats, not
+alternative logical declarations.
+Dense pages accept ONNX ``raw_data`` or the matching typed field: ``float_data``
+for FLOAT and ``int32_data`` carrying 16-bit element representations for FLOAT16
+and BFLOAT16. Importing typed 16-bit data packs it into owned runtime storage;
+raw payloads retain the existing borrowing behavior.
+
+Versioned operator schema
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``ai.rt::PagedAttention`` has an independent ``LightOpSchema`` at domain
+``ai.rt``, opset 1. It takes ``Q, K, V, past`` and produces ``Y, present``.
+Q/K/V and Y are FLOAT, FLOAT16, or BFLOAT16 ``[batch,heads,L,D]`` tensors;
+Q/K/V use the same batch and new-token dimensions, K/V use the same head count,
+and the query head count is a multiple of the K/V head count. ``past`` and
+``present`` use the paged-cache structure. Shape inference returns Y with Q's
+batch, heads, sequence length and element type, V's head size, and preserves
+the structured declaration of ``past`` for ``present``.
+
+All attributes are optional: ``block_size=16`` and ``max_tokens=4096`` must be
+positive; ``is_causal=1`` accepts only 0 or 1; ``left_window_size=-1`` means
+unbounded and non-negative values bound preceding tokens. Physical cache
+storage is deliberately absent from the operator attributes: every page is
+self-describing, and the registered kernel may choose a different K/V format
+on every execution. Data-dependent cache checks happen at execution. The
+schema and shape-function registration do not register a kernel.
+
+Kernel implementation
+~~~~~~~~~~~~~~~~~~~~~
+
+The native ``onnx_kernels::kernel::PagedAttention`` is an opt-in consumer. It
+does not change standard ONNX ``Attention`` or add another state subsystem.
+Declare ``past`` and ``present`` as structured values and bind ``past <-
+present`` in ``GraphProto.persistent_bindings``. Initialize each request with
+``PagedAttention::EmptyCache()``.
+
+Import domain ``ai.rt`` at version 1 in the model. Unknown ranks and
+symbolic Q/K/V dimensions remain supported. Cache page capacities should remain
+unspecified because appended pages can have different lengths.
+
+Register the native kernel on the context used by the state:
+
+.. code-block:: cpp
+
+    using namespace onnx_light;
+    using namespace onnx_light::core::runtime;
+
+    context.RegisterKernelFn(
+        "ai.rt", "PagedAttention", core::symbolic::Device::kCPU,
+        [](const NodeProto &node, RuntimeContext &rt) -> std::unique_ptr<KernelBase> {
+          auto kernel =
+              std::make_unique<onnx_kernels::kernel::PagedAttention>(rt.kernel_ctx());
+          kernel->set_node(node);
+          return kernel;
+        });
+
+To select storage dynamically, construct the kernel with a ``FormatSelector``.
+The selector receives the current K/V tensors and retained token count. It
+returns the formats for the pages appended by that execution. Without a
+selector the native kernel stores new pages as dense FLOAT. For example, a
+policy can switch formats as the cache grows:
+
+.. code-block:: cpp
+
+    auto select_formats =
+        [](const Tensor &, const Tensor &, int64_t past_length) {
+          if (past_length < 1024)
+            return onnx_kernels::kernel::PagedAttention::Formats{};
+          return onnx_kernels::kernel::PagedAttention::Formats{
+              {TensorProto::INT8, 0.01f, 0},
+              {TensorProto::UINT4, 0.25f, 8}};
+        };
+    auto kernel = std::make_unique<onnx_kernels::kernel::PagedAttention>(
+        context.kernel_ctx(), select_formats);
+
+The node takes ``Q, K, V, past`` and returns ``Y, present``. It accepts finite
+FLOAT, FLOAT16, or BFLOAT16 tensors, supports multiple batches and grouped-query
+attention, and requires equal new Q/K/V sequence lengths and positive head
+sizes. Masks and other unsupported attributes fail explicitly. Kernel
+instances, execution and allocator routing use the normal runtime contracts.
+Python feedback represents this cache with ``PagedCacheProto`` rather than
+converting its internal sequence into a Python list.
+This conversion recognizes the runtime structure: a single ``blocks`` sequence,
+whose elements have exactly ``start``, ``length``, ``key`` and ``value`` fields.
+The first two fields are INT64 scalar tensors; the payloads are tensors or encoded
+values. Payload types, shapes and page ranges are validated before export.
+No separate runtime marker records the value's origin. A Python dictionary with
+this structure is therefore also treated as a cache and returned as
+``PagedCacheProto``. A structure containing only ``{"blocks": []}`` represents an
+empty cache. Other structures remain dictionaries, and their ordinary sequence
+fields round-trip as Python lists.
+
+Selected-block quantization
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The :ref:`Python example <l-example-quantize-paged-cache>` builds and executes
+a graph that quantizes one cache page, dequantizes it, and serializes the
+mixed-format cache.
+
+``ai.rt::QuantizePagedCache`` converts selected cache blocks without
+rebuilding the remaining cache. Its opset-1 signature is::
+
+    QuantizePagedCache(
+        cache, block_indices,
+        key_scale, key_zero_point,
+        value_scale, value_zero_point) -> quantized_cache
+
+``block_indices`` is a rank-one INT64 tensor of unique, zero-based block
+indices. The K and V scales are positive finite scalar FLOAT tensors. Each
+scalar zero point selects the corresponding payload storage type, so K and V
+may use different formats. INT8, UINT8, INT4, UINT4, INT2 and UINT2 request
+affine quantization. FLOAT, FLOAT16 and BFLOAT16 request dense dequantization;
+the floating-point marker's value and the corresponding scale are ignored.
+For a paged cache declared with logical FLOAT K/V fields, dense FLOAT16 and
+BFLOAT16 pages are physical storage alternatives and remain valid across
+persistent bindings. Ordinary non-cache tensor fields still require exact
+dtype agreement.
+
+For every selected block, the kernel decodes either its dense floating-point
+payload or its existing affine payload, then converts the valid ``length``
+prefix to the selected format. The original capacity and ``length`` are preserved.
+Unused rows are initialized from logical zeros in the destination format without
+reading the source's unused rows. This also preserves fixed-capacity cache
+declarations through quantization, requantization and dequantization.
+The whole input cache is validated before applying the block selection, including
+page fields, contiguous ranges, K/V capacities and payload extents. This also
+applies to unselected pages and an empty selection, without decoding payloads.
+Unselected blocks retain their payload storage
+and owners. Indices and quantization parameters are all checked before the
+output is published, so an invalid request does not partially modify the
+cache. Shape inference preserves the input cache's structured declaration on
+``quantized_cache``.
+
+For example, this graph first quantizes block 3 to INT2 keys and UINT4 values,
+then uses the same operator to materialize FLOAT16 keys and BFLOAT16 values.
+The floating zero-point inputs are type markers:
+
+.. code-block:: text
+
+    key_scale       = FLOAT scalar 0.25
+    key_zero_int2   = INT2 scalar 0
+    value_scale     = FLOAT scalar 0.125
+    value_zero_u4   = UINT4 scalar 8
+    ignored_scale   = FLOAT scalar 1
+    key_float16     = FLOAT16 scalar 0
+    value_bfloat16  = BFLOAT16 scalar 0
+    selected_blocks = INT64[1] {3}
+
+    quantized_cache = ai.rt::QuantizePagedCache(
+        cache, selected_blocks,
+        key_scale, key_zero_int2,
+        value_scale, value_zero_u4)
+
+    dequantized_cache = ai.rt::QuantizePagedCache(
+        quantized_cache, selected_blocks,
+        ignored_scale, key_float16,
+        ignored_scale, value_bfloat16)
+
+Serialized cache values
+~~~~~~~~~~~~~~~~~~~~~~~
+
+The graph's structured declaration does not serialize a cache value. At
+runtime, a cache is a ``RuntimeValue`` structure containing a dynamic
+``RuntimeSequence`` of pages. The sequence cannot be represented as one
+fixed-layout ``EncodedValueProto``; an encoded value represents one tensor (or
+one fixed-layout structured value), not the complete cache and its dynamic
+page sequence.
+
+``PagedCacheProto`` is the dedicated onnx-light serialized value representation,
+separate from the logical ``TypeProto``. Its ``blocks`` field contains
+``PagedCacheBlockProto`` messages with explicit ``start`` and ``length``.
+Each block selects exactly one dense ``key`` or ``encoded_key``, and one dense
+``value`` or ``encoded_value``. Dense payloads use ``TensorProto``; encoded
+payloads retain ``EncodedValueProto`` layouts and parameter references.
+The current kernel accepts inline dense FLOAT, FLOAT16 or BFLOAT16 pages, or
+affine INT8, UINT8, INT4, UINT4, INT2 or UINT2 pages with FLOAT scales; K and V
+may use independent per-axis or blocked formats. Page ranges start at zero, are
+contiguous and have positive lengths no greater than their physical capacities.
+K/V capacities match within each block, and each tensor's head width is
+consistent across blocks.
+
+``RuntimeValue::FromPagedCache`` restores the recursive runtime value with
+retained storage owners; ``ToPagedCache`` exports it without decoding pages.
+Already retained dense buffers and managed encoded payloads remain shared.
+Ownerless dense or encoded initializer views are copied on export so the cache's
+payloads remain valid after their source model is destroyed. Encoded layouts and
+affine parameter payloads are preserved without decoding the pages.
+Binary protobuf serialization writes their contents; parsing reconstructs
+owned data. Referenced types and shared quantization parameters still belong to
+the containing model, not to the standalone cache. Pass its catalogues to the
+native conversion functions when needed.
+
+``GraphProto.paged_cache_initializer`` (extension field 1002) stores named
+cache defaults. Names are unique across all initializer categories. A default
+that also names a graph input may be overridden by a caller; otherwise it is a
+constant graph value. Runtime sessions seed these initializers, and persistent
+state initialization/reset uses them when a bound input is omitted from the
+initial-value map. Shape inference, model validation and ``GraphBuilder``
+import/export preserve the declaration and its structured type references.
+``GraphBuilder::MakePagedCacheInitializer`` adds one directly.
+Non-bound graph inputs with initializer defaults may also be omitted from
+current feeds; an explicit feed overrides the default for that invocation.
+
+Python exposes both messages through ``onnx_light.onnx``. A
+``PersistentValueState`` accepts and returns ``PagedCacheProto`` for these
+values, including through ``values`` and ``reset``. Serializing a returned
+cache and placing it in a new model's ``paged_cache_initializer`` resumes the
+cache independently of the original state.
+
+Validation rejects missing payload alternatives, negative or non-contiguous
+starts, non-positive lengths, lengths larger than page capacity, inconsistent
+K/V capacities or widths, non-concrete encoded payload dimensions, and external
+page data. The runtime kernel additionally validates these ranges and
+capacities on actual page values before attention. Load external data before
+constructing the serialized cache.
+This extension is supported by onnx-light binary protobuf, not standard ONNX,
+ORT, or ONNX text export. Legacy graph extraction, prefixing and merging reject
+cache initializers explicitly rather than silently losing them; use
+``GraphBuilder`` for supported graph edits.
+
+The cache is a named structure containing ``blocks``, a typed runtime sequence.
+Historical descriptors are shared, and immutable page validation is memoized
+per kernel instance. A finite attention window uses a binary search to skip
+unattended historical pages; views are prepared once per invocation, not once
+per query row. ``Statistics.validated_pages`` counts newly checked page metadata.
+The memo is synchronized only during metadata analysis, not numerical attention.
+Cache pages use independently retained storage (the I/O arena when supplied),
+even when ``present`` is an intermediate value forwarded to a persistent output.
+Each block is a structure with scalar INT64 ``start`` and ``length`` fields and
+``key``/``value`` fields. Starts are contiguous logical token offsets; length is
+the valid prefix of the block's physical token capacity. Key/value payloads are
+independently owned dense tensors or affine ``EncodedValueProto`` values whose
+logical shapes are ``[1, 1, capacity, head_size]``. Their affine descriptors carry
+format identity, scales and zero points, independently for K, V and each block.
+There are no persistent flags or new quantization layouts.
+
+A root persistent sequence containing only dense tensors is bridged to the
+standard ``RuntimeContext::sequences()`` representation while the graph runs,
+then converted back to ``RuntimeValue`` at the persistent output boundary.
+Standard sequence operators such as ``SequenceInsert`` can therefore consume
+and produce persistent tensor sequences. A root sequence containing encoded
+tensor values remains in ``RuntimeContext::values()`` for consumers that support
+those encodings, and outputs are accepted symmetrically from either store.
+Nested sequences, including the ``blocks`` field above, remain part of their
+enclosing structured ``RuntimeValue``.
+
+Persistent values also retain the shared parameter catalogue introduced by
+:doc:`/howto/cpp/quantized_values`, recursively through structures and sequences. A tensor
+declaration is checked against an encoded value's logical tensor type; a
+structured declaration is checked against its storage type. Retaining or
+validating a compact shared value checks its reference, types and byte extent
+without materializing it. Borrowed views survive reset and session destruction
+with both their payload and their shared parameters.
+Native C++ current feeds undergo this reference validation before execution,
+including when an encoded value is only forwarded to a nonpersistent output.
+They must carry their shared parameter catalogue in ``RuntimeValue``.
+
+Python construction, ``reset`` and ``run`` resolve ``EncodedValueProto.parameter_ref``
+against the state's model, including encoded values nested in dictionaries.
+Conversions reject missing references and reuse one shared parameter catalogue
+per input dictionary. The session owns the state's lifetime; already exported
+values remain valid after session destruction.
+
+This general runtime support does not broaden the native ``PagedAttention``
+decoder: its supported page formats remain the dense and affine formats below.
+Portable structured and shared encodings can be retained and forwarded by other
+consumers, but this kernel rejects them explicitly rather than materializing a
+whole cache or silently converting its representation.
+
+``block_size`` bounds each block's token capacity and ``max_tokens`` bounds the
+retained logical length. A registered kernel may provide a ``FormatSelector``
+that chooses independent K/V formats from the current inputs and retained
+length on every execution. FLOAT, INT8, UINT8, INT4, UINT4, INT2 and UINT2 are
+supported for new blocks; affine append uses scalar parameters. The selected descriptor is
+stored in every new page, so successive executions may append different
+formats without converting prior pages. An affine descriptor may omit its
+concrete ``storage_type`` and provide ``signed_storage`` instead. Validation
+then infers the unique supported code width from the logical element count and
+payload byte size; ambiguous sizes are rejected. Existing blocks may also use
+per-axis and blocked affine parameters with FLOAT scales. Other scale types,
+external payloads and custom structured encodings require another consumer and
+are rejected.
+Partial blocks are sealed: an append adds new blocks
+rather than rewriting the previous partial block. This can use more metadata
+than filling partial blocks, but guarantees that even live aliases never force
+a prefix payload copy or conversion.
+
+Attention applies causal masking by default. ``is_causal`` and
+``left_window_size`` control the visible token range. It reads only valid,
+visible tokens and uses online softmax instead of concatenating K/V or allocating
+a cache-length score matrix. Current K/V participate in this calculation as
+uncompressed FLOAT values and are encoded only afterward for publication in
+``present``. Retention, invocation, publication and state views share payload
+owners. Kernel conversion of new blocks is separate from those zero-copy state
+operations.
+
+The direct C++ call returns ``Result::statistics``:
+
+* ``copied_bytes`` counts new stored payload bytes written by copying or
+  conversion, excluding metadata and Y.
+* ``dequantized_bytes`` counts decoded FLOAT bytes for visible quantized
+  tokens, including repeated reads for different queries.
+* ``peak_workspace_bytes`` counts peak numerical scratch, excluding output,
+  retained payloads and collection metadata.
+
+These are kernel costs, not state-forwarding copies. Native tests also check
+payload/owner identity across publication and append. For example, the native
+windowed fixture starts with six retained tokens, appends two tokens with
+INT8 keys (width 2) and UINT4 values (width 3), and uses a left window of one:
+it writes 7 new payload bytes, decodes 80 FLOAT bytes across the two queries,
+and uses 24 bytes of numerical scratch. No prior block payload is copied.
+The dense fixture appends three tokens with widths 3 and 2 on each call:
+its 60 append bytes and 16 scratch bytes stay constant as the cache grows.
+
+Quantization rounds ties
+to even and saturates to the selected code range. For non-saturated inputs,
+each affine reconstruction differs from its source by at most half its scale
+(plus floating-point rounding). Attention error also depends on Q/K magnitudes
+and softmax conditioning; no format alone guarantees a universal output error
+bound. The numerical fixtures compare the paged consumer to dense Attention
+using the reconstructed values with absolute tolerance ``1e-5`` for the four
+tested affine storage types (INT4, UINT4, INT8 and UINT8), separately from
+quantization error. The end-to-end
+four-step fixture uses Q/K/V components ``+/-(0.173 * step)`` and compares to
+unquantized dense Attention with these absolute output tolerances:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Storage
+     - Scale
+     - Zero point
+     - Fixture tolerance
+   * - INT8 / UINT8
+     - 0.01
+     - 0 / 128
+     - 0.01
+   * - INT4 / UINT4
+     - 0.25
+     - 0 / 8
+     - 0.15
+
+These fixture-specific bounds do not apply to arbitrary models or saturated
+inputs. INT2 and UINT2 are supported, but are not covered by these four-format
+accuracy fixtures or the table above.
+
+Validation rejects malformed ranges, invalid layouts, unsupported consumers
+and capacity violations. A failing or cancelled invocation cannot publish part
+of a block collection. Cancellation remains a publication gate, not preemption.
+Reset and session destruction drop retained values; exported views and other
+requests retain their blocks until their last owner is released. The bound model
+is never serialized or cloned by this path.

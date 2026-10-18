@@ -2,7 +2,7 @@
 
 Portable profiles describe onnx-light representations, not vendor binary layouts.
 ORT_MATMULNBITS_INT2/INT4/INT8 produce ONNX Runtime operator inputs, not internal
-kernel prepacking. No profile performs calibration. See :doc:`/howto/quantized_values`.
+kernel prepacking. No profile performs calibration. See :doc:`/howto/python/quantized_values`.
 """
 
 from ..onnx_py._onnxpykernels import runtime  # type: ignore[missing-import]

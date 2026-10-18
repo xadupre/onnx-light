@@ -1,16 +1,19 @@
-.. _l-howto-save-ort-flatbuffers:
+.. _l-howto-save-ort-flatbuffers-cpp:
 
 :html_theme.sidebar_secondary.remove:
 
 How to save and load a model in the ORT flatbuffer format
 =========================================================
 
+This guide covers the C++ interface. For the other language, see
+:doc:`../python/save_ort_flatbuffers`.
+
 `onnxruntime <https://onnxruntime.ai/>`_ defines a compact flatbuffer
 serialization (``.ort``) that avoids the protobuf parsing step when loading
 models in ONNX Runtime.
 
 *onnx-light* exposes the format through
-:py:class:`onnx_light.onnx.SerializeFormat` (value ``ORT_FLATBUFFERS``).
+``onnx::SerializeFormat::kOrtFlatbuffers``.
 The native C++ writer produces files with the ``ORTM`` identifier and ORT
 format version ``4``, readable by a full :epkg:`onnxruntime` build. The
 runtime resolves the graph and upgrades kernel metadata when loading it.
@@ -24,78 +27,40 @@ Save with the native writer
 For an in-memory model whose tensor payloads have been loaded, select
 ``ORT_FLATBUFFERS`` in the serialization options:
 
-.. tab-set::
 
-   .. tab-item:: Python
-      :sync: python
+.. code-block:: cpp
 
-      .. code-block:: python
+    #include "onnx.h"
+    #include "onnx_helper.h"
+    #include "stream.h"
 
-          import onnx_light.onnx as onnxl
-
-          sopts = onnxl.SerializeOptions()
-          sopts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
-          model.SerializeToFile("model.ort", sopts)
-
-   .. tab-item:: C++
-      :sync: cpp
-
-      .. code-block:: cpp
-
-          #include "onnx.h"
-          #include "onnx_helper.h"
-          #include "stream.h"
-
-          onnx::SerializeOptions options;
-          options.format = onnx::SerializeFormat::kOrtFlatbuffers;
-          onnx::utils::FileWriteStream stream("model.ort");
-          onnx::SerializeModelProtoToStream(model, stream, options);
+    onnx::SerializeOptions options;
+    options.format = onnx::SerializeFormat::kOrtFlatbuffers;
+    onnx::utils::FileWriteStream stream("model.ort");
+    onnx::SerializeModelProtoToStream(model, stream, options);
 
 Memory and file-descriptor output
---------------------------------
+---------------------------------
 
-The same options also apply to ``SerializeToString`` and
-``SerializeToFileDescriptor``:
+The Python ``SerializeToString`` and ``SerializeToFileDescriptor`` helpers
+accept the same format:
 
-.. code-block:: python
+See the :doc:`Python recipe </howto/python/save_ort_flatbuffers>`
+for this example.
 
-    payload = model.SerializeToString(sopts)
-    assert payload[4:8] == b"ORTM"
+The Python recipe also shows how to load the result with ONNX Runtime:
 
-    with open("model.ort", "wb") as output:
-        model.SerializeToFileDescriptor(output.fileno(), sopts)
-
-To load the result for inference, use ONNX Runtime directly:
-
-.. code-block:: python
-
-    import onnxruntime
-
-    session = onnxruntime.InferenceSession(
-        "model.ort", providers=["CPUExecutionProvider"]
-    )
+See the :doc:`Python recipe </howto/python/save_ort_flatbuffers>`
+for this example.
 
 Read with the native reader
 ---------------------------
 
-Set ``ParseOptions.format`` to select native ORT decoding, whether reading
-from a file or from bytes:
+Set ``ParseOptions.format`` to ``onnx::SerializeFormat::kOrtFlatbuffers``
+before calling ``ParseModelProtoFromStream`` to select native ORT decoding.
 
-.. code-block:: python
-
-    popts = onnxl.ParseOptions()
-    popts.format = onnxl.SerializeFormat.ORT_FLATBUFFERS
-
-    restored = onnxl.ModelProto()
-    restored.ParseFromFile("model.ort", popts)
-
-    restored_from_bytes = onnxl.ModelProto()
-    restored_from_bytes.ParseFromString(payload, popts)
-
-    # Default serialization produces ONNX protobuf for execution or saving.
-    session = onnxruntime.InferenceSession(
-        restored.SerializeToString(), providers=["CPUExecutionProvider"]
-    )
+See the :doc:`Python recipe </howto/python/save_ort_flatbuffers>`
+for this example.
 
 The reader reconstructs an ONNX model for execution and reserialization,
 not an exact copy of the original protobuf bytes. ORT may normalize the
@@ -153,5 +118,5 @@ See also
   parallelization, and alignment.
 * :ref:`l-example-plot-save-ort-flatbuffers` - end-to-end example that saves
   the same model in both formats and compares the resulting file sizes.
-* :ref:`l-howto-load-save-onnx-files` - load/save recipes for the regular
+* :ref:`l-howto-load-save-onnx-files-cpp` - load/save recipes for the regular
   ``.onnx`` protobuf format.

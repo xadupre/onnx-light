@@ -5,23 +5,22 @@ from pathlib import Path
 
 class TestNextStepsDocumentation(unittest.TestCase):
     def test_plans_grouped_by_year(self):
-        """Checks that each roadmap plan is indexed once under its matching year."""
+        """Checks that each year has a page indexing its roadmap plans exactly once."""
         root = Path(__file__).resolve().parents[2] / "docs" / "next_steps"
         content = (root / "index.rst").read_text(encoding="utf-8")
-        sections = re.split(r"(?m)^(\d{4})\n-{4}\n", content)
-        years = sections[1::2]
+        entries = re.findall(r"(?m)^    ([^\s:][^\s]*)$", content)
         expected_years = sorted(
             (path.name for path in root.iterdir() if path.is_dir() and path.name.isdigit()),
             reverse=True,
         )
-        self.assertEqual(years, expected_years)
-        self.assertNotRegex(sections[0], r"(?m)^    \d{4}/")
-        for year, section in zip(years, sections[2::2]):
+        self.assertEqual(entries, [f"{year}/index" for year in expected_years])
+        for year in expected_years:
             with self.subTest(year=year):
-                plans = re.findall(r"(?m)^    (\d{4}/[^\s]+)$", section)
+                page = (root / year / "index.rst").read_text(encoding="utf-8")
+                self.assertTrue(page.startswith(f"{year}\n====\n"))
+                plans = re.findall(r"(?m)^    ([^\s:][^\s]*)$", page)
                 expected_plans = [
-                    path.relative_to(root).with_suffix("").as_posix()
-                    for path in (root / year).glob("*.rst")
+                    path.stem for path in (root / year).glob("*.rst") if path.name != "index.rst"
                 ]
                 self.assertCountEqual(plans, expected_plans)
 

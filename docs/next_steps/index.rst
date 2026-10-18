@@ -13,6 +13,7 @@ Next Steps
     2026/2026-08_kernel_parallelization
     2026/2026-10_kernel_parallelization_completion
     2026/2026-10_guarded_kernel_replay
+    2026/2026-10_offline_semantic_documentation_search
     2026/2026-08_onnxruntime_fast_model_loading
     2026/2026-08_proto_inheritance
     2026/2026-08_quantization
@@ -65,6 +66,10 @@ Discussion
 
     * - Plan
       - Contribution
+    * - :ref:`l-next-steps-offline-semantic-documentation-search`
+      - Proposes an independent offline browser search engine with ONNX Runtime
+        Web, technical-documentation lexical/vector ranking and a four-PR
+        implementation sequence gated by model and tokenizer feasibility.
     * - :ref:`l-next-steps-guarded-kernel-replay`
       - Lowers ExecutionPlan into a CapturedExecutionPlan of functions,
         with kernel capture APIs, dynamic dimensions and onnx-light-cpu.

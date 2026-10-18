@@ -8,6 +8,8 @@
 // roadmap item: owner release, alignment, file replacement, truncation,
 // concurrent views, and path confinement.
 #include "onnx_mapped_payload.h"
+#include "stream.h"
+#include "windows_junction.h"
 
 #include <atomic>
 #include <cstdint>
@@ -15,6 +17,7 @@
 #include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>
+#include <iterator>
 #include <string>
 #include <thread>
 #include <vector>
@@ -54,6 +57,29 @@ std::string MakeBytes(size_t n, char fill_start = 0) {
   return result;
 }
 
+void PrepareDirectoryReplacement(const std::filesystem::path &directory) {
+#if defined(_WIN32)
+  // Windows cannot rename a directory containing open files; retarget a junction instead.
+  const std::filesystem::path original = directory.string() + ".original";
+  std::filesystem::create_directories(original);
+  const auto error = onnx_light_test::CreateWindowsJunction(directory, original);
+  ASSERT_FALSE(error) << error.message();
+#else
+  std::filesystem::create_directories(directory);
+#endif
+}
+
+void ReplaceDirectoryWithLink(const std::filesystem::path &directory,
+                              const std::filesystem::path &target) {
+#if defined(_WIN32)
+  const auto error = onnx_light_test::CreateWindowsJunction(directory, target, false);
+  ASSERT_FALSE(error) << error.message();
+#else
+  std::filesystem::rename(directory, directory.string() + ".original");
+  std::filesystem::create_directory_symlink(target, directory);
+#endif
+}
+
 } // namespace
 
 TEST_F(MappedPayloadTest, BorrowReturnsExpectedBytesAndAlignment) {
@@ -69,6 +95,67 @@ TEST_F(MappedPayloadTest, BorrowReturnsExpectedBytesAndAlignment) {
   // the page size worth of alignment (>= 4096, i.e. much more than 8 bytes).
   EXPECT_GE(payload.alignment, size_t{8});
   EXPECT_EQ(std::memcmp(payload.data, content.data(), content.size()), 0);
+}
+
+TEST_F(MappedPayloadTest, NonAsciiNativePathsOpenMappedAndDirectReads) {
+  const auto path = base_dir_ / std::filesystem::path(u8"weights-\u00e9.bin");
+  const std::string content = "mapped payload";
+  std::ofstream out(path, std::ios::binary | std::ios::trunc);
+  out.write(content.data(), static_cast<std::streamsize>(content.size()));
+  out.close();
+
+  MappedPayloadSource source(base_dir_.string());
+  const std::string native_path = path.string();
+  const auto mapped = source.Borrow(native_path, 0, content.size());
+  ASSERT_NE(mapped.data, nullptr);
+  EXPECT_EQ(std::memcmp(mapped.data, content.data(), content.size()), 0);
+
+  std::vector<uint8_t> bytes(content.size());
+  FinalDestinationReadDescriptor(native_path, 0, content.size(), PayloadIdentity{})
+      .ReadInto(bytes.data());
+  EXPECT_EQ(std::memcmp(bytes.data(), content.data(), content.size()), 0);
+}
+
+TEST_F(MappedPayloadTest, TrustedBaseAliasesPreserveMappedAndDirectReadsAndRejectOutsideChildren) {
+  const auto base = base_dir_ / "model";
+  const auto alias = base_dir_ / "alias";
+  std::filesystem::create_directory(base);
+  const auto content = MakeBytes(32, 3);
+  WriteFile("model/weights.bin", content);
+#ifdef _WIN32
+  const auto error = onnx_light_test::CreateWindowsJunction(alias, base);
+  ASSERT_FALSE(error) << error.message();
+#else
+  std::filesystem::create_directory_symlink(base, alias);
+#endif
+  for (const auto &source_base : {base, alias}) {
+    MappedPayloadSource source(source_base.string());
+    const auto relative = source.Borrow("weights.bin", 0, content.size());
+    for (const auto &file_base : {base, alias}) {
+      const auto path = (file_base / "weights.bin").string();
+      const auto mapped = source.Borrow(path, 0, content.size());
+      EXPECT_EQ(mapped.owner, relative.owner);
+      EXPECT_EQ(mapped.identity.source_path, relative.identity.source_path);
+      EXPECT_EQ(std::memcmp(mapped.data, content.data(), content.size()), 0);
+      std::vector<uint8_t> bytes(content.size());
+      source.DescribeFinalDestinationRead(path, 0, content.size()).ReadInto(bytes.data());
+      EXPECT_EQ(std::memcmp(bytes.data(), content.data(), content.size()), 0);
+    }
+  }
+#ifdef _WIN32
+  std::filesystem::create_directory(base_dir_ / "outside");
+  WriteFile("outside/weights.bin", content);
+  const auto child_error =
+      onnx_light_test::CreateWindowsJunction(base / "linked", base_dir_ / "outside");
+  ASSERT_FALSE(child_error) << child_error.message();
+#else
+  std::filesystem::create_directory(base_dir_ / "outside");
+  WriteFile("outside/weights.bin", content);
+  std::filesystem::create_directory_symlink(base_dir_ / "outside", base / "linked");
+#endif
+  MappedPayloadSource source(alias.string());
+  EXPECT_ANY_THROW(source.Borrow((base / "linked" / "weights.bin").string(), 0, 4));
+  EXPECT_ANY_THROW(source.DescribeFinalDestinationRead("linked/weights.bin", 0, 4));
 }
 
 TEST_F(MappedPayloadTest, BorrowNonZeroOffsetReportsReducedAlignment) {
@@ -128,6 +215,10 @@ TEST_F(MappedPayloadTest, FileReplacementProducesNewGenerationAndBytes) {
   // the old mapping must keep observing the old inode's bytes.
   const std::string replacement = MakeBytes(32, 100);
   const std::string replacement_path = WriteFile("weights.bin.new", replacement);
+#if defined(_WIN32)
+  // Windows cannot replace a mapped destination, but can rename it out of the way.
+  std::filesystem::rename(base_dir_ / "weights.bin", base_dir_ / "weights.original");
+#endif
   std::filesystem::rename(replacement_path, base_dir_ / "weights.bin");
   source.ReleaseCachedMappings();
 
@@ -226,6 +317,19 @@ TEST_F(MappedPayloadTest, FinalDestinationReadDescriptorReadsDirectlyIntoCallerB
   EXPECT_EQ(std::memcmp(destination.data(), content.data() + 8, 16), 0);
 }
 
+TEST_F(MappedPayloadTest, ConfinedNestedPathsRemainSupported) {
+  std::filesystem::create_directories(base_dir_ / "first" / "second");
+  const std::string content = MakeBytes(32, 7);
+  WriteFile("first/second/weights.bin", content);
+  MappedPayloadSource source(base_dir_.string());
+  const auto payload = source.Borrow("first/second/weights.bin", 4, 16);
+  EXPECT_EQ(std::memcmp(payload.data, content.data() + 4, 16), 0);
+  const auto descriptor = source.DescribeFinalDestinationRead("first/second/weights.bin", 4, 16);
+  std::vector<char> destination(16);
+  descriptor.ReadInto(destination.data());
+  EXPECT_EQ(std::memcmp(destination.data(), content.data() + 4, 16), 0);
+}
+
 TEST_F(MappedPayloadTest, FinalDestinationReadDescriptorRejectsTruncationAtReadTime) {
   const std::string content = MakeBytes(64, 2);
   WriteFile("weights.bin", content);
@@ -239,6 +343,119 @@ TEST_F(MappedPayloadTest, FinalDestinationReadDescriptorRejectsTruncationAtReadT
 
   std::vector<char> destination(64, '\0');
   EXPECT_THROW(descriptor.ReadInto(destination.data()), std::exception);
+}
+
+TEST_F(MappedPayloadTest, FinalDestinationReadRetainsFileAcrossDirectoryReplacement) {
+  ASSERT_NO_FATAL_FAILURE(PrepareDirectoryReplacement(base_dir_ / "model" / "child"));
+  std::filesystem::create_directory(base_dir_ / "outside");
+  const std::string original = MakeBytes(32, 3);
+  WriteFile("model/child/weights.bin", original);
+  WriteFile("outside/weights.bin", MakeBytes(32, 99));
+  MappedPayloadSource source((base_dir_ / "model").string());
+  auto descriptor = source.DescribeFinalDestinationRead("child/weights.bin", 4, 16);
+
+  ASSERT_NO_FATAL_FAILURE(
+      ReplaceDirectoryWithLink(base_dir_ / "model" / "child", base_dir_ / "outside"));
+  std::vector<char> destination(16);
+  descriptor.ReadInto(destination.data());
+  EXPECT_EQ(std::memcmp(destination.data(), original.data() + 4, 16), 0);
+  EXPECT_THROW(source.DescribeFinalDestinationRead("child/weights.bin", 4, 16), std::exception);
+  EXPECT_THROW(source.Borrow("child/weights.bin", 4, 16), std::exception);
+}
+
+TEST_F(MappedPayloadTest, MappingUsesOpenedFileAfterDirectoryReplacement) {
+  ASSERT_NO_FATAL_FAILURE(PrepareDirectoryReplacement(base_dir_ / "model" / "child"));
+  std::filesystem::create_directory(base_dir_ / "outside");
+  const std::string original = MakeBytes(32, 3);
+  WriteFile("model/model.onnx", "model");
+  WriteFile("model/child/weights.bin", original);
+  WriteFile("outside/weights.bin", MakeBytes(32, 99));
+  utils::TwoFilesStream stream((base_dir_ / "model" / "model.onnx").string(),
+                               (base_dir_ / "model" / "child" / "weights.bin").string(), true);
+
+  ASSERT_NO_FATAL_FAILURE(
+      ReplaceDirectoryWithLink(base_dir_ / "model" / "child", base_dir_ / "outside"));
+  std::shared_ptr<void> owner;
+  const auto *mapping =
+      stream.borrow_weights_bytes("child/weights.bin", 0, original.size(), 1, owner);
+  ASSERT_NE(mapping, nullptr);
+  EXPECT_EQ(std::memcmp(mapping, original.data(), original.size()), 0);
+}
+
+TEST_F(MappedPayloadTest, ParallelStreamReadsRetainFilesAcrossDirectoryReplacement) {
+  const auto model = base_dir_ / "model";
+  ASSERT_NO_FATAL_FAILURE(PrepareDirectoryReplacement(model / "child"));
+  std::filesystem::create_directory(base_dir_ / "outside");
+  WriteFile("model/model.onnx", "model");
+  WriteFile("model/child/weights.bin", "original");
+  WriteFile("model/child/extra.bin", "extra!!!");
+  WriteFile("outside/weights.bin", "sentinel");
+  WriteFile("outside/extra.bin", "sentinel");
+  utils::TwoFilesStream stream((model / "model.onnx").string(),
+                               (model / "child" / "weights.bin").string(), true);
+  stream.set_active_weights_location("child/extra.bin");
+  stream.set_active_weights_location("child/weights.bin");
+  ASSERT_NO_FATAL_FAILURE(ReplaceDirectoryWithLink(model / "child", base_dir_ / "outside"));
+
+  uint8_t destination[8]{};
+  stream.read_bytes_from_weights_stream(8, destination, 0);
+  EXPECT_EQ(std::string(reinterpret_cast<char *>(destination), 8), "original");
+  for (const auto &location : {"child/weights.bin", "child/extra.bin"}) {
+    stream.set_active_weights_location(location);
+    stream.read_bytes_from_weights_stream(0, destination, 0);
+    stream.StartThreadPool(1);
+    utils::DelayedBlock block{8, destination, 0, 1};
+    stream.ReadDelayedBlock(block);
+    stream.WaitForDelayedBlock();
+    const std::string expected =
+        location == std::string("child/weights.bin") ? "original" : "extra!!!";
+    EXPECT_EQ(std::string(reinterpret_cast<char *>(destination), 8), expected);
+    std::shared_ptr<void> owner;
+    const auto *mapped = stream.borrow_weights_bytes(location, 0, 8, 1, owner);
+    ASSERT_NE(mapped, nullptr);
+    EXPECT_EQ(std::string(reinterpret_cast<const char *>(mapped), 8), expected);
+  }
+}
+
+TEST_F(MappedPayloadTest, ParallelStreamWritesRetainFilesAcrossDirectoryReplacement) {
+  const auto model = base_dir_ / "model";
+  ASSERT_NO_FATAL_FAILURE(PrepareDirectoryReplacement(model / "child"));
+  std::filesystem::create_directory(base_dir_ / "outside");
+  WriteFile("outside/weights.bin", "sentinel");
+  WriteFile("outside/extra.bin", "sentinel");
+  {
+    utils::TwoFilesWriteStream stream((model / "model.onnx").string(),
+                                      (model / "child" / "weights.bin").string());
+    stream.pre_allocate_weights(12);
+    stream.pre_allocate_weights("child/extra.bin", 12);
+    ASSERT_NO_FATAL_FAILURE(ReplaceDirectoryWithLink(model / "child", base_dir_ / "outside"));
+    stream.StartWriteThreadPool(2);
+    stream.SetMinParallelBlockSize(8);
+    for (const auto &location : {"child/weights.bin", "child/extra.bin"}) {
+      stream.write_raw_bytes_in_second_stream(reinterpret_cast<const uint8_t *>("original"), 8,
+                                              location);
+      stream.write_raw_bytes_in_second_stream(reinterpret_cast<const uint8_t *>("tail"), 4,
+                                              location);
+    }
+    stream.WaitForWriteCompletion();
+  }
+  for (const auto &filename : {"weights.bin", "extra.bin"}) {
+    std::ifstream pinned(model / "child.original" / filename, std::ios::binary);
+    EXPECT_EQ(std::string(std::istreambuf_iterator<char>(pinned), {}), "originaltail");
+    std::ifstream outside(base_dir_ / "outside" / filename, std::ios::binary);
+    EXPECT_EQ(std::string(std::istreambuf_iterator<char>(outside), {}), "sentinel");
+  }
+}
+
+TEST_F(MappedPayloadTest, FinalDestinationReadPinsFileAtConstruction) {
+  const std::string original = MakeBytes(32, 3);
+  const std::string path = WriteFile("weights.bin", original);
+  FinalDestinationReadDescriptor descriptor(path, 4, 16, PayloadIdentity{});
+  std::filesystem::rename(base_dir_ / "weights.bin", base_dir_ / "weights.original");
+  WriteFile("weights.bin", MakeBytes(32, 99));
+  std::vector<char> destination(16);
+  descriptor.ReadInto(destination.data());
+  EXPECT_EQ(std::memcmp(destination.data(), original.data() + 4, 16), 0);
 }
 
 TEST_F(MappedPayloadTest, FinalDestinationReadDescriptorOutOfRangeThrows) {

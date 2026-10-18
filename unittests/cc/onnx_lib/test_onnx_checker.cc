@@ -10,6 +10,7 @@
 #include <string>
 
 #ifdef _WIN32
+#include "../onnx_proto/windows_junction.h"
 #include <io.h>
 #else
 #include <unistd.h>
@@ -370,6 +371,7 @@ TEST(CHECKER, OpenExternalDataEmptyBaseDirTest) {
     std::ofstream ofs(dir / "data.bin", std::ios::binary);
     ofs << "data";
   }
+
   fs::current_path(dir);
 
   EXPECT_NO_THROW({
@@ -412,6 +414,67 @@ TEST(CHECKER, OpenExternalDataEmptyBaseDirTest) {
 #endif
 #endif
 }
+
+#ifndef _WIN32
+TEST(CHECKER, OpenExternalDataRetainsVerifiedFileAndRejectsUnsafeCreation) {
+  const fs::path root = "test_checker_anchored_external_data";
+  fs::remove_all(root);
+  fs::create_directories(root / "model" / "sub");
+  fs::create_directories(root / "outside");
+  {
+    std::ofstream(root / "model" / "sub" / "data.bin") << "original";
+    std::ofstream(root / "outside" / "data.bin") << "sentinel";
+  }
+  {
+    ScopedFd descriptor(static_cast<int>(
+        checker::open_external_data((root / "model").string(), "sub/data.bin", "tensor", true)));
+    fs::rename(root / "model" / "sub", root / "model" / "pinned");
+    fs::create_directory_symlink(fs::absolute(root / "outside"), root / "model" / "sub");
+    char bytes[8]{};
+    EXPECT_EQ(::read(descriptor.get(), bytes, 8), 8);
+    EXPECT_EQ(std::string(bytes, 8), "original");
+    EXPECT_THROW(
+        checker::open_external_data((root / "model").string(), "sub/new.bin", "tensor", false),
+        checker::ValidationError);
+    EXPECT_FALSE(fs::exists(root / "outside" / "new.bin"));
+    fs::create_hard_link(root / "outside" / "data.bin", root / "model" / "linked.bin");
+    EXPECT_THROW(
+        checker::open_external_data((root / "model").string(), "linked.bin", "tensor", false),
+        checker::ValidationError);
+    EXPECT_THROW(checker::open_external_data((root / "model").string(), "pinned", "tensor", false),
+                 checker::ValidationError);
+  }
+  {
+    std::ifstream outside(root / "outside" / "data.bin");
+    EXPECT_EQ(std::string(std::istreambuf_iterator<char>(outside), {}), "sentinel");
+  }
+  fs::remove_all(root);
+}
+#else
+TEST(CHECKER, OpenExternalDataRejectsActualWindowsJunctionBeforeCreation) {
+  const fs::path root = "test_checker_external_data_junction";
+  fs::remove_all(root);
+  fs::create_directories(root / "model");
+  fs::create_directories(root / "outside");
+  std::ofstream(root / "outside" / "data.bin") << "sentinel";
+  const auto error =
+      onnx_light_test::CreateWindowsJunction(root / "model" / "junction", root / "outside");
+  ASSERT_FALSE(error) << error.message();
+  for (bool read_only : {false, true})
+    EXPECT_THROW(checker::open_external_data((root / "model").string(), "junction/data.bin",
+                                             "tensor", read_only),
+                 checker::ValidationError);
+  EXPECT_THROW(
+      checker::open_external_data((root / "model").string(), "junction/new.bin", "tensor", false),
+      checker::ValidationError);
+  EXPECT_FALSE(fs::exists(root / "outside" / "new.bin"));
+  {
+    std::ifstream outside(root / "outside" / "data.bin");
+    EXPECT_EQ(std::string(std::istreambuf_iterator<char>(outside), {}), "sentinel");
+  }
+  fs::remove_all(root);
+}
+#endif
 
 } // namespace Test
 } // namespace ONNX_LIGHT_NAMESPACE

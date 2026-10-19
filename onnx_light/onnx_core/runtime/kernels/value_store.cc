@@ -71,6 +71,11 @@ const RuntimeValue &ValueStore::Get(const Slot &slot) const {
   return *entry;
 }
 
+ValueStore::BoundSlot ValueStore::BindForRead(const Slot &slot) const {
+  Get(slot);
+  return BoundSlot(*this, slot.index_);
+}
+
 std::optional<RuntimeValue> &ValueStore::ValueAt(const Slot &slot) {
   EXT_ENFORCE(slot.owner_ == identity_, "Value store slot ", slot.index_,
               " is not bound to this store.");

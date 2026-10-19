@@ -36,8 +36,9 @@ inline constexpr uint32_t kInvalidValueStoreSlot = std::numeric_limits<uint32_t>
  *
  * All sessions sharing the store are serialized by contract. Indexed reads
  * neither copy identity ownership nor require mutexes or atomic updates.
- * A kernel retains the store-bound slot returned by :cpp:func:`Bind`, so
- * execution checks its owner and performs a direct indexed lookup.
+ * Initialization uses the store-bound slot returned by :cpp:func:`Bind`.
+ * Once published, :cpp:func:`BindForRead` validates it and returns a binding
+ * that performs direct indexed reads without repeating ownership checks.
  * This synchronous store is separate from
  * :cpp:class:`PreparedExecutionState` and its :cpp:class:`PreparedObjectStore`;
  * the dynamic path manages asynchronous tasks, generations, residency,
@@ -71,6 +72,26 @@ public:
     uint32_t index_ = kInvalidValueStoreSlot;
   };
 
+  /**
+   * Borrows a published value through a validated store pointer and integer index.
+   *
+   * Only BindForRead constructs bindings, after checking ownership and readiness.
+   * Publication is immutable, so reads need no further validation. The original
+   * store must outlive the binding's use; this binding retains no shared owner.
+   */
+  class BoundSlot {
+  public:
+    /// Returns the immutable value directly, without ownership or readiness checks.
+    const RuntimeValue &Get() const noexcept { return *store_->slots_[index_]; }
+
+  private:
+    friend class ValueStore;
+    BoundSlot(const ValueStore &store, uint32_t index) : store_(&store), index_(index) {}
+
+    const ValueStore *store_;
+    uint32_t index_;
+  };
+
   ValueStore() = default;
   ValueStore(const ValueStore &) = delete;
   ValueStore &operator=(const ValueStore &) = delete;
@@ -82,6 +103,8 @@ public:
   Tensor AllocateTensor(int32_t data_type, const Shape &shape, size_t n_bytes);
   void Publish(const Slot &slot, RuntimeValue value);
   const RuntimeValue &Get(const Slot &slot) const;
+  /// Validates a published slot once and binds it for direct immutable replay.
+  BoundSlot BindForRead(const Slot &slot) const;
 
   /// Returns the sum of live buffer sizes in this static store's allocators.
   /// Includes allocated but unpublished values, not retained free capacity or

@@ -194,6 +194,12 @@ TEST(ValueStore, RejectsSlotsFromAnotherStoreWithTheSameIndex) {
   EXPECT_THROW(first.IsReady(second_slot), std::runtime_error);
   EXPECT_THROW(second.Get(first_slot), std::runtime_error);
   EXPECT_THROW(first.Get(second_slot), std::runtime_error);
+  EXPECT_THROW(second.BindForRead(first_slot), std::runtime_error);
+  EXPECT_THROW(first.BindForRead(second_slot), std::runtime_error);
+  const auto first_read = first.BindForRead(first_slot);
+  const auto second_read = second.BindForRead(second_slot);
+  EXPECT_FLOAT_EQ(first_read.Get().tensor.As<float>()[0], 7.0f);
+  EXPECT_FLOAT_EQ(second_read.Get().tensor.As<float>()[0], 9.0f);
   EXPECT_FLOAT_EQ(first.Get(first_slot).tensor.As<float>()[0], 7.0f);
   EXPECT_FLOAT_EQ(second.Get(second_slot).tensor.As<float>()[0], 9.0f);
 }
@@ -214,10 +220,26 @@ TEST(ValueStore, RejectsUnboundSlotsAndSlotsFromPreviousStoreLifetimes) {
   for (const auto &invalid : {ValueStore::Slot{}, current, previous}) {
     EXPECT_THROW(store->IsReady(invalid), std::runtime_error);
     EXPECT_THROW(store->Get(invalid), std::runtime_error);
+    EXPECT_THROW(store->BindForRead(invalid), std::runtime_error);
     EXPECT_THROW(store->Publish(invalid, RuntimeValue()), std::runtime_error);
   }
   EXPECT_TRUE(store->IsReady(active));
   EXPECT_FLOAT_EQ(store->Get(active).tensor.As<float>()[0], 11.0f);
+}
+
+TEST(ValueStore, BoundReadsRequirePublicationAndRemainStableAcrossSlotGrowth) {
+  ValueStore store;
+  const auto slot = store.Bind("prepared");
+  EXPECT_THROW(store.BindForRead(slot), std::runtime_error);
+  Tensor tensor = store.AllocateTensor(TensorProto::FLOAT, {1}, sizeof(float));
+  tensor.As<float>()[0] = 13.0f;
+  store.Publish(slot, RuntimeValue(std::move(tensor)));
+  const auto binding = store.BindForRead(slot);
+  const RuntimeValue *value = &binding.Get();
+  for (size_t i = 0; i < 256; ++i)
+    store.Bind("other_" + std::to_string(i));
+  EXPECT_EQ(&binding.Get(), value);
+  EXPECT_FLOAT_EQ(binding.Get().tensor.As<float>()[0], 13.0f);
 }
 
 } // namespace

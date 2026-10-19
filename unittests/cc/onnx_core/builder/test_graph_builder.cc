@@ -405,6 +405,68 @@ TEST(GraphBuilder, SetOpsetVersionRefreshesMetadataSuffixOnce) {
   EXPECT_EQ(builder.Compute().Memory(), expected.Memory());
   builder.SetOpsetVersion("opset_batch_test", 2);
   EXPECT_EQ(*peak_calls, builder.Nodes().size());
+  expected.RefreshNodes(graph.node(), {{0, {"x"}}}, builder.Shapes(), {},
+                        core::symbolic::Device::kCPU);
+  EXPECT_EQ(*peak_calls, builder.Nodes().size());
+}
+
+TEST(GraphBuilder, SetOpsetVersionReplacesOnlyAffectedShapeConstraints) {
+  core::shapes::RegisterComputeShapeFn(
+      "opset_constraint_test", "Grow", [](core::shapes::ShapesContext &ctx, const NodeProto &node) {
+        const int version = ctx.OpsetVersion("opset_constraint_test");
+        ctx.Set(node.output(0),
+                core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                          MakeShape({4, version})));
+        ctx.AddConstraint("version_axis", std::to_string(version));
+      });
+  core::builder::GraphBuilder builder("g", SchemaLookup(),
+                                      {{"", 18}, {"opset_constraint_test", 1}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({4, 1}));
+  builder.MakeInput("stable", core::symbolic::TensorType::kFloat, MakeShape({5}));
+  builder.MakeInput("cond", core::symbolic::TensorType::kBool, MakeShape({}));
+  builder.MakeNode("NonZero", {"stable"}, {"unrelated"});
+  builder.MakeNode("Grow", {"x"}, {"changing"}, "opset_constraint_test");
+  builder.MakeNode("NonZero", {"changing"}, {"nonzero"});
+  auto &body = builder.MakeSubgraph("body");
+  body.MakeNode("Identity", {"changing"}, {"body_result"});
+  body.MakeNode("NonZero", {"changing"}, {"body_nonzero"});
+  body.MakeOutput("body_result");
+  auto &otherwise = builder.MakeSubgraph("otherwise");
+  otherwise.MakeNode("Identity", {"x"}, {"else_result"});
+  otherwise.MakeOutput("else_result");
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  for (const auto &[name, branch] :
+       {std::pair{"then_branch_ref", "body"}, std::pair{"else_branch_ref", "otherwise"}}) {
+    auto &attribute = attributes.add();
+    attribute.set_name(name);
+    attribute.set_type(AttributeProto::STRING);
+    attribute.set_s(branch);
+  }
+  builder.MakeNode("If", {"cond"}, {"result"}, "", "", attributes);
+  builder.MakeOutput("result");
+  ASSERT_TRUE(builder.Shapes().HasLessEqualConstraint("NonZero_nonzero_nnz", "4"));
+
+  for (int version : {2, 3, 1}) {
+    builder.SetOpsetVersion("opset_constraint_test", version);
+    core::shapes::ShapesContext fresh;
+    fresh.SetOpsetVersion("", 18);
+    fresh.SetOpsetVersion("opset_constraint_test", version);
+    fresh.ComputeShapeGraph(builder.BuildGraph());
+    EXPECT_EQ(builder.Shapes().Constraints(), fresh.Constraints());
+    EXPECT_EQ(builder.Shapes().LessEqualConstraints(), fresh.LessEqualConstraints());
+    EXPECT_TRUE(builder.Shapes().HasLessEqualConstraint("NonZero_unrelated_nnz", "5"));
+    EXPECT_TRUE(builder.Shapes().HasLessEqualConstraint("NonZero_nonzero_nnz",
+                                                        std::to_string(4 * version)));
+    EXPECT_TRUE(body.Shapes().HasLessEqualConstraint("NonZero_body_nonzero_nnz",
+                                                     std::to_string(4 * version)));
+    EXPECT_EQ(body.Shapes().LessEqualConstraintsSize(), 1u);
+    if (version == 1) {
+      EXPECT_FALSE(builder.Shapes().HasLessEqualConstraint("If_result_d1", "3"));
+    } else {
+      EXPECT_FALSE(builder.Shapes().HasLessEqualConstraint("NonZero_nonzero_nnz", "4"));
+      EXPECT_TRUE(builder.Shapes().HasLessEqualConstraint("If_result_d1", std::to_string(version)));
+    }
+  }
 }
 
 TEST(GraphBuilder, MakeNodeMaintainsTagsAndReuseIncrementally) {

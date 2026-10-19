@@ -749,6 +749,7 @@ bool GraphBuilder::RefreshDependentNodes(
       continue;
     }
     affected = true;
+    compute_.Shapes().EraseNodeConstraints(stored);
     for (const std::string &output : stored.output()) {
       if (!output.empty()) {
         affected_values.insert(output);

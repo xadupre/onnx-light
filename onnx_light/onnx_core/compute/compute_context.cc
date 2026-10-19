@@ -583,11 +583,11 @@ void ComputeContext::RefreshNodes(const utils::RepeatedProtoField<NodeProto> &no
   for (const auto &[index, current] : references) {
     EXT_ENFORCE_INVALID(index < nodes.size() && index < incr_node_references_.size(),
                         "RefreshNodes: node index is out of bounds.");
-    refresh_from = std::min(refresh_from, index);
     const auto &previous = incr_node_references_[index];
     if (previous == current) {
       continue;
     }
+    refresh_from = std::min(refresh_from, index);
     const std::unordered_set<std::string> old_names(previous.begin(), previous.end());
     const std::unordered_set<std::string> new_names(current.begin(), current.end());
     for (const auto &name : old_names) {

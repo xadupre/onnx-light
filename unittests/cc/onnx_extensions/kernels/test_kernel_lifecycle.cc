@@ -395,7 +395,7 @@ TEST(KernelLifecycle, NestedFunctionPreparesBoundImmutableGemmWeight) {
     if (overridable)
       rt.Put("B", Tensor::FromFloat("B", {3, 2}, {1, 2, 3, 4, 5, 6}));
     session.Run(rt);
-    EXPECT_EQ(rt.value_store_owner(), session.value_store());
+    EXPECT_EQ(rt.value_store_owner(), session.value_store_owner());
     EXPECT_EQ(rt.value_store().slot_count(), overridable ? 0u : 1u);
     EXPECT_EQ(rt.value_store().prepared_bytes(), overridable ? 0u : 6 * sizeof(float));
     EXPECT_EQ(std::vector<float>(rt.Get("Y").AsFloat(), rt.Get("Y").AsFloat() + 2),
@@ -439,7 +439,7 @@ TEST(KernelLifecycle, NestedGraphPreparesCapturedImmutableGemmWeight) {
     if (overridable)
       rt.Put("B", Tensor::FromFloat("B", {3, 2}, {1, 2, 3, 4, 5, 6}));
     session.Run(rt);
-    EXPECT_EQ(rt.value_store_owner(), session.value_store());
+    EXPECT_EQ(rt.value_store_owner(), session.value_store_owner());
     EXPECT_EQ(rt.value_store().slot_count(), overridable ? 0u : 1u);
     EXPECT_EQ(rt.value_store().prepared_bytes(), overridable ? 0u : 6 * sizeof(float));
     EXPECT_EQ(std::vector<float>(rt.Get("Y").AsFloat(), rt.Get("Y").AsFloat() + 2),

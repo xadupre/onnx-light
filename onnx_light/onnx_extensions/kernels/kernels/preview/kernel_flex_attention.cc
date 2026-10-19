@@ -484,9 +484,9 @@ void FlexAttention::Run(RuntimeContext &rt) {
     EXT_ENFORCE_INVALID(!(score_mod_graph.input().empty()),
                         "RunNode: 'score_mod' subgraph must declare at least one input.");
     const std::string in_name = score_mod_graph.input()[0].name();
-    score_mod_session =
-        std::make_unique<SubgraphSession>(score_mod_graph, ctx_.opset_imports, nullptr,
-                                          std::unordered_set<std::string>{}, ctx_.model_functions);
+    score_mod_session = std::make_unique<SubgraphSession>(
+        score_mod_graph, ctx_.opset_imports, rt.value_store_owner(),
+        std::unordered_set<std::string>{}, ctx_.model_functions);
     score_mod_fn = [in_name, &rt, &session = *score_mod_session](Tensor &scores) {
       auto outputs = session.Run({{in_name, scores}}, rt, "score_mod");
       if (!outputs.empty()) {
@@ -500,9 +500,9 @@ void FlexAttention::Run(RuntimeContext &rt) {
     EXT_ENFORCE_INVALID(!(prob_mod_graph.input().empty()),
                         "RunNode: 'prob_mod' subgraph must declare at least one input.");
     const std::string in_name = prob_mod_graph.input()[0].name();
-    prob_mod_session =
-        std::make_unique<SubgraphSession>(prob_mod_graph, ctx_.opset_imports, nullptr,
-                                          std::unordered_set<std::string>{}, ctx_.model_functions);
+    prob_mod_session = std::make_unique<SubgraphSession>(
+        prob_mod_graph, ctx_.opset_imports, rt.value_store_owner(),
+        std::unordered_set<std::string>{}, ctx_.model_functions);
     prob_mod_fn = [in_name, &rt, &session = *prob_mod_session](Tensor &probs) {
       auto outputs = session.Run({{in_name, probs}}, rt, "prob_mod");
       if (!outputs.empty()) {

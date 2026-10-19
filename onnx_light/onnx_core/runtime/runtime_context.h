@@ -632,14 +632,19 @@ public:
            tensor.allocation_owner() == io_arena_owner_.get();
   }
 
-  /// Returns the value store visible to kernels in this invocation.
+  /// Returns the non-null static preparation store visible to kernels.
+  /// This is separate from the invocation value directory and dynamic residency.
   ValueStore &value_store() noexcept { return *value_store_; }
   const ValueStore &value_store() const noexcept { return *value_store_; }
 
-  /// Returns the shared value-store owner inherited by nested contexts.
-  const std::shared_ptr<ValueStore> &value_store_owner() const noexcept { return value_store_; }
+  /// Returns the shared owner to pass explicitly to nested sessions.
+  const std::shared_ptr<ValueStore> &value_store_owner() noexcept { return value_store_; }
+  /// Returns a read-only shared owner without permitting preparation mutation.
+  std::shared_ptr<const ValueStore> value_store_owner() const noexcept { return value_store_; }
 
-  /// Installs the session hierarchy's value store in this context.
+  /// Installs a non-null static preparation store; rejects null.
+  /// A session installs its construction-time owner before initializing kernels.
+  /// Other root sessions never adopt this owner implicitly.
   void SetValueStore(std::shared_ptr<ValueStore> value_store);
 
   /// Returns the allocator dedicated to values that cross the runtime

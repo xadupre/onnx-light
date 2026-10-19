@@ -207,15 +207,14 @@ public:
    * repeated executions of that node, including when that node itself is
    * nested inside an outer ``Loop`` / ``Scan`` / ``SequenceMap`` body.
    *
-   * @param rt    Runtime context; only used to propagate events during
-   *              construction-time bookkeeping (kept for API symmetry with
-   *              :cpp:func:`Run` / :cpp:func:`RunChild`; the plan itself no
-   *              longer depends on it).
    * @param graph The subgraph to run repeatedly via :cpp:func:`Run`. Must
    *              outlive this :cpp:class:`SubgraphSession` (its nodes are
    *              referenced by pointer from the owned
    *              :cpp:class:`ExecutionPlan`); typically part of the parsed
    *              model, so this holds for the model's whole lifetime.
+   * @param value_store Static preparation owner inherited explicitly from
+   *                    the parent session or active context. Omitting it creates
+   *                    an independent store; it is not adopted on the first run.
    */
   SubgraphSession(const GraphProto &graph, const OpsetImports *opset_imports = nullptr,
                   std::shared_ptr<ValueStore> value_store = nullptr,

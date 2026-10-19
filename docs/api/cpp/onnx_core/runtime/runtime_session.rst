@@ -20,10 +20,13 @@ when exporting initializer views.
 Kernel preparation
 ------------------
 
+Construction fixes a non-null ``ValueStore`` owner, creating a private store
+unless ``RuntimeSessionOptions::value_store`` explicitly supplies one.
 The first ``Run`` resolves every planned kernel and invokes preparation hooks
-for immutable inputs. It retains the ``ValueStore`` exposed by the root
-``RuntimeContext``; ``If``, ``Loop``, ``Scan``, ``SequenceMap``, and model-local
-function contexts inherit the same store. A kernel binds a stable ``uint32_t``
+for immutable inputs. Each run installs the session's store into the
+``RuntimeContext``; it never adopts a context's previous store. ``If``,
+``Loop``, ``Scan``, ``SequenceMap``, and model-local function sessions explicitly
+inherit the parent's owner. A kernel binds a stable ``uint32_t``
 slot and retains it for the session lifetime. Subsequent runs read the slot directly, so ordinary
 ``ExecutionPlan`` replay does not wait on readiness, acquire a preparation
 mutex, or repeat a string-keyed lookup.
@@ -31,14 +34,26 @@ mutex, or repeat a string-keyed lookup.
 ``Gemm`` currently uses this path for a constant ``B`` initializer. An
 initializer that is also a graph input, or a value supplied by the caller
 before initialization, remains overridable and is not prepared.
-``RuntimeSession::prepared_bytes`` reports the allocations owned by the shared
-hierarchy store, so the root session's value includes preparations created by
-its nested sessions.
+``RuntimeSession::prepared_bytes`` reports live buffer sizes in the static
+store's allocators, including allocated but unpublished values and preparations
+created by nested sessions. It excludes retained free capacity, execution/I/O
+arenas, and dynamic prepared-object residency. Explicitly sharing a store
+between otherwise independent sessions also shares this accounting: it is
+not a per-session partition. All sessions sharing one store must serialize
+their runs. Contexts may keep the owner alive after a session is destroyed.
+
+``value_store()`` returns a reference, available even before the first run.
+Use ``value_store_owner()`` when passing shared ownership to options or a
+nested session. Const session/context access returns ``const ValueStore&``
+or ``std::shared_ptr<const ValueStore>``; initialization-time mutation and
+sharing a mutable owner require a non-const session/context.
 
 This synchronous store is not ``PreparedObjectStore``: asynchronous external
 data loading, dependency scheduling, generations, cache persistence, and
 eviction remain responsibilities of ``PreparedExecutionPlan`` and
 ``PreparedExecutionState``.
+Dynamic preparation does not automatically publish values into the static
+store, and its admission/residency budgets do not constrain static allocations.
 
 .. doxygenfile:: onnx_core/runtime/runtime_session.h
    :project: onnx-light

@@ -1424,11 +1424,19 @@ def _index_page_rst() -> str:
     lines.append("")
     lines.append("   domains")
     lines.append("   patterns")
+    lines.append("   memory_peak")
     lines.append("")
+
+    return "\n".join(lines)
+
+
+def _memory_peak_page_rst() -> str:
+    """Returns RST content for the peak-memory catalogue."""
+    lines: list[str] = []
     lines.append(".. _l-api-memory-peak-catalog:")
     lines.append("")
     lines.append("MemoryPeak")
-    lines.append("----------")
+    lines.append("==========")
     lines.append("")
     lines.append(
         "This table lists the peak-memory functions registered by the installed "
@@ -1578,7 +1586,8 @@ def generate_operators_doc(
 
     Reads all ONNX operator schemas from the lightweight ``onnx_op`` C
     extension (``LightOpSchema``) and writes one RST file per domain plus a
-    top-level ``index.rst`` toctree with separate domain and pattern catalogues.
+    top-level ``index.rst`` toctree with separate domain, pattern and peak-memory
+    catalogues.
 
     Args:
         output_dir: Directory where the generated ``.rst`` files are written.
@@ -1670,6 +1679,7 @@ def generate_operators_doc(
         ("index.rst", _index_page_rst()),
         ("domains.rst", _domains_page_rst(list(by_domain.keys()))),
         ("patterns.rst", _patterns_page_rst()),
+        ("memory_peak.rst", _memory_peak_page_rst()),
     ):
         catalogue_path = pathlib.Path(output_dir, filename)
         if catalogue_path.exists() and catalogue_path.read_text(encoding="utf-8") == content:

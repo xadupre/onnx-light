@@ -29,6 +29,7 @@ class TestGenOperators(ExtTestCase):
         self.assertIn("index.rst", files, "index.rst must be generated")
         self.assertIn("domains.rst", files, "domains.rst must be generated")
         self.assertIn("patterns.rst", files, "patterns.rst must be generated")
+        self.assertIn("memory_peak.rst", files, "memory_peak.rst must be generated")
         self.assertIn("ai_onnx.rst", files, "ai_onnx.rst must be generated")
         self.assertIn("ai_onnx_ml.rst", files, "ai_onnx_ml.rst must be generated")
 
@@ -47,8 +48,10 @@ class TestGenOperators(ExtTestCase):
         self.assertIn("ByOp\n====\n", index)
         self.assertIn("   domains\n", index)
         self.assertIn("   patterns\n", index)
-        self.assertIn("MemoryPeak\n----------\n", index)
-        self.assertIn("**Attention**", index)
+        self.assertIn("   memory_peak\n", index)
+        self.assertNotIn("MemoryPeak", index)
+        self.assertNotIn("**Attention**", index)
+        self.assertNotIn(".. _l-api-memory-peak-catalog:", index)
         self.assertNotIn(".. _l-api-pattern-catalog:", index)
         self.assertNotIn("   ai_onnx\n", index)
 
@@ -59,6 +62,15 @@ class TestGenOperators(ExtTestCase):
         self.assertIn(".. _l-api-pattern-catalog:", content)
         self.assertIn(doc_module.render_rst_pattern_catalog().rstrip(), content)
         self.assertNotIn("MemoryPeak", content)
+
+    def test_memory_peak_page_contains_catalogue(self):
+        self._init()
+        content = Path(self.tmp_dir, "memory_peak.rst").read_text(encoding="utf-8")
+        self.assertIn("MemoryPeak\n==========\n", content)
+        self.assertIn(".. _l-api-memory-peak-catalog:", content)
+        self.assertIn(doc_module.render_rst_peak_memory_catalog().rstrip(), content)
+        self.assertIn("**Attention**", content)
+        self.assertNotIn(".. _l-api-pattern-catalog:", content)
 
     def test_ml_domain_page_contains_operators(self):
         self._init()
@@ -268,7 +280,7 @@ class TestGenOperators(ExtTestCase):
 
     def test_generate_refreshes_existing_index(self):
         folder = self.get_dump_folder("test_gen_operators_refresh_index", clean=True)
-        for filename in ("index.rst", "domains.rst", "patterns.rst"):
+        for filename in ("index.rst", "domains.rst", "patterns.rst", "memory_peak.rst"):
             path = Path(folder, filename)
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("Ops\n===\n", encoding="utf-8")
@@ -279,13 +291,19 @@ class TestGenOperators(ExtTestCase):
         self.assertIn("ByOp\n====\n", content)
         self.assertIn("   domains\n", content)
         self.assertIn("   patterns\n", content)
-        self.assertIn("MemoryPeak\n----------\n", content)
+        self.assertIn("   memory_peak\n", content)
+        self.assertNotIn("MemoryPeak", content)
+        self.assertNotIn(".. _l-api-memory-peak-catalog:", content)
         domains = Path(folder, "domains.rst").read_text(encoding="utf-8")
         self.assertIn("Domains\n=======\n", domains)
         self.assertIn("   ai_onnx\n", domains)
         patterns = Path(folder, "patterns.rst").read_text(encoding="utf-8")
         self.assertIn("Patterns\n========\n", patterns)
         self.assertIn(".. _l-api-pattern-catalog:", patterns)
+        memory_peak = Path(folder, "memory_peak.rst").read_text(encoding="utf-8")
+        self.assertIn("MemoryPeak\n==========\n", memory_peak)
+        self.assertIn(".. _l-api-memory-peak-catalog:", memory_peak)
+        self.assertIn(doc_module.render_rst_peak_memory_catalog().rstrip(), memory_peak)
 
     def test_latest_page_contains_diff_with_previous_version(self):
         self._init()

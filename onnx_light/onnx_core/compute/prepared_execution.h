@@ -117,8 +117,10 @@ public:
   void AdmitAllocation(size_t n_bytes);
 
   PreparedResidencyState State(const PreparedKey &key) const;
+  /// Returns dynamic resident-object bytes, excluding static ValueStore storage.
   size_t resident_bytes() const;
   size_t waiting_admissions() const;
+  /// Returns the dynamic object-store budget, not a limit on static preparation.
   size_t residency_budget() const noexcept { return residency_budget_; }
   uint64_t readiness_epoch() const noexcept { return readiness_epoch_.load(); }
 
@@ -194,10 +196,13 @@ struct PreparedExecutionResult {
   std::vector<PreparedTaskTrace> trace;
 };
 
+/// Bounds dynamic task admission and residency, not static ValueStore storage
+/// or the execution/I/O allocators used by ordinary RuntimeSession replay.
 struct PreparedSchedulerOptions {
   size_t io_workers = 2;
   size_t global_memory_budget = std::numeric_limits<size_t>::max();
   size_t preparation_memory_budget = std::numeric_limits<size_t>::max();
+  /// Dynamic prepared-object residency/admission budget, independent of ValueStore.
   size_t prepared_memory_budget = std::numeric_limits<size_t>::max();
   size_t execution_memory_budget = std::numeric_limits<size_t>::max();
   size_t io_memory_budget = std::numeric_limits<size_t>::max();
@@ -325,7 +330,12 @@ ExpandMaterializationRecipe(const PreparedRequirementDescriptor &requirement,
                             const MaterializationRecipe &selected, TaskId first_task_id);
 
 /**
- * Owns session preparation arenas and the mutable prepared-object residency state.
+ * Owns dynamic preparation arenas, scheduling, generations, and object residency.
+ *
+ * PreparedExecutionPlan consumes this state. Ordinary RuntimeSession replay
+ * instead uses its static ValueStore; preparing or publishing a dynamic object
+ * does not automatically populate that store. The two allocation policies,
+ * budgets, and memory statistics remain independent.
  */
 class ONNX_LIGHT_CORE_API PreparedExecutionState {
 public:

@@ -305,8 +305,8 @@ Tensors Loop::operator()(RuntimeContext &rt, const GraphProto &body, const Tenso
   // Build a single session over the body once and reuse it for every
   // iteration instead of re-resolving the body's kernels on every call; the
   // body itself is only needed here, not kept around afterwards.
-  SubgraphSession session(body, ctx_.opset_imports, nullptr, std::unordered_set<std::string>{},
-                          ctx_.model_functions);
+  SubgraphSession session(body, ctx_.opset_imports, rt.value_store_owner(),
+                          std::unordered_set<std::string>{}, ctx_.model_functions);
   return (*this)(rt, body, session, M, cond, v_initial);
 }
 

@@ -22,6 +22,10 @@
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
 
+std::shared_ptr<ValueStore> SessionValueStore(std::shared_ptr<ValueStore> store) {
+  return store ? std::move(store) : std::make_shared<ValueStore>();
+}
+
 /// Derives the CPU policy a session requests when the caller supplied none.
 /// The requested participant count comes from
 /// :cpp:var:`RuntimeParameters::num_threads` (negative values mean "topology
@@ -116,7 +120,8 @@ RuntimeSession::RuntimeSession(const ModelProto &model, int verbose)
                             }) {}
 
 RuntimeSession::RuntimeSession(const ModelProto &model, RuntimeSessionOptions options)
-    : default_plan_(model), plan_(default_plan_), value_store_(std::move(options.value_store)),
+    : default_plan_(model), plan_(default_plan_),
+      value_store_(SessionValueStore(std::move(options.value_store))),
       check_shapes_(options.check_shapes),
       allow_external_output_allocators_(options.allow_external_output_allocators),
       parameters_(std::move(options.parameters)),
@@ -140,7 +145,8 @@ RuntimeSession::RuntimeSession(const GraphProto &graph, const OpsetImports *inhe
                                std::unordered_set<std::string> immutable_inputs,
                                const FunctionMap *model_functions)
     : default_plan_(graph), plan_(default_plan_), inherited_opset_imports_(inherited_opset_imports),
-      inherited_model_functions_(model_functions), value_store_(std::move(value_store)),
+      inherited_model_functions_(model_functions),
+      value_store_(SessionValueStore(std::move(value_store))),
       cpu_execution_(DefaultCpuExecutionPolicy(parameters_)), verbose_(verbose) {
   SetDeclaredShapes(graph);
   SetInitializers(graph);
@@ -162,7 +168,7 @@ RuntimeSession::RuntimeSession(const ExecutionPlan &plan, int verbose)
                            }) {}
 
 RuntimeSession::RuntimeSession(const ExecutionPlan &plan, RuntimeSessionOptions options)
-    : plan_(plan), value_store_(std::move(options.value_store)),
+    : plan_(plan), value_store_(SessionValueStore(std::move(options.value_store))),
       check_shapes_(options.check_shapes),
       allow_external_output_allocators_(options.allow_external_output_allocators),
       parameters_(std::move(options.parameters)),
@@ -181,7 +187,8 @@ RuntimeSession::RuntimeSession(const FunctionProto &function,
                                RuntimeSessionOptions options, const FunctionMap *model_functions)
     : default_plan_(function), plan_(default_plan_),
       inherited_opset_imports_(inherited_opset_imports),
-      inherited_model_functions_(model_functions), value_store_(std::move(options.value_store)),
+      inherited_model_functions_(model_functions),
+      value_store_(SessionValueStore(std::move(options.value_store))),
       inherited_immutable_inputs_(std::move(options.immutable_inputs)),
       check_shapes_(options.check_shapes),
       allow_external_output_allocators_(options.allow_external_output_allocators),
@@ -503,9 +510,7 @@ void RuntimeSession::ResolveKernelValueSlots(RuntimeContext &rt) {
   }
 }
 
-size_t RuntimeSession::prepared_bytes() const noexcept {
-  return value_store_ == nullptr ? 0 : value_store_->prepared_bytes();
-}
+size_t RuntimeSession::prepared_bytes() const noexcept { return value_store_->prepared_bytes(); }
 
 std::vector<std::string> RuntimeSession::used_kernels() const {
   std::vector<std::string> result;
@@ -683,9 +688,7 @@ void RuntimeSession::Run(RuntimeContext &rt) {
   const ParallelRegionCollectorScope collector_scope(parallel_region_collector_ != nullptr
                                                          ? parallel_region_collector_.get()
                                                          : CurrentParallelRegionCollector());
-  if (value_store_ == nullptr) {
-    value_store_ = rt.value_store_owner();
-  } else if (rt.value_store_owner() != value_store_) {
+  if (rt.value_store_owner() != value_store_) {
     rt.SetValueStore(value_store_);
   }
   const std::unordered_set<std::string> seeded_initializers = SeedInitializers(rt);

@@ -82,8 +82,10 @@ struct RuntimeSessionOptions {
   /// Initial capacity along a kernel's append axis for contiguous persistent tensors.
   /// Zero disables append reservations; kernels use their ordinary allocation path.
   size_t persistent_tensor_initial_capacity = 32;
-  /// Value store inherited by nested graph and model-local function sessions.
-  /// A root session left empty adopts the store exposed by its first runtime context.
+  /// Static preparation store shared with nested graph and model-local function sessions.
+  /// When omitted, construction creates a private store independent of runtime contexts.
+  /// Supplying an owner explicitly shares preparations and their allocation accounting.
+  /// Runs of sessions sharing one store must be serialized.
   std::shared_ptr<ValueStore> value_store = nullptr;
   /// Immutable names inherited from a caller after binding function inputs.
   std::unordered_set<std::string> immutable_inputs = {};
@@ -143,7 +145,8 @@ struct KernelTuningResolutionStatistics {
  * serialize nodes. Factories must return independent mutable kernel state
  * for each resolution. Independent sessions and contexts may run concurrently
  * with thread-safe user callbacks and immutable shared parameters, but runs
- * on the same session/context must be serialized by the caller.
+ * on the same session/context must be serialized by the caller. Sessions
+ * explicitly sharing a ValueStore must also serialize their runs.
  *
  * This mirrors how an inference runtime prepares an executable graph once and
  * then runs it repeatedly. Every caller that needs to run a node list builds
@@ -321,15 +324,22 @@ public:
     return tuning_resolution_statistics_;
   }
 
-  /// Returns bytes occupied by prepared kernel objects in the shared root,
-  /// subgraph, and model-local function session hierarchy.
+  /// Returns live allocation bytes in this session's static preparation store,
+  /// including nested sessions and any other sessions explicitly sharing it.
+  /// Includes allocated but unpublished values; excludes execution/I/O arenas,
+  /// dynamic prepared-object residency, and retained free-buffer capacity.
   size_t prepared_bytes() const noexcept;
 
-  /// Returns the synchronous preparation store shared by this session hierarchy.
-  /// This store supplies stable direct-lookup slots during ordinary
-  /// :cpp:class:`ExecutionPlan` replay; it is separate from the asynchronous
-  /// :cpp:class:`PreparedExecutionState`.
-  const std::shared_ptr<ValueStore> &value_store() const noexcept { return value_store_; }
+  /// Returns the non-null static preparation store fixed at construction.
+  /// Kernels publish during initialization and use stable slots during replay.
+  /// This is not the invocation value directory or dynamic PreparedExecutionState.
+  ValueStore &value_store() noexcept { return *value_store_; }
+  const ValueStore &value_store() const noexcept { return *value_store_; }
+
+  /// Returns the owner to share explicitly with another session or nested kernel.
+  const std::shared_ptr<ValueStore> &value_store_owner() noexcept { return value_store_; }
+  /// Returns a read-only shared owner without permitting preparation mutation.
+  std::shared_ptr<const ValueStore> value_store_owner() const noexcept { return value_store_; }
 
   /// Enables or disables concrete-shape validation. When enabled, :cpp:func:`Run`
   /// checks that the concrete shape of every tensor carrying a declared

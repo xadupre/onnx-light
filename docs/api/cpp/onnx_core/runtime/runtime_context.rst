@@ -46,6 +46,17 @@ value destroys its allocation handle and returns the physical ``RawBuffer`` to
 the arena for reuse by another name. The context also exposes a non-null
 ``ValueStore`` for immutable prepared kernel values.
 
+This static preparation store is distinct from both the invocation directory
+and dynamic ``PreparedExecutionState``. A session installs its
+construction-time store before kernel initialization; it does not adopt a
+context's previous owner. Reusing a context therefore does not merge the
+stores of independent sessions. Child contexts inherit the active owner;
+nested sessions receive it explicitly through ``value_store_owner()``.
+Use ``value_store()`` for a reference and ``value_store_owner()`` to retain or
+share ownership. Const access yields a read-only reference or shared owner.
+``SetValueStore`` rejects null, and all sessions sharing a store must serialize
+their runs.
+
 Ordinary tensor payloads are stored in a slot-indexed vector.
 ``RuntimeSession`` attaches pre-resolved input/output slot vectors before each
 kernel dispatch; ``GetInput`` and ``SetOutput`` therefore use direct indexing.

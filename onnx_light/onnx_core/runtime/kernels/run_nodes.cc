@@ -1217,6 +1217,9 @@ ResolveNodeKernelDefault(const NodeProto &node, RuntimeContext &rt, const std::s
                          const OpsetImports *opset_imports, std::shared_ptr<ValueStore> value_store,
                          const std::unordered_set<std::string> &immutable_inputs,
                          const FunctionMap *model_functions) {
+  if (value_store == nullptr) {
+    value_store = rt.value_store_owner();
+  }
   // A node referring to a model-local FunctionProto (registered by
   // ``RegisterModelFunctions`` from ``ModelProto::functions()``) takes priority over
   // the built-in kernel dispatch table so that user-defined functions

@@ -162,16 +162,20 @@ RuntimeSession integration
 applying its tuning profile and before the first node executes. The CPU
 ``Gemm`` implementation uses this hook to pack a constant ``B`` initializer
 into the root session hierarchy's ``ValueStore``. Control-flow
-subgraphs and model-local function sessions inherit the same store. The kernel
-binds a stable integer slot while it initializes; later runs consume that slot
+subgraphs and model-local function sessions explicitly inherit the same store.
+The kernel binds a stable integer slot while it initializes; later runs consume that slot
 by direct vector indexing instead of repacking ``B`` or repeating a string-key
 lookup. FLOAT16 and BFLOAT16 weights are promoted and packed once as FLOAT
 because those kernels compute in FLOAT.
 
 An initializer that is also a graph input remains overridable and is therefore
 not prepared: every run continues to consume the caller's current value.
-``RuntimeSession::prepared_bytes`` reports the resident prepared allocation for
-diagnostics and tests.
+``RuntimeSession::prepared_bytes`` sums live buffer sizes in the static store's
+allocators, including allocated but unpublished values. It excludes retained
+free capacity, execution/I/O arenas, and dynamic object residency.
+The owner is fixed at construction, independently of the first context.
+Sharing via ``RuntimeSessionOptions::value_store`` is explicit and shares the
+same accounting; all sharing sessions must serialize their runs.
 
 This synchronous direct-replay path intentionally has no readiness wait,
 mutex, generation state, eviction, or persistence. The
@@ -179,6 +183,10 @@ mutex, generation state, eviction, or persistence. The
 residency store for asynchronous loading/prepacking and cache-aware execution.
 It is not consulted when an already initialized ``RuntimeSession`` replays its
 ordinary ``ExecutionPlan``.
+Dynamic publication does not populate the static store, and
+``PreparedSchedulerOptions`` budgets apply only to dynamic task admission and
+residency. ``PreparedObjectStore::resident_bytes()`` is a separate dynamic
+metric, not an alias for ``RuntimeSession::prepared_bytes()``.
 
 Pool ownership and dispatch
 +++++++++++++++++++++++++++

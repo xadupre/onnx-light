@@ -73,8 +73,8 @@ Tensors If::operator()(RuntimeContext &rt, const Tensor &cond, const GraphProto 
   // repeated iteration to amortize the session over, but the same
   // construct-then-run separation keeps the control-flow kernels
   // consistent with one another.
-  SubgraphSession session(branch, ctx_.opset_imports, nullptr, std::unordered_set<std::string>{},
-                          ctx_.model_functions);
+  SubgraphSession session(branch, ctx_.opset_imports, rt.value_store_owner(),
+                          std::unordered_set<std::string>{}, ctx_.model_functions);
   return session.Run({}, rt, branch_name);
 }
 

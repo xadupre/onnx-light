@@ -64,7 +64,12 @@ graph/function sessions share one ``ValueStore``. Each kernel
 retains a stable integer slot, so later executions read the prepared value by
 direct vector indexing without a mutex, map lookup, readiness wait, or
 scheduler dispatch. The store owns its prepared allocations for the complete
-session-hierarchy lifetime.
+session-hierarchy lifetime, or longer if a context retains its shared owner.
+The root owns a non-null store from construction; nested sessions explicitly
+inherit that owner. Independent sessions have independent stores even when
+they reuse a context. Intentional cross-session sharing uses
+``RuntimeSessionOptions::value_store`` and requires serialized runs across
+all sharing sessions.
 
 The preparation ``ValueStore`` is separate from the invocation value
 directory. The former owns immutable prepared kernel objects; the latter maps
@@ -92,6 +97,14 @@ sessions can share workers without nested oversubscription. See
 :ref:`l-next-steps-prepared-execution`,
 :ref:`l-next-steps-native-fast-loading-completion`, and
 :ref:`l-next-steps-session-execution-pools` for the implemented contracts.
+
+``RuntimeSession::prepared_bytes()`` sums live static-store buffer sizes,
+including unpublished allocations and explicitly shared sessions; it excludes
+retained free capacity and execution/I/O arenas. In contrast,
+``PreparedObjectStore::resident_bytes()`` describes dynamic object residency.
+``PreparedSchedulerOptions`` admission and residency budgets apply only to
+the dynamic path, not to static storage or ordinary replay allocations.
+Publishing a dynamic object does not automatically populate the static store.
 
 .. toctree::
     :maxdepth: 1

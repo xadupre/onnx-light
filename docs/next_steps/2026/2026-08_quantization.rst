@@ -327,7 +327,7 @@ prepackers for every constant operand whose reuse amortizes preparation:
        without merging independently loadable experts into one mandatory blob
 
 Mutable decoder K/V caches are not compiled initializers. Their blocked or
-quantized runtime layout belongs to :ref:`l-next-steps-prepared-execution` and
+quantized runtime layout belongs to the persistent runtime state and
 must encode the same head, sequence-tile, feature, and kernel-ABI constraints.
 A cache populated during inference must never be published as an immutable
 prepared cache entry for a model initializer.

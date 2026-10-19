@@ -363,11 +363,10 @@ The resolved execution descriptor is then available while a kernel captures
 immutable tuning parameters. Dynamic-shape re-preparation does not change the
 executor unless the caller creates a new session policy.
 
-The future :ref:`l-next-steps-prepared-execution` task graph must submit
-invocation tasks through the same executor or through a scheduler that owns it.
-Prepared execution must not introduce another worker pool beside the kernel
-pool. Session-scoped preparation tasks and invocation-scoped compute tasks need
-an explicit resource class when they can overlap.
+Future loading-time prepacking must reuse the session CPU executor rather than
+introduce another kernel worker pool. File reads must remain separate from CPU
+work. This integration is tracked by
+`issue #5382 <https://github.com/xadupre/onnx-light/issues/5382>`_.
 
 Registered kernel libraries
 +++++++++++++++++++++++++++

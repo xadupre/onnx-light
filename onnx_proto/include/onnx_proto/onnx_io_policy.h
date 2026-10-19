@@ -12,8 +12,7 @@
  * @brief Adaptive external-data I/O policy: lazy worker creation, calibrated block size and
  * worker count, and a lightweight trace of the resolved policy.
  *
- * This is Native PR01 of :ref:`l-next-steps-native-fast-loading-completion`. Parallel
- * reads/writes of external tensor data already create their worker threads lazily (see
+ * Parallel reads/writes of external tensor data create their worker threads lazily (see
  * :cpp:class:`ONNX_LIGHT_NAMESPACE::utils::ThreadPool`, which only spawns OS threads on the
  * first submitted task), so a metadata-only parse (``ParseOptions::skip_raw_data``) or a
  * wholly borrowed/mapped parse (``ParseOptions::no_copy`` or

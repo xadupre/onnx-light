@@ -80,8 +80,6 @@ recyclable by the execution arena.
 Sessions lease executors rather than creating one thread pool per kernel, so
 independent sessions can share workers without nested oversubscription. See
 :ref:`l-next-steps-session-execution-pools` for the executor contract.
-The unused dynamic preparation scheduler has been removed; it is not part of
-model execution.
 
 ``RuntimeSession::prepared_bytes()`` sums live static-store buffer sizes,
 including unpublished allocations and explicitly shared sessions; it excludes

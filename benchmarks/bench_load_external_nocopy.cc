@@ -27,12 +27,10 @@
  * approach but skip the extra copy step.
  *
  * Usage:
- *   python -m benchmarks.fixtures.generate_prepared_execution_external
- *   bench_load_external_nocopy [-n iters] [-m model.onnx] [-w weights.data]
+ *   bench_load_external_nocopy -m model.onnx -w weights.data [-n iters]
  */
 
 #include "onnx.h"
-#include "onnx_core/compute/resolved_model_fixture.h"
 #include "stream.h"
 
 #include <chrono>
@@ -44,21 +42,9 @@
 #include <fstream>
 #include <iostream>
 #include <string>
-#include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
-using namespace ONNX_LIGHT_NAMESPACE::core::runtime;
 using namespace ONNX_LIGHT_NAMESPACE::utils;
-
-#ifndef ONNX_LIGHT_BENCH_FIXTURE_DIR
-#define ONNX_LIGHT_BENCH_FIXTURE_DIR "benchmarks/fixtures"
-#endif
-
-static const std::string kOnnxFile =
-    ONNX_LIGHT_BENCH_FIXTURE_DIR "/prepared_execution_external.onnx";
-static const std::string kDataFile =
-    ONNX_LIGHT_BENCH_FIXTURE_DIR "/prepared_execution_external.data";
-static constexpr uint64_t kFixturePayloadBytes = 16;
 
 /** Size of a virtual-memory page; used to stride through tensor bytes when
  *  forcing page faults in ``touch_all_raw_data()``. */
@@ -150,8 +136,8 @@ static std::pair<size_t, uint64_t> run_load_external_copy(int n_iters,
 
 int main(int argc, char *argv[]) {
   int n_iters = 20;
-  std::string model_path = kOnnxFile;
-  std::string weights_path = kDataFile;
+  std::string model_path;
+  std::string weights_path;
 
   for (int i = 1; i + 1 < argc; ++i) {
     if (std::strcmp(argv[i], "-n") == 0) {
@@ -163,14 +149,15 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  if (model_path.empty() || weights_path.empty() || n_iters <= 0) {
+    std::cerr << "Usage: bench_load_external_nocopy -m model.onnx -w weights.data [-n iters]\n";
+    return 1;
+  }
+
   std::cout << "bench_load_external_nocopy\n"
             << "  n_iters  = " << n_iters << "\n"
             << "  model    = " << model_path << "\n"
             << "  weights  = " << weights_path << "\n";
-
-  ResolvedModelFixture resolved(model_path, RequiredPayloadManifest::Freeze({PayloadManifestEntry{
-                                                "W", weights_path, 0, kFixturePayloadBytes}}));
-  const std::vector<uint8_t> expected_output = resolved.ReadPayload("W");
 
   if (std::filesystem::exists(weights_path)) {
     const double data_mb =
@@ -193,7 +180,6 @@ int main(int argc, char *argv[]) {
   std::cout << "load/2filex1/onnxlight-nocopy : " << nc_ms / n_iters << " ms/iter"
             << "  (total_tensors=" << nc_tensors << ", checksum=" << nc_checksum << ")\n"
             << "load/2filex1/onnxlight        : " << cp_ms / n_iters << " ms/iter"
-            << "  (total_tensors=" << cp_tensors << ", checksum=" << cp_checksum << ")\n"
-            << "  deterministic_output_bytes = " << expected_output.size() << "\n";
+            << "  (total_tensors=" << cp_tensors << ", checksum=" << cp_checksum << ")\n";
   return 0;
 }

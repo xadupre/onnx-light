@@ -4,9 +4,9 @@
 
 #pragma once
 
-#include "onnx_core/compute/prepared_task.h"
 #include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/task_completion.h"
 #include "onnx_core/runtime/tuning/cpu_executor.h"
 #include "onnx_core/runtime/tuning/kernel_tuning.h"
 #include "onnx_core/runtime/tuning/parallel_region_collector.h"

@@ -40,7 +40,7 @@ struct TaskDiagnostic {
 };
 
 /**
- * Shares the completion state of one task between producers and dependants.
+ * Shares completion, cancellation, and failure state for runtime operations.
  */
 class ONNX_LIGHT_CORE_API TaskCompletion {
 public:

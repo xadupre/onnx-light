@@ -9,10 +9,6 @@ Model loading and kernel preparation are separate operations. The current
 its first run; it does not overlap model execution with a dynamic graph of
 weight-loading and preparation tasks.
 
-The former dynamic preparation scheduler, its object-residency registry, and
-its CUDA preparation scaffolding have been removed. They were no longer used
-by model sessions after preparation moved to ``ValueStore``.
-
 Session preparation
 -------------------
 
@@ -52,22 +48,14 @@ including allocated but unpublished values. It excludes free retained
 capacity and the context's execution and I/O arenas. There is no preparation
 residency budget or eviction policy on this path.
 
-Loading helpers and historical designs
---------------------------------------
+Loading and execution resources
+-------------------------------
 
 The native loader's external-data I/O workers are separate from the session's
 CPU executor. They do not constitute a runtime preparation scheduler.
 
-``PreparedTensorCache`` remains an explicit helper for loading compatible
-packed payloads or preparing and persisting them through caller-supplied
-callbacks. It is not automatically connected to ``RuntimeSession``.
-``ResolvedModelFixture`` remains a payload-loading fixture used by tests and
-benchmarks, not a production model resolver.
-
-The original overlap proposals remain in
-:ref:`l-next-steps-prepared-execution` and
-:ref:`l-next-steps-native-fast-loading-completion` as historical documents.
-They must not be read as descriptions of the current runtime. See
-:ref:`l-design-runtime` and the C++ API pages for
+Explicit preparation before inference and overlap with model loading are
+tracked by `issue #5382 <https://github.com/xadupre/onnx-light/issues/5382>`_.
+See :ref:`l-design-runtime` and the C++ API pages for
 :doc:`../../api/cpp/onnx_core/runtime/runtime_session` and
 :doc:`../../api/cpp/onnx_core/runtime/value_store`.

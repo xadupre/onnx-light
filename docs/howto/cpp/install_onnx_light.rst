@@ -33,6 +33,46 @@ Speed up the build
 
     cmake --build build-install --parallel 8
 
+Kernels precompiled headers
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The private ``lib_onnx_kernels`` PCH includes ``test_case.h`` and
+``node_helpers.h`` (which includes ``runtime_context.h``), plus standard
+headers. ``ONNX_LIGHT_USE_PCH=OFF`` disables it through the existing PCH
+wrapper; compiler-cache launchers still disable PCH by default.
+
+A local GCC 13.3 comparison used Unix Makefiles, ``/usr/bin/c++``, Release
+``-O3 -DNDEBUG``, kernels, Python bindings and tests enabled, and
+``cmake --build <build-dir> --parallel 6``. The build directory was deleted
+and configured afresh before each complete default-target build. Compiler
+launchers were empty and ``CCACHE_DISABLE=1 SCCACHE_DISABLE=1`` were set.
+Timing covered all compilation and linking, including PCH construction,
+but excluded configuration.
+
+.. list-table:: Single clean-build pair
+   :header-rows: 1
+
+   * - Kernels PCH
+     - Elapsed
+     - Maximum RSS (KiB)
+     - Kernels PCH size (bytes)
+   * - Existing headers
+     - 23m 17.31s
+     - 2,923,372
+     - 152,606,520
+   * - With ``node_helpers.h``
+     - 22m 50.47s
+     - 2,923,420
+     - 179,695,275
+
+This pair improved complete-build elapsed time by 26.84s (1.92%), with
+essentially unchanged maximum RSS reported by GNU ``time -v``. That RSS is
+not the aggregate memory of six concurrent compiler processes. Filesystem
+caches were not flushed; this is not a statistical or cross-toolchain
+speedup claim. Generated ``cmake_pch.hxx.gch.d`` dependencies contained
+both runtime headers only after the extension. Target compiler flags and
+definitions were unchanged.
+
 Verify the install
 ^^^^^^^^^^^^^^^^^^
 

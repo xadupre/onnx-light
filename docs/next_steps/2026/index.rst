@@ -70,9 +70,6 @@ Discussion
     * - :ref:`l-next-steps-guarded-kernel-replay`
       - Lowers ExecutionPlan into a CapturedExecutionPlan of functions,
         with kernel capture APIs, dynamic dimensions and onnx-light-cpu.
-    * - :ref:`l-next-steps-proto-inheritance`
-      - Reuses common schema fields without changing the flat wire format;
-        independent of the prepared-value and persistent-state plan.
 
 Completed
 ---------
@@ -121,6 +118,20 @@ Completed
       - Supplies structured and quantized values, graph-declared zero-copy
         feedback, contiguous KV reuse, paged quantized caches, and end-to-end
         decode validation with allocation and copy measurements.
+
+Abandoned
+---------
+
+.. list-table::
+    :header-rows: 1
+    :widths: 35 65
+    :class: sphinx-datatable
+
+    * - Plan
+      - Status
+    * - :ref:`l-next-steps-proto-inheritance`
+      - Abandoned; retained for historical reference only, with no implementation
+        planned.
 
 Consolidated design references
 ------------------------------

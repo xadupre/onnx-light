@@ -16,7 +16,7 @@ class TestProtoRelationsSync(unittest.TestCase):
 
     def _declared_edges(self):
         """Returns message-valued fields, resolving nested C++ message names."""
-        header = (self.ROOT / "onnx_light/onnx_proto/onnx.h").read_text(encoding="utf-8")
+        header = (self.ROOT / "onnx_proto/include/onnx_proto/onnx.h").read_text(encoding="utf-8")
         header = re.sub(r'//[^\n]*|/\*[\s\S]*?\*/|"(?:\\.|[^"\\])*"', "", header)
         declarations = re.compile(
             r"^\s*(?:(BEGIN_PROTO(?:_NOINIT)?)\s*\(\s*(\w+)"

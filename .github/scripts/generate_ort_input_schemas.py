@@ -8,12 +8,7 @@ import sys
 
 from onnx_light.onnx import defs
 
-SNAPSHOT = (
-    Path(__file__).resolve().parents[2]
-    / "onnx_light"
-    / "onnx_proto"
-    / "onnx_ort_input_schemas.inc"
-)
+SNAPSHOT = Path(__file__).resolve().parents[2] / "onnx_proto/src/onnx_ort_input_schemas.inc"
 
 
 def generate_ort_input_schemas() -> str:

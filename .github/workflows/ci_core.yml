@@ -54,6 +54,40 @@ jobs:
           done <<< "${changed}"
           echo "docs_only=${docs_only}" >> "$GITHUB_OUTPUT"
 
+  standalone_proto:
+    name: standalone C++ protos
+    needs: changes
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build, install and consume the isolated proto project
+        run: |
+          cp -r onnx_proto "$RUNNER_TEMP/onnx_proto"
+          for shared in OFF ON; do
+            build="$RUNNER_TEMP/proto-build-$shared"
+            prefix="$RUNNER_TEMP/proto-install-$shared"
+            consumer="$RUNNER_TEMP/proto-consumer-$shared"
+            cmake -S "$RUNNER_TEMP/onnx_proto" -B "$build" \
+              -DCMAKE_BUILD_TYPE=Release -DONNX_PROTO_BUILD_SHARED="$shared" \
+              -DONNX_PROTO_BUILD_TESTS=ON -DONNX_PROTO_WERROR=ON \
+              -DCMAKE_INSTALL_PREFIX="$prefix"
+            cmake --build "$build" --parallel 6
+            ctest --test-dir "$build" --output-on-failure
+            cmake --install "$build"
+            for compiler in g++ clang++; do
+              "$compiler" -std=c++20 -fsyntax-only -I "$prefix/include/onnx_light" \
+                "$RUNNER_TEMP/onnx_proto/tests/consumer/test_onnx_proto.cc"
+            done
+            cmake -S "$RUNNER_TEMP/onnx_proto/tests/consumer" -B "$consumer" \
+              -DCMAKE_PREFIX_PATH="$prefix"
+            cmake --build "$consumer" --parallel 6
+            ctest --test-dir "$consumer" --output-on-failure
+          done
+
   free_threaded:
     name: free-threaded build (CMake ${{ matrix.cmake }}, Python 3.13t)
     needs: [reduced_tests_ubuntu, no_onnx_tests_ubuntu, changes]

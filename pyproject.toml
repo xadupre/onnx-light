@@ -4,11 +4,11 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "onnx-light"
-version = "0.1.36"
+version = "0.2.0"
 description = "onnx without protobuf"
 readme = "README.md"
 license = "Apache-2.0"
-license-files = ["LICENSE", "onnx_light/onnx_proto/dlpack/LICENSE"]
+license-files = ["LICENSE", "onnx_proto/include/onnx_proto/dlpack/LICENSE"]
 requires-python = ">=3.12"
 dependencies = [
     "numpy>=2.2",

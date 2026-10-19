@@ -57,7 +57,7 @@ class TestOnnxOptimDependency(ExtTestCase):
         )
 
     def test_tensor_type_header_in_onnx_proto(self):
-        header = self.root / "onnx_light" / "onnx_proto" / "type_helper.h"
+        header = self.root / "onnx_proto" / "include" / "onnx_proto" / "type_helper.h"
         self.assertTrue(header.exists(), "onnx_proto/type_helper.h must exist")
         content = header.read_text(encoding="utf-8")
         self.assertIn(

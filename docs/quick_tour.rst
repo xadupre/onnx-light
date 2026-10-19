@@ -111,14 +111,14 @@ Parsing and serializing options
   on GPU or any other memory.
 
 See the current
-`parsing options <https://github.com/xadupre/onnx-light/blob/main/onnx_light/onnx_proto/serialize_options.h>`_.
+`parsing options <https://github.com/xadupre/onnx-light/blob/main/onnx_proto/include/onnx_proto/serialize_options.h>`_.
 
 .. image:: images/what_is_onnx_light/parsing_2.png
     :class: quick-tour-graph
     :alt: Parsing options
 
 See the current
-`serialization options <https://github.com/xadupre/onnx-light/blob/main/onnx_light/onnx_proto/serialize_options.h>`_.
+`serialization options <https://github.com/xadupre/onnx-light/blob/main/onnx_proto/include/onnx_proto/serialize_options.h>`_.
 
 Kernels
 +++++++

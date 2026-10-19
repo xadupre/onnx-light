@@ -10,7 +10,7 @@
 #include <string>
 
 #ifdef _WIN32
-#include "../onnx_proto/windows_junction.h"
+#include "../../../onnx_proto/tests/windows_junction.h"
 #include <io.h>
 #else
 #include <unistd.h>

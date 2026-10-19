@@ -878,7 +878,7 @@ are implemented, and ``StructTypeProto``,
 ``EncodedValueProto``, typed/constant fields, arrays, bit packing, type
 references, payload ownership, value serialization and the built-in affine
 subset are implemented in ``lib_onnx_proto``
-(``onnx_light/onnx_proto/onnx.h`` and ``onnx_verify.h``/``.cc`` plus the
+(``onnx_proto/include/onnx_proto/onnx.h`` and ``onnx_verify.h``/``.cc`` plus the
 ``TypeProto``/``GraphProto``/``ModelProto`` field-1000 branches), with
 structural validation wired into ``VerifyModel``/``VerifyGraph``. PR03
 integrates the representation with ``GraphBuilder`` authoring,

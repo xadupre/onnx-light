@@ -64,7 +64,7 @@ The wire types relevant to ONNX are:
 
 Wire types 3 and 4 (start-group / end-group) are deprecated and not
 used by ONNX.
-The decoding side appears in ``onnx_light/onnx_proto/stream.cc``: the
+The decoding side appears in ``onnx_proto/src/stream.cc``: the
 function :cpp:func:`~onnx_light::utils::BinaryStream::next_field` reads the tag varint and splits
 it into ``field_number = tag >> 3`` and ``wire_type = tag & 0x07``.
 
@@ -109,7 +109,7 @@ values:
       2 -> 4
       ...
 
-It is implemented in ``onnx_light/onnx_proto/stream.h`` by
+It is implemented in ``onnx_proto/include/onnx_proto/stream.h`` by
 :cpp:func:`~onnx_light::utils::encodeZigZag64` / :cpp:func:`~onnx_light::utils::decodeZigZag64`.  Note that the plain
 ``int32`` and ``int64`` ONNX fields do **not** use ZigZag; they use the
 two's-complement representation directly, which is why a negative

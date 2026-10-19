@@ -41,7 +41,7 @@ The message (de)serialization API
 ---------------------------------
 
 onnx-light message classes expose the following **native** API (declared by the
-``SERIALIZATION_METHOD()`` macro in ``onnx_light/onnx_proto/stream_class.h``):
+``SERIALIZATION_METHOD()`` macro in ``onnx_proto/include/onnx_proto/stream_class.h``):
 
 .. list-table::
     :header-rows: 1
@@ -166,7 +166,7 @@ The ``google::protobuf`` symbols still referenced by onnxruntime
 
 A few onnxruntime files reference the ``google::protobuf`` namespace for
 non-serialization purposes.  ``onnx-light`` provides drop-in equivalents in
-``onnx_light/onnx_proto/google_protobuf_compat.h`` (pulled in automatically by
+``onnx_proto/include/onnx_proto/google_protobuf_compat.h`` (pulled in automatically by
 the ``<onnx/onnx_pb.h>`` compatibility header):
 
 .. list-table::

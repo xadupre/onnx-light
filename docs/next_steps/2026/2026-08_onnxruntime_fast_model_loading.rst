@@ -107,7 +107,7 @@ Acceptance:
 * ineligible ranges require no intermediate full-tensor allocation;
 * the public contract contains no ORT-specific type.
 
-**Status: implemented in** ``onnx-light`` (``onnx_light/onnx_proto/onnx_mapped_payload.h``).
+**Status: implemented in** ``onnx-light`` (``onnx_proto/include/onnx_proto/onnx_mapped_payload.h``).
 ``PayloadIdentity``, ``MappedPayload``, ``FinalDestinationReadDescriptor``, and
 ``MappedPayloadSource`` are exposed independently of ORT, built on the existing
 ``mmap_file_as_shared_ptr`` / ``validate_external_weights_read_path``

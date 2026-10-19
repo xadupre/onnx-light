@@ -74,7 +74,7 @@ The ``google::protobuf`` shim
 
 A few ORT files name the ``google::protobuf`` namespace for non-serialization
 purposes.  ``onnx-light`` provides drop-in equivalents in
-``onnx_light/onnx_proto/google_protobuf_compat.h`` (pulled in by the
+``onnx_proto/include/onnx_proto/google_protobuf_compat.h`` (pulled in by the
 ``<onnx/onnx_pb.h>`` compatibility header): ``RepeatedField<T>``,
 ``RepeatedPtrField<T>``, the back-insert iterators, ``ShutdownProtobufLibrary``
 (a no-op), and the ``google::protobuf::io`` stream classes.  Each is a pure

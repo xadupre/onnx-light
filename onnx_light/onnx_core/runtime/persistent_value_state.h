@@ -4,8 +4,8 @@
 
 #pragma once
 
-#include "onnx_core/compute/prepared_task.h"
 #include "onnx_core/runtime/runtime_session.h"
+#include "onnx_core/runtime/task_completion.h"
 #include "onnx_proto/onnx_verify.h"
 #include <atomic>
 

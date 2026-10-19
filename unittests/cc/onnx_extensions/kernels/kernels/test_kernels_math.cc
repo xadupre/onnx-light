@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/backend_test/test_case.h"
-#include "onnx_core/compute/prepared_execution.h"
 #include "onnx_core/runtime/kernels/cast_helper.h"
 #include "onnx_core/runtime/kernels/float16_promote.h"
 #include "onnx_core/runtime/kernels/kernel_context.h"
@@ -3190,81 +3189,6 @@ TEST(KernelClass, GemmPreparedHalfConstantBStoresPromotedPackedValues) {
   const Tensor expected = gemm_kernel(a, b, nullptr, 1.0f, 0.0f, 0, 0);
   const Tensor got = gemm_kernel(a, prepared, nullptr, 1.0f, 0.0f, 0);
   EXPECT_EQ(DecodeHalfTensor(got), DecodeHalfTensor(expected));
-}
-
-TEST(KernelClass, PreparedPlanOverlapsDependentGemmsAndReusesWeights) {
-  const KernelContext ctx{DefaultOpset(13)};
-  Gemm gemm_kernel{ctx};
-  core::runtime::PreparedExecutionState state(2, 2);
-  core::runtime::ValueStore value_store;
-  const Tensor input = Tensor::FromFloat("A", {1, 2}, {1.0f, 2.0f});
-  const Tensor first_weight = Tensor::FromFloat("B1", {2, 2}, {1.0f, 0.0f, 0.0f, 2.0f});
-  const Tensor second_weight = Tensor::FromFloat("B2", {2, 1}, {3.0f, 4.0f});
-  PreparedGemmB first_prepared;
-  PreparedGemmB second_prepared;
-  std::atomic<int> preparation_count{0};
-  std::atomic<bool> second_weight_finished{false};
-  core::runtime::PreparedExecutionPlan plan({
-      core::runtime::TaskDescriptor{core::runtime::TaskId{1}, core::runtime::TaskScope::kSession,
-                                    core::runtime::TaskKind::kPrepare,
-                                    core::runtime::ResourceClass::kCpu},
-      core::runtime::TaskDescriptor{core::runtime::TaskId{2}, core::runtime::TaskScope::kSession,
-                                    core::runtime::TaskKind::kPrepare,
-                                    core::runtime::ResourceClass::kCpu},
-      core::runtime::TaskDescriptor{core::runtime::TaskId{3},
-                                    core::runtime::TaskScope::kInvocation,
-                                    core::runtime::TaskKind::kExecute,
-                                    core::runtime::ResourceClass::kCpu,
-                                    {core::runtime::TaskId{1}}},
-      core::runtime::TaskDescriptor{core::runtime::TaskId{4},
-                                    core::runtime::TaskScope::kInvocation,
-                                    core::runtime::TaskKind::kExecute,
-                                    core::runtime::ResourceClass::kCpu,
-                                    {core::runtime::TaskId{2}, core::runtime::TaskId{3}}},
-  });
-
-  auto run = [&]() {
-    Tensor first_output;
-    Tensor second_output;
-    bool first_executed_before_second_weight = false;
-    const core::runtime::PreparedExecutionResult result =
-        plan.RunSequential(state, [&](const core::runtime::TaskDescriptor &task,
-                                      core::runtime::PreparedExecutionState &) {
-          switch (task.id.value) {
-          case 1:
-            ++preparation_count;
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            first_prepared = gemm_kernel.PrepareConstantB(first_weight, 0, value_store);
-            break;
-          case 2:
-            ++preparation_count;
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            second_prepared = gemm_kernel.PrepareConstantB(second_weight, 0, value_store);
-            second_weight_finished = true;
-            break;
-          case 3:
-            first_executed_before_second_weight = !second_weight_finished;
-            first_output = gemm_kernel(input, first_prepared, nullptr, 1.0f, 0.0f, 0, nullptr);
-            break;
-          case 4:
-            second_output =
-                gemm_kernel(first_output, second_prepared, nullptr, 1.0f, 0.0f, 0, nullptr);
-            break;
-          default:
-            FAIL() << "Unexpected prepared task ID " << task.id.value;
-          }
-        });
-    EXPECT_TRUE(first_executed_before_second_weight);
-    EXPECT_EQ(result.diagnostics[2].status, core::runtime::TaskStatus::kSucceeded);
-    EXPECT_EQ(result.diagnostics[3].status, core::runtime::TaskStatus::kSucceeded);
-    ASSERT_EQ(second_output.shape, (Shape{1, 1}));
-    EXPECT_FLOAT_EQ(second_output.As<float>()[0], 19.0f);
-  };
-
-  run();
-  second_weight_finished = false;
-  run();
-  EXPECT_EQ(preparation_count, 2);
 }
 
 // Verifies that the half-precision path of ``kernel::Gemm`` matches the

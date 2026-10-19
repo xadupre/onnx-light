@@ -42,16 +42,13 @@ initialization. ``value_store()`` returns a reference;
 ``value_store_owner()`` returns shared ownership. Both session and context
 accessors expose only read-only views through const objects.
 
-This store is deliberately narrower than ``PreparedObjectStore``. It does not
-schedule asynchronous loading, track generations, evict values, or persist
-prepared payloads. Those responsibilities remain in
-``PreparedExecutionState`` and ``PreparedExecutionPlan``.
-Publishing through that dynamic path does not populate ``ValueStore``.
+This store does not schedule asynchronous loading, track generations, evict
+values, or persist prepared payloads.
 
 ``prepared_bytes()`` sums live buffer sizes in this static store's allocators,
 including allocated but unpublished values. It excludes retained free-buffer
-capacity, execution/I/O arenas, and dynamic objects. There is no static-store
-admission budget or eviction policy; dynamic scheduler budgets do not apply.
+capacity and execution/I/O arenas. There is no static-store admission budget or
+eviction policy.
 
 .. doxygenfile:: onnx_core/runtime/kernels/value_store.h
    :project: onnx-light

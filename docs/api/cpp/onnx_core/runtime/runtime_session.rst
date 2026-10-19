@@ -40,7 +40,7 @@ before initialization, remains overridable and is not prepared.
 ``RuntimeSession::prepared_bytes`` reports live buffer sizes in the static
 store's allocators, including allocated but unpublished values and preparations
 created by nested sessions. It excludes retained free capacity, execution/I/O
-arenas, and dynamic prepared-object residency. Explicitly sharing a store
+arenas. Explicitly sharing a store
 between otherwise independent sessions also shares this accounting: it is
 not a per-session partition. All sessions sharing one store must serialize
 their runs. Contexts may keep the owner alive after a session is destroyed.
@@ -51,12 +51,8 @@ nested session. Const session/context access returns ``const ValueStore&``
 or ``std::shared_ptr<const ValueStore>``; initialization-time mutation and
 sharing a mutable owner require a non-const session/context.
 
-This synchronous store is not ``PreparedObjectStore``: asynchronous external
-data loading, dependency scheduling, generations, cache persistence, and
-eviction remain responsibilities of ``PreparedExecutionPlan`` and
-``PreparedExecutionState``.
-Dynamic preparation does not automatically publish values into the static
-store, and its admission/residency budgets do not constrain static allocations.
+Preparation is synchronous. The store does not schedule asynchronous loading,
+track generations, or evict prepared values.
 
 .. doxygenfile:: onnx_core/runtime/runtime_session.h
    :project: onnx-light

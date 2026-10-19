@@ -17,11 +17,7 @@
     2026-08_proto_inheritance
     2026-08_quantization
     2026-08_graph_builder_quantized_tensor
-    2026-08_model_resolution
-    2026-08_fast_loading_sequence
     2026-08_model_loading_bug_fixes
-    2026-08_prepared_execution
-    2026-08_native_fast_loading_completion
     2026-08_parallel_for_profiling
     2026-08_graph_builder_authoring
     2026-06_lib_onnx
@@ -52,8 +48,7 @@ Started
     * - :ref:`l-next-steps-model-loading`
       - Implement issue #4612 in an ONNX Runtime fork: retain mapped-payload
         owners in ``SessionState``, use direct reads for ineligible tensors,
-        run the four-configuration benchmark, and submit the upstream PR. All
-        native dependencies through #4623 are complete.
+        run the four-configuration benchmark, and submit the upstream PR.
 
 Discussion
 ----------
@@ -78,9 +73,6 @@ Discussion
     * - :ref:`l-next-steps-proto-inheritance`
       - Reuses common schema fields without changing the flat wire format;
         independent of the prepared-value and persistent-state plan.
-    * - :ref:`l-next-steps-model-resolution`
-      - Determines the final graph and live payloads before parallel reads or
-        ONNX Runtime handoff.
 
 Completed
 ---------
@@ -92,18 +84,9 @@ Completed
 
     * - Plan
       - Contribution
-    * - :ref:`l-next-steps-fast-loading-sequence`
-      - Orders the four startup plans: bug fixes, prepared execution, native
-        completion, then final ONNX Runtime integration.
     * - :ref:`l-next-steps-model-loading-bug-fixes`
       - Makes parsing, external data, and initializer materialization reliable
         before asynchronous work starts.
-    * - :ref:`l-next-steps-prepared-execution`
-      - Provides the dependency graph, bounded scheduling, kernel creation, and
-        prepacking needed by parallel startup.
-    * - :ref:`l-next-steps-native-fast-loading-completion`
-      - Connects adaptive I/O, model resolution, prepared tensors, and
-        first-token overlap before any new work in ONNX Runtime.
     * - :ref:`l-next-steps-parallel-for-profiling`
       - Measures work decomposition, utilization, and hardware counters so
         tuning decisions have evidence.

@@ -25,11 +25,10 @@ This page merges the former structured-types and mutable-cache proposals
 into one contract, authoritative over :ref:`l-next-steps-quantization` and
 :ref:`l-next-steps-graph-builder-quantized-tensor` where they conflict.
 Only a small closed set of common quantized forms gets specialized proto
-support. Prepacking, prepared-object identity, prepared-object persistence
-and scheduling stay owned by :ref:`l-next-steps-prepared-execution`, whose completed work
-(native fast-loading, allocator, session executor) is the foundation this
-plan builds on. :ref:`l-next-steps-proto-inheritance` is independent and
-not a prerequisite.
+support. Kernel prepacking uses the session-owned ``ValueStore`` described in
+:ref:`l-design-runtime`; loading-time overlap is tracked separately by
+`issue #5382 <https://github.com/xadupre/onnx-light/issues/5382>`_.
+:ref:`l-next-steps-proto-inheritance` is independent and not a prerequisite.
 
 Implemented foundations and integration
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -613,19 +612,15 @@ part of a representation change.
 
 .. _l-next-steps-custom-types-prepared-values:
 
-Interoperability with prepared execution
+Interoperability with kernel preparation
 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-``EncodedValueProto`` may describe the bytes and logical view of an object
-managed by :ref:`l-next-steps-prepared-execution`, but this plan does not
-define prepack requests, prepared keys, prepared-object persistence,
-compatibility checks, publication, eviction or scheduling; those stay entirely in
-:ref:`l-next-steps-prepared-execution`, :ref:`l-next-steps-model-resolution`,
-and :ref:`l-next-steps-native-fast-loading-completion`. The representation
-layer exposes only enough validated type, layout and payload information
-for a prepared consumer to bind a typed view, adding no preparation
-provenance to ``EncodedValueProto`` and no ``prepared_values`` field to
-``ModelProto``.
+``EncodedValueProto`` may describe the bytes and logical view of a prepared
+object, but it does not define kernel preparation, persistence, compatibility
+checks, or scheduling. The representation layer exposes validated type,
+layout and payload information for a prepared consumer to bind a typed view,
+adding no preparation provenance to ``EncodedValueProto`` and no
+``prepared_values`` field to ``ModelProto``.
 
 .. _l-next-steps-mutable-cache:
 

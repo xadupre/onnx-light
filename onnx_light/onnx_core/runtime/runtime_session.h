@@ -4,9 +4,9 @@
 
 #pragma once
 
-#include "onnx_core/compute/prepared_execution.h"
 #include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/runtime/task_completion.h"
 #include "onnx_core/runtime/tuning/cpu_executor.h"
 #include "onnx_core/runtime/tuning/kernel_tuning.h"
 #include "onnx_core/runtime/tuning/parallel_region_collector.h"
@@ -332,7 +332,7 @@ public:
 
   /// Returns the non-null static preparation store fixed at construction.
   /// Kernels publish during initialization and use stable slots during replay.
-  /// This is not the invocation value directory or dynamic PreparedExecutionState.
+  /// This is not the invocation value directory.
   ValueStore &value_store() noexcept { return *value_store_; }
   const ValueStore &value_store() const noexcept { return *value_store_; }
 

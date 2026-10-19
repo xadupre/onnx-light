@@ -133,7 +133,7 @@ performance regressions are not part of the default matrix.
 See also
 ++++++++
 
-* :ref:`l-next-steps-prepared-execution` — how resolved kernels are cached and
+* :ref:`l-design-runtime` — how resolved kernels are cached and
   replayed by the runtime session.
 * :ref:`l-next-steps-processor-aware-kernel-tuning` — per-kernel tuning
   built on top of the dispatch table.

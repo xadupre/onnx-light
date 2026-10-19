@@ -76,35 +76,15 @@ directory. The former owns immutable prepared kernel objects; the latter maps
 ONNX value names to stable runtime slots whose physical tensor buffers remain
 recyclable by the execution arena.
 
-``PreparedExecutionPlan`` may prepare synchronously or submit work through a
-shared execution pool. Its tasks cover payload reads, kernel creation, weight
-prepacking, device copies, and publication; dependencies and memory admission
-prevent a consumer from observing a partially prepared value. ``RunAsync``
-uses the same task graph, while ``RunSequential`` remains the synchronous
-reference.
-
-Prepared tensors are keyed by source identity, processor/device, layout,
-kernel ABI, and format version. Compatible entries bypass portable-weight
-loading and prepacking. Residency is bounded, active consumers pin their
-objects, and evicted entries retain enough information for a later reload.
-
 ``RuntimeSessionOptions`` selects the CPU execution policy.
-``PreparedExecutionState`` owns the asynchronous plan's preparation arenas,
-residency, generations, and resource limits; it is separate from the
-``ValueStore`` used by direct replay. Sessions and prepared plans
-lease executors rather than creating one thread pool per kernel, so independent
-sessions can share workers without nested oversubscription. See
-:ref:`l-next-steps-prepared-execution`,
-:ref:`l-next-steps-native-fast-loading-completion`, and
-:ref:`l-next-steps-session-execution-pools` for the implemented contracts.
+Sessions lease executors rather than creating one thread pool per kernel, so
+independent sessions can share workers without nested oversubscription. See
+:ref:`l-next-steps-session-execution-pools` for the executor contract.
 
 ``RuntimeSession::prepared_bytes()`` sums live static-store buffer sizes,
 including unpublished allocations and explicitly shared sessions; it excludes
-retained free capacity and execution/I/O arenas. In contrast,
-``PreparedObjectStore::resident_bytes()`` describes dynamic object residency.
-``PreparedSchedulerOptions`` admission and residency budgets apply only to
-the dynamic path, not to static storage or ordinary replay allocations.
-Publishing a dynamic object does not automatically populate the static store.
+retained free capacity and execution/I/O arenas. Prepared allocations remain
+available until the last shared owner of the store is released.
 
 .. toctree::
     :maxdepth: 1

@@ -115,9 +115,6 @@ Acceptance:
 Completion
 ++++++++++
 
-After these three PRs, proceed to
-:ref:`l-next-steps-prepared-execution`. The explicit onnxruntime integration
-follows once the native prepared-object and ownership contracts are stable.
-Adaptive I/O tuning, selective payload loading, prepared caches, and
-first-token overlap intentionally belong to the later native completion
-roadmap.
+Explicit session preparation and overlap with model loading are tracked by
+`issue #5382 <https://github.com/xadupre/onnx-light/issues/5382>`_.
+The existing session preparation path is described in :ref:`l-design-runtime`.

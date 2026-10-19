@@ -24,8 +24,8 @@ Loading a large model must overlap independent parsing, reading, tensor
 preparation, and kernel creation while keeping CPU, I/O, and memory use bounded.
 The implementation first establishes reliable model resolution and ownership,
 then schedules prepared execution and overlaps useful work with the first
-inference. See :ref:`l-next-steps-fast-loading-sequence` and
-:ref:`l-next-steps-prepared-execution`.
+inference. Explicit session preparation and loading-time overlap are tracked by
+`issue #5382 <https://github.com/xadupre/onnx-light/issues/5382>`_.
 
 Integrate with ONNX Runtime
 +++++++++++++++++++++++++++

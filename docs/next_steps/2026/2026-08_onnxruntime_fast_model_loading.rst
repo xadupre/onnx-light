@@ -10,10 +10,9 @@ Using ``onnx-light`` fast loading in ``onnxruntime``
 Objective
 +++++++++
 
-This is step 4 and the final part of the fast-loading sequence. It starts only
-after :ref:`l-next-steps-native-fast-loading-completion` has stabilized the
-native ownership, payload-resolution, prepared-object, overlap, residency, and
-device-variant contracts.
+This work consumes the native loader's payload ownership and external-data
+contracts. Overlapping model loading and session prepacking is separate work,
+tracked by `issue #5382 <https://github.com/xadupre/onnx-light/issues/5382>`_.
 
 The completed :ref:`l-next-steps-ort-onnx-light` roadmap made
 ``onnxruntime_USE_ONNX_LIGHT`` a build-time replacement for protobuf and the

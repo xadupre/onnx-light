@@ -37,7 +37,7 @@ their sibling libraries, so none needs to depend on another extension.
 Summary of each library
 -----------------------
 
-* ``onnx_light::lib_onnx_proto`` — proto-compatible message types, binary
+* ``onnx_proto::lib_onnx_proto`` — proto-compatible message types, binary
   parsing and serialization, external data, and encrypted files.
 * ``onnx_light::lib_onnx_core`` — graph and symbolic-shape utilities,
   ``GraphBuilder``, generic pattern optimization, runtime execution, and
@@ -90,7 +90,7 @@ transformation.
 What to link
 ------------
 
-* **Read and write ONNX models** — ``onnx_light::lib_onnx_proto``.
+* **Read and write ONNX models** — ``onnx_proto::lib_onnx_proto``.
 * **Inspect lightweight operator schemas** — ``onnx_light::lib_onnx_op``.
 * **Parse or print ONNX text and manipulate protos** —
   ``onnx_light::lib_onnx_manipulations``.

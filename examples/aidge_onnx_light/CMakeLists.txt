@@ -81,7 +81,7 @@ else()
 endif()
 
 add_executable(aidge_onnx_light main.cc)
-target_link_libraries(aidge_onnx_light PRIVATE onnx_light::lib_onnx_proto)
+target_link_libraries(aidge_onnx_light PRIVATE onnx_proto::lib_onnx_proto)
 
 if(aidge_core_FOUND AND aidge_onnx_FOUND)
   message(STATUS

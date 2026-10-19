@@ -48,7 +48,6 @@ add_library(lib_onnx_proto ${_onnx_proto_type}
     ${ONNX_PROTO_SOURCES} ${ONNX_BLAKE3_SOURCES}
     helpers/onnx_light_helpers.cc)
 add_library(onnx_proto::lib_onnx_proto ALIAS lib_onnx_proto)
-add_library(onnx_light::lib_onnx_proto ALIAS lib_onnx_proto)
 
 target_compile_features(lib_onnx_proto PUBLIC cxx_std_20)
 if(ONNX_PROTO_WERROR)

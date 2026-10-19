@@ -1,7 +1,7 @@
 # Standalone C++ example: build, save and load an ONNX model using only
 # the proto layer of onnx_light (no schemas, no shape inference, no checker,
 # no backend kernels). The executable links against
-# ``onnx_light::lib_onnx_proto`` only.
+# ``onnx_proto::lib_onnx_proto`` only.
 #
 # Prerequisites
 # -------------
@@ -37,4 +37,4 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(onnx_light REQUIRED)
 
 add_executable(build_save_load_onnx_proto main.cc)
-target_link_libraries(build_save_load_onnx_proto PRIVATE onnx_light::lib_onnx_proto)
+target_link_libraries(build_save_load_onnx_proto PRIVATE onnx_proto::lib_onnx_proto)

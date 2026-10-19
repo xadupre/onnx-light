@@ -1,5 +1,5 @@
 # Standalone C++ example: print any ONNX proto as readable text for debugging.
-# The executable links against ``onnx_light::lib_onnx_proto`` only, which is
+# The executable links against ``onnx_proto::lib_onnx_proto`` only, which is
 # the minimum dependency set needed to format generated protobuf messages.
 #
 # Prerequisites
@@ -36,4 +36,4 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(onnx_light REQUIRED)
 
 add_executable(print_proto_debug main.cc)
-target_link_libraries(print_proto_debug PRIVATE onnx_light::lib_onnx_proto)
+target_link_libraries(print_proto_debug PRIVATE onnx_proto::lib_onnx_proto)

@@ -65,7 +65,7 @@ The full *onnx-light* installation continues to expose the existing target:
 
     find_package(onnx_light REQUIRED)
     add_executable(load_model main.cc)
-    target_link_libraries(load_model PRIVATE onnx_light::lib_onnx_proto)
+    target_link_libraries(load_model PRIVATE onnx_proto::lib_onnx_proto)
 
 The quoted headers come from the installed ``onnx_light`` target's
 exported include directories.
@@ -110,7 +110,7 @@ Notes
   ``find_package(onnx_light REQUIRED)``.
 * Use ``onnx_light::lib_onnx_lib`` for higher-level ONNX features such as checker,
   shape inference, or version conversion. Use
-  ``onnx_light::lib_onnx_proto`` when the downstream code only needs proto
+  ``onnx_proto::lib_onnx_proto`` when the downstream code only needs proto
   parsing and serialization.
 
 See also

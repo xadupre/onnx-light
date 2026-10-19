@@ -8,7 +8,7 @@ This page documents ``examples/print_proto_debug``
 a self-contained CMake project that demonstrates how to dump any ONNX proto as
 readable text from C++.
 
-The example purposely links against ``onnx_light::lib_onnx_proto`` **only**:
+The example purposely links against ``onnx_proto::lib_onnx_proto`` **only**:
 no operator schemas, no shape inference, no checker, and no backend kernels
 are needed to print a generated protobuf message for debugging.
 
@@ -73,7 +73,7 @@ CMakeLists.txt
 --------------
 
 The example CMake project uses ``find_package`` to locate the installed
-library and links against the exported ``onnx_light::lib_onnx_proto`` target.
+library and links against the exported ``onnx_proto::lib_onnx_proto`` target.
 That is the minimum dependency set required here because the example only
 formats generated protobuf-compatible messages:
 
@@ -88,7 +88,7 @@ formats generated protobuf-compatible messages:
     find_package(onnx_light REQUIRED)
 
     add_executable(print_proto_debug main.cc)
-    target_link_libraries(print_proto_debug PRIVATE onnx_light::lib_onnx_proto)
+    target_link_libraries(print_proto_debug PRIVATE onnx_proto::lib_onnx_proto)
 
 Example output:
 

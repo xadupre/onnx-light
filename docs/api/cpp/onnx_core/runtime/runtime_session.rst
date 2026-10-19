@@ -26,8 +26,9 @@ The first ``Run`` resolves every planned kernel and invokes preparation hooks
 for immutable inputs. Each run installs the session's store into the
 ``RuntimeContext``; it never adopts a context's previous store. ``If``,
 ``Loop``, ``Scan``, ``SequenceMap``, and model-local function sessions explicitly
-inherit the parent's owner. A kernel binds a stable ``uint32_t``
-slot and retains it for the session lifetime. Subsequent runs read the slot directly, so ordinary
+inherit the parent's owner. A kernel binds a store-specific ``ValueStore::Slot``
+with a stable integer index and retains it for the session lifetime.
+Subsequent runs validate its owner and read the slot directly, so ordinary
 ``ExecutionPlan`` replay does not wait on readiness, acquire a preparation
 mutex, or repeat a string-keyed lookup.
 

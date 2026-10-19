@@ -236,7 +236,7 @@ KernelTuningParameters CalibrateGemm(const KernelTuningKey &key,
 
 struct PreparedGemmB::State {
   const ValueStore *store = nullptr;
-  uint32_t slot = kInvalidValueStoreSlot;
+  ValueStore::Slot slot;
   int32_t source_data_type = DataType::UNDEFINED;
   Shape shape;
   int64_t trans_b = 0;
@@ -281,7 +281,7 @@ PreparedGemmB Gemm::PrepareConstantB(const Tensor &b, int64_t transB, ValueStore
   key << "Gemm:B:column-major-k-v1:value=" << b.name << ":type=" << b.data_type
       << ":shape=" << b.shape[0] << 'x' << b.shape[1] << ":transB=" << transB
       << ":digest=" << digest;
-  const uint32_t slot = store.Bind(key.str());
+  const auto slot = store.Bind(key.str());
 
   if (!store.IsReady(slot)) {
     const Tensor promoted = IsHalfPrecision(b.data_type) ? PromoteToFloat32(b) : Tensor{};

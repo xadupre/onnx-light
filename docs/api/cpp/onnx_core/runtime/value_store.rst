@@ -9,11 +9,24 @@ the context before initializing kernels. Nested graph/function sessions
 explicitly receive their parent's owner. Independent sessions do not adopt
 the store of a reused context; cross-session sharing requires
 ``RuntimeSessionOptions::value_store``.
-Kernels bind a stable ``uint32_t`` slot during initialization and read that
-slot directly during execution, without a map lookup, mutex, readiness wait,
+Kernels bind a ``ValueStore::Slot`` during initialization. This opaque handle
+associates a stable ``uint32_t`` index with the originating store. ``IsReady``,
+``Publish``, and ``Get`` reject handles from any other store, even when both
+stores use the same numeric index. Raw integers cannot be used as handles;
+``Slot::index()`` exposes the index only for diagnostics.
+
+Execution compares the handle's identity and reads the slot directly,
+without a map lookup, mutex, readiness wait,
 or scheduler dispatch on the hot path. All sessions sharing a store must
 serialize their runs. Its allocations remain alive until the last shared
 owner, including any context, is released.
+
+A slot retains only a small identity token, not the store or its prepared
+allocations. The token remains distinct if the original store is destroyed
+and another is constructed at the same address. Default-constructed and
+moved-from slots are rejected. Lookups take handles by const reference, so
+they do not copy shared ownership or update reference counts. Callers must
+still keep the store alive while accessing its values.
 
 The location under ``runtime/kernels/`` reflects its kernel-preparation role:
 it is not the invocation value directory. "Static" means publication once per

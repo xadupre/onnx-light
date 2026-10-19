@@ -9,6 +9,7 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <type_traits>
 #include <unordered_map>
@@ -58,7 +59,7 @@ TEST(ValueStore, SessionsDoNotAdoptStoresFromReusedContexts) {
     owners.push_back(std::move(owner));
   }
 
-  const uint32_t slot = first.value_store().Bind("prepared");
+  const auto slot = first.value_store().Bind("prepared");
   Tensor tensor = first.value_store().AllocateTensor(TensorProto::FLOAT, {1}, sizeof(float));
   tensor.As<float>()[0] = 7.0f;
   first.value_store().Publish(slot, RuntimeValue(std::move(tensor)));
@@ -91,7 +92,7 @@ TEST(ValueStore, ExplicitOwnersSharePreparationsAcrossSessionConstructors) {
   RuntimeSession third(function, {.value_store = owner});
   SubgraphSession fourth(model.graph(), nullptr, owner);
 
-  const uint32_t slot = first.value_store().Bind("shared");
+  const auto slot = first.value_store().Bind("shared");
   Tensor tensor = first.value_store().AllocateTensor(TensorProto::FLOAT, {1}, sizeof(float));
   tensor.As<float>()[0] = 9.0f;
   first.value_store().Publish(slot, RuntimeValue(std::move(tensor)));
@@ -115,7 +116,7 @@ TEST(ValueStore, PlanlessFunctionDispatchPreservesActiveStore) {
   RuntimeContext context;
   core::runtime::RegisterModelFunctions(model, context);
   const auto owner = context.value_store_owner();
-  const uint32_t slot = owner->Bind("existing");
+  const auto slot = owner->Bind("existing");
   NodeProto node;
   node.set_domain(function->domain());
   node.set_op_type(function->name());
@@ -127,11 +128,11 @@ TEST(ValueStore, PlanlessFunctionDispatchPreservesActiveStore) {
   }
 }
 
-TEST(ValueStore, UsesIntegerSlotsAndAllocatorBackedRuntimeValues) {
+TEST(ValueStore, UsesStableSlotsAndAllocatorBackedRuntimeValues) {
   ValueStore store;
-  const uint32_t first = store.Bind("first");
-  const uint32_t shared = store.Bind("first");
-  const uint32_t second = store.Bind("second");
+  const auto first = store.Bind("first");
+  const auto shared = store.Bind("first");
+  const auto second = store.Bind("second");
 
   EXPECT_EQ(first, shared);
   EXPECT_NE(first, second);
@@ -167,6 +168,56 @@ TEST(ValueStore, UsesIntegerSlotsAndAllocatorBackedRuntimeValues) {
   EXPECT_FLOAT_EQ(prepared_struct.fields.at("left").tensor.As<float>()[0], 3.0f);
   EXPECT_FLOAT_EQ(prepared_struct.fields.at("right").tensor.As<float>()[0], 4.0f);
   EXPECT_EQ(store.prepared_bytes(), 4 * sizeof(float));
+}
+
+TEST(ValueStore, RejectsSlotsFromAnotherStoreWithTheSameIndex) {
+  ValueStore first;
+  ValueStore second;
+  const auto first_slot = first.Bind("first");
+  const auto second_slot = second.Bind("second");
+  ASSERT_EQ(first_slot.index(), second_slot.index());
+  EXPECT_NE(first_slot, second_slot);
+
+  Tensor rejected = second.AllocateTensor(TensorProto::FLOAT, {1}, sizeof(float));
+  rejected.As<float>()[0] = -1.0f;
+  EXPECT_THROW(second.Publish(first_slot, RuntimeValue(std::move(rejected))), std::runtime_error);
+  EXPECT_FALSE(second.IsReady(second_slot));
+
+  Tensor first_value = first.AllocateTensor(TensorProto::FLOAT, {1}, sizeof(float));
+  first_value.As<float>()[0] = 7.0f;
+  first.Publish(first_slot, RuntimeValue(std::move(first_value)));
+  Tensor second_value = second.AllocateTensor(TensorProto::FLOAT, {1}, sizeof(float));
+  second_value.As<float>()[0] = 9.0f;
+  second.Publish(second_slot, RuntimeValue(std::move(second_value)));
+
+  EXPECT_THROW(second.IsReady(first_slot), std::runtime_error);
+  EXPECT_THROW(first.IsReady(second_slot), std::runtime_error);
+  EXPECT_THROW(second.Get(first_slot), std::runtime_error);
+  EXPECT_THROW(first.Get(second_slot), std::runtime_error);
+  EXPECT_FLOAT_EQ(first.Get(first_slot).tensor.As<float>()[0], 7.0f);
+  EXPECT_FLOAT_EQ(second.Get(second_slot).tensor.As<float>()[0], 9.0f);
+}
+
+TEST(ValueStore, RejectsUnboundSlotsAndSlotsFromPreviousStoreLifetimes) {
+  std::optional<ValueStore> store(std::in_place);
+  const auto previous = store->Bind("previous");
+  store.reset();
+  store.emplace();
+  auto current = store->Bind("current");
+  ASSERT_EQ(previous.index(), current.index());
+  EXPECT_NE(previous, current);
+
+  Tensor tensor = store->AllocateTensor(TensorProto::FLOAT, {1}, sizeof(float));
+  tensor.As<float>()[0] = 11.0f;
+  store->Publish(current, RuntimeValue(std::move(tensor)));
+  const auto active = std::move(current);
+  for (const auto &invalid : {ValueStore::Slot{}, current, previous}) {
+    EXPECT_THROW(store->IsReady(invalid), std::runtime_error);
+    EXPECT_THROW(store->Get(invalid), std::runtime_error);
+    EXPECT_THROW(store->Publish(invalid, RuntimeValue()), std::runtime_error);
+  }
+  EXPECT_TRUE(store->IsReady(active));
+  EXPECT_FLOAT_EQ(store->Get(active).tensor.As<float>()[0], 11.0f);
 }
 
 } // namespace

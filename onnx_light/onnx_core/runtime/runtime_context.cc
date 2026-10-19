@@ -744,13 +744,15 @@ RuntimeContext RuntimeContext::MakeFunctionContext() const {
 }
 
 RuntimeContext RuntimeContext::MakeIsolatedContext() const {
-  return RuntimeContext(*this, RuntimeContextOptions{
-                                   .events_enabled = events_enabled_,
-                                   .verbose = verbose_,
-                                   .release_intermediates = release_intermediates_,
-                                   .device = device_,
-                                   .cpu_executor = cpu_executor_,
-                               });
+  RuntimeContext isolated(*this, RuntimeContextOptions{
+                                     .events_enabled = events_enabled_,
+                                     .verbose = verbose_,
+                                     .release_intermediates = release_intermediates_,
+                                     .device = device_,
+                                     .cpu_executor = cpu_executor_,
+                                 });
+  isolated.events_ = std::make_shared<EventState>();
+  return isolated;
 }
 
 void RuntimeContext::ResetInvocation() noexcept {

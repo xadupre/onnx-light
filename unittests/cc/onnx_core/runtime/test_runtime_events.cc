@@ -103,6 +103,52 @@ TEST(RuntimeEvents, ConfiguredContextsShareEventsButKeepValuesAndAllocatorsIndep
   EXPECT_EQ(parent.events()[2].name, "before failure");
 }
 
+TEST(RuntimeEvents, IsolatedContextKeepsEventRecordingAndDestructiveOperationsIndependent) {
+  auto parent = EventContext();
+  PutNumber(parent, "parent");
+  auto isolated = parent.MakeIsolatedContext();
+  EXPECT_TRUE(isolated.events_enabled());
+  EXPECT_NE(&parent.events(), &isolated.events());
+  EXPECT_TRUE(isolated.events().empty());
+  EXPECT_FALSE(isolated.Has("parent"));
+
+  auto child = isolated.MakeFunctionContext();
+  PutNumber(child, "child");
+  ASSERT_EQ(parent.events().size(), 1u);
+  EXPECT_EQ(parent.events().front().name, "parent");
+  ASSERT_EQ(isolated.events().size(), 1u);
+  EXPECT_EQ(isolated.events().front().name, "child");
+
+  isolated.ClearEvents();
+  EXPECT_TRUE(isolated.events().empty());
+  EXPECT_TRUE(child.events().empty());
+  ASSERT_EQ(parent.events().size(), 1u);
+  EXPECT_EQ(parent.events().front().name, "parent");
+
+  PutNumber(isolated, "isolated");
+  auto events = isolated.TakeEvents();
+  ASSERT_EQ(events.size(), 1u);
+  EXPECT_EQ(events.front().name, "isolated");
+  EXPECT_TRUE(isolated.events().empty());
+  ASSERT_EQ(parent.events().size(), 1u);
+  EXPECT_EQ(parent.events().front().name, "parent");
+
+  PutNumber(isolated, "next");
+  parent.ClearEvents();
+  ASSERT_EQ(isolated.events().size(), 1u);
+  EXPECT_EQ(isolated.events().front().name, "next");
+}
+
+TEST(RuntimeEvents, IsolatedContextPreservesDisabledEventLogging) {
+  RuntimeContext parent;
+  auto isolated = parent.MakeIsolatedContext();
+  EXPECT_FALSE(isolated.events_enabled());
+  EXPECT_NE(&parent.events(), &isolated.events());
+  PutNumber(isolated, "ignored");
+  EXPECT_TRUE(isolated.events().empty());
+  EXPECT_TRUE(parent.events().empty());
+}
+
 TEST(RuntimeEvents, SharesOneLogAcrossNestedContextsAndCopies) {
   auto parent = EventContext();
   parent.set_current_node_index(7);

@@ -46,8 +46,8 @@ value destroys its allocation handle and returns the physical ``RawBuffer`` to
 the arena for reuse by another name. The context also exposes a non-null
 ``ValueStore`` for immutable prepared kernel values.
 
-This static preparation store is distinct from both the invocation directory
-and dynamic ``PreparedExecutionState``. A session installs its
+This static preparation store is distinct from the invocation directory.
+A session installs its
 construction-time store before kernel initialization; it does not adopt a
 context's previous owner. Reusing a context therefore does not merge the
 stores of independent sessions. Child contexts inherit the active owner;

@@ -5,7 +5,15 @@ Completing native fast model loading
 
 :Date: 2026-08
 
-**implemented; native PR01--PR06 are implemented**
+**Historical implementation plan; dynamic preparation sections superseded**
+
+.. warning::
+
+    The dynamic preparation scheduler and its CUDA preparation scaffolding have
+    been removed because model execution no longer used them. The overlap,
+    residency, and prepared-plan benchmark descriptions below are historical,
+    not current ``RuntimeSession`` capabilities. Synchronous kernel preparation
+    uses the session-owned ``ValueStore``; see :ref:`l-design-runtime`.
 
 Objective
 +++++++++

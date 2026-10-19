@@ -22,15 +22,11 @@ The ownership boundaries are:
   without invalidating values that still own allocations from the previous one.
 * ``ValueStore`` owns immutable, synchronously prepared kernel
   values for the root session and its nested sessions.
-* ``PreparedExecutionPlan`` is the separate scope-aware dependency graph used
-  when loading, preparation, publication, and invocation work must overlap.
 
 Consequently, direct ``ExecutionPlan`` replay remains a synchronous hot path:
 kernel initialization prepares constant inputs once, then each run reads the
 kernel's stable preparation slot and replays only the ordinary execution
-actions. The general prepared-execution scheduler remains available for
-asynchronous loading, priorities, generations, cancellation, persistence, and
-eviction; it is not consulted by this direct replay path.
+actions. There is no separate dynamic preparation scheduler.
 
 .. doxygenfile:: onnx_core/compute/execution_plan.h
    :project: onnx-light

@@ -39,10 +39,8 @@ inline constexpr uint32_t kInvalidValueStoreSlot = std::numeric_limits<uint32_t>
  * Initialization uses the store-bound slot returned by :cpp:func:`Bind`.
  * Once published, :cpp:func:`BindForRead` validates it and returns a binding
  * that performs direct indexed reads without repeating ownership checks.
- * This synchronous store is separate from
- * :cpp:class:`PreparedExecutionState` and its :cpp:class:`PreparedObjectStore`;
- * the dynamic path manages asynchronous tasks, generations, residency,
- * persistence, and eviction.
+ * This store does not schedule asynchronous tasks, track generations, persist
+ * payloads, or evict prepared values.
  */
 class ONNX_LIGHT_CORE_API ValueStore {
   struct Identity {};
@@ -108,7 +106,7 @@ public:
 
   /// Returns the sum of live buffer sizes in this static store's allocators.
   /// Includes allocated but unpublished values, not retained free capacity or
-  /// dynamic PreparedObjectStore residency. No dynamic budget or eviction applies.
+  /// other runtime storage. No admission budget or eviction applies.
   size_t prepared_bytes() const noexcept;
   size_t slot_count() const noexcept { return slots_.size(); }
 

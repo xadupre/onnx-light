@@ -7,6 +7,13 @@ Model resolution before weight loading
 
 **discussion**
 
+.. note::
+
+    The ``PreparedExecutionPlan`` examples below belong to the original design.
+    That dynamic preparation API has been removed. The production model path
+    uses ``RuntimeSession`` with synchronous ``ValueStore`` preparation; see
+    :ref:`l-design-runtime`.
+
 Objective
 +++++++++
 

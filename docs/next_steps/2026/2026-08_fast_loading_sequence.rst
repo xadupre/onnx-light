@@ -5,6 +5,12 @@ Fast-loading implementation sequence
 
 :Date: 2026-08
 
+.. note::
+
+    This is a historical implementation sequence. The dynamic preparation
+    scheduler from steps 2 and 3 has since been removed; it is not part of the
+    current model-execution path. See :ref:`l-design-runtime`.
+
 Large-model startup follows one explicit four-document sequence:
 
 1. fix existing parser, external-data, and initializer-materialization defects

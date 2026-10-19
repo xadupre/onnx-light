@@ -4,7 +4,6 @@
 
 #pragma once
 
-#include "onnx_core/compute/prepared_task.h"
 #include "onnx_light_helpers.h"
 
 #include <cstddef>
@@ -76,7 +75,7 @@ private:
 };
 
 /**
- * Provides the frozen resolved-model contract used by prepared-execution tests.
+ * Provides a frozen resolved-model fixture for payload-loading tests and benchmarks.
  *
  * This fixture is intentionally smaller than the production resolver planned
  * by the model-resolution roadmap. Reads are addressed only through its frozen
@@ -94,8 +93,6 @@ public:
 
   /** Reads one complete active payload and rejects IDs outside the manifest. */
   std::vector<uint8_t> ReadPayload(const std::string &id) const;
-  /** Reads the payload named by a manifest-backed read task. */
-  std::vector<uint8_t> ReadPayload(const TaskDescriptor &task) const;
 
 private:
   std::filesystem::path model_path_;

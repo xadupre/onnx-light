@@ -5,7 +5,15 @@ Prepared and asynchronous execution
 
 :Date: 2026-08
 
-**Implemented**
+**Historical design; dynamic preparation scheduler removed**
+
+.. warning::
+
+    The dynamic preparation API described below has been removed. It was no
+    longer used by ``RuntimeSession`` after kernel preparation moved to
+    ``ValueStore``. This page preserves the original proposal, not the current
+    API or implemented runtime behavior. See :ref:`l-design-runtime` for the
+    model-execution path.
 
 Objective
 +++++++++

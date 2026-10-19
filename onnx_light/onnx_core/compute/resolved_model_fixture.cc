@@ -101,12 +101,4 @@ std::vector<uint8_t> ResolvedModelFixture::ReadPayload(const std::string &id) co
   return bytes;
 }
 
-std::vector<uint8_t> ResolvedModelFixture::ReadPayload(const TaskDescriptor &task) const {
-  EXT_ENFORCE(task.kind == TaskKind::kReadPayload, "Task ", task.id.value,
-              " is not a payload-read task.");
-  EXT_ENFORCE(!task.payload_id.empty(), "Payload-read task ", task.id.value,
-              " does not name a frozen manifest entry.");
-  return ReadPayload(task.payload_id);
-}
-
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

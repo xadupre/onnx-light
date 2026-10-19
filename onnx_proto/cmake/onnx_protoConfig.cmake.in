@@ -1,9 +1,6 @@
 @PACKAGE_INIT@
 
 include(CMakeFindDependencyMacro)
-if(@OpenMP_CXX_FOUND@)
-  find_dependency(OpenMP COMPONENTS CXX)
-endif()
 if(@OpenSSL_FOUND@)
   find_dependency(OpenSSL COMPONENTS Crypto)
 endif()

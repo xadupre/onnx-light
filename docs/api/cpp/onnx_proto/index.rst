@@ -19,8 +19,8 @@ Installed flat headers forward to the canonical ``onnx_proto/`` tree, so both
 spellings can be mixed safely in the same translation unit.
 
 ``ONNX_PROTO_BUILD_SHARED`` selects a shared library instead of the default
-static library; ``ONNX_PROTO_INSTALL`` controls installation. OpenMP and OpenSSL
-are optional and detected automatically. The project includes serialization,
+static library; ``ONNX_PROTO_INSTALL`` controls installation. OpenSSL is optional
+and detected automatically; OpenMP is not required. The project includes serialization,
 structural validation, DLPack support, BLAKE3, and the common C++ helpers.
 It does not provide the ONNX operator schemas or schema-based checker.
 

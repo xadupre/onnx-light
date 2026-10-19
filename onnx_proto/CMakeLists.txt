@@ -13,7 +13,6 @@ if(WIN32 AND NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
   set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 endif()
 
-find_package(OpenMP QUIET)
 find_package(OpenSSL QUIET)
 
 file(GLOB ONNX_PROTO_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cc")
@@ -65,9 +64,6 @@ target_include_directories(lib_onnx_proto PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/onnx_proto>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/helpers/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light>)
-if(OpenMP_CXX_FOUND)
-  target_link_libraries(lib_onnx_proto PUBLIC OpenMP::OpenMP_CXX)
-endif()
 if(OpenSSL_FOUND)
   target_compile_definitions(lib_onnx_proto PUBLIC ONNX_LIGHT_HAS_OPENSSL)
   target_link_libraries(lib_onnx_proto PUBLIC OpenSSL::Crypto)

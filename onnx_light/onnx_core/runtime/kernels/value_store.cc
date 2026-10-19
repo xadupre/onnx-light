@@ -34,20 +34,20 @@ void ValidateAllocatedValue(const RuntimeValue &value,
 
 } // namespace
 
-uint32_t ValueStore::Bind(std::string key) {
+ValueStore::Slot ValueStore::Bind(std::string key) {
   EXT_ENFORCE(!key.empty(), "Value store keys must not be empty.");
   auto found = slots_by_key_.find(key);
   if (found != slots_by_key_.end()) {
-    return found->second;
+    return Slot(identity_, found->second);
   }
   EXT_ENFORCE(slots_.size() < kInvalidValueStoreSlot, "Value store slot capacity was exceeded.");
   const uint32_t slot = static_cast<uint32_t>(slots_.size());
   slots_.emplace_back();
   slots_by_key_.emplace(std::move(key), slot);
-  return slot;
+  return Slot(identity_, slot);
 }
 
-bool ValueStore::IsReady(uint32_t slot) const { return ValueAt(slot).has_value(); }
+bool ValueStore::IsReady(const Slot &slot) const { return ValueAt(slot).has_value(); }
 
 Tensor ValueStore::AllocateTensor(int32_t data_type, const Shape &shape, size_t n_bytes) {
   auto allocator = std::make_unique<ExecutionArena>(1);
@@ -57,27 +57,37 @@ Tensor ValueStore::AllocateTensor(int32_t data_type, const Shape &shape, size_t 
   return tensor;
 }
 
-void ValueStore::Publish(uint32_t slot, RuntimeValue value) {
+void ValueStore::Publish(const Slot &slot, RuntimeValue value) {
   std::optional<RuntimeValue> &entry = ValueAt(slot);
-  EXT_ENFORCE(!entry.has_value(), "Value store slot ", slot, " was published more than once.");
-  ValidateAllocatedValue(value, allocator_index_, slot);
+  EXT_ENFORCE(!entry.has_value(), "Value store slot ", slot.index_,
+              " was published more than once.");
+  ValidateAllocatedValue(value, allocator_index_, slot.index_);
   entry.emplace(std::move(value));
 }
 
-const RuntimeValue &ValueStore::Get(uint32_t slot) const {
+const RuntimeValue &ValueStore::Get(const Slot &slot) const {
   const std::optional<RuntimeValue> &entry = ValueAt(slot);
-  EXT_ENFORCE(entry.has_value(), "Value store slot ", slot, " is not ready.");
+  EXT_ENFORCE(entry.has_value(), "Value store slot ", slot.index_, " is not ready.");
   return *entry;
 }
 
-std::optional<RuntimeValue> &ValueStore::ValueAt(uint32_t slot) {
-  EXT_ENFORCE(slot < slots_.size(), "Invalid value store slot ", slot, ".");
-  return slots_[slot];
+ValueStore::BoundSlot ValueStore::BindForRead(const Slot &slot) const {
+  Get(slot);
+  return BoundSlot(*this, slot.index_);
 }
 
-const std::optional<RuntimeValue> &ValueStore::ValueAt(uint32_t slot) const {
-  EXT_ENFORCE(slot < slots_.size(), "Invalid value store slot ", slot, ".");
-  return slots_[slot];
+std::optional<RuntimeValue> &ValueStore::ValueAt(const Slot &slot) {
+  EXT_ENFORCE(slot.owner_ == identity_, "Value store slot ", slot.index_,
+              " is not bound to this store.");
+  EXT_ENFORCE(slot.index_ < slots_.size(), "Invalid value store slot ", slot.index_, ".");
+  return slots_[slot.index_];
+}
+
+const std::optional<RuntimeValue> &ValueStore::ValueAt(const Slot &slot) const {
+  EXT_ENFORCE(slot.owner_ == identity_, "Value store slot ", slot.index_,
+              " is not bound to this store.");
+  EXT_ENFORCE(slot.index_ < slots_.size(), "Invalid value store slot ", slot.index_, ".");
+  return slots_[slot.index_];
 }
 
 size_t ValueStore::prepared_bytes() const noexcept {

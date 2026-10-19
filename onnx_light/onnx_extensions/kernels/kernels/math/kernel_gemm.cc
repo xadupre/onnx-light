@@ -235,16 +235,15 @@ KernelTuningParameters CalibrateGemm(const KernelTuningKey &key,
 } // namespace
 
 struct PreparedGemmB::State {
-  const ValueStore *store = nullptr;
-  uint32_t slot = kInvalidValueStoreSlot;
+  explicit State(ValueStore::BoundSlot bound_slot) : slot(bound_slot) {}
+
+  ValueStore::BoundSlot slot;
   int32_t source_data_type = DataType::UNDEFINED;
   Shape shape;
   int64_t trans_b = 0;
 };
 
-bool PreparedGemmB::IsReady() const {
-  return state_ != nullptr && state_->store != nullptr && state_->store->IsReady(state_->slot);
-}
+bool PreparedGemmB::IsReady() const { return state_ != nullptr; }
 
 Gemm::Gemm(const KernelContext &ctx) : KernelBase(ctx) {}
 
@@ -281,7 +280,7 @@ PreparedGemmB Gemm::PrepareConstantB(const Tensor &b, int64_t transB, ValueStore
   key << "Gemm:B:column-major-k-v1:value=" << b.name << ":type=" << b.data_type
       << ":shape=" << b.shape[0] << 'x' << b.shape[1] << ":transB=" << transB
       << ":digest=" << digest;
-  const uint32_t slot = store.Bind(key.str());
+  const auto slot = store.Bind(key.str());
 
   if (!store.IsReady(slot)) {
     const Tensor promoted = IsHalfPrecision(b.data_type) ? PromoteToFloat32(b) : Tensor{};
@@ -301,9 +300,7 @@ PreparedGemmB Gemm::PrepareConstantB(const Tensor &b, int64_t transB, ValueStore
     }
     store.Publish(slot, RuntimeValue(std::move(packed)));
   }
-  auto prepared = std::make_shared<PreparedGemmB::State>();
-  prepared->store = &store;
-  prepared->slot = slot;
+  auto prepared = std::make_shared<PreparedGemmB::State>(store.BindForRead(slot));
   prepared->source_data_type = b.data_type;
   prepared->shape = b.shape;
   prepared->trans_b = transB;
@@ -380,7 +377,7 @@ Tensor Gemm::operator()(const Tensor &a, const PreparedGemmB &b, const Tensor *c
   EXT_ENFORCE_INVALID(b.state_ != nullptr, kGemmName, " prepared B is empty.");
   EXT_ENFORCE_INVALID(a.data_type == b.state_->source_data_type, kGemmName,
                       " inputs A and prepared B must share the same dtype.");
-  const RuntimeValue &prepared_value = b.state_->store->Get(b.state_->slot);
+  const RuntimeValue &prepared_value = b.state_->slot.Get();
   const Tensor &packed = prepared_value.tensor;
   const int64_t m = transA ? a.shape[1] : a.shape[0];
   const int64_t a_k = transA ? a.shape[0] : a.shape[1];

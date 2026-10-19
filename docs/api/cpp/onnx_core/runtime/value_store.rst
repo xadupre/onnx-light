@@ -9,11 +9,31 @@ the context before initializing kernels. Nested graph/function sessions
 explicitly receive their parent's owner. Independent sessions do not adopt
 the store of a reused context; cross-session sharing requires
 ``RuntimeSessionOptions::value_store``.
-Kernels bind a stable ``uint32_t`` slot during initialization and read that
-slot directly during execution, without a map lookup, mutex, readiness wait,
-or scheduler dispatch on the hot path. All sessions sharing a store must
+Kernels bind a ``ValueStore::Slot`` during initialization. This opaque handle
+associates a stable ``uint32_t`` index with the originating store. ``IsReady``,
+``Publish``, and ``Get`` reject handles from any other store, even when both
+stores use the same numeric index. Raw integers cannot be used as handles;
+``Slot::index()`` exposes the index only for diagnostics.
+
+After publication, ``BindForRead(slot)`` checks ownership, bounds, and readiness
+once and returns a ``ValueStore::BoundSlot``. It contains only the store pointer
+and a ``uint32_t`` index. Its parameterless ``Get()`` reads the immutable value
+directly: no identity comparison, ownership copy, bounds/readiness validation,
+map lookup, mutex, readiness wait, or scheduler dispatch occurs on the hot path.
+There is no public unchecked ``Get(uint32_t)`` that could combine an arbitrary
+index with another store. ``Gemm`` retains this validated binding, not the
+identity-carrying setup handle. All sessions sharing a store must
 serialize their runs. Its allocations remain alive until the last shared
 owner, including any context, is released.
+
+A slot retains only a small identity token, not the store or its prepared
+allocations. The token remains distinct if the original store is destroyed
+and another is constructed at the same address. Default-constructed and
+moved-from setup slots are rejected. Checked store operations take setup
+handles by const reference, while replay bindings contain no shared pointer.
+Bindings can only be constructed after successful validation and cannot be
+default-constructed. They borrow the original store, which must remain alive
+through every read; neither kind of handle extends its allocation lifetime.
 
 The location under ``runtime/kernels/`` reflects its kernel-preparation role:
 it is not the invocation value directory. "Static" means publication once per

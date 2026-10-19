@@ -382,7 +382,7 @@ Implementation references
   `prepared scheduler
   <https://github.com/xadupre/onnx-light/blob/main/onnx_light/onnx_core/compute/prepared_execution.cc>`_,
   `I/O worker pool
-  <https://github.com/xadupre/onnx-light/blob/main/onnx_light/onnx_proto/thread_pool.cc>`_,
+  <https://github.com/xadupre/onnx-light/blob/main/onnx_proto/src/thread_pool.cc>`_,
   :ref:`l-next-steps-prepared-execution`, and
   :ref:`l-next-steps-native-fast-loading-completion`.
 * ONNX Runtime:

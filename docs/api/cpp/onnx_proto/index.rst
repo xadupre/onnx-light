@@ -1,6 +1,35 @@
 onnx_proto
 ==========
 
+The C++ proto library lives in the top-level ``onnx_proto/`` directory and can
+be built and installed without Python, operator schemas, or the runtime:
+
+.. code-block:: bash
+
+    cmake -S onnx_proto -B build-proto -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/path/to/proto-install
+    cmake --build build-proto --parallel 6
+    cmake --install build-proto
+
+Consumers use ``find_package(onnx_proto CONFIG REQUIRED)`` and link
+``onnx_proto::lib_onnx_proto``. The legacy ``onnx_light::lib_onnx_proto`` target
+and installed include paths remain available. Both ``#include "onnx.h"`` and
+``#include "onnx_proto/onnx.h"`` continue to work.
+
+``ONNX_PROTO_BUILD_SHARED`` selects a shared library instead of the default
+static library; ``ONNX_PROTO_INSTALL`` controls installation. OpenMP and OpenSSL
+are optional and detected automatically. The project includes serialization,
+structural validation, DLPack support, BLAKE3, and the common C++ helpers.
+It does not provide the ONNX operator schemas or schema-based checker.
+
+Configure with ``-DONNX_PROTO_BUILD_TESTS=ON`` and run
+``ctest --test-dir build-proto --output-on-failure`` to exercise the standalone
+round-trip and DLPack linkage checks.
+
+The repository's main build includes this project directly and uses a shared
+proto library for its Python extensions. Python modules, imports, and bindings
+remain in ``onnx_light`` and are unchanged.
+
 .. toctree::
     :maxdepth: 1
 

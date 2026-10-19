@@ -45,6 +45,21 @@ Verify the install
 Load a model with the proto-only target
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+To build only the C++ protos, configure the independent ``onnx_proto/`` project
+instead of the repository root:
+
+.. code-block:: bash
+
+    cmake -S onnx_proto -B build-proto -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/path/to/install
+    cmake --build build-proto --parallel 6
+    cmake --install build-proto
+
+This installation exports ``find_package(onnx_proto CONFIG REQUIRED)`` and
+``onnx_proto::lib_onnx_proto`` without building Python, schemas, or runtime
+kernels. See :doc:`../../api/cpp/onnx_proto/index` for its build options.
+
+The full *onnx-light* installation continues to expose the existing target:
 
 .. code-block:: cmake
 

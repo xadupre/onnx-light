@@ -9,7 +9,8 @@ class TestCMakeCppStandard(ExtTestCase):
         root = Path(__file__).resolve().parents[2]
         content = (root / "CMakeLists.txt").read_text(encoding="utf-8")
         self.assertIn("set(CMAKE_CXX_STANDARD 20)", content)
-        self.assertIn("target_compile_features(lib_onnx_proto PUBLIC cxx_std_20)", content)
+        proto_content = (root / "onnx_proto/CMakeLists.txt").read_text(encoding="utf-8")
+        self.assertIn("target_compile_features(lib_onnx_proto PUBLIC cxx_std_20)", proto_content)
         self.assertIn("target_compile_features(lib_onnx_lib PUBLIC cxx_std_20)", content)
         self.assertRegex(
             content,
@@ -46,8 +47,9 @@ class TestCMakeCppStandard(ExtTestCase):
         )
         self.assertIn("function(onnx_light_disable_werror)", content)
         self.assertIn("onnx_light_disable_werror(gtest gtest_main gmock gmock_main)", content)
+        proto_content = (root / "onnx_proto/CMakeLists.txt").read_text(encoding="utf-8")
         self.assertRegex(
-            content,
+            proto_content,
             (
                 r"(?s)set\(ONNX_BLAKE3_SOURCES.*?"
                 r"set_property\(SOURCE \$\{ONNX_BLAKE3_SOURCES\} APPEND PROPERTY "

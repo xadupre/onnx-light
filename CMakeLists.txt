@@ -301,13 +301,9 @@ find_package(OpenMP QUIET)
 # Find OpenSSL (optional – enables encrypted model save/load)
 find_package(OpenSSL QUIET)
 
-# BLAKE3 (vendored, onnx_light/onnx_proto/blake3) is written in C, so enable the
-# C language for the few translation units that make up the hasher.
-enable_language(C)
-
 # Set include directories
-set(ROOT_INCLUDE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_helpers/include")
-set(ONNX_PROTO_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_proto")
+set(ROOT_INCLUDE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_proto/helpers/include")
+set(ONNX_PROTO_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_proto/include/onnx_proto")
 set(ONNX_COMMON_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/common")
 set(ONNX_DEFS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/defs")
 set(ONNX_CORE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_core")
@@ -323,11 +319,6 @@ set(ONNX_GRADIENT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_extensions/g
 file(GLOB_RECURSE ONNX_LIGHT_HEADERS CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/*.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/*.hpp"
-)
-file(GLOB ONNX_LIGHT_SOURCES CONFIGURE_DEPENDS
-    "${ONNX_PROTO_PATH}/onnx*.cc"
-    "${ONNX_PROTO_PATH}/s*.cc"
-    "${ONNX_PROTO_PATH}/t*.cc"
 )
 file(GLOB ONNX_COMMON_SOURCES CONFIGURE_DEPENDS "${ONNX_COMMON_PATH}/*.cc")
 file(GLOB_RECURSE ONNX_DEFS_SOURCES CONFIGURE_DEPENDS "${ONNX_DEFS_PATH}/*.cc")
@@ -375,35 +366,6 @@ file(GLOB ONNX_VERSION_CONVERTER_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOUR
 set(ONNX_CHECKER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/checker.cc" )
 file(GLOB_RECURSE ONNX_LIGHT_BENCHMARK_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/bench_*.cc")
 
-# Vendored BLAKE3 hasher (onnx_light/onnx_proto/blake3). Compiled portable-only
-# (no SIMD/assembly object files) and with BLAKE3_USE_TBB so the std::async based
-# join in blake3_join.cc parallelizes large hashes without a oneTBB dependency.
-set(ONNX_BLAKE3_PATH "${ONNX_PROTO_PATH}/blake3")
-set(ONNX_BLAKE3_SOURCES
-    "${ONNX_BLAKE3_PATH}/blake3.c"
-    "${ONNX_BLAKE3_PATH}/blake3_dispatch.c"
-    "${ONNX_BLAKE3_PATH}/blake3_portable.c"
-    "${ONNX_BLAKE3_PATH}/blake3_join.cc"
-    "${ONNX_BLAKE3_PATH}/blake3_hash.cc")
-set_source_files_properties(${ONNX_BLAKE3_SOURCES} PROPERTIES COMPILE_DEFINITIONS
-    "BLAKE3_USE_TBB;BLAKE3_NO_SSE2;BLAKE3_NO_SSE41;BLAKE3_NO_AVX2;BLAKE3_NO_AVX512;BLAKE3_USE_NEON=0")
-# BLAKE3 is vendored upstream code: its warnings cannot be fixed here, so keep
-# them non-fatal like the other third-party sources (see
-# onnx_light_disable_werror). The portable-only configuration used above makes
-# `num_cvs` in compress_subtree_to_parent_node() unused once NDEBUG turns the
-# assert reading it into a no-op, which Clang reports as -Wunused-variable.
-if(ONNX_LIGHT_WERROR)
-  if(MSVC)
-    set_property(SOURCE ${ONNX_BLAKE3_SOURCES} APPEND PROPERTY COMPILE_OPTIONS "/WX-")
-  else()
-    set_property(SOURCE ${ONNX_BLAKE3_SOURCES} APPEND PROPERTY COMPILE_OPTIONS "-Wno-error")
-  endif()
-endif()
-
-set(ONNX_LIGHT_PROTO_ALL_SOURCES
-    ${ONNX_LIGHT_SOURCES}
-    ${ONNX_BLAKE3_SOURCES}
-    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_helpers/onnx_light_helpers.cc")
 set(ONNX_LIGHT_LIB_ALL_SOURCES
     "${ONNX_COMMON_PATH}/ir_pb_converter.cc"
     ${ONNX_DEFS_SOURCES}
@@ -434,84 +396,15 @@ set(ONNX_LIGHT_LIB_ALL_SOURCES
 if(ONNX_LIGHT_BUILD_PYTHON)
   set(_lib_onnx_proto_type SHARED)
   set(_onnx_light_lib_type SHARED)
+  set(ONNX_PROTO_BUILD_SHARED ON)
 else()
   set(_lib_onnx_proto_type STATIC)
   set(_onnx_light_lib_type STATIC)
+  set(ONNX_PROTO_BUILD_SHARED OFF)
 endif()
-
-add_library(lib_onnx_proto ${_lib_onnx_proto_type} ${ONNX_LIGHT_HEADERS} ${ONNX_LIGHT_PROTO_ALL_SOURCES})
-# Structural and DLPack validation are control-flow and diagnostics heavy rather
-# than throughput-sensitive. Optimize these translation units for size to stay
-# within the proto-library binary budget.
-if(MSVC)
-  set_source_files_properties("${ONNX_PROTO_PATH}/onnx_verify.cc"
-                              "${ONNX_PROTO_PATH}/onnx_dlpack.cc"
-                              PROPERTIES COMPILE_OPTIONS "/Os")
-else()
-  set_source_files_properties("${ONNX_PROTO_PATH}/onnx_verify.cc"
-                              "${ONNX_PROTO_PATH}/onnx_dlpack.cc"
-                              PROPERTIES COMPILE_OPTIONS "-Os")
-endif()
-if(_lib_onnx_proto_type STREQUAL "SHARED" AND WIN32)
-  # Export every symbol so downstream extensions can use the proto classes
-  # without sprinkling __declspec(dllexport) annotations in headers.
-  set_target_properties(lib_onnx_proto PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
-endif()
-if(_lib_onnx_proto_type STREQUAL "SHARED" AND NOT WIN32)
-  set_target_properties(lib_onnx_proto PROPERTIES
-      CXX_VISIBILITY_PRESET hidden
-      VISIBILITY_INLINES_HIDDEN YES)
-endif()
+set(ONNX_PROTO_INSTALL ${ONNX_LIGHT_INSTALL})
+add_subdirectory(onnx_proto)
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files" FILES ${ONNX_LIGHT_HEADERS})
-source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files" FILES ${ONNX_LIGHT_PROTO_ALL_SOURCES})
-target_include_directories(lib_onnx_proto PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light>
-    $<BUILD_INTERFACE:${ROOT_INCLUDE_PATH}>
-    $<BUILD_INTERFACE:${ONNX_PROTO_PATH}>
-    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light>
-)
-set_property(TARGET lib_onnx_proto PROPERTY POSITION_INDEPENDENT_CODE ON)
-target_compile_features(lib_onnx_proto PUBLIC cxx_std_20)
-if(OpenMP_CXX_FOUND)
-  target_link_libraries(lib_onnx_proto PUBLIC OpenMP::OpenMP_CXX)
-endif()
-if(OpenSSL_FOUND)
-  target_compile_definitions(lib_onnx_proto PUBLIC ONNX_LIGHT_HAS_OPENSSL)
-  target_link_libraries(lib_onnx_proto PUBLIC OpenSSL::Crypto)
-endif()
-
-# Reduce the binary size of lib_onnx_proto. The proto message classes are
-# macro-generated (SERIALIZATION_METHOD / FIELD in stream_class.h), which emits
-# a large number of small out-of-line forwarders and inline accessors per class
-# and per field. Many of these are never referenced by a given consumer.
-# Compiling each function/data symbol into its own section and letting the
-# linker garbage-collect unreferenced sections (and fold identical ones) drops
-# that dead weight from the final binary without changing behavior.
-if(MSVC)
-  # cl.exe: /Gy (function-level linking) + /Gw (data COMDAT) enable the linker
-  # to discard unused functions/data. link.exe: /OPT:REF removes unreferenced
-  # symbols, /OPT:ICF folds identical COMDATs.
-  target_compile_options(lib_onnx_proto PRIVATE
-      $<$<COMPILE_LANGUAGE:C,CXX>:/Gy>
-      $<$<COMPILE_LANGUAGE:C,CXX>:/Gw>)
-  if(_lib_onnx_proto_type STREQUAL "SHARED")
-    target_link_options(lib_onnx_proto PRIVATE /OPT:REF /OPT:ICF)
-  endif()
-else()
-  target_compile_options(lib_onnx_proto PRIVATE
-      $<$<COMPILE_LANGUAGE:C,CXX>:-ffunction-sections>
-      $<$<COMPILE_LANGUAGE:C,CXX>:-fdata-sections>)
-  # Only the SHARED variant is linked here; the STATIC archive is garbage
-  # collected when the final consumer links it. --gc-sections (GNU/LLVM ld) and
-  # -dead_strip (Apple ld) drop the unreferenced sections at link time.
-  if(_lib_onnx_proto_type STREQUAL "SHARED")
-    if(APPLE)
-      target_link_options(lib_onnx_proto PRIVATE -Wl,-dead_strip)
-    else()
-      target_link_options(lib_onnx_proto PRIVATE -Wl,--gc-sections)
-    endif()
-  endif()
-endif()
 
 # Builds onnx_core library.
 # This intermediate library sits between lib_onnx_proto and the higher-level
@@ -809,7 +702,7 @@ if(ONNX_LIGHT_PROVIDE_ONNX_TARGETS)
     # resolve via the PUBLIC include dirs propagated from the linked libraries.
     target_include_directories(onnx_compat INTERFACE
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_compat_include>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_proto>
+        $<BUILD_INTERFACE:${ONNX_PROTO_PATH}>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_compat_include>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_proto>)
     add_library(onnx ALIAS onnx_compat)
@@ -840,7 +733,7 @@ if(ONNX_LIGHT_PROVIDE_ONNX_TARGETS)
     target_include_directories(onnx_light_protobuf_compat INTERFACE
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_compat_include>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_proto>
+        $<BUILD_INTERFACE:${ONNX_PROTO_PATH}>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_compat_include>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_proto>)
@@ -1298,6 +1191,15 @@ if(ONNX_LIGHT_BUILD_FUZZERS)
 endif()
 
 if(ONNX_LIGHT_BUILD_PYTHON)
+  if(SKBUILD)
+    # These headers previously shipped as files inside the Python source package.
+    install(DIRECTORY "${ONNX_PROTO_PATH}/"
+        DESTINATION onnx_light/onnx_proto
+        FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp")
+    install(DIRECTORY "${ROOT_INCLUDE_PATH}/"
+        DESTINATION onnx_light/onnx_helpers/include
+        FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp")
+  endif()
   # Install the extensions into the package directory. When the core C++
   # libraries are built SHARED (the default in Python builds), install them
   # alongside so the $ORIGIN rpath above resolves them without
@@ -1341,7 +1243,7 @@ if(ONNX_LIGHT_INSTALL)
   # Splitting into two install(TARGETS) calls keeps the same exported
   # ``onnx_lightTargets`` set when ONNX_LIGHT_BUILD_KERNELS=OFF while
   # avoiding references to targets that were never created.
-  install(TARGETS lib_onnx_proto lib_onnx_core lib_onnx_manipulations lib_onnx_lib
+  install(TARGETS lib_onnx_core lib_onnx_manipulations lib_onnx_lib
       lib_onnx_op lib_onnx_shape lib_onnx_patterns
     EXPORT onnx_lightTargets
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
@@ -1357,12 +1259,6 @@ if(ONNX_LIGHT_INSTALL)
     )
   endif()
 
-  # Install public headers from onnx_light/onnx_helpers/include
-  install(DIRECTORY "${ROOT_INCLUDE_PATH}/"
-    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light"
-    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
-  )
-
   # Install the drop-in `onnx/*.h` / `google/protobuf/*.h` compatibility headers.
   # These back the INSTALL_INTERFACE include dir
   # (${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_compat_include) referenced by
@@ -1374,23 +1270,6 @@ if(ONNX_LIGHT_INSTALL)
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_compat_include"
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
   )
-
-  # Install public headers from onnx_light/onnx_proto
-  install(DIRECTORY "${ONNX_PROTO_PATH}/"
-    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light"
-    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
-    PATTERN "_onnxpy.cc" EXCLUDE
-    PATTERN "external_data_internal.h" EXCLUDE
-  )
-  # Also install under onnx_proto/ for headers that include "onnx_proto/...".
-  install(DIRECTORY "${ONNX_PROTO_PATH}/"
-    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_proto"
-    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
-    PATTERN "_onnxpy.cc" EXCLUDE
-    PATTERN "external_data_internal.h" EXCLUDE
-  )
-  install(FILES "${ONNX_PROTO_PATH}/dlpack/LICENSE"
-    DESTINATION "${CMAKE_INSTALL_DATADIR}/licenses/onnx_light/dlpack")
 
   # Install public headers from onnx_light/onnx_lib/common
   install(DIRECTORY "${ONNX_COMMON_PATH}/"

@@ -17,7 +17,7 @@ The SVG below is generated from
 :download:`protos_relations.dot <_static/protos_relations.dot>` with
 ``dot -Tsvg`` (Graphviz); regenerate it after editing the ``.dot`` source.
 ``unittests/main/test_proto_relations_sync.py`` checks containment edges against
-``onnx_light/onnx_proto/onnx.h`` and checks the generated SVG and text trees
+``onnx_proto/include/onnx_proto/onnx.h`` and checks the generated SVG and text trees
 against the DOT.
 
 Click the diagram to open it at its native resolution in a full-screen view.

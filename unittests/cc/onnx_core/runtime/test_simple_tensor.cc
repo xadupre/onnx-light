@@ -11,6 +11,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -758,6 +759,161 @@ TEST(SimpleTensorFromProto, WithAllocator) {
   Tensor t = TensorFromProto(tp, &alloc);
   EXPECT_TRUE(t.has_allocation());
   EXPECT_FLOAT_EQ(t.AsFloat()[1], 2.0f);
+}
+
+TEST(SimpleTensorFromProto, RejectsMismatchedTypedPayloads) {
+  const std::vector<DataType> types = {
+      DataType::FLOAT, DataType::DOUBLE,     DataType::COMPLEX64,  DataType::COMPLEX128,
+      DataType::INT64, DataType::UINT64,     DataType::UINT32,     DataType::INT32,
+      DataType::INT16, DataType::UINT16,     DataType::FLOAT16,    DataType::BFLOAT16,
+      DataType::INT8,  DataType::UINT8,      DataType::BOOL,       DataType::FLOAT8E4M3FN,
+      DataType::INT4,  DataType::UINT4,      DataType::FLOAT4E2M1, DataType::INT2,
+      DataType::UINT2, DataType::FLOAT6E2M3, DataType::FLOAT6E3M2, DataType::STRING};
+  for (DataType dtype : types) {
+    for (size_t count : {0u, 1u, 3u, 11u}) {
+      SCOPED_TRACE(static_cast<int32_t>(dtype));
+      SCOPED_TRACE(count);
+      TensorProto tp;
+      tp.set_data_type(dtype);
+      tp.ref_dims().push_back(5);
+      for (size_t i = 0; i < count; ++i) {
+        tp.add_float_data(1);
+        tp.add_double_data(1);
+        tp.add_int64_data(1);
+        tp.add_uint64_data(1);
+        tp.add_int32_data(1);
+        tp.add_string_data("a");
+      }
+      // Packed 4-bit fields need three bytes for five elements.
+      if (count == 3 &&
+          (dtype == DataType::INT4 || dtype == DataType::UINT4 || dtype == DataType::FLOAT4E2M1))
+        tp.ref_dims()[0] = 3;
+      SimpleRawBufferAllocator allocator(1);
+      EXPECT_THROW(TensorFromProto(tp), std::invalid_argument);
+      EXPECT_THROW(TensorFromProto(tp, &allocator), std::invalid_argument);
+    }
+  }
+
+  TensorProto tp;
+  tp.set_data_type(DataType::FLOAT);
+  tp.ref_dims().push_back(3);
+  tp.add_float_data(1);
+  tp.add_float_data(2);
+  EXPECT_THROW(TensorFromProto(tp), std::invalid_argument);
+}
+
+TEST(SimpleTensorFromProto, PackedPayloadsMatchRoundedByteSizes) {
+  for (DataType dtype : {DataType::INT4, DataType::UINT4, DataType::FLOAT4E2M1, DataType::INT2,
+                         DataType::UINT2, DataType::FLOAT6E2M3, DataType::FLOAT6E3M2}) {
+    for (int64_t count : {0, 1, 2, 3, 4, 5}) {
+      SCOPED_TRACE(static_cast<int32_t>(dtype));
+      SCOPED_TRACE(count);
+      const size_t bytes = PackedByteSize(dtype, count);
+      TensorProto tp;
+      tp.set_data_type(dtype);
+      tp.ref_dims().push_back(count);
+      const bool float6 = dtype == DataType::FLOAT6E2M3 || dtype == DataType::FLOAT6E3M2;
+      for (size_t i = 0; i < (float6 ? static_cast<size_t>(count) : bytes); ++i)
+        tp.add_int32_data(1);
+      Tensor typed = TensorFromProto(tp);
+      EXPECT_EQ(typed.size_bytes(), bytes);
+      if (float6 && count == 3) {
+        tp.ref_dims()[0] = 4; // Three and four FLOAT6 elements both occupy three bytes.
+        EXPECT_THROW(TensorFromProto(tp), std::invalid_argument);
+        tp.ref_dims()[0] = count;
+      }
+      tp.ref_raw_data() = std::vector<uint8_t>(bytes, 1);
+      EXPECT_EQ(TensorFromProto(tp).size_bytes(), bytes);
+      tp.ref_raw_data() = std::vector<uint8_t>(bytes + 1, 1);
+      EXPECT_THROW(TensorFromProto(tp), std::invalid_argument);
+      if (bytes > 0) {
+        tp.ref_raw_data() = std::vector<uint8_t>(bytes - 1, 1);
+        EXPECT_THROW(TensorFromProto(tp), std::invalid_argument);
+      }
+    }
+  }
+}
+
+TEST(SimpleTensorFromProto, ScalarsAndEmptyTensors) {
+  for (DataType dtype : {DataType::FLOAT, DataType::STRING}) {
+    TensorProto tp;
+    tp.set_data_type(dtype);
+    EXPECT_THROW(TensorFromProto(tp), std::invalid_argument);
+    if (dtype == DataType::FLOAT)
+      tp.add_float_data(2);
+    else
+      tp.add_string_data("scalar");
+    EXPECT_EQ(TensorFromProto(tp).element_count(), 1);
+    tp.ref_dims().push_back(0);
+    EXPECT_THROW(TensorFromProto(tp), std::invalid_argument);
+
+    TensorProto empty;
+    empty.set_data_type(dtype);
+    empty.ref_dims().push_back(3);
+    empty.ref_dims().push_back(2);
+    empty.ref_dims().push_back(0);
+    Tensor t = TensorFromProto(empty);
+    EXPECT_EQ(t.size_bytes(), 0u);
+    EXPECT_EQ(t.shape.back(), 0);
+    if (dtype == DataType::FLOAT) {
+      tp.ref_dims().clear();
+      tp.ref_raw_data() = std::vector<uint8_t>(sizeof(float), 0);
+      EXPECT_EQ(TensorFromProto(tp).element_count(), 1);
+      tp.ref_dims().push_back(0);
+      EXPECT_THROW(TensorFromProto(tp), std::invalid_argument);
+      tp.ref_raw_data() = std::vector<uint8_t>{};
+      EXPECT_EQ(TensorFromProto(tp).size_bytes(), 0u);
+    }
+  }
+}
+
+TEST(SimpleTensorFromProto, RejectsInvalidDimensionsAndOverflow) {
+  for (bool raw : {false, true}) {
+    for (const std::vector<int64_t> &dims :
+         {std::vector<int64_t>{std::numeric_limits<int64_t>::min()}, std::vector<int64_t>{0, -1},
+          std::vector<int64_t>{std::numeric_limits<int64_t>::max(), 2},
+          std::vector<int64_t>{std::numeric_limits<int64_t>::max(), 2, 0},
+          std::vector<int64_t>{std::numeric_limits<int64_t>::max()}}) {
+      TensorProto tp;
+      tp.set_data_type(DataType::FLOAT);
+      for (int64_t dimension : dims)
+        tp.ref_dims().push_back(dimension);
+      if (raw)
+        tp.ref_raw_data() = std::vector<uint8_t>{1};
+      EXPECT_THROW(TensorFromProto(tp), std::invalid_argument);
+    }
+  }
+  const int64_t max_count = std::numeric_limits<int64_t>::max();
+  if (sizeof(size_t) >= sizeof(int64_t)) {
+    EXPECT_EQ(PackedByteSize(DataType::INT4, max_count), static_cast<size_t>(max_count / 2 + 1));
+    EXPECT_EQ(PackedByteSize(DataType::INT2, max_count), static_cast<size_t>(max_count / 4 + 1));
+  }
+  EXPECT_THROW(PackedByteSize(DataType::COMPLEX128, max_count), std::invalid_argument);
+  for (bool raw : {false, true}) {
+    TensorProto tp;
+    tp.set_data_type(DataType::UNDEFINED);
+    tp.ref_dims().push_back(0);
+    if (raw)
+      tp.ref_raw_data() = std::vector<uint8_t>{};
+    EXPECT_THROW(TensorFromProto(tp), std::invalid_argument);
+  }
+}
+
+TEST(SimpleTensorFromProto, ValidatesRawPayloadAndPreservesOwner) {
+  auto owner = std::make_shared<std::vector<uint8_t>>(3 * sizeof(float), 0);
+  TensorProto tp;
+  tp.set_data_type(DataType::FLOAT);
+  tp.ref_dims().push_back(3);
+  tp.ref_raw_data().assign_borrowed(owner->data(), owner->size(), owner);
+  SimpleRawBufferAllocator allocator(1);
+  Tensor t = TensorFromProto(tp, &allocator);
+  EXPECT_EQ(t.bytes(), owner->data());
+  EXPECT_EQ(t.borrowed_owner(), owner);
+  EXPECT_FALSE(t.has_allocation());
+  for (size_t bytes : {0u, 8u, 11u, 13u, 16u}) {
+    tp.ref_raw_data() = std::vector<uint8_t>(bytes, 0);
+    EXPECT_THROW(TensorFromProto(tp), std::invalid_argument);
+  }
 }
 
 } // namespace Test

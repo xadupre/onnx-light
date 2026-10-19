@@ -960,6 +960,7 @@ public:
   RuntimeContext MakeFunctionContext() const;
 
   /// Creates an independent invocation with fresh allocators and diagnostics.
+  /// Preserves the event-logging flag but starts with an empty, independent event log.
   RuntimeContext MakeIsolatedContext() const;
 
   /// Clears invocation values while preserving allocators, plans and diagnostics.

@@ -1,7 +1,7 @@
 # Copyright (c) ONNX Project Contributors
 #
 # SPDX-License-Identifier: Apache-2.0
-"""Tests for :class:`onnx_light.reference.ReferenceEvaluator`.
+"""Tests for :class:`onnx_light.onnx.reference.ReferenceEvaluator`.
 
 The evaluator is a thin Python layer on top of the C++ kernels Python
 API (``onnx_light.onnx_py._onnxpykernels.runtime``). These tests cover

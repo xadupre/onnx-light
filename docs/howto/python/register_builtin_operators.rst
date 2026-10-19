@@ -49,14 +49,14 @@ Kernels live under
 
 Nothing to register on the Python side. Once the C++ libraries are
 rebuilt, run a model containing the operator with
-:class:`onnx_light.reference.ReferenceEvaluator`, which drives the C++
+:class:`onnx_light.onnx.reference.ReferenceEvaluator`, which drives the C++
 ``RuntimeSession`` and resolves kernels through ``BuiltinKernelFunctions``:
 
 .. code-block:: python
 
     import numpy as np
     from onnx_light.onnx_lib import parser
-    from onnx_light.reference import ReferenceEvaluator
+    from onnx_light.onnx.reference import ReferenceEvaluator
 
     model = parser.parse_model(
         '<ir_version: 10, opset_import: ["" : 18]>'

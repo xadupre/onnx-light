@@ -23,8 +23,17 @@ structural validation, DLPack support, BLAKE3, and the common C++ helpers.
 It does not provide the ONNX operator schemas or schema-based checker.
 
 Configure with ``-DONNX_PROTO_BUILD_TESTS=ON`` and run
-``ctest --test-dir build-proto --output-on-failure`` to exercise the standalone
-round-trip and DLPack linkage checks.
+``ctest --test-dir build-proto --output-on-failure`` to run the native proto
+suites, including serialization, structural validation, external data,
+threading, cryptography, DLPack, and common helpers. Test sources, fixtures,
+and test utilities live in ``onnx_proto/tests/``. Tests require GoogleTest,
+which is found locally or fetched at the pinned version.
+
+The same suites are registered by the full repository build when
+``ONNX_LIGHT_BUILD_TESTS=ON``; they are not duplicated in its main test executable.
+Schema, parser, and core graph-helper integration tests stay under ``unittests/cc``.
+The small project under ``onnx_proto/tests/consumer/`` separately checks both
+exported target names against the installed package without requiring GoogleTest.
 
 The repository's main build includes this project directly and uses a shared
 proto library for its Python extensions. Python modules, imports, and bindings

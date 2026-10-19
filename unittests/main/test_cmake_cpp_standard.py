@@ -46,7 +46,8 @@ class TestCMakeCppStandard(ExtTestCase):
             msg="GCC/Clang builds must add -Werror when ONNX_LIGHT_WERROR is ON.",
         )
         self.assertIn("function(onnx_light_disable_werror)", content)
-        self.assertIn("onnx_light_disable_werror(gtest gtest_main gmock gmock_main)", content)
+        proto_tests = (root / "onnx_proto/tests/CMakeLists.txt").read_text(encoding="utf-8")
+        self.assertIn("onnx_light_disable_werror(gtest gtest_main)", proto_tests)
         proto_content = (root / "onnx_proto/CMakeLists.txt").read_text(encoding="utf-8")
         self.assertRegex(
             proto_content,

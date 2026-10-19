@@ -50,7 +50,7 @@ https://best.openssf.org/Compiler-Hardening-Guides/Compiler-Options-Hardening-Gu
 
 # When ONNX_LIGHT_BUILD_KERNELS=OFF and ONNX_LIGHT_BUILD_TESTS=ON the test
 # executable is built in "reduced" mode: only the proto / schema / shape-
-# inference / optimisation tests are compiled (unittests/cc/onnx_proto,
+# inference / optimisation tests are compiled (onnx_proto/tests,
 # onnx_lib, onnx_op, onnx_shapes).  Kernel, backend-test, and gradient test
 # sources are excluded because the libraries they depend on are not built.
 # The Python extensions are tolerant of ONNX_LIGHT_BUILD_KERNELS=OFF:
@@ -403,6 +403,10 @@ else()
   set(ONNX_PROTO_BUILD_SHARED OFF)
 endif()
 set(ONNX_PROTO_INSTALL ${ONNX_LIGHT_INSTALL})
+set(ONNX_PROTO_BUILD_TESTS ${ONNX_LIGHT_BUILD_TESTS})
+if(ONNX_LIGHT_BUILD_TESTS)
+  enable_testing()
+endif()
 add_subdirectory(onnx_proto)
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files" FILES ${ONNX_LIGHT_HEADERS})
 
@@ -886,7 +890,6 @@ endif()
 # Builds test
 if(ONNX_LIGHT_BUILD_TESTS)
 
-  file(GLOB_RECURSE ONNX_CPP_PROTO_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_proto/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_CORE_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_core/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_LIB_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_lib/test_*.cc")
   file(GLOB_RECURSE ONNX_CPP_OP_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_op/test_*.cc")
@@ -900,14 +903,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
   set(ONNX_CPP_PATTERN_REGISTRY_CORE_TEST
       "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_core/builder/test_pattern_registry.cc")
   list(REMOVE_ITEM ONNX_CPP_CORE_TEST_SOURCES "${ONNX_CPP_PATTERN_REGISTRY_CORE_TEST}")
-  set(ONNX_CPP_PROTO_STREAM_CLASS_PRINT_TEST
-      "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_proto/test_stream_class_print.cc")
-  list(REMOVE_ITEM ONNX_CPP_PROTO_TEST_SOURCES "${ONNX_CPP_PROTO_STREAM_CLASS_PRINT_TEST}")
-  set(ONNX_CPP_PROTO_DLPACK_TEST
-      "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_proto/test_onnx_dlpack.cc")
-  list(REMOVE_ITEM ONNX_CPP_PROTO_TEST_SOURCES "${ONNX_CPP_PROTO_DLPACK_TEST}")
   set(ONNX_CPP_TEST_SOURCES
-      ${ONNX_CPP_PROTO_TEST_SOURCES}
       ${ONNX_CPP_CORE_TEST_SOURCES}
       ${ONNX_CPP_LIB_TEST_SOURCES}
       ${ONNX_CPP_OP_TEST_SOURCES}
@@ -922,36 +918,12 @@ if(ONNX_LIGHT_BUILD_TESTS)
     )
   endif()
   set(ONNX_CPP_ALL_TEST_SOURCES ${ONNX_CPP_TEST_SOURCES}
-      ${ONNX_CPP_PATTERN_REGISTRY_CORE_TEST} ${ONNX_CPP_PROTO_STREAM_CLASS_PRINT_TEST}
-      ${ONNX_CPP_PROTO_DLPACK_TEST} ${ONNX_CPP_RUNTIME_EVENT_FORWARDER_TEST})
+      ${ONNX_CPP_PATTERN_REGISTRY_CORE_TEST} ${ONNX_CPP_RUNTIME_EVENT_FORWARDER_TEST})
 
   enable_testing()
 
-  # Find or fetch GTest
-  find_package(GTest QUIET)
-  if(NOT GTest_FOUND)
-    include(FetchContent)
-    FetchContent_Declare(
-      googletest
-      GIT_REPOSITORY https://github.com/google/googletest.git
-      GIT_TAG v1.14.0
-    )
-    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-    # Only GTest is used (no GMock), so avoid building GMock. Also disable the
-    # googletest install rules: otherwise `cmake --install` tries to install
-    # libgmock.a (which is never built) and fails.
-    set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
-    set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
-    FetchContent_MakeAvailable(googletest)
-    onnx_light_disable_werror(gtest gtest_main gmock gmock_main)
-  endif()
+  # GoogleTest is provided by the proto test subproject.
   include(GoogleTest)
-
-  # test_onnx_light_helpers
-  add_executable(test_onnx_light_helpers "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc_common/test_onnx_light_helpers.cc")
-  target_include_directories(test_onnx_light_helpers PRIVATE "${ROOT_INCLUDE_PATH}")
-  target_link_libraries(test_onnx_light_helpers PRIVATE lib_onnx_lib)
-  add_test(NAME test_onnx_light_helpers COMMAND test_onnx_light_helpers)
 
   # gtest
   add_executable(test_onnx_light ${ONNX_CPP_TEST_SOURCES})
@@ -1008,24 +980,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
   target_link_libraries(test_pattern_registry_core PRIVATE lib_onnx_core GTest::gtest_main)
   gtest_discover_tests(test_pattern_registry_core DISCOVERY_TIMEOUT 120 DISCOVERY_MODE PRE_TEST)
 
-  add_executable(test_stream_class_print "${ONNX_CPP_PROTO_STREAM_CLASS_PRINT_TEST}")
-  target_include_directories(test_stream_class_print PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light"
-    "${ROOT_INCLUDE_PATH}"
-    "${ONNX_PROTO_PATH}"
-    "${ONNX_COMMON_PATH}"
-  )
-  target_link_libraries(test_stream_class_print PRIVATE lib_onnx_proto GTest::gtest_main)
-  gtest_discover_tests(test_stream_class_print DISCOVERY_TIMEOUT 120 DISCOVERY_MODE PRE_TEST)
-
-  # The native DLPack export requires only the proto library, not Python or nanobind.
-  add_executable(test_onnx_dlpack "${ONNX_CPP_PROTO_DLPACK_TEST}")
-  target_link_libraries(test_onnx_dlpack PRIVATE lib_onnx_proto GTest::gtest_main)
-  gtest_discover_tests(test_onnx_dlpack DISCOVERY_TIMEOUT 120 DISCOVERY_MODE PRE_TEST)
-
   add_custom_target(onnx_cpp_tests SOURCES ${ONNX_CPP_ALL_TEST_SOURCES})
-  source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_proto" PREFIX "Source Files/cc/onnx_proto"
-               FILES ${ONNX_CPP_PROTO_TEST_SOURCES})
   source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_lib" PREFIX "Source Files/cc/onnx_lib"
                FILES ${ONNX_CPP_LIB_TEST_SOURCES})
   source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc/onnx_op" PREFIX "Source Files/cc/onnx_op"

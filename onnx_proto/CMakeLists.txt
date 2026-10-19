@@ -6,7 +6,7 @@ include(CMakePackageConfigHelpers)
 
 option(ONNX_PROTO_BUILD_SHARED "Build the proto library as a shared library." OFF)
 option(ONNX_PROTO_INSTALL "Install the proto library, headers and CMake package." ON)
-option(ONNX_PROTO_BUILD_TESTS "Build the standalone proto smoke test." OFF)
+option(ONNX_PROTO_BUILD_TESTS "Build the native proto unit tests and consumer checks." OFF)
 
 find_package(OpenMP QUIET)
 find_package(OpenSSL QUIET)

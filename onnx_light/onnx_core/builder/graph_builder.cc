@@ -624,6 +624,47 @@ void GraphBuilder::CopyInferredValuesFrom(const ShapesContext &source) {
   }
 }
 
+void GraphBuilder::RefreshInferredInputsFrom(
+    const ShapesContext &source, const std::unordered_set<std::string> &changed_captures) {
+  std::unordered_set<std::string> candidates;
+  for (const auto &input : inputs_) {
+    candidates.insert(input.name().value());
+  }
+  for (const auto &name : changed_captures) {
+    if (inherited_names_.count(name) != 0) {
+      candidates.insert(name);
+    }
+  }
+  auto &shapes = compute_.Shapes();
+  std::unordered_set<std::string> changed_values;
+  for (const auto &name : candidates) {
+    if (!source.Has(name) && !source.HasType(name) && !source.HasSequence(name) &&
+        !source.HasEncodedValue(name)) {
+      continue;
+    }
+    const bool unchanged =
+        shapes.Has(name) == source.Has(name) &&
+        (!source.Has(name) || shapes.Get(name) == source.Get(name)) &&
+        shapes.HasType(name) == source.HasType(name) &&
+        (!source.HasType(name) || shapes.GetType(name).Equals(source.GetType(name))) &&
+        shapes.HasSequence(name) == source.HasSequence(name) &&
+        (!source.HasSequence(name) || shapes.GetSequence(name) == source.GetSequence(name)) &&
+        shapes.HasEncodedValue(name) == source.HasEncodedValue(name) &&
+        (!source.HasEncodedValue(name) ||
+         shapes.GetEncodedValue(name).Equals(source.GetEncodedValue(name)));
+    if (!unchanged) {
+      shapes.Erase(name);
+      shapes.CopyValueFrom(name, source, name);
+      changed_values.insert(name);
+    }
+  }
+  if (!changed_values.empty()) {
+    RefreshDependentNodes(
+        [](const NodeProto &, const std::unordered_set<std::string> &) { return false; },
+        changed_values, /*propagate_to_parent=*/false);
+  }
+}
+
 void GraphBuilder::set_device(Device device) {
   if (device_ == device) {
     return;
@@ -732,6 +773,7 @@ bool GraphBuilder::RefreshDependentNodes(
     std::unordered_set<std::string> &affected_values, bool propagate_to_parent) {
   bool affected = false;
   std::map<std::size_t, std::vector<std::string>> refreshed_references;
+  const auto declarations = StructuredDeclarations(value_infos_);
   for (std::size_t index = 0; index < nodes_.size(); ++index) {
     const NodeProto &stored = nodes_[index];
     const bool directly_affected = is_affected(stored, affected_values);
@@ -770,8 +812,20 @@ bool GraphBuilder::RefreshDependentNodes(
     if (ready) {
       compute_.Shapes().set_current_node_index(static_cast<int64_t>(index));
       compute_.Shapes().ComputeShapeNode(materialized);
+      for (const auto &attribute : stored.attribute()) {
+        if (HasGraphReferenceSuffix(attribute.name().value()) &&
+            attribute.type() == AttributeProto::AttributeType::STRING && attribute.has_s()) {
+          const std::string attribute_name =
+              attribute.name().value().substr(0, attribute.name().value().size() - 4);
+          if (compute_.Shapes().HasSubgraphContext(static_cast<int64_t>(index), attribute_name)) {
+            NamedBuilderOrThrow(subgraphs_, attribute.s().value(), "subgraph")
+                .RefreshInferredInputsFrom(compute_.Shapes().GetSubgraphContext(
+                                               static_cast<int64_t>(index), attribute_name),
+                                           affected_values);
+          }
+        }
+      }
     }
-    const auto declarations = StructuredDeclarations(value_infos_);
     SeedDeclaredOutputs(compute_.Shapes(), stored, declarations);
     for (const auto &output : outputs_) {
       if (affected_values.count(output.name().value()) != 0) {

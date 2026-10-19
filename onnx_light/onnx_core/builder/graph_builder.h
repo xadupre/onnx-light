@@ -761,6 +761,8 @@ private:
   void SeedShape(const std::string &name, SymTensor tensor);
   void SeedInheritedValue(const std::string &name);
   void CopyInferredValuesFrom(const ShapesContext &source);
+  void RefreshInferredInputsFrom(const ShapesContext &source,
+                                 const std::unordered_set<std::string> &changed_captures);
 
   template <typename Tensor> const std::string &MakeInitializerImpl(Tensor &&tensor);
 

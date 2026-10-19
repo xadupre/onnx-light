@@ -392,6 +392,15 @@ TEST(GraphBuilder, SetOpsetVersionRefreshesMetadataSuffixOnce) {
     previous = builder.MakeNode("Probe", {previous}, {}, "opset_batch_test")[0];
   }
   builder.MakeOutput(previous);
+  ModelProto model;
+  model.add_opset("opset_batch_test", 1);
+  *model.mutable_graph() = builder.BuildGraph();
+  for (const auto &node : model.graph().node()) {
+    auto *value = model.mutable_graph()->add_value_info();
+    *value = model.graph().input(0);
+    value->set_name(node.output(0));
+  }
+  builder = core::builder::GraphBuilder(model, {});
   *peak_calls = 0;
 
   builder.SetOpsetVersion("opset_batch_test", 2);

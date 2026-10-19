@@ -11,6 +11,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <gtest/gtest.h>
 #include <stdexcept>
 #include <thread>
@@ -645,6 +646,135 @@ TEST(PreparedExecutionPlan, RejectsUnstableDependencies) {
                                   {TaskId{1}}},
                }),
                std::runtime_error);
+}
+
+TEST(PreparedExecutionPlan, AsyncSubmissionsOwnDirectAndNamedLambdaCaptures) {
+  for (const bool prepare_only : {false, true}) {
+    for (const bool named : {false, true}) {
+      SCOPED_TRACE(::testing::Message() << "prepare_only=" << prepare_only << ", named=" << named);
+      PreparedExecutionPlan plan({
+          TaskDescriptor{TaskId{1}, TaskScope::kSession, TaskKind::kReadPayload,
+                         ResourceClass::kIo},
+      });
+      PreparedExecutionState state;
+      std::promise<void> entered;
+      auto started = entered.get_future();
+      std::promise<void> release;
+      const auto gate = release.get_future().share();
+      std::weak_ptr<int> lifetime;
+      std::atomic<int> observed{-1};
+      const auto make_callback = [&]() {
+        auto owner = std::make_shared<int>(42);
+        lifetime = owner;
+        return [owner = std::move(owner), gate, &entered, &observed](const TaskDescriptor &,
+                                                                     PreparedExecutionState &) {
+          const std::weak_ptr<int> observer = owner;
+          const auto wait = gate;
+          auto *result = &observed;
+          entered.set_value();
+          wait.wait();
+          if (const auto retained = observer.lock()) {
+            result->store(*retained);
+          }
+        };
+      };
+      ExecutionHandle handle;
+      if (named) {
+        const auto callback = make_callback();
+        handle = prepare_only ? plan.PrepareAsync(state, callback) : plan.RunAsync(state, callback);
+      } else {
+        handle = prepare_only ? plan.PrepareAsync(state, make_callback())
+                              : plan.RunAsync(state, make_callback());
+      }
+      const auto status = started.wait_for(std::chrono::seconds(5));
+      const bool retained = !lifetime.expired();
+      release.set_value();
+      const auto &result = handle.Wait();
+      EXPECT_EQ(status, std::future_status::ready);
+      EXPECT_TRUE(retained);
+      EXPECT_EQ(observed.load(), 42);
+      ASSERT_EQ(result.diagnostics.size(), 1u);
+      EXPECT_EQ(result.diagnostics[0].status, TaskStatus::kSucceeded);
+      EXPECT_TRUE(lifetime.expired());
+    }
+  }
+}
+
+TEST(PreparedExecutionPlan, AsyncCallbacksPreserveCancellationAndFailureDiagnostics) {
+  for (const bool cancel : {false, true}) {
+    SCOPED_TRACE(::testing::Message() << "cancel=" << cancel);
+    PreparedExecutionPlan plan({
+        TaskDescriptor{TaskId{1}, TaskScope::kInvocation, TaskKind::kExecute, ResourceClass::kIo},
+        TaskDescriptor{TaskId{2},
+                       TaskScope::kInvocation,
+                       TaskKind::kExecute,
+                       ResourceClass::kCpu,
+                       {TaskId{1}}},
+    });
+    PreparedExecutionState state;
+    std::promise<void> entered;
+    auto started = entered.get_future();
+    std::promise<void> release;
+    const auto gate = release.get_future().share();
+    std::atomic<int> calls{0};
+    auto handle = plan.RunAsync(state, [&, gate](const TaskDescriptor &, PreparedExecutionState &) {
+      ++calls;
+      entered.set_value();
+      gate.wait();
+      if (!cancel)
+        throw std::runtime_error("callback failed");
+    });
+    const auto status = started.wait_for(std::chrono::seconds(5));
+    if (cancel)
+      handle.Cancel();
+    release.set_value();
+    const auto &result = handle.Wait();
+    EXPECT_EQ(status, std::future_status::ready);
+    EXPECT_EQ(calls.load(), 1);
+    ASSERT_EQ(result.diagnostics.size(), 2u);
+    EXPECT_EQ(result.diagnostics[0].status, cancel ? TaskStatus::kSucceeded : TaskStatus::kFailed);
+    EXPECT_EQ(result.diagnostics[1].status,
+              cancel ? TaskStatus::kCancelled : TaskStatus::kSuppressed);
+  }
+  PreparedExecutionPlan plan({});
+  PreparedExecutionState state;
+  auto invalid_run = plan.RunAsync(state, {});
+  EXPECT_THROW(invalid_run.Wait(), std::runtime_error);
+  auto invalid_preparation = plan.PrepareAsync(state, {});
+  EXPECT_THROW(invalid_preparation.Wait(), std::runtime_error);
+}
+
+TEST(PreparedExecutionPlan, AsyncHandleDestructionWaitsForOwnedCallback) {
+  PreparedExecutionPlan plan({
+      TaskDescriptor{TaskId{1}, TaskScope::kInvocation, TaskKind::kExecute, ResourceClass::kIo},
+  });
+  PreparedExecutionState state;
+  std::promise<void> entered;
+  auto started = entered.get_future();
+  std::promise<void> release;
+  const auto gate = release.get_future().share();
+  std::atomic<bool> completed{false};
+  auto handle = plan.RunAsync(state, [&, gate](const TaskDescriptor &, PreparedExecutionState &) {
+    entered.set_value();
+    gate.wait();
+    completed = true;
+  });
+  const auto status = started.wait_for(std::chrono::seconds(5));
+  std::promise<void> destroying;
+  auto destruction_started = destroying.get_future();
+  auto destroyed =
+      std::async(std::launch::async, [handle = std::move(handle), &destroying]() mutable {
+        destroying.set_value();
+        ExecutionHandle owned = std::move(handle);
+      });
+  const auto destruction_status = destruction_started.wait_for(std::chrono::seconds(5));
+  const auto premature = destroyed.wait_for(std::chrono::seconds(0));
+  release.set_value();
+  destroyed.get();
+  EXPECT_EQ(status, std::future_status::ready);
+  EXPECT_EQ(destruction_status, std::future_status::ready);
+  EXPECT_EQ(premature, std::future_status::timeout);
+  EXPECT_TRUE(completed);
 }
 
 TEST(PreparedExecutionPlan, RetriesFailedSessionGenerationAndKeepsInvocationsSeparate) {

@@ -708,7 +708,7 @@ PreparedExecutionResult PreparedExecutionPlan::RunParallel(PreparedExecutionStat
 }
 
 ExecutionHandle PreparedExecutionPlan::PrepareAsync(PreparedExecutionState &state,
-                                                    const PreparedTaskExecutor &executor,
+                                                    PreparedTaskExecutor executor,
                                                     CpuExecutor *cpu_executor) const {
   std::vector<TaskDescriptor> session_tasks;
   session_tasks.reserve(tasks_.size());
@@ -718,19 +718,19 @@ ExecutionHandle PreparedExecutionPlan::PrepareAsync(PreparedExecutionState &stat
     }
   }
   auto session_plan = std::make_shared<PreparedExecutionPlan>(std::move(session_tasks));
-  return ExecutionHandle::Submit(
-      [session_plan, &state, &executor, cpu_executor](std::atomic<bool> &cancel_requested) {
-        return session_plan->Run(state, executor, cpu_executor, &cancel_requested);
-      });
+  return ExecutionHandle::Submit([session_plan, &state, executor = std::move(executor),
+                                  cpu_executor](std::atomic<bool> &cancel_requested) {
+    return session_plan->Run(state, executor, cpu_executor, &cancel_requested);
+  });
 }
 
 ExecutionHandle PreparedExecutionPlan::RunAsync(PreparedExecutionState &state,
-                                                const PreparedTaskExecutor &executor,
+                                                PreparedTaskExecutor executor,
                                                 CpuExecutor *cpu_executor) const {
-  return ExecutionHandle::Submit(
-      [this, &state, &executor, cpu_executor](std::atomic<bool> &cancel_requested) {
-        return Run(state, executor, cpu_executor, &cancel_requested);
-      });
+  return ExecutionHandle::Submit([this, &state, executor = std::move(executor),
+                                  cpu_executor](std::atomic<bool> &cancel_requested) {
+    return Run(state, executor, cpu_executor, &cancel_requested);
+  });
 }
 
 void PreparedExecutionPlan::Prepare(PreparedExecutionState &state,

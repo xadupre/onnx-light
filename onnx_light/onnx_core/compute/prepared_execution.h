@@ -212,12 +212,12 @@ struct PreparedSchedulerOptions {
 /**
  * Owns the completion state of one ``PrepareAsync``/``RunAsync`` submission.
  *
- * The handle is movable but not copyable. It keeps the submission's borrowed
- * ``PreparedExecutionState`` and task executor referenced by the caller alive
- * for as long as the submission still runs: destroying (or move-assigning
- * over) a live handle blocks until every task the submission still owns
- * reaches a terminal state, so no detached task can outlive the context or
- * input state its submission borrowed. ``Cancel()`` only affects tasks this
+ * The handle is movable but not copyable. The submission owns its task executor,
+ * but borrows its state and optional CPU executor (and, for RunAsync, the plan).
+ * Callers must keep those borrowed objects and any callback reference captures
+ * alive until completion. Destroying (or move-assigning over) a live handle
+ * blocks until every task the submission still owns reaches a terminal state.
+ * ``Cancel()`` only affects tasks this
  * submission produces; shared session-scoped work still required elsewhere
  * is left untouched.
  */
@@ -294,19 +294,21 @@ public:
   /**
    * Submits only this plan's session-scoped tasks and returns immediately.
    *
-   * ``state``, ``executor``, and (when supplied) ``cpu_executor`` must outlive
-   * the returned handle.
+   * The submission owns ``executor``, copying an lvalue or moving an rvalue.
+   * ``state`` and (when supplied) ``cpu_executor`` must outlive the returned
+   * handle. Objects captured by reference in the callback remain borrowed.
    */
-  ExecutionHandle PrepareAsync(PreparedExecutionState &state, const PreparedTaskExecutor &executor,
+  ExecutionHandle PrepareAsync(PreparedExecutionState &state, PreparedTaskExecutor executor,
                                CpuExecutor *cpu_executor = nullptr) const;
 
   /**
    * Submits every task in this plan and returns immediately.
    *
-   * This plan, ``state``, ``executor``, and (when supplied) ``cpu_executor``
-   * must all outlive the returned handle.
+   * The submission owns ``executor``, copying an lvalue or moving an rvalue.
+   * This plan, ``state``, and (when supplied) ``cpu_executor`` must outlive the
+   * returned handle. Objects captured by reference in the callback remain borrowed.
    */
-  ExecutionHandle RunAsync(PreparedExecutionState &state, const PreparedTaskExecutor &executor,
+  ExecutionHandle RunAsync(PreparedExecutionState &state, PreparedTaskExecutor executor,
                            CpuExecutor *cpu_executor = nullptr) const;
 
   /** Synchronous ``PrepareAsync`` followed by ``Wait``. */

@@ -54,6 +54,32 @@ jobs:
           done <<< "${changed}"
           echo "docs_only=${docs_only}" >> "$GITHUB_OUTPUT"
 
+  standalone_threads:
+    name: standalone threads (${{ matrix.os }}, shared=${{ matrix.shared }})
+    needs: changes
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        shared: ["OFF", "ON"]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build and consume the independent threading project
+        shell: bash
+        run: |
+          cp -r onnx_threads "$RUNNER_TEMP/onnx_threads"
+          build="$RUNNER_TEMP/threads-build"
+          cmake -S "$RUNNER_TEMP/onnx_threads" -B "$build" \
+            -DCMAKE_BUILD_TYPE=Release -DONNX_THREADS_BUILD_SHARED=${{ matrix.shared }} \
+            -DONNX_THREADS_BUILD_TESTS=ON -DONNX_THREADS_WERROR=ON
+          cmake --build "$build" --config Release --parallel 6
+          ctest --test-dir "$build" -C Release --output-on-failure
+
   standalone_proto:
     name: standalone C++ protos
     needs: changes
@@ -70,11 +96,16 @@ jobs:
           for shared in OFF ON; do
             build="$RUNNER_TEMP/proto-build-$shared"
             prefix="$RUNNER_TEMP/proto-install-$shared"
+            cmake -S onnx_threads -B "$RUNNER_TEMP/threads-dependency-$shared" \
+              -DCMAKE_BUILD_TYPE=Release -DONNX_THREADS_BUILD_SHARED="$shared" \
+              -DONNX_THREADS_WERROR=ON -DCMAKE_INSTALL_PREFIX="$prefix"
+            cmake --build "$RUNNER_TEMP/threads-dependency-$shared" --parallel 6
+            cmake --install "$RUNNER_TEMP/threads-dependency-$shared"
             cmake -S "$RUNNER_TEMP/onnx_proto" -B "$build" \
               -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ \
               -DCMAKE_BUILD_TYPE=Release -DONNX_PROTO_BUILD_SHARED="$shared" \
               -DONNX_PROTO_BUILD_TESTS=ON -DONNX_PROTO_WERROR=ON \
-              -DCMAKE_INSTALL_PREFIX="$prefix"
+              -DCMAKE_INSTALL_PREFIX="$prefix" -DCMAKE_PREFIX_PATH="$prefix"
             cmake --build "$build" --parallel 6
             ctest --test-dir "$build" --output-on-failure
             cmake --install "$build"
@@ -82,9 +113,9 @@ jobs:
               for header in onnx_proto/onnx_alias.h onnx_alias.h; do
                 printf '#include "%s"\n' "$header" | \
                   "$compiler" -std=c++20 -fsyntax-only -x c++ \
-                    -I "$prefix/include/onnx_light" -
+                    -I "$prefix/include/onnx_light" -I "$prefix/include" -
               done
-              "$compiler" -std=c++20 -fsyntax-only -I "$prefix/include/onnx_light" \
+              "$compiler" -std=c++20 -fsyntax-only -I "$prefix/include/onnx_light" -I "$prefix/include" \
                 "$RUNNER_TEMP/onnx_proto/tests/consumer/test_onnx_proto.cc"
               consumer="$RUNNER_TEMP/proto-consumer-$shared-$compiler"
               cmake -S "$RUNNER_TEMP/onnx_proto/tests/consumer" -B "$consumer" \

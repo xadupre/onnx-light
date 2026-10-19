@@ -1,4 +1,5 @@
-#include "thread_pool.h"
+#include "onnx_threads/thread_pool.h"
+#include "check.h"
 
 namespace ONNX_LIGHT_NAMESPACE::utils {
 
@@ -12,7 +13,7 @@ void WorkerPool::Start(int32_t num_threads) {
     num_threads = static_cast<int32_t>(std::thread::hardware_concurrency());
 
   std::lock_guard<std::mutex> lock(mutex_);
-  EXT_ENFORCE(!started_, "WorkerPool already started");
+  onnx_threads::detail::Enforce(!started_, "WorkerPool already started");
   stop_ = false;
   started_ = true;
   first_exception_ = nullptr;
@@ -26,7 +27,7 @@ void WorkerPool::Enqueue(std::function<void()> job) {
   bool has_workers;
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    EXT_ENFORCE(started_, "WorkerPool is not started");
+    onnx_threads::detail::Enforce(started_, "WorkerPool is not started");
     ++pending_jobs_;
     jobs_.push(std::move(job));
     has_workers = !workers_.empty();
@@ -139,7 +140,7 @@ bool WorkerPool::IsStarted() const {
 ThreadPool::ThreadPool() : is_started_(false), requested_threads_(0) {}
 
 void ThreadPool::Start(int32_t num_threads) {
-  EXT_ENFORCE(!is_started_, "ThreadPool already started");
+  onnx_threads::detail::Enforce(!is_started_, "ThreadPool already started");
   if (num_threads < 0)
     num_threads = static_cast<int32_t>(std::thread::hardware_concurrency());
   is_started_ = true;
@@ -172,7 +173,8 @@ void ThreadPool::Wait() { WaitImpl(true); }
 ThreadPool::~ThreadPool() { WaitImpl(false); }
 
 void ThreadPool::Clear() {
-  EXT_ENFORCE(!IsStarted(), "Cannot clear the pool if threads are still running.");
+  onnx_threads::detail::Enforce(!IsStarted(),
+                                "Cannot clear the pool if threads are still running.");
   // Wait() shuts down WorkerPool and clears its queue and exception before it
   // marks this batch adapter stopped, so every valid Clear() call is already
   // operating on empty worker state.

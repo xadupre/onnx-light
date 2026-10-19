@@ -5,6 +5,7 @@ PROJECT_NAME           = "onnx-light"
 PROJECT_BRIEF          = "ONNX without protobuf"
 OUTPUT_DIRECTORY       = $(DOXYGEN_OUTPUT_DIR)
 INPUT                  = ../onnx_proto/helpers/include \
+                         ../onnx_threads/include \
                          ../onnx_light/onnx_core \
                          ../onnx_light/onnx_op \
                          ../onnx_light/onnx_extensions/patterns \
@@ -55,6 +56,7 @@ EXPAND_ONLY_PREDEF     = YES
 # FIELD* macros each expand to a documented member declaration.
 # SERIALIZATION_METHOD expands to the parse/serialize method signatures.
 PREDEFINED             = \
+    "ONNX_THREADS_API=" \
     "ONNX_API=" \
     "ONNX_LIGHT_NAMESPACE=onnx_light" \
     "ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(domain,ver,name)=name" \

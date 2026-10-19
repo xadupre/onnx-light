@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_core/runtime/tuning/cpu_executor.h"
+#include "onnx_threads/cpu_executor.h"
 
-#include "onnx_core/runtime/kernels/parallel_for.h"
+#include "onnx_threads/parallel_for.h"
 
 #include <algorithm>
 #include <atomic>

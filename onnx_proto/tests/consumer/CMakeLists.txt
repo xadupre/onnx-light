@@ -14,6 +14,14 @@ add_test(NAME proto_roundtrip COMMAND proto_consumer)
 set_tests_properties(proto_roundtrip PROPERTIES TIMEOUT 30)
 
 if(WIN32)
+  get_target_property(_threads_type onnx_threads::lib_onnx_threads TYPE)
+  if(_threads_type STREQUAL "SHARED_LIBRARY")
+    add_custom_command(TARGET proto_consumer POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:onnx_threads::lib_onnx_threads>"
+            "$<TARGET_FILE_DIR:proto_consumer>"
+        VERBATIM)
+  endif()
   get_target_property(_onnx_proto_imported onnx_proto::lib_onnx_proto IMPORTED)
   get_target_property(_onnx_proto_type onnx_proto::lib_onnx_proto TYPE)
   if(_onnx_proto_imported AND _onnx_proto_type STREQUAL "SHARED_LIBRARY")

@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_core/platform/cpu_descriptor.h"
+#include "onnx_threads/cpu_descriptor.h"
 
 #include <algorithm>
 #include <array>

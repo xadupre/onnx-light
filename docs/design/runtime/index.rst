@@ -81,6 +81,12 @@ Sessions lease executors rather than creating one thread pool per kernel, so
 independent sessions can share workers without nested oversubscription. See
 :ref:`l-next-steps-session-execution-pools` for the executor contract.
 
+The executor, worker lifecycle, CPU topology, affinity and threading diagnostics
+are implemented by the standalone ``onnx_threads`` library. Existing runtime
+headers forward to it without changing callers. See :ref:`l-design-threading`
+for the dependency boundary and the distinction between sharing implementation
+and sharing worker instances.
+
 ``RuntimeSession::prepared_bytes()`` sums live static-store buffer sizes,
 including unpublished allocations and explicitly shared sessions; it excludes
 retained free capacity and execution/I/O arenas. Prepared allocations remain

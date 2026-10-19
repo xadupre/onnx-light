@@ -13,6 +13,19 @@ if(WIN32 AND NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
   set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 endif()
 
+if(NOT TARGET onnx_threads::lib_onnx_threads)
+  if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../onnx_threads/CMakeLists.txt")
+    set(ONNX_THREADS_BUILD_SHARED ${ONNX_PROTO_BUILD_SHARED})
+    set(ONNX_THREADS_INSTALL ${ONNX_PROTO_INSTALL})
+    set(ONNX_THREADS_BUILD_TESTS ${ONNX_PROTO_BUILD_TESTS})
+    set(ONNX_THREADS_WERROR ${ONNX_PROTO_WERROR})
+    add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../onnx_threads"
+        "${CMAKE_CURRENT_BINARY_DIR}/onnx_threads")
+  else()
+    find_package(onnx_threads CONFIG REQUIRED)
+  endif()
+endif()
+
 find_package(OpenSSL QUIET)
 
 file(GLOB ONNX_PROTO_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cc")
@@ -50,6 +63,7 @@ add_library(lib_onnx_proto ${_onnx_proto_type}
 add_library(onnx_proto::lib_onnx_proto ALIAS lib_onnx_proto)
 
 target_compile_features(lib_onnx_proto PUBLIC cxx_std_20)
+target_link_libraries(lib_onnx_proto PUBLIC onnx_threads::lib_onnx_threads)
 if(ONNX_PROTO_WERROR)
   if(MSVC)
     target_compile_options(lib_onnx_proto PRIVATE $<$<COMPILE_LANGUAGE:C,CXX>:/WX>)

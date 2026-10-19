@@ -45,10 +45,10 @@ def get_cpp_build_info() -> dict[str, str]:
         A dictionary with the nanobind version and platform ABI tag, compiler
         identity and version, C++ standard, stable-ABI mode, ``include_dir``,
         ``library_dir`` and one ``<component>_library`` entry per runtime
-        library built as a shared library. Python builds use shared core and
-        proto libraries on every platform so extensions observe one runtime
-        identity. On Windows, the matching ``<component>_import_library`` is
-        added when the build tree is available.
+        library built as a shared library. Python builds use shared core, proto
+        and threading libraries on every platform so extensions observe one
+        runtime identity. On Windows, the matching ``<component>_import_library``
+        is added when the build tree is available.
 
     The following example displays the ABI metadata and the exact headers and
     libraries selected by the imported package:
@@ -68,7 +68,7 @@ def get_cpp_build_info() -> dict[str, str]:
     library_dir = _extension_directory()
     info = dict(_onnxpyprotoop.get_cpp_build_metadata())
     info.update({"include_dir": str(package_dir), "library_dir": str(library_dir)})
-    for component in ("core", "proto"):
+    for component in ("core", "proto", "threads"):
         name = f"lib_onnx_{component}"
         library = _find_runtime_library(library_dir, name)
         if library is None:

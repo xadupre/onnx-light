@@ -10,6 +10,9 @@ rm -f test*.onnx
 rm -f dummy*.onnx
 rm -f onnx*.md
 rm -f onnx_light/onnx_py/*.so
+rm -f Serialize*
+rm -f bench_qwen*
+rm -f qmoe*
 find . -type d -name "__pycache__" -exec rm -rf {} +
 
 if [ "$1" == "--all" ]; then

@@ -96,6 +96,29 @@ class TestIOModel(ExtTestCase):
             loaded_proto = onnxl.load(model_path)
             self.assertEqual(proto, loaded_proto)
 
+    def test_save_to_file_descriptor_thread_options(self) -> None:
+        """Tests that ignored threading options preserve bytes and descriptor ownership."""
+        proto = _simple_model()
+        tensor = _simple_tensor()
+        tensor.raw_data = np.arange(24, dtype=np.float32).tobytes()
+        tensor.ClearField("float_data")
+        proto.graph.initializer.append(tensor)
+        expected = proto.SerializeToString()
+        for num_threads in (-2, -1, 0, 1, 2, 4):
+            for min_block_size in (0, 1, 1024):
+                with (
+                    self.subTest(num_threads=num_threads, min_block_size=min_block_size),
+                    tempfile.TemporaryFile() as handle,
+                ):
+                    onnxl.save_to_file_descriptor(
+                        proto,
+                        handle.fileno(),
+                        num_threads=num_threads,
+                        min_block_size=min_block_size,
+                    )
+                    handle.seek(0)
+                    self.assertEqual(handle.read(), expected)
+
     def test_save_model_when_input_is_file_like_object(self) -> None:
         """Tests that save() accepts a file-like object with a write() method."""
         proto = _simple_model()

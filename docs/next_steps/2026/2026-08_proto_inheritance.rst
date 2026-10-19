@@ -5,9 +5,12 @@ Proto schema inheritance
 
 :Date: 2026-08
 
-**discussion**
+**abandoned**
 
 .. note::
+
+    This proposal is abandoned and retained for historical reference only.
+    No implementation is planned.
 
     This is an independent schema-language discussion, not part of the
     implementation sequence in

@@ -4,6 +4,23 @@ from pathlib import Path
 
 
 class TestNextStepsDocumentation(unittest.TestCase):
+    def test_proto_inheritance_abandoned(self):
+        """Checks that the abandoned proposal remains accessible but is not active."""
+        root = Path(__file__).resolve().parents[2] / "docs" / "next_steps" / "2026"
+        proposal = (root / "2026-08_proto_inheritance.rst").read_text(encoding="utf-8")
+        self.assertIn(".. _l-next-steps-proto-inheritance:", proposal)
+        self.assertIn("**abandoned**", proposal)
+        self.assertIn("No implementation is planned.", proposal)
+        index = (root / "index.rst").read_text(encoding="utf-8")
+        self.assertIn("    2026-08_proto_inheritance\n", index)
+        sections = re.split(r"(?m)^([^\n]+)\n-+\n", index)
+        categories = dict(zip(sections[1::2], sections[2::2]))
+        reference = ":ref:`l-next-steps-proto-inheritance`"
+        self.assertIn(reference, categories["Abandoned"])
+        for category in ("Started", "Discussion", "Completed"):
+            with self.subTest(category=category):
+                self.assertNotIn(reference, categories[category])
+
     def test_plans_grouped_by_year(self):
         """Checks that each year has a page indexing its roadmap plans exactly once."""
         root = Path(__file__).resolve().parents[2] / "docs" / "next_steps"

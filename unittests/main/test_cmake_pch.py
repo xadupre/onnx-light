@@ -13,6 +13,7 @@ class TestCMakePch(unittest.TestCase):
                 "cmake_minimum_required(VERSION 3.15)\n"
                 "project(PchPolicy LANGUAGES C CXX)\n"
                 "set(CMAKE_CXX_COMPILER_LAUNCHER ${TEST_LAUNCHER})\n"
+                "set(CMAKE_C_COMPILER_LAUNCHER ${TEST_C_LAUNCHER})\n"
                 f'add_subdirectory("{root.as_posix()}" onnx_light)\n'
                 "foreach(target IN ITEMS lib_onnx_shape lib_onnx_patterns)\n"
                 "  if(target STREQUAL lib_onnx_shape)\n"
@@ -37,13 +38,18 @@ class TestCMakePch(unittest.TestCase):
                 encoding="utf-8",
             )
             cases = (
-                ("default", "", None, True),
-                ("disabled", "", "OFF", False),
-                ("ccache", "ccache", None, False),
-                ("sccache", "sccache", None, False),
-                ("forced", "sccache", "ON", True),
+                ("default", "", "", None, True),
+                ("disabled", "", "", "OFF", False),
+                ("ccache", "ccache", "", None, False),
+                ("sccache", "sccache", "", None, False),
+                ("forced_ccache", "ccache", "", "ON", True),
+                ("forced_sccache", "sccache", "", "ON", True),
+                ("c_ccache", "", "ccache", None, False),
+                ("c_sccache", "", "sccache", None, False),
+                ("forced_c_ccache", "", "ccache", "ON", True),
+                ("forced_c_sccache", "", "sccache", "ON", True),
             )
-            for name, launcher, use_pch, expected in cases:
+            for name, launcher, c_launcher, use_pch, expected in cases:
                 with self.subTest(case=name):
                     command = [
                         "cmake",
@@ -55,6 +61,7 @@ class TestCMakePch(unittest.TestCase):
                         "-DONNX_LIGHT_BUILD_KERNELS=OFF",
                         "-DONNX_LIGHT_BUILD_TESTS=OFF",
                         f"-DTEST_LAUNCHER={launcher}",
+                        f"-DTEST_C_LAUNCHER={c_launcher}",
                         f"-DEXPECT_PCH={'ON' if expected else 'OFF'}",
                     ]
                     if use_pch is not None:

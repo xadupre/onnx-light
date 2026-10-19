@@ -65,6 +65,18 @@ class TestIOModel(ExtTestCase):
             loaded_proto = onnxl.load(model_path)
             self.assertEqual(proto, loaded_proto)
 
+    def test_save_and_load_model_with_inferred_protobuf_format(self) -> None:
+        """Tests protobuf inference for arbitrary filenames and path types."""
+        proto = _simple_model()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            for filename in ("model.pb", "model.bin", "model"):
+                for path_type in (str, pathlib.Path):
+                    with self.subTest(filename=filename, path_type=path_type):
+                        model_path = path_type(os.path.join(temp_dir, filename))
+                        onnxl.save(proto, model_path)
+                        self.assertEqual(proto, onnxl.load(model_path))
+                        self.assertEqual(proto, onnxl.load(model_path, format="protobuf"))
+
     def test_save_and_load_model_when_input_is_file_descriptor(self) -> None:
         proto = _simple_model()
         with tempfile.TemporaryDirectory() as temp_dir:

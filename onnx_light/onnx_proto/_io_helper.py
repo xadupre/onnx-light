@@ -304,7 +304,6 @@ def load(
     assert isinstance(f, (str, bytes, Path)), f"Unexpected type {type(f)} for f."
     if isinstance(f, Path):
         f = str(f)
-    inferred_format = format is None
     if format is None:
         format = _infer_format(f)
     if format not in _SUPPORTED_FORMATS:
@@ -337,10 +336,6 @@ def load(
     assert (
         not location or load_external_data
     ), f"'load_external_data' must be True if location={location!r}"
-    if inferred_format:
-        assert not isinstance(f, str) or os.path.splitext(f)[-1] in {
-            ".onnx"
-        }, f"File name must have the extension .onnx to be loaded but f={f!r}"
     if load_external_data and not location and isinstance(f, str):
         # Avoid a metadata-only pre-scan parse. The C++ external-data path
         # resolver consumes each tensor's ``external_data.location`` on the same

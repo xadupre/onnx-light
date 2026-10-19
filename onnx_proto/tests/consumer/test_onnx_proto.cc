@@ -1,3 +1,5 @@
+#include "onnx_proto/tml.h"
+
 #include "onnx.h"
 #include "onnx_proto/onnx_dlpack.h"
 #include "onnx_proto/onnx_helper.h"

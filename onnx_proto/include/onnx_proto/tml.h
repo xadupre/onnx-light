@@ -28,7 +28,7 @@
 #include <string>
 #include <vector>
 
-#include <onnx/onnx_pb.h>
+#include "onnx.h"
 
 namespace ONNX_LIGHT_NAMESPACE::proto {
 
@@ -212,7 +212,7 @@ public:
   const VectorMapInt64ToFloat &vector_map_int64_to_float() const {
     return vector_map_int64_to_float_;
   }
-  const ONNX_NAMESPACE::TensorProto &tensor() const { return tensor_; }
+  const ol::TensorProto &tensor() const { return tensor_; }
 
   const std::string &name() const { return name_; }
   const std::string &debug_info() const { return debug_info_; }
@@ -331,7 +331,7 @@ private:
   MapInt64ToDouble map_int64_to_double_;
   VectorMapStringToFloat vector_map_string_to_float_;
   VectorMapInt64ToFloat vector_map_int64_to_float_;
-  ONNX_NAMESPACE::TensorProto tensor_;
+  ol::TensorProto tensor_;
   std::string name_;
   std::string debug_info_;
 };

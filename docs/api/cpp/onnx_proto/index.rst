@@ -22,6 +22,10 @@ are optional and detected automatically. The project includes serialization,
 structural validation, DLPack support, BLAKE3, and the common C++ helpers.
 It does not provide the ONNX operator schemas or schema-based checker.
 
+``ONNX_PROTO_WERROR`` treats compiler warnings as errors when enabled (default:
+``OFF``). The full repository build follows ``ONNX_LIGHT_WERROR`` instead.
+Vendored BLAKE3 sources remain exempt from warnings-as-errors.
+
 Configure with ``-DONNX_PROTO_BUILD_TESTS=ON`` and run
 ``ctest --test-dir build-proto --output-on-failure`` to run the native proto
 suites, including serialization, structural validation, external data,

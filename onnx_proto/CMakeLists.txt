@@ -7,6 +7,7 @@ include(CMakePackageConfigHelpers)
 option(ONNX_PROTO_BUILD_SHARED "Build the proto library as a shared library." OFF)
 option(ONNX_PROTO_INSTALL "Install the proto library, headers and CMake package." ON)
 option(ONNX_PROTO_BUILD_TESTS "Build the native proto unit tests and consumer checks." OFF)
+option(ONNX_PROTO_WERROR "Treat proto compiler warnings as errors." OFF)
 
 find_package(OpenMP QUIET)
 find_package(OpenSSL QUIET)
@@ -25,7 +26,7 @@ set(ONNX_BLAKE3_SOURCES
     "${ONNX_BLAKE3_PATH}/blake3_hash.cc")
 set_source_files_properties(${ONNX_BLAKE3_SOURCES} PROPERTIES COMPILE_DEFINITIONS
     "BLAKE3_USE_TBB;BLAKE3_NO_SSE2;BLAKE3_NO_SSE41;BLAKE3_NO_AVX2;BLAKE3_NO_AVX512;BLAKE3_USE_NEON=0")
-if(ONNX_LIGHT_WERROR)
+if(ONNX_PROTO_WERROR)
   if(MSVC)
     set_property(SOURCE ${ONNX_BLAKE3_SOURCES} APPEND PROPERTY COMPILE_OPTIONS "/WX-")
   else()
@@ -45,6 +46,13 @@ add_library(onnx_proto::lib_onnx_proto ALIAS lib_onnx_proto)
 add_library(onnx_light::lib_onnx_proto ALIAS lib_onnx_proto)
 
 target_compile_features(lib_onnx_proto PUBLIC cxx_std_20)
+if(ONNX_PROTO_WERROR)
+  if(MSVC)
+    target_compile_options(lib_onnx_proto PRIVATE $<$<COMPILE_LANGUAGE:C,CXX>:/WX>)
+  else()
+    target_compile_options(lib_onnx_proto PRIVATE $<$<COMPILE_LANGUAGE:C,CXX>:-Werror>)
+  endif()
+endif()
 set_target_properties(lib_onnx_proto PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(lib_onnx_proto PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

@@ -68,18 +68,20 @@ jobs:
         run: |
           cp -r onnx_proto "$RUNNER_TEMP/onnx_proto"
           for shared in OFF ON; do
-            build="$RUNNER_TEMP/proto-build"
-            prefix="$RUNNER_TEMP/proto-install"
+            build="$RUNNER_TEMP/proto-build-$shared"
+            prefix="$RUNNER_TEMP/proto-install-$shared"
+            consumer="$RUNNER_TEMP/proto-consumer-$shared"
             cmake -S "$RUNNER_TEMP/onnx_proto" -B "$build" \
               -DCMAKE_BUILD_TYPE=Release -DONNX_PROTO_BUILD_SHARED="$shared" \
-              -DONNX_PROTO_BUILD_TESTS=ON -DCMAKE_INSTALL_PREFIX="$prefix"
+              -DONNX_PROTO_BUILD_TESTS=ON -DONNX_PROTO_WERROR=ON \
+              -DCMAKE_INSTALL_PREFIX="$prefix"
             cmake --build "$build" --parallel 6
             ctest --test-dir "$build" --output-on-failure
             cmake --install "$build"
-            cmake -S "$RUNNER_TEMP/onnx_proto/tests/consumer" -B "$RUNNER_TEMP/proto-consumer" \
+            cmake -S "$RUNNER_TEMP/onnx_proto/tests/consumer" -B "$consumer" \
               -DCMAKE_PREFIX_PATH="$prefix"
-            cmake --build "$RUNNER_TEMP/proto-consumer" --parallel 6
-            ctest --test-dir "$RUNNER_TEMP/proto-consumer" --output-on-failure
+            cmake --build "$consumer" --parallel 6
+            ctest --test-dir "$consumer" --output-on-failure
           done
 
   free_threaded:

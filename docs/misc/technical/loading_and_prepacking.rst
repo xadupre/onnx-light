@@ -199,6 +199,13 @@ The implementation combines three execution mechanisms:
 * ``PrepareAsync`` and ``RunAsync`` use one coordinating ``std::thread`` owned
   by their :cpp:class:`ExecutionHandle`.
 
+Each asynchronous submission owns its task callback, copying an lvalue
+``PreparedTaskExecutor`` or moving an rvalue. Direct and named lambda arguments
+therefore remain safe after their temporary ``std::function`` conversion is
+destroyed. Reference captures still borrow their targets. The state and optional
+CPU executor must remain alive until completion; ``RunAsync`` also borrows its
+plan, whereas ``PrepareAsync`` retains a session-only plan of its own.
+
 The coordinator sorts ready tasks by effective priority and then by scope.
 Admitted I/O tasks are enqueued independently. Ready CPU tasks are collected
 and submitted as one ``CpuExecutor::ParallelFor`` batch. While that synchronous

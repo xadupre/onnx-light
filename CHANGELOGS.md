@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixes
 
+- Made dynamic `PrepareAsync` and `RunAsync` submissions own their task callbacks, preventing dangling references from temporary `std::function` conversions of direct or named lambdas ([#5350](https://github.com/xadupre/onnx-light/issues/5350)). The state, optional CPU executor, `RunAsync` plan, and callback reference captures remain borrowed.
 - Allowed external tensor data in one existing child directory while rejecting absolute paths, parent traversal, deeper paths, and statically resolved escapes ([#5305](https://github.com/xadupre/onnx-light/pull/5305)).
 - Expanded scalar `SplitToSequence` splits into explicit lengths, including a final remainder, when rewriting to `Split`, and ignored `keepdims` when a split input is present ([#5300](https://github.com/xadupre/onnx-light/pull/5300)).
 - Preserved symbolic dimensions for open-ended `Slice` inference by treating `INT64_MAX` ends as the input extent rather than a concrete output dimension ([#5301](https://github.com/xadupre/onnx-light/pull/5301)).

@@ -17,7 +17,7 @@ builtin op converters for ``Conv``, ``BatchNormalization``,
 ``MaxPool``/``AveragePool``, the elementwise math/logical/comparison ops,
 ``Gemm``, ``MatMul``, ``Reshape``, ``Flatten``, ``Transpose``, ``Concat``,
 ``Identity`` and ``Clip``).  Only the proto layer of *onnx-light*
-(``onnx_light::lib_onnx_proto``) is linked, to load and walk the ONNX
+(``onnx_proto::lib_onnx_proto``) is linked, to load and walk the ONNX
 ``ModelProto``.
 
 Step 1 – Install the C++ library
@@ -64,7 +64,7 @@ CMakeLists.txt
 --------------
 
 The example uses ``find_package`` and links against the exported
-``onnx_light::lib_onnx_proto`` target. The NNEF sources are compiled in
+``onnx_proto::lib_onnx_proto`` target. The NNEF sources are compiled in
 the same executable:
 
 .. code-block:: cmake
@@ -83,7 +83,7 @@ the same executable:
         nnef/tensor_io.cc
     )
     target_include_directories(export_nnef PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-    target_link_libraries(export_nnef PRIVATE onnx_light::lib_onnx_proto)
+    target_link_libraries(export_nnef PRIVATE onnx_proto::lib_onnx_proto)
 
 main.cc
 --------

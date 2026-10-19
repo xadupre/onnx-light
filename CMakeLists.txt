@@ -33,7 +33,7 @@ option(ONNX_LIGHT_PYTHON_STABLE_ABI
     "Build Python extensions with CPython's stable ABI." ON)
 option(ONNX_LIGHT_INSTALL "Install the C++ library and headers." ON)
 option(ONNX_LIGHT_BUILD_KERNELS
-    "Build the operator-kernel runtime (lib_onnx_kernels) and the backend-test registry (lib_onnx_backend_test). Turn OFF to install only the schema / checker / shape-inference / version-converter libraries (useful for downstream projects that only need onnx_light::lib_onnx_lib or onnx_light::lib_onnx_proto)."
+    "Build the operator-kernel runtime (lib_onnx_kernels) and the backend-test registry (lib_onnx_backend_test). Turn OFF to install only the schema / checker / shape-inference / version-converter libraries (useful for downstream projects that only need onnx_light::lib_onnx_lib or onnx_proto::lib_onnx_proto)."
     ON)
 option(ONNX_LIGHT_PROVIDE_ONNX_TARGETS
     "Expose drop-in `onnx` and `onnx_proto` CMake targets (aliasing the onnx-light libraries) so onnx-light can be consumed as a replacement for upstream onnx, e.g. via FetchContent from onnxruntime. When ON the aggregate `onnx` target bundles the schema / checker / shape-inference libraries and `onnx_proto` aliases lib_onnx_proto."

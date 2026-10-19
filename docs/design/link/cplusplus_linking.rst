@@ -29,11 +29,11 @@ A downstream project can then select one or more exported targets:
     find_package(onnx_light CONFIG REQUIRED)
 
     add_executable(my_reader main.cc)
-    target_link_libraries(my_reader PRIVATE onnx_light::lib_onnx_proto)
+    target_link_libraries(my_reader PRIVATE onnx_proto::lib_onnx_proto)
 
 Common choices are:
 
-* ``onnx_light::lib_onnx_proto`` for model parsing and serialization;
+* ``onnx_proto::lib_onnx_proto`` for model parsing and serialization;
 * ``onnx_light::lib_onnx_lib`` for schemas, checking, inlining, standard shape
   inference, and version conversion;
 * ``onnx_light::lib_onnx_shape`` for the standalone shape and peak-memory

@@ -66,7 +66,7 @@ class TestCMakeCppTestLayout(ExtTestCase):
                 f'add_subdirectory("{(root / "onnx_proto").as_posix()}" proto)\n'
                 "foreach(target IN ITEMS lib_onnx_proto test_onnx_proto "
                 "test_stream_class_print test_onnx_dlpack test_onnx_light_helpers "
-                "proto_consumer proto_consumer_legacy)\n"
+                "proto_consumer)\n"
                 "  get_target_property(output ${target} RUNTIME_OUTPUT_DIRECTORY)\n"
                 "  if(NOT output STREQUAL expected)\n"
                 '    message(FATAL_ERROR "${target}: ${output} != ${expected}")\n'

@@ -87,7 +87,7 @@ Modular C++ libraries
 The C++ code is shipped as several small libraries so that downstream
 projects can link only what they need:
 
-- ``onnx_light::lib_onnx_proto`` – protobuf-compatible message types,
+- ``onnx_proto::lib_onnx_proto`` – protobuf-compatible message types,
   parser / serializer, external data, optional encrypted save / load
   (AES-256-CBC, ChaCha20-Poly1305, or AES-256-GCM).
 - ``onnx_light::lib_onnx_core`` – implements *all* the generic

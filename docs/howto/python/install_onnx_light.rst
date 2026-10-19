@@ -60,7 +60,7 @@ Notes
   ``find_package(onnx_light REQUIRED)``.
 * Use ``onnx_light::lib_onnx_lib`` for higher-level ONNX features such as checker,
   shape inference, or version conversion. Use
-  ``onnx_light::lib_onnx_proto`` when the downstream code only needs proto
+  ``onnx_proto::lib_onnx_proto`` when the downstream code only needs proto
   parsing and serialization.
 
 See also

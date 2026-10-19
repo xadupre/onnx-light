@@ -12,8 +12,8 @@ be built and installed without Python, operator schemas, or the runtime:
     cmake --install build-proto
 
 Consumers use ``find_package(onnx_proto CONFIG REQUIRED)`` and link
-``onnx_proto::lib_onnx_proto``. The legacy ``onnx_light::lib_onnx_proto`` target
-and installed include paths remain available. Both ``#include "onnx.h"`` and
+``onnx_proto::lib_onnx_proto``. The same target is available through the full
+``onnx_light`` package. Both ``#include "onnx.h"`` and
 ``#include "onnx_proto/onnx.h"`` continue to work.
 Installed flat headers forward to the canonical ``onnx_proto/`` tree, so both
 spellings can be mixed safely in the same translation unit.

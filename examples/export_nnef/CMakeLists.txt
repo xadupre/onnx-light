@@ -44,4 +44,4 @@ add_executable(export_nnef
 # The NNEF sources include "nnef/exporter.h" / "nnef/tensor_io.h" relative to
 # the example root, so expose this directory as a private include path.
 target_include_directories(export_nnef PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-target_link_libraries(export_nnef PRIVATE onnx_light::lib_onnx_proto)
+target_link_libraries(export_nnef PRIVATE onnx_proto::lib_onnx_proto)

@@ -89,16 +89,17 @@ enum class BroadcastDimOp { kAdd, kSub };
  * (currently ``Add`` and ``Sub``).
  *
  * If both inputs of ``node`` carry a ``ValueAsShape`` annotation, the
- * helper combines them with right-aligned broadcasting using the
- * matching :cpp:func:`expressions::dim_add` /
+ * helper pairs values elementwise for equal-length vectors or repeats
+ * the actual value of a length-one operand using the matching
+ * :cpp:func:`expressions::dim_add` /
  * :cpp:func:`expressions::dim_sub` operation, and writes the resulting
  * 1-D dim vector back as the ``ValueAsShape`` of ``node.output(0)``
- * (which must already exist in ``ctx``). Missing leading dimensions on
- * the shorter side are treated as the integer ``1``, matching numpy's
- * broadcasting rules.
+ * (which must already exist in ``ctx``). Empty vectors paired with
+ * empty or length-one vectors produce an empty annotation.
  *
- * Does nothing if either input is missing a ``ValueAsShape`` or if
- * the resulting shape would exceed :cpp:var:`kMaxOptimRank` dims.
+ * Does nothing if either input is missing a ``ValueAsShape``, if their
+ * lengths differ and neither is one, or if the resulting shape would
+ * exceed :cpp:var:`kMaxOptimRank` dims.
  */
 void PropagateValueAsShapeArithmetic(ShapesContext &ctx, const NodeProto &node, const char *input_a,
                                      const char *input_b, BroadcastDimOp op);

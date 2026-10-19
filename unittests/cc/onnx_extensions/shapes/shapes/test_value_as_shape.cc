@@ -10,10 +10,13 @@
 // ``ValueAsShape`` annotation is correctly propagated through those
 // operators so that the downstream ``Expand`` recovers a precise shape.
 
+#include "onnx_core/expressions/expressions.h"
 #include "onnx_core/shapes/shape_inference.h"
 
+#include "onnx_core/shapes/shape_broadcast.h"
 #include "onnx_core/shapes/shapes_context.h"
 #include "onnx_core/symbolic/sym_tensor.h"
+#include "onnx_extensions/shapes/shapes/math/shape_math.h"
 #include "onnx_proto/onnx.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -186,6 +189,98 @@ bool DimEqualsExpr(const core::symbolic::SymDim &d, const std::string &s) {
 }
 
 } // namespace
+
+TEST(OnnxOptimShapeInference, ValueAsShapeArithmeticBroadcastsActualSingletonValue) {
+  using core::symbolic::SymDim;
+  using core::symbolic::SymShape;
+  using core::symbolic::SymTensor;
+  using core::symbolic::TensorType;
+
+  for (bool subtract : {false, true}) {
+    for (bool reverse : {false, true}) {
+      SCOPED_TRACE(::testing::Message() << "subtract=" << subtract << ", reverse=" << reverse);
+      core::shapes::ShapesContext ctx;
+      SymTensor values(nullptr, TensorType::kInt64, SymShape{SymDim(2)});
+      values.SetValueAsShape(SymShape{SymDim("N"), SymDim("M")});
+      SymTensor five(nullptr, TensorType::kInt64, SymShape{SymDim(1)});
+      five.SetValueAsShape(SymShape{SymDim(5)});
+      ctx.Set("values", std::move(values));
+      ctx.Set("five", std::move(five));
+      const char *a = reverse ? "five" : "values";
+      const char *b = reverse ? "values" : "five";
+      NodeProto node = MakeNode(subtract ? "Sub" : "Add", {a, b}, {"result"});
+      if (subtract) {
+        onnx_shapes::shapes::math::ComputeShapeSub(ctx, node, a, b);
+      } else {
+        onnx_shapes::shapes::math::ComputeShapeAdd(ctx, node, a, b);
+      }
+      ASSERT_TRUE(ctx.Get("result").HasValueAsShape());
+      const SymShape &result = ctx.Get("result").ValueAsShape();
+      ASSERT_EQ(result.Rank(), 2u);
+      EXPECT_EQ(ctx.Get("result").Shape(), SymShape{SymDim(2)});
+      for (std::size_t i = 0; i < result.Rank(); ++i) {
+        const std::string symbol = i == 0 ? "N" : "M";
+        const std::string expected =
+            subtract ? (reverse ? "5-" + symbol : symbol + "-5") : symbol + "+5";
+        EXPECT_TRUE(
+            DimEqualsExpr(result[i], core::expressions::simplify_result_to_string(
+                                         core::expressions::simplify_expression(expected))));
+      }
+    }
+  }
+}
+
+TEST(OnnxOptimShapeInference, ValueAsShapeArithmeticPairsCompatibleLengths) {
+  using core::symbolic::SymDim;
+  using core::symbolic::SymShape;
+  using core::symbolic::SymTensor;
+  using core::symbolic::TensorType;
+
+  struct TestCase {
+    SymShape a;
+    SymShape b;
+    SymShape sum;
+    SymShape difference;
+    bool compatible = true;
+  };
+  const std::vector<TestCase> cases{
+      {{SymDim(7), SymDim(9)}, {SymDim(5)}, {SymDim(12), SymDim(14)}, {SymDim(2), SymDim(4)}},
+      {{SymDim(5)}, {SymDim(7), SymDim(9)}, {SymDim(12), SymDim(14)}, {SymDim(-2), SymDim(-4)}},
+      {{SymDim(7), SymDim(9)},
+       {SymDim(5), SymDim(3)},
+       {SymDim(12), SymDim(12)},
+       {SymDim(2), SymDim(6)}},
+      {{SymDim(7)}, {SymDim(5)}, {SymDim(12)}, {SymDim(2)}},
+      {{}, {}, {}, {}},
+      {{}, {SymDim(5)}, {}, {}},
+      {{SymDim(5)}, {}, {}, {}},
+      {{SymDim(2), SymDim(3)}, {SymDim(4), SymDim(5), SymDim(6)}, {}, {}, false},
+      {{SymDim(4), SymDim(5), SymDim(6)}, {SymDim(2), SymDim(3)}, {}, {}, false},
+      {{}, {SymDim(2), SymDim(3)}, {}, {}, false},
+      {{SymDim(2), SymDim(3)}, {}, {}, {}, false}};
+  for (const auto &test : cases) {
+    for (bool subtract : {false, true}) {
+      SCOPED_TRACE(::testing::Message() << "lengths=" << test.a.Rank() << "," << test.b.Rank()
+                                        << ", subtract=" << subtract);
+      core::shapes::ShapesContext ctx;
+      SymTensor a(nullptr, TensorType::kInt64, SymShape{SymDim(test.a.Rank())});
+      a.SetValueAsShape(test.a);
+      SymTensor b(nullptr, TensorType::kInt64, SymShape{SymDim(test.b.Rank())});
+      b.SetValueAsShape(test.b);
+      ctx.Set("a", std::move(a));
+      ctx.Set("b", std::move(b));
+      ctx.Set("result", SymTensor(nullptr, TensorType::kInt64, SymShape{}));
+      NodeProto node = MakeNode(subtract ? "Sub" : "Add", {"a", "b"}, {"result"});
+      core::shapes::PropagateValueAsShapeArithmetic(ctx, node, "a", "b",
+                                                    subtract ? core::shapes::BroadcastDimOp::kSub
+                                                             : core::shapes::BroadcastDimOp::kAdd);
+      ASSERT_EQ(ctx.Get("result").HasValueAsShape(), test.compatible);
+      if (test.compatible) {
+        EXPECT_EQ(ctx.Get("result").ValueAsShape(), subtract ? test.difference : test.sum);
+      }
+    }
+  }
+}
 
 TEST(OnnxOptimShapeInference, ValueAsShapePropagatesThroughShapeConcatAddSubExpand) {
   ModelProto model = MakeValueAsShapeModel();

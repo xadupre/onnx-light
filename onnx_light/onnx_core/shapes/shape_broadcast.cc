@@ -182,17 +182,17 @@ void PropagateValueAsShapeArithmetic(ShapesContext &ctx, const NodeProto &node, 
   const SymShape &bv = rhs.ValueAsShape();
   const std::size_t ra = av.Rank();
   const std::size_t rb = bv.Rank();
-  const std::size_t r = std::max(ra, rb);
+  if (ra != rb && ra != 1 && rb != 1) {
+    return;
+  }
+  const std::size_t r = ra == 1 ? rb : ra;
   if (r > kMaxOptimRank) {
     return;
   }
-  const SymDim kOne(static_cast<int64_t>(1));
   SymShape out_value_as_shape;
   for (std::size_t i = 0; i < r; ++i) {
-    const bool has_a = i + ra >= r;
-    const bool has_b = i + rb >= r;
-    const SymDim &da = has_a ? av[i - (r - ra)] : kOne;
-    const SymDim &db = has_b ? bv[i - (r - rb)] : kOne;
+    const SymDim &da = av[ra == 1 ? 0 : i];
+    const SymDim &db = bv[rb == 1 ? 0 : i];
     expressions::DimType result;
     switch (op) {
     case BroadcastDimOp::kAdd:

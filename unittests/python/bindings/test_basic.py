@@ -10,6 +10,7 @@ from typing import get_type_hints
 import numpy as np
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
+import onnx_light.onnx.numpy_helper as onh
 from onnx_light.onnx import defs, parser
 from onnx_light.ext_test_case import ExtTestCase
 from onnx_light.onnx_proto._io_helper import load
@@ -71,6 +72,18 @@ class TestIOModel(ExtTestCase):
             onnxl.save(proto, model_path)
             loaded_proto = onnxl.load(model_path)
             self.assertEqual(proto, loaded_proto)
+
+    def test_save_and_load_model_with_inferred_protobuf_format(self) -> None:
+        """Tests protobuf inference for arbitrary filenames and path types."""
+        proto = _simple_model()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            for filename in ("model.pb", "model.bin", "model"):
+                for path_type in (str, pathlib.Path):
+                    with self.subTest(filename=filename, path_type=path_type):
+                        model_path = path_type(os.path.join(temp_dir, filename))
+                        onnxl.save(proto, model_path)
+                        self.assertEqual(proto, onnxl.load(model_path))
+                        self.assertEqual(proto, onnxl.load(model_path, format="protobuf"))
 
     def test_save_and_load_model_when_input_is_file_descriptor(self) -> None:
         proto = _simple_model()
@@ -187,7 +200,79 @@ class TestIOModel(ExtTestCase):
 
 
 class TestIOTensor(ExtTestCase):
-    """Tests for saving and loading TensorProto (protobuf format only)."""
+    """Tests standalone TensorProto files and streams."""
+
+    def test_tensor_pb_files_contain_standalone_tensor_messages(self) -> None:
+        tensors = [
+            _simple_tensor(),
+            onh.from_array(np.arange(6, dtype=np.float32).reshape(2, 3), name="raw"),
+            onh.from_array(np.array(["alpha", "beta"], dtype=object), name="strings"),
+        ]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            for tensor in tensors:
+                for path_type in (str, pathlib.Path):
+                    with self.subTest(tensor=tensor.name, path_type=path_type):
+                        path = path_type(os.path.join(temp_dir, "input_0.pb"))
+                        onnxl.save_tensor(tensor, path)
+                        loaded = onnxl.load_tensor(path)
+                        self.assertIsInstance(loaded, onnxl.TensorProto)
+                        self.assertEqual(tensor, loaded)
+                        np.testing.assert_array_equal(onh.to_array(tensor), onh.to_array(loaded))
+                        direct = onnxl.TensorProto()
+                        direct.ParseFromString(pathlib.Path(path).read_bytes())
+                        self.assertEqual(tensor, direct)
+                        self.assertEqual(tensor, onnxl.load_tensor(path, format="protobuf"))
+
+    def test_tensor_helpers_accept_binary_streams_without_closing_them(self) -> None:
+        tensor = _simple_tensor()
+        stream = io.BytesIO()
+        onnxl.save_tensor(tensor, stream)
+        self.assertFalse(stream.closed)
+        stream.seek(0)
+        self.assertEqual(tensor, onnxl.load_tensor(stream))
+        self.assertFalse(stream.closed)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = pathlib.Path(temp_dir, "output_0.pb")
+            with path.open("wb") as handle:
+                onnxl.save_tensor(tensor, handle)
+                self.assertFalse(handle.closed)
+            with path.open("rb") as handle:
+                self.assertEqual(tensor, onnxl.load_tensor(handle))
+                self.assertFalse(handle.closed)
+
+    def test_tensor_textproto_inference_and_explicit_format(self) -> None:
+        tensor = _simple_tensor()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            for filename, format in [("tensor.textproto", None), ("tensor.pb", "textproto")]:
+                with self.subTest(filename=filename, format=format):
+                    path = pathlib.Path(temp_dir, filename)
+                    onnxl.save_tensor(tensor, path, format=format)
+                    self.assertEqual(tensor, onnxl.load_tensor(path, format=format))
+        stream = io.BytesIO()
+        onnxl.save_tensor(tensor, stream, format="textproto")
+        stream.seek(0)
+        self.assertEqual(tensor, onnxl.load_tensor(stream, format="textproto"))
+
+    def test_tensor_helpers_reject_invalid_inputs_before_writing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = pathlib.Path(temp_dir, "tensor.pb")
+            path.write_bytes(b"existing")
+            with self.assertRaises(TypeError):
+                onnxl.save_tensor(_simple_model(), path)
+            with self.assertRaises(ValueError):
+                onnxl.save_tensor(_simple_tensor(), path, format="ort")
+            self.assertEqual(path.read_bytes(), b"existing")
+            with self.assertRaises(ValueError):
+                onnxl.load_tensor(path, format="ort")
+            with self.assertRaises(TypeError):
+                onnxl.load_tensor(1)
+            with self.assertRaises(TypeError):
+                onnxl.save_tensor(_simple_tensor(), 1)
+            with self.assertRaises(FileNotFoundError):
+                onnxl.load_tensor(pathlib.Path(temp_dir, "missing.pb"))
+            path.write_bytes(b"\x0a\x05\x01")
+            with self.assertRaises(RuntimeError):
+                onnxl.load_tensor(path)
 
     def test_load_tensor_when_input_is_bytes(self) -> None:
         proto = _simple_tensor()

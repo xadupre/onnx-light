@@ -6,11 +6,13 @@ import os
 import pathlib
 import tempfile
 import unittest
+from typing import get_type_hints
 import numpy as np
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
 from onnx_light.onnx import defs, parser
 from onnx_light.ext_test_case import ExtTestCase
+from onnx_light.onnx_proto._io_helper import load
 
 
 def _simple_model() -> onnxl.ModelProto:
@@ -42,6 +44,11 @@ def _pipeline_with_node(doc_string: str) -> onnxl.PipelineProto:
 
 class TestIOModel(ExtTestCase):
     """Tests for saving and loading ModelProto (protobuf format only)."""
+
+    def test_load_input_annotation(self) -> None:
+        self.assertIs(onnxl.load, load)
+        self.assertIs(onnxl.load_model, load)
+        self.assertEqual(get_type_hints(load)["f"], str | pathlib.Path | bytes)
 
     def test_load_model_when_input_is_bytes(self) -> None:
         proto = _simple_model()

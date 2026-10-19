@@ -181,19 +181,17 @@ def save_to_file_descriptor(
 
     Writes the serialized protobuf bytes directly into the open file descriptor
     *fd*. The descriptor is not closed after writing; the caller is responsible
-    for closing it.
+    for closing it. File-descriptor serialization always runs serially on the
+    calling thread.
 
     :param proto: should be an in-memory ModelProto.
     :param fd: open writable file descriptor (integer). Must be a valid file
         descriptor opened for writing.
-    :param num_threads: number of threads to use for serialization.
-        ``1`` (default) disables parallelization, ``> 1`` uses exactly that
-        many worker threads. Negative values are not supported for file
-        descriptor writes and are treated as ``1``.
-    :param min_block_size: minimum raw-data block size in bytes to write in
-        parallel when ``num_threads != 1``; tensor blocks smaller than this
-        threshold are written on the calling thread to avoid thread-pool
-        overhead. A value of 0 (default) parallelizes all blocks.
+    :param num_threads: accepted for API compatibility but ignored for
+        file-descriptor writes. All values, including values greater than
+        ``1`` and negative values, are treated as ``1``.
+    :param min_block_size: accepted for API compatibility but has no effect
+        because file-descriptor writes do not use parallel serialization.
     """
     assert isinstance(proto, ModelProto), f"Unexpected type {type(proto)} for proto."
     if num_threads != 1 or min_block_size != 0:

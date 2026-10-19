@@ -25,6 +25,7 @@ class TestPackageVersionConsistency(unittest.TestCase):
         setup_py = (self.root / "setup.py").read_text(encoding="utf-8")
         cpp_version = (self.root / "onnx_light" / "_version.cc").read_text(encoding="utf-8")
         cmake = (self.root / "CMakeLists.txt").read_text(encoding="utf-8")
+        proto_cmake = (self.root / "onnx_proto" / "CMakeLists.txt").read_text(encoding="utf-8")
         changelog = (self.root / "CHANGELOGS.md").read_text(encoding="utf-8")
 
         pyproject_version = self._extract(
@@ -43,6 +44,11 @@ class TestPackageVersionConsistency(unittest.TestCase):
         cmake_version = self._extract(
             r"project\(onnx_light VERSION ([0-9]+\.[0-9]+\.[0-9]+)", cmake, "CMakeLists.txt"
         )
+        proto_cmake_version = self._extract(
+            r"project\(onnx_proto VERSION ([0-9]+\.[0-9]+\.[0-9]+)",
+            proto_cmake,
+            "onnx_proto/CMakeLists.txt",
+        )
         changelog_version = self._extract(r"^## \[([^\]]+)\]", changelog, "CHANGELOGS.md")
 
         self.assertEqual(pyproject_version, package_init_version)
@@ -50,6 +56,7 @@ class TestPackageVersionConsistency(unittest.TestCase):
         self.assertEqual(pyproject_version, cpp_version_value)
         self.assertEqual(pyproject_version, cpp_documented_version)
         self.assertEqual(pyproject_version, cmake_version)
+        self.assertEqual(pyproject_version, proto_cmake_version)
         self.assertEqual(pyproject_version, changelog_version)
 
 

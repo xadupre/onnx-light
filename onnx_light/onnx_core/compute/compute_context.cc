@@ -569,13 +569,55 @@ void ComputeContext::RefreshNode(const utils::RepeatedProtoField<NodeProto> &nod
                                  const std::vector<std::string> &references, Device device) {
   EXT_ENFORCE_INVALID(node_index < nodes.size() && node_index < incr_node_references_.size(),
                       "RefreshNode: node index is out of bounds.");
-  const std::vector<std::string> previous = incr_node_references_[node_index];
-  std::unordered_set<std::string> changed(previous.begin(), previous.end());
-  changed.insert(references.begin(), references.end());
+  const auto &outputs = nodes[node_index].output();
+  RefreshNodes(nodes, {{node_index, references}}, ctx, {outputs.begin(), outputs.end()}, device);
+}
 
-  std::size_t refresh_from = node_index;
+void ComputeContext::RefreshNodes(const utils::RepeatedProtoField<NodeProto> &nodes,
+                                  const std::map<std::size_t, std::vector<std::string>> &references,
+                                  const ShapesContext &ctx,
+                                  const std::unordered_set<std::string> &changed_values,
+                                  Device device) {
+  std::size_t refresh_from = nodes.size();
+  std::unordered_set<std::string> changed_references;
+  for (const auto &[index, current] : references) {
+    EXT_ENFORCE_INVALID(index < nodes.size() && index < incr_node_references_.size(),
+                        "RefreshNodes: node index is out of bounds.");
+    refresh_from = std::min(refresh_from, index);
+    const auto &previous = incr_node_references_[index];
+    if (previous == current) {
+      continue;
+    }
+    const std::unordered_set<std::string> old_names(previous.begin(), previous.end());
+    const std::unordered_set<std::string> new_names(current.begin(), current.end());
+    for (const auto &name : old_names) {
+      if (new_names.count(name) == 0) {
+        changed_references.insert(name);
+      }
+    }
+    for (const auto &name : new_names) {
+      if (old_names.count(name) == 0) {
+        changed_references.insert(name);
+      }
+    }
+  }
+  for (const auto &name : changed_values) {
+    if (name.empty()) {
+      continue;
+    }
+    incr_byte_size_expr_cache_.erase(name);
+    const auto producer = incr_producer_.find(name);
+    refresh_from = std::min(refresh_from, producer == incr_producer_.end() || producer->second < 0
+                                              ? 0
+                                              : static_cast<std::size_t>(producer->second));
+  }
+
+  const auto updated_references = [&](std::size_t index) -> const std::vector<std::string> & {
+    const auto updated = references.find(index);
+    return updated == references.end() ? incr_node_references_[index] : updated->second;
+  };
   std::unordered_map<std::string, int> updated_last_use;
-  for (const std::string &name : changed) {
+  for (const std::string &name : changed_references) {
     if (name.empty()) {
       continue;
     }
@@ -585,7 +627,7 @@ void ComputeContext::RefreshNode(const utils::RepeatedProtoField<NodeProto> &nod
     }
     int last = -1;
     for (std::size_t index = 0; index < incr_node_references_.size(); ++index) {
-      const auto &node_references = index == node_index ? references : incr_node_references_[index];
+      const auto &node_references = updated_references(index);
       if (std::find(node_references.begin(), node_references.end(), name) !=
           node_references.end()) {
         last = static_cast<int>(index);
@@ -600,12 +642,24 @@ void ComputeContext::RefreshNode(const utils::RepeatedProtoField<NodeProto> &nod
       refresh_from = std::min(refresh_from, static_cast<std::size_t>(producer->second));
     }
   }
+  if (refresh_from == nodes.size()) {
+    return;
+  }
   MarkMemoryRefresh(refresh_from);
   PrepareMemoryRefresh(nodes, nodes.size());
-  incr_node_references_[node_index] = references;
+  for (const auto &name : changed_values) {
+    incr_allocation_bytes_.erase(name);
+  }
+  for (const auto &[index, current] : references) {
+    if (incr_node_references_[index] != current) {
+      incr_node_references_[index] = current;
+    }
+  }
 
   for (const auto &[name, last] : updated_last_use) {
-    for (std::size_t index = 0; index < release_after_.size(); ++index) {
+    const auto previous = incr_last_use_.find(name);
+    if (previous != incr_last_use_.end() && previous->second >= 0) {
+      const std::size_t index = static_cast<std::size_t>(previous->second);
       EraseValueFromList(release_after_[index], name);
       EraseValueFromList(not_used_after_[index], name);
       EraseValueFromList(release_after_shape_tagged_[index], name);

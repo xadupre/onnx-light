@@ -731,6 +731,7 @@ bool GraphBuilder::RefreshDependentNodes(
         &is_affected,
     std::unordered_set<std::string> &affected_values, bool propagate_to_parent) {
   bool affected = false;
+  std::map<std::size_t, std::vector<std::string>> refreshed_references;
   for (std::size_t index = 0; index < nodes_.size(); ++index) {
     const NodeProto &stored = nodes_[index];
     const bool directly_affected = is_affected(stored, affected_values);
@@ -776,9 +777,10 @@ bool GraphBuilder::RefreshDependentNodes(
         SeedDeclaredValueInfo(compute_.Shapes(), output);
       }
     }
-    compute_.RefreshNode(nodes_, index, compute_.Shapes(), references, device_);
+    refreshed_references.emplace(index, std::move(references));
     compute_.AppendNodeConstant(stored, index);
   }
+  compute_.RefreshNodes(nodes_, refreshed_references, compute_.Shapes(), affected_values, device_);
   if (propagate_to_parent && !ancestor_refresh_suppressed_ && parent_ != nullptr &&
       !affected_values.empty()) {
     if (is_local_function_) {

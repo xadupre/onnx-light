@@ -4,6 +4,7 @@
 
 #include "onnx_core/builder/graph_builder.h"
 #include "onnx_core/compute/value_tags.h"
+#include "onnx_core/shapes/dispatch_table.h"
 
 #include "onnx_helper.h"
 #include "onnx_lib/checker.h"
@@ -14,6 +15,7 @@
 
 #include <algorithm>
 #include <gtest/gtest.h>
+#include <memory>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
@@ -314,6 +316,95 @@ TEST(GraphBuilder, SetOpsetVersionRefreshesOnlyAffectedNestedConsumers) {
     EXPECT_TRUE(computations(*scope).empty());
     EXPECT_EQ(scope->OpsetVersion("unused"), 1);
   }
+}
+
+TEST(GraphBuilder, SetOpsetVersionInvalidatesChangedAndCapturedByteSizes) {
+  for (bool symbolic : {false, true}) {
+    core::builder::GraphBuilder builder("g", {}, {{"", 18}, {"versioned", 1}});
+    const core::symbolic::SymDim extent =
+        symbolic ? core::symbolic::SymDim("N") : core::symbolic::SymDim(4);
+    const core::symbolic::SymShape fixed_shape{extent, core::symbolic::SymDim(1)};
+    core::shapes::RegisterComputeShapeFn(
+        "versioned", "Resize", [extent](core::shapes::ShapesContext &ctx, const NodeProto &node) {
+          const int version = ctx.OpsetVersion("versioned");
+          ctx.Set(node.output(0),
+                  core::symbolic::SymTensor(nullptr,
+                                            version == 3 ? core::symbolic::TensorType::kDouble
+                                                         : core::symbolic::TensorType::kFloat,
+                                            {extent, core::symbolic::SymDim(version)}));
+        });
+    core::shapes::RegisterComputeShapeFn(
+        "versioned", "Fixed",
+        [fixed_shape](core::shapes::ShapesContext &ctx, const NodeProto &node) {
+          ctx.Set(node.output(0), core::symbolic::SymTensor(
+                                      nullptr, core::symbolic::TensorType::kFloat, fixed_shape));
+        });
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, fixed_shape);
+    builder.MakeNode("Resize", {"x"}, {"changing"}, "versioned");
+    auto &body = builder.MakeSubgraph("body");
+    body.MakeNode("Identity", {"changing"}, {"captured"});
+    body.MakeNode("Fixed", {"captured"}, {"body_result"}, "versioned");
+    body.MakeOutput("body_result");
+    builder.MakeNode("Fixed", {"changing"}, {"result"}, "versioned");
+    builder.MakeOutput("result");
+    ASSERT_EQ(builder.Compute().NodeReuse(1).size(), 1u);
+    ASSERT_EQ(body.Compute().NodeReuse(1).size(), 1u);
+    const auto previous_memory = builder.Compute().Memory();
+
+    for (int version : {2, 3, 1}) {
+      builder.SetOpsetVersion("versioned", version);
+      EXPECT_EQ(body.GetShape("changing"), builder.GetShape("changing"));
+      EXPECT_EQ(body.GetShape("captured").Shape(), builder.GetShape("changing").Shape());
+      for (auto *scope : {&builder, &body}) {
+        core::compute::ComputeContext expected;
+        const GraphProto graph = scope->BuildGraph();
+        const auto tags = expected.ComputeValueAndNodeTags(graph);
+        expected.ComputeInPlaceReuseGraph(graph, scope->Shapes(), false, tags.first);
+        EXPECT_EQ(scope->Compute().Reuse(), expected.Reuse());
+        EXPECT_EQ(scope->Compute().Memory(), expected.Memory());
+        if (symbolic && version != 1) {
+          EXPECT_TRUE(scope->Compute().NodeReuse(1).empty());
+        }
+      }
+      if (version == 2) {
+        EXPECT_NE(builder.Compute().Memory(), previous_memory);
+      }
+    }
+  }
+}
+
+TEST(GraphBuilder, SetOpsetVersionRefreshesMetadataSuffixOnce) {
+  const auto peak_calls = std::make_shared<std::size_t>(0);
+  core::shapes::RegisterComputePeakMemoryFn(
+      "opset_batch_test", "Probe", core::symbolic::Device::kCPU,
+      [peak_calls](core::symbolic::Device, const std::vector<core::symbolic::SymShape> &) {
+        ++*peak_calls;
+        return 0;
+      });
+  core::builder::GraphBuilder builder("g", {}, {{"opset_batch_test", 1}});
+  core::shapes::RegisterComputeShapeFn(
+      "opset_batch_test", "Probe", [](core::shapes::ShapesContext &ctx, const NodeProto &node) {
+        ctx.Set(node.output(0), core::symbolic::SymTensor(ctx.Get(node.input(0))));
+      });
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({4}));
+  std::string previous = "x";
+  for (int i = 0; i < 64; ++i) {
+    previous = builder.MakeNode("Probe", {previous}, {}, "opset_batch_test")[0];
+  }
+  builder.MakeOutput(previous);
+  *peak_calls = 0;
+
+  builder.SetOpsetVersion("opset_batch_test", 2);
+
+  EXPECT_EQ(*peak_calls, builder.Nodes().size());
+  core::compute::ComputeContext expected;
+  const GraphProto graph = builder.BuildGraph();
+  const auto tags = expected.ComputeValueAndNodeTags(graph);
+  expected.ComputeInPlaceReuseGraph(graph, builder.Shapes(), false, tags.first);
+  EXPECT_EQ(builder.Compute().Reuse(), expected.Reuse());
+  EXPECT_EQ(builder.Compute().Memory(), expected.Memory());
+  builder.SetOpsetVersion("opset_batch_test", 2);
+  EXPECT_EQ(*peak_calls, builder.Nodes().size());
 }
 
 TEST(GraphBuilder, MakeNodeMaintainsTagsAndReuseIncrementally) {

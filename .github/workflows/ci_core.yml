@@ -360,6 +360,7 @@ jobs:
         # the generation configuration fields into PipelineProto.
         # External-data descriptor handling measures 1663240 installed bytes, 1169466 text bytes
         # and 891 defined dynamic symbols in Linux CI run 39113004348.
+        # Threading extraction adds the packaged liblib_onnx_threads.so dependency.
         run: |
           proto_dir="$(python -c 'import importlib.util, pathlib; print(pathlib.Path(importlib.util.find_spec("onnx_light.onnx_py._onnxpyprotoop").origin).parent)')"
           python .github/scripts/report_proto_binary_size.py \
@@ -368,6 +369,7 @@ jobs:
             --max-installed-size 1663272 \
             --max-text-size 1172762 \
             --max-dynamic-symbols 891 \
+            --allowed-dependency liblib_onnx_threads.so \
             --allowed-dependency libcrypto.so.3 \
             --allowed-dependency libstdc++.so.6 \
             --allowed-dependency libgcc_s.so.1 \

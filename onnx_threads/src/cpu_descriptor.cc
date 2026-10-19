@@ -123,7 +123,7 @@ std::string DetectArchitecture() {
 
 std::string DetectMicroarchitecture(std::string_view vendor, std::optional<uint32_t> family,
                                     std::optional<uint32_t> model) {
-  if (vendor != "intel" || family != 6 || !model.has_value()) {
+  if (vendor != "intel" || family != 6U || !model.has_value()) {
     return {};
   }
   switch (*model) {

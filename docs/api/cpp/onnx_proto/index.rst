@@ -38,6 +38,9 @@ The same suites are registered by the full repository build when
 Schema, parser, and core graph-helper integration tests stay under ``unittests/cc``.
 The small project under ``onnx_proto/tests/consumer/`` separately checks both
 exported target names against the installed package without requiring GoogleTest.
+On Windows, build-tree DLLs and test executables share the runtime output
+directory; installed-package consumer checks copy the proto DLL beside each
+executable before execution.
 
 The repository's main build includes this project directly and uses a shared
 proto library for its Python extensions. Python modules, imports, and bindings

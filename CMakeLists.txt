@@ -405,8 +405,14 @@ endif()
 set(ONNX_PROTO_INSTALL ${ONNX_LIGHT_INSTALL})
 set(ONNX_PROTO_BUILD_TESTS ${ONNX_LIGHT_BUILD_TESTS})
 set(ONNX_PROTO_WERROR ${ONNX_LIGHT_WERROR})
+if(WIN32 AND NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
+  set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+endif()
 if(ONNX_LIGHT_BUILD_TESTS)
   enable_testing()
+  if(NOT TARGET GTest::gtest_main)
+    find_package(GTest QUIET)
+  endif()
 endif()
 add_subdirectory(onnx_proto)
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files" FILES ${ONNX_LIGHT_HEADERS})
@@ -923,7 +929,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
 
   enable_testing()
 
-  # GoogleTest is provided by the proto test subproject.
+  # GoogleTest is discovered in this scope or built by the proto subproject.
   include(GoogleTest)
 
   # gtest

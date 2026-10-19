@@ -9,6 +9,10 @@ option(ONNX_PROTO_INSTALL "Install the proto library, headers and CMake package.
 option(ONNX_PROTO_BUILD_TESTS "Build the native proto unit tests and consumer checks." OFF)
 option(ONNX_PROTO_WERROR "Treat proto compiler warnings as errors." OFF)
 
+if(WIN32 AND NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
+  set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+endif()
+
 find_package(OpenMP QUIET)
 find_package(OpenSSL QUIET)
 

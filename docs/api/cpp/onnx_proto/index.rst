@@ -15,6 +15,8 @@ Consumers use ``find_package(onnx_proto CONFIG REQUIRED)`` and link
 ``onnx_proto::lib_onnx_proto``. The legacy ``onnx_light::lib_onnx_proto`` target
 and installed include paths remain available. Both ``#include "onnx.h"`` and
 ``#include "onnx_proto/onnx.h"`` continue to work.
+Installed flat headers forward to the canonical ``onnx_proto/`` tree, so both
+spellings can be mixed safely in the same translation unit.
 
 ``ONNX_PROTO_BUILD_SHARED`` selects a shared library instead of the default
 static library; ``ONNX_PROTO_INSTALL`` controls installation. OpenMP and OpenSSL

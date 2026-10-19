@@ -19,7 +19,8 @@ find_package(OpenSSL QUIET)
 file(GLOB ONNX_PROTO_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cc")
 file(GLOB_RECURSE ONNX_PROTO_HEADERS CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/include/*.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/*.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/*.hpp")
+file(GLOB_RECURSE ONNX_PROTO_HELPER_HEADERS CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/helpers/include/*.h")
 set(ONNX_BLAKE3_PATH "${CMAKE_CURRENT_SOURCE_DIR}/include/onnx_proto/blake3")
 set(ONNX_BLAKE3_SOURCES
@@ -44,7 +45,8 @@ else()
   set(_onnx_proto_type STATIC)
 endif()
 add_library(lib_onnx_proto ${_onnx_proto_type}
-    ${ONNX_PROTO_HEADERS} ${ONNX_PROTO_SOURCES} ${ONNX_BLAKE3_SOURCES}
+    ${ONNX_PROTO_HEADERS} ${ONNX_PROTO_HELPER_HEADERS}
+    ${ONNX_PROTO_SOURCES} ${ONNX_BLAKE3_SOURCES}
     helpers/onnx_light_helpers.cc)
 add_library(onnx_proto::lib_onnx_proto ALIAS lib_onnx_proto)
 add_library(onnx_light::lib_onnx_proto ALIAS lib_onnx_proto)
@@ -105,12 +107,23 @@ if(ONNX_PROTO_INSTALL)
       ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
       LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
       RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
-  # Preserve both existing public include spellings: "onnx.h" and "onnx_proto/onnx.h".
-  foreach(_header_dir IN ITEMS onnx_light onnx_light/onnx_proto)
-    install(DIRECTORY include/onnx_proto/
-        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${_header_dir}"
-        FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
-        PATTERN "external_data_internal.h" EXCLUDE)
+  install(DIRECTORY include/onnx_proto/
+      DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_proto"
+      FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+      PATTERN "external_data_internal.h" EXCLUDE)
+  # Forward flat include spellings to the same files used by namespaced includes.
+  foreach(_header IN LISTS ONNX_PROTO_HEADERS)
+    file(RELATIVE_PATH _header_relative
+        "${CMAKE_CURRENT_SOURCE_DIR}/include/onnx_proto" "${_header}")
+    if(_header_relative STREQUAL "external_data_internal.h")
+      continue()
+    endif()
+    set(_forwarding_header "${CMAKE_CURRENT_BINARY_DIR}/forwarding_headers/${_header_relative}")
+    file(WRITE "${_forwarding_header}"
+        "#pragma once\n#include \"onnx_proto/${_header_relative}\"\n")
+    get_filename_component(_header_dir "${_header_relative}" DIRECTORY)
+    install(FILES "${_forwarding_header}"
+        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/${_header_dir}")
   endforeach()
   install(DIRECTORY helpers/include/
       DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light"

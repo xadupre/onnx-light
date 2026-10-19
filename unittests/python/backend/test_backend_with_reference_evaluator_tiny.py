@@ -1,7 +1,7 @@
 # Copyright (c) ONNX Project Contributors
 #
 # SPDX-License-Identifier: Apache-2.0
-"""Tests the ``tiny_llm`` decoder with :class:`onnx_light.reference.ReferenceEvaluator`."""
+"""Tests the ``tiny_llm`` decoder with :class:`onnx_light.onnx.reference.ReferenceEvaluator`."""
 
 from __future__ import annotations
 

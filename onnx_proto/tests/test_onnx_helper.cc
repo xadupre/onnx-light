@@ -2669,6 +2669,67 @@ TEST(onnx_helper, ReadScalarAsDouble_TypedFields) {
   EXPECT_DOUBLE_EQ(out, 42.0);
 }
 
+TEST(onnx_helper, ReadScalarAsDouble_StoragePrecedenceAndFallback) {
+  const struct {
+    TensorProto::DataType type;
+    size_t width;
+  } cases[] = {
+      {TensorProto::DataType::FLOAT, 4},  {TensorProto::DataType::DOUBLE, 8},
+      {TensorProto::DataType::INT64, 8},  {TensorProto::DataType::INT32, 4},
+      {TensorProto::DataType::INT16, 2},  {TensorProto::DataType::INT8, 1},
+      {TensorProto::DataType::UINT8, 1},  {TensorProto::DataType::BOOL, 1},
+      {TensorProto::DataType::UINT16, 2}, {TensorProto::DataType::UINT32, 4},
+      {TensorProto::DataType::UINT64, 8},
+  };
+  const uint8_t raw[8] = {};
+  for (const auto &test : cases) {
+    SCOPED_TRACE(static_cast<int>(test.type));
+    for (size_t raw_size = 0; raw_size <= test.width; ++raw_size) {
+      SCOPED_TRACE(raw_size);
+      TensorProto tensor;
+      tensor.set_data_type(test.type);
+      if (raw_size > 0) {
+        tensor.set_raw_data(raw, raw_size);
+      }
+      double out = 123.0;
+      EXPECT_EQ(ReadScalarAsDouble(tensor, out), raw_size == test.width);
+      EXPECT_DOUBLE_EQ(out, raw_size == test.width ? 0.0 : 123.0);
+
+      switch (test.type) {
+      case TensorProto::DataType::FLOAT:
+        tensor.add_float_data(1.0f);
+        tensor.add_float_data(2.0f);
+        break;
+      case TensorProto::DataType::DOUBLE:
+        tensor.add_double_data(1.0);
+        tensor.add_double_data(2.0);
+        break;
+      case TensorProto::DataType::INT64:
+        tensor.add_int64_data(1);
+        tensor.add_int64_data(2);
+        break;
+      case TensorProto::DataType::UINT32:
+      case TensorProto::DataType::UINT64:
+        tensor.add_uint64_data(1);
+        tensor.add_uint64_data(2);
+        break;
+      default:
+        tensor.add_int32_data(1);
+        tensor.add_int32_data(2);
+        break;
+      }
+      ASSERT_TRUE(ReadScalarAsDouble(tensor, out));
+      EXPECT_DOUBLE_EQ(out, 1.0);
+      if (test.type == TensorProto::DataType::FLOAT || test.type == TensorProto::DataType::DOUBLE) {
+        std::vector<double> values;
+        ASSERT_TRUE(ReadFloatingValues(tensor, values));
+        ASSERT_EQ(values.size(), 2u);
+        EXPECT_DOUBLE_EQ(out, values[0]);
+      }
+    }
+  }
+}
+
 TEST(onnx_helper, ReadScalarAsDouble_RawData) {
   double out = 0.0;
 

@@ -1,7 +1,7 @@
 # Copyright (c) ONNX Project Contributors
 #
 # SPDX-License-Identifier: Apache-2.0
-"""Backend tests that exercise :class:`onnx_light.reference.ReferenceEvaluator`
+"""Backend tests that exercise :class:`onnx_light.onnx.reference.ReferenceEvaluator`
 against every backend test case.
 
 This is the Python counterpart of

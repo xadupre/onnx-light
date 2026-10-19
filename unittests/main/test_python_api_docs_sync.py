@@ -9,6 +9,18 @@ class TestPythonApiDocsSync(ExtTestCase):
 
     ROOT = Path(__file__).resolve().parents[2]
 
+    def test_reference_evaluator_examples_use_public_module(self):
+        for source in [
+            "onnx_light/_reference/_evaluator.py",
+            "docs/howto/python/register_builtin_operators.rst",
+            "docs/examples/runtime/plot_runtime_events.py",
+            "docs/examples/runtime/plot_runtime_memory.py",
+        ]:
+            with self.subTest(source=source):
+                text = (self.ROOT / source).read_text(encoding="utf-8")
+                self.assertIn("onnx_light.onnx.reference", text)
+                self.assertNotIn("onnx_light.reference", text)
+
     def _read_toctree_entries(self, path: Path) -> set[str]:
         entries = set()
         in_toctree = False

@@ -26,6 +26,84 @@ def _infer_format(f: object) -> str:
     return "protobuf"
 
 
+def load_tensor(f: str | Path | IO[bytes], format: str | None = None) -> TensorProto:
+    """Loads a TensorProto from a file path or a binary readable stream.
+
+    A ``.pb`` file contains a tensor here, not a ModelProto. The format defaults
+    to protobuf, except for paths ending in ``.textproto``. External tensor-data
+    references are preserved but their payloads are not loaded.
+
+    :param f: tensor file path or binary readable stream.
+    :param format: ``"protobuf"`` or ``"textproto"``, inferred when omitted.
+
+    Returns:
+        Loaded in-memory TensorProto.
+    """
+    if not isinstance(f, (str, Path)) and not hasattr(f, "read"):
+        raise TypeError(f"Expected str, Path, or a binary readable stream, got {type(f)}.")
+    if format is None:
+        format = _infer_format(f)
+    if format not in _SUPPORTED_FORMATS:
+        raise ValueError(
+            f"Unsupported format={format!r}; onnx-light only supports "
+            f"{sorted(_SUPPORTED_FORMATS)!r}."
+        )
+    tensor = TensorProto()
+    if format == "textproto":
+        from ._text_format import parse_from_textproto
+
+        if isinstance(f, (str, Path)):
+            with open(f, encoding="utf-8") as handle:
+                text = handle.read()
+        else:
+            text = f.read().decode("utf-8")
+        return parse_from_textproto(text, tensor)
+    if isinstance(f, (str, Path)):
+        with open(f, "rb") as handle:
+            tensor.ParseFromString(handle.read())
+    else:
+        tensor.ParseFromString(f.read())
+    return tensor
+
+
+def save_tensor(proto: TensorProto, f: str | Path | IO[bytes], format: str | None = None) -> None:
+    """Saves a TensorProto to a file path or a binary writable stream.
+
+    The format defaults to protobuf, except for paths ending in ``.textproto``.
+    This helper writes the tensor message, not a containing model, and does not
+    create or copy external tensor-data files.
+
+    :param proto: in-memory TensorProto.
+    :param f: tensor file path or binary writable stream.
+    :param format: ``"protobuf"`` or ``"textproto"``, inferred when omitted.
+    """
+    if not isinstance(proto, TensorProto):
+        raise TypeError(f"Expected TensorProto, got {type(proto)}.")
+    if not isinstance(f, (str, Path)) and not hasattr(f, "write"):
+        raise TypeError(f"Expected str, Path, or a binary writable stream, got {type(f)}.")
+    if format is None:
+        format = _infer_format(f)
+    if format not in _SUPPORTED_FORMATS:
+        raise ValueError(
+            f"Unsupported format={format!r}; onnx-light only supports "
+            f"{sorted(_SUPPORTED_FORMATS)!r}."
+        )
+    if format == "textproto":
+        from ._text_format import serialize_to_textproto
+
+        text = serialize_to_textproto(proto)
+        if isinstance(f, (str, Path)):
+            with open(f, "w", encoding="utf-8") as handle:
+                handle.write(text)
+        else:
+            f.write(text.encode("utf-8"))
+    elif isinstance(f, (str, Path)):
+        with open(f, "wb") as handle:
+            proto.SerializeToOstream(handle)
+    else:
+        proto.SerializeToOstream(f)
+
+
 def save(
     proto: ModelProto,
     f: str | Path | IO[bytes],
@@ -181,19 +259,17 @@ def save_to_file_descriptor(
 
     Writes the serialized protobuf bytes directly into the open file descriptor
     *fd*. The descriptor is not closed after writing; the caller is responsible
-    for closing it.
+    for closing it. File-descriptor serialization always runs serially on the
+    calling thread.
 
     :param proto: should be an in-memory ModelProto.
     :param fd: open writable file descriptor (integer). Must be a valid file
         descriptor opened for writing.
-    :param num_threads: number of threads to use for serialization.
-        ``1`` (default) disables parallelization, ``> 1`` uses exactly that
-        many worker threads. Negative values are not supported for file
-        descriptor writes and are treated as ``1``.
-    :param min_block_size: minimum raw-data block size in bytes to write in
-        parallel when ``num_threads != 1``; tensor blocks smaller than this
-        threshold are written on the calling thread to avoid thread-pool
-        overhead. A value of 0 (default) parallelizes all blocks.
+    :param num_threads: accepted for API compatibility but ignored for
+        file-descriptor writes. All values, including values greater than
+        ``1`` and negative values, are treated as ``1``.
+    :param min_block_size: accepted for API compatibility but has no effect
+        because file-descriptor writes do not use parallel serialization.
     """
     assert isinstance(proto, ModelProto), f"Unexpected type {type(proto)} for proto."
     if num_threads != 1 or min_block_size != 0:
@@ -206,7 +282,7 @@ def save_to_file_descriptor(
 
 
 def load(
-    f: str | Path,
+    f: str | Path | bytes,
     skip_raw_data: bool = False,
     raw_data_threshold: int = 1024,
     tiny_external_data_threshold: int = -1,
@@ -304,7 +380,6 @@ def load(
     assert isinstance(f, (str, bytes, Path)), f"Unexpected type {type(f)} for f."
     if isinstance(f, Path):
         f = str(f)
-    inferred_format = format is None
     if format is None:
         format = _infer_format(f)
     if format not in _SUPPORTED_FORMATS:
@@ -337,10 +412,6 @@ def load(
     assert (
         not location or load_external_data
     ), f"'load_external_data' must be True if location={location!r}"
-    if inferred_format:
-        assert not isinstance(f, str) or os.path.splitext(f)[-1] in {
-            ".onnx"
-        }, f"File name must have the extension .onnx to be loaded but f={f!r}"
     if load_external_data and not location and isinstance(f, str):
         # Avoid a metadata-only pre-scan parse. The C++ external-data path
         # resolver consumes each tensor's ``external_data.location`` on the same

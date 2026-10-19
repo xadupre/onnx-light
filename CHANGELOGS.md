@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixes
 
+- Added `onnx_light.onnx.load_tensor` and `save_tensor` for standalone `TensorProto` files such as ONNX backend `input_0.pb` and `output_0.pb`, with binary streams and explicit or inferred protobuf/textproto formats.
 - Allowed external tensor data in one existing child directory while rejecting absolute paths, parent traversal, deeper paths, and statically resolved escapes ([#5305](https://github.com/xadupre/onnx-light/pull/5305)).
 - Expanded scalar `SplitToSequence` splits into explicit lengths, including a final remainder, when rewriting to `Split`, and ignored `keepdims` when a split input is present ([#5300](https://github.com/xadupre/onnx-light/pull/5300)).
 - Preserved symbolic dimensions for open-ended `Slice` inference by treating `INT64_MAX` ends as the input extent rather than a concrete output dimension ([#5301](https://github.com/xadupre/onnx-light/pull/5301)).

@@ -17,6 +17,31 @@ larger models.
 Common load/save patterns
 -------------------------
 
+Standalone tensor files (``.pb``)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+ONNX backend datasets store individual inputs and expected outputs as
+``TensorProto`` messages, commonly named ``input_0.pb`` and ``output_0.pb``.
+Use ``load_tensor`` and ``save_tensor`` for these files, not the model helpers
+``load`` and ``save``. The ``.pb`` extension does not identify the message type.
+
+.. code-block:: python
+
+    import numpy as np
+    import onnx_light.onnx as onnxl
+    import onnx_light.onnx.numpy_helper as onh
+
+    tensor = onh.from_array(np.array([1, 2, 3], dtype=np.float32), name="X")
+    onnxl.save_tensor(tensor, "input_0.pb")
+    restored = onnxl.load_tensor("input_0.pb")
+    values = onh.to_array(restored)
+
+Both helpers accept string paths, ``pathlib.Path`` objects, and binary file-like
+objects, which they leave open. ``.pb`` defaults to binary protobuf;
+``.textproto`` selects text format, or use ``format="protobuf"`` or
+``format="textproto"`` explicitly. These helpers read and write standalone
+tensor messages; they do not resolve or create external tensor-data files.
+
 Load one file
 ^^^^^^^^^^^^^
 

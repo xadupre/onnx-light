@@ -62,9 +62,11 @@ from ..onnx_proto._io_helper import (  # noqa: F401
     load,
     load_encrypted,
     load_encrypted_string,
+    load_tensor,
     save,
     save_encrypted,
     save_encrypted_string,
+    save_tensor,
     save_to_file_descriptor,
 )
 from ..onnx_proto._helper import proto_str_to_multiline  # noqa: F401

@@ -494,13 +494,49 @@ void GraphBuilder::SetOpsetVersion(const std::string &domain, int version) {
     throw BuilderError("GraphBuilder: opset versions must be positive.");
   }
   const std::string key = NormaliseDomain(domain);
-  const auto existing = opsets_.find(key);
-  const bool changed = existing == opsets_.end() || existing->second != version;
-  opsets_[key] = version;
-  compute_.Shapes().SetOpsetVersion(key, version);
-  if (changed && !nodes_.empty()) {
-    RebuildStructuredState();
+  const bool changed = OpsetVersion(key) != version;
+  if (RefreshOpsetVersion(key, version) || (changed && is_local_function_)) {
+    RefreshAncestors();
   }
+}
+
+bool GraphBuilder::RefreshOpsetVersion(const std::string &domain, int version,
+                                       const std::unordered_set<std::string> &inherited_values) {
+  const auto existing = opsets_.find(domain);
+  const bool changed = existing == opsets_.end() || existing->second != version;
+  opsets_[domain] = version;
+  auto &shapes = compute_.Shapes();
+  shapes.SetOpsetVersion(domain, version);
+  std::unordered_set<std::string> affected_values;
+  for (const auto &name : inherited_values) {
+    if (inherited_names_.count(name) != 0) {
+      shapes.Erase(name);
+      SeedInheritedValue(name);
+      affected_values.insert(name);
+    }
+  }
+  // Refresh children at their referencing nodes, after any captured producers.
+  std::unordered_map<GraphBuilder *, bool> refreshed;
+  const bool affected = RefreshDependentNodes(
+      [&](const NodeProto &node, const std::unordered_set<std::string> &values) {
+        bool nested_changed = false;
+        for (GraphBuilder *subgraph : ReferencedSubgraphs(node)) {
+          auto it = refreshed.find(subgraph);
+          if (it == refreshed.end()) {
+            it = refreshed.emplace(subgraph, subgraph->RefreshOpsetVersion(domain, version, values))
+                     .first;
+          }
+          nested_changed |= it->second;
+        }
+        return nested_changed || (changed && NormaliseDomain(node.domain().value()) == domain);
+      },
+      affected_values, /*propagate_to_parent=*/false);
+  for (const auto &subgraph : subgraphs_) {
+    if (refreshed.count(subgraph.get()) == 0) {
+      subgraph->RefreshOpsetVersion(domain, version, affected_values);
+    }
+  }
+  return affected;
 }
 
 int GraphBuilder::OpsetVersion(const std::string &domain) const {
@@ -673,22 +709,34 @@ void GraphBuilder::RefreshNestedDependency(GraphBuilder &child, bool propagate_t
       }
     }
   }
-  std::vector<bool> affected(nodes_.size(), false);
   std::unordered_set<std::string> affected_values;
+  RefreshDependentNodes(
+      [&](const NodeProto &node, const std::unordered_set<std::string> &) {
+        if (child.is_local_function_ && node.domain().value() == child.function_domain_ &&
+            node.op_type().value() == child.name_) {
+          return true;
+        }
+        for (GraphBuilder *subgraph : ReferencedSubgraphs(node)) {
+          if (subgraph == &child || (child.is_local_function_ && depends_on_function(*subgraph))) {
+            return true;
+          }
+        }
+        return false;
+      },
+      affected_values, propagate_to_parent);
+}
+
+bool GraphBuilder::RefreshDependentNodes(
+    const std::function<bool(const NodeProto &, const std::unordered_set<std::string> &)>
+        &is_affected,
+    std::unordered_set<std::string> &affected_values, bool propagate_to_parent) {
+  bool affected = false;
   for (std::size_t index = 0; index < nodes_.size(); ++index) {
     const NodeProto &stored = nodes_[index];
-    bool references_child = child.is_local_function_ &&
-                            stored.domain().value() == child.function_domain_ &&
-                            stored.op_type().value() == child.name_;
-    if (!references_child) {
-      for (GraphBuilder *subgraph : ReferencedSubgraphs(stored)) {
-        if (subgraph == &child || (child.is_local_function_ && depends_on_function(*subgraph))) {
-          references_child = true;
-          break;
-        }
-      }
+    const bool directly_affected = is_affected(stored, affected_values);
+    if (!directly_affected && affected_values.empty()) {
+      continue;
     }
-
     NodeProto materialized = stored;
     MaterializeGraphReferences(materialized);
     std::vector<std::string> references;
@@ -696,10 +744,10 @@ void GraphBuilder::RefreshNestedDependency(GraphBuilder &child, bool propagate_t
     const bool consumes_affected =
         std::any_of(references.begin(), references.end(),
                     [&](const std::string &name) { return affected_values.count(name) != 0; });
-    if (!references_child && !consumes_affected) {
+    if (!directly_affected && !consumes_affected) {
       continue;
     }
-    affected[index] = true;
+    affected = true;
     for (const std::string &output : stored.output()) {
       if (!output.empty()) {
         affected_values.insert(output);
@@ -738,6 +786,7 @@ void GraphBuilder::RefreshNestedDependency(GraphBuilder &child, bool propagate_t
     }
     parent_->RefreshNestedDependency(*this);
   }
+  return affected;
 }
 
 void GraphBuilder::RefreshAfterMutation() {

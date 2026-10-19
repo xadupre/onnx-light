@@ -184,6 +184,138 @@ TEST(GraphBuilder, SetOpsetVersionRebuildsMetadataImmediately) {
   EXPECT_EQ(builder.Compute().Memory(), expected.Memory());
 }
 
+TEST(GraphBuilder, SetOpsetVersionUpdatesExistingNestedBuildersWithoutChangingFunctions) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  auto &body = builder.MakeSubgraph("body");
+  body.MakeNode("Abs", {"x"}, {"body_result"});
+  body.MakeOutput("body_result");
+  auto &nested = body.MakeSubgraph("nested");
+  nested.MakeNode("Identity", {"body_result"}, {"nested_result"});
+  nested.MakeOutput("nested_result");
+  auto &function = builder.MakeLocalFunction("F", "local");
+  auto &function_body = function.MakeSubgraph("function_body");
+  auto &nested_function = body.MakeLocalFunction("NestedF", "local");
+
+  for (auto *scope : {&body, &nested}) {
+    auto &shapes = const_cast<core::shapes::ShapesContext &>(scope->Shapes());
+    shapes.set_events_enabled(true);
+    shapes.ClearEvents();
+  }
+  builder.SetOpsetVersion("ai.onnx", 17);
+
+  for (auto *scope : {&builder, &body, &nested}) {
+    EXPECT_EQ(scope->OpsetVersion(""), 17);
+    EXPECT_EQ(scope->Shapes().OpsetVersion("ai.onnx"), 17);
+  }
+  for (auto *scope : {&function, &function_body, &nested_function}) {
+    EXPECT_EQ(scope->OpsetVersion(""), 18);
+    EXPECT_EQ(scope->Shapes().OpsetVersion(""), 18);
+  }
+  for (auto *scope : {&body, &nested}) {
+    EXPECT_EQ(std::count_if(scope->Shapes().Events().begin(), scope->Shapes().Events().end(),
+                            [](const auto &event) {
+                              return event.action == core::shapes::ShapeEventAction::kComputeNode;
+                            }),
+              1);
+    EXPECT_EQ(scope->GetShape(scope->Outputs()[0].name().value()).Shape(), MakeShape({2, 3}));
+    core::compute::ComputeContext expected;
+    const GraphProto graph = scope->BuildGraph();
+    const auto tags = expected.ComputeValueAndNodeTags(graph);
+    expected.ComputeInPlaceReuseGraph(graph, scope->Shapes(), false, tags.first);
+    EXPECT_EQ(scope->Compute().Reuse(), expected.Reuse());
+    EXPECT_EQ(scope->Compute().Memory(), expected.Memory());
+    const_cast<core::shapes::ShapesContext &>(scope->Shapes()).ClearEvents();
+  }
+
+  builder.SetOpsetVersion("", 17);
+  EXPECT_TRUE(body.Shapes().Events().empty());
+  EXPECT_TRUE(nested.Shapes().Events().empty());
+  builder.SetOpsetVersion("custom", 2);
+  for (auto *scope : {&builder, &body, &nested}) {
+    EXPECT_EQ(scope->OpsetVersion("custom"), 2);
+    EXPECT_EQ(scope->Shapes().OpsetVersion("custom"), 2);
+    EXPECT_TRUE(scope->Shapes().Events().empty());
+  }
+  for (auto *scope : {&function, &function_body, &nested_function}) {
+    EXPECT_EQ(scope->OpsetVersion("custom"), core::shapes::kUnknownOpsetVersion);
+  }
+  EXPECT_THROW(builder.SetOpsetVersion("", 0), core::builder::BuilderError);
+  EXPECT_EQ(nested.OpsetVersion(""), 17);
+  function.SetOpsetVersion("", 16);
+  EXPECT_EQ(function_body.OpsetVersion(""), 16);
+  EXPECT_EQ(function_body.Shapes().OpsetVersion(""), 16);
+  EXPECT_EQ(builder.OpsetVersion(""), 17);
+  EXPECT_EQ(nested_function.OpsetVersion(""), 18);
+}
+
+TEST(GraphBuilder, SetOpsetVersionRefreshesOnlyAffectedNestedConsumers) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}, {"local", 1}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeInput("cond", core::symbolic::TensorType::kBool, MakeShape({}));
+  auto &function = builder.MakeLocalFunction("F", "local");
+  function.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  function.MakeNode("Identity", {"a"}, {"r"});
+  function.MakeOutput("r");
+
+  auto &body = builder.MakeSubgraph("body");
+  auto &nested = body.MakeSubgraph("nested");
+  nested.MakeNode("F", {"x"}, {"nested_result"}, "local");
+  nested.MakeOutput("nested_result");
+  const auto make_if = [](core::builder::GraphBuilder &scope, const std::string &branch,
+                          const std::string &output) {
+    utils::RepeatedProtoField<AttributeProto> attributes;
+    for (const char *name : {"then_branch_ref", "else_branch_ref"}) {
+      auto &attribute = attributes.add();
+      attribute.set_name(name);
+      attribute.set_type(AttributeProto::STRING);
+      attribute.set_s(branch);
+    }
+    scope.MakeNode("If", {"cond"}, {output}, "", "", attributes);
+  };
+  make_if(body, "nested", "body_result");
+  body.MakeOutput("body_result");
+  make_if(builder, "body", "result");
+  make_if(builder, "body", "other_result");
+  builder.MakeNode("Identity", {"result"}, {"dependent"});
+  builder.MakeNode("Abs", {"x"}, {"independent"});
+  builder.MakeOutput("dependent");
+
+  for (auto *scope : {&builder, &body, &nested, &function}) {
+    auto &shapes = const_cast<core::shapes::ShapesContext &>(scope->Shapes());
+    shapes.set_events_enabled(true);
+    shapes.ClearEvents();
+  }
+  builder.SetOpsetVersion("local", 2);
+
+  const auto computations = [](const core::builder::GraphBuilder &scope) {
+    std::vector<std::string> result;
+    for (const auto &event : scope.Shapes().Events()) {
+      if (event.action == core::shapes::ShapeEventAction::kComputeNode &&
+          event.subgraph_node_index == -1) {
+        result.push_back(event.op_type);
+      }
+    }
+    return result;
+  };
+  EXPECT_EQ(computations(nested), (std::vector<std::string>{"F"}));
+  EXPECT_EQ(computations(body), (std::vector<std::string>{"If"}));
+  EXPECT_EQ(computations(builder), (std::vector<std::string>{"If", "If", "Identity"}));
+  EXPECT_TRUE(computations(function).empty());
+  EXPECT_EQ(function.OpsetVersion("local"), 1);
+  EXPECT_EQ(builder.GetShape("dependent").Shape(), MakeShape({2, 3}));
+  for (auto *scope : {&builder, &body, &nested}) {
+    EXPECT_EQ(scope->OpsetVersion("local"), 2);
+    EXPECT_EQ(scope->Shapes().OpsetVersion("local"), 2);
+    const_cast<core::shapes::ShapesContext &>(scope->Shapes()).ClearEvents();
+  }
+  builder.SetOpsetVersion("unused", 1);
+  for (auto *scope : {&builder, &body, &nested}) {
+    EXPECT_TRUE(computations(*scope).empty());
+    EXPECT_EQ(scope->OpsetVersion("unused"), 1);
+  }
+}
+
 TEST(GraphBuilder, MakeNodeMaintainsTagsAndReuseIncrementally) {
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));

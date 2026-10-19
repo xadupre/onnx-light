@@ -2,6 +2,7 @@ import ast
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
+import re
 import textwrap
 import unittest
 
@@ -31,6 +32,21 @@ class TestCommandLineDocs(unittest.TestCase):
                 page = self.DOCS / f"{name}.rst"
                 self.assertTrue(page.is_file(), str(page))
                 self.assertIn("Command-line reference", page.read_text(encoding="utf-8"))
+
+    def test_command_summary_table(self):
+        index = (self.DOCS / "index.rst").read_text(encoding="utf-8")
+        self.assertIn(".. list-table::", index)
+        table = index.split(".. list-table::", 1)[1].split(".. toctree::", 1)[0]
+        self.assertIn(":header-rows: 1", table)
+        rows = re.findall(r"    \* - :doc:`([^`]+) <([^>]+)>`\n      - (\S[^\n]*)", table)
+        pages = {path.stem for path in self.DOCS.glob("*.rst")} - {"index"}
+        self.assertEqual({name for _, name, _ in rows}, pages)
+        self.assertEqual(len(rows), len(pages))
+        for invocation, name, summary in rows:
+            with self.subTest(command=name):
+                page = (self.DOCS / f"{name}.rst").read_text(encoding="utf-8")
+                self.assertIn(invocation, page)
+                self.assertTrue(summary.endswith("."), summary)
 
     def test_help_snippets(self):
         parser = _build_parser()

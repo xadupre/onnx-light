@@ -527,6 +527,9 @@ target_include_directories(lib_onnx_shape PUBLIC
 set_property(TARGET lib_onnx_shape PROPERTY POSITION_INDEPENDENT_CODE ON)
 target_compile_features(lib_onnx_shape PUBLIC cxx_std_20)
 target_link_libraries(lib_onnx_shape PUBLIC lib_onnx_core)
+onnx_light_target_precompile_headers(lib_onnx_shape PRIVATE
+    "${ONNX_CORE_PATH}/shapes/shapes_context.h"
+)
 
 # Builds the concrete graph-rewriting pattern library. The generic optimizer
 # interfaces and registry remain in lib_onnx_core; this extension target
@@ -547,6 +550,9 @@ target_include_directories(lib_onnx_patterns PUBLIC
 set_property(TARGET lib_onnx_patterns PROPERTY POSITION_INDEPENDENT_CODE ON)
 target_compile_features(lib_onnx_patterns PUBLIC cxx_std_20)
 target_link_libraries(lib_onnx_patterns PUBLIC lib_onnx_core)
+onnx_light_target_precompile_headers(lib_onnx_patterns PRIVATE
+    "${ONNX_CORE_PATH}/builder/graph_graph.h"
+)
 
 # Builds onnx_kernels library.
 # This library is the runtime/operator-kernel layer extracted from the

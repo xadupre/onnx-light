@@ -33,6 +33,16 @@ Speed up the build
 
     cmake --build build-install --parallel 8
 
+Local builds use private precompiled headers (PCHs) to avoid repeatedly parsing
+common headers. The shape and pattern libraries precompile only their shared
+``shapes_context.h`` and ``graph_graph.h`` interfaces, respectively; these PCHs
+are not propagated to consumers. Source files must still include their own
+dependencies and build without PCHs.
+
+Configure with ``-DONNX_LIGHT_USE_PCH=OFF`` to disable PCHs. When ``ccache`` or
+``sccache`` is configured as a compiler launcher, PCHs are disabled by default;
+``-DONNX_LIGHT_USE_PCH=ON`` explicitly overrides that default.
+
 Verify the install
 ^^^^^^^^^^^^^^^^^^
 

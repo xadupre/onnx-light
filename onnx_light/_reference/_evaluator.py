@@ -359,7 +359,7 @@ class ReferenceEvaluator:
 
         import numpy as np
         from onnx_light.onnx_lib import parser
-        from onnx_light.reference import ReferenceEvaluator
+        from onnx_light.onnx.reference import ReferenceEvaluator
 
         model = parser.parse_model(
             '<ir_version: 10, opset_import: ["" : 18]>'

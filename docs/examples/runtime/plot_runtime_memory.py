@@ -19,7 +19,7 @@ This example:
   (``Mul`` then ``Add``) so the allocator's live memory grows and shrinks as
   nodes run,
 * attaches a :class:`SimpleRawBufferAllocator` to a
-  :class:`~onnx_light.reference.ReferenceEvaluator` and runs it with
+  :class:`~onnx_light.onnx.reference.ReferenceEvaluator` and runs it with
   ``events_enabled=True`` and ``release_intermediates=True``,
 * prints :meth:`RuntimeEvent.summary` for every recorded event — a one-line
   recap including the live and peak memory,
@@ -63,7 +63,7 @@ print(pretty_onnx(model))
 # :class:`SimpleRawBufferAllocator` is a fixed-capacity pool: ``capacity`` is
 # the maximum number of buffers that may be alive at the same time (a generous
 # upper bound is fine — empty slots are cheap). Passing it to
-# :class:`~onnx_light.reference.ReferenceEvaluator` routes the runtime's buffer
+# :class:`~onnx_light.onnx.reference.ReferenceEvaluator` routes the runtime's buffer
 # storage through it, so every recorded event reports the live and peak memory.
 # ``release_intermediates=True`` frees each intermediate as soon as its last
 # consumer has run, which is exactly what makes the live footprint go down

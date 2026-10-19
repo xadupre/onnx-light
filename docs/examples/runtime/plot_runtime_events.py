@@ -5,10 +5,10 @@ Run a model with the runtime and inspect intermediate results
 =============================================================
 
 :mod:`onnx_light` ships a C++ kernel dispatcher exposed in Python
-through :class:`~onnx_light.reference.ReferenceEvaluator`. After each
-:meth:`~onnx_light.reference.ReferenceEvaluator.run` call the evaluator
+through :class:`~onnx_light.onnx.reference.ReferenceEvaluator`. After each
+:meth:`~onnx_light.onnx.reference.ReferenceEvaluator.run` call the evaluator
 retains the :class:`RuntimeContext` used internally; calling
-:meth:`~onnx_light.reference.ReferenceEvaluator.events` returns an
+:meth:`~onnx_light.onnx.reference.ReferenceEvaluator.events` returns an
 append-only log of every tensor map mutation: graph initializers
 seeded on entry, inputs injected by the caller, intermediate values
 produced by each node kernel and outputs propagated back to the caller.
@@ -26,7 +26,7 @@ This example:
   to resolve each symbolic dimension to a concrete integer given
   the actual batch size at runtime,
 * drives the runtime through
-  :class:`~onnx_light.reference.ReferenceEvaluator` while collecting
+  :class:`~onnx_light.onnx.reference.ReferenceEvaluator` while collecting
   the event log, with ``release_intermediates=True`` so the runtime
   drops every intermediate tensor as soon as its last consumer has
   run,
@@ -146,10 +146,10 @@ for name, shape in resolved_shapes.items():
 # Run the model with ``ReferenceEvaluator``
 # +++++++++++++++++++++++++++++++++++++++++
 #
-# :class:`~onnx_light.reference.ReferenceEvaluator` wraps the C++ kernel
+# :class:`~onnx_light.onnx.reference.ReferenceEvaluator` wraps the C++ kernel
 # dispatcher and handles all input/output conversions automatically.
-# After :meth:`~onnx_light.reference.ReferenceEvaluator.run` returns,
-# :meth:`~onnx_light.reference.ReferenceEvaluator.events` exposes the full
+# After :meth:`~onnx_light.onnx.reference.ReferenceEvaluator.run` returns,
+# :meth:`~onnx_light.onnx.reference.ReferenceEvaluator.events` exposes the full
 # event log recorded by the internal :class:`RuntimeContext`.
 #
 # ``release_intermediates=True`` asks the runtime to drop every
@@ -165,7 +165,7 @@ print(f"y =\n{y}")
 # Inspect the event log
 # +++++++++++++++++++++
 #
-# :meth:`~onnx_light.reference.ReferenceEvaluator.events` returns a list of
+# :meth:`~onnx_light.onnx.reference.ReferenceEvaluator.events` returns a list of
 # :class:`RuntimeEvent` entries. Each event carries the
 # ``action`` enum (rendered by ``as_dict()`` as ``"add"``, ``"replace"``,
 # ``"remove"``, ``"run_node"`` or ``"persistent_storage"``), the

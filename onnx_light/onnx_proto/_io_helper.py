@@ -206,7 +206,7 @@ def save_to_file_descriptor(
 
 
 def load(
-    f: str | Path,
+    f: str | Path | bytes,
     skip_raw_data: bool = False,
     raw_data_threshold: int = 1024,
     tiny_external_data_threshold: int = -1,

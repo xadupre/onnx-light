@@ -19,3 +19,4 @@ headers via :epkg:`Doxygen` and rendered by :epkg:`Breathe`.
     onnx_extensions/kernels/index
     onnx_extensions/backend_test/index
     onnx_proto/index
+    onnx_threads/index

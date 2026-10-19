@@ -2,10 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_core/runtime/kernels/parallel_for.h"
+#include "onnx_threads/parallel_for.h"
 
-#include "onnx_core/runtime/tuning/cpu_executor.h"
-#include "onnx_core/runtime/tuning/runtime_parameters.h"
+#include "check.h"
+#include "onnx_threads/cpu_executor.h"
 
 #include <algorithm>
 #include <chrono>
@@ -62,7 +62,7 @@ int64_t ParallelForThreadCount() noexcept {
   if (const CpuExecutor *executor = CurrentCpuExecutor(); executor != nullptr) {
     return static_cast<int64_t>(executor->effective_threads());
   }
-  static const int64_t thread_count = RuntimeParameters().EffectiveNumThreads();
+  static const int64_t thread_count = static_cast<int32_t>(DefaultCpuParticipantCount());
   return thread_count;
 }
 
@@ -531,8 +531,9 @@ void ParallelForErased(int64_t total, int64_t minimum_elements, void *task_ctx,
   if (total <= 0) {
     return;
   }
-  EXT_ENFORCE_INVALID(minimum_elements > 0, "ParallelFor minimum_elements must be positive, got ",
-                      minimum_elements, ".");
+  onnx_threads::detail::EnforceInvalid(minimum_elements > 0,
+                                       "ParallelFor minimum_elements must be positive, got ",
+                                       minimum_elements, ".");
   // Inside a session run the leased executor is installed on the calling
   // thread; dispatching through it is what makes the session policy effective.
   // The process-wide pool below only serves standalone callers that run
@@ -566,8 +567,9 @@ void ParallelForErasedProfiled(int64_t total, int64_t minimum_elements, void *ta
   if (total <= 0) {
     return;
   }
-  EXT_ENFORCE_INVALID(minimum_elements > 0, "ParallelFor minimum_elements must be positive, got ",
-                      minimum_elements, ".");
+  onnx_threads::detail::EnforceInvalid(minimum_elements > 0,
+                                       "ParallelFor minimum_elements must be positive, got ",
+                                       minimum_elements, ".");
   if (CpuExecutor *executor = CurrentCpuExecutor(); executor != nullptr) {
     executor->ParallelFor(total, minimum_elements, task_ctx, task_fn, 0, collector, label,
                           location);

@@ -11,11 +11,16 @@
 #include "onnx_core/runtime/tuning/parallel_region_collector.h"
 #include "onnx_core/runtime/tuning/runtime_parameters.h"
 #include "onnx_proto/onnx.h"
+#include "onnx_proto/thread_pool.h"
 
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <future>
 #include <memory>
 #include <mutex>
 #include <set>
@@ -419,6 +424,48 @@ TEST(SessionExecutor, RunInstallsTheLeasedExecutor) {
   // session never points at a released lease.
   EXPECT_EQ(rt.cpu_executor(), nullptr);
   EXPECT_EQ(CurrentCpuExecutor(), nullptr);
+}
+
+TEST(SessionExecutor, LoadingPoolDoesNotBlockSessionComputation) {
+  const std::filesystem::path path = "session_executor_io.data";
+  {
+    std::ofstream output(path, std::ios::binary);
+    output << "immutable weights";
+    ASSERT_TRUE(output.good());
+  }
+  std::promise<void> io_started;
+  auto started = io_started.get_future();
+  std::promise<void> inference_finished;
+  auto finished = inference_finished.get_future();
+  utils::ThreadPool io;
+  io.Start(1);
+  io.SubmitTask([&]() {
+    std::ifstream input(path, std::ios::binary);
+    char first = 0;
+    input.get(first);
+    EXPECT_EQ(first, 'i');
+    io_started.set_value();
+    EXPECT_EQ(finished.wait_for(std::chrono::seconds(10)), std::future_status::ready);
+    std::string remaining;
+    std::getline(input, remaining);
+    EXPECT_EQ(remaining, "mmutable weights");
+  });
+  EXPECT_EQ(started.wait_for(std::chrono::seconds(10)), std::future_status::ready);
+
+  GraphProto graph = MakeObserverGraph();
+  graph.add_input()->set_name("x");
+  graph.add_output()->set_name("y");
+  RuntimeContext rt(KernelContext(core::runtime::DefaultOpset(18)));
+  const ExecutionPlan &plan = rt.GetExecutionPlan(graph);
+  RuntimeSession session(plan, RuntimeSessionOptions{.parameters = RuntimeParameters(2)});
+  ExecutorObservation observation;
+  RunObserver(session, rt, observation, 8);
+  inference_finished.set_value();
+  io.Wait();
+  EXPECT_EQ(observation.current, session.cpu_executor().get());
+  EXPECT_EQ(observation.block_threads.size(), 2u);
+  EXPECT_EQ(rt.Get("y").AsFloat()[0], 1.0f);
+  std::filesystem::remove(path);
 }
 
 TEST(SessionExecutor, RunEventsIdentifyTheResolvedExecutor) {

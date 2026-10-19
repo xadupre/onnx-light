@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_core/runtime/tuning/cpu_execution_policy.h"
+#include "onnx_threads/cpu_execution_policy.h"
 
-#include "onnx_core/platform/cpu_descriptor.h"
+#include "onnx_threads/cpu_descriptor.h"
 
 #include <algorithm>
 #include <filesystem>

@@ -2,7 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "task_completion.h"
+#include "onnx_threads/task_completion.h"
+#include "check.h"
 
 #include <utility>
 
@@ -17,24 +18,27 @@ bool TaskCompletion::IsTerminal(TaskStatus status) {
 
 void TaskCompletion::MarkRunning() const {
   std::lock_guard<std::mutex> lock(state_->mutex);
-  EXT_ENFORCE(state_->diagnostic.status == TaskStatus::kPending, "Only a pending task can start.");
+  onnx_threads::detail::Enforce(state_->diagnostic.status == TaskStatus::kPending,
+                                "Only a pending task can start.");
   state_->diagnostic.status = TaskStatus::kRunning;
 }
 
 void TaskCompletion::Succeed() const {
   {
     std::lock_guard<std::mutex> lock(state_->mutex);
-    EXT_ENFORCE(!IsTerminal(state_->diagnostic.status), "Task is already complete.");
+    onnx_threads::detail::Enforce(!IsTerminal(state_->diagnostic.status),
+                                  "Task is already complete.");
     state_->diagnostic.status = TaskStatus::kSucceeded;
   }
   state_->completed.notify_all();
 }
 
 void TaskCompletion::Fail(std::exception_ptr error, std::string message) const {
-  EXT_ENFORCE(error != nullptr, "A failed task must provide an exception.");
+  onnx_threads::detail::Enforce(error != nullptr, "A failed task must provide an exception.");
   {
     std::lock_guard<std::mutex> lock(state_->mutex);
-    EXT_ENFORCE(!IsTerminal(state_->diagnostic.status), "Task is already complete.");
+    onnx_threads::detail::Enforce(!IsTerminal(state_->diagnostic.status),
+                                  "Task is already complete.");
     state_->diagnostic.status = TaskStatus::kFailed;
     state_->diagnostic.message = std::move(message);
     state_->error = std::move(error);
@@ -45,8 +49,8 @@ void TaskCompletion::Fail(std::exception_ptr error, std::string message) const {
 void TaskCompletion::Cancel(std::string message) const {
   {
     std::lock_guard<std::mutex> lock(state_->mutex);
-    EXT_ENFORCE(state_->diagnostic.status == TaskStatus::kPending,
-                "Only a pending task can be cancelled.");
+    onnx_threads::detail::Enforce(state_->diagnostic.status == TaskStatus::kPending,
+                                  "Only a pending task can be cancelled.");
     state_->diagnostic.status = TaskStatus::kCancelled;
     state_->diagnostic.message = std::move(message);
   }
@@ -56,8 +60,8 @@ void TaskCompletion::Cancel(std::string message) const {
 void TaskCompletion::Suppress(TaskId caused_by, std::string message) const {
   {
     std::lock_guard<std::mutex> lock(state_->mutex);
-    EXT_ENFORCE(state_->diagnostic.status == TaskStatus::kPending,
-                "Only a pending task can be suppressed.");
+    onnx_threads::detail::Enforce(state_->diagnostic.status == TaskStatus::kPending,
+                                  "Only a pending task can be suppressed.");
     state_->diagnostic.status = TaskStatus::kSuppressed;
     state_->diagnostic.message = std::move(message);
     state_->diagnostic.caused_by = caused_by;

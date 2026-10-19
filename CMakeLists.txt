@@ -864,7 +864,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
     list(APPEND _onnxpy_rpath_targets _onnxpykernels _onnxpybackend _onnxpygradient)
   endif()
   if(_lib_onnx_proto_type STREQUAL "SHARED")
-    list(APPEND _onnxpy_rpath_targets lib_onnx_proto)
+    list(APPEND _onnxpy_rpath_targets lib_onnx_proto lib_onnx_threads)
   endif()
   if(_onnx_light_lib_type STREQUAL "SHARED")
     list(APPEND _onnxpy_rpath_targets lib_onnx_core lib_onnx_lib lib_onnx_manipulations lib_onnx_op
@@ -1156,6 +1156,9 @@ if(ONNX_LIGHT_BUILD_PYTHON)
     install(DIRECTORY "${ROOT_INCLUDE_PATH}/"
         DESTINATION onnx_light/onnx_helpers/include
         FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp")
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/onnx_threads/include/onnx_threads/"
+        DESTINATION onnx_light/onnx_threads
+        FILES_MATCHING PATTERN "*.h")
   endif()
   # Install the extensions into the package directory. When the core C++
   # libraries are built SHARED (the default in Python builds), install them
@@ -1168,7 +1171,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
     install(TARGETS _onnxpykernels _onnxpybackend _onnxpygradient LIBRARY DESTINATION onnx_light/onnx_py)
   endif()
   if(_lib_onnx_proto_type STREQUAL "SHARED")
-    install(TARGETS lib_onnx_proto
+    install(TARGETS lib_onnx_proto lib_onnx_threads
         LIBRARY DESTINATION onnx_light/onnx_py
         RUNTIME DESTINATION onnx_light/onnx_py)
   endif()

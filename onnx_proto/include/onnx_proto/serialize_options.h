@@ -64,7 +64,9 @@ struct TensorBufferOptions {
    *  Tensors whose raw_data is smaller than this threshold are left in-place. */
   int64_t raw_data_threshold = kSmallTensorDataThresholdBytes;
   /** Controls the alignment boundary for tensor offsets within the buffer.
-   *  If > 0, each tensor's offset is padded to a multiple of this many bytes.
+   *  If > 0, consolidation and serialization pad each tensor's offset to a multiple
+   *  of this many bytes. Parsing validates existing external-data offsets instead
+   *  of padding them; see ParseOptions for realignment and borrowing behavior.
    *  0 disables alignment.  Use 4096 for mmap-friendly page-aligned offsets. */
   int64_t alignment = 0;
 };
@@ -90,7 +92,13 @@ enum class SerializeFormat : int32_t {
   kOrtFlatbuffers = 1,
 };
 
-/** Controls behavior when parsing ONNX protobuf messages from a stream or string. */
+/** Controls behavior when parsing ONNX protobuf messages from a stream or string.
+ *  The inherited ``alignment`` option validates existing external-data offsets;
+ *  parsing does not pad or change file offsets. A misaligned offset throws when
+ *  ``no_copy`` is true or MMAP borrowing is active (``FileLoadMode::kMmap``).
+ *  Otherwise, parsing emits a warning and copies the tensor bytes into an aligned
+ *  buffer. For example, ``alignment = 4096`` rejects an offset not divisible by
+ *  4096 when borrowing, but allows realignment when copying is permitted. */
 struct ParseOptions : TensorBufferOptions {
   /** Selects the on-disk serialization format expected when parsing.
    *  ``SerializeFormat::kOnnx`` (default) parses the ONNX protobuf wire format;

@@ -929,7 +929,8 @@ size_t ElementSize(int32_t dtype);
 /// ``dtype``. Whole-byte dtypes return ``element_count * ElementSize(dtype)``;
 /// sub-byte packed dtypes pack 2 (INT4/UINT4) or 4 (INT2/UINT2) elements per
 /// byte and ``element_count`` is rounded up to fill the trailing byte. Throws
-/// ``std::invalid_argument`` for unsupported types.
+/// ``std::invalid_argument`` for unsupported types, negative counts, or sizes
+/// that cannot be represented by ``size_t``.
 size_t PackedByteSize(int32_t dtype, int64_t element_count);
 
 /// Fills ``vi`` with the type/shape information described by ``tensor``.
@@ -946,6 +947,11 @@ void FillValueInfo(const Tensor &tensor, ValueInfoProto &vi);
  *
  * The resulting ``Tensor::name`` is set from ``tp.name()``; the shape is
  * taken from ``tp.dims()``.
+ * Dimensions and their running product must fit in ``int64_t`` and be non-negative.
+ * The payload must exactly match the shape and data type, including packed
+ * trailing bytes and both components of complex elements. An empty shape
+ * denotes one scalar element; a zero dimension requires an empty payload.
+ * The required numeric byte size must fit in ``size_t``.
  *
  * For the typed-field path the byte buffer is acquired from ``allocator``
  * when it is non-null (the returned tensor is then allocator-backed); when
@@ -958,7 +964,8 @@ void FillValueInfo(const Tensor &tensor, ValueInfoProto &vi);
  *                  be ``nullptr``.
  * @return          A ``Tensor`` whose data matches the content of ``tp``.
  *
- * @throws std::invalid_argument for unsupported ``data_type`` values.
+ * @throws std::invalid_argument for unsupported ``data_type`` values, invalid
+ *         or overflowing dimensions/sizes, or a mismatched payload size.
  */
 Tensor TensorFromProto(const TensorProto &tp, RawBufferAllocator *allocator = nullptr);
 

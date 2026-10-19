@@ -7,6 +7,7 @@
 #include "onnx_core/compute/raw_buffer_allocator.h"
 
 #include <cstring>
+#include <limits>
 #include <stdexcept>
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
@@ -203,21 +204,31 @@ size_t Tensor::element_size() const { return ElementSize(data_type); }
 
 size_t PackedByteSize(int32_t dtype, int64_t element_count) {
   EXT_ENFORCE_INVALID(element_count >= 0, "PackedByteSize: element_count must be non-negative.");
+  const uint64_t count = static_cast<uint64_t>(element_count);
+  const auto checked_size = [](uint64_t bytes) -> size_t {
+    EXT_ENFORCE_INVALID(bytes <= std::numeric_limits<size_t>::max(),
+                        "PackedByteSize: byte size overflows size_t.");
+    return static_cast<size_t>(bytes);
+  };
   switch (static_cast<DataType>(dtype)) {
   case DataType::INT4:
   case DataType::UINT4:
   case DataType::FLOAT4E2M1:
     // Two 4-bit elements packed per byte (low nibble first).
-    return static_cast<size_t>((element_count + 1) / 2);
+    return checked_size(count / 2 + (count % 2 != 0));
   case DataType::INT2:
   case DataType::UINT2:
     // Four 2-bit elements packed per byte (least significant pair first).
-    return static_cast<size_t>((element_count + 3) / 4);
+    return checked_size(count / 4 + (count % 4 != 0));
   case DataType::FLOAT6E2M3:
   case DataType::FLOAT6E3M2:
-    return static_cast<size_t>(element_count / 4 * 3 + (element_count % 4 * 6 + 7) / 8);
-  default:
-    return static_cast<size_t>(element_count) * ElementSize(dtype);
+    return checked_size(count / 4 * 3 + (count % 4 * 6 + 7) / 8);
+  default: {
+    const size_t element_size = ElementSize(dtype);
+    EXT_ENFORCE_INVALID(count <= std::numeric_limits<size_t>::max() / element_size,
+                        "PackedByteSize: byte size overflows size_t.");
+    return static_cast<size_t>(count) * element_size;
+  }
   }
 }
 
@@ -465,30 +476,37 @@ Tensor TensorFromProto(const TensorProto &tp, RawBufferAllocator *allocator) {
   // Tensor name (borrowed from the proto; the Tensor makes its own copy).
   const std::string &name = tp.name();
 
-  // Tensor shape (dims are stored as uint64 in TensorProto).
+  // Tensor shape.
   Shape shape;
   shape.reserve(tp.dims().size());
   for (size_t i = 0; i < tp.dims().size(); ++i) {
-    shape.push_back(static_cast<int64_t>(tp.dims()[i]));
+    shape.push_back(tp.dims()[i]);
   }
+  const int64_t element_count = shape.product(0, shape.size(), "TensorFromProto");
 
   const int32_t dtype = static_cast<int32_t>(tp.data_type());
 
   // STRING tensors live in string_data, not in raw/typed bytes.
   if (dtype == static_cast<int32_t>(DataType::STRING)) {
+    EXT_ENFORCE_INVALID(tp.string_data().size() == static_cast<uint64_t>(element_count),
+                        "TensorFromProto: string_data size does not match the shape.");
     std::vector<std::string> strings;
     strings.reserve(tp.string_data().size());
     for (size_t i = 0; i < tp.string_data().size(); ++i) {
       strings.emplace_back(tp.string_data()[i]);
     }
-    return Tensor::FromStrings(name, shape, strings);
+    return Tensor::MakeString(name, std::move(shape), std::move(strings));
   }
+
+  const size_t expected_bytes = PackedByteSize(dtype, element_count);
 
   // Raw data path: bytes are already in little-endian layout.
   // Return a borrowed (zero-copy) view directly into the TensorProto buffer.
   // The TensorProto must outlive the returned Tensor.
   if (tp.is_raw_data()) {
     const auto &rd = tp.ref_raw_data();
+    EXT_ENFORCE_INVALID(rd.size() == expected_bytes,
+                        "TensorFromProto: raw_data size does not match the shape and data_type.");
     return Tensor::Borrow(name, dtype, shape, rd.data(), rd.size(), rd.owner());
   }
 
@@ -496,10 +514,12 @@ Tensor TensorFromProto(const TensorProto &tp, RawBufferAllocator *allocator) {
   // The buffer is acquired from ``allocator`` when provided (allocator-backed
   // tensor), otherwise an inline ``std::vector<uint8_t>`` is used.
   Tensor t;
-  // Creates the destination buffer of ``n_bytes`` and returns a writable
-  // pointer to it; the buffer is zero-initialised.
-  const auto make = [&](size_t n_bytes) -> uint8_t * {
-    t = MakeOutputTensor(dtype, shape, n_bytes, allocator);
+  // Validates the typed payload before allocating the destination buffer.
+  const auto make = [&](size_t count, size_t item_size = 1) -> uint8_t * {
+    EXT_ENFORCE_INVALID(expected_bytes % item_size == 0 && count == expected_bytes / item_size,
+                        "TensorFromProto: typed payload size does not match the shape and "
+                        "data_type.");
+    t = MakeOutputTensor(dtype, shape, expected_bytes, allocator);
     t.name = name;
     return t.mutable_bytes();
   };
@@ -508,7 +528,7 @@ Tensor TensorFromProto(const TensorProto &tp, RawBufferAllocator *allocator) {
   case TensorProto::DataType::FLOAT:
   case TensorProto::DataType::COMPLEX64: {
     const auto &fd = tp.float_data().values();
-    uint8_t *dst = make(fd.size() * sizeof(float));
+    uint8_t *dst = make(fd.size(), sizeof(float));
     if (!fd.empty()) {
       std::memcpy(dst, fd.data(), fd.size() * sizeof(float));
     }
@@ -517,7 +537,7 @@ Tensor TensorFromProto(const TensorProto &tp, RawBufferAllocator *allocator) {
   case TensorProto::DataType::DOUBLE:
   case TensorProto::DataType::COMPLEX128: {
     const auto &dd = tp.double_data().values();
-    uint8_t *dst = make(dd.size() * sizeof(double));
+    uint8_t *dst = make(dd.size(), sizeof(double));
     if (!dd.empty()) {
       std::memcpy(dst, dd.data(), dd.size() * sizeof(double));
     }
@@ -525,7 +545,7 @@ Tensor TensorFromProto(const TensorProto &tp, RawBufferAllocator *allocator) {
   }
   case TensorProto::DataType::INT64: {
     const auto &i64 = tp.int64_data().values();
-    uint8_t *dst = make(i64.size() * sizeof(int64_t));
+    uint8_t *dst = make(i64.size(), sizeof(int64_t));
     if (!i64.empty()) {
       std::memcpy(dst, i64.data(), i64.size() * sizeof(int64_t));
     }
@@ -533,7 +553,7 @@ Tensor TensorFromProto(const TensorProto &tp, RawBufferAllocator *allocator) {
   }
   case TensorProto::DataType::UINT64: {
     const auto &u64 = tp.uint64_data().values();
-    uint8_t *dst = make(u64.size() * sizeof(uint64_t));
+    uint8_t *dst = make(u64.size(), sizeof(uint64_t));
     if (!u64.empty()) {
       std::memcpy(dst, u64.data(), u64.size() * sizeof(uint64_t));
     }
@@ -542,7 +562,7 @@ Tensor TensorFromProto(const TensorProto &tp, RawBufferAllocator *allocator) {
   case TensorProto::DataType::UINT32: {
     // uint64_data stores uint32 values as uint64; truncate each to 4 bytes.
     const auto &u64 = tp.uint64_data().values();
-    uint8_t *dst = make(u64.size() * sizeof(uint32_t));
+    uint8_t *dst = make(u64.size(), sizeof(uint32_t));
     for (size_t i = 0; i < u64.size(); ++i) {
       const uint32_t v = static_cast<uint32_t>(u64[i]);
       std::memcpy(dst + i * sizeof(uint32_t), &v, sizeof(uint32_t));
@@ -551,7 +571,7 @@ Tensor TensorFromProto(const TensorProto &tp, RawBufferAllocator *allocator) {
   }
   case TensorProto::DataType::INT32: {
     const auto &i32 = tp.int32_data().values();
-    uint8_t *dst = make(i32.size() * sizeof(int32_t));
+    uint8_t *dst = make(i32.size(), sizeof(int32_t));
     if (!i32.empty()) {
       std::memcpy(dst, i32.data(), i32.size() * sizeof(int32_t));
     }
@@ -563,7 +583,7 @@ Tensor TensorFromProto(const TensorProto &tp, RawBufferAllocator *allocator) {
   case TensorProto::DataType::BFLOAT16: {
     // int32_data stores one 16-bit element per int32; take the low 2 bytes.
     const auto &i32 = tp.int32_data().values();
-    uint8_t *dst = make(i32.size() * sizeof(uint16_t));
+    uint8_t *dst = make(i32.size(), sizeof(uint16_t));
     for (size_t i = 0; i < i32.size(); ++i) {
       const uint16_t v = static_cast<uint16_t>(static_cast<uint32_t>(i32[i]));
       std::memcpy(dst + i * sizeof(uint16_t), &v, sizeof(uint16_t));
@@ -589,14 +609,15 @@ Tensor TensorFromProto(const TensorProto &tp, RawBufferAllocator *allocator) {
   case TensorProto::DataType::FLOAT6E2M3:
   case TensorProto::DataType::FLOAT6E3M2: {
     const auto &i32 = tp.int32_data().values();
-    const size_t packed_size = PackedByteSize(dtype, static_cast<int64_t>(i32.size()));
+    EXT_ENFORCE_INVALID(i32.size() == static_cast<uint64_t>(element_count),
+                        "TensorFromProto: FLOAT6 payload size does not match the shape.");
+    const size_t packed_size = expected_bytes;
     uint8_t *dst = make(packed_size);
     std::fill_n(dst, packed_size, uint8_t{0});
     for (size_t i = 0; i < i32.size(); ++i) {
       const auto value = static_cast<uint8_t>(i32[i]) & 0x3F;
-      const size_t bit_offset = i * 6;
-      const size_t byte_offset = bit_offset / 8;
-      const int shift = static_cast<int>(bit_offset % 8);
+      const size_t byte_offset = i / 4 * 3 + (i % 4 * 6) / 8;
+      const int shift = static_cast<int>((i % 4 * 6) % 8);
       dst[byte_offset] |= static_cast<uint8_t>(value << shift);
       if (shift > 2) {
         dst[byte_offset + 1] |= static_cast<uint8_t>(value >> (8 - shift));

@@ -52,7 +52,7 @@ for the upstream project's direction and priorities.
 The C++ code is split into several small libraries so a downstream project
 can link only what it needs:
 
-- `onnx_light::lib_onnx_proto` – protobuf-compatible message types,
+- `onnx_proto::lib_onnx_proto` – protobuf-compatible message types,
   parser / serializer, external data, optional encrypted save / load
   (AES-256-CBC, ChaCha20-Poly1305, or AES-256-GCM).
 - `onnx_light::lib_onnx_core` – implements *all* the generic
@@ -241,11 +241,11 @@ target_link_libraries(my_target PRIVATE onnx_light::lib_onnx_lib)
 
 If the code only needs protobuf-compatible message parsing/serialization and does
 not need operator schemas, checker, or shape inference, it can link against the
-lighter ``onnx_light::lib_onnx_proto`` target instead:
+lighter ``onnx_proto::lib_onnx_proto`` target instead:
 
 ```cmake
 find_package(onnx_light REQUIRED)
-target_link_libraries(my_target PRIVATE onnx_light::lib_onnx_proto)
+target_link_libraries(my_target PRIVATE onnx_proto::lib_onnx_proto)
 ```
 
 If the code needs lightweight math operator schemas without shape inference, it

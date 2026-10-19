@@ -26,7 +26,7 @@ if(NOT TARGET onnx::onnx)
   add_library(onnx::onnx INTERFACE IMPORTED)
   set_target_properties(onnx::onnx PROPERTIES
     INTERFACE_LINK_LIBRARIES
-      "onnx_light::lib_onnx_lib;onnx_light::lib_onnx_op;onnx_light::lib_onnx_shape;onnx_light::lib_onnx_manipulations;onnx_light::lib_onnx_proto"
+      "onnx_light::lib_onnx_lib;onnx_light::lib_onnx_op;onnx_light::lib_onnx_shape;onnx_light::lib_onnx_manipulations;onnx_proto::lib_onnx_proto"
     INTERFACE_INCLUDE_DIRECTORIES "${_onnx_compat_include_dir}"
   )
 endif()
@@ -35,7 +35,7 @@ endif()
 if(NOT TARGET onnx::onnx_proto)
   add_library(onnx::onnx_proto INTERFACE IMPORTED)
   set_target_properties(onnx::onnx_proto PROPERTIES
-    INTERFACE_LINK_LIBRARIES onnx_light::lib_onnx_proto
+    INTERFACE_LINK_LIBRARIES onnx_proto::lib_onnx_proto
     INTERFACE_INCLUDE_DIRECTORIES "${_onnx_compat_include_dir}"
   )
 endif()

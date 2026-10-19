@@ -55,7 +55,7 @@ Build (CMake)
 Downstream CMake projects replace the ``onnx`` package and target with the
 ``onnx_light`` package and the equivalent ``onnx_light::...`` target.  Use
 ``onnx_light::lib_onnx_lib`` for the schema / checker / shape-inference layer or a
-lighter target such as ``onnx_light::lib_onnx_proto`` for proto-only parsing —
+lighter target such as ``onnx_proto::lib_onnx_proto`` for proto-only parsing —
 see :ref:`l-design-cpp-linking` for the full list.
 
 .. tab-set::

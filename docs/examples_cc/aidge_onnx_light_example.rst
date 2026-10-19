@@ -128,7 +128,7 @@ optional unless ``-DAIDGE_ONNX_LIGHT_REQUIRE_AIDGE=ON`` is passed:
     endif()
 
     add_executable(aidge_onnx_light main.cc)
-    target_link_libraries(aidge_onnx_light PRIVATE onnx_light::lib_onnx_proto)
+    target_link_libraries(aidge_onnx_light PRIVATE onnx_proto::lib_onnx_proto)
     if(aidge_core_FOUND AND aidge_onnx_FOUND)
       target_compile_definitions(aidge_onnx_light PRIVATE AIDGE_ONNX_LIGHT_HAS_AIDGE=1)
       target_link_libraries(aidge_onnx_light PRIVATE _aidge_core _aidge_onnx)

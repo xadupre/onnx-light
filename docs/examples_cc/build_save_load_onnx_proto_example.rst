@@ -9,7 +9,7 @@ a self-contained
 CMake project that builds a tiny ONNX :cpp:class:`onnx_light::ModelProto` entirely
 in C++, serializes it to disk, parses it back, and checks the round-trip.
 
-The example purposely links against ``onnx_light::lib_onnx_proto`` **only**:
+The example purposely links against ``onnx_proto::lib_onnx_proto`` **only**:
 no operator schemas, no shape inference, no checker, and no backend kernels
 are needed. It is the minimum surface required to produce and consume an
 ``.onnx`` file from C++.
@@ -73,7 +73,7 @@ CMakeLists.txt
 --------------
 
 The example CMake project uses ``find_package`` to locate the installed
-library and links against the exported ``onnx_light::lib_onnx_proto`` target
+library and links against the exported ``onnx_proto::lib_onnx_proto`` target
 only:
 
 .. code-block:: cmake
@@ -87,7 +87,7 @@ only:
     find_package(onnx_light REQUIRED)
 
     add_executable(build_save_load_onnx_proto main.cc)
-    target_link_libraries(build_save_load_onnx_proto PRIVATE onnx_light::lib_onnx_proto)
+    target_link_libraries(build_save_load_onnx_proto PRIVATE onnx_proto::lib_onnx_proto)
 
 Key API types
 -------------

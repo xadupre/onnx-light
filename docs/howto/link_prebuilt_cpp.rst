@@ -139,7 +139,7 @@ Minimal ``CMakeLists.txt``
     add_executable(my_binary main.cc)
 
     # Choose the target that matches what you need (see "Available targets" below).
-    target_link_libraries(my_binary PRIVATE onnx_light::lib_onnx_proto)
+    target_link_libraries(my_binary PRIVATE onnx_proto::lib_onnx_proto)
 
 Configure with ``-DCMAKE_PREFIX_PATH`` pointing at the extracted prefix:
 
@@ -178,7 +178,7 @@ short.
 
     * - CMake target
       - What it provides
-    * - ``onnx_light::lib_onnx_proto``
+    * - ``onnx_proto::lib_onnx_proto``
       - Proto parsing / serialization only (``ModelProto``, ``GraphProto``,
         ``TensorProto``, …).  Lightest option.
     * - ``onnx_light::lib_onnx_core``
@@ -213,7 +213,7 @@ Minimal example (proto parsing only)
 -------------------------------------
 
 The snippet below reads an ``.onnx`` file and prints the number of nodes
-using only ``onnx_light::lib_onnx_proto``.
+using only ``onnx_proto::lib_onnx_proto``.
 
 .. code-block:: cpp
 
@@ -246,7 +246,7 @@ The matching ``CMakeLists.txt``:
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
     find_package(onnx_light REQUIRED)
     add_executable(load_model main.cc)
-    target_link_libraries(load_model PRIVATE onnx_light::lib_onnx_proto)
+    target_link_libraries(load_model PRIVATE onnx_proto::lib_onnx_proto)
 
 Notes
 -----
@@ -255,7 +255,7 @@ Notes
 * The pre-built archives are compiled *without* the Python extension modules
   (``-DONNX_LIGHT_BUILD_PYTHON=OFF``) and *with* OpenSSF compiler hardening
   flags (``-DONNX_HARDENING=ON``).
-* OpenSSL is an **optional** dependency of ``onnx_light::lib_onnx_proto`` (it
+* OpenSSL is an **optional** dependency of ``onnx_proto::lib_onnx_proto`` (it
   enables encrypted ``.onnxc`` model save/load).  If your project does not
   need encryption you can ignore it.  If you do, install OpenSSL on the
   target machine and the exported CMake targets will pick it up automatically

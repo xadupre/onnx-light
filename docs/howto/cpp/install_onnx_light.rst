@@ -34,7 +34,7 @@ Speed up the build
     cmake --build build-install --parallel 8
 
 Kernels precompiled headers
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The private ``lib_onnx_kernels`` PCH includes ``test_case.h`` and
 ``node_helpers.h`` (which includes ``runtime_context.h``), plus standard

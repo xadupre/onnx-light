@@ -278,6 +278,80 @@ TEST(GraphBuilder, DeclaredOutputShapeUpdatesMetadataImmediately) {
   ASSERT_EQ(builder.Compute().Memory().size(), 2u);
 }
 
+TEST(GraphBuilder, ConflictingTypedOutputAfterInferenceIsRejectedBeforeMutation) {
+  for (int conflict = 0; conflict < 6; ++conflict) {
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+    builder.MakeNode("Abs", {"x"}, {"z"});
+
+    ValueInfoProto output;
+    output.set_name("z");
+    auto *tensor = output.mutable_type()->mutable_tensor_type();
+    tensor->set_elem_type(conflict < 2 ? TensorProto::INT64 : TensorProto::FLOAT);
+    if (conflict == 5) {
+      tensor->mutable_shape();
+    } else if (conflict != 1) {
+      tensor->mutable_shape()->add_dim()->set_dim_value(conflict == 2 ? 4 : 2);
+      if (conflict != 3) {
+        tensor->mutable_shape()->add_dim()->set_dim_value(conflict == 4 ? 5 : 3);
+      }
+    }
+    EXPECT_THROW(builder.MakeOutput(output), core::builder::BuilderError) << conflict;
+    EXPECT_TRUE(builder.Outputs().empty());
+    EXPECT_TRUE(builder.BuildGraph().output().empty());
+    EXPECT_EQ(builder.GetShape("z").Dtype(), core::symbolic::TensorType::kFloat);
+    EXPECT_EQ(builder.GetShape("z").Shape(), MakeShape({2, 3}));
+
+    builder.MakeOutput("z", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+    const auto expected = builder.Outputs()[0];
+    EXPECT_THROW(builder.MakeOutput(output), core::builder::BuilderError) << conflict;
+    ASSERT_EQ(builder.Outputs().size(), 1u);
+    EXPECT_TRUE(builder.Outputs()[0].Equals(expected));
+    EXPECT_TRUE(builder.BuildGraph().output(0).type().Equals(expected.type()));
+    EXPECT_TRUE(builder.ToModel().graph().output(0).type().Equals(expected.type()));
+  }
+}
+
+TEST(GraphBuilder, CompatibleTypedOutputAfterInferenceKeepsPublicViewsCoherent) {
+  for (int inference = 0; inference < 3; ++inference) {
+    for (int declaration = 0; declaration < 5; ++declaration) {
+      core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+      core::symbolic::SymShape shape = MakeShape({2, 3});
+      if (inference != 0) {
+        shape[0] = core::symbolic::SymDim(inference == 1 ? "batch" : "");
+      }
+      builder.MakeInput("x", core::symbolic::TensorType::kFloat, shape);
+      builder.MakeNode("Abs", {"x"}, {"z"});
+
+      ValueInfoProto output;
+      output.set_name("z");
+      output.set_doc_string("declared output");
+      auto *tensor = output.mutable_type()->mutable_tensor_type();
+      tensor->set_elem_type(declaration == 4 ? TensorProto::UNDEFINED : TensorProto::FLOAT);
+      if (declaration != 3) {
+        auto *dim = tensor->mutable_shape()->add_dim();
+        if (declaration == 1) {
+          dim->set_dim_param("declared_batch");
+        } else if (declaration != 2) {
+          dim->set_dim_value(2);
+        }
+        tensor->mutable_shape()->add_dim()->set_dim_value(3);
+      }
+      builder.MakeOutput(output);
+
+      EXPECT_EQ(builder.GetShape("z").Dtype(), core::symbolic::TensorType::kFloat);
+      EXPECT_EQ(builder.GetShape("z").Shape(), shape);
+      ValueInfoProto inferred;
+      ASSERT_TRUE(core::symbolic::SymTensorToValueInfo(builder.GetShape("z"), inferred));
+      ASSERT_EQ(builder.Outputs().size(), 1u);
+      EXPECT_EQ(builder.Outputs()[0].doc_string().value(), "declared output");
+      EXPECT_TRUE(builder.Outputs()[0].type().Equals(inferred.type()));
+      EXPECT_TRUE(builder.BuildGraph().output(0).type().Equals(inferred.type()));
+      EXPECT_TRUE(builder.ToModel().graph().output(0).type().Equals(inferred.type()));
+    }
+  }
+}
+
 TEST(GraphBuilder, TypedOutputRebuildDefersPersistentBindingValidationDuringImport) {
   ModelProto model;
   model.set_ir_version(10);

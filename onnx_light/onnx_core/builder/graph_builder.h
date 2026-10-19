@@ -294,6 +294,8 @@ public:
   const std::string &MakeInput(const std::string &name, TensorType dtype, const SymShape &shape);
 
   /// Declares a graph output from a ready-made :cpp:class:`ValueInfoProto`.
+  /// Rejects tensor declarations incompatible with an existing inferred descriptor
+  /// and uses the inferred tensor type and shape for compatible declarations.
   void MakeOutput(const ValueInfoProto &value_info);
 
   /// Declares ``name`` (which must already exist) as a graph output described

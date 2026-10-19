@@ -1124,6 +1124,39 @@ const std::string &GraphBuilder::MakeInput(const std::string &name, TensorType d
 void GraphBuilder::MakeOutput(const ValueInfoProto &value_info) {
   const std::string name = value_info.name().value();
   ValidateSubgraphOutput(name);
+  ValueInfoProto output = value_info;
+  if (value_info.has_type() && value_info.type().has_tensor_type() && Shapes().Has(name)) {
+    const auto &declared = value_info.type().tensor_type();
+    const SymTensor &inferred = Shapes().Get(name);
+    const auto dtype = TensorTypeToDataType(inferred.Dtype());
+    bool compatible = declared.elem_type() == TensorProto::UNDEFINED ||
+                      dtype == TensorProto::UNDEFINED || declared.elem_type() == dtype;
+    if (declared.has_shape()) {
+      const auto &dims = declared.shape().dim();
+      compatible = compatible && dims.size() == inferred.Shape().Rank();
+      for (std::size_t i = 0; compatible && i < dims.size(); ++i) {
+        const auto &actual = inferred.Shape()[i];
+        compatible =
+            !dims[i].has_dim_value() || !actual.IsInt() || dims[i].dim_value() == actual.AsInt();
+      }
+    }
+    if (!compatible) {
+      throw BuilderError("GraphBuilder: output '" + name +
+                         "' has an incompatible tensor type or shape.");
+    }
+    auto *tensor = output.mutable_type()->mutable_tensor_type();
+    tensor->set_elem_type(dtype);
+    tensor->clear_shape();
+    auto *shape = tensor->mutable_shape();
+    for (const auto &dimension : inferred.Shape().Dims()) {
+      auto *dim = shape->add_dim();
+      if (dimension.IsInt()) {
+        dim->set_dim_value(dimension.AsInt());
+      } else {
+        dim->set_dim_param(dimension.AsExpr());
+      }
+    }
+  }
   bool declaration_added = false;
   if (value_info.has_type() &&
       (HasStructuredType(value_info.type()) || Shapes().HasEncodedValue(name))) {
@@ -1148,7 +1181,7 @@ void GraphBuilder::MakeOutput(const ValueInfoProto &value_info) {
     SeedShape(name, std::move(descriptor));
     declaration_added = true;
   }
-  outputs_.push_back(value_info);
+  outputs_.push_back(std::move(output));
   compute_.SeedValueTag(name, DeclaredValueTag(value_info), nodes_);
   compute_.SeedReuseOutput(value_info.name().value(), nodes_, compute_.Shapes());
   if (declaration_added) {

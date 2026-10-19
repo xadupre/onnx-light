@@ -69,13 +69,18 @@ struct TensorBufferOptions {
   int64_t alignment = 0;
 };
 
-/** Selects which file-backed BinaryStream implementation is used when parsing
- *  a model from a file path (for example via ``ModelProto::ParseFromFile``).
+/** Selects the file-backed stream used by the Python binding's ``ParseFromFile`` method.
+ *  Native C++ callers construct a ``utils::BinaryStream`` implementation themselves and use
+ *  ``ModelProto::ParseFromZeroCopyStream`` or ``ParseProtoFromStream`` with parsing options;
+ *  these entry points do not select a stream based on this value.
+ *  For a single model file, the Python binding uses:
  *  - ``kAuto`` (default): pick a compatible implementation without memory-mapping.
- *    Today that means ``FileStream``, but the choice may change in the future —
- *    see ``ParseFromFile`` for the precise selection rules.
- *  - ``kMmap``: force usage of ``MmapFileStream`` (memory-mapped file).
- *  - ``kFileStream``: force usage of ``FileStream`` (buffered ``std::ifstream``). */
+ *    Currently this is ``utils::FileStream``.
+ *  - ``kMmap``: use ``utils::MmapFileStream`` (memory-mapped file).
+ *  - ``kFileStream``: use ``utils::FileStream`` (buffered ``std::ifstream``).
+ *  With an explicit external weights file, the Python binding uses ``utils::TwoFilesStream``:
+ *  the model file is buffered, and ``kMmap`` or ``ParseOptions::no_copy`` memory-maps the weights.
+ */
 enum class FileLoadMode : int32_t {
   kAuto = 0,
   kMmap = 1,
@@ -152,9 +157,10 @@ struct ParseOptions : TensorBufferOptions {
    *    loads it from disk into ``raw_data`` and clears ``data_location`` and
    *    ``external_data``. */
   int64_t tiny_external_data_threshold = -1;
-  /** Selects the file-backed BinaryStream implementation used when parsing a model
-   *  from a file path (e.g. ``ModelProto::ParseFromFile``).  See ``FileLoadMode``
-   *  for the semantics of each value.  Ignored when parsing from bytes/streams. */
+  /** Selects the file-backed stream in the Python binding's ``ParseFromFile`` method.
+   *  See ``FileLoadMode`` for selection rules. Native C++ callers supply their own stream to
+   *  ``ModelProto::ParseFromZeroCopyStream`` or ``ParseProtoFromStream``; this option does not
+   *  change that stream. Ignored when parsing from bytes. */
   FileLoadMode file_load_mode = FileLoadMode::kAuto;
   /** Maximum nesting depth of protobuf sub-messages accepted while parsing.
    *  Protects the parser against stack overflow / out-of-memory caused by

@@ -70,8 +70,8 @@ jobs:
           for shared in OFF ON; do
             build="$RUNNER_TEMP/proto-build-$shared"
             prefix="$RUNNER_TEMP/proto-install-$shared"
-            consumer="$RUNNER_TEMP/proto-consumer-$shared"
             cmake -S "$RUNNER_TEMP/onnx_proto" -B "$build" \
+              -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ \
               -DCMAKE_BUILD_TYPE=Release -DONNX_PROTO_BUILD_SHARED="$shared" \
               -DONNX_PROTO_BUILD_TESTS=ON -DONNX_PROTO_WERROR=ON \
               -DCMAKE_INSTALL_PREFIX="$prefix"
@@ -86,11 +86,13 @@ jobs:
               done
               "$compiler" -std=c++20 -fsyntax-only -I "$prefix/include/onnx_light" \
                 "$RUNNER_TEMP/onnx_proto/tests/consumer/test_onnx_proto.cc"
+              consumer="$RUNNER_TEMP/proto-consumer-$shared-$compiler"
+              cmake -S "$RUNNER_TEMP/onnx_proto/tests/consumer" -B "$consumer" \
+                -DCMAKE_CXX_COMPILER="$compiler" -DCMAKE_PREFIX_PATH="$prefix" \
+                -DCMAKE_DISABLE_FIND_PACKAGE_OpenMP=ON
+              cmake --build "$consumer" --parallel 6
+              ctest --test-dir "$consumer" --output-on-failure
             done
-            cmake -S "$RUNNER_TEMP/onnx_proto/tests/consumer" -B "$consumer" \
-              -DCMAKE_PREFIX_PATH="$prefix"
-            cmake --build "$consumer" --parallel 6
-            ctest --test-dir "$consumer" --output-on-failure
           done
 
   free_threaded:

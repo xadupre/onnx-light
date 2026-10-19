@@ -79,6 +79,11 @@ jobs:
             ctest --test-dir "$build" --output-on-failure
             cmake --install "$build"
             for compiler in g++ clang++; do
+              for header in onnx_proto/onnx_alias.h onnx_alias.h; do
+                printf '#include "%s"\n' "$header" | \
+                  "$compiler" -std=c++20 -fsyntax-only -x c++ \
+                    -I "$prefix/include/onnx_light" -
+              done
               "$compiler" -std=c++20 -fsyntax-only -I "$prefix/include/onnx_light" \
                 "$RUNNER_TEMP/onnx_proto/tests/consumer/test_onnx_proto.cc"
             done

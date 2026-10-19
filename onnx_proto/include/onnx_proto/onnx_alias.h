@@ -11,6 +11,8 @@
 
 #pragma once
 
+#include "onnx.h"
+
 namespace ONNX_LIGHT_NAMESPACE {
 
 /**

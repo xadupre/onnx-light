@@ -32,6 +32,18 @@ constexpr std::array<int32_t, 4> kSupportedElementTypes = {
     static_cast<int32_t>(DataType::FLOAT), static_cast<int32_t>(DataType::DOUBLE),
     static_cast<int32_t>(DataType::FLOAT16), static_cast<int32_t>(DataType::BFLOAT16)};
 
+size_t ValidateConstantB(const Tensor &b, int64_t trans_b) {
+  EXT_ENFORCE_INVALID(b.shape.size() == 2, kGemmName, " constant B must have rank 2.");
+  EXT_ENFORCE_INVALID(trans_b == 0 || trans_b == 1, kGemmName, " transB must be 0 or 1.");
+  EXT_ENFORCE_INVALID(tuning::IsSupportedElementType(b.data_type, kSupportedElementTypes),
+                      kGemmName, " unsupported constant B type.");
+  const int64_t count = b.shape.product(0, b.shape.size(), "Gemm constant B");
+  const size_t bytes = PackedByteSize(b.data_type, count);
+  EXT_ENFORCE_INVALID(b.size_bytes() == bytes && (bytes == 0 || b.bytes() != nullptr), kGemmName,
+                      " constant B payload does not match its shape.");
+  return bytes;
+}
+
 int64_t DivideRoundUp(int64_t value, int64_t divisor) {
   return value / divisor + static_cast<int64_t>(value % divisor != 0);
 }
@@ -266,11 +278,7 @@ void Gemm::Configure(const KernelTuningParameters &parameters) {
 }
 
 PreparedGemmB Gemm::PrepareConstantB(const Tensor &b, int64_t transB, ValueStore &store) const {
-  EXT_ENFORCE_INVALID(b.shape.size() == 2, kGemmName, " constant B must have rank 2.");
-  EXT_ENFORCE_INVALID(transB == 0 || transB == 1, kGemmName, " transB must be 0 or 1.");
-  EXT_ENFORCE_INVALID(tuning::IsSupportedElementType(b.data_type, kSupportedElementTypes),
-                      kGemmName,
-                      " prepared constant B only supports FLOAT, DOUBLE, FLOAT16 and BFLOAT16.");
+  ValidateConstantB(b, transB);
 
   uint64_t digest = 14695981039346656037ULL;
   for (const uint8_t byte : std::span<const uint8_t>(b.bytes(), b.size_bytes())) {
@@ -290,7 +298,7 @@ PreparedGemmB Gemm::PrepareConstantB(const Tensor &b, int64_t transB, ValueStore
     const int64_t k = transB ? b.shape[1] : b.shape[0];
     const int64_t n = transB ? b.shape[0] : b.shape[1];
     const size_t element_size = source.element_size();
-    for (int64_t j = 0; j < n; ++j) {
+    for (int64_t j = 0; k != 0 && j < n; ++j) {
       for (int64_t l = 0; l < k; ++l) {
         const int64_t source_index = transB ? j * k + l : l * n + j;
         const int64_t target_index = j * k + l;
@@ -312,12 +320,29 @@ bool Gemm::HasPreparations(const std::unordered_set<std::string> &immutable_inpu
          immutable_inputs.find(node_->input(1)) != immutable_inputs.end();
 }
 
-void Gemm::Prepare(RuntimeContext &rt, const std::unordered_set<std::string> &immutable_inputs) {
+void Gemm::DeclarePreparations(const std::unordered_set<std::string> &immutable_inputs,
+                               std::vector<KernelPreparation> &preparations) {
   if (!HasPreparations(immutable_inputs)) {
     return;
   }
-  prepared_b_ = PrepareConstantB(rt.Get(node_->input(1)),
-                                 GetAttributeIntOrDefault(*node_, "transB", 0), rt.value_store());
+  const std::string source = node_->input(1);
+  const int64_t trans_b = GetAttributeIntOrDefault(*node_, "transB", 0);
+  KernelPreparation preparation;
+  preparation.source_inputs = {source};
+  preparation.representation = "Gemm:B:column-major-k-v1";
+  preparation.output_slots = {source + ":" + preparation.representation};
+  preparation.estimate_memory = [source, trans_b](const RuntimeContext &rt) {
+    const Tensor &b = rt.Get(source);
+    const size_t source_bytes = ValidateConstantB(b, trans_b);
+    const size_t packed_bytes = PackedByteSize(
+        IsHalfPrecision(b.data_type) ? DataType::FLOAT : b.data_type, b.element_count());
+    return KernelPreparationMemory{source_bytes, IsHalfPrecision(b.data_type) ? packed_bytes : 0,
+                                   packed_bytes};
+  };
+  preparation.execute = [this, source, trans_b](RuntimeContext &rt) {
+    prepared_b_ = PrepareConstantB(rt.Get(source), trans_b, rt.value_store());
+  };
+  preparations.push_back(std::move(preparation));
 }
 
 Tensor Gemm::operator()(const Tensor &a, const Tensor &b, const Tensor *c, float alpha, float beta,

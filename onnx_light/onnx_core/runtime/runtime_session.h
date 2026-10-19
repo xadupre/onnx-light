@@ -14,6 +14,8 @@
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx.h"
 
+#include <exception>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -245,6 +247,20 @@ public:
    *         the session's.
    */
   void Run(RuntimeContext &rt);
+
+  /// Resolves and tunes kernels and declares work without seeding or reading payloads.
+  void DeclarePreparations(RuntimeContext &rt);
+  /// Seeds available initializers and completes ready work without running inference.
+  void Prepare(RuntimeContext &rt);
+  /// Drains ready work within a peak-byte budget without seeding initializer payloads.
+  /// Calls on this session and sessions sharing its store must be serialized.
+  void ExecutePreparations(RuntimeContext &rt,
+                           size_t memory_limit = std::numeric_limits<size_t>::max());
+  /// Returns deferred declarations, including unavailable sources and budget-limited work.
+  std::vector<KernelPreparationInfo> pending_preparations() const;
+  /// Estimates one declaration's peak bytes while retaining its callables in this session.
+  KernelPreparationMemory EstimatePreparationMemory(const RuntimeContext &rt,
+                                                    size_t preparation_index) const;
 
   /**
    * Runs in the supplied context and commits persistent feedback only on success.
@@ -520,6 +536,11 @@ private:
   std::shared_ptr<ValueStore> value_store_;
   std::unique_ptr<PersistentValueState> persistent_state_;
   std::vector<PreparedKernel> kernels_;
+  std::vector<KernelPreparation> preparations_;
+  std::vector<bool> preparation_complete_;
+  size_t pending_preparation_count_ = 0;
+  std::exception_ptr preparation_failure_;
+  std::unordered_set<std::string> seeded_initializer_names_;
   const GraphProto *initializer_graph_ = nullptr;
   std::optional<StructTypeCatalogue> struct_type_catalogue_;
   std::shared_ptr<const QuantizationParameterCatalogue> quantization_parameters_;

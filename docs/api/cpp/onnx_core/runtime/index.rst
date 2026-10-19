@@ -38,6 +38,7 @@ a dependency from ``onnx_core`` back onto ``onnx_kernels``.
     runtime_parameters
     run_nodes
     runtime_session
+    runtime_session_loader
     task_completion
     generation
     persistent_value_state

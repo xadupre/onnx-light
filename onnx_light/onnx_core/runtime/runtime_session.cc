@@ -284,6 +284,7 @@ void RuntimeSession::SetInitializers(const GraphProto &graph) {
     overridable.insert(input.name());
   }
   for (const TensorProto &initializer : graph.initializer()) {
+    declared_tensor_types_.try_emplace(initializer.name(), initializer.data_type());
     if (overridable.find(initializer.name()) == overridable.end()) {
       immutable_initializer_names_.insert(initializer.name());
     }
@@ -298,7 +299,8 @@ std::unordered_set<std::string> RuntimeSession::SeedInitializers(RuntimeContext 
     rt.set_quantization_parameters(quantization_parameters_);
   if (initializer_graph_ != nullptr) {
     for (const TensorProto &initializer : initializer_graph_->initializer())
-      if (!rt.HasValue(initializer.name())) {
+      if (!rt.HasValue(initializer.name()) &&
+          (initializer.data_location() != TensorProto::EXTERNAL || initializer.is_raw_data())) {
         rt.Set(initializer.name(), Tensor::BorrowInitializer(initializer),
                RuntimeEventKind::kInitializer);
         seeded.insert(initializer.name());
@@ -447,6 +449,15 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt,
       }
     }
 
+    if (tuning_input_index < 0 && element_type == static_cast<int32_t>(DataType::UNDEFINED)) {
+      for (const std::string &input : node.input()) {
+        const auto declared_type = declared_tensor_types_.find(input);
+        if (declared_type != declared_tensor_types_.end()) {
+          element_type = declared_type->second;
+          break;
+        }
+      }
+    }
     const KernelTuningKey tuning_key = prepared.instance->TuningKey(element_type);
     if (tuning_key.device == Device::kUndefined) {
       continue;
@@ -477,8 +488,19 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt,
     if (action.kind() == ExecuteActionKind::kExecuteNode) {
       KernelBase &kernel = *kernels_[action.node_index()].instance;
       if (kernel.HasPreparations(preparable_inputs)) {
-        kernel.Prepare(rt, preparable_inputs);
+        kernel.DeclarePreparations(preparable_inputs, preparations_);
       }
+    }
+  }
+  preparation_complete_.assign(preparations_.size(), false);
+  pending_preparation_count_ = preparations_.size();
+  for (size_t index = 0; index < preparations_.size(); ++index) {
+    const auto &preparation = preparations_[index];
+    EXT_ENFORCE_INVALID(preparation.execute && preparation.estimate_memory,
+                        "RuntimeSession: preparation requires execution and memory callbacks.");
+    for (size_t dependency : preparation.dependencies) {
+      EXT_ENFORCE_INVALID(dependency < index,
+                          "RuntimeSession: preparation dependency must precede its consumer.");
     }
   }
 
@@ -511,6 +533,107 @@ void RuntimeSession::ResolveKernelValueSlots(RuntimeContext &rt) {
 }
 
 size_t RuntimeSession::prepared_bytes() const noexcept { return value_store_->prepared_bytes(); }
+
+void RuntimeSession::DeclarePreparations(RuntimeContext &rt) {
+  if (preparation_failure_)
+    std::rethrow_exception(preparation_failure_);
+  if (kernels_initialized_)
+    return;
+  const bool inherits_executor = !cpu_execution_explicit_ && rt.cpu_executor() != nullptr;
+  const SessionExecutorScope executor_scope(rt, inherits_executor ? rt.cpu_executor()
+                                                                  : cpu_executor().get());
+  if (rt.value_store_owner() != value_store_)
+    rt.SetValueStore(value_store_);
+  std::unordered_set<std::string> immutable = inherited_immutable_inputs_;
+  for (const std::string &name : immutable_initializer_names_) {
+    if (!rt.HasValue(name) || seeded_initializer_names_.contains(name))
+      immutable.insert(name);
+  }
+  try {
+    InitializeKernels(rt, immutable);
+  } catch (...) {
+    preparation_failure_ = std::current_exception();
+    throw;
+  }
+}
+
+void RuntimeSession::Prepare(RuntimeContext &rt) {
+  if (preparation_failure_)
+    std::rethrow_exception(preparation_failure_);
+  const auto seeded = SeedInitializers(rt);
+  seeded_initializer_names_.insert(seeded.begin(), seeded.end());
+  DeclarePreparations(rt);
+  ExecutePreparations(rt);
+}
+
+void RuntimeSession::ExecutePreparations(RuntimeContext &rt, size_t memory_limit) {
+  DeclarePreparations(rt);
+  if (pending_preparation_count_ == 0)
+    return;
+  const bool inherits_executor = !cpu_execution_explicit_ && rt.cpu_executor() != nullptr;
+  const SessionExecutorScope executor_scope(rt, inherits_executor ? rt.cpu_executor()
+                                                                  : cpu_executor().get());
+  if (rt.value_store_owner() != value_store_)
+    rt.SetValueStore(value_store_);
+  try {
+    for (size_t index = 0; index < preparations_.size(); ++index) {
+      if (preparation_complete_[index])
+        continue;
+      const KernelPreparation &preparation = preparations_[index];
+      bool ready = true;
+      for (const std::string &name : preparation.source_inputs)
+        ready = ready && rt.HasValue(name);
+      for (size_t dependency : preparation.dependencies)
+        ready = ready && preparation_complete_[dependency];
+      if (!ready)
+        continue;
+      const KernelPreparationMemory memory = preparation.estimate_memory(rt);
+      size_t remaining = memory_limit;
+      for (size_t bytes : {value_store_->prepared_bytes(), memory.source_bytes,
+                           memory.temporary_bytes, memory.prepared_bytes}) {
+        if (bytes > remaining) {
+          ready = false;
+          break;
+        }
+        remaining -= bytes;
+      }
+      if (!ready)
+        continue;
+      preparation.execute(rt);
+      preparation_complete_[index] = true;
+      --pending_preparation_count_;
+    }
+  } catch (...) {
+    preparation_failure_ = std::current_exception();
+    throw;
+  }
+}
+
+KernelPreparationMemory
+RuntimeSession::EstimatePreparationMemory(const RuntimeContext &rt, size_t preparation_index) const {
+  if (preparation_failure_)
+    std::rethrow_exception(preparation_failure_);
+  EXT_ENFORCE_INVALID(preparation_index < preparations_.size(),
+                      "RuntimeSession: preparation index is out of bounds.");
+  const KernelPreparation &preparation = preparations_[preparation_index];
+  for (const std::string &name : preparation.source_inputs)
+    EXT_ENFORCE_INVALID(rt.HasValue(name),
+                        "RuntimeSession: preparation source is unavailable: ", name);
+  return preparation.estimate_memory(rt);
+}
+
+std::vector<KernelPreparationInfo> RuntimeSession::pending_preparations() const {
+  std::vector<KernelPreparationInfo> pending;
+  pending.reserve(preparations_.size());
+  for (size_t index = 0; index < preparations_.size(); ++index) {
+    if (index < preparation_complete_.size() && preparation_complete_[index])
+      continue;
+    const KernelPreparation &preparation = preparations_[index];
+    pending.push_back({index, preparation.source_inputs, preparation.representation,
+                       preparation.output_slots, preparation.dependencies});
+  }
+  return pending;
+}
 
 std::vector<std::string> RuntimeSession::used_kernels() const {
   std::vector<std::string> result;
@@ -696,17 +819,15 @@ void RuntimeSession::Run(RuntimeContext &rt) {
   // runs reuse the same built instances without redoing the per-node
   // dispatch lookup or re-constructing concrete kernels.
   if (!kernels_initialized_) {
-    std::unordered_set<std::string> preparable_inputs;
-    for (const std::string &name : seeded_initializers) {
-      if (immutable_initializer_names_.find(name) != immutable_initializer_names_.end()) {
-        preparable_inputs.insert(name);
-      }
-    }
-    for (const std::string &name : inherited_immutable_inputs_)
-      if (rt.HasValue(name))
-        preparable_inputs.insert(name);
-    InitializeKernels(rt, preparable_inputs);
+    seeded_initializer_names_.insert(seeded_initializers.begin(), seeded_initializers.end());
+    DeclarePreparations(rt);
   }
+  if (preparation_failure_)
+    std::rethrow_exception(preparation_failure_);
+  if (pending_preparation_count_ != 0)
+    ExecutePreparations(rt);
+  EXT_ENFORCE_INVALID(pending_preparation_count_ == 0,
+                      "RuntimeSession: preparation sources are unavailable before Run().");
   if (resolve_value_slots) {
     ResolveKernelValueSlots(rt);
     value_directory_identity_ = rt.value_directory_identity();

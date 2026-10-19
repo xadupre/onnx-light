@@ -1,0 +1,578 @@
+// Copyright (c) ONNX Project Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+#include "onnx_core/runtime/kernels/value_store.h"
+#include "onnx_core/runtime/runtime_session_loader.h"
+#include "onnx_extensions/kernels/kernel_dispatch_table.h"
+#include "onnx_proto/onnx_helper.h"
+
+#include <gtest/gtest.h>
+
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <filesystem>
+#include <fstream>
+#include <mutex>
+#include <stdexcept>
+#include <thread>
+#include <vector>
+
+using namespace ONNX_LIGHT_NAMESPACE;
+using namespace ONNX_LIGHT_NAMESPACE::core::runtime;
+
+namespace {
+
+class RuntimeSessionLoading : public testing::Test {
+protected:
+  void SetUp() override {
+    onnx_kernels::RegisterKernelFunctions();
+    static std::atomic<size_t> sequence{0};
+    directory = std::filesystem::current_path() /
+                ("session-loading-" +
+                 std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + "-" +
+                 std::to_string(sequence++));
+    std::filesystem::create_directory(directory);
+    WriteModel();
+  }
+  void TearDown() override { std::filesystem::remove_all(directory); }
+
+  void WriteModel() {
+    ModelProto model;
+    model.set_ir_version(9);
+    model.add_opset_import()->set_version(13);
+    auto *graph = model.mutable_graph();
+    graph->add_input()->set_name("A");
+    for (size_t i = 0; i < 2; ++i) {
+      const std::string suffix = std::to_string(i);
+      graph->add_output()->set_name("Y" + suffix);
+      auto *weight = graph->add_initializer();
+      weight->set_name("B" + suffix);
+      weight->set_data_type(TensorProto::FLOAT);
+      weight->add_dims(3);
+      weight->add_dims(2);
+      weight->set_data_location(TensorProto::EXTERNAL);
+      auto *location = weight->add_external_data();
+      location->set_key("location");
+      location->set_value("weight" + suffix + ".bin");
+      auto *length = weight->add_external_data();
+      length->set_key("length");
+      length->set_value("24");
+      const std::vector<float> values{1, 2, 3, 4, 5, 6};
+      std::ofstream payload(directory / ("weight" + suffix + ".bin"), std::ios::binary);
+      payload.write(reinterpret_cast<const char *>(values.data()),
+                    static_cast<std::streamsize>(values.size() * sizeof(float)));
+      auto *node = graph->add_node();
+      node->set_op_type("Gemm");
+      node->add_input("A");
+      node->add_input("B" + suffix);
+      node->add_output("Y" + suffix);
+    }
+    std::ofstream output(directory / "model.onnx", std::ios::binary);
+    const auto bytes = model.SerializeAsString();
+    output.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+  }
+
+  std::vector<float> Run(RuntimeSession &session, RuntimeContext &rt) {
+    rt.Put("A", Tensor::FromFloat("A", {1, 3}, {1, 2, 3}));
+    session.Run(rt);
+    const float *first = rt.Get("Y0").AsFloat();
+    const float *second = rt.Get("Y1").AsFloat();
+    return {first[0], first[1], second[0], second[1]};
+  }
+
+  std::string Path() const { return (directory / "model.onnx").string(); }
+  ModelProto ReadModel() const {
+    ModelProto model;
+    utils::FileStream stream(Path());
+    ParseOptions options;
+    if (!model.ParseFromStream(stream, options))
+      throw std::runtime_error("Cannot read loader fixture.");
+    return model;
+  }
+  void SaveModel(const ModelProto &model) const {
+    std::ofstream output(Path(), std::ios::binary);
+    const auto bytes = model.SerializeAsString();
+    output.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+  }
+  std::filesystem::path directory;
+};
+
+TEST_F(RuntimeSessionLoading, OverlapsRealGemmPreparationWithSecondRead) {
+  RuntimeContext rt;
+  std::mutex mutex;
+  std::condition_variable changed;
+  bool prepared = false;
+  bool second_started = false;
+  bool second_finished = false;
+  std::thread::id io_thread;
+  const auto caller = std::this_thread::get_id();
+  RuntimeLoadOptions options;
+  options.trace = [&](const RuntimeLoadEvent &event) {
+    if (event.phase == RuntimeLoadPhase::kPreparationStarted && event.tensor_name == "B0") {
+      std::unique_lock lock(mutex);
+      if (!changed.wait_for(lock, std::chrono::seconds(10), [&] { return second_started; }))
+        throw std::runtime_error("Second read did not start before preparation.");
+    }
+    if (event.phase == RuntimeLoadPhase::kPreparationFinished && event.tensor_name == "B0") {
+      EXPECT_EQ(std::this_thread::get_id(), caller);
+      EXPECT_GT(event.prepared_bytes_added, 0u);
+      EXPECT_GT(rt.value_store().prepared_bytes(), 0u);
+      std::lock_guard lock(mutex);
+      prepared = true;
+      EXPECT_FALSE(second_finished);
+      changed.notify_all();
+    }
+  };
+  options.external_reader = [&](TensorProto &tensor, const std::string &base) {
+    EXPECT_NE(std::this_thread::get_id(), caller);
+    if (tensor.name() == "B1") {
+      std::unique_lock lock(mutex);
+      EXPECT_EQ(std::this_thread::get_id(), io_thread);
+      second_started = true;
+      changed.notify_all();
+      if (!changed.wait_for(lock, std::chrono::seconds(10), [&] { return prepared; }))
+        throw std::runtime_error("Preparation did not overlap the blocked second read.");
+    } else {
+      io_thread = std::this_thread::get_id();
+    }
+    tensor.LoadExternalData(base);
+    if (tensor.name() == "B1") {
+      std::lock_guard lock(mutex);
+      second_finished = true;
+    }
+  };
+  LoadedRuntimeSession loaded(Path(), rt, {}, options);
+  EXPECT_TRUE(prepared);
+  EXPECT_TRUE(second_started);
+  EXPECT_TRUE(second_finished);
+  EXPECT_GT(loaded.session().prepared_bytes(), 0u);
+  EXPECT_EQ(loaded.statistics().external_tensors, 2u);
+  EXPECT_EQ(loaded.statistics().peak_queued_tensors, 1u);
+  EXPECT_FALSE(rt.Has("B0"));
+  EXPECT_FALSE(rt.Has("B1"));
+  EXPECT_EQ(Run(loaded.session(), rt), (std::vector<float>{22, 28, 22, 28}));
+}
+
+TEST_F(RuntimeSessionLoading, SerialOverlapExplicitAndLazyAgreeAndOwnSource) {
+  RuntimeContext serial_rt;
+  RuntimeLoadOptions serial;
+  serial.overlap_preparation = false;
+  LoadedRuntimeSession serial_loaded(Path(), serial_rt, {}, serial);
+  RuntimeContext overlap_rt;
+  LoadedRuntimeSession overlap_loaded(Path(), overlap_rt);
+
+  ModelProto model;
+  utils::FileStream stream(Path());
+  ParseOptions parse;
+  ASSERT_TRUE(model.ParseFromStream(stream, parse));
+  LoadExternalDataForModel(model, directory.string());
+  RuntimeContext explicit_rt;
+  RuntimeSession explicit_session(model);
+  explicit_session.Prepare(explicit_rt);
+  RuntimeContext lazy_rt;
+  RuntimeSession lazy_session(model);
+  const auto expected = Run(lazy_session, lazy_rt);
+  EXPECT_EQ(Run(explicit_session, explicit_rt), expected);
+  // The writer's model was destroyed in SetUp and files are no longer needed.
+  std::filesystem::remove_all(directory);
+  EXPECT_EQ(Run(serial_loaded.session(), serial_rt), expected);
+  EXPECT_EQ(Run(overlap_loaded.session(), overlap_rt), expected);
+}
+
+TEST_F(RuntimeSessionLoading, SerialBaselineLoadsAllPayloadsBeforePreparation) {
+  RuntimeContext rt;
+  size_t finished_reads = 0;
+  RuntimeLoadOptions options;
+  options.overlap_preparation = false;
+  options.trace = [&](const RuntimeLoadEvent &event) {
+    if (event.phase == RuntimeLoadPhase::kReadFinished)
+      ++finished_reads;
+    if (event.phase == RuntimeLoadPhase::kPreparationStarted) {
+      EXPECT_EQ(finished_reads, 2u);
+    }
+  };
+  LoadedRuntimeSession loaded(Path(), rt, {}, options);
+  EXPECT_EQ(Run(loaded.session(), rt), (std::vector<float>{22, 28, 22, 28}));
+}
+
+TEST_F(RuntimeSessionLoading, OverlapsInlinePreparationWithExternalRead) {
+  auto model = ReadModel();
+  auto &weight = model.ref_graph().ref_initializer()[0];
+  weight.LoadExternalData(directory.string());
+  weight.set_data_location(TensorProto::DEFAULT);
+  weight.clr_external_data();
+  SaveModel(model);
+  RuntimeContext rt;
+  std::mutex mutex;
+  std::condition_variable changed;
+  bool reading = false;
+  bool prepared = false;
+  RuntimeLoadOptions options;
+  options.external_reader = [&](TensorProto &tensor, const std::string &base) {
+    {
+      std::unique_lock lock(mutex);
+      reading = true;
+      changed.notify_all();
+      if (!changed.wait_for(lock, std::chrono::seconds(10), [&] { return prepared; }))
+        throw std::runtime_error("Inline preparation did not overlap external read.");
+    }
+    tensor.LoadExternalData(base);
+  };
+  options.trace = [&](const RuntimeLoadEvent &event) {
+    if (event.phase == RuntimeLoadPhase::kPreparationStarted && event.tensor_name == "B0") {
+      std::unique_lock lock(mutex);
+      if (!changed.wait_for(lock, std::chrono::seconds(10), [&] { return reading; }))
+        throw std::runtime_error("External reader did not start before inline preparation.");
+    }
+    if (event.phase == RuntimeLoadPhase::kPreparationFinished && event.tensor_name == "B0") {
+      EXPECT_GT(event.prepared_bytes_added, 0u);
+      EXPECT_GT(rt.value_store().prepared_bytes(), 0u);
+      std::lock_guard lock(mutex);
+      prepared = true;
+      changed.notify_all();
+    }
+  };
+  LoadedRuntimeSession loaded(Path(), rt, {}, options);
+  EXPECT_TRUE(prepared);
+  EXPECT_EQ(Run(loaded.session(), rt), (std::vector<float>{22, 28, 22, 28}));
+}
+
+TEST_F(RuntimeSessionLoading, AdmissionRejectsBeforeExternalRead) {
+  RuntimeContext rt;
+  size_t reads = 0;
+  RuntimeLoadOptions options;
+  options.memory_limit = 95;
+  options.external_reader = [&](TensorProto &, const std::string &) { ++reads; };
+  EXPECT_THROW(LoadedRuntimeSession(Path(), rt, {}, options), std::length_error);
+  EXPECT_EQ(reads, 0u);
+  EXPECT_FALSE(rt.Has("B0"));
+  EXPECT_FALSE(rt.Has("B1"));
+}
+
+TEST_F(RuntimeSessionLoading, TracksConservativeAdmission) {
+  RuntimeContext rt;
+  RuntimeLoadOptions options;
+  options.memory_limit = 1024 * 1024;
+  LoadedRuntimeSession loaded(Path(), rt, {}, options);
+  EXPECT_EQ(loaded.statistics().source_bytes, 48u);
+  EXPECT_EQ(loaded.statistics().conversion_reserve_bytes, 48u);
+  EXPECT_GE(loaded.statistics().peak_admitted_bytes, 96u);
+  EXPECT_GT(loaded.statistics().peak_admitted_bytes, 96u + loaded.session().prepared_bytes());
+  EXPECT_LE(loaded.statistics().peak_admitted_bytes, options.memory_limit);
+  EXPECT_EQ(Run(loaded.session(), rt), (std::vector<float>{22, 28, 22, 28}));
+}
+
+TEST_F(RuntimeSessionLoading, PreparationBudgetRejectsWithoutLazyFallback) {
+  RuntimeContext rt;
+  RuntimeLoadOptions options;
+  options.memory_limit = 100;
+  EXPECT_THROW(LoadedRuntimeSession(Path(), rt, {}, options), std::length_error);
+  EXPECT_FALSE(rt.Has("B0"));
+  EXPECT_FALSE(rt.Has("B1"));
+}
+
+TEST_F(RuntimeSessionLoading, PreservesCallerInitializerOverrides) {
+  RuntimeContext rt;
+  rt.Put("B0", Tensor::FromFloat("B0", {3, 2}, {2, 2, 2, 2, 2, 2}));
+  LoadedRuntimeSession loaded(Path(), rt);
+  EXPECT_TRUE(rt.Has("B0"));
+  EXPECT_FALSE(rt.Has("B1"));
+  EXPECT_EQ(Run(loaded.session(), rt), (std::vector<float>{12, 12, 22, 28}));
+}
+
+TEST_F(RuntimeSessionLoading, RejectsMismatchedExternalLengthBeforeReading) {
+  auto model = ReadModel();
+  model.ref_graph().ref_initializer()[0].ref_external_data()[1].set_value("23");
+  SaveModel(model);
+  RuntimeContext rt;
+  size_t reads = 0;
+  RuntimeLoadOptions options;
+  options.external_reader = [&](TensorProto &, const std::string &) { ++reads; };
+  EXPECT_THROW(LoadedRuntimeSession(Path(), rt, {}, options), std::invalid_argument);
+  EXPECT_EQ(reads, 0u);
+}
+
+TEST_F(RuntimeSessionLoading, RejectsExternalRangeOverflowBeforeReading) {
+  auto model = ReadModel();
+  auto *offset = model.ref_graph().ref_initializer()[0].add_external_data();
+  offset->set_key("offset");
+  offset->set_value("9223372036854775807");
+  SaveModel(model);
+  RuntimeContext rt;
+  size_t reads = 0;
+  RuntimeLoadOptions options;
+  options.external_reader = [&](TensorProto &, const std::string &) { ++reads; };
+  EXPECT_THROW(LoadedRuntimeSession(Path(), rt, {}, options), std::invalid_argument);
+  EXPECT_EQ(reads, 0u);
+}
+
+TEST_F(RuntimeSessionLoading, RejectsMissingLengthBeforeReading) {
+  auto model = ReadModel();
+  model.ref_graph().ref_initializer()[0].ref_external_data()[1].set_key("unused_metadata");
+  SaveModel(model);
+  RuntimeContext rt;
+  size_t reads = 0;
+  RuntimeLoadOptions options;
+  options.external_reader = [&](TensorProto &, const std::string &) { ++reads; };
+  EXPECT_THROW(LoadedRuntimeSession(Path(), rt, {}, options), std::invalid_argument);
+  EXPECT_EQ(reads, 0u);
+}
+
+TEST_F(RuntimeSessionLoading, SupportsExternalSizeAlias) {
+  auto model = ReadModel();
+  model.ref_graph().ref_initializer()[0].ref_external_data()[1].set_key("size");
+  SaveModel(model);
+  RuntimeContext rt;
+  LoadedRuntimeSession loaded(Path(), rt);
+  EXPECT_EQ(Run(loaded.session(), rt), (std::vector<float>{22, 28, 22, 28}));
+}
+
+TEST_F(RuntimeSessionLoading, RejectsEncodedPayloadBeforeReadingOrDeclaring) {
+  auto model = ReadModel();
+  auto *encoded = model.ref_graph().add_encoded_initializer();
+  encoded->set_name("encoded");
+  encoded->set_raw_data(std::string(4096, '\0'));
+  SaveModel(model);
+  RuntimeContext rt;
+  size_t reads = 0;
+  bool declared = false;
+  RuntimeLoadOptions options;
+  options.memory_limit = 1024;
+  options.external_reader = [&](TensorProto &, const std::string &) { ++reads; };
+  options.trace = [&](const RuntimeLoadEvent &event) {
+    declared = declared || event.phase == RuntimeLoadPhase::kDeclared;
+  };
+  EXPECT_THROW(LoadedRuntimeSession(Path(), rt, {}, options), std::invalid_argument);
+  EXPECT_EQ(reads, 0u);
+  EXPECT_FALSE(declared);
+}
+
+TEST_F(RuntimeSessionLoading, RejectsPagedPayloadBeforeReadingOrDeclaring) {
+  auto model = ReadModel();
+  auto *cache = model.ref_graph().add_paged_cache_initializer();
+  cache->set_name("cache");
+  auto *key = cache->add_blocks()->mutable_key();
+  key->set_name("key");
+  key->set_data_type(TensorProto::FLOAT);
+  key->add_dims(1024);
+  key->set_raw_data(std::string(4096, '\0'));
+  SaveModel(model);
+  RuntimeContext rt;
+  size_t reads = 0;
+  bool declared = false;
+  RuntimeLoadOptions options;
+  options.memory_limit = 1024;
+  options.external_reader = [&](TensorProto &, const std::string &) { ++reads; };
+  options.trace = [&](const RuntimeLoadEvent &event) {
+    declared = declared || event.phase == RuntimeLoadPhase::kDeclared;
+  };
+  EXPECT_THROW(LoadedRuntimeSession(Path(), rt, {}, options), std::invalid_argument);
+  EXPECT_EQ(reads, 0u);
+  EXPECT_FALSE(declared);
+}
+
+TEST_F(RuntimeSessionLoading, WorkerFailurePropagatesAndJoins) {
+  RuntimeContext rt;
+  std::atomic<bool> active{false};
+  std::atomic<size_t> reads{0};
+  RuntimeLoadOptions options;
+  options.external_reader = [&](TensorProto &tensor, const std::string &base) {
+    active = true;
+    ++reads;
+    if (tensor.name() == "B1") {
+      active = false;
+      throw std::runtime_error("test reader failure");
+    }
+    tensor.LoadExternalData(base);
+    active = false;
+  };
+  EXPECT_THROW(LoadedRuntimeSession(Path(), rt, {}, options), std::runtime_error);
+  EXPECT_EQ(reads, 2u);
+  EXPECT_FALSE(active);
+  EXPECT_FALSE(rt.Has("B0"));
+  EXPECT_FALSE(rt.Has("B1"));
+}
+
+TEST_F(RuntimeSessionLoading, CallerFailureJoinsBlockedWorker) {
+  RuntimeContext rt;
+  std::mutex mutex;
+  std::condition_variable changed;
+  bool second_started = false;
+  bool release = false;
+  bool exited = false;
+  RuntimeLoadOptions options;
+  options.external_reader = [&](TensorProto &tensor, const std::string &base) {
+    if (tensor.name() == "B1") {
+      std::unique_lock lock(mutex);
+      second_started = true;
+      changed.notify_all();
+      if (!changed.wait_for(lock, std::chrono::seconds(10), [&] { return release; }))
+        throw std::runtime_error("Caller did not release reader.");
+    }
+    tensor.LoadExternalData(base);
+    if (tensor.name() == "B1") {
+      std::lock_guard lock(mutex);
+      exited = true;
+    }
+  };
+  options.trace = [&](const RuntimeLoadEvent &event) {
+    if (event.phase == RuntimeLoadPhase::kPreparationStarted && event.tensor_name == "B0") {
+      std::unique_lock lock(mutex);
+      if (!changed.wait_for(lock, std::chrono::seconds(10), [&] { return second_started; }))
+        throw std::runtime_error("Second read did not start.");
+      release = true;
+      changed.notify_all();
+      throw std::runtime_error("test preparation observer failure");
+    }
+  };
+  EXPECT_THROW(LoadedRuntimeSession(Path(), rt, {}, options), std::runtime_error);
+  EXPECT_TRUE(exited);
+  EXPECT_FALSE(rt.Has("B0"));
+  EXPECT_FALSE(rt.Has("B1"));
+}
+
+TEST_F(RuntimeSessionLoading, InvalidGemmPreparationJoinsWorkerAndCleansSources) {
+  auto model = ReadModel();
+  auto &weight = model.ref_graph().ref_initializer()[0];
+  weight.set_data_type(TensorProto::INT64);
+  weight.clr_dims();
+  weight.add_dims(3);
+  weight.add_dims(1);
+  SaveModel(model);
+  RuntimeContext rt;
+  auto store = std::make_shared<ValueStore>();
+  RuntimeSessionOptions session_options;
+  session_options.value_store = store;
+  std::mutex mutex;
+  std::condition_variable changed;
+  bool second_started = false;
+  bool release = false;
+  bool exited = false;
+  bool preparation_finished = false;
+  RuntimeLoadOptions options;
+  options.external_reader = [&](TensorProto &tensor, const std::string &base) {
+    if (tensor.name() == "B1") {
+      std::unique_lock lock(mutex);
+      second_started = true;
+      changed.notify_all();
+      if (!changed.wait_for(lock, std::chrono::seconds(10), [&] { return release; }))
+        throw std::runtime_error("Gemm preparation did not release the active reader.");
+    }
+    tensor.LoadExternalData(base);
+    if (tensor.name() == "B1") {
+      std::lock_guard lock(mutex);
+      exited = true;
+    }
+  };
+  options.trace = [&](const RuntimeLoadEvent &event) {
+    if (event.phase == RuntimeLoadPhase::kPreparationStarted && event.tensor_name == "B0") {
+      std::unique_lock lock(mutex);
+      if (!changed.wait_for(lock, std::chrono::seconds(10), [&] { return second_started; }))
+        throw std::runtime_error("Second reader was not active during Gemm preparation.");
+      release = true;
+      changed.notify_all();
+    }
+    if (event.phase == RuntimeLoadPhase::kPreparationFinished && event.tensor_name == "B0")
+      preparation_finished = true;
+  };
+  EXPECT_THROW(LoadedRuntimeSession(Path(), rt, session_options, options), std::invalid_argument);
+  EXPECT_TRUE(exited);
+  EXPECT_FALSE(preparation_finished);
+  EXPECT_FALSE(rt.Has("B0"));
+  EXPECT_FALSE(rt.Has("B1"));
+  EXPECT_EQ(store->prepared_bytes(), 0u);
+  EXPECT_EQ(store->slot_count(), 0u);
+}
+
+TEST_F(RuntimeSessionLoading, ConfinesExternalPaths) {
+  auto model = ReadModel();
+  model.ref_graph().ref_initializer()[0].ref_external_data()[0].set_value("../weight0.bin");
+  SaveModel(model);
+  RuntimeContext rt;
+  EXPECT_THROW(LoadedRuntimeSession(Path(), rt), std::exception);
+  EXPECT_FALSE(rt.Has("B0"));
+}
+
+TEST_F(RuntimeSessionLoading, LoadsNestedAndFunctionAttributePayloads) {
+  auto model = ReadModel();
+  const auto bytes = model.graph().initializer(0).SerializeAsString();
+  auto *attribute = model.ref_graph().ref_node()[0].add_attribute();
+  attribute->set_name("unused_graph");
+  attribute->set_type(AttributeProto::GRAPH);
+  auto *nested = attribute->mutable_g()->add_initializer();
+  ASSERT_TRUE(nested->ParseFromString(bytes));
+  nested->set_name("nested");
+  auto *function = model.add_functions();
+  function->set_name("UnusedFunction");
+  function->set_domain("loading.test");
+  function->add_opset_import()->set_version(13);
+  auto *default_attribute = function->add_attribute_proto();
+  default_attribute->set_name("default_tensor");
+  default_attribute->set_type(AttributeProto::TENSOR);
+  ASSERT_TRUE(default_attribute->mutable_t()->ParseFromString(bytes));
+  default_attribute->mutable_t()->set_name("function_tensor");
+  SaveModel(model);
+  RuntimeContext rt;
+  LoadedRuntimeSession loaded(Path(), rt);
+  const auto &graph_tensor = loaded.model().graph().node(0).attribute(0).g().initializer(0);
+  const auto &function_tensor = loaded.model().functions(0).attribute_proto(0).t();
+  EXPECT_EQ(graph_tensor.raw_data().size(), 24u);
+  EXPECT_EQ(function_tensor.raw_data().size(), 24u);
+  EXPECT_EQ(graph_tensor.data_location(), TensorProto::DEFAULT);
+  EXPECT_EQ(function_tensor.data_location(), TensorProto::DEFAULT);
+  EXPECT_EQ(loaded.statistics().external_tensors, 4u);
+  EXPECT_EQ(Run(loaded.session(), rt), (std::vector<float>{22, 28, 22, 28}));
+}
+
+TEST_F(RuntimeSessionLoading, LoadsFunctionConstantPayloadBeforeBindingCopiesIt) {
+  const auto original = ReadModel();
+  ModelProto model;
+  model.set_ir_version(9);
+  model.add_opset_import()->set_version(13);
+  auto *custom_import = model.add_opset_import();
+  custom_import->set_domain("loading.test");
+  custom_import->set_version(1);
+  auto *graph = model.mutable_graph();
+  graph->add_output()->set_name("Y");
+  auto *call = graph->add_node();
+  call->set_domain("loading.test");
+  call->set_op_type("ExternalConstant");
+  call->add_output("Y");
+  auto *function = model.add_functions();
+  function->set_domain("loading.test");
+  function->set_name("ExternalConstant");
+  function->add_output("out");
+  function->add_opset_import()->set_version(13);
+  auto *constant = function->add_node();
+  constant->set_op_type("Constant");
+  constant->add_output("out");
+  auto *attribute = constant->add_attribute();
+  attribute->set_name("value");
+  attribute->set_type(AttributeProto::TENSOR);
+  ASSERT_TRUE(
+      attribute->mutable_t()->ParseFromString(original.graph().initializer(0).SerializeAsString()));
+  SaveModel(model);
+  RuntimeContext rt;
+  bool read_before_declaration = false;
+  bool declared = false;
+  RuntimeLoadOptions options;
+  options.trace = [&](const RuntimeLoadEvent &event) {
+    if (event.phase == RuntimeLoadPhase::kDeclared)
+      declared = true;
+    if (event.phase == RuntimeLoadPhase::kReadFinished) {
+      EXPECT_FALSE(declared);
+      read_before_declaration = true;
+    }
+  };
+  LoadedRuntimeSession loaded(Path(), rt, {}, options);
+  EXPECT_TRUE(read_before_declaration);
+  loaded.session().Run(rt);
+  const auto &output = rt.Get("Y");
+  ASSERT_EQ(output.element_count(), 6);
+  EXPECT_EQ((std::vector<float>(output.AsFloat(), output.AsFloat() + 6)),
+            (std::vector<float>{1, 2, 3, 4, 5, 6}));
+}
+
+} // namespace

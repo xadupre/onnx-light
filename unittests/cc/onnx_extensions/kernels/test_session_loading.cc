@@ -14,15 +14,51 @@
 #include <condition_variable>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <mutex>
 #include <stdexcept>
 #include <thread>
+#include <utility>
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using namespace ONNX_LIGHT_NAMESPACE::core::runtime;
 
 namespace {
+
+class LoadingPreparedIdentity : public KernelBase {
+public:
+  LoadingPreparedIdentity(const NodeProto &node, std::shared_ptr<size_t> executions)
+      : KernelBase(KernelContext{}), executions_(std::move(executions)) {
+    set_node(node);
+  }
+
+  bool HasPreparations(const std::unordered_set<std::string> &) const override { return true; }
+
+  void DeclarePreparations(const std::unordered_set<std::string> &,
+                           std::vector<KernelPreparation> &preparations) override {
+    KernelPreparation preparation;
+    if (node_->input_size() != 0)
+      preparation.source_inputs = {node_->input(0)};
+    preparation.estimate_memory = [](const RuntimeContext &) { return KernelPreparationMemory{}; };
+    preparation.execute = [this](RuntimeContext &) {
+      ++*executions_;
+      ready_ = true;
+    };
+    preparations.push_back(std::move(preparation));
+  }
+
+  void Run(RuntimeContext &rt) override {
+    if (!ready_)
+      throw std::logic_error("Preparation consumer ran before publication.");
+    rt.Set(node_->output(0), node_->input_size() == 0 ? Tensor::FromFloat("Y0", {}, {1})
+                                                      : rt.Get(node_->input(0)).BorrowView());
+  }
+
+private:
+  std::shared_ptr<size_t> executions_;
+  bool ready_ = false;
+};
 
 class RuntimeSessionLoading : public testing::Test {
 protected:
@@ -280,6 +316,72 @@ TEST_F(RuntimeSessionLoading, PreservesCallerInitializerOverrides) {
   EXPECT_TRUE(rt.Has("B0"));
   EXPECT_FALSE(rt.Has("B1"));
   EXPECT_EQ(Run(loaded.session(), rt), (std::vector<float>{12, 12, 22, 28}));
+}
+
+TEST_F(RuntimeSessionLoading, DefaultedGraphInputsRemainMutableAfterLoading) {
+  auto model = ReadModel();
+  model.ref_graph().add_input()->set_name("B0");
+  SaveModel(model);
+  RuntimeContext rt;
+  LoadedRuntimeSession loaded(Path(), rt);
+  EXPECT_EQ(loaded.session().prepared_bytes(), 24u);
+  EXPECT_EQ(Run(loaded.session(), rt), (std::vector<float>{22, 28, 22, 28}));
+  rt.Put("B0", Tensor::FromFloat("B0", {3, 2}, {2, 2, 2, 2, 2, 2}));
+  EXPECT_EQ(Run(loaded.session(), rt), (std::vector<float>{12, 12, 22, 28}));
+  EXPECT_EQ(loaded.session().prepared_bytes(), 24u);
+}
+
+TEST_F(RuntimeSessionLoading, DefersIntermediatePreparationUntilItsConsumer) {
+  auto model = ReadModel();
+  auto &graph = model.ref_graph();
+  graph.ref_node().clear();
+  graph.ref_output().clear();
+  graph.add_output()->set_name("Y0");
+  graph.add_node(MakeNode("Identity", {"B0"}, {"ready_B"}));
+  graph.add_node(MakeNode("LoadingPreparedIdentity", {"ready_B"}, {"Y0"}));
+  SaveModel(model);
+  RuntimeContext rt;
+  const auto executions = std::make_shared<size_t>(0);
+  ASSERT_TRUE(rt.RegisterKernelFn(
+      "ai.onnx", "LoadingPreparedIdentity", core::symbolic::Device::kCPU,
+      [executions](const NodeProto &node, RuntimeContext &, const KernelContext &) {
+        return std::make_unique<LoadingPreparedIdentity>(node, executions);
+      }));
+  LoadedRuntimeSession loaded(Path(), rt);
+  EXPECT_EQ(*executions, 0u);
+  ASSERT_EQ(loaded.session().pending_preparations().size(), 1u);
+  EXPECT_EQ(loaded.session().pending_preparations()[0].source_inputs,
+            (std::vector<std::string>{"ready_B"}));
+  loaded.session().Run(rt);
+  EXPECT_EQ(*executions, 1u);
+  EXPECT_TRUE(loaded.session().pending_preparations().empty());
+  ASSERT_EQ(rt.Get("Y0").element_count(), 6);
+  EXPECT_FLOAT_EQ(rt.Get("Y0").AsFloat()[5], 6);
+  loaded.session().Run(rt);
+  EXPECT_EQ(*executions, 1u);
+}
+
+TEST_F(RuntimeSessionLoading, ExecutesSourceFreePreparationWithoutAnyPayload) {
+  auto model = ReadModel();
+  auto &graph = model.ref_graph();
+  graph.ref_node().clear();
+  graph.ref_initializer().clear();
+  graph.ref_output().clear();
+  graph.add_output()->set_name("Y0");
+  graph.add_node(MakeNode("LoadingPreparedIdentity", {}, {"Y0"}));
+  SaveModel(model);
+  RuntimeContext rt;
+  const auto executions = std::make_shared<size_t>(0);
+  ASSERT_TRUE(rt.RegisterKernelFn(
+      "ai.onnx", "LoadingPreparedIdentity", core::symbolic::Device::kCPU,
+      [executions](const NodeProto &node, RuntimeContext &, const KernelContext &) {
+        return std::make_unique<LoadingPreparedIdentity>(node, executions);
+      }));
+  LoadedRuntimeSession loaded(Path(), rt);
+  EXPECT_EQ(*executions, 1u);
+  EXPECT_TRUE(loaded.session().pending_preparations().empty());
+  loaded.session().Run(rt);
+  EXPECT_FLOAT_EQ(rt.Get("Y0").AsFloat()[0], 1);
 }
 
 TEST_F(RuntimeSessionLoading, RejectsMismatchedExternalLengthBeforeReading) {

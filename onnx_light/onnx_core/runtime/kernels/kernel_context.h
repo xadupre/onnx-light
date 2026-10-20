@@ -72,6 +72,7 @@ struct KernelPreparationInfo {
   std::string representation;
   std::vector<std::string> output_slots;
   std::vector<size_t> dependencies;
+  bool awaits_runtime_tuning = false;
 };
 
 /// Immutable opset imports owned by a model or function session.

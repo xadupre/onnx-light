@@ -6,6 +6,7 @@
 #include "onnx_core/runtime/persistent_value_state.h"
 #include "onnx_core/runtime/quantization.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -356,6 +357,65 @@ RuntimeSession::ResolveNodeKernel(const NodeProto &node, RuntimeContext &rt,
                                           EffectiveModelFunctions());
 }
 
+int32_t
+RuntimeSession::TuningElementType(const NodeProto &node, const KernelBase &kernel,
+                                  const RuntimeContext &rt,
+                                  const std::unordered_set<std::string> *available_outputs) const {
+  const int32_t selected = kernel.TuningInputIndex();
+  for (int input_index = 0; input_index < node.input_size(); ++input_index) {
+    if (selected >= 0 && selected != input_index)
+      continue;
+    const std::string &input = node.input(input_index);
+    if (!input.empty() && rt.Has(input) &&
+        (!node_output_names_.contains(input) ||
+         (available_outputs != nullptr && available_outputs->contains(input))))
+      return rt.Get(input).data_type;
+  }
+  for (int input_index = 0; input_index < node.input_size(); ++input_index) {
+    if (selected >= 0 && selected != input_index)
+      continue;
+    const auto declared = declared_tensor_types_.find(node.input(input_index));
+    if (declared != declared_tensor_types_.end())
+      return declared->second;
+  }
+  return static_cast<int32_t>(DataType::UNDEFINED);
+}
+
+void RuntimeSession::ResolveDeferredTuning(size_t node_index, RuntimeContext &rt,
+                                           const std::unordered_set<std::string> &available_outputs,
+                                           bool at_consumer) {
+  PreparedKernel &prepared = kernels_[node_index];
+  if (!prepared.tuning_deferred)
+    return;
+  const int32_t element_type =
+      TuningElementType(*plan_.nodes()[node_index], *prepared.instance, rt, &available_outputs);
+  if (element_type == static_cast<int32_t>(DataType::UNDEFINED) && !at_consumer)
+    return;
+  const KernelTuningKey key = prepared.instance->TuningKey(element_type);
+  if (key.device != Device::kUndefined) {
+    try {
+      const auto start = std::chrono::steady_clock::now();
+      const CpuExecutionDescriptor execution{platform::GetCpuDescriptor(),
+                                             rt.cpu_executor()->effective_threads()};
+      const auto *parameters = tuning_snapshot_->Resolve(key, execution);
+      tuning_resolution_statistics_.resolution_duration_ns +=
+          static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                    std::chrono::steady_clock::now() - start)
+                                    .count());
+      ++tuning_resolution_statistics_.tunable_kernels;
+      if (parameters != nullptr) {
+        prepared.instance->Configure(*parameters);
+        ++tuning_resolution_statistics_.resolved_profiles;
+      }
+    } catch (...) {
+      preparation_failure_ = std::current_exception();
+      throw;
+    }
+  }
+  prepared.tuning_deferred = false;
+  --pending_tuning_count_;
+}
+
 void RuntimeSession::InitializeKernels(RuntimeContext &rt,
                                        const std::unordered_set<std::string> &preparable_inputs) {
   // Resolve and build the kernel instance for every node the plan will
@@ -365,6 +425,9 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt,
   // a single key alongside the resolved instance so :cpp:func:`Run` never
   // has to redo the dispatch lookup or reconstruct the concrete kernel.
   const std::vector<const NodeProto *> &nodes = plan_.nodes();
+  for (const NodeProto *node : nodes)
+    for (const auto &output : node->output())
+      node_output_names_.insert(output);
   kernels_.clear();
   kernels_.resize(nodes.size());
   for (const ExecuteAction &action : plan_.actions()) {
@@ -424,39 +487,12 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt,
     }
     const size_t index = action.node_index();
     const NodeProto &node = *nodes[index];
-    int32_t element_type = static_cast<int32_t>(DataType::UNDEFINED);
     PreparedKernel &prepared = kernels_[index];
-    const int32_t tuning_input_index = prepared.instance->TuningInputIndex();
-    if (tuning_input_index >= 0) {
-      if (tuning_input_index < node.input_size()) {
-        const std::string &input = node.input(tuning_input_index);
-        if (!input.empty() && rt.Has(input)) {
-          element_type = rt.Get(input).data_type;
-        } else if (!input.empty()) {
-          const auto declared_type = declared_tensor_types_.find(input);
-          if (declared_type != declared_tensor_types_.end()) {
-            element_type = declared_type->second;
-          }
-        }
-      }
-    } else {
-      for (int input_index = 0; input_index < node.input_size(); ++input_index) {
-        const std::string &input = node.input(input_index);
-        if (!input.empty() && rt.Has(input)) {
-          element_type = rt.Get(input).data_type;
-          break;
-        }
-      }
-    }
-
-    if (tuning_input_index < 0 && element_type == static_cast<int32_t>(DataType::UNDEFINED)) {
-      for (const std::string &input : node.input()) {
-        const auto declared_type = declared_tensor_types_.find(input);
-        if (declared_type != declared_tensor_types_.end()) {
-          element_type = declared_type->second;
-          break;
-        }
-      }
+    const int32_t element_type = TuningElementType(node, *prepared.instance, rt);
+    if (element_type == static_cast<int32_t>(DataType::UNDEFINED) && node.input_size() != 0) {
+      prepared.tuning_deferred = true;
+      ++pending_tuning_count_;
+      continue;
     }
     const KernelTuningKey tuning_key = prepared.instance->TuningKey(element_type);
     if (tuning_key.device == Device::kUndefined) {
@@ -486,10 +522,14 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt,
   }
   for (const ExecuteAction &action : plan_.actions()) {
     if (action.kind() == ExecuteActionKind::kExecuteNode) {
-      KernelBase &kernel = *kernels_[action.node_index()].instance;
+      PreparedKernel &prepared = kernels_[action.node_index()];
+      KernelBase &kernel = *prepared.instance;
+      prepared.preparation_begin = preparations_.size();
       if (kernel.HasPreparations(preparable_inputs)) {
         kernel.DeclarePreparations(preparable_inputs, preparations_);
       }
+      prepared.preparation_end = preparations_.size();
+      preparation_node_indices_.resize(preparations_.size(), action.node_index());
     }
   }
   preparation_complete_.assign(preparations_.size(), false);
@@ -537,13 +577,13 @@ size_t RuntimeSession::prepared_bytes() const noexcept { return value_store_->pr
 void RuntimeSession::DeclarePreparations(RuntimeContext &rt) {
   if (preparation_failure_)
     std::rethrow_exception(preparation_failure_);
+  if (rt.value_store_owner() != value_store_)
+    rt.SetValueStore(value_store_);
   if (kernels_initialized_)
     return;
   const bool inherits_executor = !cpu_execution_explicit_ && rt.cpu_executor() != nullptr;
   const SessionExecutorScope executor_scope(rt, inherits_executor ? rt.cpu_executor()
                                                                   : cpu_executor().get());
-  if (rt.value_store_owner() != value_store_)
-    rt.SetValueStore(value_store_);
   std::unordered_set<std::string> immutable = inherited_immutable_inputs_;
   for (const std::string &name : immutable_initializer_names_) {
     if (!rt.HasValue(name) || seeded_initializer_names_.contains(name))
@@ -567,6 +607,12 @@ void RuntimeSession::Prepare(RuntimeContext &rt) {
 }
 
 void RuntimeSession::ExecutePreparations(RuntimeContext &rt, size_t memory_limit) {
+  ExecutePreparationsImpl(rt, memory_limit, {});
+}
+
+void RuntimeSession::ExecutePreparationsImpl(
+    RuntimeContext &rt, size_t memory_limit,
+    const std::unordered_set<std::string> &available_outputs) {
   DeclarePreparations(rt);
   if (pending_preparation_count_ == 0)
     return;
@@ -579,10 +625,15 @@ void RuntimeSession::ExecutePreparations(RuntimeContext &rt, size_t memory_limit
     for (size_t index = 0; index < preparations_.size(); ++index) {
       if (preparation_complete_[index])
         continue;
+      const size_t node_index = preparation_node_indices_[index];
+      ResolveDeferredTuning(node_index, rt, available_outputs);
+      if (kernels_[node_index].tuning_deferred)
+        continue;
       const KernelPreparation &preparation = preparations_[index];
       bool ready = true;
       for (const std::string &name : preparation.source_inputs)
-        ready = ready && rt.HasValue(name);
+        ready = ready && rt.HasValue(name) &&
+                (!node_output_names_.contains(name) || available_outputs.contains(name));
       for (size_t dependency : preparation.dependencies)
         ready = ready && preparation_complete_[dependency];
       if (!ready)
@@ -599,6 +650,7 @@ void RuntimeSession::ExecutePreparations(RuntimeContext &rt, size_t memory_limit
       }
       if (!ready)
         continue;
+      preparation_peak_bytes_ = std::max(preparation_peak_bytes_, memory_limit - remaining);
       preparation.execute(rt);
       preparation_complete_[index] = true;
       --pending_preparation_count_;
@@ -609,8 +661,8 @@ void RuntimeSession::ExecutePreparations(RuntimeContext &rt, size_t memory_limit
   }
 }
 
-KernelPreparationMemory
-RuntimeSession::EstimatePreparationMemory(const RuntimeContext &rt, size_t preparation_index) const {
+KernelPreparationMemory RuntimeSession::EstimatePreparationMemory(const RuntimeContext &rt,
+                                                                  size_t preparation_index) const {
   if (preparation_failure_)
     std::rethrow_exception(preparation_failure_);
   EXT_ENFORCE_INVALID(preparation_index < preparations_.size(),
@@ -630,7 +682,8 @@ std::vector<KernelPreparationInfo> RuntimeSession::pending_preparations() const 
       continue;
     const KernelPreparation &preparation = preparations_[index];
     pending.push_back({index, preparation.source_inputs, preparation.representation,
-                       preparation.output_slots, preparation.dependencies});
+                       preparation.output_slots, preparation.dependencies,
+                       kernels_[preparation_node_indices_[index]].tuning_deferred});
   }
   return pending;
 }
@@ -826,8 +879,6 @@ void RuntimeSession::Run(RuntimeContext &rt) {
     std::rethrow_exception(preparation_failure_);
   if (pending_preparation_count_ != 0)
     ExecutePreparations(rt);
-  EXT_ENFORCE_INVALID(pending_preparation_count_ == 0,
-                      "RuntimeSession: preparation sources are unavailable before Run().");
   if (resolve_value_slots) {
     ResolveKernelValueSlots(rt);
     value_directory_identity_ = rt.value_directory_identity();
@@ -852,6 +903,7 @@ void RuntimeSession::Run(RuntimeContext &rt) {
                         "' is not defined in the RuntimeContext before Run().");
   }
   const std::vector<const NodeProto *> &nodes = plan_.nodes();
+  std::unordered_set<std::string> available_preparation_outputs;
   // When shape validation is enabled, resolve the declared (possibly symbolic)
   // shapes against the concrete tensors. ``shape_bindings`` binds each symbolic
   // ``dim_param`` to the first concrete value it resolves to during this run so
@@ -878,6 +930,19 @@ void RuntimeSession::Run(RuntimeContext &rt) {
     case ExecuteActionKind::kExecuteNode: {
       const size_t index = action.node_index();
       const PreparedKernel &prepared = kernels_[index];
+      if (prepared.tuning_deferred)
+        ResolveDeferredTuning(index, rt, available_preparation_outputs, true);
+      if (pending_preparation_count_ != 0 &&
+          prepared.preparation_begin != prepared.preparation_end) {
+        ExecutePreparationsImpl(rt, std::numeric_limits<size_t>::max(),
+                                available_preparation_outputs);
+        for (size_t preparation = prepared.preparation_begin;
+             preparation < prepared.preparation_end; ++preparation)
+          EXT_ENFORCE_INVALID(preparation_complete_[preparation],
+                              "RuntimeSession: preparation sources or dependencies are "
+                              "unavailable before consumer node ",
+                              index, ".");
+      }
       NodeDispatchScope dispatch_scope(rt);
       // Every kExecuteNode index is resolved by InitializeKernels (which
       // walks the same plan), so a missing kernel instance here means the
@@ -932,6 +997,9 @@ void RuntimeSession::Run(RuntimeContext &rt) {
       }
 
       prepared.instance->Run(rt);
+      if (pending_preparation_count_ != 0 || pending_tuning_count_ != 0)
+        for (const auto &output : node.output())
+          available_preparation_outputs.insert(output);
 
       if (logging) {
         const int64_t duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(

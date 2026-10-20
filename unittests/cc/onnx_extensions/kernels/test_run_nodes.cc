@@ -5668,6 +5668,54 @@ TEST(RuntimeSession, ConstructsExactlyOneKernelPerNodeAcrossMultipleRuns) {
   EXPECT_EQ(invoke_count, 3);
 }
 
+TEST(RuntimeSession, ExplicitPreparationDefersUnknownTuningAndKeepsItsSnapshot) {
+  onnx_kernels::RegisterKernelFunctions();
+  using core::runtime::KernelTuningKey;
+  using core::runtime::KernelTuningParameters;
+  const std::string domain = "test.onnxlight.deferred_tuning";
+  const KernelTuningKey key{"runtime_session_test",
+                            "DeferredTunableOp",
+                            "test",
+                            static_cast<int32_t>(DataType::FLOAT),
+                            core::symbolic::Device::kCPU,
+                            1};
+  KernelTuningParameters profile{key, {{"algorithm.threshold", int64_t{20}}}};
+  core::runtime::RegisterKernelTuningSchema(core::runtime::KernelTuningSchema(profile));
+  auto &registry = core::runtime::GetKernelTuningRegistry();
+  registry.PublishProfiles(std::span<const KernelTuningParameters>(&profile, 1));
+  GraphProto graph;
+  graph.add_input()->set_name("source");
+  graph.add_output()->set_name("y");
+  graph.add_node(MakeNode("Identity", {"source"}, {"x"}));
+  graph.add_node(MakeNode("TunableOp", {"x"}, {"y"}, domain));
+  RuntimeContext rt(KernelContext(DefaultOpset(18)));
+  ASSERT_TRUE(
+      rt.RegisterKernelFn(domain, "TunableOp", core::symbolic::Device::kCPU,
+                          [key](const NodeProto &node, RuntimeContext &, const KernelContext &) {
+                            return std::make_unique<TestTunableKernel>(node, key);
+                          }));
+  rt.Set("x", Tensor::FromInt32("x", {1}, {99}));
+  RuntimeSession session(rt.GetExecutionPlan(graph));
+  session.Prepare(rt);
+  const auto prepared_generation = session.tuning_generation();
+  const auto before_run = registry.AccessCounts();
+  EXPECT_EQ(session.tuning_resolution_statistics().resolved_profiles, 0u);
+  profile.values["algorithm.threshold"] = int64_t{30};
+  registry.PublishProfiles(std::span<const KernelTuningParameters>(&profile, 1));
+  rt.Set("source", Tensor::FromFloat("source", {1}, {1}));
+  session.Run(rt);
+  EXPECT_EQ(rt.Get("y").AsInt64()[0], 20);
+  EXPECT_EQ(session.tuning_generation(), prepared_generation);
+  EXPECT_EQ(session.tuning_resolution_statistics().resolved_profiles, 1u);
+  const auto after_run = registry.AccessCounts();
+  EXPECT_EQ(after_run.snapshots, before_run.snapshots);
+  EXPECT_EQ(after_run.resolutions - before_run.resolutions, 1u);
+  session.Run(rt);
+  EXPECT_EQ(registry.AccessCounts(), after_run);
+  EXPECT_EQ(rt.Get("y").AsInt64()[0], 20);
+  registry.PublishProfiles({}, std::span<const KernelTuningKey>(&key, 1));
+}
+
 TEST(RuntimeSession, KeepsResolvedKernelTuningImmutable) {
   using core::runtime::KernelTuningKey;
   using core::runtime::KernelTuningParameters;

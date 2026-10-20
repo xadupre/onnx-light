@@ -36,10 +36,18 @@ Preparation separates declaration from execution:
 * ``pending_preparations()`` exposes metadata-only diagnostics for deferred
   work, including unavailable sources and budget-limited work. Diagnostics
   contain no execution callables and do not force deferred branches to run.
+  ``EstimatePreparationMemory(context, index)`` estimates a declaration by its
+  diagnostic index without exporting its session-borrowing callbacks.
+  ``awaits_runtime_tuning`` distinguishes work whose input type is not yet
+  known well enough to resolve its tuning profile.
 
 Kernel declaration callables borrow their kernel/model state and remain
 session-owned. Session entry points enforce dependency, readiness, and
 admission checks before execution.
+Unknown input types defer tuning rather than selecting an undefined-type
+profile. Resolution uses the declaration-time registry snapshot once the
+actual input becomes available, before packing or the affected inference
+consumer executes. A later registry update does not change that snapshot.
 
 An explicit preparation entry point permits loading and packing before the
 first real input arrives:
@@ -69,6 +77,9 @@ early payload access. ``Gemm`` declares packing for a constant ``B`` initializer
 An initializer that is also a graph input, or a value supplied by the caller
 before initialization, remains overridable and is not statically prepared.
 Missing dynamic inputs are checked by inference, not invented by preparation.
+Initializer overrides must be supplied before kernel initialization, whether
+initialization starts through declaration, explicit preparation, or the first
+inference. Initializers exposed as graph inputs remain mutable throughout.
 
 Each entry point installs the session's store into the ``RuntimeContext``; it
 never adopts a context's previous store. ``If``, ``Loop``, ``Scan``,
@@ -83,6 +94,14 @@ Ready publication occurs only after a preparation succeeds. A preparation
 failure is sticky: subsequent preparation or execution rethrows it rather than
 retrying partially completed work. Calls on one session/context, and calls on
 sessions sharing a store, must be serialized.
+
+Declarations that depend on a node-produced value remain deferred during
+explicit preparation. Inference executes their producers first, then drains
+ready work and enforces readiness immediately before each affected consumer.
+A same-named intermediate already present in the context is not evidence that
+its producer has executed. Missing sources or incomplete dependencies prevent
+the consumer from running. Once all declarations are complete, warm replay
+does not redispatch preparation work.
 
 A kernel binds a store-specific ``ValueStore::Slot`` with a stable integer
 index during initialization. After publication, ``BindForRead`` validates it
@@ -139,10 +158,12 @@ caller, with no I/O worker.
 Only the caller mutates ``RuntimeContext`` and ``ValueStore``. Nested
 external payloads are loaded, but this does not eagerly execute or prepare
 their deferred branch/function sessions.
-Successful construction completes all declared root preparations; an
+Successful construction completes all ready root preparations; an
 insufficient admission budget raises an exception instead of silently
 postponing that work until inference. This root readiness guarantee does not
-claim that deferred child sessions have already been initialized.
+claim that deferred child sessions have already been initialized. Root
+declarations requiring runtime feeds or node-produced values remain visible
+through ``pending_preparations()`` and complete before their inference consumers.
 
 ``RuntimeLoadStatistics`` reports source bytes, a conservative conversion
 reserve, logical peak admitted bytes, external tensor count, and bounded queue
@@ -153,6 +174,11 @@ inference allocations are outside this budget. The loader requires explicit
 external tensor lengths and validates them against fixed-width types and
 dimensions before admitting reads; it does not accept unbounded file-remainder
 reads.
+Peak admission includes the source and temporary work of each executed
+declaration, including dependent preparations executed in the same drain.
+``RuntimeSession::preparation_peak_bytes()`` exposes the executor's peak
+preparation reservation, excluding the loader's separate source/conversion
+reservation.
 
 The optional ``trace`` callback receives ``RuntimeLoadEvent`` phase,
 tensor name, and ``steady_clock`` nanosecond timestamp. Events distinguish

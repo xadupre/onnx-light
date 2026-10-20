@@ -25,6 +25,8 @@ including on failure; pre-existing context values are preserved. Subsequent
 including exported initializer-backed outputs, must not outlive the wrapper.
 Serialize access to the session/context and any explicitly shared preparation
 store as for ordinary sessions.
+Caller overrides must be installed before construction; initializer names
+also declared as graph inputs remain overridable after loading.
 
 Admission and failures
 ----------------------
@@ -34,6 +36,11 @@ tensor payloads, an equal conversion reserve, and declared preparation output an
 temporary work. It excludes proto metadata/parser allocations, CPU pools, allocator
 free capacity and inference allocations; it is not a process-RSS limit.
 Models that cannot be admitted fail rather than falling back to unbounded loading.
+Ready declarations, including source-free work in a model with no tensors,
+finish before construction returns. Declarations requiring a runtime feed or
+an intermediate produced by inference remain explicitly pending. The session
+waits until those producers have executed and establishes readiness before
+each affected consumer; stale context intermediates do not satisfy that barrier.
 External tensors must declare an explicit non-negative ``length`` (or ``size``)
 matching their fixed-width shape. Unknown/string external payload types and
 missing lengths are rejected. ``statistics()`` reports source bytes, conversion

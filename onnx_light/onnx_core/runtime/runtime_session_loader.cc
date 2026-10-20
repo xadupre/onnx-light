@@ -303,34 +303,20 @@ LoadedRuntimeSession::LoadedRuntimeSession(const std::string &path, RuntimeConte
 
   SeedCleanup cleanup{rt, {}};
   const auto prepare = [&](TensorProto *tensor) {
-    if (initializers.count(tensor) && !rt.HasValue(tensor->name())) {
+    if (tensor != nullptr && initializers.count(tensor) && !rt.HasValue(tensor->name())) {
       cleanup.names.push_back(tensor->name());
       rt.Set(tensor->name(), Tensor::BorrowInitializer(*tensor), RuntimeEventKind::kInitializer);
     }
     const size_t prepared_before = session_->prepared_bytes();
-    Trace(load_options, RuntimeLoadPhase::kPreparationStarted, tensor->name());
-    size_t prepared_reservation = session_->prepared_bytes();
-    size_t work_reservation = 0;
-    for (const auto &preparation : session_->pending_preparations()) {
-      const bool ready =
-          std::all_of(preparation.source_inputs.begin(), preparation.source_inputs.end(),
-                      [&](const std::string &name) { return rt.HasValue(name); });
-      if (ready) {
-        const auto memory = preparation.estimate_memory(rt);
-        prepared_reservation = Add(prepared_reservation, memory.prepared_bytes);
-        work_reservation =
-            std::max(work_reservation, Add(memory.source_bytes, memory.temporary_bytes));
-      }
-    }
-    const size_t admitted = Add(source_reservation, Add(prepared_reservation, work_reservation));
-    if (admitted > load_options.memory_limit)
-      throw std::length_error("Runtime loader preparation exceeds memory admission limit.");
-    statistics_.peak_admitted_bytes = std::max(statistics_.peak_admitted_bytes, admitted);
+    const std::string name = tensor == nullptr ? std::string{} : tensor->name().value();
+    Trace(load_options, RuntimeLoadPhase::kPreparationStarted, name);
     session_->ExecutePreparations(rt, preparation_limit);
-    statistics_.peak_admitted_bytes = std::max(statistics_.peak_admitted_bytes,
-                                               Add(source_reservation, session_->prepared_bytes()));
+    statistics_.peak_admitted_bytes =
+        std::max(statistics_.peak_admitted_bytes,
+                 Add(source_reservation,
+                     std::max(session_->preparation_peak_bytes(), session_->prepared_bytes())));
     const size_t prepared_after = session_->prepared_bytes();
-    Trace(load_options, RuntimeLoadPhase::kPreparationFinished, tensor->name(),
+    Trace(load_options, RuntimeLoadPhase::kPreparationFinished, name,
           prepared_after > prepared_before ? prepared_after - prepared_before : 0);
   };
   const auto prepare_inline = [&] {
@@ -358,8 +344,34 @@ LoadedRuntimeSession::LoadedRuntimeSession(const std::string &path, RuntimeConte
     tensor->set_data_location(TensorProto::DEFAULT);
     tensor->clr_external_data();
   }
-  if (!session_->pending_preparations().empty())
-    throw std::length_error("Runtime loader cannot admit all declared preparations.");
+  prepare(nullptr);
+  std::unordered_set<std::string> runtime_sources;
+  std::unordered_set<std::string> produced_sources;
+  for (const auto &input : model_.graph().input())
+    runtime_sources.insert(input.name());
+  for (const auto &node : model_.graph().node())
+    for (const auto &output : node.output())
+      produced_sources.insert(output);
+  std::unordered_set<size_t> deferred;
+  for (const auto &preparation : session_->pending_preparations()) {
+    bool waits_for_runtime = preparation.awaits_runtime_tuning;
+    for (const auto &name : preparation.source_inputs) {
+      if (produced_sources.contains(name)) {
+        waits_for_runtime = true;
+        continue;
+      }
+      if (rt.HasValue(name))
+        continue;
+      if (!runtime_sources.contains(name))
+        throw std::invalid_argument("Runtime loader unknown preparation source: " + name);
+      waits_for_runtime = true;
+    }
+    for (size_t dependency : preparation.dependencies)
+      waits_for_runtime = waits_for_runtime || deferred.contains(dependency);
+    if (!waits_for_runtime)
+      throw std::length_error("Runtime loader cannot admit all ready declared preparations.");
+    deferred.insert(preparation.index);
+  }
   Trace(load_options, RuntimeLoadPhase::kComplete);
 }
 

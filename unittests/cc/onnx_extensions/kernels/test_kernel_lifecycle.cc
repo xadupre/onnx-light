@@ -49,6 +49,9 @@ struct LifecycleState {
 
 struct PreparationRecord {
   std::vector<int> executed;
+  std::string source = "B";
+  bool tune = false;
+  int64_t configured = -1;
   bool fail = false;
   int runs = 0;
 };
@@ -60,12 +63,25 @@ public:
 
   bool HasPreparations(const std::unordered_set<std::string> &) const override { return true; }
 
+  int32_t TuningInputIndex() const noexcept override { return record_->tune ? 0 : -1; }
+
+  core::runtime::KernelTuningKey TuningKey(int32_t element_type) const override {
+    if (!record_->tune || element_type == static_cast<int32_t>(DataType::UNDEFINED))
+      return {};
+    return {
+        "preparation_test", "Declarative", "test", element_type, core::symbolic::Device::kCPU, 1};
+  }
+
+  void Configure(const core::runtime::KernelTuningParameters &parameters) override {
+    record_->configured = parameters.Get<int64_t>("algorithm.threshold");
+  }
+
   void DeclarePreparations(const std::unordered_set<std::string> &,
                            std::vector<core::runtime::KernelPreparation> &preparations) override {
     const size_t first = preparations.size();
     for (int stage : {1, 2}) {
       core::runtime::KernelPreparation preparation;
-      preparation.source_inputs = {"B"};
+      preparation.source_inputs = {record_->source};
       preparation.representation = "test";
       if (stage == 2)
         preparation.dependencies = {first};
@@ -74,6 +90,10 @@ public:
       };
       preparation.execute = [record = record_, stage](RuntimeContext &rt) {
         EXPECT_NE(rt.cpu_executor(), nullptr);
+        EXPECT_FLOAT_EQ(rt.Get(record->source).AsFloat()[0], 1);
+        if (record->tune) {
+          EXPECT_EQ(record->configured, 10);
+        }
         record->executed.push_back(stage);
         if (record->fail)
           throw std::invalid_argument("preparation failed");
@@ -82,7 +102,10 @@ public:
     }
   }
 
-  void Run(RuntimeContext &) override { ++record_->runs; }
+  void Run(RuntimeContext &) override {
+    EXPECT_EQ(record_->executed, (std::vector<int>{1, 2}));
+    ++record_->runs;
+  }
 
 private:
   std::shared_ptr<PreparationRecord> record_;
@@ -528,6 +551,112 @@ TEST(KernelLifecycle, PreexistingGemmWeightIsNotImplicitlyImmutable) {
   EXPECT_EQ(rt.Get("Y").AsFloat()[1], 0);
 }
 
+TEST(KernelLifecycle, PreparationWaitsForRuntimeTuningBeforeExecuting) {
+  const ModelProto model = MakeGemmModel(false);
+  RuntimeContext rt;
+  const auto record = std::make_shared<PreparationRecord>();
+  record->tune = true;
+  DeclarativeKernel prototype(record);
+  const auto key = prototype.TuningKey(static_cast<int32_t>(DataType::FLOAT));
+  core::runtime::RegisterKernelTuningSchema(core::runtime::KernelTuningSchema(
+      core::runtime::KernelTuningParameters{key, {{"algorithm.threshold", int64_t{10}}}}));
+  ASSERT_TRUE(
+      rt.RegisterKernelFn("ai.onnx", "Gemm", core::symbolic::Device::kCPU,
+                          [record](const NodeProto &, RuntimeContext &, const KernelContext &) {
+                            return std::make_unique<DeclarativeKernel>(record);
+                          }));
+  RuntimeSession session(model);
+  session.Prepare(rt);
+  EXPECT_TRUE(record->executed.empty());
+  EXPECT_EQ(record->configured, -1);
+  ASSERT_EQ(session.pending_preparations().size(), 2u);
+  EXPECT_TRUE(session.pending_preparations()[0].awaits_runtime_tuning);
+  rt.Put("A", Tensor::FromFloat("A", {1, 3}, {1, 2, 3}));
+  session.Run(rt);
+  EXPECT_EQ(record->configured, 10);
+  EXPECT_EQ(record->executed, (std::vector<int>{1, 2}));
+  EXPECT_EQ(record->runs, 1);
+  EXPECT_TRUE(session.pending_preparations().empty());
+}
+
+TEST(KernelLifecycle, PreparationWaitsForIntermediateBeforeItsConsumerOnly) {
+  ModelProto model = MakeGemmModel(false);
+  NodeProto producer;
+  producer.set_op_type("Identity");
+  producer.add_input("B");
+  producer.add_output("ready_B");
+  model.ref_graph().ref_node().push_back(producer);
+  std::swap(model.ref_graph().ref_node()[0], model.ref_graph().ref_node()[1]);
+  model.ref_graph().ref_node()[1].ref_input()[1] = "ready_B";
+  RuntimeContext rt;
+  const auto record = std::make_shared<PreparationRecord>();
+  record->source = "ready_B";
+  ASSERT_TRUE(
+      rt.RegisterKernelFn("ai.onnx", "Gemm", core::symbolic::Device::kCPU,
+                          [record](const NodeProto &, RuntimeContext &, const KernelContext &) {
+                            return std::make_unique<DeclarativeKernel>(record);
+                          }));
+  RuntimeSession session(model);
+  rt.Put("ready_B", Tensor::FromFloat("ready_B", {3, 2}, {99, 99, 99, 99, 99, 99}));
+  session.Prepare(rt);
+  EXPECT_TRUE(record->executed.empty());
+  EXPECT_EQ(session.pending_preparations().size(), 2u);
+  rt.Put("A", Tensor::FromFloat("A", {1, 3}, {1, 2, 3}));
+  session.Run(rt);
+  EXPECT_EQ(record->executed, (std::vector<int>{1, 2}));
+  EXPECT_EQ(record->runs, 1);
+  EXPECT_TRUE(session.pending_preparations().empty());
+  rt.Remove("ready_B");
+  session.Run(rt);
+  EXPECT_EQ(record->executed, (std::vector<int>{1, 2}));
+  EXPECT_EQ(record->runs, 2);
+}
+
+TEST(KernelLifecycle, MissingPreparationSourceRejectsBeforeConsumerRuns) {
+  const ModelProto model = MakeGemmModel(false);
+  RuntimeContext rt;
+  const auto record = std::make_shared<PreparationRecord>();
+  record->source = "unavailable";
+  ASSERT_TRUE(
+      rt.RegisterKernelFn("ai.onnx", "Gemm", core::symbolic::Device::kCPU,
+                          [record](const NodeProto &, RuntimeContext &, const KernelContext &) {
+                            return std::make_unique<DeclarativeKernel>(record);
+                          }));
+  RuntimeSession session(model);
+  session.Prepare(rt);
+  rt.Put("A", Tensor::FromFloat("A", {1, 3}, {1, 2, 3}));
+  EXPECT_THROW(session.Run(rt), std::invalid_argument);
+  EXPECT_EQ(record->runs, 0);
+  EXPECT_TRUE(record->executed.empty());
+}
+
+TEST(KernelLifecycle, RepeatedPreparationInstallsSessionStoreOnNewContext) {
+  const ModelProto model = MakeGemmModel(false);
+  RuntimeSession session(model);
+  RuntimeContext first;
+  session.Prepare(first);
+  RuntimeContext second;
+  session.Prepare(second);
+  EXPECT_EQ(second.value_store_owner(), session.value_store_owner());
+  EXPECT_EQ(session.prepared_bytes(), 6 * sizeof(float));
+}
+
+TEST(KernelLifecycle, ExplicitPreparationDoesNotFreezeDefaultedGraphInput) {
+  const ModelProto model = MakeGemmModel(true);
+  RuntimeSession session(model);
+  RuntimeContext rt;
+  session.Prepare(rt);
+  EXPECT_EQ(session.prepared_bytes(), 0u);
+  rt.Put("A", Tensor::FromFloat("A", {1, 3}, {1, 2, 3}));
+  session.Run(rt);
+  EXPECT_FLOAT_EQ(rt.Get("Y").AsFloat()[0], 22);
+  rt.Put("B", Tensor::FromFloat("B", {3, 2}, {2, 2, 2, 2, 2, 2}));
+  session.Run(rt);
+  EXPECT_FLOAT_EQ(rt.Get("Y").AsFloat()[0], 12);
+  EXPECT_FLOAT_EQ(rt.Get("Y").AsFloat()[1], 12);
+  EXPECT_EQ(session.prepared_bytes(), 0u);
+}
+
 TEST(KernelLifecycle, ExplicitGemmPreparationsReuseSharedValueStore) {
   const ModelProto model = MakeGemmModel(false);
   core::runtime::RuntimeSessionOptions options;
@@ -620,6 +749,8 @@ TEST(KernelLifecycle, NestedFunctionPreparesBoundImmutableGemmWeight) {
     RuntimeSession session(model);
     RuntimeContext rt(core::runtime::KernelContext(core::backend_test::DefaultOpset(13)));
     core::runtime::RegisterModelFunctions(model, rt);
+    session.Prepare(rt);
+    EXPECT_EQ(session.prepared_bytes(), 0u);
     rt.Put("A", Tensor::FromFloat("A", {1, 3}, {1, 2, 3}));
     if (overridable)
       rt.Put("B", Tensor::FromFloat("B", {3, 2}, {1, 2, 3, 4, 5, 6}));
@@ -663,6 +794,8 @@ TEST(KernelLifecycle, NestedGraphPreparesCapturedImmutableGemmWeight) {
 
     RuntimeSession session(model);
     RuntimeContext rt(core::runtime::KernelContext(core::backend_test::DefaultOpset(13)));
+    session.Prepare(rt);
+    EXPECT_EQ(session.prepared_bytes(), 0u);
     rt.Put("A", Tensor::FromFloat("A", {1, 3}, {1, 2, 3}));
     rt.Put("cond", Tensor::FromBool("cond", {}, {true}));
     if (overridable)

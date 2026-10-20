@@ -77,7 +77,8 @@ The plan builder inserts allocation/publication/release calls around it.
 Capture itself performs no numerical execution or physical buffer allocation.
 
 ``Run`` and checked standalone ``operator()`` APIs remain available.
-``KernelBase::Prepare`` keeps its existing immutable-input preparation role.
+``KernelBase::DeclarePreparations`` keeps its immutable-input declaration role;
+the runtime executor performs the declared work separately from capture.
 Discover the optional capture function through a versioned descriptor associated
 with the exact resolved factory, without changing ``KernelBase``'s vtable.
 Negotiate version, size, ABI and ownership with external libraries.

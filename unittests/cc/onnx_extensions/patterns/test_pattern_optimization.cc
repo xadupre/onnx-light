@@ -8,6 +8,7 @@
 #include "onnx_core/runtime/kernels/run_nodes.h"
 #include "onnx_core/runtime/memory/simple_tensor.h"
 #include "onnx_core/runtime/runtime_context.h"
+#include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_extensions/patterns/canonicalization/cast_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/clip_pattern.h"
 #include "onnx_extensions/patterns/canonicalization/constant_pattern.h"
@@ -230,6 +231,25 @@ private:
   core::runtime::NodeKernelFn previous_;
 };
 
+class ScopedAbsShapeCounter {
+public:
+  ScopedAbsShapeCounter() : previous_(core::shapes::DispatchTable().at("ai.onnx:Abs")) {
+    core::shapes::RegisterComputeShapeFn("", "Abs", [this](auto &ctx, const auto &node) {
+      ++calls;
+      previous_(ctx, node);
+    });
+  }
+
+  ~ScopedAbsShapeCounter() {
+    core::shapes::RegisterComputeShapeFn("", "Abs", std::move(previous_));
+  }
+
+  std::size_t calls = 0;
+
+private:
+  core::shapes::ComputeShapeFn previous_;
+};
+
 } // namespace
 
 TEST(PatternOptimization, ScopedCustomKernelRestoresFactory) {
@@ -328,6 +348,60 @@ TEST(PatternOptimization, SequentialRebasingPreservesLargeMixedBatch) {
   }
   EXPECT_EQ(core::builder::Replay(original, plan, SchemaLookup()).SerializeAsString(),
             builder.BuildGraph().SerializeAsString());
+}
+
+TEST(PatternOptimization, ReplayBatchesIndependentEditsWithoutRepeatedGraphInference) {
+  core::builder::GraphBuilder builder("independent_replay", SchemaLookup());
+  builder.SetOpsetVersion("", 18);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
+  RewritingProto plan;
+  constexpr std::size_t count = 64;
+  for (std::size_t i = 0; i < count; ++i) {
+    const std::string output = "y" + std::to_string(i);
+    builder.MakeNode("Abs", {"x"}, {output});
+    builder.MakeOutput(output);
+    auto *edit = plan.add_rewrites();
+    edit->add_matched_nodes(i);
+    edit->add_added_nodes(MakeNode("Neg", {"x"}, {output}));
+    edit->add_added_nodes_positions(i);
+  }
+  ModelProto original;
+  *original.mutable_graph() = builder.BuildGraph();
+  AddOpsetImports(original, builder);
+  ScopedAbsShapeCounter counter;
+  const auto replayed = core::builder::Replay(original, plan, SchemaLookup());
+  ASSERT_EQ(replayed.node().size(), count);
+  for (std::size_t i = 0; i < count; ++i)
+    EXPECT_TRUE(replayed.node(i).Equals(plan.rewrites(i).added_nodes(0)));
+  EXPECT_LE(counter.calls, 4 * count);
+}
+
+TEST(PatternOptimization, ReplayBatchStillValidatesLaterSequentialEdits) {
+  core::builder::GraphBuilder builder("invalid_batch_replay", SchemaLookup());
+  builder.SetOpsetVersion("", 18);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
+  for (const char *name : {"first", "second"}) {
+    builder.MakeNode("Abs", {"x"}, {name});
+    builder.MakeOutput(name);
+  }
+  ModelProto original;
+  *original.mutable_graph() = builder.BuildGraph();
+  AddOpsetImports(original, builder);
+  for (bool duplicate : {false, true}) {
+    RewritingProto plan;
+    auto *first = plan.add_rewrites();
+    first->add_matched_nodes(0);
+    first->add_added_nodes(MakeNode("Neg", {"x"}, {"first"}));
+    first->add_added_nodes_positions(0);
+    auto *invalid = plan.add_rewrites();
+    invalid->add_matched_nodes(duplicate ? 1 : 2);
+    if (duplicate)
+      invalid->add_matched_nodes(1);
+    invalid->add_added_nodes(MakeNode("Neg", {"x"}, {"second"}));
+    invalid->add_added_nodes_positions(1);
+    EXPECT_THROW(core::builder::Replay(original, plan, SchemaLookup()),
+                 core::builder::BuilderError);
+  }
 }
 
 TEST(PatternOptimization, ReplayRejectsMalformedPositionsAndFutureExecution) {

@@ -5,6 +5,7 @@
 #include "onnx_core/builder/graph_graph.h"
 
 #include <algorithm>
+#include <bit>
 #include <chrono>
 #include <limits>
 #include <set>
@@ -14,6 +15,8 @@
 #include <utility>
 
 #include "onnx_core/builder/pattern_registry.h"
+#include "onnx_core/shapes/dispatch_table.h"
+#include "onnx_lib/common/scoped_resource.h"
 #include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE::core::builder {
@@ -97,6 +100,18 @@ public:
     for (std::size_t i = rank; i != 0; i -= i & (~i + 1))
       count += counts_[i];
     return count;
+  }
+
+  std::size_t Find(std::size_t position) const {
+    std::size_t rank = 0;
+    for (std::size_t step = std::bit_floor(counts_.size() - 1); step != 0; step >>= 1) {
+      const std::size_t next = rank + step;
+      if (next < counts_.size() && counts_[next] <= position) {
+        rank = next;
+        position -= counts_[next];
+      }
+    }
+    return rank;
   }
 
 private:
@@ -188,6 +203,192 @@ void NormalizeBatch(std::vector<PendingReplacement> &replacements, std::size_t n
     }
   }
 }
+
+bool IsNodeOnlyRewrite(const LocalRewritingProto &rewrite) {
+  return !rewrite.matched_nodes().empty() && rewrite.removed_initializers().empty() &&
+         rewrite.added_initializers().empty() && rewrite.added_initializer_positions().empty() &&
+         rewrite.value_renames().empty() && rewrite.initializer_calls().empty() &&
+         rewrite.computed_initializer_positions().empty();
+}
+
+bool SameGraphPath(const LocalRewritingProto &left, const LocalRewritingProto &right) {
+  return left.graph_path().size() == right.graph_path().size() &&
+         std::equal(left.graph_path().begin(), left.graph_path().end(), right.graph_path().begin());
+}
+
+bool HasNestedGraph(const NodeProto &node) {
+  return std::any_of(node.attribute().begin(), node.attribute().end(), [](const auto &attribute) {
+    return attribute.has_g() || !attribute.graphs().empty() ||
+           attribute.type() == AttributeProto::GRAPH ||
+           attribute.type() == AttributeProto::GRAPHS || attribute.name().value().ends_with("_ref");
+  });
+}
+
+// Batches independent edits only when their boundary descriptors stay identical.
+// Buckets precede original nodes; live counts translate sequential coordinates.
+class ReplayNodeBatch {
+public:
+  explicit ReplayNodeBatch(const GraphBuilder &builder)
+      : builder_(builder), removed_(builder.Nodes().size(), false),
+        added_(builder.Nodes().size() + 1), live_(builder.Nodes().size() + 1) {
+    for (std::size_t i = 0; i < removed_.size(); ++i)
+      live_.Update(i, true);
+  }
+
+  bool Append(const LocalRewritingProto &rewrite, const GraphGraph &graph) {
+    if (!IsNodeOnlyRewrite(rewrite) ||
+        rewrite.added_nodes().size() != rewrite.added_nodes_positions().size())
+      return false;
+    const std::size_t node_count = live_.Before(added_.size());
+    std::vector<std::size_t> originals;
+    std::unordered_set<const NodeProto *> matched;
+    std::size_t insertion_position = node_count;
+    for (uint64_t encoded : rewrite.matched_nodes()) {
+      const std::size_t position = CheckedPosition(encoded);
+      if (position >= node_count)
+        return false;
+      const std::size_t original = live_.Find(position);
+      if (position - live_.Before(original) < added_[original].size() ||
+          original == removed_.size() || removed_[original] ||
+          !matched.insert(&builder_.Nodes()[original]).second)
+        return false;
+      if (HasNestedGraph(builder_.Nodes()[original]))
+        return false;
+      originals.push_back(original);
+      insertion_position = std::min(insertion_position, position);
+    }
+    std::vector<std::pair<std::size_t, const NodeProto *>> additions;
+    for (std::size_t i = 0; i < rewrite.added_nodes().size(); ++i)
+      additions.emplace_back(CheckedPosition(rewrite.added_nodes_positions(i)),
+                             &rewrite.added_nodes(i));
+    std::sort(additions.begin(), additions.end(),
+              [](const auto &left, const auto &right) { return left.first < right.first; });
+    if (additions.size() >
+        std::numeric_limits<std::size_t>::max() - (node_count - originals.size()))
+      throw BuilderError("Replay: batch node count overflow.");
+    for (std::size_t i = 0; i < additions.size(); ++i) {
+      if (additions[i].first != insertion_position + i || HasNestedGraph(*additions[i].second))
+        return false;
+    }
+    if (!PreservesBoundary(originals, matched, additions, graph))
+      return false;
+
+    for (std::size_t original : originals) {
+      removed_[original] = true;
+      live_.Update(original, false);
+    }
+    bool committed = false;
+    ScopeExit restore([&]() noexcept {
+      if (!committed) {
+        for (std::size_t original : originals) {
+          removed_[original] = false;
+          live_.Update(original, true);
+        }
+      }
+    });
+    const std::size_t remaining = node_count - originals.size();
+    const std::size_t anchor =
+        insertion_position == remaining ? removed_.size() : live_.Find(insertion_position);
+    if (insertion_position - live_.Before(anchor) != added_[anchor].size())
+      return false;
+    added_[anchor].reserve(added_[anchor].size() + additions.size());
+    for (const auto &[position, node] : additions) {
+      (void)position;
+      added_[anchor].push_back(node);
+      live_.Update(anchor, true);
+      for (const auto &output : node->output())
+        if (!output.empty())
+          produced_names_.insert(output.value());
+    }
+    committed = true;
+    return true;
+  }
+
+  LocalRewritingProto Rewriting() const {
+    LocalRewritingProto rewrite;
+    std::size_t position = 0;
+    for (std::size_t original = 0; original < added_.size(); ++original) {
+      for (const NodeProto *node : added_[original]) {
+        rewrite.add_added_nodes(*node);
+        rewrite.add_added_nodes_positions(position++);
+      }
+      if (original < removed_.size()) {
+        if (removed_[original])
+          rewrite.add_matched_nodes(original);
+        else
+          ++position;
+      }
+    }
+    return rewrite;
+  }
+
+private:
+  bool PreservesBoundary(const std::vector<std::size_t> &originals,
+                         const std::unordered_set<const NodeProto *> &matched,
+                         const std::vector<std::pair<std::size_t, const NodeProto *>> &additions,
+                         const GraphGraph &graph) const {
+    const auto &source = builder_.Compute().Shapes();
+    std::unordered_set<std::string> removed_names;
+    std::unordered_set<std::string> boundary;
+    const std::size_t first_original = *std::min_element(originals.begin(), originals.end());
+    for (std::size_t original : originals) {
+      for (const auto &output : builder_.Nodes()[original].output()) {
+        const std::string name = output.value();
+        if (name.empty())
+          continue;
+        removed_names.insert(name);
+        if (graph.IsOutput(name) || graph.IsUsedBySubgraph(name) ||
+            std::any_of(graph.NextNodes(name).begin(), graph.NextNodes(name).end(),
+                        [&](const NodeProto *consumer) { return !matched.contains(consumer); }))
+          boundary.insert(name);
+      }
+    }
+    shapes::ShapesContext inferred;
+    for (const auto &[domain, version] : source.Opsets())
+      inferred.SetOpsetVersion(domain, version);
+    std::unordered_set<std::string> produced;
+    for (const auto &[position, node] : additions) {
+      (void)position;
+      const std::string key =
+          ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(*node) + ":" + node->op_type().value();
+      if (!shapes::DispatchTable().contains(key) ||
+          source.GetCustomShapeInferenceFunction(node->domain(), node->op_type()) != nullptr)
+        return false;
+      for (const auto &input : node->input()) {
+        const std::string name = input.value();
+        if (name.empty() || inferred.Has(name))
+          continue;
+        const NodeProto *producer = graph.NodeBefore(name);
+        if (removed_names.contains(name) || !source.Has(name) || source.HasEncodedValue(name) ||
+            (source.HasType(name) && !source.GetType(name).has_tensor_type()) ||
+            (producer != nullptr && graph.Position(*producer) >= first_original))
+          return false;
+        inferred.Set(name, symbolic::SymTensor(source.Get(name)));
+      }
+      for (const auto &output : node->output()) {
+        const std::string name = output.value();
+        if (!name.empty() &&
+            (produced_names_.contains(name) || !produced.insert(name).second ||
+             (!removed_names.contains(name) &&
+              (graph.NodeBefore(name) != nullptr || source.Has(name) || source.HasType(name)))))
+          return false;
+      }
+      inferred.ComputeShapeNode(*node);
+    }
+    for (const auto &name : boundary) {
+      if (!produced.contains(name) || !source.Has(name) || !inferred.Has(name) ||
+          source.Get(name) != inferred.Get(name))
+        return false;
+    }
+    return true;
+  }
+
+  const GraphBuilder &builder_;
+  std::vector<bool> removed_;
+  std::vector<std::vector<const NodeProto *>> added_;
+  std::unordered_set<std::string> produced_names_;
+  LiveRanks live_;
+};
 
 int64_t ElapsedNanoseconds(std::chrono::steady_clock::time_point start) {
   return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() -
@@ -1012,7 +1213,9 @@ GraphProto Replay(const ModelProto &model, const RewritingProto &rewrites,
   // nodes; reimporting intermediate graphs could regenerate automatic paths.
   GraphBuilder builder(model, std::move(schema_lookup));
 
-  for (const auto &rewrite : rewrites.rewrites()) {
+  std::size_t index = 0;
+  while (index < rewrites.rewrites().size()) {
+    const auto &rewrite = rewrites.rewrites(index);
     GraphBuilder *target = &builder;
     for (const auto &path_component : rewrite.graph_path()) {
       const std::string name = path_component.value();
@@ -1022,7 +1225,22 @@ GraphProto Replay(const ModelProto &model, const RewritingProto &rewrites,
       target = &target->Subgraph(name);
     }
     GraphGraph graph(*target, std::vector<std::unique_ptr<PatternOptimization>>{});
-    graph.ApplyRewriting(rewrite);
+    std::size_t end = index;
+    if (IsNodeOnlyRewrite(rewrite) && index + 1 < rewrites.rewrites().size() &&
+        SameGraphPath(rewrite, rewrites.rewrites(index + 1)) &&
+        IsNodeOnlyRewrite(rewrites.rewrites(index + 1))) {
+      ReplayNodeBatch batch(*target);
+      while (end < rewrites.rewrites().size() && SameGraphPath(rewrite, rewrites.rewrites(end)) &&
+             batch.Append(rewrites.rewrites(end), graph))
+        ++end;
+      if (end > index + 1)
+        graph.ApplyRewriting(batch.Rewriting());
+    }
+    if (end <= index + 1) {
+      graph.ApplyRewriting(rewrite);
+      end = index + 1;
+    }
+    index = end;
   }
   return builder.BuildGraph();
 }

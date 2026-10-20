@@ -23,6 +23,8 @@ digraph protos {
         SequenceProto;
         MapProto;
         OptionalProto;
+        RewritingProto;
+        LocalRewritingProto;
     }
 
     subgraph cluster_data {
@@ -83,6 +85,14 @@ digraph protos {
     ModelProto -> DeviceConfigurationProto [label="configuration"];
     ModelProto -> StringStringEntryProto [label="metadata_props"];
     ModelProto -> StructTypeProto [label="struct_types"];
+
+    RewritingProto -> LocalRewritingProto [label="rewrites"];
+    RewritingProto -> OperatorSetIdProto [label="required_opset_imports"];
+    RewritingProto -> FunctionProto [label="added_functions"];
+    RewritingProto -> StringStringEntryProto [label="metadata_props"];
+    LocalRewritingProto -> NodeProto [label="added_nodes, initializer_calls"];
+    LocalRewritingProto -> TensorProto [label="added_initializers"];
+    LocalRewritingProto -> StringStringEntryProto [label="value_renames, metadata_props"];
 
     GraphProto -> NodeProto [label="node"];
     GraphProto -> TensorProto [label="initializer"];

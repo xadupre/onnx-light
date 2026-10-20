@@ -53,6 +53,7 @@ struct PreparationRecord {
   bool tune = false;
   int64_t configured = -1;
   bool fail = false;
+  bool fail_declaration = false;
   int runs = 0;
 };
 
@@ -99,6 +100,8 @@ public:
           throw std::invalid_argument("preparation failed");
       };
       preparations.push_back(std::move(preparation));
+      if (record_->fail_declaration)
+        throw std::range_error("preparation declaration failed");
     }
   }
 
@@ -500,6 +503,28 @@ TEST(KernelLifecycle, GemmPreparationFailureIsStickyAndDoesNotPublishOutput) {
   EXPECT_THROW(session.Prepare(rt), std::invalid_argument);
   EXPECT_THROW(session.Run(rt), std::invalid_argument);
   EXPECT_FALSE(rt.HasValue("Y"));
+}
+
+TEST(KernelLifecycle, PendingPreparationsRethrowsPartialDeclarationFailure) {
+  const ModelProto model = MakeGemmModel(false);
+  RuntimeSession session(model);
+  RuntimeContext rt;
+  const auto record = std::make_shared<PreparationRecord>();
+  record->fail_declaration = true;
+  ASSERT_TRUE(
+      rt.RegisterKernelFn("ai.onnx", "Gemm", core::symbolic::Device::kCPU,
+                          [record](const NodeProto &, RuntimeContext &, const KernelContext &) {
+                            return std::make_unique<DeclarativeKernel>(record);
+                          }));
+  EXPECT_THROW(session.DeclarePreparations(rt), std::range_error);
+  try {
+    session.pending_preparations();
+    FAIL() << "Expected the saved declaration failure";
+  } catch (const std::range_error &error) {
+    EXPECT_STREQ(error.what(), "preparation declaration failed");
+  }
+  EXPECT_TRUE(record->executed.empty());
+  EXPECT_EQ(record->runs, 0);
 }
 
 TEST(KernelLifecycle, DeclarativeWorkHonorsDependenciesAndStickyExecutionFailures) {

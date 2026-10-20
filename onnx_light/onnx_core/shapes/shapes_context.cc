@@ -12,6 +12,55 @@
 
 namespace ONNX_LIGHT_NAMESPACE::core::shapes {
 
+std::string ShapesContext::ConstraintOwner(const NodeProto &node) {
+  for (const auto &output : node.output()) {
+    if (!output.empty()) {
+      return output;
+    }
+  }
+  return {};
+}
+
+void ShapesContext::RecordConstraint(const Constraint &constraint, bool less_equal) {
+  auto &contributions = node_constraints_[constraint_owner_];
+  auto &constraints = less_equal ? contributions.less_equal : contributions.equal;
+  if (constraints.insert(constraint).second) {
+    auto &counts = less_equal ? le_constraint_counts_ : constraint_counts_;
+    ++counts[constraint];
+  }
+}
+
+void ShapesContext::EraseNodeConstraints(const NodeProto &node) {
+  const std::string owner = ConstraintOwner(node);
+  if (owner.empty()) {
+    return;
+  }
+  const auto contributed = node_constraints_.find(owner);
+  if (contributed == node_constraints_.end()) {
+    return;
+  }
+  const auto remove = [](const auto &contributions, auto &counts, auto &constraints) {
+    for (const auto &constraint : contributions) {
+      auto count = counts.find(constraint);
+      if (--count->second == 0) {
+        counts.erase(count);
+        constraints.erase(constraint);
+      }
+    }
+  };
+  remove(contributed->second.equal, constraint_counts_, constraints_);
+  remove(contributed->second.less_equal, le_constraint_counts_, le_constraints_);
+  node_constraints_.erase(contributed);
+}
+
+void ShapesContext::ClearConstraints() noexcept {
+  constraints_.clear();
+  le_constraints_.clear();
+  node_constraints_.clear();
+  constraint_counts_.clear();
+  le_constraint_counts_.clear();
+}
+
 ShapesContext ShapesContext::MakeChildContext() const {
   ShapesContext child;
   child.struct_types_model_ = struct_types_model_;

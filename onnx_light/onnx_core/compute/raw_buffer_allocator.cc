@@ -364,7 +364,9 @@ AllocationHandle IOArena::ExportHandle(AllocationHandle &&handle) {
     throw std::invalid_argument(
         "IOArena::ExportHandle: handle must own a plain allocator-backed buffer.");
   }
-  return AllocationHandle(this, Export(handle.Release()));
+  IOLease lease = Export(handle.buffer());
+  handle.Release();
+  return AllocationHandle(this, std::move(lease));
 }
 
 void IOArena::ReturnLease(RawBuffer *buf) noexcept {

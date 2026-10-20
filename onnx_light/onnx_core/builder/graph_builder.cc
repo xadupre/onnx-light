@@ -981,6 +981,11 @@ void GraphBuilder::RebuildStructuredState(bool refresh_ancestors) {
   for (const auto &input : inputs_) {
     input_names.insert(input.name().value());
     SeedDeclaredValueInfo(shapes, input);
+    for (const auto &output : outputs_) {
+      if (output.name() == input.name()) {
+        SeedDeclaredValueInfo(shapes, output);
+      }
+    }
   }
   for (const auto &initializer : initializers_) {
     if (input_names.count(initializer.name().value()) == 0) {
@@ -1267,6 +1272,14 @@ void GraphBuilder::MakeOutput(const ValueInfoProto &value_info) {
   const std::string name = value_info.name().value();
   ValidateSubgraphOutput(name);
   ValueInfoProto output = value_info;
+  if (output.has_type() && output.type().has_tensor_type() &&
+      output.type().tensor_type().has_shape()) {
+    for (auto &dim : output.mutable_type()->mutable_tensor_type()->mutable_shape()->ref_dim()) {
+      if (!dim.has_dim_value() && !dim.has_dim_param()) {
+        dim.set_dim_param("");
+      }
+    }
+  }
   bool tensor_refined = false;
   SymTensor refined;
   if (value_info.has_type() && value_info.type().has_tensor_type() && Shapes().Has(name)) {

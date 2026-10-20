@@ -228,7 +228,9 @@ void ComputeShapeSequenceErase(ShapesContext &ctx, const NodeProto &node);
  * equal to the sequence element at the given position. The output element
  * dtype matches the input sequence element dtype. Because the position is a
  * runtime value, known per-element shapes with a common rank are merged
- * dimension by dimension. Otherwise only the element type is stored as a
+ * dimension by dimension. When per-element shapes are unavailable, a declared
+ * sequence element shape preserves its rank, including scalar rank.
+ * Otherwise only the element type is stored as a
  * :cpp:class:`TypeProto` without a shape; unknown rank is not treated as scalar.
  * If neither the rank nor the element dtype is known, the output remains unresolved.
  *

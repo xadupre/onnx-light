@@ -703,6 +703,28 @@ void ComputeContext::RefreshNodes(const utils::RepeatedProtoField<NodeProto> &no
     }
   }
 
+  std::unordered_set<std::size_t> reclassified_last_uses;
+  for (const auto &name : changed_values) {
+    const auto last = incr_last_use_.find(name);
+    if (last != incr_last_use_.end() && last->second >= 0 &&
+        (incr_graph_inputs_.count(name) != 0 || incr_graph_initializers_.count(name) != 0)) {
+      const auto index = static_cast<std::size_t>(last->second);
+      reclassified_last_uses.insert(index);
+      EraseValueFromList(release_after_[index], name);
+      EraseValueFromList(release_after_shape_tagged_[index], name);
+    }
+  }
+  for (const auto index : reclassified_last_uses) {
+    not_used_after_[index].clear();
+    for (const auto &name : incr_node_references_[index]) {
+      const auto last = incr_last_use_.find(name);
+      if (last != incr_last_use_.end() && last->second == static_cast<int>(index) &&
+          (incr_graph_inputs_.count(name) != 0 || incr_graph_initializers_.count(name) != 0)) {
+        not_used_after_[index].push_back(name);
+      }
+    }
+  }
+
   for (std::size_t index = refresh_from; index < nodes.size(); ++index) {
     RefreshNodeReuse(nodes, index, ctx);
     AppendNodePeakMemory(nodes[index], index, device);

@@ -27,6 +27,9 @@ running the matcher. Matched and removed positions refer to the graph
 immediately before each edit; added positions describe its result. Internal
 optimizer batches are normalized to this sequential coordinate system. Later
 edits may consume nodes created by earlier ones.
+Normalization keeps an indexed live order and materializes the final sequence
+once. Retained nodes displaced across other retained nodes are explicitly
+recorded in the edit, so replay preserves subsequent positional coordinates.
 Every rewrite immediately maintains dependency-consistent node order, shapes,
 and compute annotations. Coordinates refer to that actual order, so the returned
 builder can receive another plan, including an empty plan, without exporting first.

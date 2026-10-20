@@ -397,8 +397,123 @@ void OrderPreparationDependencies(std::vector<PendingReplacement> &replacements)
   replacements = std::move(ordered);
 }
 
-// Rebases sequential coordinates by inserting blocked consumers after their
-// producers. Untouched node dependencies stay indexed.
+// Fixed slots reserve room for every batch addition. Independent edits only
+// change live counts; dependency adjustments rewrite the affected slots.
+class LiveNodeOrder {
+public:
+  LiveNodeOrder(std::vector<std::shared_ptr<NodeProto>> slots,
+                const std::unordered_set<const NodeProto *> &originals)
+      : slots_(std::move(slots)), counts_(slots_.size()) {
+    for (std::size_t rank = 0; rank < slots_.size(); ++rank) {
+      ranks_.emplace(slots_[rank].get(), rank);
+      if (originals.count(slots_[rank].get()) != 0)
+        Activate(slots_[rank].get());
+    }
+  }
+
+  std::size_t Rank(const NodeProto *node) const { return ranks_.at(node); }
+  std::size_t Position(const NodeProto *node) const { return counts_.Before(Rank(node)); }
+  bool Contains(const NodeProto *node) const { return active_.count(node) != 0; }
+
+  void Activate(const NodeProto *node) {
+    const auto rank = Rank(node);
+    if (!active_.insert(node).second)
+      throw BuilderError("GraphGraph::Optimize: duplicate live batch node.");
+    entries_.emplace(rank, slots_[rank]);
+    counts_.Update(rank, true);
+  }
+
+  void Remove(const NodeProto *node) {
+    if (active_.erase(node) == 0)
+      throw BuilderError("GraphGraph::Optimize: missing live batch node.");
+    const auto rank = Rank(node);
+    entries_.erase(rank);
+    counts_.Update(rank, false);
+  }
+
+  void InsertBefore(const std::vector<const NodeProto *> &added, const NodeProto *anchor) {
+    if (added.empty())
+      return;
+    const auto anchor_rank = anchor == nullptr ? slots_.size() : Rank(anchor);
+    const auto position = counts_.Before(anchor_rank);
+    if (std::all_of(added.begin(), added.end(),
+                    [&](const auto *node) { return Position(node) == position; }))
+      return;
+    std::size_t first = anchor_rank, last = anchor_rank;
+    std::unordered_set<const NodeProto *> selected(added.begin(), added.end());
+    std::vector<std::shared_ptr<NodeProto>> additions;
+    for (const auto *node : added) {
+      const auto rank = Rank(node);
+      first = std::min(first, rank);
+      last = std::max(last, rank + 1);
+      additions.push_back(slots_[rank]);
+    }
+    std::vector<std::shared_ptr<NodeProto>> interval;
+    for (std::size_t rank = first; rank < last; ++rank) {
+      if (rank == anchor_rank)
+        interval.insert(interval.end(), additions.begin(), additions.end());
+      if (selected.count(slots_[rank].get()) == 0)
+        interval.push_back(slots_[rank]);
+    }
+    if (anchor_rank == last)
+      interval.insert(interval.end(), additions.begin(), additions.end());
+    for (std::size_t offset = 0; offset < interval.size(); ++offset) {
+      const auto rank = first + offset;
+      if (Contains(slots_[rank].get())) {
+        entries_.erase(rank);
+        counts_.Update(rank, false);
+      }
+    }
+    for (std::size_t offset = 0; offset < interval.size(); ++offset) {
+      const auto rank = first + offset;
+      slots_[rank] = std::move(interval[offset]);
+      ranks_[slots_[rank].get()] = rank;
+      if (Contains(slots_[rank].get())) {
+        entries_.emplace(rank, slots_[rank]);
+        counts_.Update(rank, true);
+      }
+    }
+  }
+
+  std::vector<std::shared_ptr<NodeProto>> Interval(std::size_t first, std::size_t last) const {
+    std::vector<std::shared_ptr<NodeProto>> result;
+    for (auto it = entries_.lower_bound(first); it != entries_.end() && it->first <= last; ++it)
+      result.push_back(it->second);
+    return result;
+  }
+
+  void ReplaceInterval(std::size_t first, const std::vector<std::shared_ptr<NodeProto>> &nodes) {
+    auto it = entries_.lower_bound(first);
+    for (const auto &node : nodes) {
+      EXT_ENFORCE_INVALID(it != entries_.end(),
+                          "GraphGraph::Optimize: replacement interval exceeds the live order.");
+      const auto rank = it->first;
+      slots_[rank] = node;
+      ranks_[node.get()] = rank;
+      it->second = node;
+      ++it;
+    }
+  }
+
+  utils::RepeatedProtoField<NodeProto> Materialize() const {
+    utils::RepeatedProtoField<NodeProto> result;
+    result.reserve(entries_.size());
+    for (const auto &[rank, node] : entries_) {
+      result.add();
+      result.get(result.size() - 1) = node;
+    }
+    return result;
+  }
+
+private:
+  std::vector<std::shared_ptr<NodeProto>> slots_;
+  std::unordered_map<const NodeProto *, std::size_t> ranks_;
+  std::unordered_set<const NodeProto *> active_;
+  std::map<std::size_t, std::shared_ptr<NodeProto>> entries_;
+  LiveRanks counts_;
+};
+
+// Rebases sequential coordinates without materializing the live graph per edit.
 utils::RepeatedProtoField<NodeProto> NormalizeBatch(
     std::vector<PendingReplacement> &replacements,
     const utils::RepeatedProtoField<NodeProto> &original_nodes, std::size_t initializer_count,
@@ -408,8 +523,6 @@ utils::RepeatedProtoField<NodeProto> NormalizeBatch(
         const utils::RepeatedProtoField<NodeProto> &, const std::unordered_set<std::string> &,
         const std::vector<std::vector<std::string>> &, const std::vector<bool> &)> &insert_nodes) {
   const std::size_t node_count = original_nodes.size();
-  utils::RepeatedProtoField<NodeProto> nodes;
-  std::unordered_map<const NodeProto *, std::size_t> positions;
   std::unordered_map<std::string, const NodeProto *> producers;
   std::unordered_map<std::string, std::vector<const NodeProto *>> consumers;
   std::unordered_map<const NodeProto *, std::vector<std::string>> references;
@@ -421,13 +534,8 @@ utils::RepeatedProtoField<NodeProto> NormalizeBatch(
       if (!output.empty())
         producers[output.value()] = &node;
   };
-  for (std::size_t index = 0; index < node_count; ++index) {
-    nodes.add();
-    nodes.get(index) = original_nodes.shared_at(index);
-    positions.emplace(&nodes[index], index);
-    index_node(nodes[index]);
-  }
   std::vector<uint64_t> initializer_positions;
+  std::unordered_map<std::size_t, std::vector<std::shared_ptr<NodeProto>>> insertions;
   std::size_t total_nodes = node_count;
   for (std::size_t i = 0; i < replacements.size(); ++i) {
     const auto &replacement = replacements[i];
@@ -437,11 +545,30 @@ utils::RepeatedProtoField<NodeProto> NormalizeBatch(
       throw BuilderError("GraphGraph::Optimize: invalid batch insertion size or position.");
     }
     total_nodes += replacement.rewriting.added_nodes().size();
+    for (std::size_t added = 0; added < replacement.rewriting.added_nodes().size(); ++added)
+      insertions[replacement.position].push_back(
+          replacement.rewriting.added_nodes().shared_at(added));
     const auto &positions = replacement.rewriting.added_initializer_positions();
     initializer_positions.insert(initializer_positions.end(), positions.begin(), positions.end());
     const auto &computed = replacement.rewriting.computed_initializer_positions();
     initializer_positions.insert(initializer_positions.end(), computed.begin(), computed.end());
   }
+  std::vector<std::shared_ptr<NodeProto>> slots;
+  slots.reserve(total_nodes);
+  std::unordered_set<const NodeProto *> originals;
+  std::set<std::size_t> retained_originals;
+  for (std::size_t index = 0; index <= node_count; ++index) {
+    const auto additions = insertions.find(index);
+    if (additions != insertions.end())
+      slots.insert(slots.end(), additions->second.begin(), additions->second.end());
+    if (index < node_count) {
+      slots.push_back(original_nodes.shared_at(index));
+      originals.insert(&original_nodes[index]);
+      retained_originals.insert(index);
+      index_node(original_nodes[index]);
+    }
+  }
+  LiveNodeOrder nodes(std::move(slots), originals);
   std::vector<bool> removed(node_count, false);
   std::sort(initializer_positions.begin(), initializer_positions.end());
   if (initializer_positions.size() > std::numeric_limits<std::size_t>::max() - initializer_count) {
@@ -455,8 +582,12 @@ utils::RepeatedProtoField<NodeProto> NormalizeBatch(
   };
   for (std::size_t i = 0; i < replacements.size(); ++i) {
     auto &rewrite = replacements[i].rewriting;
-    std::unordered_set<const NodeProto *> matched;
+    std::vector<std::size_t> matched_positions;
+    std::vector<const NodeProto *> matched;
     std::unordered_set<std::string> changed_outputs;
+    const auto insertion = retained_originals.lower_bound(replacements[i].position);
+    const auto *anchor =
+        insertion == retained_originals.end() ? nullptr : &original_nodes[*insertion];
     for (uint64_t &position : rewrite.ref_matched_nodes()) {
       const std::size_t original = CheckedPosition(position);
       if (original >= node_count || removed[original]) {
@@ -464,55 +595,38 @@ utils::RepeatedProtoField<NodeProto> NormalizeBatch(
       }
       removed[original] = true;
       const NodeProto *node = &original_nodes[original];
-      matched.insert(node);
-      const auto found = positions.find(node);
-      if (found == positions.end())
-        throw BuilderError("GraphGraph::Optimize: missing batch match.");
-      position = found->second;
+      matched.push_back(node);
+      position = nodes.Position(node);
+      matched_positions.push_back(position);
+      retained_originals.erase(original);
       for (const auto &output : node->output())
         if (!output.empty()) {
           producers.erase(output.value());
           changed_outputs.insert(output.value());
         }
     }
-    std::size_t insertion = nodes.size();
-    for (std::size_t original = replacements[i].position; original < node_count; ++original) {
-      const auto found = positions.find(&original_nodes[original]);
-      if (found != positions.end()) {
-        insertion = found->second;
-        break;
-      }
+    for (const auto *node : matched)
+      nodes.Remove(node);
+    std::vector<const NodeProto *> additions;
+    for (const auto &node : rewrite.added_nodes())
+      additions.push_back(&node);
+    nodes.InsertBefore(additions, anchor);
+    for (const auto *node : additions) {
+      nodes.Activate(node);
+      index_node(*node);
+      for (const auto &output : node->output())
+        if (!output.empty())
+          changed_outputs.insert(output.value());
     }
-    utils::RepeatedProtoField<NodeProto> rebuilt;
-    for (std::size_t position = 0; position <= nodes.size(); ++position) {
-      if (position == insertion) {
-        for (std::size_t added = 0; added < rewrite.added_nodes().size(); ++added) {
-          rebuilt.add();
-          rebuilt.get(rebuilt.size() - 1) = rewrite.added_nodes().shared_at(added);
-          index_node(rebuilt.back());
-          for (const auto &output : rebuilt.back().output())
-            if (!output.empty())
-              changed_outputs.insert(output.value());
-        }
-      }
-      if (position < nodes.size() && matched.count(&nodes[position]) == 0) {
-        rebuilt.add();
-        rebuilt.get(rebuilt.size() - 1) = nodes.shared_at(position);
-      }
-    }
-    nodes = std::move(rebuilt);
-    positions.clear();
-    for (std::size_t position = 0; position < nodes.size(); ++position)
-      positions.emplace(&nodes[position], position);
-    std::size_t first = nodes.size(), last = 0;
+    std::size_t first = total_nodes, last = 0;
     const auto check_reference = [&](const NodeProto *consumer, const std::string &input) {
       const auto producer = producers.find(input);
       if (producer == producers.end()) {
         if (available.count(input) == 0)
           throw BuilderError("GraphGraph::Optimize: unknown rewrite input '" + input + "'.");
-      } else if (positions.at(producer->second) >= positions.at(consumer)) {
-        first = std::min(first, positions.at(consumer));
-        last = std::max(last, positions.at(producer->second));
+      } else if (nodes.Rank(producer->second) >= nodes.Rank(consumer)) {
+        first = std::min(first, nodes.Rank(consumer));
+        last = std::max(last, nodes.Rank(producer->second));
       }
     };
     for (const auto &added : rewrite.added_nodes())
@@ -520,36 +634,70 @@ utils::RepeatedProtoField<NodeProto> NormalizeBatch(
         check_reference(&added, input);
     for (const auto &output : changed_outputs)
       for (const auto *consumer : consumers[output])
-        if (positions.count(consumer) != 0)
+        if (nodes.Contains(consumer))
           check_reference(consumer, output);
-    if (first < nodes.size()) {
+    if (first < total_nodes) {
       utils::RepeatedProtoField<NodeProto> interval;
       std::vector<std::vector<std::string>> interval_references;
       std::vector<bool> interval_additions;
       std::unordered_set<const NodeProto *> added_nodes;
       for (const auto &node : rewrite.added_nodes())
         added_nodes.insert(&node);
-      auto external = available;
-      for (const auto &[name, producer] : producers)
-        if (positions.at(producer) < first || positions.at(producer) > last)
-          external.insert(name);
-        else
-          external.erase(name);
-      for (std::size_t position = first; position <= last; ++position) {
+      std::unordered_set<std::string> external;
+      const auto previous = nodes.Interval(first, last);
+      for (const auto &node : previous) {
         interval.add();
-        interval.get(interval.size() - 1) = nodes.shared_at(position);
-        interval_references.push_back(references.at(&nodes[position]));
-        interval_additions.push_back(added_nodes.count(&nodes[position]) != 0);
+        interval.get(interval.size() - 1) = node;
+        interval_references.push_back(references.at(node.get()));
+        interval_additions.push_back(added_nodes.count(node.get()) != 0);
+        for (const auto &input : references.at(node.get())) {
+          const auto producer = producers.find(input);
+          if (producer == producers.end() || nodes.Rank(producer->second) < first ||
+              nodes.Rank(producer->second) > last)
+            external.insert(input);
+        }
       }
       const auto order = insert_nodes(interval, external, interval_references, interval_additions);
-      for (std::size_t offset = 0; offset < order.size(); ++offset) {
-        nodes.get(first + offset) = interval.shared_at(order[offset]);
-        positions[&nodes[first + offset]] = first + offset;
+      EXT_ENFORCE_INVALID(order.size() == previous.size(),
+                          "GraphGraph::Optimize: incomplete dependency insertion.");
+      std::vector<std::shared_ptr<NodeProto>> ordered;
+      std::vector<const NodeProto *> retained_before, retained_after;
+      for (const auto &node : previous)
+        if (added_nodes.count(node.get()) == 0)
+          retained_before.push_back(node.get());
+      for (const auto index : order) {
+        ordered.push_back(previous[index]);
+        if (added_nodes.count(previous[index].get()) == 0)
+          retained_after.push_back(previous[index].get());
       }
+      if (retained_before != retained_after) {
+        std::sort(matched_positions.begin(), matched_positions.end());
+        std::vector<std::size_t> added_ranks;
+        for (const auto *node : additions)
+          added_ranks.push_back(nodes.Rank(node));
+        std::sort(added_ranks.begin(), added_ranks.end());
+        std::size_t removed_before = 0;
+        for (const auto &node : previous) {
+          if (added_nodes.count(node.get()) != 0)
+            continue;
+          const auto added_before = static_cast<std::size_t>(
+              std::lower_bound(added_ranks.begin(), added_ranks.end(), nodes.Rank(node.get())) -
+              added_ranks.begin());
+          auto position = nodes.Position(node.get()) - added_before;
+          while (removed_before < matched_positions.size() &&
+                 matched_positions[removed_before] <= position + removed_before)
+            ++removed_before;
+          position += removed_before;
+          rewrite.add_matched_nodes(position);
+          rewrite.ref_added_nodes().add();
+          rewrite.ref_added_nodes().get(rewrite.added_nodes().size() - 1) = node;
+        }
+      }
+      nodes.ReplaceInterval(first, ordered);
     }
     rewrite.clr_added_nodes_positions();
     for (const auto &added : rewrite.added_nodes()) {
-      rewrite.add_added_nodes_positions(positions.at(&added));
+      rewrite.add_added_nodes_positions(nodes.Position(&added));
     }
     const auto final_positions = rewrite.added_initializer_positions();
     const auto computed_positions = rewrite.computed_initializer_positions();
@@ -564,7 +712,7 @@ utils::RepeatedProtoField<NodeProto> NormalizeBatch(
       rewrite.ref_computed_initializer_positions()[j] =
           initializer_count + live_initializers.Before(initializer_rank(computed_positions[j]));
   }
-  return nodes;
+  return nodes.Materialize();
 }
 
 bool IsNodeOnlyRewrite(const LocalRewritingProto &rewrite) {
@@ -1372,7 +1520,15 @@ std::size_t GraphGraph::Cleanup(utils::RepeatedProtoField<LocalRewritingProto> &
       names.push_back(initializer.name().value());
     return names;
   };
-  const auto initializers_before = initializer_names();
+  const auto all_initializer_names = [&]() {
+    auto names = initializer_names();
+    for (const auto &initializer : builder_.encoded_initializers_)
+      names.push_back(initializer.name().value());
+    for (const auto &initializer : builder_.paged_cache_initializers_)
+      names.push_back(initializer.name().value());
+    return names;
+  };
+  const auto initializers_before = all_initializer_names();
   const auto record_removed_initializers = [&](LocalRewritingProto &rewrite,
                                                const std::vector<std::string> &original) {
     std::unordered_set<std::string> retained;
@@ -1444,7 +1600,8 @@ std::size_t GraphGraph::Cleanup(utils::RepeatedProtoField<LocalRewritingProto> &
     rewrites.push_back(std::move(rewriting));
     cleaned += removed_initializers;
   }
-  if (cleaned != 0) {
+  const auto remaining_initializers = all_initializer_names();
+  if (cleaned != 0 || initializers_before != remaining_initializers) {
     std::unordered_map<std::string, std::size_t> original_indices;
     for (std::size_t index = 0; index < original_nodes.size(); ++index)
       for (const auto &output : original_nodes[index].output())
@@ -1485,8 +1642,7 @@ std::size_t GraphGraph::Cleanup(utils::RepeatedProtoField<LocalRewritingProto> &
         affected_values.insert(rename.value().value());
       }
     std::unordered_set<std::string> retained_initializers;
-    for (const auto &initializer : builder_.initializers_)
-      retained_initializers.insert(initializer.name().value());
+    retained_initializers.insert(remaining_initializers.begin(), remaining_initializers.end());
     for (const auto &name : initializers_before) {
       if (retained_initializers.count(name) == 0) {
         affected_values.insert(name);

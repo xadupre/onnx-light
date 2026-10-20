@@ -700,27 +700,106 @@ TEST(GraphBuilder, TypedOutputRefinesUndefinedDtypeAndOnlyAffectedConsumers) {
       }
       EXPECT_EQ(computed, (std::vector<std::string>{"Identity"}));
       EXPECT_EQ(builder.GetShape("x").Dtype(), core::symbolic::TensorType::kUndefined);
-      const GraphProto graph = builder.BuildGraph();
-      const ModelProto model = builder.ToModel();
-      ASSERT_EQ(builder.Outputs().size(), 2u);
-      EXPECT_EQ(builder.Outputs()[1].doc_string().value(), "declared output");
-      for (std::size_t i = 0; i < builder.Outputs().size(); ++i) {
-        const auto &name = builder.Outputs()[i].name().value();
-        EXPECT_EQ(builder.GetShape(name).Dtype(), core::symbolic::DataTypeToTensorType(dtype));
-        EXPECT_EQ(builder.GetShape(name).Shape(), MakeShape({2, 3}));
-        ValueInfoProto inferred;
-        ASSERT_TRUE(core::symbolic::SymTensorToValueInfo(builder.GetShape(name), inferred));
-        EXPECT_TRUE(builder.Outputs()[i].type().Equals(inferred.type()));
-        EXPECT_TRUE(graph.output(i).type().Equals(inferred.type()));
-        EXPECT_TRUE(model.graph().output(i).type().Equals(inferred.type()));
+      for (int refresh : {0, 1, 2}) {
+        SCOPED_TRACE(refresh);
+        if (refresh == 1) {
+          builder.SetOpsetVersion("", 27);
+        } else if (refresh == 2) {
+          builder.RemoveUnusedNodes();
+          EXPECT_EQ(builder.RemoveUnusedNodes(), 0u);
+        }
+        const GraphProto graph = builder.BuildGraph();
+        const ModelProto model = builder.ToModel();
+        ASSERT_EQ(builder.Outputs().size(), 2u);
+        EXPECT_EQ(builder.Outputs()[1].doc_string().value(), "declared output");
+        for (std::size_t i = 0; i < builder.Outputs().size(); ++i) {
+          const auto &name = builder.Outputs()[i].name().value();
+          EXPECT_EQ(builder.GetShape(name).Dtype(), core::symbolic::DataTypeToTensorType(dtype));
+          EXPECT_EQ(builder.GetShape(name).Shape(), MakeShape({2, 3}));
+          ValueInfoProto inferred;
+          ASSERT_TRUE(core::symbolic::SymTensorToValueInfo(builder.GetShape(name), inferred));
+          EXPECT_TRUE(builder.Outputs()[i].type().Equals(inferred.type()));
+          EXPECT_TRUE(graph.output(i).type().Equals(inferred.type()));
+          EXPECT_TRUE(model.graph().output(i).type().Equals(inferred.type()));
+        }
+        core::compute::ComputeContext expected;
+        const auto tags = expected.ComputeValueAndNodeTags(graph);
+        expected.ComputeInPlaceReuseGraph(graph, builder.Shapes(), false, tags.first);
+        EXPECT_EQ(builder.Compute().Reuse(), expected.Reuse());
+        EXPECT_EQ(builder.Compute().Memory(), expected.Memory());
       }
-      core::compute::ComputeContext expected;
-      const auto tags = expected.ComputeValueAndNodeTags(graph);
-      expected.ComputeInPlaceReuseGraph(graph, builder.Shapes(), false, tags.first);
-      EXPECT_EQ(builder.Compute().Reuse(), expected.Reuse());
-      EXPECT_EQ(builder.Compute().Memory(), expected.Memory());
     }
   }
+}
+
+TEST(GraphBuilder, ImportsSequenceAtOutputWithUnknownElementRank) {
+  ModelProto model;
+  model.set_ir_version(10);
+  model.add_opset("", 18);
+  GraphProto *graph = model.mutable_graph();
+  graph->set_name("sequence_at");
+  auto *sequence = graph->add_input();
+  sequence->set_name("s");
+  sequence->mutable_type()
+      ->mutable_sequence_type()
+      ->mutable_elem_type()
+      ->mutable_tensor_type()
+      ->set_elem_type(TensorProto::FLOAT);
+  auto *position = graph->add_input();
+  position->set_name("p");
+  auto *position_type = position->mutable_type()->mutable_tensor_type();
+  position_type->set_elem_type(TensorProto::INT64);
+  position_type->mutable_shape();
+  graph->add_node(MakeNode("SequenceAt", {"s", "p"}, {"z"}));
+  graph->add_node(MakeNode("Identity", {"z"}, {"result"}));
+  for (const char *name : {"z", "result"}) {
+    auto *output = graph->add_output();
+    output->set_name(name);
+    auto *tensor = output->mutable_type()->mutable_tensor_type();
+    tensor->set_elem_type(TensorProto::FLOAT);
+    tensor->mutable_shape()->add_dim()->set_dim_value(2);
+    tensor->mutable_shape()->add_dim()->set_dim_value(3);
+  }
+
+  core::builder::GraphBuilder builder(model, SchemaLookup());
+  for (bool refresh : {false, true}) {
+    if (refresh) {
+      builder.SetOpsetVersion("", 17);
+      EXPECT_EQ(builder.RemoveUnusedNodes(), 0u);
+    }
+    for (std::size_t i = 0; i < builder.Outputs().size(); ++i) {
+      const auto &name = builder.Outputs()[i].name().value();
+      EXPECT_EQ(builder.GetShape(name).Dtype(), core::symbolic::TensorType::kFloat);
+      EXPECT_EQ(builder.GetShape(name).Shape(), MakeShape({2, 3}));
+      EXPECT_TRUE(builder.Outputs()[i].type().Equals(graph->output(i).type()));
+      EXPECT_TRUE(builder.BuildGraph().output(i).type().Equals(graph->output(i).type()));
+      EXPECT_TRUE(builder.ToModel().graph().output(i).type().Equals(graph->output(i).type()));
+    }
+  }
+}
+
+TEST(GraphBuilder, SequenceAtUnknownRankStillValidatesDtypeAndKnownScalars) {
+  core::builder::GraphBuilder builder("sequence_at", SchemaLookup(), {{"", 18}});
+  ValueInfoProto sequence;
+  sequence.set_name("s");
+  sequence.mutable_type()
+      ->mutable_sequence_type()
+      ->mutable_elem_type()
+      ->mutable_tensor_type()
+      ->set_elem_type(TensorProto::FLOAT);
+  builder.MakeInput(sequence);
+  builder.MakeInput("p", core::symbolic::TensorType::kInt64, MakeShape({}));
+  builder.MakeNode("SequenceAt", {"s", "p"}, {"z"});
+  EXPECT_THROW(builder.MakeOutput("z", core::symbolic::TensorType::kDouble, MakeShape({2, 3})),
+               core::builder::BuilderError);
+  EXPECT_TRUE(builder.Outputs().empty());
+  builder.MakeInput("scalar", core::symbolic::TensorType::kFloat, MakeShape({}));
+  builder.MakeNode("SequenceConstruct", {"scalar"}, {"scalar_sequence"});
+  builder.MakeNode("SequenceAt", {"scalar_sequence", "p"}, {"scalar_result"});
+  EXPECT_THROW(
+      builder.MakeOutput("scalar_result", core::symbolic::TensorType::kFloat, MakeShape({2, 3})),
+      core::builder::BuilderError);
+  EXPECT_TRUE(builder.Outputs().empty());
 }
 
 TEST(GraphBuilder, TypedOutputRebuildDefersPersistentBindingValidationDuringImport) {

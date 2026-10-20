@@ -299,7 +299,8 @@ public:
   /// Rejects tensor declarations incompatible with an existing inferred descriptor
   /// and uses the inferred tensor type and shape for compatible declarations.
   /// Refines an undefined inferred element type from a concrete declaration and
-  /// incrementally refreshes affected consumers and compute metadata.
+  /// incrementally refreshes affected consumers and compute metadata. Retains
+  /// that refinement after producer reinference and accepts unknown inferred rank.
   void MakeOutput(const ValueInfoProto &value_info);
 
   /// Declares ``name`` (which must already exist) as a graph output described

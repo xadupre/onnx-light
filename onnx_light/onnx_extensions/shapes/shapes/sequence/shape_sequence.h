@@ -221,21 +221,22 @@ void ComputeShapeSequenceEmpty(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeSequenceErase(ShapesContext &ctx, const NodeProto &node);
 
 /**
- * Computes the output :cpp:class:`SymTensor` of a ``SequenceAt`` node and
- * stores it in ``ctx``.
+ * Computes the output tensor type of a ``SequenceAt`` node and stores it in ``ctx``.
  *
  * ``SequenceAt`` (since opset 11 in the ``ai.onnx`` domain) takes a sequence
  * input and a required scalar position input, and produces a tensor output
  * equal to the sequence element at the given position. The output element
  * dtype matches the input sequence element dtype. Because the position is a
- * runtime value, the output shape is generally unknown; the only exception is
- * when the input sequence records per-element shapes and all of them are
- * equal, in which case the shared shape is forwarded as the output shape.
+ * runtime value, known per-element shapes with a common rank are merged
+ * dimension by dimension. Otherwise only the element type is stored as a
+ * :cpp:class:`TypeProto` without a shape; unknown rank is not treated as scalar.
+ * If neither the rank nor the element dtype is known, the output remains unresolved.
  *
  * @param ctx   In/out context. Must already contain an
  *              :cpp:class:`SymSequence` entry for ``node.input(0)``; on
- *              return it also contains an :cpp:class:`SymTensor` entry for
- *              ``node.output(0)``.
+ *              return it contains a tensor descriptor for ``node.output(0)``
+ *              when the rank is known, or a shape-less tensor type when only
+ *              the element dtype is known.
  * @param node  The ``SequenceAt`` ``NodeProto`` whose output should be
  *              described. ``node.op_type()`` must be ``"SequenceAt"`` and
  *              ``node`` must declare at least one output.

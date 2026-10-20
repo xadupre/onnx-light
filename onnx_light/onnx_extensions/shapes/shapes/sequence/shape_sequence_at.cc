@@ -51,8 +51,12 @@ void ComputeShapeSequenceAt(ShapesContext &ctx, const NodeProto &node) {
 
   if (shape_known) {
     ctx.Set(node.output(0), SymTensor(nullptr, elem_dtype, out_shape));
+  } else if (elem_dtype != TensorType::kUndefined) {
+    TypeProto type;
+    type.mutable_tensor_type()->set_elem_type(core::symbolic::TensorTypeToDataType(elem_dtype));
+    ctx.SetType(node.output(0), type);
   } else {
-    ctx.Set(node.output(0), SymTensor(nullptr, elem_dtype, SymShape{}));
+    ctx.Erase(node.output(0));
   }
 }
 

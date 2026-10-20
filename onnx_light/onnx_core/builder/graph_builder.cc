@@ -190,11 +190,39 @@ void SeedDeclaredOutputs(ShapesContext &shapes, const NodeProto &node,
   }
 }
 
+SymTensor RefineTensorDtype(const SymTensor &inferred, TensorType dtype) {
+  SymTensor refined(inferred.Data(), dtype, inferred.Shape());
+  refined.SetDevice(inferred.GetDevice());
+  if (inferred.HasMin()) {
+    refined.SetMin(inferred.Min());
+  }
+  if (inferred.HasMax()) {
+    refined.SetMax(inferred.Max());
+  }
+  if (inferred.HasValueAsShape()) {
+    refined.SetValueAsShape(inferred.ValueAsShape());
+  }
+  return refined;
+}
+
 void SeedDeclaredValueInfo(ShapesContext &shapes, const ValueInfoProto &value) {
   if (!value.has_type()) {
     return;
   }
   const std::string name = value.name().value();
+  if (value.type().has_tensor_type() && shapes.Has(name)) {
+    const SymTensor &inferred = shapes.Get(name);
+    const auto dtype = value.type().tensor_type().elem_type();
+    if (inferred.Dtype() == TensorType::kUndefined && dtype != TensorProto::UNDEFINED) {
+      const auto refined_dtype = core::symbolic::DataTypeToTensorType(dtype);
+      if (refined_dtype == TensorType::kUndefined) {
+        throw BuilderError("GraphBuilder: output '" + name +
+                           "' has an unsupported tensor element type.");
+      }
+      shapes.Set(name, RefineTensorDtype(inferred, refined_dtype));
+    }
+    return;
+  }
   SymTensor descriptor;
   if (value.type().has_tensor_type() && value.type().tensor_type().has_shape() &&
       !shapes.Has(name) && SymTensorFromValueInfo(value, descriptor)) {
@@ -945,10 +973,7 @@ void GraphBuilder::RebuildStructuredState(bool refresh_ancestors) {
   std::unordered_set<std::string> input_names;
   for (const auto &input : inputs_) {
     input_names.insert(input.name().value());
-    if (input.has_type() &&
-        (!input.type().has_tensor_type() || input.type().tensor_type().has_shape())) {
-      shapes.SetType(input.name().value(), input.type());
-    }
+    SeedDeclaredValueInfo(shapes, input);
   }
   for (const auto &initializer : initializers_) {
     if (input_names.count(initializer.name().value()) == 0) {
@@ -1241,7 +1266,7 @@ void GraphBuilder::MakeOutput(const ValueInfoProto &value_info) {
   const std::string name = value_info.name().value();
   ValidateSubgraphOutput(name);
   ValueInfoProto output = value_info;
-  bool dtype_refined = false;
+  bool tensor_refined = false;
   SymTensor refined;
   if (value_info.has_type() && value_info.type().has_tensor_type() && Shapes().Has(name)) {
     const auto &declared = value_info.type().tensor_type();
@@ -1269,18 +1294,8 @@ void GraphBuilder::MakeOutput(const ValueInfoProto &value_info) {
         throw BuilderError("GraphBuilder: output '" + name +
                            "' has an unsupported tensor element type.");
       }
-      refined = SymTensor(inferred.Data(), refined_dtype, inferred.Shape());
-      refined.SetDevice(inferred.GetDevice());
-      if (inferred.HasMin()) {
-        refined.SetMin(inferred.Min());
-      }
-      if (inferred.HasMax()) {
-        refined.SetMax(inferred.Max());
-      }
-      if (inferred.HasValueAsShape()) {
-        refined.SetValueAsShape(inferred.ValueAsShape());
-      }
-      dtype_refined = true;
+      refined = RefineTensorDtype(inferred, refined_dtype);
+      tensor_refined = true;
     }
     auto *tensor = output.mutable_type()->mutable_tensor_type();
     tensor->set_elem_type(dtype);
@@ -1293,6 +1308,18 @@ void GraphBuilder::MakeOutput(const ValueInfoProto &value_info) {
       } else {
         dim->set_dim_param(dimension.AsExpr());
       }
+    }
+  } else if (value_info.has_type() && value_info.type().has_tensor_type() &&
+             Shapes().HasType(name) && Shapes().GetType(name).has_tensor_type()) {
+    const auto inferred_dtype = Shapes().GetType(name).tensor_type().elem_type();
+    const auto declared_dtype = value_info.type().tensor_type().elem_type();
+    if (inferred_dtype != TensorProto::UNDEFINED && declared_dtype != TensorProto::UNDEFINED &&
+        inferred_dtype != declared_dtype) {
+      throw BuilderError("GraphBuilder: output '" + name +
+                         "' has an incompatible tensor element type.");
+    }
+    if (inferred_dtype != TensorProto::UNDEFINED) {
+      output.mutable_type()->mutable_tensor_type()->set_elem_type(inferred_dtype);
     }
   }
   bool declaration_added = false;
@@ -1312,15 +1339,15 @@ void GraphBuilder::MakeOutput(const ValueInfoProto &value_info) {
     compute_.Shapes().SetType(value_info.name().value(), value_info.type());
     declaration_added = true;
   }
+  if (tensor_refined) {
+    SeedShape(name, std::move(refined));
+  }
   SymTensor descriptor;
   if (value_info.has_type() && value_info.type().has_tensor_type() &&
       value_info.type().tensor_type().has_shape() && !Shapes().Has(name) &&
-      SymTensorFromValueInfo(value_info, descriptor)) {
+      SymTensorFromValueInfo(output, descriptor)) {
     SeedShape(name, std::move(descriptor));
-    declaration_added = true;
-  }
-  if (dtype_refined) {
-    SeedShape(name, std::move(refined));
+    tensor_refined = true;
   }
   outputs_.push_back(std::move(output));
   compute_.SeedValueTag(name, DeclaredValueTag(value_info), nodes_);
@@ -1328,7 +1355,7 @@ void GraphBuilder::MakeOutput(const ValueInfoProto &value_info) {
   if (declaration_added) {
     RebuildStructuredState();
   } else {
-    if (dtype_refined) {
+    if (tensor_refined) {
       std::unordered_set<std::string> affected_values{name};
       RefreshDependentNodes(
           [](const NodeProto &, const std::unordered_set<std::string> &) { return false; },

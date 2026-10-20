@@ -959,6 +959,13 @@ TEST(PatternOptimization, AppliesOverridesInsideReachableFunctions) {
       override.ref_node().push_back(MakeNode("Add", {"A", "A"}, {"C"}));
       RewritingProto loaded;
       ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
+      EXPECT_THROW(core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(loaded),
+                   core::builder::BuilderError);
+      const auto functions = original.functions();
+      original.ref_functions().clear();
+      original.add_function(override);
+      for (const auto &function : functions)
+        original.add_function(function);
       const auto replayed =
           core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(loaded).ToModel();
       EXPECT_FLOAT_EQ(core::runtime::RunModel(replayed, {})[0].AsFloat()[0], reachable ? 2 : 3);
@@ -1029,6 +1036,13 @@ TEST(PatternOptimization, AppliesOverridesInsideNestedFunctionGraphs) {
   override.add_output("C");
   override.add_opset("", 18);
   override.ref_node().push_back(MakeNode("Identity", {"A"}, {"C"}));
+  EXPECT_THROW(core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan),
+               core::builder::BuilderError);
+  const auto functions = original.functions();
+  original.ref_functions().clear();
+  original.add_function(override);
+  for (const auto &function : functions)
+    original.add_function(function);
   EXPECT_NO_THROW(
       core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan).ToModel());
 }

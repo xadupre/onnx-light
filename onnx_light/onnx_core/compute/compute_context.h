@@ -400,7 +400,8 @@ public:
 
   /// Reindexes retained annotations after node replacement. An index equal to
   /// the old node count denotes a new node. Refreshes only affected lifetimes,
-  /// tags and constants; descriptors are maintained by the caller.
+  /// tags and constants, preserving existing value tags for retained names;
+  /// descriptors are maintained by the caller.
   void UpdateNodes(const utils::RepeatedProtoField<NodeProto> &nodes,
                    const std::vector<std::size_t> &old_indices,
                    const std::vector<std::vector<std::string>> &references,

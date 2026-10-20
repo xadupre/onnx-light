@@ -832,7 +832,6 @@ void ComputeContext::UpdateNodes(const utils::RepeatedProtoField<NodeProto> &nod
     incr_node_references_[index] = references[index];
   }
   for (const auto &name : changed_values) {
-    value_tags_.erase(name);
     constant_values_.erase(name);
     incr_byte_size_expr_cache_.erase(name);
     incr_allocation_bytes_.erase(name);
@@ -845,6 +844,13 @@ void ComputeContext::UpdateNodes(const utils::RepeatedProtoField<NodeProto> &nod
       if (changed_references.count(name) != 0) {
         incr_last_use_[name] = static_cast<int>(index);
       }
+    }
+  }
+  for (const auto &name : changed_values) {
+    // Retained names keep their existing tags, including inferred input tags.
+    if (incr_producer_.count(name) == 0 && incr_graph_inputs_.count(name) == 0 &&
+        incr_graph_initializers_.count(name) == 0 && incr_last_use_.count(name) == 0) {
+      value_tags_.erase(name);
     }
   }
   for (std::size_t index = 0; index < nodes.size(); ++index) {

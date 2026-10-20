@@ -1003,6 +1003,30 @@ TEST(OnnxOptimShapesNnGroupNormalization, PreservesDeprecatedOpset18ScaleShape) 
   EXPECT_NO_THROW(onnx_shapes::shapes::nn::ComputeShapeGroupNormalization(ctx, node, "X"));
 }
 
+TEST(OnnxOptimShapesNnLayerNormalization, ExplicitFloatStashUsesOnnxDataType) {
+  NodeProto node;
+  node.set_op_type("LayerNormalization");
+  node.add_input("X");
+  for (const char *name : {"Y", "Mean", "InvStdDev"}) {
+    node.add_output(name);
+  }
+  AddAttribute<int64_t>(node, "stash_type", TensorProto::FLOAT);
+  AddAttribute<int64_t>(node, "axis", 0);
+  core::shapes::ShapesContext ctx;
+  SetInput(ctx, {core::symbolic::SymDim(2), core::symbolic::SymDim(3)},
+           core::symbolic::TensorType::kFloat16);
+
+  onnx_shapes::shapes::nn::ComputeShapeLayerNormalization(ctx, node, "X");
+
+  EXPECT_EQ(ctx.Get("Y").Dtype(), core::symbolic::TensorType::kFloat16);
+  EXPECT_EQ(ctx.Get("Y").Shape(), ctx.Get("X").Shape());
+  for (const char *name : {"Mean", "InvStdDev"}) {
+    EXPECT_EQ(ctx.Get(name).Dtype(), core::symbolic::TensorType::kFloat);
+    EXPECT_EQ(ctx.Get(name).Shape(),
+              (core::symbolic::SymShape{core::symbolic::SymDim(1), core::symbolic::SymDim(1)}));
+  }
+}
+
 TEST(OnnxOptimShapesNnMeanVarianceNormalization, PropagatesInputShapeAndType) {
   NodeProto node;
   node.set_op_type("MeanVarianceNormalization");

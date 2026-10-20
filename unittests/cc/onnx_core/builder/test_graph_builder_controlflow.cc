@@ -290,9 +290,24 @@ TEST(GraphBuilderControlflow, SequenceMapBuildsAndImportsMultipleOutputTypes) {
   builder.MakeInitializer(MakeInitializer<int64_t>("index", {}, {0}));
   builder.MakeNode("SequenceAt", {"values", "index"}, {"value"});
   builder.MakeNode("SequenceAt", {"integers", "index"}, {"integer"});
-  EXPECT_EQ(builder.GetShape("value").Dtype(), core::symbolic::TensorType::kFloat);
-  EXPECT_EQ(builder.GetShape("integer").Dtype(), core::symbolic::TensorType::kInt64);
-  ExpectTensorRoundTrip(builder, {"value", "integer"});
+  for (const char *name : {"value", "integer"}) {
+    EXPECT_FALSE(builder.HasShape(name));
+    ASSERT_TRUE(builder.Shapes().HasType(name));
+    builder.MakeOutput(name);
+  }
+  const ModelProto model = builder.ToModel();
+  core::builder::GraphBuilder imported(model, SchemaLookup());
+  const ModelProto exported = imported.ToModel();
+  ASSERT_EQ(exported.graph().output().size(), 2u);
+  for (std::size_t i = 0; i < exported.graph().output().size(); ++i) {
+    const auto &output = exported.graph().output(i);
+    EXPECT_EQ(output.name(), i == 0 ? "value" : "integer");
+    EXPECT_EQ(output.type().tensor_type().elem_type(),
+              i == 0 ? TensorProto::FLOAT : TensorProto::INT64);
+    EXPECT_FALSE(output.type().tensor_type().has_shape());
+    EXPECT_FALSE(imported.HasShape(output.name().value()));
+    EXPECT_TRUE(output.type().Equals(imported.Shapes().GetType(output.name().value())));
+  }
 }
 
 TEST(GraphBuilderControlflow, ImportsScanInLocalFunctionWithReferencedBodyAttribute) {

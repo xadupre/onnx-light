@@ -61,12 +61,17 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable();
  * @param op_type The ONNX operator type name (e.g. ``"Abs"``).
  * @param fn      The shape function implementing the ``ComputeShape*`` rule.
  * @param accepts_structured_inputs Whether the function explicitly handles structured values.
+ * @param accepts_type_only_tensor_inputs Whether the function handles tensor types without rank.
  */
 void RegisterComputeShapeFn(const std::string &domain, const std::string &op_type,
-                            ComputeShapeFn fn, bool accepts_structured_inputs = false);
+                            ComputeShapeFn fn, bool accepts_structured_inputs = false,
+                            bool accepts_type_only_tensor_inputs = false);
 
 /** Returns whether a registered shape function explicitly accepts structured/encoded inputs. */
 bool AcceptsStructuredShapeInputs(const std::string &domain, const std::string &op_type);
+
+/** Returns whether a registered shape function accepts tensor types without a shape descriptor. */
+bool AcceptsTypeOnlyTensorShapeInputs(const std::string &domain, const std::string &op_type);
 
 /**
  * Signature of every per-operator peak-memory function registered in

@@ -72,6 +72,20 @@ bool HasUnboundAttributes(const NodeProto &node) {
   return false;
 }
 
+bool ShapeInputsAvailable(const ShapesContext &shapes, const NodeProto &node) {
+  for (const std::string &input : core::graph::CollectNodeInputs(node)) {
+    if (input.empty() || shapes.Has(input) || shapes.HasSequence(input)) {
+      continue;
+    }
+    if (!shapes.HasType(input) ||
+        (shapes.GetType(input).has_tensor_type() &&
+         !core::shapes::AcceptsTypeOnlyTensorShapeInputs(node.domain(), node.op_type()))) {
+      return false;
+    }
+  }
+  return true;
+}
+
 // Compares two packed payload fields byte-for-byte without copying.
 template <typename T>
 bool SamePackedData(const utils::RepeatedField<T> &lhs, const utils::RepeatedField<T> &rhs) {
@@ -190,11 +204,39 @@ void SeedDeclaredOutputs(ShapesContext &shapes, const NodeProto &node,
   }
 }
 
+SymTensor RefineTensorDtype(const SymTensor &inferred, TensorType dtype) {
+  SymTensor refined(inferred.Data(), dtype, inferred.Shape());
+  refined.SetDevice(inferred.GetDevice());
+  if (inferred.HasMin()) {
+    refined.SetMin(inferred.Min());
+  }
+  if (inferred.HasMax()) {
+    refined.SetMax(inferred.Max());
+  }
+  if (inferred.HasValueAsShape()) {
+    refined.SetValueAsShape(inferred.ValueAsShape());
+  }
+  return refined;
+}
+
 void SeedDeclaredValueInfo(ShapesContext &shapes, const ValueInfoProto &value) {
   if (!value.has_type()) {
     return;
   }
   const std::string name = value.name().value();
+  if (value.type().has_tensor_type() && shapes.Has(name)) {
+    const SymTensor &inferred = shapes.Get(name);
+    const auto dtype = value.type().tensor_type().elem_type();
+    if (inferred.Dtype() == TensorType::kUndefined && dtype != TensorProto::UNDEFINED) {
+      const auto refined_dtype = core::symbolic::DataTypeToTensorType(dtype);
+      if (refined_dtype == TensorType::kUndefined) {
+        throw BuilderError("GraphBuilder: output '" + name +
+                           "' has an unsupported tensor element type.");
+      }
+      shapes.Set(name, RefineTensorDtype(inferred, refined_dtype));
+    }
+    return;
+  }
   SymTensor descriptor;
   if (value.type().has_tensor_type() && value.type().tensor_type().has_shape() &&
       !shapes.Has(name) && SymTensorFromValueInfo(value, descriptor)) {
@@ -799,16 +841,9 @@ bool GraphBuilder::RefreshDependentNodes(
       }
     }
 
-    bool ready = ShapeFunctionAvailable(materialized) && !HasUnboundAttributes(materialized);
-    for (const std::string &input : core::graph::CollectNodeInputs(materialized)) {
-      if (!input.empty() && !compute_.Shapes().Has(input) &&
-          !compute_.Shapes().HasSequence(input) &&
-          !(compute_.Shapes().HasType(input) &&
-            !compute_.Shapes().GetType(input).has_tensor_type())) {
-        ready = false;
-        break;
-      }
-    }
+    const bool ready = ShapeFunctionAvailable(materialized) &&
+                       !HasUnboundAttributes(materialized) &&
+                       ShapeInputsAvailable(compute_.Shapes(), materialized);
     if (ready) {
       compute_.Shapes().set_current_node_index(static_cast<int64_t>(index));
       compute_.Shapes().ComputeShapeNode(materialized);
@@ -834,6 +869,16 @@ bool GraphBuilder::RefreshDependentNodes(
     }
     refreshed_references.emplace(index, std::move(references));
     compute_.AppendNodeConstant(stored, index);
+  }
+  for (auto &output : outputs_) {
+    const std::string name = output.name().value();
+    if (affected_values.count(name) != 0 && output.has_type() && output.type().has_tensor_type() &&
+        Shapes().Has(name)) {
+      ValueInfoProto inferred;
+      if (SymTensorToValueInfo(Shapes().Get(name), inferred)) {
+        *output.mutable_type() = inferred.type();
+      }
+    }
   }
   compute_.RefreshNodes(nodes_, refreshed_references, compute_.Shapes(), affected_values, device_);
   if (propagate_to_parent && !ancestor_refresh_suppressed_ && parent_ != nullptr &&
@@ -935,9 +980,11 @@ void GraphBuilder::RebuildStructuredState(bool refresh_ancestors) {
   std::unordered_set<std::string> input_names;
   for (const auto &input : inputs_) {
     input_names.insert(input.name().value());
-    if (input.has_type() &&
-        (!input.type().has_tensor_type() || input.type().tensor_type().has_shape())) {
-      shapes.SetType(input.name().value(), input.type());
+    SeedDeclaredValueInfo(shapes, input);
+    for (const auto &output : outputs_) {
+      if (output.name() == input.name()) {
+        SeedDeclaredValueInfo(shapes, output);
+      }
     }
   }
   for (const auto &initializer : initializers_) {
@@ -964,14 +1011,8 @@ void GraphBuilder::RebuildStructuredState(bool refresh_ancestors) {
   for (std::size_t i = 0; i < nodes_.size(); ++i) {
     NodeProto node = nodes_[i];
     MaterializeGraphReferences(node);
-    bool ready = ShapeFunctionAvailable(node) && !HasUnboundAttributes(node);
-    for (const auto &input : core::graph::CollectNodeInputs(node)) {
-      if (!input.empty() && !shapes.Has(input) && !shapes.HasSequence(input) &&
-          !(shapes.HasType(input) && !shapes.GetType(input).has_tensor_type())) {
-        ready = false;
-        break;
-      }
-    }
+    const bool ready = ShapeFunctionAvailable(node) && !HasUnboundAttributes(node) &&
+                       ShapeInputsAvailable(shapes, node);
     if (ready) {
       shapes.set_current_node_index(static_cast<int64_t>(i));
       shapes.ComputeShapeNode(node);
@@ -1230,6 +1271,71 @@ const std::string &GraphBuilder::MakeInput(const std::string &name, TensorType d
 void GraphBuilder::MakeOutput(const ValueInfoProto &value_info) {
   const std::string name = value_info.name().value();
   ValidateSubgraphOutput(name);
+  ValueInfoProto output = value_info;
+  if (output.has_type() && output.type().has_tensor_type() &&
+      output.type().tensor_type().has_shape()) {
+    for (auto &dim : output.mutable_type()->mutable_tensor_type()->mutable_shape()->ref_dim()) {
+      if (!dim.has_dim_value() && !dim.has_dim_param()) {
+        dim.set_dim_param("");
+      }
+    }
+  }
+  bool tensor_refined = false;
+  SymTensor refined;
+  if (value_info.has_type() && value_info.type().has_tensor_type() && Shapes().Has(name)) {
+    const auto &declared = value_info.type().tensor_type();
+    const SymTensor &inferred = Shapes().Get(name);
+    auto dtype = TensorTypeToDataType(inferred.Dtype());
+    bool compatible = declared.elem_type() == TensorProto::UNDEFINED ||
+                      dtype == TensorProto::UNDEFINED || declared.elem_type() == dtype;
+    if (declared.has_shape()) {
+      const auto &dims = declared.shape().dim();
+      compatible = compatible && dims.size() == inferred.Shape().Rank();
+      for (std::size_t i = 0; compatible && i < dims.size(); ++i) {
+        const auto &actual = inferred.Shape()[i];
+        compatible =
+            !dims[i].has_dim_value() || !actual.IsInt() || dims[i].dim_value() == actual.AsInt();
+      }
+    }
+    if (!compatible) {
+      throw BuilderError("GraphBuilder: output '" + name +
+                         "' has an incompatible tensor type or shape.");
+    }
+    if (dtype == TensorProto::UNDEFINED && declared.elem_type() != TensorProto::UNDEFINED) {
+      dtype = declared.elem_type();
+      const auto refined_dtype = core::symbolic::DataTypeToTensorType(dtype);
+      if (refined_dtype == TensorType::kUndefined) {
+        throw BuilderError("GraphBuilder: output '" + name +
+                           "' has an unsupported tensor element type.");
+      }
+      refined = RefineTensorDtype(inferred, refined_dtype);
+      tensor_refined = true;
+    }
+    auto *tensor = output.mutable_type()->mutable_tensor_type();
+    tensor->set_elem_type(dtype);
+    tensor->clear_shape();
+    auto *shape = tensor->mutable_shape();
+    for (const auto &dimension : inferred.Shape().Dims()) {
+      auto *dim = shape->add_dim();
+      if (dimension.IsInt()) {
+        dim->set_dim_value(dimension.AsInt());
+      } else {
+        dim->set_dim_param(dimension.AsExpr());
+      }
+    }
+  } else if (value_info.has_type() && value_info.type().has_tensor_type() &&
+             Shapes().HasType(name) && Shapes().GetType(name).has_tensor_type()) {
+    const auto inferred_dtype = Shapes().GetType(name).tensor_type().elem_type();
+    const auto declared_dtype = value_info.type().tensor_type().elem_type();
+    if (inferred_dtype != TensorProto::UNDEFINED && declared_dtype != TensorProto::UNDEFINED &&
+        inferred_dtype != declared_dtype) {
+      throw BuilderError("GraphBuilder: output '" + name +
+                         "' has an incompatible tensor element type.");
+    }
+    if (inferred_dtype != TensorProto::UNDEFINED) {
+      output.mutable_type()->mutable_tensor_type()->set_elem_type(inferred_dtype);
+    }
+  }
   bool declaration_added = false;
   if (value_info.has_type() &&
       (HasStructuredType(value_info.type()) || Shapes().HasEncodedValue(name))) {
@@ -1247,19 +1353,28 @@ void GraphBuilder::MakeOutput(const ValueInfoProto &value_info) {
     compute_.Shapes().SetType(value_info.name().value(), value_info.type());
     declaration_added = true;
   }
+  if (tensor_refined) {
+    SeedShape(name, std::move(refined));
+  }
   SymTensor descriptor;
   if (value_info.has_type() && value_info.type().has_tensor_type() &&
       value_info.type().tensor_type().has_shape() && !Shapes().Has(name) &&
-      SymTensorFromValueInfo(value_info, descriptor)) {
+      SymTensorFromValueInfo(output, descriptor)) {
     SeedShape(name, std::move(descriptor));
-    declaration_added = true;
+    tensor_refined = true;
   }
-  outputs_.push_back(value_info);
+  outputs_.push_back(std::move(output));
   compute_.SeedValueTag(name, DeclaredValueTag(value_info), nodes_);
   compute_.SeedReuseOutput(value_info.name().value(), nodes_, compute_.Shapes());
   if (declaration_added) {
     RebuildStructuredState();
   } else {
+    if (tensor_refined) {
+      std::unordered_set<std::string> affected_values{name};
+      RefreshDependentNodes(
+          [](const NodeProto &, const std::unordered_set<std::string> &) { return false; },
+          affected_values, /*propagate_to_parent=*/false);
+    }
     RefreshAfterMutation();
   }
 }
@@ -1793,16 +1908,8 @@ GraphBuilder::MakeNode(const std::string &op_type, const std::vector<std::string
   // registered for its operator; unregistered operators simply leave their
   // outputs without an inferred descriptor.
   if (ShapeFunctionAvailable(node)) {
-    bool known_inputs = true;
-    for (const std::string &input : core::graph::CollectNodeInputs(materialized)) {
-      if (!input.empty() && !compute_.Shapes().Has(input) &&
-          !compute_.Shapes().HasSequence(input) &&
-          !(Shapes().HasType(input) && !Shapes().GetType(input).has_tensor_type())) {
-        known_inputs = false;
-        break;
-      }
-    }
-    if (known_inputs && !HasUnboundAttributes(materialized)) {
+    if (ShapeInputsAvailable(compute_.Shapes(), materialized) &&
+        !HasUnboundAttributes(materialized)) {
       compute_.Shapes().set_current_node_index(static_cast<int64_t>(nodes_.size()));
       compute_.Shapes().ComputeShapeNode(materialized);
     }

@@ -296,6 +296,13 @@ public:
   const std::string &MakeInput(const std::string &name, TensorType dtype, const SymShape &shape);
 
   /// Declares a graph output from a ready-made :cpp:class:`ValueInfoProto`.
+  /// Rejects tensor declarations incompatible with an existing inferred descriptor
+  /// and uses the inferred tensor type and shape for compatible declarations.
+  /// Refines an undefined inferred element type from a concrete declaration and
+  /// incrementally refreshes affected consumers and compute metadata. Retains
+  /// that refinement after producer reinference and rebuilding, including when
+  /// the output is also a graph input, and accepts unknown inferred rank.
+  /// Normalizes anonymous declared dimensions to empty symbolic dimensions.
   void MakeOutput(const ValueInfoProto &value_info);
 
   /// Declares ``name`` (which must already exist) as a graph output described

@@ -51,6 +51,41 @@ TEST(OnnxOptimShapeInference, DispatchesAbs) {
             core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat, shape));
 }
 
+TEST(OnnxOptimShapeInference, PropagatesSequenceAtUnknownRankThroughAbsAndIdentity) {
+  ModelProto model;
+  model.set_ir_version(10);
+  model.add_opset("", 18);
+  auto *graph = model.mutable_graph();
+  auto *sequence = graph->add_input();
+  sequence->set_name("s");
+  sequence->mutable_type()
+      ->mutable_sequence_type()
+      ->mutable_elem_type()
+      ->mutable_tensor_type()
+      ->set_elem_type(TensorProto::FLOAT);
+  auto *position = graph->add_input();
+  position->set_name("p");
+  position->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::INT64);
+  position->mutable_type()->mutable_tensor_type()->mutable_shape();
+  graph->add_node(MakeNode("SequenceAt", {"s", "p"}, {"z"}));
+  graph->add_node(MakeNode("Abs", {"z"}, {"absolute"}));
+  graph->add_node(MakeNode("Identity", {"absolute"}, {"result"}));
+  graph->add_output()->set_name("result");
+  core::shapes::ShapesContext ctx;
+  ctx.ComputeShapeModel(model);
+  for (const char *name : {"z", "absolute", "result"}) {
+    EXPECT_FALSE(ctx.Has(name));
+    ASSERT_TRUE(ctx.HasType(name));
+    ASSERT_TRUE(ctx.GetType(name).has_tensor_type());
+    EXPECT_EQ(ctx.GetType(name).tensor_type().elem_type(), TensorProto::FLOAT);
+    EXPECT_FALSE(ctx.GetType(name).tensor_type().has_shape());
+  }
+  ctx.ApplyInferredShapesToModel(model);
+  ASSERT_TRUE(model.graph().output(0).has_type());
+  EXPECT_EQ(model.graph().output(0).type().tensor_type().elem_type(), TensorProto::FLOAT);
+  EXPECT_FALSE(model.graph().output(0).type().tensor_type().has_shape());
+}
+
 TEST(OnnxOptimShapeInference, SupportsUtilsStringLookupForNodeOutput) {
   NodeProto node = MakeNode("Abs", {"X"}, {"Y"});
   core::shapes::ShapesContext ctx;

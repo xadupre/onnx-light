@@ -423,10 +423,10 @@ void ComputeShapeUpsample(ShapesContext &ctx, const NodeProto &node);
  *
  * The output dtype always matches the input dtype (type constraint ``T1``)
  * and the output rank equals the input rank. Per-axis output dims are
- * computed concretely when both the corresponding input dim and the
- * ``sizes`` constant are statically known (data-propagation lattice only
- * carries integer shape values, so ``scales`` -- a FLOAT input -- always
- * leaves dims symbolic).
+ * computed from constant ``sizes``, including aspect-ratio policies when the
+ * resized input dimensions are concrete, or from uniform constant ``scales``.
+ * Otherwise resized dimensions stay symbolic; axes not selected for resizing
+ * retain their input dimensions.
  */
 void ComputeShapeResize(ShapesContext &ctx, const NodeProto &node);
 

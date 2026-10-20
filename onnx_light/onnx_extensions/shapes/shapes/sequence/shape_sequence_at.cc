@@ -48,11 +48,29 @@ void ComputeShapeSequenceAt(ShapesContext &ctx, const NodeProto &node) {
       shape_known = true;
     }
   }
+  if (!shape_known && !seq.HasElemShapes() && ctx.HasType(node.input(0))) {
+    const auto &declared = ctx.GetType(node.input(0));
+    if (declared.has_sequence_type() && declared.sequence_type().elem_type().has_tensor_type()) {
+      const auto &element = declared.sequence_type().elem_type().tensor_type();
+      if (element.has_shape()) {
+        for (const auto &dim : element.shape().dim()) {
+          out_shape.PushBack(dim.has_dim_value()
+                                 ? SymDim(dim.dim_value())
+                                 : SymDim(dim.has_dim_param() ? dim.dim_param().value() : ""));
+        }
+        shape_known = true;
+      }
+    }
+  }
 
   if (shape_known) {
     ctx.Set(node.output(0), SymTensor(nullptr, elem_dtype, out_shape));
+  } else if (elem_dtype != TensorType::kUndefined) {
+    TypeProto type;
+    type.mutable_tensor_type()->set_elem_type(core::symbolic::TensorTypeToDataType(elem_dtype));
+    ctx.SetType(node.output(0), type);
   } else {
-    ctx.Set(node.output(0), SymTensor(nullptr, elem_dtype, SymShape{}));
+    ctx.Erase(node.output(0));
   }
 }
 

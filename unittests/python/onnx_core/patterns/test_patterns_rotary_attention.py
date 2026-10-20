@@ -149,7 +149,7 @@ def _make_rotary_concat_slice(*, negate_first: bool, gap: bool = False, nonzero:
     return _make_model(
         nodes,
         [_value_info("X", FLOAT, [1, 2, 3, 8])],
-        [_value_info("Y", FLOAT, [1, 2, 3, 8])],
+        [_value_info("Y", FLOAT, [1, 2, 3, left_width + right_width])],
         [
             _initializer("start0", [0], np.int64),
             _initializer("end0", [left_end], np.int64),
@@ -296,7 +296,7 @@ def _make_causal_mask(*, shifted: bool, expose_range: bool = False):
         )
     else:
         nodes.append(oh.make_node("LessOrEqual", ["u1", "u2"], ["mask"]))
-    outputs = [_value_info("mask", BOOL, [1, 1, 5, 2])]
+    outputs = [_value_info("mask", BOOL, [1, 1, 2, 5])]
     if expose_range:
         outputs.append(_value_info("range2", INT64, [2]))
     return _make_model(
@@ -331,7 +331,7 @@ def _make_causal_mask_mul_add():
     return _make_model(
         nodes,
         [_value_info("X", FLOAT, [2, 3, 4])],
-        [_value_info("mask", INT64, [1, 3, 4, 1])],
+        [_value_info("mask", INT64, [4, 1, 1, 3])],
         [
             _initializer("zero", 0, np.int64),
             _initializer("one", 1, np.int64),

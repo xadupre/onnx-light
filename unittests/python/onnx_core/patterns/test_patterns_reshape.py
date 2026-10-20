@@ -738,7 +738,7 @@ class TestPatternsReshape(ExtTestCase):
 
     def test_unsqueeze_or_squeeze_reshape(self):
         self._optimize_and_check(
-            self._make_unsqueeze_reshape(["a", 8, 16], 0, [-1, 128], ["a*2", 64]),
+            self._make_unsqueeze_reshape(["a", 8, 16], 0, [-1, 128], ["a", 128]),
             {"X": self._range(32, 8, 16)},
             ["UnsqueezeOrSqueezeReshape"],
             ["Reshape"],

@@ -729,6 +729,8 @@ KernelPreparationMemory RuntimeSession::EstimatePreparationMemory(const RuntimeC
 }
 
 std::vector<KernelPreparationInfo> RuntimeSession::pending_preparations() const {
+  if (preparation_failure_ && preparation_node_indices_.size() < preparations_.size())
+    std::rethrow_exception(preparation_failure_);
   std::vector<KernelPreparationInfo> pending;
   pending.reserve(preparations_.size());
   for (size_t index = 0; index < preparations_.size(); ++index) {

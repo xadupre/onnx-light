@@ -1416,6 +1416,37 @@ TEST(OnnxOptimShapesContextLessEqualConstraint, AddAndQuery) {
   EXPECT_EQ(ctx.LessEqualConstraintsSize(), 2u);
 }
 
+TEST(OnnxOptimShapesContextConstraints, PreservesSharedAndExplicitContributions) {
+  core::shapes::ShapesContext ctx;
+  ctx.SetCustomShapeInferenceFunction("constraint_test", "Contribute",
+                                      [](core::shapes::ShapesContext &inner, const NodeProto &) {
+                                        inner.AddConstraint("A", "B");
+                                        inner.AddLessEqualConstraint("count", "8");
+                                      });
+  const NodeProto first = MakeNode("Contribute", {}, {"first"}, "constraint_test");
+  const NodeProto second = MakeNode("Contribute", {}, {"second"}, "constraint_test");
+  ctx.ComputeShapeNode(first);
+  ctx.ComputeShapeNode(second);
+  ctx.EraseNodeConstraints(first);
+  EXPECT_TRUE(ctx.HasConstraint("A", "B"));
+  EXPECT_TRUE(ctx.HasLessEqualConstraint("count", "8"));
+  ctx.EraseNodeConstraints(second);
+  EXPECT_EQ(ctx.ConstraintsSize(), 0u);
+  EXPECT_EQ(ctx.LessEqualConstraintsSize(), 0u);
+
+  ctx.ComputeShapeNode(first);
+  EXPECT_FALSE(ctx.AddConstraint("B", "A"));
+  EXPECT_FALSE(ctx.AddLessEqualConstraint("count", "8"));
+  ctx.EraseNodeConstraints(first);
+  EXPECT_TRUE(ctx.HasConstraint("A", "B"));
+  EXPECT_TRUE(ctx.HasLessEqualConstraint("count", "8"));
+  ctx.ClearInferredState();
+  ctx.ComputeShapeNode(first);
+  ctx.EraseNodeConstraints(first);
+  EXPECT_EQ(ctx.ConstraintsSize(), 0u);
+  EXPECT_EQ(ctx.LessEqualConstraintsSize(), 0u);
+}
+
 TEST(OnnxOptimShapesContextEventLog, DisabledByDefault) {
   core::shapes::ShapesContext ctx;
   EXPECT_FALSE(ctx.events_enabled());

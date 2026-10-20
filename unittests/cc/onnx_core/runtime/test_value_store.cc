@@ -172,24 +172,30 @@ TEST(ValueStore, UsesStableSlotsAndAllocatorBackedRuntimeValues) {
   EXPECT_EQ(store.prepared_bytes(), 4 * sizeof(float));
 }
 
-TEST(ValueStore, ChecksReadinessByKeyWithoutCreatingSlots) {
+TEST(ValueStore, FindsSlotsByKeyWithoutCreatingThem) {
   ValueStore store;
   const ValueStore &view = store;
-  EXPECT_FALSE(view.IsReady("missing"));
+  EXPECT_EQ(view.Find("missing"), std::nullopt);
   EXPECT_EQ(store.slot_count(), 0u);
-  EXPECT_THROW(view.IsReady(""), std::runtime_error);
+  EXPECT_THROW(view.Find(""), std::runtime_error);
   const auto slot = store.Bind("prepared");
-  EXPECT_FALSE(view.IsReady("prepared"));
+  const auto found = view.Find("prepared");
+  ASSERT_TRUE(found.has_value());
+  EXPECT_EQ(*found, slot);
+  EXPECT_FALSE(view.IsReady(*found));
   Tensor tensor = store.AllocateTensor(TensorProto::FLOAT, {1}, sizeof(float));
   tensor.As<float>()[0] = 7.0f;
-  EXPECT_FALSE(view.IsReady("prepared"));
+  EXPECT_FALSE(view.IsReady(*found));
   store.Publish(slot, RuntimeValue(std::move(tensor)));
-  EXPECT_TRUE(view.IsReady("prepared"));
-  EXPECT_FALSE(view.IsReady("missing"));
+  EXPECT_EQ(view.Find("prepared"), found);
+  EXPECT_TRUE(view.IsReady(*found));
+  EXPECT_FLOAT_EQ(view.Get(*found).tensor.As<float>()[0], 7.0f);
+  EXPECT_EQ(view.Find("missing"), std::nullopt);
   EXPECT_EQ(store.slot_count(), 1u);
   EXPECT_EQ(store.prepared_bytes(), sizeof(float));
   const ValueStore other;
-  EXPECT_FALSE(other.IsReady("prepared"));
+  EXPECT_EQ(other.Find("prepared"), std::nullopt);
+  EXPECT_THROW(other.IsReady(*found), std::runtime_error);
 }
 
 TEST(ValueStore, RejectsSlotsFromAnotherStoreWithTheSameIndex) {

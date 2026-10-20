@@ -98,8 +98,8 @@ public:
 
   Slot Bind(std::string key);
   bool IsReady(const Slot &slot) const;
-  /// Checks publication without creating a slot; unknown keys return false.
-  bool IsReady(const std::string &key) const;
+  /// Looks up a slot without creating it; unknown keys return std::nullopt.
+  std::optional<Slot> Find(const std::string &key) const;
   Tensor AllocateTensor(int32_t data_type, const Shape &shape, size_t n_bytes);
   void Publish(const Slot &slot, RuntimeValue value);
   const RuntimeValue &Get(const Slot &slot) const;

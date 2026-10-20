@@ -15,10 +15,11 @@ associates a stable ``uint32_t`` index with the originating store. ``IsReady``,
 stores use the same numeric index. Raw integers cannot be used as handles;
 ``Slot::index()`` exposes the index only for diagnostics.
 
-``IsReady(key)`` checks publication through a const store without binding or
-creating a slot. Unknown keys and bound but unpublished slots return false;
-empty keys are rejected. Preparation memory estimators can use this lookup
-to avoid charging for an artifact that is already ready in the same store.
+``Find(key)`` looks up a slot through a const store without binding or creating
+one. Unknown keys return ``std::nullopt``; empty keys are rejected. A returned
+slot may still be unpublished, so callers check it with ``IsReady(slot)`` before
+reading its value. Preparation memory estimators can use this lookup to avoid
+charging for an artifact that is already ready in the same store.
 
 After publication, ``BindForRead(slot)`` checks ownership, bounds, and readiness
 once and returns a ``ValueStore::BoundSlot``. It contains only the store pointer

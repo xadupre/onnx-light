@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <bit>
 #include <chrono>
+#include <iterator>
 #include <limits>
 #include <map>
 #include <set>
@@ -1691,8 +1692,45 @@ GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const
     MergeImport(model.ref_opset_import(), opset);
   for (const auto &function : local_functions_)
     MergeFunction(model.ref_functions(), function->BuildFunction(function->function_domain_));
-  for (const auto &function : rewrites.added_functions())
-    MergeFunction(model.ref_functions(), function);
+  for (const auto &function : rewrites.added_functions()) {
+    const auto key = Identity(function);
+    const auto identical =
+        std::find_if(model.functions().begin(), model.functions().end(), [&](const auto &existing) {
+          return Identity(existing) == key && existing.Equals(function);
+        });
+    if (identical != model.functions().end()) {
+      continue;
+    }
+    const auto source =
+        std::find_if(local_functions_.begin(), local_functions_.end(), [&](const auto &existing) {
+          return FunctionKey(RewriteDomain(existing->function_domain_), existing->name_,
+                             existing->function_template_.overload().value()) == key;
+        });
+    if (source == local_functions_.end()) {
+      MergeFunction(model.ref_functions(), function);
+      continue;
+    }
+    ModelProto comparison;
+    comparison.mutable_graph();
+    comparison.ref_struct_types() = Shapes().StructTypes();
+    for (const auto &[domain, version] : (*source)->opsets_) {
+      comparison.add_opset(domain, version);
+    }
+    comparison.ref_functions() = model.functions();
+    const auto definition =
+        std::find_if(comparison.ref_functions().begin(), comparison.ref_functions().end(),
+                     [&](const auto &existing) { return Identity(existing) == key; });
+    const std::size_t position =
+        static_cast<std::size_t>(std::distance(comparison.ref_functions().begin(), definition));
+    *definition = function;
+    GraphBuilder normalized(comparison, schema_lookup_);
+    const auto &candidate = *normalized.local_functions_[position];
+    auto canonical = candidate.BuildFunction((*source)->function_domain_);
+    if (candidate.opsets_ == (*source)->opsets_) {
+      canonical.ref_opset_import() = model.functions(position).opset_import();
+    }
+    MergeFunction(model.ref_functions(), canonical);
+  }
   *model.mutable_graph() =
       BuildGraphImpl(/*validate_persistent_bindings=*/true, /*share_initializers=*/true);
   FunctionIndex functions;

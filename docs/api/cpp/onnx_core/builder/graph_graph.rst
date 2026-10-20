@@ -43,9 +43,10 @@ override a native operation already captured in an initializer recipe.
 preserving the source builder. Added functions must be compatible with existing
 calls before any edit is applied: an incompatible signature or a conflicting
 function name raises an error rather than postponing validation or renaming the
-function. Each edit updates affected shapes and annotations in dependency order;
-the returned builder preserves recorded node positions and has up-to-date memory
-metadata.
+function. Identical definitions are reused after normalizing builder-generated
+annotations and imports. Each edit updates affected shapes and annotations in
+dependency order; the returned builder preserves recorded node positions and has
+up-to-date memory metadata.
 
 Consecutive node-only edits in the same graph are coalesced when they replace
 original nodes at their first matched position. Live-rank queries translate

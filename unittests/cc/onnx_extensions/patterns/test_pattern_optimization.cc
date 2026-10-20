@@ -478,6 +478,34 @@ TEST(PatternOptimization, ModelReplayRejectsInvalidPreparationAndConflictingDefi
   }
 }
 
+TEST(PatternOptimization, AcceptsIdenticalFunctionsAndRejectsConflictingBodies) {
+  ScopedAddKernel kernel;
+  for (bool changed_builder : {false, true}) {
+    for (bool changed_definition : {false, true}) {
+      SCOPED_TRACE(changed_builder);
+      SCOPED_TRACE(changed_definition);
+      auto original = PreparationModel();
+      original.add_opset("test.prepare", 1);
+      original.ref_functions().push_back(PreparationAdd());
+      core::builder::GraphBuilder builder(original, SchemaLookup());
+      if (changed_builder) {
+        builder.LocalFunction("Prepare").MakeNode("Neg", {"A"}, {"extra"});
+      }
+      auto plan = PreparationPlan();
+      if (changed_definition) {
+        plan.ref_added_functions()[0].ref_node()[0].set_op_type("Mul");
+      }
+      if (changed_builder || changed_definition) {
+        EXPECT_THROW(builder.ApplyRewritings(plan), core::builder::BuilderError);
+      } else {
+        const auto result = builder.ApplyRewritings(plan).ToModel();
+        ASSERT_EQ(result.functions_size(), 1);
+        EXPECT_FLOAT_EQ(core::runtime::RunModel(result, {})[0].AsFloat()[0], 12);
+      }
+    }
+  }
+}
+
 TEST(PatternOptimization, ModelReplayRetainsFunctionsUsedByReplacementNodes) {
   ScopedAddKernel kernel;
   ModelProto model = PreparationModel();

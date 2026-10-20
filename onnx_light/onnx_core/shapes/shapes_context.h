@@ -558,12 +558,13 @@ public:
   // ``op_type`` is not registered may still be valid if it calls a
   // model-local :cpp:class:`FunctionProto` declared in
   // ``ModelProto::functions``. Local functions are addressed by a
-  // ``"<domain>:<name>"`` key (matching :cpp:func:`GetFunctionIdentifier`
-  // in ``onnx_lib``); :cpp:func:`ComputeShapeModel` registers every
+  // escaped ``"<domain>:<name>[:<overload>]"`` key;
+  // :cpp:func:`ComputeShapeModel` registers every
   // entry of ``model.functions()`` here so that
   // :cpp:func:`ComputeShapeNode` can detect and expand the call.
 
-  /// Returns a domain/name key, with a suffix for nonempty overloads.
+  /// Returns an escaped domain/name key, with a suffix for nonempty overloads.
+  /// Percent signs and colons inside each component use percent encoding.
   static std::string LocalFunctionKey(const std::string &domain, const std::string &name,
                                       const std::string &overload = "");
 
@@ -587,7 +588,7 @@ public:
 
   /// ``true`` when a model-local function is registered for ``key``.
   /// ``key`` is produced by LocalFunctionKey; empty overloads retain the
-  /// ``"<domain>:<name>"`` identifier.
+  /// escaped ``"<domain>:<name>"`` identifier.
   bool HasLocalFunction(const std::string &key) const {
     return local_functions_.find(key) != local_functions_.end();
   }

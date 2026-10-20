@@ -192,10 +192,9 @@ private:
   void Rebuild();
   void RebuildSuccessors();
   std::size_t Cleanup(utils::RepeatedProtoField<LocalRewritingProto> &rewrites, bool remove_unused);
-  void ApplyRewriting(const LocalRewritingProto &rewrite,
-                      const utils::RepeatedProtoField<FunctionProto> &functions);
-  static void ReplayEdits(GraphBuilder &builder, const RewritingProto &rewrites,
-                          const utils::RepeatedProtoField<FunctionProto> &functions);
+  struct ReplayState;
+  static GraphProto ReplayEdits(const GraphBuilder &builder, const RewritingProto &rewrites,
+                                const utils::RepeatedProtoField<FunctionProto> &functions);
 
   // Returns the concrete dims of the constant ``name`` (empty vector for a
   // scalar) into ``dims``, or ``false`` when the shape cannot be determined.
@@ -251,7 +250,9 @@ GraphProto Replay(const ModelProto &model, const RewritingProto &rewrites,
 /**
  * Replays edits and one-time initializer recipes, retaining model metadata.
  *
- * Installs shared functions and absent opset imports before applying edits.
+ * Imports the source with its original function signatures and stages edits
+ * without mutating that builder. Validates the completed graph with the merged
+ * function definitions and opset imports.
  * Rejects conflicting definitions/imports and nonconstant or nondeterministic
  * preparation. The source model and the rewrite collection remain unchanged.
  */

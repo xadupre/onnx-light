@@ -599,6 +599,89 @@ TEST(PatternOptimization, ModelReplayUsesOverloadedFunctionSignatureBeforeNative
   EXPECT_FLOAT_EQ(core::runtime::RunModel(replayed, {})[0].AsFloat()[0], 3);
 }
 
+TEST(PatternOptimization, ModelReplayReplacesCallsBeforeActivatingChangedFunctionSignatures) {
+  ScopedAddKernel kernel;
+  for (bool multiple_edits : {false, true}) {
+    SCOPED_TRACE(multiple_edits);
+    auto original = PreparationModel();
+    original.mutable_graph()->ref_node()[0] = MakeNode("Neg", {"a"}, {"y"});
+    if (multiple_edits) {
+      original.mutable_graph()->ref_node().push_back(MakeNode("Neg", {"b"}, {"z"}));
+      auto output = original.graph().output(0);
+      output.set_name("z");
+      original.mutable_graph()->ref_output().push_back(output);
+    }
+    RewritingProto plan;
+    auto function = PreparationAdd();
+    function.set_name("Neg");
+    function.set_domain("");
+    function.clr_output();
+    function.add_output("C");
+    plan.ref_added_functions().push_back(function);
+    EXPECT_THROW(core::builder::ReplayModel(original, plan, SchemaLookup()),
+                 core::builder::BuilderError);
+    auto &edit = *plan.add_rewrites();
+    edit.add_matched_nodes(0);
+    edit.add_added_nodes_positions(0);
+    edit.ref_added_nodes().push_back(MakeNode("Neg", {"a", "b"}, {"y"}));
+    if (multiple_edits) {
+      auto literal = original.graph().initializer(0);
+      literal.set_name("extra");
+      edit.ref_added_initializers().push_back(literal);
+      edit.add_added_initializer_positions(original.graph().initializer_size());
+      auto &second = *plan.add_rewrites();
+      second.add_matched_nodes(1);
+      second.add_added_nodes_positions(1);
+      second.ref_added_nodes().push_back(MakeNode("Neg", {"b", "a"}, {"z"}));
+    }
+    RewritingProto loaded;
+    ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
+    const auto replayed = core::builder::ReplayModel(original, loaded, SchemaLookup());
+    EXPECT_EQ(replayed.graph().node(0).input_size(), 2);
+    const auto outputs = core::runtime::RunModel(replayed, {});
+    for (const auto &output : outputs)
+      EXPECT_FLOAT_EQ(output.AsFloat()[0], 3);
+    EXPECT_THROW(core::builder::Replay(original, loaded, SchemaLookup()),
+                 core::builder::BuilderError);
+  }
+}
+
+TEST(PatternOptimization, ModelReplayDistinguishesFunctionNamesFromOverloads) {
+  auto original = PreparationModel();
+  original.add_opset("local.test", 1);
+  for (bool overloaded : {false, true}) {
+    auto &function = *original.add_functions();
+    function.set_name(overloaded ? "F" : "F:pair");
+    function.set_domain("local.test");
+    if (overloaded)
+      function.set_overload("pair");
+    function.add_input("A");
+    function.add_output("C");
+    function.add_opset("", 18);
+    auto &cast = *function.add_node();
+    cast = MakeNode("Cast", {"A"}, {"C"});
+    auto &attribute = *cast.add_attribute();
+    attribute.set_name("to");
+    attribute.set_type(AttributeProto::INT);
+    attribute.set_i(overloaded ? TensorProto::INT64 : TensorProto::FLOAT);
+  }
+  original.mutable_graph()->ref_node()[0] = MakeNode("F:pair", {"a"}, {"y"}, "local.test");
+  original.mutable_graph()->ref_node().push_back(MakeNode("F", {"a"}, {"z"}, "local.test"));
+  original.mutable_graph()->ref_node().back().set_overload("pair");
+  auto output = original.graph().output(0);
+  output.set_name("z");
+  output.mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::INT64);
+  original.mutable_graph()->ref_output().push_back(output);
+  const auto replayed = core::builder::ReplayModel(original, RewritingProto{}, SchemaLookup());
+  const auto outputs = core::runtime::RunModel(replayed, {});
+  ASSERT_EQ(outputs.size(), 2u);
+  EXPECT_EQ(outputs[0].data_type, TensorProto::FLOAT);
+  EXPECT_EQ(outputs[1].data_type, TensorProto::INT64);
+  core::builder::GraphBuilder builder(replayed, SchemaLookup());
+  EXPECT_EQ(builder.GetShape("y").Dtype(), core::symbolic::TensorType::kFloat);
+  EXPECT_EQ(builder.GetShape("z").Dtype(), core::symbolic::TensorType::kInt64);
+}
+
 TEST(PatternOptimization, DoesNotFoldModelLocalOverridesAsNativeOperators) {
   ScopedAddKernel kernel;
   auto original = PreparationModel();
@@ -759,6 +842,70 @@ TEST(PatternOptimization, GraphReplayChecksNestedGraphsOfReachableFunctions) {
   override.ref_node().push_back(MakeNode("Identity", {"A"}, {"C"}));
   EXPECT_NO_THROW(core::builder::ReplayModel(original, plan, SchemaLookup()));
   EXPECT_THROW(core::builder::Replay(original, plan, SchemaLookup()), core::builder::BuilderError);
+}
+
+TEST(PatternOptimization, GraphReplayBindsFunctionGraphDefaultsAtEachCallSite) {
+  for (bool explicit_binding : {false, true}) {
+    SCOPED_TRACE(explicit_binding);
+    auto original = PreparationModel();
+    original.add_opset("wrapper.test", 1);
+    TensorProto condition;
+    condition.set_name("condition");
+    condition.set_data_type(TensorProto::BOOL);
+    condition.add_int32_data(1);
+    original.mutable_graph()->ref_initializer().push_back(condition);
+    FunctionProto wrapper;
+    wrapper.set_name("Wrapper");
+    wrapper.set_domain("wrapper.test");
+    wrapper.add_input("A");
+    wrapper.add_input("condition");
+    wrapper.add_output("C");
+    wrapper.add_opset("", 18);
+    auto &conditional = *wrapper.add_node();
+    conditional = MakeNode("If", {"condition"}, {"C"});
+    for (const char *name : {"then_branch", "else_branch"}) {
+      auto &reference = *conditional.add_attribute();
+      reference.set_name(name);
+      reference.set_type(AttributeProto::GRAPH);
+      reference.set_ref_attr_name(name);
+      auto &attribute = *wrapper.add_attribute_proto();
+      attribute.set_name(name);
+      attribute.set_type(AttributeProto::GRAPH);
+      auto &branch = *attribute.mutable_g();
+      branch.set_name(name);
+      branch.ref_node().push_back(
+          MakeNode(explicit_binding ? "Identity" : "Neg", {"A"}, {"branch_result"}));
+      auto output = original.graph().output(0);
+      output.set_name("branch_result");
+      branch.ref_output().push_back(output);
+    }
+    original.ref_functions().push_back(wrapper);
+    original.mutable_graph()->ref_node()[0] =
+        MakeNode("Wrapper", {"a", "condition"}, {"y"}, "wrapper.test");
+    if (explicit_binding) {
+      auto second = MakeNode("Wrapper", {"a", "condition"}, {"z"}, "wrapper.test");
+      second.ref_attribute() = wrapper.attribute_proto();
+      for (auto &attribute : second.ref_attribute())
+        attribute.mutable_g()->ref_node()[0].set_op_type("Neg");
+      original.mutable_graph()->ref_node().push_back(std::move(second));
+      auto output = original.graph().output(0);
+      output.set_name("z");
+      original.mutable_graph()->ref_output().push_back(output);
+    }
+    RewritingProto plan;
+    auto &override = *plan.add_added_functions();
+    override.set_name("Neg");
+    override.add_input("A");
+    override.add_output("C");
+    override.add_opset("", 18);
+    override.ref_node().push_back(MakeNode("Identity", {"A"}, {"C"}));
+    RewritingProto loaded;
+    ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
+    const auto replayed = core::builder::ReplayModel(original, loaded, SchemaLookup());
+    EXPECT_FLOAT_EQ(core::runtime::RunModel(replayed, {})[0].AsFloat()[0], 1);
+    EXPECT_THROW(core::builder::Replay(original, loaded, SchemaLookup()),
+                 core::builder::BuilderError);
+  }
 }
 
 TEST(PatternOptimization, ScopedCustomKernelRestoresFactory) {

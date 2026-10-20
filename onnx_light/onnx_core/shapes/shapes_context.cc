@@ -372,7 +372,20 @@ std::string ShapesContext::LocalFunctionKey(const std::string &domain, const std
                                             const std::string &overload) {
   const std::string normalized =
       domain == "ai.onnx" || domain == "onnx.ai" ? std::string() : domain;
-  return normalized + ":" + name + (overload.empty() ? std::string() : ":" + overload);
+  const auto escape = [](const std::string &component) {
+    std::string escaped;
+    for (char value : component) {
+      if (value == '%')
+        escaped += "%25";
+      else if (value == ':')
+        escaped += "%3A";
+      else
+        escaped += value;
+    }
+    return escaped;
+  };
+  return escape(normalized) + ":" + escape(name) +
+         (overload.empty() ? std::string() : ":" + escape(overload));
 }
 
 void ShapesContext::SetLocalFunction(std::shared_ptr<const FunctionProto> func) {

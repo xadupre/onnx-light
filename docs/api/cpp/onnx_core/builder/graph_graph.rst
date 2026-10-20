@@ -8,6 +8,8 @@ definitions with the same domain/name/overload are rejected.
 Imported functions use a namespace independent of graph values and subgraphs;
 different domains and overloads may share a function name. Shape inference
 preserves those identities, including the overload on imported call nodes.
+Identity components escape percent signs and colons so a colon in a function
+name cannot be confused with an overload separator.
 Model-level imports include additions in nested graph scopes, while each
 function keeps its own imports.
 
@@ -29,7 +31,8 @@ their existing ownership during edits and internal metadata analysis; public
 graph exports retain value semantics. ``Replay`` also executes recipes but
 rejects surviving nodes that require newly added imports/functions; use
 ``ReplayModel`` (Python ``replay_model``) for those plans.
-This check includes reachable function bodies and their nested graphs, without
+This check binds function attributes at each call site, including graph-valued
+defaults, and includes reachable function bodies and their nested graphs without
 confusing function-local imports with model-level imports.
 Native constant folding skips operations shadowed by model-local functions,
 so it cannot disagree with function-first dispatch during replay.
@@ -38,21 +41,20 @@ including inference-mode ``Dropout``, which remain ordinary added nodes.
 Optimization rejects a completed plan if a function introduced later would
 override a native operation already captured in an initializer recipe.
 
-``Replay`` coalesces consecutive node-only edits in the same graph when they
-replace original nodes at their first matched position and preserve all
-externally used tensor descriptors. It validates each replacement's inference
-using only its input descriptors, then applies the combined edit with one graph
-analysis. Live-rank queries translate sequential positions without rebuilding
-the node order for every record.
+Replay imports the source using its original function definitions, then stages
+serialized edits in a separate graph state. Neither the source builder nor its
+inferred state is mutated. The completed graph is imported and validated with
+the merged function definitions, allowing rewrites to replace primitive calls
+with calls to added functions that have different signatures.
 
-Edits consuming previously added nodes or reading values produced by earlier edits,
-changing boundary descriptors, modifying initializers or renames, replacing nested
-graphs, or calling model-local functions or context-specific inference callbacks
-end the batch and retain ordinary sequential validation. This includes replacing
-an existing constant under the same name before introducing a new consumer.
-Local functions take precedence even when they share a native operator's name.
-This keeps subgraph identities and invalid-plan diagnostics while avoiding
-repeated full analyses for independent replacements.
+Consecutive node-only edits in the same graph are coalesced when they replace
+original nodes at their first matched position. Live-rank queries translate
+sequential positions without rebuilding the node order for every record.
+Edits consuming previously added nodes, modifying initializers or renames, or
+replacing nested graphs end the batch. Coordinates, initializer conflicts and
+preparation eligibility are checked while staging each edit; shape inference
+uses the final graph and definitions. Subgraph identities remain stable across
+edits even when their referencing nodes move.
 
 .. doxygenfile:: onnx_core/builder/graph_graph.h
    :project: onnx-light

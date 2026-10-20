@@ -76,7 +76,7 @@ Existing callers can retain lazy initialization:
    RuntimeContext context;
    context.Set("x", real_input);
    session.Run(context);          // initializes and prepares before replay
-   context.Set("x", next_input);
+   context.Put("x", next_input, RuntimeEventKind::kInput);
    session.Run(context);          // reuses resolved kernels and packed values
 
 Immutability and availability are separate facts. An external initializer can

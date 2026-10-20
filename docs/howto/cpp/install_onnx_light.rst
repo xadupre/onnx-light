@@ -33,6 +33,43 @@ Speed up the build
 
     cmake --build build-install --parallel 8
 
+Local builds use private precompiled headers (PCHs) to avoid repeatedly parsing
+common headers. The shape and pattern libraries precompile only their shared
+``shapes_context.h`` and ``graph_graph.h`` interfaces, respectively; these PCHs
+are not propagated to consumers. Source files must still include their own
+dependencies and build without PCHs.
+
+Configure with ``-DONNX_LIGHT_USE_PCH=OFF`` to disable PCHs. When ``ccache`` or
+``sccache`` is configured as a compiler launcher, PCHs are disabled by default;
+``-DONNX_LIGHT_USE_PCH=ON`` explicitly overrides that default.
+
+Shape and pattern precompiled headers
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A single clean-build comparison for the shape and pattern PCHs used GCC 13.3,
+Unix Makefiles, Release ``-O3 -DNDEBUG``, kernels, Python bindings and tests
+enabled, and ``--parallel 6``, without compiler caches or reusable build
+outputs. Complete-build timing included PCH construction:
+
+.. list-table:: Single clean-build pair
+   :header-rows: 1
+
+   * - Shape and pattern PCHs
+     - Elapsed
+     - Maximum RSS (KiB)
+   * - Disabled
+     - 22m 46.43s
+     - 2,923,976
+   * - Enabled
+     - 21m 19.36s
+     - 2,923,840
+
+This pair reduced complete-build elapsed time by 87.07s (6.37%). GNU
+``time`` reports maximum process RSS, not aggregate concurrent memory.
+This is a single observation, not a statistical or cross-toolchain speedup
+claim, and predates the separate kernels PCH extension below. The two
+percentages must not be added to predict a combined improvement.
+
 Kernels precompiled headers
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

@@ -11,6 +11,7 @@
     2026-08_kernel_parallelization
     2026-10_kernel_parallelization_completion
     2026-10_guarded_kernel_replay
+    2026-10_serialized_graph_rewriting
     2026-10_offline_semantic_documentation_search
     2026-10_native_lora_reinforcement_learning
     2026-08_onnxruntime_fast_model_loading
@@ -60,6 +61,9 @@ Discussion
 
     * - Plan
       - Contribution
+    * - :ref:`l-next-steps-serialized-graph-rewriting`
+      - Serializes concrete graph rewrites, bundles alternative model variants,
+        and defines canonical, bundled and materialized exports in four PRs.
     * - :ref:`l-next-steps-native-lora-reinforcement-learning`
       - Extends symbolic gradients to native Transformer training, LoRA
         adapters and a bounded REINFORCE agent loop, with numerical and

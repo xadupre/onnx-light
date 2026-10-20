@@ -326,8 +326,7 @@ public:
   /// Clears inferred graph state while preserving configuration and memoized expressions.
   void ClearInferredState() noexcept {
     ClearValues();
-    constraints_.clear();
-    le_constraints_.clear();
+    ClearConstraints();
     subgraph_contexts_.clear();
     events_.clear();
     current_node_index_ = -1;
@@ -392,7 +391,7 @@ public:
     opsets_.clear();
     ClearLocalFunctions();
     custom_shape_inference_.clear();
-    constraints_.clear();
+    ClearConstraints();
     subgraph_contexts_.clear();
     topk_k_dims_.clear();
     dim_values_.clear();
@@ -666,6 +665,7 @@ public:
     }
     Constraint c = (a < b) ? Constraint(a, b) : Constraint(b, a);
     const bool inserted = constraints_.insert(c).second;
+    RecordConstraint(c, false);
     if (inserted && events_enabled_) {
       LogConstraintEvent(ShapeEventAction::kConstraint, c.first, c.second);
     }
@@ -728,6 +728,7 @@ public:
       return false;
     }
     const bool inserted = le_constraints_.insert(LessEqualConstraint(lhs, rhs)).second;
+    RecordConstraint(LessEqualConstraint(lhs, rhs), true);
     if (inserted && events_enabled_) {
       LogConstraintEvent(ShapeEventAction::kConstraintMax, lhs, rhs);
     }
@@ -752,6 +753,10 @@ public:
   LessEqualConstraints() const noexcept {
     return le_constraints_;
   }
+
+  /// Removes only constraints contributed by ``node`` during shape inference.
+  /// Retains constraints also contributed by other nodes or explicit callers.
+  void EraseNodeConstraints(const NodeProto &node);
 
   // ── Shape-inference entry points ────────────────────────────────────
   //
@@ -866,6 +871,10 @@ public:
                               std::vector<std::string> inputs);
 
 private:
+  static std::string ConstraintOwner(const NodeProto &node);
+  void RecordConstraint(const Constraint &constraint, bool less_equal);
+  void ClearConstraints() noexcept;
+
   /// Appends a :cpp:enumerator:`ShapeEventAction::kAdd` /
   /// :cpp:enumerator:`ShapeEventAction::kReplace` event for ``name``
   /// describing ``tensor`` (the descriptor about to be stored). Only
@@ -901,6 +910,14 @@ private:
   CustomShapeInferenceMap custom_shape_inference_;
   std::unordered_set<Constraint, PairStringHash> constraints_;
   std::unordered_set<LessEqualConstraint, PairStringHash> le_constraints_;
+  struct NodeConstraints {
+    std::unordered_set<Constraint, PairStringHash> equal;
+    std::unordered_set<LessEqualConstraint, PairStringHash> less_equal;
+  };
+  std::unordered_map<std::string, NodeConstraints> node_constraints_;
+  std::unordered_map<Constraint, std::size_t, PairStringHash> constraint_counts_;
+  std::unordered_map<LessEqualConstraint, std::size_t, PairStringHash> le_constraint_counts_;
+  std::string constraint_owner_;
   std::map<SubgraphContextKey, std::shared_ptr<ShapesContext>> subgraph_contexts_;
   ShapeEventLog events_;
   std::function<void(const ShapeEvent &)> event_callback_;

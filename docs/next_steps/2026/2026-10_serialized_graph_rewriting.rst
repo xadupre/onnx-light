@@ -214,7 +214,7 @@ This serializes matched edits, not a general declarative matching language.
 PR sequence
 +++++++++++
 
-Each PR depends on the preceding one; ORT integration is a separate consumer.
+Each PR depends on the preceding one; ORT reuses onnx-light as described below.
 
 .. list-table::
    :header-rows: 1
@@ -276,17 +276,11 @@ schemas, kernels and resource requirements before replay on a working model.
 A requested incompatible variant fails with a clear error; canonical
 execution remains an explicit alternative, not a silent fallback.
 
-Optional ORT follow-up
-++++++++++++++++++++++
+ORT integration
++++++++++++++++
 
-`ORT issue #33403 <https://github.com/microsoft/onnxruntime/issues/33403>`_
-and `design PR #33404 <https://github.com/microsoft/onnxruntime/pull/33404>`_
-propose runtime-discovered, post-partition fusion. This proposal instead
-stores edits discovered at export time; neither mechanism implements the
-other.
-
-An ORT consumer PR must establish source-position-to-runtime-node identity
-before preprocessing changes the graph, then validate actual EP ownership,
-kernel availability and resources. It must reject stale plans, not apply
-canonical positions directly to a post-partition graph. Materialized standard
-ONNX export is the simpler initial interoperability path.
+ORT uses onnx-light to load the model and replay the selected
+``RewritingProto`` before its own graph transformations. It then processes the
+resulting model through its normal initialization pipeline. Reuse onnx-light's
+replay implementation; no separate ORT rewrite engine or mapping from source
+positions to post-partition nodes is needed.

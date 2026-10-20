@@ -154,6 +154,16 @@ NodeProto CaptureInitializerCall(const NodeProto &node, const GraphBuilder &buil
 
 using FunctionIndex = std::map<FunctionKey, const FunctionProto *>;
 
+bool IsPreparationPrimitive(const NodeProto &node) {
+  if (core::compute::IsNonDeterministicOp(node.domain(), node.op_type()) ||
+      node.op_type() == "Dropout" || node.op_type() == "If" || node.op_type() == "Loop" ||
+      node.op_type() == "Scan" || node.op_type() == "SequenceMap")
+    return false;
+  return std::none_of(node.attribute().begin(), node.attribute().end(), [](const auto &attribute) {
+    return attribute.has_g() || !attribute.graphs().empty() || !attribute.ref_attr_name().empty();
+  });
+}
+
 // Validates the complete dependency tree before any preparation code executes.
 void ValidatePreparation(const NodeProto &call, const FunctionIndex &functions,
                          std::set<FunctionKey> &active) {
@@ -194,9 +204,7 @@ void ValidatePreparation(const NodeProto &call, const FunctionIndex &functions,
     if (functions.count(Identity(node)) != 0) {
       ValidatePreparation(node, functions, active);
     } else {
-      if (core::compute::IsNonDeterministicOp(node.domain(), node.op_type()) ||
-          node.op_type() == "Dropout" || node.op_type() == "If" || node.op_type() == "Loop" ||
-          node.op_type() == "Scan" || node.op_type() == "SequenceMap") {
+      if (!IsPreparationPrimitive(node)) {
         throw BuilderError("Replay: initializer preparation must be deterministic and stateless.");
       }
       const auto imported = std::find_if(imports.begin(), imports.end(), [&](const auto &opset) {
@@ -784,6 +792,19 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
   const std::size_t original_functions = collection.added_functions().size();
   auto result = OptimizeImpl(max_iter, report, {}, folding_options, remove_unused, collection);
   capture_functions(capture_functions, *root);
+  FunctionIndex functions;
+  for (const auto &function : collection.added_functions())
+    functions.emplace(Identity(function), &function);
+  for (const auto &rewrite : result.rewrites()) {
+    for (const auto &call : rewrite.initializer_calls()) {
+      for (const auto &node : functions.at(Identity(call))->node()) {
+        if (functions.count(Identity(node)) != 0)
+          throw BuilderError("GraphGraph::Optimize: a later function overrides a captured "
+                             "initializer operation '" +
+                             node.op_type().value() + "'.");
+      }
+    }
+  }
   utils::RepeatedProtoField<OperatorSetIdProto> graph_imports;
   const auto capture_imports = [&](const auto &self, const GraphBuilder &scope) -> void {
     for (const auto &[domain, version] : scope.opsets_) {
@@ -1088,11 +1109,13 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
       std::unordered_set<std::string> replacement_outputs;
       for (std::size_t i = 0; i < replacements.size(); ++i) {
         for (const NodeProto &node : replacements[i].rewriting.added_nodes()) {
+          const bool can_prepare = IsPreparationPrimitive(node);
           for (std::size_t o = 0; o < node.output().size(); ++o) {
             const std::string output(node.output(static_cast<std::size_t>(o)));
             if (!output.empty()) {
               output_owners.emplace(output, i);
-              replacement_outputs.insert(output);
+              if (can_prepare)
+                replacement_outputs.insert(output);
             }
           }
         }
@@ -1638,20 +1661,27 @@ GraphProto Replay(const ModelProto &model, const RewritingProto &rewrites,
                      }))
       new_domains.insert(RewriteDomain(opset.domain().value()));
   }
-  const auto validate_graph = [&](const auto &self, const GraphProto &graph) -> void {
-    for (const auto &node : graph.node()) {
+  FunctionIndex functions;
+  for (const auto &function : replayed.functions())
+    functions.emplace(Identity(function), &function);
+  std::set<FunctionKey> visited;
+  const auto validate_nodes = [&](const auto &self, const auto &nodes, bool model_imports) -> void {
+    for (const auto &node : nodes) {
       if (new_functions.count(Identity(node)) != 0 ||
-          new_domains.count(RewriteDomain(node.domain().value())) != 0)
+          (model_imports && new_domains.count(RewriteDomain(node.domain().value())) != 0))
         throw BuilderError("Replay: surviving function/import additions require ReplayModel.");
+      const auto function = functions.find(Identity(node));
+      if (function != functions.end() && visited.insert(function->first).second)
+        self(self, function->second->node(), false);
       for (const auto &attribute : node.attribute()) {
         if (attribute.has_g())
-          self(self, attribute.g());
+          self(self, attribute.g().node(), model_imports);
         for (const auto &child : attribute.graphs())
-          self(self, child);
+          self(self, child.node(), model_imports);
       }
     }
   };
-  validate_graph(validate_graph, replayed.graph());
+  validate_nodes(validate_nodes, replayed.graph().node(), true);
   return std::move(*replayed.mutable_graph());
 }
 

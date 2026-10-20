@@ -29,8 +29,14 @@ their existing ownership during edits and internal metadata analysis; public
 graph exports retain value semantics. ``Replay`` also executes recipes but
 rejects surviving nodes that require newly added imports/functions; use
 ``ReplayModel`` (Python ``replay_model``) for those plans.
+This check includes reachable function bodies and their nested graphs, without
+confusing function-local imports with model-level imports.
 Native constant folding skips operations shadowed by model-local functions,
 so it cannot disagree with function-first dispatch during replay.
+Serialized folding also excludes operations outside the preparation subset,
+including inference-mode ``Dropout``, which remain ordinary added nodes.
+Optimization rejects a completed plan if a function introduced later would
+override a native operation already captured in an initializer recipe.
 
 ``Replay`` coalesces consecutive node-only edits in the same graph when they
 replace original nodes at their first matched position and preserve all

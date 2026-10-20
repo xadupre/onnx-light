@@ -15,6 +15,17 @@ associates a stable ``uint32_t`` index with the originating store. ``IsReady``,
 stores use the same numeric index. Raw integers cannot be used as handles;
 ``Slot::index()`` exposes the index only for diagnostics.
 
+``Find(key) const`` looks up an existing slot without binding or allocating one.
+It returns ``std::nullopt`` for an unknown key (including an empty key), and a
+store-bound slot for a known key, even if its value has not been published.
+Call ``IsReady(*slot)`` to check publication before ``Get`` or ``BindForRead``;
+both reads reject unpublished slots. Estimators can use this lookup through
+``const RuntimeContext::value_store()`` with the same execution cache key used
+by preparation. An already published artifact needs no additional prepared
+allocation: its storage is already included in ``prepared_bytes()``.
+Lookups neither change that total nor create slots, and only search this store,
+not independent stores with the same keys.
+
 After publication, ``BindForRead(slot)`` checks ownership, bounds, and readiness
 once and returns a ``ValueStore::BoundSlot``. It contains only the store pointer
 and a ``uint32_t`` index. Its parameterless ``Get()`` reads the immutable value

@@ -37,6 +37,81 @@ static_assert(std::is_same_v<decltype(std::declval<const RuntimeSession &>().val
                              std::shared_ptr<const ValueStore>>);
 static_assert(std::is_same_v<decltype(std::declval<const RuntimeContext &>().value_store_owner()),
                              std::shared_ptr<const ValueStore>>);
+static_assert(std::is_same_v<decltype(std::declval<const ValueStore &>().Find(
+                                 std::declval<const std::string &>())),
+                             std::optional<ValueStore::Slot>>);
+static_assert(std::is_same_v<decltype(std::declval<const ValueStore &>().Get(
+                                 std::declval<const ValueStore::Slot &>())),
+                             const RuntimeValue &>);
+
+TEST(ValueStore, ConstLookupDistinguishesMissingUnpublishedAndPublishedSlots) {
+  RuntimeContext context;
+  ValueStore &store = context.value_store();
+  const RuntimeContext &estimator_context = context;
+  const ValueStore &lookup = estimator_context.value_store();
+
+  EXPECT_FALSE(lookup.Find("prepared").has_value());
+  EXPECT_FALSE(lookup.Find("").has_value());
+  EXPECT_EQ(lookup.slot_count(), 0u);
+  EXPECT_EQ(lookup.prepared_bytes(), 0u);
+
+  const auto bound = store.Bind("prepared");
+  EXPECT_EQ(bound.index(), 0u);
+  const auto unpublished = lookup.Find("prepared");
+  ASSERT_TRUE(unpublished.has_value());
+  EXPECT_EQ(*unpublished, bound);
+  EXPECT_FALSE(lookup.IsReady(*unpublished));
+  EXPECT_THROW(lookup.Get(*unpublished), std::runtime_error);
+  EXPECT_THROW(lookup.BindForRead(*unpublished), std::runtime_error);
+  EXPECT_EQ(lookup.slot_count(), 1u);
+
+  Tensor tensor = store.AllocateTensor(TensorProto::FLOAT, {1}, sizeof(float));
+  tensor.As<float>()[0] = 17.0f;
+  store.Publish(bound, RuntimeValue(std::move(tensor)));
+  const auto published = lookup.Find("prepared");
+  ASSERT_TRUE(published.has_value());
+  EXPECT_EQ(*published, *unpublished);
+  ASSERT_TRUE(lookup.IsReady(*published));
+  EXPECT_FLOAT_EQ(lookup.Get(*published).tensor.As<float>()[0], 17.0f);
+  EXPECT_EQ(&lookup.Get(*published), &lookup.BindForRead(*published).Get());
+  EXPECT_FALSE(lookup.Find("unknown").has_value());
+  EXPECT_FALSE(lookup.Find("").has_value());
+  EXPECT_EQ(lookup.slot_count(), 1u);
+  EXPECT_EQ(lookup.prepared_bytes(), sizeof(float));
+}
+
+TEST(ValueStore, ConstLookupKeepsIndependentStoresIsolated) {
+  ValueStore first;
+  ValueStore second;
+  const ValueStore &first_lookup = first;
+  const ValueStore &second_lookup = second;
+  const auto first_slot = first.Bind("shared_key");
+  Tensor tensor = first.AllocateTensor(TensorProto::FLOAT, {1}, sizeof(float));
+  tensor.As<float>()[0] = 19.0f;
+  first.Publish(first_slot, RuntimeValue(std::move(tensor)));
+
+  EXPECT_FALSE(second_lookup.Find("shared_key").has_value());
+  EXPECT_EQ(second_lookup.slot_count(), 0u);
+  const auto second_slot = second.Bind("shared_key");
+  const auto first_found = first_lookup.Find("shared_key");
+  const auto second_found = second_lookup.Find("shared_key");
+  ASSERT_TRUE(first_found.has_value());
+  ASSERT_TRUE(second_found.has_value());
+  EXPECT_EQ(*first_found, first_slot);
+  EXPECT_EQ(*second_found, second_slot);
+  EXPECT_EQ(first_found->index(), second_found->index());
+  EXPECT_NE(*first_found, *second_found);
+  EXPECT_TRUE(first_lookup.IsReady(*first_found));
+  EXPECT_FALSE(second_lookup.IsReady(*second_found));
+  EXPECT_THROW(second_lookup.IsReady(*first_found), std::runtime_error);
+  EXPECT_THROW(second_lookup.Get(*first_found), std::runtime_error);
+  EXPECT_THROW(second_lookup.BindForRead(*first_found), std::runtime_error);
+  EXPECT_THROW(first_lookup.IsReady(*second_found), std::runtime_error);
+  EXPECT_THROW(first_lookup.Get(*second_found), std::runtime_error);
+  EXPECT_THROW(first_lookup.BindForRead(*second_found), std::runtime_error);
+  EXPECT_EQ(first_lookup.prepared_bytes(), sizeof(float));
+  EXPECT_EQ(second_lookup.prepared_bytes(), 0u);
+}
 
 TEST(ValueStore, SessionsDoNotAdoptStoresFromReusedContexts) {
   ModelProto model;

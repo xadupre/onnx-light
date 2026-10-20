@@ -214,7 +214,7 @@ This serializes matched edits, not a general declarative matching language.
 PR sequence
 +++++++++++
 
-Each PR depends on the preceding one; ORT reuses onnx-light as described below.
+Each PR depends on the preceding one.
 
 .. list-table::
    :header-rows: 1
@@ -276,11 +276,19 @@ schemas, kernels and resource requirements before replay on a working model.
 A requested incompatible variant fails with a clear error; canonical
 execution remains an explicit alternative, not a silent fallback.
 
-ORT integration
-+++++++++++++++
+Comparison with ORT runtime fusion
+++++++++++++++++++++++++++++++++++
 
-ORT uses onnx-light to load the model and replay the selected
-``RewritingProto`` before its own graph transformations. It then processes the
-resulting model through its normal initialization pipeline. Reuse onnx-light's
-replay implementation; no separate ORT rewrite engine or mapping from source
-positions to post-partition nodes is needed.
+`ORT issue #33403 <https://github.com/microsoft/onnxruntime/issues/33403>`_
+proposes optional runtime fusion packages that match the graph after EP
+assignment and submit replacements using existing kernels. This proposal
+instead records concrete edits during export and bundles them with the
+canonical model for later replay, without rerunning the matcher. Updating
+export-time matching decisions requires regenerating the affected plans;
+ORT's proposed packages can update matching and adapter logic independently
+of the canonical artifact. Runtime matching can account for actual EP
+ownership and session kernel availability, whereas serialized variants must
+be selected and validated against the target runtime. Both approaches keep a
+canonical graph, but differ in when rewrites are discovered and how they are
+distributed; neither implies that ORT depends on onnx-light. Both remain design
+proposals.

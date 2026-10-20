@@ -42,16 +42,6 @@ void CheckOnnxDomain(const NodeProto &node) {
                       node.domain(), "' for op '", node.op_type(), "'.");
 }
 
-// Returns the ``"<domain>:<name>"`` identifier used as a key in
-// :cpp:func:`ShapesContext::SetLocalFunction` /
-// :cpp:func:`ShapesContext::GetLocalFunction`. The empty default ONNX
-// domain is kept as-is here because local functions live in non-default
-// domains in practice; the domain is matched literally against the
-// FunctionProto's own ``domain`` field.
-std::string LocalFunctionKey(const std::string &domain, const std::string &name) {
-  return domain + ":" + name;
-}
-
 std::string ShapeDispatchKey(const NodeProto &node) {
   return ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(node) + ":" + node.op_type();
 }
@@ -278,7 +268,8 @@ bool TrySeedAnnotatedOutputsForUnknownCustomOp(
     ShapesContext &ctx, const NodeProto &node,
     const std::unordered_map<std::string, const ValueInfoProto *> &declared_outputs) {
   if (IsSupportedDomain(node) ||
-      ctx.HasLocalFunction(LocalFunctionKey(node.domain(), node.op_type())) ||
+      ctx.HasLocalFunction(
+          ShapesContext::LocalFunctionKey(node.domain(), node.op_type(), node.overload())) ||
       ctx.GetCustomShapeInferenceFunction(node.domain(), node.op_type()) != nullptr ||
       DispatchTable().find(ShapeDispatchKey(node)) != DispatchTable().end() ||
       node.output_size() == 0) {
@@ -826,7 +817,8 @@ void DispatchComputeShapeNode(ShapesContext &ctx, const NodeProto &node) {
   // is arbitrary) and the op-type dispatch table; they are expanded
   // by recursively running shape inference on the FunctionProto body.
   const std::string op_type = node.op_type();
-  const std::string local_key = LocalFunctionKey(node.domain(), op_type);
+  const std::string local_key =
+      ShapesContext::LocalFunctionKey(node.domain(), op_type, node.overload());
   if (const FunctionProto *func = ctx.GetLocalFunction(local_key); func != nullptr) {
     ctx.CheckInputsAvailable(node);
     ctx.CheckOutputsNotAvailable(node);
@@ -944,7 +936,7 @@ void ShapesContext::ComputeShapeNode(const NodeProto &node) {
       (node.domain().empty() || node.domain() == kOnnxDomain) &&
       (node.op_type() == "Identity" || node.op_type() == "If" || node.op_type() == "Loop");
   const bool local_function =
-      GetLocalFunction(LocalFunctionKey(node.domain(), node.op_type())) != nullptr;
+      GetLocalFunction(LocalFunctionKey(node.domain(), node.op_type(), node.overload())) != nullptr;
   const bool custom_inference =
       GetCustomShapeInferenceFunction(node.domain(), node.op_type()) != nullptr;
   const bool structured_inference = AcceptsStructuredShapeInputs(node.domain(), node.op_type());

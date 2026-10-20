@@ -591,14 +591,10 @@ private:
     std::unordered_set<std::string> produced;
     for (const auto &[position, node] : additions) {
       (void)position;
-      // Local function domains are literal, unlike native/custom dispatch domains.
-      std::string key = node->domain().value();
-      key += ":";
-      key += node->op_type().value();
-      if (source.HasLocalFunction(key))
+      if (source.HasLocalFunction(shapes::ShapesContext::LocalFunctionKey(
+              node->domain(), node->op_type(), node->overload())))
         return false;
-      if (node->domain().empty())
-        key.insert(0, kDefaultOnnxDomain);
+      const std::string key = RewriteDomain(node->domain()) + ":" + node->op_type().value();
       if (!shapes::DispatchTable().contains(key) ||
           source.CustomShapeInferenceFunctions().contains(key))
         return false;
@@ -788,18 +784,31 @@ RewritingProto GraphGraph::Optimize(int max_iter, OptimizationReport *report,
   const std::size_t original_functions = collection.added_functions().size();
   auto result = OptimizeImpl(max_iter, report, {}, folding_options, remove_unused, collection);
   capture_functions(capture_functions, *root);
-  for (const auto &[domain, version] : root->opsets_) {
+  utils::RepeatedProtoField<OperatorSetIdProto> graph_imports;
+  const auto capture_imports = [&](const auto &self, const GraphBuilder &scope) -> void {
+    for (const auto &[domain, version] : scope.opsets_) {
+      OperatorSetIdProto opset;
+      opset.set_domain(domain);
+      opset.set_version(version);
+      MergeImport(graph_imports, opset);
+    }
+    for (const auto &subgraph : scope.subgraphs_)
+      self(self, *subgraph);
+  };
+  capture_imports(capture_imports, *root);
+  for (const auto &opset : graph_imports) {
+    const std::string domain = RewriteDomain(opset.domain().value());
+    const int64_t version = opset.version();
     const auto previous = original_opsets.find(domain);
     if (previous != original_opsets.end()) {
       if (previous->second != version)
         throw BuilderError("GraphGraph::Optimize: a rewrite changed an existing opset.");
       continue;
     }
-    OperatorSetIdProto opset;
-    opset.set_domain(domain);
-    opset.set_version(version);
     MergeImport(collection.ref_required_opset_imports(), opset);
   }
+  for (const auto &opset : collection.required_opset_imports())
+    MergeImport(graph_imports, opset);
   for (std::size_t i = 0; i < original_functions; ++i)
     collection.ref_added_functions().erase(collection.ref_added_functions().begin());
   result.ref_added_functions() = std::move(collection.ref_added_functions());
@@ -1394,15 +1403,24 @@ void GraphGraph::ApplyRewriting(const LocalRewritingProto &rewrite,
     for (const auto &function : functions)
       function_index.emplace(Identity(function), &function);
     std::unordered_map<std::string, const TensorProto *> constants;
+    std::unordered_set<std::string> graph_inputs;
     std::vector<const GraphBuilder *> scopes;
     for (const GraphBuilder *scope = &builder_; scope != nullptr; scope = scope->parent_)
       scopes.push_back(scope);
     for (auto scope = scopes.rbegin(); scope != scopes.rend(); ++scope) {
-      for (const auto &input : (*scope)->inputs_)
+      for (const auto &input : (*scope)->inputs_) {
+        graph_inputs.insert(input.name().value());
         constants.erase(input.name().value());
+      }
       for (const auto &node : (*scope)->nodes_)
         for (const auto &output : node.output())
           constants.erase(output.value());
+      for (const auto &initializer : (*scope)->encoded_initializers_)
+        constants.erase(initializer.name().value());
+      for (const auto &initializer : (*scope)->paged_cache_initializers_)
+        constants.erase(initializer.name().value());
+      for (const auto &initializer : (*scope)->graph_template_.sparse_initializer())
+        constants.erase(initializer.values().name().value());
       for (const auto &initializer : (*scope)->initializers_) {
         const auto &inputs = (*scope)->inputs_;
         if (std::none_of(inputs.begin(), inputs.end(),
@@ -1422,7 +1440,8 @@ void GraphGraph::ApplyRewriting(const LocalRewritingProto &rewrite,
       std::set<FunctionKey> active;
       ValidatePreparation(call, function_index, active);
       for (const auto &input : call.input()) {
-        if (input.empty() || available.count(input.value()) == 0)
+        if (input.empty() || graph_inputs.count(input.value()) != 0 ||
+            available.count(input.value()) == 0)
           throw BuilderError("Replay: initializer call input is not an available constant.");
       }
       for (const auto &output : call.output()) {

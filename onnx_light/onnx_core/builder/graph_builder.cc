@@ -472,14 +472,24 @@ GraphBuilder::GraphBuilder(const ModelProto &model, SchemaLookupFn schema_lookup
     SetOpsetVersion(opset.domain().empty() ? std::string() : opset.domain().value(),
                     static_cast<int>(opset.version()));
   }
+  std::set<FunctionIdentifier> imported_functions;
   for (const auto &function : model.functions()) {
     const std::string function_name = function.name().value();
     const std::string function_domain =
         function.domain().empty() ? std::string() : function.domain().value();
-    GraphBuilder &local = MakeLocalFunction(function_name, function_domain);
-    for (const auto &entry : opsets_) {
-      local.SetOpsetVersion(entry.first, entry.second);
-    }
+    if (function_name.empty() || !imported_functions
+                                      .insert(MakeFunctionIdentifier(function_domain, function_name,
+                                                                     function.overload().value()))
+                                      .second)
+      throw BuilderError("GraphBuilder: empty or duplicate model-local function identity.");
+    // ONNX functions have an independent namespace and are identified by all
+    // three fields, not by graph value names or the bare function name.
+    auto child = std::make_unique<GraphBuilder>(function_name, schema_lookup_, opsets_);
+    child->is_local_function_ = true;
+    child->function_domain_ = function_domain;
+    child->parent_ = this;
+    GraphBuilder &local = *child;
+    local_functions_.push_back(std::move(child));
     local.ImportFunction(function);
   }
   ImportGraph(model.graph());
@@ -769,8 +779,9 @@ void GraphBuilder::RefreshLocalFunctionDefinition(GraphBuilder &function) {
 void GraphBuilder::RefreshNestedDependency(GraphBuilder &child, bool propagate_to_parent) {
   std::function<bool(const GraphBuilder &)> depends_on_function = [&](const GraphBuilder &builder) {
     for (const NodeProto &node : builder.nodes_) {
-      if (node.domain().value() == child.function_domain_ &&
-          node.op_type().value() == child.name_) {
+      if (MakeFunctionIdentifier(node.domain(), node.op_type(), node.overload()) ==
+          MakeFunctionIdentifier(child.function_domain_, child.name_,
+                                 child.function_template_.overload())) {
         return true;
       }
       for (const GraphBuilder *subgraph : builder.ReferencedSubgraphs(node)) {
@@ -796,8 +807,10 @@ void GraphBuilder::RefreshNestedDependency(GraphBuilder &child, bool propagate_t
   std::unordered_set<std::string> affected_values;
   RefreshDependentNodes(
       [&](const NodeProto &node, const std::unordered_set<std::string> &) {
-        if (child.is_local_function_ && node.domain().value() == child.function_domain_ &&
-            node.op_type().value() == child.name_) {
+        if (child.is_local_function_ &&
+            MakeFunctionIdentifier(node.domain(), node.op_type(), node.overload()) ==
+                MakeFunctionIdentifier(child.function_domain_, child.name_,
+                                       child.function_template_.overload())) {
           return true;
         }
         for (GraphBuilder *subgraph : ReferencedSubgraphs(node)) {
@@ -1566,7 +1579,8 @@ void GraphBuilder::ImportGraph(const GraphProto &graph) {
     }
     MakeNode(node.op_type().value(), inputs, outputs,
              node.domain().empty() ? std::string() : node.domain().value(),
-             node.name().empty() ? std::string() : node.name().value(), ImportAttributes(node));
+             node.name().empty() ? std::string() : node.name().value(), ImportAttributes(node),
+             node.overload().value());
     NodeProto &imported_node = nodes_.back();
     imported_node.name_ = node.name_;
     imported_node.op_type_ = node.op_type_;
@@ -1624,7 +1638,8 @@ void GraphBuilder::ImportFunction(const FunctionProto &function) {
     }
     MakeNode(node.op_type().value(), inputs, outputs,
              node.domain().empty() ? std::string() : node.domain().value(),
-             node.name().empty() ? std::string() : node.name().value(), ImportAttributes(node));
+             node.name().empty() ? std::string() : node.name().value(), ImportAttributes(node),
+             node.overload().value());
     NodeProto &imported_node = nodes_.back();
     imported_node.name_ = node.name_;
     imported_node.op_type_ = node.op_type_;
@@ -1716,7 +1731,8 @@ bool GraphBuilder::ShapeFunctionAvailable(const NodeProto &node) const {
   const std::string key = NormaliseDomain(domain) + ":" + node.op_type().value();
   const auto &table = core::shapes::DispatchTable();
   return table.find(key) != table.end() ||
-         compute_.Shapes().HasLocalFunction(domain + ":" + node.op_type().value());
+         compute_.Shapes().HasLocalFunction(
+             ShapesContext::LocalFunctionKey(domain, node.op_type(), node.overload()));
 }
 
 void GraphBuilder::RefreshLocalFunctions() {
@@ -1739,7 +1755,8 @@ void GraphBuilder::RefreshLocalFunctions() {
   std::unordered_set<std::string> function_keys;
   for (GraphBuilder *builder : builders) {
     for (const auto &function : builder->local_functions_) {
-      const std::string key = function->function_domain_ + ":" + function->name_;
+      const std::string key = ShapesContext::LocalFunctionKey(
+          function->function_domain_, function->name_, function->function_template_.overload());
       if (!function_keys.insert(key).second) {
         throw BuilderError("GraphBuilder: duplicate local function '" + key + "'.");
       }
@@ -1752,11 +1769,10 @@ void GraphBuilder::RefreshLocalFunctions() {
   }
 }
 
-std::vector<std::string>
-GraphBuilder::MakeNode(const std::string &op_type, const std::vector<std::string> &inputs,
-                       const std::vector<std::string> &outputs, const std::string &domain,
-                       const std::string &name,
-                       const utils::RepeatedProtoField<AttributeProto> &attributes) {
+std::vector<std::string> GraphBuilder::MakeNode(
+    const std::string &op_type, const std::vector<std::string> &inputs,
+    const std::vector<std::string> &outputs, const std::string &domain, const std::string &name,
+    const utils::RepeatedProtoField<AttributeProto> &attributes, const std::string &overload) {
   const int opset = OpsetVersion(domain);
   if (opset <= 0) {
     throw BuilderError("GraphBuilder: node '" + op_type + "' has no explicit opset for domain '" +
@@ -1769,13 +1785,15 @@ GraphBuilder::MakeNode(const std::string &op_type, const std::vector<std::string
     while (root->parent_ != nullptr) {
       root = root->parent_;
     }
-    const std::string function_key = domain + ":" + op_type;
+    const std::string function_key = ShapesContext::LocalFunctionKey(domain, op_type, overload);
     bool calls_function = false;
     bool has_local_functions = false;
     std::function<void(const GraphBuilder &)> inspect = [&](const GraphBuilder &builder) {
       for (const auto &function : builder.local_functions_) {
         has_local_functions = true;
-        if (function->function_domain_ + ":" + function->name_ == function_key) {
+        if (ShapesContext::LocalFunctionKey(function->function_domain_, function->name_,
+                                            function->function_template_.overload()) ==
+            function_key) {
           calls_function = true;
         }
         inspect(*function);
@@ -1809,12 +1827,15 @@ GraphBuilder::MakeNode(const std::string &op_type, const std::vector<std::string
   // Select the matching schema (if any) via the cached
   // per-operator, per-domain lookup table.
   const std::string normalised_domain = NormaliseDomain(domain);
-  const std::vector<LightOpSchema> &domain_schemas = DomainSchemas(op_type, normalised_domain);
+  const FunctionProto *local_function = compute_.Shapes().GetLocalFunction(
+      ShapesContext::LocalFunctionKey(domain, op_type, overload));
   const LightOpSchema *schema = nullptr;
-  for (const LightOpSchema &candidate : domain_schemas) {
-    if (candidate.since_version() <= opset &&
-        (schema == nullptr || candidate.since_version() > schema->since_version())) {
-      schema = &candidate;
+  if (local_function == nullptr) {
+    for (const LightOpSchema &candidate : DomainSchemas(op_type, normalised_domain)) {
+      if (candidate.since_version() <= opset &&
+          (schema == nullptr || candidate.since_version() > schema->since_version())) {
+        schema = &candidate;
+      }
     }
   }
 
@@ -1835,8 +1856,7 @@ GraphBuilder::MakeNode(const std::string &op_type, const std::vector<std::string
       num_outputs = static_cast<std::size_t>(std::max(1, schema->min_output()));
     }
   } else if (outputs.empty()) {
-    const FunctionProto *function = compute_.Shapes().GetLocalFunction(domain + ":" + op_type);
-    num_outputs = function == nullptr ? 1 : function->output().size();
+    num_outputs = local_function == nullptr ? 1 : local_function->output().size();
   }
 
   // Assign the final output names, generating fresh names where needed.
@@ -1853,6 +1873,8 @@ GraphBuilder::MakeNode(const std::string &op_type, const std::vector<std::string
   // Build the node, attach its attributes and append it to the node list.
   NodeProto node;
   node.set_op_type(op_type);
+  if (!overload.empty())
+    node.set_overload(overload);
   if (!domain.empty()) {
     node.set_domain(domain);
   }
@@ -2930,6 +2952,12 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
     // initializer carrying that name, which remains a valid graph output.
     bool candidate = node_constant[idx] == core::compute::ConstantInfo::kConstant &&
                      !is_excluded(normalised_domain, op_type) && !NodeCarriesSubgraph(node);
+    if (candidate && compute_.Shapes().HasLocalFunction(
+                         ShapesContext::LocalFunctionKey(domain, op_type, node.overload()))) {
+      // Native-only folding must not evaluate a model-local override as the
+      // primitive kernel; recipe replay resolves model functions first.
+      candidate = false;
+    }
     if (candidate && included_outputs != nullptr) {
       for (std::size_t i = 0; i < node.output().size(); ++i) {
         const std::string output(node.output(static_cast<std::size_t>(i)));

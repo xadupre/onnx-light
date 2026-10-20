@@ -353,13 +353,15 @@ public:
   /// @param domain     Operator domain (empty for the default ONNX domain).
   /// @param name       Optional node name.
   /// @param attributes Node attributes.
+  /// @param overload   Model-local function overload.
   /// @return The (possibly generated) output names of the node.
   std::vector<std::string> MakeNode(const std::string &op_type,
                                     const std::vector<std::string> &inputs,
                                     const std::vector<std::string> &outputs = {},
                                     const std::string &domain = "", const std::string &name = "",
                                     const utils::RepeatedProtoField<AttributeProto> &attributes =
-                                        utils::RepeatedProtoField<AttributeProto>());
+                                        utils::RepeatedProtoField<AttributeProto>(),
+                                    const std::string &overload = "");
 
   /// Read-only access to the accumulated nodes (in insertion order).
   const utils::RepeatedProtoField<NodeProto> &Nodes() const noexcept { return nodes_; }

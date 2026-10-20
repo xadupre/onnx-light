@@ -250,6 +250,36 @@ private:
   core::shapes::ComputeShapeFn previous_;
 };
 
+class RegisterNestedFunctionPattern final : public core::builder::PatternOptimization {
+public:
+  RegisterNestedFunctionPattern() : PatternOptimization(1, "RegisterNestedFunction") {}
+
+  std::set<std::string> FastOpType() const override { return {"Identity"}; }
+
+  core::builder::MatchResult Match(core::builder::GraphGraph &,
+                                   const NodeProto &candidate) const override {
+    return candidate.op_type() == "Identity"
+               ? core::builder::MatchResult{this, {&candidate}, &candidate}
+               : core::builder::MatchResult{};
+  }
+
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &graph,
+        const std::vector<const NodeProto *> &nodes) const override {
+    auto &builder = graph.Builder();
+    builder.SetOpsetVersion("nested.test", nodes[0]->name() == "version_two" ? 2 : 1);
+    auto &function = builder.MakeLocalFunction("Nested", "nested.test");
+    function.SetOpsetVersion("", 17);
+    function.MakeInput("arg", core::symbolic::TensorType::kFloat, Shape());
+    function.MakeNode("Identity", {"arg"}, {"result"});
+    function.MakeOutput("result");
+    utils::RepeatedProtoField<NodeProto> replacements;
+    replacements.push_back(MakeNode("Nested", {nodes[0]->input(0).value()},
+                                    {nodes[0]->output(0).value()}, "nested.test"));
+    return replacements;
+  }
+};
+
 FunctionProto PreparationAdd() {
   FunctionProto function;
   function.set_name("Prepare");
@@ -409,6 +439,163 @@ TEST(PatternOptimization, ModelReplayRetainsFunctionsUsedByReplacementNodes) {
   ASSERT_EQ(result.functions().size(), 1u);
   EXPECT_FLOAT_EQ(core::runtime::RunModel(result, {})[0].AsFloat()[0], 3);
   EXPECT_THROW(core::builder::Replay(model, plan, SchemaLookup()), core::builder::BuilderError);
+}
+
+TEST(PatternOptimization, ModelReplayRejectsRecipesReadingNewInputDefaults) {
+  ScopedAddKernel kernel;
+  for (const std::string name : {"literal", "c"}) {
+    SCOPED_TRACE(name);
+    auto model = PreparationModel();
+    auto &input = *model.mutable_graph()->add_input();
+    input.set_name(name);
+    auto &type = *input.mutable_type()->mutable_tensor_type();
+    type.set_elem_type(TensorProto::FLOAT);
+    type.mutable_shape()->add_dim()->set_dim_value(1);
+    EXPECT_THROW(core::builder::ReplayModel(model, PreparationPlan(), SchemaLookup()),
+                 core::builder::BuilderError);
+  }
+}
+
+TEST(PatternOptimization, ModelReplayPreservesDistinctFunctionDomainsAndOverloads) {
+  ScopedAddKernel kernel;
+  for (const bool overloaded : {false, true}) {
+    SCOPED_TRACE(overloaded);
+    auto original = PreparationModel();
+    auto first = PreparationAdd();
+    first.set_domain("first.test");
+    original.ref_functions().push_back(first);
+    auto plan = PreparationPlan();
+    auto &second = plan.ref_added_functions()[0];
+    if (overloaded) {
+      second.set_domain("first.test");
+      second.set_overload("twice");
+    } else {
+      second.set_domain("second.test");
+    }
+    // Distinct descriptors make an overload lookup error observable in inference.
+    second.clr_output();
+    second.add_output("C");
+    for (auto &call : plan.ref_rewrites()[0].ref_initializer_calls()) {
+      call.set_domain(second.domain().value());
+      call.set_overload(second.overload().value());
+      call.ref_output().resize(1);
+    }
+    auto &edit = plan.ref_rewrites()[0];
+    edit.ref_computed_initializer_positions().clear();
+    edit.add_computed_initializer_positions(0);
+    edit.add_computed_initializer_positions(2);
+    edit.ref_added_initializer_positions()[0] = 1;
+    edit.ref_added_nodes()[0] =
+        MakeNode("Prepare", {"c", "e"}, {"y"}, second.domain().value().c_str());
+    edit.ref_added_nodes()[0].set_overload(second.overload().value());
+    plan.ref_required_opset_imports()[0].set_domain(second.domain().value());
+    RewritingProto loaded;
+    ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
+    const auto result = core::builder::ReplayModel(original, loaded, SchemaLookup());
+    ASSERT_EQ(result.functions().size(), 2u);
+    EXPECT_EQ(result.functions(0).domain(), "first.test");
+    EXPECT_EQ(result.functions(1).overload().value(), overloaded ? "twice" : "");
+    EXPECT_FLOAT_EQ(core::runtime::RunModel(result, {})[0].AsFloat()[0], 8);
+    EXPECT_EQ(result.graph().output(0).type().tensor_type().shape().dim().size(), 1u);
+  }
+}
+
+TEST(PatternOptimization, CapturesNestedGraphImportsWithoutMergingFunctionLocalImports) {
+  for (bool conflicting_imports : {false, true}) {
+    SCOPED_TRACE(conflicting_imports);
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
+    auto &branch = builder.MakeSubgraph("branch");
+    branch.MakeNode("Identity", {"x"}, {"y"});
+    branch.MakeOutput("y");
+    AddSubgraphReference(builder, "body", "branch", "result");
+    builder.MakeOutput("result");
+    if (conflicting_imports) {
+      auto &other = builder.MakeSubgraph("other");
+      other.SetOpsetVersion("nested.test", 2);
+      other.MakeNode("Neg", {"x"}, {"y"});
+      other.MakeOutput("y");
+      AddSubgraphReference(builder, "body", "other", "other_result");
+      builder.MakeOutput("other_result");
+    }
+    ModelProto original;
+    *original.mutable_graph() = builder.BuildGraph();
+    AddOpsetImports(original, builder);
+    core::builder::GraphGraph optimizer(
+        builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{
+                     std::make_shared<RegisterNestedFunctionPattern>()});
+    if (conflicting_imports) {
+      EXPECT_THROW(optimizer.Optimize(), core::builder::BuilderError);
+      continue;
+    }
+    const auto plan = optimizer.Optimize();
+    ASSERT_EQ(plan.required_opset_imports().size(), 1u);
+    EXPECT_EQ(plan.required_opset_imports(0).domain(), "nested.test");
+    EXPECT_EQ(plan.required_opset_imports(0).version(), 1);
+    RewritingProto loaded;
+    ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
+    const auto replayed = core::builder::ReplayModel(original, loaded, SchemaLookup());
+    EXPECT_EQ(replayed.graph().SerializeAsString(), builder.BuildGraph().SerializeAsString());
+    EXPECT_EQ(replayed.opset_import(0).version(), 18);
+    ASSERT_EQ(replayed.functions().size(), 1u);
+    const auto &imports = replayed.functions(0).opset_import();
+    EXPECT_TRUE(std::any_of(imports.begin(), imports.end(), [](const auto &opset) {
+      return opset.domain().value() == "ai.onnx" && opset.version() == 17;
+    }));
+  }
+}
+
+TEST(PatternOptimization, ModelReplayUsesOverloadedFunctionSignatureBeforeNativeSchema) {
+  ScopedAddKernel kernel;
+  auto original = PreparationModel();
+  auto first = PreparationAdd();
+  first.set_name("Neg");
+  first.set_domain("");
+  first.clr_output();
+  first.add_output("C");
+  original.ref_functions().push_back(first);
+  auto second = PreparationAdd();
+  second.set_name("Neg");
+  second.set_domain("ai.onnx");
+  second.set_overload("pair");
+  RewritingProto plan;
+  plan.ref_added_functions().push_back(second);
+  auto &edit = *plan.add_rewrites();
+  edit.add_matched_nodes(0);
+  edit.add_added_nodes_positions(0);
+  auto call = MakeNode("Neg", {"a", "b"}, {"y", "unused"});
+  call.set_overload("pair");
+  edit.ref_added_nodes().push_back(std::move(call));
+  const auto replayed = core::builder::ReplayModel(original, plan, SchemaLookup());
+  EXPECT_EQ(replayed.graph().node(0).overload(), "pair");
+  EXPECT_FLOAT_EQ(core::runtime::RunModel(replayed, {})[0].AsFloat()[0], 3);
+}
+
+TEST(PatternOptimization, DoesNotFoldModelLocalOverridesAsNativeOperators) {
+  ScopedAddKernel kernel;
+  auto original = PreparationModel();
+  FunctionProto function;
+  function.set_name("Add");
+  function.add_input("A");
+  function.add_input("B");
+  function.add_output("C");
+  function.add_opset("", 18);
+  function.ref_node().push_back(MakeNode("Mul", {"A", "B"}, {"C"}));
+  original.ref_functions().push_back(std::move(function));
+  original.mutable_graph()->ref_node()[0] = MakeNode("Identity", {"a"}, {"y"});
+  core::builder::GraphBuilder builder(original, SchemaLookup());
+  core::builder::GraphGraph optimizer(
+      builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{
+                   std::make_shared<ReplaceIdentityWithConstantAddPattern>()});
+  const auto plan = optimizer.Optimize();
+  ASSERT_EQ(plan.rewrites().size(), 1u);
+  EXPECT_TRUE(plan.added_functions().empty());
+  EXPECT_TRUE(plan.rewrites(0).initializer_calls().empty());
+  EXPECT_TRUE(plan.rewrites(0).added_initializers().empty());
+  ASSERT_EQ(builder.Nodes().size(), 1u);
+  EXPECT_EQ(builder.Nodes()[0].op_type(), "Add");
+  EXPECT_EQ(core::builder::ReplayModel(original, plan, SchemaLookup()).graph().SerializeAsString(),
+            builder.BuildGraph().SerializeAsString());
 }
 
 TEST(PatternOptimization, ScopedCustomKernelRestoresFactory) {

@@ -5,9 +5,16 @@ graph_graph.h
 metadata, shared function definitions and new opset imports. Existing imports
 cannot be changed; identical function definitions are reused and conflicting
 definitions with the same domain/name/overload are rejected.
+Imported functions use a namespace independent of graph values and subgraphs;
+different domains and overloads may share a function name. Shape inference
+preserves those identities, including the overload on imported call nodes.
+Model-level imports include additions in nested graph scopes, while each
+function keeps its own imports.
 
 Initializer calls run once before the edit removes their source constants.
 They may consume immutable initializers, new literals and preceding call outputs.
+Public graph inputs remain overridable and cannot be consumed as constants,
+including defaults introduced by literals or preceding calls in the same edit.
 Their flattened outputs and literal additions share one resulting initializer
 coordinate system. Preparation validates the complete reachable function tree
 before execution: inputs must be explicit, operations deterministic and backed
@@ -22,6 +29,8 @@ their existing ownership during edits and internal metadata analysis; public
 graph exports retain value semantics. ``Replay`` also executes recipes but
 rejects surviving nodes that require newly added imports/functions; use
 ``ReplayModel`` (Python ``replay_model``) for those plans.
+Native constant folding skips operations shadowed by model-local functions,
+so it cannot disagree with function-first dispatch during replay.
 
 ``Replay`` coalesces consecutive node-only edits in the same graph when they
 replace original nodes at their first matched position and preserve all

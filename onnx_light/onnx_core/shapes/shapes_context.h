@@ -563,16 +563,18 @@ public:
   // entry of ``model.functions()`` here so that
   // :cpp:func:`ComputeShapeNode` can detect and expand the call.
 
+  /// Returns a domain/name key, with a suffix for nonempty overloads.
+  static std::string LocalFunctionKey(const std::string &domain, const std::string &name,
+                                      const std::string &overload = "");
+
   /// Registers a non-owning pointer to a model-local
   /// :cpp:class:`FunctionProto`. The pointer must remain valid for the
   /// lifetime of the shape-inference pass. Replaces any previous entry
-  /// registered under the same ``"<domain>:<name>"`` key. ``func`` must
+  /// registered under the same domain/name/overload key. ``func`` must
   /// not be ``nullptr``.
   void SetLocalFunction(const FunctionProto *func) {
     EXT_ENFORCE_INVALID(func != nullptr, "SetLocalFunction: func must not be nullptr.");
-    std::string key = func->domain();
-    key += ":";
-    key += func->name();
+    const std::string key = LocalFunctionKey(func->domain(), func->name(), func->overload());
     local_functions_[key] = func;
     owned_local_functions_.erase(key);
   }
@@ -584,8 +586,8 @@ public:
   void CopyLocalFunctions(const ShapesContext &context);
 
   /// ``true`` when a model-local function is registered for ``key``.
-  /// ``key`` is expected to be the ``"<domain>:<name>"`` identifier of
-  /// the function.
+  /// ``key`` is produced by LocalFunctionKey; empty overloads retain the
+  /// ``"<domain>:<name>"`` identifier.
   bool HasLocalFunction(const std::string &key) const {
     return local_functions_.find(key) != local_functions_.end();
   }
@@ -595,14 +597,13 @@ public:
 
   /// Returns the registered ``FunctionProto`` pointer for ``key``, or
   /// ``nullptr`` when none is registered. ``key`` is expected to be the
-  /// ``"<domain>:<name>"`` identifier of the function.
+  /// identifier produced by LocalFunctionKey.
   const FunctionProto *GetLocalFunction(const std::string &key) const {
     auto it = local_functions_.find(key);
     return it == local_functions_.end() ? nullptr : it->second;
   }
 
-  /// Read-only access to the underlying ``"<domain>:<name>" →
-  /// FunctionProto*`` map.
+  /// Read-only access to the function-identity → FunctionProto* map.
   const std::unordered_map<std::string, const FunctionProto *> &LocalFunctions() const noexcept {
     return local_functions_;
   }

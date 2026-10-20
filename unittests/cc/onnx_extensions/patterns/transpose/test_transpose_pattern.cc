@@ -206,6 +206,48 @@ TEST(TransposeToInitializerPattern, ReplaysNestedRecipesAcrossIterationsWithoutW
             (std::vector<float>{1, 2, 3, 4, 5, 6}));
 }
 
+TEST(TransposeToInitializerPattern, RecipeFunctionNamesDoNotConflictWithSourceGraphNames) {
+  ScopedTransposeKernel kernel;
+  for (int kind = 0; kind < 3; ++kind) {
+    SCOPED_TRACE(kind);
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+    const std::string name = "PrepareInitializer_0";
+    if (kind == 0) {
+      builder.MakeInput(name, core::symbolic::TensorType::kFloat, Shape({1}));
+    } else if (kind == 1) {
+      builder.MakeInitializer(MakeInitializer<float>(name.c_str(), {1}, {99}));
+    } else {
+      auto &body = builder.MakeSubgraph(name);
+      body.MakeInitializer(MakeInitializer<float>("value", {1}, {99}));
+      body.MakeOutput("value");
+      utils::RepeatedProtoField<AttributeProto> references;
+      auto &reference = references.add();
+      reference.set_name("body_ref");
+      reference.set_type(AttributeProto::STRING);
+      reference.set_s(name);
+      builder.MakeNode("SubgraphCarrier", {}, {"result"}, "", "", references);
+      builder.MakeOutput("result");
+    }
+    builder.MakeInitializer(MakeInitializer<float>("weight", {2, 3}, {1, 2, 3, 4, 5, 6}));
+    builder.MakeNode("Transpose", {"weight"}, {"weight_t"}, "", "", PermAttr({1, 0}));
+    builder.MakeOutput("weight_t");
+    ModelProto original;
+    original.add_opset("", 28);
+    *original.mutable_graph() = builder.BuildGraph();
+    std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+    patterns.push_back(std::make_unique<onnx_patterns::TransposeToInitializerPattern>());
+    core::builder::GraphGraph optimizer(builder, std::move(patterns));
+    const auto plan = optimizer.Optimize();
+    ASSERT_EQ(plan.added_functions().size(), 1u);
+    EXPECT_EQ(plan.added_functions(0).name(), name);
+    RewritingProto loaded;
+    ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
+    EXPECT_EQ(
+        core::builder::ReplayModel(original, loaded, SchemaLookup()).graph().SerializeAsString(),
+        builder.BuildGraph().SerializeAsString());
+  }
+}
+
 TEST(TransposeToInitializerPattern, UsesDefaultReversePermutation) {
   ScopedTransposeKernel kernel;
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});

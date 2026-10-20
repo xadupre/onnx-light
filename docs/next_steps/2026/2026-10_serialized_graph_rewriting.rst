@@ -74,6 +74,8 @@ and affected subgraph paths after each preceding edit. Internal batching may
 remain an implementation detail, not a second persistent record format.
 Verify that sequential replay preserves the batch result. Check integer
 ranges before converting proto positions to ``size_t``.
+Normalization indexes insertion anchors and maintains live node and initializer
+ranks incrementally; it does not rescan or sort the full live order per edit.
 
 New and modified proto messages
 +++++++++++++++++++++++++++++++
@@ -228,7 +230,8 @@ Each PR depends on the preceding one; ORT integration is a separate consumer.
      - Serialized and in-memory replay agree; cover nested graphs, cleanup,
        initializers, renames, multi-batch edits and invalid plans. A transposed-weight
        recipe stores no duplicate payload; verify results, source removal
-       ordering and function conflicts.
+       ordering and function conflicts. Retained initializer payloads are reused,
+       not deep-copied for every edit, including node-only edits.
    * - 3. Model envelope
      - Add ``RewritingEntryProto`` and the ``ModelProto.rewritings`` field,
        model I/O and bindings; define explicit selection and compatibility.

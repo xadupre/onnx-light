@@ -288,6 +288,48 @@ TEST(PatternOptimization, SequentialRebasingPreservesReorderedFoldingBatch) {
             builder.BuildGraph().SerializeAsString());
 }
 
+TEST(PatternOptimization, SequentialRebasingPreservesLargeMixedBatch) {
+  ScopedAddKernel kernel;
+  core::builder::GraphBuilder builder("mixed_batch", SchemaLookup());
+  builder.SetOpsetVersion("", 18);
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
+  TensorProto base;
+  base.set_name("base");
+  base.set_data_type(TensorProto::FLOAT);
+  base.add_dims(1);
+  base.add_float_data(1.0f);
+  builder.MakeInitializer(base);
+  constexpr std::size_t count = 64;
+  for (std::size_t i = 0; i < count; ++i) {
+    const std::string suffix = std::to_string(i);
+    builder.MakeNode("Identity", {"x"}, {"identity_" + suffix});
+    builder.MakeNode("Relu", {"x"}, {"relu_" + suffix});
+    builder.MakeOutput("identity_" + suffix);
+    builder.MakeOutput("relu_" + suffix);
+  }
+  ModelProto original;
+  *original.mutable_graph() = builder.BuildGraph();
+  AddOpsetImports(original, builder);
+  std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+  patterns.push_back(std::make_unique<ReorderedFoldingPattern>("Relu"));
+  patterns.push_back(std::make_unique<ReplaceIdentityWithTwoNodesPattern>());
+  core::builder::GraphGraph optimizer(builder, std::move(patterns));
+  const RewritingProto plan = optimizer.Optimize(1, nullptr, {}, false);
+  ASSERT_GE(plan.rewrites().size(), 2 * count);
+  for (std::size_t i = 0; i < count; ++i) {
+    const auto &folded = plan.rewrites(i);
+    EXPECT_EQ(folded.matched_nodes().values(), (std::vector<uint64_t>{2 * i + 1}));
+    EXPECT_EQ(folded.added_nodes_positions().values(), (std::vector<uint64_t>{2 * i + 1}));
+    EXPECT_EQ(folded.added_initializer_positions().values(),
+              (std::vector<uint64_t>{i + 1, 2 * i + 2}));
+    const auto &expanded = plan.rewrites(count + i);
+    EXPECT_EQ(expanded.matched_nodes().values(), (std::vector<uint64_t>{3 * i}));
+    EXPECT_EQ(expanded.added_nodes_positions().values(), (std::vector<uint64_t>{3 * i, 3 * i + 1}));
+  }
+  EXPECT_EQ(core::builder::Replay(original, plan, SchemaLookup()).SerializeAsString(),
+            builder.BuildGraph().SerializeAsString());
+}
+
 TEST(PatternOptimization, ReplayRejectsMalformedPositionsAndFutureExecution) {
   core::builder::GraphBuilder builder("invalid", SchemaLookup());
   builder.SetOpsetVersion("", 18);

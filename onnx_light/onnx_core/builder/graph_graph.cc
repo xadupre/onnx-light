@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <chrono>
 #include <limits>
-#include <numeric>
 #include <set>
 #include <stdexcept>
 #include <unordered_map>
@@ -79,75 +78,111 @@ void RecordRenames(LocalRewritingProto &rewrite,
   }
 }
 
-// Assigns each original/replacement node an ordering token, including originals
-// removed by later edits. Filtering this common order rebases each sequential edit.
+// A Fenwick tree counts live entries before a fixed ordering rank.
+class LiveRanks {
+public:
+  explicit LiveRanks(std::size_t size) : counts_(size + 1, 0) {}
+
+  void Update(std::size_t rank, bool added) {
+    for (std::size_t i = rank + 1; i < counts_.size(); i += i & (~i + 1)) {
+      if (added)
+        ++counts_[i];
+      else
+        --counts_[i];
+    }
+  }
+
+  std::size_t Before(std::size_t rank) const {
+    std::size_t count = 0;
+    for (std::size_t i = rank; i != 0; i -= i & (~i + 1))
+      count += counts_[i];
+    return count;
+  }
+
+private:
+  std::vector<std::size_t> counts_;
+};
+
+// Ranks include originals removed by later edits; only their live counts change.
 void NormalizeBatch(std::vector<PendingReplacement> &replacements, std::size_t node_count,
                     std::size_t initializer_count) {
-  std::vector<std::vector<std::size_t>> added_tokens(replacements.size());
+  std::unordered_map<std::size_t, std::vector<std::size_t>> insertions;
+  std::vector<std::vector<std::size_t>> added_ranks(replacements.size());
   std::vector<utils::RepeatedField<uint64_t>> final_node_positions;
+  std::vector<uint64_t> initializer_positions;
   final_node_positions.reserve(replacements.size());
-  for (const auto &replacement : replacements) {
+  std::size_t total_nodes = node_count;
+  for (std::size_t i = 0; i < replacements.size(); ++i) {
+    const auto &replacement = replacements[i];
+    if (replacement.position > node_count ||
+        replacement.rewriting.added_nodes().size() >=
+            std::numeric_limits<std::size_t>::max() - total_nodes) {
+      throw BuilderError("GraphGraph::Optimize: invalid batch insertion size or position.");
+    }
+    total_nodes += replacement.rewriting.added_nodes().size();
+    insertions[replacement.position].push_back(i);
     final_node_positions.push_back(replacement.rewriting.added_nodes_positions());
+    const auto &positions = replacement.rewriting.added_initializer_positions();
+    initializer_positions.insert(initializer_positions.end(), positions.begin(), positions.end());
   }
-  std::vector<std::size_t> order;
-  std::size_t next_token = node_count;
+  std::vector<std::size_t> original_ranks(node_count);
+  std::size_t next_rank = 0;
   for (std::size_t position = 0; position <= node_count; ++position) {
-    for (std::size_t i = 0; i < replacements.size(); ++i) {
-      if (replacements[i].position != position) {
-        continue;
-      }
-      for (std::size_t j = 0; j < replacements[i].rewriting.added_nodes().size(); ++j) {
-        added_tokens[i].push_back(next_token);
-        order.push_back(next_token++);
+    const auto insertion = insertions.find(position);
+    if (insertion != insertions.end()) {
+      for (std::size_t i : insertion->second) {
+        for (std::size_t j = 0; j < replacements[i].rewriting.added_nodes().size(); ++j)
+          added_ranks[i].push_back(next_rank++);
       }
     }
-    if (position < node_count) {
-      order.push_back(position);
-    }
+    if (position < node_count)
+      original_ranks[position] = next_rank++;
   }
-  std::vector<std::size_t> rank(next_token);
-  for (std::size_t i = 0; i < order.size(); ++i) {
-    rank[order[i]] = i;
+  LiveRanks live_nodes(total_nodes);
+  for (std::size_t rank : original_ranks)
+    live_nodes.Update(rank, true);
+  std::vector<bool> removed(node_count, false);
+  std::sort(initializer_positions.begin(), initializer_positions.end());
+  if (initializer_positions.size() > std::numeric_limits<std::size_t>::max() - initializer_count) {
+    throw BuilderError("GraphGraph::Optimize: batch initializer count overflow.");
   }
-  std::vector<std::size_t> current(node_count);
-  std::iota(current.begin(), current.end(), 0);
-  std::vector<uint64_t> installed_initializers;
+  LiveRanks live_initializers(initializer_positions.size());
+  const auto initializer_rank = [&](uint64_t position) {
+    return static_cast<std::size_t>(
+        std::lower_bound(initializer_positions.begin(), initializer_positions.end(), position) -
+        initializer_positions.begin());
+  };
   for (std::size_t i = 0; i < replacements.size(); ++i) {
     auto &rewrite = replacements[i].rewriting;
-    std::unordered_set<std::size_t> removed;
+    std::vector<std::size_t> removed_ranks;
+    removed_ranks.reserve(rewrite.matched_nodes().size());
     for (uint64_t &position : rewrite.ref_matched_nodes()) {
-      const std::size_t token = CheckedPosition(position);
-      const auto found = std::find(current.begin(), current.end(), token);
-      if (found == current.end()) {
+      const std::size_t original = CheckedPosition(position);
+      if (original >= node_count || removed[original]) {
         throw BuilderError("GraphGraph::Optimize: overlapping batch matches.");
       }
-      removed.insert(token);
-      position = static_cast<uint64_t>(found - current.begin());
+      removed[original] = true;
+      const std::size_t rank = original_ranks[original];
+      position = live_nodes.Before(rank);
+      removed_ranks.push_back(rank);
     }
-    std::erase_if(current, [&](std::size_t token) { return removed.count(token) != 0; });
-    current.insert(current.end(), added_tokens[i].begin(), added_tokens[i].end());
-    std::sort(current.begin(), current.end(),
-              [&](std::size_t a, std::size_t b) { return rank[a] < rank[b]; });
+    for (std::size_t rank : removed_ranks)
+      live_nodes.Update(rank, false);
+    for (std::size_t rank : added_ranks[i])
+      live_nodes.Update(rank, true);
     rewrite.clr_added_nodes_positions();
-    for (std::size_t token : added_tokens[i]) {
-      rewrite.add_added_nodes_positions(static_cast<uint64_t>(
-          std::find(current.begin(), current.end(), token) - current.begin()));
-    }
+    for (std::size_t rank : added_ranks[i])
+      rewrite.add_added_nodes_positions(live_nodes.Before(rank));
     const auto final_positions = rewrite.added_initializer_positions();
-    installed_initializers.insert(installed_initializers.end(), final_positions.begin(),
-                                  final_positions.end());
-    for (std::size_t j = 0; j < final_positions.size(); ++j) {
-      const uint64_t position = final_positions[j];
+    for (uint64_t position : final_positions)
+      live_initializers.Update(initializer_rank(position), true);
+    for (std::size_t j = 0; j < final_positions.size(); ++j)
       rewrite.ref_added_initializer_positions()[j] =
-          initializer_count + static_cast<uint64_t>(std::count_if(
-                                  installed_initializers.begin(), installed_initializers.end(),
-                                  [&](uint64_t other) { return other < position; }));
-    }
+          initializer_count + live_initializers.Before(initializer_rank(final_positions[j]));
   }
   for (std::size_t i = 0; i < replacements.size(); ++i) {
-    for (std::size_t j = 0; j < added_tokens[i].size(); ++j) {
-      const auto found = std::find(current.begin(), current.end(), added_tokens[i][j]);
-      if (static_cast<uint64_t>(found - current.begin()) != final_node_positions[i][j]) {
+    for (std::size_t j = 0; j < added_ranks[i].size(); ++j) {
+      if (live_nodes.Before(added_ranks[i][j]) != final_node_positions[i][j]) {
         throw BuilderError("GraphGraph::Optimize: sequential node order differs from batch order.");
       }
     }

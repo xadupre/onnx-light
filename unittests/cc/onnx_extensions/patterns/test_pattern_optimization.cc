@@ -250,7 +250,166 @@ private:
   core::shapes::ComputeShapeFn previous_;
 };
 
+FunctionProto PreparationAdd() {
+  FunctionProto function;
+  function.set_name("Prepare");
+  function.set_domain("test.prepare");
+  function.add_input("A");
+  function.add_input("B");
+  function.add_output("C");
+  function.add_output("D");
+  function.add_opset("", 18);
+  function.ref_node().push_back(MakeNode("Add", {"A", "B"}, {"C"}));
+  function.ref_node().push_back(MakeNode("Add", {"C", "B"}, {"D"}));
+  return function;
+}
+
+RewritingProto PreparationPlan() {
+  RewritingProto plan;
+  plan.ref_added_functions().push_back(PreparationAdd());
+  auto &opset = *plan.add_required_opset_imports();
+  opset.set_domain("test.prepare");
+  opset.set_version(1);
+  auto &edit = *plan.add_rewrites();
+  edit.add_matched_nodes(0);
+  edit.add_removed_initializers(0);
+  edit.add_removed_initializers(1);
+  edit.ref_added_nodes().push_back(MakeNode("Add", {"e", "f"}, {"y"}));
+  edit.add_added_nodes_positions(0);
+  edit.ref_added_initializers().push_back(MakeInitializer<float>("literal", {1}, {2}));
+  edit.add_added_initializer_positions(2);
+  edit.ref_initializer_calls().push_back(
+      MakeNode("Prepare", {"a", "b"}, {"c", "d"}, "test.prepare"));
+  edit.ref_initializer_calls().push_back(
+      MakeNode("Prepare", {"c", "literal"}, {"e", "f"}, "test.prepare"));
+  for (uint64_t position : {1, 0, 3, 4})
+    edit.add_computed_initializer_positions(position);
+  return plan;
+}
+
+ModelProto PreparationModel() {
+  ModelProto model;
+  model.set_producer_name("canonical");
+  model.add_opset("", 18);
+  auto &graph = *model.mutable_graph();
+  graph.set_name("preparation");
+  graph.ref_initializer().push_back(MakeInitializer<float>("a", {1}, {1}));
+  graph.ref_initializer().push_back(MakeInitializer<float>("b", {1}, {2}));
+  graph.ref_node().push_back(MakeNode("Add", {"a", "b"}, {"y"}));
+  auto &output = *graph.add_output();
+  output.set_name("y");
+  auto &type = *output.mutable_type()->mutable_tensor_type();
+  type.set_elem_type(TensorProto::FLOAT);
+  type.mutable_shape()->add_dim()->set_dim_value(1);
+  return model;
+}
+
 } // namespace
+
+TEST(PatternOptimization, ModelReplayPreparesDependentOutputsBeforeRemovingSources) {
+  ScopedAddKernel kernel;
+  const ModelProto original = PreparationModel();
+  const std::string original_bytes = original.SerializeAsString();
+  RewritingProto plan = PreparationPlan();
+  // Identical definitions are installed only once.
+  plan.ref_added_functions().push_back(PreparationAdd());
+  RewritingProto loaded;
+  ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
+  const auto replayed = core::builder::ReplayModel(original, loaded, SchemaLookup());
+  EXPECT_EQ(replayed.SerializeAsString(),
+            core::builder::ReplayModel(original, plan, SchemaLookup()).SerializeAsString());
+  EXPECT_EQ(original.SerializeAsString(), original_bytes);
+  EXPECT_EQ(replayed.producer_name(), "canonical");
+  ASSERT_EQ(replayed.functions().size(), 1u);
+  ASSERT_EQ(replayed.opset_import().size(), 2u);
+  const auto &graph = replayed.graph();
+  ASSERT_EQ(graph.initializer().size(), 5u);
+  const std::vector<std::string> names{"d", "c", "literal", "e", "f"};
+  const std::vector<float> values{5, 3, 2, 5, 7};
+  for (std::size_t i = 0; i < names.size(); ++i) {
+    EXPECT_EQ(graph.initializer(i).name(), names[i]);
+    EXPECT_FLOAT_EQ(core::runtime::TensorFromProto(graph.initializer(i)).AsFloat()[0], values[i]);
+  }
+  ASSERT_EQ(graph.node().size(), 1u);
+  EXPECT_EQ(graph.node(0).op_type(), "Add");
+  const auto outputs = core::runtime::RunModel(replayed, {});
+  ASSERT_EQ(outputs.size(), 1u);
+  EXPECT_FLOAT_EQ(outputs[0].AsFloat()[0], 12);
+}
+
+TEST(PatternOptimization, ModelReplayRejectsInvalidPreparationAndConflictingDefinitions) {
+  ScopedAddKernel kernel;
+  using Mutation = std::function<void(ModelProto &, RewritingProto &)>;
+  const std::vector<Mutation> invalid{
+      [](auto &, auto &plan) {
+        plan.ref_rewrites()[0].ref_computed_initializer_positions()[0] = 2;
+      },
+      [](auto &, auto &plan) { plan.ref_rewrites()[0].add_computed_initializer_positions(5); },
+      [](auto &, auto &plan) {
+        plan.ref_rewrites()[0].ref_initializer_calls()[0].ref_input()[0] = "future";
+      },
+      [](auto &, auto &plan) {
+        plan.ref_rewrites()[0].ref_initializer_calls()[1].ref_output()[0] = "c";
+      },
+      [](auto &model, auto &) { model.mutable_graph()->add_input()->set_name("a"); },
+      [](auto &, auto &plan) {
+        plan.ref_added_functions()[0].ref_node()[0].set_op_type("RandomUniform");
+      },
+      [](auto &, auto &plan) {
+        plan.ref_added_functions()[0].ref_node()[0].set_op_type("MissingPreparationKernel");
+      },
+      [](auto &, auto &plan) {
+        auto &body = plan.ref_added_functions()[0].ref_node()[0];
+        body.set_domain("test.prepare");
+        body.set_op_type("Prepare");
+        body.add_output("extra");
+      },
+      [](auto &, auto &plan) {
+        plan.ref_added_functions()[0].ref_node()[0].ref_input()[0] = "capture";
+      },
+      [](auto &model, auto &) {
+        auto function = PreparationAdd();
+        function.ref_node()[0].set_op_type("Mul");
+        model.ref_functions().push_back(std::move(function));
+      },
+      [](auto &, auto &plan) {
+        auto function = PreparationAdd();
+        function.ref_node()[0].set_op_type("Mul");
+        plan.ref_added_functions().push_back(std::move(function));
+      },
+      [](auto &, auto &plan) {
+        auto &opset = *plan.add_required_opset_imports();
+        opset.set_domain("ai.onnx");
+        opset.set_version(19);
+      }};
+  for (std::size_t i = 0; i < invalid.size(); ++i) {
+    SCOPED_TRACE(i);
+    ModelProto model = PreparationModel();
+    RewritingProto plan = PreparationPlan();
+    invalid[i](model, plan);
+    EXPECT_THROW(core::builder::ReplayModel(model, plan, SchemaLookup()),
+                 core::builder::BuilderError);
+  }
+}
+
+TEST(PatternOptimization, ModelReplayRetainsFunctionsUsedByReplacementNodes) {
+  ScopedAddKernel kernel;
+  ModelProto model = PreparationModel();
+  RewritingProto plan;
+  plan.ref_added_functions().push_back(PreparationAdd());
+  auto &import = *plan.add_required_opset_imports();
+  import.set_domain("test.prepare");
+  import.set_version(1);
+  auto &edit = *plan.add_rewrites();
+  edit.add_matched_nodes(0);
+  edit.ref_added_nodes().push_back(
+      MakeNode("Prepare", {"a", "b"}, {"y", "unused"}, "test.prepare"));
+  edit.add_added_nodes_positions(0);
+  const auto result = core::builder::ReplayModel(model, plan, SchemaLookup());
+  ASSERT_EQ(result.functions().size(), 1u);
+  EXPECT_FLOAT_EQ(core::runtime::RunModel(result, {})[0].AsFloat()[0], 3);
+  EXPECT_THROW(core::builder::Replay(model, plan, SchemaLookup()), core::builder::BuilderError);
+}
 
 TEST(PatternOptimization, ScopedCustomKernelRestoresFactory) {
   ScopedAddKernel outer;
@@ -297,8 +456,11 @@ TEST(PatternOptimization, SequentialRebasingPreservesReorderedFoldingBatch) {
   EXPECT_EQ(plan.rewrites(1).matched_nodes().values(), (std::vector<uint64_t>{0}));
   EXPECT_EQ(plan.rewrites(0).added_nodes_positions().values(), (std::vector<uint64_t>{1}));
   EXPECT_EQ(plan.rewrites(1).added_nodes_positions().values(), (std::vector<uint64_t>{0}));
-  EXPECT_EQ(plan.rewrites(0).added_initializer_positions().values(), (std::vector<uint64_t>{1, 2}));
-  EXPECT_EQ(plan.rewrites(1).added_initializer_positions().values(), (std::vector<uint64_t>{2, 3}));
+  EXPECT_EQ(plan.rewrites(0).added_initializer_positions().values(), (std::vector<uint64_t>{1}));
+  EXPECT_EQ(plan.rewrites(0).computed_initializer_positions().values(), (std::vector<uint64_t>{2}));
+  EXPECT_EQ(plan.rewrites(1).added_initializer_positions().values(), (std::vector<uint64_t>{2}));
+  EXPECT_EQ(plan.rewrites(1).computed_initializer_positions().values(), (std::vector<uint64_t>{3}));
+  ASSERT_EQ(plan.added_functions().size(), 1u);
   std::string bytes;
   ASSERT_TRUE(plan.SerializeToString(bytes));
   RewritingProto loaded;
@@ -340,8 +502,8 @@ TEST(PatternOptimization, SequentialRebasingPreservesLargeMixedBatch) {
     const auto &folded = plan.rewrites(i);
     EXPECT_EQ(folded.matched_nodes().values(), (std::vector<uint64_t>{2 * i + 1}));
     EXPECT_EQ(folded.added_nodes_positions().values(), (std::vector<uint64_t>{2 * i + 1}));
-    EXPECT_EQ(folded.added_initializer_positions().values(),
-              (std::vector<uint64_t>{i + 1, 2 * i + 2}));
+    EXPECT_EQ(folded.added_initializer_positions().values(), (std::vector<uint64_t>{i + 1}));
+    EXPECT_EQ(folded.computed_initializer_positions().values(), (std::vector<uint64_t>{2 * i + 2}));
     const auto &expanded = plan.rewrites(count + i);
     EXPECT_EQ(expanded.matched_nodes().values(), (std::vector<uint64_t>{3 * i}));
     EXPECT_EQ(expanded.added_nodes_positions().values(), (std::vector<uint64_t>{3 * i, 3 * i + 1}));
@@ -971,9 +1133,8 @@ TEST(PatternOptimization, CleanupPassesProduceReplayableRewritingSequence) {
   ASSERT_EQ(rewrites[3].value_renames().size(), 1u);
   EXPECT_EQ(rewrites[3].value_renames(0).key(), "c2");
   EXPECT_EQ(rewrites[3].value_renames(0).value(), "c1");
-  EXPECT_EQ(rewrites[3].removed_initializers().values(), std::vector<uint64_t>({0, 1}));
-  ASSERT_EQ(rewrites[3].added_initializers().size(), 1u);
-  EXPECT_EQ(rewrites[3].added_initializers(0).name().value(), "c1");
+  EXPECT_EQ(rewrites[3].removed_initializers().values(), std::vector<uint64_t>({1}));
+  EXPECT_TRUE(rewrites[3].added_initializers().empty());
 
   const GraphProto optimized = builder.BuildGraph();
   const GraphProto replayed = core::builder::Replay(original, plan, SchemaLookup());
@@ -1135,8 +1296,10 @@ TEST(PatternOptimization, OptimizeFoldsConstantReplacementAndReplaysInitializer)
   const auto &rewrites = plan.rewrites();
   ASSERT_EQ(rewrites.size(), 1u);
   EXPECT_TRUE(rewrites[0].added_nodes().empty());
-  ASSERT_EQ(rewrites[0].added_initializers().size(), 1u);
-  EXPECT_EQ(rewrites[0].added_initializers(0).name().value(), "y");
+  EXPECT_TRUE(rewrites[0].added_initializers().empty());
+  ASSERT_EQ(rewrites[0].initializer_calls().size(), 1u);
+  EXPECT_EQ(rewrites[0].initializer_calls(0).output(0), "y");
+  EXPECT_EQ(rewrites[0].computed_initializer_positions().values(), (std::vector<uint64_t>{2}));
   ASSERT_EQ(builder.Nodes().size(), 1u);
   EXPECT_EQ(builder.Nodes()[0].output()[0].value(), "untouched");
   EXPECT_TRUE(graph.IsConstant("y"));

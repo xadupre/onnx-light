@@ -377,6 +377,15 @@ def replay(
     return _C.replay(model, rewrites, schema_lookup)
 
 
+def replay_model(
+    model: ModelProto,
+    rewrites: RewritingProto,
+    schema_lookup: SchemaLookup | None = _default_schema_lookup,
+) -> ModelProto:
+    """Replays edits and one-time constant recipes, preserving functions and imports."""
+    return _C.replay_model(model, rewrites, schema_lookup)
+
+
 __all__ = [
     "AttentionGQAPattern",
     "BatchNormalizationPattern",
@@ -517,6 +526,7 @@ __all__ = [
     "registered_patterns",
     "render_rst_standard_patterns_table",
     "replay",
+    "replay_model",
     "reset_registered_patterns",
     "standard_pattern_names",
     "standard_patterns",

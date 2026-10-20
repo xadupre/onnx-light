@@ -422,11 +422,14 @@ void RequireStandardGraph(const GraphProto &graph) {
   RequireStandardBody(graph);
 }
 
+} // namespace
+
 // Materializes an initializer ``TensorProto`` (owning its payload) from a
 // runtime tensor produced by constant folding. Non-STRING tensors copy their
 // little-endian byte buffer into ``raw_data``; STRING tensors copy their
 // elements into ``string_data``.
-TensorProto ProtoFromRuntimeTensor(const core::runtime::Tensor &tensor, const std::string &name) {
+TensorProto GraphBuilder::ProtoFromRuntimeTensor(const core::runtime::Tensor &tensor,
+                                                 const std::string &name) {
   TensorProto proto;
   proto.set_name(name);
   proto.set_data_type(tensor.data_type);
@@ -442,8 +445,6 @@ TensorProto ProtoFromRuntimeTensor(const core::runtime::Tensor &tensor, const st
   }
   return proto;
 }
-
-} // namespace
 
 GraphBuilder::GraphBuilder(std::string name, SchemaLookupFn schema_lookup,
                            const std::unordered_map<std::string, int> &opsets)
@@ -823,7 +824,7 @@ bool GraphBuilder::RefreshDependentNodes(
       continue;
     }
     NodeProto materialized = stored;
-    MaterializeGraphReferences(materialized);
+    MaterializeGraphReferences(materialized, /*share_initializers=*/true);
     std::vector<std::string> references;
     CollectNodeReferences(materialized, references);
     const bool consumes_affected =
@@ -955,7 +956,8 @@ void GraphBuilder::RebuildMetadata() {
     compute_.SeedReuseOutput(name, nodes_, compute_.Shapes());
   }
 
-  GraphProto graph = BuildGraphImpl(/*validate_persistent_bindings=*/false);
+  GraphProto graph = BuildGraphImpl(/*validate_persistent_bindings=*/false,
+                                    /*share_initializers=*/true);
   const auto tags = compute_.ComputeValueAndNodeTags(graph);
   compute_.ComputeConstants(graph);
   compute_.ComputeInPlaceReuseGraph(graph, compute_.Shapes(), /*allow_input_overwrite=*/false,
@@ -1010,7 +1012,7 @@ void GraphBuilder::RebuildStructuredState(bool refresh_ancestors) {
   RefreshLocalFunctions();
   for (std::size_t i = 0; i < nodes_.size(); ++i) {
     NodeProto node = nodes_[i];
-    MaterializeGraphReferences(node);
+    MaterializeGraphReferences(node, /*share_initializers=*/true);
     const bool ready = ShapeFunctionAvailable(node) && !HasUnboundAttributes(node) &&
                        ShapeInputsAvailable(shapes, node);
     if (ready) {
@@ -1656,7 +1658,7 @@ void GraphBuilder::ImportFunction(const FunctionProto &function) {
   RebuildStructuredState();
 }
 
-void GraphBuilder::MaterializeGraphReferences(NodeProto &node) const {
+void GraphBuilder::MaterializeGraphReferences(NodeProto &node, bool share_initializers) const {
   for (auto &attribute : node.ref_attribute()) {
     if (!HasGraphReferenceSuffix(attribute.name().value())) {
       continue;
@@ -1669,7 +1671,7 @@ void GraphBuilder::MaterializeGraphReferences(NodeProto &node) const {
         AttributeProto graph_attribute;
         graph_attribute.set_name(base_name);
         graph_attribute.set_type(AttributeProto::AttributeType::GRAPH);
-        *graph_attribute.mutable_g() = Subgraph(ref_name).BuildGraph();
+        *graph_attribute.mutable_g() = Subgraph(ref_name).BuildGraphImpl(true, share_initializers);
         attribute = std::move(graph_attribute);
       }
     } else if (attribute.type() == AttributeProto::AttributeType::STRINGS &&
@@ -1681,7 +1683,8 @@ void GraphBuilder::MaterializeGraphReferences(NodeProto &node) const {
       for (std::size_t i = 0; i < refs.size(); ++i) {
         const std::string ref_name = refs[static_cast<std::size_t>(i)];
         if (HasSubgraph(ref_name)) {
-          *graphs_attribute.add_graphs() = Subgraph(ref_name).BuildGraph();
+          *graphs_attribute.add_graphs() =
+              Subgraph(ref_name).BuildGraphImpl(true, share_initializers);
         }
       }
       attribute = std::move(graphs_attribute);
@@ -3309,14 +3312,20 @@ void GraphBuilder::ValidateSubgraphOutput(const std::string &name) const {
   }
 }
 
-GraphProto GraphBuilder::BuildGraphImpl(bool validate_persistent_bindings) const {
+GraphProto GraphBuilder::BuildGraphImpl(bool validate_persistent_bindings,
+                                        bool share_initializers) const {
   GraphProto graph = graph_template_;
   graph.set_name(name_);
   for (const ValueInfoProto &input : inputs_) {
     graph.add_input(input);
   }
-  for (const TensorProto &initializer : initializers_) {
-    graph.add_initializer(initializer);
+  for (std::size_t i = 0; i < initializers_.size(); ++i) {
+    if (share_initializers) {
+      graph.ref_initializer().add();
+      graph.ref_initializer().get(i) = initializers_.shared_at(i);
+    } else {
+      graph.add_initializer(initializers_[i]);
+    }
   }
   for (const auto &initializer : encoded_initializers_) {
     graph.ref_encoded_initializer().push_back(EncodedValueProto(initializer));
@@ -3326,7 +3335,7 @@ GraphProto GraphBuilder::BuildGraphImpl(bool validate_persistent_bindings) const
   }
   for (const NodeProto &node : nodes_) {
     NodeProto materialized = node;
-    MaterializeGraphReferences(materialized);
+    MaterializeGraphReferences(materialized, share_initializers);
     graph.ref_node().push_back(std::move(materialized));
   }
   for (const ValueInfoProto &output : outputs_) {

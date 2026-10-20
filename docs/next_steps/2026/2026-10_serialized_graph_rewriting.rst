@@ -5,10 +5,11 @@ Serialized graph rewrites and model variants
 
 :Date: 2026-10-20
 
-**First step implemented: proto records.** The optimizer and graph-only replay
-use ``LocalRewritingProto`` and ``RewritingProto``. Initializer recipes,
-model-level replay, the model envelope and export operations below remain
-proposals, not available APIs.
+**Steps 1 and 2 implemented: proto records and extended replay.** The optimizer
+captures initializer recipes and shared function definitions in
+``LocalRewritingProto`` / ``RewritingProto``. ``ReplayModel`` (Python:
+``replay_model``) prepares constants once and preserves model-level additions.
+The model envelope and export operations below remain proposals.
 
 Existing building blocks
 ++++++++++++++++++++++++
@@ -31,17 +32,18 @@ Records contain a diagnostic pattern name, not a live pattern pointer or
 timings. Timing remains in ``OptimizationReport``. There is not yet a rewrite
 map in ``ModelProto``.
 
-Constant folding currently stores materialized results: after
-``ConstantFoldNodes``, the optimizer copies computed tensors into
-``added_initializers`` and removes folded operations from ``added_nodes``.
-It does not retain the computation that produced those tensors. Serializing
-this record alone would embed transformed weights, such as a second,
-transposed copy.
+Constant folding retains the computation as shared functions and ordered
+``initializer_calls``, not materialized results in ``added_initializers``.
+Literal constants still use ``added_initializers``. Cleanup records only
+removed initializer positions and renames, without re-embedding retained
+weights. Serializing a transposed-weight recipe therefore stores no second
+transposed payload.
 
 The messages are defined in ``onnx_proto/include/onnx_proto/onnx.h`` using
 the existing protobuf-free message layer. The schema below includes fields
-reserved for subsequent steps; graph-only replay does not execute initializer
-recipes or install collection-level functions/imports.
+used by constant preparation. Graph-only ``Replay`` also evaluates recipes,
+but rejects surviving nodes requiring newly added functions/imports: callers
+must use ``ReplayModel`` to retain those model-level dependencies.
 
 Decision: use protos as runtime records
 ++++++++++++++++++++++++++++++++++++++++
@@ -140,7 +142,7 @@ not permission to reinterpret surviving operators.
 Deferred constant folding and added functions
 +++++++++++++++++++++++++++++++++++++++++++++
 
-Extend optimizer capture to populate ``LocalRewritingProto.initializer_calls``
+Optimizer capture populates ``LocalRewritingProto.initializer_calls``
 and ``computed_initializer_positions`` directly. Collect and deduplicate
 definitions across all local edits into ``RewritingProto.added_functions``
 during capture. Local records contain calls, not repeated definitions.
@@ -223,7 +225,7 @@ Each PR depends on the preceding one.
      - Binary round-trip; no matcher pointer or duplicate record type;
        sequential replay preserves existing results, including batch edits;
        invalid positions rejected.
-   * - 2. Extend existing replay
+   * - 2. Extend existing replay (implemented)
      - Capture initializer recipes and shared function definitions directly
        in the protos. Extend existing replay for one-time constant preparation
        and model-level function/import additions; preserve payload ownership.

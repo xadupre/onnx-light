@@ -287,4 +287,15 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
       },
       nb::arg("model"), nb::arg("rewrites"), nb::arg("schema_lookup") = nb::none(),
       "Replays captured rewrites on a fresh copy of a model graph.");
+  builder_mod.def(
+      "replay_model",
+      [](const ModelProto &model, const RewritingProto &rewrites, nb::object schema_lookup) {
+        return core::builder::ReplayModel(
+            model, rewrites,
+            schema_lookup.is_none()
+                ? core::builder::GraphBuilder::SchemaLookupFn{}
+                : nb::cast<core::builder::GraphBuilder::SchemaLookupFn>(schema_lookup));
+      },
+      nb::arg("model"), nb::arg("rewrites"), nb::arg("schema_lookup") = nb::none(),
+      "Replays captured rewrites, initializer recipes, functions and imports on a model.");
 }

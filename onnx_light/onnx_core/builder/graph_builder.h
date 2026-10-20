@@ -56,6 +56,10 @@
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx.h"
 
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
+struct Tensor;
+}
+
 namespace ONNX_LIGHT_NAMESPACE::core::builder {
 
 using ::onnx_light::core::compute::ComputeContext;
@@ -686,6 +690,8 @@ private:
 
   std::size_t ConstantFoldNodes(const ConstantFoldingOptions &options,
                                 const std::unordered_set<std::string> &included_outputs);
+  static TensorProto ProtoFromRuntimeTensor(const core::runtime::Tensor &tensor,
+                                            const std::string &name);
   std::size_t ConstantFoldImpl(const ConstantFoldingOptions &options,
                                const std::unordered_set<std::string> *included_outputs);
 
@@ -786,7 +792,8 @@ private:
       std::unordered_set<std::string> &affected_values, bool propagate_to_parent = true);
   void RebuildMetadata();
   void RebuildStructuredState(bool refresh_ancestors = true);
-  GraphProto BuildGraphImpl(bool validate_persistent_bindings) const;
+  GraphProto BuildGraphImpl(bool validate_persistent_bindings,
+                            bool share_initializers = false) const;
   void ValidateSubgraphOutput(const std::string &name) const;
   std::size_t DeduplicateEncodedInitializers(std::vector<const EncodedValueProto *> &index,
                                              std::unordered_map<std::string, std::string> &rename);
@@ -818,7 +825,7 @@ private:
 
   // Materializes ``*_ref`` STRING/STRINGS attributes in ``node`` back to
   // GRAPH/GRAPHS attributes from the referenced nested builders.
-  void MaterializeGraphReferences(NodeProto &node) const;
+  void MaterializeGraphReferences(NodeProto &node, bool share_initializers = false) const;
 
   // Returns ``true`` when ``name`` ends with ``"_ref"``.
   static bool HasGraphReferenceSuffix(const std::string &name);

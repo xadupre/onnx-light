@@ -1686,7 +1686,15 @@ void GraphBuilder::ImportGraph(const GraphProto &graph) {
     }
   }
   const auto declarations = StructuredDeclarations(value_infos_);
-  for (const auto &node : graph.node()) {
+  std::unordered_set<std::string> available = inherited_names_;
+  available.insert(names_.begin(), names_.end());
+  std::vector<std::vector<std::string>> references(graph.node().size());
+  for (std::size_t index = 0; index < graph.node().size(); ++index) {
+    CollectNodeReferences(graph.node(index), references[index]);
+  }
+  const auto order = TopologicalNodeOrder(graph.node(), available, references);
+  for (std::size_t index : order) {
+    const auto &node = graph.node(index);
     std::vector<std::string> inputs;
     inputs.reserve(node.input().size());
     for (std::size_t i = 0; i < node.input().size(); ++i) {
@@ -1713,6 +1721,23 @@ void GraphBuilder::ImportGraph(const GraphProto &graph) {
   }
   for (const auto &output : graph.output()) {
     MakeOutput(output);
+  }
+  std::vector<std::size_t> old_indices(order.size());
+  bool reordered = false;
+  for (std::size_t index = 0; index < order.size(); ++index) {
+    old_indices[order[index]] = index;
+    reordered |= order[index] != index;
+  }
+  if (reordered) {
+    // Inference uses dependency order; serialized rewrite coordinates keep recorded order.
+    utils::RepeatedProtoField<NodeProto> recorded;
+    recorded.reserve(nodes_.size());
+    for (std::size_t index : old_indices) {
+      recorded.push_back(std::move(nodes_[index]));
+    }
+    nodes_ = std::move(recorded);
+    compute_.UpdateNodes(nodes_, old_indices, references, {}, device_);
+    compute_.RefreshIncrementalMemory(nodes_, compute_.Shapes());
   }
 }
 

@@ -27,6 +27,9 @@ running the matcher. Matched and removed positions refer to the graph
 immediately before each edit; added positions describe its result. Internal
 optimizer batches are normalized to this sequential coordinate system. Later
 edits may consume nodes created by earlier ones.
+The returned builder can receive another plan, including an empty plan, even
+when its recorded node order is not topological. Replay preserves those node
+coordinates and their annotations; native export orders dependencies.
 
 The two rewrite messages support binary serialization and Python bindings.
 Records contain a diagnostic pattern name, not a live pattern pointer or

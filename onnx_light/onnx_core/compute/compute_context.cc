@@ -751,9 +751,16 @@ void ComputeContext::UpdateNodes(const utils::RepeatedProtoField<NodeProto> &nod
   }
   std::unordered_set<std::string> changed_references;
   for (std::size_t index = 0; index < old_count; ++index) {
-    if (new_indices[index] < 0) {
+    if (new_indices[index] != static_cast<int>(index)) {
       changed_references.insert(incr_node_references_[index].begin(),
                                 incr_node_references_[index].end());
+      if (new_indices[index] >= 0) {
+        for (const auto &output : nodes[static_cast<std::size_t>(new_indices[index])].output()) {
+          if (!output.empty()) {
+            changed_references.insert(output.value());
+          }
+        }
+      }
     }
   }
   const auto remap = [&](auto &values) {

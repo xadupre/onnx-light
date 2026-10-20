@@ -574,6 +574,33 @@ TEST(GraphGraph, ReverseReplacementOrderReplaysAcrossIterationsBeforeExportSorti
     EXPECT_EQ(rewritten.GetShape("p"), source.GetShape("p"));
     EXPECT_EQ(rewritten.GetShape("Y"), source.GetShape("Y"));
     EXPECT_TRUE(rewritten.Compute().NodeReuse(1).empty());
+    auto unchanged = rewritten.ApplyRewritings(RewritingProto{});
+    EXPECT_EQ(unchanged.BuildGraph().SerializeAsString(), replayed.SerializeAsString());
+    EXPECT_EQ(unchanged.Compute().NodeTags(), rewritten.Compute().NodeTags());
+    EXPECT_EQ(unchanged.Compute().NodeConstant(), rewritten.Compute().NodeConstant());
+    EXPECT_EQ(unchanged.Compute().Memory(), rewritten.Compute().Memory());
+    EXPECT_EQ(unchanged.Compute().PeakMemory(), rewritten.Compute().PeakMemory());
+    for (std::size_t index = 0; index < rewritten.Nodes().size(); ++index) {
+      EXPECT_EQ(unchanged.Compute().NodeReuse(index), rewritten.Compute().NodeReuse(index));
+    }
+    RewritingProto follow_up;
+    auto &replace = *follow_up.add_rewrites();
+    replace.add_matched_nodes(1);
+    replace.add_added_nodes_positions(1);
+    replace.add_added_nodes(MakeNode("Neg", {"X"}, {"p"}));
+    auto composed = rewritten.ApplyRewritings(follow_up);
+    EXPECT_EQ(unchanged.ApplyRewritings(follow_up).BuildGraph().SerializeAsString(),
+              composed.BuildGraph().SerializeAsString());
+    ASSERT_EQ(composed.Nodes().size(), 2u);
+    EXPECT_EQ(composed.Nodes()[0].op_type(), "Add");
+    EXPECT_EQ(composed.Nodes()[1].op_type(), "Neg");
+    EXPECT_EQ(composed.GetShape("p"), source.GetShape("p"));
+    EXPECT_EQ(composed.GetShape("Y"), source.GetShape("Y"));
+    EXPECT_TRUE(composed.Compute().NodeReuse(1).empty());
+    EXPECT_EQ(rewritten.BuildGraph().SerializeAsString(), replayed.SerializeAsString());
+    const auto composed_graph = composed.ToGraph();
+    EXPECT_EQ(composed_graph.node(0).op_type(), "Neg");
+    EXPECT_EQ(composed_graph.node(1).op_type(), "Add");
     rewritten.MakeNode("Identity", {"Y"}, {"copy"});
     EXPECT_EQ(rewritten.GetShape("copy"), source.GetShape("Y"));
     const GraphProto finalized = builder.ToGraph();
@@ -582,6 +609,32 @@ TEST(GraphGraph, ReverseReplacementOrderReplaysAcrossIterationsBeforeExportSorti
     EXPECT_EQ(builder.Nodes()[0].op_type(), "Mul");
     EXPECT_EQ(builder.Nodes()[1].op_type(), "Add");
   }
+}
+
+TEST(GraphGraph, ReplayRefreshesReuseWhenOnlyProducerMoves) {
+  core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 28}});
+  source.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  source.MakeNode("Neg", {"X"}, {"p"});
+  source.MakeNode("Abs", {"X"}, {"a"});
+  source.MakeNode("Relu", {"p"}, {"Y"});
+  source.MakeNode("Abs", {"Y"}, {"Z"});
+  source.MakeOutput("a");
+  source.MakeOutput("Z");
+  ASSERT_FALSE(source.Compute().NodeReuse(2).empty());
+  RewritingProto plan;
+  auto &rewrite = *plan.add_rewrites();
+  rewrite.add_matched_nodes(0);
+  rewrite.add_matched_nodes(3);
+  rewrite.add_added_nodes_positions(0);
+  rewrite.add_added_nodes(MakeNode("Abs", {"Y"}, {"Z"}));
+  rewrite.add_added_nodes_positions(3);
+  rewrite.add_added_nodes(MakeNode("Neg", {"X"}, {"p"}));
+  auto reversed = source.ApplyRewritings(plan);
+  auto replayed = reversed.ApplyRewritings(RewritingProto{});
+  EXPECT_EQ(replayed.BuildGraph().SerializeAsString(), reversed.BuildGraph().SerializeAsString());
+  EXPECT_TRUE(replayed.Compute().NodeReuse(2).empty());
+  EXPECT_EQ(replayed.Compute().Memory(), reversed.Compute().Memory());
+  EXPECT_EQ(replayed.Compute().PeakMemory(), reversed.Compute().PeakMemory());
 }
 
 TEST(GraphGraph, RewritingReindexesRetainedControlFlowContexts) {
@@ -614,6 +667,8 @@ TEST(GraphGraph, RewritingReindexesRetainedControlFlowContexts) {
       rewrite.add_added_nodes_positions(1);
     }
     auto result = source.ApplyRewritings(plan);
+    auto replayed = result.ApplyRewritings(RewritingProto{});
+    EXPECT_EQ(replayed.BuildGraph().SerializeAsString(), result.BuildGraph().SerializeAsString());
     const int64_t position = reverse ? 0 : 1;
     EXPECT_EQ(result.Nodes()[static_cast<std::size_t>(position)].op_type(), "If");
     EXPECT_FALSE(result.Shapes().HasSubgraphContext(2, "then_branch"));
@@ -621,6 +676,9 @@ TEST(GraphGraph, RewritingReindexesRetainedControlFlowContexts) {
       ASSERT_TRUE(result.Shapes().HasSubgraphContext(position, name));
       EXPECT_EQ(result.Shapes().GetSubgraphContext(position, name).Get("branch_result"),
                 source.Shapes().GetSubgraphContext(2, name).Get("branch_result"));
+      ASSERT_TRUE(replayed.Shapes().HasSubgraphContext(position, name));
+      EXPECT_EQ(replayed.Shapes().GetSubgraphContext(position, name).Get("branch_result"),
+                result.Shapes().GetSubgraphContext(position, name).Get("branch_result"));
     }
   }
 }

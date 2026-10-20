@@ -194,6 +194,8 @@ public:
   /// Function declarations retain their value information and attribute
   /// defaults. Inference runs when input descriptors and referenced attributes
   /// are available; an unspecified formal-input rank is never treated as scalar.
+  /// Requires callees before callers in the function definitions; a forward call,
+  /// including one in a nested graph attribute, throws :cpp:class:`BuilderError`.
   explicit GraphBuilder(const ModelProto &model, SchemaLookupFn schema_lookup = {});
 
   ~GraphBuilder();

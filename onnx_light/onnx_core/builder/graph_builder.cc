@@ -473,16 +473,54 @@ GraphBuilder::GraphBuilder(const ModelProto &model, SchemaLookupFn schema_lookup
     SetOpsetVersion(opset.domain().empty() ? std::string() : opset.domain().value(),
                     static_cast<int>(opset.version()));
   }
-  std::set<FunctionIdentifier> imported_functions;
+  std::set<FunctionIdentifier> model_functions;
   for (const auto &function : model.functions()) {
-    const std::string function_name = function.name().value();
-    const std::string function_domain =
-        function.domain().empty() ? std::string() : function.domain().value();
-    if (function_name.empty() || !imported_functions
-                                      .insert(MakeFunctionIdentifier(function_domain, function_name,
-                                                                     function.overload().value()))
-                                      .second)
+    if (function.name().empty() ||
+        !model_functions
+             .insert(
+                 MakeFunctionIdentifier(function.domain(), function.name(), function.overload()))
+             .second)
       throw BuilderError("GraphBuilder: empty or duplicate model-local function identity.");
+  }
+  std::set<FunctionIdentifier> imported_functions;
+  const auto check_function_calls = [&](const auto &self, const NodeProto &node) -> void {
+    const auto identity = MakeFunctionIdentifier(node.domain(), node.op_type(), node.overload());
+    if (model_functions.count(identity) != 0 && imported_functions.count(identity) == 0) {
+      throw BuilderError("GraphBuilder: model-local function '" + node.domain().value() +
+                         "::" + node.op_type().value() + ":" + node.overload().value() +
+                         "' is not yet imported; definitions must place callees before callers.");
+    }
+    for (const auto &attribute : node.attribute()) {
+      if (attribute.has_g()) {
+        for (const auto &child : attribute.g().node()) {
+          self(self, child);
+        }
+      }
+      for (const auto &graph : attribute.graphs()) {
+        for (const auto &child : graph.node()) {
+          self(self, child);
+        }
+      }
+    }
+  };
+  for (const auto &function : model.functions()) {
+    for (const auto &node : function.node()) {
+      check_function_calls(check_function_calls, node);
+    }
+    for (const auto &attribute : function.attribute_proto()) {
+      if (attribute.has_g()) {
+        for (const auto &node : attribute.g().node()) {
+          check_function_calls(check_function_calls, node);
+        }
+      }
+      for (const auto &graph : attribute.graphs()) {
+        for (const auto &node : graph.node()) {
+          check_function_calls(check_function_calls, node);
+        }
+      }
+    }
+    const std::string function_name = function.name().value();
+    const std::string function_domain = function.domain().value();
     // ONNX functions have an independent namespace and are identified by all
     // three fields, not by graph value names or the bare function name.
     auto child = std::make_unique<GraphBuilder>(function_name, schema_lookup_, opsets_);
@@ -493,6 +531,8 @@ GraphBuilder::GraphBuilder(const ModelProto &model, SchemaLookupFn schema_lookup
     GraphBuilder &local = *child;
     local_functions_.push_back(std::move(child));
     local.ImportFunction(function);
+    imported_functions.insert(
+        MakeFunctionIdentifier(function_domain, function_name, function.overload()));
   }
   ImportGraph(model.graph());
 }

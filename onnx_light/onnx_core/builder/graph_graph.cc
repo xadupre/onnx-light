@@ -511,7 +511,7 @@ bool HasNestedGraph(const NodeProto &node) {
   });
 }
 
-// Batches independent edits only when their boundary descriptors stay identical.
+// Batches edits only when each replacement preserves its input/output dependencies.
 // Buckets precede original nodes; live counts translate sequential coordinates.
 class RewritingNodeBatch {
 public:
@@ -555,6 +555,18 @@ public:
       throw BuilderError("ApplyRewriting: batch node count overflow.");
     for (std::size_t i = 0; i < additions.size(); ++i) {
       if (additions[i].first != insertion_position + i || HasNestedGraph(*additions[i].second))
+        return false;
+    }
+    if (originals.size() != additions.size())
+      return false;
+    std::sort(originals.begin(), originals.end());
+    for (std::size_t i = 0; i < originals.size(); ++i) {
+      const auto &original = nodes_[originals[i]];
+      const auto &replacement = *additions[i].second;
+      if (!std::equal(original.input().begin(), original.input().end(), replacement.input().begin(),
+                      replacement.input().end()) ||
+          !std::equal(original.output().begin(), original.output().end(),
+                      replacement.output().begin(), replacement.output().end()))
         return false;
     }
     for (std::size_t original : originals) {

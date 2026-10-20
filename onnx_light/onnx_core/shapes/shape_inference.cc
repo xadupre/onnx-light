@@ -933,6 +933,13 @@ void ShapesContext::CheckOutputsNotAvailable(const NodeProto &node) const {
 }
 
 void ShapesContext::ComputeShapeNode(const NodeProto &node) {
+  EraseNodeConstraints(node);
+  struct RestoreConstraintOwner {
+    std::string &owner;
+    std::string previous;
+    ~RestoreConstraintOwner() { owner = std::move(previous); }
+  } restore_owner{constraint_owner_, std::move(constraint_owner_)};
+  constraint_owner_ = ConstraintOwner(node);
   const bool preserving =
       (node.domain().empty() || node.domain() == kOnnxDomain) &&
       (node.op_type() == "Identity" || node.op_type() == "If" || node.op_type() == "Loop");

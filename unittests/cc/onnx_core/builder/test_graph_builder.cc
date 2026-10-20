@@ -4,6 +4,7 @@
 
 #include "onnx_core/builder/graph_builder.h"
 #include "onnx_core/compute/value_tags.h"
+#include "onnx_core/shapes/dispatch_table.h"
 
 #include "onnx_helper.h"
 #include "onnx_lib/checker.h"
@@ -14,6 +15,7 @@
 
 #include <algorithm>
 #include <gtest/gtest.h>
+#include <memory>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
@@ -184,6 +186,298 @@ TEST(GraphBuilder, SetOpsetVersionRebuildsMetadataImmediately) {
   EXPECT_EQ(builder.Compute().Memory(), expected.Memory());
 }
 
+TEST(GraphBuilder, SetOpsetVersionUpdatesExistingNestedBuildersWithoutChangingFunctions) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  auto &body = builder.MakeSubgraph("body");
+  body.MakeNode("Abs", {"x"}, {"body_result"});
+  body.MakeOutput("body_result");
+  auto &nested = body.MakeSubgraph("nested");
+  nested.MakeNode("Identity", {"body_result"}, {"nested_result"});
+  nested.MakeOutput("nested_result");
+  auto &function = builder.MakeLocalFunction("F", "local");
+  auto &function_body = function.MakeSubgraph("function_body");
+  auto &nested_function = body.MakeLocalFunction("NestedF", "local");
+
+  for (auto *scope : {&body, &nested}) {
+    auto &shapes = const_cast<core::shapes::ShapesContext &>(scope->Shapes());
+    shapes.set_events_enabled(true);
+    shapes.ClearEvents();
+  }
+  builder.SetOpsetVersion("ai.onnx", 17);
+
+  for (auto *scope : {&builder, &body, &nested}) {
+    EXPECT_EQ(scope->OpsetVersion(""), 17);
+    EXPECT_EQ(scope->Shapes().OpsetVersion("ai.onnx"), 17);
+  }
+  for (auto *scope : {&function, &function_body, &nested_function}) {
+    EXPECT_EQ(scope->OpsetVersion(""), 18);
+    EXPECT_EQ(scope->Shapes().OpsetVersion(""), 18);
+  }
+  for (auto *scope : {&body, &nested}) {
+    EXPECT_EQ(std::count_if(scope->Shapes().Events().begin(), scope->Shapes().Events().end(),
+                            [](const auto &event) {
+                              return event.action == core::shapes::ShapeEventAction::kComputeNode;
+                            }),
+              1);
+    EXPECT_EQ(scope->GetShape(scope->Outputs()[0].name().value()).Shape(), MakeShape({2, 3}));
+    core::compute::ComputeContext expected;
+    const GraphProto graph = scope->BuildGraph();
+    const auto tags = expected.ComputeValueAndNodeTags(graph);
+    expected.ComputeInPlaceReuseGraph(graph, scope->Shapes(), false, tags.first);
+    EXPECT_EQ(scope->Compute().Reuse(), expected.Reuse());
+    EXPECT_EQ(scope->Compute().Memory(), expected.Memory());
+    const_cast<core::shapes::ShapesContext &>(scope->Shapes()).ClearEvents();
+  }
+
+  builder.SetOpsetVersion("", 17);
+  EXPECT_TRUE(body.Shapes().Events().empty());
+  EXPECT_TRUE(nested.Shapes().Events().empty());
+  builder.SetOpsetVersion("custom", 2);
+  for (auto *scope : {&builder, &body, &nested}) {
+    EXPECT_EQ(scope->OpsetVersion("custom"), 2);
+    EXPECT_EQ(scope->Shapes().OpsetVersion("custom"), 2);
+    EXPECT_TRUE(scope->Shapes().Events().empty());
+  }
+  for (auto *scope : {&function, &function_body, &nested_function}) {
+    EXPECT_EQ(scope->OpsetVersion("custom"), core::shapes::kUnknownOpsetVersion);
+  }
+  EXPECT_THROW(builder.SetOpsetVersion("", 0), core::builder::BuilderError);
+  EXPECT_EQ(nested.OpsetVersion(""), 17);
+  function.SetOpsetVersion("", 16);
+  EXPECT_EQ(function_body.OpsetVersion(""), 16);
+  EXPECT_EQ(function_body.Shapes().OpsetVersion(""), 16);
+  EXPECT_EQ(builder.OpsetVersion(""), 17);
+  EXPECT_EQ(nested_function.OpsetVersion(""), 18);
+}
+
+TEST(GraphBuilder, SetOpsetVersionRefreshesOnlyAffectedNestedConsumers) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 18}, {"local", 1}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeInput("cond", core::symbolic::TensorType::kBool, MakeShape({}));
+  auto &function = builder.MakeLocalFunction("F", "local");
+  function.MakeInput("a", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  function.MakeNode("Identity", {"a"}, {"r"});
+  function.MakeOutput("r");
+
+  auto &body = builder.MakeSubgraph("body");
+  auto &nested = body.MakeSubgraph("nested");
+  nested.MakeNode("F", {"x"}, {"nested_result"}, "local");
+  nested.MakeOutput("nested_result");
+  const auto make_if = [](core::builder::GraphBuilder &scope, const std::string &branch,
+                          const std::string &output) {
+    utils::RepeatedProtoField<AttributeProto> attributes;
+    for (const char *name : {"then_branch_ref", "else_branch_ref"}) {
+      auto &attribute = attributes.add();
+      attribute.set_name(name);
+      attribute.set_type(AttributeProto::STRING);
+      attribute.set_s(branch);
+    }
+    scope.MakeNode("If", {"cond"}, {output}, "", "", attributes);
+  };
+  make_if(body, "nested", "body_result");
+  body.MakeOutput("body_result");
+  make_if(builder, "body", "result");
+  make_if(builder, "body", "other_result");
+  builder.MakeNode("Identity", {"result"}, {"dependent"});
+  builder.MakeNode("Abs", {"x"}, {"independent"});
+  builder.MakeOutput("dependent");
+
+  for (auto *scope : {&builder, &body, &nested, &function}) {
+    auto &shapes = const_cast<core::shapes::ShapesContext &>(scope->Shapes());
+    shapes.set_events_enabled(true);
+    shapes.ClearEvents();
+  }
+  builder.SetOpsetVersion("local", 2);
+
+  const auto computations = [](const core::builder::GraphBuilder &scope) {
+    std::vector<std::string> result;
+    for (const auto &event : scope.Shapes().Events()) {
+      if (event.action == core::shapes::ShapeEventAction::kComputeNode &&
+          event.subgraph_node_index == -1) {
+        result.push_back(event.op_type);
+      }
+    }
+    return result;
+  };
+  EXPECT_EQ(computations(nested), (std::vector<std::string>{"F"}));
+  EXPECT_EQ(computations(body), (std::vector<std::string>{"If"}));
+  EXPECT_EQ(computations(builder), (std::vector<std::string>{"If", "If", "Identity"}));
+  EXPECT_TRUE(computations(function).empty());
+  EXPECT_EQ(function.OpsetVersion("local"), 1);
+  EXPECT_EQ(builder.GetShape("dependent").Shape(), MakeShape({2, 3}));
+  for (auto *scope : {&builder, &body, &nested}) {
+    EXPECT_EQ(scope->OpsetVersion("local"), 2);
+    EXPECT_EQ(scope->Shapes().OpsetVersion("local"), 2);
+    const_cast<core::shapes::ShapesContext &>(scope->Shapes()).ClearEvents();
+  }
+  builder.SetOpsetVersion("unused", 1);
+  for (auto *scope : {&builder, &body, &nested}) {
+    EXPECT_TRUE(computations(*scope).empty());
+    EXPECT_EQ(scope->OpsetVersion("unused"), 1);
+  }
+}
+
+TEST(GraphBuilder, SetOpsetVersionInvalidatesChangedAndCapturedByteSizes) {
+  for (bool symbolic : {false, true}) {
+    core::builder::GraphBuilder builder("g", {}, {{"", 18}, {"versioned", 1}});
+    const core::symbolic::SymDim extent =
+        symbolic ? core::symbolic::SymDim("N") : core::symbolic::SymDim(4);
+    const core::symbolic::SymShape fixed_shape{extent, core::symbolic::SymDim(1)};
+    core::shapes::RegisterComputeShapeFn(
+        "versioned", "Resize", [extent](core::shapes::ShapesContext &ctx, const NodeProto &node) {
+          const int version = ctx.OpsetVersion("versioned");
+          ctx.Set(node.output(0),
+                  core::symbolic::SymTensor(nullptr,
+                                            version == 3 ? core::symbolic::TensorType::kDouble
+                                                         : core::symbolic::TensorType::kFloat,
+                                            {extent, core::symbolic::SymDim(version)}));
+        });
+    core::shapes::RegisterComputeShapeFn(
+        "versioned", "Fixed",
+        [fixed_shape](core::shapes::ShapesContext &ctx, const NodeProto &node) {
+          ctx.Set(node.output(0), core::symbolic::SymTensor(
+                                      nullptr, core::symbolic::TensorType::kFloat, fixed_shape));
+        });
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, fixed_shape);
+    builder.MakeNode("Resize", {"x"}, {"changing"}, "versioned");
+    auto &body = builder.MakeSubgraph("body");
+    body.MakeNode("Identity", {"changing"}, {"captured"});
+    body.MakeNode("Fixed", {"captured"}, {"body_result"}, "versioned");
+    body.MakeOutput("body_result");
+    builder.MakeNode("Fixed", {"changing"}, {"result"}, "versioned");
+    builder.MakeOutput("result");
+    ASSERT_EQ(builder.Compute().NodeReuse(1).size(), 1u);
+    ASSERT_EQ(body.Compute().NodeReuse(1).size(), 1u);
+    const auto previous_memory = builder.Compute().Memory();
+
+    for (int version : {2, 3, 1}) {
+      builder.SetOpsetVersion("versioned", version);
+      EXPECT_EQ(body.GetShape("changing"), builder.GetShape("changing"));
+      EXPECT_EQ(body.GetShape("captured").Shape(), builder.GetShape("changing").Shape());
+      for (auto *scope : {&builder, &body}) {
+        core::compute::ComputeContext expected;
+        const GraphProto graph = scope->BuildGraph();
+        const auto tags = expected.ComputeValueAndNodeTags(graph);
+        expected.ComputeInPlaceReuseGraph(graph, scope->Shapes(), false, tags.first);
+        EXPECT_EQ(scope->Compute().Reuse(), expected.Reuse());
+        EXPECT_EQ(scope->Compute().Memory(), expected.Memory());
+        if (symbolic && version != 1) {
+          EXPECT_TRUE(scope->Compute().NodeReuse(1).empty());
+        }
+      }
+      if (version == 2) {
+        EXPECT_NE(builder.Compute().Memory(), previous_memory);
+      }
+    }
+  }
+}
+
+TEST(GraphBuilder, SetOpsetVersionRefreshesMetadataSuffixOnce) {
+  const auto peak_calls = std::make_shared<std::size_t>(0);
+  core::shapes::RegisterComputePeakMemoryFn(
+      "opset_batch_test", "Probe", core::symbolic::Device::kCPU,
+      [peak_calls](core::symbolic::Device, const std::vector<core::symbolic::SymShape> &) {
+        ++*peak_calls;
+        return 0;
+      });
+  core::builder::GraphBuilder builder("g", {}, {{"opset_batch_test", 1}});
+  core::shapes::RegisterComputeShapeFn(
+      "opset_batch_test", "Probe", [](core::shapes::ShapesContext &ctx, const NodeProto &node) {
+        ctx.Set(node.output(0), core::symbolic::SymTensor(ctx.Get(node.input(0))));
+      });
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({4}));
+  std::string previous = "x";
+  for (int i = 0; i < 64; ++i) {
+    previous = builder.MakeNode("Probe", {previous}, {}, "opset_batch_test")[0];
+  }
+  builder.MakeOutput(previous);
+  ModelProto model;
+  model.add_opset("opset_batch_test", 1);
+  *model.mutable_graph() = builder.BuildGraph();
+  for (const auto &node : model.graph().node()) {
+    auto *value = model.mutable_graph()->add_value_info();
+    *value = model.graph().input(0);
+    value->set_name(node.output(0));
+  }
+  builder = core::builder::GraphBuilder(model, {});
+  *peak_calls = 0;
+
+  builder.SetOpsetVersion("opset_batch_test", 2);
+
+  EXPECT_EQ(*peak_calls, builder.Nodes().size());
+  core::compute::ComputeContext expected;
+  const GraphProto graph = builder.BuildGraph();
+  const auto tags = expected.ComputeValueAndNodeTags(graph);
+  expected.ComputeInPlaceReuseGraph(graph, builder.Shapes(), false, tags.first);
+  EXPECT_EQ(builder.Compute().Reuse(), expected.Reuse());
+  EXPECT_EQ(builder.Compute().Memory(), expected.Memory());
+  builder.SetOpsetVersion("opset_batch_test", 2);
+  EXPECT_EQ(*peak_calls, builder.Nodes().size());
+  expected.RefreshNodes(graph.node(), {{0, {"x"}}}, builder.Shapes(), {},
+                        core::symbolic::Device::kCPU);
+  EXPECT_EQ(*peak_calls, builder.Nodes().size());
+}
+
+TEST(GraphBuilder, SetOpsetVersionReplacesOnlyAffectedShapeConstraints) {
+  core::shapes::RegisterComputeShapeFn(
+      "opset_constraint_test", "Grow", [](core::shapes::ShapesContext &ctx, const NodeProto &node) {
+        const int version = ctx.OpsetVersion("opset_constraint_test");
+        ctx.Set(node.output(0),
+                core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                          MakeShape({4, version})));
+        ctx.AddConstraint("version_axis", std::to_string(version));
+      });
+  core::builder::GraphBuilder builder("g", SchemaLookup(),
+                                      {{"", 18}, {"opset_constraint_test", 1}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({4, 1}));
+  builder.MakeInput("stable", core::symbolic::TensorType::kFloat, MakeShape({5}));
+  builder.MakeInput("cond", core::symbolic::TensorType::kBool, MakeShape({}));
+  builder.MakeNode("NonZero", {"stable"}, {"unrelated"});
+  builder.MakeNode("Grow", {"x"}, {"changing"}, "opset_constraint_test");
+  builder.MakeNode("NonZero", {"changing"}, {"nonzero"});
+  auto &body = builder.MakeSubgraph("body");
+  body.MakeNode("Identity", {"changing"}, {"body_result"});
+  body.MakeNode("NonZero", {"changing"}, {"body_nonzero"});
+  body.MakeOutput("body_result");
+  auto &otherwise = builder.MakeSubgraph("otherwise");
+  otherwise.MakeNode("Identity", {"x"}, {"else_result"});
+  otherwise.MakeOutput("else_result");
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  for (const auto &[name, branch] :
+       {std::pair{"then_branch_ref", "body"}, std::pair{"else_branch_ref", "otherwise"}}) {
+    auto &attribute = attributes.add();
+    attribute.set_name(name);
+    attribute.set_type(AttributeProto::STRING);
+    attribute.set_s(branch);
+  }
+  builder.MakeNode("If", {"cond"}, {"result"}, "", "", attributes);
+  builder.MakeOutput("result");
+  ASSERT_TRUE(builder.Shapes().HasLessEqualConstraint("NonZero_nonzero_nnz", "4"));
+
+  for (int version : {2, 3, 1}) {
+    builder.SetOpsetVersion("opset_constraint_test", version);
+    core::shapes::ShapesContext fresh;
+    fresh.SetOpsetVersion("", 18);
+    fresh.SetOpsetVersion("opset_constraint_test", version);
+    fresh.ComputeShapeGraph(builder.BuildGraph());
+    EXPECT_EQ(builder.Shapes().Constraints(), fresh.Constraints());
+    EXPECT_EQ(builder.Shapes().LessEqualConstraints(), fresh.LessEqualConstraints());
+    EXPECT_TRUE(builder.Shapes().HasLessEqualConstraint("NonZero_unrelated_nnz", "5"));
+    EXPECT_TRUE(builder.Shapes().HasLessEqualConstraint("NonZero_nonzero_nnz",
+                                                        std::to_string(4 * version)));
+    EXPECT_TRUE(body.Shapes().HasLessEqualConstraint("NonZero_body_nonzero_nnz",
+                                                     std::to_string(4 * version)));
+    EXPECT_EQ(body.Shapes().LessEqualConstraintsSize(), 1u);
+    if (version == 1) {
+      EXPECT_FALSE(builder.Shapes().HasLessEqualConstraint("If_result_d1", "3"));
+    } else {
+      EXPECT_FALSE(builder.Shapes().HasLessEqualConstraint("NonZero_nonzero_nnz", "4"));
+      EXPECT_TRUE(builder.Shapes().HasLessEqualConstraint("If_result_d1", std::to_string(version)));
+    }
+  }
+}
+
 TEST(GraphBuilder, MakeNodeMaintainsTagsAndReuseIncrementally) {
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
@@ -348,6 +642,83 @@ TEST(GraphBuilder, CompatibleTypedOutputAfterInferenceKeepsPublicViewsCoherent) 
       EXPECT_TRUE(builder.Outputs()[0].type().Equals(inferred.type()));
       EXPECT_TRUE(builder.BuildGraph().output(0).type().Equals(inferred.type()));
       EXPECT_TRUE(builder.ToModel().graph().output(0).type().Equals(inferred.type()));
+    }
+  }
+}
+
+TEST(GraphBuilder, TypedOutputRefinesUndefinedDtypeAndOnlyAffectedConsumers) {
+  for (bool declare_shape : {false, true}) {
+    for (auto dtype : {TensorProto::FLOAT, TensorProto::DOUBLE}) {
+      core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+      ValueInfoProto input;
+      input.set_name("x");
+      auto *input_shape = input.mutable_type()->mutable_tensor_type()->mutable_shape();
+      input_shape->add_dim()->set_dim_value(2);
+      input_shape->add_dim()->set_dim_value(3);
+      builder.MakeInput(input);
+      builder.MakeInput("other", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+      builder.MakeNode("Abs", {"x"}, {"z"});
+      builder.MakeNode("Identity", {"z"}, {"result"});
+      builder.MakeNode("Abs", {"other"}, {"independent"});
+      ASSERT_EQ(builder.GetShape("z").Dtype(), core::symbolic::TensorType::kUndefined);
+      ValueInfoProto result = input;
+      result.set_name("result");
+      builder.MakeOutput(result);
+
+      ValueInfoProto output;
+      output.set_name("z");
+      output.set_doc_string("declared output");
+      output.mutable_type()->mutable_tensor_type()->set_elem_type(dtype);
+      if (declare_shape) {
+        *output.mutable_type()->mutable_tensor_type()->mutable_shape() = *input_shape;
+      }
+      auto &shapes = const_cast<core::shapes::ShapesContext &>(builder.Shapes());
+      shapes.set_events_enabled(true);
+      shapes.ClearEvents();
+      ValueInfoProto incompatible = output;
+      auto *incompatible_shape =
+          incompatible.mutable_type()->mutable_tensor_type()->mutable_shape();
+      *incompatible_shape = *input_shape;
+      incompatible_shape->mutable_dim(0)->set_dim_value(4);
+      const auto memory = builder.Compute().Memory();
+      EXPECT_THROW(builder.MakeOutput(incompatible), core::builder::BuilderError);
+      incompatible = output;
+      incompatible.mutable_type()->mutable_tensor_type()->set_elem_type(
+          static_cast<TensorProto::DataType>(999));
+      EXPECT_THROW(builder.MakeOutput(incompatible), core::builder::BuilderError);
+      EXPECT_TRUE(shapes.Events().empty());
+      EXPECT_EQ(builder.Outputs().size(), 1u);
+      EXPECT_EQ(builder.GetShape("z").Dtype(), core::symbolic::TensorType::kUndefined);
+      EXPECT_EQ(builder.Compute().Memory(), memory);
+      builder.MakeOutput(output);
+
+      std::vector<std::string> computed;
+      for (const auto &event : shapes.Events()) {
+        if (event.action == core::shapes::ShapeEventAction::kComputeNode) {
+          computed.push_back(event.op_type);
+        }
+      }
+      EXPECT_EQ(computed, (std::vector<std::string>{"Identity"}));
+      EXPECT_EQ(builder.GetShape("x").Dtype(), core::symbolic::TensorType::kUndefined);
+      const GraphProto graph = builder.BuildGraph();
+      const ModelProto model = builder.ToModel();
+      ASSERT_EQ(builder.Outputs().size(), 2u);
+      EXPECT_EQ(builder.Outputs()[1].doc_string().value(), "declared output");
+      for (std::size_t i = 0; i < builder.Outputs().size(); ++i) {
+        const auto &name = builder.Outputs()[i].name().value();
+        EXPECT_EQ(builder.GetShape(name).Dtype(), core::symbolic::DataTypeToTensorType(dtype));
+        EXPECT_EQ(builder.GetShape(name).Shape(), MakeShape({2, 3}));
+        ValueInfoProto inferred;
+        ASSERT_TRUE(core::symbolic::SymTensorToValueInfo(builder.GetShape(name), inferred));
+        EXPECT_TRUE(builder.Outputs()[i].type().Equals(inferred.type()));
+        EXPECT_TRUE(graph.output(i).type().Equals(inferred.type()));
+        EXPECT_TRUE(model.graph().output(i).type().Equals(inferred.type()));
+      }
+      core::compute::ComputeContext expected;
+      const auto tags = expected.ComputeValueAndNodeTags(graph);
+      expected.ComputeInPlaceReuseGraph(graph, builder.Shapes(), false, tags.first);
+      EXPECT_EQ(builder.Compute().Reuse(), expected.Reuse());
+      EXPECT_EQ(builder.Compute().Memory(), expected.Memory());
     }
   }
 }

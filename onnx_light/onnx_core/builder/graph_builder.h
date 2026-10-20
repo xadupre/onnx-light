@@ -207,6 +207,8 @@ public:
   /// Records the opset version to use for ``domain`` (an empty string denotes
   /// the default ONNX domain). A positive version must be selected before
   /// adding a node in that domain; schemas never select a version implicitly.
+  /// Updates existing subgraphs and dependent metadata immediately, without
+  /// changing the independent imports of local functions.
   void SetOpsetVersion(const std::string &domain, int version);
 
   /// Returns the opset version recorded for ``domain`` or
@@ -296,6 +298,8 @@ public:
   /// Declares a graph output from a ready-made :cpp:class:`ValueInfoProto`.
   /// Rejects tensor declarations incompatible with an existing inferred descriptor
   /// and uses the inferred tensor type and shape for compatible declarations.
+  /// Refines an undefined inferred element type from a concrete declaration and
+  /// incrementally refreshes affected consumers and compute metadata.
   void MakeOutput(const ValueInfoProto &value_info);
 
   /// Declares ``name`` (which must already exist) as a graph output described
@@ -761,6 +765,8 @@ private:
   void SeedShape(const std::string &name, SymTensor tensor);
   void SeedInheritedValue(const std::string &name);
   void CopyInferredValuesFrom(const ShapesContext &source);
+  void RefreshInferredInputsFrom(const ShapesContext &source,
+                                 const std::unordered_set<std::string> &changed_captures);
 
   template <typename Tensor> const std::string &MakeInitializerImpl(Tensor &&tensor);
 
@@ -769,6 +775,12 @@ private:
   void RefreshAncestors();
   void RefreshLocalFunctionDefinition(GraphBuilder &function);
   void RefreshNestedDependency(GraphBuilder &child, bool propagate_to_parent = true);
+  bool RefreshOpsetVersion(const std::string &domain, int version,
+                           const std::unordered_set<std::string> &inherited_values = {});
+  bool RefreshDependentNodes(
+      const std::function<bool(const NodeProto &, const std::unordered_set<std::string> &)>
+          &is_affected,
+      std::unordered_set<std::string> &affected_values, bool propagate_to_parent = true);
   void RebuildMetadata();
   void RebuildStructuredState(bool refresh_ancestors = true);
   GraphProto BuildGraphImpl(bool validate_persistent_bindings) const;

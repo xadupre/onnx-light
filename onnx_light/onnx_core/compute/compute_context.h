@@ -386,6 +386,14 @@ public:
                    const ShapesContext &ctx, const std::vector<std::string> &references,
                    Device device);
 
+  /// Refreshes changed node references and descriptors as one batch. Preserves
+  /// unchanged lifetimes, invalidates byte sizes for ``changed_values``, and
+  /// recomputes the affected reuse and memory suffix once after shape propagation.
+  void RefreshNodes(const utils::RepeatedProtoField<NodeProto> &nodes,
+                    const std::map<std::size_t, std::vector<std::string>> &references,
+                    const ShapesContext &ctx, const std::unordered_set<std::string> &changed_values,
+                    Device device);
+
   /// Refreshes memory profiles from the earliest node affected by incremental
   /// tag, lifetime, reuse, input, initializer, or output changes.
   void RefreshIncrementalMemory(const utils::RepeatedProtoField<NodeProto> &nodes,

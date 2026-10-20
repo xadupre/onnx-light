@@ -733,6 +733,43 @@ TEST(IOArenaExportHandle, RejectsEmptyOrLeaseBackedHandle) {
   EXPECT_EQ(arena->leased_count(), 1u);
 }
 
+TEST(IOArenaExportHandle, RejectsForeignBufferWithoutConsumingHandle) {
+  auto owner = IOArena::Create(1);
+  auto foreign = IOArena::Create(1);
+  RawBuffer *buffer = owner->Allocate(16);
+  uint8_t *payload = buffer->data();
+  const size_t retained_capacity = buffer->capacity();
+  payload[0] = 42;
+
+  {
+    AllocationHandle handle(owner.get(), buffer);
+    EXPECT_THROW(foreign->ExportHandle(std::move(handle)), std::invalid_argument);
+    ASSERT_TRUE(static_cast<bool>(handle));
+    EXPECT_FALSE(handle.holds_lease());
+    EXPECT_EQ(handle.owner(), owner.get());
+    EXPECT_EQ(handle.buffer(), buffer);
+    EXPECT_EQ(handle.logical_size(), 16u);
+    EXPECT_EQ(handle.retained_capacity(), retained_capacity);
+    EXPECT_EQ(handle.buffer()->data()[0], 42);
+    EXPECT_EQ(owner->allocated_count(), 1u);
+    EXPECT_EQ(owner->leased_count(), 0u);
+    EXPECT_EQ(owner->TotalAllocatedSize(), 16u);
+    EXPECT_EQ(foreign->allocated_count(), 0u);
+    EXPECT_EQ(foreign->leased_count(), 0u);
+    EXPECT_EQ(foreign->TotalAllocatedSize(), 0u);
+  }
+
+  EXPECT_EQ(owner->allocated_count(), 0u);
+  EXPECT_EQ(owner->leased_count(), 0u);
+  EXPECT_EQ(owner->TotalAllocatedSize(), 0u);
+  EXPECT_EQ(owner->retained_count(), 1u);
+  EXPECT_EQ(owner->RetainedSize(), retained_capacity);
+  RawBuffer *reused = owner->Allocate(16);
+  EXPECT_EQ(reused, buffer);
+  EXPECT_EQ(reused->data(), payload);
+  owner->Free(reused);
+}
+
 // A graph output allocated from an IOArena can have its allocation released
 // from the tensor and exported as a self-owning handle. The handle then keeps
 // the arena's storage alive even after the arena's other owner is destroyed,

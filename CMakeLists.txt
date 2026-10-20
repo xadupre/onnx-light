@@ -579,11 +579,11 @@ target_include_directories(lib_onnx_kernels PUBLIC
 set_property(TARGET lib_onnx_kernels PROPERTY POSITION_INDEPENDENT_CODE ON)
 target_compile_features(lib_onnx_kernels PUBLIC cxx_std_20)
 target_link_libraries(lib_onnx_kernels PUBLIC lib_onnx_core)
-# Same PCH rationale as ``lib_onnx_backend_test``: kernel translation
-# units all pull in ``test_case.h`` (via ``kernel_context.h``) and the
-# usual standard-library headers.
+# Precompile the common test-case and runtime header stacks used by kernel
+# translation units, including ``runtime_context.h`` via ``node_helpers.h``.
 onnx_light_target_precompile_headers(lib_onnx_kernels PRIVATE
     "${ONNX_CORE_PATH}/backend_test/test_case.h"
+    "${ONNX_CORE_PATH}/runtime/kernels/node_helpers.h"
     <algorithm>
     <cmath>
     <cstdint>

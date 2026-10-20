@@ -39,21 +39,21 @@ including inference-mode ``Dropout``, which remain ordinary added nodes.
 Optimization rejects a completed plan if a function introduced later would
 override a native operation already captured in an initializer recipe.
 
-``ApplyRewritings`` stages serialized edits without mutating the source builder
-or its inferred state. The completed graph is imported and validated with the
-merged function definitions, allowing rewrites to replace primitive calls with
-calls to added functions that have different signatures. Validation follows
-dependency order; the returned builder preserves recorded node positions and
-has up-to-date shapes and memory metadata.
+``ApplyRewritings`` applies serialized edits directly to a new ``GraphBuilder``,
+preserving the source builder. Added functions must be compatible with existing
+calls before any edit is applied: an incompatible signature or a conflicting
+function name raises an error rather than postponing validation or renaming the
+function. Each edit updates affected shapes and annotations in dependency order;
+the returned builder preserves recorded node positions and has up-to-date memory
+metadata.
 
 Consecutive node-only edits in the same graph are coalesced when they replace
 original nodes at their first matched position. Live-rank queries translate
 sequential positions without rebuilding the node order for every record.
 Edits consuming previously added nodes, modifying initializers or renames, or
 replacing nested graphs end the batch. Coordinates, initializer conflicts and
-preparation eligibility are checked while staging each edit; shape inference
-uses the final graph and definitions. Subgraph identities remain stable across
-edits even when their referencing nodes move.
+preparation eligibility are checked when applying each edit. Subgraph identities
+remain stable across edits even when their referencing nodes move.
 
 .. doxygenfile:: onnx_core/builder/graph_graph.h
    :project: onnx-light

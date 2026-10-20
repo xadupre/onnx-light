@@ -528,6 +528,18 @@ public:
   /// events, ...).
   void ClearSubgraphContexts() noexcept { subgraph_contexts_.clear(); }
 
+  /// Reindexes retained node contexts without copying inferred subgraph state.
+  void ReindexSubgraphContexts(const std::vector<int> &new_indices) {
+    decltype(subgraph_contexts_) updated;
+    for (auto &[key, context] : subgraph_contexts_) {
+      const int index = new_indices.at(static_cast<std::size_t>(key.first));
+      if (index >= 0) {
+        updated.emplace(SubgraphContextKey(index, key.second), std::move(context));
+      }
+    }
+    subgraph_contexts_ = std::move(updated);
+  }
+
   // ── Opset versions ──────────────────────────────────────────────────
 
   /**

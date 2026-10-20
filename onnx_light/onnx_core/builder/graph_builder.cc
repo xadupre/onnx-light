@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstring>
 #include <limits>
+#include <numeric>
 #include <queue>
 #include <set>
 #include <sstream>
@@ -827,11 +828,13 @@ void GraphBuilder::RefreshNestedDependency(GraphBuilder &child, bool propagate_t
 bool GraphBuilder::RefreshDependentNodes(
     const std::function<bool(const NodeProto &, const std::unordered_set<std::string> &)>
         &is_affected,
-    std::unordered_set<std::string> &affected_values, bool propagate_to_parent) {
+    std::unordered_set<std::string> &affected_values, bool propagate_to_parent,
+    const std::vector<std::size_t> *node_order) {
   bool affected = false;
   std::map<std::size_t, std::vector<std::string>> refreshed_references;
   const auto declarations = StructuredDeclarations(value_infos_);
-  for (std::size_t index = 0; index < nodes_.size(); ++index) {
+  for (std::size_t position = 0; position < nodes_.size(); ++position) {
+    const std::size_t index = node_order == nullptr ? position : node_order->at(position);
     const NodeProto &stored = nodes_[index];
     const bool directly_affected = is_affected(stored, affected_values);
     if (!directly_affected && affected_values.empty()) {
@@ -904,6 +907,122 @@ bool GraphBuilder::RefreshDependentNodes(
     parent_->RefreshNestedDependency(*this);
   }
   return affected;
+}
+
+void GraphBuilder::RefreshAfterRewriting(const std::vector<std::size_t> &old_indices,
+                                         std::unordered_set<std::string> affected_values) {
+  std::unordered_set<GraphBuilder *> referenced_subgraphs;
+  for (const auto &node : nodes_) {
+    for (GraphBuilder *child : ReferencedSubgraphs(node)) {
+      referenced_subgraphs.insert(child);
+    }
+  }
+  subgraphs_.erase(std::remove_if(subgraphs_.begin(), subgraphs_.end(),
+                                  [&](const auto &child) {
+                                    return referenced_subgraphs.count(child.get()) == 0;
+                                  }),
+                   subgraphs_.end());
+  std::unordered_set<std::string> available = inherited_names_;
+  for (const auto &input : inputs_) {
+    available.insert(input.name().value());
+  }
+  for (const auto &initializer : initializers_) {
+    available.insert(initializer.name().value());
+  }
+  for (const auto &initializer : encoded_initializers_) {
+    available.insert(initializer.name().value());
+  }
+  for (const auto &initializer : paged_cache_initializers_) {
+    available.insert(initializer.name().value());
+  }
+  for (const auto &initializer : graph_template_.sparse_initializer()) {
+    available.insert(initializer.values().name().value());
+  }
+  std::vector<std::vector<std::string>> references(nodes_.size());
+  for (std::size_t index = 0; index < nodes_.size(); ++index) {
+    CollectNodeReferences(nodes_[index], references[index]);
+  }
+  const auto order = TopologicalNodeOrder(nodes_, available, references);
+  const auto old_count = compute_.Size();
+  for (std::size_t index : order) {
+    if (old_indices[index] == old_count ||
+        std::any_of(references[index].begin(), references[index].end(),
+                    [&](const auto &name) { return affected_values.count(name) != 0; })) {
+      for (const auto &output : nodes_[index].output()) {
+        if (!output.empty()) {
+          affected_values.insert(output.value());
+        }
+      }
+    }
+  }
+  compute_.UpdateNodes(nodes_, old_indices, references, affected_values, device_);
+  auto &shapes = compute_.Shapes();
+  for (const auto &name : affected_values) {
+    if (parent_ != nullptr && inherited_names_.count(name) != 0) {
+      shapes.Erase(name);
+      SeedInheritedValue(name);
+    }
+  }
+  for (const auto &initializer : initializers_) {
+    const std::string name = initializer.name().value();
+    if (affected_values.count(name) == 0) {
+      continue;
+    }
+    const bool is_input = std::any_of(inputs_.begin(), inputs_.end(), [&](const auto &input) {
+      return input.name() == initializer.name();
+    });
+    if (!is_input) {
+      shapes.Erase(name);
+      SymTensor tensor;
+      if (SymTensorFromTensorProto(initializer, tensor)) {
+        shapes.Set(name, std::move(tensor));
+      }
+      compute_.SeedValueTag(name, "weight");
+      compute_.SeedConstant(name);
+    }
+    compute_.SeedValueTag(name, DeclaredValueTag(initializer), nodes_);
+    compute_.SeedReuseInput(name, is_input, /*is_initializer=*/true,
+                            /*allow_input_overwrite=*/false);
+  }
+  for (const auto &info : value_infos_) {
+    if (affected_values.count(info.name().value()) != 0) {
+      compute_.SeedValueTag(info.name().value(), DeclaredValueTag(info), nodes_);
+    }
+  }
+  for (const auto &input : inputs_) {
+    if (affected_values.count(input.name().value()) != 0) {
+      compute_.SeedValueTag(input.name().value(), DeclaredValueTag(input), nodes_);
+    }
+  }
+  for (const auto &output : outputs_) {
+    if (affected_values.count(output.name().value()) != 0) {
+      compute_.SeedValueTag(output.name().value(), DeclaredValueTag(output), nodes_);
+    }
+  }
+  compute_.RefreshValueTags(nodes_, affected_values);
+  RefreshDependentNodes(
+      [&](const NodeProto &node, const std::unordered_set<std::string> &) {
+        return std::any_of(node.output().begin(), node.output().end(),
+                           [&](const auto &name) { return affected_values.count(name) != 0; });
+      },
+      affected_values, /*propagate_to_parent=*/false, &order);
+  for (const auto &child : subgraphs_) {
+    std::unordered_set<std::string> captures;
+    child->CollectImplicitInputs(captures);
+    std::unordered_set<std::string> changed_captures;
+    for (const auto &name : affected_values) {
+      if (captures.count(name) != 0) {
+        changed_captures.insert(name);
+      }
+    }
+    if (!changed_captures.empty()) {
+      AncestorRefreshGuard guard(*child);
+      std::vector<std::size_t> child_indices(child->nodes_.size());
+      std::iota(child_indices.begin(), child_indices.end(), 0);
+      child->RefreshAfterRewriting(child_indices, std::move(changed_captures));
+    }
+  }
+  RefreshAfterMutation();
 }
 
 void GraphBuilder::RefreshAfterMutation() {
@@ -3229,6 +3348,13 @@ void GraphBuilder::RewriteCapturedReferences(
     const std::unordered_map<std::string, std::string> &rename) {
   if (rename.empty()) {
     return;
+  }
+  for (const auto &[source, target] : rename) {
+    if (source != target && inherited_names_.erase(source) != 0) {
+      inherited_names_.insert(target);
+      compute_.Shapes().Erase(source);
+      compute_.EraseValue(source);
+    }
   }
   for (NodeProto &node : nodes_) {
     for (std::size_t i = 0; i < node.input().size(); ++i) {

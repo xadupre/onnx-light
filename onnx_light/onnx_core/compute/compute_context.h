@@ -216,6 +216,10 @@ public:
   /// to the same least fixed point as :cpp:func:`ComputeValueAndNodeTags`.
   void AppendNodeTags(const utils::RepeatedProtoField<NodeProto> &nodes, std::size_t node_index);
 
+  /// Refreshes tags of changed values and their producers and consumers.
+  void RefreshValueTags(const utils::RepeatedProtoField<NodeProto> &nodes,
+                        const std::unordered_set<std::string> &changed_values);
+
   /// Read-only access to the last value-tag map computed through
   /// :cpp:func:`ComputeValueAndNodeTags`.
   const std::unordered_map<std::string, std::string> &ValueTags() const noexcept {
@@ -393,6 +397,17 @@ public:
                     const std::map<std::size_t, std::vector<std::string>> &references,
                     const ShapesContext &ctx, const std::unordered_set<std::string> &changed_values,
                     Device device);
+
+  /// Reindexes retained annotations after node replacement. An index equal to
+  /// the old node count denotes a new node. Refreshes only affected lifetimes,
+  /// tags and constants; descriptors are maintained by the caller.
+  void UpdateNodes(const utils::RepeatedProtoField<NodeProto> &nodes,
+                   const std::vector<std::size_t> &old_indices,
+                   const std::vector<std::vector<std::string>> &references,
+                   const std::unordered_set<std::string> &changed_values, Device device);
+
+  /// Forgets an initializer or node value removed by a graph mutation.
+  void EraseValue(const std::string &name);
 
   /// Refreshes memory profiles from the earliest node affected by incremental
   /// tag, lifetime, reuse, input, initializer, or output changes.

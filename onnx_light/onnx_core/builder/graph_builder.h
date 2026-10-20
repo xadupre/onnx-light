@@ -625,6 +625,8 @@ public:
   /// Applies ordered captured rewrites and returns a new, validated builder.
   /// Preserves the source builder and recorded node order, and merges added
   /// functions and opset imports. Requires a root model builder.
+  /// Throws on function-name collisions or calls incompatible with the merged
+  /// definitions, even when a later edit would remove those calls.
   GraphBuilder ApplyRewritings(const RewritingProto &rewrites) const;
 
   /// Read-only access to the owned :cpp:class:`ComputeContext`.
@@ -796,7 +798,10 @@ private:
   bool RefreshDependentNodes(
       const std::function<bool(const NodeProto &, const std::unordered_set<std::string> &)>
           &is_affected,
-      std::unordered_set<std::string> &affected_values, bool propagate_to_parent = true);
+      std::unordered_set<std::string> &affected_values, bool propagate_to_parent = true,
+      const std::vector<std::size_t> *node_order = nullptr);
+  void RefreshAfterRewriting(const std::vector<std::size_t> &old_indices,
+                             std::unordered_set<std::string> affected_values);
   void RebuildMetadata();
   void RebuildStructuredState(bool refresh_ancestors = true);
   GraphProto BuildGraphImpl(bool validate_persistent_bindings,
@@ -822,7 +827,8 @@ private:
 
   // Orders producers before consumers, including lexical subgraph captures.
   void SortNodesTopologically();
-  struct RewritingState;
+  void ApplyRewriting(const LocalRewritingProto &rewrite,
+                      const utils::RepeatedProtoField<FunctionProto> &functions);
   static std::vector<std::size_t>
   TopologicalNodeOrder(const utils::RepeatedProtoField<NodeProto> &nodes,
                        const std::unordered_set<std::string> &available,

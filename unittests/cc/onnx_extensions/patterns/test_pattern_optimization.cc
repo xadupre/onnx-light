@@ -4,6 +4,7 @@
 
 #include "onnx_core/builder/graph_graph.h"
 #include "onnx_core/builder/pattern_registry.h"
+#include "onnx_core/compute/value_tags.h"
 #include "onnx_core/runtime/kernels/kernel_dispatch_table.h"
 #include "onnx_core/runtime/kernels/run_nodes.h"
 #include "onnx_core/runtime/memory/simple_tensor.h"
@@ -635,8 +636,7 @@ TEST(PatternOptimization, ModelReplayUsesOverloadedFunctionSignatureBeforeNative
   EXPECT_FLOAT_EQ(core::runtime::RunModel(replayed, {})[0].AsFloat()[0], 3);
 }
 
-TEST(PatternOptimization, ModelReplayReplacesCallsBeforeActivatingChangedFunctionSignatures) {
-  ScopedAddKernel kernel;
+TEST(PatternOptimization, RejectsFunctionsIncompatibleWithExistingCalls) {
   for (bool multiple_edits : {false, true}) {
     SCOPED_TRACE(multiple_edits);
     auto original = PreparationModel();
@@ -656,7 +656,7 @@ TEST(PatternOptimization, ModelReplayReplacesCallsBeforeActivatingChangedFunctio
     plan.ref_added_functions().push_back(function);
     EXPECT_THROW(
         core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan).ToModel(),
-        std::invalid_argument);
+        core::builder::BuilderError);
     auto &edit = *plan.add_rewrites();
     edit.add_matched_nodes(0);
     edit.add_added_nodes_positions(0);
@@ -673,13 +673,137 @@ TEST(PatternOptimization, ModelReplayReplacesCallsBeforeActivatingChangedFunctio
     }
     RewritingProto loaded;
     ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
-    const auto replayed =
-        core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(loaded).ToModel();
-    EXPECT_EQ(replayed.graph().node(0).input_size(), 2);
-    const auto outputs = core::runtime::RunModel(replayed, {});
-    for (const auto &output : outputs)
-      EXPECT_FLOAT_EQ(output.AsFloat()[0], 3);
+    core::builder::GraphBuilder builder(original, SchemaLookup());
+    EXPECT_THROW(builder.ApplyRewritings(loaded), core::builder::BuilderError);
+    EXPECT_EQ(builder.BuildGraph().SerializeAsString(), original.graph().SerializeAsString());
   }
+}
+
+TEST(PatternOptimization, RejectsCollidingFunctionLookupNames) {
+  for (bool existing : {false, true}) {
+    SCOPED_TRACE(existing);
+    auto original = PreparationModel();
+    auto first = PreparationAdd();
+    first.set_name("F:part");
+    first.set_overload("one");
+    auto second = first;
+    second.set_name("F");
+    second.set_overload("part:one");
+    RewritingProto plan;
+    if (existing) {
+      original.ref_functions().push_back(first);
+    } else {
+      plan.ref_added_functions().push_back(first);
+    }
+    plan.ref_added_functions().push_back(second);
+    EXPECT_THROW(core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan),
+                 core::builder::BuilderError);
+  }
+}
+
+TEST(PatternOptimization, RejectsPreparationFunctionNameCollisions) {
+  ScopedAddKernel kernel;
+  auto original = PreparationModel();
+  original.mutable_graph()->ref_node()[0] = MakeNode("Identity", {"a"}, {"y"});
+  auto function = PreparationAdd();
+  function.set_name("PrepareInitializer_1");
+  function.set_domain("onnx.light.rewriting");
+  original.ref_functions().push_back(function);
+  core::builder::GraphBuilder builder(original, SchemaLookup());
+  core::builder::GraphGraph optimizer(
+      builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{
+                   std::make_shared<ReplaceIdentityWithConstantAddPattern>()});
+  EXPECT_THROW(optimizer.Optimize(), core::builder::BuilderError);
+}
+
+TEST(PatternOptimization, UpdatesOnlyAffectedShapesAndRefreshesRemovedLastUses) {
+  core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 18}});
+  source.MakeInput("X", core::symbolic::TensorType::kFloat, Shape());
+  source.MakeNode("Abs", {"X"}, {"unchanged"});
+  source.MakeNode("Neg", {"X"}, {"p"});
+  source.MakeNode("Add", {"p", "p"}, {"Y"});
+  source.MakeNode("Relu", {"p"}, {"unused"});
+  source.MakeOutput("unchanged");
+  source.MakeOutput("Y");
+  RewritingProto plan;
+  auto &remove = *plan.add_rewrites();
+  remove.add_matched_nodes(3);
+  auto &replace = *plan.add_rewrites();
+  replace.add_matched_nodes(1);
+  replace.add_added_nodes_positions(1);
+  replace.ref_added_nodes().push_back(MakeNode("Identity", {"X"}, {"p"}));
+  ScopedAbsShapeCounter counter;
+  auto result = source.ApplyRewritings(plan);
+  EXPECT_EQ(counter.calls, 1u);
+  EXPECT_EQ(result.GetShape("p"), source.GetShape("p"));
+  EXPECT_EQ(result.GetShape("Y"), source.GetShape("Y"));
+  EXPECT_FALSE(result.HasShape("unused"));
+  EXPECT_EQ(source.Nodes().size(), 4u);
+  ModelProto model;
+  *model.mutable_graph() = result.BuildGraph();
+  AddOpsetImports(model, result);
+  core::builder::GraphBuilder expected(model, SchemaLookup());
+  EXPECT_EQ(result.Compute().ValueTags(), expected.Compute().ValueTags());
+  EXPECT_EQ(result.Compute().NodeTags(), expected.Compute().NodeTags());
+  EXPECT_EQ(result.Compute().NodeConstant(), expected.Compute().NodeConstant());
+  EXPECT_EQ(result.Compute().Memory(), expected.Compute().Memory());
+  EXPECT_EQ(result.Compute().PeakMemory(), expected.Compute().PeakMemory());
+  for (std::size_t index = 0; index < result.Nodes().size(); ++index) {
+    EXPECT_EQ(result.Compute().NodeReuse(index), expected.Compute().NodeReuse(index));
+  }
+}
+
+TEST(PatternOptimization, PreservesDeclaredTagsWhenRenamingToInputs) {
+  core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 18}});
+  ValueInfoProto input;
+  input.set_name("X");
+  auto &type = *input.mutable_type()->mutable_tensor_type();
+  type.set_elem_type(TensorProto::FLOAT);
+  type.mutable_shape()->add_dim()->set_dim_value(2);
+  auto &tag = *input.add_metadata_props();
+  tag.set_key(core::compute::kValueTagMetadataKey);
+  tag.set_value("shape");
+  source.MakeInput(input);
+  source.MakeNode("Identity", {"X"}, {"p"});
+  source.MakeNode("Unknown", {"p"}, {"Y"});
+  source.MakeOutput("Y");
+  RewritingProto plan;
+  auto &rewrite = *plan.add_rewrites();
+  rewrite.add_matched_nodes(0);
+  auto &rename = *rewrite.add_value_renames();
+  rename.set_key("p");
+  rename.set_value("X");
+  const auto result = source.ApplyRewritings(plan);
+  EXPECT_EQ(result.Nodes()[0].input(0), "X");
+  EXPECT_EQ(result.Compute().ValueTags().at("X"), "shape");
+}
+
+TEST(PatternOptimization, RefreshesRenamedCapturesWithoutAParentShapeFunction) {
+  auto original = PreparationModel();
+  original.mutable_graph()->clr_node();
+  original.mutable_graph()->clr_output();
+  core::builder::GraphBuilder source(original, SchemaLookup());
+  auto &body = source.MakeSubgraph("body");
+  body.MakeNode("Identity", {"a"}, {"out"});
+  body.MakeOutput("out");
+  AddSubgraphReference(source, "body", "body", "result");
+  source.MakeOutput("result");
+  RewritingProto plan;
+  auto &rewrite = *plan.add_rewrites();
+  rewrite.add_removed_initializers(0);
+  auto &rename = *rewrite.add_value_renames();
+  rename.set_key("a");
+  rename.set_value("b");
+  auto result = source.ApplyRewritings(plan);
+  auto &updated = result.Subgraph("body");
+  EXPECT_EQ(updated.Nodes()[0].input(0), "b");
+  EXPECT_FALSE(updated.HasShape("a"));
+  EXPECT_EQ(updated.GetShape("b"), source.GetShape("b"));
+  updated.MakeNode("Identity", {"b"}, {"copy"});
+  EXPECT_EQ(updated.GetShape("copy").Shape(), source.GetShape("b").Shape());
+  EXPECT_EQ(updated.GetShape("copy").Dtype(), source.GetShape("b").Dtype());
+  EXPECT_EQ(body.Nodes()[0].input(0), "a");
+  EXPECT_TRUE(body.HasShape("a"));
 }
 
 TEST(PatternOptimization, ModelReplayDistinguishesFunctionNamesFromOverloads) {
@@ -1253,6 +1377,8 @@ TEST(PatternOptimization, ReplayRejectsMalformedPositionsAndFutureExecution) {
   });
   reject([&](auto &, auto &edit) { edit.ref_added_nodes_positions()[0] = maximum; });
   reject([](auto &, auto &edit) { edit.clr_added_nodes_positions(); });
+  reject([](auto &, auto &edit) { edit.ref_added_nodes()[0].set_domain("missing.opset"); });
+  reject([](auto &, auto &edit) { edit.ref_added_nodes()[0].add_output("extra"); });
   reject([](auto &, auto &edit) {
     *edit.add_added_nodes() = MakeNode("Neg", {"x"}, {"other"});
     edit.add_added_nodes_positions(0);

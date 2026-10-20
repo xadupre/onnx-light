@@ -84,7 +84,7 @@ class TestPatternSelection(ExtTestCase):
             with self.subTest(selector=selector):
                 graph = optim.GraphGraph(self.builder, patterns=selector)
                 self.assertEqual(graph.patterns, [])
-                self.assertEqual(graph.optimize(), [])
+                self.assertEqual(len(graph.optimize().rewrites), 0)
                 self.assertEqual(
                     [node.op_type for node in self.builder.build_graph().node], ["Neg", "Neg"]
                 )
@@ -105,7 +105,7 @@ class TestPatternSelection(ExtTestCase):
                     remove_unused=remove_unused
                 )
                 self.assertEqual(len(builder.to_model().graph.node), 1 if remove_unused else 2)
-                self.assertEqual(len(rewrites), 1 if remove_unused else 0)
+                self.assertEqual(len(rewrites.rewrites), 1 if remove_unused else 0)
 
     def test_device_includes_generic_and_matching_patterns_and_sets_target(self):
         for device, specific in ((Device.kCPU, self.cpu), (Device.kGPU0, self.gpu)):
@@ -139,7 +139,9 @@ class TestPatternSelection(ExtTestCase):
         optim.clear_registered_patterns()
         optim.register_pattern(CPUOnlyPattern(name="CPUOnly", device=Device.kCPU))
         graph = optim.GraphGraph(self.builder, patterns=Device.kCPU)
-        self.assertEqual([rewrite.pattern_name for rewrite in graph.optimize()], ["CPUOnly"])
+        self.assertEqual(
+            [rewrite.pattern_name for rewrite in graph.optimize().rewrites], ["CPUOnly"]
+        )
         self.assertTrue(observed)
         self.assertEqual(set(observed), {Device.kCPU})
 
@@ -197,7 +199,9 @@ class TestPatternSelection(ExtTestCase):
         self.assertEqual(graph.patterns, [replacement])
         del replacement
         gc.collect()
-        self.assertEqual([rewrite.pattern_name for rewrite in graph.optimize()], ["Neutral"])
+        self.assertEqual(
+            [rewrite.pattern_name for rewrite in graph.optimize().rewrites], ["Neutral"]
+        )
 
     def test_iterables_and_unregistered_standard_names(self):
         graph = optim.GraphGraph(self.builder, patterns=(pattern for pattern in [self.cpu]))
@@ -249,7 +253,7 @@ class TestPatternOptimization(ExtTestCase):
 
         rewrites = optim.GraphGraph(builder, [OneShotNegNegPattern()]).optimize()
 
-        self.assertEqual([rewrite.pattern_name for rewrite in rewrites], ["NegNeg"])
+        self.assertEqual([rewrite.pattern_name for rewrite in rewrites.rewrites], ["NegNeg"])
         self.assertEqual(
             [node.op_type for node in builder.to_onnx().graph.node], ["Identity", "Neg", "Neg"]
         )
@@ -262,23 +266,18 @@ class TestPatternOptimization(ExtTestCase):
         optimized = builder.to_onnx()
 
         self.assertEqual([node.op_type for node in optimized.graph.node], ["Identity"])
-        self.assertEqual(len(rewrites), 1)
-        self.assertEqual(rewrites[0].pattern_name, "NegNeg")
-        self.assertEqual(
-            repr(rewrites[0]),
-            "LocalRewriting("
-            "pattern=NegNeg, graph_path=<root>, matched_nodes=2, added_nodes=1)",
-        )
-        self.assertEqual(str(rewrites[0]), repr(rewrites[0]))
-        details = rewrites[0].to_detailed_string()
-        self.assertIn("  graph_path: <root>\n", details)
-        self.assertIn("  matched_nodes:\n    positions: [0, 1]\n", details)
-        self.assertIn(
-            "  added_nodes:\n    nodes: [Identity(outputs=[y])]\n    positions: [0]\n", details
-        )
-        self.assertIn("  initializers:\n", details)
-        self.assertIn("  value_renames: []\n", details)
-        self.assertIn("  timings:\n    match_time_ns: ", details)
+        self.assertIsInstance(rewrites, optim.RewritingProto)
+        self.assertEqual(len(rewrites.rewrites), 1)
+        rewrite = rewrites.rewrites[0]
+        self.assertIsInstance(rewrite, optim.LocalRewritingProto)
+        self.assertEqual(rewrite.pattern_name, "NegNeg")
+        self.assertEqual(list(rewrite.matched_nodes), [0, 1])
+        self.assertEqual(list(rewrite.added_nodes_positions), [0])
+        self.assertFalse(hasattr(rewrite, "iteration"))
+        self.assertFalse(hasattr(rewrite, "match_time_ns"))
+        parsed = optim.RewritingProto()
+        parsed.ParseFromString(rewrites.SerializeToString())
+        self.assertEqual(parsed.SerializeToString(), rewrites.SerializeToString())
         self.assertEqual(report.rewrites, 1)
         pattern_report = next(item for item in report.patterns if item.pattern_name == "NegNeg")
         self.assertEqual(pattern_report.matches, 1)
@@ -298,6 +297,58 @@ class TestPatternOptimization(ExtTestCase):
 
         self.assertEqual(replayed.SerializeToString(), optimized.SerializeToString())
 
+    def test_rewriting_proto_binary_roundtrip_all_fields(self):
+        plan = optim.RewritingProto()
+        edit = plan.rewrites.add()
+        edit.pattern_name = "Serialized"
+        edit.graph_path.extend(["branch", "leaf"])
+        edit.matched_nodes.extend([0, 2**64 - 1])
+        edit.removed_initializers.extend([1])
+        edit.added_nodes.append(oh.make_node("Identity", ["x"], ["y"]))
+        edit.added_nodes_positions.extend([0])
+        edit.added_initializers.append(oh.make_tensor("literal", TensorProto.FLOAT, [1], [2]))
+        edit.added_initializer_positions.extend([1])
+        rename = edit.value_renames.add()
+        rename.key, rename.value = "old", "new"
+        edit.metadata_props.add().key = "local"
+        edit.initializer_calls.append(oh.make_node("Prepare", ["weight"], ["prepared"]))
+        edit.computed_initializer_positions.extend([2])
+        plan.required_opset_imports.append(oh.make_opsetid("custom", 1))
+        plan.added_functions.add().name = "Prepare"
+        plan.metadata_props.add().key = "collection"
+        parsed = optim.RewritingProto()
+        parsed.ParseFromString(plan.SerializeToString())
+        self.assertEqual(parsed.SerializeToString(), plan.SerializeToString())
+        local = optim.LocalRewritingProto()
+        local.ParseFromString(edit.SerializeToString())
+        self.assertEqual(list(local.matched_nodes), [0, 2**64 - 1])
+        self.assertEqual(local.value_renames[0].key, "old")
+        self.assertEqual(local.value_renames[0].value, "new")
+
+    def test_graph_replay_rejects_future_preparation_fields(self):
+        model = _double_neg_model()
+        for field in (
+            "required_opset_imports",
+            "added_functions",
+            "initializer_calls",
+            "computed_initializer_positions",
+        ):
+            with self.subTest(field=field):
+                builder = optim.GraphBuilder(model)
+                plan = optim.GraphGraph(builder, [NegNegPattern()]).optimize()
+                target = (
+                    plan
+                    if field in ("required_opset_imports", "added_functions")
+                    else plan.rewrites[0]
+                )
+                values = getattr(target, field)
+                if field == "computed_initializer_positions":
+                    values.append(0)
+                else:
+                    values.add()
+                with self.assertRaisesRegex(ValueError, "not supported"):
+                    optim.replay(model, plan)
+
     def test_optimizer_retains_python_pattern(self):
         model = _double_neg_model()
         builder = optim.GraphBuilder(model)
@@ -307,7 +358,7 @@ class TestPatternOptimization(ExtTestCase):
         gc.collect()
 
         rewrites = graph.optimize()
-        self.assertEqual(len(rewrites), 1)
+        self.assertEqual(len(rewrites.rewrites), 1)
 
     def test_initializer_only_cleanup_reports_and_replays(self):
         for with_node in (False, True):
@@ -334,7 +385,7 @@ class TestPatternOptimization(ExtTestCase):
                 optimized = builder.build_graph()
 
                 self.assertEqual(
-                    [rewrite.pattern_name for rewrite in rewrites], ["RemoveUnusedNodes"]
+                    [rewrite.pattern_name for rewrite in rewrites.rewrites], ["RemoveUnusedNodes"]
                 )
                 self.assertEqual(report.rewrites, 1)
                 self.assertEqual(len(report.patterns), 0)
@@ -344,11 +395,12 @@ class TestPatternOptimization(ExtTestCase):
                     optimized.initializer[0].SerializeToString(),
                     model.graph.initializer[0].SerializeToString(),
                 )
+                loaded = optim.RewritingProto()
+                loaded.ParseFromString(rewrites.SerializeToString())
                 self.assertEqual(
-                    optim.replay(model, rewrites).SerializeToString(),
-                    optimized.SerializeToString(),
+                    optim.replay(model, loaded).SerializeToString(), optimized.SerializeToString()
                 )
-                self.assertEqual(len(graph.optimize()), 0)
+                self.assertEqual(len(graph.optimize().rewrites), 0)
 
     def test_global_pattern_registration(self):
         optim.register_pattern(NegNegPattern())
@@ -357,7 +409,9 @@ class TestPatternOptimization(ExtTestCase):
             graph = optim.GraphGraph(builder)
             rewrites = graph.optimize()
             self.assertIn("NegNeg", optim.registered_pattern_names())
-            self.assertTrue(any(rewrite.pattern_name == "NegNeg" for rewrite in rewrites))
+            self.assertTrue(
+                any(rewrite.pattern_name == "NegNeg" for rewrite in rewrites.rewrites)
+            )
         finally:
             optim.unregister_pattern("NegNeg")
 
@@ -369,14 +423,14 @@ class TestPatternOptimization(ExtTestCase):
         rewrites = graph.optimize()
 
         self.assertEqual(builder.registered_pattern_names(), ("NegNeg",))
-        self.assertEqual(rewrites[0].pattern_name, "NegNeg")
+        self.assertEqual(rewrites.rewrites[0].pattern_name, "NegNeg")
 
     def test_graph_pattern_registration(self):
         builder = optim.GraphBuilder(_double_neg_model())
         graph = optim.GraphGraph(builder, [NegNegPattern()])
 
         rewrites = graph.optimize()
-        self.assertEqual(rewrites[0].pattern_name, "NegNeg")
+        self.assertEqual(rewrites.rewrites[0].pattern_name, "NegNeg")
 
     def test_python_exception_propagates(self):
         class FailingPattern(NegNegPattern):
@@ -404,7 +458,7 @@ class TestPatternOptimization(ExtTestCase):
         self.assertEqual(optim.registered_pattern_names()[0], "Cast")
         self.assertIsInstance(optim.CastPattern(), optim.PatternOptimization)
         self.assertEqual([node.op_type for node in optimized.graph.node], ["Identity"])
-        self.assertEqual(rewrites[0].pattern_name, "Cast")
+        self.assertEqual(rewrites.rewrites[0].pattern_name, "Cast")
 
     def test_standard_clip_clip_pattern_is_selectable(self):
         graph = oh.make_graph(
@@ -431,7 +485,7 @@ class TestPatternOptimization(ExtTestCase):
         self.assertIsInstance(optim.ClipClipPattern(), optim.PatternOptimization)
         self.assertEqual([node.op_type for node in optimized.graph.node], ["Clip"])
         self.assertEqual(list(optimized.graph.node[0].input), ["x", "mn", "mx"])
-        self.assertEqual(rewrites[0].pattern_name, "ClipClip")
+        self.assertEqual(rewrites.rewrites[0].pattern_name, "ClipClip")
 
     def test_standard_gather_to_slice_pattern_rewrites_vector_singleton(self):
         graph = oh.make_graph(
@@ -453,7 +507,7 @@ class TestPatternOptimization(ExtTestCase):
         self.assertEqual([node.op_type for node in optimized.graph.node], ["Slice"])
         self.assertEqual(optimized.graph.node[0].input[0], "x")
         self.assertEqual(optimized.graph.node[0].output[0], "y")
-        self.assertEqual(rewrites[0].pattern_name, "GatherToSlice")
+        self.assertEqual(rewrites.rewrites[0].pattern_name, "GatherToSlice")
 
     def test_standard_gather_to_slice_pattern_rewrites_scalar_index_with_squeeze(self):
         graph = oh.make_graph(
@@ -627,13 +681,63 @@ class TestPatternOptimization(ExtTestCase):
                 rewrites, report = graph.optimize(report=True)
 
                 self.assertEqual(set(observed), {device})
-                self.assertEqual(len(rewrites), 1)
-                self.assertEqual(rewrites[0].graph_path, ["then_branch"])
-                self.assertIn("graph_path=then_branch", repr(rewrites[0]))
-                self.assertIn("  graph_path: then_branch\n", rewrites[0].to_detailed_string())
+                self.assertEqual(len(rewrites.rewrites), 1)
+                self.assertEqual(rewrites.rewrites[0].graph_path, ["then_branch"])
                 self.assertTrue(
                     any(item.graph_path == ["then_branch"] for item in report.subgraphs)
                 )
+                loaded = optim.RewritingProto()
+                loaded.ParseFromString(rewrites.SerializeToString())
+                self.assertEqual(
+                    optim.replay(model, loaded).SerializeToString(),
+                    builder.build_graph().SerializeToString(),
+                )
+
+    def test_replay_keeps_unnamed_subgraph_paths_after_parent_shift(self):
+        then_branch = oh.make_graph(
+            [
+                oh.make_node("Neg", ["x"], ["middle"]),
+                oh.make_node("Neg", ["middle"], ["then_out"]),
+            ],
+            "",
+            [],
+            [oh.make_tensor_value_info("then_out", TensorProto.FLOAT, [2])],
+        )
+        else_branch = oh.make_graph(
+            [oh.make_node("Identity", ["x"], ["else_out"])],
+            "",
+            [],
+            [oh.make_tensor_value_info("else_out", TensorProto.FLOAT, [2])],
+        )
+        model = oh.make_model(
+            oh.make_graph(
+                [
+                    oh.make_node("Neg", ["x"], ["dead"]),
+                    oh.make_node(
+                        "If", ["cond"], ["y"], then_branch=then_branch, else_branch=else_branch
+                    ),
+                ],
+                "main",
+                [
+                    oh.make_tensor_value_info("cond", TensorProto.BOOL, []),
+                    oh.make_tensor_value_info("x", TensorProto.FLOAT, [2]),
+                ],
+                [oh.make_tensor_value_info("y", TensorProto.FLOAT, [2])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+        )
+        builder = optim.GraphBuilder(model)
+        plan = optim.GraphGraph(builder, [NegNegPattern()]).optimize()
+        self.assertEqual(
+            [edit.pattern_name for edit in plan.rewrites], ["NegNeg", "RemoveUnusedNodes"]
+        )
+        reordered = optim.RewritingProto(rewrites=[plan.rewrites[1], plan.rewrites[0]])
+        loaded = optim.RewritingProto()
+        loaded.ParseFromString(reordered.SerializeToString())
+        self.assertEqual(
+            optim.replay(model, loaded).SerializeToString(),
+            builder.build_graph().SerializeToString(),
+        )
 
     def test_render_rst_standard_patterns_table_lists_every_pattern(self):
         table = optim.render_rst_standard_patterns_table()

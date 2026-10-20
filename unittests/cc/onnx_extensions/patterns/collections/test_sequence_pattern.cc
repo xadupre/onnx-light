@@ -180,7 +180,7 @@ TEST(SplitToSequenceSequenceAtPattern, OptimizesScalarSplitWithRemainder) {
   std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
   patterns.push_back(std::make_unique<onnx_patterns::SplitToSequenceSequenceAtPattern>());
   core::builder::GraphGraph graph(builder, std::move(patterns));
-  ASSERT_FALSE(graph.Optimize().empty());
+  ASSERT_FALSE(graph.Optimize().rewrites().empty());
   ASSERT_EQ(builder.Nodes().size(), 1u);
   EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Split");
   EXPECT_EQ(builder.GetShape("y0").Shape()[1].AsInt(), 5);

@@ -179,12 +179,14 @@ class TestCanonicalizationPatterns(ExtTestCase):
         builder = optimization.GraphBuilder(model)
         graph = optimization.GraphGraph(builder, [pattern])
         all_rewrites, report = graph.optimize(report=True)
-        self.assertEqual(report.rewrites, len(all_rewrites))
+        self.assertEqual(report.rewrites, len(all_rewrites.rewrites))
         self.assertEqual(
             optimization.replay(model, all_rewrites).SerializeToString(),
             builder.build_graph().SerializeToString(),
         )
-        rewrites = [rewrite for rewrite in all_rewrites if rewrite.pattern_name == pattern]
+        rewrites = [
+            rewrite for rewrite in all_rewrites.rewrites if rewrite.pattern_name == pattern
+        ]
         return builder.to_onnx(), rewrites, report
 
     def _assert_equivalent(self, model, optimized, feeds, atol=0):

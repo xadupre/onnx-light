@@ -5,7 +5,7 @@ Replaying graph-rewriting patterns
 ==================================
 
 Every successful pattern optimization produces a
-:class:`~onnx_light.onnx_core.optimization.LocalRewriting` record. These
+:class:`~onnx_light.onnx.LocalRewritingProto` record. These
 records can reconstruct the optimized graph from the original model without
 running pattern matching again.
 """
@@ -14,7 +14,7 @@ running pattern matching again.
 
 from __future__ import annotations
 
-from onnx_light.onnx_lib import parser
+from onnx_light.onnx_lib import RewritingProto, parser
 from onnx_light.onnx_core.optimization import GraphBuilder, GraphGraph, replay, standard_patterns
 from onnx_light.tools import pretty_onnx
 
@@ -48,13 +48,11 @@ print(pretty_onnx(builder.to_onnx()))
 # Inspect the captured modifications
 # ++++++++++++++++++++++++++++++++++
 #
-# Each record has a concise one-line display. Use ``to_detailed_string`` to
-# inspect the pattern, matched nodes, inserted nodes, and optimization iteration
-# needed to reproduce one modification.
+# The collection stores sequential edits without pattern pointers or timings.
+# Each record's positions refer to the graph immediately before/after that edit.
 
-for rewrite in rewrites:
+for rewrite in rewrites.rewrites:
     print(rewrite)
-    print(rewrite.to_detailed_string())
 
 #####################################
 # Replay without matching patterns
@@ -64,7 +62,10 @@ for rewrite in rewrites:
 # records to a fresh copy of the source model. The reconstructed graph is
 # byte-for-byte identical to the graph produced by the optimizer.
 
-replayed_graph = replay(model, rewrites)
+serialized = rewrites.SerializeToString()
+loaded = RewritingProto()
+loaded.ParseFromString(serialized)
+replayed_graph = replay(model, loaded)
 
 assert replayed_graph.SerializeToString() == optimized_graph.SerializeToString()
 print("Replayed graph:")

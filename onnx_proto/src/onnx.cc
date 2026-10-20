@@ -2032,6 +2032,100 @@ void FunctionProto::PrintToStringStream(std::stringstream &ss, utils::PrintOptio
                                  NAME_EXIST_VALUE(value_info), NAME_EXIST_VALUE(metadata_props));
 }
 
+IMPLEMENT_PROTO(LocalRewritingProto)
+SerializeSizeResult LocalRewritingProto::SerializeSize(utils::BinaryWriteStream &stream,
+                                                       SerializeOptions &options) const {
+  SerializeSizeResult size;
+  SIZE_FIELD(size, options, stream, pattern_name)
+  SIZE_REPEATED_FIELD(size, options, stream, graph_path)
+  SIZE_REPEATED_FIELD(size, options, stream, matched_nodes)
+  SIZE_REPEATED_FIELD(size, options, stream, removed_initializers)
+  SIZE_REPEATED_FIELD(size, options, stream, added_nodes)
+  SIZE_REPEATED_FIELD(size, options, stream, added_nodes_positions)
+  SIZE_REPEATED_FIELD(size, options, stream, added_initializers)
+  SIZE_REPEATED_FIELD(size, options, stream, added_initializer_positions)
+  SIZE_REPEATED_FIELD(size, options, stream, value_renames)
+  SIZE_REPEATED_FIELD(size, options, stream, metadata_props)
+  SIZE_REPEATED_FIELD(size, options, stream, initializer_calls)
+  SIZE_REPEATED_FIELD(size, options, stream, computed_initializer_positions)
+  return size;
+}
+void LocalRewritingProto::SerializeToStream(utils::BinaryWriteStream &stream,
+                                            SerializeOptions &options) const {
+  WRITE_FIELD(options, stream, pattern_name)
+  WRITE_REPEATED_FIELD(options, stream, graph_path)
+  WRITE_REPEATED_FIELD(options, stream, matched_nodes)
+  WRITE_REPEATED_FIELD(options, stream, removed_initializers)
+  WRITE_REPEATED_FIELD(options, stream, added_nodes)
+  WRITE_REPEATED_FIELD(options, stream, added_nodes_positions)
+  WRITE_REPEATED_FIELD(options, stream, added_initializers)
+  WRITE_REPEATED_FIELD(options, stream, added_initializer_positions)
+  WRITE_REPEATED_FIELD(options, stream, value_renames)
+  WRITE_REPEATED_FIELD(options, stream, metadata_props)
+  WRITE_REPEATED_FIELD(options, stream, initializer_calls)
+  WRITE_REPEATED_FIELD(options, stream, computed_initializer_positions)
+}
+bool LocalRewritingProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, LocalRewritingProto)
+  READ_FIELD(options, stream, pattern_name)
+  READ_REPEATED_FIELD(options, stream, graph_path)
+  READ_REPEATED_FIELD(options, stream, matched_nodes)
+  READ_REPEATED_FIELD(options, stream, removed_initializers)
+  READ_REPEATED_FIELD(options, stream, added_nodes)
+  READ_REPEATED_FIELD(options, stream, added_nodes_positions)
+  READ_REPEATED_FIELD(options, stream, added_initializers)
+  READ_REPEATED_FIELD(options, stream, added_initializer_positions)
+  READ_REPEATED_FIELD(options, stream, value_renames)
+  READ_REPEATED_FIELD(options, stream, metadata_props)
+  READ_REPEATED_FIELD(options, stream, initializer_calls)
+  READ_REPEATED_FIELD(options, stream, computed_initializer_positions)
+  READ_END(options, stream, LocalRewritingProto)
+  return true;
+}
+void LocalRewritingProto::PrintToStringStream(std::stringstream &ss,
+                                              utils::PrintOptions &options) const {
+  write_proto_into_vector_string(
+      ss, options, NAME_EXIST_VALUE(pattern_name), NAME_EXIST_VALUE(graph_path),
+      NAME_EXIST_VALUE(matched_nodes), NAME_EXIST_VALUE(removed_initializers),
+      NAME_EXIST_VALUE(added_nodes), NAME_EXIST_VALUE(added_nodes_positions),
+      NAME_EXIST_VALUE(added_initializers), NAME_EXIST_VALUE(added_initializer_positions),
+      NAME_EXIST_VALUE(value_renames), NAME_EXIST_VALUE(metadata_props),
+      NAME_EXIST_VALUE(initializer_calls), NAME_EXIST_VALUE(computed_initializer_positions));
+}
+
+IMPLEMENT_PROTO(RewritingProto)
+SerializeSizeResult RewritingProto::SerializeSize(utils::BinaryWriteStream &stream,
+                                                  SerializeOptions &options) const {
+  SerializeSizeResult size;
+  SIZE_REPEATED_FIELD(size, options, stream, rewrites)
+  SIZE_REPEATED_FIELD(size, options, stream, required_opset_imports)
+  SIZE_REPEATED_FIELD(size, options, stream, metadata_props)
+  SIZE_REPEATED_FIELD(size, options, stream, added_functions)
+  return size;
+}
+void RewritingProto::SerializeToStream(utils::BinaryWriteStream &stream,
+                                       SerializeOptions &options) const {
+  WRITE_REPEATED_FIELD(options, stream, rewrites)
+  WRITE_REPEATED_FIELD(options, stream, required_opset_imports)
+  WRITE_REPEATED_FIELD(options, stream, metadata_props)
+  WRITE_REPEATED_FIELD(options, stream, added_functions)
+}
+bool RewritingProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, RewritingProto)
+  READ_REPEATED_FIELD(options, stream, rewrites)
+  READ_REPEATED_FIELD(options, stream, required_opset_imports)
+  READ_REPEATED_FIELD(options, stream, metadata_props)
+  READ_REPEATED_FIELD(options, stream, added_functions)
+  READ_END(options, stream, RewritingProto)
+  return true;
+}
+void RewritingProto::PrintToStringStream(std::stringstream &ss,
+                                         utils::PrintOptions &options) const {
+  write_proto_into_vector_string(
+      ss, options, NAME_EXIST_VALUE(rewrites), NAME_EXIST_VALUE(required_opset_imports),
+      NAME_EXIST_VALUE(metadata_props), NAME_EXIST_VALUE(added_functions));
+}
+
 // ModelProto
 
 IMPLEMENT_PROTO(ModelProto)
@@ -2833,6 +2927,34 @@ bool SparseTensorProto::Equals(const SparseTensorProto &right, std::string *diff
   COMPARE_FIELD(values)
   COMPARE_FIELD(indices)
   COMPARE_FIELD(dims)
+  return true;
+}
+
+bool LocalRewritingProto::Equals(const LocalRewritingProto &right, std::string *difference) const {
+  const auto &left = *this;
+  ProtoComparison comparison(difference);
+  COMPARE_FIELD(pattern_name)
+  COMPARE_FIELD(graph_path)
+  COMPARE_FIELD(matched_nodes)
+  COMPARE_FIELD(removed_initializers)
+  COMPARE_FIELD(added_nodes)
+  COMPARE_FIELD(added_nodes_positions)
+  COMPARE_FIELD(added_initializers)
+  COMPARE_FIELD(added_initializer_positions)
+  COMPARE_FIELD(value_renames)
+  COMPARE_FIELD(metadata_props)
+  COMPARE_FIELD(initializer_calls)
+  COMPARE_FIELD(computed_initializer_positions)
+  return true;
+}
+
+bool RewritingProto::Equals(const RewritingProto &right, std::string *difference) const {
+  const auto &left = *this;
+  ProtoComparison comparison(difference);
+  COMPARE_FIELD(rewrites)
+  COMPARE_FIELD(required_opset_imports)
+  COMPARE_FIELD(metadata_props)
+  COMPARE_FIELD(added_functions)
   return true;
 }
 

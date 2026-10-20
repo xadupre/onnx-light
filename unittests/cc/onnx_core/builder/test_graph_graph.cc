@@ -207,9 +207,9 @@ TEST(GraphGraph, NativeCleanupReplaysOrphanInitializers) {
     const ModelProto original = builder.ToModel();
     core::builder::GraphGraph graph(builder);
     const auto rewrites = graph.Optimize();
-    ASSERT_EQ(rewrites.size(), 1u);
-    EXPECT_EQ(rewrites[0].pattern->Name(), "RemoveUnusedNodes");
-    ASSERT_EQ(rewrites[0].removed_initializers.size(), 1u);
+    ASSERT_EQ(rewrites.rewrites().size(), 1u);
+    EXPECT_EQ(rewrites.rewrites(0).pattern_name(), "RemoveUnusedNodes");
+    ASSERT_EQ(rewrites.rewrites(0).removed_initializers().size(), 1u);
     const GraphProto optimized = builder.ToGraph();
     EXPECT_EQ(optimized.node_size(), 0);
     EXPECT_EQ(optimized.initializer_size(), 0);
@@ -261,7 +261,7 @@ TEST(GraphGraph, NestedRewriteRegistersStructTypeInModelScope) {
   core::builder::GraphGraph graph(branch,
                                   std::vector<std::shared_ptr<core::builder::PatternOptimization>>{
                                       std::make_shared<RegisterStructType>()});
-  ASSERT_EQ(graph.Optimize().size(), 1u);
+  ASSERT_EQ(graph.Optimize().rewrites().size(), 1u);
 
   const ModelProto model = builder.ToModel();
   ASSERT_EQ(model.struct_types().size(), 1u);
@@ -282,7 +282,7 @@ TEST(GraphGraph, NestedDisjointRewritesPreserveCapturedShapeAfterLocalFunctionRe
                                       std::make_shared<RegisterLocalFunction>()});
   const auto rewrites = graph.Optimize();
 
-  EXPECT_EQ(rewrites.size(), 2u);
+  EXPECT_EQ(rewrites.rewrites().size(), 2u);
   EXPECT_TRUE(branch.HasShape("captured"));
   ASSERT_EQ(branch.Nodes().size(), 2u);
   EXPECT_EQ(branch.Nodes()[0].op_type(), "Neg");
@@ -305,7 +305,7 @@ TEST(GraphGraph, OptionalUnusedCleanupPreservesDeadEnds) {
     const auto rewrites = graph.Optimize(-1, nullptr, {}, remove_unused);
     EXPECT_EQ(builder.ToGraph().node_size(), remove_unused ? 1 : 2);
     EXPECT_EQ(builder.ToGraph().initializer_size(), remove_unused ? 0 : 1);
-    EXPECT_EQ(rewrites.size(), remove_unused ? 1u : 0u);
+    EXPECT_EQ(rewrites.rewrites().size(), remove_unused ? 1u : 0u);
   }
 }
 
@@ -537,7 +537,7 @@ TEST(GraphGraph, NativeExportOrdersDependenciesAndRecomputesCapturedLifetimes) {
   std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
   patterns.push_back(std::make_unique<ReverseReplacementOrder>());
   core::builder::GraphGraph optimizer(builder, std::move(patterns));
-  EXPECT_FALSE(optimizer.Optimize(1).empty());
+  EXPECT_FALSE(optimizer.Optimize(1).rewrites().empty());
   const GraphProto graph = builder.ToGraph();
   ASSERT_EQ(graph.node().size(), 3u);
   EXPECT_EQ(graph.node(0).op_type(), "Mul");

@@ -100,46 +100,6 @@ struct OptimizationReport {
   std::string ToString() const;
 };
 
-/// Persistent description of one applied local graph rewrite.
-struct LocalRewriting {
-  /// Shared link to the pattern that produced the rewrite.
-  std::shared_ptr<const PatternOptimization> pattern;
-  /// Nested builder path from the root graph; empty means the root graph.
-  std::vector<std::string> graph_path;
-  /**
-   * Positions of the nodes selected by the match.
-   *
-   * Positions refer to the graph at the start of the rewrite batch identified
-   * by ``iteration``, not to the original model: a later batch may match nodes
-   * added by an earlier one. This batch-local coordinate system is also used by
-   * :cpp:var:`insert_at`.
-   */
-  std::vector<std::size_t> matched_nodes;
-  /// Replacement nodes owned by this record.
-  utils::RepeatedProtoField<NodeProto> added_nodes;
-  /// Positions occupied by added nodes after this rewrite batch.
-  std::vector<std::size_t> added_nodes_positions;
-  /// Initializers created while applying the pattern.
-  utils::RepeatedProtoField<TensorProto> added_initializers;
-  /// Positions occupied by added initializers after this rewrite batch.
-  std::vector<std::size_t> added_initializer_positions;
-  /// Positions of initializers removed by this rewrite.
-  std::vector<std::size_t> removed_initializers;
-  /// Value-name replacements applied to node inputs and nested captures.
-  std::vector<std::pair<std::string, std::string>> value_renames;
-  /// Ordered rewrite batch; records with the same value are applied together.
-  std::size_t iteration = 0;
-  /// Time spent recognizing this match, in nanoseconds.
-  int64_t match_time_ns = 0;
-  /// Time spent building its replacement nodes, in nanoseconds.
-  int64_t apply_time_ns = 0;
-
-  /// Returns a concise summary of this rewrite.
-  std::string ToString() const;
-  /// Returns a structured description of every diagnostic field.
-  std::string ToDetailedString() const;
-};
-
 /// Explains why one candidate did not match a pattern.
 struct PatternNoMatch {
   /// Candidate inspected by the matcher.

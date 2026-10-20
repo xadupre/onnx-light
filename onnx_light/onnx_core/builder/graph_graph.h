@@ -92,11 +92,11 @@ public:
    * Returns:
    *   Self-contained records of the applied rewrites, in application order.
    */
-  std::vector<LocalRewriting> Optimize(int max_iter = -1, OptimizationReport *report = nullptr,
-                                       const ConstantFoldingOptions &folding_options = {},
-                                       bool remove_unused = true);
+  RewritingProto Optimize(int max_iter = -1, OptimizationReport *report = nullptr,
+                          const ConstantFoldingOptions &folding_options = {},
+                          bool remove_unused = true);
 
-  /// Returns the patterns shared by this graph optimizer and its rewrites.
+  /// Returns the patterns owned by this graph optimizer.
   const std::vector<std::shared_ptr<PatternOptimization>> &Patterns() const noexcept {
     return patterns_;
   }
@@ -184,15 +184,13 @@ public:
   void SetComputedConstant(const std::string &name, TensorProto value);
 
 private:
-  friend GraphProto Replay(const ModelProto &model, const std::vector<LocalRewriting> &rewrites,
+  friend GraphProto Replay(const ModelProto &model, const RewritingProto &rewrites,
                            GraphBuilder::SchemaLookupFn schema_lookup);
 
   void Rebuild();
   void RebuildSuccessors();
-  std::size_t Cleanup(std::vector<LocalRewriting> &rewrites, std::size_t &rewrite_batch,
-                      bool remove_unused);
-  void ApplyRewritingBatch(const std::vector<LocalRewriting> &rewrites, std::size_t begin,
-                           std::size_t end);
+  std::size_t Cleanup(utils::RepeatedProtoField<LocalRewritingProto> &rewrites, bool remove_unused);
+  void ApplyRewriting(const LocalRewritingProto &rewrite);
 
   // Returns the concrete dims of the constant ``name`` (empty vector for a
   // scalar) into ``dims``, or ``false`` when the shape cannot be determined.
@@ -208,10 +206,9 @@ private:
              DoNotRemovePredicate do_not_remove, const GraphGraph *parent_graph,
              std::size_t parent_position_limit);
 
-  std::vector<LocalRewriting> OptimizeImpl(int max_iterations, OptimizationReport *report,
-                                           const std::vector<std::string> &graph_path,
-                                           const ConstantFoldingOptions &folding_options,
-                                           bool remove_unused);
+  RewritingProto OptimizeImpl(int max_iterations, OptimizationReport *report,
+                              const std::vector<std::string> &graph_path,
+                              const ConstantFoldingOptions &folding_options, bool remove_unused);
 
   GraphBuilder &builder_;
   std::vector<std::shared_ptr<PatternOptimization>> patterns_;
@@ -241,7 +238,7 @@ private:
  * Pattern and cleanup records are both applied from that sequence; replay does
  * not rerun matching or cleanup algorithms.
  */
-GraphProto Replay(const ModelProto &model, const std::vector<LocalRewriting> &rewrites,
+GraphProto Replay(const ModelProto &model, const RewritingProto &rewrites,
                   GraphBuilder::SchemaLookupFn schema_lookup = {});
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::builder

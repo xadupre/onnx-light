@@ -383,6 +383,13 @@ retained node pointers and replacement fields into a new
 Rewrites as data: ``LocalRewriting`` and replay
 +++++++++++++++++++++++++++++++++++++++++++++++
 
+.. note::
+
+   This section describes the original in-memory record API. It has been
+   superseded by :ref:`l-next-steps-serialized-graph-rewriting`: ``Optimize``
+   now returns a serializable ``RewritingProto`` containing sequential
+   ``LocalRewritingProto`` edits, without pattern pointers, batch IDs or timings.
+
 A ``MatchResult`` only describes a match in terms of the transient
 ``const NodeProto *`` pointers of one ``GraphGraph``; those pointers become
 invalid as soon as the builder node field is rebuilt. To make rewrites
@@ -391,7 +398,7 @@ instead of only mutating the builder in place:
 
 .. code-block:: cpp
 
-    std::vector<LocalRewriting> GraphGraph::Optimize(...);
+    RewritingProto GraphGraph::Optimize(...);
 
 A ``LocalRewriting`` no longer refers to live node pointers: it records the
 positions selected by the match and owns the nodes and initializers it adds,
@@ -439,7 +446,7 @@ re-running the matching phase:
 .. code-block:: cpp
 
     GraphProto Replay(const ModelProto &model,
-                      const std::vector<LocalRewriting> &rewrites);
+                      const RewritingProto &rewrites);
 
 Replay groups consecutive records from the same rewrite batch, drops their
 matched nodes and removed initializers, and places every added node at its
@@ -542,7 +549,7 @@ keeping aggregation and formatting out of the default path:
 .. code-block:: cpp
 
     OptimizationReport report;
-    std::vector<LocalRewriting> rewrites = graph.Optimize(-1, &report);
+    RewritingProto rewrites = graph.Optimize(-1, &report);
     std::cout << report.ToString() << std::endl;
 
 Python bindings and custom patterns

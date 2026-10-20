@@ -100,6 +100,12 @@ the explicit ``make_*`` methods as the complete low-level contract.
 LocalRewriting display
 ++++++++++++++++++++++
 
+.. note::
+
+   The original ``LocalRewriting`` API described here has been replaced by
+   ``LocalRewritingProto``. See
+   :ref:`l-next-steps-serialized-graph-rewriting` for the serialized record API.
+
 Improve ``LocalRewriting`` presentation without changing the data consumed by
 ``replay()``:
 

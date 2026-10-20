@@ -416,14 +416,14 @@ TEST(GatherToSlicePattern, OptimizerConvergesFullRangeGatherToIdentity) {
   patterns.push_back(std::make_unique<onnx_patterns::SliceEliminationPattern>());
   core::builder::GraphGraph graph(builder, std::move(patterns));
 
-  EXPECT_FALSE(graph.Optimize().empty());
+  EXPECT_FALSE(graph.Optimize().rewrites().empty());
   ASSERT_EQ(builder.Nodes().size(), 1u);
   EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Identity");
   EXPECT_EQ(builder.Nodes()[0].input()[0].value(), "x");
   EXPECT_EQ(builder.Nodes()[0].output()[0].value(), "y");
 
   // A second optimization pass finds nothing left to rewrite (converged).
-  EXPECT_TRUE(graph.Optimize().empty());
+  EXPECT_TRUE(graph.Optimize().rewrites().empty());
 }
 
 // --- GatherUpstreamPropagationPattern -------------------------------------
@@ -770,8 +770,8 @@ TEST(GatherUpstreamPropagationPattern, OptimizesChainOfAddsToConvergence) {
   std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
   patterns.push_back(std::make_unique<onnx_patterns::GatherUpstreamPropagationPattern>());
   core::builder::GraphGraph graph(builder, std::move(patterns));
-  const std::vector<core::builder::LocalRewriting> rewrites = graph.Optimize();
-  EXPECT_FALSE(rewrites.empty());
+  const RewritingProto rewrites = graph.Optimize();
+  EXPECT_FALSE(rewrites.rewrites().empty());
 
   // The final graph output is still "y", produced by the outer Add.
   ASSERT_GE(builder.Nodes().size(), 1u);
@@ -793,7 +793,7 @@ TEST(GatherUpstreamPropagationPattern, OptimizesChainOfAddsToConvergence) {
       EXPECT_TRUE(data == "x" || data == "b1" || data == "b2");
     }
   }
-  EXPECT_TRUE(graph.Optimize().empty());
+  EXPECT_TRUE(graph.Optimize().rewrites().empty());
 }
 
 } // namespace

@@ -62,7 +62,7 @@ print(pretty_onnx(model))
 # +++++++++++++++++++++++++++++++++++++++++++++++++
 #
 # :meth:`~onnx_light.onnx_core.optimization.GraphGraph.optimize` returns the
-# list of applied rewrites; passing ``report=True`` additionally returns an
+# ``RewritingProto`` of applied edits; passing ``report=True`` additionally returns an
 # :class:`~onnx_light.onnx_core.optimization.OptimizationReport` with timing
 # and match/no-match counters for every pattern that was tried.
 
@@ -132,7 +132,7 @@ builder = GraphBuilder(failure_model)
 graph = GraphGraph(builder, [NegNegPattern()])
 failed_rewrites, failed_report = graph.optimize(report=True)
 
-print(f"failed rewrite count: {len(failed_rewrites)}")
+print(f"failed rewrite count: {len(failed_rewrites.rewrites)}")
 for pattern_stats in failed_report.patterns:
     for no_match in pattern_stats.no_matches:
         print(
@@ -140,7 +140,7 @@ for pattern_stats in failed_report.patterns:
             f"{no_match.occurrences} candidate(s): {no_match.reason}"
         )
 
-assert not failed_rewrites
+assert not failed_rewrites.rewrites
 failed_no_match_reasons = {
     no_match.reason
     for pattern_stats in failed_report.patterns
@@ -159,7 +159,7 @@ rewrites = graph.optimize()
 fully_optimized = builder.to_onnx()
 
 print(pretty_onnx(fully_optimized))
-print([rewrite.pattern_name for rewrite in rewrites])
+print([rewrite.pattern_name for rewrite in rewrites.rewrites])
 assert [node.op_type for node in fully_optimized.graph.node] == ["Identity"]
 
 #####################################

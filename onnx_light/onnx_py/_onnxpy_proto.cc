@@ -3238,6 +3238,48 @@ The result is a legacy ``dltensor`` capsule, not an array.)pbdoc")
            nb::rv_policy::reference_internal,
            "Sets metadata property *key* to *value*, updating an existing entry in place.");
   DECLARE_REPEATED_FIELD_PROTO(FunctionProto, rep_function);
+
+  PYDEFINE_PROTO(m, LocalRewritingProto)
+      .PYFIELD_STR(LocalRewritingProto, pattern_name)
+      .PYFIELD(LocalRewritingProto, graph_path)
+      .PYFIELD(LocalRewritingProto, matched_nodes)
+      .PYFIELD(LocalRewritingProto, removed_initializers)
+      .PYFIELD(LocalRewritingProto, added_nodes)
+      .PYFIELD(LocalRewritingProto, added_nodes_positions)
+      .PYFIELD(LocalRewritingProto, added_initializers)
+      .PYFIELD(LocalRewritingProto, added_initializer_positions)
+      .PYFIELD(LocalRewritingProto, value_renames)
+      .PYFIELD(LocalRewritingProto, metadata_props)
+      .PYFIELD(LocalRewritingProto, initializer_calls)
+      .PYFIELD(LocalRewritingProto, computed_initializer_positions);
+  PYADD_PROTO_SERIALIZATION(LocalRewritingProto);
+  nb_LocalRewritingProto
+      .def("__repr__", [](LocalRewritingProto &self) { return proto_repr_with_short_line(self); })
+      .def(
+          "HasField",
+          [](const LocalRewritingProto &self, const std::string &field_name) {
+            if (field_name == "pattern_name")
+              return self.has_pattern_name();
+            throw nb::value_error(("Unknown or repeated field: " + field_name).c_str());
+          },
+          nb::arg("field_name"));
+  DECLARE_REPEATED_FIELD_PROTO(LocalRewritingProto, rep_local_rewriting);
+  define_repeated_field_type_proto(rep_local_rewriting, rep_local_rewriting_proto);
+
+  PYDEFINE_PROTO(m, RewritingProto)
+      .PYFIELD(RewritingProto, rewrites)
+      .PYFIELD(RewritingProto, required_opset_imports)
+      .PYFIELD(RewritingProto, metadata_props)
+      .PYFIELD(RewritingProto, added_functions);
+  PYADD_PROTO_SERIALIZATION(RewritingProto);
+  nb_RewritingProto
+      .def("__repr__", [](RewritingProto &self) { return proto_repr_with_short_line(self); })
+      .def(
+          "HasField",
+          [](const RewritingProto &, const std::string &field_name) -> bool {
+            throw nb::value_error(("Unknown or repeated field: " + field_name).c_str());
+          },
+          nb::arg("field_name"));
   define_repeated_field_type_proto(rep_function, rep_function_proto);
 
   PYDEFINE_PROTO(m, ModelProto)

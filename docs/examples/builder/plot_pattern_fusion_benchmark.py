@@ -226,7 +226,7 @@ def measure_light_fusion(model, repeats: int = 3) -> float:
         start = time.perf_counter()
         rewrites = GraphGraph(builder, light_patterns()).optimize()
         samples.append((time.perf_counter() - start) * 1000)
-        assert len(rewrites) == expected
+        assert len(rewrites.rewrites) == expected
     return statistics.median(samples)
 
 

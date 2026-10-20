@@ -60,6 +60,11 @@ def _optimize(model, pattern_name: str, *, report: bool = False):
     pattern = getattr(optimization, f"{pattern_name}Pattern")()
     graph = optimization.GraphGraph(builder, [pattern])
     result = graph.optimize(report=report)
+    if report:
+        plan, statistics = result
+        result = plan.rewrites, statistics
+    else:
+        result = result.rewrites
     return builder.to_onnx(), result
 
 

@@ -23,6 +23,49 @@ TEST(onnx_compatibility, NamespaceMacros) {
   EXPECT_TRUE((std::is_same<ONNX_LIGHT_NAMESPACE::TensorProto, TensorProto>::value));
 }
 
+TEST(onnx_proto, RewritingProto_AllFieldsRoundTrip) {
+  RewritingProto source;
+  auto &edit = *source.add_rewrites();
+  edit.set_pattern_name("Example");
+  edit.add_graph_path("body");
+  edit.add_graph_path("leaf");
+  edit.add_matched_nodes(0);
+  edit.add_matched_nodes(UINT64_MAX);
+  edit.add_removed_initializers(2);
+  edit.add_added_nodes()->set_op_type("Identity");
+  edit.add_added_nodes_positions(1);
+  edit.add_added_initializers()->set_name("literal");
+  edit.add_added_initializer_positions(3);
+  auto &rename = *edit.add_value_renames();
+  rename.set_key("old");
+  rename.set_value("new");
+  edit.add_metadata_props()->set_key("local");
+  edit.add_initializer_calls()->set_op_type("Prepare");
+  edit.add_computed_initializer_positions(4);
+  auto &opset = *source.add_required_opset_imports();
+  opset.set_domain("custom");
+  opset.set_version(18);
+  source.add_metadata_props()->set_key("collection");
+  auto &function = *source.add_added_functions();
+  function.set_name("Prepare");
+  function.set_domain("custom");
+  std::string bytes;
+  ASSERT_TRUE(source.SerializeToString(bytes));
+  RewritingProto loaded;
+  ASSERT_TRUE(loaded.ParseFromString(bytes));
+  std::string difference;
+  EXPECT_TRUE(loaded.Equals(source, &difference)) << difference;
+  EXPECT_EQ(loaded.rewrites(0).matched_nodes(1), UINT64_MAX);
+  RewritingProto copied;
+  copied.CopyFrom(loaded);
+  EXPECT_TRUE(copied.Equals(source, &difference)) << difference;
+  std::string local_bytes;
+  ASSERT_TRUE(edit.SerializeToString(local_bytes));
+  LocalRewritingProto local;
+  ASSERT_TRUE(local.ParseFromString(local_bytes));
+  EXPECT_TRUE(local.Equals(edit));
+}
+
 TEST(onnx_string, RefString_Constructors) {
   utils::RefString original("test", 4);
   utils::RefString copied(original);

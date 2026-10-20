@@ -142,7 +142,7 @@ template <typename Pattern> void OptimizeAndVerify(core::builder::GraphBuilder &
   std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
   patterns.push_back(std::make_unique<Pattern>());
   core::builder::GraphGraph optimizer(builder, std::move(patterns));
-  EXPECT_FALSE(optimizer.Optimize().empty());
+  EXPECT_FALSE(optimizer.Optimize().rewrites().empty());
   ExpectTopologicalGraph(builder);
 }
 

@@ -622,6 +622,11 @@ public:
   /// nodes and outputs into a :cpp:class:`GraphProto`.
   GraphProto BuildGraph() const;
 
+  /// Applies ordered captured rewrites and returns a new, validated builder.
+  /// Preserves the source builder and recorded node order, and merges added
+  /// functions and opset imports. Requires a root model builder.
+  GraphBuilder ApplyRewritings(const RewritingProto &rewrites) const;
+
   /// Read-only access to the owned :cpp:class:`ComputeContext`.
   const ComputeContext &Compute() const noexcept { return compute_; }
 
@@ -817,6 +822,11 @@ private:
 
   // Orders producers before consumers, including lexical subgraph captures.
   void SortNodesTopologically();
+  struct RewritingState;
+  static std::vector<std::size_t>
+  TopologicalNodeOrder(const utils::RepeatedProtoField<NodeProto> &nodes,
+                       const std::unordered_set<std::string> &available,
+                       const std::vector<std::vector<std::string>> &references);
 
   // Converts node attributes from proto form to builder form: GRAPH/GRAPHS
   // attributes become ``*_ref`` STRING/STRINGS attributes that reference nested

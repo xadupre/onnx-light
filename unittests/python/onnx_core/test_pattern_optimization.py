@@ -293,7 +293,7 @@ class TestPatternOptimization(ExtTestCase):
         graph = optim.GraphGraph(builder, [NegNegPattern()])
         rewrites = graph.optimize()
         optimized = builder.build_graph()
-        replayed = optim.replay(model, rewrites)
+        replayed = optim.apply_rewriting(model, rewrites)
 
         self.assertEqual(replayed.SerializeToString(), optimized.SerializeToString())
 
@@ -347,7 +347,7 @@ class TestPatternOptimization(ExtTestCase):
                 else:
                     values.add()
                 with self.assertRaises(ValueError):
-                    optim.replay_model(model, plan)
+                    optim.apply_rewriting_to_model(model, plan)
 
     def test_model_replay_installs_functions_and_imports(self):
         model = _double_neg_model()
@@ -368,13 +368,14 @@ class TestPatternOptimization(ExtTestCase):
         plan.rewrites[0].added_nodes[0].domain = "local.test"
         loaded = optim.RewritingProto()
         loaded.ParseFromString(plan.SerializeToString())
-        result = optim.replay_model(model, loaded)
+        result = optim.apply_rewriting_to_model(model, loaded)
         self.assertEqual(model.SerializeToString(), original)
         self.assertEqual(result.functions[0].name, "Negate")
         self.assertEqual(result.graph.node[0].op_type, "Negate")
         self.assertIn(("local.test", 1), [(i.domain, i.version) for i in result.opset_import])
-        with self.assertRaisesRegex(ValueError, "ReplayModel"):
-            optim.replay(model, loaded)
+        rewritten = optim.GraphBuilder(model).apply_rewritings(loaded)
+        self.assertEqual(rewritten.build_graph().node[0].op_type, "Negate")
+        self.assertEqual(rewritten.to_model().functions[0].name, "Negate")
 
     def test_optimizer_retains_python_pattern(self):
         model = _double_neg_model()
@@ -425,7 +426,8 @@ class TestPatternOptimization(ExtTestCase):
                 loaded = optim.RewritingProto()
                 loaded.ParseFromString(rewrites.SerializeToString())
                 self.assertEqual(
-                    optim.replay(model, loaded).SerializeToString(), optimized.SerializeToString()
+                    optim.apply_rewriting(model, loaded).SerializeToString(),
+                    optimized.SerializeToString(),
                 )
                 self.assertEqual(len(graph.optimize().rewrites), 0)
 
@@ -716,7 +718,7 @@ class TestPatternOptimization(ExtTestCase):
                 loaded = optim.RewritingProto()
                 loaded.ParseFromString(rewrites.SerializeToString())
                 self.assertEqual(
-                    optim.replay(model, loaded).SerializeToString(),
+                    optim.apply_rewriting(model, loaded).SerializeToString(),
                     builder.build_graph().SerializeToString(),
                 )
 
@@ -762,7 +764,7 @@ class TestPatternOptimization(ExtTestCase):
         loaded = optim.RewritingProto()
         loaded.ParseFromString(reordered.SerializeToString())
         self.assertEqual(
-            optim.replay(model, loaded).SerializeToString(),
+            optim.apply_rewriting(model, loaded).SerializeToString(),
             builder.build_graph().SerializeToString(),
         )
 

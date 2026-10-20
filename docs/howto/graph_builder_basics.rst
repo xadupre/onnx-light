@@ -280,7 +280,7 @@ one :class:`~onnx_light.onnx.LocalRewritingProto` replaces it with
     from onnx_light.onnx_core.graph_builder import GraphBuilder
     from onnx_light.onnx_core.optimization import (
         GraphGraph,
-        replay,
+        apply_rewriting,
         standard_patterns,
     )
     source = GraphBuilder("optimization")
@@ -307,7 +307,7 @@ one :class:`~onnx_light.onnx.LocalRewritingProto` replaces it with
     )
     print(repr(rewrites.rewrites[0]))
 
-    replayed_graph = replay(original, rewrites)
+    replayed_graph = apply_rewriting(original, rewrites)
     assert replayed_graph.SerializeToString() == optimized_graph.SerializeToString()
 
     optimized_model = builder.to_onnx()

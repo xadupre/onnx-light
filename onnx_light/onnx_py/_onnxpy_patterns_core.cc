@@ -277,25 +277,25 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
   builder_mod.def("registered_pattern_names", &RegisteredPatternNames,
                   "Returns registered C++ pattern names in evaluation order.");
   builder_mod.def(
-      "replay",
+      "apply_rewriting",
       [](const ModelProto &model, const RewritingProto &rewrites, nb::object schema_lookup) {
-        if (schema_lookup.is_none()) {
-          return core::builder::Replay(model, rewrites);
-        }
-        return core::builder::Replay(
-            model, rewrites, nb::cast<core::builder::GraphBuilder::SchemaLookupFn>(schema_lookup));
+        core::builder::GraphBuilder builder(
+            model, schema_lookup.is_none()
+                       ? core::builder::GraphBuilder::SchemaLookupFn{}
+                       : nb::cast<core::builder::GraphBuilder::SchemaLookupFn>(schema_lookup));
+        return builder.ApplyRewritings(rewrites).BuildGraph();
       },
       nb::arg("model"), nb::arg("rewrites"), nb::arg("schema_lookup") = nb::none(),
-      "Replays captured rewrites on a fresh copy of a model graph.");
+      "Applies captured rewrites and returns a graph; use a model export to retain functions.");
   builder_mod.def(
-      "replay_model",
+      "apply_rewriting_to_model",
       [](const ModelProto &model, const RewritingProto &rewrites, nb::object schema_lookup) {
-        return core::builder::ReplayModel(
-            model, rewrites,
-            schema_lookup.is_none()
-                ? core::builder::GraphBuilder::SchemaLookupFn{}
-                : nb::cast<core::builder::GraphBuilder::SchemaLookupFn>(schema_lookup));
+        core::builder::GraphBuilder builder(
+            model, schema_lookup.is_none()
+                       ? core::builder::GraphBuilder::SchemaLookupFn{}
+                       : nb::cast<core::builder::GraphBuilder::SchemaLookupFn>(schema_lookup));
+        return builder.ApplyRewritings(rewrites).ToModel();
       },
       nb::arg("model"), nb::arg("rewrites"), nb::arg("schema_lookup") = nb::none(),
-      "Replays captured rewrites, initializer recipes, functions and imports on a model.");
+      "Applies captured rewrites and exports a model with its functions and imports.");
 }

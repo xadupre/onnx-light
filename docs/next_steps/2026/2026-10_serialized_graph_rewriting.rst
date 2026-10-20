@@ -7,8 +7,9 @@ Serialized graph rewrites and model variants
 
 **Steps 1 and 2 implemented: proto records and extended replay.** The optimizer
 captures initializer recipes and shared function definitions in
-``LocalRewritingProto`` / ``RewritingProto``. ``ReplayModel`` (Python:
-``replay_model``) prepares constants once and preserves model-level additions.
+``LocalRewritingProto`` / ``RewritingProto``. ``GraphBuilder::ApplyRewritings``
+(Python: ``builder.apply_rewritings``) returns a new builder, prepares constants
+once and preserves model-level additions.
 The model envelope and export operations below remain proposals.
 
 Existing building blocks
@@ -21,7 +22,7 @@ match. ``GraphGraph::Optimize`` returns a ``RewritingProto`` containing ordered
 matched node positions, added nodes and their positions, added/removed
 initializers, value renames and subgraph path.
 
-``Replay(model, rewrites)`` already reconstructs a ``GraphProto`` without
+``builder.ApplyRewritings(rewrites)`` reconstructs a ``GraphBuilder`` without
 running the matcher. Matched and removed positions refer to the graph
 immediately before each edit; added positions describe its result. Internal
 optimizer batches are normalized to this sequential coordinate system. Later
@@ -41,9 +42,9 @@ transposed payload.
 
 The messages are defined in ``onnx_proto/include/onnx_proto/onnx.h`` using
 the existing protobuf-free message layer. The schema below includes fields
-used by constant preparation. Graph-only ``Replay`` also evaluates recipes,
-but rejects surviving nodes requiring newly added functions/imports: callers
-must use ``ReplayModel`` to retain those model-level dependencies.
+used by constant preparation. The returned builder exposes ``BuildGraph()``
+for a graph-only result and ``ToModel()`` to export the graph together with its
+functions and opset imports.
 
 Decision: use protos as runtime records
 ++++++++++++++++++++++++++++++++++++++++
@@ -57,13 +58,13 @@ layer.
 Migrate ``Optimize`` results, replay arguments, cleanup recording, C++/Python
 bindings, diagnostics, tests and examples to the new messages. Keep matching
 and ``MatchResult`` separate: the live pattern pointer belongs to matching,
-not the recorded edit. Replay must stop requiring that pointer while retaining
+not the recorded edit. Applying rewrites must not require that pointer while retaining
 its structural validation. Keep timing in ``OptimizationReport`` rather than
 requiring it in replay records.
 
 .. code-block:: text
 
-   Optimize + capture recipes -> RewritingProto -> existing Replay, extended
+   Optimize + capture recipes -> RewritingProto -> GraphBuilder::ApplyRewritings
                                        |
                               file / ModelProto.rewritings
 
@@ -172,13 +173,13 @@ and replacement nodes. Keep ``added_initializers`` for literal constants;
 do not serialize a computed payload as well as its recipe. Rebasing to
 sequential records must preserve preparation dependencies and positions too.
 
-Before applying local edits, replay adds collection-level functions to
-``ModelProto.functions``: add absent definitions, reuse identical definitions,
+Before applying local edits, ``ApplyRewritings`` merges collection-level functions:
+add absent definitions, reuse identical definitions,
 and reject conflicting definitions with the same identity, including conflicts
-between local edits during capture. Add a model-level replay API for
-functions/imports while retaining the graph-only entry point where useful;
-both use the existing replay engine, migrated to proto records. Update
-dependent callers explicitly. Validate constant-only, deterministic preparation
+between local edits during capture. Return a new ``GraphBuilder`` containing
+the merged functions/imports, and use its existing ``BuildGraph`` / ``ToModel``
+exports rather than separate graph/model replay functions. Update dependent
+callers explicitly. Validate constant-only, deterministic preparation
 operations and available implementations; do not execute arbitrary stateful
 functions as initializer recipes.
 
@@ -279,7 +280,7 @@ Comparison with ORT runtime fusion
 proposes optional runtime fusion packages that match the graph after EP
 assignment and submit replacements using existing kernels. This proposal
 instead records concrete edits during export and bundles them with the
-canonical model for later replay, without rerunning the matcher. Updating
+canonical model for later apply_rewriting, without rerunning the matcher. Updating
 export-time matching decisions requires regenerating the affected plans;
 ORT's proposed packages can update matching and adapter logic independently
 of the canonical artifact. Runtime matching can account for actual EP

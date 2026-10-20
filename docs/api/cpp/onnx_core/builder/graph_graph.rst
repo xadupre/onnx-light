@@ -1,7 +1,8 @@
 graph_graph.h
 =============
 
-``ReplayModel`` applies the same ordered edits as ``Replay`` and retains model
+``GraphGraph::Optimize`` captures ordered edits. Applying them belongs to
+``GraphBuilder::ApplyRewritings``, which returns a new builder and retains model
 metadata, shared function definitions and new opset imports. Existing imports
 cannot be changed; identical function definitions are reused and conflicting
 definitions with the same domain/name/overload are rejected.
@@ -28,12 +29,9 @@ Ordinary added functions are not restricted to this preparation subset.
 ``GraphGraph::Optimize`` records folded computations as shared, canonicalized
 functions rather than duplicate tensor payloads. Retained initializers keep
 their existing ownership during edits and internal metadata analysis; public
-graph exports retain value semantics. ``Replay`` also executes recipes but
-rejects surviving nodes that require newly added imports/functions; use
-``ReplayModel`` (Python ``replay_model``) for those plans.
-This check binds function attributes at each call site, including graph-valued
-defaults, and includes reachable function bodies and their nested graphs without
-confusing function-local imports with model-level imports.
+graph exports retain value semantics. ``ApplyRewritings`` executes recipes once.
+Use the returned builder's ``ToModel()`` to export functions and imports;
+``BuildGraph()`` exports only its graph.
 Native constant folding skips operations shadowed by model-local functions,
 so it cannot disagree with function-first dispatch during replay.
 Serialized folding also excludes operations outside the preparation subset,
@@ -41,11 +39,12 @@ including inference-mode ``Dropout``, which remain ordinary added nodes.
 Optimization rejects a completed plan if a function introduced later would
 override a native operation already captured in an initializer recipe.
 
-Replay imports the source using its original function definitions, then stages
-serialized edits in a separate graph state. Neither the source builder nor its
-inferred state is mutated. The completed graph is imported and validated with
-the merged function definitions, allowing rewrites to replace primitive calls
-with calls to added functions that have different signatures.
+``ApplyRewritings`` stages serialized edits without mutating the source builder
+or its inferred state. The completed graph is imported and validated with the
+merged function definitions, allowing rewrites to replace primitive calls with
+calls to added functions that have different signatures. Validation follows
+dependency order; the returned builder preserves recorded node positions and
+has up-to-date shapes and memory metadata.
 
 Consecutive node-only edits in the same graph are coalesced when they replace
 original nodes at their first matched position. Live-rank queries translate

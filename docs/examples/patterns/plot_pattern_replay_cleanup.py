@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from onnx_light.onnx import TensorProto
 import onnx_light.onnx.helper as oh
-from onnx_light.onnx_core.optimization import GraphBuilder, GraphGraph, replay
+from onnx_light.onnx_core.optimization import GraphBuilder, GraphGraph, apply_rewriting
 from onnx_light.tools import pretty_onnx
 
 #####################################
@@ -63,13 +63,13 @@ print(pretty_onnx(builder.to_onnx()))
 # Inspect and replay the cleanup modifications
 # ++++++++++++++++++++++++++++++++++++++++++++
 #
-# Every cleanup operation is captured as a ``LocalRewritingProto`` record. Replay
+# Every cleanup operation is captured as a ``LocalRewritingProto`` record. ApplyRewriting
 # applies the records to a fresh copy of the source model.
 
 for rewrite in rewrites.rewrites:
     print(rewrite)
 
-replayed_graph = replay(model, rewrites)
+replayed_graph = apply_rewriting(model, rewrites)
 assert replayed_graph.SerializeToString() == optimized_graph.SerializeToString()
 print("Replayed graph:")
 print(pretty_onnx(replayed_graph))

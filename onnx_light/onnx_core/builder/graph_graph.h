@@ -184,17 +184,9 @@ public:
   void SetComputedConstant(const std::string &name, TensorProto value);
 
 private:
-  friend GraphProto Replay(const ModelProto &model, const RewritingProto &rewrites,
-                           GraphBuilder::SchemaLookupFn schema_lookup);
-  friend ModelProto ReplayModel(const ModelProto &model, const RewritingProto &rewrites,
-                                GraphBuilder::SchemaLookupFn schema_lookup);
-
   void Rebuild();
   void RebuildSuccessors();
   std::size_t Cleanup(utils::RepeatedProtoField<LocalRewritingProto> &rewrites, bool remove_unused);
-  struct ReplayState;
-  static GraphProto ReplayEdits(const GraphBuilder &builder, const RewritingProto &rewrites,
-                                const utils::RepeatedProtoField<FunctionProto> &functions);
 
   // Returns the concrete dims of the constant ``name`` (empty vector for a
   // scalar) into ``dims``, or ``false`` when the shape cannot be determined.
@@ -235,28 +227,5 @@ private:
   // Folded-constant cache keyed by value name.
   std::unordered_map<std::string, TensorProto> computed_constants_;
 };
-
-/**
- * Reconstructs an optimized graph by replaying captured rewrites.
- *
- * Rewrites must be ordered as returned by :cpp:func:`GraphGraph::Optimize`.
- * Pattern and cleanup records are both applied from that sequence; replay does
- * not rerun matching or cleanup algorithms. Initializer recipes run once.
- * Surviving nodes requiring added functions/imports must use ReplayModel.
- */
-GraphProto Replay(const ModelProto &model, const RewritingProto &rewrites,
-                  GraphBuilder::SchemaLookupFn schema_lookup = {});
-
-/**
- * Replays edits and one-time initializer recipes, retaining model metadata.
- *
- * Imports the source with its original function signatures and stages edits
- * without mutating that builder. Validates the completed graph with the merged
- * function definitions and opset imports.
- * Rejects conflicting definitions/imports and nonconstant or nondeterministic
- * preparation. The source model and the rewrite collection remain unchanged.
- */
-ModelProto ReplayModel(const ModelProto &model, const RewritingProto &rewrites,
-                       GraphBuilder::SchemaLookupFn schema_lookup = {});
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::builder

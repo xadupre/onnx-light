@@ -234,7 +234,9 @@ TEST(GraphGraph, NativeCleanupReplaysOrphanInitializers) {
     const GraphProto optimized = builder.ToGraph();
     EXPECT_EQ(optimized.node_size(), 0);
     EXPECT_EQ(optimized.initializer_size(), 0);
-    const GraphProto replayed = core::builder::Replay(original, rewrites, SchemaLookup());
+    const GraphProto replayed = core::builder::GraphBuilder(original, SchemaLookup())
+                                    .ApplyRewritings(rewrites)
+                                    .BuildGraph();
     EXPECT_EQ(replayed.SerializeAsString(), optimized.SerializeAsString());
   }
 }
@@ -564,8 +566,16 @@ TEST(GraphGraph, ReverseReplacementOrderReplaysAcrossIterationsBeforeExportSorti
 
     RewritingProto loaded;
     ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
-    const GraphProto replayed = core::builder::Replay(original, loaded, SchemaLookup());
+    core::builder::GraphBuilder source(original, SchemaLookup());
+    auto rewritten = source.ApplyRewritings(loaded);
+    const GraphProto replayed = rewritten.BuildGraph();
     EXPECT_EQ(replayed.SerializeAsString(), builder.BuildGraph().SerializeAsString());
+    EXPECT_EQ(source.BuildGraph().SerializeAsString(), original.graph().SerializeAsString());
+    EXPECT_EQ(rewritten.GetShape("p"), source.GetShape("p"));
+    EXPECT_EQ(rewritten.GetShape("Y"), source.GetShape("Y"));
+    EXPECT_TRUE(rewritten.Compute().NodeReuse(1).empty());
+    rewritten.MakeNode("Identity", {"Y"}, {"copy"});
+    EXPECT_EQ(rewritten.GetShape("copy"), source.GetShape("Y"));
     const GraphProto finalized = builder.ToGraph();
     EXPECT_EQ(finalized.node(0).op_type(), "Mul");
     EXPECT_EQ(finalized.node(1).op_type(), "Add");

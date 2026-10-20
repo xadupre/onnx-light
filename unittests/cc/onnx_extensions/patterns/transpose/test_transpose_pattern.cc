@@ -143,10 +143,17 @@ TEST(TransposeToInitializerPattern, FoldsFloatInitializer) {
     EXPECT_TRUE(edit.added_initializers().empty());
   RewritingProto loaded;
   ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
-  EXPECT_EQ(core::builder::Replay(original, loaded, SchemaLookup()).SerializeAsString(),
+  EXPECT_EQ(core::builder::GraphBuilder(original, SchemaLookup())
+                .ApplyRewritings(loaded)
+                .BuildGraph()
+                .SerializeAsString(),
             builder.BuildGraph().SerializeAsString());
-  EXPECT_EQ(core::builder::ReplayModel(original, plan, SchemaLookup()).graph().SerializeAsString(),
-            builder.BuildGraph().SerializeAsString());
+  EXPECT_EQ(core::builder::GraphBuilder(original, SchemaLookup())
+                .ApplyRewritings(plan)
+                .ToModel()
+                .graph()
+                .SerializeAsString(),
+            builder.ToGraph().SerializeAsString());
 
   EXPECT_TRUE(builder.Nodes().empty());
   ASSERT_EQ(builder.Initializers().size(), 1u);
@@ -196,8 +203,9 @@ TEST(TransposeToInitializerPattern, ReplaysNestedRecipesAcrossIterationsWithoutW
   EXPECT_EQ(calls, 2u);
   RewritingProto loaded;
   ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
-  const auto replayed = core::builder::ReplayModel(original, loaded, SchemaLookup());
-  EXPECT_EQ(replayed.graph().SerializeAsString(), builder.BuildGraph().SerializeAsString());
+  const auto replayed =
+      core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(loaded).ToModel();
+  EXPECT_EQ(replayed.graph().SerializeAsString(), builder.ToGraph().SerializeAsString());
   const auto &body = replayed.graph().node(0).attribute(0).g();
   ASSERT_EQ(body.initializer().size(), 1u);
   EXPECT_EQ(body.initializer(0).name(), "second");
@@ -242,9 +250,12 @@ TEST(TransposeToInitializerPattern, RecipeFunctionNamesDoNotConflictWithSourceGr
     EXPECT_EQ(plan.added_functions(0).name(), name);
     RewritingProto loaded;
     ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
-    EXPECT_EQ(
-        core::builder::ReplayModel(original, loaded, SchemaLookup()).graph().SerializeAsString(),
-        builder.BuildGraph().SerializeAsString());
+    EXPECT_EQ(core::builder::GraphBuilder(original, SchemaLookup())
+                  .ApplyRewritings(loaded)
+                  .ToModel()
+                  .graph()
+                  .SerializeAsString(),
+              builder.ToGraph().SerializeAsString());
   }
 }
 

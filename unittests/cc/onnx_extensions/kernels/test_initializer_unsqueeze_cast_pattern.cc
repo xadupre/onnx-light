@@ -179,9 +179,13 @@ TEST(GatherUpstreamPropagationPattern, SerializedReplayKeepsInferenceDropoutUnfo
   EXPECT_EQ(plan.added_functions(0).node(0).op_type(), "Gather");
   RewritingProto loaded;
   ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
-  const auto replayed = core::builder::ReplayModel(original, loaded, schema_lookup);
+  const auto replayed =
+      core::builder::GraphBuilder(original, schema_lookup).ApplyRewritings(loaded).ToModel();
   EXPECT_TRUE(replayed.graph().Equals(builder.BuildGraph()));
-  EXPECT_TRUE(core::builder::Replay(original, loaded, schema_lookup).Equals(replayed.graph()));
+  EXPECT_TRUE(core::builder::GraphBuilder(original, schema_lookup)
+                  .ApplyRewritings(loaded)
+                  .BuildGraph()
+                  .Equals(replayed.graph()));
   EXPECT_FLOAT_EQ(core::runtime::RunModel(original, {})[0].AsFloat()[0], 2.5f);
   EXPECT_FLOAT_EQ(core::runtime::RunModel(replayed, {})[0].AsFloat()[0], 2.5f);
 }

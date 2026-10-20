@@ -3502,8 +3502,6 @@ void GraphBuilder::SortNodesTopologically() {
   for (const auto &child : local_functions_) {
     child->SortNodesTopologically();
   }
-  const std::size_t count = nodes_.size();
-  std::unordered_map<std::string, std::size_t> producers;
   std::unordered_set<std::string> available = inherited_names_;
   for (const auto &input : inputs_) {
     available.insert(input.name().value());
@@ -3520,9 +3518,46 @@ void GraphBuilder::SortNodesTopologically() {
   for (const auto &initializer : graph_template_.sparse_initializer()) {
     available.insert(initializer.values().name().value());
   }
+  std::vector<std::vector<std::string>> references(nodes_.size());
+  for (std::size_t i = 0; i < nodes_.size(); ++i)
+    CollectNodeReferences(nodes_[i], references[i]);
+  const auto order = TopologicalNodeOrder(nodes_, available, references);
+  bool reordered = false;
+  for (std::size_t i = 0; i < nodes_.size(); ++i) {
+    if (order[i] != i) {
+      reordered = true;
+      break;
+    }
+  }
+  utils::RepeatedProtoField<NodeProto> sorted;
+  sorted.reserve(nodes_.size());
+  for (std::size_t i : order) {
+    sorted.push_back(std::move(nodes_[i]));
+  }
+  nodes_ = std::move(sorted);
+  for (const NodeProto &node : nodes_) {
+    for (GraphBuilder *child : ReferencedSubgraphs(node)) {
+      child->inherited_names_ = available;
+      child->SortNodesTopologically();
+    }
+    for (std::size_t i = 0; i < node.output().size(); ++i) {
+      available.insert(node.output(i));
+    }
+  }
+  if (reordered) {
+    RebuildMetadata();
+  }
+}
+
+std::vector<std::size_t>
+GraphBuilder::TopologicalNodeOrder(const utils::RepeatedProtoField<NodeProto> &nodes,
+                                   const std::unordered_set<std::string> &available,
+                                   const std::vector<std::vector<std::string>> &references) {
+  const std::size_t count = nodes.size();
+  std::unordered_map<std::string, std::size_t> producers;
   for (std::size_t i = 0; i < count; ++i) {
-    for (std::size_t j = 0; j < nodes_[i].output().size(); ++j) {
-      const std::string output = nodes_[i].output(j);
+    for (std::size_t j = 0; j < nodes[i].output().size(); ++j) {
+      const std::string output = nodes[i].output(j);
       if (!output.empty() &&
           (available.count(output) != 0 || !producers.emplace(output, i).second)) {
         throw BuilderError("GraphBuilder: multiple definitions of '" + output + "'.");
@@ -3533,15 +3568,13 @@ void GraphBuilder::SortNodesTopologically() {
   std::vector<std::size_t> pending(count, 0);
   std::priority_queue<std::size_t, std::vector<std::size_t>, std::greater<std::size_t>> ready;
   for (std::size_t i = 0; i < count; ++i) {
-    std::vector<std::string> references;
-    CollectNodeReferences(nodes_[i], references);
     std::unordered_set<std::size_t> dependencies;
-    for (const std::string &reference : references) {
+    for (const std::string &reference : references[i]) {
       const auto producer = producers.find(reference);
       if (producer != producers.end()) {
         dependencies.insert(producer->second);
       } else if (available.count(reference) == 0) {
-        throw BuilderError("GraphBuilder: node '" + nodes_[i].op_type().value() +
+        throw BuilderError("GraphBuilder: node '" + nodes[i].op_type().value() +
                            "' reads the unknown value '" + reference + "'.");
       }
     }
@@ -3568,31 +3601,7 @@ void GraphBuilder::SortNodesTopologically() {
   if (order.size() != count) {
     throw BuilderError("GraphBuilder: cyclic node dependencies prevent topological ordering.");
   }
-  bool reordered = false;
-  for (std::size_t i = 0; i < count; ++i) {
-    if (order[i] != i) {
-      reordered = true;
-      break;
-    }
-  }
-  utils::RepeatedProtoField<NodeProto> sorted;
-  sorted.reserve(count);
-  for (std::size_t i : order) {
-    sorted.push_back(std::move(nodes_[i]));
-  }
-  nodes_ = std::move(sorted);
-  for (const NodeProto &node : nodes_) {
-    for (GraphBuilder *child : ReferencedSubgraphs(node)) {
-      child->inherited_names_ = available;
-      child->SortNodesTopologically();
-    }
-    for (std::size_t i = 0; i < node.output().size(); ++i) {
-      available.insert(node.output(i));
-    }
-  }
-  if (reordered) {
-    RebuildMetadata();
-  }
+  return order;
 }
 
 template <typename Proto> void GraphBuilder::Finalize(Proto &graph) {

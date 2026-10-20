@@ -181,7 +181,7 @@ class TestCanonicalizationPatterns(ExtTestCase):
         all_rewrites, report = graph.optimize(report=True)
         self.assertEqual(report.rewrites, len(all_rewrites.rewrites))
         self.assertEqual(
-            optimization.replay(model, all_rewrites).SerializeToString(),
+            optimization.apply_rewriting(model, all_rewrites).SerializeToString(),
             builder.build_graph().SerializeToString(),
         )
         rewrites = [

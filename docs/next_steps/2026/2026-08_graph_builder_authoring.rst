@@ -107,7 +107,7 @@ LocalRewriting display
    :ref:`l-next-steps-serialized-graph-rewriting` for the serialized record API.
 
 Improve ``LocalRewriting`` presentation without changing the data consumed by
-``replay()``:
+``apply_rewriting()``:
 
 * add a deterministic one-line summary containing the pattern, graph path, and
   matched/added node counts;

@@ -447,6 +447,62 @@ TEST(PatternOptimization, ReplayPreservesLocalFunctionsShadowingNativeOperators)
   }
 }
 
+TEST(PatternOptimization, ReplayReadsPreviouslyProducedInputsFromUpdatedState) {
+  const auto constant = [](const std::vector<int64_t> &values) {
+    NodeProto node = MakeNode("Constant", {}, {"a"});
+    auto *attribute = node.add_attribute();
+    attribute->set_name("value_ints");
+    attribute->set_type(AttributeProto::INTS);
+    for (int64_t value : values)
+      attribute->add_ints(value);
+    return node;
+  };
+  for (bool extra_edit : {false, true}) {
+    SCOPED_TRACE(extra_edit);
+    core::builder::GraphBuilder builder("dependent_replay", SchemaLookup());
+    builder.SetOpsetVersion("", 18);
+    core::symbolic::SymShape shape;
+    shape.PushBack(core::symbolic::SymDim(2));
+    shape.PushBack(core::symbolic::SymDim(3));
+    builder.MakeInput("x", core::symbolic::TensorType::kFloat, shape);
+    const NodeProto original_constant = constant({-1, -1});
+    builder.MakeNode("Constant", {}, {"a"}, "", "", original_constant.attribute());
+    if (extra_edit) {
+      builder.MakeNode("Abs", {"x"}, {"independent"});
+      builder.MakeOutput("independent");
+    }
+    builder.MakeNode("Abs", {"x"}, {"b"});
+    builder.MakeOutput("b");
+    ModelProto original;
+    *original.mutable_graph() = builder.BuildGraph();
+    AddOpsetImports(original, builder);
+
+    RewritingProto plan;
+    auto *first = plan.add_rewrites();
+    first->add_matched_nodes(0);
+    first->add_added_nodes(constant({2, 3}));
+    first->add_added_nodes_positions(0);
+    if (extra_edit) {
+      auto *independent = plan.add_rewrites();
+      independent->add_matched_nodes(1);
+      independent->add_added_nodes(MakeNode("Neg", {"x"}, {"independent"}));
+      independent->add_added_nodes_positions(1);
+    }
+    auto *dependent = plan.add_rewrites();
+    dependent->add_matched_nodes(extra_edit ? 2 : 1);
+    dependent->add_added_nodes(MakeNode("Reshape", {"x", "a"}, {"b"}));
+    dependent->add_added_nodes_positions(extra_edit ? 2 : 1);
+
+    ModelProto sequential = original;
+    for (const auto &edit : plan.rewrites()) {
+      RewritingProto single;
+      *single.add_rewrites() = edit;
+      *sequential.mutable_graph() = core::builder::Replay(sequential, single, SchemaLookup());
+    }
+    EXPECT_TRUE(core::builder::Replay(original, plan, SchemaLookup()).Equals(sequential.graph()));
+  }
+}
+
 TEST(PatternOptimization, ReplayRejectsMalformedPositionsAndFutureExecution) {
   core::builder::GraphBuilder builder("invalid", SchemaLookup());
   builder.SetOpsetVersion("", 18);

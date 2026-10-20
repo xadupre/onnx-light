@@ -365,7 +365,8 @@ private:
         if (name.empty() || inferred.Has(name))
           continue;
         const NodeProto *producer = graph.NodeBefore(name);
-        if (removed_names.contains(name) || !source.Has(name) || source.HasEncodedValue(name) ||
+        if (produced_names_.contains(name) || removed_names.contains(name) || !source.Has(name) ||
+            source.HasEncodedValue(name) ||
             (source.HasType(name) && !source.GetType(name).has_tensor_type()) ||
             (producer != nullptr && graph.Position(*producer) >= first_original))
           return false;

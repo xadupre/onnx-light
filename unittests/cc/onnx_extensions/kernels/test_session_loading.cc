@@ -202,9 +202,11 @@ TEST_F(RuntimeSessionLoading, SerialOverlapExplicitAndLazyAgreeAndOwnSource) {
   LoadedRuntimeSession overlap_loaded(Path(), overlap_rt);
 
   ModelProto model;
-  utils::FileStream stream(Path());
-  ParseOptions parse;
-  ASSERT_TRUE(model.ParseFromStream(stream, parse));
+  {
+    utils::FileStream stream(Path());
+    ParseOptions parse;
+    ASSERT_TRUE(model.ParseFromStream(stream, parse));
+  }
   LoadExternalDataForModel(model, directory.string());
   RuntimeContext explicit_rt;
   RuntimeSession explicit_session(model);

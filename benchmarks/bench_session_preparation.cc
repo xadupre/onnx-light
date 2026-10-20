@@ -272,7 +272,8 @@ Measurement Measure(const Arguments &arguments, const std::string &path, bool ov
     throw std::runtime_error("Gemm chain produced an unexpected output type or shape");
   }
   measurement.output.assign(result.AsFloat(), result.AsFloat() + arguments.dimension);
-  context.Set("x", Tensor::FromFloat("x", {1, static_cast<int64_t>(arguments.dimension)}, input));
+  context.Put("x", Tensor::FromFloat("x", {1, static_cast<int64_t>(arguments.dimension)}, input),
+              RuntimeEventKind::kInput);
   const auto warm_start = Clock::now();
   session.Run(context);
   measurement.warm_inference_ms = Milliseconds(Clock::now() - warm_start);

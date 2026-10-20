@@ -91,7 +91,7 @@ requests:
        preservation, and shared-output restoration.
    * - `PR #4445 <https://github.com/xadupre/onnx-light/pull/4445>`_
      - Python bindings and custom patterns
-     - Exposes optimizer queries, rewrites, reports, apply_rewriting, and concrete Cast
+     - Exposes optimizer queries, rewrites, reports, apply_rewritings, and concrete Cast
        patterns; supports global, builder-local, and graph-local Python pattern
        registration with recursive lifetime and exception propagation.
    * - `PR #4455 <https://github.com/xadupre/onnx-light/pull/4455>`_
@@ -618,7 +618,7 @@ past interpreter shutdown. The bindings expose registered C++ pattern names
 and selection so callers can combine the standard library with custom
 patterns.
 
-Tests cover a Python-only rewrite, positive and rejected matches, exact apply_rewriting,
+Tests cover a Python-only rewrite, positive and rejected matches, exact apply_rewritings,
 recursive subgraphs, callback exception propagation, pattern lifetime after
 garbage collection, registered C++ pattern selection, and mixed C++/Python
 pattern ordering by priority.

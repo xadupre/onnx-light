@@ -18,7 +18,7 @@ from onnx_light.onnx_lib import RewritingProto, parser
 from onnx_light.onnx_core.optimization import (
     GraphBuilder,
     GraphGraph,
-    apply_rewriting,
+    apply_rewritings,
     standard_patterns,
 )
 from onnx_light.tools import pretty_onnx
@@ -63,14 +63,14 @@ for rewrite in rewrites.rewrites:
 # ApplyRewriting without matching patterns
 # ++++++++++++++++++++++++++++++++
 #
-# :func:`~onnx_light.onnx_core.optimization.apply_rewriting` applies the captured
+# :func:`~onnx_light.onnx_core.optimization.apply_rewritings` applies the captured
 # records to a fresh copy of the source model. The reconstructed graph is
 # byte-for-byte identical to the graph produced by the optimizer.
 
 serialized = rewrites.SerializeToString()
 loaded = RewritingProto()
 loaded.ParseFromString(serialized)
-replayed_graph = apply_rewriting(model, loaded)
+replayed_graph = apply_rewritings(model, loaded)
 
 assert replayed_graph.SerializeToString() == optimized_graph.SerializeToString()
 print("Replayed graph:")

@@ -280,7 +280,7 @@ Comparison with ORT runtime fusion
 proposes optional runtime fusion packages that match the graph after EP
 assignment and submit replacements using existing kernels. This proposal
 instead records concrete edits during export and bundles them with the
-canonical model for later apply_rewriting, without rerunning the matcher. Updating
+canonical model for later apply_rewritings, without rerunning the matcher. Updating
 export-time matching decisions requires regenerating the affected plans;
 ORT's proposed packages can update matching and adapter logic independently
 of the canonical artifact. Runtime matching can account for actual EP

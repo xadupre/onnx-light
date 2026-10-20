@@ -242,7 +242,7 @@ class TestGraphBuilder(ExtTestCase):
         graph = optimization.GraphGraph(builder, optimization.standard_patterns(["Cast"]))
         rewrites, report = graph.optimize(report=True)
         optimized_graph = builder.build_graph()
-        replayed_graph = optimization.apply_rewriting(original, rewrites)
+        replayed_graph = optimization.apply_rewritings(original, rewrites)
 
         self.assertEqual(len(rewrites.rewrites), 1)
         self.assertEqual(report.rewrites, 1)

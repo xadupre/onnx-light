@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from onnx_light.onnx import TensorProto
 import onnx_light.onnx.helper as oh
-from onnx_light.onnx_core.optimization import GraphBuilder, GraphGraph, apply_rewriting
+from onnx_light.onnx_core.optimization import GraphBuilder, GraphGraph, apply_rewritings
 from onnx_light.tools import pretty_onnx
 
 #####################################
@@ -69,7 +69,7 @@ print(pretty_onnx(builder.to_onnx()))
 for rewrite in rewrites.rewrites:
     print(rewrite)
 
-replayed_graph = apply_rewriting(model, rewrites)
+replayed_graph = apply_rewritings(model, rewrites)
 assert replayed_graph.SerializeToString() == optimized_graph.SerializeToString()
 print("Replayed graph:")
 print(pretty_onnx(replayed_graph))

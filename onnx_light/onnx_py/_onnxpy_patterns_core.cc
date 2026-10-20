@@ -277,7 +277,7 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
   builder_mod.def("registered_pattern_names", &RegisteredPatternNames,
                   "Returns registered C++ pattern names in evaluation order.");
   builder_mod.def(
-      "apply_rewriting",
+      "apply_rewritings",
       [](const ModelProto &model, const RewritingProto &rewrites, nb::object schema_lookup) {
         core::builder::GraphBuilder builder(
             model, schema_lookup.is_none()
@@ -288,7 +288,7 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
       nb::arg("model"), nb::arg("rewrites"), nb::arg("schema_lookup") = nb::none(),
       "Applies captured rewrites and returns a graph; use a model export to retain functions.");
   builder_mod.def(
-      "apply_rewriting_to_model",
+      "apply_rewritings_to_model",
       [](const ModelProto &model, const RewritingProto &rewrites, nb::object schema_lookup) {
         core::builder::GraphBuilder builder(
             model, schema_lookup.is_none()

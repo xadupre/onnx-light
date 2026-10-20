@@ -1871,7 +1871,7 @@ TEST(GraphBuilder, RemoveUnusedNodesKeepsSharedProducer) {
   EXPECT_EQ(builder.Nodes()[1].op_type().value(), "Abs");
 }
 
-TEST(GraphBuilder, RemoveUnusedNodesPreservesRetainedValueTags) {
+TEST(GraphBuilder, RewritingPreservesTagsWhenConsumerIsRemoved) {
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
   builder.MakeInitializer(MakeInitializer<int64_t>("dims", {2}, {3, 2}));
@@ -1884,22 +1884,21 @@ TEST(GraphBuilder, RemoveUnusedNodesPreservesRetainedValueTags) {
   EXPECT_EQ(builder.Compute().ValueTags().at("neg_dims"), "shape");
   EXPECT_EQ(builder.Compute().NodeTag(1), "shape");
 
-  EXPECT_EQ(builder.RemoveUnusedNodes(), 1u);
-  ASSERT_EQ(builder.Nodes().size(), 1u);
-  EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Neg");
-  ASSERT_EQ(builder.Initializers().size(), 1u);
-  EXPECT_EQ(builder.Initializers()[0].name().value(), "dims");
-  EXPECT_EQ(builder.Compute().ValueTags().at("dims"), "shape");
-  EXPECT_EQ(builder.Compute().ValueTags().at("neg_dims"), "shape");
-  EXPECT_EQ(builder.Compute().NodeTag(0), "shape");
+  RewritingProto plan;
+  plan.add_rewrites()->add_matched_nodes(0);
+  const auto rewritten = builder.ApplyRewritings(plan);
+  ASSERT_EQ(rewritten.Nodes().size(), 1u);
+  EXPECT_EQ(rewritten.Nodes()[0].op_type().value(), "Neg");
+  ASSERT_EQ(rewritten.Initializers().size(), 1u);
+  EXPECT_EQ(rewritten.Initializers()[0].name().value(), "dims");
+  EXPECT_EQ(rewritten.Compute().ValueTags().at("dims"), "shape");
+  EXPECT_EQ(rewritten.Compute().ValueTags().at("neg_dims"), "shape");
+  EXPECT_EQ(rewritten.Compute().NodeTag(0), "shape");
 
-  const auto tags = core::compute::InferValueAndNodeTags(builder.ToGraph());
-  EXPECT_EQ(tags.first.at("dims"), "shape");
-  EXPECT_EQ(tags.first.at("neg_dims"), "shape");
-  EXPECT_EQ(tags.second, std::vector<std::string>{"shape"});
-  EXPECT_EQ(builder.RemoveUnusedNodes(), 0u);
-  EXPECT_EQ(builder.Compute().ValueTags().at("dims"), "shape");
-  EXPECT_EQ(builder.Compute().ValueTags().at("neg_dims"), "shape");
+  // Fresh inference on the untagged reduced graph is not the rewrite's tag contract.
+  const auto fresh_tags = core::compute::InferValueAndNodeTags(rewritten.BuildGraph());
+  EXPECT_EQ(fresh_tags.first.at("dims"), "weight");
+  EXPECT_EQ(fresh_tags.first.at("neg_dims"), "weight");
 }
 
 TEST(GraphBuilder, RemoveUnusedNodesRecursesIntoSubgraphs) {

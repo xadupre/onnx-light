@@ -172,6 +172,26 @@ TEST(ValueStore, UsesStableSlotsAndAllocatorBackedRuntimeValues) {
   EXPECT_EQ(store.prepared_bytes(), 4 * sizeof(float));
 }
 
+TEST(ValueStore, ChecksReadinessByKeyWithoutCreatingSlots) {
+  ValueStore store;
+  const ValueStore &view = store;
+  EXPECT_FALSE(view.IsReady("missing"));
+  EXPECT_EQ(store.slot_count(), 0u);
+  EXPECT_THROW(view.IsReady(""), std::runtime_error);
+  const auto slot = store.Bind("prepared");
+  EXPECT_FALSE(view.IsReady("prepared"));
+  Tensor tensor = store.AllocateTensor(TensorProto::FLOAT, {1}, sizeof(float));
+  tensor.As<float>()[0] = 7.0f;
+  EXPECT_FALSE(view.IsReady("prepared"));
+  store.Publish(slot, RuntimeValue(std::move(tensor)));
+  EXPECT_TRUE(view.IsReady("prepared"));
+  EXPECT_FALSE(view.IsReady("missing"));
+  EXPECT_EQ(store.slot_count(), 1u);
+  EXPECT_EQ(store.prepared_bytes(), sizeof(float));
+  const ValueStore other;
+  EXPECT_FALSE(other.IsReady("prepared"));
+}
+
 TEST(ValueStore, RejectsSlotsFromAnotherStoreWithTheSameIndex) {
   ValueStore first;
   ValueStore second;

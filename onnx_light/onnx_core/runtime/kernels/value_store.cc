@@ -79,6 +79,12 @@ ValueStore::Slot ValueStore::Bind(std::string key) {
 
 bool ValueStore::IsReady(const Slot &slot) const { return ValueAt(slot).has_value(); }
 
+bool ValueStore::IsReady(const std::string &key) const {
+  EXT_ENFORCE(!key.empty(), "Value store keys must not be empty.");
+  const auto found = slots_by_key_.find(key);
+  return found != slots_by_key_.end() && IsReady(Slot(identity_, found->second));
+}
+
 Tensor ValueStore::AllocateTensor(int32_t data_type, const Shape &shape, size_t n_bytes) {
   auto allocator = std::make_unique<ValueStoreArena>(prepared_bytes_, accounting_allocator_visits_);
   Tensor tensor = MakeOutputTensor(data_type, shape, n_bytes, allocator.get());

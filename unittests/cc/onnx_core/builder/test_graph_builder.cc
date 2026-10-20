@@ -1871,6 +1871,37 @@ TEST(GraphBuilder, RemoveUnusedNodesKeepsSharedProducer) {
   EXPECT_EQ(builder.Nodes()[1].op_type().value(), "Abs");
 }
 
+TEST(GraphBuilder, RemoveUnusedNodesPreservesRetainedValueTags) {
+  core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+  builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  builder.MakeInitializer(MakeInitializer<int64_t>("dims", {2}, {3, 2}));
+  builder.MakeNode("Reshape", {"X", "dims"}, {"unused"});
+  builder.MakeNode("Neg", {"dims"}, {"neg_dims"});
+  builder.MakeOutput("dims");
+  builder.MakeOutput("neg_dims");
+
+  EXPECT_EQ(builder.Compute().ValueTags().at("dims"), "shape");
+  EXPECT_EQ(builder.Compute().ValueTags().at("neg_dims"), "shape");
+  EXPECT_EQ(builder.Compute().NodeTag(1), "shape");
+
+  EXPECT_EQ(builder.RemoveUnusedNodes(), 1u);
+  ASSERT_EQ(builder.Nodes().size(), 1u);
+  EXPECT_EQ(builder.Nodes()[0].op_type().value(), "Neg");
+  ASSERT_EQ(builder.Initializers().size(), 1u);
+  EXPECT_EQ(builder.Initializers()[0].name().value(), "dims");
+  EXPECT_EQ(builder.Compute().ValueTags().at("dims"), "shape");
+  EXPECT_EQ(builder.Compute().ValueTags().at("neg_dims"), "shape");
+  EXPECT_EQ(builder.Compute().NodeTag(0), "shape");
+
+  const auto tags = core::compute::InferValueAndNodeTags(builder.ToGraph());
+  EXPECT_EQ(tags.first.at("dims"), "shape");
+  EXPECT_EQ(tags.first.at("neg_dims"), "shape");
+  EXPECT_EQ(tags.second, std::vector<std::string>{"shape"});
+  EXPECT_EQ(builder.RemoveUnusedNodes(), 0u);
+  EXPECT_EQ(builder.Compute().ValueTags().at("dims"), "shape");
+  EXPECT_EQ(builder.Compute().ValueTags().at("neg_dims"), "shape");
+}
+
 TEST(GraphBuilder, RemoveUnusedNodesRecursesIntoSubgraphs) {
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));

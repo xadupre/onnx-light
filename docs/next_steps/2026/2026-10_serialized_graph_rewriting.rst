@@ -82,8 +82,8 @@ New and modified proto messages
 
 The wire schema is below. The first two messages use onnx-light's existing
 ``BEGIN_PROTO`` / ``FIELD_*`` layer, parser and serializer, without adding a
-protobuf compiler or ``libprotobuf``. ``RewritingEntryProto`` and the
-``ModelProto`` field remain deferred to step 3.
+protobuf compiler or ``libprotobuf``. The ``ModelProto.rewritings`` field
+remains deferred to step 3.
 
 .. code-block:: protobuf
 
@@ -110,16 +110,11 @@ protobuf compiler or ``libprotobuf``. ``RewritingEntryProto`` and the
      repeated FunctionProto added_functions = 4;
    }
 
-   message RewritingEntryProto {
-     string key = 1;
-     RewritingProto value = 2;
-   }
-
-**Modify only onnx-light's ``ModelProto``** to add a repeated
-``RewritingEntryProto rewritings`` field, exposed as a map keyed by variant
-name. Reserve and document its extension field number before implementation;
-no number is assigned by this proposal. The entry message is the wire
-representation of ``map<string, RewritingProto>``. Reject duplicate keys.
+**Modify only onnx-light's ``ModelProto``** to add
+``map<string, RewritingProto> rewritings``, keyed by variant name, without
+introducing another named proto message in this plan. Reserve and document
+its extension field number before implementation; no number is assigned by
+this proposal. Reject duplicate keys.
 
 ``NodeProto``, ``GraphProto``, ``TensorProto``, ``FunctionProto`` and
 ``OperatorSetIdProto`` need no new fields. Their existing forms carry the
@@ -233,8 +228,8 @@ Each PR depends on the preceding one.
        ordering and function conflicts. Retained initializer payloads are reused,
        not deep-copied for every edit, including node-only edits.
    * - 3. Model envelope
-     - Add ``RewritingEntryProto`` and the ``ModelProto.rewritings`` field,
-       model I/O and bindings; define explicit selection and compatibility.
+     - Add the ``ModelProto.rewritings`` map, model I/O and bindings;
+       define explicit selection and compatibility.
      - Two independent variants survive save/load; the canonical graph stays
        unchanged; mutations invalidate variants; duplicate keys and missing
        kernels are diagnosed.

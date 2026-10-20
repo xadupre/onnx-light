@@ -507,6 +507,18 @@ GraphBuilder::GraphBuilder(const ModelProto &model, SchemaLookupFn schema_lookup
     for (const auto &node : function.node()) {
       check_function_calls(check_function_calls, node);
     }
+    for (const auto &attribute : function.attribute_proto()) {
+      if (attribute.has_g()) {
+        for (const auto &node : attribute.g().node()) {
+          check_function_calls(check_function_calls, node);
+        }
+      }
+      for (const auto &graph : attribute.graphs()) {
+        for (const auto &node : graph.node()) {
+          check_function_calls(check_function_calls, node);
+        }
+      }
+    }
     const std::string function_name = function.name().value();
     const std::string function_domain = function.domain().value();
     // ONNX functions have an independent namespace and are identified by all

@@ -1107,6 +1107,15 @@ TEST(PatternOptimization, BindsFunctionGraphDefaultsAtEachCallSite) {
     override.ref_node().push_back(MakeNode("Identity", {"A"}, {"C"}));
     RewritingProto loaded;
     ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
+    if (!explicit_binding) {
+      EXPECT_THROW(core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(loaded),
+                   core::builder::BuilderError);
+    }
+    const auto functions = original.functions();
+    original.ref_functions().clear();
+    original.add_function(override);
+    for (const auto &function : functions)
+      original.add_function(function);
     const auto replayed =
         core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(loaded).ToModel();
     EXPECT_FLOAT_EQ(core::runtime::RunModel(replayed, {})[0].AsFloat()[0], 1);

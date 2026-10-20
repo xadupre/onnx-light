@@ -3254,6 +3254,45 @@ TEST(GraphBuilder, RejectsForwardLocalFunctionInsideNestedGraphAttributes) {
   }
 }
 
+TEST(GraphBuilder, RejectsForwardLocalFunctionInsideDefaultGraphAttributes) {
+  for (const bool repeated_graphs : {false, true}) {
+    SCOPED_TRACE(repeated_graphs);
+    ModelProto model;
+    model.mutable_graph()->set_name("g");
+    model.add_opset("", 18);
+    FunctionProto wrapper;
+    wrapper.set_name("Wrapper");
+    wrapper.set_domain("local");
+    wrapper.add_input("a");
+    wrapper.add_output("r");
+    wrapper.add_opset("", 18);
+    wrapper.add_node(MakeNode("Identity", {"a"}, {"r"}));
+    AttributeProto attribute;
+    attribute.set_name("body");
+    attribute.set_type(repeated_graphs ? AttributeProto::GRAPHS : AttributeProto::GRAPH);
+    GraphProto *graph = repeated_graphs ? attribute.add_graphs() : attribute.mutable_g();
+    graph->set_name("default_body");
+    NodeProto call = MakeNode("Neg", {"a"}, {"branch_result"});
+    call.set_overload("custom");
+    graph->add_node(call);
+    graph->add_output()->set_name("branch_result");
+    wrapper.add_attribute_proto(attribute);
+    model.add_function(wrapper);
+    FunctionProto callee = wrapper;
+    callee.set_name("Neg");
+    callee.set_domain("");
+    callee.set_overload("custom");
+    callee.ref_attribute_proto().clear();
+    model.add_function(callee);
+    EXPECT_THROW(core::builder::GraphBuilder imported(model, SchemaLookup()),
+                 core::builder::BuilderError);
+    model.ref_functions().clear();
+    model.add_function(callee);
+    model.add_function(wrapper);
+    EXPECT_NO_THROW(core::builder::GraphBuilder imported(model, SchemaLookup()));
+  }
+}
+
 TEST(GraphBuilder, NativeTypedFunctionInfersOnImportAndPreservesDeclarationsAfterMove) {
   core::builder::GraphBuilder seed("g", SchemaLookup());
   seed.SetOpsetVersion("", 18);

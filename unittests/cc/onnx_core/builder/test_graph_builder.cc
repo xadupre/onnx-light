@@ -802,6 +802,55 @@ TEST(GraphBuilder, SequenceAtUnknownRankStillValidatesDtypeAndKnownScalars) {
   EXPECT_TRUE(builder.Outputs().empty());
 }
 
+TEST(GraphBuilder, UnknownRankTensorConsumersKeepDtypeWithoutAnIntermediateDeclaration) {
+  for (const std::string consumer : {"Identity", "Abs"}) {
+    SCOPED_TRACE(consumer);
+    core::builder::GraphBuilder builder("unknown_rank_consumer", SchemaLookup(), {{"", 18}});
+    ValueInfoProto sequence;
+    sequence.set_name("s");
+    sequence.mutable_type()
+        ->mutable_sequence_type()
+        ->mutable_elem_type()
+        ->mutable_tensor_type()
+        ->set_elem_type(TensorProto::FLOAT);
+    builder.MakeInput(sequence);
+    builder.MakeInput("p", core::symbolic::TensorType::kInt64, MakeShape({}));
+    builder.MakeNode("SequenceAt", {"s", "p"}, {"z"});
+    builder.MakeNode(consumer, {"z"}, {"middle"});
+    builder.MakeNode("Identity", {"middle"}, {"result"});
+    const auto check = [&](const core::builder::GraphBuilder &actual) {
+      for (const char *name : {"z", "middle", "result"}) {
+        EXPECT_FALSE(actual.HasShape(name));
+        ASSERT_TRUE(actual.Compute().Shapes().HasType(name));
+        const auto &type = actual.Compute().Shapes().GetType(name);
+        ASSERT_TRUE(type.has_tensor_type());
+        EXPECT_EQ(type.tensor_type().elem_type(), TensorProto::FLOAT);
+        EXPECT_FALSE(type.tensor_type().has_shape());
+      }
+    };
+    const auto reject_conflict = [&] {
+      const auto count = builder.Outputs().size();
+      EXPECT_THROW(
+          builder.MakeOutput("result", core::symbolic::TensorType::kDouble, MakeShape({2, 3})),
+          core::builder::BuilderError);
+      EXPECT_EQ(builder.Outputs().size(), count);
+      check(builder);
+    };
+    check(builder);
+    reject_conflict();
+    builder.MakeOutput("result");
+    builder.SetOpsetVersion("", 17);
+    reject_conflict();
+    EXPECT_EQ(builder.RemoveUnusedNodes(), 0u);
+    reject_conflict();
+    ModelProto exported = builder.ToModel();
+    EXPECT_EQ(exported.graph().output(0).type().tensor_type().elem_type(), TensorProto::FLOAT);
+    EXPECT_FALSE(exported.graph().output(0).type().tensor_type().has_shape());
+    core::builder::GraphBuilder imported(exported, SchemaLookup());
+    check(imported);
+  }
+}
+
 TEST(GraphBuilder, TypedOutputRebuildDefersPersistentBindingValidationDuringImport) {
   ModelProto model;
   model.set_ir_version(10);

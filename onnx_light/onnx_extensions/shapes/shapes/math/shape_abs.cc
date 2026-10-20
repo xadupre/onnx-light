@@ -10,6 +10,10 @@ namespace ONNX_LIGHT_NAMESPACE::onnx_shapes::shapes::math {
 
 void ComputeShapeAbs(ShapesContext &ctx, const NodeProto &node, const char *x) {
   CheckNodeOpAndOutput(node, "Abs", "ComputeShapeAbs");
+  if (!ctx.Has(x) && ctx.HasType(x) && ctx.GetType(x).has_tensor_type()) {
+    ctx.CopyValueFrom(node.output(0), ctx, x);
+    return;
+  }
   const SymTensor &input = ctx.Get(x);
   // Abs is element-wise in every supported opset revision: the output
   // dtype and shape match the input.

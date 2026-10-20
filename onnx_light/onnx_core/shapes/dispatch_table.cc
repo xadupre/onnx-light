@@ -46,6 +46,11 @@ std::unordered_set<std::string> &StructuredShapeInputs() {
   return keys;
 }
 
+std::unordered_set<std::string> &TypeOnlyTensorShapeInputs() {
+  static std::unordered_set<std::string> keys;
+  return keys;
+}
+
 // Returns the mutable peak-memory dispatch table singleton. Only
 // :cpp:func:`RegisterComputePeakMemoryFn` writes to it;
 // :cpp:func:`PeakMemoryDispatchTable` exposes a read-only view for lookups.
@@ -61,17 +66,26 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
 }
 
 void RegisterComputeShapeFn(const std::string &domain, const std::string &op_type,
-                            ComputeShapeFn fn, bool accepts_structured_inputs) {
+                            ComputeShapeFn fn, bool accepts_structured_inputs,
+                            bool accepts_type_only_tensor_inputs) {
   const auto key = DispatchKey(domain, op_type);
   MutableDispatchTable()[key] = std::move(fn);
   if (accepts_structured_inputs)
     StructuredShapeInputs().insert(key);
   else
     StructuredShapeInputs().erase(key);
+  if (accepts_type_only_tensor_inputs)
+    TypeOnlyTensorShapeInputs().insert(key);
+  else
+    TypeOnlyTensorShapeInputs().erase(key);
 }
 
 bool AcceptsStructuredShapeInputs(const std::string &domain, const std::string &op_type) {
   return StructuredShapeInputs().count(DispatchKey(domain, op_type)) != 0;
+}
+
+bool AcceptsTypeOnlyTensorShapeInputs(const std::string &domain, const std::string &op_type) {
+  return TypeOnlyTensorShapeInputs().count(DispatchKey(domain, op_type)) != 0;
 }
 
 const std::unordered_map<std::string, ComputePeakMemoryFn> &PeakMemoryDispatchTable() {

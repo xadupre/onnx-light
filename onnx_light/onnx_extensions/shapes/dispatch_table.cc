@@ -1369,7 +1369,8 @@ void RegisterShapeFunctions() {
       ::onnx_light::core::shapes::RegisterComputeShapeFn(
           key.substr(0, sep), key.substr(sep + 1), entry.second,
           key == "ai.rt:Dequantize" || key == "ai.rt:PagedAttention" ||
-              key == "ai.rt:QuantizePagedCache");
+              key == "ai.rt:QuantizePagedCache",
+          key == "ai.onnx:Identity" || key == "ai.onnx:Abs");
     }
     return true;
   }();

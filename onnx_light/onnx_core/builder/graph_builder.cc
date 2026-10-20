@@ -72,6 +72,20 @@ bool HasUnboundAttributes(const NodeProto &node) {
   return false;
 }
 
+bool ShapeInputsAvailable(const ShapesContext &shapes, const NodeProto &node) {
+  for (const std::string &input : core::graph::CollectNodeInputs(node)) {
+    if (input.empty() || shapes.Has(input) || shapes.HasSequence(input)) {
+      continue;
+    }
+    if (!shapes.HasType(input) ||
+        (shapes.GetType(input).has_tensor_type() &&
+         !core::shapes::AcceptsTypeOnlyTensorShapeInputs(node.domain(), node.op_type()))) {
+      return false;
+    }
+  }
+  return true;
+}
+
 // Compares two packed payload fields byte-for-byte without copying.
 template <typename T>
 bool SamePackedData(const utils::RepeatedField<T> &lhs, const utils::RepeatedField<T> &rhs) {
@@ -827,16 +841,9 @@ bool GraphBuilder::RefreshDependentNodes(
       }
     }
 
-    bool ready = ShapeFunctionAvailable(materialized) && !HasUnboundAttributes(materialized);
-    for (const std::string &input : core::graph::CollectNodeInputs(materialized)) {
-      if (!input.empty() && !compute_.Shapes().Has(input) &&
-          !compute_.Shapes().HasSequence(input) &&
-          !(compute_.Shapes().HasType(input) &&
-            !compute_.Shapes().GetType(input).has_tensor_type())) {
-        ready = false;
-        break;
-      }
-    }
+    const bool ready = ShapeFunctionAvailable(materialized) &&
+                       !HasUnboundAttributes(materialized) &&
+                       ShapeInputsAvailable(compute_.Shapes(), materialized);
     if (ready) {
       compute_.Shapes().set_current_node_index(static_cast<int64_t>(index));
       compute_.Shapes().ComputeShapeNode(materialized);
@@ -999,14 +1006,8 @@ void GraphBuilder::RebuildStructuredState(bool refresh_ancestors) {
   for (std::size_t i = 0; i < nodes_.size(); ++i) {
     NodeProto node = nodes_[i];
     MaterializeGraphReferences(node);
-    bool ready = ShapeFunctionAvailable(node) && !HasUnboundAttributes(node);
-    for (const auto &input : core::graph::CollectNodeInputs(node)) {
-      if (!input.empty() && !shapes.Has(input) && !shapes.HasSequence(input) &&
-          !(shapes.HasType(input) && !shapes.GetType(input).has_tensor_type())) {
-        ready = false;
-        break;
-      }
-    }
+    const bool ready = ShapeFunctionAvailable(node) && !HasUnboundAttributes(node) &&
+                       ShapeInputsAvailable(shapes, node);
     if (ready) {
       shapes.set_current_node_index(static_cast<int64_t>(i));
       shapes.ComputeShapeNode(node);
@@ -1894,16 +1895,8 @@ GraphBuilder::MakeNode(const std::string &op_type, const std::vector<std::string
   // registered for its operator; unregistered operators simply leave their
   // outputs without an inferred descriptor.
   if (ShapeFunctionAvailable(node)) {
-    bool known_inputs = true;
-    for (const std::string &input : core::graph::CollectNodeInputs(materialized)) {
-      if (!input.empty() && !compute_.Shapes().Has(input) &&
-          !compute_.Shapes().HasSequence(input) &&
-          !(Shapes().HasType(input) && !Shapes().GetType(input).has_tensor_type())) {
-        known_inputs = false;
-        break;
-      }
-    }
-    if (known_inputs && !HasUnboundAttributes(materialized)) {
+    if (ShapeInputsAvailable(compute_.Shapes(), materialized) &&
+        !HasUnboundAttributes(materialized)) {
       compute_.Shapes().set_current_node_index(static_cast<int64_t>(nodes_.size()));
       compute_.Shapes().ComputeShapeNode(materialized);
     }

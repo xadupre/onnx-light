@@ -37,7 +37,8 @@ struct RuntimeLoadEvent {
 /** Configures synchronous owning model loading. */
 struct RuntimeLoadOptions {
   bool overlap_preparation = true;
-  /// Bounds source payload, conversion reserve, bound function copies, and preparation work.
+  /// Bounds source payload, conversion reserve, bound function copies, shared quantization
+  /// catalogues (including construction workspaces), and preparation work.
   /// Excludes proto metadata, parser allocations, executor pools and inference.
   size_t memory_limit = std::numeric_limits<size_t>::max();
   /// Receives events on the caller or I/O thread; must be thread safe.
@@ -54,6 +55,8 @@ struct RuntimeLoadStatistics {
   size_t source_bytes = 0;
   size_t conversion_reserve_bytes = 0;
   size_t function_binding_bytes = 0;
+  size_t quantization_catalogue_bytes = 0;
+  size_t quantization_temporary_bytes = 0;
   size_t peak_admitted_bytes = 0;
   size_t external_tensors = 0;
   size_t peak_queued_tensors = 0;

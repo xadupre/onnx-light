@@ -15,6 +15,7 @@
 #include <condition_variable>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
@@ -332,6 +333,135 @@ TEST_F(RuntimeSessionLoading, OverlapsInlinePreparationWithExternalRead) {
   LoadedRuntimeSession loaded(Path(), rt, {}, options);
   EXPECT_TRUE(prepared);
   EXPECT_EQ(Run(loaded.session(), rt), (std::vector<float>{22, 28, 22, 28}));
+}
+
+TEST_F(RuntimeSessionLoading, AdmitsExpandedSharedQuantizationBeforeReads) {
+  const auto original = ReadModel().SerializeAsString();
+  for (auto format : {QuantizationFormat::kInt4, QuantizationFormat::kNf4,
+                      QuantizationFormat::kOrtMatmulnbitsInt4}) {
+    for (int64_t blocks :
+         {int64_t{4096}, static_cast<int64_t>(std::numeric_limits<size_t>::max() / 4096)}) {
+      SCOPED_TRACE(QuantizationFormatName(format));
+      SCOPED_TRACE(blocks);
+      ModelProto model;
+      ASSERT_TRUE(model.ParseFromString(original));
+      const bool ort = format == QuantizationFormat::kOrtMatmulnbitsInt4;
+      StructTypeProto storage;
+      if (ort) {
+        const auto encoded =
+            QuantizeTensor(Tensor::FromFloat("", {16, 1}, std::vector<float>(16, 0)),
+                           MakeMatMulNBitsPlan(format, 16, 1, 16));
+        storage = encoded.Encoded().struct_type();
+        for (int field : {1, 2})
+          storage.mutable_structure()
+              ->mutable_field(field)
+              ->mutable_type()
+              ->mutable_tensor_type()
+              ->mutable_shape()
+              ->mutable_dim(1)
+              ->set_dim_value(blocks);
+      } else {
+        storage = MakeQuantizationType(MakeQuantizationPlan(format, 1, 1));
+        auto *fields = storage.mutable_structure()
+                           ->mutable_field(6)
+                           ->mutable_type()
+                           ->mutable_struct_type()
+                           ->mutable_structure();
+        fields->mutable_field(0)->mutable_constant()->ref_int64_data()[0] = blocks;
+        fields->mutable_field(1)
+            ->mutable_type()
+            ->mutable_struct_type()
+            ->mutable_array()
+            ->set_dimension(blocks);
+      }
+      TypeProto logical;
+      auto *tensor_type = logical.mutable_tensor_type();
+      tensor_type->set_elem_type(TensorProto::FLOAT);
+      tensor_type->mutable_shape()->add_dim()->set_dim_value(ort ? 16 * blocks : blocks);
+      if (ort)
+        tensor_type->mutable_shape()->add_dim()->set_dim_value(1);
+      auto *annotation = model.ref_graph().add_quantization_annotation();
+      annotation->set_tensor_name("onnx_light.quantization.parameters:shared");
+      const auto add = [&](const std::string &role, const std::string &bytes) {
+        auto *tensor = model.ref_graph().add_initializer();
+        tensor->set_name(role);
+        tensor->set_data_type(TensorProto::UINT8);
+        tensor->add_dims(bytes.size());
+        tensor->set_raw_data(bytes);
+        auto *mapping = annotation->add_quant_parameter_tensor_names();
+        mapping->set_key(role);
+        mapping->set_value(role);
+      };
+      add("storage_type", storage.SerializeAsString());
+      add("logical_type", logical.SerializeAsString());
+      auto *scales = model.ref_graph().add_initializer();
+      scales->set_name("scales");
+      scales->set_data_type(TensorProto::DOUBLE);
+      scales->set_data_location(TensorProto::EXTERNAL);
+      auto *location = scales->add_external_data();
+      location->set_key("location");
+      location->set_value("scales.bin");
+      auto *length = scales->add_external_data();
+      length->set_key("length");
+      length->set_value("8");
+      auto *mapping = annotation->add_quant_parameter_tensor_names();
+      mapping->set_key("scales");
+      mapping->set_value("scales");
+      {
+        const double scale = 2;
+        std::ofstream payload(directory / "scales.bin", std::ios::binary);
+        payload.write(reinterpret_cast<const char *>(&scale), sizeof(scale));
+      }
+      SaveModel(model);
+      for (bool overlap : {false, true}) {
+        RuntimeLoadOptions options;
+        options.overlap_preparation = overlap;
+        options.memory_limit = 64 * 1024;
+        size_t reads = 0;
+        options.external_reader = [&](TensorProto &tensor, const std::string &base) {
+          ++reads;
+          tensor.LoadExternalData(base);
+        };
+        RuntimeContext rejected;
+        EXPECT_THROW(LoadedRuntimeSession(Path(), rejected, {}, options), std::length_error);
+        EXPECT_EQ(reads, 0u);
+        if (blocks != 4096)
+          continue;
+        options.memory_limit = 16 * 1024 * 1024;
+        RuntimeContext rt;
+        LoadedRuntimeSession loaded(Path(), rt, {}, options);
+        const auto &statistics = loaded.statistics();
+        EXPECT_EQ(Run(loaded.session(), rt), (std::vector<float>{22, 28, 22, 28}));
+        ASSERT_NE(rt.quantization_parameters(), nullptr);
+        const auto &entry = rt.quantization_parameters()->Get("shared");
+        EXPECT_EQ(entry.plan.runs[0].blocks.size(), 4096u);
+        EXPECT_GE(statistics.quantization_catalogue_bytes,
+                  entry.common.size() + 4096 * sizeof(QuantizationBlockParameters));
+        EXPECT_GT(statistics.quantization_temporary_bytes, 0u);
+        const size_t reservation = statistics.source_bytes + statistics.conversion_reserve_bytes +
+                                   statistics.function_binding_bytes +
+                                   statistics.quantization_catalogue_bytes +
+                                   statistics.quantization_temporary_bytes;
+        EXPECT_GE(statistics.peak_admitted_bytes, reservation + loaded.session().prepared_bytes());
+        reads = 0;
+        options.memory_limit = reservation - 1;
+        RuntimeContext below_reservation;
+        EXPECT_THROW(LoadedRuntimeSession(Path(), below_reservation, {}, options),
+                     std::length_error);
+        EXPECT_EQ(reads, 0u);
+        options.memory_limit = reservation;
+        RuntimeContext no_preparation_budget;
+        EXPECT_THROW(LoadedRuntimeSession(Path(), no_preparation_budget, {}, options),
+                     std::length_error);
+        EXPECT_GT(reads, 0u);
+        options.memory_limit = statistics.peak_admitted_bytes;
+        RuntimeContext exact;
+        LoadedRuntimeSession bounded(Path(), exact, {}, options);
+        EXPECT_LE(bounded.statistics().peak_admitted_bytes, options.memory_limit);
+        EXPECT_EQ(Run(bounded.session(), exact), (std::vector<float>{22, 28, 22, 28}));
+      }
+    }
+  }
 }
 
 TEST_F(RuntimeSessionLoading, AdmissionRejectsBeforeExternalRead) {

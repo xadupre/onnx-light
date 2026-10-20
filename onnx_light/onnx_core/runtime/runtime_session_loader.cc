@@ -4,6 +4,7 @@
 
 #include "onnx_core/runtime/runtime_session_loader.h"
 #include "onnx_core/runtime/kernels/value_store.h"
+#include "onnx_core/runtime/quantization.h"
 #include "onnx_proto/onnx_helper.h"
 
 #include <algorithm>
@@ -383,11 +384,19 @@ LoadedRuntimeSession::LoadedRuntimeSession(const std::string &path, RuntimeConte
   statistics_.conversion_reserve_bytes =
       std::max(statistics_.source_bytes, binding.temporary_bytes);
   statistics_.function_binding_bytes = binding.retained_bytes;
-  const size_t source_reservation =
+  size_t source_reservation =
       Add(Add(statistics_.source_bytes, statistics_.conversion_reserve_bytes),
           statistics_.function_binding_bytes);
   if (source_reservation > load_options.memory_limit)
     throw std::length_error("Runtime loader source payload exceeds memory admission limit.");
+  const auto catalogue = QuantizationParameterCatalogue::EstimateMemory(model_);
+  statistics_.quantization_catalogue_bytes = catalogue.retained_bytes;
+  statistics_.quantization_temporary_bytes = catalogue.temporary_bytes;
+  source_reservation =
+      Add(source_reservation, Add(catalogue.retained_bytes, catalogue.temporary_bytes));
+  if (source_reservation > load_options.memory_limit)
+    throw std::length_error(
+        "Runtime loader quantization catalogue exceeds memory admission limit.");
   statistics_.external_tensors = external.size();
   statistics_.peak_admitted_bytes =
       Add(source_reservation,

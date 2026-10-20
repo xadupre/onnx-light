@@ -132,10 +132,11 @@ class TestPatternsAlgebra(ExtTestCase):
             [rewrite.pattern_name for rewrite in rewrites],
         )
         self.assertEqual(len(rewrites), report.rewrites)
-        self.assertEqual([0, 1, 2], list(rewrites[1].removed_initializers))
+        self.assertEqual([0, 1], list(rewrites[1].removed_initializers))
+        self.assertEqual(0, len(rewrites[1].added_initializers))
         self.assertEqual(
             [initializer.name for initializer in optimized.graph.initializer],
-            [initializer.name for initializer in rewrites[1].added_initializers],
+            [initializer.name for initializer in rewrites[0].added_initializers],
         )
         self.assertEqual("MulMulMulScalar", pattern_report.pattern_name)
         self.assertEqual(1, pattern_report.matches)

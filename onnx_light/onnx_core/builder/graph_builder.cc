@@ -487,6 +487,7 @@ GraphBuilder::GraphBuilder(const ModelProto &model, SchemaLookupFn schema_lookup
     auto child = std::make_unique<GraphBuilder>(function_name, schema_lookup_, opsets_);
     child->is_local_function_ = true;
     child->function_domain_ = function_domain;
+    child->compute_.Shapes().SetStructTypes(Shapes().StructTypes());
     child->parent_ = this;
     GraphBuilder &local = *child;
     local_functions_.push_back(std::move(child));

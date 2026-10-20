@@ -2240,6 +2240,8 @@ void AddOnnxPyBuilder(nb::module_ &m) {
           "build_graph", [](const GraphBuilder &self) { return self.BuildGraph(); },
           "Assembles the accumulated inputs, initializers, nodes and outputs into a "
           "GraphProto without running the finalisation analyses.")
+      .def("apply_rewritings", &GraphBuilder::ApplyRewritings, nb::arg("rewrites"),
+           "Applies captured rewrites and returns a new validated GraphBuilder.")
       .def(
           "make_local_function",
           [](GraphBuilder &self, const std::string &name, const std::string &domain)

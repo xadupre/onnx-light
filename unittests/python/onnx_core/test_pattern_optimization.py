@@ -293,7 +293,7 @@ class TestPatternOptimization(ExtTestCase):
         graph = optim.GraphGraph(builder, [NegNegPattern()])
         rewrites = graph.optimize()
         optimized = builder.build_graph()
-        replayed = optim.replay(model, rewrites)
+        replayed = optim.apply_rewritings(model, rewrites)
 
         self.assertEqual(replayed.SerializeToString(), optimized.SerializeToString())
 
@@ -325,7 +325,7 @@ class TestPatternOptimization(ExtTestCase):
         self.assertEqual(local.value_renames[0].key, "old")
         self.assertEqual(local.value_renames[0].value, "new")
 
-    def test_graph_replay_rejects_future_preparation_fields(self):
+    def test_replay_rejects_malformed_preparation_fields(self):
         model = _double_neg_model()
         for field in (
             "required_opset_imports",
@@ -346,8 +346,36 @@ class TestPatternOptimization(ExtTestCase):
                     values.append(0)
                 else:
                     values.add()
-                with self.assertRaisesRegex(ValueError, "not supported"):
-                    optim.replay(model, plan)
+                with self.assertRaises(ValueError):
+                    optim.apply_rewritings_to_model(model, plan)
+
+    def test_model_replay_installs_functions_and_imports(self):
+        model = _double_neg_model()
+        original = model.SerializeToString()
+        builder = optim.GraphBuilder(model)
+        plan = optim.GraphGraph(builder, [NegNegPattern()]).optimize()
+        function = oh.make_function(
+            "local.test",
+            "Negate",
+            ["arg"],
+            ["result"],
+            [oh.make_node("Neg", ["arg"], ["result"])],
+            [oh.make_opsetid("", 18)],
+        )
+        plan.added_functions.append(function)
+        plan.required_opset_imports.append(oh.make_opsetid("local.test", 1))
+        plan.rewrites[0].added_nodes[0].op_type = "Negate"
+        plan.rewrites[0].added_nodes[0].domain = "local.test"
+        loaded = optim.RewritingProto()
+        loaded.ParseFromString(plan.SerializeToString())
+        result = optim.apply_rewritings_to_model(model, loaded)
+        self.assertEqual(model.SerializeToString(), original)
+        self.assertEqual(result.functions[0].name, "Negate")
+        self.assertEqual(result.graph.node[0].op_type, "Negate")
+        self.assertIn(("local.test", 1), [(i.domain, i.version) for i in result.opset_import])
+        rewritten = optim.GraphBuilder(model).apply_rewritings(loaded)
+        self.assertEqual(rewritten.build_graph().node[0].op_type, "Negate")
+        self.assertEqual(rewritten.to_model().functions[0].name, "Negate")
 
     def test_optimizer_retains_python_pattern(self):
         model = _double_neg_model()
@@ -398,7 +426,8 @@ class TestPatternOptimization(ExtTestCase):
                 loaded = optim.RewritingProto()
                 loaded.ParseFromString(rewrites.SerializeToString())
                 self.assertEqual(
-                    optim.replay(model, loaded).SerializeToString(), optimized.SerializeToString()
+                    optim.apply_rewritings(model, loaded).SerializeToString(),
+                    optimized.SerializeToString(),
                 )
                 self.assertEqual(len(graph.optimize().rewrites), 0)
 
@@ -689,7 +718,7 @@ class TestPatternOptimization(ExtTestCase):
                 loaded = optim.RewritingProto()
                 loaded.ParseFromString(rewrites.SerializeToString())
                 self.assertEqual(
-                    optim.replay(model, loaded).SerializeToString(),
+                    optim.apply_rewritings(model, loaded).SerializeToString(),
                     builder.build_graph().SerializeToString(),
                 )
 
@@ -735,7 +764,7 @@ class TestPatternOptimization(ExtTestCase):
         loaded = optim.RewritingProto()
         loaded.ParseFromString(reordered.SerializeToString())
         self.assertEqual(
-            optim.replay(model, loaded).SerializeToString(),
+            optim.apply_rewritings(model, loaded).SerializeToString(),
             builder.build_graph().SerializeToString(),
         )
 

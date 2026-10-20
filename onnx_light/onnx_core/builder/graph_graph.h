@@ -184,13 +184,9 @@ public:
   void SetComputedConstant(const std::string &name, TensorProto value);
 
 private:
-  friend GraphProto Replay(const ModelProto &model, const RewritingProto &rewrites,
-                           GraphBuilder::SchemaLookupFn schema_lookup);
-
   void Rebuild();
   void RebuildSuccessors();
   std::size_t Cleanup(utils::RepeatedProtoField<LocalRewritingProto> &rewrites, bool remove_unused);
-  void ApplyRewriting(const LocalRewritingProto &rewrite);
 
   // Returns the concrete dims of the constant ``name`` (empty vector for a
   // scalar) into ``dims``, or ``false`` when the shape cannot be determined.
@@ -208,7 +204,8 @@ private:
 
   RewritingProto OptimizeImpl(int max_iterations, OptimizationReport *report,
                               const std::vector<std::string> &graph_path,
-                              const ConstantFoldingOptions &folding_options, bool remove_unused);
+                              const ConstantFoldingOptions &folding_options, bool remove_unused,
+                              RewritingProto &collection);
 
   GraphBuilder &builder_;
   std::vector<std::shared_ptr<PatternOptimization>> patterns_;
@@ -230,15 +227,5 @@ private:
   // Folded-constant cache keyed by value name.
   std::unordered_map<std::string, TensorProto> computed_constants_;
 };
-
-/**
- * Reconstructs an optimized graph by replaying captured rewrites.
- *
- * Rewrites must be ordered as returned by :cpp:func:`GraphGraph::Optimize`.
- * Pattern and cleanup records are both applied from that sequence; replay does
- * not rerun matching or cleanup algorithms.
- */
-GraphProto Replay(const ModelProto &model, const RewritingProto &rewrites,
-                  GraphBuilder::SchemaLookupFn schema_lookup = {});
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::builder

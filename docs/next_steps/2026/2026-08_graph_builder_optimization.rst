@@ -91,7 +91,7 @@ requests:
        preservation, and shared-output restoration.
    * - `PR #4445 <https://github.com/xadupre/onnx-light/pull/4445>`_
      - Python bindings and custom patterns
-     - Exposes optimizer queries, rewrites, reports, replay, and concrete Cast
+     - Exposes optimizer queries, rewrites, reports, apply_rewritings, and concrete Cast
        patterns; supports global, builder-local, and graph-local Python pattern
        registration with recursive lifetime and exception propagation.
    * - `PR #4455 <https://github.com/xadupre/onnx-light/pull/4455>`_
@@ -445,10 +445,9 @@ re-running the matching phase:
 
 .. code-block:: cpp
 
-    GraphProto Replay(const ModelProto &model,
-                      const RewritingProto &rewrites);
+    GraphBuilder GraphBuilder::ApplyRewritings(const RewritingProto &rewrites) const;
 
-Replay groups consecutive records from the same rewrite batch, drops their
+``ApplyRewritings`` groups consecutive compatible records, drops their
 matched nodes and removed initializers, and places every added node at its
 recorded ``added_nodes_positions`` in one rebuild. ``MatchResult::insert_at``
 remains the pattern's match-time insertion request, but ``GraphGraph`` resolves
@@ -509,7 +508,7 @@ node's subgraphs are optimized in place, seeded with the values visible from the
 enclosing scope. The subgraph builders are already owned by ``GraphBuilder``
 (``GraphBuilder::Subgraphs``), so the optimizer runs on each of them
 with an inherited context of input, initializer and preceding node names.
-Each rewrite stores the stable nested-builder path from the root graph. Replay
+Each rewrite stores the stable nested-builder path from the root graph. ApplyRewriting
 uses that path to route an ordered rewrite batch to the same subgraph rather
 than applying every record to the root builder.
 
@@ -619,7 +618,7 @@ past interpreter shutdown. The bindings expose registered C++ pattern names
 and selection so callers can combine the standard library with custom
 patterns.
 
-Tests cover a Python-only rewrite, positive and rejected matches, exact replay,
+Tests cover a Python-only rewrite, positive and rejected matches, exact apply_rewritings,
 recursive subgraphs, callback exception propagation, pattern lifetime after
 garbage collection, registered C++ pattern selection, and mixed C++/Python
 pattern ordering by priority.
@@ -639,7 +638,7 @@ Implementation order
 4. Implement the match/apply loop and wire in the existing cleanup passes
    (`PR #4394 <https://github.com/xadupre/onnx-light/pull/4394>`_).
 5. Refactor ``Optimize`` to return the applied ``LocalRewriting`` records and
-   add ``Replay`` so a captured list of rewrites reconstructs the final graph
+   add ``ApplyRewriting`` so a captured list of rewrites reconstructs the final graph
    from a ``ModelProto``
    (`PR #4412 <https://github.com/xadupre/onnx-light/pull/4412>`_).
 6. Add logging with per-phase timing (match, rewrite, dead-branch removal,
@@ -671,7 +670,7 @@ Implementation order
     `PR #4455 <https://github.com/xadupre/onnx-light/pull/4455>`_.
 12. Resolve every ``MatchResult::insert_at`` while applying its rewrite batch,
     record exact ``added_nodes_positions`` in the returned ``LocalRewriting``,
-    and make ``Replay`` use only those final coordinates; test multiple
+    and make ``ApplyRewriting`` use only those final coordinates; test multiple
     disjoint replacements and multiple nodes added by one pattern
     (`PR #4539 <https://github.com/xadupre/onnx-light/pull/4539>`_).
 

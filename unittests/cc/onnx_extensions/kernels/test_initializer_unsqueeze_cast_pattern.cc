@@ -7,9 +7,11 @@
 #include <gtest/gtest.h>
 
 #include "onnx_core/builder/graph_graph.h"
+#include "onnx_core/runtime/kernels/run_nodes.h"
 #include "onnx_core/runtime/memory/simple_tensor.h"
 #include "onnx_extensions/kernels/kernel_dispatch_table.h"
 #include "onnx_extensions/patterns/canonicalization/initializer_unsqueeze_cast_pattern.h"
+#include "onnx_extensions/patterns/collections/gather_pattern.h"
 #include "onnx_op/operator_sets.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -150,6 +152,39 @@ TEST(InitializerUnsqueezeCastPattern, FoldsEmptyAxesWithoutChangingShape) {
   auto tensor = core::runtime::TensorFromProto(*folded);
   EXPECT_DOUBLE_EQ(tensor.As<double>()[0], 1.25);
   EXPECT_DOUBLE_EQ(tensor.As<double>()[1], 2.5);
+}
+
+TEST(GatherUpstreamPropagationPattern, SerializedReplayKeepsInferenceDropoutUnfolded) {
+  onnx_kernels::RegisterKernelFunctions();
+  const auto schema_lookup = [](const std::string &op) {
+    return onnx_op::GetAllOnnxOpSchemasWithHistory(op, false);
+  };
+  core::builder::GraphBuilder builder("g", schema_lookup, {{"", 18}});
+  builder.MakeInitializer(MakeInitializer<float>("weight", {2}, {1.25f, 2.5f}));
+  builder.MakeInitializer(MakeInitializer<int64_t>("index", {1}, {1}));
+  builder.MakeNode("Dropout", {"weight"}, {"dropped"});
+  builder.MakeNode("Gather", {"dropped", "index"}, {"y"});
+  builder.MakeOutput("y");
+  ModelProto original;
+  original.add_opset("", 18);
+  *original.mutable_graph() = builder.BuildGraph();
+  core::builder::GraphGraph optimizer(
+      builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{
+                   std::make_shared<onnx_patterns::GatherUpstreamPropagationPattern>()});
+  const auto plan = optimizer.Optimize();
+  ASSERT_FALSE(plan.rewrites().empty());
+  ASSERT_EQ(builder.Nodes().size(), 1u);
+  EXPECT_EQ(builder.Nodes()[0].op_type(), "Dropout");
+  ASSERT_EQ(plan.added_functions().size(), 1u);
+  EXPECT_EQ(plan.added_functions(0).node(0).op_type(), "Gather");
+  RewritingProto loaded;
+  ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
+  auto rewritten = core::builder::GraphBuilder(original, schema_lookup).ApplyRewritings(loaded);
+  EXPECT_TRUE(rewritten.BuildGraph().Equals(builder.BuildGraph()));
+  const auto replayed = rewritten.ToModel();
+  EXPECT_TRUE(replayed.graph().Equals(builder.ToGraph()));
+  EXPECT_FLOAT_EQ(core::runtime::RunModel(original, {})[0].AsFloat()[0], 2.5f);
+  EXPECT_FLOAT_EQ(core::runtime::RunModel(replayed, {})[0].AsFloat()[0], 2.5f);
 }
 
 TEST(InitializerUnsqueezeCastPattern, RejectsSharedAndOverridableInputs) {

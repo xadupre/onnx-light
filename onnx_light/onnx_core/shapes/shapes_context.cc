@@ -368,9 +368,29 @@ int ShapesContext::OpsetVersion(const std::string &domain) const {
 
 // ── Model-local functions ───────────────────────────────────────────
 
+std::string ShapesContext::LocalFunctionKey(const std::string &domain, const std::string &name,
+                                            const std::string &overload) {
+  const std::string normalized =
+      domain == "ai.onnx" || domain == "onnx.ai" ? std::string() : domain;
+  const auto escape = [](const std::string &component) {
+    std::string escaped;
+    for (char value : component) {
+      if (value == '%')
+        escaped += "%25";
+      else if (value == ':')
+        escaped += "%3A";
+      else
+        escaped += value;
+    }
+    return escaped;
+  };
+  return escape(normalized) + ":" + escape(name) +
+         (overload.empty() ? std::string() : ":" + escape(overload));
+}
+
 void ShapesContext::SetLocalFunction(std::shared_ptr<const FunctionProto> func) {
   EXT_ENFORCE_INVALID(func != nullptr, "SetLocalFunction: func must not be nullptr.");
-  const std::string key = std::string(func->domain()) + ":" + std::string(func->name());
+  const std::string key = LocalFunctionKey(func->domain(), func->name(), func->overload());
   local_functions_[key] = func.get();
   owned_local_functions_[key] = std::move(func);
 }

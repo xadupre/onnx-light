@@ -368,13 +368,22 @@ class GraphGraph(_C.GraphGraph):
         )
 
 
-def replay(
+def apply_rewritings(
     model: ModelProto,
     rewrites: RewritingProto,
     schema_lookup: SchemaLookup | None = _default_schema_lookup,
 ) -> GraphProto:
-    """Replays captured rewrites and returns the resulting graph."""
-    return _C.replay(model, rewrites, schema_lookup)
+    """Applies captured rewrites and returns the resulting graph."""
+    return _C.apply_rewritings(model, rewrites, schema_lookup)
+
+
+def apply_rewritings_to_model(
+    model: ModelProto,
+    rewrites: RewritingProto,
+    schema_lookup: SchemaLookup | None = _default_schema_lookup,
+) -> ModelProto:
+    """Applies captured rewrites to a model, preserving functions and imports."""
+    return _C.apply_rewritings_to_model(model, rewrites, schema_lookup)
 
 
 __all__ = [
@@ -511,12 +520,13 @@ __all__ = [
     "UnsqueezeShapePattern",
     "UnsqueezeUnsqueezePattern",
     "WhereAddPattern",
+    "apply_rewritings",
+    "apply_rewritings_to_model",
     "clear_registered_patterns",
     "register_pattern",
     "registered_pattern_names",
     "registered_patterns",
     "render_rst_standard_patterns_table",
-    "replay",
     "reset_registered_patterns",
     "standard_pattern_names",
     "standard_patterns",

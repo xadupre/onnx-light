@@ -6,12 +6,14 @@
 
 #include <algorithm>
 #include <deque>
+#include <limits>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -385,6 +387,23 @@ void ComputeContext::PropagateNodeTags(const utils::RepeatedProtoField<NodeProto
   }
 }
 
+void ComputeContext::RefreshValueTags(const utils::RepeatedProtoField<NodeProto> &nodes,
+                                      const std::unordered_set<std::string> &changed_values) {
+  std::unordered_set<int> seeds;
+  for (const auto &name : changed_values) {
+    const auto producer = tag_producer_node_.find(name);
+    if (producer != tag_producer_node_.end()) {
+      seeds.insert(producer->second);
+    }
+    const auto consumers = tag_consumers_.find(name);
+    if (consumers != tag_consumers_.end()) {
+      seeds.insert(consumers->second.begin(), consumers->second.end());
+    }
+  }
+  PropagateNodeTags(nodes, {seeds.begin(), seeds.end()},
+                    {changed_values.begin(), changed_values.end()});
+}
+
 void ComputeContext::SeedReuseInput(const std::string &name, bool is_graph_input,
                                     bool is_initializer, bool allow_input_overwrite) {
   EXT_ENFORCE_INVALID(!allow_input_overwrite,
@@ -689,6 +708,183 @@ void ComputeContext::RefreshNodes(const utils::RepeatedProtoField<NodeProto> &no
     AppendNodePeakMemory(nodes[index], index, device);
   }
   RefreshIncrementalMemory(nodes, ctx);
+}
+
+void ComputeContext::EraseValue(const std::string &name) {
+  if (incr_graph_inputs_.count(name) != 0) {
+    incr_graph_initializers_.erase(name);
+    return;
+  }
+  value_tags_.erase(name);
+  constant_values_.erase(name);
+  incr_graph_initializers_.erase(name);
+  if (incr_graph_outputs_.count(name) == 0) {
+    incr_keep_.erase(name);
+  }
+  incr_producer_.erase(name);
+  tag_producer_node_.erase(name);
+  incr_byte_size_expr_cache_.erase(name);
+  incr_allocation_bytes_.erase(name);
+  incr_memory_alive_.erase(name);
+  incr_memory_alive_before_refresh_.erase(name);
+  MarkMemoryRefresh(0);
+}
+
+void ComputeContext::UpdateNodes(const utils::RepeatedProtoField<NodeProto> &nodes,
+                                 const std::vector<std::size_t> &old_indices,
+                                 const std::vector<std::vector<std::string>> &references,
+                                 const std::unordered_set<std::string> &changed_values,
+                                 Device device) {
+  const std::size_t old_count = Size();
+  EXT_ENFORCE_INVALID(old_indices.size() == nodes.size() && references.size() == nodes.size(),
+                      "UpdateNodes: inconsistent node coordinates.");
+  EXT_ENFORCE_INVALID(nodes.size() <= static_cast<std::size_t>(std::numeric_limits<int>::max()),
+                      "UpdateNodes: too many nodes for incremental indices.");
+  std::vector<int> new_indices(old_count, -1);
+  for (std::size_t index = 0; index < old_indices.size(); ++index) {
+    EXT_ENFORCE_INVALID(old_indices[index] <= old_count, "UpdateNodes: invalid old node index.");
+    if (old_indices[index] < old_count) {
+      EXT_ENFORCE_INVALID(new_indices[old_indices[index]] == -1,
+                          "UpdateNodes: duplicate old node index.");
+      new_indices[old_indices[index]] = static_cast<int>(index);
+    }
+  }
+  std::unordered_set<std::string> changed_references;
+  for (std::size_t index = 0; index < old_count; ++index) {
+    if (new_indices[index] < 0) {
+      changed_references.insert(incr_node_references_[index].begin(),
+                                incr_node_references_[index].end());
+    }
+  }
+  const auto remap = [&](auto &values) {
+    using Values = std::decay_t<decltype(values)>;
+    Values updated(nodes.size());
+    for (std::size_t index = 0; index < old_indices.size(); ++index) {
+      if (old_indices[index] < values.size()) {
+        updated[index] = std::move(values[old_indices[index]]);
+      }
+    }
+    values = std::move(updated);
+  };
+  remap(node_tags_);
+  remap(node_tag_custom_override_);
+  remap(node_constant_);
+  remap(reuse_);
+  remap(release_after_);
+  remap(not_used_after_);
+  remap(release_after_shape_tagged_);
+  remap(memory_);
+  remap(peak_memory_);
+  remap(incr_node_references_);
+  const auto remap_producers = [&](auto &producers) {
+    for (auto it = producers.begin(); it != producers.end();) {
+      if (it->second >= 0) {
+        const int updated = new_indices.at(static_cast<std::size_t>(it->second));
+        if (updated < 0) {
+          it = producers.erase(it);
+          continue;
+        }
+        it->second = updated;
+      }
+      ++it;
+    }
+  };
+  remap_producers(incr_producer_);
+  remap_producers(tag_producer_node_);
+  remap_producers(incr_last_use_);
+  for (auto &[name, consumers] : tag_consumers_) {
+    std::vector<int> updated;
+    for (int index : consumers) {
+      if (new_indices.at(static_cast<std::size_t>(index)) >= 0) {
+        updated.push_back(new_indices[static_cast<std::size_t>(index)]);
+      }
+    }
+    consumers = std::move(updated);
+  }
+  for (std::size_t index = 0; index < nodes.size(); ++index) {
+    if (old_indices[index] == old_count || incr_node_references_[index] != references[index]) {
+      changed_references.insert(incr_node_references_[index].begin(),
+                                incr_node_references_[index].end());
+      changed_references.insert(references[index].begin(), references[index].end());
+      for (const auto &name : incr_node_references_[index]) {
+        auto &consumers = tag_consumers_[name];
+        consumers.erase(std::remove(consumers.begin(), consumers.end(), static_cast<int>(index)),
+                        consumers.end());
+      }
+      for (const auto &input : nodes[index].input()) {
+        if (!input.empty()) {
+          tag_consumers_[input.value()].push_back(static_cast<int>(index));
+        }
+      }
+    }
+    if (old_indices[index] == old_count ||
+        std::any_of(nodes[index].output().begin(), nodes[index].output().end(),
+                    [&](const auto &name) { return changed_values.count(name) != 0; })) {
+      node_tags_[index].clear();
+      node_tag_custom_override_[index] = 0;
+    }
+    for (const auto &output : nodes[index].output()) {
+      if (!output.empty()) {
+        incr_producer_[output.value()] = static_cast<int>(index);
+        tag_producer_node_[output.value()] = static_cast<int>(index);
+      }
+    }
+    incr_node_references_[index] = references[index];
+  }
+  for (const auto &name : changed_values) {
+    value_tags_.erase(name);
+    constant_values_.erase(name);
+    incr_byte_size_expr_cache_.erase(name);
+    incr_allocation_bytes_.erase(name);
+  }
+  for (const auto &name : changed_references) {
+    incr_last_use_.erase(name);
+  }
+  for (std::size_t index = 0; index < nodes.size(); ++index) {
+    for (const auto &name : references[index]) {
+      if (changed_references.count(name) != 0) {
+        incr_last_use_[name] = static_cast<int>(index);
+      }
+    }
+  }
+  for (std::size_t index = 0; index < nodes.size(); ++index) {
+    if (old_indices[index] != old_count &&
+        std::none_of(references[index].begin(), references[index].end(),
+                     [&](const auto &name) { return changed_references.count(name) != 0; })) {
+      continue;
+    }
+    release_after_[index].clear();
+    not_used_after_[index].clear();
+    release_after_shape_tagged_[index].clear();
+    for (const auto &name : references[index]) {
+      const auto last = incr_last_use_.find(name);
+      if (last == incr_last_use_.end() || last->second != static_cast<int>(index)) {
+        continue;
+      }
+      if (incr_graph_inputs_.count(name) != 0 || incr_graph_initializers_.count(name) != 0) {
+        not_used_after_[index].push_back(name);
+      }
+      const auto producer = incr_producer_.find(name);
+      if (incr_keep_.count(name) == 0 && producer != incr_producer_.end() &&
+          producer->second >= 0 && producer->second < last->second) {
+        release_after_[index].push_back(name);
+        const auto tag = value_tags_.find(name);
+        if (tag != value_tags_.end() && tag->second == "shape") {
+          release_after_shape_tagged_[index].push_back(name);
+        }
+      }
+    }
+  }
+  shapes_.ReindexSubgraphContexts(new_indices);
+  for (std::size_t index = 0; index < nodes.size(); ++index) {
+    if (old_indices[index] != index ||
+        std::any_of(references[index].begin(), references[index].end(),
+                    [&](const auto &name) { return changed_references.count(name) != 0; })) {
+      RefreshNodeReuse(nodes, index, shapes_);
+      AppendNodePeakMemory(nodes[index], index, device);
+      MarkMemoryRefresh(index);
+    }
+  }
 }
 
 void ComputeContext::MarkMemoryRefresh(std::size_t node_index) {

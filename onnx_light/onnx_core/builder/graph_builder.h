@@ -56,6 +56,10 @@
 #include "onnx_core/symbolic/sym_tensor.h"
 #include "onnx_proto/onnx.h"
 
+namespace ONNX_LIGHT_NAMESPACE::core::runtime {
+struct Tensor;
+}
+
 namespace ONNX_LIGHT_NAMESPACE::core::builder {
 
 using ::onnx_light::core::compute::ComputeContext;
@@ -349,13 +353,15 @@ public:
   /// @param domain     Operator domain (empty for the default ONNX domain).
   /// @param name       Optional node name.
   /// @param attributes Node attributes.
+  /// @param overload   Model-local function overload.
   /// @return The (possibly generated) output names of the node.
   std::vector<std::string> MakeNode(const std::string &op_type,
                                     const std::vector<std::string> &inputs,
                                     const std::vector<std::string> &outputs = {},
                                     const std::string &domain = "", const std::string &name = "",
                                     const utils::RepeatedProtoField<AttributeProto> &attributes =
-                                        utils::RepeatedProtoField<AttributeProto>());
+                                        utils::RepeatedProtoField<AttributeProto>(),
+                                    const std::string &overload = "");
 
   /// Read-only access to the accumulated nodes (in insertion order).
   const utils::RepeatedProtoField<NodeProto> &Nodes() const noexcept { return nodes_; }
@@ -616,6 +622,14 @@ public:
   /// nodes and outputs into a :cpp:class:`GraphProto`.
   GraphProto BuildGraph() const;
 
+  /// Applies ordered captured rewrites and returns a new, validated builder.
+  /// Preserves the source builder and recorded node order, and merges added
+  /// functions and opset imports. Requires a root model builder.
+  /// Reuses identical function definitions after builder normalization.
+  /// Throws on conflicting definitions or calls incompatible with the merged
+  /// definitions, even when a later edit would remove those calls.
+  GraphBuilder ApplyRewritings(const RewritingProto &rewrites) const;
+
   /// Read-only access to the owned :cpp:class:`ComputeContext`.
   const ComputeContext &Compute() const noexcept { return compute_; }
 
@@ -686,6 +700,8 @@ private:
 
   std::size_t ConstantFoldNodes(const ConstantFoldingOptions &options,
                                 const std::unordered_set<std::string> &included_outputs);
+  static TensorProto ProtoFromRuntimeTensor(const core::runtime::Tensor &tensor,
+                                            const std::string &name);
   std::size_t ConstantFoldImpl(const ConstantFoldingOptions &options,
                                const std::unordered_set<std::string> *included_outputs);
 
@@ -783,10 +799,14 @@ private:
   bool RefreshDependentNodes(
       const std::function<bool(const NodeProto &, const std::unordered_set<std::string> &)>
           &is_affected,
-      std::unordered_set<std::string> &affected_values, bool propagate_to_parent = true);
+      std::unordered_set<std::string> &affected_values, bool propagate_to_parent = true,
+      const std::vector<std::size_t> *node_order = nullptr);
+  void RefreshAfterRewriting(const std::vector<std::size_t> &old_indices,
+                             std::unordered_set<std::string> affected_values);
   void RebuildMetadata();
   void RebuildStructuredState(bool refresh_ancestors = true);
-  GraphProto BuildGraphImpl(bool validate_persistent_bindings) const;
+  GraphProto BuildGraphImpl(bool validate_persistent_bindings,
+                            bool share_initializers = false) const;
   void ValidateSubgraphOutput(const std::string &name) const;
   std::size_t DeduplicateEncodedInitializers(std::vector<const EncodedValueProto *> &index,
                                              std::unordered_map<std::string, std::string> &rename);
@@ -808,6 +828,12 @@ private:
 
   // Orders producers before consumers, including lexical subgraph captures.
   void SortNodesTopologically();
+  void ApplyRewriting(const LocalRewritingProto &rewrite,
+                      const utils::RepeatedProtoField<FunctionProto> &functions);
+  static std::vector<std::size_t>
+  TopologicalNodeOrder(const utils::RepeatedProtoField<NodeProto> &nodes,
+                       const std::unordered_set<std::string> &available,
+                       const std::vector<std::vector<std::string>> &references);
 
   // Converts node attributes from proto form to builder form: GRAPH/GRAPHS
   // attributes become ``*_ref`` STRING/STRINGS attributes that reference nested
@@ -818,7 +844,7 @@ private:
 
   // Materializes ``*_ref`` STRING/STRINGS attributes in ``node`` back to
   // GRAPH/GRAPHS attributes from the referenced nested builders.
-  void MaterializeGraphReferences(NodeProto &node) const;
+  void MaterializeGraphReferences(NodeProto &node, bool share_initializers = false) const;
 
   // Returns ``true`` when ``name`` ends with ``"_ref"``.
   static bool HasGraphReferenceSuffix(const std::string &name);

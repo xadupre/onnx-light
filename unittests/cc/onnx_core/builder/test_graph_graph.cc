@@ -234,7 +234,9 @@ TEST(GraphGraph, NativeCleanupReplaysOrphanInitializers) {
     const GraphProto optimized = builder.ToGraph();
     EXPECT_EQ(optimized.node_size(), 0);
     EXPECT_EQ(optimized.initializer_size(), 0);
-    const GraphProto replayed = core::builder::Replay(original, rewrites, SchemaLookup());
+    const GraphProto replayed = core::builder::GraphBuilder(original, SchemaLookup())
+                                    .ApplyRewritings(rewrites)
+                                    .BuildGraph();
     EXPECT_EQ(replayed.SerializeAsString(), optimized.SerializeAsString());
   }
 }
@@ -564,13 +566,62 @@ TEST(GraphGraph, ReverseReplacementOrderReplaysAcrossIterationsBeforeExportSorti
 
     RewritingProto loaded;
     ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
-    const GraphProto replayed = core::builder::Replay(original, loaded, SchemaLookup());
+    core::builder::GraphBuilder source(original, SchemaLookup());
+    auto rewritten = source.ApplyRewritings(loaded);
+    const GraphProto replayed = rewritten.BuildGraph();
     EXPECT_EQ(replayed.SerializeAsString(), builder.BuildGraph().SerializeAsString());
+    EXPECT_EQ(source.BuildGraph().SerializeAsString(), original.graph().SerializeAsString());
+    EXPECT_EQ(rewritten.GetShape("p"), source.GetShape("p"));
+    EXPECT_EQ(rewritten.GetShape("Y"), source.GetShape("Y"));
+    EXPECT_TRUE(rewritten.Compute().NodeReuse(1).empty());
+    rewritten.MakeNode("Identity", {"Y"}, {"copy"});
+    EXPECT_EQ(rewritten.GetShape("copy"), source.GetShape("Y"));
     const GraphProto finalized = builder.ToGraph();
     EXPECT_EQ(finalized.node(0).op_type(), "Mul");
     EXPECT_EQ(finalized.node(1).op_type(), "Add");
     EXPECT_EQ(builder.Nodes()[0].op_type(), "Mul");
     EXPECT_EQ(builder.Nodes()[1].op_type(), "Add");
+  }
+}
+
+TEST(GraphGraph, RewritingReindexesRetainedControlFlowContexts) {
+  core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 28}});
+  source.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  source.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+  source.MakeNode("Neg", {"X"}, {"p"});
+  source.MakeNode("Abs", {"X"}, {"unused"});
+  utils::RepeatedProtoField<AttributeProto> attributes;
+  for (const std::string name : {"then_branch", "else_branch"}) {
+    auto &branch = source.MakeSubgraph(name);
+    branch.MakeNode("Identity", {"p"}, {"branch_result"});
+    branch.MakeOutput("branch_result");
+    auto &reference = attributes.add();
+    reference.set_name(name + "_ref");
+    reference.set_type(AttributeProto::STRING);
+    reference.set_s(name);
+  }
+  source.MakeNode("If", {"condition"}, {"selected"}, "", "", attributes);
+  source.MakeOutput("selected");
+  ASSERT_TRUE(source.Shapes().HasSubgraphContext(2, "then_branch"));
+  for (bool reverse : {false, true}) {
+    SCOPED_TRACE(reverse);
+    RewritingProto plan;
+    auto &rewrite = *plan.add_rewrites();
+    rewrite.add_matched_nodes(1);
+    if (reverse) {
+      rewrite.add_matched_nodes(0);
+      rewrite.add_added_nodes(MakeNode("Neg", {"X"}, {"p"}));
+      rewrite.add_added_nodes_positions(1);
+    }
+    auto result = source.ApplyRewritings(plan);
+    const int64_t position = reverse ? 0 : 1;
+    EXPECT_EQ(result.Nodes()[static_cast<std::size_t>(position)].op_type(), "If");
+    EXPECT_FALSE(result.Shapes().HasSubgraphContext(2, "then_branch"));
+    for (const std::string name : {"then_branch", "else_branch"}) {
+      ASSERT_TRUE(result.Shapes().HasSubgraphContext(position, name));
+      EXPECT_EQ(result.Shapes().GetSubgraphContext(position, name).Get("branch_result"),
+                source.Shapes().GetSubgraphContext(2, name).Get("branch_result"));
+    }
   }
 }
 

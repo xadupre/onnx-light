@@ -5710,6 +5710,7 @@ TEST(RuntimeSession, ExplicitPreparationDefersUnknownTuningAndKeepsItsSnapshot) 
   const auto after_run = registry.AccessCounts();
   EXPECT_EQ(after_run.snapshots, before_run.snapshots);
   EXPECT_EQ(after_run.resolutions - before_run.resolutions, 1u);
+  rt.Remove("y");
   session.Run(rt);
   EXPECT_EQ(registry.AccessCounts(), after_run);
   EXPECT_EQ(rt.Get("y").AsInt64()[0], 20);

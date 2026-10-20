@@ -51,7 +51,7 @@ public:
   void Run(RuntimeContext &rt) override {
     if (!ready_)
       throw std::logic_error("Preparation consumer ran before publication.");
-    rt.Set(node_->output(0), node_->input_size() == 0 ? Tensor::FromFloat("Y0", {}, {1})
+    rt.Put(node_->output(0), node_->input_size() == 0 ? Tensor::FromFloat("Y0", {}, {1})
                                                       : rt.Get(node_->input(0)).BorrowView());
   }
 

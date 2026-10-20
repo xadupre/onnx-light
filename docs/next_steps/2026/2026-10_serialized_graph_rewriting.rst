@@ -290,5 +290,4 @@ of the canonical artifact. Runtime matching can account for actual EP
 ownership and session kernel availability, whereas serialized variants must
 be selected and validated against the target runtime. Both approaches keep a
 canonical graph, but differ in when rewrites are discovered and how they are
-distributed; neither implies that ORT depends on onnx-light. Both remain design
-proposals.
+distributed.

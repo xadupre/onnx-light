@@ -291,3 +291,14 @@ ownership and session kernel availability, whereas serialized variants must
 be selected and validated against the target runtime. Both approaches keep a
 canonical graph, but differ in when rewrites are discovered and how they are
 distributed.
+
+Rewrite definitions can live outside the canonical graph: a Python exporter
+can construct and serialize ``RewritingProto`` records as data without
+providing a separately compiled runtime extension. Requiring exporters to
+ship a native fusion package would complicate Python-based export workflows;
+keep that requirement out of this design. ORT's proposed runtime packages
+instead carry executable matching and adapter logic behind an experimental
+extension interface. Serialized edits still require compatible operator
+implementations in the target runtime, but the exporter need not supply a
+binary merely to describe those edits. The bundled model remains the proposed
+distribution format; this does not introduce standalone rewrite files.

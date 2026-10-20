@@ -38,6 +38,123 @@ NodeProto MakeConcatNode(const std::vector<std::string> &inputs,
 
 } // namespace
 
+TEST(OnnxOptimShapesTensorResize, UnknownParametersDoNotPreserveResizedInputDimensions) {
+  for (bool use_sizes : {false, true}) {
+    for (const std::vector<int64_t> &axes : {std::vector<int64_t>{2, 3}, {-1, -2}}) {
+      NodeProto node;
+      node.set_op_type("Resize");
+      for (const char *name : {"X", "", use_sizes ? "" : "scales", use_sizes ? "sizes" : ""}) {
+        node.add_input(name);
+      }
+      node.add_output("Y");
+      AddAttribute<std::vector<int64_t>>(node, "axes", axes);
+      core::shapes::ShapesContext ctx;
+      ctx.Set("X",
+              core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                        {core::symbolic::SymDim(1), core::symbolic::SymDim(1),
+                                         core::symbolic::SymDim(2), core::symbolic::SymDim(3)}));
+      core::symbolic::SymTensor parameter(nullptr,
+                                          use_sizes ? core::symbolic::TensorType::kInt64
+                                                    : core::symbolic::TensorType::kFloat,
+                                          {core::symbolic::SymDim(2)});
+      if (!use_sizes) {
+        parameter.SetMinMax(2.0, 3.0);
+      }
+      ctx.Set(use_sizes ? "sizes" : "scales", std::move(parameter));
+
+      onnx_shapes::shapes::tensor::ComputeShapeResize(ctx, node);
+
+      const core::symbolic::SymShape &shape = ctx.Get("Y").Shape();
+      ASSERT_EQ(shape.Rank(), 4u);
+      EXPECT_EQ(shape[0].AsInt(), 1);
+      EXPECT_EQ(shape[1].AsInt(), 1);
+      EXPECT_FALSE(shape[2].IsInt());
+      EXPECT_FALSE(shape[3].IsInt());
+    }
+  }
+}
+
+TEST(OnnxOptimShapesTensorResize, SizesRespectAspectRatioPolicyAndAxesOrder) {
+  for (const char *policy : {"stretch", "not_larger", "not_smaller"}) {
+    for (bool reverse_axes : {false, true}) {
+      NodeProto node;
+      node.set_op_type("Resize");
+      for (const char *name : {"X", "", "", "sizes"}) {
+        node.add_input(name);
+      }
+      node.add_output("Y");
+      AddAttribute<std::vector<int64_t>>(
+          node, "axes", reverse_axes ? std::vector<int64_t>{-1, -2} : std::vector<int64_t>{2, 3});
+      AddAttribute<std::string>(node, "keep_aspect_ratio_policy", policy);
+      core::shapes::ShapesContext ctx;
+      ctx.Set("X",
+              core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                        {core::symbolic::SymDim(1), core::symbolic::SymDim(1),
+                                         core::symbolic::SymDim(2), core::symbolic::SymDim(3)}));
+      core::symbolic::SymTensor sizes(nullptr, core::symbolic::TensorType::kInt64,
+                                      {core::symbolic::SymDim(2)});
+      sizes.SetValueAsShape({core::symbolic::SymDim(reverse_axes ? 8 : 4),
+                             core::symbolic::SymDim(reverse_axes ? 4 : 8)});
+      ctx.Set("sizes", std::move(sizes));
+
+      onnx_shapes::shapes::tensor::ComputeShapeResize(ctx, node);
+
+      const core::symbolic::SymShape &shape = ctx.Get("Y").Shape();
+      const bool stretch = std::string(policy) == "stretch";
+      const bool not_larger = std::string(policy) == "not_larger";
+      ASSERT_EQ(shape.Rank(), 4u);
+      EXPECT_EQ(shape[0].AsInt(), 1);
+      EXPECT_EQ(shape[1].AsInt(), 1);
+      EXPECT_EQ(shape[2].AsInt(), stretch || not_larger ? 4 : 5);
+      EXPECT_EQ(shape[3].AsInt(), not_larger ? 6 : 8);
+
+      if (!stretch) {
+        ctx.Set("X", core::symbolic::SymTensor(
+                         nullptr, core::symbolic::TensorType::kFloat,
+                         {core::symbolic::SymDim(1), core::symbolic::SymDim(1),
+                          core::symbolic::SymDim("H"), core::symbolic::SymDim(3)}));
+        onnx_shapes::shapes::tensor::ComputeShapeResize(ctx, node);
+        EXPECT_FALSE(ctx.Get("Y").Shape()[2].IsInt());
+        EXPECT_FALSE(ctx.Get("Y").Shape()[3].IsInt());
+      }
+
+      if (not_larger) {
+        ctx.Set("X", core::symbolic::SymTensor(
+                         nullptr, core::symbolic::TensorType::kFloat,
+                         {core::symbolic::SymDim(1), core::symbolic::SymDim(1),
+                          core::symbolic::SymDim(1), core::symbolic::SymDim(100)}));
+        core::symbolic::SymTensor small_sizes(nullptr, core::symbolic::TensorType::kInt64,
+                                              {core::symbolic::SymDim(2)});
+        small_sizes.SetValueAsShape({core::symbolic::SymDim(1), core::symbolic::SymDim(1)});
+        ctx.Set("sizes", std::move(small_sizes));
+        onnx_shapes::shapes::tensor::ComputeShapeResize(ctx, node);
+        EXPECT_EQ(ctx.Get("Y").Shape()[2].AsInt(), 1);
+        EXPECT_EQ(ctx.Get("Y").Shape()[3].AsInt(), 1);
+      }
+    }
+  }
+}
+
+TEST(OnnxOptimShapesTensorResize, RejectsUnrepresentableAspectRatioOutputDimension) {
+  NodeProto node;
+  node.set_op_type("Resize");
+  for (const char *name : {"X", "", "", "sizes"}) {
+    node.add_input(name);
+  }
+  node.add_output("Y");
+  AddAttribute<std::string>(node, "keep_aspect_ratio_policy", "not_smaller");
+  core::shapes::ShapesContext ctx;
+  ctx.Set("X", core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                         {core::symbolic::SymDim(2), core::symbolic::SymDim(3)}));
+  core::symbolic::SymTensor sizes(nullptr, core::symbolic::TensorType::kInt64,
+                                  {core::symbolic::SymDim(2)});
+  sizes.SetValueAsShape(
+      {core::symbolic::SymDim(std::numeric_limits<int64_t>::max()), core::symbolic::SymDim(1)});
+  ctx.Set("sizes", std::move(sizes));
+
+  EXPECT_THROW(onnx_shapes::shapes::tensor::ComputeShapeResize(ctx, node), std::invalid_argument);
+}
+
 TEST(OnnxOptimShapesTensorConcat, ConcatenatesTwoFullyKnownInputsOnAxis0) {
   NodeProto node = MakeConcatNode({"A", "B"}, /*axis=*/0);
   core::shapes::ShapesContext ctx;

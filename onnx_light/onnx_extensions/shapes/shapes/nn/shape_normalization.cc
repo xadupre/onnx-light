@@ -93,7 +93,8 @@ void ComputeShapeLayerNormalization(ShapesContext &ctx, const NodeProto &node, c
   int64_t axis = -1;
   for (const auto &attr : node.attribute()) {
     if (attr.name() == "stash_type") {
-      stash_type = static_cast<TensorType>(attr.i());
+      stash_type =
+          core::symbolic::DataTypeToTensorType(static_cast<TensorProto::DataType>(attr.i()));
     } else if (attr.name() == "axis") {
       axis = attr.i();
     }

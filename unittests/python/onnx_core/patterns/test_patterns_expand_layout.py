@@ -475,7 +475,7 @@ class TestExpandLayoutPatterns(ExtTestCase):
                 oh.make_node("Reshape", ["expanded", "reshape_shape"], ["Y"]),
             ],
             [oh.make_tensor_value_info("X", TensorProto.FLOAT, [1, 1, 1])],
-            [oh.make_tensor_value_info("Y", TensorProto.FLOAT, [3, 2, 1])],
+            [oh.make_tensor_value_info("Y", TensorProto.FLOAT, [3, 1, 2])],
             [
                 _initializer("expand_shape", [3, 2, 1], np.int64),
                 _initializer("reshape_shape", [0, 1, -1], np.int64),
@@ -1703,7 +1703,8 @@ class TestExpandLayoutPatterns(ExtTestCase):
                     oh.make_node("Div", ["squeezed", "two"], ["quotient"]),
                     oh.make_node("Unsqueeze", ["quotient", "zero"], ["Y"]),
                 ]
-                outputs = [oh.make_tensor_value_info("Y", TensorProto.INT64, [1])]
+                output_shape = [1, 1] if case == "non_scalar" else [1]
+                outputs = [oh.make_tensor_value_info("Y", TensorProto.INT64, output_shape)]
                 if case == "shared":
                     nodes.append(oh.make_node("Identity", ["quotient"], ["other"]))
                     outputs.append(oh.make_tensor_value_info("other", TensorProto.INT64, []))

@@ -4,6 +4,7 @@
 
 #include "onnx_extensions/shapes/shapes/tensor/shape_tensor.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <string>
@@ -168,13 +169,50 @@ void ComputeShapeResize(ShapesContext &ctx, const NodeProto &node) {
   // Non-axis dims (when ``axes`` is provided) keep the input dim.
   if (axes.size() != rank) {
     for (std::size_t i = 0; i < rank; ++i) {
-      out_shape[i] = input_shape[i];
+      if (std::find(axes.begin(), axes.end(), static_cast<int64_t>(i)) == axes.end()) {
+        out_shape[i] = input_shape[i];
+      }
     }
   }
 
   if (sizes_known && sizes_data.size() == axes.size()) {
-    for (std::size_t i = 0; i < axes.size(); ++i) {
-      out_shape[static_cast<std::size_t>(axes[i])] = SymDim(sizes_data[i]);
+    const AttributeProto *policy_attr = FindAttribute(node, "keep_aspect_ratio_policy");
+    const std::string policy = policy_attr == nullptr ? "stretch" : policy_attr->s();
+    if (policy == "stretch") {
+      for (std::size_t i = 0; i < axes.size(); ++i) {
+        out_shape[static_cast<std::size_t>(axes[i])] = SymDim(sizes_data[i]);
+      }
+    } else {
+      EXT_ENFORCE_INVALID(policy == "not_larger" || policy == "not_smaller",
+                          "ComputeShapeResize: unsupported keep_aspect_ratio_policy '", policy,
+                          "'.");
+      bool input_dims_known = true;
+      double scale = 0.0;
+      for (std::size_t i = 0; i < axes.size(); ++i) {
+        const SymDim &dim = input_shape[static_cast<std::size_t>(axes[i])];
+        EXT_ENFORCE_INVALID(sizes_data[i] > 0,
+                            "ComputeShapeResize: aspect-ratio sizes must be positive.");
+        if (!dim.IsInt()) {
+          input_dims_known = false;
+          continue;
+        }
+        EXT_ENFORCE_INVALID(dim.AsInt() > 0,
+                            "ComputeShapeResize: aspect-ratio input dims must be positive.");
+        const double ratio = static_cast<double>(sizes_data[i]) / static_cast<double>(dim.AsInt());
+        scale = i == 0 ? ratio
+                       : (policy == "not_larger" ? std::min(scale, ratio) : std::max(scale, ratio));
+      }
+      if (input_dims_known) {
+        for (std::size_t i = 0; i < axes.size(); ++i) {
+          const std::size_t axis = static_cast<std::size_t>(axes[i]);
+          const double dim =
+              std::max(1.0, std::round(scale * static_cast<double>(input_shape[axis].AsInt())));
+          EXT_ENFORCE_INVALID(
+              dim >= 0.0 && dim < std::ldexp(1.0, 63),
+              "ComputeShapeResize: aspect-ratio output dim is outside int64 range.");
+          out_shape[axis] = SymDim(static_cast<int64_t>(dim));
+        }
+      }
     }
   } else if (scales_known) {
     for (std::size_t i = 0; i < axes.size(); ++i) {

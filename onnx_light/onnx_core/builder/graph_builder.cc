@@ -494,13 +494,49 @@ void GraphBuilder::SetOpsetVersion(const std::string &domain, int version) {
     throw BuilderError("GraphBuilder: opset versions must be positive.");
   }
   const std::string key = NormaliseDomain(domain);
-  const auto existing = opsets_.find(key);
-  const bool changed = existing == opsets_.end() || existing->second != version;
-  opsets_[key] = version;
-  compute_.Shapes().SetOpsetVersion(key, version);
-  if (changed && !nodes_.empty()) {
-    RebuildStructuredState();
+  const bool changed = OpsetVersion(key) != version;
+  if (RefreshOpsetVersion(key, version) || (changed && is_local_function_)) {
+    RefreshAncestors();
   }
+}
+
+bool GraphBuilder::RefreshOpsetVersion(const std::string &domain, int version,
+                                       const std::unordered_set<std::string> &inherited_values) {
+  const auto existing = opsets_.find(domain);
+  const bool changed = existing == opsets_.end() || existing->second != version;
+  opsets_[domain] = version;
+  auto &shapes = compute_.Shapes();
+  shapes.SetOpsetVersion(domain, version);
+  std::unordered_set<std::string> affected_values;
+  for (const auto &name : inherited_values) {
+    if (inherited_names_.count(name) != 0) {
+      shapes.Erase(name);
+      SeedInheritedValue(name);
+      affected_values.insert(name);
+    }
+  }
+  // Refresh children at their referencing nodes, after any captured producers.
+  std::unordered_map<GraphBuilder *, bool> refreshed;
+  const bool affected = RefreshDependentNodes(
+      [&](const NodeProto &node, const std::unordered_set<std::string> &values) {
+        bool nested_changed = false;
+        for (GraphBuilder *subgraph : ReferencedSubgraphs(node)) {
+          auto it = refreshed.find(subgraph);
+          if (it == refreshed.end()) {
+            it = refreshed.emplace(subgraph, subgraph->RefreshOpsetVersion(domain, version, values))
+                     .first;
+          }
+          nested_changed |= it->second;
+        }
+        return nested_changed || (changed && NormaliseDomain(node.domain().value()) == domain);
+      },
+      affected_values, /*propagate_to_parent=*/false);
+  for (const auto &subgraph : subgraphs_) {
+    if (refreshed.count(subgraph.get()) == 0) {
+      subgraph->RefreshOpsetVersion(domain, version, affected_values);
+    }
+  }
+  return affected;
 }
 
 int GraphBuilder::OpsetVersion(const std::string &domain) const {
@@ -585,6 +621,47 @@ void GraphBuilder::CopyInferredValuesFrom(const ShapesContext &source) {
                           source.HasEncodedValue(name))) {
       compute_.Shapes().CopyValueFrom(name, source, name);
     }
+  }
+}
+
+void GraphBuilder::RefreshInferredInputsFrom(
+    const ShapesContext &source, const std::unordered_set<std::string> &changed_captures) {
+  std::unordered_set<std::string> candidates;
+  for (const auto &input : inputs_) {
+    candidates.insert(input.name().value());
+  }
+  for (const auto &name : changed_captures) {
+    if (inherited_names_.count(name) != 0) {
+      candidates.insert(name);
+    }
+  }
+  auto &shapes = compute_.Shapes();
+  std::unordered_set<std::string> changed_values;
+  for (const auto &name : candidates) {
+    if (!source.Has(name) && !source.HasType(name) && !source.HasSequence(name) &&
+        !source.HasEncodedValue(name)) {
+      continue;
+    }
+    const bool unchanged =
+        shapes.Has(name) == source.Has(name) &&
+        (!source.Has(name) || shapes.Get(name) == source.Get(name)) &&
+        shapes.HasType(name) == source.HasType(name) &&
+        (!source.HasType(name) || shapes.GetType(name).Equals(source.GetType(name))) &&
+        shapes.HasSequence(name) == source.HasSequence(name) &&
+        (!source.HasSequence(name) || shapes.GetSequence(name) == source.GetSequence(name)) &&
+        shapes.HasEncodedValue(name) == source.HasEncodedValue(name) &&
+        (!source.HasEncodedValue(name) ||
+         shapes.GetEncodedValue(name).Equals(source.GetEncodedValue(name)));
+    if (!unchanged) {
+      shapes.Erase(name);
+      shapes.CopyValueFrom(name, source, name);
+      changed_values.insert(name);
+    }
+  }
+  if (!changed_values.empty()) {
+    RefreshDependentNodes(
+        [](const NodeProto &, const std::unordered_set<std::string> &) { return false; },
+        changed_values, /*propagate_to_parent=*/false);
   }
 }
 
@@ -673,22 +750,36 @@ void GraphBuilder::RefreshNestedDependency(GraphBuilder &child, bool propagate_t
       }
     }
   }
-  std::vector<bool> affected(nodes_.size(), false);
   std::unordered_set<std::string> affected_values;
+  RefreshDependentNodes(
+      [&](const NodeProto &node, const std::unordered_set<std::string> &) {
+        if (child.is_local_function_ && node.domain().value() == child.function_domain_ &&
+            node.op_type().value() == child.name_) {
+          return true;
+        }
+        for (GraphBuilder *subgraph : ReferencedSubgraphs(node)) {
+          if (subgraph == &child || (child.is_local_function_ && depends_on_function(*subgraph))) {
+            return true;
+          }
+        }
+        return false;
+      },
+      affected_values, propagate_to_parent);
+}
+
+bool GraphBuilder::RefreshDependentNodes(
+    const std::function<bool(const NodeProto &, const std::unordered_set<std::string> &)>
+        &is_affected,
+    std::unordered_set<std::string> &affected_values, bool propagate_to_parent) {
+  bool affected = false;
+  std::map<std::size_t, std::vector<std::string>> refreshed_references;
+  const auto declarations = StructuredDeclarations(value_infos_);
   for (std::size_t index = 0; index < nodes_.size(); ++index) {
     const NodeProto &stored = nodes_[index];
-    bool references_child = child.is_local_function_ &&
-                            stored.domain().value() == child.function_domain_ &&
-                            stored.op_type().value() == child.name_;
-    if (!references_child) {
-      for (GraphBuilder *subgraph : ReferencedSubgraphs(stored)) {
-        if (subgraph == &child || (child.is_local_function_ && depends_on_function(*subgraph))) {
-          references_child = true;
-          break;
-        }
-      }
+    const bool directly_affected = is_affected(stored, affected_values);
+    if (!directly_affected && affected_values.empty()) {
+      continue;
     }
-
     NodeProto materialized = stored;
     MaterializeGraphReferences(materialized);
     std::vector<std::string> references;
@@ -696,10 +787,11 @@ void GraphBuilder::RefreshNestedDependency(GraphBuilder &child, bool propagate_t
     const bool consumes_affected =
         std::any_of(references.begin(), references.end(),
                     [&](const std::string &name) { return affected_values.count(name) != 0; });
-    if (!references_child && !consumes_affected) {
+    if (!directly_affected && !consumes_affected) {
       continue;
     }
-    affected[index] = true;
+    affected = true;
+    compute_.Shapes().EraseNodeConstraints(stored);
     for (const std::string &output : stored.output()) {
       if (!output.empty()) {
         affected_values.insert(output);
@@ -720,17 +812,30 @@ void GraphBuilder::RefreshNestedDependency(GraphBuilder &child, bool propagate_t
     if (ready) {
       compute_.Shapes().set_current_node_index(static_cast<int64_t>(index));
       compute_.Shapes().ComputeShapeNode(materialized);
+      for (const auto &attribute : stored.attribute()) {
+        if (HasGraphReferenceSuffix(attribute.name().value()) &&
+            attribute.type() == AttributeProto::AttributeType::STRING && attribute.has_s()) {
+          const std::string attribute_name =
+              attribute.name().value().substr(0, attribute.name().value().size() - 4);
+          if (compute_.Shapes().HasSubgraphContext(static_cast<int64_t>(index), attribute_name)) {
+            NamedBuilderOrThrow(subgraphs_, attribute.s().value(), "subgraph")
+                .RefreshInferredInputsFrom(compute_.Shapes().GetSubgraphContext(
+                                               static_cast<int64_t>(index), attribute_name),
+                                           affected_values);
+          }
+        }
+      }
     }
-    const auto declarations = StructuredDeclarations(value_infos_);
     SeedDeclaredOutputs(compute_.Shapes(), stored, declarations);
     for (const auto &output : outputs_) {
       if (affected_values.count(output.name().value()) != 0) {
         SeedDeclaredValueInfo(compute_.Shapes(), output);
       }
     }
-    compute_.RefreshNode(nodes_, index, compute_.Shapes(), references, device_);
+    refreshed_references.emplace(index, std::move(references));
     compute_.AppendNodeConstant(stored, index);
   }
+  compute_.RefreshNodes(nodes_, refreshed_references, compute_.Shapes(), affected_values, device_);
   if (propagate_to_parent && !ancestor_refresh_suppressed_ && parent_ != nullptr &&
       !affected_values.empty()) {
     if (is_local_function_) {
@@ -738,6 +843,7 @@ void GraphBuilder::RefreshNestedDependency(GraphBuilder &child, bool propagate_t
     }
     parent_->RefreshNestedDependency(*this);
   }
+  return affected;
 }
 
 void GraphBuilder::RefreshAfterMutation() {

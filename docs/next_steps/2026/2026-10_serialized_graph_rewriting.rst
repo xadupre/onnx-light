@@ -214,7 +214,7 @@ This serializes matched edits, not a general declarative matching language.
 PR sequence
 +++++++++++
 
-Each PR depends on the preceding one; ORT integration is a separate consumer.
+Each PR depends on the preceding one.
 
 .. list-table::
    :header-rows: 1
@@ -276,17 +276,29 @@ schemas, kernels and resource requirements before replay on a working model.
 A requested incompatible variant fails with a clear error; canonical
 execution remains an explicit alternative, not a silent fallback.
 
-Optional ORT follow-up
-++++++++++++++++++++++
+Comparison with ORT runtime fusion
+++++++++++++++++++++++++++++++++++
 
 `ORT issue #33403 <https://github.com/microsoft/onnxruntime/issues/33403>`_
-and `design PR #33404 <https://github.com/microsoft/onnxruntime/pull/33404>`_
-propose runtime-discovered, post-partition fusion. This proposal instead
-stores edits discovered at export time; neither mechanism implements the
-other.
+proposes optional runtime fusion packages that match the graph after EP
+assignment and submit replacements using existing kernels. This proposal
+instead records concrete edits during export and bundles them with the
+canonical model for later replay, without rerunning the matcher. Updating
+export-time matching decisions requires regenerating the affected plans;
+ORT's proposed packages can update matching and adapter logic independently
+of the canonical artifact. Runtime matching can account for actual EP
+ownership and session kernel availability, whereas serialized variants must
+be selected and validated against the target runtime. Both approaches keep a
+canonical graph, but differ in when rewrites are discovered and how they are
+distributed.
 
-An ORT consumer PR must establish source-position-to-runtime-node identity
-before preprocessing changes the graph, then validate actual EP ownership,
-kernel availability and resources. It must reject stale plans, not apply
-canonical positions directly to a post-partition graph. Materialized standard
-ONNX export is the simpler initial interoperability path.
+Rewrite definitions can live outside the canonical graph: a Python exporter
+can construct and serialize ``RewritingProto`` records as data without
+providing a separately compiled runtime extension. Requiring exporters to
+ship a native fusion package would complicate Python-based export workflows;
+keep that requirement out of this design. ORT's proposed runtime packages
+instead carry executable matching and adapter logic behind an experimental
+extension interface. Serialized edits still require compatible operator
+implementations in the target runtime, but the exporter need not supply a
+binary merely to describe those edits. The bundled model remains the proposed
+distribution format; this does not introduce standalone rewrite files.

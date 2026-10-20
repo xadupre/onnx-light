@@ -391,7 +391,7 @@ public:
    *
    * @throws std::invalid_argument if ``handle`` is empty or already lease-backed,
    *         or if its buffer is not live in this arena or has already been
-   *         exported.
+   *         exported. The handle and its ownership remain unchanged on rejection.
    */
   AllocationHandle ExportHandle(AllocationHandle &&handle);
 

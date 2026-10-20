@@ -3,12 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/builder/graph_builder.h"
+#include "onnx_core/shapes/dispatch_table.h"
 #include "onnx_helper.h"
 #include "onnx_op/operator_sets.h"
 #include "onnx_proto/onnx_verify.h"
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -175,6 +177,73 @@ TEST(GraphBuilderControlflow, LoopBuildsAndImportsCarriedAndScanOutputs) {
     EXPECT_EQ(builder.GetShape("scanned").Shape()[1], core::symbolic::SymDim(2));
     EXPECT_EQ(builder.GetShape("scanned").Dtype(), core::symbolic::TensorType::kFloat);
     ExpectTensorRoundTrip(builder, {"final", "scanned"});
+  }
+}
+
+TEST(GraphBuilderControlflow, OpsetRefreshSynchronizesLoopFormalInputsAndConsumers) {
+  core::shapes::RegisterComputeShapeFn(
+      "loop_opset_test", "Grow", [](core::shapes::ShapesContext &ctx, const NodeProto &node) {
+        ctx.Set(node.output(0),
+                core::symbolic::SymTensor(nullptr, core::symbolic::TensorType::kFloat,
+                                          MakeShape({4, ctx.OpsetVersion("loop_opset_test")})));
+      });
+  core::builder::GraphBuilder builder("loop_graph", {}, {{"", 18}, {"loop_opset_test", 1}});
+  builder.MakeInput("trip_count", core::symbolic::TensorType::kInt64, MakeShape({}));
+  builder.MakeInput("condition", core::symbolic::TensorType::kBool, MakeShape({}));
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, MakeShape({4, 1}));
+  builder.MakeNode("Grow", {"x"}, {"initial"}, "loop_opset_test");
+  GraphProto body;
+  body.set_name("loop_body");
+  for (const char *name : {"iteration", "keep_going", "state"}) {
+    body.add_input()->set_name(name);
+  }
+  AddNode(body, "Identity", {"keep_going"}, {"next_condition"});
+  AddNode(body, "Neg", {"state"}, {"next_state"});
+  AddNode(body, "Abs", {"x"}, {"independent"});
+  auto &select = AddNode(body, "If", {"keep_going"}, {"scan_item"});
+  for (const char *name : {"then_branch", "else_branch"}) {
+    GraphProto branch;
+    branch.set_name(name);
+    AddNode(branch, "Identity", {"next_state"}, {std::string(name) + "_result"});
+    branch.add_output()->set_name(std::string(name) + "_result");
+    AddGraphAttribute(select, name, branch);
+  }
+  for (const char *name : {"next_condition", "next_state", "scan_item"}) {
+    body.add_output()->set_name(name);
+  }
+  NodeProto node = MakeNode("Loop", {"trip_count", "condition", "initial"}, {"final", "scanned"});
+  AddGraphAttribute(node, "body", body);
+  builder.MakeNode("Loop", {"trip_count", "condition", "initial"}, {"final", "scanned"}, "", "",
+                   node.attribute());
+  auto &scope = builder.Subgraph("loop_body");
+  auto &shapes = const_cast<core::shapes::ShapesContext &>(scope.Shapes());
+  shapes.set_events_enabled(true);
+
+  for (int version : {2, 3, 1}) {
+    shapes.ClearEvents();
+    builder.SetOpsetVersion("loop_opset_test", version);
+    const auto expected_shape = MakeShape({4, version});
+    EXPECT_EQ(scope.GetShape("state").Shape(), expected_shape);
+    EXPECT_EQ(scope.GetShape("next_state").Shape(), expected_shape);
+    EXPECT_EQ(scope.GetShape("scan_item").Shape(), expected_shape);
+    EXPECT_EQ(scope.GetShape("independent").Shape(), MakeShape({4, 1}));
+    const auto &inferred_body = builder.Shapes().GetSubgraphContext(1, "body");
+    EXPECT_EQ(scope.GetShape("state"), inferred_body.Get("state"));
+    for (auto *nested : {&scope.Subgraph("then_branch"), &scope.Subgraph("else_branch")}) {
+      EXPECT_EQ(nested->GetShape("next_state").Shape(), expected_shape);
+    }
+    for (const auto *current :
+         {&scope, &scope.Subgraph("then_branch"), &scope.Subgraph("else_branch")}) {
+      core::compute::ComputeContext expected;
+      const GraphProto graph = current->BuildGraph();
+      const auto tags = expected.ComputeValueAndNodeTags(graph);
+      expected.ComputeInPlaceReuseGraph(graph, current->Shapes(), false, tags.first);
+      EXPECT_EQ(current->Compute().Reuse(), expected.Reuse());
+      EXPECT_EQ(current->Compute().Memory(), expected.Memory());
+    }
+    EXPECT_FALSE(std::any_of(shapes.Events().begin(), shapes.Events().end(), [](const auto &event) {
+      return event.action == core::shapes::ShapeEventAction::kComputeNode && event.op_type == "Abs";
+    }));
   }
 }
 

@@ -623,8 +623,8 @@ public:
   GraphProto BuildGraph() const;
 
   /// Applies ordered captured rewrites and returns a new, validated builder.
-  /// Preserves the source builder and recorded node order, and merges added
-  /// functions and opset imports. Requires a root model builder.
+  /// Preserves the source builder, maintains dependency-consistent node order,
+  /// and merges added functions and opset imports. Requires a root model builder.
   /// Reuses identical function definitions after builder normalization.
   /// Throws on conflicting definitions or calls incompatible with the merged
   /// definitions, even when a later edit would remove those calls.

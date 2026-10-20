@@ -942,10 +942,25 @@ void GraphBuilder::RefreshAfterRewriting(const std::vector<std::size_t> &old_ind
   for (std::size_t index = 0; index < nodes_.size(); ++index) {
     CollectNodeReferences(nodes_[index], references[index]);
   }
-  const auto order = TopologicalNodeOrder(nodes_, available, references);
+  auto order = TopologicalNodeOrder(nodes_, available, references);
+  utils::RepeatedProtoField<NodeProto> sorted;
+  sorted.reserve(nodes_.size());
+  std::vector<std::size_t> sorted_indices;
+  sorted_indices.reserve(nodes_.size());
+  std::vector<std::vector<std::string>> sorted_references;
+  sorted_references.reserve(nodes_.size());
+  for (std::size_t index : order) {
+    sorted.add();
+    sorted.get(sorted.size() - 1) = nodes_.shared_at(index);
+    sorted_indices.push_back(old_indices[index]);
+    sorted_references.push_back(std::move(references[index]));
+  }
+  nodes_ = std::move(sorted);
+  references = std::move(sorted_references);
+  std::iota(order.begin(), order.end(), 0);
   const auto old_count = compute_.Size();
   for (std::size_t index : order) {
-    if (old_indices[index] == old_count ||
+    if (sorted_indices[index] == old_count ||
         std::any_of(references[index].begin(), references[index].end(),
                     [&](const auto &name) { return affected_values.count(name) != 0; })) {
       for (const auto &output : nodes_[index].output()) {
@@ -955,7 +970,7 @@ void GraphBuilder::RefreshAfterRewriting(const std::vector<std::size_t> &old_ind
       }
     }
   }
-  compute_.UpdateNodes(nodes_, old_indices, references, affected_values, device_);
+  compute_.UpdateNodes(nodes_, sorted_indices, references, affected_values, device_);
   auto &shapes = compute_.Shapes();
   for (const auto &name : affected_values) {
     if (parent_ != nullptr && inherited_names_.count(name) != 0) {
@@ -1686,15 +1701,7 @@ void GraphBuilder::ImportGraph(const GraphProto &graph) {
     }
   }
   const auto declarations = StructuredDeclarations(value_infos_);
-  std::unordered_set<std::string> available = inherited_names_;
-  available.insert(names_.begin(), names_.end());
-  std::vector<std::vector<std::string>> references(graph.node().size());
-  for (std::size_t index = 0; index < graph.node().size(); ++index) {
-    CollectNodeReferences(graph.node(index), references[index]);
-  }
-  const auto order = TopologicalNodeOrder(graph.node(), available, references);
-  for (std::size_t index : order) {
-    const auto &node = graph.node(index);
+  for (const auto &node : graph.node()) {
     std::vector<std::string> inputs;
     inputs.reserve(node.input().size());
     for (std::size_t i = 0; i < node.input().size(); ++i) {
@@ -1721,23 +1728,6 @@ void GraphBuilder::ImportGraph(const GraphProto &graph) {
   }
   for (const auto &output : graph.output()) {
     MakeOutput(output);
-  }
-  std::vector<std::size_t> old_indices(order.size());
-  bool reordered = false;
-  for (std::size_t index = 0; index < order.size(); ++index) {
-    old_indices[order[index]] = index;
-    reordered |= order[index] != index;
-  }
-  if (reordered) {
-    // Inference uses dependency order; serialized rewrite coordinates keep recorded order.
-    utils::RepeatedProtoField<NodeProto> recorded;
-    recorded.reserve(nodes_.size());
-    for (std::size_t index : old_indices) {
-      recorded.push_back(std::move(nodes_[index]));
-    }
-    nodes_ = std::move(recorded);
-    compute_.UpdateNodes(nodes_, old_indices, references, {}, device_);
-    compute_.RefreshIncrementalMemory(nodes_, compute_.Shapes());
   }
 }
 
@@ -3011,7 +3001,30 @@ std::size_t GraphBuilder::ConstantFold(const ConstantFoldingOptions &options) {
 std::size_t
 GraphBuilder::ConstantFoldNodes(const ConstantFoldingOptions &options,
                                 const std::unordered_set<std::string> &included_outputs) {
-  return ConstantFoldImpl(options, &included_outputs);
+  std::unordered_map<const NodeProto *, std::size_t> indices;
+  std::vector<std::shared_ptr<NodeProto>> original_nodes;
+  for (std::size_t index = 0; index < nodes_.size(); ++index) {
+    indices.emplace(&nodes_[index], index);
+    original_nodes.push_back(nodes_.shared_at(index));
+  }
+  const auto initializer_count = initializers_.size();
+  const auto removed = ConstantFoldImpl(options, &included_outputs);
+  if (removed != 0) {
+    std::vector<std::size_t> old_indices;
+    std::unordered_set<const NodeProto *> retained;
+    for (const auto &node : nodes_) {
+      old_indices.push_back(indices.at(&node));
+      retained.insert(&node);
+    }
+    for (const auto &node : original_nodes)
+      if (retained.count(node.get()) == 0)
+        compute_.Shapes().EraseNodeConstraints(*node);
+    std::unordered_set<std::string> affected_values;
+    for (std::size_t index = initializer_count; index < initializers_.size(); ++index)
+      affected_values.insert(initializers_[index].name().value());
+    RefreshAfterRewriting(old_indices, std::move(affected_values));
+  }
+  return removed;
 }
 
 std::size_t
@@ -3125,7 +3138,8 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
       }
     }
     if (!candidate) {
-      kept.push_back(std::move(node));
+      kept.add();
+      kept.get(kept.size() - 1) = nodes_.shared_at(idx);
       continue;
     }
 
@@ -3145,7 +3159,8 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
     // only folded when the caller opts in, so they can be deferred to a final
     // pass.
     if (!is_shape_result && !options.fold_weights) {
-      kept.push_back(std::move(node));
+      kept.add();
+      kept.get(kept.size() - 1) = nodes_.shared_at(idx);
       continue;
     }
 
@@ -3165,7 +3180,8 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
                            op_type + "' in domain '" + normalised_domain +
                            "', but no runtime kernel is registered.");
       }
-      kept.push_back(std::move(node));
+      kept.add();
+      kept.get(kept.size() - 1) = nodes_.shared_at(idx);
       continue;
     }
 
@@ -3200,7 +3216,8 @@ GraphBuilder::ConstantFoldImpl(const ConstantFoldingOptions &options,
       }
     }
     if (!within_threshold) {
-      kept.push_back(std::move(node));
+      kept.add();
+      kept.get(kept.size() - 1) = nodes_.shared_at(idx);
       continue;
     }
 

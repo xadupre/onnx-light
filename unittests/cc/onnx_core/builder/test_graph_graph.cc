@@ -701,6 +701,40 @@ TEST(GraphGraph, ReplayRestoresDependenciesAndReuseBeforeExport) {
   EXPECT_EQ(replayed.Compute().PeakMemory(), reversed.Compute().PeakMemory());
 }
 
+TEST(GraphGraph, ReplayInsertsProducerBeforeConsumersWithoutSortingIndependentNodes) {
+  core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 28}});
+  source.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+  source.MakeNode("Neg", {"X"}, {"p"});
+  source.MakeNode("Relu", {"p"}, {"Y"});
+  source.MakeNode("Abs", {"X"}, {"independent"});
+  source.MakeNode("Identity", {"p"}, {"tail"});
+  source.MakeOutput("Y");
+  source.MakeOutput("independent");
+  source.MakeOutput("tail");
+  RewritingProto plan;
+  auto &rewrite = *plan.add_rewrites();
+  rewrite.add_matched_nodes(0);
+  rewrite.add_added_nodes(MakeNode("Mul", {"X", "X"}, {"p"}));
+  rewrite.add_added_nodes_positions(3);
+  auto result = source.ApplyRewritings(plan);
+  ASSERT_EQ(result.Nodes().size(), 4u);
+  const std::vector<std::string> expected{"p", "Y", "independent", "tail"};
+  for (std::size_t index = 0; index < expected.size(); ++index) {
+    EXPECT_EQ(result.Nodes()[index].output(0), expected[index]);
+    EXPECT_EQ(result.GetShape(expected[index]), source.GetShape(expected[index]));
+  }
+  EXPECT_TRUE(result.Compute().NodeReuse(0).empty());
+  EXPECT_TRUE(result.Compute().NodeReuse(1).empty());
+  auto unchanged = result.ApplyRewritings(RewritingProto{});
+  EXPECT_EQ(unchanged.BuildGraph().SerializeAsString(), result.BuildGraph().SerializeAsString());
+  EXPECT_EQ(unchanged.Compute().Memory(), result.Compute().Memory());
+  EXPECT_EQ(unchanged.Compute().PeakMemory(), result.Compute().PeakMemory());
+  const auto exported = result.ToGraph();
+  for (std::size_t index = 0; index < expected.size(); ++index) {
+    EXPECT_EQ(exported.node(index).output(0), expected[index]);
+  }
+}
+
 TEST(GraphGraph, RewritingReindexesRetainedControlFlowContexts) {
   core::builder::GraphBuilder source("g", SchemaLookup(), {{"", 28}});
   source.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
@@ -815,17 +849,30 @@ TEST(GraphGraph, NativeExportOrdersProducerBeforeLexicalCapture) {
   }
   builder.MakeNode("If", {"condition"}, {"selected"}, "", "", attributes);
   builder.MakeOutput("selected");
+  builder.MakeNode("Abs", {"X"}, {"independent"});
+  builder.MakeOutput("independent");
   builder.MakeNode("Abs", {"p"}, {"Y"});
   builder.MakeOutput("Y");
+  ModelProto original;
+  *original.mutable_graph() = builder.BuildGraph();
+  original.add_opset("", 28);
   std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
   patterns.push_back(std::make_unique<ReverseReplacementOrder>());
   core::builder::GraphGraph optimizer(builder, std::move(patterns));
-  optimizer.Optimize(1);
+  const auto plan = optimizer.Optimize(1);
+  ASSERT_EQ(builder.Nodes().size(), 4u);
+  EXPECT_EQ(builder.Nodes()[0].op_type(), "Mul");
+  EXPECT_EQ(builder.Nodes()[1].op_type(), "If");
+  EXPECT_EQ(builder.Nodes()[2].output(0), "independent");
+  EXPECT_EQ(builder.Nodes()[3].op_type(), "Add");
+  auto replayed = core::builder::GraphBuilder(original, SchemaLookup()).ApplyRewritings(plan);
+  EXPECT_EQ(replayed.BuildGraph().SerializeAsString(), builder.BuildGraph().SerializeAsString());
   const GraphProto graph = builder.ToGraph();
-  ASSERT_EQ(graph.node().size(), 3u);
+  ASSERT_EQ(graph.node().size(), 4u);
   EXPECT_EQ(graph.node(0).op_type(), "Mul");
   EXPECT_EQ(graph.node(1).op_type(), "If");
-  EXPECT_EQ(graph.node(2).op_type(), "Add");
+  EXPECT_EQ(graph.node(2).output(0), "independent");
+  EXPECT_EQ(graph.node(3).op_type(), "Add");
 }
 
 TEST(GraphGraph, NativeExportRejectsCyclesAndUndefinedDependencies) {

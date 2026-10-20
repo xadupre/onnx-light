@@ -397,8 +397,8 @@ void OrderPreparationDependencies(std::vector<PendingReplacement> &replacements)
   replacements = std::move(ordered);
 }
 
-// Rebases sequential coordinates in dependency order. Only intervals containing
-// a new backward edge need sorting; untouched node dependencies stay indexed.
+// Rebases sequential coordinates by inserting blocked consumers after their
+// producers. Untouched node dependencies stay indexed.
 utils::RepeatedProtoField<NodeProto> NormalizeBatch(
     std::vector<PendingReplacement> &replacements,
     const utils::RepeatedProtoField<NodeProto> &original_nodes, std::size_t initializer_count,
@@ -406,7 +406,7 @@ utils::RepeatedProtoField<NodeProto> NormalizeBatch(
     const std::function<std::vector<std::string>(const NodeProto &)> &node_references,
     const std::function<std::vector<std::size_t>(
         const utils::RepeatedProtoField<NodeProto> &, const std::unordered_set<std::string> &,
-        const std::vector<std::vector<std::string>> &)> &node_order) {
+        const std::vector<std::vector<std::string>> &, const std::vector<bool> &)> &insert_nodes) {
   const std::size_t node_count = original_nodes.size();
   utils::RepeatedProtoField<NodeProto> nodes;
   std::unordered_map<const NodeProto *, std::size_t> positions;
@@ -525,6 +525,10 @@ utils::RepeatedProtoField<NodeProto> NormalizeBatch(
     if (first < nodes.size()) {
       utils::RepeatedProtoField<NodeProto> interval;
       std::vector<std::vector<std::string>> interval_references;
+      std::vector<bool> interval_additions;
+      std::unordered_set<const NodeProto *> added_nodes;
+      for (const auto &node : rewrite.added_nodes())
+        added_nodes.insert(&node);
       auto external = available;
       for (const auto &[name, producer] : producers)
         if (positions.at(producer) < first || positions.at(producer) > last)
@@ -535,8 +539,9 @@ utils::RepeatedProtoField<NodeProto> NormalizeBatch(
         interval.add();
         interval.get(interval.size() - 1) = nodes.shared_at(position);
         interval_references.push_back(references.at(&nodes[position]));
+        interval_additions.push_back(added_nodes.count(&nodes[position]) != 0);
       }
-      const auto order = node_order(interval, external, interval_references);
+      const auto order = insert_nodes(interval, external, interval_references, interval_additions);
       for (std::size_t offset = 0; offset < order.size(); ++offset) {
         nodes.get(first + offset) = interval.shared_at(order[offset]);
         positions[&nodes[first + offset]] = first + offset;
@@ -1288,8 +1293,8 @@ RewritingProto GraphGraph::OptimizeImpl(int max_iter, OptimizationReport *report
             builder_.CollectNodeReferences(node, references);
             return references;
           },
-          [](const auto &nodes, const auto &external, const auto &references) {
-            return GraphBuilder::TopologicalNodeOrder(nodes, external, references);
+          [](const auto &nodes, const auto &external, const auto &references, const auto &added) {
+            return GraphBuilder::InsertNodesInDependencyOrder(nodes, external, references, added);
           });
       std::unordered_map<std::string, std::size_t> current_indices;
       for (std::size_t index = 0; index < builder_.nodes_.size(); ++index)

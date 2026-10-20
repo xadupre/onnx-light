@@ -26,16 +26,24 @@ Preparation separates declaration from execution:
 
 * ``DeclarePreparations(context)`` resolves and tunes the planned kernels and
   records their immutable work without seeding or reading initializer payloads.
-  A ``KernelPreparation`` names source inputs, a representation, output slots,
-  dependency indices, a memory estimator, and an execution callable.
+  A ``KernelPreparation`` contains its metadata in ``info``, a
+  ``KernelPreparationInfo`` describing source inputs, a representation, output
+  slots and dependency indices, alongside a memory estimator and an execution
+  callable.
 * ``ExecutePreparations(context, memory_limit)`` executes ready declarations
   whose dependencies and source tensors are available and whose estimated peak
   fits the budget. It does not load or seed missing initializers.
+  The overload taking ``changed_sources`` schedules only their indexed
+  consumers, newly satisfied dependencies and work unblocked by a larger budget.
+  Source hints never bypass availability, intermediate-provenance or tuning
+  validation. ``preparation_readiness_checks()`` reports candidate inspections.
 * ``Prepare(context)`` seeds available initializers and executes ready work
   without running inference or requiring example feeds.
 * ``pending_preparations()`` exposes metadata-only diagnostics for deferred
   work, including unavailable sources and budget-limited work. Diagnostics
-  contain no execution callables and do not force deferred branches to run.
+  copy the declaration's ``info`` and add the session index and current tuning
+  status. They contain no execution callables, remain readable after session
+  destruction, and do not force deferred branches to run.
   ``EstimatePreparationMemory(context, index)`` estimates a declaration by its
   diagnostic index without exporting its session-borrowing callbacks.
   ``awaits_runtime_tuning`` distinguishes work whose input type is not yet

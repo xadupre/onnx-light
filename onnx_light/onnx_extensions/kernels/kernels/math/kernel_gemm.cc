@@ -328,9 +328,9 @@ void Gemm::DeclarePreparations(const std::unordered_set<std::string> &immutable_
   const std::string source = node_->input(1);
   const int64_t trans_b = GetAttributeIntOrDefault(*node_, "transB", 0);
   KernelPreparation preparation;
-  preparation.source_inputs = {source};
-  preparation.representation = "Gemm:B:column-major-k-v1";
-  preparation.output_slots = {source + ":" + preparation.representation};
+  preparation.info.source_inputs = {source};
+  preparation.info.representation = "Gemm:B:column-major-k-v1";
+  preparation.info.output_slots = {source + ":" + preparation.info.representation};
   preparation.estimate_memory = [source, trans_b](const RuntimeContext &rt) {
     const Tensor &b = rt.Get(source);
     const size_t source_bytes = ValidateConstantB(b, trans_b);

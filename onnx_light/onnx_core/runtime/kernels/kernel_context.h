@@ -49,6 +49,16 @@ struct KernelPreparationMemory {
   size_t prepared_bytes = 0;
 };
 
+/// Describes preparation work without exposing kernel-borrowing executable callables.
+struct KernelPreparationInfo {
+  size_t index = 0;
+  std::vector<std::string> source_inputs;
+  std::string representation;
+  std::vector<std::string> output_slots;
+  std::vector<size_t> dependencies;
+  bool awaits_runtime_tuning = false;
+};
+
 /**
  * Declares immutable work without accessing source payloads.
  *
@@ -57,22 +67,9 @@ struct KernelPreparationMemory {
  * Execution must publish complete outputs only after successful computation.
  */
 struct KernelPreparation {
-  std::vector<std::string> source_inputs;
-  std::string representation;
-  std::vector<std::string> output_slots;
-  std::vector<size_t> dependencies;
+  KernelPreparationInfo info;
   std::function<KernelPreparationMemory(const RuntimeContext &)> estimate_memory;
   std::function<void(RuntimeContext &)> execute;
-};
-
-/// Describes deferred work without exposing kernel-borrowing executable callables.
-struct KernelPreparationInfo {
-  size_t index = 0;
-  std::vector<std::string> source_inputs;
-  std::string representation;
-  std::vector<std::string> output_slots;
-  std::vector<size_t> dependencies;
-  bool awaits_runtime_tuning = false;
 };
 
 /// Immutable opset imports owned by a model or function session.

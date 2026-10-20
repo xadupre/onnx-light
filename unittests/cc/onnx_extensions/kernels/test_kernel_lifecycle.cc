@@ -81,10 +81,10 @@ public:
     const size_t first = preparations.size();
     for (int stage : {1, 2}) {
       core::runtime::KernelPreparation preparation;
-      preparation.source_inputs = {record_->source};
-      preparation.representation = "test";
+      preparation.info.source_inputs = {record_->source};
+      preparation.info.representation = "test";
       if (stage == 2)
-        preparation.dependencies = {first};
+        preparation.info.dependencies = {first};
       preparation.estimate_memory = [](const RuntimeContext &) {
         return core::runtime::KernelPreparationMemory{};
       };
@@ -472,7 +472,8 @@ TEST(KernelLifecycle, GemmPreparationDefersWhenPeakMemoryCannotBeAdmitted) {
   RuntimeContext rt;
   session.DeclarePreparations(rt);
   rt.Put("B", Tensor::FromFloat("B", {3, 2}, {1, 2, 3, 4, 5, 6}));
-  session.ExecutePreparations(rt, 12 * sizeof(float) - 1);
+  const std::string sources[] = {"B"};
+  session.ExecutePreparations(rt, 12 * sizeof(float) - 1, sources);
   EXPECT_EQ(session.prepared_bytes(), 0u);
   ASSERT_EQ(session.pending_preparations().size(), 1u);
   const auto memory =
@@ -480,7 +481,7 @@ TEST(KernelLifecycle, GemmPreparationDefersWhenPeakMemoryCannotBeAdmitted) {
   EXPECT_EQ(memory.source_bytes, 6 * sizeof(float));
   EXPECT_EQ(memory.temporary_bytes, 0u);
   EXPECT_EQ(memory.prepared_bytes, 6 * sizeof(float));
-  session.ExecutePreparations(rt, 12 * sizeof(float));
+  session.ExecutePreparations(rt, 12 * sizeof(float), {});
   EXPECT_TRUE(session.pending_preparations().empty());
 }
 

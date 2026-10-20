@@ -533,15 +533,29 @@ void RuntimeSession::InitializeKernels(RuntimeContext &rt,
     }
   }
   preparation_complete_.assign(preparations_.size(), false);
+  preparation_queued_.assign(preparations_.size(), false);
+  preparation_dependents_.resize(preparations_.size());
   pending_preparation_count_ = preparations_.size();
   for (size_t index = 0; index < preparations_.size(); ++index) {
     const auto &preparation = preparations_[index];
     EXT_ENFORCE_INVALID(preparation.execute && preparation.estimate_memory,
                         "RuntimeSession: preparation requires execution and memory callbacks.");
-    for (size_t dependency : preparation.dependencies) {
+    for (size_t dependency : preparation.info.dependencies) {
       EXT_ENFORCE_INVALID(dependency < index,
                           "RuntimeSession: preparation dependency must precede its consumer.");
+      preparation_dependents_[dependency].push_back(index);
     }
+    for (const auto &source : preparation.info.source_inputs)
+      preparation_source_consumers_[source].push_back(index);
+    const size_t node_index = preparation_node_indices_[index];
+    if (kernels_[node_index].tuning_deferred) {
+      const auto &node = *nodes[node_index];
+      const int32_t selected = kernels_[node_index].instance->TuningInputIndex();
+      for (int input = 0; input < node.input_size(); ++input)
+        if ((selected < 0 || selected == input) && !node.input(input).empty())
+          preparation_source_consumers_[node.input(input)].push_back(index);
+    }
+    QueuePreparation(index);
   }
 
   // Record the external inputs the scheduled nodes read (names not produced by
@@ -607,7 +621,32 @@ void RuntimeSession::Prepare(RuntimeContext &rt) {
 }
 
 void RuntimeSession::ExecutePreparations(RuntimeContext &rt, size_t memory_limit) {
+  DeclarePreparations(rt);
+  for (size_t index = 0; index < preparations_.size(); ++index)
+    QueuePreparation(index);
   ExecutePreparationsImpl(rt, memory_limit, {});
+}
+
+void RuntimeSession::ExecutePreparations(RuntimeContext &rt, size_t memory_limit,
+                                         std::span<const std::string> changed_sources) {
+  DeclarePreparations(rt);
+  for (const auto &source : changed_sources)
+    QueuePreparationsForSource(source);
+  ExecutePreparationsImpl(rt, memory_limit, {});
+}
+
+void RuntimeSession::QueuePreparation(size_t index) {
+  if (!preparation_complete_[index] && !preparation_queued_[index]) {
+    preparation_candidates_.push_back(index);
+    preparation_queued_[index] = true;
+  }
+}
+
+void RuntimeSession::QueuePreparationsForSource(const std::string &name) {
+  const auto found = preparation_source_consumers_.find(name);
+  if (found != preparation_source_consumers_.end())
+    for (size_t index : found->second)
+      QueuePreparation(index);
 }
 
 void RuntimeSession::ExecutePreparationsImpl(
@@ -621,20 +660,29 @@ void RuntimeSession::ExecutePreparationsImpl(
                                                                   : cpu_executor().get());
   if (rt.value_store_owner() != value_store_)
     rt.SetValueStore(value_store_);
+  if (memory_limit > preparation_memory_limit_ ||
+      value_store_->prepared_bytes() < preparation_store_bytes_)
+    for (size_t index : preparation_budget_blocked_)
+      QueuePreparation(index);
+  preparation_memory_limit_ = memory_limit;
   try {
-    for (size_t index = 0; index < preparations_.size(); ++index) {
+    while (!preparation_candidates_.empty()) {
+      const size_t index = preparation_candidates_.front();
+      preparation_candidates_.pop_front();
+      preparation_queued_[index] = false;
       if (preparation_complete_[index])
         continue;
+      ++preparation_readiness_checks_;
       const size_t node_index = preparation_node_indices_[index];
       ResolveDeferredTuning(node_index, rt, available_outputs);
       if (kernels_[node_index].tuning_deferred)
         continue;
       const KernelPreparation &preparation = preparations_[index];
       bool ready = true;
-      for (const std::string &name : preparation.source_inputs)
+      for (const std::string &name : preparation.info.source_inputs)
         ready = ready && rt.HasValue(name) &&
                 (!node_output_names_.contains(name) || available_outputs.contains(name));
-      for (size_t dependency : preparation.dependencies)
+      for (size_t dependency : preparation.info.dependencies)
         ready = ready && preparation_complete_[dependency];
       if (!ready)
         continue;
@@ -648,13 +696,19 @@ void RuntimeSession::ExecutePreparationsImpl(
         }
         remaining -= bytes;
       }
-      if (!ready)
+      if (!ready) {
+        preparation_budget_blocked_.insert(index);
         continue;
+      }
       preparation_peak_bytes_ = std::max(preparation_peak_bytes_, memory_limit - remaining);
       preparation.execute(rt);
       preparation_complete_[index] = true;
+      preparation_budget_blocked_.erase(index);
       --pending_preparation_count_;
+      for (size_t dependent : preparation_dependents_[index])
+        QueuePreparation(dependent);
     }
+    preparation_store_bytes_ = value_store_->prepared_bytes();
   } catch (...) {
     preparation_failure_ = std::current_exception();
     throw;
@@ -668,7 +722,7 @@ KernelPreparationMemory RuntimeSession::EstimatePreparationMemory(const RuntimeC
   EXT_ENFORCE_INVALID(preparation_index < preparations_.size(),
                       "RuntimeSession: preparation index is out of bounds.");
   const KernelPreparation &preparation = preparations_[preparation_index];
-  for (const std::string &name : preparation.source_inputs)
+  for (const std::string &name : preparation.info.source_inputs)
     EXT_ENFORCE_INVALID(rt.HasValue(name),
                         "RuntimeSession: preparation source is unavailable: ", name);
   return preparation.estimate_memory(rt);
@@ -680,10 +734,10 @@ std::vector<KernelPreparationInfo> RuntimeSession::pending_preparations() const 
   for (size_t index = 0; index < preparations_.size(); ++index) {
     if (index < preparation_complete_.size() && preparation_complete_[index])
       continue;
-    const KernelPreparation &preparation = preparations_[index];
-    pending.push_back({index, preparation.source_inputs, preparation.representation,
-                       preparation.output_slots, preparation.dependencies,
-                       kernels_[preparation_node_indices_[index]].tuning_deferred});
+    pending.push_back(preparations_[index].info);
+    pending.back().index = index;
+    pending.back().awaits_runtime_tuning =
+        kernels_[preparation_node_indices_[index]].tuning_deferred;
   }
   return pending;
 }
@@ -934,6 +988,9 @@ void RuntimeSession::Run(RuntimeContext &rt) {
         ResolveDeferredTuning(index, rt, available_preparation_outputs, true);
       if (pending_preparation_count_ != 0 &&
           prepared.preparation_begin != prepared.preparation_end) {
+        for (size_t preparation = prepared.preparation_begin;
+             preparation < prepared.preparation_end; ++preparation)
+          QueuePreparation(preparation);
         ExecutePreparationsImpl(rt, std::numeric_limits<size_t>::max(),
                                 available_preparation_outputs);
         for (size_t preparation = prepared.preparation_begin;
@@ -998,8 +1055,10 @@ void RuntimeSession::Run(RuntimeContext &rt) {
 
       prepared.instance->Run(rt);
       if (pending_preparation_count_ != 0 || pending_tuning_count_ != 0)
-        for (const auto &output : node.output())
+        for (const auto &output : node.output()) {
           available_preparation_outputs.insert(output);
+          QueuePreparationsForSource(output);
+        }
 
       if (logging) {
         const int64_t duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(

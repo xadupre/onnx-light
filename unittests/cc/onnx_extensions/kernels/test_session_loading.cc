@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_core/runtime/kernels/value_store.h"
+#include "onnx_core/runtime/quantization.h"
 #include "onnx_core/runtime/runtime_session_loader.h"
 #include "onnx_extensions/kernels/kernel_dispatch_table.h"
 #include "onnx_proto/onnx_helper.h"
@@ -39,7 +40,7 @@ public:
                            std::vector<KernelPreparation> &preparations) override {
     KernelPreparation preparation;
     if (node_->input_size() != 0)
-      preparation.source_inputs = {node_->input(0)};
+      preparation.info.source_inputs = {node_->input(0)};
     preparation.estimate_memory = [](const RuntimeContext &) { return KernelPreparationMemory{}; };
     preparation.execute = [this](RuntimeContext &) {
       ++*executions_;
@@ -233,6 +234,64 @@ TEST_F(RuntimeSessionLoading, SerialBaselineLoadsAllPayloadsBeforePreparation) {
   EXPECT_EQ(Run(loaded.session(), rt), (std::vector<float>{22, 28, 22, 28}));
 }
 
+TEST_F(RuntimeSessionLoading, LoadsSharedQuantizationSourcesBeforeSessionConstruction) {
+  auto model = ReadModel();
+  const auto encoded = QuantizeTensor(Tensor::FromFloat("X", {3}, {-2, 0, 2}),
+                                      MakeQuantizationPlan(QuantizationFormat::kInt4, 3));
+  auto *annotation = model.ref_graph().add_quantization_annotation();
+  annotation->set_tensor_name("onnx_light.quantization.parameters:shared");
+  const auto add = [&](const std::string &role, const std::string &bytes) {
+    auto *tensor = model.ref_graph().add_initializer();
+    tensor->set_name(role);
+    tensor->set_data_type(TensorProto::UINT8);
+    tensor->add_dims(bytes.size());
+    tensor->set_raw_data(bytes);
+    auto *mapping = annotation->add_quant_parameter_tensor_names();
+    mapping->set_key(role);
+    mapping->set_value(role);
+  };
+  add("storage_type", encoded.Encoded().struct_type().SerializeAsString());
+  add("logical_type", encoded.Encoded().logical_type().SerializeAsString());
+  auto *scales = model.ref_graph().add_initializer();
+  scales->set_name("scales");
+  scales->set_data_type(TensorProto::DOUBLE);
+  scales->set_data_location(TensorProto::EXTERNAL);
+  auto *entry = scales->add_external_data();
+  entry->set_key("location");
+  entry->set_value("scales.bin");
+  entry = scales->add_external_data();
+  entry->set_key("length");
+  entry->set_value("8");
+  auto *mapping = annotation->add_quant_parameter_tensor_names();
+  mapping->set_key("scales");
+  mapping->set_value("scales");
+  {
+    const double scale = 2;
+    std::ofstream payload(directory / "scales.bin", std::ios::binary);
+    payload.write(reinterpret_cast<const char *>(&scale), sizeof(scale));
+  }
+  SaveModel(model);
+  for (bool overlap : {false, true}) {
+    RuntimeContext rt;
+    RuntimeLoadOptions options;
+    options.overlap_preparation = overlap;
+    bool scales_loaded = false;
+    options.trace = [&](const RuntimeLoadEvent &event) {
+      if (event.phase == RuntimeLoadPhase::kReadFinished && event.tensor_name == "scales")
+        scales_loaded = true;
+      if (event.phase == RuntimeLoadPhase::kDeclared) {
+        EXPECT_TRUE(scales_loaded);
+      }
+    };
+    LoadedRuntimeSession loaded(Path(), rt, {}, options);
+    EXPECT_TRUE(scales_loaded);
+    EXPECT_EQ(loaded.statistics().external_tensors, 3u);
+    EXPECT_EQ(Run(loaded.session(), rt), (std::vector<float>{22, 28, 22, 28}));
+    ASSERT_NE(rt.quantization_parameters(), nullptr);
+    EXPECT_NO_THROW(rt.quantization_parameters()->Get("shared"));
+  }
+}
+
 TEST_F(RuntimeSessionLoading, OverlapsInlinePreparationWithExternalRead) {
   auto model = ReadModel();
   auto &weight = model.ref_graph().ref_initializer()[0];
@@ -359,6 +418,37 @@ TEST_F(RuntimeSessionLoading, DefersIntermediatePreparationUntilItsConsumer) {
   EXPECT_FLOAT_EQ(rt.Get("Y0").AsFloat()[5], 6);
   loaded.session().Run(rt);
   EXPECT_EQ(*executions, 1u);
+}
+
+TEST_F(RuntimeSessionLoading, IndependentWeightsVisitOnlyNewlyEnabledPreparations) {
+  auto model = ReadModel();
+  const TensorProto original = model.graph().initializer(0);
+  auto &graph = model.ref_graph();
+  graph.ref_initializer().clear();
+  graph.ref_node().clear();
+  graph.ref_output().clear();
+  constexpr size_t count = 64;
+  for (size_t index = 0; index < count; ++index) {
+    const std::string source = "B" + std::to_string(index);
+    const std::string output = "Y" + std::to_string(index);
+    auto *tensor = graph.add_initializer();
+    *tensor = original;
+    tensor->set_name(source);
+    graph.add_output()->set_name(output);
+    graph.add_node(MakeNode("LoadingPreparedIdentity", {source}, {output}));
+  }
+  SaveModel(model);
+  RuntimeContext rt;
+  const auto executions = std::make_shared<size_t>(0);
+  ASSERT_TRUE(rt.RegisterKernelFn(
+      "ai.onnx", "LoadingPreparedIdentity", core::symbolic::Device::kCPU,
+      [executions](const NodeProto &node, RuntimeContext &, const KernelContext &) {
+        return std::make_unique<LoadingPreparedIdentity>(node, executions);
+      }));
+  LoadedRuntimeSession loaded(Path(), rt);
+  EXPECT_EQ(*executions, count);
+  EXPECT_TRUE(loaded.session().pending_preparations().empty());
+  EXPECT_LE(loaded.session().preparation_readiness_checks(), 2 * count);
 }
 
 TEST_F(RuntimeSessionLoading, ExecutesSourceFreePreparationWithoutAnyPayload) {
@@ -655,11 +745,28 @@ TEST_F(RuntimeSessionLoading, LoadsFunctionConstantPayloadBeforeBindingCopiesIt)
   attribute->set_type(AttributeProto::TENSOR);
   ASSERT_TRUE(
       attribute->mutable_t()->ParseFromString(original.graph().initializer(0).SerializeAsString()));
+  for (const std::string name : {"Y1", "Y2"}) {
+    graph->add_output()->set_name(name);
+    auto *repeated = graph->add_node();
+    repeated->set_domain("loading.test");
+    repeated->set_op_type("ExternalConstant");
+    repeated->add_output(name);
+  }
   SaveModel(model);
+  {
+    RuntimeContext bounded_rt;
+    RuntimeLoadOptions bounded;
+    bounded.memory_limit = 119;
+    size_t reads = 0;
+    bounded.external_reader = [&](TensorProto &, const std::string &) { ++reads; };
+    EXPECT_THROW(LoadedRuntimeSession(Path(), bounded_rt, {}, bounded), std::length_error);
+    EXPECT_EQ(reads, 0u);
+  }
   RuntimeContext rt;
   bool read_before_declaration = false;
   bool declared = false;
   RuntimeLoadOptions options;
+  options.memory_limit = 1024;
   options.trace = [&](const RuntimeLoadEvent &event) {
     if (event.phase == RuntimeLoadPhase::kDeclared)
       declared = true;
@@ -670,6 +777,9 @@ TEST_F(RuntimeSessionLoading, LoadsFunctionConstantPayloadBeforeBindingCopiesIt)
   };
   LoadedRuntimeSession loaded(Path(), rt, {}, options);
   EXPECT_TRUE(read_before_declaration);
+  EXPECT_EQ(loaded.statistics().function_binding_bytes, 72u);
+  EXPECT_GE(loaded.statistics().peak_admitted_bytes, 120u);
+  EXPECT_LE(loaded.statistics().peak_admitted_bytes, options.memory_limit);
   loaded.session().Run(rt);
   const auto &output = rt.Get("Y");
   ASSERT_EQ(output.element_count(), 6);

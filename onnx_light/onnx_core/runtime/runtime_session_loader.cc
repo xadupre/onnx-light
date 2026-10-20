@@ -15,6 +15,7 @@
 #include <mutex>
 #include <stdexcept>
 #include <thread>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -149,6 +150,116 @@ size_t ExternalBytes(const TensorProto &tensor) {
   return length;
 }
 
+size_t TensorBytes(const TensorProto &tensor) {
+  return Add(InlineBytes(tensor),
+             tensor.data_location() == TensorProto::EXTERNAL && !tensor.is_raw_data()
+                 ? ExternalBytes(tensor)
+                 : 0);
+}
+
+size_t AttributeBytes(const AttributeProto &attribute, size_t depth = 0) {
+  if (depth > 128)
+    throw std::invalid_argument("Runtime loader graph nesting exceeds 128.");
+  size_t bytes = 0;
+  const auto sparse = [&](const SparseTensorProto &tensor) {
+    if (tensor.has_values())
+      bytes = Add(bytes, TensorBytes(tensor.values()));
+    if (tensor.has_indices())
+      bytes = Add(bytes, TensorBytes(tensor.indices()));
+  };
+  if (attribute.has_t())
+    bytes = Add(bytes, TensorBytes(attribute.t()));
+  for (const auto &tensor : attribute.tensors())
+    bytes = Add(bytes, TensorBytes(tensor));
+  if (attribute.has_sparse_tensor())
+    sparse(attribute.sparse_tensor());
+  for (const auto &tensor : attribute.sparse_tensors())
+    sparse(tensor);
+  const auto graph = [&](const GraphProto &value) {
+    for (const auto &tensor : value.initializer())
+      bytes = Add(bytes, TensorBytes(tensor));
+    for (const auto &tensor : value.sparse_initializer())
+      sparse(tensor);
+    for (const auto &node : value.node())
+      for (const auto &nested : node.attribute())
+        bytes = Add(bytes, AttributeBytes(nested, depth + 1));
+  };
+  if (attribute.has_g())
+    graph(attribute.g());
+  for (const auto &value : attribute.graphs())
+    graph(value);
+  return bytes;
+}
+
+size_t
+BoundReferenceBytes(const NodeProto &node,
+                    const std::unordered_map<std::string, const AttributeProto *> &attributes,
+                    size_t depth = 0) {
+  if (depth > 128)
+    throw std::invalid_argument("Runtime loader graph nesting exceeds 128.");
+  size_t bytes = 0;
+  for (const auto &attribute : node.attribute()) {
+    if (!attribute.ref_attr_name().empty()) {
+      const auto found = attributes.find(attribute.ref_attr_name());
+      if (found != attributes.end())
+        bytes = Add(bytes, AttributeBytes(*found->second));
+    } else {
+      const auto graph = [&](const GraphProto &value) {
+        for (const auto &nested : value.node())
+          bytes = Add(bytes, BoundReferenceBytes(nested, attributes, depth + 1));
+      };
+      if (attribute.has_g())
+        graph(attribute.g());
+      for (const auto &value : attribute.graphs())
+        graph(value);
+    }
+  }
+  return bytes;
+}
+
+struct FunctionBindingMemory {
+  size_t retained_bytes = 0;
+  size_t temporary_bytes = 0;
+};
+
+FunctionBindingMemory FunctionBindingBytes(const ModelProto &model, const RuntimeContext &rt) {
+  const auto key = [](const std::string &domain, const std::string &name,
+                      const std::string &overload) {
+    return NormaliseDomain(domain) + ":" + name + ":" + overload;
+  };
+  FunctionMap functions = rt.functions();
+  for (const auto &function : model.functions())
+    functions[key(function.domain(), function.name(), function.overload())] = &function;
+  FunctionBindingMemory memory;
+  for (const auto &call : model.graph().node()) {
+    const auto found = functions.find(key(call.domain(), call.op_type(), call.overload()));
+    if (found == functions.end())
+      continue;
+    const auto &function = *found->second;
+    size_t body_bytes = 0;
+    size_t reference_bytes = 0;
+    std::unordered_map<std::string, const AttributeProto *> attributes;
+    for (const auto &attribute : function.attribute_proto()) {
+      body_bytes = Add(body_bytes, AttributeBytes(attribute));
+      attributes[attribute.name()] = &attribute;
+    }
+    for (const auto &attribute : call.attribute()) {
+      attributes[attribute.name()] = &attribute;
+      memory.temporary_bytes = std::max(memory.temporary_bytes,
+                                        Add(attribute.ByteSizeLong(), AttributeBytes(attribute)));
+    }
+    for (const auto &node : function.node()) {
+      for (const auto &attribute : node.attribute())
+        body_bytes = Add(body_bytes, AttributeBytes(attribute));
+      reference_bytes = Add(reference_bytes, BoundReferenceBytes(node, attributes));
+    }
+    memory.retained_bytes = Add(memory.retained_bytes, Add(body_bytes, reference_bytes));
+    memory.temporary_bytes =
+        std::max(memory.temporary_bytes, Add(function.ByteSizeLong(), body_bytes));
+  }
+  return memory;
+}
+
 struct SeedCleanup {
   RuntimeContext &rt;
   std::vector<std::string> names;
@@ -253,6 +364,10 @@ LoadedRuntimeSession::LoadedRuntimeSession(const std::string &path, RuntimeConte
   std::unordered_set<const TensorProto *> initializers;
   for (const auto &tensor : model_.graph().initializer())
     initializers.insert(&tensor);
+  std::unordered_set<std::string> quantization_sources;
+  for (const auto &annotation : model_.graph().quantization_annotation())
+    for (const auto &mapping : annotation.quant_parameter_tensor_names())
+      quantization_sources.insert(mapping.value());
   std::vector<TensorProto *> external;
   std::vector<size_t> lengths;
   for (TensorProto *tensor : tensors) {
@@ -264,9 +379,13 @@ LoadedRuntimeSession::LoadedRuntimeSession(const std::string &path, RuntimeConte
       statistics_.source_bytes = Add(statistics_.source_bytes, length);
     }
   }
-  statistics_.conversion_reserve_bytes = statistics_.source_bytes;
+  const auto binding = FunctionBindingBytes(model_, rt);
+  statistics_.conversion_reserve_bytes =
+      std::max(statistics_.source_bytes, binding.temporary_bytes);
+  statistics_.function_binding_bytes = binding.retained_bytes;
   const size_t source_reservation =
-      Add(statistics_.source_bytes, statistics_.conversion_reserve_bytes);
+      Add(Add(statistics_.source_bytes, statistics_.conversion_reserve_bytes),
+          statistics_.function_binding_bytes);
   if (source_reservation > load_options.memory_limit)
     throw std::length_error("Runtime loader source payload exceeds memory admission limit.");
   statistics_.external_tensors = external.size();
@@ -278,23 +397,33 @@ LoadedRuntimeSession::LoadedRuntimeSession(const std::string &path, RuntimeConte
   const size_t preparation_limit = load_options.memory_limit - source_reservation;
   const std::string base = std::filesystem::absolute(path).parent_path().string();
   std::vector<TensorProto *> root_external;
+  std::vector<TensorProto *> preloaded_initializers;
   std::vector<size_t> root_lengths;
   for (size_t i = 0; i < external.size(); ++i) {
-    if (initializers.count(external[i])) {
+    if (initializers.count(external[i]) && !quantization_sources.contains(external[i]->name())) {
       root_external.push_back(external[i]);
       root_lengths.push_back(lengths[i]);
     } else {
       // Function binding and custom factories may copy attribute payloads during
-      // declaration, so only independent root initializers may remain unloaded.
+      // declaration. Quantization catalogues also consume annotated initializers
+      // during construction, so only independent root initializers remain unloaded.
       Reader::Read(*external[i], lengths[i], base, load_options);
-      external[i]->set_data_location(TensorProto::DEFAULT);
-      external[i]->clr_external_data();
+      if (!initializers.count(external[i])) {
+        external[i]->set_data_location(TensorProto::DEFAULT);
+        external[i]->clr_external_data();
+      } else {
+        preloaded_initializers.push_back(external[i]);
+      }
     }
   }
   external = std::move(root_external);
   lengths = std::move(root_lengths);
   statistics_.peak_queued_tensors = load_options.overlap_preparation && !external.empty() ? 1 : 0;
   session_ = std::make_unique<RuntimeSession>(model_, std::move(session_options));
+  for (TensorProto *tensor : preloaded_initializers) {
+    tensor->set_data_location(TensorProto::DEFAULT);
+    tensor->clr_external_data();
+  }
   statistics_.peak_admitted_bytes = Add(source_reservation, session_->prepared_bytes());
   if (statistics_.peak_admitted_bytes > load_options.memory_limit)
     throw std::length_error("Runtime loader shared preparation store exceeds memory limit.");
@@ -310,7 +439,9 @@ LoadedRuntimeSession::LoadedRuntimeSession(const std::string &path, RuntimeConte
     const size_t prepared_before = session_->prepared_bytes();
     const std::string name = tensor == nullptr ? std::string{} : tensor->name().value();
     Trace(load_options, RuntimeLoadPhase::kPreparationStarted, name);
-    session_->ExecutePreparations(rt, preparation_limit);
+    session_->ExecutePreparations(rt, preparation_limit,
+                                  tensor == nullptr ? std::span<const std::string>{}
+                                                    : std::span<const std::string>(&name, 1));
     statistics_.peak_admitted_bytes =
         std::max(statistics_.peak_admitted_bytes,
                  Add(source_reservation,

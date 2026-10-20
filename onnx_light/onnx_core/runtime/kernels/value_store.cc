@@ -3,9 +3,39 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "value_store.h"
+#include "onnx_lib/common/scoped_resource.h"
 
 namespace ONNX_LIGHT_NAMESPACE::core::runtime {
 namespace {
+
+class ValueStoreArena : public ExecutionArena {
+public:
+  ValueStoreArena(size_t &live_bytes, size_t &accounting_visits)
+      : ExecutionArena(1), live_bytes_(live_bytes), accounting_visits_(accounting_visits) {}
+
+  RawBuffer *Allocate(size_t n_bytes) override {
+    EXT_ENFORCE(n_bytes <= std::numeric_limits<size_t>::max() - live_bytes_,
+                "Value store live-byte total overflow.");
+    const size_t before = TotalAllocatedSize();
+    ScopeExit update([&]() noexcept { live_bytes_ = live_bytes_ - before + TotalAllocatedSize(); });
+    return ExecutionArena::Allocate(n_bytes);
+  }
+
+  void Free(RawBuffer *buffer) override {
+    const size_t before = TotalAllocatedSize();
+    ScopeExit update([&]() noexcept { live_bytes_ = live_bytes_ - before + TotalAllocatedSize(); });
+    ExecutionArena::Free(buffer);
+  }
+
+  size_t TotalAllocatedSize() const override {
+    ++accounting_visits_;
+    return ExecutionArena::TotalAllocatedSize();
+  }
+
+private:
+  size_t &live_bytes_;
+  size_t &accounting_visits_;
+};
 
 void ValidateAllocatedValue(const RuntimeValue &value,
                             const std::unordered_set<const void *> &allocators, uint32_t slot) {
@@ -50,7 +80,7 @@ ValueStore::Slot ValueStore::Bind(std::string key) {
 bool ValueStore::IsReady(const Slot &slot) const { return ValueAt(slot).has_value(); }
 
 Tensor ValueStore::AllocateTensor(int32_t data_type, const Shape &shape, size_t n_bytes) {
-  auto allocator = std::make_unique<ExecutionArena>(1);
+  auto allocator = std::make_unique<ValueStoreArena>(prepared_bytes_, accounting_allocator_visits_);
   Tensor tensor = MakeOutputTensor(data_type, shape, n_bytes, allocator.get());
   allocator_index_.insert(allocator.get());
   allocators_.push_back(std::move(allocator));
@@ -90,12 +120,6 @@ const std::optional<RuntimeValue> &ValueStore::ValueAt(const Slot &slot) const {
   return slots_[slot.index_];
 }
 
-size_t ValueStore::prepared_bytes() const noexcept {
-  size_t bytes = 0;
-  for (const auto &allocator : allocators_) {
-    bytes += allocator->TotalAllocatedSize();
-  }
-  return bytes;
-}
+size_t ValueStore::prepared_bytes() const noexcept { return prepared_bytes_; }
 
 } // namespace ONNX_LIGHT_NAMESPACE::core::runtime

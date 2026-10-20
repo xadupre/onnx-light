@@ -45,8 +45,12 @@ accessors expose only read-only views through const objects.
 This store does not schedule asynchronous loading, track generations, evict
 values, or persist prepared payloads.
 
-``prepared_bytes()`` sums live buffer sizes in this static store's allocators,
-including allocated but unpublished values. It excludes retained free-buffer
+``prepared_bytes()`` returns an incrementally maintained live-byte total in
+constant time, including allocated but unpublished values. Each allocation
+and release updates the total, including reuse through a tensor's allocator.
+``accounting_allocator_visits()`` exposes allocator live-byte query visits for
+deterministic scaling diagnostics; reading the total adds no visits.
+The total excludes retained free-buffer
 capacity and execution/I/O arenas. There is no static-store admission budget or
 eviction policy.
 

@@ -420,7 +420,7 @@ TEST_F(RuntimeSessionLoading, DefersIntermediatePreparationUntilItsConsumer) {
   EXPECT_EQ(*executions, 1u);
 }
 
-TEST_F(RuntimeSessionLoading, IndependentWeightsVisitOnlyNewlyEnabledPreparations) {
+TEST_F(RuntimeSessionLoading, IndependentWeightsKeepReadinessAndAccountingLinear) {
   auto model = ReadModel();
   const TensorProto original = model.graph().initializer(0);
   auto &graph = model.ref_graph();
@@ -435,20 +435,15 @@ TEST_F(RuntimeSessionLoading, IndependentWeightsVisitOnlyNewlyEnabledPreparation
     *tensor = original;
     tensor->set_name(source);
     graph.add_output()->set_name(output);
-    graph.add_node(MakeNode("LoadingPreparedIdentity", {source}, {output}));
+    graph.add_node(MakeNode("Gemm", {"A", source}, {output}));
   }
   SaveModel(model);
   RuntimeContext rt;
-  const auto executions = std::make_shared<size_t>(0);
-  ASSERT_TRUE(rt.RegisterKernelFn(
-      "ai.onnx", "LoadingPreparedIdentity", core::symbolic::Device::kCPU,
-      [executions](const NodeProto &node, RuntimeContext &, const KernelContext &) {
-        return std::make_unique<LoadingPreparedIdentity>(node, executions);
-      }));
   LoadedRuntimeSession loaded(Path(), rt);
-  EXPECT_EQ(*executions, count);
+  EXPECT_EQ(loaded.session().prepared_bytes(), count * 6 * sizeof(float));
   EXPECT_TRUE(loaded.session().pending_preparations().empty());
   EXPECT_LE(loaded.session().preparation_readiness_checks(), 2 * count);
+  EXPECT_LE(loaded.session().value_store().accounting_allocator_visits(), 4 * count);
 }
 
 TEST_F(RuntimeSessionLoading, ExecutesSourceFreePreparationWithoutAnyPayload) {

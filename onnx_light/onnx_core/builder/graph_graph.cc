@@ -40,6 +40,34 @@ std::size_t CheckedPosition(uint64_t position) {
   return static_cast<std::size_t>(position);
 }
 
+void ValidateInputDefault(const GraphBuilder &builder, const TensorProto &initializer) {
+  for (const auto &input : builder.Inputs()) {
+    if (input.name() != initializer.name() || !input.has_type()) {
+      continue;
+    }
+    if (!input.type().has_tensor_type()) {
+      throw BuilderError("Replay: an initializer cannot supply a non-tensor input default.");
+    }
+    const auto &declared = input.type().tensor_type();
+    if (declared.elem_type() != TensorProto::UNDEFINED &&
+        declared.elem_type() != initializer.data_type()) {
+      throw BuilderError("Replay: initializer default element type differs from its input.");
+    }
+    if (!declared.has_shape()) {
+      continue;
+    }
+    if (declared.shape().dim().size() != initializer.dims().size()) {
+      throw BuilderError("Replay: initializer default rank differs from its input.");
+    }
+    for (std::size_t i = 0; i < initializer.dims().size(); ++i) {
+      const auto &dimension = declared.shape().dim(i);
+      if (dimension.has_dim_value() && dimension.dim_value() != initializer.dims(i)) {
+        throw BuilderError("Replay: initializer default dimension differs from its input.");
+      }
+    }
+  }
+}
+
 void RecordRenames(LocalRewritingProto &rewrite,
                    const std::unordered_map<std::string, std::string> &renames) {
   std::vector<std::pair<std::string, std::string>> sorted(renames.begin(), renames.end());
@@ -860,9 +888,36 @@ void GraphGraph::ApplyRewriting(const LocalRewritingProto &rewrite) {
       throw BuilderError("Replay: initializers must have unique, nonempty names.");
     }
   }
+  const auto validate_node_outputs = [&](const NodeProto &node) {
+    for (const auto &output : node.output()) {
+      if (initializer_names.count(output.value()) != 0) {
+        throw BuilderError("Replay: an initializer name conflicts with a retained node output.");
+      }
+    }
+  };
+  for (const auto &node : builder_.nodes_) {
+    if (removed.count(&node) == 0) {
+      validate_node_outputs(node);
+    }
+  }
+  for (const auto &addition : added_nodes) {
+    validate_node_outputs(*addition.node);
+  }
+  for (const auto &initializer : builder_.encoded_initializers_) {
+    if (initializer_names.count(initializer.name().value()) != 0) {
+      throw BuilderError("Replay: an initializer name conflicts with an encoded initializer.");
+    }
+  }
+  for (const auto &initializer : builder_.paged_cache_initializers_) {
+    if (initializer_names.count(initializer.name().value()) != 0) {
+      throw BuilderError("Replay: an initializer name conflicts with a paged-cache initializer.");
+    }
+  }
 
   builder_.RewriteInitializerReferences(value_renames);
   for (const auto &addition : added_initializers) {
+    // Replacing an existing default must not bypass the public-input contract.
+    ValidateInputDefault(builder_, *addition.initializer);
     const auto &name = addition.initializer->name();
     bool replaces_removed_value = false;
     for (const NodeProto *node : removed) {

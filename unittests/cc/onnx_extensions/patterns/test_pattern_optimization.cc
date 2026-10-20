@@ -361,6 +361,84 @@ TEST(PatternOptimization, ReplayRejectsMalformedPositionsAndFutureExecution) {
   });
 }
 
+TEST(PatternOptimization, ReplayRejectsInitializerNameAndInputDefaultConflicts) {
+  core::builder::GraphBuilder builder("initializer_validation", SchemaLookup(), {{"", 18}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
+  builder.MakeInitializer(MakeInitializer<float>("old", {1}, {1.0f}));
+  StructTypeProto record;
+  record.set_type_id(1);
+  record.set_name("record");
+  auto &field = *record.mutable_structure()->add_field();
+  field.set_name("value");
+  auto &type = *field.mutable_type()->mutable_tensor_type();
+  type.set_elem_type(TensorProto::FLOAT);
+  type.mutable_shape();
+  builder.MakeStructType(record);
+  EncodedValueProto encoded;
+  encoded.set_name("encoded");
+  encoded.mutable_struct_type()->set_type_ref(1);
+  encoded.set_raw_data(std::string(4, '\0'));
+  builder.MakeEncodedInitializer(encoded);
+  builder.MakeNode("Neg", {"x"}, {"y"});
+  builder.MakeOutput("y");
+  const ModelProto original = builder.ToModel();
+  const std::vector<TensorProto> invalid = {
+      MakeInitializer<float>("y", {2}, {1.0f, 2.0f}),
+      MakeInitializer<float>("encoded", {2}, {1.0f, 2.0f}),
+      MakeInitializer<int64_t>("x", {2}, {1, 2}),
+      MakeInitializer<float>("x", {}, {1.0f}),
+      MakeInitializer<float>("x", {3}, {1.0f, 2.0f, 3.0f}),
+  };
+  for (const bool remove : {false, true}) {
+    SCOPED_TRACE(remove);
+    for (const TensorProto &tensor : invalid) {
+      SCOPED_TRACE(tensor.name().value());
+      RewritingProto plan;
+      auto &edit = *plan.add_rewrites();
+      if (remove) {
+        edit.add_removed_initializers(0);
+      }
+      *edit.add_added_initializers() = tensor;
+      edit.add_added_initializer_positions(remove ? 0 : 1);
+      EXPECT_THROW(core::builder::Replay(original, plan, SchemaLookup()),
+                   core::builder::BuilderError);
+    }
+  }
+}
+
+TEST(PatternOptimization, ReplayValidatesReplacementDefaultsAndPreservesRetainedDefaults) {
+  core::builder::GraphBuilder builder("replacement_default", SchemaLookup(), {{"", 18}});
+  builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
+  builder.MakeInitializer(MakeInitializer<float>("x", {2}, {1.0f, 2.0f}));
+  builder.MakeInitializer(MakeInitializer<float>("old", {1}, {3.0f}));
+  builder.MakeNode("Neg", {"x"}, {"y"});
+  builder.MakeOutput("y");
+  const ModelProto original = builder.ToModel();
+  for (const TensorProto &tensor : {
+           MakeInitializer<int64_t>("x", {2}, {1, 2}),
+           MakeInitializer<float>("x", {}, {1.0f}),
+           MakeInitializer<float>("x", {3}, {1.0f, 2.0f, 3.0f}),
+       }) {
+    RewritingProto plan;
+    auto &edit = *plan.add_rewrites();
+    edit.add_removed_initializers(0);
+    *edit.add_added_initializers() = tensor;
+    edit.add_added_initializer_positions(0);
+    EXPECT_THROW(core::builder::Replay(original, plan, SchemaLookup()),
+                 core::builder::BuilderError);
+  }
+  RewritingProto plan;
+  auto &edit = *plan.add_rewrites();
+  edit.add_removed_initializers(1);
+  *edit.add_added_initializers() = MakeInitializer<float>("fresh", {1}, {4.0f});
+  edit.add_added_initializer_positions(1);
+  const GraphProto replayed = core::builder::Replay(original, plan, SchemaLookup());
+  ASSERT_EQ(replayed.initializer().size(), 2u);
+  EXPECT_EQ(replayed.initializer(0).SerializeAsString(),
+            original.graph().initializer(0).SerializeAsString());
+  EXPECT_EQ(replayed.input(0).SerializeAsString(), original.graph().input(0).SerializeAsString());
+}
+
 TEST(PatternOptimization, ReplayPositionsInitializersAmongRetainedValues) {
   core::builder::GraphBuilder builder("initializer_positions", SchemaLookup());
   builder.SetOpsetVersion("", 18);

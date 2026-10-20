@@ -254,9 +254,9 @@ TEST(ShapeBasedExpandBroadcastPattern, PreservesSharedExpandForOtherConsumers) {
   auto optimized_pattern = std::make_shared<onnx_patterns::ShapeBasedExpandBroadcastPattern>();
   core::builder::GraphGraph optimizer(
       builder, std::vector<std::shared_ptr<core::builder::PatternOptimization>>{optimized_pattern});
-  const std::vector<core::builder::LocalRewriting> rewrites = optimizer.Optimize(1);
-  ASSERT_EQ(rewrites.size(), 1u);
-  EXPECT_EQ(rewrites[0].matched_nodes, (std::vector<std::size_t>{1, 2}));
+  const RewritingProto rewrites = optimizer.Optimize(1);
+  ASSERT_EQ(rewrites.rewrites().size(), 1u);
+  EXPECT_EQ(rewrites.rewrites(0).matched_nodes().values(), (std::vector<uint64_t>{1, 2}));
   ASSERT_EQ(builder.Nodes().size(), 3u);
   EXPECT_EQ(builder.Nodes()[1].op_type().value(), "Expand");
   EXPECT_EQ(builder.Nodes()[2].op_type().value(), "Mul");

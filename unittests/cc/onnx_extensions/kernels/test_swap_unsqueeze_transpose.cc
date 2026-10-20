@@ -96,10 +96,9 @@ TEST(SwapUnsqueezeTransposePattern, NumericallyPreservesEverySmallPermutation) {
           patterns.push_back(std::make_unique<onnx_patterns::SwapUnsqueezeTransposePattern>());
           core::builder::GraphGraph graph(builder, std::move(patterns));
           const auto rewrites = graph.Optimize();
-          ASSERT_EQ(std::count_if(rewrites.begin(), rewrites.end(),
-                                  [](const core::builder::LocalRewriting &rewrite) {
-                                    return rewrite.pattern != nullptr &&
-                                           rewrite.pattern->Name() == "SwapUnsqueezeTranspose";
+          ASSERT_EQ(std::count_if(rewrites.rewrites().begin(), rewrites.rewrites().end(),
+                                  [](const LocalRewritingProto &rewrite) {
+                                    return rewrite.pattern_name() == "SwapUnsqueezeTranspose";
                                   }),
                     1);
           const ModelProto optimized = builder.ToModel();

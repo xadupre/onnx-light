@@ -5,7 +5,7 @@ Replaying graph cleanup modifications
 =====================================
 
 Graph cleanup algorithms also produce
-:class:`~onnx_light.onnx_core.optimization.LocalRewriting` records. These
+:class:`~onnx_light.onnx.LocalRewritingProto` records. These
 records replay identity removal, dead-end removal, and initializer
 deduplication without running cleanup again.
 """
@@ -47,11 +47,11 @@ model = oh.make_model(
 
 builder = GraphBuilder(model)
 graph = GraphGraph(builder, patterns=False)
-rewrites = list(graph.optimize())
+rewrites = graph.optimize()
 optimized_graph = builder.build_graph()
 
 assert {"RemoveIdentityNodes", "RemoveUnusedNodes", "RemoveDuplicateInitializers"} <= {
-    rewrite.pattern_name for rewrite in rewrites
+    rewrite.pattern_name for rewrite in rewrites.rewrites
 }
 
 print("Original graph:")
@@ -63,10 +63,10 @@ print(pretty_onnx(builder.to_onnx()))
 # Inspect and replay the cleanup modifications
 # ++++++++++++++++++++++++++++++++++++++++++++
 #
-# Every cleanup operation is captured as a ``LocalRewriting`` record. Replay
+# Every cleanup operation is captured as a ``LocalRewritingProto`` record. Replay
 # applies the records to a fresh copy of the source model.
 
-for rewrite in rewrites:
+for rewrite in rewrites.rewrites:
     print(rewrite)
 
 replayed_graph = replay(model, rewrites)

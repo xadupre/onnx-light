@@ -196,7 +196,7 @@ class TestPatternsMatmulNormalization(ExtTestCase):
         optimized = builder.to_onnx()
         if check_model:
             checker.check_model(optimized)
-        return optimized, rewrites, report
+        return optimized, rewrites.rewrites, report
 
     def _check_equivalent(
         self, model, optimized, feeds, *, expected=None, atol: float = 1e-6, rtol: float = 1e-6

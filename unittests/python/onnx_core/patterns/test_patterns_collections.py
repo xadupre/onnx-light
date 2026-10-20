@@ -60,8 +60,10 @@ class TestCollectionPatterns(ExtTestCase):
         builder = optimization.GraphBuilder(model)
         graph = optimization.GraphGraph(builder, [pattern_name])
         all_rewrites, report = graph.optimize(report=True)
-        self.assertEqual(report.rewrites, len(all_rewrites))
-        rewrites = [rewrite for rewrite in all_rewrites if rewrite.pattern_name == pattern_name]
+        self.assertEqual(report.rewrites, len(all_rewrites.rewrites))
+        rewrites = [
+            rewrite for rewrite in all_rewrites.rewrites if rewrite.pattern_name == pattern_name
+        ]
         return builder.to_onnx(), rewrites
 
     def assert_equivalent(self, original, optimized, feeds):

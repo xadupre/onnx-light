@@ -34,7 +34,7 @@ def _optimize(model, pattern_names):
     """Runs only the requested patterns and returns the optimized model."""
     builder = optimization.GraphBuilder(model)
     graph = optimization.GraphGraph(builder, optimization.standard_patterns(pattern_names))
-    rewrites = graph.optimize()
+    rewrites = graph.optimize().rewrites
     return builder.to_onnx(), [rewrite.pattern_name for rewrite in rewrites]
 
 

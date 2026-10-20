@@ -4,17 +4,21 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 import re
-from typing import Literal, TypeAlias
+from typing import Literal, TypeAlias, overload
 
-from ..onnx_lib import GraphProto, ModelProto
+from ..onnx_lib import GraphProto, LocalRewritingProto, ModelProto, RewritingProto
 from ..onnx_py._onnxpycore import builder as _C  # type: ignore[attr-defined]
 from ..onnx_py import _onnxpypatterns as _patterns  # type: ignore[attr-defined]
-from .graph_builder import GraphBuilder, SchemaLookup, _default_schema_lookup
+from .graph_builder import (
+    ConstantFoldingOptions,
+    GraphBuilder,
+    SchemaLookup,
+    _default_schema_lookup,
+)
 from .shape_inference import Device
 
 PatternOptimization: TypeAlias = _C.PatternOptimization
 MatchResult: TypeAlias = _C.MatchResult
-LocalRewriting: TypeAlias = _C.LocalRewriting
 OptimizationReport: TypeAlias = _C.OptimizationReport
 
 CastPattern: TypeAlias = _patterns.CastPattern
@@ -315,14 +319,62 @@ class GraphGraph(_C.GraphGraph):
         if target_device is not None:
             self.set_target_device(target_device)
 
+    @overload
+    def optimize(
+        self,
+        max_iter: int = -1,
+        *,
+        report: Literal[False] = False,
+        folding_options: ConstantFoldingOptions | None = None,
+        remove_unused: bool = True,
+    ) -> RewritingProto: ...
+
+    @overload
+    def optimize(
+        self,
+        max_iter: int = -1,
+        *,
+        report: Literal[True],
+        folding_options: ConstantFoldingOptions | None = None,
+        remove_unused: bool = True,
+    ) -> tuple[RewritingProto, OptimizationReport]: ...
+
+    @overload
+    def optimize(
+        self,
+        max_iter: int = -1,
+        *,
+        report: bool,
+        folding_options: ConstantFoldingOptions | None = None,
+        remove_unused: bool = True,
+    ) -> RewritingProto | tuple[RewritingProto, OptimizationReport]: ...
+
+    def optimize(
+        self,
+        max_iter: int = -1,
+        *,
+        report: bool = False,
+        folding_options: ConstantFoldingOptions | None = None,
+        remove_unused: bool = True,
+    ) -> RewritingProto | tuple[RewritingProto, OptimizationReport]:
+        """Returns sequential proto edits and optionally their optimization report."""
+        return super().optimize(
+            max_iter,
+            report=report,
+            folding_options=(
+                ConstantFoldingOptions() if folding_options is None else folding_options
+            ),
+            remove_unused=remove_unused,
+        )
+
 
 def replay(
     model: ModelProto,
-    rewrites: Iterable[LocalRewriting],
+    rewrites: RewritingProto,
     schema_lookup: SchemaLookup | None = _default_schema_lookup,
 ) -> GraphProto:
     """Replays captured rewrites and returns the resulting graph."""
-    return _C.replay(model, list(rewrites), schema_lookup)
+    return _C.replay(model, rewrites, schema_lookup)
 
 
 __all__ = [
@@ -376,7 +428,7 @@ __all__ = [
     "LayerNormalizationScalePattern",
     "LeakyReluPattern",
     "LinearAttentionPattern",
-    "LocalRewriting",
+    "LocalRewritingProto",
     "MatMulAddPattern",
     "MatMulBatchNormalizationFusionPattern",
     "MatMulReshape2Of3Pattern",
@@ -405,6 +457,7 @@ __all__ = [
     "ReshapeReshapeBinaryPattern",
     "ReshapeReshapePattern",
     "ReshapeSqueezePattern",
+    "RewritingProto",
     "RotaryConcatPartPattern",
     "RotaryEmbeddingPattern",
     "STFTFusionPattern",

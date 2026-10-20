@@ -7,7 +7,7 @@ Relations between protos
 
 The following graph shows containment relations between ONNX protos and the
 onnx-light extensions, including structured types, encoded values, persistent
-bindings and paged caches. Solid edges represent nested messages; dashed edges
+bindings, paged caches and rewrite records. Solid edges represent nested messages; dashed edges
 show selected model-scoped references, not containment or storage ownership.
 Each edge label is the attribute name (or names) that carries the nested proto.
 The diagram groups messages into **Data**, **Container**, and **Struct and Types**.
@@ -144,6 +144,19 @@ The runtime container protos form a separate cycle of their own:
        ├── sequence_value → SequenceProto (↑)
        ├── map_value → MapProto (↑)
        └── optional_value → OptionalProto (↑)
+
+Rewrite records are standalone at this stage, not yet a field of ``ModelProto``:
+
+.. code-block:: text
+
+   RewritingProto
+   ├── rewrites → LocalRewritingProto
+   │   ├── added_nodes, initializer_calls → NodeProto (↑)
+   │   ├── added_initializers → TensorProto (↑)
+   │   └── value_renames, metadata_props → StringStringEntryProto
+   ├── required_opset_imports → OperatorSetIdProto
+   ├── added_functions → FunctionProto (↑)
+   └── metadata_props → StringStringEntryProto
 
 Containment attributes
 ======================

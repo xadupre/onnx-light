@@ -38,7 +38,7 @@ type and constant queries) and drives a match/apply loop:
     rewrites, report = graph.optimize(report=True)
     optimized_model = builder.to_onnx()
 
-    assert len(rewrites) == 1
+    assert len(rewrites.rewrites) == 1
     assert report.rewrites == 1
     assert optimized_model.graph.node[0].op_type == "Identity"
 

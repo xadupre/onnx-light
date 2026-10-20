@@ -62,6 +62,27 @@ public:
   std::string producer_input;
 };
 
+class MarkReversedProducer : public core::builder::PatternOptimization {
+public:
+  MarkReversedProducer() : PatternOptimization(1, "MarkReversedProducer") {}
+
+  core::builder::MatchResult Match(core::builder::GraphGraph &,
+                                   const NodeProto &candidate) const override {
+    if (candidate.op_type() != "Mul" || candidate.name() == "revisited") {
+      return {};
+    }
+    return {this, {&candidate}, &candidate};
+  }
+
+  utils::RepeatedProtoField<NodeProto>
+  Apply(core::builder::GraphGraph &, const std::vector<const NodeProto *> &matched) const override {
+    utils::RepeatedProtoField<NodeProto> nodes;
+    nodes.push_back(*matched[0]);
+    nodes[0].set_name("revisited");
+    return nodes;
+  }
+};
+
 class CaptureOutputAndDropIdentity : public core::builder::PatternOptimization {
 public:
   CaptureOutputAndDropIdentity() : PatternOptimization(1, "CaptureOutputAndDropIdentity") {}
@@ -207,9 +228,9 @@ TEST(GraphGraph, NativeCleanupReplaysOrphanInitializers) {
     const ModelProto original = builder.ToModel();
     core::builder::GraphGraph graph(builder);
     const auto rewrites = graph.Optimize();
-    ASSERT_EQ(rewrites.size(), 1u);
-    EXPECT_EQ(rewrites[0].pattern->Name(), "RemoveUnusedNodes");
-    ASSERT_EQ(rewrites[0].removed_initializers.size(), 1u);
+    ASSERT_EQ(rewrites.rewrites().size(), 1u);
+    EXPECT_EQ(rewrites.rewrites(0).pattern_name(), "RemoveUnusedNodes");
+    ASSERT_EQ(rewrites.rewrites(0).removed_initializers().size(), 1u);
     const GraphProto optimized = builder.ToGraph();
     EXPECT_EQ(optimized.node_size(), 0);
     EXPECT_EQ(optimized.initializer_size(), 0);
@@ -261,7 +282,7 @@ TEST(GraphGraph, NestedRewriteRegistersStructTypeInModelScope) {
   core::builder::GraphGraph graph(branch,
                                   std::vector<std::shared_ptr<core::builder::PatternOptimization>>{
                                       std::make_shared<RegisterStructType>()});
-  ASSERT_EQ(graph.Optimize().size(), 1u);
+  ASSERT_EQ(graph.Optimize().rewrites().size(), 1u);
 
   const ModelProto model = builder.ToModel();
   ASSERT_EQ(model.struct_types().size(), 1u);
@@ -282,7 +303,7 @@ TEST(GraphGraph, NestedDisjointRewritesPreserveCapturedShapeAfterLocalFunctionRe
                                       std::make_shared<RegisterLocalFunction>()});
   const auto rewrites = graph.Optimize();
 
-  EXPECT_EQ(rewrites.size(), 2u);
+  EXPECT_EQ(rewrites.rewrites().size(), 2u);
   EXPECT_TRUE(branch.HasShape("captured"));
   ASSERT_EQ(branch.Nodes().size(), 2u);
   EXPECT_EQ(branch.Nodes()[0].op_type(), "Neg");
@@ -305,7 +326,7 @@ TEST(GraphGraph, OptionalUnusedCleanupPreservesDeadEnds) {
     const auto rewrites = graph.Optimize(-1, nullptr, {}, remove_unused);
     EXPECT_EQ(builder.ToGraph().node_size(), remove_unused ? 1 : 2);
     EXPECT_EQ(builder.ToGraph().initializer_size(), remove_unused ? 0 : 1);
-    EXPECT_EQ(rewrites.size(), remove_unused ? 1u : 0u);
+    EXPECT_EQ(rewrites.rewrites().size(), remove_unused ? 1u : 0u);
   }
 }
 
@@ -511,6 +532,48 @@ TEST(GraphGraph, SetComputedConstantIsCached) {
   EXPECT_EQ(tensor->name().value(), "y");
 }
 
+TEST(GraphGraph, ReverseReplacementOrderReplaysAcrossIterationsBeforeExportSorting) {
+  for (const bool folding : {false, true}) {
+    SCOPED_TRACE(folding);
+    core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
+    builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
+    builder.MakeNode("Neg", {"X"}, {"p"}, "", "rewrite");
+    builder.MakeNode("Abs", {"p"}, {"Y"});
+    builder.MakeOutput("Y");
+    ModelProto original;
+    *original.mutable_graph() = builder.BuildGraph();
+    auto &opset = *original.add_opset_import();
+    opset.set_domain("");
+    opset.set_version(28);
+
+    std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
+    patterns.push_back(std::make_unique<ReverseReplacementOrder>());
+    patterns.push_back(std::make_unique<MarkReversedProducer>());
+    core::builder::GraphGraph optimizer(builder, std::move(patterns));
+    core::builder::ConstantFoldingOptions options;
+    options.enabled = folding;
+    const RewritingProto plan = optimizer.Optimize(2, nullptr, options);
+    ASSERT_EQ(plan.rewrites().size(), 2u);
+    EXPECT_EQ(plan.rewrites(0).added_nodes_positions().values(), (std::vector<uint64_t>{0, 1}));
+    EXPECT_EQ(plan.rewrites(1).pattern_name(), "MarkReversedProducer");
+    EXPECT_EQ(plan.rewrites(1).matched_nodes().values(), (std::vector<uint64_t>{1}));
+    ASSERT_EQ(builder.Nodes().size(), 2u);
+    EXPECT_EQ(builder.Nodes()[0].op_type(), "Add");
+    EXPECT_EQ(builder.Nodes()[1].op_type(), "Mul");
+    EXPECT_EQ(builder.Nodes()[1].name(), "revisited");
+
+    RewritingProto loaded;
+    ASSERT_TRUE(loaded.ParseFromString(plan.SerializeAsString()));
+    const GraphProto replayed = core::builder::Replay(original, loaded, SchemaLookup());
+    EXPECT_EQ(replayed.SerializeAsString(), builder.BuildGraph().SerializeAsString());
+    const GraphProto finalized = builder.ToGraph();
+    EXPECT_EQ(finalized.node(0).op_type(), "Mul");
+    EXPECT_EQ(finalized.node(1).op_type(), "Add");
+    EXPECT_EQ(builder.Nodes()[0].op_type(), "Mul");
+    EXPECT_EQ(builder.Nodes()[1].op_type(), "Add");
+  }
+}
+
 TEST(GraphGraph, NativeExportOrdersDependenciesAndRecomputesCapturedLifetimes) {
   core::builder::GraphBuilder builder("g", SchemaLookup(), {{"", 28}});
   builder.MakeInput("X", core::symbolic::TensorType::kFloat, MakeShape({2, 3}));
@@ -537,7 +600,7 @@ TEST(GraphGraph, NativeExportOrdersDependenciesAndRecomputesCapturedLifetimes) {
   std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
   patterns.push_back(std::make_unique<ReverseReplacementOrder>());
   core::builder::GraphGraph optimizer(builder, std::move(patterns));
-  EXPECT_FALSE(optimizer.Optimize(1).empty());
+  EXPECT_FALSE(optimizer.Optimize(1).rewrites().empty());
   const GraphProto graph = builder.ToGraph();
   ASSERT_EQ(graph.node().size(), 3u);
   EXPECT_EQ(graph.node(0).op_type(), "Mul");

@@ -67,7 +67,7 @@ def _optimize(model, pattern, run_shape_inference=True):
     work = shape_inference.infer_shapes(model) if run_shape_inference else model
     builder = optimization.GraphBuilder(work)
     graph = optimization.GraphGraph(builder, [pattern])
-    rewrites = graph.optimize()
+    rewrites = graph.optimize().rewrites
     return builder.to_onnx(), rewrites
 
 

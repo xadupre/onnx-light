@@ -63,7 +63,6 @@ public:
 } // namespace
 
 void AddOnnxPyPatternCore(nb::module_ &m) {
-  using core::builder::LocalRewriting;
   using core::builder::OptimizationReport;
   using core::builder::PatternNoMatchStatistics;
   using core::builder::PatternOptimizationStatistics;
@@ -159,26 +158,6 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
       .def("__str__", &MatchResult::ToString)
       .def("__repr__", &MatchResult::ToString);
 
-  nb::class_<LocalRewriting>(builder_mod, "LocalRewriting")
-      .def_ro("graph_path", &LocalRewriting::graph_path)
-      .def_ro("matched_nodes", &LocalRewriting::matched_nodes)
-      .def_ro("added_nodes", &LocalRewriting::added_nodes)
-      .def_ro("added_nodes_positions", &LocalRewriting::added_nodes_positions)
-      .def_ro("added_initializers", &LocalRewriting::added_initializers)
-      .def_ro("added_initializer_positions", &LocalRewriting::added_initializer_positions)
-      .def_ro("removed_initializers", &LocalRewriting::removed_initializers)
-      .def_ro("value_renames", &LocalRewriting::value_renames)
-      .def_ro("iteration", &LocalRewriting::iteration)
-      .def_ro("match_time_ns", &LocalRewriting::match_time_ns)
-      .def_ro("apply_time_ns", &LocalRewriting::apply_time_ns)
-      .def_prop_ro("pattern_name",
-                   [](const LocalRewriting &rewrite) {
-                     return rewrite.pattern == nullptr ? std::string{} : rewrite.pattern->Name();
-                   })
-      .def("to_detailed_string", &LocalRewriting::ToDetailedString)
-      .def("__str__", &LocalRewriting::ToString)
-      .def("__repr__", &LocalRewriting::ToString);
-
   nb::class_<GraphGraph>(builder_mod, "GraphGraph")
       .def(
           "__init__",
@@ -209,7 +188,7 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
               return nb::cast(graph.Optimize(max_iter, nullptr, folding_options, remove_unused));
             }
             OptimizationReport statistics;
-            std::vector<LocalRewriting> rewrites =
+            RewritingProto rewrites =
                 graph.Optimize(max_iter, &statistics, folding_options, remove_unused);
             return nb::make_tuple(std::move(rewrites), std::move(statistics));
           },
@@ -299,8 +278,7 @@ void AddOnnxPyPatternCore(nb::module_ &m) {
                   "Returns registered C++ pattern names in evaluation order.");
   builder_mod.def(
       "replay",
-      [](const ModelProto &model, const std::vector<LocalRewriting> &rewrites,
-         nb::object schema_lookup) {
+      [](const ModelProto &model, const RewritingProto &rewrites, nb::object schema_lookup) {
         if (schema_lookup.is_none()) {
           return core::builder::Replay(model, rewrites);
         }

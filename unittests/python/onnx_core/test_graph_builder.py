@@ -244,9 +244,9 @@ class TestGraphBuilder(ExtTestCase):
         optimized_graph = builder.build_graph()
         replayed_graph = optimization.replay(original, rewrites)
 
-        self.assertEqual(len(rewrites), 1)
+        self.assertEqual(len(rewrites.rewrites), 1)
         self.assertEqual(report.rewrites, 1)
-        self.assertEqual(rewrites[0].pattern_name, "Cast")
+        self.assertEqual(rewrites.rewrites[0].pattern_name, "Cast")
         self.assertEqual(replayed_graph.SerializeToString(), optimized_graph.SerializeToString())
         checker.check_model(builder.to_onnx())
 

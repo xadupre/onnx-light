@@ -5,27 +5,31 @@ Serialized graph rewrites and model variants
 
 :Date: 2026-10-20
 
-**Discussion -- not implemented.** Proto names and export operations below
-are proposals, not available APIs.
+**First step implemented: proto records.** The optimizer and graph-only replay
+use ``LocalRewritingProto`` and ``RewritingProto``. Initializer recipes,
+model-level replay, the model envelope and export operations below remain
+proposals, not available APIs.
 
 Existing building blocks
 ++++++++++++++++++++++++
 
 ``PatternOptimization`` implements recognition (``Match``) and replacement
 construction (``Apply``), in C++ or Python. ``MatchResult`` identifies one
-match. ``GraphGraph::Optimize`` records concrete changes as ``LocalRewriting``:
+match. ``GraphGraph::Optimize`` returns a ``RewritingProto`` containing ordered
+``LocalRewritingProto`` edits:
 matched node positions, added nodes and their positions, added/removed
-initializers, value renames, subgraph path and iteration.
+initializers, value renames and subgraph path.
 
 ``Replay(model, rewrites)`` already reconstructs a ``GraphProto`` without
-running the matcher. Positions refer to the start of each iteration batch;
-added positions describe the result of that batch. One batch targets one
-graph. Later batches may consume nodes created by earlier ones.
+running the matcher. Matched and removed positions refer to the graph
+immediately before each edit; added positions describe its result. Internal
+optimizer batches are normalized to this sequential coordinate system. Later
+edits may consume nodes created by earlier ones.
 
-There is no dedicated ``LocalRewritingProto``, serialized rewrite collection,
-or rewrite map in ``ModelProto``. The current record contains an in-memory
-pattern pointer; its ``NodeProto`` and ``TensorProto`` members alone do not
-make the complete record serializable.
+The two rewrite messages support binary serialization and Python bindings.
+Records contain a diagnostic pattern name, not a live pattern pointer or
+timings. Timing remains in ``OptimizationReport``. There is not yet a rewrite
+map in ``ModelProto``.
 
 Constant folding currently stores materialized results: after
 ``ConstantFoldNodes``, the optimizer copies computed tensors into
@@ -34,29 +38,15 @@ It does not retain the computation that produced those tensors. Serializing
 this record alone would embed transformed weights, such as a second,
 transposed copy.
 
-The existing ``LocalRewriting`` in
-``onnx_light/onnx_core/builder/pattern_optimization.h`` contains:
-
-.. code-block:: cpp
-
-   // Existing fields; namespace qualifiers omitted.
-   std::shared_ptr<const PatternOptimization> pattern;
-   std::vector<std::string> graph_path;
-   std::vector<std::size_t> matched_nodes;
-   RepeatedProtoField<NodeProto> added_nodes;
-   std::vector<std::size_t> added_nodes_positions;
-   RepeatedProtoField<TensorProto> added_initializers;
-   std::vector<std::size_t> added_initializer_positions;
-   std::vector<std::size_t> removed_initializers;
-   std::vector<std::pair<std::string, std::string>> value_renames;
-   std::size_t iteration;
-   int64_t match_time_ns;
-   int64_t apply_time_ns;
+The messages are defined in ``onnx_proto/include/onnx_proto/onnx.h`` using
+the existing protobuf-free message layer. The schema below includes fields
+reserved for subsequent steps; graph-only replay does not execute initializer
+recipes or install collection-level functions/imports.
 
 Decision: use protos as runtime records
 ++++++++++++++++++++++++++++++++++++++++
 
-**Replace ``LocalRewriting`` with ``LocalRewritingProto`` as the record used
+**Use ``LocalRewritingProto`` as the record used
 by the optimizer and existing replay engine.** ``RewritingProto`` holds the
 ordered records and their shared function definitions/imports. Do not maintain
 parallel C++/proto records or introduce a second replay engine and conversion
@@ -84,13 +74,16 @@ and affected subgraph paths after each preceding edit. Internal batching may
 remain an implementation detail, not a second persistent record format.
 Verify that sequential replay preserves the batch result. Check integer
 ranges before converting proto positions to ``size_t``.
+Normalization indexes insertion anchors and maintains live node and initializer
+ranks incrementally; it does not rescan or sort the full live order per edit.
 
 New and modified proto messages
 +++++++++++++++++++++++++++++++
 
-The proposed wire schema is below. These are message definitions to implement
-with onnx-light's existing ``BEGIN_PROTO`` / ``FIELD_*`` layer, parser and
-serializer, not a requirement to add a protobuf compiler or ``libprotobuf``.
+The wire schema is below. The first two messages use onnx-light's existing
+``BEGIN_PROTO`` / ``FIELD_*`` layer, parser and serializer, without adding a
+protobuf compiler or ``libprotobuf``. ``RewritingEntryProto`` and the
+``ModelProto`` field remain deferred to step 3.
 
 .. code-block:: protobuf
 
@@ -193,8 +186,8 @@ when supported by the tensor representation and consumer. Materialized plain
 ONNX export may intentionally store computed weights instead.
 
 ``LocalRewritingProto.value_renames`` reuses ``StringStringEntryProto``:
-``key`` is the old reference and ``value`` its replacement. It mirrors
-existing ``LocalRewriting.value_renames`` and redirects references to an
+``key`` is the old reference and ``value`` its replacement. It mirrors the
+former ``LocalRewriting.value_renames`` and redirects references to an
 eliminated value, rather than renaming a
 surviving producer. For example, removing ``b = Identity(a)`` redirects
 consumers of ``b`` to ``a``. Existing identity/duplicate-node cleanup and
@@ -223,7 +216,7 @@ Each PR depends on the preceding one.
    * - PR
      - Scope
      - Acceptance
-   * - 1. Proto records
+   * - 1. Proto records (implemented)
      - Add ``LocalRewritingProto`` and ``RewritingProto`` and replace the
        existing C++ record. Migrate optimizer, cleanup and replay to ordered
        proto edits, with position rebasing; update bindings and direct callers.
@@ -237,7 +230,8 @@ Each PR depends on the preceding one.
      - Serialized and in-memory replay agree; cover nested graphs, cleanup,
        initializers, renames, multi-batch edits and invalid plans. A transposed-weight
        recipe stores no duplicate payload; verify results, source removal
-       ordering and function conflicts.
+       ordering and function conflicts. Retained initializer payloads are reused,
+       not deep-copied for every edit, including node-only edits.
    * - 3. Model envelope
      - Add ``RewritingEntryProto`` and the ``ModelProto.rewritings`` field,
        model I/O and bindings; define explicit selection and compatibility.

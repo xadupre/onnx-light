@@ -1598,6 +1598,31 @@ OperatorSetIdProto &add_opset(const std::string &domain, int64_t version);
 StringStringEntryProto &add_metadata(const std::string &key, const std::string &value);
 END_PROTO()
 
+BEGIN_PROTO(LocalRewritingProto, "Describes one sequential, materialized graph edit.")
+FIELD_STR(pattern_name, 1, "Diagnostic name of the pattern.")
+FIELD_REPEATED_STR(utils::String, graph_path, 2, "Subgraph path before this edit.")
+FIELD_REPEATED(uint64_t, matched_nodes, 3, "Removed node positions before this edit.")
+FIELD_REPEATED(uint64_t, removed_initializers, 4, "Removed initializer positions before this edit.")
+FIELD_REPEATED_PROTO(NodeProto, added_nodes, 5, "Replacement nodes.")
+FIELD_REPEATED(uint64_t, added_nodes_positions, 6, "Node positions after this edit.")
+FIELD_REPEATED_PROTO(TensorProto, added_initializers, 7, "Materialized replacement initializers.")
+FIELD_REPEATED(uint64_t, added_initializer_positions, 8, "Initializer positions after this edit.")
+FIELD_REPEATED_PROTO(StringStringEntryProto, value_renames, 9,
+                     "Old references and their replacements.")
+FIELD_REPEATED_PROTO(StringStringEntryProto, metadata_props, 10, "Descriptive metadata.")
+FIELD_REPEATED_PROTO(NodeProto, initializer_calls, 11,
+                     "Reserved for initializer preparation calls.")
+FIELD_REPEATED(uint64_t, computed_initializer_positions, 12,
+               "Reserved for prepared initializer positions.")
+END_PROTO()
+
+BEGIN_PROTO(RewritingProto, "Stores ordered sequential graph edits.")
+FIELD_REPEATED_PROTO(LocalRewritingProto, rewrites, 1, "Edits in application order.")
+FIELD_REPEATED_PROTO(OperatorSetIdProto, required_opset_imports, 2, "Required additional imports.")
+FIELD_REPEATED_PROTO(StringStringEntryProto, metadata_props, 3, "Descriptive metadata.")
+FIELD_REPEATED_PROTO(FunctionProto, added_functions, 4, "Shared additional functions.")
+END_PROTO()
+
 // ModelProto
 
 // message ModelProto {

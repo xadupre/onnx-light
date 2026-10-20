@@ -883,7 +883,7 @@ TEST(BackendRunModel, SplitToSequenceScalarRemainderSequenceAt) {
     std::vector<std::unique_ptr<core::builder::PatternOptimization>> patterns;
     patterns.push_back(std::make_unique<onnx_patterns::SplitToSequenceSequenceAtPattern>());
     core::builder::GraphGraph graph(builder, std::move(patterns));
-    ASSERT_FALSE(graph.Optimize().empty());
+    ASSERT_FALSE(graph.Optimize().rewrites().empty());
     const ModelProto optimized = builder.ToModel();
     ASSERT_EQ(optimized.ref_graph().ref_node().size(), 1u);
     EXPECT_EQ(optimized.ref_graph().ref_node()[0].ref_op_type(), "Split");

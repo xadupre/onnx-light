@@ -270,7 +270,7 @@ Optimize and replay a rewrite
 
 The following model contains a redundant ``Cast`` from ``float`` to ``float``.
 Selecting only the standard ``Cast`` pattern makes the result deterministic:
-one :class:`~onnx_light.onnx_core.optimization.LocalRewriting` replaces it with
+one :class:`~onnx_light.onnx.LocalRewritingProto` replaces it with
 ``Identity``.
 
 .. runpython::
@@ -298,14 +298,14 @@ one :class:`~onnx_light.onnx_core.optimization.LocalRewriting` replaces it with
     rewrites, report = graph.optimize(report=True)
     optimized_graph = builder.build_graph()
 
-    assert len(rewrites) == 1
+    assert len(rewrites.rewrites) == 1
     assert report.rewrites == 1
     cast_report = next(item for item in report.patterns if item.pattern_name == "Cast")
     print(
         f"Cast: {cast_report.matches} match(es) over "
         f"{cast_report.attempts} attempt(s)"
     )
-    print(repr(rewrites[0]))
+    print(repr(rewrites.rewrites[0]))
 
     replayed_graph = replay(original, rewrites)
     assert replayed_graph.SerializeToString() == optimized_graph.SerializeToString()
@@ -315,5 +315,5 @@ one :class:`~onnx_light.onnx_core.optimization.LocalRewriting` replaces it with
     print("replay reproduced the optimized graph")
 
 ``report`` aggregates attempts, matches, rejections, and timings by pattern.
-Each returned ``LocalRewriting`` is also a replayable record of the matched and
+The returned ``RewritingProto`` contains ordered ``LocalRewritingProto`` records of the matched and
 added nodes, their positions, initializer changes, and value renames.

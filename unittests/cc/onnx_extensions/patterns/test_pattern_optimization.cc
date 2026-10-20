@@ -404,6 +404,49 @@ TEST(PatternOptimization, ReplayBatchStillValidatesLaterSequentialEdits) {
   }
 }
 
+TEST(PatternOptimization, ReplayPreservesLocalFunctionsShadowingNativeOperators) {
+  for (const char *domain : {"", "ai.onnx"}) {
+    for (std::size_t local_position : {0u, 1u}) {
+      SCOPED_TRACE(domain);
+      SCOPED_TRACE(local_position);
+      core::builder::GraphBuilder builder("local_function_replay", SchemaLookup());
+      builder.SetOpsetVersion("", 18);
+      builder.MakeInput("x", core::symbolic::TensorType::kFloat, Shape());
+      for (const char *output : {"first", "second"}) {
+        builder.MakeNode("Abs", {"x"}, {output});
+        builder.MakeOutput(output);
+      }
+      ModelProto original;
+      *original.mutable_graph() = builder.BuildGraph();
+      AddOpsetImports(original, builder);
+      auto *function = original.add_functions();
+      function->set_domain(domain);
+      function->set_name("Add");
+      function->add_input("a");
+      function->add_output("b");
+      function->add_node(MakeNode("Identity", {"a"}, {"b"}));
+      function->add_opset_import()->set_version(18);
+
+      RewritingProto plan;
+      for (std::size_t i = 0; i < 2; ++i) {
+        auto *edit = plan.add_rewrites();
+        edit->add_matched_nodes(i);
+        edit->add_added_nodes(MakeNode(i == local_position ? "Add" : "Neg", {"x"},
+                                       {i == 0 ? "first" : "second"},
+                                       i == local_position ? domain : ""));
+        edit->add_added_nodes_positions(i);
+      }
+      ModelProto sequential = original;
+      for (const auto &edit : plan.rewrites()) {
+        RewritingProto single;
+        *single.add_rewrites() = edit;
+        *sequential.mutable_graph() = core::builder::Replay(sequential, single, SchemaLookup());
+      }
+      EXPECT_TRUE(core::builder::Replay(original, plan, SchemaLookup()).Equals(sequential.graph()));
+    }
+  }
+}
+
 TEST(PatternOptimization, ReplayRejectsMalformedPositionsAndFutureExecution) {
   core::builder::GraphBuilder builder("invalid", SchemaLookup());
   builder.SetOpsetVersion("", 18);

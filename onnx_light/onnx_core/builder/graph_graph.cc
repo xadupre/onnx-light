@@ -349,10 +349,16 @@ private:
     std::unordered_set<std::string> produced;
     for (const auto &[position, node] : additions) {
       (void)position;
-      const std::string key =
-          ONNX_LIGHT_NAMESPACE::NormaliseDispatchDomain(*node) + ":" + node->op_type().value();
+      // Local function domains are literal, unlike native/custom dispatch domains.
+      std::string key = node->domain().value();
+      key += ":";
+      key += node->op_type().value();
+      if (source.HasLocalFunction(key))
+        return false;
+      if (node->domain().empty())
+        key.insert(0, kDefaultOnnxDomain);
       if (!shapes::DispatchTable().contains(key) ||
-          source.GetCustomShapeInferenceFunction(node->domain(), node->op_type()) != nullptr)
+          source.CustomShapeInferenceFunctions().contains(key))
         return false;
       for (const auto &input : node->input()) {
         const std::string name = input.value();
